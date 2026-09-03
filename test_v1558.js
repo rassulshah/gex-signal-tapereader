@@ -28,19 +28,20 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const html=run('elBody.innerHTML'); const errs=JSON.parse(run('JSON.stringify(__gptsDebug.renderErrors())')||'[]');
   ok(errs.length===0,'1a the Testing tab renders with nothing swallowed',errs);
   ok(/<th[^>]*>hyp<\/th>[\s\S]*?subject · study[\s\S]*?claim[\s\S]*?predict[\s\S]*?refute if[\s\S]*?n \/ minN[\s\S]*?verdict/.test(html),'1b ① THE REGISTER has the mockup’s columns: hyp · subject·study · claim · predict · refute if · n/minN · verdict');
-  const h2row=(html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?>H2<\/td>[\s\S]*?<\/tr>/)||[''])[0];
+  const h2row=(html.match(/<tr[^>]*>(?:(?!<\/tr>)[\s\S])*?>H2<\/b><\/td>[\s\S]*?<\/tr>/)||[''])[0];   // (v15.62) the mockup's <td class="bl"><b>H2</b></td>
   ok(/F · F2\.1/.test(h2row) && /a node.s 2nd test holds MORE often than its 1st/.test(h2row) && /tap(&gt;|>)=1 held (&gt;|>) 60%/.test(h2row) && /tap(&gt;|>)=1 held (&lt;|<)= 55%/.test(h2row),'1c H2 shows its study, prediction and refutation from the fetched register',h2row.replace(/<[^>]+>/g,'|').slice(0,240));
-  ok(/width:0%[^>]*><\/i><\/span> <span[^>]*>0\/30/.test(html),'1d the n / minN bar (0/30 today)');
-  ok(/H6<\/td><td[^>]*>H · H2\.7/.test(html) && /H7<\/td><td[^>]*>H · H2\.8/.test(html),'1e H6 / H7 rows with their studies');
-  ok(/predicted-low band[\s\S]*?predicted-high band[\s\S]*?n per band[\s\S]*?verdict/.test(html) && /<td[^>]*>dir<\/td>/.test(html) && /<td[^>]*>node<\/td>/.test(html) && /<td[^>]*>decision<\/td>/.test(html),'1f ② THE GATE summary: dir / node / decision rows with both bands, Δ, n per band, verdict');
-  ok(/EVERY FEATURE · the live bands/.test(html),'1g …with the full live band table under it');
+  ok(/<span class="bar"><i style="width:0%"><\/i><\/span><span class="dm"> 0\/30/.test(html),'1d the n / minN bar (0/30 today) — the mockup’s .bar');
+  ok(/H6<\/b><\/td><td[^>]*>H · H2\.7/.test(html) && /H7<\/b><\/td><td[^>]*>H · H2\.8/.test(html),'1e H6 / H7 rows with their studies');
+  ok(/predicted-low band[\s\S]*?predicted-high band[\s\S]*?n per band[\s\S]*?verdict/.test(html) && /<td[^>]*><b>dir<\/b><\/td>/.test(html) && /<td[^>]*><b>node<\/b><\/td>/.test(html) && /<td[^>]*><b>decision<\/b><\/td>/.test(html),'1f ② THE GATE summary: dir / node / decision rows with both bands, Δ, n per band, verdict');
+  ok(/EVERY FEATURE · THE LIVE BANDS/.test(html),'1g …with the full live band table under it');
   ok(/<th[^>]*>store<\/th>[\s\S]*?size[\s\S]*?fields present[\s\S]*?missing for the OPEN studies/.test(html) && /feat \(IDB\)/.test(html) && /TAP record/.test(html) && /the book corpus/.test(html),'1h ④ THE RECORD: the stores table (feat · defl · TAP · ES 1-min · the book corpus · kingRoll)');
   ok(/WHAT UNLOCKS WHEN/.test(html),'1i …with the unlock thresholds under it');
   ok(/last run[\s\S]*?reads next[\s\S]*?H1 at 40 · H2 at 30[\s\S]*?refreshes[\s\S]*?SWEEPS\.json \(116 cells, 284 sessions\)/.test(html),'1j ⑤ THE NIGHTLY head: last run · reads next · refreshes · ledger');
-  ok(/THE SUITE · self-test/.test(html) && /135 files/.test(html) && /126 green/.test(html) && /9 red/.test(html) && /test_expiry_profile\.js/.test(html) && /SELF-TEST · the synthetic day/.test(html),'1k ⑥ THE SUITE shows the stamped run (files · green · red · which) then the self-test');
-  ok(bareP(html.slice(html.indexOf('① THE REGISTER'), html.indexOf('① THE REGISTER')+9000)).length===0,'1l no bare % in the register block',bareP(html.slice(html.indexOf('① THE REGISTER'), html.indexOf('① THE REGISTER')+9000)));
-  const order=['ANALYSIS','TRACKED','REGISTER','GATE','DASHBOARD','NIGHTLY','① THE REGISTER','② THE GATE','③ ON THE DASHBOARD','④ THE RECORD','⑤ THE NIGHTLY','⑥ THE SUITE'].map(k=>html.indexOf(k));
-  ok(order.every(i=>i>=0) && order.every((v,i)=>i===0||v>order[i-1]),'1m the loop strip then ①…⑥ in loop order',order);
+  ok(/<span class="t">THE SUITE<\/span>/.test(html) && /135 files/.test(html) && /126 green/.test(html) && /9 red/.test(html) && /test_expiry_profile\.js/.test(html) && /SELF-TEST · THE SYNTHETIC DAY/.test(html),'1k ⑥ THE SUITE shows the stamped run (files · green · red · which) then the self-test');
+  const regAt=html.indexOf('<span class="t">THE REGISTER</span>');
+  ok(bareP(html.slice(regAt, regAt+9000)).length===0,'1l no bare % in the register block',bareP(html.slice(regAt, regAt+9000)));
+  const order=['ANALYSIS','TRACKED','REGISTER','GATE','DASHBOARD','NIGHTLY'].map(k=>html.indexOf('<b>'+k+'</b>')).concat([['①','THE REGISTER'],['②','THE GATE'],['③','ON THE DASHBOARD'],['④','THE RECORD'],['⑤','THE NIGHTLY'],['⑥','THE SUITE']].map(p=>html.indexOf('>'+p[0]+'</span><span class="t">'+p[1])));
+  ok(order.every(i=>i>=0) && order.every((v,i)=>i===0||v>order[i-1]),'1m the loop strip then ①…⑥ in loop order (v15.62: the mockup’s markup)',order);
 }
 {
   const s=fs.readFileSync('tools/run-tests.sh','utf8');

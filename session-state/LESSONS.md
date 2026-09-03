@@ -131,6 +131,47 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.62 — "as mocked" is a pin, not a paraphrase; a learned rule is a counted rule
+Three times he asked for the mockup's look. The first two builds re-typed the look from memory into inline styles
+and matched it structurally while drifting visually — a header the mockup never had, section headers in a different
+shape, smaller type. The false belief: that looking at both and saying "same" is a check. The rule: the panel renders
+with the mockup generator's OWN stylesheet and markup, spliced from one source, and a test pins the CSS string and the
+skeleton equal — then the mockup cannot be "matched", only shared. (`tools/panel-css.py`, `test_v1562 1a/2e`.)
+Second: the first learning example came with his answer, and the temptation was to write "I see it" and a rule. What
+made it a lesson was the record: `gpts_nodeevents_v1` on his machine showed the King at $116M on the tap bar and the
+"new" pullback node re-growing from 11:15, not born before 11:00 — the picture and the data disagreed on one leg, and
+the disagreement is the finding. A rule from one example is PROPOSED (n=1), never more; L3 was refuted by the fourth
+example's −γ King and stays refuted — the conditioned rewrite (L8) is a new proposal, not a confirmation. The gauge
+was designed so it cannot flatter: taught examples move only breadth (max 10); identify is the Wilson lower bound of
+blind reads; the mutation pass caught it when a raw 83% was substituted for the bound (M6).
+Third: a render test in jsdom said the tabs were fine while a Chromium render showed them BARE — the stylesheet was
+only injected by the dashboard's render path. Structure tests do not see CSS; one real-browser screenshot per build
+of anything visual is not optional.
+
+### v15.61 — faithful is not the same as useful; what is drawn and what is counted are two lists
+The ladder drew a three-node book as three bars. It was correct (every strike ≥ the threshold), and it told him nothing
+about where the rest of the book sat. Two rules. (1) A display floor is a DISPLAY change: the drawn list may grow, the
+node list (the recorder, the READ, the rolls) must not — so the subs go into `RAILPS_DRAW`, never `RAILPS`, and a test
+pins that nothing else calls the function. (2) The floor fills with what the tape has, never with padding: a 0% strike
+is not drawn. The first mutation pass caught three of four; the survivor ("floor ignored") survived because the test
+only checked n = 8 — `slice(0, 8-n)` is empty at 8 and non-empty at 9. A floor test needs a case ABOVE the floor.
+Found the way the manifest bug was found: by reading his live tape, not the code.
+**And the record nearly lost this build's own exchange.** The context was compacted at 19:29; the transcript then
+held the summary and nothing else, and `tools/chat-history.py` exited "no conversation turns" BEFORE its compaction
+recovery ran — the recovery existed and never executed. Two more holes under it: a reply sent through SendUserMessage
+counted as no text (a tool-heavy turn parses as silence), and a rebuild REPLACED the same context's verbatim entry with
+the summary's abbreviated prompts ("…"). Fixed: recovery before the empty check; SendUserMessage replies are replies;
+the transcript's own record is kept and only the prompts it lacks are recovered (compared on letters and digits, since
+the summary re-punctuates). Rule: a rebuild of the record must never hold less than the record already held.
+
+### v15.60 — every input he can type is the same machine
+
+**What happened.** TRACK (v15.55), then issues, questions and enhancement requests (v15.60) — four kinds of thing he
+types into the panel. The temptation was four stores and four paths. It is one path: typed → the day export → the
+nightly copies it → the review answers in a file → the panel reads the file back. **A second path for the same
+shape is a second thing to forget in the installer manifest, the nightly and the tests.** The only difference between
+a TRACK request and an issue is what the review does with it.
+
 ### v15.59 — what must never be lost goes into the thing he looks at every day
 
 **What happened.** "We have lost so much." The objective and the machinery were documented — in the repo, pinned by

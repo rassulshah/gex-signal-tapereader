@@ -118,11 +118,11 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
 // ---- 5 · the Analysis H2 table shows the book block ---------------------------------------------------
 {
   const g={ PAL, RATE_MIN_N, g3esc:esc, tabEmpty:t=>'<div>'+t+'</div>', sweepsBookLoad:()=>({ corpus:WB.corpus, lookup:WB.lookup }) };
-  const h=build(g,['rateTxt','sweepTableHtml'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g));
+  const h=build(g,['rateTxt','sweepTableHtml','panSection','panNote','panRow'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g));
   ok(/the book · 9 sessions of the panel’s own exports · SPY 3-min/.test(h) && /KING ↓ → LOD/.test(h) && /price sweep AT a top-5 node \/ the King/.test(h) && /thin \(n=/.test(h),'5a the H2 table carries the book block, thin cells say thin',h.slice(h.indexOf('the book'), h.indexOf('the book')+200));
   ok(bareP(h).length===0,'5b no bare % in the table',bareP(h));
   const g2={ PAL, RATE_MIN_N, g3esc:esc, tabEmpty:t=>'<div>'+t+'</div>', sweepsBookLoad:()=>null };
-  const h2=build(g2,['rateTxt','sweepTableHtml'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g2));
+  const h2=build(g2,['rateTxt','sweepTableHtml','panSection','panNote','panRow'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g2));
   ok(/the book table \(SWEEPS-BOOK\.json\) has not been fetched yet/.test(h2),'5c …and says so when the book table is not there');
 }
 

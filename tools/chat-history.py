@@ -59,8 +59,20 @@ def text_of(content):
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return '\n'.join(b.get('text', '') for b in content
-                         if isinstance(b, dict) and b.get('type') == 'text')
+        out = []
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            if b.get('type') == 'text':
+                out.append(b.get('text', ''))
+            # ⚠ (v15.61) A reply sent through the SendUserMessage tool is a reply — the operator read it verbatim —
+            # and on a tool-heavy turn it is the ONLY text there is. Without this, a whole context of such
+            # replies parses as "no conversation turns" and the generator exits before recovery runs.
+            elif b.get('type') == 'tool_use' and b.get('name') == 'SendUserMessage':
+                msg = (b.get('input') or {}).get('message')
+                if isinstance(msg, str) and msg.strip():
+                    out.append(msg)
+        return '\n'.join(out)
     return ''
 
 
@@ -94,6 +106,22 @@ def parse(path):
             except Exception:
                 continue
             m = d.get('message')
+            # ⚠ (v15.62) A MESSAGE HE SENDS WHILE I AM WORKING is not a `message` record at all: the harness stores it
+            # as an `attachment` of type `queued_command` whose `prompt` is a list of blocks (his images, his text) and
+            # surfaces it to me inside a later tool result. Four teaching messages of 2026-09-03 (the deflection
+            # examples) were invisible to this generator until this branch. His words are his words wherever they land.
+            if not isinstance(m, dict) and d.get('type') == 'attachment':
+                att = d.get('attachment') or {}
+                if att.get('type') == 'queued_command':
+                    pr = att.get('prompt')
+                    txt = pr if isinstance(pr, str) else '\n'.join(b.get('text', '') for b in (pr or []) if isinstance(b, dict) and b.get('type') == 'text')
+                    imgs = 0 if isinstance(pr, str) else sum(1 for b in (pr or []) if isinstance(b, dict) and b.get('type') == 'image')
+                    t = scrub(txt)
+                    if imgs:
+                        t = (t + '\n' if t else '') + '[%d image%s attached]' % (imgs, '' if imgs == 1 else 's')
+                    if t and not any(pp.match(t) for pp in NOISE):
+                        turns.append(('user', (d.get('timestamp') or '')[11:16], t + '\n\n_[sent while I was working — a queued message]_'))
+                continue
             if not isinstance(m, dict):
                 continue
             role, content = m.get('role'), m.get('content')
@@ -205,6 +233,8 @@ def recovered_prompts(summary, already):
     # ⚠ Prompts are stored one blockquote line per source line, so a MULTI-LINE prompt is '> ' broken
     # in the file and a raw substring test never matches it — every build would recover it again.
     already = re.sub(r'\s+', ' ', re.sub(r'^\s*>\s?', '', already or '', flags=re.M))
+    _alnum = lambda x: re.sub(r'[^a-z0-9]+', '', x.lower())
+    already_n = _alnum(already)
     m = ALLMSGS.search(summary or '')
     if not m:
         return []
@@ -227,6 +257,17 @@ def recovered_prompts(summary, already):
                 continue
             if already.find(key) >= 0:
                 continue          # an earlier entry already quotes it
+            # (v15.61) the summary ABBREVIATES long prompts with "..." — every fragment of an abbreviated prompt
+            # found in what the file already quotes verbatim means the file holds the fuller version; keep that.
+            # Punctuation and spacing differ between the summary and the transcript ("1st one , it" vs "1st one, it"),
+            # so the comparison is on letters and digits only.
+            segs = [_alnum(x) for x in re.split(r'\.\.\.|…', key) if len(_alnum(x)) >= 12]
+            if segs and all(already_n.find(sg) >= 0 for sg in segs):
+                continue
+            # The summary also PARAPHRASES the middle of a long prompt ("[full TRACK ask]"); its opening is verbatim.
+            # A long opening already quoted means the file holds the whole prompt from the transcript.
+            if segs and len(segs[0]) >= 25 and already_n.find(segs[0][:40]) >= 0:
+                continue
             if any(re.sub(r'\s+', ' ', o) == key for o in out):
                 continue
             out.append(txt)
@@ -261,8 +302,6 @@ def main():
 
     path = a.transcript or newest_transcript()
     turns = merge_adjacent(parse(path))
-    if not turns:
-        sys.exit('transcript parsed but held no conversation turns')
 
     prev_md = ''
     if os.path.exists(OUT):
@@ -272,23 +311,46 @@ def main():
     # prompt recovered by the previous run of this same context must be recovered again — otherwise
     # every build after the first writes an entry with no prompts at all.
     earlier_md = prev_md.split(MARK_OLD, 1)[1] if MARK_OLD in prev_md else prev_md
-    rec = recovered_prompts(compaction_summary(path), earlier_md)
+    sid = os.path.basename(path).replace('.jsonl', '')[:8]
+    summary = compaction_summary(path)
+    # ⚠⚠ (v15.61) THE TRANSCRIPT'S OWN RECORD OUTRANKS THE SUMMARY'S. When this SAME context was already written
+    # before the compaction, its CURRENT entry holds the operator's prompts verbatim from the transcript; the
+    # summary holds them abbreviated ("…"). Replacing the entry with the recovered set — what this tool did at
+    # v15.61 before this block — threw the verbatim record away for a paraphrase. So: keep the previous
+    # exchange as it was, recover only the prompts it does not already quote, then append the turns after
+    # the compaction. The ITEM 18 rule in one line: never let a rebuild hold less than the file already held.
+    prev_exchange = ''
+    if summary and MARK_CUR in prev_md:
+        cur_prev = prev_md.split(MARK_CUR, 1)[1].split(MARK_OLD, 1)[0]
+        if ('session `%s`' % sid) in cur_prev:
+            m = re.search(r'^### THE EXCHANGE\s*\n(.*?)(?=^### |\Z)', cur_prev, re.S | re.M)
+            if m and m.group(1).strip():
+                prev_exchange = m.group(1).strip()
+    rec = recovered_prompts(summary, earlier_md + '\n' + prev_exchange)
     if rec:
         turns = [['user', '', t + '\n\n_[RECOVERED from the compaction summary — this context was '
                   'compacted and the transcript no longer holds the turn itself]_'] for t in rec] + turns
+    # ⚠ (v15.61) The empty check lives AFTER recovery: right after a compaction the transcript holds the summary
+    # and nothing else, and exiting here threw the recovered prompts away with it (v15.61 hit exactly this).
+    if not turns:
+        sys.exit('transcript parsed but held no conversation turns')
 
-    sid = os.path.basename(path).replace('.jsonl', '')[:8]
     ver = a.version or detect_version()
     day = datetime.date.today().isoformat()
     prompts = [t for t in turns if t[0] == 'user']
+    n_prompts = len(prompts) + len(re.findall(r'^\*\*OPERATOR:\*\*', prev_exchange, re.M))
 
     head = f"## {day} · v{ver} · session `{sid}`"
     if a.title:
         head += f" — {a.title}"
 
     body = [MARK_CUR, '', head, '',
-            f"_{len(prompts)} operator prompts · transcript `{os.path.basename(path)}`_", '',
+            f"_{n_prompts} operator prompts · transcript `{os.path.basename(path)}`_", '',
             '### THE EXCHANGE', '']
+    if prev_exchange:
+        body += [prev_exchange, '',
+                 '_— the context was COMPACTED here: the turns above are the transcript\'s own record, written before '
+                 'the compaction; what follows is recovered from the summary, then the turns after it —_', '']
 
     for role, ts, t in turns:
         if role == 'user':
@@ -359,7 +421,7 @@ def main():
 
     if a.dry_run:
         print(out[:4000])
-        print(f"\n... [{len(out)} bytes total, {len(prompts)} prompts]")
+        print(f"\n... [{len(out)} bytes total, {n_prompts} prompts]")
         return
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

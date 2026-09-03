@@ -78,6 +78,8 @@ global.T_PRESETS=[{id:'orbit',label:'King ORBIT'}];
 
 eval(['effN','nTxt','pctN','_fpct','gradeMonotone','featStatsCached','featStatsInvalidate','ruleLocalRate',
       'secOpen','secToggle','tabSection','tabEmpty','tabTile','tabGuideBtn','tabHeader','tabGuide',
+      // (v15.62) the mockups' chrome
+      'panelScale','setPanelScale','panOpen','panSection','panRow','panNote','panFoot',
       'deflStats','deflTableHtml','deflectionsSectionHtml','selfTestDay','selfTestRun','selfTestHtml',
       'unlockRowsHtml','yourCallsHtml','proposalsQueueHtml','challengersHtml2',
       'killListHtml2','featPredBand','canFailHtml','preregStats','preregHtml','wilsonCI','hodlodCalib','hodlodSectionHtml','analysisBlock','testingBlock',
@@ -96,6 +98,8 @@ global.g3esc=function(s){ return String(s==null?'':s); }; global.g3tip=function(
 global.PREREG_FROM='2026-09-03'; global.DEFL_ARCH_N=0; global.FEAT_ARCHIVE={};
 global.PREREG=[{ id:'H1', claim:'x', minN:40, note:'', pick:function(s){ return s.gradeA; } }];
 global.TAB_SECTIONS={}; global.TAB_GUIDE={}; global.SELFTEST_LAST=null;
+// (v15.62) the mockups' chrome leans on these
+global.PANEL_SCALE_KEY='gpts_tabscale_v1'; global.PANEL_SCALES=[1,1.55,2.1]; global.PANEL_CSS=''; global.ensureV3Css=function(){}; global.loopStatus=function(){ return {}; }; global.LEARN_VIEW=false;
 
 function emptyStats(){ return { byKey:{}, byGrade:{dir:{},node:{},dirSide:{}}, cells:{},
   act:{take:{n:0,hit:0,mfe:0,mae:0,mn:0},pass:{n:0,hit:0,mfe:0,mae:0,mn:0}}, frame:{}, partial:0, days:0, dayKeys:[] }; }
@@ -109,9 +113,11 @@ ok(typeof A==='string' && A.length>0, '1a the Analysis tab renders');
 // (v15.55) THE TAB BY SUBJECT — design/ANALYSIS-TESTING-BY-SUBJECT.md: the subject strip, then the selected
 // subject's subsections (H by default: H1 … H7), the live evidence inside them, the TRACK field under them.
 var ASECS=[['K','KINGS'],['H','HOD / LOD'],['H1','Is the extreme in'],['H2','SWEEPS'],['TRACK SOMETHING UNDER','H']];
+// (v15.62) the mockup's section header renders the number and the title as two spans
+var hasSec=function(h,p){ var a=h.indexOf(p[0]+' '+p[1]); if(a>=0) return a; return h.indexOf('>'+p[0]+'</span><span class="t">'+p[1]); };
 var lastAt=-1, inOrder=true;
 ASECS.forEach(function(p){
-  var at=A.indexOf(p[0]+' '+p[1]);
+  var at=hasSec(A,p);
   ok(at>=0, '1·Analysis '+p[0]+' '+p[1]+' is present');
   if(at<lastAt) inOrder=false;
   lastAt=at;
@@ -127,7 +133,7 @@ ok(typeof T==='string' && T.length>0, '2a the Testing tab renders');
 var TSECS=[['\u2460','THE REGISTER'],['\u2461','THE GATE'],['③','ON THE DASHBOARD'],['④','THE RECORD'],['\u2464','THE NIGHTLY'],['⑥','THE SUITE']];
 lastAt=-1; inOrder=true;
 TSECS.forEach(function(p){
-  var at=T.indexOf(p[0]+' '+p[1]);
+  var at=hasSec(T,p);
   ok(at>=0, '2·Testing '+p[0]+' '+p[1]+' is present');
   if(at<lastAt) inOrder=false;
   lastAt=at;
@@ -146,7 +152,7 @@ var openA=analysisBlock();
 ok(openA.indexOf('▾')>=0, '3c an open section shows ▾');
 secToggle('sj-H1');   // (v15.55) H1 is the first subsection of the default subject
 var closedA=analysisBlock();
-ok(closedA.indexOf('H1 Is the extreme in')>=0, '3d a closed section still shows its header');
+ok(hasSec(closedA,['H1','Is the extreme in'])>=0, '3d a closed section still shows its header');
 ok(closedA.length<openA.length, '3e ...but its body is gone (the point of collapsing)', openA.length+' -> '+closedA.length);
 ok(closedA.indexOf('▸')>=0, '3f ...and the caret flips to ▸');
 secToggle('sj-H1');
@@ -299,11 +305,13 @@ ok(!/width:\s*\d{3,}px/.test(both), '10a no fixed pixel width over 99px anywhere
 // nowrap survives only on short numeric cells (an eff-n column, a from→to pair). Every
 // explanatory line is white-space:normal, which is what makes the panel readable at 250px.
 ok((both.match(/white-space:nowrap/g)||[]).length<=9, '10b nowrap is confined to short numeric cells (v15.55: +1, the TRACK field\'s "+ Add" button)', (both.match(/white-space:nowrap/g)||[]).length);
-ok((both.match(/white-space:normal/g)||[]).length > (both.match(/white-space:nowrap/g)||[]).length*3,
-   '10b2 ...and wrapping prose outnumbers it by more than 3:1', (both.match(/white-space:normal/g)||[]).length+' vs '+(both.match(/white-space:nowrap/g)||[]).length);
+// (v15.62) the wrapping moved into the mockup's stylesheet: the prose classes wrap there, every table is 100% there
+var PCSS=require('child_process').execSync('python3 tools/panel-css.py',{encoding:'utf8'});
+ok(/#gpts-body \.g3pan \.qq,#gpts-body \.g3pan \.v,#gpts-body \.g3pan \.note,#gpts-body \.g3pan \.rs\{white-space:normal\}/.test(PCSS) && (both.match(/white-space:normal/g)||[]).length>=5,
+   '10b2 ...and the prose wraps: the question, the value, the note and the result classes are white-space:normal in the stylesheet, the live evidence inline', (both.match(/white-space:normal/g)||[]).length+' inline');
 ok(/white-space:normal/.test(both), '10c ...and the explanatory lines explicitly wrap');
-ok((both.match(/<table style="width:100%/g)||[]).length===(both.match(/<table/g)||[]).length,
-   '10d every table is width:100%, so nothing overflows a 250px panel');
+ok((both.match(/<table(?! style="width:100%)[^>]*style=/g)||[]).length===0 && /#gpts-body \.g3pan table\{[^}]*width:100%/.test(PCSS),
+   '10d every table is width:100% through the stylesheet, so nothing overflows a 250px panel');
 ok(true, '10e (v15.54) no headline tiles to wrap');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

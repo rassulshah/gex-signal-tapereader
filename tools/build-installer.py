@@ -244,7 +244,9 @@ FILES += sorted(f for f in os.listdir('.') if f.startswith('mockuphodlod') and f
 # listed HERE, by glob, and test_installer_manifest.js pins the list against the panel's fetch calls.
 import glob as _glob
 for _p in sorted(set(_glob.glob('learning/*.json') + _glob.glob('learning/*.md') + _glob.glob('learning/log/*.json') +
-                     _glob.glob('learning/nightly/*.md') + _glob.glob('data/es-1min/*.json') + _glob.glob('review/*.json'))):
+                     _glob.glob('learning/nightly/*.md') + _glob.glob('data/es-1min/*.json') + _glob.glob('review/*.json') +
+                     # (v15.62) the deflection learning doc: the json the 📚 Learn tab fetches, the .md a context reads, the images
+                     _glob.glob('learning/deflections/*.json') + _glob.glob('learning/deflections/*.md') + _glob.glob('learning/deflections/img/*.png'))):
     if os.path.isfile(_p) and _p not in FILES:
         FILES.append(_p)
 # --list: print the manifest and stop — what the test reads

@@ -35,14 +35,16 @@ PLAN = {
     {"tab": "Analysis", "role": "ASK AND READ", "line": "the registry: every study by subject, its status, its result with n; the TRACK field"},
     {"tab": "Testing", "role": "TRUST AND PROMOTE", "line": "the register, the gate, what the ladder renders and why, the record, the nightly, the suite"},
     {"tab": "Architecture", "role": "THE HOW", "line": "the objective and the loop, as live status — is the machinery working today"},
-    {"tab": "Roadmap", "role": "THE PLAN", "line": "what shipped, what is next, in order, each with the objective it serves"}
+    {"tab": "Roadmap", "role": "THE PLAN", "line": "what shipped, what is next, in order, each with the objective it serves; your enhancement requests"},
+    {"tab": "Open Items", "role": "PROJECT MANAGEMENT", "line": "your issues and questions, with the review's answer under each"},
+    {"tab": "Learn", "role": "TEACH", "line": "the deflection learning doc: your screenshots, my blind calls, what the record says, the rules, and the 0–100 gauge"}
   ],
   "stages": [
-    {"n": 1, "id": "RECORD", "who": "browser", "what": "every bar's book and price (snaps), every tap (defl), every scored feature (feat), what he asked to track (requests)", "writes": "recorder store · IDB", "probe": "rec"},
+    {"n": 1, "id": "RECORD", "who": "browser", "what": "every bar's book and price (snaps), every tap (defl), every scored feature (feat), what he asked to track (requests), his issues, questions and enhancement requests (items)", "writes": "recorder store · IDB", "probe": "rec"},
     {"n": 2, "id": "EXPORT", "who": "browser", "what": "Save writes the day file — the day, the book, the ES bars, the requests", "writes": "data/<day>.json", "probe": "saved"},
     {"n": 3, "id": "PUSH", "who": "his machine", "what": "push-data.bat / the installer push to GitHub — the cloud cannot push", "writes": "GitHub main", "probe": "pushed"},
-    {"n": 4, "id": "NIGHTLY", "who": "cloud", "what": "verdicts per hypothesis (read ONCE at minN), refreshes the tables, copies TRACK requests, writes the log", "writes": "learning/log/<day>.json · SWEEPS*.json · requests.json", "probe": "nightly"},
-    {"n": 5, "id": "REVIEW", "who": "cloud (LLM)", "what": "a READ becomes a hypothesis (predict + refuteIf fixed before the data), a request becomes a study row, a refuted rule retires, FINDINGS written", "writes": "register.json · studies.json · FINDINGS.md", "probe": "review"},
+    {"n": 4, "id": "NIGHTLY", "who": "cloud", "what": "verdicts per hypothesis (read ONCE at minN), refreshes the tables, copies TRACK requests and open items, writes the log", "writes": "learning/log/<day>.json · SWEEPS*.json · requests.json · items.json", "probe": "nightly"},
+    {"n": 5, "id": "REVIEW", "who": "cloud (LLM)", "what": "a READ becomes a hypothesis (predict + refuteIf fixed before the data), a request becomes a study row, an issue/question/enhancement gets its answer in items.json, a refuted rule retires, a taught screenshot becomes a learning example with the record's numbers (tools/node-lookup.py) and a rule L-n, FINDINGS written", "writes": "register.json · studies.json · items.json · deflections/examples.json · FINDINGS.md", "probe": "review"},
     {"n": 6, "id": "REGISTRY", "who": "cloud", "what": "studies.json (subjects → subsections → studies, result WITH n) and register.json are what the tabs render", "writes": "learning/studies.json · register.json", "probe": "registry"},
     {"n": 7, "id": "BUILD", "who": "cloud", "what": "code + mutation-tested assertions + docs + chat history; the installer carries EVERY file the panel fetches", "writes": "installvNNNN.bat", "probe": "suite"},
     {"n": 8, "id": "INSTALL", "who": "his machine", "what": "run the .bat (it pushes), click the Tampermonkey links, reload; the panel fetches the registry, the tables, the log", "writes": "the running panel", "probe": "version"},
@@ -58,9 +60,12 @@ PLAN = {
     {"rule": "every level named live is made the way the corpus made it", "test": "overnightHL().full · companion v1.18 · test_v1556"},
     {"rule": "every new assertion is mutation-tested", "test": "BUILD-CHECKLIST §2"},
     {"rule": "every file the panel fetches rides the installer", "test": "test_installer_manifest.js"},
-    {"rule": "after an install, probe the live panel — never assume", "test": "this tab"}
+    {"rule": "after an install, probe the live panel — never assume", "test": "this tab"},
+    {"rule": "the mockup's look is the panel's look — one stylesheet, one skeleton", "test": "test_v1562 1a · 2e"},
+    {"rule": "a deflection is never called from the picture alone — the record is looked up; the gauge cannot flatter", "test": "tools/node-lookup.py · test_v1562 3f/3g/3l"}
   ],
   "hardening": [
+    "the deflection candidate score — the L-rules as a live score per node, measured by the ledger's outcomes (the gauge's predict part)",
     "score THE READ (stage ⑪)",
     "one definitions file read by Python and the panel, pinned equal",
     "the nightly reads one READ NEXT study per night and writes it back",
@@ -74,13 +79,17 @@ PLAN = {
     {"v": "15.56", "title": "the book's levels in the sweep read · the book table · the honest overnight (companion v1.18)", "serves": "HOD/LOD · H6", "status": "shipped", "date": "2026-09-03"},
     {"v": "15.57", "title": "EM edges · VWAP + bands · developing profile · London · HVL/magnet · the two-line rule", "serves": "HOD/LOD · PULLBACK (interior levels are pullback candidates)", "status": "shipped", "date": "2026-09-03"},
     {"v": "15.58", "title": "the READ ranks reclaimed sweeps first · the Testing tab as mocked · the installer manifest carries every fetched file", "serves": "the loop", "status": "shipped", "date": "2026-09-03"},
-    {"v": "15.59", "title": "the ⚙ Architecture and 🗺 Roadmap tabs — the WHAT, the HOW and the plan inside the app, as live status", "serves": "never forgetting the objective and the machinery", "status": "next", "done": "the tabs render from learning/plan.json; the docs, the file and the seed are pinned equal; a 404 shows a red stage"},
-    {"v": "15.60", "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured", "serves": "HOD/LOD · the loop closes", "status": "later", "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"},
-    {"v": "15.61", "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme", "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6", "status": "later", "done": "40 taps recorded and the first F-study reads from them with n"},
-    {"v": "15.62", "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study", "serves": "the loop closes on its own", "status": "later", "done": "a study changes status without a human editing the seed"},
-    {"v": "15.63", "title": "one definitions file (Python + panel) · the shipped-artifact test", "serves": "hardening", "status": "later", "done": "changing a bin in one place fails the suite until the other side follows"},
-    {"v": "15.64", "title": "the face manifest — every number on the face names its study, pinned by a test", "serves": "data-driven, enforced", "status": "later", "done": "a new number on the face without a study fails the suite"},
-    {"v": "15.65", "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move", "serves": "PULLBACK", "status": "later", "done": "a resume rate with n renders on a tier-3 READ line"}
+    {"v": "15.59", "title": "the ⚙ Architecture and 🗺 Roadmap tabs — the WHAT, the HOW and the plan inside the app, as live status", "serves": "never forgetting the objective and the machinery", "status": "shipped", "date": "2026-09-03"},
+    {"v": "15.60", "title": "the 📌 Open Items tab (issues, questions) and enhancement requests on the Roadmap — one field, one store, the review answers in the file", "serves": "complete application management: requirements → design → open items", "status": "shipped", "date": "2026-09-03"},
+    {"v": "15.61", "title": "the ladder floor — never fewer than 8 strikes when the tape has them: sub-threshold strikes drawn dimmed as CONTEXT rows, display only (his 'only 3 strikes' ask)", "serves": "HOD/LOD · seeing the node around the King on a concentrated book", "status": "shipped", "date": "2026-09-03"},
+    {"v": "15.62", "title": "the mockups' look is the panel's look (one stylesheet, one skeleton, the scale control) · the 📚 Learn tab — the deflection learning doc, four taught examples checked against the record, eight rules, the 0–100 gauge", "serves": "PULLBACK · HOD/LOD · learning to identify and predict deflections", "status": "next", "done": "the Analysis tab's skeleton equals the mockup generator's; a screenshot he teaches with renders on the Learn tab with the record's numbers, and the gauge cannot move on taught examples alone"},
+    {"v": "15.63", "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part", "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'", "status": "later", "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"},
+    {"v": "15.64", "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured", "serves": "HOD/LOD · the loop closes", "status": "later", "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"},
+    {"v": "15.65", "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme", "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6", "status": "later", "done": "40 taps recorded and the first F-study reads from them with n"},
+    {"v": "15.66", "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study", "serves": "the loop closes on its own", "status": "later", "done": "a study changes status without a human editing the seed"},
+    {"v": "15.67", "title": "one definitions file (Python + panel) · the shipped-artifact test", "serves": "hardening", "status": "later", "done": "changing a bin in one place fails the suite until the other side follows"},
+    {"v": "15.68", "title": "the face manifest — every number on the face names its study, pinned by a test", "serves": "data-driven, enforced", "status": "later", "done": "a new number on the face without a study fails the suite"},
+    {"v": "15.69", "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move", "serves": "PULLBACK", "status": "later", "done": "a resume rate with n renders on a tier-3 READ line"}
   ],
   "decisionsHis": [
     "the Skylit API backfill (~15–20k credits): years of taps in an afternoon — unblocks most OPEN studies",

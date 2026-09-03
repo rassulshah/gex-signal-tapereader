@@ -47,7 +47,9 @@ tap, what the measurements support — with n, or "unmeasured".
 The three tabs are the loop's three faces. **Dashboard = act** (what the tables support right now).
 **Analysis = ask and read** (the registry: every study, its status, its result with n; the TRACK
 field). **Testing = trust and promote** (the register, the gate, what the ladder renders and why, the
-record, the nightly, the suite).
+record, the nightly, the suite). **Learn = teach** (v15.62): his screenshots become examples checked
+against the record, the examples become rules, the rules become the deflection scorer's features
+(v15.63) — and the gauge says how good the identification has become, on blind reads only.
 
 ## 2 · The files, and who writes each
 
@@ -57,6 +59,8 @@ record, the nightly, the suite).
 | `learning/studies.json` | `tools/studies-seed.py` (edited by the review — never the JSON by hand) | Analysis, Testing, the mockups |
 | `learning/register.json` | the review (append only; a row is never edited after it is written) | Testing ①, the nightly, `PREREG_SEED` pinned equal |
 | `learning/requests.json` | the nightly (`ingest_requests`) | the review |
+| `learning/items.json` | the nightly (`ingest_items`); the review writes the answers | 📌 Open Items, 🗺 Roadmap (enhancements) |
+| `learning/deflections/examples.json` + `LEARNING.md` + `img/` | `tools/learn-seed.py` (the review adds each taught screenshot, checked with `tools/node-lookup.py`) | 📚 Learn (the tab), every context on load (the doc) |
 | `learning/log/<day>.json` | the nightly | Testing ⑤, the READ's register line |
 | `learning/suite.json` | `tools/run-tests.sh` | Testing ⑥ |
 | `learning/rules.json` | the weekly learning run | the ladder (tiers), Testing ③ |
@@ -80,12 +84,15 @@ pins the builder's `--list` against every `pipeFetch` path in the panel.
 | every new assertion is mutation-tested | an assertion that never fails buys false confidence | `BUILD-CHECKLIST §2`, the mutation pass in every v155x build |
 | every file the panel fetches rides the installer | the cloud cannot push | `test_installer_manifest.js` |
 | the suite, the resume note, the changelog, the lessons and the chat history move with the code | a stale note cost seven builds | `test_savedone`, `test_chat_history`, `test_lessons`, `test_recordcurrent` |
-| after an install, PROBE THE LIVE PANEL, never assume | the manifest bug was found only by reading his tab | the ⚙ Architecture tab (the loop as live status, v15.59) |
+| after an install, PROBE THE LIVE PANEL, never assume | the manifest bug was found only by reading his tab; the three-bar ladder (v15.61) only by reading his tape | the ⚙ Architecture tab (the loop as live status, v15.59) |
+| what the ladder DRAWS and what the engine COUNTS are two lists | a display floor must never change what is recorded or scored | `ladderSubPiles` feeds `RAILPS_DRAW` only; `test_v1561 1f/1g` |
+| the mockup's look is the panel's look — one stylesheet, one skeleton | the tabs were re-typed "as mocked" twice and drifted twice | `tools/panel-css.py` == `PANEL_CSS`; the skeleton pin `test_v1562 2e` |
+| a deflection is never called from the picture alone; the gauge cannot flatter | a remembered pattern is not a measured one | `tools/node-lookup.py`; identify = Wilson lower bound of BLIND reads (`test_v1562 3f/3g/3l`) |
 
 ## 4 · What is thin, what is open, what is next — honestly
 
 - The book corpus is **9 sessions**; every cell thin. It grows one session per export. H6 reads at 40.
-- **94 studies are OPEN on the TAP record** (v15.61): the per-tap fields (trinity, gatekeeper ratio,
+- **94 studies are OPEN on the TAP record** (v15.63): the per-tap fields (trinity, gatekeeper ratio,
   growth into the tap, node state, both zones, extent, `wasSessionExtreme`) are not recorded yet.
 - The READ is **not yet scored**: what it said about a sweep is not written to the day file and the
   nightly does not check whether the candidate printed the extreme. That is stage ⑪ and it is the
@@ -95,6 +102,9 @@ pins the builder's `--list` against every `pipeFetch` path in the panel.
 
 ## 5 · How to tighten and harden it (the standing backlog, in order)
 
+0. **The deflection candidate score** (v15.63): the L-rules as features in the register, scored by the
+   deflection ledger's outcomes — the gauge's predict part. *Definition of done:* 30 scored calls and a
+   Wilson lower bound on the Learn tab.
 1. **Score the READ** (⑪): write each sweep line's verdict candidate to the day file; the nightly
    labels it at the close; Testing ③ shows the READ's own hit rate with n. *Definition of done:* a
    cell "READ said candidate → printed the extreme x% (n)" on Testing.

@@ -19,6 +19,7 @@ the verdict. The verdicts are proposals; his call.
 | **LEVEL** | IB, prior day, the SPY King, IF levels (italic) | HOD/LOD (H2 sweeps), PULLBACK (P5 confluence) | H2.*, P5.2 | descriptive | keep; the sweep read now names which of these were run |
 | **PRICE** | the strike on this chart's scale | — (axis) | — | descriptive | keep |
 | **NODE · %KING** | dealer exposure at the strike as a share of the King's; colour = polarity | MOVEMENT · F5 magnitude · F6 polarity | F5.1, F5.3, F6.1 (H3 null) | descriptive; the polarity colour implies nothing measured (H3: 52.2 vs 52.1%) | keep the size; **stop implying polarity predicts** — keep the colour as identity only (hover says H3) |
+| **context rows** (v15.61, dimmed outline bars) | the next-strongest strikes BELOW the node threshold, drawn only when fewer than 8 nodes clear it, with their real %King | MOVEMENT (where the rest of the book sits around the King) | — | descriptive; display only — not a node, not recorded, not scored | keep; the hover says what it is |
 | **NOW** | price and the three crowns | HOD/LOD (K1 which King, F7 trinity) | K1.*, F7.* | descriptive | keep |
 | **MARK** | IN PLAY / DEFENDING / BREAKING / ATTRACTING | PULLBACK · HOD/LOD (the tap) | F1.*, F3.* | **unmeasured** — the words assert a state whose hold rate is not on the face | keep the label, add the measured hold rate for that state when F3.1 reads; until then hover says "descriptive" |
 | **Δ15m** | dollars gained / lost at the strike over 15 min | MOVEMENT · F4 growth into the tap | F4.1, S6.2 | descriptive (F4: growth mattered, pairing did not — exploratory) | keep; the tap record makes it a measured condition |
@@ -58,7 +59,7 @@ The A row is today (actual), the E row is the expected value from 284 sessions (
 
 | element | shows | verdict |
 |---|---|---|
-| pipeline dots (rec · saved · pushed · review · deps) | the loop's stages ①–⑤ as dots | keep; expand into the ⚙ Process tab (roadmap v15.60) |
+| pipeline dots (rec · saved · pushed · review · deps) | the loop's stages ①–⑤ as dots | keep; the ⚙ Architecture tab (v15.59) is the expansion; the Analysis / Testing / Learn tabs repeat rec · saved · pushed in their foot (v15.62) |
 | version, Save, folder | the build, the export, the repo folder | keep |
 | step tips (hover doctrine) | the five-step execution doctrine as hovers | keep (doctrine, C-numbered) |
 

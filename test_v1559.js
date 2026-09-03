@@ -24,8 +24,9 @@ const planVersions=plan.roadmap.filter(x=>x.status!=='shipped').map(x=>x.v);
 ok(docVersions.length>=6 && docVersions.every(v=>planVersions.indexOf(v)>=0),'1f every roadmap version in ROADMAP.md is in plan.json',{doc:docVersions,plan:planVersions});
 ok(planVersions.every(v=>docVersions.indexOf(v)>=0),'1g …and every unshipped plan item is in ROADMAP.md',{doc:docVersions,plan:planVersions});
 ok(plan.roadmap.filter(x=>x.status==='next').length===1 && plan.roadmap.every(x=>['shipped','next','later'].indexOf(x.status)>=0) && plan.roadmap.filter(x=>x.status!=='shipped').every(x=>x.done),'1h exactly one NEXT; every unshipped item says what done means');
-ok(plan.roadmap.find(x=>x.status==='next').v==='15.59' && /Architecture/.test(plan.roadmap.find(x=>x.status==='next').title),'1i the NEXT item is this build (the tabs), so the Roadmap tab marks it RUNNING');
-ok(plan.tabs.length===5 && plan.tabs.map(t=>t.tab).join(',')==='Dashboard,Analysis,Testing,Architecture,Roadmap','1j the five tabs and their roles');
+const GV=(src.match(/var GPTS_VERSION='([0-9.]+)'/)||[])[1];
+ok(plan.roadmap.find(x=>x.status==='next').v===GV,'1i the NEXT item is the running build (v'+GV+'), so the Roadmap tab marks it RUNNING',plan.roadmap.find(x=>x.status==='next').v);
+ok(plan.tabs.length===7 && plan.tabs.map(t=>t.tab).join(',')==='Dashboard,Analysis,Testing,Architecture,Roadmap,Open Items,Learn','1j the seven tabs and their roles (v15.60: Open Items · v15.62: Learn)');
 ok(plan.rules.length>=8 && plan.rules.every(r=>r.rule && r.test),'1k every rule names the test behind it');
 
 // ---- 2 · the tabs render, with data and with a broken loop ----------------------------------------------
@@ -50,11 +51,12 @@ ok(plan.rules.length>=8 && plan.rules.every(r=>r.rule && r.test),'1k every rule 
   run('RENDER_ERRS.length=0'); run('__gptsDebug.showArchitecture(true)');
   let html=run('elBody.innerHTML'); let errs=JSON.parse(run('JSON.stringify(__gptsDebug.renderErrors())')||'[]');
   ok(errs.length===0,'2a the Architecture tab renders with nothing swallowed',errs);
-  ok(['Dashboard','Analysis','Testing','Architecture','Roadmap'].every(t=>html.indexOf(t)>=0),'2b the tab bar has five tabs');
+  ok(['Dashboard','Analysis','Testing','Learn','Architecture','Roadmap','Open Items'].every(t=>html.indexOf(t)>=0),'2b the tab bar has seven tabs');
   ok(html.indexOf(plan.objective.one.slice(0,60))>=0 && /The mechanism:/.test(html) && /TREND REVERSAL/.test(html) && /PULLBACK REVERSAL/.test(html) && /expensive/i.test(html)===false || /Confusing the pullback/.test(html),'2c ① THE WHAT: the objective, the mechanism, the two kinds, the expensive error');
   plan.stages.forEach(sg=>ok(new RegExp('>'+sg.id+'<').test(html),'2d ② the loop draws stage '+sg.id));
   ok(/studies · SWEEPS suite loaded/.test(html) && /the review’s files are here/.test(html),'2e with the files fetched, REGISTRY and REVIEW are green with their evidence');
-  ok(/not built — v15\.60/.test(html),'2f SCORE is honestly red: not built');
+  const scoreV=(plan.roadmap.find(x=>/score THE READ/.test(x.title)&&x.status!=='shipped')||{}).v;
+  ok(!!scoreV && new RegExp('not built — planned v'+scoreV.replace('.','\\.')).test(html),'2f SCORE is honestly red: not built — and names the plan’s version for it (v'+scoreV+'), not a typed one',scoreV);
   ok(/of 11 stages green right now/.test(html),'2g the header counts the green stages');
   // (b) nothing fetched -> the seeds render, REGISTRY / REVIEW / NIGHTLY are red
   run=boot({});
@@ -64,7 +66,7 @@ ok(plan.rules.length>=8 && plan.rules.every(r=>r.rule && r.test),'1k every rule 
   // (c) the roadmap tab
   run('__gptsDebug.showRoadmap(true)'); html=run('elBody.innerHTML');
   ok(/① NEXT/.test(html) && /② AFTER THAT/.test(html) && /③ SHIPPED/.test(html) && /④ HIS DECISIONS/.test(html) && /⑤ STANDING CONSTRAINTS/.test(html),'2j the Roadmap tab: NEXT · AFTER THAT · SHIPPED · HIS DECISIONS · STANDING CONSTRAINTS');
-  ok(/v15\.59<\/span><div[^>]*>RUNNING/.test(html),'2k the running version is marked on its row');
+  ok(new RegExp('v'+GV.replace('.','\\.')+'</span><div[^>]*>RUNNING').test(html),'2k the running version is marked on its row');
   const order=plan.roadmap.filter(x=>x.status==='later').map(x=>html.indexOf('v'+x.v+'</span>'));
   ok(order.every(i=>i>=0) && order.every((v,i)=>i===0||v>order[i-1]),'2l AFTER THAT keeps the plan’s order',order);
   ok(/done when: /.test(html) && /Skylit API backfill/.test(html) && (/one install file per build/.test(html) || /STANDING CONSTRAINTS/.test(html)),'2m done-when lines, his open decisions, the standing constraints (folded by default)');

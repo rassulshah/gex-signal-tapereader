@@ -131,7 +131,7 @@ ok(/Math\.max\(up,dn\)\/vn\)>=0\.90/.test(ex('selfTestRun')), '8g ...and the sel
 
 // ---------------- 9. (v10.54) IT IS REACHABLE FROM THE TESTING TAB ----------
 ok(/data-gselftest/.test(src), '9a the self-test is behind a button, not a console call');
-ok(/'⑥','SELF-TEST'/.test(src) || /'⑥','THE SUITE \\u00b7 self-test'/.test(src), '9b ...in section ⑥ of the Testing tab (v15.58: ⑥ THE SUITE · self-test)');
+ok(/'⑥','SELF-TEST'/.test(src) || /'⑥','THE SUITE \\u00b7 self-test'/.test(src) || /panSection\('t5','\\u2465','THE SUITE'/.test(src), '9b ...in section ⑥ of the Testing tab (v15.62: ⑥ THE SUITE, the mockup’s section)');
 ok(/SELFTEST_LAST=selfTestRun\(\)/.test(src), '9c clicking it runs the scorer');
 ok(/finds the planted edge/.test(src) && /flags the 1-way trap/.test(src) && /splits the regime-dependent rule/.test(src),
    '9d the three checks are named in plain language, not by key');

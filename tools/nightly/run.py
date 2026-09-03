@@ -219,6 +219,10 @@ def run(upto=None, write=True, reg_path=REG, days=None):
         newreq = ingest_requests(days) if write else 0
     except Exception as eR:
         newreq = 0; print('requests ingest threw:', eR)
+    try:
+        newitems = ingest_items(days) if write else 0
+    except Exception as eI:
+        newitems = 0; print('items ingest threw:', eI)
     # (v15.55) refresh the sweep table the panel reads (data/es-1min/SWEEPS.json) when the ES file is present
     try:
         if write: refresh_sweeps()
@@ -230,7 +234,7 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     preopen = ('%d session%s since %s · %d episodes · %d of %d hypotheses still thin · null band %.1f pts'
                % (n_sess, '' if n_sess == 1 else 's', frm, len(eps), thin, len(verdicts), null['p95']))
     log = dict(schema=2, date=last, writtenBy='tools/nightly/run.py', from_=frm, sessions=n_sess, episodes=len(eps),
-               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0))
+               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0), newItems=(newitems if write else 0))
     log['from'] = log.pop('from_')
     if write:
         os.makedirs(LOGD, exist_ok=True)
@@ -260,6 +264,28 @@ def ingest_requests(days):
     if added or not os.path.exists(REQ):
         io.open(REQ, 'w', encoding='utf-8').write(json.dumps(cur, indent=1, ensure_ascii=False))
         print('requests: %d new -> learning/requests.json (%d total)' % (added, len(cur['requests'])))
+    return added
+
+ITEMS = os.path.join(ROOT, 'learning', 'items.json')
+
+def ingest_items(days):
+    """(v15.60) issues · questions · enhancement requests typed into the panel, copied from data/<day>.json `items`.
+    Append-only by id. The review sets status (SEEN / ANSWERED / FIXED / PLANNED / DECLINED), answer, link, answeredOn."""
+    cur = {'schema': 1, 'asOf': None, 'note': 'issues, questions and enhancement requests from the panel (Open Items / Roadmap tabs), copied by the nightly; the review answers here and the panel reads it back', 'items': []}
+    if os.path.exists(ITEMS):
+        try: cur = json.load(open(ITEMS))
+        except Exception: pass
+    seen = set(r.get('id') for r in cur.get('items', []))
+    added = 0
+    for d, D in days:
+        for r in (D.get('items') or []):
+            if not r or not r.get('id') or r['id'] in seen: continue
+            cur['items'].append(dict(id=r['id'], kind=r.get('kind'), text=r.get('text'), date=r.get('date'), seenIn=d, status='SEEN', answer=None, link=None, answeredOn=None))
+            seen.add(r['id']); added += 1
+    if added or not os.path.exists(ITEMS):
+        cur['asOf'] = datetime.date.today().isoformat()
+        io.open(ITEMS, 'w', encoding='utf-8').write(json.dumps(cur, indent=1, ensure_ascii=False))
+        print('items: %d new -> learning/items.json (%d total)' % (added, len(cur['items'])))
     return added
 
 def refresh_sweeps():

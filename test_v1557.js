@@ -117,7 +117,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(['H2.10h','H2.10i','H2.10j','H2.10k','H2.10l'].every(id=>flat.some(x=>x.id===id)) && /PULLBACK candidate/.test(flat.find(x=>x.id==='H2.10h').result),'4e the registry carries the five level families, and says a VWAP-band sweep is a pullback candidate, not the extreme');
   // the H2 table renders the new rows
   const g={ PAL, RATE_MIN_N, g3esc:esc, tabEmpty:t=>'<div>'+t+'</div>', sweepsBookLoad:()=>({ corpus:WB.corpus, lookup:WB.lookup }) };
-  const h=build(g,['rateTxt','sweepTableHtml'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g));
+  const h=build(g,['rateTxt','sweepTableHtml','panSection','panNote','panRow'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g));
   ok(/LDNL → LOD/.test(h) && /VWAP −1σ → LOD/.test(h) && /today’s POC ↓ → LOD/.test(h) && /HVL \(zero γ\)/.test(h) && /magnet/.test(h),'4f the H2 table shows London, the VWAP bands, today’s profile, HVL and the magnet');
   ok(bareP(h).length===0,'4g no bare % in the table',bareP(h));
 }

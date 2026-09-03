@@ -10,6 +10,84 @@ READ · v15.60 the ⚙ Process tab · v15.61 the TAP record · v15.62 the nightl
 file + the shipped-artifact test · v15.64 the face manifest · v15.65 the pullback outcome. `design/DASHBOARD-INVENTORY.md`
 — every face element → objective → study → measured / descriptive / unmeasured, with verdicts.
 
+## v15.62 — the mockups' look is the panel's look · the 📚 Learn tab
+
+> "for the analysis and testing tabs, use the look and feel that you gave me with the mockups. I also want a learn tab.
+> I will be giving you screenshots in a way training you and you will put it into a deflection learning doc … always
+> updating it when i give you examples … put an indicator on the learning tab like a scale from 0 to 100."
+
+**The look, for the third and last time.** Twice the tabs were rebuilt "as mocked" by re-typing the look into inline
+styles, and twice they drifted (a header the mockup never had, section headers in another shape, smaller type). Now the
+tabs render in the mockup generators' own classes with their own stylesheet: `tools/panel-css.py` takes the `.pan…`
+rules of `mockup-from-studies.py` and the EXTRA of `mockup-testing.py`, scopes them under `#gpts-body .g3pan`, and
+`--splice`s them into `PANEL_CSS`; `test_v1562 1a` pins the two equal and `2e` pins the Analysis tab's skeleton for a
+subject (sections, header parts, row parts, row counts, result lines) equal to the generator's. The tab bar is the
+mockup's `.tabs`; the TRACK field is a section in the same chrome; the foot carries the pipeline dots, the source
+line, the mockup page's scale control (1× / 1.55× / 2.1×, persisted) and the "?" guide. Testing: the `.hd` loop line,
+the six-cell `.flow` strip, ①–⑥ with the mockup's titles and tables (the n/minN bar, `.row/.k/.v`). `ensureV3Css()`
+now also runs from `panOpen()` so a tab opened before any dashboard render is not bare.
+
+**📚 Learn.** `tools/learn-seed.py` is the one source: it writes `learning/deflections/examples.json` (what the tab
+renders; `LEARN_SEED` is its copy) and `learning/deflections/LEARNING.md` (what a context reads on every load —
+skill 1a-00d). The protocol: BLIND CALL FIRST; then the record (`tools/node-lookup.py`, new: a strike's line from the
+day file's vend rows / node events / ES bars); a rule is PROPOSED at n=1, CONFIRMED at three agreeing examples, REFUTED
+by one that contradicts and kept, marked; a rule rewritten to absorb its counter-example is a NEW proposed rule. Four
+examples taught today (Sep 3, Aug 31, Aug 28, Aug 27 — 16 circled deflections), every leg checked in the record:
+L1 growth into the tap (13 of 15 measurable legs), L2 a fresh node at the extreme (6/6) and L6 a stack (3/3) CONFIRMED;
+L3 the King as magnet REFUTED by the −γ King of Aug 31 (price ran away from it) and kept; L8 (+γ magnet), L4 side
+flip, L5 −γ accelerates away, L7 time of day PROPOSED. The gauge (0–100) cannot flatter: identify (60) is the Wilson
+lower bound of BLIND reads, zero until five; predict (30) is the live call scored by the outcome, zero until the scorer
+(v15.63); breadth (10) is the only part a taught example moves. **Today: 4.** Images ride the installer
+(`learning/deflections/img/`), and raw-GitHub images load on the Skylit page (checked from his tab).
+
+**Tests.** `test_v1562.js` (34; 10 of 10 mutations after one survivor forced an exact Wilson pin): one stylesheet, the
+skeleton pin, the Testing sections, the Learn tab from the seed and from a fetched file with blind reads, the
+Python/JS gauge equality, mutual exclusion, the manifest. Plan: 15.62 is this; 15.63 the deflection candidate score
+(his "predict a deflection once you see price is going to the node"); score the READ → 15.64 … the pullback outcome →
+15.69; the ⚙ tab's tabs pin → seven.
+
+## v15.61 — the ladder floor: never fewer than 8 strikes when the tape has them
+
+> "first tell me why there are only 3 strikes on the application. you are not displaying the node ladder appropriately."
+
+**Why.** Probed his live panel (v15.58 running) at 12:40 CT: Skylit's SPXW tape carried 100 strikes (7500–8200), 16 of
+them non-zero, and exactly three at or above the 20% node threshold (`CFG.nodeThresh`, his gear setting): 7750 = 100%
+(King), 7745 = 45%, 7740 = 28%; then 7735 11%, 7755 8%, 7730 6%, 7760 5%. `skPiles` skips every strike below the
+threshold, so the ladder drew three rows, with price (7762) above the EM high (7743) in empty air. No render errors,
+coverage 95.9% — the ladder was faithful to a concentrated afternoon 0DTE book, and faithful was useless.
+
+**What changed — display only.** `LAD_MIN_ROWS=8` and `ladderSubPiles(B, sym, have)`: when fewer than 8 nodes clear the
+threshold, the next-strongest non-zero strikes from `tapeMap('SPXW').pct` are appended to the DRAW list (`RAILPS_DRAW`)
+as `sub:true` rows — dimmed outline bars (`.g3ldbar.sub`, opacity .42) keeping their real %King and polarity colour, hover
+"CONTEXT ROW — below the 20% node threshold … Not a node: not recorded, not scored, no role". `emPiles` / `RAILPS` — the
+recorder, the READ's top-5, the rolls, `emRailBounds` — see exactly the same nodes as before. A zero-%King strike is never
+filler: the ladder shows what the tape has, not padding. Lowering `nodeThresh` in the gear is still the way to make more
+strikes *nodes*; that changes the record, so it was not touched.
+
+**Tests.** `test_v1561.js` (9; 4 of 4 mutations caught: zero strikes as filler, the subs leaking into the engine list, the
+floor ignored, the sub flag dropped) on the live tape's numbers. The SCORE stage on ⚙ Architecture now names the plan's
+version for score-the-READ instead of a typed one (`test_v1559 2f`). Plan re-numbered: v15.61 is this; score the READ
+→ v15.62, the TAP record → v15.63, … the pullback outcome → v15.67.
+
+## v15.60 — the 📌 Open Items tab, and enhancement requests on the Roadmap
+
+> "I also need Open Items tab, which will have both issues and questions in it … add issues and questions using a textfield
+> and some type of add button which will allow you to store it and consider the issue … Same with the roadmap, it should
+> allow me to add enhancement requests … complete management of the application from enhancements (requirements) to
+> design (architecture) and open items (project management)."
+
+**One store, one path.** `gpts_items_v1` holds issues, questions and enhancement requests (`itemsAdd`, kinds enforced,
+deduped, dated). They ride the day export as `items`; the nightly's `ingest_items` copies new ones into
+`learning/items.json` as SEEN (append-only by id, idempotent); the review answers there — ANSWERED (with the evidence),
+FIXED (with the version), PLANNED as vX, DECLINED (with the reason) — and the panel fetches the file (`itemsFetch`) and
+shows the answer under the item (`itemsMerged`: local + file by id; an item only in the file still shows). **📌 Open
+Items** = ① ISSUES (field + "+ Issue") · ② QUESTIONS (field + "+ Question") · ③ CLOSED. **🗺 Roadmap** gains
+⊕ REQUEST AN ENHANCEMENT (field + "+ Enhancement", the PLANNED and CLOSED lists). Six tabs; every view clears the other five.
+
+**Tests.** `test_v1560.js` (24; 7 of 7 mutations): the store, the merge with the review's file, both tabs in jsdom with
+the add path through the DOM, the export, the nightly's ingest on a planted day file (idempotent), the manifest. The
+plan and ROADMAP.md re-numbered: v15.60 is this; score the READ moves to v15.61, the TAP record to v15.62.
+
 ## v15.59 — the ⚙ Architecture and 🗺 Roadmap tabs: the WHAT, the HOW and the plan inside the app
 
 > "we have lost so much. i think there should be a tab for roadmap so its not lost and there is a record and a tab for

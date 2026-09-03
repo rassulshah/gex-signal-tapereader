@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-03 · v15.59 · session `5e8d34b5` — v15.59: the Architecture and Roadmap tabs — the WHAT, the HOW and the plan inside the app
+## 2026-09-03 · v15.62 · session `5e8d34b5` — v15.62 — the mockups' look, the Learn tab, four taught deflection examples
 
-_31 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_41 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -332,7 +332,158 @@ You're right on every count, and the honest part first: the WHAT was pinned (PUR
 **OPERATOR:**
 > [Image: original 1280x2296, displayed at 1115x2000. Multiply coordinates by 1.15 to map to original image.]
 
+**me (18:51):** Done — both tabs are built, tested, and in v15.59. The two images above are the real script rendering them.
+
+**Tampermonkey:**
+- **Tapereader v15.59** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.18** — unchanged, do not reinstall.
+
+Run `installv1559.bat`, wait ~5 min, click the tapereader link, reload — footer v15.59.
+
+**⚙ Architecture** — ① THE WHAT: your objective in your own sentence, the mechanism ("a gamma node deflects price, and the deflection IS the turning point"), the two kinds of reversal side by side with the trade each calls for, and the expensive error in red. ② THE HOW: the eleven-stage loop RECORD → EXPORT → PUSH → NIGHTLY → REVIEW → REGISTRY → BUILD → INSTALL → GATE → DASHBOARD → SCORE — but drawn as **live status**, not prose. Every box is green, amber or red from what the panel can actually see right now: recording or blind, saved today or not, pushed or not, nightly read back or 404, the review's files fetched or not, the registry loaded, the suite stamp, your version and the companion's overnight, the gate, the earned tiers — and SCORE is honestly red: "not built — v15.60". A red box is where the loop is broken today. Had this tab existed on Monday, the installer-manifest bug would have shown as a red REGISTRY box the first time you opened it. Then ③ the tabs' roles, ④ the rules with the test behind each, ⑤ the hardening backlog.
+
+**🗺 Roadmap** — NEXT (this build, marked RUNNING), AFTER THAT in order (v15.60 score the READ → v15.61 the TAP record → v15.62 the nightly reads the queue → v15.63 one definitions file + shipped-artifact test → v15.64 the face manifest → v15.65 the pullback outcome), each with the objective it serves and what "done" means; SHIPPED; your op …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 89 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:51):** Push is denied from this environment by organization policy (403 on origin) — the 89 commits are local and go up when `installv1559.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> I realize that i have these tabs , they will help me manage the development of the app .   for example, the roadmap will help plan upcoming features and the archtecture will  explain the design and how the application works.  I also need Open Items tab, which will have both issues and questions in it.  this will allows a complete appliction management. Make sure you add the abilty to add issues and quesitons using a textfield and some type of add button which will allow you to store it and consider the issue so that you will be able to come up with a solution.  Same with the roadmap , it should allow me to add enhancement requests to it that you will save and review for development.   This way we have a complete management of the application from enhancements (requirements) to designa(architecture) and open items (Project management) .
+
+**me (19:15):** Now the roadmap doc (versions must match the plan), the test for the items path, then the suite.
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> what are som alternatives to analysis tab...
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> you also didn't implement the testing tab as you mocked up file:///C:/Dev/gex-signal-tapereader/mockuptestingtabstandalone.html
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> now given the inventory of ont dashboard, can you tell me if anything should be modified, deleted, enhanced, given you know my objectives.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> first tell my why there are ony 3 strickes on the application. you are not displaying the node ladeer appropriately
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (19:30):** **Why only 3 strikes.** The ladder was drawing the book faithfully — and the book was concentrated. I probed your live panel at 12:40 CT: Skylit's SPXW tape carried 100 strikes (7500–8200), only 16 of them non-zero, and exactly **three at or above the 20% node threshold** (`nodeThresh` = 20 in your gear settings): King 7750 = 100%, 7745 = 45%, 7740 = 28%. The next ones were 7735 at 11%, 7755 at 8%, 7730 at 6%, 7760 at 5%. The ladder only draws strikes ≥ the threshold, so it drew three rows — with price at 7762, above the EM high of 7743, sitting in empty air above them. No render errors, coverage 95.9% — it wasn't broken, it was a three-strike afternoon 0DTE book drawn literally. That is useless to the eye, and you're right that it is not an appropriate display of the ladder.
+
+**The fix (v15.61, building now):** the ladder never shows fewer than 8 strikes when the tape has them. Below the three real nodes it now appends the next-strongest sub-threshold strikes as **context rows** — dimmed outline bars with their real %King (11%, 8%, 6%, 5%, 3%), hover: "context row — below the 20% node threshold, not a node". Display only: the deflection engine, the recorder, the READ's top-5 and the rolls still see exactly the same three nodes, so nothing is measured or scored differently. Zero-%King strikes are never used as filler. (If you'd rather see more *real* nodes, lowering `nodeThresh` in the gear does that — but it changes what counts as a node, which changes the record, so I did not touch it.)
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (19:30):** **Why only 3 strikes.** The ladder was drawing the book faithfully — and the book was concentrated. I probed your live panel at 12:40 CT: Skylit's SPXW tape carried 100 strikes (7500–8200), only 16 of them non-zero, and exactly **three at or above the 20% node threshold** (`nodeThresh` = 20 in your gear settings): King 7750 = 100%, 7745 = 45%, 7740 = 28%. The next ones were 7735 at 11%, 7755 at 8%, 7730 at 6%, 7760 at 5%. The ladder only draws strikes ≥ the threshold, so it drew three rows — with price at 7762, above the EM high of 7743, sitting in empty air above them. No render errors, coverage 95.9% — it wasn't broken, it was a three-strike afternoon 0DTE book drawn literally. That is useless to the eye, and you're right that it is not an appropriate display of the ladder.
+
+**The fix (v15.61, building now):** the ladder never shows fewer than 8 strikes when the tape has them. Below the three real nodes it now appends the next-strongest sub-threshold strikes as **context rows** — dimmed outline bars with their real %King (11%, 8%, 6%, 5%, 3%), hover: "context row — below the 20% node threshold, not a node". Display only: the deflection engine, the recorder, the READ's top-5 and the rolls still see exactly the same three nodes, so nothing is measured or scored differently. Zero-%King strikes are never used as filler. (If you'd rather see more *real* nodes, lowering `nodeThresh` in the gear does that — but it changes what counts as a node, which changes the record, so I did not touch it.)
+Build is done — **v15.61, the ladder floor.** One installer, `installv1561.bat` (3.37 MB, no PowerShell); it also carries v15.60, which your panel was still behind on at the last probe.
+
+**Tampermonkey:**
+- **Tapereader v15.61** (changed) — https://raw.githubusercontent.com/rassulshah/ …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 93 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (19:40):** Push is denied from this environment by organization policy (403 on origin) — the 93 commits are local and go up when `installv1561.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> for the analysis and testing tabs , use the look and feel that you gave me with the mockups . I also want a learn tab.  I will be givingyou screenshots in a way training you and you will put it into a deflection learning doc, which will be part of your training to get better at identifying deflections and you will put it in the learning tab, always updating it when i give you examples. and learning untill you get really good at identifying deflections.
+
+**me (20:14):** Understood on both — and I checked your live panel before answering: it's still on **v15.58** (three tabs), so the ⚙/🗺/📌 tabs and the ladder fix aren't in front of you yet; `installv1561.bat` carries all of that.
+
+**Look and feel.** Your screenshots are the mockup's panel, and the live tab does differ from it: it puts a "📊 Analysis · Did the dashboard tell the truth? …" header on top, its section headers are a gold title with a grey question line instead of the mockup's `▾ K1  title … decides SIDE · LEVEL · 6` row, and the type is smaller. The mockup page also showed the panel at 1.55× on a ~940px stage, which is most of why it reads so well. For v15.62 I'm making the Analysis and Testing tabs render with the mockup's *own* CSS and markup — one source, pinned by a test so the tab cannot drift from the mockup again — plus the mockup's scale control (1× / 1.55× / 2.1×) on the tab. One honest caveat: your docked panel is 531px wide; at 1.55× the mockup needs ~940px, so pop the panel out or widen it to see it at that size.
+
+**📚 Learn tab.** Building it as a real training loop, not a scrapbook: a deflection learning doc (`learning/deflections/LEARNING.md` — read by me on every load, part of my training) and an examples file the tab renders. The protocol I'll follow with every screenshot you give me: I first say what I see and make my **blind call** (HOD/LOD turn · pullback turn · no deflection, with the features I'm using) *before* you tell me the answer; then I record your verdict, what I got wrong, and the rule it produces. The tab shows the rules I've learned (each citing its examples), the examples with your screenshots, and my blind-read score with its n — the same house rule as everywhere else: no % without n, and "thin" under 15. That score is how we both know when I' …[trimmed]
+
+**OPERATOR:**
+> in this example you see price going the first resistance deflection , then pulling  back  and retesting it two times after which it went down to test a pb support node that created a deflection that eventually went to the third resistance deflection node at the high.  can you see it in the picture and the data.  learn from this example today.   I will try to feed you these examples often. for you to learn from.  do you have prior past screenshots also that i might have given prior contexts ?  Also when you analyze , make sure you take all the factors into account like if it is a new node or heavy node growth or node roll etc. you want to lookup the node that caused the deflection , maybe it was a rug or reverse rug or there was stack of nodes .   for example the resistance nodes show they got brighter meaning they were growning when they created resistance .  the pullback support node shows that it was new node growth that created the pullback that came out of nowhere just before 11 am .  pay attention to these new nodes that come out of nowhere. the way i see it , typically new gamma node growth,  increasing gamma growth and gamma rolling up or down are very important and my cause deflections as well has push and pull price.   see pic
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:24):** Yes — I see it in the picture, and I checked it against the panel's own node-event record for today (962 events, SPXW strikes, all times CT; your chart's axis is CT too — the panel's price trail lines up bar for bar). It confirms your read, with numbers:
+
+**R1 — first resistance, 10:42–11:12, ES ~7755–7758.** That is the King, SPXW 7750 (ES 7758). At 10:00 it was a *decaying* $17M node at 56% of the King; by 10:06 it was the King at $40M, 10:18 $77M, 10:33 $101M, and **$116M at 10:42, the bar price first tapped it** — growing $40–54M per 15 minutes on the way in, the fastest-growing node on the board. Brighter = growing, exactly as you said. Two taps, held.
+
+**R2 — the retests, ~11:57–12:06, ES 7757–7758.** Same King, $180–204M, still adding $20–30M per 15 min through the retests. Held again.
+
+**Pb — the pullback bounce, ~12:20–12:36, low ~ES 7744–7746.** Two support nodes there: SPXW 7740 (ES 7748) and 7735 (ES 7743). 7740 went $57M at 12:00 → $72M at 12:30 → **$81M at 12:36, the tap bar**, then $90–94M by 12:51 — growing +$13–21M per 15 min *into* the tap; 7735 grew $47M → $61M into 12:09. So the bounce came off support that was growing under price. One correction to the story from the data: 7740 was not born out of nowhere — it was an 80% node at 10:16, decayed to ~40% by 10:33, flipped to "support" at 10:42 when price went above it, and started **re-growing at 11:15** (a TURN_UP event) — the growth is what made it look new on your chart. If the node you mean is a different one (you said "just before 11 am"), tell me which price and I'll pull its line.
+
+**R3 — the high, 13:12–13:33, ES 7763–7765.** Two things at once: SPXW **7755** (ES 7763) crossed the 20% threshold at 12:48 — a node that *was* new on the ladder, $49–56M, growing +$11–12M/15min — sitting right where …[trimmed]
+
+**OPERATOR:**
+> i want to train you first by giving you a lot of examples, at least 10.   see these examples, remember each circle count as 1 deflection . this is from another day , i think it is from the 31st .   double check and confirm, but most importantly you must learn so you can identify , qualify and understand and predict a deflection.  here are 4 examples. 3 at a support  with one at resistance.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+> i need you to refine you learning capability . I provide you screenshots, you lookup the nodes, any additional data and learn, eventually being able to identify nodes where deflections will occur.  you will eventaully get good and develop a scoring ccapability taking multiple things into account . you may also take time of day, levels  as well as the node details and steup type like rug, reverse rug, piku stack etc.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+> here are some more .    put an indicator on the learning tab like a scale from 0 to 100 which will measure your learning progress and how good you have become in identifying deflections  and becoming a deflection expert with the ability to idenfity deflections and even predict a defliction will occur once you see price is going to the node.    I think you have enough to start with and analysze for now.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:44):** Now the 📚 Learn tab in the panel — the module, the view flag, the render branch, the fetch, the guide, and the seed splice.
+Now the mutation pass on the new assertions, then a real-browser screenshot of the three tabs to see them.
+Now a real-browser render of the three tabs from the actual script (Playwright), to see them before shipping.
+Now the docs: ROADMAP, PROCESS, the skill, the resume note, CHANGELOG, LESSONS, and the inventory.
+
 ### DECISIONS
+
+**v15.62 · the mockups' look, the 📚 Learn tab, four taught examples (2026-09-03, evening).**
+- His third ask for the mockups' look and feel. Decision: no more re-typing — the tabs render in the mockup generators'
+  OWN stylesheet and skeleton, spliced from one source (`tools/panel-css.py`), pinned by `test_v1562 1a/2e`; the
+  mockup page's 1× / 1.55× / 2.1× control in the tab's foot; his docked panel is 531px wide, 1.55× wants ~940px.
+- The Learn tab as a TRAINING LOOP, not a scrapbook: blind call first, then the record (`tools/node-lookup.py`), rules
+  with n / agree / weak / refute, a 0–100 gauge that cannot flatter (identify = Wilson lower bound of blind reads, 0
+  until five; predict = 0 until the scorer; breadth capped at 10). Today 4/100 — all breadth.
+- Four examples taught with the answer (E001 Sep 3, E002 Aug 31 — his "31st" confirmed from the levels, E003 Aug 28
+  — found from PDC 7741.25, E004 Aug 27), 16 circled deflections, every leg checked in the record. Findings: growth
+  into the tap in 13 of 15 measurable legs (L1 CONFIRMED); a fresh node at the extreme 6/6 (L2); a stack 3/3 (L6);
+  the King-as-magnet rule REFUTED by the −γ King of Aug 31 and kept (L3); its +γ-conditioned rewrite is a NEW
+  proposal (L8) — "a rule rewritten to absorb its counter-example waits for a new example" went into the protocol.
+- The E001 disagreement: his "new node out of nowhere just before 11 am" is, in the record, 7740 re-growing from a
+  TURN_UP at 11:15 after decaying from 80% at 10:16 — asked which node he meant. "piku stack" — asked what it means.
+- His next asks, in his words: "eventually being able to identify nodes where deflections will occur … develop a
+  scoring capability taking multiple things into account … time of day, levels as well as the node details and
+  setup type like rug, reverse rug, piku stack" → the plan's v15.63: the deflection candidate score, measured by
+  the deflection ledger's outcomes, rendered only through the gate. "I think you have enough to start with."
+- Found and fixed: `tools/chat-history.py` could not see a message he sends while I am working (an `attachment`
+  of type `queued_command`) — four teaching messages were invisible to the record until this build.
+
+**v15.61 · the ladder floor (2026-09-03, after the compaction).**
+- His ask: *"first tell me why there are only 3 strikes on the application. you are not displaying the node ladder
+  appropriately."* Probed live first, answered first: the SPXW tape had 100 strikes, 16 non-zero, three at or above the
+  20% threshold (7750 100% · 7745 45% · 7740 28%; then 11 / 8 / 6 / 5%). The ladder was faithful and useless.
+- **Decision: a display floor, never a measurement change.** `LAD_MIN_ROWS=8`; the next-strongest non-zero strikes are
+  drawn dimmed as CONTEXT rows (real %King, hover "not a node: not recorded, not scored, no role"); `emPiles` / the
+  recorder / the READ's top-5 / the rolls unchanged; a 0% strike is never filler. `nodeThresh` (his gear setting) still
+  decides what a node IS and was not touched — "do not tune a parameter to make a number look good".
+- Plan re-numbered: v15.61 is this; score the READ → v15.62 … the pullback outcome → v15.67. The SCORE stage on
+  ⚙ Architecture now reads the plan's version instead of a typed one.
+- The chat-history generator was found to exit on a compacted transcript before its recovery ran, and to count a
+  SendUserMessage reply as no text — both fixed; the transcript's own record is kept over the summary's paraphrase.
+
+**v15.58 – v15.60 (2026-09-03; the sections were not filled at the time — from CHANGELOG).**
+- v15.58: the READ ranks reclaimed → broke → opened-beyond (a gap open is not a sweep); the Testing tab rebuilt as
+  mocked ("as mocked means every section"); the installer manifest by glob (learning/*.json, log, SWEEPS*) — found by
+  probing his live tab (404s). v15.59: the ⚙ Architecture + 🗺 Roadmap tabs from `learning/plan.json`, pinned to the
+  docs. v15.60: 📌 Open Items (issues, questions) + enhancement requests, one store, the TRACK path, answers in
+  `learning/items.json`. His question *"given the inventory … anything to modify, delete, enhance?"* is answered in
+  DASHBOARD-INVENTORY §4 and in the chat; his verdicts are still open (OPEN AT CLOSE).
 
 **v15.57 · the levels he approved, and the two-line rule (2026-09-03).**
 - Asked which key levels were missing; recommended five (EM edges, VWAP + bands, developing value area, London, HVL/magnet)
@@ -753,6 +904,24 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.62** — `tools/panel-css.py` (+ `--splice`), `PANEL_CSS`, `panOpen/panSection/panRow/panNote/panFoot`,
+`panelScale/setPanelScale` + the `data-gscale` control, the Analysis / Testing renderers in the mockup's classes, the
+seven-tab `.tabs` bar, `ensureV3Css()` from `panOpen()`; `tools/learn-seed.py` → `learning/deflections/examples.json`
++ `LEARNING.md`, `learning/deflections/img/E001–E004.png`, `LEARN_KEY/LEARN_SEED/learnLoad/learnFetch/learnScore/
+learnGauge/learnBlock`, `LEARN_VIEW/showLearn`, `__gptsDebug.learn`, the guide; `tools/node-lookup.py`; the manifest
+globs; `test_v1562.js` (34; 10 of 10 mutations); plan 15.62 next → 15.63 the scorer → … 15.69; the old pins moved to
+the mockup's markup (test_v1555/1558/analysis_tabs/review_selftest/testing_tab/1552); suite 134 green / 5 baseline
+red; `installv1562.bat`.
+
+**v15.61** — `LAD_MIN_ROWS`, `ladderSubPiles(B, sym, have)`, `RAILPS_DRAW` (draw list only), `.g3ldbar.sub` + the
+context hover; `loopStatus().score` names the plan's version; `test_v1561.js` 9 / 4 of 4 mutations; plan-seed +
+plan.json + PLAN_SEED re-numbered (15.60 shipped, 15.61 next, 15.62–15.67); ROADMAP / PROCESS / INVENTORY / resume /
+CHANGELOG / LESSONS; `tools/chat-history.py` compaction fixes; version pins in test_direction_grade / pipeline_indicator
+/ rules_v2 / v1559 2f / v1560 3d. Companion unchanged (v1.18). Installer `installv1561.bat`.
+
+**v15.58 – v15.60** — see CHANGELOG (the READ's ranking + Testing tab as mocked + installer manifest; the ⚙/🗺 tabs;
+📌 Open Items + enhancements). Installers installv1558/1559/1560.bat; he had installed v15.58 at the last probe.
+
 **v15.57** — `LEVEL_TIER` / `levelTier`, `vwapSeries`, `devProfileSeries`, `sweepScanDynamic`; EM edges, London,
 HVL/MAG in `sweepLevelsToday` / `bookLevelsNow`; dynamic levels in `sweepEventsToday`; the two-line rule + trailer
 in `statsRead`; the H2 table rows; `study-sweeps.py` at 32 level types (116 cells); HVL/MAG in the book study;
@@ -924,6 +1093,26 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+- **He has not installed since v15.58** — `installv1562.bat` carries 15.59–15.62. After his reload: probe the seven
+  tabs, the ladder's context rows, the Learn tab's images (raw GitHub loads on Skylit — checked), the scale control.
+- **The next screenshots are BLIND**: call first (kind · side · node · factors · confidence), then the record, then his
+  answer. Five blind reads make identify move; the gauge is 4 today.
+- Open questions for him: E001's "new node just before 11 am" (which price?); "piku stack"; his verdicts on the
+  dashboard inventory (§4).
+- v15.63 the deflection candidate score (his "predict a deflection once you see price is going to the node") — the
+  L-rules as register features scored by the deflection ledger; then 15.64 score the READ, 15.65 the TAP record.
+- Push from the cloud is denied (403); the installer pushes.
+
+- **He has not installed v15.60 or v15.61 yet** (last probe: panel v15.58). installv1561.bat carries everything; after
+  he reloads: probe `__gptsDebug.piles` (n=3 real) and count `.g3ldbar.sub` rows on the ladder (expect 5 on a book like
+  today's), check `renderErrors()` empty, the six tabs, items/requests stores.
+- **His answer to the dashboard-inventory question** (modify / delete / enhance): the four low-value DAY columns
+  (OF BAR ×2, PTN, BODY) → hovers or keep; the MARK/STATE/polarity hovers "descriptive" (v15.62); the face manifest.
+- Next build in the plan: **v15.62 score THE READ** (stage ⑪) — then v15.63 the TAP record (94 OPEN studies).
+- `learning/items.json` / `learning/requests.json`: read on load, answer what is SEEN.
+- Push from the cloud is denied (403); the installer pushes from his machine. The transcript was compacted at 19:29 —
+  the chat history keeps the pre-compaction record and marks the recovered prompts.
 
 - **v15.58: the TAP record** — 94 OPEN studies wait on it.
 - P5.1: the resume outcome for VWAP/band and value-area sweeps (the pullback objective) — data on hand.
@@ -1132,18 +1321,18 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+f514e4a v15.62: the mockups' look is the panel's look (tools/panel-css.py → PANEL_CSS, the skeleton pin, the scale control) · the 📚 Learn tab — the deflection learning doc (tools/learn-seed.py → examples.json + LEARNING.md + img/), four taught examples checked against the record (tools/node-lookup.py), eight rules, the 0–100 gauge that cannot flatter; plan: 15.63 the deflection candidate score
+466798a v15.61: the ladder floor — never fewer than 8 strikes when the tape has them; sub-threshold strikes drawn dimmed as CONTEXT rows, display only (the engine's node set unchanged); plan re-numbered (score the READ → 15.62 … pullback → 15.67); SCORE stage reads the plan's version; chat-history generator compaction-safe; suite stamp; LESSONS; chat history
+364a09f suite stamp v15.60
+92da907 v15.60: chat history
+00b7bfb v15.60: the Open Items tab (issues, questions) and enhancement requests on the Roadmap — one store, the TRACK path, the review answers in learning/items.json
+7787e99 suite stamp v15.59
+4466239 v15.59: chat history
 09bb216 config: LESSONS stays first in tier 0 (its test pins it); PURPOSE, PROCESS, ROADMAP follow; projectFiles = the union
 cd37df9 v15.59: chat history
 d4eeed9 v15.59: the ⚙ Architecture and 🗺 Roadmap tabs — the WHAT, the HOW (as live status) and the plan inside the app, from learning/plan.json; docs, file and seed pinned equal
 dfbd416 chat history
 f06f9c6 config: PURPOSE, PROCESS, ROADMAP lead tier 0
-bec5108 chat history
-f1f7ba1 the WHAT and the HOW pinned: design/PROCESS.md + test_process.js, roadmap/ROADMAP.md, design/DASHBOARD-INVENTORY.md; skill load order, .gex-config theWhatAndTheHow, resume-note standing block
-233f110 v15.58: chat history
-c10ac5b LESSONS: v15.58 — as mocked means every section
-f084388 v15.58: chat history
-cd5f2a7 v15.58: the Testing tab as mocked — register columns, gate summary, the stores, the nightly head, the suite stamp (learning/suite.json)
-ab2a0b2 v15.58: chat history
 ```
 
 ---

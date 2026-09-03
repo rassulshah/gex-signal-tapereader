@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.59
+// @version    15.62
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -519,7 +519,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.59';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.62';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6735,6 +6735,7 @@ function buildDayExport(dateKey){
     feat:day.feat||{},
     defl:day.defl||{},           // (v15.54) the EVENT-level deflection ledger — what H5 is scored on
     requests:(function(){ try{ return requestsExport(dk); }catch(eRq){ return []; } })(),   // (v15.55) what he asked to be tracked — the nightly copies it to learning/requests.json
+    items:(function(){ try{ return itemsExport(dk); }catch(eIt){ return []; } })(),         // (v15.60) issues · questions · enhancement requests — the nightly copies them to learning/items.json
     act:day.act||{},
     // (v10.55 PART F) the same records, ENGINE-READY: one row per bar per symbol.
     matrix:(function(){ try{ return buildFeatureMatrix(day); }catch(eMx){ return []; } })(),
@@ -17027,17 +17028,21 @@ function confluence(sym){
 // ============================================================================
 var ANALYSIS_VIEW=false;              // false = Dashboard, true = Analysis tab
 var TESTING_VIEW=false;               // (v10.45) true = 🧪 Testing tab (mutually exclusive)
-var ARCH_VIEW=false, ROADMAP_VIEW=false;   // (v15.59) ⚙ Architecture (the WHAT and the HOW as live status) · 🗺 Roadmap
+var ARCH_VIEW=false, ROADMAP_VIEW=false, ITEMS_VIEW=false, LEARN_VIEW=false;   // (v15.59) ⚙ Architecture · 🗺 Roadmap · (v15.60) 📌 Open Items · (v15.62) 📚 Learn
 var ANALYSIS_SYM='SPY';
 var ANALYSIS_REVIEW=null;             // optional loaded LLM review {why,discoveries,recs,grade,...}
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.setReview=function(obj){ ANALYSIS_REVIEW=obj; if(typeof render==='function') render(); return 'review loaded'; };
-window.__gptsDebug.showAnalysis=function(b){ ANALYSIS_VIEW=(b!==false); if(ANALYSIS_VIEW){ TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; } if(typeof render==='function') render(); };
-window.__gptsDebug.showDashboard=function(){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; if(typeof render==='function') render(); };
-window.__gptsDebug.showTesting=function(b){ TESTING_VIEW=(b!==false); if(TESTING_VIEW){ ANALYSIS_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; } if(typeof render==='function') render(); };
+window.__gptsDebug.showAnalysis=function(b){ ANALYSIS_VIEW=(b!==false); if(ANALYSIS_VIEW){ TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; ITEMS_VIEW=false; LEARN_VIEW=false; } if(typeof render==='function') render(); };
+window.__gptsDebug.showDashboard=function(){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; ITEMS_VIEW=false; LEARN_VIEW=false; if(typeof render==='function') render(); };
+window.__gptsDebug.showTesting=function(b){ TESTING_VIEW=(b!==false); if(TESTING_VIEW){ ANALYSIS_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; ITEMS_VIEW=false; LEARN_VIEW=false; } if(typeof render==='function') render(); };
 // (v15.59) the two tabs that carry the WHAT, the HOW and the plan inside the app — so no future context can lose them
-window.__gptsDebug.showArchitecture=function(b){ ARCH_VIEW=(b!==false); if(ARCH_VIEW){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ROADMAP_VIEW=false; } if(typeof render==='function') render(); };
-window.__gptsDebug.showRoadmap=function(b){ ROADMAP_VIEW=(b!==false); if(ROADMAP_VIEW){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; } if(typeof render==='function') render(); };
+window.__gptsDebug.showArchitecture=function(b){ ARCH_VIEW=(b!==false); if(ARCH_VIEW){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ROADMAP_VIEW=false; ITEMS_VIEW=false; LEARN_VIEW=false; } if(typeof render==='function') render(); };
+window.__gptsDebug.showRoadmap=function(b){ ROADMAP_VIEW=(b!==false); if(ROADMAP_VIEW){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; ITEMS_VIEW=false; LEARN_VIEW=false; } if(typeof render==='function') render(); };
+// (v15.60) 📌 Open Items — issues and questions, with a field to add them; enhancement requests live on the Roadmap tab
+window.__gptsDebug.showItems=function(b){ ITEMS_VIEW=(b!==false); if(ITEMS_VIEW){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; LEARN_VIEW=false; } if(typeof render==='function') render(); };
+window.__gptsDebug.learn=function(){ return { doc:learnLoad(), gauge:learnGauge(learnLoad()) }; };
+window.__gptsDebug.showLearn=function(b){ LEARN_VIEW=(b!==false); if(LEARN_VIEW){ ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; ITEMS_VIEW=false; } if(typeof render==='function') render(); };   // (v15.62)
 window.__gptsTestRefresh=function(){ repoCoverage(function(c){ var el=document.getElementById('gpts-tcov'); if(!el) return;
   var days=c.days.length, bars=c.bars;
   el.innerHTML='repository: <b>'+days+'</b> day'+(days===1?'':'s')+' · <b>'+bars+'</b> bars ('+ 'about '+Math.round(bars/(FEAT_FWD||10))+' effective observations if every bar carried one feature) · '+
@@ -17184,6 +17189,19 @@ function tabGuide(which){
       ['What is this tab?','THE WHAT and THE HOW inside the app, so no future context can lose them: the objective in his words, and the loop RECORD \u2192 EXPORT \u2192 PUSH \u2192 NIGHTLY \u2192 REVIEW \u2192 REGISTRY \u2192 BUILD \u2192 INSTALL \u2192 GATE \u2192 DASHBOARD \u2192 SCORE as LIVE STATUS.'],
       ['green / amber / red','What this panel can SEE about each stage right now: fetched or 404, saved or not, pushed or not, read back or not, the gate, the earned tiers. A red stage is where the loop is broken today \u2014 fix that before anything else.'],
       ['Source','design/PURPOSE.md, design/PROCESS.md and learning/plan.json (tools/plan-seed.py) \u2014 pinned equal by test_v1559.js. The seed inside the script renders before the first fetch.']
+    ];
+  } else if(which==='learn'){   // (v15.62)
+    rows=[
+      ['What is this tab?','The deflection learning doc, as data: the examples you teach me with (your screenshot, your words, what the record says), the rules they produce, and the gauge — how good I have become at identifying deflections.'],
+      ['The protocol','You paste a screenshot; I make my BLIND CALL first (kind · side · the node · the factors); you tell me the answer; I check the panel\u2019s own record (tools/node-lookup.py) and write what the data says; a rule is PROPOSED at n=1, CONFIRMED at three agreeing examples, REFUTED by one that contradicts (it stays, marked).'],
+      ['The gauge','0\u2013100, defined so it cannot flatter: identify (60) is the Wilson lower bound of my blind-read accuracy, zero until five blind reads; predict (30) is the live call \u201cprice is going to the node \u2014 will it deflect?\u201d scored by the outcome, zero until the scorer exists; breadth (10) is examples and confirmed rules, capped.'],
+      ['Source','learning/deflections/examples.json (tools/learn-seed.py) \u2014 the same data writes learning/deflections/LEARNING.md, which every context reads on load. Images ride the installer under learning/deflections/img/.']
+    ];
+  } else if(which==='items'){   // (v15.60)
+    rows=[
+      ['What is this tab?','Project management: the issues and questions you raise, in your words, with the review’s answer under each. Enhancement requests live on the Roadmap tab.'],
+      ['The path','typed → the day export at Save → the nightly copies it to learning/items.json → the review answers (FIXED / PLANNED as vX / ANSWERED / DECLINED with the reason) → the answer appears here.'],
+      ['Never guessed','A question is answered with the evidence or with what it would take to know; session-state/OPEN-QUESTIONS.md is the long-form record.']
     ];
   } else if(which==='roadmap'){   // (v15.59)
     rows=[
@@ -17627,10 +17645,12 @@ function analysisBlock(){
 
   // ---- header + guide -------------------------------------------------------
   var loaded=(typeof LOADED_DAY!=='undefined'&&LOADED_DAY);
-  var srcLabel = loaded ? ('📂 loaded '+(LOADED_DAY.date||'file'))
-               : (R ? '◷ review loaded' : '◷ live from tape data');
-  h+=tabHeader('analysis','📊 Analysis',
-     'Did the dashboard tell the truth? '+sym+' · '+st.date+' · '+st.bars+' bars · '+((fs&&fs.days)||0)+'d recorded · '+srcLabel);
+  var srcLabel = loaded ? ('\uD83D\uDCC2 loaded '+(LOADED_DAY.date||'file'))
+               : (R ? '\u25f7 review loaded' : '\u25f7 live from tape data');
+  // (v15.62) as mocked: no header line above the subject strip — the tab bar, then the strip. The source
+  // line the old header carried (day · bars · days recorded · live/loaded) is the foot's right-hand text.
+  var footRight=sym+' \u00b7 '+st.date+' \u00b7 '+st.bars+' bars \u00b7 '+((fs&&fs.days)||0)+'d recorded \u00b7 '+srcLabel;
+  h+=panOpen();
 
 
 
@@ -17674,6 +17694,7 @@ function analysisBlock(){
   _live.F5=nl; _live.D2=df;
   try{ h+=analysisSubjectsHtml(sym, _live); }catch(eSubj){ h+=tabEmpty('the subject panel could not be rendered: '+String(eSubj&&eSubj.message||eSubj).replace(/[<>&]/g,'')); }
   void S_defl; void S_nodes; void S_dir;   // the wrappers are built for their bodies; the bodies render above
+  h+=panFoot('analysis', footRight)+'</div>';
 
   // ---- save banner (the tab IS the trigger) ---------------------------------
   if(st.bars){
@@ -18124,62 +18145,90 @@ function requestsExport(dateKey){
   if(changed) requestsSave(a);
   return a.map(function(r){ return { id:r.id, subj:r.subj, text:r.text, date:r.date, t:r.t }; });
 }
+// ============================================================================================
+// (v15.62) THE MOCKUP'S LOOK IS THE PANEL'S LOOK. Operator, 2026-09-03, the third time: "for the analysis and testing
+// tabs, use the look and feel that you gave me with the mockups." Twice the tabs were rebuilt "as mocked" by re-typing
+// the look into inline styles, and twice they drifted (a header the mockup never had, a section header in another
+// shape, smaller type). Now the tabs render in the mockup generators' OWN classes (.subj .hd .sec .sech .secb .sc .rs
+// .note table .row .foot .flow) with their OWN stylesheet: PANEL_CSS is spliced from tools/panel-css.py (the .pan…
+// rules of tools/mockup-from-studies.py + the EXTRA of tools/mockup-testing.py, scoped under #gpts-body .g3pan) and
+// pinned equal by test_v1562.js — the mockup and the panel cannot drift apart again without the suite going red.
+// The mockup page showed the panel at 1.55× on a ~940px stage; the same scale control lives in the tab's foot.
+var PANEL_CSS='#gpts-body .g3pan{--g-bg:#0b0e14;--g-panel:#0f131b;--g-card:#12161f;--g-line:#1e2530;--g-line2:#3a4150;--g-txt:#e6edf3;--g-mut:#8b98a9;--g-dim:#6c7889;--g-grn:#2ec27e;--g-red:#f0616d;--g-amb:#f2b45a;--g-yel:#e3c341;--g-pur:#a371f7;--g-blu:#7cc7ff;--g-lil:#cdb4fa;--g-teal:#5fd3c4}#gpts-body .g3pan{width:608px;background:var(--g-panel);color:var(--g-txt);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;font-size:8.4px;line-height:1.35}#gpts-body .g3pan .tabs{display:flex;gap:2px;background:#12161f;border-bottom:1px solid var(--g-line2);padding:4px 4px 0}#gpts-body .g3pan .tabs span{padding:4px 10px;font-size:9.5px;font-weight:600;color:var(--g-dim)}#gpts-body .g3pan .tabs span.on{color:var(--g-txt);font-weight:800;border-bottom:2px solid var(--g-blu)}#gpts-body .g3pan .hd{padding:5px 7px 4px;border-bottom:1px solid var(--g-line);font-size:7.6px;color:var(--g-mut)}#gpts-body .g3pan .hd b{color:var(--g-txt);font-size:9px}#gpts-body .g3pan .subj{display:flex;gap:3px;padding:4px 6px 0;flex-wrap:wrap}#gpts-body .g3pan .subj span{font-size:7.2px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border:1px solid var(--g-line2);border-radius:3px;color:var(--g-dim)}#gpts-body .g3pan .subj span.on{color:var(--g-txt);border-color:var(--g-blu);background:#141a24}#gpts-body .g3pan .sec{margin:5px 6px;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card);overflow:hidden}#gpts-body .g3pan .sech{display:flex;align-items:center;gap:6px;padding:4px 7px;background:#141a24;border-bottom:1px solid var(--g-line)}#gpts-body .g3pan .sech .n{font-size:8.6px;font-weight:900;color:var(--g-blu);min-width:16px}#gpts-body .g3pan .sech .t{font-size:8.4px;font-weight:800;letter-spacing:.03em;color:var(--g-txt)}#gpts-body .g3pan .sech .dc{margin-left:auto;font-size:6.6px;letter-spacing:.08em;color:var(--g-teal);font-weight:800;white-space:nowrap}#gpts-body .g3pan .sech .ct{font-size:7px;color:var(--g-dim);white-space:nowrap}#gpts-body .g3pan .sech .car{color:var(--g-dim);font-size:8px}#gpts-body .g3pan .secb{padding:4px 7px 5px}#gpts-body .g3pan .note{font-size:7.2px;color:var(--g-mut);font-style:italic;padding:3px 0 2px;border-top:1px dashed rgba(255,255,255,.06);margin-top:3px}#gpts-body .g3pan .sc{display:flex;gap:6px;padding:2.5px 0 0;font-size:7.8px;align-items:baseline;border-top:1px dashed rgba(255,255,255,.05)}#gpts-body .g3pan .sc:first-child{border-top:0}#gpts-body .g3pan .sc .id{font-family:ui-monospace,monospace;color:var(--g-dim);min-width:30px}#gpts-body .g3pan .sc .qq{color:var(--g-txt);flex:1;min-width:0}#gpts-body .g3pan .sc .de{font-size:6.2px;letter-spacing:.07em;font-weight:800;color:var(--g-teal);min-width:54px;text-align:right;white-space:nowrap}#gpts-body .g3pan .sc .cl{color:var(--g-dim);min-width:40px;font-size:7px;white-space:nowrap}#gpts-body .g3pan .sc .cp{color:var(--g-dim);min-width:74px;font-size:7px;white-space:nowrap}#gpts-body .g3pan .sc .vd{min-width:56px;text-align:right;font-weight:900;letter-spacing:.05em;font-size:6.8px;white-space:nowrap}#gpts-body .g3pan .rs{padding:0 0 2.5px 36px;font-size:7.4px;color:var(--g-mut)}#gpts-body .g3pan .rs b{color:var(--g-txt);font-weight:600}#gpts-body .g3pan .rs .ci{color:var(--g-dim);font-style:italic}#gpts-body .g3pan .gr{color:var(--g-grn)}#gpts-body .g3pan .rd{color:var(--g-red)}#gpts-body .g3pan .am{color:var(--g-amb)}#gpts-body .g3pan .ye{color:var(--g-yel)}#gpts-body .g3pan .pu{color:var(--g-pur)}#gpts-body .g3pan .bl{color:var(--g-blu)}#gpts-body .g3pan .bl2{color:#a9dbff}#gpts-body .g3pan .te{color:var(--g-teal)}#gpts-body .g3pan .dm{color:var(--g-dim)}#gpts-body .g3pan .mu{color:var(--g-mut)}#gpts-body .g3pan .lil{color:var(--g-lil)}#gpts-body .g3pan table{border-collapse:collapse;width:100%;font-size:7.6px;margin:3px 0 2px}#gpts-body .g3pan th{font-size:6.4px;font-weight:800;letter-spacing:.07em;color:var(--g-dim);text-transform:uppercase;text-align:left;padding:2px 4px 3px;border-bottom:1px solid var(--g-line2)}#gpts-body .g3pan td{padding:1.5px 4px;border-top:1px solid rgba(255,255,255,.04);vertical-align:top;white-space:nowrap}#gpts-body .g3pan td.r,#gpts-body .g3pan th.r{text-align:right}#gpts-body .g3pan td.sub{padding-left:12px;color:var(--g-mut)}#gpts-body .g3pan .foot{padding:5px 7px;border-top:1px solid var(--g-line);font-size:7.4px;color:var(--g-dim);display:flex;gap:9px}#gpts-body .g3pan .flow{display:flex;align-items:center;gap:4px;margin:5px 6px 2px;padding:5px 6px;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card)}#gpts-body .g3pan .flow div{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;padding:2px 5px;border-left:2px solid var(--g-line2)}#gpts-body .g3pan .flow div b{font-size:6.6px;letter-spacing:.09em;color:var(--g-blu)}#gpts-body .g3pan .flow div span{font-size:7.6px;color:var(--g-txt)}#gpts-body .g3pan .flow div span.dm{font-size:6.8px}#gpts-body .g3pan .flow i{color:var(--g-dim);font-style:normal;font-size:9px}#gpts-body .g3pan .bar{display:inline-block;width:52px;height:5px;background:rgba(255,255,255,.08);border-radius:2px;vertical-align:middle;overflow:hidden}#gpts-body .g3pan .bar i{display:block;height:100%;background:var(--g-amb)}#gpts-body .g3pan tr.draft td{color:var(--g-mut)}#gpts-body .g3pan td.sk{color:var(--g-lil)}#gpts-body .g3pan .row{display:flex;gap:6px;align-items:baseline;padding:2px 0;border-top:1px dashed rgba(255,255,255,.05)}#gpts-body .g3pan .row:first-child{border-top:0}#gpts-body .g3pan .k{color:var(--g-mut);min-width:72px;font-size:7.4px}#gpts-body .g3pan .v{color:var(--g-txt);font-size:7.6px}#gpts-body .g3pan td{white-space:normal}#gpts-body .g3pan{width:auto}#gpts-body .g3pan.g3scaled{zoom:var(--g-scale,1)}#gpts-body .g3pan .tabs span{cursor:pointer}#gpts-body .g3pan .sech[data-gsec]{cursor:pointer}#gpts-body .g3pan .qq,#gpts-body .g3pan .v,#gpts-body .g3pan .note,#gpts-body .g3pan .rs{white-space:normal}';
+var PANEL_SCALE_KEY='gpts_tabscale_v1', PANEL_SCALES=[1,1.55,2.1];
+function panelScale(){ try{ var v=parseFloat(localStorage.getItem(PANEL_SCALE_KEY)||'1'); return (PANEL_SCALES.indexOf(v)>=0)?v:1; }catch(e){ return 1; } }
+function setPanelScale(v){ v=parseFloat(v); if(PANEL_SCALES.indexOf(v)<0) v=1; try{ localStorage.setItem(PANEL_SCALE_KEY, String(v)); }catch(e){} try{ render(); }catch(eR){} }
+function panOpen(){ try{ ensureV3Css(); }catch(e){} return '<div class="g3pan g3scaled" style="--g-scale:'+panelScale()+'">'; }   // the stylesheet is the dashboard's; a tab opened first must not render bare
+// the mockup's section: ▾ id TITLE … decides X · n  — the header toggles (data-gsec), the body is .secb
+function panSection(id, num, title, decides, count, body, dflt, tip){
+  var open=secOpen(id, dflt);
+  return '<div class="sec"><div class="sech" data-gsec="'+g3esc(id)+'"'+(tip?(' title="'+g3esc(tip)+'"'):'')+'>'+
+    '<span class="car">'+(open?'\u25be':'\u25b8')+'</span><span class="n">'+g3esc(num)+'</span><span class="t">'+g3esc(title)+'</span>'+
+    (decides?('<span class="dc">'+decides+'</span>'):'<span class="dc"></span>')+(count!=null?('<span class="ct">\u00b7 '+g3esc(String(count))+'</span>'):'')+
+  '</div>'+(open?('<div class="secb">'+body+'</div>'):'')+'</div>';
+}
+function panRow(k, v){ return '<div class="row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
+function panNote(t){ return '<div class="note">'+t+'</div>'; }
+// the mockup's foot: the three pipeline dots (real state), the tab's name, the scale control, the "?" guide
+function panFoot(which, right){
+  var LS=null; try{ LS=loopStatus(); }catch(e){}
+  function dot(k, label){ var st=(LS&&LS[k]&&LS[k].state)||'grey'; var col={ green:'#2ec27e', amber:'#f2b45a', red:'#f0616d', grey:'#6c7889' }[st]||'#6c7889'; return '<span title="'+g3esc((LS&&LS[k]&&LS[k].ev)||'')+'"><span style="color:'+col+'">\u25cf</span> '+label+'</span>'; }
+  var sc=panelScale();
+  var scale='<span style="margin-left:auto">'+g3esc(right||'')+'</span><span title="The mockup page showed the panel at 1.55\u00d7 on a ~940px stage: pick the same scale here. At 1.55\u00d7 the tab wants ~940px of width \u2014 pop the panel out or widen it.">scale '+
+    PANEL_SCALES.map(function(v){ return '<span data-gscale="'+v+'" style="cursor:pointer;padding:0 4px;'+(v===sc?'color:var(--g-txt);font-weight:800;border-bottom:1px solid var(--g-blu)':'')+'">'+v+'\u00d7</span>'; }).join('')+'</span>';
+  return '<div class="foot">'+dot('rec','rec')+dot('saved','saved')+dot('pushed','pushed')+scale+tabGuideBtn(which)+'</div>'+(TAB_GUIDE[which]?tabGuide(which):'');
+}
 function trackFieldHtml(subj, flat){
   var mine=requestsLoad().filter(function(r){ return r && r.subj===subj; });
-  var h='<div style="margin-top:6px;border:1px solid '+PAL.line+';border-radius:8px;padding:5px 7px;background:#0f131b">';
-  h+='<div style="font-size:8px;font-weight:800;letter-spacing:.08em;color:'+PAL.gold+'">TRACK SOMETHING UNDER '+g3esc(subj)+'</div>';
-  h+='<div style="font-size:8px;color:'+PAL.sub+';white-space:normal;line-height:1.35">Type what you want measured — a setup, a level, a condition, a question. It rides in the day export, the nightly copies it into learning/requests.json, and the review turns it into a study row (and a register entry if it earns one). The row comes back here with its id.</div>';
-  h+='<div style="display:flex;gap:4px;margin-top:4px"><input id="gpts-track-'+g3esc(subj)+'" type="text" maxlength="400" placeholder="e.g. ONL sweep into a top-5 node before 09:30 — is that the LOD more often?" style="flex:1;min-width:0;font-size:9px;padding:3px 5px;border:1px solid '+PAL.line+';border-radius:5px;background:#12161f;color:'+PAL.ink+'">'+
-     '<span onclick="window.__gptsDebug&&window.__gptsDebug.requestsAdd&&window.__gptsDebug.requestsAdd(\''+g3esc(subj)+'\')" title="Add this to the tracking queue for '+g3esc(subj)+'." style="cursor:pointer;white-space:nowrap;font-size:9px;font-weight:800;color:#0b0e14;background:'+PAL.gold+';border-radius:12px;padding:2px 9px;align-self:center">+ Add</span></div>';
+  var body='<div class="note" style="border-top:0;margin-top:0;padding-top:0">Type what you want measured \u2014 a setup, a level, a condition, a question. It rides in the day export, the nightly copies it into learning/requests.json, and the review turns it into a study row (and a register entry if it earns one). The row comes back here with its id.</div>';
+  body+='<div style="display:flex;gap:4px;margin-top:3px"><input id="gpts-track-'+g3esc(subj)+'" type="text" maxlength="400" placeholder="e.g. ONL sweep into a top-5 node before 09:30 \u2014 is that the LOD more often?" style="flex:1;min-width:0;font:inherit;font-size:8px;padding:3px 5px;border:1px solid var(--g-line2);border-radius:3px;background:#0f131b;color:var(--g-txt)">'+
+     '<span onclick="window.__gptsDebug&&window.__gptsDebug.requestsAdd&&window.__gptsDebug.requestsAdd(\''+g3esc(subj)+'\')" title="Add this to the tracking queue for '+g3esc(subj)+'." style="cursor:pointer;white-space:nowrap;font-size:7.6px;font-weight:800;letter-spacing:.06em;color:#0b0e14;background:var(--g-blu);border-radius:3px;padding:2px 8px;align-self:center">+ ADD</span></div>';
   if(mine.length){
     mine.slice().reverse().forEach(function(r){
       var st=requestStatus(r, flat);
-      h+='<div style="display:flex;gap:6px;align-items:baseline;margin-top:3px;font-size:8.5px;line-height:1.35;border-top:1px dashed rgba(255,255,255,.06);padding-top:2px">'+
-          '<span style="color:'+PAL.sub+';font-family:ui-monospace,monospace;font-size:7.5px">'+g3esc(r.id)+'</span>'+
-          '<span style="flex:1;min-width:0;color:'+PAL.ink+';white-space:normal">'+g3esc(r.text)+'</span>'+
-          '<span style="color:'+st.col+';font-weight:800;font-size:7.5px;white-space:nowrap">'+g3esc(st.label)+'</span>'+
-          '<span onclick="window.__gptsDebug&&window.__gptsDebug.requestsRemove&&window.__gptsDebug.requestsRemove(\''+g3esc(r.id)+'\')" title="remove" style="cursor:pointer;color:'+PAL.sub+'">×</span></div>';
+      body+='<div class="sc"><span class="id">'+g3esc(r.id)+'</span><span class="qq">'+g3esc(r.text)+'</span><span class="vd" style="color:'+st.col+'">'+g3esc(st.label)+'</span>'+
+          '<span onclick="window.__gptsDebug&&window.__gptsDebug.requestsRemove&&window.__gptsDebug.requestsRemove(\''+g3esc(r.id)+'\')" title="remove" class="dm" style="cursor:pointer">\u00d7</span></div>';
     });
   }
-  return h+'</div>';
+  return panSection('track-'+subj, '\u2295', 'TRACK SOMETHING UNDER '+subj, 'typed \u2192 export \u2192 nightly \u2192 a study row', mine.length, body, true, 'Ask for something to be measured under this subject.');
 }
 
 // ---- the subject panel -----------------------------------------------------------------------
 var ANALYSIS_SUBJ=(function(){ try{ return localStorage.getItem(ASUBJ_KEY)||'H'; }catch(e){ return 'H'; } })();
 function showSubject(k){ ANALYSIS_SUBJ=String(k||'H'); try{ localStorage.setItem(ASUBJ_KEY, ANALYSIS_SUBJ); }catch(e){} try{ render(); }catch(eR){} }
 function subjectStripHtml(sel, S){
-  var h='<div style="display:flex;gap:3px;flex-wrap:wrap;margin:2px 0 4px">';
+  var h='<div class="subj">';
   (S.subjects||[]).forEach(function(sj){
     var on=(sj.key===sel);
-    h+='<span onclick="window.__gptsDebug&&window.__gptsDebug.showSubject&&window.__gptsDebug.showSubject(\''+g3esc(sj.key)+'\')" title="'+g3esc(sj.strap||'')+'" style="cursor:pointer;font-size:8px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border:1px solid '+(on?PAL.blue:PAL.line)+';border-radius:4px;color:'+(on?PAL.ink:PAL.sub)+';background:'+(on?'#141a24':'transparent')+'">'+g3esc(sj.key+' '+sj.name)+'</span>';
+    h+='<span'+(on?' class="on"':'')+' onclick="window.__gptsDebug&&window.__gptsDebug.showSubject&&window.__gptsDebug.showSubject(\''+g3esc(sj.key)+'\')" title="'+g3esc(sj.strap||'')+'" style="cursor:pointer">'+g3esc(sj.key+' '+sj.name)+'</span>';
   });
   return h+'</div>';
 }
+// (v15.62) the mockup's row: id · the question · DECIDES · claim · corpus · STATUS, then the result line
 function studyRowHtml(x){
   var col=STUDY_STATUS_COL[x.status]||'#6c7889';
-  var h='<div style="display:flex;gap:5px;align-items:baseline;padding:2px 0 0;font-size:8.6px;border-top:1px dashed rgba(255,255,255,.05)">'+
-    '<span style="font-family:ui-monospace,monospace;color:'+PAL.sub+';min-width:34px;font-size:8px">'+g3esc(x.id)+'</span>'+
-    '<span style="flex:1;min-width:0;color:'+PAL.ink+';white-space:normal;line-height:1.35">'+g3esc(x.q)+(x.was?(' <span style="color:'+PAL.sub+'">('+g3esc(x.was)+')</span>'):'')+'</span>'+
-    '<span title="What does this study change at the tap? SIZE · SIDE · TARGET · STOP · SKIP · TIME · LEVEL · WAIT" style="font-size:6.8px;letter-spacing:.07em;font-weight:800;color:#5fd3c4;white-space:nowrap">'+g3esc(x.decides||'')+'</span>'+
-    '<span title="Which doctrine claim does it test? C-n from design/SKYLIT-DOCTRINE-CLAIMS-AND-ANALYSIS-DESIGN.md; lore = trader folklore; ours = our own" style="font-size:7.5px;color:'+PAL.sub+';white-space:nowrap">'+g3esc(x.claim||'')+'</span>'+
-    '<span title="What corpus does it need? tap record = the v15.56 TAP record; API backfill = Skylit\u2019s historical heatmap" style="font-size:7.5px;color:'+PAL.sub+';white-space:nowrap">'+g3esc(x.corpus||'')+'</span>'+
-    '<span style="font-size:7.2px;font-weight:900;letter-spacing:.05em;color:'+col+';white-space:nowrap;min-width:52px;text-align:right">'+g3esc(x.status)+'</span></div>';
-  if(x.result) h+='<div style="padding:0 0 2px 39px;font-size:8.2px;color:'+PAL.sub+';white-space:normal;line-height:1.35">→ <b style="color:'+PAL.ink+';font-weight:600">'+g3esc(x.result)+'</b>'+(x.script?(' <i style="color:'+PAL.sub+'">· '+g3esc(x.script)+'</i>'):'')+'</div>';
+  var h='<div class="sc"><span class="id">'+g3esc(x.id)+'</span>'+
+    '<span class="qq">'+g3esc(x.q)+(x.was?(' <span class="dm">('+g3esc(x.was)+')</span>'):'')+'</span>'+
+    '<span class="de" title="What does this study change at the tap? SIZE \u00b7 SIDE \u00b7 TARGET \u00b7 STOP \u00b7 SKIP \u00b7 TIME \u00b7 LEVEL \u00b7 WAIT">'+g3esc(x.decides||'')+'</span>'+
+    '<span class="cl" title="Which doctrine claim does it test? C-n from design/SKYLIT-DOCTRINE-CLAIMS-AND-ANALYSIS-DESIGN.md; lore = trader folklore; ours = our own">'+g3esc(x.claim||'')+'</span>'+
+    '<span class="cp" title="What corpus does it need? tap record = the TAP record (planned); API backfill = Skylit\u2019s historical heatmap">'+g3esc(x.corpus||'')+'</span>'+
+    '<span class="vd" style="color:'+col+'">'+g3esc(x.status)+'</span></div>';
+  if(x.result) h+='<div class="rs">\u2192 <b>'+g3esc(x.result)+'</b>'+(x.script?(' <span class="ci">\u00b7 '+g3esc(x.script)+'</span>'):'')+'</div>';
   return h;
 }
 function sweepTableHtml(W){
   if(!W || !W.cells) return tabEmpty('the sweep table (data/es-1min/SWEEPS.json) has not been fetched yet — it arrives with the pipeline check.');
   var want=[['ONL','ONL → LOD'],['ONH','ONH → HOD'],['PDL','PDL → LOD'],['PDH','PDH → HOD'],['PDC-','PDC ↓ → LOD'],['PDC+','PDC ↑ → HOD'],['VAL','VAL → LOD'],['VAH','VAH → HOD'],['POC-','POC ↓ → LOD'],['POC+','POC ↑ → HOD'],['IBL','IBL → LOD'],['IBH','IBH → HOD'],['PML','PML → LOD'],['PMH','PMH → HOD'],['PWL','PWL → LOD'],['PWH','PWH → HOD'],['OR15L','OR15L → LOD'],['OR15H','OR15H → HOD']];
   var L=W.lookup||{};
-  var h='<table style="width:100%;border-collapse:collapse;font-size:8.2px"><tr style="color:'+PAL.sub+';font-size:7px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">sweep-and-reclaim</th><th style="text-align:right">printed it</th><th style="text-align:right">fresh-low control</th><th style="text-align:right">lift</th><th style="text-align:right">pays (med.)</th></tr>';
+  var h='<table><tr><th>sweep-and-reclaim</th><th class="r">printed it</th><th class="r">fresh-low control</th><th class="r">lift</th><th class="r">pays (med.)</th></tr>';
   function row(name, c, sub){
     if(!c) return '';
-    var lift=(c.lift!=null)?Math.round(100*c.lift):null; var lc=(lift==null)?PAL.sub:((lift>=8)?PAL.longAccent:((lift<=-8)?PAL.shortAccent:PAL.sub));
-    return '<tr><td style="padding:1px 3px;border-top:1px solid rgba(255,255,255,.04);'+(sub?'padding-left:10px;color:'+PAL.sub:'')+'">'+g3esc(name)+'</td>'+
-      '<td style="text-align:right;border-top:1px solid rgba(255,255,255,.04)"><b>'+g3esc(rateTxt(c))+'</b>'+((c.ci&&c.rate!=null)?(' <i style="color:'+PAL.sub+'">['+Math.round(100*c.ci[0])+'–'+Math.round(100*c.ci[1])+']</i>'):'')+'</td>'+
-      '<td style="text-align:right;border-top:1px solid rgba(255,255,255,.04);color:'+PAL.sub+'">'+((c.fresh!=null)?(Math.round(100*c.fresh)+'% (n='+g3esc(String((W.corpus&&W.corpus.sessions)||'?'))+')'):'—')+'</td>'+
-      '<td style="text-align:right;border-top:1px solid rgba(255,255,255,.04);color:'+lc+'">'+((lift==null)?'—':((lift>=0?'+':'')+lift+'pp'))+'</td>'+
-      '<td style="text-align:right;border-top:1px solid rgba(255,255,255,.04)">'+((c.pay!=null)?(c.pay.toFixed(1)+' pts'):'—')+'</td></tr>';
+    var lift=(c.lift!=null)?Math.round(100*c.lift):null; var lc=(lift==null)?'dm':((lift>=8)?'gr':((lift<=-8)?'rd':'dm'));
+    return '<tr><td'+(sub?' class="sub"':'')+'>'+g3esc(name)+'</td>'+
+      '<td class="r"><b>'+g3esc(rateTxt(c))+'</b>'+((c.ci&&c.rate!=null)?(' <span class="ci dm">['+Math.round(100*c.ci[0])+'\u2013'+Math.round(100*c.ci[1])+']</span>'):'')+'</td>'+
+      '<td class="r dm">'+((c.fresh!=null)?(Math.round(100*c.fresh)+'% (n='+g3esc(String((W.corpus&&W.corpus.sessions)||'?'))+')'):'\u2014')+'</td>'+
+      '<td class="r '+lc+'">'+((lift==null)?'\u2014':((lift>=0?'+':'')+lift+'pp'))+'</td>'+
+      '<td class="r">'+((c.pay!=null)?(c.pay.toFixed(1)+' pts'):'\u2014')+'</td></tr>';
   }
   want.forEach(function(p){ h+=row(p[1], L.level&&L.level[p[0]]); });
   // (v15.57) the levels added on his ask: London, the VWAP and its bands, today's developing profile
@@ -18190,11 +18239,11 @@ function sweepTableHtml(W){
   // (v15.56) THE BOOK — from the panel's own day files, thin and growing
   var WB=null; try{ WB=sweepsBookLoad(); }catch(eWB){}
   if(WB && WB.lookup){ var LBk=WB.lookup; var bn=(WB.corpus&&WB.corpus.sessions)||0;
-    h+='<tr><td colspan="5" style="padding:4px 3px 1px;font-size:7px;letter-spacing:.06em;text-transform:uppercase;color:'+PAL.sub+';border-top:1px solid '+PAL.line+'">the book · '+bn+' sessions of the panel’s own exports · SPY 3-min · ±'+((LBk.bins&&LBk.bins.zone)||0.5)+' tap zone · thin by construction</td></tr>';
+    h+='<tr><th colspan="5" style="padding-top:5px">the book \u00b7 '+bn+' sessions of the panel\u2019s own exports \u00b7 SPY 3-min \u00b7 \u00b1'+((LBk.bins&&LBk.bins.zone)||0.5)+' tap zone \u00b7 thin by construction</th></tr>';
     [['PW0-','PW0 ↓ → LOD'],['CW0+','CW0 ↑ → HOD'],['PW-','PW ↓ → LOD'],['CW+','CW ↑ → HOD'],['KING-','KING ↓ → LOD'],['KING+','KING ↑ → HOD'],['HVL-','HVL (zero γ) ↓ → LOD'],['HVL+','HVL (zero γ) ↑ → HOD'],['MAG-','magnet ↓ → LOD'],['MAG+','magnet ↑ → HOD']].forEach(function(p){ if(LBk.level&&LBk.level[p[0]]) h+=row(p[1], LBk.level[p[0]]); });
     if(LBk.node){ h+=row('price sweep AT a top-5 node / the King', LBk.node.atNode, true); h+=row('price sweep NOT at a node', LBk.node.notAtNode, true); h+=row('price sweep AT the King', LBk.node.atKing, true); h+=row('price sweep AT a wall', LBk.node.atWall, true); }
-  } else h+='<tr><td colspan="5" style="padding:3px;font-size:7.6px;color:'+PAL.sub+'">the book table (SWEEPS-BOOK.json) has not been fetched yet</td></tr>';
-  h+='</table><div style="font-size:7.8px;color:'+PAL.sub+';white-space:normal;line-height:1.35;margin-top:2px;font-style:italic">'+g3esc((W.corpus&&W.corpus.sessions)||'?')+' ES sessions '+g3esc((W.corpus&&W.corpus.first)||'')+' → '+g3esc((W.corpus&&W.corpus.last)||'')+' · the fresh-low control is a bounce off a session low printed in the last 30 bars at the same minute, at ANY level or none · '+g3esc(String((W.ledger&&W.ledger.cells_read)||'?'))+' cells read, none pre-registered · pays = median points to the far extreme when the sweep WAS the extreme</div>';
+  } else h+='<tr><td colspan="5" class="dm">the book table (SWEEPS-BOOK.json) has not been fetched yet</td></tr>';
+  h+='</table>'+panNote(g3esc((W.corpus&&W.corpus.sessions)||'?')+' ES sessions '+g3esc((W.corpus&&W.corpus.first)||'')+' \u2192 '+g3esc((W.corpus&&W.corpus.last)||'')+' \u00b7 the fresh-low control is a bounce off a session low printed in the last 30 bars at the same minute, at ANY level or none \u00b7 '+g3esc(String((W.ledger&&W.ledger.cells_read)||'?'))+' cells read, none pre-registered \u00b7 pays = median points to the far extreme when the sweep WAS the extreme');
   return h;
 }
 function subjectPanelHtml(sym, sel, live){
@@ -18203,19 +18252,20 @@ function subjectPanelHtml(sym, sel, live){
   if(!sj) sj=S.subjects[0];
   var mine=flat.filter(function(x){ return x.subj===sj.key; });
   var by=studiesCounts(mine);
-  var h='<div style="font-size:8.5px;color:'+PAL.sub+';white-space:normal;line-height:1.35;margin-bottom:3px"><b style="color:'+PAL.ink+';font-size:9.5px">'+g3esc(sj.name)+'</b> · '+g3esc(sj.strap||'')+' · '+(sj.subsections||[]).length+' subsections · '+mine.length+' studies'+
-    (mine.length?(' · '+Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).map(function(k){ return by[k]+' '+k.toLowerCase(); }).join(' · ')):(S.seed?' · <span style="color:'+PAL.amber+'">registry not fetched yet — rows arrive with the pipeline check</span>':''))+'</div>';
+  // the mockup's header line: NAME · the strap · n subsections · n studies · the counts by status
+  var h='<div class="hd"><b>'+g3esc(sj.name)+'</b> \u00b7 '+g3esc(sj.strap||'')+' \u00b7 '+(sj.subsections||[]).length+' subsections \u00b7 '+mine.length+' studies'+
+    (mine.length?(' \u00b7 '+Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).map(function(k){ return by[k]+' '+k.toLowerCase(); }).join(' \u00b7 ')):(S.seed?' \u00b7 <span class="am">registry not fetched yet \u2014 rows arrive with the pipeline check</span>':''))+'</div>';
   (sj.subsections||[]).forEach(function(ss){
     var rows=mine.filter(function(x){ return x.sub===ss.key; });
     var body='';
     rows.forEach(function(x){ body+=studyRowHtml(x); });
-    if(!rows.length) body+=tabEmpty(S.seed?'rows arrive when learning/studies.json is fetched.':'no studies here yet — add one below.');
-    if(ss.key==='H2'){ var W=null; try{ W=sweepsLoad(); }catch(eW){} body+='<div style="margin-top:4px;font-size:8px;font-weight:700;color:'+PAL.sub+'">THE SWEEP TABLE · measured</div>'+sweepTableHtml(W); }
-    if(ss.note) body+='<div style="margin-top:3px;font-size:7.8px;color:'+PAL.sub+';font-style:italic;white-space:normal;line-height:1.35">'+g3esc(ss.note)+'</div>';
-    if(live && live[ss.key]) body+='<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">TODAY’S EVIDENCE · live</div>'+live[ss.key];
+    if(!rows.length) body+=tabEmpty(S.seed?'rows arrive when learning/studies.json is fetched.':'no studies here yet \u2014 add one below.');
+    if(ss.key==='H2'){ var W=null; try{ W=sweepsLoad(); }catch(eW){} body+='<div class="dm" style="margin-top:4px;font-weight:800;letter-spacing:.06em;font-size:6.8px">THE SWEEP TABLE \u00b7 MEASURED</div>'+sweepTableHtml(W); }
+    if(ss.note) body+=panNote(g3esc(ss.note));
+    if(live && live[ss.key]) body+='<div class="dm" style="margin-top:5px;font-weight:800;letter-spacing:.06em;font-size:6.8px">TODAY\u2019S EVIDENCE \u00b7 LIVE</div>'+live[ss.key];
     // open by default where there is something to read: a result line, the sweep table, live evidence, or the objective (H1/H2)
     var dflt=(ss.key==='H1'||ss.key==='H2'||!!(live&&live[ss.key])||rows.some(function(x){ return !!x.result; }));
-    h+=tabSection('sj-'+ss.key, ss.key, ss.name, 'What does it decide at the tap? '+(ss.decides||'')+' · '+rows.length+' stud'+(rows.length===1?'y':'ies'), body, dflt);
+    h+=panSection('sj-'+ss.key, ss.key, ss.name, 'decides '+g3esc(ss.decides||''), rows.length, body, dflt, 'What does it decide at the tap? '+(ss.decides||'')+' \u00b7 '+rows.length+' stud'+(rows.length===1?'y':'ies'));
   });
   h+=trackFieldHtml(sj.key, flat);
   return h;
@@ -18440,14 +18490,17 @@ function testingLoopStripHtml(){
   var N=null; try{ N=(typeof ANALYSIS_NIGHTLY!=='undefined')?ANALYSIS_NIGHTLY:null; }catch(eN){}
   var tc=rulesTierCounts();
   var reqs=requestsLoad();
-  function cell(t, v, s){ return '<div style="flex:1;min-width:0;border-left:2px solid '+PAL.line+';padding:2px 5px"><div style="font-size:6.8px;letter-spacing:.09em;color:'+PAL.blue+';font-weight:800">'+t+'</div><div style="font-size:8.6px;color:'+PAL.ink+'">'+v+'</div><div style="font-size:7.4px;color:'+PAL.sub+';white-space:normal">'+s+'</div></div>'; }
+  // (v15.62) as mocked: the .hd line ("The loop, today · …") then the .flow strip
+  function cell(t, v, s){ return '<div><b>'+t+'</b><span>'+v+'</span><span class="dm">'+s+'</span></div>'; }
   var gates=['dir','node','decision'].map(function(k){ return gateStateTxt(k); }); var clear=gates.filter(function(g){ return g.txt==='CLEAR'; }).length;
-  return '<div style="display:flex;align-items:stretch;gap:3px;margin:3px 0 5px;padding:4px 5px;border:1px solid '+PAL.line+';border-radius:8px;background:'+PAL.card+'">'+
-    cell('ANALYSIS', flat.length+' studies', (S.seed?'registry not fetched':((by.READ||0)+' read · '+(by.SHIPPED||0)+' shipped · '+(by.OPEN||0)+' open')))+'<span style="color:'+PAL.sub+'">→</span>'+
-    cell('TRACKED', reqs.length+' request'+(reqs.length===1?'':'s'), (reqs.filter(function(r){ return !r.exported; }).length)+' not yet exported')+'<span style="color:'+PAL.sub+'">→</span>'+
-    cell('REGISTER', reg.length+' written', (by.DRAFT||0)+' drafted · from '+g3esc(PREREG_FROM))+'<span style="color:'+PAL.sub+'">→</span>'+
-    cell('GATE', clear+' of 3 clear', '30 per band to judge')+'<span style="color:'+PAL.sub+'">→</span>'+
-    cell('DASHBOARD', tc.earned+' earned', tc.hand+' hand rules render no rate')+'<span style="color:'+PAL.sub+'">→</span>'+
+  var WB=null; try{ WB=sweepsBookLoad(); }catch(eB){} var W=null; try{ W=sweepsLoad(); }catch(eW){}
+  var hd='<div class="hd"><b>The loop, today</b> \u00b7 '+flat.length+' studies \u2192 '+reg.length+' hypotheses written + '+(by.DRAFT||0)+' drafted \u2192 3 features at the gate ('+clear+' clear) \u2192 '+tc.total+' rules on the ladder ('+tc.earned+' earned, '+tc.hand+' hand) \u2192 recorded: '+g3esc(String((WB&&WB.corpus&&WB.corpus.sessions)||0))+' sessions with the book, '+g3esc(String((W&&W.corpus&&W.corpus.sessions)||0))+' price-only \u2192 nightly '+g3esc((N&&N.date)||'not read back')+'</div>';
+  return hd+'<div class="flow">'+
+    cell('ANALYSIS', flat.length+' studies', (S.seed?'registry not fetched':((by.READ||0)+' read \u00b7 '+(by.SHIPPED||0)+' shipped \u00b7 '+(by.OPEN||0)+' open')))+'<i>\u2192</i>'+
+    cell('TRACKED', reqs.length+' request'+(reqs.length===1?'':'s'), (reqs.filter(function(r){ return !r.exported; }).length)+' not yet exported')+'<i>\u2192</i>'+
+    cell('REGISTER', reg.length+' written', (by.DRAFT||0)+' drafted \u00b7 from '+g3esc(PREREG_FROM))+'<i>\u2192</i>'+
+    cell('GATE', clear+' of 3 clear', '30 per band to judge')+'<i>\u2192</i>'+
+    cell('DASHBOARD', tc.earned+' earned', tc.hand+' hand rules render no rate')+'<i>\u2192</i>'+
     cell('NIGHTLY', g3esc((N&&N.date)||'not read back'), g3esc((N&&N.preopen)?String(N.preopen).slice(0,60):'reads the register at minN'))+
   '</div>';
 }
@@ -18468,26 +18521,26 @@ function dashboardRulesHtml(sym){
     ['decision grid A×A … C×C','F P · decision.*','“⛔ gated”','9 hand rules',gc.txt,gc.col],
     ['node rules','F · node.*','held rate by node condition','hand',gn.txt,gn.col]
   ];
-  var h='<table style="width:100%;border-collapse:collapse;font-size:8.4px"><tr style="color:'+PAL.sub+';font-size:7px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">ladder element</th><th style="text-align:left">subject · study</th><th style="text-align:left">renders</th><th style="text-align:left">rule / tier</th><th style="text-align:right">state</th></tr>';
-  rows.forEach(function(r){ h+='<tr><td style="padding:1px 3px;border-top:1px solid rgba(255,255,255,.04);white-space:normal">'+g3esc(r[0])+'</td><td style="color:'+PAL.sub+';border-top:1px solid rgba(255,255,255,.04)">'+g3esc(r[1])+'</td><td style="border-top:1px solid rgba(255,255,255,.04);white-space:normal">'+g3esc(r[2])+'</td><td style="color:'+PAL.sub+';border-top:1px solid rgba(255,255,255,.04);white-space:normal">'+g3esc(r[3])+'</td><td style="text-align:right;font-weight:900;color:'+r[5]+';border-top:1px solid rgba(255,255,255,.04);white-space:normal">'+g3esc(r[4])+'</td></tr>'; });
+  var h='<table><tr><th>ladder element</th><th>subject \u00b7 study</th><th>renders</th><th>rule / tier</th><th class="r">state</th></tr>';
+  rows.forEach(function(r){ h+='<tr><td>'+g3esc(r[0])+'</td><td class="dm">'+g3esc(r[1])+'</td><td>'+g3esc(r[2])+'</td><td class="dm">'+g3esc(r[3])+'</td><td class="r" style="color:'+r[5]+'"><b>'+g3esc(r[4])+'</b></td></tr>'; });
   h+='</table>';
   var tc=rulesTierCounts();
-  h+='<div style="margin-top:3px;font-size:8px;color:'+PAL.sub+';white-space:normal;line-height:1.35;font-style:italic">'+tc.total+' rules on the ladder, '+tc.earned+' earned. A hand rule renders no rate. kill.negGammaWide is flagged while a registered null argues against a rule that kills on polarity: when H3 clears at 40 the rule retires; if H3 is refused it stays. That is the loop changing the ladder.</div>';
+  h+=panNote(tc.total+' rules on the ladder, '+tc.earned+' earned. A hand rule renders no rate. kill.negGammaWide is flagged while a registered null argues against a rule that kills on polarity: when H3 clears at 40 the rule retires; if H3 is refused it stays. That is the loop changing the ladder.');
   return h;
 }
 // (v15.58) ② THE GATE as mocked: one row per feature the rules hang on — the bands, the gap, n per band, the verdict
 function gateSummaryHtml(){
   var st=null; try{ st=featStatsCached('SPY'); }catch(e){}
   var feeds={ dir:'D \u00b7 dir.A / dir.B / dir.C \u00b7 kill.*', node:'F \u00b7 node.* \u00b7 kill.tap3 \u00b7 kill.negGammaWide', decision:'F P \u00b7 decision.A\u00d7A \u2026 C\u00d7C', lodhod:'H \u00b7 the HOD/LOD live column (close-scored)' };
-  var h='<table style="width:100%;border-collapse:collapse;font-size:9px"><tr style="color:'+PAL.sub+';font-size:7.5px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">feature</th><th style="text-align:left">subject \u00b7 rules it feeds</th><th style="text-align:right">predicted-low band</th><th style="text-align:right">predicted-high band</th><th style="text-align:right">\u0394</th><th style="text-align:right">n per band</th><th style="text-align:right">verdict</th></tr>';
+  var h='<table><tr><th>feature</th><th>subject \u00b7 rules it feeds</th><th class="r">predicted-low band</th><th class="r">predicted-high band</th><th class="r">\u0394</th><th class="r">n per band</th><th class="r">verdict</th></tr>';
   ['dir','node','decision','lodhod'].forEach(function(k){
     var b=(st&&st.byKey&&st.byKey[k])||{}; var lo=(b.band&&b.band.lo)||{n:0,hit:0}, hi=(b.band&&b.band.hi)||{n:0,hit:0};
     var rl=lo.n?Math.round(100*lo.hit/lo.n):null, rh=hi.n?Math.round(100*hi.hit/hi.n):null; var g=gateStateTxt(k);
-    h+='<tr style="border-top:1px solid rgba(255,255,255,.04)"><td style="font-weight:800">'+g3esc(k)+'</td><td style="color:'+PAL.sub+';white-space:normal">'+g3esc(feeds[k]||'')+'</td>'+
-      '<td style="text-align:right">'+(rl==null?'\u2014':(rl+'% <i style="color:'+PAL.sub+'">n='+lo.n+'</i>'))+'</td><td style="text-align:right">'+(rh==null?'\u2014':(rh+'% <i style="color:'+PAL.sub+'">n='+hi.n+'</i>'))+'</td>'+
-      '<td style="text-align:right">'+((rl!=null&&rh!=null)?((rh-rl>=0?'+':'')+(rh-rl)+'pp'):'\u2014')+'</td><td style="text-align:right;color:'+PAL.sub+'">'+lo.n+' / '+hi.n+'</td><td style="text-align:right;font-weight:900;color:'+g.col+';white-space:normal">'+g3esc(g.txt)+'</td></tr>';
+    h+='<tr><td><b>'+g3esc(k)+'</b></td><td class="dm">'+g3esc(feeds[k]||'')+'</td>'+
+      '<td class="r">'+(rl==null?'\u2014':(rl+'% <span class="ci dm">n='+lo.n+'</span>'))+'</td><td class="r">'+(rh==null?'\u2014':(rh+'% <span class="ci dm">n='+hi.n+'</span>'))+'</td>'+
+      '<td class="r">'+((rl!=null&&rh!=null)?((rh-rl>=0?'+':'')+(rh-rl)+'pp'):'\u2014')+'</td><td class="r dm">'+lo.n+' / '+hi.n+'</td><td class="r" style="color:'+g.col+'"><b>'+g3esc(g.txt)+'</b></td></tr>';
   });
-  return h+'</table><div style="margin-top:3px;font-size:8px;color:'+PAL.sub+';white-space:normal;font-style:italic">A feature whose hit rate does not move by \u2265 10 points between the band it predicts low and the band it predicts high cannot promote (ruleTier \u2696) and its rate cannot render (pctN \u26d4). Thin bands are not judged. The full per-feature table follows.</div>';
+  return h+'</table>'+panNote('A feature whose hit rate does not move by \u2265 10 points between the band it predicts low and the band it predicts high cannot promote (ruleTier \u2696) and its rate cannot render (pctN \u26d4). Thin bands are not judged. The full per-feature table follows.');
 }
 // (v15.58) ④ THE RECORD as mocked: the stores, what they carry, what the OPEN studies still need
 function recordStoresHtml(sym){
@@ -18506,14 +18559,14 @@ function recordStoresHtml(sym){
   var rows=[
     ['feat (IDB)', featN+' recs \u00b7 '+days+' d', 'grade \u00b7 p \u00b7 tap# \u00b7 state \u00b7 growth15 \u00b7 pol \u00b7 MFE10 / MAE \u00b7 toClose (lodhod)', 'trinity at tap \u00b7 gk ratio \u00b7 King role & book \u00b7 velocity \u00b7 EM edge'],
     ['defl (IDB v3)', (DEFL_ARCH_N||0)+' archived \u00b7 '+deflToday+' today', 'sig \u00b7 tapBar \u00b7 wick \u00b7 CONTINUED / STALLED \u00b7 extent', 'wasSessionExtreme at the close \u00b7 node born-during-move \u00b7 sweep link'],
-    ['TAP record', '0 \u00b7 v15.59', '\u2014 the record '+openTap+' OPEN studies wait on \u2014', 'identity \u00b7 node \u00b7 lifecycle \u00b7 growth \u00b7 structure \u00b7 configuration \u00b7 trinity \u00b7 both zones \u00b7 extent \u00b7 wasSessionExtreme'],
+    ['TAP record', '0 \u00b7 planned', '\u2014 the record '+openTap+' OPEN studies wait on \u2014', 'identity \u00b7 node \u00b7 lifecycle \u00b7 growth \u00b7 structure \u00b7 configuration \u00b7 trinity \u00b7 both zones \u00b7 extent \u00b7 wasSessionExtreme'],
     ['ES 1-min (courier)', es?((es.n||0)+' bars \u00b7 '+(es.full?'full Globex day':'RTH window only (companion < v1.18)')):'no courier data', 'RTH'+(es&&es.full?' + overnight \u00b7 ONH/ONL \u00b7 London':'')+' \u00b7 PDH/PDL/PDC \u00b7 IB \u00b7 VWAP \u00b7 profile', (es&&es.full)?'NQ alongside for D5':'the overnight (companion v1.18)'],
     ['the book corpus', WB?((WB.corpus&&WB.corpus.sessions)||0)+' sessions \u00b7 SPY 3-min':'not fetched', 'King \u00b7 top-5 \u00b7 walls \u00b7 HVL \u00b7 magnet per bar \u00b7 sweeps at-node / not', 'grows one session per export'],
     ['kingRoll recs', kr+' rows on this machine', 'recorded since v14', readNext+' READ NEXT studies wait on a first read']
   ];
-  var h='<table style="width:100%;border-collapse:collapse;font-size:9px"><tr style="color:'+PAL.sub+';font-size:7.5px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">store</th><th style="text-align:right">size</th><th style="text-align:left">fields present</th><th style="text-align:left">missing for the OPEN studies</th></tr>';
-  rows.forEach(function(r){ h+='<tr style="border-top:1px solid rgba(255,255,255,.04);vertical-align:top"><td style="font-weight:700;white-space:nowrap">'+g3esc(r[0])+'</td><td style="text-align:right;white-space:nowrap">'+g3esc(r[1])+'</td><td style="white-space:normal">'+g3esc(r[2])+'</td><td style="white-space:normal;color:'+PAL.sub+'">'+g3esc(r[3])+'</td></tr>'; });
-  return h+'</table><div style="margin-top:3px;font-size:8px;color:'+PAL.sub+';white-space:normal;font-style:italic">The record is the bottleneck, not the analysis: '+openTap+' of '+flat.length+' studies are OPEN on the TAP record. The unlock thresholds follow.</div>';
+  var h='<table><tr><th>store</th><th class="r">size</th><th>fields present</th><th>missing for the OPEN studies</th></tr>';
+  rows.forEach(function(r){ h+='<tr><td><b>'+g3esc(r[0])+'</b></td><td class="r">'+g3esc(r[1])+'</td><td>'+g3esc(r[2])+'</td><td class="dm">'+g3esc(r[3])+'</td></tr>'; });
+  return h+'</table>'+panNote('The record is the bottleneck, not the analysis: '+openTap+' of '+flat.length+' studies are OPEN on the TAP record. The unlock thresholds follow.');
 }
 // (v15.58) ⑤ THE NIGHTLY as mocked: last run \u00b7 reads next \u00b7 refreshes \u00b7 then the review as written
 function nightlyHeadHtml(){
@@ -18521,7 +18574,7 @@ function nightlyHeadHtml(){
   var W=null; try{ W=sweepsLoad(); }catch(e2){} var WB=null; try{ WB=sweepsBookLoad(); }catch(e3){}
   var reg=[]; try{ reg=preregList(); }catch(e4){}
   var next=reg.map(function(H){ return H.id+' at '+H.minN; }).join(' \u00b7 ');
-  function row(k,v){ return '<div style="display:flex;gap:6px;align-items:baseline;padding:2px 0;border-top:1px dashed rgba(255,255,255,.05)"><span style="color:'+PAL.sub+';min-width:72px;font-size:8px">'+k+'</span><span style="color:'+PAL.ink+';font-size:8.5px;white-space:normal">'+v+'</span></div>'; }
+  var row=panRow;
   var h='';
   h+=row('last run', N?(g3esc(N.date||'')+' \u00b7 '+g3esc(String(N.preopen||''))):'not read back yet \u2014 learning/log/&lt;day&gt;.json arrives with the pipeline check');
   h+=row('reads next', g3esc(next));
@@ -18538,12 +18591,103 @@ function suiteFetch(){
 }
 function suiteHtml(){
   var S=suiteLoad();
-  function row(k,v){ return '<div style="display:flex;gap:6px;align-items:baseline;padding:2px 0;border-top:1px dashed rgba(255,255,255,.05)"><span style="color:'+PAL.sub+';min-width:72px;font-size:8px">'+k+'</span><span style="color:'+PAL.ink+';font-size:8.5px;white-space:normal">'+v+'</span></div>'; }
+  var row=panRow;
   var h='';
-  if(S) h+=row('last run', g3esc(String(S.files||0))+' files \u00b7 <b style="color:#2ec27e">'+g3esc(String(S.green))+' green</b> \u00b7 <b style="color:#f0616d">'+g3esc(String(S.red||0))+' red</b>'+(S.redFiles&&S.redFiles.length?(' <span style="color:'+PAL.sub+'">('+g3esc(S.redFiles.join(' \u00b7 '))+')</span>'):'')+' \u00b7 v'+g3esc(String(S.version||'?'))+' \u00b7 '+g3esc(String(S.at||'')));
+  if(S) h+=row('last run', g3esc(String(S.files||0))+' files \u00b7 <b class="gr">'+g3esc(String(S.green))+' green</b> \u00b7 <b class="rd">'+g3esc(String(S.red||0))+' red</b>'+(S.redFiles&&S.redFiles.length?(' <span class="dm">('+g3esc(S.redFiles.join(' \u00b7 '))+')</span>'):'')+' \u00b7 v'+g3esc(String(S.version||'?'))+' \u00b7 '+g3esc(String(S.at||'')));
   else h+=row('last run', 'learning/suite.json not fetched yet \u2014 tools/run-tests.sh writes it on every suite run');
   h+=row('mutation', 'every new assertion is mutation-tested: v15.55 12/12 \u00b7 v15.56 9/9 \u00b7 v15.57 10/10 \u2014 a mutant that survives is a test that passes for the wrong reason');
   h+=row('self-test', 'below: a synthetic day with three planted properties through this panel\u2019s own arithmetic; the nightly\u2019s --selftest plants an effect and a nothing');
+  return h;
+}
+// ============================================================================================
+// (v15.62) 📚 LEARN — THE DEFLECTION LEARNING DOC, INSIDE THE APP. Operator, 2026-09-03:
+//   "I also want a learn tab. I will be giving you screenshots in a way training you and you will put it into a
+//    deflection learning doc, which will be part of your training to get better at identifying deflections and you
+//    will put it in the learning tab, always updating it when i give you examples … put an indicator on the learning
+//    tab like a scale from 0 to 100 which will measure your learning progress and how good you have become."
+// ONE SOURCE, THREE PLACES: tools/learn-seed.py → learning/deflections/examples.json (this tab) + LEARNING.md (what a
+// context reads on load); LEARN_SEED is the json's copy for the first render, pinned equal by test_v1562.js.
+// THE GAUGE CANNOT FLATTER: identify = Wilson lower bound of the BLIND reads (zero until five); predict = the live
+// call scored by the outcome (zero until the scorer exists); breadth = examples + confirmed rules, capped at 10.
+var LEARN_KEY='gpts_learn_v1';
+var LEARN_SEED={"schema":1,"written":"2026-09-03","rateMinN":15,"protocol":["You paste a screenshot (and, ideally, say nothing yet).","I write my BLIND CALL first: kind (HOD/LOD turn · PULLBACK turn · NONE), side, the node I think caused it, the factors I see, confidence.","You tell me what it was. If you told me with the screenshot, the example is TAUGHT (recorded, not scored).","I pull the panel's own node-event record for those strikes and times and write what the DATA says, with numbers — agreeing or disagreeing with the picture.","The example produces or touches a rule (L-n): PROPOSED at n=1, CONFIRMED when three agree and none refutes, REFUTED when one contradicts (it stays, marked). A rule rewritten to absorb its counter-example is a NEW proposed rule and waits for a new example — it is not confirmed by the cases that produced it.","My score is blind reads only: right / n, by kind — thin under 15. When it is not thin and not embarrassing, I am getting good."],"factors":[{"id":"new","name":"NEW NODE","what":"a strike that was not on the ladder (below the 20% threshold) and crossed it — born within the last ~30 bars"},{"id":"growth","name":"GROWTH INTO THE TAP","what":"the node's $ exposure rising in the 15 minutes before price reached it (the recorder's d15 > 0, the chart's marker getting brighter)"},{"id":"heavy","name":"HEAVY","what":"the King, or a node ≥ 50% of the King"},{"id":"roll","name":"ROLL","what":"mass moving strike to strike toward or away from price (the ⇄ column; ROLL events)"},{"id":"rug","name":"RUG / REVERSE RUG","what":"a node that vanishes (dissipates) as price arrives — the floor pulled — or one that appears under price as it falls"},{"id":"stack","name":"STACK","what":"two or more nodes within a few points, acting as one wall"},{"id":"magnet","name":"MAGNET PULL","what":"a node growing hard while price sits away from it — price is drawn back to it"},{"id":"side","name":"SIDE FLIP","what":"a node that was resistance becoming support once price is above it (or the reverse)"}],"rules":[{"id":"L1","rule":"A deflection comes off a node that is GROWING INTO THE TAP. Read the growth in the 15 minutes before the tap (d15), not the size alone; the sign of the gamma did not matter to whether it deflected.","from":["E001","E002","E003","E004"],"status":"CONFIRMED","n":15,"agree":13,"weak":2,"refute":0,"note":"13 of 15 measurable legs (4 legs fell in blind windows). Weak: E002 c2 (7670 −γ roughly flat, −13M → −17M) and E003 c2 (7775 grew +13–15M/15m until 09:57, then d15 +3 → 0 AT the high: the growth stalled at the tap). +γ and −γ nodes both deflected (E001 +γ King; E002 −γ King; E004 −γ King at 10:16 and +γ stack at 12:10)."},{"id":"L2","rule":"A FRESH node at the extreme — just crossed the threshold and growing — is a turning-point candidate: the high or low of the leg prints against it.","from":["E001","E002","E003","E004"],"status":"CONFIRMED","n":6,"agree":6,"weak":0,"refute":0,"note":"E001 R3 (7755 born 12:48, the session high); E002 c1 (7665/7670 born 09:21–09:27 −γ, the session low); E003 c2 (7775 born 09:33, the session high), c4 (7720 born 12:39, the 13:12 high), c5 (7705 born 13:42 −γ, the 14:00 low); E004 c1 (7700 fresh 08:45–08:57, the morning support)."},{"id":"L3","rule":"The King growing hard while price sits away from it PULLS price back to it (magnet) — as first written, without a sign condition.","from":["E001","E002","E003","E004"],"status":"REFUTED","n":4,"agree":3,"weak":0,"refute":1,"note":"Held for three +γ Kings — E001 (King $237M → $345M with price above; price back on it by 14:23), E003 c3 (the King rolled DOWN 7790 → 7715 onto price; price rose to it and traded on it 12:36–13:12), E004 c3 (after the 7755 high price returned to the King 7735 by 13:00) — and FAILED for the −γ King of E002 c4 (7675 grew −27M → −116M under price and price rallied AWAY into the 14:59 high). The rule stays here refuted; L8 is the conditioned version and waits for a new example."},{"id":"L8","rule":"A +γ King growing hard while price sits away from it pulls price back to it (magnet): price above a +γ King adding $50–90M per 15 min is a pullback-to-the-King candidate, not a breakout. (L3 with the sign condition the refutation forced.)","from":["E001","E003","E004"],"status":"PROPOSED","n":3,"agree":3,"weak":0,"refute":0,"note":"Born from L3's refutation, so by the protocol it does not count as confirmed until a NEW example agrees — a rule rewritten to fit its counter-example has not been tested yet. Register candidate H8 is the corpus version."},{"id":"L4","rule":"A node's SIDE FLIPS when price crosses it: the earlier resistance node re-growing under price is the pullback support. Look for the re-growth (a TURN_UP after a decay), not for a new strike.","from":["E001","E002"],"status":"PROPOSED","n":2,"agree":2,"weak":0,"refute":0,"note":"E001 Pb (7740: 80% resistance at 10:16 → decayed → support from 10:42 → re-grew from 11:15 → held 12:36); E002 c4 (7675 pierced at 13:39 'above' then reclaimed 'below', then the King)."},{"id":"L5","rule":"A −γ node growing next to price ACCELERATES price away from it — a −γ node under price is a launch pad, above price a lid; it does not hold price the way a +γ node does.","from":["E002","E003","E004"],"status":"PROPOSED","n":5,"agree":4,"weak":1,"refute":0,"note":"E002 c2 and c4 (−γ under price → up), E003 c5 (−γ 7705 under the 14:00 low → up), E004 c2 (−γ King 7735 above the 10:16 high → down). Unclear: E003 c3 (−γ 7710 at ES 7718 grew after the 12:06 low while price sat on it — the +γ King above was pulling)."},{"id":"L6","rule":"A STACK — two nodes within ~5 ES points, both growing — marks the extreme of the leg more reliably than a single node.","from":["E001","E002","E004"],"status":"CONFIRMED","n":3,"agree":3,"weak":0,"refute":0,"note":"E001 Pb (7735 + 7740, $61M + $81M), E002 c1 (7665 + 7670 + 7675 −γ, the session low), E004 c3 (7745 + 7750, $73M + $46M, the session high 5 pts between them)."},{"id":"L7","rule":"TIME OF DAY: the taught deflections cluster in the first hour and in the noon window (12:00–13:15 CT) — 3 and 7 of 16 legs. An observation to measure on the 284-session corpus, not a rule to trade.","from":["E001","E002","E003","E004"],"status":"PROPOSED","n":16,"agree":10,"weak":6,"refute":0,"note":"First hour: E002 c1 09:27, E003 c1 08:42–09:00, E004 c1 08:45–09:10. Noon: E001 R2 11:57–12:06, Pb 12:20–12:36, R3 13:12; E002 c3 12:51–13:24; E003 c3 12:06, c4 13:12; E004 c3 12:10. The sweep corpus already says the first 30 minutes matter (27% vs 18%, n=180)."}],"examples":[{"id":"E001","date":"2026-09-03","chart":"ES1 · Skylit · 3-min · 09:52–15:00 CT","tz":"CT","img":"learning/deflections/img/E001.png","given":"2026-09-03 15:2x CT, with the answer — TAUGHT, not blind","coverage":"node events 08:39–15:00 CT (a blind gap 13:36–14:23); the picture and the record agree bar for bar","his":"in this example you see price going the first resistance deflection, then pulling back and retesting it two times after which it went down to test a pb support node that created a deflection that eventually went to the third resistance deflection node at the high. can you see it in the picture and the data. learn from this example today. … the resistance nodes show they got brighter meaning they were growing when they created resistance. the pullback support node shows that it was new node growth that created the pullback that came out of nowhere just before 11 am. pay attention to these new nodes that come out of nowhere. the way i see it, typically new gamma node growth, increasing gamma growth and gamma rolling up or down are very important and may cause deflections as well as push and pull price.","legs":[{"leg":"R1","kind":"PULLBACK","side":"resistance","when":"10:42–11:12 CT","px":"ES 7755–7758","node":"SPXW 7750 (the King, ES 7758)","data":"10:00 56% $17M decaying → 10:06 King $40M → 10:18 $77M → 10:33 $101M → $116M at 10:42, the first tap bar; d15 +$40–54M. Two taps, held.","factors":["growth","heavy"]},{"leg":"R2","kind":"PULLBACK","side":"resistance","when":"11:57–12:06 CT","px":"ES 7757–7758","node":"SPXW 7750 (the King)","data":"$180–204M, still +$20–30M/15m through the retests. Held.","factors":["growth","heavy"]},{"leg":"Pb","kind":"PULLBACK","side":"support","when":"12:20–12:36 CT","px":"low ES 7744–7746","node":"SPXW 7740 (ES 7748) + 7735 (ES 7743)","data":"7740: $57M at 12:00 → $72M 12:30 → $81M at 12:36 (the tap bar) → $90–94M by 12:51, d15 +$13–21M into the tap; 7735 $47M → $61M into 12:09. NOT born out of nowhere in the record: 7740 was an 80% resistance node at 10:16, decayed to ~40% by 10:33, flipped to support at 10:42, and re-grew from a TURN_UP at 11:15 — the re-growth is what looked new. (His 'just before 11 am' does not match the record; asked which node he meant.)","factors":["growth","side","stack"]},{"leg":"R3","kind":"HOD","side":"resistance","when":"13:12–13:33 CT","px":"ES 7763–7765 (the session high)","node":"SPXW 7755 (ES 7763) — fresh — over the King 7750","data":"7755 crossed the 20% threshold at 12:48 ($49–56M, d15 +$11–12M): new on the ladder, and the high printed at it. Under it the King went $237M → $345M between 13:00 and 13:33 (+$37…+92M/15m) with price above it; price was back at 7762 → 7756 by 14:23 ($568M).","factors":["new","growth","magnet","heavy"]}],"call":{"kind":"PULLBACK ×3 then HOD","summary":"three deflections and a pullback, every one off a node growing into the tap; the HOD at a fresh node with the King pulling from below"},"blind":null,"rules":["L1","L2","L3","L4","L6","L8"],"open":"which node he meant by 'new node growth just before 11 am' — the record shows 7740 re-growing from 11:15, not a birth before 11:00"},{"id":"E002","date":"2026-08-31","chart":"ES1 · Skylit · 3-min · Aug 31 08:30 → Sep 1 (the PDH/PDC/PDL lines are Aug 31's own levels, drawn from Sep 1)","tz":"CT","img":"learning/deflections/img/E002.png","given":"2026-09-03, with the answer ('3 at a support with one at resistance'; 'i think it is from the 31st') — TAUGHT","coverage":"snaps 08:36–15:00 CT (the book per 3-min bar); node events only from 10:39; the courier's ES minute bars. Date confirmed Aug 31: RTH O 7701.25 · H 7708.25 (14:59) · L 7674.75 (09:27) · C 7697.75 = the chart's PDH 7708 / PDC 7698 / PDL 7674.","his":"see these examples, remember each circle count as 1 deflection. this is from another day, i think it is from the 31st. double check and confirm, but most importantly you must learn so you can identify, qualify and understand and predict a deflection. here are 4 examples. 3 at a support with one at resistance.","legs":[{"leg":"c1","kind":"LOD","side":"support","when":"09:24–09:33 CT","px":"low ES 7674.75 at 09:27 (the session low)","node":"SPXW 7665 (ES 7673) + 7670 (ES 7678) + 7675 (ES 7683), all −γ","data":"A fresh −γ stack under price: 7670 born 09:21 (−$6M → −$8M at 09:27, d15 −3), 7665 born 09:27 (−$5M), 7675 −$15M → −$20M (50% of the King) at 09:27, d15 −2. The King was 7700 / 7650 flipping. Bounce to 7688 by 09:42.","factors":["new","growth","stack"]},{"leg":"c2","kind":"PULLBACK","side":"support","when":"11:00–11:09 CT","px":"low ES 7677.25 at 11:06","node":"SPXW 7670 (ES 7678, −γ)","data":"7670: −$13M (11:00) → −$17M (11:03, 48%) → −$14M (11:06, side 'above' = price pierced it) → −$11M (11:09) → reclaimed ('below') at 11:12. Growth into the tap was weak (d15 −1 … −2); the node shrank as price pierced it and price came back up through it. The weakest of the four.","factors":["side"]},{"leg":"c3","kind":"PULLBACK","side":"resistance","when":"12:51–13:24 CT","px":"high ES 7694–7695.75 (his circle sits on the 7698 PDC line — the close, drawn in hindsight)","node":"SPXW 7685 (ES 7693) + 7690 (ES 7698) + 7695 (ES 7703), +γ","data":"7685 grew $12M → $23M into the tap (d15 +12 … +15M at 13:03–13:15, 16% → 21%); 7695 $33–39M flat; 7690 $21–28M slow. Price held 7692–7696 for 30 minutes and fell to 7680 by 13:42.","factors":["growth","stack"]},{"leg":"c4","kind":"PULLBACK","side":"support","when":"13:36–13:51 CT","px":"lows ES 7679.75–7680 (13:42–13:51)","node":"SPXW 7675 (ES 7683, −γ) — became the King at 13:39 — + 7670 (ES 7678)","data":"7675: −$27M (13:33, 52%) → −$39M King (13:39) → −$58M (13:51) → −$65M (13:57) → −$116M by 14:33, d15 −$24 … −48M: the biggest growth of the day, under price; 7670 −$21M → −$40M (88–90%) 13:39–14:06. Price pierced 7683 ('above' at 13:39–13:48), reclaimed, then rallied AWAY from the growing −γ King into the 14:59 high 7708 — the −γ King did not pull price back (L3's sign condition).","factors":["growth","heavy","stack","side"]}],"call":{"kind":"LOD then PULLBACK ×3","summary":"the LOD at a fresh −γ stack; two supports and one resistance off growing nodes; the afternoon −γ King grew under price and price ran away from it"},"blind":null,"rules":["L1","L2","L3","L4","L5","L6"],"open":""},{"id":"E003","date":"2026-08-28","chart":"ES1 · Skylit · 3-min · Aug 28 (the levels PDH 7755.5 · PDC 7741.25 · PDL 7702.75 are Aug 27's; IB 7743.75–7756.25)","tz":"CT","img":"learning/deflections/img/E003.png","given":"2026-09-03, with the circles (5) — TAUGHT","coverage":"snaps 08:36–10:03 and 12:12–14:57 CT; node events 09:09–10:06 and 12:16–15:00 — the panel was blind 10:06–12:12. Date found from the levels: Aug 27 H 7755.5 · L 7702.75 · C 7741.25 → the chart is Aug 28: O 7746.25 · H 7782.5 (10:01) · L 7711.75 (12:10) · C 7722.","his":"(five circles, no words)","legs":[{"leg":"c1","kind":"PULLBACK","side":"resistance","when":"08:42–09:00 CT","px":"ES 7757–7760.5","node":"SPXW 7750 (the King, ES 7758)","data":"The King at the open (08:36 7750; briefly 7790 at 08:39; 7750 again 09:00). At 09:09, the first event: 93–100%, $14M, stage Delivered, 3 taps — the circle IS those three taps. Growth into the taps is in the blind minutes before 09:09; from 09:09 it grew $14M → $34M by 09:48 while price fell to 7732 and came back. Price went through it at 09:42 (side 'below' from 09:45) and never returned.","factors":["heavy"]},{"leg":"c2","kind":"HOD","side":"resistance","when":"10:00 and 10:24–10:30 CT","px":"high ES 7782.25 at 10:00, 7779.5 at 10:30 (the session high)","node":"SPXW 7775 (ES 7783) fresh; the King had rolled UP to 7790 (ES 7798)","data":"7775 born 09:33 (8%) → $9M → $25M by 09:57 (+$13–15M/15m, 46–60% of the King) and STOPPED at the high (10:00 d15 +3, 10:06 +0; 37% as the King outgrew it). The King rolled 7750 → 7790 at 09:51–09:54 ($39M → $57M, +$24–34M/15m), 15 pts above price. The high printed at the fresh node whose growth stalled, under a King price never reached. Then blind until 12:12.","factors":["new","growth","roll"]},{"leg":"c3","kind":"PULLBACK","side":"support","when":"12:00–12:30 CT","px":"low ES 7714.25 at 12:06","node":"the King rolled DOWN 7790 → 7715 (ES 7723) onto price; 7710 (ES 7718, −γ) grew after","data":"At 12:12 the King was 7715 at $52M (from 7790 during the blind gap) — 9 pts above the low. 7705 (ES 7713) was not on the board (not in the top 90) until 13:42; 7700 (ES 7708) +$9M small; 7710 (−γ) −$7M → −$19M over 12:18–12:42. The bounce went straight to the King's price: 12:36 7722–7723.5, then 7722–7726 for 40 minutes ON it — pulled up to the King (L3).","factors":["roll","magnet","heavy"]},{"leg":"c4","kind":"PULLBACK","side":"resistance","when":"12:54–13:18 CT","px":"high ES 7726.5 at 13:12 (at the SMA 50)","node":"SPXW 7720 (ES 7728) fresh, over the King 7715 (ES 7723)","data":"7720 born 12:39 (13%) → $13M (12:45, 20%) → $24M (13:15, 45%) → $29M (13:27, 54%), d15 +$9–11M into the tap; the King under it was DECAYING 13:03–13:21 (d15 −7 … −15M). Price fell from 7726 to 7714 by 14:00.","factors":["new","growth"]},{"leg":"c5","kind":"PULLBACK","side":"support","when":"13:54–14:06 CT","px":"low ES 7713.75 at 14:00","node":"SPXW 7705 (ES 7713, −γ) fresh; 7710 (ES 7718, −γ) dissipating above it","data":"7705 appeared 13:42 (−$18M, 31%) → −$24M (13:45, 38%, d15 −14M) → −$20M (13:48); 7710 above it went −$36M (13:42) → −$10M (13:51) — dissipating as price fell into it; the King flickered to 7690 (13:48–13:51) then back to 7715. Bounce to 7722–7726 by 14:30–14:42 — back to the King again.","factors":["new","growth","rug","magnet"]}],"call":{"kind":"PULLBACK, HOD, PULLBACK ×3","summary":"the high at a fresh node whose growth stalled under a King that had rolled up; the two afternoon lows at fresh −γ nodes with the King (rolled down onto price) pulling price back up each time"},"blind":null,"rules":["L1","L2","L3","L5","L8"],"open":"the 10:06–12:12 gap hides how the King rolled from 7790 to 7715 — the roll itself may be the tell for the 12:06 low"},{"id":"E004","date":"2026-08-27","chart":"ES1 · Skylit · 3-min · Aug 27 08:30–13:15 CT (levels PDH 7705.5 · PDC 7692 · PDL 7671 are Aug 26's; IB 7702.75–7728.5)","tz":"CT","img":"learning/deflections/img/E004.png","given":"2026-09-03, with the circles (3) — TAUGHT; 'I think you have enough to start with and analyze for now'","coverage":"snaps 08:36–15:00 CT; node events 09:24–15:00; ES minute bars from the 08-28 day file. Aug 27: O 7716.25 · H 7755.5 (12:10) · L 7702.75 (08:35) · C 7741.25.","his":"put an indicator on the learning tab like a scale from 0 to 100 which will measure your learning progress and how good you have become in identifying deflections and becoming a deflection expert with the ability to identify deflections and even predict a deflection will occur once you see price is going to the node.","legs":[{"leg":"c1","kind":"PULLBACK","side":"support","when":"08:45–09:10 CT","px":"ES 7708–7714 (after the 08:35 low 7702.75)","node":"SPXW 7700 (ES 7708), +γ, fresh; the King 7740/7745 (ES 7748/7753) far above","data":"7700: $3M (08:45, 22%) → $4M → $7M at 08:57 (50%, d15 +8M) — a small fresh +γ node growing right under price; 7705 −γ tiny. The King sat 35–45 pts above at 7740/7745 — and price rallied to it (7743 at 10:16).","factors":["new","growth","magnet"]},{"leg":"c2","kind":"PULLBACK","side":"resistance","when":"10:13–10:22 CT","px":"high ES 7742.75 at 10:19","node":"SPXW 7735 (the King, ES 7743, −γ)","data":"The −γ King: −$30M (09:54) → −$37M (10:00) → −$44M at 10:18, the tap bar (d15 −9M: growing into the tap) → dissipating after (10:30 d15 +12M, 10:36 +15M, −$27M) as price fell to 7731. Price met the King's price to the point and turned.","factors":["growth","heavy"]},{"leg":"c3","kind":"HOD","side":"resistance","when":"11:55–12:20 CT","px":"high ES 7755.5 at 12:10 (the session high)","node":"SPXW 7745 (ES 7753) + 7750 (ES 7758), +γ stack, 10–15 pts above the King 7735","data":"7745: $34M (11:30) → $51M (11:39, d15 +26M) → $72M (12:06, +19M) → $73M (12:15) — the biggest +γ node, growing into the tap; 7750 $26M → $46M then decaying from 12:15 (−7, −13M). The high printed between the two (7753 / 7758). Price fell back to the King's price (7733 by 13:00).","factors":["growth","stack","magnet"]}],"call":{"kind":"PULLBACK ×2 then HOD","summary":"a fresh support node under price with the King far above pulling; the King itself as the first resistance; the HOD at a growing +γ stack, and the return to the King"},"blind":null,"rules":["L1","L2","L3","L6","L7","L8"],"open":""}],"priors":[{"id":"P-sweep","says":"The level's NAME does not matter to whether a sweep prints the extreme; the flush (depth > 8 pts), the clock (first 30 min) and a slow reclaim (6–30 bars) do. Interior levels (VWAP, value area) are pullback candidates, not extremes.","from":"roadmap/FINDINGS-sweeps-first-read.md · 284 ES sessions"},{"id":"P-node","says":"Whether a sweep AT a top-5 node / the King prints the extreme more often than one not at a node is UNMEASURED (H6, 9 book sessions, thin). The examples here are the qualitative side of that question; H6 is the quantitative one.","from":"learning/register.json H6"},{"id":"P-tap","says":"First taps hold more often than later taps (tap decay 73% n=22 vs 47% n=70, book corpus) — a third tap is where hand rule kill.tap3 lives.","from":"skylit-docs/FINDINGS.md"},{"id":"P-pol","says":"Polarity alone (accelerator vs brake) did not discriminate hold rates (H3: 52.2% vs 52.1%, n=46/48). Colour is identity, not prediction — and L1/L5 above say the same about WHETHER it deflects while proposing that the sign decides WHICH WAY price goes after.","from":"learning/register.json H3"}],"gauge":{"parts":[{"id":"identify","weight":60,"what":"blind-read accuracy (Wilson 95% lower bound); 0 until 5 blind reads; thin under 15"},{"id":"predict","weight":30,"what":"live prediction accuracy — 'price is going to the node: will it deflect?' — scored by the outcome; 0 until the scorer exists (v15.63) and 30 calls are scored"},{"id":"breadth","weight":10,"what":"5 × min(1, examples/20) + 5 × min(1, confirmed rules/6)"}],"predictCalls":0,"predictRight":0,"predictBuilt":false}};
+function learnLoad(){
+  try{ var raw=JSON.parse(localStorage.getItem(LEARN_KEY)||'null'); if(raw && raw.schema===1 && Array.isArray(raw.examples) && Array.isArray(raw.rules)) return raw; }catch(e){}
+  return LEARN_SEED;
+}
+function learnFetch(){
+  try{ pipeFetch(PIPE_RAW_BASE+'/learning/deflections/examples.json').then(function(r){
+    if(r && r.ok && typeof r.json==='function') r.json().then(function(j){ if(j && j.schema===1 && Array.isArray(j.examples)){ try{ localStorage.setItem(LEARN_KEY, JSON.stringify(j)); }catch(e){} try{ if(LEARN_VIEW) render(); }catch(eR){} } }).catch(function(){}); }).catch(function(){}); }catch(e){}
+}
+function wilsonLow(right, n){ if(!(n>0)) return 0; var z=1.96, p=right/n, d=1+z*z/n, c=p+z*z/(2*n), m=z*Math.sqrt((p*(1-p)+z*z/(4*n))/n); return Math.max(0,(c-m)/d); }
+function learnScore(D){
+  var out={ n:0, right:0, byKind:{} };
+  (D.examples||[]).forEach(function(e){ var b=e.blind; if(!b || b.right==null) return; out.n++; if(b.right) out.right++; var k=(e.call&&e.call.kind)||'?'; var d=out.byKind[k]||(out.byKind[k]={n:0,right:0}); d.n++; if(b.right) d.right++; });
+  return out;
+}
+// the same arithmetic as tools/learn-seed.py gauge() — pinned equal by the test on the seed's own numbers
+function learnGauge(D){
+  var sc=learnScore(D); var G=D.gauge||{};
+  var ident=(sc.n>=5)?60*wilsonLow(sc.right, sc.n):0;
+  var pred=(G.predictBuilt && (G.predictCalls||0)>=30)?30*wilsonLow(G.predictRight||0, G.predictCalls):0;
+  var conf=(D.rules||[]).filter(function(r){ return r.status==='CONFIRMED'; }).length;
+  var breadth=5*Math.min(1,(D.examples||[]).length/20)+5*Math.min(1,conf/6);
+  return { value:Math.round(ident+pred+breadth), identify:Math.round(ident*10)/10, predict:Math.round(pred*10)/10, breadth:Math.round(breadth*10)/10, blindN:sc.n, blindRight:sc.right, examples:(D.examples||[]).length, confirmed:conf,
+    identifyWhy: sc.n?(sc.n+' blind reads, '+sc.right+' right'):'no blind read yet \u2014 every example so far was taught with its answer',
+    predictWhy: G.predictBuilt?((G.predictCalls||0)+' calls, '+(G.predictRight||0)+' right'):'the scorer is not built (roadmap v15.63)' };
+}
+var LEARN_RULE_COL={ CONFIRMED:'#2ec27e', PROPOSED:'#cdb4fa', REFUTED:'#f0616d' };
+function learnGaugeHtml(G){
+  var v=Math.max(0, Math.min(100, G.value||0));
+  var col=(v>=70)?'#2ec27e':((v>=40)?'#f2b45a':'#6c7889');
+  var h='<div style="display:flex;gap:10px;align-items:center;padding:6px 8px;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card);margin:5px 6px 2px">';
+  h+='<div style="min-width:64px;text-align:center"><div style="font-size:26px;font-weight:900;line-height:1;color:'+col+'">'+v+'</div><div class="dm" style="font-size:6.4px;letter-spacing:.08em">OF 100</div></div>';
+  h+='<div style="flex:1;min-width:0"><div title="how good I have become at identifying deflections \u2014 blind reads, live calls, breadth" style="height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden"><i style="display:block;height:100%;width:'+v+'%;background:'+col+'"></i></div>';
+  h+='<div class="dm" style="margin-top:4px;font-size:7px;white-space:normal;line-height:1.4"><b class="te">identify</b> '+g3esc(String(G.identify))+'/60 \u00b7 '+g3esc(G.identifyWhy)+' &nbsp;<b class="te">predict</b> '+g3esc(String(G.predict))+'/30 \u00b7 '+g3esc(G.predictWhy)+' &nbsp;<b class="te">breadth</b> '+g3esc(String(G.breadth))+'/10 \u00b7 '+G.examples+' example'+(G.examples===1?'':'s')+', '+G.confirmed+' confirmed rule'+(G.confirmed===1?'':'s')+'</div></div></div>';
+  return h;
+}
+function learnBlock(){
+  var D=learnLoad(); var G=learnGauge(D); var sc=learnScore(D);
+  var h=panOpen();
+  h+='<div class="hd"><b>Learn</b> \u00b7 the deflection learning doc \u00b7 '+(D.examples||[]).length+' examples \u00b7 '+(D.rules||[]).length+' rules \u00b7 blind reads '+g3esc(rateTxt({ n:sc.n, rate:(sc.n?sc.right/sc.n:null) }))+(D.seedOnly||D===LEARN_SEED?' \u00b7 <span class="am">file not fetched \u2014 rendering the seed</span>':'')+'</div>';
+  h+=learnGaugeHtml(G);
+  // ① the protocol
+  var pr=''; (D.protocol||[]).forEach(function(t,i){ pr+='<div class="sc"><span class="id">'+(i+1)+'</span><span class="qq">'+g3esc(t)+'</span></div>'; });
+  h+=panSection('lrn-proto','\u2460','THE PROTOCOL','how you teach me \u00b7 blind call first', (D.protocol||[]).length, pr, false, 'The steps of a lesson. The blind call is what makes the score mean something.');
+  // ② the rules
+  var rl='';
+  (D.rules||[]).forEach(function(r){
+    var col=LEARN_RULE_COL[r.status]||'#6c7889';
+    rl+='<div class="sc"><span class="id">'+g3esc(r.id)+'</span><span class="qq">'+g3esc(r.rule)+'</span><span class="cl">n='+g3esc(String(r.n||0))+' \u00b7 '+g3esc(String(r.agree||0))+'/'+g3esc(String(r.weak||0))+'/'+g3esc(String(r.refute||0))+'</span><span class="cp">'+g3esc((r.from||[]).join(' '))+'</span><span class="vd" style="color:'+col+'">'+g3esc(r.status)+'</span></div>';
+    if(r.note) rl+='<div class="rs">\u2192 <span class="ci">'+g3esc(r.note)+'</span></div>';
+  });
+  if(!(D.rules||[]).length) rl=tabEmpty('no rule yet \u2014 the first example writes the first one.');
+  h+=panSection('lrn-rules','\u2461','WHAT I HAVE LEARNED','the rules \u00b7 n = legs \u00b7 agree / weak / refute \u00b7 the examples each cites', (D.rules||[]).length, rl+panNote('PROPOSED at n=1 \u00b7 CONFIRMED when three examples agree and none refutes \u00b7 REFUTED stays here, marked \u2014 a rule rewritten to absorb its counter-example is a new proposed rule.'), true, 'The rules the examples produced, with the count behind each.');
+  // ③ the factors
+  var fc=''; (D.factors||[]).forEach(function(f){ fc+='<div class="sc"><span class="id">'+g3esc(f.id)+'</span><span class="qq"><b>'+g3esc(f.name)+'</b> \u2014 '+g3esc(f.what)+'</span></div>'; });
+  h+=panSection('lrn-fact','\u2462','THE FACTORS I CHECK','your list, made a checklist \u00b7 which node caused it, first', (D.factors||[]).length, fc, false, 'What I look up in the record before I call a deflection.');
+  // ④ the examples
+  var ex='';
+  (D.examples||[]).slice().reverse().forEach(function(e, idx){
+    var img=(e.img?('<a href="'+g3esc(PIPE_RAW_BASE+'/'+e.img)+'" target="_blank" rel="noopener" title="open the screenshot"><img src="'+g3esc(PIPE_RAW_BASE+'/'+e.img)+'" alt="'+g3esc(e.id)+'" style="max-width:100%;max-height:220px;border:1px solid var(--g-line2);border-radius:4px;display:block"></a>'):'');
+    var legs='<table><tr><th>leg</th><th>kind</th><th>side</th><th>when</th><th>price</th><th>node</th><th>factors</th><th>what the record says</th></tr>';
+    (e.legs||[]).forEach(function(g){ legs+='<tr><td><b>'+g3esc(g.leg)+'</b></td><td class="te">'+g3esc(g.kind)+'</td><td class="dm">'+g3esc(g.side)+'</td><td class="dm">'+g3esc(g.when)+'</td><td>'+g3esc(g.px)+'</td><td>'+g3esc(g.node)+'</td><td class="lil">'+g3esc((g.factors||[]).join(' '))+'</td><td class="dm" style="white-space:normal;min-width:180px">'+g3esc(g.data)+'</td></tr>'; });
+    legs+='</table>';
+    var blind=e.blind?('<div class="row"><span class="k">my blind call</span><span class="v">'+g3esc(e.blind.kind||'')+' \u2014 <b class="'+(e.blind.right?'gr':'rd')+'">'+(e.blind.right?'RIGHT':'WRONG')+'</b>'+(e.blind.note?(' \u00b7 '+g3esc(e.blind.note)):'')+'</span></div>'):'<div class="row"><span class="k">my blind call</span><span class="v dm">none \u2014 taught with the answer; not scored</span></div>';
+    var body='<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap"><div style="flex:0 0 200px;max-width:100%">'+img+'</div><div style="flex:1;min-width:200px">'+
+      '<div class="row"><span class="k">given</span><span class="v">'+g3esc(e.given||'')+'</span></div>'+
+      '<div class="row"><span class="k">coverage</span><span class="v dm">'+g3esc(e.coverage||'')+'</span></div>'+
+      '<div class="row"><span class="k">his words</span><span class="v"><i>'+g3esc(e.his||'')+'</i></span></div>'+
+      '<div class="row"><span class="k">the call</span><span class="v"><b>'+g3esc((e.call&&e.call.kind)||'')+'</b> \u2014 '+g3esc((e.call&&e.call.summary)||'')+'</span></div>'+blind+
+      '<div class="row"><span class="k">rules</span><span class="v">'+g3esc((e.rules||[]).join(' \u00b7 '))+'</span></div>'+(e.open?('<div class="row"><span class="k">open</span><span class="v am">'+g3esc(e.open)+'</span></div>'):'')+'</div></div>'+legs;
+    ex+=panSection('lrn-ex-'+e.id, e.id, g3esc(e.date+' \u00b7 '+(e.chart||'')), (e.legs||[]).length+' leg'+((e.legs||[]).length===1?'':'s'), null, body, idx===0, e.his||'');   // the newest example open
+  });
+  if(!(D.examples||[]).length) ex=tabEmpty('no example yet \u2014 paste a screenshot in the chat.');
+  h+=panSection('lrn-ex','\u2463','THE EXAMPLES','newest first \u00b7 the picture, your words, what the record says', (D.examples||[]).length, ex, true, 'Every lesson, with its image, your words, my call and the record.');
+  // ⑤ the priors
+  var pri=''; (D.priors||[]).forEach(function(p){ pri+='<div class="sc"><span class="id">'+g3esc(p.id)+'</span><span class="qq">'+g3esc(p.says)+' <span class="ci dm">('+g3esc(p.from)+')</span></span></div>'; });
+  h+=panSection('lrn-pri','\u2464','WHAT THE CORPUS ALREADY SAYS','my priors, before your first example', (D.priors||[]).length, pri, false, 'Measured facts the lessons are read against.');
+  h+=panFoot('learn', 'Learn \u00b7 '+(D.written||''))+'</div>';
   return h;
 }
 // ============================================================================================
@@ -18557,7 +18701,7 @@ function suiteHtml(){
 // the evidence the panel can see (fetched? saved? pushed? read back? version? gate? earned?). PROCESS.md §3's last rule.
 // ============================================================================================
 var PLAN_KEY='gpts_plan_v1';
-var PLAN_SEED={"schema":1,"written":"2026-09-03","objective":{"one":"Find the day's HOD and LOD early enough to trade the move between them; secondarily, find the pullback turning points that resume a trend rather than end it.","mechanism":"A gamma node deflects price, and the deflection IS the turning point.","twoKinds":[{"kind":"TREND REVERSAL","what":"a node at the extreme turns the day","gives":"the HOD or the LOD","trade":"turn around"},{"kind":"PULLBACK REVERSAL","what":"a node stops a counter-move","gives":"trend CONTINUATION","trade":"stay in"}],"expensiveError":"Confusing the pullback deflection (stay in) with the HOD/LOD deflection (turn around).","quote":"The purpose of the application is to be able to identify two key turning points which are the high of the day and low of day, in order to profit from the move from high to low or low to high. As a side objective, it is also to identify pullback turning points (aka reversals or deflections). In order to do this I am relying on gamma levels.","doc":"design/PURPOSE.md"},"tabs":[{"tab":"Dashboard","role":"ACT","line":"what the tables support right now, at the tap — THE READ, every rate with its n"},{"tab":"Analysis","role":"ASK AND READ","line":"the registry: every study by subject, its status, its result with n; the TRACK field"},{"tab":"Testing","role":"TRUST AND PROMOTE","line":"the register, the gate, what the ladder renders and why, the record, the nightly, the suite"},{"tab":"Architecture","role":"THE HOW","line":"the objective and the loop, as live status — is the machinery working today"},{"tab":"Roadmap","role":"THE PLAN","line":"what shipped, what is next, in order, each with the objective it serves"}],"stages":[{"n":1,"id":"RECORD","who":"browser","what":"every bar's book and price (snaps), every tap (defl), every scored feature (feat), what he asked to track (requests)","writes":"recorder store · IDB","probe":"rec"},{"n":2,"id":"EXPORT","who":"browser","what":"Save writes the day file — the day, the book, the ES bars, the requests","writes":"data/<day>.json","probe":"saved"},{"n":3,"id":"PUSH","who":"his machine","what":"push-data.bat / the installer push to GitHub — the cloud cannot push","writes":"GitHub main","probe":"pushed"},{"n":4,"id":"NIGHTLY","who":"cloud","what":"verdicts per hypothesis (read ONCE at minN), refreshes the tables, copies TRACK requests, writes the log","writes":"learning/log/<day>.json · SWEEPS*.json · requests.json","probe":"nightly"},{"n":5,"id":"REVIEW","who":"cloud (LLM)","what":"a READ becomes a hypothesis (predict + refuteIf fixed before the data), a request becomes a study row, a refuted rule retires, FINDINGS written","writes":"register.json · studies.json · FINDINGS.md","probe":"review"},{"n":6,"id":"REGISTRY","who":"cloud","what":"studies.json (subjects → subsections → studies, result WITH n) and register.json are what the tabs render","writes":"learning/studies.json · register.json","probe":"registry"},{"n":7,"id":"BUILD","who":"cloud","what":"code + mutation-tested assertions + docs + chat history; the installer carries EVERY file the panel fetches","writes":"installvNNNN.bat","probe":"suite"},{"n":8,"id":"INSTALL","who":"his machine","what":"run the .bat (it pushes), click the Tampermonkey links, reload; the panel fetches the registry, the tables, the log","writes":"the running panel","probe":"version"},{"n":9,"id":"GATE","who":"browser","what":"a feature whose rate does not move between its predicted bands cannot promote and cannot render a rate","writes":"featGated","probe":"gate"},{"n":10,"id":"DASHBOARD","who":"browser","what":"a rate renders only from an earned tier that cleared the gate; THE READ turns today's tape into sentences from the tables","writes":"the face · THE READ","probe":"dashboard"},{"n":11,"id":"SCORE","who":"next day","what":"what THE READ said is written to the day file and scored at the close — a read that cannot be wrong cannot improve","writes":"reads[] · readScore","probe":"score"}],"rules":[{"rule":"a % is never rendered without its n","test":"test_analysis_tabs 5a/5b · bareP · RATE_MIN_N"},{"rule":"a scorer must be able to fail before its rate means anything","test":"featGated · test_v1554 7*"},{"rule":"a hypothesis is written with predict + refuteIf BEFORE the data and read ONCE at minN","test":"register ↔ seed pin · the nightly's judge"},{"rule":"a first read is never a verdict — it becomes a register row and is read again on unseen sessions","test":"H7.since · the ledger line"},{"rule":"every level named live is made the way the corpus made it","test":"overnightHL().full · companion v1.18 · test_v1556"},{"rule":"every new assertion is mutation-tested","test":"BUILD-CHECKLIST §2"},{"rule":"every file the panel fetches rides the installer","test":"test_installer_manifest.js"},{"rule":"after an install, probe the live panel — never assume","test":"this tab"}],"hardening":["score THE READ (stage ⑪)","one definitions file read by Python and the panel, pinned equal","the nightly reads one READ NEXT study per night and writes it back","TRACK → DRAFT study as a nightly step","the face manifest: every number on the face names its study","a shipped-artifact test (smoke-test the installer's payload)","data-quality checks on the face (courier age, ratio drift, bar gaps)"],"roadmap":[{"v":"15.55","title":"the Analysis tab by subject · TRACK · THE READ FROM THE STATS","serves":"HOD/LOD · PULLBACK · the loop","status":"shipped","date":"2026-09-03"},{"v":"15.56","title":"the book's levels in the sweep read · the book table · the honest overnight (companion v1.18)","serves":"HOD/LOD · H6","status":"shipped","date":"2026-09-03"},{"v":"15.57","title":"EM edges · VWAP + bands · developing profile · London · HVL/magnet · the two-line rule","serves":"HOD/LOD · PULLBACK (interior levels are pullback candidates)","status":"shipped","date":"2026-09-03"},{"v":"15.58","title":"the READ ranks reclaimed sweeps first · the Testing tab as mocked · the installer manifest carries every fetched file","serves":"the loop","status":"shipped","date":"2026-09-03"},{"v":"15.59","title":"the ⚙ Architecture and 🗺 Roadmap tabs — the WHAT, the HOW and the plan inside the app, as live status","serves":"never forgetting the objective and the machinery","status":"next","done":"the tabs render from learning/plan.json; the docs, the file and the seed are pinned equal; a 404 shows a red stage"},{"v":"15.60","title":"score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured","serves":"HOD/LOD · the loop closes","status":"later","done":"a scored READ line exists in a nightly log and renders on Testing ③ with its n"},{"v":"15.61","title":"the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme","serves":"HOD/LOD · PULLBACK · 94 OPEN studies · H6","status":"later","done":"40 taps recorded and the first F-study reads from them with n"},{"v":"15.62","title":"the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study","serves":"the loop closes on its own","status":"later","done":"a study changes status without a human editing the seed"},{"v":"15.63","title":"one definitions file (Python + panel) · the shipped-artifact test","serves":"hardening","status":"later","done":"changing a bin in one place fails the suite until the other side follows"},{"v":"15.64","title":"the face manifest — every number on the face names its study, pinned by a test","serves":"data-driven, enforced","status":"later","done":"a new number on the face without a study fails the suite"},{"v":"15.65","title":"the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move","serves":"PULLBACK","status":"later","done":"a resume rate with n renders on a tier-3 READ line"}],"decisionsHis":["the Skylit API backfill (~15–20k credits): years of taps in an afternoon — unblocks most OPEN studies","NQ 1-minute beside ES for D5 (cross-book lead)","fold the four low-value DAY columns (OF BAR ×2, PTN, BODY) into hovers, or keep them"],"constraints":["one install file per build, with the Tampermonkey links pasted as text; wait ~5 min, click, reload","✅ SAVE DONE naming the files saved; chat history regenerated last; every new assertion mutation-tested","do not tune a parameter to make a number look good","cloud push is policy-denied — the installer pushes","the integrations are untouched: IRT export, the Yahoo courier, InsiderFinance"]};
+var PLAN_SEED={"schema":1,"written":"2026-09-03","objective":{"one":"Find the day's HOD and LOD early enough to trade the move between them; secondarily, find the pullback turning points that resume a trend rather than end it.","mechanism":"A gamma node deflects price, and the deflection IS the turning point.","twoKinds":[{"kind":"TREND REVERSAL","what":"a node at the extreme turns the day","gives":"the HOD or the LOD","trade":"turn around"},{"kind":"PULLBACK REVERSAL","what":"a node stops a counter-move","gives":"trend CONTINUATION","trade":"stay in"}],"expensiveError":"Confusing the pullback deflection (stay in) with the HOD/LOD deflection (turn around).","quote":"The purpose of the application is to be able to identify two key turning points which are the high of the day and low of day, in order to profit from the move from high to low or low to high. As a side objective, it is also to identify pullback turning points (aka reversals or deflections). In order to do this I am relying on gamma levels.","doc":"design/PURPOSE.md"},"tabs":[{"tab":"Dashboard","role":"ACT","line":"what the tables support right now, at the tap — THE READ, every rate with its n"},{"tab":"Analysis","role":"ASK AND READ","line":"the registry: every study by subject, its status, its result with n; the TRACK field"},{"tab":"Testing","role":"TRUST AND PROMOTE","line":"the register, the gate, what the ladder renders and why, the record, the nightly, the suite"},{"tab":"Architecture","role":"THE HOW","line":"the objective and the loop, as live status — is the machinery working today"},{"tab":"Roadmap","role":"THE PLAN","line":"what shipped, what is next, in order, each with the objective it serves; your enhancement requests"},{"tab":"Open Items","role":"PROJECT MANAGEMENT","line":"your issues and questions, with the review's answer under each"},{"tab":"Learn","role":"TEACH","line":"the deflection learning doc: your screenshots, my blind calls, what the record says, the rules, and the 0–100 gauge"}],"stages":[{"n":1,"id":"RECORD","who":"browser","what":"every bar's book and price (snaps), every tap (defl), every scored feature (feat), what he asked to track (requests), his issues, questions and enhancement requests (items)","writes":"recorder store · IDB","probe":"rec"},{"n":2,"id":"EXPORT","who":"browser","what":"Save writes the day file — the day, the book, the ES bars, the requests","writes":"data/<day>.json","probe":"saved"},{"n":3,"id":"PUSH","who":"his machine","what":"push-data.bat / the installer push to GitHub — the cloud cannot push","writes":"GitHub main","probe":"pushed"},{"n":4,"id":"NIGHTLY","who":"cloud","what":"verdicts per hypothesis (read ONCE at minN), refreshes the tables, copies TRACK requests and open items, writes the log","writes":"learning/log/<day>.json · SWEEPS*.json · requests.json · items.json","probe":"nightly"},{"n":5,"id":"REVIEW","who":"cloud (LLM)","what":"a READ becomes a hypothesis (predict + refuteIf fixed before the data), a request becomes a study row, an issue/question/enhancement gets its answer in items.json, a refuted rule retires, a taught screenshot becomes a learning example with the record's numbers (tools/node-lookup.py) and a rule L-n, FINDINGS written","writes":"register.json · studies.json · items.json · deflections/examples.json · FINDINGS.md","probe":"review"},{"n":6,"id":"REGISTRY","who":"cloud","what":"studies.json (subjects → subsections → studies, result WITH n) and register.json are what the tabs render","writes":"learning/studies.json · register.json","probe":"registry"},{"n":7,"id":"BUILD","who":"cloud","what":"code + mutation-tested assertions + docs + chat history; the installer carries EVERY file the panel fetches","writes":"installvNNNN.bat","probe":"suite"},{"n":8,"id":"INSTALL","who":"his machine","what":"run the .bat (it pushes), click the Tampermonkey links, reload; the panel fetches the registry, the tables, the log","writes":"the running panel","probe":"version"},{"n":9,"id":"GATE","who":"browser","what":"a feature whose rate does not move between its predicted bands cannot promote and cannot render a rate","writes":"featGated","probe":"gate"},{"n":10,"id":"DASHBOARD","who":"browser","what":"a rate renders only from an earned tier that cleared the gate; THE READ turns today's tape into sentences from the tables","writes":"the face · THE READ","probe":"dashboard"},{"n":11,"id":"SCORE","who":"next day","what":"what THE READ said is written to the day file and scored at the close — a read that cannot be wrong cannot improve","writes":"reads[] · readScore","probe":"score"}],"rules":[{"rule":"a % is never rendered without its n","test":"test_analysis_tabs 5a/5b · bareP · RATE_MIN_N"},{"rule":"a scorer must be able to fail before its rate means anything","test":"featGated · test_v1554 7*"},{"rule":"a hypothesis is written with predict + refuteIf BEFORE the data and read ONCE at minN","test":"register ↔ seed pin · the nightly's judge"},{"rule":"a first read is never a verdict — it becomes a register row and is read again on unseen sessions","test":"H7.since · the ledger line"},{"rule":"every level named live is made the way the corpus made it","test":"overnightHL().full · companion v1.18 · test_v1556"},{"rule":"every new assertion is mutation-tested","test":"BUILD-CHECKLIST §2"},{"rule":"every file the panel fetches rides the installer","test":"test_installer_manifest.js"},{"rule":"after an install, probe the live panel — never assume","test":"this tab"},{"rule":"the mockup's look is the panel's look — one stylesheet, one skeleton","test":"test_v1562 1a · 2e"},{"rule":"a deflection is never called from the picture alone — the record is looked up; the gauge cannot flatter","test":"tools/node-lookup.py · test_v1562 3f/3g/3l"}],"hardening":["the deflection candidate score — the L-rules as a live score per node, measured by the ledger's outcomes (the gauge's predict part)","score THE READ (stage ⑪)","one definitions file read by Python and the panel, pinned equal","the nightly reads one READ NEXT study per night and writes it back","TRACK → DRAFT study as a nightly step","the face manifest: every number on the face names its study","a shipped-artifact test (smoke-test the installer's payload)","data-quality checks on the face (courier age, ratio drift, bar gaps)"],"roadmap":[{"v":"15.55","title":"the Analysis tab by subject · TRACK · THE READ FROM THE STATS","serves":"HOD/LOD · PULLBACK · the loop","status":"shipped","date":"2026-09-03"},{"v":"15.56","title":"the book's levels in the sweep read · the book table · the honest overnight (companion v1.18)","serves":"HOD/LOD · H6","status":"shipped","date":"2026-09-03"},{"v":"15.57","title":"EM edges · VWAP + bands · developing profile · London · HVL/magnet · the two-line rule","serves":"HOD/LOD · PULLBACK (interior levels are pullback candidates)","status":"shipped","date":"2026-09-03"},{"v":"15.58","title":"the READ ranks reclaimed sweeps first · the Testing tab as mocked · the installer manifest carries every fetched file","serves":"the loop","status":"shipped","date":"2026-09-03"},{"v":"15.59","title":"the ⚙ Architecture and 🗺 Roadmap tabs — the WHAT, the HOW and the plan inside the app, as live status","serves":"never forgetting the objective and the machinery","status":"shipped","date":"2026-09-03"},{"v":"15.60","title":"the 📌 Open Items tab (issues, questions) and enhancement requests on the Roadmap — one field, one store, the review answers in the file","serves":"complete application management: requirements → design → open items","status":"shipped","date":"2026-09-03"},{"v":"15.61","title":"the ladder floor — never fewer than 8 strikes when the tape has them: sub-threshold strikes drawn dimmed as CONTEXT rows, display only (his 'only 3 strikes' ask)","serves":"HOD/LOD · seeing the node around the King on a concentrated book","status":"shipped","date":"2026-09-03"},{"v":"15.62","title":"the mockups' look is the panel's look (one stylesheet, one skeleton, the scale control) · the 📚 Learn tab — the deflection learning doc, four taught examples checked against the record, eight rules, the 0–100 gauge","serves":"PULLBACK · HOD/LOD · learning to identify and predict deflections","status":"next","done":"the Analysis tab's skeleton equals the mockup generator's; a screenshot he teaches with renders on the Learn tab with the record's numbers, and the gauge cannot move on taught examples alone"},{"v":"15.63","title":"the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part","serves":"PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'","status":"later","done":"30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"},{"v":"15.64","title":"score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured","serves":"HOD/LOD · the loop closes","status":"later","done":"a scored READ line exists in a nightly log and renders on Testing ③ with its n"},{"v":"15.65","title":"the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme","serves":"HOD/LOD · PULLBACK · 94 OPEN studies · H6","status":"later","done":"40 taps recorded and the first F-study reads from them with n"},{"v":"15.66","title":"the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study","serves":"the loop closes on its own","status":"later","done":"a study changes status without a human editing the seed"},{"v":"15.67","title":"one definitions file (Python + panel) · the shipped-artifact test","serves":"hardening","status":"later","done":"changing a bin in one place fails the suite until the other side follows"},{"v":"15.68","title":"the face manifest — every number on the face names its study, pinned by a test","serves":"data-driven, enforced","status":"later","done":"a new number on the face without a study fails the suite"},{"v":"15.69","title":"the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move","serves":"PULLBACK","status":"later","done":"a resume rate with n renders on a tier-3 READ line"}],"decisionsHis":["the Skylit API backfill (~15–20k credits): years of taps in an afternoon — unblocks most OPEN studies","NQ 1-minute beside ES for D5 (cross-book lead)","fold the four low-value DAY columns (OF BAR ×2, PTN, BODY) into hovers, or keep them"],"constraints":["one install file per build, with the Tampermonkey links pasted as text; wait ~5 min, click, reload","✅ SAVE DONE naming the files saved; chat history regenerated last; every new assertion mutation-tested","do not tune a parameter to make a number look good","cloud push is policy-denied — the installer pushes","the integrations are untouched: IRT export, the Yahoo courier, InsiderFinance"]};
 function planLoad(){
   try{ var raw=JSON.parse(localStorage.getItem(PLAN_KEY)||'null'); if(raw && raw.schema===1 && Array.isArray(raw.stages) && Array.isArray(raw.roadmap)) return raw; }catch(e){}
   return PLAN_SEED;
@@ -18591,7 +18735,7 @@ function loopStatus(){
     version: st('green','panel v'+GPTS_VERSION+' · companion ES '+(es?((es.n||0)+' bars · '+(es.full?'full Globex day':'RTH window only — companion < v1.18')):'no courier data')),
     gate: st(clear?'green':'amber', clear+' of 3 features clear · '+gates.join(' / ')),
     dashboard: st(tc.earned?'green':'amber', tc.earned+' earned tier'+(tc.earned===1?'':'s')+' · '+tc.hand+' hand rules render no rate · THE READ quotes the tables'),
-    score: st('red','not built — v15.60: what THE READ said is written to the day file and scored at the close')
+    score: st('red','not built — '+(function(){ try{ var it=(planLoad().roadmap||[]).filter(function(x){ return /score THE READ/.test(String(x.title||'')) && x.status!=='shipped'; })[0]; return it?('planned v'+it.v):'planned'; }catch(e){ return 'planned'; } })()+': what THE READ said is written to the day file and scored at the close')
   };
 }
 function stageBox(sg, L){
@@ -18641,6 +18785,8 @@ function roadmapBlock(){
       '<div style="font-size:7.8px;color:'+PAL.sub+';white-space:normal;line-height:1.35">serves: <span style="color:'+PAL.gold+'">'+g3esc(x.serves||'')+'</span>'+(x.date?(' · shipped '+g3esc(x.date)):'')+(x.done?('<br>done when: '+g3esc(x.done)):'')+'</div></div>'+
       '<div style="font-size:7px;font-weight:900;letter-spacing:.06em;color:'+col+';white-space:nowrap;align-self:center">'+g3esc(String(x.status).toUpperCase())+'</div></div>';
   }
+  var enh=''; try{ enh=enhancementsHtml(); }catch(eEn){ enh=tabEmpty('the enhancement list could not be rendered.'); }
+  h+=tabSection('rm0','\u2295','REQUEST AN ENHANCEMENT','What should the application do that it does not? A requirement in your words; the review turns it into a roadmap item or declines it with the reason.', enh, true);
   h+=tabSection('rm1','\u2460','NEXT','What is being built next, and why first? The top item is what the next build ships.', (next.length?next.map(row).join(''):tabEmpty('nothing queued — the plan is empty, which is itself a finding')), true);
   h+=tabSection('rm2','\u2461','AFTER THAT','In order. A build re-orders this list only when a finding changes the order, and says why in CHANGELOG.', later.map(row).join(''), true);
   h+=tabSection('rm3','\u2462','SHIPPED','Where we are — what this week put on the panel, newest first.', shipped.slice().reverse().map(row).join(''), false);
@@ -18650,6 +18796,98 @@ function roadmapBlock(){
   h+=tabSection('rm5','\u2464','STANDING CONSTRAINTS','The rules every build follows, operator-mandated.', con, false);
   return h;
 }
+// ============================================================================================
+// (v15.60) 📌 OPEN ITEMS — issues and questions; 🗺 ROADMAP gains enhancement requests. Operator, 2026-09-03:
+//   "I also need Open Items tab, which will have both issues and questions in it … add issues and questions using a
+//    textfield and some type of add button which will allow you to store it and consider the issue so that you will be
+//    able to come up with a solution. Same with the roadmap, it should allow me to add enhancement requests …"
+// THE PATH (the same one TRACK uses): typed here → gpts_items_v1 → the day export (`items`) → the nightly copies new
+// ones into learning/items.json → the review answers (status + answer + link) → the panel fetches items.json and shows
+// the answer under the item. Statuses: NEW → SEEN → ANSWERED (question) · FIXED / PLANNED as vX (issue, enhancement) ·
+// DECLINED (with the reason). An item never disappears from the file; it is closed, with its answer.
+// ============================================================================================
+var ITEMS_KEY='gpts_items_v1', ITEMSFILE_KEY='gpts_itemsfile_v1';
+var ITEM_KINDS={ issue:'ISSUE', question:'QUESTION', enhancement:'ENHANCEMENT' };
+function itemsLoad(){ try{ var a=JSON.parse(localStorage.getItem(ITEMS_KEY)||'null'); if(Array.isArray(a)) return a; }catch(e){} return []; }
+function itemsSave(a){ try{ localStorage.setItem(ITEMS_KEY, JSON.stringify(a.slice(-300))); }catch(e){} }
+function itemsAdd(kind, text){
+  kind=String(kind||''); if(!ITEM_KINDS[kind]) return null;
+  text=String(text==null?'':text).replace(/\s+/g,' ').trim();
+  if(!text || text.length<3) return null; if(text.length>600) text=text.slice(0,600);
+  var a=itemsLoad(); if(a.some(function(r){ return r && r.kind===kind && r.text===text; })) return null;
+  var rec={ id:'I'+Date.now().toString(36)+Math.floor(Math.random()*36).toString(36), kind:kind, text:text, date:(function(){ try{ return ctTodayStr(); }catch(e){ return null; } })(), t:Date.now(), status:'NEW' };
+  a.push(rec); itemsSave(a); return rec;
+}
+function itemsRemove(id){ itemsSave(itemsLoad().filter(function(r){ return !(r && r.id===id); })); }
+function itemsExport(dateKey){
+  var a=itemsLoad(); var changed=false;
+  a.forEach(function(r){ if(r && !r.exported){ r.exported=dateKey||r.date||null; changed=true; } });
+  if(changed) itemsSave(a);
+  return a.map(function(r){ return { id:r.id, kind:r.kind, text:r.text, date:r.date, t:r.t }; });
+}
+// the reviewed file: learning/items.json — {schema:1, items:[{id, kind, text, status, answer, link, answeredOn}]}
+function itemsFileLoad(){ try{ var j=JSON.parse(localStorage.getItem(ITEMSFILE_KEY)||'null'); if(j && j.schema===1 && Array.isArray(j.items)) return j; }catch(e){} return null; }
+function itemsFetch(){
+  try{ pipeFetch(PIPE_RAW_BASE+'/learning/items.json').then(function(r){
+    if(r && r.ok && typeof r.json==='function') r.json().then(function(j){ if(j && j.schema===1 && Array.isArray(j.items)){ try{ localStorage.setItem(ITEMSFILE_KEY, JSON.stringify(j)); }catch(e){} try{ if(ITEMS_VIEW||ROADMAP_VIEW) render(); }catch(eR){} } }).catch(function(){}); }).catch(function(){}); }catch(e){}
+}
+// one list: every local item, merged with what the review said about it (by id); items only in the file appear too
+function itemsMerged(){
+  var local=itemsLoad(); var F=itemsFileLoad(); var byId={};
+  local.forEach(function(r){ byId[r.id]={ id:r.id, kind:r.kind, text:r.text, date:r.date, t:r.t||0, exported:r.exported||null, status:(r.exported?'IN THE EXPORT':'NEW'), answer:null, link:null, local:true }; });
+  ((F&&F.items)||[]).forEach(function(f){ if(!f || !f.id) return; var m=byId[f.id]||(byId[f.id]={ id:f.id, kind:f.kind||'question', text:f.text||'', date:f.date||null, t:0, exported:f.seenIn||null, local:false });
+    m.status=String(f.status||'SEEN').toUpperCase(); m.answer=f.answer||null; m.link=f.link||null; m.answeredOn=f.answeredOn||null; });
+  return Object.keys(byId).map(function(k){ return byId[k]; }).sort(function(a,b){ return (b.t||0)-(a.t||0); });
+}
+function itemStatusCol(st){ return { NEW:'#8b98a9', 'IN THE EXPORT':'#f2b45a', SEEN:'#f2b45a', ANSWERED:'#2ec27e', FIXED:'#2ec27e', PLANNED:'#7cc7ff', DECLINED:'#f0616d' }[st]||'#8b98a9'; }
+function itemsClosed(st){ return st==='ANSWERED' || st==='FIXED' || st==='DECLINED'; }
+function itemRowHtml(m){
+  var col=itemStatusCol(m.status);
+  var h='<div style="display:flex;gap:6px;align-items:baseline;padding:3px 0;border-top:1px dashed rgba(255,255,255,.06)">'+
+    '<span style="font-family:ui-monospace,monospace;font-size:7.5px;color:'+PAL.sub+';min-width:52px">'+g3esc(m.id)+'</span>'+
+    '<span style="flex:1;min-width:0;font-size:9px;color:'+PAL.ink+';white-space:normal;line-height:1.35">'+g3esc(m.text)+'<span style="color:'+PAL.sub+';font-size:7.5px"> · '+g3esc(m.date||'')+'</span></span>'+
+    '<span style="font-size:7.2px;font-weight:900;letter-spacing:.05em;color:'+col+';white-space:nowrap">'+g3esc(m.status)+(m.link?(' · '+g3esc(m.link)):'')+'</span>'+
+    (m.local?('<span onclick="window.__gptsDebug&&window.__gptsDebug.itemsRemove&&window.__gptsDebug.itemsRemove(\''+g3esc(m.id)+'\')" title="remove from this machine (the file keeps it if it was exported)" style="cursor:pointer;color:'+PAL.sub+'">×</span>'):'')+'</div>';
+  if(m.answer) h+='<div style="padding:0 0 3px 58px;font-size:8.6px;color:'+PAL.ink+';white-space:normal;line-height:1.4;border-left:2px solid '+col+';margin-left:0"><span style="color:'+PAL.sub+';font-size:7.4px;letter-spacing:.06em;font-weight:800">'+(m.status==='DECLINED'?'WHY NOT':'THE ANSWER')+(m.answeredOn?(' · '+g3esc(m.answeredOn)):'')+'</span><br>'+g3esc(m.answer)+'</div>';
+  return h;
+}
+function itemFieldHtml(kind, label, placeholder){
+  return '<div style="display:flex;gap:4px;margin-top:4px"><input id="gpts-item-'+g3esc(kind)+'" type="text" maxlength="600" placeholder="'+g3esc(placeholder)+'" style="flex:1;min-width:0;font-size:9px;padding:3px 5px;border:1px solid '+PAL.line+';border-radius:5px;background:#12161f;color:'+PAL.ink+'">'+
+    '<span onclick="window.__gptsDebug&&window.__gptsDebug.itemsAdd&&window.__gptsDebug.itemsAdd(\''+g3esc(kind)+'\')" style="cursor:pointer;white-space:nowrap;font-size:9px;font-weight:800;color:#0b0e14;background:'+PAL.gold+';border-radius:12px;padding:2px 9px;align-self:center">+ '+g3esc(label)+'</span></div>';
+}
+function itemsBlock(){
+  var all=itemsMerged();
+  var issues=all.filter(function(m){ return m.kind==='issue' && !itemsClosed(m.status); });
+  var questions=all.filter(function(m){ return m.kind==='question' && !itemsClosed(m.status); });
+  var closed=all.filter(function(m){ return (m.kind==='issue'||m.kind==='question') && itemsClosed(m.status); });
+  var F=itemsFileLoad();
+  var h=tabHeader('items','\uD83D\uDCCC Open Items','Project management: '+issues.length+' open issue'+(issues.length===1?'':'s')+' · '+questions.length+' open question'+(questions.length===1?'':'s')+' · '+closed.length+' closed · '+(F?('answers read back '+(F.asOf||'')):'answers not read back yet (learning/items.json)'));
+  var path='<div style="font-size:8px;color:'+PAL.sub+';white-space:normal;line-height:1.35;margin-bottom:3px">Type it, click add. It rides in the day export at Save; the nightly copies it into learning/items.json; the review considers it and writes the answer (or the fix, or the version it is planned for) back into that file; the answer appears under the item here. Nothing typed here is lost, and nothing is answered by guessing.</div>';
+  var bi=path+itemFieldHtml('issue','Issue','something is wrong, or not as agreed — what you saw, when')+(issues.length?issues.map(itemRowHtml).join(''):tabEmpty('no open issues on this machine.'));
+  h+=tabSection('oi1','\u2460','ISSUES \u00b7 open','What is wrong, or not as agreed? Each issue is considered by the review and comes back FIXED (with the version), PLANNED (with the version) or DECLINED (with the reason).', bi, true);
+  var bq=itemFieldHtml('question','Question','something you want answered — the review answers it in writing, with the evidence')+(questions.length?questions.map(itemRowHtml).join(''):tabEmpty('no open questions on this machine.'));
+  h+=tabSection('oi2','\u2461','QUESTIONS \u00b7 open','What do you want answered? Never guessed: the review answers with the evidence, or says what it would take to know (session-state/OPEN-QUESTIONS.md is the long-form record).', bq, true);
+  h+=tabSection('oi3','\u2462','CLOSED \u00b7 answered, fixed, declined','What was settled, and how? An item never disappears; it is closed with its answer.', (closed.length?closed.map(itemRowHtml).join(''):tabEmpty('nothing closed yet.')), false);
+  return h;
+}
+// the enhancement field + list, rendered on the Roadmap tab
+function enhancementsHtml(){
+  var all=itemsMerged().filter(function(m){ return m.kind==='enhancement'; });
+  var open=all.filter(function(m){ return !itemsClosed(m.status) && m.status!=='PLANNED'; }), planned=all.filter(function(m){ return m.status==='PLANNED'; }), closed=all.filter(function(m){ return itemsClosed(m.status); });
+  var h='<div style="font-size:8px;color:'+PAL.sub+';white-space:normal;line-height:1.35;margin-bottom:3px">A requirement in your words. It rides in the day export at Save; the review considers it and comes back PLANNED as a version on this tab, or DECLINED with the reason.</div>';
+  h+=itemFieldHtml('enhancement','Enhancement','what the application should do that it does not — and the objective it serves');
+  if(open.length) h+=open.map(itemRowHtml).join('');
+  if(planned.length) h+='<div style="margin-top:4px;font-size:8px;font-weight:700;color:'+PAL.blue+'">PLANNED</div>'+planned.map(itemRowHtml).join('');
+  if(closed.length) h+='<div style="margin-top:4px;font-size:8px;font-weight:700;color:'+PAL.sub+'">CLOSED</div>'+closed.map(itemRowHtml).join('');
+  if(!all.length) h+=tabEmpty('no enhancement requests on this machine yet.');
+  return h;
+}
+try{
+  window.__gptsDebug.showItems=window.__gptsDebug.showItems||function(){};
+  window.__gptsDebug.itemsAdd=function(kind, text){ if(text==null){ try{ var el=document.getElementById('gpts-item-'+kind); text=el?el.value:''; if(el) el.value=''; }catch(e){ text=''; } } var rec=itemsAdd(kind, text); try{ render(); }catch(eR){} return rec; };
+  window.__gptsDebug.itemsRemove=function(id){ itemsRemove(id); try{ render(); }catch(eR){} };
+  window.__gptsDebug.items=itemsMerged;
+}catch(eIt){}
 function readNextQueueHtml(){
   var flat=studiesFlat(); var q=flat.filter(function(x){ return x.status==='READ NEXT'; });
   var drafts=flat.filter(function(x){ return x.status==='DRAFT'; });
@@ -18709,7 +18947,7 @@ function preregStats(sym){
 function preregHtml(){
   var s=preregStats('SPY');
   var NJ=null; try{ NJ=(typeof ANALYSIS_NIGHTLY!=='undefined')?ANALYSIS_NIGHTLY:null; }catch(eNJ){}
-  var h='<table style="width:100%;border-collapse:collapse;font-size:9px"><tr style="color:'+PAL.sub+';font-size:7.5px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">hyp</th><th style="text-align:left">subject \u00b7 study</th><th style="text-align:left">claim</th><th style="text-align:left">predict</th><th style="text-align:left">refute if</th><th style="text-align:left">n / minN</th><th style="text-align:right">verdict</th></tr>';
+  var h='<table><tr><th>hyp</th><th>subject \u00b7 study</th><th>claim</th><th>predict</th><th>refute if</th><th>n / minN</th><th class="r">verdict</th></tr>';
   preregList().forEach(function(H){
     var v=H.pickFn(s)||{}; var n=0, status, c=PAL.sub, bar='';
     var hv=null; ((NJ&&NJ.hypotheses)||[]).some(function(x){ if(x.id===H.id){ hv=x; return true; } return false; });
@@ -18719,23 +18957,24 @@ function preregHtml(){
     else { n=v.n||0; if(n>=H.minN){ status='READ'; bar='held '+Math.round(100*v.hit/v.n)+'% (n='+v.n+')'; c='#e6edf3'; } else { status='THIN'; bar='not read'; c='#f2b45a'; } }
     if(hv && hv.verdict && !H.judgedBy){ status=String(hv.verdict).toUpperCase(); if(hv.bar) bar=hv.bar; c=(hv.verdict==='cleared')?'#2ec27e':((hv.verdict==='refused')?'#f0616d':c); }
     var w=Math.max(0, Math.min(100, Math.round(100*n/(H.minN||1))));
-    var barHtml='<span style="display:inline-block;width:52px;height:5px;background:rgba(255,255,255,.08);border-radius:2px;vertical-align:middle;overflow:hidden"><i style="display:block;height:100%;width:'+w+'%;background:#f2b45a"></i></span> <span style="color:'+PAL.sub+'">'+n+'/'+H.minN+'</span>';
+    var barHtml='<span class="bar"><i style="width:'+w+'%"></i></span><span class="dm"> '+n+'/'+H.minN+'</span>';
     var isDraft=false;
-    h+='<tr'+g3tip((H.note||'')+(bar?(' \u2014 '+bar):''))+' style="vertical-align:top;border-top:1px solid rgba(255,255,255,.04)"><td style="font-weight:800;color:'+(isDraft?'#cdb4fa':PAL.blue)+'">'+g3esc(H.id)+'</td><td style="color:'+PAL.sub+';white-space:nowrap">'+g3esc((HYP_STUDY[H.id]?(HYP_STUDY[H.id].charAt(0)+' \u00b7 '+HYP_STUDY[H.id]):'\u2014'))+'</td><td style="white-space:normal">'+g3esc(H.claim)+'</td><td style="color:#cdb4fa;white-space:normal">'+g3esc(H.predict||'\u2014')+'</td><td style="color:'+PAL.sub+';white-space:normal">'+g3esc(H.refuteIf||'\u2014')+'</td><td style="white-space:nowrap">'+barHtml+'</td><td style="text-align:right;color:'+c+';font-weight:900;letter-spacing:.05em;white-space:nowrap">'+g3esc(status)+'</td></tr>';
-    if(bar) h+='<tr><td></td><td colspan="6" style="font-size:8px;color:'+PAL.sub+';white-space:normal;padding-bottom:2px">'+g3esc(bar)+'</td></tr>';
+    h+='<tr'+g3tip((H.note||'')+(bar?(' \u2014 '+bar):''))+'><td class="'+(isDraft?'lil':'bl')+'"><b>'+g3esc(H.id)+'</b></td><td class="dm" style="white-space:nowrap">'+g3esc((HYP_STUDY[H.id]?(HYP_STUDY[H.id].charAt(0)+' \u00b7 '+HYP_STUDY[H.id]):'\u2014'))+'</td><td>'+g3esc(H.claim)+'</td><td class="sk">'+g3esc(H.predict||'\u2014')+'</td><td class="dm">'+g3esc(H.refuteIf||'\u2014')+'</td><td style="white-space:nowrap">'+barHtml+'</td><td class="r" style="color:'+c+'"><b>'+g3esc(status)+'</b></td></tr>';
+    if(bar) h+='<tr><td></td><td colspan="6" class="dm" style="padding-bottom:2px">'+g3esc(bar)+'</td></tr>';
   });
   h+='</table>';
   // drafts: studies.json rows with status DRAFT that are not yet in the register
   try{ var ids={}; preregList().forEach(function(H){ ids[H.id]=1; }); var drafts=studiesFlat().filter(function(x){ return x.status==='DRAFT'; });
     drafts.forEach(function(x){ var m=/H\d+/.exec(x.result||''); var hid=m?m[0]:null; if(hid && ids[hid]) return;
-      h+='<div style="font-size:8.5px;color:'+PAL.sub+';white-space:normal;margin-top:2px"><b style="color:#cdb4fa">DRAFT</b> '+g3esc(x.subj+' \u00b7 '+x.id)+' \u2014 '+g3esc(x.q)+(x.result?(' \u2014 '+g3esc(x.result)):'')+'</div>'; }); }catch(eDr){}
-  return h+'<div style="margin-top:4px;color:'+PAL.sub+';font-size:8.5px;white-space:normal">A hypothesis is written with its prediction and its refutation before the first session is scored, and never edited. Sessions from '+PREREG_FROM+' only \u00b7 one row per (day, node) episode, first bar \u00b7 a rate appears only at the minimum n. Registered NULLS (H3, H4) are deliberate.</div>';
+      h+='<div class="rs" style="padding-left:0"><b class="lil">DRAFT</b> '+g3esc(x.subj+' \u00b7 '+x.id)+' \u2014 '+g3esc(x.q)+(x.result?(' \u2014 '+g3esc(x.result)):'')+'</div>'; }); }catch(eDr){}
+  return h+panNote('A hypothesis is written with its prediction and its refutation before the first session is scored, and never edited. Sessions from '+PREREG_FROM+' only \u00b7 one row per (day, node) episode, first bar \u00b7 a rate appears only at the minimum n. Registered NULLS (H3, H4) are deliberate.');
 }
 function testingBlock(){
   var h='';
   var cov=null; try{ cov=featStatsCached('SPY'); }catch(e){}
-  h+=tabHeader('testing','🧪 Testing',
-    'What is being tested, and what would settle it? '+((cov&&cov.days)||0)+' recorded day'+(((cov&&cov.days)||0)===1?'':'s')+' on this machine.');
+  // (v15.62) as mocked: no header line — the tab bar, the .hd loop line, the .flow strip, then ①–⑥
+  var footRight=((cov&&cov.days)||0)+' recorded day'+(((cov&&cov.days)||0)===1?'':'s')+' on this machine \u00b7 Testing \u00b7 by subject';
+  h+=panOpen();
 
   // (v15.54) ① QUESTION QUEUE is archived — a question with no n is a hypothesis; the register (②) holds those.
   // (the question queue's section text is in archive/v15.54/T-question-queue)
@@ -18750,17 +18989,17 @@ function testingBlock(){
   var T_kill=tabSection('t4','④','KILL LIST','Which conditions would void a read, and is each one ACTIVE or just written down? A hand-set kill changes nothing.', kl, false);
 
   var stt=''; try{ stt=selfTestHtml(); }catch(e5){ stt=tabEmpty('the self-test could not be rendered.'); }
-  try{ stt=suiteHtml()+'<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">SELF-TEST \u00b7 the synthetic day</div>'+stt; }catch(eSu){}
-  var T_self=tabSection('t5','⑥','THE SUITE \u00b7 self-test','Does the scorer itself work, and did the build ship green? The last suite run (tools/run-tests.sh writes learning/suite.json), the mutation record, then the self-test.  A synthetic day with three properties planted at known strengths is run through this panel’s own arithmetic: it must FIND the edge, FLAG the 1-way trap, and SPLIT the regime-dependent rule.', stt);
+  try{ stt=suiteHtml()+'<div class="dm" style="margin-top:5px;font-weight:800;letter-spacing:.06em;font-size:6.8px">SELF-TEST \u00b7 THE SYNTHETIC DAY</div>'+stt; }catch(eSu){}
+  var T_self=panSection('t5','\u2465','THE SUITE','the build cannot ship red \u00b7 the last run \u00b7 mutation \u00b7 the self-test', null, stt, true, 'Does the scorer itself work, and did the build ship green? The last suite run (tools/run-tests.sh writes learning/suite.json), the mutation record, then the self-test: a synthetic day with three properties planted at known strengths is run through this panel\u2019s own arithmetic \u2014 it must FIND the edge, FLAG the 1-way trap, and SPLIT the regime-dependent rule.');
   // (v15.52) the check ⑤ could not make: not "does the arithmetic work" but "can THIS feature's scorer fail"
   var cf=''; try{ cf=canFailHtml(); }catch(eCF){ cf='<div style="color:#f0616d">canFail threw: '+String(eCF&&eCF.message||eCF).replace(/[<>&]/g,'')+'</div>'; }
-  try{ cf=gateSummaryHtml()+'<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">EVERY FEATURE \u00b7 the live bands</div>'+cf; }catch(eGS){}
-  var T_canfail=tabSection('t5b','\u2461','THE GATE \u00b7 can the scorer fail?','Before a feature\u2019s rate means anything: does that rate MOVE between the records it predicted LOW and the ones it predicted HIGH? lodhod read 100% (n=362 rows, 4 sessions) in BOTH bands \u2014 a scorer that cannot fail (FINDINGS F-11). A flagged row is measuring something other than what it claims, and its number must not reach the face. eff n counts SESSIONS for a to-close feature.', cf);
+  try{ cf=gateSummaryHtml()+'<div class="dm" style="margin-top:5px;font-weight:800;letter-spacing:.06em;font-size:6.8px">EVERY FEATURE \u00b7 THE LIVE BANDS</div>'+cf; }catch(eGS){}
+  var T_canfail=panSection('t5b','\u2461','THE GATE','can the scorer fail? \u00b7 rendered live from featGated', null, cf, true, 'Before a feature\u2019s rate means anything: does that rate MOVE between the records it predicted LOW and the ones it predicted HIGH? lodhod read 100% (n=362 rows, 4 sessions) in BOTH bands \u2014 a scorer that cannot fail (FINDINGS F-11). A flagged row is measuring something other than what it claims, and its number must not reach the face. eff n counts SESSIONS for a to-close feature.');
 
   var dcv=''; try{ dcv=recordStoresHtml('SPY'); }catch(eRS){ dcv=tabEmpty('the stores could not be listed: '+String(eRS&&eRS.message||eRS).replace(/[<>&]/g,'')); }
-  try{ dcv+='<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">WHAT UNLOCKS WHEN</div>'+unlockRowsHtml('SPY'); }catch(e6){ dcv+=tabEmpty('coverage could not be computed.'); }
+  try{ dcv+='<div class="dm" style="margin-top:5px;font-weight:800;letter-spacing:.06em;font-size:6.8px">WHAT UNLOCKS WHEN</div>'+unlockRowsHtml('SPY'); }catch(e6){ dcv+=tabEmpty('coverage could not be computed.'); }
   dcv+='<div id="gpts-tcov" style="font-size:8px;color:'+PAL.sub+';margin-top:4px;white-space:normal">repository: computing… <span data-gtcov="1" style="cursor:pointer;text-decoration:underline">refresh</span></div>';
-  var T_cov=tabSection('t6','\u2463','THE RECORD \u00b7 data coverage','How much have we actually got, and what unlocks when? The honest answer to "why is everything still ⚖" is almost always "not enough recorded days" — this says exactly which threshold each capability is waiting on.', dcv);
+  var T_cov=panSection('t6','\u2463','THE RECORD','what is captured, what the open studies still need', null, dcv, true, 'How much have we actually got, and what unlocks when? The honest answer to "why is everything still \u2696" is almost always "not enough recorded days" \u2014 this says exactly which threshold each capability is waiting on.');
 
   // ---- exploration, folded away: it is not part of the loop ------------------
   var det='';
@@ -18790,39 +19029,42 @@ function testingBlock(){
     // 22 rows permanently 'not ready') are ARCHIVED (G-testing-prose). The miner above is the exploration that stays.
   }catch(eD){ det=tabEmpty('the exploration tools could not be rendered.'); }
   var pg=''; try{ pg=preregHtml(); }catch(ePG){ pg='<div style="color:#f0616d">prereg threw: '+String(ePG&&ePG.message||ePG).replace(/[<>&]/g,'')+'</div>'; }
-  var T_prereg=tabSection('t8','\u2460','THE REGISTER','Hypotheses fixed on '+PREREG_FROM+' BEFORE the data that tests them existed (roadmap/PREREGISTER.md). Each is read ONCE, at its minimum n, on sessions from that date only. Until then the rate is deliberately not shown \u2014 a hypothesis peeked at early is a search, not a test. The exploratory pass behind these found exactly what chance predicts.', pg);
-  var T_detail=tabSection('t7','⊕','DETAIL · exploration + scorecards','Hypothesis builder, pattern miner and the research-curated test list. Exploration, not the loop: nothing here can promote anything.', det, false);
+  var T_prereg=panSection('t8','\u2460','THE REGISTER','fed by Analysis \u00b7 read once at minN \u00b7 sessions from '+g3esc(PREREG_FROM), null, pg, true, 'Hypotheses fixed on '+PREREG_FROM+' BEFORE the data that tests them existed (roadmap/PREREGISTER.md). Each is read ONCE, at its minimum n, on sessions from that date only. Until then the rate is deliberately not shown \u2014 a hypothesis peeked at early is a search, not a test. The exploratory pass behind these found exactly what chance predicts.');
+  var T_detail=panSection('t7','\u2295','DETAIL','exploration + scorecards \u00b7 nothing here can promote anything', null, det, false, 'Hypothesis builder, pattern miner and the research-curated test list. Exploration, not the loop: nothing here can promote anything.');
   // (v15.54) THE TAB IN WORKFLOW ORDER — design/ARCHITECTURE-E2E-WORKFLOW.md §3: gate, register, promotion, kills, coverage, self-test, detail
   // (v15.55) THE TAB BY SUBJECT — the loop strip, then one section per question in the loop. PROPOSALS,
   // CHALLENGERS and the KILL LIST are what asks to change the ladder, so they live under ③ ON THE DASHBOARD;
   // the review and the read-next queue are ⑤ THE NIGHTLY.
   var T_loop=''; try{ T_loop=testingLoopStripHtml(); }catch(eLp){ T_loop=tabEmpty('the loop strip could not be rendered.'); }
   var T_dashB=''; try{ T_dashB=dashboardRulesHtml('SPY'); }catch(eDb){ T_dashB=tabEmpty('the dashboard table could not be rendered: '+String(eDb&&eDb.message||eDb).replace(/[<>&]/g,'')); }
-  var _sub=function(t){ return '<div style="margin-top:6px;font-size:8px;font-weight:700;color:'+PAL.sub+'">'+t+'</div>'; };
-  var T_dash=tabSection('t9','\u2462','ON THE DASHBOARD','What the ladder renders, and which study each number comes from. A rule renders a rate only when it has earned a tier AND its feature cleared the gate \u2014 otherwise \u201c\u26d4 gated\u201d or \u201cthin\u201d, never a bare %. Under it: PROPOSALS \u2014 What is asking to change the model, and does it clear the bar? (the bar is LOCAL: eff n\u2265'+PROMO_MIN_N+', '+PROMO_WF_SESSIONS+' walk-forward sessions, no regime flip) \u2014 CHALLENGERS (is the challenger actually ahead of the incumbent, on the SAME bars?) and the KILL LIST (is each kill ACTIVE or just written down?).', T_dashB+_sub('PROPOSALS')+pr+_sub('CHALLENGERS \u00b7 vs incumbent')+ch+_sub('KILL LIST')+kl, true);
+  var _sub=function(t){ return '<div class="dm" style="margin-top:6px;font-weight:800;letter-spacing:.06em;font-size:6.8px">'+t+'</div>'; };
+  var T_dash=panSection('t9','\u2462','ON THE DASHBOARD','what the ladder renders, and which study each number comes from', null, T_dashB+_sub('PROPOSALS')+pr+_sub('CHALLENGERS \u00b7 VS INCUMBENT')+ch+_sub('KILL LIST')+kl, true, 'What the ladder renders, and which study each number comes from. A rule renders a rate only when it has earned a tier AND its feature cleared the gate \u2014 otherwise \u201c\u26d4 gated\u201d or \u201cthin\u201d, never a bare %. Under it: PROPOSALS \u2014 What is asking to change the model, and does it clear the bar? (the bar is LOCAL: eff n\u2265'+PROMO_MIN_N+', '+PROMO_WF_SESSIONS+' walk-forward sessions, no regime flip) \u2014 CHALLENGERS (is the challenger actually ahead of the incumbent, on the SAME bars?) and the KILL LIST (is each kill ACTIVE or just written down?).');
   var T_night=''; try{ T_night=nightlyHeadHtml(); }catch(eNh){ T_night=tabEmpty('the nightly head could not be rendered.'); }
-  try{ T_night+='<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">THE REVIEW \u00b7 as written</div>'+nightlyReviewHtml(); }catch(eNr){ T_night+=tabEmpty('the review could not be rendered: '+String(eNr&&eNr.message||eNr).replace(/[<>&]/g,'')); }
+  try{ T_night+='<div class="dm" style="margin-top:5px;font-weight:800;letter-spacing:.06em;font-size:6.8px">THE REVIEW \u00b7 AS WRITTEN</div>'+nightlyReviewHtml(); }catch(eNr){ T_night+=tabEmpty('the review could not be rendered: '+String(eNr&&eNr.message||eNr).replace(/[<>&]/g,'')); }
   try{ T_night+=readNextQueueHtml(); }catch(eRq){}
-  var T_nightly=tabSection('t10','\u2464','THE NIGHTLY','What did the review actually say? The nightly log and the weekly review, quoted as written \u2014 verdicts on the register, the HOD/LOD live-vs-table cells, what changed on this machine \u2014 and the READ-NEXT queue the nightly works through one study per night. Your TRACK requests reach it through the day export.', T_night, true);
+  var T_nightly=panSection('t10','\u2464','THE NIGHTLY','run.py \u00b7 reads the register \u00b7 refreshes the tables \u00b7 writes the digest for the LLM review', null, T_night, true, 'What did the review actually say? The nightly log and the weekly review, quoted as written \u2014 verdicts on the register, the HOD/LOD live-vs-table cells, what changed on this machine \u2014 and the READ-NEXT queue the nightly works through one study per night. Your TRACK requests reach it through the day export.');
   h+=T_loop+T_prereg+T_canfail+T_dash+T_cov+T_nightly+T_self+T_detail;
+  h+=panFoot('testing', footRight)+'</div>';
   void T_prop; void T_chal; void T_kill;
   return h;
 }
 // tab bar shown above every view
 function analysisTabBar(){
-  function tab(label,active,fn){
-    return '<div onclick="'+fn+'" style="cursor:pointer;padding:5px 12px;font-size:11px;font-weight:'+(active?'800':'600')+';color:'+(active?PAL.ink:PAL.sub)+';'+(active?'border-bottom:2px solid '+PAL.gold+';background:#0b0e14;border-radius:6px 6px 0 0':'')+'">'+label+'</div>';
-  }
+  // (v15.62) the mockup's .tabs: the same chrome on every view, seven tabs
+  function tab(label,active,fn){ return '<span'+(active?' class="on"':'')+' onclick="'+fn+'">'+label+'</span>'; }
   // (v10.57 FIX) Dashboard must clear BOTH view flags: showAnalysis(false) left TESTING_VIEW
   // set, so from the Testing tab the Dashboard click did nothing until Analysis was visited.
   var onDash='window.__gptsDebug&&window.__gptsDebug.showDashboard&&window.__gptsDebug.showDashboard()';
-  return '<div style="display:flex;gap:2px;background:#12161f;border-bottom:1px solid '+PAL.line+';padding:4px 4px 0;margin:-2px -2px 6px;flex-wrap:wrap">'+
-    tab('Dashboard', (!ANALYSIS_VIEW&&!TESTING_VIEW&&!ARCH_VIEW&&!ROADMAP_VIEW), onDash)+
+  try{ ensureV3Css(); }catch(e){}
+  return '<div class="g3pan" style="margin:-2px -2px 6px"><div class="tabs" style="flex-wrap:wrap">'+
+    tab('Dashboard', (!ANALYSIS_VIEW&&!TESTING_VIEW&&!ARCH_VIEW&&!ROADMAP_VIEW&&!ITEMS_VIEW&&!LEARN_VIEW), onDash)+
     tab('\uD83D\uDCCA Analysis', ANALYSIS_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showAnalysis&&window.__gptsDebug.showAnalysis(true)')+
     tab('\uD83E\uDDEA Testing', TESTING_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showTesting&&window.__gptsDebug.showTesting(true)')+
+    tab('\uD83D\uDCDA Learn', LEARN_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showLearn&&window.__gptsDebug.showLearn(true)')+
     tab('\u2699 Architecture', ARCH_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showArchitecture&&window.__gptsDebug.showArchitecture(true)')+
     tab('\uD83D\uDDFA Roadmap', ROADMAP_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showRoadmap&&window.__gptsDebug.showRoadmap(true)')+
-  '</div>';
+    tab('\uD83D\uDCCC Open Items', ITEMS_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showItems&&window.__gptsDebug.showItems(true)')+
+  '</div></div>';
 }
 
 // (v11.0 audit bug 5) ONE delegated click listener for the whole panel body — action buttons,
@@ -18909,6 +19151,9 @@ function wireBodyDelegation(){
           }
           if(t.getAttribute && t.getAttribute('data-gguide')){
             ev.stopPropagation(); var gw=t.getAttribute('data-gguide'); TAB_GUIDE[gw]=!TAB_GUIDE[gw]; try{ render(); }catch(eS2){} return;
+          }
+          if(t.getAttribute && t.getAttribute('data-gscale')){   // (v15.62) the mockup's scale control
+            ev.stopPropagation(); setPanelScale(t.getAttribute('data-gscale')); return;
           }
           if(t.getAttribute && t.getAttribute('data-gselftest')){
             ev.stopPropagation();
@@ -19712,6 +19957,8 @@ function ensureV3Css(){
     '#gpts-body .g3ldbar.acc{background:#a371f7;color:#1b1030}'+
     '#gpts-body .g3ldbar.brk{background:#e3c341;color:#2a2408}'+
     '#gpts-body .g3ldbar.bal{background:transparent;box-shadow:inset 0 0 0 1px rgba(139,152,169,.6);color:#8b98a9}'+
+    '#gpts-body .g3ldbar.sub{opacity:.42;background:transparent;box-shadow:inset 0 0 0 1px currentColor}'+   /* (v15.61) context rows below the threshold */
+    '#gpts-body .g3ldbar.sub.acc{color:#a371f7}#gpts-body .g3ldbar.sub.brk{color:#e3c341}'+
     '#gpts-body .g3ldbar.king{height:15px}'+
     '#gpts-body .g3ldpk{position:absolute;left:'+LAD_NODE+'px;height:16px;transform:translateY(-50%);'+
       'border:1px solid #4a5462;border-left:none;border-radius:0 2px 2px 0;cursor:help}'+
@@ -20273,7 +20520,8 @@ function ensureV3Css(){
     '#gpts-body .g3alt b{color:#e6edf3;font-weight:700}'+
     '@keyframes g3soft{0%,100%{opacity:.5}50%{opacity:1}}'+
     '#gpts-body .g3pulse{animation:g3soft 2s ease-in-out infinite}'+
-    '@media (prefers-reduced-motion: reduce){#gpts-body .g3pulse{animation:none;opacity:1}}';
+    '@media (prefers-reduced-motion: reduce){#gpts-body .g3pulse{animation:none;opacity:1}}'+
+    PANEL_CSS;   // (v15.62) the mockup's stylesheet, scoped — tools/panel-css.py
     document.head.appendChild(s);
   }catch(e){}
 }
@@ -21625,6 +21873,33 @@ function skPiles(B, sym){
 // (v11.77) emPiles is now a ROUTER and it returns an ARRAY as before, so every existing caller is
 // unchanged. The reason a call came back empty is stashed on `emPiles.lastWhy` and read by emRead —
 // an array cannot carry a reason, and inventing an object return here would have touched six callers.
+// (v15.61) ⚠⚠ THE LADDER NEVER SHOWS FEWER THAN LAD_MIN_ROWS STRIKES WHEN THE TAPE HAS THEM. Operator, 2026-09-03,
+// 12:40 CT: "why are there only 3 strikes on the application. you are not displaying the node ladder appropriately."
+// Probed live: the SPXW tape carried 100 strikes, 16 non-zero, and exactly THREE at or above the 20% node threshold
+// (7750 100% · 7745 45% · 7740 28%; the next were 11%, 8%, 6%, 5%). The ladder was faithful to the book and useless to
+// the eye: a concentrated 0DTE afternoon book drawn as three bars with no context around the King.
+// The fix is DISPLAY, not measurement: the engine's node set (emPiles → the deflection recorder, the READ's top-5, the
+// rolls) is unchanged; the ladder appends the next strongest strikes as SUB rows — dimmed, labelled "context", hover
+// says they are below the threshold — until LAD_MIN_ROWS strikes are drawn. A sub row is never a node: it is not
+// recorded, not scored, not counted, and never carries a role. Its number is still the real %King.
+var LAD_MIN_ROWS=8;
+function ladderSubPiles(B, sym, have){
+  var out=[];
+  try{
+    if(!B || !B.ok) return out;
+    var n=(have||[]).length; if(n>=LAD_MIN_ROWS) return out;
+    var L=null; try{ L=ifLadder(sym); }catch(e2){} if(!L || L.err || !(L.dispScale>0)) return out;
+    var T=null; try{ T=tapeMap('SPXW'); }catch(eT){} if(!T || !T.pct) return out;
+    var seen={}; (have||[]).forEach(function(P){ seen[+P.k]=1; });
+    var cands=[]; Object.keys(T.pct).forEach(function(kk){ var k=parseFloat(kk), pct=T.pct[kk]; if(!isFinite(k) || typeof pct!=='number' || !isFinite(pct) || !(Math.abs(pct)>0) || seen[k]) return; cands.push({ k:k, pct:pct }); });
+    cands.sort(function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); });
+    cands.slice(0, LAD_MIN_ROWS-n).forEach(function(c){
+      var disp=c.k*L.dispScale;
+      out.push({ k:c.k, disp:disp, pct:Math.round(Math.abs(c.pct)), signed:c.pct, role:null, accel:(c.pct<0), brake:(c.pct>0), balanced:false, pos:emPos(B, disp), window:'skylit', src:'skylit', sub:true });
+    });
+  }catch(e){}
+  return out;
+}
 emPiles.lastWhy='';
 emPiles.lastSrc='';
 emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.lastDegraded=''; emPiles.lastRoles=null;
@@ -24749,7 +25024,7 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       var role=P.role||'';
       var lvS=(LVLST&&LVLST[P.k])?LVLST[P.k]:null;
       var vv=null; try{ var vE=velAt(P.k); vv=(vE&&vE.v&&!vE.stale)?vE.v:null; }catch(eV){}
-      var tip=frameNum(P.disp)+' (SPXW '+P.k+') — '+pct+'% of King. '+
+      var tip=frameNum(P.disp)+' (SPXW '+P.k+') — '+pct+'% of King. '+(P.sub?'CONTEXT ROW — below the '+((typeof CFG!=='undefined'&&CFG&&typeof CFG.nodeThresh==='number')?CFG.nodeThresh:20)+'% node threshold, drawn so the ladder never shows fewer than '+LAD_MIN_ROWS+' strikes when the tape has them. Not a node: not recorded, not scored, no role. ':'')+
         (P.balanced?'BALANCED — the legs very nearly cancel, so there is no side to lean on.'
           :(neg?'NEGATIVE gamma: dealers are short here, so crossing it a hedge trades WITH the move — an ACCELERATOR.'
                :'POSITIVE gamma: dealers are long here, so a hedge leans against price — a BRAKE.'))+
@@ -24781,7 +25056,7 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       var pctW=showPct?(pctTxt.length*5.6):0, roleW=role?(role.length*6.2):0;
       var roomPct=(showPct && len>=Math.max(LAD_PCT_IN_BAR, pctW+8));
       var roomTyp=(role && len>=(pctW+roleW+11));
-      h+='<i class="g3ldbar '+k+(role==='KING'?' king':'')+'" style="top:'+t.toFixed(1)+'px;width:'+len.toFixed(0)+'px"'+
+      h+='<i class="g3ldbar '+k+(role==='KING'?' king':'')+(P.sub?' sub':'')+'" style="top:'+t.toFixed(1)+'px;width:'+len.toFixed(0)+'px"'+
          g3tip(tip)+'>'+(roomPct?('<b>'+pctTxt+'</b>'):'')+(roomTyp?g3esc(role):'')+'</i>';
       // ⚠⚠ A FALLBACK LABEL IS THE NEW WAY INTO THE CHUTE, and the render audit caught it: a 74% node
       // with a 3-letter role put "RUG" at [206.8, 224.6] against a chute starting at 224 — over the
@@ -25990,7 +26265,9 @@ function secFrame(sym){
     // Additive on purpose: the previous surface stays in the DOM for one release so the two can be
     // compared live, and so a fault is a toggle away from being reverted rather than a rebuild.
     if(CFG.ladder!==false){
-      try{ h+=ladderHtml(EB, RB, sym, RAILPS, RAILROLLS, SESSL, LVLST, RAILTGT); }catch(eLAD){ swallow('ladder', eLAD); }
+      // (v15.61) the ladder draws context rows below the threshold; nothing else reads them
+      var RAILPS_DRAW=RAILPS; try{ var _subs=ladderSubPiles(EB, sym, RAILPS); if(_subs.length) RAILPS_DRAW=RAILPS.concat(_subs); }catch(eSub){}
+      try{ h+=ladderHtml(EB, RB, sym, RAILPS_DRAW, RAILROLLS, SESSL, LVLST, RAILTGT); }catch(eLAD){ swallow('ladder', eLAD); }
     }
     // (v15.53) THE OLD EM RAIL (.g3emw) IS ARCHIVED — archive/v15.53/B-hidden-rail. It had been built into
     // the HTML every render and hidden by the g3ladon body class since v14.46. The ladder above is the surface.
@@ -27430,9 +27707,9 @@ function render(){
     try{ window.__gptsTestRefresh&&window.__gptsTestRefresh(); }catch(e2){}
     return;
   }
-  if(ARCH_VIEW || ROADMAP_VIEW){   // (v15.59) the WHAT, the HOW and the plan — inside the app
+  if(ARCH_VIEW || ROADMAP_VIEW || ITEMS_VIEW || LEARN_VIEW){   // (v15.59) the WHAT, the HOW and the plan — inside the app · (v15.60) open items · (v15.62) learn
     html+='<div class="gpts-analysis-scroll" style="max-height:calc(100vh - 180px);min-height:240px;overflow-y:auto;overflow-x:hidden;padding-right:3px">';
-    try{ html+=ARCH_VIEW?architectureBlock():roadmapBlock(); }catch(eA){ html+='<div style="color:'+PAL.sub+';padding:6px">'+(ARCH_VIEW?'Architecture':'Roadmap')+' — '+String(eA&&eA.message||eA).replace(/[<>&]/g,'')+'</div>'; }
+    try{ html+=ARCH_VIEW?architectureBlock():(ITEMS_VIEW?itemsBlock():(LEARN_VIEW?learnBlock():roadmapBlock())); }catch(eA){ html+='<div style="color:'+PAL.sub+';padding:6px">'+(ARCH_VIEW?'Architecture':(ITEMS_VIEW?'Open Items':(LEARN_VIEW?'Learn':'Roadmap')))+' — '+String(eA&&eA.message||eA).replace(/[<>&]/g,'')+'</div>'; }
     html+='</div>';
     elBody.innerHTML=html;
     return;
@@ -27722,6 +27999,8 @@ function boot(){
   try{ sweepsBookFetch(); }catch(eSB){}   // (v15.56) the book table — data/es-1min/SWEEPS-BOOK.json
   try{ suiteFetch(); }catch(eSu){}         // (v15.58) the last suite run — learning/suite.json
   try{ planFetch(); }catch(ePl){}          // (v15.59) the WHAT, the HOW and the plan — learning/plan.json
+  try{ itemsFetch(); }catch(eIf){}         // (v15.60) the review's answers — learning/items.json
+  try{ learnFetch(); }catch(eLf){}         // (v15.62) the deflection learning doc — learning/deflections/examples.json
   rulesApply(true);            // (v10.54) BOOT is one of the only two moments the model may move
   render();
   tick();

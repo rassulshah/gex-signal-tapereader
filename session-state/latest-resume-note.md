@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-03 · panel v15.59 · companion v1.18 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-03 · panel v15.62 · companion v1.18 · supersedes every earlier resume note_
 
 
 # ⚠⚠⚠ THE WHAT AND THE HOW — STANDING, EVERY CONTEXT, BEFORE ANYTHING ELSE
@@ -14,13 +14,58 @@ levels: **a gamma node deflects price, and the deflection IS the turning point.*
 registry + TRACK), Testing = trust and promote (the register, the gate, what the ladder renders and why). Every rate
 with its n; a scorer must be able to fail; a hypothesis is written before the data and read once at minN; a first
 read is never a verdict; every file the panel fetches rides the installer; probe the live panel after every install.
-**THE PLAN** is `roadmap/ROADMAP.md` and the 🗺 Roadmap tab (v15.59 the ⚙ Architecture + 🗺 Roadmap tabs · v15.60 score the READ · v15.61 the TAP record). **The WHAT and the HOW are INSIDE THE APP from v15.59** (⚙ Architecture tab, rendered from `learning/plan.json` = `tools/plan-seed.py`; the seed, the file and the docs are pinned equal by `test_v1559.js`). Edit the plan in `tools/plan-seed.py`, run it, re-splice `PLAN_SEED`, update the docs.
+**THE PLAN** is `roadmap/ROADMAP.md` and the 🗺 Roadmap tab (v15.59 the ⚙ Architecture + 🗺 Roadmap tabs · v15.60 📌 Open Items · v15.61 the ladder floor · v15.62 the mockups' look + 📚 Learn · v15.63 the deflection candidate score · v15.64 score the READ · v15.65 the TAP record). **The WHAT and the HOW are INSIDE THE APP from v15.59** (⚙ Architecture tab, rendered from `learning/plan.json` = `tools/plan-seed.py`; the seed, the file and the docs are pinned equal by `test_v1559.js`). Edit the plan in `tools/plan-seed.py`, run it, re-splice `PLAN_SEED`, update the docs.
 **Tighten and harden the machinery over time** — PROCESS.md §5 is the standing backlog; add to it when something
 breaks, and say what broke in LESSONS.
 
+**THE LEARNING DOC** (v15.62, `learning/deflections/LEARNING.md` — READ IT ON LOAD, skill 1a-00d): his chart screenshots
+are lessons. BLIND CALL FIRST, then look the nodes up in the record (`tools/node-lookup.py <day> <strike> hh:mm-hh:mm`;
+today's book on his machine is `gpts_nodeevents_v1` via the Chrome tab), then the example + the rule go into
+`tools/learn-seed.py` → run → re-splice `LEARN_SEED` → build. The gauge (0–100) cannot flatter: 4 today, all breadth.
+
 ---
 
-# ⚠⚠ 2026-09-03 (latest) — v15.59: THE ⚙ ARCHITECTURE AND 🗺 ROADMAP TABS. THE WHAT, THE HOW AND THE PLAN ARE IN THE APP.
+# ⚠⚠ 2026-09-03 (latest) — v15.62: THE MOCKUPS' LOOK IS THE PANEL'S LOOK · 📚 LEARN.
+
+**Panel is v15.62, companion v1.18.** (1) His third ask for the mockups' look: the Analysis / Testing / Learn tabs now
+render in the mockup generators' OWN classes (.subj .hd .sec/.sech/.secb .sc .rs .note table .row .flow .foot) with
+their own stylesheet — `tools/panel-css.py` scopes the `.pan…` rules of `mockup-from-studies.py` + the EXTRA of
+`mockup-testing.py` under `#gpts-body .g3pan`; `PANEL_CSS` pinned equal; the Analysis skeleton for subject K pinned
+equal to the generator's (`test_v1562 2e`); the mockup page's scale control (1× / 1.55× / 2.1×, `gpts_tabscale_v1`) in
+the tab's foot; the old "Did the dashboard tell the truth?" header is gone; `ensureV3Css()` runs in `panOpen()` too.
+**A change to the look is made in the mockup generator first, then spliced.** (2) 📚 Learn: `tools/learn-seed.py` →
+`learning/deflections/examples.json` (the tab, `LEARN_SEED`) + `LEARNING.md` (the doc, read on load, skill 1a-00d) +
+`img/E00n.png` (his screenshots, on the installer manifest). Four TAUGHT examples (E001 Sep 3, E002 Aug 31, E003 Aug 28,
+E004 Aug 27), each leg checked in the record with `tools/node-lookup.py` (snaps' vend rows + nodeEvents + ES bars);
+eight rules: L1 growth into the tap · L2 fresh node at the extreme · L6 stack CONFIRMED; L3 (magnet, unconditioned)
+REFUTED by the −γ King of Aug 31 and kept; L8 (+γ magnet) · L4 side flip · L5 −γ accelerates away · L7 time of day
+PROPOSED. **The gauge is 4/100** — identify 0 (no blind read yet), predict 0 (the scorer is v15.63), breadth 3.5.
+He said: "i think you have enough to start with and analyze for now." Open: which node he meant by "new node just
+before 11 am" in E001; what "piku stack" means. **He has not installed since v15.58** — installv1562.bat carries 15.59–62.
+
+# (earlier) — v15.61: THE LADDER FLOOR. "why are there only 3 strikes."
+
+**Panel is v15.61, companion v1.18.** Probed his live panel at 12:40 CT: 100 SPXW strikes, 16 non-zero, exactly THREE at
+or above `CFG.nodeThresh` (20): 7750 100% · 7745 45% · 7740 28% (then 11 / 8 / 6 / 5%). The ladder drew the book
+faithfully — three bars — and was useless to the eye. **Fix is DISPLAY only:** `LAD_MIN_ROWS=8`; `ladderSubPiles(B,sym,have)`
+appends the next-strongest non-zero sub-threshold strikes to `RAILPS_DRAW` (never to `RAILPS`/`emPiles`) as `sub:true`
+rows — dimmed outline (`.g3ldbar.sub`), real %King, hover "context row — not a node: not recorded, not scored, no role".
+The engine's node set, the recorder, the READ's top-5 and the rolls are unchanged; a zero strike is never filler.
+`test_v1561.js` (9; 4 of 4 mutations). Plan re-numbered: v15.62 score the READ · v15.63 the TAP record · … · v15.67 the
+pullback outcome. He had NOT yet installed v15.60 when v15.61 was built — installv1561.bat carries both. **He has not
+answered the dashboard-inventory question yet** (what to modify / delete / enhance, DASHBOARD-INVENTORY §4) — it is asked
+in the chat; the answer goes to `learning/items.json` / the plan.
+
+# (earlier) — v15.60: 📌 OPEN ITEMS (issues, questions) + ENHANCEMENT REQUESTS ON THE ROADMAP.
+
+**Panel is v15.60, companion v1.18.** Six tabs. Issues / questions / enhancements typed on the panel → `gpts_items_v1` →
+the day export `items` → `run.py ingest_items` → `learning/items.json` (SEEN) → **the review answers IN THAT FILE**
+(status ANSWERED / FIXED / PLANNED as vX / DECLINED, `answer`, `link`, `answeredOn`) → the panel shows the answer under
+the item. **A context that loads this project must read `learning/items.json` and `learning/requests.json` and answer
+what is SEEN** — that is the review's job (stage ⑤), and it is how his words come back as work. Plan re-numbered:
+v15.62 score the READ · v15.63 the TAP record.
+
+# (earlier) — v15.59: THE ⚙ ARCHITECTURE AND 🗺 ROADMAP TABS. THE WHAT, THE HOW AND THE PLAN ARE IN THE APP.
 
 **Panel is v15.59, companion v1.18.** Two new tabs rendered from `learning/plan.json` (`tools/plan-seed.py`; `PLAN_SEED`
 pinned equal by `test_v1559.js`, which also pins every stage to PROCESS.md and every version to ROADMAP.md). Architecture =

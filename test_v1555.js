@@ -138,7 +138,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
 // ---- 5 · the dashboard table, the gate text, the loop strip ------------------------------------
 {
   const mk=(night)=>{ const g={ PAL, g3esc:esc, RULE_UNLOCK_N:20, ANALYSIS_NIGHTLY:night, featGated:(k)=>(k==='dir'?{gated:false}:(k==='node'?{gated:true,why:'CANNOT DISCRIMINATE'}:{gated:false,thin:true})), ruleLocalRate:()=>({effN:2}), rulesLoad:()=>({ rules:{ 'dir.A':{}, 'kill.tap3':{}, 'x':{} } }), ruleTier:(id)=>(id==='x'?'📊':'⚖') };
-    return build(g,['gateStateTxt','rulesTierCounts','dashboardRulesHtml'],'return { html:dashboardRulesHtml("SPY"), tc:rulesTierCounts(), g:[gateStateTxt("dir").txt,gateStateTxt("node").txt,gateStateTxt("decision").txt] };')(g); };
+    return build(g,['gateStateTxt','rulesTierCounts','dashboardRulesHtml','panSection','panNote','panRow'],'return { html:dashboardRulesHtml("SPY"), tc:rulesTierCounts(), g:[gateStateTxt("dir").txt,gateStateTxt("node").txt,gateStateTxt("decision").txt] };')(g); };
   let D=mk(null);
   ok(/kill\.negGammaWide[\s\S]*?FLAG/.test(D.html) && /contradicts H3/.test(D.html),'5a with no verdict on H3, kill.negGammaWide is FLAGGED against the registered null');
   D=mk({ hypotheses:[{ id:'H3', verdict:'refused' }] });
@@ -177,14 +177,14 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const errsA=JSON.parse(run('JSON.stringify(__gptsDebug.renderErrors())')||'[]');
   ok(errsA.length===0,'6c the Analysis tab renders with nothing swallowed',errsA.map(e=>(e.where||e.w)+':'+(e.msg||e.m)));
   ok(['K KINGS','S SETUPS','D DIRECTION','F DEFLECTION MECHANICS','P PULLBACK DEFLECTIONS','H HOD / LOD','X CONTEXT'].every(k=>html.indexOf(esc(k))>=0),'6d the subject strip shows all seven subjects');
-  ok(/H2 SWEEPS — the levels that get run before the turn/.test(html) && /ONL → LOD/.test(html) && /29% \(n=113\)/.test(html) && /28% \(n=284\)/.test(html),'6e H is the default subject: H2 carries the sweep table with ONL 29% (n=113) and the control 28% (n=284)');
+  ok(/<span class="n">H2<\/span><span class="t">SWEEPS — the levels that get run before the turn/.test(html) && /ONL → LOD/.test(html) && /29% \(n=113\)/.test(html) && /28% \(n=284\)/.test(html),'6e H is the default subject: H2 carries the sweep table with ONL 29% (n=113) and the control 28% (n=284)');
   ok(/id="gpts-track-H"/.test(html) && /TRACK SOMETHING UNDER H/.test(html) && /Rtest1/.test(html) && /NEW — rides in the next Save/.test(html),'6f the TRACK field and the stored request render under the subject');
-  ok(html.indexOf('H1 Is the extreme in')>=0 && /TODAY’S EVIDENCE · live/.test(html),'6g H1 carries today’s live HOD/LOD evidence under its rows');
+  ok(/<span class="n">H1<\/span><span class="t">Is the extreme in/.test(html) && /TODAY’S EVIDENCE · LIVE/.test(html),'6g H1 carries today’s live HOD/LOD evidence under its rows');
   const sweepBlock=html.slice(html.indexOf('THE SWEEP TABLE'), html.indexOf('THE SWEEP TABLE')+12000);
   ok(bareP(sweepBlock).length===0,'6h no bare % in the sweep table',bareP(sweepBlock).slice(0,4));
   run('__gptsDebug.showSubject("K")'); html=run('elBody ? elBody.innerHTML : ""');
-  ok(/K1 King deflections by book/.test(html) && /K1\.3/.test(html) && /437 kingRoll records, never read/.test(html) && /id="gpts-track-K"/.test(html),'6i switching to K shows its subsections, rows (a subsection with a result opens by default), result lines and its own TRACK field');
-  ok(/K5 King quality/.test(html) && !/K5\.1/.test(html),'6i2 a subsection with nothing measured yet stays folded (its count is in the header)');
+  ok(/<span class="n">K1<\/span><span class="t">King deflections by book/.test(html) && /K1\.3/.test(html) && /437 kingRoll records, never read/.test(html) && /id="gpts-track-K"/.test(html),'6i switching to K shows its subsections, rows (a subsection with a result opens by default), result lines and its own TRACK field');
+  ok(/<span class="n">K5<\/span><span class="t">King quality/.test(html) && !/K5\.1/.test(html),'6i2 a subsection with nothing measured yet stays folded (its count is in the header)');
   // the Add button path: value in the input -> requestsAdd(subj) reads and clears it
   run('document.getElementById("gpts-track-K").value="does the QQQ King lead the SPX King?"; __gptsDebug.requestsAdd("K");');
   const reqs=JSON.parse(store['gpts_requests_v1']);
@@ -196,9 +196,9 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   html=run('elBody ? elBody.innerHTML : ""');
   const errsT=JSON.parse(run('JSON.stringify(__gptsDebug.renderErrors())')||'[]');
   ok(errsT.length===0,'6l the Testing tab renders with nothing swallowed',errsT.map(e=>(e.where||e.w)+':'+(e.msg||e.m)));
-  const order=['ANALYSIS','TRACKED','REGISTER','GATE','DASHBOARD','NIGHTLY','① THE REGISTER','② THE GATE','③ ON THE DASHBOARD','④ THE RECORD','⑤ THE NIGHTLY','⑥ THE SUITE'].map(k=>html.indexOf(k));
-  ok(order.every(i=>i>=0) && order.every((v,i)=>i===0||v>order[i-1]),'6m the loop strip then ①…⑥ in loop order',order);
-  ok(/H6<\/td><td[^>]*>H · H2\.7/.test(html) && /H7<\/td><td[^>]*>H · H2\.8/.test(html) && /judged by the nightly/.test(html),'6n the register shows H6/H7 with their study ids, judged by the nightly');
+  const order=['ANALYSIS','TRACKED','REGISTER','GATE','DASHBOARD','NIGHTLY'].map(k=>html.indexOf('<b>'+k+'</b>')).concat([['①','THE REGISTER'],['②','THE GATE'],['③','ON THE DASHBOARD'],['④','THE RECORD'],['⑤','THE NIGHTLY'],['⑥','THE SUITE']].map(p=>html.indexOf('>'+p[0]+'</span><span class="t">'+p[1])));
+  ok(order.every(i=>i>=0) && order.every((v,i)=>i===0||v>order[i-1]),'6m the loop strip then ①…⑥ in loop order (v15.62: the mockup’s markup)',order);
+  ok(/H6<\/b><\/td><td[^>]*>H · H2\.7/.test(html) && /H7<\/b><\/td><td[^>]*>H · H2\.8/.test(html) && /judged by the nightly/.test(html),'6n the register shows H6/H7 with their study ids, judged by the nightly');
   ok(/kill\.negGammaWide/.test(html) && /READ-NEXT QUEUE/.test(html) && /K1\.3/.test(html),'6o ③ carries the flag row, ⑤ carries the read-next queue');
   ok(/2 requests/.test(html) && /2 not yet exported/.test(html),'6p the loop strip counts TRACK requests and how many are not yet exported');
   // the export carries them (buildDayExport refuses with no bars; requestsExport is what it calls)
