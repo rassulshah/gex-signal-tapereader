@@ -1,0 +1,2503 @@
+{
+ "corpus": {
+  "sessions": 284,
+  "first": "2025-06-02",
+  "last": "2026-08-21",
+  "file": "/home/claude/gex-signal-tapereader/data/es-1min/ES TestingData.txt"
+ },
+ "definitions": ", written before the first number was read (2026-09-03):\n  trading day d   bars stamped >= 17:00 belong to the NEXT calendar day; RTH is 08:30-15:00 CT.\n  ON session      the bars of d outside RTH (17:00 prev -> 08:29). ONH/ONL = their high/low.\n  PDH/PDL         the previous trading day's RTH high/low (previous session in the corpus).\n  IBH/IBL         the high/low of the first 60 RTH minutes; IB sweeps are only looked for after 09:30.\n  PDC             the previous session's RTH close (both sides: a sweep below it that reclaims -> LOD?,\n                  above it -> HOD?). The \"gap fill\" level.\n  POC/VAH/VAL     the previous session's RTH volume profile: 1-minute volume spread evenly across each\n                  bar's range on a 1-point grid; POC = the busiest price; the value area = the 70% band\n                  grown from the POC one tick at a time, heavier side first (the panel's priorProfile()).\n                  VAL is a low-side level, VAH high-side, POC both.\n  PMH/PML         the pre-market: the ON bars from 07:00 CT to the open. High-side / low-side.\n  PWH/PWL         the previous ISO week's RTH high/low.\n  OR5 / OR15      the opening range: the high/low of the first 5 / 15 RTH minutes; sweeps looked for\n                  after the range completes.\n  LDNH/LDNL       (v15.57) the London range: the ON bars from 02:00 CT to the open.\n  VWAP, VW1/VW2   (v15.57) the session VWAP (typical price x volume, cumulative) and its +-1 / +-2 sigma\n                  bands (volume-weighted sd of price about the VWAP). DYNAMIC: the level is valued at the\n                  sweep bar and frozen for the reclaim; the side is the side price came FROM (a dip below the\n                  VWAP from above is a low-side event, VWAP-; a spike above it from below is VWAP+). Looked\n                  for from bar 5 (VWAP) / bar 30 (bands).\n  DPOC/DVAH/DVAL  (v15.57) TODAY'S developing profile (1-point grid, 70% value area), valued at the sweep\n                  bar; looked for from bar 30.\n  sweep           the first RTH bar whose low prints strictly below the level (high side mirrored).\n  reclaim         the first bar after the sweep whose CLOSE is back above the level, within 30 bars.\n                  No reclaim within 30 bars = ACCEPTANCE (the level broke) - counted, not scored.\n  extremum        the lowest low from the sweep bar to the reclaim bar (the sweep's wick).\n  printed the LOD the extremum equals the session's final low.\n  baseline        the fraction of ALL sessions whose standing low at the reclaim MINUTE is the final\n                  low - the clock alone, matched minute for minute. Reported beside every rate.\n  payoff          points from the extremum to (a) the session close, (b) the session's far extreme.\nBuckets (sweep-bar time): 08:30-09:00 / 09:00-10:00 / 10:00-11:30 / 11:30-15:00.\nEvery cell read is counted in the ledger. Nothing here is pre-registered: it is a FIRST READ, and\na rate that looks good here becomes a register entry to be read again on sessions this file has\nnot seen.",
+ "cells": [
+  {
+   "label": "ONL sweep-reclaim -> printed the LOD",
+   "events": 121,
+   "reclaimed": 113,
+   "accepted": 8,
+   "printed": 33,
+   "rate": 0.2920353982300885,
+   "ci": [
+    0.21614182470769672,
+    0.38160418356333003
+   ],
+   "base": 0.4884987242948608,
+   "fresh": 0.2780514169456163,
+   "lift": -0.1964633260647723,
+   "lift_fresh": 0.013983981284472202,
+   "pay_close_med": 30.0,
+   "pay_far_med": 74.5
+  },
+  {
+   "label": "  ONL \u00b7 08:30-09:00",
+   "events": 37,
+   "reclaimed": 35,
+   "accepted": 2,
+   "printed": 13,
+   "rate": 0.37142857142857144,
+   "ci": [
+    0.23165607368891059,
+    0.5366335951197893
+   ],
+   "base": 0.22334004024144868,
+   "fresh": 0.22124120383677726,
+   "lift": 0.14808853118712276,
+   "lift_fresh": 0.15018736759179419,
+   "pay_close_med": 46.75,
+   "pay_far_med": 77.25
+  },
+  {
+   "label": "  ONL \u00b7 09:00-10:00",
+   "events": 30,
+   "reclaimed": 28,
+   "accepted": 2,
+   "printed": 4,
+   "rate": 0.14285714285714285,
+   "ci": [
+    0.056989129307017855,
+    0.31490173044877334
+   ],
+   "base": 0.4083249496981892,
+   "fresh": 0.2533394951529317,
+   "lift": -0.26546780684104637,
+   "lift_fresh": -0.11048235229578884,
+   "pay_close_med": 25.25,
+   "pay_far_med": 41.75
+  },
+  {
+   "label": "  ONL \u00b7 10:00-11:30",
+   "events": 18,
+   "reclaimed": 17,
+   "accepted": 1,
+   "printed": 3,
+   "rate": 0.17647058823529413,
+   "ci": [
+    0.0619101371254899,
+    0.41029929017375777
+   ],
+   "base": 0.5770505385252692,
+   "fresh": 0.24976931586227766,
+   "lift": -0.40057995028997506,
+   "lift_fresh": -0.07329872762698353,
+   "pay_close_med": 21.5,
+   "pay_far_med": 71.5
+  },
+  {
+   "label": "  ONL \u00b7 11:30-15:00",
+   "events": 36,
+   "reclaimed": 33,
+   "accepted": 3,
+   "printed": 13,
+   "rate": 0.3939393939393939,
+   "ci": [
+    0.24682882231508207,
+    0.5631685719348962
+   ],
+   "base": 0.792136263345142,
+   "fresh": 0.3738419317159581,
+   "lift": -0.39819686940574806,
+   "lift_fresh": 0.020097462223435836,
+   "pay_close_med": 16.75,
+   "pay_far_med": 80.25
+  },
+  {
+   "label": "ONH sweep-reclaim -> printed the HOD",
+   "events": 154,
+   "reclaimed": 140,
+   "accepted": 14,
+   "printed": 36,
+   "rate": 0.2571428571428571,
+   "ci": [
+    0.1919094253195786,
+    0.3353483359956459
+   ],
+   "base": 0.4563380281690137,
+   "fresh": 0.21521722017739958,
+   "lift": -0.19919517102615658,
+   "lift_fresh": 0.041925636965457536,
+   "pay_close_med": 18.25,
+   "pay_far_med": 67.75
+  },
+  {
+   "label": "  ONH \u00b7 08:30-09:00",
+   "events": 47,
+   "reclaimed": 41,
+   "accepted": 6,
+   "printed": 11,
+   "rate": 0.2682926829268293,
+   "ci": [
+    0.15694805281336685,
+    0.41933825276002934
+   ],
+   "base": 0.17176228100309177,
+   "fresh": 0.1699185236955171,
+   "lift": 0.09653040192373752,
+   "lift_fresh": 0.09837415923131218,
+   "pay_close_med": 42.75,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "  ONH \u00b7 09:00-10:00",
+   "events": 25,
+   "reclaimed": 25,
+   "accepted": 0,
+   "printed": 6,
+   "rate": 0.24,
+   "ci": [
+    0.11496157730326725,
+    0.43430059955238565
+   ],
+   "base": 0.3708450704225351,
+   "fresh": 0.20679633672931297,
+   "lift": -0.13084507042253513,
+   "lift_fresh": 0.03320366327068702,
+   "pay_close_med": 33.5,
+   "pay_far_med": 87.0
+  },
+  {
+   "label": "  ONH \u00b7 10:00-11:30",
+   "events": 29,
+   "reclaimed": 27,
+   "accepted": 2,
+   "printed": 6,
+   "rate": 0.2222222222222222,
+   "ci": [
+    0.10607095489408958,
+    0.4075729546307081
+   ],
+   "base": 0.49478351591027636,
+   "fresh": 0.1713535685069339,
+   "lift": -0.27256129368805415,
+   "lift_fresh": 0.050868653715288314,
+   "pay_close_med": 22.25,
+   "pay_far_med": 44.0
+  },
+  {
+   "label": "  ONH \u00b7 11:30-15:00",
+   "events": 53,
+   "reclaimed": 47,
+   "accepted": 6,
+   "printed": 13,
+   "rate": 0.2765957446808511,
+   "ci": [
+    0.16936405991152936,
+    0.41758835700689967
+   ],
+   "base": 0.7279742283488162,
+   "fresh": 0.2844105656468023,
+   "lift": -0.4513784836679651,
+   "lift_fresh": -0.007814820965951208,
+   "pay_close_med": 6.75,
+   "pay_far_med": 56.0
+  },
+  {
+   "label": "PDL sweep-reclaim -> printed the LOD",
+   "events": 124,
+   "reclaimed": 87,
+   "accepted": 37,
+   "printed": 20,
+   "rate": 0.22988505747126436,
+   "ci": [
+    0.15403115692511482,
+    0.32858473711462033
+   ],
+   "base": 0.40824834061842324,
+   "fresh": 0.24445087451273181,
+   "lift": -0.17836328314715888,
+   "lift_fresh": -0.01456581704146745,
+   "pay_close_med": 38.0,
+   "pay_far_med": 84.25
+  },
+  {
+   "label": "  PDL \u00b7 08:30-09:00",
+   "events": 68,
+   "reclaimed": 39,
+   "accepted": 29,
+   "printed": 12,
+   "rate": 0.3076923076923077,
+   "ci": [
+    0.1856575344598306,
+    0.464215486155646
+   ],
+   "base": 0.2075659082701336,
+   "fresh": 0.202054612755839,
+   "lift": 0.1001263994221741,
+   "lift_fresh": 0.10563769493646871,
+   "pay_close_med": 57.75,
+   "pay_far_med": 84.25
+  },
+  {
+   "label": "  PDL \u00b7 09:00-10:00",
+   "events": 25,
+   "reclaimed": 20,
+   "accepted": 5,
+   "printed": 3,
+   "rate": 0.15,
+   "ci": [
+    0.05236779195949584,
+    0.36042329588695743
+   ],
+   "base": 0.4260563380281691,
+   "fresh": 0.25547622169338996,
+   "lift": -0.2760563380281691,
+   "lift_fresh": -0.10547622169338997,
+   "pay_close_med": 14.75,
+   "pay_far_med": 72.0
+  },
+  {
+   "label": "  PDL \u00b7 11:30-15:00",
+   "events": 17,
+   "reclaimed": 15,
+   "accepted": 2,
+   "printed": 1,
+   "rate": 0.06666666666666667,
+   "ci": [
+    0.011866588606194856,
+    0.2981707755242399
+   ],
+   "base": 0.761737089201878,
+   "fresh": 0.3276720948991648,
+   "lift": -0.6950704225352113,
+   "lift_fresh": -0.26100542823249817,
+   "pay_close_med": 83.5,
+   "pay_far_med": 88.25
+  },
+  {
+   "label": "PDH sweep-reclaim -> printed the HOD",
+   "events": 170,
+   "reclaimed": 113,
+   "accepted": 57,
+   "printed": 18,
+   "rate": 0.1592920353982301,
+   "ci": [
+    0.10319965655551687,
+    0.23778848465446312
+   ],
+   "base": 0.3156848310224711,
+   "fresh": 0.17800000385195325,
+   "lift": -0.156392795624241,
+   "lift_fresh": -0.01870796845372316,
+   "pay_close_med": 28.25,
+   "pay_far_med": 60.0
+  },
+  {
+   "label": "  PDH \u00b7 08:30-09:00",
+   "events": 115,
+   "reclaimed": 65,
+   "accepted": 50,
+   "printed": 13,
+   "rate": 0.2,
+   "ci": [
+    0.12077845770945213,
+    0.31270362289297426
+   ],
+   "base": 0.15211267605633802,
+   "fresh": 0.15168802381041332,
+   "lift": 0.04788732394366199,
+   "lift_fresh": 0.048311976189586686,
+   "pay_close_med": 28.25,
+   "pay_far_med": 48.75
+  },
+  {
+   "label": "  PDH \u00b7 09:00-10:00",
+   "events": 18,
+   "reclaimed": 16,
+   "accepted": 2,
+   "printed": 1,
+   "rate": 0.0625,
+   "ci": [
+    0.01111905730833121,
+    0.2832926836802987
+   ],
+   "base": 0.37477992957746475,
+   "fresh": 0.20520681734025062,
+   "lift": -0.31227992957746475,
+   "lift_fresh": -0.14270681734025062,
+   "pay_close_med": 43.5,
+   "pay_far_med": 57.0
+  },
+  {
+   "label": "  PDH \u00b7 11:30-15:00",
+   "events": 23,
+   "reclaimed": 20,
+   "accepted": 3,
+   "printed": 2,
+   "rate": 0.1,
+   "ci": [
+    0.027865893984153206,
+    0.30103820641179335
+   ],
+   "base": 0.683443238938934,
+   "fresh": 0.25027200257563237,
+   "lift": -0.583443238938934,
+   "lift_fresh": -0.15027200257563236,
+   "pay_close_med": 25.75,
+   "pay_far_med": 157.0
+  },
+  {
+   "label": "IBL sweep-reclaim -> printed the LOD",
+   "events": 166,
+   "reclaimed": 143,
+   "accepted": 23,
+   "printed": 29,
+   "rate": 0.20279720279720279,
+   "ci": [
+    0.14507437781527893,
+    0.27607058383046723
+   ],
+   "base": 0.5429166090963732,
+   "fresh": 0.2596987498196374,
+   "lift": -0.34011940629917037,
+   "lift_fresh": -0.056901547022434634,
+   "pay_close_med": 31.25,
+   "pay_far_med": 60.0
+  },
+  {
+   "label": "  IBL \u00b7 09:00-10:00",
+   "events": 88,
+   "reclaimed": 75,
+   "accepted": 13,
+   "printed": 13,
+   "rate": 0.17333333333333334,
+   "ci": [
+    0.10419048023286545,
+    0.2743102097582053
+   ],
+   "base": 0.4512206572769953,
+   "fresh": 0.23305520698009355,
+   "lift": -0.27788732394366195,
+   "lift_fresh": -0.05972187364676021,
+   "pay_close_med": 35.75,
+   "pay_far_med": 68.0
+  },
+  {
+   "label": "  IBL \u00b7 10:00-11:30",
+   "events": 47,
+   "reclaimed": 42,
+   "accepted": 5,
+   "printed": 7,
+   "rate": 0.16666666666666666,
+   "ci": [
+    0.08315811295836502,
+    0.30604296204774295
+   ],
+   "base": 0.56715291750503,
+   "fresh": 0.2519698886869246,
+   "lift": -0.4004862508383634,
+   "lift_fresh": -0.08530322202025795,
+   "pay_close_med": 40.0,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "  IBL \u00b7 11:30-15:00",
+   "events": 31,
+   "reclaimed": 26,
+   "accepted": 5,
+   "printed": 9,
+   "rate": 0.34615384615384615,
+   "ci": [
+    0.19412014972852126,
+    0.5377977099036699
+   ],
+   "base": 0.7682732026844403,
+   "fresh": 0.3490402067634731,
+   "lift": -0.4221193565305942,
+   "lift_fresh": -0.0028863606096269367,
+   "pay_close_med": 16.75,
+   "pay_far_med": 47.5
+  },
+  {
+   "label": "IBH sweep-reclaim -> printed the HOD",
+   "events": 184,
+   "reclaimed": 148,
+   "accepted": 36,
+   "printed": 24,
+   "rate": 0.16216216216216217,
+   "ci": [
+    0.11146031697656603,
+    0.22995863540538994
+   ],
+   "base": 0.46171964217738864,
+   "fresh": 0.19159309940603614,
+   "lift": -0.2995574800152265,
+   "lift_fresh": -0.029430937243873967,
+   "pay_close_med": 28.25,
+   "pay_far_med": 50.25
+  },
+  {
+   "label": "  IBH \u00b7 09:00-10:00",
+   "events": 102,
+   "reclaimed": 81,
+   "accepted": 21,
+   "printed": 14,
+   "rate": 0.1728395061728395,
+   "ci": [
+    0.10584307626279289,
+    0.2694633771751432
+   ],
+   "base": 0.3888888888888891,
+   "fresh": 0.19648739724307807,
+   "lift": -0.21604938271604962,
+   "lift_fresh": -0.02364789107023857,
+   "pay_close_med": 38.25,
+   "pay_far_med": 49.5
+  },
+  {
+   "label": "  IBH \u00b7 10:00-11:30",
+   "events": 54,
+   "reclaimed": 45,
+   "accepted": 9,
+   "printed": 5,
+   "rate": 0.1111111111111111,
+   "ci": [
+    0.04840400437825558,
+    0.23499375490890945
+   ],
+   "base": 0.49123630672926444,
+   "fresh": 0.17282450365441332,
+   "lift": -0.38012519561815333,
+   "lift_fresh": -0.061713392543302215,
+   "pay_close_med": 18.25,
+   "pay_far_med": 50.75
+  },
+  {
+   "label": "  IBH \u00b7 11:30-15:00",
+   "events": 28,
+   "reclaimed": 22,
+   "accepted": 6,
+   "printed": 5,
+   "rate": 0.22727272727272727,
+   "ci": [
+    0.10122890794820358,
+    0.4344035606295935
+   ],
+   "base": 0.6694942381562101,
+   "fresh": 0.21196349413433843,
+   "lift": -0.4422215108834828,
+   "lift_fresh": 0.015309233138388834,
+   "pay_close_med": 20.75,
+   "pay_far_med": 50.25
+  },
+  {
+   "label": "PDC- sweep-reclaim -> printed the LOD",
+   "events": 215,
+   "reclaimed": 120,
+   "accepted": 95,
+   "printed": 36,
+   "rate": 0.3,
+   "ci": [
+    0.22525501338672319,
+    0.38715309503564865
+   ],
+   "base": 0.3076877934272301,
+   "fresh": 0.21424430510944967,
+   "lift": -0.0076877934272301385,
+   "lift_fresh": 0.08575569489055032,
+   "pay_close_med": 40.0,
+   "pay_far_med": 49.75
+  },
+  {
+   "label": "  PDC- \u00b7 08:30-09:00",
+   "events": 164,
+   "reclaimed": 77,
+   "accepted": 87,
+   "printed": 21,
+   "rate": 0.2727272727272727,
+   "ci": [
+    0.1858435554011884,
+    0.3812110303566392
+   ],
+   "base": 0.19283885128955547,
+   "fresh": 0.18942875418157681,
+   "lift": 0.07988842143771724,
+   "lift_fresh": 0.0832985185456959,
+   "pay_close_med": 41.0,
+   "pay_far_med": 64.25
+  },
+  {
+   "label": "  PDC- \u00b7 09:00-10:00",
+   "events": 31,
+   "reclaimed": 25,
+   "accepted": 6,
+   "printed": 8,
+   "rate": 0.32,
+   "ci": [
+    0.17204987516891143,
+    0.5159008626542329
+   ],
+   "base": 0.41112676056338027,
+   "fresh": 0.261159921778829,
+   "lift": -0.09112676056338026,
+   "lift_fresh": 0.05884007822117099,
+   "pay_close_med": 49.0,
+   "pay_far_med": 56.5
+  },
+  {
+   "label": "PDC+ sweep-reclaim -> printed the HOD",
+   "events": 240,
+   "reclaimed": 105,
+   "accepted": 135,
+   "printed": 20,
+   "rate": 0.19047619047619047,
+   "ci": [
+    0.12682403782859736,
+    0.27597783204468634
+   ],
+   "base": 0.2236418511066398,
+   "fresh": 0.17052203747425212,
+   "lift": -0.033165660630449345,
+   "lift_fresh": 0.01995415300193834,
+   "pay_close_med": 31.75,
+   "pay_far_med": 72.5
+  },
+  {
+   "label": "  PDC+ \u00b7 08:30-09:00",
+   "events": 204,
+   "reclaimed": 76,
+   "accepted": 128,
+   "printed": 15,
+   "rate": 0.19736842105263158,
+   "ci": [
+    0.12341879212336243,
+    0.30044044917440715
+   ],
+   "base": 0.15256671608598965,
+   "fresh": 0.15238512137556132,
+   "lift": 0.04480170496664193,
+   "lift_fresh": 0.044983299677070265,
+   "pay_close_med": 31.75,
+   "pay_far_med": 51.75
+  },
+  {
+   "label": "  PDC+ \u00b7 09:00-10:00",
+   "events": 22,
+   "reclaimed": 20,
+   "accepted": 2,
+   "printed": 4,
+   "rate": 0.2,
+   "ci": [
+    0.0806563532712,
+    0.41602172202575993
+   ],
+   "base": 0.33749999999999997,
+   "fresh": 0.22336156345287134,
+   "lift": -0.13749999999999996,
+   "lift_fresh": -0.023361563452871326,
+   "pay_close_med": 23.5,
+   "pay_far_med": 100.5
+  },
+  {
+   "label": "VAL sweep-reclaim -> printed the LOD",
+   "events": 172,
+   "reclaimed": 112,
+   "accepted": 60,
+   "printed": 31,
+   "rate": 0.2767857142857143,
+   "ci": [
+    0.20237659760682053,
+    0.36599952979473477
+   ],
+   "base": 0.37691775653923554,
+   "fresh": 0.2373716727050359,
+   "lift": -0.10013204225352124,
+   "lift_fresh": 0.039414041580678405,
+   "pay_close_med": 38.0,
+   "pay_far_med": 56.0
+  },
+  {
+   "label": "  VAL \u00b7 08:30-09:00",
+   "events": 112,
+   "reclaimed": 58,
+   "accepted": 54,
+   "printed": 17,
+   "rate": 0.29310344827586204,
+   "ci": [
+    0.1917802782864472,
+    0.42013144456677776
+   ],
+   "base": 0.19973288003885384,
+   "fresh": 0.19912364022401113,
+   "lift": 0.0933705682370082,
+   "lift_fresh": 0.09397980805185091,
+   "pay_close_med": 37.75,
+   "pay_far_med": 56.0
+  },
+  {
+   "label": "  VAL \u00b7 09:00-10:00",
+   "events": 26,
+   "reclaimed": 22,
+   "accepted": 4,
+   "printed": 5,
+   "rate": 0.22727272727272727,
+   "ci": [
+    0.10122890794820358,
+    0.4344035606295935
+   ],
+   "base": 0.4108514724711908,
+   "fresh": 0.2561331271884948,
+   "lift": -0.18357874519846354,
+   "lift_fresh": -0.028860399915767526,
+   "pay_close_med": 68.25,
+   "pay_far_med": 74.5
+  },
+  {
+   "label": "  VAL \u00b7 11:30-15:00",
+   "events": 20,
+   "reclaimed": 19,
+   "accepted": 1,
+   "printed": 7,
+   "rate": 0.3684210526315789,
+   "ci": [
+    0.19149272376273843,
+    0.5896084250184328
+   ],
+   "base": 0.7574128984432914,
+   "fresh": 0.32386836820219306,
+   "lift": -0.3889918458117125,
+   "lift_fresh": 0.04455268442938587,
+   "pay_close_med": 39.75,
+   "pay_far_med": 69.75
+  },
+  {
+   "label": "VAH sweep-reclaim -> printed the HOD",
+   "events": 206,
+   "reclaimed": 118,
+   "accepted": 88,
+   "printed": 23,
+   "rate": 0.19491525423728814,
+   "ci": [
+    0.13353979782234554,
+    0.27552902596197765
+   ],
+   "base": 0.27184292193841003,
+   "fresh": 0.17310746101717334,
+   "lift": -0.07692766770112189,
+   "lift_fresh": 0.021807793220114807,
+   "pay_close_med": 31.75,
+   "pay_far_med": 57.0
+  },
+  {
+   "label": "  VAH \u00b7 08:30-09:00",
+   "events": 161,
+   "reclaimed": 78,
+   "accepted": 83,
+   "printed": 17,
+   "rate": 0.21794871794871795,
+   "ci": [
+    0.14076696665343852,
+    0.32160913547555214
+   ],
+   "base": 0.15411700975081252,
+   "fresh": 0.15376313287920856,
+   "lift": 0.06383170819790543,
+   "lift_fresh": 0.06418558506950939,
+   "pay_close_med": 31.75,
+   "pay_far_med": 53.75
+  },
+  {
+   "label": "  VAH \u00b7 09:00-10:00",
+   "events": 23,
+   "reclaimed": 20,
+   "accepted": 3,
+   "printed": 6,
+   "rate": 0.3,
+   "ci": [
+    0.14547527396899385,
+    0.5189767762289793
+   ],
+   "base": 0.375,
+   "fresh": 0.20328866015309321,
+   "lift": -0.07500000000000001,
+   "lift_fresh": 0.09671133984690677,
+   "pay_close_med": 43.5,
+   "pay_far_med": 118.5
+  },
+  {
+   "label": "POC- sweep-reclaim -> printed the LOD",
+   "events": 207,
+   "reclaimed": 108,
+   "accepted": 99,
+   "printed": 29,
+   "rate": 0.26851851851851855,
+   "ci": [
+    0.19394781819614243,
+    0.3589913386113424
+   ],
+   "base": 0.32482198517633765,
+   "fresh": 0.23211550224057773,
+   "lift": -0.0563034666578191,
+   "lift_fresh": 0.03640301627794082,
+   "pay_close_med": 45.75,
+   "pay_far_med": 51.5
+  },
+  {
+   "label": "  POC- \u00b7 08:30-09:00",
+   "events": 162,
+   "reclaimed": 66,
+   "accepted": 96,
+   "printed": 17,
+   "rate": 0.25757575757575757,
+   "ci": [
+    0.16748707345896682,
+    0.37433327429938923
+   ],
+   "base": 0.20747972684592408,
+   "fresh": 0.20493894955882047,
+   "lift": 0.050096030729833485,
+   "lift_fresh": 0.0526368080169371,
+   "pay_close_med": 49.0,
+   "pay_far_med": 71.25
+  },
+  {
+   "label": "  POC- \u00b7 09:00-10:00",
+   "events": 27,
+   "reclaimed": 24,
+   "accepted": 3,
+   "printed": 8,
+   "rate": 0.3333333333333333,
+   "ci": [
+    0.17971978688379642,
+    0.5329404050591954
+   ],
+   "base": 0.4052230046948357,
+   "fresh": 0.26236934924160066,
+   "lift": -0.07188967136150237,
+   "lift_fresh": 0.07096398409173266,
+   "pay_close_med": 46.0,
+   "pay_far_med": 53.75
+  },
+  {
+   "label": "POC+ sweep-reclaim -> printed the HOD",
+   "events": 228,
+   "reclaimed": 97,
+   "accepted": 131,
+   "printed": 25,
+   "rate": 0.25773195876288657,
+   "ci": [
+    0.18109470708719705,
+    0.35282780108403383
+   ],
+   "base": 0.23359227530129223,
+   "fresh": 0.17269919710792123,
+   "lift": 0.02413968346159434,
+   "lift_fresh": 0.08503276165496534,
+   "pay_close_med": 30.5,
+   "pay_far_med": 63.0
+  },
+  {
+   "label": "  POC+ \u00b7 08:30-09:00",
+   "events": 199,
+   "reclaimed": 72,
+   "accepted": 127,
+   "printed": 21,
+   "rate": 0.2916666666666667,
+   "ci": [
+    0.19937911717246715,
+    0.4050596077489481
+   ],
+   "base": 0.1526310641627543,
+   "fresh": 0.15243938085730216,
+   "lift": 0.1390356025039124,
+   "lift_fresh": 0.13922728580936453,
+   "pay_close_med": 31.75,
+   "pay_far_med": 60.0
+  },
+  {
+   "label": "PML sweep-reclaim -> printed the LOD",
+   "events": 217,
+   "reclaimed": 189,
+   "accepted": 28,
+   "printed": 40,
+   "rate": 0.21164021164021163,
+   "ci": [
+    0.15944680101546374,
+    0.27532246038871455
+   ],
+   "base": 0.27951039570757885,
+   "fresh": 0.21300720966180334,
+   "lift": -0.06787018406736722,
+   "lift_fresh": -0.0013669980215917088,
+   "pay_close_med": 37.5,
+   "pay_far_med": 64.75
+  },
+  {
+   "label": "  PML \u00b7 08:30-09:00",
+   "events": 151,
+   "reclaimed": 135,
+   "accepted": 16,
+   "printed": 30,
+   "rate": 0.2222222222222222,
+   "ci": [
+    0.1603281725224173,
+    0.2994879056558809
+   ],
+   "base": 0.1894366197183099,
+   "fresh": 0.18768922584077546,
+   "lift": 0.0327856025039123,
+   "lift_fresh": 0.034532996381446746,
+   "pay_close_med": 37.75,
+   "pay_far_med": 73.25
+  },
+  {
+   "label": "  PML \u00b7 09:00-10:00",
+   "events": 42,
+   "reclaimed": 34,
+   "accepted": 8,
+   "printed": 5,
+   "rate": 0.14705882352941177,
+   "ci": [
+    0.06449346382626417,
+    0.30128388174051957
+   ],
+   "base": 0.40099420049710016,
+   "fresh": 0.2588435950551694,
+   "lift": -0.2539353769676884,
+   "lift_fresh": -0.11178477152575764,
+   "pay_close_med": 39.0,
+   "pay_far_med": 46.5
+  },
+  {
+   "label": "PMH sweep-reclaim -> printed the HOD",
+   "events": 235,
+   "reclaimed": 197,
+   "accepted": 38,
+   "printed": 30,
+   "rate": 0.15228426395939088,
+   "ci": [
+    0.10880060721400828,
+    0.20906979413710622
+   ],
+   "base": 0.23396725530850054,
+   "fresh": 0.16530490559009073,
+   "lift": -0.08168299134910967,
+   "lift_fresh": -0.013020641630699853,
+   "pay_close_med": 34.5,
+   "pay_far_med": 67.75
+  },
+  {
+   "label": "  PMH \u00b7 08:30-09:00",
+   "events": 169,
+   "reclaimed": 143,
+   "accepted": 26,
+   "printed": 20,
+   "rate": 0.13986013986013987,
+   "ci": [
+    0.09239624657944673,
+    0.20616764812069277
+   ],
+   "base": 0.15392002363833338,
+   "fresh": 0.15188650808072668,
+   "lift": -0.014059883778193505,
+   "lift_fresh": -0.012026368220586808,
+   "pay_close_med": 48.75,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "  PMH \u00b7 09:00-10:00",
+   "events": 38,
+   "reclaimed": 31,
+   "accepted": 7,
+   "printed": 4,
+   "rate": 0.12903225806451613,
+   "ci": [
+    0.05134201164644764,
+    0.28852756954385356
+   ],
+   "base": 0.35052248977737405,
+   "fresh": 0.21474426817851797,
+   "lift": -0.22149023171285792,
+   "lift_fresh": -0.08571201011400184,
+   "pay_close_med": 38.25,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "PWL sweep-reclaim -> printed the LOD",
+   "events": 58,
+   "reclaimed": 36,
+   "accepted": 22,
+   "printed": 9,
+   "rate": 0.25,
+   "ci": [
+    0.13750323839225387,
+    0.41070767683203424
+   ],
+   "base": 0.41763784513125074,
+   "fresh": 0.2721582264375329,
+   "lift": -0.16763784513125074,
+   "lift_fresh": -0.022158226437532902,
+   "pay_close_med": 55.25,
+   "pay_far_med": 86.0
+  },
+  {
+   "label": "  PWL \u00b7 08:30-09:00",
+   "events": 39,
+   "reclaimed": 18,
+   "accepted": 21,
+   "printed": 4,
+   "rate": 0.2222222222222222,
+   "ci": [
+    0.09000781913382,
+    0.4521502645230549
+   ],
+   "base": 0.21733176838810642,
+   "fresh": 0.21209146659075578,
+   "lift": 0.004890453834115793,
+   "lift_fresh": 0.010130755631466426,
+   "pay_close_med": 82.75,
+   "pay_far_med": 106.75
+  },
+  {
+   "label": "PWH sweep-reclaim -> printed the HOD",
+   "events": 129,
+   "reclaimed": 55,
+   "accepted": 74,
+   "printed": 12,
+   "rate": 0.21818181818181817,
+   "ci": [
+    0.12945897827653213,
+    0.3437028664047817
+   ],
+   "base": 0.35992046076652656,
+   "fresh": 0.1941678084976288,
+   "lift": -0.1417386425847084,
+   "lift_fresh": 0.024014009684189375,
+   "pay_close_med": 31.75,
+   "pay_far_med": 52.25
+  },
+  {
+   "label": "  PWH \u00b7 08:30-09:00",
+   "events": 101,
+   "reclaimed": 29,
+   "accepted": 72,
+   "printed": 9,
+   "rate": 0.3103448275862069,
+   "ci": [
+    0.17275424489768068,
+    0.49230470472718546
+   ],
+   "base": 0.15468674113647407,
+   "fresh": 0.15468674113647407,
+   "lift": 0.15565808644973284,
+   "lift_fresh": 0.15565808644973284,
+   "pay_close_med": 34.0,
+   "pay_far_med": 52.25
+  },
+  {
+   "label": "  PWH \u00b7 11:30-15:00",
+   "events": 16,
+   "reclaimed": 15,
+   "accepted": 1,
+   "printed": 2,
+   "rate": 0.13333333333333333,
+   "ci": [
+    0.0373604698913593,
+    0.3788249920651624
+   ],
+   "base": 0.6990510791486256,
+   "fresh": 0.27713123810118706,
+   "lift": -0.5657177458152923,
+   "lift_fresh": -0.14379790476785373,
+   "pay_close_med": 12.25,
+   "pay_far_med": 118.0
+  },
+  {
+   "label": "OR5L sweep-reclaim -> printed the LOD",
+   "events": 246,
+   "reclaimed": 212,
+   "accepted": 34,
+   "printed": 42,
+   "rate": 0.19811320754716982,
+   "ci": [
+    0.1500411918346862,
+    0.25693132875448665
+   ],
+   "base": 0.2727034501830641,
+   "fresh": 0.23390141506812953,
+   "lift": -0.07459024263589425,
+   "lift_fresh": -0.03578820752095971,
+   "pay_close_med": 41.25,
+   "pay_far_med": 61.25
+  },
+  {
+   "label": "  OR5L \u00b7 08:30-09:00",
+   "events": 190,
+   "reclaimed": 168,
+   "accepted": 22,
+   "printed": 34,
+   "rate": 0.20238095238095238,
+   "ci": [
+    0.1485947022039544,
+    0.26947403086184574
+   ],
+   "base": 0.2251006036217305,
+   "fresh": 0.22244280137792197,
+   "lift": -0.022719651240778127,
+   "lift_fresh": -0.020061848996969583,
+   "pay_close_med": 37.5,
+   "pay_far_med": 61.25
+  },
+  {
+   "label": "  OR5L \u00b7 09:00-10:00",
+   "events": 41,
+   "reclaimed": 35,
+   "accepted": 6,
+   "printed": 7,
+   "rate": 0.2,
+   "ci": [
+    0.10042319445900802,
+    0.35891936609462516
+   ],
+   "base": 0.39678068410462775,
+   "fresh": 0.26225419708296105,
+   "lift": -0.19678068410462773,
+   "lift_fresh": -0.06225419708296104,
+   "pay_close_med": 49.0,
+   "pay_far_med": 61.75
+  },
+  {
+   "label": "OR5H sweep-reclaim -> printed the HOD",
+   "events": 251,
+   "reclaimed": 215,
+   "accepted": 36,
+   "printed": 22,
+   "rate": 0.10232558139534884,
+   "ci": [
+    0.06854889119254981,
+    0.15006402335386182
+   ],
+   "base": 0.2230429086144772,
+   "fresh": 0.1771197003002879,
+   "lift": -0.12071732721912837,
+   "lift_fresh": -0.07479411890493906,
+   "pay_close_med": 47.25,
+   "pay_far_med": 67.75
+  },
+  {
+   "label": "  OR5H \u00b7 08:30-09:00",
+   "events": 200,
+   "reclaimed": 171,
+   "accepted": 29,
+   "printed": 18,
+   "rate": 0.10526315789473684,
+   "ci": [
+    0.06762647375458761,
+    0.16024606916426007
+   ],
+   "base": 0.1715262334239353,
+   "fresh": 0.16862255706216225,
+   "lift": -0.06626307552919847,
+   "lift_fresh": -0.06335939916742542,
+   "pay_close_med": 42.75,
+   "pay_far_med": 67.75
+  },
+  {
+   "label": "  OR5H \u00b7 09:00-10:00",
+   "events": 33,
+   "reclaimed": 29,
+   "accepted": 4,
+   "printed": 4,
+   "rate": 0.13793103448275862,
+   "ci": [
+    0.05497350852047822,
+    0.30559357712699325
+   ],
+   "base": 0.33948518698397284,
+   "fresh": 0.21645039044373393,
+   "lift": -0.20155415250121422,
+   "lift_fresh": -0.07851935596097531,
+   "pay_close_med": 60.75,
+   "pay_far_med": 73.0
+  },
+  {
+   "label": "OR15L sweep-reclaim -> printed the LOD",
+   "events": 219,
+   "reclaimed": 186,
+   "accepted": 33,
+   "printed": 40,
+   "rate": 0.21505376344086022,
+   "ci": [
+    0.16209026292148496,
+    0.27954950412641183
+   ],
+   "base": 0.3692815638463936,
+   "fresh": 0.27847975457760926,
+   "lift": -0.15422780040553338,
+   "lift_fresh": -0.06342599113674904,
+   "pay_close_med": 43.25,
+   "pay_far_med": 55.5
+  },
+  {
+   "label": "  OR15L \u00b7 08:30-09:00",
+   "events": 128,
+   "reclaimed": 107,
+   "accepted": 21,
+   "printed": 22,
+   "rate": 0.205607476635514,
+   "ci": [
+    0.13988321742546095,
+    0.2917381232985993
+   ],
+   "base": 0.2822495721995526,
+   "fresh": 0.27821995843647307,
+   "lift": -0.07664209556403859,
+   "lift_fresh": -0.07261248180095906,
+   "pay_close_med": 40.25,
+   "pay_far_med": 55.5
+  },
+  {
+   "label": "  OR15L \u00b7 09:00-10:00",
+   "events": 60,
+   "reclaimed": 54,
+   "accepted": 6,
+   "printed": 12,
+   "rate": 0.2222222222222222,
+   "ci": [
+    0.13195287989578958,
+    0.34938926831587813
+   ],
+   "base": 0.3994522691705789,
+   "fresh": 0.2629338692744693,
+   "lift": -0.1772300469483567,
+   "lift_fresh": -0.04071164705224711,
+   "pay_close_med": 61.0,
+   "pay_far_med": 65.5
+  },
+  {
+   "label": "OR15H sweep-reclaim -> printed the HOD",
+   "events": 234,
+   "reclaimed": 201,
+   "accepted": 33,
+   "printed": 28,
+   "rate": 0.13930348258706468,
+   "ci": [
+    0.09816885894812451,
+    0.19396711343248574
+   ],
+   "base": 0.29426809613902355,
+   "fresh": 0.2141533207388357,
+   "lift": -0.15496461355195887,
+   "lift_fresh": -0.07484983815177101,
+   "pay_close_med": 43.5,
+   "pay_far_med": 63.5
+  },
+  {
+   "label": "  OR15H \u00b7 08:30-09:00",
+   "events": 146,
+   "reclaimed": 122,
+   "accepted": 24,
+   "printed": 20,
+   "rate": 0.16393442622950818,
+   "ci": [
+    0.10870072431592571,
+    0.2396864544866324
+   ],
+   "base": 0.2231586238743938,
+   "fresh": 0.21669796713974127,
+   "lift": -0.05922419764488562,
+   "lift_fresh": -0.05276354091023308,
+   "pay_close_med": 46.5,
+   "pay_far_med": 80.75
+  },
+  {
+   "label": "  OR15H \u00b7 09:00-10:00",
+   "events": 62,
+   "reclaimed": 57,
+   "accepted": 5,
+   "printed": 6,
+   "rate": 0.10526315789473684,
+   "ci": [
+    0.04914398953912691,
+    0.21123049107939723
+   ],
+   "base": 0.3356807511737088,
+   "fresh": 0.21847083154225924,
+   "lift": -0.230417593278972,
+   "lift_fresh": -0.1132076736475224,
+   "pay_close_med": 47.25,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "LDNL sweep-reclaim -> printed the LOD",
+   "events": 178,
+   "reclaimed": 163,
+   "accepted": 15,
+   "printed": 34,
+   "rate": 0.2085889570552147,
+   "ci": [
+    0.15328227961519503,
+    0.2773153650969151
+   ],
+   "base": 0.34401192430657573,
+   "fresh": 0.2374688963175853,
+   "lift": -0.13542296725136102,
+   "lift_fresh": -0.02887993926237059,
+   "pay_close_med": 36.25,
+   "pay_far_med": 64.75
+  },
+  {
+   "label": "  LDNL \u00b7 08:30-09:00",
+   "events": 104,
+   "reclaimed": 97,
+   "accepted": 7,
+   "printed": 21,
+   "rate": 0.21649484536082475,
+   "ci": [
+    0.14618670657065763,
+    0.3084034625658892
+   ],
+   "base": 0.2142079279802527,
+   "fresh": 0.207122099409671,
+   "lift": 0.0022869173805720455,
+   "lift_fresh": 0.009372745951153755,
+   "pay_close_med": 36.25,
+   "pay_far_med": 73.25
+  },
+  {
+   "label": "  LDNL \u00b7 09:00-10:00",
+   "events": 36,
+   "reclaimed": 31,
+   "accepted": 5,
+   "printed": 5,
+   "rate": 0.16129032258064516,
+   "ci": [
+    0.07092519905439934,
+    0.3263470272497887
+   ],
+   "base": 0.3942526124488868,
+   "fresh": 0.2600294913681227,
+   "lift": -0.23296228986824166,
+   "lift_fresh": -0.09873916878747754,
+   "pay_close_med": 49.0,
+   "pay_far_med": 56.5
+  },
+  {
+   "label": "  LDNL \u00b7 10:00-11:30",
+   "events": 18,
+   "reclaimed": 17,
+   "accepted": 1,
+   "printed": 1,
+   "rate": 0.058823529411764705,
+   "ci": [
+    0.01046013064516424,
+    0.269825452035628
+   ],
+   "base": 0.563380281690141,
+   "fresh": 0.25065049655847504,
+   "lift": -0.5045567522783763,
+   "lift_fresh": -0.19182696714671033,
+   "pay_close_med": 31.5,
+   "pay_far_med": 71.5
+  },
+  {
+   "label": "  LDNL \u00b7 11:30-15:00",
+   "events": 20,
+   "reclaimed": 18,
+   "accepted": 2,
+   "printed": 7,
+   "rate": 0.3888888888888889,
+   "ci": [
+    0.20304991926931162,
+    0.6138133141934384
+   ],
+   "base": 0.7498043818466353,
+   "fresh": 0.3497007657290252,
+   "lift": -0.36091549295774644,
+   "lift_fresh": 0.0391881231598637,
+   "pay_close_med": 16.5,
+   "pay_far_med": 46.0
+  },
+  {
+   "label": "LDNH sweep-reclaim -> printed the HOD",
+   "events": 203,
+   "reclaimed": 170,
+   "accepted": 33,
+   "printed": 27,
+   "rate": 0.1588235294117647,
+   "ci": [
+    0.11150729412985383,
+    0.2212185896632083
+   ],
+   "base": 0.2702347320254932,
+   "fresh": 0.17859428674356279,
+   "lift": -0.1114112026137285,
+   "lift_fresh": -0.01977075733179809,
+   "pay_close_med": 33.25,
+   "pay_far_med": 67.75
+  },
+  {
+   "label": "  LDNH \u00b7 08:30-09:00",
+   "events": 126,
+   "reclaimed": 106,
+   "accepted": 20,
+   "printed": 15,
+   "rate": 0.14150943396226415,
+   "ci": [
+    0.0876695987836644,
+    0.2204249664812261
+   ],
+   "base": 0.160742758437417,
+   "fresh": 0.15853838767305878,
+   "lift": -0.019233324475152858,
+   "lift_fresh": -0.01702895371079463,
+   "pay_close_med": 42.75,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "  LDNH \u00b7 09:00-10:00",
+   "events": 42,
+   "reclaimed": 35,
+   "accepted": 7,
+   "printed": 4,
+   "rate": 0.11428571428571428,
+   "ci": [
+    0.0453510585448975,
+    0.2595179478812023
+   ],
+   "base": 0.34134808853118725,
+   "fresh": 0.21877843251456197,
+   "lift": -0.227062374245473,
+   "lift_fresh": -0.10449271822884769,
+   "pay_close_med": 38.25,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "  LDNH \u00b7 11:30-15:00",
+   "events": 20,
+   "reclaimed": 16,
+   "accepted": 4,
+   "printed": 5,
+   "rate": 0.3125,
+   "ci": [
+    0.14164435051961052,
+    0.5559606813326594
+   ],
+   "base": 0.6630574080525556,
+   "fresh": 0.22572238581358828,
+   "lift": -0.35055740805255564,
+   "lift_fresh": 0.08677761418641172,
+   "pay_close_med": 18.25,
+   "pay_far_med": 56.0
+  },
+  {
+   "label": "VWAP- sweep-reclaim -> printed the LOD",
+   "events": 144,
+   "reclaimed": 126,
+   "accepted": 18,
+   "printed": 9,
+   "rate": 0.07142857142857142,
+   "ci": [
+    0.0380307121123797,
+    0.1301865618583662
+   ],
+   "base": 0.22328414934048738,
+   "fresh": 0.212912384669557,
+   "lift": -0.15185557791191595,
+   "lift_fresh": -0.14148381324098558,
+   "pay_close_med": 35.25,
+   "pay_far_med": 50.0
+  },
+  {
+   "label": "  VWAP- \u00b7 08:30-09:00",
+   "events": 134,
+   "reclaimed": 119,
+   "accepted": 15,
+   "printed": 9,
+   "rate": 0.07563025210084033,
+   "ci": [
+    0.040296784434261525,
+    0.13750617482383995
+   ],
+   "base": 0.21147473073736542,
+   "fresh": 0.2100732569366728,
+   "lift": -0.1358444786365251,
+   "lift_fresh": -0.1344430048358325,
+   "pay_close_med": 35.25,
+   "pay_far_med": 50.0
+  },
+  {
+   "label": "VWAP+ sweep-reclaim -> printed the HOD",
+   "events": 136,
+   "reclaimed": 124,
+   "accepted": 12,
+   "printed": 6,
+   "rate": 0.04838709677419355,
+   "ci": [
+    0.022362105662260094,
+    0.1015537401969907
+   ],
+   "base": 0.18289981826442525,
+   "fresh": 0.1624818588761221,
+   "lift": -0.1345127214902317,
+   "lift_fresh": -0.11409476210192855,
+   "pay_close_med": 54.25,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "  VWAP+ \u00b7 08:30-09:00",
+   "events": 125,
+   "reclaimed": 113,
+   "accepted": 12,
+   "printed": 6,
+   "rate": 0.05309734513274336,
+   "ci": [
+    0.024559255637348558,
+    0.11102259192379405
+   ],
+   "base": 0.16003988532967733,
+   "fresh": 0.15949166563552666,
+   "lift": -0.10694254019693397,
+   "lift_fresh": -0.1063943205027833,
+   "pay_close_med": 54.25,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "VW1L sweep-reclaim -> printed the LOD",
+   "events": 243,
+   "reclaimed": 207,
+   "accepted": 36,
+   "printed": 16,
+   "rate": 0.07729468599033816,
+   "ci": [
+    0.04813467549874949,
+    0.12185834295681143
+   ],
+   "base": 0.41215894400217756,
+   "fresh": 0.2779235721986536,
+   "lift": -0.3348642580118394,
+   "lift_fresh": -0.20062888620831543,
+   "pay_close_med": 45.5,
+   "pay_far_med": 56.5
+  },
+  {
+   "label": "  VW1L \u00b7 09:00-10:00",
+   "events": 209,
+   "reclaimed": 176,
+   "accepted": 33,
+   "printed": 15,
+   "rate": 0.08522727272727272,
+   "ci": [
+    0.052327443232824546,
+    0.13584703920060573
+   ],
+   "base": 0.374659891165173,
+   "fresh": 0.2782052626948855,
+   "lift": -0.2894326184379003,
+   "lift_fresh": -0.19297798996761278,
+   "pay_close_med": 45.5,
+   "pay_far_med": 56.5
+  },
+  {
+   "label": "  VW1L \u00b7 10:00-11:30",
+   "events": 23,
+   "reclaimed": 22,
+   "accepted": 1,
+   "printed": 1,
+   "rate": 0.045454545454545456,
+   "ci": [
+    0.008069219301147859,
+    0.21798489499518053
+   ],
+   "base": 0.5702624839948784,
+   "fresh": 0.25461577185657036,
+   "lift": -0.524807938540333,
+   "lift_fresh": -0.2091612264020249,
+   "pay_close_med": 40.0,
+   "pay_far_med": 44.5
+  },
+  {
+   "label": "VW1H sweep-reclaim -> printed the HOD",
+   "events": 256,
+   "reclaimed": 200,
+   "accepted": 56,
+   "printed": 17,
+   "rate": 0.085,
+   "ci": [
+    0.05374529946985246,
+    0.13189688544235392
+   ],
+   "base": 0.3422359154929572,
+   "fresh": 0.23080496203555867,
+   "lift": -0.25723591549295716,
+   "lift_fresh": -0.14580496203555865,
+   "pay_close_med": 38.25,
+   "pay_far_med": 63.0
+  },
+  {
+   "label": "  VW1H \u00b7 09:00-10:00",
+   "events": 226,
+   "reclaimed": 174,
+   "accepted": 52,
+   "printed": 16,
+   "rate": 0.09195402298850575,
+   "ci": [
+    0.057393641975025125,
+    0.14414300636821964
+   ],
+   "base": 0.3101019912578918,
+   "fresh": 0.23439399091210059,
+   "lift": -0.21814796826938604,
+   "lift_fresh": -0.14243996792359484,
+   "pay_close_med": 39.5,
+   "pay_far_med": 63.0
+  },
+  {
+   "label": "  VW1H \u00b7 10:00-11:30",
+   "events": 19,
+   "reclaimed": 17,
+   "accepted": 2,
+   "printed": 0,
+   "rate": 0.0,
+   "ci": [
+    0.0,
+    0.18432366037156456
+   ],
+   "base": 0.48840099420049726,
+   "fresh": 0.17449047448098268,
+   "lift": -0.48840099420049726,
+   "lift_fresh": -0.17449047448098268,
+   "pay_close_med": null,
+   "pay_far_med": null
+  },
+  {
+   "label": "VW2L sweep-reclaim -> printed the LOD",
+   "events": 196,
+   "reclaimed": 180,
+   "accepted": 16,
+   "printed": 23,
+   "rate": 0.12777777777777777,
+   "ci": [
+    0.08667435764393652,
+    0.18443729499616232
+   ],
+   "base": 0.4565911566770075,
+   "fresh": 0.28010018635245026,
+   "lift": -0.32881337889922974,
+   "lift_fresh": -0.1523224085746725,
+   "pay_close_med": 40.0,
+   "pay_far_med": 53.75
+  },
+  {
+   "label": "  VW2L \u00b7 09:00-10:00",
+   "events": 147,
+   "reclaimed": 135,
+   "accepted": 12,
+   "printed": 16,
+   "rate": 0.11851851851851852,
+   "ci": [
+    0.07428284793141758,
+    0.18386456610011193
+   ],
+   "base": 0.38531559728742865,
+   "fresh": 0.27340052517271823,
+   "lift": -0.2667970787689101,
+   "lift_fresh": -0.1548820066541997,
+   "pay_close_med": 45.5,
+   "pay_far_med": 60.0
+  },
+  {
+   "label": "  VW2L \u00b7 10:00-11:30",
+   "events": 27,
+   "reclaimed": 24,
+   "accepted": 3,
+   "printed": 4,
+   "rate": 0.16666666666666666,
+   "ci": [
+    0.06678568000728924,
+    0.3585347038786943
+   ],
+   "base": 0.5773180751173709,
+   "fresh": 0.2520052477147197,
+   "lift": -0.41065140845070425,
+   "lift_fresh": -0.08533858104805306,
+   "pay_close_med": 63.25,
+   "pay_far_med": 77.5
+  },
+  {
+   "label": "  VW2L \u00b7 11:30-15:00",
+   "events": 22,
+   "reclaimed": 21,
+   "accepted": 1,
+   "printed": 3,
+   "rate": 0.14285714285714285,
+   "ci": [
+    0.04980921798213492,
+    0.346364941492295
+   ],
+   "base": 0.7768175602496011,
+   "fresh": 0.3552779380938488,
+   "lift": -0.6339604173924582,
+   "lift_fresh": -0.21242079523670593,
+   "pay_close_med": 24.0,
+   "pay_far_med": 50.75
+  },
+  {
+   "label": "VW2H sweep-reclaim -> printed the HOD",
+   "events": 205,
+   "reclaimed": 178,
+   "accepted": 27,
+   "printed": 20,
+   "rate": 0.11235955056179775,
+   "ci": [
+    0.07392192832223898,
+    0.1671758182879976
+   ],
+   "base": 0.3690061718626364,
+   "fresh": 0.21938722840210223,
+   "lift": -0.25664662130083865,
+   "lift_fresh": -0.10702767784030448,
+   "pay_close_med": 31.0,
+   "pay_far_med": 50.25
+  },
+  {
+   "label": "  VW2H \u00b7 09:00-10:00",
+   "events": 165,
+   "reclaimed": 143,
+   "accepted": 22,
+   "printed": 14,
+   "rate": 0.0979020979020979,
+   "ci": [
+    0.05921616223092841,
+    0.15762702117213995
+   ],
+   "base": 0.3221461636954593,
+   "fresh": 0.22896526932999361,
+   "lift": -0.22424406579336137,
+   "lift_fresh": -0.1310631714278957,
+   "pay_close_med": 38.25,
+   "pay_far_med": 59.5
+  },
+  {
+   "label": "  VW2H \u00b7 10:00-11:30",
+   "events": 23,
+   "reclaimed": 21,
+   "accepted": 2,
+   "printed": 4,
+   "rate": 0.19047619047619047,
+   "ci": [
+    0.07667440615177301,
+    0.40000986539273287
+   ],
+   "base": 0.4986586183769282,
+   "fresh": 0.1690899252236965,
+   "lift": -0.30818242790073774,
+   "lift_fresh": 0.021386265252493958,
+   "pay_close_med": 18.25,
+   "pay_far_med": 28.75
+  },
+  {
+   "label": "DPOC- sweep-reclaim -> printed the LOD",
+   "events": 144,
+   "reclaimed": 131,
+   "accepted": 13,
+   "printed": 6,
+   "rate": 0.04580152671755725,
+   "ci": [
+    0.021157596293058425,
+    0.09632543564960615
+   ],
+   "base": 0.37063219008708753,
+   "fresh": 0.282158340349479,
+   "lift": -0.32483066336953026,
+   "lift_fresh": -0.23635681363192176,
+   "pay_close_med": 55.0,
+   "pay_far_med": 81.25
+  },
+  {
+   "label": "  DPOC- \u00b7 09:00-10:00",
+   "events": 142,
+   "reclaimed": 129,
+   "accepted": 13,
+   "printed": 5,
+   "rate": 0.03875968992248062,
+   "ci": [
+    0.01666725738662231,
+    0.08752901847876926
+   ],
+   "base": 0.3678076209193145,
+   "fresh": 0.2823390188321164,
+   "lift": -0.3290479309968339,
+   "lift_fresh": -0.24357932890963574,
+   "pay_close_med": 55.0,
+   "pay_far_med": 56.5
+  },
+  {
+   "label": "DPOC+ sweep-reclaim -> printed the HOD",
+   "events": 140,
+   "reclaimed": 121,
+   "accepted": 19,
+   "printed": 4,
+   "rate": 0.03305785123966942,
+   "ci": [
+    0.0129289722168894,
+    0.08192402550181974
+   ],
+   "base": 0.3147479920847401,
+   "fresh": 0.22920604498877956,
+   "lift": -0.28169014084507066,
+   "lift_fresh": -0.19614819374911013,
+   "pay_close_med": 18.75,
+   "pay_far_med": 32.0
+  },
+  {
+   "label": "  DPOC+ \u00b7 09:00-10:00",
+   "events": 137,
+   "reclaimed": 119,
+   "accepted": 18,
+   "printed": 4,
+   "rate": 0.03361344537815126,
+   "ci": [
+    0.013147540181404155,
+    0.08324977147848957
+   ],
+   "base": 0.3120487631672389,
+   "fresh": 0.23011707095497758,
+   "lift": -0.27843531778908764,
+   "lift_fresh": -0.19650362557682632,
+   "pay_close_med": 18.75,
+   "pay_far_med": 32.0
+  },
+  {
+   "label": "DVAL sweep-reclaim -> printed the LOD",
+   "events": 253,
+   "reclaimed": 213,
+   "accepted": 40,
+   "printed": 17,
+   "rate": 0.07981220657276995,
+   "ci": [
+    0.05042523581880395,
+    0.12408740382229813
+   ],
+   "base": 0.421097004562587,
+   "fresh": 0.2755127218475114,
+   "lift": -0.34128479798981703,
+   "lift_fresh": -0.19570051527474147,
+   "pay_close_med": 46.0,
+   "pay_far_med": 61.5
+  },
+  {
+   "label": "  DVAL \u00b7 09:00-10:00",
+   "events": 209,
+   "reclaimed": 176,
+   "accepted": 33,
+   "printed": 16,
+   "rate": 0.09090909090909091,
+   "ci": [
+    0.056732230508081204,
+    0.142563149426261
+   ],
+   "base": 0.3797415172855315,
+   "fresh": 0.27632548509476496,
+   "lift": -0.2888324263764406,
+   "lift_fresh": -0.18541639418567404,
+   "pay_close_med": 49.0,
+   "pay_far_med": 61.75
+  },
+  {
+   "label": "  DVAL \u00b7 10:00-11:30",
+   "events": 28,
+   "reclaimed": 25,
+   "accepted": 3,
+   "printed": 1,
+   "rate": 0.04,
+   "ci": [
+    0.007096050386699165,
+    0.19544472405022525
+   ],
+   "base": 0.5697183098591548,
+   "fresh": 0.25726339211896254,
+   "lift": -0.5297183098591548,
+   "lift_fresh": -0.21726339211896253,
+   "pay_close_med": 40.0,
+   "pay_far_med": 44.5
+  },
+  {
+   "label": "DVAH sweep-reclaim -> printed the HOD",
+   "events": 265,
+   "reclaimed": 207,
+   "accepted": 58,
+   "printed": 14,
+   "rate": 0.06763285024154589,
+   "ci": [
+    0.04071115951879931,
+    0.11031027078717445
+   ],
+   "base": 0.3588147240933521,
+   "fresh": 0.22425911872440418,
+   "lift": -0.29118187385180616,
+   "lift_fresh": -0.1566262684828583,
+   "pay_close_med": 26.25,
+   "pay_far_med": 61.25
+  },
+  {
+   "label": "  DVAH \u00b7 09:00-10:00",
+   "events": 225,
+   "reclaimed": 171,
+   "accepted": 54,
+   "printed": 13,
+   "rate": 0.07602339181286549,
+   "ci": [
+    0.04496360130209782,
+    0.12571431516629414
+   ],
+   "base": 0.31342146445927005,
+   "fresh": 0.23141729595673388,
+   "lift": -0.23739807264640456,
+   "lift_fresh": -0.1553939041438684,
+   "pay_close_med": 25.25,
+   "pay_far_med": 59.5
+  },
+  {
+   "label": "  DVAH \u00b7 10:00-11:30",
+   "events": 24,
+   "reclaimed": 21,
+   "accepted": 3,
+   "printed": 0,
+   "rate": 0.0,
+   "ci": [
+    0.0,
+    0.15464382326420195
+   ],
+   "base": 0.4909456740442656,
+   "fresh": 0.17303763530961577,
+   "lift": -0.4909456740442656,
+   "lift_fresh": -0.17303763530961577,
+   "pay_close_med": null,
+   "pay_far_med": null
+  },
+  {
+   "label": "  DVAH \u00b7 11:30-15:00",
+   "events": 16,
+   "reclaimed": 15,
+   "accepted": 1,
+   "printed": 1,
+   "rate": 0.06666666666666667,
+   "ci": [
+    0.011866588606194856,
+    0.2981707755242399
+   ],
+   "base": 0.6913145539906104,
+   "fresh": 0.21436597505654875,
+   "lift": -0.6246478873239437,
+   "lift_fresh": -0.1476993083898821,
+   "pay_close_med": 26.25,
+   "pay_far_med": 75.5
+  },
+  {
+   "label": "ONL+PDL pooled",
+   "events": 245,
+   "reclaimed": 200,
+   "accepted": 45,
+   "printed": 53,
+   "rate": 0.265,
+   "ci": [
+    0.20868060011609973,
+    0.33017702266551113
+   ],
+   "base": 0.45358980739561017,
+   "fresh": 0.26343518098731145,
+   "lift": -0.18858980739561015,
+   "lift_fresh": 0.0015648190126885675,
+   "pay_close_med": 33.5,
+   "pay_far_med": 75.75
+  },
+  {
+   "label": "ONH+PDH pooled",
+   "events": 324,
+   "reclaimed": 253,
+   "accepted": 71,
+   "printed": 54,
+   "rate": 0.2134387351778656,
+   "ci": [
+    0.16743166728414177,
+    0.2680180417972531
+   ],
+   "base": 0.393516639720163,
+   "fresh": 0.19859451090951244,
+   "lift": -0.18007790454229738,
+   "lift_fresh": 0.014844224268353162,
+   "pay_close_med": 22.25,
+   "pay_far_med": 60.0
+  },
+  {
+   "label": "ON sweep \u00b7 open inside ON",
+   "events": 275,
+   "reclaimed": 253,
+   "accepted": 22,
+   "printed": 69,
+   "rate": 0.2727272727272727,
+   "ci": [
+    0.22155327497041197,
+    0.33069994257690105
+   ],
+   "base": 0.4707022916560525,
+   "fresh": 0.2432815056904764,
+   "lift": -0.19797501892877978,
+   "lift_fresh": 0.0294457670367963,
+   "pay_close_med": 22.0,
+   "pay_far_med": 70.5
+  },
+  {
+   "label": "reclaim within 5 bars",
+   "events": 363,
+   "reclaimed": 363,
+   "accepted": 0,
+   "printed": 71,
+   "rate": 0.19559228650137742,
+   "ci": [
+    0.15806399627416975,
+    0.2394961495762464
+   ],
+   "base": 0.4224664195787113,
+   "fresh": 0.22314990000023668,
+   "lift": -0.22687413307733387,
+   "lift_fresh": -0.027557613498859268,
+   "pay_close_med": 26.0,
+   "pay_far_med": 71.25
+  },
+  {
+   "label": "reclaim in 6-30 bars",
+   "events": 90,
+   "reclaimed": 90,
+   "accepted": 0,
+   "printed": 36,
+   "rate": 0.4,
+   "ci": [
+    0.30488859176782823,
+    0.5032988219165079
+   ],
+   "base": 0.41024845579167973,
+   "fresh": 0.2436448195275892,
+   "lift": -0.010248455791679711,
+   "lift_fresh": 0.15635518047241082,
+   "pay_close_med": 25.75,
+   "pay_far_med": 69.75
+  },
+  {
+   "label": "depth <= 3 pts",
+   "events": 228,
+   "reclaimed": 228,
+   "accepted": 0,
+   "printed": 31,
+   "rate": 0.13596491228070176,
+   "ci": [
+    0.09746610961244054,
+    0.18652778967051817
+   ],
+   "base": 0.4510734514332915,
+   "fresh": 0.22870116881200597,
+   "lift": -0.31510853915258974,
+   "lift_fresh": -0.09273625653130421,
+   "pay_close_med": 22.0,
+   "pay_far_med": 57.0
+  },
+  {
+   "label": "depth 3-8 pts",
+   "events": 139,
+   "reclaimed": 139,
+   "accepted": 0,
+   "printed": 42,
+   "rate": 0.302158273381295,
+   "ci": [
+    0.23198620734287273,
+    0.38297190009921694
+   ],
+   "base": 0.38934923827224993,
+   "fresh": 0.21888245617044427,
+   "lift": -0.08719096489095496,
+   "lift_fresh": 0.0832758172108507,
+   "pay_close_med": 26.0,
+   "pay_far_med": 68.25
+  },
+  {
+   "label": "depth > 8 pts",
+   "events": 86,
+   "reclaimed": 86,
+   "accepted": 0,
+   "printed": 34,
+   "rate": 0.3953488372093023,
+   "ci": [
+    0.29862264637556246,
+    0.5010247330121598
+   ],
+   "base": 0.38736488699639693,
+   "fresh": 0.23677813442720758,
+   "lift": 0.007983950212905377,
+   "lift_fresh": 0.15857070278209473,
+   "pay_close_med": 41.25,
+   "pay_far_med": 89.0
+  }
+ ],
+ "sessions_with_a_winning_sweep": 87,
+ "sessions_with_any_on_pd_sweep": 276,
+ "ledger": {
+  "cells_read": 116,
+  "note": "first read, not pre-registered; expect ~1 in 20 cells to sit outside its interval by chance"
+ },
+ "lookup": {
+  "level": {
+   "ONL": {
+    "rate": 0.2920353982300885,
+    "n": 113,
+    "fresh": 0.2780514169456163,
+    "ci": [
+     0.21614182470769672,
+     0.38160418356333003
+    ],
+    "lift": 0.013983981284472202,
+    "pay": 74.5
+   },
+   "ONH": {
+    "rate": 0.2571428571428571,
+    "n": 140,
+    "fresh": 0.21521722017739958,
+    "ci": [
+     0.1919094253195786,
+     0.3353483359956459
+    ],
+    "lift": 0.041925636965457536,
+    "pay": 67.75
+   },
+   "PDL": {
+    "rate": 0.22988505747126436,
+    "n": 87,
+    "fresh": 0.24445087451273181,
+    "ci": [
+     0.15403115692511482,
+     0.32858473711462033
+    ],
+    "lift": -0.01456581704146745,
+    "pay": 84.25
+   },
+   "PDH": {
+    "rate": 0.1592920353982301,
+    "n": 113,
+    "fresh": 0.17800000385195325,
+    "ci": [
+     0.10319965655551687,
+     0.23778848465446312
+    ],
+    "lift": -0.01870796845372316,
+    "pay": 60.0
+   },
+   "IBL": {
+    "rate": 0.20279720279720279,
+    "n": 143,
+    "fresh": 0.2596987498196374,
+    "ci": [
+     0.14507437781527893,
+     0.27607058383046723
+    ],
+    "lift": -0.056901547022434634,
+    "pay": 60.0
+   },
+   "IBH": {
+    "rate": 0.16216216216216217,
+    "n": 148,
+    "fresh": 0.19159309940603614,
+    "ci": [
+     0.11146031697656603,
+     0.22995863540538994
+    ],
+    "lift": -0.029430937243873967,
+    "pay": 50.25
+   },
+   "PDC-": {
+    "rate": 0.3,
+    "n": 120,
+    "fresh": 0.21424430510944967,
+    "ci": [
+     0.22525501338672319,
+     0.38715309503564865
+    ],
+    "lift": 0.08575569489055032,
+    "pay": 49.75
+   },
+   "PDC+": {
+    "rate": 0.19047619047619047,
+    "n": 105,
+    "fresh": 0.17052203747425212,
+    "ci": [
+     0.12682403782859736,
+     0.27597783204468634
+    ],
+    "lift": 0.01995415300193834,
+    "pay": 72.5
+   },
+   "VAL": {
+    "rate": 0.2767857142857143,
+    "n": 112,
+    "fresh": 0.2373716727050359,
+    "ci": [
+     0.20237659760682053,
+     0.36599952979473477
+    ],
+    "lift": 0.039414041580678405,
+    "pay": 56.0
+   },
+   "VAH": {
+    "rate": 0.19491525423728814,
+    "n": 118,
+    "fresh": 0.17310746101717334,
+    "ci": [
+     0.13353979782234554,
+     0.27552902596197765
+    ],
+    "lift": 0.021807793220114807,
+    "pay": 57.0
+   },
+   "POC-": {
+    "rate": 0.26851851851851855,
+    "n": 108,
+    "fresh": 0.23211550224057773,
+    "ci": [
+     0.19394781819614243,
+     0.3589913386113424
+    ],
+    "lift": 0.03640301627794082,
+    "pay": 51.5
+   },
+   "POC+": {
+    "rate": 0.25773195876288657,
+    "n": 97,
+    "fresh": 0.17269919710792123,
+    "ci": [
+     0.18109470708719705,
+     0.35282780108403383
+    ],
+    "lift": 0.08503276165496534,
+    "pay": 63.0
+   },
+   "PML": {
+    "rate": 0.21164021164021163,
+    "n": 189,
+    "fresh": 0.21300720966180334,
+    "ci": [
+     0.15944680101546374,
+     0.27532246038871455
+    ],
+    "lift": -0.0013669980215917088,
+    "pay": 64.75
+   },
+   "PMH": {
+    "rate": 0.15228426395939088,
+    "n": 197,
+    "fresh": 0.16530490559009073,
+    "ci": [
+     0.10880060721400828,
+     0.20906979413710622
+    ],
+    "lift": -0.013020641630699853,
+    "pay": 67.75
+   },
+   "PWL": {
+    "rate": 0.25,
+    "n": 36,
+    "fresh": 0.2721582264375329,
+    "ci": [
+     0.13750323839225387,
+     0.41070767683203424
+    ],
+    "lift": -0.022158226437532902,
+    "pay": 86.0
+   },
+   "PWH": {
+    "rate": 0.21818181818181817,
+    "n": 55,
+    "fresh": 0.1941678084976288,
+    "ci": [
+     0.12945897827653213,
+     0.3437028664047817
+    ],
+    "lift": 0.024014009684189375,
+    "pay": 52.25
+   },
+   "OR5L": {
+    "rate": 0.19811320754716982,
+    "n": 212,
+    "fresh": 0.23390141506812953,
+    "ci": [
+     0.1500411918346862,
+     0.25693132875448665
+    ],
+    "lift": -0.03578820752095971,
+    "pay": 61.25
+   },
+   "OR5H": {
+    "rate": 0.10232558139534884,
+    "n": 215,
+    "fresh": 0.1771197003002879,
+    "ci": [
+     0.06854889119254981,
+     0.15006402335386182
+    ],
+    "lift": -0.07479411890493906,
+    "pay": 67.75
+   },
+   "OR15L": {
+    "rate": 0.21505376344086022,
+    "n": 186,
+    "fresh": 0.27847975457760926,
+    "ci": [
+     0.16209026292148496,
+     0.27954950412641183
+    ],
+    "lift": -0.06342599113674904,
+    "pay": 55.5
+   },
+   "OR15H": {
+    "rate": 0.13930348258706468,
+    "n": 201,
+    "fresh": 0.2141533207388357,
+    "ci": [
+     0.09816885894812451,
+     0.19396711343248574
+    ],
+    "lift": -0.07484983815177101,
+    "pay": 63.5
+   },
+   "LDNL": {
+    "rate": 0.2085889570552147,
+    "n": 163,
+    "fresh": 0.2374688963175853,
+    "ci": [
+     0.15328227961519503,
+     0.2773153650969151
+    ],
+    "lift": -0.02887993926237059,
+    "pay": 64.75
+   },
+   "LDNH": {
+    "rate": 0.1588235294117647,
+    "n": 170,
+    "fresh": 0.17859428674356279,
+    "ci": [
+     0.11150729412985383,
+     0.2212185896632083
+    ],
+    "lift": -0.01977075733179809,
+    "pay": 67.75
+   },
+   "VWAP-": {
+    "rate": 0.07142857142857142,
+    "n": 126,
+    "fresh": 0.212912384669557,
+    "ci": [
+     0.0380307121123797,
+     0.1301865618583662
+    ],
+    "lift": -0.14148381324098558,
+    "pay": 50.0
+   },
+   "VWAP+": {
+    "rate": 0.04838709677419355,
+    "n": 124,
+    "fresh": 0.1624818588761221,
+    "ci": [
+     0.022362105662260094,
+     0.1015537401969907
+    ],
+    "lift": -0.11409476210192855,
+    "pay": 68.25
+   },
+   "VW1L": {
+    "rate": 0.07729468599033816,
+    "n": 207,
+    "fresh": 0.2779235721986536,
+    "ci": [
+     0.04813467549874949,
+     0.12185834295681143
+    ],
+    "lift": -0.20062888620831543,
+    "pay": 56.5
+   },
+   "VW1H": {
+    "rate": 0.085,
+    "n": 200,
+    "fresh": 0.23080496203555867,
+    "ci": [
+     0.05374529946985246,
+     0.13189688544235392
+    ],
+    "lift": -0.14580496203555865,
+    "pay": 63.0
+   },
+   "VW2L": {
+    "rate": 0.12777777777777777,
+    "n": 180,
+    "fresh": 0.28010018635245026,
+    "ci": [
+     0.08667435764393652,
+     0.18443729499616232
+    ],
+    "lift": -0.1523224085746725,
+    "pay": 53.75
+   },
+   "VW2H": {
+    "rate": 0.11235955056179775,
+    "n": 178,
+    "fresh": 0.21938722840210223,
+    "ci": [
+     0.07392192832223898,
+     0.1671758182879976
+    ],
+    "lift": -0.10702767784030448,
+    "pay": 50.25
+   },
+   "DPOC-": {
+    "rate": 0.04580152671755725,
+    "n": 131,
+    "fresh": 0.282158340349479,
+    "ci": [
+     0.021157596293058425,
+     0.09632543564960615
+    ],
+    "lift": -0.23635681363192176,
+    "pay": 81.25
+   },
+   "DPOC+": {
+    "rate": 0.03305785123966942,
+    "n": 121,
+    "fresh": 0.22920604498877956,
+    "ci": [
+     0.0129289722168894,
+     0.08192402550181974
+    ],
+    "lift": -0.19614819374911013,
+    "pay": 32.0
+   },
+   "DVAL": {
+    "rate": 0.07981220657276995,
+    "n": 213,
+    "fresh": 0.2755127218475114,
+    "ci": [
+     0.05042523581880395,
+     0.12408740382229813
+    ],
+    "lift": -0.19570051527474147,
+    "pay": 61.5
+   },
+   "DVAH": {
+    "rate": 0.06763285024154589,
+    "n": 207,
+    "fresh": 0.22425911872440418,
+    "ci": [
+     0.04071115951879931,
+     0.11031027078717445
+    ],
+    "lift": -0.1566262684828583,
+    "pay": 61.25
+   }
+  },
+  "clock": {
+   "08:30-09:00": {
+    "rate": 0.2722222222222222,
+    "n": 180,
+    "fresh": 0.18027751694976668,
+    "ci": [
+     0.21246399571150315,
+     0.3414998514264678
+    ],
+    "lift": 0.09194470527245552,
+    "pay": 69.75
+   },
+   "09:00-10:00": {
+    "rate": 0.15730337078651685,
+    "n": 89,
+    "fresh": 0.2320926718407495,
+    "ci": [
+     0.09607722097921384,
+     0.24688972487264566
+    ],
+    "lift": -0.07478930105423265,
+    "pay": 68.0
+   },
+   "10:00-11:30": {
+    "rate": 0.21739130434782608,
+    "n": 69,
+    "fresh": 0.20580644646025814,
+    "ci": [
+     0.13640646957336042,
+     0.328185192334121
+    ],
+    "lift": 0.01158485788756794,
+    "pay": 60.25
+   },
+   "11:30-15:00": {
+    "rate": 0.25217391304347825,
+    "n": 115,
+    "fresh": 0.3097791461480561,
+    "ci": [
+     0.18169823689536532,
+     0.3386717345624406
+    ],
+    "lift": -0.057605233104577824,
+    "pay": 71.25
+   }
+  },
+  "speed": {
+   "poke": {
+    "rate": 0.19559228650137742,
+    "n": 363,
+    "fresh": 0.22314990000023668,
+    "ci": [
+     0.15806399627416975,
+     0.2394961495762464
+    ],
+    "lift": -0.027557613498859268,
+    "pay": 71.25
+   },
+   "flush": {
+    "rate": 0.4,
+    "n": 90,
+    "fresh": 0.2436448195275892,
+    "ci": [
+     0.30488859176782823,
+     0.5032988219165079
+    ],
+    "lift": 0.15635518047241082,
+    "pay": 69.75
+   }
+  },
+  "depth": {
+   "shallow": {
+    "rate": 0.13596491228070176,
+    "n": 228,
+    "fresh": 0.22870116881200597,
+    "ci": [
+     0.09746610961244054,
+     0.18652778967051817
+    ],
+    "lift": -0.09273625653130421,
+    "pay": 57.0
+   },
+   "mid": {
+    "rate": 0.302158273381295,
+    "n": 139,
+    "fresh": 0.21888245617044427,
+    "ci": [
+     0.23198620734287273,
+     0.38297190009921694
+    ],
+    "lift": 0.0832758172108507,
+    "pay": 68.25
+   },
+   "deep": {
+    "rate": 0.3953488372093023,
+    "n": 86,
+    "fresh": 0.23677813442720758,
+    "ci": [
+     0.29862264637556246,
+     0.5010247330121598
+    ],
+    "lift": 0.15857070278209473,
+    "pay": 89.0
+   }
+  },
+  "bins": {
+   "speedPokeMaxBars": 5,
+   "depthShallowMaxPts": 3,
+   "depthDeepMinPts": 8,
+   "reclaimMaxBars": 30
+  },
+  "sessions": 284,
+  "first": "2025-06-02",
+  "last": "2026-08-21"
+ }
+}

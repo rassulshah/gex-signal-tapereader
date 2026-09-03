@@ -17,7 +17,7 @@ ok(/window\.__gptsHypo=function/.test(src) && /window\.__gptsMineRun=function/.t
 // hypothesis builder / pattern miner / research list are kept in a DETAIL section.
 ok(/function testingBlock\(\)/.test(src), 'testingBlock exists');
 // (v15.55) the tab in LOOP order — design/ANALYSIS-TESTING-BY-SUBJECT.md §3
-[['\u2460','THE REGISTER'],['\u2461','THE GATE'],['\u2462','ON THE DASHBOARD'],['\u2463','THE RECORD'],['\u2464','THE NIGHTLY'],['⑥','SELF-TEST']].forEach(function(p){
+[['\u2460','THE REGISTER'],['\u2461','THE GATE'],['\u2462','ON THE DASHBOARD'],['\u2463','THE RECORD'],['\u2464','THE NIGHTLY'],['⑥','THE SUITE']].forEach(function(p){
   // the source writes some glyphs as \uXXXX escapes and some as characters; accept either, and a title prefix
   var esc=p[0].split('').map(function(c){ var cc=c.charCodeAt(0); return cc>127?('\\u'+cc.toString(16).padStart(4,'0')):c; }).join('');
   ok(src.indexOf("'"+p[0]+"','"+p[1])>=0 || src.indexOf("'"+esc+"','"+p[1])>=0, 'testing section '+p[0]+' '+p[1]+' is rendered');

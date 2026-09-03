@@ -234,6 +234,24 @@ for _p in ['data/es-1min/BASERATES.json', 'data/es-1min/FARSIDE.json', 'data/es-
 # the approved HOD/LOD design lives at the repo ROOT, not in mockups/ — which is exactly why two
 # earlier sessions reported it lost. Ship it so a fresh clone has the spec beside its transcription.
 FILES += sorted(f for f in os.listdir('.') if f.startswith('mockuphodlod') and f.endswith('.html'))
+# (v15.57b) ⚠⚠ EVERYTHING THE PANEL FETCHES FROM GITHUB MUST RIDE THE INSTALLER, BECAUSE THE CLOUD CANNOT PUSH.
+# Found 2026-09-03 by probing his live panel after "reloaded double check": the raw repo had v15.57 but
+# learning/studies.json, learning/register.json, learning/requests.json, data/es-1min/SWEEPS*.json and
+# learning/log/*.json returned 404 — only learning/rules.json was ever in this manifest. So the Analysis tab
+# showed the seed ("registry not fetched"), the sweep table never arrived, the READ quoted no rates, the
+# nightly's verdicts never came back, and the register the panel ran on was the built-in seed. The SIXTH
+# directory this manifest has lost. Rule from here: every file a `pipeFetch(PIPE_RAW_BASE+...)` names is
+# listed HERE, by glob, and test_installer_manifest.js pins the list against the panel's fetch calls.
+import glob as _glob
+for _p in sorted(set(_glob.glob('learning/*.json') + _glob.glob('learning/*.md') + _glob.glob('learning/log/*.json') +
+                     _glob.glob('learning/nightly/*.md') + _glob.glob('data/es-1min/*.json') + _glob.glob('review/*.json'))):
+    if os.path.isfile(_p) and _p not in FILES:
+        FILES.append(_p)
+# --list: print the manifest and stop — what the test reads
+if '--list' in sys.argv:
+    for _p in FILES:
+        print(_p)
+    raise SystemExit(0)
 
 # --- size ADVISORY on the raw tree ------------------------------------------------------------
 # ⚠⚠ (v15.22) THIS USED TO BE THE HARD GATE AND IT MEASURED THE WRONG THING. What `more +n` walks is

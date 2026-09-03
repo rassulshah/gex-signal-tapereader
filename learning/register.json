@@ -1,0 +1,84 @@
+{
+ "schema": 1,
+ "from": "2026-09-03",
+ "note": "THE ONE REGISTER. Read by the panel (Testing ②, fetched like rules.json) and by tools/nightly/run.py. A hypothesis is added with the date it was written and is never edited after; it is READ ONCE at minN on sessions from `from` onward. Registered NULLS are deliberate: a register that only holds hopes is a machine for producing wins.",
+ "hypotheses": [
+  {
+   "id": "H1",
+   "written": "2026-09-03",
+   "claim": "grade A holds LESS often than the base rate",
+   "pick": "gradeA",
+   "minN": 40,
+   "predict": "held < 45%",
+   "refuteIf": "held >= 50% or the CI covers the base",
+   "note": "exploratory 32% on n=34 — the INVERSE of the grade's purpose. Known confound: A may be assigned in strong trends. If it survives, test the confound BEFORE touching the grade."
+  },
+  {
+   "id": "H2",
+   "written": "2026-09-03",
+   "claim": "a node's 2nd test holds MORE often than its 1st",
+   "pick": "tap1",
+   "minN": 30,
+   "predict": "tap>=1 held > 60%",
+   "refuteIf": "tap>=1 held <= 55%",
+   "note": "exploratory 73% on n=22 vs 47% first tests."
+  },
+  {
+   "id": "H3",
+   "written": "2026-09-03",
+   "claim": "NULL — polarity does not discriminate",
+   "pick": "pol",
+   "gap": true,
+   "minN": 40,
+   "predict": "gap < 8 points",
+   "refuteIf": "gap >= 8 points",
+   "note": "exploratory +γ 52.2% / −γ 52.1%. Registered as a null ON PURPOSE."
+  },
+  {
+   "id": "H4",
+   "written": "2026-09-03",
+   "claim": "NULL — the rejection wick does not discriminate",
+   "pick": "wick",
+   "gap": true,
+   "minN": 40,
+   "predict": "gap < 5 points",
+   "refuteIf": "gap >= 5 points",
+   "note": "measured 49.1% confirmed vs 48.6% weak on 970 rows. While this stands the wick is REPORTED, never WEIGHTED."
+  },
+  {
+   "id": "H5",
+   "written": "2026-09-03",
+   "claim": "a top-5 gamma node moves the HOD/LOD cell",
+   "pick": "defl",
+   "blocked": true,
+   "minN": 50,
+   "predict": "cell-rate shift >= 8 points in either direction",
+   "refuteIf": "shift < 8 points or its CI covers the unconditioned cell",
+   "note": "THE question the panel exists for. Baseline HLTAB AUC 0.879. Definition FIXED IN ADVANCE: within DEFL_NEAR (1.0 ATR) of a top-5-by-dollars node, wick-triggered. Needs the EVENT-level ledger (the defl store)."
+  },
+  {
+   "id": "H6",
+   "written": "2026-09-03",
+   "claim": "an ON/PD sweep-reclaim that lands in a top-5 node band or at the King prints the extreme more often",
+   "pick": "sweepNode",
+   "blocked": true,
+   "minN": 40,
+   "judgedBy": "nightly",
+   "predict": "printed > 40% (base 24%, n=453 ON/PD sweep-reclaims over 284 sessions)",
+   "refuteIf": "printed <= 30% or the CI covers 24%",
+   "note": "drafted from roadmap/FINDINGS-sweeps-first-read.md. The level's NAME was measured to add nothing (ON, PD, PDC, POC/VAH/VAL, PM, PW, IB, OR all within chance of a bounce off any fresh low); the node is the untested clause and the reason the tapereader exists. Needs the TAP record (v15.56) or the API backfill."
+  },
+  {
+   "id": "H7",
+   "written": "2026-09-03",
+   "claim": "a first-30-minute ON/PD sweep-reclaim prints the extreme more often than a bounce off any fresh low",
+   "pick": "sweepEarly",
+   "minN": 60,
+   "judgedBy": "nightly",
+   "predict": "printed > 24%",
+   "refuteIf": "printed <= 18% or the CI covers the fresh-low control",
+   "note": "found at 27% (n=180) vs an 18% control on sessions BEFORE 2026-08-22 (tools/study-sweeps.py). Read again ONLY on sessions after it, by the nightly, with the same definitions.",
+   "since": "2026-08-21"
+  }
+ ]
+}

@@ -1,0 +1,5 @@
+{
+ "schema": 1,
+ "note": "what he asked to be tracked, copied from data/<day>.json `requests` by the nightly; the review turns each into a study row (studies.json carries req:<id>) and marks it here",
+ "requests": []
+}

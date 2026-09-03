@@ -91,7 +91,16 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   // a broken tier-1 level outranks a reclaimed tier-2 one
   const R2=mk([ E('PDH','HOD',7712,12,20,'accepted'), E('IBH','HOD',7705,5,80), E('CW0+','HOD',7708,3,90) ]);
   const s2=R2.lines.filter(l=>l.kind==='sweep');
-  ok(s2.length===2 && s2.some(l=>/^PDH swept/.test(l.head) && /the level BROKE/.test(l.txt)) && s2.some(l=>/^IBH swept/.test(l.head)),'3g a broken PDH keeps its place among the two; the tier-2 CW0 is named in the trailer',s2.map(l=>l.head));
+  const r2=R2.lines.find(l=>l.kind==='rest');
+  ok(s2.length===2 && s2.some(l=>/^IBH swept/.test(l.head)) && s2.some(l=>/^CW0\+ swept/.test(l.head)) && r2 && /PDH 08:50 \(broke\)/.test(r2.txt),'3g (v15.58) the two RECLAIMED excursions are read; the broken PDH is named in the trailer as (broke)',{shown:s2.map(l=>l.head),rest:r2&&r2.txt});
+  // (v15.58) reclaimed excursions come first; a level the session OPENED beyond is not a sweep and ranks last
+  const R3=mk([ E('PDH','HOD',7712,12,0,'accepted'), E('VAH','HOD',7705,40,0,'accepted'), E('IBL','LOD',7655,6,70), E('VW2L','LOD',7640,20,40) ]);
+  const s3=R3.lines.filter(l=>l.kind==='sweep');
+  ok(s3.length===2 && s3.some(l=>/^IBL swept/.test(l.head)) && s3.some(l=>/^VW2L swept/.test(l.head)),'3i two reclaimed excursions outrank two gap-open breaks, whatever the tier',s3.map(l=>l.head));
+  const r3=R3.lines.find(l=>l.kind==='rest');
+  ok(r3 && /PDH 08:30 \(opened beyond\)/.test(r3.txt) && /VAH 08:30 \(opened beyond\)/.test(r3.txt),'3j a level the session opened beyond is named "(opened beyond)", never "broke"',r3&&r3.txt);
+  const R4=mk([ E('PDH','HOD',7712,12,0,'accepted') ]);
+  ok(/the session OPENED 12\.00 pts beyond it and never came back: not a sweep/.test(R4.lines[0].head),'3k …and when it is all there is, the line says so instead of "swept 08:30"',R4.lines[0].head);
   ok(bareP(R.lines.map(l=>(l.head||'')+' '+l.txt+' '+(l.node||'')).join(' ')).length===0,'3h no bare % in any line');
 }
 

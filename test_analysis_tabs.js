@@ -124,7 +124,7 @@ reset();
 var T=testingBlock();
 ok(typeof T==='string' && T.length>0, '2a the Testing tab renders');
 // (v15.55) the loop order: ① THE REGISTER · ② THE GATE · ③ ON THE DASHBOARD (proposals, challengers, kills inside) · ④ THE RECORD · ⑤ THE NIGHTLY · ⑥ SELF-TEST
-var TSECS=[['\u2460','THE REGISTER'],['\u2461','THE GATE'],['③','ON THE DASHBOARD'],['④','THE RECORD'],['\u2464','THE NIGHTLY'],['⑥','SELF-TEST']];
+var TSECS=[['\u2460','THE REGISTER'],['\u2461','THE GATE'],['③','ON THE DASHBOARD'],['④','THE RECORD'],['\u2464','THE NIGHTLY'],['⑥','THE SUITE']];
 lastAt=-1; inOrder=true;
 TSECS.forEach(function(p){
   var at=T.indexOf(p[0]+' '+p[1]);
@@ -232,7 +232,7 @@ ok(qFirst>=8, '6b ...and the hovers ask a QUESTION rather than restating the lab
 });
 ['Before a feature','Hypotheses fixed on','What the ladder renders, and which study each number comes from','What is asking to change the model',
  'What did the review actually say?','WHAT CHANGED',
- 'Does the scorer itself work?','How much have we actually got, and what unlocks when?'].forEach(function(q){
+ 'Does the scorer itself work, and did the build ship green?','How much have we actually got, and what unlocks when?'].forEach(function(q){
   ok(T.indexOf(q)>=0, '6·Testing subtitle asks: '+q);
 });
 

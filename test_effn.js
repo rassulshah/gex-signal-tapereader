@@ -65,7 +65,7 @@ ok(/recording — need/.test(ex('tabTile')), '4c ...and say what they are waitin
 ok(/nTxt\(/.test(ex('proposalsQueueHtml')), '4d the proposals queue states n the same way');
 ok(/effN\(/.test(ex('unlockRowsHtml')), '4e "what unlocks when" counts effective observations');
 // (v15.54) 4f pinned the question queue, archived — the register (preregHtml) reports n / minN per hypothesis instead
-ok(/n\+' \/ '\+H\.minN/.test(ex('preregHtml')), '4f the register reports n against the minimum n per hypothesis');
+ok(/n\+'\/'\+H\.minN/.test(ex('preregHtml')) || /n\+' \/ '\+H\.minN/.test(ex('preregHtml')), '4f the register reports n against the minimum n per hypothesis (v15.58: as a bar, n/minN)');
 // the monotone check refuses to speak on a sample of one 30-minute outcome
 var thin=gradeMonotone({ A:{n:5,hit:1}, B:{n:5,hit:4}, C:{n:5,hit:5} });
 ok(thin.ok===null, '4g the monotone check stays SILENT on eff n<2 in every grade — calling the fusion wrong off one outcome is the same fiat this release closes', ''+thin.ok);

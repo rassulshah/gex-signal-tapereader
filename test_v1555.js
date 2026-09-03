@@ -196,9 +196,9 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   html=run('elBody ? elBody.innerHTML : ""');
   const errsT=JSON.parse(run('JSON.stringify(__gptsDebug.renderErrors())')||'[]');
   ok(errsT.length===0,'6l the Testing tab renders with nothing swallowed',errsT.map(e=>(e.where||e.w)+':'+(e.msg||e.m)));
-  const order=['ANALYSIS','TRACKED','REGISTER','GATE','DASHBOARD','NIGHTLY','① THE REGISTER','② THE GATE','③ ON THE DASHBOARD','④ THE RECORD','⑤ THE NIGHTLY','⑥ SELF-TEST'].map(k=>html.indexOf(k));
+  const order=['ANALYSIS','TRACKED','REGISTER','GATE','DASHBOARD','NIGHTLY','① THE REGISTER','② THE GATE','③ ON THE DASHBOARD','④ THE RECORD','⑤ THE NIGHTLY','⑥ THE SUITE'].map(k=>html.indexOf(k));
   ok(order.every(i=>i>=0) && order.every((v,i)=>i===0||v>order[i-1]),'6m the loop strip then ①…⑥ in loop order',order);
-  ok(/H6<\/td><td[^>]*>H2\.7/.test(html) && /H7<\/td><td[^>]*>H2\.8/.test(html) && /judged by the nightly/.test(html),'6n the register shows H6/H7 with their study ids, judged by the nightly');
+  ok(/H6<\/td><td[^>]*>H · H2\.7/.test(html) && /H7<\/td><td[^>]*>H · H2\.8/.test(html) && /judged by the nightly/.test(html),'6n the register shows H6/H7 with their study ids, judged by the nightly');
   ok(/kill\.negGammaWide/.test(html) && /READ-NEXT QUEUE/.test(html) && /K1\.3/.test(html),'6o ③ carries the flag row, ⑤ carries the read-next queue');
   ok(/2 requests/.test(html) && /2 not yet exported/.test(html),'6p the loop strip counts TRACK requests and how many are not yet exported');
   // the export carries them (buildDayExport refuses with no bars; requestsExport is what it calls)

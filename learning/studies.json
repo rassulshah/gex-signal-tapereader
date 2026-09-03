@@ -1,0 +1,1968 @@
+{
+ "schema": 1,
+ "written": "2026-09-03",
+ "subjects": [
+  {
+   "key": "K",
+   "name": "KINGS",
+   "strap": "the crown: which book's, what role, when it moves, and what it does to price",
+   "subsections": [
+    {
+     "key": "K1",
+     "name": "King deflections by book — SPX King · SPY King · QQQ King",
+     "decides": "SIDE · LEVEL",
+     "studies": [
+      {
+       "id": "K1.1",
+       "q": "When price taps the SPX King, how often does it hold, and what does the hold pay (MFE10)?",
+       "decides": "SIZE",
+       "claim": "C10",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K1.2",
+       "q": "The same for the SPY King and the QQQ King — three rows, one table",
+       "decides": "SIZE",
+       "claim": "C10 C28",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K1.3",
+       "q": "Which King leads: when the QQQ King moves, does SPX/SPY price follow within N minutes — and the reverse?",
+       "decides": "TIME",
+       "claim": "C28",
+       "corpus": "437 recs · book + tap record",
+       "status": "READ NEXT",
+       "result": "437 kingRoll records, never read"
+      },
+      {
+       "id": "K1.4",
+       "q": "Is the SPX King the better floor/ceiling (held rate) and the QQQ King the better direction tell (follow rate)?",
+       "decides": "SIDE · LEVEL",
+       "claim": "C28",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K1.5",
+       "q": "Kings aligned across the three books (same strike-equivalent) vs split — held rate at the aligned King",
+       "decides": "SIZE",
+       "claim": "C28",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K1.6",
+       "q": "King in Skylit's flow book vs the InsiderFinance structure King — do both sit at the same strike, and which one price respects?",
+       "decides": "LEVEL",
+       "claim": "ours",
+       "corpus": "tap record + IF book",
+       "status": "OPEN"
+      }
+     ],
+     "note": "Two books are never averaged: Skylit = flow, InsiderFinance = structure. Each King is its own row."
+    },
+    {
+     "key": "K2",
+     "name": "King deflections by role — floor · ceiling · pin",
+     "decides": "SIDE · TARGET",
+     "studies": [
+      {
+       "id": "K2.1",
+       "q": "King BELOW spot (a floor): tap held rate and the bounce's extent",
+       "decides": "SIZE · TARGET",
+       "claim": "C10",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K2.2",
+       "q": "King ABOVE spot (a ceiling): tap held rate and the rejection's extent",
+       "decides": "SIZE · TARGET",
+       "claim": "C10",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K2.3",
+       "q": "Spot INSIDE the King band: dwell time, and which side it leaves by",
+       "decides": "WAIT",
+       "claim": "C10",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K2.4",
+       "q": "King as the magnet: from how far does price get pulled to the King before the close (5–10 pt margin claim)?",
+       "decides": "TARGET",
+       "claim": "C10",
+       "corpus": "11d · book",
+       "status": "THIN",
+       "result": "11 sessions"
+      },
+      {
+       "id": "K2.5",
+       "q": "King sweep (beach ball at the King): overshoot then close back inside — what follows?",
+       "decides": "STOP",
+       "claim": "C9",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "K3",
+     "name": "King by the clock — drive-off early · pin late",
+     "decides": "TIME",
+     "studies": [
+      {
+       "id": "K3.1",
+       "q": "Before 11:00 the King drives price off; after 14:00 it pins — held rate at the King by hour",
+       "decides": "TIME",
+       "claim": "C10",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-A2"
+      },
+      {
+       "id": "K3.2",
+       "q": "Distance from the King at 15:00 CT — how often inside 5 pts / 10 pts (SPX), by regime",
+       "decides": "TARGET",
+       "claim": "C10",
+       "corpus": "11d · book",
+       "status": "THIN",
+       "result": "11 sessions"
+      },
+      {
+       "id": "K3.3",
+       "q": "A King tap in the first 30 minutes — is it the day's extreme more often than a later King tap?",
+       "decides": "SIZE",
+       "claim": "C10 C13",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K3.4",
+       "q": "Last-hour King: does price close on the King's side of the last node it crossed?",
+       "decides": "SIDE",
+       "claim": "C10",
+       "corpus": "11d · book",
+       "status": "THIN"
+      }
+     ]
+    },
+    {
+     "key": "K4",
+     "name": "King rolls — the crown migrates",
+     "decides": "SIDE · TARGET",
+     "studies": [
+      {
+       "id": "K4.1",
+       "q": "After the crown moves, does price move toward the NEW King within 10 / 30 bars?",
+       "decides": "SIDE",
+       "claim": "C11",
+       "corpus": "437 recs · book",
+       "status": "READ NEXT",
+       "result": "recorded since v14; unread",
+       "was": "S-C1"
+      },
+      {
+       "id": "K4.2",
+       "q": "A roll UP pulls price up, a roll DOWN pushes it down — follow rate by direction, and by distance of the move",
+       "decides": "SIDE · TARGET",
+       "claim": "C11",
+       "corpus": "437 recs · book",
+       "status": "READ NEXT"
+      },
+      {
+       "id": "K4.3",
+       "q": "How often the crown moves per session, and how long it dwells",
+       "decides": "WAIT",
+       "claim": "C11",
+       "corpus": "11d · book",
+       "status": "SHIPPED",
+       "result": "kingmoves / kingdwell on the tab",
+       "was": "S-D1"
+      },
+      {
+       "id": "K4.4",
+       "q": "A roll in the last 90 minutes — does the close land at the new King?",
+       "decides": "TARGET",
+       "claim": "C11",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "K4.5",
+       "q": "Roll into a fresh node vs roll into an existing one — which does price follow?",
+       "decides": "SIDE",
+       "claim": "C11 C21",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K4.6",
+       "q": "Does a roll AWAY from spot (the crown leaves) precede the day's extreme?",
+       "decides": "SIZE",
+       "claim": "C11 C13",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "K5",
+     "name": "King quality — dominance · freshness · the gate in front",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "K5.1",
+       "q": "Dominance: the King's share of the book's gamma — does a dominant King hold more than a marginal one?",
+       "decides": "SIZE",
+       "claim": "C1",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K5.2",
+       "q": "A FRESH King (untested today) vs a TESTED one — tap decay at the crown",
+       "decides": "SIZE",
+       "claim": "C3 C4",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K5.3",
+       "q": "A King carried from yesterday (grew day-over-day = real) vs born today — which holds?",
+       "decides": "SIZE",
+       "claim": "C5",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K5.4",
+       "q": "A gatekeeper in front of the King: does the gate take the tap, or does price reach the King?",
+       "decides": "LEVEL",
+       "claim": "C14",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "K5.5",
+       "q": "King under rapid unwinding (losing gamma fast) — break rate",
+       "decides": "STOP",
+       "claim": "C-unwind",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "K6",
+     "name": "The King and the day's extremes",
+     "decides": "SIZE · TARGET",
+     "studies": [
+      {
+       "id": "K6.1",
+       "q": "How often the HOD/LOD prints AT the King, per book",
+       "decides": "TARGET",
+       "claim": "C13",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-A1"
+      },
+      {
+       "id": "K6.2",
+       "q": "Which book's King owns the extremes — SPX, SPY or QQQ",
+       "decides": "LEVEL",
+       "claim": "C28",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-A6"
+      },
+      {
+       "id": "K6.3",
+       "q": "King as the day's pin: close within the King band — rate, by OPEX vs non-OPEX",
+       "decides": "TARGET",
+       "claim": "C10 C-OPEX",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "K6.4",
+       "q": "A King tap that IS the extreme vs one that is not — what differed before the tap (growth, trinity, clock)?",
+       "decides": "SIZE",
+       "claim": "C10 C21 C28",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "S",
+   "name": "SETUPS",
+   "strap": "the patternpedia as trades: trigger · invalidation · target — each measured, not admired",
+   "subsections": [
+    {
+     "key": "S1",
+     "name": "Rug · reverse rug",
+     "decides": "SIZE · TARGET",
+     "studies": [
+      {
+       "id": "S1.1",
+       "q": "Rug: a rejection with acceleration — is it faster and deeper than a plain rejection (MFE10, bars to target)?",
+       "decides": "TARGET",
+       "claim": "C23",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B6"
+      },
+      {
+       "id": "S1.2",
+       "q": "Reverse rug (the upside mirror) — same measure",
+       "decides": "TARGET",
+       "claim": "C23",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S1.3",
+       "q": "Rug at the King vs rug at a lesser node",
+       "decides": "SIZE",
+       "claim": "C23 C10",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S1.4",
+       "q": "Rug configuration detected (rugDetect) vs Skylit's nodeType — agreement rate",
+       "decides": "SKIP",
+       "claim": "ours",
+       "corpus": "API · 1 call/bar",
+       "status": "OPEN",
+       "was": "S-D6"
+      },
+      {
+       "id": "S1.5",
+       "q": "After a rug, does price return to the node (revisit within 20 bars)?",
+       "decides": "STOP",
+       "claim": "C6 C23",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "S2",
+     "name": "Gatekeeper rejection",
+     "decides": "SIDE · LEVEL",
+     "studies": [
+      {
+       "id": "S2.1",
+       "q": "An EARLY gatekeeper rejection (before 10:30) marks the day's extreme — rate vs a late one",
+       "decides": "SIZE",
+       "claim": "C14",
+       "corpus": "671 recs · book",
+       "status": "READ NEXT",
+       "result": "gatekeeper records unread",
+       "was": "S-A3"
+      },
+      {
+       "id": "S2.2",
+       "q": "Gatekeeper ratio (its value ÷ the node behind it): hold vs break by ratio band",
+       "decides": "LEVEL",
+       "claim": "C14",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B9"
+      },
+      {
+       "id": "S2.3",
+       "q": "When the gate breaks, does price reach the node behind it — and how fast?",
+       "decides": "TARGET",
+       "claim": "C14 C15",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S2.4",
+       "q": "A gate that held: is the next tap of the node behind it a better hold?",
+       "decides": "SIZE",
+       "claim": "C14 C3",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "S3",
+     "name": "Beach ball — overshoot, close back inside",
+     "decides": "STOP · TARGET",
+     "studies": [
+      {
+       "id": "S3.1",
+       "q": "How often a tap overshoots the band and closes back inside (wick triggers, 3m close decides)",
+       "decides": "STOP",
+       "claim": "C9",
+       "corpus": "8 sess · book",
+       "status": "SHIPPED",
+       "result": "the deflection engine's trigger geometry"
+      },
+      {
+       "id": "S3.2",
+       "q": "After the overshoot, the reversion's extent — does a deeper overshoot pay more?",
+       "decides": "TARGET",
+       "claim": "C9",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B7"
+      },
+      {
+       "id": "S3.3",
+       "q": "Overshoot at a −γ node vs +γ — wickier at −γ?",
+       "decides": "STOP",
+       "claim": "C8",
+       "corpus": "94 ep · book",
+       "status": "REFUSED",
+       "result": "H3 null: 52.2% vs 52.1%, n=46/48",
+       "was": "S-B8"
+      },
+      {
+       "id": "S3.4",
+       "q": "Overshoot depth in ATR: where to put the stop so the beach ball does not take it",
+       "decides": "STOP",
+       "claim": "C9 ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "S4",
+     "name": "Air pocket — the gap in the ladder",
+     "decides": "TARGET · SIZE",
+     "studies": [
+      {
+       "id": "S4.1",
+       "q": "A pocket on the far side of the tap: is the deflection larger (MFE10 by pocket × velocity × polarity)?",
+       "decides": "TARGET",
+       "claim": "C15 C20",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B10"
+      },
+      {
+       "id": "S4.2",
+       "q": "When price enters a pocket, does it reach the next node — reach rate and speed",
+       "decides": "TARGET",
+       "claim": "C15",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S4.3",
+       "q": "Entry on the break into the pocket vs on the retest of the node — which pays?",
+       "decides": "TIME",
+       "claim": "C15",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S4.4",
+       "q": "Pocket width in points vs realised travel — is the pocket the target, or does price stop short?",
+       "decides": "TARGET",
+       "claim": "C15",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "S5",
+     "name": "Rolling floors and ceilings",
+     "decides": "SIDE · TARGET",
+     "studies": [
+      {
+       "id": "S5.1",
+       "q": "Two migrations vs three — does price follow within the session?",
+       "decides": "SIDE",
+       "claim": "C19",
+       "corpus": "11d · book",
+       "status": "THIN",
+       "was": "S-C2"
+      },
+      {
+       "id": "S5.2",
+       "q": "Stairstep: after delivery, is the next fresh growing node reached?",
+       "decides": "TARGET",
+       "claim": "C22",
+       "corpus": "11d · book",
+       "status": "THIN",
+       "was": "S-C3"
+      },
+      {
+       "id": "S5.3",
+       "q": "Succession: motion vs stasis — measured",
+       "decides": "WAIT",
+       "claim": "C22",
+       "corpus": "11d · book",
+       "status": "SHIPPED",
+       "result": "three passes on the tab",
+       "was": "S-D2"
+      },
+      {
+       "id": "S5.4",
+       "q": "A floor that rolls UP under a pullback — does the pullback turn at the new floor?",
+       "decides": "LEVEL",
+       "claim": "C19",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "S6",
+     "name": "New node in the path · node fed gamma · node that moved",
+     "decides": "LEVEL · SIZE",
+     "studies": [
+      {
+       "id": "S6.1",
+       "q": "A node BORN during the move (crossed the display threshold) — does the pullback deflect at it?",
+       "decides": "LEVEL",
+       "claim": "C21",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B5"
+      },
+      {
+       "id": "S6.2",
+       "q": "An existing node that had gamma ADDED into the tap (15-min accumulation) vs one left flat",
+       "decides": "SIZE",
+       "claim": "C21",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B4"
+      },
+      {
+       "id": "S6.3",
+       "q": "A node whose strike SHIFTED toward price vs away — which one deflects?",
+       "decides": "LEVEL",
+       "claim": "C21 C22",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S6.4",
+       "q": "Reshuffle: do pre-reshuffle nodes stop holding?",
+       "decides": "SKIP",
+       "claim": "C21",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-D4"
+      },
+      {
+       "id": "S6.5",
+       "q": "Rollsupport read: growth mattered, pairing did not — re-read as events",
+       "decides": "SIZE",
+       "claim": "C21",
+       "corpus": "11d · book",
+       "status": "READ",
+       "result": "exploratory; direction only"
+      }
+     ]
+    },
+    {
+     "key": "S7",
+     "name": "Pika cloud · cluster",
+     "decides": "WAIT · SIZE",
+     "studies": [
+      {
+       "id": "S7.1",
+       "q": "Does a pika cloud pin — dwell inside vs at a single node",
+       "decides": "WAIT",
+       "claim": "C24",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B11"
+      },
+      {
+       "id": "S7.2",
+       "q": "Cluster mass vs held rate — does magnitude decide?",
+       "decides": "SIZE",
+       "claim": "C24 C1",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S7.3",
+       "q": "clusterDetect vs Skylit's pika/barney nodeType — agreement",
+       "decides": "SKIP",
+       "claim": "ours",
+       "corpus": "API · 1 call/bar",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "S8",
+     "name": "Rapid unwinding · hedge bleed · decoys",
+     "decides": "STOP · SKIP",
+     "studies": [
+      {
+       "id": "S8.1",
+       "q": "A node losing gamma fast (rapid unwinding) — break rate on the next tap",
+       "decides": "STOP",
+       "claim": "C-unwind",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S8.2",
+       "q": "Hedge bleed: nodes that shrank day-over-day — how often they vanish; do they ever hold?",
+       "decides": "SKIP",
+       "claim": "C5",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-D3"
+      },
+      {
+       "id": "S8.3",
+       "q": "Decoys: far, isolated, oversized nodes — reach rate by distance × gatekeeper count",
+       "decides": "SKIP",
+       "claim": "C18",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-D5"
+      },
+      {
+       "id": "S8.4",
+       "q": "A node that vanished and came back — does it deflect like a fresh one?",
+       "decides": "SIZE",
+       "claim": "C4 C21",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "D",
+   "name": "DIRECTION",
+   "strap": "which way after the turn, and how far — the leg between the two extremes is the trade",
+   "subsections": [
+    {
+     "key": "D1",
+     "name": "The day's direction",
+     "decides": "SIDE",
+     "studies": [
+      {
+       "id": "D1.1",
+       "q": "GREEN / RED — does the session close above its own open?",
+       "decides": "SIDE",
+       "claim": "—",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "77% one-liner, n=196; opens / value area no better than sham",
+       "script": "study-greenred.py",
+       "was": "S-C5"
+      },
+      {
+       "id": "D1.2",
+       "q": "LOD first or HOD first — which extreme prints first?",
+       "decides": "SIDE · TIME",
+       "claim": "—",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "LOD first 146 / HOD first 138 = 51% · n=284",
+       "script": "BASERATES.json"
+      },
+      {
+       "id": "D1.3",
+       "q": "Day type: trend / range / whipsaw / rainbow vs realised range and efficiency",
+       "decides": "SIZE",
+       "claim": "C26 C27",
+       "corpus": "11d · book",
+       "status": "THIN",
+       "was": "S-C4"
+      },
+      {
+       "id": "D1.4",
+       "q": "Open location vs the overnight range (above / inside / below) → GREEN rate and sweep rate",
+       "decides": "SIDE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "open inside ON: 253 of 275 ON sweeps reclaimed; direction split not yet read",
+       "script": "study-sweeps.py"
+      }
+     ]
+    },
+    {
+     "key": "D2",
+     "name": "After the deflection — which way, how far",
+     "decides": "TARGET · STOP",
+     "studies": [
+      {
+       "id": "D2.1",
+       "q": "The hold's extent: MFE10 / MAE, distance to the next node, bars to get there",
+       "decides": "TARGET",
+       "claim": "ours",
+       "corpus": "94 ep · book",
+       "status": "READ",
+       "result": "median MFE10 on the tab; by node role thin"
+      },
+      {
+       "id": "D2.2",
+       "q": "+γ fade vs −γ follow: does the rejection travel further at −γ?",
+       "decides": "TARGET",
+       "claim": "C30",
+       "corpus": "94 ep · book",
+       "status": "THIN",
+       "result": "H3 says held rate is flat; extent unread",
+       "was": "S-B14"
+      },
+      {
+       "id": "D2.3",
+       "q": "Continuation to the next node vs failure back through the tapped one — the R:R actually realised",
+       "decides": "STOP",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "D2.4",
+       "q": "After a HOD/LOD deflection, how far to the far extreme — the prize",
+       "decides": "TARGET",
+       "claim": "ours",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "when a sweep is the extreme: median 60–89 pts to the far extreme, by level",
+       "script": "study-sweeps.py"
+      }
+     ]
+    },
+    {
+     "key": "D3",
+     "name": "The King and spot",
+     "decides": "SIDE",
+     "studies": [
+      {
+       "id": "D3.1",
+       "q": "Spot above the King at the open vs below — drift direction by 15:00",
+       "decides": "SIDE",
+       "claim": "C10",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "D3.2",
+       "q": "Distance to the King at the open vs realised drift toward it (the magnet in points)",
+       "decides": "TARGET",
+       "claim": "C10",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "D3.3",
+       "q": "dir.kingRoll — the 437 records: follow rate",
+       "decides": "SIDE",
+       "claim": "C11",
+       "corpus": "437 recs · book",
+       "status": "READ NEXT"
+      }
+     ]
+    },
+    {
+     "key": "D4",
+     "name": "Structure → direction",
+     "decides": "SIDE",
+     "studies": [
+      {
+       "id": "D4.1",
+       "q": "Floors migrating up during the morning → GREEN close rate",
+       "decides": "SIDE",
+       "claim": "C19",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "D4.2",
+       "q": "Ceilings migrating down → RED close rate",
+       "decides": "SIDE",
+       "claim": "C19",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "D4.3",
+       "q": "The book's skew (gamma above vs below spot) at 09:00 → close side",
+       "decides": "SIDE",
+       "claim": "C-regime",
+       "corpus": "11d · book",
+       "status": "THIN"
+      }
+     ]
+    },
+    {
+     "key": "D5",
+     "name": "Cross-book lead — does QQQ lead SPX?",
+     "decides": "TIME · SIDE",
+     "studies": [
+      {
+       "id": "D5.1",
+       "q": "Cross-market divergence at a new extreme (this book made a new low, the sibling did not) — is the standing extreme final?",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d ES + NQ · price",
+       "status": "READ",
+       "result": "in model-lodhod as xdiv; event-level read pending",
+       "script": "model-lodhod.py"
+      },
+      {
+       "id": "D5.2",
+       "q": "NQ prints its extreme before ES — how many minutes, how often?",
+       "decides": "TIME",
+       "claim": "lore",
+       "corpus": "284d ES + NQ · price",
+       "status": "READ NEXT"
+      },
+      {
+       "id": "D5.3",
+       "q": "QQQ King moves first, SPX follows — lead time in minutes",
+       "decides": "TIME",
+       "claim": "C28",
+       "corpus": "437 recs · book",
+       "status": "READ NEXT"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "F",
+   "name": "DEFLECTION MECHANICS",
+   "strap": "what a tap is, and what makes it hold — the engine both objectives run on",
+   "subsections": [
+    {
+     "key": "F1",
+     "name": "The zone and the trigger",
+     "decides": "STOP · LEVEL",
+     "studies": [
+      {
+       "id": "F1.1",
+       "q": "Skylit's zone (±0.50 SPY/QQQ, ±5 SPX) vs our ATR band — which definition is tighter, and do they disagree on taps?",
+       "decides": "LEVEL",
+       "claim": "C2",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-A4"
+      },
+      {
+       "id": "F1.2",
+       "q": "Wick triggers, the 3-minute close decides — the trigger geometry as shipped",
+       "decides": "STOP",
+       "claim": "C9 ours",
+       "corpus": "8 sess · book",
+       "status": "SHIPPED",
+       "result": "DEFL_NEAR 1.0 / DEFL_THRU 1.5 ATR"
+      },
+      {
+       "id": "F1.3",
+       "q": "The midpoint control: reactions halfway between nodes — the rate every node cell is judged against",
+       "decides": "SKIP",
+       "claim": "C16",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B16"
+      },
+      {
+       "id": "F1.4",
+       "q": "Depth of the wick beyond the node: does deeper mean more likely to hold, or less?",
+       "decides": "STOP",
+       "claim": "ours",
+       "corpus": "970 rows · book",
+       "status": "REFUSED",
+       "result": "H4 null: 49.1% vs 48.6%, n=970 rows",
+       "was": "S-B17"
+      }
+     ]
+    },
+    {
+     "key": "F2",
+     "name": "Tap decay — 1st · 2nd · 3rd",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "F2.1",
+       "q": "Skylit's 80 / 66 / 33 against our taps — held rate by tap number",
+       "decides": "SIZE",
+       "claim": "C3",
+       "corpus": "94 ep · book",
+       "status": "REGISTERED",
+       "result": "tap≥1 73% n=22 vs tap0 47% n=70 · H2 reads at 30",
+       "was": "S-B1"
+      },
+      {
+       "id": "F2.2",
+       "q": "The third tap: kill.tap3 as a rule — does it earn its place?",
+       "decides": "SKIP",
+       "claim": "C3",
+       "corpus": "94 ep · book",
+       "status": "THIN",
+       "result": "n=2 third taps"
+      },
+      {
+       "id": "F2.3",
+       "q": "Decay by node role: does the King decay slower than a lesser node?",
+       "decides": "SIZE",
+       "claim": "C3 C10",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "F3",
+     "name": "Lifecycle state",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "F3.1",
+       "q": "FRESH vs TESTED vs DELIVERED vs DECAYING — held rate by state",
+       "decides": "SIZE",
+       "claim": "C4",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B2"
+      },
+      {
+       "id": "F3.2",
+       "q": "Real vs hedge: grew day-over-day vs faded — held rate",
+       "decides": "SIZE",
+       "claim": "C5",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B3"
+      },
+      {
+       "id": "F3.3",
+       "q": "After a rejection, does the node's growth in the next 15 minutes predict the revisit?",
+       "decides": "WAIT",
+       "claim": "C6",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B15"
+      }
+     ]
+    },
+    {
+     "key": "F4",
+     "name": "Growth into the tap",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "F4.1",
+       "q": "Building vs flat vs shedding in the 15 minutes before the tap",
+       "decides": "SIZE",
+       "claim": "C21",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B4"
+      },
+      {
+       "id": "F4.2",
+       "q": "Growth measured in the flow book vs the structure book — do they agree on 'building'?",
+       "decides": "SIZE",
+       "claim": "ours",
+       "corpus": "tap record + IF book",
+       "status": "OPEN"
+      },
+      {
+       "id": "F4.3",
+       "q": "Accumulation canon (accumCanon) vs the archived variants — one definition, one number",
+       "decides": "SIZE",
+       "claim": "ours",
+       "corpus": "11d · book",
+       "status": "READ",
+       "result": "growth mattered, pairing did not (rollsupport)"
+      }
+     ]
+    },
+    {
+     "key": "F5",
+     "name": "Magnitude and rank",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "F5.1",
+       "q": "Top-5 node vs the rest — held rate",
+       "decides": "SIZE",
+       "claim": "C1",
+       "corpus": "94 ep · book",
+       "status": "THIN"
+      },
+      {
+       "id": "F5.2",
+       "q": "Grade A/B/C at fire — does the grade predict the hold, or invert it?",
+       "decides": "SIZE",
+       "claim": "ours",
+       "corpus": "94 ep · book",
+       "status": "REGISTERED",
+       "result": "exploratory 32% n=34 for A — the inverse · H1 reads at 40"
+      },
+      {
+       "id": "F5.3",
+       "q": "Node share of the book's gamma at the tap — a continuous magnitude read",
+       "decides": "SIZE",
+       "claim": "C1",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "F6",
+     "name": "Polarity and regime",
+     "decides": "STOP · TARGET",
+     "studies": [
+      {
+       "id": "F6.1",
+       "q": "+γ vs −γ node — held rate (registered null)",
+       "decides": "STOP",
+       "claim": "C8",
+       "corpus": "94 ep · book",
+       "status": "REGISTERED",
+       "result": "H3: 52.2% vs 52.1% · n=46/48 · gap < 8 predicted"
+      },
+      {
+       "id": "F6.2",
+       "q": "+γ vs −γ — the EXTENT, not the rate",
+       "decides": "TARGET",
+       "claim": "C30",
+       "corpus": "94 ep · book",
+       "status": "THIN"
+      },
+      {
+       "id": "F6.3",
+       "q": "GEX / VEX overlap at the strike — held rate with vs without vanna",
+       "decides": "SIZE",
+       "claim": "C29",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B13"
+      }
+     ]
+    },
+    {
+     "key": "F7",
+     "name": "Trinity",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "F7.1",
+       "q": "3/3 vs 2/3 vs split at the tap — held rate",
+       "decides": "SIZE",
+       "claim": "C28",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B12"
+      },
+      {
+       "id": "F7.2",
+       "q": "The SPX outlier is the bad one — held rate when SPX disagrees vs when QQQ disagrees",
+       "decides": "SIZE",
+       "claim": "C28",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "F7.3",
+       "q": "Trinity alignment at the OPEN vs at the tap — which one predicts?",
+       "decides": "TIME",
+       "claim": "C28",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "F8",
+     "name": "Velocity into the tap",
+     "decides": "STOP",
+     "studies": [
+      {
+       "id": "F8.1",
+       "q": "Fast approach vs grind (ROC at tap) — held rate and overshoot depth",
+       "decides": "STOP",
+       "claim": "C20",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "F8.2",
+       "q": "Velocity × air pocket behind — the setups that overshoot the most",
+       "decides": "STOP",
+       "claim": "C15 C20",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "P",
+   "name": "PULLBACK DEFLECTIONS",
+   "strap": "inside a move, will this retracement turn at this node — the join-the-move trade",
+   "subsections": [
+    {
+     "key": "P1",
+     "name": "Which node holds the pullback",
+     "decides": "LEVEL",
+     "studies": [
+      {
+       "id": "P1.1",
+       "q": "The NEAREST node, the LARGEST below/above, the King, or the node that just delivered — share of pullback turns by role",
+       "decides": "LEVEL",
+       "claim": "C13 C22",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P1.2",
+       "q": "First node hit vs second — how often the pullback needs the second",
+       "decides": "LEVEL",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P1.3",
+       "q": "A gatekeeper in the pullback's path — does it take the turn before the bigger node?",
+       "decides": "LEVEL",
+       "claim": "C14",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "P2",
+     "name": "Pullback depth",
+     "decides": "STOP · LEVEL",
+     "studies": [
+      {
+       "id": "P2.1",
+       "q": "Retracement of the leg at the turn (% of the leg) — distribution, by regime",
+       "decides": "STOP",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P2.2",
+       "q": "Turns inside the EM band vs beyond it",
+       "decides": "LEVEL",
+       "claim": "ours",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "P2.3",
+       "q": "Depth in ATR from the leg's extreme — where the stop must live",
+       "decides": "STOP",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "P3",
+     "name": "Timing — the 10:00 · midday · the 14:00",
+     "decides": "TIME",
+     "studies": [
+      {
+       "id": "P3.1",
+       "q": "The first pullback after the open drive (09:00–10:30): turn rate at the first node",
+       "decides": "TIME",
+       "claim": "lore",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P3.2",
+       "q": "Midday pullbacks (11:30–13:30): turn rate — does lunch hold?",
+       "decides": "TIME",
+       "claim": "lore",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P3.3",
+       "q": "The 14:00 pullback into the last 90 minutes: turn vs reversal",
+       "decides": "TIME",
+       "claim": "lore C10",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "P4",
+     "name": "Node condition at the pullback",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "P4.1",
+       "q": "A node born during the move vs an established one",
+       "decides": "SIZE",
+       "claim": "C21",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-B5"
+      },
+      {
+       "id": "P4.2",
+       "q": "A node fed gamma during the leg vs one left flat",
+       "decides": "SIZE",
+       "claim": "C21",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P4.3",
+       "q": "A node that moved WITH the leg (rolled up under a rally) vs static",
+       "decides": "SIZE",
+       "claim": "C19 C22",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P4.4",
+       "q": "Tap number of the pullback node: is a TESTED node a better pullback floor than a FRESH one (H2 says maybe)?",
+       "decides": "SIZE",
+       "claim": "C3",
+       "corpus": "94 ep · book",
+       "status": "REGISTERED",
+       "result": "H2 · tap≥1 73% n=22"
+      }
+     ]
+    },
+    {
+     "key": "P5",
+     "name": "Confluence",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "P5.1",
+       "q": "Node × VWAP within the band — turn rate with vs without; and the VWAP-band sweep as a pullback: does the move RESUME to a new extreme within 30 bars?",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price + tap record",
+       "status": "READ NEXT",
+       "result": "H2.10h found VWAP/band sweeps are not the extreme (5–13%, n=124–207) — the right outcome for them is resume, unread"
+      },
+      {
+       "id": "P5.2",
+       "q": "Node × a prior level (IBH/IBL, ONH/ONL, PDH/PDL) — turn rate with vs without",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "tap record + 284d price",
+       "status": "OPEN"
+      },
+      {
+       "id": "P5.3",
+       "q": "Node × EM band edge",
+       "decides": "SIZE",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P5.4",
+       "q": "Node in both books (Skylit and InsiderFinance) vs one",
+       "decides": "SIZE",
+       "claim": "ours",
+       "corpus": "tap record + IF book",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "P6",
+     "name": "Deflection or reversal",
+     "decides": "SIDE · STOP",
+     "studies": [
+      {
+       "id": "P6.1",
+       "q": "After the turn, did the move resume to a NEW extreme (continuation) — rate",
+       "decides": "SIDE",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P6.2",
+       "q": "The pullback that became the day's turn: what did it look like before it broke (growth, tap#, clock)?",
+       "decides": "STOP",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P6.3",
+       "q": "Failure cost: when the pullback node breaks, how far to the next node (the stop's distance)",
+       "decides": "STOP",
+       "claim": "C15",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "P7",
+     "name": "Payoff",
+     "decides": "TARGET",
+     "studies": [
+      {
+       "id": "P7.1",
+       "q": "Resume-to-new-extreme distance and time, from the turn",
+       "decides": "TARGET",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P7.2",
+       "q": "MFE10 of pullback holds vs extreme holds — which pays more per point of stop?",
+       "decides": "TARGET",
+       "claim": "ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "P7.3",
+       "q": "With-trend pullback on a GREEN day vs counter-trend — turn rate and payoff",
+       "decides": "SIDE",
+       "claim": "lore",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "H",
+   "name": "HOD / LOD",
+   "strap": "is the extreme in, what printed it, and what the other side pays — the move from low to high",
+   "subsections": [
+    {
+     "key": "H1",
+     "name": "Is the extreme in",
+     "decides": "SIZE · WAIT",
+     "studies": [
+      {
+       "id": "H1.1",
+       "q": "The standing extreme is the day's — posr × clock, calibrated",
+       "decides": "SIZE",
+       "claim": "C17",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "AUC 0.879 · NOT-IN cell 85% n=230",
+       "script": "model-lodhod.py",
+       "was": "S-A5"
+      },
+      {
+       "id": "H1.2",
+       "q": "The time-only baseline every claim must beat: the standing low is final ~40% at 09:30, ~64% by noon",
+       "decides": "WAIT",
+       "claim": "—",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "clock curve on the tab"
+      },
+      {
+       "id": "H1.3",
+       "q": "The standing extreme conditioned on a top-5 node at it — does the node move the cell?",
+       "decides": "SIZE",
+       "claim": "C17 C13",
+       "corpus": "defl ledger 0/50",
+       "status": "BLOCKED",
+       "result": "H5 · needs 50 labelled deflections"
+      },
+      {
+       "id": "H1.4",
+       "q": "IB60 break as an 'extreme is in' tell",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "0.655 standalone; no lift over the clock in ablation"
+      }
+     ]
+    },
+    {
+     "key": "H2",
+     "name": "SWEEPS — the levels that get run before the turn",
+     "decides": "SIZE · STOP · TIME",
+     "studies": [
+      {
+       "id": "H2.1",
+       "q": "ONL sweep-and-reclaim → is the sweep's low the LOD? ONH → the HOD?",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "ONL 29% n=113 · ONH 26% n=140 — vs a fresh-low bounce at nothing: 28% / 22% (+1 / +4pp)",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.2",
+       "q": "PDL / PDH sweep-and-reclaim → the extreme?",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "PDL 23% n=87 · PDH 16% n=113 — control 24% / 18% (−1 / −2pp)",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.3",
+       "q": "IBL / IBH sweep-and-reclaim (after 09:30) → the extreme?",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "IBL 20% n=143 · IBH 16% n=148 — control 26% / 19% (−6 / −3pp)",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.4",
+       "q": "Sweep by the clock: does an early sweep print the extreme more than a late one?",
+       "decides": "TIME",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "first 30 min: ONL 37% n=35 · ONH 27% n=41 · PDL 31% n=39 · PDH 20% n=65 — each +5 to +15pp over control; after 10:00 no better than nothing",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.5",
+       "q": "Depth and speed of the sweep — the flush vs the poke",
+       "decides": "SIZE · STOP",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "depth > 8 pts 40% n=86 (+16pp) · reclaim 6–30 bars 40% n=90 (+16pp) · shallow ≤3 pt quick poke 14% n=228 (−9pp): the poke is NOT the low 86% of the time",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.6",
+       "q": "Acceptance — the level breaks on first touch (no reclaim in 30 bars)",
+       "decides": "STOP",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "PD levels break on first touch 30% n=124 / 34% n=170 · ON 7% n=121 / 9% n=154 · IB 14% n=166 / 20% n=184",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.7",
+       "q": "Sweep × node: an ON/PD sweep-reclaim that lands in a top-5 node band or at the King — does the node lift the 26%?",
+       "decides": "SIZE",
+       "claim": "C13 C17",
+       "corpus": "tap record · API backfill",
+       "status": "DRAFT",
+       "result": "H6 proposed: > 40% vs the 24% base (n=453 ON/PD sweep-reclaims) · refute if ≤ 30%"
+      },
+      {
+       "id": "H2.8",
+       "q": "The early sweep as a register entry — re-read on sessions after 2026-08-21",
+       "decides": "SIZE · TIME",
+       "claim": "lore",
+       "corpus": "new sessions",
+       "status": "DRAFT",
+       "result": "H7 proposed: first-30-min ON/PD sweep-reclaim prints the extreme > 24% · refute if ≤ 18% (pooled 27% n=180 on the read corpus)"
+      },
+      {
+       "id": "H2.9",
+       "q": "Sweep of the SESSION extreme itself — the failed breakdown: a new low that fails within 30 bars",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ NEXT"
+      },
+      {
+       "id": "H2.10",
+       "q": "PDC (prior close, the gap-fill level) — sweep-and-reclaim → the extreme?",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "PDC− → LOD 30% n=120 (control 21%, +9pp) · PDC+ → HOD 19% n=105 (control 17%) · and PDC BREAKS on first touch 44% / 56% of the time — it is a magnet, not a wall",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10b",
+       "q": "Prior-day profile — POC / VAH / VAL sweep-and-reclaim → the extreme?",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "VAL 28% n=112 (+4pp) · VAH 19% n=118 (+2pp) · POC− 27% n=108 (+4pp) · POC+ 26% n=97 (+9pp) — all inside chance of the control; they break on first touch 35–57%",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10c",
+       "q": "Pre-market high/low (07:00–08:30 CT) — PMH / PML",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "PML 21% n=189 (control 21%) · PMH 15% n=197 (17%) — nothing; they reclaim 87% of the time and mean nothing when they do",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10d",
+       "q": "Prior WEEK high/low — PWH / PWL",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "PWL 25% n=36 (27%) · PWH 22% n=55 (19%) — thin and flat; PW levels break on first touch 38% / 57%",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10e",
+       "q": "Opening range 5 / 15 min — OR5 / OR15 sweeps (after the range completes)",
+       "decides": "SKIP",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "OR5L 20% n=212 (−4pp) · OR5H 10% n=215 (−7pp) · OR15L 22% n=186 (−6pp) · OR15H 14% n=201 (−7pp) — an OR sweep-reclaim is slightly WORSE than a bounce at nothing: it is the poke by construction",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10f",
+       "q": "Sweeps of the BOOK'S levels — CW0 / PW0 / CW / PW and the King as sweep levels, valued as of the sweep bar",
+       "decides": "SIZE",
+       "claim": "C13 ours",
+       "corpus": "book · day files",
+       "status": "THIN",
+       "result": "BOOK CORPUS 9 sessions (2026-08-18 → 2026-08-31, SPY 3-min, ±0.50 zone): price sweep AT a top-5 node / the King 30% n=10 vs NOT at a node 38% n=8 · AT the King 33% n=3 · AT a wall 60% n=5 · sweeps OF the book’s levels: KING↓ 20% n=5 · KING↑ 50% n=2 · PW0↓ 0% n=3 · CW0↑ 0% n=3 · CW↑ 0% n=4 · PW↓ 0% n=3 — all thin; every export adds a session",
+       "script": "study-sweeps-book.py"
+      },
+      {
+       "id": "H2.10g",
+       "q": "Sweep × NODE (H6 as a table): a price-level sweep whose extremum sits in the tap zone (±0.50 SPY) of a top-5 node / the King / a wall, vs one that lands at nothing",
+       "decides": "SIZE",
+       "claim": "C2 C13 C17",
+       "corpus": "book · day files",
+       "status": "REGISTERED",
+       "result": "H6 · judged by the nightly from the same table · reads at 40 at-node events on sessions from 2026-09-03",
+       "script": "study-sweeps-book.py"
+      },
+      {
+       "id": "H2.10h",
+       "q": "VWAP and its ±1σ / ±2σ bands as sweep levels (valued at the sweep bar, side = the side price came from)",
+       "decides": "SKIP · LEVEL",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "the interior levels are NOT the extreme: VWAP- 7% n=126 (control 21%) · VWAP+ 5% n=124 (control 16%) · VW1L 8% n=207 (control 28%) · VW1H 8% n=200 (control 23%) · VW2L 13% n=180 (control 28%) · VW2H 11% n=178 (control 22%) — a VWAP-band sweep is a PULLBACK candidate, not the day’s turn; the pullback outcome (resume to a new extreme) is P5.1",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10i",
+       "q": "Today’s DEVELOPING profile — DPOC / DVAH / DVAL as sweep levels",
+       "decides": "SKIP · LEVEL",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "not the extreme, by construction inside the range: DPOC- 5% n=131 (control 28%) · DPOC+ 3% n=121 (control 23%) · DVAL 8% n=213 (control 28%) · DVAH 7% n=207 (control 22%) — pullback levels, measured for the pullback objective under P5",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10j",
+       "q": "The London range (02:00 CT → the open) — LDNH / LDNL",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "LDNL 21% n=163 (control 24%) · LDNH 16% n=170 (control 18%) — like every other level name: within chance of the fresh-low control",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10k",
+       "q": "The expected-move edges (EMH / EML) as sweep levels — Skylit’s own band",
+       "decides": "SIZE",
+       "claim": "C-EM ours",
+       "corpus": "live only · needs the straddle in the corpus",
+       "status": "OPEN",
+       "result": "live in the READ from v15.57; the price corpus has no straddle, so no rate yet — the tap record / API backfill measures it"
+      },
+      {
+       "id": "H2.10l",
+       "q": "HVL (zero-gamma) and the magnet as sweep levels",
+       "decides": "SIZE",
+       "claim": "C30 ours",
+       "corpus": "book · day files",
+       "status": "THIN",
+       "result": "HVL↓ 1 of 2 · HVL↑ 1 of 2 · MAG↓ 1 of 3 · MAG↑ 1 of 2 over 9 sessions (n under 15 everywhere: thin) — grows with every export",
+       "script": "study-sweeps-book.py"
+      },
+      {
+       "id": "H2.11",
+       "q": "The payoff when the sweep IS the extreme — median distance to the far extreme",
+       "decides": "TARGET",
+       "claim": "ours",
+       "corpus": "284d · price",
+       "status": "READ",
+       "result": "ONL 74.5 · ONH 67.8 · PDL 84.2 · PDH 60.0 pts — the whole range, the prize",
+       "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.12",
+       "q": "The bar-level sweep feature inside the standing-extreme model — kept on the board as the refusal it earned",
+       "decides": "SKIP",
+       "claim": "—",
+       "corpus": "284d · price",
+       "status": "REFUSED",
+       "result": "swp 0.559 standalone; no lift over the clock",
+       "script": "model-lodhod.py"
+      }
+     ],
+     "note": "First read, 79 cells over 20 level types on price, 20 more on the book corpus (thin), none pre-registered. The verdict that matters: the LEVEL'S NAME does not matter — ON, PD, PDC, POC/VAH/VAL, PM, PW, IB, OR are all within chance of a bounce off any fresh low (−7 to +9pp; the two +9s are what 79 cells produce by luck); the CLOCK, the DEPTH and the SPEED do. The node-conditioned version is H6 — the tapereader's whole reason to exist."
+    },
+    {
+     "key": "H3",
+     "name": "Which node printed the extreme",
+     "decides": "LEVEL · SIZE",
+     "studies": [
+      {
+       "id": "H3.1",
+       "q": "The King, the largest-beyond, the nearest, or a gatekeeper — share of extremes by role, per book",
+       "decides": "LEVEL",
+       "claim": "C13 C10",
+       "corpus": "tap record",
+       "status": "OPEN",
+       "was": "S-A1"
+      },
+      {
+       "id": "H3.2",
+       "q": "State and tap number of the node at the extreme (FRESH? first tap?)",
+       "decides": "SIZE",
+       "claim": "C3 C4",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "H3.3",
+       "q": "Extremes with NO node within the band — how often the day turns at nothing (the control)",
+       "decides": "SKIP",
+       "claim": "C16",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "H3.4",
+       "q": "Which book's node — Skylit flow vs InsiderFinance structure",
+       "decides": "LEVEL",
+       "claim": "ours",
+       "corpus": "tap record + IF book",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "H4",
+     "name": "The clock of extremes",
+     "decides": "TIME · WAIT",
+     "studies": [
+      {
+       "id": "H4.1",
+       "q": "When the extremes print — the first extreme's median minute, the gap to the second",
+       "decides": "TIME",
+       "claim": "—",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "first extreme median 33.5 min · gap 229.5 min",
+       "script": "BASERATES.json"
+      },
+      {
+       "id": "H4.2",
+       "q": "LOD-first vs HOD-first by day of week and by open location",
+       "decides": "TIME",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ NEXT"
+      },
+      {
+       "id": "H4.3",
+       "q": "An extreme printed in the first 30 minutes — survival rate by the minute it was set (the ladder)",
+       "decides": "WAIT",
+       "claim": "C17",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "ladder 30/60/90/120/180 on the tab",
+       "script": "BASERATES.json"
+      },
+      {
+       "id": "H4.4",
+       "q": "The 14:00 turn: extremes printed after 13:30 — how often, and are they at the King?",
+       "decides": "TIME",
+       "claim": "C10",
+       "corpus": "284d + tap record",
+       "status": "READ NEXT"
+      }
+     ]
+    },
+    {
+     "key": "H5",
+     "name": "Range and the expected move",
+     "decides": "TARGET",
+     "studies": [
+      {
+       "id": "H5.1",
+       "q": "The day's range: median 61.4 pts, p25 41.8 — what a full low-to-high pays",
+       "decides": "TARGET",
+       "claim": "—",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "rng_pts 61.4 · rng_usd 3,072",
+       "script": "BASERATES.json"
+      },
+      {
+       "id": "H5.2",
+       "q": "The extreme at the EM band edge vs inside — how often the band is the wall",
+       "decides": "TARGET",
+       "claim": "ours",
+       "corpus": "11d · book",
+       "status": "THIN"
+      },
+      {
+       "id": "H5.3",
+       "q": "Range vs ATR at the open — does a wide open range shrink the second leg?",
+       "decides": "TARGET",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ NEXT"
+      }
+     ]
+    },
+    {
+     "key": "H6",
+     "name": "The other side — the move from low to high",
+     "decides": "TARGET",
+     "studies": [
+      {
+       "id": "H6.1",
+       "q": "After the LOD holds, where does the HOD print — at the King, a ceiling, the EM edge?",
+       "decides": "TARGET",
+       "claim": "C13 ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "H6.2",
+       "q": "Time from the first extreme to the second — median 229 min; by the first extreme's clock",
+       "decides": "TIME",
+       "claim": "—",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "gap_min 229.5",
+       "script": "BASERATES.json"
+      },
+      {
+       "id": "H6.3",
+       "q": "The first excursion (wick family): median 40 pts n=252 before the first close back through the open",
+       "decides": "STOP",
+       "claim": "ours",
+       "corpus": "284d · price",
+       "status": "SHIPPED",
+       "result": "wick 61.1 mean / 40 median · n=252 · zero-wick days print 0",
+       "script": "BASERATES.json"
+      },
+      {
+       "id": "H6.4",
+       "q": "Does the second extreme reach the far-side node most often named by the ladder at the first extreme?",
+       "decides": "TARGET",
+       "claim": "C15",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "H6.5",
+       "q": "The LID: after a big-node rejection from the LOD, how often does a ceiling node cap the bounce — at which node, how far up, how soon (his example for the READ)",
+       "decides": "TARGET · STOP",
+       "claim": "C10 C13 ours",
+       "corpus": "tap record",
+       "status": "OPEN"
+      }
+     ]
+    },
+    {
+     "key": "H7",
+     "name": "Event and expiry days",
+     "decides": "SIZE · SKIP",
+     "studies": [
+      {
+       "id": "H7.1",
+       "q": "OPEX: does the doctrine's discount show as a lower held rate at the extremes?",
+       "decides": "SIZE",
+       "claim": "C-OPEX",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "H7.2",
+       "q": "FOMC / CPI days (ForexFactory): extremes at the release vs after",
+       "decides": "TIME",
+       "claim": "lore",
+       "corpus": "284d + calendar",
+       "status": "READ NEXT"
+      },
+      {
+       "id": "H7.3",
+       "q": "VIX regime (low / mid / high) — range, and whether the extremes print at nodes more or less",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d + ^VIX",
+       "status": "READ NEXT"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "X",
+   "name": "CONTEXT",
+   "strap": "the modifiers every row above is split by — regime, calendar, volatility, the three books",
+   "subsections": [
+    {
+     "key": "X1",
+     "name": "Gamma regime",
+     "decides": "TARGET · STOP",
+     "studies": [
+      {
+       "id": "X1.1",
+       "q": "+γ fade vs −γ follow — style of the day: reversion vs extension",
+       "decides": "TARGET",
+       "claim": "C30",
+       "corpus": "94 ep · book",
+       "status": "THIN",
+       "result": "rate flat (H3); extent unread"
+      },
+      {
+       "id": "X1.2",
+       "q": "Regime flip intraday (the zero-gamma crossing) — what happens to the extremes on a flip day",
+       "decides": "STOP",
+       "claim": "C30",
+       "corpus": "11d · book",
+       "status": "THIN"
+      }
+     ]
+    },
+    {
+     "key": "X2",
+     "name": "Calendar",
+     "decides": "SIZE · SKIP",
+     "studies": [
+      {
+       "id": "X2.1",
+       "q": "OPEX vs non-OPEX — the discount",
+       "decides": "SIZE",
+       "claim": "C-OPEX",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "X2.2",
+       "q": "Monday / Friday effects on extremes and range",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ NEXT"
+      },
+      {
+       "id": "X2.3",
+       "q": "Event days from ForexFactory — skip or size?",
+       "decides": "SKIP",
+       "claim": "lore",
+       "corpus": "284d + calendar",
+       "status": "READ NEXT"
+      }
+     ]
+    },
+    {
+     "key": "X3",
+     "name": "Volatility",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "X3.1",
+       "q": "VIX level and change vs range and held rates",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d + ^VIX",
+       "status": "READ NEXT"
+      },
+      {
+       "id": "X3.2",
+       "q": "EM band width vs realised range — the band as a range forecast",
+       "decides": "TARGET",
+       "claim": "ours",
+       "corpus": "11d · book",
+       "status": "THIN"
+      }
+     ]
+    },
+    {
+     "key": "X4",
+     "name": "The three books",
+     "decides": "SIZE",
+     "studies": [
+      {
+       "id": "X4.1",
+       "q": "Trinity alignment at the open — a modifier for every held rate",
+       "decides": "SIZE",
+       "claim": "C28",
+       "corpus": "tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "X4.2",
+       "q": "ES / NQ divergence at the extremes — the cross-market read",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d ES + NQ",
+       "status": "READ",
+       "result": "xdiv in the model; event read pending"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "counts": {
+  "studies": 182,
+  "byStatus": {
+   "OPEN": 94,
+   "READ NEXT": 17,
+   "THIN": 24,
+   "SHIPPED": 13,
+   "REFUSED": 3,
+   "READ": 23,
+   "REGISTERED": 5,
+   "BLOCKED": 1,
+   "DRAFT": 2
+  }
+ }
+}

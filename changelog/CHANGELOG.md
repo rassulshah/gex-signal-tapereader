@@ -1,3 +1,29 @@
+## v15.58 — the READ reads sweeps, not gaps · the Testing tab as mocked
+
+> "you also didn't implement the testing tab as you mocked up"
+
+Fair: v15.55 gave the Testing tab the loop order and ③ ON THE DASHBOARD, but ①, ②, ④, ⑤ and ⑥ kept their old bodies.
+Now each is the mockup's: **① THE REGISTER** — hyp · subject·study · claim · predict · refute if · n/minN bar · verdict
+(the seed carries predict/refuteIf like the file; DRAFT rows from the registry underneath); **② THE GATE** — the summary
+table (feature · rules it feeds · both bands · Δ · n per band · verdict) over the full live band table; **④ THE RECORD** —
+the stores (feat · defl · TAP · ES 1-min with its full/stub state · the book corpus · kingRoll recs) with fields present
+and what the OPEN studies still need, then the unlock thresholds; **⑤ THE NIGHTLY** — last run · reads next · refreshes
+· ledger, then the review as written; **⑥ THE SUITE · self-test** — the last suite run stamped by `tools/run-tests.sh`
+into `learning/suite.json` (files · green · red · which), the mutation record, then the self-test. `test_v1558.js` (15)
+renders the tab in jsdom with every store loaded; seven older tests moved with the code.
+
+
+> "the analysis tabs looks nothing like the mockups … did you implement this [the TRACK field, the read section]?"
+
+Both were live on his panel (probed: the TRACK field and + Add, `statsRead` reading today's sweeps, the register line
+naming the 772 Rug deflection). What the probe also showed: with the session gapped open above prior value, the two
+lines at the top of the READ were "POC+ swept 08:30 · 47.50 pts through · NOT reclaimed — accepted" and the same for
+VAH — a level the session opened beyond was never swept at all, and a break is a fact about a level that is gone, not
+the READ's subject. **Order now: reclaimed excursions → breaks → levels the session opened beyond**, then tier, then
+depth; an opened-beyond level is named "(opened beyond)" in the trailer and, when it is all there is, the line says
+"the session OPENED 12 pts beyond it and never came back: not a sweep". `test_v1557.js` 3g/3i–3k moved with it.
+Panel only; companion unchanged (v1.18).
+
 ## v15.57 — the levels he asked for, and the two-line rule
 
 > "ok.. lets add these, but note that if there are multiple sweeps we only need to show two on the dashboard that are
@@ -23,6 +49,14 @@ the book study carries HVL/magnet (thin).
 
 **Tests.** `test_v1557.js` (25; 10 of 10 mutations — one fixture re-cut so typical price ≠ close). Suite 125 green /
 9 red (5 baseline + 4 save gates), smoke clean, nightly run.
+
+**Installer rebuilt the same day (v15.57, second `installv1557.bat`).** Probing his live panel after "reloaded double
+check": the raw repo carried panel v15.57 but `learning/studies.json`, `learning/register.json`, `learning/requests.json`,
+`data/es-1min/SWEEPS.json`, `SWEEPS-BOOK.json` and `learning/log/*.json` were **404** — the installer manifest had never
+listed them (only `learning/rules.json`), and the cloud cannot push. So the Analysis tab ran on its seed, the sweep table
+never arrived, the READ quoted no rates, the nightly's verdicts never came back. The manifest now includes every file a
+`pipeFetch` names, by glob, and `test_installer_manifest.js` pins the builder's `--list` against the panel's fetch calls
+(mutation-checked: removing the glob block fails m3/m4/m5).
 
 **Next (v15.58).** The TAP record.
 

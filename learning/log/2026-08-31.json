@@ -1,0 +1,92 @@
+{
+ "schema": 2,
+ "date": "2026-08-31",
+ "writtenBy": "tools/nightly/run.py",
+ "sessions": 0,
+ "episodes": 0,
+ "deflEvents": 0,
+ "null": {
+  "p50": 0,
+  "p95": 0
+ },
+ "hypotheses": [
+  {
+   "id": "H1",
+   "claim": "grade A holds LESS often than the base rate",
+   "minN": 40,
+   "pick": "gradeA",
+   "n": 0,
+   "nBase": 0,
+   "verdict": "thin"
+  },
+  {
+   "id": "H2",
+   "claim": "a node's 2nd test holds MORE often than its 1st",
+   "minN": 30,
+   "pick": "tap1",
+   "n": 0,
+   "nBase": 0,
+   "verdict": "thin"
+  },
+  {
+   "id": "H3",
+   "claim": "NULL \u2014 polarity does not discriminate",
+   "minN": 40,
+   "pick": "pol",
+   "n": 0,
+   "nA": 0,
+   "nB": 0,
+   "verdict": "thin"
+  },
+  {
+   "id": "H4",
+   "claim": "NULL \u2014 the rejection wick does not discriminate",
+   "minN": 40,
+   "pick": "wick",
+   "n": 0,
+   "nA": 0,
+   "nB": 0,
+   "verdict": "thin"
+  },
+  {
+   "id": "H5",
+   "claim": "a top-5 gamma node moves the HOD/LOD cell",
+   "minN": 50,
+   "pick": "defl",
+   "n": 0,
+   "verdict": "blocked",
+   "bar": "the event ledger holds 0 of 50"
+  },
+  {
+   "id": "H6",
+   "claim": "an ON/PD sweep-reclaim that lands in a top-5 node band or at the King prints the extreme more often",
+   "minN": 40,
+   "pick": "sweepNode",
+   "judgedBy": "nightly",
+   "n": 0,
+   "nControl": 0,
+   "sessions": 9,
+   "verdict": "thin",
+   "bar": "0 sweep-at-a-node events on sessions from 2026-09-03 (needs 40); not at a node: 0"
+  },
+  {
+   "id": "H7",
+   "claim": "a first-30-minute ON/PD sweep-reclaim prints the extreme more often than a bounce off any fresh low",
+   "minN": 60,
+   "pick": "sweepEarly",
+   "judgedBy": "nightly",
+   "n": 0,
+   "sessionsAfter": 0,
+   "verdict": "thin",
+   "bar": "0 early ON/PD sweep-reclaims on sessions after 2026-08-21 (needs 60)"
+  }
+ ],
+ "lodhod": {
+  "sessions": 0,
+  "cells": [],
+  "note": "close-scored rows only (v15.51+); a flat live column against a rising table column means the scorer cannot fail"
+ },
+ "preopen": "0 sessions since 2026-09-03 \u00b7 0 episodes \u00b7 7 of 7 hypotheses still thin \u00b7 null band 0.0 pts",
+ "newRequests": 0,
+ "from": "2026-09-03"
+}

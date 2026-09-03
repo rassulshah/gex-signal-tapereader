@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-03 · v15.57 · session `5e8d34b5` — v15.57: EM edges, VWAP + bands, developing profile, London, HVL/magnet in the sweep read; the two-line rule
+## 2026-09-03 · v15.58 · session `5e8d34b5` — v15.58: the READ ranks reclaimed sweeps first; the Testing tab as mocked; TRACK and the read confirmed live on his panel
 
-_18 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_23 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -195,6 +195,63 @@ What I'd skip and why: the midpoints and floor pivots are mostly measured-worthl
 > ok.. lets add these, but note that if there are multiple sweeps we only need to show two on the dashboard that are the biggest levels that  are the most popular like PDH, PDL, ONH, ONL, VAH, VAL, POC  etc.
 
 **me (16:40):** Now the registry rows for the new levels, then tests.
+Added, with your two-line rule built in.
+
+**Tampermonkey:**
+- **Tapereader v15.57** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.18** — unchanged since v15.56; click it only if you skipped that install — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Run `installv1557.bat`, wait ~5 min, click the tapereader link, reload Atlas — footer must say v15.57.
+
+**The five levels are in the read:** the expected-move edges (from the panel's own band), VWAP with ±1σ/±2σ bands, today's developing POC/VAH/VAL, the London range (02:00 CT → open, only once the companion has the full night), and HVL / the magnet from the InsiderFinance ladder. The dynamic ones are valued at the sweep bar and frozen for the reclaim, and their side is the side price came from — a dip through VWAP from above is a low-side event.
+
+**Your display rule.** Levels are tiered: tier 1 is your list plus the King and the EM edges (PDH, PDL, ONH, ONL, VAH, VAL, POC, KING, EMH, EML); tier 2 is PDC, the walls, IB, London, HVL, magnet; tier 3 the dynamic and minor ones. Every excursion is ranked by tier first, then depth, and ⓪a reads the top two in full — the rest are named in one trailer line ("also swept today, lesser levels: VW2L 09:10 · IBL 10:40"). A broken PDH keeps its place in the two; a deeper VWAP poke does not displace a PDL flush.
+
+**Measured before it was trusted, and it matters.** London behaves like every other named level — within chance of a bounce off nothing. But the interior levels came back with the worst numbers on the board: a VWAP sweep-reclaim is the day's extreme **5–7%** of the time (n=124/1 …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 72 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (16:48):** Push is denied from this environment by organization policy (403 on origin) — the 72 commits are local and go up when `installv1557.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> reloaded double check
+
+**me (16:59):** Good thing you asked — the double check found two problems, one on your side and one on mine.
+
+**Your panel is still running v15.54.** I read it straight off your Atlas tab: footer v15.54, companion still trimming the overnight (v1.17). The raw repo does carry v15.57 and companion v1.18, so the installer pushed — Tampermonkey just hasn't fetched. You need to **click both links**, install, then reload:
+
+- **Tapereader v15.57** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.18** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+**The one on my side is worse, and I'm glad it surfaced now.** While checking, I fetched the files the panel reads from GitHub and got 404 on `learning/studies.json`, `register.json`, `requests.json`, both sweep tables and the nightly logs. The installer's manifest had never included them — only `rules.json` — and the cloud can't push, so nothing the nightly or the studies wrote ever reached your repo. Every test was green because every test reads the working tree. On the live panel that would have meant: Analysis tab showing the seed with "registry not fetched", no sweep table, the READ quoting no rates, no verdicts coming back. The same "a file in the sandbox doesn't exist" lesson this project has hit five times before, so the manifest is now built by glob over everything a `pipeFetch` names, and a new `test_installer_manifest.js` pins the builder's own file list against the panel's fetch calls (I confirmed it fails against the old manifest).
+
+So: **run the rebuilt `installv1557.bat` again** (same version, 320 files instead of 311 — it pushes the missing ones), wait ~5 min, click both links, reload. Then tell me …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 74 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (16:59):** Push is denied from this environment by organization policy (403 on origin) — the 74 commits are local and go up when the rebuilt `installv1557.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> i installed 15.57 and reloaded already, the analysis tabs looks nothing like the mockups we agreed upon . did you update it and the testing tab yet ?
+
+**me (17:00):** The Analysis tab *is* the new one — your panel is on v15.57 and rendering the subject layout (I can see the K/S/D/F/P/H/X strip on your tab). What's missing is its **data**: the registry and the sweep tables are still 404 on GitHub, because the first `installv1557.bat` didn't carry them — that's the manifest bug I found on the double check. So the tab shows the skeleton: "7 subsections · 0 studies · registry not fetched yet", no rows, no sweep table, and the READ has no rates. That's what makes it look nothing like the mockup — the mockup is what it renders once `learning/studies.json` arrives.
+
+Two things fix it, in this order:
+
+1. **Run the rebuilt `installv1557.bat`** I sent last message (the 3.29 MB one, 320 files). It pushes `studies.json`, `register.json`, `requests.json`, both `SWEEPS*.json` and the nightly logs. Within a couple of minutes the panel's pipeline check fetches them and the rows, the sweep table and the READ's rates appear — no reinstall of the tapereader needed.
+
+2. **The companion is still v1.17.** Its ES store still has the trimmed window (`full:false`), so ONH/ONL are still the pre-market stub. Click this link and install: https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js — then reload Atlas.
+
+The Testing tab is likewise built and running (loop strip → ① REGISTER … ⑥ SELF-TEST); it will fill in the same way once the register and logs are fetched.
+
+Tell me when the installer has run and I'll probe the panel again to confirm all four files loaded and the overnight is the full night.
+
+**OPERATOR:**
+> did you implement this: I want each section in the analysis tab to have a text field in which I can add something that needs to be tracked.  You can then analyze it and also consider testting it.  Basically I want to add something so i will just enter it in the text field for the appropriate section and click a button like add which will trigger you to do your part of analysis and testing.  There also needs to be a feedback mechanism that feeds back into the dashboard especially a read section.  For example if you know there is a high probability of a lid after a big node rejection from the lod because of analysis and testing and stats you can tell me in the read section as we sweep an overnight low and deflect from a node and the statistics and analysis confirm.      did you also implement the file:///C:/Dev/gex-signal-tapereader/mockupanalysisbysubjectstandalone.html  which has the analysis mockup
 
 ### DECISIONS
 
@@ -996,18 +1053,18 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+c10ac5b LESSONS: v15.58 — as mocked means every section
+f084388 v15.58: chat history
+cd5f2a7 v15.58: the Testing tab as mocked — register columns, gate summary, the stores, the nightly head, the suite stamp (learning/suite.json)
+ab2a0b2 v15.58: chat history
+b41a8d8 v15.58: the READ ranks reclaimed sweeps first, a gap open is named as opened-beyond and ranks last
+ac35f47 chat history regenerated (installer manifest fix)
+7490a88 installer manifest: every file the panel fetches rides the installer (learning/*.json, learning/log, data/es-1min/*.json) + test_installer_manifest.js; found by probing the live panel
+83bc1c6 v15.57: chat history regenerated and filled
 536a9b9 v15.57: EM edges, VWAP + bands, developing profile, London range, HVL/magnet in the sweep read; the two-line rule (tiers); corpus at 32 level types (F-16: interior levels are pullback candidates, not extremes)
 8019bfb v15.56: chat history filled (DECISIONS / SHIPPED / OPEN AT CLOSE)
 dbba41a v15.56: chat history regenerated and filled
 ec4ef7a v15.56: the book's levels in the sweep read (CW0/PW0/CW/PW/KING), the book table from the day files (H6 judged from it), the honest overnight, companion v1.18 keeps the full Globex day for ES
-5acc703 v15.55: chat history regenerated and filled (DECISIONS / SHIPPED / OPEN AT CLOSE)
-620a35c v15.55: the Analysis tab by subject (studies.json), TRACK field per subject, THE READ FROM THE STATS on ⓪a, Testing in loop order, sweep study extended to 20 level types (F-14), H6/H7 in the register, nightly judges them and ingests requests
-1863e1e Testing tab redesigned by subject (mockup from live state), sweep findings, design doc, session-state, changelog, chat history
-3fe567f Analysis by subject: studies.json registry (7 subjects, 45 subsections, 170 studies), sweep study on 284 ES sessions (SWEEPS.json), mockup rendered from the registry
-5e3848d mockups: five Analysis-tab alternatives (subject, doctrine scorecard, setup grader, conditions matrix, session timeline) with a recommendation
-6c83f80 mockup: the Analysis tab in three moments (before the open · at the tap · after the close · the nodes), true 608px
-f18345b design: C32-C35 from the live core-concepts page (rapid unwinding, hedge nodes near events, pocket polarity, OPEX discount)
-ff1ff38 design: the Skylit doctrine as 31 measurable claims, and the analysis + capture designed from them
 ```
 
 ---

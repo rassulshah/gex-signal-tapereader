@@ -131,6 +131,33 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.58 (Testing tab) — "as mocked" means every section, not the order of the headings
+
+**What happened.** v15.55 put the Testing tab in the mockup's loop order and built ③ from scratch, then reused the old
+bodies for ①②④⑤⑥ and called it done. He opened it and said it was not what we agreed. He was right: a heading in the
+right place over the old table is not the mockup. **When a design was agreed section by section, ship it section by
+section, and render the result beside the mockup before calling it shipped** — the jsdom page-render harness exists
+for exactly that comparison and was not used on the Testing tab until now.
+
+### v15.58 — a gap open is not a sweep
+
+**What happened.** The corpus definition ("the first bar whose low prints through the level") counts a level the
+session opens beyond as swept at bar 0 and never reclaimed. Fine as a corpus cell (it is counted, not scored); wrong at
+the top of the READ, where it displaced the two real sweep-reclaims of the morning with two 40-point "breaks" that were
+just the gap. **A definition that is right for the count can be wrong for the sentence.** Seen only by reading his live
+panel — the jsdom render had no gap.
+
+### v15.57 (installer) — the sixth directory the manifest lost, found by probing the live panel
+
+**What happened.** Three builds shipped machinery whose output files (the registry, the register, the two sweep tables,
+the nightly logs, the TRACK requests) never reached GitHub: the installer manifest listed `learning/rules.json` and
+nothing else under `learning/` or `data/es-1min/*.json`, and the cloud cannot push. Every test was green because every
+test read the working tree. The panel fetched, got 404, and fell back to its seed — quietly, by design. Found only
+because he said "reloaded double check" and I probed the live panel and the raw URLs instead of trusting the suite.
+**A file the cloud writes exists only when the installer carries it; the guard is a test that reads the builder's own
+manifest against the panel's fetch list** (`test_installer_manifest.js`). Same lesson as v14.59/v14.63/v14.68/v14.92 —
+the manifest is enumerated by hand, and a hand-enumerated list forgets. It is by glob now.
+
 ### v15.57 — an interior level cannot be the extreme; measure the outcome the level can actually deliver
 
 **What happened.** VWAP, its bands and today's value area were added as sweep levels and scored on "printed the

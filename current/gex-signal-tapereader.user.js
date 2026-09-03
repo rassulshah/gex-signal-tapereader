@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.57
+// @version    15.58
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -519,7 +519,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.57';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.58';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17882,14 +17882,14 @@ var PREREG_PICK={ gradeA:function(s){ return s.gradeA; }, tap1:function(s){ retu
                   // register's date); the panel holds no corpus, so their pick returns an empty count on purpose.
                   sweepNode:function(s){ return {n:0,hit:0}; }, sweepEarly:function(s){ return {n:0,hit:0}; } };
 var PREREG_SEED=[
-  { id:'H1', claim:'grade A holds LESS often than the base rate', pick:'gradeA', minN:40, note:'exploratory 32% on n=34 \u2014 the INVERSE of the grade\u2019s purpose. Known confound: A may be assigned in strong trends. If it survives, test the confound BEFORE touching the grade.' },
-  { id:'H2', claim:'a node\u2019s 2nd test holds MORE often than its 1st', pick:'tap1', minN:30, note:'exploratory 73% on n=22 vs 47% first tests.' },
-  { id:'H3', claim:'NULL \u00b7 polarity does not discriminate', pick:'pol', gap:true, minN:40, note:'exploratory +\u03b3 52.2% / \u2212\u03b3 52.1%. Registered as a null ON PURPOSE.' },
-  { id:'H4', claim:'NULL \u00b7 the rejection wick does not discriminate', pick:'wick', gap:true, minN:40, note:'measured 49.1% confirmed vs 48.6% weak on 970 rows. While this stands the wick is REPORTED, never WEIGHTED.' },
-  { id:'H5', claim:'a top-5 gamma node moves the HOD/LOD cell', pick:'defl', blocked:true, minN:50, note:'THE question the panel exists for. Baseline HLTAB AUC 0.879. Definition fixed in advance: within DEFL_NEAR of a top-5-by-dollars node, wick-triggered. Needs the EVENT-level ledger.' },
+  { id:'H1', claim:'grade A holds LESS often than the base rate', pick:'gradeA', minN:40, predict:'held < 45%', refuteIf:'held >= 50% or the CI covers the base', note:'exploratory 32% on n=34 \u2014 the INVERSE of the grade\u2019s purpose. Known confound: A may be assigned in strong trends. If it survives, test the confound BEFORE touching the grade.' },
+  { id:'H2', claim:'a node\u2019s 2nd test holds MORE often than its 1st', pick:'tap1', minN:30, predict:'tap>=1 held > 60%', refuteIf:'tap>=1 held <= 55%', note:'exploratory 73% on n=22 vs 47% first tests.' },
+  { id:'H3', claim:'NULL \u00b7 polarity does not discriminate', pick:'pol', gap:true, minN:40, predict:'gap < 8 points', refuteIf:'gap >= 8 points', note:'exploratory +\u03b3 52.2% / \u2212\u03b3 52.1%. Registered as a null ON PURPOSE.' },
+  { id:'H4', claim:'NULL \u00b7 the rejection wick does not discriminate', pick:'wick', gap:true, minN:40, predict:'gap < 5 points', refuteIf:'gap >= 5 points', note:'measured 49.1% confirmed vs 48.6% weak on 970 rows. While this stands the wick is REPORTED, never WEIGHTED.' },
+  { id:'H5', claim:'a top-5 gamma node moves the HOD/LOD cell', pick:'defl', blocked:true, minN:50, predict:'cell-rate shift >= 8 points in either direction', refuteIf:'shift < 8 points or its CI covers the unconditioned cell', note:'THE question the panel exists for. Baseline HLTAB AUC 0.879. Definition fixed in advance: within DEFL_NEAR of a top-5-by-dollars node, wick-triggered. Needs the EVENT-level ledger.' },
   // (v15.55) drafted from the sweep study (roadmap/FINDINGS-sweeps-first-read.md) and written the same day
-  { id:'H6', claim:'an ON/PD sweep-reclaim that lands in a top-5 node band or at the King prints the extreme more often', pick:'sweepNode', blocked:true, minN:40, judgedBy:'nightly', note:'base 24% over 453 ON/PD sweep-reclaims (284 sessions). Predict > 40%; refute if <= 30% or the CI covers 24%. Needs the TAP record or the API backfill — the level’s NAME was measured to add nothing; the node is the untested clause.' },
-  { id:'H7', claim:'a first-30-minute ON/PD sweep-reclaim prints the extreme more often than a bounce off any fresh low', pick:'sweepEarly', minN:60, judgedBy:'nightly', since:'2026-08-21', note:'found at 27% (n=180) vs an 18% control on sessions BEFORE 2026-08-22; read again only on sessions after it. Predict > 24%; refute if <= 18%.' }
+  { id:'H6', claim:'an ON/PD sweep-reclaim that lands in a top-5 node band or at the King prints the extreme more often', pick:'sweepNode', blocked:true, minN:40, judgedBy:'nightly', predict:'printed > 40% (base 24%, n=453)', refuteIf:'printed <= 30% or the CI covers 24%', note:'base 24% over 453 ON/PD sweep-reclaims (284 sessions). Predict > 40%; refute if <= 30% or the CI covers 24%. Needs the TAP record or the API backfill — the level’s NAME was measured to add nothing; the node is the untested clause.' },
+  { id:'H7', claim:'a first-30-minute ON/PD sweep-reclaim prints the extreme more often than a bounce off any fresh low', pick:'sweepEarly', minN:60, judgedBy:'nightly', since:'2026-08-21', predict:'printed > 24%', refuteIf:'printed <= 18% or the CI covers the fresh-low control', note:'found at 27% (n=180) vs an 18% control on sessions BEFORE 2026-08-22; read again only on sessions after it. Predict > 24%; refute if <= 18%.' }
 ];
 function preregList(){
   var list=null;
@@ -18316,11 +18316,15 @@ function statsRead(sym){
   // best tier among its levels, then by depth; the top two are read in full, the rest are named in one trailer.
   var broke=evs.filter(function(e){ return e.status==='accepted'; }).map(function(e){ var m={}; for(var kk in e) m[kk]=e[kk]; m.levels=[e.level]; return m; });
   var cands=merged.concat(broke);
-  cands.forEach(function(m){ m.tier=Math.min.apply(null, (m.levels||[m.level]).map(levelTier)); });
-  cands.sort(function(a,b){ return (a.tier-b.tier) || (b.depth-a.depth) || (a.atBar-b.atBar); });
+  cands.forEach(function(m){ m.tier=Math.min.apply(null, (m.levels||[m.level]).map(levelTier)); m.gap=(m.atBar===0 && m.status==='accepted'); });
+  // (v15.58) a reclaimed excursion is the READ's subject; a break is a fact about a level that is gone; a level the
+  // session OPENED beyond (bar 0, never reclaimed) was never tested at all — seen live 2026-09-03 when a gap open
+  // put "POC+ swept 08:30 · 47 pts through" at the top of the read. Order: reclaimed → broke → opened beyond.
+  var rank=function(m){ return m.gap?2:(m.status==='accepted'?1:0); };
+  cands.sort(function(a,b){ return (rank(a)-rank(b)) || (a.tier-b.tier) || (b.depth-a.depth) || (a.atBar-b.atBar); });
   var shown=cands.slice(0,2); shown.sort(function(a,b){ return a.atBar-b.atBar; });
   var rest=cands.slice(2);
-  R.rest=rest.map(function(m){ return (m.levels||[m.level]).join('+')+' '+m.at+(m.status==='accepted'?' (broke)':''); });
+  R.rest=rest.map(function(m){ return (m.levels||[m.level]).join('+')+' '+m.at+(m.gap?' (opened beyond)':(m.status==='accepted'?' (broke)':'')); });
   var pending=evs.filter(function(e){ return e.status==='pending'; });
   if(!shown.length){
     if(pending.length){ var pe=pending[pending.length-1]; R.lines.push({ kind:'sweep', txt:pe.level+' is being tested NOW — swept '+pe.at+', '+pe.depth.toFixed(2)+' pts through, not reclaimed yet. The table reads it once a close comes back inside (or 30 bars pass and it counts as a break).', decides:'WAIT' }); }
@@ -18330,7 +18334,8 @@ function statsRead(sym){
     var parts=[]; var favour=0, of=0;
     var lvl=L&&L.level&&L.level[e.level];
     var names=(e.levels&&e.levels.length>1)?e.levels.join(' + '):e.level;
-    var head=names+' swept '+e.at+' · '+e.depth.toFixed(2)+' pts through '+e.level+(e.status==='reclaimed'?(' · back inside in '+e.speed+' bar'+(e.speed===1?'':'s')):' · NOT reclaimed in 30 bars — accepted');
+    var head=e.gap ? (names+' — the session OPENED '+e.depth.toFixed(2)+' pts beyond it and never came back: not a sweep, a level that is gone')
+                   : (names+' swept '+e.at+' · '+e.depth.toFixed(2)+' pts through '+e.level+(e.status==='reclaimed'?(' · back inside in '+e.speed+' bar'+(e.speed===1?'':'s')):' · NOT reclaimed in 30 bars — accepted'));
     if(!L){ parts.push('the sweep table has not been fetched — no rate is quoted'); }
     else if(e.status==='accepted'){
       var acc=null; (W.cells||[]).some(function(c){ if(c.label===e.level+' sweep-reclaim -> printed the '+e.side){ acc=c; return true; } return false; });
@@ -18454,6 +18459,77 @@ function dashboardRulesHtml(sym){
   h+='<div style="margin-top:3px;font-size:8px;color:'+PAL.sub+';white-space:normal;line-height:1.35;font-style:italic">'+tc.total+' rules on the ladder, '+tc.earned+' earned. A hand rule renders no rate. kill.negGammaWide is flagged while a registered null argues against a rule that kills on polarity: when H3 clears at 40 the rule retires; if H3 is refused it stays. That is the loop changing the ladder.</div>';
   return h;
 }
+// (v15.58) ② THE GATE as mocked: one row per feature the rules hang on — the bands, the gap, n per band, the verdict
+function gateSummaryHtml(){
+  var st=null; try{ st=featStatsCached('SPY'); }catch(e){}
+  var feeds={ dir:'D \u00b7 dir.A / dir.B / dir.C \u00b7 kill.*', node:'F \u00b7 node.* \u00b7 kill.tap3 \u00b7 kill.negGammaWide', decision:'F P \u00b7 decision.A\u00d7A \u2026 C\u00d7C', lodhod:'H \u00b7 the HOD/LOD live column (close-scored)' };
+  var h='<table style="width:100%;border-collapse:collapse;font-size:9px"><tr style="color:'+PAL.sub+';font-size:7.5px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">feature</th><th style="text-align:left">subject \u00b7 rules it feeds</th><th style="text-align:right">predicted-low band</th><th style="text-align:right">predicted-high band</th><th style="text-align:right">\u0394</th><th style="text-align:right">n per band</th><th style="text-align:right">verdict</th></tr>';
+  ['dir','node','decision','lodhod'].forEach(function(k){
+    var b=(st&&st.byKey&&st.byKey[k])||{}; var lo=(b.band&&b.band.lo)||{n:0,hit:0}, hi=(b.band&&b.band.hi)||{n:0,hit:0};
+    var rl=lo.n?Math.round(100*lo.hit/lo.n):null, rh=hi.n?Math.round(100*hi.hit/hi.n):null; var g=gateStateTxt(k);
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.04)"><td style="font-weight:800">'+g3esc(k)+'</td><td style="color:'+PAL.sub+';white-space:normal">'+g3esc(feeds[k]||'')+'</td>'+
+      '<td style="text-align:right">'+(rl==null?'\u2014':(rl+'% <i style="color:'+PAL.sub+'">n='+lo.n+'</i>'))+'</td><td style="text-align:right">'+(rh==null?'\u2014':(rh+'% <i style="color:'+PAL.sub+'">n='+hi.n+'</i>'))+'</td>'+
+      '<td style="text-align:right">'+((rl!=null&&rh!=null)?((rh-rl>=0?'+':'')+(rh-rl)+'pp'):'\u2014')+'</td><td style="text-align:right;color:'+PAL.sub+'">'+lo.n+' / '+hi.n+'</td><td style="text-align:right;font-weight:900;color:'+g.col+';white-space:normal">'+g3esc(g.txt)+'</td></tr>';
+  });
+  return h+'</table><div style="margin-top:3px;font-size:8px;color:'+PAL.sub+';white-space:normal;font-style:italic">A feature whose hit rate does not move by \u2265 10 points between the band it predicts low and the band it predicts high cannot promote (ruleTier \u2696) and its rate cannot render (pctN \u26d4). Thin bands are not judged. The full per-feature table follows.</div>';
+}
+// (v15.58) ④ THE RECORD as mocked: the stores, what they carry, what the OPEN studies still need
+function recordStoresHtml(sym){
+  sym=sym||'SPY';
+  var st=null; try{ st=featStatsCached(sym); }catch(e){}
+  var featN=(st&&st.byKey)?Object.keys(st.byKey).reduce(function(a,k){ return a+((st.byKey[k]||{}).n||0); },0):0;
+  var days=(st&&st.days)||0;
+  var deflToday=0; try{ var db=recorderLoad(); var day=recorderDay(db); deflToday=(((day&&day.defl)||{})[sym]||[]).length; }catch(e2){}
+  var fb=null; try{ fb=futBarsLoad(); }catch(e3){}
+  var es=(fb&&fb.ES)||null;
+  var flat=[]; try{ flat=studiesFlat(); }catch(e4){}
+  var openTap=flat.filter(function(x){ return x.status==='OPEN' && /tap record/.test(x.corpus||''); }).length;
+  var readNext=flat.filter(function(x){ return x.status==='READ NEXT'; }).length;
+  var kr=((st&&st.byKey&&st.byKey['dir.kingRoll'])||{}).n||0;
+  var WB=null; try{ WB=sweepsBookLoad(); }catch(e5){}
+  var rows=[
+    ['feat (IDB)', featN+' recs \u00b7 '+days+' d', 'grade \u00b7 p \u00b7 tap# \u00b7 state \u00b7 growth15 \u00b7 pol \u00b7 MFE10 / MAE \u00b7 toClose (lodhod)', 'trinity at tap \u00b7 gk ratio \u00b7 King role & book \u00b7 velocity \u00b7 EM edge'],
+    ['defl (IDB v3)', (DEFL_ARCH_N||0)+' archived \u00b7 '+deflToday+' today', 'sig \u00b7 tapBar \u00b7 wick \u00b7 CONTINUED / STALLED \u00b7 extent', 'wasSessionExtreme at the close \u00b7 node born-during-move \u00b7 sweep link'],
+    ['TAP record', '0 \u00b7 v15.59', '\u2014 the record '+openTap+' OPEN studies wait on \u2014', 'identity \u00b7 node \u00b7 lifecycle \u00b7 growth \u00b7 structure \u00b7 configuration \u00b7 trinity \u00b7 both zones \u00b7 extent \u00b7 wasSessionExtreme'],
+    ['ES 1-min (courier)', es?((es.n||0)+' bars \u00b7 '+(es.full?'full Globex day':'RTH window only (companion < v1.18)')):'no courier data', 'RTH'+(es&&es.full?' + overnight \u00b7 ONH/ONL \u00b7 London':'')+' \u00b7 PDH/PDL/PDC \u00b7 IB \u00b7 VWAP \u00b7 profile', (es&&es.full)?'NQ alongside for D5':'the overnight (companion v1.18)'],
+    ['the book corpus', WB?((WB.corpus&&WB.corpus.sessions)||0)+' sessions \u00b7 SPY 3-min':'not fetched', 'King \u00b7 top-5 \u00b7 walls \u00b7 HVL \u00b7 magnet per bar \u00b7 sweeps at-node / not', 'grows one session per export'],
+    ['kingRoll recs', kr+' rows on this machine', 'recorded since v14', readNext+' READ NEXT studies wait on a first read']
+  ];
+  var h='<table style="width:100%;border-collapse:collapse;font-size:9px"><tr style="color:'+PAL.sub+';font-size:7.5px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">store</th><th style="text-align:right">size</th><th style="text-align:left">fields present</th><th style="text-align:left">missing for the OPEN studies</th></tr>';
+  rows.forEach(function(r){ h+='<tr style="border-top:1px solid rgba(255,255,255,.04);vertical-align:top"><td style="font-weight:700;white-space:nowrap">'+g3esc(r[0])+'</td><td style="text-align:right;white-space:nowrap">'+g3esc(r[1])+'</td><td style="white-space:normal">'+g3esc(r[2])+'</td><td style="white-space:normal;color:'+PAL.sub+'">'+g3esc(r[3])+'</td></tr>'; });
+  return h+'</table><div style="margin-top:3px;font-size:8px;color:'+PAL.sub+';white-space:normal;font-style:italic">The record is the bottleneck, not the analysis: '+openTap+' of '+flat.length+' studies are OPEN on the TAP record. The unlock thresholds follow.</div>';
+}
+// (v15.58) ⑤ THE NIGHTLY as mocked: last run \u00b7 reads next \u00b7 refreshes \u00b7 then the review as written
+function nightlyHeadHtml(){
+  var N=null; try{ N=(typeof ANALYSIS_NIGHTLY!=='undefined')?ANALYSIS_NIGHTLY:null; }catch(e){}
+  var W=null; try{ W=sweepsLoad(); }catch(e2){} var WB=null; try{ WB=sweepsBookLoad(); }catch(e3){}
+  var reg=[]; try{ reg=preregList(); }catch(e4){}
+  var next=reg.map(function(H){ return H.id+' at '+H.minN; }).join(' \u00b7 ');
+  function row(k,v){ return '<div style="display:flex;gap:6px;align-items:baseline;padding:2px 0;border-top:1px dashed rgba(255,255,255,.05)"><span style="color:'+PAL.sub+';min-width:72px;font-size:8px">'+k+'</span><span style="color:'+PAL.ink+';font-size:8.5px;white-space:normal">'+v+'</span></div>'; }
+  var h='';
+  h+=row('last run', N?(g3esc(N.date||'')+' \u00b7 '+g3esc(String(N.preopen||''))):'not read back yet \u2014 learning/log/&lt;day&gt;.json arrives with the pipeline check');
+  h+=row('reads next', g3esc(next));
+  h+=row('refreshes', 'BASERATES.json \u00b7 SWEEPS.json ('+g3esc(String((W&&W.ledger&&W.ledger.cells_read)||'?'))+' cells, '+g3esc(String((W&&W.corpus&&W.corpus.sessions)||'?'))+' sessions) \u00b7 SWEEPS-BOOK.json ('+g3esc(String((WB&&WB.corpus&&WB.corpus.sessions)||'?'))+' sessions) \u00b7 HLTAB calibration cells \u00b7 learning/requests.json');
+  h+=row('ledger', 'every cell read is counted; a first read is never a verdict \u2014 it becomes a register row and is read again on sessions it has not seen');
+  return h;
+}
+// (v15.58) ⑥ THE SUITE: the last run, stamped by tools/run-tests.sh into learning/suite.json (fetched like the others)
+var SUITE_KEY='gpts_suite_v1';
+function suiteLoad(){ try{ var raw=JSON.parse(localStorage.getItem(SUITE_KEY)||'null'); if(raw && typeof raw.green==='number') return raw; }catch(e){} return null; }
+function suiteFetch(){
+  try{ pipeFetch(PIPE_RAW_BASE+'/learning/suite.json').then(function(r){
+    if(r && r.ok && typeof r.json==='function') r.json().then(function(j){ if(j && typeof j.green==='number'){ try{ localStorage.setItem(SUITE_KEY, JSON.stringify(j)); }catch(e){} } }).catch(function(){}); }).catch(function(){}); }catch(e){}
+}
+function suiteHtml(){
+  var S=suiteLoad();
+  function row(k,v){ return '<div style="display:flex;gap:6px;align-items:baseline;padding:2px 0;border-top:1px dashed rgba(255,255,255,.05)"><span style="color:'+PAL.sub+';min-width:72px;font-size:8px">'+k+'</span><span style="color:'+PAL.ink+';font-size:8.5px;white-space:normal">'+v+'</span></div>'; }
+  var h='';
+  if(S) h+=row('last run', g3esc(String(S.files||0))+' files \u00b7 <b style="color:#2ec27e">'+g3esc(String(S.green))+' green</b> \u00b7 <b style="color:#f0616d">'+g3esc(String(S.red||0))+' red</b>'+(S.redFiles&&S.redFiles.length?(' <span style="color:'+PAL.sub+'">('+g3esc(S.redFiles.join(' \u00b7 '))+')</span>'):'')+' \u00b7 v'+g3esc(String(S.version||'?'))+' \u00b7 '+g3esc(String(S.at||'')));
+  else h+=row('last run', 'learning/suite.json not fetched yet \u2014 tools/run-tests.sh writes it on every suite run');
+  h+=row('mutation', 'every new assertion is mutation-tested: v15.55 12/12 \u00b7 v15.56 9/9 \u00b7 v15.57 10/10 \u2014 a mutant that survives is a test that passes for the wrong reason');
+  h+=row('self-test', 'below: a synthetic day with three planted properties through this panel\u2019s own arithmetic; the nightly\u2019s --selftest plants an effect and a nothing');
+  return h;
+}
 function readNextQueueHtml(){
   var flat=studiesFlat(); var q=flat.filter(function(x){ return x.status==='READ NEXT'; });
   var drafts=flat.filter(function(x){ return x.status==='DRAFT'; });
@@ -18512,19 +18588,28 @@ function preregStats(sym){
 }
 function preregHtml(){
   var s=preregStats('SPY');
-  var h='<table style="width:100%;border-collapse:collapse;font-size:10px"><tr style="color:'+PAL.sub+';font-size:9px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">id</th><th style="text-align:left">study</th><th style="text-align:left">claim</th><th>n / min</th><th style="text-align:left">status</th></tr>';
+  var NJ=null; try{ NJ=(typeof ANALYSIS_NIGHTLY!=='undefined')?ANALYSIS_NIGHTLY:null; }catch(eNJ){}
+  var h='<table style="width:100%;border-collapse:collapse;font-size:9px"><tr style="color:'+PAL.sub+';font-size:7.5px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">hyp</th><th style="text-align:left">subject \u00b7 study</th><th style="text-align:left">claim</th><th style="text-align:left">predict</th><th style="text-align:left">refute if</th><th style="text-align:left">n / minN</th><th style="text-align:right">verdict</th></tr>';
   preregList().forEach(function(H){
-    var v=H.pickFn(s)||{}; var n, status, c=PAL.sub;
-    if(H.judgedBy==='nightly'){   // (v15.55) the sweep hypotheses: judged by tools/study-sweeps.py on sessions after the register date
-      var NJ=null; try{ NJ=(typeof ANALYSIS_NIGHTLY!=='undefined')?ANALYSIS_NIGHTLY:null; }catch(eNJ){}
-      var hv=null; ((NJ&&NJ.hypotheses)||[]).some(function(x){ if(x.id===H.id){ hv=x; return true; } return false; });
-      n=(hv&&hv.n!=null)?hv.n:0; status=(hv?((hv.verdict||'thin').toUpperCase()+(hv.bar?(' \u00b7 '+hv.bar):'')):'judged by the nightly \u00b7 not read back yet')+(H.blocked?' \u00b7 needs the TAP record':''); c=(hv&&hv.verdict==='cleared')?'#2ec27e':((hv&&hv.verdict==='refused')?'#f0616d':'#f2b45a'); }
-    else if(H.blocked){ n=v.n||0; status=(n>=H.minN)?'ledger has '+n+' events \u2014 ready to run':('BLOCKED \u00b7 the event ledger holds '+n+' of '+H.minN); c='#f2b45a'; }
-    else if(H.gap){ n=Math.min(v.a.n,v.b.n); if(n>=H.minN){ var ra=Math.round(100*v.a.hit/v.a.n), rb=Math.round(100*v.b.hit/v.b.n); status='READ \u00b7 '+v.la+' '+ra+'% vs '+v.lb+' '+rb+'% \u00b7 gap '+Math.abs(ra-rb)+' pts'; c='#e6edf3'; } else status='thin \u2014 not read ('+v.la+' '+v.a.n+' / '+v.lb+' '+v.b.n+')'; }
-    else { n=v.n||0; if(n>=H.minN){ status='READ \u00b7 held '+Math.round(100*v.hit/v.n)+'%'; c='#e6edf3'; } else status='thin \u2014 not read'; }
-    h+='<tr'+g3tip(H.note||'')+'><td style="font-weight:800">'+g3esc(H.id)+'</td><td style="color:'+PAL.sub+';white-space:nowrap">'+g3esc(HYP_STUDY[H.id]||'\u2014')+'</td><td>'+H.claim+'</td><td style="text-align:right">'+n+' / '+H.minN+'</td><td style="color:'+c+'">'+status+'</td></tr>';
+    var v=H.pickFn(s)||{}; var n=0, status, c=PAL.sub, bar='';
+    var hv=null; ((NJ&&NJ.hypotheses)||[]).some(function(x){ if(x.id===H.id){ hv=x; return true; } return false; });
+    if(H.judgedBy==='nightly'){ n=(hv&&hv.n!=null)?hv.n:0; status=hv?((hv.verdict||'thin').toUpperCase()):'THIN'; bar=hv&&hv.bar?hv.bar:'judged by the nightly \u00b7 not read back yet'; c=(hv&&hv.verdict==='cleared')?'#2ec27e':((hv&&hv.verdict==='refused')?'#f0616d':'#f2b45a'); }
+    else if(H.blocked){ n=v.n||0; status=(n>=H.minN)?'READY':'BLOCKED'; bar=(n>=H.minN)?('ledger has '+n+' events \u2014 the join can be run'):('the event ledger holds '+n+' of '+H.minN); c='#f2b45a'; }
+    else if(H.gap){ n=Math.min((v.a||{}).n||0,(v.b||{}).n||0); if(n>=H.minN){ var ra=Math.round(100*v.a.hit/v.a.n), rb=Math.round(100*v.b.hit/v.b.n); status='READ'; bar=v.la+' '+ra+'% vs '+v.lb+' '+rb+'% \u00b7 gap '+Math.abs(ra-rb)+' pts \u00b7 n '+v.a.n+'/'+v.b.n; c='#e6edf3'; } else { status='THIN'; bar='not read \u00b7 '+v.la+' '+((v.a||{}).n||0)+' / '+v.lb+' '+((v.b||{}).n||0); c='#f2b45a'; } }
+    else { n=v.n||0; if(n>=H.minN){ status='READ'; bar='held '+Math.round(100*v.hit/v.n)+'% (n='+v.n+')'; c='#e6edf3'; } else { status='THIN'; bar='not read'; c='#f2b45a'; } }
+    if(hv && hv.verdict && !H.judgedBy){ status=String(hv.verdict).toUpperCase(); if(hv.bar) bar=hv.bar; c=(hv.verdict==='cleared')?'#2ec27e':((hv.verdict==='refused')?'#f0616d':c); }
+    var w=Math.max(0, Math.min(100, Math.round(100*n/(H.minN||1))));
+    var barHtml='<span style="display:inline-block;width:52px;height:5px;background:rgba(255,255,255,.08);border-radius:2px;vertical-align:middle;overflow:hidden"><i style="display:block;height:100%;width:'+w+'%;background:#f2b45a"></i></span> <span style="color:'+PAL.sub+'">'+n+'/'+H.minN+'</span>';
+    var isDraft=false;
+    h+='<tr'+g3tip((H.note||'')+(bar?(' \u2014 '+bar):''))+' style="vertical-align:top;border-top:1px solid rgba(255,255,255,.04)"><td style="font-weight:800;color:'+(isDraft?'#cdb4fa':PAL.blue)+'">'+g3esc(H.id)+'</td><td style="color:'+PAL.sub+';white-space:nowrap">'+g3esc((HYP_STUDY[H.id]?(HYP_STUDY[H.id].charAt(0)+' \u00b7 '+HYP_STUDY[H.id]):'\u2014'))+'</td><td style="white-space:normal">'+g3esc(H.claim)+'</td><td style="color:#cdb4fa;white-space:normal">'+g3esc(H.predict||'\u2014')+'</td><td style="color:'+PAL.sub+';white-space:normal">'+g3esc(H.refuteIf||'\u2014')+'</td><td style="white-space:nowrap">'+barHtml+'</td><td style="text-align:right;color:'+c+';font-weight:900;letter-spacing:.05em;white-space:nowrap">'+g3esc(status)+'</td></tr>';
+    if(bar) h+='<tr><td></td><td colspan="6" style="font-size:8px;color:'+PAL.sub+';white-space:normal;padding-bottom:2px">'+g3esc(bar)+'</td></tr>';
   });
-  return h+'</table><div style="margin-top:4px;color:'+PAL.sub+';font-size:9px">sessions from '+PREREG_FROM+' only \u00b7 one row per (day, node) episode, first bar \u00b7 a rate appears only at the minimum n</div>';
+  h+='</table>';
+  // drafts: studies.json rows with status DRAFT that are not yet in the register
+  try{ var ids={}; preregList().forEach(function(H){ ids[H.id]=1; }); var drafts=studiesFlat().filter(function(x){ return x.status==='DRAFT'; });
+    drafts.forEach(function(x){ var m=/H\d+/.exec(x.result||''); var hid=m?m[0]:null; if(hid && ids[hid]) return;
+      h+='<div style="font-size:8.5px;color:'+PAL.sub+';white-space:normal;margin-top:2px"><b style="color:#cdb4fa">DRAFT</b> '+g3esc(x.subj+' \u00b7 '+x.id)+' \u2014 '+g3esc(x.q)+(x.result?(' \u2014 '+g3esc(x.result)):'')+'</div>'; }); }catch(eDr){}
+  return h+'<div style="margin-top:4px;color:'+PAL.sub+';font-size:8.5px;white-space:normal">A hypothesis is written with its prediction and its refutation before the first session is scored, and never edited. Sessions from '+PREREG_FROM+' only \u00b7 one row per (day, node) episode, first bar \u00b7 a rate appears only at the minimum n. Registered NULLS (H3, H4) are deliberate.</div>';
 }
 function testingBlock(){
   var h='';
@@ -18545,12 +18630,15 @@ function testingBlock(){
   var T_kill=tabSection('t4','④','KILL LIST','Which conditions would void a read, and is each one ACTIVE or just written down? A hand-set kill changes nothing.', kl, false);
 
   var stt=''; try{ stt=selfTestHtml(); }catch(e5){ stt=tabEmpty('the self-test could not be rendered.'); }
-  var T_self=tabSection('t5','⑥','SELF-TEST','Does the scorer itself work? A synthetic day with three properties planted at known strengths is run through this panel’s own arithmetic: it must FIND the edge, FLAG the 1-way trap, and SPLIT the regime-dependent rule.', stt);
+  try{ stt=suiteHtml()+'<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">SELF-TEST \u00b7 the synthetic day</div>'+stt; }catch(eSu){}
+  var T_self=tabSection('t5','⑥','THE SUITE \u00b7 self-test','Does the scorer itself work, and did the build ship green? The last suite run (tools/run-tests.sh writes learning/suite.json), the mutation record, then the self-test.  A synthetic day with three properties planted at known strengths is run through this panel’s own arithmetic: it must FIND the edge, FLAG the 1-way trap, and SPLIT the regime-dependent rule.', stt);
   // (v15.52) the check ⑤ could not make: not "does the arithmetic work" but "can THIS feature's scorer fail"
   var cf=''; try{ cf=canFailHtml(); }catch(eCF){ cf='<div style="color:#f0616d">canFail threw: '+String(eCF&&eCF.message||eCF).replace(/[<>&]/g,'')+'</div>'; }
+  try{ cf=gateSummaryHtml()+'<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">EVERY FEATURE \u00b7 the live bands</div>'+cf; }catch(eGS){}
   var T_canfail=tabSection('t5b','\u2461','THE GATE \u00b7 can the scorer fail?','Before a feature\u2019s rate means anything: does that rate MOVE between the records it predicted LOW and the ones it predicted HIGH? lodhod read 100% (n=362 rows, 4 sessions) in BOTH bands \u2014 a scorer that cannot fail (FINDINGS F-11). A flagged row is measuring something other than what it claims, and its number must not reach the face. eff n counts SESSIONS for a to-close feature.', cf);
 
-  var dcv=''; try{ dcv=unlockRowsHtml('SPY'); }catch(e6){ dcv=tabEmpty('coverage could not be computed.'); }
+  var dcv=''; try{ dcv=recordStoresHtml('SPY'); }catch(eRS){ dcv=tabEmpty('the stores could not be listed: '+String(eRS&&eRS.message||eRS).replace(/[<>&]/g,'')); }
+  try{ dcv+='<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">WHAT UNLOCKS WHEN</div>'+unlockRowsHtml('SPY'); }catch(e6){ dcv+=tabEmpty('coverage could not be computed.'); }
   dcv+='<div id="gpts-tcov" style="font-size:8px;color:'+PAL.sub+';margin-top:4px;white-space:normal">repository: computing… <span data-gtcov="1" style="cursor:pointer;text-decoration:underline">refresh</span></div>';
   var T_cov=tabSection('t6','\u2463','THE RECORD \u00b7 data coverage','How much have we actually got, and what unlocks when? The honest answer to "why is everything still ⚖" is almost always "not enough recorded days" — this says exactly which threshold each capability is waiting on.', dcv);
 
@@ -18592,7 +18680,8 @@ function testingBlock(){
   var T_dashB=''; try{ T_dashB=dashboardRulesHtml('SPY'); }catch(eDb){ T_dashB=tabEmpty('the dashboard table could not be rendered: '+String(eDb&&eDb.message||eDb).replace(/[<>&]/g,'')); }
   var _sub=function(t){ return '<div style="margin-top:6px;font-size:8px;font-weight:700;color:'+PAL.sub+'">'+t+'</div>'; };
   var T_dash=tabSection('t9','\u2462','ON THE DASHBOARD','What the ladder renders, and which study each number comes from. A rule renders a rate only when it has earned a tier AND its feature cleared the gate \u2014 otherwise \u201c\u26d4 gated\u201d or \u201cthin\u201d, never a bare %. Under it: PROPOSALS \u2014 What is asking to change the model, and does it clear the bar? (the bar is LOCAL: eff n\u2265'+PROMO_MIN_N+', '+PROMO_WF_SESSIONS+' walk-forward sessions, no regime flip) \u2014 CHALLENGERS (is the challenger actually ahead of the incumbent, on the SAME bars?) and the KILL LIST (is each kill ACTIVE or just written down?).', T_dashB+_sub('PROPOSALS')+pr+_sub('CHALLENGERS \u00b7 vs incumbent')+ch+_sub('KILL LIST')+kl, true);
-  var T_night=''; try{ T_night=nightlyReviewHtml(); }catch(eNr){ T_night=tabEmpty('the review could not be rendered: '+String(eNr&&eNr.message||eNr).replace(/[<>&]/g,'')); }
+  var T_night=''; try{ T_night=nightlyHeadHtml(); }catch(eNh){ T_night=tabEmpty('the nightly head could not be rendered.'); }
+  try{ T_night+='<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">THE REVIEW \u00b7 as written</div>'+nightlyReviewHtml(); }catch(eNr){ T_night+=tabEmpty('the review could not be rendered: '+String(eNr&&eNr.message||eNr).replace(/[<>&]/g,'')); }
   try{ T_night+=readNextQueueHtml(); }catch(eRq){}
   var T_nightly=tabSection('t10','\u2464','THE NIGHTLY','What did the review actually say? The nightly log and the weekly review, quoted as written \u2014 verdicts on the register, the HOD/LOD live-vs-table cells, what changed on this machine \u2014 and the READ-NEXT queue the nightly works through one study per night. Your TRACK requests reach it through the day export.', T_night, true);
   h+=T_loop+T_prereg+T_canfail+T_dash+T_cov+T_nightly+T_self+T_detail;
@@ -27502,6 +27591,7 @@ function boot(){
   try{ studiesFetch(); }catch(eSF){}   // (v15.55) the study registry — learning/studies.json
   try{ sweepsFetch(); }catch(eSW){}    // (v15.55) the sweep table — data/es-1min/SWEEPS.json
   try{ sweepsBookFetch(); }catch(eSB){}   // (v15.56) the book table — data/es-1min/SWEEPS-BOOK.json
+  try{ suiteFetch(); }catch(eSu){}         // (v15.58) the last suite run — learning/suite.json
   rulesApply(true);            // (v10.54) BOOT is one of the only two moments the model may move
   render();
   tick();

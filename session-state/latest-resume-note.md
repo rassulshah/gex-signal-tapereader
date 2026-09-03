@@ -1,9 +1,17 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-03 · panel v15.57 · companion v1.18 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-03 · panel v15.58 · companion v1.18 · supersedes every earlier resume note_
 
 ---
 
-# ⚠⚠ 2026-09-03 (latest) — v15.57 SHIPPED: EM EDGES · VWAP + BANDS · DEVELOPING PROFILE · LONDON · HVL/MAGNET · THE TWO-LINE RULE.
+# ⚠⚠ 2026-09-03 (latest) — v15.58: THE READ RANKS RECLAIMED SWEEPS FIRST; A GAP OPEN IS NOT A SWEEP. INSTALLER MANIFEST FIXED.
+
+**Panel is v15.58, companion v1.18.** Live probe of his panel found: (1) the installer manifest never carried
+learning/*.json, learning/log, data/es-1min/SWEEPS*.json — fixed by glob + `test_installer_manifest.js`; until he runs
+the rebuilt installer the Analysis tab shows the seed ("registry not fetched"); (2) the READ put gap-open "breaks" at the
+top — now reclaimed → broke → opened beyond; (3) the Testing tab's ①②④⑤⑥ now carry the mockup's bodies (register
+columns, gate summary, stores, nightly head, suite stamp from `learning/suite.json`). **Next: v15.59 the TAP record.**
+
+# (earlier) — v15.57 SHIPPED: EM EDGES · VWAP + BANDS · DEVELOPING PROFILE · LONDON · HVL/MAGNET · THE TWO-LINE RULE.
 
 **Panel is v15.57, companion v1.18 (unchanged).** Five level families added to the sweep read (his approval), `LEVEL_TIER`
 + the two-line rule on ⓪a, the corpus at 32 level types / 116 cells. Finding: interior levels (VWAP/bands/today's value

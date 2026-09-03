@@ -14,4 +14,8 @@ for f in test_*.js; do
 done
 echo "SUITE: $pass green / $fail red  (of $((pass+fail)) files)"
 [ -n "$failed" ] && { echo "RED:"; for f in $failed; do echo "  $f"; done; }
+# (v15.58) STAMP THE RUN for the Testing tab (⑥ THE SUITE reads learning/suite.json, fetched like the others)
+ver=$(grep -m1 '@version' current/gex-signal-tapereader.user.js | sed 's/.*@version *//')
+redlist=$(for f in $failed; do printf '"%s",' "$f"; done | sed 's/,$//')
+printf '{"schema":1,"version":"%s","at":"%s","files":%d,"green":%d,"red":%d,"redFiles":[%s],"writtenBy":"tools/run-tests.sh"}\n' "$ver" "$(date -u +%Y-%m-%dT%H:%MZ)" $((pass+fail)) $pass $fail "$redlist" > learning/suite.json
 exit 0
