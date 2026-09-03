@@ -133,3 +133,15 @@ CHALLENGERS as a section (a challenger is a proposal). Sections: **9 → 7.**
 - **No gamma claim tested against the 284-session file** — it has no gamma book; the panel says so.
 - **No second register, no second accumulation engine, no second roll renderer.** One of each.
 - **No deletion.** Retired code goes to `archive/<version>/` with its reason and its tests.
+
+
+## Added at v15.55 — three paths (design/ANALYSIS-TESTING-BY-SUBJECT.md)
+
+| # | step | store / file | status |
+|---|---|---|---|
+| 15 | **the registry** — subjects → subsections → studies, fetched like rules.json | `learning/studies.json` ← `tools/studies-seed.py` · `gpts_studies_v1` | ✅ v15.55 |
+| 16 | **the sweep table** — 20 level types, two controls, refreshed by the nightly; read by Analysis H2 and by ⓪a THE READ FROM THE STATS | `tools/study-sweeps.py` → `data/es-1min/SWEEPS.json` · `gpts_sweeps_v1` | ✅ v15.55 |
+| 17 | **TRACK** — what he typed → day export `requests` → nightly → `learning/requests.json` → review → a study row with `req:<id>` → back to the field | `gpts_requests_v1` · `run.py ingest_requests` | ✅ v15.55 (the review step is human/LLM) |
+| 18 | **THE READ FROM THE STATS** — today's sweeps on the courier's ES bars against the table; node clause from the deflection ledger; register's word | `sweepEventsToday` · `statsRead` · `statsReadHtml` (⓪a) | ✅ v15.55 · node-conditioned rate UNMEASURED until H6 |
+| 19 | **the book table** — the panel's own day files as a corpus: sweeps of CW0/PW0/CW/PW/KING and every price sweep tagged at-node / not; H6 judged from it | `tools/study-sweeps-book.py` → `SWEEPS-BOOK.json` · `gpts_sweepsbook_v1` | ✅ v15.56 (thin, grows per export) |
+| 20 | **the TAP record** — what 94 OPEN studies wait on | IDB `taps` | ⏳ v15.58 |

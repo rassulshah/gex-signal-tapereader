@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analysis Tab Alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{ --ink:#141821; --ink2:#3d4557; --mut:#6b7488; --rule:#d9dde5; --paper:#f4f5f8; --card:#ffffff; --acc:#8a5a2b; --good:#1d6b4a; --bad:#9b2f38;
+  --g-bg:#0b0e14; --g-panel:#0f131b; --g-card:#12161f; --g-line:#1e2530; --g-line2:#3a4150; --g-txt:#e6edf3; --g-mut:#8b98a9; --g-dim:#6c7889;
+  --g-grn:#2ec27e; --g-red:#f0616d; --g-amb:#f2b45a; --g-yel:#e3c341; --g-pur:#a371f7; --g-blu:#7cc7ff; --g-lil:#cdb4fa; --g-teal:#5fd3c4; --scale:1.55; }
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){ --ink:#e7eaf0; --ink2:#aab3c4; --mut:#7d8798; --rule:#2a3040; --paper:#101319; --card:#171b24; --acc:#d9a066; --good:#4cc38a; --bad:#e5707a; }}
+:root[data-theme="dark"]{ --ink:#e7eaf0; --ink2:#aab3c4; --mut:#7d8798; --rule:#2a3040; --paper:#101319; --card:#171b24; --acc:#d9a066; --good:#4cc38a; --bad:#e5707a; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:38px 26px 90px}
+h1{font-size:29px;font-weight:600;letter-spacing:-.015em;margin:0 0 6px;text-wrap:balance}
+h2{font-size:12px;font-weight:600;letter-spacing:.10em;text-transform:uppercase;color:var(--mut);margin:0 0 14px;padding-bottom:7px;border-bottom:1px solid var(--rule)}
+h2 span{color:var(--ink);font-weight:700;letter-spacing:0;text-transform:none;font-size:15px;margin-right:10px}
+p{margin:0 0 13px;max-width:68ch;color:var(--ink2)}
+.lede{font-size:16px;color:var(--ink2);max-width:70ch;margin-bottom:22px}
+section{margin-top:52px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.flag{display:flex;gap:13px;align-items:flex-start;border:1px solid var(--rule);border-left:3px solid var(--acc);background:var(--card);padding:13px 16px;border-radius:3px;margin-bottom:26px}
+.flag p{margin:0;font-size:13.5px} .flag b{color:var(--ink)}
+.tag{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor;border-radius:2px;color:var(--acc)}
+.ctl{display:flex;gap:7px;align-items:center;margin:0 0 16px;font-size:12px;color:var(--mut)}
+.ctl button{font-family:"IBM Plex Mono",monospace;font-size:11px;padding:4px 10px;cursor:pointer;background:var(--card);color:var(--ink2);border:1px solid var(--rule);border-radius:2px}
+.ctl button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pros{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;max-width:900px}
+.pros div{font-size:13px;color:var(--ink2);border-top:2px solid var(--rule);padding-top:8px}
+.pros b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
+.pros .g b{color:var(--good)} .pros .b b{color:var(--bad)}
+.verdict{margin-top:12px;font-size:13.5px;color:var(--ink);border-left:3px solid var(--acc);padding:6px 12px;background:var(--card);max-width:900px}
+.stage{background:var(--g-bg);border:1px solid var(--g-line2);border-radius:4px;padding:14px;overflow-x:auto;margin-bottom:4px}
+.scaler{width:608px;transform:scale(var(--scale));transform-origin:top left;margin-bottom:calc((var(--scale) - 1) * var(--sh,400px))}
+.pan{width:608px;background:var(--g-panel);color:var(--g-txt);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;font-size:8.4px;line-height:1.35}
+.tabs{display:flex;gap:2px;background:#12161f;border-bottom:1px solid var(--g-line2);padding:4px 4px 0}
+.tabs span{padding:4px 10px;font-size:9.5px;font-weight:600;color:var(--g-dim)} .tabs span.on{color:var(--g-txt);font-weight:800;border-bottom:2px solid var(--g-blu)}
+.hd{padding:5px 7px 4px;border-bottom:1px solid var(--g-line);font-size:7.6px;color:var(--g-mut)} .hd b{color:var(--g-txt);font-size:9px}
+.sec{margin:5px 6px;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card);overflow:hidden}
+.sech{display:flex;align-items:center;gap:6px;padding:4px 7px;background:#141a24;border-bottom:1px solid var(--g-line)}
+.sech .n{font-size:9px;font-weight:900;color:var(--g-blu)} .sech .t{font-size:8.6px;font-weight:800;letter-spacing:.06em;color:var(--g-txt)}
+.sech .q{margin-left:auto;font-size:7px;color:var(--g-dim);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.sech .car{color:var(--g-dim);font-size:8px}
+.secb{padding:5px 7px 6px}
+.row{display:flex;gap:6px;align-items:baseline;padding:2px 0;border-top:1px dashed rgba(255,255,255,.05)} .row:first-child{border-top:0}
+.k{color:var(--g-mut);min-width:80px} .v{color:var(--g-txt)} .n{color:var(--g-dim);font-size:7.4px;margin-left:auto}
+.sk{color:var(--g-lil)} .we{font-weight:700}
+.gr{color:var(--g-grn)} .rd{color:var(--g-red)} .am{color:var(--g-amb)} .ye{color:var(--g-yel)} .pu{color:var(--g-lil)} .bl{color:var(--g-blu)} .te{color:var(--g-teal)} .dm{color:var(--g-dim)} .mu{color:var(--g-mut)}
+table{border-collapse:collapse;width:100%;font-size:8px}
+th{font-size:6.6px;font-weight:800;letter-spacing:.07em;color:var(--g-dim);text-transform:uppercase;text-align:left;padding:2px 4px 3px;border-bottom:1px solid var(--g-line2)}
+td{padding:2px 4px;border-top:1px solid rgba(255,255,255,.04);vertical-align:top;white-space:nowrap} td.r,th.r{text-align:right}
+.ci{color:var(--g-dim);font-weight:400;font-style:italic}
+.sc{display:flex;gap:6px;padding:2px 0;font-size:7.8px;align-items:baseline;border-top:1px dashed rgba(255,255,255,.05)} .sc:first-child{border-top:0}
+.sc .id{font-family:ui-monospace,monospace;color:var(--g-dim);min-width:30px} .sc .qq{color:var(--g-txt);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc .cl{color:var(--g-dim);min-width:22px} .sc .cp{color:var(--g-dim);min-width:70px;font-size:7px}
+.sc .rs{min-width:112px;text-align:right;font-weight:700} .sc .vd{min-width:58px;text-align:right;font-weight:900;letter-spacing:.05em;font-size:7px}
+.grade{display:inline-block;font-size:11px;font-weight:900;padding:0 6px;border-radius:3px;border:1px solid currentColor}
+.heat td.c{text-align:center;font-weight:700;min-width:44px}
+.h0{background:rgba(240,97,109,.35)} .h1{background:rgba(240,97,109,.16)} .h2{background:rgba(139,152,169,.10)} .h3{background:rgba(46,194,126,.18)} .h4{background:rgba(46,194,126,.38)} .hthin{color:var(--g-dim);font-weight:400;font-style:italic}
+.tl{position:relative;height:74px;margin:4px 0 2px;border-bottom:1px solid var(--g-line2)}
+.tl .hr{position:absolute;bottom:-11px;font-size:6.4px;color:var(--g-dim)}
+.tl .tk{position:absolute;bottom:0;width:1px;background:rgba(255,255,255,.08);height:100%}
+.tl .tp{position:absolute;width:9px;height:9px;border-radius:50%;border:1.5px solid;transform:translate(-50%,0);font-size:5.6px;line-height:6px;text-align:center;font-weight:900}
+.tl .lab{position:absolute;font-size:6.6px;color:var(--g-mut);transform:translateX(-50%);white-space:nowrap}
+.tl .px{position:absolute;left:0;right:0;height:1px;background:rgba(124,199,255,.35)}
+.foot{padding:5px 7px;border-top:1px solid var(--g-line);font-size:7.4px;color:var(--g-dim);display:flex;gap:9px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:700px){.wrap{padding:26px 15px 70px} h1{font-size:23px} .pros{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<h1>Analysis Tab Alternatives</h1>
+<p class="lede">Five ways to organise the same evidence. Each is drawn as the tab would look, then judged on one question: <b>does it change what you do at the next tap?</b> The three-moment layout from the last mockup is the baseline they are measured against.</p>
+<div class="flag"><span class="tag">Mockups</span><p><b>Nothing is built.</b> Real numbers as before: the 09-02 session, the 284-session table (0.879, NOT-IN 85% n=230), the 11-day exploratory figures. Every cell that would need the tap record is marked <i>illustrative</i> — it shows what the tab would hold ~10 sessions after that record ships. Today those cells read <i>thin</i>.</p></div>
+<div class="ctl"><span>Scale</span><button type="button" data-s="1" aria-pressed="false">1×</button><button type="button" data-s="1.55" aria-pressed="true">1.55×</button><button type="button" data-s="2.1" aria-pressed="false">2.1×</button></div>
+
+<!-- ================= A · BY SUBJECT ================= -->
+<section>
+<h2><span>A · By subject</span> the research notebook — Kings · Setups · Direction · Deflections · Pullbacks · HOD/LOD</h2>
+<div class="stage"><div class="scaler" style="--sh:564px"><div class="pan">
+  <div class="tabs"><span>Dashboard</span><span class="on">📊 Analysis</span><span>🧪 Testing</span></div>
+  <div class="hd"><b>Studies by subject</b> · 11 sessions with the book · 284 price-only · 32 studies · 6 shipped · 4 refused · 22 open</div>
+  <div class="sec"><div class="sech"><span class="car">▾</span><span class="n">K</span><span class="t">KINGS</span><span class="q">the crown: where it sits, when it moves, what it does to price</span></div><div class="secb">
+    <div class="sc"><span class="id">S-A6</span><span class="qq">Which book's King owns the day's extremes — SPX, SPY or QQQ?</span><span class="cl">C28</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+    <div class="sc"><span class="id">S-A2</span><span class="qq">King taps by hour: drive-off before noon, pin after two?</span><span class="cl">C10</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+    <div class="sc"><span class="id">S-C1</span><span class="qq">After the crown moves, does price follow within 10 bars?</span><span class="cl">C11</span><span class="cp">437 recs · book</span><span class="rs am">unread</span><span class="vd bl">READ NEXT</span></div>
+    <div class="sc"><span class="id">S-D1</span><span class="qq">How often the crown moves; how long it dwells</span><span class="cl">C11</span><span class="cp">11d · book</span><span class="rs">measured</span><span class="vd gr">SHIPPED</span></div>
+    <div class="sc"><span class="id">S-B1k</span><span class="qq">King tap vs top-5 non-King tap — held rate</span><span class="cl">C1</span><span class="cp">94 ep · book</span><span class="rs am">thin (8 King)</span><span class="vd dm">OPEN</span></div>
+  </div></div>
+  <div class="sec"><div class="sech"><span class="car">▾</span><span class="n">S</span><span class="t">SETUPS</span><span class="q">rug · reverse rug · gatekeeper · pika · beach ball · air pocket</span></div><div class="secb">
+    <div class="sc"><span class="id">S-B6</span><span class="qq">Rug: is the rejection faster and deeper than a plain one?</span><span class="cl">C23</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+    <div class="sc"><span class="id">S-B9</span><span class="qq">Gatekeeper ratio (value ÷ node behind) → hold vs break</span><span class="cl">C14</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+    <div class="sc"><span class="id">S-A3</span><span class="qq">Early gatekeeper rejection → the day's extreme?</span><span class="cl">C14</span><span class="cp">671 recs · book</span><span class="rs am">unread</span><span class="vd bl">READ NEXT</span></div>
+    <div class="sc"><span class="id">S-B7</span><span class="qq">Beach ball: overshoot, close back inside — what follows?</span><span class="cl">C9</span><span class="cp">8 sess · book</span><span class="rs">wick triggers · close decides</span><span class="vd gr">SHIPPED</span></div>
+    <div class="sc"><span class="id">S-B10</span><span class="qq">Air pocket on the far side: is the deflection larger?</span><span class="cl">C15·C20</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+  </div></div>
+  <div class="sec"><div class="sech"><span class="car">▸</span><span class="n">D</span><span class="t">DIRECTION</span><span class="q">which way after the turn, and how far</span></div><div class="secb">
+    <div class="sc"><span class="id">S-C5</span><span class="qq">GREEN/RED — close above the open?</span><span class="cl">—</span><span class="cp">284d · price</span><span class="rs">77% <span class="ci">n=196</span></span><span class="vd gr">SHIPPED</span></div>
+    <div class="sc"><span class="id">S-C2</span><span class="qq">Rolling floor: two migrations vs three — does price follow?</span><span class="cl">C19</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+    <div class="sc"><span class="id">S-B14</span><span class="qq">Regime: −γ rejections travel further than +γ?</span><span class="cl">C30</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+  </div></div>
+  <div class="sec"><div class="sech"><span class="car">▸</span><span class="n">H</span><span class="t">HOD / LOD DEFLECTIONS</span><span class="q">the day's extremes, and the node that made them</span></div><div class="secb">
+    <div class="sc"><span class="id">S-A5</span><span class="qq">Is the standing extreme the day's? — posr × clock</span><span class="cl">C17</span><span class="cp">284d · price</span><span class="rs">AUC 0.879 · NOT-IN 85% <span class="ci">n=230</span></span><span class="vd gr">SHIPPED</span></div>
+    <div class="sc"><span class="id">S-A1</span><span class="qq">Which node printed the extreme — King, largest-beyond, or nearest?</span><span class="cl">C13</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+    <div class="sc"><span class="id">H5</span><span class="qq">Does a top-5 node move the table's cell?</span><span class="cl">C17</span><span class="cp">ledger 0/50</span><span class="rs am">blocked</span><span class="vd am">REGISTERED</span></div>
+  </div></div>
+  <div class="sec"><div class="sech"><span class="car">▸</span><span class="n">P</span><span class="t">PULLBACK DEFLECTIONS</span><span class="q">will this pullback turn here</span></div><div class="secb">
+    <div class="sc"><span class="id">S-B1</span><span class="qq">Tap decay — Skylit's 80/66/33 against our taps</span><span class="cl">C3</span><span class="cp">94 ep · book</span><span class="rs">tap1 73% <span class="ci">n=22</span> · tap0 47%</span><span class="vd bl">H2 · READ AT 30</span></div>
+    <div class="sc"><span class="id">S-B4</span><span class="qq">Growth into the tap: building vs flat vs shedding</span><span class="cl">C21</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+    <div class="sc"><span class="id">S-B17</span><span class="qq">The rejection wick</span><span class="cl">—</span><span class="cp">970 rows · book</span><span class="rs">49.1% vs 48.6%</span><span class="vd rd">REFUSED</span></div>
+  </div></div>
+  <div class="foot"><span>● rec</span><span>● saved</span><span>● pushed</span><span style="margin-left:auto">alt A</span></div>
+</div></div></div>
+<div class="pros"><div class="g"><b>What it is good at</b>Browsable. Every study has a home you can find by its subject; refused work sits beside shipped work. This is the notebook the doctrine tells you to keep.</div><div class="b"><b>What it costs</b>It is a catalogue, not an instrument — nothing on it is about <i>now</i>. Kings, setups and deflections overlap (a King tap is a deflection is a setup), so the same study wants two homes.</div></div>
+<div class="verdict">Right as the <b>evidence layer</b> under any other layout; wrong as the whole tab, because it answers "what do we know" and never "what should I expect at this tap."</div>
+</section>
+
+<!-- ================= B · DOCTRINE SCORECARD ================= -->
+<section>
+<h2><span>B · The doctrine scorecard</span> Skylit's claims as rows — their number, ours, verdict</h2>
+<div class="stage"><div class="scaler" style="--sh:292px"><div class="pan">
+  <div class="tabs"><span>Dashboard</span><span class="on">📊 Analysis</span><span>🧪 Testing</span></div>
+  <div class="hd"><b>Skylit's doctrine, scored</b> · 35 claims · 4 measured · 2 refuted · 29 thin or open · every row a pre-registered hypothesis someone else wrote</div>
+  <div class="secb" style="padding:5px 7px"><table>
+    <tr><th>claim</th><th>Skylit says</th><th class="r">we measure</th><th class="r">n</th><th>corpus</th><th class="r">verdict</th></tr>
+    <tr><td><b>C3</b> 2nd tap</td><td class="sk">~66% reacts</td><td class="r we">73% <span class="ci">[52–87]</span></td><td class="r">22</td><td class="dm">book</td><td class="r bl">READ AT 30</td></tr>
+    <tr><td><b>C3</b> 1st tap</td><td class="sk">~80%</td><td class="r we">47% <span class="ci">[36–59]</span></td><td class="r">70</td><td class="dm">book</td><td class="r am">CONFLICT</td></tr>
+    <tr><td><b>C17</b> range extreme holds</td><td class="sk">reactions at extremes</td><td class="r we">AUC 0.879</td><td class="r">284</td><td class="dm">price</td><td class="r gr">MEASURED</td></tr>
+    <tr><td><b>C10</b> King: early drive-off</td><td class="sk">pushed away before EOD</td><td class="r am">thin</td><td class="r">8</td><td class="dm">book</td><td class="r dm">OPEN</td></tr>
+    <tr><td><b>C14</b> early gatekeeper rejection → reversal</td><td class="sk">high-probability</td><td class="r am">unread</td><td class="r">671</td><td class="dm">book</td><td class="r bl">READ NEXT</td></tr>
+    <tr><td><b>C23</b> rug: rejection + acceleration</td><td class="sk">faster, deeper</td><td class="r am">thin</td><td class="r">—</td><td class="dm">book</td><td class="r dm">OPEN</td></tr>
+    <tr><td><b>C28</b> 3/3 &gt; 2/3; SPX outlier worst</td><td class="sk">A+ / size down</td><td class="r am">thin</td><td class="r">—</td><td class="dm">book</td><td class="r dm">OPEN</td></tr>
+    <tr><td><b>C6</b> growth after delivery → revisit</td><td class="sk">more likely</td><td class="r am">thin</td><td class="r">—</td><td class="dm">book</td><td class="r dm">OPEN</td></tr>
+    <tr><td><b>C8</b> −γ node: wickier</td><td class="sk">overshoots</td><td class="r we">52.1 vs 52.2%</td><td class="r">46/48</td><td class="dm">book</td><td class="r dm">H3 NULL</td></tr>
+    <tr><td><b>—</b> the wick itself</td><td class="sk dm">(no claim)</td><td class="r we">49.1 vs 48.6%</td><td class="r">970</td><td class="dm">book</td><td class="r rd">REFUSED</td></tr>
+    <tr><td><b>—</b> sweeps</td><td class="sk dm">(no claim)</td><td class="r we">48% · 0.559</td><td class="r">284</td><td class="dm">price</td><td class="r rd">REFUSED</td></tr>
+  </table>
+  <div class="row" style="margin-top:5px"><span class="v dm">the 24 rows below are OPEN — the tap record starts recording them tomorrow · rows sort: conflicts first, then read-next, then thin</span></div></div>
+  <div class="foot"><span>● rec</span><span>● saved</span><span style="margin-left:auto">alt B</span></div>
+</div></div></div>
+<div class="pros"><div class="g"><b>What it is good at</b>One table, one question per row, and the conflicts jump out — the tab already shows Skylit's 80% first tap against our 47%. Nothing to navigate. The nightly's verdicts map onto it one-to-one.</div><div class="b"><b>What it costs</b>Organised by <i>their</i> book, not your session. A row is a claim about the world, not a reading of today's node; extent (MFE) squeezes into one column badly.</div></div>
+<div class="verdict">The best <b>Testing</b>-adjacent view — it is what the register looks like when it has grown to 35 rows. As the Analysis tab it is honest and cold.</div>
+</section>
+
+<!-- ================= C · THE SETUP GRADER ================= -->
+<section>
+<h2><span>C · The setup grader</span> the execution doctrine's three requirements, scored for the node in play</h2>
+<div class="stage"><div class="scaler" style="--sh:377px"><div class="pan">
+  <div class="tabs"><span>Dashboard</span><span class="on">📊 Analysis</span><span>🧪 Testing</span></div>
+  <div class="hd"><b>SPY 765 gate</b> · TESTING · 14:47 CT · grade <span class="grade am">B</span> · A+ needs all three; this has one and a half</div>
+  <div class="sec"><div class="sech"><span class="n gr">1</span><span class="t">CHART STRUCTURE</span><span class="q">where is price — charts first, before exposure</span></div><div class="secb">
+    <div class="row"><span class="k">range</span><span class="v">at <b>60%</b> of the day's range · not an extreme · <span class="dm">reactions live at extremes (C17)</span></span><span class="n rd">✕</span></div>
+    <div class="row"><span class="k">prior levels</span><span class="v">on nothing — PDH 767.4 · IB low 763.9 · POC 764.2 <span class="dm">(0.6 away)</span></span><span class="n rd">✕</span></div>
+    <div class="row"><span class="k">measured</span><span class="v">interior taps held <b>44%</b> <span class="ci">[35–54] n=61</span> · extremes <b>61%</b> <span class="ci">[47–73] n=33</span></span><span class="n am">illustr.</span></div>
+  </div></div>
+  <div class="sec"><div class="sech"><span class="n gr">2</span><span class="t">HEATSEEKER CONFLUENCE</span><span class="q">fresh, growing, high-magnitude, aligned</span></div><div class="secb">
+    <div class="row"><span class="k">fresh?</span><span class="v">tap <b>2</b> · TESTED · <span class="sk">Skylit ~66%</span> · <span class="we">we 73% <span class="ci">n=22</span></span></span><span class="n am">◐</span></div>
+    <div class="row"><span class="k">growing?</span><span class="v"><span class="rd">shedding −$3.6M</span> · −48 since open · <span class="sk">weakening</span> · <span class="we">41% <span class="ci">n=58</span></span></span><span class="n rd">✕</span></div>
+    <div class="row"><span class="k">magnitude</span><span class="v">score 1 · 8th of 8 in the book · gk ratio 0.41 · <span class="dm">magnitude overrides pattern (C1)</span></span><span class="n rd">✕</span></div>
+    <div class="row"><span class="k">trinity</span><span class="v"><b>2/3</b> · QQQ the outlier · <span class="sk">size down</span></span><span class="n am">◐</span></div>
+    <div class="row"><span class="k">the floor below</span><span class="v"><b class="pu">764</b> +γ · building +$12.6M · fresh · grew d/d · <span class="gr">this is the A+ node, not 765</span></span><span class="n gr">✓</span></div>
+  </div></div>
+  <div class="sec"><div class="sech"><span class="n gr">3</span><span class="t">PAYOFF</span><span class="q">asymmetric R:R, structural stop, regime-matched</span></div><div class="secb">
+    <div class="row"><span class="k">if it holds</span><span class="v">median MFE10 <b>+3.1</b> pts · to the 7681 ceiling <b>+16</b> · stop one node beyond: 764 → <b>−1.0</b> · R:R <b>3.1</b></span><span class="n gr">✓ ≥3</span></div>
+    <div class="row"><span class="k">regime</span><span class="v">+γ at spot → fade; wider stop, tighter target · <span class="dm">C30</span></span><span class="n dm">—</span></div>
+    <div class="row"><span class="k">the touch</span><span class="v dm">52% held over 94 episodes — the grade is the case for THIS one, not a forecast</span></div>
+  </div></div>
+  <div class="foot"><span>● rec</span><span>● saved</span><span style="margin-left:auto">alt C</span></div>
+</div></div></div>
+<div class="pros"><div class="g"><b>What it is good at</b>It is the doctrine's own checklist — chart, confluence, payoff — and it argues: "765 is a B; the A+ node is the 764 floor building under it." That is the most <i>decision-shaped</i> view of the five.</div><div class="b"><b>What it costs</b>The grade is a rule, and rules are what the register exists to test; a grade you have not measured is a confident font. It also has nothing to say before the open or after the close.</div></div>
+<div class="verdict">This is what the three-moment tab's ② card <b>becomes</b> once the tap record has a season behind it — a graded card, with each line's rate measured. Not a tab on its own.</div>
+</section>
+
+<!-- ================= D · THE CONDITIONS MATRIX ================= -->
+<section>
+<h2><span>D · The conditions matrix</span> one grid: conditions × the two objectives</h2>
+<div class="stage"><div class="scaler" style="--sh:308px"><div class="pan">
+  <div class="tabs"><span>Dashboard</span><span class="on">📊 Analysis</span><span>🧪 Testing</span></div>
+  <div class="hd"><b>Held rate by condition</b> · pullback taps vs the taps that printed the day's extreme · colour = distance from base (52%) · n under each cell</div>
+  <div class="secb" style="padding:5px 7px"><table class="heat">
+    <tr><th>condition</th><th class="c">pullback taps</th><th class="c">HOD/LOD taps</th><th class="c">MFE10 med.</th><th>Skylit</th></tr>
+    <tr><td>1st tap · FRESH</td><td class="c h1">47% <span class="ci">70</span></td><td class="c h3">64% <span class="ci">14</span></td><td class="c">+2.4</td><td class="sk">~80%</td></tr>
+    <tr><td>2nd tap · TESTED</td><td class="c h3">73% <span class="ci">22</span></td><td class="c hthin">thin 3</td><td class="c">+3.1</td><td class="sk">~66%</td></tr>
+    <tr><td>3rd+ tap</td><td class="c hthin">thin 2</td><td class="c hthin">—</td><td class="c dm">—</td><td class="sk">~33%</td></tr>
+    <tr><td>building into the tap</td><td class="c h3">61% <span class="ci">40</span></td><td class="c h4">71% <span class="ci">9</span></td><td class="c">+3.8</td><td class="sk">magnet</td></tr>
+    <tr><td>shedding into the tap</td><td class="c h1">41% <span class="ci">58</span></td><td class="c h2">50% <span class="ci">6</span></td><td class="c">+1.9</td><td class="sk">weakening</td></tr>
+    <tr><td>King</td><td class="c hthin">thin 8</td><td class="c h3">67% <span class="ci">12</span></td><td class="c">+4.0</td><td class="sk">pins late</td></tr>
+    <tr><td>gatekeeper · ratio &gt; 0.6</td><td class="c h2">55% <span class="ci">21</span></td><td class="c hthin">thin 4</td><td class="c">+2.8</td><td class="sk">checkpoint</td></tr>
+    <tr><td>trinity 3/3</td><td class="c h3">63% <span class="ci">19</span></td><td class="c h4">75% <span class="ci">8</span></td><td class="c">+3.5</td><td class="sk">A+</td></tr>
+    <tr><td>trinity 2/3 · SPX out</td><td class="c h0">31% <span class="ci">13</span></td><td class="c hthin">thin 2</td><td class="c">+0.9</td><td class="sk">serious</td></tr>
+    <tr><td>rug configuration</td><td class="c hthin">thin 5</td><td class="c hthin">thin 1</td><td class="c hthin">—</td><td class="sk">accelerates</td></tr>
+    <tr><td>+γ regime</td><td class="c h2">54% <span class="ci">52</span></td><td class="c h2">57% <span class="ci">14</span></td><td class="c">+2.1</td><td class="sk">fade</td></tr>
+    <tr><td>−γ regime</td><td class="c h1">48% <span class="ci">42</span></td><td class="c h3">62% <span class="ci">13</span></td><td class="c">+4.6</td><td class="sk">follow, further</td></tr>
+  </table>
+  <div class="row" style="margin-top:5px"><span class="v dm">all cells illustrative except row 1–2 col 1 · 24 cells read · 3 exclude the base · chance predicts 1.2 · <b class="am">one flag over chance</b></span></div></div>
+  <div class="foot"><span>● rec</span><span>● saved</span><span style="margin-left:auto">alt D</span></div>
+</div></div></div>
+<div class="pros"><div class="g"><b>What it is good at</b>The densest honest view: both objectives side by side, extent beside hit rate, Skylit's number in the margin, the chance-flag ledger under the grid. This is what the nightly actually computes.</div><div class="b"><b>What it costs</b>It is a table for someone who already knows the question. Twelve rows × two objectives = 24 cells, and at eleven sessions most are thin; it will look empty for months without the backfill.</div></div>
+<div class="verdict">The right <b>engine</b> — the expectation card in ② should be a lookup into exactly this grid — and a good expert view, but not the first thing on the tab.</div>
+</section>
+
+<!-- ================= E · THE SESSION TIMELINE ================= -->
+<section>
+<h2><span>E · The session timeline</span> the day as a strip — every tap on the clock, extremes marked</h2>
+<div class="stage"><div class="scaler" style="--sh:266px"><div class="pan">
+  <div class="tabs"><span>Dashboard</span><span class="on">📊 Analysis</span><span>🧪 Testing</span></div>
+  <div class="hd"><b>2026-09-02 · SPY</b> · 5 taps · 3 held · HOD 13:47 at 7681 ceil · LOD 10:04 at 7660 mag · both extremes at a top-5 node</div>
+  <div class="secb" style="padding:5px 10px 14px">
+    <div class="tl">
+      <div class="tk" style="left:0%"></div><div class="tk" style="left:15.4%"></div><div class="tk" style="left:30.8%"></div><div class="tk" style="left:46.2%"></div><div class="tk" style="left:61.5%"></div><div class="tk" style="left:76.9%"></div><div class="tk" style="left:92.3%"></div>
+      <div class="hr" style="left:0%">08:30</div><div class="hr" style="left:15.4%">09:30</div><div class="hr" style="left:30.8%">10:30</div><div class="hr" style="left:46.2%">11:30</div><div class="hr" style="left:61.5%">12:30</div><div class="hr" style="left:76.9%">13:30</div><div class="hr" style="left:92.3%">14:30</div>
+      <div class="px" style="top:40px"></div>
+      <div class="tp rd" style="left:18.2%;top:44px">1</div><div class="lab" style="left:18.2%;top:56px">764 flr · broke</div>
+      <div class="tp gr" style="left:24.1%;top:62px">1</div><div class="lab gr" style="left:24.1%;top:6px">LOD · 7660 · held +6.3</div>
+      <div class="tp gr" style="left:44.1%;top:30px">1</div><div class="lab" style="left:44.1%;top:14px">765 gate · held +4.2</div>
+      <div class="tp gr" style="left:81.3%;top:10px">1</div><div class="lab gr" style="left:81.3%;top:26px">HOD · 7681 · held +2.7</div>
+      <div class="tp am" style="left:96.6%;top:30px">2</div><div class="lab am" style="left:93%;top:44px">765 · pending</div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>tap</th><th>node</th><th>#</th><th>growth</th><th>tri</th><th class="r">held</th><th class="r">MFE10</th><th>extreme?</th><th>studies it feeds</th></tr>
+      <tr><td>09:41</td><td class="pu">764 flr</td><td>1</td><td class="gr">+$2.1M</td><td>3/3</td><td class="r rd">broke</td><td class="r">−1.9</td><td class="dm">—</td><td class="dm">S-B1 S-B4 S-B12</td></tr>
+      <tr><td>10:04</td><td class="pu">7660 mag</td><td>1</td><td class="gr">+$8.4M</td><td>2/3</td><td class="r gr">held</td><td class="r">+6.3</td><td class="gr">LOD ✓</td><td class="dm">S-A1 S-B1 S-B4 H5</td></tr>
+      <tr><td>13:47</td><td class="ye">7681 ceil</td><td>1</td><td class="mu">flat</td><td>1/3</td><td class="r gr">held</td><td class="r">+2.7</td><td class="gr">HOD ✓</td><td class="dm">S-A1 S-A3 H5</td></tr>
+    </table>
+    <div class="row" style="margin-top:4px"><span class="v dm">rows illustrative · the strip is the deflection ledger drawn on the clock · scrub ◀ ▶ to replay the book at each tap</span></div>
+  </div>
+  <div class="foot"><span>● rec</span><span>● saved</span><span style="margin-left:auto">alt E</span></div>
+</div></div></div>
+<div class="pros"><div class="g"><b>What it is good at</b>It is how a trader remembers a day: the two extremes, where the taps fell, which held. Each tap names the studies it will feed, so "what am I collecting for" is visible. Pairs naturally with the replay slider.</div><div class="b"><b>What it costs</b>One session at a time; it cannot show a rate. Beautiful for the review moment, mute for the other two.</div></div>
+<div class="verdict">The best form for the ③ <b>after-the-close</b> moment — the journal drawn instead of listed. Not a tab on its own.</div>
+</section>
+
+<section>
+<h2>The recommendation</h2>
+<p><b>Keep the three-moment layout as the tab, and take one thing from each alternative.</b> The expectation card in ② becomes the <b>setup grader</b> (C) once its lines are measured, and it looks its numbers up in the <b>conditions matrix</b> (D), which is what the nightly computes anyway. The after-the-close moment ③ is drawn as the <b>session timeline</b> (E). The evidence rows under each moment are the <b>research notebook</b> (A). And the <b>doctrine scorecard</b> (B) goes to the Testing tab beside the register, where a row of claims with verdicts belongs.</p>
+<p class="mono" style="font-size:12.5px">three moments = the tab · C = ②'s card · D = ②'s engine · E = ③'s form · A = the evidence rows · B = Testing</p>
+</section>
+</div>
+<script>(function(){ var b=[].slice.call(document.querySelectorAll('.ctl button')); b.forEach(function(x){ x.addEventListener('click',function(){ b.forEach(function(o){ o.setAttribute('aria-pressed', o===x?'true':'false'); }); document.documentElement.style.setProperty('--scale', x.getAttribute('data-s')); }); }); })();</script>
+
+</body>
+</html>

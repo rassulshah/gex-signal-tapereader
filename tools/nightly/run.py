@@ -96,8 +96,62 @@ def shuffle_null(H_list, eps, iters=400, seed=11):
     best.sort()
     return dict(p50=best[len(best)//2], p95=best[int(.95*len(best))])
 
-def judge(H, eps, defl, null95):
+def judge_sweep(H, since):
+    """(v15.55) H7 — the early sweep, re-read on sessions AFTER the corpus it was found in. Uses the same
+    definitions as tools/study-sweeps.py (imported, not re-typed). H6 needs the TAP record: blocked."""
+    out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick=H.get('pick'), judgedBy='nightly')
+    if H.get('pick') == 'sweepNode':
+        # (v15.56) the day files carry the book per 3-minute bar — tools/study-sweeps-book.py tags every price-level
+        # sweep-reclaim AT a top-5 node / the King or NOT. n counts the AT-node events on sessions from `since`.
+        try:
+            sys.path.insert(0, os.path.join(ROOT, 'tools'))
+            sb = __import__('study-sweeps-book')
+            res = sb.run()
+            at = [e for e in res['events'] if e['kind'] == 'price' and e['printed'] is not None and e['atNode'] and e['d'] >= since]
+            no = [e for e in res['events'] if e['kind'] == 'price' and e['printed'] is not None and e['atNode'] is False and e['d'] >= since]
+            n = len(at); k = sum(e['printed'] for e in at); nn = len(no); kn = sum(e['printed'] for e in no)
+            out.update(n=n, nControl=nn, sessions=res['corpus'].get('sessions', 0))
+            if n < H['minN']:
+                out.update(verdict='thin', bar='%d sweep-at-a-node events on sessions from %s (needs %d); not at a node: %d' % (n, since, H['minN'], nn)); return out
+            r = k / n; lo, hi = wilson(k, n); ctrl = (kn / nn) if nn else None
+            out.update(rate=round(100*r, 1), base=(round(100*ctrl, 1) if ctrl is not None else None), ci=[round(100*lo), round(100*hi)])
+            thr = _points(H.get('predict', ''), 40); ref = _points(H.get('refuteIf', ''), 30)
+            if 100*r > thr and ctrl is not None and lo > ctrl: out.update(verdict='cleared', bar='holds (> %.0f%%) and the CI excludes the not-at-a-node rate %.0f%%' % (thr, 100*ctrl))
+            elif 100*r <= ref: out.update(verdict='refused', bar='%.0f%% <= %.0f%%: refuted' % (100*r, ref))
+            else: out.update(verdict='refused', bar='between the prediction and the refutation, or the CI covers the control')
+            return out
+        except Exception as e:
+            out.update(n=0, verdict='thin', bar='book study threw: %s' % e); return out
+    if H.get('blocked'):
+        out.update(n=0, verdict='blocked', bar='blocked: %s' % H.get('note', '')[:80])
+        return out
+    try:
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        sw = __import__('study-sweeps')
+        es = os.path.join(ROOT, 'data', 'es-1min', 'ES TestingData.txt')
+        if not os.path.exists(es):
+            out.update(n=0, verdict='thin', bar='no ES file to read'); return out
+        res = sw.run(es)
+        ev = [e for e in res['events'] if e['d'] > since and e['level'] in ('ONL', 'ONH', 'PDL', 'PDH') and e['bucket'] == '08:30-09:00' and e['printed'] is not None]
+        n = len(ev); k = sum(e['printed'] for e in ev)
+        out.update(n=n, sessionsAfter=len(set(e['d'] for e in ev)))
+        if n < H['minN']:
+            out.update(verdict='thin', bar='%d early ON/PD sweep-reclaims on sessions after %s (needs %d)' % (n, since, H['minN'])); return out
+        r = k / n; lo, hi = wilson(k, n); ctrl = sum(e['fresh'] for e in ev if e['fresh'] is not None) / max(1, len([e for e in ev if e['fresh'] is not None]))
+        out.update(rate=round(100*r, 1), base=round(100*ctrl, 1), ci=[round(100*lo), round(100*hi)])
+        thr = _points(H.get('predict', ''), 24); ref = _points(H.get('refuteIf', ''), 18)
+        if 100*r > thr and lo > ctrl: out.update(verdict='cleared', bar='holds (> %.0f%%) and the CI excludes the fresh-low control %.0f%%' % (thr, 100*ctrl))
+        elif 100*r <= ref: out.update(verdict='refused', bar='%.0f%% <= %.0f%%: refuted' % (100*r, ref))
+        else: out.update(verdict='refused', bar='between the prediction and the refutation, or the CI covers the control %.0f%%' % (100*ctrl))
+        return out
+    except Exception as e:
+        out.update(n=0, verdict='thin', bar='sweep judge threw: %s' % e); return out
+
+
+def judge(H, eps, defl, null95, since='2026-09-03'):
     out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick=H.get('pick'))
+    if H.get('judgedBy') == 'nightly' or H.get('pick') in ('sweepNode', 'sweepEarly'):
+        return judge_sweep(H, H.get('since') or since)
     if H.get('blocked'):
         n = len(defl); out.update(n=n, verdict=('ready' if n >= H['minN'] else 'blocked'),
             bar=('the event ledger holds %d of %d' % (n, H['minN'])) if n < H['minN'] else 'ledger has %d events — the join can be run' % n)
@@ -158,14 +212,25 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     eps = episodes(days, frm); defl = defl_events(days, frm)
     H_list = R['hypotheses']
     null = shuffle_null(H_list, eps) if eps else dict(p50=0, p95=0)
-    verdicts = [judge(H, eps, defl, null['p95']) for H in H_list]
+    verdicts = [judge(H, eps, defl, null['p95'], since=frm) for H in H_list]
+    # (v15.55) TRACK requests: whatever he typed into an Analysis-tab field rides in the day export; copy every new one
+    # into learning/requests.json (append-only, by id) so the review can turn it into a study row.
+    try:
+        newreq = ingest_requests(days) if write else 0
+    except Exception as eR:
+        newreq = 0; print('requests ingest threw:', eR)
+    # (v15.55) refresh the sweep table the panel reads (data/es-1min/SWEEPS.json) when the ES file is present
+    try:
+        if write: refresh_sweeps()
+    except Exception as eS:
+        print('sweep refresh threw:', eS)
     cal = lodhod_calibration(days, frm)
     n_sess = len(set(e['_day'] for e in eps))
     thin = sum(1 for v in verdicts if v['verdict'] in ('thin', 'blocked'))
     preopen = ('%d session%s since %s · %d episodes · %d of %d hypotheses still thin · null band %.1f pts'
                % (n_sess, '' if n_sess == 1 else 's', frm, len(eps), thin, len(verdicts), null['p95']))
     log = dict(schema=2, date=last, writtenBy='tools/nightly/run.py', from_=frm, sessions=n_sess, episodes=len(eps),
-               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen)
+               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0))
     log['from'] = log.pop('from_')
     if write:
         os.makedirs(LOGD, exist_ok=True)
@@ -176,6 +241,41 @@ def run(upto=None, write=True, reg_path=REG, days=None):
         print('  %-3s %-9s n %4s/%-3s %s %s' % (v['id'], v['verdict'].upper(), v.get('n', '-'), v['minN'],
               (('%s%%' % v['rate']) if v.get('rate') is not None else ''), v.get('bar', '')))
     return log
+
+# ---- (v15.55) TRACK requests and the sweep table -----------------------------------------------------
+REQ = os.path.join(ROOT, 'learning', 'requests.json')
+
+def ingest_requests(days):
+    cur = {'schema': 1, 'note': 'what he asked to be tracked, copied from data/<day>.json `requests` by the nightly; the review turns each into a study row (studies.json carries req:<id>) and marks it here', 'requests': []}
+    if os.path.exists(REQ):
+        try: cur = json.load(open(REQ))
+        except Exception: pass
+    seen = set(r.get('id') for r in cur.get('requests', []))
+    added = 0
+    for d, D in days:
+        for r in (D.get('requests') or []):
+            if not r or not r.get('id') or r['id'] in seen: continue
+            cur['requests'].append(dict(id=r['id'], subj=r.get('subj'), text=r.get('text'), date=r.get('date'), seenIn=d, status='NEW'))
+            seen.add(r['id']); added += 1
+    if added or not os.path.exists(REQ):
+        io.open(REQ, 'w', encoding='utf-8').write(json.dumps(cur, indent=1, ensure_ascii=False))
+        print('requests: %d new -> learning/requests.json (%d total)' % (added, len(cur['requests'])))
+    return added
+
+def refresh_sweeps():
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))
+    es = os.path.join(ROOT, 'data', 'es-1min', 'ES TestingData.txt')
+    if os.path.exists(es):
+        sw = __import__('study-sweeps')
+        out = sw.run(es); out.pop('events', None)
+        io.open(os.path.join(ROOT, 'data', 'es-1min', 'SWEEPS.json'), 'w', encoding='utf-8').write(json.dumps(out, indent=1))
+        print('sweeps: refreshed data/es-1min/SWEEPS.json (%d sessions, %d cells)' % (out['corpus']['sessions'], out['ledger']['cells_read']))
+    # (v15.56) the book table from the panel's own day files
+    sb = __import__('study-sweeps-book')
+    ob = sb.run(); ob.pop('events', None)
+    io.open(os.path.join(ROOT, 'data', 'es-1min', 'SWEEPS-BOOK.json'), 'w', encoding='utf-8').write(json.dumps(ob, indent=1))
+    print('sweeps x book: refreshed data/es-1min/SWEEPS-BOOK.json (%d sessions, %d cells)' % (ob['corpus'].get('sessions', 0), ob['ledger'].get('cells_read', 0)))
+    return True
 
 # ---- self-test: the harness must find a planted effect and refuse a planted nothing ---------------
 def selftest():

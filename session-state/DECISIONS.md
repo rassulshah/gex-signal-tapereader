@@ -382,3 +382,37 @@ up and down days.
 - **Pop-out: keep the window only.** PiP archived.
 - **Face hierarchy: keep the ladder on top.** ⓪a stays below it (my recommendation was the reverse; his call).
 - **"perform the simplification"** — go, in the plan's order: defects + dead code first (v15.53), merges next.
+
+
+## 2026-09-03 — the Analysis tab, by subject
+
+- **Of five alternatives (by subject · doctrine scorecard · setup grader · conditions matrix · session timeline)
+  he chose A · by subject: "it provides a subject which can then be added to."** My recommendation was the
+  three-moment layout with the others folded in; his call, and the registry makes it extensible.
+- **"Think like a trader … We don't want information for the sake of information."** Every study carries
+  `decides` (SIZE / SIDE / TARGET / STOP / SKIP / TIME / LEVEL / WAIT). A study with no action does not go in.
+- **Sweeps get their own extensive subsection (H2, 12 studies)** — ONL/ONH, PDL/PDH, IBL/IBH, by clock, depth,
+  speed, acceptance, sweep × node (H6 draft), the early sweep re-read (H7 draft).
+- **Testing is redesigned to the same subjects** — register, gate, dashboard, record, nightly, suite; ids shared
+  with Analysis; a hand rule against a registered null is FLAGGED (kill.negGammaWide ↔ H3).
+
+- **TRACK field (v15.55):** one per subject, not per subsection — "I want each section … a text field … click a
+  button like add which will trigger you to do your part." The request rides in the day export → nightly →
+  learning/requests.json → the review turns it into a study row carrying `req:<id>` → the row comes back to the
+  field. The trigger IS the Save; nothing reaches the review without the day file.
+- **THE READ FROM THE STATS (v15.55):** lives in ⓪a under the deflection ledger. It reads today's sweeps on the
+  courier's ES bars against SWEEPS.json, the node clause from the deflection ledger, the register's word. The
+  node-conditioned rate prints UNMEASURED until H6 fills — never a guess dressed as a rate.
+- **Other sweeps (his question):** PDC, POC/VAH/VAL, PMH/PML, PWH/PWL, OR5/OR15 measured the same day (F-14):
+  none beats the fresh-low control. CW0/PW0/King/VWAP sweeps need the book at the sweep — H6 / the tap record.
+- **The book's levels as sweep levels (v15.56, his ask):** CW0 / PW0 / CW / PW / KING, valued as of the sweep bar,
+  side by POSITION against the open (a PW0 above the open is a high-side level whatever its name). The node clause
+  uses Skylit's own tap zone (±0.50 SPY = ±5 ES, C2). The book corpus is the panel's own day files at 3-minute
+  resolution — one scale, no ratio — and it is thin (9 sessions) and says so; every export adds a session.
+- **Companion v1.18 widens ES to the full Globex day.** Not "messing with the integration": the same courier, one
+  more flag, so the live ONH/ONL are the overnight the corpus defined. NQ/GC/CL keep the trim.
+- **RATE_MIN_N = 15:** a cell under 15 prints thin with its n everywhere the sweep machinery renders a rate.
+- **Levels added (v15.57, his approval of my five):** EM edges, VWAP + bands, developing POC/VAH/VAL, London range,
+  HVL/magnet. Skipped by agreement: midpoints, floor pivots, round numbers, weekly/monthly, naked POCs.
+- **The two-line rule (his):** at most two sweep lines on ⓪a, the biggest / most popular levels first (tier 1 = PDH PDL
+  ONH ONL VAH VAL POC KING EMH EML), then depth; the rest named in one trailer.

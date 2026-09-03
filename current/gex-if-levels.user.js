@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.17
+// @version      1.18
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -587,7 +587,12 @@ var FUTBARS_KEY='gpts_futbars_v1';
 // guessing one would put a wrong series in the corpus under a right-looking name. Add it here when
 // he says what it is.
 var FUT_MARKETS=[
-  { k:'ES', y:'ES=F' },
+  // (v1.18) ⚠ ES KEEPS THE WHOLE GLOBEX DAY. The UTC trim below was cutting the overnight, so the panel's
+  // "ONH/ONL" (v15.00) were the 08:00-08:29 CT pre-market stub, not the overnight range - the sweep read
+  // (v15.55) inherited that. The sweep corpus (tools/study-sweeps.py) defines ONH/ONL over 17:00 -> 08:29
+  // CT; the live feed must carry the same hours or the live level is a different level with the same
+  // name. ES only: it is the corpus instrument, and 5 days x ~1,380 bars is ~6,900 rows (~300 KB).
+  { k:'ES', y:'ES=F', full:true },
   { k:'NQ', y:'NQ=F' },
   { k:'GC', y:'GC=F' },
   { k:'CL', y:'CL=F' },
@@ -621,7 +626,7 @@ function futPollMs(){
   }catch(e){ return FUT_POLL_OFF_MS; }
 }
 var futLast=0;
-function futParse(txt){
+function futParse(txt, full){
   try{
     var j=JSON.parse(txt);
     var r=j && j.chart && j.chart.result && j.chart.result[0];
@@ -639,7 +644,7 @@ function futParse(txt){
       // and a fake LOD.
       if(q.open[i]==null||q.high[i]==null||q.low[i]==null||q.close[i]==null) continue;
       sod=((ts[i]%86400)+86400)%86400;
-      if(sod<FUT_WIN_A||sod>FUT_WIN_B) continue;
+      if(!full && (sod<FUT_WIN_A||sod>FUT_WIN_B)) continue;   // (v1.18) `full` markets keep every bar
       rows.push([ ts[i], q.open[i], q.high[i], q.low[i], q.close[i], (q.volume&&q.volume[i]!=null)?q.volume[i]:0 ]);
     }
     return { rows:rows,
@@ -670,10 +675,10 @@ function futPull(m){
       onload:function(res){
         try{
           if(!res || res.status!==200){ futStore(m.k, { err:'HTTP '+(res&&res.status), at:Date.now() }); return; }
-          var P=futParse(res.responseText||'');
+          var P=futParse(res.responseText||'', !!m.full);
           if(P.err){ futStore(m.k, { err:P.err, at:Date.now() }); return; }
           futStore(m.k, { at:Date.now(), sym:P.sym, gran:P.gran, tz:P.tz, gmtoffset:P.gmtoffset,
-                          n:P.rows.length, rows:P.rows });
+                          n:P.rows.length, rows:P.rows, full:!!m.full });
           log('futures', m.k, P.rows.length, 'bars');
         }catch(e){ futStore(m.k, { err:'compute: '+e.message, at:Date.now() }); }
       },

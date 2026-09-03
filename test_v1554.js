@@ -51,11 +51,11 @@ const code=src.split('\n').filter(l=>!l.trim().startsWith('//')).join('\n');
   ok(reg.hypotheses.every(h=>h.written && h.predict && h.refuteIf),'8c every hypothesis carries a written date, a prediction and what refutes it');
   // preregList: file wins when present, seed otherwise; picks resolve to functions
   const store={}; const g={ PREREG_PICK:null, PREREG_SEED:null };
-  const code2=exVar('PREREG_SEED')+'\n'+'var PREREG_PICK={ gradeA:function(s){ return s.gradeA; }, tap1:function(s){ return s.tap1; }, pol:function(s){ return s.pol; }, wick:function(s){ return s.wick; }, defl:function(s){ return s.defl; } };\n'+
+  const code2=exVar('PREREG_SEED')+'\n'+'var PREREG_PICK={ gradeA:function(s){ return s.gradeA; }, tap1:function(s){ return s.tap1; }, pol:function(s){ return s.pol; }, wick:function(s){ return s.wick; }, defl:function(s){ return s.defl; }, sweepNode:function(){ return {n:0}; }, sweepEarly:function(){ return {n:0}; } };\n'+
     "var REGISTER_KEY='gpts_register_v1'; var localStorage={ getItem:function(k){ return store[k]||null; }, setItem:function(k,v){ store[k]=v; } };\n"+ex('preregList')+'\nreturn preregList;';
   const preregList=new Function('store',code2)(store);
   let l=preregList();
-  ok(l.length===5 && typeof l[0].pickFn==='function' && l[0].pickFn({gradeA:{n:3}}).n===3,'8d with nothing fetched the seed is used and picks resolve to functions');
+  ok(l.length===7 && typeof l[0].pickFn==='function' && l[0].pickFn({gradeA:{n:3}}).n===3,'8d with nothing fetched the seed is used and picks resolve to functions (v15.55: 7 rows, H6/H7 added)');
   store['gpts_register_v1']=JSON.stringify({ schema:1, hypotheses:[{ id:'H9', claim:'x', pick:'tap1', minN:5 }] });
   l=preregList();
   ok(l.length===1 && l[0].id==='H9','8e once the file is fetched, THE FILE is the register');
@@ -132,9 +132,9 @@ const code=src.split('\n').filter(l=>!l.trim().startsWith('//')).join('\n');
 // ---- the tabs, in workflow order ---------------------------------------------------------------
 {
   const ab=ex('analysisBlock'), tb=ex('testingBlock');
-  ok(/h\+=S_hodlod\+S_defl\+S_nodes\+S_review\+S_dir;/.test(ab),'T1 Analysis emits ① HOD/LOD · ② DEFLECTIONS AT NODES · ③ NODES · ④ REVIEW · ⑤ DIRECTION — in that order');
+  ok(/h\+=analysisSubjectsHtml\(sym, _live\);/.test(ab) && /_live\.H1=hodlodSectionHtml\(sym\)/.test(ab) && /_live\.F5=nl; _live\.D2=df;/.test(ab),'T1 (v15.55) Analysis emits the subject panel with the live evidence mapped to H1 / F1 / F5 / D2');
   ok(!/tabTile\('Direction'/.test(ab) && !/tabSection\('a8'/.test(ab),'T2 the headline tiles and the scorecard section are gone from Analysis');
-  ok(/h\+=T_canfail\+T_prereg\+T_prop\+T_chal\+T_kill\+T_cov\+T_self\+T_detail;/.test(tb),'T3 Testing emits ① CAN THE SCORER FAIL · ② PRE-REGISTERED · ③ PROPOSALS · ④ KILL LIST · ⑤ COVERAGE · ⑥ SELF-TEST · ⊕');
+  ok(/h\+=T_loop\+T_prereg\+T_canfail\+T_dash\+T_cov\+T_nightly\+T_self\+T_detail;/.test(tb),'T3 (v15.55) Testing emits the loop strip · ① REGISTER · ② GATE · ③ DASHBOARD · ④ RECORD · ⑤ NIGHTLY · ⑥ SELF-TEST · ⊕');
   ok(!/questionQueueHtml\(/.test(code),'T4 the question queue is archived — the register holds the questions now');
   ok(/featureScorecardsHtml\('SPY'\)/.test(tb),'T5 the feature scorecards live in Testing ⊕');
   ok(/GATED/.test(ex('canFailHtml')),'T6 ⑤b says GATED where the gate bites');

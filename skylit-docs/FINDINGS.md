@@ -604,3 +604,37 @@ per-event, which is why `repoUpsertDefl` shipped. Full method: `tools/study-corp
 `reaction` quality over 970 rows: `confirmed` (a real rejection wick) **49.1%** vs `weak` **48.6%**.
 Episode level: 33.3% (n=12) vs 55.6% (n=63). It is REPORTED on the face and never WEIGHTED, per
 `PREREGISTER.md` H4.
+
+
+## F-14 · THE LEVEL'S NAME DOES NOT MATTER; THE FLUSH, THE CLOCK AND THE SPEED DO (2026-09-03)
+
+Event-level sweep study, `tools/study-sweeps.py`, 284 ES sessions, full Globex, 20 level types, 919
+events, two controls. Against the fair control — price at a fresh low right now, at ANY level or none —
+a sweep-and-reclaim of the overnight low, the prior-day low, the prior close, the profile levels, the
+pre-market, the prior week, the IB or the opening range is the day's low **exactly as often as a bounce
+off nothing** (−7 to +9pp over 79 cells; the +9s are what 79 cells produce by luck). What moves it: the
+**first 30 minutes** (27% n=180 vs 18%), a **flush past 8 pts** (40% n=86 vs 24%), a **slow reclaim of
+6–30 bars** (40% n=90 vs 24%). A **shallow quick poke is NOT the extreme 86% of the time** (n=228). When
+the sweep IS the extreme, the far extreme is a median 60–89 pts away. ⚠ First read, not pre-registered:
+H7 re-reads the early sweep on sessions after 2026-08-21; **H6 adds the node**, which is the untested
+clause and the tapereader's reason to exist. Full table: `roadmap/FINDINGS-sweeps-first-read.md`;
+the panel reads `data/es-1min/SWEEPS.json` (⓪a THE READ FROM THE STATS, Analysis H2).
+
+
+## F-15 · THE BOOK CORPUS EXISTS AND IS THIN (2026-09-03)
+
+The panel's own day files carry the book per 3-minute bar (King, top nodes, the InsiderFinance walls) beside
+h/l/close. `tools/study-sweeps-book.py` reads them as a corpus: 9 sessions (2026-08-18 → 08-31), 20 cells, every
+one under n=15. Price-level sweeps AT a top-5 node or the King printed the extreme 3 of 10 vs 3 of 8 not at a node;
+at a wall 3 of 5; sweeps OF the King 1 of 5 (low side). **Nothing is readable yet and nothing is claimed** — the
+point of F-15 is that H6 now has a table that grows by one session per export, judged by the nightly on sessions
+from the register date, instead of waiting on a record that did not exist.
+
+
+## F-16 · THE INTERIOR LEVELS ARE NOT THE EXTREME (2026-09-03)
+
+Same event study as F-14, twelve more level types. London high/low: 16–21% (n=170/163) vs 18–24% control — a name
+like the others. VWAP sweep-reclaim: **5–7% printed the extreme** (n=124/126) vs 16–21%; its ±1σ bands 8% (n≈200),
+±2σ 11–13% (n≈180); today's developing POC **3–5%** (n=121/131), today's VAH/VAL 7–8% (n≈210). By construction a
+central-tendency level sits inside the range, so a sweep of it is a pullback, not the day's turn. The right outcome
+for these levels is "did the move resume" — queued as P5.1. On the face they rank tier 3 and are named, not read.

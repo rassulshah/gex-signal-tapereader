@@ -98,7 +98,7 @@ const build=(g,fns,tail)=>{ const code=Object.keys(g).map(k=>'var '+k+'=__g.'+k+
     const days={}; recs.forEach(r=>{ (days[r.d]=days[r.d]||{feat:{SPY:[]}}).feat.SPY.push(r); });
     g.recorderLoad=()=>({ days:days });
     g.g3esc=(s)=>String(s); g.g3tip=(t)=>' title="'+String(t).replace(/"/g,'&quot;')+'"';
-    const code=Object.keys(g).map(k=>'var '+k+'=__g.'+k+';').join('\n')+'\nvar PREREG_FROM="2026-09-03";\n'+exVar('PREREG_SEED')+'\nvar PREREG_PICK={ gradeA:function(s){ return s.gradeA; }, tap1:function(s){ return s.tap1; }, pol:function(s){ return s.pol; }, wick:function(s){ return s.wick; }, defl:function(s){ return s.defl; } };\nvar REGISTER_KEY="x"; var localStorage={ getItem:function(){ return null; } };\n'+ex('preregList')+'\n'+ex('preregStats')+'\n'+ex('preregHtml')+'\nreturn { s:preregStats("SPY"), h:preregHtml() };';
+    const code=Object.keys(g).map(k=>'var '+k+'=__g.'+k+';').join('\n')+'\nvar PREREG_FROM="2026-09-03";\n'+exVar('PREREG_SEED')+'\nvar PREREG_PICK={ gradeA:function(s){ return s.gradeA; }, tap1:function(s){ return s.tap1; }, pol:function(s){ return s.pol; }, wick:function(s){ return s.wick; }, defl:function(s){ return s.defl; }, sweepNode:function(){ return {n:0,hit:0}; }, sweepEarly:function(){ return {n:0,hit:0}; } };\nvar HYP_STUDY={ H1:"F5.2", H2:"F2.1", H3:"F6.1", H4:"F1.4", H5:"H1.3", H6:"H2.7", H7:"H2.8" };\nvar REGISTER_KEY="x"; var localStorage={ getItem:function(){ return null; } };\n'+ex('preregList')+'\n'+ex('preregStats')+'\n'+ex('preregHtml')+'\nreturn { s:preregStats("SPY"), h:preregHtml() };';
     return (new Function('__g',code))(g);
   };
   const R=(d,key,t,rec,hit)=>({ d:d, key:key, t:t, resolved:true, hit:hit, rec:rec });

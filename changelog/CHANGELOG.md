@@ -1,3 +1,136 @@
+## v15.57 — the levels he asked for, and the two-line rule
+
+> "ok.. lets add these, but note that if there are multiple sweeps we only need to show two on the dashboard that are
+> the biggest levels that are the most popular like PDH, PDL, ONH, ONL, VAH, VAL, POC etc."
+
+**Added to the sweep read, in his order of value:** the **expected-move edges** (EMH/EML from the panel's own band,
+Skylit's level), the **session VWAP and its ±1σ/±2σ bands** and **today's developing POC/VAH/VAL** (dynamic levels —
+valued at the sweep bar, frozen for the reclaim, side = the side price came from), the **London range** (02:00 CT
+→ the open, only when the overnight is the full night), and **HVL (zero-gamma) and the magnet** from the
+InsiderFinance ladder (FLIP / Mag rows). All in ES points via `dispToEs`.
+
+**The two-line rule.** `LEVEL_TIER`: tier 1 = his list plus the King and the EM edges (PDH PDL ONH ONL VAH VAL POC
+KING EMH EML); tier 2 = PDC, the walls, IB, London, HVL, magnet; tier 3 = the dynamic and minor ones. Every merged
+excursion and every break is ranked by tier then depth; the READ prints the top two in full and names the rest in one
+trailer ("also swept today, lesser levels: …"). The alignment count covers the two shown.
+
+**Measured before it was trusted.** `study-sweeps.py` now reads 32 level types (116 cells). London is like every
+other name (within chance of the control). The **interior levels are NOT the extreme**: a VWAP sweep-reclaim prints
+the day's extreme 5–7% (n=124/126) against a 16–21% control, the bands 8–13% (n≈180–207), today's POC 3–5%
+(n=121/131), today's VAH/VAL 7–8% (n≈210) — by construction they sit inside the range. They are **pullback
+candidates**, and the pullback outcome (resume to a new extreme) is queued as P5.1. The registry says so (H2.10h–l);
+the book study carries HVL/magnet (thin).
+
+**Tests.** `test_v1557.js` (25; 10 of 10 mutations — one fixture re-cut so typical price ≠ close). Suite 125 green /
+9 red (5 baseline + 4 save gates), smoke clean, nightly run.
+
+**Next (v15.58).** The TAP record.
+
+## v15.56 — the book's levels in the sweep read: CW0 / PW0 / CW / PW / KING, the book table, the honest overnight
+
+> "good point, about CW0, PW0 etc.. can you add them"
+
+**Why it was wrong before.** The sweep read (v15.55) only knew price levels — the book's own walls and King were
+absent, and the node clause could only cite a recorded deflection. Worse, the panel's "ONH/ONL" (v15.00) were never
+the overnight: the companion trimmed ES to 08:00–16:30 CT, so the level named ONL was the 08:00–08:29 pre-market
+low. A level with the corpus's name must have the corpus's hours.
+
+**The book's levels, live.** `bookLevelsNow(sym)` reads the InsiderFinance ladder (CR0/PS0/CR/PS → CW0/PW0/CW/PW)
+and the rail (the King, the top-5 by |pct|) and puts them in ES points (`dispToEs`: an ES chart displays ES; a
+cash chart converts by the last-good ES/SPY ratio; no ratio → left out, not guessed). `sweepLevelsToday` adds the
+walls and the King as sweep levels, side by position against today's open (`KING-`, `CW0+` …). The READ's node
+clause now checks the sweep's extremum against the King, the top-5 and the walls inside Skylit's tap zone
+(±0.50 SPY = ±5 ES, C2) and quotes H6's own comparison from the book table — AT a node vs NOT at a node, with n —
+then the deflection ledger as second evidence.
+
+**The book table.** `tools/study-sweeps-book.py` over the panel's own day files (every 3-minute bar carries the
+King, `tri.SPY.top`, `lev.cr0/ps0/cr/ps`, h/l/close): sweeps OF the book's levels (valued as of the sweep bar,
+frozen for the reclaim) and every price-level sweep tagged at-node / at-King / at-wall / not. `--selftest` plants a
+PDL sweep landing on the King. Output `data/es-1min/SWEEPS-BOOK.json`, fetched like the others
+(`sweepsBookFetch`), rendered as a block under the H2 sweep table, refreshed by the nightly. Today: 9 sessions,
+every cell thin — printed as thin, with its n. **H6 is now judged from it** (`judge_sweep` → `sweepNode`), thin
+at n=0 on sessions from the register date, no longer "blocked".
+
+**The honest overnight.** `overnightHL()` returns `full` (≥ 600 bars outside RTH); a stub is labelled PMH/PML on
+the ladder and in the read. **Companion v1.18**: ES is fetched without the UTC trim (`full:true`), so from the next
+poll the panel holds the whole Globex day for ES and ONH/ONL are the overnight. NQ/GC/CL keep the trim.
+
+**A cell under n=15 prints "thin (n=…)"** (`RATE_MIN_N`, the same floor the deflection tables use) — the book table
+is thin everywhere today and says so; the READ says "thin (n=10) vs thin (n=8)" rather than 30% vs 38%.
+
+**Tests.** `test_v1556.js` (32; 9 mutations / 9 caught — two fixtures had to be re-cut so an unsorted top-5 and a
+King above the open were detectable). Suite 124 green / 9 red (5 baseline + 4 save gates), smoke clean, nightly run.
+
+**Next (v15.57).** The TAP record.
+
+## v15.55 — the Analysis tab by subject · the TRACK field · THE READ FROM THE STATS · Testing in loop order
+
+> "I like the 1st one, it provides a subject which can then be added to … Kings should have king deflections for
+> each type of king like a setup … an extensive section covering types of sweeps under hod lod … each section in
+> the analysis tab to have a text field in which I can add something that needs to be tracked … a feedback
+> mechanism that feeds back into the dashboard especially a read section … Did you consider other types of
+> sweeps like pdh pdl prior day poc vah val and other major levels."
+
+**Why it was wrong before.** The Analysis tab was five sections in workflow order with no place to put a new
+question, no way for him to ask one from the panel, and nothing on the face that turned a measured table into
+a sentence at the moment a sweep printed. The sweep knowledge existed only as a refused bar-level feature.
+
+**Analysis by subject.** `learning/studies.json` (7 subjects · 45 subsections · 176 studies, each with what it
+DECIDES at the tap) is fetched like rules.json (`studiesFetch`, `gpts_studies_v1`; a names-only seed keeps the
+strip and the fields alive offline). The tab renders the subject strip, the selected subject's subsections
+(open where there is something to read), one row per study with its result line — every % with its n — and the
+live sections became the evidence bodies of the subsections they answer (HOD/LOD live → H1, deflections + your
+calls → F1, the node ledger → F5, direction factors → D2). H2 carries the sweep table from
+`data/es-1min/SWEEPS.json` (`sweepsFetch`).
+
+**The sweep study, extended to his list.** `tools/study-sweeps.py` now reads 20 level types (ON, PD, PDC,
+POC/VAH/VAL, PM, PW, IB, OR5/OR15) with two controls; FINDINGS F-14: the level's name does not matter, the
+flush, the clock and the reclaim speed do. `SWEEPS.json` carries a `lookup` the panel reads; the nightly
+refreshes it.
+
+**TRACK.** One field per subject. `requestsAdd` stores `{id, subj, text, date}` in `gpts_requests_v1`; the day
+export carries `requests`; `run.py` copies new ones into `learning/requests.json`; a study row carrying
+`req:<id>` reports back as "STUDIED as …". Statuses: NEW → IN THE EXPORT → STUDIED.
+
+**THE READ FROM THE STATS (⓪a).** `sweepEventsToday()` applies the corpus definitions to the courier's ES
+1-minute bars (ONH/ONL, PDH/PDL/PDC, POC/VAH/VAL, IB); `statsRead()` scores each excursion on the three
+measured conditions (early · deep · slow), quotes the level by name against the fresh-low control, names the
+node deflection within 10 minutes and says the node-conditioned rate is UNMEASURED (H6), and reads the
+register's word on the last deflection. One line per excursion, one excursion per side, the latest break as
+its own line; "k of n measured conditions favour the sweep being the extreme".
+
+**Testing in loop order.** ⓪ the loop strip (studies → tracked → register → gate → dashboard → nightly) ·
+① THE REGISTER (with the study each row belongs to; H6/H7 judged by the nightly) · ② THE GATE · ③ ON THE
+DASHBOARD (each ladder element → its study → its state; `kill.negGammaWide` FLAGGED against the H3 null until
+H3 is refused; proposals, challengers, kills underneath) · ④ THE RECORD · ⑤ THE NIGHTLY (the review as written,
+what changed, the read-next queue, the LLM-review handoff) · ⑥ SELF-TEST · ⊕.
+
+**Register.** H6 (sweep × node, blocked on the tap record) and H7 (the early sweep, sessions after 2026-08-21)
+written to `register.json` and the seed; `run.py` judges them through `study-sweeps` (`judge_sweep`).
+
+**Tests.** `test_v1555.js` (68; 12 mutations / 12 caught) runs sweepScan on planted flushes and pokes,
+statsRead against the real SWEEPS.json, the TRACK store, the registry as data, the dashboard table, and renders
+the face and both tabs in jsdom with the real script. Moved with the code: test_analysis_tabs, test_testing_tab,
+test_v1552, test_v1554. Suite 123 green / 9 red (5 baseline + 4 save gates), smoke clean.
+
+**Next (v15.56).** The TAP record — 95 OPEN studies wait on it, and H6 with them.
+
+### (design, earlier the same day)
+
+> "Kings should have king deflections for each type of king like a setup. In fact I want you to further have
+> subcategories for these subjects. Think like a trader … an extensive section covering types of sweeps under hod lod
+> … After this, you will start redesigning the Testing tab to be consistent and provide accurate insight to both the
+> dashboard and be fed by the Analysis."
+
+No userscript change. Added: `learning/studies.json` (7 subjects · 45 subsections · 170 studies, each with the action
+it decides; written by `tools/studies-seed.py`, every `%` checked for its `n`), `tools/study-sweeps.py` +
+`data/es-1min/SWEEPS.json` (919 sweep events on 284 ES sessions, event-level, two controls),
+`roadmap/FINDINGS-sweeps-first-read.md`, `design/ANALYSIS-TESTING-BY-SUBJECT.md`, mockups rendered from the
+registry (`design/mockup-analysis-by-subject*.html`, `design/mockup-testing-tab*.html`) and the five-alternative page
+(`design/mockup-analysis-alternatives*.html`). Drafted for the register: H6 (sweep × node) and H7 (the early sweep,
+re-read on unseen sessions). Build plan for v15.55 in the design doc: TAP record, both tabs from the registry, the
+nightly refreshing SWEEPS.json and reading one READ NEXT study per night, the ladder's sweep line.
+
 ## v15.54 — the workflow: the loop is closed
 
 > "did you create a tight integrated end to end workflow that spans hod lod data (including the multi month data

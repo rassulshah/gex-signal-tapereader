@@ -1,7 +1,48 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-03 · panel v15.54 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-03 · panel v15.57 · companion v1.18 · supersedes every earlier resume note_
 
 ---
+
+# ⚠⚠ 2026-09-03 (latest) — v15.57 SHIPPED: EM EDGES · VWAP + BANDS · DEVELOPING PROFILE · LONDON · HVL/MAGNET · THE TWO-LINE RULE.
+
+**Panel is v15.57, companion v1.18 (unchanged).** Five level families added to the sweep read (his approval), `LEVEL_TIER`
++ the two-line rule on ⓪a, the corpus at 32 level types / 116 cells. Finding: interior levels (VWAP/bands/today's value
+area) are NOT the extreme (3–13% vs 16–28% control) — pullback candidates; P5.1 measures resume. **Next: v15.58 the TAP
+record.**
+
+# (earlier) — v15.56 SHIPPED: THE BOOK'S LEVELS IN THE SWEEP READ · COMPANION v1.18.
+
+**Panel is v15.56, companion v1.18.** CW0/PW0/CW/PW and the King join the sweep levels (`bookLevelsNow`, `dispToEs`,
+side by position); the READ's node clause checks the sweep against the King / top-5 / walls inside ±0.50 SPY (±5 ES)
+and quotes H6's own comparison from the book table (`tools/study-sweeps-book.py` → `data/es-1min/SWEEPS-BOOK.json`,
+9 sessions, all thin, grows per export; H6 judged from it, THIN not BLOCKED). The overnight is honest: `overnightHL().full`;
+a courier stub is PMH/PML; companion v1.18 fetches ES without the UTC trim so ONH/ONL become the overnight from the next
+poll. `RATE_MIN_N=15`. **Next: v15.57 the TAP record.**
+
+# (earlier) — v15.55 SHIPPED: THE ANALYSIS TAB BY SUBJECT · TRACK · THE READ FROM THE STATS.
+
+**Panel is v15.55.** Analysis renders `learning/studies.json` by subject (K S D F P H X; the live sections are the
+evidence bodies of H1/F1/F5/D2; H2 carries the sweep table from `data/es-1min/SWEEPS.json`); one TRACK field per
+subject (`gpts_requests_v1` → day export `requests` → nightly → `learning/requests.json` → a study row with
+`req:<id>` reports back); ⓪a has THE READ FROM THE STATS (today's sweeps on the courier's ES bars against the
+sweep table, the node clause from the deflection ledger, the register's word — node-conditioned rate UNMEASURED
+until H6); Testing in loop order ⓪–⑥ with the `kill.negGammaWide` FLAG. Register has H6/H7 (nightly-judged).
+**The registry is edited in `tools/studies-seed.py`, never in the JSON or the HTML.** F-14 in FINDINGS: the
+level's name does not matter; the flush, the clock and the speed do. **Next: v15.56 the TAP record** (95 OPEN
+studies and H6 wait on it), then the READ NEXT queue one study per night (K4.1 first).
+
+# (earlier the same day) — THE ANALYSIS TAB IS NOW "BY SUBJECT". DESIGN DONE.
+
+He chose alternative A (by subject) and asked for subcategories "like a trader", an extensive sweeps section, and
+the Testing tab redesigned to match. Delivered, all design, no userscript change: **`learning/studies.json`** (the
+registry: K KINGS · S SETUPS · D DIRECTION · F DEFLECTION MECHANICS · P PULLBACK DEFLECTIONS · H HOD/LOD · X CONTEXT
+— 45 subsections, 170 studies, each with `decides`), **`tools/study-sweeps.py` → `data/es-1min/SWEEPS.json`** (the
+sweep study, run: the level's NAME does not matter vs a fresh-low control; the clock, depth and reclaim speed do;
+node unmeasured = H6), **`design/ANALYSIS-TESTING-BY-SUBJECT.md`** (the design + v15.55 build list + his decisions),
+mockups from the registry (`design/mockup-analysis-by-subject-standalone.html`, `design/mockup-testing-tab-standalone.html`).
+**Next: build v15.55** — TAP record · Analysis renders studies.json · Testing renders register/gate/dashboard/record/
+nightly/suite by subject · write H6/H7 to register.json · nightly runs study-sweeps.py and one READ NEXT per night ·
+ladder sweep line (base rate + n, no node claim). Mockups are generated: edit `tools/studies-seed.py`, not the HTML.
 
 # ⚠⚠ 2026-09-03 — READ THIS BEFORE THE REST. NO CODE SHIPPED; THE PLAN CHANGED.
 

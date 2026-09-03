@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html{color-scheme:light dark}body{margin:0}img{max-width:100%}</style>
+<title>Analysis Tab, Three Moments</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ink:#141821; --ink2:#3d4557; --mut:#6b7488; --rule:#d9dde5; --paper:#f4f5f8; --card:#ffffff;
+  --acc:#8a5a2b; --good:#1d6b4a; --bad:#9b2f38;
+  --g-bg:#0b0e14; --g-panel:#0f131b; --g-card:#12161f; --g-line:#1e2530; --g-line2:#3a4150;
+  --g-txt:#e6edf3; --g-mut:#8b98a9; --g-dim:#6c7889; --g-grn:#2ec27e; --g-red:#f0616d; --g-amb:#f2b45a;
+  --g-yel:#e3c341; --g-pur:#a371f7; --g-blu:#7cc7ff; --g-lil:#cdb4fa; --g-teal:#5fd3c4;
+  --scale:1.6;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ink:#e7eaf0; --ink2:#aab3c4; --mut:#7d8798; --rule:#2a3040; --paper:#101319; --card:#171b24; --acc:#d9a066; --good:#4cc38a; --bad:#e5707a; }}
+:root[data-theme="dark"]{ --ink:#e7eaf0; --ink2:#aab3c4; --mut:#7d8798; --rule:#2a3040; --paper:#101319; --card:#171b24; --acc:#d9a066; --good:#4cc38a; --bad:#e5707a; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:38px 26px 90px}
+h1{font-size:29px;font-weight:600;letter-spacing:-.015em;margin:0 0 6px;text-wrap:balance}
+h2{font-size:12px;font-weight:600;letter-spacing:.10em;text-transform:uppercase;color:var(--mut);margin:0 0 14px;padding-bottom:7px;border-bottom:1px solid var(--rule)}
+p{margin:0 0 13px;max-width:66ch;color:var(--ink2)}
+.lede{font-size:16px;color:var(--ink2);max-width:70ch;margin-bottom:22px}
+section{margin-top:44px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.flag{display:flex;gap:13px;align-items:flex-start;border:1px solid var(--rule);border-left:3px solid var(--acc);background:var(--card);padding:13px 16px;border-radius:3px;margin-bottom:26px}
+.flag b{color:var(--ink);font-weight:600} .flag p{margin:0;font-size:13.5px}
+.tag{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor;border-radius:2px;vertical-align:2px;color:var(--acc)}
+.ctl{display:flex;gap:7px;align-items:center;margin:0 0 16px;font-size:12px;color:var(--mut)}
+.ctl button{font-family:"IBM Plex Mono",monospace;font-size:11px;padding:4px 10px;cursor:pointer;background:var(--card);color:var(--ink2);border:1px solid var(--rule);border-radius:2px}
+.ctl button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.ctl button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.cap{font-size:13px;color:var(--ink2);max-width:66ch;margin:10px 0 0} .cap b{color:var(--ink);font-weight:600}
+.note{font-size:12.5px;color:var(--mut);border-left:2px solid var(--rule);padding-left:12px;margin:14px 0 0;max-width:66ch} .note b{color:var(--ink2)}
+
+/* ---- the panel: his palette, hard-coded ---- */
+.stage{background:var(--g-bg);border:1px solid var(--g-line2);border-radius:4px;padding:14px;overflow-x:auto;margin-bottom:6px}
+.scaler{width:608px;transform:scale(var(--scale));transform-origin:top left;margin-bottom:calc((var(--scale) - 1) * var(--sh,600px))}
+.pan{width:608px;background:var(--g-panel);color:var(--g-txt);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;font-size:8.4px;line-height:1.35}
+.tabs{display:flex;gap:2px;background:#12161f;border-bottom:1px solid var(--g-line2);padding:4px 4px 0}
+.tabs span{padding:4px 10px;font-size:9.5px;font-weight:600;color:var(--g-dim)}
+.tabs span.on{color:var(--g-txt);font-weight:800;border-bottom:2px solid var(--g-blu)}
+.hd{padding:5px 7px 4px;border-bottom:1px solid var(--g-line);font-size:7.6px;color:var(--g-mut)} .hd b{color:var(--g-txt);font-size:9px}
+.sec{margin:5px 6px;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card);overflow:hidden}
+.sech{display:flex;align-items:center;gap:6px;padding:4px 7px;background:#141a24;border-bottom:1px solid var(--g-line)}
+.sech .n{font-size:9px;font-weight:900;color:var(--g-blu)} .sech .t{font-size:8.6px;font-weight:800;letter-spacing:.06em;color:var(--g-txt)}
+.sech .q{margin-left:auto;font-size:7px;color:var(--g-dim);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+.sech .car{color:var(--g-dim);font-size:8px}
+.secb{padding:5px 7px 6px}
+.row{display:flex;gap:6px;align-items:baseline;padding:2px 0;border-top:1px dashed rgba(255,255,255,.05)}
+.row:first-child{border-top:0}
+.k{color:var(--g-mut);min-width:78px} .v{color:var(--g-txt)} .n{color:var(--g-dim);font-size:7.4px}
+.sk{color:var(--g-lil)} .we{color:var(--g-txt);font-weight:700}
+.gr{color:var(--g-grn)} .rd{color:var(--g-red)} .am{color:var(--g-amb)} .ye{color:var(--g-yel)} .pu{color:var(--g-lil)} .bl{color:var(--g-blu)} .te{color:var(--g-teal)} .dm{color:var(--g-dim)} .mu{color:var(--g-mut)}
+table{border-collapse:collapse;width:100%;font-size:8px}
+th{font-size:6.6px;font-weight:800;letter-spacing:.07em;color:var(--g-dim);text-transform:uppercase;text-align:left;padding:2px 4px 3px;border-bottom:1px solid var(--g-line2)}
+td{padding:2px 4px;border-top:1px solid rgba(255,255,255,.04);vertical-align:top;white-space:nowrap}
+td.r,th.r{text-align:right}
+.ci{color:var(--g-dim);font-weight:400;font-style:italic}
+.card{border:1px solid var(--g-line2);border-radius:6px;padding:5px 7px;background:#0f141d;margin-top:4px}
+.card .st{font-size:9px;font-weight:900;letter-spacing:.06em}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.col h5{margin:0 0 2px;font-size:6.6px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--g-dim)}
+.ev{margin-top:5px;padding-top:4px;border-top:1px solid var(--g-line)}
+.ev h5{margin:0 0 3px;font-size:6.6px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--g-dim)}
+.sc{display:flex;gap:6px;padding:2px 0;font-size:7.8px;align-items:baseline}
+.sc .id{font-family:ui-monospace,monospace;color:var(--g-dim);min-width:30px} .sc .qq{color:var(--g-txt);flex:1;min-width:0}
+.sc .cl{color:var(--g-dim);min-width:22px} .sc .cp{color:var(--g-dim);min-width:74px;font-size:7px}
+.sc .rs{min-width:118px;text-align:right;font-weight:700} .sc .vd{min-width:60px;text-align:right;font-weight:900;letter-spacing:.05em;font-size:7px}
+.ledg{margin-top:5px;padding-top:4px;border-top:1px solid var(--g-line);font-size:7.6px;color:var(--g-mut)}
+.foot{padding:5px 7px;border-top:1px solid var(--g-line);font-size:7.4px;color:var(--g-dim);display:flex;gap:9px}
+.dot{color:var(--g-grn)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:700px){.wrap{padding:26px 15px 70px} h1{font-size:23px}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+<h1>Analysis Tab, Three Moments</h1>
+<p class="lede">The Analysis tab reorganised around when you actually open it — before the open, at a tap, after the close — with the studies living under the moment they inform. Drawn at the panel's true 608&nbsp;px in its own palette.</p>
+
+<div class="flag">
+  <span class="tag">Mockup</span>
+  <p><b>Nothing here is built.</b> Real: SPY 2026-09-02 afternoon (price 764.85, the 765 gate, the 767 King, the 764 floor and their growth), the 284-session table's figures (0.879, NOT-IN 85%, n=230), the exploratory numbers from the 11-day corpus (base 52.1% [42–62] on 94 episodes, tap decay 73% vs 47%, the wick 49.1% vs 48.6%, sweeps 48%, IB60 0.655, GREEN/RED 77%). <b>Illustrative, and marked as such on the page:</b> every "we measure" cell in ② and the journal rows in ③ — they show the state the tab would be in ~10 sessions after the tap record ships; today those cells read <i>thin</i>.</p>
+</div>
+
+<div class="ctl"><span>Scale</span>
+  <button type="button" data-s="1" aria-pressed="false">1×&nbsp;true size</button>
+  <button type="button" data-s="1.6" aria-pressed="true">1.6×</button>
+  <button type="button" data-s="2.2" aria-pressed="false">2.2×</button>
+</div>
+
+<section>
+<h2>The tab, top to bottom</h2>
+<div class="stage"><div class="scaler" style="--sh:1180px">
+<div class="pan">
+  <div class="tabs"><span>Dashboard</span><span class="on">📊 Analysis</span><span>🧪 Testing</span></div>
+  <div class="hd"><b>What has the data said?</b> · SPY · 2026-09-02 · 14:58 CT · 11 sessions with the book · 284 sessions price-only · <span class="dot">● nightly read back 09-02</span></div>
+
+  <!-- ① BEFORE THE OPEN -->
+  <div class="sec">
+    <div class="sech"><span class="car">▾</span><span class="n">①</span><span class="t">BEFORE THE OPEN</span><span class="q">what does today's map imply, and what has that kind of map done?</span></div>
+    <div class="secb">
+      <div class="row"><span class="k">day type</span><span class="v"><b class="am">RANGE</b> · +γ at spot · trinity <b>2/3</b> (QQQ the outlier)</span><span class="n">C30 · C28</span></div>
+      <div class="row"><span class="k">range days</span><span class="v">realised range <b>0.82×</b> EM · EFF <b>38%</b> <span class="ci">[31–46]</span> · extremes held at a node <b>61%</b></span><span class="n">n=47 · price + book · illustrative</span></div>
+      <div class="row"><span class="k">kings</span><span class="v"><b class="ye">SPXW 7665</b> −γ · +203 since open · <span class="gr">▲ d/d</span> &nbsp; <b class="pu">SPY 764</b> +γ · +317 · <span class="gr">▲ d/d</span> &nbsp; <b class="te">QQQ 528</b> · <span class="rd">▼ d/d</span></span><span class="n">C5</span></div>
+      <div class="row"><span class="k">grew d/d</span><span class="v">nodes that grew day-over-day held <b>58%</b> <span class="ci">[49–66]</span> · faded <b>44%</b> <span class="ci">[34–55]</span></span><span class="n">n=131/79 · illustrative</span></div>
+      <div class="row"><span class="k">largest ⌈⌋</span><span class="v">ceiling <b>7681</b> (largest above, not nearest) · floor <b>7644</b> · gatekeepers to the King: <b>1</b> (7674 · 0.41× the node behind it)</span><span class="n">C13 · C14</span></div>
+      <div class="row"><span class="k">flags</span><span class="v"><span class="dm">not OPEX week · no FF high-impact event · power hour 14:30 CT</span></span><span class="n">C35 · C33 · C31</span></div>
+      <div class="row"><span class="k">far side</span><span class="v">HOD in <b>100%</b> · 46% of the range to the LOD so far · when an extreme of this age held, the other side printed later, median 3h50, usually ~13:02</span><span class="n">284d · price only</span></div>
+      <div class="ev"><h5>evidence</h5>
+        <div class="sc"><span class="id">S-C4</span><span class="qq">Day type vs realised range and efficiency</span><span class="cl">C26</span><span class="cp">11d · book</span><span class="rs am">thin (11)</span><span class="vd dm">OPEN</span></div>
+        <div class="sc"><span class="id">S-B3</span><span class="qq">Real vs hedge — does a node that grew day-over-day hold more?</span><span class="cl">C5</span><span class="cp">11d · book</span><span class="rs am">thin (11)</span><span class="vd dm">OPEN</span></div>
+        <div class="sc"><span class="id">S-C5</span><span class="qq">GREEN/RED — will today close above its open?</span><span class="cl">—</span><span class="cp">284d · price</span><span class="rs">77% <span class="ci">n=196</span></span><span class="vd gr">SHIPPED</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② AT THE TAP -->
+  <div class="sec">
+    <div class="sech"><span class="car">▾</span><span class="n">②</span><span class="t">AT THE TAP</span><span class="q">what should I expect at this node, now?</span></div>
+    <div class="secb">
+      <div class="card">
+        <div><span class="st am">TESTING</span> <span class="v"> · <b class="ye">SPY 765 gate</b> −γ brake · 0.3 ATR in · inside ±0.50 <span class="dm">and</span> inside the ATR band</span></div>
+        <div class="row"><span class="k">this tap</span><span class="v">tap <b>2</b> · <b>TESTED</b> (1st held 11:22) · delivered from <b>7681</b> · price at 60% of the range · trinity <b>2/3</b>, QQQ out</span><span class="n">C3 · C4 · C28</span></div>
+        <div class="row"><span class="k">the node</span><span class="v"><span class="rd">shedding</span> −$3.6M / 15m · <span class="rd">−48 since open</span> · gk ratio <b>0.41</b> · 764 floor building <b>+$12.6M</b> below · no rug · no pika · vanna at strike: <span class="dm">none</span></span><span class="n">C21 · C14 · C23 · C29</span></div>
+        <div class="two">
+          <div class="col"><h5>Skylit says</h5>
+            <div class="row"><span class="k">2nd tap</span><span class="sk">~66% reacts</span></div>
+            <div class="row"><span class="k">shedding</span><span class="sk">level weakening</span></div>
+            <div class="row"><span class="k">2/3 trinity</span><span class="sk">size down</span></div>
+            <div class="row"><span class="k">−γ node</span><span class="sk">wicky, overshoots</span></div>
+          </div>
+          <div class="col"><h5>we measure · closest conditions</h5>
+            <div class="row"><span class="k">2nd tap</span><span class="we">73% <span class="ci">[52–87] n=22</span></span></div>
+            <div class="row"><span class="k">shedding</span><span class="we">41% <span class="ci">[29–54] n=58</span> <span class="am">illustr.</span></span></div>
+            <div class="row"><span class="k">2/3 · QQQ out</span><span class="we">thin (n=9)</span></div>
+            <div class="row"><span class="k">extent if held</span><span class="we">med. MFE10 <b>+3.1</b> pts <span class="ci">n=31</span> <span class="am">illustr.</span></span></div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:3px"><span class="k">this node today</span><span class="v">11:22 tap 1 · held · +4.2 pts &nbsp;·&nbsp; 14:47 tap 2 · <b class="am">pending</b></span></div>
+        <div class="row"><span class="k">would change it</span><span class="v dm">H2 refutes if tap≥1 holds ≤55% on unseen sessions (n 22/30) · the touch itself is a coin: 52% held, n=94</span></div>
+      </div>
+      <div class="ev"><h5>evidence</h5>
+        <div class="sc"><span class="id">S-B1</span><span class="qq">Tap decay — Skylit's 80/66/33 against our taps</span><span class="cl">C3</span><span class="cp">11d · book</span><span class="rs">tap1 73% <span class="ci">n=22</span> vs tap0 47%</span><span class="vd bl">H2 · READ AT 30</span></div>
+        <div class="sc"><span class="id">S-B4</span><span class="qq">Growth into the tap: building vs flat vs shedding</span><span class="cl">C21</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+        <div class="sc"><span class="id">S-B6</span><span class="qq">Rug: is the rejection faster and deeper?</span><span class="cl">C23</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+        <div class="sc"><span class="id">S-B12</span><span class="qq">Trinity at the tap — 3/3 vs 2/3 vs split; is the SPX outlier the bad one?</span><span class="cl">C28</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+        <div class="sc"><span class="id">S-B17</span><span class="qq">The rejection wick</span><span class="cl">—</span><span class="cp">970 rows · book</span><span class="rs">49.1% vs 48.6%</span><span class="vd rd">REFUSED</span></div>
+        <div class="sc"><span class="id">F-1</span><span class="qq">Sweep + reclaim</span><span class="cl">—</span><span class="cp">284d · price</span><span class="rs">48% · AUC 0.559</span><span class="vd rd">REFUSED</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ AFTER THE CLOSE -->
+  <div class="sec">
+    <div class="sech"><span class="car">▾</span><span class="n">③</span><span class="t">AFTER THE CLOSE</span><span class="q">did it tell the truth?</span></div>
+    <div class="secb">
+      <table>
+        <tr><th>tap</th><th>node</th><th>#</th><th>state</th><th>growth</th><th>tri</th><th>zone</th><th class="r">held</th><th class="r">MFE10</th><th>extreme?</th></tr>
+        <tr><td>09:41</td><td class="pu">SPY 764 flr</td><td>1</td><td>FRESH</td><td class="gr">+$2.1M</td><td>3/3</td><td>both</td><td class="r rd">broke</td><td class="r">−1.9</td><td class="dm">—</td></tr>
+        <tr><td>10:04</td><td class="pu">SPXW 7660 mag</td><td>1</td><td>FRESH</td><td class="gr">+$8.4M</td><td>2/3</td><td>ATR</td><td class="r gr">held</td><td class="r">+6.3</td><td class="gr">LOD ✓</td></tr>
+        <tr><td>11:22</td><td class="ye">SPY 765 gate</td><td>1</td><td>FRESH</td><td class="rd">−$0.8M</td><td>2/3</td><td>both</td><td class="r gr">held</td><td class="r">+4.2</td><td class="dm">—</td></tr>
+        <tr><td>13:47</td><td class="ye">SPXW 7681 ceil</td><td>1</td><td>FRESH</td><td class="mu">flat</td><td>1/3</td><td>±5</td><td class="r gr">held</td><td class="r">+2.7</td><td class="gr">HOD ✓</td></tr>
+        <tr><td>14:47</td><td class="ye">SPY 765 gate</td><td>2</td><td>TESTED</td><td class="rd">−$3.6M</td><td>2/3</td><td>both</td><td class="r am">pending</td><td class="r dm">—</td><td class="dm">—</td></tr>
+      </table>
+      <div class="ledg">5 taps · 3 held · both extremes printed at a top-5 node today · <span class="dm">rows illustrative; the columns are the tap record</span></div>
+      <div class="row" style="margin-top:5px"><span class="k">HOD/LOD call</span><span class="v">IN called 09:20 · right · the table said <b>63%</b>, close-scored live <b>—</b> <span class="dm">(first close-scored session tonight)</span></span><span class="n">284d · C17</span></div>
+      <div class="row"><span class="k">live vs table</span><span class="v dm">no close-scored sessions yet — the scorer could not fail before v15.51; the first honest row arrives with tonight's close</span></div>
+      <div class="row"><span class="k">nightly</span><span class="v"><b class="bl">H1</b> THIN 0/40 · <b class="bl">H2</b> THIN 22/30 · <b class="bl">H3</b> THIN · <b class="bl">H4</b> THIN · <b class="am">H5</b> BLOCKED · ledger 0/50 · <span class="dm">0 sessions since 09-03</span></span><span class="n">learning/log</span></div>
+      <div class="row"><span class="k">what changed</span><span class="v dm">nothing promoted or demoted on this machine — every weight is still the hand-set hypothesis ⚖</span></div>
+      <div class="ev"><h5>evidence</h5>
+        <div class="sc"><span class="id">S-A1</span><span class="qq">Which node printed the HOD/LOD — the King, the largest-below/above, or the nearest?</span><span class="cl">C13</span><span class="cp">11d · book</span><span class="rs am">thin</span><span class="vd dm">OPEN</span></div>
+        <div class="sc"><span class="id">S-A5</span><span class="qq">Is the standing extreme the day's? — posr × clock</span><span class="cl">C17</span><span class="cp">284d · price</span><span class="rs">AUC 0.879 · NOT-IN 85% <span class="ci">n=230</span></span><span class="vd gr">SHIPPED</span></div>
+        <div class="sc"><span class="id">H5</span><span class="qq">Does a top-5 node move the HOD/LOD cell?</span><span class="cl">C17</span><span class="cp">needs the ledger</span><span class="rs am">blocked 0/50</span><span class="vd am">REGISTERED</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ THE NODES -->
+  <div class="sec">
+    <div class="sech"><span class="car">▸</span><span class="n">④</span><span class="t">THE NODES</span><span class="q">each node's life, and whether our roles agree with Skylit's</span></div>
+    <div class="secb">
+      <div class="sc"><span class="id">S-D1</span><span class="qq">How often the crown moves, and how long it dwells</span><span class="cl">C11</span><span class="cp">11d · book</span><span class="rs">measured</span><span class="vd gr">SHIPPED</span></div>
+      <div class="sc"><span class="id">S-D6</span><span class="qq">Our King / gatekeeper / rug detectors vs Skylit's own nodeType</span><span class="cl">oracle</span><span class="cp">needs 1 API call/bar</span><span class="rs am">—</span><span class="vd dm">OPEN</span></div>
+    </div>
+  </div>
+
+  <div class="foot"><span>● rec</span><span>● saved</span><span>● pushed</span><span>● review</span><span class="dm">deps 1✕</span><span class="dm">ES/SPY 10.035</span><span style="margin-left:auto">v16 mockup</span></div>
+</div>
+</div></div>
+<p class="cap"><b>Reading it top to bottom is reading your session.</b> ① is what you know at 08:25. ② appears only while a node is being tested and is the one card the dashboard's callout line summarises — same function, one source. ③ is the journal the doctrine tells you to keep, with the one column that makes your two objectives one table: <span class="mono">extreme?</span></p>
+<p class="note"><b>Two things are carried on every number:</b> its n with a Wilson interval, and which corpus it came from — <i>price only</i> (the 284 sessions) or <i>with the book</i> (the sessions since the recorder). And Skylit's own figure sits beside ours wherever the doctrine gives one, so the disagreement on tap decay (66% vs our 73%) is visible rather than buried.</p>
+</section>
+
+<section>
+<h2>What is honest about the empty state</h2>
+<p>Most "we measure" cells will read <b>thin</b> for a while — the tap record starts tomorrow and the conditions multiply fast. The card never invents a number for a thin cell; it shows Skylit's expectation alone and says so. The historical API backfill (Part 2 of the design document) is what fills the right-hand column in an afternoon instead of a season.</p>
+<p class="note">Removed from the tab: the direction-factor lift table (a model diagnostic — Testing ⊕) and the node ledger as its own section (evidence under ④). Sections: 5 → 4, with ② conditional on a live tap.</p>
+</section>
+</div>
+
+<script>
+(function(){ var btns=[].slice.call(document.querySelectorAll('.ctl button'));
+  btns.forEach(function(b){ b.addEventListener('click',function(){ btns.forEach(function(o){o.setAttribute('aria-pressed', o===b?'true':'false');}); document.documentElement.style.setProperty('--scale', b.getAttribute('data-s')); }); }); })();
+</script>
+
+</body>
+</html>

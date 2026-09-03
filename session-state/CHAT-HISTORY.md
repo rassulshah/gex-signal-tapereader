@@ -15,547 +15,219 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-03 · v15.54 · session `5e8d34b5` — v15.54 — the workflow is closed
+## 2026-09-03 · v15.57 · session `5e8d34b5` — v15.57: EM edges, VWAP + bands, developing profile, London, HVL/magnet in the sweep read; the two-line rule
 
-_35 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_18 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
-**me (23:46):** Noted — no `APPROACHING`. Worth one line on the consequence: the state becomes **coincident** rather than early. Your early read stays in the ⇄ / Δ15m / STATE / ROC group — gamma building into a node you can see price walking toward — and the state only speaks once price is actually there. That's coherent, and it's the more honest of the two.
+**me (12:32):** Five real alternatives, each drawn as its own panel, with what each is good at and what it costs — so this is a choice, not a menu.
+Now the standalone copy (full document, so it opens straight from disk in Chrome), a render check, and the commit.
+Five alternatives, each drawn as the tab would look and judged on one question — does it change what you do at the next tap:
 
-Writing the spec now.
-Spec written, nothing built. It's everything we just agreed, in your words where you gave them.
+**A · By subject** — the research notebook you named: KINGS · SETUPS · DIRECTION · HOD/LOD DEFLECTIONS · PULLBACK DEFLECTIONS, each holding its studies (S-A6 which book's King owns the extremes; S-B6 rug; S-B9 gatekeeper ratio; S-B1 tap decay 80/66/33; the refused wick study sitting beside the shipped ones). Browsable, but it is a catalogue: nothing on it is about *now*, and a King tap is also a deflection is also a setup, so studies want two homes.
 
-The parts most worth your eye:
+**B · The doctrine scorecard** — Skylit's claims as rows: their number, ours, n, verdict. The conflicts jump out immediately (Skylit ~80% first tap against our 47% n=70; ~66% second tap against our 73% n=22). Honest and cold — it's the register grown to 35 rows, which is a Testing-tab object.
 
-**§7 — the cuts.** King lanes out (52px), but the migration track keeps recording and becomes a *"king for 3h"* clause — node age is a new Q11 candidate nobody had listed. `%KING` bar becomes a top-5 rank badge, which is your own rule applied. **You'd lose one thing**: at-a-glance *gaps* between node sizes — the rank tells you the order, not whether #1 is twice #2. The number moves to the hover. Say if that's a bad trade.
+**C · The setup grader** — the execution doctrine's own three requirements scored for the node in play: chart structure, Heatseeker confluence, payoff. It argues: "765 is a B; the A+ node is the 764 floor building under it." The most decision-shaped of the five, but a grade is a rule, and an unmeasured rule is a confident font.
 
-**§10 — what this build may not claim.** The touch has no edge: 56% break, t = +0.41 / −0.32, both null. This build makes the test *visible and recorded*. It does not predict the resolution, and I've written in that no wording on the face may suggest it does. That's the constraint I'd most want you to push back on if you disagree with it.
+**D · The conditions matrix** — one grid, conditions × the two objectives (pullback taps | HOD/LOD taps), MFE beside hit rate, Skylit's number in the margin, the chance-flag ledger underneath. It is literally what the nightly computes. At eleven sessions most cells read *thin*; it will look empty for months without the backfill.
 
-**§9 — absorption, parked but written down** with the limit that travels with it: total volume, not bid/ask, so it can say *heavy volume, no progress through the node* and cannot say *buyers absorbed sellers*.
-
-Two things I recorded as consequences rather than decisions, so nobody undoes them by accident: declining `APPROACHING` makes the state **coincident, not early** — your early read stays in the ⇄/Δ/STATE/ROC group. And the 3m close means confirmation arrives up to three minutes after the low prints. Both follow from your c …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 44 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (23:48):** Same policy denial — 44 commits now. They're all in `installv1550.bat`; the spec I just sent is committed on top and will ride the next installer.
-
-**OPERATOR:**
-> you know my requirement and the objective of this application. i need you to help me get there with everything we have.. di you review the hod  lod stats and how that can assist you ,  how sweeps can assist you  etc..   you must consider everything we have and integrate it into achieving my objective !
-
-**me (23:50):** You're right, and I've been under-using what's already there. Let me actually go look rather than reason from memory.
-`bd>3` — the *same* fixed-point gate as `LVL_INPLAY_PTS`. Let me check the rest.
-Found the thing you're pointing at. Three measurement systems in this panel that have **never been connected to each other**.
-You were right to push. The audit found something I'd missed completely, and it changes the order of the work.
-
-**The panel already contains a validated probability engine and a gamma map, and they have never been multiplied together.**
-
-**1 · The HOD/LOD table is already two-thirds of Q11.** `HLTAB` — 284 sessions, 44,302 observations, AUC **0.879** on two axes: `posr` (how far price has travelled off the extreme, as a fraction of range) and the clock. At the HOD/LOD, *"will this extreme hold?"* and Q11's *"deflect or break?"* **are the same question**. I've been writing Q11 up as unbuilt and blocked — it shipped in v14. It just doesn't know gamma exists.
-
-And the strong call is the one neither of us quotes: **NOT-IN at 20% → the extreme broke 85% of the time**, n=230, median 08:40 CT, against a ~57% base. Stronger *and* earlier than the IN call.
-
-So Q11 stops being "build a discriminator from a blank page" and becomes: **does the node move the cell?** A question with a corpus and a number to beat.
-
-**2 · Sweeps — the honest answer, then the reframe.** They were measured and rejected: AUC 0.559, 48%, *below* their own base rate. They don't work. **But every rejected feature was measured in open air** — sweeps, the 50-SMA, IB30/60, both divergences. **The node was never the conditioning variable in any of those studies.** A sweep at a top-5 king is not the same event as a sweep in a vacuum, and we've only ever measured the vacuum. That's your thesis s …[trimmed]
+**E · The sess …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 45 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 63 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (23:55):** Still the proxy policy denial — 45 commits now, both new design files included. Per the README I'm reporting it rather than retrying; they'll ship in the next installer.
-`0 days` most likely means I gave you the wrong key, not that nothing recorded — frames were vending fine yesterday. Let me check the source rather than guess.
-My probe was wrong — the key is `gpts_recorder_v7`, not `v1`. And note how it failed: a missing key parsed to `{}`, yielded `0 days`, and **looked exactly like an empty recorder**. Same failure mode we keep hitting — a plausible zero instead of an error.
-Confirmed, and it **partly retracts what I told you yesterday**. `snaps` and `feat` are both archived to IndexedDB. `defl` is not — there is no `repoUpsertDefl`. And `recorderSave`'s eviction ladder deletes **non-today days first**.
+**me (12:39):** Push is blocked from this environment by organization policy (403 on origin) — the 63 commits stay local and go up when you run the next installer, which pushes from your machine. Not retrying, per the standing rule.
 
-So the deflection corpus is **today-only by construction**. Every past day's deflections were evicted to make room. I said "months may have been accumulating" — that was wrong.
+**OPERATOR:**
+> I like the 1st one , it provides a subject which can then be added to .   lets to with that.  I want you to use this but you need to make it more robust. For example, Kings should have king deflections for each type of king like a setup .  Infact i want you to further have subcategories for these subjects.   Think like a trader.  For example, you should have an extensive section covering types of sweeps under hod lod .  For example, ONH or ONL  sweeps leading to a LOD or HOD.   Create subsections and start filling them up.. show me a mockup of each section subsection.   After this, you will start redesigning the Testing tab to be consistent and provide accurate insight to both the dash board and be fed by the Analysis .   Remember , you need to be an expert at skylit but always keeping my ojectives in mind as a guiding north star.  We dont want informaiton for the sake of information . We want information to trade defections, thinking like a trader to make money
 
-Correcting the file:
-Two things, one of them a retraction.
+**me (13:01):** The `85% n=230` literal collides with `%`-formatting. Escaping it.
+Now the session-state files, changelog, resume note, and the chat history (last), then commit.
+Done — three deliverables, and one thing I measured along the way that you should read first.
 
-**The probe was mine and it was broken.** Wrong key (`v1`, not `v7`). A missing key parses to `{}`, `.days` is undefined, and you get `0 days · 0 deflections` — **no error**. A wrong key and a genuinely empty recorder returned the *identical string*. I nearly filed "the corpus is empty" off an instrument that couldn't tell "nothing there" from "I looked in the wrong place." Same family as the empty catch and the guard that can't fire.
+**The Analysis tab, by subject** (first file). Seven subjects, 45 subsections, 170 studies, every one carrying the action it decides at the tap — SIZE, SIDE, TARGET, STOP, SKIP, TIME, LEVEL or WAIT — because a study with no action doesn't belong on a trader's tab. Kings split by book (SPX/SPY/QQQ King), by role (floor/ceiling/pin), by clock, rolls, quality, and the extremes. Setups are the patternpedia as trades: rug, gatekeeper rejection, beach ball, air pocket, rolling floors, the new/fed/moved node, pika, unwinding. Pullbacks have which-node, depth, timing, condition, confluence, deflection-or-reversal, payoff. HOD/LOD has the extensive sweeps subsection you asked for (12 studies). The registry is a JSON file (`learning/studies.json`) and the mockup is rendered from it, so adding a subject later is adding rows, not redrawing a page.
 
-**And the thing it was probing, I'd got wrong too.** I told you labelled deflections might have been piling up for months. They haven't, and they couldn't have:
-
-```
-repoUpsertSnaps()   snaps → IndexedDB   survives
-repoUpsertFeat()    feat  → IndexedDB   survives
-repoUpsertDefl()    does not exist
-``` …[trimmed]
+**The sweep study — real numbers, run today on your 284 ES sessions.** The file has the overnight session, so ONH/ONL came from the bars. Against the fair control (price at a fresh low right now, at any level or none), the level's *name* adds nothing: ONL 29% vs 28% (n=113), PDL 23% vs 24% (n=87), IBL 20% vs 26% (n=143). What matters is when, how deep, and how slow the reclaim: first-30-minute sweeps 27% vs 18% (n=180); a flush deeper than 8 pts or a reclaim taking 6–30 bars prints the extreme 40% vs 24% (n=86, n=90); a shallow quick poke is *not* the low 86% of the time (n=228). That last one is the trap. The node is unmeasured — that's H6, the register entry the tap record exists to …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 46 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 65 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (00:09):** 46 commits, same organization policy denial on push (403). Per the README I'm reporting rather than retrying — the two design files and this correction will ship in the next installer alongside the code.
-Your console has a filter active — the box next to the funnel says **`history`**, and the top right says **3,167 hidden**. The probe ran fine (Promise fulfilled); its `console.log` lines were filtered out before they reached you.
-
-Third variant of the same lesson in two days: output suppressed downstream looks identical to output never produced.
-
-Clear that filter box, or just run this version — it *returns* the value, so it renders as the evaluation result and the filter can't touch it:
-
-```js
-await (async()=>{const K='gpts_recorder_v7',raw=localStorage.getItem(K);
-if(raw===null)return'❌ '+K+' MISSING';
-const db=JSON.parse(raw),days=db.days||{},ds=Object.keys(days).sort();
-const o=[K+' '+(raw.length/1024|0)+'KB · days: '+(ds.join(', ')||'(none)')];
-for(const d of ds){const s=days[d].defl||{};let n=0,l=0;
-for(const y in s){n+=s[y].length;l+=s[y].filter(e=>e.cont!=null).length;}
-o.push(d+' · defl '+n+' ('+l+' labelled)');}
-const idb=await new Promise(r=>{const q=indexedDB.open('gpts_repo_v1',2);q.onsuccess=e=>r(e.target.result);q.onerror=()=>r(null);});
-if(!idb)o.push('❌ IDB unavailable');
-else{const c={};await new Promise(r=>{idb.transaction('feat').objectStore('feat').openCursor().onsuccess=e=>{const x=e.target.result;if(x){c[x.value.date]=(c[x.value.date]||0)+1;x.continue();}else r();};});
-const k=Object.keys(c).sort();o.push('IDB feat · '+k.length+'d · '+k.reduce((a,b)=>a+c[b],0)+' recs · '+(k[0]||'-')+' → '+(k.at(-1)||'-'));}
-return o.join('  |  ');})()
-```
-
-Separately — that red **2,747** errors badge. Once we've got the corpus number, I'd like to see what's throwi …[trimmed]
+**me (13:08):** Push is blocked from this environment by organization policy (403 on origin) — the 65 commits are local and go up with your next installer, which pushes from your machine. Not retrying, per the standing rule.
 
 **OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 47 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> Did you consider other types of sweeps like pdh pdl prior day poc vah val and other major levels
 
-**me (00:48):** 47 commits, same 403 policy denial on push — reporting per the README rather than retrying.
-
-**OPERATOR:**
-> @"/root/.claude/uploads/5e8d34b5-d55e-5fa6-938c-1f55548b25ee/0964327c-featexport.json" [files attached]
-
-**me (00:49):** `out.held` / `out.broke` — **that's the deflect/break label, on 1,151 rows with a full feature vector.** That's Q11's dataset. Let me look at the other keys' shapes before analysing.
-`out.mfe`/`out.mae` are **populated on the unscored records too** — only `hit` is null. So those 7,500 aren't missing data, they're unlabelled data with the raw material still present. Now the main analysis:
-**48% held / 52% broke** — and `hit` *is* the held/broke label. But look at the denominator:
-The rejection wick — **grader #1 in my own spec** — is already measured on 970 records: `confirmed` 49.1% vs `weak` 48.6%. Flat. Writing this up:
-First time Q11 has been asked of data rather than argued. Four things came out, and one of them refutes something I proposed to you two days ago.
-
-**Your base rate is confirmed by a second, independent sample.** 49 of 94 episodes held — **52.1%** [42–62%]. The hand study said 56% break; this says 47.9%. Same conclusion from different data: the touch is a coin. That number is now much harder to argue with.
-
-**But 1,151 rows are only 94 episodes.** Every bar re-records the same node with an overlapping 10-bar window — 12.2 rows each. Treating them as independent would have inflated every interval about 3.5× and manufactured significance out of nothing.
-
-**And the label is the wrong shape for your question.** 62 of the 94 episodes carry *internally contradictory* labels — the same node, the same day, held on some bars and broke on others. That isn't noise, it's the definition: `hit` answers *"did price move favourably over the next 10 bars from this bar,"* re-asked every bar. You're asking *"when price tested this node, did it deflect or break"* — which has a discrete event in it.
-
-That reverses what I told you an hour ago. `day.defl` dedups by strike wit …[trimmed]
+**me (13:43):** API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.
 
 **OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 48 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> I want each section in the analysis tab to have a text field in which I can add something that needs to be tracked.  You can then analyze it and also consider testting it.  Basically I want to add something so i will just enter it in the text field for the appropriate section and click a button like add which will trigger you to do your part of analysis and testing.  There also needs to be a feedback mechanism that feeds back into the dashboard especially a read section.  For example if you know there is a high probability of a lid after a big node rejection from the lod because of analysis and testing and stats you can tell me in the read section as we sweep an overnight low and deflect from a node and the statistics and analysis confirm.
 
-**me (00:52):** 48 commits held locally — same 403 organization policy denial on push, reported not retried per the README. The three new design/findings docs are among them and will ship in the next installer.
-
-**OPERATOR:**
-> how many more features.. are you ready to build
-
-**me (00:54):** **Zero more features.** 49 are registered and all of them are recording — that was never the shortage. The shortage is 94 episodes and a label at the wrong granularity. Adding features to a 94-episode corpus just adds cells to search, which is how you find something that isn't there.
-
-Yes, ready. Three changes, all mechanical, none of them a new prediction. Let me check the `hit==null` cause before I commit to fixing it.
-`r.resolved=true` is set **unconditionally** — even when `f.outcome()` returned null or threw, and that catch is empty. Let me test which of the two it was, because it changes whether I was right about "recoverable".
-All 2,706 declined. **Zero threw.** And the reasons are legitimate — I was wrong, in the unhelpful direction this time.
-I have to retract something I told you an hour ago before we build on it.
-
-**The "7,500 discarded records" were not discarded evidence.** I checked all 2,706 in the export instead of assuming: **zero** threw. All 2,706 *declined*, and the declines are correct —
-
-```
-defl.trigger   state:""  dir:"none"  latchedBar:null   nothing was latched
-dir.kingRoll   vote:0    voting:false                  no vote was cast
-defl_ant       fired:false                             it never fired
-```
-
-Those rows are the feature saying *"I had nothing to say on this bar."* Scoring them would count non-events as events and **poison** the corpus, not double it. `defl.trigger` isn't losing 73% of its evidence — on 73% of bars there was no trigger to have evidence about.
-
-**So the corpus is 94 episodes. There's no free doubling.** §4's conclusion stands and is now the only one.
-
-Worth naming the pattern in my own three corrections today, because it bears directly on the warning I gave you:
-
-```
-"months of labelled deflections may exist"   → none …[trimmed]
+**me (13:49):** API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.
 
 **OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 49 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> Also see my prior message about considering other types of sweeps
 
-**me (00:55):** 49 commits, same 403 policy denial — reported per the README, not retried.
-
-**OPERATOR:**
-> you know my objective .. tell me what it is and how you plan on helping me accomplish it.  Tell me how, what are you using , what are you doing. Tell me the plan .
-
-**me (00:56):** Your objective, in your words:
-
-> *"identify two key turning points which are the high of the day and low of day, in order to profit from the move from high to low or low to high"* — and secondarily the **pullback** turning points, the ones that stop a counter-move and resume the trend rather than end it.
-
-The mechanism you're trading: **a gamma node deflects price, and that deflection is the turning point.** Two kinds, and confusing them is the expensive error — a pullback deflection means stay in, a HOD/LOD deflection means turn around.
-
-**Where the evidence actually stands, because my plan has to start here.** Your touch has now been measured twice, independently: your 8-session hand study said 56% break; the 11-day archive said 47.9%. Overlapping intervals, same answer. **Price arriving at a top-5 gamma node, on its own, is a coin.** Not a weak edge — no edge. And the rejection wick, which I proposed to you as the leading discriminator, is 49.1% vs 48.6% on 970 rows.
-
-That does **not** mean you're wrong. It means the node alone isn't the signal, and a panel that says `DEFLECTING` in confident type over a 52% event is the exact failure your own §4.4 names.
-
-**What I'm using — the assets that already exist and were never joined:**
-
-- **`HLTAB`** — 284 sessions, 44,302 observations, AUC **0.879** on *"has the day's extreme already printed?"* This is the one thing in the panel with a real edge, and its strong call is one nobody quotes: **NOT-IN at 20% → the extreme broke 85% of the time**, n=230, firing at 08:40 CT against a ~57% base. That is *directly* your §1 objective, already working.
-- **The node ladder** — where gamma is, which node is king, how it's rolling. A location, with no probability attached.
-- **`posr`** = (price − extreme) / range — the table's winning …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 49 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (00:56):** Still 49 — no new commits that turn. Same 403 policy denial standing on push; reported, not retried.
-
-**OPERATOR:**
-> ok, give me the mockup
-
-**me (00:58):** Good — real geometry and palette. Now the header columns and some **actual 09-02 data**, so the mockup isn't invented:
-Real 09-02 data: price **764.85**, sitting on the 765 Gate, King at 767, and the 764 Floor building hard (+317). That's a live TESTING scenario — I'll build the mockup on it rather than inventing numbers.
-
-**OPERATOR:**
-> Approach this as the design lead at a small studio known for their versatility, giving every client a visual identity pitched at the treatment the task actually calls for. Make deliberate choices about palette, typography, and layout that are specific to this subject, and avoid templated designs.
-> 
-> ## Read the request first
-> 
-> Calibrate treatment, not whether to design. A doc deserves the same craft as a landing page - what changes is the treatment that craft is delivered in. Format is not part of this read: author HTML, and publish Markdown only when a loaded skill explicitly instructs it - a Markdown publish keeps its filename as its title and takes almost none of the craft below, and is never a way to save time.
-> 
-> Many requests call for a more utilitarian treatment: a plan, a memo, a demo. Make it polished: include real typographic hierarchy, considered spacing, and a proper palette, but avoid over-designing. Most pages do not need a flashy, gigantic hero. Keep flourishes tasteful and limited.
-> 
-> Some requests call for an editorial treatment: a landing page, a game, an app or tool they'll keep or share.
-> 
-> When unsure: a well-composed page is never the wrong answer; an over-designed visual identity sometimes is.
-> 
-> Fundamentals below apply to everything. The editorial process after that runs only when the read above says so.
-> 
-> ## Fundamentals for every artifact
-> 
-> **Honor what's already there** Look for an existing design system first - CLAUDE.md, a tokens or theme file, existing component styles. When one exists, apply it; everything below fills gaps and never overrides. Precedence is always: the user's own words, then the project's existing system, then your choices.
-> 
-> **Ground it in the subject.** If the subject isn't already clear, pin it: one concrete subject, its audience, and the page's single job. The subject's own world - its materials, instruments, vernacular - is where distinctive choices come from. Whatever the treatment, carry at least one detail only this subject would have - its real units and scales, its document conventions, its terms of art - as content, not ornament; it costs a plain page nothing. Build with real content throughout, never lorem.
-> 
-> **Pair typefaces** Typography carries the page even when the page isn't about typography. Google Fonts is the one font host the Artifact CSP admits - link it directly (`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...&display=swap">`); a face from anywhere else must be inlined as a @font-face data URI or it falls back silently. Either way, declare a real fallback stack. Keep running text near 65 characters wide; set a type scale and stay on it; give headings `text-wrap: balance`, body text room to breathe, and uppercase labels a touch of letter-spacing.
-> 
-> **Load libraries, don't paste them.** When the page genuinely needs a library - React, a charting or highlighting package - load its UMD build from cdnjs (only the script - a library's stylesheet still has to be inlined) with one pinned `<script src="https://cdnjs.cloudflare.com/ajax/libs/...">` placed before the inline script that uses its global, instead of inlining the library's source or hand-writing a stand-in; the Artifact tool's description lists the few other script hosts the CSP admits. The page's own CSS and JS, its images and its data ship with the page. Most pages need no library at all - reach for one only when it carries real weight.
-> 
-> **Choose neutrals, don't default to them.** A pure mid-grey reads as unconsidered; a grey with a slight hue bias toward the page's accent reads as chosen. Pure white and near-black are fine grounds when they suit the subject - the point is that the neutral was picked, not inherited.
-> 
-> **Design both themes.** The page renders in the viewer's theme, and the viewer has three states, not two: an explicit choice stamps `data-theme="dark"` / `data-theme="light"` on the root element, and the default "system" setting stamps *nothing* - most viewers see the un-stamped document, where only `prefers-color-scheme` separates light from dark. Structure the CSS token-level for all three: the bare `:root` block defines the complete light palette (for a deliberately dark-first design, swap light and dark consistently through this whole pattern); `@media (prefers-color-scheme: dark)` redefines only the tokens, guarded as `:root:not([data-theme="light"])` so an explicit light choice beats a dark OS; `:root[data-theme="dark"]` redefines them again so the toggle also wins in the other direction. Style components through the tokens, never directly inside a media or `[data-theme]` block - a color whose only definition sits behind `[data-theme]` never applies in the un-stamped state, and the page renders one theme's text on the other theme's ground. Two more rules keep each theme resolving as a set: the artifact composites over a ground the viewer paints in *its* theme, so `body` must set an explicit `background` from a token - a transparent body silently borrows the host's ground; and every element that sets a color takes it from the same token set as the surface behind it, never a literal that only works in one theme. Declare every token in the bare `:root` block before any media or `[data-theme]` block redefines it - a color that exists only inside one of those blocks is the classic unreadable-artifact bug. Give the second theme the same care as the first - don't naively invert; keep contrast legible and the accent working on both grounds. A design that deliberately commits to one visual world (a neon arcade screen, a letterpress invitation) may stay single-theme - then skip the media query and stamps entirely but still paint the background and every color explicitly, so the page holds on either host ground; make it a choice, not an omission.
-> 
-> **Let layout do the spacing.** Lay out sibling groups with flex or grid and `gap`, not per-element margins that silently collapse or double. Wide content - tables, code, diagrams - gets `overflow-x: auto` on its own container so the page body never scrolls sideways. Reach for `font-variant-numeric: tabular-nums` wherever digits line up in columns.
-> 
-> **Compose repeated things as one object.** Cards in a row, label/value pairs down a list, badges on siblings: same edges, baselines and inner padding from one to the next, and a recurring element sits in the same place on each. Let content set a container's height and pick a column count the items fill, so nothing stretches over dead space or sits alone in a row. Text that can outgrow its track wraps or scrolls in its own container; clipped text is a bug.
-> 
-> **Not everything is a card.** Border, fill, radius and shadow each say "separate object" - spend them by role, lifting the one thing that needs it, instead of one radius and one shadow stamped on every block, which flattens the hierarchy. Lead with big-number tiles only when those figures are the point of the page.
-> 
-> **Draw charts to the scale.** One scale places marks, ticks and labels, and every label names a value the chart reaches; chart text takes its color from the theme tokens so it reads in both themes; marks, labels and edges stay clear of one another and inside the drawing's bounds - in SVG, leave room in the viewBox for the outermost labels and give every drawn shape an explicit fill.
-> 
-> **Show the page at rest.** Everything meant to be read is visible once the page has loaded, without scrolling to trigger it - that first still frame is what a thumbnail, a shared link, and a skimming reader all get. A section may animate in, but from a visible resting state, never parked at `opacity: 0` waiting on an observer. Size a hero to what it holds, not to the viewport; a `100vh` opener pushes the page itself out of that first frame. A tool or app opens in a realistic working state - the user's real data where it exists, otherwise example rows, a loaded sample, a form someone plausibly filled, plainly marked as examples and never passed off as the user's own figures - so the first look shows what it does; an empty shell waiting for input shows nothing.
-> 
-> **Avoid AI-generated design** AI-generated design currently clusters around a few looks: warm cream (#F4F1EA) with a serif display and terracotta accent; near-black with a lone acid-green or vermilion pop; broadsheet hairline rules with dense columns; a purple-to-blue gradient hero on white; Inter or Space Grotesk as the "safe" face; emoji as section markers; everything centered; `rounded-lg` everywhere; accent bar/rail on rounded cards. Where the user pins down a visual direction, follow it exactly - their words always win, including when they ask for one of these looks. Where nothing is specified, don't spend that freedom on one of these defaults.
-> 
-> **Build cleanly** Be cognizant of overlapping elements, cascade collisions, silent font fallbacks. Close every non-void element, double-quote attributes, give keyboard focus a visible state, respect `prefers-reduced-motion`. For generative or decorative graphics, reach for Canvas or WebGL rather than hand-authoring long SVG path data.
-> 
-> **CSS rules** When writing the CSS, watch your selector specificities. It is easy to generate classes that cancel each other out - a type-based selector like `.section` fighting an element-based one like `.cta` over padding and margins between sections. Structure the cascade so it doesn't silently undo your spacing.
-> 
-> **Writing the copy** Words are design material, not decoration. Write from the user's side of the screen - name things by what people recognize, not how the system is built (a person manages *notifications*, not *webhook config*). Active voice; a control says exactly what happens ("Publish", then a toast that says "Published"). Errors explain what went wrong and how to fix it - no apologies, no vagueness. Specific beats clever.
-> 
-> **Name the page like a product, not a caption.** The `<title>` is the artifact's name in the gallery and the browser tab, and it sets the reader's first impression of care. Give the page a real name: a short noun phrase, typically two to four words, specific to the subject - or, for a page that exists to answer one question, that question itself, which is then the page's name. Stop at the name - a title that carries its own explainer after a dash or colon reads as generated filler. The name must also identify the page among many: in the gallery it sits beside dozens of other artifacts, and a generic category label that could sit on any of them fails as a name just as surely as an appended explainer. When a candidate title pairs the name with a generic word - a greeting, a category, a page-type label - the name is the half to keep; a trim that drops the identity and keeps the generic word produces exactly the title that could sit on any page. And the rule removes explainers, it does not impose brevity: a multi-word title that already reads as one specific name is finished, and shortening it further only makes it generic. The one-sentence publish `description` is where the explanation belongs; the gallery shows it right under the title.
-> 
-> **Structure is information** Structural devices, numbering, eyebrows, dividers, labels, should encode something true about the content, not decorate it. Many generic designs use numbered markers (01 / 02 / 03), but that's only appropriate if the content actually is a sequence - like a real process or a typed timeline where order carries information the reader needs. Question if choices like numbered markers actually make sense before incorporating them.
-> 
-> **When it's a UI, not a document** A dashboard or tool is scanned and operated, not read top-to-bottom, so the craft shifts from typography to information design. Surface the summary before the detail; encode state in form as well as number - a pill, a chip, a severity stripe - so what needs attention reads at a glance. Semantic color (good / warning / critical) is separate from the accent hue and doesn't count as your accent. Give sparklines and charts the same care as type: an area fill, a faint grid, an emphasized endpoint. What's interactive should look interactive.
-> 
-> 
-> 
-> ## Process
-> 
-> Before writing code, sketch a short design plan - a compact token system with color, type, and layout:
-> - **Color**: describe the palette as 4-6 named hex values.
-> - **Type**: typefaces for 2+ roles - a characterful display face used with restraint, a complementary body face, and a utility face for captions or data if needed.
-> - **Layout**: a layout concept in one or two sentences.
-> 
-> Then build, following the plan and deriving every color and type decision from it.
-> 
-> **Write, look once, publish.** Before publishing you may look at the rendered page once - one screenshot of the local file, or the Artifact tool's preview where it offers one - then one pass of edits for what it shows, without a second look. For a page that charts real numbers, take that look rather than skip it, and spend it on the chart. Don't build a test loop around your own file: no repeated screenshots, no pulling the script out to run it through node, no scripts that probe the DOM. That loop spends the session re-checking what a careful write already settled, while the user waits for a link. Then publish, check once any `window.claude` call the preview couldn't run, and stop: the live page is the review surface, and further polish is the user's to ask for. If the user reports something visibly broken - a clipped column, unreadable text, a control that does nothing - fix that and republish once.
-> 
-> ## When the request is editorial
-> 
-> The stance shifts: the client has already rejected proposals that felt templated, and is paying for a distinctive point of view. Make opinionated calls, and take one real aesthetic risk where it serves the work.
-> 
-> Review the design plan against the subject before building: if any part of it reads like the generic default you would produce for any similar page, revise that part, and note what you changed and why. Only after you've confirmed the plan's uniqueness do you write the code, following the revised plan exactly.
-> 
-> **Principles** 
-> 
-> - The hero is a thesis: open with the most characteristic thing in the subject's world - headline, image, live demo, interactive moment. 
-> - Typography carries the personality of the page. Pair the display and body faces deliberately, not the same families you would reach for on any other project, and set a clear type scale with intentional weights, widths, and spacing. Make the type treatment itself a memorable part of the design, not a neutral delivery vehicle for the content. 
-> - Leverage motion deliberately. Think about where and if animation can serve the subject: a page-load sequence, hover micro-interactions, ambient atmosphere. An orchestrated moment usually lands harder than scattered effects; choose what the direction calls for. However, sometimes less is more, and extra animation contributes to the feeling that the design is AI-generated. 
-> - Match complexity to the vision. Maximalist directions need elaborate execution; minimal directions need precision in spacing, type, and detail. Elegance is executing the chosen vision well.
-> - Spend your boldness in one place; keep everything around it quiet. If the accent fights the ground, shift it toward analogous or drop saturation rather than replacing it.
-
-**me (00:59):** Building it on his real 09-02 ladder, in his own palette, at the panel's true 608px.
-The mockup's published — four panel states at the real 608px, in your palette, built on your actual 09-02 ladder.
-
-**The data is your own where it can be.** Price 764.85, strikes 761–768, the roles, polarity, grades and growth figures all come out of the 11-day export. The 765 gate shedding while the 764 floor builds hard underneath is the real shape of that afternoon — which is why I used that bar. The Δ dollars, ROC percentages, wick depths and ledger times are illustrative and flagged as such on the page; the export carries since-open growth, not those.
-
-**The layout decision I'd most like you to check:** the right-hand group doesn't move. `DAX 400 · ROLL 452 · ST 500 · ROC 558` keep the exact offsets `test_ladder` already pins. All 110 freed pixels — 52 from the king lanes, 58 from `%KING` becoming a rank badge — go **left**, where MARK needs room for a word and the price chute has been cramped since v14.46. A cut that buys a feature without disturbing verified geometry beats one that frees more pixels.
-
-Four states: **silent** (callout blank, MARK empty — and the line holds its 15px so the ladder never jumps), **testing**, **deflected**, **broke**, plus the ⓪a ledger. That ledger is the piece that doesn't exist in any form today, which is exactly why the deflection question has been argued instead of counted.
-
-Two things I deliberately held back. **The wick clause is reported, not weighted** — it's on the line because it describes what happened, but it gets no colour, no emphasis and no vote, because `reaction` has it at 49.1% vs 48.6% on 970 rows. And **the callout never says which way price goes.** It gives you geometry, polarity, the direction gamma is moving, and the test count …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 50 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:02):** 50 commits, same 403 policy denial standing — reported, not retried.
-
-**OPERATOR:**
-> i cant open in google chrome
-
-**me (01:03):** Here it is as a standalone file you can open directly — no hosting involved.
-That should preview right in the conversation, and downloading it gives you a normal `.html` that opens in Chrome with no login or hosting involved.
-
-The reason the first one didn't: what I published is a page *fragment* — the Artifact tool adds the `<head>` and `<body>` when it hosts it, so as a local file it was relying on the browser to patch it up. This copy is a complete document. It's generated from the same source file rather than retyped, so the two can't drift apart.
-
-If the artifact link itself is what failed rather than the file, tell me what you saw and I'll dig into that separately — but either way you can judge the mockup now.
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 51 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:04):** 51 commits, same 403 policy denial — reported, not retried.
-
-**OPERATOR:**
-> looks good to me but what i want to know is that have you tried your best in using all the data i have and have you integrated a process of self improvement that includes the analysis and testing to better the application ?
-
-**me (01:06):** Both fair questions, and I should check rather than tell you. Let me look at what I actually used versus what exists, and whether the self-improvement loop is real or just present.
-⚠ Forty `study-*` scripts and a `tools/nightly/` — there's far more analysis machinery than I've been using. Let me check whether these already answer things I proposed today as new.
-That changes my answer. `study-nodeatextreme.py` and `study-kingdeflect.py` **already ask the question I pitched to you today as the new idea** — and they read `tri.<SYM>.top`, the full ranked book in `snaps`, which I never opened.
-No on the first, and only partly on the second. I checked instead of answering, and both were uncomfortable.
-
-**Have I used all your data? Not close.** I used `feat` — 10 of 49 feature keys, one of about 56 stores. I never opened `snaps`, which carries `tri.<SYM>.top`: the **full ranked node book for SPY, QQQ, SPXW and VIX, every bar, archived**. Also untouched: `gpts_nodeevents_v1` (3.2 MB), the four king-tracking stores, `gpts_promo_v1`, `gpts_nodehist_v1`, `gpts_peak_v1`.
-
-Worse — **I pitched you an idea that's already written.** `study-nodeatextreme.py` and `study-kingdeflect.py` ask exactly *"was the extreme at a node"* and *"did a king cause the deflection"*, and they read the ranked book I ignored. And `study-nodeatextreme`'s own header records a previous context making my precise mistake: reading `tri.king`, the single crown, and concluding *"no node was there"* from a one-line view of a full book. **Same error, same project, second time — and you were the one who caught it then too.**
-
-**Is there a self-improvement loop? Yes, and it's more developed than I've been treating it.** Features record → resolve → `featStats` → `ruleTier` → a promotion bar **re-derived in code** so a …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 52 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:09):** 52 commits, same 403 policy denial — reported, not retried.
-
-Since I just called this a real break rather than a nuisance: I can bundle the 52 commits into a single file (`git bundle`), send it to you, and you'd pull and push from your own machine in two commands. That would close the transport and let the nightly see everything from the last few days. Say the word and I'll generate it.
-
-**OPERATOR:**
-> you know my objective , you need to figure out what to display on the dashboard and how the analysis and testing pipleline will help self improve this objective.
-
-**me (01:11):** Then the answer starts with something the mockup gets wrong. Let me measure the one feature that claims an edge, live.
-⚠⚠ **362 of 362. One hundred percent — including the cell where the table predicts 0–19%.** That's not an edge, that's a broken scorer. Let me confirm.
-The scorer compares a 30-minute excursion against **the entire session range** — `fwd.mae > -rngPts`. That can essentially never fail. Let me recompute it against the distance that actually matters:
-⚠⚠ Even corrected it's flat — **the table says 0–19% and reality is 100%; it says 80–99% and reality is 94.6%.** No calibration at all. The reason matters, and it answers your question.
-Answering your two questions properly, and the second one changes the first.
-
-**What the dashboard should display — and the mockup gets the hierarchy backwards.**
-
-Your objective is the HOD and the LOD: *profit from the move from high to low or low to high.* The deflection ladder I put at the top serves the **secondary** objective, and it's the part measured null — 52% on 94 episodes. Meanwhile ⓪a, sitting below it, holds the only validated edge in the application: **AUC 0.879 over 284 sessions**, whose NOT-IN call breaks the extreme 85% of the time on n=230, at 08:40 CT.
-
-**I led with what doesn't work and buried what does.** The face should open with *which extreme is standing, has it printed, and where the other side is expected* — that's literally your sentence. The ladder goes underneath as the supporting read: where a turn could happen, what gamma is building there. It gets promoted above the fold when H5 pays, not before.
-
-**How the pipeline self-improves — right now, it doesn't, and I can show you exactly where it stops.**
-
-`lodhod` is enrolled correctly, "from its first line of code," as the mandate requires. Over fou …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 53 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:14):** Rather than report this again, let me just make the bundle so you can close the loop whenever you want.
-101 MB — that's the full history. Let me bundle only the 53 commits.
-53 commits bundled — 1.2 MB, verified against your `origin/main`. From your repo:
-
-```
-git fetch /path/to/gex-unpushed.bundle main:from-cloud
-git merge --ff-only from-cloud
-git push
-```
-
-It's a thin bundle keyed to `6806ea9`, so it'll refuse to apply to the wrong base rather than make a mess.
-
-That closes the transport — which matters more than the hook nagging suggests, since the nightly is the only consumer that can grade a session-level claim, and it's had nothing for the whole session.
-
-**OPERATOR:**
-> why didnt you give me an install
-
-**me (01:16):** Because I haven't changed a line of code — I've been writing specs and analysis while you were waiting for a build. That's on me. Let me do it properly now.
-`es` is "display price, already on the rail's scale" and every caller passes display space — consistent, so both fixed gates live in the same space. One helper fixes both.
-Yes — and that handoff is exactly what this project's save procedure is for. But it's stale right now: 53 commits of findings and I haven't regenerated the chat history or resume note this session, so a fresh context would start from v15.35-era assumptions. Let me fix that first, since it's also step zero of the build checklist.
-Two answers.
-
-**Why no install:** because I haven't changed a line of the userscript. The panel is still v15.50. You said "are you ready to build," I said yes, and then spent the session writing analysis instead. That's a fair hit and I'd rather say so plainly than ship you a rebuilt v15.50 to look busy.
-
-**Yes, you can switch** — the model picker is in the client (`/model`). But the handoff doesn't depend on which model; it depends on the documents being current, and they weren't. **They are now.**
-
-✅ **SAVE DONE**
-- `session-state/CHAT-HISTORY.md` — regenerated from the real transcript, 21 prompts, 686 KB
-- `session-state/latest-resume-note.md` — amended with a 2026-09-03 block that reads first
-- `session-state/2026-09-03_resume-v15.50.md` — dated archive
-- `test_savedone.js` — 19/19 green
-
-The new block carries what a fresh context would otherwise re-derive expensively: the four findings ending with the loop measuring nothing; **the three corrections I made in one day**, written down so the next context doesn't repeat them; the fact that I never opened `snaps` — which holds the full ranked node book every bar — and that …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 54 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:19):** 54 commits — the bundle I sent covers 53 of them; this save commit is the 54th. If you'd rather have one clean file, I'll regenerate the bundle before you push.
-
-**OPERATOR:**
-> i have switched to fable 5.1 . i want you to give it what it needs to help me reach my objective.
-
-**me (01:22):** Context carried over with the switch — I have the whole conversation, and the resume note I just wrote covers any cold start. What Fable needs isn't another briefing; it's to ship the build that's been owed since this morning. Starting now.
-Everything I need is in view. Applying the four changes with a patch that refuses to run unless every anchor matches exactly once — the safest way to edit a 29k-line file.
-17 anchors, each matched exactly once; the file parses. Now the tests — they have to execute the code, not grep it, and then I mutate the source to prove each assertion can fail.
-38/38 green. Now the part the project trusts — mutate the source and prove the assertions actually fire:
-M3 printed nothing — that's a test that either crashed or didn't run, and either way it isn't a pass. Checking rather than assuming:
-That mutant didn't parse (the dangling `else`), so it proves nothing. A proper one:
-All eleven mutants killed. Now the full suite and the smoke test:
-16 red against a baseline of 6. Some will be version-drift gates (chat history, resume note still say 15.50) — but I need to see each one, not assume.
-Baseline confirmed at exactly the 6 known reds. `rules_v2` and `read_v1047` were green at v15.50 and aren't now — so six to read, not four:
-Six green. Smoke test — the one that catches what a render's own catch swallowed:
-Smoke clean. Now the save procedure — changelog, lessons, findings, resume note, then chat history last:
-Those two just need the commit. Committing, then the final suite run:
-147 green / 6 red — the identical baseline six. Building the installer:
-**Tampermonkey — update ONLY what changed:**
-- **Tapereader v15.51** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- **Compa …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 55 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:32):** 55 commits — all of them ship inside `installv1551.bat`, which pushes from your machine where the policy denial doesn't apply. Once you've run it the remote catches up.
-
-**OPERATOR:**
-> where is the tapereader application ?
-
-**me (01:33):** Let me check the one thing I can see from here — whether your push landed:
-That says **10.46** — which can't be right if any installer has ever pushed. Let me get the header verbatim rather than a summary:
-Your push landed — the raw GitHub file now reads `@version 15.51` (my first fetch hit a stale cache and said 10.46, which is why I checked twice). So the installer ran and the transport is finally closed.
-
-The application lives in three places:
-
-1. **In Tampermonkey** — the script *Gex Signal Tapereader*. Tampermonkey icon → Dashboard → it should be listed, enabled, and showing **15.51**. If it still says 15.50, Tampermonkey hasn't fetched yet: click the raw link above and accept the *Reinstall/Update* prompt.
-2. **On your machine** — the repo folder the installer extracted into (the same one every previous `installvNNNN.bat` used), with `current/gex-signal-tapereader.user.js` inside it.
-3. **On the page** — it renders as the panel on `app.skylit.ai/atlas` after a reload, with the version in the footer.
-
-If you mean the panel isn't appearing on Atlas at all after reloading: that's a different problem from the version, and the first thing I'd want is the console — specifically whether that red error badge from earlier (2,800+) is still climbing, and the output of `__gptsDebug.mark()`. Tell me which of the three you're looking at and what it shows.
-
-**OPERATOR:**
-> i reloaded and it doesnt display at all
-
-**me (01:35):** That's a regression from my build — top priority. Two things at once: I'm reading the boot path for what could stop the whole panel, and I need one thing from you.
-That harness renders pre-built markup, not the live script. I'll load the whole userscript into real Chromium and capture what it throws:
-In a real Chromium it's clean: all five parts load, the panel builds with 19 KB of body, **zero errors**. So v15.51 itself runs — the failure is in your environment, and one console check splits it cleanly.
-
-Open the console on the Atlas tab (clear that `history` filter first), reload, and look for these lines:
-
-```
-[GPTS] v15.51 part1 loaded
-...
-[GPTS] v15.51 part5 loaded
-```
-
-- **None of them appear** → the script isn't running at all. Tampermonkey → Dashboard: is *Gex Signal Tapereader* enabled, and does the Tampermonkey icon show a count on the Atlas tab? An update that changes the header sometimes leaves the script off.
-- **They appear, then a red error** → paste me that first red line. That's `boot()` throwing after load, and the stack will name the function.
-- **They appear, no red error, still no panel** → something changed on Skylit's side today. Run `__gptsDebug.session()` and tell me what it returns; and check whether the panel is simply positioned off-screen — `localStorage.removeItem('gpts_panelpos_v7')` then reload resets its position.
-
-One thing I want to rule out with you rather than guess: do you have a **second Atlas tab** open? The build bumps the IndexedDB version, and a second tab holding the old connection blocks the upgrade. That shouldn't remove the panel — but I'd rather know than assume, given today.
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 55 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:37):** Those 55 are the container's local history; your installer pushed the working tree from your machine as its own commit, so the remote already has this content (raw shows 15.51). The hook will keep counting until this container can fetch, which the same policy blocks.
-
-**OPERATOR:**
-> its working.   now lets go back to the entire process and architecture.have you built all of it to help me reach my objective as well as a way of improving that captures data, analyzes it, tests it and has a self improvment function
-
-**me (01:43):** Good — working. And the honest answer is **no**: v15.51 is the foundation, not the building. The grader can fail now, the event ledger survives, but the Testing tab still can't show you any of that, the promotion gate still counts rows instead of episodes, and the dashboard hierarchy is still backwards. Let me build the next piece now — and since I can now see your actual Atlas tab, let me look at what you see before I touch the code.
-v15.51 live — and **MARK is populated**: `DEFENDING` on 7678, with price at 7678.25. That column was empty for a week. Let me see the Testing tab as it stands, since that's what v15.52 changes:
-Eight for eight. Now the two things that only exist as rendered DOM, in real Chromium — seed a day with deflections, load the script, read the ⓪a ledger, open the Testing tab:
-Both sections render, H5 shows `BLOCKED` with the ledger count, zero errors. Version pins, full suite, smoke:
-That's the house rule catching *my blurb text*: "100% in BOTH bands" is a percentage rendered without its n. Legitimate. Let me see the exact pattern it wants:
-144 green; the 10 red are the 6 baseline plus the 4 save gates that clear once I run the save procedure. Doing that now:
-**Tampermonkey — update ONLY what changed:**
-- **Tapereader v15.52** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- **Companion v1.17** — UNCHANGED, do not reinstall — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
-
-Run `installv1552.bat`, wait ~5 min for the CDN, **click the link**, reload Atlas — footer must say v15.52.
-
-✅ **SAVE DONE** — `CHAT-HISTORY.md` (28 prompts) · `LESSONS.md` · `CHANGELOG.md` · `latest-resume-note.md` (declares v15.52) · commit on `main` …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 56 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:55):** 56 local commits; the content ships via `installv1552.bat`, which pushes from your machine as before.
-
-**OPERATOR:**
-> before i implement this , i need you to simplify the application . there is a lot of stuff on the analysis and testing tab that can be archived somewhere because it was an earlier idea that is not used. you may take it out and refactor the application so it is small , efficient and sticks to the objective.  Before you do that , review the code and the documentation so you can do it properly . take your time and do it right . Remember, the applications focus on identifying the hod and lod and pullback using nodes and the data we collect , analyzing and test, so the machinery should be directly supporting this endeavor and a process for improvement should be implemented which includes the analysis , testing, nightly llm review and reimplementation as a feedback loop .  it should be a fine tuned process machine.   do you understand the ask ?
-
-**me (02:24):** Yes. Restated so you can check me:
-
-**The ask.** Strip the application down to what serves one objective — calling the HOD, the LOD and the pullback turns using gamma nodes — and the loop that improves that call: collect → analyse → test → nightly LLM review → reimplement. Everything on the Analysis and Testing tabs that was an earlier idea and isn't feeding that loop gets **archived, not deleted** — kept somewhere findable with its reasoning intact. The result should be small, efficient, and a fine-tuned process machine, not a museum of every idea tried. And **review first, plan, then cut** — no removals until I've read the code and the documentation properly and you've seen the cut list.
-
-That last part matters most, so here's how I'll do it: a full inventory of the script and the tools, section by section, with a verdict on each — *keep / merge / archive* — and the evidence for the verdict (who calls it, what reads its output, whether the objective needs it). You approve the list before a line moves. Starting the review now; it's a 29k-line file, so I'm fanning parts of it out in parallel while I read the architecture documents myself.
-All seven slices are in. Before I write the plan, one more read — the nightly review protocol, because "nightly LLM review and reimplementation" is the half of the loop the audit didn't cover:
-The review is done and the plan is in front of you. Nothing has been cut.
-
-**What the review found.** Seven independent audits, every function's callers grepped, reachability traced to `render()`/`tick()`/`boot()`. The file is **31,063 lines and 880 functions** — more than double what it was when this question was last asked on 2026-08-18, and 17 of that audit's 42 retirements were never carried out. Roughly **3,800 lines are dead or unreachable* …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 57 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:05):** 57 local; ships with the next installer as before.
-
-**OPERATOR:**
-> i need the irt export it is very important , also the yahoo finance, insider finnace so dont mess with the integrations.  perform the simplification .  what are the other decisions, go one by one
-
-**me (03:16):** IRT, Yahoo Finance, and InsiderFinance are protected — I won't touch the integrations, and that includes leaving the dormant `ifFetch` lane alone rather than archiving it. v15.53 (defects + dead code) needs none of the remaining decisions, so I'll start it as soon as we've walked through them. Decision two:
-Now D4 — the READ must become a property of the record, not a side-effect of a render that never runs:
-D1–D7 applied. Before the archive surgery, a checkpoint — smoke and suite on the defect fixes alone:
-All four are the deliberate-change category — harnesses that stub the old shape. Reading exactly what each pins:
-My edit put a `//` comment mid-line and swallowed the rest of the evals. Fixing:
-Two flaws in my tool: dry mode doesn't simulate the chain, and `refs()` counts mentions inside comments — `kingBlock` has 5 comment mentions and one definition. Fixing both:
-58 blocks / 902 lines clean; three refused with two references each. Let me see those references — the tool says "live caller" and I should look before overriding it:
-A multi-line `var` — my `find_var` cut only its first line. Looking, then restoring from the archive copy and cutting the whole statement:
-`briefBlockHtml` — the pre-open brief — is also called *only* from the dead branch, so it's been invisible since v11.26 too. Cutting the branch, then group A through the tool:
-Groups D and A done — 2,128 lines archived, smoke clean. Group B is the hidden EM rail: a ~300-line subtree inside the live `secFrame`, so it has to be cut by hand at exact boundaries:
-Group B closed. Group C is the flagged-off surfaces — the `LOC_SHOW_*` blocks inside `secLoc` first, by hand:
-27,490 lines. Groups F and G next — the King-era analytics in Analysis ⊕ and the Testing-tab prose. Both are wired from live tab builders, so …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 58 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (04:02):** 58 local; `installv1553.bat` pushes them when you run it, as before.
-
-**OPERATOR:**
-> did you create a tight integrated end to end workflow that spans hod lod data (including the multi month data file) , gamma nodes,  and the analysis and testing and llm feedback into the application ?  did you update the analysis and Testing Tabs and the content on them to be specific for the workflow and to be effieicnet. after all of this , the application to serve my objective and have an analysis and testing feature that is specific to my objectives . it should also be faster to update..  make sure you create the appropriate design/ architecture document or update an existing one on the entire end to end workflow.
-
-**me (04:17):** Honest answer first: **no, not yet — and the question is fair.** v15.53 was removal and defect repair, nothing visible by design. The pieces of the workflow exist — the 284-session file, the HOD/LOD table, the node ladder, the recorder, the harness — but they are connected as I described in the plan, not as I've built them. The Analysis and Testing tabs were trimmed, not rebuilt around the workflow. And there is no architecture document of the end-to-end loop; the plan's §9 is a sketch. Let me confirm the few joints I haven't looked at directly, then write the document as the spec for the build that follows it.
-Now the half of the loop that has run twice — make it one command. First the harness's actual API:
+**me (13:53):** API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.
 
 **OPERATOR:**
 > Continue from where you left off.
 
-**me (04:23):** The nightly finds a planted effect and refuses a planted nothing. Now the two tabs, rebuilt around the workflow steps. Reading the builders as they stand:
-Now the rebuild patch for both tabs — computed bodies stay where they are, the sections are re-composed in workflow order, and `deflStats` learns to count episodes:
-The script aborted in memory before writing (a `\u` escape inside a regex replacement) — the file is untouched. Same patch with function replacements:
-The tabs are in workflow order and smoke-clean. Now the render budget. Before memoising, one check: memoising is only safe for results nobody mutates —
-Now the test — every new piece executed, the nightly's self-test invoked from it, and the tab order checked in real Chromium:
-44/44. Mutations for the behaviours that matter most — the gate, the register precedence, the episode dedup, the memo:
-All eight killed. Now the tabs in real Chromium — the order a viewer actually sees:
-Both tabs in workflow order, zero errors. Full suite:
-`test_analysis_tabs` is the structural pin of both tabs — it should describe the v15.54 layout, not be trimmed around. Reading its spec lists:
-The house rule caught my prose again — "100% in every cell" without its n. Fixing the text, then the remaining tests:
+**me (14:04):** API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.
+
+**OPERATOR:**
+> see my prior messages and try again
+> the other model has issues. can you continue the context
+> is the model available now ?
+> hello, can you continue or not
+> is the server available now
+
+**me (14:34):** No response requested.
+
+**OPERATOR:**
+> is the server available now
+
+**me (14:51):** No response requested.
+
+**OPERATOR:**
+> can you give me the build with the latest changes
+
+**me (15:04):** API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.
+
+**OPERATOR:**
+> is the issue resolved
+> are you working now
+> check prior messages
+
+**me (15:25):** Now the nightly: judge the sweep hypotheses, ingest TRACK requests, refresh SWEEPS.json.
+Now the test file — function-level with stubs, a full jsdom render of both tabs, and the file checks.
+Now the mutation pass — each new assertion must fire when the code is wrong.
+Now the full suite (with the 4 version pins), the earlier tests that must move with the code, and smoke.
+
+**OPERATOR:**
+> [Image: original 1280x2600, displayed at 985x2000. Multiply coordinates by 1.30 to map to original image.]
+
+**me (15:41):** Now the chat history (last), the save gates, then the installer.
+Yes — I'm here, and the model is fine. Your three prior messages are all answered in this build.
+
+**Tampermonkey — update ONLY what changed:**
+- **Tapereader v15.55** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.17** — UNCHANGED, do not reinstall — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Run `installv1555.bat` (it pushes from your machine), wait ~5 min for the CDN, **click the tapereader link**, reload Atlas — the footer must say v15.55. "Reinstall" means you already have it.
+
+**What's in it, against what you asked:**
+
+*Other sweeps — PDH/PDL, prior POC/VAH/VAL, other major levels.* Measured today on your 284 ES sessions, same definitions, two controls: PDC, POC, VAH, VAL, pre-market high/low, prior-week high/low, opening range 5/15, plus the ON/PD/IB set — 20 level types, 919 events. The answer is clean and worth knowing: **no level's name beats a bounce off any fresh low** (−7 to +9pp over 79 cells; the two +9s are what 79 cells produce by luck). PDC breaks on first touch 44–56% — a magnet, not a wall; the opening range is slightly *worse* than nothing (it's the poke by construction). What does move it: the first 30 minutes, a flush past 8 pts, a slow reclaim. That's FINDINGS F-14. The book's own levels (CW0/PW0/King) are the one family not yet measured — that is H6, and it needs the tap record.
+
+*The text field.* Every subject on the Analysis tab now ends with **TRACK SOMETHING UNDER K/S/D/F/P/H/X** and an **+ Add** button. What you type is stored, rides in the day export when you Save, the nightly copies it into `learning/requests.json`, I turn it …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 67 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (15:43):** Push from this environment is denied by organization policy (403 on origin) — the 67 commits are local and go up when you run `installv1555.bat`, which pushes from your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> good point,  about CWO ,PW0 etc.. can you add them
+
+**me (16:04):** Now the panel: honest overnight labels, the book's levels in the live read, the book table, and the fetch.
+Now the test file for v15.56, then the mutation pass and the suite.
+Added — and adding them turned up a defect worth knowing about.
+
+**Tampermonkey — both changed this time:**
+- **Tapereader v15.56** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.18** — CHANGED, update it too — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Run `installv1556.bat`, wait ~5 min, click **both** links, reload Atlas — footer must say v15.56.
+
+**What's in it.** CW0, PW0, CW, PW and the King are now sweep levels in the read on ⓪a — read from the InsiderFinance ladder and the rail as they stand, in ES points, side by *position* against the open (a PW0 sitting above the open is a ceiling-type level whatever its name), so a line can read *"KING- swept 09:20 · 5.00 pts through · back inside in 4 bars"*. The node clause now looks at the book itself: is the sweep's extremum inside Skylit's tap zone (±0.50 SPY = ±5 ES) of the King, a top-5 node or a wall — and it quotes H6's own comparison, sweeps AT a node vs NOT at a node, from a new **book table**. That table is built from your own day files: every 3-minute bar in an export carries the King, the top nodes and the walls beside the bar's high/low/close, so `tools/study-sweeps-book.py` treats them as a corpus. Today it holds 9 sessions and every cell is thin — it prints "thin (n=10) vs thin (n=8)", not 30% vs 38% — and it grows by one session per export. H6 is judged from it nightly now (THIN, no longer "blocked" on a record that didn't exist).
+
+**The defect.** While wiring the book levels I checked …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 70 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (16:14):** Push is denied from this environment by organization policy (403 on origin) — the 70 commits are local and go up when `installv1556.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> tell me which key levels am i missing ?
+
+**me (16:32):** Here's the honest inventory, judged against what a level trader on ES actually keeps on the chart.
+
+**What the sweep read covers now.** ONH/ONL (real overnight from companion v1.18 on), PMH/PML, PDH/PDL/PDC, prior-day POC/VAH/VAL, IBH/IBL, CW0/PW0/CW/PW, the King — plus top-5 nodes and walls as the node clause. The corpus study also read prior-week H/L and OR5/OR15.
+
+**Missing, and computable today from data we already have:**
+
+- **VWAP and its bands** (session VWAP ±1σ/±2σ; anchored VWAPs from the prior day's low/high). Dynamic, not a fixed line, but it's the level most ES traders fade first. The ES bars carry volume — computable live and over the 284 sessions. Queued as H2.10h.
+- **Today's developing POC / VAH / VAL** — you have the *prior* day's profile only; the intraday value area is a different level set.
+- **Naked / virgin POCs** — prior days' POCs never revisited. Needs the multi-day ES file, which we have.
+- **The midpoints** — overnight mid, prior-day mid, IB mid. Half-back levels are where a lot of "why did it turn there" answers live.
+- **Asia and London ranges** — the overnight split at 02:00 CT. London's high/low is a classic ES sweep level; right now it's blended into ONH/ONL.
+- **Weekly / monthly open, prior week's close, monthly H/L** — higher-timeframe reference levels.
+- **The opening print** and the **gap half-fill** — PDC (full gap fill) is in; the open itself and the half-way point are not.
+- **Floor pivots / Camarilla** (PP, S1/R1…) — old but still watched, so they still get run.
+- **Round numbers** — 00/50 handles on ES.
+- **Skylit's own levels I left out:** the **expected-move band edges** (the panel already computes `emBand` — a major Skylit level, not yet a sweep level), the **gamma flip / zero-gamma** level, the InsiderFinance **HVL** and **m …[trimmed]
+
+**OPERATOR:**
+> which ones would your recommend
+
+**me (16:35):** I'd add five, in this order, and leave the rest out.
+
+**1. The expected-move band edges (EMH / EML).** They're Skylit's own level, the panel already computes them, and they answer your first objective directly — a sweep of the EM edge that reclaims is the cleanest candidate for "the extreme is in" the doctrine offers. Zero new data, one afternoon.
+
+**2. VWAP with ±1σ / ±2σ bands.** The one dynamic level nearly every ES desk trades against, so it gets run, and a run of a level everyone watches is exactly the kind of sweep this read exists for. The ES bars carry volume, so it's computable live and over all 284 sessions — which means it's the only new level we can *measure* before we trust it.
+
+**3. HVL and the magnet.** Both are already in your export (`lev.hvl`, `lev.mag`), both are InsiderFinance structure levels like CW0/PW0, and the magnet is a pin candidate — directly relevant to where the afternoon goes after the extreme prints. Nearly free.
+
+**4. Today's developing POC / VAH / VAL.** Your pullback objective lives inside the day's value area — a pullback that turns at the developing VAL is a different event from one that turns at yesterday's, and right now the read only knows yesterday's.
+
+**5. The London range (02:00–08:30 CT).** Once companion v1.18 gives us the full overnight, splitting it costs nothing, and London's high/low is the overnight level ES most often runs at the open.
+
+What I'd skip and why: the midpoints and floor pivots are mostly measured-worthless folklore and would add rows without a hypothesis behind them; round numbers fire so often they'd bury the read in noise; weekly/monthly levels matter maybe twice a month and can wait; naked POCs are real but multi-day bookkeeping for a rare event. If any of those turns out to matter to you, the TRACK fie …[trimmed]
+
+**OPERATOR:**
+> ok.. lets add these, but note that if there are multiple sweeps we only need to show two on the dashboard that are the biggest levels that  are the most popular like PDH, PDL, ONH, ONL, VAH, VAL, POC  etc.
+
+**me (16:40):** Now the registry rows for the new levels, then tests.
 
 ### DECISIONS
+
+**v15.57 · the levels he approved, and the two-line rule (2026-09-03).**
+- Asked which key levels were missing; recommended five (EM edges, VWAP + bands, developing value area, London, HVL/magnet)
+  and said which to skip; he approved: "ok.. lets add these".
+- **His display rule:** if there are multiple sweeps, show only TWO on the dashboard — the biggest, most popular levels
+  (PDH, PDL, ONH, ONL, VAH, VAL, POC …). Built as `LEVEL_TIER` + rank by tier then depth; the rest named in a trailer.
+- Measured first: interior levels (VWAP/bands/today's value area) are NOT the extreme (3–13% vs 16–28% control) — they
+  are pullback candidates; P5.1 measures resume. London is a name like the others.
+
+
+**v15.56 · the book's levels (2026-09-03).**
+- **"good point, about CW0, PW0 etc.. can you add them"** — added as sweep levels (CW0/PW0/CW/PW/KING, side by
+  position against the open) in the live read and in a new book corpus built from the panel's own day files.
+- The node clause uses Skylit's tap zone (±0.50 SPY = ±5 ES) against the King / top-5 / walls, and quotes H6's own
+  comparison (at a node vs not) from the book table — thin today, and it says so.
+- **The overnight was a stub** (the courier trimmed ES to 08:00–16:30 CT): a stub is now PMH/PML on the face and in
+  the read; companion v1.18 fetches ES without the trim. A level with the corpus's name must have the corpus's hours.
+- RATE_MIN_N = 15: under it a cell prints thin with its n.
+
+
+**v15.55 · the Analysis tab by subject (2026-09-03).**
+- **He chose alternative A (by subject)** of five mockups — "it provides a subject which can then be added to."
+  Subcategories "like a trader"; an extensive sweeps section; the Testing tab redesigned to match.
+- **TRACK field, one per subject** — "each section … a text field … click a button like add which will trigger
+  you." The trigger is the Save: request → day export → nightly → learning/requests.json → review → a study row
+  with `req:<id>` reports back.
+- **THE READ FROM THE STATS on ⓪a** — "a feedback mechanism that feeds back into the dashboard especially a read
+  section." Today's sweeps against the measured table; the node-conditioned rate prints UNMEASURED until H6.
+- **Other sweeps (his question — PDH/PDL/POC/VAH/VAL/major levels)**: measured the same day (F-14). None beats
+  the fresh-low control. The book's levels (CW0/PW0/King) need the tap record.
+- **The registry is edited in `tools/studies-seed.py`**, never in the JSON or the mockup HTML.
 
 **v15.50 · the deflection roadmap.**
 - `roadmap/DEFLECTION-ROADMAP.md` — 21 items across Dashboard/Analysis/Testing + foundation, in a
@@ -945,6 +617,28 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.57** — `LEVEL_TIER` / `levelTier`, `vwapSeries`, `devProfileSeries`, `sweepScanDynamic`; EM edges, London,
+HVL/MAG in `sweepLevelsToday` / `bookLevelsNow`; dynamic levels in `sweepEventsToday`; the two-line rule + trailer
+in `statsRead`; the H2 table rows; `study-sweeps.py` at 32 level types (116 cells); HVL/MAG in the book study;
+registry H2.10h–l, P5.1 READ NEXT; `test_v1557.js` 25 / 10 of 10 mutations; suite 125 green / 9 red; smoke clean;
+FINDINGS F-16. Companion unchanged (v1.18).
+
+
+**v15.56 · companion v1.18** — `bookLevelsNow` / `dispToEs` / `tapZoneEs`; walls + King as sweep levels; the node
+clause from the book now + the deflection ledger; `tools/study-sweeps-book.py` (`--selftest`) → `SWEEPS-BOOK.json`
+(9 sessions, 20 cells, all thin) fetched and rendered under the H2 table; `run.py` judges H6 from it (THIN, not
+BLOCKED) and refreshes it nightly; `overnightHL().full`, PMH/PML labels; `test_v1556.js` 32 / 9 of 9 mutations;
+suite 124 green / 9 red (5 baseline + 4 save gates); smoke clean. FINDINGS F-15.
+
+
+**v15.55** — `learning/studies.json` (7 subjects · 45 subsections · 176 studies, `decides` on each) rendered by
+subject on Analysis with the live sections as evidence under H1/F1/F5/D2; TRACK field per subject
+(`gpts_requests_v1`, export `requests`, nightly ingest); ⓪a THE READ FROM THE STATS (`sweepEventsToday`,
+`statsRead`); Testing in loop order ⓪–⑥ with the `kill.negGammaWide` FLAG; `tools/study-sweeps.py` on 20
+level types → `SWEEPS.json` with a `lookup`; H6/H7 in `register.json` + seed, judged by `run.py judge_sweep`;
+`test_v1555.js` 68 / 12 of 12 mutations; suite 123 green / 9 red (5 baseline + 4 save gates); smoke clean.
+FINDINGS F-14. Mockups regenerated from the registry.
+
 **v15.50** — `roadmap/DEFLECTION-ROADMAP.md` + `test_roadmap.js` (35) + `load gex` 1a-01.
 7 mutations / 7 caught. Suite 142 green / 6 baseline red.
 
@@ -1094,6 +788,26 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+- **v15.58: the TAP record** — 94 OPEN studies wait on it.
+- P5.1: the resume outcome for VWAP/band and value-area sweeps (the pullback objective) — data on hand.
+- The book corpus grows one session per export; H6 reads at 40; H7 at 60 on sessions after 2026-08-21.
+- His decisions: the Skylit API backfill (credits), the tap-zone definition, NQ 1-minute for D5.
+- Push from the cloud is denied (403); the installer pushes from his machine.
+
+
+- **v15.57: the TAP record** — 94 OPEN studies wait on it.
+- The book corpus grows one session per export; H6 reads at 40 at-node events on sessions from 2026-09-03.
+- The nightly reading one READ NEXT study per night (K4.1 first); TRACK → DRAFT study as a nightly step.
+- His decisions: the Skylit API backfill (credits), the tap-zone definition, NQ 1-minute for D5.
+- Push from the cloud is denied (403); the installer pushes from his machine. Companion v1.18 must be reinstalled.
+
+
+- **v15.56: the TAP record** — 95 OPEN studies and H6 wait on it.
+- The nightly reading one READ NEXT study per night (K4.1 first) and writing it back to studies.json.
+- TRACK → DRAFT study as a nightly step.
+- His decisions: the Skylit API backfill (credits), the tap-zone definition, NQ 1-minute for D5.
+- Push from the cloud is denied (403); the installer pushes from his machine.
 
 1. ⚠ **Q11 — the ex-ante deflect/break discriminator.** THE product gap. Blocked on an
    exhaustively-labelled session and the re-arm distance — both his.
@@ -1282,18 +996,18 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
-385e247 v15.53 — the simplification, part 1: eight defects fixed, 4,233 lines archived, nothing visible changed
-2494630 SIMPLIFICATION PLAN — for his approval; nothing cut yet
-35ce8c6 v15.52 — the grader becomes visible: CAN THE SCORER FAIL, PRE-REGISTERED, the ledger in ⓪a
-934d9df v15.51 — the loop measures nothing: a scorer that can fail, and a ledger that survives
-678125a save: chat history + resume note current, so a new context (or model) starts from today's evidence
-74f68a6 FINDING: the self-improvement loop is complete and measures nothing
-5d63118 process: check in the corpus analysis and pre-register the hypotheses
-e8a0e07 mockup: standalone copy (doctype/head/body) for opening directly in a browser
-7fb90d4 mockup: v16 node ladder, true 608px, on his real 2026-09-02 ladder
-74fef45 RETRACTION: the "7,500 discarded records" were correct declines, not lost evidence
-1e70b28 Q11 first analysis on real data: the touch is a coin, and the label is the wrong shape
-45882af SECOND correction: the corpus exists, under a different key — and 7,500 records are being discarded
+536a9b9 v15.57: EM edges, VWAP + bands, developing profile, London range, HVL/magnet in the sweep read; the two-line rule (tiers); corpus at 32 level types (F-16: interior levels are pullback candidates, not extremes)
+8019bfb v15.56: chat history filled (DECISIONS / SHIPPED / OPEN AT CLOSE)
+dbba41a v15.56: chat history regenerated and filled
+ec4ef7a v15.56: the book's levels in the sweep read (CW0/PW0/CW/PW/KING), the book table from the day files (H6 judged from it), the honest overnight, companion v1.18 keeps the full Globex day for ES
+5acc703 v15.55: chat history regenerated and filled (DECISIONS / SHIPPED / OPEN AT CLOSE)
+620a35c v15.55: the Analysis tab by subject (studies.json), TRACK field per subject, THE READ FROM THE STATS on ⓪a, Testing in loop order, sweep study extended to 20 level types (F-14), H6/H7 in the register, nightly judges them and ingests requests
+1863e1e Testing tab redesigned by subject (mockup from live state), sweep findings, design doc, session-state, changelog, chat history
+3fe567f Analysis by subject: studies.json registry (7 subjects, 45 subsections, 170 studies), sweep study on 284 ES sessions (SWEEPS.json), mockup rendered from the registry
+5e3848d mockups: five Analysis-tab alternatives (subject, doctrine scorecard, setup grader, conditions matrix, session timeline) with a recommendation
+6c83f80 mockup: the Analysis tab in three moments (before the open · at the tap · after the close · the nodes), true 608px
+f18345b design: C32-C35 from the live core-concepts page (rapid unwinding, hedge nodes near events, pocket polarity, OPEX discount)
+ff1ff38 design: the Skylit doctrine as 31 measurable claims, and the analysis + capture designed from them
 ```
 
 ---

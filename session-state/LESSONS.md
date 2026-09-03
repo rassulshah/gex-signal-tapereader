@@ -131,6 +131,45 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.57 — an interior level cannot be the extreme; measure the outcome the level can actually deliver
+
+**What happened.** VWAP, its bands and today's value area were added as sweep levels and scored on "printed the
+day's extreme" like every other level — and came back at 3–13% against a 16–28% control, the worst numbers on the
+board. That is not a finding about VWAP; it is the outcome being wrong for the level. A central-tendency level sits
+inside the day's range by construction, so a sweep of it is almost never the extreme — it is a pullback. **Ask a level
+the question it can answer:** for VWAP that is "did the move resume" (P5.1), not "was this the low".
+
+**Also.** A VWAP test whose bars have typical price equal to close cannot tell typical-price VWAP from close VWAP; a
+mutation survived until the fixture's h/l were made asymmetric. The fixture must break the coincidence.
+
+### v15.56 — a level with the corpus's name must have the corpus's hours
+
+**What happened.** The panel had drawn "ONH/ONL" since v15.00 from the courier's ES bars, and the v15.55 sweep read
+quoted the corpus's ONL rate against them. The courier trimmed ES to 08:00–16:30 CT. So the live "ONL" was the
+08:00–08:29 pre-market low — a level the corpus measured separately (PML, 21% vs 21%, nothing) — wearing the name of
+one it had measured differently. Nothing on the face could tell them apart. The fix is two-sided: the reader
+reports coverage (`full`) and every consumer labels a stub PM, and the courier stops trimming the instrument the
+corpus is built on. **When a live number borrows a measured number's name, check that it was made the same way.**
+
+**Also.** A mutation that survives because the fixture happens to be in the order the code would produce anyway
+(the top-5 list already sorted; the King already below the open) is the v15.54 lesson again — the fixture must put
+the code in a state where only the behaviour under test gives the answer.
+
+### v15.55 — the clock is not a control; a bounce is
+
+**What happened.** The first sweep table judged every sweep-reclaim against *the clock* — the share of all
+sessions whose standing low at that minute is final — and every level looked −20pp. The population was
+wrong: it included sessions whose low was set at the open and never revisited. Against *price is at a
+fresh low right now, at any level or none*, the level's name adds nothing (+1, −1, −6pp) and the clock,
+the depth and the reclaim speed add +9 to +16pp. **A control is the same situation minus the one thing
+being tested** — the midpoint control (F1.3), learned again on price alone.
+
+**Also in this build.** A `%` in a literal that passes through `%`-formatting needs `%%` (the house rule's
+own text broke the generator); a section that is folded by default is not in the DOM, so a render test
+that greps for a row must open the section it lives in (test 6i); and a READ line that shows the "last
+three events" shows the wrong three — the wick that went furthest is the candidate for the day's extreme,
+so the READ is one line per excursion and one excursion per side.
+
 ### v15.54 — a mutant that survives for the wrong reason is a test that passes for the wrong reason
 
 **What happened.** Mutating `ruleTier` to ignore the gate left all 44 assertions green. The assertion for it
@@ -2416,3 +2455,19 @@ Retiring `ladderRolls` would have silently removed *"⚠ INFERRED from paired ch
 observed transfer"* — the only sentence saying a roll is an inference. It lived solely in that
 drawer's hover. **Before retiring any drawer, grep its hovers for orphaned caveats.**
 
+
+
+### 2026-09-03 · The clock is not a control; a bounce is
+
+The first sweep table judged every sweep-reclaim against *the clock* — the share of all sessions whose
+standing low at that minute is final — and every level looked −20pp. The population was wrong: it
+included sessions whose low was set at the open and never revisited. The fair control is *price is at
+a fresh low right now, at any level or none* — and against it the level's name adds nothing (+1, −1,
+−6pp) while the clock, the depth and the speed add +9 to +16pp. **A control must be the same
+situation minus the one thing being tested.** Same lesson as the midpoint control (S-B16 / F1.3),
+learned again on price alone.
+
+### 2026-09-03 · A `%` in a literal and a `%` in a format string
+
+`'NOT-IN 85% n=230' % (...)` — the house rule's own text broke the generator with *unsupported format
+character*. Any literal that carries a percentage and passes through `%`-formatting needs `%%`.

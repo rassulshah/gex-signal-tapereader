@@ -80,7 +80,14 @@ eval(['effN','nTxt','pctN','_fpct','gradeMonotone','featStatsCached','featStatsI
       'secOpen','secToggle','tabSection','tabEmpty','tabTile','tabGuideBtn','tabHeader','tabGuide',
       'deflStats','deflTableHtml','deflectionsSectionHtml','selfTestDay','selfTestRun','selfTestHtml',
       'unlockRowsHtml','yourCallsHtml','proposalsQueueHtml','challengersHtml2',
-      'killListHtml2','featPredBand','canFailHtml','preregStats','preregHtml','wilsonCI','hodlodCalib','hodlodSectionHtml','analysisBlock','testingBlock'].map(ex).join('\n'));
+      'killListHtml2','featPredBand','canFailHtml','preregStats','preregHtml','wilsonCI','hodlodCalib','hodlodSectionHtml','analysisBlock','testingBlock',
+      // (v15.55) the tab by subject, the TRACK field, the Testing loop
+      'studiesLoad','sweepsLoad','studiesFlat','studiesCounts','rateTxt','pctOf','ctrlTxt','requestsLoad','requestsSave','requestsAdd','requestsRemove','requestStatus','requestsExport','trackFieldHtml',
+      'showSubject','subjectStripHtml','studyRowHtml','sweepTableHtml','sweepsBookLoad','subjectPanelHtml','analysisSubjectsHtml','nightlyReviewHtml','gateStateTxt','rulesTierCounts','testingLoopStripHtml','dashboardRulesHtml','readNextQueueHtml'].map(ex).join('\n'));
+// (v15.55) the registry seed and the small constants the subject panel reads
+eval(src.slice(src.indexOf('var STUDIES_KEY='), src.indexOf('function studiesLoad(')));
+global.ANALYSIS_SUBJ='H'; global.ANALYSIS_NIGHTLY=null; global.RATE_MIN_N=15; global.sweepsBookLoad=function(){ return null; }; global.featGated=function(){ return null; }; global.ruleTier=function(){ return '⚖'; }; global.rulesLoad=function(){ return { rules:{} }; };
+global.HYP_STUDY=HYP_STUDY; global.STUDIES_SEED=STUDIES_SEED; global.STUDY_STATUS_COL=STUDY_STATUS_COL; global.STUDIES_KEY=STUDIES_KEY; global.SWEEPS_KEY=SWEEPS_KEY; global.REQUESTS_KEY=REQUESTS_KEY; global.ASUBJ_KEY=ASUBJ_KEY;
 // (v15.54) ① HOD / LOD: no session read in the harness -> its own honest empty line
 global.hodLod=function(){ return { ok:false, why:'no bars' }; }; global.lodhodCall=function(){ return null; }; global.hlClock=function(){ return '—'; }; global.hlDur=function(){ return '—'; };
 global.HLTAB_META={ sessions:284, first:'2025-06-02', last:'2026-08-21', notIn:20 }; global.preregList=function(){ return []; };
@@ -99,8 +106,9 @@ function reset(){ TAB_SECTIONS={}; TAB_GUIDE={}; SELFTEST_LAST=null; STATS=empty
 reset();
 var A=analysisBlock();
 ok(typeof A==='string' && A.length>0, '1a the Analysis tab renders');
-// (v15.54) THE TAB IN WORKFLOW ORDER — design/ARCHITECTURE-E2E-WORKFLOW.md §3
-var ASECS=[['①','HOD / LOD'],['②','DEFLECTIONS AT NODES'],['③','NODES'],['④','REVIEW'],['⑤','DIRECTION']];
+// (v15.55) THE TAB BY SUBJECT — design/ANALYSIS-TESTING-BY-SUBJECT.md: the subject strip, then the selected
+// subject's subsections (H by default: H1 … H7), the live evidence inside them, the TRACK field under them.
+var ASECS=[['K','KINGS'],['H','HOD / LOD'],['H1','Is the extreme in'],['H2','SWEEPS'],['TRACK SOMETHING UNDER','H']];
 var lastAt=-1, inOrder=true;
 ASECS.forEach(function(p){
   var at=A.indexOf(p[0]+' '+p[1]);
@@ -109,14 +117,14 @@ ASECS.forEach(function(p){
   lastAt=at;
 });
 ok(inOrder, '1b ...and they appear in the spec order, top to bottom');
-ok(A.indexOf('Did the dashboard tell the truth')>=0 || A.indexOf('The objective, stated')>=0, '1c the tab states the question it answers (v15.54: the objective, stated)');
+ok(A.indexOf('Did the dashboard tell the truth')>=0 || A.indexOf('The objective, stated')>=0 || A.indexOf('TODAY’S EVIDENCE')>=0, '1c the tab states the question it answers (v15.55: the live evidence sits under the subsection it answers)');
 
 // ================= 2. THE TESTING TAB RENDERS ①-⑥, IN ORDER =================
 reset();
 var T=testingBlock();
 ok(typeof T==='string' && T.length>0, '2a the Testing tab renders');
-var TSECS=[['\u2460','CAN THE SCORER FAIL?'],['\u2461','PRE-REGISTERED'],['③','PROPOSALS'],['③b','CHALLENGERS'],['④','KILL LIST'],
-           ['\u2464','DATA COVERAGE'],['⑥','SELF-TEST']];
+// (v15.55) the loop order: ① THE REGISTER · ② THE GATE · ③ ON THE DASHBOARD (proposals, challengers, kills inside) · ④ THE RECORD · ⑤ THE NIGHTLY · ⑥ SELF-TEST
+var TSECS=[['\u2460','THE REGISTER'],['\u2461','THE GATE'],['③','ON THE DASHBOARD'],['④','THE RECORD'],['\u2464','THE NIGHTLY'],['⑥','SELF-TEST']];
 lastAt=-1; inOrder=true;
 TSECS.forEach(function(p){
   var at=T.indexOf(p[0]+' '+p[1]);
@@ -136,12 +144,12 @@ ok((T.match(/data-gsec="/g)||[]).length>=7, '3b every Testing section too', (T.m
 reset();
 var openA=analysisBlock();
 ok(openA.indexOf('▾')>=0, '3c an open section shows ▾');
-secToggle('a0');   // (v15.54) ① is HOD / LOD, id a0
+secToggle('sj-H1');   // (v15.55) H1 is the first subsection of the default subject
 var closedA=analysisBlock();
-ok(closedA.indexOf('①')>=0, '3d a closed section still shows its header');
+ok(closedA.indexOf('H1 Is the extreme in')>=0, '3d a closed section still shows its header');
 ok(closedA.length<openA.length, '3e ...but its body is gone (the point of collapsing)', openA.length+' -> '+closedA.length);
 ok(closedA.indexOf('▸')>=0, '3f ...and the caret flips to ▸');
-secToggle('a0');   // (v15.54) ① is HOD / LOD, id a0
+secToggle('sj-H1');
 ok(analysisBlock().length===openA.length, '3g toggling back restores it exactly');
 
 // ================= 4. EMPTY STATES ARE ONE HONEST LINE ======================
@@ -151,11 +159,13 @@ A=analysisBlock(); T=testingBlock();
 ['a1','a2','a3','a4','a5','a6','a7','a8'].forEach(function(id){ TAB_SECTIONS[id]=true; });
 ['t1','t2','t3','t4','t5','t6','t7'].forEach(function(id){ TAB_SECTIONS[id]=true; });
 A=analysisBlock(); T=testingBlock();
-[['no session read yet', A, 'Analysis ① with no data'],
- ['nothing has ever been promoted or demoted', A, 'Analysis ② with nothing promoted'],
- ['no resolved deflection records yet', A, 'Analysis ④ with no node records'],
- ['no taps logged yet', A, 'Analysis ⑤ with no taps'],
- ['no review has come back yet', A, 'Analysis ⑥ with no review'],
+ANALYSIS_SUBJ='F'; ['sj-F1','sj-F5'].forEach(function(id){ TAB_SECTIONS[id]=true; }); var AF=analysisBlock(); ANALYSIS_SUBJ='H';
+[['no session read yet', A, 'Analysis H1 with no data'],
+ ['nothing has ever been promoted or demoted', T, 'Testing ⑤ WHAT CHANGED with nothing promoted'],
+ ['no resolved deflection records yet', AF, 'Analysis F1 with no node records'],
+ ['no taps logged yet', AF, 'Analysis F1 YOUR CALLS with no taps'],
+ ['no review has come back yet', T, 'Testing ⑤ with no review'],
+ ['rows arrive when learning/studies.json is fetched', A, 'Analysis with the registry not fetched'],
  ['no open proposals', T, 'Testing ② with an empty queue'],
  ['no challengers evaluated yet', T, 'Testing ③ with no challengers'],
  ['not run yet', T, 'Testing ⑤ before the self-test is run']
@@ -216,14 +226,12 @@ var titles=(A+T).match(/title="[^"]{12,}"/g)||[];
 ok(titles.length>=10, '6a both tabs are densely hovered', titles.length);
 var qFirst=titles.filter(function(t){ return /\?/.test(t); }).length;
 ok(qFirst>=8, '6b ...and the hovers ask a QUESTION rather than restating the label', qFirst+'/'+titles.length);
-['The objective, stated','Which inputs actually predict?',
- 'Which nodes actually hold?','Are the reads you TAKE better than the ones you PASS?',
- 'What did the review actually say?','WHAT CHANGED'].forEach(function(q){
-  ok(A.indexOf(q)>=0, '6·Analysis subtitle asks: '+q);
+// (v15.55) the subject panel: each subsection says what it DECIDES; the TRACK field says what happens to what you type
+['What does it decide at the tap? SIZE · WAIT','What does it decide at the tap? SIZE · STOP · TIME','Type what you want measured','the move from low to high'].forEach(function(q){
+  ok(A.indexOf(q)>=0, '6·Analysis subtitle says: '+q);
 });
-['Before a feature','Hypotheses fixed on','What is asking to change the model, and does it clear the bar?',
- 'What is trying to replace an incumbent, and is it actually ahead?',
- 'Which conditions would void a read, and is each one ACTIVE or just written down?',
+['Before a feature','Hypotheses fixed on','What the ladder renders, and which study each number comes from','What is asking to change the model',
+ 'What did the review actually say?','WHAT CHANGED',
  'Does the scorer itself work?','How much have we actually got, and what unlocks when?'].forEach(function(q){
   ok(T.indexOf(q)>=0, '6·Testing subtitle asks: '+q);
 });
@@ -290,7 +298,7 @@ var both=A+T;
 ok(!/width:\s*\d{3,}px/.test(both), '10a no fixed pixel width over 99px anywhere in either tab');
 // nowrap survives only on short numeric cells (an eff-n column, a from→to pair). Every
 // explanatory line is white-space:normal, which is what makes the panel readable at 250px.
-ok((both.match(/white-space:nowrap/g)||[]).length<=8, '10b nowrap is confined to short numeric cells', (both.match(/white-space:nowrap/g)||[]).length);
+ok((both.match(/white-space:nowrap/g)||[]).length<=9, '10b nowrap is confined to short numeric cells (v15.55: +1, the TRACK field\'s "+ Add" button)', (both.match(/white-space:nowrap/g)||[]).length);
 ok((both.match(/white-space:normal/g)||[]).length > (both.match(/white-space:nowrap/g)||[]).length*3,
    '10b2 ...and wrapping prose outnumbers it by more than 3:1', (both.match(/white-space:normal/g)||[]).length+' vs '+(both.match(/white-space:nowrap/g)||[]).length);
 ok(/white-space:normal/.test(both), '10c ...and the explanatory lines explicitly wrap');
