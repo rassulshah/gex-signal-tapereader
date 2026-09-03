@@ -22,9 +22,14 @@
    "what": "the node's $ exposure rising in the 15 minutes before price reached it (the recorder's d15 > 0, the chart's marker getting brighter)"
   },
   {
+   "id": "king",
+   "name": "KING DEFLECTION",
+   "what": "the tap is of THE King — and which book's: SPX (SPXW, the flow book), SPY, or QQQ. His bread-and-butter setup (studies S0.1–S0.7); tracked per book, religiously"
+  },
+  {
    "id": "heavy",
    "name": "HEAVY",
-   "what": "the King, or a node ≥ 50% of the King"
+   "what": "a node ≥ 50% of the King that is not the King"
   },
   {
    "id": "roll",
@@ -161,6 +166,22 @@
    "note": "E001 Pb (7735 + 7740, $61M + $81M), E002 c1 (7665 + 7670 + 7675 −γ, the session low), E004 c3 (7745 + 7750, $73M + $46M, the session high 5 pts between them)."
   },
   {
+   "id": "L9",
+   "rule": "THE KING DEFLECTION is the bread-and-butter setup: a tap of the King — SPX, SPY or QQQ King, each its own row — is the base case every other setup is measured against. Track every King tap with its book, its growth into the tap (d15), its sign, and the outcome.",
+   "from": [
+    "E001",
+    "E002",
+    "E003",
+    "E004"
+   ],
+   "status": "PROPOSED",
+   "n": 6,
+   "agree": 6,
+   "weak": 0,
+   "refute": 0,
+   "note": "His words, 2026-09-03: 'this is a bread and butter setup … track this religiously.' In the four taught days 6 of 16 circled legs were taps of the King and all six deflected (E001 R1, R2 — the SPX King 7750; E002 c4 — 7675 as it became the King; E003 c1 — 7750 at the open, c3 — the King rolled onto price; E004 c2 — the −γ King 7735). That is selection, not a rate: he circled deflections, not every tap. The rate comes from the ledger (S0.1–S0.4), per book, at n ≥ 15."
+  },
+  {
    "id": "L7",
    "rule": "TIME OF DAY: the taught deflections cluster in the first hour and in the noon window (12:00–13:15 CT) — 3 and 7 of 16 legs. An observation to measure on the 284-session corpus, not a rule to trade.",
    "from": [
@@ -197,8 +218,8 @@
      "node": "SPXW 7750 (the King, ES 7758)",
      "data": "10:00 56% $17M decaying → 10:06 King $40M → 10:18 $77M → 10:33 $101M → $116M at 10:42, the first tap bar; d15 +$40–54M. Two taps, held.",
      "factors": [
-      "growth",
-      "heavy"
+      "king",
+      "growth"
      ]
     },
     {
@@ -210,8 +231,8 @@
      "node": "SPXW 7750 (the King)",
      "data": "$180–204M, still +$20–30M/15m through the retests. Held.",
      "factors": [
-      "growth",
-      "heavy"
+      "king",
+      "growth"
      ]
     },
     {
@@ -255,7 +276,8 @@
     "L3",
     "L4",
     "L6",
-    "L8"
+    "L8",
+    "L9"
    ],
    "open": "which node he meant by 'new node growth just before 11 am' — the record shows 7740 re-growing from 11:15, not a birth before 11:00"
   },
@@ -317,8 +339,8 @@
      "node": "SPXW 7675 (ES 7683, −γ) — became the King at 13:39 — + 7670 (ES 7678)",
      "data": "7675: −$27M (13:33, 52%) → −$39M King (13:39) → −$58M (13:51) → −$65M (13:57) → −$116M by 14:33, d15 −$24 … −48M: the biggest growth of the day, under price; 7670 −$21M → −$40M (88–90%) 13:39–14:06. Price pierced 7683 ('above' at 13:39–13:48), reclaimed, then rallied AWAY from the growing −γ King into the 14:59 high 7708 — the −γ King did not pull price back (L3's sign condition).",
      "factors": [
+      "king",
       "growth",
-      "heavy",
       "stack",
       "side"
      ]
@@ -335,7 +357,8 @@
     "L3",
     "L4",
     "L5",
-    "L6"
+    "L6",
+    "L9"
    ],
    "open": ""
   },
@@ -358,7 +381,7 @@
      "node": "SPXW 7750 (the King, ES 7758)",
      "data": "The King at the open (08:36 7750; briefly 7790 at 08:39; 7750 again 09:00). At 09:09, the first event: 93–100%, $14M, stage Delivered, 3 taps — the circle IS those three taps. Growth into the taps is in the blind minutes before 09:09; from 09:09 it grew $14M → $34M by 09:48 while price fell to 7732 and came back. Price went through it at 09:42 (side 'below' from 09:45) and never returned.",
      "factors": [
-      "heavy"
+      "king"
      ]
     },
     {
@@ -384,9 +407,9 @@
      "node": "the King rolled DOWN 7790 → 7715 (ES 7723) onto price; 7710 (ES 7718, −γ) grew after",
      "data": "At 12:12 the King was 7715 at $52M (from 7790 during the blind gap) — 9 pts above the low. 7705 (ES 7713) was not on the board (not in the top 90) until 13:42; 7700 (ES 7708) +$9M small; 7710 (−γ) −$7M → −$19M over 12:18–12:42. The bounce went straight to the King's price: 12:36 7722–7723.5, then 7722–7726 for 40 minutes ON it — pulled up to the King (L3).",
      "factors": [
+      "king",
       "roll",
-      "magnet",
-      "heavy"
+      "magnet"
      ]
     },
     {
@@ -428,7 +451,8 @@
     "L2",
     "L3",
     "L5",
-    "L8"
+    "L8",
+    "L9"
    ],
    "open": "the 10:06–12:12 gap hides how the King rolled from 7790 to 7715 — the roll itself may be the tell for the 12:06 low"
   },
@@ -465,8 +489,8 @@
      "node": "SPXW 7735 (the King, ES 7743, −γ)",
      "data": "The −γ King: −$30M (09:54) → −$37M (10:00) → −$44M at 10:18, the tap bar (d15 −9M: growing into the tap) → dissipating after (10:30 d15 +12M, 10:36 +15M, −$27M) as price fell to 7731. Price met the King's price to the point and turned.",
      "factors": [
-      "growth",
-      "heavy"
+      "king",
+      "growth"
      ]
     },
     {
@@ -495,7 +519,8 @@
     "L3",
     "L6",
     "L7",
-    "L8"
+    "L8",
+    "L9"
    ],
    "open": ""
   }

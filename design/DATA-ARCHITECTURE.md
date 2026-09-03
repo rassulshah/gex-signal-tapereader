@@ -70,7 +70,9 @@ another. Name both units out loud before comparing two numbers.
 |---|---|---|
 | `setup-gex-autopull.bat` → `tools/gex-pull.bat` | scheduled task **"GEX auto-pull"**, every 2 min | Drive `GEX-inbox`: `gex-patch-*.patch` / `gex-drop-*.tar.gz` → apply → commit → push |
 | `tools/review-pull.bat` | scheduled | Drive `GEX-review-inbox` → `review/`, `learning/rules.json` → push |
-| `pushdata.bat` / `tools/push-data.bat` | manual / scheduled | `Downloads\YYYY-MM-DD.json` → `data/` → push |
+| `pushdata.bat` / `tools/push-data.bat` | manual / scheduled (~15:30, `data/` only) | `Downloads\YYYY-MM-DD.json` → `data/` → push |
+| `tools/gex-sync.bat` (task "GEX sync", every 2 min, since 2026-09-03) | scheduled | commits + pushes ANYTHING new in the repo: the day file, the nightly's files Claude writes over the desktop bridge, Drive drops; replaces the Drive-only auto-pull |
+| the desktop bridge (`mcp__remote-devices__*`) | per session, folder approved once | Claude reads `data/<day>.json` from his machine and writes `learning/log/`, the tables, the brain back into `C:\Dev\gex-signal-tapereader\` — no installer, no API |
 | `installvNNNN.bat` | operator double-click | a whole build → xcopy → commit → push |
 
 **None of them fetches market data.** They are couriers. Until v14.59 the only thing in this project

@@ -94,6 +94,17 @@ load instruction. Then read, in order:
    with status SEEN is his — answer it IN THE FILE (status, answer, link, answeredOn) as part of the session's work; the
    panel reads the file back. After ANY install, probe the live
    panel (version, fetched files, companion `full`) — never assume; the installer-manifest bug was found only that way.
+1a-00e. **THE END OF DAY RUNS THROUGH THE DESKTOP BRIDGE (2026-09-03).** His one step: 💾 Save at the close. Yours:
+   (1) `mcp__remote-devices__get_device_info` — if his desktop is linked, request the folder ONCE per session
+   (`device_request_folder_access` on `C:\Dev\gex-signal-tapereader`, reason stated) and `device_stage_files` the day
+   file(s) from `data\` (also any `<root>\<day>.json` a mis-picked folder produced — the fuller one wins); if not
+   linked, `git fetch origin` in the cloud clone (fetch works, push never does) and read `data/` from origin/main.
+   (2) `python3 tools/nightly/run.py`; then the review (stage ⑤): the log, the register, `learning/items.json`
+   answers, the brain (`tools/learn-seed.py`) for any screenshot he gave that day. (3) `SendUserFile` + 
+   `device_commit_files` the outputs into his repo folder (`learning\log\<day>.json`, `data\es-1min\SWEEPS*.json`,
+   `learning\*.json`, `learning\deflections\*`) — the "GEX sync" Windows task (tools/gex-sync.bat, every 2 minutes)
+   commits and pushes them; the panel fetches them next morning. No installer for data; no other model; no API.
+   Verify with `git fetch origin` + `git log origin/main -3` (a "gex: sync …" commit) or by staging `tools\gex-sync.log`.
 1a-00d. **`learning/deflections/LEARNING.md` — THE DEFLECTION LEARNING DOC. READ IT ON EVERY LOAD; IT IS PART OF
    YOUR TRAINING.** Operator, 2026-09-03: *"I will be giving you screenshots in a way training you and you will put it
    into a deflection learning doc, which will be part of your training to get better at identifying deflections … always

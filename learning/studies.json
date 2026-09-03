@@ -308,6 +308,71 @@
    "strap": "the patternpedia as trades: trigger · invalidation · target — each measured, not admired",
    "subsections": [
     {
+     "key": "S0",
+     "name": "King deflection — the bread-and-butter setup",
+     "decides": "SIZE · SIDE · LEVEL",
+     "studies": [
+      {
+       "id": "S0.1",
+       "q": "A tap of THE King (whichever book owns it): held rate, MFE10, bars held — the base row every other setup is measured against",
+       "decides": "SIZE",
+       "claim": "C10",
+       "corpus": "defl ledger · tap record",
+       "status": "THIN",
+       "result": "51 ledger events on 2026-09-03; the join with the King's role is the review's next job"
+      },
+      {
+       "id": "S0.2",
+       "q": "SPX King deflection (SPXW, the flow book): held rate and extent",
+       "decides": "SIZE · LEVEL",
+       "claim": "C10 C28",
+       "corpus": "defl ledger · tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S0.3",
+       "q": "SPY King deflection: held rate and extent — and does it lead or lag the SPX King's?",
+       "decides": "SIZE · SIDE",
+       "claim": "C10 C28",
+       "corpus": "defl ledger · tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S0.4",
+       "q": "QQQ King deflection: held rate and extent — the cross-book tell (K1.3)",
+       "decides": "SIDE",
+       "claim": "C28",
+       "corpus": "defl ledger · tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S0.5",
+       "q": "King growing INTO the tap vs flat/decaying at the tap — held rate by d15 (the Learn tab's L1, measured)",
+       "decides": "SIZE",
+       "claim": "C21 ours",
+       "corpus": "defl ledger · tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S0.6",
+       "q": "The King that ROLLS onto price (E003 c3): is the first tap after a roll a better hold than a tap of a King that stood still?",
+       "decides": "SIZE · LEVEL",
+       "claim": "C19 C10",
+       "corpus": "defl ledger · tap record",
+       "status": "OPEN"
+      },
+      {
+       "id": "S0.7",
+       "q": "+γ King vs −γ King deflection: same hold rate (H3 says polarity does not discriminate) — but does price return to a +γ King and run from a −γ one (L3/L5/L8)?",
+       "decides": "SIDE · TARGET",
+       "claim": "C8 ours",
+       "corpus": "defl ledger · tap record",
+       "status": "OPEN"
+      }
+     ],
+     "note": "Tracked religiously: every King tap is a ledger row with the book, the role, the growth into the tap and the outcome; the per-book rows print a rate only at n ≥ 15 (thin below), like every rate here."
+    },
+    {
      "key": "S1",
      "name": "Rug · reverse rug",
      "decides": "SIZE · TARGET",
@@ -1556,8 +1621,7 @@
        "claim": "C13 ours",
        "corpus": "book · day files",
        "status": "THIN",
-       "result": "BOOK CORPUS 9 sessions (2026-08-18 → 2026-08-31, SPY 3-min, ±0.50 zone): price sweep AT a top-5 node / the King 30% n=10 vs NOT at a node 38% n=8 · AT the King 33% n=3 · AT a wall 60% n=5 · sweeps OF the book’s levels: KING↓ 20% n=5 · KING↑ 50% n=2 · PW0↓ 0% n=3 · CW0↑ 0% n=3 · CW↑ 0% n=4 · PW↓ 0% n=3 — all thin; every export adds a session",
-       "script": "study-sweeps-book.py"
+       "result": "BOOK CORPUS 11 sessions (2026-08-18 → 2026-09-03, SPY 3-min, ±0.50 zone): price sweep AT a top-5 node / the King 25% n=12 vs NOT at a node 38% n=8 · AT the King 25% n=4 · AT a wall 43% n=7 · sweeps OF the book’s levels: KING↓ 20% n=5 · KING↑ 50% n=2 · PW0↓ 0% n=4 · CW0↑ 0% n=4 — every cell thin; the corpus grows one session per export (nightly 2026-09-03 evening: 11)"
       },
       {
        "id": "H2.10g",
@@ -1952,11 +2016,11 @@
   }
  ],
  "counts": {
-  "studies": 182,
+  "studies": 189,
   "byStatus": {
-   "OPEN": 94,
+   "OPEN": 100,
    "READ NEXT": 17,
-   "THIN": 24,
+   "THIN": 25,
    "SHIPPED": 13,
    "REFUSED": 3,
    "READ": 23,

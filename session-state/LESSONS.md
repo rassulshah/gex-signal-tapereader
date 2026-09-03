@@ -131,6 +131,18 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.62 (same day, evening) — the bridge is the pipe; a promise about a script is checked against the script
+Two false beliefs died tonight. (1) "The auto-pull task commits and pushes anything new every two minutes" — it did
+not: `tools/gex-pull.bat` exits before `git add` unless a Drive drop arrived, so the nightly's files written over the
+bridge would have sat uncommitted until the next installer. I said it before reading the script; the rule is the
+same as for a number — a claim about what a script does is read off the script, not remembered. Replaced by
+`tools/gex-sync.bat` (commit + push anything new, lock file, its own log excluded), verified on GitHub as
+`gex: sync 03-Thu-09 17:39`. (2) "The review needs the day file pushed first" — with his folder approved for the
+session the day file comes over the desktop bridge and the results go back the same way; the push is only for the
+panel's morning fetch. The nightly ran tonight on three day files GitHub had never been asked for. Also seen: 💾 with
+the repo ROOT picked writes the day file at the root — the 📁 hover says "the data folder", and a hover is not a
+guard; v15.63 writes into `data\` under either.
+
 ### v15.62 — "as mocked" is a pin, not a paraphrase; a learned rule is a counted rule
 Three times he asked for the mockup's look. The first two builds re-typed the look from memory into inline styles
 and matched it structurally while drifting visually — a header the mockup never had, section headers in a different

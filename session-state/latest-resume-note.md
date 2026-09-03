@@ -18,6 +18,15 @@ read is never a verdict; every file the panel fetches rides the installer; probe
 **Tighten and harden the machinery over time** — PROCESS.md §5 is the standing backlog; add to it when something
 breaks, and say what broke in LESSONS.
 
+**THE END OF DAY (2026-09-03 evening, skill 1a-00e):** his one step is 💾 Save. The desktop bridge is how the files
+move: `get_device_info` → `device_request_folder_access` on `C:\Dev\gex-signal-tapereader` (once per session) →
+`device_stage_files` the day file → `tools/nightly/run.py` → the review → `SendUserFile` + `device_commit_files` the
+log / tables / brain into his repo folder → the "GEX sync" Windows task (every 2 min) pushes → the panel fetches.
+The cloud can `git fetch origin` (works) but never push. Done tonight for 2026-09-03 (and the unpushed 09-01, 09-02).
+**His ask 2026-09-03:** the KING DEFLECTION is the bread-and-butter setup — S0.1–S0.7 in the registry (per book: SPX,
+SPY, QQQ; growth into the tap; the rolled King; ±γ), the `king` factor + L9 in the brain; the ledger's per-book King
+rows are the v15.63 measurement. "piku stack" = S7 Pika cloud · cluster.
+
 **THE LEARNING DOC** (v15.62, `learning/deflections/LEARNING.md` — READ IT ON LOAD, skill 1a-00d): his chart screenshots
 are lessons. BLIND CALL FIRST, then look the nodes up in the record (`tools/node-lookup.py <day> <strike> hh:mm-hh:mm`;
 today's book on his machine is `gpts_nodeevents_v1` via the Chrome tab), then the example + the rule go into

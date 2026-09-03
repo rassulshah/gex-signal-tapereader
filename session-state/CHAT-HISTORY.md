@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-03 · v15.62 · session `5e8d34b5` — v15.62 — the mockups' look, the Learn tab, four taught deflection examples
+## 2026-09-03 · v15.62 · session `5e8d34b5` — v15.62 evening — the end of day over the bridge, the GEX sync task, the King deflection setup
 
-_41 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_55 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -441,7 +441,193 @@ Now the mutation pass on the new assertions, then a real-browser screenshot of t
 Now a real-browser render of the three tabs from the actual script (Playwright), to see them before shipping.
 Now the docs: ROADMAP, PROCESS, the skill, the resume note, CHANGELOG, LESSONS, and the inventory.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (19:30):** **Why only 3 strikes.** The ladder was drawing the book faithfully — and the book was concentrated. I probed your live panel at 12:40 CT: Skylit's SPXW tape carried 100 strikes (7500–8200), only 16 of them non-zero, and exactly **three at or above the 20% node threshold** (`nodeThresh` = 20 in your gear settings): King 7750 = 100%, 7745 = 45%, 7740 = 28%. The next ones were 7735 at 11%, 7755 at 8%, 7730 at 6%, 7760 at 5%. The ladder only draws strikes ≥ the threshold, so it drew three rows — with price at 7762, above the EM high of 7743, sitting in empty air above them. No render errors, coverage 95.9% — it wasn't broken, it was a three-strike afternoon 0DTE book drawn literally. That is useless to the eye, and you're right that it is not an appropriate display of the ladder.
+
+**The fix (v15.61, building now):** the ladder never shows fewer than 8 strikes when the tape has them. Below the three real nodes it now appends the next-strongest sub-threshold strikes as **context rows** — dimmed outline bars with their real %King (11%, 8%, 6%, 5%, 3%), hover: "context row — below the 20% node threshold, not a node". Display only: the deflection engine, the recorder, the READ's top-5 and the rolls still see exactly the same three nodes, so nothing is measured or scored differently. Zero-%King strikes are never used as filler. (If you'd rather see more *real* nodes, lowering `nodeThresh` in the gear does that — but it changes what counts as a node, which changes the record, so I did not touch it.)
+Build is done — **v15.61, the ladder floor.** One installer, `installv1561.bat` (3.37 MB, no PowerShell); it also carries v15.60, which your panel was still behind on at the last probe.
+
+**Tampermonkey:**
+- **Tapereader v15.61** (changed) — https://raw.githubusercontent.com/rassulshah/ …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 93 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (19:40):** Push is denied from this environment by organization policy (403 on origin) — the 93 commits are local and go up when `installv1561.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> for the analysis and testing tabs , use the look and feel that you gave me with the mockups . I also want a learn tab.  I will be givingyou screenshots in a way training you and you will put it into a deflection learning doc, which will be part of your training to get better at identifying deflections and you will put it in the learning tab, always updating it when i give you examples. and learning untill you get really good at identifying deflections.
+
+**me (20:14):** Understood on both — and I checked your live panel before answering: it's still on **v15.58** (three tabs), so the ⚙/🗺/📌 tabs and the ladder fix aren't in front of you yet; `installv1561.bat` carries all of that.
+
+**Look and feel.** Your screenshots are the mockup's panel, and the live tab does differ from it: it puts a "📊 Analysis · Did the dashboard tell the truth? …" header on top, its section headers are a gold title with a grey question line instead of the mockup's `▾ K1  title … decides SIDE · LEVEL · 6` row, and the type is smaller. The mockup page also showed the panel at 1.55× on a ~940px stage, which is most of why it reads so well. For v15.62 I'm making the Analysis and Testing tabs render with the mockup's *own* CSS and markup — one source, pinned by a test so the tab cannot drift from the mockup again — plus the mockup's scale control (1× / 1.55× / 2.1×) on the tab. One honest caveat: your docked panel is 531px wide; at 1.55× the mockup needs ~940px, so pop the panel out or widen it to see it at that size.
+
+**📚 Learn tab.** Building it as a real training loop, not a scrapbook: a deflection learning doc (`learning/deflections/LEARNING.md` — read by me on every load, part of my training) and an examples file the tab renders. The protocol I'll follow with every screenshot you give me: I first say what I see and make my **blind call** (HOD/LOD turn · pullback turn · no deflection, with the features I'm using) *before* you tell me the answer; then I record your verdict, what I got wrong, and the rule it produces. The tab shows the rules I've learned (each citing its examples), the examples with your screenshots, and my blind-read score with its n — the same house rule as everywhere else: no % without n, and "thin" under 15. That score is how we both know when I' …[trimmed]
+
+**OPERATOR:**
+> in this example you see price going the first resistance deflection , then pulling  back  and retesting it two times after which it went down to test a pb support node that created a deflection that eventually went to the third resistance deflection node at the high.  can you see it in the picture and the data.  learn from this example today.   I will try to feed you these examples often. for you to learn from.  do you have prior past screenshots also that i might have given prior contexts ?  Also when you analyze , make sure you take all the factors into account like if it is a new node or heavy node growth or node roll etc. you want to lookup the node that caused the deflection , maybe it was a rug or reverse rug or there was stack of nodes .   for example the resistance nodes show they got brighter meaning they were growning when they created resistance .  the pullback support node shows that it was new node growth that created the pullback that came out of nowhere just before 11 am .  pay attention to these new nodes that come out of nowhere. the way i see it , typically new gamma node growth,  increasing gamma growth and gamma rolling up or down are very important and my cause deflections as well has push and pull price.   see pic
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:24):** Yes — I see it in the picture, and I checked it against the panel's own node-event record for today (962 events, SPXW strikes, all times CT; your chart's axis is CT too — the panel's price trail lines up bar for bar). It confirms your read, with numbers:
+
+**R1 — first resistance, 10:42–11:12, ES ~7755–7758.** That is the King, SPXW 7750 (ES 7758). At 10:00 it was a *decaying* $17M node at 56% of the King; by 10:06 it was the King at $40M, 10:18 $77M, 10:33 $101M, and **$116M at 10:42, the bar price first tapped it** — growing $40–54M per 15 minutes on the way in, the fastest-growing node on the board. Brighter = growing, exactly as you said. Two taps, held.
+
+**R2 — the retests, ~11:57–12:06, ES 7757–7758.** Same King, $180–204M, still adding $20–30M per 15 min through the retests. Held again.
+
+**Pb — the pullback bounce, ~12:20–12:36, low ~ES 7744–7746.** Two support nodes there: SPXW 7740 (ES 7748) and 7735 (ES 7743). 7740 went $57M at 12:00 → $72M at 12:30 → **$81M at 12:36, the tap bar**, then $90–94M by 12:51 — growing +$13–21M per 15 min *into* the tap; 7735 grew $47M → $61M into 12:09. So the bounce came off support that was growing under price. One correction to the story from the data: 7740 was not born out of nowhere — it was an 80% node at 10:16, decayed to ~40% by 10:33, flipped to "support" at 10:42 when price went above it, and started **re-growing at 11:15** (a TURN_UP event) — the growth is what made it look new on your chart. If the node you mean is a different one (you said "just before 11 am"), tell me which price and I'll pull its line.
+
+**R3 — the high, 13:12–13:33, ES 7763–7765.** Two things at once: SPXW **7755** (ES 7763) crossed the 20% threshold at 12:48 — a node that *was* new on the ladder, $49–56M, growing +$11–12M/15min — sitting right where …[trimmed]
+
+**OPERATOR:**
+> i want to train you first by giving you a lot of examples, at least 10.   see these examples, remember each circle count as 1 deflection . this is from another day , i think it is from the 31st .   double check and confirm, but most importantly you must learn so you can identify , qualify and understand and predict a deflection.  here are 4 examples. 3 at a support  with one at resistance.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+> i need you to refine you learning capability . I provide you screenshots, you lookup the nodes, any additional data and learn, eventually being able to identify nodes where deflections will occur.  you will eventaully get good and develop a scoring ccapability taking multiple things into account . you may also take time of day, levels  as well as the node details and steup type like rug, reverse rug, piku stack etc.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+> here are some more .    put an indicator on the learning tab like a scale from 0 to 100 which will measure your learning progress and how good you have become in identifying deflections  and becoming a deflection expert with the ability to idenfity deflections and even predict a defliction will occur once you see price is going to the node.    I think you have enough to start with and analysze for now.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:44):** Now the 📚 Learn tab in the panel — the module, the view flag, the render branch, the fetch, the guide, and the seed splice.
+Now the mutation pass on the new assertions, then a real-browser screenshot of the three tabs to see them.
+Now a real-browser render of the three tabs from the actual script (Playwright), to see them before shipping.
+Now the docs: ROADMAP, PROCESS, the skill, the resume note, CHANGELOG, LESSONS, and the inventory.
+**v15.62 is built** — one installer, `installv1562.bat` (4.6 MB, no PowerShell). Your panel is still on v15.58, so this one carries 15.59 → 15.62: the ⚙/🗺/📌 tabs, the ladder floor, and today's work.
+
+**Tampermonkey:**
+- **Tapereader v15.62** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.18** — UNCHANGED, do not reinstall — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Run the .bat (it pushes 95 local commits from your machine), wait ~5 min, click the tapereader link, reload the Atlas tab — footer v15.62. Then tell me and I'll probe it.
+
+**The look.** The Analysis and Testing tabs now render with the mockup generators' *own* stylesheet and markup — `tools/panel-css.py` scopes the mockups' CSS and splices it into the script, and the suite pins two things: the CSS string equal to the tool's output, and the Analysis tab's skeleton for a subject equal to the mockup generator's (same sections, header parts, row parts, row counts). I rendered the real script in Chromium and compared it with your screenshot before shipping — it is the mockup. The scale control (1× / 1.55× / 2.1×) sits in each tab's foot; your docked panel is 531px wide and 1.55× wants ~940px, so pop it out or widen it for that view. …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 94 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (21:03):** Push is denied from this environment by organization policy (403 on origin) — the 94 commits are local and go up when `installv1562.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> the learning doc where you will add the screenshots that i will give you is like your learning brain. you will use it to become an analyst. i will aslo feed you vidoes, like youtube videos and you will learn from them and add it to your "brain". do you understand.  you can structure the documet as you see fit.
+
+**me (22:16):** Yes — I understand, and the framing is right: it *is* my brain in a literal sense. Nothing else carries over between sessions except what is written down, so the doc is not a record of the training — it is the only place the training exists. That is why the skill now forces every context to read it on load and why a test pins the file, the tab and the seed equal; a lesson that isn't in the file was never learned.
+
+Two things I'll change so it can hold what you're describing:
+
+**The shape.** Right now it's one chapter (deflection examples). I'll make it a brain with chapters, one index file (`learning/brain/BRAIN.md`) and one data file behind the Learn tab: (1) **what I've been told** — doctrine from your videos and docs, each claim with its source (video, timestamp, or document), (2) **what I've seen** — your screenshots, each leg checked against the record, (3) **the rules** that come out of the examples, with n / agree / weak / refute, (4) **the vocabulary** (rug, reverse rug, stack, beach ball, air pocket, gatekeeper, and "piku stack" once you tell me what it is), (5) **the factors I check** before calling anything, (6) **what the corpus has measured** (the F-numbers and the register), (7) **my blind-read log and the gauge**, and (8) **open questions for you**. Every claim in the brain carries a status that moves only one way on evidence: TOLD (a video said it) → SEEN (an example agreed) → MEASURED (a study or register row) — or REFUTED, kept and marked. That keeps someone's teaching separate from what the data has confirmed, which is the whole discipline of this project.
+
+**Videos.** I can take them through your Chrome tab: open the YouTube link, read the transcript, screenshot the frames at the moments that matter (or the timestamps you point me to), and write what …[trimmed]
+
+**OPERATOR:**
+> you also do an end of day review .. how do you do this.. do you really need to send it to another model via an api or can you just do it yourself and give it to the appropriate model ?  I am trying to figure out how to make this process easy by jut doing it end of day without relying on additional api's
+
+**me (22:21):** Good question, and the answer is simpler than the plumbing makes it look: **no other model and no API key are involved anywhere.** The "nightly LLM review" *is* me. There are two parts and only one of them is a machine:
+
+**1. The nightly — deterministic Python.** `tools/nightly/run.py` reads the day files and the register, judges the hypotheses at their minimum n, refreshes the tables (SWEEPS, the book table, base rates), copies your TRACK requests and Open Items into their files, and writes `learning/log/<day>.json`. No model, no network — it runs anywhere Python runs.
+
+**2. The review — a Claude session, i.e. me.** I read that log, the day file and the tables, and do the judgment work: turn a read into a register row, answer your SEEN items in the file, add the day's screenshots to the brain, write findings. That can be this session when you say "nightly review", or a **scheduled task** — this product can start a fresh session on a schedule (say 15:30 CT weekdays), and that session loads gex and does the review. That is the "give it to the appropriate model" part: it's already the same model, started on a timer, with no API of yours in between.
+
+What actually makes it work end-of-day is not the model, it's the two hand-offs across the cloud/your-machine line, because the cloud can't push:
+
+- **In:** at the close you hit 💾 Save with the 📁 repo folder set (so the day file lands in `data\`, not Downloads), and `pushdata.bat` — or the "GEX auto-pull" task if you ran `setup-gex-autopull.bat` — pushes it. Without that, the review has nothing to read.
+- **Out:** the review's files (the log, the register, the brain) have to get back into your repo. Today they ride the next installer. The easier path already exists in your tooling: the Drive inbox — I drop the files into your …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 94 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:22):** Push is denied from this environment by organization policy (403 on origin) — the 94 commits are local and go up when `installv1562.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> so what are the next steps .. give me steps like step 1 step 2
+
+**me (22:26):** Here's the whole loop as steps — yours are marked **you**, mine **me**.
+
+**Step 1 — Install (you, now).** Run `installv1562.bat`. It pushes the 94 local commits and lays the files down. Wait ~5 min, click the Tapereader link in Tampermonkey (Update), reload the Atlas tab — footer should read v15.62 and you should see seven tabs. Tell me "reloaded" and I'll probe it.
+
+**Step 2 — Point the panel at the repo folder (you, once).** Click 📁 in the panel footer and pick `C:\Dev\gex-signal-tapereader`. From then on 💾 Save writes the day file straight into `data\` instead of Downloads. (If it goes to Downloads, `pushdata.bat` moves it, so it's not fatal — just one more step.)
+
+**Step 3 — Save at the close (you, daily).** Around 15:05 CT click 💾 Save. You can do it for today right now — the panel holds what it recorded (the book from 12:57, the node events from 08:39).
+
+**Step 4 — Push (you, daily — or once, automated).** Run `pushdata.bat`. Or run `setup-gex-autopull.bat` one time: it installs the "GEX auto-pull" task that commits and pushes anything new every two minutes and picks up my files from the Drive inbox, so after that this step disappears.
+
+**Step 5 — The nightly (me).** Say "nightly review" (or, if you give me a time, I create a scheduled task that starts a session at that time each weekday — it asks for your approval once). I run `tools/nightly/run.py`, read the log and the day file, judge what can be judged, answer your SEEN Open Items, add the day's screenshots to the brain, and write the findings.
+
+**Step 6 — Delivery back to you (me).** With the auto-pull task in place I drop the review's files into your `GEX-inbox` Drive folder and your machine commits them within two minutes; without it they ride the next installer. Next morning the panel fetches them — Testin …[trimmed]
+
+**OPERATOR:**
+> i clicked the folder and selected the destination and clicked save.  can the rest be automated . can you run pushdata ?
+
+**me (22:33):** Yes — and most of it just happened, because your folder is now connected to this session (you approved `C:\Dev\gex-signal-tapereader` a minute ago). Here's what I did and where the one remaining gap is.
+
+**What ran tonight, without any push:**
+1. I checked `data\` on your machine — your Save landed: `2026-09-03.json` (5.7 MB, the full session: the book from 08:36 to 14:57, 899 node events). I also found `2026-09-01.json` and `2026-09-02.json` sitting there unpushed since the 31st — the review had never seen them.
+2. I pulled all three over the bridge into the cloud and ran the nightly (`tools/nightly/run.py`): the log for today is written, SWEEPS and the book table refreshed — the book corpus is now **11 sessions**. Verdicts: 1 session since the register date, so H1–H4, H6, H7 are all still thin; **H5 is READY** — the deflection ledger reached 51 events (needs 50), so its join (does a top-5 node move the HOD/LOD cell?) can be run — that is tomorrow's review job, it needs the join code written, not a nightly button. One thing to watch: the HOD/LOD live column read 0% today in two cells where the table says 99–100% (n=13, 15, one session) — too early to call, but it's the F-11 shape and I've flagged it.
+3. I wrote the results straight back into your repo folder: `learning\log\2026-09-03.json` and `data\es-1min\SWEEPS-BOOK.json`. No installer, no Drive.
+
+**The gap — running `pushdata.bat`:** the folder link lets me read and write files on your machine but not run programs, so I can't execute the .bat from here. Two ways to close it:
+
+- **Tonight:** just run `installv1562.bat` — its last step is `git add -A` + commit + push, which is exactly what `pushdata.bat` does, so it pushes the three day files and tonight's log along with the build. One .bat, not two.
+- **Permanently: …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 95 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:33):** Push is denied from this environment by organization policy (403 on origin) — the 95 commits are local and go up when `installv1562.bat` runs on your machine (it does `git add -A`, commit, push — pushdata's job included). Not retrying, per the standing rule.
+
+**OPERATOR:**
+> i thought i ran install v1562..  can you give me the autopull file so i can run it just once.
+
+**me (22:38):** You did run it — I checked your repo's git log over the bridge: the commit **"v15.62: the mockups look…"** is there at 17:16 CT and it's on GitHub (I can fetch from the cloud, just not push). So your panel should show v15.62 after a reload; tell me "reloaded" and I'll probe the seven tabs. Also visible in that log: a **"data: daily export"** commit at 15:30 — you already have a scheduled task that pushes `data\` once a day, which is why the three day files were on GitHub. What that task doesn't cover is anything outside `data\` — the nightly's log and tables I write into your folder, which would otherwise wait for the next installer.
+
+**The run-once file is in your repo folder now:** `C:\Dev\gex-signal-tapereader\setup-gex-sync.bat` (with `tools\gex-sync.bat` beside it). Double-click it once. It creates a Windows task **"GEX sync"** that runs every 2 minutes under your login and commits + pushes *anything* new in the repo — the day file you Save at the close, the log and tables I write over the bridge, a Drive-inbox drop if one is ever there. Nothing new → it does nothing. It removes the old "GEX auto-pull" task if it exists (that one only fired on a Drive drop, so it wouldn't have pushed the bridge-written files — I had that wrong earlier). No PowerShell; its own log is `tools\gex-sync.log`, and it never commits that log.
+
+After that, your end of day is one click: 💾 Save. I pull the file over the bridge, run the nightly, write the results into your folder, the task pushes them within two minutes, and the panel fetches them next morning. Tonight's log (`learning\log\2026-09-03.json`) and the refreshed book table are already sitting in your folder waiting for the task's first run.
+
+The one thing I'd still like from you is a time for the review session itself (Step 5) — s …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 96 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:38):** Push is denied from this environment by organization policy (403 on origin) — the 96 commits are local; the files reach GitHub through your machine (the installer, and now the GEX sync task once you've run its setup). Not retrying, per the standing rule.
+
+**OPERATOR:**
+> ok.. check..  so from now on i will just click the save button end of day and you can take care of everything else.  make sure you update the architecture to include this so your future sessions / contexts are aware of this also.
+> I also noticed that you did not have king deflection in the setups .  this is a bread and button setup so make sure you have a king deflection setup and also indivual king deflection setups like qqq king, spy king and spx king and track this religiously .
+> 
+> _[sent while I was working — a queued message]_
+
+**me (22:46):** Now the prose the future contexts read — PROCESS.md, the skill, the resume note, DATA-ARCHITECTURE — then delivery over the bridge.
+Now the record (LESSONS, chat history), commit, and delivery of everything to your repo folder over the bridge.
+
 ### DECISIONS
+
+**2026-09-03 evening · the end of day, the sync task, the King deflection setup.**
+- "so what are the next steps" → the seven steps; "can the rest be automated, can you run pushdata?" → his folder
+  approved for the session; the day files came over the bridge (09-01, 09-02 had never been pushed), the nightly ran,
+  the log and the book table went back over the bridge. I cannot run a .bat through the folder link; the installer's
+  `git add -A` + push does pushdata's job; for permanence `setup-gex-sync.bat` — he ran it, "GEX sync" is live
+  (`gex: sync 03-Thu-09 17:39` on GitHub). Corrected myself: the old auto-pull never pushed local changes.
+- "from now on i will just click the save button end of day and you can take care of everything else. make sure you
+  update the architecture" → PROCESS.md ①–⑤ + §5b, the plan's stages ②③④ (the ⚙ tab), skill 1a-00e,
+  DATA-ARCHITECTURE, the resume note. His one step: 💾 Save. Open: the review session's time of day.
+- "you did not have king deflection in the setups. this is a bread and butter setup … track this religiously" → S0.1–S0.7
+  in the registry (any King · SPX · SPY · QQQ · growth into the tap · the rolled King · ±γ), the `king` factor per book
+  and L9 in the brain; the per-book ledger rows are v15.63's measurement. "piku stack" = S7 Pika cloud · cluster.
+- The review: H2.10f rewritten on the 11-session table (AT a node 25% n=12 vs NOT 38% n=8 — thin); H5 READY (51
+  ledger events) — the join is the next review job; the HOD/LOD live column read 0% in two cells (n=13/15, one
+  session) — watched, not called.
 
 **v15.62 · the mockups' look, the 📚 Learn tab, four taught examples (2026-09-03, evening).**
 - His third ask for the mockups' look and feel. Decision: no more re-typing — the tabs render in the mockup generators'
@@ -904,6 +1090,11 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**(same day, no version bump)** — `tools/gex-sync.bat` + `setup-gex-sync.bat` (on his machine, task live), the
+nightly's outputs for 09-03 over the bridge, S0 in `tools/studies-seed.py` → `learning/studies.json`, the brain's
+`king` factor + L9, the plan's ②③④, PROCESS §1/§2/§5b, skill 1a-00e, DATA-ARCHITECTURE, the resume note, CHANGELOG,
+LESSONS; STUDIES_SEED / PLAN_SEED / LEARN_SEED re-spliced into the v15.62 script; test_v1556 reads the corpus size.
+
 **v15.62** — `tools/panel-css.py` (+ `--splice`), `PANEL_CSS`, `panOpen/panSection/panRow/panNote/panFoot`,
 `panelScale/setPanelScale` + the `data-gscale` control, the Analysis / Testing renderers in the mockup's classes, the
 seven-tab `.tabs` bar, `ensureV3Css()` from `panOpen()`; `tools/learn-seed.py` → `learning/deflections/examples.json`
@@ -1093,6 +1284,10 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+- The review session's time of day (a scheduled task) — his call. Until then: "nightly review" in a session.
+- 💾 with the repo root picked writes `<root>\<day>.json` — he should re-pick the `data` folder; v15.63 handles both.
+- v15.63: the deflection candidate score + the per-book King rows from the ledger (S0.1–S0.4) + the H5 join.
 
 - **He has not installed since v15.58** — `installv1562.bat` carries 15.59–15.62. After his reload: probe the seven
   tabs, the ladder's context rows, the Learn tab's images (raw GitHub loads on Skylit — checked), the scale control.
@@ -1321,7 +1516,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
-f514e4a v15.62: the mockups' look is the panel's look (tools/panel-css.py → PANEL_CSS, the skeleton pin, the scale control) · the 📚 Learn tab — the deflection learning doc (tools/learn-seed.py → examples.json + LEARNING.md + img/), four taught examples checked against the record (tools/node-lookup.py), eight rules, the 0–100 gauge that cannot flatter; plan: 15.63 the deflection candidate score
+8e78c8f review 2026-09-03: H2.10f on the 11-session book table; LESSONS (the bridge is the pipe); test_v1556 reads the corpus size from the file
+fa7a8ae the end of day over the desktop bridge (PROCESS ①–⑤ + §5b, the plan's ②③④, skill 1a-00e, DATA-ARCHITECTURE, resume note) · S0 King deflection per book in the registry · the king factor + L9 in the brain · seeds re-spliced · nightly re-run on the fuller 09-03 save
+5f8300a GEX sync: a 2-minute Windows task that commits and pushes anything new in the repo (day files, the nightly's files written over the bridge, Drive drops) — replaces the Drive-only auto-pull; setup-gex-sync.bat run once
+e549ead nightly 2026-09-03: day files 09-01..09-03 (from his machine over the bridge), the log, SWEEPS + SWEEPS-BOOK refreshed (11 book sessions); H5 READY at 51 deflection events
+0ac7c44 v15.62: the mockups' look is the panel's look (tools/panel-css.py → PANEL_CSS, the skeleton pin, the scale control) · the 📚 Learn tab — the deflection learning doc (tools/learn-seed.py → examples.json + LEARNING.md + img/), four taught examples checked against the record (tools/node-lookup.py), eight rules, the 0–100 gauge that cannot flatter · plan: 15.63 the deflection candidate score · chat history (queued messages seen) · suite stamp
 466798a v15.61: the ladder floor — never fewer than 8 strikes when the tape has them; sub-threshold strikes drawn dimmed as CONTEXT rows, display only (the engine's node set unchanged); plan re-numbered (score the READ → 15.62 … pullback → 15.67); SCORE stage reads the plan's version; chat-history generator compaction-safe; suite stamp; LESSONS; chat history
 364a09f suite stamp v15.60
 92da907 v15.60: chat history
@@ -1329,10 +1528,6 @@ f514e4a v15.62: the mockups' look is the panel's look (tools/panel-css.py → PA
 7787e99 suite stamp v15.59
 4466239 v15.59: chat history
 09bb216 config: LESSONS stays first in tier 0 (its test pins it); PURPOSE, PROCESS, ROADMAP follow; projectFiles = the union
-cd37df9 v15.59: chat history
-d4eeed9 v15.59: the ⚙ Architecture and 🗺 Roadmap tabs — the WHAT, the HOW (as live status) and the plan inside the app, from learning/plan.json; docs, file and seed pinned equal
-dfbd416 chat history
-f06f9c6 config: PURPOSE, PROCESS, ROADMAP lead tier 0
 ```
 
 ---

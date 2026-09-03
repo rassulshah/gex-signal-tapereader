@@ -21,13 +21,21 @@ tap, what the measurements support — with n, or "unmeasured".
 ```
  ①  RECORD   the panel records every bar's book and price (snaps), every tap (defl ledger), every
              scored feature (feat) and what he asked to be tracked (requests)          ← the browser
- ②  EXPORT   Save writes data/<day>.json — the day, the book, the ES bars, the requests   ← the browser
- ③  PUSH     push-data.bat / the installer push it to GitHub (the cloud cannot push)     ← his machine
- ④  NIGHTLY  tools/nightly/run.py reads every day file + the register:
+ ②  EXPORT   he clicks 💾 Save at the close — THE ONE MANUAL STEP OF THE DAY; the panel writes
+             data/<day>.json into the folder picked with 📁 (pick the DATA folder)              ← the browser
+ ③  PUSH     the GEX sync task (tools/gex-sync.bat, a Windows task every 2 minutes, installed
+             2026-09-03 by setup-gex-sync.bat) commits and pushes ANYTHING new in the repo: the
+             day file, the review's files written over the desktop bridge, a Drive drop. The old
+             daily "data: daily export" task still runs at ~15:30. The cloud can fetch, never push  ← his machine
+ ④  NIGHTLY  Claude (no other model, no API): pulls the day file over the desktop bridge when his
+             app is linked (mcp__remote-devices, folder C:\Dev\gex-signal-tapereader) or from GitHub
+             after the sync; runs tools/nightly/run.py, which reads every day file + the register:
              verdicts per hypothesis (read ONCE at minN, sessions from the register date),
              refreshes the tables (SWEEPS.json, SWEEPS-BOOK.json, BASERATES.json),
-             copies TRACK requests into learning/requests.json, writes learning/log/<day>.json  ← the cloud
- ⑤  REVIEW   the LLM reads the log, the tables, the requests and the day file; turns a READ into a
+             copies TRACK requests into learning/requests.json, writes learning/log/<day>.json;
+             then writes the log and the tables BACK INTO HIS REPO FOLDER over the bridge
+             (device_commit_files) — the sync pushes them within two minutes; no installer needed  ← the cloud
+ ⑤  REVIEW   Claude reads the log, the tables, the requests and the day file; turns a READ into a
              register row (predict + refuteIf fixed BEFORE the next session), a request into a study
              row (studies.json, req:<id>), a refuted rule into a retirement; writes FINDINGS      ← the cloud
  ⑥  REGISTRY studies.json (subjects → subsections → studies, status + result WITH n) and
@@ -69,8 +77,12 @@ against the record, the examples become rules, the rules become the deflection s
 | `data/es-1min/BASERATES.json` | `tools/study-hodlod.py` | ⓪a DAY table (E row), Analysis H1 |
 | `skylit-docs/FINDINGS.md` | the review | every context (the measured facts, F-1 … F-16) |
 
-**Rule: a file the cloud writes exists only when the installer carries it.** `test_installer_manifest.js`
-pins the builder's `--list` against every `pipeFetch` path in the panel.
+**Rule: a file the cloud writes exists only when it reaches his machine.** Two roads: the installer
+(`test_installer_manifest.js` pins the builder's `--list` against every `pipeFetch` path in the panel) for
+builds, and — since 2026-09-03 — the desktop bridge for the nightly's files (written straight into
+`C:\Dev\gex-signal-tapereader\…`, pushed by the GEX sync task). The bridge needs his desktop app open and
+the folder approved for the session (`device_request_folder_access`, one prompt); when it is not, the files
+wait for the next installer. Either way the cloud's git history never reaches GitHub — only files do.
 
 ## 3 · The rules the machinery enforces (and the test that enforces each)
 
@@ -126,6 +138,20 @@ pins the builder's `--list` against every `pipeFetch` path in the panel.
    working tree), run the smoke test on it — the suite reads the tree; the operator runs the payload.
 8. **Data-quality checks on the face**: courier age, ratio drift, gaps in the ES bars, the book's
    age — a store that is stale says so beside the number it feeds.
+
+## 5b · The end of day, as it runs now (2026-09-03)
+
+```
+ 15:05 CT   he clicks 💾 Save                                   → data/<day>.json in the repo folder
+ +2 min     the GEX sync task commits + pushes it                → GitHub
+ evening    Claude: bridge (or fetch) → run.py → the review → writes the log, the tables, the brain
+            into his repo folder over the bridge                → the sync pushes within 2 min
+ morning    the panel fetches the log, the tables, the registry, the plan, the brain from GitHub raw
+```
+His words: *"from now on i will just click the save button end of day and you can take care of everything
+else."* A scheduled task for the review session (his time of day) is the one piece still to set; until
+then "nightly review" in a session does it. Today's stray: 💾 with the REPO root picked writes
+`<root>\<day>.json` — pick the `data` folder (v15.63 makes the panel write into `data\` under either).
 
 ## 6 · The standing process constraints (operator-mandated)
 

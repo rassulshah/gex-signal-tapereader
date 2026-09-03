@@ -27,7 +27,8 @@ The gauge is defined so it cannot flatter: identify is the Wilson lower bound of
 |---|---|
 | **NEW NODE** | a strike that was not on the ladder (below the 20% threshold) and crossed it — born within the last ~30 bars |
 | **GROWTH INTO THE TAP** | the node's $ exposure rising in the 15 minutes before price reached it (the recorder's d15 > 0, the chart's marker getting brighter) |
-| **HEAVY** | the King, or a node ≥ 50% of the King |
+| **KING DEFLECTION** | the tap is of THE King — and which book's: SPX (SPXW, the flow book), SPY, or QQQ. His bread-and-butter setup (studies S0.1–S0.7); tracked per book, religiously |
+| **HEAVY** | a node ≥ 50% of the King that is not the King |
 | **ROLL** | mass moving strike to strike toward or away from price (the ⇄ column; ROLL events) |
 | **RUG / REVERSE RUG** | a node that vanishes (dissipates) as price arrives — the floor pulled — or one that appears under price as it falls |
 | **STACK** | two or more nodes within a few points, acting as one wall |
@@ -45,6 +46,7 @@ Which node caused it, first: look it up in the record (strike, %King, $ exposure
 - **L4 · PROPOSED (n=2: 2 agree · 0 weak · 0 refute; from E001, E002).** A node's SIDE FLIPS when price crosses it: the earlier resistance node re-growing under price is the pullback support. Look for the re-growth (a TURN_UP after a decay), not for a new strike. *E001 Pb (7740: 80% resistance at 10:16 → decayed → support from 10:42 → re-grew from 11:15 → held 12:36); E002 c4 (7675 pierced at 13:39 'above' then reclaimed 'below', then the King).*
 - **L5 · PROPOSED (n=5: 4 agree · 1 weak · 0 refute; from E002, E003, E004).** A −γ node growing next to price ACCELERATES price away from it — a −γ node under price is a launch pad, above price a lid; it does not hold price the way a +γ node does. *E002 c2 and c4 (−γ under price → up), E003 c5 (−γ 7705 under the 14:00 low → up), E004 c2 (−γ King 7735 above the 10:16 high → down). Unclear: E003 c3 (−γ 7710 at ES 7718 grew after the 12:06 low while price sat on it — the +γ King above was pulling).*
 - **L6 · CONFIRMED (n=3: 3 agree · 0 weak · 0 refute; from E001, E002, E004).** A STACK — two nodes within ~5 ES points, both growing — marks the extreme of the leg more reliably than a single node. *E001 Pb (7735 + 7740, $61M + $81M), E002 c1 (7665 + 7670 + 7675 −γ, the session low), E004 c3 (7745 + 7750, $73M + $46M, the session high 5 pts between them).*
+- **L9 · PROPOSED (n=6: 6 agree · 0 weak · 0 refute; from E001, E002, E003, E004).** THE KING DEFLECTION is the bread-and-butter setup: a tap of the King — SPX, SPY or QQQ King, each its own row — is the base case every other setup is measured against. Track every King tap with its book, its growth into the tap (d15), its sign, and the outcome. *His words, 2026-09-03: 'this is a bread and butter setup … track this religiously.' In the four taught days 6 of 16 circled legs were taps of the King and all six deflected (E001 R1, R2 — the SPX King 7750; E002 c4 — 7675 as it became the King; E003 c1 — 7750 at the open, c3 — the King rolled onto price; E004 c2 — the −γ King 7735). That is selection, not a rate: he circled deflections, not every tap. The rate comes from the ledger (S0.1–S0.4), per book, at n ≥ 15.*
 - **L7 · PROPOSED (n=16: 10 agree · 6 weak · 0 refute; from E001, E002, E003, E004).** TIME OF DAY: the taught deflections cluster in the first hour and in the noon window (12:00–13:15 CT) — 3 and 7 of 16 legs. An observation to measure on the 284-session corpus, not a rule to trade. *First hour: E002 c1 09:27, E003 c1 08:42–09:00, E004 c1 08:45–09:10. Noon: E001 R2 11:57–12:06, Pb 12:20–12:36, R3 13:12; E002 c3 12:51–13:24; E003 c3 12:06, c4 13:12; E004 c3 12:10. The sweep corpus already says the first 30 minutes matter (27% vs 18%, n=180).*
 
 ## 4 · The examples
@@ -61,8 +63,8 @@ Which node caused it, first: look it up in the record (strike, %King, $ exposure
 
 | leg | kind | side | when | price | node | factors | what the record says |
 |---|---|---|---|---|---|---|---|
-| R1 | PULLBACK | resistance | 10:42–11:12 CT | ES 7755–7758 | SPXW 7750 (the King, ES 7758) | growth, heavy | 10:00 56% $17M decaying → 10:06 King $40M → 10:18 $77M → 10:33 $101M → $116M at 10:42, the first tap bar; d15 +$40–54M. Two taps, held. |
-| R2 | PULLBACK | resistance | 11:57–12:06 CT | ES 7757–7758 | SPXW 7750 (the King) | growth, heavy | $180–204M, still +$20–30M/15m through the retests. Held. |
+| R1 | PULLBACK | resistance | 10:42–11:12 CT | ES 7755–7758 | SPXW 7750 (the King, ES 7758) | king, growth | 10:00 56% $17M decaying → 10:06 King $40M → 10:18 $77M → 10:33 $101M → $116M at 10:42, the first tap bar; d15 +$40–54M. Two taps, held. |
+| R2 | PULLBACK | resistance | 11:57–12:06 CT | ES 7757–7758 | SPXW 7750 (the King) | king, growth | $180–204M, still +$20–30M/15m through the retests. Held. |
 | Pb | PULLBACK | support | 12:20–12:36 CT | low ES 7744–7746 | SPXW 7740 (ES 7748) + 7735 (ES 7743) | growth, side, stack | 7740: $57M at 12:00 → $72M 12:30 → $81M at 12:36 (the tap bar) → $90–94M by 12:51, d15 +$13–21M into the tap; 7735 $47M → $61M into 12:09. NOT born out of nowhere in the record: 7740 was an 80% resistance node at 10:16, decayed to ~40% by 10:33, flipped to support at 10:42, and re-grew from a TURN_UP at 11:15 — the re-growth is what looked new. (His 'just before 11 am' does not match the record; asked which node he meant.) |
 | R3 | HOD | resistance | 13:12–13:33 CT | ES 7763–7765 (the session high) | SPXW 7755 (ES 7763) — fresh — over the King 7750 | new, growth, magnet, heavy | 7755 crossed the 20% threshold at 12:48 ($49–56M, d15 +$11–12M): new on the ladder, and the high printed at it. Under it the King went $237M → $345M between 13:00 and 13:33 (+$37…+92M/15m) with price above it; price was back at 7762 → 7756 by 14:23 ($568M). |
 
@@ -70,7 +72,7 @@ Which node caused it, first: look it up in the record (strike, %King, $ exposure
 
 **My blind call:** none — taught with the answer; not scored.
 
-**Rules touched:** L1, L2, L3, L4, L6, L8.
+**Rules touched:** L1, L2, L3, L4, L6, L8, L9.
 
 **Open:** which node he meant by 'new node growth just before 11 am' — the record shows 7740 re-growing from 11:15, not a birth before 11:00.
 
@@ -89,13 +91,13 @@ Which node caused it, first: look it up in the record (strike, %King, $ exposure
 | c1 | LOD | support | 09:24–09:33 CT | low ES 7674.75 at 09:27 (the session low) | SPXW 7665 (ES 7673) + 7670 (ES 7678) + 7675 (ES 7683), all −γ | new, growth, stack | A fresh −γ stack under price: 7670 born 09:21 (−$6M → −$8M at 09:27, d15 −3), 7665 born 09:27 (−$5M), 7675 −$15M → −$20M (50% of the King) at 09:27, d15 −2. The King was 7700 / 7650 flipping. Bounce to 7688 by 09:42. |
 | c2 | PULLBACK | support | 11:00–11:09 CT | low ES 7677.25 at 11:06 | SPXW 7670 (ES 7678, −γ) | side | 7670: −$13M (11:00) → −$17M (11:03, 48%) → −$14M (11:06, side 'above' = price pierced it) → −$11M (11:09) → reclaimed ('below') at 11:12. Growth into the tap was weak (d15 −1 … −2); the node shrank as price pierced it and price came back up through it. The weakest of the four. |
 | c3 | PULLBACK | resistance | 12:51–13:24 CT | high ES 7694–7695.75 (his circle sits on the 7698 PDC line — the close, drawn in hindsight) | SPXW 7685 (ES 7693) + 7690 (ES 7698) + 7695 (ES 7703), +γ | growth, stack | 7685 grew $12M → $23M into the tap (d15 +12 … +15M at 13:03–13:15, 16% → 21%); 7695 $33–39M flat; 7690 $21–28M slow. Price held 7692–7696 for 30 minutes and fell to 7680 by 13:42. |
-| c4 | PULLBACK | support | 13:36–13:51 CT | lows ES 7679.75–7680 (13:42–13:51) | SPXW 7675 (ES 7683, −γ) — became the King at 13:39 — + 7670 (ES 7678) | growth, heavy, stack, side | 7675: −$27M (13:33, 52%) → −$39M King (13:39) → −$58M (13:51) → −$65M (13:57) → −$116M by 14:33, d15 −$24 … −48M: the biggest growth of the day, under price; 7670 −$21M → −$40M (88–90%) 13:39–14:06. Price pierced 7683 ('above' at 13:39–13:48), reclaimed, then rallied AWAY from the growing −γ King into the 14:59 high 7708 — the −γ King did not pull price back (L3's sign condition). |
+| c4 | PULLBACK | support | 13:36–13:51 CT | lows ES 7679.75–7680 (13:42–13:51) | SPXW 7675 (ES 7683, −γ) — became the King at 13:39 — + 7670 (ES 7678) | king, growth, stack, side | 7675: −$27M (13:33, 52%) → −$39M King (13:39) → −$58M (13:51) → −$65M (13:57) → −$116M by 14:33, d15 −$24 … −48M: the biggest growth of the day, under price; 7670 −$21M → −$40M (88–90%) 13:39–14:06. Price pierced 7683 ('above' at 13:39–13:48), reclaimed, then rallied AWAY from the growing −γ King into the 14:59 high 7708 — the −γ King did not pull price back (L3's sign condition). |
 
 **The call:** LOD then PULLBACK ×3 — the LOD at a fresh −γ stack; two supports and one resistance off growing nodes; the afternoon −γ King grew under price and price ran away from it.
 
 **My blind call:** none — taught with the answer; not scored.
 
-**Rules touched:** L1, L2, L3, L4, L5, L6.
+**Rules touched:** L1, L2, L3, L4, L5, L6, L9.
 
 ### E003 — 2026-08-28 · ES1 · Skylit · 3-min · Aug 28 (the levels PDH 7755.5 · PDC 7741.25 · PDL 7702.75 are Aug 27's; IB 7743.75–7756.25)
 
@@ -109,9 +111,9 @@ Which node caused it, first: look it up in the record (strike, %King, $ exposure
 
 | leg | kind | side | when | price | node | factors | what the record says |
 |---|---|---|---|---|---|---|---|
-| c1 | PULLBACK | resistance | 08:42–09:00 CT | ES 7757–7760.5 | SPXW 7750 (the King, ES 7758) | heavy | The King at the open (08:36 7750; briefly 7790 at 08:39; 7750 again 09:00). At 09:09, the first event: 93–100%, $14M, stage Delivered, 3 taps — the circle IS those three taps. Growth into the taps is in the blind minutes before 09:09; from 09:09 it grew $14M → $34M by 09:48 while price fell to 7732 and came back. Price went through it at 09:42 (side 'below' from 09:45) and never returned. |
+| c1 | PULLBACK | resistance | 08:42–09:00 CT | ES 7757–7760.5 | SPXW 7750 (the King, ES 7758) | king | The King at the open (08:36 7750; briefly 7790 at 08:39; 7750 again 09:00). At 09:09, the first event: 93–100%, $14M, stage Delivered, 3 taps — the circle IS those three taps. Growth into the taps is in the blind minutes before 09:09; from 09:09 it grew $14M → $34M by 09:48 while price fell to 7732 and came back. Price went through it at 09:42 (side 'below' from 09:45) and never returned. |
 | c2 | HOD | resistance | 10:00 and 10:24–10:30 CT | high ES 7782.25 at 10:00, 7779.5 at 10:30 (the session high) | SPXW 7775 (ES 7783) fresh; the King had rolled UP to 7790 (ES 7798) | new, growth, roll | 7775 born 09:33 (8%) → $9M → $25M by 09:57 (+$13–15M/15m, 46–60% of the King) and STOPPED at the high (10:00 d15 +3, 10:06 +0; 37% as the King outgrew it). The King rolled 7750 → 7790 at 09:51–09:54 ($39M → $57M, +$24–34M/15m), 15 pts above price. The high printed at the fresh node whose growth stalled, under a King price never reached. Then blind until 12:12. |
-| c3 | PULLBACK | support | 12:00–12:30 CT | low ES 7714.25 at 12:06 | the King rolled DOWN 7790 → 7715 (ES 7723) onto price; 7710 (ES 7718, −γ) grew after | roll, magnet, heavy | At 12:12 the King was 7715 at $52M (from 7790 during the blind gap) — 9 pts above the low. 7705 (ES 7713) was not on the board (not in the top 90) until 13:42; 7700 (ES 7708) +$9M small; 7710 (−γ) −$7M → −$19M over 12:18–12:42. The bounce went straight to the King's price: 12:36 7722–7723.5, then 7722–7726 for 40 minutes ON it — pulled up to the King (L3). |
+| c3 | PULLBACK | support | 12:00–12:30 CT | low ES 7714.25 at 12:06 | the King rolled DOWN 7790 → 7715 (ES 7723) onto price; 7710 (ES 7718, −γ) grew after | king, roll, magnet | At 12:12 the King was 7715 at $52M (from 7790 during the blind gap) — 9 pts above the low. 7705 (ES 7713) was not on the board (not in the top 90) until 13:42; 7700 (ES 7708) +$9M small; 7710 (−γ) −$7M → −$19M over 12:18–12:42. The bounce went straight to the King's price: 12:36 7722–7723.5, then 7722–7726 for 40 minutes ON it — pulled up to the King (L3). |
 | c4 | PULLBACK | resistance | 12:54–13:18 CT | high ES 7726.5 at 13:12 (at the SMA 50) | SPXW 7720 (ES 7728) fresh, over the King 7715 (ES 7723) | new, growth | 7720 born 12:39 (13%) → $13M (12:45, 20%) → $24M (13:15, 45%) → $29M (13:27, 54%), d15 +$9–11M into the tap; the King under it was DECAYING 13:03–13:21 (d15 −7 … −15M). Price fell from 7726 to 7714 by 14:00. |
 | c5 | PULLBACK | support | 13:54–14:06 CT | low ES 7713.75 at 14:00 | SPXW 7705 (ES 7713, −γ) fresh; 7710 (ES 7718, −γ) dissipating above it | new, growth, rug, magnet | 7705 appeared 13:42 (−$18M, 31%) → −$24M (13:45, 38%, d15 −14M) → −$20M (13:48); 7710 above it went −$36M (13:42) → −$10M (13:51) — dissipating as price fell into it; the King flickered to 7690 (13:48–13:51) then back to 7715. Bounce to 7722–7726 by 14:30–14:42 — back to the King again. |
 
@@ -119,7 +121,7 @@ Which node caused it, first: look it up in the record (strike, %King, $ exposure
 
 **My blind call:** none — taught with the answer; not scored.
 
-**Rules touched:** L1, L2, L3, L5, L8.
+**Rules touched:** L1, L2, L3, L5, L8, L9.
 
 **Open:** the 10:06–12:12 gap hides how the King rolled from 7790 to 7715 — the roll itself may be the tell for the 12:06 low.
 
@@ -136,14 +138,14 @@ Which node caused it, first: look it up in the record (strike, %King, $ exposure
 | leg | kind | side | when | price | node | factors | what the record says |
 |---|---|---|---|---|---|---|---|
 | c1 | PULLBACK | support | 08:45–09:10 CT | ES 7708–7714 (after the 08:35 low 7702.75) | SPXW 7700 (ES 7708), +γ, fresh; the King 7740/7745 (ES 7748/7753) far above | new, growth, magnet | 7700: $3M (08:45, 22%) → $4M → $7M at 08:57 (50%, d15 +8M) — a small fresh +γ node growing right under price; 7705 −γ tiny. The King sat 35–45 pts above at 7740/7745 — and price rallied to it (7743 at 10:16). |
-| c2 | PULLBACK | resistance | 10:13–10:22 CT | high ES 7742.75 at 10:19 | SPXW 7735 (the King, ES 7743, −γ) | growth, heavy | The −γ King: −$30M (09:54) → −$37M (10:00) → −$44M at 10:18, the tap bar (d15 −9M: growing into the tap) → dissipating after (10:30 d15 +12M, 10:36 +15M, −$27M) as price fell to 7731. Price met the King's price to the point and turned. |
+| c2 | PULLBACK | resistance | 10:13–10:22 CT | high ES 7742.75 at 10:19 | SPXW 7735 (the King, ES 7743, −γ) | king, growth | The −γ King: −$30M (09:54) → −$37M (10:00) → −$44M at 10:18, the tap bar (d15 −9M: growing into the tap) → dissipating after (10:30 d15 +12M, 10:36 +15M, −$27M) as price fell to 7731. Price met the King's price to the point and turned. |
 | c3 | HOD | resistance | 11:55–12:20 CT | high ES 7755.5 at 12:10 (the session high) | SPXW 7745 (ES 7753) + 7750 (ES 7758), +γ stack, 10–15 pts above the King 7735 | growth, stack, magnet | 7745: $34M (11:30) → $51M (11:39, d15 +26M) → $72M (12:06, +19M) → $73M (12:15) — the biggest +γ node, growing into the tap; 7750 $26M → $46M then decaying from 12:15 (−7, −13M). The high printed between the two (7753 / 7758). Price fell back to the King's price (7733 by 13:00). |
 
 **The call:** PULLBACK ×2 then HOD — a fresh support node under price with the King far above pulling; the King itself as the first resistance; the HOD at a growing +γ stack, and the return to the King.
 
 **My blind call:** none — taught with the answer; not scored.
 
-**Rules touched:** L1, L2, L3, L6, L7, L8.
+**Rules touched:** L1, L2, L3, L6, L7, L8, L9.
 
 ## 5 · What the corpus already says (my priors, before his first example)
 

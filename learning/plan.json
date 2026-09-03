@@ -72,7 +72,7 @@
    "n": 2,
    "id": "EXPORT",
    "who": "browser",
-   "what": "Save writes the day file — the day, the book, the ES bars, the requests",
+   "what": "he clicks 💾 Save at the close — the ONE manual step of the day; the panel writes data/<day>.json into the repo folder picked with 📁 (pick the data folder)",
    "writes": "data/<day>.json",
    "probe": "saved"
   },
@@ -80,7 +80,7 @@
    "n": 3,
    "id": "PUSH",
    "who": "his machine",
-   "what": "push-data.bat / the installer push to GitHub — the cloud cannot push",
+   "what": "the GEX sync task (tools/gex-sync.bat, every 2 minutes since 2026-09-03) commits and pushes anything new — the day file, the review's files written over the desktop bridge; the cloud can fetch but never push",
    "writes": "GitHub main",
    "probe": "pushed"
   },
@@ -88,7 +88,7 @@
    "n": 4,
    "id": "NIGHTLY",
    "who": "cloud",
-   "what": "verdicts per hypothesis (read ONCE at minN), refreshes the tables, copies TRACK requests and open items, writes the log",
+   "what": "Claude pulls the day file over the desktop bridge (or from GitHub after the sync), runs tools/nightly/run.py — verdicts per hypothesis (read ONCE at minN), the tables refreshed, TRACK requests and open items copied, the log written — and writes the results back into the repo folder over the bridge; no other model, no API",
    "writes": "learning/log/<day>.json · SWEEPS*.json · requests.json · items.json",
    "probe": "nightly"
   },

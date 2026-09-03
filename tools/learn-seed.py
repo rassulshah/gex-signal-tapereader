@@ -32,7 +32,8 @@ RATE_MIN_N = 15
 FACTORS = [
     {"id": "new",    "name": "NEW NODE",            "what": "a strike that was not on the ladder (below the 20% threshold) and crossed it — born within the last ~30 bars"},
     {"id": "growth", "name": "GROWTH INTO THE TAP", "what": "the node's $ exposure rising in the 15 minutes before price reached it (the recorder's d15 > 0, the chart's marker getting brighter)"},
-    {"id": "heavy",  "name": "HEAVY",               "what": "the King, or a node ≥ 50% of the King"},
+    {"id": "king",   "name": "KING DEFLECTION",     "what": "the tap is of THE King — and which book's: SPX (SPXW, the flow book), SPY, or QQQ. His bread-and-butter setup (studies S0.1–S0.7); tracked per book, religiously"},
+    {"id": "heavy",  "name": "HEAVY",               "what": "a node ≥ 50% of the King that is not the King"},
     {"id": "roll",   "name": "ROLL",                "what": "mass moving strike to strike toward or away from price (the ⇄ column; ROLL events)"},
     {"id": "rug",    "name": "RUG / REVERSE RUG",   "what": "a node that vanishes (dissipates) as price arrives — the floor pulled — or one that appears under price as it falls"},
     {"id": "stack",  "name": "STACK",               "what": "two or more nodes within a few points, acting as one wall"},
@@ -62,6 +63,9 @@ RULES = [
     {"id": "L6", "rule": "A STACK — two nodes within ~5 ES points, both growing — marks the extreme of the leg more reliably than a single node.",
      "from": ["E001", "E002", "E004"], "status": "CONFIRMED", "n": 3, "agree": 3, "weak": 0, "refute": 0,
      "note": "E001 Pb (7735 + 7740, $61M + $81M), E002 c1 (7665 + 7670 + 7675 −γ, the session low), E004 c3 (7745 + 7750, $73M + $46M, the session high 5 pts between them)."},
+    {"id": "L9", "rule": "THE KING DEFLECTION is the bread-and-butter setup: a tap of the King — SPX, SPY or QQQ King, each its own row — is the base case every other setup is measured against. Track every King tap with its book, its growth into the tap (d15), its sign, and the outcome.",
+     "from": ["E001", "E002", "E003", "E004"], "status": "PROPOSED", "n": 6, "agree": 6, "weak": 0, "refute": 0,
+     "note": "His words, 2026-09-03: 'this is a bread and butter setup … track this religiously.' In the four taught days 6 of 16 circled legs were taps of the King and all six deflected (E001 R1, R2 — the SPX King 7750; E002 c4 — 7675 as it became the King; E003 c1 — 7750 at the open, c3 — the King rolled onto price; E004 c2 — the −γ King 7735). That is selection, not a rate: he circled deflections, not every tap. The rate comes from the ledger (S0.1–S0.4), per book, at n ≥ 15."},
     {"id": "L7", "rule": "TIME OF DAY: the taught deflections cluster in the first hour and in the noon window (12:00–13:15 CT) — 3 and 7 of 16 legs. An observation to measure on the 284-session corpus, not a rule to trade.",
      "from": ["E001", "E002", "E003", "E004"], "status": "PROPOSED", "n": 16, "agree": 10, "weak": 6, "refute": 0,
      "note": "First hour: E002 c1 09:27, E003 c1 08:42–09:00, E004 c1 08:45–09:10. Noon: E001 R2 11:57–12:06, Pb 12:20–12:36, R3 13:12; E002 c3 12:51–13:24; E003 c3 12:06, c4 13:12; E004 c3 12:10. The sweep corpus already says the first 30 minutes matter (27% vs 18%, n=180)."},
@@ -76,9 +80,9 @@ EXAMPLES = [
         "his": "in this example you see price going the first resistance deflection, then pulling back and retesting it two times after which it went down to test a pb support node that created a deflection that eventually went to the third resistance deflection node at the high. can you see it in the picture and the data. learn from this example today. … the resistance nodes show they got brighter meaning they were growing when they created resistance. the pullback support node shows that it was new node growth that created the pullback that came out of nowhere just before 11 am. pay attention to these new nodes that come out of nowhere. the way i see it, typically new gamma node growth, increasing gamma growth and gamma rolling up or down are very important and may cause deflections as well as push and pull price.",
         "legs": [
             {"leg": "R1", "kind": "PULLBACK", "side": "resistance", "when": "10:42–11:12 CT", "px": "ES 7755–7758", "node": "SPXW 7750 (the King, ES 7758)",
-             "data": "10:00 56% $17M decaying → 10:06 King $40M → 10:18 $77M → 10:33 $101M → $116M at 10:42, the first tap bar; d15 +$40–54M. Two taps, held.", "factors": ["growth", "heavy"]},
+             "data": "10:00 56% $17M decaying → 10:06 King $40M → 10:18 $77M → 10:33 $101M → $116M at 10:42, the first tap bar; d15 +$40–54M. Two taps, held.", "factors": ["king", "growth"]},
             {"leg": "R2", "kind": "PULLBACK", "side": "resistance", "when": "11:57–12:06 CT", "px": "ES 7757–7758", "node": "SPXW 7750 (the King)",
-             "data": "$180–204M, still +$20–30M/15m through the retests. Held.", "factors": ["growth", "heavy"]},
+             "data": "$180–204M, still +$20–30M/15m through the retests. Held.", "factors": ["king", "growth"]},
             {"leg": "Pb", "kind": "PULLBACK", "side": "support", "when": "12:20–12:36 CT", "px": "low ES 7744–7746", "node": "SPXW 7740 (ES 7748) + 7735 (ES 7743)",
              "data": "7740: $57M at 12:00 → $72M 12:30 → $81M at 12:36 (the tap bar) → $90–94M by 12:51, d15 +$13–21M into the tap; 7735 $47M → $61M into 12:09. NOT born out of nowhere in the record: 7740 was an 80% resistance node at 10:16, decayed to ~40% by 10:33, flipped to support at 10:42, and re-grew from a TURN_UP at 11:15 — the re-growth is what looked new. (His 'just before 11 am' does not match the record; asked which node he meant.)", "factors": ["growth", "side", "stack"]},
             {"leg": "R3", "kind": "HOD", "side": "resistance", "when": "13:12–13:33 CT", "px": "ES 7763–7765 (the session high)", "node": "SPXW 7755 (ES 7763) — fresh — over the King 7750",
@@ -86,7 +90,7 @@ EXAMPLES = [
         ],
         "call": {"kind": "PULLBACK ×3 then HOD", "summary": "three deflections and a pullback, every one off a node growing into the tap; the HOD at a fresh node with the King pulling from below"},
         "blind": None,
-        "rules": ["L1", "L2", "L3", "L4", "L6", "L8"],
+        "rules": ["L1", "L2", "L3", "L4", "L6", "L8", "L9"],
         "open": "which node he meant by 'new node growth just before 11 am' — the record shows 7740 re-growing from 11:15, not a birth before 11:00"
     },
     {
@@ -103,11 +107,11 @@ EXAMPLES = [
             {"leg": "c3", "kind": "PULLBACK", "side": "resistance", "when": "12:51–13:24 CT", "px": "high ES 7694–7695.75 (his circle sits on the 7698 PDC line — the close, drawn in hindsight)", "node": "SPXW 7685 (ES 7693) + 7690 (ES 7698) + 7695 (ES 7703), +γ",
              "data": "7685 grew $12M → $23M into the tap (d15 +12 … +15M at 13:03–13:15, 16% → 21%); 7695 $33–39M flat; 7690 $21–28M slow. Price held 7692–7696 for 30 minutes and fell to 7680 by 13:42.", "factors": ["growth", "stack"]},
             {"leg": "c4", "kind": "PULLBACK", "side": "support", "when": "13:36–13:51 CT", "px": "lows ES 7679.75–7680 (13:42–13:51)", "node": "SPXW 7675 (ES 7683, −γ) — became the King at 13:39 — + 7670 (ES 7678)",
-             "data": "7675: −$27M (13:33, 52%) → −$39M King (13:39) → −$58M (13:51) → −$65M (13:57) → −$116M by 14:33, d15 −$24 … −48M: the biggest growth of the day, under price; 7670 −$21M → −$40M (88–90%) 13:39–14:06. Price pierced 7683 ('above' at 13:39–13:48), reclaimed, then rallied AWAY from the growing −γ King into the 14:59 high 7708 — the −γ King did not pull price back (L3's sign condition).", "factors": ["growth", "heavy", "stack", "side"]}
+             "data": "7675: −$27M (13:33, 52%) → −$39M King (13:39) → −$58M (13:51) → −$65M (13:57) → −$116M by 14:33, d15 −$24 … −48M: the biggest growth of the day, under price; 7670 −$21M → −$40M (88–90%) 13:39–14:06. Price pierced 7683 ('above' at 13:39–13:48), reclaimed, then rallied AWAY from the growing −γ King into the 14:59 high 7708 — the −γ King did not pull price back (L3's sign condition).", "factors": ["king", "growth", "stack", "side"]}
         ],
         "call": {"kind": "LOD then PULLBACK ×3", "summary": "the LOD at a fresh −γ stack; two supports and one resistance off growing nodes; the afternoon −γ King grew under price and price ran away from it"},
         "blind": None,
-        "rules": ["L1", "L2", "L3", "L4", "L5", "L6"],
+        "rules": ["L1", "L2", "L3", "L4", "L5", "L6", "L9"],
         "open": ""
     },
     {
@@ -118,11 +122,11 @@ EXAMPLES = [
         "his": "(five circles, no words)",
         "legs": [
             {"leg": "c1", "kind": "PULLBACK", "side": "resistance", "when": "08:42–09:00 CT", "px": "ES 7757–7760.5", "node": "SPXW 7750 (the King, ES 7758)",
-             "data": "The King at the open (08:36 7750; briefly 7790 at 08:39; 7750 again 09:00). At 09:09, the first event: 93–100%, $14M, stage Delivered, 3 taps — the circle IS those three taps. Growth into the taps is in the blind minutes before 09:09; from 09:09 it grew $14M → $34M by 09:48 while price fell to 7732 and came back. Price went through it at 09:42 (side 'below' from 09:45) and never returned.", "factors": ["heavy"]},
+             "data": "The King at the open (08:36 7750; briefly 7790 at 08:39; 7750 again 09:00). At 09:09, the first event: 93–100%, $14M, stage Delivered, 3 taps — the circle IS those three taps. Growth into the taps is in the blind minutes before 09:09; from 09:09 it grew $14M → $34M by 09:48 while price fell to 7732 and came back. Price went through it at 09:42 (side 'below' from 09:45) and never returned.", "factors": ["king"]},
             {"leg": "c2", "kind": "HOD", "side": "resistance", "when": "10:00 and 10:24–10:30 CT", "px": "high ES 7782.25 at 10:00, 7779.5 at 10:30 (the session high)", "node": "SPXW 7775 (ES 7783) fresh; the King had rolled UP to 7790 (ES 7798)",
              "data": "7775 born 09:33 (8%) → $9M → $25M by 09:57 (+$13–15M/15m, 46–60% of the King) and STOPPED at the high (10:00 d15 +3, 10:06 +0; 37% as the King outgrew it). The King rolled 7750 → 7790 at 09:51–09:54 ($39M → $57M, +$24–34M/15m), 15 pts above price. The high printed at the fresh node whose growth stalled, under a King price never reached. Then blind until 12:12.", "factors": ["new", "growth", "roll"]},
             {"leg": "c3", "kind": "PULLBACK", "side": "support", "when": "12:00–12:30 CT", "px": "low ES 7714.25 at 12:06", "node": "the King rolled DOWN 7790 → 7715 (ES 7723) onto price; 7710 (ES 7718, −γ) grew after",
-             "data": "At 12:12 the King was 7715 at $52M (from 7790 during the blind gap) — 9 pts above the low. 7705 (ES 7713) was not on the board (not in the top 90) until 13:42; 7700 (ES 7708) +$9M small; 7710 (−γ) −$7M → −$19M over 12:18–12:42. The bounce went straight to the King's price: 12:36 7722–7723.5, then 7722–7726 for 40 minutes ON it — pulled up to the King (L3).", "factors": ["roll", "magnet", "heavy"]},
+             "data": "At 12:12 the King was 7715 at $52M (from 7790 during the blind gap) — 9 pts above the low. 7705 (ES 7713) was not on the board (not in the top 90) until 13:42; 7700 (ES 7708) +$9M small; 7710 (−γ) −$7M → −$19M over 12:18–12:42. The bounce went straight to the King's price: 12:36 7722–7723.5, then 7722–7726 for 40 minutes ON it — pulled up to the King (L3).", "factors": ["king", "roll", "magnet"]},
             {"leg": "c4", "kind": "PULLBACK", "side": "resistance", "when": "12:54–13:18 CT", "px": "high ES 7726.5 at 13:12 (at the SMA 50)", "node": "SPXW 7720 (ES 7728) fresh, over the King 7715 (ES 7723)",
              "data": "7720 born 12:39 (13%) → $13M (12:45, 20%) → $24M (13:15, 45%) → $29M (13:27, 54%), d15 +$9–11M into the tap; the King under it was DECAYING 13:03–13:21 (d15 −7 … −15M). Price fell from 7726 to 7714 by 14:00.", "factors": ["new", "growth"]},
             {"leg": "c5", "kind": "PULLBACK", "side": "support", "when": "13:54–14:06 CT", "px": "low ES 7713.75 at 14:00", "node": "SPXW 7705 (ES 7713, −γ) fresh; 7710 (ES 7718, −γ) dissipating above it",
@@ -130,7 +134,7 @@ EXAMPLES = [
         ],
         "call": {"kind": "PULLBACK, HOD, PULLBACK ×3", "summary": "the high at a fresh node whose growth stalled under a King that had rolled up; the two afternoon lows at fresh −γ nodes with the King (rolled down onto price) pulling price back up each time"},
         "blind": None,
-        "rules": ["L1", "L2", "L3", "L5", "L8"],
+        "rules": ["L1", "L2", "L3", "L5", "L8", "L9"],
         "open": "the 10:06–12:12 gap hides how the King rolled from 7790 to 7715 — the roll itself may be the tell for the 12:06 low"
     },
     {
@@ -143,13 +147,13 @@ EXAMPLES = [
             {"leg": "c1", "kind": "PULLBACK", "side": "support", "when": "08:45–09:10 CT", "px": "ES 7708–7714 (after the 08:35 low 7702.75)", "node": "SPXW 7700 (ES 7708), +γ, fresh; the King 7740/7745 (ES 7748/7753) far above",
              "data": "7700: $3M (08:45, 22%) → $4M → $7M at 08:57 (50%, d15 +8M) — a small fresh +γ node growing right under price; 7705 −γ tiny. The King sat 35–45 pts above at 7740/7745 — and price rallied to it (7743 at 10:16).", "factors": ["new", "growth", "magnet"]},
             {"leg": "c2", "kind": "PULLBACK", "side": "resistance", "when": "10:13–10:22 CT", "px": "high ES 7742.75 at 10:19", "node": "SPXW 7735 (the King, ES 7743, −γ)",
-             "data": "The −γ King: −$30M (09:54) → −$37M (10:00) → −$44M at 10:18, the tap bar (d15 −9M: growing into the tap) → dissipating after (10:30 d15 +12M, 10:36 +15M, −$27M) as price fell to 7731. Price met the King's price to the point and turned.", "factors": ["growth", "heavy"]},
+             "data": "The −γ King: −$30M (09:54) → −$37M (10:00) → −$44M at 10:18, the tap bar (d15 −9M: growing into the tap) → dissipating after (10:30 d15 +12M, 10:36 +15M, −$27M) as price fell to 7731. Price met the King's price to the point and turned.", "factors": ["king", "growth"]},
             {"leg": "c3", "kind": "HOD", "side": "resistance", "when": "11:55–12:20 CT", "px": "high ES 7755.5 at 12:10 (the session high)", "node": "SPXW 7745 (ES 7753) + 7750 (ES 7758), +γ stack, 10–15 pts above the King 7735",
              "data": "7745: $34M (11:30) → $51M (11:39, d15 +26M) → $72M (12:06, +19M) → $73M (12:15) — the biggest +γ node, growing into the tap; 7750 $26M → $46M then decaying from 12:15 (−7, −13M). The high printed between the two (7753 / 7758). Price fell back to the King's price (7733 by 13:00).", "factors": ["growth", "stack", "magnet"]}
         ],
         "call": {"kind": "PULLBACK ×2 then HOD", "summary": "a fresh support node under price with the King far above pulling; the King itself as the first resistance; the HOD at a growing +γ stack, and the return to the King"},
         "blind": None,
-        "rules": ["L1", "L2", "L3", "L6", "L7", "L8"],
+        "rules": ["L1", "L2", "L3", "L6", "L7", "L8", "L9"],
         "open": ""
     }
 ]

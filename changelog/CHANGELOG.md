@@ -10,6 +10,28 @@ READ · v15.60 the ⚙ Process tab · v15.61 the TAP record · v15.62 the nightl
 file + the shipped-artifact test · v15.64 the face manifest · v15.65 the pullback outcome. `design/DASHBOARD-INVENTORY.md`
 — every face element → objective → study → measured / descriptive / unmeasured, with verdicts.
 
+## (same day, no version bump) — the end of day over the desktop bridge · the GEX sync task · the King deflection setup
+
+> "so from now on i will just click the save button end of day and you can take care of everything else. make sure
+> you update the architecture to include this so your future sessions / contexts are aware of this also." · "you did
+> not have king deflection in the setups. this is a bread and butter setup … track this religiously."
+
+**The end of day.** With his repo folder approved for the session, the nightly ran with no push at all: the day files
+(09-01, 09-02 unpushed since the 31st; 09-03 from his 💾) staged over the bridge, `run.py` in the cloud, the log and the
+refreshed book table (11 sessions) written straight back into `C:\Dev\gex-signal-tapereader\`. `tools/gex-sync.bat`
++ `setup-gex-sync.bat` (run once, done): a Windows task every 2 minutes that commits and pushes anything new — day
+files, bridge-written files, Drive drops — replacing the Drive-only auto-pull (which never pushed local changes; the
+earlier promise that it did was wrong). Verified: `gex: sync 03-Thu-09 17:39` on GitHub. PROCESS.md ①–⑤ and §5b,
+the plan's stages ②③④ (the ⚙ tab), the skill (1a-00e), DATA-ARCHITECTURE and the resume note say so. Found: 💾 with
+the repo ROOT picked writes `<root>\<day>.json` (5.7 MB stray, now committed) — pick `data`; v15.63 writes into
+`data\` under either. H5 is READY (51 ledger events): the join is the review's next job.
+
+**The King deflection setup.** S0 in the registry ahead of S1: S0.1 the King (any book) · S0.2 SPX · S0.3 SPY ·
+S0.4 QQQ · S0.5 growth into the tap · S0.6 the rolled King · S0.7 ±γ — read from the deflection ledger as it fills,
+per book, thin below 15. The brain: a `king` factor (per book) replaces "heavy" on six legs (E001 R1/R2, E002 c4,
+E003 c1/c3, E004 c2 — all six deflected: selection, not a rate) and L9 PROPOSED. STUDIES_SEED / PLAN_SEED /
+LEARN_SEED re-spliced into the v15.62 script (seeds only; the panel reads the files from GitHub either way).
+
 ## v15.62 — the mockups' look is the panel's look · the 📚 Learn tab
 
 > "for the analysis and testing tabs, use the look and feel that you gave me with the mockups. I also want a learn tab.

@@ -20,6 +20,8 @@ const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const W=JSON.parse(fs.readFileSync('data/es-1min/SWEEPS.json','utf8'));
 const Wslim={ corpus:W.corpus, lookup:W.lookup, ledger:W.ledger, cells:W.cells };
 const WB=JSON.parse(fs.readFileSync('data/es-1min/SWEEPS-BOOK.json','utf8'));
+// the book corpus grows one session per export (9 on 2026-09-03 morning, 11 that evening): the pins read its size and cells from the file
+const BS=WB.corpus.sessions, BN=WB.lookup.node, nAt=BN.atNode.n, nNot=BN.notAtNode.n, rAt=Math.round(100*BN.atNode.rate), rNot=Math.round(100*BN.notAtNode.rate), kingN=(WB.lookup.level['KING-']||{}).n;
 const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).replace(/<[^>]+>/g,' '); while((m=re.exec(txt))){ const tail=txt.slice(m.index, m.index+60); if(!/n=|\(n |n \d|sessions\)|n\s*\d+\/\d+/.test(tail)) out.push(tail.slice(0,40)); } return out; };
 
 // ---- 1 · the overnight is honest: a stub is the pre-market --------------------------------------
@@ -86,7 +88,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const book={ walls:[{ name:'PW0', es:7652 }], king:{ es:7649, k:765 }, top5:[{ es:7649, k:765, rank:1, isKing:true },{ es:7700, k:770, rank:2 }] };
   let R=mk([ev],[],book,WB);
   ok(/^at a NODE: the KING 7649\.00, PW0 7652\.00 inside the tap zone \(±5\.00\)/.test(R.lines[0].node),'3a the extremum inside the zone of the King and a wall -> named',R.lines[0].node);
-  ok(/sweeps AT a node printed the extreme thin \(n=10\) vs NOT at a node thin \(n=8\) \(book corpus, 9 sessions\) · H6 reads at 40/.test(R.lines[0].node),'3b …with H6’s own comparison from the book table: under 15 a cell says thin, with its n',R.lines[0].node);
+  ok(new RegExp('sweeps AT a node printed the extreme thin \\(n='+nAt+'\\) vs NOT at a node thin \\(n='+nNot+'\\) \\(book corpus, '+BS+' sessions\\) · H6 reads at 40').test(R.lines[0].node),'3b …with H6’s own comparison from the book table: under 15 a cell says thin, with its n',R.lines[0].node);
   R=mk([ev],[],{ walls:[], king:{ es:7620 }, top5:[{ es:7700, rank:1 }] },WB);
   ok(/^at NOTHING: no top-5 node, King or wall inside the tap zone/.test(R.lines[0].node),'3c nothing inside the zone and no deflection -> at NOTHING');
   R=mk([ev],[{ t:1700000000*1000+3*60*1000, strike:7650, cont:1 }],{ walls:[], king:null, top5:[] },WB);
@@ -96,7 +98,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   // a sweep OF a book level answers by name from the book table, and says thin
   const kev={ level:'KING-', side:'LOD', px:7660, at:'09:20', atBar:50, epoch:1700003000, bucket:'09:00-10:00', ext:7655, depth:5, speed:4, status:'reclaimed' };
   R=mk([kev],[],{ walls:[], king:{ es:7660 }, top5:[] },WB);
-  ok(/by name: KING- \(the book\) thin \(n=5\) · book corpus n=9 sessions — a book level; thin until the exports accumulate/.test(R.lines[0].txt),'3f KING- by name comes from the book table with its n and says thin',R.lines[0].txt.slice(-200));
+  ok(new RegExp('by name: KING- \\(the book\\) thin \\(n='+kingN+'\\) · book corpus n='+BS+' sessions — a book level; thin until the exports accumulate').test(R.lines[0].txt),'3f KING- by name comes from the book table with its n and says thin',R.lines[0].txt.slice(-200));
   ok(bareP(R.lines.map(l=>(l.head||'')+' '+l.txt+' '+(l.node||'')).join(' ')).length===0,'3g no bare % in any line',bareP(R.lines.map(l=>l.txt+' '+(l.node||'')).join(' ')));
 }
 
@@ -111,7 +113,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8'));
   const flat=[]; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>ss.studies.forEach(x=>flat.push(x))));
   const f=flat.find(x=>x.id==='H2.10f'), g=flat.find(x=>x.id==='H2.10g');
-  ok(f && f.status==='THIN' && /BOOK CORPUS 9 sessions/.test(f.result) && /AT a top-5 node \/ the King 30% n=10 vs NOT at a node 38% n=8/.test(f.result),'4e H2.10f carries the book numbers, thin, with n on every rate');
+  ok(f && f.status==='THIN' && /BOOK CORPUS \d+ sessions/.test(f.result) && /AT a top-5 node \/ the King \d+% n=\d+ vs NOT at a node \d+% n=\d+/.test(f.result),'4e H2.10f carries the book numbers, thin, with n on every rate');
   ok(g && g.status==='REGISTERED' && /H6/.test(g.result),'4f H2.10g is the sweep × node table, registered as H6');
 }
 
@@ -119,7 +121,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
 {
   const g={ PAL, RATE_MIN_N, g3esc:esc, tabEmpty:t=>'<div>'+t+'</div>', sweepsBookLoad:()=>({ corpus:WB.corpus, lookup:WB.lookup }) };
   const h=build(g,['rateTxt','sweepTableHtml','panSection','panNote','panRow'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g));
-  ok(/the book · 9 sessions of the panel’s own exports · SPY 3-min/.test(h) && /KING ↓ → LOD/.test(h) && /price sweep AT a top-5 node \/ the King/.test(h) && /thin \(n=/.test(h),'5a the H2 table carries the book block, thin cells say thin',h.slice(h.indexOf('the book'), h.indexOf('the book')+200));
+  ok(new RegExp('the book · '+BS+' sessions of the panel’s own exports · SPY 3-min').test(h) && /KING ↓ → LOD/.test(h) && /price sweep AT a top-5 node \/ the King/.test(h) && /thin \(n=/.test(h),'5a the H2 table carries the book block, thin cells say thin',h.slice(h.indexOf('the book'), h.indexOf('the book')+200));
   ok(bareP(h).length===0,'5b no bare % in the table',bareP(h));
   const g2={ PAL, RATE_MIN_N, g3esc:esc, tabEmpty:t=>'<div>'+t+'</div>', sweepsBookLoad:()=>null };
   const h2=build(g2,['rateTxt','sweepTableHtml','panSection','panNote','panRow'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g2));
