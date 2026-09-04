@@ -4,7 +4,8 @@ REM ============================================================
 REM   GEX SYNC SETUP  --  RUN ONCE  (v15.62)
 REM
 REM   Installs a Windows task "GEX sync" that runs
-REM   tools\gex-sync.bat every 2 minutes under your login:
+REM   tools\gex-sync.bat every 2 minutes under your login,
+REM   hidden (through tools\gex-sync-hidden.vbs, no window):
 REM   it commits and pushes anything new in the repo - the day
 REM   file you Save at the close, the nightly's log and tables
 REM   Claude writes into the folder, a Drive-inbox drop if any.
@@ -42,7 +43,14 @@ if not errorlevel 1 (
   echo   [3] removed the old "GEX auto-pull" task ^(the sync replaces it^)
 )
 
-schtasks /Create /TN "GEX sync" /TR "\"%REPO%\tools\gex-sync.bat\"" /SC MINUTE /MO 2 /F >nul 2>&1
+REM the task runs the hidden launcher (wscript, window style 0) so no cmd window pops up every two minutes
+if not exist "%REPO%\tools\gex-sync-hidden.vbs" (
+  echo   [X] %REPO%\tools\gex-sync-hidden.vbs is missing - it ships with this file.
+  echo.
+  pause
+  exit /b 1
+)
+schtasks /Create /TN "GEX sync" /TR "wscript.exe //B //Nologo \"%REPO%\tools\gex-sync-hidden.vbs\"" /SC MINUTE /MO 2 /F >nul 2>&1
 if errorlevel 1 (
   echo   [X] Could not create the scheduled task.
   echo       To schedule it by hand: Task Scheduler -^> Create Basic Task -^> "GEX sync"
@@ -51,7 +59,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo   [4] task "GEX sync" created: every 2 minutes, your login
+echo   [4] task "GEX sync" created: every 2 minutes, your login, window hidden
 echo.
 echo   Running it once now...
 call "%REPO%\tools\gex-sync.bat"
