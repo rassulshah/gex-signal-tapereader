@@ -131,6 +131,17 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.63 — a stack is a strike-spacing question, not a point question; a replayed face is the only face a test can see
+Two things a mockup could not have caught. (1) "Two nodes within 5 points" was written with SPXW in mind, where strikes
+are 5 apart; on the SPY book strikes are 1 apart (≈10 ES points), so the same rule found no SPY stacks at all and, once
+the distance was dropped, made every adjacent SPXW pair a stack. The unit is the book's own strike step — adjacency —
+and a cloud needs mass (its biggest member ≥ 40% of the King). Rules about price geometry are written per book or they
+are wrong on two of the three. (2) The unit render (jsdom) said the grid was fine; the first Chromium render of the
+shipped renderers showed EMH 7743 as a level row on a 773-scale replay and no NEW chip anywhere — a stale band on
+another scale and a birth definition that fires on a $9M strike at 10:00 when the King was $40M. Both were visible only
+when the face was drawn from a real day file (`tools/render-face.js`). The rule from v15.62 holds and is stronger: one
+real-browser render of the shipped code per build, on a recorded day, before anything visual ships.
+
 ### v15.62 (same day, evening) — the bridge is the pipe; a promise about a script is checked against the script
 Two false beliefs died tonight. (1) "The auto-pull task commits and pushes anything new every two minutes" — it did
 not: `tools/gex-pull.bat` exits before `git add` unless a Drive drop arrived, so the nightly's files written over the

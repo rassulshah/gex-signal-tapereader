@@ -15,7 +15,7 @@
 
 ## 1 · The gauge and my score
 
-**Deflection expertise: 4 / 100** — identify 0/60 (no blind read yet — every example so far was taught with its answer) · predict 0/30 (the scorer is not built (roadmap v15.63)) · breadth 3.5/10 (4 examples, 3 confirmed rules).
+**Deflection expertise: 4 / 100** — identify 0/60 (no blind read yet — every example so far was taught with its answer) · predict 0/30 (the scorer is not built (roadmap v15.64)) · breadth 3.5/10 (4 examples, 3 confirmed rules).
 
 Blind reads only: **thin (n=0)**. No blind read yet — every example so far was taught with its answer.
 
@@ -30,8 +30,8 @@ The gauge is defined so it cannot flatter: identify is the Wilson lower bound of
 | **KING DEFLECTION** | the tap is of THE King — and which book's: SPX (SPXW, the flow book), SPY, or QQQ. His bread-and-butter setup (studies S0.1–S0.7); tracked per book, religiously |
 | **HEAVY** | a node ≥ 50% of the King that is not the King |
 | **ROLL** | mass moving strike to strike toward or away from price (the ⇄ column; ROLL events) |
-| **RUG / REVERSE RUG** | a node that vanishes (dissipates) as price arrives — the floor pulled — or one that appears under price as it falls |
-| **STACK** | two or more nodes within a few points, acting as one wall |
+| **RUG / REVERSE RUG** | the patternpedia's rug setup: a yellow (+γ) node stacked above a purple (−γ) node with no floor in sight — when the yellow unwinds the drop is violent; the reverse rug is the mirror (purple above yellow, no ceiling). Called per book: SPX · SPY · QQQ |
+| **PIKA / BARNEY STACK** | a cluster of nodes within a few points acting as one wall — PIKA when they are yellow (+γ), BARNEY when purple (−γ); called per book: SPX · SPY · QQQ |
 | **MAGNET PULL** | a node growing hard while price sits away from it — price is drawn back to it |
 | **SIDE FLIP** | a node that was resistance becoming support once price is above it (or the reverse) |
 

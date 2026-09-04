@@ -35,8 +35,8 @@ FACTORS = [
     {"id": "king",   "name": "KING DEFLECTION",     "what": "the tap is of THE King — and which book's: SPX (SPXW, the flow book), SPY, or QQQ. His bread-and-butter setup (studies S0.1–S0.7); tracked per book, religiously"},
     {"id": "heavy",  "name": "HEAVY",               "what": "a node ≥ 50% of the King that is not the King"},
     {"id": "roll",   "name": "ROLL",                "what": "mass moving strike to strike toward or away from price (the ⇄ column; ROLL events)"},
-    {"id": "rug",    "name": "RUG / REVERSE RUG",   "what": "a node that vanishes (dissipates) as price arrives — the floor pulled — or one that appears under price as it falls"},
-    {"id": "stack",  "name": "STACK",               "what": "two or more nodes within a few points, acting as one wall"},
+    {"id": "rug",    "name": "RUG / REVERSE RUG",   "what": "the patternpedia's rug setup: a yellow (+γ) node stacked above a purple (−γ) node with no floor in sight — when the yellow unwinds the drop is violent; the reverse rug is the mirror (purple above yellow, no ceiling). Called per book: SPX · SPY · QQQ"},
+    {"id": "stack",  "name": "PIKA / BARNEY STACK",  "what": "a cluster of nodes within a few points acting as one wall — PIKA when they are yellow (+γ), BARNEY when purple (−γ); called per book: SPX · SPY · QQQ"},
     {"id": "magnet", "name": "MAGNET PULL",         "what": "a node growing hard while price sits away from it — price is drawn back to it"},
     {"id": "side",   "name": "SIDE FLIP",           "what": "a node that was resistance becoming support once price is above it (or the reverse)"},
 ]
@@ -166,7 +166,7 @@ EXAMPLES = [
 GAUGE = {
     "parts": [
         {"id": "identify", "weight": 60, "what": "blind-read accuracy (Wilson 95%% lower bound); 0 until 5 blind reads; thin under %d" % RATE_MIN_N},
-        {"id": "predict", "weight": 30, "what": "live prediction accuracy — 'price is going to the node: will it deflect?' — scored by the outcome; 0 until the scorer exists (v15.63) and 30 calls are scored"},
+        {"id": "predict", "weight": 30, "what": "live prediction accuracy — 'price is going to the node: will it deflect?' — scored by the outcome; 0 until the scorer exists (v15.64) and 30 calls are scored"},
         {"id": "breadth", "weight": 10, "what": "5 × min(1, examples/20) + 5 × min(1, confirmed rules/6)"}
     ],
     "predictCalls": 0, "predictRight": 0, "predictBuilt": False
@@ -213,7 +213,7 @@ def gauge(examples, rules):
     return {"value": int(round(ident + pred + breadth)), "identify": round(ident, 1), "predict": round(pred, 1), "breadth": round(breadth, 1),
             "blindN": sc["n"], "blindRight": sc["right"], "examples": len(examples), "confirmed": conf,
             "identifyWhy": ("%d blind reads, %d right" % (sc["n"], sc["right"])) if sc["n"] else "no blind read yet — every example so far was taught with its answer",
-            "predictWhy": ("%d calls, %d right" % (GAUGE["predictCalls"], GAUGE["predictRight"])) if GAUGE["predictBuilt"] else "the scorer is not built (roadmap v15.63)"}
+            "predictWhy": ("%d calls, %d right" % (GAUGE["predictCalls"], GAUGE["predictRight"])) if GAUGE["predictBuilt"] else "the scorer is not built (roadmap v15.64)"}
 
 
 def score(examples):

@@ -11,7 +11,17 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
-## 1 · The ladder (`secLoc` → `ladderHtml`)
+## 0 · v15.63 — what the conversation changed (2026-09-03/04)
+
+The face was re-decided feature by feature with him; the rows below describe the v15.62 face and stay as the record.
+What renders now (`CFG.ladderGrid`, `CFG.dayRead`, both default on): the **King strip** (SPY · SPX · QQQ: price,
+ABOVE/BELOW, GROWTH, ROLLED) · the **tally** (King taps per book, counts until n ≥ 15) · the **grid ladder** — LEVEL ·
+PRICE/STRIKE · NODE · **NEW** · **⇄ ROLL** · **▲ GROWTH** · **SETUP** (per book, patternpedia colours) with the three
+Kings as rows of one zone · the **READ box** (unchanged) · the **SWEPT line** (rates in the hover). Off the face: MARK,
+STATE, Δ15m in dollars, ROC, the King tracks, the candle chute, the 22-column DAY table, the taps list. Every one of
+those is still computed and recorded; the studies and the Testing tab read them. Reference `design/render-v1563-face.png`.
+
+## 1 · The ladder (`secLoc` → `ladderHtml`) — the v15.62 face, kept behind the toggle
 
 | element | shows | serves | study | status | verdict |
 |---|---|---|---|---|---|

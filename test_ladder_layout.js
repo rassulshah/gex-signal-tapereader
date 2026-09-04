@@ -37,7 +37,7 @@ if (!chromium || !EXE) {
   // 2026-08-28 13:18 has `dnExc: 0` — price never traded below the expected low all session — so the
   // window's floor IS the band's low, `Y(EL)` is exactly H, and the label lands on the boundary.
   // That is the geometry the operator reported, and it is the only kind of day that tests the clamp.
-  cp.execSync('node tools/render-face.js 2026-08-28 13:18 --page', { stdio: 'ignore' });
+  cp.execSync('node tools/render-face.js 2026-08-28 13:18 --page --legacy', { stdio: 'ignore' });   // (v15.63) this test measures the v15.62 ladder's geometry — one toggle away, still shipped
   const b = await chromium.launch({ executablePath: EXE });
   const p = await b.newPage({ viewport: { width: 900, height: 900 } });
   await p.goto('file:///tmp/face-page.html');

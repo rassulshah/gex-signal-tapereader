@@ -39,12 +39,12 @@
   {
    "id": "rug",
    "name": "RUG / REVERSE RUG",
-   "what": "a node that vanishes (dissipates) as price arrives — the floor pulled — or one that appears under price as it falls"
+   "what": "the patternpedia's rug setup: a yellow (+γ) node stacked above a purple (−γ) node with no floor in sight — when the yellow unwinds the drop is violent; the reverse rug is the mirror (purple above yellow, no ceiling). Called per book: SPX · SPY · QQQ"
   },
   {
    "id": "stack",
-   "name": "STACK",
-   "what": "two or more nodes within a few points, acting as one wall"
+   "name": "PIKA / BARNEY STACK",
+   "what": "a cluster of nodes within a few points acting as one wall — PIKA when they are yellow (+γ), BARNEY when purple (−γ); called per book: SPX · SPY · QQQ"
   },
   {
    "id": "magnet",
@@ -557,7 +557,7 @@
    {
     "id": "predict",
     "weight": 30,
-    "what": "live prediction accuracy — 'price is going to the node: will it deflect?' — scored by the outcome; 0 until the scorer exists (v15.63) and 30 calls are scored"
+    "what": "live prediction accuracy — 'price is going to the node: will it deflect?' — scored by the outcome; 0 until the scorer exists (v15.64) and 30 calls are scored"
    },
    {
     "id": "breadth",

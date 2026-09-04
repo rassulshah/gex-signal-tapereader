@@ -58,6 +58,8 @@ run('typeof buildPanel==="function" ? buildPanel() : (typeof boot==="function" ?
 // ⚠ Setting the latch to today is the honest disarm: it is the same "already handled once" state a
 // real panel reaches after handing back, so the guard is not patched out, it is satisfied.
 run(`REPLAY.on=true; REPLAY.day=${JSON.stringify(day)}; REPLAY.frames=${JSON.stringify(FR)}; REPLAY.idx=${idx};`);
+// (v15.63) --legacy: draw the v15.62 ladder and DAY table (the grid and the read are the default face now)
+if(process.argv.indexOf('--legacy')>=0) run('CFG.ladderGrid=false; CFG.dayRead=false;');
 try{ run('RP_STALEGUARD=(typeof sessionDayStr==="function")?sessionDayStr():0;'); }catch(e){}
 run('RENDER_ERRS.length=0');
 try{ run('render()'); }catch(e){ console.log('render() THREW: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n')); }

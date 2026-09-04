@@ -76,7 +76,7 @@ const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
   ok(exp.length===3 && exp.map(r=>r.kind).join(',')==='issue,question,enhancement','2h itemsExport returns the three rows the day file carries');
   ok(/items:\(function\(\)\{ try\{ return itemsExport\(dk\); \}/.test(src),'2i buildDayExport writes `items`');
   run('__gptsDebug.showItems(true)'); run('__gptsDebug.showDashboard()'); html=run('elBody.innerHTML');
-  ok(!/① ISSUES/.test(html) && /the read · from the stats/.test(html),'2j the Dashboard clears the Open Items view, straight from it');
+  ok(!/① ISSUES/.test(html) && /(the read · from the stats|<em>SWEPT<\/em>)/.test(html),'2j the Dashboard clears the Open Items view, straight from it');
 }
 
 // ---- 3 · the nightly ingests, the manifest carries ------------------------------------------------------

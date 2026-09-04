@@ -39,7 +39,13 @@ for b, d in K.items():
 born = {7755: 1}
 tapped = {7750: '2 held · 0 broke', 7740: '1 held · 0 broke'}
 roll = {7750: '<span class="chip roll up">▲ from 7745 · 12:30</span>', 7745: '<span class="chip roll up">▲ to 7750 · 12:30</span>'}   # the 12:30 ROLL event: mass rolled UP out of 7745 into 7750 — a roll is between any two nodes, King or not
-setup = {7740: '<span class="chip stk">PIKA STACK · 7735</span>', 7735: '<span class="chip stk">PIKA STACK · 7740</span>'}   # the setup column: pika stack · rug · reverse rug · air pocket · gatekeeper (the registry's S-setups) — only what is present now
+# THE SETUP COLUMN — the patternpedia's names, per book, in the patternpedia's colours: PIKA (yellow, +γ) · BARNEY (purple, −γ) ·
+# RUG = a yellow node stacked above a purple one with no floor in sight (pattern-rug-setup.md) · REVERSE RUG = the mirror.
+# What the books actually held at 12:48: SPXW 7750 · 7745 · 7740 · 7735 all +γ (a pika stack, the tight pair 7740/7735 5 pts apart);
+# SPY 773 (+γ King) above 772 · 771 (−γ, a barney pair) with only a $15M floor at 768.5 = a SPY rug setup; QQQ 718 · 719 · 720 +γ = a QQQ pika stack.
+setup = {7740: '<span class="chip pika">SPX PIKA STACK · 7735</span>', 7735: '<span class="chip pika">SPX PIKA STACK · 7740</span>'}
+KSETUP = {'SPY': '<span class="chip rug" title="SPY 773 (+γ) stacked above 772 · 771 (−γ, a barney pair); floor below only $15M at 768.5 — the rug setup of the patternpedia">SPY RUG · 773 over 772/771</span>',
+          'QQQ': '<span class="chip pika" title="QQQ 718 · 719 · 720 all +γ — a pika cloud around the QQQ King">QQQ PIKA STACK · 718–720</span>', 'SPX': ''}
 
 def esq(k): return k * ES
 def pct(cur): return round(100 * abs(cur) / kmax)
@@ -93,7 +99,10 @@ CSS = M.CSS.replace('--scale:1.55', '--scale:1.4') + r"""
 .c{white-space:nowrap;font-size:7.2px} .c.mut{color:var(--g-dim)}
 .chip{display:inline-block;font-size:6.4px;letter-spacing:.06em;font-weight:900;padding:1px 5px;border-radius:3px;white-space:nowrap}
 .chip.new{background:#2ec27e;color:#04120a} .chip.roll{background:rgba(124,199,255,.16);color:#7cc7ff;box-shadow:inset 0 0 0 1px rgba(124,199,255,.5)} .chip.roll.dn{background:rgba(240,97,109,.14);color:#f0616d;box-shadow:inset 0 0 0 1px rgba(240,97,109,.5)}
-.chip.tap{background:rgba(255,255,255,.07);color:var(--g-txt)} .chip.stk{color:#cdb4fa;box-shadow:inset 0 0 0 1px rgba(205,180,250,.5)}
+.chip.tap{background:rgba(255,255,255,.07);color:var(--g-txt)}
+.chip.pika{background:#e3c341;color:#2a2408} .chip.barney{background:#a371f7;color:#1b1030}
+.chip.rug{background:rgba(240,97,109,.18);color:#f0616d;box-shadow:inset 0 0 0 1px rgba(240,97,109,.6)} .chip.rrug{background:rgba(46,194,126,.16);color:#2ec27e;box-shadow:inset 0 0 0 1px rgba(46,194,126,.6)}
+.chip.air{color:var(--g-dim);box-shadow:inset 0 0 0 1px var(--g-line2)} .chip.gate{color:#7cc7ff;box-shadow:inset 0 0 0 1px rgba(124,199,255,.5)}
 .g{font-size:7.6px;font-weight:800;white-space:nowrap} .g small{font-weight:600;color:var(--g-dim);font-size:6.4px;margin-left:3px}
 .nowpill{display:inline-block;background:#fff;color:#0d1117;border-radius:8px;font-size:9px;font-weight:900;padding:1px 8px}
 .leg{display:flex;gap:12px;flex-wrap:wrap;padding:4px 7px 5px;border-top:1px solid var(--g-line);font-size:6.6px;color:var(--g-dim);white-space:normal;line-height:1.5}
@@ -132,7 +141,7 @@ def king_row(b, lv=''):
     rolled = {'SPX': '<span class="chip roll up">▲ from 7745 · 12:30</span>', 'SPY': '<span class="chip roll up">▲ 771 → 773 · 12:27</span>', 'QQQ': ''}[b]
     return ('<div class="grid lr zone">%s<span class="px">%.1f<small>%d</small></span><span class="kchip %s">%s</span>%s%s%s%s</div>' % (
         cell(lv, 'lv zt'), d['es'], d['strike'], b.lower(), label,
-        cell(''), cell(rolled), cell(gtxt(d['g'])), cell('bearing' if b == 'QQQ' else '', 'c mut')))
+        cell(''), cell(rolled), cell(gtxt(d['g'])), cell(KSETUP.get(b, ''))))
 
 def king_cell(b, name, cls, lead=False):
     d = K[b]
@@ -160,20 +169,21 @@ lad += ('<div class="grid lr now zone"><span class="lv zt">NOW</span><span class
 lad += king_row('SPY', '3 layers · 4.0 pts')
 lad += node_row(R[7745]) + node_row(R[7740], lv='IB30H 7726') + node_row(R[7735]) + node_row(R[7730]) + node_row(R[7725]) + node_row(R[7720])
 lad += ('<div class="leg"><span><b>NEW</b> crossed the 20% threshold within the last 30 bars — new money / hedging coming in — age in bars</span><span><b>⇄ ROLL</b> ▲ rolled up · ▼ rolled down — "from" on the node that received it, "to" on the node it left; any node, King or not</span>'
-        '<span><b>▲ GROWTH</b> the node lighting up — its change over the window as a share of itself; the window (5 · 15 · 30 min) is under test</span><span><b>SETUP</b> pika stack · rug · reverse rug · air pocket · gatekeeper, when present</span>'
+        '<span><b>▲ GROWTH</b> the node lighting up — its change over the window as a share of itself; the window (5 · 15 · 30 min) is under test</span>'
+        '<span><b>SETUP</b> the patternpedia\'s names, per book, in its colours — <span class="chip pika">PIKA STACK</span> +γ cluster · <span class="chip barney">BARNEY STACK</span> −γ cluster · <span class="chip rug">RUG</span> yellow over purple, no floor · <span class="chip rrug">REVERSE RUG</span> the mirror · <span class="chip air">AIR POCKET</span> · <span class="chip gate">GATEKEEPER</span> — only when present</span>'
         '<span><b>KING ZONE</b> the three Kings at their ES prices, three layers of one zone</span></div></div>')
 
 panel = ('<div class="pan"><div class="tabs"><span class="on">Dashboard</span><span>📊 Analysis</span><span>🧪 Testing</span><span>📚 Learn</span><span>⚙ Architecture</span><span>🗺 Roadmap</span><span>📌 Open Items</span></div>'
          '<div class="hd"><b>2026-09-03 · 12:48 CT</b> · ES 7756.00 · the book 12 minutes after the pullback bounce, 24 minutes before the high · <b>real numbers</b> from the day file</div>'
          + strip + lad +
-         '<div class="foot"><span>● rec</span><span>● saved</span><span>● pushed</span><span style="margin-left:auto">mockup v3 · features 1 + 2 · simplified on his review</span></div></div>')
+         '<div class="foot"><span>● rec</span><span>● saved</span><span>● pushed</span><span style="margin-left:auto">mockup v3b · features 1 + 2 · the setup column per book, in the patternpedia’s colours</span></div></div>')
 
 page = '\n'.join([
     '<title>The King zone and the node row</title>',
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">',
     '<style>' + CSS + '</style>', '<div class="wrap">',
     '<h1>The King zone and the node row — v3</h1>',
-    '<p class="lede">Third draft, simplified on his review: no dollar amounts anywhere, the King cells down to growth and the roll with an ABOVE / BELOW price badge, the roll column with its own up / down arrow, a SETUP column for pika stack · rug · reverse rug in place of taps and zone, and the zone read parked. Drawn on the real book of 2026-09-03 at 12:48 CT: twelve minutes after the pullback bounce you circled, twenty-four minutes before the high printed at the fresh 7755.</p>',
+    '<p class="lede">Third draft, simplified on his review, with the setup column calling the patternpedia\'s shapes per book in the patternpedia\'s colours (pika yellow, barney purple, rug red, reverse rug green): no dollar amounts anywhere, the King cells down to growth and the roll with an ABOVE / BELOW price badge, the roll column with its own up / down arrow, a SETUP column for pika stack · rug · reverse rug in place of taps and zone, and the zone read parked. Drawn on the real book of 2026-09-03 at 12:48 CT: twelve minutes after the pullback bounce you circled, twenty-four minutes before the high printed at the fresh 7755.</p>',
     '<div class="flag"><span class="tag">His words</span><p><b>"all three kings are important and can cause deflections. sometimes one will disagree because it is leading and the others are lagging … we don\'t know which node it will deflect on."</b> So the Kings are not three candidates for one crown — they are three layers of one zone, and the zone is what the ladder brackets, the strip describes and the ledger records (which layer price touched first, whether it went through to the next).</p></div>',
     '<div class="ctl"><span>Scale</span><button type="button" data-s="1" aria-pressed="false">1×</button><button type="button" data-s="1.4" aria-pressed="true">1.4×</button><button type="button" data-s="2" aria-pressed="false">2×</button></div>',
     '<div class="stage"><div class="scaler" style="width:700px">' + panel + '</div></div>',

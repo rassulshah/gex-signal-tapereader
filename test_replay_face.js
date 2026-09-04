@@ -71,6 +71,7 @@ function renderAt(want, opts){
   try{ run('RP_STALEGUARD=(typeof sessionDayStr==="function")?sessionDayStr():0;'); }catch(e){}
   run('RENDER_ERRS.length=0');
   let threw=null;
+  try{ run('CFG.ladderGrid=false; CFG.dayRead=false;'); }catch(e0){}   // (v15.63) this file tests the v15.62 face in replay — still shipped, one toggle away
   try{ run('render()'); }catch(e){ threw=e.message; }
   const html=run('elBody?elBody.innerHTML:""');
   // ⚠ NOT textContent: adjacent elements have no whitespace between them, so "HL RNG" and its value

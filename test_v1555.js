@@ -207,7 +207,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(/requests:\(function\(\)\{ try\{ return requestsExport\(dk\); \}/.test(src),'6r buildDayExport writes `requests`');
   // the face: the read from the stats (no courier bars in jsdom -> the honest WAIT line)
   run('__gptsDebug.showDashboard()'); html=run('elBody ? elBody.innerHTML : ""');
-  ok(/the read · from the stats/.test(html) && /No level has been swept/.test(html),'6s ⓪a carries THE READ FROM THE STATS, honest with no courier bars');
+  ok(/(the read · from the stats|<em>SWEPT<\/em>)/.test(html) && /(No level has been swept|no key level swept yet today)/.test(html),'6s ⓪a carries the read from the stats — v15.63: the SWEPT line — honest with no courier bars');
 }
 
 console.log('\n'+pass+' passed, '+fail+' failed');

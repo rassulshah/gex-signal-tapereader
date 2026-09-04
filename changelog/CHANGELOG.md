@@ -10,6 +10,41 @@ READ · v15.60 the ⚙ Process tab · v15.61 the TAP record · v15.62 the nightl
 file + the shipped-artifact test · v15.64 the face manifest · v15.65 the pullback outcome. `design/DASHBOARD-INVENTORY.md`
 — every face element → objective → study → measured / descriptive / unmeasured, with verdicts.
 
+## v15.63 — the dashboard conversation: the node row, the King zone, the tally, the SWEPT line, the DAY read
+
+> Feature by feature, 2026-09-03/04, his decisions: "three things to look at are if the node recently grew so it's a new
+> node, whether there was a roll from a prior node, and growth" · "i dont need to see dollar amounts … i want simplicity"
+> · "all three kings are important and can cause deflections … we don't know which node it will deflect on" · "pika
+> stack should be yellow … rug and reverse rug are important … a qqq pica stack or spx pica stack or a reverse rug from
+> qqq or spy or spxw, lets use that column to call it out" · "i only glance at it" (the READ box) · "i just need to know
+> if a key level was swept … that detail can be in the hover" · "the rest is just statistics and i dont need to see it
+> but it is data for you" · "no i dont want to see the taps list" · "keep it in its own column" (the levels).
+
+**The node row** (`ladderGridHtml`): one row per strike, one column per tell — LEVEL (its own column) · PRICE/STRIKE ·
+NODE bar · **NEW** (age in bars since the strike crossed the threshold today — new money at a price; seeded from the
+day's recorded book, persisted per day) · **⇄ ROLL** (▲/▼ from/to and the time — on both ends, any node, King or not) ·
+**▲ GROWTH** (the node's change over the window as a share of itself, sign-aware, no dollars; the window 5 · 15 · 60 min
+is a gear setting under test, S6.6) · **SETUP** (the patternpedia's shapes per book in its colours — PIKA STACK yellow,
+BARNEY STACK purple, RUG red, REVERSE RUG green — a stack is a run of same-sign nodes on adjacent strikes whose biggest
+member is ≥ 40% of the King; a rug is a yellow node on the strike directly above a purple one with no yellow within
+three strikes below; the reverse rug the mirror). No MARK / STATE words, no taps or zone columns. Context rows keep
+their bar and nothing else. **The King zone**: SPY, SPX and QQQ Kings as rows at their prices on the chart, bracketed as
+one zone with its layer count; the strip of three identical cells — price, ABOVE / BELOW badge, GROWTH, ROLLED with the
+arrow head — with the other books' Kings from the Trinity pane (live) or the frame's recorded trinity (replay). **The
+tally** under the strip: every King tap today per book from the ledger (the ledger now records `kings[]` per tap) —
+counts until n ≥ 15, then a rate with its n. **⓪a**: the READ box untouched (one line, the range added to its timing
+text); **the SWEPT line** (which key level, when, reclaimed / broke / being tested — the rates in the hover) replaces the
+two-line read; the 22-column table and the taps list are off the face. **Replay-aware** throughout (the frame's clock,
+births, growth via `velAt`, Kings from the frame's trinity) so the slider and `tools/render-face.js` draw it too.
+**One toggle away**: `CFG.ladderGrid` / `CFG.dayRead` in the gear — off = the v15.62 ladder and table, untouched.
+
+**Tests.** `test_v1563.js` (65; 14 of 14 mutations): growth as a share, sign-aware, the window; the roll's ends and
+direction; the setups on real books (the SPXW cloud, the SPY rug, the QQQ reverse rug fixture, the floor and the
+ceiling that cancel); NEW seeded from the book and frozen at first sight; the tally's counts and its n gate; the SWEPT
+line's tiers; the grid's seven columns, the zone, no dollars, no MARK/STATE; the wiring. Rendered from the shipped
+script on the real book of 2026-09-03 12:48 (`tools/render-face.js`, `design/render-v1563-face.png`). Plan: 15.63 is
+this; the scorer → 15.64, score the READ → 15.65 … the pullback outcome → 15.70.
+
 ## (same day, no version bump) — the end of day over the desktop bridge · the GEX sync task · the King deflection setup
 
 > "so from now on i will just click the save button end of day and you can take care of everything else. make sure

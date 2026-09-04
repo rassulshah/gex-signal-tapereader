@@ -74,7 +74,7 @@ ok(plan.rules.length>=8 && plan.rules.every(r=>r.rule && r.test),'1k every rule 
   run('__gptsDebug.showAnalysis(true)'); html=run('elBody.innerHTML');
   ok(!/① NEXT/.test(html) && /TRACK SOMETHING UNDER/.test(html),'2n switching to Analysis leaves the Roadmap');
   run('__gptsDebug.showRoadmap(true)'); run('__gptsDebug.showDashboard()'); html=run('elBody.innerHTML');
-  ok(!/① NEXT/.test(html) && !/THE WHAT · the objective/.test(html) && /the read · from the stats/.test(html),'2o …and the Dashboard clears every view flag, straight from the Roadmap');
+  ok(!/① NEXT/.test(html) && !/THE WHAT · the objective/.test(html) && /(the read · from the stats|<em>SWEPT<\/em>)/.test(html),'2o …and the Dashboard clears every view flag, straight from the Roadmap (v15.63: the SWEPT line is the read)');
 }
 
 console.log('\n'+pass+' passed, '+fail+' failed');

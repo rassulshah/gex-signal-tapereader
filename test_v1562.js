@@ -19,7 +19,7 @@ const PANEL_CSS=lit('PANEL_CSS');
 ok(PANEL_CSS===cssTool,'1a PANEL_CSS in the script equals tools/panel-css.py (the mockups’ CSS, scoped) — run `python3 tools/panel-css.py --splice`',{script:PANEL_CSS.length,tool:cssTool.length});
 ok(/^#gpts-body \.g3pan\{--g-bg:#0b0e14/.test(PANEL_CSS) && /#gpts-body \.g3pan \.sech \.dc\{margin-left:auto/.test(PANEL_CSS) && /#gpts-body \.g3pan \.flow\{display:flex/.test(PANEL_CSS) && /\.g3pan\.g3scaled\{zoom:var\(--g-scale,1\)\}/.test(PANEL_CSS),'1b …scoped under #gpts-body .g3pan: the variables, the section header, the flow strip, the scale');
 ok(!/\.wrap\{|h1\{|\.lede\{|\.stage\{|\.scaler\{/.test(PANEL_CSS),'1c …and none of the mockup PAGE’s rules leaked into the panel');
-ok(/PANEL_CSS;\s*\/\/ \(v15\.62\)/.test(src) && src.indexOf("'@media (prefers-reduced-motion: reduce){#gpts-body .g3pulse{animation:none;opacity:1}}'+\n    PANEL_CSS")>0,'1d the stylesheet is appended to the panel’s style element');
+ok(/PANEL_CSS;\s*\/\/ \(v15\.62\)/.test(src) && /'@media \(prefers-reduced-motion: reduce\)\{#gpts-body \.g3pulse\{animation:none;opacity:1\}\}'\+/.test(src) && src.indexOf('PANEL_CSS;')>src.indexOf("#gpts-body .g3swept em{"),'1d the stylesheet is appended to the panel’s style element (after the v15.63 grid rules)');
 
 // ---- 2 · the tabs render in the mockups’ classes ------------------------------------------------------
 const { JSDOM }=require('jsdom');
@@ -112,7 +112,7 @@ ok(g2.blindN===6 && g2.blindRight===5 && Math.abs(g2.identify-60*wl(5,6))<0.15 &
 delete store['gpts_learn_v1'];
 // mutual exclusion
 run('__gptsDebug.showLearn(true)'); run('__gptsDebug.showDashboard()');
-ok(!/THE FACTORS I CHECK/.test(doc.body.innerHTML) && /the read · from the stats/.test(doc.body.innerHTML),'3m the Dashboard clears the Learn view');
+ok(!/THE FACTORS I CHECK/.test(doc.body.innerHTML) && /(the read · from the stats|<em>SWEPT<\/em>)/.test(doc.body.innerHTML),'3m the Dashboard clears the Learn view');
 run('__gptsDebug.showLearn(true)'); run('__gptsDebug.showAnalysis(true)');
 ok(!/THE FACTORS I CHECK/.test(doc.body.innerHTML) && /TRACK SOMETHING UNDER/.test(doc.body.innerHTML),'3n …and so does Analysis');
 

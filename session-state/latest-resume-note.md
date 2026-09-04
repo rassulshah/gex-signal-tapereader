@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-03 · panel v15.62 · companion v1.18 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-04 · panel v15.63 · companion v1.18 · supersedes every earlier resume note_
 
 
 # ⚠⚠⚠ THE WHAT AND THE HOW — STANDING, EVERY CONTEXT, BEFORE ANYTHING ELSE
@@ -14,9 +14,22 @@ levels: **a gamma node deflects price, and the deflection IS the turning point.*
 registry + TRACK), Testing = trust and promote (the register, the gate, what the ladder renders and why). Every rate
 with its n; a scorer must be able to fail; a hypothesis is written before the data and read once at minN; a first
 read is never a verdict; every file the panel fetches rides the installer; probe the live panel after every install.
-**THE PLAN** is `roadmap/ROADMAP.md` and the 🗺 Roadmap tab (v15.59 the ⚙ Architecture + 🗺 Roadmap tabs · v15.60 📌 Open Items · v15.61 the ladder floor · v15.62 the mockups' look + 📚 Learn · v15.63 the deflection candidate score · v15.64 score the READ · v15.65 the TAP record). **The WHAT and the HOW are INSIDE THE APP from v15.59** (⚙ Architecture tab, rendered from `learning/plan.json` = `tools/plan-seed.py`; the seed, the file and the docs are pinned equal by `test_v1559.js`). Edit the plan in `tools/plan-seed.py`, run it, re-splice `PLAN_SEED`, update the docs.
+**THE PLAN** is `roadmap/ROADMAP.md` and the 🗺 Roadmap tab (v15.59 the ⚙ Architecture + 🗺 Roadmap tabs · v15.60 📌 Open Items · v15.61 the ladder floor · v15.62 the mockups' look + 📚 Learn · v15.63 the dashboard conversation · v15.64 the deflection candidate score · v15.65 score the READ · v15.66 the TAP record). **The WHAT and the HOW are INSIDE THE APP from v15.59** (⚙ Architecture tab, rendered from `learning/plan.json` = `tools/plan-seed.py`; the seed, the file and the docs are pinned equal by `test_v1559.js`). Edit the plan in `tools/plan-seed.py`, run it, re-splice `PLAN_SEED`, update the docs.
 **Tighten and harden the machinery over time** — PROCESS.md §5 is the standing backlog; add to it when something
 breaks, and say what broke in LESSONS.
+
+# ⚠⚠ 2026-09-04 (latest) — v15.63: THE DASHBOARD CONVERSATION, FEATURE BY FEATURE, SHIPPED.
+
+**Panel is v15.63, companion v1.18.** His decisions are the face now: the node row = NEW · ⇄ ROLL · ▲ GROWTH (% of the
+node, no dollars, window 5/15/60 in the gear, under test S6.6) · SETUP per book in the patternpedia's colours (pika
+yellow · barney purple · rug red · reverse rug green; stacks by adjacent strikes with mass; rugs adjacent, no floor
+within 3 strikes); the three Kings as rows of one KING ZONE + the strip (price · ABOVE/BELOW · GROWTH · ROLLED); the
+per-book King tally from the ledger (`kings[]` per tap; counts until n ≥ 15); the READ box untouched; the SWEPT line
+(rates in the hover); the DAY table and the taps list OFF the face; MARK/STATE gone; levels in their own column.
+`CFG.ladderGrid` / `CFG.dayRead` off = v15.62. Replay-aware. Reference: design/mockup-king-strip.html v3b,
+design/render-v1563-face.png (the shipped script on 2026-09-03 12:48). `test_v1563.js` 65 / 14 of 14 mutations.
+NEXT (v15.64): the deflection candidate score (the L-rules as register features scored by the ledger — the gauge's
+predict part), the per-book King rows on Testing, the H5 join. Open for him: the review's time of day.
 
 **HOW TO ASK HIM TO DO ANYTHING (2026-09-04, standing):** numbered steps — Step 1, Step 2 … — one action per step,
 what he should see, the word to send back. Never inside a paragraph. (skills/gex/SKILL.md, STANDING PROJECT RULES.)

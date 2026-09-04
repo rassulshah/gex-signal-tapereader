@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-03 · v15.62 · session `5e8d34b5` — v15.62 evening — the end of day over the bridge, the GEX sync task, the King deflection setup
+## 2026-09-04 · v15.63 · session `5e8d34b5` — v15.63 — the dashboard conversation shipped: the node row, the King zone, the tally, the SWEPT line
 
-_55 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_91 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -611,7 +611,448 @@ The one thing I'd still like from you is a time for the review session itself (S
 **me (22:46):** Now the prose the future contexts read — PROCESS.md, the skill, the resume note, DATA-ARCHITECTURE — then delivery over the bridge.
 Now the record (LESSONS, chat history), commit, and delivery of everything to your repo folder over the bridge.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (19:30):** **Why only 3 strikes.** The ladder was drawing the book faithfully — and the book was concentrated. I probed your live panel at 12:40 CT: Skylit's SPXW tape carried 100 strikes (7500–8200), only 16 of them non-zero, and exactly **three at or above the 20% node threshold** (`nodeThresh` = 20 in your gear settings): King 7750 = 100%, 7745 = 45%, 7740 = 28%. The next ones were 7735 at 11%, 7755 at 8%, 7730 at 6%, 7760 at 5%. The ladder only draws strikes ≥ the threshold, so it drew three rows — with price at 7762, above the EM high of 7743, sitting in empty air above them. No render errors, coverage 95.9% — it wasn't broken, it was a three-strike afternoon 0DTE book drawn literally. That is useless to the eye, and you're right that it is not an appropriate display of the ladder.
+
+**The fix (v15.61, building now):** the ladder never shows fewer than 8 strikes when the tape has them. Below the three real nodes it now appends the next-strongest sub-threshold strikes as **context rows** — dimmed outline bars with their real %King (11%, 8%, 6%, 5%, 3%), hover: "context row — below the 20% node threshold, not a node". Display only: the deflection engine, the recorder, the READ's top-5 and the rolls still see exactly the same three nodes, so nothing is measured or scored differently. Zero-%King strikes are never used as filler. (If you'd rather see more *real* nodes, lowering `nodeThresh` in the gear does that — but it changes what counts as a node, which changes the record, so I did not touch it.)
+Build is done — **v15.61, the ladder floor.** One installer, `installv1561.bat` (3.37 MB, no PowerShell); it also carries v15.60, which your panel was still behind on at the last probe.
+
+**Tampermonkey:**
+- **Tapereader v15.61** (changed) — https://raw.githubusercontent.com/rassulshah/ …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 93 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (19:40):** Push is denied from this environment by organization policy (403 on origin) — the 93 commits are local and go up when `installv1561.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> for the analysis and testing tabs , use the look and feel that you gave me with the mockups . I also want a learn tab.  I will be givingyou screenshots in a way training you and you will put it into a deflection learning doc, which will be part of your training to get better at identifying deflections and you will put it in the learning tab, always updating it when i give you examples. and learning untill you get really good at identifying deflections.
+
+**me (20:14):** Understood on both — and I checked your live panel before answering: it's still on **v15.58** (three tabs), so the ⚙/🗺/📌 tabs and the ladder fix aren't in front of you yet; `installv1561.bat` carries all of that.
+
+**Look and feel.** Your screenshots are the mockup's panel, and the live tab does differ from it: it puts a "📊 Analysis · Did the dashboard tell the truth? …" header on top, its section headers are a gold title with a grey question line instead of the mockup's `▾ K1  title … decides SIDE · LEVEL · 6` row, and the type is smaller. The mockup page also showed the panel at 1.55× on a ~940px stage, which is most of why it reads so well. For v15.62 I'm making the Analysis and Testing tabs render with the mockup's *own* CSS and markup — one source, pinned by a test so the tab cannot drift from the mockup again — plus the mockup's scale control (1× / 1.55× / 2.1×) on the tab. One honest caveat: your docked panel is 531px wide; at 1.55× the mockup needs ~940px, so pop the panel out or widen it to see it at that size.
+
+**📚 Learn tab.** Building it as a real training loop, not a scrapbook: a deflection learning doc (`learning/deflections/LEARNING.md` — read by me on every load, part of my training) and an examples file the tab renders. The protocol I'll follow with every screenshot you give me: I first say what I see and make my **blind call** (HOD/LOD turn · pullback turn · no deflection, with the features I'm using) *before* you tell me the answer; then I record your verdict, what I got wrong, and the rule it produces. The tab shows the rules I've learned (each citing its examples), the examples with your screenshots, and my blind-read score with its n — the same house rule as everywhere else: no % without n, and "thin" under 15. That score is how we both know when I' …[trimmed]
+
+**OPERATOR:**
+> in this example you see price going the first resistance deflection , then pulling  back  and retesting it two times after which it went down to test a pb support node that created a deflection that eventually went to the third resistance deflection node at the high.  can you see it in the picture and the data.  learn from this example today.   I will try to feed you these examples often. for you to learn from.  do you have prior past screenshots also that i might have given prior contexts ?  Also when you analyze , make sure you take all the factors into account like if it is a new node or heavy node growth or node roll etc. you want to lookup the node that caused the deflection , maybe it was a rug or reverse rug or there was stack of nodes .   for example the resistance nodes show they got brighter meaning they were growning when they created resistance .  the pullback support node shows that it was new node growth that created the pullback that came out of nowhere just before 11 am .  pay attention to these new nodes that come out of nowhere. the way i see it , typically new gamma node growth,  increasing gamma growth and gamma rolling up or down are very important and my cause deflections as well has push and pull price.   see pic
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:24):** Yes — I see it in the picture, and I checked it against the panel's own node-event record for today (962 events, SPXW strikes, all times CT; your chart's axis is CT too — the panel's price trail lines up bar for bar). It confirms your read, with numbers:
+
+**R1 — first resistance, 10:42–11:12, ES ~7755–7758.** That is the King, SPXW 7750 (ES 7758). At 10:00 it was a *decaying* $17M node at 56% of the King; by 10:06 it was the King at $40M, 10:18 $77M, 10:33 $101M, and **$116M at 10:42, the bar price first tapped it** — growing $40–54M per 15 minutes on the way in, the fastest-growing node on the board. Brighter = growing, exactly as you said. Two taps, held.
+
+**R2 — the retests, ~11:57–12:06, ES 7757–7758.** Same King, $180–204M, still adding $20–30M per 15 min through the retests. Held again.
+
+**Pb — the pullback bounce, ~12:20–12:36, low ~ES 7744–7746.** Two support nodes there: SPXW 7740 (ES 7748) and 7735 (ES 7743). 7740 went $57M at 12:00 → $72M at 12:30 → **$81M at 12:36, the tap bar**, then $90–94M by 12:51 — growing +$13–21M per 15 min *into* the tap; 7735 grew $47M → $61M into 12:09. So the bounce came off support that was growing under price. One correction to the story from the data: 7740 was not born out of nowhere — it was an 80% node at 10:16, decayed to ~40% by 10:33, flipped to "support" at 10:42 when price went above it, and started **re-growing at 11:15** (a TURN_UP event) — the growth is what made it look new on your chart. If the node you mean is a different one (you said "just before 11 am"), tell me which price and I'll pull its line.
+
+**R3 — the high, 13:12–13:33, ES 7763–7765.** Two things at once: SPXW **7755** (ES 7763) crossed the 20% threshold at 12:48 — a node that *was* new on the ladder, $49–56M, growing +$11–12M/15min — sitting right where …[trimmed]
+
+**OPERATOR:**
+> i want to train you first by giving you a lot of examples, at least 10.   see these examples, remember each circle count as 1 deflection . this is from another day , i think it is from the 31st .   double check and confirm, but most importantly you must learn so you can identify , qualify and understand and predict a deflection.  here are 4 examples. 3 at a support  with one at resistance.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+> i need you to refine you learning capability . I provide you screenshots, you lookup the nodes, any additional data and learn, eventually being able to identify nodes where deflections will occur.  you will eventaully get good and develop a scoring ccapability taking multiple things into account . you may also take time of day, levels  as well as the node details and steup type like rug, reverse rug, piku stack etc.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+> here are some more .    put an indicator on the learning tab like a scale from 0 to 100 which will measure your learning progress and how good you have become in identifying deflections  and becoming a deflection expert with the ability to idenfity deflections and even predict a defliction will occur once you see price is going to the node.    I think you have enough to start with and analysze for now.
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:44):** Now the 📚 Learn tab in the panel — the module, the view flag, the render branch, the fetch, the guide, and the seed splice.
+Now the mutation pass on the new assertions, then a real-browser screenshot of the three tabs to see them.
+Now a real-browser render of the three tabs from the actual script (Playwright), to see them before shipping.
+Now the docs: ROADMAP, PROCESS, the skill, the resume note, CHANGELOG, LESSONS, and the inventory.
+**v15.62 is built** — one installer, `installv1562.bat` (4.6 MB, no PowerShell). Your panel is still on v15.58, so this one carries 15.59 → 15.62: the ⚙/🗺/📌 tabs, the ladder floor, and today's work.
+
+**Tampermonkey:**
+- **Tapereader v15.62** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.18** — UNCHANGED, do not reinstall — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Run the .bat (it pushes 95 local commits from your machine), wait ~5 min, click the tapereader link, reload the Atlas tab — footer v15.62. Then tell me and I'll probe it.
+
+**The look.** The Analysis and Testing tabs now render with the mockup generators' *own* stylesheet and markup — `tools/panel-css.py` scopes the mockups' CSS and splices it into the script, and the suite pins two things: the CSS string equal to the tool's output, and the Analysis tab's skeleton for a subject equal to the mockup generator's (same sections, header parts, row parts, row counts). I rendered the real script in Chromium and compared it with your screenshot before shipping — it is the mockup. The scale control (1× / 1.55× / 2.1×) sits in each tab's foot; your docked panel is 531px wide and 1.55× wants ~940px, so pop it out or widen it for that view. …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 94 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (21:03):** Push is denied from this environment by organization policy (403 on origin) — the 94 commits are local and go up when `installv1562.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> the learning doc where you will add the screenshots that i will give you is like your learning brain. you will use it to become an analyst. i will aslo feed you vidoes, like youtube videos and you will learn from them and add it to your "brain". do you understand.  you can structure the documet as you see fit.
+
+**me (22:16):** Yes — I understand, and the framing is right: it *is* my brain in a literal sense. Nothing else carries over between sessions except what is written down, so the doc is not a record of the training — it is the only place the training exists. That is why the skill now forces every context to read it on load and why a test pins the file, the tab and the seed equal; a lesson that isn't in the file was never learned.
+
+Two things I'll change so it can hold what you're describing:
+
+**The shape.** Right now it's one chapter (deflection examples). I'll make it a brain with chapters, one index file (`learning/brain/BRAIN.md`) and one data file behind the Learn tab: (1) **what I've been told** — doctrine from your videos and docs, each claim with its source (video, timestamp, or document), (2) **what I've seen** — your screenshots, each leg checked against the record, (3) **the rules** that come out of the examples, with n / agree / weak / refute, (4) **the vocabulary** (rug, reverse rug, stack, beach ball, air pocket, gatekeeper, and "piku stack" once you tell me what it is), (5) **the factors I check** before calling anything, (6) **what the corpus has measured** (the F-numbers and the register), (7) **my blind-read log and the gauge**, and (8) **open questions for you**. Every claim in the brain carries a status that moves only one way on evidence: TOLD (a video said it) → SEEN (an example agreed) → MEASURED (a study or register row) — or REFUTED, kept and marked. That keeps someone's teaching separate from what the data has confirmed, which is the whole discipline of this project.
+
+**Videos.** I can take them through your Chrome tab: open the YouTube link, read the transcript, screenshot the frames at the moments that matter (or the timestamps you point me to), and write what …[trimmed]
+
+**OPERATOR:**
+> you also do an end of day review .. how do you do this.. do you really need to send it to another model via an api or can you just do it yourself and give it to the appropriate model ?  I am trying to figure out how to make this process easy by jut doing it end of day without relying on additional api's
+
+**me (22:21):** Good question, and the answer is simpler than the plumbing makes it look: **no other model and no API key are involved anywhere.** The "nightly LLM review" *is* me. There are two parts and only one of them is a machine:
+
+**1. The nightly — deterministic Python.** `tools/nightly/run.py` reads the day files and the register, judges the hypotheses at their minimum n, refreshes the tables (SWEEPS, the book table, base rates), copies your TRACK requests and Open Items into their files, and writes `learning/log/<day>.json`. No model, no network — it runs anywhere Python runs.
+
+**2. The review — a Claude session, i.e. me.** I read that log, the day file and the tables, and do the judgment work: turn a read into a register row, answer your SEEN items in the file, add the day's screenshots to the brain, write findings. That can be this session when you say "nightly review", or a **scheduled task** — this product can start a fresh session on a schedule (say 15:30 CT weekdays), and that session loads gex and does the review. That is the "give it to the appropriate model" part: it's already the same model, started on a timer, with no API of yours in between.
+
+What actually makes it work end-of-day is not the model, it's the two hand-offs across the cloud/your-machine line, because the cloud can't push:
+
+- **In:** at the close you hit 💾 Save with the 📁 repo folder set (so the day file lands in `data\`, not Downloads), and `pushdata.bat` — or the "GEX auto-pull" task if you ran `setup-gex-autopull.bat` — pushes it. Without that, the review has nothing to read.
+- **Out:** the review's files (the log, the register, the brain) have to get back into your repo. Today they ride the next installer. The easier path already exists in your tooling: the Drive inbox — I drop the files into your …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 94 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:22):** Push is denied from this environment by organization policy (403 on origin) — the 94 commits are local and go up when `installv1562.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> so what are the next steps .. give me steps like step 1 step 2
+
+**me (22:26):** Here's the whole loop as steps — yours are marked **you**, mine **me**.
+
+**Step 1 — Install (you, now).** Run `installv1562.bat`. It pushes the 94 local commits and lays the files down. Wait ~5 min, click the Tapereader link in Tampermonkey (Update), reload the Atlas tab — footer should read v15.62 and you should see seven tabs. Tell me "reloaded" and I'll probe it.
+
+**Step 2 — Point the panel at the repo folder (you, once).** Click 📁 in the panel footer and pick `C:\Dev\gex-signal-tapereader`. From then on 💾 Save writes the day file straight into `data\` instead of Downloads. (If it goes to Downloads, `pushdata.bat` moves it, so it's not fatal — just one more step.)
+
+**Step 3 — Save at the close (you, daily).** Around 15:05 CT click 💾 Save. You can do it for today right now — the panel holds what it recorded (the book from 12:57, the node events from 08:39).
+
+**Step 4 — Push (you, daily — or once, automated).** Run `pushdata.bat`. Or run `setup-gex-autopull.bat` one time: it installs the "GEX auto-pull" task that commits and pushes anything new every two minutes and picks up my files from the Drive inbox, so after that this step disappears.
+
+**Step 5 — The nightly (me).** Say "nightly review" (or, if you give me a time, I create a scheduled task that starts a session at that time each weekday — it asks for your approval once). I run `tools/nightly/run.py`, read the log and the day file, judge what can be judged, answer your SEEN Open Items, add the day's screenshots to the brain, and write the findings.
+
+**Step 6 — Delivery back to you (me).** With the auto-pull task in place I drop the review's files into your `GEX-inbox` Drive folder and your machine commits them within two minutes; without it they ride the next installer. Next morning the panel fetches them — Testin …[trimmed]
+
+**OPERATOR:**
+> i clicked the folder and selected the destination and clicked save.  can the rest be automated . can you run pushdata ?
+
+**me (22:33):** Yes — and most of it just happened, because your folder is now connected to this session (you approved `C:\Dev\gex-signal-tapereader` a minute ago). Here's what I did and where the one remaining gap is.
+
+**What ran tonight, without any push:**
+1. I checked `data\` on your machine — your Save landed: `2026-09-03.json` (5.7 MB, the full session: the book from 08:36 to 14:57, 899 node events). I also found `2026-09-01.json` and `2026-09-02.json` sitting there unpushed since the 31st — the review had never seen them.
+2. I pulled all three over the bridge into the cloud and ran the nightly (`tools/nightly/run.py`): the log for today is written, SWEEPS and the book table refreshed — the book corpus is now **11 sessions**. Verdicts: 1 session since the register date, so H1–H4, H6, H7 are all still thin; **H5 is READY** — the deflection ledger reached 51 events (needs 50), so its join (does a top-5 node move the HOD/LOD cell?) can be run — that is tomorrow's review job, it needs the join code written, not a nightly button. One thing to watch: the HOD/LOD live column read 0% today in two cells where the table says 99–100% (n=13, 15, one session) — too early to call, but it's the F-11 shape and I've flagged it.
+3. I wrote the results straight back into your repo folder: `learning\log\2026-09-03.json` and `data\es-1min\SWEEPS-BOOK.json`. No installer, no Drive.
+
+**The gap — running `pushdata.bat`:** the folder link lets me read and write files on your machine but not run programs, so I can't execute the .bat from here. Two ways to close it:
+
+- **Tonight:** just run `installv1562.bat` — its last step is `git add -A` + commit + push, which is exactly what `pushdata.bat` does, so it pushes the three day files and tonight's log along with the build. One .bat, not two.
+- **Permanently: …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 95 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:33):** Push is denied from this environment by organization policy (403 on origin) — the 95 commits are local and go up when `installv1562.bat` runs on your machine (it does `git add -A`, commit, push — pushdata's job included). Not retrying, per the standing rule.
+
+**OPERATOR:**
+> i thought i ran install v1562..  can you give me the autopull file so i can run it just once.
+
+**me (22:38):** You did run it — I checked your repo's git log over the bridge: the commit **"v15.62: the mockups look…"** is there at 17:16 CT and it's on GitHub (I can fetch from the cloud, just not push). So your panel should show v15.62 after a reload; tell me "reloaded" and I'll probe the seven tabs. Also visible in that log: a **"data: daily export"** commit at 15:30 — you already have a scheduled task that pushes `data\` once a day, which is why the three day files were on GitHub. What that task doesn't cover is anything outside `data\` — the nightly's log and tables I write into your folder, which would otherwise wait for the next installer.
+
+**The run-once file is in your repo folder now:** `C:\Dev\gex-signal-tapereader\setup-gex-sync.bat` (with `tools\gex-sync.bat` beside it). Double-click it once. It creates a Windows task **"GEX sync"** that runs every 2 minutes under your login and commits + pushes *anything* new in the repo — the day file you Save at the close, the log and tables I write over the bridge, a Drive-inbox drop if one is ever there. Nothing new → it does nothing. It removes the old "GEX auto-pull" task if it exists (that one only fired on a Drive drop, so it wouldn't have pushed the bridge-written files — I had that wrong earlier). No PowerShell; its own log is `tools\gex-sync.log`, and it never commits that log.
+
+After that, your end of day is one click: 💾 Save. I pull the file over the bridge, run the nightly, write the results into your folder, the task pushes them within two minutes, and the panel fetches them next morning. Tonight's log (`learning\log\2026-09-03.json`) and the refreshed book table are already sitting in your folder waiting for the task's first run.
+
+The one thing I'd still like from you is a time for the review session itself (Step 5) — s …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 96 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:38):** Push is denied from this environment by organization policy (403 on origin) — the 96 commits are local; the files reach GitHub through your machine (the installer, and now the GEX sync task once you've run its setup). Not retrying, per the standing rule.
+
+**OPERATOR:**
+> ok.. check..  so from now on i will just click the save button end of day and you can take care of everything else.  make sure you update the architecture to include this so your future sessions / contexts are aware of this also.
+> I also noticed that you did not have king deflection in the setups .  this is a bread and button setup so make sure you have a king deflection setup and also indivual king deflection setups like qqq king, spy king and spx king and track this religiously .
+> 
+> _[sent while I was working — a queued message]_
+
+**me (22:46):** Now the prose the future contexts read — PROCESS.md, the skill, the resume note, DATA-ARCHITECTURE — then delivery over the bridge.
+Now the record (LESSONS, chat history), commit, and delivery of everything to your repo folder over the bridge.
+Now delivering the updated files into your repo folder — the sync task pushes them within two minutes, no installer.
+Checked, and it works end to end. Your setup ran clean: the task's own log says `committed` and `pushed 1 commit(s)` at 17:39:57, and I can see `gex: sync 03-Thu-09 17:39` on GitHub from here — it carried tonight's log, the refreshed book table and the sync scripts. Just now I wrote 20 more files into your folder (below); the task will have them on GitHub within two minutes, no installer.
+
+**Yes — from now on your day is one click: 💾 Save.** Everything else is mine, and it's now written where future contexts read it: PROCESS.md (the loop ①–⑤ rewritten as it actually runs, plus a new §5b "the end of day"), the plan behind the ⚙ Architecture tab (stages EXPORT / PUSH / NIGHTLY say bridge + sync task, no other model, no API), the skill (a new load-order entry 1a-00e that tells any session exactly how to pull your day file over the bridge, run the nightly, and write the results back), DATA-ARCHITECTURE, the resume note, CHANGELOG and LESSONS.
+
+Two things to fix on your side, both small:
+
+- **Re-pick the folder and choose `data`.** Your 💾 tonight wrote `2026-09-03.json` into the repo *root* (the 📁 hover says "the data folder", and a hover isn't a guard). I used that copy anyway — it's the fuller one (v15.62, 962 node events vs 899) — and re-ran the nightly on it; the next build makes the panel write into `data\` either way. You can delete the stray root file whenever; the sync will commit the deletion.
+- **A time for the …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 99 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:52):** Push is denied from this environment by organization policy (403 on origin) — the 99 commits are local; the files went to your machine over the bridge and the GEX sync task pushes them. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> you know my objective and intentions now pretty well.  i want you to start considering the dashboard features and see if they need to change. consider each feature and lets have a conversation . step by step , feature by feature
+
+**me (23:27):** Good — this is the right moment for it, because today changed what the dashboard has to answer. Your objective is the two turning points and the pullback turns; what we learned from the four days is that the tell is not *where* a node is but *what it is doing as price arrives* — growing into the tap, fresh, stacked, the King of which book, the sign. So the standard for every feature is the one we set in the inventory: **does it change what you do at the next tap?** If a feature only describes, it earns a hover; if it predicts, it earns its place and a number with an n.
+
+Here's the order I'd take, one per step: (1) the node row on the ladder, (2) the King — per book, the tracks, the ♛ pill, (3) the MARK and STATE words, (4) the ⇄ rolls, (5) the levels column and the EM rails, (6) the READ box (HOD/LOD "is it in"), (7) THE READ FROM THE STATS, (8) the DAY table's columns, (9) the deflections-today ledger, (10) the footer and pipeline. Say if you want a different order; otherwise, feature 1.
+
+**Feature 1 — the node row on the ladder.** Today a row shows the strike, the %King bar (colour = sign), Δ15m in dollars, and the STATE word. It describes the node well. What it does *not* show is the three things that decided every deflection you circled: whether the node is **growing into the tap right now** (Δ15m is there, but it's a dollar figure you have to interpret against the node's size — $+20M means everything for a $60M node and nothing for a $500M one), whether the node is **fresh** (born in the last 30 bars — there is no age on the row at all; you had to see it as "out of nowhere" on the chart), and whether it is part of a **stack** (two nodes within ~5 points — visible only if you notice the adjacency yourself).
+
+My recommendation: keep the bar and the colour exactly as …[trimmed]
+
+**OPERATOR:**
+> there are multiple things . three things to look at are  if the node recently grew so its a  new node , whethere there was a roll from a prior node, and growth.
+
+**me (23:31):** That settles feature 1. The row's right side becomes those three, in that order of prominence:
+
+- **NEW** — the node recently grew *into existence*: age in bars since it crossed the threshold, and how fast it got there ("NEW 12b ▲$61M").
+- **⇄ from 7790** — the roll: which prior node the mass came from and how much, on the row itself rather than in a separate column (the ⇄ column stays as the mechanism, the tag is the read).
+- **▲+35%/15m** — growth into the tap as a share of the node, not a dollar figure.
+
+The stack bracket stays but quiet. And those three are exactly the first three inputs of the v15.63 score, so the row won't change shape again when the number arrives. Moving on.
+
+**Feature 2 — the King.** Today the ladder shows the S and Y tracks (where the SPXW and SPY crowns have sat, by price and time), the ♛ pill with moves and dwell, and the NOW pill takes a book's colour when price is on its King. The QQQ King is a dashed "proportional bearing" only. All of it is *identity* — which strike wears the crown. What the four days say is that the King's **behaviour** is the setup: the SPX King at $116M and growing $40–54M per 15 minutes when price first tapped it (E001), the −γ King growing into the tap and dissipating after (E004), the King that rolled from 7790 down onto price and became the support (E003), the +γ King adding $90M per 15 minutes under price and pulling it back (E001, L8). None of that is on the face; you read it off the chart's brightness.
+
+My recommendation: a **King strip** across the top of the ladder, one cell per book — **SPX · SPY · QQQ** — each showing the strike in ES terms, its size and sign, its growth ▲%/15m, its distance from price, whether it rolled and from where, and **its taps today: held / broke**, the per-book count the ledger now …[trimmed]
+
+**OPERATOR:**
+> ok.. can you show me a mockup
+
+**me (23:36):** Here it is — drawn on the real book of today at **12:48 CT**, twelve minutes after the pullback bounce you circled and twenty-four minutes before the high printed at the fresh 7755. Every SPXW number is from your day file; nothing is illustrative except the two placeholders I'll point out. It's also on your machine as `C:\Dev\gex-signal-tapereader\mockupkingstripstandalone.html`.
+
+**The King strip (feature 2)** — one cell per book. The SPX King cell says what the chart made you infer: 7750 (ES 7758.4), +γ, $273M, **▲+3%/15m after +$96M in the hour** — still growing but slowing at the tap, which is what you'd want to know with price sitting on it; it **rolled up from 7745 at 12:30 (+$20M)**; **taps today 2 held · 0 broke** — that's the religious tracking, on the face. The SPY King is 773, which is ES 7755.7 — 2.7 points *below* the SPX King with price between the two; the QQQ King is a dashed bearing, not a strike. The two "TAPS —" placeholders on SPY and QQQ are drawn as placeholders on purpose: the recorder holds growth and the tap ledger for the SPXW book only, and v15.63 adds the other two books rather than pretending.
+
+**The read line** under it is the words the score will replace: "price is ON the King stack … growth is slowing at the tap … 7755 is NEW this bar" — marked descriptive.
+
+**The node row (feature 1)** — your three, in your order. 7755 reads **NEW 1b · crossed 20% this bar · ▲+27%/15m**: that is the row that, 24 minutes later, was the session high. The King reads **⇄ from 7745 · 12:30 · +$20M · ▲+3%/15m · taps 2 held**. Under price, 7740 reads **▲+26%/15m · taps 1 held** and 7735 **▲+33%/15m · stack with 7740** — the floor that held at 12:36. Growth is a share of the node, not dollars, so a +$17M on 7735 reads as +33% while the King's +$7M reads as +3%. …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 100 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:36):** Push is denied from this environment by organization policy (403 on origin) — the 100 commits are local; the mockup files went to your machine over the bridge and the GEX sync task pushes them. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> all three kings are important  and can cause deflections. sometimes one will disagree becasue it is leading and the others are lagging. For example spy and spxy could be together and qqq moves higher first attracting price of all three.  At other times price is pulling back and it deflects on the spy node , at other times it goes through it and defelects off the spxy node . we dont know which node it will deflect on . what we do know is all 3 can pull and push (deflect) price .
+
+**me (23:37):** That's the answer I needed, and it changes the design in a good way: the Kings are not three candidates for one crown, they're **three layers of one zone**, and the trade is the zone. So:
+
+- **All three Kings go on the ladder as rows**, each at its ES-equivalent price in its book's colour — QQQ included, as a dashed row — and each row carries the same three tells (NEW · ⇄ roll · ▲ growth). Today at 12:48 that's SPY K 7755.7, SPX K 7758.4, QQQ K ≈ 7759.7: a **King zone of four points**, bracketed on the ladder as one thing with three layers.
+- **The zone is what the ledger records.** A tap of the zone is logged with *which* King price touched first and whether it went through to the next: "deflected at SPY K" or "through SPY K, held at SPX K". That gives S0.2–S0.4 their per-book rows *and* a zone row — "first King in the path held x% (n), second y% (n)" — which is exactly the "we don't know which one it will deflect on" question, measured instead of guessed.
+- **Lead and lag on the strip.** Each King cell shows its last move — strike, direction, minutes ago — and the King whose move is most recent gets a **LEAD** tag with its direction: "QQQ K rolled up 12:30 → 719; SPY K, SPX K unchanged" reads as *QQQ leading up, the pull is up*. That is your "QQQ moves higher first and attracts all three", on the face, descriptive until K1.3 (which King leads — 437 King-roll records, never read) is measured, and K1.3 goes to the front of the READ NEXT queue because of this conversation.
+- The magnet read line becomes a zone read: "price 3 below the King zone, zone growing +$27M/15m, lead QQQ up".
+
+I'll redraw the mockup with the zone once we've been through the rest, so it carries all your answers at once. On the two smaller questions I'll keep both forms — % of the node with the doll …[trimmed]
+
+**OPERATOR:**
+> i like the mockup , but it needs to be slightly better aligned, organized, user friendly and intuitive.. retry and show me the mockups
+
+**me (23:44):** Second draft, same real book at 12:48 CT — also updated on your machine as `mockupkingstripstandalone.html`.
+
+What changed to make it line up and read at a glance:
+
+- **One column per tell.** The ladder is now a fixed grid — LEVEL · PRICE/STRIKE · NODE · NEW · ⇄ ROLL · ▲ GROWTH · TAPS · ZONE/STACK. A tell that is absent leaves its column empty instead of shifting everything else, so every row is read left to right in the same order. Growth shows the % as the number and the dollars small beside it, as we agreed.
+- **The King zone on the ladder.** All three Kings are rows now, each at its ES price in its book's colour: QQQ K ≈ 7759.7 (dashed, a bearing), SPX K 7758.4, SPY K 7755.7 — bracketed as **KING ZONE · 3 layers · 4.0 pts**, with NOW at 7756 sitting on the second layer. That is your point drawn literally: three layers of one zone, and we don't know which layer will do the deflecting.
+- **The strip's three cells are identical line for line** — price, SIZE, GROWTH, PRICE distance, MOVED, TAPS — so you compare books by scanning across. And now that all three Kings are measured the same way, the strip says something the chart doesn't: at 12:48 the **SPY King was shrinking (−13%, −$60M in 15 min), the SPX King had stalled (0%), and the QQQ King was the only one still growing (+5%)** — the zone as a whole lost $48M. Twenty-four minutes later the high printed just above it.
+- **LEAD** marks the King that moved last — SPY, up 771 → 773 at 12:27 — with the direction; descriptive until K1.3 (which King leads) is read, which this conversation has moved to the front of the READ NEXT queue.
+- The zone read is three labelled lines — ZONE · LEAD · NEXT — instead of a paragraph, and the context rows say only "context row".
+
+The two honest placeholders stay: SPY and QQQ taps show "— …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 101 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:44):** Push is denied from this environment by organization policy (403 on origin) — the 101 commits are local; the mockup went to your machine over the bridge and the GEX sync task pushes it. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> lets simplify this . keep only  growth  and rename moved to Rolled and add a up arrow head  before up.  add a badge for above or below price..   remove the sextion that says zone lead next.  for now. I like the node ladder .  the new column makes sense. the roll columns makes sense , but you shoudl have a up dn indicator so i can quickly identify if it was a roll up or roll dn.  i dont need to see +20m or dolalr amounts becasue they just make things more complicated to read and i want simplicity. im not sure waht the zone stack is for but there needs to be a place where you quickly idnetify piku stack, rug, reverse rug  etc.  i dont thingk we need a taps and zone-stack column.   now show me updated mockups ..  i like that you are focusing on identifying new nodes that could potentially stop price and cause deflections because new money/hedging is coming in , i also like the focus on rolls. note that gamma could be rolling from and into non king nodes also .  I also like growth which would be similar to atalas "lighting up " a node .    Im not sure about the timeframe i am tracking . we should test this .  i guess 15m will ensure that noise is removed to a certain degree.   okay show new mockup.     REMBMEBER to keep my objective in mind always whenever you desing something.
+
+**me (00:02):** v3, with every point you made, on your machine as `mockupkingstripstandalone.html`:
+
+- **The King cells** are down to the price line, **GROWTH**, and **ROLLED** with the arrow head — `▲ up · 771 → 773 at 12:27` — plus the **ABOVE / BELOW** price badge with the distance. Size, taps, dollars gone.
+- **The zone read (ZONE · LEAD · NEXT)** is parked. Nothing between the strip and the ladder now.
+- **No dollar amounts anywhere.** Growth is a percentage with its arrow; the roll shows where and when.
+- **The roll column has its own arrow** — `▲ from 7745 · 12:30` on the node that received the gamma, `▲ to 7750 · 12:30` on the node it left. Both ends show, because you're right that gamma rolls between any two nodes, King or not; the arrow is the roll's direction (▲ rolled up, ▼ rolled down), so a roll down toward price reads at a glance.
+- **SETUP column** in place of taps and zone: pika stack, rug, reverse rug, air pocket, gatekeeper — the registry's named setups — shown only when present. At 12:48 that's the 7740 · 7735 pair, which is why the two rows say PIKA STACK; a rug would appear on the row of the node dissipating as price arrives.
+- The **King zone** stays as the three King rows on the ladder, labelled in the level column, since you liked the ladder.
+
+On the timeframe: I agree it should be tested, not chosen, so it's now a study — **S6.6, the growth window: 5 vs 15 vs 30 minutes, which one predicts the hold** — the recorder already stores d5, d15 and d60 per bar, so it reads from data we have. The row shows 15 min until that reads, then follows the winner.
+
+And to your reminder — how each column serves the objective: **NEW** is new money or hedging arriving at a price, i.e. a candidate turning point that did not exist an hour ago; **ROLL** is a floor or ceiling moving …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 102 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (00:02):** Push is denied from this environment by organization policy (403 on origin) — the 102 commits are local; the files went to your machine over the bridge and the GEX sync task pushes them. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> okay we can go with this ..  pika stack should be yellow.. i think there may be a barney stack ,  but rug and reverse rug are important , so you can mention them too for example there might be a qqq pica stack or spx pica stack or a reverse rug  from qqq or spy or spxw , lets use that column to call it out.  remember to keep my objective and the patternpedia in mind along with the how to use heatseeker and core concepts because they help in designing this appl.
+> also , the new job that runs every two minute keeps popping up and then going away . is there a way that it doesn't show the black cmd screen while running.
+> 
+> _[sent while I was working — a queued message]_
+
+**me (00:18):** Now the hidden-window fix for the sync task, then I'll deliver both.
+**The pop-up first.** The task was launching the .bat directly, so Windows opened a console for it every two minutes. Fixed the way the patternpedia's own tooling would do it, without PowerShell: a tiny Windows Script Host launcher, `tools\gex-sync-hidden.vbs`, runs the .bat with its window style set to hidden, and the task now runs that instead. Both files are in your repo folder — **double-click `setup-gex-sync.bat` once more**; it replaces the task in place (same name, same two minutes, window hidden) and runs it once. Nothing else changes.
+
+**The SETUP column (v3b)** — in the patternpedia's colours, per book, only when present. I went back to the docs before drawing it: Pika is the yellow +γ node, Barney the purple −γ node, and the *rug setup* is "a yellow node stacked above a purple node with no obvious floor in sight" — when the yellow unwinds, the drop is violent; the reverse rug is the mirror. So the chips are **PIKA STACK** yellow, **BARNEY STACK** purple, **RUG** red, **REVERSE RUG** green, plus AIR POCKET and GATEKEEPER as outlines, each prefixed with its book. And here is the part I like: at 12:48 yesterday the books actually held three of them, and the mockup shows the real ones — **SPX PIKA STACK** on 7740/7735, **QQQ PIKA STACK · 718–720** on the QQQ King row, and **SPY RUG · 773 over 772/771** on the SPY King row (the +γ SPY King stacked on a Barney pair with only a $15M floor at 768.5). The SPY rug didn't fire — price went to the high and drifted — which is exactly why setups are called on the face and measured in the ledger (S1 has the rug rows), never assumed. The brain's factor definitions now carry the patternpedia's wording too.
+
+This is the reference for the build. What the row a …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 103 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (00:19):** Push is denied from this environment by organization policy (403 on origin) — the 103 commits are local; the files went to your machine over the bridge and the GEX sync task pushes them. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> what did you want be to do .. tell me step by stepl like step 1.   also from now on remember this
+
+**me (00:28):** Remembered — it's now a standing rule in the project skill and the resume note, so every future session gives you numbered steps whenever you have to do something. Here are the two things I asked for:
+
+**A. Stop the pop-up window (2 minutes)**
+
+**Step 1.** Open File Explorer and go to `C:\Dev\gex-signal-tapereader`.
+
+**Step 2.** Double-click **`setup-gex-sync.bat`**.
+
+**Step 3.** A window opens. You should see the line `[4] task "GEX sync" created: every 2 minutes, your login, window hidden`, then `Press any key to continue`. Press any key. Done — the task now runs silently.
+
+**Step 4.** Send me "done" and I'll confirm from here that the next run committed and pushed without a window.
+
+**B. Point Save at the data folder (optional, 30 seconds — skip it if you like; the next build handles both)**
+
+**Step 1.** On the panel, click the 📁 icon in the footer.
+
+**Step 2.** In the folder picker, open `C:\Dev\gex-signal-tapereader` and select the **`data`** folder inside it (not the repo folder itself), then click Select Folder. If Chrome asks "Allow on every visit", choose that.
+
+**Step 3.** Nothing else — tomorrow's 💾 Save will land in `data\` where the nightly reads it.
+
+That's all for you. Everything else from the conversation — the ladder mockup, the setup column, the sync — is in my hands.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 104 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (00:28):** Push is denied from this environment by organization policy (403 on origin) — the 104 commits are local; the files went to your machine over the bridge and the GEX sync task pushes them. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> done
+
+**me (00:32):** Confirmed from here. The task is doing its job — the log shows a commit and a push at 19:03, 19:13, 19:21 and 19:29, each within two minutes of me writing files into your folder, and GitHub has all four (`gex: sync 03-Thu-09 19:29` is the latest). The 19:29 run is the first after your re-run of the setup, so from here on they're silent; if a black window ever flashes again, tell me and I'll look at the task definition.
+
+Everything from today is now on GitHub: v15.62, the three day files, tonight's nightly, the brain with the King-deflection setup, the mockups, the sync scripts. Your end of day tomorrow is 💾 Save and nothing else.
+
+When you want to continue the dashboard conversation, the next feature is the levels column and the ⇄ rolls mechanism; my open question was whether a level (PDH, IB, VWAP, EM) should be its own row on the ladder or stay a label on the nearest node's row.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 104 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (00:32):** Push is denied from this environment by organization policy (403 on origin) — the 104 commits are local; everything they hold is already on GitHub through your machine's sync task (latest `gex: sync 03-Thu-09 19:29`). Not retrying, per the standing rule.
+
+**OPERATOR:**
+> keep it in its own column
+
+**me (00:33):** Levels stay in their own column — decided. And the ⇄ rolls mechanism doesn't need a conversation of its own: its face is now the ROLL column on the row (▲/▼, from/to, the time), the caveat stays in the hover (a roll is inferred from paired changes between strikes, never an observed transfer), and K4.1/K4.2 measure whether price follows the crown after it moves. Nothing else to change there.
+
+**Feature 6 — the READ box ("HOD IN x% · LOD after …").** This is the one instrument on the face that answers the objective's first question directly — *is the standing high or low already the day's?* — from the posr × clock cell (H1.1, AUC 0.879, NOT-IN 85% at n=230), calibrated live since v15.51. It stays, untouched in what it computes. Two things I'd change around it:
+
+- **Where it sits.** Today it's in the DAY section under the ladder, below the fold when the panel is short. The ladder now says *where* the turn is (the King zone, the node lighting up); the READ box says *whether* the turn is already in. Those are the two halves of your objective and they should be read together — I'd move the READ box up to sit directly under the King strip, above the ladder, as one line: "HOD 7766 · IN 61% (n=…) · LOD 7700 · IN 88% (n=…)".
+- **The one thing to watch.** Tonight's nightly showed the READ's live column reading 0% in two cells where the table says 99–100% (one session, n=13 and 15). One session is nothing, but that is the F-11 shape — a scorer that cannot fail — and it's on Testing ② until it clears or is explained. Until then the box keeps its table number and the live number is labelled thin, which is what it does today.
+
+Question: do you read the READ box during the session as it is, or do you mostly read the chart and only glance at it — i.e. is moving it to the top worth the s …[trimmed]
+
+**OPERATOR:**
+> i only glance at it.
+
+**me (00:34):** Then it stays where it is, as one compact line — no move, nothing added. A glance is what a calibrated number deserves; the ladder is where the eyes live.
+
+**Feature 7 — THE READ FROM THE STATS.** The two lines under the DAY table: today's sweeps of the named levels (ONL, PDL, IB, EM, VWAP…) against the 284-session table — "ONL swept 08:41 · deep · slow — printed the extreme 40% (n=86)" — ranked reclaimed → broke → opened-beyond, tier one first, the rest in a trailer, plus the node clause from the book table (thin) and the register's word. It is honest and measured, and it is the bridge from the corpus to the face. But it is about *levels*, and everything we settled this week says the turn is about the *node* — the level tells you where price went, the node tells you where it stopped. The corpus agreed: the level's name added nothing; the flush, the clock and the reclaim did; the node clause is the unmeasured part (H6, 11 sessions).
+
+My recommendation: keep it, but make it earn its two lines by answering the node question first. Line one becomes the sweep *at the node*: "ONL 7743 swept 08:41 → held at SPX PIKA STACK 7740/7735 — deep · slow · 40% (n=86) · at a node: thin (n=12)". Line two the next candidate. And the moment H6 reads at 40 sessions, the node-conditioned rate replaces the level rate as the headline number — that's v15.64, scoring the READ, which also tells us whether these lines have been right.
+
+Question: when a level like the ONL or PDL is swept and reclaimed, is that something you already see and use from the Skylit chart (those lines are drawn there), or is the READ's rate — "40% of the time that was the low" — telling you something the chart can't?
+
+**OPERATOR:**
+> i just need to know if a key level was swept and keep it simple. i dont need the percentages shown to me in the text but that detail can be in the hover over.
+
+**me (00:35):** Done — the READ becomes a sweep line and nothing more: which key level, swept when, reclaimed or broke ("ONL 7743 swept 08:41 · reclaimed 08:52 · PDL 7702 not tested"), the rates and the n in the hover, the node clause in the hover too until H6 reads. Simple on the face, measured underneath.
+
+**Feature 8 — the DAY table.** The A/E rows under the ladder: SLvl · TLvl · TIME · TOOK · BOP · WICK · W.END · WICK% · OF BAR · MUD · PTMUD · PT TOOK · PT · PTWICK · GD/RD · PTN · HL GAP · HL RNG · HL $ · LC GAP · LC RNG · EFF · BODY, today's value against the 284-session expectation. Most of it is measured, all of it is descriptive of the day's *shape*, and it is twenty-two columns wide for someone who glances. The inventory already flagged four as low value (OF BAR ×2, PTN, BODY). Given the standard we've been applying — does it change what you do at the next tap — I'd keep the ones that time the objective: **TIME · TOOK** (when the first extreme tends to print, median 33 min), **HL RNG** (the prize itself, 61 pts / $3,072 median), and the **far-side line** (where and when the other extreme can print), and fold the other nineteen into the Analysis tab's H-subject and the hover, where they are already studied. The table shrinks to one short row.
+
+Question: which of those columns do you actually look at — is it the far-side line and the range, or is there one I'd be cutting that you use?
+
+**OPERATOR:**
+> right now its difficult for me to see .  but i am interested in the levels that have been swept and if hod or lod (1st extremity has been completed). the rest is just statistics and i dont need to see it but it is data for you to help you tell me when the lod is in , when the hod is expected , how long itwill take (in case i am holding a trade) where it could potentiallay go ..e tc..
+
+**me (00:39):** That's the clearest brief I've had for that part of the face, and it changes the DAY section from a table into a read. The twenty-two columns go off the face and become what you just said they are — my inputs — and what's left is four short lines in words, each number with its n in the hover:
+
+- **SWEPT** — "ONL 7743 swept 08:41 · reclaimed 08:52 · PDL 7702 not tested" (the key levels only, by tier).
+- **FIRST EXTREME** — "LOD 7700 at 09:56 — IN" (the READ box's call, the cell and its n in the hover; "not yet" when the table says the low is likely still ahead).
+- **THE OTHER SIDE** — "HOD not in · expected ~13:45 (the far side prints a median 229 min after the first) · where: 7745–7778, the middle half; the range prize is a median 61 pts from the low → 7761" — from H6.2, H5.1 and the far-side line, all measured on the 284 sessions.
+- **IF YOU'RE HOLDING** — "median time from a first extreme to the far one ≈ 3h 50m; the last extreme to the close ≈ …" — the timing words for a trade already on.
+
+Every one of those is already computed for the table; this only changes what reaches your eyes. The full statistics stay on the Analysis tab's H-subject where they belong, and the scoring of these sentences (v15.64) is what will tell us how good the "expected" lines are.
+
+**Feature 9 — the deflections-today ledger.** One row per fresh tap today: the node, the trigger, CONTINUED / STALLED / pending. With the King deflection now the bread-and-butter setup and "track it religiously", this ledger is the record that produces S0.1–S0.4 and the counts we parked from the King strip. My recommendation: keep it on the dashboard but compact — the last five taps, newest first, each as "12:36 · SPX 7740 · NEW/ROLL/GROWTH as they were at the tap · SPX PIKA STACK · HELD", with a per-book tally li …[trimmed]
+
+**OPERATOR:**
+> no i dont want to see the taps list
+
+**me (00:40):** Then the list goes to the Testing tab only, and the dashboard keeps just the tally line under the King strip — "SPX King 2 held · 0 broke · SPY — · QQQ —" — because that line *is* the religious tracking, and it turns into the per-book rate with its n as the ledger fills. Nothing else from the ledger on the face.
+
+**Feature 10 — the footer.** The pipeline dots (rec · saved · pushed · review · deps), the version, 💾 Save, 📁, and the doctrine step tips. Keep all of it; one change: the *pushed* dot now means the sync task's push (within two minutes of your Save), so its hover says that instead of "run push-data.bat", and the 📁 hover says "pick the data folder" in plain words. That's it — nothing on the footer competes with the ladder.
+
+That closes the conversation. Everything decided, in one list, and this becomes the build spec for **v15.63**:
+
+1. **The node row** — LEVEL (own column) · PRICE/STRIKE · NODE bar · NEW · ⇄ ROLL (▲/▼, from/to, time) · ▲ GROWTH (% only; 15 min until S6.6 picks the window) · SETUP (per book, patternpedia colours). No dollars, no MARK/STATE words, no taps or zone columns.
+2. **The King zone** — all three Kings as rows on the ladder at their ES prices, bracketed as one zone; the strip with three identical cells: price, ABOVE/BELOW badge, GROWTH, ROLLED with the arrow head. The zone read parked.
+3. **The tally line** under the strip — per-book King taps held · broke, a rate with n when it earns one.
+4. **The READ box** stays where it is, one compact line.
+5. **THE READ FROM THE STATS** becomes the SWEPT line — which key level, when, reclaimed or broke; rates in the hover.
+6. **The DAY table** becomes the four-line day read — SWEPT · FIRST EXTREME · THE OTHER SIDE · IF YOU'RE HOLDING — the statistics off the face, into the hovers and the Analysis tab …[trimmed]
+
+**OPERATOR:**
+> ok..
+
+**me (00:49):** Now splice the module, the CSS, the config, the gear, and the wiring into the script.
+Now secDay: the table and the taps list behind the toggle, the SWEPT line in, the range in the timing text.
+Now the tests — the helpers on fixtures, the grid's skeleton against the mockup's columns, the toggles — then a Chromium render of the real renderers.
+Mutation pass, then a Chromium render of the real renderers with the same fixtures.
+Now the real renderers in Chromium with the 12:48 fixtures, to see the actual face before the docs.
+Now the plan, the docs, the inventory, the record — then the suite and the installer.
+Now the real thing: render-face on the 2026-09-03 day file at 12:48 — the whole face from the shipped script, in replay.
+
 ### DECISIONS
+
+**v15.63 · the dashboard conversation, feature by feature (2026-09-03 evening → 2026-09-04).**
+- Feature 1, the node row: his three — "if the node recently grew so it's a new node, whether there was a roll from a
+  prior node, and growth" — became NEW · ⇄ ROLL · ▲ GROWTH; then "i dont need to see dollar amounts", "you should have
+  an up dn indicator" on the roll, no taps / zone columns, a SETUP column "to quickly identify piku stack, rug, reverse
+  rug", the timeframe "we should test this" (S6.6, 15 min until it reads).
+- Feature 2, the Kings: "all three kings are important … one will disagree because it is leading … we don't know which
+  node it will deflect on" → the three Kings as rows of one zone; the strip simplified to growth + rolled (with the
+  arrow head) + an ABOVE/BELOW badge; the ZONE/LEAD/NEXT read parked.
+- The SETUP column: "pika stack should be yellow … there may be a barney stack … rug and reverse rug are important …
+  a qqq pica stack or spx pica stack or a reverse rug from qqq or spy or spxw" → per book, the patternpedia's colours
+  and definitions (rug = yellow directly above purple, no floor in sight). "piku stack" = S7 Pika cloud.
+- Feature 4/5 the levels: "keep it in its own column". Feature 6 the READ box: "i only glance at it" → stays, one line.
+  Feature 7 the READ from the stats: "i just need to know if a key level was swept … detail in the hover" → the SWEPT
+  line. Feature 8 the DAY table: "the rest is just statistics … data for you to tell me when the lod is in, when the hod
+  is expected, how long it will take, where it could go" → off the face; the READ line carries the timing and the range.
+  Feature 9: "no i dont want to see the taps list" → the tally line only. Feature 10 the footer: unchanged.
+- Three mockup rounds (v1 → v3b), each on the real book of 2026-09-03 12:48; "ok.." → the build. Shipped as v15.63 with
+  the v15.62 ladder and table one gear toggle away. The scorer moved to v15.64.
+- Standing rule written on his ask: instructions to him are numbered steps (skill + resume note).
 
 **2026-09-03 evening · the end of day, the sync task, the King deflection setup.**
 - "so what are the next steps" → the seven steps; "can the rest be automated, can you run pushdata?" → his folder
@@ -1090,6 +1531,13 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.63** — the v15.63 module (NEW/born store, growth via velAt, rollTagFor, gridBookNodes/gridSetups per book,
+kingsNow + KING_PATH, kingsAtStrike → the ledger's `kings[]`, kingTapsToday/tallyLineHtml, kingStripHtml,
+ladderGridHtml, sweptLineHtml), the gear (ladderGrid · dayRead · growthWin), secFrame/secDay wiring, the grid CSS,
+replay branches; `tools/render-face.js --legacy`; `test_v1563.js` (65; 14 of 14 mutations); the plan (15.63 next →
+15.70), ROADMAP, CHANGELOG, LESSONS, resume note, DASHBOARD-INVENTORY §0; old pins moved (v1555 6s, v1560 2j, v1559 2o,
+v1562 1d/3m, ladder_layout/replay_face on --legacy). Suite 135 green / 5 baseline red. Installer `installv1563.bat`.
+
 **(same day, no version bump)** — `tools/gex-sync.bat` + `setup-gex-sync.bat` (on his machine, task live), the
 nightly's outputs for 09-03 over the bridge, S0 in `tools/studies-seed.py` → `learning/studies.json`, the brain's
 `king` factor + L9, the plan's ②③④, PROCESS §1/§2/§5b, skill 1a-00e, DATA-ARCHITECTURE, the resume note, CHANGELOG,
@@ -1284,6 +1732,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+- **He installs v15.63** (installv1563.bat), reloads, and I probe: the King strip, the tally (counts start today), the
+  grid's NEW / ROLL / GROWTH / SETUP on the live book, the SWEPT line, the gear toggles.
+- v15.64: the deflection candidate score + the per-book King rows on Testing + the H5 join. S6.6 decides the growth window.
+- The review session's time of day — his call. Blind screenshots from him → the gauge.
 
 - The review session's time of day (a scheduled task) — his call. Until then: "nightly review" in a session.
 - 💾 with the repo root picked writes `<root>\<day>.json` — he should re-pick the `data` folder; v15.63 handles both.
@@ -1516,18 +1969,18 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+07d0472 v15.63: the dashboard conversation — the node row (NEW · ⇄ ROLL · ▲ GROWTH · SETUP per book in the patternpedia's colours), the King zone (three Kings as rows, the strip), the per-book King tally, the SWEPT line, the DAY table and taps list off the face; replay-aware; one toggle away from v15.62
+b9aa241 standing rule: instructions to him are numbered steps (skill + resume note)
+f860dba mockup v3b: the SETUP column per book in the patternpedia's colours (pika yellow, barney purple, rug red, reverse rug green) · the sync task runs hidden (tools/gex-sync-hidden.vbs, wscript //B) · the brain's rug/stack factors per the patternpedia
+117c64b mockup v3: his simplifications (no dollars, the King cells to growth + rolled + an above/below badge, the roll arrow, a SETUP column, no taps/zone columns, the zone read parked) · S6.6 the growth window as a study
+9a14684 mockup v2: the King zone (three layers) and the node row on a fixed grid
+0ce3db0 mockup: the King strip and the node row (features 1+2 of the dashboard conversation), on the real book of 2026-09-03 12:48 CT
+34617ac chat history (evening)
 8e78c8f review 2026-09-03: H2.10f on the 11-session book table; LESSONS (the bridge is the pipe); test_v1556 reads the corpus size from the file
 fa7a8ae the end of day over the desktop bridge (PROCESS ①–⑤ + §5b, the plan's ②③④, skill 1a-00e, DATA-ARCHITECTURE, resume note) · S0 King deflection per book in the registry · the king factor + L9 in the brain · seeds re-spliced · nightly re-run on the fuller 09-03 save
 5f8300a GEX sync: a 2-minute Windows task that commits and pushes anything new in the repo (day files, the nightly's files written over the bridge, Drive drops) — replaces the Drive-only auto-pull; setup-gex-sync.bat run once
 e549ead nightly 2026-09-03: day files 09-01..09-03 (from his machine over the bridge), the log, SWEEPS + SWEEPS-BOOK refreshed (11 book sessions); H5 READY at 51 deflection events
 0ac7c44 v15.62: the mockups' look is the panel's look (tools/panel-css.py → PANEL_CSS, the skeleton pin, the scale control) · the 📚 Learn tab — the deflection learning doc (tools/learn-seed.py → examples.json + LEARNING.md + img/), four taught examples checked against the record (tools/node-lookup.py), eight rules, the 0–100 gauge that cannot flatter · plan: 15.63 the deflection candidate score · chat history (queued messages seen) · suite stamp
-466798a v15.61: the ladder floor — never fewer than 8 strikes when the tape has them; sub-threshold strikes drawn dimmed as CONTEXT rows, display only (the engine's node set unchanged); plan re-numbered (score the READ → 15.62 … pullback → 15.67); SCORE stage reads the plan's version; chat-history generator compaction-safe; suite stamp; LESSONS; chat history
-364a09f suite stamp v15.60
-92da907 v15.60: chat history
-00b7bfb v15.60: the Open Items tab (issues, questions) and enhancement requests on the Roadmap — one store, the TRACK path, the review answers in learning/items.json
-7787e99 suite stamp v15.59
-4466239 v15.59: chat history
-09bb216 config: LESSONS stays first in tier 0 (its test pins it); PURPOSE, PROCESS, ROADMAP follow; projectFiles = the union
 ```
 
 ---
