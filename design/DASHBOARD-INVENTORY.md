@@ -11,7 +11,15 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
-## 0 · v15.64 — the second conversation (2026-09-04): what the face carries now
+## 0 · v15.65 — the PATTERN columns (2026-09-04, afternoon)
+
+SETUP became **PATTERN, one column per book (SPX · SPY · QQQ)**: a PIKA / BARNEY block (the word in black on yellow /
+purple, the book's own strikes in yellow under it), RUG / RRUG blocks with their two strikes; a SPY / QQQ pattern off
+its King sits on the ladder row nearest its converted price (within one SPXW strike). The NOW row is a white hue; the
+King rows, chips and strip cells are SPX orange · SPY blue · QQQ cyan. Reference `design/render-v1565-face.png`,
+mockup `mockups/mockup-pattern-columns.png`. Everything else below stands.
+
+## 0a · v15.64 — the second conversation (2026-09-04): what the face carries now
 
 Top to bottom, with `CFG.dayRead` / `CFG.ladderGrid` on (both default): the **READ line** — its two facts only
 (`LOD IN 99% · HOD after 1:49pm — 80%`; the range clause and the timing prose in its hover) · the **SWEPT line** —

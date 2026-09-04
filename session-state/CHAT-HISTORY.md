@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-04 · v15.64 · session `f9c89c64` — v15.64: the second dashboard conversation — NEW and the stacks re-calibrated, the QQQ King live, the face re-ordered; roadmap/ and archive/ recovered; the installer's courier ceiling
+## 2026-09-04 · v15.65 · session `f9c89c64` — v15.64 → v15.65: the second dashboard conversation, the installer's courier ceiling, then the PATTERN columns and the Kings' colours
 
-_13 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_17 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -179,6 +179,54 @@ I'll put the 65,535 limit into the builder's records after the install so it's a
 > worked.. make sure you save as a lesson learned.   i just reloaded the application
 
 **me (17:01):** Now the chat history, the commit, and the files to his repo (the sync task pushes them):
+Everything is on GitHub and verified.
+
+**Live probe of your panel after the reload** — v15.64, no swallowed render errors:
+- ⓪a at the top (`HOD STANDING 65%`, `SWEPT · making LOD POC · VAL · EML · PDC · IBL`), the replay strip at the bottom.
+- Three King rows in one zone — the QQQ King is drawn live now (≈7729, QQQ 719) — all three cells wearing ROLLED badges, the pulse running, the NOW row lit, no tally text.
+- One NEW chip (`NEW 8b +98%`); three stacks, each named once with its bracket; no rugs.
+
+**GitHub:** `c61d6df` is your v15.64 install (the 26 retired tests gone from the root, `archive/` and `roadmap/` on origin for the first time, `v10.js` untracked), and `1fde3c4 gex: sync 04-Fri-09 12:04` is your sync task pushing the lesson — I wrote the records straight into your repo folder over the link rather than sending a second installer.
+
+**The lesson, as saved** (LESSONS "v15.64 — the install", landmine L-S in PROJECT-CONSTANTS, CHANGELOG same-night entry): `more +N` stops at 65,535 lines — v15.64's 66,123 was the first build past it, which is why every earlier installer had worked; the builder now copies the payload with a `for /f` skip, refuses a `more` command in the header, and `test_delivery M1–M5` pin it (mutation-checked). Also recorded: the Chrome side panel cannot download a `.bat`, so when the session is linked to your computer the installer goes into `C:\Dev\gex-signal-tapereader` directly and you run it there.
+
+Still to watch over a full session: the NEW count through the day (expect 0–2 per bar) and that the gear's motion switch stops the pulse.
+
+✅ SAVE DONE — commit `54be3f2` (pushed as `1fde3c4`): `session-state/LESSONS.md`, `session-state/PROJECT-CONSTANTS.md` (L …[trimmed]
+
+**OPERATOR:**
+> the barney's seems to be detecting better.  remember that it shows up in the skylit tape as dense purple just like piku is positive gamm aand is dense  yellow, and since the skylit tape is  a heatmap, its abs % king is probabaly high.   The second thing i am considering is to split the setup column into 3 columns so 1 is for spx, spy and qqq.  so if there is a barney stack in spy, it would be similar to how it is now but only with the text indicating the prices like a purple block with 769-772 to keep it simple and abbreviated.    lets also rename setup to Pattern .   it would indicate things like rug, rrug(reverse rug), gate  as well as airpockets and other things you learned going over the skylit documentation.    Regarding the the sweeps it should oly indicate the key levels its swept .  lets also break this into multiple instruments like ES and NQ .  are you able to get that data or does it have to be SPXW, QQQ and SPY ?    Also you only want the major levels here like prior day  POC, VAH , VAL  , prior week POC,   ONL, ONH, PDH, PDL. CW0, PW0  etc.   there is no need to mention IBH and IBL, EMH, EML.
+
+**me (17:18):** **ES and NQ — yes, both, with one limit.** The SWEPT line already *is* ES: the chart is ES1, its bars and the day's levels (ONH/ONL, PDH/PDL/PDC, prior-day POC/VAH/VAL) are all ES. NQ is available too — the companion has been fetching NQ 1-minute bars hourly since v1.15 (Yahoo `NQ=F`, 5-day window, full overnight), so NQ's ONH/ONL, PDH/PDL/PDC and prior-day POC/VAH/VAL can be computed the same way and swept the same way, on the same face, without switching the chart. Two things NQ can't have directly: CW0/PW0 are options walls from the SPX/SPY chain (for NQ they'd have to be the QQQ book scaled to NQ, a bearing — the way the QQQ King is drawn now), and **prior-week POC** isn't in the live 5-day window for either instrument — it would come from the nightly (the day files carry the bars) as a couriered level, like the base-rate tables. Doable; it's a nightly product, not a live one.
+
+Noted, in your order, nothing dropped — I'll take them one at a time:
+1. Barney = dense purple on the tape, pika = dense yellow; the tape is a heatmap, so high |%King| is the signature → goes into the brain as your stated claim (it's also why the 30% member cut works).
+2. SETUP split into three columns — SPX · SPY · QQQ — a purple or yellow block with just the prices, `769–772`.
+3. Rename SETUP → PATTERN; it also carries rug, rrug, gate, air pocket, and the other shapes from the docs.
+4. SWEPT: ES and NQ, key levels only.
+5. Major levels only — prior-day POC/VAH/VAL, prior-week POC, ONH/ONL, PDH/PDL, CW0/PW0 — no IBH/IBL, no EMH/EML.
+
+Next up is item 2 — the three columns. Before I draw the mockup, one question about it: with the ladder rows being SPXW strikes, a SPY or QQQ stack lands on the ladder at its *converted* price — do you want the block to read the book's own strikes (`769–772`) ev …[trimmed]
+
+**OPERATOR:**
+> its own price event rhough it sits on the converted price
+
+**me (17:22):** Item 2 drawn on a real book (Aug 28, 13:12 — the bar with stacks in all three books). One column per book under one PATTERN header; a stack is a yellow (pika) or purple (barney) block carrying only the book's own strikes — `7750–7755`, `769–771`, `717–718` — sitting on the row of its biggest member at the converted price, with the thin bar marking the other members. Rug / reverse rug would sit in the same columns as `RUG 773/772` (red) and `RRUG 719/718` (green); the hover keeps the full name and the definition. The other columns were trimmed a few pixels each so all nine fit your current panel width with nothing clipped.
+
+Good as drawn, or change something?
+
+**OPERATOR:**
+> the purple and yellow should also indicate pika or barney and have the prices below the text.   I alsow what the current price row to be highlighted with ta white hue instead and the other kings can have a seperate hue you can do the colors. for example, since qqq is cyan , it wwould have a cyan hue.   the spy ans spx king, use unique colors like you did with qqq  so the kings stand out  different than the color of the nodes.
+
+**me (17:29):** Revised as asked: the blocks read PIKA / BARNEY with the strikes on a second line; the NOW row carries a white hue; the three King rows each have their own hue and chip — SPX orange, SPY blue, QQQ cyan — so no King shares a colour with a node bar (the King strip's three cells would take the same three colours). In the build the pulse stays on the King rows, gated by the gear's motion switch as now.
+
+Keep these three colours, or do you want different ones for SPX and SPY?
+
+**OPERATOR:**
+> okay, but write barney and picka in black and have the prices in yellow..  build it.
+
+**me (17:33):** Now the v15.65 edits:
+Now `test_v1565.js` — the new rendering executed, with a SPY pattern that is *not* on its King:
 
 ### DECISIONS
 
@@ -217,6 +265,14 @@ I'll put the 65,535 limit into the builder's records after the install so it's a
 
 ### SHIPPED
 
+**v15.65** (panel; companion v1.18 unchanged) — after v15.64 was installed and verified live. SETUP → three PATTERN
+columns (SPX · SPY · QQQ): PIKA / BARNEY blocks (black word on yellow / purple, the book's own strikes in yellow under
+it), RUG / RRUG blocks; a SPY / QQQ pattern off its King placed on the nearest ladder row within one SPXW strike
+(`gridPatternHost`) — v15.63/64 never drew those; the NOW row in a white hue; the Kings in their own colours (SPX orange,
+SPY blue, QQQ cyan) on rows, chips and strip cells; the heatmap claim in the brain (P-heat); the plan renumbered
+(v15.65 this, 15.66–15.72 after). `test_v1565.js` 25 / 10 of 10 mutations; `test_v1563` and `test_v1564` re-pinned.
+Mockup `mockups/mockup-pattern-columns.png`, render `design/render-v1565-face.png`.
+
 **v15.64** (panel; companion v1.18 unchanged). NEW re-defined (`bornFromSnaps` with the below-set, `nodeBelowTouch`,
 `nodeBornTouch` as a latch, `nodeIsNew` → `{age,x,g}`, chip `NEW 9b ×2.3` / `NEW 6b +26%`); the stacks re-defined
 (`gridSetups(nodes,{px})`: member cut, one name, `stk` bracket rows, the rugs' side rule); `gridDisp` reads
@@ -236,6 +292,14 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **He installs v15.65** (installv1565.bat written into `C:\Dev\gex-signal-tapereader\` over the bridge → double-click
+  → wait 5 min → click the tapereader link → reload → "reloaded") and I probe: every pattern in its book's column, a
+  SPY/QQQ block on a non-King row when one exists, the white NOW row, the three King colours on the rows AND the strip,
+  nothing clipped at 673 px.
+- **His items not yet discussed one at a time, in his order:** (3b) PATTERN to carry GATE, AIR POCKET and other
+  doctrine shapes — each needs its Academy definition named first; (4) SWEPT on ES and NQ (NQ bars already couriered;
+  CW0/PW0 only as a QQQ bearing); (5) SWEPT majors only — prior-day POC/VAH/VAL, prior-week POC (a nightly product),
+  ONH/ONL, PDH/PDL, CW0/PW0; drop IBH/IBL, EMH/EML; ask whether PDC stays.
 - ✅ **Installed and verified live** (2026-09-04 ~11:55 CT): GitHub `c61d6df` v15.64; the 26 retired tests gone from
   the root, `archive/v15.53/` + `roadmap/` on origin, v10.js untracked. His panel: ⓪a at the top, the strip at the
   bottom, three King rows (QQQ ≈7729 drawn live), one NEW chip (`NEW 8b +98%`), three stack names with brackets,
@@ -261,6 +325,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+54be3f2 docs+tooling (v15.64, the install): the installer's courier ceiling - more +N stops at 65,535 lines, replaced by a for /f skip copy; the bridge delivery; LESSONS, L-S, CHANGELOG, resume note, chat history
 cc0bcce v15.64: the second dashboard conversation - NEW and the stacks re-calibrated (a crossing after a below-observation + growth; members >= 30% named once with a bracket; rugs on price's side), the QQQ King live, ROLLED badge, the READ and SWEPT lines at the top in plain words, the replay strip at the bottom, the tally off the face, NOW and King rows lit and pulsing; roadmap/ and archive/v15.53 recovered and carried by the installer
 665f809 v15.63: the dashboard conversation - the node row (NEW, roll, growth, setup per book), the King zone, the King tally, the SWEPT line; the DAY table and taps list off the face; one toggle away from v15.62
 13b18c2 gex: sync 03-Thu-09 19:29
@@ -272,7 +337,6 @@ d0d0c6c gex: sync 03-Thu-09 18:39
 2946157 gex: sync 03-Thu-09 18:37
 0fb27f6 gex: sync 03-Thu-09 17:53
 f096c83 gex: sync 03-Thu-09 17:39
-9080af3 v15.62: the mockups look (one stylesheet, one skeleton, scale control) + the Learn tab (deflection learning doc, four taught examples, eight rules, the 0-100 gauge) + tools/node-lookup.py
 ```
 
 ---

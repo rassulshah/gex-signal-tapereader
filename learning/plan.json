@@ -269,53 +269,61 @@
    "v": "15.64",
    "title": "the second dashboard conversation — NEW and the stacks calibrated on his taught days (NEW = not the opening book, crossed 20% within 20 bars, doubled or +20%/15m; a stack = adjacent same-sign nodes each ≥ 30% of the King, named once with a bracket; rug / reverse rug take the doctrine's price side), the King zone made obvious (NOW and King rows lit, Kings pulsing, the QQQ King live, ROLLED badge), the HOD/LOD line and the SWEPT line at the top in plain words (names only, making LOD / making HOD, details in the hover), the replay strip below, the tally off the face · the lost roadmap/ and archive/ recovered and carried by the installer",
    "serves": "HOD/LOD · PULLBACK · 'when price is going to a level, a new node pops up and deflects price'",
-   "status": "next",
+   "status": "shipped",
+   "date": "2026-09-04",
    "done": "after 10:00 the face shows 0–2 NEW chips per bar and one label per stack on the recorded days (tools/study-gridtells.py), the QQQ King draws live, and a fresh clone's suite is green but for the five baseline files"
   },
   {
    "v": "15.65",
+   "title": "the PATTERN columns — one per book (SPX · SPY · QQQ): a PIKA / BARNEY block in black on yellow / purple with the book's own strikes in yellow under it, RUG / RRUG blocks, a SPY / QQQ pattern off its King placed on the ladder row nearest its converted price; the NOW row in a white hue; the three Kings in their own colours (SPX orange · SPY blue · QQQ cyan) so no King shares a node colour; the heatmap claim in the brain",
+   "serves": "HOD/LOD · PULLBACK · reading the three books' shapes at a glance",
+   "status": "next",
+   "done": "a SPY or QQQ stack that does not sit on its King is visible on the ladder, and the render of 2026-08-28 13:12 shows every pattern in its book's column"
+  },
+  {
+   "v": "15.66",
    "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join",
    "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'",
    "status": "later",
    "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"
   },
   {
-   "v": "15.66",
+   "v": "15.67",
    "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured",
    "serves": "HOD/LOD · the loop closes",
    "status": "later",
    "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"
   },
   {
-   "v": "15.67",
+   "v": "15.68",
    "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme",
    "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6",
    "status": "later",
    "done": "40 taps recorded and the first F-study reads from them with n"
   },
   {
-   "v": "15.68",
+   "v": "15.69",
    "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study",
    "serves": "the loop closes on its own",
    "status": "later",
    "done": "a study changes status without a human editing the seed"
   },
   {
-   "v": "15.69",
+   "v": "15.70",
    "title": "one definitions file (Python + panel) · the shipped-artifact test",
    "serves": "hardening",
    "status": "later",
    "done": "changing a bin in one place fails the suite until the other side follows"
   },
   {
-   "v": "15.70",
+   "v": "15.71",
    "title": "the face manifest — every number on the face names its study, pinned by a test",
    "serves": "data-driven, enforced",
    "status": "later",
    "done": "a new number on the face without a study fails the suite"
   },
   {
-   "v": "15.71",
+   "v": "15.72",
    "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move",
    "serves": "PULLBACK",
    "status": "later",

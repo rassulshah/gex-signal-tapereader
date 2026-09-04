@@ -84,7 +84,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
   const q3=f.gridSetups(N('QQQ',[[718,100,7759.7],[715,-27,7727]]));
   ok(!(q3[718]||[]).some(s=>s.kind==='rug'),'3k a purple node three strikes below is not "stacked" under the yellow — no rug (the docs: directly above)');
   const html=f.setupHtml(spy[773]);
-  ok(/g3chip rug/.test(html) && /SPY RUG · 773 over 772/.test(html) && /title=/.test(html),'3i the chip carries the pattern’s name, the book, and the patternpedia’s definition in the hover');
+  ok(/g3pb rug/.test(html) && /title="SPY RUG · 773 over 772 — /.test(html) && /<i class="g3pr">773\/772<\/i>/.test(html),'3i (v15.65) the block: RUG with its two strikes; the pattern’s name, the book and the patternpedia’s definition in the hover');
   ok(f.setupHtml([])==='' && f.setupHtml(null)==='','3j nothing present → nothing drawn');
 }
 
@@ -156,7 +156,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
   g.readTrinityHeaders=()=>null; g.RATE_MIN_N=15;   // (v15.64) gridDisp asks the page's Trinity headers first, live
   const R=build(g,fns,exVar('KING_PATH')+' return { grid:ladderGridHtml("SPY", __g.PS, __g.rolls, {pdh:7708.25,pdl:7674.75,pdc:7697.75}, {ok:true,high:7743.4,low:7665.1}), strip:kingStripHtml("SPY", __g.rolls), kings:kingsNow("SPY") };')(Object.assign({PS,rolls},g));
   const grid=R.grid;
-  ok(/g3gr hd">.*level.*price · strike.*node · %king.*new.*⇄ roll.*▲ growth 15m.*setup/.test(grid),'7a the header row is the mockup’s seven columns in order',grid.slice(0,400));
+  ok(/g3gr hd">.*level.*price · strike.*node · %king.*new.*⇄ roll.*▲ growth 15m.*pattern · SPX.*SPY.*QQQ/.test(grid),'7a the header row: the mockup’s six columns, then PATTERN per book (v15.65)',grid.slice(0,400));
   ok(!/\$/.test(grid) && !/IN PLAY|DEFENDING|BREAKING|ATTRACTING|BUILDING|WEAKENING|SPENT/.test(grid),'7b no dollar amounts, no MARK / STATE words on the grid');
   ok(/♛ SPX KING/.test(grid) && /♛ SPY KING/.test(grid) && /♛ QQQ KING ≈/.test(grid) && /KING ZONE/.test(grid) && /3 layers<\/i>/.test(grid) && /3 layers, 4 points top to bottom/.test(grid),'7c the three Kings are rows of one zone, bracketed with its layer count and span',(grid.match(/layers[^<]*/)||[])[0]);
   const order=['♛ QQQ KING','♛ SPX KING','class="g3now"','♛ SPY KING'].map(t=>grid.indexOf(t));
@@ -165,7 +165,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
   ok(/▲ from 7745/.test(grid) && /▲ to 7750/.test(grid),'7f the roll shows on both ends: the King received it, 7745 lost it');
   ok(/▲ \+27%/.test(grid) && /▲ \+26%/.test(grid) && /▲ \+33%/.test(grid) && /▲ \+3%/.test(grid),'7g growth per row as the mockup’s numbers (the King’s +3% from its own strike)',(grid.match(/g3gg [a-z]+">[^<]*/g)||[]));
   const gface=grid.replace(/title="[^"]*"/g,'');
-  ok(/SPX PIKA STACK · 7740–7750/.test(gface) && (gface.match(/SPX PIKA STACK/g)||[]).length===1 && (gface.match(/g3stk pika/g)||[]).length===2 && /QQQ PIKA STACK · 718–719/.test(gface) && /SPY PIKA STACK · 773–774/.test(gface),'7h (v15.64) the SETUP column names each stack ONCE — SPX 7740–7750 on the King with its members bracketed, QQQ 718–719 on the QQQ King row, SPY 773–774 on the SPY King row');
+  ok((gface.match(/g3pb pika">PIKA<\/span><i class="g3pr">7740–7750/g)||[]).length===1 && (gface.match(/g3stk pika/g)||[]).length===2 && /g3gc pat qqq"><span class="g3pat"\s*><span class="g3pb pika">PIKA<\/span><i class="g3pr">718–719/.test(gface) && /g3gc pat spy"><span class="g3pat"\s*><span class="g3pb pika">PIKA<\/span><i class="g3pr">773–774/.test(gface),'7h (v15.65) each stack ONCE, as a block in its book’s column — SPX 7740–7750 on the King with its members bracketed, QQQ 718–719 in the QQQ column on the QQQ King row, SPY 773–774 in the SPY column on the SPY King row');
   ok(!/SPY RUG/.test(grid),'7h2 (v15.64) …and no SPY RUG: price (7756) sits ABOVE the yellow 773 (7755.7), so the yellow is a floor under price, not the rug’s ceiling — the docs’ "spot positioned below the positive node"');
   ok(/g3gr zone king/.test(grid) && /g3rolled|g3kbadges/.test(R.strip) && !/SPX King —|SPY King —|QQQ King —/.test(grid+R.strip),'7h3 (v15.64) the King rows carry the king class (lit and pulsing in CSS); the tally text is off the face');
   ok(/g3gr sub">/.test(grid) && /context row/.test(grid) && !/7738\.3[\s\S]{0,300}NEW/.test(grid),'7i a context row (below the threshold) draws its bar and nothing else');

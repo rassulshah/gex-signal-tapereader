@@ -23,7 +23,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 const face=h=>String(h).replace(/title="[^"]*"/g,'');
 
 // ---- 0 · the version and the constants -------------------------------------------------------------------------
-ok(/@version\s+15\.64/.test(src) && /var GPTS_VERSION='15\.64';/.test(src),'0a v15.64 in both spots');
+ok(/@version\s+15\.6[45]/.test(src) && /var GPTS_VERSION='15\.6[45]';/.test(src),'0a v15.64+ in both spots');
 ok(/var GRID_NEW_BARS=20;/.test(src) && /var GRID_NEW_GROW_X=2;/.test(src) && /var GRID_NEW_GROW_PCT=20;/.test(src) && /var GRID_STACK_MIN_PCT=30;/.test(src) && /var GRID_STACK_MAX_PCT=40;/.test(src),'0b the calibrated constants: NEW within 20 bars, ×2 or +20%; a stack member ≥ 30%, the biggest ≥ 40%');
 ok(/var NODEBORN_KEY='gpts_nodeborn_v2';/.test(src),'0c the birth store is v2 — his day’s first-sight "births" are discarded on install');
 ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03\), 7705 \(08-28\),\s*\/\/ 7665 \(08-31\)/.test(src),'0d the constants say they are hand-set (⚖) and name the three taps the rule cannot catch — recorded, not hidden');
@@ -106,7 +106,7 @@ ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03
   ok(!(rr2[718]||[]).some(s=>s.kind==='rrug'),'3k …price at 7750, under the yellow: not a reverse rug');
   const html=f.setupHtml(spx[7745]);
   ok(/^<span class="g3stk pika" title="[^"]*member[^"]*">┃<\/span>$/.test(html),'3l a member renders as the bracket glyph with its hover',html);
-  ok(/g3chip pika/.test(f.setupHtml(spx[7750])) && /SPX PIKA STACK · 7740–7750/.test(f.setupHtml(spx[7750])),'3m the biggest member renders the named chip');
+  ok(/g3pb pika">PIKA<\/span><i class="g3pr">7740–7750<\/i>/.test(f.setupHtml(spx[7750])) && /title="SPX PIKA STACK · 7740–7750 — /.test(f.setupHtml(spx[7750])),'3m the biggest member renders the block — PIKA over its strikes, the full name in the hover (v15.65)');
 }
 
 // ---- 4 · the QQQ King draws LIVE: the Trinity headers feed gridDisp when there is no replay frame -------------------
@@ -199,9 +199,9 @@ ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03
 
 // ---- 9 · the CSS: the NOW row and the King rows lit, the Kings pulsing under two gates, the bracket, the badge ---------
 {
-  ok(/#gpts-body \.g3gr\.now,#gpts-body \.g3gr\.now\.zone\{background:rgba\(255,255,255,\.11\);box-shadow:inset 3px 0 0 #fff/.test(src),'9a the NOW row: a brighter ground and a white left bar — "the current price row is not obvious enough" — and it wins inside the King zone (the zone tint used to override it: Chromium, 2026-09-04)');
-  ok(/#gpts-body \.g3gr\.king\{background:rgba\(227,195,65,\.10\);box-shadow:inset 3px 0 0 #e3c341\}/.test(src),'9b the King rows: a gold ground and a gold left bar');
-  ok(/@keyframes g3kingpulse\{/.test(src) && /#gpts-body \.g3gr\.king\{animation:g3kingpulse 2\.4s ease-in-out infinite\}/.test(src) && /#gpts-body \.g3gr\.king \.g3kchip\{animation:g3kchippulse/.test(src),'9c the King rows and their chips pulse');
+  ok(/#gpts-body \.g3gr\.now,#gpts-body \.g3gr\.now\.zone\{background:rgba\(255,255,255,\.1[17]\);box-shadow:inset 3px 0 0 #fff/.test(src),'9a the NOW row: a brighter ground and a white left bar — "the current price row is not obvious enough" — and it wins inside the King zone (the zone tint used to override it: Chromium, 2026-09-04)');
+  ok(/#gpts-body \.g3gr\.king\.kspx,#gpts-body \.g3gr\.zone\.king\.kspx\{background:rgba\(255,154,60,\.13\);box-shadow:inset 3px 0 0 #ff9a3c\}/.test(src),'9b the King rows: a ground and a left bar of their own colour (v15.65: SPX orange, SPY blue, QQQ cyan)');
+  ok(/@keyframes g3kchippulse\{/.test(src) && /#gpts-body \.g3gr\.king\{animation:g3kchippulse 2\.4s ease-in-out infinite\}/.test(src) && /#gpts-body \.g3gr\.king \.g3kchip\{animation:g3kchippulse/.test(src),'9c the King rows and their chips pulse (v15.65: a brightness pulse, so each row keeps its own colour)');
   ok(/@media \(prefers-reduced-motion: reduce\)\{#gpts-body \.g3gr\.king,#gpts-body \.g3gr\.king \.g3kchip\{animation:none !important\}\}/.test(src) && /#gpts-body\.g3nomo \.g3gr\.king,#gpts-body\.g3nomo \.g3gr\.king \.g3kchip\{animation:none !important\}/.test(src),'9d …gated by the panel’s motion setting (g3nomo) and the OS reduced-motion preference');
   ok(/#gpts-body \.g3gr\.stk\{box-shadow:inset 3px 0 0 rgba\(227,195,65,\.7\)\}#gpts-body \.g3gr\.stk\.barney\{box-shadow:inset 3px 0 0 rgba\(163,113,247,\.7\)\}/.test(src) && /#gpts-body \.g3stk\{/.test(src),'9e the stack bracket: a gold or purple left bar down the member rows, the glyph in the SETUP cell');
   ok(/#gpts-body \.g3kbadges\{margin-left:auto;display:flex;flex-direction:column/.test(src) && /#gpts-body \.g3rolled\.up\{/.test(src) && /#gpts-body \.g3rolled\.dn\{/.test(src),'9f the badge column stacks vertically; ROLLED UP green, ROLLED DOWN red');
@@ -231,8 +231,8 @@ ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03
   const g2=Object.assign({}, g, { localStorage:{getItem:k=>store2[k]||null,setItem:(k,v)=>{store2[k]=v;}} });
   const grid2=face(build(g2,fns,exVar('KING_PATH')+' return ladderGridHtml("SPY", __g.PS, [], null, null);')(Object.assign({PS},g2)));
   ok(/NEW 6b \+26%/.test(grid2) && !/×1\b/.test(grid2) && (grid2.match(/g3chip new/g)||[]).length===1,'10b2 7740 born 6 bars ago at $80M ($94.4M now = ×1.2, but +26% over the window) is NEW on growth and prints the growth, never "×1"; 7745 (×1.1, +11%) clears neither gate',grid2.match(/NEW[^<]*/g)||'no chip');
-  ok((gf.match(/SPX PIKA STACK/g)||[]).length===1 && /SPX PIKA STACK · 7740–7750/.test(gf) && (gf.match(/g3gr zone king stk pika|g3gr zone stk pika|g3gr stk pika/g)||[]).length===2,'10c ONE stack name on the King row; the two member rows carry the stk class (the bracket)',gf.match(/class="g3gr[^"]*"/g));
-  ok(/class="g3gr now/.test(gf) && /class="g3gr zone king"/.test(gf),'10d the NOW row and the King rows carry the classes the CSS lights and pulses');
+  ok((gf.match(/g3pb pika">PIKA<\/span><i class="g3pr">7740–7750/g)||[]).length===1 && (gf.match(/g3gr zone king kspx stk pika|g3gr zone stk pika|g3gr stk pika/g)||[]).length===2,'10c ONE stack block on the King row; the two member rows carry the stk class (the bracket)',gf.match(/class="g3gr[^"]*"/g));
+  ok(/class="g3gr now/.test(gf) && /class="g3gr zone king k(spy|qqq)"/.test(gf) && /class="g3gr zone king kspx"/.test(gf),'10d the NOW row and the King rows carry the classes the CSS lights and pulses (v15.65: per book)');
   ok(!/SPX King —|SPY King —|QQQ King —|held ·/.test(gf+face(R.strip)),'10e no tally text anywhere on the face');
   const bl=JSON.parse(store.gpts_nodeborn_v2).below;
   ok(bl[7730]===1 && bl[7725]===1 && bl[7735]===undefined,'10f the render recorded the below-observations: the context rows 7730 (11%, on the tape) and 7725 (9%, rows only) are in the below-set; 7735 (26%) is a node and is not',bl);
@@ -247,7 +247,7 @@ ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03
   ok(/## v15\.64/.test(cl) && cl.indexOf('## v15.64')<cl.indexOf('## v15.63'),'11c the CHANGELOG has the v15.64 entry on top');
   const ls=fs.existsSync('session-state/LESSONS.md')?fs.readFileSync('session-state/LESSONS.md','utf8'):'';
   const logAt=ls.indexOf('## 2 · THE LESSON LOG'); const firstEntry=(ls.slice(logAt).match(/### v[\d.]+/)||[])[0];
-  ok(firstEntry==='### v15.64','11d the lesson log’s first entry is v15.64 (newest first)',firstEntry);
+  ok(/### v15\.64/.test(ls.slice(logAt)) && /a stack is a strike-spacing question|first sight is not a birth/.test(ls),'11d the lesson log carries the v15.64 entries (first sight is not a birth; the courier’s ceiling)',firstEntry);
 }
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

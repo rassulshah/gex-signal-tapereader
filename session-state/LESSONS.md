@@ -131,6 +131,18 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.65 — a per-book pattern drawn only on that book's King row is invisible whenever the King is not in it
+v15.63 and v15.64 looked the SPY and QQQ patterns up ONLY on the SPY / QQQ King rows (`st[Kb.k]`), because those were
+the only rows those books had on the ladder. A SPY barney stack whose biggest member was not the King — or a SPY rug
+on a strike other than the King — was computed every render and never drawn, and nothing said so: the SETUP column
+simply read empty, which is indistinguishable from "no pattern". Found only because the three-column mockup made me
+ask where a SPY block goes when the SPY King has no stack. The rule: when a surface can only show a thing at one
+place, list what the thing can be that is not at that place — an empty column is not evidence of absence (pattern 4
+again, on my own face). Fixed by placing an off-King pattern on the ladder row nearest its converted price, within
+one SPXW strike (`gridPatternHost`), with a test that it lands (2f) and a test that a far one stays off (2f2). Seen
+in Chromium and not in jsdom, again: the QQQ column's block clipped at the ladder's right edge until the columns
+were re-measured — layout is measured, not assumed.
+
 ### v15.64 (the install, same night) — the courier has a ceiling; a card is not a download; write to his disk
 Operator, 2026-09-04 (his words): "make sure you save as a lesson learned." Three things that were believed and were
 false. (1) "`more +N` extracts the payload; the .bat just needs to stay under 6 MB." The installer sat on "Extracting

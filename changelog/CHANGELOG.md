@@ -1,3 +1,34 @@
+## v15.65 — the PATTERN columns, one per book; the Kings in their own colours; the NOW row in white
+
+> Operator, 2026-09-04, one item at a time: "split the setup column into 3 columns so 1 is for spx, spy and qqq … a
+> purple block with 769-772 to keep it simple and abbreviated" · "rename setup to Pattern" · "its own price even
+> though it sits on the converted price" · "the purple and yellow should also indicate pika or barney and have the
+> prices below the text … the current price row to be highlighted with a white hue … the other kings can have a
+> separate hue … since qqq is cyan … the spy and spx king, use unique colors … different than the color of the nodes"
+> · "write barney and pika in black and have the prices in yellow.. build it." Mockup approved first
+> (`mockups/mockup-pattern-columns.png`, drawn from the real 2026-08-28 13:12 book).
+
+**The columns.** SETUP is gone; PATTERN is three columns — SPX · SPY · QQQ. A stack is a block: PIKA on yellow or
+BARNEY on purple, the word in black, the book's OWN strikes in yellow under it (`769–771` on a row that shows a
+converted price). RUG (red) and RRUG (green) blocks carry their two strikes. The full name and the patternpedia
+definition are in the hover. **What was invisible before:** v15.63/64 looked a SPY or QQQ pattern up only on that
+book's King row, so a SPY stack or rug whose biggest member was not the King never drew at all. Now a pattern off its
+King lands in its column on the ladder row nearest its converted price, within one SPXW strike (`gridPatternHost`);
+further than that it is off the ladder and stays off. On 2026-08-28 13:12 that surfaces a SPY RUG 772/771 and a QQQ
+PIKA 715–716 the v15.64 face did not show. The nine columns were measured in Chromium at his 673 px panel
+(48 · 58 · 104 · 58 · 82 · 60 · 62 · 62 · 62); the node bar scales to 98 px.
+
+**The colours.** The NOW row: a white hue (`rgba(255,255,255,.17)` + the white bar). The three King rows and cells:
+SPX orange `#ff9a3c`, SPY blue `#5ea4ff`, QQQ cyan `#5fd3bc` — none of them the nodes' yellow or purple, which is
+what he asked for; the pulse became a brightness pulse so each row keeps its colour. The strip's cells match.
+
+**The brain.** His stated claim as P-heat: a barney is dense purple on the tape as a pika is dense yellow; the tape is
+a heatmap, so |%King| is high by construction — why the 30% member cut finds them.
+
+**Tests.** `test_v1565.js` (25; 10 of 10 mutations — the blocks, the nine cells, the columns, the off-King placement
+and its one-strike limit, the level rows never hosting, the row classes, the colours). `test_v1563` 3i · 7a · 7h and
+`test_v1564` 0a · 3m · 9a–9c · 10c · 10d re-pinned; the version pins. Render: `design/render-v1565-face.png`.
+
 ## (same night, no version bump) — the installer's courier hit its ceiling: `more` stops at 65,535 lines
 
 > "why does the cmd just pause. it seems to be hanging" · "can you look in the directory of how earlier install files
