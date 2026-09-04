@@ -637,6 +637,15 @@
        "corpus": "11d · book",
        "status": "READ",
        "result": "exploratory; direction only"
+      },
+      {
+       "id": "S6.6",
+       "q": "THE GROWTH WINDOW: is growth INTO the tap measured over 5, 15 or 30 minutes the better tell for the hold? (his ask 2026-09-03: \"I'm not sure about the timeframe … we should test this\")",
+       "decides": "SIZE · TIME",
+       "claim": "ours",
+       "corpus": "defl ledger · day files (d5 · d15 · d60 recorded per bar)",
+       "status": "OPEN",
+       "result": "the dashboard shows 15 min until this reads; the row's window follows the winner"
       }
      ]
     },
@@ -2016,9 +2025,9 @@
   }
  ],
  "counts": {
-  "studies": 189,
+  "studies": 190,
   "byStatus": {
-   "OPEN": 100,
+   "OPEN": 101,
    "READ NEXT": 17,
    "THIN": 25,
    "SHIPPED": 13,
