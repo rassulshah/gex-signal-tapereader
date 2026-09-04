@@ -18,6 +18,9 @@ read is never a verdict; every file the panel fetches rides the installer; probe
 **Tighten and harden the machinery over time** — PROCESS.md §5 is the standing backlog; add to it when something
 breaks, and say what broke in LESSONS.
 
+**HOW TO ASK HIM TO DO ANYTHING (2026-09-04, standing):** numbered steps — Step 1, Step 2 … — one action per step,
+what he should see, the word to send back. Never inside a paragraph. (skills/gex/SKILL.md, STANDING PROJECT RULES.)
+
 **THE END OF DAY (2026-09-03 evening, skill 1a-00e):** his one step is 💾 Save. The desktop bridge is how the files
 move: `get_device_info` → `device_request_folder_access` on `C:\Dev\gex-signal-tapereader` (once per session) →
 `device_stage_files` the day file → `tools/nightly/run.py` → the review → `SendUserFile` + `device_commit_files` the

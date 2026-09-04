@@ -472,6 +472,13 @@ an overall one-liner. Never inflate; unverified-live code stays "candidate".
 
 ## STANDING PROJECT RULES (apply always)
 
+- **WHEN HE HAS TO DO SOMETHING, GIVE NUMBERED STEPS (operator-mandated 2026-09-04: "tell me step by step like
+  step 1 … also from now on remember this").** Any action on his machine or in the panel — run a file, click a
+  button, pick a folder, reload — is written as **Step 1, Step 2, …**, one action per step, with what he should
+  see when it worked and the one word to send back ("done", "reloaded"). Never bury an instruction in a
+  paragraph; never assume he saw a step mentioned three messages ago. The same for a build: install steps first,
+  then the explanation.
+
 - **FEATURE ENROLLMENT (user-mandated 2026-08-17): no feature ships un-enrolled.**
   Every feature — new ones included — must AUTOMATICALLY enter all three improvement layers and
   become part of the tape-reader mental model: DATA (recorded per bar in the day file), ANALYSIS
