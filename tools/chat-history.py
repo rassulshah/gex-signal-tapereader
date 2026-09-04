@@ -410,9 +410,13 @@ def main():
         # it would file a compressed copy of the context alongside the live one on every build.
         same = ('session `%s`' % sid) in cur_block
         kept = '' if same else compress(cur_block).strip()
-        old_block = (kept + ('\n\n' if kept and rest.strip() else '') + rest.strip()).strip()
         # `rest` carries the tier's own heading; the writer emits one too. Without this a rebuilt
         # context stacks a fresh '# EARLIER CONTEXTS' line on the file every single run.
+        # ⚠ (2026-09-04) strip it from `rest` BEFORE joining: when a DIFFERENT context is demoted
+        # (`kept` non-empty) the old heading sits in the middle of the block, where an anchored
+        # regex on the joined string never saw it — test_chat_history r7 caught the second heading.
+        rest = re.sub(r'^\s*#\s*EARLIER CONTEXTS\s*\n+', '', rest.strip())
+        old_block = (kept + ('\n\n' if kept and rest.strip() else '') + rest.strip()).strip()
         old_block = re.sub(r'^#\s*EARLIER CONTEXTS\s*\n+', '', old_block)
     elif prev.strip():
         old_block = prev.strip()

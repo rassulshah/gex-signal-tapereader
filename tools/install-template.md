@@ -18,7 +18,7 @@ Every installer .bat must therefore end with, before `pause`:
    push failed. Never a silent success, because a silent failure here is invisible until Tampermonkey
    misbehaves two steps later.
 
-Payload rules (unchanged): base64 after `exit /b 0`, extracted with `more +<HDRLINES>` then
+Payload rules: base64 after `exit /b 0`, extracted with a `for /f "usebackq skip=<HDRLINES> delims="` copy (v15.64 — `more +<HDRLINES>` before that; it walked 66,000 lines one at a time and sat for minutes) then
 `certutil -f -decode` then `tar -xzf`. NO PowerShell anywhere — Avast flags it (IDP.HELU.PSE88).
 `<HDRLINES>` is the header's line count and must be recomputed whenever the header changes.
 

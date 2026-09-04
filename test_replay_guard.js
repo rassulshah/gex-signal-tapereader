@@ -118,7 +118,8 @@ ok(/every write path is blind while replaying|write path is blind/i.test(bar),
 // ⚠ ONE regex, not an alternation. My first cut ORed two patterns and the second kept passing when
 // the banner lost its click handler — an `||` in an assertion is two chances to be satisfied by the
 // half you did not break. Anchor on the div that must carry BOTH.
-const banner=(bar.match(/h\+='<div data-grp="exit"[\s\S]{0,900}?CLICK HERE FOR LIVE\.<\/div>';/)||[''])[0];
+// (v15.64) the banner is built into `_warn` so render() can mount it at the TOP while the strip sits at the bottom
+const banner=(bar.match(/_warn\+='<div data-grp="exit"[\s\S]{0,900}?CLICK HERE FOR LIVE\.<\/div>';/)||[''])[0];
 ok(banner.length>0, 'b1c the banner div itself carries data-grp="exit" — the fix is where the warning is');
 ok(/cursor:pointer/.test(banner), 'b1c2 ...and looks clickable');
 ok(/rgba\(240,97,109/.test(bar), 'b1d ...in the panel’s own red, not another amber pill among a dozen');

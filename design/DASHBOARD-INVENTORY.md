@@ -11,7 +11,22 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
-## 0 · v15.63 — what the conversation changed (2026-09-03/04)
+## 0 · v15.64 — the second conversation (2026-09-04): what the face carries now
+
+Top to bottom, with `CFG.dayRead` / `CFG.ladderGrid` on (both default): the **READ line** — its two facts only
+(`LOD IN 99% · HOD after 1:49pm — 80%`; the range clause and the timing prose in its hover) · the **SWEPT line** —
+names only, grouped by the side price was working, the latest sweep's side first (`making LOD: POC · VAL · IBL ·
+making HOD: PDH`), the name's colour = its state, time/price/status in the hover · the **King strip** (SPY · SPX ·
+QQQ: price, `▲ ROLLED UP` / `▼ ROLLED DOWN` over ABOVE/BELOW, GROWTH, ROLLED; the King taps tally in the hover) · the
+**grid ladder** — LEVEL · PRICE/STRIKE · NODE · **NEW** (`NEW 9b ×2.3`: observed below the threshold today, crossed
+within 20 bars, grew ×2 or +20%) · **⇄ ROLL** · **▲ GROWTH** · **SETUP** (a stack named ONCE on its biggest member,
+members ≥ 30% of the King bracketed; rugs on price's side); the NOW row bright, the King rows gold and pulsing (the
+gear's motion switch and `prefers-reduced-motion` stop it) · the **replay strip** at the bottom (the NOT RECORDING
+warning stays at the top). Off the face since this build: the tally line. Reference `design/render-v1564-face.png`.
+Calibration: `tools/study-gridtells.py` (NEW rule C, stacks S6). The three legs no %King threshold catches (7755
+09-03, 7705 08-28, 7665 08-31 — 12–18% of a grown King at the tap) are recorded in the constants' comment.
+
+## 0b · v15.63 — what the first conversation changed (2026-09-03/04)
 
 The face was re-decided feature by feature with him; the rows below describe the v15.62 face and stay as the record.
 What renders now (`CFG.ladderGrid`, `CFG.dayRead`, both default on): the **King strip** (SPY · SPX · QQQ: price,

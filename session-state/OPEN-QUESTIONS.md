@@ -52,6 +52,15 @@ operator named 'nd' and no context has identified the contract." Still unidentif
 
 ## 🔬 ANSWERABLE BY MEASUREMENT — no operator input needed, just the work
 
+### Q11 · Which axis catches the small fresh node at the extreme — %King, absolute dollars, or the node's OWN history? (opened 2026-09-04, v15.64)
+Three of his circled legs — 7755 (09-03, the session high), 7705 (08-28, the 14:00 low), 7665 (08-31) — sat at 12–18%
+of the King at the tap because the King had grown to $300M+ that hour. No threshold on %King names them without naming
+half the ladder (F-17; `tools/study-gridtells.py`). Candidates to measure on the day files: (a) absolute size ≥ $X with
+d15 growth; (b) the node against its own morning (×N its size at 09:00, or at its birth); (c) rank among the fresh
+nodes only. The panel's NEW rule (20 bars · ×2 · +20%) is ⚖ hand-set until one of these is measured against the
+deflection ledger. Not blocked on him.
+
+
 ### Q10 · When is a return to the node a NEW deflection rather than the same test continuing?
 **Blocks:** the deflection study, and therefore any claim about how often nodes deflect price.
 **Settled already** (his teaching + 5 circled examples, 2026-08-30): one *visit* is one deflection, not

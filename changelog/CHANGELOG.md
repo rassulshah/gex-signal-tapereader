@@ -1,3 +1,80 @@
+## v15.64 — the second dashboard conversation: NEW and the stacks re-calibrated, the QQQ King live, the face re-ordered · roadmap/ and archive/ recovered
+
+> His corrections, 2026-09-04, one per message: "The current price row is not obvious enough" · "The king rows need to
+> also be highlighted a little more" · "I dont see the qqq king on the node ladder at all" · "Above that, there should be
+> a rolled up or rolled down badge" · "The HOD/LOD banner along with the Swept banner should trade positions with the
+> replay at the top" · "spx king --, spy king -- and qqq king -- … taking up too much space" · "The new column has every
+> node as new, which is useless. The purpose of new was when price is going to a level, a new node pops up and deflects
+> price. It grew rapidly for this purpose" · "The spx barney and piku stacks are not implemented correctly at all because
+> they show barney stacks at multiple levels. I think you need threshold and examples. look at the skylit documentation"
+> · "The swept text needs to be simple like POC … the additional text of time and price can be within a hover over. The
+> read should be very simple" · "the kings should be pulsing or at least a little more animated on the ladder" · "in the
+> sweeps, there should be some text like price making lod swept … POC so it puts it in context of what price is
+> attempting to do".
+
+**Why NEW was wrong.** v15.63 marked a strike "born" the first time the panel SAW it at or above the threshold — which
+is the whole opening book at 08:30 and the whole ladder after any reload — so 15 of 15 rows read `NEW 10b` at 10:00.
+A birth now needs the strike OBSERVED BELOW the threshold earlier today (in the recorded book, or live: every context
+row and every tape strike under the cut feeds a below-set), a crossing within `GRID_NEW_BARS`=20, and GROWTH — at least
+×`GRID_NEW_GROW_X`=2 its size at the crossing (the birth now stores `mag`/`pct`; store `gpts_nodeborn_v2`, so his
+first-sight births are discarded on install) or ≥ +`GRID_NEW_GROW_PCT`=20% of itself over the growth window. The chip
+says which figure carried it: `NEW 9b ×2.3` / `NEW 6b +26%`. Calibrated on his four taught days
+(`tools/study-gridtells.py`, rule C): 0–2 chips per bar after 10:00 against v15.63's 4–15; catches 7775 (08-28 HOD),
+7720 (08-28 13:12), 7700 (08-27), 7670 (08-31 LOD); cannot catch 7755 (09-03), 7705 (08-28), 7665 (08-31), which at the
+tap sat at 12–18% of a King that had grown — the moving denominator (failure pattern 2), recorded in the constants'
+comment, not solved. The doctrine has no number for "grew rapidly" (velocity mode "appearing", "rapid accumulation acts
+like a magnet", the 2025-10-09 case study "downside nodes popped up and grew significantly … wait for the floor to hit");
+the thresholds are ⚖ hand-set until the ledger scores them.
+
+**Why the stacks were wrong.** v15.63 required only the biggest member of a run to clear 40% and printed the name on
+EVERY member row — a 100% King beside a 22% neighbour was a "stack", twice. The doctrine: a pika cloud is a DENSE
+cluster of LARGE nodes ("magnitude matters most … thin cloud = soft/porous; dense king-level cloud can pin all session",
+learn/heatseeker-patterns; "clusters of nodes: when multiple LARGE values group together", faqs). Now a MEMBER is a node
+≥ `GRID_STACK_MIN_PCT`=30% of the King — a thinner node is not a member and BREAKS the run (study S6: the cut applied
+BEFORE the runs are built; applying it as "every node in the run" (S2) let one 26% neighbour kill the King's own cloud
+and left 2026-09-03 with no stack on 66 of 87 bars) — the biggest ≥ 40%, named ONCE on the biggest member with a
+bracket (`stk` rows, a coloured left bar and a ┃ glyph) down the members. Measured: median 1 stack per bar (08-31: 2),
+max 3–5, at least one on 90–99% of bars (v15.63: median 2, 7 chips at 12:48 on 09-03 → 3 names now, one per stack).
+The rugs take price's side (learn/heatseeker-patterns: "spot positioned BELOW the positive node"): a RUG needs price
+under the yellow, a REVERSE RUG price above it — `gridSetups(nodes, {px})`; at 12:48 on 09-03 the v15.63 "SPY RUG 773
+over 772" is gone because price (7756) sat above the yellow (7755.7).
+
+**Why the QQQ King was missing live.** `gridDisp()` read the Trinity prices (`xm`) only from a replayed frame; live it
+fell to `STATE.QQQ.price`, which is never set under the SPX pin (`refreshSym('QQQ')` runs only when QQQ is the active
+book). So the third layer of the zone drew in replay and in the mockup and never on his panel. Live now reads
+`readTrinityHeaders()` — the page's own headers, the same thing the recorder stores as `xm` — when there is no frame.
+
+**The face.** ⓪a (the READ line + SWEPT) mounts at the TOP of the dashboard (`panelV3`, `_dayTop`); the replay strip
+at the BOTTOM (`render()` emits `replayBarHtml('strip')` after the single column; the NOT RECORDING warning stays at the
+top as `replayBarHtml('warn')`; no argument = both, for the tests and the pop-out). The READ line is its two facts —
+`LOD IN 99% · HOD after 1:49pm — 80%` — the "% of the range" clause and the timing prose moved into its hover (THE
+RANGE / THE TIMING). The SWEPT line is names only, grouped by the side price was working, the latest sweep's side
+first — `SWEPT · making LOD: POC · VAL · IBL · making HOD: PDH` — the name's colour is its state (green reclaimed, red
+broke, amber testing, dim opened-beyond), time · price · status in each name's hover. The tally line is off the face
+(`tallyLineHtml` kept; the counts are in each King cell's hover). The King cells carry a `▲ ROLLED UP` / `▼ ROLLED
+DOWN` badge stacked above ABOVE/BELOW. CSS: the NOW row has a bright ground and a white left bar (and wins inside the
+King zone — the zone tint used to override it, seen only in Chromium); the King rows a gold ground, a gold bar and a
+2.4 s pulse (`g3kingpulse`, the chip brightening with it), gated by the gear's motion setting (`g3nomo`) and the OS
+`prefers-reduced-motion`; the grid columns re-balanced from Chromium measurements (NEW 46 → 64 px for `NEW 12b +48%`).
+
+**The seventh directory (landmine L-Q, and the fix).** A fresh clone's suite ran 130/37 against an advertised 137/5.
+`archive/v15.53/` (the ~4,300 lines the simplification retired, with `INDEX.md` and 26 retired tests) and `roadmap/`
+had been committed in the cloud and NEVER reached GitHub — the installer's manifest carried neither, and the cloud
+cannot push. `tools/recover-archive.py` rebuilt the archive from git `bbd2f1a` (v15.51): 155 blocks in 13 groups,
+`INDEX.md` marked as a reconstruction (the per-block reasons are gone with the sandbox). The 26 retired tests moved to
+`archive/v15.53/tests/` (`git mv`) and the installer now DELETES them from his tree (`RETIRED_DEL` in the .bat — an
+installer can add files but had never removed one). `build-installer.py` walks `roadmap/*.md` and `archive/**` (183
+files). `tools/plan-seed.py` writes `roadmap/ROADMAP.md` beside `learning/plan.json` (v15.63 shipped; v15.64 this;
+15.65–15.71 renumbered); `roadmap/PRODUCT-ROADMAP.md` carries a STALE banner and the PARKED block for the futures
+gamma spec; `tools/splice-seed.py` is the one way a seed reaches the script.
+
+**Tests.** `test_v1564.js` (84; 21 of 21 mutations — births, the growth gate, the member cut, the once-only name, both
+rugs' side rules, the Trinity fallback, the badge order, the tally, the SWEPT grouping, the two-part strip, the READ
+hover, the CSS gates, the context-row below-observations). `test_v1563.js` re-pinned where the tells changed (3a · 3d ·
+4a–4d · 6a–6b · 7e · 7h · 8b, marked (v15.64)); `test_replay f9`, `test_replay_guard b1c`, the version pins. Rendered in
+Chromium from the shipped script on 2026-09-03 12:48 and 2026-08-28 10:00 (`design/render-v1564-face.png`). Suite on
+a fresh clone after the installer runs: green but for the five permanent baseline files.
+
 ## (docs, same day) — the WHAT and the HOW pinned; the roadmap; the dashboard inventory
 
 > "ensure you never forget my objective (the what) and the machinery and process … (the how) … tighten and harden the

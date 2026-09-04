@@ -65,10 +65,17 @@ every later build correctly reported it "unchanged" — and the delivery note sa
 never installed it.** The corpus tap therefore never ran once, across four builds. ⚠ The comparison
 that matters is against the version RUNNING IN HIS BROWSER; read it off the panel.
 
-**L-Q · THE INSTALLER MANIFEST HAS SILENTLY DROPPED THREE DIRECTORIES.** `design/`, `skylit-docs/`
+**L-Q · THE INSTALLER MANIFEST HAS SILENTLY DROPPED SEVEN DIRECTORIES.** `design/`, `skylit-docs/`
 and `tools/fixtures/` were each absent from the payload until a pre-send decode caught them —
-including on the build whose entire purpose was creating `FINDINGS.md`. **DECODE THE .bat AND CHECK
-THE FILE LIST BEFORE SENDING. It is the only check that finds this class of bug.**
+including on the build whose entire purpose was creating `FINDINGS.md`. **2026-09-04: `roadmap/` and
+`archive/v15.53/` (the whole simplification archive, ~4,300 lines + 26 retired tests) were committed in
+the cloud, never in the manifest, never pushed — a fresh clone's suite read 130/37 against an
+advertised 137/5 and nobody noticed for a day.** The manifest now walks both; `tools/recover-archive.py`
+rebuilt the archive from git. **A second shape of the same landmine: an installer ADDS files and had
+never DELETED one, so every retired test stayed at the root of his tree, red, forever** — the .bat now
+carries a deletion list (`RETIRED_DEL`). **DECODE THE .bat AND CHECK THE FILE LIST BEFORE SENDING. It is
+the only check that finds this class of bug** — and `test_installer_manifest.js` pins the fetched files,
+not the directories.
 
 **L-R · THE RESUME NOTE WENT SEVEN BUILDS STALE WHILE EVERYTHING ELSE WAS CURRENT.**
 `CHAT-HISTORY.md`, `CHANGELOG.md` and `FINDINGS.md` were updated on every build because

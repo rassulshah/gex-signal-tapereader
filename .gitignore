@@ -33,3 +33,6 @@ __pycache__/
 tools/gex-sync.log
 tools/gex-sync.lock
 tools/gex-pull.log
+
+# (v15.64) scratch a baseline test writes at the root (test_tapeking.js)
+_harness.js

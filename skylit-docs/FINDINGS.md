@@ -638,3 +638,35 @@ like the others. VWAP sweep-reclaim: **5–7% printed the extreme** (n=124/126) 
 ±2σ 11–13% (n≈180); today's developing POC **3–5%** (n=121/131), today's VAH/VAL 7–8% (n≈210). By construction a
 central-tendency level sits inside the range, so a sweep of it is a pullback, not the day's turn. The right outcome
 for these levels is "did the move resume" — queued as P5.1. On the face they rank tier 3 and are named, not read.
+
+## F-17 · NEW AND THE STACKS, CALIBRATED ON HIS FOUR TAUGHT DAYS — PROVISIONAL, HAND-SET, n=4 days (2026-09-04)
+
+Status: **PROVISIONAL** (⚖ hand-set thresholds against four sessions — 08-27, 08-28, 08-31, 09-03 — and his circled
+legs, not a corpus; the ledger scores them from v15.64 on). Doctrine bearing on it: `learn/air-pockets-velocity` (velocity
+mode: nodes "growing, shrinking, appearing, disappearing" = dealer urgency), `core-concepts` ("rapid accumulation acts
+like a magnet"), `examples-and-case-studies` 2025-10-09 ("downside nodes popped up and grew significantly … wait for the
+floor to hit to play the bounce"), `learn/heatseeker-patterns` (pika cloud: "magnitude matters most … thin cloud =
+soft/porous; dense king-level cloud can pin all session"), `faqs` ("clusters of nodes: multiple LARGE values"). None gives
+a number. Tool: `tools/study-gridtells.py`.
+
+**NEW.** The v15.63 rule (first sight ≥ 20% of the King within 30 bars) flagged 4–15 rows per bar after 10:00 — the
+whole opening book is "first seen" at 08:30. Rule C — observed below the threshold earlier today, crossed within 20
+bars, and grew (×2 its size at the crossing or ≥ +20% of itself over the window) — flags 0–2 per bar after 10:00. It
+catches 7775 (08-28, the HOD), 7720 (08-28, the 13:12 high), 7700 (08-27, the morning support), 7670 (08-31, the LOD
+stack) and cannot catch 7755 (09-03, the session high), 7705 (08-28, the 14:00 low), 7665 (08-31): at the tap those
+sat at 12–18% of a King that had itself grown to $300M+ — failure pattern 2, the moving denominator. A $50M node reading
+18% of a $345M King is not "below the threshold" in any sense that matters to price; the threshold is on the wrong
+axis for those legs. **Open:** an absolute-size or own-history criterion (the node's size against its OWN morning, not
+the King's) — queued, not built.
+
+**STACKS.** The v15.63 rule (biggest member ≥ 40%, the name on every member row) drew 2 stacks on 93–100% of bars and
+printed 7 chips at 12:48 on 09-03 ("barney stacks at multiple levels"). S6 — a member is a node ≥ 30% of the King, a
+thinner node breaks the run, the biggest ≥ 40%, named once — draws a median of 1 per bar (08-31: 2), max 3–5, at least
+one on 90–99% of bars, and 3 names at 12:48 on 09-03 (SPX 7740–7750 · SPY 773–774 · QQQ 718–719). ⚠ S2 — the same 30%
+applied to every node of a run built from ALL nodes ≥ 20% — is NOT the same rule: one 26% neighbour kills the King's
+cloud, and 09-03 had no stack on 66 of 87 bars under it. The 08-31 LOD stack he circled (7665/7670/7675 −γ) is not
+named by S6 either (7670 at 22%, 7665 under the ladder's cut) — the same denominator problem as NEW's.
+
+**The rugs.** `learn/heatseeker-patterns` puts spot BELOW the positive node for a rug; v15.63 ignored price's side and
+would have called "SPY RUG 773 over 772" at 12:48 on 09-03 with price 0.3 above the yellow. Fixed in v15.64; unmeasured
+as a predictor (S1 / S1.2 still OPEN).

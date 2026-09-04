@@ -1,0 +1,25 @@
+// archived at v15.53 (2026-09-03); recovered from git bbd2f1a on 2026-09-04 by tools/recover-archive.py
+var RECO_TESTS=[
+  {th:'GEX regime', t:'Negative-gamma regime (spot below zero-gamma) → higher realized vol + trend continuation next 15–30m', s:'📗', need:'deriv', ready:true},
+  {th:'GEX regime', t:'Positive-gamma + spot near King → mean-reversion to King; smaller |move| (the pin)', s:'📗', need:'deriv+King', ready:true},
+  {th:'GEX regime', t:'Gamma-flip crossing → regime change; 30m range expands vs the 30m before the cross', s:'📙', need:'deriv.zg', ready:true},
+  {th:'GEX level', t:'Call Wall rejects from below / Put Wall breaks are more violent than Call breaks (asymmetry)', s:'📕', need:'deriv.cw/pw', ready:true},
+  {th:'Concentration', t:'High gamma concentration (HHI top tercile) → pins win; low HHI → momentum wins', s:'📙', need:'deriv.hhi', ready:true},
+  {th:'Imbalance', t:'Above/below gamma imbalance predicts break direction (heavier side repels)', s:'📙', need:'deriv.imb', ready:true},
+  {th:'Accumulation', t:'A strike whose gamma mass is BUILDING is a stronger pin than one bleeding out (15–30m)', s:'📙', need:'chg', ready:true},
+  {th:'Accumulation', t:'King mass FALLING while spot sits on it → elevated pin-break probability within 30m', s:'📙', need:'chg+King', ready:true},
+  {th:'Accumulation', t:'King migration up/down (successive Kings at higher/lower strikes) = structural drift tell', s:'📙', need:'tking series', ready:true},
+  {th:'Time-of-day', t:'Vanna at open + charm in last 90m; midday quiet — vol/drift by session bucket', s:'📙', need:'time', ready:true},
+  {th:'VEX (vanna)', t:'VEX King and GEX King co-located → stronger, tighter pull to that level (superposition)', s:'📕', need:'VEX', ready:false},
+  {th:'VEX (vanna)', t:'Net VEX +near spot AND VIX falling → melt-up drift toward the VEX King', s:'📙', need:'VEX+VIX', ready:false},
+  {th:'VEX (vanna)', t:'GEX pins locally but drift bleeds toward the VEX King in the IV-move direction (tug)', s:'📙', need:'VEX+VIX', ready:false},
+  {th:'VEX (vanna)', t:'Zero-Vanna level flips the sign of the IV→spot response (untested anywhere)', s:'📕', need:'VEX', ready:false},
+  {th:'VEX (vanna)', t:'BUILDING VEX under falling VIX → stronger/longer melt than a static VEX King (hours)', s:'📕', need:'VEX Δ+VIX', ready:false},
+  {th:'DTE gate', t:'VEX signals only fire when 30–90 DTE OI present; on 0DTE bars VEX≈0 (enforce as filter)', s:'📗', need:'VEX', ready:false},
+  {th:'Confluence', t:'SPY & QQQ Kings same side + VIX falling → SPY continues toward its King (30m)', s:'📙', need:'multi-sym+VIX', ready:false},
+  {th:'Confluence', t:'QQQ leads SPY on turns — QQQ King-flip/break precedes SPY by ≥1 bar (test the lead is real)', s:'📕', need:'multi-sym', ready:false},
+  {th:'Confluence', t:'SPX breaks SPXW vol-trigger + SPY net-GEX<0 → SPY down-trend + vol expansion (cascade)', s:'📙', need:'multi-sym', ready:false},
+  {th:'Confluence', t:'VIX backwardation (VIX/VIX3M>1) → raise vol expectation, down-weight pin signals', s:'📗', need:'VIX term', ready:false},
+  {th:'Expiration', t:'On OPEX days, close clusters at/near the King vs non-OPEX (Ni-Pearson-Poteshman pinning)', s:'📗', need:'OPEX flag+King', ready:true},
+  {th:'End-of-day', t:'Charm: OPEX + spot near high-mass King at 14:30 → close pulls to the King', s:'📙', need:'OPEX+time', ready:true}
+];

@@ -18,7 +18,7 @@ import json, io
 
 PLAN = {
   "schema": 1,
-  "written": "2026-09-03",
+  "written": "2026-09-04",
   "objective": {
     "one": "Find the day's HOD and LOD early enough to trade the move between them; secondarily, find the pullback turning points that resume a trend rather than end it.",
     "mechanism": "A gamma node deflects price, and the deflection IS the turning point.",
@@ -31,7 +31,7 @@ PLAN = {
     "doc": "design/PURPOSE.md"
   },
   "tabs": [
-    {"tab": "Dashboard", "role": "ACT", "line": "what the node is DOING as price arrives — NEW · ⇄ ROLL · ▲ GROWTH · SETUP per book, the King zone, the tally, the READ line and the SWEPT line; every rate with its n"},
+    {"tab": "Dashboard", "role": "ACT", "line": "what the node is DOING as price arrives — NEW · ⇄ ROLL · ▲ GROWTH · SETUP per book, the King zone (three Kings, lit), the HOD/LOD line and the SWEPT line at the top in plain words; every rate with its n, in the hover"},
     {"tab": "Analysis", "role": "ASK AND READ", "line": "the registry: every study by subject, its status, its result with n; the TRACK field"},
     {"tab": "Testing", "role": "TRUST AND PROMOTE", "line": "the register, the gate, what the ladder renders and why, the record, the nightly, the suite"},
     {"tab": "Architecture", "role": "THE HOW", "line": "the objective and the loop, as live status — is the machinery working today"},
@@ -83,14 +83,15 @@ PLAN = {
     {"v": "15.60", "title": "the 📌 Open Items tab (issues, questions) and enhancement requests on the Roadmap — one field, one store, the review answers in the file", "serves": "complete application management: requirements → design → open items", "status": "shipped", "date": "2026-09-03"},
     {"v": "15.61", "title": "the ladder floor — never fewer than 8 strikes when the tape has them: sub-threshold strikes drawn dimmed as CONTEXT rows, display only (his 'only 3 strikes' ask)", "serves": "HOD/LOD · seeing the node around the King on a concentrated book", "status": "shipped", "date": "2026-09-03"},
     {"v": "15.62", "title": "the mockups' look is the panel's look (one stylesheet, one skeleton, the scale control) · the 📚 Learn tab — the deflection learning doc, four taught examples checked against the record, eight rules, the 0–100 gauge", "serves": "PULLBACK · HOD/LOD · learning to identify and predict deflections", "status": "shipped", "date": "2026-09-03"},
-    {"v": "15.63", "title": "the dashboard conversation, feature by feature — the node row (NEW · ⇄ ROLL · ▲ GROWTH · SETUP per book in the patternpedia's colours), the King zone (three Kings as rows of one zone, the strip with growth / rolled / above-below), the per-book King tally, the SWEPT line, the DAY table and the taps list off the face, the growth window as a setting under test (S6.6)", "serves": "HOD/LOD · PULLBACK · 'what is the node DOING as price arrives'", "status": "next", "done": "the face renders his eight decisions from the real book (design/render-v1563.png) with no dollar amount and no rate under its n; the v15.62 ladder and table are one toggle away"},
-    {"v": "15.64", "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join", "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'", "status": "later", "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"},
-    {"v": "15.65", "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured", "serves": "HOD/LOD · the loop closes", "status": "later", "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"},
-    {"v": "15.66", "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme", "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6", "status": "later", "done": "40 taps recorded and the first F-study reads from them with n"},
-    {"v": "15.67", "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study", "serves": "the loop closes on its own", "status": "later", "done": "a study changes status without a human editing the seed"},
-    {"v": "15.68", "title": "one definitions file (Python + panel) · the shipped-artifact test", "serves": "hardening", "status": "later", "done": "changing a bin in one place fails the suite until the other side follows"},
-    {"v": "15.69", "title": "the face manifest — every number on the face names its study, pinned by a test", "serves": "data-driven, enforced", "status": "later", "done": "a new number on the face without a study fails the suite"},
-    {"v": "15.70", "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move", "serves": "PULLBACK", "status": "later", "done": "a resume rate with n renders on a tier-3 READ line"}
+    {"v": "15.63", "title": "the dashboard conversation, feature by feature — the node row (NEW · ⇄ ROLL · ▲ GROWTH · SETUP per book in the patternpedia's colours), the King zone (three Kings as rows of one zone, the strip with growth / rolled / above-below), the per-book King tally, the SWEPT line, the DAY table and the taps list off the face, the growth window as a setting under test (S6.6)", "serves": "HOD/LOD · PULLBACK · 'what is the node DOING as price arrives'", "status": "shipped", "date": "2026-09-03"},
+    {"v": "15.64", "title": "the second dashboard conversation — NEW and the stacks calibrated on his taught days (NEW = not the opening book, crossed 20% within 20 bars, doubled or +20%/15m; a stack = adjacent same-sign nodes each ≥ 30% of the King, named once with a bracket; rug / reverse rug take the doctrine's price side), the King zone made obvious (NOW and King rows lit, Kings pulsing, the QQQ King live, ROLLED badge), the HOD/LOD line and the SWEPT line at the top in plain words (names only, making LOD / making HOD, details in the hover), the replay strip below, the tally off the face · the lost roadmap/ and archive/ recovered and carried by the installer", "serves": "HOD/LOD · PULLBACK · 'when price is going to a level, a new node pops up and deflects price'", "status": "next", "done": "after 10:00 the face shows 0–2 NEW chips per bar and one label per stack on the recorded days (tools/study-gridtells.py), the QQQ King draws live, and a fresh clone's suite is green but for the five baseline files"},
+    {"v": "15.65", "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join", "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'", "status": "later", "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"},
+    {"v": "15.66", "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured", "serves": "HOD/LOD · the loop closes", "status": "later", "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"},
+    {"v": "15.67", "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme", "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6", "status": "later", "done": "40 taps recorded and the first F-study reads from them with n"},
+    {"v": "15.68", "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study", "serves": "the loop closes on its own", "status": "later", "done": "a study changes status without a human editing the seed"},
+    {"v": "15.69", "title": "one definitions file (Python + panel) · the shipped-artifact test", "serves": "hardening", "status": "later", "done": "changing a bin in one place fails the suite until the other side follows"},
+    {"v": "15.70", "title": "the face manifest — every number on the face names its study, pinned by a test", "serves": "data-driven, enforced", "status": "later", "done": "a new number on the face without a study fails the suite"},
+    {"v": "15.71", "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move", "serves": "PULLBACK", "status": "later", "done": "a resume rate with n renders on a tier-3 READ line"}
   ],
   "decisionsHis": [
     "the Skylit API backfill (~15–20k credits): years of taps in an afternoon — unblocks most OPEN studies",
@@ -106,6 +107,31 @@ PLAN = {
   ]
 }
 
+def roadmap_md():
+    """roadmap/ROADMAP.md — the prose form of PLAN['roadmap'], regenerated so it can never drift from the plan.
+    (v15.64) The hand-written ROADMAP.md of v15.59 never reached GitHub (roadmap/ was not in the installer's
+    manifest); this generator replaced it, and roadmap/*.md now rides the installer. test_v1559 pins the
+    `### v15.NN —` headings here to the plan's unshipped items; test_process pins 'Where we are' / 'Done when'."""
+    R = PLAN["roadmap"]
+    out = ["# ROADMAP — incremental, one build at a time, each with a definition of done", "",
+           "_Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders) · written %s · the WHAT is `design/PURPOSE.md`, the HOW is `design/PROCESS.md`._" % PLAN["written"],
+           "", "⚠ Edit `tools/plan-seed.py`, run it, re-splice `PLAN_SEED` — never this file by hand. Older roadmaps (`roadmap/PRODUCT-ROADMAP.md`, the v15.50 deflection roadmap) are history; this is the plan.", "",
+           "## Where we are", ""]
+    for x in [x for x in R if x["status"] == "shipped"]:
+        out.append("- **v%s** (%s) — %s · serves: %s" % (x["v"], x.get("date", ""), x["title"], x["serves"]))
+    nxt = [x for x in R if x["status"] == "next"]
+    out += ["", "## NEXT — the running build", ""]
+    for x in nxt:
+        out += ["### v%s — %s" % (x["v"], x["title"]), "", "Serves: %s." % x["serves"], "", "Done when: %s." % x["done"], ""]
+    out += ["## AFTER THAT — in order", ""]
+    for x in [x for x in R if x["status"] == "later"]:
+        out += ["### v%s — %s" % (x["v"], x["title"]), "", "Serves: %s." % x["serves"], "", "Done when: %s." % x["done"], ""]
+    out += ["## His decisions, still open", ""] + ["- %s" % d for d in PLAN["decisionsHis"]]
+    out += ["", "## Constraints (operator-mandated)", ""] + ["- %s" % c for c in PLAN["constraints"]]
+    out += ["", "## The hardening backlog (PROCESS.md §5)", ""] + ["- %s" % h for h in PLAN["hardening"]]
+    return "\n".join(out) + "\n"
+
 if __name__ == "__main__":
     io.open("learning/plan.json", "w", encoding="utf-8").write(json.dumps(PLAN, ensure_ascii=False, indent=1))
-    print("wrote learning/plan.json ·", len(PLAN["stages"]), "stages ·", len(PLAN["roadmap"]), "roadmap items")
+    io.open("roadmap/ROADMAP.md", "w", encoding="utf-8").write(roadmap_md())
+    print("wrote learning/plan.json + roadmap/ROADMAP.md ·", len(PLAN["stages"]), "stages ·", len(PLAN["roadmap"]), "roadmap items")

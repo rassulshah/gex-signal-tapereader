@@ -131,6 +131,33 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.64 — first sight is not a birth; a cut is applied before the run, not to it; an installer that only adds loses directories
+Four false beliefs, each with its instance. (1) "A strike is NEW when the panel first sees it at the threshold." The
+panel first sees the WHOLE opening book at 08:30 and the whole ladder after every reload, so 15 of 15 rows read
+`NEW 10b` on his panel at 10:00 — a tell that fires on everything says nothing. A birth is a CROSSING, and a crossing
+needs a prior observation below; absence of a prior observation is ignorance, not novelty. The same shape as failure
+pattern 4 inverted: concluding "new" from a shallow look. And a node that appeared and did not grow is not what he
+means by new — "it grew rapidly for this purpose" — so growth is part of the definition, not a decoration. (2) "Each
+member ≥ 30%" can be implemented two ways and they are not the same: filtering the run's nodes BEFORE building it
+(S6) or requiring every node in a run built from all nodes to clear it (S2). S2 let one 26% neighbour kill the King's
+own cloud — 2026-09-03 had no stack at all on 66 of 87 bars — and I had written the calibration numbers from S2 into
+the constants' comment before the Chromium render showed the King's cloud missing. The measured rule and the shipped
+rule must be the same function; `study-gridtells.py` now carries S6 beside S2 and says which ships. (3) "A live
+defect that the mockup and the replay do not show is not there." The QQQ King drew in replay (the frame's `xm`) and in
+the mockup (a fixture) and never live, because the live path read `STATE.QQQ.price`, set only when QQQ is the active
+book. Three surfaces agreed and all three were fed by something other than the live page; the probe of his tab
+(`readTrinityHeaders()` had QQQ $717.82 while `STATE.QQQ` was undefined) was the only honest witness. Probe the live
+panel after every install — PROCESS.md says so and this is why. (4) "What is committed is in the repo." `archive/v15.53/`
+and `roadmap/` were committed in the cloud, never pushed (the cloud cannot), never in the installer's manifest — the
+SEVENTH directory lost that way (L-Q) — and a fresh clone's suite read 130/37 against an advertised 137/5 because the
+25 retired tests stayed at the root, red, while their archive never arrived. An installer that can add a file but never
+delete one leaves every retirement half-done on his machine. Fixed structurally: the manifest walks `roadmap/` and
+`archive/`, the .bat deletes the retired tests, `recover-archive.py` rebuilds the archive from git (the code was never
+lost; the per-block reasons were). Withdrawn: the v15.63 NEW/stack calibration claims ("median 1 stack per bar, max
+3–4, keeps the 09-03 12:36 floor") were S2's numbers; S6's are median 1 (08-31: 2), max 3–5, ≥ 1 on 90–99% of bars.
+Also seen in Chromium and not in jsdom: `.g3gr.zone` overrode `.g3gr.now` inside the King zone (equal specificity,
+later rule wins), and a 46 px NEW column clipped `NEW 12b +48%` (63 px measured). Layout is measured, not assumed.
+
 ### v15.63 — a stack is a strike-spacing question, not a point question; a replayed face is the only face a test can see
 Two things a mockup could not have caught. (1) "Two nodes within 5 points" was written with SPXW in mind, where strikes
 are 5 apart; on the SPY book strikes are 1 apart (≈10 ES points), so the same rule found no SPY stacks at all and, once

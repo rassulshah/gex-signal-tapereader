@@ -11,7 +11,7 @@ Every version string here is READ FROM THE FILES. Nothing is typed twice.
 
   python3 tools/build-installer.py "v11.87: one-line commit message"
 
-Payload rules (tools/install-template.md): base64 after `exit /b 0`, extracted with `more +<HDRLINES>`
+Payload rules (tools/install-template.md): base64 after `exit /b 0`, extracted with a `for /f "skip=<HDRLINES>"` copy (v15.64; `more +N` before that)
 then `certutil -f -decode` then `tar -xzf`. NO PowerShell anywhere - Avast flags it (IDP.HELU.PSE88).
 HDRLINES is computed here, never guessed, and asserted against the emitted file before it is written.
 """
@@ -143,6 +143,29 @@ for _root, _dirs, _fs in os.walk('skylit-docs'):
         if f.endswith('.md'):
             FILES.append(os.path.join(_root, f))
 FILES.append('SOURCE-OF-TRUTH.md')
+# (v15.64) the lock beside package.json — jsdom's version pinned, so `npm install` on his machine matches the cloud's
+for _pk in ('package.json', 'package-lock.json'):
+    if os.path.isfile(_pk): FILES.append(_pk)
+# (v15.64) ⚠⚠ roadmap/ AND archive/ WERE NEVER IN THE MANIFEST — THE SEVENTH DIRECTORY LOST THIS WAY.
+# Found 2026-09-04 on a fresh clone: roadmap/ROADMAP.md (v15.59, pinned by test_process / test_v1559 / test_lessons),
+# roadmap/DEFLECTION-ROADMAP.md (v15.50, test_roadmap), PREREGISTER.md, the FINDINGS-* notes, SIMPLIFICATION-PLAN.md,
+# the v15.38 PARKED block in PRODUCT-ROADMAP.md, and the whole archive/v15.53/ (4,233 lines + 26 retired tests +
+# INDEX.md) existed only in sandbox commits; GitHub had none of them. The suite a fresh clone ran was 130/37, not
+# the 137/5 that suite.json advertised. The archive was rebuilt from git (tools/recover-archive.py); the roadmap
+# is regenerated from the plan (tools/plan-seed.py); the rest is recorded as lost in LESSONS. Text only.
+for _root, _dirs, _fs in os.walk('roadmap'):
+    for f in sorted(_fs):
+        if f.endswith('.md'):
+            FILES.append(os.path.join(_root, f))
+for _root, _dirs, _fs in os.walk('archive'):
+    for f in sorted(_fs):
+        if f.endswith('.md') or f.endswith('.js'):
+            FILES.append(os.path.join(_root, f))
+# the retired tests the installer must REMOVE from the operator's tree: an installer can add files but never
+# delete them, so the 26 tests archived at v15.53 stayed at his repo root — red — until this build's .bat
+# deletes the root copies (their archive copies ride along above). The list is the archive's own tests/ dir.
+RETIRED_TESTS = sorted(f for f in os.listdir('archive/v15.53/tests') if f.endswith('.js')) if os.path.isdir('archive/v15.53/tests') else []
+RETIRED_DEL = ''.join('del /q "%%REPO%%\\%s" >nul 2>&1\n' % f for f in RETIRED_TESTS)
 for f in sorted(os.listdir('tools')):
     p=os.path.join('tools', f)
     # (v13.9) NO .bat, NO .log — an installer must never contain installers.
@@ -185,9 +208,12 @@ for f in _mk_md + _mk_bin[:12]:
 # this builder would have dropped it silently, because `design/` was not in the manifest at all.
 # A doc that a `load gex` is required to read cannot travel by luck. Text only - the mockup .html
 # files in design/ are big and already have a home in mockups/.
+# (v15.64) …and the RENDERS: design/render-vNNNN-face.png is the shipped script drawn in Chromium on a recorded day,
+# the reference the CHANGELOG and the resume note point at. v15.63's never reached GitHub — same landmine, a
+# file type the walk did not take. The mockup .png files are still excluded (mockups/ carries them).
 for f in sorted(os.listdir('design')):
     p = os.path.join('design', f)
-    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt')):
+    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt') or (f.startswith('render-') and f.endswith('.png'))):
         FILES.append(p)
 # (v14.59) the fixtures the tests read. test_futbars.js and append-futures.py both use
 # tools/fixtures/futbars-day.json; shipping the test without its input turns his suite red for a
@@ -300,9 +326,13 @@ if not exist "%REPO%\\.git" (
   exit /b 1
 )
 
-echo Extracting payload...
+echo Extracting payload (about ten seconds)...
 set HDRLINES={HDRLINES}
-more +%HDRLINES% "%SELF%" > "%TEMP%\\gex-{TAG}-payload.b64"
+rem (v15.64) NOT `more +N` ANY MORE. `more` copies the payload out one line at a time and sat on this
+rem line for minutes at 66,000 lines (5.1 MB) - and "hung" on a 30 MB file at v14.4x. A for /f skip
+rem loads the file once and copies the payload lines in seconds. Safe with delayed expansion because
+rem base64 carries no `!`; eol is `;` and no base64 line starts with one. Plain cmd only (Avast).
+(for /f "usebackq skip=%HDRLINES% delims=" %%L in ("%SELF%") do echo(%%L)>"%TEMP%\\gex-{TAG}-payload.b64"
 certutil -f -decode "%TEMP%\\gex-{TAG}-payload.b64" "%TEMP%\\gex-{TAG}-payload.tar.gz" >nul
 if errorlevel 1 (
   echo ERROR: certutil decode failed. Payload is corrupt or certutil is unavailable.
@@ -362,6 +392,12 @@ rem ~28MB of dead weight that ballooned this installer to 30MB and hung its own 
 rem They remain recoverable from git history; this removes them from the tree and the push
 rem records the deletion so the repo shrinks back.
 del /q "%REPO%\\mockups\\install*.bat" >nul 2>&1
+rem (v15.64) the tests archived at v15.53 - their copies now live in archive\\v15.53\\tests; the root copies
+rem stayed on this machine (an installer adds, never deletes) and kept the suite red. Removed here so the
+rem commit records the move.
+{RETIRED_DEL}rem (v15.64) v10.js is GENERATED by tools/run-tests.sh and .gitignore'd, yet GitHub still tracked a v11.48 copy -
+rem the stale-but-green trap BUILD-CHECKLIST warns about. Drop it from the index here; the file stays on disk, ignored.
+"!GIT!" rm --cached -q v10.js >nul 2>&1
 "!GIT!" add -A
 "!GIT!" diff --cached --quiet
 if errorlevel 1 (
@@ -410,7 +446,7 @@ exit /b 0
 
 def render(hdrlines):
     return HDR.format(V=V, TAG=TAG, HDRLINES=hdrlines, MSG=MSG,
-                      COMPAN_NOTE=COMPAN_NOTE, NFILES=len(FILES))
+                      COMPAN_NOTE=COMPAN_NOTE, NFILES=len(FILES), RETIRED_DEL=RETIRED_DEL)
 
 # HDRLINES is the number of header lines `more +N` must skip. Solve it: the value appears INSIDE the
 # header, so a naive count can be off by the digits it adds. Iterate to a fixed point, then ASSERT.
@@ -422,6 +458,15 @@ for _ in range(6):
     n = n2
 header = render(n)
 assert header.count('\n') == n, 'HDRLINES did not converge'
+# (v15.64) NO BLANK LINES IN THE HEADER. The for /f skip counts lines, and whether an EMPTY line counts
+# toward `skip=` is exactly the kind of cmd detail a build must not depend on: a blank line becomes
+# `rem` (same line count, nothing printed), so the skip lands on the first base64 line either way.
+_hl = header.split('\n')
+header = '\n'.join((l if l.strip() else 'rem') if i < len(_hl) - 1 else l for i, l in enumerate(_hl))
+assert header.count('\n') == n and not any(l.strip() == '' for l in header.split('\n')[:-1]), 'blank header line'
+# …and no header line may look like a base64 line (a second guard for the payload boundary)
+import re as _re
+assert not any(_re.fullmatch(r'[A-Za-z0-9+/=]{76}', l) for l in header.split('\n')), 'a header line looks like payload'
 
 out = header.replace('\n', '\r\n') + '\r\n'.join(B64_LINES) + '\r\n'
 

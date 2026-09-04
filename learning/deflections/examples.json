@@ -14,7 +14,7 @@
   {
    "id": "new",
    "name": "NEW NODE",
-   "what": "a strike that was not on the ladder (below the 20% threshold) and crossed it — born within the last ~30 bars"
+   "what": "a strike OBSERVED below the 20% threshold earlier today that crossed it within the last 20 bars AND GREW — ×2 its size at the crossing, or +20% of itself over the growth window (v15.64; the panel's NEW chip). First sight is never a birth: the opening book and the ladder after a reload are not new. His words: 'when price is going to a level, a new node pops up and deflects price. It grew rapidly for this purpose.'"
   },
   {
    "id": "growth",
@@ -44,7 +44,7 @@
   {
    "id": "stack",
    "name": "PIKA / BARNEY STACK",
-   "what": "a cluster of nodes within a few points acting as one wall — PIKA when they are yellow (+γ), BARNEY when purple (−γ); called per book: SPX · SPY · QQQ"
+   "what": "a cluster of LARGE same-sign nodes on adjacent strikes acting as one wall — each member ≥ 30% of the King, the biggest ≥ 40%, named once on the biggest (v15.64) — PIKA when they are yellow (+γ), BARNEY when purple (−γ); called per book: SPX · SPY · QQQ. The docs: 'magnitude matters most here: thin cloud = soft/porous; dense king-level cloud can pin all session.'"
   },
   {
    "id": "magnet",
@@ -540,6 +540,16 @@
    "id": "P-tap",
    "says": "First taps hold more often than later taps (tap decay 73% n=22 vs 47% n=70, book corpus) — a third tap is where hand rule kill.tap3 lives.",
    "from": "skylit-docs/FINDINGS.md"
+  },
+  {
+   "id": "P-new",
+   "says": "TOLD by the docs, no number given: nodes that APPEAR and grow are dealer urgency — velocity mode tracks nodes 'growing, shrinking, appearing, disappearing' (learn/air-pockets-velocity); 'rapid accumulation acts like a magnet' (core-concepts); the 2025-10-09 SPX/SPY/QQQ case: 'downside nodes popped up and grew significantly … floors beginning to grow at 670 … wait for the floor to hit to play the bounce' (examples-and-case-studies); the TSLA case, a node appearing under price and price returning to it. The panel's NEW thresholds (20 bars · ×2 · +20%) are ⚖ hand-set against his four taught days (tools/study-gridtells.py), NOT measured on a corpus; the ledger scores them from here.",
+   "from": "skylit-docs (2026-09-04 read-through for v15.64)"
+  },
+  {
+   "id": "P-stack",
+   "says": "TOLD by the docs: a pika cloud is a DENSE cluster of LARGE positive nodes — 'thin cloud = soft/porous; dense king-level cloud can pin all session' (learn/heatseeker-patterns); 'clusters of nodes: when multiple LARGE values group together price pins or chops'; 'double stacked nodes … a strong bounce' (faqs). No member threshold is given; 30% of the King per member and 40% for the biggest are ⚖ hand-set (S6 in tools/study-gridtells.py: median 1 stack per bar on his four days). Three of his circled legs (7755 09-03, 7705 08-28, 7665 08-31) sat at 12–18% of a grown King at the tap — the moving denominator — and no threshold on %King catches them; recorded, not solved.",
+   "from": "skylit-docs (2026-09-04 read-through for v15.64)"
   },
   {
    "id": "P-pol",

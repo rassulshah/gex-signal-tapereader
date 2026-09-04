@@ -242,7 +242,8 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   ok(/ev\.preventDefault\(\); ev\.stopPropagation\(\)/.test(wire),
      'f8 ...and the drag does not also drag the panel across the screen');
   const rnd=decomment(ex('render'));
-  ok(/html\+=replayBarHtml\(\)/.test(rnd), 'f9 the strip is mounted in render');
+  // (v15.64) the strip is mounted in TWO parts: the NOT RECORDING warning at the top, the strip itself at the bottom
+  ok(/html\+=replayBarHtml\('warn'\)/.test(rnd) && /html\+=replayBarHtml\('strip'\)/.test(rnd), 'f9 the strip is mounted in render — the warning at the top, the strip at the bottom (v15.64)');
   const tIdx=rnd.indexOf('TESTING_VIEW'), aIdx=rnd.indexOf('ANALYSIS_VIEW'), rIdx=rnd.indexOf('replayBarHtml');
   ok(tIdx<rIdx && aIdx<rIdx, 'f10 ...after both other tabs have returned, so it shows on the dashboard only');
 }

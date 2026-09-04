@@ -2,6 +2,20 @@
 
 _Last updated: 2026-08-13 · Current shipped: v10.29_
 
+> ⚠⚠ **THIS BOARD IS STALE.** It says "current shipped: v10.29" while the panel is **v15.64** (first disclosed at
+> **v15.38**, 2026-09-01 — that edit lived only in a cloud sandbox because `roadmap/` was not in the installer's
+> manifest until v15.64, so GitHub kept the 08-13 board). It is kept as history. **The live plan is
+> `roadmap/ROADMAP.md`**, generated from `tools/plan-seed.py` — the same data the 🗺 Roadmap tab renders.
+
+## PARKED — researched, specified, deliberately not started
+
+**Futures gamma levels for CL · NG · GC · E6 (· HG pending)** — `design/spec-futures-gamma-markets.md`.
+Operator, 2026-09-01: *"hold this implementation detail somewhere... we will come back to it once the application
+with the current markets is optimal."* Parked means parked: a future context does NOT start it unprompted and
+does NOT re-research it — the spec carries the three measured traps (`<ROOT>*0` vs `*1`, the hand-written DTN
+root map, the chain not being in the raw HTML) and the negatives (Skylit has no futures gamma including ES1;
+InsiderFinance is equity-only; the ETF route is dropped). `test_parked_specs.js` pins all of it.
+
 Board format: **NOW** (in build) · **NEXT** (committed / requested) · **LATER** (candidates) · **EXPLORING** (infra research).
 
 

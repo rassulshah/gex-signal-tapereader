@@ -2,6 +2,10 @@
 // test_v1563.js — (v15.63) THE DASHBOARD CONVERSATION: the node row (NEW · ⇄ ROLL · ▲ GROWTH · SETUP), the King zone,
 //   the tally, the SWEPT line, the DAY table off the face. Every decision is his (2026-09-03/04); the reference is
 //   design/mockup-king-strip.html v3b. Fixtures are the real book of 2026-09-03 12:48 CT where a number matters.
+//   ⚠ (v15.64) the assertions marked (v15.64) were REWRITTEN when he corrected the tells the same day: NEW needs a
+//   below-observation and growth, a stack is named once on members ≥ 30%, the rugs take price's side, the SWEPT line
+//   is names-only, the tally is off the face. test_v1564.js carries the new rules in full; what stays here is the
+//   v15.63 surface that survived.
 // ============================================================================================
 const fs=require('fs');
 const SRC=process.env.GPTS_SRC||'./current/gex-signal-tapereader.user.js';
@@ -15,7 +19,7 @@ const build=(g,fns,tail)=>new Function('__g', Object.keys(g).map(k=>'var '+k+'=_
 const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const tip=t=>t?(' title="'+esc(t)+'"'):'';
 const two=x=>{ x=''+x; return x.length<2?'0'+x:x; };
-const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).replace(/\.?0+$/,''):String(x);
+const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,''):String(x);   // ⚠ strips zeros only AFTER a point — the older form turned 7690 into 769
 
 // ---- 1 · GROWTH: a share of the node, sign-aware, the window a setting ----------------------------------
 {
@@ -56,14 +60,16 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
   const N=(book,list)=>list.map(x=>({book, k:x[0], pct:x[1], disp:x[2], pos:x[1]>0})).sort((a,b)=>b.disp-a.disp);
   // the SPXW book at 12:48: all +γ, 7740/7735 five points apart
   const spx=f.gridSetups(N('SPX',[[7755,20,7763.4],[7750,100,7758.4],[7745,45,7753.4],[7740,35,7748.4],[7735,26,7743.4]]));
-  ok([7755,7750,7745,7740,7735].every(k=>spx[k] && spx[k][0].kind==='pika' && spx[k][0].txt==='SPX PIKA STACK · 7735–7755'),'3a five +γ nodes each within 5 points of the next = ONE pika cloud 7735–7755, named on every member',spx);
+  // (v15.64) members are the nodes ≥ 30% of the King: 7750 · 7745 · 7740; 7755 (20%) and 7735 (26%) are not members
+  ok(spx[7750] && spx[7750][0].kind==='pika' && spx[7750][0].txt==='SPX PIKA STACK · 7740–7750' && spx[7745] && /^stk pika$/.test(spx[7745][0].kind) && spx[7740] && /^stk pika$/.test(spx[7740][0].kind) && !spx[7755] && !spx[7735],'3a (v15.64) the three +γ members ≥ 30% = ONE pika cloud 7740–7750, named ONCE on the King, the other two bracketed; the 20% and 26% neighbours are not members',spx);
   const spx2=f.gridSetups(N('SPX',[[7755,20,7763.4],[7745,22,7753.4],[7740,18,7748.4]]));
   ok(!Object.keys(spx2).length,'3a2 a run whose biggest member is under 40% of the King is not a cloud — mass is required');
   ok(!Object.values(spx).flat().some(s=>s.kind==='rug'||s.kind==='rrug'||s.kind==='barney'),'3b an all-yellow book has no rug, no reverse rug, no barney');
   // the SPY book at 12:48: 773 (+γ King) above 772 · 771 (−γ), only a $15M floor 768.5 (below the threshold → not a node)
-  const spy=f.gridSetups(N('SPY',[[774,33,7765.8],[773,100,7755.7],[772,-21,7745.7],[771,-74,7735.7]]));
-  ok(spy[773] && spy[773].some(s=>s.kind==='rug' && /SPY RUG · 773 over 772/.test(s.txt)),'3c yellow 773 directly above purple 772 with no +γ node within 15 points below → SPY RUG on the yellow row',spy);
-  ok(spy[772] && spy[772].some(s=>s.kind==='barney' && s.txt==='SPY BARNEY STACK · 771–772') && spy[771] && spy[771].some(s=>s.kind==='barney'),'3d 772 · 771 both −γ within 5 (771 at 74%) → SPY BARNEY STACK on both',spy);
+  const spy=f.gridSetups(N('SPY',[[774,33,7765.8],[773,100,7755.7],[772,-35,7745.7],[771,-74,7735.7]]));
+  ok(spy[773] && spy[773].some(s=>s.kind==='rug' && /SPY RUG · 773 over 772/.test(s.txt)),'3c yellow 773 directly above purple 772 with no +γ node within 15 points below → SPY RUG on the yellow row (no price given: no side rule)',spy);
+  // (v15.64) named once, on the biggest member (771 at 74%); 772 (35%) is bracketed
+  ok(spy[771] && spy[771].some(s=>s.kind==='barney' && s.txt==='SPY BARNEY STACK · 771–772') && spy[772] && spy[772].some(s=>/^stk barney$/.test(s.kind)) && !spy[772].some(s=>s.kind==='barney'),'3d (v15.64) 772 · 771 both −γ within 1, each ≥ 30% → SPY BARNEY STACK named on 771 (74%), 772 bracketed',spy);
   ok(!spy[773].some(s=>s.kind==='rrug'),'3e …and no reverse rug on that side');
   // a floor within 15 points cancels the rug
   const spy2=f.gridSetups(N('SPY',[[773,100,7755.7],[772,-21,7745.7],[770,40,7725.7]]));
@@ -85,15 +91,21 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 // ---- 4 · NEW: the age of a strike, seeded from today’s recorded book ------------------------------------
 {
   const now=1788465600000; // 2026-09-03 14:00 CT
-  const snaps=[ { bar:now-3600000, vend:{rows:[[7750,200e6,0,0,0,0],[7745,60e6,0,0,0,0],[7730,20e6,0,0,0,0]]} },   // 13:00 — 7730 at 10% is not a node
-                { bar:now-1800000, vend:{rows:[[7750,220e6,0,0,0,0],[7745,70e6,0,0,0,0],[7755,50e6,0,0,0,0]]} } ];  // 13:30 — 7755 crosses (22%)
+  // (v15.64) consecutive 3-minute bars — a 30-minute hole between frames is a RECORDING GAP and the first bar after one is never a birth
+  const snaps=[ { bar:now-1980000, vend:{rows:[[7750,200e6,0,0,0,0],[7745,60e6,0,0,0,0],[7730,20e6,0,0,0,0]]} },   // 13:27 — the opening book of this fixture; 7730 at 10% is not a node
+                { bar:now-1800000, vend:{rows:[[7750,220e6,0,0,0,0],[7745,70e6,0,0,0,0],[7755,50e6,0,0,0,0]]} } ];  // 13:30 — 7755 crosses (22%), absent from the list before
   const store={};
-  const g={ CFG:{nodeThresh:20}, ctTodayStr:()=>'2026-09-03', recorderLoad:()=>({days:{'2026-09-03':{snaps:{SPY:snaps}}}}), localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>{store[k]=v;}} };
-  const f=build(g,['nodeBornLoad','nodeBornTouch','nodeAgeBars','nodeIsNew'],'return { nodeBornLoad, nodeBornTouch, nodeAgeBars, nodeIsNew };')(g);
-  ok(f.nodeAgeBars(7750,now)===20 && f.nodeAgeBars(7755,now)===10 && f.nodeAgeBars(7730,now)===null,'4a seeded from the day’s book: 7750 born 13:00 (20 bars), 7755 born 13:30 (10 bars), 7730 never a node',[f.nodeAgeBars(7750,now),f.nodeAgeBars(7755,now)]);
-  ok(f.nodeIsNew(7755,now)===10 && f.nodeIsNew(7750,now)===20 && f.nodeIsNew(7750,now+40*180000)===null,'4b NEW within 30 bars, not after');
-  f.nodeBornTouch(7760, now); ok(f.nodeAgeBars(7760,now+180000)===1 && JSON.parse(store['gpts_nodeborn_v1']).m[7760]===now,'4c a strike first seen live is born now, and persisted');
-  f.nodeBornTouch(7755, now); ok(f.nodeAgeBars(7755,now)===10,'4d a second touch never moves the birth');
+  // (v15.64) 7755 was ABSENT from the 13:00 top list (= small) and crossed at 13:30; it is $120M now against $50M then
+  const VEL={ 7755:{cur:120e6,d15:40e6}, 7750:{cur:220e6,d15:5e6} };
+  const g={ VEL, CFG:{nodeThresh:20, growthWin:15}, ctTodayStr:()=>'2026-09-03', recorderLoad:()=>({days:{'2026-09-03':{snaps:{SPY:snaps}}}}), localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>{store[k]=v;}} };
+  const f=build(g,['nodeBornLoad','nodeBornSave','nodeBelowTouch','nodeBornTouch','nodeBornOf','nodeAgeBars','nodeIsNew','nodeGrowth','growthWin'],'return { nodeBornLoad, nodeBornTouch, nodeBelowTouch, nodeAgeBars, nodeIsNew };')(g);
+  ok(f.nodeAgeBars(7750,now)===null && f.nodeAgeBars(7755,now)===10 && f.nodeAgeBars(7730,now)===null,'4a (v15.64) seeded from the day’s book: 7750 is the OPENING book (never a birth), 7755 born 13:30 (10 bars), 7730 never a node',[f.nodeAgeBars(7750,now),f.nodeAgeBars(7755,now)]);
+  const nw=f.nodeIsNew(7755,now);
+  ok(nw && nw.age===10 && nw.x===2.4 && nw.g===50 && f.nodeIsNew(7750,now)===null && f.nodeIsNew(7755,now+40*180000)===null,'4b (v15.64) NEW = born within 20 bars AND grew (×2.4 its size at the crossing, +50% over the window); not the opening book, not after the window',nw);
+  f.nodeBornTouch(7760, now, 60e6, 27); ok(f.nodeAgeBars(7760,now+180000)===null && !(store['gpts_nodeborn_v2'] && JSON.parse(store['gpts_nodeborn_v2']).m[7760]),'4c (v15.64) a strike FIRST SEEN live at the threshold is NOT born — first sight is never a birth');
+  f.nodeBelowTouch(7760); f.nodeBornTouch(7760, now, 60e6, 27); const b60=JSON.parse(store['gpts_nodeborn_v2']).m[7760];
+  ok(f.nodeAgeBars(7760,now+180000)===1 && b60 && b60.t===now && b60.mag===60e6 && b60.pct===27,'4c2 (v15.64) …seen BELOW first, then at the threshold: born now, with its size at the crossing, and persisted (v2 store)',b60);
+  f.nodeBornTouch(7755, now, 1, 1); ok(f.nodeAgeBars(7755,now)===10,'4d a second touch never moves the birth');
 }
 
 // ---- 5 · the tally: every King tap today, per book, counts until n ≥ 15 -----------------------------------
@@ -114,12 +126,14 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 
 // ---- 6 · the SWEPT line: key levels only, simple words, the rates in the hover ------------------------------
 {
-  const ev=[ {level:'ONL',px:7743,at:'08:41',atBar:11,status:'reclaimed',speed:11,depth:6}, {level:'VW1L',px:7738,at:'09:10',atBar:40,status:'reclaimed',speed:3,depth:1}, {level:'PDH',px:7702,at:'08:30',atBar:0,status:'accepted',depth:3}, {level:'IBH',px:7726,at:'09:31',atBar:61,status:'pending',depth:0.5} ];
+  const ev=[ {level:'ONL-',side:'LOD',px:7743,at:'08:41',atBar:11,status:'reclaimed',speed:11,depth:6}, {level:'VW1L',side:'LOD',px:7738,at:'09:10',atBar:40,status:'reclaimed',speed:3,depth:1}, {level:'PDH+',side:'HOD',px:7702,at:'08:30',atBar:0,status:'accepted',depth:3}, {level:'IBH+',side:'HOD',px:7726,at:'09:31',atBar:61,status:'pending',depth:0.5} ];
   const g={ sweepEventsToday:()=>ev, statsRead:()=>({lines:[{txt:'ONL swept 08:41 · deep · slow — printed the extreme 40% (n=86) vs 24% control'}]}), levelTier:n=>({ONL:1,PDH:1,IBH:2,VW1L:3}[String(n).replace(/[-+]$/,'')]||4), g3tip:tip, g3esc:esc, frameNum:fnum, SWEEP_RECLAIM_MAX:30 };
   const h=build(g,['sweptLineHtml'],'return sweptLineHtml("SPY");')(g);
-  ok(/<em>SWEPT<\/em>/.test(h) && /<b>ONL 7743<\/b> swept 08:41 · reclaimed in 11 bars/.test(h) && /<b>PDH 7702<\/b> swept 08:30 · opened beyond/.test(h) && /<b>IBH 7726<\/b> swept 09:31 · being tested/.test(h),'6a which key level, when, reclaimed / opened beyond / being tested',h);
+  // (v15.64) names only, grouped by the side price was working, the latest sweep's side first; time · price · status in each name's hover
   const face=h.replace(/title="[^"]*"/g,'');
-  ok(!/VW1L/.test(face) && !/40%/.test(face) && /ONL 7743/.test(face),'6b a tier-3 level (VWAP band) and the rates stay OFF the line — only the key levels are on it',face);
+  ok(/<em>SWEPT<\/em>/.test(h) && /<em>making HOD<\/em> <b class="open" >PDH<\/b> <i>·<\/i> <b class="tst" >IBH<\/b>/.test(face) && /<em>making LOD<\/em> <b class="rec" >ONL<\/b>/.test(face) && face.indexOf('making HOD')<face.indexOf('making LOD'),'6a (v15.64) SWEPT · making HOD: PDH · IBH · making LOD: ONL — names only, the latest sweep’s side (IBH at bar 61) first',face);
+  ok(!/VW1L/.test(face) && !/40%/.test(face) && !/7743|08:41|reclaimed/.test(face),'6b (v15.64) a tier-3 level (VWAP band), the rates, the prices and the times stay OFF the line',face);
+  ok(/<b class="rec" title="ONL 7743 — swept 08:41 · reclaimed in 11 bars\."/.test(h) && /title="PDH 7702 — swept 08:30 · opened beyond\."/.test(h) && /title="IBH 7726 — swept 09:31 · being tested\."/.test(h),'6b2 (v15.64) …each name’s hover carries its price, time and status; the ± suffix is stripped from the name',h);
   ok(/title="[^"]*40% \(n=86\)/.test(h),'6c …the rates are in the hover');
   const g2=Object.assign({},g,{ sweepEventsToday:()=>[] });
   ok(/no key level swept yet today/.test(build(g2,['sweptLineHtml'],'return sweptLineHtml("SPY");')(g2)),'6d nothing swept → says so');
@@ -129,16 +143,17 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 {
   const VEL={ 7755:{cur:55.9e6,d15:11.9e6}, 7750:{cur:273.2e6,d15:7e6}, 7745:{cur:123.6e6,d15:12.3e6}, 7740:{cur:94.4e6,d15:19.5e6}, 7735:{cur:69.9e6,d15:17.2e6}, 7730:{cur:29.4e6,d15:-1.8e6} };
   const now=1788465600000;
-  const store={ gpts_nodeborn_v1: JSON.stringify({day:'2026-09-03', m:{7755:now-180000, 7750:now-4e6, 7745:now-4e6, 7740:now-4e6, 7735:now-4e6}}) };
+  const store={ gpts_nodeborn_v2: JSON.stringify({day:'2026-09-03', m:{7755:{t:now-180000,mag:25e6,pct:10}, 7750:now-4e6, 7745:now-4e6, 7740:now-4e6, 7735:now-4e6}, below:{}}) };   // (v15.64) v2: a birth carries its size; a bare number still reads (a v1 shape)
   const tape={ pct:{'7755':20,'7750':100,'7745':45,'7740':35,'7735':26,'7730':11}, king:7750, count:100 };
   const ladders={ SPY:{ pct:{'774':33,'773':100,'772':-21,'771':-74}, king:773, kingKd:390226 }, QQQ:{ pct:{'720':17,'719':47,'718':100,'715':-27}, king:718, kingKd:257257 } };
   const g={ VEL, CFG:{nodeThresh:20, growthWin:15}, STATE:{ SPY:{price:773.03}, QQQ:{price:717.66} }, TODAY:'2026-09-03', ctTodayStr:()=>'2026-09-03',
     recorderLoad:()=>({days:{'2026-09-03':{snaps:{SPY:[]},defl:{}}}}), localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>{store[k]=v;}},
     ifLadder:()=>({ px:7756, dispScale:1.00108, undPx:773.03, rows:[{id:'CR0',disp:7766.0},{id:'PS0',disp:7736.0}] }),
     tapeMap:()=>tape, laddersByDollar:()=>ladders, g3tip:tip, g3esc:esc, frameNum:fnum, two, LAD_KING_TEST_PTS:2, Date:class extends Date{ static now(){ return now; } } };   // the clock frozen at 14:00 CT, the constructor real
-  const fns=['growthWin','nodeBornLoad','nodeBornTouch','nodeAgeBars','nodeIsNew','nodeGrowth','growthHtml','rollTagFor','rollHtml','gridDisp','gridBookNodes','gridSetups','setupHtml','kingPathSeed','kingPathTouch','kingTriTouch','kingGrowth','kingsNow','kingCellHtml','kingStripHtml','ladderGridHtml'];
+  const fns=['growthWin','nodeBornLoad','nodeBornSave','nodeBelowTouch','nodeBornTouch','nodeBornOf','nodeAgeBars','nodeIsNew','nodeGrowth','growthHtml','rollTagFor','rollHtml','gridDisp','gridBookNodes','gridSetups','setupHtml','kingPathSeed','kingPathTouch','kingTriTouch','kingGrowth','kingsNow','kingTapsToday','kingCellHtml','kingStripHtml','ladderGridHtml'];
   const PS=[{k:7755,disp:7763.4,pct:20,brake:true},{k:7750,disp:7758.4,pct:100,brake:true,role:'KING'},{k:7745,disp:7753.4,pct:45,brake:true},{k:7740,disp:7748.4,pct:35,brake:true},{k:7735,disp:7743.4,pct:26,brake:true},{k:7730,disp:7738.3,pct:11,brake:true,sub:true}];
   const rolls=[{from:7745,to:7750,dir:'up',lastT:now-1e6,live:true}];
+  g.readTrinityHeaders=()=>null; g.RATE_MIN_N=15;   // (v15.64) gridDisp asks the page's Trinity headers first, live
   const R=build(g,fns,exVar('KING_PATH')+' return { grid:ladderGridHtml("SPY", __g.PS, __g.rolls, {pdh:7708.25,pdl:7674.75,pdc:7697.75}, {ok:true,high:7743.4,low:7665.1}), strip:kingStripHtml("SPY", __g.rolls), kings:kingsNow("SPY") };')(Object.assign({PS,rolls},g));
   const grid=R.grid;
   ok(/g3gr hd">.*level.*price · strike.*node · %king.*new.*⇄ roll.*▲ growth 15m.*setup/.test(grid),'7a the header row is the mockup’s seven columns in order',grid.slice(0,400));
@@ -146,10 +161,13 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
   ok(/♛ SPX KING/.test(grid) && /♛ SPY KING/.test(grid) && /♛ QQQ KING ≈/.test(grid) && /KING ZONE/.test(grid) && /3 layers<\/i>/.test(grid) && /3 layers, 4 points top to bottom/.test(grid),'7c the three Kings are rows of one zone, bracketed with its layer count and span',(grid.match(/layers[^<]*/)||[])[0]);
   const order=['♛ QQQ KING','♛ SPX KING','class="g3now"','♛ SPY KING'].map(t=>grid.indexOf(t));
   ok(order.every(i=>i>=0) && order[0]<order[1] && order[1]<order[2] && order[2]<order[3],'7d …in price order: QQQ K 7759.7 · SPX K 7758.4 · NOW 7756 · SPY K 7755.7 (NOW inside the zone)',order);
-  ok(/NEW 1b/.test(grid) && grid.indexOf('NEW 1b')>grid.indexOf('7763.4') && grid.indexOf('NEW 1b')<grid.indexOf('7758.4'),'7e 7755, born one bar ago, reads NEW 1b on its row');
+  ok(/NEW 1b ×2\.2/.test(grid) && grid.indexOf('NEW 1b')>grid.indexOf('7763.4') && grid.indexOf('NEW 1b')<grid.indexOf('7758.4') && (grid.match(/g3chip new/g)||[]).length===1,'7e (v15.64) 7755, born one bar ago at $25M and $55.9M now, reads NEW 1b ×2.2 on its row — and it is the ONLY NEW chip on the ladder');
   ok(/▲ from 7745/.test(grid) && /▲ to 7750/.test(grid),'7f the roll shows on both ends: the King received it, 7745 lost it');
   ok(/▲ \+27%/.test(grid) && /▲ \+26%/.test(grid) && /▲ \+33%/.test(grid) && /▲ \+3%/.test(grid),'7g growth per row as the mockup’s numbers (the King’s +3% from its own strike)',(grid.match(/g3gg [a-z]+">[^<]*/g)||[]));
-  ok(/SPX PIKA STACK · 7735–7755/.test(grid) && /SPY RUG · 773 over 772/.test(grid) && /QQQ PIKA STACK · 718–719/.test(grid),'7h the SETUP column calls the patternpedia’s shapes per book: SPX pika stack, SPY rug on the SPY King row, QQQ pika stack on the QQQ King row');
+  const gface=grid.replace(/title="[^"]*"/g,'');
+  ok(/SPX PIKA STACK · 7740–7750/.test(gface) && (gface.match(/SPX PIKA STACK/g)||[]).length===1 && (gface.match(/g3stk pika/g)||[]).length===2 && /QQQ PIKA STACK · 718–719/.test(gface) && /SPY PIKA STACK · 773–774/.test(gface),'7h (v15.64) the SETUP column names each stack ONCE — SPX 7740–7750 on the King with its members bracketed, QQQ 718–719 on the QQQ King row, SPY 773–774 on the SPY King row');
+  ok(!/SPY RUG/.test(grid),'7h2 (v15.64) …and no SPY RUG: price (7756) sits ABOVE the yellow 773 (7755.7), so the yellow is a floor under price, not the rug’s ceiling — the docs’ "spot positioned below the positive node"');
+  ok(/g3gr zone king/.test(grid) && /g3rolled|g3kbadges/.test(R.strip) && !/SPX King —|SPY King —|QQQ King —/.test(grid+R.strip),'7h3 (v15.64) the King rows carry the king class (lit and pulsing in CSS); the tally text is off the face');
   ok(/g3gr sub">/.test(grid) && /context row/.test(grid) && !/7738\.3[\s\S]{0,300}NEW/.test(grid),'7i a context row (below the threshold) draws its bar and nothing else');
   ok(/PDH/.test(grid) && /PDL/.test(grid) && /EMH/.test(grid) && /g3gc lv/.test(grid),'7j the levels stay in their own column (PDH/PDL/PDC, the EM edges, the IF book)');
   const strip=R.strip;
@@ -162,7 +180,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 
 // ---- 8 · the wiring: the toggles, the ledger’s kings, the DAY table off the face ---------------------------
 ok(/ladderGrid: true,/.test(src) && /dayRead: true,/.test(src) && /growthWin: 15,/.test(src),'8a the three settings default on (15 min)');
-ok(/if\(CFG\.ladderGrid!==false\)\{[\s\S]{0,200}kingStripHtml\(sym, RAILROLLS\)\+tallyLineHtml\(sym\)\+ladderGridHtml\(sym, RAILPS_DRAW, RAILROLLS, SESSL, EB\)/.test(src) && /\} else \{\s*try\{ h\+=ladderHtml\(EB, RB, sym, RAILPS_DRAW/.test(src),'8b the grid replaces the ladder when on; the v15.62 ladder is one toggle away');
+ok(/if\(CFG\.ladderGrid!==false\)\{[\s\S]{0,600}kingStripHtml\(sym, RAILROLLS\)\+ladderGridHtml\(sym, RAILPS_DRAW, RAILROLLS, SESSL, EB\)/.test(src) && /\} else \{\s*try\{ h\+=ladderHtml\(EB, RB, sym, RAILPS_DRAW/.test(src),'8b the grid replaces the ladder when on; the v15.62 ladder is one toggle away (v15.64: the tally line is off the face)');
 ok(/if\(CFG\.dayRead===false\)\{\s*function row\(cls,tag,cells\)/.test(src) && /\}\s*\/\/ \(v15\.63\) end of the statistics table/.test(src),'8c the 22-column table renders only with dayRead off');
 ok(/try\{ if\(CFG\.dayRead===false\)\{\s*var _ddb=recorderLoad\(\)/.test(src),'8d the taps list too');
 ok(/if\(CFG\.dayRead!==false\)\{ try\{ h\+=sweptLineHtml\(sym\); \}/.test(src) && /else \{ try\{ h\+=statsReadHtml\(sym\); \}/.test(src),'8e the SWEPT line replaces the two-line read when on');
