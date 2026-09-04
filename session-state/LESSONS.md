@@ -131,6 +131,27 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.64 (the install, same night) — the courier has a ceiling; a card is not a download; write to his disk
+Operator, 2026-09-04 (his words): "make sure you save as a lesson learned." Three things that were believed and were
+false. (1) "`more +N` extracts the payload; the .bat just needs to stay under 6 MB." The installer sat on "Extracting
+payload..." for minutes, twice. Every installer in his folder uses the same `more` step and every one of them had
+worked — 35,506 · 42,458 · 58,721 · 59,759 lines (v15.09 · 15.51 · 15.62 · 15.63). This one had 66,123. **`more`
+stops at 65,535 lines** (a 16-bit line count) and waits for a keypress on a prompt written into the redirected file —
+it looks exactly like a hang, and it is what "hung" the 30 MB build at v14.4x. The builder's caps (6 MB / 80,000
+lines) were set at "double the largest artefact with evidence", which is a guess dressed as a gate; the real ceiling
+was a property of the tool, found by lining up the sizes of the files that had worked against the one that had not.
+Replaced: the payload is copied with `for /f "usebackq skip=N delims="` (no line limit; blank header lines become `rem`
+so the skip cannot depend on how cmd counts empty lines), and the builder refuses a `more` command in the header.
+(2) "The file card is the delivery." From the Claude-in-Chrome side panel the card could neither preview nor download a
+.bat — "This file type cannot be opened" — and he had never hit it because every earlier install came through the
+desktop app. (3) "He has to download it." With the session linked to his computer, `device_commit_files` writes the
+same .bat straight into `C:\Dev\gex-signal-tapereader\`, where every earlier installer already sits, and he
+double-clicks it there: no browser, no download, no ' (1)' copies. That is the delivery now whenever the link is up; the
+card stays as the record and the fallback. Verified after the run: GitHub `c61d6df` v15.64, the 26 retired tests gone
+from the root, `archive/v15.53/` and `roadmap/` on origin for the first time, v10.js untracked; his live panel probed
+at 11:5x CT — v15.64, ⓪a at the top, the strip at the bottom, three King rows (QQQ ≈7729 drawn live), one NEW chip,
+three stack names with their brackets, the pulse running, no tally text, `SWEPT · making LOD POC · VAL · EML · PDC · IBL`.
+
 ### v15.64 — first sight is not a birth; a cut is applied before the run, not to it; an installer that only adds loses directories
 Four false beliefs, each with its instance. (1) "A strike is NEW when the panel first sees it at the threshold." The
 panel first sees the WHOLE opening book at 08:30 and the whole ladder after every reload, so 15 of 15 rows read

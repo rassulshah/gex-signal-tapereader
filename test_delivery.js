@@ -180,5 +180,19 @@ ok(fs.existsSync('tools/chat-history.py'),
      'S5 ...and saying so if the commit cannot be read, rather than claiming a save that did not happen');
 }
 
+// ===== (v15.64, the install) THE COURIER'S CEILING — `more` stops at 65,535 lines (L-S) ==================
+{
+  const bi=require('fs').readFileSync('tools/build-installer.py','utf8');
+  const hdr=(bi.match(/HDR = \"\"\"[\s\S]*?\"\"\"/)||[''])[0];
+  ok(hdr.length>0 && /\(for \/f "usebackq skip=%HDRLINES% delims=" %%L in \("%SELF%"\) do echo\(%%L\)>"%TEMP%/.test(hdr),
+     'M1 the payload is copied out with a for /f skip — no line limit');
+  ok(!/^\s*more\s+\+/m.test(hdr),
+     'M2 …and no `more +N` command remains in the header (it stops at 65,535 lines — v15.64 was the first build past it)');
+  ok(/refuses it coming back|`more \+N` extraction is back/.test(bi) && /_re\.match\(r'\\s\*more\\s\+\\\+', l\)/.test(bi),
+     'M3 the builder asserts against a `more` command in the rendered header');
+  ok(/if l\.strip\(\) else 'rem'/.test(bi), 'M4 blank header lines become `rem`, so the skip count cannot depend on how cmd counts empty lines');
+  ok(/fullmatch\(r'\[A-Za-z0-9\+\/=\]\{76\}', l\)/.test(bi), 'M5 …and a header line that looks like a base64 line fails the build');
+}
+
 console.log('test_delivery: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

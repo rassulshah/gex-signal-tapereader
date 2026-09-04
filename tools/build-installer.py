@@ -467,6 +467,7 @@ assert header.count('\n') == n and not any(l.strip() == '' for l in header.split
 # …and no header line may look like a base64 line (a second guard for the payload boundary)
 import re as _re
 assert not any(_re.fullmatch(r'[A-Za-z0-9+/=]{76}', l) for l in header.split('\n')), 'a header line looks like payload'
+assert not any(_re.match(r'\s*more\s+\+', l) for l in header.split('\n')), '`more +N` extraction is back — it stops at 65,535 lines (L-S)'
 
 out = header.replace('\n', '\r\n') + '\r\n'.join(B64_LINES) + '\r\n'
 
@@ -478,8 +479,13 @@ out = header.replace('\n', '\r\n') + '\r\n'.join(B64_LINES) + '\r\n'
 # ⚠ The reference is not a guess: v13.x through v15.21 all extracted correctly, and v15.21 measured
 # 2.89 MB across 37,106 lines. The cap is set at roughly double that, which is the largest artefact
 # this delivery path has evidence for surviving. Raise it only with a build that actually ran.
-_BAT_BYTES_CAP = 6 * 1024 * 1024
-_BAT_LINES_CAP = 80000
+# ⚠⚠ (v15.64, the install) THE REAL CEILING WAS `more` ITSELF: it stops at 65,535 lines (a 16-bit line count) and
+# waits for a keypress on a prompt written into the redirected file — v15.64's 66,123 lines sat on "Extracting
+# payload..." for good while v15.63's 59,759 had worked. The caps below were "double the largest artefact with
+# evidence", a guess; the tool's limit was the fact. `more` is gone (a for /f skip copy has no such limit), and the
+# assertion after the header is rendered refuses it coming back. The caps stay as a sanity limit on the file itself.
+_BAT_BYTES_CAP = 8 * 1024 * 1024
+_BAT_LINES_CAP = 110000
 _bat_bytes = len(out.encode('ascii'))
 _bat_lines = out.count('\r\n')
 if _bat_bytes > _BAT_BYTES_CAP or _bat_lines > _BAT_LINES_CAP:

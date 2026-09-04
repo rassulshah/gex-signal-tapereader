@@ -77,6 +77,16 @@ carries a deletion list (`RETIRED_DEL`). **DECODE THE .bat AND CHECK THE FILE LI
 the only check that finds this class of bug** — and `test_installer_manifest.js` pins the fetched files,
 not the directories.
 
+**L-S · THE COURIER HAS A CEILING: `more` STOPS AT 65,535 LINES.** (2026-09-04) The self-extracting
+installer copied its payload out with `more +N`; the first build past 65,535 lines (v15.64, 66,123 lines,
+5.1 MB) sat on "Extracting payload..." indefinitely — `more` was waiting for a keypress on a prompt written
+into the redirected file. Every earlier installer (up to 59,759 lines) had worked, which is why it looked
+like a hang and not a limit. Now extracted with `for /f "usebackq skip=N delims="`; the builder refuses a
+`more` command in the header. **When a courier fails on a bigger payload, line the sizes of the ones that
+worked up against the one that did not before touching the payload.** And the delivery when the session is
+linked to his computer: `device_commit_files` the .bat into `C:\Dev\gex-signal-tapereader\` — the Chrome
+side panel cannot download a .bat at all.
+
 **L-R · THE RESUME NOTE WENT SEVEN BUILDS STALE WHILE EVERYTHING ELSE WAS CURRENT.**
 `CHAT-HISTORY.md`, `CHANGELOG.md` and `FINDINGS.md` were updated on every build because
 `test_chat_history.js` fails red when the history is not. **Nothing guards the resume note**, so it

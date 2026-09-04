@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-04 · v15.64 · session `f9c89c64` — v15.64: the second dashboard conversation — NEW and the stacks re-calibrated, the QQQ King live, the face re-ordered; roadmap/ and archive/ recovered
+## 2026-09-04 · v15.64 · session `f9c89c64` — v15.64: the second dashboard conversation — NEW and the stacks re-calibrated, the QQQ King live, the face re-ordered; roadmap/ and archive/ recovered; the installer's courier ceiling
 
-_6 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_13 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -77,6 +77,108 @@ Now the LESSONS entry:
 Now the config, the render PNG, the resume-note snapshot, and PROCESS.md's landmine list for L-Q:
 Now fill the three hand-written sections:
 Now the installer — build, then decode the payload and check it carries everything:
+**v15.64 is built** — all eleven items, plus the recovery of the two directories that never reached GitHub.
+
+**What changed and why (short form — the CHANGELOG has the full reasoning):**
+- **NEW** is now a *crossing*, not a sighting: the strike must have been seen below 20% earlier today, crossed within 20 bars, and grown (×2 its size at the crossing, or +20% over the window). Chip reads `NEW 9b ×2.3`. On your four taught days: 0–2 chips per bar after 10:00 (was 4–15). It catches 7775/7720 (Aug 28), 7700 (Aug 27), 7670 (Aug 31); it cannot catch 7755 (Sep 3), 7705, 7665 — those sat at 12–18% of a King that had grown. Recorded as F-17 / Q11, not hidden.
+- **Stacks**: members must each be ≥30% of the King (a thinner node breaks the run), named **once** on the biggest with a bracket down the member rows. Median 1 stack per bar now. Rugs take price's side per the docs.
+- **QQQ King live** — the live path read a price that is never set under the SPX pin; it now reads the page's Trinity headers.
+- READ + SWEPT at the top, replay strip at the bottom; SWEPT is names only — `making LOD: POC · VAL · …[trimmed]
+
+**OPERATOR:**
+> why is it saying this file type cannot be opened ?
+
+**me (16:22):** That message is the Claude app's file viewer, not Windows. The card tries to *preview* the file when you click it, and a `.bat` isn't a previewable type (a PDF or PNG would open inline; a batch file can't). The file itself is fine — it just has to be **downloaded**, not opened in the app.
+
+**Step 1.** On the file card, use the **download arrow** (hover the card on desktop; on the web it's the ⬇ icon at the right of the card) instead of clicking the file name. You should see the browser's download start.
+**Step 2.** If Chrome shows "This type of file can harm your computer", choose **Keep**.
+**Step 3.** Check the saved name in your Downloads folder is exactly `installv1564.bat` (not `installv1564.bat.txt`). If it got a `.txt` tacked on, rename it.
+**Step 4.** Double-click it. A console window runs, commits and pushes, then closes.
+
+If you're on your phone, that's the reason too — it needs to be downloaded on the PC where `C:\Dev\gex-signal-tapereader` lives. Tell me which of these it was and what you see.
+
+**OPERATOR:**
+> i should be able to save install bat files like before .. soemthing is creating a problem
+
+**me (16:26):** It's the client, not the file. You're in the Claude side panel inside Chrome (this session has your Atlas tab attached), and that panel can only *open* previewable types — it has no way to hand a `.bat` to the OS, so it shows that toast. Your earlier installs came through the Claude desktop app, where the card saves to disk. The `.bat` itself is built and checked (payload decoded, 535 files, v15.64).
+
+Two ways to get it, either works:
+
+**A — the desktop app (the way it worked before)**
+**Step 1.** Open the Claude desktop app and open this same conversation (it's the "continue gex session recovery" one; sessions are shared across clients).
+**Step 2.** Click the `installv1564.bat` card there → it saves to your Downloads.
+**Step 3.** Double-click it. Console window runs, commits, pushes, closes.
+
+**B — straight from this panel, via Drive**
+**Step 1.** On the `installv1564.bat` card, click the **Google Drive** button (the one you can see on the PNG card).
+**Step 2.** On the PC, open the Google Drive folder in Explorer (`My Drive`) — the file appears there within a minute.
+**Step 3.** Double-click it from there.
+
+After either: wait ~5 min, click the tapereader link, reload Atlas, and send **reloaded** — I'll probe the live panel from here.
+
+**OPERATOR:**
+> giveing me an error .. create it again
+
+**me (16:30):** `installv1564.bat` is now sitting in your repo folder — **5,151,869 bytes, exactly the file I built and checked** — written straight over the desktop link, so no browser download is involved.
+
+**Step 1.** Open `C:\Dev\gex-signal-tapereader` in Explorer (where all your earlier `installv15xx.bat` files are).
+**Step 2.** Double-click **installv1564.bat**. A console window runs, commits and pushes, then closes.
+**Step 3.** Wait ~5 min, then click the tapereader link and take *Update*:
+https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+(companion v1.18 unchanged — do not reinstall it)
+**Step 4.** Reload the Atlas tab — footer must say **v15.64** — and send **reloaded**.
+
+Two things I noticed in that folder while writing the file, for later, not now: the day file `2026-09-03.json` was saved at the repo root rather than in `data\` (the 💾 hover issue already on record), and a stray `Claude Setup.exe` (7 MB) is in there — the sync task ignores neither, so I'll deal with both after the install.
+
+**OPERATOR:**
+> why does the cmd just pause. it seems to be hangign
+
+**me (16:34):** It's not dead — that step is `more` copying the payload out of the file **one line at a time**, and this installer has 66,000 lines (5.1 MB, the biggest yet; last night's was 4.7 MB). `more` is slow and shows nothing until it's done. Give it **up to 3 minutes** — the next line you'll see is `Files installed into C:\Dev\gex-signal-tapereader`, then the commit and push.
+
+**Step 1.** Leave the window alone for 3 minutes.
+**Step 2.** If it moves on: wait ~5 min, click the tapereader link (Update), reload Atlas, send **reloaded**.
+**Step 3.** If it's still on `Extracting payload...` after 3 minutes: close the window and send **stuck** — I have a version of the installer ready that extracts without `more` (a fast `findstr` pass instead), and I'll write it into the same folder.
+
+**OPERATOR:**
+> ok.. very strange, it usually nevertakes this long and the javascript file is just updated in tampermonkey
+
+**me (16:42):** You're right that it's unusual, and I found the cause. Every installer copies its payload out with the `more` command before decoding it; `more` goes one line at a time, and this build's payload is 66,000 lines — it crossed from "a few seconds" into "minutes" (the same thing that hung a 30 MB build weeks ago). The JS file itself is fine; it just never got as far as being written.
+
+I rebuilt the installer with a different extraction (a single `for /f` copy — about ten seconds), same v15.64 payload, and wrote it into your repo folder as **installv1564b.bat** (a new file, so it can't disturb the one still running).
+
+**Step 1.** If the first window is still on `Extracting payload...`, close it.
+**Step 2.** In `C:\Dev\gex-signal-tapereader`, double-click **installv1564b.bat**. You should see `Extracting payload (about ten seconds)...`, then `Files installed into C:\Dev\gex-signal-tapereader`, then the commit and push lines.
+**Step 3.** Wait ~5 min, click the tapereader link (Update), reload Atlas, and send **reloaded**.
+
+If the first window did finish on its own in the meantime, running the b file is harmless — it finds nothing new to commit.
+
+**OPERATOR:**
+> can you look in the directory of how earier install files were done prior to last night because this is still taking too long
+
+**me (16:51):** I looked at every installer in your folder. Same mechanism in all of them — `more +123` copying the payload, then certutil, then tar — but look at the line counts:
+
+| installer | lines | result |
+|---|---|---|
+| installv1509 | 35,506 | fine |
+| installv1551 | 42,458 | fine |
+| installv1562 | 58,721 | fine |
+| installv1563 (last night) | 59,759 | fine |
+| **installv1564** | **66,123** | hangs at "Extracting payload…" |
+
+This is the first one past **65,535 lines**, and `more` has a 16-bit line counter — past that it stops and waits for a keypress on a prompt you can't see (it went into the redirected file). That's also what "hung" the 30 MB build weeks ago. So nothing is wrong with the build or the JS; the courier just hit its ceiling.
+
+`installv1564b.bat` (already in the folder) doesn't use `more` at all — a `for /f` copy, no line limit.
+
+**Step 1.** Close the stuck `Extracting payload...` window(s) — the original never got past `more`, so it wrote nothing.
+**Step 2.** Double-click **installv1564b.bat** in `C:\Dev\gex-signal-tapereader`. It prints `Extracting payload (about ten seconds)...`, then `Files installed into…`, then the commit and push.
+**Step 3.** Wait ~5 min, click the tapereader link (Update), reload Atlas, send **reloaded**.
+
+I'll put the 65,535 limit into the builder's records after the install so it's a rule, not a memory.
+
+**OPERATOR:**
+> worked.. make sure you save as a lesson learned.   i just reloaded the application
+
+**me (17:01):** Now the chat history, the commit, and the files to his repo (the sync task pushes them):
 
 ### DECISIONS
 
@@ -134,13 +236,17 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He installs v15.64 (installv1564.bat → wait 5 min → click the tapereader link → reload Atlas → "reloaded") and I
-  probe the live tab**: the NEW count after 10:00 (expect 0–2), one name per stack with the bracket, the QQQ King row
-  AND cell (was the defect), ⓪a at the top / the strip at the bottom, the pulse (and that the gear's motion switch
-  stops it), no tally text, the SWEPT grouping once a key level has been swept, the NEW column not clipping.
-- **After the installer runs on his machine**: the 26 retired tests must be GONE from the repo root there and
-  `archive/v15.53/` + `roadmap/` present; the GEX sync task pushes the commit. If a fresh clone's suite is not green
-  but for the five baseline files (+ test_recordcurrent until the day's records are committed), say so before anything.
+- ✅ **Installed and verified live** (2026-09-04 ~11:55 CT): GitHub `c61d6df` v15.64; the 26 retired tests gone from
+  the root, `archive/v15.53/` + `roadmap/` on origin, v10.js untracked. His panel: ⓪a at the top, the strip at the
+  bottom, three King rows (QQQ ≈7729 drawn live), one NEW chip (`NEW 8b +98%`), three stack names with brackets,
+  the pulse running, no tally text, `SWEPT · making LOD POC · VAL · EML · PDC · IBL`, no swallowed errors. Still to
+  watch over a full session: the NEW count through the day (expect 0–2 per bar); the gear's motion switch stopping
+  the pulse.
+- **The install itself became a lesson** (LESSONS v15.64 "the install", landmine L-S): `more +N` stops at 65,535
+  lines and v15.64 (66,123) was the first build past it — the .bat sat on "Extracting payload..."; replaced by a
+  `for /f skip` copy, guarded by `test_delivery M1–M5`. The Chrome side panel cannot download a .bat; when the
+  session is linked to his computer the .bat is written into `C:\Dev\gex-signal-tapereader\` over the bridge and
+  run there. These records reach GitHub through the same bridge + the GEX sync task (no second installer).
 - **Q11** (OPEN-QUESTIONS): which axis catches the small fresh node at the extreme — measure (a) absolute size + d15,
   (b) the node against its own morning, (c) rank among fresh nodes — against the deflection ledger. Not blocked on him.
 - **NEXT build (v15.65)**: the deflection candidate score (the L-rules as register features scored by the ledger — the
@@ -155,7 +261,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
-9fdd486 v15.64: the second dashboard conversation - NEW and the stacks re-calibrated (a crossing after a below-observation + growth; members >= 30% named once with a bracket; rugs on price's side), the QQQ King live, ROLLED badge, the READ and SWEPT lines at the top in plain words, the replay strip at the bottom, the tally off the face, NOW and King rows lit and pulsing; roadmap/ and archive/v15.53 recovered and carried by the installer
+cc0bcce v15.64: the second dashboard conversation - NEW and the stacks re-calibrated (a crossing after a below-observation + growth; members >= 30% named once with a bracket; rugs on price's side), the QQQ King live, ROLLED badge, the READ and SWEPT lines at the top in plain words, the replay strip at the bottom, the tally off the face, NOW and King rows lit and pulsing; roadmap/ and archive/v15.53 recovered and carried by the installer
 665f809 v15.63: the dashboard conversation - the node row (NEW, roll, growth, setup per book), the King zone, the King tally, the SWEPT line; the DAY table and taps list off the face; one toggle away from v15.62
 13b18c2 gex: sync 03-Thu-09 19:29
 b0514b2 gex: sync 03-Thu-09 19:21

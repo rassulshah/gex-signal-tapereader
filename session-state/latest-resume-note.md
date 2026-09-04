@@ -55,12 +55,15 @@ message and built on "okay build". WHAT CHANGED AND WHY (the CHANGELOG has the f
 downloaded ("This file type cannot be opened"). When the session is linked to his computer, write the SAME
 `installvNNNN.bat` into `C:\Dev\gex-signal-tapereader\` with `device_commit_files` (request that one folder first)
 and he double-clicks it there — the folder where every earlier installer already sits. The .bat now extracts with a
-`for /f skip` copy: `more +N` walked 66,000 lines one at a time and sat on "Extracting payload..." for minutes.
+`for /f skip` copy: **`more +N` stops at 65,535 lines** (v15.64 was the first build past it, 66,123) and sat on
+"Extracting payload..." for good (landmine L-S). **INSTALLED AND VERIFIED LIVE 2026-09-04 ~11:55 CT:** GitHub `c61d6df`;
+his panel v15.64 — ⓪a at the top, the strip at the bottom, three King rows with the QQQ King drawn live (≈7729), one
+NEW chip (`NEW 8b +98%`), three stack names with brackets, the pulse running, no tally text, the SWEPT grouping
+(`making LOD POC · VAL · EML · PDC · IBL`), no swallowed render errors.
 **Verified**: `test_v1564.js` 84 / 21 of 21 mutations; `test_v1563` re-pinned where the tells changed; smoke clean;
 Chromium renders of the shipped script on 2026-09-03 12:48 and 2026-08-28 10:00 (`design/render-v1564-face.png`).
-**NOT yet verified live** — probe his tab after he installs: the NEW count after 10:00 (expect 0–2), one name per
-stack with the bracket, the QQQ King row and cell, ⓪a at the top and the strip at the bottom, the pulse, no tally
-text, the SWEPT grouping once a key level has been swept. **NEXT (v15.65):** the deflection candidate score (the
+**Verified live** (above). Still to watch over a full session: the NEW count through the day (expect 0–2 per bar),
+and the gear's motion switch stopping the pulse. **NEXT (v15.65):** the deflection candidate score (the
 L-rules as register features scored by the ledger — the gauge's predict part), the per-book King rows on Testing,
 the H5 join. **Doctrine to put in the brain as TOLD claims** (learn-seed): velocity mode "appearing"; core-concepts
 "rapid accumulation acts like a magnet"; the 2025-10-09 SPX/SPY/QQQ case study "downside nodes popped up and grew

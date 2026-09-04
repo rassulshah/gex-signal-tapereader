@@ -1,3 +1,22 @@
+## (same night, no version bump) — the installer's courier hit its ceiling: `more` stops at 65,535 lines
+
+> "why does the cmd just pause. it seems to be hanging" · "can you look in the directory of how earlier install files
+> were done prior to last night because this is still taking too long" · "worked.. make sure you save as a lesson learned."
+
+`installv1564.bat` sat on "Extracting payload..." — twice. Every installer in his folder used the same `more +N` copy
+and had worked; the line counts told the story: 35,506 · 42,458 · 58,721 · 59,759 (v15.09 → v15.63) and then 66,123.
+`more` stops at 65,535 lines and waits for a key on a prompt that went into the redirected file. `build-installer.py`
+now copies the payload with `for /f "usebackq skip=<HDRLINES> delims="` (blank header lines become `rem` so the skip
+count cannot depend on cmd's handling of empty lines; a header line that looks like base64, or a `more +` command, fails
+the build); the caps are a sanity limit on the file, no longer a proxy for `more`. Delivery, learned the same hour: the
+Chrome side panel cannot open or download a .bat; with the session linked to his computer the .bat is written into
+`C:\Dev\gex-signal-tapereader\` over the bridge (`device_commit_files`) and run from there. `installv1564b.bat` ran in
+seconds: GitHub `c61d6df`, the retired tests gone from the root, `archive/` and `roadmap/` on origin, v10.js untracked.
+Live probe of his panel after the reload: v15.64, ⓪a at the top, the strip at the bottom, three King rows with the
+QQQ King drawn live (≈7729), one NEW chip (`NEW 8b +98%`), three stack names each with its bracket, the pulse running,
+no tally text, `SWEPT · making LOD POC · VAL · EML · PDC · IBL`, no swallowed render errors. Records: LESSONS
+(v15.64, the install), PROJECT-CONSTANTS L-S, `.gex-config.json` deliveryRule, the resume note, `install-template.md`.
+
 ## v15.64 — the second dashboard conversation: NEW and the stacks re-calibrated, the QQQ King live, the face re-ordered · roadmap/ and archive/ recovered
 
 > His corrections, 2026-09-04, one per message: "The current price row is not obvious enough" · "The king rows need to
