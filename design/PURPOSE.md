@@ -74,6 +74,25 @@ trend continuation; gamma building at a high or a low may be the node that cause
 deflection.* So the question the columns answer is **"is a deflection being built right now, and
 where?"** — which is the leading indicator for the turning points §1 is about.
 
+## 3b · THE STANDING REQUIREMENT ON HOW IT IS BUILT (operator, 2026-09-04, his words)
+
+> "the idea is to have a trading decision support system that is data driven. I want to have top quality insight
+> and decision support. In order to do that we are building out data capture, analysis testing back to dashboard
+> for everything that is displayed on the dashboard including hod lod time, nodes, setups, directional prediction,
+> reads and more."
+
+And, the same evening: *"i envision clicking on the save, the data getting saved and the analysis occurring and
+the analysis tab being updated."* The consequence, stated once so no later context re-derives it: **every element
+the dashboard shows must have a chain — captured in the record → counted by the nightly (Analysis) → tested out of
+sample by the register (Testing) → approved as a rule → rendered with its n → the read recorded and scored the next
+day — and one definition travels that whole chain.** An element without a chain is DESCRIPTIVE and must say so;
+it may not imply a claim. His end of day is one click (the 💾); everything after it is the machine's, except the
+review, which is a session's (and says so). The build order follows from this: the outcomes the counts are scored
+against (turn vs stay in), the read recorded and scored, the count → test draft, recommendations with his tick,
+the live pre-tap read joined to the tested number. `design/PROCESS.md` is the loop; `design/ARCHITECTURE.md` the
+machinery; `design/DASHBOARD-INVENTORY.md` the element-by-element ledger of what has a chain and what is still
+descriptive.
+
 ## 4 · WHAT THIS MEANS FOR EVERY FUTURE DECISION
 
 1. **A feature earns its place by helping call a turning point.** If it cannot be traced to §1 or
