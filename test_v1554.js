@@ -55,7 +55,7 @@ const code=src.split('\n').filter(l=>!l.trim().startsWith('//')).join('\n');
     "var REGISTER_KEY='gpts_register_v1'; var localStorage={ getItem:function(k){ return store[k]||null; }, setItem:function(k,v){ store[k]=v; } };\n"+ex('preregList')+'\nreturn preregList;';
   const preregList=new Function('store',code2)(store);
   let l=preregList();
-  ok(l.length===7 && typeof l[0].pickFn==='function' && l[0].pickFn({gradeA:{n:3}}).n===3,'8d with nothing fetched the seed is used and picks resolve to functions (v15.55: 7 rows, H6/H7 added)');
+  ok(l.length===9 && typeof l[0].pickFn==='function' && l[0].pickFn({gradeA:{n:3}}).n===3 && l.every(H=>typeof H.pickFn==='function'),'8d with nothing fetched the seed is used and picks resolve to functions (v15.55: 7 rows, H6/H7 added; v15.72: 9 rows, H8/H9 the rolling floor / ceiling)');
   store['gpts_register_v1']=JSON.stringify({ schema:1, hypotheses:[{ id:'H9', claim:'x', pick:'tap1', minN:5 }] });
   l=preregList();
   ok(l.length===1 && l[0].id==='H9','8e once the file is fetched, THE FILE is the register');

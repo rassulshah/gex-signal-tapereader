@@ -79,6 +79,36 @@
    "refuteIf": "printed <= 18% or the CI covers the fresh-low control",
    "note": "found at 27% (n=180) vs an 18% control on sessions BEFORE 2026-08-22 (tools/study-sweeps.py). Read again ONLY on sessions after it, by the nightly, with the same definitions.",
    "since": "2026-08-21"
+  },
+  {
+   "id": "H8",
+   "written": "2026-09-04",
+   "claim": "the rolling floor: a King that rolled UP today and holds as a floor resumes the trend more often than any floor (his read, 2026-09-04)",
+   "pick": "pat",
+   "cls": "king:floor:up",
+   "outcome": "resume",
+   "base": "dir:up",
+   "minN": 30,
+   "since": "2026-09-08",
+   "predict": "resume rate of king:floor:up > the dir:up base, Wilson low above it",
+   "refuteIf": "at n >= 30 the Wilson low of king:floor:up is not above the dir:up resume rate",
+   "note": "Operator: \"when the king rolls up and is below price it may be creating a floor (support) and be bullish and vice versa\". Doctrine (rolling-floors-ceilings.md): the largest floor migrating higher = floor rolling up (bullish) — FOLLOWING. The class exists only on stamped taps (kroll, v15.72+), so the first session it can count is 2026-09-08. Read from the pattern table (tools/nightly/patterns.py), the same rows Testing ⑦ renders.",
+   "judgedBy": "nightly"
+  },
+  {
+   "id": "H9",
+   "written": "2026-09-04",
+   "claim": "the rolling ceiling: a King that rolled DOWN today and holds as a ceiling resumes the trend more often than any ceiling (the mirror of H8)",
+   "pick": "pat",
+   "cls": "king:ceil:dn",
+   "outcome": "resume",
+   "base": "dir:dn",
+   "minN": 30,
+   "since": "2026-09-08",
+   "predict": "resume rate of king:ceil:dn > the dir:dn base, Wilson low above it",
+   "refuteIf": "at n >= 30 the Wilson low of king:ceil:dn is not above the dir:dn resume rate",
+   "note": "The mirror of H8: the largest ceiling migrating lower = ceiling rolling down (bearish). Same read, same bar, same source.",
+   "judgedBy": "nightly"
   }
  ]
 }

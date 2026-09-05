@@ -1,1 +1,1 @@
-{"schema":1,"version":"15.71","at":"2026-09-05T00:03Z","files":150,"green":144,"red":6,"redFiles":["test_expiry_profile.js","test_node_map.js","test_recordcurrent.js","test_sma_cont.js","test_tapeking.js","test_v1126_process.js"],"writtenBy":"tools/run-tests.sh"}
+{"schema":1,"version":"15.72","at":"2026-09-05T00:58Z","files":151,"green":144,"red":7,"redFiles":["test_expiry_profile.js","test_node_map.js","test_recordcurrent.js","test_sma_cont.js","test_tapeking.js","test_v1126_process.js","test_v1571.js"],"writtenBy":"tools/run-tests.sh"}

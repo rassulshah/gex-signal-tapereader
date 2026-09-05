@@ -41,3 +41,6 @@ _harness.js
 tools/gex-nightly.log
 tools/gex-nightly.lock
 *.json.tmp
+
+# (v15.72) the desktop app drops every file I send into this folder — not the record
+Claude outputs/

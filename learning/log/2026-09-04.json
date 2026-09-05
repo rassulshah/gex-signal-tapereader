@@ -3,7 +3,7 @@
  "date": "2026-09-04",
  "writtenBy": "tools/nightly/run.py",
  "ranOn": "cloud",
- "ranAt": "2026-09-05T00:35:55Z",
+ "ranAt": "2026-09-05T00:44:28Z",
  "sessions": 2,
  "episodes": 9,
  "deflEvents": 78,
@@ -81,6 +81,32 @@
    "sessionsAfter": 0,
    "verdict": "thin",
    "bar": "0 early ON/PD sweep-reclaims on sessions after 2026-08-21 (needs 60)"
+  },
+  {
+   "id": "H8",
+   "claim": "the rolling floor: a King that rolled UP today and holds as a floor resumes the trend more often than any floor (his read, 2026-09-04)",
+   "minN": 30,
+   "pick": "pat",
+   "cls": "king:floor:up",
+   "outcome": "resume",
+   "base": "dir:up",
+   "n": 0,
+   "nBase": 17,
+   "verdict": "thin",
+   "bar": "king:floor:up: 0 resume-scored taps of 30 needed (base dir:up: 17)"
+  },
+  {
+   "id": "H9",
+   "claim": "the rolling ceiling: a King that rolled DOWN today and holds as a ceiling resumes the trend more often than any ceiling (the mirror of H8)",
+   "minN": 30,
+   "pick": "pat",
+   "cls": "king:ceil:dn",
+   "outcome": "resume",
+   "base": "dir:dn",
+   "n": 0,
+   "nBase": 11,
+   "verdict": "thin",
+   "bar": "king:ceil:dn: 0 resume-scored taps of 30 needed (base dir:dn: 11)"
   }
  ],
  "lodhod": {
@@ -101,7 +127,7 @@
   ],
   "note": "close-scored rows only (v15.51+); a flat live column against a rising table column means the scorer cannot fail"
  },
- "preopen": "2 sessions since 2026-09-03 \u00b7 9 episodes \u00b7 6 of 7 hypotheses still thin \u00b7 null band 0.0 pts",
+ "preopen": "2 sessions since 2026-09-03 \u00b7 9 episodes \u00b7 8 of 9 hypotheses still thin \u00b7 null band 0.0 pts",
  "newRequests": 0,
  "newItems": 0,
  "tape": null,

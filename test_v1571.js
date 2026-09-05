@@ -24,7 +24,7 @@ const build=(g,tail,fns)=>new Function('__g', Object.keys(g).map(k=>'var '+k+'=_
 const clock=(dow, sec)=>({ ctNow:()=>({ getDay:()=>dow, getTime:()=>1e12, setDate(){}, getDate:()=>4 }), ctNowSecOfDay:()=>sec });
 const H=(h,m)=>h*3600+(m||0)*60;
 
-ok(/@version\s+15\.71/.test(src) && /var GPTS_VERSION='15\.71';/.test(src),'0a v15.71 in both spots');
+ok(/@version\s+15\.(7[1-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[1-9]|[89]\d)';/.test(src),'0a v15.71 or later in both spots');
 
 // ---- 1 · the clock -----------------------------------------------------------------------------------------------------------
 {
@@ -234,7 +234,7 @@ async function part5(){
 async function part6(){
   const P=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]);
   const nx=P.roadmap.filter(r=>r.status==='next');
-  ok(nx.length===1 && nx[0].v==='15.71' && /THE SAVE RUNS ITSELF/.test(nx[0].title) && P.roadmap.some(r=>r.v==='15.70' && r.status==='shipped') && P.roadmap.some(r=>r.v==='15.72' && /candidate score/.test(r.title)),'6a the plan: v15.70 shipped, v15.71 this build, the score moved to v15.72',nx.map(x=>x.v));
+  ok(nx.length===1 && P.roadmap.some(r=>r.v==='15.71' && r.status==='shipped' && /THE SAVE RUNS ITSELF/.test(r.title)) && P.roadmap.some(r=>r.v==='15.70' && r.status==='shipped') && P.roadmap.some(r=>/candidate score/.test(r.title) && r.status==='later'),'6a the plan: v15.70 and v15.71 shipped (v15.72 re-pinned it), the score still ahead',nx.map(x=>x.v));
   ok(/write-if-absent/.test(P.stages[1].what) && /the 💾 is the override/.test(P.stages[1].what) && /Allow on every visit/.test(P.stages[1].what),'6b stage ② says the panel writes the day itself, write-if-absent, the 💾 the override');
   ok(P.process.then && /automatically have the application trigger the save button/.test(P.process.then),'6c the process record carries his words');
   const doc=fs.readFileSync('design/DATA-ANALYSIS-PROCESS.md','utf8');
@@ -257,7 +257,7 @@ async function part6(){
   ok(r7 && r7.status==='implemented' && r7.version==='15.71' && r7.by==='operator' && /approved in the chat/.test(r7.why||''),'6m the face change has its Rec row: R-7, his own ask, implemented in v15.71 (rule 9: nothing on the face changes except through Rec)',r7&&[r7.status,r7.version]);
   const seedJs=JSON.parse(/var REC_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(R),'6n REC_SEED equals the file');
   const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8');
-  ok(/v15\.71/.test(rn.slice(0,600)) && /the save runs itself/i.test(rn),'6l the resume note is at v15.71 and says the save runs itself');
+  ok(/v15\.(7[1-9]|[89]\d)/.test(rn.slice(0,600)) && /the save runs itself/i.test(rn),'6l the resume note is at v15.71 or later and says the save runs itself');
   finish();
 }
 function finish(){ console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0); }

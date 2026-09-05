@@ -11,6 +11,26 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0h · v15.72 — his three asks on the face, one bug, one read (2026-09-04, night)
+
+Three elements moved or grew, one was repaired, none changed meaning. **The AFTER HOURS · EM EXPIRED bar** left the King
+row (`secFrame`) for the bottom of the panel — a full-width bar between the replay strip and the footer (`afterHoursChipHtml`,
+the same replay-aware predicate as the branch that retires the band; nothing inside RTH or pre-market). **The King cards**
+(`.g3kz`) span their row — they sat as a flex item beside the chip, sized to content, 462 of 649 px measured — and grew: the
+price 12 → 16.5 px, the KING titles 6.8 → 8.6, GROWTH / ROLLED 7 → 8.6, the ROLLED / ABOVE-BELOW pills 6.2 → 7.4. **The
+ladder** rows 7.6 → 9 px (header 7.3, level rows 8) with the nine columns widened ~15% (`56 68 118 66 94 68 70 70 70`; the
+node bar scales to 112); the panel widens itself once (ladderFit) to ~730 px. **The pattern blocks** (RUG / RRUG / PIKA /
+BARNEY): the amber sliver inside their left edge was a dead `.g3pb` (pullback) rule's `border-left` leaking into the v15.65
+class of the same name — the rule is gone and the block states `border-left:0`; one `.g3pb` rule is pinned. Degrees
+unchanged: every element keeps the degree it had. Render: `design/render-v1572-face.png` (the 09-04 replay at 15:00 CT).
+
+**Not on the face, in the record:** his read — *"when the king rolls up and is below price it may be creating a floor
+(support) and be bullish and vice versa"* — is the doctrine's rolling floor / ceiling on the King. Every tap is now stamped
+with each book's King roll today (`kroll`); four classes in both twins (`king:floor:up` · `king:floor:dn` · `king:ceil:dn` ·
+`king:ceil:up`); K2.6 / K2.7 on Analysis (REGISTERED); H8 / H9 in the register, judged by the nightly from the pattern
+table (`judge_pat`) once at n = 30 per class against the floor / ceiling base, from the first stamped session (2026-09-08).
+Nothing renders on the face until the count clears — degree **doctrine** until then.
+
 ## 0g · v15.71 — the save runs itself (2026-09-04, night)
 
 One element changed: the footer's **💾** is a chip. `autosaveState()` → `data-autosave`: **idle** (plain, the session is

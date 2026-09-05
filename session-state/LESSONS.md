@@ -131,6 +131,24 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.72 — a class name is a global; a "look" bug is measured, not eyeballed; his read goes into the register the same night
+(1) "There is yellow in the rectangle right before the purple" was a CSS class collision: v15.65 named the pattern block
+`.g3pb` while a dead rule for the old pullback row still carried that name with an amber left border. The new rule set
+what it cared about (colour) and inherited what it never mentioned (the border). GREP BEFORE NAMING applies to CSS
+classes exactly as to functions — and a test that counts the rules for a class (one) is the guard, because a stylesheet
+never throws. (2) The layout ask was answered by MEASURING first: a Playwright probe found the cards at 462 of 649 px
+inside a wrapping flex row beside the chip — the cause of "taking up too much space" was the row, not the chip's size.
+The mockup was the real panel re-rendered with the CSS change injected, at his 673 and 760 px, before a line of the panel
+changed; the render after the build is the same picture. A layout change made by eye would have grown fonts and left
+the cards squeezed. (3) His read ("the king rolls up and is below price … a floor … bullish") went into the register as
+H8 / H9 THE SAME NIGHT, with predict + refuteIf, a minN, a base and a since-date, and the stamp field it needs (`kroll`)
+— so the first stamped session already counts it. The alternative, "we'll see what the data says", is how a read becomes
+a rate nobody registered. (4) `.gitattributes` said `*-text` — no space — for its whole life: a pattern that matches
+nothing, so it protected nothing, and his git normalized the task scripts on the first push. A config file is code; read
+it back after writing it. (5) A new hypothesis kind (a pattern CLASS) was judged by adding one function and one line to
+the nightly, not a second scorer: it reads the table the panel already renders, so the Testing tab, the Analysis rows and
+the register cannot disagree about the number.
+
 ### v15.71 — read the record before designing the feature: half of "automate the save" already existed, and the half that was missing was the failure mode
 (1) He asked for the save to run on a clock. The first move was `exportedAt` on the last seven day files: 15:01–15:03
 CT every trading day — the auto-export had been firing since v10.44 and his click was a second write. The design that

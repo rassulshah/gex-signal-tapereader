@@ -29,7 +29,7 @@ import glob, io, json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RATE_MIN_N = 15
-HYP_STUDY = {'H1': 'F5.2', 'H2': 'F2.1', 'H3': 'F6.1', 'H4': 'F1.4', 'H5': 'H1.3', 'H6': 'H2.7', 'H7': 'H2.8'}
+HYP_STUDY = {'H1': 'F5.2', 'H2': 'F2.1', 'H3': 'F6.1', 'H4': 'F1.4', 'H5': 'H1.3', 'H6': 'H2.7', 'H7': 'H2.8', 'H8': 'K2.6', 'H9': 'K2.7'}
 STUDY_SOURCES = {
     # the King (subject S0 / K1 / K2)
     'S0.1': ('pattern', ['king:any']),
@@ -42,6 +42,8 @@ STUDY_SOURCES = {
     'K1.2': ('pattern', ['king:SPY', 'king:QQQ']),
     'K2.1': ('pattern', ['king:floor']),
     'K2.2': ('pattern', ['king:ceil']),
+    'K2.6': ('pattern', ['king:floor:up', 'king:floor:dn']),   # (v15.72) the rolling floor — his read of 2026-09-04 (H8)
+    'K2.7': ('pattern', ['king:ceil:dn', 'king:ceil:up']),     # (v15.72) the rolling ceiling (H9)
     # the rugs (S1) and the stacks (S7)
     'S1.1': ('pattern', ['spx:rug', 'spy:rug', 'qqq:rug']),
     'S1.2': ('pattern', ['spx:rrug', 'spy:rrug', 'qqq:rrug']),

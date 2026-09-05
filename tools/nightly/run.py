@@ -150,6 +150,8 @@ def judge_sweep(H, since):
 
 def judge(H, eps, defl, null95, since='2026-09-03'):
     out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick=H.get('pick'))
+    if H.get('pick') == 'pat':   # (v15.72) read from the pattern table once it exists (judge_pat, after the table is built)
+        out.update(n=0, verdict='thin', bar='the pattern table is read after the episodes'); return out
     if H.get('judgedBy') == 'nightly' or H.get('pick') in ('sweepNode', 'sweepEarly'):
         return judge_sweep(H, H.get('since') or since)
     if H.get('blocked'):
@@ -181,6 +183,30 @@ def judge(H, eps, defl, null95, since='2026-09-03'):
     elif not holds: out['verdict'] = 'refused'; out['bar'] = 'the prediction (%s) does not hold' % H.get('predict', '')
     elif not excludes: out['verdict'] = 'refused'; out['bar'] = 'CI [%d-%d] covers the base rate %.0f%%' % (round(100*lo), round(100*hi), 100*rb)
     else: out['verdict'] = 'refused'; out['bar'] = 'inside the best-of-K noise band (%.1f pts)' % null95
+    return out
+
+def judge_pat(H, P):
+    """(v15.72) a hypothesis on a pattern CLASS — read from the same table Testing ⑦ renders (patterns.py: the classes and the
+    arithmetic the panel uses): the class's outcome rate against its base class, cleared when the Wilson low is above the
+    base at n >= minN, refused when the CI covers it. Read once at minN, on days from the register's `from`; the class
+    exists only on stamped taps, so `since` is the first stamped session by construction. His read of 2026-09-04 (H8 / H9)."""
+    out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick='pat', cls=H.get('cls'), outcome=H.get('outcome') or 'held', base=H.get('base'))
+    rows = {r.get('key'): r for r in ((P or {}).get('rows') or [])}
+    r = rows.get(H.get('cls')); b = rows.get(H.get('base')); oc = out['outcome']
+    def nh(row):
+        if not row: return (0, 0)
+        if oc == 'held': return (row.get('n') or 0, row.get('held') or 0)
+        o = row.get(oc) or {}; return (o.get('n') or 0, o.get('hit') or 0)
+    n, h = nh(r); nb, hb = nh(b)
+    out.update(n=n, nBase=nb)
+    if n < H['minN'] or not nb:
+        out['verdict'] = 'thin'; out['bar'] = '%s: %d %s-scored taps of %d needed (base %s: %d)' % (H.get('cls'), n, oc, H['minN'], H.get('base'), nb); return out
+    lo, hi = wilson(h, n); rb = hb / nb
+    out.update(rate=round(100 * h / n, 1), base=round(100 * rb, 1), ci=[round(100 * lo), round(100 * hi)])
+    if lo > rb:
+        out['verdict'] = 'cleared'; out['bar'] = '%s %s %.0f%% (Wilson low %.0f%%) clear of the %s base %.0f%% (n=%d vs %d)' % (H.get('cls'), oc, 100 * h / n, 100 * lo, H.get('base'), 100 * rb, n, nb)
+    else:
+        out['verdict'] = 'refused'; out['bar'] = 'CI [%d-%d] covers the %s base %.0f%% (n=%d vs %d)' % (round(100 * lo), round(100 * hi), H.get('base'), 100 * rb, n, nb)
     return out
 
 def _points(txt, dflt):
@@ -253,6 +279,11 @@ def run(upto=None, write=True, reg_path=REG, days=None):
         print('\n'.join(_pt.report(patterns)))
     except Exception as eP:
         print('patterns threw:', eP)
+    # (v15.72) the hypotheses on a pattern CLASS (pick 'pat') are read from that table — H8 / H9, the rolling floor and ceiling
+    try:
+        verdicts = [judge_pat(H, patterns) if H.get('pick') == 'pat' else v for H, v in zip(H_list, verdicts)]
+    except Exception as eJ:
+        print('pattern hypotheses threw:', eJ)
     cal = lodhod_calibration(days, frm)
     n_sess = len(set(e['_day'] for e in eps))
     thin = sum(1 for v in verdicts if v['verdict'] in ('thin', 'blocked'))

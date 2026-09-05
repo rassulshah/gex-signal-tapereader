@@ -1,3 +1,67 @@
+## v15.72 — THE FACE, HIS THREE ASKS + ONE BUG + ONE READ: the AFTER HOURS bar at the bottom, the King cards and the ladder bigger, the leaked border gone; the rolling floor / ceiling registered
+
+> Operator, 2026-09-04: "the after hours message to the left is bad choice, it is taking up too much space. you can put
+> it on the bottom of the application, this will give you much more space for the king badges which you can make bigger.
+> as well as the size of the font in the node ladder." · "why do the rugs and the barneys etc have a yellow in them?" ·
+> "there is yellow in the rectangle right before the purple" · "I like how the badges in the kings tell you that the king
+> rolled up or down and is above or below. i think there is something to this. when the king rolls up and is below price
+> it may be creating a floor (support) and be bullish and vice versa" · "yes .. build"
+
+**The face (mockup first — `mockups/mockup-after-hours-bottom.png`, the real panel re-rendered at 760 px; then built,
+`design/render-v1572-face.png`).** The AFTER HOURS · EM EXPIRED chip left the King row for the bottom of the panel — a
+full-width bar between the replay strip and the footer (`afterHoursChipHtml`, the same replay-aware predicate as the
+branch that retires the band; nothing inside RTH or pre-market; both render paths). Why it hurt: the chip and the three
+King cards shared one wrapping flex row, so on his wide panel the chip sat to the left and the cards took the leftover —
+462 of 649 px measured. The cards now span their row (`.g3kz{flex:1 1 100%}`) and grow: the price 12 → 16.5 px, the
+titles 6.8 → 8.6, the GROWTH / ROLLED lines 7 → 8.6, the pills 6.2 → 7.4, the padding with them. The ladder: rows 7.6 →
+9 px (header 7.3, level rows 8, the King chips 8.4 at 17 px tall, the % bars 8.4 at 13, the NEW / roll chips 7.5, NOW
+10.5) with the nine columns widened ~15% (`56 68 118 66 94 68 70 70 70`; the node bar scales to 112) — ladderFit grows
+the panel once to ~730 px, as it did for the pattern columns in v15.65.
+
+**The bug.** "there is yellow in the rectangle right before the purple": every RUG / RRUG / PIKA / BARNEY block carried a
+2 px amber left border. v15.65 named the pattern block `.g3pb`, and a dead rule from an earlier face — `.g3pb` the
+pullback row, `border-left:2px solid #f2b45a` — was still in the stylesheet; the new rule set the block's colour and never
+its border, so the old one leaked in. The GREP-BEFORE-NAMING landmine in CSS. The dead rule is gone, the block states
+`border-left:0`, and test_v1572 1a fails on a second `.g3pb` rule. Measured live in the render probe: every block's
+`borderLeftWidth` is 0px.
+
+**The read, registered before the data.** His observation is `skylit-docs/learn/rolling-floors-ceilings.md` applied to
+the biggest node — the largest floor migrating higher is a floor rolling up (bullish), the largest ceiling migrating lower
+a ceiling rolling down (bearish). Doctrine gate: FOLLOWING. The record could say only the halves (F-19: on two days a
+floor holding resumed 14 of 17, a ceiling 7 of 11 — n too small for a difference) and nothing about the King's roll,
+which no tap carried. Now every ledger event is stamped with each book's King roll today (`kroll`, from `kingsNow().moved`,
+the same source as the card's ROLLED badge); `tapClasses` / `tap_classes` derive four classes — `king:floor:up` (his
+floor case), `king:floor:dn`, `king:ceil:dn` (his ceiling case), `king:ceil:up` — from the tapped books' rolls only (a tap
+of two Kings that disagree counts in both, said not hidden); both twins pinned equal on a six-tap fixture; K2.6 / K2.7 on
+the Analysis tab (REGISTERED, sourced from the classes); H8 / H9 in `learning/register.json` — pick `pat`, outcome
+`resume`, base `dir:up` / `dir:dn`, minN 30, since 2026-09-08 (the first stamped session — the class cannot exist earlier),
+judged by the nightly from the pattern table it already builds (`run.py judge_pat`: cleared when the class's Wilson low
+is above the base, refused when the CI covers it, thin under minN or without a base). The nightly re-run on 09-04 reads
+both THIN with their base counts (dir:up 17, dir:dn 11). The panel's seed and `HYP_STUDY` carry H8 / H9; the pick `pat`
+resolves (the live row shows the nightly's verdict, never a count of its own). Nothing on the face until a class clears.
+
+**Also.** `.gitattributes` said `*-text` (no space) since it was written — a pattern matching nothing — so his Windows git
+normalized the task scripts to LF on the first push and test_v1568 4a went red; it now says `* -text` and the scripts
+are CRLF again. `Claude outputs/` (the desktop app's drop folder) is ignored. The Analysis mockup generator draws the
+nightly's "⟳ count so far" line the panel has drawn since v15.68 (test_v1562 2e pins subject K equal, and K2.6 / K2.7
+carry that line). R-8 on Rec, implemented (his ask, approved on the mockup). The plan: v15.71 shipped, v15.72 this build,
+the candidate score → v15.73 and the rest one later.
+
+**Tests.** `test_v1572.js` — 63 assertions: one `.g3pb` rule and the block's own border; the cards' row and sizes; the
+ladder's sizes, columns and bar scale; the chip gone from the King row, the bar's predicate (after the close only, never
+inside RTH, never pre-market, never a crash), its place in both render paths; the four classes on seven fixture taps
+(the rolling floor, the rolling ceiling, the magnet cases, two Kings disagreeing, no kroll, another book's roll, not a
+King tap), the twin equal on the six-tap fixture, `kroll` stamped and shown by the probe; H8 / H9 in the register, the
+seed and the maps; `judge_pat` thin / cleared / refused / no base / own outcome on fixtures; the committed log; the plan,
+R-8, the seeds, .gitattributes, the ignore, CRLF, the generator, the record. 12 of 12 mutants caught (floor up/dn
+swapped, any book's roll, the twin dropping a class, the chip pre-market, the chip after the footer, no Wilson, no minN
+gate, the border back, kroll unstamped, the twin reading any book, the seed forgetting H9, kingRollsNow reading the wrong
+field). Re-pinned: test_v1565 1f / 2n, test_v1568 3e (asOf moves nightly), test_v1554 8d (nine hypotheses), test_v1571
+0a / 6a, the three version pins. Suite: 146 green / 5 permanent baselines.
+
+**Not yet verified on his machine:** the install; the panel widening once to fit the ladder; the bar after Monday's
+close; the first `kroll` on a stamped tap (Monday 09-08) and `king:floor:up` counting in the nightly's table.
+
 ## v15.71 — THE SAVE RUNS ITSELF: no click at the close; the earlier days written when missed; the 💾 a chip
 
 > Operator, 2026-09-04: "the next step is to automatically have the application trigger the save button instead of

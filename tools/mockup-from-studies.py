@@ -84,7 +84,12 @@ def row(x):
          % (E(x['id']), E(x['q']), was, E(chips(x['decides'])), E(x['claim']), E(x['corpus']), cls, E(st_)))
     if x.get('result'):
         scr = (' <span class="ci">· ' + E(x['script']) + '</span>') if x.get('script') else ''
-        h += '<div class="rs">→ <b>%s</b>%s</div>' % (E(x['result']), scr)
+        by = (' <span class="ci nt">· by the nightly, %s</span>' % E(x.get('asOf') or '')) if x.get('by') == 'nightly' else ''
+        h += '<div class="rs">→ <b>%s</b>%s%s</div>' % (E(x['result']), scr, by)
+    # (v15.72) the nightly's count so far under a row it is still counting toward — the panel drew this line since v15.68
+    # (studyRowHtml); the generator is the look's source, so it draws it too (test_v1562 2e pins them equal on subject K)
+    if x.get('nightly') and x.get('nightly') != x.get('result'):
+        h += '<div class="rs nt">⟳ <b>%s</b></div>' % E(x['nightly'])
     return h
 
 

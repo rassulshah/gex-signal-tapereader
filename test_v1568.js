@@ -95,7 +95,7 @@ const LOG={ date:'2026-09-08', ranOn:'his machine', patterns:{ rows:[
   ok(log.ranOn==='cloud' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(log.ranAt||'') && log.patterns && log.patterns.rows.length,'3d the committed 2026-09-03 log carries ranOn cloud, ranAt, the pattern table',[log.ranOn,log.ranAt]);
   const RJ=JSON.parse(fs.readFileSync('learning/results.json','utf8')); const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8'));
   const byId={}; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>ss.studies.forEach(x=>{ byId[x.id]=x; })));
-  ok(RJ.asOf==='2026-09-03' && Object.keys(RJ.results).length>=7 && byId['H1.3'] && byId['H1.3'].status==='READ NEXT' && byId['H1.3'].by==='nightly' && byId['F2.1'] && byId['F2.1'].status==='REGISTERED' && /^H2 thin: n=1 of 30/.test(byId['F2.1'].nightly||''),'3e the committed registry: H1.3 → READ NEXT by the nightly (H5 ready at 51), F2.1 still REGISTERED with "H2 thin: n=1 of 30" beside the review’s sentence',[RJ.asOf, byId['H1.3']&&byId['H1.3'].status, byId['F2.1']&&byId['F2.1'].nightly]);
+  ok(RJ.asOf>='2026-09-03' && Object.keys(RJ.results).length>=7 && byId['H1.3'] && byId['H1.3'].status==='READ NEXT' && byId['H1.3'].by==='nightly' && byId['F2.1'] && byId['F2.1'].status==='REGISTERED' && /^H2 thin: n=1 of 30/.test(byId['F2.1'].nightly||''),'3e the committed registry: H1.3 → READ NEXT by the nightly (H5 ready at 51), F2.1 still REGISTERED with "H2 thin: n=1 of 30" beside the review’s sentence',[RJ.asOf, byId['H1.3']&&byId['H1.3'].status, byId['F2.1']&&byId['F2.1'].nightly]);
 }
 
 // ---- 4 · the Windows task: the scripts, line by line -----------------------------------------------------------------------

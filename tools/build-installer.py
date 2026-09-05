@@ -105,7 +105,7 @@ def _compan_verdict(dash):
 # --- the payload ---------------------------------------------------------------------------------
 FILES = []
 for pat in ['current/gex-signal-tapereader.user.js', 'current/gex-if-levels.user.js',
-            'changelog/CHANGELOG.md', '.gitignore', '.gex-config.json',
+            'changelog/CHANGELOG.md', '.gitignore', '.gitattributes', '.gex-config.json',   # (v15.72) .gitattributes rides: it keeps the task scripts CRLF on his git
             'learning/rules.json', 'data/README.json', 'skills/gex/SKILL.md',
             'setup-gex-autopull.bat']:
     if os.path.exists(pat):

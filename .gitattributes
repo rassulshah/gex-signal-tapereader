@@ -1,1 +1,5 @@
-*-text
+# (v15.72) NO line-ending conversion anywhere: the file said "*-text" (no space) since it was written, which matches nothing,
+# so his Windows git normalized the task scripts (.bat / .vbs) to LF on the first push and test_v1568 4a went red.
+* -text
+*.bat -text
+*.vbs -text

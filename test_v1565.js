@@ -39,7 +39,7 @@ ok(/@version\s+15\.(6[5-9]|[7-9]\d)/.test(src) && /var GPTS_VERSION='15\.(6[5-9]
   const spx=f.gridSetups(N('SPX',[[7750,100,7758.4],[7745,45,7753.4],[7740,35,7748.4]]), {px:7756});
   ok(/<span class="g3pb pika">PIKA<\/span><i class="g3pr">7740–7750<\/i>/.test(f.setupHtml(spx[7750])) && f.setupHtml(spx[7745])==='<span class="g3stk pika"'+tip(spx[7745][0].tip)+'>┃</span>','1d a pika stack: a yellow PIKA block on the biggest member; the members keep the bracket glyph');
   ok(!/SPX PIKA STACK/.test(face(f.setupHtml(spx[7750]))) && !/BARNEY STACK/.test(face(bl)),'1e the words STACK and the book are off the face — the block and the strikes only');
-  ok(/#gpts-body \.g3pb\{display:block;[^}]*color:#0b0e14\}/.test(src) && /#gpts-body \.g3pb\.pika\{background:#e3c341\}#gpts-body \.g3pb\.barney\{background:#a371f7\}/.test(src) && /#gpts-body \.g3pr\{display:block;[^}]*color:#e3c341/.test(src),'1f CSS: the word in black on the coloured block, the strikes in yellow under it');
+  ok(/#gpts-body \.g3pb\{display:block;[^}]*color:#0b0e14;border-left:0\}/.test(src) && /#gpts-body \.g3pb\.pika\{background:#e3c341\}#gpts-body \.g3pb\.barney\{background:#a371f7\}/.test(src) && /#gpts-body \.g3pr\{display:block;[^}]*color:#e3c341/.test(src),'1f CSS: the word in black on the coloured block, the strikes in yellow under it (v15.72: the block states its own border — the dead .g3pb rule leaked an amber one)');
 }
 
 // ---- 2 · the grid: nine columns, a pattern in its book’s column, a SPY pattern off its King placed on the nearest row ----
@@ -89,7 +89,7 @@ ok(/@version\s+15\.(6[5-9]|[7-9]\d)/.test(src) && /var GPTS_VERSION='15\.(6[5-9]
   ok(/#gpts-body \.g3kchip\.spx\{background:#ff9a3c/.test(src) && /#gpts-body \.g3kchip\.spy\{background:#5ea4ff/.test(src) && /#gpts-body \.g3kchip\.qqq\{background:transparent;color:#5fd3bc/.test(src),'2k the King chips: SPX orange · SPY blue · QQQ cyan');
   ok(/#gpts-body \.g3kc\.spx\{border-color:rgba\(255,154,60,\.6\)\}#gpts-body \.g3kc\.spx \.g3bk,#gpts-body \.g3kc\.spx \.g3kx\{color:#ff9a3c\}/.test(src) && /#gpts-body \.g3kc\.spy\{border-color:rgba\(94,164,255,\.6\)\}/.test(src),'2l …and the strip’s cells match');
   ok(!/#gpts-body \.g3kchip\.spx\{background:#e3c341/.test(src) && !/#gpts-body \.g3kc\.spy\{border-color:rgba\(205,180,250/.test(src),'2m the old yellow SPX chip and lavender SPY cell are gone — no King shares a node colour');
-  ok(/#gpts-body \.g3gr\{display:grid;grid-template-columns:48px 58px 104px 58px 82px 60px 62px 62px 62px;/.test(src) && /Math\.round\(pctv\/100\*98\)/.test(src),'2n nine columns as measured in Chromium; the node bar scaled to the narrower NODE column');
+  ok(/#gpts-body \.g3gr\{display:grid;grid-template-columns:56px 68px 118px 66px 94px 68px 70px 70px 70px;/.test(src) && /Math\.round\(pctv\/100\*112\)/.test(src),'2n nine columns as measured in Chromium (v15.72: widened ~15% with the 9 px font, mockups/mockup-after-hours-bottom.png); the node bar scaled to the NODE column');
 }
 
 // ---- 3 · the records ---------------------------------------------------------------------------------------------

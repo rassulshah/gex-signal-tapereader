@@ -39,7 +39,9 @@ PAT_GROW_PCT = 20
 PAT_CLASSES = [
     ('all', 'every tap'),
     ('king:SPX', 'King · SPX'), ('king:SPY', 'King · SPY'), ('king:QQQ', 'King · QQQ'), ('king:any', 'King · any book'), ('king:none', 'no King at the tap'),
-    ('king:floor', 'King as a floor (deflected UP)'), ('king:ceil', 'King as a ceiling (deflected DOWN)'), ('king:grow', 'SPX King growing into the tap'), ('king:fade', 'SPX King fading into the tap'), ('king:pos', 'SPX King +γ'), ('king:neg', 'SPX King −γ'),
+    ('king:floor', 'King as a floor (deflected UP)'), ('king:ceil', 'King as a ceiling (deflected DOWN)'),
+    ('king:floor:up', 'King as a floor, rolled UP today — the rolling floor'), ('king:floor:dn', 'King as a floor, rolled DOWN today'), ('king:ceil:dn', 'King as a ceiling, rolled DOWN today — the rolling ceiling'), ('king:ceil:up', 'King as a ceiling, rolled UP today'),
+    ('king:grow', 'SPX King growing into the tap'), ('king:fade', 'SPX King fading into the tap'), ('king:pos', 'SPX King +γ'), ('king:neg', 'SPX King −γ'),
     ('spx:pika', 'SPX pika stack (named or member)'), ('spx:barney', 'SPX barney stack (named or member)'), ('spy:pika', 'SPY pika stack'), ('spy:barney', 'SPY barney stack'), ('qqq:pika', 'QQQ pika stack'), ('qqq:barney', 'QQQ barney stack'),
     ('spx:rug', 'SPX rug — the yellow over the purple'), ('spx:rrug', 'SPX reverse rug — the yellow under the purple'), ('spy:rug', 'SPY rug'), ('spy:rrug', 'SPY reverse rug'), ('qqq:rug', 'QQQ rug'), ('qqq:rrug', 'QQQ reverse rug'),
     ('spx:new', 'SPX node NEW at the tap'), ('spx:grow', 'SPX node growing into the tap (≥ %d%%)' % PAT_GROW_PCT), ('spx:fade', 'SPX node fading into the tap (≤ −%d%%)' % PAT_GROW_PCT),
@@ -69,6 +71,18 @@ def tap_classes(e):
             c.append('king:floor')
         elif isinstance(d0, (int, float)) and d0 < 0:
             c.append('king:ceil')
+        # (v15.72) the tapped King's roll today × the side it was tested from — his read of 2026-09-04 ("when the king rolls
+        # up and is below price it may be creating a floor (support) and be bullish and vice versa"); the panel stamps
+        # `kroll` per book; a tap of two Kings that disagree counts in both classes (the panel's tapClasses, mirrored)
+        KR = e.get('kroll') or None
+        if isinstance(KR, dict):
+            r_up = any(KR.get(b) == 'up' for b in K); r_dn = any(KR.get(b) == 'dn' for b in K)
+            if isinstance(d0, (int, float)) and d0 > 0:
+                if r_up: c.append('king:floor:up')
+                if r_dn: c.append('king:floor:dn')
+            elif isinstance(d0, (int, float)) and d0 < 0:
+                if r_dn: c.append('king:ceil:dn')
+                if r_up: c.append('king:ceil:up')
         # (v15.68) the SPX King's own condition at the tap — S0.5 (growing into the tap) and S0.7 (polarity) read these
         ks = (Pt or {}).get('spx') if ('SPX' in K and Pt) else None
         if ks and ks.get('node') is True:

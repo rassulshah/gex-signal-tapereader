@@ -109,6 +109,26 @@
        "claim": "C9",
        "corpus": "tap record",
        "status": "OPEN"
+      },
+      {
+       "id": "K2.6",
+       "q": "The rolling floor: a King that rolled UP today and holds as a floor — does the trend resume more often than after any floor? (his read, 2026-09-04; H8, read once at n = 30 from the first stamped session)",
+       "decides": "SIDE · TARGET",
+       "claim": "Academy: floor rolling up = bullish",
+       "corpus": "tap record (stamped, v15.72+)",
+       "status": "REGISTERED",
+       "nightly": "H8 thin: n=0 of 30 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
+      },
+      {
+       "id": "K2.7",
+       "q": "The rolling ceiling: a King that rolled DOWN today and holds as a ceiling — does the trend resume more often than after any ceiling? (H9, the mirror)",
+       "decides": "SIDE · TARGET",
+       "claim": "Academy: ceiling rolling down = bearish",
+       "corpus": "tap record (stamped, v15.72+)",
+       "status": "REGISTERED",
+       "nightly": "H9 thin: n=0 of 30 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
       }
      ]
     },
@@ -2047,15 +2067,15 @@
   }
  ],
  "counts": {
-  "studies": 190,
+  "studies": 192,
   "byStatus": {
    "OPEN": 101,
    "READ NEXT": 18,
    "THIN": 25,
+   "REGISTERED": 7,
    "SHIPPED": 13,
    "REFUSED": 3,
    "READ": 23,
-   "REGISTERED": 5,
    "DRAFT": 2
   }
  }

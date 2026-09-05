@@ -3,6 +3,26 @@
  "asOf": "2026-09-04",
  "writtenBy": "tools/nightly/results.py",
  "results": {
+  "K2.6": {
+   "line": "H8 thin: n=0 of 30 · nightly 2026-09-04",
+   "status": null,
+   "n": 0,
+   "rate": null,
+   "lo": null,
+   "src": "register:H8",
+   "asOf": "2026-09-04",
+   "by": "nightly"
+  },
+  "K2.7": {
+   "line": "H9 thin: n=0 of 30 · nightly 2026-09-04",
+   "status": null,
+   "n": 0,
+   "rate": null,
+   "lo": null,
+   "src": "register:H9",
+   "asOf": "2026-09-04",
+   "by": "nightly"
+  },
   "F5.2": {
    "line": "H1 thin: n=1 of 40 · nightly 2026-09-04",
    "status": null,
