@@ -1,141 +1,141 @@
 {
  "schema": 1,
- "asOf": "2026-09-03",
+ "asOf": "2026-09-04",
  "writtenBy": "tools/nightly/results.py",
  "results": {
   "F5.2": {
-   "line": "H1 thin: n=1 of 40 · nightly 2026-09-03",
+   "line": "H1 thin: n=1 of 40 · nightly 2026-09-04",
    "status": null,
    "n": 1,
    "rate": null,
    "lo": null,
    "src": "register:H1",
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "F2.1": {
-   "line": "H2 thin: n=1 of 30 · nightly 2026-09-03",
+   "line": "H2 thin: n=1 of 30 · nightly 2026-09-04",
    "status": null,
    "n": 1,
    "rate": null,
    "lo": null,
    "src": "register:H2",
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "F6.1": {
-   "line": "H3 thin: n=2 of 40 · nightly 2026-09-03",
+   "line": "H3 thin: n=2 of 40 · nightly 2026-09-04",
    "status": null,
    "n": 2,
    "rate": null,
    "lo": null,
    "src": "register:H3",
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "F1.4": {
-   "line": "H4 thin: n=0 of 40 · nightly 2026-09-03",
+   "line": "H4 thin: n=0 of 40 · nightly 2026-09-04",
    "status": null,
    "n": 0,
    "rate": null,
    "lo": null,
    "src": "register:H4",
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "H1.3": {
-   "line": "H5 ready: ledger has 51 events — the join can be run · nightly 2026-09-03",
+   "line": "H5 ready: ledger has 78 events — the join can be run · nightly 2026-09-04",
    "status": "READ NEXT",
-   "n": 51,
+   "n": 78,
    "rate": null,
    "lo": null,
    "src": "register:H5",
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "H2.7": {
-   "line": "H6 thin: n=0 of 40 · nightly 2026-09-03",
+   "line": "H6 thin: n=0 of 40 · nightly 2026-09-04",
    "status": null,
    "n": 0,
    "rate": null,
    "lo": null,
    "src": "register:H6",
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "H2.8": {
-   "line": "H7 thin: n=0 of 60 · nightly 2026-09-03",
+   "line": "H7 thin: n=0 of 60 · nightly 2026-09-04",
    "status": null,
    "n": 0,
    "rate": null,
    "lo": null,
    "src": "register:H7",
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   }
  },
  "rules": {
   "L1": {
-   "evidence": "held: growing — vs fading — — thin (growing into the tap holds more than fading) · nightly 2026-09-03",
+   "evidence": "held: growing — vs fading — — thin (growing into the tap holds more than fading) · nightly 2026-09-04",
    "verdict": "thin",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L2": {
-   "evidence": "turn: a NEW node — vs every tap 1 / 19 = 5% (low 1%) — thin (a fresh node at the extreme IS the turn more often than any tap) · nightly 2026-09-03",
+   "evidence": "turn: a NEW node — vs every tap 1 / 28 = 4% (low 1%) — thin (a fresh node at the extreme IS the turn more often than any tap) · nightly 2026-09-04",
    "verdict": "thin",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L5": {
-   "evidence": "held: a −γ node — vs a +γ node — — thin (a −γ node holds less than a +γ node) · nightly 2026-09-03",
+   "evidence": "held: a −γ node — vs a +γ node — — thin (a −γ node holds less than a +γ node) · nightly 2026-09-04",
    "verdict": "thin",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L6": {
-   "evidence": "turn: pika stack + barney stack — vs every tap 1 / 19 = 5% (low 1%) — thin (a stack marks the extreme more often than any tap) · nightly 2026-09-03",
+   "evidence": "turn: pika stack + barney stack — vs every tap 1 / 28 = 4% (low 1%) — thin (a stack marks the extreme more often than any tap) · nightly 2026-09-04",
    "verdict": "thin",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L9": {
-   "evidence": "held: any King — · SPX King — · SPY King — · QQQ King — · nightly 2026-09-03",
+   "evidence": "held: any King — · SPX King — · SPY King — · QQQ King — · nightly 2026-09-04",
    "verdict": "thin",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L3": {
    "evidence": "not measured by the ledger: needs the King path (price pulled back to a growing King) — not a tap class",
    "verdict": "not measured",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L8": {
    "evidence": "not measured by the ledger: needs the King path with the sign — not a tap class",
    "verdict": "not measured",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L4": {
    "evidence": "not measured by the ledger: needs the side flip (a node re-growing under price) — not a tap class",
    "verdict": "not measured",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   },
   "L7": {
    "evidence": "not measured by the ledger: needs the clock as a class — to add",
    "verdict": "not measured",
    "n": 0,
-   "asOf": "2026-09-03",
+   "asOf": "2026-09-04",
    "by": "nightly"
   }
  }

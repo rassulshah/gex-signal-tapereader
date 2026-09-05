@@ -970,8 +970,8 @@
        "status": "REFUSED",
        "result": "H4 null: 49.1% vs 48.6%, n=970 rows",
        "was": "S-B17",
-       "nightly": "H4 thin: n=0 of 40 · nightly 2026-09-03",
-       "asOf": "2026-09-03"
+       "nightly": "H4 thin: n=0 of 40 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
       }
      ]
     },
@@ -989,8 +989,8 @@
        "status": "REGISTERED",
        "result": "tap≥1 73% n=22 vs tap0 47% n=70 · H2 reads at 30",
        "was": "S-B1",
-       "nightly": "H2 thin: n=1 of 30 · nightly 2026-09-03",
-       "asOf": "2026-09-03"
+       "nightly": "H2 thin: n=1 of 30 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
       },
       {
        "id": "F2.2",
@@ -1099,8 +1099,8 @@
        "corpus": "94 ep · book",
        "status": "REGISTERED",
        "result": "exploratory 32% n=34 for A — the inverse · H1 reads at 40",
-       "nightly": "H1 thin: n=1 of 40 · nightly 2026-09-03",
-       "asOf": "2026-09-03"
+       "nightly": "H1 thin: n=1 of 40 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
       },
       {
        "id": "F5.3",
@@ -1125,8 +1125,8 @@
        "corpus": "94 ep · book",
        "status": "REGISTERED",
        "result": "H3: 52.2% vs 52.1% · n=46/48 · gap < 8 predicted",
-       "nightly": "H3 thin: n=2 of 40 · nightly 2026-09-03",
-       "asOf": "2026-09-03"
+       "nightly": "H3 thin: n=2 of 40 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
       },
       {
        "id": "F6.2",
@@ -1484,9 +1484,9 @@
        "claim": "C17 C13",
        "corpus": "defl ledger 0/50",
        "status": "READ NEXT",
-       "result": "H5 ready: ledger has 51 events — the join can be run · nightly 2026-09-03",
-       "nightly": "H5 ready: ledger has 51 events — the join can be run · nightly 2026-09-03",
-       "asOf": "2026-09-03",
+       "result": "H5 ready: ledger has 78 events — the join can be run · nightly 2026-09-04",
+       "nightly": "H5 ready: ledger has 78 events — the join can be run · nightly 2026-09-04",
+       "asOf": "2026-09-04",
        "by": "nightly"
       },
       {
@@ -1573,8 +1573,8 @@
        "corpus": "tap record · API backfill",
        "status": "DRAFT",
        "result": "H6 proposed: > 40% vs the 24% base (n=453 ON/PD sweep-reclaims) · refute if ≤ 30%",
-       "nightly": "H6 thin: n=0 of 40 · nightly 2026-09-03",
-       "asOf": "2026-09-03"
+       "nightly": "H6 thin: n=0 of 40 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
       },
       {
        "id": "H2.8",
@@ -1584,8 +1584,8 @@
        "corpus": "new sessions",
        "status": "DRAFT",
        "result": "H7 proposed: first-30-min ON/PD sweep-reclaim prints the extreme > 24% · refute if ≤ 18% (pooled 27% n=180 on the read corpus)",
-       "nightly": "H7 thin: n=0 of 60 · nightly 2026-09-03",
-       "asOf": "2026-09-03"
+       "nightly": "H7 thin: n=0 of 60 · nightly 2026-09-04",
+       "asOf": "2026-09-04"
       },
       {
        "id": "H2.9",

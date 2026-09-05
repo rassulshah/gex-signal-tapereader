@@ -73,9 +73,9 @@
    "weak": 2,
    "refute": 0,
    "note": "13 of 15 measurable legs (4 legs fell in blind windows). Weak: E002 c2 (7670 −γ roughly flat, −13M → −17M) and E003 c2 (7775 grew +13–15M/15m until 09:57, then d15 +3 → 0 AT the high: the growth stalled at the tap). +γ and −γ nodes both deflected (E001 +γ King; E002 −γ King; E004 −γ King at 10:16 and +γ stack at 12:10).",
-   "evidence": "held: growing — vs fading — — thin (growing into the tap holds more than fading) · nightly 2026-09-03",
+   "evidence": "held: growing — vs fading — — thin (growing into the tap holds more than fading) · nightly 2026-09-04",
    "verdict": "thin",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L2",
@@ -92,9 +92,9 @@
    "weak": 0,
    "refute": 0,
    "note": "E001 R3 (7755 born 12:48, the session high); E002 c1 (7665/7670 born 09:21–09:27 −γ, the session low); E003 c2 (7775 born 09:33, the session high), c4 (7720 born 12:39, the 13:12 high), c5 (7705 born 13:42 −γ, the 14:00 low); E004 c1 (7700 fresh 08:45–08:57, the morning support).",
-   "evidence": "turn: a NEW node — vs every tap 1 / 19 = 5% (low 1%) — thin (a fresh node at the extreme IS the turn more often than any tap) · nightly 2026-09-03",
+   "evidence": "turn: a NEW node — vs every tap 1 / 28 = 4% (low 1%) — thin (a fresh node at the extreme IS the turn more often than any tap) · nightly 2026-09-04",
    "verdict": "thin",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L3",
@@ -113,7 +113,7 @@
    "note": "Held for three +γ Kings — E001 (King $237M → $345M with price above; price back on it by 14:23), E003 c3 (the King rolled DOWN 7790 → 7715 onto price; price rose to it and traded on it 12:36–13:12), E004 c3 (after the 7755 high price returned to the King 7735 by 13:00) — and FAILED for the −γ King of E002 c4 (7675 grew −27M → −116M under price and price rallied AWAY into the 14:59 high). The rule stays here refuted; L8 is the conditioned version and waits for a new example.",
    "evidence": "not measured by the ledger: needs the King path (price pulled back to a growing King) — not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L8",
@@ -131,7 +131,7 @@
    "note": "Born from L3's refutation, so by the protocol it does not count as confirmed until a NEW example agrees — a rule rewritten to fit its counter-example has not been tested yet. Register candidate H8 is the corpus version.",
    "evidence": "not measured by the ledger: needs the King path with the sign — not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L4",
@@ -148,7 +148,7 @@
    "note": "E001 Pb (7740: 80% resistance at 10:16 → decayed → support from 10:42 → re-grew from 11:15 → held 12:36); E002 c4 (7675 pierced at 13:39 'above' then reclaimed 'below', then the King).",
    "evidence": "not measured by the ledger: needs the side flip (a node re-growing under price) — not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L5",
@@ -164,9 +164,9 @@
    "weak": 1,
    "refute": 0,
    "note": "E002 c2 and c4 (−γ under price → up), E003 c5 (−γ 7705 under the 14:00 low → up), E004 c2 (−γ King 7735 above the 10:16 high → down). Unclear: E003 c3 (−γ 7710 at ES 7718 grew after the 12:06 low while price sat on it — the +γ King above was pulling).",
-   "evidence": "held: a −γ node — vs a +γ node — — thin (a −γ node holds less than a +γ node) · nightly 2026-09-03",
+   "evidence": "held: a −γ node — vs a +γ node — — thin (a −γ node holds less than a +γ node) · nightly 2026-09-04",
    "verdict": "thin",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L6",
@@ -182,9 +182,9 @@
    "weak": 0,
    "refute": 0,
    "note": "E001 Pb (7735 + 7740, $61M + $81M), E002 c1 (7665 + 7670 + 7675 −γ, the session low), E004 c3 (7745 + 7750, $73M + $46M, the session high 5 pts between them).",
-   "evidence": "turn: pika stack + barney stack — vs every tap 1 / 19 = 5% (low 1%) — thin (a stack marks the extreme more often than any tap) · nightly 2026-09-03",
+   "evidence": "turn: pika stack + barney stack — vs every tap 1 / 28 = 4% (low 1%) — thin (a stack marks the extreme more often than any tap) · nightly 2026-09-04",
    "verdict": "thin",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L9",
@@ -201,9 +201,9 @@
    "weak": 0,
    "refute": 0,
    "note": "His words, 2026-09-03: 'this is a bread and butter setup … track this religiously.' In the four taught days 6 of 16 circled legs were taps of the King and all six deflected (E001 R1, R2 — the SPX King 7750; E002 c4 — 7675 as it became the King; E003 c1 — 7750 at the open, c3 — the King rolled onto price; E004 c2 — the −γ King 7735). That is selection, not a rate: he circled deflections, not every tap. The rate comes from the ledger (S0.1–S0.4), per book, at n ≥ 15.",
-   "evidence": "held: any King — · SPX King — · SPY King — · QQQ King — · nightly 2026-09-03",
+   "evidence": "held: any King — · SPX King — · SPY King — · QQQ King — · nightly 2026-09-04",
    "verdict": "thin",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   },
   {
    "id": "L7",
@@ -222,7 +222,7 @@
    "note": "First hour: E002 c1 09:27, E003 c1 08:42–09:00, E004 c1 08:45–09:10. Noon: E001 R2 11:57–12:06, Pb 12:20–12:36, R3 13:12; E002 c3 12:51–13:24; E003 c3 12:06, c4 13:12; E004 c3 12:10. The sweep corpus already says the first 30 minutes matter (27% vs 18%, n=180).",
    "evidence": "not measured by the ledger: needs the clock as a class — to add",
    "verdict": "not measured",
-   "asOf": "2026-09-03"
+   "asOf": "2026-09-04"
   }
  ],
  "examples": [

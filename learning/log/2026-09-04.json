@@ -1,0 +1,300 @@
+{
+ "schema": 2,
+ "date": "2026-09-04",
+ "writtenBy": "tools/nightly/run.py",
+ "ranOn": "his machine",
+ "ranAt": "2026-09-05T00:21:14Z",
+ "sessions": 2,
+ "episodes": 9,
+ "deflEvents": 78,
+ "null": {
+  "p50": 0.0,
+  "p95": 0.0
+ },
+ "hypotheses": [
+  {
+   "id": "H1",
+   "claim": "grade A holds LESS often than the base rate",
+   "minN": 40,
+   "pick": "gradeA",
+   "n": 1,
+   "nBase": 5,
+   "verdict": "thin"
+  },
+  {
+   "id": "H2",
+   "claim": "a node's 2nd test holds MORE often than its 1st",
+   "minN": 30,
+   "pick": "tap1",
+   "n": 1,
+   "nBase": 5,
+   "verdict": "thin"
+  },
+  {
+   "id": "H3",
+   "claim": "NULL \u00e2\u20ac\u201d polarity does not discriminate",
+   "minN": 40,
+   "pick": "pol",
+   "n": 2,
+   "nA": 3,
+   "nB": 2,
+   "verdict": "thin"
+  },
+  {
+   "id": "H4",
+   "claim": "NULL \u00e2\u20ac\u201d the rejection wick does not discriminate",
+   "minN": 40,
+   "pick": "wick",
+   "n": 0,
+   "nA": 0,
+   "nB": 4,
+   "verdict": "thin"
+  },
+  {
+   "id": "H5",
+   "claim": "a top-5 gamma node moves the HOD/LOD cell",
+   "minN": 50,
+   "pick": "defl",
+   "n": 78,
+   "verdict": "ready",
+   "bar": "ledger has 78 events \u2014 the join can be run"
+  },
+  {
+   "id": "H6",
+   "claim": "an ON/PD sweep-reclaim that lands in a top-5 node band or at the King prints the extreme more often",
+   "minN": 40,
+   "pick": "sweepNode",
+   "judgedBy": "nightly",
+   "n": 0,
+   "nControl": 2,
+   "sessions": 12,
+   "verdict": "thin",
+   "bar": "0 sweep-at-a-node events on sessions from 2026-09-03 (needs 40); not at a node: 2"
+  },
+  {
+   "id": "H7",
+   "claim": "a first-30-minute ON/PD sweep-reclaim prints the extreme more often than a bounce off any fresh low",
+   "minN": 60,
+   "pick": "sweepEarly",
+   "judgedBy": "nightly",
+   "n": 0,
+   "sessionsAfter": 0,
+   "verdict": "thin",
+   "bar": "0 early ON/PD sweep-reclaims on sessions after 2026-08-21 (needs 60)"
+  }
+ ],
+ "lodhod": {
+  "sessions": 2,
+  "cells": [
+   {
+    "cell": "100-119",
+    "n": 23,
+    "live": 43,
+    "table": 100
+   },
+   {
+    "cell": "80-99",
+    "n": 30,
+    "live": 50,
+    "table": 99
+   }
+  ],
+  "note": "close-scored rows only (v15.51+); a flat live column against a rising table column means the scorer cannot fail"
+ },
+ "preopen": "2 sessions since 2026-09-03 \u00b7 9 episodes \u00b7 6 of 7 hypotheses still thin \u00b7 null band 0.0 pts",
+ "newRequests": 0,
+ "newItems": 0,
+ "tape": null,
+ "patterns": {
+  "rows": [
+   {
+    "key": "all",
+    "label": "every tap",
+    "n": 78,
+    "held": 35,
+    "broke": 43,
+    "pending": 3,
+    "rate": 45,
+    "lo": 34,
+    "turn": {
+     "n": 28,
+     "hit": 1,
+     "rate": 4,
+     "lo": 1
+    },
+    "resume": {
+     "n": 28,
+     "hit": 21,
+     "rate": 75,
+     "lo": 57
+    }
+   },
+   {
+    "key": "old:King",
+    "label": "old detector \u00b7 King",
+    "n": 10,
+    "held": 3,
+    "broke": 7,
+    "pending": 0,
+    "rate": 30,
+    "lo": 11,
+    "turn": {
+     "n": 4,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 4,
+     "hit": 4,
+     "rate": 100,
+     "lo": 51
+    }
+   },
+   {
+    "key": "old:Gate",
+    "label": "old detector \u00b7 Gate",
+    "n": 11,
+    "held": 6,
+    "broke": 5,
+    "pending": 0,
+    "rate": 55,
+    "lo": 28,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 1,
+     "rate": 50,
+     "lo": 9
+    }
+   },
+   {
+    "key": "old:Rug",
+    "label": "old detector \u00b7 Rug",
+    "n": 8,
+    "held": 4,
+    "broke": 4,
+    "pending": 1,
+    "rate": 50,
+    "lo": 22,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "old:Floor",
+    "label": "old detector \u00b7 Floor",
+    "n": 27,
+    "held": 15,
+    "broke": 12,
+    "pending": 0,
+    "rate": 56,
+    "lo": 37,
+    "turn": {
+     "n": 13,
+     "hit": 1,
+     "rate": 8,
+     "lo": 1
+    },
+    "resume": {
+     "n": 13,
+     "hit": 11,
+     "rate": 85,
+     "lo": 58
+    }
+   },
+   {
+    "key": "old:Ceiling",
+    "label": "old detector \u00b7 Ceiling",
+    "n": 22,
+    "held": 7,
+    "broke": 15,
+    "pending": 2,
+    "rate": 32,
+    "lo": 16,
+    "turn": {
+     "n": 9,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 9,
+     "hit": 5,
+     "rate": 56,
+     "lo": 27
+    }
+   },
+   {
+    "key": "dir:up",
+    "label": "deflected UP (a floor held)",
+    "n": 44,
+    "held": 22,
+    "broke": 22,
+    "pending": 0,
+    "rate": 50,
+    "lo": 36,
+    "turn": {
+     "n": 17,
+     "hit": 1,
+     "rate": 6,
+     "lo": 1
+    },
+    "resume": {
+     "n": 17,
+     "hit": 14,
+     "rate": 82,
+     "lo": 59
+    }
+   },
+   {
+    "key": "dir:dn",
+    "label": "deflected DOWN (a ceiling held)",
+    "n": 34,
+    "held": 13,
+    "broke": 21,
+    "pending": 3,
+    "rate": 38,
+    "lo": 24,
+    "turn": {
+     "n": 11,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 11,
+     "hit": 7,
+     "rate": 64,
+     "lo": 35
+    }
+   }
+  ],
+  "events": 81,
+  "stamped": 0,
+  "schema": 1,
+  "days": 2,
+  "writtenBy": "tools/nightly/patterns.py",
+  "outcomes": {
+   "turnTol": 0.5,
+   "market": "SPY",
+   "episodes": "first tap per (strike, dir) per day",
+   "scored": 28
+  }
+ },
+ "from": "2026-09-03"
+}
