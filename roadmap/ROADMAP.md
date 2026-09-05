@@ -24,54 +24,55 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 - **v15.70** (2026-09-04) — 💡 REC — the eighth and last tab: proposals TO him from the nightly (pre-registered conditions: a class clear of the base at n ≥ 15, a Learn rule the record contradicts, a hypothesis cleared) and from the review (tools/rec-seed.py), each with what it changes and its evidence; his ✓ / ✗ saved at once and riding the next day file (`reco`), the nightly setting the row's status; withdrawn when the record stops supporting it; nothing on the face changes except through here · THE DATA ANALYSIS PROCESS named and written (design/DATA-ANALYSIS-PROCESS.md: the seven links, the degrees of knowledge, the ten rules, the eight tabs) and pinned by a test · learning/markets.json — every market-specific number in one place, gold as a configuration entry when a gamma book exists · serves: 'from that point on you take over from data, analysis, testing, learning all the way to the Rec tab, which is where we will discuss what to implement'
 - **v15.71** (2026-09-04) — THE SAVE RUNS ITSELF — no click at the close: after the close (15:01 CT and later, no upper bound) any tick that finds the day not confirmed in the repo folder writes it and retries every 10 minutes until it lands; outside market hours every earlier day still in IndexedDB with bars and no file is written, write-if-absent, and marked once; saved means confirmed in the folder and nothing else (the silent download fallback is gone); the 💾 becomes a chip — saved · pending · DUE — and its click carries the folder permission inside the gesture (Chrome 122+ offers Allow on every visit there), so after one such click no rule ever needs him again; a day with no recorded bars is never written on any path · serves: 'automatically have the application trigger the save button instead of me clicking it' — the Data Analysis process with zero steps at the close
 - **v15.72** (2026-09-05) — THE FACE, HIS THREE ASKS + ONE BUG + ONE READ — the AFTER HOURS chip leaves the King row for the bottom of the panel (a full-width bar above the footer, only after the close); the three King cards take the whole row and grow (price 12 → 16.5 px, titles 6.8 → 8.6, the lines 7 → 8.6, the pills 6.2 → 7.4); the ladder font 7.6 → 9 px with the columns widened ~15% (ladderFit grows the panel once); the amber sliver inside every RUG / RRUG / PIKA / BARNEY block was a dead .g3pb rule’s left border leaking into the v15.65 class of the same name — gone, pinned; THE ROLLING FLOOR / CEILING — his read ("when the king rolls up and is below price it may be creating a floor (support) and be bullish and vice versa") is the doctrine’s rolling floor on the biggest node: every tap is stamped with each book’s King roll today (kroll), four classes in both twins (king:floor:up · king:floor:dn · king:ceil:dn · king:ceil:up), K2.6 / K2.7 on Analysis, H8 / H9 in the register read once at n = 30 from the first stamped session against the floor / ceiling base; .gitattributes fixed (the task scripts stay CRLF), Claude outputs/ ignored · serves: the face he reads at the tap · "i think there is something to this" — a read becomes a claim before the data
+- **v15.73** (2026-09-05) — THE DAY LINE — the process reporting on itself at the bottom of the panel: the date, then saved · analysis · testing · learning · rec, each with its evidence (the time, who, the counts) and a colour — green done, amber expected but not yet, red overdue and why (analysis 30 minutes after the save with no log names the GEX nightly task; a save not confirmed by 15:15 points at the 💾 chip), grey not knowable yet; during the session the same row reads data · recording · N bars; yesterday’s completed line stays until today records its first bar; the hover is the whole sentence; every fact from what the panel already fetches (the chip’s save evidence, the nightly log, the Learn file, the Rec file), so it fills in on its own · serves: "there needs to be some message at the bottom that tells me … 9/4 - data saved, analysis complete, testing complete, recommendations made" — the loop visible without opening a tab
 
 ## NEXT — the running build
 
-### v15.73 — THE DAY LINE — the process reporting on itself at the bottom of the panel: the date, then saved · analysis · testing · learning · rec, each with its evidence (the time, who, the counts) and a colour — green done, amber expected but not yet, red overdue and why (analysis 30 minutes after the save with no log names the GEX nightly task; a save not confirmed by 15:15 points at the 💾 chip), grey not knowable yet; during the session the same row reads data · recording · N bars; yesterday’s completed line stays until today records its first bar; the hover is the whole sentence; every fact from what the panel already fetches (the chip’s save evidence, the nightly log, the Learn file, the Rec file), so it fills in on its own
+### v15.74 — THE LOG SURVIVES A RELOAD — the nightly log (ANALYSIS_NIGHTLY) lived only in memory while the pipeline's 10-minute throttle survived the reload, so for up to ten minutes after every reload the day line read "analysis overdue — is the GEX nightly task installed?" over a log that was on GitHub (his first sight of v15.73, 22:3x CT, with his machine's run at 22:35 in the file); the log is kept in localStorage (gpts_nightly_v1) and restored at load
 
-Serves: "there needs to be some message at the bottom that tells me … 9/4 - data saved, analysis complete, testing complete, recommendations made" — the loop visible without opening a tab.
+Serves: the day line tells the truth at the moment he looks — "why hasn't the analysis started".
 
-Done when: the line under the after-hours bar reads saved · analysis · testing · learning · rec in green after a close with the task installed, and names the task in red when the analysis is 30 minutes late.
+Done when: after a reload with a fresh pipeline stamp the line reads the log's time and machine at once; a corrupt stored copy reads as none, never throws.
 
 ## AFTER THAT — in order
 
-### v15.74 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+### v15.75 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
 
 Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
 
 Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
 
-### v15.75 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+### v15.76 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
 
 Serves: HOD/LOD · the loop closes.
 
 Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
 
-### v15.76 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
+### v15.77 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
 
 Serves: HOD/LOD · PULLBACK · 94 OPEN studies · H6.
 
 Done when: 40 taps recorded and the first F-study reads from them with n.
 
-### v15.77 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
+### v15.78 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v15.78 — one definitions file (Python + panel) · the shipped-artifact test
+### v15.79 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v15.79 — the face manifest — every number on the face names its study, pinned by a test
+### v15.80 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v15.80 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v15.81 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 

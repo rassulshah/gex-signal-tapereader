@@ -131,6 +131,20 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.74 — "what survives a reload?" is a question to ask of every variable a status reads
+(1) The day line shipped at 22:2x and lied to him at 22:3x: "analysis overdue — is the GEX nightly task installed?" over a
+log his own machine had written at 22:35 and pushed at 22:36. The segment read `ANALYSIS_NIGHTLY`, which lived only in
+memory, while the throttle that decides whether to fetch it again (`P.t`) lived in localStorage — the two halves of one
+mechanism with different lifetimes, and a reload separates them for ten minutes. A status that reads a variable must
+know how that variable comes back after a reload; if the answer is "it doesn't, until a timer", the status will lie for
+exactly that long. (2) The Analysis tab had carried the same ten-minute "not read back yet" since v11.0 and nobody
+noticed, because nobody reloads and reads that row within ten minutes. The day line put the same fact at the bottom of
+the face, where he looks first — a new surface for an old value finds the value's old faults. (3) He reported it in five
+words and the diagnosis needed no probe of his panel: origin showed the log (his machine, 22:35), the code showed the
+lifetimes. Read what the machine already wrote before asking him what the screen shows. (4) The v15.73 mockup could not
+have shown this: a rendered page has no reload. The test now carries the scene (a stored log, a fresh pipe stamp,
+Saturday small hours) and, beside it, the same scene with nothing stored — the lie, kept as the record of what he saw.
+
 ### v15.73 — a status line is a contract about evidence, not a mood ring; the day it describes is a decision
 (1) "Data saved, analysis complete, testing complete, recommendations made" is easy to draw and easy to lie with. Each
 segment was tied to ONE piece of evidence the panel already holds — the chip's save record, the nightly log's date and

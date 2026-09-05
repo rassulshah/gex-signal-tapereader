@@ -32,7 +32,7 @@ ROWS = [
          changes='the dashboard draws from the knowledge base and nothing else; a contradicted rule cannot stay on the face',
          evidence='two files today; “it is from the learning that you can know something” (2026-09-04)'),
     dict(id='R-5', kind='FEATURE', by='review', asOf='2026-09-04',
-         text='The candidate score (v15.74) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
+         text='The candidate score (v15.75) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
          changes='the pre-tap read shows a tested number, not a hope',
          evidence='no tested rule exists yet; the score waits for R-2 and the first clears'),
     dict(id='R-6', kind='PROCESS', by='review', asOf='2026-09-04',

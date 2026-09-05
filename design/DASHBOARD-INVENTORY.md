@@ -30,6 +30,9 @@ patterns.events), the Learn file (`learnLoad`: rules' verdict + asOf), the Rec f
 `__gptsDebug.dayLine()`. A segment never clips — the row wraps at a segment boundary, so a completed day is two rows at
 760 px (REC on its own). Mockup `mockups/mockup-day-line.png`; render `design/render-v1573-face.png` (the day-line state
 seeded from the real 09-04 record via `render-face.js --pre`, because the harness holds no save evidence and no nightly log).
+(v15.74) The log the line reads survives a reload: `ANALYSIS_NIGHTLY` is restored from `gpts_nightly_v1` at load, so the
+analysis and testing segments are right before the first 10-minute check (his first sight of v15.73 was "analysis
+overdue" over a log his machine had just written).
 
 ## 0h · v15.72 — his three asks on the face, one bug, one read (2026-09-04, night)
 

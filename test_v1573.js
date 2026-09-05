@@ -30,7 +30,7 @@ const RULES=(d)=>['L1','L2','L3','L4','L5','L6','L7','L8','L9'].map(id=>({id, ve
 const REC=[{id:'R-1',status:'proposed',by:'review',asOf:'2026-09-04'},{id:'R-2',status:'proposed',by:'review',asOf:'2026-09-04'},{id:'R-3',status:'proposed',by:'review',asOf:'2026-09-04'},{id:'R-4',status:'proposed',by:'review',asOf:'2026-09-04'},{id:'R-5',status:'proposed',by:'review',asOf:'2026-09-04'},{id:'R-6',status:'proposed',by:'review',asOf:'2026-09-04'},{id:'R-7',status:'implemented',by:'operator',asOf:'2026-09-04'}];
 const seg=(st,k)=>st.segs.find(s=>s.key===k);
 
-ok(/@version\s+15\.73/.test(src) && /var GPTS_VERSION='15\.73';/.test(src),'0a v15.73 in both spots');
+ok(/@version\s+15\.(7[3-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[3-9]|[89]\d)';/.test(src),'0a v15.73 or later in both spots');
 
 // ---- 1 · the session running -----------------------------------------------------------------------------------------------------------------
 {
@@ -131,7 +131,7 @@ ok(/@version\s+15\.73/.test(src) && /var GPTS_VERSION='15\.73';/.test(src),'0a v
 {
   const P=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]);
   const nx=P.roadmap.filter(r=>r.status==='next');
-  ok(nx.length===1 && nx[0].v==='15.73' && /THE DAY LINE/.test(nx[0].title) && P.roadmap.some(r=>r.v==='15.72' && r.status==='shipped') && P.roadmap.some(r=>r.v==='15.74' && /candidate score/.test(r.title)),'7a the plan: v15.72 shipped, v15.73 this build, the score → v15.74',nx.map(x=>x.v));
+  ok(P.roadmap.some(r=>r.v==='15.73' && /THE DAY LINE/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.73'))) && P.roadmap.some(r=>r.v==='15.72' && r.status==='shipped') && P.roadmap.some(r=>/candidate score/.test(r.title) && r.v>='15.74'),'7a the plan: v15.72 shipped, v15.73 this build or shipped since, the score after it',nx.map(x=>x.v));
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r9=R.rows.find(r=>r.id==='R-9');
   ok(r9 && r9.status==='implemented' && r9.version==='15.73' && r9.by==='operator','7b the face change has its Rec row: R-9, implemented in v15.73',r9&&[r9.status,r9.version]);
   const seedJs=JSON.parse(/var REC_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(R),'7c REC_SEED equals the file');
@@ -139,7 +139,7 @@ ok(/@version\s+15\.73/.test(src) && /var GPTS_VERSION='15\.73';/.test(src),'0a v
   const inv=fs.readFileSync('design/DASHBOARD-INVENTORY.md','utf8'); ok(/## 0i · v15\.73/.test(inv),'7e the inventory carries §0i');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/## v15\.73/.test(cl) && cl.indexOf('## v15.73')<cl.indexOf('## v15.72'),'7f the CHANGELOG has the v15.73 entry on top');
   const ls=fs.readFileSync('session-state/LESSONS.md','utf8'); const logAt=ls.indexOf('## 2 · THE LESSON LOG'); ok(/### v15\.73/.test(ls.slice(logAt>=0?logAt:0)),'7g the lesson log carries the v15.73 entry');
-  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.73/.test(rn.slice(0,600)) && /day line/i.test(rn),'7h the resume note is at v15.73 and names the day line');
+  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.(7[3-9]|[89]\d)/.test(rn.slice(0,600)) && /day line/i.test(rn),'7h the resume note is at v15.73 or later and names the day line');
   const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/THE DAY LINE/.test(cfg.theWhatAndTheHow.dayLine||'') && cfg.theWhatAndTheHow.pinnedBy.indexOf('test_v1573.js')>=0,'7i .gex-config.json names the line and this test');
 }
 // ---- 8 · the item id is unique against the store (the flake test_v1560 §1 showed once in twelve runs) ----

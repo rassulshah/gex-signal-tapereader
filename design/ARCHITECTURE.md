@@ -95,6 +95,7 @@ _Generated from `tools/plan-seed.py` (the same data the ⚙ Architecture tab ren
 | `IndexedDB gpts_repo_v1 (v4): snaps · tape · defl · feat · kv` | every bar of every day (snaps), the whole tape per bar per book (tape, 5 days retained; the files are the record), every tap (defl, the ledger H5 waits on), resolved features, the folder handles (dataDir, irtDir) |
 | `learning/results.json → learning/studies.json (patched)` | (v15.68) the nightly's numbers by study id, and the registry the Analysis tab renders with them applied — result · status · by:'nightly' · asOf on the rows the nightly can answer; `nightly` (the count so far) on the rows it is still counting toward |
 | `learning/recommendations.json · gpts_rec_v1 · gpts_reco_v1 · the day file's `reco`` | (v15.70) the Rec tab: the file (the nightly's and the review's rows with their status), its fetched copy, his ✓ / ✗ on this machine, and the decisions riding the day file to the nightly |
+| `gpts_nightly_v1` | (v15.74) the fetched copy of learning/log/<day>.json, restored at load so the day line and the Analysis tab's last-run row are right before the first 10-minute check |
 | `learning/markets.json` | (v15.70) every market-specific number in one place — books, chart, bar length, the tolerances, the corpus — SPY live; NQ · GC · CL price only |
 | `data/<day>.json · data/tape/<day>/ · learning/* · review/*` | the repo — the one source of truth; the cloud clones it, the panel fetches from it, the installer and the sync task push to it |
 

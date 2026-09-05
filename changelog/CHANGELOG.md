@@ -1,3 +1,34 @@
+## v15.74 — THE LOG SURVIVES A RELOAD: the day line told him the analysis had not started while it sat on GitHub
+
+**What he saw (2026-09-04, 22:3x CT, minutes after installing v15.73): "why hasn't the analysis started".** The day line
+read *9/4 · saved 15:01 · analysis overdue — is the GEX nightly task installed?* — red, naming the task he had just
+installed — while `learning/log/2026-09-04.json` was on GitHub twice over: the cloud's run (19:44 CT) and, since the
+installer had touched the day file, his own machine's run at 22:35 CT (`ranOn: his machine`, pushed by the sync task at
+22:36). The analysis had started, finished, and been pushed. The line was wrong.
+
+**Why.** `ANALYSIS_NIGHTLY` — the fetched copy of the nightly log that the day line, the Analysis tab's "last run" row
+and the pattern table all read — lived only in memory. A reload emptied it. The pipeline's 10-minute throttle (`P.t` in
+`gpts_pipe_v1`) survives the reload, so the fetch that would have refilled it was refused for up to ten minutes. Every
+other file the panel fetches (studies, rec, learn, sweeps) is written to localStorage and read back at load; the log
+was the one that was not, and the day line — built the same night to read it — made the gap visible for the first time:
+after every reload, ten minutes of "overdue" over a log that existed. The Analysis tab had shown "not read back yet" in
+the same window since v11.0; nobody had reloaded and looked within ten minutes.
+
+**The fix.** `gpts_nightly_v1` holds the whole log as fetched (single-digit KB); `nightlyLoad()` restores it at load
+(`var ANALYSIS_NIGHTLY=nightlyLoad();`), `pipeNightlyTry` stores what it fetched. A newer day's log replaces it on the
+next check; an older day's restored log does not count for today (the v15.73 rule, pinned by test_v1573 5b). A corrupt
+or foreign stored value reads as none and never throws; a full localStorage is swallowed.
+
+**Tests.** `test_v1574.js` — 29 assertions: the store (round trip, one key, garbage, a JSON string, a date that is not a
+string, a quota error), the declaration executed with a stored log and with nothing, the fetch storing what it fetched
+and the 404 path storing nothing, the scene itself (Saturday small hours after a reload with a fresh pipeline stamp —
+analysis GREEN "22:35 · your machine · 81 taps"; and the same scene with nothing stored reads overdue, kept as the record
+of what he saw), the plan, the seed, the storage table, the CHANGELOG, LESSONS, the resume note, the config. 5 of 5
+mutants caught (the declaration back to null · the fetch not storing · the date check dropped from the load · the guard
+dropped from the save · the try/catch dropped from the load). Suite: 148 green / 5 permanent baselines. R-9 unchanged
+(the line behaves as approved; this makes it truthful); the plan: v15.73 shipped, v15.74 this build, the candidate
+score → v15.75.
+
 ## v15.73 — THE DAY LINE: the process reporting on itself, at the bottom of the panel
 
 > Operator, 2026-09-05: "there needs to be some message at the bottom that tells me that says something like 9/4- data

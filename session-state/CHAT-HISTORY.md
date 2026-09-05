@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-05 · v15.73 · session `f9c89c64` — v15.73: the day line — the process reporting on itself at the bottom of the panel ("9/4 - data saved, analysis complete, testing complete, recommendations made")
+## 2026-09-05 · v15.74 · session `f9c89c64` — v15.73 the day line → v15.74 the log survives a reload ("why hasn't the analysis started" — the line read overdue over a log his machine had just written)
 
-_91 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_92 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1239,8 +1239,41 @@ One question: **build it as shown for v15.73?** If you would rather the wording 
 
 **me (03:06):** Logic done and 12 of 12 mutants caught. Now the record: the plan, R-9, the docs, then the build.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (03:29):** Now the decode-check of the installer (header lines, the tar list, the panel byte-identical).
+Build done, verified and delivered. What to do — one file, then the link:
+
+**Step 1.** Double-click `installv1573.bat` (it's on your Desktop's download and also already in `C:\Dev\gex-signal-tapereader\`). A console window runs, xcopies into the repo folder and pushes to GitHub. You should see it end with the push and close. Send back "done".
+
+**Step 2.** Wait 5 minutes (GitHub's raw cache).
+
+**Step 3.** Click [Tapereader v15.73](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) → Tampermonkey shows **Update** (v15.72 → v15.73) → click Update. The companion is unchanged (v1.18) — no second link this time.
+
+**Step 4.** Reload the Atlas tab. At the bottom, under the AFTER HOURS bar, you should see the new line: **9/4 · SAVED 15:01 … · ANALYSIS … · TESTING … · LEARNING … · REC 6 awaiting your ✓**. Tell me what it shows (which segments are green / amber / grey) — I can't see your panel from here.
+
+What shipped (v15.73 — the day line). The line you asked for sits between the AFTER HOURS bar and the footer, on both render paths: the date, then saved · analysis · testing · learning · rec, each tied to one piece of evidence the panel already has (the 💾 chip's save record, the nightly log's date/ranOn/ranAt, its verdicts, the Learn rules' asOf, the Rec rows) and coloured by it — green done with the time and who, amber expected-not-yet, red overdue naming the cause ("analysis overdue — is the GEX nightly task installed?"), grey not knowable yet. During the session it reads "data · recording · N bars"; yesterday's completed line stays until today's first bar; the hover is the whole sentence. One thing changed from the mockup aft …[trimmed]
+
+**OPERATOR:**
+> why hasn't the analysis started
+
+**me (04:33):** Now the plan seed (15.73 shipped, 15.74 the fix, the rest shifted), the rec seed's version text, and the storage row.
+Now the test for the fix, with its mutants.
+Now the resume note, snapshot and chat history.
+
 ### DECISIONS
 
+- **v15.73 — the day line, on the mockup: "i like it."** His ask: "there needs to be some message at the bottom that
+  tells me that says something like 9/4- data saved analysis complete, testing complete, recommendations made.
+  something descriptive". Designed as the process reporting on itself from facts the panel already holds — the date,
+  then saved · analysis · testing · learning · rec, each with its evidence and a colour; red names the cause when a
+  stage is overdue; grey says what will happen; yesterday's line stays until today records. Settled after rendering the
+  real panel: a segment never clips — the row wraps (a completed day is two rows at 760 px, REC on its own).
+- **v15.74 — "why hasn't the analysis started" (22:3x CT, minutes after installing v15.73).** Not a question about the
+  task: the line was wrong. The log was on GitHub (his machine's run at 22:35 CT); `ANALYSIS_NIGHTLY` lived only in
+  memory and the pipeline throttle survives a reload, so the line read overdue for up to ten minutes after every reload.
+  An unambiguous bug in what had just shipped → fixed without a round trip (the 2026-08-20 exception): the log is kept
+  in localStorage and restored at load. The candidate score moves to v15.75.
 - **v15.73 — the day line, on the mockup: "i like it."** His ask: "there needs to be some message at the bottom that
   tells me that says something like 9/4- data saved analysis complete, testing complete, recommendations made.
   something descriptive". Designed as the process reporting on itself from facts the panel already holds — the date,
@@ -1351,6 +1384,15 @@ One question: **build it as shown for v15.73?** If you would rather the wording 
 
 **v15.73** (panel; companion v1.18 unchanged) — THE DAY LINE. `dayLineState` / `dayLineHtml` (`.g3pline`, between the
 after-hours bar and the footer, both render paths); `fmtCT`; `dayBarCount`; `DAYLINE_ANALYSIS_LATE_MS`;
+`__gptsDebug.dayLine()`; the CSS (wrapping, never clipping); R-9 implemented; the plan shifted; DATA-ANALYSIS-PROCESS.md,
+INVENTORY §0i, the config (2026-09-05b); `render-face.js --pre`; `itemsAdd` ids unique against the store (a 1-in-36
+collision found as a flake); the installer's renders ride by version number (the mtime rule tipped the 8 MB cap).
+`test_v1573.js` 44 assertions, 14 of 14 mutants. Mockup `mockups/mockup-day-line.png`, render `design/render-v1573-face.png`.
+**v15.74** (panel) — THE LOG SURVIVES A RELOAD. `NIGHTLY_KEY` (`gpts_nightly_v1`), `nightlyLoad` / `nightlySave`,
+`var ANALYSIS_NIGHTLY=nightlyLoad();`, `pipeNightlyTry` stores what it fetched; the plan (v15.73 shipped, v15.74 this,
+the score → v15.75); the storage table; the config (2026-09-05c). `test_v1574.js` 29 assertions, 5 of 5 mutants.
+**v15.73** (panel; companion v1.18 unchanged) — THE DAY LINE. `dayLineState` / `dayLineHtml` (`.g3pline`, between the
+after-hours bar and the footer, both render paths); `fmtCT`; `dayBarCount`; `DAYLINE_ANALYSIS_LATE_MS`;
 `__gptsDebug.dayLine()`; the CSS; R-9 implemented; the plan shifted; DATA-ANALYSIS-PROCESS.md, INVENTORY §0i, the config
 (2026-09-05b). `test_v1573.js` 44 assertions, 14 of 14 mutants (a 1-in-36 id collision in `itemsAdd`, found as a flake, fixed). Mockup `mockups/mockup-day-line.png`, render
 `design/render-v1573-face.png`.
@@ -1449,6 +1491,12 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **He runs ONE file** — `installv1574.bat`; wait 5 min; the tapereader link (as a link); reload. Then: what does the
+  day line show? (Expected on Saturday: 9/4 · saved 15:01 · analysis 22:35 · your machine · 81 taps · testing 9 claims ·
+  learning · rec 6 awaiting.) The nightly task is installed and has run twice on his machine (19:21 with the charmap
+  error, 22:35 clean); nothing else on his machine.
+- **Monday:** the line live (recording, then green after 15:01 as the task runs); the first stamped session; the
+  automatic close.
 - **He runs ONE file** — `installv1573.bat`; wait 5 min; the tapereader link (as a link); reload. The nightly task is
   installed and has run; nothing else on his machine.
 - **Monday:** the day line live (recording, then green after 15:01 as the task runs); the first stamped session; the
@@ -1530,6 +1578,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+77ea671 v15.73: THE DAY LINE — the process reporting on itself at the bottom of the panel
 51b88dd v15.72b (tools, no panel change): the nightly's output is UTF-8 on Windows (the task's first run on his machine logged a cp1252 charmap error printing the pattern report); PURPOSE §3b carries his expectation after the install (no click on the save, only the Rec tab); R-LINK - the Tampermonkey link is a clickable link, never only in a code block; the skill says so
 9698b9f v15.72: the face - the AFTER HOURS bar moves to the bottom of the panel (a full-width bar above the footer, after the close only), the King cards take the whole row and grow, the ladder 9 px with the columns widened, the leaked .g3pb border gone (a dead pullback rule's amber left border inside every RUG/RRUG/PIKA/BARNEY block); THE ROLLING FLOOR / CEILING registered - his read of 2026-09-04 as H8/H9 (predict + refuteIf, minN 30, base dir:up/dir:dn, since the first stamped session), every tap stamped with each book's King roll (kroll), four classes in both twins, K2.6/K2.7 on Analysis, judge_pat in the nightly; .gitattributes fixed (the task scripts stay CRLF), Claude outputs/ ignored; the Analysis mockup generator draws the nightly's count line; R-8 implemented
 e05a50b nightly 2026-09-04 (cloud): the log, the registry, the Learn rules' verdicts, the sweep tables; F-19 second day - turn 1/28, resume 21/28, held 35/78 (two sessions, no stamps yet)
@@ -1541,7 +1590,6 @@ d3926a1 gex: sync 04-Fri-09 17:26
 967dac5 gex: sync 04-Fri-09 16:30
 0f6e8c0 gex: sync 04-Fri-09 15:02
 cd1a7b8 v15.65: the PATTERN columns one per book, PIKA/BARNEY blocks with the book's own strikes, RUG/RRUG, off-King patterns on the nearest row; the NOW row in white; the Kings in their own colours
-f15529e gex: sync 04-Fri-09 12:46
 ```
 
 ---
