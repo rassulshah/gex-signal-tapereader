@@ -13,6 +13,10 @@ missing or older than it. A second 💾 makes the day file newer again → one m
 Exit codes: 0 ran · 1 the nightly failed · 3 nothing to do.
 """
 import glob, io, os, sys, time
+try:   # (v15.72b) UTF-8 into tools\gex-nightly.log on Windows (see run.py)
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace'); sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

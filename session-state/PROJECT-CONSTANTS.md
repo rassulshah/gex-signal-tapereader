@@ -6,6 +6,12 @@ Touch this file only when one of these things actually changes.
 
 ---
 
+## R-LINK · THE TAMPERMONKEY LINK IS A LINK (operator, 2026-09-04: "next time give me the tampermonkey link")
+
+Every build message carries the panel's raw-GitHub URL as a **clickable markdown link** in the numbered step that says
+to click it — never only inside a fenced code block, which his app renders as text. v15.72's message put it in the block
+alone and he read it as missing. The companion's link the same way whenever it changed.
+
 
 ## L-H · THE CHAT HISTORY IS PART OF THE BUILD, AND A TEST ENFORCES IT
 

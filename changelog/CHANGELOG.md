@@ -62,6 +62,20 @@ field). Re-pinned: test_v1565 1f / 2n, test_v1568 3e (asOf moves nightly), test_
 **Not yet verified on his machine:** the install; the panel widening once to fit the ladder; the bar after Monday's
 close; the first `kroll` on a stamped tap (Monday 09-08) and `king:floor:up` counting in the nightly's table.
 
+**v15.72b (the same night, tools only — no panel change).** Verified after his install: GitHub at v15.72 (`d05d769`),
+`.gitattributes` on origin and the task scripts CRLF again, `learning/log/2026-09-04.json` pushed by the sync. The "GEX
+nightly" task ran on his machine at 19:21:02 CT (its first run) and logged `patterns threw: 'charmap' codec can't encode
+character '\u2265'` — stdout redirected into `tools\gex-nightly.log` takes the console code page (cp1252) and the pattern
+report prints ≥ · —; the table was built before the print threw, so the log still had it, but the line read as a failure.
+`run.py` and `tick.py` reconfigure stdout/stderr to UTF-8 (errors replaced), `tools/gex-nightly.bat` sets `PYTHONUTF8=1` /
+`PYTHONIOENCODING=utf-8`; test_v1568 4d re-pinned. His words after the install, into PURPOSE §3b: *"my expectation is
+that from now on i will not have to click on the save button and that i will only goto the rec tab to discuss
+recommendations with you, everything else will be done automatically"* — with what it requires of him (the tab open
+through the close; the folder permission kept) and what still needs a session (a read into a claim, an item answered, a
+finding written, every approved build). R-LINK in PROJECT-CONSTANTS: the Tampermonkey link is a clickable link in the
+step that says to click it, never only inside a code block ("next time give me the tampermonkey link"). Written into his
+repo folder over the bridge (run.py, tick.py, gex-nightly.bat, PURPOSE, the constants, the skill) so Monday's run has it.
+
 ## v15.71 — THE SAVE RUNS ITSELF: no click at the close; the earlier days written when missed; the 💾 a chip
 
 > Operator, 2026-09-04: "the next step is to automatically have the application trigger the save button instead of

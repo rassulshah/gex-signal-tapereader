@@ -32,6 +32,9 @@ if not defined PY (
 )
 
 cd /d "%REPO%"
+REM (v15.72b) the log is UTF-8: the pattern report carries non-cp1252 characters (measured 2026-09-04 19:21 CT)
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 !PY! tools\nightly\tick.py >> "%LOGF%" 2>&1
 set RC=!ERRORLEVEL!
 if "!RC!"=="0" echo %DATE% %TIME% nightly ran - the GEX sync task pushes it within two minutes >> "%LOGF%"

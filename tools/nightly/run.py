@@ -22,6 +22,14 @@ WHAT IT DOES, AND WHAT IT REFUSES
     into the register with a `written` date and are tested on sessions AFTER that date only.
 """
 import io, json, os, sys, glob, math, random, collections, datetime
+# (v15.72b) THE LOG IS UTF-8 ON WINDOWS TOO. Measured on his machine 2026-09-04 19:21 CT: the task's first run printed
+# "patterns threw: 'charmap' codec can't encode character '\u2265'" — stdout redirected into tools\gex-nightly.log takes the
+# console code page (cp1252) and the pattern report carries ≥ · —. The table was already built when the print threw, so
+# the log had it, but the message read as a failure of the patterns and any earlier such print would have cost a step.
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace'); sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REG  = os.path.join(ROOT, 'learning', 'register.json')

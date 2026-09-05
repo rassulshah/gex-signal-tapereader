@@ -58,7 +58,11 @@ results.py); H8 / H9 in `learning/register.json` + `PREREG_SEED` + `HYP_STUDY` (
 `.gitattributes` fixed (`* -text`; the task scripts CRLF again); `Claude outputs/` ignored; the Analysis mockup generator
 draws the nightly's count line; R-8 implemented on Rec; the plan (v15.71 shipped, v15.72 this, the score → v15.73).
 `test_v1572.js` 63 / 12 of 12 mutants. Render `design/render-v1572-face.png`; mockup `mockups/mockup-after-hours-bottom.png`.
-**NOT yet verified on his machine:** the install; the panel widening once for the ladder; Monday: the first stamped
+**VERIFIED after his install (v15.72b, the same night):** GitHub at v15.72; `.gitattributes` on origin, the task scripts
+CRLF; the "GEX nightly" task ran on his machine at 19:21 CT (first run) — its one wart, a cp1252 print of ≥ in the pattern
+report ("patterns threw: 'charmap'"), fixed: UTF-8 stdout in run.py / tick.py, PYTHONUTF8 in the .bat, written over the
+bridge. His words after the install (PURPOSE §3b): no click on the save, only the Rec tab; R-LINK (the Tampermonkey link
+as a clickable link) in the constants. **NOT yet verified:** the panel widening once for the ladder; Monday: the first stamped
 session — `kroll` on a tap, `king:floor:up` in the nightly's table, the automatic close (writtenBy auto), the nightly task
 (once he runs `setup-gex-nightly.bat`).
 **THE FIRST DECISIONS ARE HIS (unchanged):** the six proposed Rec rows — R-1 (record the reads) first, R-2 second. **Also

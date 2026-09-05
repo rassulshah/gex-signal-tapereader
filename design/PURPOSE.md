@@ -91,7 +91,13 @@ the application trigger the save button instead of me clicking it … if the sav
 time is [after market hours], trigger it. if the save button for the previous day has not been triggered and the time
 is during non market hours, trigger it."* — the same day); now the panel writes the day itself after the close and any
 missed day outside market hours, the 💾 is the override, and everything after the file is the machine's, except the
-review, which is a session's (and says so). The build order follows from this: the outcomes the counts are scored
+review, which is a session's (and says so). His expectation, stated after the install (2026-09-04, late): *"my
+expectation is that from now on i will not have to click on the save button and that i will only goto the rec tab to
+discuss recommendations with you, everything else will be done automatically."* What that requires of him: the Atlas
+tab open through the close (a closed browser runs no timer; a missed day is written the next morning) and Chrome's
+folder permission kept ("Allow on every visit", once). What still needs a session: a read turned into a claim, an item
+answered, a finding written — and every build he approves on Rec. R-2 (the count → test draft) and R-6 (the review on a
+clock) are the two Rec rows that move the first of those into the machine. The build order follows from this: the outcomes the counts are scored
 against (turn vs stay in), the read recorded and scored, the count → test draft, recommendations with his tick,
 the live pre-tap read joined to the tested number. **And the Learn tab is part of the same chain** (his addition,
 the same evening: "in this process, the learn tab should also be updated"): the rules L-n carry the nightly's

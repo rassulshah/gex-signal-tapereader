@@ -389,6 +389,10 @@ getting files to the USER (SendUserFile) and into the git repo (source of truth)
    ⚠ **THE BUILDER HAS PRINTED THE LINKS SINCE v14.3 AND THEY STILL WENT MISSING FOR SEVERAL BUILDS,
    because pasting them lived only in a context's head.** Scroll to the end of the build output and
    copy both blocks. A build message without them is incomplete, however good the build is.
+   ⚠ **(2026-09-04, operator: "next time give me the tampermonkey link") THE LINK IS A LINK, NOT TEXT IN A CODE
+   BLOCK.** A URL inside a fenced block is not clickable in his app and reads as "no link". Put the Tampermonkey link
+   as plain markdown — `[Tapereader v15.NN](https://raw.githubusercontent.com/…/gex-signal-tapereader.user.js)` — in the
+   Step that tells him to click it, and again in the paste block; the companion likewise when it changed.
 
 0. **REGENERATE `session-state/CHAT-HISTORY.md`** — `python3 tools/chat-history.py --title "<what
    this context was about>"`, then fill in DECISIONS / SHIPPED / OPEN AT CLOSE by hand before
