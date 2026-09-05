@@ -695,7 +695,7 @@ What v15.67 measures from here: the held rate (continued ≥ DEFL_CONT_PTS withi
 `thin`. ⚠ The outcome is the ledger's (10 bars, the book's units) — the pullback / HOD-LOD distinction (PURPOSE) is
 not in it; a 61% floor rate is "price continued away", not "the LOD".
 
-## F-19 · THE OBJECTIVE OUTCOMES, FIRST READ — a node tap was the session's turn 1 of 19 — PROVISIONAL, n=19 episodes, ONE day (2026-09-04)
+## F-19 · THE OBJECTIVE OUTCOMES, FIRST READ — a node tap was the session's turn 1 of 19 — PROVISIONAL, n=28 episodes, TWO days (2026-09-04, second day added the same night)
 
 Status: **PROVISIONAL** (one session, 2026-09-03, the OLD detector's taps, no stamps). Definitions written in
 `tools/nightly/patterns.py` before the numbers were read: TURN = the tap's extreme within 0.50 SPY of the session's
@@ -710,3 +710,12 @@ HOD/LOD question is *which* tap, never *whether* a tap holds — the classes (NE
 the clock) have to separate the 1 from the 18, and 68% resume is the base a pullback class has to beat. Known
 confound, recorded not solved: an early tap has more session ahead of it to be undercut; the clock is a class to add.
 Read again at n ≥ 15 per class, on stamped taps, before any of this is quoted as a rate.
+**Second day (2026-09-04, the nightly run in the cloud on the panel's own after-close file; still the old detector,
+still no stamps — v15.67+ was installed only that evening): two sessions, 78 events — turn 1 of 28 (4%, low 1%) · resume
+21 of 28 (75%, low 57%) · held 35 of 78 (45%, low 34%).** Floors held 15 of 27 (56%) and resumed 11 of 13; ceilings held
+7 of 22 (32%) and resumed 5 of 9; a floor holding (`dir:up`) resumed 14 of 17 (82%, low 59%), a ceiling 7 of 11. The
+day-one picture held on day two: the turn is rare, the resume is the base (now ≥ 57% with the bound), floors hold more
+often than ceilings on both days (n too small to call it a difference). The King's own classes read nothing yet (0
+stamped taps); the first stamped session is 2026-09-08. His read of the same evening — the King rolled UP and BELOW
+price is a rolling floor (bullish), rolled DOWN and ABOVE a rolling ceiling — is registered as H-KR (v15.72) with four
+stamp classes, to be counted from the first stamped session and read once at n = 30 per class.

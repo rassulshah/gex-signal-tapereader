@@ -2,8 +2,8 @@
  "schema": 2,
  "date": "2026-09-04",
  "writtenBy": "tools/nightly/run.py",
- "ranOn": "his machine",
- "ranAt": "2026-09-05T00:21:14Z",
+ "ranOn": "cloud",
+ "ranAt": "2026-09-05T00:35:55Z",
  "sessions": 2,
  "episodes": 9,
  "deflEvents": 78,
@@ -32,7 +32,7 @@
   },
   {
    "id": "H3",
-   "claim": "NULL \u00e2\u20ac\u201d polarity does not discriminate",
+   "claim": "NULL \u2014 polarity does not discriminate",
    "minN": 40,
    "pick": "pol",
    "n": 2,
@@ -42,7 +42,7 @@
   },
   {
    "id": "H4",
-   "claim": "NULL \u00e2\u20ac\u201d the rejection wick does not discriminate",
+   "claim": "NULL \u2014 the rejection wick does not discriminate",
    "minN": 40,
    "pick": "wick",
    "n": 0,
