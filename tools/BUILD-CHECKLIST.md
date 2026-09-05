@@ -51,6 +51,13 @@ undocumented. That has already happened repeatedly in this project.
 1. **Code + tests in the same commit.** A deliberate change that breaks a test means the TEST is updated
    now, not later. A permanently-red baseline trains everyone to ignore red — 23 stale failures once
    camouflaged two live bugs for months.
+1a. **`python3 tools/origin-guard.py` BEFORE THE COMMIT (v15.74b).** His machine writes files the installer also
+   carries (the nightly log, results, studies, examples, recommendations, items, requests, SWEEPS*): the guard fetches
+   origin and ADOPTS its bytes wherever origin moved a file the cloud never touched, or his machine rewrote one with the
+   same numbers (CRLF, float noise, the runner stamps); a real conflict refuses until merged by hand or named with
+   `--keep-mine=<path>`. `build-installer.py` runs it again read-only and refuses the build if anything is left to
+   adopt. Why: v15.74's payload overwrote his machine's 9/4 run with the cloud's earlier copy — the Analysis tab named
+   the cloud, and he asked "double check .. look at analysis". Pinned by `test_origin_guard.js`.
 2. **Full suite green.** `cp current/gex-signal-tapereader.user.js v10.js` first — the harness reads
    `v10.js`, not `current/`.
    ⚠ **AND THE TEST MUST RUN THE CODE, NOT GREP IT.** v11.86 shipped fourteen assertions that could not

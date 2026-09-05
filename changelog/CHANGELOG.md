@@ -1,3 +1,32 @@
+## v15.74b (tools, no panel change) — THE ORIGIN GUARD: the installer overwrote his machine's run with the cloud's copy
+
+**"double check .. look at analysis" (2026-09-04, 23:4x CT).** He was right to. The v15.74 message said the analysis
+had run on his machine at 22:35 — true when written: `tools\gex-nightly.log` shows clean runs at 21:55 and 22:35, and
+the sync pushed the outputs at 22:36. Then the v15.74 installer, built from a clone still holding the CLOUD's earlier
+copies of the same seven files (the log, results, studies, examples, recommendations, SWEEPS, SWEEPS-BOOK), extracted
+over the repo and put the cloud's 19:44 run back on disk and on GitHub. The Analysis tab named the cloud. The numbers
+were identical to the last digit (his Python writes CRLF and 16th-digit float noise; the only real differences were
+`ranOn` / `ranAt`), so the record was wrong only about who ran it — but the same mechanism overwrites real differences
+just as silently. His machine healed it on its own at 23:45 (the extracted log carries mtime 0, so the day file reads
+newer and the task re-runs — a third run for 9/4, pushed 23:46), which is why the tab now names his machine.
+
+**The fix — `tools/origin-guard.py`.** Before the commit: fetch origin; for every file the installer carries, ADOPT
+origin's bytes when origin moved the file and the cloud never touched it (the working copy equals the base or a
+version origin held), or when it is one of the files his machine writes and the numbers are the same up to the runner
+stamps; REFUSE on a real conflict until merged by hand or named with `--keep-mine=<path>`. Origin is never an ancestor
+of HEAD here (his installer pushes the cloud's commits under new hashes), so a version origin holds that the cloud
+itself committed is not "his machine moved it" — the first draft flagged `build-installer.py` as a conflict for that
+reason; the selftest now carries the case. `build-installer.py` runs the guard read-only and refuses the build if
+anything is left to adopt (`--no-origin-guard` to skip, loudly). Run today: seven files adopted from origin — his
+machine's 23:45 run is what this clone now carries. BUILD-CHECKLIST §1a; PROJECT-CONSTANTS L-O; the skill's SAVE §3.
+
+**Tests.** `test_origin_guard.js` (8): runs the guard's own selftest (a temp repo with a base, "his machine" and
+"the cloud": adopt-untouched, adopt-same-numbers, a real conflict refused, keep-mine, a second pass adopts nothing,
+the installer-push case, adopt-after-adopt; `same_numbers` — stamps ignored, True ≠ 1, lists by position) and pins
+the wiring (the builder runs it read-only and refuses; `--list` never runs it; the checklist; the guard rides).
+Suite: 149 green / 5 permanent baselines. Panel v15.74 unchanged — no Tampermonkey click; the files went over the
+bridge and the sync task pushes them.
+
 ## v15.74 — THE LOG SURVIVES A RELOAD: the day line told him the analysis had not started while it sat on GitHub
 
 **What he saw (2026-09-04, 22:3x CT, minutes after installing v15.73): "why hasn't the analysis started".** The day line

@@ -415,6 +415,11 @@ getting files to the USER (SendUserFile) and into the git repo (source of truth)
    Then xcopy into `C:\Dev\gex-signal-tapereader` and commit+push using a GIT-FINDER probe (git is not
    on the user's PATH). **The push is the only durable copy of the work — the cloud sandbox can reset
    mid-session and has.** User's only step: download, double-click.
+   ⚠ **(v15.74b) THE INSTALLER OVERWRITES HIS MACHINE, AND HIS MACHINE WRITES SOME OF THE FILES IT CARRIES** (the
+   nightly log, results, studies, examples, recommendations, items, requests, SWEEPS*). Run `python3 tools/origin-guard.py`
+   BEFORE the commit: it fetches origin and adopts his machine's newer copies (or refuses on a real conflict);
+   `build-installer.py` refuses to build over anything left to adopt. v15.74 shipped without it and put the cloud's
+   copy of the 9/4 log back over his machine's run — "double check .. look at analysis".
 4. SendUserFile the installer. Also send individually any file the user will READ (mockups render inline).
 5. If code shipped: send **BOTH** Tampermonkey links whenever the companion changed, and say to
    **wait FIVE minutes** (`raw.githubusercontent.com` returns `cache-control: max-age=300`; clicking

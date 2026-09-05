@@ -131,6 +131,19 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.74b — two writers, one file: the installer must carry the newest of both worlds, and a machine can check that
+(1) "Your machine ran it at 22:35" was true when I wrote it and false ten minutes later, because my own installer put
+the cloud's copy of the log back over his machine's — the installer extracts every file it carries, and his nightly
+task writes seven of them. The cloud had never pulled. A statement about the record is only as good as the last
+writer, and there are two writers now. (2) "Double check" from him should be read as an instruction to look at the
+MACHINE, not the screen: `tools\gex-nightly.log` (staged over the bridge) and `git log origin/main` told the whole
+story in one read — three clean runs, the 23:46 push, the cloud's copy in between. (3) The guard's first draft flagged
+`tools/build-installer.py` as a conflict: origin held a version the cloud itself had committed (pushed by his installer
+under a new hash), and "origin moved it" was measured against the merge-base. A rule about who changed a file needs
+both histories, not one. (4) A payload that is byte-identical when nothing changed (mtime 0 in the tar) makes every
+install look like a new day file to the task and costs one re-run per install; harmless, idempotent, and the reason
+his machine healed the record before I did. Left as is, and written down so it is not "fixed" into a real bug.
+
 ### v15.74 — "what survives a reload?" is a question to ask of every variable a status reads
 (1) The day line shipped at 22:2x and lied to him at 22:3x: "analysis overdue — is the GEX nightly task installed?" over a
 log his own machine had written at 22:35 and pushed at 22:36. The segment read `ANALYSIS_NIGHTLY`, which lived only in

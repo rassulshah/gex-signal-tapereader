@@ -13,6 +13,17 @@ to click it — never only inside a fenced code block, which his app renders as 
 alone and he read it as missing. The companion's link the same way whenever it changed.
 
 
+## L-O · THE INSTALLER OVERWRITES HIS MACHINE — RUN THE ORIGIN GUARD BEFORE EVERY COMMIT (2026-09-04, v15.74b)
+
+The payload extracts over `C:\Dev\gex-signal-tapereader`, and his machine WRITES some of the files it carries: the
+"GEX nightly" task rewrites the log, results, studies, examples, recommendations, items, requests and the SWEEPS tables,
+and the sync task pushes them. A build made from a clone that has not taken those in ships the cloud's older copies
+back over his run — v15.74 did exactly that an hour after his machine's 22:35 run, the log's `ranOn` went back to
+"cloud", and he asked "double check .. look at analysis". `python3 tools/origin-guard.py` before the commit (BUILD-
+CHECKLIST §1a): it fetches, ADOPTS origin's bytes where the cloud never touched a file or his machine rewrote it with
+the same numbers, and REFUSES on a real conflict; `build-installer.py` runs it again read-only and will not build over
+it. The cloud can fetch — only push is blocked. Pinned by `test_origin_guard.js`.
+
 ## L-H · THE CHAT HISTORY IS PART OF THE BUILD, AND A TEST ENFORCES IT
 
 **Operator-mandated 2026-08-27**, and he asked specifically that a future context not have to be

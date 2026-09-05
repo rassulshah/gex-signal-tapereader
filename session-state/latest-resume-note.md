@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-05 (small hours, v15.74) · panel v15.74 · companion v1.18 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-05 (small hours, v15.74b) · panel v15.74 · companion v1.18 · supersedes every earlier resume note_
 
 
 # ⚠⚠⚠ THE WHAT AND THE HOW — STANDING, EVERY CONTEXT, BEFORE ANYTHING ELSE
@@ -33,7 +33,7 @@ probably eod, and from that point on you take over from data, analysis, testing,
 which is where we will discuss what to implement." — then: "the next step is to automatically have the application
 trigger the save button instead of me clicking it … instead of 5pm can you just modify so it is after market hours."
 
-# ⚠⚠ 2026-09-05 small hours (latest) — v15.74: THE LOG SURVIVES A RELOAD — the day line lied to him ten minutes after v15.73.
+# ⚠⚠ 2026-09-05 small hours (latest) — v15.74: THE LOG SURVIVES A RELOAD (+ v15.74b: THE ORIGIN GUARD — the installer had overwritten his machine's run).
 
 **Panel is v15.74, companion v1.18 (unchanged). Installed? v15.73 IS installed (his push 22:2x CT); installv1574.bat
 carries v15.74 — one double-click, the link, reload.** His first sight of v15.73 (22:3x CT): *"why hasn't the analysis
@@ -45,8 +45,17 @@ with the scene (Saturday small hours, a stored log, a fresh pipe stamp → analy
 taps") and the pre-fix lie kept beside it. The plan: v15.73 shipped, v15.74 this, the candidate score → v15.75.
 **Lesson (LESSONS v15.74):** ask of every variable a status reads, "what survives a reload?" — a status and the timer
 that refreshes its source must share a lifetime, or the status lies for the timer's length.
-**NOT yet verified on his machine:** the line green after the v15.74 reload (ask him what it shows); Monday's first
-stamped session; the automatic close (writtenBy auto).
+**v15.74b (tools, the same night) — "double check .. look at analysis": he was right.** The v15.74 installer, built
+from a clone that had never pulled, put the CLOUD's copy of the 9/4 log (19:44) back over his machine's run (22:35) —
+the Analysis tab named the cloud. The numbers were identical; only `ranOn` / `ranAt` differed. His task re-ran at 23:45
+(the extracted log has mtime 0, so the day file reads newer) and the sync pushed it at 23:46 — GitHub carries his
+machine's run again. Fix: `tools/origin-guard.py` before every commit (adopts his machine's newer copies of the files
+it writes, refuses a real conflict); `build-installer.py` refuses to build over anything left to adopt. This clone
+adopted the seven files. `test_origin_guard.js` (8). BUILD-CHECKLIST §1a · PROJECT-CONSTANTS L-O · the skill's SAVE §3.
+**VERIFIED on his machine (over the bridge, `tools\gex-nightly.log`):** three clean UTF-8 runs for 9/4 — 21:55, 22:35,
+23:45 CT — the same numbers each time (81 taps · H5 READY 78 · resume 21/28 = 75%).
+**NOT yet verified on his machine:** the day line after the v15.74 reload (ask him what it shows — expected: 9/4 ·
+saved 15:01 · analysis 23:45 · your machine · 81 taps); Monday's first stamped session; the automatic close.
 **THE FIRST DECISIONS ARE HIS (unchanged):** the six proposed Rec rows — R-1 first, R-2 second. Open, in his order:
 (3b) GATE / AIR POCKET in PATTERN; (4) SWEPT on ES and NQ; (5) SWEPT majors only. H5 READY at 78 — the join rides the
 candidate-score build (v15.75).

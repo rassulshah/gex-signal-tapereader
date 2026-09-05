@@ -295,6 +295,30 @@ if '--list' in sys.argv:
         print(_p)
     raise SystemExit(0)
 
+# (v15.74b) ⚠⚠ THE ORIGIN GUARD — THE INSTALLER MUST NEVER CARRY A STALE COPY OF A FILE HIS MACHINE WRITES.
+# v15.74 was built from a clone holding the cloud's copies of the seven files his nightly task had rewritten an hour
+# earlier; the payload extracts over the repo, so it overwrote his machine's 9/4 run with the cloud's — the log's
+# ranOn went back to "cloud", the Analysis tab named the cloud, and he asked "double check .. look at analysis".
+# tools/origin-guard.py adopts origin's bytes when the cloud never touched a file (or his machine rewrote it with the
+# same numbers) and refuses on a real conflict; it runs BEFORE the commit (BUILD-CHECKLIST §1a). Here it runs again,
+# read-only, and refuses the build if anything is still to adopt — so HEAD, the tree and the payload stay one thing.
+if FETCH_OK and '--no-origin-guard' not in sys.argv:
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location('origin_guard', os.path.join('tools', 'origin-guard.py'))
+    _og = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_og)
+    _keep = tuple(a.split('=', 1)[1] for a in sys.argv if a.startswith('--keep-mine='))
+    _ad, _cf = _og.check(FILES, '.', 'origin/main', _keep, write=False)
+    if _ad or _cf:
+        print('ORIGIN GUARD: origin has moved past the copies this build would carry. Run `python3 tools/origin-guard.py`,'
+              ' review what it adopted, commit, rebuild.')
+        for _p, _why in _ad:
+            print('  would adopt  %s  (%s)' % (_p, _why))
+        for _p in _cf:
+            print('  CONFLICT     %s  (merge by hand, or --keep-mine=%s)' % (_p, _p))
+        raise SystemExit(2)
+elif not FETCH_OK:
+    print('WARNING: no fetch, so the origin guard could not run - the payload may carry stale copies of files his machine writes')
+
 # --- size ADVISORY on the raw tree ------------------------------------------------------------
 # ⚠⚠ (v15.22) THIS USED TO BE THE HARD GATE AND IT MEASURED THE WRONG THING. What `more +n` walks is
 # the FINISHED .bat — lines of base64 — and the raw tree size is only a proxy for it across gzip
