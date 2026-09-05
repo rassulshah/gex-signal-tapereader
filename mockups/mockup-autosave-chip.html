@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>v15.71 — the 💾 chip: the save runs itself</title>
+<style>
+  body{margin:0;background:#0b0e14;color:#c9d1d9;font:11px/1.35 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:14px 16px;width:640px}
+  h1{font-size:12px;margin:0 0 2px;color:#e6edf3} .sub{font-size:9px;color:#8b949e;margin:0 0 10px}
+  .row{display:flex;align-items:center;gap:10px;margin:0 0 7px}
+  .when{width:150px;font-size:9px;color:#8b949e;text-align:right}
+  .strip{flex:1;display:flex;align-items:center;gap:6px;background:#12161f;border:1px solid #1e2530;border-radius:8px;padding:4px 7px;font-size:8.6px;white-space:nowrap}
+  .dot{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:2px}
+  .g{background:#2ec27e}.a{background:#f2b45a}.r{background:#f0616d}.k{background:#3a4250}
+  .st{display:inline-flex;align-items:center}
+  .ctrl{margin-left:auto;display:inline-flex;gap:4px;align-items:center}
+  .chip{border:1px solid #1e2530;border-radius:6px;padding:0 3px;cursor:pointer}
+  .chip.saved{border-color:#2ec27e;color:#2ec27e}.chip.pending{border-color:#f2b45a;color:#f2b45a}.chip.perm{border-color:#f2b45a;color:#f2b45a}.chip.due{border-color:#f0616d;color:#f0616d;font-weight:800}
+  .ver{color:#8b949e}
+  .tip{width:100%;font-size:8.4px;color:#8b949e;margin:-3px 0 9px 160px;padding-left:8px;border-left:2px solid #1e2530}
+  .tip b{color:#c9d1d9;font-weight:600}
+  .note{font-size:8.6px;color:#8b949e;margin-top:10px;border-top:1px solid #1e2530;padding-top:8px}
+</style></head><body>
+<h1>v15.71 — the 💾 is a chip: the save runs itself</h1>
+<p class="sub">The footer strip as it renders (250 px wide in the panel, shown at width here). Same strip, six states of the one control. Every hover opens with the question.</p>
+
+<div class="row"><div class="when">10:40 CT · the session</div><div class="strip"><span class="st"><i class="dot g"></i>rec</span><span class="st"><i class="dot a"></i>none</span><span class="st"><i class="dot k"></i>pushed</span><span class="st"><i class="dot g"></i>review</span><span class="st"><i class="dot g"></i>deps</span><span class="ctrl"><span class="chip">💾</span><span class="chip">📁</span><span class="ver">v15.71</span></span></div></div>
+<div class="tip"><b>Is today’s data saved in the repo folder?</b> not yet — the session is still running. The panel saves the day itself: after the close (15:01 CT, then every 10 minutes until the file is confirmed in the repo folder) and, outside market hours, any earlier day it missed. Click to save now.</div>
+
+<div class="row"><div class="when">15:01 CT · the close</div><div class="strip"><span class="st"><i class="dot g"></i>rec</span><span class="st"><i class="dot a"></i>pending</span><span class="st"><i class="dot k"></i>pushed</span><span class="st"><i class="dot g"></i>review</span><span class="st"><i class="dot g"></i>deps</span><span class="ctrl"><span class="chip pending">💾</span><span class="chip">📁</span><span class="ver">v15.71</span></span></div></div>
+<div class="tip"><b>Is today’s data saved in the repo folder?</b> not yet — the close has passed; the panel is writing it (tried 1×). …</div>
+
+<div class="row"><div class="when">15:01 CT · written</div><div class="strip"><span class="st"><i class="dot g"></i>rec</span><span class="st"><i class="dot g"></i>saved</span><span class="st"><i class="dot g"></i>pushed</span><span class="st"><i class="dot g"></i>review</span><span class="st"><i class="dot g"></i>deps</span><span class="ctrl"><span class="chip saved">💾</span><span class="chip">📁</span><span class="ver">v15.71</span></span></div></div>
+<div class="tip"><b>Is today’s data saved in the repo folder?</b> yes at 03:01 PM CT — written by the panel, after the close. …</div>
+
+<div class="row"><div class="when">09:10 CT · reloaded, grant gone</div><div class="strip"><span class="st"><i class="dot g"></i>rec</span><span class="st"><i class="dot a"></i>none</span><span class="st"><i class="dot k"></i>pushed</span><span class="st"><i class="dot g"></i>review</span><span class="st"><i class="dot g"></i>deps</span><span class="ctrl"><span class="chip perm">💾!</span><span class="chip">📁</span><span class="ver">v15.71</span></span></div></div>
+<div class="tip"><b>Is today’s data saved in the repo folder?</b> not yet — and the folder permission needs one click today: click 💾 now and choose “Allow on every visit”. …</div>
+
+<div class="row"><div class="when">15:01 CT · cannot write</div><div class="strip"><span class="st"><i class="dot g"></i>rec</span><span class="st"><i class="dot r"></i>none</span><span class="st"><i class="dot k"></i>pushed</span><span class="st"><i class="dot g"></i>review</span><span class="st"><i class="dot g"></i>deps</span><span class="ctrl"><span class="chip due">💾 DUE</span><span class="chip">📁</span><span class="ver">v15.71</span></span></div></div>
+<div class="tip"><b>Is today’s data saved in the repo folder?</b> NO — ONE CLICK NEEDED. Chrome dropped the folder permission on the last page load, and a timer cannot ask for it back. Click 💾 and choose “Allow on every visit” so this never comes back. …</div>
+
+<div class="row"><div class="when">07:30 CT · yesterday never written</div><div class="strip"><span class="st"><i class="dot a"></i>rec</span><span class="st"><i class="dot a"></i>none</span><span class="st"><i class="dot k"></i>pushed</span><span class="st"><i class="dot g"></i>review</span><span class="st"><i class="dot g"></i>deps</span><span class="ctrl"><span class="chip due">💾 DUE+1</span><span class="chip">📁</span><span class="ver">v15.71</span></span></div></div>
+<div class="tip"><b>Is today’s data saved in the repo folder?</b> NO — ONE CLICK NEEDED. Chrome dropped the folder permission … 1 earlier day waiting too. (With the grant kept, this state never appears: the panel writes yesterday on its own, pre-market, and the nightly runs before the open.)</div>
+
+<div class="note">Rules, on the panel's clock (Chicago): <b>1+2</b> after the close (15:01 and later, weekdays, no upper bound) — any tick that finds the day not confirmed in the repo folder writes it, retried every 10 minutes until it lands · <b>3</b> outside market hours (before 08:30, after 15:00, weekends) — every earlier day still in IndexedDB with bars and no file is written, write-if-absent, marked once · <b>saved</b> means confirmed in the folder; the silent download is gone · a timer may ask Chrome for the grant, never request it — the click carries it, and "Allow on every visit" ends the question · the 💾 stays as the override.</div>
+</body></html>

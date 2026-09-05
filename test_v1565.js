@@ -22,7 +22,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 const face=h=>String(h).replace(/title="[^"]*"/g,'');
 const cellsOf=(row)=>(row.match(/<span class="g3gc[^"]*">[\s\S]*?<\/span>(?=<span class="g3gc|<\/div>)/g)||[]);
 
-ok(/@version\s+15\.65/.test(src) && /var GPTS_VERSION='15\.65';/.test(src),'0a v15.65 in both spots');
+ok(/@version\s+15\.(6[5-9]|[7-9]\d)/.test(src) && /var GPTS_VERSION='15\.(6[5-9]|[7-9]\d)';/.test(src),'0a v15.65+ in both spots');
 
 // ---- 1 · the blocks --------------------------------------------------------------------------------------------
 {
@@ -98,7 +98,7 @@ ok(/@version\s+15\.65/.test(src) && /var GPTS_VERSION='15\.65';/.test(src),'0a v
   ok(/## v15\.65/.test(cl) && cl.indexOf('## v15.65')<cl.indexOf('## v15.64'),'3a the CHANGELOG has the v15.65 entry on top');
   const ls=fs.existsSync('session-state/LESSONS.md')?fs.readFileSync('session-state/LESSONS.md','utf8'):'';
   const logAt=ls.indexOf('## 2 · THE LESSON LOG'); const firstEntry=(ls.slice(logAt).match(/### v[\d.]+/)||[])[0];
-  ok(firstEntry==='### v15.65','3b the lesson log’s first entry is v15.65',firstEntry);
+  ok(/### v15\.65/.test(ls.slice(logAt)) && /invisible whenever the King is not in it/.test(ls),'3b the lesson log carries the v15.65 entry (the off-King pattern that never drew)',firstEntry);
   ok(fs.existsSync('mockups/mockup-pattern-columns.png'),'3c the approved mockup is in mockups/ (the installer carries it)');
 }
 

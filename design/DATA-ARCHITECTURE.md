@@ -64,7 +64,7 @@ another. Name both units out loud before comparing two numbers.
 
 ---
 
-## 3 · THE FOUR TRANSPORTS (all pre-existing; all move files INTO git)
+## 3 · THE TRANSPORTS (all move files INTO git; the GEX nightly task also computes)
 
 | script | trigger | what it moves |
 |---|---|---|
@@ -73,7 +73,9 @@ another. Name both units out loud before comparing two numbers.
 | `pushdata.bat` / `tools/push-data.bat` | manual / scheduled (~15:30, `data/` only) | `Downloads\YYYY-MM-DD.json` → `data/` → push |
 | `tools/gex-sync.bat` (task "GEX sync", every 2 min, since 2026-09-03) | scheduled | commits + pushes ANYTHING new in the repo: the day file, the nightly's files Claude writes over the desktop bridge, Drive drops; replaces the Drive-only auto-pull |
 | the desktop bridge (`mcp__remote-devices__*`) | per session, folder approved once | Claude reads `data/<day>.json` from his machine and writes `learning/log/`, the tables, the brain back into `C:\Dev\gex-signal-tapereader\` — no installer, no API |
-| `installvNNNN.bat` | operator double-click | a whole build → xcopy → commit → push |
+| `installvNNNN.bat` | operator double-click (from `C:\Dev\gex-signal-tapereader\`, written there over the desktop bridge when the session is linked) | a whole build → xcopy → commit → push |
+| the 💾 (v15.66) | his click at the close, and the 15:01 auto-export | `data/<day>.json` AND `data/tape/<day>/<BOOK>.json` into the picked data folder → the sync task pushes |
+| `setup-gex-nightly.bat` → `tools/gex-nightly.bat` → `tools/nightly/tick.py` (v15.68) | scheduled task **"GEX nightly"**, every 10 min, hidden; RUNS only when the newest `data/<day>.json` is newer than `learning/log/<day>.json` | the nightly ON HIS MACHINE: `run.py` → the log (`ranOn`), the pattern table, the tables, and the registry (`results.py` → `learning/results.json` + `studies.json` patched) → the sync task pushes. Not a courier of market data — the one transport that COMPUTES. Needs Python 3 on the PATH |
 
 **None of them fetches market data.** They are couriers. Until v14.59 the only thing in this project
 that ORIGINATED market data was the browser panel, and what it originated was the Skylit day file.
@@ -221,6 +223,42 @@ is "missing", list the FOLDER before trusting the NAME.
 
 **What the daily Yahoo tap is FOR:** these corpora are static exports. The tap keeps them growing so
 the ⓪a base rates and the LOD/HOD table can be re-derived on current data instead of ageing.
+
+## 6b · THE TAPE ON DISK (v15.66, 2026-09-04) — the whole book, every bar, every market
+
+Operator: *"in order for you to do proper analysis for the day as part of the end of day review, you must store the
+whole day … save the entire tape in daily files for each market."* Until v15.65 the record held the **90 biggest SPXW
+strikes** per bar (`vend`) and, for SPY · QQQ · SPXW · VIX, the King, its $K and the **8 strongest strikes as %King**
+(`tri`) — a SPY stack survived only if its members were in the top 8 that bar; SPY/QQQ growth per strike was not
+measurable from the record; the 100-strike Trinity ladders existed only live.
+
+| where | what | when |
+|---|---|---|
+| `TAPE` (memory) → `repo.tape` (IndexedDB, keyed `day|book|bar`, indexed by day) | **SPXW**: every row of today's expiry from the velocity harvest — `[cur, d5, d15, d60, d1d]`, Skylit's dollars unaltered (~286 strikes). **SPY · QQQ · VIX**: every Trinity strike — `[pct, vel]` — plus the King and its $K per bar (dollars = pct/100 × kd × 1000) | every closed 3-minute bar while the panel is open on a live page; blind in replay; restored from IndexedDB on a reload; 5 days retained there |
+| `data/tape/<day>/SPXW.json · SPY.json · QQQ.json · VIX.json` | one file per book per day: `{schema, book, day, src, f, unit, strikes:[shared list], bars:[{t, bar, px, n, v:[aligned rows], king?, kd?}]}` — ~1.7 MB + 3 × ~0.2 MB a day | **written once, at the close**, by the same 💾 (and the 15:01 auto-export) that writes the day file, into `tape/<day>/` under the picked data folder; a day captured and never written is written on the next boot or the next 💾, once (`kv tapeWritten:<day>`) |
+| `tools/nightly/tape.py` | `load(day)` · `dollars(book, bar, k)` · `coverage(day)` · `--selftest`; `run.py` prints the coverage and logs it (`tape`) | the nightly |
+
+⚠ **NOT periodic.** Every write during the day would be a fresh ~2 MB blob for the GEX sync task to push two
+minutes later — 26 autosaves is 50 MB of git history for one day. IndexedDB survives a reload and a crash; the file
+is the courier, not the safety net. ⚠ **Forward-only:** days before v15.66 stay at 8 strikes. ⚠ **Vendor verbatim:**
+nothing in these files is derived; d5/d15 are Skylit's, stored rather than recomputed. Probe: `__gptsDebug.tape()`
+(bars per book today, the last write); `__gptsDebug.tapeExport()` writes today on demand.
+
+## 6c · THE DEFLECTION LEDGER, STAMPED (v15.67, 2026-09-04) — one row per tap, in the book's own units
+
+`day.defl.<SYM>[]` — one event per fresh tap (`recordDeflections`), **in the BOOK'S OWN units** (a SPY tap is 768,
+`px0` 769.5; a QQQ tap 567): `{sig, key, name (the OLD node-map detector's call), strike, dir, awayPts, bars, px0,
+tapBar, t, chips, kings:[books whose King the tap touched — chart-frame join through tapDisp, v15.67], pat:{spx, spy,
+qqq} (v15.67: what the PATTERN columns showed at that strike at the tap — null = book unreadable · {node:false} ·
+{node:true, k, pct, pos, st:'pika'|'barney', mem, rug:'rug'|'rrug', nw, g}), cont (1 held · 0 broke · null pending),
+contBar}`. Mirrored to IndexedDB `defl` (`repoUpsertDefl`, id `sym|date|sig|tapBar`). Scored 10 bars after the tap by
+`labelDeflectionOutcomes` (held = continued ≥ DEFL_CONT_PTS in the book's units). ⚠ `kings` was `[]` on every tap
+from v15.63 to v15.66 (the scale bug, L-T) and absent before — a pre-v15.67 row says nothing about the King.
+Readers: the panel's `patternTable` (Testing ⑦) and `tools/nightly/patterns.py` (the log's `patterns`), pinned equal.
+
+**The complete architecture — components, integrations, the HOD/LOD statistics pipeline, storage — is
+`design/ARCHITECTURE.md`**, generated from `tools/plan-seed.py` and rendered on ⚙ Architecture ⑥–⑨ (v15.67). This
+file remains the authority on WHO CAN REACH WHAT and the corpora on disk.
 
 ## 7 · KNOWN GAPS
 

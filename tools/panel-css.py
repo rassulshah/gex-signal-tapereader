@@ -94,6 +94,8 @@ def build():
     out.append(SCOPE + '{width:auto}' + SCOPE + '.g3scaled{zoom:var(--g-scale,1)}')
     # the app's own tab bar and the guide rows sit in the mockup's chrome too
     out.append(SCOPE + ' .tabs span{cursor:pointer}' + SCOPE + ' .sech[data-gsec]{cursor:pointer}' + SCOPE + ' .qq,' + SCOPE + ' .v,' + SCOPE + ' .note,' + SCOPE + ' .rs{white-space:normal}')
+    # (v15.68) the nightly's lines on the Analysis tab — blue (the READ colour), never mistaken for a review sentence
+    out.append(SCOPE + ' .rs .ci.nt{color:#7cc7ff}' + SCOPE + ' .rs.nt b{color:#7cc7ff;font-weight:500}')
     return ''.join(out)
 
 

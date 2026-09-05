@@ -86,12 +86,27 @@ the analysis tab being updated."* The consequence, stated once so no later conte
 the dashboard shows must have a chain — captured in the record → counted by the nightly (Analysis) → tested out of
 sample by the register (Testing) → approved as a rule → rendered with its n → the read recorded and scored the next
 day — and one definition travels that whole chain.** An element without a chain is DESCRIPTIVE and must say so;
-it may not imply a claim. His end of day is one click (the 💾); everything after it is the machine's, except the
+it may not imply a claim. His end of day was one click (the 💾) until v15.71 (*"the next step is to automatically have
+the application trigger the save button instead of me clicking it … if the save button has not been pressed and the
+time is [after market hours], trigger it. if the save button for the previous day has not been triggered and the time
+is during non market hours, trigger it."* — the same day); now the panel writes the day itself after the close and any
+missed day outside market hours, the 💾 is the override, and everything after the file is the machine's, except the
 review, which is a session's (and says so). The build order follows from this: the outcomes the counts are scored
 against (turn vs stay in), the read recorded and scored, the count → test draft, recommendations with his tick,
-the live pre-tap read joined to the tested number. `design/PROCESS.md` is the loop; `design/ARCHITECTURE.md` the
-machinery; `design/DASHBOARD-INVENTORY.md` the element-by-element ledger of what has a chain and what is still
-descriptive.
+the live pre-tap read joined to the tested number. **And the Learn tab is part of the same chain** (his addition,
+the same evening: "in this process, the learn tab should also be updated"): the rules L-n carry the nightly's
+numbers for the class each rule names; the gauge's predict part is the scored reads; the day's strongest taps are
+offered as candidate examples for him to teach; the taught examples are re-checked against the record under the
+current definitions — the blind calls and the teaching stay his and mine. And the sharpest form of it, his words the same evening: *"when you think about it, the entire data, analysis
+and testing process results in learning and it is from the learning that can know something and make a decision
+based on what you see on the dashboard."* So the chain ends at KNOWLEDGE, not at the dashboard: data → analysis
+(counts) → testing (trials) → learning (what survived the trial, with its evidence) → the decision at the
+dashboard, which draws from the knowledge and nothing else. Knowledge has degrees, and the face shows which one a
+number carries: confirmed (tested out of sample) · provisional (counted, untested) · doctrine (Skylit's word,
+unmeasured here) · descriptive (a fact about now, no claim). A data-driven decision-support system is exactly
+this chain, closed. **Its name, his choice: the Data Analysis process — `design/DATA-ANALYSIS-PROCESS.md`** ("lets
+call the process Data Analysis process to keep it simple"); the Rec tab is where what to implement is discussed. `design/PROCESS.md` is the loop; `design/ARCHITECTURE.md` the machinery;
+`design/DASHBOARD-INVENTORY.md` the element-by-element ledger of what has a chain and what is still descriptive.
 
 ## 4 · WHAT THIS MEANS FOR EVERY FUTURE DECISION
 

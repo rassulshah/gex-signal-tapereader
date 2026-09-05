@@ -16,54 +16,60 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 - **v15.62** (2026-09-03) — the mockups' look is the panel's look (one stylesheet, one skeleton, the scale control) · the 📚 Learn tab — the deflection learning doc, four taught examples checked against the record, eight rules, the 0–100 gauge · serves: PULLBACK · HOD/LOD · learning to identify and predict deflections
 - **v15.63** (2026-09-03) — the dashboard conversation, feature by feature — the node row (NEW · ⇄ ROLL · ▲ GROWTH · SETUP per book in the patternpedia's colours), the King zone (three Kings as rows of one zone, the strip with growth / rolled / above-below), the per-book King tally, the SWEPT line, the DAY table and the taps list off the face, the growth window as a setting under test (S6.6) · serves: HOD/LOD · PULLBACK · 'what is the node DOING as price arrives'
 - **v15.64** (2026-09-04) — the second dashboard conversation — NEW and the stacks calibrated on his taught days (NEW = not the opening book, crossed 20% within 20 bars, doubled or +20%/15m; a stack = adjacent same-sign nodes each ≥ 30% of the King, named once with a bracket; rug / reverse rug take the doctrine's price side), the King zone made obvious (NOW and King rows lit, Kings pulsing, the QQQ King live, ROLLED badge), the HOD/LOD line and the SWEPT line at the top in plain words (names only, making LOD / making HOD, details in the hover), the replay strip below, the tally off the face · the lost roadmap/ and archive/ recovered and carried by the installer · serves: HOD/LOD · PULLBACK · 'when price is going to a level, a new node pops up and deflects price'
+- **v15.65** (2026-09-04) — the PATTERN columns — one per book (SPX · SPY · QQQ): a PIKA / BARNEY block in black on yellow / purple with the book's own strikes in yellow under it, RUG / RRUG blocks, a SPY / QQQ pattern off its King placed on the ladder row nearest its converted price; the NOW row in a white hue; the three Kings in their own colours (SPX orange · SPY blue · QQQ cyan) so no King shares a node colour; the heatmap claim in the brain · serves: HOD/LOD · PULLBACK · reading the three books' shapes at a glance
+- **v15.66** (2026-09-04) — THE TAPE — the whole book, every closed bar, every market: SPXW's full velocity table (all ~286 strikes, Skylit's dollars and d5/d15/d60/d1d) and the whole Trinity ladders for SPY · QQQ · VIX (every strike as %King + the King's $K), captured into IndexedDB during the day and written ONCE at the close beside the day file as data/tape/<day>/<BOOK>.json; a captured day never written is written on the next boot or 💾; tools/nightly/tape.py reads it and run.py logs the coverage · serves: the end-of-day review on the WHOLE day — SPY/QQQ patterns scorable, NEW on SPY/QQQ, Q11's dollar axis
+- **v15.67** (2026-09-04) — SCORE THE SETUPS AND PATTERNS — every tap in the deflection ledger is stamped at the moment of the tap with the patterns as the face defines them (per book: PIKA / BARNEY stack, named or member; RUG / RRUG; the King by book; gate; NEW; growth into the tap; floor / ceiling) and scored 30 minutes later; the held rate by setup × book with its n and Wilson bound on the Testing tab (⑦ THE PATTERNS) live, and from the nightly across every recorded day (tools/nightly/patterns.py → the log) · the complete architecture on the ⚙ tab and in design/ARCHITECTURE.md (components, integrations — Skylit, InsiderFinance, Yahoo, ForexFactory, GitHub — the daily HOD/LOD statistics pipeline, storage) · serves: PULLBACK · HOD/LOD · 'score these setups and patterns to get proper probabilities and insights'
+- **v15.68** (2026-09-04) — THE LOOP CLOSES ON THE CLICK — his 💾 is the only manual step: the 'GEX nightly' Windows task (setup-gex-nightly.bat, run once) runs the nightly on his machine within 10 minutes of the save (tick.py: only when the day file is newer than its log), the nightly writes the Analysis tab's registry itself (results.py: every study whose number the log can answer — the King by book, the rugs, the stacks, the register's verdicts — result · status · by the nightly · asOf; a thin row keeps the review's sentence and shows the count so far), the sync pushes it, the panel re-fetches the registry on its 10-minute check; the log says where it ran · serves: the loop closes without a session — 'clicking on the save, the data getting saved and the analysis occurring and the analysis tab being updated'
+- **v15.69** (2026-09-04) — THE OBJECTIVE OUTCOMES — every tap scored, from the day's own bars, on the two decisions PURPOSE names: TURN (the tap's extreme within 0.50 SPY of the session's HOD / LOD — the node WAS the turn) and RESUME (a new session extreme after the tap — the pullback ended, stay in), first tap per node per day; beside held on the nightly's pattern table and in the Analysis rows' lines · the Learn tab's rules carry THE RECORD: each rule that names a class gets the ledger's numbers for it and a verdict — agrees / contradicts at n ≥ 15 on both sides, thin until then, not measured where the ledger has no class yet (L3 / L8 the King path, L4 the side flip, L7 the clock); the seed merges it so a review never erases it · serves: PULLBACK · HOD/LOD — 'the entire data, analysis and testing process results in learning'
+- **v15.70** (2026-09-04) — 💡 REC — the eighth and last tab: proposals TO him from the nightly (pre-registered conditions: a class clear of the base at n ≥ 15, a Learn rule the record contradicts, a hypothesis cleared) and from the review (tools/rec-seed.py), each with what it changes and its evidence; his ✓ / ✗ saved at once and riding the next day file (`reco`), the nightly setting the row's status; withdrawn when the record stops supporting it; nothing on the face changes except through here · THE DATA ANALYSIS PROCESS named and written (design/DATA-ANALYSIS-PROCESS.md: the seven links, the degrees of knowledge, the ten rules, the eight tabs) and pinned by a test · learning/markets.json — every market-specific number in one place, gold as a configuration entry when a gamma book exists · serves: 'from that point on you take over from data, analysis, testing, learning all the way to the Rec tab, which is where we will discuss what to implement'
 
 ## NEXT — the running build
 
-### v15.65 — the PATTERN columns — one per book (SPX · SPY · QQQ): a PIKA / BARNEY block in black on yellow / purple with the book's own strikes in yellow under it, RUG / RRUG blocks, a SPY / QQQ pattern off its King placed on the ladder row nearest its converted price; the NOW row in a white hue; the three Kings in their own colours (SPX orange · SPY blue · QQQ cyan) so no King shares a node colour; the heatmap claim in the brain
+### v15.71 — THE SAVE RUNS ITSELF — no click at the close: after the close (15:01 CT and later, no upper bound) any tick that finds the day not confirmed in the repo folder writes it and retries every 10 minutes until it lands; outside market hours every earlier day still in IndexedDB with bars and no file is written, write-if-absent, and marked once; saved means confirmed in the folder and nothing else (the silent download fallback is gone); the 💾 becomes a chip — saved · pending · DUE — and its click carries the folder permission inside the gesture (Chrome 122+ offers Allow on every visit there), so after one such click no rule ever needs him again; a day with no recorded bars is never written on any path
 
-Serves: HOD/LOD · PULLBACK · reading the three books' shapes at a glance.
+Serves: 'automatically have the application trigger the save button instead of me clicking it' — the Data Analysis process with zero steps at the close.
 
-Done when: a SPY or QQQ stack that does not sit on its King is visible on the ladder, and the render of 2026-08-28 13:12 shows every pattern in its book's column.
+Done when: a weekday closes with the Atlas tab open and no click, and data/<day>.json with writtenBy auto is on GitHub within ~12 minutes, followed by the nightly's log; a day left unsaved is on GitHub the next morning with writtenBy late.
 
 ## AFTER THAT — in order
 
-### v15.66 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+### v15.72 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
 
 Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
 
 Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
 
-### v15.67 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+### v15.73 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
 
 Serves: HOD/LOD · the loop closes.
 
 Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
 
-### v15.68 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
+### v15.74 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
 
 Serves: HOD/LOD · PULLBACK · 94 OPEN studies · H6.
 
 Done when: 40 taps recorded and the first F-study reads from them with n.
 
-### v15.69 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
+### v15.75 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v15.70 — one definitions file (Python + panel) · the shipped-artifact test
+### v15.76 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v15.71 — the face manifest — every number on the face names its study, pinned by a test
+### v15.77 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v15.72 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v15.78 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 

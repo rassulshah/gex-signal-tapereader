@@ -77,6 +77,22 @@ carries a deletion list (`RETIRED_DEL`). **DECODE THE .bat AND CHECK THE FILE LI
 the only check that finds this class of bug** — and `test_installer_manifest.js` pins the fetched files,
 not the directories.
 
+**L-U · THE NIGHTLY OWNS THE NUMBERS; THE SEED OWNS THE QUESTIONS.** (2026-09-04, v15.68) `learning/studies.json`
+is written by TWO hands: `tools/studies-seed.py` (the review — questions, statuses it sets by judgement) and
+`tools/nightly/results.py` (the machine — `result` · `status` · `by:'nightly'` · `asOf` on the rows it can
+compute, `nightly` = the count so far on the rows it cannot yet judge). The seed merges `learning/results.json`
+when it regenerates. **Never hand-write a number into a row the nightly answers (STUDY_SOURCES) — it will be
+overwritten within ten minutes of the next 💾; and never assume a session ran the nightly — read the log's
+`ranOn`.** The nightly runs on HIS machine (the "GEX nightly" task); the cloud runs the same script in a session.
+
+**L-T · THE LEDGER IS IN THE BOOK'S UNITS; THE LADDER IS IN THE CHART'S.** (2026-09-04, v15.67) The deflection
+ledger (`day.defl.SPY[]`) holds SPY strikes (768) and SPY prices; the QQQ ledger QQQ strikes; every ladder
+structure (`gridBookNodes`, `kingsNow`, `gridPatternHost`, the rows) is in the chart's frame (SPX 7700s under the
+futures display). `kingsAtStrike` compared them raw for four builds and `kings` was `[]` on every tap — and
+nothing threw. **Convert through `tapDisp(sym, k)` (SPY: k × px/undPx; QQQ: px × k / qqqPx — the ratios
+`gridBookNodes` uses) before any ledger-vs-ladder comparison**, and treat an all-empty join as a broken join until
+proven otherwise. A record with `kings` absent or `[]` before v15.67 says NOTHING about the King.
+
 **L-S · THE COURIER HAS A CEILING: `more` STOPS AT 65,535 LINES.** (2026-09-04) The self-extracting
 installer copied its payload out with `more +N`; the first build past 65,535 lines (v15.64, 66,123 lines,
 5.1 MB) sat on "Extracting payload..." indefinitely — `more` was waiting for a keypress on a prompt written

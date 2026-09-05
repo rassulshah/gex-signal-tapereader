@@ -1,3 +1,289 @@
+## v15.71 — THE SAVE RUNS ITSELF: no click at the close; the earlier days written when missed; the 💾 a chip
+
+> Operator, 2026-09-04: "the next step is to automatically have the application trigger the save button instead of
+> me clicking it. can the application self trigger using a time. for example, if the save button has not been pressed
+> and the time is 5pm or later, trigger it. if the save button for the previous day has not been triggered and the
+> time is during non market hours, trigger it." · "instead of 5pm can you just modify so it is after market hours..
+> besides this i approve .. build"
+
+**What the record said first.** The last seven trading days' files (08-27 → 09-03) all carry `exportedAt` 15:01–15:03
+CT — the v10.44 auto-export was already firing one minute after the close; his 💾 was mostly a second write. Two things
+were missing: the attempt stopped at 16:00 CT (a tab opened later stayed unsaved until his click), and a day never
+written (the tab closed before 15:01) was written only by the next click. One thing was wrong: when the folder grant was
+missing the silent path DOWNLOADED the file into Downloads and the panel counted the day as exported — a file git never
+sees. And the 08-29 / 08-30 weekend files show the auto-export also wrote days with no bars.
+
+**Three rules, one writer (`repoExportDay(date, silent, by, done)`), on the panel's clock (Chicago).** RULE 1+2 —
+after the close (15:01 CT and later, weekdays, no upper bound): any tick that finds today not confirmed in the repo
+folder writes it, and tries again every 10 minutes (`AUTOSAVE_RETRY_MS`) until `saveState()` says saved
+(`repoAutoExportTick`). RULE 3 — outside market hours (before 08:30, after 15:00, weekends): every earlier day still in
+IndexedDB with bars, inside a 10-day look-back, with no file in the folder, is written — WRITE-IF-ABSENT (the file is
+looked for first; a found file is marked and never overwritten by a thinner re-export) — and marked in kv
+`dayWritten:<day>` so it is checked once (`repoLateSweep` / `repoLateSaveTick`; the tape's own sweep rides along). A
+day with no recorded bars is refused on every path. `writtenBy` (click · auto · late) rides in the file; a late file
+carries `late:{writtenAt, why}`; a day whose localStorage record was evicted is written from IndexedDB with `partial`.
+A previous day's write never touches today's evidence (`gpts_last_export`, the pipe note, `SAVED_TODAY`). An auto
+retry does not rewrite a tape already written this session (2 MB into git history per retry otherwise).
+
+**SAVED means one thing.** Confirmed written into the repo folder. The silent path no longer downloads: with the grant
+missing it sets `AUTOSAVE.blocked` and stops; no folder picked → blocked "no folder"; a failed write → blocked with the
+error. His click keeps the download as its fallback (he asked for a file and gets one).
+
+**The permission, and its end.** Chrome resets a File System Access grant to "prompt" on every page load, and a timer
+may ASK (`queryPermission`) but never REQUEST it (`requestPermission` needs a gesture — the v14.53 / v14.78 lessons).
+So: `autosavePermTick` asks every 10 minutes and un-blocks the rules the moment a grant appears; the footer's 💾 is a
+CHIP — idle · saved (green) · pending (amber) · **💾!** (amber: the grant is known missing, said BEFORE the close) ·
+**💾 DUE** (red: a save is due and the panel cannot write; "+n" earlier days) · nodata — every hover opening with "Is
+today's data saved in the repo folder?"; and the click (`repoClickExport`) calls `requestPermission()` FIRST,
+synchronously inside the gesture on the handle cached at boot (`DATA_DIR_H`), then writes today, then sweeps the
+earlier days. On that prompt Chrome 122+ offers "Allow on every visit": chosen once, none of the rules ever needs him
+again. The 📁 pick re-arms the rules. `saveState` treats a refusal as no save. The tick runs `autosaveTick()` BEFORE
+the 08:30 gate so a missed day is written pre-market and the nightly runs before the open.
+
+**The process.** `design/DATA-ANALYSIS-PROCESS.md`: "The operator's one step: none, since v15.71 … the 💾 remains as the
+override" (test d3 re-pinned); PROCESS.md ② EXPORT rewritten, §5b's timeline; PURPOSE §3b carries his words; the
+inventory §0g (the chip, descriptive); ARCHITECTURE.md / the ⚙ tab (stage ②, the day file, the sync, the HOD/LOD
+step); the skill (no step at the close; what DUE means); `.gex-config.json` `autosave` (2026-09-04h); the roadmap:
+v15.70 shipped, v15.71 this build, the candidate score → v15.72 and the rest one later. Probes:
+`__gptsDebug.autosave()` · `__gptsDebug.lateSweep()`. Mockup `mockups/mockup-autosave-chip.png`.
+
+**Rec.** R-7 (`tools/rec-seed.py`): his own ask, recorded as IMPLEMENTED in v15.71 with why "approved in the chat" — rule 9 kept in the record even when the approval came in the conversation rather than on the tab (test_v1570 1d re-pinned).
+
+**Tests.** `test_v1571.js` — 90 assertions: the clock (weekday / weekend / a broken clock reads as market hours), rule
+1+2 (15:01, the 10-minute retry, saved stops it, 14:59 / Saturday nothing, a download-only day is written), the writer
+(the evidence only from the success callback; silent + grant missing writes nothing and downloads nothing; the click
+asks and writes; no folder; the refusal; the evicted day; the late day; the tape guard; a failed write), rule 3 (the
+sweep, found vs written, the grant, no folder, marked days, market hours, pre-market, the cadence, Sunday), the click
+order, the chip's states and hovers, the permission tick, the wiring (before the gate, one call, boot, the pick,
+saveState), the process and the plan. 16 of 16 mutants caught (the upper bound back, the weekend ignored, no retry
+cadence, the silent download back, the late day writing today's evidence, the refusal gone, write-if-absent gone,
+rule 3 inside market hours, the export before the permission, saved outranking due, the tape rewritten, the block
+kept, nodata never, the no-folder download, the look-back ignored, the tick behind the gate). Re-pinned: test_v1570
+0a / 3h, test_pipeline_indicator 8i, test_direction_grade 10e, test_rules_v2 6i, test_data_analysis_process d3.
+Suite: 145 green / 5 permanent baselines.
+
+**Not yet verified on his machine:** the install; the first close with the tab open and no click → `data/<day>.json`
+with `writtenBy: "auto"` on GitHub within ~12 minutes and the nightly's log after it; the chip's states live; a day
+left unsaved → on GitHub the next morning with `writtenBy: "late"`.
+
+## v15.70 — 💡 REC, the eighth and last tab; THE DATA ANALYSIS PROCESS named and pinned; learning/markets.json
+
+> Operator, 2026-09-04: "we need one other tab called recommendations. based on the entire process and what you have
+> learned you need to make recommendations and get my approval to implement." · "lets abbreviate as Rec. i like it" ·
+> "what should we call this entire approach? How will you make sure that this process is not forgotten by future
+> contexts … Does it adapt to different markets, for example gold … i want to fine tune everything so that we don't
+> have to play around changing the structure that we are deciding on now and that is solid" · "lets call the process
+> Data Analysis process to keep it simple. ok build out everything. my expectation from now on is to just click on the
+> save button once a day probably eod, and from that point on you take over from data, analysis, testing, learning all
+> the way to the Rec tab, which is where we will discuss what to implement as needed."
+
+**Rec.** `learning/recommendations.json` — proposals TO him, by id, from two writers that never erase each other's
+fields: the review (`tools/rec-seed.py`, rows R-n: R-1 record the reads · R-2 the count-to-test draft · R-3 the clock
+as a class · R-4 one knowledge file · R-5 the candidate score from tested rules · R-6 the review on a clock) and the
+nightly (`tools/nightly/recommend.py`, rows RN-…, from conditions written in the file BEFORE any row was generated:
+a class whose Wilson low beats the base rate of every tap at n ≥ 15 on held / turn / resume → RULE "register it out
+of sample, put the number on the face"; a Learn rule the record contradicts → TEACH; a hypothesis cleared → RULE;
+refused → its row WITHDRAWN; a machine RULE whose condition stops holding → withdrawn, and back when it holds again).
+Each row: kind (RULE · TEST · FEATURE · DATA · DESIGN · PROCESS · TEACH) · what it changes · the evidence with its n ·
+by whom · as of. **His ✓ / ✗** on the tab is saved at once (`gpts_reco_v1`), shown at once ("your ✓ · rides the next
+💾"), rides the next day export as `reco` (a note optional on ✗), and the nightly sets the row's status — approved /
+declined, with the day and the note; the latest decision per id wins; an implemented or withdrawn row is never
+revived by a decision; the seed never reverts his status. Four sections: ① awaiting your approval · ② approved, in
+implementation (target version) · ③ implemented (the version) · ④ declined / withdrawn (the reason). The file is
+fetched at boot and on the 10-minute check; `REC_SEED` renders before the first fetch and says so. The real tab never
+prints an invented number — the mockup's illustrative row is not in the file (test_v1570 1e). Nothing on the face
+changes except through Rec (rule 9).
+
+**The process, named.** `design/DATA-ANALYSIS-PROCESS.md`: the seven links CAPTURE → ANALYSIS → TESTING → LEARNING →
+REC → DASHBOARD → SCORE, who runs each, what it writes, which tab; one definition end to end; the four degrees of
+knowledge every face number carries (confirmed · provisional · doctrine · descriptive); the ten rules; the markets;
+the eight tabs as the final set (no ninth); his words quoted. Pinned by `test_data_analysis_process.js` (the links
+in the document, the plan, PROCESS.md, the config, the skill, the generated ARCHITECTURE.md; eight tabs in the plan
+and the tab bar; the markets file's numbers equal the panel's). The `load gex` procedure reads it first (SKILL.md);
+`PLAN_SEED.process` carries it; the ⚙ tab names it as its first source.
+
+**The markets.** `learning/markets.json` — every market-specific number in one place: SPY (the SPX complex) live —
+books, chart, bar length, tap / turn / continuation tolerances, the forward window, the minimum bars, the corpus;
+NQ · GC · CL price only (bars couriered since v1.15; the HOD/LOD statistics can be built once a corpus accrues; a
+gamma book source is what gold still needs). `patterns.py` reads the ledger market's tolerances from it; the panel's
+`DEFL_CONT_PTS` / `DEFL_FWD_BARS` are pinned equal to the SPY entry.
+
+**Tests.** `test_v1570.js` (31; 18 of 18 mutations — 8 panel, 9 nightly, 1 document) and `test_data_analysis_process.js`
+(20). Render `design/render-v1570-rec.png` (the real tab, from the seed).
+
+## v15.69 — THE OBJECTIVE OUTCOMES (turn · stay in) on every tap; the Learn tab's rules carry the record
+
+> Operator, 2026-09-04: "the idea is to have a trading decision support system that is data driven … building out data
+> capture, analysis testing back to dashboard for everything that is displayed on the dashboard including hod lod
+> time, nodes, setups, directional prediction, reads and more" · "the learn tab should also be updated" · "the entire
+> data, analysis and testing process results in learning and it is from the learning that can know something" ·
+> "reflect on the entire approach and see if we are missing anything or how to best do this and then build".
+
+**The reflection, in one line.** One definition must travel the whole chain — capture → count → test → rule → face →
+the read scored — and the count must be scored against the OBJECTIVE, not against a convenient proxy. "Held ten bars"
+was the proxy; PURPOSE names two decisions: TURN (the node is the HOD / LOD) and STAY IN (the pullback ends, the trend
+resumes). Neither was measured anywhere.
+
+**What is true now.** (1) **The objective outcomes**, pre-registered in `tools/nightly/patterns.py` before the first
+number was read: for an UP deflection, TURN = the lowest low in the tap window (four bars before the event's time, one
+after) within 0.50 SPY (the doctrine's deflection zone) of the SESSION low — the node WAS the LOD; RESUME = a higher
+high after the tap than any before it — the trend resumed. Mirror for DOWN. Only the first tap per (strike, dir) per
+day carries them (a retest of the LOD is not the LOD twice); a day with fewer than 20 recorded bars scores nothing.
+Computed from the day file's own SPY bars (the snaps' h / l), so it needs nothing new from the panel. The nightly's
+pattern table carries `turn` and `resume` beside `held` per class (n · hit · rate · Wilson low); Testing ⑦ renders
+them as two extra columns on the nightly's table (the live table has no whole day and stays held-only, and says so);
+the Analysis rows' lines read "held · turn · resume". **The first read** (F-19; 2026-09-03, one day, 19 episodes,
+the OLD names): the tap was the session's turn **1 of 19**; the trend resumed after **13 of 19** — a node tap is
+rarely THE turn (there are two a day), which is the base every class has to beat. (2) **The Learn tab carries the
+record.** `results.py RULE_SOURCES` maps each rule that names a class to it — L1 growing vs fading (held), L2 a NEW
+node vs every tap (TURN), L5 −γ vs +γ (held), L6 the stacks vs every tap (TURN), L9 the King rows — and writes each
+rule's evidence and the record's verdict: **agrees / contradicts** at n ≥ 15 on both sides in / against the direction
+the rule claims, **thin** until then, **measured** for a base row, **not measured** where the ledger has no class yet
+(L3 / L8 the King path, L4 the side flip, L7 the clock — each named). The rule's status (his taught legs) is the prior
+and is never changed by the machine; the verdict sits under it on the tab, green / red / blue, with the evidence, and
+in LEARNING.md; `tools/learn-seed.py` merges `results.json` so a review never erases it. The nightly's `results.json`
+carries `rules`. (3) Six new classes in both twins for the King's own condition (`king:floor · ceil · grow · fade ·
+pos · neg`) feed S0.5 / S0.7 / K2.1 / K2.2 and L1 / L5.
+
+**Tests.** `test_v1569.js` (26; 15 of 15 mutations — 4 panel, 5 outcomes, 5 rules, 1 seed) executes the outcomes on a
+synthetic day (the LOD tap 1/1; a mid-day floor 0/1; a retest None; the HOD ceiling 1/0; a ceiling under the HOD 0/0;
+a floor after the HOD 0/0; no time None; a thin record None), pins the first read on the recorded day, the rules'
+verdicts on a fixture (L5 contradicting — a taught rule can be wrong and the tab must say so), `write()` against a
+temp Learn doc (status never touched), the seed's merge, the panel's columns and rule rows, the plan.
+
+## v15.68 — THE LOOP CLOSES ON THE CLICK: the nightly runs on his machine after every 💾 and writes the Analysis tab itself
+
+> Operator, 2026-09-04 (the step-by-step conversation): "Obviously it is triggered by the save button (disk icon). Then
+> you take that data and perform your analysis and update the analysis tab, which gives you ideas to test. is that how
+> it goes" · "this seems like a gap. when i click on the save button and the push happens, you have everything to start
+> the analysis" · "i envision clicking on the save, the data getting saved and the analysis occurring and the analysis
+> tab being updated" · "so can you update that so you do what you need to do".
+
+**What was true.** After the 💾 and the sync's push, nothing ran until I opened a session: the nightly (`run.py`) ran
+in the cloud when I was there, and the Analysis tab's registry (`learning/studies.json`) changed only when a review
+edited `tools/studies-seed.py`. PROCESS.md described stage ④ by its actor ("the cloud"), not its trigger — so the
+gap was invisible in the document and visible to him in one question (LESSONS v15.68).
+
+**What is true now.** (1) **The "GEX nightly" Windows task** — `setup-gex-nightly.bat` (run once, like the sync's
+setup) registers a task that runs `tools\gex-nightly.bat` every 10 minutes, hidden through `tools\gex-nightly-hidden.vbs`,
+no PowerShell, a lock, `python` on the PATH or the `py -3` launcher. The .bat calls `tools/nightly/tick.py`, which
+runs the nightly ONLY when the newest `data/<day>.json` is newer than `learning/log/<day>.json` — "today" is the
+newest day file, never cmd's locale-shaped `%DATE%` (the sync's commits read "03-Thu-09" for that reason) — and
+exits 3, silently, otherwise; a second 💾 makes the day file newer and earns one more run. The sync task pushes the
+results within two minutes. (2) **The nightly writes the registry** — `tools/nightly/results.py`: `STUDY_SOURCES`
+maps 21 study rows to their numbers — the King by book (S0.1–S0.4, K1.1, K1.2), the King as floor / ceiling (K2.1,
+K2.2), growing / fading and ±γ at the King (S0.5, S0.7; new classes `king:floor · king:ceil · king:grow · king:fade ·
+king:pos · king:neg` in both twins), the rugs (S1.1, S1.2), the stacks (S7.1, S7.2), and the register's verdicts
+through `HYP_STUDY` (H1→F5.2 … H7→H2.8, pinned equal to the panel's map). It writes `learning/results.json` and patches
+`learning/studies.json` in place: a row with a VERDICT (a rate at n ≥ 15, or cleared / refused / ready) gets `result`
+= the machine's line, `status` (READ · REFUSED · READ NEXT · THIN), `by:'nightly'`, `asOf`; a row still being counted
+toward keeps the review's sentence and status and carries the count so far as `nightly` beside it; a row the nightly
+cannot compute is untouched. Atomic writes (the sync must never commit half a file). `tools/studies-seed.py` merges
+`results.json` when it regenerates, so a review never erases the machine's numbers — the seed owns the questions, the
+nightly the numbers. `run.py` calls it after the log, stamps the log with `ranOn` (his machine / cloud) and `ranAt`,
+writes the sweep table with a relative path, and refuses unknown flags (`--help` used to run it). Already visible on
+the 2026-09-03 registry: H1.3 → READ NEXT (H5 ready at 51 events); F2.1 / F5.2 / F6.1 keep their sentences with
+"H2 thin: n=1 of 30" beside them. (3) **The panel** re-fetches the registry on its 10-minute pipeline check (it fetched
+only the day file and the log), tags a nightly-written result "· by the nightly, <date>" in blue and shows the count
+so far as a second line, and the ⚙ tab's NIGHTLY box says where the last run happened. The architecture (stage ④, the
+nightly component, storage, `design/ARCHITECTURE.md`) and the roadmap (v15.67 shipped, v15.68 this, the candidate
+score → v15.69) follow. His end of day is unchanged: one click.
+
+**Tests.** `test_v1568.js` (45; 21 of 21 mutations — 6 in the panel, 10 in the Python, 5 in the batch files) executes
+`tick.py`'s decision (no day → nothing; no log → run; log newer → nothing; a second 💾 → run; the next day → run),
+`results.py` on a fixture log (the rates, the floor, the register's four verdicts, an unanswerable study untouched),
+`write()` against a temp registry (the review's sentence survives a thin row; the counts follow), the seed's merge
+in a temp copy, `run.py --help` exiting 2 without touching the log, the panel's row (tag · second line · untouched),
+the re-fetch, the loop status, the plan and the document; the batch files line by line (no PowerShell command, the
+lock that exits, the python fallback, the silent no-op, the 10-minute schedule, the sync-task check).
+
+## v15.67 — SCORE THE SETUPS AND PATTERNS; the complete architecture on the ⚙ tab and in design/ARCHITECTURE.md
+
+> Operator, 2026-09-04: "the next thing i wanted to talk to you about, is whether the node deflections consider the
+> setup / pattern type and if that is being tracked and scored. for example, rug, reverse rug, barney and piku stack,
+> king node deflections etc." · "you need to score these setups and patterns to get proper probabilities and insights.
+> build and make sure you are updating the architecture document and tab in the application which should be a complete
+> architecture / design of the application's process, including the integrations with inside finance and yahoo data
+> that is used to get hod lod statistics daily."
+
+**What was true.** A tap in the deflection ledger carried a `name` from the OLD node-map detector (`classifyDeflection`:
+King / Gate / Rug / Pika / Floor / Ceiling by the level's role) — not from the PATTERN columns the face draws
+(`gridSetups`: the member-cut stacks, the rugs with their price side) — and no per-pattern held rate existed anywhere
+(S0 THIN, S1 / S7 OPEN). 2026-09-03: 53 taps; pika / barney 0 under the old names while the face showed stacks all day.
+**And the King join was broken:** `kingsAtStrike` (v15.63) compared the ledger's strike — the BOOK'S OWN units, SPY 768 —
+against the Kings in the CHART'S frame (7712), so `kings` was `[]` on every tap and the per-book tally never counted
+a King (LESSONS v15.67; landmine L-T).
+
+**What is true now.** (1) **The stamp.** Every new tap is stamped, at the moment of the tap, with what the face showed
+at that strike, per book — `pat:{spx,spy,qqq}`, each `null` (the book unreadable) · `{node:false}` · `{node:true, k,
+pct, pos, st:'pika'|'barney', mem, rug:'rug'|'rrug', nw, g}` — by the very functions the PATTERN columns use
+(`gridBookNodes` / `gridSetups` / `nodeIsNew` / `nodeGrowth`), so a pattern's definition lives in one place and the
+stamp follows it. (2) **One conversion.** `tapDisp(sym, k)` puts the ledger's strike into the chart's frame with the
+ratios `gridBookNodes` converts the books with (SPY × px/undPx; QQQ × px/qqqPx); `kingsAtStrike` uses it — a SPY tap at
+768 against the SPX King at 7706 is a King tap now. (3) **The table.** `patternTable(events)` groups the ledger into
+classes — every tap; King · SPX / SPY / QQQ / any / none; SPX / SPY / QQQ pika and barney stacks (named or member);
+rug / reverse rug per book; SPX NEW, growing (≥ +20%), fading (≤ −20%), +γ / −γ, no SPX node; the old detector's names
+as classes of their own; UP / DOWN — held / broke / pending per class, the rate at n ≥ RATE_MIN_N (15) with its Wilson
+lower bound, `thin (n=…)` under it. A tap counts in every class it matches. **Testing ⑦ THE PATTERNS** renders it live
+from this browser's ledger (today + the IndexedDB archive, `DEFL_ARCH`, de-duplicated per sym|date|sig|tapBar) and
+from the nightly (`ANALYSIS_NIGHTLY.patterns`). `tools/nightly/patterns.py` is the Python twin (same classes, same
+arithmetic, JavaScript's rounding) — `run.py` writes it into `learning/log/<day>.json` as `patterns`; test_v1567 3l
+runs both on one fixture and fails if they ever differ. Forward-only: taps before v15.67 carry no stamp and, since
+their `kings` was `[]` by the bug, say nothing about the King either. `__gptsDebug.patterns()` · `.stamp(k, sym)`.
+(4) **The architecture.** `PLAN.system` in `tools/plan-seed.py` — nine components (the panel, the companion, the
+stores, the day file, the couriers to git, the nightly, the review, the corpora, the suite: where, does, cadence,
+owner), five integrations (Skylit Atlas · InsiderFinance · Yahoo · ForexFactory · GitHub raw: how, what, keys, notes),
+the HOD/LOD statistics daily pipeline in eight steps (the companion's ES fetch → the day file → the sync → append-futures
+→ study-hodlod / study-farside / study-sweeps → the couriers → ⓪a live → scored at the close, with the corrected rates
+only), and every storage key and store — rendered on ⚙ Architecture as ⑥ THE SYSTEM · ⑦ THE INTEGRATIONS · ⑧ THE
+HOD/LOD STATISTICS, DAILY · ⑨ STORAGE (`architectureSystemHtml`), and written by the same script as
+`design/ARCHITECTURE.md` (one source; the seed, the file and the document pinned equal). The roadmap: v15.66 shipped,
+v15.67 = this build, the deflection candidate score moved to v15.68 (…v15.74).
+
+**Tests.** `test_v1567.js` (57; 19 of 19 mutations — 16 in the panel, 3 in the Python twin) executes `tapDisp` and
+`kingsAtStrike` (the raw-compare regression pinned), the stamp through the real `gridBookNodes` / `gridSetups` /
+`nodeIsNew` / `nodeGrowth` / `kingsNow` on a fixture (member vs named, the tolerance, the nearest node, an unreadable
+book vs no node), the classes, the table (counts, the floor, Wilson, pending, colours), the ledger de-duplication, the
+section, the hook (`recordDeflections` executed with stubs), the four architecture sections, the seed ↔ plan.json ↔
+ARCHITECTURE.md pins, the roadmap, the log, the records. `patterns.py --selftest`, `run.py --selftest` green.
+Renders: `design/render-v1567-patterns.png` (Testing ⑦ on the 2026-09-03 ledger), `design/render-v1567-architecture.png`.
+
+## v15.66 — THE TAPE: the whole book, every bar, every market, in daily files for the nightly
+
+> Operator, 2026-09-04: "i wanted to further talk to you about whether you are saving the entire days tape for all the
+> markets spy, qqq, spxw currently" · "in order for you to do proper analysis for the day as part of the end of day
+> review, you must store the whole day. can you enhance the architecture to save the entire tape in daily files for
+> each market and you can keep it in a folder like the data folder … unless you have a better idea?" · "yes, build it
+> first. should there be a periodic save to the file during the day or can you capture the entire day and save it one
+> shot."
+
+**What was true.** The day file held the 90 biggest SPXW strikes per bar (`vend`) and, for SPY · QQQ · SPXW · VIX, the
+King, its $K and the EIGHT strongest strikes as %King (`tri`). Measured on 2026-09-03: `vend` n=286 stored 90 (the 90th
+at 0.1% of the King — every drawn strike survives), `tri` 8 of 100 per book. A SPY barney at 769–772 was in the record
+only if those strikes were in the top 8 that bar; a SPY rug's floor check could not be replayed; SPY/QQQ growth per
+strike could not be measured at all. The 100-strike Trinity ladders the live panel reads existed only live.
+
+**What is true now.** Every closed 3-minute bar, while the panel is open on a live page: **SPXW** — the whole velocity
+table for today's expiry, all ~286 strikes, `[cur, d5, d15, d60, d1d]`, Skylit's dollars unaltered (the same source
+as `vend`, uncapped); **SPY · QQQ · VIX** — the whole Trinity ladder, every strike as `[pct, vel]` with the King and
+its $K per bar (dollars per strike = pct/100 × kd × 1000). Held in memory and mirrored per bar into IndexedDB
+(`repo.tape`, database version 4, keyed `day|book|bar`, indexed by day) — never localStorage (the 10 MB quota, F-10);
+restored on a reload; five days retained there. **Written once, at the close**, by the same 💾 and the same 15:01
+auto-export that write the day file, beside it: `data/tape/<day>/SPXW.json · SPY.json · QQQ.json · VIX.json` — one
+shared strike list per file, one aligned row per bar (~1.7 MB + 3 × ~0.2 MB a day). A day captured and never written
+(the 💾 forgotten, the browser closed early) is written on the next boot or the next 💾, once (`kv tapeWritten:<day>`).
+His question answered in the design: **not periodic** — every write during the day would be a fresh ~2 MB blob for
+the GEX sync task to push two minutes later, 26 autosaves ≈ 50 MB of git history per day; IndexedDB survives a
+reload and a crash, so the file is the courier, not the safety net. Blind in replay, like every recorder. Forward-only.
+`tools/nightly/tape.py` reads the files (`load`, `dollars`, `coverage`, `--selftest`); `run.py` prints and logs the
+coverage. `__gptsDebug.tape()` / `.tapeExport()`.
+
+**Tests.** `test_v1566.js` (39; 11 of 11 mutations) executes the readers against a fake harvest and fake Trinity
+ladders, the capture against a fake IndexedDB (throttle, replay-blind, the mirror, the restore, re-capture without
+duplicates), the file shape (shared strikes, aligned rows with nulls, the units), the writer against a fake folder
+handle (`tape/<day>/<BOOK>.json`, the download fallback, the once-only mark), the late save and the retention, the
+database upgrade. `tape.py --selftest` green; `run.py --selftest` green with the coverage line.
+
 ## v15.65 — the PATTERN columns, one per book; the Kings in their own colours; the NOW row in white
 
 > Operator, 2026-09-04, one item at a time: "split the setup column into 3 columns so 1 is for spx, spy and qqq … a

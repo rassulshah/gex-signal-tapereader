@@ -26,7 +26,7 @@ ok(planVersions.every(v=>docVersions.indexOf(v)>=0),'1g …and every unshipped p
 ok(plan.roadmap.filter(x=>x.status==='next').length===1 && plan.roadmap.every(x=>['shipped','next','later'].indexOf(x.status)>=0) && plan.roadmap.filter(x=>x.status!=='shipped').every(x=>x.done),'1h exactly one NEXT; every unshipped item says what done means');
 const GV=(src.match(/var GPTS_VERSION='([0-9.]+)'/)||[])[1];
 ok(plan.roadmap.find(x=>x.status==='next').v===GV,'1i the NEXT item is the running build (v'+GV+'), so the Roadmap tab marks it RUNNING',plan.roadmap.find(x=>x.status==='next').v);
-ok(plan.tabs.length===7 && plan.tabs.map(t=>t.tab).join(',')==='Dashboard,Analysis,Testing,Architecture,Roadmap,Open Items,Learn','1j the seven tabs and their roles (v15.60: Open Items · v15.62: Learn)');
+ok(plan.tabs.length===8 && plan.tabs.map(t=>t.tab).join(',')==='Dashboard,Analysis,Testing,Architecture,Roadmap,Open Items,Learn,Rec','1j the eight tabs and their roles (v15.60: Open Items · v15.62: Learn · v15.70: Rec — the final set)');
 ok(plan.rules.length>=8 && plan.rules.every(r=>r.rule && r.test),'1k every rule names the test behind it');
 
 // ---- 2 · the tabs render, with data and with a broken loop ----------------------------------------------

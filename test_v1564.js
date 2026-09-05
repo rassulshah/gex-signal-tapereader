@@ -23,7 +23,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 const face=h=>String(h).replace(/title="[^"]*"/g,'');
 
 // ---- 0 · the version and the constants -------------------------------------------------------------------------
-ok(/@version\s+15\.6[45]/.test(src) && /var GPTS_VERSION='15\.6[45]';/.test(src),'0a v15.64+ in both spots');
+ok(/@version\s+15\.(6[4-9]|[7-9]\d)/.test(src) && /var GPTS_VERSION='15\.(6[4-9]|[7-9]\d)';/.test(src),'0a v15.64+ in both spots');
 ok(/var GRID_NEW_BARS=20;/.test(src) && /var GRID_NEW_GROW_X=2;/.test(src) && /var GRID_NEW_GROW_PCT=20;/.test(src) && /var GRID_STACK_MIN_PCT=30;/.test(src) && /var GRID_STACK_MAX_PCT=40;/.test(src),'0b the calibrated constants: NEW within 20 bars, ×2 or +20%; a stack member ≥ 30%, the biggest ≥ 40%');
 ok(/var NODEBORN_KEY='gpts_nodeborn_v2';/.test(src),'0c the birth store is v2 — his day’s first-sight "births" are discarded on install');
 ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03\), 7705 \(08-28\),\s*\/\/ 7665 \(08-31\)/.test(src),'0d the constants say they are hand-set (⚖) and name the three taps the rule cannot catch — recorded, not hidden');

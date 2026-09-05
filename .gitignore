@@ -36,3 +36,8 @@ tools/gex-pull.log
 
 # (v15.64) scratch a baseline test writes at the root (test_tapeking.js)
 _harness.js
+
+# (v15.68) the GEX nightly task's log and lock - the sync task's `git add -A` must never sweep them
+tools/gex-nightly.log
+tools/gex-nightly.lock
+*.json.tmp

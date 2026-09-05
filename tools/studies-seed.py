@@ -90,7 +90,7 @@ subject("S", "SETUPS", "the patternpedia as trades: trigger · invalidation · t
     # rolls onto price. The deflection ledger (51 events on 2026-09-03) carries the node's role and the book, so S0.1–S0.4
     # read from it as it fills; the Learn tab's examples are its qualitative side (E001 R1/R2, E002 c4, E003 c1/c3, E004 c2).
     sub("S0", "King deflection — the bread-and-butter setup", "SIZE · SIDE · LEVEL",
-        [st("S0.1", "A tap of THE King (whichever book owns it): held rate, MFE10, bars held — the base row every other setup is measured against", "SIZE", "C10", "defl ledger · tap record", "THIN", "51 ledger events on 2026-09-03; the join with the King's role is the review's next job"),
+        [st("S0.1", "A tap of THE King (whichever book owns it): held rate, MFE10, bars held — the base row every other setup is measured against", "SIZE", "C10", "defl ledger · tap record", "THIN", "51 scored taps on 2026-09-03, but every `kings` join before v15.67 was empty (F-18, L-T); the old detector's King 2 held / 4 broke (thin). From v15.67 the held rate by King · SPX / SPY / QQQ reads on Testing ⑦ (patternTable) and in the nightly's `patterns`; read once at n ≥ 15", script="tools/nightly/patterns.py"),
          st("S0.2", "SPX King deflection (SPXW, the flow book): held rate and extent", "SIZE · LEVEL", "C10 C28", "defl ledger · tap record", "OPEN"),
          st("S0.3", "SPY King deflection: held rate and extent — and does it lead or lag the SPX King's?", "SIZE · SIDE", "C10 C28", "defl ledger · tap record", "OPEN"),
          st("S0.4", "QQQ King deflection: held rate and extent — the cross-book tell (K1.3)", "SIDE", "C28", "defl ledger · tap record", "OPEN"),
@@ -99,8 +99,8 @@ subject("S", "SETUPS", "the patternpedia as trades: trigger · invalidation · t
          st("S0.7", "+γ King vs −γ King deflection: same hold rate (H3 says polarity does not discriminate) — but does price return to a +γ King and run from a −γ one (L3/L5/L8)?", "SIDE · TARGET", "C8 ours", "defl ledger · tap record", "OPEN")],
         note="Tracked religiously: every King tap is a ledger row with the book, the role, the growth into the tap and the outcome; the per-book rows print a rate only at n ≥ 15 (thin below), like every rate here."),
     sub("S1", "Rug · reverse rug", "SIZE · TARGET",
-        [st("S1.1", "Rug: a rejection with acceleration — is it faster and deeper than a plain rejection (MFE10, bars to target)?", "TARGET", "C23", "tap record", "OPEN", was="S-B6"),
-         st("S1.2", "Reverse rug (the upside mirror) — same measure", "TARGET", "C23", "tap record", "OPEN"),
+        [st("S1.1", "Rug: a rejection with acceleration — is it faster and deeper than a plain rejection (MFE10, bars to target)?", "TARGET", "C23", "tap record", "OPEN", "the held rate of a tap at a rug's yellow, per book, accrues on Testing ⑦ from v15.67 (the stamp `pat.<book>.rug`); MFE10 and bars-to-target still need the tap record", script="tools/nightly/patterns.py", was="S-B6"),
+         st("S1.2", "Reverse rug (the upside mirror) — same measure", "TARGET", "C23", "tap record", "OPEN", "the held rate per book accrues on Testing ⑦ from v15.67 (`pat.<book>.rug` = rrug)", script="tools/nightly/patterns.py"),
          st("S1.3", "Rug at the King vs rug at a lesser node", "SIZE", "C23 C10", "tap record", "OPEN"),
          st("S1.4", "Rug configuration detected (rugDetect) vs Skylit's nodeType — agreement rate", "SKIP", "ours", "API · 1 call/bar", "OPEN", was="S-D6"),
          st("S1.5", "After a rug, does price return to the node (revisit within 20 bars)?", "STOP", "C6 C23", "tap record", "OPEN")]),
@@ -132,7 +132,7 @@ subject("S", "SETUPS", "the patternpedia as trades: trigger · invalidation · t
          st("S6.5", "Rollsupport read: growth mattered, pairing did not — re-read as events", "SIZE", "C21", "11d · book", "READ", "exploratory; direction only"),
          st("S6.6", "THE GROWTH WINDOW: is growth INTO the tap measured over 5, 15 or 30 minutes the better tell for the hold? (his ask 2026-09-03: \"I'm not sure about the timeframe … we should test this\")", "SIZE · TIME", "ours", "defl ledger · day files (d5 · d15 · d60 recorded per bar)", "OPEN", "the dashboard shows 15 min until this reads; the row's window follows the winner")]),
     sub("S7", "Pika cloud · cluster", "WAIT · SIZE",
-        [st("S7.1", "Does a pika cloud pin — dwell inside vs at a single node", "WAIT", "C24", "tap record", "OPEN", was="S-B11"),
+        [st("S7.1", "Does a pika cloud pin — dwell inside vs at a single node", "WAIT", "C24", "tap record", "OPEN", "the held rate of a tap inside a pika / barney stack (named or member), per book, accrues on Testing ⑦ from v15.67 (`pat.<book>.st`); dwell still needs the tap record", script="tools/nightly/patterns.py", was="S-B11"),
          st("S7.2", "Cluster mass vs held rate — does magnitude decide?", "SIZE", "C24 C1", "tap record", "OPEN"),
          st("S7.3", "clusterDetect vs Skylit's pika/barney nodeType — agreement", "SKIP", "ours", "API · 1 call/bar", "OPEN")]),
     sub("S8", "Rapid unwinding · hedge bleed · decoys", "STOP · SKIP",
@@ -322,5 +322,19 @@ for sj in S["subjects"]:
 S["counts"] = dict(studies=tot, byStatus=by)
 
 if __name__ == "__main__":
+    # (v15.68) THE NIGHTLY'S NUMBERS SURVIVE A REGENERATION: learning/results.json (tools/nightly/results.py) is merged
+    # over the seed rows it answers — result · status · by · asOf — so a review editing this seed never erases what
+    # the machine measured. The seed owns the QUESTIONS; the nightly owns the NUMBERS it can compute.
+    import os, sys
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "nightly"))
+        import results as _results
+        _rp = "learning/results.json"
+        if os.path.exists(_rp):
+            _n = _results.apply(S, json.load(io.open(_rp, encoding="utf-8")))
+            tot, by = S["counts"]["studies"], S["counts"]["byStatus"]
+            print("merged learning/results.json ·", _n, "rows carry the nightly's numbers")
+    except Exception as e:
+        print("results merge skipped:", e)
     io.open("learning/studies.json", "w", encoding="utf-8").write(json.dumps(S, ensure_ascii=False, indent=1))
     print("wrote learning/studies.json ·", tot, "studies ·", by)

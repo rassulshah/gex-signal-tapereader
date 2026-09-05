@@ -1,6 +1,22 @@
 {
  "schema": 1,
  "written": "2026-09-04",
+ "process": {
+  "name": "the Data Analysis process",
+  "doc": "design/DATA-ANALYSIS-PROCESS.md",
+  "named": "2026-09-04",
+  "links": [
+   "CAPTURE",
+   "ANALYSIS",
+   "TESTING",
+   "LEARNING",
+   "REC",
+   "DASHBOARD",
+   "SCORE"
+  ],
+  "his": "just click on the save button once a day probably eod, and from that point on you take over from data, analysis, testing, learning all the way to the Rec tab",
+  "then": "(v15.71) \"automatically have the application trigger the save button instead of me clicking it\" — the panel saves the day itself after the close and any missed day outside market hours; the 💾 is the override"
+ },
  "objective": {
   "one": "Find the day's HOD and LOD early enough to trade the move between them; secondarily, find the pullback turning points that resume a trend rather than end it.",
   "mechanism": "A gamma node deflects price, and the deflection IS the turning point.",
@@ -57,6 +73,11 @@
    "tab": "Learn",
    "role": "TEACH",
    "line": "the deflection learning doc: your screenshots, my blind calls, what the record says, the rules, and the 0–100 gauge"
+  },
+  {
+   "tab": "Rec",
+   "role": "DECIDE",
+   "line": "(v15.70) proposals to you from the nightly (pre-registered conditions) and the review, with their evidence; your ✓ / ✗ rides the next day file; nothing on the face changes except through here"
   }
  ],
  "stages": [
@@ -64,16 +85,16 @@
    "n": 1,
    "id": "RECORD",
    "who": "browser",
-   "what": "every bar's book and price (snaps), every tap (defl), every scored feature (feat), what he asked to track (requests), his issues, questions and enhancement requests (items)",
-   "writes": "recorder store · IDB",
+   "what": "every bar's book and price (snaps), the WHOLE tape every bar for SPXW · SPY · QQQ · VIX (v15.66), every tap (defl), every scored feature (feat), what he asked to track (requests), his issues, questions and enhancement requests (items)",
+   "writes": "recorder store · IDB (snaps, tape, defl, feat)",
    "probe": "rec"
   },
   {
    "n": 2,
    "id": "EXPORT",
    "who": "browser",
-   "what": "he clicks 💾 Save at the close — the ONE manual step of the day; the panel writes data/<day>.json into the repo folder picked with 📁 (pick the data folder)",
-   "writes": "data/<day>.json",
+   "what": "(v15.71) the panel writes the day itself: after the close (15:01 CT, then every 10 minutes until the file is confirmed in the repo folder) and, outside market hours, any earlier day still in IndexedDB with bars and no file (write-if-absent); data/<day>.json and (v15.66) the tape files data/tape/<day>/<BOOK>.json go into the folder picked once with 📁; the 💾 is the override and the one click Chrome may need for the folder permission after a reload (choose Allow on every visit once) — the footer chip says 💾 DUE when that click is needed",
+   "writes": "data/<day>.json · data/tape/<day>/",
    "probe": "saved"
   },
   {
@@ -87,17 +108,17 @@
   {
    "n": 4,
    "id": "NIGHTLY",
-   "who": "cloud",
-   "what": "Claude pulls the day file over the desktop bridge (or from GitHub after the sync), runs tools/nightly/run.py — verdicts per hypothesis (read ONCE at minN), the tables refreshed, TRACK requests and open items copied, the log written — and writes the results back into the repo folder over the bridge; no other model, no API",
-   "writes": "learning/log/<day>.json · SWEEPS*.json · requests.json · items.json",
+   "who": "his machine (the GEX nightly task) · the cloud",
+   "what": "(v15.68) the 'GEX nightly' task on his machine, every 10 minutes, hidden: when the day file (the panel's after-close write, or his 💾) is newer than its log it runs tools/nightly/run.py — verdicts per hypothesis (read ONCE at minN), the pattern table, the tape coverage, the tables refreshed, TRACK requests and open items copied, the log written, and the study registry patched with every number the log can answer (tools/nightly/results.py → learning/results.json + studies.json) — and the sync task pushes it; the cloud runs the same script when I am in a session; no other model, no API",
+   "writes": "learning/log/<day>.json · results.json · studies.json (patched) · SWEEPS*.json · requests.json · items.json",
    "probe": "nightly"
   },
   {
    "n": 5,
    "id": "REVIEW",
    "who": "cloud (LLM)",
-   "what": "a READ becomes a hypothesis (predict + refuteIf fixed before the data), a request becomes a study row, an issue/question/enhancement gets its answer in items.json, a refuted rule retires, a taught screenshot becomes a learning example with the record's numbers (tools/node-lookup.py) and a rule L-n, FINDINGS written",
-   "writes": "register.json · studies.json · items.json · deflections/examples.json · FINDINGS.md",
+   "what": "a READ becomes a hypothesis (predict + refuteIf fixed before the data), a request becomes a study row, an issue/question/enhancement gets its answer in items.json, a refuted rule retires, a taught screenshot becomes a learning example with the record's numbers (tools/node-lookup.py) and a rule L-n, FINDINGS written — and (v15.70) the review's recommendations go onto the Rec tab (tools/rec-seed.py) beside the nightly's, for his ✓ / ✗",
+   "writes": "register.json · studies.json · items.json · deflections/examples.json · recommendations.json · FINDINGS.md",
    "probe": "review"
   },
   {
@@ -112,8 +133,8 @@
    "n": 7,
    "id": "BUILD",
    "who": "cloud",
-   "what": "code + mutation-tested assertions + docs + chat history; the installer carries EVERY file the panel fetches",
-   "writes": "installvNNNN.bat",
+   "what": "what he APPROVED on Rec, and nothing else on the face: code + mutation-tested assertions + docs + chat history; the installer carries EVERY file the panel fetches; the build marks the Rec row IMPLEMENTED with its version",
+   "writes": "installvNNNN.bat · recommendations.json (implemented)",
    "probe": "suite"
   },
   {
@@ -277,59 +298,284 @@
    "v": "15.65",
    "title": "the PATTERN columns — one per book (SPX · SPY · QQQ): a PIKA / BARNEY block in black on yellow / purple with the book's own strikes in yellow under it, RUG / RRUG blocks, a SPY / QQQ pattern off its King placed on the ladder row nearest its converted price; the NOW row in a white hue; the three Kings in their own colours (SPX orange · SPY blue · QQQ cyan) so no King shares a node colour; the heatmap claim in the brain",
    "serves": "HOD/LOD · PULLBACK · reading the three books' shapes at a glance",
-   "status": "next",
+   "status": "shipped",
+   "date": "2026-09-04",
    "done": "a SPY or QQQ stack that does not sit on its King is visible on the ladder, and the render of 2026-08-28 13:12 shows every pattern in its book's column"
   },
   {
    "v": "15.66",
+   "title": "THE TAPE — the whole book, every closed bar, every market: SPXW's full velocity table (all ~286 strikes, Skylit's dollars and d5/d15/d60/d1d) and the whole Trinity ladders for SPY · QQQ · VIX (every strike as %King + the King's $K), captured into IndexedDB during the day and written ONCE at the close beside the day file as data/tape/<day>/<BOOK>.json; a captured day never written is written on the next boot or 💾; tools/nightly/tape.py reads it and run.py logs the coverage",
+   "serves": "the end-of-day review on the WHOLE day — SPY/QQQ patterns scorable, NEW on SPY/QQQ, Q11's dollar axis",
+   "status": "shipped",
+   "date": "2026-09-04",
+   "done": "the first session's data/tape/<day>/ holds four files with ~130 bars each, SPXW at ~280 strikes and SPY/QQQ at ~100, and the nightly log carries their coverage"
+  },
+  {
+   "v": "15.67",
+   "title": "SCORE THE SETUPS AND PATTERNS — every tap in the deflection ledger is stamped at the moment of the tap with the patterns as the face defines them (per book: PIKA / BARNEY stack, named or member; RUG / RRUG; the King by book; gate; NEW; growth into the tap; floor / ceiling) and scored 30 minutes later; the held rate by setup × book with its n and Wilson bound on the Testing tab (⑦ THE PATTERNS) live, and from the nightly across every recorded day (tools/nightly/patterns.py → the log) · the complete architecture on the ⚙ tab and in design/ARCHITECTURE.md (components, integrations — Skylit, InsiderFinance, Yahoo, ForexFactory, GitHub — the daily HOD/LOD statistics pipeline, storage)",
+   "serves": "PULLBACK · HOD/LOD · 'score these setups and patterns to get proper probabilities and insights'",
+   "status": "shipped",
+   "date": "2026-09-04",
+   "done": "a held rate with n ≥ 15 renders for at least one pattern class on the Testing tab and in a nightly log, and the architecture document names every integration with its cadence and its key"
+  },
+  {
+   "v": "15.68",
+   "title": "THE LOOP CLOSES ON THE CLICK — his 💾 is the only manual step: the 'GEX nightly' Windows task (setup-gex-nightly.bat, run once) runs the nightly on his machine within 10 minutes of the save (tick.py: only when the day file is newer than its log), the nightly writes the Analysis tab's registry itself (results.py: every study whose number the log can answer — the King by book, the rugs, the stacks, the register's verdicts — result · status · by the nightly · asOf; a thin row keeps the review's sentence and shows the count so far), the sync pushes it, the panel re-fetches the registry on its 10-minute check; the log says where it ran",
+   "serves": "the loop closes without a session — 'clicking on the save, the data getting saved and the analysis occurring and the analysis tab being updated'",
+   "status": "shipped",
+   "date": "2026-09-04",
+   "done": "a 💾 on his machine is followed, with no session open, by a log with ranOn 'his machine' on GitHub and an Analysis-tab row tagged 'by the nightly' with that day's date"
+  },
+  {
+   "v": "15.69",
+   "title": "THE OBJECTIVE OUTCOMES — every tap scored, from the day's own bars, on the two decisions PURPOSE names: TURN (the tap's extreme within 0.50 SPY of the session's HOD / LOD — the node WAS the turn) and RESUME (a new session extreme after the tap — the pullback ended, stay in), first tap per node per day; beside held on the nightly's pattern table and in the Analysis rows' lines · the Learn tab's rules carry THE RECORD: each rule that names a class gets the ledger's numbers for it and a verdict — agrees / contradicts at n ≥ 15 on both sides, thin until then, not measured where the ledger has no class yet (L3 / L8 the King path, L4 the side flip, L7 the clock); the seed merges it so a review never erases it",
+   "serves": "PULLBACK · HOD/LOD — 'the entire data, analysis and testing process results in learning'",
+   "status": "shipped",
+   "date": "2026-09-04",
+   "done": "a class reads turn and resume at n ≥ 15 in a nightly log, and a Learn rule shows agrees or contradicts from the record"
+  },
+  {
+   "v": "15.70",
+   "title": "💡 REC — the eighth and last tab: proposals TO him from the nightly (pre-registered conditions: a class clear of the base at n ≥ 15, a Learn rule the record contradicts, a hypothesis cleared) and from the review (tools/rec-seed.py), each with what it changes and its evidence; his ✓ / ✗ saved at once and riding the next day file (`reco`), the nightly setting the row's status; withdrawn when the record stops supporting it; nothing on the face changes except through here · THE DATA ANALYSIS PROCESS named and written (design/DATA-ANALYSIS-PROCESS.md: the seven links, the degrees of knowledge, the ten rules, the eight tabs) and pinned by a test · learning/markets.json — every market-specific number in one place, gold as a configuration entry when a gamma book exists",
+   "serves": "'from that point on you take over from data, analysis, testing, learning all the way to the Rec tab, which is where we will discuss what to implement'",
+   "status": "shipped",
+   "date": "2026-09-04",
+   "done": "a ✓ on his panel reaches learning/recommendations.json as status approved after the next 💾 with no session open, and a fresh context's load names the seven links from the file"
+  },
+  {
+   "v": "15.71",
+   "title": "THE SAVE RUNS ITSELF — no click at the close: after the close (15:01 CT and later, no upper bound) any tick that finds the day not confirmed in the repo folder writes it and retries every 10 minutes until it lands; outside market hours every earlier day still in IndexedDB with bars and no file is written, write-if-absent, and marked once; saved means confirmed in the folder and nothing else (the silent download fallback is gone); the 💾 becomes a chip — saved · pending · DUE — and its click carries the folder permission inside the gesture (Chrome 122+ offers Allow on every visit there), so after one such click no rule ever needs him again; a day with no recorded bars is never written on any path",
+   "serves": "'automatically have the application trigger the save button instead of me clicking it' — the Data Analysis process with zero steps at the close",
+   "status": "next",
+   "done": "a weekday closes with the Atlas tab open and no click, and data/<day>.json with writtenBy auto is on GitHub within ~12 minutes, followed by the nightly's log; a day left unsaved is on GitHub the next morning with writtenBy late"
+  },
+  {
+   "v": "15.72",
    "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join",
    "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'",
    "status": "later",
    "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"
   },
   {
-   "v": "15.67",
+   "v": "15.73",
    "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured",
    "serves": "HOD/LOD · the loop closes",
    "status": "later",
    "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"
   },
   {
-   "v": "15.68",
+   "v": "15.74",
    "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme",
    "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6",
    "status": "later",
    "done": "40 taps recorded and the first F-study reads from them with n"
   },
   {
-   "v": "15.69",
+   "v": "15.75",
    "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study",
    "serves": "the loop closes on its own",
    "status": "later",
    "done": "a study changes status without a human editing the seed"
   },
   {
-   "v": "15.70",
+   "v": "15.76",
    "title": "one definitions file (Python + panel) · the shipped-artifact test",
    "serves": "hardening",
    "status": "later",
    "done": "changing a bin in one place fails the suite until the other side follows"
   },
   {
-   "v": "15.71",
+   "v": "15.77",
    "title": "the face manifest — every number on the face names its study, pinned by a test",
    "serves": "data-driven, enforced",
    "status": "later",
    "done": "a new number on the face without a study fails the suite"
   },
   {
-   "v": "15.72",
+   "v": "15.78",
    "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move",
    "serves": "PULLBACK",
    "status": "later",
    "done": "a resume rate with n renders on a tier-3 READ line"
   }
  ],
+ "system": {
+  "components": [
+   {
+    "id": "panel",
+    "name": "THE PANEL — current/gex-signal-tapereader.user.js",
+    "where": "Tampermonkey on app.skylit.ai/atlas, @grant none (same-origin only: it can read the page and localStorage, fetch raw.githubusercontent.com, and nothing else)",
+    "does": "reads Skylit's tape and Trinity panes off the DOM and the gex/levels feed, builds the ladder (nodes · NEW · ⇄ ROLL · ▲ GROWTH · PATTERN per book · the King zone), ⓪a (HOD/LOD read, SWEPT), records every bar and every tap, exports the day, renders the seven tabs",
+    "cadence": "a tick every few seconds; one record per closed 3-minute bar",
+    "owner": "browser"
+   },
+   {
+    "id": "companion",
+    "name": "THE COMPANION — current/gex-if-levels.user.js (v1.18)",
+    "where": "Tampermonkey, GM_xmlhttpRequest (the only participant that may fetch cross-origin)",
+    "does": "the couriers: the InsiderFinance chain and levels, the Yahoo 1-minute bars (ES full Globex · NQ · GC · CL), VIX daily, the ForexFactory calendar, and the base-rate tables from GitHub — each dropped into a localStorage key the panel reads",
+    "cadence": "IF every 5 min · bars every 5 min in RTH, hourly off-hours (range=5d, so every poll backfills) · VIX every 12 h",
+    "owner": "browser"
+   },
+   {
+    "id": "store",
+    "name": "THE STORES — localStorage + IndexedDB (gpts_repo_v1, db v4)",
+    "where": "the browser profile",
+    "does": "localStorage: config, the day's recorder, node events, the courier drops (10 MB quota, bounded writes, F-10); IndexedDB: snaps · tape (v15.66) · defl · feat · kv (the folder handles)",
+    "cadence": "per bar",
+    "owner": "browser"
+   },
+   {
+    "id": "dayfile",
+    "name": "THE DAY FILE — data/<day>.json (+ data/tape/<day>/<BOOK>.json from v15.66)",
+    "where": "his repo folder, written by the panel (v15.71: itself, after the close; the 💾 as override) through the File System Access API into the folder picked with 📁",
+    "does": "everything the browser recorded: snaps per bar (book, price, levels, IF chain, trinity, velocity, futBars), node events, the deflection ledger, features, requests, items — and the whole tape per market",
+    "cadence": "after the close, by the panel (15:01 CT, retried every 10 min until confirmed); a missed day outside market hours; the 💾 any time",
+    "owner": "browser → his disk"
+   },
+   {
+    "id": "sync",
+    "name": "THE COURIERS TO GIT — tools/gex-sync.bat (task 'GEX sync') · installvNNNN.bat · the desktop bridge",
+    "where": "his machine (the cloud can fetch, never push)",
+    "does": "the sync task commits and pushes anything new every 2 minutes — the day file and the tape files the panel wrote after the close (or his 💾), the log and the registry the GEX nightly task wrote, the review's files written over the bridge; the installer carries a build (every file the panel fetches) and pushes it; the bridge writes the cloud's results straight into the repo folder when the session is linked",
+    "cadence": "2 min · per build · per session",
+    "owner": "his machine"
+   },
+   {
+    "id": "nightly",
+    "name": "THE NIGHTLY — tools/nightly/run.py (+ tick.py, patterns.py, results.py, tape.py)",
+    "where": "his machine — the 'GEX nightly' Windows task (setup-gex-nightly.bat → tools/gex-nightly.bat, hidden, every 10 minutes; tick.py runs it only when the newest day file is newer than its log; Python 3 on the PATH) — and the cloud when I am in a session; no other model, no API",
+    "does": "reads the register and every day file: verdicts per hypothesis read ONCE at minN, the pattern table (held rate by setup × book, and from v15.69 the objective outcomes turn / resume from the day's own bars), the tape coverage, the refreshed sweep tables, new TRACK requests and items copied; writes learning/log/<day>.json (ranOn: his machine / cloud) and then the study registry — every study whose number the log can answer gets it (results.py → learning/results.json, studies.json patched in place: result · status · by:'nightly' · asOf; a thin row keeps the review's sentence and shows the count so far) and the Learn tab's rules (each rule's class, its numbers, the record's verdict — agrees / contradicts / thin)",
+    "cadence": "within ~10 minutes of the day file (the task); the sync pushes it ≤ 2 minutes later; the panel re-fetches the registry and the log on its 10-minute check or a reload",
+    "owner": "his machine · cloud"
+   },
+   {
+    "id": "review",
+    "name": "THE REVIEW — the LLM over the nightly's output",
+    "where": "the cloud, in a session (the one part of the loop that still waits for one)",
+    "does": "a READ becomes a hypothesis (predict + refuteIf before the data), a request a study row, an item its answer, a taught screenshot a learning example checked against the record, FINDINGS written, the registry's QUESTIONS and the roadmap updated (the NUMBERS are the nightly's from v15.68 — studies-seed.py merges learning/results.json so a review never erases them), the build shipped",
+    "cadence": "per session",
+    "owner": "cloud"
+   },
+   {
+    "id": "corpus",
+    "name": "THE CORPORA — data/es-1min/ (ES 284 sessions · NQ 188) + data/futures/<SYM>/ (the daily tap, created on the first append)",
+    "where": "the repo",
+    "does": "the static exports the HOD/LOD tables were built on, growing by one file per session from the courier's bars (tools/append-futures.py)",
+    "cadence": "daily",
+    "owner": "repo"
+   },
+   {
+    "id": "tests",
+    "name": "THE SUITE — test_*.js (145 files) · tools/run-tests.sh · tools/smoke.js · tools/render-face.js",
+    "where": "the cloud before every build; his machine after an install",
+    "does": "executes the panel's functions with fixtures (never grep where it can run), mutation-tested; the smoke loads the whole script; the render draws the shipped face on a recorded day in Chromium",
+    "cadence": "every build",
+    "owner": "cloud"
+   }
+  ],
+  "integrations": [
+   {
+    "id": "skylit",
+    "name": "Skylit Atlas (the page)",
+    "how": "DOM + the page's own gex/levels feed (installFeedObserver)",
+    "what": "the SPXW tape (strike, %King, the King's $K), the velocity table (every strike's size and d5/d15/d60/d1d for today's expiry), the Trinity panes (SPY · QQQ · SPXW · VIX: 100 strikes as %King + the King's $K), the headers (prices), the chart's 3-minute candles",
+    "keys": "LASTFEED · VEL · TAPE_CACHE · LADDER_CACHE",
+    "notes": "the panel runs ONLY on /atlas*; never open a second /atlas tab; the required chart posture is RTH · READ AS %King · VELOCITY All · LOW NODES never Hide (SKYLIT-FEEDS.md)"
+   },
+   {
+    "id": "if",
+    "name": "InsiderFinance (the second book — STRUCTURE)",
+    "how": "the companion, GM_xmlhttpRequest to insiderfinance.io/gamma-exposure, every 5 min",
+    "what": "the SPX / SPY / QQQ option chains (open interest × gamma per strike) in three windows — dte0 · toFri · all — and the levels the panel names: CW / PW (call and put walls), CW0 / PW0 (0DTE walls), FLIP, Mag / HVL, the expected-move band (emBand) that the ladder's scale is built on (ifLadder: dispScale, px, undPx)",
+    "keys": "gpts_if_chain_v1 → ifChain() · ifLadder() · gLevels()",
+    "notes": "STOCK, refreshed once a day at the source; never averaged with Skylit's FLOW; every number carries its book, window and scale (INSIDERFINANCE.md — four phantom bugs came from mixing them)"
+   },
+   {
+    "id": "yahoo",
+    "name": "Yahoo Finance (price bars)",
+    "how": "the companion only (the panel is @grant none and never touches Yahoo — test_futbars f30): Yahoo's v8 chart endpoint, <SYM>=F?interval=1m&range=5d — every 5 min in RTH, hourly off-hours; ^VIX interval=1d&range=2y every 12 h",
+    "what": "ES (the whole Globex day, so ONH/ONL are the real overnight 17:00→08:29 CT), NQ, GC, CL 1-minute bars; VIX daily closes",
+    "keys": "gpts_futbars_v1 → futBarsLoad() (the day file's futBars) · gpts_vix_daily_v1",
+    "notes": "1-minute history is ≤ 7 days at the source — a gap longer than that can never be recovered; the day file carries the bars so the corpus grows even when the courier missed a poll"
+   },
+   {
+    "id": "ff",
+    "name": "ForexFactory (the calendar)",
+    "how": "the companion",
+    "what": "the day's economic events, for the event tag and the calendar context (X2)",
+    "keys": "gpts_evcal_v1",
+    "notes": "context only; never a direction vote"
+   },
+   {
+    "id": "github",
+    "name": "GitHub raw (the repo, read back)",
+    "how": "the panel's own fetch (raw.githubusercontent.com is CORS-open) and the companion for the two base-rate tables",
+    "what": "learning/log/<day>.json (the nightly), studies.json · register.json · plan.json · items.json · requests.json · deflections/examples.json · suite.json (the tabs), review/<day>.json, data/es-1min/BASERATES.json + FARSIDE.json (couriered into gpts_hodlod_base_v1 / gpts_farside_v1 and VALIDATED before use)",
+    "keys": "pipeFetch() · the *_SEED copies in the script render before the first fetch",
+    "notes": "raw is CDN-cached ~5 minutes; every file the panel fetches rides the installer (test_installer_manifest)"
+   }
+  ],
+  "hodlod": {
+   "title": "THE HOD/LOD STATISTICS, DAILY — from Yahoo bars to the ⓪a line",
+   "steps": [
+    "① the companion fetches ES 1-minute bars (full Globex) every 5 minutes in RTH → gpts_futbars_v1",
+    "② the panel carries them in the day file (futBars) → the after-close write (v15.71; the 💾 as override) → the sync task → GitHub",
+    "③ tools/append-futures.py writes data/futures/ES/<day>.csv — the corpus grows by one session a day beside the static 284-session export (data/es-1min/)",
+    "④ tools/study-hodlod.py re-derives BASERATES.json: the first-extreme and second-extreme clocks, the LOD-first share, the gap, the range, the wick family (trimmed means, no-wick days and Tukey outliers excluded), and the lookup table itself — 8 posr rows × 7 forty-five-minute blocks (9:15–13:45 CT), 284 sessions, 38,054 observations, AUC 0.879 (a 5-feature logistic scored the same 0.8795, so the table ships: F-5); every cell carries its n and a cell under 25 observations is never shown",
+    "⑤ tools/study-farside.py writes FARSIDE.json (does the far side trade before the close × when — validated ≥ 120 sessions, every rated cell n ≥ 60, monotone); tools/study-sweeps.py writes SWEEPS.json / SWEEPS-BOOK.json (which swept level printed the extreme — by flush, clock and speed, not by name: F-14/F-16)",
+    "⑥ the companion couriers BASERATES.json and FARSIDE.json into gpts_hodlod_base_v1 / gpts_farside_v1, validated before use; the panel fetches SWEEPS*.json itself",
+    "⑦ live, ⓪a reads today's bars (measureBars: the chart live, the frames in replay): posr (how far price has travelled off the extreme) × the clock → the table cell → 'HOD IN 84%' / 'LOD after 11:02 — 80%' (the one-sided floor from FARSIDE), the SWEPT line (names only; the rates in the hover)",
+    "⑧ what THE READ said is written to the day file and scored at the close (stage ⑪; the live scorer can fail — F-11); the decision rates on the face are the corrected ones: IN 63% (n=284, F-12), NOT-IN 85% (n=230, F-11/F-12) — never the withdrawn 92%"
+   ]
+  },
+  "storage": [
+   {
+    "key": "gpts_cfg_v8",
+    "what": "the gear: thresholds, toggles (ladderGrid, dayRead, motion), the growth window"
+   },
+   {
+    "key": "gpts_recorder_v7",
+    "what": "today's recorder: snaps, events, the deflection ledger (defl), features — bounded to 3.6 MB, evicted oldest-day-first; mirrored to IndexedDB"
+   },
+   {
+    "key": "gpts_nodeevents_v1",
+    "what": "node events (ACCUM · ROLL · taps with their why-vector and three outcomes) — bounded to 1.2 MB"
+   },
+   {
+    "key": "gpts_nodeborn_v2",
+    "what": "the day's births and the below-set for NEW"
+   },
+   {
+    "key": "gpts_futbars_v1 · gpts_vix_daily_v1 · gpts_if_chain_v1 · gpts_evcal_v1 · gpts_hodlod_base_v1 · gpts_farside_v1",
+    "what": "the courier drops (companion → panel)"
+   },
+   {
+    "key": "gpts_items_v1 · gpts_requests_v1 · gpts_lastbook_v1",
+    "what": "his items and TRACK requests until the day export copies them; the close-of-session book"
+   },
+   {
+    "key": "IndexedDB gpts_repo_v1 (v4): snaps · tape · defl · feat · kv",
+    "what": "every bar of every day (snaps), the whole tape per bar per book (tape, 5 days retained; the files are the record), every tap (defl, the ledger H5 waits on), resolved features, the folder handles (dataDir, irtDir)"
+   },
+   {
+    "key": "learning/results.json → learning/studies.json (patched)",
+    "what": "(v15.68) the nightly's numbers by study id, and the registry the Analysis tab renders with them applied — result · status · by:'nightly' · asOf on the rows the nightly can answer; `nightly` (the count so far) on the rows it is still counting toward"
+   },
+   {
+    "key": "learning/recommendations.json · gpts_rec_v1 · gpts_reco_v1 · the day file's `reco`",
+    "what": "(v15.70) the Rec tab: the file (the nightly's and the review's rows with their status), its fetched copy, his ✓ / ✗ on this machine, and the decisions riding the day file to the nightly"
+   },
+   {
+    "key": "learning/markets.json",
+    "what": "(v15.70) every market-specific number in one place — books, chart, bar length, the tolerances, the corpus — SPY live; NQ · GC · CL price only"
+   },
+   {
+    "key": "data/<day>.json · data/tape/<day>/ · learning/* · review/*",
+    "what": "the repo — the one source of truth; the cloud clones it, the panel fetches from it, the installer and the sync task push to it"
+   }
+  ]
+ },
  "decisionsHis": [
   "the Skylit API backfill (~15–20k credits): years of taps in an afternoon — unblocks most OPEN studies",
   "NQ 1-minute beside ES for D5 (cross-book lead)",

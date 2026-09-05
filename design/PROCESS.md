@@ -9,6 +9,16 @@
 > Registered in `skills/gex/SKILL.md` (1a-00b) and pinned by `test_process.js`. A context that skips
 > it fails the suite. **Read PURPOSE first, then this, before proposing, prioritising or cutting anything.**
 
+> **THE PROCESS HAS A NAME: the Data Analysis process — `design/DATA-ANALYSIS-PROCESS.md` (2026-09-04).** Its seven links —
+> CAPTURE → ANALYSIS → TESTING → LEARNING → REC → DASHBOARD → SCORE — are the structure; the eleven stages below are how
+> the machinery runs them, night by night. Since v15.71 there is no manual step at the close — the panel writes the day
+> itself (after the close, and any missed day outside market hours); the 💾 is the override. His ✓ on the Rec tab is the
+> only path to the face.
+
+> **The complete architecture — every component, integration (Skylit · InsiderFinance · Yahoo · ForexFactory · GitHub),
+> the daily HOD/LOD statistics pipeline and every storage key — is `design/ARCHITECTURE.md`** (v15.67, generated from
+> `tools/plan-seed.py`, the same data the ⚙ Architecture tab renders as ⑥–⑨). This file is the LOOP.
+
 ## 0 · The WHAT, in one line (from PURPOSE.md)
 
 Find the day's HOD and LOD early enough to trade the move between them; secondarily find the
@@ -21,20 +31,38 @@ tap, what the measurements support — with n, or "unmeasured".
 ```
  ①  RECORD   the panel records every bar's book and price (snaps), every tap (defl ledger), every
              scored feature (feat) and what he asked to be tracked (requests)          ← the browser
- ②  EXPORT   he clicks 💾 Save at the close — THE ONE MANUAL STEP OF THE DAY; the panel writes
-             data/<day>.json into the folder picked with 📁 (pick the DATA folder)              ← the browser
+ ②  EXPORT   (v15.71) THE PANEL WRITES THE DAY ITSELF — rule 1+2: after the close (15:01 CT and
+             later, weekdays, no upper bound) any tick that finds the day not confirmed in the repo
+             folder writes it and retries every 10 minutes until it lands; rule 3: outside market
+             hours (before 08:30, after 15:00, weekends) every earlier day still in IndexedDB with
+             bars and no file is written, WRITE-IF-ABSENT, and marked once (kv dayWritten:<day>).
+             It writes data/<day>.json AND (v15.66) the tape — data/tape/<day>/SPXW·SPY·QQQ·VIX.json,
+             the whole book every bar — into the folder picked once with 📁 (pick the DATA folder).
+             SAVED means confirmed in that folder and nothing else: the silent download fallback is
+             gone. A timer may ASK Chrome for the grant, never REQUEST it (v14.53), so when the grant
+             is missing the footer's 💾 turns into DUE and his one click carries the permission inside
+             the gesture — where Chrome 122+ offers "Allow on every visit"; chosen once, no rule ever
+             needs him again. The 💾 remains as the override. A day with no recorded bars is never
+             written on any path (the 08-29 / 08-30 weekend files were the old auto-export's).   ← the browser
  ③  PUSH     the GEX sync task (tools/gex-sync.bat, a Windows task every 2 minutes, installed
              2026-09-03 by setup-gex-sync.bat) commits and pushes ANYTHING new in the repo: the
              day file, the review's files written over the desktop bridge, a Drive drop. The old
              daily "data: daily export" task still runs at ~15:30. The cloud can fetch, never push  ← his machine
- ④  NIGHTLY  Claude (no other model, no API): pulls the day file over the desktop bridge when his
-             app is linked (mcp__remote-devices, folder C:\Dev\gex-signal-tapereader) or from GitHub
-             after the sync; runs tools/nightly/run.py, which reads every day file + the register:
-             verdicts per hypothesis (read ONCE at minN, sessions from the register date),
-             refreshes the tables (SWEEPS.json, SWEEPS-BOOK.json, BASERATES.json),
-             copies TRACK requests into learning/requests.json, writes learning/log/<day>.json;
-             then writes the log and the tables BACK INTO HIS REPO FOLDER over the bridge
-             (device_commit_files) — the sync pushes them within two minutes; no installer needed  ← the cloud
+ ④  NIGHTLY  (v15.68) HIS MACHINE — the "GEX nightly" Windows task (setup-gex-nightly.bat, run once):
+             every 10 minutes, hidden, tools\gex-nightly.bat → tools/nightly/tick.py, which runs the nightly
+             ONLY when the newest data/<day>.json is newer than learning/log/<day>.json — i.e. within ~10
+             minutes of the day file's write — the panel's own after the close, or his 💾 — once (a
+             second write earns one more run; nothing new → exit 3, silent).
+             TRIGGER: the day file's mtime. If the task is not installed or python is missing, this stage
+             does NOT happen and the ⚙ tab's NIGHTLY box stays red — it never silently waits for a session.
+             tools/nightly/run.py reads every day file + the register: verdicts per hypothesis (read ONCE
+             at minN, sessions from the register date), the pattern table (patterns.py), the tape coverage
+             (tape.py), the refreshed tables (SWEEPS.json, SWEEPS-BOOK.json), TRACK requests and items
+             copied, learning/log/<day>.json written (ranOn: his machine / cloud) — and then THE REGISTRY:
+             results.py writes every study whose number the log can answer into learning/results.json and
+             learning/studies.json (result · status · by:'nightly' · asOf; a thin row keeps the review's
+             sentence and shows the count so far). The sync task pushes it all within two minutes.
+             The cloud runs the same script when I am in a session (over the desktop bridge, or from GitHub).
  ⑤  REVIEW   Claude reads the log, the tables, the requests and the day file; turns a READ into a
              register row (predict + refuteIf fixed BEFORE the next session), a request into a study
              row (studies.json, req:<id>), a refuted rule into a retirement; writes FINDINGS      ← the cloud
@@ -139,18 +167,29 @@ wait for the next installer. Either way the cloud's git history never reaches Gi
 8. **Data-quality checks on the face**: courier age, ratio drift, gaps in the ES bars, the book's
    age — a store that is stale says so beside the number it feeds.
 
-## 5b · The end of day, as it runs now (2026-09-03)
+## 5b · The end of day, as it runs now (2026-09-04, v15.71: no click — the panel saves the day itself)
 
 ```
- 15:05 CT   he clicks 💾 Save                                   → data/<day>.json in the repo folder
- +2 min     the GEX sync task commits + pushes it                → GitHub
- evening    Claude: bridge (or fetch) → run.py → the review → writes the log, the tables, the brain
-            into his repo folder over the bridge                → the sync pushes within 2 min
- morning    the panel fetches the log, the tables, the registry, the plan, the brain from GitHub raw
+ 15:01 CT   the panel writes the day itself (rule 1+2; retried every 10 min until confirmed; the 💾 is the override)
+                                                               → data/<day>.json + data/tape/<day>/ in the repo folder
+ +2 min     the GEX sync task commits + pushes them              → GitHub
+ ≤ +10 min  the GEX nightly task (his machine) sees the day file newer than its log → tick.py → run.py
+            → learning/log/<day>.json (ranOn 'his machine'), the pattern table, the tables, and the
+            registry: results.py → learning/results.json + studies.json (the Analysis tab's rows)
+ +2 min     the sync pushes those                                → GitHub
+ ≤ +10 min  the panel's pipeline check re-fetches the log and the registry (or a reload does) — the
+            ⚙ tab's NIGHTLY box says "ran on his machine", Analysis rows read "by the nightly, <day>"
+ a session  Claude: the review — a READ into a hypothesis, items answered, FINDINGS, the seed's questions
+            (studies-seed.py merges results.json: the machine's numbers survive) → over the bridge → pushed
 ```
 His words: *"from now on i will just click the save button end of day and you can take care of everything
-else."* A scheduled task for the review session (his time of day) is the one piece still to set; until
-then "nightly review" in a session does it. Today's stray: 💾 with the REPO root picked writes
+else."*, (2026-09-04) *"i envision clicking on the save, the data getting saved and the analysis occurring
+and the analysis tab being updated."*, and then (2026-09-04, v15.71) *"the next step is to automatically have
+the application trigger the save button instead of me clicking it … instead of 5pm can you just modify so it
+is after market hours."* A day the tab was closed before 15:01 is written the next time the panel is open
+outside market hours (rule 3) — the next morning, pre-market, so the nightly has run before the open. The
+mechanical half now runs without a session OR a click; the review is the one
+piece that still waits for one (a scheduled cloud session, bound to his computer, is the candidate). Today's stray: 💾 with the REPO root picked writes
 `<root>\<day>.json` — pick the `data` folder (v15.63 makes the panel write into `data\` under either).
 
 ## 6 · The standing process constraints (operator-mandated)

@@ -277,6 +277,8 @@ def md():
     L.append("")
     for r in RULES:
         L.append("- **%s · %s (n=%d: %d agree · %d weak · %d refute; from %s).** %s *%s*" % (r["id"], r["status"], r["n"], r.get("agree", 0), r.get("weak", 0), r.get("refute", 0), ", ".join(r["from"]), r["rule"], r.get("note", "")))
+        if r.get("verdict"):
+            L.append("  - the record (nightly %s): **%s** — %s" % (r.get("asOf") or "?", r["verdict"], r.get("evidence") or ""))
     L.append("")
     L.append("## 4 · The examples")
     L.append("")
@@ -320,6 +322,20 @@ def md():
 
 if __name__ == "__main__":
     os.makedirs("learning/deflections/img", exist_ok=True)
+    # (v15.69) THE RECORD'S VERDICT ON EACH RULE SURVIVES A REGENERATION: learning/results.json (tools/nightly/results.py)
+    # carries `rules` — evidence · verdict · asOf per rule — merged over the seed's rules here, so a review editing this
+    # seed never erases what the machine measured. The seed owns the rule and its taught legs; the nightly the record.
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "nightly"))
+        import results as _results
+        _rp = "learning/results.json"
+        if os.path.exists(_rp):
+            _rj = json.load(io.open(_rp, encoding="utf-8"))
+            _n = _results.apply_rules(DOC, _rj.get("rules") or {})
+            print("merged learning/results.json ·", _n, "rules carry the record's verdict")
+    except Exception as e:
+        print("results merge skipped:", e)
     io.open("learning/deflections/examples.json", "w", encoding="utf-8").write(json.dumps(DOC, ensure_ascii=False, indent=1))
     io.open("learning/deflections/LEARNING.md", "w", encoding="utf-8").write(md())
     print("wrote learning/deflections/examples.json ·", len(EXAMPLES), "examples ·", len(RULES), "rules · LEARNING.md")

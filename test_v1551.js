@@ -127,7 +127,7 @@ function exOutcome(key){
   code=Object.keys(g2).map(k=>'var '+k+'=__g.'+k+';').join('\n')+'\n'+ex('repoOpen')+'\nrepoOpen(function(){});';
   (new Function('__g',code))(g2);
   setTimeout(()=>{
-    ok(opened===3,'4d the repo opens at IDB version 3 (a new store needs a bump or onupgradeneeded never fires)',opened);
+    ok(opened===4,'4d the repo opens at IDB version 4 — v15.51 bumped it to 3 for the defl store, v15.66 to 4 for the tape store (a new store needs a bump or onupgradeneeded never fires)',opened);
     ok(created.indexOf('defl')>=0,'4e ...and the upgrade creates the defl store',created);
     ok(created.indexOf('feat')>=0 && created.indexOf('snaps')>=0,'4f ...without dropping the existing stores',created);
     finish();

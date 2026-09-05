@@ -131,6 +131,100 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.71 — read the record before designing the feature: half of "automate the save" already existed, and the half that was missing was the failure mode
+(1) He asked for the save to run on a clock. The first move was `exportedAt` on the last seven day files: 15:01–15:03
+CT every trading day — the auto-export had been firing since v10.44 and his click was a second write. The design that
+followed was three rules and a permission story, not a scheduler; without that read it would have been a second
+scheduler beside the first. (2) The v10.5x silent path handled "no grant" by DOWNLOADING and then counted the day as
+exported — the most dangerous kind of fallback: it succeeds at the wrong thing and reports success. A fallback that
+produces something git never sees is a failure with a green light; "saved" now means one thing. (3) A timer can ASK
+Chrome for a File System Access grant (`queryPermission`) but never REQUEST it; the honest design detects the missing
+gesture, says so on the face in words that name the one click (DUE), and lets the click carry the permission
+synchronously — the v14.53 / v14.78 lessons applied to the day file. "Allow on every visit" ends the question; the
+code does not need to know whether he chose it, only to ask on the next click if it is gone. (4) Write-if-absent for a
+late day: the recorder's localStorage window evicts old days, so a re-export of an old day can be thinner than the file
+already on disk; the sweep looks for the file first and never overwrites one it finds. (5) A previous day's write must
+not touch today's evidence — the flag and the pipe note are keyed by "today" and a late write of yesterday would have
+made today read unsaved; the guard is `date===TODAY` around the evidence, and a mutant that drops it goes red.
+(6) The harness test with the unrealistic clock (`Date.now()` = 1000) silently disabled the rule through the retry
+throttle (1000 − 0 < 600000) — a test that passes for the wrong reason is worth less than none; use a real epoch.
+
+### v15.70 — a process has to be named, written, and pinned by a test, or the next context re-derives a narrower one
+(1) He asked "how will you make sure that this process is not forgotten by future contexts". The record of this
+project is that documents rot and tests don't: the resume note went seven builds stale; the chat history stayed current
+only because a test went red. So the Data Analysis process is a FILE (the seven links, the degrees, the rules, the
+eight tabs), a TEST (the links must be in the file, the plan, PROCESS.md, the config, the skill), a LOAD ORDER (the
+skill reads it first), and CODE ON A CLOCK (the task, the nightly, the registry and Rec writers) — four ways, because
+one is what failed before. (2) A mockup may show an illustrative row; the real tab must not — the row is excluded by
+a test (test_v1570 1e), because "illustrative" numbers have become "the numbers" in this project before (F-11's 100%).
+(3) Three writers on one file (the review's seed, the nightly, his decisions) is safe only BY ID and BY FIELD: each
+writer owns named fields and never touches the others'; a test mutates each writer to overreach and must go red.
+(4) The mutation harness counted a crashed test as "survived" until the exit code was read — a harness bug that
+hides a caught mutant looks exactly like a weak test. Read the exit code.
+
+### v15.69 — a count scored against a proxy answers a question nobody asked; the objective names the outcome
+(1) Every held rate in this project — the tally, the pattern table, the ledger's `cont` — scored "price continued
+0.3 SPY within ten bars". PURPOSE names two decisions and neither is that. It took his sentence ("everything that
+is displayed on the dashboard including hod lod time, nodes, setups, directional prediction, reads") to notice that
+the outcome column was the one thing never tied to the objective. **Write the outcome from the objective first,
+then count; a count against a proxy is easy to compute and easy to mistake for knowledge.** The first honest read
+is sobering: a node tap was the session's turn 1 time in 19 (09-03). That is the base, and it says the HOD/LOD
+question is about WHICH tap, never whether a tap holds. (2) The Learn tab's rules were CONFIRMED by his taught
+legs (n=15 legs, 4 days) and nothing in the record had ever been asked to agree or disagree. A rule with a class
+now carries the record's verdict beside the taught status — and the machine never touches the status: the review
+promotes, the record informs. On 09-03 every rule reads thin or not measured; that is the truth of the record, not
+a failure of the tab. (3) The reflection he asked for found the two gaps above and one more not yet built: the
+face's own reads are shown and never recorded, so "directional prediction" and "reads" have no chain at all.
+Recorded in PURPOSE §3b as the build order; nothing pretends otherwise on the face.
+
+### v15.68 — a stage described by its actor and not its trigger hides a manual step; he found it in one question
+(1) PROCESS.md stage ④ said "NIGHTLY — cloud: Claude pulls the day file … runs tools/nightly/run.py". True, and
+useless: it ran only when I was in a session, so the loop the document drew as automatic had a human in it, unnamed.
+The operator asked "is that how it goes" and the answer had to be "no — nothing runs by itself after your click",
+which he correctly called a gap. **Every stage needs its TRIGGER written next to its actor** (what starts it, and
+what happens if nothing does); "the cloud" is an actor with no trigger. Now ④ is the "GEX nightly" task on his
+machine, fired by the day file being newer than its log, and the document says so. The review (⑤) still waits for a
+session — and now says so instead of implying otherwise. (2) The first version of `results.py` overwrote the
+review's `result` sentence with "H4 thin: n=0 of 40" on every row it could not yet judge — a machine line replacing
+a human one and saying less. **A machine may replace a human sentence only with a verdict; a count rides beside it.**
+(3) `tick.py` never parses `%DATE%`: the sync's commit messages read "gex: sync 03-Thu-09" because cmd's date is
+locale-shaped and the sync's `for /f` assumed "MM/DD/YYYY". "Today" is the newest day file on disk. (4) A `.bat`
+that logs "nothing to do" every 10 minutes writes 144 lines a day into a file the sync task must never commit — the
+no-op is silent and the log and lock are in `.gitignore`; check what a scheduled script does on the BORING tick.
+
+### v15.67 — the King tally never counted a King: 768 against 7712, and nothing threw
+(1) **Two scales, one comparison.** The deflection ledger writes the BOOK'S OWN strike — `recordDeflections(sym)` walks
+`nodeMapModel(sym).levels` and `STATE[sym].price`, so a SPY tap is 768 and its `px0` 769.5 — while the ladder draws
+every book in the CHART'S frame (SPX 7700s under the futures display; `gridBookNodes` converts SPY and QQQ strikes into
+it). v15.63's `kingsAtStrike(sym, L.k)` compared the two raw: 768 against a King at 7712, never within 2 points, so
+`kings` was `[]` on every tap for four builds and the per-book tally read "—" all day. It was verified live in v15.64
+— "no tally on the face" was the design, so the empty join looked like an empty ledger. **An empty result from a join
+must be distinguishable from a broken join**: the record for 2026-09-03 (53 taps, `kings` absent or empty on all) now
+says nothing about the King rather than "no King at the tap" (`tapClasses`: the King-none class needs a stamped tap).
+The rule, again, from failure pattern 1: **which book, which window, which SCALE — before comparing, not after.** Now
+`tapDisp` converts once, with the ratios the ladder itself uses, and test_v1567 1d pins the raw-compare regression.
+(2) **A pattern named by one detector cannot be scored by another.** The ledger's `name` came from the old node-map
+detector (roles), the face's PATTERN blocks from `gridSetups` (the member-cut stacks, the rugs with a price side); 09-03
+had 53 taps and 0 "pika/barney" under the old names while the face showed stacks all day. The stamp is taken by the
+face's own functions at the moment of the tap, so the definition lives in one place — and the stamps already written
+keep the definition of their day (the stamp records the verdict, not the rule). (3) **A `var` line with a trailing
+comment is not sliceable by exVar** — the second time this has cost a build; the constants block's own rule says so.
+The v15.67 vars carry their comments on the line above. (4) `python3 tools/nightly/run.py --help` RAN the nightly and
+rewrote the log and SWEEPS.json — a script with no argument parsing treats every argument as "go". Harmless here
+(the log gained `patterns`, SWEEPS.json reverted), but a nightly must not be startable by a typo: to add.
+
+### v15.66 — a sketch had been called the tape for 18 days; a courier is not a safety net
+Two things. (1) Since the recorder was born the record has been described, in the notes and in my own answers, as
+"the tape": it held 90 SPXW strikes per bar and, for SPY and QQQ, EIGHT — read straight off `tri.<SYM>.top.slice(0,8)`,
+where it had sat since v11.2. Nobody asked "how many strikes per book" until the operator asked whether the entire
+day's tape was being saved for all the markets; the honest answer was "only SPXW, and SPY/QQQ as a sketch". A record
+should be described by its measured depth (strikes per book per bar), never by its name — and the question "what is
+NOT in the record" belongs in the load report beside "what is". (2) His design question — periodic file saves or one
+shot — has a wrong answer that looks safe: periodic. Each save is a fresh ~2 MB blob the sync task pushes two minutes
+later, so 26 autosaves is 50 MB of git history for one day of tape. The safety net is the store that survives a reload
+and a crash (IndexedDB); the file is the courier and is written once, with a late save for a day the click missed.
+Separate the two roles before choosing a cadence.
+
 ### v15.65 — a per-book pattern drawn only on that book's King row is invisible whenever the King is not in it
 v15.63 and v15.64 looked the SPY and QQQ patterns up ONLY on the SPY / QQQ King rows (`st[Kb.k]`), because those were
 the only rows those books had on the ladder. A SPY barney stack whose biggest member was not the King — or a SPY rug

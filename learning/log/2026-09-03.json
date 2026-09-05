@@ -2,6 +2,8 @@
  "schema": 2,
  "date": "2026-09-03",
  "writtenBy": "tools/nightly/run.py",
+ "ranOn": "cloud",
+ "ranAt": "2026-09-04T22:20:41Z",
  "sessions": 1,
  "episodes": 7,
  "deflEvents": 51,
@@ -102,5 +104,197 @@
  "preopen": "1 session since 2026-09-03 \u00b7 7 episodes \u00b7 6 of 7 hypotheses still thin \u00b7 null band 0.0 pts",
  "newRequests": 0,
  "newItems": 0,
+ "tape": null,
+ "patterns": {
+  "rows": [
+   {
+    "key": "all",
+    "label": "every tap",
+    "n": 51,
+    "held": 24,
+    "broke": 27,
+    "pending": 2,
+    "rate": 47,
+    "lo": 34,
+    "turn": {
+     "n": 19,
+     "hit": 1,
+     "rate": 5,
+     "lo": 1
+    },
+    "resume": {
+     "n": 19,
+     "hit": 13,
+     "rate": 68,
+     "lo": 46
+    }
+   },
+   {
+    "key": "old:King",
+    "label": "old detector \u00b7 King",
+    "n": 6,
+    "held": 2,
+    "broke": 4,
+    "pending": 0,
+    "rate": 33,
+    "lo": 10,
+    "turn": {
+     "n": 3,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 3,
+     "hit": 3,
+     "rate": 100,
+     "lo": 44
+    }
+   },
+   {
+    "key": "old:Gate",
+    "label": "old detector \u00b7 Gate",
+    "n": 11,
+    "held": 6,
+    "broke": 5,
+    "pending": 0,
+    "rate": 55,
+    "lo": 28,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 1,
+     "rate": 50,
+     "lo": 9
+    }
+   },
+   {
+    "key": "old:Rug",
+    "label": "old detector \u00b7 Rug",
+    "n": 4,
+    "held": 2,
+    "broke": 2,
+    "pending": 1,
+    "rate": 50,
+    "lo": 15,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "old:Floor",
+    "label": "old detector \u00b7 Floor",
+    "n": 18,
+    "held": 11,
+    "broke": 7,
+    "pending": 0,
+    "rate": 61,
+    "lo": 39,
+    "turn": {
+     "n": 9,
+     "hit": 1,
+     "rate": 11,
+     "lo": 2
+    },
+    "resume": {
+     "n": 9,
+     "hit": 7,
+     "rate": 78,
+     "lo": 45
+    }
+   },
+   {
+    "key": "old:Ceiling",
+    "label": "old detector \u00b7 Ceiling",
+    "n": 12,
+    "held": 3,
+    "broke": 9,
+    "pending": 1,
+    "rate": 25,
+    "lo": 9,
+    "turn": {
+     "n": 5,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 5,
+     "hit": 2,
+     "rate": 40,
+     "lo": 12
+    }
+   },
+   {
+    "key": "dir:up",
+    "label": "deflected UP (a floor held)",
+    "n": 31,
+    "held": 16,
+    "broke": 15,
+    "pending": 0,
+    "rate": 52,
+    "lo": 35,
+    "turn": {
+     "n": 12,
+     "hit": 1,
+     "rate": 8,
+     "lo": 1
+    },
+    "resume": {
+     "n": 12,
+     "hit": 9,
+     "rate": 75,
+     "lo": 47
+    }
+   },
+   {
+    "key": "dir:dn",
+    "label": "deflected DOWN (a ceiling held)",
+    "n": 20,
+    "held": 8,
+    "broke": 12,
+    "pending": 2,
+    "rate": 40,
+    "lo": 22,
+    "turn": {
+     "n": 7,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 7,
+     "hit": 4,
+     "rate": 57,
+     "lo": 25
+    }
+   }
+  ],
+  "events": 53,
+  "stamped": 0,
+  "schema": 1,
+  "days": 1,
+  "writtenBy": "tools/nightly/patterns.py",
+  "outcomes": {
+   "turnTol": 0.5,
+   "market": "SPY",
+   "episodes": "first tap per (strike, dir) per day",
+   "scored": 19
+  }
+ },
  "from": "2026-09-03"
 }

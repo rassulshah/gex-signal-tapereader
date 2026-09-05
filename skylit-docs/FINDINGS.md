@@ -670,3 +670,43 @@ named by S6 either (7670 at 22%, 7665 under the ladder's cut) — the same denom
 **The rugs.** `learn/heatseeker-patterns` puts spot BELOW the positive node for a rug; v15.63 ignored price's side and
 would have called "SPY RUG 773 over 772" at 12:48 on 09-03 with price 0.3 above the yellow. Fixed in v15.64; unmeasured
 as a predictor (S1 / S1.2 still OPEN).
+
+## F-18 · THE KING TALLY NEVER COUNTED A KING; THE PATTERNS ARE NOW STAMPED AND SCORED — OPEN, n=0 stamped (2026-09-04)
+
+Status: **OPEN** as a measurement (no stamped tap exists yet; the first accrue after v15.67 is installed) and
+**CONFIRMED** as a fact about the record: every `kings` array written by v15.63–v15.66 is `[]`, and every row before
+v15.63 has none — `kingsAtStrike` compared the ledger's SPY strike (768) against the Kings in the chart's frame (7712)
+and could never match (landmine L-T; LESSONS v15.67). **A pre-v15.67 row says nothing about the King.** 2026-09-03,
+the only register-era day: 53 taps, 51 scored — every tap 47% held (Wilson low 34%, n=51); by the OLD detector's
+names King 2/6, Gate 6/11, Rug 2/4, Floor 11/18 (61%, low 39%), Ceiling 3/12; UP 16/31 (52%), DOWN 8/20 (40%). None
+of these is a pattern rate in the face's sense — the old names come from the node map's roles, not from `gridSetups`
+(0 pika / barney under them while the face showed stacks all day).
+
+Doctrine bearing on the classes (the gate, stated): pika cloud / barney stack and the rug — `patternpedia` +
+`learn/heatseeker-patterns`, as `gridSetups` encodes them (FOLLOWING); the King — `learn/reading-heatseeker`
+(FOLLOWING); NEW and growth — `learn/node-lifecycle`'s two questions, FRESH? GROWING? (FOLLOWING); polarity — the
+absolute-value rule, polarity sets the CHARACTER of the interaction, measured here as a class of its own (FOLLOWING);
+the gate — `patternpedia`'s Gatekeeper, still the old detector's call until item 3b names its definition.
+
+What v15.67 measures from here: the held rate (continued ≥ DEFL_CONT_PTS within 10 bars) per class — King · SPX / SPY
+/ QQQ / any / none; SPX / SPY / QQQ pika and barney stacks; rug / reverse rug per book; SPX NEW, growing, fading, +γ /
+−γ; the old names; UP / DOWN — with n and the Wilson lower bound, rendered at n ≥ 15 (Testing ⑦, the nightly's
+`patterns`). **Read it ONCE at n ≥ 15 per class and write the number here with its date**; until then every row is
+`thin`. ⚠ The outcome is the ledger's (10 bars, the book's units) — the pullback / HOD-LOD distinction (PURPOSE) is
+not in it; a 61% floor rate is "price continued away", not "the LOD".
+
+## F-19 · THE OBJECTIVE OUTCOMES, FIRST READ — a node tap was the session's turn 1 of 19 — PROVISIONAL, n=19 episodes, ONE day (2026-09-04)
+
+Status: **PROVISIONAL** (one session, 2026-09-03, the OLD detector's taps, no stamps). Definitions written in
+`tools/nightly/patterns.py` before the numbers were read: TURN = the tap's extreme within 0.50 SPY of the session's
+HOD / LOD (the doctrine's deflection zone); RESUME = a new session extreme after the tap; the first tap per (strike,
+dir) per day only; from the day file's own SPY bars (the snaps' h / l per 3-minute bar); a day under 20 bars scores
+nothing. **2026-09-03: turn 1 of 19 (5%, Wilson low 1%) · resume 13 of 19 (68%, low 46%)**; floors 1 of 12 · 9 of 12,
+ceilings 0 of 7 · 4 of 7. Held ten bars, the same taps: 24 of 51 (47%).
+
+What it says, provisionally: a tap that holds is common (≈ half), a tap that IS the day's turn is rare by
+construction (there are two extremes a day), and the trend usually resumes after a hold (≈ two thirds). So the
+HOD/LOD question is *which* tap, never *whether* a tap holds — the classes (NEW at the extreme, the King, the stacks,
+the clock) have to separate the 1 from the 18, and 68% resume is the base a pullback class has to beat. Known
+confound, recorded not solved: an early tap has more session ahead of it to be undercut; the clock is a class to add.
+Read again at n ≥ 15 per class, on stamped taps, before any of this is quoted as a rate.

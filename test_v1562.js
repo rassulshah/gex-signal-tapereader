@@ -47,7 +47,7 @@ let pan=doc.querySelector('#gpts-body .g3pan.g3scaled');
 ok(!!pan,'2b the tab body is wrapped in the mockup’s panel (.g3pan.g3scaled)');
 ok(!/Did the dashboard tell the truth\?/.test(doc.body.innerHTML),'2c the header line the mockup never had is gone');
 const tabs=[...doc.querySelectorAll('#gpts-body .g3pan .tabs span')].map(e=>e.textContent.trim());
-ok(tabs.length===7 && /Analysis/.test(tabs[1]) && /Learn/.test(tabs[3]) && doc.querySelector('#gpts-body .g3pan .tabs span.on').textContent.indexOf('Analysis')>=0,'2d the tab bar is the mockup’s .tabs: seven tabs, the active one .on',tabs);
+ok(tabs.length===8 && /Analysis/.test(tabs[1]) && /Learn/.test(tabs[3]) && /Rec/.test(tabs[4]) && doc.querySelector('#gpts-body .g3pan .tabs span.on').textContent.indexOf('Analysis')>=0,'2d the tab bar is the mockup’s .tabs: eight tabs (v15.70: Rec after Learn), the active one .on',tabs);
 // the mockup generator's skeleton for the same subject
 const mockHtml=cp.execSync("python3 -c \"import sys,importlib; sys.path.insert(0,'tools'); M=importlib.import_module('mockup-from-studies'); print(M.panel([s for s in M.S['subjects'] if s['key']=='K'][0]))\"",{encoding:'utf8'});
 const mdoc=new JSDOM('<div id="m">'+mockHtml+'</div>').window.document;

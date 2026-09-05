@@ -211,9 +211,14 @@ for f in _mk_md + _mk_bin[:12]:
 # (v15.64) …and the RENDERS: design/render-vNNNN-face.png is the shipped script drawn in Chromium on a recorded day,
 # the reference the CHANGELOG and the resume note point at. v15.63's never reached GitHub — same landmine, a
 # file type the walk did not take. The mockup .png files are still excluded (mockups/ carries them).
+# (v15.70) ⚠ THE RENDERS TIPPED THE 8 MB CAP (five 2×-DPI PNGs, 3 MB): only the THREE newest renders ride; the older
+# ones are pushed over the desktop bridge when the session is linked (device_commit_files → the sync task) and stay in
+# git history. Same rule as mockups', same reason.
+_rn = [f for f in os.listdir('design') if f.startswith('render-') and f.endswith('.png')]
+_rn.sort(key=lambda f: os.path.getmtime(os.path.join('design', f)), reverse=True)
 for f in sorted(os.listdir('design')):
     p = os.path.join('design', f)
-    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt') or (f.startswith('render-') and f.endswith('.png'))):
+    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt') or f in _rn[:3]):
         FILES.append(p)
 # (v14.59) the fixtures the tests read. test_futbars.js and append-futures.py both use
 # tools/fixtures/futbars-day.json; shipping the test without its input turns his suite red for a
@@ -254,7 +259,10 @@ FILES += sorted(f for f in os.listdir('.') if f.startswith('test_') and f.endswi
 for _p in ['data/es-1min/BASERATES.json', 'data/es-1min/FARSIDE.json', 'data/es-1min/README.md',
            'tools/irt/irtserve.py', 'tools/irt/irtserve.bat', 'tools/irt/irtstartup.bat',
            'tools/irt/setupautostart.bat', 'tools/irt/README.md',
-           'tools/irt/FlexLevelsExport.sample.csv']:
+           'tools/irt/FlexLevelsExport.sample.csv',
+           # (v15.68) the two scheduled tasks — he RUNS these: the sync's setup and script (shipped over the bridge
+           # until now) and the nightly's (setup once → tools/gex-nightly.bat every 10 min → tick.py)
+           'setup-gex-sync.bat', 'tools/gex-sync.bat', 'setup-gex-nightly.bat', 'tools/gex-nightly.bat']:
     if os.path.exists(_p):
         FILES.append(_p)
 # the approved HOD/LOD design lives at the repo ROOT, not in mockups/ — which is exactly why two

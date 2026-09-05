@@ -134,7 +134,7 @@ const code=src.split('\n').filter(l=>!l.trim().startsWith('//')).join('\n');
   const ab=ex('analysisBlock'), tb=ex('testingBlock');
   ok(/h\+=analysisSubjectsHtml\(sym, _live\);/.test(ab) && /_live\.H1=hodlodSectionHtml\(sym\)/.test(ab) && /_live\.F5=nl; _live\.D2=df;/.test(ab),'T1 (v15.55) Analysis emits the subject panel with the live evidence mapped to H1 / F1 / F5 / D2');
   ok(!/tabTile\('Direction'/.test(ab) && !/tabSection\('a8'/.test(ab),'T2 the headline tiles and the scorecard section are gone from Analysis');
-  ok(/h\+=T_loop\+T_prereg\+T_canfail\+T_dash\+T_cov\+T_nightly\+T_self\+T_detail;/.test(tb),'T3 (v15.55) Testing emits the loop strip · ① REGISTER · ② GATE · ③ DASHBOARD · ④ RECORD · ⑤ NIGHTLY · ⑥ SELF-TEST · ⊕');
+  ok(/h\+=T_loop\+T_prereg\+T_canfail\+T_dash\+T_cov\+T_nightly\+T_self\+T_pat\+T_detail;/.test(tb),'T3 (v15.55) Testing emits the loop strip · ① REGISTER · ② GATE · ③ DASHBOARD · ④ RECORD · ⑤ NIGHTLY · ⑥ SELF-TEST · ⑦ PATTERNS (v15.67) · ⊕');
   ok(!/questionQueueHtml\(/.test(code),'T4 the question queue is archived — the register holds the questions now');
   ok(/featureScorecardsHtml\('SPY'\)/.test(tb),'T5 the feature scorecards live in Testing ⊕');
   ok(/GATED/.test(ex('canFailHtml')),'T6 ⑤b says GATED where the gate bites');

@@ -228,18 +228,65 @@ def run(upto=None, write=True, reg_path=REG, days=None):
         if write: refresh_sweeps()
     except Exception as eS:
         print('sweep refresh threw:', eS)
+    # (v15.66) THE TAPE — the whole book per bar per market (data/tape/<day>/<BOOK>.json, written by the panel's 💾).
+    # Reported in the log so a night that ran without it says so; the studies that need the full SPY/QQQ books
+    # (the per-book patterns, NEW on SPY/QQQ, Q11's dollar axis) read it through tools/nightly/tape.py.
+    tape_cov = None
+    try:
+        import importlib.util as _ilu
+        _sp = _ilu.spec_from_file_location('tape', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tape.py'))
+        _tp = _ilu.module_from_spec(_sp); _sp.loader.exec_module(_tp)
+        _T = _tp.load(last)
+        tape_cov = {b: {'bars': len(_T[b]['bars']), 'strikes': len(_T[b]['strikes'])} for b in _T} if _T else None
+        print('\n'.join(_tp.coverage(last)))
+    except Exception as eT:
+        print('tape read threw:', eT)
+    # (v15.67) THE PATTERNS — the held rate by setup × book from every day's stamped deflection ledger (tools/nightly/
+    # patterns.py, the same classes and arithmetic as the panel's patternTable; test_v1567 pins them equal). Days from
+    # the register's `from`, like every other number in this log. Written as `patterns` so Testing ⑦ renders it.
+    patterns = None
+    try:
+        import importlib.util as _ilu2
+        _sp2 = _ilu2.spec_from_file_location('patterns', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'patterns.py'))
+        _pt = _ilu2.module_from_spec(_sp2); _sp2.loader.exec_module(_pt)
+        patterns = _pt.table_for(frm=frm)
+        print('\n'.join(_pt.report(patterns)))
+    except Exception as eP:
+        print('patterns threw:', eP)
     cal = lodhod_calibration(days, frm)
     n_sess = len(set(e['_day'] for e in eps))
     thin = sum(1 for v in verdicts if v['verdict'] in ('thin', 'blocked'))
     preopen = ('%d session%s since %s · %d episodes · %d of %d hypotheses still thin · null band %.1f pts'
                % (n_sess, '' if n_sess == 1 else 's', frm, len(eps), thin, len(verdicts), null['p95']))
-    log = dict(schema=2, date=last, writtenBy='tools/nightly/run.py', from_=frm, sessions=n_sess, episodes=len(eps),
-               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0), newItems=(newitems if write else 0))
+    # (v15.68) where this run happened — his machine (the "GEX nightly" task, every 10 minutes after the 💾) or the cloud
+    ran_on = 'his machine' if os.name == 'nt' else 'cloud'
+    log = dict(schema=2, date=last, writtenBy='tools/nightly/run.py', ranOn=ran_on, ranAt=datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'), from_=frm, sessions=n_sess, episodes=len(eps),
+               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0), newItems=(newitems if write else 0), tape=tape_cov, patterns=patterns)
     log['from'] = log.pop('from_')
     if write:
         os.makedirs(LOGD, exist_ok=True)
-        p = os.path.join(LOGD, last + '.json'); io.open(p, 'w', encoding='utf-8').write(json.dumps(log, indent=1))
+        p = os.path.join(LOGD, last + '.json'); _tmp = p + '.tmp'; io.open(_tmp, 'w', encoding='utf-8').write(json.dumps(log, indent=1)); os.replace(_tmp, p)   # (v15.68) atomic: the sync task must never commit half a log
         print('wrote', os.path.relpath(p, ROOT))
+        # (v15.68) THE ANALYSIS TAB — every study whose number this log can answer gets it written into the registry
+        # (learning/results.json + learning/studies.json patched in place; tools/nightly/results.py). Operator: "clicking on
+        # the save, the data getting saved and the analysis occurring and the analysis tab being updated."
+        try:
+            import importlib.util as _ilu3
+            _sp3 = _ilu3.spec_from_file_location('results', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results.py'))
+            _rs = _ilu3.module_from_spec(_sp3); _sp3.loader.exec_module(_rs)
+            _rs.write(ROOT, log)
+        except Exception as eRs:
+            print('results threw:', eRs)
+        # (v15.70) THE REC TAB — the machine's recommendations from tonight's numbers, and his ✓ / ✗ from the day files
+        # (tools/nightly/recommend.py → learning/recommendations.json). Operator: "from that point on you take over from
+        # data, analysis, testing, learning all the way to the Rec tab".
+        try:
+            import importlib.util as _ilu4
+            _sp4 = _ilu4.spec_from_file_location('recommend', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'recommend.py'))
+            _rc = _ilu4.module_from_spec(_sp4); _sp4.loader.exec_module(_rc)
+            _rc.update(ROOT, log, None, days)
+        except Exception as eRc:
+            print('recommend threw:', eRc)
     print(preopen)
     for v in verdicts:
         print('  %-3s %-9s n %4s/%-3s %s %s' % (v['id'], v['verdict'].upper(), v.get('n', '-'), v['minN'],
@@ -294,6 +341,8 @@ def refresh_sweeps():
     if os.path.exists(es):
         sw = __import__('study-sweeps')
         out = sw.run(es); out.pop('events', None)
+        try: out['corpus']['file'] = os.path.relpath(es, ROOT).replace(os.sep, '/')   # (v15.68) not the machine's absolute path — a diff every night otherwise
+        except Exception: pass
         io.open(os.path.join(ROOT, 'data', 'es-1min', 'SWEEPS.json'), 'w', encoding='utf-8').write(json.dumps(out, indent=1))
         print('sweeps: refreshed data/es-1min/SWEEPS.json (%d sessions, %d cells)' % (out['corpus']['sessions'], out['ledger']['cells_read']))
     # (v15.56) the book table from the panel's own day files
@@ -327,5 +376,7 @@ def selftest():
 
 if __name__ == '__main__':
     if '--selftest' in sys.argv: sys.exit(0 if selftest() else 1)
+    if any(a.startswith('-') for a in sys.argv[1:]):
+        print(__doc__); sys.exit(2)   # (v15.68) an unknown flag prints the usage — LESSONS v15.67: `--help` ran the nightly
     upto = next((a for a in sys.argv[1:] if not a.startswith('--')), None)
     sys.exit(0 if run(upto) else 1)

@@ -50,6 +50,18 @@ three times as "never built" while its spec sat in commit `72e820e`.
     git log --all --oneline -S"<term>" -i
     git log --all --pretty=format: --name-only --diff-filter=A | sort -u | grep -i "<term>"
 
+**⚠ THE PROCESS HAS A NAME (2026-09-04): the Data Analysis process — `design/DATA-ANALYSIS-PROCESS.md`. Read it
+FIRST, in full: the seven links (CAPTURE → ANALYSIS → TESTING → LEARNING → REC → DASHBOARD → SCORE), the degrees of
+knowledge, the ten rules, the eight tabs (the final set — no ninth), the markets. His standing expectation: "just
+click on the save button once a day probably eod, and from that point on you take over from data, analysis, testing,
+learning all the way to the Rec tab, which is where we will discuss what to implement." — and since v15.71 not even
+the click: "automatically have the application trigger the save button instead of me clicking it … after market hours".
+The panel writes the day itself after the close (15:01 CT, retried every 10 min until confirmed in the repo folder) and
+any missed day outside market hours; the 💾 is the override, and the footer's 💾 DUE chip is the one click Chrome may need
+for the folder permission after a reload (choose "Allow on every visit" there, once). The nightly runs on HIS
+machine (the "GEX nightly" task) — never assume a session ran it; read the log's `ranOn`. Nothing on the face changes
+except through a ✓ on the Rec tab and a build that marks the row IMPLEMENTED.**
+
 **Read `.gex-config.json` at the repo root FIRST** — it lists the canonical files and the exact
 load instruction. Then read, in order:
 
@@ -94,7 +106,8 @@ load instruction. Then read, in order:
    with status SEEN is his — answer it IN THE FILE (status, answer, link, answeredOn) as part of the session's work; the
    panel reads the file back. After ANY install, probe the live
    panel (version, fetched files, companion `full`) — never assume; the installer-manifest bug was found only that way.
-1a-00e. **THE END OF DAY RUNS THROUGH THE DESKTOP BRIDGE (2026-09-03).** His one step: 💾 Save at the close. Yours:
+1a-00e. **THE END OF DAY RUNS THROUGH THE DESKTOP BRIDGE (2026-09-03).** His step at the close: none since v15.71 (the panel
+   writes the day itself; the 💾 is the override — if the footer shows 💾 DUE, one click). Yours:
    (1) `mcp__remote-devices__get_device_info` — if his desktop is linked, request the folder ONCE per session
    (`device_request_folder_access` on `C:\Dev\gex-signal-tapereader`, reason stated) and `device_stage_files` the day
    file(s) from `data\` (also any `<root>\<day>.json` a mis-picked folder produced — the fuller one wins); if not

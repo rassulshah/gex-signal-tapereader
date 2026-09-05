@@ -1,0 +1,12 @@
+{
+ "schema": 1,
+ "written": "2026-09-04",
+ "note": "Every market-specific number the Data Analysis process uses, in one place, so adding a market is a configuration entry and never a restructure (operator, 2026-09-04: 'if i wanted to start doing this for gold, could this be applied also?'). The process is the same for every market; what differs is the SOURCES (which ladder gives the gamma book, which bars give price), the UNITS (a tolerance is a number in the book's own points), and the doctrine priors. tools/nightly/patterns.py reads turnTolPts / minBarsDay / barMinutes for the ledger's market; the panel's DEFL_CONT_PTS / DEFL_FWD_BARS are pinned equal to contPts / fwdBars by test_v1570. status: live = the whole loop runs · price only = the HOD/LOD statistics can be built from the couriered bars, no gamma book source yet.",
+ "ledgerMarket": "SPY",
+ "markets": {
+  "SPY": {"name": "S&P 500 (the SPX complex)", "status": "live", "chart": "ES", "underlying": "SPY", "books": ["SPXW", "SPY", "QQQ"], "barMinutes": 3, "tapTolPts": 0.5, "turnTolPts": 0.5, "contPts": 0.3, "fwdBars": 10, "minBarsDay": 20, "futures": "ES", "priceCorpus": "data/es-1min/ES TestingData.txt", "priceSessions": 284, "bookSource": "Skylit Atlas (SPXW tape + Trinity) · InsiderFinance (SPX/SPY/QQQ chains)"},
+  "NQ":  {"name": "Nasdaq 100", "status": "price only", "chart": "NQ", "underlying": "QQQ", "books": ["QQQ"], "barMinutes": 3, "tapTolPts": 0.5, "turnTolPts": 0.5, "contPts": 0.3, "fwdBars": 10, "minBarsDay": 20, "futures": "NQ", "priceCorpus": "data/es-1min/NQ TestingData.txt", "priceSessions": 188, "bookSource": "the QQQ book scaled to NQ (a bearing); CW0/PW0 from InsiderFinance QQQ"},
+  "GC":  {"name": "Gold", "status": "price only", "chart": "GC", "underlying": "GLD", "books": [], "barMinutes": 3, "tapTolPts": null, "turnTolPts": null, "contPts": null, "fwdBars": 10, "minBarsDay": 20, "futures": "GC", "priceCorpus": null, "priceSessions": 0, "bookSource": "none yet — a GLD chain (InsiderFinance) or a Skylit GLD ladder would be the gamma book; the companion couriers GC 1-minute bars since v1.15, so the HOD/LOD statistics can be built once a corpus accrues (data/futures/GC/)"},
+  "CL":  {"name": "Crude", "status": "price only", "chart": "CL", "underlying": "USO", "books": [], "barMinutes": 3, "tapTolPts": null, "turnTolPts": null, "contPts": null, "fwdBars": 10, "minBarsDay": 20, "futures": "CL", "priceCorpus": null, "priceSessions": 0, "bookSource": "none yet; CL bars couriered since v1.15"}
+ }
+}

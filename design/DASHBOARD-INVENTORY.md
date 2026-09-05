@@ -11,6 +11,58 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0g · v15.71 — the save runs itself (2026-09-04, night)
+
+One element changed: the footer's **💾** is a chip. `autosaveState()` → `data-autosave`: **idle** (plain, the session is
+running) · **saved** (green — written into the repo folder, by the panel after the close or by his click) · **pending**
+(amber — the close has passed, the panel is writing, retried every 10 minutes) · **💾!** (amber — the folder permission
+needs one click today, said BEFORE the close) · **💾 DUE** (red, bold — a save is due and the panel cannot write: the
+grant is missing after a reload, no folder is picked, or the write failed; "+n" = earlier days waiting too) · **nodata**
+(plain — nothing was recorded today). Every hover opens with the question *"Is today's data saved in the repo folder?"*
+and ends with how the panel saves on its own. Degree: **descriptive** (a fact about the record, no claim). The pipeline
+strip's `saved` dot is unchanged and agrees with the chip (both read `saveState()`); its "not yet" hover now names the
+after-close write. There is no longer a manual step at the close; the 💾 is the override.
+
+## 0f · v15.70 — 💡 Rec, the eighth and last tab (2026-09-04, night)
+
+Nothing on the face changed. **💡 Rec** (new, `recBlock`): proposals to him from the nightly (`recommend.py`) and the review
+(`rec-seed.py`), each with kind · what it changes · evidence · by · as of; ✓ / ✗ buttons on a proposed row, saved at
+once and riding the next day file (`reco`); four sections (awaiting · approved · implemented · declined / withdrawn).
+From here on, **nothing on the face changes except through a ✓ on Rec and a build that marks the row IMPLEMENTED** — the
+inventory below gains its "knowledge degree" column with the read-recording build (R-1). Reference
+`design/render-v1570-rec.png`; mockup `mockups/mockup-recommendations.png`. The eight tabs are the final set.
+
+## 0e · v15.69 — the objective outcomes; the Learn rules carry the record (2026-09-04, night)
+
+Nothing on the face changed. **Testing ⑦**: the nightly's table gains two columns, **turn** (the node WAS the session's
+HOD / LOD, within 0.50 SPY) and **resume** (a new session extreme after the tap — stay in), first tap per node per day;
+the live table stays held-only and says so. **Analysis rows** the nightly answers read "held · turn · resume". **Learn
+②**: under each rule, THE RECORD — the ledger's numbers for the class the rule names and its verdict (agrees green ·
+contradicts red · thin / measured blue · not measured, with the reason); the rule's status is untouched. First read
+F-19: turn 1 of 19, resume 13 of 19 (2026-09-03, one day).
+
+## 0d · v15.68 — the Analysis tab written by the nightly (2026-09-04, evening)
+
+Nothing on the face changed. **Analysis tab rows** the nightly can answer (the King by book, the King as floor /
+ceiling, growing / fading and ±γ at the King, the rugs, the stacks, the register's verdicts — `tools/nightly/results.py`)
+now carry the machine's line as their result, tagged **"· by the nightly, <date>"** in blue, with the status the number
+earned (READ at n ≥ 15 · THIN · REFUSED · READ NEXT); a row still being counted toward keeps the review's sentence and
+shows **"⟳ H2 thin: n=1 of 30 · nightly <date>"** under it. The registry is re-fetched on the panel's 10-minute check.
+The ⚙ tab's NIGHTLY box names where the last run happened ("ran on his machine"). The 💾 was the only manual step until v15.71 (§0g).
+
+## 0c · v15.67 — the patterns SCORED; the architecture complete (2026-09-04, evening)
+
+Nothing on the face changed. **Testing ⑦ THE PATTERNS** (new, `patternScoresHtml`): the held rate by setup × book from
+the deflection ledger — every new tap is stamped at the moment of the tap with what the PATTERN columns showed at that
+strike, per book (`pat`: pika / barney stack named or member, rug / reverse rug, NEW, growth, polarity), plus the
+Kings it touched (`kings`, whose join was broken since v15.63 — LESSONS v15.67). Live from this browser's ledger (today
++ the IndexedDB archive) and from the nightly (`learning/log/<day>.json` `patterns`, `tools/nightly/patterns.py`). A rate
+prints at n ≥ 15 with its Wilson lower bound; the old detector's names are classes of their own. Reference
+`design/render-v1567-patterns.png` (the 2026-09-03 ledger: 53 taps, none stamped yet). **⚙ Architecture ⑥–⑨** (new,
+`architectureSystemHtml`): the components, the integrations (Skylit · InsiderFinance · Yahoo · ForexFactory · GitHub),
+the HOD/LOD statistics daily pipeline, storage — from `PLAN.system`, the same data as `design/ARCHITECTURE.md`.
+Reference `design/render-v1567-architecture.png`.
+
 ## 0 · v15.65 — the PATTERN columns (2026-09-04, afternoon)
 
 SETUP became **PATTERN, one column per book (SPX · SPY · QQQ)**: a PIKA / BARNEY block (the word in black on yellow /
@@ -93,7 +145,7 @@ The A row is today (actual), the E row is the expected value from 284 sessions (
 | element | shows | verdict |
 |---|---|---|
 | pipeline dots (rec · saved · pushed · review · deps) | the loop's stages ①–⑤ as dots | keep; the ⚙ Architecture tab (v15.59) is the expansion; the Analysis / Testing / Learn tabs repeat rec · saved · pushed in their foot (v15.62) |
-| version, Save, folder | the build, the export, the repo folder | keep |
+| version, 💾 chip, folder | the build, whether the day is saved (v15.71: idle · saved · pending · ! · DUE · nodata — the panel saves itself; the click is the override and carries the folder permission), the repo folder | keep; descriptive |
 | step tips (hover doctrine) | the five-step execution doctrine as hovers | keep (doctrine, C-numbered) |
 
 ## 4 · What the inventory says
