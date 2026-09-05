@@ -1,3 +1,66 @@
+## v15.73 — THE DAY LINE: the process reporting on itself, at the bottom of the panel
+
+> Operator, 2026-09-05: "there needs to be some message at the bottom that tells me that says something like 9/4- data
+> saved analysis complete, testing complete, recommendations made. something descriptive" · on the mockup: "i like it."
+
+**What it is.** One row between the AFTER HOURS bar and the footer (`dayLineHtml` / `dayLineState`, `.g3pline`): the
+date, then the links in the process order — **saved · analysis · testing · learning · rec** — each a dot and a few words
+of evidence. Green = done, with the time and who ("saved 15:01 · the panel · 131 bars", "analysis 15:11 · your machine ·
+81 taps counted", "testing 9 claims read · 1 ready · 8 thin", "learning 9 rules carry the record"). Amber = expected but
+not yet ("analysis not yet — the task runs every 10 min"; "rec 6 awaiting your ✓" is amber because the action is his).
+Red = overdue, with the cause: analysis 30 minutes after the save with no log reads "overdue — is the GEX nightly task
+installed?" and the hover names `tools\gex-nightly.log`; a save not confirmed by 15:15 reads "overdue — see the 💾 chip";
+a chip that is DUE reads "cannot write — click 💾". Grey = not knowable yet, saying what will happen ("saved · after the
+close, by the panel", "analysis · your machine, ≤ 10 min after"). During the session the first segment is **data ·
+recording · N bars**. The day shown is the newest with data: today while it records or is saved (or the session is on);
+before the first bar the previous day's completed line stays; a day known only as a download reads "N bars, not saved"
+— a download is not a save, here as on the chip. Nothing recorded → "nothing recorded today", never a red. The hover is
+the whole sentence, opening with *"What has the process done with 9/5?"*. **A segment never clips:** the row wraps at a
+segment boundary (`flex-wrap`), so at the panel's 760 px a completed day is two rows — the four process links, then REC
+on its own (measured in the render: 784 px of segments against 722 available; the one-row variants that fit did so by
+7 px, which is how a line comes to clip later — the wrap is the rule, not a fallback).
+
+**Where the facts come from — nothing new to fetch.** The 💾 chip's own save evidence (`saveState`,
+`AUTOSAVE.lastWrite`, `DAY_WRITTEN`), the pipeline record (`pipeLoad`: saveDate · saveHow · pushed), the nightly log
+(`ANALYSIS_NIGHTLY`: date · ranOn · ranAt · hypotheses · patterns.events, fetched on the 10-minute check, today then
+yesterday), the Learn file (`learnLoad`: each rule's verdict and asOf), the Rec file merged with his decisions
+(`recMerged`). `fmtCT` prints Chicago HH:MM from an ISO string or epoch ms. A throwing source is treated as unknown; the
+footer never loses the line. Probe: `__gptsDebug.dayLine()`. Degree: descriptive — every word is a fact about the record.
+
+**Tests.** `test_v1573.js` — 44 assertions on a stubbed world (today 2026-09-05, the CT clock, the record's pieces): the
+session running (six segments in order, recording · 41 bars, the rest grey and saying what will happen, rec amber; no bar
+yet at 08:31 → data amber; nothing awaiting → rec green); after the close with the file written and no log (saved green
+with time · who · bars and "on GitHub" in the hover; analysis amber at 3 minutes, RED at 44 naming the task and its log;
+a click says "your click"); everything done (15:11 · your machine · 81 taps counted; 9 claims read · 1 ready · 8 thin;
+9 rules carry the record; 7 awaiting your ✓ · 1 new; the hover sentence; the markup; the Learn file not yet fetched →
+amber; a cloud run says the cloud; cleared / refused / ready in order); the save that did not happen (amber at 15:04,
+RED at 15:20 pointing at the chip, RED "cannot write — click 💾" when blocked with the reason, grey "nothing recorded
+today"); the next morning (yesterday's completed line dated 9/4; today's line takes over on the first bar and
+yesterday's log does not count for today; nothing known → today, grey, no invented facts; a download-only day → "131
+bars, not saved", from the pipe or from a written-day mark); the clock (fmtCT ISO / epoch / garbage), the render order in
+both paths, the CSS, the probe, the constant, a throwing source; and the item id (§8). 14 of 14 mutants caught (no overdue, a download
+as a save, yesterday never shown, the log ignored, yesterday's log counting for today, the due save amber, saved-overdue
+never, rec counting everything, the line dropped from the main path, learning ignoring the day, fmtCT in UTC, the who
+dropped, the single-draw id, the ellipsis back). Suite: 147
+green / 5 permanent baselines. Render `design/render-v1573-face.png` — the real panel on the 09-04 frames at 15:30 CT,
+the day-line state seeded from the real record with the new `render-face.js --pre` (the harness holds no save evidence
+and no nightly log; everything seeded comes from a file in the repo). Mockup `mockups/mockup-day-line.png`. R-9 on Rec,
+implemented; the plan: v15.72 shipped, v15.73 this build, the candidate score → v15.74.
+
+**Also — a flake was a bug.** `test_v1560` §1 went red once in twelve runs: `itemsAdd` built an id from the millisecond
+plus ONE random base-36 digit, so two items added in the same millisecond collided about once in 36 and the merge lost
+one. The id is now drawn until it is unique against the store (`test_v1573` §8 pins it with a stubbed clock and a
+stubbed draw; the single-draw mutant fails). A test that fails one run in twelve is not "flaky" — it is reporting a
+1-in-36 event, and the fix belongs in the code, not in a retry.
+
+**Also — the installer's "three newest renders" were newest by checkout.** `render-v1567-architecture.png` (0.95 MB, on
+GitHub since v15.67) rode again because a fresh clone gives every file the clone's mtime, and the .bat came out at
+8.73 MB against the 8 MB cap. `tools/build-installer.py` now reads the age from the NAME — the renders of the two highest
+versions present ride (v1573, v1572; 7.5 MB); the rest are in git history and go over the bridge when a session is linked.
+
+**Not yet verified on his machine:** the line live on Monday: recording during the session, then green segment by segment
+after 15:01 as the task runs.
+
 ## v15.72 — THE FACE, HIS THREE ASKS + ONE BUG + ONE READ: the AFTER HOURS bar at the bottom, the King cards and the ladder bigger, the leaked border gone; the rolling floor / ceiling registered
 
 > Operator, 2026-09-04: "the after hours message to the left is bad choice, it is taking up too much space. you can put

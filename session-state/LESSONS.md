@@ -131,6 +131,26 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.73 — a status line is a contract about evidence, not a mood ring; the day it describes is a decision
+(1) "Data saved, analysis complete, testing complete, recommendations made" is easy to draw and easy to lie with. Each
+segment was tied to ONE piece of evidence the panel already holds — the chip's save record, the nightly log's date and
+ranOn, the log's verdicts, the Learn rules' asOf, the Rec rows' status — and to the colour that evidence earns; a
+segment with no evidence says what will happen, in grey, and a segment that should have happened by now goes red and
+names the cause. The alternative — green when "probably fine" — is the F-11 scorer that could not fail, drawn as a
+footer. (2) Which day the line describes is a decision with edge cases: today while it records or is saved (or the
+session is on), yesterday until the first bar of today, and never a day the record does not know; a download-only day
+is "not saved" here exactly as on the chip, or the two would disagree about the same fact. (3) The mutation runner had
+to read the exit code AGAIN: a mutant that crashed the test's diagnostic argument showed as "survived" because no FAIL
+line was printed — the v15.70 lesson, forgotten in a new harness within a week. Diagnostics must never throw
+(`(seg(st,'x')||{}).text`), and a runner counts a non-zero exit as caught. (4) A mockup with three moments (the session,
+the file written, everything done) got "i like it" in one round; the same feature described in words would have taken
+three. The rendering is the specification. (5) The mockup's one row did not survive the real panel: at 760 px a completed
+day measured 784 px of segments against 722 available, and every one-row variant that fit did so by 7 px. The row wraps at
+a segment boundary instead — a design that fits by a hair is a design that clips next month. (6) A test that fails one run
+in twelve is not flaky, it is precise: `test_v1560` §1 was reporting a 1-in-36 id collision in `itemsAdd` (one random
+base-36 digit per millisecond). The fix went into the code, with a pin whose stubbed draw forces the collision; a retry
+would have hidden a real bug behind a green.
+
 ### v15.72 — a class name is a global; a "look" bug is measured, not eyeballed; his read goes into the register the same night
 (1) "There is yellow in the rectangle right before the purple" was a CSS class collision: v15.65 named the pattern block
 `.g3pb` while a dead rule for the old pullback row still carried that name with an amber left border. The new rule set

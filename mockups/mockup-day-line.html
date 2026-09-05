@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>v15.73 — the day line: what the process did today, at the bottom of the panel</title>
+<style>
+  body{margin:0;background:#0b0e14;color:#c9d1d9;font:11px/1.35 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:14px 16px;width:770px}
+  h1{font-size:12px;margin:0 0 2px;color:#e6edf3} .sub{font-size:9px;color:#8b949e;margin:0 0 10px}
+  .case{margin:0 0 14px} .when{font-size:9px;color:#8b949e;margin:0 0 4px}
+  .panel{width:740px;background:#0b0e14;border:1px solid #1e2530;border-radius:8px;padding:6px 10px 8px}
+  .rp{display:flex;align-items:center;gap:8px;padding:0 6px;height:26px;background:rgba(242,180,90,0.07);border-top:1px solid #1e2530;border-bottom:1px solid rgba(242,180,90,0.45);font-family:ui-monospace,monospace;font-size:9px;color:#f2b45a}
+  .rp .track{flex:1;height:3px;background:#3a4150;border-radius:2px;position:relative}.rp .track i{position:absolute;right:0;top:-4px;width:8px;height:11px;background:#f2b45a;border-radius:2px}
+  .ah{display:block;margin:5px 0 0;padding:2px 6px;border-radius:3px;font-size:7.6px;text-align:center;color:#f2b45a;background:rgba(242,180,90,.10);border:1px solid rgba(242,180,90,.5);font-weight:800;letter-spacing:.04em}
+  .day{display:flex;align-items:center;gap:0;margin:5px 0 0;padding:3px 7px;border:1px solid #1e2530;border-left:3px solid #7cc7ff;border-radius:6px;background:#12161f;font-size:8.4px;color:#e6edf3;white-space:nowrap;overflow:hidden}
+  .day b.d{color:#7cc7ff;font-weight:900;letter-spacing:.06em;margin-right:8px;font-size:8px}
+  .day .st{display:inline-flex;align-items:center;gap:4px;margin-right:9px}
+  .day .st i{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .g{background:#2ec27e}.a{background:#f2b45a}.r{background:#f0616d}.k{background:#3a4150}
+  .day .st em{font-style:normal;font-weight:800;letter-spacing:.04em;font-size:7.4px;color:#8b98a9;text-transform:uppercase}
+  .day .st span{color:#e6edf3}.day .st span.dm{color:#8b949e}
+  .foot{display:flex;align-items:center;gap:5px;color:#8b949e;font-size:8px;letter-spacing:.2px;white-space:nowrap;border-top:1px solid #1e2530;margin-top:6px;padding-top:4px}
+  .foot .dot{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:2px}
+  .chip{border:1px solid #1e2530;border-radius:6px;padding:0 3px;margin-left:auto}.chip.saved{border-color:#2ec27e;color:#2ec27e}
+  .tip{font-size:8.4px;color:#8b949e;margin:5px 0 0 8px;padding-left:8px;border-left:2px solid #1e2530;width:720px;white-space:normal}
+  .tip b{color:#c9d1d9;font-weight:600}
+  .note{font-size:8.6px;color:#8b949e;margin-top:8px;border-top:1px solid #1e2530;padding-top:8px;width:740px}
+</style></head><body>
+<h1>v15.73 — THE DAY LINE: what the process did today, in words, at the bottom of the panel</h1>
+<p class="sub">One line between the AFTER HOURS bar and the footer. The date, then the seven links as they happen: saved · analysis · testing · learning · rec. Each segment shows its evidence (time, who, counts) and its colour: green done · amber expected but not yet · red overdue · grey not knowable. Every hover opens with the question it answers.</p>
+
+<div class="case"><div class="when">A · 10:40 CT, the session running</div>
+<div class="panel">
+  <div class="rp">◀ &nbsp;Fri 5 Sep&nbsp; ▶ <span class="track"><i></i></span> 10:40 &nbsp;38k <span style="margin-left:auto;border:1px solid #3a4150;border-radius:10px;padding:1px 8px;color:#8b949e">↺ REPLAY</span></div>
+  <div class="day"><b class="d">9/5</b>
+    <span class="st"><i class="g"></i><em>data</em><span>recording · 41 bars</span></span>
+    <span class="st"><i class="k"></i><em>saved</em><span class="dm">after the close, by the panel</span></span>
+    <span class="st"><i class="k"></i><em>analysis</em><span class="dm">your machine, ≤ 10 min after</span></span>
+    <span class="st"><i class="k"></i><em>testing</em><span class="dm">—</span></span>
+    <span class="st"><i class="k"></i><em>rec</em><span class="dm">6 awaiting your ✓ (from 9/4)</span></span>
+  </div>
+  <div class="foot"><span><i class="dot g"></i>rec</span><span><i class="dot a"></i>none</span><span><i class="dot k"></i>pushed</span><span><i class="dot g"></i>review</span><span><i class="dot g"></i>deps</span><span class="chip">💾</span><span class="chip">📁</span><span style="margin-left:8px">v15.73</span></div>
+</div>
+<div class="tip"><b>What has the process done with today?</b> Recording — 41 three-minute bars so far. The rest happens after the close: the panel writes the day (15:01 CT, retried until confirmed), the GEX nightly task on your machine reads it within ten minutes and writes the analysis, the tests and the learning; recommendations follow from what cleared. Yesterday's six proposals are still yours to decide on the Rec tab.</div>
+</div>
+
+<div class="case"><div class="when">B · 15:04 CT, the file written, the nightly not yet run</div>
+<div class="panel">
+  <div class="ah">AFTER HOURS · EM EXPIRED — re-anchors at the open</div>
+  <div class="day"><b class="d">9/5</b>
+    <span class="st"><i class="g"></i><em>saved</em><span>15:01 · the panel · 131 bars</span></span>
+    <span class="st"><i class="a"></i><em>analysis</em><span class="dm">not yet — the task runs every 10 min</span></span>
+    <span class="st"><i class="k"></i><em>testing</em><span class="dm">—</span></span>
+    <span class="st"><i class="k"></i><em>learning</em><span class="dm">—</span></span>
+    <span class="st"><i class="k"></i><em>rec</em><span class="dm">6 awaiting your ✓</span></span>
+  </div>
+  <div class="foot"><span><i class="dot g"></i>rec</span><span><i class="dot g"></i>saved</span><span><i class="dot g"></i>pushed</span><span><i class="dot g"></i>review</span><span><i class="dot g"></i>deps</span><span class="chip saved">💾</span><span class="chip">📁</span><span style="margin-left:8px">v15.73</span></div>
+</div>
+<div class="tip"><b>What has the process done with today?</b> Saved — data/2026-09-05.json, written by the panel at 15:01 CT (131 bars), on GitHub. Analysis — not yet: the GEX nightly task on your machine runs every ten minutes and reads the file when it is newer than its log; if this stays amber past 15:30 it turns red and names the task.</div>
+</div>
+
+<div class="case"><div class="when">C · 15:14 CT, everything done</div>
+<div class="panel">
+  <div class="ah">AFTER HOURS · EM EXPIRED — re-anchors at the open</div>
+  <div class="day"><b class="d">9/5</b>
+    <span class="st"><i class="g"></i><em>saved</em><span>15:01 · the panel</span></span>
+    <span class="st"><i class="g"></i><em>analysis</em><span>15:11 · your machine · 9 rows</span></span>
+    <span class="st"><i class="g"></i><em>testing</em><span>9 claims read · 1 ready · 8 thin</span></span>
+    <span class="st"><i class="g"></i><em>learning</em><span>9 rules carry the record</span></span>
+    <span class="st"><i class="a"></i><em>rec</em><span>6 awaiting your ✓ · 0 new</span></span>
+  </div>
+  <div class="foot"><span><i class="dot g"></i>rec</span><span><i class="dot g"></i>saved</span><span><i class="dot g"></i>pushed</span><span><i class="dot g"></i>review</span><span><i class="dot g"></i>deps</span><span class="chip saved">💾</span><span class="chip">📁</span><span style="margin-left:8px">v15.73</span></div>
+</div>
+<div class="tip"><b>What has the process done with today?</b> Saved 15:01 by the panel · analysis complete 15:11 on your machine (learning/log/2026-09-05.json; 9 Analysis rows carry tonight's numbers) · testing complete — 9 registered claims read: H5 ready, the rest thin (n below their minimum) · learning updated — 9 Learn rules carry the record's verdict · recommendations: nothing new cleared tonight; 6 proposals still await your ✓ on the Rec tab.</div>
+</div>
+
+<div class="note">Sources the panel already holds: <b>saved</b> = saveState() (the chip's own evidence: time, by) · <b>analysis</b> = learning/log/&lt;day&gt;.json (date, ranOn, ranAt) + learning/results.json (rows patched) · <b>testing</b> = the log's hypotheses (cleared / refused / ready / thin) · <b>learning</b> = learning/deflections/examples.json (rules with the record's verdict, asOf) · <b>rec</b> = learning/recommendations.json (proposed · new tonight · implemented) merged with your local ✓ / ✗. All fetched on the panel's 10-minute check, so the line fills in on its own after the close. The day shown is the newest day with data (today while recording or saved; yesterday's line stays until today records its first bar). Overdue: analysis &gt; 30 min after the save → red "analysis overdue — is the GEX nightly task installed?"; a save not confirmed by 15:15 → red, the 💾 chip says why.</div>
+</body></html>

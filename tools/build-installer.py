@@ -214,11 +214,17 @@ for f in _mk_md + _mk_bin[:12]:
 # (v15.70) ⚠ THE RENDERS TIPPED THE 8 MB CAP (five 2×-DPI PNGs, 3 MB): only the THREE newest renders ride; the older
 # ones are pushed over the desktop bridge when the session is linked (device_commit_files → the sync task) and stay in
 # git history. Same rule as mockups', same reason.
-_rn = [f for f in os.listdir('design') if f.startswith('render-') and f.endswith('.png')]
-_rn.sort(key=lambda f: os.path.getmtime(os.path.join('design', f)), reverse=True)
+# (v15.73) ⚠ "NEWEST" BY MTIME IS NEWEST BY CHECKOUT: in a fresh clone every render carries the clone's timestamp, and
+# on this build render-v1567-architecture.png (0.95 MB, on GitHub since v15.67) rode as one of the "three newest" and
+# tipped the 8 MB cap. The version in the NAME is the age: the renders of the TWO highest versions present ride
+# (v1573-face, v1572-face); the rest are in git history and go over the bridge when a session is linked.
+import re as _re
+_rn = [f for f in os.listdir('design') if f.startswith('render-v') and f.endswith('.png')]
+_rv = sorted({int(m.group(1)) for f in _rn for m in [_re.match(r'render-v(\d+)', f)] if m}, reverse=True)[:2]
+_ride = [f for f in _rn if _re.match(r'render-v(\d+)', f) and int(_re.match(r'render-v(\d+)', f).group(1)) in _rv]
 for f in sorted(os.listdir('design')):
     p = os.path.join('design', f)
-    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt') or f in _rn[:3]):
+    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt') or f in _ride):
         FILES.append(p)
 # (v14.59) the fixtures the tests read. test_futbars.js and append-futures.py both use
 # tools/fixtures/futbars-day.json; shipping the test without its input turns his suite red for a

@@ -11,6 +11,26 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0i · v15.73 — the day line (2026-09-05, small hours)
+
+One element added, at the bottom, between the AFTER HOURS bar and the footer: **the day line** (`dayLineHtml`,
+`dayLineState`; `.g3pline`). The date (9/5), then the links in the process order — **saved · analysis · testing ·
+learning · rec** — each a dot and a few words of evidence: "saved 15:01 · the panel · 131 bars", "analysis 15:11 · your
+machine · 81 taps counted", "testing 9 claims read · 1 ready · 8 thin", "learning 9 rules carry the record", "rec 6
+awaiting your ✓ · 0 new". Colours: green done · amber expected but not yet ("analysis not yet — the task runs every 10
+min") · red overdue with the cause ("analysis overdue — is the GEX nightly task installed?" 30 minutes after the save with
+no log; "saved overdue — see the 💾 chip" past 15:15 with no confirmed write; "cannot write — click 💾" when the chip is
+DUE) · grey not knowable yet. During the session the first segment reads **data · recording · N bars** and the rest say
+what will happen; yesterday's completed line stays until today records its first bar; a day known only as a download
+reads "N bars, not saved". The hover is the whole sentence, opening with *"What has the process done with 9/5?"*.
+Sources: the 💾 chip's own save evidence (`saveState`, `AUTOSAVE.lastWrite`, `DAY_WRITTEN`), the pipeline record
+(`pipeLoad`: saveDate / saveHow / pushed), the nightly log (`ANALYSIS_NIGHTLY`: date, ranOn, ranAt, hypotheses,
+patterns.events), the Learn file (`learnLoad`: rules' verdict + asOf), the Rec file merged with his decisions
+(`recMerged`). Degree: **descriptive** — every word is a fact about the record; no rate, no claim. Probe:
+`__gptsDebug.dayLine()`. A segment never clips — the row wraps at a segment boundary, so a completed day is two rows at
+760 px (REC on its own). Mockup `mockups/mockup-day-line.png`; render `design/render-v1573-face.png` (the day-line state
+seeded from the real 09-04 record via `render-face.js --pre`, because the harness holds no save evidence and no nightly log).
+
 ## 0h · v15.72 — his three asks on the face, one bug, one read (2026-09-04, night)
 
 Three elements moved or grew, one was repaired, none changed meaning. **The AFTER HOURS · EM EXPIRED bar** left the King

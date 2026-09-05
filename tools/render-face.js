@@ -61,6 +61,12 @@ run(`REPLAY.on=true; REPLAY.day=${JSON.stringify(day)}; REPLAY.frames=${JSON.str
 // (v15.63) --legacy: draw the v15.62 ladder and DAY table (the grid and the read are the default face now)
 if(process.argv.indexOf('--legacy')>=0) run('CFG.ladderGrid=false; CFG.dayRead=false;');
 try{ run('RP_STALEGUARD=(typeof sessionDayStr==="function")?sessionDayStr():0;'); }catch(e){}
+// (v15.73) --pre <js>: run one statement INSIDE the page before render(). The harness has no save
+// evidence and no nightly log, so the day line (v15.73) can only show its "overdue / not yet" states
+// here; --pre lets a render seed the state the operator will see (saveState, ANALYSIS_NIGHTLY, …)
+// from the real record, and says so in the render's caption. Not a way to fake a face: everything
+// seeded must come from a file in the repo.
+if(process.argv.indexOf('--pre')>=0){ try{ run(process.argv[process.argv.indexOf('--pre')+1]); }catch(e){ console.log('PRE THREW: '+e.message); } }
 run('RENDER_ERRS.length=0');
 try{ run('render()'); }catch(e){ console.log('render() THREW: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n')); }
 

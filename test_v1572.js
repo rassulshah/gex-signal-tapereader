@@ -15,7 +15,7 @@ const exVar=(n)=>{ const i=src.indexOf('var '+n+'='); if(i<0) throw new Error('n
 const build=(g,fns,tail)=>new Function('__g', Object.keys(g).map(k=>'var '+k+'=__g.'+k+';').join('\n')+'\nvar PAT_GROW_PCT=20;\n'+exVar('PAT_CLASSES')+'\n'+fns.map(ex).join('\n')+'\n'+(tail||''));
 const esc=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-ok(/@version\s+15\.72/.test(src) && /var GPTS_VERSION='15\.72';/.test(src),'0a v15.72 in both spots');
+ok(/@version\s+15\.(7[2-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[2-9]|[89]\d)';/.test(src),'0a v15.72 or later in both spots');
 
 // ---- 1 · the leaked border ---------------------------------------------------------------------------------------------------------
 {
@@ -158,7 +158,7 @@ function ex_py(txt,name){ const i=txt.indexOf('def '+name+'('); if(i<0) return '
 {
   const P=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]);
   const nx=P.roadmap.filter(r=>r.status==='next');
-  ok(nx.length===1 && nx[0].v==='15.72' && /THE FACE, HIS THREE ASKS/.test(nx[0].title) && P.roadmap.some(r=>r.v==='15.71' && r.status==='shipped') && P.roadmap.some(r=>r.v==='15.73' && /candidate score/.test(r.title)),'7a the plan: v15.71 shipped, v15.72 this build, the score → v15.73',nx.map(x=>x.v));
+  ok(P.roadmap.some(r=>r.v==='15.72' && /THE FACE, HIS THREE ASKS/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.72'))) && P.roadmap.some(r=>r.v==='15.71' && r.status==='shipped') && P.roadmap.some(r=>/candidate score/.test(r.title) && r.v>='15.73'),'7a the plan: v15.71 shipped, v15.72 this build or shipped since, the score after it',nx.map(x=>x.v));
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r8=R.rows.find(r=>r.id==='R-8');
   ok(r8 && r8.status==='implemented' && r8.version==='15.72' && r8.by==='operator','7b the face change has its Rec row: R-8, implemented in v15.72',r8&&[r8.status,r8.version]);
   const seedJs=JSON.parse(/var REC_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(R),'7c REC_SEED equals the file');
@@ -168,7 +168,7 @@ function ex_py(txt,name){ const i=txt.indexOf('def '+name+'('); if(i<0) return '
   const gen=fs.readFileSync('tools/mockup-from-studies.py','utf8'); ok(/<div class="rs nt">⟳ <b>%s<\/b><\/div>/.test(gen),'7g the Analysis mockup generator draws the nightly’s count line (the look’s source — test_v1562 2e pins the tab equal to it)');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/## v15\.72/.test(cl) && cl.indexOf('## v15.72')<cl.indexOf('## v15.71'),'7h the CHANGELOG has the v15.72 entry on top');
   const ls=fs.readFileSync('session-state/LESSONS.md','utf8'); const logAt=ls.indexOf('## 2 · THE LESSON LOG'); ok(/### v15\.72/.test(ls.slice(logAt>=0?logAt:0)),'7i the lesson log carries the v15.72 entry');
-  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.72/.test(rn.slice(0,600)) && /rolling floor/i.test(rn),'7j the resume note is at v15.72 and names the rolling floor');
+  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.(7[2-9]|[89]\d)/.test(rn.slice(0,600)) && /rolling floor/i.test(rn),'7j the resume note is at v15.72 or later and names the rolling floor');
   const inv=fs.readFileSync('design/DASHBOARD-INVENTORY.md','utf8'); ok(/## 0h · v15\.72/.test(inv),'7k the inventory carries §0h');
   const fd=fs.readFileSync('skylit-docs/FINDINGS.md','utf8'); ok(/H-KR \(v15\.72\)|H8 \/ H9/.test(fd),'7l FINDINGS names the registered read');
 }

@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-05 · v15.72 · session `f9c89c64` — v15.72: the face (his three asks + the leaked border) · the rolling floor / ceiling registered (H8 / H9) · the nightly run for 09-04 · v15.72b the UTF-8 log
+## 2026-09-05 · v15.73 · session `f9c89c64` — v15.73: the day line — the process reporting on itself at the bottom of the panel ("9/4 - data saved, analysis complete, testing complete, recommendations made")
 
-_80 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_91 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1069,8 +1069,185 @@ What shipped, in his order: the b …[trimmed]
 
 **me (02:50):** Now the delivery rule he just gave me, and his expectation, into the record — then the commit and the bridge.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (22:35):** Yes — that is my understanding, and it is now written down as the structure rather than remembered: **the Data Analysis process** (`design/DATA-ANALYSIS-PROCESS.md`), seven links CAPTURE → ANALYSIS → TESTING → LEARNING → REC → DASHBOARD → SCORE, eight tabs as the final set, every market number in `learning/markets.json`, pinned by `test_data_analysis_process.js` so a future context cannot drop it and stay green. Your one step is the 💾 at the close. From there the "GEX nightly" task on your machine counts every tap by class against held / TURN / RESUME, writes the Analysis and Testing ⑦ numbers, puts the record's verdict beside each Learn rule, and drafts Rec rows from pre-registered conditions — your ✓ / ✗ rides the next day file, and nothing on the face changes except through a ✓ and a build that marks the row IMPLEMENTED. The one honest caveat, stated on the ⚙ tab too: the *review* — turning a read into a written claim, answering your Open Items, writing findings — still waits for a session with me; everything mechanical up to the Rec tab runs on your click.
+
+You are on v15.64, so this one install carries v15.65 → v15.70.
+
+**Step 1.** Double-click `installv1570.bat` (it is in this chat and already in `C:\Dev\gex-signal-tapereader\`). It ends with `pushed`. Send "done".
+
+**Step 2.** Double-click `C:\Dev\gex-signal-tapereader\setup-gex-nightly.bat` — once, ever. It ends with `GEX nightly task installed`. Send "done".
+
+**Step 3.** Wait five minutes, then click the panel link below in Tampermonkey; it should offer *Update* to 15.70 (not *Reinstall*). The companion is unchanged — no click.
+
+**Step 4.** Reload the Atlas tab. The footer reads 15.70 and a fifth tab, 💡 Rec, is there. Send "reloaded".
+
+After your first 💾 following the install: within ten minutes `tools\gex-nigh …[trimmed]
+
+**OPERATOR:**
+> the next step is to automatically have the application trigger the save button instead of me clicking it .  can the application selft trigger using a time. for example, if the save button has not been pressed and the time is 5pm or later , trigger it.  if the save button for the previous day has not been triggered and the time is during non market hours, trigger it.
+
+**me (23:35):** Yes — and the panel already does part of it, which the record proves: the last seven trading days' files in the repo (08-27 → 09-03) all carry `exportedAt` 15:01–15:03 CT. That is the auto-export that has lived in the panel since v10.5x firing one minute after the close, not your click. So the 💾 you have been pressing was mostly a second write of the same day. What is missing is exactly your two rules, plus one thing the record taught in August.
+
+**The design — "the save runs itself"** (one build, v15.71 if you approve; the 💾 stays as an override):
+
+- **Rule 1 — the close.** Unchanged: 15:01 CT, once, the full day file and the tape files.
+- **Rule 2 — your 5pm rule.** From 17:00 on the panel's clock (Chicago, like every other time on the panel — tell me if your 5pm is another zone), any tick that finds today not confirmed written into the repo folder writes it, and keeps trying every 10 minutes until it lands. Today the attempt stops at 16:00 CT and a miss stays missed.
+- **Rule 3 — your previous-day rule.** Outside market hours (before 08:30, after 15:00, weekends), every day still in IndexedDB with bars and no file gets written — write-if-absent, so a good file is never overwritten by a thinner re-export. On boot and every tick. The tape files already do this; the day file does not.
+- **"Saved" means one thing:** confirmed written into the repo folder. A browser download (the current silent fallback when the folder grant is missing) stops counting as saved — it never reaches the repo, and the sync task never sees it.
+
+**The one thing that can stop a timer-save, and its end.** Chrome drops the folder permission on every page load, and a timer cannot ask for it back — only a click can (the IRT export died silently for a morning in August exactly this way, F-note in the …[trimmed]
+
+**OPERATOR:**
+> instead of 5pm can you just modify so it is after market hours..  besides this i approve .. build
+
+**me (23:49):** Now the plan: v15.70 shipped, v15.71 is this build, the rest shift one, and every "his 💾 is the only manual step" line says what is true now.
+Now the record: CHANGELOG, LESSONS, the resume note (+ snapshot).
+Built, tested, committed (`b31a1c8`), and the installer is in this chat and in `C:\Dev\gex-signal-tapereader\`. It carries v15.65 → v15.71 in one go.
+
+**Step 1.** Double-click `installv1571.bat`. It ends with `pushed`. Send "done".
+
+**Step 2.** Double-click `C:\Dev\gex-signal-tapereader\setup-gex-nightly.bat` — once, ever. It ends with `GEX nightly task installed`. Send "done".
+
+**Step 3.** Wait five minutes, then click the panel link below in Tampermonkey; it should offer *Update* to 15.71. The companion is unchanged — no click.
+
+**Step 4.** Reload the Atlas tab. The footer reads v15.71, and the 💾 at the bottom right is now a chip. Send "reloaded".
+
+**Step 5 (only if it applies).** If that chip shows **💾!** or **💾 DUE** after the reload, click it once and choose **"Allow on every visit"** in the Chrome prompt. That is the last click the save ever needs.
+
+What you built, in one breath: after the close (15:01 CT and later, no cut-off) the panel writes the day and keeps trying every ten minutes until the file is confirmed in the repo folder; outside market hours it writes any earlier day still in its store with bars and no file (looking for the file first, so a good one is never overwritten); "saved" now means confirmed in the folder and nothing else — the silent download fallback is gone; a day with no bars is never written (the old export had been writing weekend files). The 💾 stays as the override. Then the GEX sync and GEX nightly tasks do what they do now, so the loop reaches the Rec tab with zero clicks — and the one habit left to you is keeping the Atlas tab op …[trimmed]
+
+**OPERATOR:**
+> check now
+
+**me (00:14):** The check, in order:
+
+**GitHub — yes.** `origin/main` has your push at 19:08 CT (`99b4af7 v15.71 …`), the panel file on GitHub reads `@version 15.71`, and the sync task committed again at 19:12. Step 1 worked.
+
+**Today's file — already there, and it proves the point.** `data/2026-09-04.json` was written at **15:01:00 CT** by the panel itself (the file says version 15.65 — so you were on v15.65, not v15.64), 101 SPY bars, in the repo folder and on GitHub. That was the old auto-export doing exactly what this build makes reliable. Nothing to re-save tonight; the first close the new rules run is Monday.
+
+**The nightly task — has not run.** There is no `tools\gex-nightly.log` in your repo folder, and no `learning/log/2026-09-04.json` on GitHub. The task either is not installed yet (Step 2) or has not fired yet. So:
+
+**Step 2.** Double-click `C:\Dev\gex-signal-tapereader\setup-gex-nightly.bat` — once. It should print `[1] repo found`, `[2] python: 3.13…`, and end with the task created. Send "done", and paste the last line if it says anything with `[X]` or `[!]`.
+
+**Step 3.** Wait five minutes from your Step 1 (already past), click the panel link in Tampermonkey (Update to 15.71), then reload the Atlas tab.
+
+**Step 4.** Look at the bottom-right of the panel and tell me which you see: **💾** plain, **💾** green, **💾!** amber, or **💾 DUE** red. Send that with "reloaded".
+
+I can't look at the live panel from here without opening a second Atlas tab, which the rules forbid — your one word about the chip is the probe. Within ~12 minutes of Step 2 the log should appear and GitHub should get `learning/log/2026-09-04.json` with `ranOn: "his machine"`; I'll check for that once you send "done".
+
+**OPERATOR:**
+> also note that the after hours message to the left is bad choice , it is taking up too much space. you can put it on the  bottom of the application, this will give you much more space for the king badges which you can make bigger. as well as the size of the font in the node ladder.
+
+**me (00:19):** Noted, and I found why it hurts: the AFTER HOURS chip and the three King cards live in the same wrapping row, so on your wide panel the chip sits to the left and the cards get the leftover width — the cards were only 462 px wide of the 649 available. Moving the chip fixes the cards' width by itself; the bigger fonts come on top of that.
+
+The mockup above is the real panel re-rendered with the change, not a drawing:
+
+- **AFTER HOURS · EM EXPIRED** becomes a full-width bar at the bottom, directly above the footer strip (rec · saved · pushed …). Same words, same hover, same amber. It is only there after the close, as now.
+- **King cards** take the whole row and grow: the price 12 → 16.5 px, the KING titles 6.8 → 8.6 px, the GROWTH / ROLLED lines 7 → 8.6 px, the ROLLED UP / BELOW pills 6.2 → 7.4 px. The strip goes from 75 to 96 px tall, roughly what the removed row gave back.
+- **Ladder** rows 7.6 → 9 px (header 6.2 → 7.3, the King chips and % bars up to match), columns widened ~15% so nothing truncates. The ladder becomes ~730 px wide, so the panel will widen itself once to fit it — the same one-time grow it did for the pattern columns in v15.65 — as long as your screen allows 98% of the window.
+
+Nothing else on the face changes, and nothing in the record (this is layout, degree descriptive).
+
+One question: **build this as v15.72 as shown?** If you want a step bigger or smaller (e.g. the ladder at 10 px), say the number and I adjust the mockup before building.
+
+Meanwhile on the check: still no `tools\gex-nightly.log` and no `learning/log/2026-09-04.json` on GitHub — the nightly task has not fired yet, so Step 2 (`setup-gex-nightly.bat`, once) is still the thing to run when you get to it.
+
+**OPERATOR:**
+> why do the rugs and the barneys etc have a yellow in them ?
+
+**me (00:27):** Those yellow numbers are the pattern's own strikes: under BARNEY it is the stack's range (768–771), under RUG / RRUG it is the pair — the yellow (+γ) node over the purple (−γ) node (773/772). Same for PIKA.
+
+They are yellow because you asked for it in the v15.65 conversation: *"write barney and pika in black and have the prices in yellow."* I made that the one style for all four pattern blocks, so the rugs inherited the yellow from the stacks.
+
+If you would rather the rug numbers (or all of them) read in plain grey-white so the yellow stays reserved for the +γ nodes, say which — it is one CSS line and I will fold it into the v15.72 mockup.
+
+**OPERATOR:**
+> there is yellow in the rectangle right before the purple
+
+**me (00:29):** That sliver is a bug, and I found it. When the pattern blocks were built in v15.65 I named their class `.g3pb`, and an older, dead rule from an earlier face uses the same name with an amber left border: `border-left: 2px solid #f2b45a`. The new rule set the block's colour but never said "no left border", so the old rule's border leaks into every RUG, RRUG, BARNEY and PIKA block. Same landmine as the `ifNum` function collision, in CSS this time.
+
+The fix is one line (the dead rule goes, and the block rule states its own border), and I'll pin it with a test so no second `.g3pb` rule can come back. The crop above is the mockup re-rendered with it. It goes into v15.72 with the layout change — still waiting on your yes to that mockup.
+
+**OPERATOR:**
+> I like how the badges in the kings tell you that the king rolled up or down  and is above or below.  i think there is sometthing to this.    when the king rolls up and is below price it may be creating a floor (support) and be bullish and vice versa
+
+**me (00:32):** Yes — and it is not just "something": it is the doctrine's own rule, applied to the biggest node. `skylit-docs/learn/rolling-floors-ceilings.md`: *"Largest FLOOR node migrating HIGHER = floor ROLLING UP (bullish). Largest CEILING node migrating LOWER = ceiling ROLLING DOWN (bearish)."* The King is the largest node, so a King that rolled up and sits below price is the doctrine's rolling floor, and a King that rolled down above price is its rolling ceiling. The badges already show both halves (ROLLED UP · BELOW); nothing yet counts the pair. Doctrine gate: FOLLOWING.
+
+What the record can say today is only the halves, one day, old names: on 09-03 a floor holding (`dir:up`) resumed the trend 9 of 12 times (75%, Wilson low 47%), a ceiling 4 of 7 (57%, low 25%) — at that n, not a difference — and the King's roll direction at the tap is not in the stamp at all, so the pair has never been measured. Stamped taps so far: 0 (the stamp shipped in v15.67; tonight's install makes Monday the first stamped session).
+
+The process turns your read into a claim before the data, not after. Concretely, for v15.72:
+
+- **Four stamp classes on every tap, both twins:** the King's roll today × its side of price — `king:up-below` (your floor case), `king:dn-above` (your ceiling case), and the mirrors `king:up-above` / `king:dn-below` (a King rolling *away* from price — a magnet, if anything, not a wall). The nightly counts held · TURN · RESUME per class from the first stamped session; Rec proposes when a class is clear of the base at n ≥ 15, the same rule as every other class.
+- **One register row, written now:** *H-KR — a tap of a King that rolled UP today and sits BELOW price resumes the trend more often than the floor base; the ceiling case mirrors it. Read once at n = 30 per class, on sessions …[trimmed]
+
+**OPERATOR:**
+> yes .. build .. also yhave you run the process to save , analyze etc.. ?
+
+**me (00:37):** Yes — just ran it for today. Your panel wrote `data/2026-09-04.json` at 15:01 on its own; the nightly task on your machine hasn't fired yet (no `tools\gex-nightly.log`), so I ran the nightly here on that file and wrote its outputs into your repo folder — the sync task pushes them within two minutes, and the Analysis / Learn / Testing tabs refresh on the panel's next 10-minute check.
+
+What day two says (two sessions, 78 taps, still the old detector — nothing stamped until Monday): turn 1 of 28 (4%), resume 21 of 28 (75%, Wilson low 57%), held 35 of 78 (45%). Floors held 15 of 27, ceilings 7 of 22 — same shape as day one, n still too small to call a difference. No items or requests to answer, no ✓ on Rec yet. Recorded as F-19's second day.
+
+Building v15.72 now: the layout, the `.g3pb` border fix, the four King-roll classes in both twins and the H-KR register row.
+Now the Python twin, the register rows, the study rows and the nightly's judge:
+Now the plan (v15.71 shipped, v15.72 this build), the re-pins that failed to apply, and then the new test.
+Now `test_v1572.js`:
+Built, tested, committed (`9698b9f`), installer in this chat and in `C:\Dev\gex-signal-tapereader\`.
+
+**Step 1.** Double-click `installv1572.bat`. It ends with `pushed`. Send "done".
+
+**Step 2.** Double-click `C:\Dev\gex-signal-tapereader\setup-gex-nightly.bat` — once. It ends with the task created. Send "done". (Still not run as of my last look: no `tools\gex-nightly.log`.)
+
+**Step 3.** Wait five minutes, click the panel link below in Tampermonkey (Update to 15.72). Companion unchanged.
+
+**Step 4.** Reload the Atlas tab. The panel widens itself once to fit the bigger ladder (~730 px); the AFTER HOURS bar sits above the footer; the King cards fill their row. Send "reloaded".
+
+What shipped, in his order: the b …[trimmed]
+
+**OPERATOR:**
+> done.. check everything and next time give me the tampermonkey link.. my expectation is that from now on i will not have to click on the save button and that i will only goto the rec tab to discuss recommendations with you , everything esle will be done automatically
+
+**me (02:50):** Now the delivery rule he just gave me, and his expectation, into the record — then the commit and the bridge.
+Checked, and the machinery did its job tonight. Here is what I found, then the link you asked for.
+
+**GitHub:** at v15.72 (`d05d769`), pushed by your installer at 20:0x CT. `.gitattributes` is on origin and the task scripts are CRLF again. The nightly's log and the registry for 09-04 are on GitHub too (the sync pushed them at 19:20–20:02).
+
+**The "GEX nightly" task:** installed and it already ran — first run 19:21:02 CT on your machine, the day file read, the log written, `nightly ran` in `tools\gex-nightly.log`. One wart in that log: printing the pattern report into a Windows log file threw a cp1252 encoding error on the "≥" character (the table itself had been built, so nothing was lost — it just read like a failure). Fixed: the nightly writes UTF-8 now; the fix is in your repo folder (the sync task pushes it), so Monday's run is clean. Tagged v15.72b in the changelog — tools only, no reinstall.
+
+**The link, as a link — and every build from now on, in the step that says to click it:**
+
+**Step 1.** Click [Tapereader v15.72](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) — Tampermonkey offers *Update* to 15.72. The companion (v1.18) is unchanged; nothing to click there.
+
+**Step 2.** Reload the Atlas tab. Footer v15.72; the panel widens itself once for the bigger ladder; the King cards fill their row; after the close the AFTER HOURS bar sits above the footer. Send "reloaded".
+
+**Your expectation — yes, and here is exactly where it stands.** The save: automatic — after the close, retried until the file is confirmed; a missed day is written the next time the panel is open outside market hours. The anal …[trimmed]
+
+**OPERATOR:**
+> there needs to be some message at the bottom that tells me that says something like9/4- data saved analysis complete, testing complete, recommendations made.    something descriptive
+
+**me (02:58):** Agreed — that line is the process reporting on itself, and the panel already holds every fact it needs. Mockup above; here is what it says and when.
+
+**The day line**, one row between the AFTER HOURS bar and the footer: the date, then the links in order — **saved · analysis · testing · learning · rec** — each with its evidence and a colour. Green = done (with the time and who: "saved 15:01 · the panel", "analysis 15:11 · your machine · 9 rows"). Amber = expected but not yet ("analysis not yet — the task runs every 10 min"). Red = overdue and it names the cause ("analysis overdue — is the GEX nightly task installed?" if nothing has run 30 minutes after the save; a save not confirmed by 15:15 goes red and the 💾 chip says why). Grey = not knowable yet. During the session the same line reads "9/5 · data recording · 41 bars · saved after the close, by the panel · …", so it never goes blank; yesterday's completed line stays up until today records its first bar. The hover is the whole sentence you asked for: *"9/4 — data saved 15:01 by the panel · analysis complete 19:21 on your machine · testing complete, 9 claims read · learning updated, 9 rules carry the record · 6 recommendations awaiting your ✓."*
+
+Where the facts come from: the chip's own save evidence, the nightly log, the registry, the Learn file and the Rec file — all of which the panel already fetches every ten minutes, so the line fills in on its own after the close with nothing new to run on your machine.
+
+One question: **build it as shown for v15.73?** If you would rather the wording be exactly your four ("data saved, analysis complete, testing complete, recommendations made") without learning, say so and I will change the mockup before building.
+
+**OPERATOR:**
+> i like it.
+
+**me (03:06):** Logic done and 12 of 12 mutants caught. Now the record: the plan, R-9, the docs, then the build.
+
 ### DECISIONS
 
+- **v15.73 — the day line, on the mockup: "i like it."** His ask: "there needs to be some message at the bottom that
+  tells me that says something like 9/4- data saved analysis complete, testing complete, recommendations made.
+  something descriptive". Designed as the process reporting on itself from facts the panel already holds — the date,
+  then saved · analysis · testing · learning · rec, each with its evidence and a colour; red names the cause when a
+  stage is overdue; grey says what will happen; yesterday's line stays until today records. Offered his exact four
+  words without "learning" as the alternative; he took it as shown. Settled: a download is "not saved" on the line as on
+  the chip; the candidate score is v15.74.
 - **v15.72 — the face, on the mockup: "yes .. build".** His three asks — the AFTER HOURS message off the left ("bad
   choice, it is taking up too much space … put it on the bottom of the application"), bigger King badges, a bigger ladder
   font — answered by measuring first (the cards sat at 462 of 649 px beside the chip in one wrapping row) and mocking up
@@ -1172,6 +1349,11 @@ What shipped, in his order: the b …[trimmed]
 
 ### SHIPPED
 
+**v15.73** (panel; companion v1.18 unchanged) — THE DAY LINE. `dayLineState` / `dayLineHtml` (`.g3pline`, between the
+after-hours bar and the footer, both render paths); `fmtCT`; `dayBarCount`; `DAYLINE_ANALYSIS_LATE_MS`;
+`__gptsDebug.dayLine()`; the CSS; R-9 implemented; the plan shifted; DATA-ANALYSIS-PROCESS.md, INVENTORY §0i, the config
+(2026-09-05b). `test_v1573.js` 44 assertions, 14 of 14 mutants (a 1-in-36 id collision in `itemsAdd`, found as a flake, fixed). Mockup `mockups/mockup-day-line.png`, render
+`design/render-v1573-face.png`.
 **v15.72** (panel; companion v1.18 unchanged) — THE FACE + THE READ. `afterHoursChipHtml` at the bottom (both render
 paths; gone from `secFrame`); `.g3kz{flex:1 1 100%}` and the card sizes (16.5 / 8.6 / 8.6 / 7.4); the ladder 9 px, columns
 `56 68 118 66 94 68 70 70 70`, the node bar at 112, the chips / bars / NOW scaled; the dead `.g3pb` rule gone, `border-left:0`;
@@ -1267,6 +1449,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **He runs ONE file** — `installv1573.bat`; wait 5 min; the tapereader link (as a link); reload. The nightly task is
+  installed and has run; nothing else on his machine.
+- **Monday:** the day line live (recording, then green after 15:01 as the task runs); the first stamped session; the
+  automatic close.
 - **v15.72b, after his "done":** GitHub at v15.72, the nightly task ran on his machine at 19:21 CT (first run); its
   cp1252 print wart fixed (UTF-8 out) and written over the bridge with PURPOSE §3b (his expectation: no click, only the
   Rec tab) and R-LINK (the Tampermonkey link as a clickable link — "next time give me the tampermonkey link").
@@ -1344,6 +1530,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+51b88dd v15.72b (tools, no panel change): the nightly's output is UTF-8 on Windows (the task's first run on his machine logged a cp1252 charmap error printing the pattern report); PURPOSE §3b carries his expectation after the install (no click on the save, only the Rec tab); R-LINK - the Tampermonkey link is a clickable link, never only in a code block; the skill says so
 9698b9f v15.72: the face - the AFTER HOURS bar moves to the bottom of the panel (a full-width bar above the footer, after the close only), the King cards take the whole row and grow, the ladder 9 px with the columns widened, the leaked .g3pb border gone (a dead pullback rule's amber left border inside every RUG/RRUG/PIKA/BARNEY block); THE ROLLING FLOOR / CEILING registered - his read of 2026-09-04 as H8/H9 (predict + refuteIf, minN 30, base dir:up/dir:dn, since the first stamped session), every tap stamped with each book's King roll (kroll), four classes in both twins, K2.6/K2.7 on Analysis, judge_pat in the nightly; .gitattributes fixed (the task scripts stay CRLF), Claude outputs/ ignored; the Analysis mockup generator draws the nightly's count line; R-8 implemented
 e05a50b nightly 2026-09-04 (cloud): the log, the registry, the Learn rules' verdicts, the sweep tables; F-19 second day - turn 1/28, resume 21/28, held 35/78 (two sessions, no stamps yet)
 fc64e39 gex: sync 04-Fri-09 19:12
@@ -1355,7 +1542,6 @@ d3926a1 gex: sync 04-Fri-09 17:26
 0f6e8c0 gex: sync 04-Fri-09 15:02
 cd1a7b8 v15.65: the PATTERN columns one per book, PIKA/BARNEY blocks with the book's own strikes, RUG/RRUG, off-King patterns on the nearest row; the NOW row in white; the Kings in their own colours
 f15529e gex: sync 04-Fri-09 12:46
-bd11968 gex: sync 04-Fri-09 12:30
 ```
 
 ---

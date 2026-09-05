@@ -39,6 +39,9 @@ absent); the 💾 remains as the override and as the one click Chrome may need f
 (*"automatically have the application trigger the save button instead of me clicking it … after market hours"*, 2026-09-04).
 **The one stage that still waits for a session:** the review inside links 3–5 (turning a read into a claim, answering
 items, writing findings) — and the process says so, on the ⚙ tab and here, rather than implying otherwise.
+**The process reports on itself (v15.73): the day line** at the bottom of the panel — the date, then saved · analysis ·
+testing · learning · rec, each with its evidence and a colour (green done · amber expected, not yet · red overdue, and
+why · grey not knowable yet). It reads only facts the panel already fetches; nothing in it is a claim.
 
 ## 2 · The degrees of knowledge (every number on the face carries one)
 
