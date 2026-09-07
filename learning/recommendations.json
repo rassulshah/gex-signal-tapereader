@@ -48,7 +48,7 @@
    "kind": "FEATURE",
    "by": "review",
    "asOf": "2026-09-04",
-   "text": "The candidate score (v15.75) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
+   "text": "The candidate score (v15.76) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
    "changes": "the pre-tap read shows a tested number, not a hope",
    "evidence": "no tested rule exists yet; the score waits for R-2 and the first clears",
    "status": "proposed"
@@ -62,6 +62,18 @@
    "changes": "the one stage that still waits for a session runs on a clock",
    "evidence": "stage ⑤ is the only manual step left after v15.68",
    "status": "proposed"
+  },
+  {
+   "id": "R-12",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-07",
+   "text": "The closed state: when the market has not opened today the dashboard stands on the last recorded session parked at its close — every section as it was — badged CLOSED, and returns to LIVE by itself with today’s first book.",
+   "changes": "the session signal is the gamma payload’s own minute series, not the clock; the stale-day guard no longer evicts a replay on a holiday; the day line reads the last session, not “recording · 0 bars”",
+   "evidence": "his words 2026-09-07 (Labor Day, at the panel): “the application doesn’t seem to support a frozen state from when it was open so i can really work on it … there is no node ladder”; measured on his panel: every feed arriving, the clock past 08:30, 0 bars, an empty face, a drag on Friday’s strip handed straight back to LIVE",
+   "status": "implemented",
+   "version": "15.75",
+   "why": "approved in the chat 2026-09-07 (“ok.. fix”); shipped in v15.75"
   },
   {
    "id": "R-7",
@@ -103,7 +115,7 @@
  "counts": {
   "proposed": 6,
   "approved": 0,
-  "implemented": 3,
+  "implemented": 4,
   "declined": 0,
   "withdrawn": 0
  }

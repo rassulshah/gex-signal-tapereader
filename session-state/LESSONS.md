@@ -131,6 +131,24 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.75 — the clock is not the session; the feed you already have carries the fact you were guessing
+(1) Three places in this panel used the wall clock as a stand-in for "a session is running": the stale-day guard, the
+NOT RECORDING banner and the day line. On a trading day the clock is right and nobody notices the substitution; on
+Labor Day all three were wrong at once — an empty face, a replay evicted, "recording · 0 bars" — and the operator
+named the missing state in one sentence. When a rule says "during RTH", ask what RTH is a proxy FOR; here it was
+"the book is moving today", and the book carries its own clock (`levels[].t`, 390 minutes of the last session), so
+the proxy was never needed. (2) The probe was the tab he was typing in: `__gptsDebug.deps()`, `dayLine()`, the
+feed's newest minute, the DOM's class counts — five reads, no guessing, no second Atlas tab. The rule "never open a
+second /atlas tab" is about the second tab; reading the one he is on is how the v15.73 recorder bug and this one
+were both diagnosed in minutes. (3) A guard written for one failure (a replay parked through a live morning) had
+a second failure inside its condition (the same clock on a holiday). The fix was not to weaken the guard but to give
+it the fact it was missing; v15.45's behaviour on a trading day is unchanged and pinned (4b). (4) The recorder stays
+blind during the closed state ON PURPOSE — un-blinding "just the raw writer" would have needed nine gates to agree
+about the replayed frame, and there is nothing to record on a closed day. The release runs on the live book instead,
+which is exactly why the book had to be the signal: a release keyed on recorded bars could never fire while blind.
+(5) The store held a Sunday-evening day (2026-09-06, no RTH frames). "The last recorded day" is not "the last
+session"; the state skips weekends and marks days that load empty, or the panel would have stood on nothing.
+
 ### v15.74b — two writers, one file: the installer must carry the newest of both worlds, and a machine can check that
 (1) "Your machine ran it at 22:35" was true when I wrote it and false ten minutes later, because my own installer put
 the cloud's copy of the log back over his machine's — the installer extracts every file it carries, and his nightly

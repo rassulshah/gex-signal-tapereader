@@ -17,7 +17,7 @@ const exVar=(n)=>{ const i=src.indexOf('var '+n+'='); if(i<0) throw new Error('n
 const LOG=JSON.parse(fs.readFileSync('learning/log/2026-09-04.json','utf8'));
 const mkStore=(init)=>{ const store=Object.assign({},init||{}); return { store, localStorage:{ getItem:k=>(k in store)?store[k]:null, setItem:(k,v)=>{ store[k]=String(v); }, removeItem:k=>{ delete store[k]; } } }; };
 
-ok(/@version\s+15\.74/.test(src) && /var GPTS_VERSION='15\.74';/.test(src),'0a v15.74 in both spots');
+ok(/@version\s+15\.(7[4-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[4-9]|[89]\d)';/.test(src),'0a v15.74 or later in both spots');
 
 // ---- 1 · the store: save, load, garbage ------------------------------------------------------------------------
 {
@@ -97,13 +97,13 @@ function section4(){
 // ---- 5 · the record ------------------------------------------------------------------------------------------------
 function section5(){
   const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=P.roadmap.filter(r=>r.status==='next');
-  ok(nx.length===1 && nx[0].v==='15.74' && /SURVIVES A RELOAD/.test(nx[0].title) && P.roadmap.some(r=>r.v==='15.73' && r.status==='shipped') && P.roadmap.some(r=>r.v==='15.75' && /candidate score/.test(r.title)),'5a the plan: v15.73 shipped, v15.74 this build, the score → v15.75',nx.map(x=>x.v));
+  ok(P.roadmap.some(r=>r.v==='15.74' && /SURVIVES A RELOAD/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.74'))) && P.roadmap.some(r=>r.v==='15.73' && r.status==='shipped') && P.roadmap.some(r=>/candidate score/.test(r.title) && r.v>='15.75'),'5a the plan: v15.73 shipped, v15.74 this build or shipped since, the score after it',nx.map(x=>x.v));
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P),'5b PLAN_SEED equals the file');
   ok(P.system.storage.some(k=>/gpts_nightly_v1/.test(k.key)),'5c the architecture\'s storage table names gpts_nightly_v1');
-  const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); ok(R.rows.some(r=>r.id==='R-5' && /v15\.75/.test(r.text)),'5d R-5 points the score at v15.75');
+  const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); ok(R.rows.some(r=>r.id==='R-5' && /v15\.7[5-9]/.test(r.text)),'5d R-5 points the score at v15.75 or later');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/## v15\.74/.test(cl) && cl.indexOf('## v15.74')<cl.indexOf('## v15.73'),'5e the CHANGELOG has the v15.74 entry on top');
   const ls=fs.readFileSync('session-state/LESSONS.md','utf8'); const logAt=ls.indexOf('## 2 · THE LESSON LOG'); ok(/### v15\.74/.test(ls.slice(logAt>=0?logAt:0)),'5f the lesson log carries the v15.74 entry');
-  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.74/.test(rn.slice(0,600)) && /reload/i.test(rn),'5g the resume note is at v15.74 and names the reload');
+  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.(7[4-9]|[89]\d)/.test(rn.slice(0,600)) && /reload/i.test(rn),'5g the resume note is at v15.74 or later and names the reload');
   const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/reload/i.test(cfg.theWhatAndTheHow.dayLine||'') && cfg.theWhatAndTheHow.pinnedBy.indexOf('test_v1574.js')>=0,'5h .gex-config.json names the restore and this test');
   console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);
 }

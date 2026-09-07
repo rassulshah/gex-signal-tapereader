@@ -32,7 +32,7 @@ ROWS = [
          changes='the dashboard draws from the knowledge base and nothing else; a contradicted rule cannot stay on the face',
          evidence='two files today; “it is from the learning that you can know something” (2026-09-04)'),
     dict(id='R-5', kind='FEATURE', by='review', asOf='2026-09-04',
-         text='The candidate score (v15.75) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
+         text='The candidate score (v15.76) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
          changes='the pre-tap read shows a tested number, not a hope',
          evidence='no tested rule exists yet; the score waits for R-2 and the first clears'),
     dict(id='R-6', kind='PROCESS', by='review', asOf='2026-09-04',
@@ -57,6 +57,11 @@ ROWS = [
          changes='the loop is visible on the dashboard without opening a tab; a stalled stage says so and why',
          evidence='his words 2026-09-05: “there needs to be some message at the bottom that tells me … 9/4 - data saved, analysis complete, testing complete, recommendations made. something descriptive”; every fact is already fetched by the panel',
          status='implemented', version='15.73', why='approved on the mockup 2026-09-05 (“i like it.”); shipped in v15.73'),
+    dict(id='R-12', kind='FEATURE', by='operator', asOf='2026-09-07',
+         text='The closed state: when the market has not opened today the dashboard stands on the last recorded session parked at its close — every section as it was — badged CLOSED, and returns to LIVE by itself with today’s first book.',
+         changes='the session signal is the gamma payload’s own minute series, not the clock; the stale-day guard no longer evicts a replay on a holiday; the day line reads the last session, not “recording · 0 bars”',
+         evidence='his words 2026-09-07 (Labor Day, at the panel): “the application doesn’t seem to support a frozen state from when it was open so i can really work on it … there is no node ladder”; measured on his panel: every feed arriving, the clock past 08:30, 0 bars, an empty face, a drag on Friday’s strip handed straight back to LIVE',
+         status='implemented', version='15.75', why='approved in the chat 2026-09-07 (“ok.. fix”); shipped in v15.75'),
 ]
 
 if __name__ == '__main__':

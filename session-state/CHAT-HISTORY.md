@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-05 · v15.74 · session `f9c89c64` — v15.73 the day line → v15.74 the log survives a reload → v15.74b the origin guard ("double check .. look at analysis": the installer had overwritten his machine's run with the cloud's copy)
+## 2026-09-07 · v15.75 · session `f9c89c64` — v15.75 the closed state (Labor Day: "a frozen state from when it was open so i can really work on it") — after the purpose tags, the Rec voice, absorption and the IRT SDK conversation
 
-_94 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_119 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1299,8 +1299,360 @@ It has started — and finished. The line was wrong, not the analysis.
 
 **me (04:54):** Now the resume note, its snapshot, the chat history, and the commit.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (03:29):** Now the decode-check of the installer (header lines, the tar list, the panel byte-identical).
+Build done, verified and delivered. What to do — one file, then the link:
+
+**Step 1.** Double-click `installv1573.bat` (it's on your Desktop's download and also already in `C:\Dev\gex-signal-tapereader\`). A console window runs, xcopies into the repo folder and pushes to GitHub. You should see it end with the push and close. Send back "done".
+
+**Step 2.** Wait 5 minutes (GitHub's raw cache).
+
+**Step 3.** Click [Tapereader v15.73](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) → Tampermonkey shows **Update** (v15.72 → v15.73) → click Update. The companion is unchanged (v1.18) — no second link this time.
+
+**Step 4.** Reload the Atlas tab. At the bottom, under the AFTER HOURS bar, you should see the new line: **9/4 · SAVED 15:01 … · ANALYSIS … · TESTING … · LEARNING … · REC 6 awaiting your ✓**. Tell me what it shows (which segments are green / amber / grey) — I can't see your panel from here.
+
+What shipped (v15.73 — the day line). The line you asked for sits between the AFTER HOURS bar and the footer, on both render paths: the date, then saved · analysis · testing · learning · rec, each tied to one piece of evidence the panel already has (the 💾 chip's save record, the nightly log's date/ranOn/ranAt, its verdicts, the Learn rules' asOf, the Rec rows) and coloured by it — green done with the time and who, amber expected-not-yet, red overdue naming the cause ("analysis overdue — is the GEX nightly task installed?"), grey not knowable yet. During the session it reads "data · recording · N bars"; yesterday's completed line stays until today's first bar; the hover is the whole sentence. One thing changed from the mockup aft …[trimmed]
+
+**OPERATOR:**
+> why hasn't the analysis started
+
+**me (04:33):** Now the plan seed (15.73 shipped, 15.74 the fix, the rest shifted), the rec seed's version text, and the storage row.
+Now the test for the fix, with its mutants.
+Now the resume note, snapshot and chat history.
+It has started — and finished. The line was wrong, not the analysis.
+
+**What actually happened.** Your machine's GEX nightly task ran the analysis for 9/4 at **22:35 CT** (`learning/log/2026-09-04.json`, `ranOn: his machine`) and the sync task pushed it at 22:36 — it's on GitHub. What you saw was the new day line reading "analysis overdue — is the GEX nightly task installed?" over a log that existed. The cause is a bug in what I shipped an hour ago: the panel keeps its copy of the nightly log only in memory, and a reload empties it, while the 10-minute timer that decides whether to fetch it again *survives* the reload — so for up to ten minutes after every reload the line said the analysis was missing. (The Analysis tab's "last run" row has had the same ten-minute gap since v11.0; nobody had reloaded and looked within ten minutes before.) An unambiguous bug in my own build, so I fixed it without a round trip: the log is now kept in localStorage and restored at load.
+
+**Step 1.** Double-click `installv1574.bat` (in your download, and already in `C:\Dev\gex-signal-tapereader\`). It pushes; the window closes. Send "done".
+
+**Step 2.** Wait 5 minutes.
+
+**Step 3.** Click [Tapereader v15.74](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) → Tampermonkey offers **Update** (v15.73 → v15.74) → Update. Companion unchanged (v1.18).
+
+**Step 4.** Reload the Atlas tab. Within a few seconds the line should read **9/4 · SAVED 15:01 · ANALYSIS 22:35 · your machine · 81 taps · TESTING 9 claims · 1 ready · 8 thin · LEARN …[trimmed]
+
+**OPERATOR:**
+> double check .. look at analysis
+
+**me (04:54):** Now the resume note, its snapshot, the chat history, and the commit.
+Double-checked, against the machine rather than the screen — and you were right to ask. What the Analysis tab showed you was not what I had told you.
+
+**What actually happened, in order (all CT, from `tools\gex-nightly.log` on your machine and `git log` on GitHub):**
+
+- 21:55 and 22:35 — your GEX nightly task ran the 9/4 analysis, cleanly (UTF-8 fine), and the sync pushed it at 22:36. That part of my message was true.
+- 23:41 — you ran `installv1574.bat`. My mistake: I built it from a clone that still held the **cloud's** earlier copies of the seven files your nightly writes (the log, results, studies, examples, recommendations, SWEEPS, SWEEPS-BOOK). The installer extracts over the repo, so it put the cloud's 19:44 run back on disk and on GitHub — and the Analysis tab named the cloud, not your machine at 22:35. The numbers were identical to the last digit; only "who ran it, when" changed. But the same mechanism would have overwritten real differences just as silently.
+- 23:45 — your task re-ran on its own (the installed log carries a 1970 timestamp, so the day file reads newer) and the sync pushed it at 23:46. GitHub now names **your machine, 23:45** again. Your panel picks that up on its next 10-minute check.
+
+**The fix (v15.74b, tools only — nothing for you to click):** `tools/origin-guard.py` runs before every commit: it fetches GitHub and adopts your machine's newer copies of the files it writes (refusing on a real conflict), and the installer builder now refuses to build over anything it hasn't taken in. I ran it on this clone — the seven files are your machine's 23:45 versions here now. It went over the bridge; the sync task pushed it at 23:58.
+
+What the day line should read after its next check: …[trimmed]
+
+**OPERATOR:**
+> For each recommendation, it should have a reason , a benefit.  I need to know how approving will benefit me as a trader.  Also the fonts are too small for the recommendations and need to be bigger.   I also need to have a conversation with you.  Do you remember the purpose of the application ?
+
+**me (18:12):** Yes — and not from memory alone; it's the first file this project makes me read, in your own words from 2026‑09‑02:
+
+> "The purpose of the application is to be able to identify two key turning points which are the high of the day and low of day, in order to profit from the move from high to low or low to high. As a side objective, it is also to identify pullback turning points (aka reversals or deflections)."
+
+The mechanism you're trading is that **a gamma node deflects price, and the deflection is the turning point** — two kinds, and telling them apart is the expensive error: a node at the extreme turns the day (HOD/LOD → *turn around*), a node that stops a pullback resumes the trend (→ *stay in*). The panel has two halves for it: ⓪a measures the day (which extreme printed first, how long it stood, every figure against its base rate), and the ladder watches the gamma that causes the turn — the King attracts and deflects; the arrows, Δ15m, STATE and ROC track gamma *movement*, in your order, because gamma building on a pullback may be the node that causes the continuation, and gamma building at a high or low may be the node that causes the HOD/LOD deflection. And the standing requirement on how it's built: a data‑driven decision‑support system — everything on the dashboard captured → counted → tested → learned → the decision at the dashboard drawn from that knowledge and nothing else. "It is from the learning that you can know something."
+
+That is exactly the standard your first ask should be judged by, so let me take that one first and the fonts second.
+
+**Reason + benefit on every recommendation.** You're right that the rows today are written from the machine's side ("record every READ … score it at the close") with evidence a builder cares about. A trader needs two o …[trimmed]
+
+**OPERATOR:**
+> You need to link the entire application especially the data collection, analysis testing , learning , recommendation etc to this purpose.  The whole process serves the purpose
+
+**me (18:16):** Understood, and that is the right standard: nothing in the process earns its place unless it can say which turning point it helps you call. Let me be honest about where the link exists today and where it doesn't.
+
+Today only the Roadmap carries it (each build names what it serves — "HOD/LOD · PULLBACK"). The Analysis tab is halfway there: its subjects are HOD/LOD, PULLBACK DEFLECTIONS, KINGS, SETUPS, DIRECTION, DEFLECTION MECHANICS, CONTEXT — but a subject is a topic, not a purpose. Testing (H1–H9), the Learn rules (L1–L9), the Rec rows (R‑1–R‑9) and the data record itself carry nothing that says *why this exists for the trader*. So the chain is built, but it doesn't read as one thing serving one goal.
+
+What I'd make of your principle is a single tag that every unit of every stage must carry — **HOD/LOD · PULLBACK · BOTH · THE PROCESS** (the last for machinery like the save running itself or the day line, which serve the chain rather than a turning point directly). It appears on every row of Analysis, Testing, Learn and Rec, on every Roadmap item, and in a map in PURPOSE.md that runs the whole way from the record to the decision. And a test fails the build if anything enters the process without it, the same way the chat history and the save rule are enforced — so the link can't erode.
+
+Read end to end, the map looks like this. **Data:** every 3‑minute bar of the book (the ladder's gamma movement → *is a deflection being built, and where* → both), every tap in the ledger (the deflection event itself → both), the ES minutes and the HOD/LOD statistics (the scorecard → HOD/LOD). **Analysis:** H‑studies count the day's turning points → HOD/LOD; P‑studies count what stops a counter‑move → PULLBACK; K, S, D, F qualify the node that does either → BOTH. **Testing:** H5 (a top‑5 …[trimmed]
+
+**OPERATOR:**
+> I like what you have indicated and would just have another tag like deflection. This would cover the case of when a market rallies and deflects creating a pull back.
+
+**me (18:21):** Good addition — and it completes the sequence rather than just adding a word. Let me say it back so you can check I have it right:
+
+- **HOD/LOD** — the node at the extreme turns the day.
+- **DEFLECTION** — the market rallies (or sells off) into a node and deflects; that deflection *starts* the pullback.
+- **PULLBACK** — the node that stops the pullback and resumes the trend.
+- **THE PROCESS** — machinery that serves the chain itself (the save running itself, the day line, the review on a clock).
+
+With three kinds of turning point, "BOTH" goes away: a unit simply carries every tag it serves, so the King deflection (L9) reads *DEFLECTION · PULLBACK · HOD/LOD* and the time‑of‑day class reads all three. I'll add your DEFLECTION definition to PURPOSE.md §2 in your words when this ships, since it is a purpose‑level statement.
+
+Here are the six proposed rows in the new voice — *why · what you gain · serves*. Tell me ✓ or what to change, then the fonts mockup is next.
+
+**R‑1 · Score every read the face shows.** Why: the face already makes calls — "HOD IN 84%", the direction call, the King verdict — and none has ever been scored; the one scorer that existed read 100% on 362 rows because it could not fail. What you gain: per read, how often it was right and when ("HOD IN called by 10:30 · right 17 of 24 sessions"), so you size your trust, and your position, by a measured number; a read that keeps failing comes off the face instead of misleading you at the turn. Serves: HOD/LOD · DEFLECTION · PULLBACK.
+
+**R‑2 · A count that clears becomes a test on its own.** Why: today a count on the Analysis tab becomes a tested claim only when I write the register entry by hand in a session; 21 rows can sit as "provisional" for weeks, and a rate measured on the same days it was found is a fit, …[trimmed]
+
+**OPERATOR:**
+> I wonder if we even need pullback since deflection could cover that too
+
+**me (18:22):** You could — every one of these is a deflection off a node, so one word does cover the mechanism. Where I'd push back is that the tags exist to say which *decision* a unit informs, and the two pullback events call for opposite decisions: the deflection that starts the pullback (the rally stalls at a node — take profit, or step aside) and the deflection that ends it (the node holds and the trend resumes — stay in, or re‑enter). Your own §2 names confusing those as the expensive error. If both wear the same tag, a Learn rule like "the King that rolled up and holds as a floor resumes the trend" would read the same as "a −γ node growing next to price accelerates price away from it", and at the node you'd have to work out from the text which side of the pullback it's talking about.
+
+There's also a practical reason to keep the third: the record already separates them. The nightly scores every tap as HELD / BROKE, then TURN (it was the day's extreme) or RESUME (the trend continued through it — F‑19's 21 of 28). So "the pullback ended here" is already a measured outcome, and the tag would just name it.
+
+I think the real problem is the word. "Pullback" now sounds like the thing DEFLECTION creates, so it reads as a duplicate. Call the third one by what it means for you instead:
+
+- **HOD/LOD** — the node turns the day → turn around
+- **DEFLECTION** — the move deflects off a node and the pullback starts → take profit / step aside
+- **CONTINUATION** — the pullback ends at a node and the trend resumes → stay in / re‑enter
+- **THE PROCESS** — the machinery
+
+Three decisions, three tags, and no overlap in the words. Your call: keep three with CONTINUATION, or go to two (HOD/LOD · DEFLECTION) and accept that "stay in" and "step aside" share a tag?
+
+**OPERATOR:**
+> I don’t think we need continuation because deflection could when a rally ends and a pullback starts as well as when a pullback ends and continuation occurs.  In other words the deflection creates the turning points that are within the hod and lod whereas the hod and the lod are the extreme turning points during the day
+
+**me (18:29):** Settled, in your words: **HOD/LOD** are the extreme turning points of the day; **DEFLECTION** creates the turning points within them — when a rally ends and a pullback starts, and when a pullback ends and continuation occurs; **THE PROCESS** for the machinery. Two kinds of turning point, no third tag. I'll put that definition into PURPOSE.md §2 verbatim when this ships.
+
+The mockup above is the real Rec tab rendered at your panel's width, before and after. Three things changed in the "after": every row now reads **WHY** (what is wrong or missing at the screen today) then **WHAT YOU GAIN** (the benefit to you as a trader) then **SERVES** with the tags — HOD/LOD and DEFLECTION in blue, THE PROCESS in grey; the row title is one short sentence in bold instead of the builder's paragraph; and the type is about 1.3× bigger (rows 10.4 px, body 9.3 px, the ✓ / ✗ buttons larger), with more line height. The builder's "changes:" line moves into the hover so the row stays a trader's read; the evidence stays on the SERVES line in italics. The 1× / 1.55× / 2.1× scale control in the tab's footer still works on top of this if you want it bigger still.
+
+One ✓ covers both asks (the wording and the size), and I'll build them together as v15.75: the six rows in the file with why · gain · serves, the tags carried on the three implemented rows too, the Rec renderer and its stylesheet (in the mockup generator first, then spliced, as the rule says), an R‑10 row for the face change, and the tag on the Analysis, Testing and Learn rows plus the PURPOSE map as the step after, separately. Anything you'd change in the wording or the sizes before I build?
+
+**OPERATOR:**
+> The thing we are missing is bid ask volume to help detect  absorbtion
+
+**me (18:32):** You're naming exactly the limit the project wrote down when absorption was parked (`design/spec-v16-dashboard-deflection.md` §9). The design there is *effort without result at the node* — heavy volume inside the band, no progress through it — with the warning that we only have total volume, so it can say "heavy volume, no progress" but never "buyers absorbed sellers". Bid/ask volume is the piece that turns that into a real read, and it's the one candidate that is independent of the gamma book: the doctrine is the prior, the tape is the arbiter, and absorption at the node is the tape saying the node is actually being defended. (For the gate: Skylit's articles use "absorbing" only in the node sense — "the node is absorbing, not failing" — nothing on order flow; so this is us, not doctrine.)
+
+Where it can come from, honestly, given who can reach what:
+
+Nothing we have today carries it. Yahoo gives 1‑minute OHLCV, Skylit gives the gamma book and prints, InsiderFinance gives levels. So the panel cannot measure absorption from its current feeds at all.
+
+The shortest path is your own platform. IRT with your CQG feed has the bid/ask split per bar, and the panel already holds a folder handle for IRT — it writes the FlexLevels CSV into a folder IRT polls. That grant works both ways: if IRT writes a small file into the same folder (per minute: time, bid volume, ask volume, delta), the panel can read it on its tick with no new permission, no key and no vendor. Then the record stamps every tap with the flow inside the band (bid, ask, delta, cumulative delta at the tap), the nightly measures "taps with absorption hold more often than taps without", and it enters the process the same way everything else does — counted, tested on new sessions, learned, and only then on the face. Serves …[trimmed]
+
+**OPERATOR:**
+> Do you know if skylit is passing bid ask volume or even delta at price
+
+**me (18:33):** Partly, and the map we measured on the live page (`session-state/SKYLIT-FEEDS.md`) lets me answer precisely rather than guess. Three different things, three different answers:
+
+**The gamma feed — no.** `gex/levels` and the ladder's velocity objects carry gamma per strike and its change over 1/5/10/15 min, 1h, 4h, 1d. The "delta" fields in that payload are *changes in gamma*, not order‑flow delta. No volume at all.
+
+**Flowseeker's Live Feed — yes, but for options, not the underlying.** Every options print there carries Side (ASK / BID / MID), a bid/ask contract ratio, size, premium, volume, OI and ΔOI. That is aggressor‑classified flow at the strike — SPXW 0DTE prints at our node strikes stream through it — so it could say "calls bought at the ask at 6520 while price sat on the node", which is dealer‑hedging pressure and a real confirmation of a different kind. It is not bid/ask volume of ES or SPY at price. (The Dark Feed is prints too — price, size, notional — with no side.)
+
+**The chart itself — the interesting one, and unmeasured.** Your Atlas chart has three indicators turned OFF in your config: **VOLUME‑BUY, VOLUME‑SELL and CVD‑SESSION**. Those names mean Skylit computes aggressor buy/sell volume per bar and a session cumulative delta for the chart's symbol. If they're on, the page fetches that data itself, and the panel can read the response passively the same way it reads the dark‑pool levels — no key, no courier, no credential. What I don't know, because nobody has turned them on with the panel watching: which endpoint, which symbol (SPY cash or the index), and the bar size. It is per‑bar delta at best — delta at *price* (the footprint) is not something anything at Skylit suggests; that stays IRT's.
+
+If you want to know within five minutes what those three carry …[trimmed]
+
+**OPERATOR:**
+> Hw will you ensure the application , process as well as the features keep driving towards the purpose
+
+**me (20:05):** By making the link something the machine checks and you decide, rather than something I remember. I reset between sessions; a rule that lives only in a context's head does not survive me — that is how item 18 was lost, how a roll detector shipped against the doctrine, and how last night's installer overwrote your machine's run. Everything in this project that has actually held has held for one of three reasons: a test fails the build, the record carries it, or the decision is yours. So the honest answer is those three, applied to the purpose.
+
+**The machine refuses what does not name the purpose.** The tag we settled today — HOD/LOD · DEFLECTION · THE PROCESS — goes on every unit of every stage: every study on Analysis, every hypothesis on Testing, every Learn rule, every Rec row, every Roadmap item, and every field the recorder captures. A test fails the suite when anything enters without one, the same way `test_chat_history` fails a build that skipped the history and `test_purpose` fails a load that skipped the purpose file. The face manifest already planned for v15.80 does the same for the dashboard: every number on the face names its study, and a number without a study cannot ship. And a Roadmap item's "done" must be a measurement that moves a purpose number, not a feature that exists — "30 scored calls with a Wilson bound", not "the score is built".
+
+**The record makes drift visible.** The purpose is a hypothesis you trade, and §4.4 says the panel's job is to keep it checkable. So the process should carry a purpose scorecard — one place, per tag, that says what we can currently claim with its n: how often the face's HOD/LOD call was right this month and by what time, how often a tapped node held at 30 minutes and how often the trend resumed through it, how the taug …[trimmed]
+
+**OPERATOR:**
+> The more I think about this, doesn’t the process also seven deflections and hod lod ?
+
+**me (20:08):** Yes — and that is the sharper version of your own principle. If the whole process serves the purpose, then a tag that says "serves the process" says "serves itself", and it becomes the door a feature walks through to avoid the only question that matters. The day line, the save running itself, the origin guard, the review on a clock — none of them has a purpose of its own; each exists so that the HOD/LOD and deflection numbers exist, are current, and can be trusted. So they serve both turning points, by construction.
+
+What THE PROCESS was trying to capture is a different thing: what *kind* of item it is, not what it serves. And that axis already exists — every Rec row carries a kind (RULE · TEST · FEATURE · DATA · DESIGN · PROCESS · TEACH), the small coloured label before the title. So the two axes stay separate and neither is redundant:
+
+- **Serves** — HOD/LOD · DEFLECTION — the only two values, and every unit carries at least one.
+- **Kind** — what sort of thing it is; PROCESS means machinery.
+
+That also fixes something in the scorecard: a PROCESS‑kind item is never expected to move a purpose number directly — its job is that the numbers exist and are fresh, which is exactly what the day line reports — while every other kind is expected to move one, and gets asked if it didn't.
+
+So the vocabulary is two tags, final: **HOD/LOD** and **DEFLECTION**. In the mockup, R‑2, R‑4 and R‑6 change from "THE PROCESS" to "HOD/LOD · DEFLECTION" with their kind (TEST, DESIGN, PROCESS) where it already sits; nothing else changes. That is the last open point on the mockup — a ✓ and I build v15.75 as shown.
+
+**OPERATOR:**
+> We will eventually figure out how to get vid ask data to detect absorbtion.  I’m not really sure if the data skylit gives right now will be sufficient for detecting absorbtion.  This will need to be tested.  The reason is that the vid ask data volume position on the candle matters.  For example if heavy bid volume at or near the low of the cabdle is different than at the top of the candle.
+
+**me (22:43):** Agreed, and that example is the whole argument in one line. Heavy volume hitting the bid at the low of the candle while the low holds is passive buyers absorbing the sellers — the node being defended, which is exactly the confirmation a deflection needs. The same volume at the top of the candle is sellers pressing into a rally, initiative rather than absorption. Per‑bar delta cannot tell those apart: both bars can print the same net number. So the requirement is *delta at price* — bid and ask volume per price level within the bar, the footprint — and that is a stronger statement than the parked design (§9 of the deflection spec) makes, which only says we lack a side. I'll write your version into §9 with the v15.75 build so it becomes the standing requirement: absorption is read from where in the bar the volume sat, not from how much or which side; and whatever Skylit's per‑bar buy/sell and CVD turn out to carry is at best a coarse proxy to be tested, not the input.
+
+And "tested" should mean what the process means by it. Before any absorption data arrives, the claim goes into the register in the usual shape — predict, refuteIf, minN, since the next session — something like: *a tap of a node where the bar's bid‑side volume concentrates within N ticks of its low, and the low holds, is followed by a hold at 30 minutes and a resume more often than the base rate of every tap.* The base rate we already have (every tap held 35 of 78; resume 21 of 28). When the data comes — Skylit's per‑bar proxy first if it's usable, IRT's footprint when you export it — the claim is read once at its minimum n on sessions it never saw, and it earns its place on the face or it doesn't. Serves: DEFLECTION, and HOD/LOD when the node is at the extreme. Nothing gets drawn until then.
+
+That leaves two …[trimmed]
+
+**OPERATOR:**
+> I’m wondering if you have the capability to also create a desktop app that reads IRT charts dom and tape data similar to how we currently read skylit
+
+**me (22:45):** Yes to the desktop app; no to "the same way as Skylit", and the difference matters.
+
+The panel reads Skylit because Skylit is a web page: the chart is HTML, every ladder row is a React object we can read, and the data arrives as JSON over fetch calls we can hook. Investor/RT is a native Windows program. Its charts, DOM and tape are drawn by IRT itself — there is no DOM to walk and no JSON going past that a hook could read. A desktop app can see IRT's windows only as pixels (screen capture and OCR), which works for a demo and fails as a data feed: brittle to any layout change, slow, and it drops digits exactly when the tape is moving fastest. I would not build the purpose's absorption read on that.
+
+What a desktop app on your machine *can* do well — and I can build, since Python is already on your PATH and the nightly already runs there as a task — is be the recorder for a proper source. Three, in order of reliability:
+
+1. **IRT's own export.** RTL indicators, a chart data export or a signal action that writes a file. If IRT can write the footprint (bid volume and ask volume per price level per bar) for ES into a folder every minute, a small watcher turns it into the day's record — `data/flow/<day>.json` — and the panel and the nightly read it like everything else. That is the shortest path because it uses the data IRT already has from CQG, and it is your platform's job to render it, not ours.
+2. **The feed directly.** CQG has an API, and vendors like Databento or Rithmic sell ES tick data with the aggressor side. A desktop service subscribes, builds the footprint itself, and writes the same file. Independent of IRT entirely, exact, and it costs money and a key that you would set up, not me.
+3. **Screen reading** — the fallback I described, only if 1 and 2 are both close …[trimmed]
+
+**OPERATOR:**
+> You would need to tap into the ports that irt uses to get data. Can you listen on the ports and get the data
+
+**me (22:47):** Listening, yes — a small capture on your own machine can see every packet IRT sends and receives. Reading them, almost certainly no, and I want to be straight about why before you spend an evening on it.
+
+IRT is fed by CQG. That connection is a proprietary binary protocol between IRT and CQG's servers, and it is encrypted in transit. A capture on the wire shows the bytes going by and nothing inside them. The only way to read that stream is to decrypt it — put ourselves between IRT and CQG with our own certificate — and then reverse‑engineer an undocumented protocol from the decrypted bytes. That is where I stop, for three reasons that stack. It is fragile: the protocol changes whenever CQG ships an update, and the recorder silently breaks the next morning. It is against your CQG and Linnsoft agreements, which license the data for use inside the application and prohibit intercepting or reverse‑engineering the feed — your subscription pays for the data, not for a second door into it. And it is the only route on the list that can get your data account switched off, which would take the panel's whole ES side down with it. I won't build the decrypt‑and‑decode path; I would be building you a liability.
+
+The thing you are actually asking for exists in licensed form, and it is what "tapping the port" looks like when the vendor intends it. CQG sells API access — their WebAPI — which is the same data as a stream you're allowed to consume programmatically: trades with size and the bid/ask they printed against, from which the footprint is built exactly. That is an extra subscription through CQG or your broker; you'd hold the credentials, and a small Python service on your machine (the same kind of thing as the nightly task) would subscribe, build bid×ask per price per bar for ES, a …[trimmed]
+
+**OPERATOR:**
+> What if it’s stones using cat continuum
+> What if it’s stonex using cqg continuum
+
+**me (22:52):** That changes the answer in your favour — not on the sniffing, but on the door.
+
+CQG Continuum is CQG's hosted gateway for brokers, and it is the same infrastructure IRT is already logging into with your StoneX credentials. The programmatic access I called "an extra subscription" is, on a Continuum account, something the broker can switch on for your user: CQG's WebAPI. StoneX does this for clients who ask — sometimes for a modest monthly fee, sometimes none, depending on your account — because the market data is already licensed to you through them. So the licensed version of "tap the port" may be one email away, and it delivers exactly what the footprint needs: every ES trade with its size, plus the bid and ask it printed against, from which bid × ask volume per price per bar is built precisely. No decryption, no reverse engineering, nothing that can cost you the data account.
+
+Two things to confirm with StoneX, because they decide the design:
+
+**Step 1.** Ask StoneX to enable **CQG WebAPI access** on your CQG Continuum user, and whether they charge for it.
+
+**Step 2.** Ask whether the API needs its **own login** or shares IRT's. CQG normally allows one connection per user, so a second client on the same login can disconnect IRT mid‑session; most FCMs issue a separate API user for exactly this reason.
+
+**Step 3.** Ask for the **WebAPI host** you should connect to (Continuum accounts sometimes use a broker‑specific gateway rather than CQG's public one).
+
+Send me their three answers as you get them — "done" is enough for each.
+
+Once that is in place, the recorder is a small Python service on your machine, run as a task like the nightly: it connects with the API login you hold (the credentials live in a file on your machine that you create; I never see them), subscribes t …[trimmed]
+
+**OPERATOR:**
+> What about think or swim
+
+**me (22:54):** Weaker than the StoneX route, and for a specific reason: thinkorswim shows the tape but does not hand it out.
+
+What TOS has: a Time & Sales gadget that marks each futures print against the bid and ask, Level II, and thinkScript. What it lacks is any way to get that tape out. Time & Sales has no export. thinkScript can read the live bid and ask on the current bar (`bid()` / `ask()`) but cannot write a file, open a socket, or see history, so a study can classify ticks on screen and nowhere else. The RTD link to Excel gives quotes throttled to a few updates a second, not trades — you can't rebuild a footprint from it. And TOS is a Java desktop program, so like IRT there is no page to read; its wire protocol is proprietary and encrypted, same as CQG's, so port‑listening ends in the same place.
+
+The Schwab Trader API — the programmatic door that replaced TD Ameritrade's — is real but built for something else: throttled Level 1 quotes, 1‑minute OHLCV futures bars, option chains. The old TIMESALE stream that carried futures trades one by one did not survive the move to Schwab, so there is no trade‑by‑trade feed with the aggressor side, which is the one thing absorption needs. It also requires an individual developer registration that takes days to approve, and it is for your own use only.
+
+So for the footprint the order stands: IRT's export if it has one, then CQG WebAPI through StoneX — your trading feed, with the trades exactly as you see them where you execute. Where thinkorswim would genuinely be useful is a different problem: Schwab's API delivers full option chains with greeks for SPX, SPY and QQQ, which is the raw material for a gamma book of our own — a second source beside Skylit and InsiderFinance. That is a separate conversation for a separate day; I'm noting it, no …[trimmed]
+
+**OPERATOR:**
+> Export data rtx.  Look up
+
+**me (23:38):** Looked it up on Linnsoft's own pages. The short version: IRT can export bid/ask volume **per bar** on a timer, but not the per‑price footprint you described — and there is a way to get most of the way there.
+
+**What ExportData (RTX) is.** An indicator you put on a chart. You give it a template CSV containing tokens — `%TICKER`, `%NOW`, `%TIME`, user variables `%V#n`, chart variables `%C#n` — and it writes an output CSV with the tokens replaced by live values, either every X seconds ("Export Period") or every time the chart recalculates ("Export on Recalc"). Linnsoft's own tip uses it to push session levels and VPOC/VAH/VAL into files that update "whenever the chart gets updated with live data". The docs don't say whether the output is overwritten or appended each time; I'd assume overwritten until we see it.
+
+**Where the bid/ask numbers come from.** The Volume Breakdown (VB) indicator: it "looks inside each bar, breaking down and classifying each tick" as ask‑traded (buying) or bid‑traded (selling) — the real bid/ask classification, not up/down‑tick, on a bid/ask‑capable feed like yours — and gives buy volume, sell volume, delta, cumulative delta and more. It is available in RTL as the token `VB`, so a chart variable can hold "this bar's bid volume", and ExportData can write it. That chain — VB → chart variables → ExportData → a file the panel already has a folder grant for — is documented end to end.
+
+**The limit, and it's the one you care about.** VB is per bar: "The indicator operates per‑bar only, not per‑price level." The per‑price footprint in IRT is VolumeScope (RTX) — a premium add‑on — and its page documents no export, no RTL token and no data access at all; TimeAndSales (RTX) shows every trade with its bid/ask side but has no log‑to‑file. So "heavy bid volume …[trimmed]
+
+**OPERATOR:**
+> This doesn’t seem viable.  There must be some way of storing the bids of a 3 min candle in an array and the asks into a different array and exporting both.  Otherwise, there must be a way of creating another desktop app that analyzes irt application
+
+**me (23:46):** Your instinct is right, and it is documented: Investor/RT has a developer SDK for exactly this. Everything I found on Linnsoft's own pages:
+
+- **RTX extensions are C++ plug‑ins that run inside IRT**, and the developer API gives them "footprint buy/sell volume data per bar or price". That is your two arrays — bid volume at each price of the bar, ask volume at each price of the bar — handed to code, not to a chart.
+- **The SDK is public and already on your machine.** It ships with the install: `C:\Program Files\LinnSoft\InvestorRT\sdk\` (I can see `c`, `c++` and `docs` folders there) — the header is `sdk\c++\include\irtsdk.h`. Any subscriber may use it.
+- **An extension can write files** — ExportData, VolumeScope and TimeAndSales are themselves RTX extensions, and ExportData's whole job is writing a CSV — so ours can append one line per closed 3‑minute bar straight into `C:\Dev\gex-signal-tapereader\data\flow\`, where the sync task already pushes and the panel already reads.
+- **You build it with a wizard**: File → New → RTX Extension generates the project; Visual Studio 2022 Community (free) compiles it to a DLL in `InvestorRT\dllx64`; IRT shows it as an indicator at the next restart, and you add it to the ES chart like any other. The three earlier options — ExportData on 1‑second bars, port‑sniffing, screen‑reading — go away.
+
+So the desktop app you're describing is an RTX extension, and I can write it. What it needs from me is the API surface — which calls return the per‑price arrays and the bar timestamps — and that is in `irtsdk.h` and the `docs` folder on your machine. I asked for read access to that SDK folder a moment ago, but the approval came from a notification button that can't confirm which folder it was for, so nothing was granted.
+
+**Step 1.** Approve the f …[trimmed]
+
+**OPERATOR:**
+> So can you help me build an application that analyze irt by getting the data for a bunch of markets.  I want to build an application that can read the futures data and it sounds like you can get access to this data via irt sdk
+
+**me (23:50):** Yes. That is a real project and the SDK is the right door for it — with one honest caveat about the division of labour, and then a shape that fits everything you already have.
+
+**What the SDK gives, per Linnsoft:** the bar arrays of any chart (open, high, low, close, volume, per bar, any periodicity), the footprint — buy and sell volume per bar *or per price* — market depth, and anything an RTL indicator computes. Whatever IRT can draw for a market, an extension can read as numbers. And it reads every chart it's placed on, so "a bunch of markets" is one extension on N charts — ES, NQ, GC, CL, whatever you trade — each writing its own stream.
+
+**The shape I'd build, in three parts, two of which exist already:**
+
+1. **The tap — a C++ RTX extension inside IRT.** Small and dumb on purpose: on every closed bar it takes the bar plus its per‑price bid/ask arrays and appends one JSON line to `data\flow\<market>\<day>.jsonl` in the repo folder. It computes nothing and draws nothing, so it never needs to change when the analysis does. One DLL, one preference: the output folder.
+2. **The analysis — Python on your machine**, the same way the nightly already runs. It reads those files and builds what you want to know per market: footprints per bar, delta and cumulative delta, absorption at a level (heavy bid volume at the low that holds), the HOD/LOD statistics that NQ, GC and CL are already waiting on ("price only" today in the markets file). Every number it produces enters the record the same way everything else does — counted, tested on new sessions, learned — and carries HOD/LOD or DEFLECTION like every other unit, because a second data family is still the same purpose.
+3. **The face** stays the panel. The sync task already pushes whatever lands in the repo folder; the panel alr …[trimmed]
+
+**OPERATOR:**
+> I am outside right now and will approve when I am in front of my computer because the only thing I have is my phone.  Let me tell you what I’m thinking.   Diet the purpose of this project is something we should clarify.  Ofcourse it will be used by the tap reader application that reads gamma levels but I. Additional to this, I want to be clear that the purpose of this project.  I need you to help me define the purpose of this project as a trader.   I will tell you what I’m trying to do and you can help me craft it.  First of all I am a trader so similar to the tape reader project I am interested in finding hod lod and deflections to trade.  So that is the starting point.  I want to get in the market where it makes sense so that I can profit by buying low and selling high and that is done by catching a reversal.  This is done typically on a pullback.  The hod and lod are extreme reversals that are difficult to catch but that’s fine because the idea is that once one extremity is in we can bug or sell a pullback on its way to the other extremity.  Ofcourse this pullback needs to be a good one that may have elements like absorbtion which means I will be buying and selling with large traders which is always a good idea.   Don’t understand.
+
+**me (00:02):** Yes, I understand — and it's a clean statement. Let me say it back in one line to be sure, then draft it in your voice.
+
+What you're saying: the extremes are where the money is, but you don't need to catch them — once one is in, the move to the other extreme is the trade, and the way in is the pullback against that move, at the point where it ends. A pullback is worth taking when large traders are absorbing it, because then you are buying or selling alongside them. So the application's job is not to find the top or the bottom; it is to tell you that an extreme is probably in, that a pullback is under way, and that the pullback is ending *with size on your side*.
+
+Here is a first draft of the purpose, written the way PURPOSE.md is written for the tapereader — your words, tightened, so you can cut and correct:
+
+> **The purpose of this project is to get me into the market where it makes sense: at the end of a pullback, in the direction of the day's move, so that I profit from the move between the day's extremes.**
+>
+> The high and low of the day are the extreme reversals. They are hard to catch and I don't need to catch them: once one extremity is in, I buy or sell the pullback on its way to the other extremity. A pullback is only worth taking when it is a good one — when large traders are absorbing it, heavy volume against the pullback at a level that holds — because then I am buying and selling with them, and that is always a good idea.
+>
+> The application reads the futures data — bid and ask volume at every price, bar by bar, across the markets I trade — and answers three questions: is one extreme likely in, is a pullback under way against the move from it, and is the pullback ending with absorption. The tapereader tells me *where* a pullback should end (the gamma node) …[trimmed]
+
+**OPERATOR:**
+> I think this needs to be scored and tested for each market.   Remember that we have hod and lod extreme reversals and in them there are reversals and from these you will have pullbacks that maybe at VWAP or may be sweeps of other nearby pullbacks, for example let’s say you have a rally to 10 and a pullback to 8 and then the maker come ups a little bit to 9 but then dips to  just below the prior pullback at 8 by going slightly lower to 7.80 and there is absorbing after this intraday sweep.  That may be a good place to long the pullback because the breakdown below 8 is shallow and being absorbed.  The other thing is the gamma nodes.  If the pullback is tapping a certain type of king node or a picky stack it maybe a great opportunity given the scoring.  This is why we are having the tape reader save data in the first place to the deflections can be scored.
+
+**me (00:36):** Understood, and the example is exactly the kind of thing the purpose has to name, so let me play it back in the project's terms first. Rally to 10, pullback to 8, bounce to 9, then a dip to 7.80 — a sweep of the prior pullback low, shallow, twenty cents through it — and the selling into 7.80 is absorbed. That is a stop run that large traders bought, and the shallowness is the tell: the break of 8 failed to travel. Long the pullback there, with the other extremity as the target. The tapereader already measures the cousin of this — the overnight and prior‑day sweep‑reclaims in the SWEEPS corpus (H6/H7) — but at the day's edges, not at an intraday pullback; your example extends the same shape to the pullback itself.
+
+Folded into the draft, the "good pullback" paragraph becomes this:
+
+> A pullback is worth taking when it is a good one, and what makes it good is scored, not felt. Its elements: **where it ends** — at VWAP, at a shallow sweep of a prior pullback (a dip just through the earlier low that fails to travel and is bought back), at a King node of a certain type, or at a PIKA stack; and **who ends it** — absorption after the tap or the sweep, heavy volume against the pullback at a level that holds, so that I am buying and selling with the large traders. Each element is a factor with a measured rate, the score is built from the factors that survive testing, and it is scored and tested **per market** — ES is not gold. This is why the tapereader saves every deflection in the first place: so the deflections can be scored, and the pullbacks I take are the ones the record says are worth taking.
+
+Two things this settles about the build, and both already have a home. The score you're describing is R‑5 on the Rec tab — the candidate score from tested rules — with two new facto …[trimmed]
+
+**OPERATOR:**
+> currently Swept only covers ES , can it be updated to cover both ES and NQ ?
+
+**me (05:18):** Yes — and most of what it needs is already there. SWEPT is ES‑only for one reason: the read pulls the day's bars from the courier's ES rows (`futSessionBars` takes `o.ES`), and the level list, the VWAP and the base rates are all built from them. The NQ 1‑minute bars have been couriered alongside ES since companion v1.15, so the data is on your machine every session and nobody reads it. It is item (4) on your open list.
+
+What "cover both" takes, honestly, in three parts:
+
+1. **The read, per market.** `futSessionBars` and the level builders take a market instead of assuming ES; NQ gets its own overnight and prior‑day highs and lows, its own VWAP and developing profile, its own sweep scan on its own bars. The gamma levels on NQ come from the QQQ book through the QQQ→NQ ratio, which is manual by construction, so those rows wear the `~` they wear today — the doctrine levels are exact, the node levels approximate.
+2. **The face.** Either a second SWEPT line under the first, or one SWEPT line that follows whichever instrument is on the chart (the panel already knows — `FUTMODE` detects ES vs NQ). I'd mock up both and let you pick; my preference is one line following the chart, because you read the instrument you're trading and the panel has no spare rows.
+3. **The base rates.** This is the real gap. The reclaim rates that make SWEPT a read rather than a label come from the ES corpus (284 sessions, built from your IRT export of ES 1‑minute history). NQ has no corpus, so its SWEPT line would show the events with "thin" rates until one accrues — weeks by courier. The short cut is the same one that built ES: an NQ 1‑minute history export from IRT (the same Export Data you used for `EPM26-1min.csv`), and the nightly builds NQ's SWEEPS table the night it lands. That also fits what y …[trimmed]
+
+**OPERATOR:**
+> i will come back to his . the market is about to open in 10 minutes.
+> i want to select the top 5 setting in skylit.. will this be a problem ?   i want to make sure you dont have issues reading the data .
+> 
+> _[sent while I was working — a queued message]_
+
+**me (13:21):** Go ahead — **top 5 is fine.** The NODES setting only governs what the *chart overlay* draws; the ladder pane still renders the full strip, which is what the panel harvests (we measured 100 strikes rendered at the P20 setting, and the ladder is unaffected by the top‑N choice).
+
+The four settings that *do* matter for the capture stay as they are: **RTH · READ AS %King · VELOCITY All · LOW NODES on Dim or Fade — never Hide** (a hidden row can't be harvested; the grey minors and the small‑node stats depend on it). If top 5 ever looks like it thinned the ladder itself, the check is the footer's `deps` dot and `__gptsDebug.deps()` — but from what we measured it won't.
+
+Everything from today is written down for when you're back (`session-state/2026-09-07_design-notes-purpose-tags-flow.md`, committed): the two tags, the Rec mockup waiting for your ✓, the absorption requirement and where the data can come from, the RTX SDK path with the folder approval pending, your purpose draft for the second project in your own words, and SWEPT on NQ as R‑11. One note for the week: Monday is Labor Day, so the options session — and the gamma book — doesn't move until Tuesday; the register already counts Tuesday the 8th as the first stamped session, and the day line will keep showing 9/4 until the first bar of that session. Good trading.
+
+**OPERATOR:**
+> i gues the market is closed or something because of labor day , but the application doesn't seem to support a frozen state from when it was open so i can really work on it. as you can see there is no node ladder and even if the node ladder was there i would need to different things on the app like if it was open , but in a frozen state so it would be meaningfull
+
+**me (13:37):** I see it — I'm looking at your panel through this tab. The feeds are all arriving (SPY/QQQ gamma 0 min old, the IF chains OK, the courier OK), but the day line reads *9/7 · recording · 0 bars* and the face below it is empty: no King cards, no ladder, no patterns. The panel decides "a session is running" by the clock — it's a weekday after 08:30 — and then waits for the first bar of a session that isn't coming. I also tried twice from here to drag Friday's replay strip so you'd get 9/4 at the close; it didn't take, and the reason is the same logic: the stale‑day guard hands any replay of a previous day back to LIVE while the clock says RTH. That guard was the fix for the morning you lost to a parked replay — right on a trading day, wrong on a holiday.
+
+So the gap is exactly what you said: the panel has no *closed* state. It has live (bars arriving) and replay (you drag), and today is neither. What you want is the third one — when no live bars are arriving, show the last recorded session parked at its close, the whole face as it was at 15:00 Friday: Kings, ladder, patterns, SWEPT, the READ, all the tabs — clearly marked as frozen, and hand back to LIVE by itself the moment a real bar prints. The other tabs (Analysis, Testing, Learn, Rec) already work today because they read files, so the Rec tab is usable now; the dashboard is the one that goes blank.
+
+In the Rec voice, for your ✓:
+
+> **R‑12 · The closed state.** Why: on a holiday or before the first bar the panel treats the clock as the session and shows an empty face; the last session's book is in the recorder but there is no way to stand on it. What you gain: outside a live session the dashboard shows Friday's close exactly as it was — every section — with a banner "CLOSED · Fri 9/4 at 15:00 · live resumes with the fir …[trimmed]
+
+**OPERATOR:**
+> ok.. fix
+
+**me (13:43):** Now I have the whole picture. Writing the closed state.
+Logic green (45). Now the mutants, then the record.
+Now the record: the plan, R‑12, CHANGELOG, LESSONS, inventory, config, resume note, chat history.
+
 ### DECISIONS
 
+- **The purpose tags (2026-09-06, settled): HOD/LOD · DEFLECTION.** His definition: "the deflection creates the turning
+  points that are within the hod and lod whereas the hod and the lod are the extreme turning points during the day";
+  DEFLECTION covers a rally ending into a pullback AND a pullback ending into continuation; no PULLBACK / CONTINUATION
+  tag; no THE PROCESS tag ("doesn't the process also serve deflections and hod lod?") — machinery carries both, its
+  nature is the KIND. "The whole process serves the purpose": a `serves` tag on every unit of every stage, shown on
+  every tab, enforced by a test, the PURPOSE map — the step after the Rec voice.
+- **The Rec voice and bigger type (v15.76 when ✓): why · what you gain · serves.** Mockup sent
+  (`mockups/mockup-rec-why-gain.png`, the real tab at 760 px, ~1.3× type); the six rows rewritten; awaiting his ✓.
+- **Absorption needs delta at price, not per-bar delta** ("heavy bid volume at or near the low of the candle is
+  different than at the top"). Sources weighed: Skylit's chart toggles (VOLUME-BUY / VOLUME-SELL / CVD-SESSION,
+  unmeasured — three steps given), port-sniffing IRT's CQG feed (declined: encrypted, against the agreements, brittle),
+  StoneX / CQG Continuum WebAPI (three questions for StoneX), thinkorswim (no tape export), **Investor/RT's RTX SDK**
+  (documented: "footprint buy/sell volume data per bar or price"; installed at C:\Program Files\LinnSoft\InvestorRT\sdk;
+  the folder approval must come from the desktop). The second project: a C++ RTX tap → data/flow → Python analysis →
+  the panel; its purpose drafted in his words ("once one extremity is in we can buy or sell a pullback on its way to
+  the other extremity … a good one … absorption … buying and selling with large traders"); a good pullback = scored
+  and tested per market: VWAP, a shallow sweep of a prior pullback (10 → 8 → 9 → 7.80 absorbed), a King node type,
+  a PIKA stack. SWEPT on NQ proposed as R-11 (the NQ bars are couriered; a corpus needs an IRT export).
+- **v15.75 — the closed state ("ok.. fix").** Labor Day at his panel: every feed arriving, the clock past 08:30, "recording
+  · 0 bars", an empty face, Friday's replay evicted by the stale-day guard. Settled: the session signal is the gamma
+  payload's own minute series, not the clock; the panel stands on the last session at its close until today's first
+  live minute; the recorder stays blind on purpose; his drag makes it his replay; LIVE stands for the day.
 - **v15.73 — the day line, on the mockup: "i like it."** His ask: "there needs to be some message at the bottom that
   tells me that says something like 9/4- data saved analysis complete, testing complete, recommendations made.
   something descriptive". Designed as the process reporting on itself from facts the panel already holds — the date,
@@ -1437,6 +1789,13 @@ It has started — and finished. The line was wrong, not the analysis.
 
 ### SHIPPED
 
+**v15.75** (panel; companion v1.18 unchanged) — THE CLOSED STATE. `liveBookToday` / `bookArrived` / `closedDay` /
+`closedState` / `replayAutoPark` / `replayAutoRelease` / `closedChipHtml`; `REPLAY.auto`; `RP_AUTO_OFF` / `RP_AUTO_SKIP`;
+the stale-day guard requires the live book and skips auto-parks; the strip badge ⏸ CLOSED; no NOT RECORDING for the
+closed state or a holiday; the tick runs release-or-park before the gate; the day line counts RTH only with the live
+book; `.g3closed`; `__gptsDebug.closed()`. R-12 implemented; the plan (v15.74 shipped, v15.75 this, the Rec voice v15.76,
+the score v15.77); INVENTORY §0j; the config (2026-09-07). `test_v1575.js` 52 assertions, 14 of 14 mutants. Render
+`design/render-v1575-face.png`. Also: `session-state/2026-09-07_design-notes-purpose-tags-flow.md` (the conversation).
 **v15.73** (panel; companion v1.18 unchanged) — THE DAY LINE. `dayLineState` / `dayLineHtml` (`.g3pline`, between the
 after-hours bar and the footer, both render paths); `fmtCT`; `dayBarCount`; `DAYLINE_ANALYSIS_LATE_MS`;
 `__gptsDebug.dayLine()`; the CSS (wrapping, never clipping); R-9 implemented; the plan shifted; DATA-ANALYSIS-PROCESS.md,
@@ -1559,6 +1918,11 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **He runs ONE file** — `installv1575.bat`; wait 5 min; the tapereader link (as a link); reload. Then: what do the strip
+  badge and the bar say? (expected ⏸ CLOSED · showing Fri 4 Sep at 14:58; the face at Friday's close).
+- **Awaiting his ✓:** the Rec voice + bigger type (v15.76); SWEPT on NQ (R-11). **Awaiting him at the desktop:** the
+  folder approval for the IRT SDK (`C:\Program Files\LinnSoft\InvestorRT\sdk`); the Network-tab look at CVD-SESSION.
+- **Tuesday 09-08:** the release at 08:30 with the first live minute; the first stamped session; the automatic close.
 - **Nothing for him to run for v15.74b** (tools only; the sync pushes it). v15.74 is installed (his push 23:41).
   Ask what the day line shows after the reload — expected: 9/4 · saved 15:01 · analysis 23:45 · your machine · 81 taps ·
   testing 9 claims · 1 ready · 8 thin · learning 9 rules · rec 6 awaiting.
@@ -1651,6 +2015,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+b202f47 session-state: 2026-09-07 design notes — the purpose tags (HOD/LOD · DEFLECTION), the Rec voice awaiting ✓, absorption/footprint sources, the RTX SDK path, the second project's purpose draft, SWEPT on NQ (R-11 proposed)
+062ce9d v15.74b (tools, no panel change): THE ORIGIN GUARD — the installer had overwritten his machine's 9/4 run with the cloud's copy
 235b66a v15.74: THE LOG SURVIVES A RELOAD — the day line read "analysis overdue" over a log his machine had just written
 77ea671 v15.73: THE DAY LINE — the process reporting on itself at the bottom of the panel
 51b88dd v15.72b (tools, no panel change): the nightly's output is UTF-8 on Windows (the task's first run on his machine logged a cp1252 charmap error printing the pattern report); PURPOSE §3b carries his expectation after the install (no click on the save, only the Rec tab); R-LINK - the Tampermonkey link is a clickable link, never only in a code block; the skill says so
@@ -1661,8 +2027,6 @@ fc64e39 gex: sync 04-Fri-09 19:12
 9ba9099 gex: sync 04-Fri-09 19:08
 d3926a1 gex: sync 04-Fri-09 17:26
 650b35d gex: sync 04-Fri-09 16:56
-967dac5 gex: sync 04-Fri-09 16:30
-0f6e8c0 gex: sync 04-Fri-09 15:02
 ```
 
 ---

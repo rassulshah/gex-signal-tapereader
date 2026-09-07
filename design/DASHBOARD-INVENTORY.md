@@ -11,6 +11,19 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0j · v15.75 — the closed state (2026-09-07, Labor Day)
+
+No new element on a live day. When the market has not opened today (a weekend, a holiday, before the open) the
+dashboard stands on the last recorded session parked at its close — every section exactly as it was at that frame —
+under a full-width blue bar (`.g3closed`: *CLOSED · showing Fri 4 Sep at 14:58 — no session so far today · live
+resumes with today's first book*, the hover explains) and the strip badge ⏸ CLOSED. The session signal is the gamma
+payload's own minute series (`levels[].t`), read by `liveBookToday()`; the state is `closedState()` /
+`replayAutoPark()` / `replayAutoRelease()`; the recorder stays blind (nothing to record); the first live minute of
+today's book returns the face to LIVE by itself. His drag or ◀ ▶ makes it his replay; LIVE out of the closed state
+stands for the day. The day line reads the last session's completed line, not "recording · 0 bars". Probe:
+`__gptsDebug.closed()`. Render `design/render-v1575-face.png`. Serves: HOD/LOD · DEFLECTION (the day studied, the
+ladder read, the setups discussed as if open). R-12.
+
 ## 0i · v15.73 — the day line (2026-09-05, small hours)
 
 One element added, at the bottom, between the AFTER HOURS bar and the footer: **the day line** (`dayLineHtml`,

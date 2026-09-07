@@ -186,7 +186,7 @@ ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03
   ok((rnd.match(/replayBarHtml\('strip'\)/g)||[]).length===2,'8f the unmapped-instrument branch gets the strip at its bottom too');
   // replayBarHtml(part), executed
   const REPLAY={ frames:[{t:1}], days:['2026-09-03'], day:'2026-09-03', on:true, idx:0, loading:false, err:null };
-  const g={ CFG:{}, REPLAY, PAL:{amber:'#f2b45a',ink:'#fff',sub:'#888',card:'#111',line:'#222',time:'#ccc',longAccent:'#2ec27e'}, replayEnsure(){}, replayOn:()=>true, replayFrame:()=>REPLAY.frames[0], replayDayLabel:d=>d, replaySec:()=>9*3600, replaySecOf:()=>9*3600, hlClock:s=>String(s), RP_OPEN_SEC:8.5*3600, RP_CLOSE_SEC:15*3600, g3tip:tip, g3esc:esc, liveSessionPhase:()=>({rth:true,label:'RTH',leftMin:120}), RP_STALEMSG:null, swallow(){}, activeSym:()=>'SPY', skPiles:()=>null, emBand:()=>null };
+  const g={ CFG:{}, REPLAY, PAL:{amber:'#f2b45a',ink:'#fff',sub:'#888',card:'#111',line:'#222',time:'#ccc',longAccent:'#2ec27e'}, replayEnsure(){}, replayOn:()=>true, replayFrame:()=>REPLAY.frames[0], replayDayLabel:d=>d, replaySec:()=>9*3600, replaySecOf:()=>9*3600, hlClock:s=>String(s), RP_OPEN_SEC:8.5*3600, RP_CLOSE_SEC:15*3600, g3tip:tip, g3esc:esc, liveSessionPhase:()=>({rth:true,label:'RTH',leftMin:120}), liveBookToday:()=>true, RP_STALEMSG:null, swallow(){}, activeSym:()=>'SPY', skPiles:()=>null, emBand:()=>null };
   const f=build(g,['replayBarHtml'],'return { replayBarHtml };')(g);
   const w=f.replayBarHtml('warn'), s=f.replayBarHtml('strip'), both=f.replayBarHtml();
   ok(/NOT RECORDING/.test(w) && /data-grp="exit"/.test(w) && !/g3rptrack/.test(w),'8g replayBarHtml("warn") is the banner alone — no track');

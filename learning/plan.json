@@ -370,53 +370,61 @@
    "v": "15.74",
    "title": "THE LOG SURVIVES A RELOAD — the nightly log (ANALYSIS_NIGHTLY) lived only in memory while the pipeline's 10-minute throttle survived the reload, so for up to ten minutes after every reload the day line read \"analysis overdue — is the GEX nightly task installed?\" over a log that was on GitHub (his first sight of v15.73, 22:3x CT, with his machine's run at 22:35 in the file); the log is kept in localStorage (gpts_nightly_v1) and restored at load",
    "serves": "the day line tells the truth at the moment he looks — \"why hasn't the analysis started\"",
-   "status": "next",
+   "status": "shipped",
+   "date": "2026-09-05",
    "done": "after a reload with a fresh pipeline stamp the line reads the log's time and machine at once; a corrupt stored copy reads as none, never throws"
   },
   {
    "v": "15.75",
+   "title": "THE CLOSED STATE — when the market has not opened today (a weekend, a holiday, before the open) the dashboard stands on the last recorded session parked at its close, every section as it was, badged CLOSED, and returns to LIVE by itself with today's first book; the session signal is the gamma payload's own minute series (levels[].t), not the clock; the stale-day guard no longer evicts a replay on a holiday; the day line reads the last session instead of \"recording · 0 bars\"",
+   "serves": "\"a frozen state from when it was open so i can really work on it\" — the day studied, the ladder read, setups discussed as if open",
+   "status": "next",
+   "done": "on a closed day the face shows the last session's Kings, ladder, patterns and READ at the close under a CLOSED bar, and the first live book minute of a trading day returns it to LIVE without a click"
+  },
+  {
+   "v": "15.76",
    "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join",
    "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'",
    "status": "later",
    "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"
   },
   {
-   "v": "15.76",
+   "v": "15.77",
    "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured",
    "serves": "HOD/LOD · the loop closes",
    "status": "later",
    "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"
   },
   {
-   "v": "15.77",
+   "v": "15.78",
    "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme",
    "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6",
    "status": "later",
    "done": "40 taps recorded and the first F-study reads from them with n"
   },
   {
-   "v": "15.78",
+   "v": "15.79",
    "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study",
    "serves": "the loop closes on its own",
    "status": "later",
    "done": "a study changes status without a human editing the seed"
   },
   {
-   "v": "15.79",
+   "v": "15.80",
    "title": "one definitions file (Python + panel) · the shipped-artifact test",
    "serves": "hardening",
    "status": "later",
    "done": "changing a bin in one place fails the suite until the other side follows"
   },
   {
-   "v": "15.80",
+   "v": "15.81",
    "title": "the face manifest — every number on the face names its study, pinned by a test",
    "serves": "data-driven, enforced",
    "status": "later",
    "done": "a new number on the face without a study fails the suite"
   },
   {
-   "v": "15.81",
+   "v": "15.82",
    "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move",
    "serves": "PULLBACK",
    "status": "later",

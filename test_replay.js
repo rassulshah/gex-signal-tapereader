@@ -266,6 +266,7 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   // provide it, or the banner's own try/catch swallows and the strip looks merely quiet.
   global.sessionPhase=()=>({ rth:false, label:'CLOSED', leftMin:null });
   global.liveSessionPhase=()=>global.sessionPhase(new Date());
+  global.liveBookToday=()=>true;   // (v15.75) the banner also needs the live book — a holiday's RTH clock is not a session
   global.replayDayLabel=d=>String(d);
   eval(ex('replayBarHtml'));
   REPLAY.on=false; REPLAY.frames=FR; REPLAY.idx=2; REPLAY.day='2026-08-31'; REPLAY.days=['2026-08-28','2026-08-31']; REPLAY.err=null;

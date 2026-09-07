@@ -38,6 +38,9 @@ global.sessionPhase=(now)=>{
   return PHASE;
 };
 eval("global.liveSessionPhase=function(){ try{ return sessionPhase(new Date()); }catch(e){ return null; } };");
+// (v15.75) a session is the live BOOK, not the clock: on a holiday the guard must NOT evict (test_v1575 4a). This harness
+// is a trading day, so the book is live.
+global.liveBookToday=function(){ return true; };
 global.replayExit=()=>{ exited++; REPLAY.on=false; REPLAY.frames=[]; REPLAY.idx=-1; };
 Object.defineProperty(global,'REPLAY',{get:()=>REPLAY,set:v=>{REPLAY=v;},configurable:true});
 let RP_STALEGUARD=0;
@@ -127,7 +130,7 @@ ok(/rgba\(240,97,109/.test(bar), 'b1d ...in the panel’s own red, not another a
 ok(/var _lp=liveSessionPhase\(\);/.test(bar),
    'b2 the banner is gated on the LIVE phase, not the parked minute');
 ok(!/ctOffsetSec/.test(bar), 'b2a ...through the shared helper, with no clock arithmetic of its own');
-ok(/if\(on && _lp && _lp\.rth\)/.test(bar), 'b2b ...and only while replaying during a live RTH session');
+ok(/if\(on && !REPLAY\.auto && _lp && _lp\.rth && liveBookToday\(\)\)/.test(bar), 'b2b ...and only while HE is replaying during a live RTH session with the live book (v15.75: never the closed state, never a holiday)');
 // and the handback announces itself rather than silently changing what he was looking at
 // ⚠ gated on the flag, not merely present in the file — an `if(false)` around it left the string
 // intact and my first assertion passed on the corpse.

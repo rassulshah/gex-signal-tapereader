@@ -1,3 +1,57 @@
+## v15.75 — THE CLOSED STATE: when the market has not opened, the dashboard stands on the last session as it was
+
+> Operator, 2026-09-07 (Labor Day), at his panel: "i guess the market is closed or something because of labor day, but the
+> application doesn't seem to support a frozen state from when it was open so i can really work on it. as you can see
+> there is no node ladder and even if the node ladder was there i would need … the app like if it was open, but in a
+> frozen state so it would be meaningful." → R-12, "ok.. fix".
+
+**What was measured on his panel that morning (through the Chrome tab, read-only):** every feed arriving — SPY/QQQ gamma
+0 min old, the InsiderFinance chains OK, the courier OK; the clock past 08:30 on a weekday; the day line *9/7 · recording
+· 0 bars*; the face below it EMPTY (no King cards, no ladder, no sections); and two attempts to drag Friday's replay
+strip handed straight back to LIVE. The panel had three states — live, replay by his hand, and an empty face while it
+waited for a session the clock promised — and the third one is what a holiday, a weekend morning and every pre-open
+look like.
+
+**The session signal is the book, not the clock.** The gamma payload is a minute series carrying the vendor's own
+times: `levels[].t`, 390 rows from 08:30 to 14:59 CT of the LAST session (measured: on Labor Day the newest minute was
+Friday 14:59 CT; on a trading day it is the current minute). `liveBookToday()` reads it — the day of the newest minute
+equals today — and that one fact replaces the clock everywhere the clock was standing in for a session: the closed
+state, the stale-day guard, the NOT RECORDING banner, the day line. It is independent of the recorder (blind while
+replaying) and of the clock (which cannot know a holiday), and it needs nothing new fetched.
+
+**The closed state.** `closedState()`: a book has arrived, none of it is today's, today is not in the store, and the
+store holds a weekday before today with frames (`closedDay()` — a Sunday-evening store is skipped; a day that loads
+empty is marked in `RP_AUTO_SKIP` and the one before it is tried). Then `replayAutoPark()` parks on that day's LAST
+frame with `REPLAY.auto=true`: the whole face as it was at the close — Kings, ladder, patterns, SWEPT, the READ — under
+a full-width blue bar (`.g3closed`: *CLOSED · showing Fri 4 Sep at 14:58 — no session so far today · live resumes with
+today's first book*; the hover says what is shown, why, and what releases it), the strip badge reads ⏸ CLOSED instead
+of ↺ REPLAY, and NO "NOT RECORDING" banner (the recorder is blind, correctly — there is nothing to record). The first
+live minute of today's book releases it (`replayAutoRelease()` → `replayExit()`, silently: nothing was missed, so no
+RETURNED TO LIVE banner). His hand on the strip, or ◀ ▶, turns it into his own replay (`auto=false`, the guard applies
+as before); LIVE out of an auto-park stands for the day (`RP_AUTO_OFF`). Both run in `tick()` every tick, BEFORE the
+08:30 gate, so a weekend morning parks too. `__gptsDebug.closed()` is the probe.
+
+**The stale-day guard (v15.45) learns the difference between a holiday and a session.** It evicted his replay of
+Friday because the clock said RTH; now it also requires the live book (`liveBookToday()`), and never touches an
+auto-park. On a real trading day it does exactly what v15.45 built it for. **The day line** counts RTH only while
+today's book is live (or bars exist): on a holiday it shows Friday's completed line, not "recording · 0 bars" — the
+grace before the first bar is the book, not a timer.
+
+**Tests.** `test_v1575.js` — 52 assertions: the session signal (Friday's series is not today's; today's 08:31 minute
+is; either book; no feed; garbage; the CT day, not the UTC day), the state (Labor Day stands on Friday and skips the
+Sunday store; weekend / before the open; a live book, no book yet, nothing recorded, today recorded, an empty day
+skipped, only weekend days), the auto-park (last frame; once; not over his replay; his LIVE click stands for the day
+and not the next; the loader asked and parked in its callback; an empty day marked), the release (by the live book,
+never his replay), the guard (holiday not evicted; trading day evicted once as before; auto never), the face (the bar,
+the badge, the banner, the render order, the CSS, the tick, the handlers), the day line on a holiday and on a trading
+morning, the record. 14 of 14 mutants caught (the guard evicting on a holiday · evicting an auto-park · weekend days
+stood on · released without a book · the day line recording a holiday · re-parking after LIVE · NOT RECORDING during
+the closed state · the badge · parking over his replay · the first frame · the UTC day · an empty day never skipped ·
+closed before any book · the drag staying auto). Suite: 150 green / 5 permanent baselines. Render
+`design/render-v1575-face.png` — the real panel on Friday's last frame under the CLOSED bar (`render-face.js --pre`
+seeds the state the way his machine holds it: the feed's newest minute Friday, today 9/7, the 9/4 record). R-12 on
+Rec, implemented; the plan: v15.74 shipped, v15.75 this build, the Rec voice and the score move one each.
+
 ## v15.74b (tools, no panel change) — THE ORIGIN GUARD: the installer overwrote his machine's run with the cloud's copy
 
 **"double check .. look at analysis" (2026-09-04, 23:4x CT).** He was right to. The v15.74 message said the analysis
