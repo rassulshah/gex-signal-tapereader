@@ -26,7 +26,7 @@ Three things exist and none of them can answer *"does the top-5 line deflect, an
 - **The per-bar `node` feature** and the L-rules score a node's condition against a 5/10/20-bar hold, pooled; the
   learn gauge reads them. Same per-bar problem, same book.
 
-What none of them carries: **the book and the rank** (SPX KING / G2–G5, SPY KING / S2–S5, QQQ KING / G2–G5 — the
+What none of them carries: **the book and the rank** (SPX KING / XG2–XG5, SPY KING / SG2–SG5, QQQ KING / G2–G5 — the
 thirteen ES lines and five NQ lines he trades from), the tap NUMBER (1st / 2nd / 3rd — the Academy's 80 / 66 / 33), an
 outcome in a trader's terms (points before the level is violated, the overshoot, held or broke), the QQQ book on NQ at
 all, and a CONTROL (what price does at a point that is not a level — F-12 and F-14 both found that without one, a
@@ -61,10 +61,10 @@ at one price (SPX 7680 and SPY 766 at the same ES price) — recorded, to be rea
 
 **The exported lines, exactly as the IRT file carries them** — the same price, the same rank, the same second:
 
-    ES   SPXW KING · G2 · G3 · G4 · G5      SPY KING · S2 · S3 · S4 · S5      (10 gamma lines; CW0 / PW0 / FLIP0 are IF structure, tier 2)
+    ES   SPXW KING · XG2 · XG3 · XG4 · XG5      SPY KING · SG2 · SG3 · SG4 · SG5      (10 gamma lines, v15.85 labels; CW0 / PW0 / FLIP0 are IF structure, tier 2)
     NQ   QQQ KING · G2 · G3 · G4 · G5                                          (5 lines)
 
-`book` = SPXW | SPY | QQQ · `rank` = 1 (the King) … 5 · `pct` = the signed %King the label carries (`G3 -56%`) ·
+`book` = SPXW | SPY | QQQ · `rank` = 1 (the King) … 5 · `pct` = the signed %King the label carries (`XG3 -56%`) ·
 `usd` = |v| in dollars · `pol` = + / − · the price = Skylit's own ES1 / NQ1 derived price (v15.81) — **the line on his
 chart is the level in the record**, to the tick. A line is what it is AT THE TAP (rank 3 at 10:04 may be rank 2 by
 10:30); the row keeps the rank at the tap and the rank when the outcome closed.
@@ -104,7 +104,7 @@ Stamped from the SAME second's book and bars, every field nullable, nothing inve
 | identity | `book` `rank` `pct` `usd` `pol` `role` (King / floor / ceiling / gatekeeper / other, by `reading-heatseeker`) | K1, F5, F6, S2 |
 | lifecycle | `tapNo` · `state` FRESH / TESTED / DELIVERED / DECAYING (today's touches of this line; decaying = |v| down ≥ 20% from its session peak with no touch) | F2, F3, K5.2 |
 | growth | `d5` `d15` `d60` (% change of |v| over 5 / 15 / 60 min) · `born` (crossed 20% of King today, and when) · `dod` (|v| vs the same strike yesterday at this clock: real vs hedge) | F4, S6, K5.3, S0.5 |
-| geometry | `kingDist` (pts to the book's King) · `gates` (nodes ≥ 20% between spot and the King) · `pocketFar` (pts to the next node ≥ 20% on the far side) · `otherBook` (the other book's exported line within ±5 pts: yes / which) · `ifWall` (CW0 / PW0 / FLIP0 within ±5) · `keyLevel` (his list within ±5) | K5.4, S4, P5, X4 |
+| geometry | `kingDist` (pts to the book's King) · `gates` (nodes ≥ 20% between spot and the King) · `pocketFar` (pts to the next node ≥ 20% on the far side) · `otherBook` (the other book's exported line within ±5 pts: yes / which) · `ifWall` (CW0 / PW0 / FLIP0 within ±5) · `keyLevel` (his list within ±5: PDH · PDL · PDC · ONH · ONL · **AHI · ALO · LHI · LLO** (his ask 2026-09-08; Asia 17:00–02:00 CT, London 02:00–08:30 CT, boundaries awaiting his word) · prior POC · VAH · VAL · WH · WL) | K5.4, S4, P5, X4; L12 |
 | approach | `from` · `speed` (pts over the last 5 bars, and in ATR) · `flush` (the wick's depth past the line, pts) · `barsFromLast` (bars since the last exported line was touched) | F8, F1.4, F-14's flush and speed |
 | context | `regime` (net γ sign; the day type read) · `trinity` (3/3 · 2/3 · split at the tap) · `kroll` (the King's roll state today, per book) · `latch` (a crown flap in progress) · `proj` (Skylit's projection regime / target, when on) | F6, F7, K4, K2.6/7 |
 | clock | `ct` · `bucket` (08:30–09:00 · 09:00–10:30 · 10:30–13:30 · 13:30–14:00 · 14:00–15:00) · `sinceOpen` · `beforeFirst` (filled at the close: was the tap before the day's first extreme?) · `dayColour` (green / red so far) · `rangePos` (where in the day's range so far, 0–100) · `vwapDist` | K3, P3, F-14's clock, P7.3 |
@@ -168,6 +168,19 @@ more often than a line that is either tested or shedding, and both more often th
 fresh+growing ≥ 40%, mid ≤ 25%, at n ≥ 40 per cell. Refute if the fresh+growing cell's Wilson high is under the
 midpoint's rate at n ≥ 40."* Read once, at minN, on sessions from the register date. Registered as a NULL if it fails
 — that too is an answer to his question.
+
+## 4b · What his first ten circles taught the record (E005 / E006, 2026-09-08) — before anything is built
+
+His six ES circles and four NQ circles were read against the ladder's own ranked lists and the node-event dollars:
+every one was a top-3 line at the moment of the tap (the SPX King ×4, the SPY 765 line at rank 2–3, the QQQ Kings
+719 / 718, the QQQ 718 / 720 nodes at rank 2–3) — a TAP RECORD ROW at ES scale (8–17-pt turns), which the SPY-scale
+`defl` ledger (21 rows in the same windows, none matching) does not see. Three things the record must carry that the
+first draft did not say loudly enough: (1) **the overshoot as a first-class outcome** — a −γ King was gone THROUGH by
+8–15 ES / 16–28 NQ pts four times and the turn came at the +γ node beneath (L10), so `mae` and "which node actually
+stopped it" are the trade, not a footnote; (2) **the liquidity column with the sweep depth**, not a yes/no — ONL/LLO at
+the −γ King, the PDC at the 719 King, the POC at the 718 King were each swept 10–28 pts before the turn (L12);
+(3) **the King's dollars AFTER the tap** for a ceiling — the 7700 King bled −$100M/15m right after its third tap and
+the ceiling was gone (L11). And the QQQ book on NQ needs dollars, which no record carries today.
 
 ## 5 · The order of building — one element per ask, nothing before his word
 

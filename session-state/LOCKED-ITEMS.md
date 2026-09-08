@@ -51,6 +51,22 @@ them; they were confirmed bar-by-bar on the tape. **No longer pending.**
 
 ## OPEN — LOCKED, NOT BUILT
 
+### ⚠ AHI · ALO · LHI · LLO — the Asia and London highs and lows as tracked levels (AGREED 2026-09-08, NOT BUILT)
+**His words (2026-09-08, evening):** *"i was not tracking sweeps of the asia and london highs and low, but we should do
+it. they can be ALO, AHI, LLO, LHI. you will find that the liquidity levels and gamma levels may increase the probability
+of deflection, so you must look at both and track both."*
+**What is agreed:** four new key levels beside PDH/PDL/ONH/ONL/POC/VAH/VAL/WH/WL — the Asia session's high and low and
+the London session's high and low — on the SWEPT line, the day candle's price axis, the sweep study
+(`tools/study-sweeps.py` level types) and the tap record's `liq` column. Proposed session boundaries, awaiting his
+word: **Asia 17:00–02:00 CT (the Globex open to the European open), London 02:00–08:30 CT** — ONH/ONL remain the
+whole night 17:00–08:30. Measured 2026-09-08 from the ES courier's rows: AHI 7725.75 (23:46) · ALO 7694.75 (01:20) ·
+LHI 7718.25 (05:20) · LLO 7687.50 (03:02) = ONL.
+**What is not there yet:** the NQ courier carries no overnight bars (30 rows before 08:30 on 09-08) — the NQ levels
+need the courier's window widened; the ES courier has 180 Asia + 390 London rows.
+**Where the full spec will live:** DECISIONS (the boundaries, once he answers) and `design/TAP-RECORD.md` §2c.
+**Leaves this file:** when the four levels draw on the SWEPT line and the candle (a version number here), or when he
+cancels them by name.
+
 ### ⚠ CONDITION THE FAR SIDE ON THE GAMMA BOOK — DESIGN BUILT, COLLECTION STARTED v14.72, TEST BLOCKED
 **Updated 2026-08-28.** The question is unchanged and it is still the highest-value unbuilt idea.
 What changed is that it is no longer an intention:

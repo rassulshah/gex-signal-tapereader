@@ -656,3 +656,30 @@ ledger holds no failures (no denominator); the node ledger is per bar (F-12) on 
 knows a line's book or rank. **The top-3 question:** today's hand read (34 taps) says ranks 1–3 carried 15 of 18
 deflections and both extremes, ranks 4–5 carried all three breaks and two pullback turns — one day; the answer he was
 given is "keep 5 for two weeks while the record accumulates, then decide with n".
+
+## 2026-09-08 · v15.86 — his training: ten circles, the liquidity levels beside the gamma levels, the path to predictions
+
+Operator (night): **"here are 6 deflections identified by the circles. each should be counted as 1 deflection. you should
+analyze the time and price and gamma node with all its details. in the future, you should be able to identify them like
+i am identifying them, and score them to predict the deflection in advance. see also if there were any type of patterns
+as well as levels there like ONH ONL, PDH, PDL, Asia High Asia Low, London High and London Lo, prior day poc, vah, val.
+i was not tracking sweeps of the asia and london highs and low, but we should do it. they can be ALO, AHI, LLO, LHI. you
+will find that the liquidity levels and gamma levels may increase the probability of deflection, so you must look at
+both and track both, so you are able to better score and predict a potential deflection will happen and give me a entry
+or exit target in the future, but first you must get really good at identification of deflections and levels and both
+as well as patterns like rug, rrug, piku stack, barney stack etc.. only after you put all of this together over time
+will you start giving me valid predictions. Espeicallay after adding hod lod statistics as well as things like volume.
+so make sure you track, score over time to get to this level of competence and reach my intended purpose of the
+project, which you should always keep in mind."** · **"here are 4 examples from the NQ to also help you learn"** ·
+**"ok.. i need you to record and let me know in about a week from now.. keep it as an open item."** (top 3 vs top 5)
+
+Decided: (1) **a circle is one deflection** — E005 / E006 carry his ten as ten legs, each read against the ladder's
+ranked lists, the node-event dollars, the bars and the day's levels; the taught examples are not scored (the protocol).
+(2) **The liquidity levels are tracked beside the gamma levels at every deflection** — the `liq` factor; **AHI · ALO ·
+LHI · LLO** join his key-level list (LOCKED-ITEMS; the session boundaries Asia 17:00–02:00 CT / London 02:00–08:30 CT
+are proposed, his word awaited). (3) **The order of competence is his**: identification of deflections, levels and
+patterns first; scoring over time; predictions with entries and targets only after — with the HOD/LOD statistics and
+volume added along the way. The gauge on the Learn tab stays honest (blind reads only); the tap record (R-25) is the
+scorer. (4) **Top 3 vs top 5 is an open item (Q12), his call on or about 2026-09-15** — he keeps 5 until then.
+Recorded for his ruling, not decided: the first-hour turns he did not circle (ES 08:45 / 09:03 / 09:39 / 09:51; the
+NQ LOD 09:09 at the PDL sweep) — whether they are deflections in his sense.

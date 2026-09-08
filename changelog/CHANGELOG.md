@@ -1,3 +1,46 @@
+## v15.86 — THE LEARN CORPUS GROWS BY TEN CIRCLES (E005 · E006) · THE LIQUIDITY LEVEL FACTOR · L10 · L11 · L12
+
+> Operator, 2026-09-08 (night): **"here are 6 deflections identified by the circles. each should be counted as 1
+> deflection. you should analyze the time and price and gamma node with all its details. in the future, you should be
+> able to identify them like i am identifying them, and score them to predict the deflection in advance. see also if
+> there were any type of patterns as well as levels there like ONH ONL, PDH, PDL, Asia High Asia Low, London High and
+> London Lo, prior day poc, vah, val. i was not tracking sweeps of the asia and london highs and low, but we should do
+> it. they can be ALO, AHI, LLO, LHI. … first you must get really good at identification of deflections and levels and
+> both as well as patterns like rug, rrug, piku stack, barney stack etc.. only after you put all of this together over
+> time will you start giving me valid predictions."** — and **"here are 4 examples from the NQ to also help you learn"**.
+
+**What was read.** Each circle against the ladder's own ranked lists per 3-minute bar (`snaps[].tri.SPXW.top` /
+`tri.SPY.top` / `tri.QQQ.top` — window-proof), the node-event record with dollars for the SPX strikes, the ES / NQ
+1-minute bars, and the day's levels from the courier (PDH/PDL/PDC, the prior POC/VAH/VAL from a 0.25-pt profile,
+ONH/ONL, and — for the first time — AHI/ALO 17:00–02:00 CT and LHI/LLO 02:00–08:30 CT). **ES (E005):** the +γ SPX
+King 7700 as the ceiling three times (10:18 · 12:06 · 13:18 — lower highs 7704 → 7701.75 → 7699.50, rejections 13.75 →
+8.5 → 12 pts, the King growing $88M → $197M into them and bleeding −$100M/15m after the third); the −γ King 7680 NOT
+the floor twice (13:48: the flush ran 10 pts through it at ONL/LLO 7687.50 and turned at the +γ 7670 / SPY 765; 14:59:
+the LOD 7672.25 on the fresh +γ stack 7665 / 7670 — 7665 $37M → $60M, +$47M/15m — 12–15 pts under the King); the
+14:33 rejection at the new +γ King 7690 over the −γ 7685 / 7680 (a rug) on the SMA-50 to the tick. **NQ (E006):** the
+−γ 718 as the lid on the opening drive's bounces; the −γ Kings 719 / 718 as floors at the PDC 29569 and the prior POC
+29512, overshot 16 and 28 pts and reclaimed within a bar; the +γ 720 pair as the afternoon ceiling. **Not circled by
+him, for his ruling:** the ES first-hour turns (08:45, 09:03 at the ONL/LLO sweep, 09:39, 09:51) and the NQ LOD (09:09,
+the PDL 29468 swept 43 pts, +155). **The panel's own `defl` ledger** fired 21 rows inside his six ES windows and matched
+none of them — it reads ±0.50 SPY wobbles; he reads 8–17-pt turns at the top-3 lines.
+
+**What shipped.** `learning/deflections/examples.json` + LEARNING.md + `LEARN_SEED`: E005 (six legs) and E006 (four),
+TAUGHT (`blind: null`); the factor **liq** (PDH · PDL · PDC · ONH · ONL · AHI · ALO · LHI · LLO · POC · VAH · VAL · WH ·
+WL); **L10** a −γ King is not the floor — the overshoot to the +γ node beneath (n=4, PROPOSED); **L11** a +γ King ceiling
+decays by the tap and is gone when the King bleeds (n=1); **L12** a liquidity level at a −γ King gets swept before the
+turn (n=4); L1 → n=24 (6 agree · 3 weak), L2, L5, L6, L7 (weak on this day), L9 touched. No face change beyond the
+Learn tab's two new sections. **Records:** OPEN-QUESTIONS **Q12** (top 3 vs top 5 — his open item, due ~2026-09-15; a
+reminder is scheduled), LOCKED-ITEMS **AHI · ALO · LHI · LLO** (agreed, not built; boundaries proposed, his word
+awaited; the NQ courier has no overnight bars), `design/TAP-RECORD.md` §4b (what the ten circles taught the record:
+the overshoot, the sweep depth, the King's $ after the tap; QQQ needs dollars) and the v15.85 labels.
+
+**Tests.** `test_v1586.js` — 23 assertions (the seed, the two examples, the factor, the three rules and the moved
+counts, LEARNING.md, Q12, the locked item, the design, the record); `test_v1562` 34 green with six examples.
+
+**The record.** The roadmap — v15.85 shipped, **v15.86 this build**, the seasonality → v15.87, the rest +1; DECISIONS
+2026-09-08 (his training words; the four levels; the open item); LESSONS v15.86; INVENTORY §0t; the config
+(2026-09-08k); the resume note (+ snapshot v15.85); the chat history.
+
 ## v15.85 — XG2–XG5 · SG2–SG5 — THE IRT NODE LINES LABELLED BY BOOK (R-26) · THE TAP RECORD DESIGNED (R-25, on paper)
 
 > Operator, 2026-09-08 (evening): **"in the irt export, the spy gama level cand be SG2 SG3 etc., and the spx levels can

@@ -20,6 +20,17 @@ one resource this project cannot regenerate: his attention.
 
 ## ⛔ BLOCKED ON THE OPERATOR — only he can answer these
 
+### Q12 · **Top 3 or top 5 gamma lines per book?** — OPEN ITEM, HIS CALL, DUE ~2026-09-15 (opened 2026-09-08)
+**His words:** *"I am also trying to determine if it is sufficient to have the top 3 instead of the top 5. can you look at
+the deflections today and see if the top 3 is enough?"* → *"ok.. i need you to record and let me know in about a week
+from now.. keep it as an open item."*
+**The one-day read (2026-09-08, 34 taps, a hand read by the tap record's definitions):** ranks 1–3 deflected 15 of 22
+with no break; ranks 4–5 3 of 12 with all three breaks; the HOD was the two Kings, the LOD the SPY 765 line (rank 3 →
+2); two turns needed a rank-4/5 line (09:51 SPY 767 r5; 13:48 SPY 765 r4). Ranks move all day (SPY 765: 3 → 1 → 5 → 4 → 3).
+**What decides it:** the tap record (R-25) once it runs, or — until it does — the same hand read on each session's
+ladder lists (`snaps[].tri.SPXW.top` / `tri.SPY.top`, window-proof) for a week. **Report to him on or about 2026-09-15**
+with the per-rank table across the week; a reminder is scheduled in the cloud session. He keeps 5 until then.
+
 ### Q1 · What does **PTWICK** measure?
 **Blocks:** the last column of ⓪a's 2ND block. PTWick% and PTMUD are built and measured; PTWICK is not.
 **Why it cannot be guessed:** `WICK` = "the session open to the bar that RECLAIMS the open". It needs

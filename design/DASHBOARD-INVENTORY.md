@@ -11,6 +11,14 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0t · v15.86 — the Learn tab gains E005 / E006 and the liquidity factor (2026-09-08, night)
+
+No new element on the dashboard. **📚 Learn** gains two taught examples (E005 ES · six circles, E006 NQ · four, with his
+images from the repo), the **LIQUIDITY LEVEL** factor in the checklist, and three PROPOSED rules (L10 · L11 · L12); the
+gauge is unchanged by construction (taught examples move breadth only). His words: *"each should be counted as 1
+deflection … you must look at both and track both"*. Measured: descriptive (a corpus). Probe: the Learn tab's E005
+section; `__gptsDebug.learn()`.
+
 ## 0s · v15.85 — the node lines labelled by book (2026-09-08, evening)
 
 No new element on the face. **The FlexLevels file's node lines** read `XG2 +86%` … `XG5` (the SPX book) and `SG2 -47%` …

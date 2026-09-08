@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-08 · v15.85 · session `f9c89c64` — XG2–XG5 · SG2–SG5 — THE IRT NODE LINES LABELLED BY BOOK (R-26) · THE TAP RECORD DESIGNED (R-25)
+## 2026-09-08 · v15.86 · session `f9c89c64` — HIS TRAINING — TEN CIRCLES (E005 · E006) · THE LIQUIDITY LEVELS · L10 · L11 · L12 · Q12 OPEN
 
-_197 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_202 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2681,6 +2681,90 @@ So today, top 3 would have kept 15 of 18 deflections plus both extremes, and dro
 
 On the …[trimmed]
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (20:33):** **Double check, 15:21–15:23 CT, file vs Skylit at the same second:**
+
+- **SPX side — exact to the tick:** SPXW KING 7680 → 7687.00 (−100, purple) · G2 7675 +86% 7681.75 · G3 7670 +50% 7676.75 · G4 7665 +43% 7671.75 · G5 7690 +32% 7697.00 — identical strikes, ranks, signs and prices to Skylit's derived SPXW book.
+- **SPY side — I found a bug.** The file printed SPY KING 760 at 15:21 and 766 at 15:23, with S rows whose signs and sizes did not match Skylit's SPY book (766 at −$49M in the panel's copy vs +$849M on Skylit's 0DTE). Cause: the panel's own SPY/QQQ book is fetched by copying the app's *last* request URL, and with the projection on the app now rotates three expiration windows (0DTE, next-2, next-4) — so the panel's SPY book was flipping between the 0DTE chain and a 3–5-expiry basket. The recorded King series today stayed 767 → 766 (0DTE), so the day's record is fine; the flap showed up in the after-close file. **Fixed in v15.84 (building now):** the panel's SPY/QQQ books are pinned to the 0DTE window, and a multi-expiration payload is refused (counted) once a 0DTE one is held. FINDINGS F-22.
+
+**Your study question — honestly, partly:**
+
+What exists today: (1) the **node ledger** — every touch of every node, scored DEFLECT / PIN / BREAK at 5/10/20 bars, with the why-vector at the touch (size %King, polarity, role, distance, growth d5/d15/d60, fresh/tested/delivered stage, taps, regime, trend, time of day); (2) the **deflection ledger** — every confirmed tap-and-reverse with its setup class (King/Gate/Rug/Pika/Barney/Floor/Ceiling), which books' Kings it touched, the King-roll state, the pattern stamp, and whether price continued; (3) the **Learn rules** L1–L9 (growth into the tap, fresh, stack, roll, King distance, time of day, confluence) scored nightly against i …[trimmed]
+
+**OPERATOR:**
+> yes
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:45):** Now the breadth pin in `selfFetch`:
+Now the mutant pass:
+Now the full suite:
+Now the CHANGELOG, DECISIONS and LESSONS entries. Let me look at the v15.83 heads for the format:
+Now the three record entries:
+Now the config, the plan seed, and the roadmap regeneration:
+Now the chat history regeneration:
+**v15.84 is built — and while building it I found the bigger half of the bug, so one correction first.** I told you "the day's record is fine because the King was steady". The King series *is* fine (767 → 766 at 14:51 — the biggest 0DTE node leads every window, so it's the one thing a window flip can't move). But the panel's own SPY book has been inheriting **window and breadth** from whatever gex/levels URL came last — the app's three projection windows today, and the panel's *own* expiry-set requests (500 nodes, week / 7-expiry windows) every day since 08-26, because their responses come back through the same hook. The recorded SPY node count per 3-minute bar this afternoon ran **30 · 3 · 12 · 4 · 5 · 4 · 11 · 12 · 5 · 4 · 11 · 4 · 28 · 5 · 13**, and the archive shows the same 34–61 band-flips in every session since 08-26. So every node-level number before tonight — F-21's "accumulating vs dissipating didn't separate", the node grade, the S rows — was read off a universe that changed shape a few times a minute. The King rows, the King roll, the SPX side of the file: sound. Written up as FINDINGS F-22; F-21 flagged; LESSONS v15.84 records the wrong sentence.
+
+**v15.84 (F-22):** the panel's SPY/QQQ book is now always `exp_mode=current & exp_count=1 & nodes=500` — the 0DTE chain, every strike, whatever the app asked last — and a multi-expiration payload is refused (and counted) once a 0DTE book is held. No face change. `test_v1584` 28, 13/13 mutants; suite 158 green / 6 known …[trimmed]
+
+**OPERATOR:**
+> im looking at the actual stats at the bottom and it says that there is no wick and bop is m but the wick % is 14%. How is that possible.   double check how you are calculating and if your drawing of the candle and the stat are correct or not.  how can there be 14 % if the the hod took 0m  ?
+> 
+> _[sent while I was working — a queued message]_
+
+**me (21:00):** Checked against the raw ES 1-minute bars for today — the row and the candle are both right, and here is why they look contradictory:
+
+- **08:30 bar:** open 7711.50 → high **7717.75** → close 7713.75. That first minute's high is the HOD. So **took 0m** (the HOD printed in the opening minute).
+- **08:31 bar:** closed 7709.25, below the open → that is **W.End 8:31a**, so **BOP 1m** and **wick 1m** (took + BOP).
+- **wick% 14%** is your own definition from 08-28: a *price* ratio, |open − first extreme| ÷ the day's range = 6.25 ÷ 45.50 = 13.7%. It is not a time ratio.
+
+So the wick isn't "none" — it's a 1-minute wick 6.25 points tall: price spiked above the open in the first minute, closed back through the open in the second, and never saw 7717.75 again. A short wick in time can be a tall wick in price; the two fields measure different things. The candle draws the same story (HOD 08:30, ↩ 8:31 · 1m, the 14% upper wick, MD 6h28 to the LOD at 14:59, $1,963).
+
+One thing I'd change if you want it: the row prints **wick 1m** — it should probably read 1m plainly, not look like "no wick". Say the word if the font is the problem.
+
+**OPERATOR:**
+> in the irt export , the spy gama level cand be SG2 SG3 etc., and the spx levels can be XG2 and XG3  etc.. make this change. also note the qqq king should only be on the nq not the es.
+> 
+> _[sent while I was working — a queued message]_
+> I am also trying to determine if it is sufficient to have the top 3 instead of the top 5.   can you look at the deflections today and see if the top 3 is enough ?
+> 
+> _[sent while I was working — a queued message]_
+
+**me (21:08):** **Top 3 vs top 5 — today's taps, measured** (ES 3-minute bars, every top-5 line of both books as it stood on the ladder at that minute, at Skylit's price; a tap = the bar enters ±5 pts from outside; DEFLECT = price gets ≥10 pts away within 60 min before any close 5 pts through; PIN = held but < 10; BREAK = closed through). 34 taps today:
+
+| lines | taps | DEFLECT | PIN | BREAK |
+|---|---|---|---|---|
+| ranks 1–3 (King, G2, G3 — both books) | 22 | **15 (68%)** | 7 | 0 |
+| ranks 4–5 (G4, G5 — both books) | 12 | 3 (25%) | 6 | **3** (all three of the day's breaks) |
+
+- **The HOD (7717.75, 08:30)** was the two Kings: SPY 770 (7718.5) and SPX 7720 (~7723) — rank 1 in both books.
+- **The LOD (7672.25, 14:59)** was SPY 765 at 7671 — rank 3 at 14:51, rank 2 by 14:57 (+26%) — with SPX 7665 (rank 5, +17%) at the same price.
+- **Only two deflections today needed a rank-4/5 line** (no top-3 line within the zone at the time): 09:51 SPY 767 (rank 5, +47%) 12.7 pts, and 13:48 SPY 765 (rank 4, +24%) 18.7 pts — the afternoon's best bounce. Both SPY, both +gamma, both pullback turns.
+- Ranks move: SPY 765 was rank 3 at 08:39, 1 at 09:09, 5 at 10:03, 4 at 13:51, 3 at 14:51 — and then it was the LOD. "Top 3" is a moving set; the line that turns the day at 14:59 can be rank 4 an hour earlier.
+
+So today, top 3 would have kept 15 of 18 deflections plus both extremes, and dropped 10 taps that pinned or broke along with 2 real turns. That leans your way — but it is **one day, n = 34, a hand read with the definitions from the design, not pre-registered**. Exactly the question the tap record answers with n (F5.1 in the registry), and with the one-window book that starts tomorrow. My suggestion: keep 5 on the chart for two more weeks while the record accumulates, then decide on the number.
+
+On the …[trimmed]
+
+**OPERATOR:**
+> tell me simply what the recommendation is
+
+**me (22:10):** Keep the top 5 lines on the chart for now — don't cut to 3 yet.
+
+Today's numbers lean toward 3 being enough (ranks 1–3 gave 15 of the 18 deflections and both the HOD and LOD), but that's one day and 34 taps, and the ranks move all day — the line that made the LOD was rank 4 an hour before. Let the tap record run for about two weeks and then decide the number with real counts behind it.
+
+**OPERATOR:**
+> ok.. i need you to record and let me know in about a week from now..  keep it as an open item.     next , i need to continue training you ..  here are 6 deflections identified by the circles. each should be counted as 1 deflection . you should analyze the time and price and gamma node with all its details. in the future, you should be able to identify them like i am identifying them, and score them to predict the deflection in advance.  see also if there were any type of patterns as well as levels there like ONH ONL, PDH, PDL, Asia High Asia Low, London High and London Lo, prior day poc, vah, val.  i was not tracking sweeps of the asia and london highs and low , but we should do it . they can be ALO, AHI, LLO,LHI.   you will find that the liquidity levels and gamma levels may increase the probability of deflection , so you must look at both and track both , so you are able to better score and predict a potential deflection will happen and give me a entry or exit target in the future, but first you must get really good at identification of deflections and levels and both as well as patterns like rug, rrug, piku stack, barney stack etc..   only after you put all of this together over time will you start giving me valid predictions.  Espeicallay after adding hod lod statistics as well as things like volume.   so make sure you track, score over time to get to this level of competence and reach my intended purpose of the project , which you should always keep in mind.
+> here are 4 examples from the NQ to also help you learn
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (22:34):** Now the two examples and the rule updates in the learn seed:
+Now the open item, the locked item for the Asia/London levels, and the reminder:
+Now the v15.86 records, test and build:
+
 ### DECISIONS
 
 - **The candle on the price axis, his key levels (2026-09-08, "build"; R-17, v15.80):** *"the levels that are swept are
@@ -2952,7 +3036,26 @@ On the …[trimmed]
   with no break, ranks 4–5 3 of 12 with all three breaks; the HOD was the two Kings, the LOD the SPY 765 line (rank
   3 → 2); two turns needed a rank-4/5 line. Told him: one day — keep 5 for two weeks while the tap record accumulates.
 
+- **His training, ten circles (2026-09-08, night; v15.86):** *"here are 6 deflections identified by the circles. each
+  should be counted as 1 deflection. you should analyze the time and price and gamma node with all its details … see also
+  if there were any type of patterns as well as levels there like ONH ONL, PDH, PDL, Asia High Asia Low, London High and
+  London Lo, prior day poc, vah, val. i was not tracking sweeps of the asia and london highs and low, but we should do it.
+  they can be ALO, AHI, LLO, LHI … first you must get really good at identification of deflections and levels and both as
+  well as patterns like rug, rrug, piku stack, barney stack etc.. only after you put all of this together over time will
+  you start giving me valid predictions."* · *"here are 4 examples from the NQ to also help you learn"* → E005 (ES, six
+  legs) and E006 (NQ, four) in the Learn corpus with the record's numbers; the `liq` factor; L10 / L11 / L12 proposed;
+  AHI · ALO · LHI · LLO locked (boundaries proposed); the question back to him: the first-hour turns he did not circle.
+- **Top 3 vs top 5 — an open item (2026-09-08):** *"ok.. i need you to record and let me know in about a week from now..
+  keep it as an open item."* → OPEN-QUESTIONS Q12; a reminder in the cloud session for 2026-09-15; he keeps 5 until then.
+
 ### SHIPPED
+
+**v15.86** (panel + installer; companion v1.18 unchanged) — THE LEARN CORPUS GROWS BY TEN CIRCLES: E005 / E006 in
+`learning/deflections/` (examples.json, LEARNING.md, `LEARN_SEED`, the two images), the LIQUIDITY LEVEL factor, L10 ·
+L11 · L12 (PROPOSED), L1 → n=24; OPEN-QUESTIONS Q12; LOCKED-ITEMS AHI · ALO · LHI · LLO; `design/TAP-RECORD.md` §4b +
+the v15.85 labels. `test_v1586.js` 23; `test_v1562` 34. The roadmap (v15.85 shipped, v15.86 this, the seasonality →
+v15.87), CHANGELOG, DECISIONS, LESSONS v15.86, INVENTORY §0t, the config (2026-09-08k), the resume note (+ snapshot
+v15.85). **NOT YET VERIFIED on his panel** (his footer read v15.85 at 20:5x CT).
 
 **v15.85** (panel + installer; companion v1.18 unchanged) — XG2–XG5 · SG2–SG5 (R-26). `irtSpyTop` → SG, the ES G rows
 → XG, `irtGHeld` `/^(XG|SG|G)[2-5]$/`, the gear line `SG rows`; R-25 (the tap record) PROPOSED with `design/TAP-RECORD.md`
@@ -3177,6 +3280,12 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **His answer owed:** the first-hour turns he did not circle (ES 08:45 / 09:03 at the ONL-LLO sweep / 09:39 / 09:51; the
+  NQ LOD 09:09 at the PDL sweep) — deflections in his sense, or skipped on purpose? The boundary of the corpus.
+- **His answers owed:** the NQ labels (G2–G5 or QG2–QG5); the Asia / London session hours (proposed 17:00–02:00 CT /
+  02:00–08:30 CT).
+- **Q12 top 3 vs top 5 — report on ~2026-09-15** (a reminder fires in the cloud session); he keeps 5 meanwhile.
+- **v15.86 (and v15.84 / v15.85 inside it) NOT verified live** — the open's probe is in the resume note.
 - **v15.85 (and v15.84 inside it) delivered after the close, NOT verified** — at the open: footer v15.85; the XG / SG
   labels on his IRT chart; `LASTFEED.SPY` one expiration and ~120 rows, steady; `feedRejects().SPY.win` climbing; the
   snaps' node count no longer flipping bands; the QQQ King on ENQU26 only.
@@ -3334,6 +3443,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+17880f7 v15.85: XG2–XG5 · SG2–SG5 — the IRT node lines labelled by book (R-26); the QQQ King on NQ only pinned again on his word; THE TAP RECORD designed on paper (R-25, design/TAP-RECORD.md — nothing built); the top-3 question answered from one day's hand read (34 taps: ranks 1–3 15 of 22, ranks 4–5 3 of 12 with all three breaks); test_v1585 16 · 6/6
 2d1fcb2 v15.84: THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH — the self-fetch pins exp_mode=current&exp_count=1&nodes=500 whatever gex/levels URL came last (the app's three projection windows; the panel's own expiry sets through the same hook), onFeed refuses a multi-expiration payload once a 0DTE book is held (F-22: the recorded node count per bar flipped bands 34–61 times a session since 08-26; the King series survive); test_v1584 28 · 13/13
 2e85e0f v15.83 verified on his panel 14:18 CT — the resume note and the chat history say so
 0c87351 mockups: the v15.83 IRT colour swatch
@@ -3345,7 +3455,6 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 636327c resume note + chat history: F-20 solved (R-22), R-23 pending his answer
 1012b6f F-20: the mechanism found live (the localStorage budget sheds the queue; the exported snaps come from IDB) — FINDINGS, the review's dataHealth; R-22 (export feat from the archive) and R-23 (Skylit's ES1 prices in the export) proposed; test_v1570 1d re-pinned
 5ea641e v15.80 (2): THE E AND A ROWS ALIGNED — one 13-column grid, E · TUE / A · TUE, eagFit; the projection question answered in SKYLIT-FEEDS (the ES1 book, the merge formula, the levels compared) (R-21)
-dc8148e v15.80: THE CANDLE ON THE PRICE AXIS · ONE SOURCE FOR THE SHOWN DAY · HIS KEY LEVELS · the A row, MU/MD, the expectation chip · the IRT export solid, no QQQ on ES, G2–G5 on NQ · the review of Friday (F-20, F-21, H10) (R-17…R-21)
 ```
 
 ---

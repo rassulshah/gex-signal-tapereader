@@ -131,6 +131,20 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.86 — his eye and the ledger's are two instruments; read the circles with the window-proof source
+(1) The panel's deflection ledger fired 21 rows inside his six ES windows and matched none of his six circles — it
+records ±0.50 SPY wobbles with a 2-bar confirm and calls half of them Rugs; he circles 8–17-point turns at the top-3
+lines. **A ledger that fires on everything identifies nothing**; the tap record is designed at his scale (ES points,
+the exported lines, the overshoot) for that reason. (2) The SPY book was on a mixed window all day (F-22), so the
+circles were read from the ladder's ranked lists per snapshot (`tri.*.top` — the DOM tape, window-proof) and the
+SPX-strike node events with dollars, never from `LASTFEED.SPY`'s nodes. Know which source survived the bug before
+reading the day. (3) The SPX→ES conversion from the sidebar prices swings ±4 pts between snapshots (a timing
+mismatch, not the basis); the median (+4) placed every line within 2 pts of the tape. (4) The −γ King was gone
+THROUGH four times in two markets and the turn came a zone lower at the +γ node — the doctrine's "wicky / overshoot"
+in numbers (ES 8–15, NQ 16–28). Filed as L10, PROPOSED, one day: a rule from one day is a hypothesis with a name.
+(5) He did not circle the first-hour turns or the NQ LOD at the PDL sweep. I asked instead of assuming; the answer
+decides what "deflection" means in this corpus — a training set is only as good as its boundary.
+
 ### v15.85 — a question about the data is answered with the data, tonight, and then filed as one day
 (1) "Is the top 3 enough?" could have been answered from the ledgers on file — and would have been wrong twice over:
 the deflection ledger has no failures in it, and the node ledger's universe changed window 61 times today (F-22). It

@@ -167,6 +167,27 @@
    "n": 0,
    "asOf": "2026-09-07",
    "by": "nightly"
+  },
+  "L10": {
+   "evidence": "not measured by the ledger: needs the overshoot past a −γ King and the node that stopped it — the tap record's mae column, not a tap class",
+   "verdict": "not measured",
+   "n": 0,
+   "asOf": "2026-09-07",
+   "by": "nightly"
+  },
+  "L11": {
+   "evidence": "not measured by the ledger: needs the King's dollars after each tap of a ceiling — the tap record's rankAtClose / d15-after, not a tap class",
+   "verdict": "not measured",
+   "n": 0,
+   "asOf": "2026-09-07",
+   "by": "nightly"
+  },
+  "L12": {
+   "evidence": "not measured by the ledger: needs the liquidity level at the tap and the sweep depth — the tap record's liq column, not a tap class",
+   "verdict": "not measured",
+   "n": 0,
+   "asOf": "2026-09-07",
+   "by": "nightly"
   }
  }
 }

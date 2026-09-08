@@ -116,6 +116,11 @@ RULE_SOURCES = {
     'L8': dict(kind='none', why='needs the King path with the sign — not a tap class'),
     'L4': dict(kind='none', why='needs the side flip (a node re-growing under price) — not a tap class'),
     'L7': dict(kind='none', why='needs the clock as a class — to add'),
+    # (v15.86) the three rules his ten circles of 2026-09-08 proposed — none has a class in the ledger; the tap record
+    # (R-25) carries the columns that measure them: mae (the overshoot), liq + the sweep depth, the King's $ after the tap
+    'L10': dict(kind='none', why='needs the overshoot past a −γ King and the node that stopped it — the tap record\'s mae column, not a tap class'),
+    'L11': dict(kind='none', why='needs the King\'s dollars after each tap of a ceiling — the tap record\'s rankAtClose / d15-after, not a tap class'),
+    'L12': dict(kind='none', why='needs the liquidity level at the tap and the sweep depth — the tap record\'s liq column, not a tap class'),
 }
 
 def _cell(r, outcome):
