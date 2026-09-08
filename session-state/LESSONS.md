@@ -131,6 +131,23 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.79 — "today" is a choice the face already made; a sort that has not bitten is a sort that will
+(1) "You should indicate the levels that the HOD and LOD swept" arrived a build after those labels shipped, and the
+right response was not "they are there" but "why can't he see them": the candle in the closed state stands on
+Friday, the sweep machinery stood on the courier's newest day — an empty Tuesday before the open. Two parts of one
+face answering "which day?" differently is the v13.2 failure with a calendar. The fix was a door (`sweepEventsShown`)
+that asks the face which day it is standing on, and both readers go through it. (2) Anchoring the walk on a day
+exposed that `futSessionBars` sorted unpadded keys as strings — the 10th before the 8th — a bug that would have made
+"today" the 9th from this Thursday on, silently, for three weeks of every month. Nothing had failed because the
+window had never straddled the boundary with a live session past it. A sort on formatted strings is a bug waiting
+for a date; sort on the number. (3) The E row's move is a two-liner in the code and was nearly wrong twice: first
+emitted after the section loop, which lands it UNDER the SET line because `secLoc`'s own tail follows `secFrame`'s
+ladder; the mockup had moved the DOM node by hand and hid that. Render the built face, not the moved mockup, before
+calling a placement done. (4) The mockups' ride had the same clone-time disease the renders had at v15.73, and the
+cap said so at 8.16 of 8.39 MB one build before it would have refused. The age that survives a clone is the last
+commit; six ride. (5) He asked for "slightly bigger", saw 9 px, and asked for bigger and the whole row — two mockups
+cost minutes and settled it; one guess at the right size would have cost a build.
+
 ### v15.78 — the black space was a flex line; a candle that fits in numbers wraps in borders
 (1) "Why is there black space to the right of the ladder" had a one-line answer once measured in a browser: the grid
 is a fixed-column FLEX ITEM inside `.g3f2` (flex-wrap), so it does not grow, and the width past its columns is the

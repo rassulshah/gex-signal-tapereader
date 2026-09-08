@@ -195,10 +195,22 @@ for _sub in ('nightly',):
 # at v14.3, same cure: SPECS always (.md, kilobytes, and they are the approved designs), but only the
 # TWELVE most recent renders. Older ones stay in git history, which is where a superseded render
 # belongs; they stop riding in every payload forever.
+# (v15.79) ⚠⚠ "NEWEST BY MTIME" WAS NEWEST BY CHECKOUT HERE TOO — the v15.73 lesson the renders learned, unlearned by
+# the mockups: in a fresh clone every mockup carries the clone's timestamp, so "the twelve most recent" was twelve
+# arbitrary files, 0.45 MB mockup-recommendations.png among them, and v15.78 shipped at 8.16 of the 8.39 MB cap. The
+# age that survives a clone is the file's LAST COMMIT (`git log -1 --format=%ct`); a mockup not yet committed (this
+# build's) is the newest of all. SIX ride, not twelve: the ones he can still be asked about. The rest are in git.
 _mk_md = [f for f in sorted(os.listdir('mockups')) if f.endswith('.md')]
 _mk_bin = [f for f in os.listdir('mockups') if f.endswith('.html') or f.endswith('.png')]
-_mk_bin.sort(key=lambda f: os.path.getmtime(os.path.join('mockups', f)), reverse=True)
-for f in _mk_md + _mk_bin[:12]:
+def _git_ct(path):
+    try:
+        out = subprocess.run(['git', 'log', '-1', '--format=%ct', '--', path], capture_output=True, text=True).stdout.strip()
+        return int(out) if out else 1 << 62
+    except Exception:
+        return 1 << 62
+_mk_bin.sort(key=lambda f: (_git_ct(os.path.join('mockups', f)), f), reverse=True)
+_MOCKUPS_RIDE = 6
+for f in _mk_md + _mk_bin[:_MOCKUPS_RIDE]:
     p = os.path.join('mockups', f)
     if os.path.isfile(p):
         FILES.append(p)

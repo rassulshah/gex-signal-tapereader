@@ -493,3 +493,13 @@ up and down days.
 - **Room or nothing:** the slot is filled only after layout, when the grid's flex line leaves ≥110 px; the candle is
   the grid's rendered height; on a narrow panel the face is exactly what it was. The candle is capped at 260 px wide.
 - **The small candle (the DAY table's) is unchanged** — `dayCandleSvg` without a frame argument draws what it drew.
+
+## 2026-09-08 — the E row below the ladder, bigger; one door for "which day" (v15.79, R-16)
+
+- **Placement (his):** under the ladder and the candle, above the SET line and the replay strip; the HOD line and
+  SWEPT stay on top. **Size (his, from two mockups):** values 10.5 px, labels 8.6, chips 9, spread across the row.
+- **The sweeps follow the shown day.** The candle and the SWEPT line read `sweepEventsShown` — today's events live,
+  the replayed / parked day's in a replay or the closed state (inside the courier's 5-day window; none beyond it).
+  A parked Friday face wears Friday's sweeps. Two readers of "which day" must go through one door.
+- **The courier's day keys compare as numbers**, never as strings (the 10th-before-the-8th bug).
+- **Mockups ride the installer by last commit, six of them** — the age that survives a clone.

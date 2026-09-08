@@ -29,60 +29,61 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 - **v15.75** (2026-09-07) — THE CLOSED STATE — when the market has not opened today (a weekend, a holiday, before the open) the dashboard stands on the last recorded session parked at its close, every section as it was, badged CLOSED, and returns to LIVE by itself with today's first book; the session signal is the gamma payload's own minute series (levels[].t), not the clock; the stale-day guard no longer evicts a replay on a holiday; the day line reads the last session instead of "recording · 0 bars" · serves: "a frozen state from when it was open so i can really work on it" — the day studied, the ladder read, setups discussed as if open
 - **v15.76** (2026-09-07) — G2–G5 IN THE IRT EXPORT — the rest of Skylit's top-5 as white lines on his ES chart beside the Kings, CW0, PW0 and FLIP0: NODES=5 draws the five largest nodes by |%King| with the King always #1, so the King's slot is the gold SPXW KING line and the four that follow are G2–G5, from the same tape the King row reads, held for the session like the Kings (R-13) · serves: HOD/LOD · DEFLECTION — the nodes price will meet, on the chart he trades from
 - **v15.77** (2026-09-08) — THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his tool's expected row minus the eleven fields he struck, above the HOD/LOD line: the weekday's recent colour, the first extreme, HOD/LOD · took · BOP · wick · W.End · wick% · MUD · the other extreme · HL gap · HL rng, every value a trimmed mean over the sessions of the SAME weekday (BASERATES byWeekday, HODLOD_BASE.byDow); the hold rates stay pooled (R-14) · serves: HOD/LOD · DEFLECTION — when the extremes and the opening excursion are expected on THIS weekday: his seasonality
+- **v15.78** (2026-09-08) — THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS — the developing session candle fills the space to the right of the node ladder at the ladder's height (measured after layout; a narrow panel is unchanged): HOD/LOD with their clocks and the leg after each, open and close ticks, MUD and its dollars, the PT line, the shape spine, the reversal names ON the wick (left) and the SWEPT line's labels THROUGH it (right), in its colours (R-15) · serves: HOD/LOD · DEFLECTION — the day's shape and what its extremes swept, beside the levels price is meeting
 
 ## NEXT — the running build
 
-### v15.78 — THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS — the developing session candle fills the space to the right of the node ladder at the ladder's height (measured after layout; a narrow panel is unchanged): HOD/LOD with their clocks and the leg after each, open and close ticks, MUD and its dollars, the PT line, the shape spine, the reversal names ON the wick (left) and the SWEPT line's labels THROUGH it (right), in its colours (R-15)
+### v15.79 — THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE THE SHOWN DAY'S — the expected row moves under the ladder and the candle, above the SET line and the replay strip, at 10.5 px spread across the row; the candle's swept levels and the SWEPT line read the replayed / parked day's bars (sweepEventsShown; futSessionBars anchored on a day, its keys sorted numerically) (R-16)
 
-Serves: HOD/LOD · DEFLECTION — the day's shape and what its extremes swept, beside the levels price is meeting.
+Serves: HOD/LOD · DEFLECTION — the expectation read against the day, in a size he can read; a parked candle that wears its own day's sweeps.
 
-Done when: the candle renders beside the grid on his panel at his width with the SWEPT line's labels; at 760 px the face is unchanged; test_v1578 44, 16/16 mutants.
+Done when: the row renders under the ladder block on his panel; the parked Friday candle shows Friday's sweeps; test_v1579 35, 11/11 mutants.
 
 ## AFTER THAT — in order
 
-### v15.79 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
+### v15.80 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
 
 Serves: HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered.
 
 Done when: mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine.
 
-### v15.80 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+### v15.81 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
 
 Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
 
 Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
 
-### v15.81 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+### v15.82 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
 
 Serves: HOD/LOD · the loop closes.
 
 Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
 
-### v15.82 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
+### v15.83 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
 
 Serves: HOD/LOD · PULLBACK · 94 OPEN studies · H6.
 
 Done when: 40 taps recorded and the first F-study reads from them with n.
 
-### v15.83 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
+### v15.84 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v15.84 — one definitions file (Python + panel) · the shipped-artifact test
+### v15.85 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v15.85 — the face manifest — every number on the face names its study, pinned by a test
+### v15.86 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v15.86 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v15.87 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 

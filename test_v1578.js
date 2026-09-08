@@ -25,7 +25,8 @@ global.swallow=(tag,e)=>{ global.__sw=(global.__sw||[]).concat([tag+': '+(e&&e.m
 global.DAYCOL_ROW=13; global.DAYCOL_HD=16; global.DAYCOL_N=9; global.ES_USD_PER_PT=50;
 global.frameNum=x=>(Math.round(x*100)/100).toString();
 global.LEVEL_TIER={ PDH:1,PDL:1,PDC:1,ONH:1,ONL:1,VAH:1,VAL:1,POC:1,KING:1,EMH:1,EML:1,IBH:2,IBL:2,CW0:2,PW0:2,VWAP:3 };
-eval(['levelTier','hlClock','hlDur','dayCandleSvg'].map(ex).join('\n'));
+eval(['levelTier','hlClock','hlDur','dayCandleSvg','sweepEventsShown'].map(ex).join('\n'));   // (v15.79) the candle reads the shown day's sweeps
+global.replayOn=()=>false; global.hlDayShown=()=>'2026-09-08'; global.ctTodayStr=()=>'2026-09-08';
 let SB={ open:7700, close:7712 }; global.sessionBody=()=>SB;
 global.displayScale=()=>({ scale:10.05 });
 let RV={ ok:true, hi:[{name:'PDH',px:7751}], lo:[{name:'PDL',px:7690},{name:'ONL',px:7686}] }; global.revLevels=()=>RV;
@@ -121,7 +122,7 @@ const P={ ok:true, ptPx:7728, lcMin:130 };
   const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=P.roadmap.filter(r=>r.status==='next');
   ok(P.roadmap.some(r=>r.v==='15.78' && /DAY CANDLE/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.78'))) && P.roadmap.some(r=>r.v==='15.77' && r.status==='shipped'),
      '4a the plan: v15.77 shipped, v15.78 this build or shipped', nx.map(x=>x.v));
-  ok(P.roadmap.some(r=>r.v==='15.79' && /SEASONALITY/.test(r.title)), '4b the seasonality tracking moved to v15.79, still mockup-first');
+  ok(P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && /^15\.(79|[89]\d)$/.test(r.v)), '4b the seasonality tracking sits after this build (v15.79 or later), still mockup-first');
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P), '4c PLAN_SEED equals the file');
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r15=R.rows.find(r=>r.id==='R-15');
   ok(r15 && r15.status==='implemented' && r15.version==='15.78' && r15.by==='operator' && /candle/i.test(r15.text) && /swept|sweep/i.test(r15.text), '4d R-15 on Rec, by operator, implemented in v15.78', r15&&[r15.status,r15.version]);

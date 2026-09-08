@@ -1,3 +1,50 @@
+## v15.79 — THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE THE SHOWN DAY'S · the courier's day keys sorted as numbers
+
+> Operator, 2026-09-08: "move the hod expected stats above the replay below the node ladder and the daily candle and
+> make the font slightly bigger because it is very small and cant read it" → a mockup at 9 px → "make the font bigger
+> and add some spacing so it takes up the row, show mockup" → the mockup at 10.5 px spread across the row, at 1000 and
+> 1300 px → "build". Mid-build: "on the daily candle you should indicate the levels that the hod and lod swept." → R-16.
+
+**The row.** `secDay` still builds it (it reads that section's weekday base and its D) but into `SECDAY_EROW`, and
+`secLoc` emits it once, after `secFrame` (the King cards, the ladder, the candle slot) and before its SET line — so on
+the face it sits directly under the ladder block and above the replay strip; the HOD line and SWEPT stay on top.
+Values 10.5 px (from 7.4), labels 8.6, chips 9 on a 17-px line, `justify-content:space-between` so the cells take the
+whole row; one line at his width, wrapping on a narrow panel. Render `design/render-v1579-face.png`.
+
+**The candle's sweeps — what he saw and why.** v15.78 drew the SWEPT line's events at the wick tips. The SWEPT
+machinery (`sweepEventsToday` → `futSessionBars(0)`) reads the courier's NEWEST day, and before the open on a trading
+day that is today with no RTH bar yet — while the closed state's candle stands on Friday. So the parked candle wore no
+sweep labels at all, and the SWEPT line above it said "no key level swept yet today" about Friday's face. Now
+`futSessionBars(offsetDays, dayStr)` can be anchored on a day, `overnightHL(dayStr)` / `priorProfile(dayStr)` /
+`sweepLevelsToday(sym, dayStr)` / `sweepEventsToday(sym, dayStr)` follow it (that day's own overnight, prior session,
+prior profile and IB; the EM band and the book already follow the replay through `measureBars` and `tapeMap`), and
+`sweepEventsShown(sym)` is the one door: live, today's; in a replay or the closed state's park, the shown day's — the
+candle and the SWEPT line both read it, so they can never disagree about the day. Inside the courier's 5-day window
+only; an older replay gets none, never today's mislabelled.
+
+**Found on the way, fixed, pinned: `futSessionBars` sorted its day keys as strings.** The keys are unpadded
+('2026-9-8', '2026-9-10'), and a string sort puts the 10th before the 8th — from the 10th of any month "today" would
+have been the 9th's bars, silently, until the 2nd of the next. It had not bitten yet only because the window had never
+straddled that boundary with a live session on the far side; this Thursday it would have. Numeric now (`futDayKeyNum`).
+
+**The installer.** v15.78 shipped at 8.16 of the 8.39 MB cap because `mockups/` rode "the twelve newest by mtime" —
+which in a fresh clone is twelve arbitrary files (the v15.73 lesson the renders learned, unlearned by the mockups).
+They now rank by their LAST COMMIT (`git log -1 --format=%ct`, an uncommitted mockup newest) and SIX ride.
+
+**Tests.** `test_v1579.js` — 35 assertions: the row built in `secDay` and never appended there, `SECDAY_EROW` bare,
+emitted in `secLoc` after `secFrame` and before SET, not a second time in `panelV3`, the strip after `panelV3`; the
+sizes and the spread; the mockups in the repo; the courier keys (unpadded form, numeric compare; a window from the 4th
+to the 10th: "today" is the 10th, the prior session the 9th; anchored on the 4th: Friday's RTH and overnight, no prior
+inside the window → null, never a wrong day; Labor Day → null; anchored on the 9th → the 8th before it); the one door
+(live → no day; parked on Friday → Friday; a replay of today → today); the level set and the scan following the day;
+the candle and the SWEPT line both reading through it; the installer rule; the record. **11 of 11 mutants.** Re-pinned:
+`test_v1564` §6 (the line reads through `sweepEventsShown`), `test_v1577` 4b/4e (built, not emitted, in `secDay`),
+`test_v1578` (the candle's door), `test_v1563` §6 (the same). Suite 153 green / 6 red of 159 (5 baseline + recordcurrent until the commit).
+
+**The record.** R-16 (by operator, implemented v15.79); the roadmap — v15.78 shipped, **v15.79 this build**, the
+seasonality tracking → v15.80, the rest +1 (R-5 says v15.81); INVENTORY §0m; LESSONS v15.79; DECISIONS 2026-09-08;
+the config (2026-09-08c); the resume note; `mockups/mockup-e-row-moved.{png,js}`, `mockups/mockup-e-row-big.png`.
+
 ## v15.78 — THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS: the black space to the right of the ladder, filled
 
 > Operator, 2026-09-08, on a screenshot of his panel with the space to the right of the ladder circled: "do you see

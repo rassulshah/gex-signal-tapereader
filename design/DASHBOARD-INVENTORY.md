@@ -11,6 +11,25 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0m · v15.79 — the E row below the ladder, bigger; the candle's sweeps are the shown day's (2026-09-08)
+
+No new element. **The E row moved** from the top (above the HOD line) to directly under the ladder and the day candle,
+above the SET line and the replay strip — his words: *"move the hod expected stats above the replay below the node
+ladder and the daily candle and make the font slightly bigger because it is very small and cant read it"*, then
+*"make the font bigger and add some spacing so it takes up the row"*. Values 10.5 px (were 7.4), labels 8.6, chips 9,
+the cells spread across the row (`justify-content:space-between`); one line at his width, wrapping on a narrow panel.
+Built by `secDay` into `SECDAY_EROW`, emitted once by `secLoc` after `secFrame` (the King cards, the ladder, the candle)
+and before its SET line. The HOD line and SWEPT stay at the top. **The candle's swept levels** — his mid-build note,
+*"on the daily candle you should indicate the levels that the hod and lod swept"*: they were there from v15.78, but
+the SWEPT machinery read TODAY's courier bars while the closed state's candle stands on FRIDAY's, so a parked candle
+before the open wore none. Now `sweepEventsShown` routes the candle AND the SWEPT line to the SHOWN day
+(`futSessionBars(offset, dayStr)` anchored on the replayed / parked day; its own overnight, prior session, prior
+profile and IB; the EM band and the book already follow the replay) — inside the courier's 5-day window; older
+replays get none, never today's. Found on the way and fixed: `futSessionBars` sorted its unpadded day keys as strings,
+so from the 10th of any month "today" would have been the 9th's bars until the 2nd of the next. Render
+`design/render-v1579-face.png` (1000 px; sweep labels stubbed as in v15.78). Mockups `mockups/mockup-e-row-moved.png`,
+`mockups/mockup-e-row-big.png`. Serves: HOD/LOD · DEFLECTION. R-16.
+
 ## 0l · v15.78 — the day candle beside the ladder, with the sweep labels (2026-09-08)
 
 One new element, beside the node ladder on a wide panel: **the developing day candle** (`.g3ladcdl`, filled by

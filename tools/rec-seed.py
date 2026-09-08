@@ -32,7 +32,7 @@ ROWS = [
          changes='the dashboard draws from the knowledge base and nothing else; a contradicted rule cannot stay on the face',
          evidence='two files today; “it is from the learning that you can know something” (2026-09-04)'),
     dict(id='R-5', kind='FEATURE', by='review', asOf='2026-09-04',
-         text='The candidate score (v15.80) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
+         text='The candidate score (v15.81) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
          changes='the pre-tap read shows a tested number, not a hope',
          evidence='no tested rule exists yet; the score waits for R-2 and the first clears'),
     dict(id='R-6', kind='PROCESS', by='review', asOf='2026-09-04',
@@ -80,6 +80,12 @@ ROWS = [
          changes='one new element beside the ladder on a wide panel (measured after layout: under 110 px of free width nothing changes); dayCandleSvg takes a frame size; the sweep labels read the SWEPT line’s own events',
          evidence='his words 2026-09-08: “do you see the black space on the right of the app … I want the daily candle that is developing to be displayed there. you have the code for this and the labels also already” · on the mockup: “you have to add the sweep labels. after doing that, build”',
          status='implemented', version='15.78', why='mockup approved in the chat 2026-09-08 with one addition (the sweep labels); shipped in v15.78'),
+    # (v15.79) the E row moved below the ladder and made bigger; the candle's sweeps are the shown day's
+    dict(id='R-16', kind='FEATURE', by='operator', asOf='2026-09-08',
+         text='The E row sits below the ladder and the day candle, above the SET line and the replay strip, at a readable size (values 10.5 px, labels 8.6 px) and spread across the whole row; the candle’s swept levels and the SWEPT line read the SHOWN day’s bars, so a parked Friday candle wears Friday’s sweeps.',
+         changes='the row moves from the top to under the ladder block; bigger type, space-between; sweepEventsShown routes the candle and the SWEPT line to the replayed / parked day; futSessionBars can be anchored on a day and sorts its day keys numerically (from the 10th of a month “today” would have been the 9th)',
+         evidence='his words 2026-09-08: “move the hod expected stats above the replay below the node ladder and the daily candle and make the font slightly bigger because it is very small and cant read it” · “make the font bigger and add some spacing so it takes up the row” · “on the daily candle you should indicate the levels that the hod and lod swept”',
+         status='implemented', version='15.79', why='mockup chosen in the chat 2026-09-08 (“build”); the candle’s sweeps asked for mid-build; shipped in v15.79'),
 ]
 
 if __name__ == '__main__':

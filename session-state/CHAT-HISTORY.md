@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-08 · v15.78 · session `f9c89c64` — v15.78 — the day candle beside the ladder, with the sweep labels (R-15)
+## 2026-09-08 · v15.79 · session `f9c89c64` — v15.79 — the E row below the ladder, bigger; the candle's sweeps are the shown day's (R-16)
 
-_137 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_149 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1827,8 +1827,157 @@ Approve to build as v15.78? One thing to say if you want it different: the heade
 **me (02:40):** Now the mutants for the candle logic:
 Now the record — R-15, roadmap, inventory §0l, CHANGELOG, LESSONS, DECISIONS, config, resume note:
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> Continue from where you left off.
+
+**me (23:01):** No response requested.
+
+**OPERATOR:**
+> i want to update the irt export so it exports the top 5 levels for the spx also .   G1 - G5 .  all should be white.  in addition to this , it already exports the kings , cw0, pw0 and the flip.
+
+**me (23:08):** Now the hold functions beside `irtKingLatch`/`irtKingHeld`:
+Now the header comment of `irtBuildCsv` (it still says "THE FILE IS THREE LINES") and the version bump:
+Now the test: the harness list, the fixture, the counts, and the new section.
+Now the mutation run — each mutant must be caught by the test:
+Now the full suite:
+Now the version pins in the other tests ("or later" pattern) — let me see how v1575's 0a and the others are written:
+Now DECISIONS:
+Now the resume note — the header, a new "(latest)" section, and the v15.75 section demoted:
+Now the full suite, then correct the counts in the CHANGELOG to the real numbers:
+The build is done and the installer is in your repo folder (`C:\Dev\gex-signal-tapereader\installv1576.bat`) and attached above.
+
+**What v15.76 writes to `FlexLevelsExport.csv`** — your choice, mirror Skylit: the King's slot stays the gold **SPXW KING** line, and the four nodes after it are **G2 G3 G4 G5**, white, thin, solid, ranked by size (a −63% put node outranks a +41% call node, exactly as Skylit's overlay ranks them), from the same tape the King row reads. They ride EPU26 on the 0.25 tick (with the `~` when the ratio isn't live) and SPY in cents, like every other row, and they're held for the session like the Kings if the tape blinks. No G1 — one level, one line. Kings, CW0, PW0, FLIP0 and the QQQ rows are unchanged. Pinned in `test_irt_export.js` (129 assertions, 14 of 14 mutants caught).
+
+**Steps:**
+
+1. Double-click `installv1576.bat` in `C:\Dev\gex-signal-tapereader` (it pushes to GitHub).
+2. Wait about 5 minutes (the raw CDN cache).
+3. Update the tapereader in Tampermonkey: [gex-signal-tapereader.user.js v15.76](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) — the companion v1. …[trimmed]
+
+**OPERATOR:**
+> We should match with skylit always in order to have a source of truth to compare against
+
+**me (23:24):** Agreed, and it's now a standing rule in the record (DECISIONS 2026-09-07, the resume note's standing block): what the panel and the export draw mirrors what Skylit shows for the same setting, so your Skylit chart is the reference the IRT lines are checked against — and any deliberate difference has to be named, never silent. That's why the G rows read Skylit's own ladder strip and take Skylit's ranks 2–5 rather than a threshold of ours.
+
+Checked against that rule, the export matches Skylit everywhere except one place, and it was designed that way: the **King latch**. The crown moves on the rail and in the file only after the new strike has held for two minutes (v14.19, so a mid-flap blip doesn't move the line on your chart). During a crown flip, Skylit shows the new King at once while your panel and IRT keep the old one for up to two minutes — and in that window the new one appears as G2. Your call, one question: keep the two-minute latch (a named, explained difference), or follow Skylit's King instantly on both the rail and the export? Either way the panel and the file stay in agreement with each other.
+
+I rebuilt `installv1576.bat` so the record rides with it — same v15.76, replaced in place in `C:\Dev\gex-signal-tapereader` and attached above; the steps from before are unchanged (double-click, wait 5 minutes, [update the tapereader in Tampermonkey](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js), reload, one export).
+
+**OPERATOR:**
+> are you able to see the actual and expected rows
+
+**me (01:39):** Yes — both rows are readable, and here's what I see so you can check me:
+
+**A (actual):** Red · Red · 1st HOD · HOD 8:39am · Took 9m · BOP 6m · Wick 15m · W.End 8:45am · Wick% 25% · MUD 1h 48m · Rly 24m · Done 9:15am · PB 9:18am · Num 1 · Ret 49% · Risk $462 · Ext 2.03 ($925) · Tgt 27.25pts ($1,362) · Rwd $1,362 · Dur 1h 15m · Time 10:33am · LOD 10:33am · HL Gap 1h 54m · HL Rng $1,962 ~ 39.25pts
+
+**E (expected):** Red · Red · 1st HOD · HOD ~9:17a · Took ~24m · BOP ~20m · Wick ~28m · W.End ~8:58am · Wick% ~40% · MUD ~2h 11m · Rly ~29m · Done ~9:58am · PB ~10:04am · Num ~1 · Ret ~35% · Risk ~$987 · Ext ~1.73 · Tgt ~27.08pts ($1,354) · Rwd ~$1,354 · Dur ~1h 44m · Time ~11:48a · LOD ~11:48a · HL Gap ~2hr 31min · HL Rng ~$2,405 ~ 48.1pts
+
+Read against each other: the day ran ahead of and smaller than its expectation — the first HOD 38 minutes early and formed in 9 minutes instead of ~24, the LOD at 10:33 against ~11:48, the HL gap 1h54 against ~2h31, the range 39.25 points against ~48.1 — while the retracement was deeper (49% vs ~35%) and the extension larger (2.03 vs ~1.73) for half the risk.
+
+One thing so I don't misread the source: this vocabulary (Rly, Done, PB, Num, Ret, Risk, Ext, Tgt, Rwd, Dur) isn't in the tapereader's code or history — the panel's own A/E stats went vertical in v15.07 and off the face in v15.63. Is this strip from your IRT chart, and what would you like me to do with it?
+
+**OPERATOR:**
+> I want to see see the expected row on top of the HOD at the top.  I think it takes into account the day from the data, so if it is tuesday , it averages Tuesdays.  I dont need  Rly 24m · Done 9:15am · PB 9:18am · Num 1 · Ret 49% · Risk $462 · Ext 2.03 ($925) · Tgt 27.25pts ($1,362) · Rwd $1,362 · Dur 1h 15m · Time 10:33am ·.   do you understand .. show me mockup.
+
+**me (01:47):** Understood, and here is the mockup, rendered from the real face: one slim row directly above the HOD line, reading exactly like your E row minus the eleven fields you struck — the day-colour chip and 1ST HOD, then HOD · took · BOP · wick · W.End · wick% · MUD · LOD · HL gap · HL rng, every value with the ~. The two leading chips are ours: RD 83% is the green/red-day rule's call, 1ST HOD is the day's first extreme. It fits on one line at your panel's width.
+
+On the weekday: I checked the corpus rather than guessing. Our E row today averages all 284 ES sessions; it does not know the weekday. Split by weekday it can — 55 to 60 sessions each — and the days do differ: Tuesdays take ~46 minutes to the first extreme, Fridays ~19, Thursdays range ~70 points against Tuesdays' ~54. Conditioning on the weekday AND the first extreme (a Tuesday that started with the HOD) leaves ~24 sessions, which is too thin to average honestly — so the row would be weekday only, with its n shown as in mockup 2.
+
+One thing to be clear about so the source of truth stays straight: these numbers are ours (the ES 1-minute corpus, trimmed means), so they will not equal your panel's E values (its HOD ~9:17a, took ~24m …) unless it computes the same way over the same data. If you want the two to agree, I need to know how your panel builds its E row.
+
+One question: which basis for the row — all sessions (n=284), or the weekday's sessions (n≈55, mockup 2)?
+
+**OPERATOR:**
+> use mockup 2 , because it compares friday with fridays in the past and mondays with past mondays and the same with the rest of the days. This seasonality is important because mondays and fridays have beginning and end of week characteristics which are different that mid week characteristics. this is a type of seasonality.  you should also be trackting the ranges and other things based on seasonality  (day of week). see charts , they take into account red day vs greenday as well as daily range by weekday.
+
+**me (01:53):** Now the study — a per-weekday block with the same statistics:
+Now the normaliser, the weekday picker, and the E row:
+Now the mutants for the new logic:
+Now the written record — CHANGELOG, LESSONS, DECISIONS, config, resume note:
+Built as v15.77 — mockup 2 as chosen, and the seasonality is now in the data, not just on the face. The installer is in `C:\Dev\gex-signal-tapereader\installv1577.bat` (attached above; it also carries v15.76 in case that one never ran).
+
+**What you get:** the E row sits above the HOD line and every value on it is the shown day's weekday — Fridays against past Fridays. The study now writes a block per weekday into `BASERATES.json` with the same statistic and exclusions as before (trimmed means, each with its n), the baked base carries the same five, and the row says its basis beside the E (*E · TUE n=60* on Tuesday). The hold rates in the HOD line stay pooled — split five ways they go thin — and the hover says so. The first chip is your tool's "last 6 per weekday": a count of the last six sessions of that weekday, green vs red, marked stale if the corpus hasn't been appended within 14 days. Measured while building, the weekday is real on our corpus: Fridays reach the first extreme in ~19 minutes, Tuesdays ~46; Thursdays range ~70 points, Tuesdays ~54. Weekday *and* first extreme together would leave ~24 sessions, so the row conditions on the weekday only.
+
+**Steps:**
+
+1. Double-click `installv1577.bat` in `C:\Dev\gex-signal-tapereader`.
+2. Wait about 5 minutes.
+3. Update the tapereader in Tampermonkey: [gex-signal-tapereader.user.js v15.77](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) — companion unchanged.
+4. Reload the Atlas tab — footer v15.77; the E row is the first thing under …[trimmed]
+
+**OPERATOR:**
+> do you see the balck space on the right of the app. see pic.  I want the daily candle that is developing to be displayed there .  you have the code for this and the labels also already ..
+
+**me (02:20):** Yes, I see it — the black space runs from the ladder's right edge to the panel's edge. Here is the mockup, rendered from the real face with the same candle code you already have.
+
+What it shows: the candle column sits beside the ladder and takes exactly the ladder's height, so the two read as one block. It's the existing `dayCandleSvg` drawn into that taller frame — the HOD with its clock and the leg that followed it, the LOD with its clock and its leg, the open tick on the left and the current close on the right, MUD and its dollars beside the open, the shape spine on the left (upper wick / body / lower wick as % of the range), the dotted PT line, and the reversal level names stacked at the wick tips (PDH · PDL · ONL … — empty in this offline render because the session levels aren't in the harness; live they print as they did before). Labels are a touch bigger than the old 98-px candle since the frame is four times taller. The header line names the day (*DAY · FRI 4 SEP · DEVELOPING*; on a live day *TUE 8 SEP*), and the hover explains each mark.
+
+One rule I'd build in: the column appears only when the panel is wider than the ladder by at least ~110 px — on a narrow panel nothing changes and the ladder never gets squeezed into a scrollbar. It updates every tick like the rest of the face, and in the closed state it's Friday's finished candle, like everything else on the face.
+
+Approve to build as v15.78? One thing to say if you want it different: the header text, or the candle without the % spine on the left.
+
+**OPERATOR:**
+> build it
+> you have to add the sweep labels . after doing that . build
+
+**me (02:40):** Now the mutants for the candle logic:
+Now the record — R-15, roadmap, inventory §0l, CHANGELOG, LESSONS, DECISIONS, config, resume note:
+Built as v15.78 with the sweep labels. The installer is in `C:\Dev\gex-signal-tapereader\installv1578.bat` (attached above; I see v15.77 reached GitHub, so this one carries just the candle on top of it).
+
+**What's in it:** the candle column fills the strip to the right of the ladder at exactly the ladder's height, drawn from the same candle code — HOD and LOD with their clocks and the leg after each, open and close ticks, MUD with its dollars, the PT line, the shape spine. The sweep labels are the SWEPT line's own events, so the candle and the line can never disagree: they stack at the wick tip of the side they were swept on, to the right of the bar, in the SWEPT line's colours (green reclaimed, red broke, amber being tested, grey opened beyond), each with the same hover (price, time, status). The reversal names — the levels the wick turned *on* — sit to the left of the bar, so "through" and "on" never share a column. The column only appears when the panel leaves at least 110 px beside the ladder; at your width it should, and on a narrow panel nothing changes. It redraws every tick; on the closed state it's Friday's finished candle, headed *as it closed*.
+
+**Steps:**
+
+1. Double-click `installv1578.bat` in `C:\Dev\gex-signal-tapereader`.
+2. Wait about 5 minutes.
+3. Update the tapereader in Tampermonkey: [gex-signal-tapereader.user.js v15.78](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) — companion unchanged.
+4. Reload the Atlas tab — footer v15.78; the candle sits beside the ladder with today's SWEPT labels on its right.
+
+Tell me what you see and I'll read `__gptsDebug` o …[trimmed]
+
+**OPERATOR:**
+> move the hod expected stats above the replay below the node ladder and the daily candle and make the font slightly bigger because it is very small and can t read it.
+> [Image: original 2004x1586, displayed at 2000x1583. Multiply coordinates by 1.00 to map to original image.]
+> [Image: original 2004x1426, displayed at 2000x1423. Multiply coordinates by 1.00 to map to original image.]
+> [Image: original 2004x300, displayed at 2000x299. Multiply coordinates by 1.00 to map to original image.]
+
+**me (05:36):** Here it is on the real face: the E row now sits directly under the ladder and the candle, above the SET line and the replay strip, and the HOD line and SWEPT stay at the top on their own. The values went from 7.4 px to 9 px — the ladder's own size — with the labels at 7.6 px and the chips at 7.8 px; at your width it stays on one line, and on a narrow panel it wraps rather than clips.
+
+Build it as v15.79? (If 9 px still reads small on your screen, say a size and I'll use that instead.)
+
+**OPERATOR:**
+> make the font bigger and add some spacing so it takes up the row  , show mockup
+> [Image: original 2004x310, displayed at 2000x309. Multiply coordinates by 1.00 to map to original image.]
+> [Image: original 2604x310, displayed at 2000x238. Multiply coordinates by 1.30 to map to original image.]
+
+**me (05:37):** Here's the bigger version: values at 10.5 px (up from 7.4 originally, 9 in the last mockup), labels 8.6 px, chips 9 px, and the cells now spread evenly across the whole row instead of bunching left — at your width the gaps open up, at 1000 px it still holds one line. Shown twice, at 1000 px and at your ~1300 px, so you can judge the spacing at your own size.
+
+Build it as v15.79 like this?
+
+**OPERATOR:**
+> build
+> on the daily candle you should indicate the levels that the hod and lod swept
+> 
+> _[sent while I was working — a queued message]_
+
+**me (06:00):** Now the shown-day sweeps and the key-sort fix:
+Now the render for the record and the full record:
+
+**OPERATOR:**
+> [Image: original 2004x300, displayed at 2000x299. Multiply coordinates by 1.00 to map to original image.]
+
+**me (06:06):** The built face matches the mockup. Now the record and the ship:
+
 ### DECISIONS
 
+- **The E row below the ladder, bigger (2026-09-08, "build"; R-16, v15.79):** under the ladder and the candle, above the
+  SET line and the replay strip; values 10.5 px, labels 8.6, chips 9, spread across the row (two mockups: 9 px was
+  "make it bigger"). **One door for "which day":** the candle's sweeps and the SWEPT line read the SHOWN day
+  (`sweepEventsShown`) — his "indicate the levels the HOD and LOD swept" was the parked Friday candle wearing an
+  empty Tuesday's sweeps. The courier's day keys compare as numbers (the 10th-before-the-8th bug). Mockups ride the
+  installer by last commit, six of them.
 - **The day candle beside the ladder, with the sweep labels (2026-09-08, "build it … you have to add the sweep labels";
   R-15, v15.78).** The DAY table's candle in a frame of the ladder's height, filling the flex line's slack to the right
   of the grid — measured after layout, nothing on a narrow panel; the SWEPT line's events as labels RIGHT of the bar in
@@ -2006,6 +2155,15 @@ Now the record — R-15, roadmap, inventory §0l, CHANGELOG, LESSONS, DECISIONS,
 
 ### SHIPPED
 
+**v15.79** (panel + installer; companion v1.18 unchanged) — THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS
+ARE THE SHOWN DAY'S. `SECDAY_EROW` (built in `secDay`, emitted in `secLoc` before SET), the row's CSS (10.5 / 8.6 / 9 px,
+space-between); `futDayKeyOf` / `futDayKeyNum` / `futSessionBars(offset, dayStr)` (numeric keys, an anchor day);
+`overnightHL(dayStr)`, `priorProfile(dayStr)`, `sweepLevelsToday(sym, dayStr)`, `sweepEventsToday(sym, dayStr)`,
+`sweepEventsShown(sym)` read by `dayCandleSvg` and `sweptLineHtml`; `build-installer.py` mockups by last commit, six.
+R-16 implemented; the roadmap (v15.78 shipped, v15.79 this, seasonality → v15.80, R-5 → v15.81); INVENTORY §0m;
+DECISIONS; LESSONS; the config (2026-09-08c); the resume note (+ snapshot). `test_v1579.js` 36 · 11 of 11 mutants;
+`test_v1564` §6, `test_v1577` 4b/4e, `test_v1578` re-pinned. Render `design/render-v1579-face.png`; mockups
+`mockup-e-row-moved.{png,js}`, `mockup-e-row-big.png`.
 **v15.78** (panel; companion v1.18 unchanged) — THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS. `dayCandleSvg(sym,
 D, PTL, {w,h})` (the tall frame: centred bar, bigger labels, the sweep labels right / the reversal names left; without
 opts unchanged), the slot `.g3ladcdl` after `ladderGridHtml`, `candleFit()` after `ladderFit()` in `render()`
@@ -2160,7 +2318,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He runs ONE file** — `installv1578.bat` (carries v15.76 → v15.78); wait 5 min; the tapereader link (as a link);
+- **He runs ONE file** — `installv1579.bat` (carries v15.76 → v15.79); wait 5 min; the tapereader link (as a link);
+  reload. Then: the E row under the ladder at his size; the parked Friday candle wearing Friday's sweeps before 08:30;
+  the release at 08:30 and today's sweeps accruing on the candle and the SWEPT line together.
+- (earlier) **He runs ONE file** — `installv1578.bat` (carries v15.76 → v15.78); wait 5 min; the tapereader link (as a link);
   reload. Then: the candle beside the ladder with the day's SWEPT labels on its right; the E row at the top; the G lines
   on the ES chart after one export.
 - (earlier) **He runs ONE file** — `installv1577.bat` (carries v15.76 + v15.77); wait 5 min; the tapereader link (as a link);
@@ -2275,6 +2436,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+8af1c96 resume note: the installer is at 8.16 of 8.39 MB — trim the mockups' ride next build
+f754ab8 v15.78: THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS (R-15)
 ca2a16b v15.77: THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his seasonality (R-14)
 9f0a6bf session-state: his standing rule — match Skylit always, the source of truth the levels are compared against (DECISIONS 2026-09-07; the King latch named as the one designed difference, his call)
 cfde302 v15.76: G2–G5 IN THE IRT EXPORT — the rest of Skylit's top-5, white, beside the Kings, CW0, PW0 and FLIP0 (R-13)
@@ -2285,8 +2448,6 @@ b202f47 session-state: 2026-09-07 design notes — the purpose tags (HOD/LOD · 
 77ea671 v15.73: THE DAY LINE — the process reporting on itself at the bottom of the panel
 51b88dd v15.72b (tools, no panel change): the nightly's output is UTF-8 on Windows (the task's first run on his machine logged a cp1252 charmap error printing the pattern report); PURPOSE §3b carries his expectation after the install (no click on the save, only the Rec tab); R-LINK - the Tampermonkey link is a clickable link, never only in a code block; the skill says so
 9698b9f v15.72: the face - the AFTER HOURS bar moves to the bottom of the panel (a full-width bar above the footer, after the close only), the King cards take the whole row and grow, the ladder 9 px with the columns widened, the leaked .g3pb border gone (a dead pullback rule's amber left border inside every RUG/RRUG/PIKA/BARNEY block); THE ROLLING FLOOR / CEILING registered - his read of 2026-09-04 as H8/H9 (predict + refuteIf, minN 30, base dir:up/dir:dn, since the first stamped session), every tap stamped with each book's King roll (kroll), four classes in both twins, K2.6/K2.7 on Analysis, judge_pat in the nightly; .gitattributes fixed (the task scripts stay CRLF), Claude outputs/ ignored; the Analysis mockup generator draws the nightly's count line; R-8 implemented
-e05a50b nightly 2026-09-04 (cloud): the log, the registry, the Learn rules' verdicts, the sweep tables; F-19 second day - turn 1/28, resume 21/28, held 35/78 (two sessions, no stamps yet)
-fc64e39 gex: sync 04-Fri-09 19:12
 ```
 
 ---

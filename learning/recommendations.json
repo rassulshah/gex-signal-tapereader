@@ -48,7 +48,7 @@
    "kind": "FEATURE",
    "by": "review",
    "asOf": "2026-09-04",
-   "text": "The candidate score (v15.80) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
+   "text": "The candidate score (v15.81) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
    "changes": "the pre-tap read shows a tested number, not a hope",
    "evidence": "no tested rule exists yet; the score waits for R-2 and the first clears",
    "status": "proposed"
@@ -112,6 +112,18 @@
    "why": "mockup approved in the chat 2026-09-08 with one addition (the sweep labels); shipped in v15.78"
   },
   {
+   "id": "R-16",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-08",
+   "text": "The E row sits below the ladder and the day candle, above the SET line and the replay strip, at a readable size (values 10.5 px, labels 8.6 px) and spread across the whole row; the candle’s swept levels and the SWEPT line read the SHOWN day’s bars, so a parked Friday candle wears Friday’s sweeps.",
+   "changes": "the row moves from the top to under the ladder block; bigger type, space-between; sweepEventsShown routes the candle and the SWEPT line to the replayed / parked day; futSessionBars can be anchored on a day and sorts its day keys numerically (from the 10th of a month “today” would have been the 9th)",
+   "evidence": "his words 2026-09-08: “move the hod expected stats above the replay below the node ladder and the daily candle and make the font slightly bigger because it is very small and cant read it” · “make the font bigger and add some spacing so it takes up the row” · “on the daily candle you should indicate the levels that the hod and lod swept”",
+   "status": "implemented",
+   "version": "15.79",
+   "why": "mockup chosen in the chat 2026-09-08 (“build”); the candle’s sweeps asked for mid-build; shipped in v15.79"
+  },
+  {
    "id": "R-7",
    "kind": "FEATURE",
    "by": "operator",
@@ -151,7 +163,7 @@
  "counts": {
   "proposed": 6,
   "approved": 0,
-  "implemented": 7,
+  "implemented": 8,
   "declined": 0,
   "withdrawn": 0
  }

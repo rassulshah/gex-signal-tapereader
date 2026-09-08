@@ -127,7 +127,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
 // ---- 6 · the SWEPT line: key levels only, simple words, the rates in the hover ------------------------------
 {
   const ev=[ {level:'ONL-',side:'LOD',px:7743,at:'08:41',atBar:11,status:'reclaimed',speed:11,depth:6}, {level:'VW1L',side:'LOD',px:7738,at:'09:10',atBar:40,status:'reclaimed',speed:3,depth:1}, {level:'PDH+',side:'HOD',px:7702,at:'08:30',atBar:0,status:'accepted',depth:3}, {level:'IBH+',side:'HOD',px:7726,at:'09:31',atBar:61,status:'pending',depth:0.5} ];
-  const g={ sweepEventsToday:()=>ev, statsRead:()=>({lines:[{txt:'ONL swept 08:41 · deep · slow — printed the extreme 40% (n=86) vs 24% control'}]}), levelTier:n=>({ONL:1,PDH:1,IBH:2,VW1L:3}[String(n).replace(/[-+]$/,'')]||4), g3tip:tip, g3esc:esc, frameNum:fnum, SWEEP_RECLAIM_MAX:30 };
+  const g={ sweepEventsToday:()=>ev, sweepEventsShown:()=>ev, statsRead:()=>({lines:[{txt:'ONL swept 08:41 · deep · slow — printed the extreme 40% (n=86) vs 24% control'}]}), levelTier:n=>({ONL:1,PDH:1,IBH:2,VW1L:3}[String(n).replace(/[-+]$/,'')]||4), g3tip:tip, g3esc:esc, frameNum:fnum, SWEEP_RECLAIM_MAX:30 };
   const h=build(g,['sweptLineHtml'],'return sweptLineHtml("SPY");')(g);
   // (v15.64) names only, grouped by the side price was working, the latest sweep's side first; time · price · status in each name's hover
   const face=h.replace(/title="[^"]*"/g,'');
@@ -135,7 +135,7 @@ const fnum=x=>(typeof x==='number')?(Math.round(x*100)/100).toFixed(x%1?2:0).rep
   ok(!/VW1L/.test(face) && !/40%/.test(face) && !/7743|08:41|reclaimed/.test(face),'6b (v15.64) a tier-3 level (VWAP band), the rates, the prices and the times stay OFF the line',face);
   ok(/<b class="rec" title="ONL 7743 — swept 08:41 · reclaimed in 11 bars\."/.test(h) && /title="PDH 7702 — swept 08:30 · opened beyond\."/.test(h) && /title="IBH 7726 — swept 09:31 · being tested\."/.test(h),'6b2 (v15.64) …each name’s hover carries its price, time and status; the ± suffix is stripped from the name',h);
   ok(/title="[^"]*40% \(n=86\)/.test(h),'6c …the rates are in the hover');
-  const g2=Object.assign({},g,{ sweepEventsToday:()=>[] });
+  const g2=Object.assign({},g,{ sweepEventsToday:()=>[], sweepEventsShown:()=>[] });
   ok(/no key level swept yet today/.test(build(g2,['sweptLineHtml'],'return sweptLineHtml("SPY");')(g2)),'6d nothing swept → says so');
 }
 

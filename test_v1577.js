@@ -134,11 +134,11 @@ eval(['hlBaseNormalise','hlBaseByDow','hlDowOf','hlDayShown','hodlodBaseFor','ho
   const sd=ex('secDay');
   ok(/var base=hodlodBaseFor\(dow\)/.test(sd) && /dow=hlDowOf\(dayShown\)/.test(sd) && /dayShown=hlDayShown\(\)/.test(sd), '4a secDay stands its base on the shown day\'s weekday');
   const iE=sd.indexOf("hlERowHtml(sym, D, base, NOREAD)"), iR=sd.indexOf('<div class="g3dayread"');
-  ok(iE>0 && iR>iE, '4b the E row is emitted BEFORE the HOD line — on top of it');
+  ok(iE>0 && iR>iE && /SECDAY_EROW=''; try\{ SECDAY_EROW=hlERowHtml\(sym, D, base, NOREAD\); \}/.test(sd), '4b the E row is BUILT before the HOD line (its base, its D) — v15.79 emits it below the ladder (test_v1579)');
   ok(/expected gap '\+hlDur\(base\.gapMin\)/.test(sd) && /the E row(\\u2019|’)s basis/.test(sd) && /\(pooled, n='\+T\.n\+'\)/.test(sd),
      '4c the read\'s timing prose says "expected gap", names the E row\'s basis, and marks the replacement rate as pooled');
   ok(/#gpts-body \.g3erow\{display:flex;flex-wrap:wrap/.test(src) && /\.g3erow \.chip\.stale\{opacity:\.55\}/.test(src) && /\.g3erow \.et\{/.test(src), '4d the stylesheet carries the row (one line at 760px, mockup-e-row)');
-  ok(/try\{ h\+=hlERowHtml\(sym, D, base, NOREAD\); \}catch\(eER\)\{ swallow\('hlERowHtml', eER\); \}/.test(sd), '4e the row cannot take the section down with it');
+  ok(/try\{ SECDAY_EROW=hlERowHtml\(sym, D, base, NOREAD\); \}catch\(eER\)\{ swallow\('hlERowHtml', eER\); \}/.test(sd), '4e the row cannot take the section down with it');
 }
 
 // ---------- 5. the record ----------

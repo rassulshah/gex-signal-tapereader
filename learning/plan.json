@@ -402,60 +402,68 @@
    "v": "15.78",
    "title": "THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS — the developing session candle fills the space to the right of the node ladder at the ladder's height (measured after layout; a narrow panel is unchanged): HOD/LOD with their clocks and the leg after each, open and close ticks, MUD and its dollars, the PT line, the shape spine, the reversal names ON the wick (left) and the SWEPT line's labels THROUGH it (right), in its colours (R-15)",
    "serves": "HOD/LOD · DEFLECTION — the day's shape and what its extremes swept, beside the levels price is meeting",
-   "status": "next",
+   "status": "shipped",
+   "date": "2026-09-08",
    "done": "the candle renders beside the grid on his panel at his width with the SWEPT line's labels; at 760 px the face is unchanged; test_v1578 44, 16/16 mutants"
   },
   {
    "v": "15.79",
+   "title": "THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE THE SHOWN DAY'S — the expected row moves under the ladder and the candle, above the SET line and the replay strip, at 10.5 px spread across the row; the candle's swept levels and the SWEPT line read the replayed / parked day's bars (sweepEventsShown; futSessionBars anchored on a day, its keys sorted numerically) (R-16)",
+   "serves": "HOD/LOD · DEFLECTION — the expectation read against the day, in a size he can read; a parked candle that wears its own day's sweeps",
+   "status": "next",
+   "done": "the row renders under the ladder block on his panel; the parked Friday candle shows Friday's sweeps; test_v1579 35, 11/11 mutants"
+  },
+  {
+   "v": "15.80",
    "title": "SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six",
    "serves": "HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered",
    "status": "later",
    "done": "mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine"
   },
   {
-   "v": "15.80",
+   "v": "15.81",
    "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join",
    "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'",
    "status": "later",
    "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"
   },
   {
-   "v": "15.81",
+   "v": "15.82",
    "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured",
    "serves": "HOD/LOD · the loop closes",
    "status": "later",
    "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"
   },
   {
-   "v": "15.82",
+   "v": "15.83",
    "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme",
    "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6",
    "status": "later",
    "done": "40 taps recorded and the first F-study reads from them with n"
   },
   {
-   "v": "15.83",
+   "v": "15.84",
    "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study",
    "serves": "the loop closes on its own",
    "status": "later",
    "done": "a study changes status without a human editing the seed"
   },
   {
-   "v": "15.84",
+   "v": "15.85",
    "title": "one definitions file (Python + panel) · the shipped-artifact test",
    "serves": "hardening",
    "status": "later",
    "done": "changing a bin in one place fails the suite until the other side follows"
   },
   {
-   "v": "15.85",
+   "v": "15.86",
    "title": "the face manifest — every number on the face names its study, pinned by a test",
    "serves": "data-driven, enforced",
    "status": "later",
    "done": "a new number on the face without a study fails the suite"
   },
   {
-   "v": "15.86",
+   "v": "15.87",
    "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move",
    "serves": "PULLBACK",
    "status": "later",

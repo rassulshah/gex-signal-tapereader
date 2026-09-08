@@ -149,17 +149,18 @@ ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03
 {
   const mk=(level,side,px,at,atBar,status,speed)=>({level,side,px,at,atBar,status,speed,depth:1});
   const ev=[ mk('POC-','LOD',7690,'09:12',14,'accepted'), mk('VAL-','LOD',7684,'09:21',17,'pending'), mk('IBL-','LOD',7688,'09:30',20,'reclaimed',4), mk('PDH+','HOD',7702,'08:30',0,'accepted'), mk('VW1L','LOD',7686,'09:22',18,'reclaimed',2) ];
-  const g={ sweepEventsToday:()=>ev, statsRead:()=>({lines:[{txt:'POC swept 09:12 — printed the extreme 40% (n=86)'}]}), levelTier:n=>({POC:1,VAL:2,IBL:2,PDH:1,ONL:1,VW1L:3}[String(n).replace(/[-+]$/,'')]||4), g3tip:tip, g3esc:esc, frameNum:fnum, SWEEP_RECLAIM_MAX:30 };
+  // (v15.79) the line reads the SHOWN day's events through sweepEventsShown; live it is sweepEventsToday(sym, null)
+  const g={ sweepEventsToday:()=>ev, sweepEventsShown:(s)=>g.sweepEventsToday(s), statsRead:()=>({lines:[{txt:'POC swept 09:12 — printed the extreme 40% (n=86)'}]}), levelTier:n=>({POC:1,VAL:2,IBL:2,PDH:1,ONL:1,VW1L:3}[String(n).replace(/[-+]$/,'')]||4), g3tip:tip, g3esc:esc, frameNum:fnum, SWEEP_RECLAIM_MAX:30 };
   const h=build(g,['sweptLineHtml'],'return sweptLineHtml("SPY");')(g);
   const fc=face(h);
   ok(/<em>SWEPT<\/em><span><span class="g3swg"><em>making LOD<\/em> <b class="brk" >POC<\/b> <i>·<\/i> <b class="tst" >VAL<\/b> <i>·<\/i> <b class="rec" >IBL<\/b><\/span> <i>·<\/i> <span class="g3swg"><em>making HOD<\/em> <b class="open" >PDH<\/b><\/span><\/span>/.test(fc),'6a SWEPT · making LOD: POC · VAL · IBL · making HOD: PDH — the side of the latest sweep (IBL, bar 20) first, tier order inside',fc);
   ok(!/7690|09:12|reclaimed|broke|VW1L|40%/.test(fc),'6b no prices, no times, no status words, no tier-3 levels, no rates on the face');
   ok(/<b class="brk" title="POC 7690 — swept 09:12 · broke\."/.test(h) && /<b class="rec" title="IBL 7688 — swept 09:30 · reclaimed in 4 bars\."/.test(h) && /<b class="tst" title="VAL 7684 — swept 09:21 · being tested\."/.test(h) && /<b class="open" title="PDH 7702 — swept 08:30 · opened beyond\."/.test(h),'6c each name’s hover: price · time · status');
   ok(/title="THE SWEPT LINE[^"]*Green = reclaimed[^"]*red = broke[^"]*amber = still being tested[^"]*40% \(n=86\)/.test(h),'6d the line’s own hover explains the colours and carries the rates');
-  const g2=Object.assign({},g,{ sweepEventsToday:()=>[mk('ONL-','LOD',7743,'08:41',11,'reclaimed',11), mk('PDH+','HOD',7760,'10:02',31,'pending')] });
+  const g2=Object.assign({},g,{ sweepEventsToday:()=>[mk('ONL-','LOD',7743,'08:41',11,'reclaimed',11), mk('PDH+','HOD',7760,'10:02',31,'pending')] }); g2.sweepEventsShown=(s)=>g2.sweepEventsToday(s);
   const fc2=face(build(g2,['sweptLineHtml'],'return sweptLineHtml("SPY");')(g2));
   ok(fc2.indexOf('making HOD')<fc2.indexOf('making LOD') && /making HOD<\/em> <b class="tst" >PDH/.test(fc2),'6e the latest sweep is on the high side: making HOD leads — what price is attempting NOW reads first',fc2);
-  const g3=Object.assign({},g,{ sweepEventsToday:()=>[] });
+  const g3=Object.assign({},g,{ sweepEventsToday:()=>[] }); g3.sweepEventsShown=(s)=>g3.sweepEventsToday(s);
   ok(/no key level swept yet today/.test(build(g3,['sweptLineHtml'],'return sweptLineHtml("SPY");')(g3)),'6f nothing swept → says so');
   ok(/#gpts-body \.g3swept b\.rec\{color:#2ec27e\}#gpts-body \.g3swept b\.brk\{color:#f0616d\}#gpts-body \.g3swept b\.tst\{color:#f2b45a\}#gpts-body \.g3swept b\.open\{color:#6c7889/.test(src),'6g the CSS: green reclaimed · red broke · amber testing · dim opened-beyond');
 }
