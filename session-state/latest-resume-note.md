@@ -39,8 +39,12 @@ trigger the save button instead of me clicking it … instead of 5pm can you jus
 
 # ⚠⚠ 2026-09-08, midday (latest) — v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix).
 
-**Panel is v15.82, companion v1.18 (unchanged). Installed? installv1582.bat carries v15.76 → v15.82 — one double-click,
-the link, reload. v15.81 was verified on his panel at 11:31 CT (below).** His words, on the outstanding list I gave him
+**Panel is v15.82, companion v1.18 (unchanged). INSTALLED AND VERIFIED on his panel 12:08 CT 2026-09-08:** footer v15.82;
+`featHealth().perSymbol.SPY` = queue 1,364 records / 29 bars (10:39 → 12:06, the shed window) · archive 2,800 · **merged
+3,271 records / 69 bars, 08:39 → 12:06 — the whole session so far, no gap**. (A probe one minute after the reload read
+archive 0: the boot loader was still walking the 60,543 archived records — IDB `feat` by date: 08-19 5.3k … 09-04 9.1k,
+09-08 2.8k at noon.) v15.81 was verified at 11:31 CT (below). Two other tabs were open on his Chrome at 12:08: an NQ1
+/atlas tab (a second panel on the same store — flagged twice) and a Skylit stage page (inert). His words, on the outstanding list I gave him
 (R-22 first): *"lets go with your recommendation"*.
 **What shipped.** The day file's `feat` and the live `featStats` read **the localStorage queue ∪ the IndexedDB archive**
 (`featMergeRecs`: by `key|t`, the LS copy wins — it is the live one; sorted by t); `repoUpsertFeat` keeps the in-memory
@@ -56,12 +60,9 @@ far-side-on-gamma study (blocked on ~40 clean sessions) can start counting. Forw
 they are. `test_v1582.js` 36 · 13/13 mutants; `test_v1571` green through the degrade path; `test_v1581` 0a loosened;
 the version pins moved; the roadmap — v15.81 shipped, **v15.82 this build**, seasonality → v15.83, score → v15.84,
 READ → v15.85.
-**NOT yet verified on his machine:** tonight's day file with `featSource.merged.SPY.from` at ~08:36 CT and `n` in the
-thousands (the queue alone would be ~1,500 / 09:xx); `__gptsDebug.featHealth().perSymbol.SPY.archive > 0` and
-`mergedBars` > `bars` after the reload (the archive fills as records resolve — within ~30 minutes of the reload the
-merged span should reach back to the morning IF the morning's records were mirrored before they were shed: they were,
-the resolver mirrors every resolved record and the shed is oldest-first); the nightly's log tomorrow morning with
-morning rows; the digest's `featSourceNote`.
+**Verified 12:08 CT (above). Still to see:** tonight's day file with `featSource.merged.SPY.from` at ~08:39 CT and
+thousands of records (the queue alone would be ~1,500 from ~13:xx); tomorrow morning's nightly log scoring morning
+rows for the first time since 08-25; the digest's `featSourceNote` on the new file.
 **NEXT, in order, each its own ask:** (a) WH / WL / weekly POC — the companion's window must reach the prior week
 (v1.19: two weeks), then PWH/PWL/WPOC draw by name; (b) v15.83 SEASONALITY TRACKED (mockup first; the corpus append into
 the nightly — it ends 08-21); (c) the Rec proposals R-1…R-6 await his ✓/✗; (d) the King latch under "match Skylit

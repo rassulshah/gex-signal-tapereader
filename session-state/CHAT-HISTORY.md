@@ -2795,10 +2795,9 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He runs ONE file** — `installv1582.bat` (carries v15.76 → v15.82); wait 5 min; the tapereader link (as a link);
-  reload. Then, within ~30 min: `__gptsDebug.featHealth().perSymbol.SPY` shows `archive` > 0 and `mergedSpan` reaching
-  back to the morning; tonight's day file carries `featSource` with `merged.SPY.from` at ~08:36 CT and thousands of
-  records; tomorrow's nightly log scores morning rows for the first time since 08-25.
+- **v15.82 INSTALLED AND VERIFIED 12:08 CT** — queue 1,364 / 29 bars (10:39 → 12:06) · archive 2,800 · merged 3,271 / 69
+  bars from 08:39: the whole session, no gap. Still to see: tonight's day file's `featSource`; tomorrow's nightly log
+  with morning rows.
 - **v15.81 INSTALLED AND VERIFIED 11:31 CT** — footer v15.81; "9 of 9 ES rows on Skylit's ES1 prices" · "5 of 5 NQ rows
   on Skylit's NQ1 prices"; SPXW KING 7705.25 vs Skylit 7705.15, G2 7710.25 vs 7710.15, SPY KING 7710.75 vs 7710.90 — within
   the tick, no '~'. (He had double-clicked installv1579.bat by mistake at 11:00; the CDN cache showed "Reinstall 15.79"
