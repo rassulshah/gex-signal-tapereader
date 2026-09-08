@@ -1,3 +1,53 @@
+## v15.78 — THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS: the black space to the right of the ladder, filled
+
+> Operator, 2026-09-08, on a screenshot of his panel with the space to the right of the ladder circled: "do you see
+> the black space on the right of the app. see pic. I want the daily candle that is developing to be displayed there.
+> you have the code for this and the labels also already." Mockup rendered from the real face → "you have to add
+> the sweep labels. after doing that, build." → R-15.
+
+**What it is.** The DAY table's own candle (`dayCandleSvg`, off the face since v15.63 with the table) drawn into a
+frame of the ladder's height beside the node ladder: `dayCandleSvg(sym, D, PTL, {w, h})` — without opts it is the
+98×137 candle it was (pinned); with them the bar centres in the frame, the labels grow one size (`.g3cdl.tall`), the
+margins hold two lines above and below. The marks he already had: the HOD and LOD with their clocks and the leg that
+followed each, the open and close ticks, MUD and its dollars, the dotted PT line, the shape spine. **Added by his
+instruction — the sweep labels:** the SWEPT line's own events (`sweepEventsToday`, tier 1–2, one source — DECISIONS
+v13.2) stacked at the wick tip of the side they were swept on, RIGHT of the bar, in the SWEPT line's colours (green
+reclaimed · red broke · amber being tested · grey opened beyond), each with the SWEPT line's hover words (price, time,
+status, side), at most seven a side, with a *SWEPT ▸* caption once any is drawn. The reversal names — the levels the
+wick turned ON (within 1 ATR) — move to the LEFT of the bar in the tall frame so THROUGH and ON never share a column;
+on the small candle nothing moved.
+
+**Measured, never assumed.** The grid is a fixed-column flex item inside `.g3f2`, which is why a wide panel shows a
+strip beside it and a narrow one does not. The slot (`.g3ladcdl`, `display:none` until `.on`) is emitted right after
+the grid as a flex sibling; `candleFit()` runs in `render()` after `ladderFit()`, after layout, and reads the free width
+the grid's line actually leaves (container width − grid width − the flex gap): under `CDL_MIN_W`=110 the slot stays
+hidden and empty and the face is exactly what it was; otherwise the candle is built at min(free−4, 260) wide — the −4
+is the slot's own borders, found the hard way when a 234-px candle in a 234-px strip wrapped under the grid — and at
+the grid's rendered height minus the 17-px header, so the two always end together (the v15.07 lesson: a height chosen
+by eye drifts). If the filled slot still wraps under the grid, it is hidden again. The header names the shown day
+(`hlDayShown`, so the closed state's park says *FRI 4 SEP · as it closed* and a live day says *developing*); the hover
+explains every mark and both columns. It redraws every tick like the rest of the face.
+
+**Verified in a real browser** (the jsdom harness has no layout): the real `candleFit` over the rendered face at 1000 px
+→ the column on, 234 wide, the grid's height, beside the grid; at 760 px → hidden, the face unchanged; at 1300 px →
+the slot stretches, the candle capped at 260 and centred. Renders `design/render-v1578-face.png` (the sweep labels
+stubbed from his 9/4 SWEPT line — *making LOD · POC VAL EML KING PDC IBL* — because the harness has no futures bars;
+said so here so nobody reads it as a measurement) and `design/render-v1578-narrow.png`.
+
+**Tests.** `test_v1578.js` — 44 assertions: the small candle unchanged (98×137, bar at 48, names at 96, no sweeps),
+the tall frame (class, the centred bar from TOP 30 to 224, the labels he had, the reversal names left at cx−20, an
+empty right column without sweeps), the sweep labels (right column at W−2, HOD side at the top tip then the LOD side
+in SWEPT-line order, tier 1–2 only, the four colours by status, the hover words, the caption, seven a side), and
+`candleFit` over a fake DOM (234 free → 230×264 and the grid's height; the header's day and *as it closed* /
+*developing*; the hover; 98 free → hidden and never built; 260 cap; the wrap guard; no read → no candle; an empty svg;
+no body; no slot), the slot after the grid, `candleFit` after `ladderFit`, the stylesheet, the mockup and renders in
+the repo, and the record. **16 of 16 mutants** (two survivors on the first run: a malformed mutant, and the HOD-side
+seven-cap that only the LOD side exercised — the fixture now offers nine on each side). Re-pinned: `test_nodeat` n45/n45c (the small candle's shape, now with the frame argument), `test_undefined_ids` (a comma declaration it could not read — split), `test_v1574` 5d. Suite 152 green / 6 red of 158 (5 baseline + recordcurrent until the commit).
+
+**The record.** R-15 (by operator, implemented v15.78); the roadmap — v15.77 shipped, **v15.78 this build**, the
+seasonality tracking → v15.79, the rest +1 (R-5 says v15.80); INVENTORY §0l; DECISIONS 2026-09-08; LESSONS v15.78;
+the config (2026-09-08b, `dayCandle`); the resume note; `mockups/mockup-day-candle.{png,js,html}`.
+
 ## v15.77 — THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY: his expected row, Fridays against past Fridays
 
 > Operator, 2026-09-08, showing his own tool's A/E strip: "I want to see the expected row on top of the HOD at the

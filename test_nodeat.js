@@ -166,10 +166,10 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
 // is the whole point of stacking them, and a side legend would put it straight back.
 (function(){
   const CD=grab('dayCandleSvg').replace(/\/\/[^\n]*/g,'');
-  ok(/var W=98,/.test(CD), 'n45 the candle is 98px wide, not 150');
+  ok(/var W=98;/.test(CD) && /cx=\(W===98\)\?48:/.test(CD), 'n45 the candle is 98px wide, not 150 (v15.78: unless a caller hands it a frame — the DAY table never does)');
   // ⚠ (v15.09) the names and MUD had collided — they now occupy SEPARATE columns.
   ok(/text-anchor="end"/.test(CD), 'n45b the level names right-align, clear of the MUD block');
-  ok(/LX=W-2/.test(CD), 'n45c ...to the frame edge, not to a bar-relative offset');
+  ok(/LXR=W-2/.test(CD) && /LX=tall\?LXL:LXR/.test(CD), 'n45c ...to the frame edge, not to a bar-relative offset (v15.78: the tall frame alone moves them left of the bar)');
   ok(/text-anchor="middle"/.test(CD), 'n46 ...because the labels stack over the bar, not beside it');
   ok(/HOD '\+hlClock\(D\.hodT\)/.test(CD) && /LOD '\+hlClock\(D\.lodT\)/.test(CD),
      'n47 both extremes carry their CLOCK, as he drew');

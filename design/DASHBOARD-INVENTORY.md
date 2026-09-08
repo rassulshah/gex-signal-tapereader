@@ -11,6 +11,27 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0l · v15.78 — the day candle beside the ladder, with the sweep labels (2026-09-08)
+
+One new element, beside the node ladder on a wide panel: **the developing day candle** (`.g3ladcdl`, filled by
+`candleFit()` after layout; the candle is `dayCandleSvg(sym, D, PTL, {w, h})` — the DAY table's own candle in a frame
+of the ladder's height). His words: *"do you see the black space on the right of the app … I want the daily candle
+that is developing to be displayed there. you have the code for this and the labels also already"* and, on the
+mockup, *"you have to add the sweep labels."* Marks: the HOD and LOD with their clocks and the leg after each, the RTH
+open (left tick) and now (right tick), MUD with its dollars, the dotted PT line, the shape spine (upper wick · body ·
+lower wick as % of the range); LEFT of the bar the reversal names — the levels the wick turned ON (within 1 ATR,
+`revLevels`); RIGHT of the bar the **SWEPT line's labels** — the key levels price went THROUGH on that side
+(`sweepEventsToday`, tier 1–2, the same events the SWEPT line prints, one source), green reclaimed · red broke ·
+amber being tested · grey opened beyond, each with the SWEPT line's own hover words; a *SWEPT ▸* caption. The header
+names the shown day (*DAY · FRI 4 SEP · developing* / *as it closed* in a replay or the closed state). **Measured,
+never assumed:** the slot is a flex sibling of the grid; after layout `candleFit` reads the free width the grid's line
+leaves — under 110 px the slot stays hidden and the face is exactly what it was; otherwise the candle is built at
+min(free−4, 260) wide and the grid's rendered height, and hidden again if it wrapped under the grid. Redraws every
+tick. Renders `design/render-v1578-face.png` (1000 px, the sweep labels stubbed from his 9/4 SWEPT line — the harness
+has no futures bars) and `design/render-v1578-narrow.png` (760 px: no column). Mockup `mockups/mockup-day-candle.png`.
+Serves: HOD/LOD (the day's shape and its extremes' clocks) · DEFLECTION (what the wick turned on, what it went
+through). R-15.
+
 ## 0k · v15.77 — the E row on top of the HOD line, per weekday (2026-09-08)
 
 One new element, at the very top of the dashboard above the HOD/LOD line: **the E row** (`.g3erow`, `hlERowHtml`) —

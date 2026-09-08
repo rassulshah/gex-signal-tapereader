@@ -32,7 +32,7 @@ ROWS = [
          changes='the dashboard draws from the knowledge base and nothing else; a contradicted rule cannot stay on the face',
          evidence='two files today; “it is from the learning that you can know something” (2026-09-04)'),
     dict(id='R-5', kind='FEATURE', by='review', asOf='2026-09-04',
-         text='The candidate score (v15.79) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
+         text='The candidate score (v15.80) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
          changes='the pre-tap read shows a tested number, not a hope',
          evidence='no tested rule exists yet; the score waits for R-2 and the first clears'),
     dict(id='R-6', kind='PROCESS', by='review', asOf='2026-09-04',
@@ -74,6 +74,12 @@ ROWS = [
          changes='one row above the HOD line; every expected field switches from all 284 sessions to the shown day’s weekday (55–60 sessions); the read’s timing prose names the same basis; the hold rates stay pooled; BASERATES.json carries byWeekday and the baked base byDow',
          evidence='his words 2026-09-08: “I want to see the expected row on top of the HOD at the top … I dont need Rly · Done · PB · Num · Ret · Risk · Ext · Tgt · Rwd · Dur · Time” · “use mockup 2, because it compares friday with fridays in the past and mondays with past mondays … this is a type of seasonality”; measured on the corpus: Fridays reach the first extreme in ~19m, Tuesdays ~46m; Thursdays range ~70 pts, Tuesdays ~54 (n=55–60 per weekday)',
          status='implemented', version='15.77', why='mockup 2 chosen in the chat 2026-09-08; shipped in v15.77'),
+    # (v15.78) the day candle beside the ladder, with the sweep labels — his ask on a screenshot of the black space
+    dict(id='R-15', kind='FEATURE', by='operator', asOf='2026-09-08',
+         text='The developing day candle fills the space to the right of the node ladder, at the ladder’s height: the HOD and LOD with their clocks and the leg after each, the open and close ticks, MUD and its dollars, the PT line, the shape spine, the reversal names ON the wick to the left of the bar and the SWEPT line’s labels THROUGH it to the right, in the SWEPT line’s colours.',
+         changes='one new element beside the ladder on a wide panel (measured after layout: under 110 px of free width nothing changes); dayCandleSvg takes a frame size; the sweep labels read the SWEPT line’s own events',
+         evidence='his words 2026-09-08: “do you see the black space on the right of the app … I want the daily candle that is developing to be displayed there. you have the code for this and the labels also already” · on the mockup: “you have to add the sweep labels. after doing that, build”',
+         status='implemented', version='15.78', why='mockup approved in the chat 2026-09-08 with one addition (the sweep labels); shipped in v15.78'),
 ]
 
 if __name__ == '__main__':

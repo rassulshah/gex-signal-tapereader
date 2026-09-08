@@ -100,7 +100,7 @@ function section5(){
   ok(P.roadmap.some(r=>r.v==='15.74' && /SURVIVES A RELOAD/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.74'))) && P.roadmap.some(r=>r.v==='15.73' && r.status==='shipped') && P.roadmap.some(r=>/candidate score/.test(r.title) && r.v>='15.75'),'5a the plan: v15.73 shipped, v15.74 this build or shipped since, the score after it',nx.map(x=>x.v));
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P),'5b PLAN_SEED equals the file');
   ok(P.system.storage.some(k=>/gpts_nightly_v1/.test(k.key)),'5c the architecture\'s storage table names gpts_nightly_v1');
-  const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); ok(R.rows.some(r=>r.id==='R-5' && /v15\.7[5-9]/.test(r.text)),'5d R-5 points the score at v15.75 or later');
+  const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); ok(R.rows.some(r=>r.id==='R-5' && /v15\.(7[5-9]|[89]\d)/.test(r.text)),'5d R-5 points the score at v15.75 or later');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/## v15\.74/.test(cl) && cl.indexOf('## v15.74')<cl.indexOf('## v15.73'),'5e the CHANGELOG has the v15.74 entry on top');
   const ls=fs.readFileSync('session-state/LESSONS.md','utf8'); const logAt=ls.indexOf('## 2 · THE LESSON LOG'); ok(/### v15\.74/.test(ls.slice(logAt>=0?logAt:0)),'5f the lesson log carries the v15.74 entry');
   const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.(7[4-9]|[89]\d)/.test(rn.slice(0,600)) && /reload/i.test(rn),'5g the resume note is at v15.74 or later and names the reload');

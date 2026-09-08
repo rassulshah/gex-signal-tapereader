@@ -482,3 +482,14 @@ up and down days.
 - **The read's timing prose reads the same base object as the row** and names the basis — one quantity, one source.
 - **His standing principle, generalised:** track ranges and other statistics by weekday too (his two charts: red vs
   green by weekday, range by weekday vs the 10-week average) — v15.78, mockup first.
+
+## 2026-09-08 — the day candle beside the ladder, with the sweep labels (v15.78, R-15)
+
+- **His ask, on a screenshot of the space to the right of the ladder:** the developing daily candle there, with the
+  labels the candle already had; then, on the mockup, "add the sweep labels."
+- **The sweep labels are the SWEPT line's events** (`sweepEventsToday`, tier 1–2), in its colours and with its hover
+  words — one source (v13.2). They sit RIGHT of the bar at the wick tip of their side; the reversal names (the levels
+  the wick turned ON) sit LEFT. THROUGH and ON never share a column.
+- **Room or nothing:** the slot is filled only after layout, when the grid's flex line leaves ≥110 px; the candle is
+  the grid's rendered height; on a narrow panel the face is exactly what it was. The candle is capped at 260 px wide.
+- **The small candle (the DAY table's) is unchanged** — `dayCandleSvg` without a frame argument draws what it drew.

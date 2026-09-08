@@ -131,6 +131,23 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.78 — the black space was a flex line; a candle that fits in numbers wraps in borders
+(1) "Why is there black space to the right of the ladder" had a one-line answer once measured in a browser: the grid
+is a fixed-column FLEX ITEM inside `.g3f2` (flex-wrap), so it does not grow, and the width past its columns is the
+line's slack. jsdom could not have told me that — it has no layout — and the first mockup script wrapped the grid in
+a new row before checking what already wrapped it. Measure the container before inventing one. (2) The candle was
+built at exactly the free width (234) and wrapped under the grid every time: the slot has 2 px of border a side, so
+its min-content width was 236 in a 234 strip. The real `candleFit` running in Playwright over the rendered face
+caught it in one run; a fake-DOM test never would have, because the fake DOM has no borders. Both kinds of test
+stayed: the browser run for the layout truth, the fake DOM for the branches. (3) "You have the code for this and the
+labels also already" was exactly right and still needed one honest note: the harness has no futures bars, so the
+render's sweep labels are stubbed from his own 9/4 SWEPT line, and the caption says so. A render that looks measured
+and is not is the mislabelling failure with a picture. (4) "Add the sweep labels" named a source, not a drawing: the
+SWEPT line's events, the SWEPT line's colours, the SWEPT line's hover words — one array (v13.2), so the candle and
+the line can never disagree about what was swept. The reversal names (ON) went left, the sweeps (THROUGH) right, so
+two different claims never share a column. (5) The tall frame is the same function with a frame argument, and the
+small candle is pinned unchanged — the DAY table's candle is still what it was for anyone who turns the table back on.
+
 ### v15.77 — a screenshot of HIS tool is a spec; "I think it averages Tuesdays" is a claim to measure, not to grant
 (1) The strip he pasted is not from this repo — its vocabulary (Rly, Done, PB, Num, Ret, Risk, Ext, Tgt, Rwd, Dur)
 appears nowhere in the code or its history, and the v14.71 note explains why: our wick family was VERIFIED AGAINST

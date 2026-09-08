@@ -48,7 +48,7 @@
    "kind": "FEATURE",
    "by": "review",
    "asOf": "2026-09-04",
-   "text": "The candidate score (v15.79) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
+   "text": "The candidate score (v15.80) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
    "changes": "the pre-tap read shows a tested number, not a hope",
    "evidence": "no tested rule exists yet; the score waits for R-2 and the first clears",
    "status": "proposed"
@@ -100,6 +100,18 @@
    "why": "mockup 2 chosen in the chat 2026-09-08; shipped in v15.77"
   },
   {
+   "id": "R-15",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-08",
+   "text": "The developing day candle fills the space to the right of the node ladder, at the ladder’s height: the HOD and LOD with their clocks and the leg after each, the open and close ticks, MUD and its dollars, the PT line, the shape spine, the reversal names ON the wick to the left of the bar and the SWEPT line’s labels THROUGH it to the right, in the SWEPT line’s colours.",
+   "changes": "one new element beside the ladder on a wide panel (measured after layout: under 110 px of free width nothing changes); dayCandleSvg takes a frame size; the sweep labels read the SWEPT line’s own events",
+   "evidence": "his words 2026-09-08: “do you see the black space on the right of the app … I want the daily candle that is developing to be displayed there. you have the code for this and the labels also already” · on the mockup: “you have to add the sweep labels. after doing that, build”",
+   "status": "implemented",
+   "version": "15.78",
+   "why": "mockup approved in the chat 2026-09-08 with one addition (the sweep labels); shipped in v15.78"
+  },
+  {
    "id": "R-7",
    "kind": "FEATURE",
    "by": "operator",
@@ -139,7 +151,7 @@
  "counts": {
   "proposed": 6,
   "approved": 0,
-  "implemented": 6,
+  "implemented": 7,
   "declined": 0,
   "withdrawn": 0
  }
