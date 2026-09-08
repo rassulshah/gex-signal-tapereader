@@ -1,6 +1,73 @@
 {
  "schema": 1,
- "asOf": "2026-09-03",
+ "asOf": "2026-09-08",
  "note": "issues, questions and enhancement requests from the panel (Open Items / Roadmap tabs), copied by the nightly; the review answers here and the panel reads it back",
- "items": []
+ "items": [
+  {
+   "id": "I0908q12",
+   "kind": "question",
+   "text": "Top 3 or top 5 gamma lines per book? (operator, 2026-09-08: 'is it sufficient to have the top 3 instead of the top 5' — 'record and let me know in about a week from now.. keep it as an open item')",
+   "date": "2026-09-08",
+   "seenIn": "2026-09-08",
+   "status": "SEEN",
+   "answer": "Open until ~2026-09-15. The 09-08 hand read (34 taps): ranks 1–3 deflected 15 of 22 with no break; ranks 4–5 3 of 12 with all three breaks; both HODs, the ES LOD and 8 of 10 circled pullbacks had a top-3 line — the gap is the +γ node under a −γ King (rank 4–6). He keeps 5 until the week's table is in.",
+   "link": "session-state/OPEN-QUESTIONS.md#q12",
+   "answeredOn": "2026-09-08"
+  },
+  {
+   "id": "I0908nq",
+   "kind": "question",
+   "text": "The NQ symbol's four QQQ lines in the IRT file — keep G2–G5, or QG2–QG5 to match XG / SG? (asked 2026-09-08 with v15.85)",
+   "date": "2026-09-08",
+   "seenIn": "2026-09-08",
+   "status": "SEEN",
+   "answer": null,
+   "link": "session-state/DECISIONS.md",
+   "answeredOn": null
+  },
+  {
+   "id": "I0908asia",
+   "kind": "question",
+   "text": "AHI · ALO · LHI · LLO — the session hours: Asia 17:00–02:00 CT and London 02:00–08:30 CT are proposed; his word decides before they draw (locked item, not built)",
+   "date": "2026-09-08",
+   "seenIn": "2026-09-08",
+   "status": "SEEN",
+   "answer": null,
+   "link": "session-state/LOCKED-ITEMS.md",
+   "answeredOn": null
+  },
+  {
+   "id": "I0908circ",
+   "kind": "question",
+   "text": "E005: the first-hour turns he did not circle (ES 08:45 · 09:03 at the ONL/LLO sweep · 09:39 · 09:51; the NQ LOD 09:09 at the PDL sweep) — deflections in his sense, or skipped on purpose? The answer sets the boundary of the Learn corpus.",
+   "date": "2026-09-08",
+   "seenIn": "2026-09-08",
+   "status": "SEEN",
+   "answer": null,
+   "link": "learning/deflections/LEARNING.md",
+   "answeredOn": null
+  },
+  {
+   "id": "I0908tap",
+   "kind": "enhancement",
+   "text": "THE TAP RECORD (R-25, design/TAP-RECORD.md): one row per tap of an exported line + two controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R; his 'yes' to the design — element 1 (the universe and the controls) awaits his call",
+   "date": "2026-09-08",
+   "seenIn": "2026-09-08",
+   "status": "PLANNED",
+   "answer": "Designed on paper 2026-09-08; roadmap v15.89; built one element at a time on his word; the clean sample starts 2026-09-09 (F-22).",
+   "link": "design/TAP-RECORD.md",
+   "answeredOn": "2026-09-08"
+  },
+  {
+   "id": "I0908lev",
+   "kind": "enhancement",
+   "text": "AHI · ALO · LHI · LLO on the SWEPT line, the day candle and the sweep study (operator, 2026-09-08: 'we should do it. they can be ALO, AHI, LLO, LHI')",
+   "date": "2026-09-08",
+   "seenIn": "2026-09-08",
+   "status": "PLANNED",
+   "answer": "Locked 2026-09-08, not built: the ES courier has the overnight bars (AHI 7725.75 · ALO 7694.75 · LHI 7718.25 · LLO 7687.50 on 09-08); the NQ courier carries none yet — its window must widen first.",
+   "link": "session-state/LOCKED-ITEMS.md",
+   "answeredOn": "2026-09-08"
+  }
+ ]
 }
