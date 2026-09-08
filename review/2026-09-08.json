@@ -1088,7 +1088,7 @@
    "minN": 60,
    "since": "2026-09-08",
    "predict": "pooled live rate of the 80-99 and 100-119 cells >= 80% at n >= 60 close-scored rows on sessions from 2026-09-08",
-   "refuteIf": "at n >= 60 the Wilson high of the pooled live rate is under 80%",
+   "refuteIf": "at n >= 60 the Wilson high of the pooled live rate is < 80%",
    "note": "written from the nightly’s own cells (09-03/09-04: 43% n 23, 50% n 30) — those two sessions are NOT counted; the rows the queue keeps are late-session by construction, which is exactly the cell family the table is most confident about."
   }
  ],
