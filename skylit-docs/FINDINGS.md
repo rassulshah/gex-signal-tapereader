@@ -801,7 +801,10 @@ is the same wound from the other side: the IndexedDB `feat` store holds the reso
 ## F-21 · ACCUMULATING NODES DID NOT DEFLECT MORE THAN DISSIPATING ONES; THE EVENT TYPE DOES NOT SEPARATE — PROVISIONAL (2026-09-08)
 
 **Status: PROVISIONAL** (full-day sources, six sessions 08-27 → 09-04, one instrument) · `review/2026-09-08.json`
-(`features[].key: ledger`, `nodeEvents`), script `tools/review-pool.py`.
+(`features[].key: ledger`, `nodeEvents`), script `tools/review-pool.py`. ⚠ **Measured on a mixed-window book (F-22,
+found the same evening):** the node universe those touches and events were read from changed window and breadth
+34–61 times a session. Not overturned — a node that is accumulating in one window is usually accumulating in the
+other — but not clean either; re-measure on the sessions from 2026-09-09 before anything is built on it.
 
 Two sources that the queue trim (F-20) does NOT touch, because they are written per node / per event for the whole
 session: the node ledger (`ledger[SYM].nodes[].touches`, the last 12 touches per node with the node's state AT the
@@ -823,3 +826,67 @@ touch is the turn.
 One slice points the other way and is recorded as a QUESTION, not a finding: PB ENTRY's hold-of-touched by the node's
 state — **acm 79% (n 19) vs dec 39% (n 18)** — the only place accumulation looked like it mattered, at an n where a
 coin does the same. Registry question `pbentry_acm`; keep recording.
+
+## F-22 · THE PANEL'S OWN SPY / QQQ BOOK FOLLOWED WHATEVER gex/levels URL CAME LAST — WINDOW AND BREADTH — SINCE v10.48; MEASURED LIVE, FIXED IN v15.84 (2026-09-08)
+
+**Status: CONFIRMED on the live panel (15:21–15:43 CT) and on the IndexedDB snapshot archive (every session since
+08-26) — FIXED in v15.84 the same evening: the self-fetch pins `exp_mode=current&exp_count=1&nodes=500` and `onFeed`
+drops a multi-expiration gamma payload once a single-expiration book is held (`FEED_REJECTS[sym].win`). Forward-only:
+the recorded sessions before v15.84 stay as they are, flagged below.** · probes through his tab: `__gptsDebug.LASTFEED`,
+`__gptsDebug.expSets()`, `__gptsDebug.dumpRecorder()`, and the `snaps` store of `gpts_repo_v1` read directly.
+
+**What the book is.** `LASTFEED.SPY` / `LASTFEED.QQQ` is the book the whole read / record pipeline stands on — the walls,
+the King, the node map, the node ledger, the deflection ledger, the per-bar feature records, and since v15.83 the S2–S5
+rows of the IRT file. On his ES chart the app never asks for SPY, so that book is fetched by the panel itself
+(`selfFetch`), which builds its request by swapping `symbol=` and `data_type=` on **the last gex/levels URL seen** and
+keeping everything else — including `exp_mode`, `exp_count` and `nodes`. Two things set that URL: the app, and the
+panel's own requests, because every request the panel makes goes through the same `window.fetch` the observer hooked,
+and every response comes back through `onFeed` — the expiry sets (`nodes=500` in the 0DTE, week and next_n/6 windows,
+every 90 s / 5 min) and the futures self-fetch included. Nothing in `onFeed` told one window from another.
+
+**What was measured.**
+
+    15:21 CT   the IRT file: SPY KING 7621.50 (760)          15:23 CT: SPY KING 766        — two Kings, two minutes
+    15:22 CT   LASTFEED.SPY = expirations [09-08, 09-09, 09-10], 766 at −$49M
+               Skylit's derived SPY (ES1 payload) and the ladder, the same minute: 766 at +$849M — the 0DTE chain
+    15:38 CT   LASTFEED.SPY = 3 expirations, FIVE rows (nodes=5 — the app's next_n/2 basket), 766 −49 · 765 +39 · 768 +33
+               expSets: dte0 122 rows / 1 exp · week 159 rows / 4 exps · wk7 159 rows / 7 exps (all nodes=500)
+    13:45 → 15:20 CT, the recorded SPY node count per 3-minute bar (localStorage mirror, King 767 → 766 at 14:51):
+               30 · 3 · 12 · 4 · 4 · 4 · 5 · 5 · 5 · 4 · 4 · 4 · 11 · 12 · 5 · 5 · 4 · 4 · 11 · 4 · 28 · 5 · 5 · 13 · 4 · 12 · 4 · 13
+
+The app's three windows on an ES chart with the projection on (SKYLIT-FEEDS § THE ES1 BOOK): `nodes=5 current/1` ·
+`nodes=5 next_n/2` · `nodes=60 next_n/4`; the panel's own: `nodes=500` current/1 · week/1 · next_n/6. A 5-row book,
+a 60-row three-to-five-expiry basket and a 122–159-row chain took turns being "the SPY book", every few seconds.
+
+**The archive says it is not today's problem.** The `snaps` store, SPY, nodes per snapshot — ≤6 / 26+ counts and the
+number of times a session flipped between the ≤6 · 7–15 · 16+ bands:
+
+    08-26  n160   0–26   ≤6: 99   26+: 1    flips 52        09-01  n135   0–46   ≤6: 65   26+: 50   flips 56
+    08-27  n148   0–27   ≤6: 112  26+: 1    flips 49        09-02  n51    4–37   ≤6: 16   26+: 3    flips 10
+    08-28  n108   0–20   ≤6: 69   26+: 0    flips 37        09-03  n115   3–38   ≤6: 75   26+: 11   flips 53
+    08-31  n145   0–37   ≤6: 25   26+: 107  flips 34        09-04  n101   3–34   ≤6: 52   26+: 17   flips 42
+                                                             09-08  n135   0–35   ≤6: 83   26+: 7    flips 61
+
+(08-11 → 08-25: 0–18 nodes, mostly ≤15 — the app itself asked for `nodes=500&exp_mode=week` then, SKYLIT-FEEDS § The
+endpoint, so the book was the WEEK window for those sessions, and the expiry sets arrived with v11.17 on 08-20 — the 26+ counts begin the week after, as the app's own URL drifted to `nodes=p20` / `exp_mode=current` on 08-26.)
+
+**What it means for the record.** The King was steady — the largest 0DTE node is the largest node in every window that
+contains today — so the King series, the King roll and the IRT King rows are sound. Everything that depends on the
+SET of nodes or on a node's % of King in its window was computed on a universe that changed shape 34–61 times a session:
+the node ledger's touches (F-21: acm 15% vs dec 15% — a node "dissipating" may simply have been read in a wider window
+one bar and a narrower one the next), the node-event ledger (ACCUM / DISSIP / ROLL fire on the series of a node's
+value, and the value of a small node differs by window), the node grade (inverted on the afternoon sample), the walls
+above the 20% threshold, the polarity of the smaller nodes (766 read −$49M in the basket and +$849M in the chain), and
+the S2–S5 rows of the IRT file today. **Pre-v15.84 sessions are a mixed-window sample for every node-level question;
+the King-level questions survive.** The level study (R-25) starts its clean sample at 2026-09-09.
+
+**What still follows the app (recorded, not fixed):** on a SPY or QQQ chart the app's own request is the displayed
+feed and comes through the hook with his NODES setting and his expiration selector; the window guard drops a
+multi-expiration selector, but a `nodes=5` single-expiration payload is accepted and the book is five rows until the
+next self-fetch (which only fires when the hook has gone quiet for 12 s). He charts ES and NQ; if that changes, the
+breadth needs its own guard.
+
+**Why it was not seen before.** The King never moved, the face reads the tape (the DOM ladder — window-proof), and
+the node count per bar is written into the file but never displayed. The projection feature made the app rotate
+windows fast enough that the S rows and the SPY King in the export changed between two consecutive files, in the
+one minute both were read side by side with Skylit.

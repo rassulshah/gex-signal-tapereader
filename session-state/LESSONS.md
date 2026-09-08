@@ -131,6 +131,35 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.85 — a question about the data is answered with the data, tonight, and then filed as one day
+(1) "Is the top 3 enough?" could have been answered from the ledgers on file — and would have been wrong twice over:
+the deflection ledger has no failures in it, and the node ledger's universe changed window 61 times today (F-22). It
+was answered instead by a hand read on the ladder's own ranked lists (`snaps[].tri.SPXW.top` / `tri.SPY.top`, the DOM
+tape — window-proof) against the ES 3-minute bars, with the design's definitions, in the page: 34 taps, ranks 1–3
+15 of 22, ranks 4–5 3 of 12. The lesson is the order: **define the row first (the design), then read one day by that
+definition, then say "one day".** A number produced before the definition would have been re-litigated the moment the
+record disagreed with it. (2) The SPX ratio is not a constant: the basis ran 1.00044 → 1.00093 (+3.4 → +7.2 pts) across
+the session; a first pass with 1.0007 flat put two taps in the wrong zone. `xm.SPXW.px` per snapshot is the ruler.
+(3) A rename is his call and his word; a hold latched under the old label is dropped, never translated.
+
+### v15.84 — "the King is right" is not "the book is right"; a URL you copy is a decision you did not make
+(1) The double-check found two SPY Kings two minutes apart and I named the cause — the app's rotating projection windows
+— and fixed it, then read the code once more and found the larger half: the panel's OWN expiry-set requests go through
+the fetch hook it installed, so their URLs became "the last URL seen" and their responses became "the SPY book". The
+first fix (pin the window) would have left the breadth flapping between 5 and 500 nodes. Pattern 4 in a new coat: I
+concluded the mechanism from the first evidence that explained the symptom. The check that caught it was cheap — the
+recorded node count per bar, already in the file, never displayed: 30 · 3 · 12 · 4 · 5 · 4 · 11 — and it had been there
+every session since 08-26. **When a symptom has a mechanism, ask what ELSE the mechanism would have broken, and look for
+that in data you already hold before shipping.** (2) "The recorded SPY King was stable during RTH, so the day's record is
+fine" — the sentence I sent him — was wrong on its second half: the King leads every window, so it is exactly the one
+series a window flap cannot disturb. Steadiness of the strongest signal proves nothing about the set it was read from.
+Withdrawn: that claim; F-21 (acm 15% vs dec 15%) is now "measured on a mixed-window book". (3) `selfFetch` copied the
+app's URL for its auth shape and inherited the app's window with it (v10.48) — a parameter you did not set is a
+decision you did not make, and the app made a different one on 08-26 (`p20`, `current`) and again today (three
+windows). Every parameter the panel's own requests depend on is now written by the panel: `exp_mode`, `exp_count`,
+`nodes`. (4) A guard that refuses with nothing held makes the panel blind at boot; the guard accepts the first payload
+of any shape and lets the next pinned fetch correct it — one wrong minute over a blind panel, the v11.55 rule.
+
 ### v15.83 — "top 5" means top five PER BOOK on a chart that borrows two; a colour asked for twice in an hour is a scheme, not a shade
 (1) "I don't see a 7690 level" was answered by reading Skylit's two derived books at the same second: the SPX side of the
 file matched to the tick and the missing line was a SPY-book node the export had never carried, because the 09-07 ask

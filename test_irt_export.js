@@ -296,10 +296,10 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
 // and the King is always #1 of them — so the King's slot is the gold SPXW KING line and the four that
 // follow are G2..G5. ⚠ No G1 row: one level, one line.
 {
-  const G=eRows.filter(l=>/,G\d,/.test(l));
-  ok(G.length===4 && G.map(l=>l.split(',')[2]).join(' ')==='G2 G3 G4 G5',
-     '4t1 EPU26 carries exactly G2 G3 G4 G5, in rank order', G.map(l=>l.split(',')[2]));
-  ok(!/,G1[ ,]/.test(b.csv) && !/,G6[ ,]/.test(b.csv), '4t2 no G1 (the King\'s slot is the gold line) and nothing past G5');
+  const G=eRows.filter(l=>/,XG\d,/.test(l));
+  ok(G.length===4 && G.map(l=>l.split(',')[2]).join(' ')==='XG2 XG3 XG4 XG5',
+     '4t1 EPU26 carries exactly XG2 XG3 XG4 XG5 (v15.85 labels), in rank order', G.map(l=>l.split(',')[2]));
+  ok(!/,XG1[ ,]/.test(b.csv) && !/,XG6[ ,]/.test(b.csv), '4t2 no G1 (the King\'s slot is the gold line) and nothing past G5');
   // ranks 2-5 of {7710:100, 7630:85, 7700:-63, 7650:41, 7680:30, 7600:-22, 7720:18} by |%King|:
   // 7630 → 7700 → 7650 → 7680; 7600 and 7720 stay out. Prices go SPX x dispScale 1.0023 on the 0.25 tick.
   const px=G.map(l=>l.split(',')[1]);
@@ -309,16 +309,16 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   ok(G.every(l=>l.split(',')[3]===String((255<<16)+(255<<8)+255)), '4t4 all four are WHITE (RGB 16777215) — his call', G.map(l=>l.split(',')[3]));
   ok(G.every(l=>l.split(',')[4]==='1' && l.split(',')[5]==='0'), '4t4b width 1, SOLID (by column index, not substring) — under the King\'s 3');
   // the ETF target carries the same four in SPY space, cents, no tick
-  const gSpy=lines.filter(l=>l.startsWith('SPY,') && /,G\d,/.test(l));
+  const gSpy=lines.filter(l=>l.startsWith('SPY,') && /,XG\d,/.test(l));
   ok(gSpy.length===4 && Math.abs(parseFloat(gSpy[0].split(',')[1]) - 7630*1.0023/10.0538) < 0.006,
      '4t5 SPY rides the same four: G2 7630 x 1.0023 / 10.0538 = 760.66', gSpy.map(l=>l.split(',')[1]));
   ok(G.every(l=>!/ ~/.test(l.split(',')[2])), '4t6 a LIVE ratio leaves the G labels untagged');
   { global.FUTMODE={ fam:'ES', r:10.0538, live:false };
-    const Bt=irtBuildCsv(); const Gt=Bt.csv.split('\r\n').filter(l=>l.startsWith('EPU26,') && /,G\d ~,/.test(l));
+    const Bt=irtBuildCsv(); const Gt=Bt.csv.split('\r\n').filter(l=>l.startsWith('EPU26,') && /,XG\d ~,/.test(l));
     ok(Gt.length===4, '4t6b ...and a last-known ratio marks every G label with ~ like every other EPU26 row', Gt.length);
     global.FUTMODE={ fam:'ES', r:10.0538, live:true }; }
   irtBuildCsv();
-  ok(IRT_LAST.gWhy==='live (G2 7630 85%, G3 7700 -63%, G4 7650 41%, G5 7680 30%)',
+  ok(IRT_LAST.gWhy==='live (XG2 7630 85%, XG3 7700 -63%, XG4 7650 41%, XG5 7680 30%)',
      '4t7 IRT_LAST.gWhy names the four strikes and their sizes', IRT_LAST.gWhy);
 }
 // ⚠ THE KING'S SLOT IS THE EXPORTED KING'S STRIKE — the LATCHED crown (v14.19), not the tape's 100%.
@@ -328,29 +328,29 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   const T2=()=>({ king:7700, pct:{ '7700.00':-100, '7710.00':96, '7650.00':40 } });
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():T2());
   const Bf=irtBuildCsv(); const L=Bf.csv.split('\r\n').filter(l=>l.startsWith('EPU26,'));
-  const kf=L.find(l=>/SPXW KING/.test(l)); const g2=L.find(l=>/,G2,/.test(l)); const g3=L.find(l=>/,G3,/.test(l));
+  const kf=L.find(l=>/SPXW KING/.test(l)); const g2=L.find(l=>/,XG2,/.test(l)); const g3=L.find(l=>/,XG3,/.test(l));
   ok(kf && /^EPU26,7727\.750000,/.test(kf), '4t8 the exported King is still the latched 7710', kf);
   ok(g2 && /^EPU26,7717\.750000,/.test(g2), '4t8b ...and the tape\'s new 100% crown (7700) is G2, not dropped and not doubled', g2);
-  ok(g3 && /^EPU26,7667\.500000,/.test(g3) && !L.some(l=>/,G[2-5],/.test(l) && /,7727\.750000,/.test(l)),
-     '4t8c 7710 is never ALSO a G row — one level, one line', L.filter(l=>/,G\d,/.test(l)));
+  ok(g3 && /^EPU26,7667\.500000,/.test(g3) && !L.some(l=>/,XG[2-5],/.test(l) && /,7727\.750000,/.test(l)),
+     '4t8c 7710 is never ALSO a G row — one level, one line', L.filter(l=>/,XG\d,/.test(l)));
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); delete LS[KING_LATCH_KEY]; }
 // ⚠ HELD like the Kings (v14.74): a blind tick must not delete four lines from his chart.
 { irtBuildCsv();                                                       // seeds today's G hold
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():null);                     // the SPXW tape goes blind
-  const Bh=irtBuildCsv(); const Gh=Bh.csv.split('\r\n').filter(l=>l.startsWith('EPU26,') && /,G\d,/.test(l));
+  const Bh=irtBuildCsv(); const Gh=Bh.csv.split('\r\n').filter(l=>l.startsWith('EPU26,') && /,XG\d,/.test(l));
   ok(Gh.length===4 && Gh.map(l=>l.split(',')[1]).join(' ')==='7647.500000 7717.750000 7667.500000 7697.750000',
      '4t9 a blind tick HOLDS the four G rows at their last good prices', Gh.map(l=>l.split(',')[1]));
   ok(/^held \d+m/.test(IRT_LAST.gWhy||''), '4t9b ...and says they are held, not fresh', IRT_LAST.gWhy);
   ok(Gh.every(l=>l.split(',')[4]==='1' && l.split(',')[5]==='0' && l.split(',')[3]===String(16777215)), '4t9c held rows keep the same white, width 1, solid');
   const keepDay=global.ctTodayStr; global.ctTodayStr=()=>'2026-08-28';   // the next session
   const Bd=irtBuildCsv();
-  ok(!(Bd && /,G\d,/.test(Bd.csv)), '4t9d ...and NEVER across days — yesterday\'s nodes are a different book');
+  ok(!(Bd && /,XG\d,/.test(Bd.csv)), '4t9d ...and NEVER across days — yesterday\'s nodes are a different book');
   ok(/nothing latched today/.test(IRT_LAST.gWhy||''), '4t9e ...which the export says in words', IRT_LAST.gWhy);
   global.ctTodayStr=keepDay; global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); }
 // the hold only ever returns G2..G5 rows — a corrupt or foreign entry cannot draw a stray line
-{ LS[IRT_KINGS_KEY]=JSON.stringify({ day:ctTodayStr(), G:{ rows:[{k:760, lbl:'G1'}, {k:'x', lbl:'G2'}, {k:761.5, lbl:'G3'}], t:Date.now() } });
+{ LS[IRT_KINGS_KEY]=JSON.stringify({ day:ctTodayStr(), G:{ rows:[{k:760, lbl:'XG1'}, {k:'x', lbl:'XG2'}, {k:761.5, lbl:'XG3'}], t:Date.now() } });
   const H=irtGHeld();
-  ok(H && H.rows.length===1 && H.rows[0].lbl==='G3', '4t10 irtGHeld filters to well-formed G2..G5 rows', H&&H.rows);
+  ok(H && H.rows.length===1 && H.rows[0].lbl==='XG3', '4t10 irtGHeld filters to well-formed G2..G5 rows', H&&H.rows);
   delete LS[IRT_KINGS_KEY]; }
 
 // ⚠ ONE CONVERSION FOR THE WHOLE SPXW BOOK (v15.76): the King and the G rows go through the same
@@ -359,7 +359,7 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
 // only way to tell the two apart — the mutation run found the earlier fixture could not.
 { global.ifLadder=(sym)=>({ dispScale:1.0023, undScale:0.0995, rows:IFL_ROWS, err:null, srcSym:'SPX' });
   const Bb=irtBuildCsv(); const L=Bb.csv.split('\r\n').filter(l=>l.startsWith('EPU26,'));
-  const kk=L.find(l=>/SPXW KING/.test(l)); const g2=L.find(l=>/,G2,/.test(l));
+  const kk=L.find(l=>/SPXW KING/.test(l)); const g2=L.find(l=>/,XG2,/.test(l));
   ok(kk && /^EPU26,7727\.750000,/.test(kk), '4t11 on a live ES chart the King follows the chart basis (7727.75), not undScale (7713.25)', kk);
   ok(g2 && /^EPU26,7647\.500000,/.test(g2), '4t11b ...and so does G2 — same closure, same scale', g2);
   global.ifLadder=(sym)=>({ dispScale:1.0023, rows:IFL_ROWS, err:null, srcSym:(sym==='QQQ'?'QQQ':'SPX') }); }

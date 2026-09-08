@@ -609,3 +609,50 @@ word for the S rows) was superseded by the scheme in the same hour and is not to
 08-28 colours (walls red / green, the flip purple): a different book, a different question. Not decided: whether the
 labels should also carry the strike (`S2 767 +55%`) — he asked for the % and the sign; the strike is in the price.
 
+## 2026-09-08 · v15.84 — the panel's own SPY / QQQ book is the 0DTE chain with every strike, whatever the app asked last (F-22)
+
+Operator: **"double check"** (the file against Skylit at the same second) — the SPX side exact, the SPY side two Kings
+in two minutes. Found: the self-fetch inherited window and breadth from the last gex/levels URL seen (the app's three
+projection windows; the panel's own expiry sets through the same hook), and had since v10.48.
+
+Decided: **the book the pipeline stands on is ONE window and ONE breadth — `exp_mode=current&exp_count=1&nodes=500`,
+pinned in the self-fetch, for gamma and vanna** — the window the ladder, the tape and the derived orbs already were.
+`onFeed` refuses a multi-expiration gamma payload once a single-expiration book is held, counts it, and never refuses
+with nothing held (blind at boot is worse than one wrong minute). "Match Skylit always" (v15.81) meant Skylit's PRICES;
+this is Skylit's WINDOW — the front chain — which is what the Academy's tap decay, the King margin and the node lifecycle
+are written about. Not decided (recorded): a breadth guard for a SPY / QQQ chart, where the app's own five-row payload
+still arrives through the hook; and whether the week / wk7 expiry sets should feed anything at all now that nothing
+reads them but the expiry profile. Forward-only: the sessions before v15.84 are a mixed-window sample for every
+node-level question (F-21 flagged); the King-level series survive. **The level study's clean sample starts 2026-09-09.**
+
+## 2026-09-08 · v15.85 — the node lines labelled by book: XG2–XG5 (SPX), SG2–SG5 (SPY); the QQQ King on NQ only (R-26)
+
+Operator (evening): **"in the irt export, the spy gama level cand be SG2 SG3 etc., and the spx levels can be XG2 and XG3
+etc.. make this change. also note the qqq king should only be on the nq not the es."**
+
+Decided: the label names the book — **XG** = the SPX book's gamma node, **SG** = the SPY book's — the rank after it, the
+signed % after that; the Kings keep their names; the colours stay the v15.83 scheme. The QQQ King is on the NQ symbol
+only (already so since v15.80, R-18; pinned again). Not decided (asked, one word): the NQ symbol's QQQ lines — `G2–G5`
+as today, or `QG2–QG5`. A hold latched under the old labels is dropped rather than translated: the next fresh book
+re-latches within a tick, and a translated label is a label nobody asked for.
+
+## 2026-09-08 · the tap record (R-25) — designed on paper, nothing built; the first hand read is one day
+
+Operator: **"are you running a study on the gamma levels deflection. basically testing spx and spy and qqq top 5 gamma
+levels and their ability to deflect and if they do deflect, under what conditions and if they dont deflect, under what
+conditions."** · **"the purpose of the study is to identify what makes gamma levels work as deflectors of price for the
+purpose of trading reversals from levels."** · **"yes"** (to the design) · **"I am also trying to determine if it is
+sufficient to have the top 3 instead of the top 5. can you look at the deflections today and see if the top 3 is
+enough?"**
+
+Decided: the study is a CORPUS, not a new ledger — `design/TAP-RECORD.md`: one row per tap of an EXPORTED line (the
+lines he trades from, by book and rank, at Skylit's price), two controls in the same row format (the rest of the 0DTE
+book ≥ 20%; the midpoint between adjacent lines — the doctrine's "imaginary support", the honest zero), the conditions
+at the tap, the outcome in trading terms (DEFLECT · PIN · BREAK; mfe · mae · reach · R), nightly by book × rank and by
+condition, every cell with n beside its control; H11 (fresh + growing > tested or shedding > midpoint) registered the
+day the record starts; the clean sample begins 2026-09-09 (F-22). Built one element at a time, on his word, in the
+order the design lists; nothing on the face until the report's mockup. Why not the existing ledgers: the deflection
+ledger holds no failures (no denominator); the node ledger is per bar (F-12) on a mixed-window book (F-22); neither
+knows a line's book or rank. **The top-3 question:** today's hand read (34 taps) says ranks 1–3 carried 15 of 18
+deflections and both extremes, ranks 4–5 carried all three breaks and two pullback turns — one day; the answer he was
+given is "keep 5 for two weeks while the record accumulates, then decide with n".

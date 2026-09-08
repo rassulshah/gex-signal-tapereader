@@ -11,6 +11,23 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0s · v15.85 — the node lines labelled by book (2026-09-08, evening)
+
+No new element on the face. **The FlexLevels file's node lines** read `XG2 +86%` … `XG5` (the SPX book) and `SG2 -47%` …
+`SG5` (the SPY book) instead of G / S; the Kings, the colours and the prices unchanged; the NQ symbol's QQQ lines stay
+`G2–G5` (asked: G or QG). **The gear's IRT line** says `SG rows …`. His words: *"the spy gama level cand be SG2 SG3 etc.,
+and the spx levels can be XG2 and XG3 etc."* (R-26). Measured: descriptive. Probe: `__gptsDebug.irt().preview`.
+
+## 0r · v15.84 — the book under every node read is one window and one breadth (2026-09-08, evening)
+
+No new element, no changed element. **The book beneath the face** — the walls, the King, the node map, the node and
+deflection ledgers, the per-bar feature records, the S2–S5 rows of the FlexLevels file — is now the 0DTE chain with every
+strike (`exp_mode=current&exp_count=1&nodes=500`, pinned in the panel's own request), where before it was whatever window
+and breadth the last gex/levels URL happened to carry (F-22: the app's three projection windows, the panel's own expiry
+sets — the recorded node count per bar flipped 34–61 times a session since 08-26). Probe: `__gptsDebug.LASTFEED.SPY.j`
+→ `expirations.length` = 1 and `levels[last].l.length` ≈ 120; `__gptsDebug.feedRejects().SPY.win` counts the windows
+refused. Measured: descriptive (a data path). His words: *"double check"*.
+
 ## 0q · v15.83 — the SPY book's top five in the IRT export; the node lines signed and coloured by polarity (2026-09-08)
 
 No new element on the face. **The FlexLevels file** gains **S2–S5** — the SPY book's next four after its King, at Skylit's

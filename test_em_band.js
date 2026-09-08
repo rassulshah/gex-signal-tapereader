@@ -1723,10 +1723,10 @@ eval(ex('emBand')); eval(ex('emBandRaw'));;
   // This fixture's tape holds three strikes, so after the King's slot two G rows follow: G2 (7630 at
   // -85, a PUT node — size, not sign) and G3 (7650 at 41). The three-line contract of v14.20 became
   // four families, each one asked for by name; nothing else may join them (see the absence checks).
-  ok(F.rows.length===4,               'the SPXW and SPY crowns + G2 G3 — nothing else', F.rows.map(x=>x.lbl));
-  ok(F.rows.map(x=>x.lbl).join(' ')==='SPXW KING G2 G3 SPY KING' && L['G2'].price===7647.5 && L['G3'].price===7667.5,
-     'G2 is the -85% put node 7630 (7647.50), G3 the +41% 7650 (7667.50); no G1 — the King\'s slot is the gold line', F.rows.map(x=>x.lbl+'@'+x.price));
-  ok(L['G2'].col==='2' && L['G3'].col==='2' && L['G2'].w==='1' && L['G2'].style==='0', 'the G rows wear gate WHITE (this fixture\'s 2), width 1, solid', L['G2']);
+  ok(F.rows.length===4,               'the SPXW and SPY crowns + XG2 XG3 — nothing else', F.rows.map(x=>x.lbl));
+  ok(F.rows.map(x=>x.lbl).join(' ')==='SPXW KING XG2 XG3 SPY KING' && L['XG2'].price===7647.5 && L['XG3'].price===7667.5,
+     'XG2 is the -85% put node 7630 (7647.50), XG3 the +41% 7650 (7667.50); no XG1 — the King\'s slot is the gold line (v15.85 labels)', F.rows.map(x=>x.lbl+'@'+x.price));
+  ok(L['XG2'].col==='2' && L['XG3'].col==='2' && L['XG2'].w==='1' && L['XG2'].style==='0', 'the G rows wear gate WHITE (this fixture\'s 2), width 1, solid', L['XG2']);
   ok(!!L['SPXW KING'],           'the SPXW King, in the locked grammar');
   ok(!!L['SPY KING'],            'and the SPY King — "i must always have the spy and spxw king"');
 

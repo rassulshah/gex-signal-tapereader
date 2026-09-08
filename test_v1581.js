@@ -118,8 +118,8 @@ ok(/@version\s+15\.(8[1-9]|9\d)/.test(src) && /var GPTS_VERSION='15\.(8[1-9]|9\d
 
   const b=irtBuildCsv(); const L=b.csv.trim().split('\r\n');
   ok(price(L,'EPU26','SPXW KING')===7704.5, '4a SPXW KING on EPU26 = Skylit\'s 7704.45 → 7704.50 at the tick (the basis would have said 7705.00)', price(L,'EPU26','SPXW KING'));
-  ok(price(L,'EPU26','G2')===7709.5 && price(L,'EPU26','G3')===7684.5, '4b G2 (7705) 7709.46 → 7709.50 and G3 (7680) 7684.44 → 7684.50 — derived rows', [price(L,'EPU26','G2'),price(L,'EPU26','G3')]);
-  ok(price(L,'EPU26','G4')===7699.5 && price(L,'EPU26','G5')===7679.5, '4c G4 (7695) and G5 (7675) are not in the 0DTE window → strike × Skylit\'s ratio (7699.45 → 7699.50, 7679.44 → 7679.50)', [price(L,'EPU26','G4'),price(L,'EPU26','G5')]);
+  ok(price(L,'EPU26','XG2')===7709.5 && price(L,'EPU26','XG3')===7684.5, '4b XG2 (7705) 7709.46 → 7709.50 and XG3 (7680) 7684.44 → 7684.50 — derived rows (v15.85 labels)', [price(L,'EPU26','XG2'),price(L,'EPU26','XG3')]);
+  ok(price(L,'EPU26','XG4')===7699.5 && price(L,'EPU26','XG5')===7679.5, '4c XG4 (7695) and XG5 (7675) are not in the 0DTE window → strike × Skylit\'s ratio (7699.45 → 7699.50, 7679.44 → 7679.50)', [price(L,'EPU26','XG4'),price(L,'EPU26','XG5')]);
   ok(price(L,'EPU26','SPY KING')===7720.0, '4d SPY KING = Skylit\'s 7720.05 → 7720.00 (the panel\'s EMA would have said 7720.50)', price(L,'EPU26','SPY KING'));
   ok(price(L,'EPU26','CW0')===7754.5 && price(L,'EPU26','PW0')===7654.5, '4e the IF 0DTE walls (SPX 7750 / 7650) on the SAME SPXW ratio: 7754.48 → 7754.50, 7654.42 → 7654.50 — one ruler', [price(L,'EPU26','CW0'),price(L,'EPU26','PW0')]);
   ok(price(L,'EPU26','FLIP0')===7699.75, '4f FLIP0 (SPX 7695.3, not a strike) by the ratio path: 7699.75', price(L,'EPU26','FLIP0'));
@@ -134,7 +134,7 @@ ok(/@version\s+15\.(8[1-9]|9\d)/.test(src) && /var GPTS_VERSION='15\.(8[1-9]|9\d
   ok(held.SPXW && held.SPXW.src===7700 && held.SPY && held.SPY.src===770, '4m irtKingLatch stores the strike in its own book (SPX 7700, SPY 770) beside the SPY-row-space k', held.SPXW);
   global.tapeMap=(s)=>(s==='QQQ'?({ king:722, count:20, fromFeed:false, pct:{ '722.00':100, '721.00':44 } }):null);
   const b2=irtBuildCsv(); const L2=b2.csv.trim().split('\r\n');
-  ok(price(L2,'EPU26','SPXW KING')===7704.5 && price(L2,'EPU26','G2')===7709.5 && /^held/.test(IRT_LAST.spxWhy) && /^held/.test(IRT_LAST.gWhy), '4n with the tape gone the HELD King and G rows still print at Skylit\'s prices (the hold carries the strikes)', [price(L2,'EPU26','SPXW KING'), IRT_LAST.spxWhy]);
+  ok(price(L2,'EPU26','SPXW KING')===7704.5 && price(L2,'EPU26','XG2')===7709.5 && /^held/.test(IRT_LAST.spxWhy) && /^held/.test(IRT_LAST.gWhy), '4n with the tape gone the HELD King and G rows still print at Skylit\'s prices (the hold carries the strikes)', [price(L2,'EPU26','SPXW KING'), IRT_LAST.spxWhy]);
   global.tapeMap=(s)=>(s==='QQQ'?({ king:722, count:20, fromFeed:false, pct:{ '722.00':100, '721.00':44 } }):SPXW_TAPE());
 
   // ---- the fallback: no ES1 payload → the panel's own basis, tilde-tagged when the ratio is not live ----

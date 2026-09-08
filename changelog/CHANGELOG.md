@@ -1,3 +1,77 @@
+## v15.85 — XG2–XG5 · SG2–SG5 — THE IRT NODE LINES LABELLED BY BOOK (R-26) · THE TAP RECORD DESIGNED (R-25, on paper)
+
+> Operator, 2026-09-08 (evening): **"in the irt export, the spy gama level cand be SG2 SG3 etc., and the spx levels can
+> be XG2 and XG3 etc.. make this change. also note the qqq king should only be on the nq not the es."**
+
+**What shipped.** The SPX book's node lines are **XG2–XG5**, the SPY book's **SG2–SG5**; the signed % follows as before
+(`XG3 -56%`, `SG2 +55%`); the Kings keep their names; the colours are unchanged (v15.83). `irtSpyTop` labels SG,
+the ES G rows XG, `irtGHeld` accepts `XG` / `SG` (ES) and `G` (NQ) — a pre-v15.85 `S2` hold is dropped and the next
+fresh book re-latches within a tick; the gear's IRT line says `SG rows`. **The QQQ King is on NQ only** — it has been
+since v15.80 (R-18, `xqWhy`), read again on his live file tonight (EPU26: SPXW KING · XG2–XG5 · SPY KING · SG2–SG5 ·
+PW0 · CW0 · FLIP0; ENQU26: QQQ KING · G2–G5) and pinned again on his word. **Asked, not decided:** the NQ symbol's
+QQQ lines — `G2–G5` or `QG2–QG5`.
+
+**Designed, not built — R-25, THE TAP RECORD** (`design/TAP-RECORD.md`), his study question in his words: *"testing spx
+and spy and qqq top 5 gamma levels and their ability to deflect and if they do deflect, under what conditions and if
+they dont deflect, under what conditions … what makes gamma levels work as deflectors of price for the purpose of
+trading reversals from levels."* One row per tap of an exported line plus two controls, the conditions at the tap, an
+outcome in trading terms (DEFLECT · PIN · BREAK, mfe / mae / reach / R), nightly by book × rank and by condition; the
+110 registry studies whose corpus is "tap record" read from it; H11 pre-registered. **The first hand read, today, 34
+taps** (ES 3-minute bars, ±5, 60 min, 10 pts): ranks 1–3 deflected 15 of 22 (0 breaks), ranks 4–5 3 of 12 (all three
+breaks); the HOD was the two Kings, the LOD the SPY 765 line (rank 3 → 2); two turns needed a rank-4/5 line. One day.
+His question *"is the top 3 enough"* is answered "today, mostly — keep 5 for two weeks while the record accumulates".
+
+**Tests.** `test_v1585.js` — 16 assertions: the three label sites, the hold's grammar (XG / SG / G; XG1, S2, QG3
+dropped), a fresh latch, no QQQ KING on ES, the record (CHANGELOG, DECISIONS, R-25 proposed, R-26 implemented, the
+design file). `test_v1583` (SG / XG), `test_v1576` 1f/1m, `test_irt_export` §4t, `test_em_band`, `test_v1581` 4b/4c/4n
+re-pinned to the new labels; the NQ pins untouched; the version pins moved.
+
+**The record.** R-25 proposed, R-26 implemented (v15.85); the roadmap — v15.84 shipped (verify at the open), **v15.85
+this build**, the seasonality → v15.86, the rest +1, the tap record (v15.89) re-titled to the design; DECISIONS
+2026-09-08 (his words, both); LESSONS v15.85; INVENTORY §0s; the config (2026-09-08j); the resume note (+ snapshot
+v15.84); the chat history.
+
+## v15.84 — THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH — THE 0DTE CHAIN, EVERY STRIKE (F-22)
+
+> Operator, 2026-09-08, 15:2x CT: **"double check"** — the file against Skylit, line by line, at the same second. The SPX
+> side was exact to the tick; the SPY side printed SPY KING 760 in the 15:21 file and 766 in the 15:23 file.
+
+**What was wrong.** The panel fetches its own SPY / QQQ book (`selfFetch`) by swapping `symbol=` and `data_type=` on
+**the last gex/levels URL seen** and keeping the rest — `exp_mode`, `exp_count` and `nodes` included. On his ES chart
+with the projection on, the app rotates THREE windows (`nodes=5 current/1` · `nodes=5 next_n/2` · `nodes=60 next_n/4`);
+and every request the panel makes itself goes through the same hooked `window.fetch`, so the expiry sets (`nodes=500`
+in the 0DTE, week and next_n/6 windows) both reset that URL and hand their responses to `onFeed`. Nothing told one
+window from another. Measured: `LASTFEED.SPY` at 15:38 CT = three expirations, FIVE rows, 766 at −$49M, while the
+ladder and Skylit's derived 0DTE orb had 766 at +$849M; the recorded SPY node count per 3-minute bar 30 · 3 · 12 · 4 ·
+5 · 4 · 11 · 12 · 5 · 4 · 11 · 4 · 28 · 5 · 13 from 13:45; the IndexedDB snaps show the same ≤6 / 26+ mix, 34–61 band
+flips a session, every session since 08-26. **The King was steady (the largest 0DTE node leads every window) — the node
+universe was not.** FINDINGS F-22 has the tables; F-21 is flagged "measured on a mixed-window book".
+
+**What shipped.** (1) `selfFetch` pins `exp_mode=current&exp_count=1&nodes=500` — replaced when present, appended when
+absent — whatever URL came last: the 0DTE chain with every strike, the dte0 expiry set's own request, for gamma and
+vanna alike. (2) `onFeed`'s gamma path drops a payload that names more than one expiration whenever a single-expiration
+book is already held, counted in `FEED_REJECTS[sym].win` / `winT` (`__gptsDebug.feedRejects()`), logged once and every
+50th time; with nothing held it is accepted (never blind at boot) and the next pinned self-fetch replaces it; a payload
+without an `expirations` field on either side stands the guard down (DEGRADE, never guess). The never-history-over-live
+guard stands behind it unchanged. No face change. Forward-only: the pre-v15.84 sessions stay as they are, flagged.
+
+**Not fixed, recorded:** on a SPY or QQQ chart the app's own request is the displayed feed and arrives with his NODES
+setting; the window guard drops a multi-expiration selector, a five-row single-expiration payload is accepted. He charts
+ES and NQ.
+
+**Tests.** `test_v1584.js` — 28 assertions: the pin from each of the seven URL shapes seen (the app's three windows,
+the panel's week and wk7 sets, the futures self-fetch, a bare URL → appended once, never twice; the cache-buster
+refreshed, the auth shape kept, nothing of the app's window or breadth surviving); the guard on the 15:22 fixture
+(basket accepted with nothing held → the chain replaces it → the basket dropped and counted, not as history → the
+week set dropped → a fresher chain accepted → the history guard still behind it → no-expirations accepted and stands
+the guard down → per-symbol counters → vanna untouched); the words. **13 of 13 mutants** (each pin dropped or bent,
+never appended, the week, >2, blind at boot, guessing, uncounted, counted as history, counted-then-accepted, one
+shared counter). `test_feed_guard` 8, `test_v1583` 38, `test_v1581` 58 unchanged; version pins moved.
+
+**The record.** FINDINGS F-22 (+ the F-21 caveat); SKYLIT-FEEDS § The endpoint; DECISIONS 2026-09-08; LESSONS v15.84;
+the roadmap — v15.83 shipped and verified (14:18 CT), **v15.84 this build**, the seasonality → v15.85, the rest +1;
+the config (2026-09-08i); the resume note (+ snapshot v15.83); the chat history.
+
 ## v15.83 — THE SPY BOOK'S TOP FIVE IN THE IRT EXPORT · THE SIGNED % ON EVERY NODE LINE · THE NODE LINES WEAR THEIR POLARITY (R-24)
 
 > Operator, 2026-09-08, on the 7690 he could not find on IRT: *"that spy node is important because it is a big node..

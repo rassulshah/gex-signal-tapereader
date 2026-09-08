@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-08 · v15.83 · session `f9c89c64` — v15.83: the SPY book's top five in the IRT export, the signed % on every node line, the node lines coloured by polarity (R-24); v15.82 the outcomes from the archive; v15.81 the export on Skylit's prices; the projection understood; the E/A rows aligned; v15.80 the candle on the price axis; the review of Friday
+## 2026-09-08 · v15.85 · session `f9c89c64` — XG2–XG5 · SG2–SG5 — THE IRT NODE LINES LABELLED BY BOOK (R-26) · THE TAP RECORD DESIGNED (R-25)
 
-_189 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_197 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2572,6 +2572,115 @@ Answered: NODES = 5 means the top 5 of each borrowed book on the chart (SPY 5 + 
 **me (18:46):** Now the v15.83 test — the S rows, the signed %, the polarity colours, the hold:
 Now the records for v15.83 (Rec R-24, the roadmap, CHANGELOG, DECISIONS, LESSONS, INVENTORY, config, resume note, chat history):
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> are you running a study on the gamma levels deflection. basically testing spx and spy and qqq top 5 gamma levels and their ability to deflect  and if they do deflect, under what conditions and if they dont deflect , under what conditions.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> the purpose of the study is to identify what makes gamma levels work as deflectors of price for the purpose of trading   reversals from levels levels .
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> top-5 rank
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> do the top-5 of each book deflect and under what conditions
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> what makes gamma levels work as deflectors for trading reversals
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (20:33):** **Double check, 15:21–15:23 CT, file vs Skylit at the same second:**
+
+- **SPX side — exact to the tick:** SPXW KING 7680 → 7687.00 (−100, purple) · G2 7675 +86% 7681.75 · G3 7670 +50% 7676.75 · G4 7665 +43% 7671.75 · G5 7690 +32% 7697.00 — identical strikes, ranks, signs and prices to Skylit's derived SPXW book.
+- **SPY side — I found a bug.** The file printed SPY KING 760 at 15:21 and 766 at 15:23, with S rows whose signs and sizes did not match Skylit's SPY book (766 at −$49M in the panel's copy vs +$849M on Skylit's 0DTE). Cause: the panel's own SPY/QQQ book is fetched by copying the app's *last* request URL, and with the projection on the app now rotates three expiration windows (0DTE, next-2, next-4) — so the panel's SPY book was flipping between the 0DTE chain and a 3–5-expiry basket. The recorded King series today stayed 767 → 766 (0DTE), so the day's record is fine; the flap showed up in the after-close file. **Fixed in v15.84 (building now):** the panel's SPY/QQQ books are pinned to the 0DTE window, and a multi-expiration payload is refused (counted) once a 0DTE one is held. FINDINGS F-22.
+
+**Your study question — honestly, partly:**
+
+What exists today: (1) the **node ledger** — every touch of every node, scored DEFLECT / PIN / BREAK at 5/10/20 bars, with the why-vector at the touch (size %King, polarity, role, distance, growth d5/d15/d60, fresh/tested/delivered stage, taps, regime, trend, time of day); (2) the **deflection ledger** — every confirmed tap-and-reverse with its setup class (King/Gate/Rug/Pika/Barney/Floor/Ceiling), which books' Kings it touched, the King-roll state, the pattern stamp, and whether price continued; (3) the **Learn rules** L1–L9 (growth into the tap, fresh, stack, roll, King distance, time of day, confluence) scored nightly against i …[trimmed]
+
+**OPERATOR:**
+> yes
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:45, working):** his "yes" is to the R-25 design — after v15.84 ships. While building it I read the code once more and found the larger half of F-22: the panel's OWN expiry-set requests go through the fetch hook it installed, so their URLs became "the last URL seen" and their responses became the SPY book — the breadth flapped 5 ↔ 500 nodes, not only the window. The recorded node count per bar (13:45 →): 30 · 3 · 12 · 4 · 5 · 4 · 11 · 12 · 5 · 4 · 11 · 4 · 28 · 5 · 13; the IDB snaps: 34–61 band flips a session since 08-26. Added the `nodes=500` pin; `test_v1584.js` 28 · 13/13 mutants; the records; F-22 written with the tables, F-21 flagged mixed-window.
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (20:33):** **Double check, 15:21–15:23 CT, file vs Skylit at the same second:**
+
+- **SPX side — exact to the tick:** SPXW KING 7680 → 7687.00 (−100, purple) · G2 7675 +86% 7681.75 · G3 7670 +50% 7676.75 · G4 7665 +43% 7671.75 · G5 7690 +32% 7697.00 — identical strikes, ranks, signs and prices to Skylit's derived SPXW book.
+- **SPY side — I found a bug.** The file printed SPY KING 760 at 15:21 and 766 at 15:23, with S rows whose signs and sizes did not match Skylit's SPY book (766 at −$49M in the panel's copy vs +$849M on Skylit's 0DTE). Cause: the panel's own SPY/QQQ book is fetched by copying the app's *last* request URL, and with the projection on the app now rotates three expiration windows (0DTE, next-2, next-4) — so the panel's SPY book was flipping between the 0DTE chain and a 3–5-expiry basket. The recorded King series today stayed 767 → 766 (0DTE), so the day's record is fine; the flap showed up in the after-close file. **Fixed in v15.84 (building now):** the panel's SPY/QQQ books are pinned to the 0DTE window, and a multi-expiration payload is refused (counted) once a 0DTE one is held. FINDINGS F-22.
+
+**Your study question — honestly, partly:**
+
+What exists today: (1) the **node ledger** — every touch of every node, scored DEFLECT / PIN / BREAK at 5/10/20 bars, with the why-vector at the touch (size %King, polarity, role, distance, growth d5/d15/d60, fresh/tested/delivered stage, taps, regime, trend, time of day); (2) the **deflection ledger** — every confirmed tap-and-reverse with its setup class (King/Gate/Rug/Pika/Barney/Floor/Ceiling), which books' Kings it touched, the King-roll state, the pattern stamp, and whether price continued; (3) the **Learn rules** L1–L9 (growth into the tap, fresh, stack, roll, King distance, time of day, confluence) scored nightly against i …[trimmed]
+
+**OPERATOR:**
+> yes
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:45):** Now the breadth pin in `selfFetch`:
+Now the mutant pass:
+Now the full suite:
+Now the CHANGELOG, DECISIONS and LESSONS entries. Let me look at the v15.83 heads for the format:
+Now the three record entries:
+Now the config, the plan seed, and the roadmap regeneration:
+Now the chat history regeneration:
+**v15.84 is built — and while building it I found the bigger half of the bug, so one correction first.** I told you "the day's record is fine because the King was steady". The King series *is* fine (767 → 766 at 14:51 — the biggest 0DTE node leads every window, so it's the one thing a window flip can't move). But the panel's own SPY book has been inheriting **window and breadth** from whatever gex/levels URL came last — the app's three projection windows today, and the panel's *own* expiry-set requests (500 nodes, week / 7-expiry windows) every day since 08-26, because their responses come back through the same hook. The recorded SPY node count per 3-minute bar this afternoon ran **30 · 3 · 12 · 4 · 5 · 4 · 11 · 12 · 5 · 4 · 11 · 4 · 28 · 5 · 13**, and the archive shows the same 34–61 band-flips in every session since 08-26. So every node-level number before tonight — F-21's "accumulating vs dissipating didn't separate", the node grade, the S rows — was read off a universe that changed shape a few times a minute. The King rows, the King roll, the SPX side of the file: sound. Written up as FINDINGS F-22; F-21 flagged; LESSONS v15.84 records the wrong sentence.
+
+**v15.84 (F-22):** the panel's SPY/QQQ book is now always `exp_mode=current & exp_count=1 & nodes=500` — the 0DTE chain, every strike, whatever the app asked last — and a multi-expiration payload is refused (and counted) once a 0DTE book is held. No face change. `test_v1584` 28, 13/13 mutants; suite 158 green / 6 known …[trimmed]
+
+**OPERATOR:**
+> im looking at the actual stats at the bottom and it says that there is no wick and bop is m but the wick % is 14%. How is that possible.   double check how you are calculating and if your drawing of the candle and the stat are correct or not.  how can there be 14 % if the the hod took 0m  ?
+> 
+> _[sent while I was working — a queued message]_
+
+**me (21:00):** Checked against the raw ES 1-minute bars for today — the row and the candle are both right, and here is why they look contradictory:
+
+- **08:30 bar:** open 7711.50 → high **7717.75** → close 7713.75. That first minute's high is the HOD. So **took 0m** (the HOD printed in the opening minute).
+- **08:31 bar:** closed 7709.25, below the open → that is **W.End 8:31a**, so **BOP 1m** and **wick 1m** (took + BOP).
+- **wick% 14%** is your own definition from 08-28: a *price* ratio, |open − first extreme| ÷ the day's range = 6.25 ÷ 45.50 = 13.7%. It is not a time ratio.
+
+So the wick isn't "none" — it's a 1-minute wick 6.25 points tall: price spiked above the open in the first minute, closed back through the open in the second, and never saw 7717.75 again. A short wick in time can be a tall wick in price; the two fields measure different things. The candle draws the same story (HOD 08:30, ↩ 8:31 · 1m, the 14% upper wick, MD 6h28 to the LOD at 14:59, $1,963).
+
+One thing I'd change if you want it: the row prints **wick 1m** — it should probably read 1m plainly, not look like "no wick". Say the word if the font is the problem.
+
+**OPERATOR:**
+> in the irt export , the spy gama level cand be SG2 SG3 etc., and the spx levels can be XG2 and XG3  etc.. make this change. also note the qqq king should only be on the nq not the es.
+> 
+> _[sent while I was working — a queued message]_
+> I am also trying to determine if it is sufficient to have the top 3 instead of the top 5.   can you look at the deflections today and see if the top 3 is enough ?
+> 
+> _[sent while I was working — a queued message]_
+
+**me (21:08):** **Top 3 vs top 5 — today's taps, measured** (ES 3-minute bars, every top-5 line of both books as it stood on the ladder at that minute, at Skylit's price; a tap = the bar enters ±5 pts from outside; DEFLECT = price gets ≥10 pts away within 60 min before any close 5 pts through; PIN = held but < 10; BREAK = closed through). 34 taps today:
+
+| lines | taps | DEFLECT | PIN | BREAK |
+|---|---|---|---|---|
+| ranks 1–3 (King, G2, G3 — both books) | 22 | **15 (68%)** | 7 | 0 |
+| ranks 4–5 (G4, G5 — both books) | 12 | 3 (25%) | 6 | **3** (all three of the day's breaks) |
+
+- **The HOD (7717.75, 08:30)** was the two Kings: SPY 770 (7718.5) and SPX 7720 (~7723) — rank 1 in both books.
+- **The LOD (7672.25, 14:59)** was SPY 765 at 7671 — rank 3 at 14:51, rank 2 by 14:57 (+26%) — with SPX 7665 (rank 5, +17%) at the same price.
+- **Only two deflections today needed a rank-4/5 line** (no top-3 line within the zone at the time): 09:51 SPY 767 (rank 5, +47%) 12.7 pts, and 13:48 SPY 765 (rank 4, +24%) 18.7 pts — the afternoon's best bounce. Both SPY, both +gamma, both pullback turns.
+- Ranks move: SPY 765 was rank 3 at 08:39, 1 at 09:09, 5 at 10:03, 4 at 13:51, 3 at 14:51 — and then it was the LOD. "Top 3" is a moving set; the line that turns the day at 14:59 can be rank 4 an hour earlier.
+
+So today, top 3 would have kept 15 of 18 deflections plus both extremes, and dropped 10 taps that pinned or broke along with 2 real turns. That leans your way — but it is **one day, n = 34, a hand read with the definitions from the design, not pre-registered**. Exactly the question the tap record answers with n (F5.1 in the registry), and with the one-window book that starts tomorrow. My suggestion: keep 5 on the chart for two more weeks while the record accumulates, then decide on the number.
+
+On the …[trimmed]
+
 ### DECISIONS
 
 - **The candle on the price axis, his key levels (2026-09-08, "build"; R-17, v15.80):** *"the levels that are swept are
@@ -2811,7 +2920,55 @@ Now the records for v15.83 (Rec R-24, the roadmap, CHANGELOG, DECISIONS, LESSONS
   every node label signed (`G3 -56%`); yellow / purple by polarity, the SPY shades the palest; beige superseded; the
   Kings bare and unchanged.
 
+- **The panel's own SPY / QQQ book is ONE window and ONE breadth (2026-09-08, evening; F-22, v15.84):** *"double check"*
+  → the SPX side of the file exact to the tick; the SPY side two Kings in two minutes (760 at 15:21, 766 at 15:23) → the
+  self-fetch had inherited window and breadth from the last gex/levels URL seen (the app's three projection windows; the
+  panel's own expiry sets through the same hook) since v10.48. Decided (an unambiguous bug, built without asking): pin
+  `exp_mode=current&exp_count=1&nodes=500`; refuse a multi-expiration payload once a 0DTE book is held, never with
+  nothing held. The King series survive; every node-level read before v15.84 is a mixed-window sample (F-21 flagged);
+  the level study's clean sample starts 2026-09-09.
+- **The study question (2026-09-08, 15:3x CT):** *"are you running a study on the gamma levels deflection. basically
+  testing spx and spy and qqq top 5 gamma levels and their ability to deflect and if they do deflect, under what
+  conditions and if they dont deflect, under what conditions."* · *"the purpose of the study is to identify what makes
+  gamma levels work as deflectors of price for the purpose of trading reversals from levels levels."* Answered: partly
+  — the node ledger, the deflection ledger and the L-rules exist and are scored nightly; nothing tags a level by book and
+  rank, the outcome is not a trader's reversal, QQQ on NQ is not scored, the sample was afternoon-only (F-20) and
+  mixed-window (F-22). Proposed **R-25 · THE LEVEL STUDY** (one row per touch of an exported level, book · rank · signed
+  % · the conditions at the touch, scored in trading terms, nightly, on Analysis). **He said "yes"** to the design —
+  on paper, one element at a time, before anything is built.
+
+- **The A row's 14% (2026-09-08, evening):** *"it says that there is no wick and bop is m but the wick % is 14%. How is
+  that possible … how can there be 14 % if the the hod took 0m ?"* → checked on the raw ES 1-minute bars: the 08:30 bar
+  ran 7711.50 → 7717.75 (the HOD, took 0m), the 08:31 bar closed 7709.25 below the open (W.End 8:31, BOP 1m, wick 1m);
+  wick% = |open − first extreme| ÷ range = 6.25 ÷ 45.5 = 14% — his own 08-28 definition, a PRICE ratio. The row and the
+  candle are right; no change made (offered to make "1m" plainer if the font is the problem).
+- **XG / SG (2026-09-08, evening; R-26, v15.85):** *"in the irt export, the spy gama level cand be SG2 SG3 etc., and the
+  spx levels can be XG2 and XG3 etc.. make this change. also note the qqq king should only be on the nq not the es."* →
+  built as said; the QQQ King has been NQ-only since v15.80 (read on his live file, pinned again). Asked: the NQ
+  symbol's QQQ lines, G or QG.
+- **Top 3 vs top 5 (2026-09-08, evening):** *"I am also trying to determine if it is sufficient to have the top 3
+  instead of the top 5. can you look at the deflections today and see if the top 3 is enough ?"* → a hand read on the
+  ladder's ranked lists against the ES 3-minute bars, the design's definitions: 34 taps, ranks 1–3 deflected 15 of 22
+  with no break, ranks 4–5 3 of 12 with all three breaks; the HOD was the two Kings, the LOD the SPY 765 line (rank
+  3 → 2); two turns needed a rank-4/5 line. Told him: one day — keep 5 for two weeks while the tap record accumulates.
+
 ### SHIPPED
+
+**v15.85** (panel + installer; companion v1.18 unchanged) — XG2–XG5 · SG2–SG5 (R-26). `irtSpyTop` → SG, the ES G rows
+→ XG, `irtGHeld` `/^(XG|SG|G)[2-5]$/`, the gear line `SG rows`; R-25 (the tap record) PROPOSED with `design/TAP-RECORD.md`
+— nothing built. `test_v1585.js` 16 · 6/6 mutants; `test_v1583` / `test_v1576` / `test_irt_export` §4t / `test_em_band` /
+`test_v1581` re-pinned; the version pins moved. The roadmap (v15.84 shipped — verify at the open; v15.85 this; the
+seasonality → v15.86; the tap record v15.89 re-titled to the design), CHANGELOG, DECISIONS (two entries), LESSONS
+v15.85, INVENTORY §0s, the config (2026-09-08j), the resume note (+ snapshot v15.84). **NOT YET VERIFIED on his panel.**
+
+**v15.84** (panel + installer; companion v1.18 unchanged) — THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH
+(F-22). `selfFetch` pins `exp_mode=current&exp_count=1&nodes=500` (replaced or appended) for gamma and vanna; `onFeed`
+refuses a multi-expiration gamma payload once a single-expiration book is held (`FEED_REJECTS[sym].win` / `winT`,
+`__gptsDebug.feedRejects()`), accepts anything with nothing held, stands down without an `expirations` field. No face
+change. `test_v1584.js` 28 · 13/13 mutants; `test_v1583` 0a loosened; the version pins moved. FINDINGS F-22 (+ the F-21
+caveat), SKYLIT-FEEDS § The endpoint, CHANGELOG, DECISIONS, LESSONS v15.84, INVENTORY §0r, the config (2026-09-08i), the
+roadmap (v15.83 shipped + verified, v15.84 this, seasonality → v15.85), the resume note (+ snapshot v15.83). **NOT YET
+VERIFIED on his panel** — the probe is in the resume note.
 
 **v15.83** (panel + installer; companion v1.18 unchanged) — THE SPY BOOK'S TOP FIVE · THE SIGNED % · THE POLARITY
 SCHEME (R-24). `irtSpyTop`, `irtPctTag`, `irtNodeCol` + `IRT_COLORS.gpos/gneg/spos/sneg`, the S rows after the SPY KING
@@ -3020,9 +3177,23 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He runs ONE file** — `installv1583.bat` (carries v15.76 → v15.83); wait 5 min; the tapereader link (as a link);
-  reload. Then on IRT: S2–S5 in the pale yellow / purple beside the G rows, every node label with its signed %
-  (`G2 +77%`), the Kings gold / purple and bare; the gear line's `S rows live (…)`. Not asked: the strike in the label.
+- **v15.85 (and v15.84 inside it) delivered after the close, NOT verified** — at the open: footer v15.85; the XG / SG
+  labels on his IRT chart; `LASTFEED.SPY` one expiration and ~120 rows, steady; `feedRejects().SPY.win` climbing; the
+  snaps' node count no longer flipping bands; the QQQ King on ENQU26 only.
+- **His word owed: the NQ symbol's QQQ lines — `G2–G5` or `QG2–QG5`.**
+- **R-25 · THE TAP RECORD — designed (`design/TAP-RECORD.md`), his "yes" to the design; the next ask is element 1, the
+  universe and the two controls.** Clean sample from 2026-09-09.
+- **v15.84 delivered after the close, NOT verified** — verify at the open through his tab: `LASTFEED.SPY.j.expirations.length`
+  = 1 and ~120 rows, steady across three reads; `feedRejects().SPY.win` climbing; today's snaps' `nodes.length` no longer
+  flipping bands; the IRT SPY rows against Skylit's SPY orbs at the same second.
+- **R-25 · THE LEVEL STUDY — his "yes" to the design.** The next deliverable: the design on paper, one element at a time
+  (the row, the conditions, the outcome in trading terms, the report), before anything is built. Clean sample from
+  2026-09-09 (F-22).
+- **Withdrawn:** "the day's record is fine" (sent to him with the double-check result) — the King series are; the
+  node-level record before v15.84 is mixed-window. LESSONS v15.84.
+- **v15.83 INSTALLED AND VERIFIED 14:18 CT** — 18 rows, 13 of 13 ES rows on Skylit's prices; G2 -100% (the crown flapping
+  under the 2-minute latch — the open latch decision, seen live); S2 +48% … S5 +18% in the palest yellow. Not asked: the
+  strike in the label; his eyes on the IRT chart decide the shades.
 - **v15.82 INSTALLED AND VERIFIED 12:08 CT** — queue 1,364 / 29 bars (10:39 → 12:06) · archive 2,800 · merged 3,271 / 69
   bars from 08:39: the whole session, no gap. Still to see: tonight's day file's `featSource`; tomorrow's nightly log
   with morning rows.
@@ -3163,6 +3334,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+2d1fcb2 v15.84: THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH — the self-fetch pins exp_mode=current&exp_count=1&nodes=500 whatever gex/levels URL came last (the app's three projection windows; the panel's own expiry sets through the same hook), onFeed refuses a multi-expiration payload once a 0DTE book is held (F-22: the recorded node count per bar flipped bands 34–61 times a session since 08-26; the King series survive); test_v1584 28 · 13/13
+2e85e0f v15.83 verified on his panel 14:18 CT — the resume note and the chat history say so
+0c87351 mockups: the v15.83 IRT colour swatch
+0f10203 v15.83: THE SPY BOOK'S TOP FIVE IN THE IRT EXPORT · THE SIGNED % ON EVERY NODE LINE · THE NODE LINES WEAR THEIR POLARITY — S2–S5 after the SPY King at Skylit's prices, G3 -56% / S2 +55%, yellow and its derivatives for +gamma, purple and its derivatives for −gamma (R-24); test_v1583 38 · 16/16
 5a66899 v15.82 verified on his panel 12:08 CT — merged 3,271 records / 69 bars from 08:39; the resume note and the chat history say so
 4047b30 v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE — feat = the localStorage queue ∪ the IndexedDB archive (featMergeRecs, LS wins per record), the in-memory archive kept current, featStats through the union, repoFeatDay + featSource in the day file, the matrix rebuilt (R-22, F-20's fix); test_v1582 36 · 13/13
 1fb9b1f v15.81 verified on his panel 11:31 CT — the resume note and the chat history say so
@@ -3171,10 +3346,6 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 1012b6f F-20: the mechanism found live (the localStorage budget sheds the queue; the exported snaps come from IDB) — FINDINGS, the review's dataHealth; R-22 (export feat from the archive) and R-23 (Skylit's ES1 prices in the export) proposed; test_v1570 1d re-pinned
 5ea641e v15.80 (2): THE E AND A ROWS ALIGNED — one 13-column grid, E · TUE / A · TUE, eagFit; the projection question answered in SKYLIT-FEEDS (the ES1 book, the merge formula, the levels compared) (R-21)
 dc8148e v15.80: THE CANDLE ON THE PRICE AXIS · ONE SOURCE FOR THE SHOWN DAY · HIS KEY LEVELS · the A row, MU/MD, the expectation chip · the IRT export solid, no QQQ on ES, G2–G5 on NQ · the review of Friday (F-20, F-21, H10) (R-17…R-21)
-b704b82 v15.79: THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE THE SHOWN DAY'S (R-16)
-8af1c96 resume note: the installer is at 8.16 of 8.39 MB — trim the mockups' ride next build
-f754ab8 v15.78: THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS (R-15)
-ca2a16b v15.77: THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his seasonality (R-14)
 ```
 
 ---

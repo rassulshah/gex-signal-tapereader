@@ -21,6 +21,12 @@ MEASURED on the live page, not inferred. Where a claim has a date, that is the d
   request. Any future direct probing must reuse the captured header, or read what the page stored.
 - Cadence: the page refreshes each (symbol × data_type) roughly every 5s per pane; the panel
   self-fetches SPY/QQQ gamma+vanna when stale (FEED_STALE_MS=12000).
+- ⚠ **THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH (v15.84, F-22):** the self-fetch pins
+  `exp_mode=current&exp_count=1&nodes=500` — the 0DTE chain, every strike — whatever URL came last (the app's
+  three projection windows on an ES chart, or the panel's own expiry sets, whose responses come back through
+  the same hook), and `onFeed` drops a multi-expiration gamma payload once a single-expiration book is held
+  (`__gptsDebug.feedRejects().SPY.win`). Before v15.84 the book inherited window AND breadth from the last URL
+  seen — the recorded node count per bar flipped 34–61 times a session since 08-26 (FINDINGS F-22).
 
 ## Payload shape (top level)
 
