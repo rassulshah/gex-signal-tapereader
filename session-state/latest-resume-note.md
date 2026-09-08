@@ -39,9 +39,15 @@ trigger the save button instead of me clicking it … instead of 5pm can you jus
 
 # ⚠⚠ 2026-09-08, late morning (latest) — v15.81: THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES (R-23) · F-20 solved (R-22 proposed).
 
-**Panel is v15.81, companion v1.18 (unchanged). Installed? The second v15.80 installer was delivered ~10:35 CT (the
-aligned rows) — NOT confirmed run; installv1581.bat carries v15.76 → v15.81 (the aligned rows ride in it too) — one
-double-click, the link, reload.** His words: *"I added the projecttion feature in skylit. i want you to look it up and
+**Panel is v15.81, companion v1.18 (unchanged). INSTALLED AND VERIFIED on his panel 11:31 CT 2026-09-08** (he ran
+installv1581.bat at 11:02 CT after a stray double-click of installv1579.bat at 11:00 — the CDN's 5-minute cache then
+showed Tampermonkey "Reinstall 15.79" until ~11:09; told him to delete the old installers): footer v15.81; the gear line
+"9 of 9 ES rows on Skylit's ES1 prices (2 s old · SPXW ratio 1.000670 · SPY ratio 10.027050)" and "5 of 5 NQ rows on
+Skylit's NQ1 prices (52 s old · QQQ ratio 41.118860)" — the NQ book by the self-fetch while the chart is on ES; the file
+vs Skylit's derived rows the same minute: SPXW KING 7705.25 vs 7705.15 · G2 7710.25 vs 7710.15 · G3 7685.25 vs 7685.14 ·
+G4 7700.25 vs 7700.15 · SPY KING 7710.75 vs 7710.90 (the ratio moved a hair in the minute between) · CW0 7700.25 vs
+7700.15 — every line within the 0.25 tick, no '~'. `__gptsDebug.futDer()` shows ES1 (SPY · SPXW · SPX) and NQ1 (QQQ ·
+NDXP · NDX — two books more than the doc knew; noted, unused).** His words: *"I added the projecttion feature in skylit. i want you to look it up and
 see how it is calculated and how we can use it. I also see percentages next to it … also look at the levels in skylit
 and the levels you are sending me in the export, are they the same or is there a computing error. Can this be resolved
 using the projected levels which look like current levels?"* → the reading → one question → **"yes, i want them to
@@ -73,11 +79,8 @@ built — ask): export feat from the archive, stop mirroring snaps into localSto
 second v15.80 installer) ride in this installer too. `test_v1581.js` 51 · 26/26 mutants; `test_v1580` 6b, `test_v1570`
 1d re-pinned; the version pins moved; the roadmap — v15.81 this build, seasonality → v15.82, score → v15.83, READ →
 v15.84.
-**NOT yet verified on his machine:** the FlexLevels file with the SPXW King within a tick of the derived orb on his ES
-chart (7704.50 vs Skylit's 7704.45 at 10:25 CT — the basis said 7705.00); no '~' on the ES rows; the gear's IRT line
-reading `n of n ES rows on Skylit's ES1 prices`; the NQ rows on NQ1 (the self-fetch must land while the chart is on ES
-— `__gptsDebug.futDer()` shows both books with their age); everything the v15.80 note lists (the axis, the aligned
-rows, MU/MD, the solid IRT lines, G rows on NQ).
+**Verified 11:31 CT (above).** Still to look at with him on the face (not probed): the aligned E/A rows, the candle's
+axis on today's live session, the solid IRT lines on his IRT chart itself (the file is right; the chart is his eyes).
 **NEXT, in order, each its own ask:** (a) R-22 — the outcomes exported from the archive (F-20's fix; every nightly and
 review scores an afternoon-only sample until it ships); (b) WH / WL / weekly POC — the companion's window must reach
 the prior week (v1.19: two weeks), then PWH/PWL/WPOC draw by name; (c) v15.82 SEASONALITY TRACKED (mockup first);

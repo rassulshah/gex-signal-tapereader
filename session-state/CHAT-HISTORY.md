@@ -2668,10 +2668,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He runs ONE file** — `installv1581.bat` (carries v15.76 → v15.81, the aligned rows included); wait 5 min; the
-  tapereader link (as a link); reload. Then: the FlexLevels file's SPXW King within a tick of the derived orb on his ES
-  chart, no '~' on the ES rows, the gear's IRT line reading `n of n ES rows on Skylit's ES1 prices`; `__gptsDebug.futDer()`
-  showing ES1 and NQ1 with their age.
+- **v15.81 INSTALLED AND VERIFIED 11:31 CT** — footer v15.81; "9 of 9 ES rows on Skylit's ES1 prices" · "5 of 5 NQ rows
+  on Skylit's NQ1 prices"; SPXW KING 7705.25 vs Skylit 7705.15, G2 7710.25 vs 7710.15, SPY KING 7710.75 vs 7710.90 — within
+  the tick, no '~'. (He had double-clicked installv1579.bat by mistake at 11:00; the CDN cache showed "Reinstall 15.79"
+  until ~11:09 — told him to delete the old installers.)
 - **Answered (R-23 shipped):** the export's SPX / SPY / QQQ rows on Skylit's own ES1 / NQ1 prices.
 - **F-20 SOLVED, fix not built (R-22 on Rec):** the localStorage budget sheds the outcome queue from the second hour
   (09:53 → 10:44 CT readings: shed 0 → 1, the queue's first bar 08:36 → 09:00, recorder 3,542 of 3,600 KB); export feat
