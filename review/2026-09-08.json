@@ -1,0 +1,1151 @@
+{
+ "schema": "gex-review/v2",
+ "date": "2026-09-08",
+ "writtenBy": "the review (cloud session, stage ⑤), Tuesday 2026-09-08 before the open",
+ "span": {
+  "from": "2026-08-25",
+  "to": "2026-09-04",
+  "sessions": 7,
+  "sessionFiles": 9,
+  "bars": 176,
+  "effectiveN": 17.6,
+  "note": "the feature queue of every session since 2026-08-25 holds only its LAST 15–30 bars (the final 45–130 minutes, always ending 14:57) — every rate below is an AFTERNOON-ONLY sample, and effN is bars/10 of what survived, not of what was recorded. 2026-08-19/20 (v11.x, 93–98% coverage) carry a different feature set and are not pooled here."
+ },
+ "grade": "D",
+ "gradeWhy": "not a verdict on the tape — a verdict on the learning layer’s data: 1–27% of each session’s bars reach the queue the nightly and this review read; nothing about a weight can be concluded from it and nothing was applied.",
+ "preopen": "Fri 9/4: HOD 08:36 (6m), open reclaimed 08:45, LOD 10:31; ONL swept 9:12, VAL 9:48. The learning layer saw only the last ~80 min of each day.",
+ "headline": "Friday 9/4 printed its HOD in 6 minutes, reclaimed the open at 08:45 and found its LOD at 10:31 (ONL swept 9:12 reclaimed, VAL 9:48 broke). The learning layer has seen only the last 45–130 minutes of every session since 08-25; the rates below are that sample, said out loud.",
+ "dataHealth": {
+  "verdict": "QUEUE-TRIMMED — not COLLAPSED by the digest’s 25% rule on 09-02/03/04 (55/26/27%), COLLAPSED on 08-25/26/27/28/31 and 09-01 (1–22%)",
+  "perSession": [
+   {
+    "day": "2026-08-25",
+    "panel": "14.15",
+    "snaps": 148,
+    "featBars": 22,
+    "coverPct": 15,
+    "queue": "13:54→14:57",
+    "recorder": "08:41→23:58"
+   },
+   {
+    "day": "2026-08-26",
+    "panel": "14.52",
+    "snaps": 160,
+    "featBars": 1,
+    "coverPct": 1,
+    "queue": "14:57→14:57",
+    "recorder": "08:53→23:28"
+   },
+   {
+    "day": "2026-08-27",
+    "panel": "14.53",
+    "snaps": 133,
+    "featBars": 1,
+    "coverPct": 1,
+    "queue": "14:42→14:42",
+    "recorder": "08:39→15:00"
+   },
+   {
+    "day": "2026-08-28",
+    "panel": "14.77",
+    "snaps": 99,
+    "featBars": 15,
+    "coverPct": 15,
+    "queue": "14:15→14:57",
+    "recorder": "08:39→15:00"
+   },
+   {
+    "day": "2026-08-31",
+    "panel": "15.09",
+    "snaps": 131,
+    "featBars": 29,
+    "coverPct": 22,
+    "queue": "13:33→14:57",
+    "recorder": "08:30→15:00"
+   },
+   {
+    "day": "2026-09-01",
+    "panel": "15.33",
+    "snaps": 135,
+    "featBars": 23,
+    "coverPct": 17,
+    "queue": "13:51→14:57",
+    "recorder": "08:39→15:00"
+   },
+   {
+    "day": "2026-09-02",
+    "panel": "15.48",
+    "snaps": 51,
+    "featBars": 28,
+    "coverPct": 55,
+    "queue": "13:36→14:57",
+    "recorder": "12:55→15:00"
+   },
+   {
+    "day": "2026-09-03",
+    "panel": "15.57",
+    "snaps": 115,
+    "featBars": 30,
+    "coverPct": 26,
+    "queue": "12:48→14:57",
+    "recorder": "08:39→15:00"
+   },
+   {
+    "day": "2026-09-04",
+    "panel": "15.65",
+    "snaps": 101,
+    "featBars": 27,
+    "coverPct": 27,
+    "queue": "13:39→14:57",
+    "recorder": "09:46→15:00"
+   }
+  ],
+  "measured": [
+   "the queue covers the LAST bars of the session only: 13:39→14:57 on 09-04 (27 of 101 snapshots), 12:48→14:57 on 09-03, 13:36→14:57 on 09-02, 13:51→14:57 on 09-01, 13:33→14:57 on 08-31, 14:15→14:57 on 08-28, 13:54→14:57 on 08-25",
+   "the snapshots are complete from the minute the recorder came up (09-04: 09:46:50 → 15:00:15) — so the recorder ran; the queue lost its earlier records",
+   "142–144 unresolved records per file = the last three bars x 48 keys, i.e. the resolver is healthy; the queue’s first bar is what moves",
+   "NOT FEAT_KEEP_BARS (160 distinct bars): 27 bars is far under it. NOT the chart window: r.n at 13:42 was 105 (the chart held the whole day). NOT the budget shedder on today’s snaps (they are intact; the callback trims snaps and feat together)",
+   "the covered span varies 45–130 minutes and the record count 714–1408, so it is neither a fixed bar cap nor a fixed byte cap on the file that is written"
+  ],
+  "probe": "__gptsDebug.featHealth() and __gptsDebug.storage() on the live panel at ~11:00 CT and again at ~14:00 CT: if the queue’s FIRST bar moves forward during the session, something evicts by age or by write; if LS_HEALTH.shed > 0 or quotaHits > 0, it is the storage budget after all (a recorder day is ~4.4 MB of JSON against a 3600 KB budget). This is the highest-leverage open item in the learning layer — forward-only data cannot be back-filled."
+ },
+ "sessionShape": {
+  "note": "the wick family per session from the ES 1-minute rows the day files carry (tools: review-pool.py); these are the A-row facts the E row (v15.77) is read against",
+  "days": [
+   {
+    "day": "2026-08-28",
+    "dow": "Fri",
+    "open": 7746.25,
+    "hod": 7782.5,
+    "hodT": "10:01",
+    "lod": 7711.75,
+    "lodT": "12:10",
+    "first": "HOD",
+    "took": 91,
+    "wend": "10:52",
+    "bop": 51,
+    "mud": 78,
+    "rng": 70.75,
+    "close": 7722,
+    "green": false,
+    "bars": 381
+   },
+   {
+    "day": "2026-08-31",
+    "dow": "Mon",
+    "open": 7701.25,
+    "hod": 7704.25,
+    "hodT": "08:31",
+    "lod": 7674.75,
+    "lodT": "09:25",
+    "first": "HOD",
+    "took": 1,
+    "wend": "08:32",
+    "bop": 1,
+    "mud": 53,
+    "rng": 29.5,
+    "close": 7691,
+    "green": false,
+    "bars": 364
+   },
+   {
+    "day": "2026-09-01",
+    "dow": "Tue",
+    "open": 7647,
+    "hod": 7673.75,
+    "hodT": "10:53",
+    "lod": 7621.5,
+    "lodT": "13:45",
+    "first": "HOD",
+    "took": 143,
+    "wend": "11:30",
+    "bop": 37,
+    "mud": 135,
+    "rng": 52.25,
+    "close": 7637.25,
+    "green": false,
+    "bars": 377
+   },
+   {
+    "day": "2026-09-02",
+    "dow": "Wed",
+    "open": 7650.5,
+    "hod": 7691.25,
+    "hodT": "10:30",
+    "lod": 7643,
+    "lodT": "08:37",
+    "first": "LOD",
+    "took": 7,
+    "wend": "08:39",
+    "bop": 2,
+    "mud": 111,
+    "rng": 48.25,
+    "close": 7681.25,
+    "green": true,
+    "bars": 304
+   },
+   {
+    "day": "2026-09-03",
+    "dow": "Thu",
+    "open": 7704.25,
+    "hod": 7766.5,
+    "hodT": "13:16",
+    "lod": 7700,
+    "lodT": "09:56",
+    "first": "LOD",
+    "took": 86,
+    "wend": "09:56",
+    "bop": 0,
+    "mud": 200,
+    "rng": 66.5,
+    "close": 7758.5,
+    "green": true,
+    "bars": 378
+   },
+   {
+    "day": "2026-09-04",
+    "dow": "Fri",
+    "open": 7742,
+    "hod": 7751,
+    "hodT": "08:36",
+    "lod": 7711.75,
+    "lodT": "10:31",
+    "first": "HOD",
+    "took": 6,
+    "wend": "08:45",
+    "bop": 9,
+    "mud": 106,
+    "rng": 39.25,
+    "close": 7723,
+    "green": false,
+    "bars": 379
+   }
+  ]
+ },
+ "features": [
+  {
+   "key": "nextStop",
+   "text": "NEXT STOP (30m): the level named was touched within 30 minutes",
+   "n": 153,
+   "rate": 67,
+   "mfe": 0.48,
+   "mae": -0.46,
+   "votes": {
+    "-1": 81,
+    "1": 72
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 33,
+     "rate": 76
+    },
+    "chop": {
+     "n": 101,
+     "rate": 60
+    },
+    "trend": {
+     "n": 19,
+     "rate": 84
+    }
+   },
+   "byGrade": {
+    "B": {
+     "n": 26,
+     "rate": 92
+    },
+    "C": {
+     "n": 127,
+     "rate": 61
+    }
+   },
+   "effN": 15.3,
+   "sessions": 8,
+   "verdict": "measured · B above C · afternoon sample",
+   "why": "B 92% (n 26) vs C 61% (n 127) — monotone, the right way round; by rule leg.magnet 65% (n 147) carries almost every call, leg.pbTarget/wall.king too thin to read (n 5/1). Trend 84% (n 19) vs chop 60% (n 101)."
+  },
+  {
+   "key": "nextStop.60",
+   "text": "NEXT STOP (60m)",
+   "n": 153,
+   "rate": 63,
+   "mfe": 0.66,
+   "mae": -0.53,
+   "votes": {
+    "-1": 81,
+    "1": 72
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 33,
+     "rate": 73
+    },
+    "chop": {
+     "n": 101,
+     "rate": 56
+    },
+    "trend": {
+     "n": 19,
+     "rate": 84
+    }
+   },
+   "byGrade": {
+    "B": {
+     "n": 26,
+     "rate": 92
+    },
+    "C": {
+     "n": 127,
+     "rate": 57
+    }
+   },
+   "effN": 15.3,
+   "sessions": 8,
+   "verdict": "measured · lower than 30m, same ordering"
+  },
+  {
+   "key": "pbEntry",
+   "text": "PB ENTRY (30m): touched, then moved the deflection way before a close through",
+   "n": 73,
+   "rate": 58,
+   "mfe": 0.48,
+   "mae": -0.46,
+   "votes": {
+    "-1": 80,
+    "1": 73
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 10,
+     "rate": 50
+    },
+    "chop": {
+     "n": 51,
+     "rate": 53
+    },
+    "trend": {
+     "n": 12,
+     "rate": 83
+    }
+   },
+   "byGrade": {
+    "B": {
+     "n": 2,
+     "rate": 50
+    },
+    "C": {
+     "n": 71,
+     "rate": 58
+    }
+   },
+   "effN": 7.3,
+   "sessions": 8,
+   "verdict": "descriptive · touch-rate and hold-rate reported separately",
+   "why": "touched 45% of leg.pb calls (n 133); of the touched, held 55% (n 60). By ledger state of the node: acm held 79% of touched (n 19) vs dec 39% (n 18) — the only slice in this review where accumulation looks like it matters, and it is n=19 vs n=18: a question, not a finding."
+  },
+  {
+   "key": "dir",
+   "text": "DIRECTION (the spine): travelled DIR_PTS the stated way",
+   "n": 146,
+   "rate": 27,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {
+    "SIDE": 111,
+    "UP": 25,
+    "DN": 10
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 31,
+     "rate": 29
+    },
+    "chop": {
+     "n": 97,
+     "rate": 25
+    },
+    "trend": {
+     "n": 18,
+     "rate": 39
+    }
+   },
+   "byGrade": {
+    "A": {
+     "n": 1,
+     "rate": 0
+    },
+    "B": {
+     "n": 15,
+     "rate": 20
+    },
+    "C": {
+     "n": 130,
+     "rate": 28
+    }
+   },
+   "effN": 14.6,
+   "sessions": 7,
+   "verdict": "measured · low, and the grade ladder is inverted on this sample",
+   "why": "B 20% (n 15) under C 28% (n 130); A n=1. 111 of 146 votes were SIDE (the mid-range / chop cap) — a spine that mostly declines to call is scored on the bars it did call."
+  },
+  {
+   "key": "dir.trend5",
+   "text": "SMA-50 trend (incumbent)",
+   "n": 147,
+   "rate": 54,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {
+    "-1": 76,
+    "1": 71
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 31,
+     "rate": 48
+    },
+    "chop": {
+     "n": 98,
+     "rate": 54
+    },
+    "trend": {
+     "n": 18,
+     "rate": 61
+    }
+   },
+   "byGrade": {},
+   "effN": 14.7,
+   "sessions": 7,
+   "verdict": "measured"
+  },
+  {
+   "key": "dir.trendFast",
+   "text": "10/20 trend (challenger, parked)",
+   "n": 36,
+   "rate": 31,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {},
+   "oneSided": false,
+   "byRegime": {
+    "chop": {
+     "n": 22,
+     "rate": 36
+    },
+    "mixed": {
+     "n": 9,
+     "rate": 33
+    },
+    "trend": {
+     "n": 5,
+     "rate": 0
+    }
+   },
+   "byGrade": {},
+   "effN": 3.6,
+   "sessions": 7,
+   "verdict": "thin — n under 40 scored",
+   "why": "loses to the incumbent on the same bars in this sample; not a swap candidate at this n"
+  },
+  {
+   "key": "dir.drift",
+   "text": "drift (shadow, not voting)",
+   "n": 148,
+   "rate": 39,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {
+    "AGREE-DN": 66,
+    "AGREE-UP": 58,
+    "SPLIT": 24
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 31,
+     "rate": 32
+    },
+    "chop": {
+     "n": 99,
+     "rate": 37
+    },
+    "trend": {
+     "n": 18,
+     "rate": 61
+    }
+   },
+   "byGrade": {},
+   "effN": 14.8,
+   "sessions": 7,
+   "verdict": "measured · below the incumbent"
+  },
+  {
+   "key": "dir.struct",
+   "text": "structure tilt (parked)",
+   "n": 148,
+   "rate": 29,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {
+    "-1": 93,
+    "1": 55
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 31,
+     "rate": 23
+    },
+    "chop": {
+     "n": 99,
+     "rate": 35
+    },
+    "trend": {
+     "n": 18,
+     "rate": 6
+    }
+   },
+   "byGrade": {},
+   "effN": 14.8,
+   "sessions": 7,
+   "verdict": "measured · 29% — no vote earned"
+  },
+  {
+   "key": "leg.magnet",
+   "text": "LEG ENGINE: the magnet was reached",
+   "n": 151,
+   "rate": 40,
+   "mfe": 0.48,
+   "mae": -0.46,
+   "votes": {
+    "dn": 79,
+    "up": 73
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 33,
+     "rate": 36
+    },
+    "chop": {
+     "n": 100,
+     "rate": 34
+    },
+    "trend": {
+     "n": 18,
+     "rate": 78
+    }
+   },
+   "byGrade": {},
+   "effN": 15.1,
+   "sessions": 8,
+   "verdict": "measured · regime-split",
+   "why": "trend 78% (n 18) vs chop 34% (n 100) — the magnet is a trend-day claim on this sample; pooled it reads as nothing."
+  },
+  {
+   "key": "leg.pbDetect",
+   "text": "LEG ENGINE: a detected PB node deflected toward the magnet",
+   "n": 137,
+   "rate": 58,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {
+    "dn": 77,
+    "up": 73
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 30,
+     "rate": 57
+    },
+    "chop": {
+     "n": 90,
+     "rate": 57
+    },
+    "trend": {
+     "n": 17,
+     "rate": 71
+    }
+   },
+   "byGrade": {},
+   "effN": 13.7,
+   "sessions": 7,
+   "verdict": "measured"
+  },
+  {
+   "key": "leg.roll",
+   "text": "LEG ENGINE: after a 2nd/3rd roll the trend continued",
+   "n": 68,
+   "rate": 12,
+   "mfe": 0.48,
+   "mae": -0.46,
+   "votes": {
+    "ceil": 79,
+    "flr": 72,
+    "up": 1
+   },
+   "oneSided": false,
+   "byRegime": {
+    "chop": {
+     "n": 52,
+     "rate": 12
+    },
+    "trend": {
+     "n": 5,
+     "rate": 40
+    },
+    "mixed": {
+     "n": 11,
+     "rate": 0
+    }
+   },
+   "byGrade": {},
+   "effN": 6.8,
+   "sessions": 8,
+   "verdict": "measured · 12% — the doctrine’s 2=signal/3=confirmation is not visible here",
+   "why": "n 68 afternoon bars over 8 sessions; a roll that is scored per BAR is over-counted (v11.5 asked for steps) — read this as a flag, not a rate"
+  },
+  {
+   "key": "levelstate",
+   "text": "LEVEL STATE: the nearest level held",
+   "n": 113,
+   "rate": 77,
+   "mfe": 0.44,
+   "mae": -0.5,
+   "votes": {},
+   "oneSided": false,
+   "byRegime": {
+    "chop": {
+     "n": 68,
+     "rate": 81
+    },
+    "mixed": {
+     "n": 27,
+     "rate": 67
+    },
+    "trend": {
+     "n": 18,
+     "rate": 78
+    }
+   },
+   "byGrade": {},
+   "effN": 11.3,
+   "sessions": 6,
+   "verdict": "measured · 77%",
+   "why": "by state at the touch: BUIL 75% (n 83), TURN 83% (n 12), SPEN 80% (n 15), WEAK n 3 — the states do not separate at these n; a SPENT level holding 80% is the F-11 shape (a scorer that cannot fail)"
+  },
+  {
+   "key": "lodhod",
+   "text": "HOD/LOD: the standing extreme was the day’s (close-scored since v15.51)",
+   "n": 132,
+   "rate": 79,
+   "mfe": 0.45,
+   "mae": -0.6,
+   "votes": {
+    "HOD": 79,
+    "LOD": 53
+   },
+   "oneSided": false,
+   "byRegime": {
+    "chop": {
+     "n": 84,
+     "rate": 90
+    },
+    "mixed": {
+     "n": 29,
+     "rate": 55
+    },
+    "trend": {
+     "n": 19,
+     "rate": 63
+    }
+   },
+   "byGrade": {},
+   "effN": 13.2,
+   "sessions": 6,
+   "verdict": "measured · the table’s late cells do not hold live",
+   "why": "the nightly’s close-scored cells over 09-03/09-04: 100-119: live 43% vs table 100% (n 23), 80-99: live 50% vs table 99% (n 30) — two sessions, and every row is a late-session call because of the queue trim; the first-crossing-of-70% decision the brief asks for is NOT recordable from a queue that starts at 13:30. Registered as H10 (forward, from 2026-09-08) rather than concluded here."
+  },
+  {
+   "key": "farside",
+   "text": "FARSIDE: the far extremity’s levels — touched before the close",
+   "n": 92,
+   "rate": 0,
+   "mfe": 0.44,
+   "mae": -0.5,
+   "votes": {
+    "HOD": 50,
+    "LOD": 42
+   },
+   "oneSided": false,
+   "byRegime": {
+    "chop": {
+     "n": 61,
+     "rate": 0
+    },
+    "mixed": {
+     "n": 18,
+     "rate": 0
+    },
+    "trend": {
+     "n": 13,
+     "rate": 0
+    }
+   },
+   "byGrade": {},
+   "effN": 9.2,
+   "sessions": 6,
+   "verdict": "descriptive · consistent with the table on an easy sample",
+   "why": "scored exactly on the ES rows after each record: p 0–49 traded 0/109, p 50s 29% (n 7), 60s 50% (n 12), 70s 55% (n 11). THE NO CALL (p<=20): 0 of 56 traded — no session with a failed NO. All of it is the last ~80 minutes with few minutes left, where NO is the table’s easiest call; the gamma question (step 3) needs ~40 clean sessions and there are 3 with a full queue — not run. The panel’s own farside `hit` reads 0/92 because its outcome asks a different question than the touch call; that scorer needs a look before its rate means anything."
+  },
+  {
+   "key": "ledger.touch",
+   "text": "LEDGER: the in-play node held (tgt before inval)",
+   "n": 151,
+   "rate": 43,
+   "mfe": 0.48,
+   "mae": -0.46,
+   "votes": {},
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 30,
+     "rate": 37
+    },
+    "chop": {
+     "n": 102,
+     "rate": 50
+    },
+    "trend": {
+     "n": 19,
+     "rate": 16
+    }
+   },
+   "byGrade": {},
+   "effN": 15.1,
+   "sessions": 8,
+   "verdict": "descriptive · non-voting",
+   "why": "chop 50% (n 102) vs trend 16% (n 19)"
+  },
+  {
+   "key": "node",
+   "text": "NODE GRADE: the node/pullback held",
+   "n": 147,
+   "rate": 37,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {},
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 31,
+     "rate": 32
+    },
+    "chop": {
+     "n": 98,
+     "rate": 45
+    },
+    "trend": {
+     "n": 18,
+     "rate": 6
+    }
+   },
+   "byGrade": {
+    "A": {
+     "n": 65,
+     "rate": 32
+    },
+    "B": {
+     "n": 54,
+     "rate": 35
+    },
+    "C": {
+     "n": 28,
+     "rate": 54
+    }
+   },
+   "effN": 14.7,
+   "sessions": 7,
+   "verdict": "measured · INVERTED ladder",
+   "why": "A 32% (n 65) < B 35% (n 54) < C 54% (n 28). This is H1’s exploratory shape again (32% on n=34 then; 32% on n=65 now) on a DIFFERENT unit (bars, not deflection episodes) — H1 stays registered and unjudged (its episode n is 1)."
+  },
+  {
+   "key": "decision",
+   "text": "DECISION CELL (dir grade x node grade)",
+   "n": 147,
+   "rate": 27,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {
+    "SIDE": 112,
+    "UP": 25,
+    "DN": 10
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 31,
+     "rate": 23
+    },
+    "chop": {
+     "n": 98,
+     "rate": 30
+    },
+    "trend": {
+     "n": 18,
+     "rate": 17
+    }
+   },
+   "byGrade": {},
+   "effN": 14.7,
+   "sessions": 7,
+   "verdict": "measured · not monotone",
+   "why": "C×A 38% (n 58), C×B 20% (n 46), C×C 19% (n 27); no A×A ever recorded"
+  },
+  {
+   "key": "map.transfer",
+   "text": "THE MAP: a transfer (the roll) — price moved the roll’s way",
+   "n": 95,
+   "rate": 35,
+   "mfe": 0.48,
+   "mae": -0.46,
+   "votes": {
+    "ceil": 62,
+    "flr": 33
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 26,
+     "rate": 42
+    },
+    "chop": {
+     "n": 59,
+     "rate": 36
+    },
+    "trend": {
+     "n": 10,
+     "rate": 10
+    }
+   },
+   "byGrade": {},
+   "effN": 9.5,
+   "sessions": 8,
+   "verdict": "measured · 35%, ceiling-heavy votes",
+   "why": "votes {'ceil': 62, 'flr': 33} — still counted per BAR in these files (stepNew exists but the outcome is scored per record); treat n as inflated"
+  },
+  {
+   "key": "emband",
+   "text": "EM BAND: the band contained the move",
+   "n": 100,
+   "rate": 76,
+   "mfe": 0.47,
+   "mae": -0.46,
+   "votes": {},
+   "oneSided": false,
+   "byRegime": {
+    "chop": {
+     "n": 60,
+     "rate": 77
+    },
+    "mixed": {
+     "n": 24,
+     "rate": 88
+    },
+    "trend": {
+     "n": 16,
+     "rate": 56
+    }
+   },
+   "byGrade": {},
+   "effN": 10.0,
+   "sessions": 7,
+   "verdict": "measured · 76%"
+  },
+  {
+   "key": "defl.trigger",
+   "text": "DEFLECTION TRIGGER ✓/✗",
+   "n": 8,
+   "rate": 75,
+   "mfe": 0.48,
+   "mae": -0.46,
+   "votes": {
+    "dn": 81,
+    "up": 73
+   },
+   "oneSided": false,
+   "byRegime": {
+    "mixed": {
+     "n": 3,
+     "rate": 67
+    },
+    "chop": {
+     "n": 5,
+     "rate": 80
+    }
+   },
+   "byGrade": {},
+   "effN": 0.8,
+   "sessions": 8,
+   "verdict": "thin — 8 scored latches over 8 sessions"
+  },
+  {
+   "key": "nodeEvents",
+   "text": "NODE EVENTS (full-day source, not queue-trimmed): the touched node within 10 bars — DEFLECT or PIN vs BREAK, by event type",
+   "n": 2257,
+   "sessions": 6,
+   "verdict": "measured · the event TYPE does not separate",
+   "byType": {
+    "ACCUM": {
+     "touched": 646,
+     "breakPct": 13,
+     "deflectOrPinPct": 87,
+     "all": 1858
+    },
+    "TURN_UP": {
+     "touched": 185,
+     "breakPct": 11,
+     "deflectOrPinPct": 87,
+     "all": 445
+    },
+    "DISSIP": {
+     "touched": 684,
+     "breakPct": 10,
+     "deflectOrPinPct": 90,
+     "all": 1422
+    },
+    "ROLL": {
+     "touched": 587,
+     "breakPct": 13,
+     "deflectOrPinPct": 87,
+     "all": 1529
+    },
+    "TURN_DN": {
+     "touched": 155,
+     "breakPct": 17,
+     "deflectOrPinPct": 81,
+     "all": 495
+    }
+   },
+   "why": "of touched nodes, BREAK is 10–17% whatever fired (ACCUM 13%, DISSIP 10%, ROLL 13%, TURN_UP 11%, TURN_DN 17%); F-7/F-8 stand — pinning is the level working, and a binary hold-rate would call it failure"
+  },
+  {
+   "key": "ledger",
+   "text": "LEDGER (acceptance f): deflect-on-touch by the node’s state AT the touch, pooled across nodes and sessions (the last 12 touches per node)",
+   "verdict": "measured · accumulating nodes did NOT deflect more than dissipating ones",
+   "n": 892,
+   "byState": {
+    "gone": {
+     "n": 216,
+     "deflectPct": 22,
+     "deflect": 48,
+     "through": 38,
+     "stall": 130
+    },
+    "dec": {
+     "n": 239,
+     "deflectPct": 15,
+     "deflect": 36,
+     "through": 46,
+     "stall": 157
+    },
+    "acm": {
+     "n": 234,
+     "deflectPct": 15,
+     "deflect": 36,
+     "through": 41,
+     "stall": 157
+    },
+    "hold": {
+     "n": 203,
+     "deflectPct": 19,
+     "deflect": 39,
+     "through": 36,
+     "stall": 128
+    }
+   },
+   "why": "acm 15% (n 234) vs dec 15% (n 239); gone 22% (n 216), hold 19% (n 203). STALL is 2116 of 2996 touches — price mostly sits at a node rather than deflecting or going through. The acm/dec chip has not earned a job on the face from this; the toward/away influence (infl) was not pooled this run."
+  }
+ ],
+ "contradictions": [
+  {
+   "claim": "READ verdict vs the direction spine, per bar, 2026-09-04",
+   "evidence": "26 of 26 recorded bars agree (21 SIDE/SIDEWAYS, 5 DN/BEARISH). The leg engine said dn on all 26 while the spine sat SIDE on 21 (mid-range and chop caps) — the voice followed the spine, so no contradiction by the brief’s rule; the tension is that the leg’s direction never reached the face.",
+   "proposal": "none — record only"
+  },
+  {
+   "claim": "a confirmed trend flipped by drift",
+   "evidence": "0 bars on 2026-09-04 (drift is shadow; relation divergence on up/dn: none)",
+   "proposal": "none"
+  },
+  {
+   "claim": "a grade A that resolved under 30%",
+   "evidence": "no grade A direction call was recorded on 2026-09-04 (B 1, C 22)",
+   "proposal": "none"
+  },
+  {
+   "claim": "the parked (closed-state) candle vs the ES bars",
+   "evidence": "the panel measured Friday from the recorder’s frames (open 767.39 at 09:46, MUD 0m) while the sweep labels read the ES bars (open 7742, MUD 106m) — two sources under one label; the MUD dollars were 10x on the ES chart since v15.08 ($15,168 for a $1,512 leg)",
+   "proposal": "fixed in v15.80 (one source for the shown day; the multiplier applied once) — the review notes it because both were on the face for the operator to find"
+  }
+ ],
+ "calibration": [
+  {
+   "id": "node.grade",
+   "label": "node grade A>B>C",
+   "claimed": null,
+   "actual": 32,
+   "n": 65,
+   "verdict": "INVERTED: A 32% (n 65) < B 35% (n 54) < C 54% (n 28) — afternoon sample; H1 is the registered test"
+  },
+  {
+   "id": "dir.grade",
+   "label": "direction grade A>B>C",
+   "actual": 20,
+   "n": 15,
+   "verdict": "B 20% (n 15) under C 28% (n 130); A n=1 — inverted, thin"
+  },
+  {
+   "id": "nextStop.grade",
+   "label": "Next Stop grade B>C",
+   "actual": 92,
+   "n": 26,
+   "verdict": "monotone: B 92% (n 26) > C 61% (n 127)"
+  },
+  {
+   "id": "lodhod.cells",
+   "label": "HOD/LOD table late cells (>=80%)",
+   "claimed": 100,
+   "actual": 43,
+   "n": 23,
+   "verdict": "the table says 99–100, live says 43–50 (n 23/30, two sessions, late-session rows only) — registered H10, forward"
+  }
+ ],
+ "challengers": {
+  "dir.trendFast": {
+   "vs": "dir.trend5",
+   "chalRate": 31,
+   "chalN": 36,
+   "incRate": 54,
+   "incN": 147,
+   "lift": -23,
+   "verdict": "no swap — the challenger is under the incumbent and under n"
+  },
+  "dir.struct": {
+   "vs": "dir.trend5",
+   "chalRate": 29,
+   "chalN": 148,
+   "incRate": 54,
+   "incN": 147,
+   "verdict": "no vote earned"
+  },
+  "netGamma": {
+   "chalRate": 30,
+   "chalN": 148,
+   "verdict": "conditions, does not point (hard-won rule) — not a voter"
+  }
+ },
+ "killList": [
+  {
+   "id": "kill.tap3",
+   "keep": true,
+   "n": 0,
+   "evidence": "unmeasured — the tap count is not in the queue that survives; no change"
+  },
+  {
+   "id": "kill.midrange",
+   "keep": true,
+   "n": 146,
+   "evidence": "the mid-range cap produced 111 SIDE calls of 146; the calls it allowed resolved 27% — the cap is doing most of the spine’s work; keep, unmeasured as a kill"
+  },
+  {
+   "id": "kill.noConf",
+   "keep": true,
+   "n": 0,
+   "evidence": "unmeasured"
+  },
+  {
+   "id": "kill.negGammaWide",
+   "keep": true,
+   "n": 0,
+   "evidence": "unmeasured"
+  }
+ ],
+ "proposals": [],
+ "proposalsNote": "none — nothing here has n>=20 independent observations from a full-session sample; the hand-set weights stand. No clearsBar:true anywhere.",
+ "register": [
+  {
+   "id": "H10",
+   "written": "2026-09-08",
+   "claim": "the HOD/LOD table’s late-session >=80% cells hold to the close at >=80% live",
+   "pick": "lodhodCell",
+   "judgedBy": "nightly",
+   "minN": 60,
+   "since": "2026-09-08",
+   "predict": "pooled live rate of the 80-99 and 100-119 cells >= 80% at n >= 60 close-scored rows on sessions from 2026-09-08",
+   "refuteIf": "at n >= 60 the Wilson high of the pooled live rate is under 80%",
+   "note": "written from the nightly’s own cells (09-03/09-04: 43% n 23, 50% n 30) — those two sessions are NOT counted; the rows the queue keeps are late-session by construction, which is exactly the cell family the table is most confident about."
+  }
+ ],
+ "questions": [
+  {
+   "id": "queue_trim",
+   "when": [],
+   "outcome": "featHealth",
+   "note": "what evicts feature records older than ~80 minutes from the queue? (the probe above; the answer decides whether any rate in this file can ever grow)"
+  },
+  {
+   "id": "took_by_weekday",
+   "when": [
+    {
+     "f": "dow",
+     "v": "Fri"
+    }
+   ],
+   "outcome": "took<=30m",
+   "note": "the E row’s weekday basis (v15.77): Fri median took ~19m (n 55) vs Tue ~46m (n 60) in the corpus to 08-21 — a forward test needs the corpus appended nightly (v15.81 SEASONALITY TRACKED); this week: Fri 9/4 took 6m, Tue 9/1 143m, Mon 8/31 1m, Wed 9/2 7m, Thu 9/3 86m"
+  },
+  {
+   "id": "pbentry_acm",
+   "when": [
+    {
+     "f": "state",
+     "v": "acm"
+    }
+   ],
+   "outcome": "holdOfTouched",
+   "note": "acm 79% (n 19) vs dec 39% (n 18) — the only accumulation signal in the file; already a registry question (pbentry_acm), keep recording"
+  },
+  {
+   "id": "ledger_touch_regime",
+   "when": [
+    {
+     "f": "regime",
+     "v": "trend"
+    }
+   ],
+   "outcome": "ledger.touch",
+   "note": "trend 16% (n 19) vs chop 50% (n 102) — does the in-play node hold LESS on trend days? thin"
+  }
+ ],
+ "missingFields": [
+  "the feature queue itself: 73–99% of each session’s bars never reach the day file (the trim above) — every other item on this list is second to it",
+  "FEAT_ARCHIVE (resolved records older than the queue) is not in buildDayExport (F-10c) — the IndexedDB copy has what the file lacks",
+  "the wick family (took · BOP · W.END · wick% · MUD) is computable exactly from the futBars block every day file carries since v14.7x but is not recorded as a feature and the corpus (data/es-1min, to 08-21) is not appended nightly — v15.81 wires append-futures → study-hodlod",
+  "the lodhod FIRST-CROSSING decision (the live rate F-12 asks for) needs the morning bars; the queue has none",
+  "the READ from the stats (⓪a, v15.63) is not recorded per bar (R-1 on Rec); the voice READ is (dir.read) and agreed with the spine 26/26 on 09-04",
+  "map.transfer outcomes are still scored per bar, not per step (stepNew is recorded; the scorer should key on it)",
+  "the ledger’s influence block (infl: acmToward/decAway) was not pooled this run — the acceptance (f) second half"
+ ],
+ "selftest": {
+  "ran": false,
+  "why": "data/_selftest.json is not present in the repo; not generated for this run"
+ },
+ "delivery": "device bridge → C:\\Dev\\gex-signal-tapereader\\review\\2026-09-08.json (the GEX sync task pushes it)",
+ "power": "176 afternoon bars over 7 sessions = ~17.6 independent observations; one day = ~2.7. No weight conclusions can be drawn from this file."
+}
