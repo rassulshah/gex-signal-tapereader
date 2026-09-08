@@ -429,3 +429,56 @@ up and down days.
 - **The WHAT and the HOW live in the app (v15.59, his ask):** ⚙ Architecture (objective + the loop as live status) and
   🗺 Roadmap tabs, from `learning/plan.json`; the roadmap re-ordered so the tabs shipped first. A HOW tab is live status,
   not prose.
+
+## 2026-09-07 — the IRT export mirrors Skylit's top-5: G2–G5, the King's slot is the gold line (v15.76, R-13)
+
+- **His ask:** "exports the top 5 levels for the spx also. G1 - G5. all should be white. in addition to this, it already
+  exports the kings, cw0, pw0 and the flip." **The question asked:** is G1 the King? Skylit's NODES setting is a top-N
+  by |%King| (1/3/5/10/15/20 — measured, SKYLIT-FEEDS.md) and NODES=1 is the King alone, so its top-5 is King + 4.
+  **His answer: "Mirror Skylit: G2–G5."** The King's slot on the ES chart is the SPXW KING line already exported (gold);
+  the four that follow are G2..G5, white, width 1, solid. **No G1 row** — one level, one line.
+- **One array, one conversion:** the ranking reads the same `T.pct` the SPXW KING row read (tapeMap, the rendered
+  ladder strip — v13.2) and both go through one closure (`spxRow`: live ES chart → dispScale/R; else undScale; else
+  dispScale/R). Sign is ignored in the ranking — polarity is a character, not a size (execution doctrine).
+- **The strike dropped is the EXPORTED King's** (the latched crown), not the tape's 100%: during a flap the new crown
+  shows as G2 rather than vanishing. A level under a lesser label beats a level absent from the chart.
+- **Held like the Kings** (v14.74, same key, same day scope): a blind tick holds four lines instead of erasing them.
+- **The v14.20 "only the kings" contract** is a ban on levels nobody asked for; each family since returned in his
+  words (0DTE trio v14.79/80, QQQ bearing v14.75, G2–G5 v15.76). Nothing else may join without the same.
+
+## 2026-09-07 — STANDING RULE: match Skylit, always — it is the source of truth the levels are compared against
+
+- **His words (after v15.76 shipped):** *"We should match with skylit always in order to have a source of truth to
+  compare against."* What the panel and the IRT export DRAW must mirror what Skylit itself shows for the same setting
+  (the ladder strip, the NODES top-N, the overlay's conversion), so that his Skylit chart is the reference the IRT
+  lines are checked against. This extends SOURCE-OF-TRUTH.md (the Academy governs the DOCTRINE) to the NUMBERS and the
+  LEVELS: Skylit's own rendering governs what a level is and where it sits. A deliberate difference must be named in
+  the file (a tag, a label) and in DECISIONS, never silent.
+- **Where the export matches today:** the SPXW book is Skylit's own ladder strip (`tapeMap`), %King verbatim; G2–G5 are
+  Skylit's NODES=5 ranks 2–5 by |%King|; the ES conversion is the same live basis Skylit's overlay uses on a futures
+  chart (v14.13/14.14); on a closed day both stand on the last session's book.
+- **The one designed difference, for his decision:** the King LATCH (`kingLatchTick`, `KING_LATCH_MS` = 2 minutes of
+  continuous hold before the crown moves; v14.19) — during a crown flip the rail and the export keep the old King for
+  up to two minutes while Skylit shows the new one. Kept so a mid-flap blip does not move the line on his chart; under
+  this rule it is a named deviation. Open: keep it (with the difference explained) or follow Skylit's King instantly on
+  both the rail and the export (they must agree with each other either way).
+
+## 2026-09-08 — the E row per weekday: his seasonality (v15.77, R-14); the hold rates stay pooled
+
+- **His ask and his choice:** the expected row on top of the HOD line, minus eleven fields (Rly · Done · PB · Num ·
+  Ret · Risk · Ext · Tgt · Rwd · Dur · Time); of two mockups (all sessions n=284 · the weekday n=55) he chose the
+  weekday: *"it compares friday with fridays in the past and mondays with past mondays … this is a type of
+  seasonality."* **Every EXPECTED field is the shown day's weekday's**; the basis and its n are printed beside the E.
+- **Measured before deciding (ES corpus, 55–60 sessions per weekday):** Fri ~19 m to the first extreme vs Tue ~46 m;
+  Thu ~70 pts range vs Tue ~54; Wed LOD-first 42% vs Tue 60%. The weekday is real here. Conditioning on the weekday
+  AND the first extreme leaves ~24 sessions — not honest — so the row conditions on the weekday only.
+- **The LADDER (hold rates by age) and the lookup table stay POOLED.** Split five ways their rungs go thin, and they
+  answer "has the extreme printed", not "when is it expected". The hover says which is which.
+- **The weekday is the SHOWN session's** (a replay's or the closed state's day; the recorder's when live; a weekend
+  never counts), so Friday's park on a Saturday reads Fridays.
+- **The colour chip is a COUNT** (the last six sessions of that weekday, RTH close vs open — his tool's "last 6 per
+  weekday"), never a rate, and it is marked STALE when the corpus has not been appended within 14 days of the shown
+  day. ⚠ The nightly does not yet append the corpus (the plan's hodlod ③–④ are prose) — v15.78 wires it.
+- **The read's timing prose reads the same base object as the row** and names the basis — one quantity, one source.
+- **His standing principle, generalised:** track ranges and other statistics by weekday too (his two charts: red vs
+  green by weekday, range by weekday vs the 10-week average) — v15.78, mockup first.

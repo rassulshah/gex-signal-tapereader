@@ -48,7 +48,7 @@
    "kind": "FEATURE",
    "by": "review",
    "asOf": "2026-09-04",
-   "text": "The candidate score (v15.76) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
+   "text": "The candidate score (v15.79) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.",
    "changes": "the pre-tap read shows a tested number, not a hope",
    "evidence": "no tested rule exists yet; the score waits for R-2 and the first clears",
    "status": "proposed"
@@ -74,6 +74,30 @@
    "status": "implemented",
    "version": "15.75",
    "why": "approved in the chat 2026-09-07 (“ok.. fix”); shipped in v15.75"
+  },
+  {
+   "id": "R-13",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-07",
+   "text": "The IRT FlexLevels file carries the SPX top-5 gamma levels as white lines beside the Kings, CW0, PW0 and FLIP0: Skylit’s NODES=5 draws the five largest nodes by |%King| with the King always #1, so the King’s slot is the gold SPXW KING line already exported and the four that follow are G2–G5 — white, thin, solid, on EPU26 and SPY, held for the session like the Kings when the tape blinks.",
+   "changes": "four white lines on his ES chart at the 2nd–5th largest SPX nodes, ranked by size not sign, from the same tape the SPXW King row reads; no G1 (one level, one line); IRT_LAST.gWhy names the four",
+   "evidence": "his words 2026-09-07: “i want to update the irt export so it exports the top 5 levels for the spx also. G1 - G5. all should be white. in addition to this, it already exports the kings, cw0, pw0 and the flip”; asked which five, he chose “Mirror Skylit: G2–G5”; the setting map (SKYLIT-FEEDS.md, measured): NODES = 1/3/5/10/15/20 top-N — NODES=1 is the King alone",
+   "status": "implemented",
+   "version": "15.76",
+   "why": "asked in the chat 2026-09-07; the one open question (is G1 the King?) answered “Mirror Skylit: G2–G5”; shipped in v15.76"
+  },
+  {
+   "id": "R-14",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-08",
+   "text": "The expected row sits on top of the HOD line: the weekday’s recent colour, the first extreme, then HOD/LOD · took · BOP · wick · W.End · wick% · MUD · the other extreme · HL gap · HL rng — every value a trimmed mean over the sessions of the SAME WEEKDAY (Fridays against past Fridays), with its n beside the E.",
+   "changes": "one row above the HOD line; every expected field switches from all 284 sessions to the shown day’s weekday (55–60 sessions); the read’s timing prose names the same basis; the hold rates stay pooled; BASERATES.json carries byWeekday and the baked base byDow",
+   "evidence": "his words 2026-09-08: “I want to see the expected row on top of the HOD at the top … I dont need Rly · Done · PB · Num · Ret · Risk · Ext · Tgt · Rwd · Dur · Time” · “use mockup 2, because it compares friday with fridays in the past and mondays with past mondays … this is a type of seasonality”; measured on the corpus: Fridays reach the first extreme in ~19m, Tuesdays ~46m; Thursdays range ~70 pts, Tuesdays ~54 (n=55–60 per weekday)",
+   "status": "implemented",
+   "version": "15.77",
+   "why": "mockup 2 chosen in the chat 2026-09-08; shipped in v15.77"
   },
   {
    "id": "R-7",
@@ -115,7 +139,7 @@
  "counts": {
   "proposed": 6,
   "approved": 0,
-  "implemented": 4,
+  "implemented": 6,
   "declined": 0,
   "withdrawn": 0
  }

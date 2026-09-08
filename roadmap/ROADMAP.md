@@ -26,54 +26,62 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 - **v15.72** (2026-09-05) — THE FACE, HIS THREE ASKS + ONE BUG + ONE READ — the AFTER HOURS chip leaves the King row for the bottom of the panel (a full-width bar above the footer, only after the close); the three King cards take the whole row and grow (price 12 → 16.5 px, titles 6.8 → 8.6, the lines 7 → 8.6, the pills 6.2 → 7.4); the ladder font 7.6 → 9 px with the columns widened ~15% (ladderFit grows the panel once); the amber sliver inside every RUG / RRUG / PIKA / BARNEY block was a dead .g3pb rule’s left border leaking into the v15.65 class of the same name — gone, pinned; THE ROLLING FLOOR / CEILING — his read ("when the king rolls up and is below price it may be creating a floor (support) and be bullish and vice versa") is the doctrine’s rolling floor on the biggest node: every tap is stamped with each book’s King roll today (kroll), four classes in both twins (king:floor:up · king:floor:dn · king:ceil:dn · king:ceil:up), K2.6 / K2.7 on Analysis, H8 / H9 in the register read once at n = 30 from the first stamped session against the floor / ceiling base; .gitattributes fixed (the task scripts stay CRLF), Claude outputs/ ignored · serves: the face he reads at the tap · "i think there is something to this" — a read becomes a claim before the data
 - **v15.73** (2026-09-05) — THE DAY LINE — the process reporting on itself at the bottom of the panel: the date, then saved · analysis · testing · learning · rec, each with its evidence (the time, who, the counts) and a colour — green done, amber expected but not yet, red overdue and why (analysis 30 minutes after the save with no log names the GEX nightly task; a save not confirmed by 15:15 points at the 💾 chip), grey not knowable yet; during the session the same row reads data · recording · N bars; yesterday’s completed line stays until today records its first bar; the hover is the whole sentence; every fact from what the panel already fetches (the chip’s save evidence, the nightly log, the Learn file, the Rec file), so it fills in on its own · serves: "there needs to be some message at the bottom that tells me … 9/4 - data saved, analysis complete, testing complete, recommendations made" — the loop visible without opening a tab
 - **v15.74** (2026-09-05) — THE LOG SURVIVES A RELOAD — the nightly log (ANALYSIS_NIGHTLY) lived only in memory while the pipeline's 10-minute throttle survived the reload, so for up to ten minutes after every reload the day line read "analysis overdue — is the GEX nightly task installed?" over a log that was on GitHub (his first sight of v15.73, 22:3x CT, with his machine's run at 22:35 in the file); the log is kept in localStorage (gpts_nightly_v1) and restored at load · serves: the day line tells the truth at the moment he looks — "why hasn't the analysis started"
+- **v15.75** (2026-09-07) — THE CLOSED STATE — when the market has not opened today (a weekend, a holiday, before the open) the dashboard stands on the last recorded session parked at its close, every section as it was, badged CLOSED, and returns to LIVE by itself with today's first book; the session signal is the gamma payload's own minute series (levels[].t), not the clock; the stale-day guard no longer evicts a replay on a holiday; the day line reads the last session instead of "recording · 0 bars" · serves: "a frozen state from when it was open so i can really work on it" — the day studied, the ladder read, setups discussed as if open
+- **v15.76** (2026-09-07) — G2–G5 IN THE IRT EXPORT — the rest of Skylit's top-5 as white lines on his ES chart beside the Kings, CW0, PW0 and FLIP0: NODES=5 draws the five largest nodes by |%King| with the King always #1, so the King's slot is the gold SPXW KING line and the four that follow are G2–G5, from the same tape the King row reads, held for the session like the Kings (R-13) · serves: HOD/LOD · DEFLECTION — the nodes price will meet, on the chart he trades from
 
 ## NEXT — the running build
 
-### v15.75 — THE CLOSED STATE — when the market has not opened today (a weekend, a holiday, before the open) the dashboard stands on the last recorded session parked at its close, every section as it was, badged CLOSED, and returns to LIVE by itself with today's first book; the session signal is the gamma payload's own minute series (levels[].t), not the clock; the stale-day guard no longer evicts a replay on a holiday; the day line reads the last session instead of "recording · 0 bars"
+### v15.77 — THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his tool's expected row minus the eleven fields he struck, above the HOD/LOD line: the weekday's recent colour, the first extreme, HOD/LOD · took · BOP · wick · W.End · wick% · MUD · the other extreme · HL gap · HL rng, every value a trimmed mean over the sessions of the SAME weekday (BASERATES byWeekday, HODLOD_BASE.byDow); the hold rates stay pooled (R-14)
 
-Serves: "a frozen state from when it was open so i can really work on it" — the day studied, the ladder read, setups discussed as if open.
+Serves: HOD/LOD · DEFLECTION — when the extremes and the opening excursion are expected on THIS weekday: his seasonality.
 
-Done when: on a closed day the face shows the last session's Kings, ladder, patterns and READ at the close under a CLOSED bar, and the first live book minute of a trading day returns it to LIVE without a click.
+Done when: the row renders above the HOD line with the shown day's weekday and n; a weekday under 40 sessions falls back to ALL and says so; test_v1577 51, 14/14 mutants.
 
 ## AFTER THAT — in order
 
-### v15.76 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+### v15.78 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
+
+Serves: HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered.
+
+Done when: mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine.
+
+### v15.79 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
 
 Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
 
 Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
 
-### v15.77 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+### v15.80 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
 
 Serves: HOD/LOD · the loop closes.
 
 Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
 
-### v15.78 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
+### v15.81 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
 
 Serves: HOD/LOD · PULLBACK · 94 OPEN studies · H6.
 
 Done when: 40 taps recorded and the first F-study reads from them with n.
 
-### v15.79 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
+### v15.82 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v15.80 — one definitions file (Python + panel) · the shipped-artifact test
+### v15.83 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v15.81 — the face manifest — every number on the face names its study, pinned by a test
+### v15.84 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v15.82 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v15.85 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 

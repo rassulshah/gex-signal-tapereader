@@ -1704,7 +1704,8 @@ eval(ex('emBand')); eval(ex('emBandRaw'));;
     // a shared latch would make these assertions depend on the order they run in.
     var IRT_KINGS_KEY='gpts_irt_kings_v1';
     eval(ex('irtRound')); eval(ex('irtCsvRow')); eval(ex('kingLatchTick'));
-    eval(ex('irtKingLatch')); eval(ex('irtKingHeld')); eval(ex('irtQqqKing')); eval(ex('irtBuildCsv'));
+    eval(ex('irtKingLatch')); eval(ex('irtKingHeld')); eval(ex('irtGLatch')); eval(ex('irtGHeld'));   // (v15.76) the G rows hold too
+    eval(ex('irtQqqKing')); eval(ex('irtBuildCsv'));
     var b=irtBuildCsv();
     if(!b) return { rows:[], byLabel:{} };
     var rows=b.csv.trim().split('\r\n').slice(1).map(function(l){
@@ -1717,8 +1718,15 @@ eval(ex('emBand')); eval(ex('emBandRaw'));;
   const F=irtFixture(10.0458);
   const L=F.byLabel;
 
-  // --- exactly the two ES kings arrive ---------------------------------------------------------
-  ok(F.rows.length===2,               'kings only: the SPXW and SPY crowns, nothing else', F.rows.map(x=>x.lbl));
+  // --- the two ES kings arrive, and (v15.76, R-13) the rest of Skylit's top-5 under them ---------
+  // Operator, 2026-09-07: "it exports the top 5 levels for the spx also ... all should be white".
+  // This fixture's tape holds three strikes, so after the King's slot two G rows follow: G2 (7630 at
+  // -85, a PUT node — size, not sign) and G3 (7650 at 41). The three-line contract of v14.20 became
+  // four families, each one asked for by name; nothing else may join them (see the absence checks).
+  ok(F.rows.length===4,               'the SPXW and SPY crowns + G2 G3 — nothing else', F.rows.map(x=>x.lbl));
+  ok(F.rows.map(x=>x.lbl).join(' ')==='SPXW KING G2 G3 SPY KING' && L['G2'].price===7647.5 && L['G3'].price===7667.5,
+     'G2 is the -85% put node 7630 (7647.50), G3 the +41% 7650 (7667.50); no G1 — the King\'s slot is the gold line', F.rows.map(x=>x.lbl+'@'+x.price));
+  ok(L['G2'].col==='2' && L['G3'].col==='2' && L['G2'].w==='1' && L['G2'].style==='0', 'the G rows wear gate WHITE (this fixture\'s 2), width 1, solid', L['G2']);
   ok(!!L['SPXW KING'],           'the SPXW King, in the locked grammar');
   ok(!!L['SPY KING'],            'and the SPY King — "i must always have the spy and spxw king"');
 

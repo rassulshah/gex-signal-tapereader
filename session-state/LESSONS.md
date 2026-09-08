@@ -131,6 +131,52 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.77 — a screenshot of HIS tool is a spec; "I think it averages Tuesdays" is a claim to measure, not to grant
+(1) The strip he pasted is not from this repo — its vocabulary (Rly, Done, PB, Num, Ret, Risk, Ext, Tgt, Rwd, Dur)
+appears nowhere in the code or its history, and the v14.71 note explains why: our wick family was VERIFIED AGAINST
+HIS OWN PANEL. Say so before designing. Reading it as an old version of ours would have produced a build that
+"restored" fields he was in the middle of removing. (2) "I think it takes into account the day … it averages
+Tuesdays" was his belief about his tool. Ours averaged all 284 sessions and had never split by weekday. The right
+move was neither to nod nor to argue: split the corpus in ten minutes (Fridays 19 m to the first extreme, Tuesdays
+46 m; Thursdays 70 pts, Tuesdays 54), show BOTH bases as mockups rendered from the real face with their n, and let
+him choose. He chose the weekday and gave the reason (beginning/end-of-week character) — a hypothesis now on the
+record with numbers under it, not a preference. (3) The split has a floor and a shape: 55–60 per weekday is honest
+for a trimmed mean; conditioning on the weekday AND the first extreme leaves 24 and is not. The row conditions on
+one thing. And the LADDER did not move: hold rates by age over 1,169 candidates would go thin five ways, and they
+answer a different question — expected values per weekday, hold rates pooled, both said in the hover. (4) One
+quantity, one source, again: the read's hover printed "median gap 3h50" from the pooled base while the new row
+printed the weekday's — two numbers for one thing on one face. The prose now reads the same `base` object the row
+reads and names the basis. It had also said "median" since v14.58 while the number was a trimmed mean; 7c pinned
+the wrong word for nineteen versions because it pinned the sentence, not the statistic. (5) "The corpus grows by
+one session a day" is written in the architecture and true nowhere: `append-futures.py` → `study-hodlod.py` is
+wired into no task, and `data/futures/ES/` is empty. The "last six" per weekday therefore ends 2026-08-21. The row
+marks the six STALE after 14 days instead of trusting the sentence; the wiring is v15.78's first step. A pipeline
+described in prose is a plan, not a pipeline. (6) The mutation run found the floor in `hodlodBaseFor` invisible:
+the courier path already drops thin weekdays, so only a thin block in the BAKED base could show it. The fixture now
+carries one. Same lesson as v15.76's conversion closure — a rule with one tested input is a fixture, not a rule.
+
+### v15.76 — "the top 5" means what the vendor's own setting means; a fixture that agrees with every branch proves nothing
+(1) "Export the top 5 levels for the SPX, G1–G5" reads as five new rows until you ask what "top 5" is on the chart he
+is looking at: Skylit's NODES=5 is a top-N by |%King| and the King is always #1 of it. So the honest choices were
+three — the five after the King, Skylit's exact five with the King's slot already gold (G2–G5), or a duplicate G1 —
+and only he could pick. Asked, he answered with a question ("What does skylit do"), and the answer had to come from
+the MEASURED setting map (`SKYLIT-FEEDS.md`: NODES = 1/3/5/10/15/20 or P-floors; NODES=1 is the King alone), not from
+what I believed the overlay did. Then he chose in one line. One question, precisely framed, beats a build that guesses
+— and the framing is only as good as the measurement behind it. (2) The ranking reads the SAME `T.pct` the King row
+reads (DECISIONS v13.2), and the King and the G rows share ONE conversion closure — but the mutation run showed the
+old fixture could not tell the shared closure from a re-derived one: every ifLadder stub carried either dispScale OR
+undScale, never both, so a mutant that preferred undScale on a live ES chart agreed with the original on every value
+tested. 13 of 14 died; the survivor named the gap. The fixture now carries both scales and pins the precedence
+(7727.75 by the chart basis, never 7713.25). A pin that only ever sees one input is not a pin on the rule, it is a
+pin on the fixture. (3) The em_band fixture lacked the new latch helpers, and the G rows were pushed BEFORE
+`irtGLatch` threw — rows present, `gDone` false, the hold path armed on top of them. An instrument's call goes in its
+own `try` (the v14.67 rule again: the export must run identically without it). (4) "Only the kings" (v14.20) was a
+step-back from levels nobody asked for, not a ban on levels he asks for by name; the header comment now lists the
+families that returned and the words that brought each one back, so the next context does not read the old contract
+as current. (5) Not folded in: the two day-line wrinkles seen live on 9/4 (the late sweep's 00:02 mark shown as SAVED,
+the bar count off the trimmed recorder). They are bugs, but they are not his export, and a build that answers one
+request with three changes is harder for him to verify — they go on OPEN with their causes named.
+
 ### v15.75 — the clock is not the session; the feed you already have carries the fact you were guessing
 (1) Three places in this panel used the wall clock as a stand-in for "a session is running": the stale-day guard, the
 NOT RECORDING banner and the day line. On a trading day the clock is right and nobody notices the substitution; on

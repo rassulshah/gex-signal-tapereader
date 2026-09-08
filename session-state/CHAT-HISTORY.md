@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-07 · v15.75 · session `f9c89c64` — v15.75 the closed state (Labor Day: "a frozen state from when it was open so i can really work on it") — after the purpose tags, the Rec voice, absorption and the IRT SDK conversation
+## 2026-09-08 · v15.77 · session `f9c89c64` — v15.77 — the E row on top of the HOD line, per weekday (his seasonality, R-14)
 
-_119 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_129 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1629,8 +1629,123 @@ In the Rec voice, for your ✓:
 Logic green (45). Now the mutants, then the record.
 Now the record: the plan, R‑12, CHANGELOG, LESSONS, inventory, config, resume note, chat history.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> Continue from where you left off.
+
+**me (23:01):** No response requested.
+
+**OPERATOR:**
+> i want to update the irt export so it exports the top 5 levels for the spx also .   G1 - G5 .  all should be white.  in addition to this , it already exports the kings , cw0, pw0 and the flip.
+
+**me (23:03, the one question, as a choice card):** In Skylit's top-5 the King is #1, and the export already draws the King as its own gold SPXW KING line. Which five should G1–G5 be? (Defaults unless you say otherwise: thin solid white lines, ranked by |%King| from the same SPXW tape the King row reads, written to EPU26 and SPY like every other row with the same ~ rule, held for the session like the Kings when the tape blinks.) — (A) the five after the King · (B) Skylit's exact five, G1 = the King (a second, white line at the King's price) · (C) Skylit's five, no duplicate (SPXW KING + G2–G5, no G1 label).
+
+**OPERATOR:**
+> What does skylit do
+
+**me (23:05):** What Skylit does: the NODES setting is a top-N by size (1 / 3 / 5 / 10 / 15 / 20) or a %King floor (P15 / P20 …). NODES = 1 draws only the King, so at 5 the overlay draws the five largest nodes by |%King| — the King (100%) is always #1, then the next four. So Skylit's "top 5" = King + 4. Given that, which five should G1–G5 be on the IRT chart? — (A) the five after the King (recommended) · (B) Mirror Skylit: G2–G5 (the King's slot is the gold line; four white lines; no G1 label) · (C) Mirror Skylit: G1 = King (a duplicate white line at the King's price).
+
+**OPERATOR:**
+> Mirror Skylit: G2–G5
+
+**me (23:08):** Building v15.76 — the G rows beside the King row, the hold, the tests, the mutants, the record.
+Now the hold functions beside `irtKingLatch`/`irtKingHeld`:
+Now the header comment of `irtBuildCsv` (it still says "THE FILE IS THREE LINES") and the version bump:
+Now the test: the harness list, the fixture, the counts, and the new section.
+Now the mutation run — each mutant must be caught by the test:
+Now the full suite:
+Now the version pins in the other tests ("or later" pattern) — let me see how v1575's 0a and the others are written:
+Now DECISIONS:
+Now the resume note — the header, a new "(latest)" section, and the v15.75 section demoted:
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> Continue from where you left off.
+
+**me (23:01):** No response requested.
+
+**OPERATOR:**
+> i want to update the irt export so it exports the top 5 levels for the spx also .   G1 - G5 .  all should be white.  in addition to this , it already exports the kings , cw0, pw0 and the flip.
+
+**me (23:08):** Now the hold functions beside `irtKingLatch`/`irtKingHeld`:
+Now the header comment of `irtBuildCsv` (it still says "THE FILE IS THREE LINES") and the version bump:
+Now the test: the harness list, the fixture, the counts, and the new section.
+Now the mutation run — each mutant must be caught by the test:
+Now the full suite:
+Now the version pins in the other tests ("or later" pattern) — let me see how v1575's 0a and the others are written:
+Now DECISIONS:
+Now the resume note — the header, a new "(latest)" section, and the v15.75 section demoted:
+Now the full suite, then correct the counts in the CHANGELOG to the real numbers:
+The build is done and the installer is in your repo folder (`C:\Dev\gex-signal-tapereader\installv1576.bat`) and attached above.
+
+**What v15.76 writes to `FlexLevelsExport.csv`** — your choice, mirror Skylit: the King's slot stays the gold **SPXW KING** line, and the four nodes after it are **G2 G3 G4 G5**, white, thin, solid, ranked by size (a −63% put node outranks a +41% call node, exactly as Skylit's overlay ranks them), from the same tape the King row reads. They ride EPU26 on the 0.25 tick (with the `~` when the ratio isn't live) and SPY in cents, like every other row, and they're held for the session like the Kings if the tape blinks. No G1 — one level, one line. Kings, CW0, PW0, FLIP0 and the QQQ rows are unchanged. Pinned in `test_irt_export.js` (129 assertions, 14 of 14 mutants caught).
+
+**Steps:**
+
+1. Double-click `installv1576.bat` in `C:\Dev\gex-signal-tapereader` (it pushes to GitHub).
+2. Wait about 5 minutes (the raw CDN cache).
+3. Update the tapereader in Tampermonkey: [gex-signal-tapereader.user.js v15.76](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) — the companion v1. …[trimmed]
+
+**OPERATOR:**
+> We should match with skylit always in order to have a source of truth to compare against
+
+**me (23:24):** Agreed, and it's now a standing rule in the record (DECISIONS 2026-09-07, the resume note's standing block): what the panel and the export draw mirrors what Skylit shows for the same setting, so your Skylit chart is the reference the IRT lines are checked against — and any deliberate difference has to be named, never silent. That's why the G rows read Skylit's own ladder strip and take Skylit's ranks 2–5 rather than a threshold of ours.
+
+Checked against that rule, the export matches Skylit everywhere except one place, and it was designed that way: the **King latch**. The crown moves on the rail and in the file only after the new strike has held for two minutes (v14.19, so a mid-flap blip doesn't move the line on your chart). During a crown flip, Skylit shows the new King at once while your panel and IRT keep the old one for up to two minutes — and in that window the new one appears as G2. Your call, one question: keep the two-minute latch (a named, explained difference), or follow Skylit's King instantly on both the rail and the export? Either way the panel and the file stay in agreement with each other.
+
+I rebuilt `installv1576.bat` so the record rides with it — same v15.76, replaced in place in `C:\Dev\gex-signal-tapereader` and attached above; the steps from before are unchanged (double-click, wait 5 minutes, [update the tapereader in Tampermonkey](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js), reload, one export).
+
+**OPERATOR:**
+> are you able to see the actual and expected rows
+
+**me (01:39):** Yes — both rows are readable, and here's what I see so you can check me:
+
+**A (actual):** Red · Red · 1st HOD · HOD 8:39am · Took 9m · BOP 6m · Wick 15m · W.End 8:45am · Wick% 25% · MUD 1h 48m · Rly 24m · Done 9:15am · PB 9:18am · Num 1 · Ret 49% · Risk $462 · Ext 2.03 ($925) · Tgt 27.25pts ($1,362) · Rwd $1,362 · Dur 1h 15m · Time 10:33am · LOD 10:33am · HL Gap 1h 54m · HL Rng $1,962 ~ 39.25pts
+
+**E (expected):** Red · Red · 1st HOD · HOD ~9:17a · Took ~24m · BOP ~20m · Wick ~28m · W.End ~8:58am · Wick% ~40% · MUD ~2h 11m · Rly ~29m · Done ~9:58am · PB ~10:04am · Num ~1 · Ret ~35% · Risk ~$987 · Ext ~1.73 · Tgt ~27.08pts ($1,354) · Rwd ~$1,354 · Dur ~1h 44m · Time ~11:48a · LOD ~11:48a · HL Gap ~2hr 31min · HL Rng ~$2,405 ~ 48.1pts
+
+Read against each other: the day ran ahead of and smaller than its expectation — the first HOD 38 minutes early and formed in 9 minutes instead of ~24, the LOD at 10:33 against ~11:48, the HL gap 1h54 against ~2h31, the range 39.25 points against ~48.1 — while the retracement was deeper (49% vs ~35%) and the extension larger (2.03 vs ~1.73) for half the risk.
+
+One thing so I don't misread the source: this vocabulary (Rly, Done, PB, Num, Ret, Risk, Ext, Tgt, Rwd, Dur) isn't in the tapereader's code or history — the panel's own A/E stats went vertical in v15.07 and off the face in v15.63. Is this strip from your IRT chart, and what would you like me to do with it?
+
+**OPERATOR:**
+> I want to see see the expected row on top of the HOD at the top.  I think it takes into account the day from the data, so if it is tuesday , it averages Tuesdays.  I dont need  Rly 24m · Done 9:15am · PB 9:18am · Num 1 · Ret 49% · Risk $462 · Ext 2.03 ($925) · Tgt 27.25pts ($1,362) · Rwd $1,362 · Dur 1h 15m · Time 10:33am ·.   do you understand .. show me mockup.
+
+**me (01:47):** Understood, and here is the mockup, rendered from the real face: one slim row directly above the HOD line, reading exactly like your E row minus the eleven fields you struck — the day-colour chip and 1ST HOD, then HOD · took · BOP · wick · W.End · wick% · MUD · LOD · HL gap · HL rng, every value with the ~. The two leading chips are ours: RD 83% is the green/red-day rule's call, 1ST HOD is the day's first extreme. It fits on one line at your panel's width.
+
+On the weekday: I checked the corpus rather than guessing. Our E row today averages all 284 ES sessions; it does not know the weekday. Split by weekday it can — 55 to 60 sessions each — and the days do differ: Tuesdays take ~46 minutes to the first extreme, Fridays ~19, Thursdays range ~70 points against Tuesdays' ~54. Conditioning on the weekday AND the first extreme (a Tuesday that started with the HOD) leaves ~24 sessions, which is too thin to average honestly — so the row would be weekday only, with its n shown as in mockup 2.
+
+One thing to be clear about so the source of truth stays straight: these numbers are ours (the ES 1-minute corpus, trimmed means), so they will not equal your panel's E values (its HOD ~9:17a, took ~24m …) unless it computes the same way over the same data. If you want the two to agree, I need to know how your panel builds its E row.
+
+One question: which basis for the row — all sessions (n=284), or the weekday's sessions (n≈55, mockup 2)?
+
+**OPERATOR:**
+> use mockup 2 , because it compares friday with fridays in the past and mondays with past mondays and the same with the rest of the days. This seasonality is important because mondays and fridays have beginning and end of week characteristics which are different that mid week characteristics. this is a type of seasonality.  you should also be trackting the ranges and other things based on seasonality  (day of week). see charts , they take into account red day vs greenday as well as daily range by weekday.
+
+**me (01:53):** Now the study — a per-weekday block with the same statistics:
+Now the normaliser, the weekday picker, and the E row:
+Now the mutants for the new logic:
+Now the written record — CHANGELOG, LESSONS, DECISIONS, config, resume note:
+
 ### DECISIONS
 
+- **The E row per weekday (2026-09-08, "use mockup 2"; R-14, v15.77).** His expected row on top of the HOD line, minus
+  Rly · Done · PB · Num · Ret · Risk · Ext · Tgt · Rwd · Dur · Time; every expected value from the shown day's weekday
+  ("it compares friday with fridays in the past … this is a type of seasonality"); the hold rates stay pooled; the
+  colour chip is a count of the last six (STALE after 14 days). Measured first: Fri ~19 m vs Tue ~46 m to the first
+  extreme; Thu ~70 vs Tue ~54 pts. Weekday AND first extreme → n≈24, not split. His two charts (red/green by weekday,
+  range by weekday vs 10-week avg) → v15.78, mockup first; the nightly must first append the corpus (found: it does not).
+- **Match Skylit always (2026-09-07, his standing rule):** what the panel and the export draw mirrors what Skylit shows;
+  a deliberate difference is named (the King latch — his call pending).
+- **The IRT export mirrors Skylit's top-5 (2026-09-07, his choice "Mirror Skylit: G2–G5"; R-13, v15.76).** Skylit's
+  NODES=5 is a top-N by |%King| with the King always #1 (measured setting map; NODES=1 is the King alone), so on his ES
+  chart the King's slot is the gold SPXW KING line already exported and the four that follow are **G2 G3 G4 G5 — white,
+  width 1, solid, no G1** (one level, one line). Ranked by size not sign, from the SAME tape the King row reads; the
+  exported King's strike is the one dropped (a flapping new crown shows as G2, never vanishes); held for the session
+  like the Kings. The v14.20 "only the kings" contract is a ban on levels nobody asked for — each family since came
+  back in his words (0DTE trio, the QQQ bearing, now G2–G5).
 - **The purpose tags (2026-09-06, settled): HOD/LOD · DEFLECTION.** His definition: "the deflection creates the turning
   points that are within the hod and lod whereas the hod and the lod are the extreme turning points during the day";
   DEFLECTION covers a rally ending into a pullback AND a pullback ending into continuation; no PULLBACK / CONTINUATION
@@ -1789,6 +1904,22 @@ Now the record: the plan, R‑12, CHANGELOG, LESSONS, inventory, config, resume 
 
 ### SHIPPED
 
+**v15.77** (panel + study; companion v1.18 unchanged) — THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY. `study-hodlod.py`
+`expected_block` / `weekday_blocks` → `BASERATES.json` `byWeekday` (pooled block unchanged, pinned) + `recent`; the
+panel: `hlBaseByDow` (floor `HLBASE_MIN_DOW`=40), `HODLOD_BASE.byDow` baked, `hlDowOf`, `hlDayShown`, `hodlodBaseFor(dow)`
+(expected fields per weekday, ladder pooled, `basis`), `hlERowState` / `hlERowHtml` (`.g3erow` + CSS, `hlClock12`), the
+call in `secDay` before the read line, the read's timing prose on the same basis. R-14 implemented; the roadmap (v15.76
+shipped, v15.77 this, v15.78 SEASONALITY TRACKED later, the rest +2, R-5 → v15.79); INVENTORY §0k; DECISIONS; LESSONS;
+the config (2026-09-08, `eRow`); the resume note (+ snapshot). `test_v1577.js` 58 · 14 of 14 mutants; `test_futbars`
+and `test_v1564` re-pinned. Mockup `mockups/mockup-e-row.{png,js,html}`; render `design/render-v1577-top.png`.
+**v15.76** (panel; companion v1.18 unchanged) — G2–G5 IN THE IRT EXPORT. In `irtBuildCsv`: one conversion closure
+`spxRow` for the whole SPXW book (the King row and the G rows), `kK` the exported King's strike, section 1g (rank `T.pct`
+by |%King|, drop `kK`, write G2..G5 white / w1 / solid into `rows[]`), `irtGLatch` / `irtGHeld` (same key as the Kings,
+day-scoped), `IRT_LAST.gWhy`; the header comment names the families that returned since v14.20. R-13 implemented; the
+plan (v15.75 shipped, v15.76 this, the score → v15.77, the rest shifted); DECISIONS; LESSONS; the config (2026-09-07b,
+`irtExport`); the resume note (+ snapshot). `test_irt_export.js` 129 (was 108; §4t) · 14 of 14 mutants (the survivor of
+the first run exposed a fixture that could not tell the shared closure from a re-derived one — fixed by a ladder stub
+carrying both scales); `test_em_band.js` re-pinned; `test_v1576.js` 26; version pins moved.
 **v15.75** (panel; companion v1.18 unchanged) — THE CLOSED STATE. `liveBookToday` / `bookArrived` / `closedDay` /
 `closedState` / `replayAutoPark` / `replayAutoRelease` / `closedChipHtml`; `REPLAY.auto`; `RP_AUTO_OFF` / `RP_AUTO_SKIP`;
 the stale-day guard requires the live book and skips auto-parks; the strip badge ⏸ CLOSED; no NOT RECORDING for the
@@ -1918,8 +2049,23 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He runs ONE file** — `installv1575.bat`; wait 5 min; the tapereader link (as a link); reload. Then: what do the strip
-  badge and the bar say? (expected ⏸ CLOSED · showing Fri 4 Sep at 14:58; the face at Friday's close).
+- **He runs ONE file** — `installv1577.bat` (carries v15.76 + v15.77); wait 5 min; the tapereader link (as a link);
+  reload. Then: the E row at the top (Tuesday: *E · TUE n=60 · … HOD/LOD ~9:15a · took ~46m …*), and the four white
+  G lines on the ES chart after one export.
+- **v15.78, mockup first:** his two seasonality charts on Analysis (red vs green by weekday, last 6; range by weekday,
+  last 5–6, vs the 10-week average) — and before them, wire `append-futures.py` → `study-hodlod.py` into the nightly:
+  the corpus ends 2026-08-21 and nothing appends it.
+- **His call pending:** the King latch under "match Skylit always" (keep the 2-minute latch, or follow Skylit's King
+  instantly on the rail and in the file).
+- (earlier) **He runs ONE file** — `installv1576.bat`; wait 5 min; the tapereader link (as a link); reload; then one export (the
+  gear's ⇩ Export now, or the 180 s tick) and a look at the ES chart: four white lines G2–G5 under/around the gold King
+  (on the closed state they come from Friday's parked book, like the King). `__gptsDebug.irt().last.gWhy` names them.
+- **Two day-line wrinkles seen live on 9/4 (not built — his request was the export):** SAVED "00:02 · 25 bars" — the late
+  sweep's mark preferred over the first write (15:01), and `dayBarCount` off the trimmed localStorage recorder (25) rather
+  than the file (101). Fix together next build (`test_v1577.js`); the architecture's integrations list also lacks the IRT
+  export (test_v1567 7a pins 5) — add as the sixth when plan-seed is next touched.
+- **v15.75 VERIFIED on his panel** (read-only probe after his reload): ⏸ CLOSED · Fri 4 Sep at 14:58 · 100 frames · the
+  King cards and 15 ladder rows.
 - **Awaiting his ✓:** the Rec voice + bigger type (v15.76); SWEPT on NQ (R-11). **Awaiting him at the desktop:** the
   folder approval for the IRT SDK (`C:\Program Files\LinnSoft\InvestorRT\sdk`); the Network-tab look at CVD-SESSION.
 - **Tuesday 09-08:** the release at 08:30 with the first live minute; the first stamped session; the automatic close.
@@ -2015,6 +2161,9 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+9f0a6bf session-state: his standing rule — match Skylit always, the source of truth the levels are compared against (DECISIONS 2026-09-07; the King latch named as the one designed difference, his call)
+cfde302 v15.76: G2–G5 IN THE IRT EXPORT — the rest of Skylit's top-5, white, beside the Kings, CW0, PW0 and FLIP0 (R-13)
+4f6cf61 v15.75: THE CLOSED STATE — when the market has not opened, the dashboard stands on the last session as it was
 b202f47 session-state: 2026-09-07 design notes — the purpose tags (HOD/LOD · DEFLECTION), the Rec voice awaiting ✓, absorption/footprint sources, the RTX SDK path, the second project's purpose draft, SWEPT on NQ (R-11 proposed)
 062ce9d v15.74b (tools, no panel change): THE ORIGIN GUARD — the installer had overwritten his machine's 9/4 run with the cloud's copy
 235b66a v15.74: THE LOG SURVIVES A RELOAD — the day line read "analysis overdue" over a log his machine had just written
@@ -2024,9 +2173,6 @@ b202f47 session-state: 2026-09-07 design notes — the purpose tags (HOD/LOD · 
 e05a50b nightly 2026-09-04 (cloud): the log, the registry, the Learn rules' verdicts, the sweep tables; F-19 second day - turn 1/28, resume 21/28, held 35/78 (two sessions, no stamps yet)
 fc64e39 gex: sync 04-Fri-09 19:12
 99b4af7 v15.71: the save runs itself - no click at the close; a missed day written the next morning; the ? a chip; saved means confirmed in the repo folder
-9ba9099 gex: sync 04-Fri-09 19:08
-d3926a1 gex: sync 04-Fri-09 17:26
-650b35d gex: sync 04-Fri-09 16:56
 ```
 
 ---

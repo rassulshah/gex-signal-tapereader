@@ -169,7 +169,7 @@ ok(/hand-set until[\s\S]{0,40}the ledger scores them/.test(src) && /7755 \(09-03
   const sd=decomment(ex('secDay'));
   ok(/\(\(CFG\.dayRead!==false\) \? '' : hlFarClause\(D, CALL\)\)/.test(sd),'7a the "% of the range" clause leaves the face when the read is on (it stays with the table)');
   ok(/'<div class="g3daysub"'\+\(\(CFG\.dayRead!==false && !NOREAD\)\?' style="display:none"':''\)/.test(sd),'7b the timing prose is hidden with the read on (shown with the table, and when there is no reading)');
-  ok(/THE RANGE: '\+Math\.round\(100\*CALL\.far\)\+'% of the range to today(\\u2019|’)s '\+D\.second/.test(sd) && /THE TIMING: when an extreme of this age held, the other side printed later (\\u2014|—) median gap '\+hlDur\(base\.gapMin\)/.test(sd),'7c …both live in the READ line’s hover instead');
+  ok(/THE RANGE: '\+Math\.round\(100\*CALL\.far\)\+'% of the range to today(\\u2019|’)s '\+D\.second/.test(sd) && /THE TIMING: when an extreme of this age held, the other side printed later (\\u2014|—) expected gap '\+hlDur\(base\.gapMin\)/.test(sd),'7c …both live in the READ line’s hover instead');
   ok(/#gpts-body \.g3dayhd\{display:none\}/.test(src),'7d the ⓪a header line stays off the face');
 }
 

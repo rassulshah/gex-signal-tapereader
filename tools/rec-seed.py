@@ -32,7 +32,7 @@ ROWS = [
          changes='the dashboard draws from the knowledge base and nothing else; a contradicted rule cannot stay on the face',
          evidence='two files today; “it is from the learning that you can know something” (2026-09-04)'),
     dict(id='R-5', kind='FEATURE', by='review', asOf='2026-09-04',
-         text='The candidate score (v15.76) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
+         text='The candidate score (v15.79) built from tested rules — each factor’s weight is its out-of-sample rate — instead of hand-set weights.',
          changes='the pre-tap read shows a tested number, not a hope',
          evidence='no tested rule exists yet; the score waits for R-2 and the first clears'),
     dict(id='R-6', kind='PROCESS', by='review', asOf='2026-09-04',
@@ -62,6 +62,18 @@ ROWS = [
          changes='the session signal is the gamma payload’s own minute series, not the clock; the stale-day guard no longer evicts a replay on a holiday; the day line reads the last session, not “recording · 0 bars”',
          evidence='his words 2026-09-07 (Labor Day, at the panel): “the application doesn’t seem to support a frozen state from when it was open so i can really work on it … there is no node ladder”; measured on his panel: every feed arriving, the clock past 08:30, 0 bars, an empty face, a drag on Friday’s strip handed straight back to LIVE',
          status='implemented', version='15.75', why='approved in the chat 2026-09-07 (“ok.. fix”); shipped in v15.75'),
+    # (v15.76) the IRT export carries the rest of Skylit's top-5 — his ask, the "which five" question asked and answered
+    dict(id='R-13', kind='FEATURE', by='operator', asOf='2026-09-07',
+         text='The IRT FlexLevels file carries the SPX top-5 gamma levels as white lines beside the Kings, CW0, PW0 and FLIP0: Skylit’s NODES=5 draws the five largest nodes by |%King| with the King always #1, so the King’s slot is the gold SPXW KING line already exported and the four that follow are G2–G5 — white, thin, solid, on EPU26 and SPY, held for the session like the Kings when the tape blinks.',
+         changes='four white lines on his ES chart at the 2nd–5th largest SPX nodes, ranked by size not sign, from the same tape the SPXW King row reads; no G1 (one level, one line); IRT_LAST.gWhy names the four',
+         evidence='his words 2026-09-07: “i want to update the irt export so it exports the top 5 levels for the spx also. G1 - G5. all should be white. in addition to this, it already exports the kings, cw0, pw0 and the flip”; asked which five, he chose “Mirror Skylit: G2–G5”; the setting map (SKYLIT-FEEDS.md, measured): NODES = 1/3/5/10/15/20 top-N — NODES=1 is the King alone',
+         status='implemented', version='15.76', why='asked in the chat 2026-09-07; the one open question (is G1 the King?) answered “Mirror Skylit: G2–G5”; shipped in v15.76'),
+    # (v15.77) the E row on top of the HOD line, per weekday — his ask on his own tool's strip, mockup 2 chosen
+    dict(id='R-14', kind='FEATURE', by='operator', asOf='2026-09-08',
+         text='The expected row sits on top of the HOD line: the weekday’s recent colour, the first extreme, then HOD/LOD · took · BOP · wick · W.End · wick% · MUD · the other extreme · HL gap · HL rng — every value a trimmed mean over the sessions of the SAME WEEKDAY (Fridays against past Fridays), with its n beside the E.',
+         changes='one row above the HOD line; every expected field switches from all 284 sessions to the shown day’s weekday (55–60 sessions); the read’s timing prose names the same basis; the hold rates stay pooled; BASERATES.json carries byWeekday and the baked base byDow',
+         evidence='his words 2026-09-08: “I want to see the expected row on top of the HOD at the top … I dont need Rly · Done · PB · Num · Ret · Risk · Ext · Tgt · Rwd · Dur · Time” · “use mockup 2, because it compares friday with fridays in the past and mondays with past mondays … this is a type of seasonality”; measured on the corpus: Fridays reach the first extreme in ~19m, Tuesdays ~46m; Thursdays range ~70 pts, Tuesdays ~54 (n=55–60 per weekday)',
+         status='implemented', version='15.77', why='mockup 2 chosen in the chat 2026-09-08; shipped in v15.77'),
 ]
 
 if __name__ == '__main__':

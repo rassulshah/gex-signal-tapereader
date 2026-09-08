@@ -18,7 +18,7 @@ eval(v('IRT_RATIO_KEY')); eval(v('IRT_NQRATIO_KEY'));
 eval(v('KING_LATCH_KEY'));
 eval(src.match(/var KING_LATCH_MS=\d+/)[0]+';');   // trailing comment defeats the v() grab
 eval(v('IRT_QQQK_KEY')); eval(v('IRT_KINGS_KEY'));
-eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtKingLatch','irtKingHeld','irtQqqKing','irtBuildCsv'].map(ex).join('\n'));
+eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtKingLatch','irtKingHeld','irtGLatch','irtGHeld','irtQqqKing','irtBuildCsv'].map(ex).join('\n'));
 // (v14.75) the projection reads the RAIL's array — stub the two functions it comes from
 let RAIL_QQQ={ at:7691.25, book:'QQQ', raw:650, kind:'proportional' };
 global.emBand=()=>({ ok:true, now:7691.2, nowLive:7691.2, scaleUsed:10.0538 });
@@ -39,7 +39,11 @@ global.ifLadder=(sym)=>({ dispScale:1.0023, rows:IFL_ROWS, err:null,
                           srcSym:(sym==='QQQ'?'QQQ':'SPX') });   // srcSym is real: ifLadder returns it
 let IF_CHAIN={ dte0:{ gf:{ flip:7695 } } };
 global.ifChain=()=>IF_CHAIN;
-const SPXW_TAPE=()=>({ king:7710, pct:{ '7710.00':100, '7630.00':85, '7650.00':41 } });
+// (v15.76) SEVEN strikes, not three: the G rows take Skylit's ranks 2-5 by |%King|, so the fixture
+// needs a book with more than five nodes, a NEGATIVE node big enough to outrank a positive one
+// (7700 at -63 must beat 7650 at +41 — size, not sign), and two nodes that must be LEFT OUT.
+const SPXW_TAPE=()=>({ king:7710, pct:{ '7710.00':100, '7630.00':85, '7650.00':41, '7700.00':-63,
+                                        '7680.00':30, '7600.00':-22, '7720.00':18 } });
 let QQQ_TAPE=()=>({ king:650, count:20, fromFeed:false, pct:{ '650.00':-100, '648.00':44 } });
 global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
 let QQQ_LADDER=()=>null;                      // (v14.73) the face's array; null = fall through to the tape
@@ -56,13 +60,14 @@ ok(lines[0]==='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRIC
 // PROJECTED onto EPU26. The projection is counted with the NQ side because it is the same King in a
 // second coordinate system, not a fourth King.
 // (v14.79) the 0DTE trio (CW0 · PW0 · FLIP0) rides EVERY configured target, like the kings do.
-// rows[] = 2 kings + 3 IF levels = 5, x 2 target symbols = 10, + the NQ king + the ES projection.
-ok(b.n===7 && lines.length===1+5*2+2,
-   '1b n=7 (2 kings + 3 IF levels + NQ king + ES projection); rows = 5x2 syms + 2', [b.n,lines.length]);
+// (v15.76) so do G2..G5 — the rest of Skylit's top-5 (R-13).
+// rows[] = 2 kings + 3 IF levels + 4 G = 9, x 2 target symbols = 18, + the NQ king + the ES projection.
+ok(b.n===11 && lines.length===1+9*2+2,
+   '1b n=11 (2 kings + 3 IF levels + G2..G5 + NQ king + ES projection); rows = 9x2 syms + 2', [b.n,lines.length]);
 const eRows=lines.filter(l=>l.startsWith('EPU26,'));
 const qRows=lines.filter(l=>l.startsWith('ENQU26,'));
-ok(eRows.length===6 && qRows.length===1,
-   '1c EPU26 carries SPXW + SPY + CW0 + PW0 + FLIP + the projected QQQ; ENQU26 the native QQQ', [eRows.length,qRows.length]);
+ok(eRows.length===10 && qRows.length===1,
+   '1c EPU26 carries SPXW + SPY + CW0 + PW0 + FLIP + G2..G5 + the projected QQQ; ENQU26 the native QQQ', [eRows.length,qRows.length]);
 ok(eRows.filter(l=>/QQQ KING/.test(l)).length===1 && /,2,1,/.test(eRows.find(l=>/QQQ KING/.test(l))||''),
    '1c2 ...and the projection is DASHED (style 1), so it cannot pass for a native level at a glance');
 ok(lines.slice(1).every(l=>l.split(',').length===28), '1d every row keeps exactly 28 columns');
@@ -294,6 +299,81 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
      '4h a blind tick HOLDS the last good King — the line stays on his chart', row2&&row2.split(',')[1]);
   ok(/latched/.test(IRT_LAST.nqWhy||''), '4h2 ...and the export says it is held, not fresh', IRT_LAST.nqWhy);
   QQQ_LADDER=keepL; QQQ_TAPE=keepT; }
+
+// ---------- 4t. G2..G5 — THE REST OF SKYLIT'S TOP-5, WHITE (v15.76, R-13) ----------
+// Operator, 2026-09-07: "i want to update the irt export so it exports the top 5 levels for the spx
+// also. G1 - G5. all should be white. in addition to this, it already exports the kings, cw0, pw0 and
+// the flip." Asked which five, he chose MIRROR SKYLIT: NODES=5 draws the five largest nodes by |%King|
+// and the King is always #1 of them — so the King's slot is the gold SPXW KING line and the four that
+// follow are G2..G5. ⚠ No G1 row: one level, one line.
+{
+  const G=eRows.filter(l=>/,G\d,/.test(l));
+  ok(G.length===4 && G.map(l=>l.split(',')[2]).join(' ')==='G2 G3 G4 G5',
+     '4t1 EPU26 carries exactly G2 G3 G4 G5, in rank order', G.map(l=>l.split(',')[2]));
+  ok(!/,G1[ ,]/.test(b.csv) && !/,G6[ ,]/.test(b.csv), '4t2 no G1 (the King\'s slot is the gold line) and nothing past G5');
+  // ranks 2-5 of {7710:100, 7630:85, 7700:-63, 7650:41, 7680:30, 7600:-22, 7720:18} by |%King|:
+  // 7630 → 7700 → 7650 → 7680; 7600 and 7720 stay out. Prices go SPX x dispScale 1.0023 on the 0.25 tick.
+  const px=G.map(l=>l.split(',')[1]);
+  ok(px.join(' ')==='7647.500000 7717.750000 7667.500000 7697.750000',
+     '4t3 G2=7630 G3=7700 G4=7650 G5=7680 — the -63% put node OUTRANKS the +41% call node (size, not sign)', px);
+  ok(!/,7613\.500000,|,7737\.750000,/.test(G.join('\n')), '4t3b the 6th and 7th nodes (7600 at -22 → 7613.50, 7720 at 18 → 7737.75) are left out');
+  ok(G.every(l=>l.split(',')[3]===String((255<<16)+(255<<8)+255)), '4t4 all four are WHITE (RGB 16777215) — his call', G.map(l=>l.split(',')[3]));
+  ok(G.every(l=>l.split(',')[4]==='1' && l.split(',')[5]==='0'), '4t4b width 1, SOLID (by column index, not substring) — under the King\'s 3');
+  // the ETF target carries the same four in SPY space, cents, no tick
+  const gSpy=lines.filter(l=>l.startsWith('SPY,') && /,G\d,/.test(l));
+  ok(gSpy.length===4 && Math.abs(parseFloat(gSpy[0].split(',')[1]) - 7630*1.0023/10.0538) < 0.006,
+     '4t5 SPY rides the same four: G2 7630 x 1.0023 / 10.0538 = 760.66', gSpy.map(l=>l.split(',')[1]));
+  ok(G.every(l=>!/ ~/.test(l.split(',')[2])), '4t6 a LIVE ratio leaves the G labels untagged');
+  { global.FUTMODE={ fam:'ES', r:10.0538, live:false };
+    const Bt=irtBuildCsv(); const Gt=Bt.csv.split('\r\n').filter(l=>l.startsWith('EPU26,') && /,G\d ~,/.test(l));
+    ok(Gt.length===4, '4t6b ...and a last-known ratio marks every G label with ~ like every other EPU26 row', Gt.length);
+    global.FUTMODE={ fam:'ES', r:10.0538, live:true }; }
+  irtBuildCsv();
+  ok(IRT_LAST.gWhy==='live (G2 7630 85%, G3 7700 -63%, G4 7650 41%, G5 7680 30%)',
+     '4t7 IRT_LAST.gWhy names the four strikes and their sizes', IRT_LAST.gWhy);
+}
+// ⚠ THE KING'S SLOT IS THE EXPORTED KING'S STRIKE — the LATCHED crown (v14.19), not the tape's 100%.
+// During a flap the new 100% node is not the exported King, so it must show up as G2 rather than
+// vanish: a level under a lesser label beats a level absent from the chart.
+{ irtBuildCsv();                                                       // latches the 7710 crown
+  const T2=()=>({ king:7700, pct:{ '7700.00':-100, '7710.00':96, '7650.00':40 } });
+  global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():T2());
+  const Bf=irtBuildCsv(); const L=Bf.csv.split('\r\n').filter(l=>l.startsWith('EPU26,'));
+  const kf=L.find(l=>/SPXW KING/.test(l)); const g2=L.find(l=>/,G2,/.test(l)); const g3=L.find(l=>/,G3,/.test(l));
+  ok(kf && /^EPU26,7727\.750000,/.test(kf), '4t8 the exported King is still the latched 7710', kf);
+  ok(g2 && /^EPU26,7717\.750000,/.test(g2), '4t8b ...and the tape\'s new 100% crown (7700) is G2, not dropped and not doubled', g2);
+  ok(g3 && /^EPU26,7667\.500000,/.test(g3) && !L.some(l=>/,G[2-5],/.test(l) && /,7727\.750000,/.test(l)),
+     '4t8c 7710 is never ALSO a G row — one level, one line', L.filter(l=>/,G\d,/.test(l)));
+  global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); delete LS[KING_LATCH_KEY]; }
+// ⚠ HELD like the Kings (v14.74): a blind tick must not delete four lines from his chart.
+{ irtBuildCsv();                                                       // seeds today's G hold
+  global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():null);                     // the SPXW tape goes blind
+  const Bh=irtBuildCsv(); const Gh=Bh.csv.split('\r\n').filter(l=>l.startsWith('EPU26,') && /,G\d,/.test(l));
+  ok(Gh.length===4 && Gh.map(l=>l.split(',')[1]).join(' ')==='7647.500000 7717.750000 7667.500000 7697.750000',
+     '4t9 a blind tick HOLDS the four G rows at their last good prices', Gh.map(l=>l.split(',')[1]));
+  ok(/^held \d+m/.test(IRT_LAST.gWhy||''), '4t9b ...and says they are held, not fresh', IRT_LAST.gWhy);
+  ok(Gh.every(l=>l.split(',')[4]==='1' && l.split(',')[5]==='0' && l.split(',')[3]===String(16777215)), '4t9c held rows keep the same white, width 1, solid');
+  const keepDay=global.ctTodayStr; global.ctTodayStr=()=>'2026-08-28';   // the next session
+  const Bd=irtBuildCsv();
+  ok(!(Bd && /,G\d,/.test(Bd.csv)), '4t9d ...and NEVER across days — yesterday\'s nodes are a different book');
+  ok(/nothing latched today/.test(IRT_LAST.gWhy||''), '4t9e ...which the export says in words', IRT_LAST.gWhy);
+  global.ctTodayStr=keepDay; global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); }
+// the hold only ever returns G2..G5 rows — a corrupt or foreign entry cannot draw a stray line
+{ LS[IRT_KINGS_KEY]=JSON.stringify({ day:ctTodayStr(), G:{ rows:[{k:760, lbl:'G1'}, {k:'x', lbl:'G2'}, {k:761.5, lbl:'G3'}], t:Date.now() } });
+  const H=irtGHeld();
+  ok(H && H.rows.length===1 && H.rows[0].lbl==='G3', '4t10 irtGHeld filters to well-formed G2..G5 rows', H&&H.rows);
+  delete LS[IRT_KINGS_KEY]; }
+
+// ⚠ ONE CONVERSION FOR THE WHOLE SPXW BOOK (v15.76): the King and the G rows go through the same
+// closure, and on a LIVE ES chart that closure prefers the chart's own basis (dispScale / R) over the
+// IF ladder's undScale (v14.14, chart-frame independence). A fixture whose ladder carries BOTH is the
+// only way to tell the two apart — the mutation run found the earlier fixture could not.
+{ global.ifLadder=(sym)=>({ dispScale:1.0023, undScale:0.0995, rows:IFL_ROWS, err:null, srcSym:'SPX' });
+  const Bb=irtBuildCsv(); const L=Bb.csv.split('\r\n').filter(l=>l.startsWith('EPU26,'));
+  const kk=L.find(l=>/SPXW KING/.test(l)); const g2=L.find(l=>/,G2,/.test(l));
+  ok(kk && /^EPU26,7727\.750000,/.test(kk), '4t11 on a live ES chart the King follows the chart basis (7727.75), not undScale (7713.25)', kk);
+  ok(g2 && /^EPU26,7647\.500000,/.test(g2), '4t11b ...and so does G2 — same closure, same scale', g2);
+  global.ifLadder=(sym)=>({ dispScale:1.0023, rows:IFL_ROWS, err:null, srcSym:(sym==='QQQ'?'QQQ':'SPX') }); }
 
 // ---------- 5. everything else stays OUT ----------
 ok(!/IF /.test(b.csv), '5a the IF walls are out of the file');

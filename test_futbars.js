@@ -33,6 +33,7 @@ global.HLBASE_MIN_SESSIONS = val('HLBASE_MIN_SESSIONS');
 global.HLBASE_MIN_BUCKET   = val('HLBASE_MIN_BUCKET');
 global.FUTBARS_KEY = 'gpts_futbars_v1';
 eval(ex('hlBaseNormalise')); eval(ex('hodlodBase')); eval(ex('hlTier'));
+global.HLBASE_MIN_DOW=val('HLBASE_MIN_DOW'); global.HL_DOWS=val('HL_DOWS'); eval(ex('hlBaseByDow'));   // (v15.77) the weekday blocks
 eval(ex('futBarsLoad')); eval(ex('futBarsHealth'));
 
 // a well-formed BASERATES.json, the shape tools/study-hodlod.py actually writes

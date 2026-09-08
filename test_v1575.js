@@ -17,7 +17,7 @@ function ex(n){ const m=new RegExp('function\\s+'+n+'\\s*\\(','g').exec(src); if
 const exVar=(n)=>{ const i=src.indexOf('var '+n+'='); if(i<0) throw new Error('no var '+n); const j=src.indexOf(';\n', i); return src.slice(i, j+1); };
 const exVarLine=(n)=>{ const i=src.indexOf('var '+n+'='); if(i<0) throw new Error('no var '+n); const j=src.indexOf(';', i); return src.slice(i, j+1); };
 
-ok(/@version\s+15\.75/.test(src) && /var GPTS_VERSION='15\.75';/.test(src),'0a v15.75 in both spots');
+ok(/@version\s+15\.(7[5-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[5-9]|[89]\d)';/.test(src),'0a v15.75 or later in both spots');
 
 // the CT clock: 2026-09-07 (Labor Day, a Monday). A feed whose newest minute is Friday 14:59 CT = 2026-09-04T19:59:00Z.
 const FRI_LAST=1788551940, MON_0831=1788784260;   // 2026-09-07T13:31:00Z
@@ -147,14 +147,14 @@ const frames=[{t:1788551040},{t:1788551880},{t:1788551940}].map(f=>({ t:f.t*1000
 {
   ok(/window\.__gptsDebug\.closed=function\(\)/.test(src),'7a the probe: __gptsDebug.closed()');
   const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=P.roadmap.filter(r=>r.status==='next');
-  ok(nx.length===1 && nx[0].v==='15.75' && /CLOSED STATE/.test(nx[0].title) && P.roadmap.some(r=>r.v==='15.74' && r.status==='shipped'),'7b the plan: v15.74 shipped, v15.75 this build',nx.map(x=>x.v));
+  ok(P.roadmap.some(r=>r.v==='15.75' && /CLOSED STATE/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.75'))) && P.roadmap.some(r=>r.v==='15.74' && r.status==='shipped'),'7b the plan: v15.74 shipped, v15.75 this build or shipped',nx.map(x=>x.v));
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P),'7c PLAN_SEED equals the file');
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r12=R.rows.find(r=>r.id==='R-12');
   ok(r12 && r12.status==='implemented' && r12.version==='15.75' && r12.by==='operator' && /closed state/i.test(r12.text),'7d R-12 on Rec, implemented in v15.75',r12&&[r12.status,r12.version]);
   const seedR=JSON.parse(/var REC_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedR)===JSON.stringify(R),'7e REC_SEED equals the file');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/## v15\.75/.test(cl) && cl.indexOf('## v15.75')<cl.indexOf('## v15.74b'),'7f the CHANGELOG has the v15.75 entry on top');
   const ls=fs.readFileSync('session-state/LESSONS.md','utf8'); const logAt=ls.indexOf('## 2 · THE LESSON LOG'); ok(/### v15\.75/.test(ls.slice(logAt>=0?logAt:0)),'7g the lesson log carries the v15.75 entry');
-  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.75/.test(rn.slice(0,600)) && /closed state/i.test(rn),'7h the resume note is at v15.75 and names the closed state');
+  const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.(7[5-9]|[89]\d)/.test(rn.slice(0,600)) && /closed state/i.test(rn),'7h the resume note is at v15.75 or later and names the closed state');
   const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/CLOSED STATE/.test(cfg.theWhatAndTheHow.closedState||'') && cfg.theWhatAndTheHow.pinnedBy.indexOf('test_v1575.js')>=0,'7i .gex-config.json names the closed state and this test');
   const inv=fs.readFileSync('design/DASHBOARD-INVENTORY.md','utf8'); ok(/## 0j · v15\.75/.test(inv),'7j the inventory carries §0j');
 }

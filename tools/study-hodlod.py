@@ -189,7 +189,9 @@ def main(paths, out=None):
         rng = hi[1] - lo[2]
         rec = dict(day=d, hod_t=hod_t, lod_t=lod_t, first='LOD' if first_low else 'HOD',
                    took=(min(hod_t, lod_t)-RTH_A)//60, gap=abs(hod_t-lod_t)//60,
-                   rng_pts=round(rng, 2), rng_usd=round(rng*PT_USD, 2))
+                   rng_pts=round(rng, 2), rng_usd=round(rng*PT_USD, 2),
+                   # (v15.77) the session's colour, RTH close against RTH open — his tool's "Red Day / Green Day"
+                   green=(b[-1][3] > b[0][4]))
         rec.update(wick_fields(b))
         rows.append(rec)
         surv_lo += survival(b, True); surv_hi += survival(b, False)
@@ -278,6 +280,17 @@ def main(paths, out=None):
                       rule="operator 2026-08-28: no-wick days and crazy outliers are not averaged; "
                            "a zero wick still PRINTS 0 on the day's own row"),
         wend_definition="first bar to CLOSE back through the session open after the first extremity")
+    # ---- (v15.77) THE SAME ROW, PER WEEKDAY — his seasonality ----------------------------------
+    # Operator, 2026-09-08: "it compares friday with fridays in the past and mondays with past
+    # mondays ... mondays and fridays have beginning and end of week characteristics which are
+    # different than mid week characteristics. this is a type of seasonality." Every E field is
+    # re-derived over the sessions of ONE weekday with the SAME statistic and the SAME exclusions
+    # as the pooled block above (trimmed mean, zero-wick and never-reclaimed days out, Tukey fence),
+    # so the weekday row and the pooled row can be read against each other. Each carries its n — a
+    # weekday is ~55-60 sessions here, a fifth of the corpus, and the face must say so.
+    # ⚠ The pooled block above is UNCHANGED: the ladder (hold rates by age) stays pooled — split five
+    # ways its rungs go thin — and the panel reads it from the same place it always did.
+    res['byWeekday'] = weekday_blocks(rows)
     # the mix, so a consumer can see a pooled corpus rather than discover it
     mix = collections.Counter(prov[d] for d in days)
     res['corpus']['sources'] = dict(mix)
@@ -292,6 +305,92 @@ def main(paths, out=None):
     else:
         print(json.dumps(res, indent=1))
     return res
+
+
+WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+
+
+def expected_block(rows):
+    """The E row over a set of session rows: expected + sequence + wickFamily, the pooled block's own
+    statistics (trimmed mean, Tukey 1.5xIQR) and exclusions, with every n. Returns None under 8
+    sessions - a fence needs eight points, and a row over fewer is a number, not an expectation."""
+    if len(rows) < 8:
+        return None
+    drop = {}
+    def tmean(xs, key=None):
+        xs = [x for x in xs if x is not None]
+        if not xs:
+            return None
+        kept, n_out = tukey_keep(xs)
+        if key:
+            drop[key] = n_out
+        return round(sum(kept) / len(kept), 1) if kept else None
+    med_true = lambda xs: round(st.median(xs), 1) if xs else None
+    firsts = collections.Counter(r['first'] for r in rows)
+    rng_all = [r['rng_pts'] for r in rows]
+    out = dict(
+        sessions=len(rows), first=min(r['day'] for r in rows), last=max(r['day'] for r in rows),
+        sequence=dict(LOD_first=firsts['LOD'], HOD_first=firsts['HOD'],
+                      pct_LOD_first=round(100 * firsts['LOD'] / len(rows))),
+        expected=dict(
+            took_min=tmean([r['took'] for r in rows], 'took'),
+            gap_min=tmean([r['gap'] for r in rows], 'gap'),
+            rng_pts=tmean(rng_all, 'rng_pts'),
+            rng_usd=tmean([r['rng_usd'] for r in rows], 'rng_usd'),
+            rng_p25=round(st.quantiles(rng_all, n=4)[0], 1),
+            rng_p75=round(st.quantiles(rng_all, n=4)[2], 1),
+            first_clock=tmean([min(r['hod_t'], r['lod_t']) for r in rows], 'first_clock'),
+            second_clock=tmean([max(r['hod_t'], r['lod_t']) for r in rows], 'second_clock'),
+            statistic='trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28',
+            outliers_excluded=drop,
+            median_for_contrast=dict(
+                took_min=med_true([r['took'] for r in rows]),
+                gap_min=med_true([r['gap'] for r in rows]),
+                rng_pts=med_true(rng_all),
+                first_clock=med_true([min(r['hod_t'], r['lod_t']) for r in rows]),
+                second_clock=med_true([max(r['hod_t'], r['lod_t']) for r in rows]))))
+    wick_rows = [r for r in rows if r.get('reclaimed')]
+    n_never = len(rows) - len(wick_rows)
+    n_zero = sum(1 for r in wick_rows if r['wick'] == 0)
+    pool = [r for r in wick_rows if r['wick'] not in (None, 0)]
+    wick_stats, wick_drop = {}, {}
+    for key in ('wick', 'bop', 'mud', 'wick_pct', 'wick_pts'):
+        kept, n_out = tukey_keep([r[key] for r in pool])
+        wick_stats[key] = round(sum(kept) / len(kept), 1) if kept else None
+        wick_stats[key + '_median'] = round(st.median(kept), 1) if kept else None
+        wick_drop[key] = n_out
+        wick_stats[key + '_n'] = len(kept)
+    out['wickFamily'] = dict(median=wick_stats,
+                             excluded=dict(never_reclaimed=n_never, zero_wick=n_zero,
+                                           outliers_tukey_1_5_iqr=wick_drop))
+    # (v15.77) THE RECENT SIX — his tool's "Last 6 per Weekday": the colour of the last six sessions
+    # of this weekday (RTH close vs RTH open), a count, never a rate, and the days it stands on.
+    last = sorted(rows, key=lambda r: r['day'])[-6:]
+    g = sum(1 for r in last if r.get('green'))
+    out['recent'] = dict(n=len(last), green=g, red=len(last) - g,
+                         days=[r['day'] for r in last],
+                         rng_pts=round(sum(r['rng_pts'] for r in last) / len(last), 1) if last else None)
+    return out
+
+
+def weekday_blocks(rows):
+    """One expected_block per weekday, keyed Mon..Fri (a weekend session, if a corpus ever carried one,
+    is left out rather than filed under a weekday it is not)."""
+    import datetime as _dt
+    by = collections.defaultdict(list)
+    for r in rows:
+        try:
+            wd = _dt.date.fromisoformat(r['day']).weekday()
+        except ValueError:
+            continue
+        if wd < 5:
+            by[WEEKDAYS[wd]].append(r)
+    out = {}
+    for name in WEEKDAYS:
+        blk = expected_block(by.get(name, []))
+        if blk:
+            out[name] = blk
+    return out
 
 
 def market_sources(market):

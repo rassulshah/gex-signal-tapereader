@@ -1,3 +1,116 @@
+## v15.77 — THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY: his expected row, Fridays against past Fridays
+
+> Operator, 2026-09-08, showing his own tool's A/E strip: "I want to see the expected row on top of the HOD at the
+> top. I think it takes into account the day from the data, so if it is tuesday, it averages Tuesdays. I dont need
+> Rly 24m · Done 9:15am · PB 9:18am · Num 1 · Ret 49% · Risk $462 · Ext 2.03 ($925) · Tgt 27.25pts ($1,362) · Rwd
+> $1,362 · Dur 1h 15m · Time 10:33am. do you understand .. show me mockup." Two mockups rendered from the real face
+> (all sessions n=284 · the weekday n=55); his choice: "use mockup 2, because it compares friday with fridays in the
+> past and mondays with past mondays … mondays and fridays have beginning and end of week characteristics which are
+> different than mid week characteristics. this is a type of seasonality. you should also be tracking the ranges and
+> other things based on seasonality (day of week)." → R-14.
+
+**What the row is.** `.g3erow` / `hlERowHtml`, emitted before the HOD/LOD read line: the E tag with its basis and n
+(*E · FRI n=55*), the weekday's recent colour (*3/3 EVEN* · *RED 5/6* — a COUNT of the last six sessions of that
+weekday, RTH close against RTH open, never a rate; marked STALE when the newest of the six is more than 14 days
+before the shown day), the first extreme (*1ST HOD* once bars exist; before the first bar the weekday's LOD-first
+share), then HOD/LOD · took · BOP · wick · W.End · wick% · MUD · the other extreme · HL gap · HL rng — every value a ~
+(a trimmed mean; the hover carries the statistic, the exclusions and the wick n per field). One line at 760 px; the
+eleven fields he struck are not on it. It shows before the session has bars (the v14.69 rule: the E row is a backtest).
+
+**Where the numbers come from — the seasonality.** `tools/study-hodlod.py` now writes `byWeekday` into
+`BASERATES.json`: one block per weekday with the SAME statistic and the SAME exclusions as the pooled block
+(`expected_block` — trimmed mean, Tukey 1.5×IQR, no-wick and never-reclaimed days out of the wick fields), each with
+its n, plus `recent` (the last six sessions' colours and days). The pooled block is byte-for-byte unchanged (pinned).
+The panel normalises the blocks into `byDow` with the pooled base's own field names (`hlBaseByDow`; a weekday under
+`HLBASE_MIN_DOW`=40 sessions or with a malformed clock is left out, never half-read), the baked `HODLOD_BASE.byDow`
+carries the same five so the row is right without the courier, and `hodlodBaseFor(dow)` swaps EVERY expected field
+for the weekday's while the LADDER (hold rates by age) and the lookup table stay pooled — split five ways their rungs
+go thin, and they answer a different question. The weekday is the SHOWN session's (`hlDayShown` — a replay's or the
+closed state's day, else the recorder's; `hlDowOf` — null on a weekend, so a Saturday look at Friday's park reads
+Fridays). The read's hover timing prose reads the same basis as the row and says so ("expected gap … the 55 Fri
+sessions — the E row's basis"; the replacement rate marked pooled with its n) — one quantity, one source (v13.2).
+Measured while building, n=55–60 per weekday: Fridays reach the first extreme in ~19 m and Tuesdays in ~46 m;
+Thursdays range ~70 pts, Tuesdays ~54; Wednesdays are LOD-first 42%, Tuesdays 60%. The weekday is real on this
+corpus; the split is honest at n=55 and would not be at n=24 (a weekday AND a first-extreme), which is why the row
+conditions on the weekday only.
+
+**What is not built, and is next (v15.78, mockup first).** His two charts — red vs green by weekday (the last six
+of each) and the daily range by weekday (the last five or six, ranked, against a 10-week average) — as a seasonality
+subject on the Analysis tab. ⚠ Found while building: the plan's hodlod steps ③–④ (`append-futures.py` → the corpus
+grows by one session a day → `study-hodlod.py`) are described in the architecture and wired in nothing —
+`tools/nightly/run.py` never calls them and `data/futures/ES/` is empty in the clone — so the corpus ends 2026-08-21
+and the "recent six" are that date's six. The row says STALE after 14 days rather than pretending; wiring the two
+steps into the nightly is part of v15.78.
+
+**Tests.** `test_v1577.js` — 51 assertions: the study (five blocks partitioning the 284, the pooled block unmoved,
+the statistic declared per block, the measured weekday differences, `recent` as a count with its days, the colour
+definition), the normaliser (byDow, the floor, a malformed clock, the baked five), `hlDowOf` / `hlDayShown` (the
+replayed day), the basis switch (every expected field the weekday's, the ladder and n pooled, the fallback with
+`basis.pooled`, the courier missing a weekday, a baked block under the floor), the row (the cell order, every ~, the
+12-hour clock, W.End = 08:30 + wick, the chips: today's first / the LOD-first share before bars, GREEN 4/6 · RED 5/6 ·
+3/3 EVEN, STALE at 28 days and not at 14, no chip without a six, ALL n=284 on the fallback, the struck fields absent,
+no throw without a base), the face (the base on the shown weekday, the row BEFORE the read line, the prose, the
+stylesheet, the swallow) and the record. **14 of 14 mutants** (the floor survived the first run until 2p put a thin
+block in the BAKED base — the courier path already had one). `test_futbars.js` gained the byDow helpers; `test_v1564`
+7c re-pinned to "expected gap" — the prose said "median gap" since v14.58 while the number was a trimmed mean.
+
+**The record.** R-14 (by operator, implemented v15.77); the roadmap — v15.76 shipped, **v15.77 this build, v15.78
+SEASONALITY TRACKED (later, mockup first)**, the rest shifted by two (R-5 says v15.79); INVENTORY §0k; DECISIONS
+2026-09-08; LESSONS v15.77; the config (2026-09-08, `eRow`); the resume note; `mockups/mockup-e-row.{png,js,html}`;
+render `design/render-v1577-top.png`.
+
+## v15.76 — G2–G5 IN THE IRT EXPORT: the rest of Skylit's top-5, white, beside the Kings, CW0, PW0 and FLIP0
+
+> Operator, 2026-09-07: "i want to update the irt export so it exports the top 5 levels for the spx also. G1 - G5. all
+> should be white. in addition to this, it already exports the kings, cw0, pw0 and the flip." → R-13.
+
+**The one question, and where the answer came from.** "The top 5" on his ES chart has to mean what it means on his
+Skylit chart, and Skylit's top-5 includes the King. Asked which five, he asked back — *"What does skylit do"* — and the
+answer had to be the MEASURED setting map, not memory: `SKYLIT-FEEDS.md`, NODES = **1 / 3 / 5 / 10 / 15 / 20 (top-N)**
+or P15/P20/… (%King floors). NODES=1 draws only the King, so NODES=5 draws the five largest nodes by |%King| and the
+King (100%) is always #1 of them. His choice: **Mirror Skylit: G2–G5** — the King's slot on the IRT chart is the gold
+SPXW KING line already exported, and the four that follow are G2..G5, white. There is no G1 row: a second line at the
+King's price would be one level wearing two labels.
+
+**What the export writes now.** After the SPXW KING row, `irtBuildCsv` ranks the SAME `T.pct` the King row read — the
+rendered ladder strip via `tapeMap('SPXW')` — by |%King| (sign ignored: a −63% put node outranks a +41% call node,
+exactly as the overlay ranks them; ties toward the lower strike so the file is stable tick to tick), drops the EXPORTED
+King's strike (`kK`, the latched crown — during a crown flap the tape's new 100% node is not the exported King, so it
+appears as G2 rather than vanishing), and writes the next four as **G2 G3 G4 G5 — white (`IRT_COLORS.gate`), width 1,
+solid** — into the same `rows[]` the targets loop expands, so they ride EPU26 on the 0.25 tick with the same `~` rule
+and SPY in cents like every other row. One conversion for the whole SPXW book: the King and the G rows go through one
+closure (`spxRow`), the v14.14 chart-frame-independent path (a live ES chart → dispScale / R; else undScale; else
+dispScale / R). **Held like the Kings (v14.74):** `irtGLatch` / `irtGHeld` keep the four in `gpts_irt_kings_v1` under
+`G`, day-scoped, so a blind tick holds four lines instead of erasing them; `IRT_LAST.gWhy` says *live (G2 7630 85%, …)*,
+*held Nm*, or *no tape and nothing latched today*. The hold is an instrument — its call sits in its own `try`, so it can
+never break the rows it holds (the em_band fixture proved that path: a missing latch helper had left rows pushed but
+`gDone` false).
+
+**Why the Kings-only contract of v14.20 is not broken.** "Too many levels — step back to only exporting the kings" was
+about levels nobody asked for. Since then every family came back BY NAME in his words: the 0DTE trio (v14.79/80), the
+QQQ bearing on ES (v14.75), and now G2..G5. The header comment of `irtBuildCsv` says so; nothing returns to the file
+without his words above its rows, and the ban list in `test_irt_export.js` §5 still holds for everything else.
+
+**Tests.** `test_irt_export.js` — **129** assertions (was 108): the fixture's SPXW tape grew from three strikes to seven
+so ranks 2–5 fill, a negative node must outrank a positive one, and two nodes must be left out; §4t pins the four
+labels in rank order, no G1 and nothing past G5, the prices (7630 → 7647.50, 7700 → 7717.75, 7650 → 7667.50, 7680 →
+7697.75; 7600 and 7720 out), white / width 1 / solid by column index, SPY in cents, the `~` on a last-known ratio,
+`gWhy`, the flap case (the latched 7710 stays the King, the new 100% 7700 is G2, 7710 is never also a G row), the
+hold (four rows at their last prices, "held Nm", never across days), `irtGHeld`'s filter, and the shared conversion's
+precedence on a live ES chart (7727.75 by the chart basis, not 7713.25 by undScale) — that last pin exists because
+the **mutation run found the earlier fixture could not tell the two paths apart**: 13 of 14 mutants died, the
+survivor swapped the King's conversion for one that agreed on every fixture value. **14 of 14 after the fixture carried
+both scales.** `test_em_band.js` §(export) re-pinned: the two crowns + G2 G3 on a three-strike tape, white, width 1.
+Version pins moved (`test_direction_grade`, `test_pipeline_indicator`, `test_rules_v2`, `test_v1575` 0a/7b/7h "or
+later"); `test_v1576.js` (26) pins the build's shape and its record. Suite: 150 green / 6 red of 156 (the 5 baseline reds + `test_recordcurrent`, green once committed).
+
+**The record.** R-13 (by operator, implemented v15.76, the question and his answer in `why`); the roadmap — v15.75
+shipped 2026-09-07, **v15.76 this build**, the candidate score → v15.77 and the rest shifted by one (R-5 says v15.77);
+`DECISIONS.md` D-(export mirrors Skylit's top-5); LESSONS v15.76; the resume note; `.gex-config.json` 2026-09-07b.
+**Not built, on purpose:** the two day-line wrinkles seen live on 9/4's SAVED segment ("00:02 · 25 bars" — the late
+sweep's mark is preferred over the first write, and `dayBarCount` reads the trimmed localStorage recorder rather than
+the file) — listed under OPEN for the next build, not folded into his export request.
+
 ## v15.75 — THE CLOSED STATE: when the market has not opened, the dashboard stands on the last session as it was
 
 > Operator, 2026-09-07 (Labor Day), at his panel: "i guess the market is closed or something because of labor day, but the

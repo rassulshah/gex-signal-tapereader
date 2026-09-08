@@ -11,6 +11,25 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0k · v15.77 — the E row on top of the HOD line, per weekday (2026-09-08)
+
+One new element, at the very top of the dashboard above the HOD/LOD line: **the E row** (`.g3erow`, `hlERowHtml`) —
+his own tool's expected row minus the eleven fields he struck (Rly · Done · PB · Num · Ret · Risk · Ext · Tgt · Rwd ·
+Dur · Time): the E tag with its basis and n (*E · FRI n=55*), the weekday's recent colour (*3/3 EVEN* · *RED 5/6* — a
+COUNT of the last six sessions of that weekday, RTH close vs open, marked stale when the corpus has not been appended),
+the first extreme (*1ST HOD* once bars exist; before the first bar the weekday's LOD-first share), then HOD/LOD ·
+took · BOP · wick · W.End · wick% · MUD · the other extreme · HL gap · HL rng, every value a ~. **Every expected value
+is the weekday's** (`hodlodBaseFor(dow)`; the study's `byWeekday` blocks in `BASERATES.json`, baked as
+`HODLOD_BASE.byDow`; the weekday is the shown session's — a replay's or the closed state's day, else the recorder's)
+— his seasonality: Fridays against past Fridays. The LADDER (hold rates by age) and the lookup table stay POOLED and
+the hover says so; the read's timing prose now names the same basis as the row. Evidence: 55–60 sessions per weekday
+of the ES 1-minute corpus (2025-06-02 → 2026-08-21); measured differences — Fridays reach the first extreme in ~19m,
+Tuesdays ~46m; Thursdays range ~70 pts, Tuesdays ~54. Render `design/render-v1577-top.png`; mockup
+`mockups/mockup-e-row.png` (mockup 2 chosen). Serves: HOD/LOD (when the extremes are expected, on this weekday) ·
+DEFLECTION (the wick family: when the opening excursion ends). R-14. ⚠ The corpus is not appended by the nightly yet
+(`tools/append-futures.py` → `study-hodlod.py` are wired in the plan's text, not in `tools/nightly/run.py`), so the
+"recent six" are as of 2026-08-21 until that runs — the row says stale after 14 days.
+
 ## 0j · v15.75 — the closed state (2026-09-07, Labor Day)
 
 No new element on a live day. When the market has not opened today (a weekend, a holiday, before the open) the
