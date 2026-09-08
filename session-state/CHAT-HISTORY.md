@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-08 · v15.79 · session `f9c89c64` — v15.79 — the E row below the ladder, bigger; the candle's sweeps are the shown day's (R-16)
+## 2026-09-08 · v15.81 · session `f9c89c64` — v15.81: the IRT export on Skylit's own futures prices (R-23); the projection understood; F-20 solved (R-22 proposed); the E/A rows aligned; v15.80 the candle on the price axis, his key levels, the A row, MU/MD; the review of Friday
 
-_149 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_170 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1970,8 +1970,306 @@ Now the render for the record and the full record:
 
 **me (06:06):** The built face matches the mockup. Now the record and the ship:
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> the levels that are swept are the only ones that should be indicated.  EMH and EML are not levels  and they should be aligned based on the y axis which should be the price axis so th candle should show where it swept the level. do you undersatnd.   Do you indicate how much time it took to reclaim the Open in the candle prior to going to the 2nd extreme. Also a MUD of 0m doens't  make sense .  double check the values they are incorrect.
+> 
+> _[sent while I was working — a queued message]_
+
+**me (13:32):** Yes, I understand all four:
+
+1. **Only swept levels on the candle** — drop the "reversal ON" names (left column) and the "opened beyond" ones; a label means price traded through it.
+2. **EMH / EML out** — the expected-move edges are a band, not levels. They leave the candle (and I'll ask separately about the SWEPT line).
+3. **Labels on the price axis** — each swept level drawn at its own price on the candle (a tick across the bar at y(level) with the name beside it), so the candle shows *where* it swept, not a stack at the wick tip.
+4. **Reclaim time** — the candle shows only MUD today; BOP (first extreme → reclaim) and W.END (the reclaim clock) are in the DAY table's A row, not on the candle.
+
+**The values — you're right, they're wrong, and I found why.** The parked Friday candle measures the recorder's frames, not the ES bars. Friday's recording started at **09:46:50** (the page came up late) and the first three frames are on a drifted ratio, so the candle's "open" is the 09:46 price, its HOD is 11:54, its LOD 12:47 — and the same 12:47 frame is the first close back through that false open, so MUD = 0. Since v15.79 the sweep labels read the true ES 1-minute bars for the shown day, but the candle's own measures still read the frames: two sources under one label, my miss.
+
+Friday from the ES 1-minute bars: open 7742 · HOD 7751 at 08:36 (took 6m) · reclaim (W.END) 08:45 → BOP 9m, WICK 15m · LOD 7711.75 at 10:31 · **MUD 106m** · wick 23% · range 39.25.
+
+Doing now, in this order: the source fix (one source — the shown day's ES bars — for the candle, the A row and the sweeps; frames only when the courier has no such day), then the mockup for 1–3 rendered from the real face for your ✓. The review of Friday is in progress and comes after.
+Now a render script that seeds the co …[trimmed]
+
+**OPERATOR:**
+> [Image: original 2928x1296, displayed at 2000x885. Multiply coordinates by 1.46 to map to original image.]
+
+**me (13:44):** Mockup rendered from the real face (Friday, as it closed), now on the ES 1-minute bars:
+
+- **Right of the bar = the price axis.** Each swept level is a tick at its own price with the name and the minute it swept: IBL 9:42 (red · broke), KING 9:43 (green · reclaimed), VAL 9:48 (red · broke). Two levels closer than a line push apart; the tick stays at the true price with a short leader.
+- **Out:** EMH/EML (a band, not levels), the "opened beyond" ones (PDC, POC — the session opened past them, never swept them), and the reversal names on the left.
+- **Left of the bar, beside the open tick:** `↩ 8:45 · 9m` = the open reclaimed at 8:45, BOP 9m (the recovery leg) — your question 4, your call to keep or drop — then `MUD 1h46` and `$1,513`.
+- **Two more wrong values found and fixed on the way:** the MUD dollars were 10× too big on the ES chart ($15,168 for a $1,512 leg — converted twice, since v15.08), and the parked/replay candle now measures the ES bars (open 7742, HOD 08:36, took 6m, MUD 106m) instead of the frames.
+
+Tier 1–2 levels only (the SWEPT line's rule) — so PML 7731 (swept 9:12, tier 3) is not on it. Say ✓ to build v15.80 as shown, or what to change.
+
+**OPERATOR:**
+> much better but the king is not a key level.   the key levels are  PDH, PDL, ONL, ONH, WH, WL, Prior day POC, VAH, VAL, Weekly Poc,
+> 
+> _[sent while I was working — a queued message]_
+
+**me (13:53):** Done — the candle now wears only your key levels: PDH, PDL, ONH, ONL, prior-day POC, VAH, VAL (the King is out; IBL, PDC, the walls stay in the SWEPT line as structure). Friday: ONL 7731.25 reclaimed 9:12, VAL 7722 broke 9:48.
+
+Two things this turned up:
+- **ONH/ONL had never been drawn.** The courier splits bars by calendar day, so the "overnight" was only midnight→08:29 (509 bars, always the PMH/PML stub). Fixed: the night is now Thu 17:00 → Fri 08:29 (919 bars, full), the corpus's own definition.
+- **WH, WL and the weekly POC are not on it yet** — the courier holds five sessions, and the prior week isn't inside that window. They're in the tier-1 list by name (PWH/PWL, the corpus's names), so they draw the day the companion carries two weeks. That's a companion change I'll ask about after this build.
+
+✓ to build v15.80 as shown?
+
+**OPERATOR:**
+> I dont want IBL IBL PDC.  you can keep CW0 and PW0.  and POC is the prior day poc.  VAH and VAL is also prior day VAH and prior day VAL.
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:01):** Applied: IBL, IBH and PDC are out of the sweep set (the SWEPT line and the candle); CW0 and PW0 stay. POC, VAH and VAL are already the prior day's profile (Thursday's for Friday's candle) — confirmed in the code, and now labelled so.
+
+Friday's SWEPT line now reads: POC (opened below it) · ONL 9:12 reclaimed · VAL 9:48 · LDNL (London low) · KING. The candle keeps only the key levels: ONL and VAL. LDNL is mine from v15.57 — say the word and it goes too.
+
+Build v15.80 now?
+**Review delivered** — path: device bridge → `C:\Dev\gex-signal-tapereader\review\2026-09-08.json` (the sync task pushes it; the panel picks it up on its 10-minute check). Descriptive only; nothing applied.
+
+1. **The headline is the data, not the tape.** Since 08-25 every session's feature queue holds only its **last 15–30 bars** (13:39→14:57 on Friday: 27 of 101 snapshots). The recorder is fine — the snapshots are complete — the queue loses its morning. Every rate below is an afternoon-only sample; 176 bars over 7 sessions ≈ 18 independent observations. It is not FEAT_KEEP_BARS, not the chart window, and the snapshots weren't shed — I need `__gptsDebug.featHealth()` and `__gptsDebug.storage()` from the live panel around 11:00 and again at 14:00 to name the mechanism.
+2. **Friday's shape** (ES 1-minute): HOD 08:36 first (took 6m), open reclaimed 08:45 (BOP 9m), LOD 10:31, MUD 106m, range 39.25, red. This week: Mon took 1m, Tue 143m, Wed 7m, Thu 86m, Fri 6m.
+3. **What measured, with n:** Next Stop 67% (n 153), grade B 92% (26) above C 61% (127) — the one ladder that is the right way round. PB Entry: touched 45% of calls, held 55% of touched (n 60). Level state 77% (113). EM band 76% (100).
+4. **Inverted ladders:** node grade A 32% (65) < B 35% (54) < C 54% (28) — H1's shape again, on bars; direction B 20% …[trimmed]
+
+**OPERATOR:**
+> since the market is open you should show today
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:21):** Today's candle, rendered with v15.80 from your own courier rows (your panel's newest ES bar is 09:02 — the feed runs ~10 minutes behind). What changes on your screen: KING and CW0 leave the candle (they stay in the SWEPT line as structure), ONL sits at its price on the axis, MUD's dollars read $1,263 instead of $12,659, and the reclaim line ↩ 8:31 · 1m appears beside the open.
+
+Two things today's data forced, both fixed: the "prior session" walked back onto Labor Day (0 RTH bars, so no PDH/PDL and no profile) — it now skips a key with no session, so PDH/PDL/POC/VAH/VAL are Friday's; and the night had 61 evening bars + 509 morning bars = 570, under the old 600 floor, so ONL would have worn the pre-market stub's name and stayed off the candle — the night is FULL when both halves are there, not by count.
+
+Build?
+Now the record files — the plan, the Rec, the changelog, the lessons, decisions, config, inventory.
+Now the CHANGELOG, LESSONS, DECISIONS, config and inventory entries.
+Now the resume note: snapshot, then the head rewritten for v15.80.
+
+**OPERATOR:**
+> build
+> 
+> _[sent while I was working — a queued message]_
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> the levels that are swept are the only ones that should be indicated.  EMH and EML are not levels  and they should be aligned based on the y axis which should be the price axis so th candle should show where it swept the level. do you undersatnd.   Do you indicate how much time it took to reclaim the Open in the candle prior to going to the 2nd extreme. Also a MUD of 0m doens't  make sense .  double check the values they are incorrect.
+> 
+> _[sent while I was working — a queued message]_
+
+**me (13:32):** Yes, I understand all four:
+
+1. **Only swept levels on the candle** — drop the "reversal ON" names (left column) and the "opened beyond" ones; a label means price traded through it.
+2. **EMH / EML out** — the expected-move edges are a band, not levels. They leave the candle (and I'll ask separately about the SWEPT line).
+3. **Labels on the price axis** — each swept level drawn at its own price on the candle (a tick across the bar at y(level) with the name beside it), so the candle shows *where* it swept, not a stack at the wick tip.
+4. **Reclaim time** — the candle shows only MUD today; BOP (first extreme → reclaim) and W.END (the reclaim clock) are in the DAY table's A row, not on the candle.
+
+**The values — you're right, they're wrong, and I found why.** The parked Friday candle measures the recorder's frames, not the ES bars. Friday's recording started at **09:46:50** (the page came up late) and the first three frames are on a drifted ratio, so the candle's "open" is the 09:46 price, its HOD is 11:54, its LOD 12:47 — and the same 12:47 frame is the first close back through that false open, so MUD = 0. Since v15.79 the sweep labels read the true ES 1-minute bars for the shown day, but the candle's own measures still read the frames: two sources under one label, my miss.
+
+Friday from the ES 1-minute bars: open 7742 · HOD 7751 at 08:36 (took 6m) · reclaim (W.END) 08:45 → BOP 9m, WICK 15m · LOD 7711.75 at 10:31 · **MUD 106m** · wick 23% · range 39.25.
+
+Doing now, in this order: the source fix (one source — the shown day's ES bars — for the candle, the A row and the sweeps; frames only when the courier has no such day), then the mockup for 1–3 rendered from the real face for your ✓. The review of Friday is in progress and comes after.
+Now a render script that seeds the co …[trimmed]
+
+**OPERATOR:**
+> [Image: original 2928x1296, displayed at 2000x885. Multiply coordinates by 1.46 to map to original image.]
+
+**me (13:44):** Mockup rendered from the real face (Friday, as it closed), now on the ES 1-minute bars:
+
+- **Right of the bar = the price axis.** Each swept level is a tick at its own price with the name and the minute it swept: IBL 9:42 (red · broke), KING 9:43 (green · reclaimed), VAL 9:48 (red · broke). Two levels closer than a line push apart; the tick stays at the true price with a short leader.
+- **Out:** EMH/EML (a band, not levels), the "opened beyond" ones (PDC, POC — the session opened past them, never swept them), and the reversal names on the left.
+- **Left of the bar, beside the open tick:** `↩ 8:45 · 9m` = the open reclaimed at 8:45, BOP 9m (the recovery leg) — your question 4, your call to keep or drop — then `MUD 1h46` and `$1,513`.
+- **Two more wrong values found and fixed on the way:** the MUD dollars were 10× too big on the ES chart ($15,168 for a $1,512 leg — converted twice, since v15.08), and the parked/replay candle now measures the ES bars (open 7742, HOD 08:36, took 6m, MUD 106m) instead of the frames.
+
+Tier 1–2 levels only (the SWEPT line's rule) — so PML 7731 (swept 9:12, tier 3) is not on it. Say ✓ to build v15.80 as shown, or what to change.
+
+**OPERATOR:**
+> much better but the king is not a key level.   the key levels are  PDH, PDL, ONL, ONH, WH, WL, Prior day POC, VAH, VAL, Weekly Poc,
+> 
+> _[sent while I was working — a queued message]_
+
+**me (13:53):** Done — the candle now wears only your key levels: PDH, PDL, ONH, ONL, prior-day POC, VAH, VAL (the King is out; IBL, PDC, the walls stay in the SWEPT line as structure). Friday: ONL 7731.25 reclaimed 9:12, VAL 7722 broke 9:48.
+
+Two things this turned up:
+- **ONH/ONL had never been drawn.** The courier splits bars by calendar day, so the "overnight" was only midnight→08:29 (509 bars, always the PMH/PML stub). Fixed: the night is now Thu 17:00 → Fri 08:29 (919 bars, full), the corpus's own definition.
+- **WH, WL and the weekly POC are not on it yet** — the courier holds five sessions, and the prior week isn't inside that window. They're in the tier-1 list by name (PWH/PWL, the corpus's names), so they draw the day the companion carries two weeks. That's a companion change I'll ask about after this build.
+
+✓ to build v15.80 as shown?
+
+**OPERATOR:**
+> I dont want IBL IBL PDC.  you can keep CW0 and PW0.  and POC is the prior day poc.  VAH and VAL is also prior day VAH and prior day VAL.
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:01):** Applied: IBL, IBH and PDC are out of the sweep set (the SWEPT line and the candle); CW0 and PW0 stay. POC, VAH and VAL are already the prior day's profile (Thursday's for Friday's candle) — confirmed in the code, and now labelled so.
+
+Friday's SWEPT line now reads: POC (opened below it) · ONL 9:12 reclaimed · VAL 9:48 · LDNL (London low) · KING. The candle keeps only the key levels: ONL and VAL. LDNL is mine from v15.57 — say the word and it goes too.
+
+Build v15.80 now?
+**Review delivered** — path: device bridge → `C:\Dev\gex-signal-tapereader\review\2026-09-08.json` (the sync task pushes it; the panel picks it up on its 10-minute check). Descriptive only; nothing applied.
+
+1. **The headline is the data, not the tape.** Since 08-25 every session's feature queue holds only its **last 15–30 bars** (13:39→14:57 on Friday: 27 of 101 snapshots). The recorder is fine — the snapshots are complete — the queue loses its morning. Every rate below is an afternoon-only sample; 176 bars over 7 sessions ≈ 18 independent observations. It is not FEAT_KEEP_BARS, not the chart window, and the snapshots weren't shed — I need `__gptsDebug.featHealth()` and `__gptsDebug.storage()` from the live panel around 11:00 and again at 14:00 to name the mechanism.
+2. **Friday's shape** (ES 1-minute): HOD 08:36 first (took 6m), open reclaimed 08:45 (BOP 9m), LOD 10:31, MUD 106m, range 39.25, red. This week: Mon took 1m, Tue 143m, Wed 7m, Thu 86m, Fri 6m.
+3. **What measured, with n:** Next Stop 67% (n 153), grade B 92% (26) above C 61% (127) — the one ladder that is the right way round. PB Entry: touched 45% of calls, held 55% of touched (n 60). Level state 77% (113). EM band 76% (100).
+4. **Inverted ladders:** node grade A 32% (65) < B 35% (54) < C 54% (28) — H1's shape again, on bars; direction B 20% …[trimmed]
+
+**OPERATOR:**
+> since the market is open you should show today
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:21):** Today's candle, rendered with v15.80 from your own courier rows (your panel's newest ES bar is 09:02 — the feed runs ~10 minutes behind). What changes on your screen: KING and CW0 leave the candle (they stay in the SWEPT line as structure), ONL sits at its price on the axis, MUD's dollars read $1,263 instead of $12,659, and the reclaim line ↩ 8:31 · 1m appears beside the open.
+
+Two things today's data forced, both fixed: the "prior session" walked back onto Labor Day (0 RTH bars, so no PDH/PDL and no profile) — it now skips a key with no session, so PDH/PDL/POC/VAH/VAL are Friday's; and the night had 61 evening bars + 509 morning bars = 570, under the old 600 floor, so ONL would have worn the pre-market stub's name and stayed off the candle — the night is FULL when both halves are there, not by count.
+
+Build?
+Now the record files — the plan, the Rec, the changelog, the lessons, decisions, config, inventory.
+Now the CHANGELOG, LESSONS, DECISIONS, config and inventory entries.
+Now the resume note: snapshot, then the head rewritten for v15.80.
+
+**OPERATOR:**
+> build
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:28):** Now the hand-filled sections for this build.
+
+**OPERATOR:**
+> currently the irt export includes qqq converted for ES ,  remove this.  qqq should only be converted for nq
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:29):** Removing the QQQ-on-ES bearing from the export and re-pinning its tests.
+
+**OPERATOR:**
+> Under the Expected row add the Today (Actual ) row.
+> 
+> _[sent while I was working — a queued message]_
+> also MUD should be dynamic,  MU or MD
+> 
+> _[sent while I was working — a queued message]_
+> Try to use common sense colors for the expected and actual rows.  for example green or red. MU should be green, MD should be red.
+> 
+> _[sent while I was working — a queued message]_
+> thee should also be the expectation for the day , which is either a Green day or a Red day .  you can place this before 1st HOD and dont need other badges that are there before 1st hod like 3/3 even , so you can use this space instead
+> 
+> _[sent while I was working — a queued message]_
+> also in the export for irt , i dont want dashed or dotted lines, make all solid lines
+> 
+> _[sent while I was working — a queued message]_
+> Can you add additional levels for NQ as well , similar to how you have it for ES,  so NQ would include G2- G5 also
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:39):** Re-pinning the E row test to the v15.80 row (MU/MD, the coloured labels, the expectation chip):
+Now the final rows mockup with today's data and the record updates for the four additions.
+All six of this morning's asks are in v15.80 and I'm building now: the candle on the price axis with your key levels; the A row under the E row (same columns, today's values, no ~); MU/MD instead of MUD (MU green, MD red; HOD cells green, LOD cells red — on both rows and the candle); the expectation chip first on the E row — GREEN DAY / RED DAY from the opening-range call (DAY ? before it fires), the "3/3 EVEN" badge folded into its hover; the IRT export with no QQQ-on-ES row, every line solid, and G2–G5 on the NQ symbol from the QQQ book. Tests, mutation pass and the installer follow — a few minutes.
+Now the records for the four additions, then the suite, the guard, the commit and the installer.
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (14:57):** Re-pin the stale §5b assertions to the aligned rows (tag `A · TUE`, date/"so far" in the hover, the `.g3eag` grid, `1ST ?`/`DAY ?` placeholders):
+Now verify the fallback in a real browser at a narrow width, and the aligned state at his width (943 px):
+Now the full suite:
+
+**OPERATOR:**
+> I added the projecttion feature in skylit. i want you to look it up and see how it is calculated and how we can use it . I also see percentages next to it. find out how it is calculated and what it means and how it can be used.   also look at th levels in skylit and the levels you are sending me in the export , are they the same or is there a computing error. Can this be resolved using the projected levels which look like current levels ?  just double check the levels in skylit and what you give me for irt and compare to projectected levles
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:30):** **PROJECTION — what it is and how Skylit computes it** (read from the app's own code and its live feed, checked against the labels on your chart)
+
+- Data: for the ES chart Skylit fetches `gex/levels?symbol=ES1` — ES has **no option book of its own**; the payload is all *derived*: the SPY book (ratio 10.026), the SPXW book (1.00058) and the SPX monthly, every strike **already converted to an ES price with Skylit's live ratio** (SPY 770 → 7720.4, SPXW 7700 → 7704.6). That is what the Derived orbs on your chart are. The projection request adds `with_slices` → one merged node list **per expiration** (Mon 8 · Tue 9 · Wed 10 · Thu 11 · Mon 14 — the "rolling basket" of the next 4).
+- The forward columns (the shaded zone past the last candle, "3 Days" on your 3-min chart): at each step the expirations still alive are merged per strike: **|GEX| × 1/√(days to expiry)**, floored at half a day, and an expiry fades to zero over its last two steps. So the nearest expiry dominates: 0DTE ×1.41, tomorrow ×0.91, Wed ×0.67, Thu ×0.56.
+- **The percentage = that merged size relative to the column's strongest strike** (the projection's own king = 100%) — the same reading as the node labels, NOT the 0DTE %King. Today: 7721 — 100% is SPY 770, 7705 — 86% is SPXW 7700, 7710 — 82% is SPXW 7705, 7691 — 72% is SPY 767. Recomputing from the slices gives 100 / 86 / 81 / 76 — it matches. (SPXW 7705 reads 94% on the 0DTE tape but 82% here because SPY 770 has more week-gamma behind it.)
+- It also computes, per column, a **target price** (gamma-weighted mean strike — the centre path / target dot), a **std-dev cone** (narrower when + and − gamma agree) and a regime word: compressed / balanced / directional / unstable. Skylit calls it beta: "contextual estimates, not signals".
+- How we can use it: (1) the …[trimmed]
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> the rows should be aligned. the firt badge can simply be E Tue and A Tue or something like that so the entire row is symmetrical
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (14:57):** Re-pin the stale §5b assertions to the aligned rows (tag `A · TUE`, date/"so far" in the hover, the `.g3eag` grid, `1ST ?`/`DAY ?` placeholders):
+Now verify the fallback in a real browser at a narrow width, and the aligned state at his width (943 px):
+Now the full suite:
+
+**OPERATOR:**
+> I added the projecttion feature in skylit. i want you to look it up and see how it is calculated and how we can use it . I also see percentages next to it. find out how it is calculated and what it means and how it can be used.   also look at th levels in skylit and the levels you are sending me in the export , are they the same or is there a computing error. Can this be resolved using the projected levels which look like current levels ?  just double check the levels in skylit and what you give me for irt and compare to projectected levles
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:30):** **PROJECTION — what it is and how Skylit computes it** (read from the app's own code and its live feed, checked against the labels on your chart)
+
+- Data: for the ES chart Skylit fetches `gex/levels?symbol=ES1` — ES has **no option book of its own**; the payload is all *derived*: the SPY book (ratio 10.026), the SPXW book (1.00058) and the SPX monthly, every strike **already converted to an ES price with Skylit's live ratio** (SPY 770 → 7720.4, SPXW 7700 → 7704.6). That is what the Derived orbs on your chart are. The projection request adds `with_slices` → one merged node list **per expiration** (Mon 8 · Tue 9 · Wed 10 · Thu 11 · Mon 14 — the "rolling basket" of the next 4).
+- The forward columns (the shaded zone past the last candle, "3 Days" on your 3-min chart): at each step the expirations still alive are merged per strike: **|GEX| × 1/√(days to expiry)**, floored at half a day, and an expiry fades to zero over its last two steps. So the nearest expiry dominates: 0DTE ×1.41, tomorrow ×0.91, Wed ×0.67, Thu ×0.56.
+- **The percentage = that merged size relative to the column's strongest strike** (the projection's own king = 100%) — the same reading as the node labels, NOT the 0DTE %King. Today: 7721 — 100% is SPY 770, 7705 — 86% is SPXW 7700, 7710 — 82% is SPXW 7705, 7691 — 72% is SPY 767. Recomputing from the slices gives 100 / 86 / 81 / 76 — it matches. (SPXW 7705 reads 94% on the 0DTE tape but 82% here because SPY 770 has more week-gamma behind it.)
+- It also computes, per column, a **target price** (gamma-weighted mean strike — the centre path / target dot), a **std-dev cone** (narrower when + and − gamma agree) and a regime word: compressed / balanced / directional / unstable. Skylit calls it beta: "contextual estimates, not signals".
+- How we can use it: (1) the …[trimmed]
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (14:57):** Re-pin the stale §5b assertions to the aligned rows (tag `A · TUE`, date/"so far" in the hover, the `.g3eag` grid, `1ST ?`/`DAY ?` placeholders):
+Now verify the fallback in a real browser at a narrow width, and the aligned state at his width (943 px):
+Now the full suite:
+
+**OPERATOR:**
+> I added the projecttion feature in skylit. i want you to look it up and see how it is calculated and how we can use it . I also see percentages next to it. find out how it is calculated and what it means and how it can be used.   also look at th levels in skylit and the levels you are sending me in the export , are they the same or is there a computing error. Can this be resolved using the projected levels which look like current levels ?  just double check the levels in skylit and what you give me for irt and compare to projectected levles
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:30):** **PROJECTION — what it is and how Skylit computes it** (read from the app's own code and its live feed, checked against the labels on your chart)
+
+- Data: for the ES chart Skylit fetches `gex/levels?symbol=ES1` — ES has **no option book of its own**; the payload is all *derived*: the SPY book (ratio 10.026), the SPXW book (1.00058) and the SPX monthly, every strike **already converted to an ES price with Skylit's live ratio** (SPY 770 → 7720.4, SPXW 7700 → 7704.6). That is what the Derived orbs on your chart are. The projection request adds `with_slices` → one merged node list **per expiration** (Mon 8 · Tue 9 · Wed 10 · Thu 11 · Mon 14 — the "rolling basket" of the next 4).
+- The forward columns (the shaded zone past the last candle, "3 Days" on your 3-min chart): at each step the expirations still alive are merged per strike: **|GEX| × 1/√(days to expiry)**, floored at half a day, and an expiry fades to zero over its last two steps. So the nearest expiry dominates: 0DTE ×1.41, tomorrow ×0.91, Wed ×0.67, Thu ×0.56.
+- **The percentage = that merged size relative to the column's strongest strike** (the projection's own king = 100%) — the same reading as the node labels, NOT the 0DTE %King. Today: 7721 — 100% is SPY 770, 7705 — 86% is SPXW 7700, 7710 — 82% is SPXW 7705, 7691 — 72% is SPY 767. Recomputing from the slices gives 100 / 86 / 81 / 76 — it matches. (SPXW 7705 reads 94% on the 0DTE tape but 82% here because SPY 770 has more week-gamma behind it.)
+- It also computes, per column, a **target price** (gamma-weighted mean strike — the centre path / target dot), a **std-dev cone** (narrower when + and − gamma agree) and a regime word: compressed / balanced / directional / unstable. Skylit calls it beta: "contextual estimates, not signals".
+- How we can use it: (1) the …[trimmed]
+
+**OPERATOR:**
+> yes, i want them to match skylits own ES1 prices ? why weren
+> why weren't they done this way before ?
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:45):** Building it now (R-23 → v15.81). Why not before, honestly:
+
+1. When the export was written (v14.1x, mid-August) the panel's model of Skylit was "SPY and QQQ have books; ES is a chart with no book of its own" — so it converted with a basis it measured itself (the ES/SPY EMA from the two prices, persisted; SPX→ES from the IF companion's spot). That was a deliberate design at v11.4.1 ("the ratio must not depend on what is charted"), not an oversight at the time.
+2. The feed that disproves it — `symbol=ES1`, every level already at Skylit's ES price — was being thrown away: the observer counts every non-SPY/QQQ payload and drops it ("mapped to SPY/QQQ only"). It has counted ~195 ES1 payloads a day and nobody opened one until your projection question made me look inside.
+3. "Match Skylit always" became the standing rule yesterday; the two rulers had never been compared at the same second before today, so the 0.5–1.5 pt wander was invisible — the strikes and the order were right, only the placement drifted.
+
+Same lesson as the MUD dollars: the number was plausible and sat next to correct ones. Going into LESSONS.
+Now the new test file for v15.81:
+Now the mutation pass for v15.81:
+Now the CHANGELOG, DECISIONS, LESSONS, INVENTORY, config and the resume note:
+Now the resume note — the head rewritten for v15.81:
+
 ### DECISIONS
 
+- **The candle on the price axis, his key levels (2026-09-08, "build"; R-17, v15.80):** *"the levels that are swept are
+  the only ones that should be indicated. EMH and EML are not levels and they should be aligned based on the y axis
+  which should be the price axis"* → *"the king is not a key level. the key levels are PDH, PDL, ONL, ONH, WH, WL,
+  Prior day POC, VAH, VAL, Weekly Poc"* → *"I dont want IBL IBH PDC. you can keep CW0 and PW0. and POC is the prior day
+  poc. VAH and VAL is also prior day VAH and prior day VAL"* → *"since the market is open you should show today"*.
+  Tier 1 = exactly his list; the King tier 2; EM/PDC/IB out of the sweep set; the reversal names gone; MUD and the
+  reclaim line (his question 4) beside the open tick. **"Double check the values"** → the parked candle read the
+  recorder's frames (MUD 0m) while its sweeps read the ES bars — one source now; the MUD dollars were 10× since v15.08.
+  **ONH/ONL** are the full night for the first time; **a holiday key is not a session** (the prior session skips it,
+  the night before it does not). WH/WL/weekly POC wait for the companion's window (asked next, one at a time).
+- **The A row · MU/MD · the colours · the expectation chip · the IRT lines · G rows on NQ (2026-09-08, mid-build; R-18…R-21,
+  v15.80):** *"Under the Expected row add the Today (Actual) row."* · *"MUD should be dynamic, MU or MD"* · *"MU
+  should be green, MD should be red"* · *"there should also be the expectation for the day … Green day or a Red day …
+  before 1st HOD and dont need other badges … like 3/3 even"* · *"the irt export includes qqq converted for ES, remove
+  this. qqq should only be converted for nq"* · *"i dont want dashed or dotted lines, make all solid lines"* · *"add
+  additional levels for NQ as well … G2-G5"*. All six shipped in the same build, each with its own pins and mutants.
+- **The review of Friday ("reviw", 2026-09-08):** delivered over the bridge as `review/2026-09-08.json` (named for the
+  day it is written — the panel fetches `review/<lastTradingDay>.json`). Its headline is the sample, not a rate: the
+  queue holds only the last ~80 minutes of every session (F-20, mechanism open, the live probe named). H10 registered
+  forward from the nightly's own HOD/LOD cells; no proposal clears the bar; F-21 the ledger (acm = dec).
 - **The E row below the ladder, bigger (2026-09-08, "build"; R-16, v15.79):** under the ladder and the candle, above the
   SET line and the replay strip; values 10.5 px, labels 8.6, chips 9, spread across the row (two mockups: 9 px was
   "make it bigger"). **One door for "which day":** the candle's sweeps and the SWEPT line read the SHOWN day
@@ -2153,7 +2451,59 @@ Now the render for the record and the full record:
   into 769 (fixed in test_v1563/v1564); the King strip's price was not given the pulse — motion stays on the ladder,
   where he asked for it.
 
+- **The E and A rows aligned (2026-09-08, after the first v15.80 installer; R-21, v15.80 rebuilt):** *"the rows should
+  be aligned. the firt badge can simply be E Tue and A Tue or something like that so the entire row is symmetrical"* →
+  one thirteen-column grid (`.g3eag`, rows `display:contents`), tags `E · TUE` / `A · TUE` (`E · ALL` pooled; the n,
+  the basis, the date, "so far / as it closed" in the hovers), `DAY ?` / `1ST ?` placeholders, `eagFit()` returning
+  the rows to wrapping below ~900 px. Same installer name; he must run the second `installv1580.bat`.
+- **The projection question (2026-09-08, ~10:30 CT; answered, nothing built):** *"I added the projecttion feature in
+  skylit … how it is calculated and how we can use it … percentages next to it … the levels in skylit and the levels
+  you are sending me in the export, are they the same or is there a computing error. Can this be resolved using the
+  projected levels …"* → read from the app's chunk 988 and its `symbol=ES1` feed (ALL derived, pre-converted to ES by
+  Skylit's live ratio): the projection merges the next 4 expirations per strike with |GEX| × 1/√days-to-expiry, the
+  label % = strength against the column's strongest, plus a target price, a cone and a regime word; verified against
+  the drawn labels. The export's SPXW/SPY rows are the SAME strikes in the SAME order as Skylit's, 0.5–1.5 pt apart
+  because our SPX→ES basis is the IF spot on a 3-minute clock and Skylit's is its own each minute — not a computing
+  error. Proposed: read the export's ES prices straight from the ES1 derived rows ("match Skylit always"). His answer
+  pending. SKYLIT-FEEDS.md § "THE ES1 BOOK AND THE PROJECTION FEATURE" holds the measurements.
+
+- **The export on Skylit's own futures prices (2026-09-08, ~11:00 CT; R-23, v15.81):** *"yes, i want them to match
+  skylits own ES1 prices"* · *"why weren't they done this way before?"* → the ES1 / NQ1 derived books are kept
+  (`LASTFUTDER`), self-fetched while the export is on, and every ES and NQ row in the file takes Skylit's price
+  (`skylitFutPx`); the panel's basis is the tilde-tagged fallback; one ruler in the file (the IF 0DTE rows on the SPXW
+  ratio); the gear's IRT line names the ruler. Answered plainly why not before: a mid-August model that ES has no book,
+  the ES1 feed counted and discarded, the rule a day old, the rulers never compared at the same second.
+
 ### SHIPPED
+
+**v15.81** (panel + installer; companion v1.18 unchanged) — THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES (R-23).
+`LASTFUTDER` / `FUTDER_STALE_MS` / `SKY_FUT`, `futDerNewestT`, the onFeed capture (ES1 / NQ1 gamma with derived[]),
+`selfFetchFut` + the ensureFeeds gate, `skylitFutPx`, `irtBuildCsv` (`esOf`, rows' `es`, the targets loop, `nqPx`,
+`IRT_LAST.skyWhy` / `nqSkyWhy`), `irtKingLatch(…, src)` / `irtKingHeld().src`, the gear's IRT line, `__gptsDebug.futDer()`.
+`test_v1581.js` 58 · 26/26 mutants; `test_v1580` 6b, `test_v1570` 1d re-pinned; the version pins moved. R-23 implemented,
+R-22 proposed (F-20's fix); the roadmap (v15.81 this, seasonality → v15.82, score → v15.83, READ → v15.84, the rest +1;
+the Skylit integration names the futures books); CHANGELOG; DECISIONS; LESSONS v15.81; INVENTORY §0o; SKYLIT-FEEDS (the
+ES1 book, the projection formula, the comparison); FINDINGS F-20 CONFIRMED / F-10c amended; the review's
+`dataHealth.mechanism`; the config (2026-09-08f); the resume note (+ snapshot v15.80).
+
+**v15.80, second installer** (same name, `installv1580.bat`) — THE E/A ROWS ALIGNED: `.g3eag` grid + `display:contents`
+rows, tags `E · TUE` / `A · TUE`, the placeholders, `eagFit()` + `.narrow`; `test_v1580` 114 · 49/49 mutants; `test_v1577`
+3c/3o, `test_v1579` 1d re-pinned; mockup `mockup-e-a-rows-aligned.png`; R-21 amended; CHANGELOG, DECISIONS, INVENTORY §0n,
+LESSONS (10)(11), the config (2026-09-08e), the resume note; SKYLIT-FEEDS.md (the ES1 book, the projection);
+`tools/chat-history.py` (the summary heading without bold).
+
+**v15.80** (panel + installer; companion v1.18 unchanged) — THE CANDLE ON THE PRICE AXIS · ONE SOURCE FOR THE SHOWN DAY ·
+HIS KEY LEVELS · THE A ROW, MU/MD, THE EXPECTATION CHIP · THE IRT EXPORT SOLID, NO QQQ ON ES, G2–G5 ON NQ. `hlARowHtml`,
+`hlMudLabel`, the `.hi`/`.lo` colours, the GREEN DAY / RED DAY chip from `gdRead`; `irtCsvRow` PENSTYLE 0, `irtQqqTop`,
+`irtGLatch/irtGHeld(key)`, section 4 of `irtBuildCsv` removed; `test_irt_export` 131; `test_v1577` re-pinned. `dayCandleSvg`: the swept tier-1 levels as ticks at their price with the minute (push-apart, leader,
+slide-up, range clip, the cash-chart ratio), MUD + `↩ W.END · BOP` left of the bar, `mudUsd` once; `measureBarsRaw`
+(the shown day's ES bars first in a replay), `replayFrameBars`, `closedCandles` on the frames; `LEVEL_TIER` (his list;
+KING 2; EM/PDC/IB gone), `sweepLevelsToday` without EM/PDC/IB, `overnightHL` (the full night by halves),
+`futSessionBars(off, day, calendar)`; the slot's hover; H10 in `learning/register.json` + `PREREG_SEED` + `PREREG_PICK`,
+`HYP_STUDY` H10 → H1.5 (panel + `results.py`), `studies-seed.py` H1.5, `run.py` `judge_lodhod`; `tools/review-pool.py`,
+`tools/review-write-2026-09-08.py`, `review/2026-09-08.json`; FINDINGS F-20 / F-21; `test_v1580.js` (79) · 29/29 mutants;
+re-pins in `test_replay`, `test_nodeat`, `test_v1554`, `test_v1572`, `test_v1557`, `test_v1578`, the version pins;
+mockups `mockup-candle-axis{,-row,-today}`; R-17; the roadmap (v15.81 seasonality, v15.82 score, v15.83 READ).
 
 **v15.79** (panel + installer; companion v1.18 unchanged) — THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS
 ARE THE SHOWN DAY'S. `SECDAY_EROW` (built in `secDay`, emitted in `secLoc` before SET), the row's CSS (10.5 / 8.6 / 9 px,
@@ -2318,7 +2668,26 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He runs ONE file** — `installv1579.bat` (carries v15.76 → v15.79); wait 5 min; the tapereader link (as a link);
+- **He runs ONE file** — `installv1581.bat` (carries v15.76 → v15.81, the aligned rows included); wait 5 min; the
+  tapereader link (as a link); reload. Then: the FlexLevels file's SPXW King within a tick of the derived orb on his ES
+  chart, no '~' on the ES rows, the gear's IRT line reading `n of n ES rows on Skylit's ES1 prices`; `__gptsDebug.futDer()`
+  showing ES1 and NQ1 with their age.
+- **Answered (R-23 shipped):** the export's SPX / SPY / QQQ rows on Skylit's own ES1 / NQ1 prices.
+- **F-20 SOLVED, fix not built (R-22 on Rec):** the localStorage budget sheds the outcome queue from the second hour
+  (09:53 → 10:44 CT readings: shed 0 → 1, the queue's first bar 08:36 → 09:00, recorder 3,542 of 3,600 KB); export feat
+  from the IndexedDB archive and stop mirroring snaps into localStorage. Ask before building.
+- **A second Atlas tab (NQ1) was open at 10:45 CT** — two panels on one recorder store; flagged to him.
+- **He runs ONE file** — the SECOND `installv1580.bat` (same name; carries v15.76 → v15.80 with the aligned rows); wait
+  5 min; the tapereader link (as a link); reload. Then, on today's live candle: ONL 7687.5 at its price (KING / CW0 gone
+  from the candle, still in the SWEPT line), $1,263 under MD, `↩ 8:31 · 1m` beside the open; the E and A rows one grid,
+  `E · TUE` / `A · TUE`, every column lined up, RED DAY on both; the IRT file solid with four G rows on ENQU26 and no
+  QQQ row on EPU26; tomorrow pre-open the closed state standing on TODAY's ES bars.
+- **Next asks, one at a time:** WH / WL / weekly POC need the companion to carry two weeks (v1.19); the F-20 probe
+  (`__gptsDebug.featHealth()` + `.storage()` at ~11:00 and ~14:00 CT); v15.81 seasonality tracked (mockup first);
+  LDNL/LDNH on the SWEPT line (mine — keep or drop); the King latch under "match Skylit always".
+- **Noted, not touched:** `hlNodeAt` compares the SPY King and the ATR unconverted against ES extremes (rr = 1 on ES
+  bars since v15.08) — HodN/LodN read "—" more than they should.
+- (earlier) **He runs ONE file** — `installv1579.bat` (carries v15.76 → v15.79); wait 5 min; the tapereader link (as a link);
   reload. Then: the E row under the ladder at his size; the parked Friday candle wearing Friday's sweeps before 08:30;
   the release at 08:30 and today's sweeps accruing on the candle and the SWEPT line together.
 - (earlier) **He runs ONE file** — `installv1578.bat` (carries v15.76 → v15.78); wait 5 min; the tapereader link (as a link);
@@ -2436,6 +2805,11 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+636327c resume note + chat history: F-20 solved (R-22), R-23 pending his answer
+1012b6f F-20: the mechanism found live (the localStorage budget sheds the queue; the exported snaps come from IDB) — FINDINGS, the review's dataHealth; R-22 (export feat from the archive) and R-23 (Skylit's ES1 prices in the export) proposed; test_v1570 1d re-pinned
+5ea641e v15.80 (2): THE E AND A ROWS ALIGNED — one 13-column grid, E · TUE / A · TUE, eagFit; the projection question answered in SKYLIT-FEEDS (the ES1 book, the merge formula, the levels compared) (R-21)
+dc8148e v15.80: THE CANDLE ON THE PRICE AXIS · ONE SOURCE FOR THE SHOWN DAY · HIS KEY LEVELS · the A row, MU/MD, the expectation chip · the IRT export solid, no QQQ on ES, G2–G5 on NQ · the review of Friday (F-20, F-21, H10) (R-17…R-21)
+b704b82 v15.79: THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE THE SHOWN DAY'S (R-16)
 8af1c96 resume note: the installer is at 8.16 of 8.39 MB — trim the mockups' ride next build
 f754ab8 v15.78: THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS (R-15)
 ca2a16b v15.77: THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his seasonality (R-14)
@@ -2443,11 +2817,6 @@ ca2a16b v15.77: THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his seasonalit
 cfde302 v15.76: G2–G5 IN THE IRT EXPORT — the rest of Skylit's top-5, white, beside the Kings, CW0, PW0 and FLIP0 (R-13)
 4f6cf61 v15.75: THE CLOSED STATE — when the market has not opened, the dashboard stands on the last session as it was
 b202f47 session-state: 2026-09-07 design notes — the purpose tags (HOD/LOD · DEFLECTION), the Rec voice awaiting ✓, absorption/footprint sources, the RTX SDK path, the second project's purpose draft, SWEPT on NQ (R-11 proposed)
-062ce9d v15.74b (tools, no panel change): THE ORIGIN GUARD — the installer had overwritten his machine's 9/4 run with the cloud's copy
-235b66a v15.74: THE LOG SURVIVES A RELOAD — the day line read "analysis overdue" over a log his machine had just written
-77ea671 v15.73: THE DAY LINE — the process reporting on itself at the bottom of the panel
-51b88dd v15.72b (tools, no panel change): the nightly's output is UTF-8 on Windows (the task's first run on his machine logged a cp1252 charmap error printing the pattern report); PURPOSE §3b carries his expectation after the install (no click on the save, only the Rec tab); R-LINK - the Tampermonkey link is a clickable link, never only in a code block; the skill says so
-9698b9f v15.72: the face - the AFTER HOURS bar moves to the bottom of the panel (a full-width bar above the footer, after the close only), the King cards take the whole row and grow, the ladder 9 px with the columns widened, the leaked .g3pb border gone (a dead pullback rule's amber left border inside every RUG/RRUG/PIKA/BARNEY block); THE ROLLING FLOOR / CEILING registered - his read of 2026-09-04 as H8/H9 (predict + refuteIf, minN 30, base dir:up/dir:dn, since the first stamped session), every tap stamped with each book's King roll (kroll), four classes in both twins, K2.6/K2.7 on Analysis, judge_pat in the nightly; .gitattributes fixed (the task scripts stay CRLF), Claude outputs/ ignored; the Analysis mockup generator draws the nightly's count line; R-8 implemented
 ```
 
 ---

@@ -47,7 +47,8 @@ global.HLBASE_MIN_DOW=val('HLBASE_MIN_DOW'); global.HL_DOWS=val('HL_DOWS'); glob
 let LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,v)=>{LS[k]=String(v);} };
 let REPLAY_ON=false; global.REPLAY={ on:false, day:null }; global.replayOn=()=>REPLAY_ON;
 global.sessionDayStr=()=>'2026-09-08'; global.ctTodayStr=()=>'2026-09-08';
-eval(['hlBaseNormalise','hlBaseByDow','hlDowOf','hlDayShown','hodlodBaseFor','hodlodBase','hlDur','hlClock12','hlERowState','hlERowHtml'].map(ex).join('\n'));
+eval(['hlBaseNormalise','hlBaseByDow','hlDowOf','hlDayShown','hodlodBaseFor','hodlodBase','hlDur','hlClock12','hlMudLabel','hlERowState','hlERowHtml'].map(ex).join('\n'));   // (v15.80) hlMudLabel: MU / MD
+global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.gdRead=()=>({ ok:false, why:'no session read' });
 {
   ok(HLBASE_MIN_DOW===40 && HL_DOWS.join()==='Mon,Tue,Wed,Thu,Fri', '2a the floor is 40 sessions per weekday; the five names');
   const N=hlBaseNormalise(BR);
@@ -97,35 +98,42 @@ eval(['hlBaseNormalise','hlBaseByDow','hlDowOf','hlDayShown','hodlodBaseFor','ho
   ok(st.ok && st.f1==='HOD' && st.f2==='LOD' && st.first==='HOD', '3a with bars, the row reads today\'s first extreme first (HOD then LOD), as his strip does');
   ok(st.firstClock===baseF.firstClock && st.took===19.1 && st.wend===mul(8,3600)+mul(30,60)+baseF.wick.wick*60, '3b W.End = 08:30 + the expected wick, the other fields the weekday\'s', [st.took, st.wend]);
   const h=hlERowHtml('SPY', D('HOD'), baseF, false);
-  ok(/<span class="et">E · FRI n=55<\/span>/.test(h), '3c the E tag names the weekday and its n', h.slice(0,120));
+  ok(/<span class="et" title="n=55 — E — the EXPECTED row[^"]*">E · FRI<\/span>/.test(h), '3c the E tag names the weekday (E · FRI); its n leads the hover (v15.80: symmetrical with A · FRI)', h.slice(0,160));
   ok(/1ST HOD<\/span>/.test(h), '3d the first-extreme chip');
-  const cells=[...h.matchAll(/<span class="ec"><i>([^<]+)<\/i><b[^>]*>([^<]+)<\/b><\/span>/g)].map(m=>[m[1],m[2]]);
-  ok(cells.map(c=>c[0]).join('|')==='HOD|took|BOP|wick|W.End|wick%|MUD|LOD|HL gap|HL rng', '3e the cells, in his strip\'s order, minus the eleven he struck', cells.map(c=>c[0]));
+  const cells=[...h.matchAll(/<span class="ec"><i[^>]*>([^<]+)<\/i><b[^>]*>([^<]+)<\/b><\/span>/g)].map(m=>[m[1],m[2]]);   // (v15.80) the label may carry a colour class
+  ok(cells.map(c=>c[0]).join('|')==='HOD|took|BOP|wick|W.End|wick%|MD|LOD|HL gap|HL rng', '3e the cells, in his strip\'s order, minus the eleven he struck (v15.80: MUD reads MD when the second extreme is the LOD)', cells.map(c=>c[0]));
+  ok(/<i class="hi">HOD<\/i><b class="hi">/.test(h) && /<i class="lo">MD<\/i><b class="lo">/.test(h) && /<i class="lo">LOD<\/i><b class="lo">/.test(h), '3e2 (v15.80) common-sense colours: HOD green, MD and LOD red — label and value alike');
   ok(cells.every(c=>/^~/.test(c[1])), '3f every value wears the ~ — a trimmed mean, never a forecast', cells.map(c=>c[1]));
   ok(cells[0][1]==='~'+hlClock12(baseF.firstClock) && cells[1][1]==='~19m' && cells[9][1]==='~63.7pts · $'+Math.round(baseF.rngUsd).toLocaleString(),
      '3g the clock in 12h, took in minutes, the range in points and dollars', [cells[0][1], cells[1][1], cells[9][1]]);
   ok(!/Rly|Done|\bPB\b|\bNum\b|\bRet\b|Risk|\bExt\b|Tgt|Rwd|\bDur\b|>Time</.test(h.replace(/title="[^"]*"/g,'')), '3h none of Rly · Done · PB · Num · Ret · Risk · Ext · Tgt · Rwd · Dur · Time is on the row');
-  ok(/chip ev"[^>]*>3\/3 EVEN</.test(h), '3i the colour chip: the last six Fridays are 3 green / 3 red → "3/3 EVEN", a count');
-  // a leaning six, a stale six, no six
-  const bG=hodlodBaseFor('Fri'); bG.recent={ n:6, green:4, red:2, last:'2026-09-04' };
-  ok(/chip gd"[^>]*>GREEN 4\/6</.test(hlERowHtml('SPY', D('HOD'), bG, false)), '3j 4 green of 6 → "GREEN 4/6" in green');
-  const bR=hodlodBaseFor('Fri'); bR.recent={ n:6, green:1, red:5, last:'2026-09-04' };
-  ok(/chip rd"[^>]*>RED 5\/6</.test(hlERowHtml('SPY', D('HOD'), bR, false)), '3k 5 red of 6 → "RED 5/6" in red');
+  // (v15.80) THE EXPECTATION CHIP replaces the 3/3 EVEN badge — operator: "there should also be the expectation for the day,
+  // which is either a Green day or a Red day. you can place this before 1st HOD and dont need other badges … like 3/3 even"
+  ok(!/3\/3 EVEN</.test(h) && /chip ev"[^>]*>DAY \?</.test(h) && /closed 3 green \/ 3 red/.test(h), '3i no call yet: the chip reads "DAY ?" and the last six Fridays (3/3) moved into its hover');
+  ok(h.indexOf('DAY ?')<h.indexOf('1ST HOD'), '3i2 …placed before 1ST HOD');
+  global.gdRead=()=>({ ok:true, call:'GD', brk:1, at:'09:03' });
+  const hG=hlERowHtml('SPY', D('HOD'), baseF, false);
+  ok(/chip gd"[^>]*>GREEN DAY</.test(hG) && /76% right on 225 of 282 sessions/.test(hG), '3j the call fired up → "GREEN DAY" in green, its rate and n in the hover');
+  global.gdRead=()=>({ ok:true, call:'RD', brk:-1, at:'09:30' });
+  ok(/chip rd"[^>]*>RED DAY</.test(hlERowHtml('SPY', D('HOD'), baseF, false)), '3k …down → "RED DAY" in red');
+  global.gdRead=()=>({ ok:true, call:null, why:'the break and the first leg disagree — no call' });
+  const hS=hlERowHtml('SPY', D('HOD'), baseF, false);
+  ok(/chip ev"[^>]*>DAY \?</.test(hS) && /no call yet: the break and the first leg disagree/.test(hS), '3l a silent rule: "DAY ?" and the hover says why');
+  global.gdRead=()=>({ ok:false, why:'no session read' });
   const bS=hodlodBaseFor('Fri'); bS.recent={ n:6, green:4, red:2, last:'2026-07-17' };
-  const hS=hlERowHtml('SPY', D('HOD'), bS, false);
-  ok(/chip gd stale"/.test(hS) && /STALE: the corpus has not been appended/.test(hS), '3l a six whose newest day is more than 14 days old is marked STALE and the hover says why');
+  ok(/stale, the corpus has not been appended/.test(hlERowHtml('SPY', D('HOD'), bS, false)), '3l2 a stale six is named stale in the hover');
   const bN=hodlodBaseFor('Fri'); bN.recent=null;
-  ok(!/class="chip (gd|rd|ev)/.test(hlERowHtml('SPY', D('HOD'), bN, false)), '3m no recent six → no colour chip, never a guess');
+  ok(/chip ev"[^>]*>DAY \?</.test(hlERowHtml('SPY', D('HOD'), bN, false)) && !/closed \d+ green/.test(hlERowHtml('SPY', D('HOD'), bN, false)), '3m no recent six → the chip still stands (the call is the expectation), no count invented');
   // before the first bar: the weekday's LOD-first share stands in for the first extreme
   const hN=hlERowHtml('SPY', { ok:false, why:'no candles' }, baseF, true);
-  ok(/1ST LOD 51%<\/span>/.test(hN) && /<i>LOD<\/i>/.test(hN.split('<span class="ec">')[1]||''), '3n no bars: "1ST LOD 51%" (Fridays) and the LOD clock reads first', hN.slice(0,400));
+  ok(/1ST LOD 51%<\/span>/.test(hN) && /<i class="lo">LOD<\/i>/.test(hN.split('<span class="ec">')[1]||''), '3n no bars: "1ST LOD 51%" (Fridays) and the LOD clock reads first (v15.80: in red)', hN.slice(0,400));
   // the pooled fallback says ALL
-  ok(/<span class="et">E · ALL n=284<\/span>/.test(hlERowHtml('SPY', D('LOD'), hodlodBaseFor(null), false)), '3o the pooled row is tagged ALL with its n');
+  ok(/<span class="et" title="n=284 — E — the EXPECTED row[^"]*">E · ALL<\/span>/.test(hlERowHtml('SPY', D('LOD'), hodlodBaseFor(null), false)), '3o the pooled row is tagged E · ALL, its n in the hover (v15.80: "E Tue and A Tue … symmetrical")');
   ok(/his seasonality: Fridays against past Fridays/.test(h) && /BOP 47 · wick 45 · MUD 51/.test(h) && /hold rates in the line below stay pooled/.test(h),
      '3p the hover states the basis, the wick n per field, and that the hold rates stay pooled');
   ok(hlERowHtml('SPY', D('HOD'), { }, false)==='' && hlERowHtml('SPY', D('HOD'), null, false)==='', '3q no base → no row, no throw');
   global.sessionDayStr=()=>'2026-09-18';
-  ok(/chip ev stale"/.test(hlERowHtml('SPY', D('HOD'), baseF, false)), '3r …and on 2026-09-18 the same six (newest 08-21) ARE stale: 28 days, corpus not appended');
+  ok(/stale, the corpus has not been appended/.test(hlERowHtml('SPY', D('HOD'), baseF, false)), '3r …and on 2026-09-18 the same six (newest 08-21) ARE stale: 28 days, corpus not appended — said in the hover (v15.80: the badge is the expectation chip now)');
   global.sessionDayStr=()=>'2026-09-08';
 }
 

@@ -29,7 +29,7 @@ import glob, io, json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RATE_MIN_N = 15
-HYP_STUDY = {'H1': 'F5.2', 'H2': 'F2.1', 'H3': 'F6.1', 'H4': 'F1.4', 'H5': 'H1.3', 'H6': 'H2.7', 'H7': 'H2.8', 'H8': 'K2.6', 'H9': 'K2.7'}
+HYP_STUDY = {'H1': 'F5.2', 'H2': 'F2.1', 'H3': 'F6.1', 'H4': 'F1.4', 'H5': 'H1.3', 'H6': 'H2.7', 'H7': 'H2.8', 'H8': 'K2.6', 'H9': 'K2.7', 'H10': 'H1.5'}
 STUDY_SOURCES = {
     # the King (subject S0 / K1 / K2)
     'S0.1': ('pattern', ['king:any']),

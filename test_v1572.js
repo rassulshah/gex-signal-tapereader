@@ -121,7 +121,7 @@ ok(/@version\s+15\.(7[2-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[2-9]|
   ok(H9 && H9.pick==='pat' && H9.cls==='king:ceil:dn' && H9.outcome==='resume' && H9.base==='dir:dn' && H9.minN===30 && H9.since==='2026-09-08' && H9.judgedBy==='nightly','6b H9: the rolling ceiling, the mirror',H9);
   ok(/"when the king rolls up and is below price it may be creating a floor \(support\) and be bullish and vice versa"/.test(H8.note||'') && /rolling-floors-ceilings\.md/.test(H8.note||'') && /floor rolling up \(bullish\)/.test(H8.note||''),'6c his words and the doctrine article are in the note');
   const seed=new Function(exVar('PREREG_SEED')+' return PREREG_SEED;')();
-  ok(seed.length===9 && seed[7].id==='H8' && seed[7].pick==='pat' && seed[7].judgedBy==='nightly' && seed[8].id==='H9','6d the panel’s seed carries H8 / H9 (renders before the first fetch)',seed.map(h=>h.id));
+  ok(seed.length>=9 && seed[7].id==='H8' && seed[7].pick==='pat' && seed[7].judgedBy==='nightly' && seed[8].id==='H9','6d the panel’s seed carries H8 / H9 (renders before the first fetch)',seed.map(h=>h.id));
   const HS=new Function(exVar('HYP_STUDY')+' return HYP_STUDY;')();
   ok(HS.H8==='K2.6' && HS.H9==='K2.7','6e H8 → K2.6, H9 → K2.7 in the panel’s map');
   const rs=fs.readFileSync('tools/nightly/results.py','utf8');

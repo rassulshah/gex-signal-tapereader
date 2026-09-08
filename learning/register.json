@@ -109,6 +109,18 @@
    "refuteIf": "at n >= 30 the Wilson low of king:ceil:dn is not above the dir:dn resume rate",
    "note": "The mirror of H8: the largest ceiling migrating lower = ceiling rolling down (bearish). Same read, same bar, same source.",
    "judgedBy": "nightly"
+  },
+  {
+   "id": "H10",
+   "written": "2026-09-08",
+   "claim": "the HOD/LOD table’s late-session >=80% cells hold to the close at >=80% live",
+   "pick": "lodhodCell",
+   "minN": 60,
+   "since": "2026-09-08",
+   "predict": "pooled live rate of the 80-99 and 100-119 cells >= 80% at n >= 60 close-scored rows on sessions from 2026-09-08",
+   "refuteIf": "at n >= 60 the Wilson high of the pooled live rate is < 80%",
+   "note": "Written by the 2026-09-08 review from the nightly’s own cells on 09-03/09-04 (100-119: live 43% n 23 · 80-99: live 50% n 30) — those two sessions are NOT counted. The rows the queue keeps are late-session by construction (the feature queue holds only the last ~80 minutes, review 2026-09-08), which is exactly the cell family the table is most confident about; a refusal here is F-12 measured forward, a clearance means the late cells are honest and the first-crossing question is a separate one.",
+   "judgedBy": "nightly"
   }
  ]
 }

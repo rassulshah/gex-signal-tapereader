@@ -18,54 +18,58 @@ function val(n){ const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([\\s\\S]*?);\
 ok(/@version\s+15\.(7[8-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[8-9]|[89]\d)';/.test(src), '0a v15.78 or later in both spots');
 
 // ---------- 1. the candle: the same marks, in a frame of the caller's size ----------
+// ⚠ (v15.80) RE-PINNED. The v15.78 labels — the SWEPT line's events stacked at the wick tips on the right, the reversal
+// names on the left — lasted one session. Operator, 2026-09-08: "the levels that are swept are the only ones that should
+// be indicated … aligned based on the y axis which should be the price axis." The right column is the PRICE AXIS now
+// (test_v1580 §2 pins its geometry); what THIS section keeps is the frame contract of v15.78: the same candle at the
+// caller's size, the bar centred, the labels sized for the tall frame.
 global.mul=(a,b)=>a*b; global.two=x=>{x=''+x;return x.length<2?'0'+x:x;};
 global.g3esc=s=>String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
 global.g3tip=t=>t?(' title="'+g3esc(t)+'"'):'';
 global.swallow=(tag,e)=>{ global.__sw=(global.__sw||[]).concat([tag+': '+(e&&e.message||e)]); };
 global.DAYCOL_ROW=13; global.DAYCOL_HD=16; global.DAYCOL_N=9; global.ES_USD_PER_PT=50;
 global.frameNum=x=>(Math.round(x*100)/100).toString();
-global.LEVEL_TIER={ PDH:1,PDL:1,PDC:1,ONH:1,ONL:1,VAH:1,VAL:1,POC:1,KING:1,EMH:1,EML:1,IBH:2,IBL:2,CW0:2,PW0:2,VWAP:3 };
-eval(['levelTier','hlClock','hlDur','dayCandleSvg','sweepEventsShown'].map(ex).join('\n'));   // (v15.79) the candle reads the shown day's sweeps
+eval(['levelTier','hlClock','hlDur','hlMudLabel','dayCandleSvg','sweepEventsShown'].map(ex).join('\n'));   // (v15.79) the candle reads the shown day's sweeps; (v15.80) MU/MD
 global.replayOn=()=>false; global.hlDayShown=()=>'2026-09-08'; global.ctTodayStr=()=>'2026-09-08';
+global.LEVEL_TIER=val('LEVEL_TIER'); global.FUTMODE={ fam:'ES' }; global.irtRatio=()=>({ r:10.03 });
 let SB={ open:7700, close:7712 }; global.sessionBody=()=>SB;
 global.displayScale=()=>({ scale:10.05 });
-let RV={ ok:true, hi:[{name:'PDH',px:7751}], lo:[{name:'PDL',px:7690},{name:'ONL',px:7686}] }; global.revLevels=()=>RV;
 let SW=[]; global.sweepEventsToday=()=>SW;
-const D={ ok:true, open:7700, hod:7735, lod:7688, hodT:mul(11,3600)+mul(54,60), lodT:mul(12,3600)+mul(47,60), first:'HOD', second:'LOD', gap:53, mud:0, scale:1, rngUsd:2350 };
+const D={ ok:true, open:7700, hod:7735, lod:7688, hodT:mul(11,3600)+mul(54,60), lodT:mul(12,3600)+mul(47,60), first:'HOD', second:'LOD', gap:53, mud:0, scale:1, rngUsd:2350, isFut:true };
 const P={ ok:true, ptPx:7728, lcMin:130 };
 {
   const s0=dayCandleSvg('SPY', D, P);
   ok(/^<svg class="g3cdl" viewBox="0 0 98 137" width="98" height="137">/.test(s0), '1a without opts the candle is the DAY table\'s 98 x 137, class g3cdl, unchanged', s0.slice(0,70));
-  ok(/<line x1="48" y1=/.test(s0) && /x="96" y=/.test(s0), '1b …bar at x=48, the reversal names hard-right at 96 (the v15.06 column)');
-  ok(!/SWEPT/.test(s0) && !/class="g3cx sw"/.test(s0), '1c …and NO sweep labels on the small candle — the DAY table\'s candle is what it was');
+  ok(/<line x1="48" y1=/.test(s0) && !/x="96" y=/.test(s0), '1b …bar at x=48; (v15.80) no reversal names in the right column');
+  ok(!/SWEPT/.test(s0) && !/class="g3cx sw"/.test(s0), '1c …and no sweep labels while there are no sweeps');
   const s1=dayCandleSvg('SPY', D, P, { w:230, h:264 });
   ok(/^<svg class="g3cdl tall" viewBox="0 0 230 264" width="230" height="264">/.test(s1), '1d with {w,h} the frame is the caller\'s and the class says tall', s1.slice(0,70));
   ok(/<line x1="115" y1="30\.0" x2="115" y2="224\.0"/.test(s1), '1e the bar is centred (x=115) and runs from TOP 30 to 30+HGT (CH=264-4=260, HGT=260-66=194 → 224): two label lines above and below', (s1.match(/<line x1="115"[^>]*>/)||[])[0]);
-  ok(/HOD 11:54<\/text>/.test(s1) && /LOD 12:47<\/text>/.test(s1) && />53m<\/text>/.test(s1) && />2h10<\/text>/.test(s1) && /MUD 0m/.test(s1), '1f the HOD/LOD clocks, the legs after each, MUD — the labels he already had');
-  ok(/x="95" y="[\d.]+" class="g3cx" text-anchor="end" fill="#e3b341"><title>PDH/.test(s1) && /x="95" y="[\d.]+" class="g3cx" text-anchor="end" fill="#5fd08a"><title>PDL/.test(s1),
-     '1g in the tall frame the reversal names (ON the wick) sit LEFT of the bar at cx-20=95', (s1.match(/x="95"[^>]*>/g)||[]).length);
+  ok(/HOD 11:54<\/text>/.test(s1) && /LOD 12:47<\/text>/.test(s1) && />53m<\/text>/.test(s1) && />2h10<\/text>/.test(s1) && /MD 0m/.test(s1), '1f the HOD/LOD clocks, the legs after each, MD (v15.80: MUD reads MU / MD) — the labels he already had');
+  ok(/<text x="95" y="[\d.]+" class="g3cs" text-anchor="end" fill="#f0616d"><title>[^<]*<\/title>MD 0m<\/text>/.test(s1) && !/fill="#e3b341"><title>PDH/.test(s1), '1g (v15.80) MD sits LEFT of the bar at cx-20=95 beside the open tick, red; the reversal names are gone');
   ok(!/x="228"/.test(s1), '1h …and nothing is drawn in the right column while there are no sweeps');
-  // the sweep labels — the SWEPT line's own events, by side, in its colours
-  SW=[ {level:'POC',side:'LOD',status:'accepted',atBar:0,px:7702.5,at:'08:30'}, {level:'VAL',side:'LOD',status:'accepted',atBar:41,px:7699.25,at:'09:11'},
-       {level:'EML',side:'LOD',status:'reclaimed',atBar:55,px:7695.5,at:'09:25',speed:3}, {level:'KING',side:'LOD',status:'tested',atBar:60,px:7694,at:'09:30'},
-       {level:'VWAP',side:'LOD',status:'accepted',atBar:61,px:7693,at:'09:31'},     // tier 3 — not on the SWEPT line, not on the candle
-       {level:'ONH',side:'HOD',status:'reclaimed',atBar:120,px:7732,at:'10:30',speed:2} ];
+  // the sweep labels — the KEY levels price swept, at their own price (test_v1580 §2 pins the axis geometry; here: the set)
+  SW=[ {level:'POC',side:'LOD',status:'accepted',atBar:0,px:7702.5,at:'08:30'},                        // opened beyond — not drawn
+       {level:'VAL',side:'LOD',status:'accepted',atBar:41,px:7699.25,at:'09:11'},                     // key · broke
+       {level:'EML',side:'LOD',status:'reclaimed',atBar:55,px:7695.5,at:'09:25',speed:3},              // not a level
+       {level:'KING',side:'LOD',status:'tested',atBar:60,px:7694,at:'09:30'},                          // not a key level
+       {level:'VWAP',side:'LOD',status:'accepted',atBar:61,px:7693,at:'09:31'},                        // tier 3
+       {level:'ONH',side:'HOD',status:'reclaimed',atBar:120,px:7732,at:'10:30',speed:2} ];             // key · reclaimed
   const s2=dayCandleSvg('SPY', D, P, { w:230, h:264 });
-  const right=[...s2.matchAll(/<text x="228" y="([\d.]+)" class="g3cx sw" text-anchor="end" fill="(#[0-9a-f]{6})"><title>([^<]*)<\/title>([A-Z0-9]+)<\/text>/g)].map(m=>({y:+m[1],col:m[2],tip:m[3],name:m[4]}));
-  ok(right.length===5 && right.map(r=>r.name).join(' ')==='ONH POC VAL EML KING', '1i the sweep labels sit RIGHT of the bar at W-2, the HOD side then the LOD side, tier 1-2 only (VWAP out)', right.map(r=>r.name));
-  ok(right[0].y===33 && right[4].y===221 && right[1].y<right[2].y && right[2].y<right[3].y && right[3].y<right[4].y, '1j the HOD-side label hangs 3px under the top tip (30+3), the LOD-side stack ends 3px above the bottom tip (224-3) in SWEPT-line order', right.map(r=>r.y));
-  const byName=Object.fromEntries(right.map(r=>[r.name,r]));
-  ok(byName.EML.col==='#2ec27e' && byName.ONH.col==='#2ec27e' && byName.VAL.col==='#f0616d' && byName.KING.col==='#f2b45a' && byName.POC.col==='#6c7889',
-     '1k …in the SWEPT line\'s colours: green reclaimed · red broke · amber being tested · grey opened beyond', right.map(r=>r.name+':'+r.col));
-  ok(/EML 7695\.5 — swept 09:25 · reclaimed in 3 bars \(making LOD\)/.test(byName.EML.tip) && /ONH 7732 — swept 10:30 · reclaimed in 2 bars \(making HOD\)/.test(byName.ONH.tip) && /POC 7702\.5 — swept 08:30 · opened beyond/.test(byName.POC.tip),
-     '1l each label\'s hover carries the price, the time, the status words and the side — the SWEPT line\'s own words', byName.EML.tip);
-  ok(/class="g3cx" text-anchor="end" fill="#7cc7ff">SWEPT ▸<\/text>/.test(s2), '1m a SWEPT ▸ caption names the right column once any sweep is drawn');
+  const right=[...s2.matchAll(/<text x="140" y="([\d.]+)" class="g3cx sw" text-anchor="start" fill="(#[0-9a-f]{6})"><title>([^<]*)<\/title>([^<]*)<\/text>/g)].map(m=>({y:+m[1],col:m[2],tip:m[3],name:m[4]}));
+  ok(right.length===2 && right.map(r=>r.name).join(' | ')==='ONH 10:30 | VAL 9:11', '1i the swept KEY levels only, top-down by price, with the minute: ONH · VAL (POC opened-beyond, EML, KING, VWAP out)', right.map(r=>r.name));
+  const y=px=>30+(7735-px)/47*194;
+  ok(Math.abs(right[0].y-(y(7732)+3))<0.06 && Math.abs(right[1].y-(y(7699.25)+3))<0.06, '1j each label sits on its own price line (the axis), not at a wick tip', right.map(r=>r.y));
+  ok(right[0].col==='#2ec27e' && right[1].col==='#f0616d', '1k …green reclaimed · red broke', right.map(r=>r.name+':'+r.col));
+  ok(/ONH 7732 — swept 10:30 · reclaimed in 2 bars \(making HOD\)/.test(right[0].tip) && /VAL 7699\.25 — swept 09:11 · broke \(making LOD\)/.test(right[1].tip), '1l each label\'s hover carries the price, the time, the status words and the side', right.map(r=>r.tip));
+  ok(/class="g3cx" text-anchor="end" fill="#7cc7ff">SWEPT ▸<\/text>/.test(s2), '1m a SWEPT ▸ caption names the axis once any sweep is drawn');
   const s3=dayCandleSvg('SPY', D, P);
-  ok(!/class="g3cx sw"/.test(s3) && /x="96"/.test(s3), '1n the small candle still ignores the sweeps and keeps its names on the right');
-  SW=[ ...Array.from({length:9},(_,i)=>({level:'PDL',side:'LOD',status:'accepted',atBar:i+1,px:7690-i,at:'09:0'+i})),
-       ...Array.from({length:9},(_,i)=>({level:'PDH',side:'HOD',status:'accepted',atBar:i+20,px:7740+i,at:'10:0'+i})) ];
+  ok((s3.match(/class="g3cx sw"/g)||[]).length===2 && /<title>[^<]*<\/title>ONH<\/text>/.test(s3) && !/ONH 10:30/.test(s3), '1n (v15.80) the small candle wears the same axis, names only');
+  SW=[ ...Array.from({length:9},(_,i)=>({level:'PDL',side:'LOD',status:'accepted',atBar:i+1,px:7690-i*0.1,at:'09:0'+i})),
+       ...Array.from({length:9},(_,i)=>({level:'PDH',side:'HOD',status:'accepted',atBar:i+20,px:7730+i*0.1,at:'10:0'+i})) ];
   const s4=dayCandleSvg('SPY', D, P, { w:230, h:264 });
-  ok((s4.match(/class="g3cx sw"/g)||[]).length===14, '1o at most seven labels a side (nine offered on each) — the columns cannot run into the bar');
+  const ys=[...s4.matchAll(/<text x="140" y="([\d.]+)" class="g3cx sw"/g)].map(m=>+m[1]);
+  ok(ys.length===18 && ys.every((v,i)=>i===0 || v-ys[i-1]>=9.49) && ys[0]>=36 && ys[17]<=227, '1o (v15.80) no seven-a-side cap: all eighteen key-level sweeps a tenth apart draw, a line apart, between the HOD tip (30+3, +3 baseline) and the LOD tip (224-1, +3)', [ys.length, ys[0], ys[17]]);
   SW=[];
 }
 
@@ -88,7 +92,7 @@ const P={ ok:true, ptPx:7728, lcMin:130 };
   let d=dom({ f2W:976 }); candleFit();
   ok(d.slot.className==='g3ladcdl on' && REQ && REQ.w===230 && REQ.h===264, '2b 976 wide, the grid 734 + 8 gap → 234 free: the candle is built 230 wide (the slot\'s borders) and grid-height minus the header (281-17)', [d.slot.className, REQ]);
   ok(/^<div class="g3cdlhd">DAY · <b>FRI 4 SEP<\/b> · as it closed<\/div><svg/.test(d.slot.innerHTML), '2c the header names the shown day; in a replay or the closed state it reads "as it closed"', d.slot.innerHTML.slice(0,80));
-  ok(/THE DAY.S CANDLE, developing/.test(d.slot.title) && /RIGHT of the bar: the SWEPT line/.test(d.slot.title) && /LEFT of the bar: the levels the wick turned ON/.test(d.slot.title), '2d the hover explains every mark and both columns');
+  ok(/THE DAY.S CANDLE, measured on the ES 1-minute bars/.test(d.slot.title) && /RIGHT of the bar is the PRICE AXIS/.test(d.slot.title) && /the minute the open was reclaimed and BOP/.test(d.slot.title), '2d (v15.80) the hover explains every mark: the source, the axis, the reclaim line');
   global.replayOn=()=>false; d=dom({ f2W:976 }); candleFit();
   ok(/· developing<\/div>/.test(d.slot.innerHTML), '2e live, the header reads "developing"');
   REQ=null; d=dom({ f2W:840 }); candleFit();

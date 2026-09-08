@@ -160,6 +160,8 @@ def judge(H, eps, defl, null95, since='2026-09-03'):
     out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick=H.get('pick'))
     if H.get('pick') == 'pat':   # (v15.72) read from the pattern table once it exists (judge_pat, after the table is built)
         out.update(n=0, verdict='thin', bar='the pattern table is read after the episodes'); return out
+    if H.get('pick') == 'lodhodCell':   # (v15.80) H10 — read from the close-scored HOD/LOD rows (judge_lodhod, after the day files)
+        out.update(n=0, verdict='thin', bar='the close-scored cells are read after the day files'); return out
     if H.get('judgedBy') == 'nightly' or H.get('pick') in ('sweepNode', 'sweepEarly'):
         return judge_sweep(H, H.get('since') or since)
     if H.get('blocked'):
@@ -223,6 +225,31 @@ def _points(txt, dflt):
     return float(m.group(1)) if m else dflt
 
 # ---- HOD/LOD: live vs the table, close-scored only -----------------------------------------------
+def judge_lodhod(H, days, sym='SPY'):
+    """(v15.80) H10 — the table's late-session >=80% cells, read live: the close-scored lodhod rows (v15.51+) on sessions
+    from H['since'], pooled over the rows whose table p >= 80 — the same rows lodhod_calibration() reports every night;
+    this is the PRE-REGISTERED read of them (written 2026-09-08 from two sessions that are NOT counted)."""
+    out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick='lodhodCell', judgedBy='nightly')
+    since = H.get('since') or '2026-09-08'
+    n = k = 0; sess = set()
+    for d, D in days:
+        if d < since: continue
+        for r in (D.get('feat') or {}).get(sym) or []:
+            if not r or r.get('key') != 'lodhod' or not r.get('atClose') or r.get('hit') is None: continue
+            p = (r.get('rec') or {}).get('p')
+            if not isinstance(p, (int, float)) or p < 80: continue
+            n += 1; k += (1 if r['hit'] else 0); sess.add(d)
+    out.update(n=n, sessions=len(sess), since=since)
+    if n < H['minN']:
+        out.update(verdict='thin', bar='%d close-scored rows in the >=80%% cells on sessions from %s (needs %d)' % (n, since, H['minN'])); return out
+    r = k / n; lo, hi = wilson(k, n)
+    out.update(rate=round(100*r, 1), ci=[round(100*lo), round(100*hi)])
+    thr = _points(H.get('predict', ''), 80)
+    if 100*hi < thr: out.update(verdict='refused', bar='CI [%d-%d] is under %.0f: the table\'s cell rate does not hold live' % (round(100*lo), round(100*hi), thr))
+    elif 100*r >= thr: out.update(verdict='cleared', bar='holds: %.0f%% >= %.0f%% on %d rows' % (100*r, thr, n))
+    else: out.update(verdict='refused', bar='the prediction (>= %.0f%%) does not hold: %.0f%%, CI [%d-%d]' % (thr, 100*r, round(100*lo), round(100*hi)))
+    return out
+
 def lodhod_calibration(days, frm, sym='SPY'):
     cells = collections.defaultdict(lambda: [0, 0, 0.0]); sessions = set()
     for d, D in days:
@@ -293,6 +320,11 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     except Exception as eJ:
         print('pattern hypotheses threw:', eJ)
     cal = lodhod_calibration(days, frm)
+    # (v15.80) H10 — the pre-registered read of those cells, on sessions from its own `since`
+    try:
+        verdicts = [judge_lodhod(H, days) if H.get('pick') == 'lodhodCell' else v for H, v in zip(H_list, verdicts)]
+    except Exception as eL:
+        print('lodhod hypothesis threw:', eL)
     n_sess = len(set(e['_day'] for e in eps))
     thin = sum(1 for v in verdicts if v['verdict'] in ('thin', 'blocked'))
     preopen = ('%d session%s since %s · %d episodes · %d of %d hypotheses still thin · null band %.1f pts'

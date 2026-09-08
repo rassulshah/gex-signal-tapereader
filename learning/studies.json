@@ -1521,6 +1521,15 @@
        "corpus": "284d · price",
        "status": "READ",
        "result": "0.655 standalone; no lift over the clock in ablation"
+      },
+      {
+       "id": "H1.5",
+       "q": "The table's late-session ≥80% cells, read LIVE (close-scored) — do they hold at ≥80%?",
+       "decides": "SIZE · TIME",
+       "claim": "C17",
+       "corpus": "new sessions · close-scored rows",
+       "status": "REGISTERED",
+       "result": "H10 proposed: ≥ 80% · refute if the Wilson high < 80% (the 2026-09-08 review read 43% n=23 and 50% n=30 on 09-03/04 — not counted; the queue keeps only late-session rows, so this is the cell family the table trusts most)"
       }
      ]
     },
@@ -2071,12 +2080,12 @@
   }
  ],
  "counts": {
-  "studies": 192,
+  "studies": 193,
   "byStatus": {
    "OPEN": 100,
    "READ NEXT": 18,
    "THIN": 26,
-   "REGISTERED": 7,
+   "REGISTERED": 8,
    "SHIPPED": 13,
    "REFUSED": 3,
    "READ": 23,

@@ -46,7 +46,7 @@ global.RP_OPEN_SEC=mul(8,3600)+mul(30,60);
 global.RP_CLOSE_SEC=mul(15,3600);
 eval(ex('replayOn')); eval(ex('replayFrame')); eval(ex('replaySecOf')); eval(ex('replaySec'));
 eval(ex('replayBookOf')); eval(ex('replayBook')); eval(ex('replayEmptyBook'));
-eval(ex('replayDayLabel')); eval(ex('replaySeek')); eval(ex('replaySeekPct')); eval(ex('measureBars')); eval(ex('measureBarsRaw'));; eval(ex('recorderBlind')); eval(ex('hlClock'));
+eval(ex('replayDayLabel')); eval(ex('replaySeek')); eval(ex('replaySeekPct')); eval(ex('replayFrameBars')); eval(ex('measureBars')); eval(ex('measureBarsRaw'));; eval(ex('recorderBlind')); eval(ex('hlClock'));   // (v15.80) replayFrameBars: the frames loop, shared with closedCandles
 global.render=()=>{};
 global.inReplay=()=>false;
 global.showingStaleBook=()=>false;
@@ -160,12 +160,13 @@ REPLAY.idx=0;
 }
 
 // ---- 7 · THE BARS COME FROM THE FRAMES --------------------------------------------------------
-// On a PAST day the ES courier holds only the newest session and the chart holds today, so reading
-// either would put today's candle under Friday's ladder.
+// On a PAST day the chart holds today, so reading it would put today's candle under Friday's ladder.
+// (v15.80) On a FUTURES chart the courier's ES bars for the SHOWN day come first when it holds them (test_v1580 §1);
+// this harness is a cash chart (dispIsFut → false), so the frames are the source, as before.
 REPLAY.idx=2;
 {
   const MB=measureBars('SPY');
-  ok(MB.src==='replay', 'r27 in replay the bar source is the frames themselves, not ES or the chart', MB.src);
+  ok(MB.src==='replay', 'r27 in replay on a cash chart the bar source is the frames themselves, not the chart (v15.80: a futures chart reads the shown day\'s ES bars first)', MB.src);
   ok(MB.bars.length===3, 'r28 ...truncated at the parked frame, inclusive', MB.bars.length);
   ok(MB.approxOpen===true, 'r29 ...and it declares that the per-bar OPEN is reconstructed, not recorded');
   ok(MB.bars[1].h===FR[1].h && MB.bars[1].l===FR[1].l && MB.bars[1].c===FR[1].px,
@@ -621,7 +622,7 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
 // ONE surviving pile: one node bar, no states (they hang off the node rows), nothing for rollScan.
 {
   global.STATE={ SPY:{ candles:[{o:9,h:9,l:9,c:9,so:1}] } };
-  eval(ex('closedCandles'));
+  eval(ex('closedCandles'));   // (v15.80) reads replayFrameBars (eval'd above), never measureBars — which may now serve ES bars
   REPLAY.on=true; REPLAY.frames=FR; REPLAY.idx=2;
   const cs=closedCandles('SPY');
   ok(cs.length===3, 'b1 in replay the BAND reads the frame bars, not the live candles', cs.length);

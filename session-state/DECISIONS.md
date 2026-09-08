@@ -503,3 +503,77 @@ up and down days.
   A parked Friday face wears Friday's sweeps. Two readers of "which day" must go through one door.
 - **The courier's day keys compare as numbers**, never as strings (the 10th-before-the-8th bug).
 - **Mockups ride the installer by last commit, six of them** — the age that survives a clone.
+
+## 2026-09-08 · v15.80 — the candle wears HIS key levels on the price axis; one source for the shown day
+
+Operator, on the v15.79 candle: **"the levels that are swept are the only ones that should be indicated. EMH and EML are not levels
+and they should be aligned based on the y axis which should be the price axis so the candle should show where it
+swept the level."** Then: **"the king is not a key level. the key levels are PDH, PDL, ONL, ONH, WH, WL,
+Prior day POC, VAH, VAL, Weekly Poc"** and **"I dont want IBL IBH PDC. you can keep CW0 and PW0. and POC is the prior
+day poc. VAH and VAL is also prior day VAH and prior day VAL."**
+
+Decided: `LEVEL_TIER` tier 1 = exactly that list (PWH/PWL/WPOC by name until the companion carries two weeks); the
+King is tier 2 (structure — a sweep at the King is still a sweep, H6); EMH/EML, PDC and the IB are out of the sweep
+set entirely (the band still draws as the band; the corpus keeps its IB/PDC cells as studies); the candle draws tier 1
+only, each at its own price, with the minute it swept; the reversal names (v14.99) are gone from the candle; MUD and
+the reclaim line (↩ W.END · BOP) sit beside the open tick, left of the bar. The candle, the A row and GREEN/RED measure
+the shown day's ES 1-minute bars in a replay / the closed state (frames only when the courier has no such day);
+`closedCandles` keeps the frames for the band, the ATR and the trend machine. The MUD dollars are converted once.
+ONH/ONL are the full Globex night (17:00 → 08:29), FULL when both halves exist. A key with no RTH bars is not a
+session (the prior session skips a holiday; the night before it does not). WH/WL/weekly POC wait for the companion's
+window (asked separately, one at a time). LDNL/LDNH (mine, v15.57) stay as tier 2 until he says otherwise.
+
+## 2026-09-08 · v15.80 — the IRT export: QQQ converts for NQ only
+
+Operator: **"currently the irt export includes qqq converted for ES, remove this. qqq should only be converted for
+nq."** Decided: the v14.75 projection of the QQQ King onto the ES symbol (a dashed `QQQ KING ~` row, the rail's own
+bearing) is no longer written; the QQQ King writes on the NQ symbol only. The rail's `~ QQQ` pill on the face is
+unchanged (a bearing, never a level). Supersedes the 2026-08-28 "qqq → NQ → ES" ask, by his own instruction.
+
+## 2026-09-08 · v15.80 — the A row, MU / MD, the colours, the expectation chip; the IRT lines and the NQ G rows
+
+Operator, in sequence: **"Under the Expected row add the Today (Actual) row."** · **"MUD should be dynamic, MU or
+MD"** · **"Try to use common sense colors for the expected and actual rows. for example green or red. MU should be
+green, MD should be red."** · **"there should also be the expectation for the day, which is either a Green day or a
+Red day. you can place this before 1st HOD and dont need other badges that are there before 1st hod like 3/3 even, so
+you can use this space instead"** · **"in the export for irt, i dont want dashed or dotted lines, make all solid
+lines"** · **"Can you add additional levels for NQ as well, similar to how you have it for ES, so NQ would include
+G2-G5 also"**.
+
+Decided: the A row (today's actuals, the E row's columns) sits directly under the E row; MUD reads MU (green) to a
+HOD and MD (red) to a LOD everywhere on the face — the record field stays `mud`; HOD cells green, LOD cells red, the
+1ST chip in the extreme's colour; the E row's first badge is the day's expectation = the v14.91 green/red call
+(GREEN DAY / RED DAY, `DAY ?` before it fires), the recent-six count lives in its hover and is no longer a badge;
+the IRT export writes every line solid (PENSTYLE 0), and the NQ symbol carries G2–G5 from the QQQ book by the ES
+rule (King dropped, |%King| rank, held day-scoped).
+
+## 2026-09-08 · v15.80 — the E and A rows are one grid, tagged E · TUE / A · TUE
+
+Operator, after the first v15.80 installer: **"the rows should be aligned. the firt badge can simply be E Tue and A Tue
+or something like that so the entire row is symmetrical."** The two rows had been two flex-wrap boxes with tags of
+different widths (`E · TUE n=60` / `A · TUE 8 SEP · so far`), so nothing below the tag lined up.
+
+Decided: the two rows are the two rows of ONE thirteen-column grid (`.g3eag`; each row `display:contents`), so every
+column is one track top and bottom; the tags are the letter and the weekday only (`E · TUE`, `A · TUE`; `E · ALL` when
+the weekday block is missing) and everything else the tag used to say — the n, the basis, the date, "so far" / "as
+it closed" — is in the tag's hover; a badge slot with nothing to say still holds a chip (`DAY ?`, `1ST ?`) so both
+rows are always thirteen cells. A max-content grid cannot wrap, so below the width of the thirteen columns (~900 px;
+his panel is 943) `eagFit()` returns the rows to wrapping — aligned where it fits, readable where it does not. Not
+decided: a narrower set of columns for a narrow panel — he has not asked, and the panel he runs is wide enough.
+
+## 2026-09-08 · v15.81 — the IRT export prints Skylit's own futures prices (R-23)
+
+Operator, after the projection reading and one question: **"yes, i want them to match skylits own ES1 prices"** · **"why
+weren't they done this way before?"**
+
+Decided: the FlexLevels file's ES rows — SPXW KING, G2–G5, SPY KING, CW0 / PW0 / FLIP0 — and its NQ rows — QQQ KING and
+its G rows — take their prices from the futures books Skylit itself publishes (`gex/levels?symbol=ES1` / `NQ1`, whose
+`derived[]` carries every SPY / SPXW / QQQ strike already at the futures price by Skylit's live ratio: the derived orbs
+on his chart); the panel's own basis (the ES/SPY EMA; the IF spot for SPX) is the FALLBACK only, tilde-tagged as before,
+used when no payload has arrived or the held one is older than five minutes. One ruler in the file: the IF 0DTE rows
+(an SPX chain) convert by the same SPXW ratio as the SPXW King, never by the IF spot beside a Skylit-priced King. The
+read/record pipeline does not consume these payloads — the face's own basis machinery is untouched. Why: "match Skylit
+always" (2026-09-07) — the two rulers were 0.5–1.5 pt apart at the same second, and his chart's orbs are Skylit's.
+Not decided: the projection's own numbers (the target price, the cone, the regime) on the face or in the file — beta,
+unmeasured; recorded in SKYLIT-FEEDS for when he asks.
+

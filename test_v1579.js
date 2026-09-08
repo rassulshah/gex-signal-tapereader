@@ -22,7 +22,7 @@ ok(/@version\s+15\.(79|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(79|[89]\d)'
   ok(/SECDAY_EROW=''; try\{ SECDAY_EROW=hlERowHtml\(sym, D, base, NOREAD\); \}catch\(eER\)\{ swallow\('hlERowHtml', eER\); \}/.test(sd), '1a secDay BUILDS the row into SECDAY_EROW (its base, its D) and no longer emits it');
   ok(!/h\+=hlERowHtml\(/.test(sd), '1b …nothing in secDay appends it to the top');
   ok(/var SECDAY_EROW='';/.test(src), '1c SECDAY_EROW is declared bare (exVar-readable)');
-  const sl=ex('secLoc'), sf=ex('secFrame'); const iEmit=sl.indexOf("try{ if(typeof SECDAY_EROW==='string' && SECDAY_EROW) h+=SECDAY_EROW; }catch(eER2){}"), iSet=sl.indexOf("<em>SET</em>");
+  const sl=ex('secLoc'), sf=ex('secFrame'); const iEmit=sl.indexOf("if(typeof SECDAY_EROW==='string' && SECDAY_EROW) _eag+=SECDAY_EROW;"), iSet=sl.indexOf("<em>SET</em>");   // (v15.80) inside the .g3eag grid with the A row
   ok(/var h=secFrame\(sym\)\+/.test(sl) && sf.indexOf("h+='<div class=\"g3ladcdl\" data-sym=")>0 && iEmit>0 && iSet>iEmit,
      '1d secLoc opens with secFrame (the King cards, the ladder, the candle slot) and emits the row BEFORE its SET line — the replay strip follows in render()');
   ok(!/SECDAY_EROW/.test(pv), '1d2 …and panelV3 does not emit it a second time');

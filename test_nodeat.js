@@ -169,7 +169,8 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
   ok(/var W=98;/.test(CD) && /cx=\(W===98\)\?48:/.test(CD), 'n45 the candle is 98px wide, not 150 (v15.78: unless a caller hands it a frame — the DAY table never does)');
   // ⚠ (v15.09) the names and MUD had collided — they now occupy SEPARATE columns.
   ok(/text-anchor="end"/.test(CD), 'n45b the level names right-align, clear of the MUD block');
-  ok(/LXR=W-2/.test(CD) && /LX=tall\?LXL:LXR/.test(CD), 'n45c ...to the frame edge, not to a bar-relative offset (v15.78: the tall frame alone moves them left of the bar)');
+  // (v15.80) the right column is the PRICE AXIS: every label sits at its level's own y, the tick from cx+12; the caption at W-2
+  ok(/var LXR=W-2;/.test(CD) && /var TX0=cx\+12, TX1=cx\+\(tall\?21:17\), LBX=cx\+\(tall\?25:20\);/.test(CD) && !/LXL/.test(CD), 'n45c ...the SWEPT caption at the frame edge; the swept levels on the price axis beside the bar (v15.80: the reversal column is gone)');
   ok(/text-anchor="middle"/.test(CD), 'n46 ...because the labels stack over the bar, not beside it');
   ok(/HOD '\+hlClock\(D\.hodT\)/.test(CD) && /LOD '\+hlClock\(D\.lodT\)/.test(CD),
      'n47 both extremes carry their CLOCK, as he drew');
@@ -179,13 +180,15 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
      'n48 ...and both follow-on durations are actually DRAWN, not merely computed');
   // (v15.09) MUD sits on the side of the OPEN the session travelled — above on a red bar, below on
   // a green one — and carries the money in the MUD LEG, which is |open - second extreme|, not range.
-  ok(/MUD '\+hlDur\(D\.mud\)/.test(CD), 'n49 MUD is drawn');
-  ok(/green \? \(y\(O\)\+LN\) : \(y\(O\)-LN-LN\)/.test(CD),
-     'n49b ...above the open on a red bar, below it on a green one');
+  ok(/hlMudLabel\(D\.second\)\+' '\+hlDur\(D\.mud\)/.test(CD), 'n49 MU / MD is drawn (v15.80: "MUD should be dynamic, MU or MD")');
+  // (v15.80) MUD moved LEFT of the bar, on the open tick's own line — the right of the bar is the price axis now
+  ok(/var MX=cx-20;/.test(CD) && /var mY=y\(O\)\+3;/.test(CD) && /x="'\+MX\+'" y="'\+mY\.toFixed\(1\)\+'" class="g3cs" text-anchor="end"/.test(CD),
+     'n49b ...beside the open tick, left of the bar, right-aligned at cx-20 (v15.80)');
   // ⚠ match the ASSIGNMENT, not the neighbouring arithmetic: setting `mudUsd=usd` (the day range)
   // left the `Math.abs(secPx-D.open)` on the line above intact, and the first version stayed green.
-  ok(/mudUsd=Math\.abs\(secPx-D\.open\)\s*\*/.test(CD),
-     'n49c ...and the MUD money is ASSIGNED from the open-to-second-extreme leg, not the day range');
+  // (v15.80) converted ONCE: |second extreme − open| × rr (D.scale) → chart points → × $50 on a future
+  ok(/var mudPts=Math\.abs\(secPx-D\.open\)\*rr;/.test(CD) && /if\(mudPts>0 && D\.isFut\) mudUsd=mudPts\*ES_USD_PER_PT;/.test(CD) && !/dr2\.scale\*ES_USD_PER_PT/.test(CD),
+     'n49c ...and the MUD money is the open-to-second-extreme leg in chart points × the multiplier, applied once (v15.80: it was ×10 on the ES chart)');
   ok(!/mudUsd\s*=\s*usd\b/.test(CD), 'n49d ...never from the day range');
   ok(/DAYCOL_HD \+ DAYCOL_N\*DAYCOL_ROW/.test(CD), 'n50b ...and the height is derived from the columns');
   // ⚠ (v15.09) the day total came OFF the candle — same number as the DAY column's HL $, 60px away.
@@ -193,11 +196,10 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
   // ---- (v15.09) the shape spine came BACK, and the reversal levels arrived --------------------
   ok(/_pu\+'%/.test(CD) && /_pb\+'%/.test(CD) && /_pd\+'%/.test(CD),
      'n51 the wick/body/wick percentages are drawn — the only figure that sums to 100');
-  ok(/revLevels\(sym, D\)/.test(CD), 'n52 the candle asks for the reversal levels');
-  ok(/RV\.hi\[ri\]\.name/.test(CD) && /RV\.lo\[rj\]\.name/.test(CD),
-     'n53 ...and DRAWS them at both wick tips');
-  ok(/frameNum\(RV\.hi\[ri\]\.px\)/.test(CD),
-     'n54 ...with the PRICE in the hover, since it is off the face');
+  ok(!/revLevels\(sym, D\)/.test(CD), 'n52 (v15.80) the candle no longer asks for the reversal levels — "the levels that are swept are the only ones that should be indicated"');
+  ok(!/RV\.hi\[ri\]\.name/.test(CD) && !/RV\.lo\[rj\]\.name/.test(CD), 'n53 (v15.80) ...and draws no reversal names');
+  ok(/frameNum\(m\.px\)/.test(CD) && /swept '\+m\.at\+/.test(CD),
+     'n54 ...the swept levels carry the PRICE and the minute in the hover, since the face shows the name and the clock (v15.80)');
 })();
 
 // ---- (v15.09) THE FILTER IS THE FEATURE -------------------------------------------------------

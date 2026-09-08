@@ -26,8 +26,9 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
 {
   const g={ LEVEL_TIER:TIER };
   const t=build(g,['levelTier'],'return levelTier;')(g);
-  ok(['PDH','PDL','ONH','ONL','VAH','VAL','POC-','POC+','KING-','KING+','EMH','EML'].every(k=>t(k)===1),'1a PDH PDL ONH ONL VAH VAL POC KING EM edges are tier 1 (his list)');
-  ok(t('PDC-')===2 && t('CW0+')===2 && t('IBL')===2 && t('LDNL')===2 && t('HVL-')===2 && t('MAG+')===2,'1b PDC, the walls, IB, London, HVL and the magnet are tier 2');
+  // (v15.80) tier 1 is HIS list and nothing else — "the king is not a key level" · "EMH and EML are not levels" · "I dont want IBL IBH PDC"
+  ok(['PDH','PDL','ONH','ONL','VAH','VAL','POC-','POC+','PWH','PWL','WPOC'].every(k=>t(k)===1) && t('KING-')===2 && t('KING+')===2 && t('EMH')===4 && t('EML')===4,'1a PDH PDL ONH ONL VAH VAL POC (+ PWH PWL WPOC by name) are tier 1; the King is tier 2; the EM edges are not levels (v15.80)');
+  ok(t('CW0+')===2 && t('LDNL')===2 && t('HVL-')===2 && t('MAG+')===2 && t('PDC-')===4 && t('IBL')===4,'1b the walls, London, HVL and the magnet are tier 2; PDC and IB are out of the map (v15.80)');
   ok(t('VWAP-')===3 && t('VW1L')===3 && t('DPOC+')===3 && t('PML')===3 && t('OR15H')===3,'1c the dynamic and minor levels are tier 3');
   ok(t('XYZ')===4,'1d an unknown level ranks last, never first');
 }
@@ -74,7 +75,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
             emBand:()=>({ ok:true, high:7740, low:7650 }) };
   const LV=build(g,['dispToEs','bookLevelsNow','sweepLevelsToday'],'return sweepLevelsToday("SPY");')(g);
   const by={}; LV.forEach(l=>{ by[l.name]=l; });
-  ok(by.EMH && by.EMH.px===7740 && !by.EMH.low && by.EML && by.EML.px===7650 && by.EML.low,'3a the expected-move edges join the levels (EMH high-side, EML low-side)',Object.keys(by));
+  ok(!by.EMH && !by.EML && !by['PDC-'] && !by['PDC+'] && !by.IBL && !by.IBH,'3a (v15.80) the expected-move edges, PDC and the IB are NOT in the sweep set — his call',Object.keys(by));
   ok(by.LDNL && by.LDNL.px===7680 && by.LDNH && by.LDNH.px===7705,'3b the London range is the 02:00-08:29 part of a full night (7680 / 7705, not the night’s 7690 / 7710)',{l:by.LDNL,h:by.LDNH});
   ok(by['HVL-'] && by['HVL-'].px===7672 && by['MAG-'] && by['MAG-'].px===7690,'3c HVL (the FLIP row) and the magnet (Mag row) join the book levels, side by position against the open 7695',{h:by['HVL-'],m:by['MAG-']});
   // two lines by tier: a deep tier-3 poke, a tier-1 PDL flush, a tier-2 IBL, a tier-1 ONH on the other side -> PDL and ONH shown, the rest named

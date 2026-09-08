@@ -18,7 +18,7 @@ eval(v('IRT_RATIO_KEY')); eval(v('IRT_NQRATIO_KEY'));
 eval(v('KING_LATCH_KEY'));
 eval(src.match(/var KING_LATCH_MS=\d+/)[0]+';');   // trailing comment defeats the v() grab
 eval(v('IRT_QQQK_KEY')); eval(v('IRT_KINGS_KEY'));
-eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtKingLatch','irtKingHeld','irtGLatch','irtGHeld','irtQqqKing','irtBuildCsv'].map(ex).join('\n'));
+eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtKingLatch','irtKingHeld','irtGLatch','irtGHeld','irtQqqKing','irtQqqTop','irtBuildCsv'].map(ex).join('\n'));   // (v15.80) irtQqqTop: G2..G5 on NQ
 // (v14.75) the projection reads the RAIL's array — stub the two functions it comes from
 let RAIL_QQQ={ at:7691.25, book:'QQQ', raw:650, kind:'proportional' };
 global.emBand=()=>({ ok:true, now:7691.2, nowLive:7691.2, scaleUsed:10.0538 });
@@ -62,14 +62,16 @@ ok(lines[0]==='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRIC
 // (v14.79) the 0DTE trio (CW0 · PW0 · FLIP0) rides EVERY configured target, like the kings do.
 // (v15.76) so do G2..G5 — the rest of Skylit's top-5 (R-13).
 // rows[] = 2 kings + 3 IF levels + 4 G = 9, x 2 target symbols = 18, + the NQ king + the ES projection.
+// (v15.80) the ES projection of the QQQ King is gone — "qqq should only be converted for nq"; the NQ symbol now carries
+// the QQQ book's G2..G5 too — this fixture's QQQ tape has ONE node beyond the King (648 at 44%), so one G row.
 ok(b.n===11 && lines.length===1+9*2+2,
-   '1b n=11 (2 kings + 3 IF levels + G2..G5 + NQ king + ES projection); rows = 9x2 syms + 2', [b.n,lines.length]);
+   '1b n=11 (2 kings + 3 IF levels + G2..G5 + NQ king + NQ G2); rows = 9x2 syms + 2 (v15.80: no ES projection, G rows on NQ)', [b.n,lines.length]);
 const eRows=lines.filter(l=>l.startsWith('EPU26,'));
 const qRows=lines.filter(l=>l.startsWith('ENQU26,'));
-ok(eRows.length===10 && qRows.length===1,
-   '1c EPU26 carries SPXW + SPY + CW0 + PW0 + FLIP + G2..G5 + the projected QQQ; ENQU26 the native QQQ', [eRows.length,qRows.length]);
-ok(eRows.filter(l=>/QQQ KING/.test(l)).length===1 && /,2,1,/.test(eRows.find(l=>/QQQ KING/.test(l))||''),
-   '1c2 ...and the projection is DASHED (style 1), so it cannot pass for a native level at a glance');
+ok(eRows.length===9 && qRows.length===2,
+   '1c EPU26 carries SPXW + SPY + CW0 + PW0 + FLIP + G2..G5 (v15.80: no projected QQQ); ENQU26 the native QQQ King + its G2', [eRows.length,qRows.length]);
+ok(eRows.filter(l=>/QQQ KING/.test(l)).length===0,
+   '1c2 ...and no QQQ King wears the ES symbol (v15.80)');
 ok(lines.slice(1).every(l=>l.split(',').length===28), '1d every row keeps exactly 28 columns');
 
 // ---------- 2. the SPXW king ----------
@@ -151,8 +153,10 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   ok(cw && cw.split(',')[3]===String((240<<16)+(97<<8)+109), 'i2 the CALL wall is RED', cw&&cw.split(',')[3]);
   ok(pw && pw.split(',')[3]===String((46<<16)+(194<<8)+126), 'i3 the PUT wall is GREEN', pw&&pw.split(',')[3]);
   ok(fl && fl.split(',')[3]===String((163<<16)+(113<<8)+247), 'i4 the FLIP is PURPLE', fl&&fl.split(',')[3]);
-  ok(cw && cw.split(',')[5]==='2' && pw.split(',')[5]==='2' && fl.split(',')[5]==='2',
-     'i5 all three 0DTE lines are DOTTED (PENSTYLE 2)', [cw&&cw.split(',')[5], pw&&pw.split(',')[5], fl&&fl.split(',')[5]]);
+  // (v15.80) "i dont want dashed or dotted lines, make all solid lines" — every row writes PENSTYLE 0
+  ok(cw && cw.split(',')[5]==='0' && pw.split(',')[5]==='0' && fl.split(',')[5]==='0',
+     'i5 all three 0DTE lines are SOLID (PENSTYLE 0) — v15.80, his call', [cw&&cw.split(',')[5], pw&&pw.split(',')[5], fl&&fl.split(',')[5]]);
+  ok(irtBuildCsv().csv.split('\r\n').filter(l=>l && !/^SYMBOL/.test(l)).every(l=>l.split(',')[5]==='0'), 'i5b …and so does every other line in the file');
   // ⚠ THE KINGS ARE SOLID — "Make the king lines solid". A style that says "king" must not also say
   // "0DTE wall"; the two families are told apart by the line, not only by the label.
   const kings=L.filter(l=>/KING/.test(l.split(',')[2]) && !/QQQ/.test(l.split(',')[2]));
@@ -191,51 +195,36 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
     IFL_ROWS=keep; }
 }
 
-// ---------- 4p. THE QQQ KING ON ES — READ FROM THE RAIL, NOT RECOMPUTED (v14.75) ----------
-// The operator pointed at his own panel: "my tapereader app shows the qqq king" — `~7721 QQQ` in the
-// price chute. ⚠ The export must write THAT number. A second computation, however well argued, puts
-// a line on the chart that disagrees with the pill on the rail (DECISIONS v13.2).
+// ---------- 4p. THE QQQ KING IS NOT ON ES ANY MORE (v15.80) ----------
+// v14.75 wrote the rail's `~ QQQ` bearing onto the ES symbol as a dashed row. Operator, 2026-09-08: "currently the
+// irt export includes qqq converted for ES, remove this. qqq should only be converted for nq."
 { const B=irtBuildCsv();
   const proj=B.csv.split('\r\n').filter(l=>/^EPU26/.test(l) && /QQQ KING/.test(l));
-  ok(proj.length===1, '4p the ES chart gets exactly ONE projected QQQ King row', proj.length);
-  ok(proj[0] && Math.abs(parseFloat(proj[0].split(',')[1]) - 7691.25) <= 0.001,
-     '4p2 ...at the RAIL\'s own bearing, unrounded and unrecomputed', proj[0]&&proj[0].split(',')[1]);
-  ok(/rail bearing/.test(IRT_LAST.xqWhy||''), '4p3 ...and the export says where it came from', IRT_LAST.xqWhy);
-  // move the rail's bearing: the export must follow it, because it is not its own number
+  ok(proj.length===0, '4p the ES symbol carries NO QQQ King row (v15.80: "qqq should only be converted for nq")', proj);
+  ok(/off — QQQ converts for NQ only/.test(IRT_LAST.xqWhy||''), '4p2 ...and the export says it is a decision, not an absence', IRT_LAST.xqWhy);
   const keep=RAIL_QQQ; RAIL_QQQ={ at:7745.00, book:'QQQ', raw:655, kind:'proportional' };
-  const B2=irtBuildCsv();
-  const p2=B2.csv.split('\r\n').filter(l=>/^EPU26/.test(l) && /QQQ KING/.test(l))[0];
-  ok(p2 && Math.abs(parseFloat(p2.split(',')[1]) - 7745.00) <= 0.001,
-     '4p4 ...and it FOLLOWS the rail when the rail moves — one quantity, one source', p2&&p2.split(',')[1]);
-  // the rail has no bearing (QQQ feed stale): the export writes none rather than inventing one
-  RAIL_QQQ=null;
-  const B3=irtBuildCsv();
-  ok(!B3.csv.split('\r\n').some(l=>/^EPU26/.test(l) && /QQQ KING/.test(l)),
-     '4p5 no rail bearing -> no projected row; the export never computes its own');
-  ok(/no QQQ bearing/.test(IRT_LAST.xqWhy||''), '4p6 ...and names the absence', IRT_LAST.xqWhy);
-  RAIL_QQQ=keep; }
-// ⚠ IT IS A BEARING, NOT A LEVEL — and the FILE has to say so, because the chart is the only surface
-// the operator sees. Dashed (style 1) and tilde-tagged, per ladderKings' own warning that a
-// proportional mapping assumes a correlation of one and is false on exactly the days it matters.
-{ const row=irtBuildCsv().csv.split('\r\n').find(l=>/^EPU26/.test(l) && /QQQ KING/.test(l));
-  // ⚠ BY COLUMN INDEX, NOT BY SUBSTRING. The first version tested /,2,1,/ against the whole row and
-  // passed with the style mutated to SOLID — ",2,1," also occurs in the band fields near the end.
-  // A mutation caught it. PENWIDTH is column 4, PENSTYLE column 5.
-  const c=row?row.split(','):[];
-  ok(c[4]==='2' && c[5]==='1',
-     '4p7 the projection is DASHED (PENSTYLE=1), so it cannot pass for a native level', [c[4],c[5]]);
-  ok(row && / ~/.test(c[2]), '4p8 ...and wears the tilde', c[2]);
-  // ⚠ THE PANEL ROUNDS TO WHOLE POINTS, THE EXPORT MUST NOT. Operator, 2026-08-28: "on my tapereader
-  // app, i have it rounded to the nearest whole number; on the export it should be based on the ES
-  // chart which is in .25 increments." The rail's DISPLAY uses frameNum (whole points, D-9); the
-  // export reads the RAW bearing off the same array and applies its own 0.25 rounding. Same
-  // quantity, two precisions — and nobody may "fix" one to match the other.
-  const keep=RAIL_QQQ; RAIL_QQQ={ at:7691.63, book:'QQQ', raw:650, kind:'proportional' };
-  const r2=irtBuildCsv().csv.split('\r\n').find(l=>/^EPU26/.test(l) && /QQQ KING/.test(l));
-  const px=parseFloat(r2.split(',')[1]);
-  ok(Math.abs(px-7691.75)<=0.001,
-     '4p9 a raw 7691.63 bearing exports as 7691.75 — the ES tick, NOT the panel\'s whole point (7692)', px);
-  RAIL_QQQ=keep; }
+  ok(!irtBuildCsv().csv.split('\r\n').some(l=>/^EPU26/.test(l) && /QQQ KING/.test(l)), '4p3 ...whatever the rail\'s bearing says');
+  RAIL_QQQ=keep;
+  const nq=B.csv.split('\r\n').filter(l=>/^ENQU26/.test(l) && /QQQ KING/.test(l));
+  ok(nq.length===1, '4p4 the QQQ King still writes on the NQ symbol, once', nq.length); }
+
+// ---------- 4q. G2..G5 ON NQ — the QQQ book's next four, like the ES rows (v15.80, R-20) ----------
+// "Can you add additional levels for NQ as well, similar to how you have it for ES, so NQ would include G2-G5 also."
+{ const keepQ=QQQ_TAPE;
+  QQQ_TAPE=()=>({ king:650, count:20, fromFeed:false, pct:{ '650.00':-100, '648.00':44, '655.00':-71, '640.00':30, '660.00':52, '645.00':-9, '652.00':12 } });
+  const B=irtBuildCsv(); const g=B.csv.split('\r\n').filter(l=>/^ENQU26/.test(l) && /,G[2-5]/.test(l));
+  const nqR=irtNqRatio(CFG.irt).r;   // the ratio in force (last-good by now — 4e stored one); the King row may be a held King
+  ok(g.length===4 && g.map(l=>l.split(',')[2].replace(/ ~$/,'')).join(' ')==='G2 G3 G4 G5', '4q four G rows on ENQU26, G2..G5 (the ~ rides with the King\'s when the ratio is not live)', g.map(l=>l.split(',')[2]));
+  ok(Math.abs(parseFloat(g[0].split(',')[1])-655*nqR)<=0.13 && Math.abs(parseFloat(g[1].split(',')[1])-660*nqR)<=0.13 && Math.abs(parseFloat(g[2].split(',')[1])-648*nqR)<=0.13 && Math.abs(parseFloat(g[3].split(',')[1])-640*nqR)<=0.13,
+     '4q2 ranked by |%King| with the King dropped: 655 (-71) · 660 (52) · 648 (44) · 640 (30) — size, not sign; 645 and 652 left out; each × the SAME NQ ratio as the King row, on the 0.25 tick', g.map(l=>l.split(',')[1]));
+  ok(g.every(l=>l.split(',')[3]===String(IRT_COLORS.gate) && l.split(',')[4]==='1' && l.split(',')[5]==='0'), '4q3 white, width 1, solid — the hierarchy reads at a glance');
+  ok(/live via tape \(G2 655 -71%/.test(IRT_LAST.gqWhy||''), '4q4 IRT_LAST.gqWhy names the source and the rows', IRT_LAST.gqWhy);
+  ok(!B.csv.split('\r\n').some(l=>/^ENQU26/.test(l) && /,G1,/.test(l)), '4q5 no G1 — the King\'s slot is the QQQ KING line');
+  // the QQQ tape goes blind: the four are HELD (day-scoped, under GQ), never deleted
+  QQQ_TAPE=()=>({ king:null, count:0, pct:{} });
+  const B2=irtBuildCsv(); const g2=B2.csv.split('\r\n').filter(l=>/^ENQU26/.test(l) && /,G[2-5]/.test(l));
+  ok(g2.length===4 && /^held \d+m/.test(IRT_LAST.gqWhy||''), '4q6 a blind tick keeps the four rows from the day\'s latch', [g2.length, IRT_LAST.gqWhy]);
+  QQQ_TAPE=keepQ; LS[IRT_KINGS_KEY]=JSON.stringify(Object.assign(JSON.parse(LS[IRT_KINGS_KEY]||'{}'),{GQ:null})); }
 
 // ---------- 4x. ⚠ ES AND NQ TRADE IN QUARTER POINTS — INCLUDING A HELD KING ----------
 // The operator, 2026-08-28: "remember that es is in 1/4 pt". The live path has rounded to the tick

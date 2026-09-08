@@ -39,8 +39,8 @@ _Generated from `tools/plan-seed.py` (the same data the ⚙ Architecture tab ren
 ### Skylit Atlas (the page)
 
 - **how:** DOM + the page's own gex/levels feed (installFeedObserver)
-- **what:** the SPXW tape (strike, %King, the King's $K), the velocity table (every strike's size and d5/d15/d60/d1d for today's expiry), the Trinity panes (SPY · QQQ · SPXW · VIX: 100 strikes as %King + the King's $K), the headers (prices), the chart's 3-minute candles
-- **keys / functions:** LASTFEED · VEL · TAPE_CACHE · LADDER_CACHE
+- **what:** the SPXW tape (strike, %King, the King's $K), the velocity table (every strike's size and d5/d15/d60/d1d for today's expiry), the Trinity panes (SPY · QQQ · SPXW · VIX: 100 strikes as %King + the King's $K), the headers (prices), the chart's 3-minute candles; (v15.81) the FUTURES books the page publishes — gex/levels?symbol=ES1 / NQ1, all derived: every SPY / SPXW / SPX (QQQ) strike already at the futures price by Skylit's live ratio, kept for the IRT export and self-fetched while it is on
+- **keys / functions:** LASTFEED · VEL · TAPE_CACHE · LADDER_CACHE · LASTFUTDER
 - **notes:** the panel runs ONLY on /atlas*; never open a second /atlas tab; the required chart posture is RTH · READ AS %King · VELOCITY All · LOW NODES never Hide (SKYLIT-FEEDS.md)
 
 ### InsiderFinance (the second book — STRUCTURE)

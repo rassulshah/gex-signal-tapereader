@@ -1,3 +1,187 @@
+## v15.81 — THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES (R-23) · F-20 solved (R-22 proposed)
+
+> Operator, 2026-09-08, after the projection reading: *"I added the projection feature in skylit. i want you to look it
+> up and see how it is calculated and how we can use it … also look at the levels in skylit and the levels you are
+> sending me in the export, are they the same or is there a computing error. Can this be resolved using the projected
+> levels which look like current levels?"* → the reading (SKYLIT-FEEDS § THE ES1 BOOK AND THE PROJECTION FEATURE) → one
+> question → **"yes, i want them to match skylits own ES1 prices"** · *"why weren't they done this way before?"*
+
+**What the reading found.** For the ES chart Skylit fetches `gex/levels?symbol=ES1` — a symbol with **no option book of
+its own** (`levels:[]`) whose `derived[]` carries the SPY, SPXW and SPX books with **every strike already at the ES
+price by Skylit's live ratio** (SPY 770 → 7720.05 at ratio 10.026042; SPXW 7700 → 7704.45 at 1.000578, 10:25 CT), the
+numbers Atlas draws as the derived orbs; NQ1 the same with QQQ. The projection (beta) merges the next four expirations
+per strike with |GEX| × 1/√days-to-expiry (an expiry fading out over its last two steps), labels the top three per
+column with their strength against the column's strongest (100%), and computes a target price, a cone and a regime
+word — read from the app's chunk 988 and verified against the drawn labels (7721 — 100% SPY 770 · 7705 — 86% SPXW 7700
+· 7710 — 82% SPXW 7705 · 7691 — 72% SPY 767). **The levels compared at the same second:** the export carried the same
+five SPXW strikes in the same order, 0.5–1.5 pt away (7703.25 vs 7704.64 at 10:0x; 7705.00 vs 7704.45 at 10:25) —
+the panel's SPX→ES basis is the IF companion's spot against ES on a 3-minute clock, Skylit's its own spot each minute.
+Not a computing error; two rulers. The observer had been COUNTING the ES1 payloads (~195 a day, `SYM_SEEN`) and
+dropping them since v11.4.2.
+
+**What shipped.** `LASTFUTDER` — the freshest ES1 / NQ1 gamma payload, kept by `onFeed` in the non-SPY/QQQ branch
+with the never-history-over-live guard on the derived series (`futDerNewestT`); `selfFetchFut(futSym)` — the app's own
+last gex/levels URL with symbol / gamma / the 0DTE window / `include_derived=true`, once a minute, called by `ensureFeeds`
+for ES1 and NQ1 only while the IRT export is on and only when the held payload is over a minute old (the app asks for
+ES1 itself while the ES chart is up; NQ1 needs the self-fetch); `skylitFutPx(futSym, book, strike)` — the derived
+row's `k` when the window carries the strike (k / ratio ≈ strike, ±0.02), else strike × the same ratio (a node below
+the cut, or the IF flip, which is not a strike), null when the payload is missing or older than five minutes.
+`irtBuildCsv`: every ES row carries `es` — SPXW KING and G2–G5 by the SPXW book, SPY KING by the SPY book, CW0 / PW0 /
+FLIP0 (an SPX chain) by the SPXW ratio — **one ruler for the whole file**; the targets loop writes `es` for the
+futures symbol and drops the '~' on those rows; the ETF symbol is untouched; the panel's own basis is the fallback
+with the old tag rule. The NQ symbol the same on NQ1's QQQ book (`nqPx`). The King latch stores the strike in its own
+book (`src`) so a HELD King still prices by Skylit. `IRT_LAST.skyWhy` / `nqSkyWhy` ("9 of 9 ES rows on Skylit's ES1
+prices (12 s old · SPXW ratio 1.000578 · SPY ratio 10.026042)") and the gear's IRT status line say which ruler the
+file is on; `__gptsDebug.futDer()` shows the books. The read/record pipeline never consumes these payloads.
+
+**Why it was not this way before** (his question): the export was designed in mid-August on the model "SPY and QQQ
+have books; ES is a chart with none", so it measured a basis itself (v11.4.1: the ratio must not depend on what is
+charted) and converted with the IF spot for SPX; the feed that disproves the model was being discarded by the observer
+and nobody had opened one; "match Skylit always" became the rule on 2026-09-07 and the two rulers were first compared
+at the same second today. The strikes and the order were always right — only the placement drifted.
+
+**F-20, solved the same morning (R-22 proposed, not built).** Two live readings: 09:53 CT recorder 2,656 KB (3 days),
+shed 0, today's queue from 08:36; 10:44 CT recorder 3,542 of the 3,600 KB budget (one day left), **shed 1**, the
+queue's first bar **09:00**, the LS snapshots' first 09:06. Today's day alone ≈ 1.8 M chars (feat 903 K + a snapshot
+mirror 897 K the IndexedDB archive already holds). The exported `snaps` come from the archive — complete — the exported
+`feat` from the shed queue; the review's "not the budget" line had read the archive's snapshots as proof and is
+withdrawn. FINDINGS F-20 CONFIRMED, F-10c amended, the review's `dataHealth.mechanism` written and delivered.
+
+**Tests.** `test_v1581.js` — 51 assertions: the state and the capture (kept, history refused, vanna and other symbols
+dropped, SYM_SEEN still counting); `skylitFutPx` (the row, the ratio path, a non-strike, a missing book, a bad strike,
+stale, no payload, the ±0.02 match); the self-fetch (the URL, the throttle, the export-off gate, the once-a-minute rule,
+run through a fetch stub); the export (each row's price against the 10:25 CT fixture, no '~', the ETF untouched, the NQ
+rows, skyWhy / nqSkyWhy, the latch's `src`, the HELD rows at Skylit's prices, the fallback with and without the '~', the
+stale payload, a QQQ-chain IF ladder, the gear line); the record. **26 of 26 mutants.** `test_v1580` 6b, `test_v1570` 1d
+re-pinned; the version pins moved. `test_irt_export` 131 unchanged (no futures payload in its fixture → the basis, as
+before).
+
+**The record.** R-23 implemented (v15.81), R-22 proposed; the roadmap — v15.80 shipped, **v15.81 this build**, the
+seasonality → v15.82, the score → v15.83, the READ → v15.84, the rest +1; the Skylit integration names the futures books;
+DECISIONS 2026-09-08 (his words); LESSONS v15.81; INVENTORY §0o; SKYLIT-FEEDS (the ES1 book, the projection, the
+comparison); FINDINGS F-20 / F-10c; the review file; the config (2026-09-08f); the resume note (+ snapshot v15.80).
+
+## v15.80 — THE CANDLE ON THE PRICE AXIS · ONE SOURCE FOR THE SHOWN DAY · HIS KEY LEVELS · the MUD dollars once · the full night · H10
+
+> Operator, 2026-09-08, on the v15.79 candle: "the levels that are swept are the only ones that should be indicated.
+> EMH and EML are not levels and they should be aligned based on the y axis which should be the price axis so the
+> candle should show where it swept the level. do you understand. Do you indicate how much time it took to reclaim
+> the Open in the candle prior to going to the 2nd extreme. Also a MUD of 0m doesn't make sense. double check the
+> values they are incorrect." Then, on the mockup: "much better but the king is not a key level. the key levels are
+> PDH, PDL, ONL, ONH, WH, WL, Prior day POC, VAH, VAL, Weekly Poc" → "I dont want IBL IBH PDC. you can keep CW0 and
+> PW0. and POC is the prior day poc. VAH and VAL is also prior day VAH and prior day VAL" → "since the market is open
+> you should show today" → today's candle from his own courier rows → "build". → R-17.
+
+**The values were wrong, and why.** The parked (closed-state) candle measured the recorder's FRAMES — SPY-scale,
+three minutes apart, opens reconstructed, and only from the minute the recorder came up. Friday 2026-09-04 was
+recorded from 09:46:50 (the first three frames on a drifted ratio), so the candle's "open" was the 09:46 print, its
+HOD 11:54, its LOD 12:47 — and that LOD frame was also the first close back through that false open, so **MUD read
+0m**. The ES bars say: open 7742 · HOD 7751 at 08:36 (took 6m) · W.END 08:45 (BOP 9m) · LOD 7711.75 at 10:31 · **MUD
+106m** · range 39.25. v15.79 had anchored the SWEEP labels on the shown day's ES bars and left the candle's own measures
+on the frames — two sources under one label, one build after the sweeps were anchored. `measureBarsRaw` in a replay
+now reads the courier's ES bars for the SHOWN day first (`futSessionBars(0, REPLAY.day)`, truncated at the parked
+frame's minute, ≥ 30 bars), the frames only when the courier does not hold that day; `replayFrameBars()` is the frames
+loop extracted, and **`closedCandles()` keeps serving the frames in replay** — the band's pin, the ATR, the trend
+machine and the pile clipper measure the underlying book on purpose and convert by `rr` (handing them ES bars under a
+ratio of ~10 is the v15.24 blackout by another road). **The MUD dollars were 10× on the ES chart since v15.08:**
+`mudUsd` multiplied ES points by `displayScale().scale` (~10.03) and then by $50 — $15,168 for a $1,512 leg on
+Friday, $12,659 for a $1,263 leg on his panel this morning — while the day total beside it (`D.rngUsd`) had been
+converted correctly all along. `|second extreme − open| × rr` (D.scale: 1 on ES bars, the ratio on the proxy) × $50,
+once.
+
+**The candle.** The right of the bar is the PRICE AXIS: every swept KEY level is a tick across the right of the bar at
+its own price with the name and the minute it swept beside it, in the SWEPT line's colours (green reclaimed · red
+broke · amber being tested); two levels closer than a line push apart, the tick stays at the true price and a short
+leader shows the displacement; a group pushed past the low slides up. A level the session merely OPENED beyond is
+not a sweep and is not drawn; a level outside the range is not on the axis; on a cash chart the ES-point sweep is
+divided by the ratio before it meets the SPY-scale axis. The reversal names (v14.99, "the levels the wick turned ON")
+are gone — "the levels that are swept are the only ones that should be indicated". MUD moves LEFT of the bar, beside
+the open tick, with the reclaim line above it — `↩ 8:45 · 9m` = the open reclaimed at 08:45, BOP 9m (his question 4)
+— and the dollars below; a day that never reclaimed prints no reclaim line. The 98-px DAY-table candle wears the same
+axis, names only. The slot's hover says what the axis is.
+
+**His key levels.** `LEVEL_TIER` tier 1 is his list and nothing else: PDH PDL ONH ONL · prior-day POC VAH VAL · PWH
+PWL WPOC by name (the corpus's names for his WH/WL; the weekly POC) so they draw the day the panel can compute them —
+today the courier's window is five sessions and the prior week is not in it (the companion's next change). The King
+is structure (tier 2, a sweep at the King is still a sweep — H6); **EMH/EML leave the sweep set** ("not levels"; the
+band still draws as the band); **PDC and the IB leave the set** ("I dont want IBL IBH PDC" — he had said so on
+2026-09-01 for the level column, and v15.57 had put the IB back on my own initiative); CW0/PW0 stay. The READ's
+no-sweep sentence names the set as it is.
+
+**Two things today's data forced.** (1) **ONH/ONL had never been the full night.** `futSessionBars` buckets by
+CALENDAR day, so a day's `on` holds its own post-midnight bars and the evening after its close; the night BEFORE a
+session was never assembled — 509 pre-open bars at most, always under the 600 floor, always the PMH/PML stub, since
+companion v1.18 started carrying the night. `overnightHL` now joins the prior calendar key's evening (≥ 17:00) to the
+session's morning (< 08:30): Thu 17:00 → Fri 08:29 = 919 bars for Friday; **FULL when both halves are there** (≥ 60
+evening, ≥ 300 morning) — by hours, the way the corpus defines the night, not by a count a thin holiday evening fails
+(the Tuesday after Labor Day: 61 + 509 = 570). (2) **A key with no RTH bars is not a session.** The prior KEY on that
+Tuesday was Monday 2026-9-7 with 0 bars between 08:30 and 15:00 — no PDH/PDL, no profile — and the trader's prior day
+was Friday. `futSessionBars(off, day, calendar)` walks back over keys whose `rth` is empty unless `calendar` is set,
+which `overnightHL` sets (the night before Tuesday IS Monday's evening, session or not).
+
+**The IRT export, mid-build (R-18).** *"currently the irt export includes qqq converted for ES, remove this. qqq
+should only be converted for nq."* Section 4 of `irtBuildCsv` — the v14.75 rail-bearing row (`QQQ KING ~`, dashed,
+on EPU26) — is gone; ENQU26 keeps its QQQ King; the rail still draws its `~ QQQ` bearing on the face; `xqWhy` says
+"off — QQQ converts for NQ only". `test_irt_export` 1b/1c/4p re-pinned (124).
+
+**The A row, MU / MD, the colours, the expectation chip (R-21).** Four instructions on the same row while the build ran:
+*"Under the Expected row add the Today (Actual) row."* → `hlARowHtml` — the E row's columns in the E row's order (the
+first extreme first), today's values without the ~, tagged `A · TUE 8 SEP · so far` while live and `A · FRI 4 SEP`
+when parked, built by `secDay` into `SECDAY_AROW`, emitted by `secLoc` right after the E row; a wick field that has
+not happened prints —, never 0. *"MUD should be dynamic, MU or MD"* → `hlMudLabel(second)`: MU up to a HOD, MD down to
+a LOD — on both rows, the candle and the DAY table (the field keeps its name in every record). *"Try to use common
+sense colors … MU should be green, MD should be red"* → `.hi` / `.lo` on the extreme cells and MU / MD, label and
+value; the 1ST chip green for a HOD, red for a LOD; the candle's MU / MD in the same colour. *"there should also be
+the expectation for the day, which is either a Green day or a Red day. you can place this before 1st HOD and dont
+need other badges … like 3/3 even"* → the E row's first badge is the GREEN DAY / RED DAY call (`gdRead`, v14.91: the
+opening-range break confirmed by the first leg, 76% on 225 of 282 sessions, base 51%, ~09:03) — `DAY ?` with the
+reason before it fires; the weekday's last six colours live in its hover. The A row's chip is the actual (RED DAY, so
+far). Mockup from his own courier rows at 09:02: `mockups/mockup-e-a-rows-today.png`.
+
+**The rows aligned (R-21, the same afternoon).** *"the rows should be aligned. the first badge can simply be E Tue and A Tue
+or something like that so the entire row is symmetrical."* The two rows had been two flex-wrap boxes, and their tags —
+`E · TUE n=60` over `A · TUE 8 SEP · so far` — were different widths, so every column after the tag started at a
+different x. Now the E row and the A row are the two rows of ONE grid (`.g3eag`, `repeat(13, max-content)`,
+`justify-content:space-between`; each `.g3erow` is `display:contents`), so every column is one track top and bottom;
+the tags are `E · TUE` / `E · ALL` and `A · TUE` (the n, the basis, the date and "so far / as it closed" moved into
+the tags' hovers); the badge slots always hold a chip (`DAY ?`, `1ST ?`) so both rows are always thirteen cells and
+the grid never shifts. A max-content grid cannot wrap, so `eagFit()` — measured after layout like `ladderFit` and
+`candleFit` — falls the grid back to the old wrapping rows (`.narrow`) when the body is narrower than the thirteen
+columns (~900 px at today's values; his panel is 943). Measured in Chromium: at 943 px both rows share every x; at
+700 px the rows wrap. Mockup from his courier rows: `mockups/mockup-e-a-rows-aligned.png`. `test_v1580` §5b re-pinned
+(114; 49 of 49 mutants); `test_v1577` 3c/3o and `test_v1579` 1d re-pinned. Same installer name, `installv1580.bat`.
+
+**The IRT export, three more (R-19, R-20).** *"i dont want dashed or dotted lines, make all solid lines"* →
+`irtCsvRow` writes PENSTYLE 0 for every row (the 0DTE trio was dotted, the SPY King dashed). *"add additional levels
+for NQ as well … so NQ would include G2-G5 also"* → `irtQqqTop`: the QQQ book's next four by |%King| after the King,
+from the same array the QQQ KING row reads (the face's ladder first, the tape second), × the NQ ratio, white, width 1,
+solid, held day-scoped under `GQ` (a blind tick never deletes them), `IRT_LAST.gqWhy`. `test_irt_export` 131 (§4q).
+
+**The review (stage ⑤), the same morning.** `review/2026-09-08.json` — headline: the learning layer has seen only the
+last 45–130 minutes of every session since 08-25 (FINDINGS **F-20**, measured on nine day files, mechanism still open,
+probe named); Next Stop 67% (n 153, B 92% above C 61%); the node grade INVERTED (A 32% n 65 < B 35% < C 54%); the
+ledger — accumulating nodes did NOT deflect more than dissipating ones (15% n 234 vs 15% n 239) and the event type
+does not separate BREAK (10–17% of touched, n 2,257) — **F-21**; the HOD/LOD table's late cells at 43–50% live against
+99–100 (n 23/30, two sessions) → **H10** registered forward from 2026-09-08 (pick `lodhodCell`, judged by the nightly's
+new `judge_lodhod`, minN 60; study row H1.5; HYP_STUDY H10 → H1.5); no proposal clears the bar; `tools/review-pool.py`
+is the pooling script. Delivered over the bridge; the panel reads it back as `review/2026-09-08.json`.
+
+**Tests.** `test_v1580.js` — 114 assertions: the shown-day source (ES first, by the shown day, the parked-minute cut,
+the 30-bar floor, the cash chart, the courier without the day, closedCandles on the frames, replayFrameBars, the
+typeof guards); the candle (the key set only, the tick at the price, the label beside it, the colours, the hover, no
+reversal names, the caption, MUD left of the bar with the reclaim line, the dollars once, no invented reclaim, the
+push-apart with one leader, the slide-up, the range clip, the small frame, the cash-chart ratio, the slot's hover); the
+tiers and the set (his list, the King at 2, EM/PDC/IB out, the night's two halves, the stub, the holiday walked over,
+`calendar`); H10 (the register, the seed, the pick, the maps, the study row, run.py's judge on fixtures: thin / refused
+under 80 / cleared / refused-under-prediction / `since`), the review file, the record; the A row (columns, values, the chips, the colours, no invention, the wiring), MU / MD, the crowd clamp, the aligned grid (the tags, the placeholders, thirteen cells, eagFit), the IRT lines. **49 of 49 mutants.** Re-pinned:
+`test_replay` (r27 wording; `replayFrameBars` eval'd), `test_nodeat` n45c/n49b/n49c/n52–n54, `test_v1554` 8d (10 rows),
+`test_v1572` 6d, `test_v1557` 1a/1b/3a (the tiers, the set), `test_v1578` §1 and 2d (the axis), the version pins.
+
+**The record.** R-17 · R-18 · R-19 · R-20 · R-21 (by operator, implemented v15.80); the roadmap — v15.79 shipped, **v15.80 this build**, the
+seasonality tracking → v15.81, the score → v15.82 (R-5), the READ → v15.83; INVENTORY §0n; LESSONS v15.80; DECISIONS
+2026-09-08 (his key levels); FINDINGS F-20 / F-21; the config (2026-09-08d); the resume note; the mockups
+`mockups/mockup-candle-axis{,-row,-today}.{png,svg}`.
+
 ## v15.79 — THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE THE SHOWN DAY'S · the courier's day keys sorted as numbers
 
 > Operator, 2026-09-08: "move the hod expected stats above the replay below the node ladder and the daily candle and

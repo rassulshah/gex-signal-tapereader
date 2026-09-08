@@ -27,7 +27,7 @@ ok(/try\{ irtGLatch\(gs\); \}catch\(eGL\)\{\}/.test(B), '1h the hold is an instr
 ok(/var HG=null; try\{ HG=irtGHeld\(\); \}catch\(eHG\)\{\}/.test(B), '1i ...and so does the read of the hold');
 ok(/IRT_LAST\.gWhy=gWhy;/.test(B), '1j IRT_LAST.gWhy reports live / held / nothing');
 ok(ex('irtGLatch').length>0 && ex('irtGHeld').length>0, '1k irtGLatch / irtGHeld exist');
-ok(/if\(!o \|\| o\.day!==ctTodayStr\(\) \|\| !o\.G/.test(ex('irtGHeld')), '1l the hold is day-scoped, like the Kings');
+ok(/if\(!o \|\| o\.day!==ctTodayStr\(\) \|\| !o\[K\]/.test(ex('irtGHeld')), '1l the hold is day-scoped, like the Kings (v15.80: keyed G for ES, GQ for NQ)');
 ok(/\/\^G\[2-5\]\$\/\.test/.test(ex('irtGHeld')), '1m ...and only ever returns G2..G5 rows');
 ok(/THE FILE WAS THREE LINES/.test(B) && /G2\.\.G5 — the rest of Skylit's top-5/.test(B), '1n the header comment says the v14.20 contract is history and names what returned');
 

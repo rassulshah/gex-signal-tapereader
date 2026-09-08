@@ -205,7 +205,9 @@ def compress(block):
 # earlier entry usually holds most of them), and marked RECOVERED so nobody mistakes a reconstructed
 # ordering for the transcript's own.
 COMPACT_HEAD = re.compile(r'^This session is being continued from a previous conversation', re.I)
-ALLMSGS = re.compile(r'^\s*\d+\.\s*\*\*All user messages:?\*\*\s*$', re.M)
+# (2026-09-08) the summary's heading is not always bold and sometimes carries a parenthetical —
+# `6. All user messages (this context, in order):` — the bold-only pattern recovered nothing that day.
+ALLMSGS = re.compile(r'^\s*\d+\.\s*(?:\*\*)?All user messages(?:\s*\([^)\n]*\))?:?(?:\*\*)?\s*:?\s*$', re.M)
 
 
 def compaction_summary(path):

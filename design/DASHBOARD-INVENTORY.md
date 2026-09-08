@@ -11,6 +11,54 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0o · v15.81 — the IRT export on Skylit's own futures prices (2026-09-08)
+
+No new element on the face. **The FlexLevels file** (⇩ Export in the gear, the 180 s tick) now prints every ES row —
+SPXW KING, G2–G5, SPY KING, CW0 / PW0 / FLIP0 — and every NQ row — QQQ KING and its G rows — at the price Skylit itself
+draws for that strike on the futures chart: the ES1 / NQ1 `gex/levels` payloads' `derived[]` rows (`LASTFUTDER`, kept by
+the observer, self-fetched once a minute while the export is on), `skylitFutPx`. The panel's own basis is the fallback,
+tilde-tagged. **The gear's IRT status line** gained the ruler: `… · 9 of 9 ES rows on Skylit's ES1 prices (12 s old ·
+SPXW ratio 1.000578 · SPY ratio 10.026042) · 2 of 2 NQ rows on Skylit's NQ1 prices (…)` — or `no ES1 payload yet — every
+ES row on the panel's own basis (~)`. Measured: descriptive (a conversion, not a claim). His words: *"yes, i want them to
+match skylits own ES1 prices"* (R-23). `__gptsDebug.futDer()` shows the books. Mockup: none (a file, not a face element);
+the delivery message carries the before/after rows from his tab.
+
+## 0n · v15.80 — the candle on the price axis; his key levels; one source for the shown day (2026-09-08)
+
+**The candle's right column is now the PRICE AXIS.** His words on the v15.79 candle: *"the levels that are swept are
+the only ones that should be indicated. EMH and EML are not levels and they should be aligned based on the y axis
+which should be the price axis so the candle should show where it swept the level"* — then *"the king is not a key
+level. the key levels are PDH, PDL, ONL, ONH, WH, WL, Prior day POC, VAH, VAL, Weekly Poc"* and *"I dont want IBL IBH
+PDC. you can keep CW0 and PW0. and POC is the prior day poc. VAH and VAL is also prior day VAH and prior day VAL."*
+Every swept KEY level (`LEVEL_TIER` tier 1 = exactly his list; PWH/PWL/WPOC by name until the companion carries two
+weeks) is a tick across the right of the bar at its own price with the name and the minute it swept — green
+reclaimed · red broke · amber being tested; a level the session opened beyond is not drawn; collisions push a line
+apart with a leader from the true price. The reversal names (v14.99) are gone. **Beside the open tick, left of the
+bar:** `↩ 8:45 · 9m` (the open reclaimed at W.END, BOP — his question *"do you indicate how much time it took to
+reclaim the Open"*), then `MUD 1h46`, then its dollars — **converted once** (they had been 10× on the ES chart since
+v15.08: $15,168 for a $1,512 leg). **One source for the shown day:** the candle, the A row and GREEN/RED measure the
+shown day's ES 1-minute bars in a replay / the closed state (the parked Friday candle had read the recorder's frames:
+open 767.39 at 09:46, MUD 0m — *"a MUD of 0m doesn't make sense. double check the values they are incorrect"*);
+`closedCandles` keeps the frames for the band, the ATR and the trend machine. **ONH/ONL are the full Globex night**
+(they had never once been: the day-key split put the evening on yesterday's key); **the prior session skips a key with
+no RTH bars** (the Tuesday after Labor Day walked onto Monday's empty key). The King is tier 2; EMH/EML, PDC and the IB
+are out of the sweep set. Mockups `mockups/mockup-candle-axis.png` (Friday, key levels only), `mockups/mockup-candle-
+axis-row.png`, `mockups/mockup-candle-axis-today.png` (today, from his own courier rows — *"since the market is open
+you should show today"*). Serves: HOD/LOD · DEFLECTION. R-17. **The IRT export** (§0j) no longer writes the QQQ King
+converted onto the ES symbol — *"qqq should only be converted for nq"* (R-18); ENQU26 keeps it, and (R-20) now carries
+**G2–G5 from the QQQ book** by the ES rule; every IRT line is **solid** (R-19). **The A row** (R-21) sits under the E
+row — the same columns, today's actuals without the ~; **the two rows are ONE grid** (`.g3eag`, thirteen max-content
+columns, each row `display:contents`) so every column lines up, tagged `E · TUE` / `A · TUE` (`E · ALL` when pooled;
+the n, the basis, the date and "so far / as it closed" in the tags' hovers), `DAY ?` / `1ST ?` placeholders keeping
+thirteen cells, and `eagFit()` dropping the grid back to wrapping rows below ~900 px (his panel is 943; measured in
+Chromium at 943 and 700) — *"the rows should be aligned … E Tue and A Tue … symmetrical"*; **MU / MD** replaces MUD on both rows,
+the candle and the DAY table (MU green to a HOD, MD red to a LOD); HOD cells green, LOD cells red; the E row's first
+badge is **the expectation for the day** — GREEN DAY / RED DAY from the v14.91 opening-range call (76% on 225 of 282
+sessions), `DAY ?` before it fires; the "3/3 EVEN" recent-six badge is gone into that chip's hover. Mockup
+`mockups/mockup-e-a-rows-today.png` (the first cut) and `mockups/mockup-e-a-rows-aligned.png` (the grid). Measured: the call is 📊 (backtest n=282; forward-scored by the nightly as
+`gd`); the A row is descriptive. Hover: the slot's title names the axis and the reclaim
+line. Measured: descriptive (the sweep statuses are the SWEPT line's own, from the corpus's definitions).
+
 ## 0m · v15.79 — the E row below the ladder, bigger; the candle's sweeps are the shown day's (2026-09-08)
 
 No new element. **The E row moved** from the top (above the HOD line) to directly under the ladder and the day candle,
@@ -226,7 +274,7 @@ those is still computed and recorded; the studies and the Testing tab read them.
 | **⇄ rolls** | mass moving strike to strike (source → destination) | MOVEMENT · S5 rolling floors · K4 | S5.1–S5.4, K4.5 | descriptive ("INFERRED from paired changes, never an observed transfer" — the caveat is in the hover) | keep; S5.1 thin (11d) |
 | **STATE** | BUILDING / WEAKENING / TURN / SPENT | MOVEMENT · F3 lifecycle | F3.1 | **unmeasured** as a predictor | keep as identity; measure F3.1 from the tap record |
 | **ROC 15m** | rate of change, Skylit's own % live | MOVEMENT · F8 velocity | F8.1 | descriptive | keep |
-| **EM rails (EH / EL)** | the expected-move band edges | HOD/LOD · H5 range · H2.10k | H5.2, H2.10k | descriptive; **now a sweep level in the READ** (v15.57) | keep |
+| **EM rails (EH / EL)** | the expected-move band edges | HOD/LOD · H5 range · H2.10k | H5.2, H2.10k | descriptive; **(v15.80) no longer a sweep level — "EMH and EML are not levels"** (was, from v15.57) | keep |
 | **candle chute / open / range marks** | today's price path on the ladder's scale | context | — | descriptive | keep |
 | **♛ King pill** | the crown, its moves and dwell | HOD/LOD · K | K4.3 (measured) | measured | keep |
 | **regime badge** (posGamma / negGamma) | the sign of the book at spot | X1 regime | X1.1 (rate flat, extent unread) | descriptive; "fade / follow" is doctrine (C30), not yet measured here | keep; label it doctrine until X1.1 reads |

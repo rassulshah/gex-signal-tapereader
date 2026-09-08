@@ -161,7 +161,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   const SD = ex('secDay');
   // (v15.09) transposed: the wick family are column-1 FIELDS now, not table columns.
   ok(/dcell\('BOP'/.test(SD) && /dcell\('WICK'/.test(SD) && /dcell\('W\.END'/.test(SD) &&
-     /dcell\('OF BAR'/.test(SD) && /dcell\('MUD'/.test(SD),
+     /dcell\('OF BAR'/.test(SD) && /dcell\(hlMudLabel\(D&&D\.second\),/.test(SD),   // (v15.80) MUD reads MU / MD
      'n1 the wick family is on the face as column-1 fields, not named as pending');
   ok(!/pending a definition/.test(SD),
      'n1b ...and the old PENDING refusal is gone with them');

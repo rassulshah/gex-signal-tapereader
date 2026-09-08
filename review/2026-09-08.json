@@ -107,7 +107,43 @@
    "NOT FEAT_KEEP_BARS (160 distinct bars): 27 bars is far under it. NOT the chart window: r.n at 13:42 was 105 (the chart held the whole day). NOT the budget shedder on today’s snaps (they are intact; the callback trims snaps and feat together)",
    "the covered span varies 45–130 minutes and the record count 714–1408, so it is neither a fixed bar cap nor a fixed byte cap on the file that is written"
   ],
-  "probe": "__gptsDebug.featHealth() and __gptsDebug.storage() on the live panel at ~11:00 CT and again at ~14:00 CT: if the queue’s FIRST bar moves forward during the session, something evicts by age or by write; if LS_HEALTH.shed > 0 or quotaHits > 0, it is the storage budget after all (a recorder day is ~4.4 MB of JSON against a 3600 KB budget). This is the highest-leverage open item in the learning layer — forward-only data cannot be back-filled."
+  "probe": "__gptsDebug.featHealth() and __gptsDebug.storage() on the live panel at ~11:00 CT and again at ~14:00 CT: if the queue’s FIRST bar moves forward during the session, something evicts by age or by write; if LS_HEALTH.shed > 0 or quotaHits > 0, it is the storage budget after all (a recorder day is ~4.4 MB of JSON against a 3600 KB budget). This is the highest-leverage open item in the learning layer — forward-only data cannot be back-filled.",
+  "mechanism": {
+   "status": "FOUND LIVE 2026-09-08 (10:44 CT) — the localStorage budget",
+   "readings": [
+    {
+     "ct": "09:53",
+     "recorderKB": 2656,
+     "daysInLS": 3,
+     "shed": 0,
+     "quotaHits": 0,
+     "queue": "08:36→09:48",
+     "queueBars": 25,
+     "snapsLS": 26
+    },
+    {
+     "ct": "10:44",
+     "recorderKB": 3542,
+     "budgetKB": 3600,
+     "daysInLS": 1,
+     "shed": 1,
+     "quotaHits": 0,
+     "queue": "09:00→10:33",
+     "queueBars": 32,
+     "snapsLS": "09:06→10:36",
+     "snapsLSn": 35,
+     "todayChars": {
+      "feat": 902540,
+      "snaps": 897349,
+      "defl": 12336
+     },
+     "recordBytes": 474,
+     "recBytes": 309
+    }
+   ],
+   "why": "the exported snaps come from the IndexedDB archive (repoExportDay: payload.snaps = day.snaps) and are complete; feat is buildDayExport’s copy of the localStorage queue, which the shedder (recorderSave → lsPut, 25% oldest-first) trims from the second hour of the session once the day alone fills the 3600 KB budget (≈ 1.8 M chars: half feat, half the snapshot mirror). The “not the budget” line above was argued from the exported snapshots, i.e. from the archive, and is withdrawn.",
+   "fix": "R-22 (proposed, not built): export feat from the IndexedDB archive (FEAT_ARCHIVE via repoUpsertFeat, F-10c) merged with the queue, and stop mirroring snaps into localStorage — the queue then lasts the session. Forward-only: nothing before the fix can be back-filled."
+  }
  },
  "sessionShape": {
   "note": "the wick family per session from the ES 1-minute rows the day files carry (tools: review-pool.py); these are the A-row facts the E row (v15.77) is read against",

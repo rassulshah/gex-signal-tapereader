@@ -131,6 +131,73 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.81 — a feed you count but never open is a model you never test; compare two rulers at the same second
+(1) The observer had counted ~195 ES1 payloads a day since v11.4.2 and dropped every one as "not SPY/QQQ". The model
+behind that line — ES is a chart with no book — was wrong in a way one `fetch` of the URL the app itself uses would have
+shown: `levels:[]`, and a `derived[]` with every strike already at the ES price by Skylit's live ratio. A payload that
+is counted and discarded is a question the code has decided not to ask; when a symbol shows up in SYM_SEEN, open one.
+(2) "Are the levels the same or is there a computing error?" was answered by reading both sides from his tab in the
+same call: the same five strikes in the same order, 0.5–1.5 pt apart, because two bases on two clocks (the IF spot
+every 3 minutes, Skylit's ratio every minute). Read a minute apart the drift would have looked like a bug in one of
+them; read from a file it would have looked like nothing. The right instrument for "do we match?" is one probe, two
+numbers, one timestamp. (3) The projection's percentages did not match any single book's %King and no doc explained
+them; the formula was in the app's own chunk (988) — |GEX| × 1/√days over the next four expirations, top three per
+column, strength against the column's strongest. Fetching the chunk and reading the minified code took twenty minutes
+and settled it; theorising from the labels had produced four wrong candidates in ten. Read the code the app ships
+before reasoning about its numbers. (4) His "why weren't they done this way before?" deserved a plain answer, not a
+defence: a deliberate design (v11.4.1) built on a model nobody re-tested once the feed that disproved it was flowing;
+the rule that would have caught it ("match Skylit always") is a day old, and the comparison had never been made. The
+MUD dollars (v15.80) and this are the same shape — a plausible number next to correct ones, unmeasured against the
+source of truth. (5) One ruler in one file: once the Kings moved to Skylit's ratio, leaving the IF rows on the IF spot
+would have put two conversions of the same chart on the same page — an inconsistency his eye cannot see and his
+stops can. When one row changes ruler, every row on that symbol changes with it, and the fallback is named. (6) F-20
+was "ruled out" on evidence from the wrong array: the exported snapshots come from the IndexedDB archive, the queue
+from localStorage, and a complete series beside a trimmed one proved nothing about the trim. Two live readings an
+hour apart (shed 0 → 1, the queue's first bar 08:36 → 09:00) settled in fifty minutes what nine day files could not.
+When a mechanism is ruled out, say which array the proof came from.
+
+### v15.80 — "double check the values" is an instruction to read the source, not the label; a level list is HIS list
+(1) The parked candle's MUD 0m was not a MUD bug. The candle measured the recorder's frames while its sweep labels
+measured the ES bars, and the frames began at 09:46 on a drifted ratio — so "the open" was a mid-morning print and the
+first close through it was the same frame as the low. One build after v15.79 moved the sweeps onto the shown day's ES
+bars, the candle's own numbers were still on the frames: fixing half of a two-source seam leaves a two-source seam
+(the v15.39 lesson, again). The fix is one source for every number on one picture, and a named exception for the
+consumers that need the other series (closedCandles keeps the frames for the band, the ATR, the trend machine). (2) The
+MUD dollars had been ten times too big on the ES chart since v15.08 — six weeks — because the multiplier was applied
+to a scale that had already been applied. Nobody saw it because the number was plausible-looking and sat next to a
+correct one. "Double check the values" found it in ten minutes by computing the leg from the bars by hand: when he
+says the values are wrong, recompute from the source before explaining the label. (3) Tier 1 had the King and the EM
+edges in it because I put them there at v15.57 "on his behalf"; the IB had come back the same way after he removed it
+on 09-01. His list is his list. When he names a set, the code carries exactly that set, and anything I add rides as
+lower tier with its provenance stated. (4) ONH/ONL had never once been the full night, for a reason nothing measured:
+the day-key bucketing put the evening on yesterday's key, the morning on today's, and the "full or stub" rule
+counted bars on one key. A definition by HOURS (17:00 → 08:29) must be assembled by hours. (5) The Tuesday after Labor
+Day walked "the prior session" onto a key with no session in it. A holiday is a calendar day, not a session; the
+walk-back skips empty keys — but the night before that Tuesday IS the holiday's evening, so the same function needs a
+`calendar` door. Two callers, two meanings of "prior", one parameter. (6) "Since the market is open you should show
+today" — the mockup was Friday's parked candle while his screen was live. Render the mockup from the day he is
+looking at; his own courier rows were readable through the tab in one probe. (7) The review's biggest finding was
+not a rate but the sample: the queue holds the last ~80 minutes of every session. Two mechanisms had been named
+confidently before and both were wrong; this time the file says what is ruled OUT and what probe decides it, and
+the register got a forward hypothesis (H10) instead of a conclusion from two sessions. (8) Six asks arrived while
+the build ran — the A row, MU/MD, the colours, the expectation chip, solid IRT lines, G rows on NQ. Each was an
+instruction, not a question, and each was small; folding them into the running build cost one more mockup and a
+mutation pass, not a second install. The line that kept it honest: every addition got its own pins and its own
+mutants before the version number moved. (9) "3/3 EVEN" was a count I had promoted to a badge; he wanted the
+expectation. The panel already HAD an expectation for the day (the v14.91 green/red call, measured) and the E row
+was not showing it. When he asks for something, look for the measured thing the panel already computes before
+inventing a new one. (10) "The rows should be aligned" — two rows built as two flex-wrap boxes with tags of different
+widths can never align, whatever the cells inside them do; alignment is a property of ONE layout, so the fix was one
+grid with the rows as `display:contents` and the tags made the same shape (`E · TUE` / `A · TUE`, the rest in the
+hover). Two lessons rode along: a max-content grid does not wrap, so a fit step measured after layout (eagFit, like
+ladderFit) must decide when it may not be a grid; and every slot must always hold a cell (`DAY ?`, `1ST ?`) or the
+columns slide the day a badge is missing. Measure the natural width against his panel (895 of 916 px — twenty-one
+pixels of slack) before calling it done. (11) The projection question came in while the build ran: the answer was in
+the app's own chunk (the formula), its own feed (`symbol=ES1`, all derived, pre-converted) and two live readings a
+minute apart — not in the docs, which say "beta, contextual". Read the code the app ships before theorising about
+its numbers; and compare levels at the SAME second from the SAME tab, or the basis drift between two clocks reads as
+a bug.
+
 ### v15.79 — "today" is a choice the face already made; a sort that has not bitten is a sort that will
 (1) "You should indicate the levels that the HOD and LOD swept" arrived a build after those labels shipped, and the
 right response was not "they are there" but "why can't he see them": the candle in the closed state stands on
