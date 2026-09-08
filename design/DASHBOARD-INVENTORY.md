@@ -11,6 +11,15 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0p · v15.82 — the outcomes exported from the archive (2026-09-08)
+
+No new element. **Every number the face computes from the outcome queue** (ruleTier, the promotion bar, the Testing and
+Learn tabs' n) now reads the localStorage queue ∪ the IndexedDB archive (`featMergeRecs`) — the whole session, not the
+last ~2 hours the shedder leaves in localStorage (F-20). **The day file** carries the same union as `feat`, plus
+`featSource` (per symbol: the queue's n/from/to, the archive's, the merged), and its matrix is rebuilt from it. Probe:
+`__gptsDebug.featHealth().perSymbol.SPY` → `records` (the queue) · `archive` · `merged` · `mergedBars` · `lsSpan` ·
+`mergedSpan`. Measured: descriptive (a data path, not a claim). His words: *"lets go with your recommendation"* (R-22).
+
 ## 0o · v15.81 — the IRT export on Skylit's own futures prices (2026-09-08)
 
 No new element on the face. **The FlexLevels file** (⇩ Export in the gear, the 180 s tick) now prints every ES row —

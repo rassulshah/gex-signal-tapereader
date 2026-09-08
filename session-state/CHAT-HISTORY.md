@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-08 · v15.81 · session `f9c89c64` — v15.81: the IRT export on Skylit's own futures prices (R-23); the projection understood; F-20 solved (R-22 proposed); the E/A rows aligned; v15.80 the candle on the price axis, his key levels, the A row, MU/MD; the review of Friday
+## 2026-09-08 · v15.82 · session `f9c89c64` — v15.82: the outcomes exported from the archive (R-22, F-20's fix); v15.81 the IRT export on Skylit's own futures prices, verified; the projection understood; the E/A rows aligned; v15.80 the candle on the price axis; the review of Friday
 
-_170 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_176 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2248,6 +2248,120 @@ Now the mutation pass for v15.81:
 Now the CHANGELOG, DECISIONS, LESSONS, INVENTORY, config and the resume note:
 Now the resume note — the head rewritten for v15.81:
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (14:57):** Re-pin the stale §5b assertions to the aligned rows (tag `A · TUE`, date/"so far" in the hover, the `.g3eag` grid, `1ST ?`/`DAY ?` placeholders):
+Now verify the fallback in a real browser at a narrow width, and the aligned state at his width (943 px):
+Now the full suite:
+
+**OPERATOR:**
+> I added the projecttion feature in skylit. i want you to look it up and see how it is calculated and how we can use it . I also see percentages next to it. find out how it is calculated and what it means and how it can be used.   also look at th levels in skylit and the levels you are sending me in the export , are they the same or is there a computing error. Can this be resolved using the projected levels which look like current levels ?  just double check the levels in skylit and what you give me for irt and compare to projectected levles
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:30):** **PROJECTION — what it is and how Skylit computes it** (read from the app's own code and its live feed, checked against the labels on your chart)
+
+- Data: for the ES chart Skylit fetches `gex/levels?symbol=ES1` — ES has **no option book of its own**; the payload is all *derived*: the SPY book (ratio 10.026), the SPXW book (1.00058) and the SPX monthly, every strike **already converted to an ES price with Skylit's live ratio** (SPY 770 → 7720.4, SPXW 7700 → 7704.6). That is what the Derived orbs on your chart are. The projection request adds `with_slices` → one merged node list **per expiration** (Mon 8 · Tue 9 · Wed 10 · Thu 11 · Mon 14 — the "rolling basket" of the next 4).
+- The forward columns (the shaded zone past the last candle, "3 Days" on your 3-min chart): at each step the expirations still alive are merged per strike: **|GEX| × 1/√(days to expiry)**, floored at half a day, and an expiry fades to zero over its last two steps. So the nearest expiry dominates: 0DTE ×1.41, tomorrow ×0.91, Wed ×0.67, Thu ×0.56.
+- **The percentage = that merged size relative to the column's strongest strike** (the projection's own king = 100%) — the same reading as the node labels, NOT the 0DTE %King. Today: 7721 — 100% is SPY 770, 7705 — 86% is SPXW 7700, 7710 — 82% is SPXW 7705, 7691 — 72% is SPY 767. Recomputing from the slices gives 100 / 86 / 81 / 76 — it matches. (SPXW 7705 reads 94% on the 0DTE tape but 82% here because SPY 770 has more week-gamma behind it.)
+- It also computes, per column, a **target price** (gamma-weighted mean strike — the centre path / target dot), a **std-dev cone** (narrower when + and − gamma agree) and a regime word: compressed / balanced / directional / unstable. Skylit calls it beta: "contextual estimates, not signals".
+- How we can use it: (1) the …[trimmed]
+
+**OPERATOR:**
+> yes, i want them to match skylits own ES1 prices ? why weren
+> why weren't they done this way before ?
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:45):** Building it now (R-23 → v15.81). Why not before, honestly:
+
+1. When the export was written (v14.1x, mid-August) the panel's model of Skylit was "SPY and QQQ have books; ES is a chart with no book of its own" — so it converted with a basis it measured itself (the ES/SPY EMA from the two prices, persisted; SPX→ES from the IF companion's spot). That was a deliberate design at v11.4.1 ("the ratio must not depend on what is charted"), not an oversight at the time.
+2. The feed that disproves it — `symbol=ES1`, every level already at Skylit's ES price — was being thrown away: the observer counts every non-SPY/QQQ payload and drops it ("mapped to SPY/QQQ only"). It has counted ~195 ES1 payloads a day and nobody opened one until your projection question made me look inside.
+3. "Match Skylit always" became the standing rule yesterday; the two rulers had never been compared at the same second before today, so the 0.5–1.5 pt wander was invisible — the strikes and the order were right, only the placement drifted.
+
+Same lesson as the MUD dollars: the number was plausible and sat next to correct ones. Going into LESSONS.
+Now the new test file for v15.81:
+Now the mutation pass for v15.81:
+Now the CHANGELOG, DECISIONS, LESSONS, INVENTORY, config and the resume note:
+Now the resume note — the head rewritten for v15.81:
+Now the full suite, then commit, guard, build:
+**v15.81 is built** — `installv1581.bat` (attached above and in `C:\Dev\gex-signal-tapereader`; it carries the aligned E/A rows too, so this one file supersedes the second v15.80 installer if you have not run it).
+
+What it does: the panel now keeps the ES1 and NQ1 books Skylit itself publishes (every SPY / SPXW / QQQ strike already at the futures price by Skylit's live ratio — the derived orbs on your chart), fetches the one t …[trimmed]
+
+**OPERATOR:**
+> tamper monkey is not giving me the update option.. can you check if the files were installed
+
+**me (16:03):** Checked GitHub directly: the push worked. `origin/main` is at commit `9b30b81` "v15.81: the IRT export on Skylit's own futures prices…", pushed at **11:02:04 CT**, and the file there reads `@version 15.81`.
+
+Two things explain the missing Update button:
+
+1. **Timing** — the raw GitHub CDN caches the file for 5 minutes. Tampermonkey fetched it before the new copy propagated, saw the same version it already has, and offered Reinstall instead of Update. Click the link again **at 11:08 CT or later**: [gex-signal-tapereader.user.js](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) — it should say **Update to 15.81**.
+2. A minute before it (11:00:48) something ran the **old installv1579.bat** — that commit pushed v15.79 over the folder, and the v15.81 installer corrected it at 11:02. No harm done (v15.81 is what is on GitHub now), but delete the old `installv1579.bat` / `installv1580.bat` from the folder so only `installv1581.bat` is there to double-click.
+
+After the update: reload the Atlas tab, footer **v15.81**, then tell me "reloaded" and I'll verify the export off your panel.
+Standing by for "reloaded" — the verification probe (footer version, `futDer()` books, the file's rows against Skylit's derived rows at the same second) is ready to run off your tab.
+
+**OPERATOR:**
+> tampermonkey is giving the reinstall option for .79
+
+**me (16:06):** I just fetched the raw file from inside your own browser (bypassing its cache): GitHub is now serving **@version 15.81**. What Tampermonkey showed you was Chrome's cached copy from your click a few minutes ago (the 5-minute cache runs from that fetch).
+
+1. At **11:09 CT** or later, click the link again: [gex-signal-tapereader.user.js](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) → it should say **Update to 15.81**.
+2. If it still says 15.79, leave that install tab open and press **Ctrl+F5** on it (a hard refresh forces a fresh fetch) — the dialog re-reads the file.
+3. Update, reload the Atlas tab, footer **v15.81**, then "reloaded".
+Waiting for his "reloaded" — GitHub is confirmed serving v15.81, so the next click should offer the update.
+
+**OPERATOR:**
+> i reloaded
+
+**me (16:31):** Verified on your panel at 11:31 CT — **v15.81 is live** and the export is on Skylit's ruler:
+
+- Gear line: **"9 of 9 ES rows on Skylit's ES1 prices (2 s old · SPXW ratio 1.000670 · SPY ratio 10.027050)"** and **"5 of 5 NQ rows on Skylit's NQ1 prices (52 s old · QQQ ratio 41.118860)"** — the NQ book arrives by the once-a-minute self-fetch while your chart stays on ES.
+- The file vs Skylit's own derived rows, read the same minute:
+
+| row | your file | Skylit ES1 derived |
+|---|---|---|
+| SPXW KING 7700 | 7705.25 | 7705.15 |
+| G2 7705 | 7710.25 | 7710.15 |
+| G3 7680 | 7685.25 | 7685.14 |
+| G4 7695 | 7700.25 | 7700.15 |
+| SPY KING 769 | 7710.75 | 7710.90 (ratio moved 10.02705 → 10.02718 in the minute between) |
+| CW0 (SPX 7695) | 7700.25 | 7700.15 |
+
+Every line is within the 0.25 tick of what Atlas draws — the remaining 0.10 is the rounding to ES ticks, not a basis. No '~' on any row.
+
+Both books are visible any time via `__gptsDebug.futDer()` (age, sources, ratios). Next on the list when you want it: R-22 (export the outcomes from the archive — the F-20 fix).
+v15.81 is verified live on his panel and the record says so (resume note + chat history written to his folder for the next sync; commit `1fb9b1f` in the clone). The export now prints Skylit's own prices — 9 of 9 ES rows and 5 of 5 NQ rows within a tick of the derived orbs — and the next item on the list is R-22 (the F-20 fix), waiting for his ask.
+
+**OPERATOR:**
+> are there any outstanding items
+
+**me (16:51):** Yes — nothing in flight, but these are open, in the order I'd take them:
+
+**Waiting on your call**
+1. **R-22 — export the outcomes from the archive** (the F-20 fix). Until it ships every nightly and every review scores only the last ~2 hours of each session; the far-side-on-gamma study (the highest-value unbuilt idea, blocked on ~40 clean sessions) is stuck behind it too. Forward-only — every day without it is a day lost.
+2. **The Rec tab's proposals** — R-1 (record every READ as a scored claim), R-2 (draft register entries from Analysis rows automatically), R-3 (time-of-day class in the pattern table), R-4 (one knowledge file for Learn + rules), R-5 (the candidate score from tested weights), R-6 (the review as a scheduled cloud session). All still "proposed", none ✓/✗ yet.
+3. **The King latch** — keep the 2-minute latch on the rail and in the export, or follow Skylit's King instantly ("match Skylit always" says instantly; your call).
+4. **LDNL / LDNH** on the candle's SWEPT line — mine, not on your key-level list; keep or drop.
+
+**Next builds, each its own ask**
+5. **WH / WL / weekly POC** on the candle — needs the companion to carry two weeks (v1.19); then PWH/PWL/WPOC draw by name.
+6. **v15.82 SEASONALITY TRACKED** — your two weekday charts on Analysis; the corpus append into the nightly (it ends 08-21 — the E row's Tuesdays are stale until it runs). Mockup first.
+7. **The projection's target / regime** as a recorded, scored read — only if you want it; unmeasured, beta.
+
+**Small / housekeeping**
+8. Two day-line wrinkles (SAVED "00:02 · 25 bars" prefers the late sweep's mark; the bar count reads the trimmed queue).
+9. `hlNodeAt` compares the SPY King and the ATR unconverted on ES bars — HodN/LodN read "—" more than they should.
+10. Rec voice + bigger type — awaiting y …[trimmed]
+
+**OPERATOR:**
+> lets go with your recommendation
+
+**me (16:54):** Now the v15.82 edit:
+Now the test for v15.82 — the merge rule, the archive kept current, featStats through the merge, and the export writing LS ∪ archive:
+Now the records for v15.82:
+
 ### DECISIONS
 
 - **The candle on the price axis, his key levels (2026-09-08, "build"; R-17, v15.80):** *"the levels that are swept are
@@ -2474,7 +2588,20 @@ Now the resume note — the head rewritten for v15.81:
   ratio); the gear's IRT line names the ruler. Answered plainly why not before: a mid-August model that ES has no book,
   the ES1 feed counted and discarded, the rule a day old, the rulers never compared at the same second.
 
+- **The outcomes from the archive (2026-09-08, ~11:45 CT; R-22, v15.82):** *"lets go with your recommendation"* (R-22
+  first on the outstanding list) → `feat` in the day file and in the live `featStats` = the localStorage queue ∪ the
+  IndexedDB archive (`featMergeRecs`, LS wins per record), the in-memory archive kept current, `featSource` in the
+  file; the snapshot mirror and the shedder left alone on purpose. Forward-only.
+
 ### SHIPPED
+
+**v15.82** (panel + installer; companion v1.18 unchanged) — THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix).
+`featMergeRecs`, `featArchiveMerge` + `repoUpsertFeat` (memory first), `repoFeatDay`, `featStats` through the union,
+`repoExportDay` (feat = LS ∪ archive, `featSource`, the matrix rebuilt; degrades without repoFeatDay), `featHealth()`
+(archive / merged / spans), `tools/day-digest.py` (featSource). `test_v1582.js` 36 · 13/13 mutants; `test_v1581` 0a
+loosened; the version pins moved. R-22 implemented; the roadmap (v15.81 shipped + verified, v15.82 this, seasonality →
+v15.83, the rest +1); CHANGELOG; DECISIONS; LESSONS v15.82; INVENTORY §0p; FINDINGS F-20 FIXED; the config
+(2026-09-08g); the resume note (+ snapshot v15.81).
 
 **v15.81** (panel + installer; companion v1.18 unchanged) — THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES (R-23).
 `LASTFUTDER` / `FUTDER_STALE_MS` / `SKY_FUT`, `futDerNewestT`, the onFeed capture (ES1 / NQ1 gamma with derived[]),
@@ -2668,6 +2795,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **He runs ONE file** — `installv1582.bat` (carries v15.76 → v15.82); wait 5 min; the tapereader link (as a link);
+  reload. Then, within ~30 min: `__gptsDebug.featHealth().perSymbol.SPY` shows `archive` > 0 and `mergedSpan` reaching
+  back to the morning; tonight's day file carries `featSource` with `merged.SPY.from` at ~08:36 CT and thousands of
+  records; tomorrow's nightly log scores morning rows for the first time since 08-25.
 - **v15.81 INSTALLED AND VERIFIED 11:31 CT** — footer v15.81; "9 of 9 ES rows on Skylit's ES1 prices" · "5 of 5 NQ rows
   on Skylit's NQ1 prices"; SPXW KING 7705.25 vs Skylit 7705.15, G2 7710.25 vs 7710.15, SPY KING 7710.75 vs 7710.90 — within
   the tick, no '~'. (He had double-clicked installv1579.bat by mistake at 11:00; the CDN cache showed "Reinstall 15.79"
@@ -2805,6 +2936,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+1fb9b1f v15.81 verified on his panel 11:31 CT — the resume note and the chat history say so
+772ff5a v15.81: THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES — the ES1/NQ1 derived books kept and self-fetched, every ES and NQ row at the price Atlas draws, the basis as the tilde-tagged fallback (R-23); the projection understood; F-20 solved (R-22 proposed); test_v1581 58 · 26/26
 636327c resume note + chat history: F-20 solved (R-22), R-23 pending his answer
 1012b6f F-20: the mechanism found live (the localStorage budget sheds the queue; the exported snaps come from IDB) — FINDINGS, the review's dataHealth; R-22 (export feat from the archive) and R-23 (Skylit's ES1 prices in the export) proposed; test_v1570 1d re-pinned
 5ea641e v15.80 (2): THE E AND A ROWS ALIGNED — one 13-column grid, E · TUE / A · TUE, eagFit; the projection question answered in SKYLIT-FEEDS (the ES1 book, the merge formula, the levels compared) (R-21)
@@ -2815,8 +2948,6 @@ f754ab8 v15.78: THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS (R-15)
 ca2a16b v15.77: THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his seasonality (R-14)
 9f0a6bf session-state: his standing rule — match Skylit always, the source of truth the levels are compared against (DECISIONS 2026-09-07; the King latch named as the one designed difference, his call)
 cfde302 v15.76: G2–G5 IN THE IRT EXPORT — the rest of Skylit's top-5, white, beside the Kings, CW0, PW0 and FLIP0 (R-13)
-4f6cf61 v15.75: THE CLOSED STATE — when the market has not opened, the dashboard stands on the last session as it was
-b202f47 session-state: 2026-09-07 design notes — the purpose tags (HOD/LOD · DEFLECTION), the Rec voice awaiting ✓, absorption/footprint sources, the RTX SDK path, the second project's purpose draft, SWEPT on NQ (R-11 proposed)
 ```
 
 ---

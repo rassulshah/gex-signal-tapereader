@@ -424,60 +424,67 @@
    "v": "15.81",
    "title": "THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES — the ES1 / NQ1 gex/levels feeds (all derived: every SPY / SPXW / QQQ strike already at the futures price by Skylit's live ratio, the numbers Atlas draws as the derived orbs) are kept by the observer and self-fetched while the export is on; every ES and NQ row in the FlexLevels file takes that price (SPXW KING, G2–G5, SPY KING, CW0 / PW0 / FLIP0 on the same two ratios; QQQ KING and its G rows on NQ1); the panel's own basis only as the fallback, tilde-tagged; the gear's IRT line says which ruler the file is on",
    "serves": "match Skylit always · one ruler in the file",
-   "status": "next",
-   "done": "his FlexLevels file prints the SPXW King within a tick of the derived orb on his ES chart, and the gear line reads 'n of n ES rows on Skylit’s ES1 prices'; test_v1581 51, 26/26 mutants"
+   "status": "shipped",
+   "done": "shipped and verified on his panel 2026-09-08 11:31 CT: 9 of 9 ES rows and 5 of 5 NQ rows on Skylit’s prices, SPXW KING 7705.25 vs Skylit 7705.15; test_v1581 58, 26/26 mutants"
   },
   {
    "v": "15.82",
+   "title": "THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix) — the day file's feat is the localStorage queue ∪ the IndexedDB archive of every resolved record (featMergeRecs, LS wins per record), with featSource saying what came from where; the in-memory archive is kept current by every mirror write and featStats reads the same union, so the live face and the nightly both see the whole session instead of its last ~2 hours",
+   "serves": "every rate in the learning layer · the far-side-on-gamma study (blocked on ~40 clean sessions)",
+   "status": "next",
+   "done": "tonight's day file carries feat from the first bar to the close (featSource.merged.SPY.from at 08:3x CT) and the nightly scores a morning row for the first time since 08-25; test_v1582 36, 13/13 mutants"
+  },
+  {
+   "v": "15.83",
    "title": "SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six",
    "serves": "HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered",
    "status": "later",
    "done": "mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine"
   },
   {
-   "v": "15.83",
+   "v": "15.84",
    "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join",
    "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'",
    "status": "later",
    "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"
   },
   {
-   "v": "15.84",
+   "v": "15.85",
    "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured",
    "serves": "HOD/LOD · the loop closes",
    "status": "later",
    "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"
   },
   {
-   "v": "15.85",
+   "v": "15.86",
    "title": "the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme",
    "serves": "HOD/LOD · PULLBACK · 94 OPEN studies · H6",
    "status": "later",
    "done": "40 taps recorded and the first F-study reads from them with n"
   },
   {
-   "v": "15.86",
+   "v": "15.87",
    "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study",
    "serves": "the loop closes on its own",
    "status": "later",
    "done": "a study changes status without a human editing the seed"
   },
   {
-   "v": "15.87",
+   "v": "15.88",
    "title": "one definitions file (Python + panel) · the shipped-artifact test",
    "serves": "hardening",
    "status": "later",
    "done": "changing a bin in one place fails the suite until the other side follows"
   },
   {
-   "v": "15.88",
+   "v": "15.89",
    "title": "the face manifest — every number on the face names its study, pinned by a test",
    "serves": "data-driven, enforced",
    "status": "later",
    "done": "a new number on the face without a study fails the suite"
   },
   {
-   "v": "15.89",
+   "v": "15.90",
    "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move",
    "serves": "PULLBACK",
    "status": "later",

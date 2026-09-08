@@ -1,3 +1,40 @@
+## v15.82 — THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22 · F-20's fix)
+
+> Operator, 2026-09-08, on the outstanding list: *"lets go with your recommendation"* — R-22, the first item.
+
+**The wound.** F-20 (measured on nine day files, mechanism found live this morning): the localStorage budget (3600 KB)
+sheds the outcome queue from the second hour of every session — 09:53 CT shed 0 and the queue from 08:36; 10:44 CT shed 1
+and the queue from 09:00 — so every day file since 08-25 carried the last 45–130 minutes of outcomes, and every nightly
+and review scored an afternoon-only sample. Every resolved record had been mirrored to IndexedDB since v11.0 — but the
+mirror was write-only in three ways: the in-memory archive (`FEAT_ARCHIVE`) was loaded once at boot and never updated;
+`featStats` read the LS queue ALONE for any day LS still held ("LS wins for a day it still has"), so the live face —
+ruleTier, the promotion bar, the tabs — saw the shed queue too; and the export wrote that queue while its snapshots
+came from the archive, which is what made the trim invisible in the files.
+
+**What shipped.** `featMergeRecs(lsArr, archArr)` — the ONE rule: LS ∪ archive by `key|t`, the LS copy wins (it is the
+live one), sorted by t; records without key or t dropped. `featArchiveMerge` + `repoUpsertFeat`: every mirror write
+updates the in-memory archive first (by id — a re-resolved record replaces its copy), then IndexedDB. `featStats` reads
+LS ∪ archive for every day. `repoFeatDay(date, cb)` reads the IDB feat store by the date index; `repoExportDay` calls it
+after `repoDay` and writes `feat` = LS ∪ archive per symbol, `featSource` = `{ls, archive, merged: {n, from, to} per
+symbol, note}`, and the matrix rebuilt from the merged queue — everything else in the payload untouched; a harness
+without `repoFeatDay` degrades to the queue alone (the v14.76 rule: degrade, do not depend). `featHealth()` reports
+`archive`, `merged`, `mergedBars` and both spans beside the queue. `tools/day-digest.py` carries `featSource` into
+`dataHealth` and names a file without it as pre-v15.82. **Not done, deliberately:** the snapshot mirror stays in
+localStorage — its readers (the forward labeller, the node-born seed, the day line's bar count) are synchronous, the
+archive already holds every bar, and shedding the mirror costs nothing now that the queue's truth is elsewhere.
+
+**Tests.** `test_v1582.js` — 36 assertions: the merge rule (union, order, the overlap, empties, dropped records, a
+duplicate inside the queue); the in-memory archive (written on upsert, mirrored, replaced by key|t, memory before IDB);
+`repoFeatDay` (the date index, the three no-data paths, a cursor stub end to end); `featStats` through the merge; the
+export end to end with stubs (the morning from the archive + the queue = bars 1–4 where the queue alone held 3–4, the
+overlap is the LS copy, a symbol only the archive holds, featSource, the rebuilt matrix, the rest untouched, no archive →
+the queue as before); the probe; the record. **13 of 13 mutants.** `test_v1571` (the writer harness) green through the
+degrade path; `test_v1581` 0a loosened to "15.81 or later"; the version pins moved.
+
+**The record.** R-22 implemented (v15.82); the roadmap — v15.81 shipped and verified (11:31 CT), **v15.82 this build**,
+the seasonality → v15.83, the score → v15.84, the READ → v15.85, the rest +1; FINDINGS F-20 FIXED; DECISIONS 2026-09-08;
+LESSONS v15.82; INVENTORY §0p; the config (2026-09-08g); the resume note (+ snapshot v15.81).
+
 ## v15.81 — THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES (R-23) · F-20 solved (R-22 proposed)
 
 > Operator, 2026-09-08, after the projection reading: *"I added the projection feature in skylit. i want you to look it

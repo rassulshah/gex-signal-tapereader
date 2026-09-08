@@ -577,3 +577,17 @@ always" (2026-09-07) — the two rulers were 0.5–1.5 pt apart at the same seco
 Not decided: the projection's own numbers (the target price, the cone, the regime) on the face or in the file — beta,
 unmeasured; recorded in SKYLIT-FEEDS for when he asks.
 
+## 2026-09-08 · v15.82 — the outcomes are exported from the archive; the queue is a window, not the record (R-22)
+
+Operator, on the outstanding list: **"lets go with your recommendation"** (R-22 first).
+
+Decided: the day file's `feat` is the localStorage queue ∪ the IndexedDB archive of every resolved record, merged by
+`key|t` with the LS copy winning (it is the live one), and the file says what came from where (`featSource`); the same
+union is what `featStats` — the live face's truth — reads for every day. The localStorage queue is a WINDOW the
+shedder may trim; the archive is the record. Not done, on purpose: the snapshot mirror stays in localStorage (its
+readers are synchronous and the archive already has every bar), and the shedder is not touched — the v14.76 shedder
+went wrong once by being re-aimed, and with the queue's truth in the archive there is nothing left for it to break.
+Why: F-20, mechanism found live this morning; every rate in the learning layer had been an afternoon-only sample since
+08-25, and the far-side-on-gamma study is blocked on clean sessions that this alone can produce. Forward-only: the days
+already written stay as they are.
+

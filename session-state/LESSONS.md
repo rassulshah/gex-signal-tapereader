@@ -131,6 +131,22 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.82 — a mirror that is written and never read is not a backup; "LS wins" hid the hole on the face too
+(1) The archive had held every resolved record since v11.0 and it changed nothing, because nothing read it for a day
+localStorage still had: `featStats` took the LS array whenever it was non-empty, the export took the LS array, and the
+in-memory copy was loaded at boot and never updated. A mirror that no reader prefers is a write-only store; F-10c said
+so on 08-31 ("the archive is not exported") and the fix waited eight days because the finding was filed under the
+export instead of under the READ path. When a store exists to outlive another, the readers must UNION them, not pick
+one. (2) "LS wins for a day it still has" was written as a freshness rule and behaved as a truncation rule the moment
+the shedder trimmed today. A rule about which copy is fresher must be applied per RECORD, not per day. (3) The obvious
+second half — stop mirroring the snapshots into localStorage — was left alone on purpose: three synchronous readers
+depend on the mirror, the archive already holds every bar, and the v14.76 lesson (the shedder re-aimed once, nine
+tests red) says do not touch the shedder in the same build that moves the queue's truth. One change, one build.
+(4) Testing an async writer in a harness taught a small hard thing: a sloppy-mode `eval` of a function declaration
+inside a block hoists it into the module scope, where it shadows the `global.` stub the next section installs — the
+first run of test_v1582 read the wrong archive and reported n = 2 for a fixture of 3. Build harness functions with
+`new Function(...)` in their own scope when a later section must stub the same name.
+
 ### v15.81 — a feed you count but never open is a model you never test; compare two rulers at the same second
 (1) The observer had counted ~195 ES1 payloads a day since v11.4.2 and dropped every one as "not SPY/QQQ". The model
 behind that line — ES is a chart with no book — was wrong in a way one `fetch` of the URL the app itself uses would have

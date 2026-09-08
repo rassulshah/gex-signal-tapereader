@@ -68,6 +68,19 @@ def digest(path):
             # bars against 131 snapshots; 08-27 had ONE against 133.
             'COLLAPSED': (nsnap > 20 and len(bars) < max(5, nsnap*0.25)),
         }
+    # (v15.82, R-22) the panel now writes feat = localStorage queue ∪ IndexedDB archive and says so in `featSource`
+    # ({ls:{SYM:{n,from,to}}, archive:{...}, merged:{...}}). Carried through so the review can see how much of a
+    # day's queue came from the archive — and so a file WITHOUT it is recognisable as pre-v15.82 (F-20: the queue alone).
+    fsrc = d.get('featSource')
+    if isinstance(fsrc, dict):
+        for sym in health:
+            try:
+                health[sym]['featSource'] = { k: (fsrc.get(k) or {}).get(sym) for k in ('ls', 'archive', 'merged') }
+            except Exception:
+                pass
+        out['featSourceNote'] = fsrc.get('note')
+    else:
+        out['featSourceNote'] = 'absent — a pre-v15.82 file: feat is the localStorage queue alone (F-20)'
     out['dataHealth'] = health
     out['dataHealthVerdict'] = (
         'COLLAPSED — feature records cover almost no bars. Report this and do NOT compute rates over it.'

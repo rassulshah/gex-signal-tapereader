@@ -724,9 +724,13 @@ stamp classes, to be counted from the first stamped session and read once at n =
 
 ## F-20 · THE FEATURE QUEUE KEEPS ONLY THE LAST ~80 MINUTES OF EVERY SESSION — MEASURED; THE MECHANISM FOUND LIVE (2026-09-08)
 
-**Status: CONFIRMED — the fact on nine day files, the mechanism on the live panel the same day** · measured by the
-2026-09-08 review, `review/2026-09-08.json` (`dataHealth`), script `tools/review-pool.py` over `data/*.json` (json,
-never cat); the mechanism by the two live probes named below, taken through his tab at 09:53 and 10:44 CT.
+**Status: CONFIRMED — the fact on nine day files, the mechanism on the live panel the same day — FIXED in v15.82
+(R-22, the same afternoon): the day file's `feat` and the live `featStats` read the localStorage queue ∪ the IndexedDB
+archive (`featMergeRecs`), the archive is kept current by every mirror write, and `featSource` in the file says what
+came from where. Forward-only: the nine files stay as they are; the first whole-session file is 2026-09-08's.** ·
+measured by the 2026-09-08 review, `review/2026-09-08.json` (`dataHealth`), script `tools/review-pool.py` over
+`data/*.json` (json, never cat); the mechanism by the two live probes named below, taken through his tab at 09:53 and
+10:44 CT.
 
 **THE MECHANISM (live, 2026-09-08).** It IS the localStorage budget after all — and the "not the budget" line below was
 argued from the wrong evidence. The day file's `snaps` are taken from the IndexedDB archive (`repoExportDay`:
