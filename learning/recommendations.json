@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "asOf": "2026-09-08",
+ "asOf": "2026-09-07",
  "writtenBy": "tools/nightly/recommend.py",
  "rows": [
   {
@@ -61,18 +61,6 @@
    "text": "The review as a scheduled cloud session bound to your computer (runs the nightly’s log through the review and writes back over the bridge).",
    "changes": "the one stage that still waits for a session runs on a clock",
    "evidence": "stage ⑤ is the only manual step left after v15.68",
-   "status": "proposed"
-  },
-  {
-   "id": "RN-teach-L5",
-   "kind": "TEACH",
-   "by": "nightly",
-   "asOf": "2026-09-08",
-   "src": "results:rules:L5",
-   "text": "L5: the record contradicts the taught rule — re-teach it against the record, or retire it.",
-   "changes": "the Learn tab’s rule L5 is rewritten or marked REFUTED by the review",
-   "evidence": "held: a −γ node 8 / 19 = 42% (low 23%) vs a +γ node 6 / 21 = 29% (low 14%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-08",
-   "n": 19,
    "status": "proposed"
   },
   {
@@ -269,7 +257,7 @@
   }
  ],
  "counts": {
-  "proposed": 7,
+  "proposed": 6,
   "approved": 0,
   "implemented": 16,
   "declined": 0,

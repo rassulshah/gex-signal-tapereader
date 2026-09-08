@@ -18,11 +18,7 @@
        "decides": "SIZE",
        "claim": "C10",
        "corpus": "tap record",
-       "status": "THIN",
-       "nightly": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       },
       {
        "id": "K1.2",
@@ -30,11 +26,7 @@
        "decides": "SIZE",
        "claim": "C10 C28",
        "corpus": "tap record",
-       "status": "THIN",
-       "nightly": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       },
       {
        "id": "K1.3",
@@ -83,11 +75,7 @@
        "decides": "SIZE · TARGET",
        "claim": "C10",
        "corpus": "tap record",
-       "status": "THIN",
-       "nightly": "King as floor held 2 / 4 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "King as floor held 2 / 4 (thin) · turn — · resume — · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       },
       {
        "id": "K2.2",
@@ -95,11 +83,7 @@
        "decides": "SIZE · TARGET",
        "claim": "C10",
        "corpus": "tap record",
-       "status": "THIN",
-       "nightly": "King as ceiling held 3 / 8 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "King as ceiling held 3 / 8 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       },
       {
        "id": "K2.3",
@@ -133,8 +117,8 @@
        "claim": "Academy: floor rolling up = bullish",
        "corpus": "tap record (stamped, v15.72+)",
        "status": "REGISTERED",
-       "nightly": "H8 thin: n=0 of 30 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H8 thin: n=0 of 30 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       },
       {
        "id": "K2.7",
@@ -143,8 +127,8 @@
        "claim": "Academy: ceiling rolling down = bearish",
        "corpus": "tap record (stamped, v15.72+)",
        "status": "REGISTERED",
-       "nightly": "H9 thin: n=0 of 30 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H9 thin: n=0 of 30 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       }
      ]
     },
@@ -355,11 +339,8 @@
        "claim": "C10",
        "corpus": "defl ledger · tap record",
        "status": "THIN",
-       "result": "any King held 5 / 12 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
-       "script": "tools/nightly/patterns.py",
-       "nightly": "any King held 5 / 12 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "by": "nightly"
+       "result": "51 scored taps on 2026-09-03, but every `kings` join before v15.67 was empty (F-18, L-T); the old detector's King 2 held / 4 broke (thin). From v15.67 the held rate by King · SPX / SPY / QQQ reads on Testing ⑦ (patternTable) and in the nightly's `patterns`; read once at n ≥ 15",
+       "script": "tools/nightly/patterns.py"
       },
       {
        "id": "S0.2",
@@ -367,11 +348,7 @@
        "decides": "SIZE · LEVEL",
        "claim": "C10 C28",
        "corpus": "defl ledger · tap record",
-       "status": "THIN",
-       "nightly": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       },
       {
        "id": "S0.3",
@@ -379,11 +356,7 @@
        "decides": "SIZE · SIDE",
        "claim": "C10 C28",
        "corpus": "defl ledger · tap record",
-       "status": "THIN",
-       "nightly": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       },
       {
        "id": "S0.4",
@@ -391,11 +364,7 @@
        "decides": "SIDE",
        "claim": "C28",
        "corpus": "defl ledger · tap record",
-       "status": "THIN",
-       "nightly": "QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       },
       {
        "id": "S0.5",
@@ -419,11 +388,7 @@
        "decides": "SIDE · TARGET",
        "claim": "C8 ours",
        "corpus": "defl ledger · tap record",
-       "status": "THIN",
-       "nightly": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 1 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 1 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "by": "nightly"
+       "status": "OPEN"
       }
      ],
      "note": "Tracked religiously: every King tap is a ledger row with the book, the role, the growth into the tap and the outcome; the per-book rows print a rate only at n ≥ 15 (thin below), like every rate here."
@@ -439,13 +404,10 @@
        "decides": "TARGET",
        "claim": "C23",
        "corpus": "tap record",
-       "status": "THIN",
-       "result": "SPX — · SPY — · QQQ held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-08",
+       "status": "OPEN",
+       "result": "the held rate of a tap at a rug's yellow, per book, accrues on Testing ⑦ from v15.67 (the stamp `pat.<book>.rug`); MFE10 and bars-to-target still need the tap record",
        "script": "tools/nightly/patterns.py",
-       "was": "S-B6",
-       "nightly": "SPX — · SPY — · QQQ held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "by": "nightly"
+       "was": "S-B6"
       },
       {
        "id": "S1.2",
@@ -453,12 +415,9 @@
        "decides": "TARGET",
        "claim": "C23",
        "corpus": "tap record",
-       "status": "THIN",
-       "result": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-08",
-       "script": "tools/nightly/patterns.py",
-       "nightly": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "by": "nightly"
+       "status": "OPEN",
+       "result": "the held rate per book accrues on Testing ⑦ from v15.67 (`pat.<book>.rug` = rrug)",
+       "script": "tools/nightly/patterns.py"
       },
       {
        "id": "S1.3",
@@ -726,13 +685,10 @@
        "decides": "WAIT",
        "claim": "C24",
        "corpus": "tap record",
-       "status": "READ",
-       "result": "SPX held 3 / 13 (thin) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 6 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-08",
+       "status": "OPEN",
+       "result": "the held rate of a tap inside a pika / barney stack (named or member), per book, accrues on Testing ⑦ from v15.67 (`pat.<book>.st`); dwell still needs the tap record",
        "script": "tools/nightly/patterns.py",
-       "was": "S-B11",
-       "nightly": "SPX held 3 / 13 (thin) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 6 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "by": "nightly"
+       "was": "S-B11"
       },
       {
        "id": "S7.2",
@@ -741,9 +697,9 @@
        "claim": "C24 C1",
        "corpus": "tap record",
        "status": "THIN",
-       "nightly": "SPX held 1 / 3 (thin) · turn — · resume — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ held 5 / 8 (thin) · turn 0 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPX held 1 / 3 (thin) · turn — · resume — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ held 5 / 8 (thin) · turn 0 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
+       "nightly": "SPX — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ — · nightly 2026-09-07",
+       "asOf": "2026-09-07",
+       "result": "SPX — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ — · nightly 2026-09-07",
        "by": "nightly"
       },
       {
@@ -1038,8 +994,8 @@
        "status": "REFUSED",
        "result": "H4 null: 49.1% vs 48.6%, n=970 rows",
        "was": "S-B17",
-       "nightly": "H4 thin: n=4 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H4 thin: n=0 of 40 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       }
      ]
     },
@@ -1057,8 +1013,8 @@
        "status": "REGISTERED",
        "result": "tap≥1 73% n=22 vs tap0 47% n=70 · H2 reads at 30",
        "was": "S-B1",
-       "nightly": "H2 thin: n=2 of 30 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H2 thin: n=1 of 30 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       },
       {
        "id": "F2.2",
@@ -1167,8 +1123,8 @@
        "corpus": "94 ep · book",
        "status": "REGISTERED",
        "result": "exploratory 32% n=34 for A — the inverse · H1 reads at 40",
-       "nightly": "H1 thin: n=5 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H1 thin: n=1 of 40 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       },
       {
        "id": "F5.3",
@@ -1193,8 +1149,8 @@
        "corpus": "94 ep · book",
        "status": "REGISTERED",
        "result": "H3: 52.2% vs 52.1% · n=46/48 · gap < 8 predicted",
-       "nightly": "H3 thin: n=3 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H3 thin: n=2 of 40 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       },
       {
        "id": "F6.2",
@@ -1552,9 +1508,9 @@
        "claim": "C17 C13",
        "corpus": "defl ledger 0/50",
        "status": "READ NEXT",
-       "result": "H5 ready: ledger has 141 events — the join can be run · nightly 2026-09-08",
-       "nightly": "H5 ready: ledger has 141 events — the join can be run · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "result": "H5 ready: ledger has 85 events — the join can be run · nightly 2026-09-07",
+       "nightly": "H5 ready: ledger has 85 events — the join can be run · nightly 2026-09-07",
+       "asOf": "2026-09-07",
        "by": "nightly"
       },
       {
@@ -1573,9 +1529,7 @@
        "claim": "C17",
        "corpus": "new sessions · close-scored rows",
        "status": "REGISTERED",
-       "result": "H10 proposed: ≥ 80% · refute if the Wilson high < 80% (the 2026-09-08 review read 43% n=23 and 50% n=30 on 09-03/04 — not counted; the queue keeps only late-session rows, so this is the cell family the table trusts most)",
-       "nightly": "H10 thin: n=26 of 60 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "result": "H10 proposed: ≥ 80% · refute if the Wilson high < 80% (the 2026-09-08 review read 43% n=23 and 50% n=30 on 09-03/04 — not counted; the queue keeps only late-session rows, so this is the cell family the table trusts most)"
       }
      ]
     },
@@ -1652,8 +1606,8 @@
        "corpus": "tap record · API backfill",
        "status": "DRAFT",
        "result": "H6 proposed: > 40% vs the 24% base (n=453 ON/PD sweep-reclaims) · refute if ≤ 30%",
-       "nightly": "H6 thin: n=1 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H6 thin: n=0 of 40 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       },
       {
        "id": "H2.8",
@@ -1663,8 +1617,8 @@
        "corpus": "new sessions",
        "status": "DRAFT",
        "result": "H7 proposed: first-30-min ON/PD sweep-reclaim prints the extreme > 24% · refute if ≤ 18% (pooled 27% n=180 on the read corpus)",
-       "nightly": "H7 thin: n=0 of 60 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H7 thin: n=0 of 60 · nightly 2026-09-07",
+       "asOf": "2026-09-07"
       },
       {
        "id": "H2.9",
@@ -2128,13 +2082,13 @@
  "counts": {
   "studies": 193,
   "byStatus": {
-   "THIN": 36,
+   "OPEN": 100,
    "READ NEXT": 18,
-   "OPEN": 89,
+   "THIN": 26,
    "REGISTERED": 8,
    "SHIPPED": 13,
    "REFUSED": 3,
-   "READ": 24,
+   "READ": 23,
    "DRAFT": 2
   }
  }

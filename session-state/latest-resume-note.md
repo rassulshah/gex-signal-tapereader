@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-08 (v15.82) · panel v15.82 · companion v1.18 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-08 (v15.83) · panel v15.83 · companion v1.18 · supersedes every earlier resume note_
 
 
 # ⚠⚠⚠ THE WHAT AND THE HOW — STANDING, EVERY CONTEXT, BEFORE ANYTHING ELSE
@@ -37,7 +37,42 @@ probably eod, and from that point on you take over from data, analysis, testing,
 which is where we will discuss what to implement." — then: "the next step is to automatically have the application
 trigger the save button instead of me clicking it … instead of 5pm can you just modify so it is after market hours."
 
-# ⚠⚠ 2026-09-08, midday (latest) — v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix).
+# ⚠⚠ 2026-09-08, early afternoon (latest) — v15.83: THE SPY BOOK'S TOP FIVE IN THE IRT EXPORT · THE SIGNED % ON EVERY NODE LINE · THE NODE LINES WEAR THEIR POLARITY (R-24).
+
+**Panel is v15.83, companion v1.18 (unchanged). Installed? installv1583.bat carries v15.76 → v15.83 — one double-click,
+the link, reload. v15.82 was verified on his panel at 12:08 CT (below).** His words, from an IRT screenshot with no
+7690 line: *"do my levels in irt match the levels in skylit. for example, i dont see a 7690 level"* → the SPX side
+matched to the tick; the 7690 was **SPY 767**, a SPY-book node the file never carried (R-13 was the SPX top-5) →
+*"that spy node is important because it is a big node.. i currently have top 5 nodes for spx. Im thinking of having the
+top 5 for spy as well .. what is your suggestion?"* → my suggestion was "export what Skylit draws" (P20 then) → he set
+NODES = 5 → *"is that showing me the top 5 from both spx and spy"* (yes: `nodes=5` per borrowed book, read off his tab)
+→ **"ok lets go with this. the spy gamma node lines can be beige"** → **"also add the % to each of the node lines
+except the king"** → **"add a + or - too so i know the polarity"** → **"infact, i want you to redo the color schemes
+for the nodes, using yellow and its derivatives for positive nodes and purple and its derivatives for negative gamma
+nodes."**
+**What shipped.** **S2–S5** — the SPY book's next four by |v| after its King (`irtSpyTop`, from the same payload the SPY
+KING row reads; no strength floor: NODES = 5 draws the top five whatever their size), width 1, solid, Skylit's ES1
+price, held day-scoped under `GS`, `IRT_LAST.sWhy`, on the ETF symbol at the SPY strikes. **The signed %** on every node
+line (`irtPctTag`: `G3 -56%`, `S2 +55%`, the NQ symbol's `G2 +44%`); the Kings bare. **The polarity scheme**
+(`irtNodeCol`, `IRT_COLORS.gpos 245,215,110 · gneg 185,150,250 · spos 250,238,190 · sneg 225,208,252`): yellow
+family = +gamma, purple family = −gamma, the shade = the book (SPXW / QQQ nodes one step lighter than their King, the
+SPY nodes the palest); white is gone from the node rows; beige (his first word) superseded within the hour — do not
+bring it back; the IF rows keep his 08-28 colours. `irtGHeld` accepts S labels; the gear's IRT line adds `S rows …`;
+the helpers are typeof-guarded inside `irtBuildCsv`. Today's file would read: SPXW KING 7705.50 · G2 +77% 7710.50 ·
+G3 -44% 7685.50 · G4 +29% 7700.50 · G5 -21% 7680.50 · SPY KING 7690.50 (767) · S2..S5 at 768 / 769 / 770 / … ·
+CW0 · PW0 · FLIP0 — 13 ES rows. `test_v1583.js` 38 · 16/16 mutants; `test_v1576` 1g/1m re-pinned; the roadmap —
+v15.82 shipped, **v15.83 this build**, seasonality → v15.84.
+**NOT yet verified on his machine:** the S rows on his IRT chart in the pale yellow / purple beside the G rows, every
+node label with its signed % (`G2 +77%`), the SPXW King gold and bare, the gear line's `S rows live (S2 768 +55%, …)`;
+whether he wants the strike in the label too (`S2 767 +55%`) — not asked, his call.
+**NEXT, in order, each its own ask:** (a) WH / WL / weekly POC — the companion's window must reach the prior week
+(v1.19: two weeks), then PWH/PWL/WPOC draw by name; (b) v15.84 SEASONALITY TRACKED (mockup first; the corpus append into
+the nightly — it ends 08-21); (c) the Rec proposals R-1…R-6 await his ✓/✗; (d) the King latch under "match Skylit
+always" (his call); (e) LDNL/LDNH on the SWEPT line — mine, ask; (f) the projection's target / regime as a recorded,
+scored read — only if he asks. **Tonight:** the day file's `featSource` (from 08:39) and tomorrow's nightly log with
+morning rows are the last proof of v15.82.
+
+# (earlier) 2026-09-08, midday — v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix).
 
 **Panel is v15.82, companion v1.18 (unchanged). INSTALLED AND VERIFIED on his panel 12:08 CT 2026-09-08:** footer v15.82;
 `featHealth().perSymbol.SPY` = queue 1,364 records / 29 bars (10:39 → 12:06, the shed window) · archive 2,800 · **merged
