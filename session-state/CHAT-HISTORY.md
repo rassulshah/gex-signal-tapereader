@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-08 · v15.83 · session `f9c89c64` — v15.83: the SPY book's top five in the IRT export, the signed % on every node line, the node lines coloured by polarity (R-24); v15.82 the outcomes from the archive; v15.81 the export on Skylit's prices; the projection understood; the E/A rows aligned; v15.80 the candle on the price axis; the review of Friday
+## 2026-09-08 · v15.82 · session `f9c89c64` — v15.82: the outcomes exported from the archive (R-22, F-20's fix); v15.81 the IRT export on Skylit's own futures prices, verified; the projection understood; the E/A rows aligned; v15.80 the candle on the price axis; the review of Friday
 
-_189 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_176 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2362,216 +2362,6 @@ v15.81 is verified live on his panel and the record says so (resume note + chat 
 Now the test for v15.82 — the merge rule, the archive kept current, featStats through the merge, and the export writing LS ∪ archive:
 Now the records for v15.82:
 
-_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
-
-**me (14:57):** Re-pin the stale §5b assertions to the aligned rows (tag `A · TUE`, date/"so far" in the hover, the `.g3eag` grid, `1ST ?`/`DAY ?` placeholders):
-Now verify the fallback in a real browser at a narrow width, and the aligned state at his width (943 px):
-Now the full suite:
-
-**OPERATOR:**
-> I added the projecttion feature in skylit. i want you to look it up and see how it is calculated and how we can use it . I also see percentages next to it. find out how it is calculated and what it means and how it can be used.   also look at th levels in skylit and the levels you are sending me in the export , are they the same or is there a computing error. Can this be resolved using the projected levels which look like current levels ?  just double check the levels in skylit and what you give me for irt and compare to projectected levles
-> 
-> _[sent while I was working — a queued message]_
-
-**me (15:30):** **PROJECTION — what it is and how Skylit computes it** (read from the app's own code and its live feed, checked against the labels on your chart)
-
-- Data: for the ES chart Skylit fetches `gex/levels?symbol=ES1` — ES has **no option book of its own**; the payload is all *derived*: the SPY book (ratio 10.026), the SPXW book (1.00058) and the SPX monthly, every strike **already converted to an ES price with Skylit's live ratio** (SPY 770 → 7720.4, SPXW 7700 → 7704.6). That is what the Derived orbs on your chart are. The projection request adds `with_slices` → one merged node list **per expiration** (Mon 8 · Tue 9 · Wed 10 · Thu 11 · Mon 14 — the "rolling basket" of the next 4).
-- The forward columns (the shaded zone past the last candle, "3 Days" on your 3-min chart): at each step the expirations still alive are merged per strike: **|GEX| × 1/√(days to expiry)**, floored at half a day, and an expiry fades to zero over its last two steps. So the nearest expiry dominates: 0DTE ×1.41, tomorrow ×0.91, Wed ×0.67, Thu ×0.56.
-- **The percentage = that merged size relative to the column's strongest strike** (the projection's own king = 100%) — the same reading as the node labels, NOT the 0DTE %King. Today: 7721 — 100% is SPY 770, 7705 — 86% is SPXW 7700, 7710 — 82% is SPXW 7705, 7691 — 72% is SPY 767. Recomputing from the slices gives 100 / 86 / 81 / 76 — it matches. (SPXW 7705 reads 94% on the 0DTE tape but 82% here because SPY 770 has more week-gamma behind it.)
-- It also computes, per column, a **target price** (gamma-weighted mean strike — the centre path / target dot), a **std-dev cone** (narrower when + and − gamma agree) and a regime word: compressed / balanced / directional / unstable. Skylit calls it beta: "contextual estimates, not signals".
-- How we can use it: (1) the …[trimmed]
-
-**OPERATOR:**
-> yes, i want them to match skylits own ES1 prices ? why weren
-> why weren't they done this way before ?
-> 
-> _[sent while I was working — a queued message]_
-
-**me (15:45):** Building it now (R-23 → v15.81). Why not before, honestly:
-
-1. When the export was written (v14.1x, mid-August) the panel's model of Skylit was "SPY and QQQ have books; ES is a chart with no book of its own" — so it converted with a basis it measured itself (the ES/SPY EMA from the two prices, persisted; SPX→ES from the IF companion's spot). That was a deliberate design at v11.4.1 ("the ratio must not depend on what is charted"), not an oversight at the time.
-2. The feed that disproves it — `symbol=ES1`, every level already at Skylit's ES price — was being thrown away: the observer counts every non-SPY/QQQ payload and drops it ("mapped to SPY/QQQ only"). It has counted ~195 ES1 payloads a day and nobody opened one until your projection question made me look inside.
-3. "Match Skylit always" became the standing rule yesterday; the two rulers had never been compared at the same second before today, so the 0.5–1.5 pt wander was invisible — the strikes and the order were right, only the placement drifted.
-
-Same lesson as the MUD dollars: the number was plausible and sat next to correct ones. Going into LESSONS.
-Now the new test file for v15.81:
-Now the mutation pass for v15.81:
-Now the CHANGELOG, DECISIONS, LESSONS, INVENTORY, config and the resume note:
-Now the resume note — the head rewritten for v15.81:
-Now the full suite, then commit, guard, build:
-**v15.81 is built** — `installv1581.bat` (attached above and in `C:\Dev\gex-signal-tapereader`; it carries the aligned E/A rows too, so this one file supersedes the second v15.80 installer if you have not run it).
-
-What it does: the panel now keeps the ES1 and NQ1 books Skylit itself publishes (every SPY / SPXW / QQQ strike already at the futures price by Skylit's live ratio — the derived orbs on your chart), fetches the one t …[trimmed]
-
-**OPERATOR:**
-> tamper monkey is not giving me the update option.. can you check if the files were installed
-
-**me (16:03):** Checked GitHub directly: the push worked. `origin/main` is at commit `9b30b81` "v15.81: the IRT export on Skylit's own futures prices…", pushed at **11:02:04 CT**, and the file there reads `@version 15.81`.
-
-Two things explain the missing Update button:
-
-1. **Timing** — the raw GitHub CDN caches the file for 5 minutes. Tampermonkey fetched it before the new copy propagated, saw the same version it already has, and offered Reinstall instead of Update. Click the link again **at 11:08 CT or later**: [gex-signal-tapereader.user.js](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) — it should say **Update to 15.81**.
-2. A minute before it (11:00:48) something ran the **old installv1579.bat** — that commit pushed v15.79 over the folder, and the v15.81 installer corrected it at 11:02. No harm done (v15.81 is what is on GitHub now), but delete the old `installv1579.bat` / `installv1580.bat` from the folder so only `installv1581.bat` is there to double-click.
-
-After the update: reload the Atlas tab, footer **v15.81**, then tell me "reloaded" and I'll verify the export off your panel.
-Standing by for "reloaded" — the verification probe (footer version, `futDer()` books, the file's rows against Skylit's derived rows at the same second) is ready to run off your tab.
-
-**OPERATOR:**
-> tampermonkey is giving the reinstall option for .79
-
-**me (16:06):** I just fetched the raw file from inside your own browser (bypassing its cache): GitHub is now serving **@version 15.81**. What Tampermonkey showed you was Chrome's cached copy from your click a few minutes ago (the 5-minute cache runs from that fetch).
-
-1. At **11:09 CT** or later, click the link again: [gex-signal-tapereader.user.js](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) → it should say **Update to 15.81**.
-2. If it still says 15.79, leave that install tab open and press **Ctrl+F5** on it (a hard refresh forces a fresh fetch) — the dialog re-reads the file.
-3. Update, reload the Atlas tab, footer **v15.81**, then "reloaded".
-Waiting for his "reloaded" — GitHub is confirmed serving v15.81, so the next click should offer the update.
-
-**OPERATOR:**
-> i reloaded
-
-**me (16:31):** Verified on your panel at 11:31 CT — **v15.81 is live** and the export is on Skylit's ruler:
-
-- Gear line: **"9 of 9 ES rows on Skylit's ES1 prices (2 s old · SPXW ratio 1.000670 · SPY ratio 10.027050)"** and **"5 of 5 NQ rows on Skylit's NQ1 prices (52 s old · QQQ ratio 41.118860)"** — the NQ book arrives by the once-a-minute self-fetch while your chart stays on ES.
-- The file vs Skylit's own derived rows, read the same minute:
-
-| row | your file | Skylit ES1 derived |
-|---|---|---|
-| SPXW KING 7700 | 7705.25 | 7705.15 |
-| G2 7705 | 7710.25 | 7710.15 |
-| G3 7680 | 7685.25 | 7685.14 |
-| G4 7695 | 7700.25 | 7700.15 |
-| SPY KING 769 | 7710.75 | 7710.90 (ratio moved 10.02705 → 10.02718 in the minute between) |
-| CW0 (SPX 7695) | 7700.25 | 7700.15 |
-
-Every line is within the 0.25 tick of what Atlas draws — the remaining 0.10 is the rounding to ES ticks, not a basis. No '~' on any row.
-
-Both books are visible any time via `__gptsDebug.futDer()` (age, sources, ratios). Next on the list when you want it: R-22 (export the outcomes from the archive — the F-20 fix).
-v15.81 is verified live on his panel and the record says so (resume note + chat history written to his folder for the next sync; commit `1fb9b1f` in the clone). The export now prints Skylit's own prices — 9 of 9 ES rows and 5 of 5 NQ rows within a tick of the derived orbs — and the next item on the list is R-22 (the F-20 fix), waiting for his ask.
-
-**OPERATOR:**
-> are there any outstanding items
-
-**me (16:51):** Yes — nothing in flight, but these are open, in the order I'd take them:
-
-**Waiting on your call**
-1. **R-22 — export the outcomes from the archive** (the F-20 fix). Until it ships every nightly and every review scores only the last ~2 hours of each session; the far-side-on-gamma study (the highest-value unbuilt idea, blocked on ~40 clean sessions) is stuck behind it too. Forward-only — every day without it is a day lost.
-2. **The Rec tab's proposals** — R-1 (record every READ as a scored claim), R-2 (draft register entries from Analysis rows automatically), R-3 (time-of-day class in the pattern table), R-4 (one knowledge file for Learn + rules), R-5 (the candidate score from tested weights), R-6 (the review as a scheduled cloud session). All still "proposed", none ✓/✗ yet.
-3. **The King latch** — keep the 2-minute latch on the rail and in the export, or follow Skylit's King instantly ("match Skylit always" says instantly; your call).
-4. **LDNL / LDNH** on the candle's SWEPT line — mine, not on your key-level list; keep or drop.
-
-**Next builds, each its own ask**
-5. **WH / WL / weekly POC** on the candle — needs the companion to carry two weeks (v1.19); then PWH/PWL/WPOC draw by name.
-6. **v15.82 SEASONALITY TRACKED** — your two weekday charts on Analysis; the corpus append into the nightly (it ends 08-21 — the E row's Tuesdays are stale until it runs). Mockup first.
-7. **The projection's target / regime** as a recorded, scored read — only if you want it; unmeasured, beta.
-
-**Small / housekeeping**
-8. Two day-line wrinkles (SAVED "00:02 · 25 bars" prefers the late sweep's mark; the bar count reads the trimmed queue).
-9. `hlNodeAt` compares the SPY King and the ATR unconverted on ES bars — HodN/LodN read "—" more than they should.
-10. Rec voice + bigger type — awaiting y …[trimmed]
-
-**OPERATOR:**
-> lets go with your recommendation
-
-**me (16:54):** Now the v15.82 edit:
-Now the test for v15.82 — the merge rule, the archive kept current, featStats through the merge, and the export writing LS ∪ archive:
-Now the records for v15.82:
-**v15.82 is built** — `installv1582.bat` (attached above and in `C:\Dev\gex-signal-tapereader`).
-
-What it does: the day file's outcome queue (`feat`) and the live statistics now read **the localStorage queue ∪ the IndexedDB archive** of every resolved record, merged per record (the live copy wins). Every resolved record was already being mirrored to the archive since v11.0 — but nothing read the archive for a day localStorage still held, so the shed queue was what the file, the nightly and the face all saw. The file now also carries `featSource` (per symbol: how many records came from the queue, how many from the archive, and the span each covers), the matrix is rebuilt from the union, and the digest names a pre-v15.82 file as queue-only. Left alone on purpose: the snapshot mirror in localStorage (three synchronous readers depend on it; the archive already has every bar) and the shedder itself.
-
-1. Double-click **installv1582.bat**.
-2. Wait 5 minutes, then click [gex-signal-tapereader.user.js](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) → Tampermonkey **Update** (if it shows Reinstall, wait and try again, or Ctrl+F5 on that tab). Companion v1.18 unchanged.
-3. Reload the Atlas tab — footer **v15.82**. Tell me "reloaded" and I'll read `featHealth()` off your panel; the real proof is tonight's day file (`featSource.merged.SPY.from` at ~08:36 instead of ~09:xx) and tomorrow morning's nightly scoring morning rows for the first time since 08-25.
-
-✅ SAVE DONE — commit `4047b30` v15.82 in the clone (the installer pushes): the panel, …[trimmed]
-
-**OPERATOR:**
-> reloaded
-
-**me (17:08):** Verified on your panel at 12:08 CT — **v15.82 is live and the archive is doing its job**:
-
-- localStorage queue: 1,364 records over **29 bars** (10:39 → 12:06 — the shed window)
-- IndexedDB archive for today: **2,800 records**
-- merged (what the file and the live stats now read): **3,271 records over 69 bars, 08:39 → 12:06** — the whole session so far, no gap
-
-(The first probe a minute earlier read archive 0 — the boot loader was still walking the 60,543 archived records; a minute later it was in.)
-
-Tonight's day file will carry `featSource` with the same numbers to the close, and tomorrow's nightly scores morning rows for the first time since 08-25. Nothing else for you to do.
-
-One reminder: the NQ1 Atlas tab is still open beside the ES1 one — two panels writing today's record into the same store. If you don't need it, close it.
-v15.82 is verified live — the merged outcome queue reaches back to 08:39 (3,271 records over 69 bars, against 29 bars in localStorage), the record says so (commit `5a66899`; the resume note and chat history written to his folder). The remaining proof is tonight's day file and tomorrow's nightly. Next on the list, each its own ask: WH/WL/weekly POC (companion v1.19), then v15.83 seasonality tracked (mockup first).
-
-**OPERATOR:**
-> reloaded.. check
-
-**me (17:13):** Checked after your reload (12:13 CT): **v15.82**, no render errors, storage 3,432 KB / shed 0.
-
-- Outcome queue: localStorage 1,460 records / 31 bars (10:39 → 12:12) · archive 2,847 · **merged 3,367 records / 71 bars from 08:39** — the whole session, no gap. (Right after a reload the archive reads low for about a minute while the panel walks the 60k archived records; it was 987 at 12:12 and 2,847 by 12:13 — normal.)
-- IRT export: 9 of 9 ES rows and 5 of 5 NQ rows on Skylit's own prices (ES1 1 s old, NQ1 0 s), 11 rows written 27 s ago.
-- Only the ES1 Atlas tab is open now — good.
-
-Everything is where it should be. The last proof arrives on its own: tonight's day file (`featSource` from 08:39) and tomorrow's nightly log with morning rows.
-All verified after his reload — v15.82 live, the merged queue covering the session from 08:39 (71 bars vs 31 in localStorage), the export on Skylit's prices, one Atlas tab. Nothing pending on my side until tonight's day file lands.
-
-**OPERATOR:**
-> do my levels in irt match the levels in skylit. for example , i dont see a 7690 level
-
-**me (17:16):** Checked at 12:16 CT against Skylit's own ES1 books (what Atlas draws at your P20 setting):
-
-**SPXW book — the file matches exactly:** 7700 King → 7705.50 · 7705 (77%) → 7710.50 · 7680 (44%) → 7685.50 · 7695 (29%) → 7700.50 · 7675 (21%) → 7680.50. Your KING / G2 / G3 / G4 / G5 are those five, at those prices (your screenshot's 7705.25 etc. is the earlier ratio; it wiggles a quarter tick through the day, as on the chart).
-
-**The 7690 you don't see is a SPY-book node:** SPY 767 → **7691.00 (55% of the SPY King)**. Skylit draws BOTH books' orbs on the ES chart; the file carries the whole SPXW top and only the **King** of the SPY book (769 → 7711.00). That was the 09-07 design — "the top 5 levels for the SPX" — so the SPY book's other nodes were never exported. Right now those are: 767 → 7691.00 (55%), 768 → 7701.00 (55%), 770 → 7721.00 (27%).
-
-**One question:** do you want the SPY book's other nodes in the file too — everything Skylit draws at P20 (today three lines), labelled like the G rows but in the SPY colour (e.g. `S2 767 55%`)?
-
-(Side note: the `~` on your labels comes from the first export right after the reload, written before Skylit's ES1 book had arrived; the next 3-minute export drops it. If a `~` is still there after 12:20, tell me.)
-Answered with the same-second comparison: the SPX side of the file matches Skylit exactly; the missing 7690 is SPY 767 (a SPY-book node the export never carried by the 09-07 design). One question is with him — whether to add the SPY book's other nodes.
-
-**OPERATOR:**
-> that spy node is important  because it is a big node.. i currently have top 5 nodes for spx. Im thinking of having the top 5 for spy as well ..  what is your suggestion ?
-
-**me (18:35):** My suggestion: **don't fix the count — export what Skylit draws**, for both books.
-
-Why: your Atlas NODES setting is **P20** (every node at least 20% of its book's King), so the orbs on your chart are not "the top 5" — they are "everything ≥ 20%". Today that happens to be exactly 5 for SPXW (7675 sits at 21%), but for SPY it is **4** (769 King · 767 55% · 768 55% · 770 27%); a fixed top-5 would put a fifth SPY line on IRT that is *not* on your Skylit chart, and on a concentrated day a fixed 5 would drop a 25% node that *is* on it. "Match Skylit always" says the rule should be Skylit's rule.
-
-So the proposal, R-24:
-
-- **SPY book:** every node ≥ 20% of the SPY King, labelled `S2 767 55%`, `S3 768 55%` … (the King stays `SPY KING`), width 1, **white like the G rows** — the label tells the books apart; capped at 8 so a flat day can't flood the chart.
-- **SPX book:** the same rule (≥ 20%, cap 8) instead of a fixed 5 — unchanged today, and it tracks your chart if you ever move the setting.
-- Held day-scoped like the G rows, Skylit's prices, `IRT_LAST` says how many of each.
-
-Today you'd get three new lines: **7691.00 (S2, 767)**, 7701.00 (S3, 768), 7721.00 (S4, 770).
-
-If you'd rather keep a fixed top-5 on both books (simpler to reason about, occasionally off the chart), say so and I'll build that instead. **Which one?**
-Recommendation sent: export what Skylit draws (every node ≥ 20% of its book's King, capped at 8, both books; SPY rows as `S2…` in white) rather than a fixed top-5 — waiting on his pick between that and a fixed five.
-
-**OPERATOR:**
-> i updated to 5 , which shows me the top 5, so is that showing me the top 5 from both spx and spy
-
-**me (18:39):** Yes — per book. With NODES = 5 Skylit asks its feed for `nodes=5` and gets the **top 5 of each borrowed book**: I read the payload off your tab just now — SPY 5 rows, SPXW 5 rows (and 5 from the SPX monthly book, which the feed carries too). So your chart draws up to ten derived orbs: SPY's top 5 and SPXW's top 5.
-
-Your file today: SPXW's five (KING 7705 · G2 7710 · G3 7700 · G4 7695 · G5 7685) — exact — plus the SPY King only. The SPY King has since moved to **767 → 7690.50**, so the big node you asked about is now in the file as `SPY KING`; what is still missing is the rest of SPY's top 5.
-
-Since your setting is now top-5, the rule for the file is simply Skylit's: **top 5 of each book**. Proposal (R-24): `S2`–`S5` — SPY's next four by |%King| after its King, at Skylit's ES1 prices, white and width 1 like the G rows, held day-scoped, `IRT_LAST.sWhy`. Today that adds four lines: 768, 769, 770 and one more.
-
-Your capture is unaffected by the NODES change (ladders still 100 strikes, the velocity table 320). **Build it?**
-Answered: NODES = 5 means the top 5 of each borrowed book on the chart (SPY 5 + SPXW 5, verified from the feed), the file has SPXW's five exactly and only the SPY King, and the proposal is R-24 — `S2`–`S5` for SPY's next four — awaiting his "build".
-
-**OPERATOR:**
-> ok lets go with this. the spy gamma node lines can be beige
-> also add the % to each of the node lines excel the king
-> 
-> _[sent while I was working — a queued message]_
-> add a + or - too so i know the polarity
-> 
-> _[sent while I was working — a queued message]_
-> infact, i want you to redo the color schemes for the nodes , using yellow and its derivatives for positive nodes and purple and its derivatives for negative gamma nodes.
-> 
-> _[sent while I was working — a queued message]_
-
-**me (18:46):** Now the v15.83 test — the S rows, the signed %, the polarity colours, the hold:
-Now the records for v15.83 (Rec R-24, the roadmap, CHANGELOG, DECISIONS, LESSONS, INVENTORY, config, resume note, chat history):
-
 ### DECISIONS
 
 - **The candle on the price axis, his key levels (2026-09-08, "build"; R-17, v15.80):** *"the levels that are swept are
@@ -2803,22 +2593,7 @@ Now the records for v15.83 (Rec R-24, the roadmap, CHANGELOG, DECISIONS, LESSONS
   IndexedDB archive (`featMergeRecs`, LS wins per record), the in-memory archive kept current, `featSource` in the
   file; the snapshot mirror and the shedder left alone on purpose. Forward-only.
 
-- **The SPY book's top five, the signed %, the polarity scheme (2026-09-08, ~13:40–14:15 CT; R-24, v15.83):** *"i dont
-  see a 7690 level"* → it was SPY 767, a SPY-book node the export never carried → *"Im thinking of having the top 5 for
-  spy as well"* → NODES = 5 → *"ok lets go with this. the spy gamma node lines can be beige"* → *"add the % to each of the
-  node lines except the king"* → *"add a + or - too"* → *"redo the color schemes for the nodes, using yellow and its
-  derivatives for positive nodes and purple and its derivatives for negative gamma nodes"*. S2–S5 at Skylit's prices;
-  every node label signed (`G3 -56%`); yellow / purple by polarity, the SPY shades the palest; beige superseded; the
-  Kings bare and unchanged.
-
 ### SHIPPED
-
-**v15.83** (panel + installer; companion v1.18 unchanged) — THE SPY BOOK'S TOP FIVE · THE SIGNED % · THE POLARITY
-SCHEME (R-24). `irtSpyTop`, `irtPctTag`, `irtNodeCol` + `IRT_COLORS.gpos/gneg/spos/sneg`, the S rows after the SPY KING
-(held under GS, `IRT_LAST.sWhy`), the G and NQ G rows through the same helpers, `irtGHeld` accepts S, the gear line, the
-typeof guards. `test_v1583.js` 38 · 16/16 mutants; `test_v1576` 1g/1m, `test_v1582` 0a re-pinned; the version pins moved.
-R-24 implemented; the roadmap (v15.82 shipped + verified, v15.83 this, seasonality → v15.84); CHANGELOG; DECISIONS;
-LESSONS v15.83; INVENTORY §0q; the config (2026-09-08h); the resume note (+ snapshot v15.82).
 
 **v15.82** (panel + installer; companion v1.18 unchanged) — THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix).
 `featMergeRecs`, `featArchiveMerge` + `repoUpsertFeat` (memory first), `repoFeatDay`, `featStats` through the union,
@@ -3020,9 +2795,6 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
-- **He runs ONE file** — `installv1583.bat` (carries v15.76 → v15.83); wait 5 min; the tapereader link (as a link);
-  reload. Then on IRT: S2–S5 in the pale yellow / purple beside the G rows, every node label with its signed %
-  (`G2 +77%`), the Kings gold / purple and bare; the gear line's `S rows live (…)`. Not asked: the strike in the label.
 - **v15.82 INSTALLED AND VERIFIED 12:08 CT** — queue 1,364 / 29 bars (10:39 → 12:06) · archive 2,800 · merged 3,271 / 69
   bars from 08:39: the whole session, no gap. Still to see: tonight's day file's `featSource`; tomorrow's nightly log
   with morning rows.
@@ -3163,8 +2935,6 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
-5a66899 v15.82 verified on his panel 12:08 CT — merged 3,271 records / 69 bars from 08:39; the resume note and the chat history say so
-4047b30 v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE — feat = the localStorage queue ∪ the IndexedDB archive (featMergeRecs, LS wins per record), the in-memory archive kept current, featStats through the union, repoFeatDay + featSource in the day file, the matrix rebuilt (R-22, F-20's fix); test_v1582 36 · 13/13
 1fb9b1f v15.81 verified on his panel 11:31 CT — the resume note and the chat history say so
 772ff5a v15.81: THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES — the ES1/NQ1 derived books kept and self-fetched, every ES and NQ row at the price Atlas draws, the basis as the tilde-tagged fallback (R-23); the projection understood; F-20 solved (R-22 proposed); test_v1581 58 · 26/26
 636327c resume note + chat history: F-20 solved (R-22), R-23 pending his answer
@@ -3175,6 +2945,8 @@ b704b82 v15.79: THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE TH
 8af1c96 resume note: the installer is at 8.16 of 8.39 MB — trim the mockups' ride next build
 f754ab8 v15.78: THE DAY CANDLE BESIDE THE LADDER, WITH THE SWEEP LABELS (R-15)
 ca2a16b v15.77: THE E ROW ON TOP OF THE HOD LINE, PER WEEKDAY — his seasonality (R-14)
+9f0a6bf session-state: his standing rule — match Skylit always, the source of truth the levels are compared against (DECISIONS 2026-09-07; the King latch named as the one designed difference, his call)
+cfde302 v15.76: G2–G5 IN THE IRT EXPORT — the rest of Skylit's top-5, white, beside the Kings, CW0, PW0 and FLIP0 (R-13)
 ```
 
 ---
