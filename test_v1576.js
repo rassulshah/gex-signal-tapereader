@@ -22,13 +22,13 @@ ok(/gs\.push\(\{ k:spxRow\(n\.k\)/.test(B), '1c ...and so do the G rows');
 ok(/Math\.abs\(b\.pct\)-Math\.abs\(a\.pct\)/.test(B), '1d ranked by |%King| — size, not sign');
 ok(/if\(exK!=null && Math\.abs\(k-exK\)<0\.001\) return;/.test(B), '1e the EXPORTED King\'s strike is dropped from the ranking (no duplicate line)');
 ok(/ranked\.slice\(0,4\)/.test(B) && /lbl:'G'\+\(i\+2\)/.test(B), '1f four rows, labelled G2..G5 — the King\'s slot is the gold line, no G1');
-ok(/col:IRT_COLORS\.gate, w:1, style:0/.test(B), '1g white, width 1, solid — his call');
+ok(/col:nodeCol\('SPXW', g\.pct\), w:1, style:0/.test(B), '1g width 1, solid — his call; (v15.83) the colour is the polarity — yellow for +gamma, purple for −gamma, no longer white');
 ok(/try\{ irtGLatch\(gs\); \}catch\(eGL\)\{\}/.test(B), '1h the hold is an instrument: its call sits in its own try');
 ok(/var HG=null; try\{ HG=irtGHeld\(\); \}catch\(eHG\)\{\}/.test(B), '1i ...and so does the read of the hold');
 ok(/IRT_LAST\.gWhy=gWhy;/.test(B), '1j IRT_LAST.gWhy reports live / held / nothing');
 ok(ex('irtGLatch').length>0 && ex('irtGHeld').length>0, '1k irtGLatch / irtGHeld exist');
 ok(/if\(!o \|\| o\.day!==ctTodayStr\(\) \|\| !o\[K\]/.test(ex('irtGHeld')), '1l the hold is day-scoped, like the Kings (v15.80: keyed G for ES, GQ for NQ)');
-ok(/\/\^G\[2-5\]\$\/\.test/.test(ex('irtGHeld')), '1m ...and only ever returns G2..G5 rows');
+ok(/\/\^\[GS\]\[2-5\]\$\/\.test/.test(ex('irtGHeld')), '1m ...and only ever returns G2..G5 (or, v15.83, S2..S5) rows');
 ok(/THE FILE WAS THREE LINES/.test(B) && /G2\.\.G5 — the rest of Skylit's top-5/.test(B), '1n the header comment says the v14.20 contract is history and names what returned');
 
 // ---------- 2. the record ----------

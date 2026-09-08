@@ -131,6 +131,21 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.83 — "top 5" means top five PER BOOK on a chart that borrows two; a colour asked for twice in an hour is a scheme, not a shade
+(1) "I don't see a 7690 level" was answered by reading Skylit's two derived books at the same second: the SPX side of the
+file matched to the tick and the missing line was a SPY-book node the export had never carried, because the 09-07 ask
+had named the SPX book. A file that mirrors ONE of two borrowed books will always be missing something the chart shows;
+the comparison had to be per book, not per file. (2) When he changed NODES from P20 to 5 I checked what that means in the
+feed before answering: `nodes=5` is per derived source, so the chart's rule is "top five of each book" and the file's
+rule could be the same words. Read the request the app makes; do not reason from the setting's label. (3) Four
+instructions arrived in fifteen minutes — beige for the S rows, the % on every node line, the sign, then the whole
+colour scheme. The last one superseded the first; the build folded them in order and recorded the superseded word so a
+later context does not resurrect it. When instructions arrive in a burst, build the LAST state and write down the path.
+(4) The new helpers (`irtPctTag`, `irtNodeCol`, `irtSpyTop`) are typeof-guarded inside `irtBuildCsv`: the first run of
+`test_irt_export` after the edit crashed on `undefined.split` because its harness evals a fixed list of functions and the
+G rows silently vanished (a ReferenceError inside the try). The v14.76 rule again, a build later: a new dependency in a
+hot path must not change behaviour when it is absent — and a test harness is the cheapest place to find out that it does.
+
 ### v15.82 — a mirror that is written and never read is not a backup; "LS wins" hid the hole on the face too
 (1) The archive had held every resolved record since v11.0 and it changed nothing, because nothing read it for a day
 localStorage still had: `featStats` took the LS array whenever it was non-empty, the export took the LS array, and the

@@ -10,7 +10,7 @@ function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.ex
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 
 // ---------- 0. the version ----------
-ok(/@version\s+15\.82/.test(src) && /var GPTS_VERSION='15\.82';/.test(src), '0a v15.82 in both spots');
+ok(/@version\s+15\.(8[2-9]|9\d)/.test(src) && /var GPTS_VERSION='15\.(8[2-9]|9\d)';/.test(src), '0a v15.82 or later in both spots');
 
 // ---------- 1. the merge rule ----------
 {
@@ -117,8 +117,8 @@ setTimeout(()=>{
   ok(r22 && r22.status==='implemented' && r22.version==='15.82', '7a R-22 on Rec, implemented in v15.82', r22&&[r22.status,r22.version]);
   const seedR=JSON.parse(/var REC_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedR)===JSON.stringify(R), '7b REC_SEED equals the file');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/## v15\.82/.test(cl) && cl.indexOf('## v15.82')<cl.indexOf('## v15.81'), '7c the CHANGELOG has the v15.82 entry on top');
-  const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const r82=P.roadmap.find(r=>r.v==='15.82'), r83=P.roadmap.find(r=>r.v==='15.83');
-  ok(r82 && /ARCHIVE/i.test(r82.title) && (r82.status==='next'||r82.status==='shipped') && r83 && /SEASONALITY TRACKED/.test(r83.title) && P.roadmap.filter(r=>r.status==='next').length===1, '7d the plan: v15.82 is this build; the seasonality moved to v15.83', r82&&[r82.status]);
+  const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const r82=P.roadmap.find(r=>r.v==='15.82'), seas=P.roadmap.find(r=>/SEASONALITY TRACKED/.test(r.title));
+  ok(r82 && /ARCHIVE/i.test(r82.title) && (r82.status==='next'||r82.status==='shipped') && seas && +seas.v>15.82 && P.roadmap.filter(r=>r.status==='next').length===1, '7d the plan: v15.82 is this build; the seasonality moved past it', r82&&[r82.status, seas&&seas.v]);
   const seedP=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedP)===JSON.stringify(P), '7e PLAN_SEED equals the file');
   const ls=fs.readFileSync('session-state/LESSONS.md','utf8'); const logAt=ls.indexOf('## 2 · THE LESSON LOG'); ok(/### v15\.82/.test(ls.slice(logAt>=0?logAt:0)), '7f the lesson log carries the v15.82 entry');
   const rn=fs.readFileSync('session-state/latest-resume-note.md','utf8'); ok(/v15\.(8[2-9]|9\d)/.test(rn.slice(0,600)) && /featSource/.test(rn), '7g the resume note is at v15.82 or later and names featSource');

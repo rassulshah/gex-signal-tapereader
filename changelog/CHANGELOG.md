@@ -1,3 +1,44 @@
+## v15.83 — THE SPY BOOK'S TOP FIVE IN THE IRT EXPORT · THE SIGNED % ON EVERY NODE LINE · THE NODE LINES WEAR THEIR POLARITY (R-24)
+
+> Operator, 2026-09-08, on the 7690 he could not find on IRT: *"that spy node is important because it is a big node..
+> i currently have top 5 nodes for spx. Im thinking of having the top 5 for spy as well .. what is your suggestion?"* →
+> *"i updated to 5, which shows me the top 5, so is that showing me the top 5 from both spx and spy"* → **"ok lets go
+> with this. the spy gamma node lines can be beige"** → **"also add the % to each of the node lines except the king"** →
+> **"add a + or - too so i know the polarity"** → **"infact, i want you to redo the color schemes for the nodes, using
+> yellow and its derivatives for positive nodes and purple and its derivatives for negative gamma nodes."**
+
+**What the 7690 was.** SPY 767 → 7691.00, 55% of the SPY King at 12:16 CT (its King by 13:38) — a SPY-book node.
+Skylit draws BOTH borrowed books on the ES chart, and with NODES = 5 its feed returns `nodes=5` **per book** (read off
+his tab: SPY 5 rows, SPXW 5 rows, the SPX monthly 5); the file carried SPXW's five (R-13, "the top 5 levels for the
+SPX") and only the SPY King. The capture is unaffected by the NODES change (ladders 100 strikes, the velocity table 320).
+
+**What shipped.** `irtSpyTop(j, exK)` — the SPY book's next four by |v| after its King, ranked from the SAME payload the
+SPY KING row reads (`FYK.j`, DECISIONS v13.2), the King = the largest |v| = 100%, the exported King's strike dropped,
+ties to the lower strike, a SIGNED pct from `d`; no MIN_STRENGTH floor — the chart draws the top five whatever their
+size. **S2..S5** ride after the SPY KING row: width 1, solid, Skylit's ES1 price (`esOf('SPY', k)`), held day-scoped
+under `GS` (a blind tick never deletes four lines), `IRT_LAST.sWhy`; the ETF symbol carries them at the SPY strikes.
+**The signed %** — `irtPctTag`: `G3 -56%`, `S2 +55%`, `G2 +44%` on the NQ symbol; the Kings keep their bare labels
+(v14.73). **The polarity scheme** — `irtNodeCol(book, pct)` + `IRT_COLORS.gpos / gneg / spos / sneg`: +gamma the yellow
+family, −gamma the purple family, the shade the book (SPXW / QQQ nodes one step lighter than their King's gold / purple;
+the SPY nodes the palest; the SPY King the lighter pair it already was). The G rows, the S rows and the NQ G rows all go
+through the same two helpers; the IF rows keep his 08-28 colours. `irtGHeld` accepts S labels; the gear's IRT line adds
+`S rows live (…)`. The three helpers are typeof-guarded inside `irtBuildCsv` (the v14.76 rule: a harness without them
+gets bare, white rows — never missing). Beige was his first call for the S rows and was superseded by the scheme within
+the hour; recorded so nobody reintroduces it.
+
+**Tests.** `test_v1583.js` — 38 assertions: the shades, `irtNodeCol` (both books, both signs, the unknown case),
+`irtPctTag`, `irtSpyTop` (the next four, a negative King by its size, no King named, ties, the sign, the empty
+cases), the hold's S labels; the export end to end on a SPY book like today's (S2..S5 at the derived prices, no S1,
+the G rows' signed % and colours, the SPXW King bare and width 3, 13 EPU26 rows, no '~', the NQ G rows, sWhy and
+skyWhy, the latch, the SPY feed stale → the hold, nothing held → no invention, the typeof guards, no white node row,
+the ETF symbol, the gear line); the record. **16 of 16 mutants.** `test_v1576` 1g/1m re-pinned (the colour is the
+polarity; the hold accepts S), `test_v1582` 0a loosened, the version pins moved; `test_irt_export` 131 and `test_v1581`
+58 unchanged (their SPY fixtures hold only a King → no S rows).
+
+**The record.** R-24 implemented (v15.83); the roadmap — v15.82 shipped and verified (12:08 CT), **v15.83 this build**,
+the seasonality → v15.84, the rest +1; DECISIONS 2026-09-08 (his words, the scheme); LESSONS v15.83; INVENTORY §0q; the
+config (2026-09-08h); the resume note (+ snapshot v15.82).
+
 ## v15.82 — THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22 · F-20's fix)
 
 > Operator, 2026-09-08, on the outstanding list: *"lets go with your recommendation"* — R-22, the first item.

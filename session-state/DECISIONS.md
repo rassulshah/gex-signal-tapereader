@@ -591,3 +591,21 @@ Why: F-20, mechanism found live this morning; every rate in the learning layer h
 08-25, and the far-side-on-gamma study is blocked on clean sessions that this alone can produce. Forward-only: the days
 already written stay as they are.
 
+## 2026-09-08 · v15.83 — the SPY book's top five in the file; every node line signed and coloured by polarity (R-24)
+
+Operator: **"i currently have top 5 nodes for spx. Im thinking of having the top 5 for spy as well"** · **"i updated to 5
+… is that showing me the top 5 from both spx and spy"** (it is — `nodes=5` per borrowed book) · **"ok lets go with this.
+the spy gamma node lines can be beige"** · **"also add the % to each of the node lines except the king"** · **"add a + or
+- too so i know the polarity"** · **"infact, i want you to redo the color schemes for the nodes, using yellow and its
+derivatives for positive nodes and purple and its derivatives for negative gamma nodes."**
+
+Decided: the file mirrors what NODES = 5 draws — the top five of EACH borrowed book: SPXW KING + G2–G5 (as since
+v15.76) and SPY KING + **S2–S5** (new), the QQQ King + its G rows on NQ; no strength floor on the S rows (the chart has
+none at NODES = 5). Every node line's label carries its **signed %King** (`G3 -56%`, `S2 +55%`); the Kings stay bare
+(v14.73). **The colour of a node line is its polarity**: the yellow family for +gamma (the brake), the purple family for
+−gamma (the accelerator); the shade tells the book — the SPXW / QQQ nodes one step lighter than their King, the SPY
+nodes the palest, the SPY King the lighter pair it already was. White is gone from the node rows; beige (his first
+word for the S rows) was superseded by the scheme in the same hour and is not to come back. The IF rows keep his
+08-28 colours (walls red / green, the flip purple): a different book, a different question. Not decided: whether the
+labels should also carry the strike (`S2 767 +55%`) — he asked for the % and the sign; the strike is in the price.
+

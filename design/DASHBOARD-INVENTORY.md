@@ -11,6 +11,17 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0q · v15.83 — the SPY book's top five in the IRT export; the node lines signed and coloured by polarity (2026-09-08)
+
+No new element on the face. **The FlexLevels file** gains **S2–S5** — the SPY book's next four after its King, at Skylit's
+prices, width 1, held day-scoped (`GS`) — beside the G rows; every node line's label carries its **signed %King**
+(`G3 -56%`, `S2 +55%`, the NQ symbol's `G2 +44%`), the Kings bare; **the colour is the polarity**: yellow and its
+derivatives for +gamma, purple and its derivatives for −gamma, the SPY shades the palest (`IRT_COLORS.gpos / gneg /
+spos / sneg`, `irtNodeCol`). **The gear's IRT status line** adds `· S rows live (S2 767 55%, …)` / `held Nm` / `no fresh
+SPY feed and nothing latched today`. Measured: descriptive (a conversion of Skylit's book, not a claim). His words:
+*"i want you to redo the color schemes for the nodes, using yellow and its derivatives for positive nodes and purple and
+its derivatives for negative gamma nodes"* (R-24). Probe: `__gptsDebug.irt().last.sWhy`.
+
 ## 0p · v15.82 — the outcomes exported from the archive (2026-09-08)
 
 No new element. **Every number the face computes from the outcome queue** (ruleTier, the promotion bar, the Testing and

@@ -33,60 +33,61 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 - **v15.79** () — THE E ROW BELOW THE LADDER, BIGGER · THE CANDLE'S SWEEPS ARE THE SHOWN DAY'S — the expected row moves under the ladder and the candle, above the SET line and the replay strip, at 10.5 px spread across the row; the candle's swept levels and the SWEPT line read the replayed / parked day's bars (sweepEventsShown; futSessionBars anchored on a day, its keys sorted numerically) (R-16) · serves: HOD/LOD · DEFLECTION — the expectation read against the day, in a size he can read; a parked candle that wears its own day's sweeps
 - **v15.80** () — THE CANDLE ON THE PRICE AXIS · ONE SOURCE FOR THE SHOWN DAY · HIS KEY LEVELS — the swept KEY levels (PDH PDL ONH ONL · prior-day POC VAH VAL; WH WL WPOC by name) drawn as ticks at their own price with the minute they swept, the reclaim line (↩ W.END · BOP) and MUD beside the open tick; the parked / replayed candle, the A row and GREEN/RED measure the shown day's ES 1-minute bars (frames only when the courier has no such day); the MUD dollars converted once; ONH/ONL the full Globex night (17:00 → 08:29, full by halves); the prior session skips a key with no RTH bars (Labor Day); EMH/EML, PDC and the IB leave the sweep set, the King leaves tier 1; H10 registered from the review's HOD/LOD cells; FINDINGS F-20 (the queue trim, measured) and F-21 (the ledger) (R-17); the IRT export drops the QQQ King converted onto ES — QQQ converts for NQ only (R-18) · serves: HOD/LOD · DEFLECTION — where the day swept its key levels, on the axis where price is; one instrument under every number on the candle
 - **v15.81** () — THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES — the ES1 / NQ1 gex/levels feeds (all derived: every SPY / SPXW / QQQ strike already at the futures price by Skylit's live ratio, the numbers Atlas draws as the derived orbs) are kept by the observer and self-fetched while the export is on; every ES and NQ row in the FlexLevels file takes that price (SPXW KING, G2–G5, SPY KING, CW0 / PW0 / FLIP0 on the same two ratios; QQQ KING and its G rows on NQ1); the panel's own basis only as the fallback, tilde-tagged; the gear's IRT line says which ruler the file is on · serves: match Skylit always · one ruler in the file
+- **v15.82** () — THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix) — the day file's feat is the localStorage queue ∪ the IndexedDB archive of every resolved record (featMergeRecs, LS wins per record), with featSource saying what came from where; the in-memory archive is kept current by every mirror write and featStats reads the same union, so the live face and the nightly both see the whole session instead of its last ~2 hours · serves: every rate in the learning layer · the far-side-on-gamma study (blocked on ~40 clean sessions)
 
 ## NEXT — the running build
 
-### v15.82 — THE OUTCOMES EXPORTED FROM THE ARCHIVE (R-22, F-20's fix) — the day file's feat is the localStorage queue ∪ the IndexedDB archive of every resolved record (featMergeRecs, LS wins per record), with featSource saying what came from where; the in-memory archive is kept current by every mirror write and featStats reads the same union, so the live face and the nightly both see the whole session instead of its last ~2 hours
+### v15.83 — THE SPY BOOK'S TOP FIVE IN THE IRT EXPORT · THE SIGNED % ON EVERY NODE LINE · THE NODE LINES WEAR THEIR POLARITY (R-24) — S2–S5 after the SPY King, like the G rows after the SPXW King (NODES = 5 draws the top five of each borrowed book); every node line labelled with its signed %King (G3 -56%, S2 +55%); yellow and its derivatives for +gamma, purple and its derivatives for −gamma, the SPY shades the palest; the Kings unchanged
 
-Serves: every rate in the learning layer · the far-side-on-gamma study (blocked on ~40 clean sessions).
+Serves: match Skylit always · the IRT chart reads the polarity at a glance.
 
-Done when: tonight's day file carries feat from the first bar to the close (featSource.merged.SPY.from at 08:3x CT) and the nightly scores a morning row for the first time since 08-25; test_v1582 36, 13/13 mutants.
+Done when: his IRT chart shows S2–S5 beside the G rows with signed percentages, yellow / purple by polarity; test_v1583 38, 16/16 mutants.
 
 ## AFTER THAT — in order
 
-### v15.83 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
+### v15.84 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
 
 Serves: HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered.
 
 Done when: mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine.
 
-### v15.84 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+### v15.85 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
 
 Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
 
 Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
 
-### v15.85 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+### v15.86 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
 
 Serves: HOD/LOD · the loop closes.
 
 Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
 
-### v15.86 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
+### v15.87 — the TAP record — one row per fresh tap with the node's condition, both zones, extent, wasSessionExtreme
 
 Serves: HOD/LOD · PULLBACK · 94 OPEN studies · H6.
 
 Done when: 40 taps recorded and the first F-study reads from them with n.
 
-### v15.87 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
+### v15.88 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v15.88 — one definitions file (Python + panel) · the shipped-artifact test
+### v15.89 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v15.89 — the face manifest — every number on the face names its study, pinned by a test
+### v15.90 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v15.90 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v15.91 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 
