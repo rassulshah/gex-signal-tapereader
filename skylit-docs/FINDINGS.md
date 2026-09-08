@@ -539,7 +539,9 @@ not followed. **Third recurrence of failure pattern 4 in one session, and the fi
 disproof was inside the evidence being cited.**
 
 ### F-10c · THE READS ARE ALL EXPORTED. THE OUTCOMES ARE NOT. AND THE DIGEST MEASURES THE WRONG ARRAY.
-**Status: CONFIRMED** for what is measured below; **the queue-trim mechanism is OPEN** · 2026-08-31
+**Status: CONFIRMED** for what is measured below; **the queue-trim mechanism was found live on 2026-09-08 — see F-20:
+the localStorage budget (3600 KB) sheds the queue from the second hour of the session; the exported snapshots come
+from the IndexedDB archive, which is why they looked intact** · 2026-08-31, amended 2026-09-08
 
     data/2026-08-31.json
       snaps[].feat    131 of 131 bars   08:30 -> 15:00 CT   ALL 48 feature keys, every bar
@@ -719,3 +721,101 @@ often than ceilings on both days (n too small to call it a difference). The King
 stamped taps); the first stamped session is 2026-09-08. His read of the same evening — the King rolled UP and BELOW
 price is a rolling floor (bullish), rolled DOWN and ABOVE a rolling ceiling — is registered as H-KR (v15.72) with four
 stamp classes, to be counted from the first stamped session and read once at n = 30 per class.
+
+## F-20 · THE FEATURE QUEUE KEEPS ONLY THE LAST ~80 MINUTES OF EVERY SESSION — MEASURED; THE MECHANISM FOUND LIVE (2026-09-08)
+
+**Status: CONFIRMED — the fact on nine day files, the mechanism on the live panel the same day** · measured by the
+2026-09-08 review, `review/2026-09-08.json` (`dataHealth`), script `tools/review-pool.py` over `data/*.json` (json,
+never cat); the mechanism by the two live probes named below, taken through his tab at 09:53 and 10:44 CT.
+
+**THE MECHANISM (live, 2026-09-08).** It IS the localStorage budget after all — and the "not the budget" line below was
+argued from the wrong evidence. The day file's `snaps` are taken from the IndexedDB archive (`repoExportDay`:
+`payload.snaps = day.snaps` from the IDB day, complete from the first minute), while its `feat` is `buildDayExport`'s
+copy of the localStorage recorder (`gpts_recorder_v7`, budget `LS_BUDGET_KB` 3600) — so a complete snapshot series
+beside a trimmed queue proved nothing about the trim. Read live:
+
+    09:53 CT   recorder 2656 KB (3 days in it) · total 6008 / 10240 · shed 0 · quotaHits 0
+               today's queue 1,200 records = 25 bars 08:36 → 09:48, 26 snapshots — complete so far
+    10:44 CT   recorder 3542 KB of the 3600 budget (ONE day left in it — the older two were shed first) · shed 1
+               today's queue 1,524 records = 32 bars **09:00 → 10:33**, 35 snapshots **09:06 → 10:36**
+               (recording began 08:36: the first 24 minutes of the queue and 30 of the snapshots are gone)
+               today's day in localStorage: feat 903 K chars (1,524 × ~474 bytes, `rec` 309 of them) + snaps 897 K
+               (35 × ~25 K, the whole ladder in each) + defl 12 K ≈ 1.8 M chars = the budget after ~2 hours
+
+So from the second hour of every session the shedder (`recorderSave` → `lsPut`, 25% oldest-first) walks the queue's
+first bar forward for the rest of the day, and at the close the queue holds whatever ~2 hours of feat + snaps fit in
+3600 KB — 45–130 minutes depending on the registry's size that day (v14.15 → v15.65: 45–48 keys × ~474 bytes × ~48
+records a bar). The snapshots in the file come from the archive; the queue does not. **F-10c is the other half of the
+same wound: the IndexedDB `feat` store holds every resolved record the queue lost — the export simply does not read
+it.** Fix (proposed, R-22, not built — his call): export `feat` from the IDB archive the way `snaps` already are, and
+stop mirroring the snapshots into localStorage at all (they are half the bytes and the archive has them), so the
+queue in localStorage lasts the whole session as a bonus. Until then every nightly and every review scores an
+afternoon-only sample.
+
+The original entry, as written before the live probe (kept — it shows which inference was wrong and why):
+
+The learning layer's input is `feat[SYM]` in the day file — the outcome queue the nightly and the review score. Since
+2026-08-25 that queue holds only the session's LAST bars, always ending at 14:57:
+
+    day        panel   snapshots (recorder)   queue (feat records)      bars   coverage
+    08-25      14.15   08:41 → 23:58  (148)   13:54 → 14:57              22     15%
+    08-28      14.77   08:39 → 15:00  ( 99)   14:15 → 14:57              15     15%
+    08-31      15.09   08:30 → 15:00  (131)   13:33 → 14:57              29     22%
+    09-01      15.33   08:39 → 15:00  (135)   13:51 → 14:57              23     17%
+    09-02      15.48   12:55 → 15:00  ( 51)   13:36 → 14:57              28     55%
+    09-03      15.57   08:39 → 15:00  (115)   12:48 → 14:57              30     26%
+    09-04      15.65   09:46 → 15:00  (101)   13:39 → 14:57              27     27%
+    08-19      11.1.3  09:38 → 15:00  (110)   09:33 → 14:54             108     98%   ← the last full-coverage days
+    08-20      11.6    08:39 → 15:00  (131)   08:36 → 14:57             122     93%
+
+So every rate the review can compute from these files is an AFTERNOON-ONLY sample (176 bars over seven sessions ≈ 18
+independent observations), and the questions that need the morning — the lodhod first-crossing decision (F-12), the
+early sweeps (H7), the opening excursion — cannot be answered from the export at all.
+
+What the files rule OUT, so the next context does not re-name them (two mechanisms were named confidently before and
+were wrong — resume note §6 item 4):
+- **not `FEAT_KEEP_BARS`** (160 distinct bars): the queue holds 15–30.
+- **not the chart window**: a record's `n` (the candle count when it was written) reads 105 at 13:42 on 09-04 — the
+  chart held the whole day, and every record resolved normally (142–144 unresolved per file = the last three bars × 48
+  keys, i.e. the resolver is healthy).
+- ~~**not the storage budget's trim of TODAY**: that callback (`recorderSave` → `lsPut` shed) trims the day's snapshots
+  and its feature records together, and the snapshots are complete from the minute the recorder came up.~~ **WRONG
+  (2026-09-08, live):** the exported snapshots come from the IndexedDB archive, not from localStorage — the trim
+  hits both in localStorage and the file never showed it. See the mechanism above.
+- **not a fixed cap**: the surviving span is 45–130 minutes and the record count 714–1408 — neither a bar count nor a
+  byte size is constant across the nine files.
+- the collapse arrived between v11.6 (08-20, 93%) and v14.15 (08-25, 15%) — the same window in which the registry grew
+  from 32 keys to 45–48 and the per-record payload grew (pbEntry's context blocks, dir.read's sentence).
+
+The probe that decides it, to be taken on the LIVE panel — not from a file: `__gptsDebug.featHealth()` and
+`__gptsDebug.storage()` at ~11:00 CT and again at ~14:00 CT. If the queue's FIRST bar moves forward during the session,
+something evicts by age or on write; if `LS_HEALTH.shed` or `quotaHits` is above zero, it is the budget after all (a
+recorder day is ~4.4 MB of JSON against a 3600 KB budget for `gpts_recorder_v7`). Forward-only data cannot be
+back-filled, which makes this the highest-leverage open item in the learning layer. F-10c (the archive is not exported)
+is the same wound from the other side: the IndexedDB `feat` store holds the resolved records the queue lost.
+
+## F-21 · ACCUMULATING NODES DID NOT DEFLECT MORE THAN DISSIPATING ONES; THE EVENT TYPE DOES NOT SEPARATE — PROVISIONAL (2026-09-08)
+
+**Status: PROVISIONAL** (full-day sources, six sessions 08-27 → 09-04, one instrument) · `review/2026-09-08.json`
+(`features[].key: ledger`, `nodeEvents`), script `tools/review-pool.py`.
+
+Two sources that the queue trim (F-20) does NOT touch, because they are written per node / per event for the whole
+session: the node ledger (`ledger[SYM].nodes[].touches`, the last 12 touches per node with the node's state AT the
+touch) and the node-event ledger (`nodeEvents[]`, `o10` = the outcome ten bars on).
+
+**The ledger, acceptance (f) of `docs/REVIEW-ACCEPTANCE.md`** — deflect share of touches by the node's state at the
+touch, pooled across nodes and sessions: **acm 15% (n 234) · dec 15% (n 239) · hold 19% (n 203) · gone 22% (n 216)**.
+Stall is 2,116 of 2,996 touches; through 441; deflect 439. Accumulation did not deflect more; the acm/dec chip has not
+earned a job on the face from this, and the doctrine's REAL-vs-HEDGE claim (a growing node is intent) is not visible
+in the touch reaction at this n. The influence block (`infl`: toward-rate while acm, away-rate while dec) was NOT
+pooled this run — it is the other half of (f) and is still owed.
+
+**The node events** — of the nodes TOUCHED within ten bars, BREAK was **13% after ACCUM (n 646) · 10% after DISSIP
+(684) · 13% after ROLL (587) · 11% after TURN_UP (185) · 17% after TURN_DN (155)**; DEFLECT+PIN 81–90% throughout. The
+event type that fired does not separate a level that holds from one that breaks, which is F-7/F-8 restated on 5,749
+events: pinning IS the level working, and the question is never whether a touched node holds (it does, ~87%) but which
+touch is the turn.
+
+One slice points the other way and is recorded as a QUESTION, not a finding: PB ENTRY's hold-of-touched by the node's
+state — **acm 79% (n 19) vs dec 39% (n 18)** — the only place accumulation looked like it mattered, at an n where a
+coin does the same. Registry question `pbentry_acm`; keep recording.
