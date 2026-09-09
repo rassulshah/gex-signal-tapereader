@@ -1,3 +1,68 @@
+## v15.89 — THE 🗄 DATA TAB: what we hold, what the studies need, what is missing (and what Yahoo can fill) — mockup B, with the recommendations section
+
+> Operator, 2026-09-09: **"i want you to build a data tab and place it before the analysis tab. Tell me what should the
+> data tab have? I am thinking it should give me a snapshot summary of the data we currently have, what we need for the
+> studies, recommendations and more. If there is missing data that we can obtain from yahoo, it should mention that.
+> what are your recommendations for this tab? can you provide mockups for it."** Two mockups were rendered from the
+> repo's and his browser's real numbers (A sources-first, B calendar-first); his choice: **"I like B, I also want
+> recommendations section. build"**.
+
+**(1) The tab.** `🗄 Data` sits between Dashboard and 📊 Analysis (his placement); `DATA_VIEW` joins the view flags (every
+other tab's `show…()` clears it; the render dispatches it like Rec / Items). It is drawn on the panel's own section
+chrome (`panOpen` · `panSection` · `panFoot`, the stylesheet Rec and Items use) — **read-only: every number is a store
+or a file; nothing on it is a claim.** Seven sections in mockup B's order, each a question in its hover:
+① **COVERAGE** — a cell per day file on GitHub, six signal rows (the day file · ES night · NQ night · the corpus CSV
+complete · the tape on disk · the nightly's log), the hover carrying the day's counts; ② **THE SOURCES, live** — Skylit
+(the tape, per book), InsiderFinance (the chains), Yahoo (ES 1-min the whole night, NQ 1-min, GC / CL RTH, the 5-minute
+month, ^VIX daily), GitHub raw (the studies, the results, the register, the sweep tables, the Learn corpus, Rec, the
+coverage), the nightly — what each carries, how much, how fresh (green · amber · grey); ③ **THE RECORD ON THIS MACHINE** —
+localStorage against its 10 MB quota (the bar; F-10's collapse is why it is watched) and the IndexedDB stores counted live
+(snaps · feat · defl · tape); ④ **WHAT THE STUDIES ARE WAITING FOR** — the registry by corpus (the tap record 104 studies,
+the price corpus 41, the book corpus 43, the Learn gauge, the King roll, the deflection ledger), have vs need;
+⑤ **THE GAPS, and what Yahoo can fill** — computed rows (an incomplete CSV, the NQ night not yet couriered, the prior
+week not yet fetched — each disappears when the store fills) then the standing ones: **daily bars, hourly bars and ^VIX1D
+in green (obtainable from Yahoo — R-33 · R-34 · R-35)**, the option chains' history, QQQ's node dollars and bid / ask volume
+in grey (Skylit / IF / IRT only); ⑥ **THE PIPELINE'S CLOCK, today** — export → sync → nightly → fetch from `dayLineState`;
+⑦ **RECOMMENDATIONS · data** — the DATA rows on Rec, proposals first, a title and one sentence each, the ✓ / ✗ on Rec.
+
+**(2) The count is the nightly's.** The panel cannot read the repo's files — it fetches them from GitHub one by one — so
+the nightly, on the machine that HAS them, counts them: **`tools/nightly/coverage.py` → `learning/coverage.json`**
+(schema 1: a row per day file — size, snaps, node events, deflection rows, the couriered ES / NQ rows and whether they
+carry the night, the corpus CSVs' bar counts per market, the tape folder, the log — plus the corpora, the studies by
+corpus, the last nightly, the tape days), run after the futures step in `run.py`; the panel fetches it with the
+10-minute pipeline check and at boot (`gpts_coverage_v1`), and adds the live half itself (today's tape, the couriers'
+ages, the browser stores). The cloud's count on this build: **19 day files since 08-17 · ES 295 / NQ 195 sessions · the
+sweep corpus 284 · the book corpus 13 · 195 studies · the tape on disk for 09-07 and 09-08.**
+
+**(3) R-33 · R-34 · R-35 — what Yahoo can fill, as rows on Rec (DATA, proposed, by the review).** A **daily-bar courier**
+(ES=F and NQ=F 1-day, the full history Yahoo holds — the seasonality charts, the weekday / 10-week ranges, the E row by
+weekday); an **hourly backfill** (730 days of 1-hour bars, once — the HOD / LOD clock at hour resolution on ~500 sessions
+instead of 295); **^VIX1D** daily alongside ^VIX in the VIX courier (the EM band's one-day implied series, backtestable).
+Nothing is fetched until his ✓.
+
+**(4) Found while building.** (a) The first render of the tab was bare — `tabHeader` / `tabSection` is the Analysis
+chrome, and the mockup's table / note styles live under `.g3pan`; the headless render (`render-face.js` + a screenshot)
+showed it before he could. (b) **origin had moved while I built**: his machine's 07:55 nightly (after the v15.88 install)
+had rewritten BASERATES · SWEEPS · the examples · the studies · the 09-08 log and put a second machine row on Rec —
+**RN-hour.2-held: H2 09:30–10:30 held 23 of 30 = 77% (Wilson low 59%) against 44% of every tap** (the hour class from
+v15.88, one session's worth; register it out of sample before believing it) — the guard flagged recommendations.json;
+merged by adopting origin's file and re-running `rec-seed.py` (merge by id), never by keep-mine alone. (c) **The guard was
+blind to files his machine ADDED**: the 09-07 day file, the tape folders and the 09-07 log were on origin for two days and
+the cloud's tree lacked them — the manifest is what is on the cloud's disk, so there was nothing to compare, and the
+cloud's coverage.json counted 18 days and no tape. `origin-guard.py` now fetches his machine's additions (day files,
+data/tape/, learning/log/, data/futures/, data/es-1min/) before the check; selftest covers it. (d) The ⑦ rows first
+printed every Rec row whole (R-25 is a paragraph): now the title and the first sentence — the row lives on Rec.
+
+**Tests.** `test_v1589.js` 46 (the placement, the flags, the dispatch, the guide, the fetch; `coverage.py`'s selftest,
+the wiring in `run.py`, the committed file, the installer glob; the tab rendered through a harness — the header from the
+file's counts, the seven sections on the pan chrome, one cell per session with six rows, the sources, the quota bar, the
+needs, the gaps with the NQ-night row disappearing when the store fills, the clock, the Rec rows; the records) ·
+9/9 mutants (the tab moved after Analysis, `showAnalysis` keeping `DATA_VIEW`, the fetch dropped from `pipeCheck`, the
+dispatch ignoring `DATA_VIEW`, `panOpen` dropped, a calendar row dropped, the NQ-night gap row never disappearing, the
+sections out of order, the guide rows dropped) · the three version tests re-pinned · five tab-set tests re-pinned to nine tabs
+(`test_data_analysis_process` · `test_testing_tab` · `test_v1559` · `test_v1562` · `test_v1570`) · `test_v1588`'s moving pins
+relaxed as v1587's were. **The suite: 169 files · 164 green · 5 red** (the five permanent). Companion unchanged (v1.19).
+
 ## v15.88 — THE AGENDA, BATCHED (+ companion v1.19): AHI · ALO · LHI · LLO · THE KING FOLLOWS SKYLIT · NQ'S NIGHT AND THE WEEKLY LEVELS · THE NQ CORPUS · THE HOUR ON EVERY DEFLECTION · ⓪a PER MARKET · F-23
 
 > Operator, 2026-09-09, one issue at a time ("1 issue at a time"), then "lets discuss other things also to put more

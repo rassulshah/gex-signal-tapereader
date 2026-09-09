@@ -140,9 +140,9 @@ eval(ex('futDayKeyNum')); eval(ex('futDayKeyOf')); eval(ex('futSessionBars')); e
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); const head=cl.split('## v15.88')[1].split('\n## ')[0];
   ok(/^## v15\.88 /m.test(cl) && /match skylit/.test(head) && /whatever is standard/.test(head) && /tag other hours/.test(head) && /F-23/.test(head), '6a CHANGELOG v15.88 — his words and F-23');
   const de=fs.readFileSync('session-state/DECISIONS.md','utf8'); ok(/"match skylit"/.test(de) && /"just use whatever is standard"/.test(de) && /tag other hours/.test(de), '6b DECISIONS carries the three words');
-  const le=fs.readFileSync('session-state/LESSONS.md','utf8'); const top=(/^### (v[\d.]+)/m.exec(le)||[])[1]; ok(top==='v15.88', '6c LESSONS top entry is v15.88', top);
+  const le=fs.readFileSync('session-state/LESSONS.md','utf8'); const top=(/^### (v[\d.]+)/m.exec(le)||[])[1]; ok(/^### v15\.88 /m.test(le), '6c LESSONS carries the v15.88 entry (the newest-first log under §2)', top);
   const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/^2026-09-09/.test(cfg.version||'') && cfg.version!=='2026-09-09a', '6d .gex-config.json re-stamped', cfg.version);
-  const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=(P.roadmap||[]).find(r=>r.status==='next'); ok(nx && nx.v==='15.88', '6e the plan\'s "next" item is 15.88', nx&&[nx.v,(nx.title||'').slice(0,60)]);
+  const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=(P.roadmap||[]).find(r=>r.status==='next'); const r88=(P.roadmap||[]).find(r=>r.v==='15.88'); ok(r88 && /agenda|batched/i.test(r88.title||'') && /shipped|next/.test(r88.status||''), '6e the plan carries 15.88 (shipped or next)', r88&&[r88.v,r88.status,(r88.title||'').slice(0,60)]);
   const li=fs.readFileSync('session-state/LOCKED-ITEMS.md','utf8'); ok(/AHI · ALO · LHI · LLO/.test(li) && /BUILT.*v15\.88|v15\.88.*BUILT/i.test(li), '6f LOCKED-ITEMS: the four levels leave the list as BUILT in v15.88');
   const R=JSON.parse(fs.readFileSync('./learning/recommendations.json','utf8')); const seedR=JSON.parse(/var REC_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedR)===JSON.stringify(R), '6g REC_SEED equals the file');
 }

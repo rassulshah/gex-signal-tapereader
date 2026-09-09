@@ -115,6 +115,7 @@ _Generated from `tools/plan-seed.py` (the same data the ⚙ Architecture tab ren
 ## 7 · The tabs
 
 - **Dashboard** (ACT) — what the node is DOING as price arrives — NEW · ⇄ ROLL · ▲ GROWTH · SETUP per book, the King zone (three Kings, lit), the HOD/LOD line and the SWEPT line at the top in plain words; every rate with its n, in the hover
+- **Data** (COUNT) — (v15.89) what we hold, what the studies need, what is missing and whether Yahoo can fill it — the sources live, the browser stores, every session on GitHub (counted by the nightly, learning/coverage.json), the pipeline’s clock, the DATA recommendations; read-only, every number a store or a file
 - **Analysis** (ASK AND READ) — the registry: every study by subject, its status, its result with n; the TRACK field
 - **Testing** (TRUST AND PROMOTE) — the register, the gate, what the ladder renders and why, the record, the nightly, the suite
 - **Architecture** (THE HOW) — the objective and the loop, as live status — is the machinery working today

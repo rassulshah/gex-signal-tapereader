@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-09 · v15.88 · session `f9c89c64` — THE AGENDA, BATCHED — the standard hours · match skylit · companion v1.19 · the NQ corpus · the hour on every deflection · ⓪a per market · F-23
+## 2026-09-09 · v15.89 · session `f9c89c64` — THE 🗄 DATA TAB, before Analysis — mockup B with the recommendations section ("I like B, I also want recommendations section. build")
 
-_230 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_234 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -3033,8 +3033,40 @@ Now LOCKED-ITEMS, the Open Items, and the CHANGELOG.
 Now DECISIONS, LESSONS, INVENTORY, DATA-ARCHITECTURE, the config.
 Now the resume note (rewrite the head, snapshot v15.87) and the chat history.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> i want you to buid a data tab and place it before the analysis tab.  Tell me what should the data tab have ?  I am thinking it should give me a snapshot summary of the data we currently have, what we need for the studies, recommendations and more. If there is misssing data that we can obtain from yahoo , it should mention that.  what are your recommendations for this tab ?  can you provide mockups for it.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> I like B,  I also want recommendations  section .  build
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> mockup B
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> I like B, I also want recommendations section. build
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (13:16):** Now the real render — the tab through the panel's own CSS.
+Now LESSONS, DECISIONS, INVENTORY, DATA-ARCHITECTURE and the config.
+
 ### DECISIONS
 
+- **The 🗄 Data tab (2026-09-09; v15.89):** *"i want you to build a data tab and place it before the analysis tab. Tell
+  me what should the data tab have? I am thinking it should give me a snapshot summary of the data we currently have,
+  what we need for the studies, recommendations and more. If there is missing data that we can obtain from yahoo, it
+  should mention that. what are your recommendations for this tab? can you provide mockups for it."* → two mockups from
+  real numbers (A sources-first, B coverage-calendar-first) → *"I like B, I also want recommendations section. build"*
+  → built as B, seven sections, ⑦ RECOMMENDATIONS · data (the DATA rows of Rec; his ✓ / ✗ stay on Rec); R-33 (daily bars)
+  · R-34 (hourly backfill) · R-35 (^VIX1D) proposed — nothing fetched until his ✓. The tap record moves to v15.90.
 - **The agenda, batched (2026-09-09; v15.88 + companion v1.19):** *"1 issue at a time"* → *"lets discuss other things also
   to put more issues in the build"*. Item 4: *"there should be no qqq lines in es. for NQ, just use G because we dont have
   to distinguish it like for the es which has both spy and spx"* (no build). Item 5, the hours: *"just use whatever is
@@ -3350,6 +3382,22 @@ Now the resume note (rewrite the head, snapshot v15.87) and the chat history.
 
 ### SHIPPED
 
+**v15.89** (panel + tools + installer; companion unchanged at v1.19) — the 🗄 Data tab between Dashboard and Analysis
+(`DATA_VIEW`, `showData`, the tab strip, the dispatch, the guide rows; `dataBlock` on `panOpen` / `panSection` / `panFoot`):
+① the coverage calendar (six signal rows per day file) · ② the sources live · ③ the record on this machine (the
+localStorage bar, the IDB counts via `dataIdbRefresh`) · ④ the studies by corpus · ⑤ the gaps with the Yahoo-fillable rows
+in green · ⑥ the pipeline's clock · ⑦ the DATA rows of Rec (`dataRecLine`: title + one sentence). `tools/nightly/coverage.py`
+→ `learning/coverage.json` (schema 1; selftest), wired into `run.py` after the futures step; `coverageFetch` in `pipeCheck`
+and at boot (`gpts_coverage_v1`). `rec-seed.py` R-33 · R-34 · R-35 (DATA, proposed). `origin-guard.py` fetches his machine's
+ADDED files (day files, tape folders, logs, CSVs) before the check — selftest. `plan-seed.py`: the Data tab in the tabs
+list, 15.89 the Data tab, 15.90 the tap record, the rest +1. Merged from origin: his machine's 07:55 outputs (BASERATES ·
+SWEEPS · examples · studies · the 09-08 log; RN-hour.2-held on Rec) and its added files (the 09-07 day file, the tape for
+09-07 / 09-08, the 09-07 log). Tests: `test_v1589.js` 46 · 9/9 mutants; the three version tests re-pinned. Records:
+CHANGELOG, LESSONS v15.89, DECISIONS, DASHBOARD-INVENTORY §0w, DATA-ARCHITECTURE §6d, LOCKED-ITEMS (the tap record →
+v15.90), items.json (same), `.gex-config.json` 2026-09-09c (+ test_v1589 pinned), the resume note (+ the v15.88 snapshot),
+this file. Mockups (the prior commit): `mockups/mockup-data-tab-A.png` / `-B.png`, `design/mockup-data-tab.html`,
+`tools/mockup-data.py`.
+
 **v15.88 + companion v1.19** (panel + companion + tools + installer) — AHI / ALO / LHI / LLO (sessionHL, tier 1, the corpus
 study's Asia window, LDNH / LDNL renamed); the King latch off; companion v1.19 (NQ full night, the weekly 5-minute fetch,
 NQ base rates) + priorWeek() → PWH / PWL / WPOC drawn; the NQ vendor corpus parsed (NQ BASERATES 195); the hour on every
@@ -3600,6 +3648,14 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **v15.84 → v15.89 NOT verified live** — at the open: the resume note's v15.88 list, plus the 🗄 Data tab between
+  Dashboard and Analysis; ① 19 cells with the tape row green on 09-07 / 09-08; ③ his browser's counts; ⑤'s "prior week
+  not fetched" row gone once `__gexif.futWeek()` has rows; ⑦ R-33 · R-34 · R-35 first. `__gptsDebug.coverage()`.
+- **His ✓ / ✗ owed on Rec:** R-33 (the daily-bar courier — his seasonality charts), R-34 (the hourly backfill), R-35
+  (^VIX1D); still R-1, R-2, R-4, R-5, R-6.
+- **Next build: v15.90 THE TAP RECORD, element 1** — asked before built (design §2a). Then the seasonality mockup (v15.91).
+- **RN-hour.2-held** (his machine's 07:55 run): H2 held 23 of 30 — one session's classes; the register counts it out of
+  sample from here; not a rate to quote.
 - **His answer owed:** the first-hour turns he did not circle (ES 08:45 / 09:03 at the ONL-LLO sweep / 09:39 / 09:51; the
   NQ LOD 09:09 at the PDL sweep) — deflections in his sense, or skipped on purpose? The boundary of the corpus.
 - **His answers owed:** the NQ labels (G2–G5 or QG2–QG5); the Asia / London session hours (proposed 17:00–02:00 CT /
@@ -3607,7 +3663,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 - **Q12 top 3 vs top 5 — report on ~2026-09-15** (a reminder fires in the cloud session); he keeps 5 meanwhile.
 - **v15.84 → v15.88 NOT verified live** — the open's probe list is in the resume note (both scripts must be updated: the
   panel AND companion v1.19).
-- **Next build: v15.89 THE TAP RECORD, element 1** — asked before built (design §2a).
+- (as written after v15.88) **Next build: THE TAP RECORD, element 1** — asked before built (design §2a) — now v15.90.
 - **On the Rec tab for his ✓ / ✗:** R-1, R-2, R-4, R-5, R-6. **Q12** ~09-15. **The seasonality mockup** before v15.90.
 - **v15.85 (and v15.84 inside it) delivered after the close, NOT verified** — at the open: footer v15.85; the XG / SG
   labels on his IRT chart; `LASTFEED.SPY` one expiration and ~120 rows, steady; `feedRejects().SPY.win` climbing; the
@@ -3766,6 +3822,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+f5b3bb1 mockups: the 🗄 DATA tab (proposed 2026-09-09) — A sources-first, B coverage-calendar-first; tools/mockup-data.py reads every number from the repo and his browser's stores; the resume note carries the open thread
+4e0ee3c v15.88 + companion v1.19: THE AGENDA, BATCHED — AHI · ALO · LHI · LLO at the standard hours ("just use whatever is standard": Asia 17:00–02:00, London 02:00–08:30 CT; LDNH/LDNL renamed to his names, tier 1); the King latch OFF ("match skylit": the rail and the export follow Skylit's crown on the same tick); companion v1.19 ("yes": NQ's full night, the weekly 5-minute bars → PWH/PWL/WPOC drawn, NQ's base rates couriered); the NQ vendor corpus parsed (NQ BASERATES 195 = 188 + Yahoo, the four shared days identical); the hour on every deflection ("i agree i think you should also tag other hours": E005 m1–m4, E006 m1, R-3 in both twins, L7 the hour class); ⓪a PER MARKET ("this build": the NQ chart reads NQ — no NQ E row existed; no baked NQ literal; the measureBarsRaw lexical-sort twin fixed); F-23 (the corpus's ONH/ONL looked ahead — corrected, F-14 partly superseded); v15.87's tick fence one second → an hour (it re-ran every ten minutes on his machine); the harvest over every day file; his machine's 21:35 outputs merged; R-3 · R-29–R-32; test_v1588 63 · 19/19 mutants
 f91daa1 records: agenda item 4 answered — the NQ file's QQQ lines stay G2–G5 ("for NQ, just use G because we dont have to distinguish it like for the es which has both spy and spx"); no QQQ line on ES (as since v15.80); item 3 parked (I0909patch); I0908nq closed; R-26's open word answered; REC_SEED re-spliced
 9086b19 v15.87: THE TOOL GRID ("tools") — the ⓪a A row and the study read the session on his tool's grid: 3-minute bars stamped by END, the open = the bar ending 08:30's open (7715.00 on 09-08, not the 08:30 minute's 7711.50 — the 14% wick was that difference; his row reproduced exactly), the hover states it; THE CORPUS APPENDS ITSELF ("yes") — the nightly runs append-futures → study-hodlod → BASERATES (ES 295 with provenance, NQ 11), the boot literal baked from the file (tools/bake-hodlod.py), Yahoo's live-quote row dropped; THE NIGHTLY RE-RUNS AFTER AN INSTALL — tick.py by mtime and by results.asOf (the 15:21/17:11/18:01 installers had put the 09-07 outputs back over his machine's 15:05 run; I had said otherwise); R-27 · R-28; the Architecture lines for v15.84 / v15.87; test_v1587 40 · 12/12 mutants; the suite 167 files · 162 green · 5 red
 398f926 records: the Testing tab's suite stamp for v15.86 (166 files · 161 green · 5 red); the Open Items file carries Q12, the three answers owed, the tap record and the Asia/London levels
@@ -3776,8 +3834,6 @@ f91daa1 records: agenda item 4 answered — the NQ file's QQQ lines stay G2–G5
 2e85e0f v15.83 verified on his panel 14:18 CT — the resume note and the chat history say so
 0c87351 mockups: the v15.83 IRT colour swatch
 0f10203 v15.83: THE SPY BOOK'S TOP FIVE IN THE IRT EXPORT · THE SIGNED % ON EVERY NODE LINE · THE NODE LINES WEAR THEIR POLARITY — S2–S5 after the SPY King at Skylit's prices, G3 -56% / S2 +55%, yellow and its derivatives for +gamma, purple and its derivatives for −gamma (R-24); test_v1583 38 · 16/16
-5a66899 v15.82 verified on his panel 12:08 CT — merged 3,271 records / 69 bars from 08:39; the resume note and the chat history say so
-4047b30 v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE — feat = the localStorage queue ∪ the IndexedDB archive (featMergeRecs, LS wins per record), the in-memory archive kept current, featStats through the union, repoFeatDay + featSource in the day file, the matrix rebuilt (R-22, F-20's fix); test_v1582 36 · 13/13
 ```
 
 ---

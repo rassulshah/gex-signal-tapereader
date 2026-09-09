@@ -30,6 +30,14 @@ NIGHTLY_WRITES = ('learning/log/', 'learning/results.json', 'learning/studies.js
                   'data/es-1min/SWEEPS.json', 'data/es-1min/SWEEPS-BOOK.json',
                   'data/es-1min/BASERATES.json', 'data/futures/')   # (v15.87) the corpus appends itself on his machine
 STAMPS = ('ranOn', 'ranAt', 'writtenBy')
+# (v15.89) HIS MACHINE'S FILES THE CLOUD MAY SIMPLY NOT HAVE. The manifest is what is on the cloud's disk, so a file that
+# exists ONLY on origin — a day file the panel exported, a tape folder, a nightly log, a corpus CSV — is invisible to
+# check(): nothing to compare. Found building the 🗄 Data tab: the cloud's coverage.json counted 18 day files and no tape
+# while origin held 2026-09-07.json and data/tape/2026-09-07 + 09-08 for two days. These are fetched (git checkout
+# origin/main -- <path>) when origin has them and the working tree does not; the cloud never wrote them, so nothing
+# can conflict, and the installer (a diff against origin) never re-ships them.
+MACHINE_ADDS = ('data/tape/', 'learning/log/', 'data/futures/', 'data/es-1min/')
+MACHINE_ADD_RE = r'^(data/20\d\d-\d\d-\d\d\.json|data/tape/.+|learning/log/.+\.json|data/futures/.+|data/es-1min/.+\.json)$'
 
 
 def _git(args, cwd):
@@ -98,6 +106,25 @@ def check(files, cwd='.', origin='origin/main', keep=(), write=True):
         else:
             conflicts.append(p)
     return adopted, conflicts
+
+
+def adopt_added(cwd='.', origin='origin/main', write=True):
+    """-> [path]: his machine's files that origin holds and the working tree lacks (see MACHINE_ADDS), checked out."""
+    import re
+    r = _git(['diff', '--name-only', '--diff-filter=A', 'HEAD', origin], cwd)
+    if r.returncode != 0:
+        return []
+    out = []
+    for p in r.stdout.decode('utf-8', 'replace').split('\n'):
+        p = p.strip()
+        if not p or not re.match(MACHINE_ADD_RE, p) or os.path.exists(os.path.join(cwd, p)):
+            continue
+        if write:
+            c = _git(['checkout', origin, '--', p], cwd)
+            if c.returncode != 0:
+                continue
+        out.append(p)
+    return out
 
 
 def versions(path, rng, cwd='.'):
@@ -203,6 +230,18 @@ def selftest():
     # same_numbers: stamps ignored, bools are not numbers, lists by position
     assert same_numbers(b'{"ranOn":"a","v":[1,2.0000000000001]}', b'{"ranOn":"b","v":[1,2]}')
     assert not same_numbers(b'{"v":true}', b'{"v":1}') and not same_numbers(b'{"v":[1,2]}', b'{"v":[2,1]}') and not same_numbers(b'x', b'x')
+    # (v15.89) files his machine ADDED — a day file, a tape folder, a log — are fetched; a doc added there is not the guard's
+    g('add', '-A'); g('commit', '-q', '-m', 'cloud 3')                                    # (the SW adoption above left the tree dirty)
+    g('checkout', '-q', 'theirs'); put('data/2026-09-07.json', '{"date":"2026-09-07"}\n'); put('data/tape/2026-09-07/SPY.json', '{}\n')
+    put('learning/log/2026-09-07.json', '{"date":"2026-09-07"}\n'); put('design/NEW.md', 'x\n'); put('data/README.json', '{}\n')
+    g('add', '-A'); g('commit', '-q', '-m', 'gex: sync (adds)'); g('checkout', '-q', 'main')
+    dry = adopt_added(root, 'theirs', write=False)
+    assert set(dry) == {'data/2026-09-07.json', 'data/tape/2026-09-07/SPY.json', 'learning/log/2026-09-07.json'}, dry
+    assert not os.path.exists(os.path.join(root, 'data', '2026-09-07.json'))                # --dry fetched nothing
+    got = adopt_added(root, 'theirs')
+    assert set(got) == set(dry) and os.path.exists(os.path.join(root, 'data', 'tape', '2026-09-07', 'SPY.json')), got
+    assert not os.path.exists(os.path.join(root, 'design', 'NEW.md')) and not os.path.exists(os.path.join(root, 'data', 'README.json'))
+    assert adopt_added(root, 'theirs') == []                                                # nothing left to fetch
     shutil.rmtree(root, ignore_errors=True)
     print('origin-guard selftest ok')
 
@@ -214,6 +253,8 @@ def main(argv):
     f = _git(['fetch', 'origin', 'main'], '.')
     if f.returncode != 0:
         print('origin-guard: git fetch failed — cannot compare with origin; nothing adopted'); return 3
+    for p in adopt_added('.', 'origin/main', write=('--dry' not in argv)):
+        print(('WOULD FETCH' if '--dry' in argv else 'FETCHED') + ' from origin: %s  (his machine wrote it; the cloud never had it)' % p)
     adopted, conflicts = check(manifest(), '.', 'origin/main', keep, write=('--dry' not in argv))
     for p, why in adopted:
         print(('WOULD ADOPT' if '--dry' in argv else 'ADOPTED') + ' from origin: %s  (%s)' % (p, why))

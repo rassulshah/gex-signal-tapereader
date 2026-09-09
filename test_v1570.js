@@ -89,11 +89,11 @@ ok(/@version\s+15\.(7\d|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7\d|[89]\d
 // ---- 3 · the wiring: the tab, the views, the export, the fetches ---------------------------------------------------------------------
 {
   const bar=(src.match(/function analysisTabBar\(\)\{[\s\S]*?\n\}/)||[''])[0];
-  ok(/tab\('\\uD83D\\uDCA1 Rec', REC_VIEW, 'window\.__gptsDebug&&window\.__gptsDebug\.showRec&&window\.__gptsDebug\.showRec\(true\)'\)/.test(bar) && /!LEARN_VIEW&&!REC_VIEW\), onDash/.test(bar),'3a the tab bar has 💡 Rec after Learn; Dashboard is "on" only when no view is');
+  ok(/tab\('\\uD83D\\uDCA1 Rec', REC_VIEW, 'window\.__gptsDebug&&window\.__gptsDebug\.showRec&&window\.__gptsDebug\.showRec\(true\)'\)/.test(bar) && /!LEARN_VIEW&&!REC_VIEW&&!DATA_VIEW\), onDash/.test(bar),'3a the tab bar has 💡 Rec after Learn; Dashboard is "on" only when no view is (v15.89: nor the Data view)');
   const shows=src.match(/window\.__gptsDebug\.show\w+=function[^\n]*/g)||[];
   const others=shows.filter(l=>!/showRec=|showDashboard=/.test(l));
-  ok(/window\.__gptsDebug\.showRec=function\(b\)\{ REC_VIEW=\(b!==false\); if\(REC_VIEW\)\{ ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; ITEMS_VIEW=false; LEARN_VIEW=false; \}/.test(src) && others.length===6 && others.every(l=>/REC_VIEW=false/.test(l)) && /showDashboard=function\(\)\{[^\n]*REC_VIEW=false/.test(src),'3b showRec closes every other view and every other show* closes Rec (no two tabs "on")',others.map(l=>l.slice(0,40)));
-  ok(/if\(ARCH_VIEW \|\| ROADMAP_VIEW \|\| ITEMS_VIEW \|\| LEARN_VIEW \|\| REC_VIEW\)\{/.test(src) && /\(REC_VIEW\?recBlock\(\):roadmapBlock\(\)\)/.test(src),'3c render dispatches REC_VIEW to recBlock');
+  ok(/window\.__gptsDebug\.showRec=function\(b\)\{ REC_VIEW=\(b!==false\); if\(REC_VIEW\)\{ DATA_VIEW=false; ANALYSIS_VIEW=false; TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; ITEMS_VIEW=false; LEARN_VIEW=false; \}/.test(src) && others.length===7 && others.every(l=>/REC_VIEW=false/.test(l)) && /showDashboard=function\(\)\{[^\n]*REC_VIEW=false/.test(src),'3b showRec closes every other view and every other show* closes Rec (no two tabs "on")',others.map(l=>l.slice(0,40)));
+  ok(/if\(ARCH_VIEW \|\| ROADMAP_VIEW \|\| ITEMS_VIEW \|\| LEARN_VIEW \|\| REC_VIEW \|\| DATA_VIEW\)\{/.test(src) && /\(REC_VIEW\?recBlock\(\):roadmapBlock\(\)\)/.test(src),'3c render dispatches REC_VIEW to recBlock (v15.89: DATA_VIEW joins the guard)');
   ok(/reco:\(function\(\)\{ try\{ return recoExport\(dk\); \}catch\(eRc\)\{ return \{\}; \} \}\)\(\),/.test(src),'3d the day export carries `reco`');
   ok(/try\{ recFetch\(\); \}catch\(eRf\)\{\}/.test(src) && /try\{ recFetch\(\); \}catch\(eRc2\)\{\}/.test(ex('pipeCheck')),'3e the file is fetched at boot and on the 10-minute check');
   ok(/\/learning\/recommendations\.json/.test(ex('recFetch')),'3f recFetch reads learning/recommendations.json');

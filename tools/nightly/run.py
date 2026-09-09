@@ -298,6 +298,14 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     futures = None
     try:
         if write: futures = refresh_futures(days)
+        # (v15.89) the record on disk, counted for the 🗄 Data tab — learning/coverage.json (after the append, so the CSVs count)
+        if write:
+            try:
+                import importlib.util as _ilu4
+                _sp4 = _ilu4.spec_from_file_location('coverage_py', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'coverage.py'))
+                _cv = _ilu4.module_from_spec(_sp4); _sp4.loader.exec_module(_cv); _cv.write(ROOT); print('coverage: wrote learning/coverage.json')
+            except Exception as eCv:
+                print('coverage failed:', eCv)
     except Exception as eF:
         futures = dict(error=str(eF)); print('futures refresh threw:', eF)
     # (v15.66) THE TAPE — the whole book per bar per market (data/tape/<day>/<BOOK>.json, written by the panel's 💾).

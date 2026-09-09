@@ -131,6 +131,26 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.89 — a tab is not built until it is rendered; the guard could not see what the cloud never had; origin moves while I build
+(1) **The Data tab's first render was bare.** I drew it on `tabHeader` / `tabSection` (the Analysis chrome) and the
+mockup's table / note styles are scoped to `.g3pan` (the Rec / Items chrome — `panOpen`). Every test passed: the harness
+stubs the chrome, so it cannot see a stylesheet. The headless render (`render-face.js --page` + a screenshot) showed
+default-size tables before he could. Rule: a new tab or section is rendered and LOOKED AT before it is called built —
+the mockup and the test both lie about CSS. (v15.72's lesson, in a new form.)
+(2) **The guard adopted only what the cloud already had.** `origin-guard.py` compares the installer's manifest — the files
+on the cloud's DISK — against origin; a file his machine ADDED (the 09-07 day file, `data/tape/2026-09-07` and `09-08`,
+the 09-07 log) was on origin for two days with nothing on the cloud side to compare, so the cloud's `coverage.json` said
+18 day files and no tape, on the tab whose whole point is the count. "Nothing to adopt" from a guard means nothing IN
+ITS LIST to adopt. Fixed: the guard fetches his machine's additions first (selftest); rule: when a check enumerates from
+one side, ask what the other side has that the list cannot name.
+(3) **Origin moved while I built — again (v15.88's (6), one build later).** His machine's 07:55 nightly, after the v15.88
+install, rewrote five files and put a second machine row on Rec (RN-hour.2-held — H2 09:30–10:30 held 23 of 30 = 77%,
+Wilson low 59% vs 44%; ONE session's classes, not a rate to quote). The right merge for `recommendations.json` is
+origin's file + `rec-seed.py` (by id) + `splice-seed.py`, then `--keep-mine` for the guard — keep-mine ALONE would have
+shipped the cloud's copy over his machine's row. Read origin at the START of a build and again before the commit.
+(4) The ⑦ section first printed every DATA row of Rec whole — R-25 is a paragraph; a section that repeats another tab's
+content is not a summary. Title + one sentence, the row lives where his ✓ is.
+
 ### v15.88 — a corpus can look ahead without a single bar being wrong; "the NQ E row" did not exist; the v15.79 sort bug had a twin
 (1) **F-23.** `study-sweeps.py` filed a session's own post-close bars under its `on` list and took ONH / ONL over all of it —
 so a day that closed near its high had an "overnight high" set after the session it was measured against. Every bar was

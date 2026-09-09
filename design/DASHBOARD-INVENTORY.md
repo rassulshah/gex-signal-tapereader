@@ -11,6 +11,22 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0w · v15.89 — the 🗄 Data tab, before Analysis: what we hold, what the studies need, what is missing (2026-09-09)
+
+**A new tab, not a new field on the face.** Read-only, seven sections (mockup B, his choice): ① a coverage calendar — a
+cell per day file on GitHub with six signal rows (day file · ES night · NQ night · CSV complete · tape · nightly log);
+② the sources, live (Skylit · IF · Yahoo · GitHub · the nightly: what, how much, how fresh); ③ the record on this machine
+(localStorage against its quota, the IndexedDB stores counted); ④ what the studies are waiting for (the registry by
+corpus, have vs need); ⑤ the gaps, with what Yahoo can fill in green (R-33 daily bars · R-34 hourly · R-35 ^VIX1D) and
+what only Skylit / IF / IRT hold in grey; ⑥ the pipeline's clock (export → sync → nightly → fetch); ⑦ the DATA rows of
+Rec, proposals first. Measured: **descriptive throughout** — every number is a store's or a file's count (the repo side
+counted by the nightly into `learning/coverage.json`); the tab makes no claim and asks for none. Objective: **MOVEMENT's
+prerequisite** — a study cannot run on data it does not have; the tab says which data that is, and which of it is one
+courier away. His words: *"a snapshot summary of the data we currently have, what we need for the studies,
+recommendations and more … if there is missing data that we can obtain from yahoo, it should mention that"* · *"I like
+B, I also want recommendations section. build"*. Probe: `__gptsDebug.showData(true)`; `__gptsDebug.coverage()`;
+`__gptsDebug.dataIdb()`.
+
 ## 0v · v15.88 — four new labels on the candle and the SWEPT line; the King without its latch; ⓪a per market; the Learn tab's hour column (2026-09-09)
 
 **The day candle's swept labels and the SWEPT line** gain **AHI · ALO · LHI · LLO** (tier 1, his names, when swept) and

@@ -286,6 +286,22 @@ contBar}`. Mirrored to IndexedDB `defl` (`repoUpsertDefl`, id `sym|date|sig|tapB
 from v15.63 to v15.66 (the scale bug, L-T) and absent before — a pre-v15.67 row says nothing about the King.
 Readers: the panel's `patternTable` (Testing ⑦) and `tools/nightly/patterns.py` (the log's `patterns`), pinned equal.
 
+## 6d · THE RECORD, COUNTED (v15.89, 2026-09-09) — `learning/coverage.json` for the 🗄 Data tab
+
+The panel cannot read the repo: it fetches one file at a time from GitHub raw. So the machine that HAS the files
+counts them — **`tools/nightly/coverage.py`** runs after the futures step in `run.py` and writes
+`learning/coverage.json` (schema 1): `days[]` — one row per `data/<day>.json` (`mb`, `version`, `snaps`, `nodeEvents`,
+`defl`, `feat`, `fut{ES,NQ,GC,CL:{n,full,err}}` from the day's couriered `futBars`, `csv{MK:{n,complete}}` from
+`data/futures/<MK>/<day>.csv` (complete = 386+ bars, study-hodlod's MIN_BARS), `tape[]` = the books under
+`data/tape/<day>/`, `log` = a nightly log exists); `corpora` (ES / NQ BASERATES sessions with vendor vs Yahoo provenance,
+the sweep and book corpora, the Learn corpus); `studies` (the registry total, by status, by the corpus each waits on);
+`nightly` (the last log's stamps); `tapeDays`; `ranOn` · `asOf` · `generatedAt`. The panel fetches it with the pipeline
+check (`coverageFetch` → `gpts_coverage_v1`) and draws ① COVERAGE, ④ NEEDS and part of ⑤ GAPS from it; the live half
+(today's tape, the couriers' ages, the browser stores) it reads itself. **A cloud build's copy is the CLOUD's count** —
+his machine's next nightly replaces it (the installer carries `learning/*.json`); the guard fetches his machine's added
+day files, tape folders and logs before a build so the cloud's count is not short (v15.89, LESSONS).
+Readers: the panel's `dataBlock()` (Data ①–⑦); the mockup tool `tools/mockup-data.py` reads the same files directly.
+
 **The complete architecture — components, integrations, the HOD/LOD statistics pipeline, storage — is
 `design/ARCHITECTURE.md`**, generated from `tools/plan-seed.py` and rendered on ⚙ Architecture ⑥–⑨ (v15.67). This
 file remains the authority on WHO CAN REACH WHAT and the corpora on disk.

@@ -167,6 +167,18 @@ ROWS = [
          changes='study-hodlod.py sniffs the format from the first line; market_sources(NQ) lists the vendor file first; refresh_futures reports the overlap for ES and NQ',
          evidence='DATA-ARCHITECTURE §6a (2026-08-28) warned the two vendor files are different formats; the NQ file sat unread through v15.87. Asked 2026-09-09: “i’ll go with your recommendation” (yes)',
          status='implemented', version='15.88', why='the NQ E row (R-31) needs a corpus, not eleven days'),
+    dict(id='R-33', kind='DATA', by='review', asOf='2026-09-09',
+         text='A DAILY-BAR COURIER — ES=F and NQ=F 1-day bars, the full history Yahoo holds (years), one fetch a day (~20 KB a year), into the corpus as data/futures/<MK>/daily.csv.',
+         changes='his seasonality charts (the range by weekday against the 10-week average, the red / green counts per weekday) stand on years instead of ~57 sessions per weekday; gap statistics (open vs the prior close) become measurable; the E row’s byDow gets a second, longer basis',
+         evidence='the Data tab’s gap list (2026-09-09): daily bars are held nowhere; Yahoo serves them for the whole listing; the 1-minute corpus reaches 295 sessions and cannot grow backwards'),
+    dict(id='R-34', kind='DATA', by='review', asOf='2026-09-09',
+         text='AN HOURLY BACKFILL — ES=F 1-hour bars for the 730 days Yahoo serves, one time, into the HOD / LOD corpus at hour resolution (the ladder — which extreme is in and how long it has stood — not the wick family, which needs minutes).',
+         changes='the HOD / LOD clock stands on ~500 sessions instead of 295; the E row per weekday on 100+ each; the ladder’s rungs at hour resolution as a second, longer table beside the minute one (never merged)',
+         evidence='the Data tab’s gap list (2026-09-09): hourly history is two years at the source; the minute corpus is a year and a quarter; the seasonality he named (2026-09-08) is a weekday question, which is a sessions question'),
+    dict(id='R-35', kind='DATA', by='review', asOf='2026-09-09',
+         text='^VIX1D — the one-day implied move, daily, alongside ^VIX in the VIX courier.',
+         changes='the EM band (built live from the ATM straddle) gets a daily implied series the corpus can be backtested against — was the band’s edge a level on the corpus days, or not',
+         evidence='the Data tab’s gap list (2026-09-09); optional — the band is a frame, not a study, until this exists'),
 ]
 
 if __name__ == '__main__':

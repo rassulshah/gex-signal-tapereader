@@ -24,9 +24,9 @@ ok(/just click on the save button once a day/.test(doc) && /lets call the proces
 // the panel: the plan carries the process; the eight tabs exist; the ⚙ tab names the document
 const P=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]);
 ok(P.process && P.process.name==='the Data Analysis process' && P.process.doc==='design/DATA-ANALYSIS-PROCESS.md' && JSON.stringify(P.process.links)===JSON.stringify(LINKS),'p1 PLAN_SEED.process names the process, its document and the seven links');
-ok(P.tabs.length===8 && JSON.stringify(P.tabs.map(t=>t.tab))===JSON.stringify(['Dashboard','Analysis','Testing','Architecture','Roadmap','Open Items','Learn','Rec']),'p2 the plan lists exactly eight tabs',P.tabs.map(t=>t.tab));
+ok(P.tabs.length===9 && JSON.stringify(P.tabs.map(t=>t.tab))===JSON.stringify(['Dashboard','Data','Analysis','Testing','Architecture','Roadmap','Open Items','Learn','Rec']),'p2 the plan lists exactly nine tabs (v15.89: 🗄 Data before Analysis, his placement)',P.tabs.map(t=>t.tab));
 const bar=(src.match(/function analysisTabBar\(\)\{[\s\S]*?\n\}/)||[''])[0];
-ok(/tab\('Dashboard'/.test(bar) && /Analysis'/.test(bar) && /Testing'/.test(bar) && /Learn'/.test(bar) && /Rec'/.test(bar) && /Architecture'/.test(bar) && /Roadmap'/.test(bar) && /Open Items'/.test(bar) && (bar.match(/tab\(/g)||[]).length===9,'p3 the tab bar renders the eight tabs (and the tab() helper) — no ninth',(bar.match(/tab\(/g)||[]).length);
+ok(/tab\('Dashboard'/.test(bar) && /Analysis'/.test(bar) && /Testing'/.test(bar) && /Learn'/.test(bar) && /Rec'/.test(bar) && /Architecture'/.test(bar) && /Roadmap'/.test(bar) && /Open Items'/.test(bar) && /Data'/.test(bar) && (bar.match(/tab\(/g)||[]).length===10,'p3 the tab bar renders the nine tabs (and the tab() helper) — no tenth (v15.89: 🗄 Data)',(bar.match(/tab\(/g)||[]).length);
 ok(/Source: design\/DATA-ANALYSIS-PROCESS\.md \(the process, named 2026-09-04\)/.test(src),'p4 the ⚙ Architecture tab names the document as its first source');
 ok(/REC_VIEW/.test(src) && /function recBlock\(\)/.test(src) && /reco:\(function\(\)\{ try\{ return recoExport\(dk\); \}/.test(src),'p5 the Rec tab exists and his decisions ride the day export');
 

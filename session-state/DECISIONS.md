@@ -766,3 +766,26 @@ more issues in the build"**; each item was still one message, one decision. His 
 session's own post-close bars — a look-ahead that removed failed sweeps. Corrected: ONL 22% n=125 · ONH 16% n=154 (were
 29% / 26%) — within chance like every level name; the first-30-minutes edge in F-14 is gone (21% n=249 vs 18%), the flush
 (35% n=94 vs 23%) and the slow reclaim (32% n=96 vs 23%) stand at about +10pp. The number to quote is the file's, with its n.
+
+## 2026-09-09 · v15.89 — the 🗄 Data tab, before Analysis, on mockup B, with a recommendations section
+
+His request, whole: **"i want you to build a data tab and place it before the analysis tab. Tell me what should the data
+tab have? I am thinking it should give me a snapshot summary of the data we currently have, what we need for the
+studies, recommendations and more. If there is missing data that we can obtain from yahoo, it should mention that. what
+are your recommendations for this tab? can you provide mockups for it."** Two mockups from real numbers (A sources-first,
+B calendar-first); his choice: **"I like B, I also want recommendations section. build"**.
+
+- **Placement:** between Dashboard and 📊 Analysis — his words. What would change it: his words.
+- **Order:** mockup B's — the coverage calendar first (what we HOLD, a cell per day), then the sources, the record on this
+  machine, what the studies wait for, the gaps (Yahoo-fillable in green), the pipeline's clock, and — added on his word —
+  the DATA recommendations. The recommendations section is a VIEW of Rec's DATA rows (title + one sentence); his ✓ / ✗
+  stay on Rec, so one file carries every decision (the 2026-09-04 Rec decision holds).
+- **Read-only, by count.** Every number on the tab is a store's or a file's; the tab makes no claim. The repo-side counts
+  are the nightly's (`coverage.py` → `learning/coverage.json`, one fetch) because the panel cannot read the repo's files
+  — DATA-ARCHITECTURE's rule (the browser fetches one file at a time; the machine that has the files counts them).
+- **What Yahoo can fill is a Rec row, not a fetch.** R-33 (daily bars), R-34 (hourly backfill), R-35 (^VIX1D) are proposed;
+  nothing is fetched until his ✓ — foreign fetches live in the companion and each is a decision (DATA-ARCHITECTURE §4).
+- **The tab's chrome is the panel's** (`panOpen` / `panSection` / `panFoot`, like Rec and Items), not a bare table: the
+  first render was bare and the headless screenshot caught it (LESSONS v15.89).
+- **The tap record stays next** (v15.90): this build took the Data tab's slot because he asked for it now; the tap record's
+  "next build, on its own" ruling is unchanged, one build later.
