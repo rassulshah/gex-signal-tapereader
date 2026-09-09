@@ -2,8 +2,8 @@
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
  "asOf": "2026-09-09",
- "generatedAt": "2026-09-09T15:11:24Z",
- "ranOn": "cloud",
+ "generatedAt": "2026-09-09T15:25:20Z",
+ "ranOn": "his machine",
  "complete": 386,
  "days": [
   {
@@ -1003,8 +1003,8 @@
    "definition": "tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending "
   },
   "sweeps": {
-   "sessions": 290,
-   "cells": 128,
+   "sessions": 284,
+   "cells": 127,
    "levels": 36
   },
   "book": {
@@ -1036,10 +1036,10 @@
    "note": "NQ BASERATES"
   },
   "sweeps": {
-   "have": 290,
+   "have": 284,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 290,
+   "sessions": 284,
    "first": null,
    "note": "the sweep corpus (vendor + the couriered nights, v15.90)"
   },
@@ -1111,15 +1111,15 @@
  "studies": {
   "total": 184,
   "byStatus": {
-   "REGISTERED": 10,
    "CUT": 2,
-   "NULL": 2,
-   "THIN": 12,
-   "SHIPPED": 13,
-   "READ": 15,
    "READY": 15,
    "WAITING": 111,
+   "THIN": 12,
+   "REGISTERED": 10,
    "REFUSED": 3,
+   "SHIPPED": 13,
+   "READ": 15,
+   "NULL": 2,
    "OPEN": 1
   },
   "byCorpus": {
