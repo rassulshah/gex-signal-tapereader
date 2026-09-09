@@ -20,10 +20,10 @@
    "text": "The NQ symbol's four QQQ lines in the IRT file — keep G2–G5, or QG2–QG5 to match XG / SG? (asked 2026-09-08 with v15.85)",
    "date": "2026-09-08",
    "seenIn": "2026-09-08",
-   "status": "SEEN",
-   "answer": null,
+   "status": "ANSWERED",
+   "answer": "His word, 2026-09-09: \"there should be no qqq lines in es. for NQ, just use G because we dont have to distinguish it like for the es which has both spy and spx.\" — G2–G5 stay on the NQ symbol (one book, nothing to distinguish); the ES file carries no QQQ line (as since v15.80, xqWhy). No build.",
    "link": "session-state/DECISIONS.md",
-   "answeredOn": null
+   "answeredOn": "2026-09-09"
   },
   {
    "id": "I0908asia",
