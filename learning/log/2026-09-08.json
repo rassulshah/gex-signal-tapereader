@@ -3,7 +3,7 @@
  "date": "2026-09-08",
  "writtenBy": "tools/nightly/run.py",
  "ranOn": "his machine",
- "ranAt": "2026-09-09T12:45:27Z",
+ "ranAt": "2026-09-09T12:55:22Z",
  "sessions": 3,
  "episodes": 23,
  "deflEvents": 141,
@@ -931,6 +931,226 @@
      "rate": 60,
      "lo": 39
     }
+   },
+   {
+    "key": "hour:1",
+    "label": "H1 \u00b7 08:30\u201309:30",
+    "n": 33,
+    "held": 14,
+    "broke": 19,
+    "pending": 0,
+    "rate": 42,
+    "lo": 27,
+    "turn": {
+     "n": 15,
+     "hit": 3,
+     "rate": 20,
+     "lo": 7
+    },
+    "resume": {
+     "n": 15,
+     "hit": 8,
+     "rate": 53,
+     "lo": 30
+    }
+   },
+   {
+    "key": "hour:2",
+    "label": "H2 \u00b7 09:30\u201310:30",
+    "n": 30,
+    "held": 23,
+    "broke": 7,
+    "pending": 0,
+    "rate": 77,
+    "lo": 59,
+    "turn": {
+     "n": 16,
+     "hit": 4,
+     "rate": 25,
+     "lo": 10
+    },
+    "resume": {
+     "n": 16,
+     "hit": 10,
+     "rate": 63,
+     "lo": 39
+    }
+   },
+   {
+    "key": "hour:3",
+    "label": "H3 \u00b7 10:30\u201311:30",
+    "n": 30,
+    "held": 12,
+    "broke": 18,
+    "pending": 0,
+    "rate": 40,
+    "lo": 25,
+    "turn": {
+     "n": 7,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 7,
+     "hit": 5,
+     "rate": 71,
+     "lo": 36
+    }
+   },
+   {
+    "key": "hour:4",
+    "label": "H4 \u00b7 11:30\u201312:30",
+    "n": 21,
+    "held": 4,
+    "broke": 17,
+    "pending": 0,
+    "rate": 19,
+    "lo": 8,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 1,
+     "rate": 50,
+     "lo": 9
+    }
+   },
+   {
+    "key": "hour:5",
+    "label": "H5 \u00b7 12:30\u201313:30",
+    "n": 13,
+    "held": 4,
+    "broke": 9,
+    "pending": 0,
+    "rate": 31,
+    "lo": 13,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 2,
+     "rate": 100,
+     "lo": 34
+    }
+   },
+   {
+    "key": "hour:6",
+    "label": "H6 \u00b7 13:30\u201314:00",
+    "n": 7,
+    "held": 2,
+    "broke": 5,
+    "pending": 0,
+    "rate": 29,
+    "lo": 8,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "hour:7",
+    "label": "H7 \u00b7 14:00\u201315:00",
+    "n": 7,
+    "held": 3,
+    "broke": 4,
+    "pending": 7,
+    "rate": 43,
+    "lo": 16,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "clock:first",
+    "label": "the first hour (08:30\u201309:30)",
+    "n": 33,
+    "held": 14,
+    "broke": 19,
+    "pending": 0,
+    "rate": 42,
+    "lo": 27,
+    "turn": {
+     "n": 15,
+     "hit": 3,
+     "rate": 20,
+     "lo": 7
+    },
+    "resume": {
+     "n": 15,
+     "hit": 8,
+     "rate": 53,
+     "lo": 30
+    }
+   },
+   {
+    "key": "clock:mid",
+    "label": "midday (09:30\u201314:00)",
+    "n": 101,
+    "held": 45,
+    "broke": 56,
+    "pending": 0,
+    "rate": 45,
+    "lo": 35,
+    "turn": {
+     "n": 28,
+     "hit": 4,
+     "rate": 14,
+     "lo": 6
+    },
+    "resume": {
+     "n": 28,
+     "hit": 18,
+     "rate": 64,
+     "lo": 46
+    }
+   },
+   {
+    "key": "clock:last",
+    "label": "the last hour (14:00\u201315:00)",
+    "n": 7,
+    "held": 3,
+    "broke": 4,
+    "pending": 7,
+    "rate": 43,
+    "lo": 16,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
    }
   ],
   "events": 148,
@@ -948,52 +1168,144 @@
  "futures": {
   "appended": {
    "CL": {
-    "minutes": 0,
+    "minutes": 1950,
     "newest": "2026-09-08",
     "newestBars": 379,
     "complete": false
    },
    "ES": {
-    "minutes": 0,
+    "minutes": 1975,
     "newest": "2026-09-08",
-    "newestBars": 379,
-    "complete": false
+    "newestBars": 393,
+    "complete": true
    },
    "GC": {
-    "minutes": 0,
+    "minutes": 1961,
     "newest": "2026-09-08",
     "newestBars": 379,
     "complete": false
    },
    "NQ": {
-    "minutes": 0,
+    "minutes": 1974,
     "newest": "2026-09-08",
-    "newestBars": 379,
-    "complete": false
+    "newestBars": 393,
+    "complete": true
    }
   },
   "baserates": {
    "ES": {
-    "sessions": 289,
+    "sessions": 295,
     "first": "2025-06-02",
-    "last": "2026-09-04",
+    "last": "2026-09-08",
     "vendor": 284,
-    "yahoo": 5,
-    "incompleteDropped": 13
+    "yahoo": 11,
+    "incompleteDropped": 12
    },
    "NQ": {
-    "sessions": 5,
-    "first": "2026-08-31",
-    "last": "2026-09-04",
-    "vendor": 0,
-    "yahoo": 5,
-    "incompleteDropped": 1
+    "sessions": 195,
+    "first": "2025-11-24",
+    "last": "2026-09-08",
+    "vendor": 188,
+    "yahoo": 7,
+    "incompleteDropped": 8
    }
   },
   "overlap": {
-   "days": 0,
-   "rows": [],
-   "note": "none \u2014 the vendor corpus ends 2026-08-21 and the Yahoo sessions begin 2026-08-31; pooled with provenance, nothing averaged"
+   "ES": {
+    "days": 0,
+    "rows": [],
+    "note": "none \u2014 the vendor corpus ends 2026-08-21 and the Yahoo sessions begin 2026-08-24; pooled with provenance, nothing averaged"
+   },
+   "NQ": {
+    "days": 4,
+    "rows": [
+     {
+      "day": "2026-08-24",
+      "vendor": {
+       "took": 3,
+       "rng": 296.25,
+       "wickPct": 13,
+       "bop": 3,
+       "open": 29205.5,
+       "hod": 29243.0,
+       "lod": 28946.75
+      },
+      "yahoo": {
+       "took": 3,
+       "rng": 296.25,
+       "wickPct": 14,
+       "bop": 3,
+       "open": 29202.25,
+       "hod": 29243.0,
+       "lod": 28946.75
+      }
+     },
+     {
+      "day": "2026-08-25",
+      "vendor": {
+       "took": 21,
+       "rng": 276.75,
+       "wickPct": 28,
+       "bop": 6,
+       "open": 29336.75,
+       "hod": 29414.75,
+       "lod": 29138.0
+      },
+      "yahoo": {
+       "took": 21,
+       "rng": 276.75,
+       "wickPct": 28,
+       "bop": 6,
+       "open": 29336.25,
+       "hod": 29414.75,
+       "lod": 29138.0
+      }
+     },
+     {
+      "day": "2026-08-26",
+      "vendor": {
+       "took": 0,
+       "rng": 212.25,
+       "wickPct": 0,
+       "bop": 3,
+       "open": 29156.5,
+       "hod": 29368.25,
+       "lod": 29156.0
+      },
+      "yahoo": {
+       "took": 0,
+       "rng": 212.0,
+       "wickPct": 2,
+       "bop": 3,
+       "open": 29160.0,
+       "hod": 29368.25,
+       "lod": 29156.25
+      }
+     },
+     {
+      "day": "2026-08-27",
+      "vendor": {
+       "took": 30,
+       "rng": 280.0,
+       "wickPct": 49,
+       "bop": 12,
+       "open": 29561.5,
+       "hod": 29703.75,
+       "lod": 29423.75
+      },
+      "yahoo": {
+       "took": 30,
+       "rng": 280.75,
+       "wickPct": 46,
+       "bop": 12,
+       "open": 29554.0,
+       "hod": 29704.5,
+       "lod": 29423.75
+      }
+     }
+    ],
+    "note": "4 sessions in both (2026-08-24 \u2192 2026-08-27): the vendor wins each; the two read side by side below"
+   }
   }
  },
  "from": "2026-09-03"

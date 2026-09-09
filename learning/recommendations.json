@@ -64,6 +64,21 @@
    "status": "proposed"
   },
   {
+   "id": "RN-hour.2-held",
+   "kind": "RULE",
+   "by": "nightly",
+   "asOf": "2026-09-08",
+   "src": "patterns:hour:2:held",
+   "text": "H2 · 09:30–10:30: held 23 of 30 = 77% (Wilson low 59%) against 44% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
+   "changes": "the face shows this class’s held rate with its n; the register tests it on sessions it has never seen",
+   "evidence": "the nightly’s pattern table, 2026-09-08: n=30, low 59% > base 44%",
+   "n": 30,
+   "rate": 77,
+   "lo": 59,
+   "base": 44,
+   "status": "proposed"
+  },
+  {
    "id": "RN-teach-L5",
    "kind": "TEACH",
    "by": "nightly",
@@ -365,7 +380,7 @@
   }
  ],
  "counts": {
-  "proposed": 7,
+  "proposed": 8,
   "approved": 0,
   "implemented": 24,
   "declined": 0,
