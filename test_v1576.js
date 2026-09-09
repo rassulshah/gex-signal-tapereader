@@ -25,7 +25,7 @@ ok(/ranked\.slice\(0,4\)/.test(B) && /lbl:'XG'\+\(i\+2\)/.test(B), '1f four rows
 ok(/col:nodeCol\('SPXW', g\.pct\), w:1, style:0/.test(B), '1g width 1, solid — his call; (v15.83) the colour is the polarity — yellow for +gamma, purple for −gamma, no longer white');
 ok(/try\{ irtGLatch\(gs\); \}catch\(eGL\)\{\}/.test(B), '1h the hold is an instrument: its call sits in its own try');
 ok(/var HG=null; try\{ HG=irtGHeld\(\); \}catch\(eHG\)\{\}/.test(B), '1i ...and so does the read of the hold');
-ok(/IRT_LAST\.gWhy=gWhy;/.test(B), '1j IRT_LAST.gWhy reports live / held / nothing');
+ok(/IRT_LAST\.gWhy=\(lean\?'on the panel, not in the file \(Kings \+ walls\) — ':''\)\+gWhy;/.test(B), '1j IRT_LAST.gWhy reports live / held / nothing (v15.92: prefixed when the file is Kings + walls)');
 ok(ex('irtGLatch').length>0 && ex('irtGHeld').length>0, '1k irtGLatch / irtGHeld exist');
 ok(/if\(!o \|\| o\.day!==ctTodayStr\(\) \|\| !o\[K\]/.test(ex('irtGHeld')), '1l the hold is day-scoped, like the Kings (v15.80: keyed G for ES, GQ for NQ)');
 ok(/\/\^\(XG\|SG\|G\)\[2-5\]\$\|\^D-\[A-Z\]\+ KING\$\|\^D-\[A-Z\]\+\[2-9\]\$\|\^D\[1-9\]\$\/\.test/.test(ex('irtGHeld')), '1m ...and only ever returns XG2..XG5 / SG2..SG5 / G2..G5 (NQ) rows (v15.85; v15.91: and the D rows by book)');

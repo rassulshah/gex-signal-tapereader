@@ -342,7 +342,7 @@ def corpus_status(studies, counts, asof, answered=()):
         if not c or c in ('live', 'register', 'cut', '?'):
             continue
         if c == 'tap':
-            out[x['id']] = dict(status='WAITING', line='WAITING · the tap record: 0 of %d taps — not recorded yet (v15.91) · nightly %s' % (need, asof), keepResult=True, n=0, asOf=asof, by='nightly')
+            out[x['id']] = dict(status='WAITING', line='WAITING · the tap record: 0 of %d taps — not recorded yet (v15.93) · nightly %s' % (need, asof), keepResult=True, n=0, asOf=asof, by='nightly')
             continue
         k = (counts or {}).get(c) or {}
         have = k.get('have') or 0; unit = k.get('unit') or ''; ps = k.get('perSession')
@@ -548,7 +548,7 @@ def selftest():
     counts = dict(tap=dict(have=0, unit='taps'), book=dict(have=13, unit='sessions', perSession=1.0, first='2026-08-18'), kingroll=dict(have=170, unit='rows', perSession=24.3, first='2026-08-19'),
                   vix=dict(have=0, unit='closes', note='no file yet'), price=dict(have=295, unit='sessions'), sweeps=dict(have=290, unit='sessions', perSession=1.0))
     CS = corpus_status(S3, counts, '2026-09-09', answered=set(SR) | set(FR))
-    assert CS['K1.4']['status'] == 'WAITING' and CS['K1.4']['line'].startswith('WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91)') and CS['K1.4']['keepResult'] is True
+    assert CS['K1.4']['status'] == 'WAITING' and CS['K1.4']['line'].startswith('WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.93)') and CS['K1.4']['keepResult'] is True
     assert CS['K2.4']['status'] == 'WAITING' and CS['K2.4']['line'].startswith('WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session'), CS['K2.4']['line']
     assert CS['K4.1']['status'] == 'READY' and CS['K4.1']['line'].startswith('READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet'), CS['K4.1']['line']
     assert CS['X3.1']['status'] == 'WAITING' and 'no file yet' in CS['X3.1']['line']

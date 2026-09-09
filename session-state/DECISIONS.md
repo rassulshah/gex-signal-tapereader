@@ -829,3 +829,27 @@ exception to one-at-a-time he has granted, and it covered the cuts.
   book's own %; nothing in the registry reads it yet (a study of NDX-vs-QQQ deflections is the tap record's business).
 - **The nightly appends before it reads.** Fixed order; a test pins it.
 - **The tap record is v15.92** — unchanged in substance; asked before built.
+
+## 2026-09-09 · v15.92 — Kings + walls ("there are way too many levels on my irt charts")
+
+- **The IRT file is eight lines, by his ruling**: SPXW KING · SPY KING · CW0 · PW0 on the ES symbol, QQQ KING · NDX KING ·
+  CW0 · PW0 on the NQ symbol. His words: *"i want to reduce it to kings along with the put and call wall only for both the
+  ES and NQ. you can continue your study."* v14.20's ruling, restated with the walls. What would change it: his word, by
+  family name — and it costs no build: **⚙ IRT › Lines: everything** writes every family v15.91 wrote (XG2–5, SG2–5,
+  G2–5, FLIP0, the D rows). The panel computes and latches every family whichever is chosen — the study continues; only
+  the file shrinks. A family added to the file in future says the line count after it.
+- **NDX KING is the NDX options book's own King, under its own name** — the NDXP book of the NQ1 payload (NDX when NDXP is
+  absent), Skylit's price, bare label, full gold / purple, width 3, held day-scoped. His words: *"why not just have NDX King
+  as the label … i dont see why any king needs to have 100%"*. The D-NDX KING row is superseded by it; the merged list
+  (everything-mode) dedupes against it.
+- **The NQ walls are InsiderFinance's QQQ 0DTE walls at Skylit's QQQ ratio** — the only Nasdaq chain the companion fetches;
+  the same window rule as the ES walls (0DTE, no all-expiry fallback), the same colours, the same stale rule, a scale check
+  against their spot. Offered to him as such ("if you want NDX's walls instead, that is a companion change"); agreed. What
+  would change it: his word for the NDX chain → the companion fetches a third symbol (both Tampermonkey links).
+- **The shade says the book on both charts**: the index book's King full, width 3 (SPXW on ES, NDX on NQ); the ETF book's
+  King the lighter pair, width 2 (SPY on ES, QQQ on NQ). Offered as "the one visible change to a line you already have";
+  agreed ("ok"). What would change it: his word to keep QQQ KING full gold.
+- **PW0 stays the 0DTE wall** (7630 SPX → 7635.25 ES that morning). His question *"why is the put wall 7635 when insider
+  finance has it at 7600. is this a conversion or an error?"* — neither: the window (their header shows all-expiry walls;
+  the 0DTE wall is the file's by the 2026-08-28 ruling) plus Skylit's SPXW ratio. Unchanged.
+- **The tap record is v15.93** — unchanged in substance; asked before built. Seasonality v15.94; the rest +1.

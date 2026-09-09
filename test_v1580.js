@@ -336,7 +336,7 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
 {
   const B=ex('irtBuildCsv');
   ok(!/'QQQ KING ~'/.test(B) && /IRT_LAST\.xqWhy='off — QQQ converts for NQ only \(operator, 2026-09-08\)'/.test(B), '6a the v14.75 projection of the QQQ King onto the ES symbol is gone from irtBuildCsv, and xqWhy says it is a decision');
-  ok(/var QP=nqPx\(QK\.k\);\n\s+out\.push\(irtCsvRow\(nqSym, QP\.px, 'QQQ KING'\+QP\.tag/.test(B), '6b …the NQ row stays (v15.81: priced by nqPx — Skylit\'s NQ1 book first, the ratio chain second)');
+  ok(/var QP=nqPx\(QK\.k\);\n(\s+\/\/[^\n]*\n)*\s+out\.push\(irtCsvRow\(nqSym, QP\.px, 'QQQ KING'\+QP\.tag/.test(B), '6b …the NQ row stays (v15.81: priced by nqPx — Skylit\'s NQ1 book first, the ratio chain second)');
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r18=R.rows.find(r=>r.id==='R-18');
   ok(r18 && r18.status==='implemented' && r18.version==='15.80' && r18.by==='operator' && /NQ only/.test(r18.text), '6c R-18 on Rec, by operator, implemented in v15.80', r18&&[r18.status,r18.version]);
   ok(/void style;/.test(ex('irtCsvRow')) && /\+','\+\(width\|\|1\)\+',0'\+/.test(ex('irtCsvRow')), '6d every IRT line is SOLID — PENSTYLE written as 0 whatever the caller passes ("make all solid lines")');

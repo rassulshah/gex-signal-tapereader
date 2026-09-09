@@ -131,6 +131,20 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.92 — a chart he cannot read is a chart with too much on it; "match Skylit" is bounded by his eye; a family asked back in is not a family he keeps
+(1) **Three builds added lines to his chart (XG, SG, the D rows) and the fourth removed them all.** Every addition was
+his word and each one was right on its own; together they made the chart unreadable ("way too many levels"). v14.20
+had already taught this ("too many levels — step back to only exporting the kings") and the file grew back one family at
+a time without anyone asking whether the SUM still read. Rule: when a family is added to the file, say the line count
+after it, and ask whether the chart still reads — density is cheap on the panel and expensive on the chart.
+(2) **"Match Atlas" is not "write everything Atlas draws".** He asked for the 7658 because it was on his chart and not
+in his file; the answer that served him was the book's King under its own name, not the whole merged list. What he
+wants matched is the LEVEL, at Skylit's price, under a label he can read. Withdrawn as a default: the D rows (kept
+behind the selector — they earn a place exactly when Atlas draws a level no book row carries).
+(3) **The families are computed either way, on purpose.** "You can continue your study" — the latches, the record and
+the studies read every level; only the file shrinks. A switch that stops computing would have made the everything-mode
+file empty for the first tick and the hold empty for the day. Nothing withdrawn.
+
 ### v15.91 — a level with no name is a question; the order of the nightly is a definition; "match" means what the other screen draws
 (1) **The NQ "derived King" was the NDX book's King and the file called it D-KING.** A label that names a rank and not a
 book left him asking what it was. The payload carries every book's ratio; dividing the row's price by each one names the

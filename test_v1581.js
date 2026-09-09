@@ -99,7 +99,7 @@ ok(/@version\s+15\.(8[1-9]|9\d)/.test(src) && /var GPTS_VERSION='15\.(8[1-9]|9\d
   global.ladderKings=()=>[];
   global.ES_RATIO=10.05; global.NQ_RATIO=41.36; global.FEED_STALE_MS=12000;
   var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
-  global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv', nqOn:true, nqSym:'ENQU26', nqRatio:41.9 } };
+  global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv', nqOn:true, nqSym:'ENQU26', nqRatio:41.9, lines:'all' } };   // (v15.92) every family — Kings + walls is test_v1592
   global.FUTMODE={ fam:'ES', r:10.0268, live:true };
   global.ctTodayStr=()=>'2026-09-08';
   // the panel's own basis: dispScale 1.00065 (the IF spot, +5.0 at 7700) — Skylit's is 1.000578 (+4.45)

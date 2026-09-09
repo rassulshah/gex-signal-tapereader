@@ -507,32 +507,40 @@
    "v": "15.91",
    "title": "THE D ROWS BY THEIR BOOK, DEDUPED (\"i'll go with your recommendation\", 2026-09-09) — the merged list Atlas draws on the futures chart carries each row's BOOK, read from Skylit's own ratios (a row is the book whose ratio turns its price back into a strike: SPY / QQQ whole numbers, SPX / NDX multiples of 5), labelled D-SPX KING · D-NDX2 · D-QQQ3; a row on a level the file already draws (within half a point) is not written twice — on FRONT the ES list IS the two books' own rows, so nothing doubles; on NQ the NDX book's rows are new (the \"derived King\" he saw at 29360: the NDX options book's King projected onto NQ — the file never carried NDX) and the QQQ duplicates go; the nightly appends the corpus BEFORE any judge or table reads it (his first v15.90 run computed the sweep tables before the night files existed: 284, not 290)",
    "serves": "match Skylit — the chart he trades off, nothing drawn twice; the corpus count honest on the first night",
-   "status": "next",
+   "status": "shipped",
+   "shipped": "2026-09-09",
    "done": "D-NDX KING on his NQ chart at Atlas's price and no D line on a level a book row already draws; his machine's next nightly reads 290+; test_v1591"
   },
   {
    "v": "15.92",
-   "title": "THE TAP RECORD — NEXT BUILD, his word 2026-09-09 (\"your recommendation\" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 104 registry studies whose corpus is the tap record (WAITING on it since v15.90) read from it; H11 registered the day it starts — v15.92 after the D rows took v15.91",
+   "title": "KINGS + WALLS — his ruling 2026-09-09 (\"there are way too many levels on my irt charts. i want to reduce it to kings along with the put and call wall only for both the ES and NQ. you can continue your study\"): the IRT file is EIGHT lines — SPXW KING · SPY KING · CW0 · PW0 on the ES symbol, QQQ KING · NDX KING · CW0 · PW0 on the NQ symbol; NDX KING is the NDX options book's own King (the NDXP book of the NQ1 payload at Skylit's price, bare label, full gold / purple, width 3 — his \"why not just have NDX King as the label … i dont see why any king needs to have 100%\"); the NQ walls are InsiderFinance's QQQ 0DTE walls at Skylit's QQQ ratio (NQ never had walls in the file); the shade says the book on both charts (index King full width 3, ETF King lighter width 2 — QQQ KING takes the lighter pair as SPY KING has); every other family (XG2–5, SG2–5, G2–5, FLIP0, the D rows) is still computed and latched — the study continues — and the ⚙ IRT Lines selector (Kings + walls / everything) writes them again by name",
+   "serves": "match Skylit, on a chart he can read — the levels he trades against and nothing else; the study unchanged underneath",
+   "status": "next",
+   "done": "eight lines in FlexLevelsExport.csv on his machine (NDX KING on ENQU26 at Atlas's price, CW0 / PW0 on both symbols); everything back with one click in ⚙; test_v1592"
+  },
+  {
+   "v": "15.93",
+   "title": "THE TAP RECORD — NEXT BUILD, his word 2026-09-09 (\"your recommendation\" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 104 registry studies whose corpus is the tap record (WAITING on it since v15.90) read from it; H11 registered the day it starts — v15.93 after the D rows took v15.91 and Kings + walls took v15.92",
    "serves": "HOD/LOD · PULLBACK · 104 studies · his question: what makes a gamma level deflect",
    "status": "later",
    "done": "the design agreed one element at a time; 40 taps per cell and the first F-study reads from them with n, beside the midpoint control"
   },
   {
-   "v": "15.93",
+   "v": "15.94",
    "title": "SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six",
    "serves": "HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered",
    "status": "later",
    "done": "mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine"
   },
   {
-   "v": "15.94",
+   "v": "15.95",
    "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join",
    "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'",
    "status": "later",
    "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"
   },
   {
-   "v": "15.95",
+   "v": "15.96",
    "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured",
    "serves": "HOD/LOD · the loop closes",
    "status": "later",
@@ -655,7 +663,7 @@
     "id": "if",
     "name": "InsiderFinance (the second book — STRUCTURE)",
     "how": "the companion, GM_xmlhttpRequest to insiderfinance.io/gamma-exposure, every 5 min",
-    "what": "the SPX / SPY / QQQ option chains (open interest × gamma per strike) in three windows — dte0 · toFri · all — and the levels the panel names: CW / PW (call and put walls), CW0 / PW0 (0DTE walls), FLIP, Mag / HVL, the expected-move band (emBand) that the ladder's scale is built on (ifLadder: dispScale, px, undPx)",
+    "what": "the SPX / SPY / QQQ option chains (open interest × gamma per strike) in three windows — dte0 · toFri · all — and the levels the panel names: CW / PW (call and put walls), CW0 / PW0 (0DTE walls), FLIP, Mag / HVL, the expected-move band (emBand) that the ladder's scale is built on (ifLadder: dispScale, px, undPx); (v15.92) the QQQ chain's 0DTE walls are the IRT file's CW0 / PW0 on the NQ symbol, at Skylit's QQQ ratio",
     "keys": "gpts_if_chain_v1 → ifChain() · ifLadder() · gLevels()",
     "notes": "STOCK, refreshed once a day at the source; never averaged with Skylit's FLOW; every number carries its book, window and scale (INSIDERFINANCE.md — four phantom bugs came from mixing them)"
    },

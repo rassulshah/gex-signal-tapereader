@@ -102,6 +102,13 @@ book's King — "the derived King on the nq"), 29523.25 → QQQ 718, 29445.49 �
 "7658 — 100%" with "7650 — 58%" was a single-ruler list from a different window (the chart was not on FRONT then). The
 panel's `futDerFrontList` does this resolution; `__gptsDebug.futDerRows(sym)` prints it.
 
+**(v15.92) A BOOK'S OWN KING FROM ITS derived[] ENTRY.** `futDerBookKing('NQ1', ['NDXP','NDX'])` reads the NDXP book's own row
+list (`derived[i].levels[last].l[]`, top-N by the app's `nodes=` — 5 on his chart) and takes the largest |v| row as the book's
+King: its `k` is already the NQ price by Skylit's ratio (29355.41 → strike 29330 = k / 1.00087 on the 5-grid), its polarity
+`net` / `d`. NDXP (the weeklies — the SPXW analog) before NDX (the monthly): both carry one ratio, and the front window's
+0DTE rows live in NDXP. That is the file's **NDX KING**; the merged slice is no longer needed for it. The self-fetched NQ1
+payload (exp_mode=current, exp_count=1) is FRONT by construction; the app's own NQ1 request follows his selector.
+
 **PROJECTION (beta) = "Forward-projected GEX zones past the last candle"** (its own toggle, sub-panel
 "Projection & Label Opacity", horizon pill "3 Days" on his 3-minute chart — `projectionHorizon:"auto"`
 follows the chart timeframe; "the projection always uses rolling expiration buckets"). The algorithm, read

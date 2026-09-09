@@ -21,6 +21,15 @@ Verified against the live page 2026-08-23 (`insiderfinance.io/gamma-exposure/SPX
 **The chain is the valuable part.** Their header gives ~9 numbers; the embedded payload gives the whole
 book and lets us compute any window we like.
 
+**(v15.92) THE QQQ CHAIN FEEDS THE NQ WALLS.** The IRT file's `CW0 / PW0` on the NQ symbol are the QQQ chain's `dte0.lv.cr / ps`
+(QQQ strikes — 721 / 714 on 2026-09-09) placed on NQ by Skylit's QQQ ratio from the NQ1 payload (the same conversion the QQQ
+KING row gets), the same window rule as the SPX walls (0DTE, no all-expiry fallback), the same stale rule (`IF_STALE_MIN`),
+plus a scale check against the chain's own `spot` (±15%) — this file's v14.97 lesson: their payload can carry strikes on one
+scale and a spot on another. Read straight off `ifChain('QQQ')`: `ifLadder('QQQ')` needs a QQQ underlying price the panel
+does not hold on an ES chart ("no underlying price"). NDX is NOT fetched (SYMS = SPX, QQQ); his word would add it (both
+Tampermonkey links). ⚠ The same four-bug rule applies to the NQ walls: a QQQ strike × 41 is NOT an NDX strike × 1.0009 —
+never compare the NQ wall (QQQ book) with NDX KING (NDX book) as if they were one book's numbers.
+
 ---
 
 ## 2. THE PAYLOAD SHAPE (verified live)

@@ -46,7 +46,7 @@ ok(/@version\s+15\.(8[3-9]|9\d)/.test(src) && /var GPTS_VERSION='15\.(8[3-9]|9\d
   global.emBand=()=>({ ok:true, now:7700, nowLive:7700, scaleUsed:10.0268 }); global.ladderKings=()=>[];
   global.ES_RATIO=10.05; global.NQ_RATIO=41.36; global.FEED_STALE_MS=12000;
   var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
-  global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv', nqOn:true, nqSym:'ENQU26', nqRatio:41.9 } };
+  global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv', nqOn:true, nqSym:'ENQU26', nqRatio:41.9, lines:'all' } };   // (v15.92) every family — Kings + walls is test_v1592
   global.FUTMODE={ fam:'ES', r:10.0268, live:true }; global.ctTodayStr=()=>'2026-09-08';
   const IFL_ROWS=[{id:'CR0', k:7750, disp:7755.04, und:773.2},{id:'PS0', k:7650, disp:7654.97, und:763.2}];
   global.ifLadder=(sym)=>({ dispScale:1.00065, undScale:0.0998, rows:IFL_ROWS, err:null, srcSym:(sym==='QQQ'?'QQQ':'SPX') });

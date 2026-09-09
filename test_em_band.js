@@ -1686,7 +1686,7 @@ eval(ex('emBand')); eval(ex('emBandRaw'));;
     opt = opt || {};
     var IRT_HEADER='HDR';
     var IRT_COLORS={king:1,gate:2,ceil:3,flr:4,neg:5,deriv:6,ns:7,pb:8,mag:9,brk:10,accp:11,sply:12,splp:13,neut:14};
-    var CFG={ irt:{futSym:'EPU26', etfSym:'', nqOn:false}, nodeThresh:20 };
+    var CFG={ irt:{futSym:'EPU26', etfSym:'', nqOn:false, lines:'all'}, nodeThresh:20 };   // (v15.92) the fixture pins every family
     var FEED_STALE_MS=12000;
     var FUTMODE={ fam:'ES', live:true };
     var irtRatio=function(){ return {r:r, live:true, src:'live'}; };

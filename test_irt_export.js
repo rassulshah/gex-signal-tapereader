@@ -26,7 +26,7 @@ global.ladderKings=()=>[{at:7727.75,book:'SPXW'},{at:7691.25,book:'SPY'}].concat
 global.ES_RATIO=10.05; global.NQ_RATIO=41.36; global.FEED_STALE_MS=12000;
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
 global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv',
-                                  nqOn:true, nqSym:'ENQU26', nqRatio:41.9 } };
+                                  nqOn:true, nqSym:'ENQU26', nqRatio:41.9, lines:'all' } };   // (v15.92) this file pins EVERY family; Kings + walls is test_v1592
 global.FUTMODE={ fam:'ES', r:10.0538, live:true };
 global.ctTodayStr=()=>'2026-08-27';
 
@@ -126,7 +126,7 @@ ok(/QQQ KING/.test(kq) && !/100%/.test(kq),
    '4a QQQ KING present on ENQU26, and the redundant 100% is gone (operator, 2026-08-28)');
 ok(/^ENQU26,27235\.000000,/.test(kq), '4b QQQ 650 × 41.9 (manual-chain ratio) on the 0.25 tick', kq);
 ok(/ ~/.test(kq.split(',')[2]), '4c ...wearing ~ (ratio not measured live)', kq.split(',')[2]);
-ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown wears the full purple', kq.split(',')[3]);
+ok(kq.split(',')[3]===String((205<<16)+(180<<8)+250) && kq.split(',')[4]==='2', '4d a negative QQQ crown wears the LIGHTER purple, width 2 (v15.92: the ETF book\'s King, as SPY\'s on ES; the full purple is NDX KING\'s)', [kq.split(',')[3], kq.split(',')[4]]);
 { global.FUTMODE={ fam:'NQ', r:41.191, live:true };
   const Bq=irtBuildCsv(); const k2=Bq.csv.split('\r\n').find(l=>/QQQ KING/.test(l));
   ok(k2 && !/ ~/.test(k2.split(',')[2]) && /^ENQU26,26774\.250000,/.test(k2), '4e on a live NQ chart the ratio is MEASURED — no ~ (v14.13 chain intact)', k2);

@@ -46,7 +46,7 @@ _Generated from `tools/plan-seed.py` (the same data the ⚙ Architecture tab ren
 ### InsiderFinance (the second book — STRUCTURE)
 
 - **how:** the companion, GM_xmlhttpRequest to insiderfinance.io/gamma-exposure, every 5 min
-- **what:** the SPX / SPY / QQQ option chains (open interest × gamma per strike) in three windows — dte0 · toFri · all — and the levels the panel names: CW / PW (call and put walls), CW0 / PW0 (0DTE walls), FLIP, Mag / HVL, the expected-move band (emBand) that the ladder's scale is built on (ifLadder: dispScale, px, undPx)
+- **what:** the SPX / SPY / QQQ option chains (open interest × gamma per strike) in three windows — dte0 · toFri · all — and the levels the panel names: CW / PW (call and put walls), CW0 / PW0 (0DTE walls), FLIP, Mag / HVL, the expected-move band (emBand) that the ladder's scale is built on (ifLadder: dispScale, px, undPx); (v15.92) the QQQ chain's 0DTE walls are the IRT file's CW0 / PW0 on the NQ symbol, at Skylit's QQQ ratio
 - **keys / functions:** gpts_if_chain_v1 → ifChain() · ifLadder() · gLevels()
 - **notes:** STOCK, refreshed once a day at the source; never averaged with Skylit's FLOW; every number carries its book, window and scale (INSIDERFINANCE.md — four phantom bugs came from mixing them)
 

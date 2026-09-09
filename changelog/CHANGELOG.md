@@ -1,3 +1,54 @@
+## v15.92 — KINGS + WALLS ("there are way too many levels on my irt charts") · NDX KING BY NAME · THE NQ WALLS · THE SHADE SAYS THE BOOK ON BOTH CHARTS
+
+> Operator, 2026-09-09: **"i realize you are tracking the kings, but there are way too many levels on my irt charts. i want
+> to reduce it to kings along with the put and call wall only for both the ES and NQ. you can continue your study."** —
+> after, on the D rows: **"why not just have NDX King as the label and its gamma levels could just be XG2 etc. similar to
+> what we are doing for ES. i dont see why any king needs to have 100%."** The list, agreed ("ok").
+
+**The file is eight lines.** `EPU26`: **SPXW KING · SPY KING · CW0 · PW0**. `ENQU26`: **QQQ KING · NDX KING · CW0 · PW0**.
+That morning: 7665.25 · 7660.00 · 7930.50 · 7635.25 and 29523.25 · 29355.50 · ~29,650 · ~29,360 — 21 lines the tick
+before, 8 after. This is v14.20's ruling again ("too many levels — step back to only exporting the kings") plus the
+walls; the families he asked back in one by one since (XG2–5, SG2–5, G2–5, FLIP0, the D rows) are **still computed
+and latched every tick** — the panel, the record and the studies keep every level ("you can continue your study") —
+and simply not written while `CFG.irt.lines` is `kw`, the default. **⚙ IRT › Lines: Kings + walls / everything** — one
+click writes every family again exactly as v15.91 did, so a family comes back by name without a build. Each `rows[]`
+entry carries its family (`king · wall · node · flip · d`); the targets loop keeps king + wall when lean; the NQ node and
+D rows are guarded the same way; `n` counts the lines written; the per-family whys say "on the panel, not in the file".
+
+**NDX KING, by name.** The `D-NDX KING +100%` row was the NDX options book's King wearing a rank. `futDerBookKing(NQ1,
+[NDXP, NDX])` reads the NQ1 payload's NDXP book (the weeklies — the SPXW analog; NDX when NDXP is absent): its largest
+|dollars| row IS the King, its `k` is already Skylit's NQ price (29355.41 = strike 29330), its polarity the row's. Bare
+label like every King (v14.73 — "since these are already kings you dont need to mention 100%"), the full gold / purple,
+width 3, FRONT payload first and the freshest-any second, **held day-scoped under `NDX`** like the other Kings (v14.74),
+`IRT_LAST.ndxWhy` says live / held / why not. In everything-mode the D list dedupes against it, so D-NDX KING no longer
+appears (D-NDX2 · D-NDX3 do).
+
+**The NQ walls.** NQ never had walls in the file. The companion fetches two chains (SPX and QQQ); the QQQ chain's 0DTE
+walls (721 / 714 that hour, their `dte0.lv.cr / ps`) are placed on NQ by `nqPx` — Skylit's QQQ ratio from the NQ1
+payload, the ratio chain with `~` otherwise — the SAME conversion the QQQ KING row gets. Same window as the ES walls
+(0DTE, no all-expiry fallback — DECISIONS 2026-08-28), same colours (call RED, put GREEN, width 2), same stale rule
+(`IF_STALE_MIN`), plus a scale check against their own spot (v14.97's lesson). Read straight off `ifChain('QQQ')`:
+`ifLadder('QQQ')` needs a QQQ underlying price the panel does not hold on an ES chart. No hold — the ES walls have none.
+
+**The shade says the book, on both charts.** The index book's King full gold / purple, width 3 (SPXW on ES, NDX on NQ);
+the ETF book's King the lighter pair, width 2 (SPY on ES — and now **QQQ on NQ**, the one visible change to a line he
+already had; offered, agreed).
+
+**The 7635 put wall (his question).** Not an error: PW0 is InsiderFinance's **0DTE** put wall, SPX 7630 that hour (the
+to-Friday wall the same, the all-expiry wall 7500 — the number their page header shows), written at Skylit's SPXW ratio:
+7630 × 1.0006963 = 7635.31 → 7635.25 on the tick, the same +5 basis the SPXW King gets. The 7600 he saw on their site
+matched none of the three windows at the time of reading; their walls move during the day.
+
+**Tests.** `test_v1592.js` 53 (futDerBookKing: the NDXP King at 29355.41, the ETF grid, the source order, front-then-any,
+both stale, no payload, no book, the tie; the eight-line file on the 09-09 numbers, no node / flip / D row anywhere, the
+prices and colours of every line, the whys, the latches still filling, NDX KING held then absent-with-why, the NQ walls
+refused stale / scale-checked / absent-said, everything-mode 13 + 8 with the D dedupe against NDX KING, back to eight, a
+config without the key) · **9/9 mutants** (lean ignored, NDX before NDXP, no stale rule, QQQ KING full gold, NDX never
+latched, no scale check, NQ G rows written lean, lines not merged back, a % on NDX KING) · re-pinned: test_irt_export /
+test_v1581 / test_v1583 / test_em_band to everything-mode (that is what they pin), test_v1576 1j, test_v1580 6b,
+test_v1590 1p, test_v1591 0a / 5a, the three version pins. The roadmap re-sequenced: **15.92 this, 15.93 the tap
+record, 15.94 seasonality**, the rest +1. Companion unchanged (v1.19).
+
 ## v15.91 — THE D ROWS BY THEIR BOOK, DEDUPED ("i'll go with your recommendation") · THE "DERIVED KING" ON NQ IS THE NDX BOOK'S · THE NIGHTLY APPENDS FIRST
 
 > Operator, 2026-09-09, on the review of v15.90: **"i'll go with your recommendation. also i am seeing a derived king on the

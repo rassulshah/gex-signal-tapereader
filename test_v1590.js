@@ -52,7 +52,7 @@ ok(/@version\s+15\.9\d/.test(src) && /var GPTS_VERSION='15\.9\d';/.test(src), '0
   ok(/if\(R2\.dOnly && !\(T2\.mul>1\)\) return;/.test(csv), '1m a merged ES row is never written for an ETF target (no ETF-space price exists)');
   ok(/irtGLatch\(ds\.map\(function\(g\)\{ return \{ k:g\.k, lbl:g\.lbl, spx:g\.k, pct:g\.pct \}; \}\), 'DE'\)/.test(csv) && /HD=irtGHeld\('DE'\)/.test(csv) && /\^D-\[A-Z\]\+ KING\$\|\^D-\[A-Z\]\+\[2-9\]\$\|\^D\[1-9\]\$/.test(ex('irtGHeld')), '1n held day-scoped under DE like the G rows; the hold accepts the D labels (v15.91: D-<BOOK> KING · D-<BOOK>n · Dn)');
   ok(/var DQ=futDerFrontList\(SKY_NQ\);/.test(csv) && /out\.push\(irtCsvRow\(nqSym, g\.k, g\.lbl\+pctTag\(g\.pct\), futDerCol\(g, isK\), \(isK\?2:1\), 0\)\); nqN\+\+;/.test(csv) && /irtGHeld\('DQ'\)/.test(csv) && /var keptQ=futDerDedupe\(DQ\.rows\.slice\(0,5\), haveQ\);/.test(csv), '1o the NQ chart gets its own D rows from NQ1\'s front list, deduped against the QQQ rows, held under DQ');
-  ok(/IRT_LAST\.dWhy=dWhy/.test(csv) && /IRT_LAST\.dqWhy=dqWhy/.test(csv), '1p the preview says why (dWhy / dqWhy)');
+  ok(/IRT_LAST\.dWhy=\(lean\?[^;]*\)\+dWhy/.test(csv) && /IRT_LAST\.dqWhy=dqWhy/.test(csv), '1p the preview says why (dWhy / dqWhy; v15.92: dWhy prefixed when the file is Kings + walls)');
   ok(/window\.__gptsDebug\.futDerRows=function\(sym\)/.test(src) && /o\.frontSlices=/.test(src) && /o\.frontExpirations=/.test(src), '1q __gptsDebug.futDerRows(sym): the payload\'s rows, slices and expirations — the numbers to hold against his chart');
   ok(/futDerIsFront\(j, viaSelf\)/.test(ex('onFeed')) && /LASTFUTDER_FRONT\[sym\]=\{ j:j, ts:Date\.now\(\) \}/.test(ex('onFeed')), '1r the observer keeps the front payload beside the freshest-any one');
 }

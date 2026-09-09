@@ -140,12 +140,12 @@ def corpus_counts(root=ROOT):
     put('ledger', n_led, s_led, f_led, 'the deflection ledger (±0.50 SPY wobbles) — the tap record replaces it at his scale')
     put('kingroll', n_kr, s_kr, f_kr, 'dir.kingRoll rows with an outcome (per bar, not independent rolls)')
     put('gate', n_gate, s_gate, f_gate, 'gateHour rows with an outcome')
-    # the tap record: not built (v15.91) — a file under data/taps/ will be counted here the day it exists
+    # the tap record: not built (v15.93, after Kings + walls took v15.92) — a file under data/taps/ will be counted here the day it exists
     taps = sorted(glob.glob(os.path.join(root, 'data', 'taps', '20??-??-??.json')))
     n_tap = 0
     for pth in taps:
         t = _jload(pth); n_tap += len(t.get('taps') or []) if isinstance(t, dict) else (len(t) if isinstance(t, list) else 0)
-    put('tap', n_tap, len(taps) or None, (os.path.basename(taps[0])[:10] if taps else None), 'THE TAP RECORD — not recorded yet (v15.91)' if not taps else 'data/taps/<day>.json')
+    put('tap', n_tap, len(taps) or None, (os.path.basename(taps[0])[:10] if taps else None), 'THE TAP RECORD — not recorded yet (v15.93)' if not taps else 'data/taps/<day>.json')
     put('vix', 0, None, None, '^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here')
     put('calendar', 0, None, None, 'ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet')
     put('live', 0, None, None, 'live only — no corpus')

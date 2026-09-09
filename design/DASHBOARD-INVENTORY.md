@@ -11,6 +11,22 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0z · v15.92 — the IRT file is eight lines: Kings + walls on both symbols; NDX KING by name; the NQ walls; ⚙ IRT › Lines (2026-09-09)
+
+**The IRT file (not the face):** `EPU26` **SPXW KING · SPY KING · CW0 · PW0** — `ENQU26` **QQQ KING · NDX KING · CW0 · PW0**.
+Nothing else, by his ruling (*"there are way too many levels on my irt charts. i want to reduce it to kings along with the put
+and call wall only for both the ES and NQ. you can continue your study"*). The node rows (XG2–5, SG2–5, G2–5), FLIP0 and the
+D rows are still computed and latched every tick and not written; **⚙ IRT › Lines: Kings + walls / everything** writes them
+again by name. **NDX KING** = the NDX options book's own King (the NQ1 payload's NDXP book at Skylit's price), bare label,
+full gold / purple, width 3, held day-scoped — the D-NDX KING row under its own name (*"why not just have NDX King as the
+label … i dont see why any king needs to have 100%"*). **The NQ walls** = InsiderFinance's QQQ 0DTE walls (721 / 714 that
+hour) at Skylit's QQQ ratio, red / green, width 2 — NQ never had walls in the file. **QQQ KING** takes the lighter pair,
+width 2 (the ETF book, as SPY KING on ES; NDX KING the full shade, as SPXW KING). Measured: descriptive (each book's King at
+Skylit's price; their walls at Skylit's ratio). **The gear's IRT status line** adds `, Kings + walls` / `, every family` to
+the count and `· NDX KING live · NDXP 29330 at 29355.41 (front payload, 12 s old)` / `held Nm` / why not, and `· NQ walls 0DTE
+from the QQQ chain (CW0 721, PW0 714, 9m old)` / `refused` / why not. Probe: `__gptsDebug.irt()` — `preview` (8 lines),
+`last.lines`, `last.esKept`, `last.ndxWhy`, `last.nqIfWhy`, `last.gWhy` ("on the panel, not in the file (Kings + walls) — …").
+
 ## 0y · v15.91 — the IRT file: the D rows named by book, nothing drawn twice; D-NDX KING on the NQ chart (2026-09-09)
 
 **The IRT file (not the face):** a merged-list row is written as **D-<BOOK> KING / D-<BOOK>n** (the book from Skylit's own

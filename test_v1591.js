@@ -5,7 +5,7 @@ const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
 let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);if(!m)throw new Error('no fn '+n);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 
-ok(/@version\s+15\.91/.test(src) && /var GPTS_VERSION='15\.91';/.test(src), '0a v15.91 in both spots');
+ok(/@version\s+15\.9\d/.test(src) && /var GPTS_VERSION='15\.9\d';/.test(src), '0a v15.91 or later in both spots');
 
 // ---------- 1. the source of every row, from Skylit's ratios ----------
 {
@@ -78,8 +78,8 @@ ok(/@version\s+15\.91/.test(src) && /var GPTS_VERSION='15\.91';/.test(src), '0a 
 // ---------- 5. the records ----------
 {
   const P=JSON.parse(fs.readFileSync('./learning/plan.json','utf8'));
-  const nx=(P.roadmap||[]).find(r=>r.status==='next'); const r90=(P.roadmap||[]).find(r=>r.v==='15.90');
-  ok(nx && nx.v==='15.91' && /D-<BOOK>|by their book|deduped/i.test(nx.title) && r90 && r90.status==='shipped' && (P.roadmap||[]).find(r=>r.v==='15.92' && /TAP RECORD/.test(r.title)), '5a the plan: 15.90 shipped, 15.91 this (next), 15.92 the tap record', nx&&[nx.v, nx.status]);
+  const r91=(P.roadmap||[]).find(r=>r.v==='15.91'); const r90=(P.roadmap||[]).find(r=>r.v==='15.90');
+  ok(r91 && /D-<BOOK>|by their book|deduped/i.test(r91.title) && r90 && r90.status==='shipped' && (P.roadmap||[]).find(r=>r.v>='15.92' && /TAP RECORD/.test(r.title)), '5a the plan: 15.90 shipped, 15.91 the D rows by their book, the tap record still on the roadmap after it (v15.92 re-sequenced it: Kings + walls came first)', r91&&[r91.v, r91.status]);
   ok(/^var PLAN_SEED=/m.test(src) && JSON.stringify(JSON.parse(src.match(/^var PLAN_SEED=(.*);$/m)[1]))===JSON.stringify(P), '5b PLAN_SEED equals the file');
   const cl=fs.readFileSync('./changelog/CHANGELOG.md','utf8'); ok(/^## v15\.91 /m.test(cl) && /NDX/.test(cl.split('## v15.90')[0]), '5c CHANGELOG v15.91 names the NDX book');
   const le=fs.readFileSync('./session-state/LESSONS.md','utf8'); ok(/^### v15\.91 /m.test(le), '5d LESSONS carries v15.91');
