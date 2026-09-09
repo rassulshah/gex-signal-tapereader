@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-09 · v15.90 · session `f9c89c64` — THE LEARNING PROCESS, HARDENED ("yes, fix everything") + D-KING · D2..D5 in the IRT file ("we need to match atlas … FRONT")
+## 2026-09-09 · v15.91 · session `f9c89c64` — THE D ROWS BY THEIR BOOK, DEDUPED ("i'll go with your recommendation") · the NDX book on his NQ chart · the nightly appends first
 
-_239 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_246 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -3138,8 +3138,128 @@ Now the two process docs.
 Now the records — CHANGELOG, LESSONS, DECISIONS, FINDINGS, INVENTORY, DATA-ARCHITECTURE, config, resume note, chat history.
 Now the resume note (head rewritten, snapshot kept) and the chat history.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (13:16):** Now the real render — the tab through the panel's own CSS.
+Now LESSONS, DECISIONS, INVENTORY, DATA-ARCHITECTURE and the config.
+Records done; now the full suite.
+**v15.89 — the 🗄 Data tab** is built, on mockup B, with the ⑦ RECOMMENDATIONS section you asked for. The installer is the file card above (`installv1589.bat`, 3.5 MB); I couldn't reach your computer over the link right now, so download and double-click it.
+
+1. Run `installv1589.bat` — it extracts, commits and pushes.
+2. Tampermonkey — only the panel changed: [Tapereader v15.89](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js). The companion stays at v1.19 — do not reinstall it.
+3. Wait ~5 minutes (the raw CDN cache), click the link, then reload the Atlas tab — the footer must say v15.89.
+4. Open **🗄 Data** (between Dashboard and 📊 Analysis). What to expect: ① 19 cells (08-17 → 09-08) with the tape row green on 09-07 and 09-08; ② Skylit's row counting today's bars; ③ your localStorage ≈ 3.4 / 10 MB and the IndexedDB counts; ⑤ the green rows are what Yahoo can fill — they are **R-33 (daily bars), R-34 (hourly backfill), R-35 (^VIX1D)** on the Rec tab, proposed, nothing fetched until your ✓; ⑦ lists those three first.
+
+Two things found while building, both recorded: your machine's 07:55 nightly (after the v15.88 install) had already put a second machine row on Rec — **RN-hour.2-held**, H2 09:30–10:30 held 23 of 30 — that is one session's classes, not a rate to act on yet; and the cloud's copy of the repo was missing the 09-07 day file and the tape folders your sync had pushed (the guard only compared files it already had) — fixed, so the tab's count is right today and the nightly re-counts it every run.
+
+✅ SAVE DONE — commit `1993adb`: CHANGELOG, LESSON …[trimmed]
+
+**OPERATOR:**
+> did you add it to my folder so i can install
+
+**me (13:56):** No — I tried again just now and I still can't reach your computer from this session, so nothing was written into `C:\Dev\gex-signal-tapereader`. The file is only in the chat for the moment.
+
+Two ways to get it there:
+
+1. **From the Cowork desktop app:** open this task there and choose **Link to this computer** (or start a new task with your computer selected and say "continue gex"). Once the link is up, tell me and I'll write `installv1589.bat` straight into `C:\Dev\gex-signal-tapereader` and you double-click it.
+2. **Without the link:** download `installv1589.bat` from the file card above (in the desktop app, not the Chrome side panel — the side panel cannot download a .bat), save it into `C:\Dev\gex-signal-tapereader\`, and double-click it. It extracts, commits and pushes on its own.
+
+After either one: wait ~5 minutes, click [Tapereader v15.89](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) in Tampermonkey, then reload the Atlas tab — the footer must say v15.89. The companion stays at v1.19.
+
+**OPERATOR:**
+> Im looking for you to hardent he learning process.  Did you integrate the data tab into the learning process (ie data, analysis , testing , learning, recommendations  etc. )   I want you to make sure the entire learning process makes sense and fine tune it. also consider if there are any pieces of it that dont make sense and are useless like studies that are useless or pointless. Basically ensure that it is refined,  targetted and usefull so that the learning process from data collection , analysis, testing and all the other steps are on point with my objectives/purpose , which you know.   Also did you update the architecture and the road map .   is everything upto date.
+
+**me (14:10):** Straight answers first, then the audit, then one thing to decide.
+
+**Your questions.** The Data tab is only half-integrated. It reads the record (link 1) and the pipeline's clock, its repo-side counts come from the nightly, and its ⑤ produced three Rec rows — but nothing downstream consumes the count: a study waiting on a corpus does not know from it how much it has or when it can read. And `design/DATA-ANALYSIS-PROCESS.md` §5 still says "eight tabs — no ninth"; I built the ninth on your instruction without changing the structure file. Architecture and roadmap: yes, both regenerated in v15.89 (the Data tab's row, the roadmap re-sequenced 15.89 → 15.91). Not up to date: `design/PROCESS.md` — its nightly step list stops at v15.68 (no corpus append, no base rates, no coverage) and its §4 numbers are v15.63's ("book corpus 9 sessions") — and that §5.
+
+**The audit — what does not make sense today, with the numbers.**
+
+1. **The sweep corpus is frozen on 08-21.** `study-sweeps.py` reads only the vendor file; the base-rate study reads the vendor plus the couriered CSVs (295). So every H2 rate on Analysis is 284 sessions and stays 284, and H7 on the register ("reads at 60 on sessions after 08-21") has n = 0 after 13 sessions and can never read. A bug in link 2.
+2. **Withdrawn numbers are on the Analysis tab right now.** H2.4 still says "first 30 min +5 to +15pp", H2.5 "40% n=86" — F-23 withdrew both yesterday (21% vs 18%; 35% n=94). For the 35 scripted studies the review hand-types the sentence; the machine rewrites the file and never the sentence.
+3. **Thirteen studies ask one question and got one answer** — "does a sweep of <named level> print the extreme?": ONL, ONH, PDL, PDH, IBL, IBH, PDC, POC/VAH/VAL, PMH/PML, PWH/PWL, OR5/OR15, VWAP bands, the developing profile, LHI/LLO, …[trimmed]
+
+**OPERATOR:**
+> yes,  fix evertyhing and make sure it all makes sense and is integrated and working together and aligned to my objectives/purpose. make sure you fix any and all issues.
+> why do i not see the 7658  in irt .. are you exporting it
+> 
+> _[sent while I was working — a queued message]_
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (14:20):** Short answer: no — the 7658 is not in the file, and it is not one of the rows the export is built from.
+
+What the export carries right now (I read it off your panel a minute ago): **SPXW KING 7656.00** — the 0DTE SPXW King, strike 7650, at Skylit's own ES1 conversion (ratio 1.000776) — plus XG2–XG5, **SPY KING 7650.00** (763 × 10.0256), SG2–SG5, and the rest of the 18 rows. Your IRT screenshot shows exactly those (SPXW KING, XG3, SG3, SG4, ONLO); the magenta **DVPOC 7658** there is IRT's own developing-POC indicator, not ours.
+
+The **"7658 — 100%"** on Skylit's ES1 chart is the *Derived* layer's label — the merged projection of the three source books (SPY, SPXW, SPX) onto ES, with 100% being the largest node of that merged list in the chart's window (your ES1 chart is requesting two windows, 0DTE and next-2-expirations). It sits two points above where Skylit's own derived[] row puts the SPXW King (7655.93), so it is either the merged list's bucket or a different window's King — I can't tell which from here, because the tool I have won't let me read that payload. Since v15.81 the export prints each book's *own* rows at Skylit's ES prices; it does not carry the Derived layer's merged rows at all. So the one label you look at most on the ES1 chart is the one the file doesn't have.
+
+Given "match Skylit always", I'd add the chart's Derived rows to the file as their own lines (**D-KING 7658 100%, D2 … D5**, labelled so they are never confused with the SPXW/SPY Kings), read from the same ES1 payload the panel already fetches, in the window the chart draws — with a debug hook so we can confirm the label matches the chart before it ships. Do you want that in this build (v15.90, the hardening)?
+
+Also: your footer already reads v15.89 with the 🗄 Data tab in place, so the install w …[trimmed]
+
+**OPERATOR:**
+> we need to match atlas .  are you saying that the level was a derived level
+
+**me (14:29):** Yes. On the ES1 chart *every* level is a derived level — ES has no option book of its own, so everything Atlas draws there is Skylit projecting the SPY and SPXW books onto ES at its live ratio. The question is which projection.
+
+What the file carries is each book's King converted one strike at a time: this minute **SPXW KING 7655.50** (SPXW 7650 × Skylit's ratio 1.000710) and **SPY KING 7650.00** (763 × 10.0264). Atlas's "7658 — 100%" is its *merged* Derived list — the three source books combined into one ES node list for the window the chart is on — and its top node lands at 7658, not at either King's converted price. The 7650 / 7660 / 7670 labels beside it are the SPY-derived 763 / 764 / 765 rows. So the file has the pieces Atlas is built from, but not the list Atlas actually draws — and that list is what you trade off.
+
+To match Atlas I'll export the merged Derived list itself — Skylit's rows, Skylit's prices, Skylit's percentages, labelled **D-KING 7658 100%, D2 … D5** so they can never be confused with the SPXW / SPY King rows — from the same ES1 payload the panel already receives every minute, with a debug hook that prints the payload's rows so I can verify the numbers against your chart before it ships. One thing I need from you: what does the expiration selector on your ES1 chart say right now (0DTE, or next 2)? The chart is requesting both windows and I have to export the one you are looking at.
+
+**OPERATOR:**
+> FRONT
+
+**me (14:32):** Now the D rows — the observer keeps the FRONT payload, a reader ranks Atlas's merged list, the export writes D-KING · D2…D5 on both futures symbols, with a hook to verify against the chart.
+Now the sweep study reads the vendor file plus every CSV, with the gap rule for the prior-day levels.
+Now the results.py selftest for the new machinery, then test_v1590 §2–§3.
+Now test_v1590 §2–§3 (the corpus append, the registry) and the run.py wiring pins.
+Now the two process docs.
+Now the records — CHANGELOG, LESSONS, DECISIONS, FINDINGS, INVENTORY, DATA-ARCHITECTURE, config, resume note, chat history.
+Now the resume note (head rewritten, snapshot kept) and the chat history.
+**v15.90 is built and the installer is in your folder** — `C:\Dev\gex-signal-tapereader\installv1590.bat` (2.9 MB; also on the file card above).
+
+1. Double-click `installv1590.bat` — it extracts, commits and pushes.
+2. Tampermonkey — only the panel changed: [Tapereader v15.90](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js). The companion stays at v1.19.
+3. Wait ~5 minutes, click the link, reload the Atlas tab — the footer must say v15.90.
+4. Check the 7658: in the console, `__gptsDebug.futDerRows('ES1')` — `front.rows[0].k` must equal the "100%" label on your ES1 chart, and IRT should now draw **D-KING** on it with **D2…D5** below (white and grey, beside the SPXW/SPY rows). If the number disagrees with the chart, tell me what the chart shows and I'll fix it from the hook's output.
+
+What changed, in your terms:
+
+- **Every issue from the audit is fixed.** The sweep corpus appends nightly now (it had stopped on 08-21; H7 could never read). The registry is written by the machine: every study says what it needs, the nightly counts every corpus and mark …[trimmed]
+
+**OPERATOR:**
+> review
+
+**me (15:32):** Reviewed on your live panel. Here is what I found.
+
+**Working as built (v15.90 is on your tab):**
+
+- The registry landed: **184 studies — WAITING 111 · READY 15 · READ 15 · THIN 12 · SHIPPED 13 · REGISTERED 10 · REFUSED 3 · NULL 2 · CUT 2 · OPEN 1**. No OPEN / READ NEXT rows without a machine status.
+- Your machine's nightly already re-ran with the new code (10:25 CT): the log says **H5 BLOCKED** (the join, 0 of 3 extremes) and **H7 WITHDRAWN**, and it carries the feature outcomes. The coverage file in your panel has all 11 corpus counts.
+- The D rows are live on both symbols, from the FRONT slice, 12 s old.
+
+**Two things the review caught:**
+
+1. **Your machine's sweep corpus still reads 284, not 290.** Cause: in the nightly the sweep tables were computed *before* the corpus append wrote the night files, so on the first run they weren't there yet. Fixed here (the append now runs before anything reads a corpus; pinned by a test) — a tools-only change, no panel version needed. Your next nightly will read 290.
+
+2. **The D rows duplicate lines you already have.** I held the FRONT list against your chart just now — prices match 5 for 5 (7665 · 7655 · 7650 · 7640 · 7620) — but on FRONT Atlas's list is simply each book's own top rows, so every D row lands on a line the file already draws: D-KING 7650 = SPY KING, D2 7665.25 = SPXW KING, D3 7655.25 = XG2, D4 7640 = SG2, D5 7670.25 = XG4. Two lines per level, and "D-KING" is a coin-flip label because on FRONT both books' Kings are 100%. The 7658 this morning was a *single-ruler* merged list (one 100%, 7650 at 58%) — that is not what FRONT produces, so your chart was on a different window then; worth a glance at the selector next time you see a level the file lacks.
+
+**My recommendation for #2, one decision:** keep the D rows but …[trimmed]
+
+**OPERATOR:**
+> i'll go with your recommendation.  also i am seeing a derived king on the nq . what is i t?
+
+**me (15:42):** Now the tests — test_v1590's D-row pins move to the new labels, and a test_v1591 for the source inference and the dedupe.
+Now the records for v15.91 (the plan, CHANGELOG, LESSONS, DECISIONS, config, the resume note, chat history) and the ship.
+
 ### DECISIONS
 
+- **The D rows by their book, deduped (2026-09-09; v15.91):** after the live review of v15.90 (the D rows doubled every
+  level on FRONT; his sweep corpus read 284 because the nightly's sweep step ran before the append) — *"i'll go with your
+  recommendation. also i am seeing a derived king on the nq. what is it?"* → each merged row carries the book Skylit's
+  ratio resolves (D-SPX KING · D-NDX2 · D-QQQ3), written only when no line is already within half a point; the "derived
+  King" on NQ is the NDX options book's King projected onto NQ (29355 / 1.00087 = 29330), which the file had never carried.
 - **The learning process, hardened (2026-09-09; v15.90):** *"Im looking for you to harden the learning process. Did you
   integrate the data tab into the learning process … make sure the entire learning process makes sense and fine tune it
   … studies that are useless or pointless … refined, targetted and usefull … on point with my objectives/purpose … did
@@ -3475,6 +3595,15 @@ Now the resume note (head rewritten, snapshot kept) and the chat history.
 
 ### SHIPPED
 
+**v15.91** (panel + tools + installer; companion unchanged at v1.19) — `futDerFrontList` resolves each merged row's book
+from `derived[].ratio` (SPY / QQQ whole strikes, SPX / NDX multiples of 5; SPXW→SPX, NDXP→NDX; Dn when unresolved) and
+labels D-<BOOK> KING / D-<BOOK>n; `futDerDedupe` (half a point / 0.012% of price) against the ES rows' prices and the NQ
+rows already written; `futDerCol` (the book's polarity shades); the holds accept the labels; the previews say when nothing
+survives; `run.py` runs `refresh_futures` before the judges and the sweep tables (the coverage last). Tests: `test_v1591.js`
+26 · 7/7 mutants; `test_v1590` re-pinned. Records: CHANGELOG, LESSONS v15.91, DECISIONS, INVENTORY §0y, SKYLIT-FEEDS (the
+merged slice resolved), the plan (15.91 next · 15.92 the tap record · 15.93 seasonality), items / LOCKED-ITEMS → v15.92,
+`.gex-config.json` 2026-09-09e, the resume note (+ the v15.90 snapshot), this file.
+
 **v15.90** (panel + tools + installer; companion unchanged at v1.19) — (1) `append-futures.py` writes `<day>-night.csv`
 (the night keyed by the session day; no stubs), `study-sweeps.py` `sources()` / `load_all(paths)` / the four-day gap rule /
 the bounded week fallback / `corpus.sources`, `study-hodlod` skips the nights, `run.py` refreshes SWEEPS.json from every
@@ -3757,6 +3886,9 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **v15.91 NOT verified live** — at the open: D-NDX KING on the NQ chart at Atlas's NDX 100% label, no D line on QQQ KING /
+  G2–G5, no D line on ES while FRONT; `futDerRows('NQ1').front.rows[0].src==='NDX'`; the sweep corpus 290+ after the nightly.
+- **Next build: v15.92 THE TAP RECORD, element 1** — asked before built.
 - **v15.90 NOT verified live** — at the open: `__gptsDebug.futDerRows('ES1')` front.rows[0].k = the "100%" label on his
   ES1 chart; D-KING on the IRT chart at it; Analysis H2 → H2.L NULL with the machine's table; Testing ② → H7 WITHDRAWN,
   H5 BLOCKED "0 of N extremes"; Data ④ → have · need · ETA; after his machine's nightly the sweep corpus reads 291.
@@ -3937,6 +4069,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+4348a62 v15.90: THE LEARNING PROCESS, HARDENED ("yes, fix everything and make sure it all makes sense and is integrated and working together and aligned to my objectives/purpose") — (1) the sweep corpus appends: the nights → data/futures/<MK>/<day>-night.csv, study-sweeps reads the vendor + every CSV with the four-day gap rule (290 sessions, one more a night; H7 had read n=0 for thirteen sessions) (2) the registry is the machine's output: needs:{corpus,n} on every study, coverage.json counts every corpus, results.py sets WAITING (have/need/ETA) or READY (data on hand, no reader) and composes the scripted sentences from SWEEPS.json nightly (H2.4/H2.5 had quoted withdrawn numbers); the thirteen level-name studies collapsed into H2.L (NULL — 2 of 36 names clear the control: chance); S1.4/S7.3 CUT; H7 WITHDRAWN (F-23); H5 judged by its join (0 of 3 extremes coincide with a ledger tap); D3.3 read from the day files (3) the docs say what runs: nine tabs, the nightly's real steps, PROCESS §4 today, the roadmap re-sequenced (15.91 the tap record) (4) D-KING · D2..D5 — the merged derived list Atlas draws on the futures chart, FRONT window, in the IRT file ("we need to match atlas … FRONT"; the 7658 the file did not carry); AUDIT-2026-09-09.md; FINDINGS F-24; test_v1590 51 · 8/8 + 6/6 mutants; 16 tests re-pinned
 1993adb v15.89: THE 🗄 DATA TAB, before Analysis ("I like B, I also want recommendations section. build") — what we hold (the coverage calendar, a cell per day file, six signals) · the sources live (Skylit · IF · Yahoo · GitHub · the nightly) · the record on this machine (localStorage against its quota, the IDB stores counted) · what the studies are waiting for (by corpus) · the gaps with what Yahoo can fill in green (R-33 daily bars · R-34 hourly · R-35 ^VIX1D, proposed on Rec) · the pipeline's clock · the DATA rows of Rec; read-only, on the panel's own chrome; tools/nightly/coverage.py → learning/coverage.json (the nightly counts the repo; the panel fetches one file); origin-guard fetches his machine's ADDED files (the 09-07 day file, the tape for 09-07/09-08, the 09-07 log were on origin two days and the cloud's count missed them); his machine's 07:55 outputs merged (RN-hour.2-held on Rec — one session's classes); the tap record → v15.90; test_v1589 46 · 9/9 mutants; five tab-set tests re-pinned to nine tabs
 f5b3bb1 mockups: the 🗄 DATA tab (proposed 2026-09-09) — A sources-first, B coverage-calendar-first; tools/mockup-data.py reads every number from the repo and his browser's stores; the resume note carries the open thread
 4e0ee3c v15.88 + companion v1.19: THE AGENDA, BATCHED — AHI · ALO · LHI · LLO at the standard hours ("just use whatever is standard": Asia 17:00–02:00, London 02:00–08:30 CT; LDNH/LDNL renamed to his names, tier 1); the King latch OFF ("match skylit": the rail and the export follow Skylit's crown on the same tick); companion v1.19 ("yes": NQ's full night, the weekly 5-minute bars → PWH/PWL/WPOC drawn, NQ's base rates couriered); the NQ vendor corpus parsed (NQ BASERATES 195 = 188 + Yahoo, the four shared days identical); the hour on every deflection ("i agree i think you should also tag other hours": E005 m1–m4, E006 m1, R-3 in both twins, L7 the hour class); ⓪a PER MARKET ("this build": the NQ chart reads NQ — no NQ E row existed; no baked NQ literal; the measureBarsRaw lexical-sort twin fixed); F-23 (the corpus's ONH/ONL looked ahead — corrected, F-14 partly superseded); v15.87's tick fence one second → an hour (it re-ran every ten minutes on his machine); the harvest over every day file; his machine's 21:35 outputs merged; R-3 · R-29–R-32; test_v1588 63 · 19/19 mutants
@@ -3948,7 +4081,6 @@ f91daa1 records: agenda item 4 answered — the NQ file's QQQ lines stay G2–G5
 17880f7 v15.85: XG2–XG5 · SG2–SG5 — the IRT node lines labelled by book (R-26); the QQQ King on NQ only pinned again on his word; THE TAP RECORD designed on paper (R-25, design/TAP-RECORD.md — nothing built); the top-3 question answered from one day's hand read (34 taps: ranks 1–3 15 of 22, ranks 4–5 3 of 12 with all three breaks); test_v1585 16 · 6/6
 2d1fcb2 v15.84: THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH — the self-fetch pins exp_mode=current&exp_count=1&nodes=500 whatever gex/levels URL came last (the app's three projection windows; the panel's own expiry sets through the same hook), onFeed refuses a multi-expiration payload once a 0DTE book is held (F-22: the recorded node count per bar flipped bands 34–61 times a session since 08-26; the King series survive); test_v1584 28 · 13/13
 2e85e0f v15.83 verified on his panel 14:18 CT — the resume note and the chat history say so
-0c87351 mockups: the v15.83 IRT colour swatch
 ```
 
 ---

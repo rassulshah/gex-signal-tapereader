@@ -817,3 +817,15 @@ exception to one-at-a-time he has granted, and it covered the cuts.
   — beside the per-book rows, never instead of them. His words: *"we need to match atlas"*, *"FRONT"*. What would change
   it: his selector (the export follows the one-expiration payload; a chart on next-2 would need the two-expiration list).
 - **The tap record is v15.91**, asked before built — unchanged by this build.
+
+## 2026-09-09 · v15.91 — the D rows by their book, deduped ("i'll go with your recommendation"); the NDX book on the NQ chart
+
+- **A merged-list row carries the book Skylit's ratio resolves it to** (D-SPX KING · D-NDX2 · D-QQQ3) or a plain Dn — never
+  a rank dressed as a name. What would change it: Skylit adding a `source` to the slice rows (then theirs, not inferred).
+- **A row on a level the file already draws is not written again** (half a point / 0.012% of price). The D rows exist for
+  what Atlas draws that the book rows do not — the NDX book on NQ today; whatever a non-FRONT window would add if he
+  ever switches the selector. His word: *"i'll go with your recommendation"*.
+- **The NDX book is on his NQ chart because Atlas draws it**, not because it was studied: descriptive, a level with its
+  book's own %; nothing in the registry reads it yet (a study of NDX-vs-QQQ deflections is the tap record's business).
+- **The nightly appends before it reads.** Fixed order; a test pins it.
+- **The tap record is v15.92** — unchanged in substance; asked before built.

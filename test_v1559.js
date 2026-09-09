@@ -19,7 +19,7 @@ ok(purpose.indexOf(plan.objective.quote.slice(0,80))>=0,'1b the objective’s qu
 ok(/high of the day and low of day/i.test(plan.objective.quote) && /pullback/i.test(plan.objective.one) && /deflection IS the turning point/i.test(plan.objective.mechanism),'1c the WHAT: HOD/LOD, pullback, the deflection mechanism');
 plan.stages.forEach(sg=>ok(new RegExp('\\b'+sg.id+'\\b').test(process_),'1d PROCESS.md names stage '+sg.n+' '+sg.id));
 ok(plan.stages.length===11 && plan.stages.map(s=>s.n).join(',')==='1,2,3,4,5,6,7,8,9,10,11','1e eleven stages, numbered');
-const docVersions=[...roadmap.matchAll(/^### v(15\.\d+) —/gm)].map(m=>m[1]);
+const docVersions=[...roadmap.matchAll(/^### v(1[56]\.\d+) —/gm)].map(m=>m[1]);   // (v15.91) the plan reaches 16.00
 const planVersions=plan.roadmap.filter(x=>x.status!=='shipped').map(x=>x.v);
 ok(docVersions.length>=6 && docVersions.every(v=>planVersions.indexOf(v)>=0),'1f every roadmap version in ROADMAP.md is in plan.json',{doc:docVersions,plan:planVersions});
 ok(planVersions.every(v=>docVersions.indexOf(v)>=0),'1g …and every unshipped plan item is in ROADMAP.md',{doc:docVersions,plan:planVersions});

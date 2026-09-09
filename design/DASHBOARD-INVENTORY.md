@@ -11,6 +11,15 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0y · v15.91 — the IRT file: the D rows named by book, nothing drawn twice; D-NDX KING on the NQ chart (2026-09-09)
+
+**The IRT file (not the face):** a merged-list row is written as **D-<BOOK> KING / D-<BOOK>n** (the book from Skylit's own
+ratio) or **Dn** (no book resolved), only when no line within half a point is already in the file. On FRONT the ES list is
+the two books' own rows → no ES D line; on NQ **D-NDX KING** (the NDX options book's King projected onto NQ — 29355 that
+morning, a level the file never carried) and its next nodes appear beside QQQ KING and G2–G5. Measured: descriptive (a
+book's own %King at Skylit's price). His words: *"i am seeing a derived king on the nq. what is it?"* · *"i'll go with your
+recommendation"*. Probe: `__gptsDebug.futDerRows('NQ1').front.rows` (k · pct · src · strike · lbl); `__gptsDebug.irt().last.dqWhy`.
+
 ## 0x · v15.90 — the machine's statuses on Analysis; the READY queue on Testing ⑤; ④ on Data from the rows' needs; D-KING · D2..D5 in the IRT file (2026-09-09)
 
 **📊 Analysis:** every study row's status chip is now one of the MACHINE's — WAITING (grey: have / need / an ETA in the ⟳

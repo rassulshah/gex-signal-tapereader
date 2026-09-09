@@ -92,6 +92,16 @@ in three windows (`nodes=5&exp_mode=current&exp_count=1` · `nodes=5&exp_mode=ne
 - The panel's feed observer SEES these payloads (`symbolsSeen().ES1.n` = 195 by 10:20 CT) and drops them as
   non-SPY/QQQ. Nothing reads them yet.
 
+**THE MERGED SLICE, RESOLVED (v15.90 / v15.91, measured 2026-09-09 on his charts).** `snapshot.slices[exp].l[]` rows carry
+`k · v · d · net` and no source; `v` is each book's OWN-KING % (two 100% rows on FRONT: one per book), so Atlas's labels on
+the futures chart are per-book percentages, not one ruler. A row's book is the one whose `derived[].ratio` turns `k` back
+into a strike: **ES1** — 7665.24 / 1.00071 = 7660 (SPXW), 7649.94 / 10.0256 = 763 (SPY), 7655.23 → 7650, 7639.92 → 762,
+7620.21 → 7615; **NQ1** — three books, QQQ (41.11874) and NDXP + NDX (one ratio, 1.00087): 29355.41 → NDX 29330 (the NDX
+book's King — "the derived King on the nq"), 29523.25 → QQQ 718, 29445.49 → NDX 29420, 29441.02 → QQQ 716, 29495.53 → NDX
+29470. On FRONT the ES slice IS the two books' top rows (verified 5 for 5 against the chart's labels); the morning's
+"7658 — 100%" with "7650 — 58%" was a single-ruler list from a different window (the chart was not on FRONT then). The
+panel's `futDerFrontList` does this resolution; `__gptsDebug.futDerRows(sym)` prints it.
+
 **PROJECTION (beta) = "Forward-projected GEX zones past the last candle"** (its own toggle, sub-panel
 "Projection & Label Opacity", horizon pill "3 Days" on his 3-minute chart — `projectionHorizon:"auto"`
 follows the chart timeframe; "the projection always uses rolling expiration buckets"). The algorithm, read

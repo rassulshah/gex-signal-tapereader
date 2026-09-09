@@ -1,67 +1,68 @@
 {
  "corpus": {
-  "sessions": 284,
+  "sessions": 290,
   "first": "2025-06-02",
-  "last": "2026-08-21",
+  "last": "2026-09-08",
   "file": "the vendor file + data/futures/ES/*.csv",
   "sources": {
-   "vendor": 284
+   "vendor": 284,
+   "yahoo": 6
   },
-  "yahooFirst": null
+  "yahooFirst": "2026-08-31"
  },
  "definitions": ", written before the first number was read (2026-09-03):\n  trading day d   bars stamped >= 17:00 belong to the NEXT calendar day; RTH is 08:30-15:00 CT.\n  ON session      the bars of d outside RTH (17:00 prev -> 08:29). ONH/ONL = their high/low.\n  PDH/PDL         the previous trading day's RTH high/low (previous session in the corpus).\n  IBH/IBL         the high/low of the first 60 RTH minutes; IB sweeps are only looked for after 09:30.\n  PDC             the previous session's RTH close (both sides: a sweep below it that reclaims -> LOD?,\n                  above it -> HOD?). The \"gap fill\" level.\n  POC/VAH/VAL     the previous session's RTH volume profile: 1-minute volume spread evenly across each\n                  bar's range on a 1-point grid; POC = the busiest price; the value area = the 70% band\n                  grown from the POC one tick at a time, heavier side first (the panel's priorProfile()).\n                  VAL is a low-side level, VAH high-side, POC both.\n  PMH/PML         the pre-market: the ON bars from 07:00 CT to the open. High-side / low-side.\n  PWH/PWL         the previous ISO week's RTH high/low.\n  WPOC            (v15.88) the previous ISO week's POC \u2014 the week's RTH volume profile (the same 1-point grid as POC,\n                  over five sessions); both sides, like POC. His 'weekly POC' (2026-09-08); the panel draws it from the\n                  companion's 5-minute weekly bars (v1.19), the corpus from its own minutes.\n  OR5 / OR15      the opening range: the high/low of the first 5 / 15 RTH minutes; sweeps looked for\n                  after the range completes.\n  AHI/ALO         (v15.88) the ASIA session: the ON bars from the Globex open 17:00 CT (the evening before) to 02:00.\n  LHI/LLO         (v15.88) the LONDON session: the ON bars from 02:00 CT to the open. (v15.57's LDNH/LDNL, renamed to\n                  his names \u2014 operator 2026-09-08: \"they can be ALO, AHI, LLO, LHI\"; the hours 2026-09-09: \"whatever is standard\".)\n  VWAP, VW1/VW2   (v15.57) the session VWAP (typical price x volume, cumulative) and its +-1 / +-2 sigma\n                  bands (volume-weighted sd of price about the VWAP). DYNAMIC: the level is valued at the\n                  sweep bar and frozen for the reclaim; the side is the side price came FROM (a dip below the\n                  VWAP from above is a low-side event, VWAP-; a spike above it from below is VWAP+). Looked\n                  for from bar 5 (VWAP) / bar 30 (bands).\n  DPOC/DVAH/DVAL  (v15.57) TODAY'S developing profile (1-point grid, 70% value area), valued at the sweep\n                  bar; looked for from bar 30.\n  sweep           the first RTH bar whose low prints strictly below the level (high side mirrored).\n  reclaim         the first bar after the sweep whose CLOSE is back above the level, within 30 bars.\n                  No reclaim within 30 bars = ACCEPTANCE (the level broke) - counted, not scored.\n  extremum        the lowest low from the sweep bar to the reclaim bar (the sweep's wick).\n  printed the LOD the extremum equals the session's final low.\n  baseline        the fraction of ALL sessions whose standing low at the reclaim MINUTE is the final\n                  low - the clock alone, matched minute for minute. Reported beside every rate.\n  payoff          points from the extremum to (a) the session close, (b) the session's far extreme.\nBuckets (sweep-bar time): 08:30-09:00 / 09:00-10:00 / 10:00-11:30 / 11:30-15:00.\nEvery cell read is counted in the ledger. Nothing here is pre-registered: it is a FIRST READ, and\na rate that looks good here becomes a register entry to be read again on sessions this file has\nnot seen.",
  "cells": [
   {
    "label": "ONL sweep-reclaim -> printed the LOD",
-   "events": 146,
-   "reclaimed": 125,
+   "events": 150,
+   "reclaimed": 129,
    "accepted": 21,
    "printed": 27,
-   "rate": 0.216,
+   "rate": 0.20930232558139536,
    "ci": [
-    0.15290710972320587,
-    0.2960286377372417
+    0.14801989416830047,
+    0.28739792675526565
    ],
-   "base": 0.39456338028169013,
-   "fresh": 0.2492738819424438,
-   "lift": -0.17856338028169014,
-   "lift_fresh": -0.033273881942443795,
+   "base": 0.38882651697407106,
+   "fresh": 0.24747760666648053,
+   "lift": -0.1795241913926757,
+   "lift_fresh": -0.038175281085085166,
    "pay_close_med": 33.5,
    "pay_far_med": 72.5
   },
   {
    "label": "  ONL \u00b7 08:30-09:00",
-   "events": 72,
-   "reclaimed": 63,
+   "events": 74,
+   "reclaimed": 65,
    "accepted": 9,
    "printed": 16,
-   "rate": 0.25396825396825395,
+   "rate": 0.24615384615384617,
    "ci": [
-    0.16280274583098153,
-    0.37341422084845166
+    0.1575785436701859,
+    0.36306013991648256
    ],
-   "base": 0.22317236753856473,
-   "fresh": 0.2185152675969193,
-   "lift": 0.030795886429689223,
-   "lift_fresh": 0.03545298637133465,
+   "base": 0.21968169761273218,
+   "fresh": 0.21529334239769835,
+   "lift": 0.026472148541113988,
+   "lift_fresh": 0.030860503756147822,
    "pay_close_med": 41.25,
    "pay_far_med": 75.75
   },
   {
    "label": "  ONL \u00b7 09:00-10:00",
-   "events": 34,
-   "reclaimed": 28,
+   "events": 36,
+   "reclaimed": 30,
    "accepted": 6,
    "printed": 3,
-   "rate": 0.10714285714285714,
+   "rate": 0.1,
    "ci": [
-    0.03711769205479949,
-    0.2719622536765708
+    0.03459925995971615,
+    0.25621441315266624
    ],
-   "base": 0.4173792756539236,
-   "fresh": 0.25142114252012043,
-   "lift": -0.3102364185110664,
-   "lift_fresh": -0.14427828537726328,
+   "base": 0.41057471264367806,
+   "fresh": 0.25326113285622426,
+   "lift": -0.3105747126436781,
+   "lift_fresh": -0.15326113285622425,
    "pay_close_med": 25.25,
    "pay_far_med": 36.75
   },
@@ -76,64 +77,64 @@
     0.17194536432683688,
     0.5462692434278971
    ],
-   "base": 0.7655935613682093,
-   "fresh": 0.3411454319898027,
-   "lift": -0.432260228034876,
-   "lift_fresh": -0.007812098656469368,
+   "base": 0.7646962233169129,
+   "fresh": 0.337149043880884,
+   "lift": -0.4313628899835796,
+   "lift_fresh": -0.003815710547550699,
    "pay_close_med": 18.0,
    "pay_far_med": 46.0
   },
   {
    "label": "ONH sweep-reclaim -> printed the HOD",
-   "events": 181,
+   "events": 183,
    "reclaimed": 154,
-   "accepted": 27,
+   "accepted": 29,
    "printed": 25,
    "rate": 0.16233766233766234,
    "ci": [
     0.11244242622704335,
     0.2286691691952027
    ],
-   "base": 0.3103377735090272,
-   "fresh": 0.18221810737347066,
-   "lift": -0.14800011117136486,
-   "lift_fresh": -0.019880445035808325,
+   "base": 0.31164197930693566,
+   "fresh": 0.18320322116886564,
+   "lift": -0.14930431696927332,
+   "lift_fresh": -0.020865558831203307,
    "pay_close_med": 24.0,
    "pay_far_med": 54.5
   },
   {
    "label": "  ONH \u00b7 08:30-09:00",
-   "events": 99,
+   "events": 100,
    "reclaimed": 82,
-   "accepted": 17,
+   "accepted": 18,
    "printed": 11,
    "rate": 0.13414634146341464,
    "ci": [
     0.07658612768827223,
     0.22445206358495667
    ],
-   "base": 0.16137066300240466,
-   "fresh": 0.159537088241293,
-   "lift": -0.027224321538990015,
-   "lift_fresh": -0.025390746777878365,
+   "base": 0.16383515559293524,
+   "fresh": 0.16188432316855803,
+   "lift": -0.029688814129520597,
+   "lift_fresh": -0.027737981705143383,
    "pay_close_med": 42.75,
    "pay_far_med": 68.25
   },
   {
    "label": "  ONH \u00b7 09:00-10:00",
-   "events": 35,
+   "events": 36,
    "reclaimed": 31,
-   "accepted": 4,
+   "accepted": 5,
    "printed": 4,
    "rate": 0.12903225806451613,
    "ci": [
     0.05134201164644764,
     0.28852756954385356
    ],
-   "base": 0.35336210813266694,
-   "fresh": 0.21597414485167454,
-   "lift": -0.22432985006815082,
-   "lift_fresh": -0.08694188678715842,
+   "base": 0.3529477196885428,
+   "fresh": 0.21344682505212834,
+   "lift": -0.2239154616240267,
+   "lift_fresh": -0.08441456698761221,
    "pay_close_med": 33.5,
    "pay_far_med": 118.5
   },
@@ -148,10 +149,10 @@
     0.10627856389112261,
     0.45091581972345923
    ],
-   "base": 0.49295774647887325,
-   "fresh": 0.1728916092039703,
-   "lift": -0.25486250838363517,
-   "lift_fresh": 0.0652036288912678,
+   "base": 0.49261083743842365,
+   "fresh": 0.17497341667294156,
+   "lift": -0.2545155993431856,
+   "lift_fresh": 0.06312182142229653,
    "pay_close_med": 22.25,
    "pay_far_med": 39.0
   },
@@ -166,46 +167,46 @@
     0.11186005278940309,
     0.4687050099580636
    ],
-   "base": 0.6626642363011994,
-   "fresh": 0.2326812508021583,
-   "lift": -0.4126642363011994,
-   "lift_fresh": 0.01731874919784171,
+   "base": 0.6636087579047846,
+   "fresh": 0.2323744116717897,
+   "lift": -0.4136087579047846,
+   "lift_fresh": 0.01762558832821029,
    "pay_close_med": 12.5,
    "pay_far_med": 37.0
   },
   {
    "label": "PDL sweep-reclaim -> printed the LOD",
-   "events": 124,
+   "events": 126,
    "reclaimed": 87,
-   "accepted": 37,
+   "accepted": 39,
    "printed": 20,
    "rate": 0.22988505747126436,
    "ci": [
     0.15403115692511482,
     0.32858473711462033
    ],
-   "base": 0.4082483406184232,
-   "fresh": 0.24445087451273192,
-   "lift": -0.17836328314715882,
-   "lift_fresh": -0.01456581704146756,
+   "base": 0.4065794688862465,
+   "fresh": 0.24426171648891964,
+   "lift": -0.17669441141498216,
+   "lift_fresh": -0.01437665901765528,
    "pay_close_med": 38.0,
    "pay_far_med": 84.25
   },
   {
    "label": "  PDL \u00b7 08:30-09:00",
-   "events": 68,
+   "events": 70,
    "reclaimed": 39,
-   "accepted": 29,
+   "accepted": 31,
    "printed": 12,
    "rate": 0.3076923076923077,
    "ci": [
     0.1856575344598306,
     0.464215486155646
    ],
-   "base": 0.20756590827013363,
-   "fresh": 0.202054612755839,
-   "lift": 0.10012639942217408,
-   "lift_fresh": 0.10563769493646871,
+   "base": 0.2053050397877984,
+   "fresh": 0.19994669872602083,
+   "lift": 0.1023872679045093,
+   "lift_fresh": 0.10774560896628688,
    "pay_close_med": 57.75,
    "pay_far_med": 84.25
   },
@@ -220,10 +221,10 @@
     0.05236779195949584,
     0.36042329588695743
    ],
-   "base": 0.426056338028169,
-   "fresh": 0.25547622169339,
-   "lift": -0.276056338028169,
-   "lift_fresh": -0.10547622169339002,
+   "base": 0.4234482758620689,
+   "fresh": 0.25594986252306745,
+   "lift": -0.2734482758620689,
+   "lift_fresh": -0.10594986252306746,
    "pay_close_med": 14.75,
    "pay_far_med": 72.0
   },
@@ -238,64 +239,64 @@
     0.011866588606194856,
     0.2981707755242399
    ],
-   "base": 0.761737089201878,
-   "fresh": 0.3276720948991648,
-   "lift": -0.6950704225352113,
-   "lift_fresh": -0.26100542823249817,
+   "base": 0.7606896551724137,
+   "fresh": 0.3254905535167508,
+   "lift": -0.6940229885057471,
+   "lift_fresh": -0.2588238868500842,
    "pay_close_med": 83.5,
    "pay_far_med": 88.25
   },
   {
    "label": "PDH sweep-reclaim -> printed the HOD",
-   "events": 167,
+   "events": 169,
    "reclaimed": 112,
-   "accepted": 55,
+   "accepted": 57,
    "printed": 18,
    "rate": 0.16071428571428573,
    "ci": [
     0.10414453380551848,
     0.2397871798448455
    ],
-   "base": 0.3139762826073046,
-   "fresh": 0.17795601433930744,
-   "lift": -0.15326199689301886,
-   "lift_fresh": -0.017241728625021713,
+   "base": 0.31542359844546336,
+   "fresh": 0.17934567571489185,
+   "lift": -0.15470931273117763,
+   "lift_fresh": -0.018631390000606124,
    "pay_close_med": 28.25,
    "pay_far_med": 60.0
   },
   {
    "label": "  PDH \u00b7 08:30-09:00",
-   "events": 113,
+   "events": 114,
    "reclaimed": 65,
-   "accepted": 48,
+   "accepted": 49,
    "printed": 13,
    "rate": 0.2,
    "ci": [
     0.12077845770945213,
     0.31270362289297426
    ],
-   "base": 0.15211267605633802,
-   "fresh": 0.15168802381041332,
-   "lift": 0.04788732394366199,
-   "lift_fresh": 0.048311976189586686,
+   "base": 0.15442970822281174,
+   "fresh": 0.15393270975848117,
+   "lift": 0.04557029177718827,
+   "lift_fresh": 0.04606729024151884,
    "pay_close_med": 28.25,
    "pay_far_med": 48.75
   },
   {
    "label": "  PDH \u00b7 09:00-10:00",
-   "events": 18,
+   "events": 19,
    "reclaimed": 16,
-   "accepted": 2,
+   "accepted": 3,
    "printed": 1,
    "rate": 0.0625,
    "ci": [
     0.01111905730833121,
     0.2832926836802987
    ],
-   "base": 0.3747799295774648,
-   "fresh": 0.20520681734025062,
-   "lift": -0.3122799295774648,
-   "lift_fresh": -0.14270681734025062,
+   "base": 0.3739224137931035,
+   "fresh": 0.20256049543532584,
+   "lift": -0.3114224137931035,
+   "lift_fresh": -0.14006049543532584,
    "pay_close_med": 43.5,
    "pay_far_med": 57.0
   },
@@ -310,47 +311,47 @@
     0.027865893984153206,
     0.30103820641179335
    ],
-   "base": 0.683443238938934,
-   "fresh": 0.2502720025756324,
-   "lift": -0.583443238938934,
-   "lift_fresh": -0.15027200257563242,
+   "base": 0.6843031857773534,
+   "fresh": 0.24990355341248943,
+   "lift": -0.5843031857773534,
+   "lift_fresh": -0.14990355341248943,
    "pay_close_med": 25.75,
    "pay_far_med": 157.0
   },
   {
    "label": "IBL sweep-reclaim -> printed the LOD",
-   "events": 166,
-   "reclaimed": 143,
-   "accepted": 23,
-   "printed": 29,
-   "rate": 0.20279720279720279,
+   "events": 170,
+   "reclaimed": 146,
+   "accepted": 24,
+   "printed": 30,
+   "rate": 0.2054794520547945,
    "ci": [
-    0.14507437781527893,
-    0.27607058383046723
+    0.147895261841292,
+    0.278165324804873
    ],
-   "base": 0.5429166090963733,
-   "fresh": 0.2596987498196374,
-   "lift": -0.3401194062991705,
-   "lift_fresh": -0.056901547022434634,
-   "pay_close_med": 31.25,
-   "pay_far_med": 60.0
+   "base": 0.5446369233736456,
+   "fresh": 0.2646463474435222,
+   "lift": -0.33915747131885104,
+   "lift_fresh": -0.059166895388727714,
+   "pay_close_med": 31.75,
+   "pay_far_med": 61.0
   },
   {
    "label": "  IBL \u00b7 09:00-10:00",
-   "events": 88,
-   "reclaimed": 75,
-   "accepted": 13,
-   "printed": 13,
-   "rate": 0.17333333333333334,
+   "events": 90,
+   "reclaimed": 76,
+   "accepted": 14,
+   "printed": 14,
+   "rate": 0.18421052631578946,
    "ci": [
-    0.10419048023286545,
-    0.2743102097582053
+    0.11302493284924942,
+    0.2857847102440753
    ],
-   "base": 0.4512206572769953,
-   "fresh": 0.23305520698009355,
-   "lift": -0.27788732394366195,
-   "lift_fresh": -0.05972187364676021,
-   "pay_close_med": 35.75,
+   "base": 0.44990925589836656,
+   "fresh": 0.23708158790616732,
+   "lift": -0.2656987295825771,
+   "lift_fresh": -0.052871061590377855,
+   "pay_close_med": 50.75,
    "pay_far_med": 68.0
   },
   {
@@ -364,136 +365,136 @@
     0.08315811295836502,
     0.30604296204774295
    ],
-   "base": 0.5671529175050302,
-   "fresh": 0.25196988868692455,
-   "lift": -0.40048625083836353,
-   "lift_fresh": -0.08530322202025789,
+   "base": 0.5677339901477831,
+   "fresh": 0.25840131848340525,
+   "lift": -0.4010673234811165,
+   "lift_fresh": -0.0917346518167386,
    "pay_close_med": 40.0,
    "pay_far_med": 68.25
   },
   {
    "label": "  IBL \u00b7 11:30-15:00",
-   "events": 31,
-   "reclaimed": 26,
+   "events": 33,
+   "reclaimed": 28,
    "accepted": 5,
    "printed": 9,
-   "rate": 0.34615384615384615,
+   "rate": 0.32142857142857145,
    "ci": [
-    0.19412014972852126,
-    0.5377977099036699
+    0.1793304754342074,
+    0.5066149544436882
    ],
-   "base": 0.7682732026844404,
-   "fresh": 0.3490402067634731,
-   "lift": -0.4221193565305943,
-   "lift_fresh": -0.0028863606096269367,
+   "base": 0.7671092777881944,
+   "fresh": 0.34883252391366115,
+   "lift": -0.4456807063596229,
+   "lift_fresh": -0.0274039524850897,
    "pay_close_med": 16.75,
    "pay_far_med": 47.5
   },
   {
    "label": "IBH sweep-reclaim -> printed the HOD",
-   "events": 184,
-   "reclaimed": 148,
-   "accepted": 36,
+   "events": 188,
+   "reclaimed": 151,
+   "accepted": 37,
    "printed": 24,
-   "rate": 0.16216216216216217,
+   "rate": 0.15894039735099338,
    "ci": [
-    0.11146031697656603,
-    0.22995863540538994
+    0.10919429425204763,
+    0.22560978940505744
    ],
-   "base": 0.46171964217738864,
-   "fresh": 0.19159309940603628,
-   "lift": -0.2995574800152265,
-   "lift_fresh": -0.029430937243874106,
+   "base": 0.46291390728476856,
+   "fresh": 0.19260067068244316,
+   "lift": -0.30397350993377514,
+   "lift_fresh": -0.033660273331449775,
    "pay_close_med": 28.25,
    "pay_far_med": 50.25
   },
   {
    "label": "  IBH \u00b7 09:00-10:00",
-   "events": 102,
-   "reclaimed": 81,
+   "events": 104,
+   "reclaimed": 83,
    "accepted": 21,
    "printed": 14,
-   "rate": 0.1728395061728395,
+   "rate": 0.1686746987951807,
    "ci": [
-    0.10584307626279289,
-    0.2694633771751432
+    0.10321987278869711,
+    0.26344310900804546
    ],
-   "base": 0.3888888888888889,
-   "fresh": 0.1964873972430781,
-   "lift": -0.2160493827160494,
-   "lift_fresh": -0.023647891070238597,
+   "base": 0.3878271707519734,
+   "fresh": 0.19362413006232382,
+   "lift": -0.21915247195679272,
+   "lift_fresh": -0.024949431267143107,
    "pay_close_med": 38.25,
    "pay_far_med": 49.5
   },
   {
    "label": "  IBH \u00b7 10:00-11:30",
-   "events": 54,
+   "events": 55,
    "reclaimed": 45,
-   "accepted": 9,
+   "accepted": 10,
    "printed": 5,
    "rate": 0.1111111111111111,
    "ci": [
     0.04840400437825558,
     0.23499375490890945
    ],
-   "base": 0.49123630672926444,
-   "fresh": 0.1728245036544133,
-   "lift": -0.38012519561815333,
-   "lift_fresh": -0.06171339254330219,
+   "base": 0.49103448275862077,
+   "fresh": 0.17536171237406653,
+   "lift": -0.37992337164750967,
+   "lift_fresh": -0.06425060126295543,
    "pay_close_med": 18.25,
    "pay_far_med": 50.75
   },
   {
    "label": "  IBH \u00b7 11:30-15:00",
-   "events": 28,
-   "reclaimed": 22,
+   "events": 29,
+   "reclaimed": 23,
    "accepted": 6,
    "printed": 5,
-   "rate": 0.22727272727272727,
+   "rate": 0.21739130434782608,
    "ci": [
-    0.10122890794820358,
-    0.4344035606295935
+    0.09663835601719065,
+    0.4190388018273492
    ],
-   "base": 0.66949423815621,
-   "fresh": 0.2119634941343384,
-   "lift": -0.4422215108834827,
-   "lift_fresh": 0.015309233138388861,
+   "base": 0.6788605697151425,
+   "fresh": 0.22263571395839302,
+   "lift": -0.4614692653673165,
+   "lift_fresh": -0.005244409610566936,
    "pay_close_med": 20.75,
    "pay_far_med": 50.25
   },
   {
    "label": "PDC- sweep-reclaim -> printed the LOD",
-   "events": 213,
-   "reclaimed": 118,
-   "accepted": 95,
+   "events": 217,
+   "reclaimed": 119,
+   "accepted": 98,
    "printed": 35,
-   "rate": 0.2966101694915254,
+   "rate": 0.29411764705882354,
    "ci": [
-    0.22166449745305883,
-    0.3843813850698232
+    0.2197225317868407,
+    0.3813897949819412
    ],
-   "base": 0.3058605872523275,
-   "fresh": 0.2144039285842507,
-   "lift": -0.009250417760802099,
-   "lift_fresh": 0.08220624090727471,
+   "base": 0.30234714575485366,
+   "fresh": 0.21234037514165974,
+   "lift": -0.008229498696030124,
+   "lift_fresh": 0.0817772719171638,
    "pay_close_med": 40.0,
    "pay_far_med": 49.75
   },
   {
    "label": "  PDC- \u00b7 08:30-09:00",
-   "events": 163,
-   "reclaimed": 76,
-   "accepted": 87,
+   "events": 167,
+   "reclaimed": 77,
+   "accepted": 90,
    "printed": 20,
-   "rate": 0.2631578947368421,
+   "rate": 0.2597402597402597,
    "ci": [
-    0.1772926637089946,
-    0.371814568610999
+    0.17489066479540777,
+    0.3674241830057244
    ],
-   "base": 0.1928743513713862,
-   "fresh": 0.1894193845646183,
-   "lift": 0.07028354336545589,
-   "lift_fresh": 0.0737385101722238,
+   "base": 0.1898790864308106,
+   "fresh": 0.18653774930005768,
+   "lift": 0.0698611733094491,
+   "lift_fresh": 0.07320251044020204,
    "pay_close_med": 43.0,
    "pay_far_med": 68.0
   },
@@ -508,46 +509,46 @@
     0.17204987516891143,
     0.5159008626542329
    ],
-   "base": 0.41112676056338027,
-   "fresh": 0.261159921778829,
-   "lift": -0.09112676056338026,
-   "lift_fresh": 0.05884007822117099,
+   "base": 0.40813793103448276,
+   "fresh": 0.25999770320588406,
+   "lift": -0.08813793103448275,
+   "lift_fresh": 0.06000229679411595,
    "pay_close_med": 49.0,
    "pay_far_med": 56.5
   },
   {
    "label": "PDC+ sweep-reclaim -> printed the HOD",
-   "events": 237,
+   "events": 239,
    "reclaimed": 104,
-   "accepted": 133,
+   "accepted": 135,
    "printed": 20,
    "rate": 0.19230769230769232,
    "ci": [
     0.12808047966842862,
     0.27845651533164556
    ],
-   "base": 0.22433640303358612,
-   "fresh": 0.1707058219624255,
-   "lift": -0.032028710725893805,
-   "lift_fresh": 0.02160187034526681,
+   "base": 0.22612732095490712,
+   "fresh": 0.1719932466504971,
+   "lift": -0.0338196286472148,
+   "lift_fresh": 0.02031444565719523,
    "pay_close_med": 31.75,
    "pay_far_med": 72.5
   },
   {
    "label": "  PDC+ \u00b7 08:30-09:00",
-   "events": 201,
+   "events": 203,
    "reclaimed": 75,
-   "accepted": 126,
+   "accepted": 128,
    "printed": 15,
    "rate": 0.2,
    "ci": [
     0.12512038203120296,
     0.3041149455116171
    ],
-   "base": 0.15258215962441316,
-   "fresh": 0.1523981436511791,
-   "lift": 0.047417840375586856,
-   "lift_fresh": 0.047601856348820915,
+   "base": 0.15508045977011495,
+   "fresh": 0.15486509376890506,
+   "lift": 0.04491954022988506,
+   "lift_fresh": 0.04513490623109495,
    "pay_close_med": 31.75,
    "pay_far_med": 51.75
   },
@@ -562,64 +563,64 @@
     0.0806563532712,
     0.41602172202575993
    ],
-   "base": 0.3375,
-   "fresh": 0.22336156345287134,
-   "lift": -0.1375,
-   "lift_fresh": -0.023361563452871326,
+   "base": 0.3374137931034482,
+   "fresh": 0.2207770425259486,
+   "lift": -0.1374137931034482,
+   "lift_fresh": -0.020777042525948586,
    "pay_close_med": 23.5,
    "pay_far_med": 100.5
   },
   {
    "label": "VAL sweep-reclaim -> printed the LOD",
-   "events": 170,
-   "reclaimed": 110,
-   "accepted": 60,
+   "events": 173,
+   "reclaimed": 111,
+   "accepted": 62,
    "printed": 30,
-   "rate": 0.2727272727272727,
+   "rate": 0.2702702702702703,
    "ci": [
-    0.19822564984733446,
-    0.36256759269317795
+    0.19636788511059944,
+    0.35954216838917763
    ],
-   "base": 0.3758322663252241,
-   "fresh": 0.2378428315394901,
-   "lift": -0.10310499359795139,
-   "lift_fresh": 0.03488444118778261,
+   "base": 0.37483690587138857,
+   "fresh": 0.23741978313537343,
+   "lift": -0.10456663560111829,
+   "lift_fresh": 0.032850487134896855,
    "pay_close_med": 39.75,
    "pay_far_med": 58.0
   },
   {
    "label": "  VAL \u00b7 08:30-09:00",
-   "events": 111,
+   "events": 113,
    "reclaimed": 57,
-   "accepted": 54,
+   "accepted": 56,
    "printed": 16,
    "rate": 0.2807017543859649,
    "ci": [
     0.18079248284972227,
     0.40830445082723554
    ],
-   "base": 0.2015072893501359,
-   "fresh": 0.20088736111748898,
-   "lift": 0.079194465035829,
-   "lift_fresh": 0.07981439326847592,
+   "base": 0.19927404718693284,
+   "fresh": 0.19870064967516243,
+   "lift": 0.08142770719903206,
+   "lift_fresh": 0.08200110471080246,
    "pay_close_med": 38.0,
    "pay_far_med": 58.0
   },
   {
    "label": "  VAL \u00b7 09:00-10:00",
-   "events": 26,
-   "reclaimed": 22,
+   "events": 27,
+   "reclaimed": 23,
    "accepted": 4,
    "printed": 5,
-   "rate": 0.22727272727272727,
+   "rate": 0.21739130434782608,
    "ci": [
-    0.10122890794820358,
-    0.4344035606295935
+    0.09663835601719065,
+    0.4190388018273492
    ],
-   "base": 0.41085147247119075,
-   "fresh": 0.2561331271884948,
-   "lift": -0.18357874519846348,
-   "lift_fresh": -0.028860399915767526,
+   "base": 0.410344827586207,
+   "fresh": 0.2543885966126787,
+   "lift": -0.19295352323838091,
+   "lift_fresh": -0.03699729226485263,
    "pay_close_med": 68.25,
    "pay_far_med": 74.5
   },
@@ -634,100 +635,100 @@
     0.20304991926931162,
     0.6138133141934384
    ],
-   "base": 0.7564553990610329,
-   "fresh": 0.32384303730651914,
-   "lift": -0.367566510172144,
-   "lift_fresh": 0.06504585158236975,
+   "base": 0.7557471264367817,
+   "fresh": 0.3246964612226369,
+   "lift": -0.36685823754789276,
+   "lift_fresh": 0.064192427666252,
    "pay_close_med": 39.75,
    "pay_far_med": 69.75
   },
   {
    "label": "VAH sweep-reclaim -> printed the HOD",
-   "events": 203,
-   "reclaimed": 117,
-   "accepted": 86,
+   "events": 205,
+   "reclaimed": 118,
+   "accepted": 87,
    "printed": 23,
-   "rate": 0.19658119658119658,
+   "rate": 0.19491525423728814,
    "ci": [
-    0.1347153235282641,
-    0.2777386658263952
+    0.13353979782234554,
+    0.27552902596197765
    ],
-   "base": 0.269742385939569,
-   "fresh": 0.17312776660435367,
-   "lift": -0.07316118935837243,
-   "lift_fresh": 0.02345342997684291,
+   "base": 0.27136177673874917,
+   "fresh": 0.1747505491904312,
+   "lift": -0.07644652250146103,
+   "lift_fresh": 0.02016470504685694,
    "pay_close_med": 31.75,
    "pay_far_med": 57.0
   },
   {
    "label": "  VAH \u00b7 08:30-09:00",
-   "events": 159,
+   "events": 160,
    "reclaimed": 78,
-   "accepted": 81,
+   "accepted": 82,
    "printed": 17,
    "rate": 0.21794871794871795,
    "ci": [
     0.14076696665343852,
     0.32160913547555214
    ],
-   "base": 0.15411700975081258,
-   "fresh": 0.15376313287920865,
-   "lift": 0.06383170819790537,
-   "lift_fresh": 0.0641855850695093,
+   "base": 0.15641025641025644,
+   "fresh": 0.1559960910233143,
+   "lift": 0.061538461538461514,
+   "lift_fresh": 0.06195262692540365,
    "pay_close_med": 31.75,
    "pay_far_med": 53.75
   },
   {
    "label": "  VAH \u00b7 09:00-10:00",
-   "events": 23,
-   "reclaimed": 20,
+   "events": 24,
+   "reclaimed": 21,
    "accepted": 3,
    "printed": 6,
-   "rate": 0.3,
+   "rate": 0.2857142857142857,
    "ci": [
-    0.14547527396899385,
-    0.5189767762289793
+    0.13813675745628204,
+    0.49956773822837586
    ],
-   "base": 0.375,
-   "fresh": 0.20328866015309321,
-   "lift": -0.07500000000000001,
-   "lift_fresh": 0.09671133984690677,
+   "base": 0.3701149425287356,
+   "fresh": 0.20221335316935704,
+   "lift": -0.08440065681444991,
+   "lift_fresh": 0.08350093254492866,
    "pay_close_med": 43.5,
    "pay_far_med": 118.5
   },
   {
    "label": "POC- sweep-reclaim -> printed the LOD",
-   "events": 205,
-   "reclaimed": 107,
-   "accepted": 98,
+   "events": 209,
+   "reclaimed": 108,
+   "accepted": 101,
    "printed": 29,
-   "rate": 0.27102803738317754,
+   "rate": 0.26851851851851855,
    "ci": [
-    0.19583435081989597,
-    0.36209335863215086
+    0.19394781819614243,
+    0.3589913386113424
    ],
-   "base": 0.32200012930527255,
-   "fresh": 0.23254605355471486,
-   "lift": -0.05097209192209501,
-   "lift_fresh": 0.038481983828462685,
+   "base": 0.3180056742101844,
+   "fresh": 0.2304354678919994,
+   "lift": -0.04948715569166584,
+   "lift_fresh": 0.03808305062651915,
    "pay_close_med": 45.75,
    "pay_far_med": 51.5
   },
   {
    "label": "  POC- \u00b7 08:30-09:00",
-   "events": 161,
-   "reclaimed": 66,
-   "accepted": 95,
+   "events": 165,
+   "reclaimed": 67,
+   "accepted": 98,
    "printed": 17,
-   "rate": 0.25757575757575757,
+   "rate": 0.2537313432835821,
    "ci": [
-    0.16748707345896682,
-    0.37433327429938923
+    0.16487779577697392,
+    0.36929421614822255
    ],
-   "base": 0.20747972684592403,
-   "fresh": 0.20493894955882042,
-   "lift": 0.05009603072983354,
-   "lift_fresh": 0.05263680801693715,
+   "base": 0.20391147709727236,
+   "fresh": 0.20151870085032275,
+   "lift": 0.049819866186309736,
+   "lift_fresh": 0.05221264243325935,
    "pay_close_med": 49.0,
    "pay_far_med": 71.25
   },
@@ -742,208 +743,208 @@
     0.17971978688379642,
     0.5329404050591954
    ],
-   "base": 0.4052230046948357,
-   "fresh": 0.2623693492416006,
-   "lift": -0.07188967136150237,
-   "lift_fresh": 0.07096398409173271,
+   "base": 0.40186781609195404,
+   "fresh": 0.260836285642471,
+   "lift": -0.06853448275862073,
+   "lift_fresh": 0.07249704769086229,
    "pay_close_med": 46.0,
    "pay_far_med": 53.75
   },
   {
    "label": "POC+ sweep-reclaim -> printed the HOD",
-   "events": 225,
-   "reclaimed": 96,
-   "accepted": 129,
+   "events": 227,
+   "reclaimed": 97,
+   "accepted": 130,
    "printed": 25,
-   "rate": 0.2604166666666667,
+   "rate": 0.25773195876288657,
    "ci": [
-    0.18305777843717663,
-    0.35621242556596444
+    0.18109470708719705,
+    0.35282780108403383
    ],
-   "base": 0.23345803990610328,
-   "fresh": 0.17193065881488456,
-   "lift": 0.026958626760563403,
-   "lift_fresh": 0.08848600785178212,
+   "base": 0.23362957696409514,
+   "fresh": 0.17282779408953014,
+   "lift": 0.024102381798791428,
+   "lift_fresh": 0.08490416467335643,
    "pay_close_med": 30.5,
    "pay_far_med": 63.0
   },
   {
    "label": "  POC+ \u00b7 08:30-09:00",
-   "events": 196,
-   "reclaimed": 71,
-   "accepted": 125,
+   "events": 198,
+   "reclaimed": 72,
+   "accepted": 126,
    "printed": 21,
-   "rate": 0.29577464788732394,
+   "rate": 0.2916666666666667,
    "ci": [
-    0.2023273873376572,
-    0.41018757760162794
+    0.19937911717246715,
+    0.4050596077489481
    ],
-   "base": 0.1513092640349137,
-   "fresh": 0.15111488096459608,
-   "lift": 0.14446538385241023,
-   "lift_fresh": 0.14465976692272786,
+   "base": 0.15258620689655175,
+   "fresh": 0.1523618673119581,
+   "lift": 0.13908045977011493,
+   "lift_fresh": 0.13930479935470857,
    "pay_close_med": 31.75,
    "pay_far_med": 60.0
   },
   {
    "label": "PML sweep-reclaim -> printed the LOD",
-   "events": 217,
-   "reclaimed": 189,
+   "events": 221,
+   "reclaimed": 193,
    "accepted": 28,
    "printed": 40,
-   "rate": 0.21164021164021163,
+   "rate": 0.20725388601036268,
    "ci": [
-    0.15944680101546374,
-    0.27532246038871455
+    0.1560536667331932,
+    0.26988068860632847
    ],
-   "base": 0.2795103957075788,
-   "fresh": 0.2130072096618035,
-   "lift": -0.06787018406736717,
-   "lift_fresh": -0.0013669980215918753,
+   "base": 0.2765231373950331,
+   "fresh": 0.21143864122348496,
+   "lift": -0.06926925138467041,
+   "lift_fresh": -0.004184755213122282,
    "pay_close_med": 37.5,
    "pay_far_med": 64.75
   },
   {
    "label": "  PML \u00b7 08:30-09:00",
-   "events": 151,
-   "reclaimed": 135,
+   "events": 154,
+   "reclaimed": 138,
    "accepted": 16,
    "printed": 30,
-   "rate": 0.2222222222222222,
+   "rate": 0.21739130434782608,
    "ci": [
-    0.1603281725224173,
-    0.2994879056558809
+    0.15673432266168497,
+    0.2933564828565833
    ],
-   "base": 0.18943661971830986,
-   "fresh": 0.1876892258407754,
-   "lift": 0.03278560250391235,
-   "lift_fresh": 0.0345329963814468,
+   "base": 0.18743128435782122,
+   "fresh": 0.18576007659547553,
+   "lift": 0.02996001999000486,
+   "lift_fresh": 0.031631227752350555,
    "pay_close_med": 37.75,
    "pay_far_med": 73.25
   },
   {
    "label": "  PML \u00b7 09:00-10:00",
-   "events": 42,
-   "reclaimed": 34,
+   "events": 43,
+   "reclaimed": 35,
    "accepted": 8,
    "printed": 5,
-   "rate": 0.14705882352941177,
+   "rate": 0.14285714285714285,
    "ci": [
-    0.06449346382626417,
-    0.30128388174051957
+    0.06260138804853496,
+    0.2937588030867426
    ],
-   "base": 0.4009942004971002,
-   "fresh": 0.25884359505516935,
-   "lift": -0.2539353769676884,
-   "lift_fresh": -0.11178477152575758,
+   "base": 0.39684729064039415,
+   "fresh": 0.2579618688303351,
+   "lift": -0.2539901477832513,
+   "lift_fresh": -0.11510472597319227,
    "pay_close_med": 39.0,
    "pay_far_med": 46.5
   },
   {
    "label": "PMH sweep-reclaim -> printed the HOD",
-   "events": 235,
-   "reclaimed": 197,
-   "accepted": 38,
-   "printed": 30,
-   "rate": 0.15228426395939088,
+   "events": 239,
+   "reclaimed": 199,
+   "accepted": 40,
+   "printed": 31,
+   "rate": 0.15577889447236182,
    "ci": [
-    0.10880060721400828,
-    0.20906979413710622
+    0.11196725210721599,
+    0.21262888596308127
    ],
-   "base": 0.23396725530850074,
-   "fresh": 0.1653049055900909,
-   "lift": -0.08168299134910986,
-   "lift_fresh": -0.01302064163070002,
+   "base": 0.23524519147461437,
+   "fresh": 0.1667727788752232,
+   "lift": -0.07946629700225255,
+   "lift_fresh": -0.010993884402861392,
    "pay_close_med": 34.5,
-   "pay_far_med": 67.75
+   "pay_far_med": 60.0
   },
   {
    "label": "  PMH \u00b7 08:30-09:00",
-   "events": 169,
-   "reclaimed": 143,
-   "accepted": 26,
-   "printed": 20,
-   "rate": 0.13986013986013987,
+   "events": 171,
+   "reclaimed": 144,
+   "accepted": 27,
+   "printed": 21,
+   "rate": 0.14583333333333334,
    "ci": [
-    0.09239624657944673,
-    0.20616764812069277
+    0.09740386921789695,
+    0.21266853259593627
    ],
-   "base": 0.1539200236383335,
-   "fresh": 0.15188650808072676,
-   "lift": -0.014059883778193616,
-   "lift_fresh": -0.012026368220586892,
-   "pay_close_med": 48.75,
-   "pay_far_med": 68.25
+   "base": 0.15574712643678146,
+   "fresh": 0.1536370249057319,
+   "lift": -0.009913793103448115,
+   "lift_fresh": -0.007803691572398547,
+   "pay_close_med": 42.75,
+   "pay_far_med": 68.0
   },
   {
    "label": "  PMH \u00b7 09:00-10:00",
-   "events": 38,
-   "reclaimed": 31,
-   "accepted": 7,
+   "events": 40,
+   "reclaimed": 32,
+   "accepted": 8,
    "printed": 4,
-   "rate": 0.12903225806451613,
+   "rate": 0.125,
    "ci": [
-    0.05134201164644764,
-    0.28852756954385356
+    0.04970053844474301,
+    0.2806864978482796
    ],
-   "base": 0.35052248977737394,
-   "fresh": 0.2147442681785179,
-   "lift": -0.2214902317128578,
-   "lift_fresh": -0.08571201011400179,
+   "base": 0.3484913793103449,
+   "fresh": 0.21294866484079966,
+   "lift": -0.2234913793103449,
+   "lift_fresh": -0.08794866484079966,
    "pay_close_med": 38.25,
    "pay_far_med": 68.25
   },
   {
    "label": "PWL sweep-reclaim -> printed the LOD",
-   "events": 56,
-   "reclaimed": 34,
-   "accepted": 22,
-   "printed": 9,
-   "rate": 0.2647058823529412,
+   "events": 58,
+   "reclaimed": 35,
+   "accepted": 23,
+   "printed": 10,
+   "rate": 0.2857142857142857,
    "ci": [
-    0.14601027541553796,
-    0.4311746216289845
+    0.16326363398295565,
+    0.45055248069821086
    ],
-   "base": 0.4041973206940667,
-   "fresh": 0.2669229868377298,
-   "lift": -0.13949143834112554,
-   "lift_fresh": -0.0022171044847886234,
+   "base": 0.3999928409497673,
+   "fresh": 0.26792938631171137,
+   "lift": -0.11427855523548158,
+   "lift_fresh": 0.017784899402574328,
    "pay_close_med": 55.25,
    "pay_far_med": 86.0
   },
   {
    "label": "  PWL \u00b7 08:30-09:00",
-   "events": 39,
-   "reclaimed": 18,
-   "accepted": 21,
-   "printed": 4,
-   "rate": 0.2222222222222222,
+   "events": 41,
+   "reclaimed": 19,
+   "accepted": 22,
+   "printed": 5,
+   "rate": 0.2631578947368421,
    "ci": [
-    0.09000781913382,
-    0.4521502645230549
+    0.11806238339540162,
+    0.48791968441070643
    ],
-   "base": 0.21733176838810642,
-   "fresh": 0.21209146659075578,
-   "lift": 0.004890453834115793,
-   "lift_fresh": 0.010130755631466426,
-   "pay_close_med": 82.75,
-   "pay_far_med": 106.75
+   "base": 0.220508166969147,
+   "fresh": 0.21583820662768027,
+   "lift": 0.0426497277676951,
+   "lift_fresh": 0.04731968810916182,
+   "pay_close_med": 55.25,
+   "pay_far_med": 76.25
   },
   {
    "label": "PWH sweep-reclaim -> printed the HOD",
-   "events": 125,
-   "reclaimed": 55,
+   "events": 126,
+   "reclaimed": 56,
    "accepted": 70,
    "printed": 12,
-   "rate": 0.21818181818181817,
+   "rate": 0.21428571428571427,
    "ci": [
-    0.12945897827653213,
-    0.3437028664047817
+    0.127057803147445,
+    0.33819713656004946
    ],
-   "base": 0.35992046076652656,
-   "fresh": 0.1941678084976287,
-   "lift": -0.1417386425847084,
-   "lift_fresh": 0.024014009684189458,
+   "base": 0.3671772461520105,
+   "fresh": 0.1965804948917144,
+   "lift": -0.1528915318662962,
+   "lift_fresh": 0.017705219393999883,
    "pay_close_med": 31.75,
    "pay_far_med": 52.25
   },
@@ -958,192 +959,192 @@
     0.17275424489768068,
     0.49230470472718546
    ],
-   "base": 0.15468674113647402,
-   "fresh": 0.15468674113647402,
-   "lift": 0.1556580864497329,
-   "lift_fresh": 0.1556580864497329,
+   "base": 0.15695600475624258,
+   "fresh": 0.15695600475624258,
+   "lift": 0.15338882282996433,
+   "lift_fresh": 0.15338882282996433,
    "pay_close_med": 34.0,
    "pay_far_med": 52.25
   },
   {
    "label": "  PWH \u00b7 11:30-15:00",
-   "events": 16,
-   "reclaimed": 15,
+   "events": 17,
+   "reclaimed": 16,
    "accepted": 1,
    "printed": 2,
-   "rate": 0.13333333333333333,
+   "rate": 0.125,
    "ci": [
-    0.0373604698913593,
-    0.3788249920651624
+    0.034976749337057134,
+    0.3602333143674828
    ],
-   "base": 0.6990510791486256,
-   "fresh": 0.27713123810118706,
-   "lift": -0.5657177458152923,
-   "lift_fresh": -0.14379790476785373,
+   "base": 0.6984824304975539,
+   "fresh": 0.27306056188698336,
+   "lift": -0.5734824304975539,
+   "lift_fresh": -0.14806056188698336,
    "pay_close_med": 12.25,
    "pay_far_med": 118.0
   },
   {
    "label": "WPOC- sweep-reclaim -> printed the LOD",
-   "events": 159,
-   "reclaimed": 59,
-   "accepted": 100,
+   "events": 163,
+   "reclaimed": 60,
+   "accepted": 103,
    "printed": 14,
-   "rate": 0.23728813559322035,
+   "rate": 0.23333333333333334,
    "ci": [
-    0.1469448625694613,
-    0.3597513386730279
+    0.1443943161843107,
+    0.3543651134039202
    ],
-   "base": 0.3335479427442055,
-   "fresh": 0.21945672858369067,
-   "lift": -0.09625980715098517,
-   "lift_fresh": 0.017831407009529676,
+   "base": 0.33982341009426076,
+   "fresh": 0.2219404473114179,
+   "lift": -0.10649007676092742,
+   "lift_fresh": 0.011392886021915433,
    "pay_close_med": 44.25,
    "pay_far_med": 71.25
   },
   {
    "label": "  WPOC- \u00b7 08:30-09:00",
-   "events": 130,
+   "events": 133,
    "reclaimed": 34,
-   "accepted": 96,
+   "accepted": 99,
    "printed": 9,
    "rate": 0.2647058823529412,
    "ci": [
     0.14601027541553796,
     0.4311746216289845
    ],
-   "base": 0.19428334714167356,
-   "fresh": 0.19288273903845687,
-   "lift": 0.07042253521126762,
-   "lift_fresh": 0.0718231433144843,
+   "base": 0.19208924949290057,
+   "fresh": 0.19077079107505068,
+   "lift": 0.07261663286004061,
+   "lift_fresh": 0.0739350912778905,
    "pay_close_med": 41.0,
    "pay_far_med": 46.25
   },
   {
    "label": "WPOC+ sweep-reclaim -> printed the HOD",
-   "events": 194,
-   "reclaimed": 45,
-   "accepted": 149,
+   "events": 198,
+   "reclaimed": 46,
+   "accepted": 152,
    "printed": 7,
-   "rate": 0.15555555555555556,
+   "rate": 0.15217391304347827,
    "ci": [
-    0.07745325311328677,
-    0.28784190511248803
+    0.07572186234017478,
+    0.28224417406315094
    ],
-   "base": 0.25187793427230043,
-   "fresh": 0.1693444730324581,
-   "lift": -0.09632237871674487,
-   "lift_fresh": -0.013788917476902529,
+   "base": 0.2505247376311843,
+   "fresh": 0.16993243647709627,
+   "lift": -0.09835082458770605,
+   "lift_fresh": -0.017758523433618,
    "pay_close_med": 53.25,
    "pay_far_med": 97.5
   },
   {
    "label": "  WPOC+ \u00b7 08:30-09:00",
-   "events": 178,
-   "reclaimed": 31,
-   "accepted": 147,
+   "events": 182,
+   "reclaimed": 32,
+   "accepted": 150,
    "printed": 6,
-   "rate": 0.1935483870967742,
+   "rate": 0.1875,
    "ci": [
-    0.09186883586347633,
-    0.36280603555459856
+    0.08889423936162782,
+    0.3530949575492244
    ],
-   "base": 0.15436165379373012,
-   "fresh": 0.15436165379373012,
-   "lift": 0.03918673330304406,
-   "lift_fresh": 0.03918673330304406,
+   "base": 0.15538793103448276,
+   "fresh": 0.15538793103448276,
+   "lift": 0.03211206896551724,
+   "lift_fresh": 0.03211206896551724,
    "pay_close_med": 76.0,
    "pay_far_med": 97.5
   },
   {
    "label": "OR5L sweep-reclaim -> printed the LOD",
-   "events": 246,
-   "reclaimed": 212,
+   "events": 252,
+   "reclaimed": 218,
    "accepted": 34,
-   "printed": 42,
-   "rate": 0.19811320754716982,
+   "printed": 43,
+   "rate": 0.19724770642201836,
    "ci": [
-    0.1500411918346862,
-    0.25693132875448665
+    0.14986480514890274,
+    0.255116046053036
    ],
-   "base": 0.27270345018306386,
-   "fresh": 0.23390141506812953,
-   "lift": -0.07459024263589403,
-   "lift_fresh": -0.03578820752095971,
-   "pay_close_med": 41.25,
-   "pay_far_med": 61.25
+   "base": 0.27201719923505446,
+   "fresh": 0.23238597641855388,
+   "lift": -0.0747694928130361,
+   "lift_fresh": -0.03513826999653552,
+   "pay_close_med": 40.0,
+   "pay_far_med": 60.5
   },
   {
    "label": "  OR5L \u00b7 08:30-09:00",
-   "events": 190,
-   "reclaimed": 168,
+   "events": 194,
+   "reclaimed": 172,
    "accepted": 22,
-   "printed": 34,
-   "rate": 0.20238095238095238,
+   "printed": 35,
+   "rate": 0.20348837209302326,
    "ci": [
-    0.1485947022039544,
-    0.26947403086184574
+    0.15010863889106016,
+    0.2698238457997069
    ],
-   "base": 0.22510060362173037,
-   "fresh": 0.22244280137792188,
-   "lift": -0.022719651240777988,
-   "lift_fresh": -0.0200618489969695,
-   "pay_close_med": 37.5,
-   "pay_far_med": 61.25
+   "base": 0.22295509222133125,
+   "fresh": 0.22047716382811386,
+   "lift": -0.019466720128307996,
+   "lift_fresh": -0.016988791735090603,
+   "pay_close_med": 37.0,
+   "pay_far_med": 60.5
   },
   {
    "label": "  OR5L \u00b7 09:00-10:00",
-   "events": 41,
-   "reclaimed": 35,
+   "events": 42,
+   "reclaimed": 36,
    "accepted": 6,
    "printed": 7,
-   "rate": 0.2,
+   "rate": 0.19444444444444445,
    "ci": [
-    0.10042319445900802,
-    0.35891936609462516
+    0.09752972019453349,
+    0.350283620635152
    ],
-   "base": 0.39678068410462775,
-   "fresh": 0.2622541970829611,
-   "lift": -0.19678068410462773,
-   "lift_fresh": -0.062254197082961094,
+   "base": 0.39281609195402295,
+   "fresh": 0.2619404119701955,
+   "lift": -0.1983716475095785,
+   "lift_fresh": -0.06749596752575107,
    "pay_close_med": 49.0,
    "pay_far_med": 61.75
   },
   {
    "label": "OR5H sweep-reclaim -> printed the HOD",
-   "events": 251,
-   "reclaimed": 215,
+   "events": 256,
+   "reclaimed": 220,
    "accepted": 36,
-   "printed": 22,
-   "rate": 0.10232558139534884,
+   "printed": 23,
+   "rate": 0.10454545454545454,
    "ci": [
-    0.06854889119254981,
-    0.15006402335386182
+    0.0706788038882292,
+    0.15198579464930803
    ],
-   "base": 0.22304290861447754,
-   "fresh": 0.17711970030028812,
-   "lift": -0.1207173272191287,
-   "lift_fresh": -0.07479411890493928,
-   "pay_close_med": 47.25,
-   "pay_far_med": 67.75
+   "base": 0.22760188087774283,
+   "fresh": 0.18060560978961912,
+   "lift": -0.12305642633228829,
+   "lift_fresh": -0.07606015524416458,
+   "pay_close_med": 42.75,
+   "pay_far_med": 63.5
   },
   {
    "label": "  OR5H \u00b7 08:30-09:00",
-   "events": 200,
-   "reclaimed": 171,
+   "events": 204,
+   "reclaimed": 175,
    "accepted": 29,
-   "printed": 18,
-   "rate": 0.10526315789473684,
+   "printed": 19,
+   "rate": 0.10857142857142857,
    "ci": [
-    0.06762647375458761,
-    0.16024606916426007
+    0.07061513886953752,
+    0.1633438505378487
    ],
-   "base": 0.17152623342393541,
-   "fresh": 0.16862255706216234,
-   "lift": -0.06626307552919858,
-   "lift_fresh": -0.0633593991674255,
-   "pay_close_med": 42.75,
-   "pay_far_med": 67.75
+   "base": 0.17471921182266026,
+   "fresh": 0.17173203805140425,
+   "lift": -0.06614778325123169,
+   "lift_fresh": -0.06316060947997568,
+   "pay_close_med": 39.25,
+   "pay_far_med": 63.5
   },
   {
    "label": "  OR5H \u00b7 09:00-10:00",
@@ -1156,100 +1157,100 @@
     0.05497350852047822,
     0.30559357712699325
    ],
-   "base": 0.33948518698397284,
-   "fresh": 0.21645039044373393,
-   "lift": -0.20155415250121422,
-   "lift_fresh": -0.07851935596097531,
+   "base": 0.33935790725327,
+   "fresh": 0.21381162440203083,
+   "lift": -0.20142687277051136,
+   "lift_fresh": -0.07588058991927221,
    "pay_close_med": 60.75,
    "pay_far_med": 73.0
   },
   {
    "label": "OR15L sweep-reclaim -> printed the LOD",
-   "events": 219,
-   "reclaimed": 186,
-   "accepted": 33,
+   "events": 224,
+   "reclaimed": 190,
+   "accepted": 34,
    "printed": 40,
-   "rate": 0.21505376344086022,
+   "rate": 0.21052631578947367,
    "ci": [
-    0.16209026292148496,
-    0.27954950412641183
+    0.15858473586033628,
+    0.2739416155523635
    ],
-   "base": 0.3692815638463938,
-   "fresh": 0.2784797545776096,
-   "lift": -0.1542278004055336,
-   "lift_fresh": -0.06342599113674938,
+   "base": 0.3677482275070807,
+   "fresh": 0.2771165009050505,
+   "lift": -0.15722191171760702,
+   "lift_fresh": -0.06659018511557685,
    "pay_close_med": 43.25,
    "pay_far_med": 55.5
   },
   {
    "label": "  OR15L \u00b7 08:30-09:00",
-   "events": 128,
-   "reclaimed": 107,
+   "events": 130,
+   "reclaimed": 109,
    "accepted": 21,
    "printed": 22,
-   "rate": 0.205607476635514,
+   "rate": 0.2018348623853211,
    "ci": [
-    0.13988321742546095,
-    0.2917381232985993
+    0.13723625011246088,
+    0.28673505125157506
    ],
-   "base": 0.28224957219955243,
-   "fresh": 0.2782199584364729,
-   "lift": -0.07664209556403842,
-   "lift_fresh": -0.07261248180095889,
+   "base": 0.2797532426447328,
+   "fresh": 0.2758991431980969,
+   "lift": -0.07791838025941167,
+   "lift_fresh": -0.07406428081277577,
    "pay_close_med": 40.25,
    "pay_far_med": 55.5
   },
   {
    "label": "  OR15L \u00b7 09:00-10:00",
-   "events": 60,
-   "reclaimed": 54,
-   "accepted": 6,
+   "events": 62,
+   "reclaimed": 55,
+   "accepted": 7,
    "printed": 12,
-   "rate": 0.2222222222222222,
+   "rate": 0.21818181818181817,
    "ci": [
-    0.13195287989578958,
-    0.34938926831587813
+    0.12945897827653213,
+    0.3437028664047817
    ],
-   "base": 0.399452269170579,
-   "fresh": 0.2629338692744693,
-   "lift": -0.1772300469483568,
-   "lift_fresh": -0.04071164705224711,
+   "base": 0.3956112852664578,
+   "fresh": 0.2622329846786977,
+   "lift": -0.1774294670846396,
+   "lift_fresh": -0.04405116649687954,
    "pay_close_med": 61.0,
    "pay_far_med": 65.5
   },
   {
    "label": "OR15H sweep-reclaim -> printed the HOD",
-   "events": 234,
-   "reclaimed": 201,
+   "events": 238,
+   "reclaimed": 205,
    "accepted": 33,
    "printed": 28,
-   "rate": 0.13930348258706468,
+   "rate": 0.13658536585365855,
    "ci": [
-    0.09816885894812451,
-    0.19396711343248574
+    0.09621731612319204,
+    0.19032329647506427
    ],
-   "base": 0.2942680961390232,
-   "fresh": 0.21415332073883556,
-   "lift": -0.15496461355195854,
-   "lift_fresh": -0.07484983815177088,
+   "base": 0.29705634987384344,
+   "fresh": 0.21592264793787394,
+   "lift": -0.1604709840201849,
+   "lift_fresh": -0.0793372820842154,
    "pay_close_med": 43.5,
    "pay_far_med": 63.5
   },
   {
    "label": "  OR15H \u00b7 08:30-09:00",
-   "events": 146,
-   "reclaimed": 122,
+   "events": 149,
+   "reclaimed": 125,
    "accepted": 24,
    "printed": 20,
-   "rate": 0.16393442622950818,
+   "rate": 0.16,
    "ci": [
-    0.10870072431592571,
-    0.2396864544866324
+    0.1060275131696875,
+    0.23424767745197506
    ],
-   "base": 0.2231586238743939,
-   "fresh": 0.21669796713974138,
-   "lift": -0.05922419764488571,
-   "lift_fresh": -0.05276354091023319,
+   "base": 0.2247724137931033,
+   "fresh": 0.21818405330743426,
+   "lift": -0.0647724137931033,
+   "lift_fresh": -0.05818405330743426,
    "pay_close_med": 46.5,
    "pay_far_med": 80.75
   },
@@ -1264,46 +1265,46 @@
     0.04914398953912691,
     0.21123049107939723
    ],
-   "base": 0.33568075117370894,
-   "fresh": 0.21847083154225927,
-   "lift": -0.2304175932789721,
-   "lift_fresh": -0.11320767364752243,
+   "base": 0.33563218390804594,
+   "fresh": 0.21606386182324677,
+   "lift": -0.2303690260133091,
+   "lift_fresh": -0.11080070392850994,
    "pay_close_med": 47.25,
    "pay_far_med": 68.25
   },
   {
    "label": "ALO sweep-reclaim -> printed the HOD",
-   "events": 166,
-   "reclaimed": 123,
-   "accepted": 43,
+   "events": 170,
+   "reclaimed": 126,
+   "accepted": 44,
    "printed": 27,
-   "rate": 0.21951219512195122,
+   "rate": 0.21428571428571427,
    "ci": [
-    0.1554740213505587,
-    0.30054040924634323
+    0.1516552400686685,
+    0.2938229425784954
    ],
-   "base": 0.3539734341005382,
-   "fresh": 0.24090305317421837,
-   "lift": -0.134461238978587,
-   "lift_fresh": -0.021390858052267148,
+   "base": 0.3484948002189382,
+   "fresh": 0.23848372185933847,
+   "lift": -0.13420908593322392,
+   "lift_fresh": -0.024198007573624197,
    "pay_close_med": 41.25,
    "pay_far_med": 72.5
   },
   {
    "label": "  ALO \u00b7 08:30-09:00",
-   "events": 106,
-   "reclaimed": 72,
-   "accepted": 34,
+   "events": 110,
+   "reclaimed": 75,
+   "accepted": 35,
    "printed": 15,
-   "rate": 0.20833333333333334,
+   "rate": 0.2,
    "ci": [
-    0.1305194089904011,
-    0.3156948058995801
+    0.12512038203120296,
+    0.3041149455116171
    ],
-   "base": 0.21948356807511737,
-   "fresh": 0.21761060821869643,
-   "lift": -0.011150234741784032,
-   "lift_fresh": -0.00927727488536309,
+   "base": 0.21696551724137933,
+   "fresh": 0.2151774941258653,
+   "lift": -0.01696551724137932,
+   "lift_fresh": -0.015177494125865276,
    "pay_close_med": 41.25,
    "pay_far_med": 72.5
   },
@@ -1318,10 +1319,10 @@
     0.0787838582943011,
     0.355917915485911
    ],
-   "base": 0.4152414486921529,
-   "fresh": 0.25967779578263117,
-   "lift": -0.23667002012072433,
-   "lift_fresh": -0.0811063672112026,
+   "base": 0.4123152709359606,
+   "fresh": 0.2588574240373809,
+   "lift": -0.23374384236453202,
+   "lift_fresh": -0.0802859954659523,
    "pay_close_med": 68.25,
    "pay_far_med": 74.5
   },
@@ -1336,46 +1337,46 @@
     0.21610786039131383,
     0.6399492561448447
    ],
-   "base": 0.75,
-   "fresh": 0.3027806035211216,
-   "lift": -0.3382352941176471,
-   "lift_fresh": 0.1089841023612313,
+   "base": 0.7490872210953347,
+   "fresh": 0.2989855274124373,
+   "lift": -0.33732251521298173,
+   "lift_fresh": 0.11277917846991564,
    "pay_close_med": 28.25,
    "pay_far_med": 72.5
   },
   {
    "label": "AHI sweep-reclaim -> printed the HOD",
-   "events": 205,
-   "reclaimed": 141,
-   "accepted": 64,
+   "events": 207,
+   "reclaimed": 142,
+   "accepted": 65,
    "printed": 21,
-   "rate": 0.14893617021276595,
+   "rate": 0.14788732394366197,
    "ci": [
-    0.09952282862708753,
-    0.21697188007538468
+    0.09880632994575239,
+    0.21551825234078315
    ],
-   "base": 0.2649086005394066,
-   "fresh": 0.16436589077390232,
-   "lift": -0.11597243032664067,
-   "lift_fresh": -0.015429720561136367,
+   "base": 0.2651044196211753,
+   "fresh": 0.16511596773861587,
+   "lift": -0.11721709567751334,
+   "lift_fresh": -0.017228643794953896,
    "pay_close_med": 24.25,
    "pay_far_med": 50.5
   },
   {
    "label": "  AHI \u00b7 08:30-09:00",
-   "events": 149,
-   "reclaimed": 92,
-   "accepted": 57,
+   "events": 151,
+   "reclaimed": 93,
+   "accepted": 58,
    "printed": 14,
-   "rate": 0.15217391304347827,
+   "rate": 0.15053763440860216,
    "ci": [
-    0.092864555668254,
-    0.23936695966537982
+    0.09184093232479834,
+    0.2369599135926586
    ],
-   "base": 0.14811696264543786,
-   "fresh": 0.14593288144319685,
-   "lift": 0.00405695039804041,
-   "lift_fresh": 0.006241031600281416,
+   "base": 0.1496848350018539,
+   "fresh": 0.14741346979681158,
+   "lift": 0.0008527994067482614,
+   "lift_fresh": 0.0031241646117905753,
    "pay_close_med": 36.5,
    "pay_far_med": 59.75
   },
@@ -1390,10 +1391,10 @@
     0.008455769471923294,
     0.22669816586235464
    ],
-   "base": 0.3596579476861167,
-   "fresh": 0.20782836744327537,
-   "lift": -0.3120389000670691,
-   "lift_fresh": -0.16020931982422776,
+   "base": 0.35911330049261087,
+   "fresh": 0.20520106571217991,
+   "lift": -0.31149425287356325,
+   "lift_fresh": -0.1575820180931323,
    "pay_close_med": 21.5,
    "pay_far_med": 130.25
   },
@@ -1408,64 +1409,64 @@
     0.0955488907167594,
     0.47262245889171595
    ],
-   "base": 0.5049710024855013,
-   "fresh": 0.16692166775611422,
-   "lift": -0.2696768848384425,
-   "lift_fresh": 0.0683724498909446,
+   "base": 0.5048681541582151,
+   "fresh": 0.1687513293130883,
+   "lift": -0.26957403651115625,
+   "lift_fresh": 0.06654278833397051,
    "pay_close_med": 31.5,
    "pay_far_med": 44.0
   },
   {
    "label": "LLO sweep-reclaim -> printed the HOD",
-   "events": 178,
-   "reclaimed": 163,
+   "events": 182,
+   "reclaimed": 167,
    "accepted": 15,
    "printed": 34,
-   "rate": 0.2085889570552147,
+   "rate": 0.20359281437125748,
    "ci": [
-    0.15328227961519503,
-    0.2773153650969151
+    0.14950910277111326,
+    0.2710067434864727
    ],
-   "base": 0.3440119243065757,
-   "fresh": 0.23746889631758536,
-   "lift": -0.13542296725136097,
-   "lift_fresh": -0.028879939262370646,
+   "base": 0.3400991121205863,
+   "fresh": 0.23589091960015138,
+   "lift": -0.13650629774932882,
+   "lift_fresh": -0.0322981052288939,
    "pay_close_med": 36.25,
    "pay_far_med": 64.75
   },
   {
    "label": "  LLO \u00b7 08:30-09:00",
-   "events": 104,
-   "reclaimed": 97,
+   "events": 106,
+   "reclaimed": 99,
    "accepted": 7,
    "printed": 21,
-   "rate": 0.21649484536082475,
+   "rate": 0.21212121212121213,
    "ci": [
-    0.14618670657065763,
-    0.3084034625658892
+    0.14313429916193274,
+    0.302615280774591
    ],
-   "base": 0.21420792798025265,
-   "fresh": 0.2071220994096709,
-   "lift": 0.002286917380572101,
-   "lift_fresh": 0.009372745951153838,
+   "base": 0.21111111111111117,
+   "fresh": 0.20431081534091458,
+   "lift": 0.001010101010100961,
+   "lift_fresh": 0.007810396780297546,
    "pay_close_med": 36.25,
    "pay_far_med": 73.25
   },
   {
    "label": "  LLO \u00b7 09:00-10:00",
-   "events": 36,
-   "reclaimed": 31,
+   "events": 38,
+   "reclaimed": 33,
    "accepted": 5,
    "printed": 5,
-   "rate": 0.16129032258064516,
+   "rate": 0.15151515151515152,
    "ci": [
-    0.07092519905439934,
-    0.3263470272497887
+    0.06650359257960956,
+    0.30920213138460484
    ],
-   "base": 0.3942526124488868,
-   "fresh": 0.26002949136812264,
-   "lift": -0.23296228986824166,
-   "lift_fresh": -0.09873916878747749,
+   "base": 0.3887147335423197,
+   "fresh": 0.2596263809351637,
+   "lift": -0.2371995820271682,
+   "lift_fresh": -0.1081112294200122,
    "pay_close_med": 49.0,
    "pay_far_med": 56.5
   },
@@ -1480,10 +1481,10 @@
     0.01046013064516424,
     0.269825452035628
    ],
-   "base": 0.5633802816901409,
-   "fresh": 0.25065049655847504,
-   "lift": -0.5045567522783762,
-   "lift_fresh": -0.19182696714671033,
+   "base": 0.5638945233265719,
+   "fresh": 0.2559740177246514,
+   "lift": -0.5050709939148071,
+   "lift_fresh": -0.19715048831288667,
    "pay_close_med": 31.5,
    "pay_far_med": 71.5
   },
@@ -1498,64 +1499,64 @@
     0.20304991926931162,
     0.6138133141934384
    ],
-   "base": 0.7498043818466353,
-   "fresh": 0.34970076572902514,
-   "lift": -0.36091549295774644,
-   "lift_fresh": 0.03918812315986375,
+   "base": 0.7490421455938698,
+   "fresh": 0.34709911012751565,
+   "lift": -0.36015325670498094,
+   "lift_fresh": 0.04178977876137324,
    "pay_close_med": 16.5,
    "pay_far_med": 46.0
   },
   {
    "label": "LHI sweep-reclaim -> printed the HOD",
-   "events": 203,
+   "events": 205,
    "reclaimed": 170,
-   "accepted": 33,
+   "accepted": 35,
    "printed": 27,
    "rate": 0.1588235294117647,
    "ci": [
     0.11150729412985383,
     0.2212185896632083
    ],
-   "base": 0.27023473202549325,
-   "fresh": 0.17859428674356295,
-   "lift": -0.11141120261372855,
-   "lift_fresh": -0.019770757331798255,
+   "base": 0.2717024502200353,
+   "fresh": 0.17975349917182734,
+   "lift": -0.11287892080827061,
+   "lift_fresh": -0.020929969760062644,
    "pay_close_med": 33.25,
    "pay_far_med": 67.75
   },
   {
    "label": "  LHI \u00b7 08:30-09:00",
-   "events": 126,
+   "events": 127,
    "reclaimed": 106,
-   "accepted": 20,
+   "accepted": 21,
    "printed": 15,
    "rate": 0.14150943396226415,
    "ci": [
     0.0876695987836644,
     0.2204249664812261
    ],
-   "base": 0.16074275843741695,
-   "fresh": 0.15853838767305867,
-   "lift": -0.019233324475152802,
-   "lift_fresh": -0.01702895371079452,
+   "base": 0.16304489264801555,
+   "fresh": 0.16075829805274208,
+   "lift": -0.021535458685751407,
+   "lift_fresh": -0.019248864090477935,
    "pay_close_med": 42.75,
    "pay_far_med": 68.25
   },
   {
    "label": "  LHI \u00b7 09:00-10:00",
-   "events": 42,
+   "events": 43,
    "reclaimed": 35,
-   "accepted": 7,
+   "accepted": 8,
    "printed": 4,
    "rate": 0.11428571428571428,
    "ci": [
     0.0453510585448975,
     0.2595179478812023
    ],
-   "base": 0.34134808853118714,
-   "fresh": 0.21877843251456197,
-   "lift": -0.22706237424547288,
-   "lift_fresh": -0.10449271822884769,
+   "base": 0.3411822660098523,
+   "fresh": 0.21646408604897197,
+   "lift": -0.22689655172413803,
+   "lift_fresh": -0.10217837176325768,
    "pay_close_med": 38.25,
    "pay_far_med": 68.25
   },
@@ -1570,118 +1571,118 @@
     0.14164435051961052,
     0.5559606813326594
    ],
-   "base": 0.6630574080525556,
-   "fresh": 0.2257223858135883,
-   "lift": -0.35055740805255564,
-   "lift_fresh": 0.0867776141864117,
+   "base": 0.6639937060016704,
+   "fresh": 0.22562126144775801,
+   "lift": -0.3514937060016704,
+   "lift_fresh": 0.08687873855224199,
    "pay_close_med": 18.25,
    "pay_far_med": 56.0
   },
   {
    "label": "VWAP- sweep-reclaim -> printed the LOD",
-   "events": 144,
-   "reclaimed": 126,
+   "events": 148,
+   "reclaimed": 130,
    "accepted": 18,
-   "printed": 9,
-   "rate": 0.07142857142857142,
+   "printed": 10,
+   "rate": 0.07692307692307693,
    "ci": [
-    0.0380307121123797,
-    0.1301865618583662
+    0.04231697987575295,
+    0.13581597729152536
    ],
-   "base": 0.22328414934048738,
-   "fresh": 0.212912384669557,
-   "lift": -0.15185557791191595,
-   "lift_fresh": -0.14148381324098558,
+   "base": 0.22066312997347481,
+   "fresh": 0.21067623643782935,
+   "lift": -0.1437400530503979,
+   "lift_fresh": -0.13375315951475242,
    "pay_close_med": 35.25,
    "pay_far_med": 50.0
   },
   {
    "label": "  VWAP- \u00b7 08:30-09:00",
-   "events": 134,
-   "reclaimed": 119,
+   "events": 138,
+   "reclaimed": 123,
    "accepted": 15,
-   "printed": 9,
-   "rate": 0.07563025210084033,
+   "printed": 10,
+   "rate": 0.08130081300813008,
    "ci": [
-    0.040296784434261525,
-    0.13750617482383995
+    0.04475838884502016,
+    0.14320518146629724
    ],
-   "base": 0.2114747307373654,
-   "fresh": 0.2100732569366728,
-   "lift": -0.13584447863652505,
-   "lift_fresh": -0.1344430048358325,
+   "base": 0.20925147182506307,
+   "fresh": 0.20795561749482164,
+   "lift": -0.127950658816933,
+   "lift_fresh": -0.12665480448669156,
    "pay_close_med": 35.25,
    "pay_far_med": 50.0
   },
   {
    "label": "VWAP+ sweep-reclaim -> printed the HOD",
-   "events": 136,
-   "reclaimed": 124,
+   "events": 138,
+   "reclaimed": 126,
    "accepted": 12,
    "printed": 6,
-   "rate": 0.04838709677419355,
+   "rate": 0.047619047619047616,
    "ci": [
-    0.022362105662260094,
-    0.1015537401969907
+    0.022004188389251493,
+    0.10000293413542474
    ],
-   "base": 0.18289981826442525,
-   "fresh": 0.162481858876122,
-   "lift": -0.1345127214902317,
-   "lift_fresh": -0.11409476210192844,
+   "base": 0.18653530377668318,
+   "fresh": 0.1663273855773785,
+   "lift": -0.13891625615763556,
+   "lift_fresh": -0.11870833795833088,
    "pay_close_med": 54.25,
    "pay_far_med": 68.25
   },
   {
    "label": "  VWAP+ \u00b7 08:30-09:00",
-   "events": 125,
-   "reclaimed": 113,
+   "events": 127,
+   "reclaimed": 115,
    "accepted": 12,
    "printed": 6,
-   "rate": 0.05309734513274336,
+   "rate": 0.05217391304347826,
    "ci": [
-    0.024559255637348558,
-    0.11102259192379405
+    0.024128220145076713,
+    0.1091719037172745
    ],
-   "base": 0.16003988532967717,
-   "fresh": 0.15949166563552652,
-   "lift": -0.1069425401969338,
-   "lift_fresh": -0.10639432050278316,
+   "base": 0.16437781109445274,
+   "fresh": 0.16378955259212494,
+   "lift": -0.11220389805097447,
+   "lift_fresh": -0.11161563954864667,
    "pay_close_med": 54.25,
    "pay_far_med": 68.25
   },
   {
    "label": "VW1L sweep-reclaim -> printed the LOD",
-   "events": 243,
-   "reclaimed": 207,
-   "accepted": 36,
+   "events": 248,
+   "reclaimed": 210,
+   "accepted": 38,
    "printed": 16,
-   "rate": 0.07729468599033816,
+   "rate": 0.0761904761904762,
    "ci": [
-    0.04813467549874949,
-    0.12185834295681143
+    0.04743897751394584,
+    0.12016919601262711
    ],
-   "base": 0.41215894400217734,
-   "fresh": 0.2779235721986537,
-   "lift": -0.33486425801183917,
-   "lift_fresh": -0.20062888620831554,
+   "base": 0.4098686371100165,
+   "fresh": 0.27634355671675526,
+   "lift": -0.3336781609195403,
+   "lift_fresh": -0.20015308052627906,
    "pay_close_med": 45.5,
    "pay_far_med": 56.5
   },
   {
    "label": "  VW1L \u00b7 09:00-10:00",
-   "events": 209,
-   "reclaimed": 176,
-   "accepted": 33,
+   "events": 213,
+   "reclaimed": 178,
+   "accepted": 35,
    "printed": 15,
-   "rate": 0.08522727272727272,
+   "rate": 0.08426966292134831,
    "ci": [
-    0.052327443232824546,
-    0.13584703920060573
+    0.05173171722256876,
+    0.13437311247536615
    ],
-   "base": 0.37465989116517284,
-   "fresh": 0.2782052626948856,
-   "lift": -0.28943261843790014,
-   "lift_fresh": -0.1929779899676129,
+   "base": 0.37101898488957774,
+   "fresh": 0.2758496027822976,
+   "lift": -0.28674932196822944,
+   "lift_fresh": -0.1915799398609493,
    "pay_close_med": 45.5,
    "pay_far_med": 56.5
   },
@@ -1696,100 +1697,100 @@
     0.008069219301147859,
     0.21798489499518053
    ],
-   "base": 0.5702624839948783,
-   "fresh": 0.25461577185657036,
-   "lift": -0.5248079385403329,
-   "lift_fresh": -0.2091612264020249,
+   "base": 0.570846394984326,
+   "fresh": 0.2608099279035974,
+   "lift": -0.5253918495297806,
+   "lift_fresh": -0.21535538244905195,
    "pay_close_med": 40.0,
    "pay_far_med": 44.5
   },
   {
    "label": "VW1H sweep-reclaim -> printed the HOD",
-   "events": 256,
-   "reclaimed": 200,
-   "accepted": 56,
+   "events": 261,
+   "reclaimed": 202,
+   "accepted": 59,
    "printed": 17,
-   "rate": 0.085,
+   "rate": 0.08415841584158416,
    "ci": [
-    0.05374529946985246,
-    0.13189688544235392
+    0.05320634173327795,
+    0.13063210491696187
    ],
-   "base": 0.34223591549295773,
-   "fresh": 0.23080496203555853,
-   "lift": -0.2572359154929577,
-   "lift_fresh": -0.14580496203555854,
+   "base": 0.34472516217138977,
+   "fresh": 0.2289266117170984,
+   "lift": -0.2605667463298056,
+   "lift_fresh": -0.14476819587551426,
    "pay_close_med": 38.25,
    "pay_far_med": 63.0
   },
   {
    "label": "  VW1H \u00b7 09:00-10:00",
-   "events": 226,
+   "events": 228,
    "reclaimed": 174,
-   "accepted": 52,
+   "accepted": 54,
    "printed": 16,
    "rate": 0.09195402298850575,
    "ci": [
     0.057393641975025125,
     0.14414300636821964
    ],
-   "base": 0.3101019912578922,
-   "fresh": 0.2343939909121005,
-   "lift": -0.21814796826938643,
-   "lift_fresh": -0.14243996792359476,
+   "base": 0.3105826397146257,
+   "fresh": 0.23247107023884442,
+   "lift": -0.21862861672611994,
+   "lift_fresh": -0.14051704725033867,
    "pay_close_med": 39.5,
    "pay_far_med": 63.0
   },
   {
    "label": "  VW1H \u00b7 10:00-11:30",
-   "events": 19,
-   "reclaimed": 17,
-   "accepted": 2,
+   "events": 21,
+   "reclaimed": 18,
+   "accepted": 3,
    "printed": 0,
    "rate": 0.0,
    "ci": [
     0.0,
-    0.18432366037156456
+    0.1758845505823749
    ],
-   "base": 0.48840099420049704,
-   "fresh": 0.1744904744809827,
-   "lift": -0.48840099420049704,
-   "lift_fresh": -0.1744904744809827,
+   "base": 0.48620689655172405,
+   "fresh": 0.1782935330416318,
+   "lift": -0.48620689655172405,
+   "lift_fresh": -0.1782935330416318,
    "pay_close_med": null,
    "pay_far_med": null
   },
   {
    "label": "VW2L sweep-reclaim -> printed the LOD",
-   "events": 196,
-   "reclaimed": 180,
+   "events": 201,
+   "reclaimed": 185,
    "accepted": 16,
    "printed": 23,
-   "rate": 0.12777777777777777,
+   "rate": 0.12432432432432433,
    "ci": [
-    0.08667435764393652,
-    0.18443729499616232
+    0.08428964287782095,
+    0.17964372773543377
    ],
-   "base": 0.45659115667700745,
-   "fresh": 0.2801001863524503,
-   "lift": -0.3288133788992297,
-   "lift_fresh": -0.15232240857467255,
+   "base": 0.45574907206454773,
+   "fresh": 0.28080296349878325,
+   "lift": -0.3314247477402234,
+   "lift_fresh": -0.15647863917445892,
    "pay_close_med": 40.0,
    "pay_far_med": 53.75
   },
   {
    "label": "  VW2L \u00b7 09:00-10:00",
-   "events": 147,
-   "reclaimed": 135,
+   "events": 150,
+   "reclaimed": 138,
    "accepted": 12,
    "printed": 16,
-   "rate": 0.11851851851851852,
+   "rate": 0.11594202898550725,
    "ci": [
-    0.07428284793141758,
-    0.18386456610011193
+    0.07263840593820414,
+    0.18004909899687838
    ],
-   "base": 0.38531559728742826,
-   "fresh": 0.27340052517271823,
-   "lift": -0.26679707876890973,
-   "lift_fresh": -0.1548820066541997,
+   "base": 0.38125937031484247,
+   "fresh": 0.27253781474492944,
+   "lift": -0.2653173413293352,
+   "lift_fresh": -0.15659578575942218,
    "pay_close_med": 45.5,
    "pay_far_med": 60.0
   },
@@ -1804,352 +1805,370 @@
     0.06678568000728924,
     0.3585347038786943
    ],
-   "base": 0.5773180751173709,
-   "fresh": 0.25200524771471966,
-   "lift": -0.41065140845070425,
-   "lift_fresh": -0.085338581048053,
+   "base": 0.5784482758620692,
+   "fresh": 0.2587391944420708,
+   "lift": -0.4117816091954025,
+   "lift_fresh": -0.09207252777540412,
    "pay_close_med": 63.25,
    "pay_far_med": 77.5
   },
   {
    "label": "  VW2L \u00b7 11:30-15:00",
-   "events": 22,
-   "reclaimed": 21,
+   "events": 24,
+   "reclaimed": 23,
    "accepted": 1,
    "printed": 3,
-   "rate": 0.14285714285714285,
+   "rate": 0.13043478260869565,
    "ci": [
-    0.04980921798213492,
-    0.346364941492295
+    0.04537576514344702,
+    0.32127897973018194
    ],
-   "base": 0.7768175602496014,
-   "fresh": 0.35527793809384883,
-   "lift": -0.6339604173924585,
-   "lift_fresh": -0.21242079523670598,
+   "base": 0.7746533307740593,
+   "fresh": 0.3534169193854329,
+   "lift": -0.6442185481653636,
+   "lift_fresh": -0.22298213677673726,
    "pay_close_med": 24.0,
    "pay_far_med": 50.75
   },
   {
    "label": "VW2H sweep-reclaim -> printed the HOD",
-   "events": 205,
-   "reclaimed": 178,
-   "accepted": 27,
+   "events": 209,
+   "reclaimed": 180,
+   "accepted": 29,
    "printed": 20,
-   "rate": 0.11235955056179775,
+   "rate": 0.1111111111111111,
    "ci": [
-    0.07392192832223898,
-    0.1671758182879976
+    0.07308697860315694,
+    0.16538788236411053
    ],
-   "base": 0.3690061718626365,
-   "fresh": 0.2193872284021021,
-   "lift": -0.25664662130083876,
-   "lift_fresh": -0.10702767784030434,
+   "base": 0.37149425287356336,
+   "fresh": 0.21934760585195048,
+   "lift": -0.26038314176245225,
+   "lift_fresh": -0.10823649474083938,
    "pay_close_med": 31.0,
    "pay_far_med": 50.25
   },
   {
    "label": "  VW2H \u00b7 09:00-10:00",
-   "events": 165,
-   "reclaimed": 143,
-   "accepted": 22,
+   "events": 167,
+   "reclaimed": 144,
+   "accepted": 23,
    "printed": 14,
-   "rate": 0.0979020979020979,
+   "rate": 0.09722222222222222,
    "ci": [
-    0.05921616223092841,
-    0.15762702117213995
+    0.058798512181177626,
+    0.15657794478357384
    ],
-   "base": 0.32214616369545945,
-   "fresh": 0.2289652693299936,
-   "lift": -0.22424406579336154,
-   "lift_fresh": -0.1310631714278957,
+   "base": 0.32215038314176236,
+   "fresh": 0.22713684700635983,
+   "lift": -0.22492816091954015,
+   "lift_fresh": -0.12991462478413762,
    "pay_close_med": 38.25,
    "pay_far_med": 59.5
   },
   {
    "label": "  VW2H \u00b7 10:00-11:30",
-   "events": 23,
+   "events": 24,
    "reclaimed": 21,
-   "accepted": 2,
+   "accepted": 3,
    "printed": 4,
    "rate": 0.19047619047619047,
    "ci": [
     0.07667440615177301,
     0.40000986539273287
    ],
-   "base": 0.4986586183769282,
-   "fresh": 0.1690899252236965,
-   "lift": -0.30818242790073774,
-   "lift_fresh": 0.021386265252493958,
+   "base": 0.4986863711001642,
+   "fresh": 0.1716975203655399,
+   "lift": -0.30821018062397376,
+   "lift_fresh": 0.01877867011065057,
    "pay_close_med": 18.25,
    "pay_far_med": 28.75
   },
   {
+   "label": "  VW2H \u00b7 11:30-15:00",
+   "events": 18,
+   "reclaimed": 15,
+   "accepted": 3,
+   "printed": 2,
+   "rate": 0.13333333333333333,
+   "ci": [
+    0.0373604698913593,
+    0.3788249920651624
+   ],
+   "base": 0.6671264367816092,
+   "fresh": 0.21128101045059458,
+   "lift": -0.5337931034482759,
+   "lift_fresh": -0.07794767711726125,
+   "pay_close_med": 33.0,
+   "pay_far_med": 50.25
+  },
+  {
    "label": "DPOC- sweep-reclaim -> printed the LOD",
-   "events": 144,
-   "reclaimed": 131,
+   "events": 146,
+   "reclaimed": 133,
    "accepted": 13,
    "printed": 6,
-   "rate": 0.04580152671755725,
+   "rate": 0.045112781954887216,
    "ci": [
-    0.021157596293058425,
-    0.09632543564960615
+    0.020836924674096327,
+    0.09492904123100854
    ],
-   "base": 0.37063219008708737,
-   "fresh": 0.2821583403494791,
-   "lift": -0.3248306633695301,
-   "lift_fresh": -0.23635681363192187,
+   "base": 0.3669691470054444,
+   "fresh": 0.27934073196829096,
+   "lift": -0.3218563650505572,
+   "lift_fresh": -0.23422795001340374,
    "pay_close_med": 55.0,
    "pay_far_med": 81.25
   },
   {
    "label": "  DPOC- \u00b7 09:00-10:00",
-   "events": 142,
-   "reclaimed": 129,
+   "events": 144,
+   "reclaimed": 131,
    "accepted": 13,
    "printed": 5,
-   "rate": 0.03875968992248062,
+   "rate": 0.03816793893129771,
    "ci": [
-    0.01666725738662231,
-    0.08752901847876926
+    0.016411091437379455,
+    0.08623972255474167
    ],
-   "base": 0.3678076209193143,
-   "fresh": 0.2823390188321165,
-   "lift": -0.32904793099683366,
-   "lift_fresh": -0.24357932890963585,
+   "base": 0.36412213740458,
+   "fresh": 0.2793426746984013,
+   "lift": -0.3259541984732823,
+   "lift_fresh": -0.24117473576710358,
    "pay_close_med": 55.0,
    "pay_far_med": 56.5
   },
   {
    "label": "DPOC+ sweep-reclaim -> printed the HOD",
-   "events": 140,
-   "reclaimed": 121,
+   "events": 144,
+   "reclaimed": 125,
    "accepted": 19,
    "printed": 4,
-   "rate": 0.03305785123966942,
+   "rate": 0.032,
    "ci": [
-    0.0129289722168894,
-    0.08192402550181974
+    0.012512936695839402,
+    0.07939526686574319
    ],
-   "base": 0.31474799208473986,
-   "fresh": 0.22920604498877944,
-   "lift": -0.28169014084507044,
-   "lift_fresh": -0.19614819374911002,
+   "base": 0.3161103448275861,
+   "fresh": 0.22724638585837983,
+   "lift": -0.2841103448275861,
+   "lift_fresh": -0.19524638585837983,
    "pay_close_med": 18.75,
    "pay_far_med": 32.0
   },
   {
    "label": "  DPOC+ \u00b7 09:00-10:00",
-   "events": 137,
-   "reclaimed": 119,
+   "events": 140,
+   "reclaimed": 122,
    "accepted": 18,
    "printed": 4,
-   "rate": 0.03361344537815126,
+   "rate": 0.03278688524590164,
    "ci": [
-    0.013147540181404155,
-    0.08324977147848957
+    0.012822391019358004,
+    0.08127685755980818
    ],
-   "base": 0.31204876316723873,
-   "fresh": 0.2301170709549774,
-   "lift": -0.2784353177890875,
-   "lift_fresh": -0.19650362557682616,
+   "base": 0.3126342566421706,
+   "fresh": 0.2283599136910404,
+   "lift": -0.279847371396269,
+   "lift_fresh": -0.19557302844513874,
    "pay_close_med": 18.75,
    "pay_far_med": 32.0
   },
   {
    "label": "DVAL sweep-reclaim -> printed the LOD",
-   "events": 253,
-   "reclaimed": 213,
-   "accepted": 40,
+   "events": 258,
+   "reclaimed": 217,
+   "accepted": 41,
    "printed": 17,
-   "rate": 0.07981220657276995,
+   "rate": 0.07834101382488479,
    "ci": [
-    0.05042523581880395,
-    0.12408740382229813
+    0.049484680283340216,
+    0.12186709402005189
    ],
-   "base": 0.4210970045625868,
-   "fresh": 0.2755127218475114,
-   "lift": -0.34128479798981687,
-   "lift_fresh": -0.19570051527474147,
+   "base": 0.4184649610678532,
+   "fresh": 0.2744242534667149,
+   "lift": -0.3401239472429684,
+   "lift_fresh": -0.1960832396418301,
    "pay_close_med": 46.0,
    "pay_far_med": 61.5
   },
   {
    "label": "  DVAL \u00b7 09:00-10:00",
-   "events": 209,
-   "reclaimed": 176,
-   "accepted": 33,
+   "events": 213,
+   "reclaimed": 179,
+   "accepted": 34,
    "printed": 16,
-   "rate": 0.09090909090909091,
+   "rate": 0.0893854748603352,
    "ci": [
-    0.056732230508081204,
-    0.142563149426261
+    0.05576821955377322,
+    0.14025719260626038
    ],
-   "base": 0.37974151728553135,
-   "fresh": 0.27632548509476496,
-   "lift": -0.28883242637644047,
-   "lift_fresh": -0.18541639418567404,
+   "base": 0.37603544596416877,
+   "fresh": 0.27447607256759776,
+   "lift": -0.28664997110383356,
+   "lift_fresh": -0.18509059770726255,
    "pay_close_med": 49.0,
    "pay_far_med": 61.75
   },
   {
    "label": "  DVAL \u00b7 10:00-11:30",
-   "events": 28,
-   "reclaimed": 25,
+   "events": 29,
+   "reclaimed": 26,
    "accepted": 3,
    "printed": 1,
-   "rate": 0.04,
+   "rate": 0.038461538461538464,
    "ci": [
-    0.007096050386699165,
-    0.19544472405022525
+    0.0068218089769898765,
+    0.18893176991958405
    ],
-   "base": 0.569718309859155,
-   "fresh": 0.25726339211896254,
-   "lift": -0.5297183098591549,
-   "lift_fresh": -0.21726339211896253,
+   "base": 0.5725464190981432,
+   "fresh": 0.26142589672247146,
+   "lift": -0.5340848806366048,
+   "lift_fresh": -0.222964358260933,
    "pay_close_med": 40.0,
    "pay_far_med": 44.5
   },
   {
    "label": "DVAH sweep-reclaim -> printed the HOD",
-   "events": 265,
-   "reclaimed": 207,
-   "accepted": 58,
+   "events": 271,
+   "reclaimed": 210,
+   "accepted": 61,
    "printed": 14,
-   "rate": 0.06763285024154589,
+   "rate": 0.06666666666666667,
    "ci": [
-    0.04071115951879931,
-    0.11031027078717445
+    0.04012346405717865,
+    0.10877927516662064
    ],
-   "base": 0.35881472409335236,
-   "fresh": 0.22425911872440404,
-   "lift": -0.2911818738518065,
-   "lift_fresh": -0.15662626848285816,
+   "base": 0.3608210180623974,
+   "fresh": 0.22219627424996036,
+   "lift": -0.29415435139573076,
+   "lift_fresh": -0.1555296075832937,
    "pay_close_med": 26.25,
    "pay_far_med": 61.25
   },
   {
    "label": "  DVAH \u00b7 09:00-10:00",
-   "events": 225,
-   "reclaimed": 171,
-   "accepted": 54,
+   "events": 229,
+   "reclaimed": 172,
+   "accepted": 57,
    "printed": 13,
-   "rate": 0.07602339181286549,
+   "rate": 0.0755813953488372,
    "ci": [
-    0.04496360130209782,
-    0.12571431516629414
+    0.04469900592107299,
+    0.12500827608727996
    ],
-   "base": 0.3134214644592702,
-   "fresh": 0.23141729595673374,
-   "lift": -0.23739807264640472,
-   "lift_fresh": -0.15539390414386825,
+   "base": 0.31437449879711327,
+   "fresh": 0.229046223960696,
+   "lift": -0.23879310344827606,
+   "lift_fresh": -0.15346482861185878,
    "pay_close_med": 25.25,
    "pay_far_med": 59.5
   },
   {
    "label": "  DVAH \u00b7 10:00-11:30",
-   "events": 24,
-   "reclaimed": 21,
+   "events": 25,
+   "reclaimed": 22,
    "accepted": 3,
    "printed": 0,
    "rate": 0.0,
    "ci": [
-    0.0,
-    0.15464382326420195
+    1.3877787807814457e-17,
+    0.14865952572596125
    ],
-   "base": 0.4909456740442656,
-   "fresh": 0.1730376353096158,
-   "lift": -0.4909456740442656,
-   "lift_fresh": -0.1730376353096158,
+   "base": 0.48777429467084626,
+   "fresh": 0.1754551088691874,
+   "lift": -0.48777429467084626,
+   "lift_fresh": -0.1754551088691874,
    "pay_close_med": null,
    "pay_far_med": null
   },
   {
    "label": "  DVAH \u00b7 11:30-15:00",
-   "events": 16,
-   "reclaimed": 15,
+   "events": 17,
+   "reclaimed": 16,
    "accepted": 1,
    "printed": 1,
-   "rate": 0.06666666666666667,
+   "rate": 0.0625,
    "ci": [
-    0.011866588606194856,
-    0.2981707755242399
+    0.01111905730833121,
+    0.2832926836802987
    ],
-   "base": 0.6913145539906103,
-   "fresh": 0.21436597505654875,
-   "lift": -0.6246478873239436,
-   "lift_fresh": -0.1476993083898821,
+   "base": 0.6855603448275862,
+   "fresh": 0.21282841725811483,
+   "lift": -0.6230603448275862,
+   "lift_fresh": -0.15032841725811483,
    "pay_close_med": 26.25,
    "pay_far_med": 75.5
   },
   {
    "label": "ONL+PDL pooled",
-   "events": 270,
-   "reclaimed": 212,
-   "accepted": 58,
+   "events": 276,
+   "reclaimed": 216,
+   "accepted": 60,
    "printed": 47,
-   "rate": 0.22169811320754718,
+   "rate": 0.2175925925925926,
    "ci": [
-    0.17101340277107793,
-    0.28228938964706585
+    0.16776161920762286,
+    0.27729336583615416
    ],
-   "base": 0.4001793781557268,
-   "fresh": 0.24729462889345827,
-   "lift": -0.17848126494817962,
-   "lift_fresh": -0.025596515685911092,
+   "base": 0.3959770114942529,
+   "fresh": 0.24618231756718514,
+   "lift": -0.17838441890166032,
+   "lift_fresh": -0.028589724974592556,
    "pay_close_med": 36.25,
    "pay_far_med": 73.25
   },
   {
    "label": "ONH+PDH pooled",
-   "events": 348,
+   "events": 352,
    "reclaimed": 266,
-   "accepted": 82,
+   "accepted": 86,
    "printed": 43,
    "rate": 0.16165413533834586,
    "ci": [
     0.12228319015251368,
     0.2106588024831659
    ],
-   "base": 0.31186977733988086,
-   "fresh": 0.1804235418854019,
-   "lift": -0.150215642001535,
-   "lift_fresh": -0.018769406547056056,
+   "base": 0.31323423999684213,
+   "fresh": 0.1815789915040343,
+   "lift": -0.15158010465849628,
+   "lift_fresh": -0.019924856165688454,
    "pay_close_med": 25.75,
    "pay_far_med": 56.0
   },
   {
    "label": "ON sweep \u00b7 open inside ON",
-   "events": 327,
-   "reclaimed": 279,
-   "accepted": 48,
+   "events": 333,
+   "reclaimed": 283,
+   "accepted": 50,
    "printed": 52,
-   "rate": 0.1863799283154122,
+   "rate": 0.18374558303886926,
    "ci": [
-    0.145056931426145,
-    0.2362222014878252
+    0.14296302208988806,
+    0.23299918143986495
    ],
-   "base": 0.3480732604143421,
-   "fresh": 0.21226101712659481,
-   "lift": -0.16169333209892991,
-   "lift_fresh": -0.025881088811182618,
+   "base": 0.3468250371128032,
+   "fresh": 0.21250143929322002,
+   "lift": -0.16307945407393395,
+   "lift_fresh": -0.02875585625435076,
    "pay_close_med": 30.0,
    "pay_far_med": 64.75
   },
   {
    "label": "reclaim within 5 bars",
-   "events": 382,
-   "reclaimed": 382,
+   "events": 386,
+   "reclaimed": 386,
    "accepted": 0,
    "printed": 59,
-   "rate": 0.1544502617801047,
+   "rate": 0.15284974093264247,
    "ci": [
-    0.1216677962008196,
-    0.1941136021761309
+    0.12038613968134235,
+    0.19215515914361628
    ],
-   "base": 0.3496505646648842,
-   "fresh": 0.2059481067128855,
-   "lift": -0.1952003028847795,
-   "lift_fresh": -0.051497844932780784,
+   "base": 0.3487662075518707,
+   "fresh": 0.20643484396413758,
+   "lift": -0.19591646661922824,
+   "lift_fresh": -0.05358510303149511,
    "pay_close_med": 31.5,
    "pay_far_med": 68.0
   },
@@ -2164,28 +2183,28 @@
     0.23775702086652156,
     0.4217035647010175
    ],
-   "base": 0.35655076291079807,
-   "fresh": 0.22653069481883117,
-   "lift": -0.033634096244131384,
-   "lift_fresh": 0.09638597184783551,
+   "base": 0.3565373563218392,
+   "fresh": 0.2269952350461245,
+   "lift": -0.03362068965517251,
+   "lift_fresh": 0.09592143162054217,
    "pay_close_med": 28.25,
    "pay_far_med": 68.25
   },
   {
    "label": "depth <= 3 pts",
-   "events": 245,
-   "reclaimed": 245,
+   "events": 249,
+   "reclaimed": 249,
    "accepted": 0,
    "printed": 28,
-   "rate": 0.11428571428571428,
+   "rate": 0.11244979919678715,
    "ci": [
-    0.08026342048020743,
-    0.16021727085114554
+    0.07895440163986665,
+    0.15772184150999474
    ],
-   "base": 0.36362303045938427,
-   "fresh": 0.2103694833095321,
-   "lift": -0.24933731617367,
-   "lift_fresh": -0.09608376902381781,
+   "base": 0.36217822009910516,
+   "fresh": 0.21123307652168602,
+   "lift": -0.249728420902318,
+   "lift_fresh": -0.09878327732489887,
    "pay_close_med": 24.25,
    "pay_far_med": 56.0
   },
@@ -2200,10 +2219,10 @@
     0.14937394144110333,
     0.2835643622463378
    ],
-   "base": 0.33286047218563175,
-   "fresh": 0.19838981100626485,
-   "lift": -0.12422737866045189,
-   "lift_fresh": 0.010243282518915015,
+   "base": 0.3326966013396178,
+   "fresh": 0.19821082461601872,
+   "lift": -0.12406350781443795,
+   "lift_fresh": 0.010422268909161148,
    "pay_close_med": 34.0,
    "pay_far_med": 68.25
   },
@@ -2218,521 +2237,521 @@
     0.2621533589409395,
     0.4516698001243252
    ],
-   "base": 0.34510788133053644,
-   "fresh": 0.22662145027897745,
-   "lift": 0.005955948456697613,
-   "lift_fresh": 0.1244423795082566,
+   "base": 0.34493763756419654,
+   "fresh": 0.22688352828785888,
+   "lift": 0.006126192223037508,
+   "lift_fresh": 0.12418030149937517,
    "pay_close_med": 38.0,
    "pay_far_med": 77.25
   }
  ],
  "sessions_with_a_winning_sweep": 77,
- "sessions_with_any_on_pd_sweep": 280,
+ "sessions_with_any_on_pd_sweep": 286,
  "ledger": {
-  "cells_read": 127,
+  "cells_read": 128,
   "note": "first read, not pre-registered; expect ~1 in 20 cells to sit outside its interval by chance"
  },
  "lookup": {
   "level": {
    "ONL": {
-    "rate": 0.216,
-    "n": 125,
-    "fresh": 0.2492738819424438,
+    "rate": 0.20930232558139536,
+    "n": 129,
+    "fresh": 0.24747760666648053,
     "ci": [
-     0.15290710972320587,
-     0.2960286377372417
+     0.14801989416830047,
+     0.28739792675526565
     ],
-    "lift": -0.033273881942443795,
+    "lift": -0.038175281085085166,
     "pay": 72.5
    },
    "ONH": {
     "rate": 0.16233766233766234,
     "n": 154,
-    "fresh": 0.18221810737347066,
+    "fresh": 0.18320322116886564,
     "ci": [
      0.11244242622704335,
      0.2286691691952027
     ],
-    "lift": -0.019880445035808325,
+    "lift": -0.020865558831203307,
     "pay": 54.5
    },
    "PDL": {
     "rate": 0.22988505747126436,
     "n": 87,
-    "fresh": 0.24445087451273192,
+    "fresh": 0.24426171648891964,
     "ci": [
      0.15403115692511482,
      0.32858473711462033
     ],
-    "lift": -0.01456581704146756,
+    "lift": -0.01437665901765528,
     "pay": 84.25
    },
    "PDH": {
     "rate": 0.16071428571428573,
     "n": 112,
-    "fresh": 0.17795601433930744,
+    "fresh": 0.17934567571489185,
     "ci": [
      0.10414453380551848,
      0.2397871798448455
     ],
-    "lift": -0.017241728625021713,
+    "lift": -0.018631390000606124,
     "pay": 60.0
    },
    "IBL": {
-    "rate": 0.20279720279720279,
-    "n": 143,
-    "fresh": 0.2596987498196374,
+    "rate": 0.2054794520547945,
+    "n": 146,
+    "fresh": 0.2646463474435222,
     "ci": [
-     0.14507437781527893,
-     0.27607058383046723
+     0.147895261841292,
+     0.278165324804873
     ],
-    "lift": -0.056901547022434634,
-    "pay": 60.0
+    "lift": -0.059166895388727714,
+    "pay": 61.0
    },
    "IBH": {
-    "rate": 0.16216216216216217,
-    "n": 148,
-    "fresh": 0.19159309940603628,
+    "rate": 0.15894039735099338,
+    "n": 151,
+    "fresh": 0.19260067068244316,
     "ci": [
-     0.11146031697656603,
-     0.22995863540538994
+     0.10919429425204763,
+     0.22560978940505744
     ],
-    "lift": -0.029430937243874106,
+    "lift": -0.033660273331449775,
     "pay": 50.25
    },
    "PDC-": {
-    "rate": 0.2966101694915254,
-    "n": 118,
-    "fresh": 0.2144039285842507,
+    "rate": 0.29411764705882354,
+    "n": 119,
+    "fresh": 0.21234037514165974,
     "ci": [
-     0.22166449745305883,
-     0.3843813850698232
+     0.2197225317868407,
+     0.3813897949819412
     ],
-    "lift": 0.08220624090727471,
+    "lift": 0.0817772719171638,
     "pay": 49.75
    },
    "PDC+": {
     "rate": 0.19230769230769232,
     "n": 104,
-    "fresh": 0.1707058219624255,
+    "fresh": 0.1719932466504971,
     "ci": [
      0.12808047966842862,
      0.27845651533164556
     ],
-    "lift": 0.02160187034526681,
+    "lift": 0.02031444565719523,
     "pay": 72.5
    },
    "VAL": {
-    "rate": 0.2727272727272727,
-    "n": 110,
-    "fresh": 0.2378428315394901,
+    "rate": 0.2702702702702703,
+    "n": 111,
+    "fresh": 0.23741978313537343,
     "ci": [
-     0.19822564984733446,
-     0.36256759269317795
+     0.19636788511059944,
+     0.35954216838917763
     ],
-    "lift": 0.03488444118778261,
+    "lift": 0.032850487134896855,
     "pay": 58.0
    },
    "VAH": {
-    "rate": 0.19658119658119658,
-    "n": 117,
-    "fresh": 0.17312776660435367,
+    "rate": 0.19491525423728814,
+    "n": 118,
+    "fresh": 0.1747505491904312,
     "ci": [
-     0.1347153235282641,
-     0.2777386658263952
+     0.13353979782234554,
+     0.27552902596197765
     ],
-    "lift": 0.02345342997684291,
+    "lift": 0.02016470504685694,
     "pay": 57.0
    },
    "POC-": {
-    "rate": 0.27102803738317754,
-    "n": 107,
-    "fresh": 0.23254605355471486,
+    "rate": 0.26851851851851855,
+    "n": 108,
+    "fresh": 0.2304354678919994,
     "ci": [
-     0.19583435081989597,
-     0.36209335863215086
+     0.19394781819614243,
+     0.3589913386113424
     ],
-    "lift": 0.038481983828462685,
+    "lift": 0.03808305062651915,
     "pay": 51.5
    },
    "POC+": {
-    "rate": 0.2604166666666667,
-    "n": 96,
-    "fresh": 0.17193065881488456,
+    "rate": 0.25773195876288657,
+    "n": 97,
+    "fresh": 0.17282779408953014,
     "ci": [
-     0.18305777843717663,
-     0.35621242556596444
+     0.18109470708719705,
+     0.35282780108403383
     ],
-    "lift": 0.08848600785178212,
+    "lift": 0.08490416467335643,
     "pay": 63.0
    },
    "PML": {
-    "rate": 0.21164021164021163,
-    "n": 189,
-    "fresh": 0.2130072096618035,
+    "rate": 0.20725388601036268,
+    "n": 193,
+    "fresh": 0.21143864122348496,
     "ci": [
-     0.15944680101546374,
-     0.27532246038871455
+     0.1560536667331932,
+     0.26988068860632847
     ],
-    "lift": -0.0013669980215918753,
+    "lift": -0.004184755213122282,
     "pay": 64.75
    },
    "PMH": {
-    "rate": 0.15228426395939088,
-    "n": 197,
-    "fresh": 0.1653049055900909,
+    "rate": 0.15577889447236182,
+    "n": 199,
+    "fresh": 0.1667727788752232,
     "ci": [
-     0.10880060721400828,
-     0.20906979413710622
+     0.11196725210721599,
+     0.21262888596308127
     ],
-    "lift": -0.01302064163070002,
-    "pay": 67.75
+    "lift": -0.010993884402861392,
+    "pay": 60.0
    },
    "PWL": {
-    "rate": 0.2647058823529412,
-    "n": 34,
-    "fresh": 0.2669229868377298,
+    "rate": 0.2857142857142857,
+    "n": 35,
+    "fresh": 0.26792938631171137,
     "ci": [
-     0.14601027541553796,
-     0.4311746216289845
+     0.16326363398295565,
+     0.45055248069821086
     ],
-    "lift": -0.0022171044847886234,
+    "lift": 0.017784899402574328,
     "pay": 86.0
    },
    "PWH": {
-    "rate": 0.21818181818181817,
-    "n": 55,
-    "fresh": 0.1941678084976287,
+    "rate": 0.21428571428571427,
+    "n": 56,
+    "fresh": 0.1965804948917144,
     "ci": [
-     0.12945897827653213,
-     0.3437028664047817
+     0.127057803147445,
+     0.33819713656004946
     ],
-    "lift": 0.024014009684189458,
+    "lift": 0.017705219393999883,
     "pay": 52.25
    },
    "WPOC-": {
-    "rate": 0.23728813559322035,
-    "n": 59,
-    "fresh": 0.21945672858369067,
+    "rate": 0.23333333333333334,
+    "n": 60,
+    "fresh": 0.2219404473114179,
     "ci": [
-     0.1469448625694613,
-     0.3597513386730279
+     0.1443943161843107,
+     0.3543651134039202
     ],
-    "lift": 0.017831407009529676,
+    "lift": 0.011392886021915433,
     "pay": 71.25
    },
    "WPOC+": {
-    "rate": 0.15555555555555556,
-    "n": 45,
-    "fresh": 0.1693444730324581,
+    "rate": 0.15217391304347827,
+    "n": 46,
+    "fresh": 0.16993243647709627,
     "ci": [
-     0.07745325311328677,
-     0.28784190511248803
+     0.07572186234017478,
+     0.28224417406315094
     ],
-    "lift": -0.013788917476902529,
+    "lift": -0.017758523433618,
     "pay": 97.5
    },
    "OR5L": {
-    "rate": 0.19811320754716982,
-    "n": 212,
-    "fresh": 0.23390141506812953,
+    "rate": 0.19724770642201836,
+    "n": 218,
+    "fresh": 0.23238597641855388,
     "ci": [
-     0.1500411918346862,
-     0.25693132875448665
+     0.14986480514890274,
+     0.255116046053036
     ],
-    "lift": -0.03578820752095971,
-    "pay": 61.25
+    "lift": -0.03513826999653552,
+    "pay": 60.5
    },
    "OR5H": {
-    "rate": 0.10232558139534884,
-    "n": 215,
-    "fresh": 0.17711970030028812,
+    "rate": 0.10454545454545454,
+    "n": 220,
+    "fresh": 0.18060560978961912,
     "ci": [
-     0.06854889119254981,
-     0.15006402335386182
+     0.0706788038882292,
+     0.15198579464930803
     ],
-    "lift": -0.07479411890493928,
-    "pay": 67.75
+    "lift": -0.07606015524416458,
+    "pay": 63.5
    },
    "OR15L": {
-    "rate": 0.21505376344086022,
-    "n": 186,
-    "fresh": 0.2784797545776096,
+    "rate": 0.21052631578947367,
+    "n": 190,
+    "fresh": 0.2771165009050505,
     "ci": [
-     0.16209026292148496,
-     0.27954950412641183
+     0.15858473586033628,
+     0.2739416155523635
     ],
-    "lift": -0.06342599113674938,
+    "lift": -0.06659018511557685,
     "pay": 55.5
    },
    "OR15H": {
-    "rate": 0.13930348258706468,
-    "n": 201,
-    "fresh": 0.21415332073883556,
+    "rate": 0.13658536585365855,
+    "n": 205,
+    "fresh": 0.21592264793787394,
     "ci": [
-     0.09816885894812451,
-     0.19396711343248574
+     0.09621731612319204,
+     0.19032329647506427
     ],
-    "lift": -0.07484983815177088,
+    "lift": -0.0793372820842154,
     "pay": 63.5
    },
    "ALO": {
-    "rate": 0.21951219512195122,
-    "n": 123,
-    "fresh": 0.24090305317421837,
+    "rate": 0.21428571428571427,
+    "n": 126,
+    "fresh": 0.23848372185933847,
     "ci": [
-     0.1554740213505587,
-     0.30054040924634323
+     0.1516552400686685,
+     0.2938229425784954
     ],
-    "lift": -0.021390858052267148,
+    "lift": -0.024198007573624197,
     "pay": 72.5
    },
    "AHI": {
-    "rate": 0.14893617021276595,
-    "n": 141,
-    "fresh": 0.16436589077390232,
+    "rate": 0.14788732394366197,
+    "n": 142,
+    "fresh": 0.16511596773861587,
     "ci": [
-     0.09952282862708753,
-     0.21697188007538468
+     0.09880632994575239,
+     0.21551825234078315
     ],
-    "lift": -0.015429720561136367,
+    "lift": -0.017228643794953896,
     "pay": 50.5
    },
    "LLO": {
-    "rate": 0.2085889570552147,
-    "n": 163,
-    "fresh": 0.23746889631758536,
+    "rate": 0.20359281437125748,
+    "n": 167,
+    "fresh": 0.23589091960015138,
     "ci": [
-     0.15328227961519503,
-     0.2773153650969151
+     0.14950910277111326,
+     0.2710067434864727
     ],
-    "lift": -0.028879939262370646,
+    "lift": -0.0322981052288939,
     "pay": 64.75
    },
    "LHI": {
     "rate": 0.1588235294117647,
     "n": 170,
-    "fresh": 0.17859428674356295,
+    "fresh": 0.17975349917182734,
     "ci": [
      0.11150729412985383,
      0.2212185896632083
     ],
-    "lift": -0.019770757331798255,
+    "lift": -0.020929969760062644,
     "pay": 67.75
    },
    "VWAP-": {
-    "rate": 0.07142857142857142,
-    "n": 126,
-    "fresh": 0.212912384669557,
+    "rate": 0.07692307692307693,
+    "n": 130,
+    "fresh": 0.21067623643782935,
     "ci": [
-     0.0380307121123797,
-     0.1301865618583662
+     0.04231697987575295,
+     0.13581597729152536
     ],
-    "lift": -0.14148381324098558,
+    "lift": -0.13375315951475242,
     "pay": 50.0
    },
    "VWAP+": {
-    "rate": 0.04838709677419355,
-    "n": 124,
-    "fresh": 0.162481858876122,
+    "rate": 0.047619047619047616,
+    "n": 126,
+    "fresh": 0.1663273855773785,
     "ci": [
-     0.022362105662260094,
-     0.1015537401969907
+     0.022004188389251493,
+     0.10000293413542474
     ],
-    "lift": -0.11409476210192844,
+    "lift": -0.11870833795833088,
     "pay": 68.25
    },
    "VW1L": {
-    "rate": 0.07729468599033816,
-    "n": 207,
-    "fresh": 0.2779235721986537,
+    "rate": 0.0761904761904762,
+    "n": 210,
+    "fresh": 0.27634355671675526,
     "ci": [
-     0.04813467549874949,
-     0.12185834295681143
+     0.04743897751394584,
+     0.12016919601262711
     ],
-    "lift": -0.20062888620831554,
+    "lift": -0.20015308052627906,
     "pay": 56.5
    },
    "VW1H": {
-    "rate": 0.085,
-    "n": 200,
-    "fresh": 0.23080496203555853,
+    "rate": 0.08415841584158416,
+    "n": 202,
+    "fresh": 0.2289266117170984,
     "ci": [
-     0.05374529946985246,
-     0.13189688544235392
+     0.05320634173327795,
+     0.13063210491696187
     ],
-    "lift": -0.14580496203555854,
+    "lift": -0.14476819587551426,
     "pay": 63.0
    },
    "VW2L": {
-    "rate": 0.12777777777777777,
-    "n": 180,
-    "fresh": 0.2801001863524503,
+    "rate": 0.12432432432432433,
+    "n": 185,
+    "fresh": 0.28080296349878325,
     "ci": [
-     0.08667435764393652,
-     0.18443729499616232
+     0.08428964287782095,
+     0.17964372773543377
     ],
-    "lift": -0.15232240857467255,
+    "lift": -0.15647863917445892,
     "pay": 53.75
    },
    "VW2H": {
-    "rate": 0.11235955056179775,
-    "n": 178,
-    "fresh": 0.2193872284021021,
+    "rate": 0.1111111111111111,
+    "n": 180,
+    "fresh": 0.21934760585195048,
     "ci": [
-     0.07392192832223898,
-     0.1671758182879976
+     0.07308697860315694,
+     0.16538788236411053
     ],
-    "lift": -0.10702767784030434,
+    "lift": -0.10823649474083938,
     "pay": 50.25
    },
    "DPOC-": {
-    "rate": 0.04580152671755725,
-    "n": 131,
-    "fresh": 0.2821583403494791,
+    "rate": 0.045112781954887216,
+    "n": 133,
+    "fresh": 0.27934073196829096,
     "ci": [
-     0.021157596293058425,
-     0.09632543564960615
+     0.020836924674096327,
+     0.09492904123100854
     ],
-    "lift": -0.23635681363192187,
+    "lift": -0.23422795001340374,
     "pay": 81.25
    },
    "DPOC+": {
-    "rate": 0.03305785123966942,
-    "n": 121,
-    "fresh": 0.22920604498877944,
+    "rate": 0.032,
+    "n": 125,
+    "fresh": 0.22724638585837983,
     "ci": [
-     0.0129289722168894,
-     0.08192402550181974
+     0.012512936695839402,
+     0.07939526686574319
     ],
-    "lift": -0.19614819374911002,
+    "lift": -0.19524638585837983,
     "pay": 32.0
    },
    "DVAL": {
-    "rate": 0.07981220657276995,
-    "n": 213,
-    "fresh": 0.2755127218475114,
+    "rate": 0.07834101382488479,
+    "n": 217,
+    "fresh": 0.2744242534667149,
     "ci": [
-     0.05042523581880395,
-     0.12408740382229813
+     0.049484680283340216,
+     0.12186709402005189
     ],
-    "lift": -0.19570051527474147,
+    "lift": -0.1960832396418301,
     "pay": 61.5
    },
    "DVAH": {
-    "rate": 0.06763285024154589,
-    "n": 207,
-    "fresh": 0.22425911872440404,
+    "rate": 0.06666666666666667,
+    "n": 210,
+    "fresh": 0.22219627424996036,
     "ci": [
-     0.04071115951879931,
-     0.11031027078717445
+     0.04012346405717865,
+     0.10877927516662064
     ],
-    "lift": -0.15662626848285816,
+    "lift": -0.1555296075832937,
     "pay": 61.25
    }
   },
   "clock": {
    "08:30-09:00": {
-    "rate": 0.20883534136546184,
-    "n": 249,
-    "fresh": 0.17906969694597,
+    "rate": 0.20717131474103587,
+    "n": 251,
+    "fresh": 0.17957023561867805,
     "ci": [
-     0.16296088206300352,
-     0.2635575389563224
+     0.1616307063945554,
+     0.2615403928294332
     ],
-    "lift": 0.029765644419491838,
+    "lift": 0.02760107912235782,
     "pay": 69.75
    },
    "09:00-10:00": {
-    "rate": 0.11578947368421053,
-    "n": 95,
-    "fresh": 0.23292446307660097,
+    "rate": 0.1134020618556701,
+    "n": 97,
+    "fresh": 0.23272835814153886,
     "ci": [
-     0.06589789764646398,
-     0.19554667629811
+     0.06451291694876782,
+     0.1917464046010688
     ],
-    "lift": -0.11713498939239045,
+    "lift": -0.11932629628586876,
     "pay": 68.0
    },
    "10:00-11:30": {
     "rate": 0.20689655172413793,
     "n": 58,
-    "fresh": 0.20628869607374642,
+    "fresh": 0.21069939532124643,
     "ci": [
      0.12251364354883215,
      0.3276946304932366
     ],
-    "lift": 0.0006078556503915089,
+    "lift": -0.0038028435971085017,
     "pay": 60.25
    },
    "11:30-15:00": {
     "rate": 0.19736842105263158,
     "n": 76,
-    "fresh": 0.28602895477406765,
+    "fresh": 0.2843164148149396,
     "ci": [
      0.12341879212336243,
      0.30044044917440715
     ],
-    "lift": -0.08866053372143606,
+    "lift": -0.086947993762308,
     "pay": 49.75
    }
   },
   "speed": {
    "poke": {
-    "rate": 0.1544502617801047,
-    "n": 382,
-    "fresh": 0.2059481067128855,
+    "rate": 0.15284974093264247,
+    "n": 386,
+    "fresh": 0.20643484396413758,
     "ci": [
-     0.1216677962008196,
-     0.1941136021761309
+     0.12038613968134235,
+     0.19215515914361628
     ],
-    "lift": -0.051497844932780784,
+    "lift": -0.05358510303149511,
     "pay": 68.0
    },
    "flush": {
     "rate": 0.3229166666666667,
     "n": 96,
-    "fresh": 0.22653069481883117,
+    "fresh": 0.2269952350461245,
     "ci": [
      0.23775702086652156,
      0.4217035647010175
     ],
-    "lift": 0.09638597184783551,
+    "lift": 0.09592143162054217,
     "pay": 68.25
    }
   },
   "depth": {
    "shallow": {
-    "rate": 0.11428571428571428,
-    "n": 245,
-    "fresh": 0.2103694833095321,
+    "rate": 0.11244979919678715,
+    "n": 249,
+    "fresh": 0.21123307652168602,
     "ci": [
-     0.08026342048020743,
-     0.16021727085114554
+     0.07895440163986665,
+     0.15772184150999474
     ],
-    "lift": -0.09608376902381781,
+    "lift": -0.09878327732489887,
     "pay": 56.0
    },
    "mid": {
     "rate": 0.20863309352517986,
     "n": 139,
-    "fresh": 0.19838981100626485,
+    "fresh": 0.19821082461601872,
     "ci": [
      0.14937394144110333,
      0.2835643622463378
     ],
-    "lift": 0.010243282518915015,
+    "lift": 0.010422268909161148,
     "pay": 68.25
    },
    "deep": {
     "rate": 0.35106382978723405,
     "n": 94,
-    "fresh": 0.22662145027897745,
+    "fresh": 0.22688352828785888,
     "ci": [
      0.2621533589409395,
      0.4516698001243252
     ],
-    "lift": 0.1244423795082566,
+    "lift": 0.12418030149937517,
     "pay": 77.25
    }
   },
@@ -2742,8 +2761,8 @@
    "depthDeepMinPts": 8,
    "reclaimMaxBars": 30
   },
-  "sessions": 284,
+  "sessions": 290,
   "first": "2025-06-02",
-  "last": "2026-08-21"
+  "last": "2026-09-08"
  }
 }

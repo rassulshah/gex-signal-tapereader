@@ -234,10 +234,10 @@
    "by": "nightly"
   },
   "H2.L": {
-   "line": "36 named levels: 2 clear the fresh-low control (PDC- 30% n=118 vs 21% (+8pp); POC+ 26% n=96 vs 17% (+9pp)) — about what 36 cells produce by chance (≈0.9 expected); worse than a bounce at nothing: OR5H 10% n=215, OR15H 14% n=201, VWAP- 7% n=126, VWAP+ 5% n=124, VW1L 8% n=207, VW1H 9% n=200, VW2L 13% n=180, VW2H 11% n=178, DPOC- 5% n=131, DPOC+ 3% n=121, DVAL 8% n=213, DVAH 7% n=207; within chance: ONL, ONH, PDL, PDH, IBL, IBH, PDC+, VAL, VAH, POC-, PML, PMH, PWL, PWH, WPOC-, WPOC+, OR5L, OR15L, ALO, AHI, LLO, LHI · 284 sessions (284 vendor + None couriered) · nightly 2026-09-08",
+   "line": "36 named levels: 2 clear the fresh-low control (PDC- 29% n=119 vs 21% (+8pp); POC+ 26% n=97 vs 17% (+8pp)) — about what 36 cells produce by chance (≈0.9 expected); worse than a bounce at nothing: OR5H 10% n=220, OR15L 21% n=190, OR15H 14% n=205, VWAP- 8% n=130, VWAP+ 5% n=126, VW1L 8% n=210, VW1H 8% n=202, VW2L 12% n=185, VW2H 11% n=180, DPOC- 5% n=133, DPOC+ 3% n=125, DVAL 8% n=217, DVAH 7% n=210; within chance: ONL, ONH, PDL, PDH, IBL, IBH, PDC+, VAL, VAH, POC-, PML, PMH, PWL, PWH, WPOC-, WPOC+, OR5L, ALO, AHI, LLO, LHI · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
    "status": "NULL",
    "keepResult": true,
-   "n": 284,
+   "n": 290,
    "rate": null,
    "lo": null,
    "src": "SWEEPS.json:levelTable",
@@ -245,10 +245,10 @@
    "by": "nightly"
   },
   "H2.10": {
-   "line": "PDC- 30% n=118 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 284 sessions (284 vendor + None couriered) · nightly 2026-09-08",
+   "line": "PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
    "status": "READ",
    "keepResult": false,
-   "n": 284,
+   "n": 290,
    "rate": null,
    "lo": null,
    "src": "SWEEPS.json:levels",
@@ -256,10 +256,10 @@
    "by": "nightly"
   },
   "H2.4": {
-   "line": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=249 vs 18% (+3pp) · 09:00-10:00 12% n=95 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 29% (-9pp) · 284 sessions (284 vendor + None couriered) · nightly 2026-09-08",
+   "line": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 28% (-9pp) · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
    "status": "READ",
    "keepResult": false,
-   "n": 284,
+   "n": 290,
    "rate": null,
    "lo": null,
    "src": "SWEEPS.json:clock",
@@ -267,10 +267,10 @@
    "by": "nightly"
   },
   "H2.5": {
-   "line": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=245 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=382 vs 21% · 284 sessions (284 vendor + None couriered) · nightly 2026-09-08",
+   "line": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=386 vs 21% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
    "status": "READ",
    "keepResult": false,
-   "n": 284,
+   "n": 290,
    "rate": null,
    "lo": null,
    "src": "SWEEPS.json:shape",
@@ -278,10 +278,10 @@
    "by": "nightly"
   },
   "H2.6": {
-   "line": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=146 · ONH 15% n=181 · PDL 30% n=124 · PDH 33% n=167 · IBL 14% n=166 · IBH 20% n=184 · PDC- 45% n=213 · PDC+ 56% n=237 · 284 sessions (284 vendor + None couriered) · nightly 2026-09-08",
+   "line": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · ONH 16% n=183 · PDL 31% n=126 · PDH 34% n=169 · IBL 14% n=170 · IBH 20% n=188 · PDC- 45% n=217 · PDC+ 56% n=239 · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
    "status": "READ",
    "keepResult": false,
-   "n": 284,
+   "n": 290,
    "rate": null,
    "lo": null,
    "src": "SWEEPS.json:acceptance",
@@ -289,10 +289,10 @@
    "by": "nightly"
   },
   "H2.11": {
-   "line": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 284 sessions (284 vendor + None couriered) · nightly 2026-09-08",
+   "line": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
    "status": "READ",
    "keepResult": false,
-   "n": 284,
+   "n": 290,
    "rate": null,
    "lo": null,
    "src": "SWEEPS.json:payoff",

@@ -348,6 +348,15 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     days = days if days is not None else load_days(upto)
     if not days: print('no day files under data/'); return None
     last = days[-1][0]
+    # (v15.90) THE CORPUS APPENDS FIRST. His machine's first v15.90 run (10:25 CT, 2026-09-09) computed the sweep tables and
+    # judged H7 BEFORE the append had written the night files, so SWEEPS.json read 284 sessions on a machine that held 290:
+    # the order was requests → sweeps → futures. Now the append (RTH + the nights → BASERATES) runs before anything reads a
+    # corpus; the sweep tables and the coverage count follow it; the judges read what is on disk tonight, not last night.
+    futures = None
+    try:
+        if write: futures = refresh_futures(days)
+    except Exception as eF:
+        futures = dict(error=str(eF)); print('futures refresh threw:', eF)
     eps = episodes(days, frm); defl = defl_events(days, frm)
     H_list = R['hypotheses']
     null = shuffle_null(H_list, eps) if eps else dict(p50=0, p95=0)
@@ -373,19 +382,15 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     # bars of the last few day files → data/futures/<MK>/<day>.csv (tools/append-futures.py, idempotent; the newest day
     # completes from the NEXT day's window) → BASERATES rebuilt for ES (the vendor corpus + every Yahoo session, with
     # provenance; the vendor wins a day both hold) and NQ (Yahoo sessions only until the NQ vendor export gets a parser).
-    futures = None
-    try:
-        if write: futures = refresh_futures(days)
-        # (v15.89) the record on disk, counted for the 🗄 Data tab — learning/coverage.json (after the append, so the CSVs count)
-        if write:
-            try:
-                import importlib.util as _ilu4
-                _sp4 = _ilu4.spec_from_file_location('coverage_py', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'coverage.py'))
-                _cv = _ilu4.module_from_spec(_sp4); _sp4.loader.exec_module(_cv); _cv.write(ROOT); print('coverage: wrote learning/coverage.json')
-            except Exception as eCv:
-                print('coverage failed:', eCv)
-    except Exception as eF:
-        futures = dict(error=str(eF)); print('futures refresh threw:', eF)
+    # (v15.89) the record on disk, counted for the 🗄 Data tab — learning/coverage.json (after the append AND the sweep refresh,
+    # so the CSVs, the nights and the sweep corpus all count tonight's state)
+    if write:
+        try:
+            import importlib.util as _ilu4
+            _sp4 = _ilu4.spec_from_file_location('coverage_py', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'coverage.py'))
+            _cv = _ilu4.module_from_spec(_sp4); _sp4.loader.exec_module(_cv); _cv.write(ROOT); print('coverage: wrote learning/coverage.json')
+        except Exception as eCv:
+            print('coverage failed:', eCv)
     # (v15.66) THE TAPE — the whole book per bar per market (data/tape/<day>/<BOOK>.json, written by the panel's 💾).
     # Reported in the log so a night that ran without it says so; the studies that need the full SPY/QQQ books
     # (the per-book patterns, NEW on SPY/QQQ, Q11's dollar axis) read it through tools/nightly/tape.py.

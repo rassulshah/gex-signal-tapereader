@@ -40,18 +40,18 @@ ok(/@version\s+15\.9\d/.test(src) && /var GPTS_VERSION='15\.9\d';/.test(src), '0
   const noSl=(t)=>{ const j=front(t); delete j.snapshot; return j; };
   LASTFUTDER_FRONT.ES1={ j:noSl(1788963480), ts:Date.now() };
   const P=futDerFrontList('ES1');
-  ok(P.rows.length===5 && P.rows[0].k===7655.4 && P.rows[0].pct===-100 && P.rows[0].src==='SPXW' && P.rows[1].k===7650.1 && P.rows[1].src==='SPY' && /pooled/.test(P.why), '1h no slices: the derived books pooled (each already at the chart\'s price), ranked together', P.rows.slice(0,2));
+  ok(P.rows.length===5 && P.rows[0].k===7655.4 && P.rows[0].pct===-100 && P.rows[0].src==='SPX' && P.rows[1].k===7650.1 && P.rows[1].src==='SPY' && /pooled/.test(P.why), '1h no slices: the derived books pooled (each already at the chart\'s price), ranked together', P.rows.slice(0,2));
   LASTFUTDER_FRONT.ES1.ts=Date.now()-301000;
   ok(futDerFrontList('ES1').rows.length===0 && futDerFrontList('ES1').stale===true, '1i a front payload older than five minutes → no rows (the export holds the day\'s last)');
   ok(futDerFrontList('NQ1').rows.length===0 && /no front-window payload/.test(futDerFrontList('NQ1').why), '1j no payload → no rows, said');
   // the export block
   const csv=ex('irtBuildCsv');
   const iD=csv.indexOf("2d) D-KING"), iS=csv.indexOf("IRT_LAST.sWhy=sWhy"), iT=csv.indexOf('ES/ETF target expansion');
-  ok(iD>iS && iD<iT && /var DL=futDerFrontList\(SKY_ES\);/.test(csv) && /lbl:\(i===0\?'D-KING':\('D'\+\(i\+1\)\)\)/.test(csv), '1k the ES D rows come after the SG rows and before the target expansion, read from the FRONT list');
-  ok(/col:\(i===0\?IRT_COLORS\.dking:IRT_COLORS\.dnode\), w:\(i===0\?2:1\), style:0, dOnly:true/.test(csv) && /dking: irtColor\(255,255,255\)/.test(src) && /dnode: irtColor\(190,198,208\)/.test(src), '1l D-KING white width 2, D2..D5 light grey width 1, solid, futures-only');
+  ok(iD>iS && iD<iT && /var DL=futDerFrontList\(SKY_ES\);/.test(csv) && /var kept=futDerDedupe\(DL\.rows\.slice\(0,5\), have\);/.test(csv), '1k the ES D rows come after the SG rows and before the target expansion, read from the FRONT list (v15.91: deduped against the rows already there)');
+  ok(/col:futDerCol\(g, isK\), w:\(isK\?2:1\), style:0, dOnly:true/.test(csv) && /dking: irtColor\(255,255,255\)/.test(src) && /dnode: irtColor\(190,198,208\)/.test(src), '1l a KING row width 2, the rest width 1, solid, futures-only; the colours by the book\'s polarity (v15.91), greys when no book resolved');
   ok(/if\(R2\.dOnly && !\(T2\.mul>1\)\) return;/.test(csv), '1m a merged ES row is never written for an ETF target (no ETF-space price exists)');
-  ok(/irtGLatch\(ds\.map\(function\(g\)\{ return \{ k:g\.k, lbl:g\.lbl, spx:g\.k, pct:g\.pct \}; \}\), 'DE'\)/.test(csv) && /HD=irtGHeld\('DE'\)/.test(csv) && /\^D-KING\$\|\^D\[2-5\]\$/.test(ex('irtGHeld')), '1n held day-scoped under DE like the G rows; the hold accepts the D labels');
-  ok(/var DQ=futDerFrontList\(SKY_NQ\);/.test(csv) && /out\.push\(irtCsvRow\(nqSym, g\.k, g\.lbl\+pctTag\(g\.pct\), \(i===0\?IRT_COLORS\.dking:IRT_COLORS\.dnode\), \(i===0\?2:1\), 0\)\); nqN\+\+;/.test(csv) && /irtGHeld\('DQ'\)/.test(csv), '1o the NQ chart gets its own D rows from NQ1\'s front list, held under DQ');
+  ok(/irtGLatch\(ds\.map\(function\(g\)\{ return \{ k:g\.k, lbl:g\.lbl, spx:g\.k, pct:g\.pct \}; \}\), 'DE'\)/.test(csv) && /HD=irtGHeld\('DE'\)/.test(csv) && /\^D-\[A-Z\]\+ KING\$\|\^D-\[A-Z\]\+\[2-9\]\$\|\^D\[1-9\]\$/.test(ex('irtGHeld')), '1n held day-scoped under DE like the G rows; the hold accepts the D labels (v15.91: D-<BOOK> KING · D-<BOOK>n · Dn)');
+  ok(/var DQ=futDerFrontList\(SKY_NQ\);/.test(csv) && /out\.push\(irtCsvRow\(nqSym, g\.k, g\.lbl\+pctTag\(g\.pct\), futDerCol\(g, isK\), \(isK\?2:1\), 0\)\); nqN\+\+;/.test(csv) && /irtGHeld\('DQ'\)/.test(csv) && /var keptQ=futDerDedupe\(DQ\.rows\.slice\(0,5\), haveQ\);/.test(csv), '1o the NQ chart gets its own D rows from NQ1\'s front list, deduped against the QQQ rows, held under DQ');
   ok(/IRT_LAST\.dWhy=dWhy/.test(csv) && /IRT_LAST\.dqWhy=dqWhy/.test(csv), '1p the preview says why (dWhy / dqWhy)');
   ok(/window\.__gptsDebug\.futDerRows=function\(sym\)/.test(src) && /o\.frontSlices=/.test(src) && /o\.frontExpirations=/.test(src), '1q __gptsDebug.futDerRows(sym): the payload\'s rows, slices and expirations — the numbers to hold against his chart');
   ok(/futDerIsFront\(j, viaSelf\)/.test(ex('onFeed')) && /LASTFUTDER_FRONT\[sym\]=\{ j:j, ts:Date\.now\(\) \}/.test(ex('onFeed')), '1r the observer keeps the front payload beside the freshest-any one');
@@ -68,6 +68,8 @@ ok(/@version\s+15\.9\d/.test(src) && /var GPTS_VERSION='15\.9\d';/.test(src), '0
   ok(/def sources\(market='ES'\)/.test(sw) && /glob\.glob\(os\.path\.join\('data', 'futures', market, '\*\.csv'\)\)/.test(sw) && /def load_all\(paths\)/.test(sw) && /gap_ok = \(prev_d is not None\) and/.test(sw) && /days <= 4/.test(sw), '2d sources(), load_all over many files, the four-day gap rule');
   ok(/if not p\.endswith\('-night\.csv'\)/.test(hl), '2e study-hodlod skips the night files (its sessions are RTH)');
   ok(/srcs = sw\.sources\('ES'\)/.test(rp) && /res = sw\.run\(srcs\)/.test(rp) && /ap\.harvest\(paths, night=True\)/.test(rp) && /suffix='-night'/.test(rp), '2f the nightly reads every source for H7 and refreshes SWEEPS.json from them; the nights are appended after the RTH');
+  { const iF=rp.indexOf('futures = refresh_futures(days)'), iJ=rp.indexOf("verdicts = [judge(H, eps, defl, null['p95'], since=frm)"), iS=rp.indexOf('if write: refresh_sweeps()'), iC=rp.indexOf('_cv.write(ROOT)');
+    ok(iF>0 && iF<iJ && iJ<iS && iS<iC, '2f2 the ORDER: the corpus appends before any judge reads it, the sweep tables after the append, the coverage count last (his first v15.90 run read 284 because the sweeps ran before the append)', [iF,iJ,iS,iC]); }
   const SW=JSON.parse(fs.readFileSync('./data/es-1min/SWEEPS.json','utf8'));
   ok(SW.corpus.sessions>=290 && SW.corpus.sources && SW.corpus.sources.vendor===284 && SW.corpus.sources.yahoo>=6 && SW.corpus.yahooFirst==='2026-08-31' && SW.corpus.last>='2026-09-08', '2g the committed SWEEPS.json: 290+ sessions = 284 vendor + the couriered nights since 08-31', SW.corpus);
   ok(fs.existsSync('./data/futures/ES/2026-09-08-night.csv') && fs.readFileSync('./data/futures/ES/2026-09-04-night.csv','utf8').split('\n').length>900, '2h the night files exist (09-04: a full night, 900+ minutes)');

@@ -131,6 +131,20 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.91 — a level with no name is a question; the order of the nightly is a definition; "match" means what the other screen draws
+(1) **The NQ "derived King" was the NDX book's King and the file called it D-KING.** A label that names a rank and not a
+book left him asking what it was. The payload carries every book's ratio; dividing the row's price by each one names the
+book whose strike it is (29355.41 / 1.00087 = 29330). Rule: a level on his chart carries its book, or it carries a plain
+number and says nothing more — never a rank pretending to be a name (D-KING for two 100% rows was a coin flip).
+(2) **On FRONT the merged list is the two books' own rows, and v15.90 drew every one of them twice.** I exported "what
+Atlas draws" verbatim and checked the prices against the chart (5 for 5) without checking them against the file's own
+rows. Rule from v15.76 restated: a chart that shows one level twice is a chart he has to reason about — dedupe against
+what the file already writes, and say when nothing survives. The morning's 7658 was a different window's list; the D
+rows earn their place exactly when Atlas's list has a level no book row carries (NDX on NQ), which is what survives now.
+(3) **The nightly's step order was a definition, not a detail.** requests → sweeps → futures meant the sweep tables and the
+register read LAST night's corpus on the first run after an append — 284 on a machine that held 290. "Refresh" steps
+that read a corpus must follow the step that writes it; the test now pins the order with the reason in the file.
+
 ### v15.90 — a corpus can stop growing in silence; a status the machine did not set is a wish; the structure file lagged the structure
 (1) **The sweep corpus stopped on 2026-08-21 and nothing said so for thirteen sessions.** The base-rate study read the
 couriered days (295) while the sweep study read the vendor file only (284); H7, registered to read "on sessions after

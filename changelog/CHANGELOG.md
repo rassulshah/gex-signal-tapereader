@@ -1,3 +1,41 @@
+## v15.91 — THE D ROWS BY THEIR BOOK, DEDUPED ("i'll go with your recommendation") · THE "DERIVED KING" ON NQ IS THE NDX BOOK'S · THE NIGHTLY APPENDS FIRST
+
+> Operator, 2026-09-09, on the review of v15.90: **"i'll go with your recommendation. also i am seeing a derived king on the
+> nq. what is it?"** — his IRT screenshot: `D-KING +100% 29360.25` under `QQQ KING 29524.00`.
+
+**What the derived King on NQ is.** Skylit's NQ1 chart is built from THREE books projected onto NQ — QQQ (ratio 41.119),
+NDXP (the NDX weeklies) and NDX (the monthly), the last two at one ratio (1.00087). The merged FRONT list that morning:
+29355.41 · 29523.25 · 29445.49 · 29441.02 · 29495.53. Divide by the ratios and every row is a strike of one book:
+**29355.41 / 1.00087 = 29330 — the NDX book's King (100% of its own ruler); 29523.25 / 41.119 = 718.00 — the QQQ King;**
+29445.49 → NDX 29420; 29441.02 → QQQ 716; 29495.53 → NDX 29470. The "derived King" is the NDX options book's King
+projected onto NQ — a level the file had never carried (it exported the QQQ book only on NQ); Atlas draws it; now the file
+does, under its own name.
+
+**(1) Every D row wears its book.** `futDerFrontList` reads the payload's `derived[].ratio` per source and resolves each
+merged row to the book whose ratio turns its price back into a strike (SPY / QQQ: whole numbers within 0.06; SPX / NDX:
+multiples of 5 within 0.35); SPXW and SPX share a ratio → `SPX`, NDXP and NDX → `NDX`; a row no ratio resolves keeps a plain
+`Dn` label — the label never claims a book it cannot show (the 7658 of the morning resolves to nothing: 7652.6 SPX, 763.8
+SPY). Labels: **D-NDX KING +100% · D-NDX2 +90% · D-QQQ3 −65%** — the book's 100% row is its KING, the rest by rank within the
+book. Colours: the book's polarity shades (his rule — yellow +γ, purple −γ; SPY / QQQ lighter), a KING row width 2.
+
+**(2) Nothing drawn twice.** `futDerDedupe`: a merged row on a level the file already draws — within half a point or
+0.012% of price (Skylit's ratio and the panel's differ in the fourth digit: QQQ KING 29524.00 vs the slice's 29523.25) — is
+not written. Verified on his ES chart 2026-09-09: on FRONT the ES list IS the two books' own top rows (7665 · 7655 · 7650 ·
+7640 · 7620 — SPXW KING, XG2, SPY KING, SG2, XG3), so no ES D row survives and the preview says so ("every row of Atlas's
+list is already on the chart under its book's label"); on NQ the NDX rows survive and the QQQ duplicates go. A surviving
+set holds day-scoped (DE / DQ); an empty one never overwrites the hold.
+
+**(3) The nightly appends first.** His machine's first v15.90 run (10:25 CT) computed the sweep tables and judged the
+register BEFORE the corpus append had written the night files — the order was requests → sweeps → futures — so
+SWEEPS.json read 284 on a machine that held 290. `run.py` now runs `refresh_futures` (RTH + the nights → BASERATES) before
+any judge or table reads a corpus, the sweep tables after it, the coverage count last; pinned by a test with the reason.
+
+**Tests.** `test_v1591.js` 26 (the source inference on the 09-09 NQ and ES lists, the pooled path, the unresolvable row,
+the dedupe on both symbols with the tolerance both ways, the export blocks, the hold, the order, the records) · 7/7
+mutants (no dedupe on ES / NQ, the tolerance ×10, ETF strikes at 0.6, SPXW not folded into SPX, any 100% a KING, an empty
+survivor set overwriting the hold) · `test_v1590` re-pinned to the new labels. **The suite: 171 files · 166 green · 5 red** (the five
+permanent). Companion unchanged (v1.19).
+
 ## v15.90 — THE LEARNING PROCESS, HARDENED ("yes, fix everything") + THE LIST ATLAS DRAWS IN THE IRT FILE ("we need to match atlas … FRONT")
 
 > Operator, 2026-09-09: **"Im looking for you to harden the learning process. Did you integrate the data tab into the

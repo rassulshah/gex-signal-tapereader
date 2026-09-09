@@ -32,7 +32,7 @@ ok(/@version\s+15\.(8[3-9]|9\d)/.test(src) && /var GPTS_VERSION='15\.(8[3-9]|9\d
   const T3=irtSpyTop({ levels:[{ l:[{k:770,v:-100,d:-1},{k:769,v:-40,d:-1},{k:768,v:40,d:1}] }] }, 770);
   ok(T3.rows.map(r=>r.k+':'+r.pct).join('|')==='768:40|769:-40', '1i ties break toward the lower strike; a negative node carries a negative pct');
   ok(irtSpyTop(null, 770).rows.length===0 && irtSpyTop({ levels:[] }, 770).rows.length===0 && irtSpyTop({ levels:[{ l:[{k:770,v:0,d:1}] }] }, 770).rows.length===0, '1j no book / no rows / no magnitude → no rows, never a throw');
-  ok(/\/\^\(XG\|SG\|G\)\[2-5\]\$\|\^D-KING\$\|\^D\[2-5\]\$\/\.test/.test(ex('irtGHeld')), '1k the hold accepts SG2..SG5 (under its own key, GS) and XG2..XG5 (v15.85; v15.90: and D-KING / D2..D5)');
+  ok(/\/\^\(XG\|SG\|G\)\[2-5\]\$\|\^D-\[A-Z\]\+ KING\$\|\^D-\[A-Z\]\+\[2-9\]\$\|\^D\[1-9\]\$\/\.test/.test(ex('irtGHeld')), '1k the hold accepts SG2..SG5 (under its own key, GS) and XG2..XG5 (v15.85; v15.91: and the D rows by book)');
 }
 
 // ---------- 2. the export ----------
