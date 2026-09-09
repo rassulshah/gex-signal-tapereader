@@ -23,9 +23,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
+       "nightly": "SPX King held 2 / 8 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "SPX King held 2 / 8 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -39,9 +39,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
+       "nightly": "SPY King held 3 / 7 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 3 / 6 (thin) · turn 0 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "SPY King held 3 / 7 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 3 / 6 (thin) · turn 0 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -56,8 +56,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K1.4",
@@ -70,8 +70,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K1.5",
@@ -84,8 +84,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K1.6",
@@ -98,8 +98,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ],
      "note": "Two books are never averaged: Skylit = flow, InsiderFinance = structure. Each King is its own row."
@@ -120,9 +120,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "King as floor held 2 / 4 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "King as floor held 2 / 4 (thin) · turn — · resume — · nightly 2026-09-08",
+       "nightly": "King as floor held 4 / 9 (thin) · turn 0 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "King as floor held 4 / 9 (thin) · turn 0 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -136,9 +136,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "King as ceiling held 3 / 8 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "King as ceiling held 3 / 8 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
+       "nightly": "King as ceiling held 4 / 11 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "King as ceiling held 4 / 11 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -152,8 +152,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K2.4",
@@ -167,8 +167,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K2.5",
@@ -181,8 +181,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K2.6",
@@ -195,8 +195,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "H8 thin: n=0 of 30 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H8 thin: n=0 of 30 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K2.7",
@@ -209,8 +209,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "H9 thin: n=0 of 30 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H9 thin: n=0 of 30 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -231,8 +231,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K3.2",
@@ -246,8 +246,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K3.3",
@@ -260,8 +260,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K3.4",
@@ -274,8 +274,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -297,8 +297,8 @@
         "corpus": "kingroll",
         "n": 40
        },
-       "nightly": "READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · kingroll: 211 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K4.2",
@@ -311,8 +311,8 @@
         "corpus": "kingroll",
         "n": 40
        },
-       "nightly": "READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · kingroll: 211 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K4.3",
@@ -339,8 +339,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K4.5",
@@ -353,8 +353,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K4.6",
@@ -367,8 +367,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -388,8 +388,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K5.2",
@@ -402,8 +402,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K5.3",
@@ -416,8 +416,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K5.4",
@@ -430,8 +430,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K5.5",
@@ -444,8 +444,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -466,8 +466,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K6.2",
@@ -481,8 +481,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K6.3",
@@ -495,8 +495,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "K6.4",
@@ -509,8 +509,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     }
@@ -532,15 +532,15 @@
        "decides": "SIZE",
        "claim": "C10",
        "corpus": "defl ledger · tap record",
-       "status": "THIN",
-       "result": "any King held 5 / 12 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
+       "status": "READ",
+       "result": "any King held 8 / 20 = 40% (low 22%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · nightly 2026-09-09",
        "script": "tools/nightly/patterns.py",
        "needs": {
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "any King held 5 / 12 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "any King held 8 / 20 = 40% (low 22%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -554,9 +554,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
+       "nightly": "SPX King held 2 / 8 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "SPX King held 2 / 8 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -570,9 +570,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
+       "nightly": "SPY King held 3 / 7 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "SPY King held 3 / 7 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -586,9 +586,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
+       "nightly": "QQQ King held 3 / 6 (thin) · turn 0 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "QQQ King held 3 / 6 (thin) · turn 0 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -597,13 +597,15 @@
        "decides": "SIZE",
        "claim": "C21 ours",
        "corpus": "defl ledger · tap record",
-       "status": "WAITING",
+       "status": "THIN",
        "needs": {
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "growing — · fading held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "growing — · fading held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-09",
+       "by": "nightly"
       },
       {
        "id": "S0.6",
@@ -616,8 +618,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S0.7",
@@ -630,9 +632,9 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 1 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 1 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
+       "nightly": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 3 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 3 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-09",
        "by": "nightly"
       }
      ],
@@ -650,15 +652,15 @@
        "claim": "C23",
        "corpus": "tap record",
        "status": "THIN",
-       "result": "SPX — · SPY — · QQQ held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-08",
+       "result": "SPX held 0 / 1 (thin) · turn 0 / 1 (thin) · resume 1 / 1 (thin) · SPY — · QQQ held 0 / 3 (thin) · turn — · resume — · nightly 2026-09-09",
        "script": "tools/nightly/patterns.py",
        "was": "S-B6",
        "needs": {
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPX — · SPY — · QQQ held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "SPX held 0 / 1 (thin) · turn 0 / 1 (thin) · resume 1 / 1 (thin) · SPY — · QQQ held 0 / 3 (thin) · turn — · resume — · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -668,14 +670,14 @@
        "claim": "C23",
        "corpus": "tap record",
        "status": "THIN",
-       "result": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-08",
+       "result": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-09",
        "script": "tools/nightly/patterns.py",
        "needs": {
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -689,8 +691,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S1.4",
@@ -717,8 +719,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -740,8 +742,8 @@
         "corpus": "gate",
         "n": 40
        },
-       "nightly": "READY · gate: 231 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · gate: 273 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S2.2",
@@ -755,8 +757,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S2.3",
@@ -769,8 +771,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S2.4",
@@ -783,8 +785,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -818,8 +820,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S3.3",
@@ -846,8 +848,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -868,8 +870,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S4.2",
@@ -882,8 +884,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S4.3",
@@ -896,8 +898,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S4.4",
@@ -910,8 +912,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -932,8 +934,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S5.2",
@@ -947,8 +949,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S5.3",
@@ -975,8 +977,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -997,8 +999,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S6.2",
@@ -1012,8 +1014,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S6.3",
@@ -1026,8 +1028,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S6.4",
@@ -1041,8 +1043,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S6.5",
@@ -1069,8 +1071,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · ledger: 191 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1086,15 +1088,15 @@
        "claim": "C24",
        "corpus": "tap record",
        "status": "READ",
-       "result": "SPX held 3 / 13 (thin) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 6 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-08",
+       "result": "SPX held 4 / 15 = 27% (low 11%) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 7 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-09",
        "script": "tools/nightly/patterns.py",
        "was": "S-B11",
        "needs": {
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPX held 3 / 13 (thin) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 6 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "SPX held 4 / 15 = 27% (low 11%) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 7 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -1103,14 +1105,14 @@
        "decides": "SIZE",
        "claim": "C24 C1",
        "corpus": "tap record",
-       "status": "THIN",
+       "status": "READ",
        "needs": {
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "SPX held 1 / 3 (thin) · turn — · resume — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ held 5 / 8 (thin) · turn 0 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "result": "SPX held 1 / 3 (thin) · turn — · resume — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ held 5 / 8 (thin) · turn 0 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
+       "nightly": "SPX held 3 / 5 (thin) · turn — · resume — · SPY held 12 / 25 = 48% (low 30%) · turn 1 / 6 (thin) · resume 2 / 6 (thin) · QQQ held 10 / 18 = 56% (low 34%) · turn 3 / 6 (thin) · resume 3 / 6 (thin) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
+       "result": "SPX held 3 / 5 (thin) · turn — · resume — · SPY held 12 / 25 = 48% (low 30%) · turn 1 / 6 (thin) · resume 2 / 6 (thin) · QQQ held 10 / 18 = 56% (low 34%) · turn 3 / 6 (thin) · resume 3 / 6 (thin) · nightly 2026-09-09",
        "by": "nightly"
       },
       {
@@ -1144,8 +1146,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S8.2",
@@ -1159,8 +1161,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S8.3",
@@ -1174,8 +1176,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "S8.4",
@@ -1188,8 +1190,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     }
@@ -1246,8 +1248,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D1.4",
@@ -1296,8 +1298,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · ledger: 191 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D2.3",
@@ -1310,8 +1312,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D2.4",
@@ -1345,8 +1347,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D3.2",
@@ -1359,8 +1361,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D3.3",
@@ -1369,7 +1371,7 @@
        "claim": "C11",
        "corpus": "437 recs · book",
        "status": "READ",
-       "result": "dir.kingRoll right within 10 bars: 102 / 170 = 60% (low 52%) on 7 sessions — per-bar rows, not independent events · nightly 2026-09-08",
+       "result": "dir.kingRoll right within 10 bars: 123 / 211 = 58% (low 52%) on 8 sessions — per-bar rows, not independent events · nightly 2026-09-09",
        "machine": {
         "file": "FEATS",
         "key": "dir.kingRoll"
@@ -1378,8 +1380,8 @@
         "corpus": "kingroll",
         "n": 40
        },
-       "nightly": "dir.kingRoll right within 10 bars: 102 / 170 = 60% (low 52%) on 7 sessions — per-bar rows, not independent events · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "dir.kingRoll right within 10 bars: 123 / 211 = 58% (low 52%) on 8 sessions — per-bar rows, not independent events · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       }
      ]
@@ -1400,8 +1402,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D4.2",
@@ -1414,8 +1416,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D4.3",
@@ -1428,8 +1430,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1463,8 +1465,8 @@
         "corpus": "nq",
         "n": 30
        },
-       "nightly": "READY · nq: 195 sessions on hand since 2025-11-24 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · nq: 195 sessions on hand since 2025-11-24 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "D5.3",
@@ -1477,8 +1479,8 @@
         "corpus": "kingroll",
         "n": 40
        },
-       "nightly": "READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · kingroll: 211 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     }
@@ -1506,8 +1508,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F1.2",
@@ -1534,8 +1536,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F1.4",
@@ -1550,8 +1552,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "H4 thin: n=4 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H4 thin: n=7 of 40 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1573,8 +1575,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "H2 thin: n=2 of 30 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H2 thin: n=3 of 30 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F2.2",
@@ -1588,8 +1590,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · ledger: 191 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F2.3",
@@ -1602,8 +1604,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1624,8 +1626,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F3.2",
@@ -1639,8 +1641,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F3.3",
@@ -1654,8 +1656,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1676,8 +1678,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F4.2",
@@ -1690,8 +1692,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F4.3",
@@ -1724,8 +1726,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · ledger: 191 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F5.2",
@@ -1739,8 +1741,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "H1 thin: n=5 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H1 thin: n=7 of 40 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F5.3",
@@ -1753,8 +1755,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1775,8 +1777,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "H3 thin: n=3 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H3 thin: n=6 of 40 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F6.2",
@@ -1789,8 +1791,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · ledger: 191 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F6.3",
@@ -1804,8 +1806,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1826,8 +1828,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F7.2",
@@ -1840,8 +1842,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F7.3",
@@ -1854,8 +1856,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1875,8 +1877,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "F8.2",
@@ -1889,8 +1891,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     }
@@ -1917,8 +1919,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P1.2",
@@ -1931,8 +1933,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P1.3",
@@ -1945,8 +1947,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -1966,8 +1968,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P2.2",
@@ -1980,8 +1982,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P2.3",
@@ -1994,8 +1996,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2015,8 +2017,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P3.2",
@@ -2029,8 +2031,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P3.3",
@@ -2043,8 +2045,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2065,8 +2067,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P4.2",
@@ -2079,8 +2081,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P4.3",
@@ -2093,8 +2095,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P4.4",
@@ -2128,8 +2130,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P5.2",
@@ -2142,8 +2144,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P5.3",
@@ -2156,8 +2158,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P5.4",
@@ -2170,8 +2172,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2191,8 +2193,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P6.2",
@@ -2205,8 +2207,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P6.3",
@@ -2219,8 +2221,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2240,8 +2242,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P7.2",
@@ -2254,8 +2256,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "P7.3",
@@ -2268,8 +2270,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     }
@@ -2325,8 +2327,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "H5 blocked: n=0 of 50 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H5 blocked: n=0 of 50 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H1.4",
@@ -2353,8 +2355,8 @@
         "corpus": "register",
         "n": 0
        },
-       "nightly": "H10 thin: n=26 of 60 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H10 thin: n=36 of 60 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2381,8 +2383,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "36 named levels: 2 clear the fresh-low control (PDC- 29% n=119 vs 21% (+8pp); POC+ 26% n=97 vs 17% (+8pp)) — about what 36 cells produce by chance (≈0.9 expected); worse than a bounce at nothing: OR5H 10% n=220, OR15L 21% n=190, OR15H 14% n=205, VWAP- 8% n=130, VWAP+ 5% n=126, VW1L 8% n=210, VW1H 8% n=202, VW2L 12% n=185, VW2H 11% n=180, DPOC- 5% n=133, DPOC+ 3% n=125, DVAL 8% n=217, DVAH 7% n=210; within chance: ONL, ONH, PDL, PDH, IBL, IBH, PDC+, VAL, VAH, POC-, PML, PMH, PWL, PWH, WPOC-, WPOC+, OR5L, ALO, AHI, LLO, LHI · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "36 named levels: 2 clear the fresh-low control (PDC- 29% n=119 vs 21% (+8pp); POC+ 26% n=97 vs 17% (+8pp)) — about what 36 cells produce by chance (≈0.9 expected); worse than a bounce at nothing: OR5H 10% n=220, OR15L 21% n=190, OR15H 14% n=205, VWAP- 8% n=130, VWAP+ 5% n=126, VW1L 8% n=210, VW1H 8% n=202, VW2L 12% n=185, VW2H 11% n=180, DPOC- 5% n=133, DPOC+ 3% n=125, DVAL 8% n=217, DVAH 7% n=210; within chance: ONL, ONH, PDL, PDH, IBL, IBH, PDC+, VAL, VAH, POC-, PML, PMH, PWL, PWH, WPOC-, WPOC+, OR5L, ALO, AHI, LLO, LHI · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H2.10",
@@ -2391,7 +2393,7 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "result": "PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
        "script": "study-sweeps.py",
        "machine": {
         "file": "SWEEPS",
@@ -2405,8 +2407,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -2416,7 +2418,7 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 28% (-9pp) · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "result": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 28% (-9pp) · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
        "script": "study-sweeps.py",
        "machine": {
         "file": "SWEEPS",
@@ -2426,8 +2428,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 28% (-9pp) · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 28% (-9pp) · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -2437,7 +2439,7 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=386 vs 21% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "result": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=386 vs 21% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
        "script": "study-sweeps.py",
        "machine": {
         "file": "SWEEPS",
@@ -2447,8 +2449,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=386 vs 21% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=386 vs 21% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -2458,7 +2460,7 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · ONH 16% n=183 · PDL 31% n=126 · PDH 34% n=169 · IBL 14% n=170 · IBH 20% n=188 · PDC- 45% n=217 · PDC+ 56% n=239 · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "result": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · ONH 16% n=183 · PDL 31% n=126 · PDH 34% n=169 · IBL 14% n=170 · IBH 20% n=188 · PDC- 45% n=217 · PDC+ 56% n=239 · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
        "script": "study-sweeps.py",
        "machine": {
         "file": "SWEEPS",
@@ -2468,8 +2470,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · ONH 16% n=183 · PDL 31% n=126 · PDH 34% n=169 · IBL 14% n=170 · IBH 20% n=188 · PDC- 45% n=217 · PDC+ 56% n=239 · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · ONH 16% n=183 · PDL 31% n=126 · PDH 34% n=169 · IBL 14% n=170 · IBH 20% n=188 · PDC- 45% n=217 · PDC+ 56% n=239 · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -2484,8 +2486,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "H6 thin: n=1 of 40 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H6 thin: n=2 of 40 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H2.8",
@@ -2499,8 +2501,8 @@
         "corpus": "register",
         "n": 0
        },
-       "nightly": "H7 withdrawn: n=0 of 60 · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "H7 withdrawn: n=0 of 60 · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H2.9",
@@ -2513,8 +2515,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H2.10f",
@@ -2528,8 +2530,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H2.10g",
@@ -2571,8 +2573,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H2.11",
@@ -2581,7 +2583,7 @@
        "claim": "ours",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "result": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
        "script": "study-sweeps.py",
        "machine": {
         "file": "SWEEPS",
@@ -2591,8 +2593,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
-       "asOf": "2026-09-08",
+       "nightly": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-09",
+       "asOf": "2026-09-09",
        "by": "nightly"
       },
       {
@@ -2629,8 +2631,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H3.2",
@@ -2643,8 +2645,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H3.3",
@@ -2657,8 +2659,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H3.4",
@@ -2671,8 +2673,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2706,8 +2708,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H4.3",
@@ -2734,8 +2736,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2769,8 +2771,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H5.3",
@@ -2783,8 +2785,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2804,8 +2806,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H6.2",
@@ -2846,8 +2848,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H6.5",
@@ -2860,8 +2862,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2881,8 +2883,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H7.2",
@@ -2895,8 +2897,8 @@
         "corpus": "calendar",
         "n": 30
        },
-       "nightly": "WAITING · calendar: 0 of 30 event days · ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · calendar: 0 of 30 event days · ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "H7.3",
@@ -2909,8 +2911,8 @@
         "corpus": "vix",
         "n": 200
        },
-       "nightly": "WAITING · vix: 0 of 200 closes · ^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · vix: 0 of 200 closes · ^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     }
@@ -2938,8 +2940,8 @@
         "corpus": "ledger",
         "n": 40
        },
-       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · ledger: 191 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "X1.2",
@@ -2952,8 +2954,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -2973,8 +2975,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "X2.2",
@@ -2987,8 +2989,8 @@
         "corpus": "price",
         "n": 30
        },
-       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "X2.3",
@@ -3001,8 +3003,8 @@
         "corpus": "calendar",
         "n": 30
        },
-       "nightly": "WAITING · calendar: 0 of 30 event days · ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · calendar: 0 of 30 event days · ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -3022,8 +3024,8 @@
         "corpus": "vix",
         "n": 200
        },
-       "nightly": "WAITING · vix: 0 of 200 closes · ^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · vix: 0 of 200 closes · ^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "X3.2",
@@ -3036,8 +3038,8 @@
         "corpus": "book",
         "n": 30
        },
-       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · book: 14 of 30 sessions · ~16 sessions at 1.0/session · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       }
      ]
     },
@@ -3057,8 +3059,8 @@
         "corpus": "tap",
         "n": 40
        },
-       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
-       "asOf": "2026-09-08"
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-09",
+       "asOf": "2026-09-09"
       },
       {
        "id": "X4.2",
@@ -3081,14 +3083,14 @@
  "counts": {
   "studies": 184,
   "byStatus": {
-   "THIN": 12,
-   "WAITING": 111,
+   "THIN": 11,
+   "WAITING": 110,
    "REGISTERED": 10,
    "READY": 15,
    "SHIPPED": 13,
+   "READ": 17,
    "CUT": 2,
    "REFUSED": 3,
-   "READ": 15,
    "NULL": 2,
    "OPEN": 1
   }

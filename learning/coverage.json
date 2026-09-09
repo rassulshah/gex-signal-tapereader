@@ -2,7 +2,7 @@
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
  "asOf": "2026-09-09",
- "generatedAt": "2026-09-09T19:35:20Z",
+ "generatedAt": "2026-09-09T20:05:20Z",
  "ranOn": "his machine",
  "complete": 386,
  "days": [
@@ -968,12 +968,12 @@
      "complete": true
     },
     "GC": {
-     "n": 379,
-     "complete": false
+     "n": 393,
+     "complete": true
     },
     "CL": {
-     "n": 379,
-     "complete": false
+     "n": 393,
+     "complete": true
     }
    },
    "tape": [
@@ -983,6 +983,62 @@
     "VIX"
    ],
    "log": true
+  },
+  {
+   "day": "2026-09-09",
+   "mb": 9.81,
+   "version": "15.92",
+   "snaps": 118,
+   "nodeEvents": 993,
+   "defl": 43,
+   "feat": true,
+   "fut": {
+    "ES": {
+     "n": 4692,
+     "full": true,
+     "err": null
+    },
+    "NQ": {
+     "n": 4693,
+     "full": true,
+     "err": null
+    },
+    "GC": {
+     "n": 1843,
+     "full": false,
+     "err": null
+    },
+    "CL": {
+     "n": 1842,
+     "full": false,
+     "err": null
+    }
+   },
+   "csv": {
+    "ES": {
+     "n": 375,
+     "complete": false
+    },
+    "NQ": {
+     "n": 375,
+     "complete": false
+    },
+    "GC": {
+     "n": 375,
+     "complete": false
+    },
+    "CL": {
+     "n": 375,
+     "complete": false
+    }
+   },
+   "tape": [
+    "QQQ",
+    "SPXW",
+    "SPY",
+    "VIX"
+   ],
+   "log": false
   }
  ],
  "corpora": {
@@ -1008,7 +1064,7 @@
    "levels": 36
   },
   "book": {
-   "sessions": 13,
+   "sessions": 14,
    "cells": 24
   },
   "learn": {
@@ -1044,34 +1100,34 @@
    "note": "the sweep corpus (vendor + the couriered nights, v15.90)"
   },
   "book": {
-   "have": 13,
+   "have": 14,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 13,
+   "sessions": 14,
    "first": null,
    "note": "the SPY 3-minute book from the day files"
   },
   "ledger": {
-   "have": 148,
+   "have": 191,
    "unit": "taps",
-   "perSession": 37.0,
-   "sessions": 4,
+   "perSession": 38.2,
+   "sessions": 5,
    "first": "2026-09-03",
    "note": "the deflection ledger (±0.50 SPY wobbles) — the tap record replaces it at his scale"
   },
   "kingroll": {
-   "have": 170,
+   "have": 211,
    "unit": "rows",
-   "perSession": 24.29,
-   "sessions": 7,
+   "perSession": 26.38,
+   "sessions": 8,
    "first": "2026-08-19",
    "note": "dir.kingRoll rows with an outcome (per bar, not independent rolls)"
   },
   "gate": {
-   "have": 231,
+   "have": 273,
    "unit": "rows",
-   "perSession": 25.67,
-   "sessions": 9,
+   "perSession": 27.3,
+   "sessions": 10,
    "first": "2026-08-19",
    "note": "gateHour rows with an outcome"
   },
@@ -1111,16 +1167,16 @@
  "studies": {
   "total": 184,
   "byStatus": {
-   "OPEN": 1,
-   "REFUSED": 3,
-   "NULL": 2,
-   "REGISTERED": 10,
-   "READ": 15,
-   "CUT": 2,
-   "THIN": 12,
    "READY": 15,
+   "THIN": 12,
+   "REGISTERED": 10,
+   "NULL": 2,
+   "OPEN": 1,
+   "READ": 15,
+   "WAITING": 111,
+   "REFUSED": 3,
    "SHIPPED": 13,
-   "WAITING": 111
+   "CUT": 2
   },
   "byCorpus": {
    "tap": {
@@ -1188,13 +1244,14 @@
  "nightly": {
   "date": "2026-09-08",
   "ranOn": "his machine",
-  "ranAt": "2026-09-09T15:55:23Z",
+  "ranAt": "2026-09-09T19:35:22Z",
   "sessions": 3,
   "episodes": 23,
   "deflEvents": 141
  },
  "tapeDays": [
   "2026-09-07",
-  "2026-09-08"
+  "2026-09-08",
+  "2026-09-09"
  ]
 }

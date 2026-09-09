@@ -1,0 +1,1401 @@
+{
+ "schema": 2,
+ "date": "2026-09-09",
+ "writtenBy": "tools/nightly/run.py",
+ "ranOn": "his machine",
+ "ranAt": "2026-09-09T20:05:22Z",
+ "sessions": 4,
+ "episodes": 35,
+ "deflEvents": 181,
+ "null": {
+  "p50": 0.0,
+  "p95": 0.0
+ },
+ "hypotheses": [
+  {
+   "id": "H1",
+   "claim": "grade A holds LESS often than the base rate",
+   "minN": 40,
+   "pick": "gradeA",
+   "n": 7,
+   "nBase": 18,
+   "verdict": "thin"
+  },
+  {
+   "id": "H2",
+   "claim": "a node's 2nd test holds MORE often than its 1st",
+   "minN": 30,
+   "pick": "tap1",
+   "n": 3,
+   "nBase": 18,
+   "verdict": "thin"
+  },
+  {
+   "id": "H3",
+   "claim": "NULL \u2014 polarity does not discriminate",
+   "minN": 40,
+   "pick": "pol",
+   "n": 6,
+   "nA": 12,
+   "nB": 6,
+   "verdict": "thin"
+  },
+  {
+   "id": "H4",
+   "claim": "NULL \u2014 the rejection wick does not discriminate",
+   "minN": 40,
+   "pick": "wick",
+   "n": 7,
+   "nA": 7,
+   "nB": 10,
+   "verdict": "thin"
+  },
+  {
+   "id": "H5",
+   "claim": "a top-5 gamma node moves the HOD/LOD cell",
+   "minN": 50,
+   "pick": "defl",
+   "judgedBy": "nightly",
+   "n": 0,
+   "extremes": 4,
+   "atNode": 0,
+   "notAtNode": 0,
+   "since": "2026-09-03",
+   "verdict": "blocked",
+   "bar": "0 of 4 extremes since 2026-09-03 coincide with a ledger tap (0 at a node) \u2014 needs 50; the tap record is where this reads"
+  },
+  {
+   "id": "H6",
+   "claim": "an ON/PD sweep-reclaim that lands in a top-5 node band or at the King prints the extreme more often",
+   "minN": 40,
+   "pick": "sweepNode",
+   "judgedBy": "nightly",
+   "n": 2,
+   "nControl": 4,
+   "sessions": 14,
+   "verdict": "thin",
+   "bar": "2 sweep-at-a-node events on sessions from 2026-09-03 (needs 40); not at a node: 4"
+  },
+  {
+   "id": "H7",
+   "claim": "a first-30-minute ON/PD sweep-reclaim prints the extreme more often than a bounce off any fresh low",
+   "minN": 60,
+   "pick": "sweepEarly",
+   "n": 0,
+   "verdict": "withdrawn",
+   "bar": "withdrawn 2026-09-09: F-23 (v15.88): the corpus\u2019s ONH / ONL looked ahead; corrected, the first 30 minutes read 21% n=249 vs an 18% control \u2014 i"
+  },
+  {
+   "id": "H8",
+   "claim": "the rolling floor: a King that rolled UP today and holds as a floor resumes the trend more often than any floor (his read, 2026-09-04)",
+   "minN": 30,
+   "pick": "pat",
+   "cls": "king:floor:up",
+   "outcome": "resume",
+   "base": "dir:up",
+   "n": 0,
+   "nBase": 30,
+   "verdict": "thin",
+   "bar": "king:floor:up: 0 resume-scored taps of 30 needed (base dir:up: 30)"
+  },
+  {
+   "id": "H9",
+   "claim": "the rolling ceiling: a King that rolled DOWN today and holds as a ceiling resumes the trend more often than any ceiling (the mirror of H8)",
+   "minN": 30,
+   "pick": "pat",
+   "cls": "king:ceil:dn",
+   "outcome": "resume",
+   "base": "dir:dn",
+   "n": 0,
+   "nBase": 31,
+   "verdict": "thin",
+   "bar": "king:ceil:dn: 0 resume-scored taps of 30 needed (base dir:dn: 31)"
+  },
+  {
+   "id": "H10",
+   "claim": "the HOD/LOD table\u2019s late-session >=80% cells hold to the close at >=80% live",
+   "minN": 60,
+   "pick": "lodhodCell",
+   "judgedBy": "nightly",
+   "n": 36,
+   "sessions": 2,
+   "since": "2026-09-08",
+   "verdict": "thin",
+   "bar": "36 close-scored rows in the >=80% cells on sessions from 2026-09-08 (needs 60)"
+  }
+ ],
+ "lodhod": {
+  "sessions": 4,
+  "cells": [
+   {
+    "cell": "100-119",
+    "n": 33,
+    "live": 61,
+    "table": 100
+   },
+   {
+    "cell": "80-99",
+    "n": 56,
+    "live": 73,
+    "table": 97
+   }
+  ],
+  "note": "close-scored rows only (v15.51+); a flat live column against a rising table column means the scorer cannot fail"
+ },
+ "preopen": "4 sessions since 2026-09-03 \u00b7 35 episodes \u00b7 9 of 10 hypotheses still thin \u00b7 null band 0.0 pts",
+ "newRequests": 0,
+ "newItems": 0,
+ "tape": {
+  "SPXW": {
+   "bars": 113,
+   "strikes": 260
+  },
+  "SPY": {
+   "bars": 113,
+   "strikes": 102
+  },
+  "QQQ": {
+   "bars": 113,
+   "strikes": 105
+  },
+  "VIX": {
+   "bars": 113,
+   "strikes": 70
+  }
+ },
+ "patterns": {
+  "rows": [
+   {
+    "key": "all",
+    "label": "every tap",
+    "n": 181,
+    "held": 84,
+    "broke": 97,
+    "pending": 10,
+    "rate": 46,
+    "lo": 39,
+    "turn": {
+     "n": 61,
+     "hit": 10,
+     "rate": 16,
+     "lo": 9
+    },
+    "resume": {
+     "n": 61,
+     "hit": 35,
+     "rate": 57,
+     "lo": 45
+    }
+   },
+   {
+    "key": "king:SPX",
+    "label": "King \u00b7 SPX",
+    "n": 8,
+    "held": 2,
+    "broke": 6,
+    "pending": 0,
+    "rate": 25,
+    "lo": 7,
+    "turn": {
+     "n": 1,
+     "hit": 1,
+     "rate": 100,
+     "lo": 21
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "king:SPY",
+    "label": "King \u00b7 SPY",
+    "n": 7,
+    "held": 3,
+    "broke": 4,
+    "pending": 0,
+    "rate": 43,
+    "lo": 16,
+    "turn": {
+     "n": 2,
+     "hit": 1,
+     "rate": 50,
+     "lo": 9
+    },
+    "resume": {
+     "n": 2,
+     "hit": 1,
+     "rate": 50,
+     "lo": 9
+    }
+   },
+   {
+    "key": "king:QQQ",
+    "label": "King \u00b7 QQQ",
+    "n": 6,
+    "held": 3,
+    "broke": 3,
+    "pending": 0,
+    "rate": 50,
+    "lo": 19,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "king:any",
+    "label": "King \u00b7 any book",
+    "n": 20,
+    "held": 8,
+    "broke": 12,
+    "pending": 0,
+    "rate": 40,
+    "lo": 22,
+    "turn": {
+     "n": 4,
+     "hit": 2,
+     "rate": 50,
+     "lo": 15
+    },
+    "resume": {
+     "n": 4,
+     "hit": 1,
+     "rate": 25,
+     "lo": 5
+    }
+   },
+   {
+    "key": "king:none",
+    "label": "no King at the tap",
+    "n": 83,
+    "held": 41,
+    "broke": 42,
+    "pending": 7,
+    "rate": 49,
+    "lo": 39,
+    "turn": {
+     "n": 29,
+     "hit": 7,
+     "rate": 24,
+     "lo": 12
+    },
+    "resume": {
+     "n": 29,
+     "hit": 13,
+     "rate": 45,
+     "lo": 28
+    }
+   },
+   {
+    "key": "king:floor",
+    "label": "King as a floor (deflected UP)",
+    "n": 9,
+    "held": 4,
+    "broke": 5,
+    "pending": 0,
+    "rate": 44,
+    "lo": 19,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "king:ceil",
+    "label": "King as a ceiling (deflected DOWN)",
+    "n": 11,
+    "held": 4,
+    "broke": 7,
+    "pending": 0,
+    "rate": 36,
+    "lo": 15,
+    "turn": {
+     "n": 3,
+     "hit": 2,
+     "rate": 67,
+     "lo": 21
+    },
+    "resume": {
+     "n": 3,
+     "hit": 1,
+     "rate": 33,
+     "lo": 6
+    }
+   },
+   {
+    "key": "king:floor:up",
+    "label": "King as a floor, rolled UP today \u2014 the rolling floor",
+    "n": 2,
+    "held": 1,
+    "broke": 1,
+    "pending": 0,
+    "rate": 50,
+    "lo": 9,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "king:floor:dn",
+    "label": "King as a floor, rolled DOWN today",
+    "n": 7,
+    "held": 3,
+    "broke": 4,
+    "pending": 0,
+    "rate": 43,
+    "lo": 16,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "king:ceil:dn",
+    "label": "King as a ceiling, rolled DOWN today \u2014 the rolling ceiling",
+    "n": 6,
+    "held": 2,
+    "broke": 4,
+    "pending": 0,
+    "rate": 33,
+    "lo": 10,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "king:ceil:up",
+    "label": "King as a ceiling, rolled UP today",
+    "n": 4,
+    "held": 0,
+    "broke": 4,
+    "pending": 0,
+    "rate": 0,
+    "lo": 0,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 1,
+     "rate": 100,
+     "lo": 21
+    }
+   },
+   {
+    "key": "king:fade",
+    "label": "SPX King fading into the tap",
+    "n": 2,
+    "held": 0,
+    "broke": 2,
+    "pending": 0,
+    "rate": 0,
+    "lo": 0,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "king:pos",
+    "label": "SPX King +\u03b3",
+    "n": 5,
+    "held": 1,
+    "broke": 4,
+    "pending": 0,
+    "rate": 20,
+    "lo": 4,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "king:neg",
+    "label": "SPX King \u2212\u03b3",
+    "n": 3,
+    "held": 1,
+    "broke": 2,
+    "pending": 0,
+    "rate": 33,
+    "lo": 6,
+    "turn": {
+     "n": 1,
+     "hit": 1,
+     "rate": 100,
+     "lo": 21
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "spx:pika",
+    "label": "SPX pika stack (named or member)",
+    "n": 15,
+    "held": 4,
+    "broke": 11,
+    "pending": 0,
+    "rate": 27,
+    "lo": 11,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "spx:barney",
+    "label": "SPX barney stack (named or member)",
+    "n": 5,
+    "held": 3,
+    "broke": 2,
+    "pending": 0,
+    "rate": 60,
+    "lo": 23,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "spy:pika",
+    "label": "SPY pika stack",
+    "n": 18,
+    "held": 7,
+    "broke": 11,
+    "pending": 0,
+    "rate": 39,
+    "lo": 20,
+    "turn": {
+     "n": 4,
+     "hit": 2,
+     "rate": 50,
+     "lo": 15
+    },
+    "resume": {
+     "n": 4,
+     "hit": 1,
+     "rate": 25,
+     "lo": 5
+    }
+   },
+   {
+    "key": "spy:barney",
+    "label": "SPY barney stack",
+    "n": 25,
+    "held": 12,
+    "broke": 13,
+    "pending": 2,
+    "rate": 48,
+    "lo": 30,
+    "turn": {
+     "n": 6,
+     "hit": 1,
+     "rate": 17,
+     "lo": 3
+    },
+    "resume": {
+     "n": 6,
+     "hit": 2,
+     "rate": 33,
+     "lo": 10
+    }
+   },
+   {
+    "key": "qqq:pika",
+    "label": "QQQ pika stack",
+    "n": 7,
+    "held": 3,
+    "broke": 4,
+    "pending": 0,
+    "rate": 43,
+    "lo": 16,
+    "turn": {
+     "n": 2,
+     "hit": 2,
+     "rate": 100,
+     "lo": 34
+    },
+    "resume": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "qqq:barney",
+    "label": "QQQ barney stack",
+    "n": 18,
+    "held": 10,
+    "broke": 8,
+    "pending": 5,
+    "rate": 56,
+    "lo": 34,
+    "turn": {
+     "n": 6,
+     "hit": 3,
+     "rate": 50,
+     "lo": 19
+    },
+    "resume": {
+     "n": 6,
+     "hit": 3,
+     "rate": 50,
+     "lo": 19
+    }
+   },
+   {
+    "key": "spx:rug",
+    "label": "SPX rug \u2014 the yellow over the purple",
+    "n": 1,
+    "held": 0,
+    "broke": 1,
+    "pending": 0,
+    "rate": 0,
+    "lo": 0,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 1,
+     "rate": 100,
+     "lo": 21
+    }
+   },
+   {
+    "key": "spy:rrug",
+    "label": "SPY reverse rug",
+    "n": 1,
+    "held": 0,
+    "broke": 1,
+    "pending": 2,
+    "rate": 0,
+    "lo": 0,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "qqq:rug",
+    "label": "QQQ rug",
+    "n": 3,
+    "held": 0,
+    "broke": 3,
+    "pending": 1,
+    "rate": 0,
+    "lo": 0,
+    "turn": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    },
+    "resume": {
+     "n": 0,
+     "hit": 0,
+     "rate": null,
+     "lo": null
+    }
+   },
+   {
+    "key": "spx:new",
+    "label": "SPX node NEW at the tap",
+    "n": 3,
+    "held": 3,
+    "broke": 0,
+    "pending": 0,
+    "rate": 100,
+    "lo": 44,
+    "turn": {
+     "n": 2,
+     "hit": 2,
+     "rate": 100,
+     "lo": 34
+    },
+    "resume": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "spx:grow",
+    "label": "SPX node growing into the tap (\u2265 20%)",
+    "n": 17,
+    "held": 9,
+    "broke": 8,
+    "pending": 0,
+    "rate": 53,
+    "lo": 31,
+    "turn": {
+     "n": 4,
+     "hit": 3,
+     "rate": 75,
+     "lo": 30
+    },
+    "resume": {
+     "n": 4,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "spx:fade",
+    "label": "SPX node fading into the tap (\u2264 \u221220%)",
+    "n": 17,
+    "held": 6,
+    "broke": 11,
+    "pending": 1,
+    "rate": 35,
+    "lo": 17,
+    "turn": {
+     "n": 5,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 5,
+     "hit": 3,
+     "rate": 60,
+     "lo": 23
+    }
+   },
+   {
+    "key": "spx:pos",
+    "label": "SPX +\u03b3 node (yellow)",
+    "n": 29,
+    "held": 9,
+    "broke": 20,
+    "pending": 1,
+    "rate": 31,
+    "lo": 17,
+    "turn": {
+     "n": 8,
+     "hit": 2,
+     "rate": 25,
+     "lo": 7
+    },
+    "resume": {
+     "n": 8,
+     "hit": 1,
+     "rate": 13,
+     "lo": 2
+    }
+   },
+   {
+    "key": "spx:neg",
+    "label": "SPX \u2212\u03b3 node (purple)",
+    "n": 33,
+    "held": 14,
+    "broke": 19,
+    "pending": 1,
+    "rate": 42,
+    "lo": 27,
+    "turn": {
+     "n": 7,
+     "hit": 4,
+     "rate": 57,
+     "lo": 25
+    },
+    "resume": {
+     "n": 7,
+     "hit": 2,
+     "rate": 29,
+     "lo": 8
+    }
+   },
+   {
+    "key": "spx:none",
+    "label": "no SPX node at the tap (SPY / QQQ level)",
+    "n": 26,
+    "held": 14,
+    "broke": 12,
+    "pending": 5,
+    "rate": 54,
+    "lo": 35,
+    "turn": {
+     "n": 11,
+     "hit": 3,
+     "rate": 27,
+     "lo": 10
+    },
+    "resume": {
+     "n": 11,
+     "hit": 5,
+     "rate": 45,
+     "lo": 21
+    }
+   },
+   {
+    "key": "old:King",
+    "label": "old detector \u00b7 King",
+    "n": 20,
+    "held": 7,
+    "broke": 13,
+    "pending": 0,
+    "rate": 35,
+    "lo": 18,
+    "turn": {
+     "n": 7,
+     "hit": 1,
+     "rate": 14,
+     "lo": 3
+    },
+    "resume": {
+     "n": 7,
+     "hit": 6,
+     "rate": 86,
+     "lo": 49
+    }
+   },
+   {
+    "key": "old:Gate",
+    "label": "old detector \u00b7 Gate",
+    "n": 21,
+    "held": 10,
+    "broke": 11,
+    "pending": 0,
+    "rate": 48,
+    "lo": 28,
+    "turn": {
+     "n": 4,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 4,
+     "hit": 2,
+     "rate": 50,
+     "lo": 15
+    }
+   },
+   {
+    "key": "old:Rug",
+    "label": "old detector \u00b7 Rug",
+    "n": 22,
+    "held": 10,
+    "broke": 12,
+    "pending": 2,
+    "rate": 45,
+    "lo": 27,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "old:Floor",
+    "label": "old detector \u00b7 Floor",
+    "n": 59,
+    "held": 30,
+    "broke": 29,
+    "pending": 1,
+    "rate": 51,
+    "lo": 38,
+    "turn": {
+     "n": 25,
+     "hit": 5,
+     "rate": 20,
+     "lo": 9
+    },
+    "resume": {
+     "n": 25,
+     "hit": 12,
+     "rate": 48,
+     "lo": 30
+    }
+   },
+   {
+    "key": "old:Ceiling",
+    "label": "old detector \u00b7 Ceiling",
+    "n": 59,
+    "held": 27,
+    "broke": 32,
+    "pending": 7,
+    "rate": 46,
+    "lo": 34,
+    "turn": {
+     "n": 24,
+     "hit": 4,
+     "rate": 17,
+     "lo": 7
+    },
+    "resume": {
+     "n": 24,
+     "hit": 15,
+     "rate": 63,
+     "lo": 43
+    }
+   },
+   {
+    "key": "dir:up",
+    "label": "deflected UP (a floor held)",
+    "n": 89,
+    "held": 42,
+    "broke": 47,
+    "pending": 2,
+    "rate": 47,
+    "lo": 37,
+    "turn": {
+     "n": 30,
+     "hit": 5,
+     "rate": 17,
+     "lo": 7
+    },
+    "resume": {
+     "n": 30,
+     "hit": 15,
+     "rate": 50,
+     "lo": 33
+    }
+   },
+   {
+    "key": "dir:dn",
+    "label": "deflected DOWN (a ceiling held)",
+    "n": 92,
+    "held": 42,
+    "broke": 50,
+    "pending": 8,
+    "rate": 46,
+    "lo": 36,
+    "turn": {
+     "n": 31,
+     "hit": 5,
+     "rate": 16,
+     "lo": 7
+    },
+    "resume": {
+     "n": 31,
+     "hit": 20,
+     "rate": 65,
+     "lo": 47
+    }
+   },
+   {
+    "key": "hour:1",
+    "label": "H1 \u00b7 08:30\u201309:30",
+    "n": 40,
+    "held": 18,
+    "broke": 22,
+    "pending": 0,
+    "rate": 45,
+    "lo": 31,
+    "turn": {
+     "n": 19,
+     "hit": 5,
+     "rate": 26,
+     "lo": 12
+    },
+    "resume": {
+     "n": 19,
+     "hit": 9,
+     "rate": 47,
+     "lo": 27
+    }
+   },
+   {
+    "key": "hour:2",
+    "label": "H2 \u00b7 09:30\u201310:30",
+    "n": 45,
+    "held": 33,
+    "broke": 12,
+    "pending": 0,
+    "rate": 73,
+    "lo": 59,
+    "turn": {
+     "n": 24,
+     "hit": 5,
+     "rate": 21,
+     "lo": 9
+    },
+    "resume": {
+     "n": 24,
+     "hit": 18,
+     "rate": 75,
+     "lo": 55
+    }
+   },
+   {
+    "key": "hour:3",
+    "label": "H3 \u00b7 10:30\u201311:30",
+    "n": 38,
+    "held": 17,
+    "broke": 21,
+    "pending": 0,
+    "rate": 45,
+    "lo": 30,
+    "turn": {
+     "n": 11,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 11,
+     "hit": 5,
+     "rate": 45,
+     "lo": 21
+    }
+   },
+   {
+    "key": "hour:4",
+    "label": "H4 \u00b7 11:30\u201312:30",
+    "n": 25,
+    "held": 6,
+    "broke": 19,
+    "pending": 0,
+    "rate": 24,
+    "lo": 11,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 1,
+     "rate": 50,
+     "lo": 9
+    }
+   },
+   {
+    "key": "hour:5",
+    "label": "H5 \u00b7 12:30\u201313:30",
+    "n": 17,
+    "held": 5,
+    "broke": 12,
+    "pending": 0,
+    "rate": 29,
+    "lo": 13,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 2,
+     "rate": 100,
+     "lo": 34
+    }
+   },
+   {
+    "key": "hour:6",
+    "label": "H6 \u00b7 13:30\u201314:00",
+    "n": 7,
+    "held": 2,
+    "broke": 5,
+    "pending": 0,
+    "rate": 29,
+    "lo": 8,
+    "turn": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 1,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "hour:7",
+    "label": "H7 \u00b7 14:00\u201315:00",
+    "n": 9,
+    "held": 3,
+    "broke": 6,
+    "pending": 9,
+    "rate": 33,
+    "lo": 12,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   },
+   {
+    "key": "clock:first",
+    "label": "the first hour (08:30\u201309:30)",
+    "n": 40,
+    "held": 18,
+    "broke": 22,
+    "pending": 0,
+    "rate": 45,
+    "lo": 31,
+    "turn": {
+     "n": 19,
+     "hit": 5,
+     "rate": 26,
+     "lo": 12
+    },
+    "resume": {
+     "n": 19,
+     "hit": 9,
+     "rate": 47,
+     "lo": 27
+    }
+   },
+   {
+    "key": "clock:mid",
+    "label": "midday (09:30\u201314:00)",
+    "n": 132,
+    "held": 63,
+    "broke": 69,
+    "pending": 0,
+    "rate": 48,
+    "lo": 39,
+    "turn": {
+     "n": 40,
+     "hit": 5,
+     "rate": 13,
+     "lo": 5
+    },
+    "resume": {
+     "n": 40,
+     "hit": 26,
+     "rate": 65,
+     "lo": 50
+    }
+   },
+   {
+    "key": "clock:last",
+    "label": "the last hour (14:00\u201315:00)",
+    "n": 9,
+    "held": 3,
+    "broke": 6,
+    "pending": 9,
+    "rate": 33,
+    "lo": 12,
+    "turn": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    },
+    "resume": {
+     "n": 2,
+     "hit": 0,
+     "rate": 0,
+     "lo": 0
+    }
+   }
+  ],
+  "events": 191,
+  "stamped": 110,
+  "schema": 1,
+  "days": 5,
+  "writtenBy": "tools/nightly/patterns.py",
+  "outcomes": {
+   "turnTol": 0.5,
+   "market": "SPY",
+   "episodes": "first tap per (strike, dir) per day",
+   "scored": 61
+  }
+ },
+ "futures": {
+  "appended": {
+   "CL": {
+    "minutes": 389,
+    "newest": "2026-09-09",
+    "newestBars": 375,
+    "complete": false,
+    "night": {
+     "minutes": 0,
+     "newest": "2026-09-09",
+     "newestBars": 0,
+     "full": false
+    }
+   },
+   "ES": {
+    "minutes": 375,
+    "newest": "2026-09-09",
+    "newestBars": 375,
+    "complete": false,
+    "night": {
+     "minutes": 916,
+     "newest": "2026-09-09",
+     "newestBars": 916,
+     "full": true
+    }
+   },
+   "GC": {
+    "minutes": 389,
+    "newest": "2026-09-09",
+    "newestBars": 375,
+    "complete": false,
+    "night": {
+     "minutes": 0,
+     "newest": "2026-09-09",
+     "newestBars": 0,
+     "full": false
+    }
+   },
+   "NQ": {
+    "minutes": 375,
+    "newest": "2026-09-09",
+    "newestBars": 375,
+    "complete": false,
+    "night": {
+     "minutes": 2959,
+     "newest": "2026-09-09",
+     "newestBars": 917,
+     "full": true
+    }
+   }
+  },
+  "baserates": {
+   "ES": {
+    "sessions": 295,
+    "first": "2025-06-02",
+    "last": "2026-09-08",
+    "vendor": 284,
+    "yahoo": 11,
+    "incompleteDropped": 13
+   },
+   "NQ": {
+    "sessions": 195,
+    "first": "2025-11-24",
+    "last": "2026-09-08",
+    "vendor": 188,
+    "yahoo": 7,
+    "incompleteDropped": 9
+   }
+  },
+  "overlap": {
+   "ES": {
+    "days": 0,
+    "rows": [],
+    "note": "none \u2014 the vendor corpus ends 2026-08-21 and the Yahoo sessions begin 2026-08-24; pooled with provenance, nothing averaged"
+   },
+   "NQ": {
+    "days": 4,
+    "rows": [
+     {
+      "day": "2026-08-24",
+      "vendor": {
+       "took": 3,
+       "rng": 296.25,
+       "wickPct": 13,
+       "bop": 3,
+       "open": 29205.5,
+       "hod": 29243.0,
+       "lod": 28946.75
+      },
+      "yahoo": {
+       "took": 3,
+       "rng": 296.25,
+       "wickPct": 14,
+       "bop": 3,
+       "open": 29202.25,
+       "hod": 29243.0,
+       "lod": 28946.75
+      }
+     },
+     {
+      "day": "2026-08-25",
+      "vendor": {
+       "took": 21,
+       "rng": 276.75,
+       "wickPct": 28,
+       "bop": 6,
+       "open": 29336.75,
+       "hod": 29414.75,
+       "lod": 29138.0
+      },
+      "yahoo": {
+       "took": 21,
+       "rng": 276.75,
+       "wickPct": 28,
+       "bop": 6,
+       "open": 29336.25,
+       "hod": 29414.75,
+       "lod": 29138.0
+      }
+     },
+     {
+      "day": "2026-08-26",
+      "vendor": {
+       "took": 0,
+       "rng": 212.25,
+       "wickPct": 0,
+       "bop": 3,
+       "open": 29156.5,
+       "hod": 29368.25,
+       "lod": 29156.0
+      },
+      "yahoo": {
+       "took": 0,
+       "rng": 212.0,
+       "wickPct": 2,
+       "bop": 3,
+       "open": 29160.0,
+       "hod": 29368.25,
+       "lod": 29156.25
+      }
+     },
+     {
+      "day": "2026-08-27",
+      "vendor": {
+       "took": 30,
+       "rng": 280.0,
+       "wickPct": 49,
+       "bop": 12,
+       "open": 29561.5,
+       "hod": 29703.75,
+       "lod": 29423.75
+      },
+      "yahoo": {
+       "took": 30,
+       "rng": 280.75,
+       "wickPct": 46,
+       "bop": 12,
+       "open": 29554.0,
+       "hod": 29704.5,
+       "lod": 29423.75
+      }
+     }
+    ],
+    "note": "4 sessions in both (2026-08-24 \u2192 2026-08-27): the vendor wins each; the two read side by side below"
+   }
+  }
+ },
+ "from": "2026-09-03",
+ "feats": {
+  "dir.kingRoll": {
+   "n": 211,
+   "hit": 123,
+   "rate": 58.3,
+   "lo": 52,
+   "sessions": 8,
+   "first": "2026-08-19"
+  },
+  "gateHour": {
+   "n": 273,
+   "hit": 144,
+   "rate": 52.7,
+   "lo": 47,
+   "sessions": 10,
+   "first": "2026-08-19"
+  }
+ }
+}
