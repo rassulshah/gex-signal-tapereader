@@ -67,6 +67,8 @@ try{ run('RP_STALEGUARD=(typeof sessionDayStr==="function")?sessionDayStr():0;')
 // from the real record, and says so in the render's caption. Not a way to fake a face: everything
 // seeded must come from a file in the repo.
 if(process.argv.indexOf('--pre')>=0){ try{ run(process.argv[process.argv.indexOf('--pre')+1]); }catch(e){ console.log('PRE THREW: '+e.message); } }
+// (v15.90) --pre-file <path>: the same, read from a file — a seeded registry + coverage is 140 KB, past the argv limit
+if(process.argv.indexOf('--pre-file')>=0){ try{ run(require('fs').readFileSync(process.argv[process.argv.indexOf('--pre-file')+1],'utf8')); }catch(e){ console.log('PRE THREW: '+e.message); } }
 run('RENDER_ERRS.length=0');
 try{ run('render()'); }catch(e){ console.log('render() THREW: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n')); }
 

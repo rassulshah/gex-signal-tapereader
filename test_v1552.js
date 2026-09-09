@@ -120,7 +120,7 @@ const build=(g,fns,tail)=>{ const code=Object.keys(g).map(k=>'var '+k+'=__g.'+k+
   ok(o.s.defl.n===12,'5e H5 reads the defl store count',o.s.defl);
   ok((/thin — not read/.test(o.h) || (/>THIN</.test(o.h) && /not read/.test(o.h))) && !/held \d+%/.test(o.h.split('H1')[1]||''),'5f under the minimum n the RATE IS NOT SHOWN — read once, at threshold');
   ok(!/READ · held/.test(o.h) && !/READ · held/.test(o.h),'5g ...and no "READ" appears anywhere on thin data');
-  ok(/BLOCKED/.test(o.h) && /12 of 50/.test(o.h),'5h H5 says BLOCKED with the ledger count over its minimum');
+  ok(/BLOCKED/.test(o.h) && /12 ledger events/.test(o.h) && !/the join can be run/.test(o.h),'5h H5 says BLOCKED with the ledger count — never "ready" from the ledger\'s size (v15.90: the join\'s n is the nightly\'s)');
   // at threshold the rate appears
   const many=[]; for(let i=0;i<45;i++) many.push(R('2026-09-0'+(3+(i%6)),'node',1,{k:700+i,grade:'A',tap:0,pol:'+'},(i%3)?1:0));
   const o2=mk(many,0);

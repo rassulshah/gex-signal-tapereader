@@ -33,11 +33,36 @@ def sub(key, name, decides, studies, note=None):
     return d
 
 
-def st(id, q, decides, claim, corpus, status, result=None, script=None, was=None):
+# (v15.90) WHAT A STUDY NEEDS, MACHINE-READABLE. The audit of 2026-09-09: 195 rows, 104 of them waiting on a corpus that is
+# not recorded, and nothing on the tab said how much of any corpus a row had or when it could read. `needs` names the
+# corpus (an id tools/nightly/coverage.py counts every night) and the n it takes; results.py turns that into WAITING
+# (have / need / an ETA at the record's own rate) or READY (data on hand, no reader yet) — statuses the MACHINE sets.
+# Derived from the corpus sentence here so the sentence stays the row's face and the id stays one place.
+NEEDS_TAPS, NEEDS_SESSIONS, NEEDS_ROWS = 40, 30, 40
+def needs_of(corpus, status):
+    c = (corpus or '').lower()
+    if 'live only' in c: return dict(corpus='live', n=0)
+    if 'tap record' in c: return dict(corpus='tap', n=NEEDS_TAPS)
+    if 'api' in c: return dict(corpus='cut', n=0)
+    if 'new sessions' in c: return dict(corpus='register', n=0)
+    if 'calendar' in c: return dict(corpus='calendar', n=NEEDS_SESSIONS)
+    if 'vix' in c: return dict(corpus='vix', n=200)
+    if '437 recs' in c: return dict(corpus='kingroll', n=NEEDS_ROWS)
+    if '671 recs' in c: return dict(corpus='gate', n=NEEDS_ROWS)
+    if 'defl ledger' in c or '94 ep' in c or '970 rows' in c: return dict(corpus='ledger', n=NEEDS_TAPS)
+    if 'es + nq' in c: return dict(corpus='nq', n=NEEDS_SESSIONS)
+    if 'book' in c: return dict(corpus='book', n=NEEDS_SESSIONS)
+    if 'price' in c or '284d' in c: return dict(corpus='price', n=NEEDS_SESSIONS)
+    return dict(corpus='?', n=0)
+
+
+def st(id, q, decides, claim, corpus, status, result=None, script=None, was=None, machine=None, needs=None):
     d = dict(id=id, q=q, decides=decides, claim=claim, corpus=corpus, status=status)
     if result: d["result"] = result
     if script: d["script"] = script
     if was: d["was"] = was
+    if machine: d["machine"] = machine        # (v15.90) the file + keys results.py composes the sentence from, every night
+    d["needs"] = needs or needs_of(corpus, status)
     return d
 
 
@@ -104,7 +129,7 @@ subject("S", "SETUPS", "the patternpedia as trades: trigger · invalidation · t
         [st("S1.1", "Rug: a rejection with acceleration — is it faster and deeper than a plain rejection (MFE10, bars to target)?", "TARGET", "C23", "tap record", "OPEN", "the held rate of a tap at a rug's yellow, per book, accrues on Testing ⑦ from v15.67 (the stamp `pat.<book>.rug`); MFE10 and bars-to-target still need the tap record", script="tools/nightly/patterns.py", was="S-B6"),
          st("S1.2", "Reverse rug (the upside mirror) — same measure", "TARGET", "C23", "tap record", "OPEN", "the held rate per book accrues on Testing ⑦ from v15.67 (`pat.<book>.rug` = rrug)", script="tools/nightly/patterns.py"),
          st("S1.3", "Rug at the King vs rug at a lesser node", "SIZE", "C23 C10", "tap record", "OPEN"),
-         st("S1.4", "Rug configuration detected (rugDetect) vs Skylit's nodeType — agreement rate", "SKIP", "ours", "API · 1 call/bar", "OPEN", was="S-D6"),
+         st("S1.4", "Rug configuration detected (rugDetect) vs Skylit's nodeType — agreement rate", "SKIP", "ours", "API · 1 call/bar", "CUT", "CUT 2026-09-09 (the audit): no feed we hold carries a nodeType, and the panel never makes a call per bar — a comparison against a field that does not exist. His rule is to match Skylit; when Skylit's label reaches a payload we read, this becomes a decision (use theirs), not a study.", was="S-D6"),
          st("S1.5", "After a rug, does price return to the node (revisit within 20 bars)?", "STOP", "C6 C23", "tap record", "OPEN")]),
     sub("S2", "Gatekeeper rejection", "SIDE · LEVEL",
         [st("S2.1", "An EARLY gatekeeper rejection (before 10:30) marks the day's extreme — rate vs a late one", "SIZE", "C14", "671 recs · book", "READ NEXT", "gatekeeper records unread", was="S-A3"),
@@ -136,7 +161,7 @@ subject("S", "SETUPS", "the patternpedia as trades: trigger · invalidation · t
     sub("S7", "Pika cloud · cluster", "WAIT · SIZE",
         [st("S7.1", "Does a pika cloud pin — dwell inside vs at a single node", "WAIT", "C24", "tap record", "OPEN", "the held rate of a tap inside a pika / barney stack (named or member), per book, accrues on Testing ⑦ from v15.67 (`pat.<book>.st`); dwell still needs the tap record", script="tools/nightly/patterns.py", was="S-B11"),
          st("S7.2", "Cluster mass vs held rate — does magnitude decide?", "SIZE", "C24 C1", "tap record", "OPEN"),
-         st("S7.3", "clusterDetect vs Skylit's pika/barney nodeType — agreement", "SKIP", "ours", "API · 1 call/bar", "OPEN")]),
+         st("S7.3", "clusterDetect vs Skylit's pika/barney nodeType — agreement", "SKIP", "ours", "API · 1 call/bar", "CUT", "CUT 2026-09-09 (the audit): the same as S1.4 — no nodeType in any feed we hold; the stack stamp is read from the ladder the face already draws.")]),
     sub("S8", "Rapid unwinding · hedge bleed · decoys", "STOP · SKIP",
         [st("S8.1", "A node losing gamma fast (rapid unwinding) — break rate on the next tap", "STOP", "C-unwind", "tap record", "OPEN"),
          st("S8.2", "Hedge bleed: nodes that shrank day-over-day — how often they vanish; do they ever hold?", "SKIP", "C5", "tap record", "OPEN", was="S-D3"),
@@ -159,7 +184,7 @@ subject("D", "DIRECTION", "which way after the turn, and how far — the leg bet
     sub("D3", "The King and spot", "SIDE",
         [st("D3.1", "Spot above the King at the open vs below — drift direction by 15:00", "SIDE", "C10", "11d · book", "THIN"),
          st("D3.2", "Distance to the King at the open vs realised drift toward it (the magnet in points)", "TARGET", "C10", "11d · book", "THIN"),
-         st("D3.3", "dir.kingRoll — the 437 records: follow rate", "SIDE", "C11", "437 recs · book", "READ NEXT")]),
+         st("D3.3", "dir.kingRoll — the King-roll vote's follow rate (the record's rows, per bar)", "SIDE", "C11", "437 recs · book", "READ NEXT", "the nightly reads it from the day files (v15.90): the vote's hit rate within 10 bars, with n — per-bar rows, not independent rolls", machine=dict(file="FEATS", key="dir.kingRoll"))]),
     sub("D4", "Structure → direction", "SIDE",
         [st("D4.1", "Floors migrating up during the morning → GREEN close rate", "SIDE", "C19", "11d · book", "THIN"),
          st("D4.2", "Ceilings migrating down → RED close rate", "SIDE", "C19", "11d · book", "THIN"),
@@ -245,34 +270,27 @@ subject("H", "HOD / LOD", "is the extreme in, what printed it, and what the othe
     sub("H1", "Is the extreme in", "SIZE · WAIT",
         [st("H1.1", "The standing extreme is the day's — posr × clock, calibrated", "SIZE", "C17", "284d · price", "SHIPPED", "AUC 0.879 · NOT-IN cell 85% n=230", "model-lodhod.py", was="S-A5"),
          st("H1.2", "The time-only baseline every claim must beat: the standing low is final ~40% at 09:30, ~64% by noon", "WAIT", "—", "284d · price", "SHIPPED", "clock curve on the tab"),
-         st("H1.3", "The standing extreme conditioned on a top-5 node at it — does the node move the cell?", "SIZE", "C17 C13", "defl ledger 0/50", "BLOCKED", "H5 · needs 50 labelled deflections"),
+         st("H1.3", "The standing extreme conditioned on a top-5 node at it — does the node move the cell?", "SIZE", "C17 C13", "defl ledger 0/50", "REGISTERED", "H5 — judged by the nightly's join every night (v15.90): an extreme counts when a ledger tap of the right direction sits within four minutes of it; the ±0.50 ledger rarely holds the day's extreme (0 of 3 on 2026-09-09) — the tap record is where this reads"),
          st("H1.4", "IB60 break as an 'extreme is in' tell", "SIZE", "lore", "284d · price", "READ", "0.655 standalone; no lift over the clock in ablation"),
          st("H1.5", "The table's late-session ≥80% cells, read LIVE (close-scored) — do they hold at ≥80%?", "SIZE · TIME", "C17", "new sessions · close-scored rows", "REGISTERED", "H10 proposed: ≥ 80% · refute if the Wilson high < 80% (the 2026-09-08 review read 43% n=23 and 50% n=30 on 09-03/04 — not counted; the queue keeps only late-session rows, so this is the cell family the table trusts most)")]),
     sub("H2", "SWEEPS — the levels that get run before the turn", "SIZE · STOP · TIME",
-        [st("H2.1", "ONL sweep-and-reclaim → is the sweep's low the LOD? ONH → the HOD?", "SIZE", "lore", "284d · price", "READ", "ONL 22% n=125 · ONH 16% n=154 — vs a fresh-low bounce at nothing: 25% / 18% (-3 / -2pp); (v15.88, F-23) the day's own post-close bars are out of the night — the earlier 29% / 26% (+1 / +4pp) looked ahead and is withdrawn", "study-sweeps.py"),
-         st("H2.2", "PDL / PDH sweep-and-reclaim → the extreme?", "SIZE", "lore", "284d · price", "READ", "PDL 23% n=87 · PDH 16% n=113 — control 24% / 18% (−1 / −2pp)", "study-sweeps.py"),
-         st("H2.3", "IBL / IBH sweep-and-reclaim (after 09:30) → the extreme?", "SIZE", "lore", "284d · price", "READ", "IBL 20% n=143 · IBH 16% n=148 — control 26% / 19% (−6 / −3pp)", "study-sweeps.py"),
-         st("H2.4", "Sweep by the clock: does an early sweep print the extreme more than a late one?", "TIME", "lore", "284d · price", "READ", "first 30 min: ONL 37% n=35 · ONH 27% n=41 · PDL 31% n=39 · PDH 20% n=65 — each +5 to +15pp over control; after 10:00 no better than nothing", "study-sweeps.py"),
-         st("H2.5", "Depth and speed of the sweep — the flush vs the poke", "SIZE · STOP", "lore", "284d · price", "READ", "depth > 8 pts 40% n=86 (+16pp) · reclaim 6–30 bars 40% n=90 (+16pp) · shallow ≤3 pt quick poke 14% n=228 (−9pp): the poke is NOT the low 86% of the time", "study-sweeps.py"),
-         st("H2.6", "Acceptance — the level breaks on first touch (no reclaim in 30 bars)", "STOP", "lore", "284d · price", "READ", "PD levels break on first touch 30% n=124 / 34% n=170 · ON 7% n=121 / 9% n=154 · IB 14% n=166 / 20% n=184", "study-sweeps.py"),
-         st("H2.7", "Sweep × node: an ON/PD sweep-reclaim that lands in a top-5 node band or at the King — does the node lift the 26%?", "SIZE", "C13 C17", "tap record · API backfill", "DRAFT", "H6 proposed: > 40% vs the 24% base (n=453 ON/PD sweep-reclaims) · refute if ≤ 30%"),
-         st("H2.8", "The early sweep as a register entry — re-read on sessions after 2026-08-21", "SIZE · TIME", "lore", "new sessions", "DRAFT", "H7 proposed: first-30-min ON/PD sweep-reclaim prints the extreme > 24% · refute if ≤ 18% (pooled 27% n=180 on the read corpus)"),
+        [st("H2.L", "THE LEVEL'S NAME — does WHICH level was swept change the rate? ONL · ONH · PDL · PDH · IBL · IBH · PDC · POC / VAH / VAL · PMH / PML · PWH / PWL · OR5 / OR15 · VWAP ± bands · the developing profile · LHI / LLO · AHI / ALO · WPOC — one question, one table", "SIZE", "lore", "284d · price", "NULL",
+            "NO: every named level's sweep-and-reclaim prints the extreme within chance of a bounce at nothing (the fresh-low control); the interior levels (VWAP bands, the developing profile, the opening range) are WORSE by construction. Thirteen studies (H2.1 · 2.2 · 2.3 · 2.10 · 2.10b–e · 2.10h–j3) asked this and got this answer (the audit of 2026-09-09); the names stay on the candle as labels — what matters is the sweep's SHAPE (H2.5) and the node at it (H2.7). PDC is the one name whose CI clears the control (+8pp, provisional) — its own row, H2.10.",
+            "study-sweeps.py", was="H2.1 · H2.2 · H2.3 · H2.10b–e · H2.10h–j3 (collapsed v15.90)", machine=dict(file="SWEEPS", read="levelTable")),
+         st("H2.10", "PDC (prior close, the gap-fill level) — the one level name whose CI clears the fresh-low control: a sweep below it that reclaims → the LOD?", "SIZE", "lore", "284d · price", "READ",
+            "PDC− → LOD 29% n=119 vs the 21% control (+8pp, the CI clears it) · PDC+ → HOD 19% n=105 (17%) · PDC breaks on first touch 44% / 56% of the time — a magnet, not a wall; provisional until the corpus that appends nightly re-reads it",
+            "study-sweeps.py", machine=dict(file="SWEEPS", read="levels", levels=["PDC-", "PDC+"])),
+         st("H2.4", "Sweep by the clock: does an early sweep print the extreme more than a late one?", "TIME", "lore", "284d · price", "READ", "first 30 min 21% n=249 vs the 18% control (+3pp, inside chance — F-23 withdrew the earlier +5 to +15pp); after 10:00 no better than nothing (the machine rewrites this line nightly)", "study-sweeps.py", machine=dict(file="SWEEPS", read="clock")),
+         st("H2.5", "Depth and speed of the sweep — the flush vs the poke", "SIZE · STOP", "lore", "284d · price", "READ", "deep (> 8 pts) 35% n=94 vs 23% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the shallow quick poke 11% n=246 vs 21%: the poke is NOT the low nine times in ten (F-23 withdrew the earlier 40% / 40% / 14%; the machine rewrites this line nightly)", "study-sweeps.py", machine=dict(file="SWEEPS", read="shape")),
+         st("H2.6", "Acceptance — the level breaks on first touch (no reclaim in 30 bars)", "STOP", "lore", "284d · price", "READ", "PD levels break on first touch 30% n=124 / 34% n=170 · ON 7% n=121 / 9% n=154 · IB 14% n=166 / 20% n=184 (the machine rewrites this line nightly)", "study-sweeps.py", machine=dict(file="SWEEPS", read="acceptance")),
+         st("H2.7", "Sweep × node: an ON/PD sweep-reclaim that lands in a top-5 node band or at the King — does the node lift the 26%?", "SIZE", "C13 C17", "tap record · API backfill", "REGISTERED", "H6 registered (blocked until 40 at-node sweep-reclaims on the book corpus — about one per three sessions; the tap record measures node × level at every tap): > 40% vs the 24% base (n=453 ON/PD sweep-reclaims) · refute if ≤ 30%"),
+         st("H2.8", "The early sweep as a register entry — re-read on sessions after 2026-08-21", "SIZE · TIME", "lore", "new sessions", "NULL", "H7 WITHDRAWN 2026-09-09: F-23 removed its premise (the corrected first-30-minutes read is 21% n=249 vs 18% — inside chance) and its count accrued one event per three sessions; the row stays on the register as withdrawn, never counted"),
          st("H2.9", "Sweep of the SESSION extreme itself — the failed breakdown: a new low that fails within 30 bars", "SIZE", "lore", "284d · price", "READ NEXT"),
-         st("H2.10", "PDC (prior close, the gap-fill level) — sweep-and-reclaim → the extreme?", "SIZE", "lore", "284d · price", "READ", "PDC− → LOD 30% n=120 (control 21%, +9pp) · PDC+ → HOD 19% n=105 (control 17%) · and PDC BREAKS on first touch 44% / 56% of the time — it is a magnet, not a wall", "study-sweeps.py"),
-         st("H2.10b", "Prior-day profile — POC / VAH / VAL sweep-and-reclaim → the extreme?", "SIZE", "lore", "284d · price", "READ", "VAL 28% n=112 (+4pp) · VAH 19% n=118 (+2pp) · POC− 27% n=108 (+4pp) · POC+ 26% n=97 (+9pp) — all inside chance of the control; they break on first touch 35–57%", "study-sweeps.py"),
-         st("H2.10c", "Pre-market high/low (07:00–08:30 CT) — PMH / PML", "SIZE", "lore", "284d · price", "READ", "PML 21% n=189 (control 21%) · PMH 15% n=197 (17%) — nothing; they reclaim 87% of the time and mean nothing when they do", "study-sweeps.py"),
-         st("H2.10d", "Prior WEEK high/low — PWH / PWL", "SIZE", "lore", "284d · price", "READ", "PWL 25% n=36 (27%) · PWH 22% n=55 (19%) — thin and flat; PW levels break on first touch 38% / 57%", "study-sweeps.py"),
-         st("H2.10e", "Opening range 5 / 15 min — OR5 / OR15 sweeps (after the range completes)", "SKIP", "lore", "284d · price", "READ", "OR5L 20% n=212 (−4pp) · OR5H 10% n=215 (−7pp) · OR15L 22% n=186 (−6pp) · OR15H 14% n=201 (−7pp) — an OR sweep-reclaim is slightly WORSE than a bounce at nothing: it is the poke by construction", "study-sweeps.py"),
          st("H2.10f", "Sweeps of the BOOK'S levels — CW0 / PW0 / CW / PW and the King as sweep levels, valued as of the sweep bar", "SIZE", "C13 ours", "book · day files", "THIN", "BOOK CORPUS 11 sessions (2026-08-18 → 2026-09-03, SPY 3-min, ±0.50 zone): price sweep AT a top-5 node / the King 25% n=12 vs NOT at a node 38% n=8 · AT the King 25% n=4 · AT a wall 43% n=7 · sweeps OF the book’s levels: KING↓ 20% n=5 · KING↑ 50% n=2 · PW0↓ 0% n=4 · CW0↑ 0% n=4 — every cell thin; the corpus grows one session per export (nightly 2026-09-03 evening: 11)"),
          st("H2.10g", "Sweep × NODE (H6 as a table): a price-level sweep whose extremum sits in the tap zone (±0.50 SPY) of a top-5 node / the King / a wall, vs one that lands at nothing", "SIZE", "C2 C13 C17", "book · day files", "REGISTERED", "H6 · judged by the nightly from the same table · reads at 40 at-node events on sessions from 2026-09-03", "study-sweeps-book.py"),
-         st("H2.10h", "VWAP and its ±1σ / ±2σ bands as sweep levels (valued at the sweep bar, side = the side price came from)", "SKIP · LEVEL", "lore", "284d · price", "READ", "the interior levels are NOT the extreme: VWAP- 7% n=126 (control 21%) \u00b7 VWAP+ 5% n=124 (control 16%) \u00b7 VW1L 8% n=207 (control 28%) \u00b7 VW1H 8% n=200 (control 23%) \u00b7 VW2L 13% n=180 (control 28%) \u00b7 VW2H 11% n=178 (control 22%) \u2014 a VWAP-band sweep is a PULLBACK candidate, not the day\u2019s turn; the pullback outcome (resume to a new extreme) is P5.1", "study-sweeps.py"),
-         st("H2.10i", "Today’s DEVELOPING profile — DPOC / DVAH / DVAL as sweep levels", "SKIP · LEVEL", "lore", "284d · price", "READ", "not the extreme, by construction inside the range: DPOC- 5% n=131 (control 28%) \u00b7 DPOC+ 3% n=121 (control 23%) \u00b7 DVAL 8% n=213 (control 28%) \u00b7 DVAH 7% n=207 (control 22%) \u2014 pullback levels, measured for the pullback objective under P5", "study-sweeps.py"),
-         st("H2.10j", "The London session (02:00 CT → the open) — LHI / LLO (v15.57's LDNH / LDNL, his names from v15.88)", "SIZE", "lore", "284d · price", "READ", "LLO 21% n=163 (control 24%) \u00b7 LHI 16% n=170 (control 18%) \u2014 like every other level name: within chance of the fresh-low control", "study-sweeps.py"),
-         st("H2.10j2", "The ASIA session (17:00 → 02:00 CT) — AHI / ALO as sweep levels (his four, 2026-09-08; the standard hours, 2026-09-09)", "SIZE", "lore", "284d · price", "READ", None, "tools/study-sweeps.py (ALO / AHI); the nightly rewrites SWEEPS.json — read the rate there, with n; the Analysis H2 table has the rows"),
-         st("H2.10j3", "The prior week's POC — WPOC as a sweep level, both sides (his 'weekly POC', 2026-09-08; drawn from the companion's weekly bars, v1.19)", "SIZE", "lore", "284d · price", "READ", None, "tools/study-sweeps.py (WPOC- / WPOC+); the nightly rewrites SWEEPS.json — read the rate there, with n; the Analysis H2 table has the rows"),
          st("H2.10k", "The expected-move edges (EMH / EML) as sweep levels — Skylit’s own band", "SIZE", "C-EM ours", "live only · needs the straddle in the corpus", "OPEN", "live in the READ from v15.57; the price corpus has no straddle, so no rate yet — the tap record / API backfill measures it"),
          st("H2.10l", "HVL (zero-gamma) and the magnet as sweep levels", "SIZE", "C30 ours", "book · day files", "THIN", "HVL↓ 1 of 2 · HVL↑ 1 of 2 · MAG↓ 1 of 3 · MAG↑ 1 of 2 over 9 sessions (n under 15 everywhere: thin) — grows with every export", "study-sweeps-book.py"),
-         st("H2.11", "The payoff when the sweep IS the extreme — median distance to the far extreme", "TARGET", "ours", "284d · price", "READ", "ONL 74.5 · ONH 67.8 · PDL 84.2 · PDH 60.0 pts — the whole range, the prize", "study-sweeps.py"),
+         st("H2.11", "The payoff when the sweep IS the extreme — median distance to the far extreme", "TARGET", "ours", "284d · price", "READ", "ONL 74.5 · ONH 67.8 · PDL 84.2 · PDH 60.0 pts — the whole range, the prize (the machine rewrites this line nightly)", "study-sweeps.py", machine=dict(file="SWEEPS", read="payoff")),
          st("H2.12", "The bar-level sweep feature inside the standing-extreme model — kept on the board as the refusal it earned", "SKIP", "—", "284d · price", "REFUSED", "swp 0.559 standalone; no lift over the clock", "model-lodhod.py")],
         note="First read, 79 cells over 20 level types on price, 20 more on the book corpus (thin), none pre-registered. The verdict that matters: the LEVEL'S NAME does not matter — ON, PD, PDC, POC/VAH/VAL, PM, PW, IB, OR are all within chance of a bounce off any fresh low (−7 to +9pp; the two +9s are what 79 cells produce by luck); the CLOCK, the DEPTH and the SPEED do. The node-conditioned version is H6 — the tapereader's whole reason to exist."),
     sub("H3", "Which node printed the extreme", "LEVEL · SIZE",

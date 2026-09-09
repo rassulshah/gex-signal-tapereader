@@ -136,10 +136,16 @@ def judge_sweep(H, since):
     try:
         sys.path.insert(0, os.path.join(ROOT, 'tools'))
         sw = __import__('study-sweeps')
-        es = os.path.join(ROOT, 'data', 'es-1min', 'ES TestingData.txt')
-        if not os.path.exists(es):
-            out.update(n=0, verdict='thin', bar='no ES file to read'); return out
-        res = sw.run(es)
+        # (v15.90) every source — the vendor file AND the couriered RTH + night CSVs (study-sweeps.sources()); the corpus had
+        # stopped on the vendor's last day and this read n = 0 for thirteen sessions (the audit of 2026-09-09)
+        cwd0 = os.getcwd(); os.chdir(ROOT)
+        try:
+            srcs = sw.sources('ES')
+            if not srcs:
+                out.update(n=0, verdict='thin', bar='no ES sources to read'); return out
+            res = sw.run(srcs)
+        finally:
+            os.chdir(cwd0)
         ev = [e for e in res['events'] if e['d'] > since and e['level'] in ('ONL', 'ONH', 'PDL', 'PDH') and e['bucket'] == '08:30-09:00' and e['printed'] is not None]
         n = len(ev); k = sum(e['printed'] for e in ev)
         out.update(n=n, sessionsAfter=len(set(e['d'] for e in ev)))
@@ -156,8 +162,80 @@ def judge_sweep(H, since):
         out.update(n=0, verdict='thin', bar='sweep judge threw: %s' % e); return out
 
 
+def judge_h5(H, days, sym='SPY'):
+    """(v15.90) H5 — "a top-5 gamma node moves the HOD/LOD cell" — THE JOIN, RUN, instead of "ready, the join can be run".
+    The audit of 2026-09-09: the nightly had reported H5 READY at n = 141 for a week — 141 was the ledger's size, not the
+    join's. The join: every close-scored lodhod row names the standing extreme (rec.side, rec.hodT / lodT); an extreme
+    COINCIDES with a ledger tap when a defl event of the matching direction sits within four minutes of it; the tap is AT
+    A NODE when its stamp shows a top-5 node in any book (pat.*.node). n = distinct extremes joined. The shift = the mean of
+    (hit − the table's p) over an extreme's rows, at-node vs not, in points; cleared when |shift| ≥ the prediction and the
+    normal CI of the difference excludes 0. Measured 2026-09-09: 3 extremes since 09-03, 0 coincide with a ledger tap —
+    the day's extreme is the open more often than not, and the ledger reads ±0.50 SPY wobbles. The tap record is where
+    this reads; until then the row says so in numbers, never "ready"."""
+    out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick=H.get('pick'), judgedBy='nightly')
+    from datetime import datetime as _dtm
+    try:
+        from zoneinfo import ZoneInfo as _ZI
+        CT = _ZI('America/Chicago')
+    except Exception:
+        CT = None
+    since = H.get('since') or '2026-09-03'
+    per_ext = []          # (atNode, mean residual in points)
+    n_ext = 0
+    for d, D in days:
+        if d < since: continue
+        feat = (D.get('feat') or {}).get(sym) or []
+        rows = [r for r in feat if r and r.get('key') == 'lodhod' and r.get('atClose') and r.get('hit') is not None and isinstance(r.get('rec'), dict)]
+        ev = (D.get('defl') or {}).get(sym) or []
+        exts = {}
+        for r in rows:
+            rc = r['rec']; side = rc.get('side'); T = rc.get('hodT') if side == 'HOD' else rc.get('lodT')
+            if side not in ('HOD', 'LOD') or not isinstance(T, (int, float)): continue
+            p = rc.get('p')
+            if not isinstance(p, (int, float)): continue
+            exts.setdefault((side, int(T)), []).append((1 if r['hit'] else 0) - p / 100.0)
+        n_ext += len(exts)
+        for (side, T), res in exts.items():
+            hit_ev = None
+            for e in ev:
+                try:
+                    t = e.get('t'); sec = None
+                    if isinstance(t, (int, float)):
+                        dtm = _dtm.fromtimestamp(t / 1000.0, tz=CT) if CT else _dtm.utcfromtimestamp(t / 1000.0)
+                        sec = dtm.hour * 3600 + dtm.minute * 60 + dtm.second
+                    if sec is None or abs(sec - T) > 240: continue
+                    if not ((side == 'LOD' and e.get('dir') == 1) or (side == 'HOD' and e.get('dir') == -1)): continue
+                    hit_ev = e; break
+                except Exception:
+                    continue
+            if hit_ev is None: continue
+            pat = hit_ev.get('pat') or {}
+            at = any(isinstance(pat.get(k), dict) and pat[k].get('node') for k in ('spx', 'spy', 'qqq'))
+            per_ext.append((at, 100.0 * sum(res) / len(res)))
+    n = len(per_ext); n_at = sum(1 for a, _ in per_ext if a); n_no = n - n_at
+    out.update(n=n, extremes=n_ext, atNode=n_at, notAtNode=n_no, since=since)
+    if n < H['minN']:
+        out.update(verdict='blocked', bar='%d of %d extremes since %s coincide with a ledger tap (%d at a node) — needs %d; the tap record is where this reads' % (n, n_ext, since, n_at, H['minN']))
+        return out
+    if not n_at or not n_no:
+        out.update(verdict='thin', bar='%d joined extremes but only one arm (%d at a node, %d not)' % (n, n_at, n_no)); return out
+    ma = sum(v for a, v in per_ext if a) / n_at; mn = sum(v for a, v in per_ext if not a) / n_no
+    va = sum((v - ma) ** 2 for a, v in per_ext if a) / max(1, n_at - 1); vn = sum((v - mn) ** 2 for a, v in per_ext if not a) / max(1, n_no - 1)
+    shift = ma - mn; se = (va / n_at + vn / n_no) ** 0.5; lo, hi = shift - 1.96 * se, shift + 1.96 * se
+    thr = _points(H.get('predict', ''), 8)
+    out.update(shift=round(shift, 1), ci=[round(lo, 1), round(hi, 1)], nAt=n_at, nNot=n_no)
+    if abs(shift) >= thr and (lo > 0 or hi < 0): out.update(verdict='cleared', bar='the node moves the cell by %.1f points (CI %.1f..%.1f), n=%d' % (shift, lo, hi, n))
+    else: out.update(verdict='refused', bar='shift %.1f points (CI %.1f..%.1f) — under %d or the CI covers 0' % (shift, lo, hi, thr))
+    return out
+
+
 def judge(H, eps, defl, null95, since='2026-09-03'):
     out = dict(id=H['id'], claim=H['claim'], minN=H['minN'], pick=H.get('pick'))
+    if H.get('withdrawn'):      # (v15.90) the review withdrew it, with a date and a reason — never edited, never counted again
+        w = H['withdrawn'] if isinstance(H['withdrawn'], dict) else dict(on=str(H['withdrawn']))
+        out.update(n=0, verdict='withdrawn', bar='withdrawn %s: %s' % (w.get('on', '?'), (w.get('why') or '')[:120])); return out
+    if H.get('pick') == 'defl' and H.get('blocked'):   # (v15.90) H5 — judged by its join after the day files (judge_h5)
+        out.update(n=0, verdict='blocked', bar='the join is run after the day files'); return out
     if H.get('pick') == 'pat':   # (v15.72) read from the pattern table once it exists (judge_pat, after the table is built)
         out.update(n=0, verdict='thin', bar='the pattern table is read after the episodes'); return out
     if H.get('pick') == 'lodhodCell':   # (v15.80) H10 — read from the close-scored HOD/LOD rows (judge_lodhod, after the day files)
@@ -342,6 +420,7 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     # (v15.80) H10 — the pre-registered read of those cells, on sessions from its own `since`
     try:
         verdicts = [judge_lodhod(H, days) if H.get('pick') == 'lodhodCell' else v for H, v in zip(H_list, verdicts)]
+        verdicts = [judge_h5(H, days) if (H.get('pick') == 'defl' and H.get('blocked') and not H.get('withdrawn')) else v for H, v in zip(H_list, verdicts)]   # (v15.90) H5's join, run
     except Exception as eL:
         print('lodhod hypothesis threw:', eL)
     n_sess = len(set(e['_day'] for e in eps))
@@ -353,6 +432,11 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     log = dict(schema=2, date=last, writtenBy='tools/nightly/run.py', ranOn=ran_on, ranAt=datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'), from_=frm, sessions=n_sess, episodes=len(eps),
                deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0), newItems=(newitems if write else 0), tape=tape_cov, patterns=patterns, futures=futures)
     log['from'] = log.pop('from_')
+    # (v15.90) the feature outcomes the registry reads (results.py FEAT_READS): per key, the rows with an outcome, the hits
+    try:
+        log['feats'] = feat_outcomes(days, ('dir.kingRoll', 'gateHour'))
+    except Exception as eF:
+        log['feats'] = {}; print('feats threw:', eF)
     if write:
         os.makedirs(LOGD, exist_ok=True)
         p = os.path.join(LOGD, last + '.json'); _tmp = p + '.tmp'; io.open(_tmp, 'w', encoding='utf-8').write(json.dumps(log, indent=1)); os.replace(_tmp, p)   # (v15.68) atomic: the sync task must never commit half a log
@@ -382,6 +466,20 @@ def run(upto=None, write=True, reg_path=REG, days=None):
         print('  %-3s %-9s n %4s/%-3s %s %s' % (v['id'], v['verdict'].upper(), v.get('n', '-'), v['minN'],
               (('%s%%' % v['rate']) if v.get('rate') is not None else ''), v.get('bar', '')))
     return log
+
+# ---- (v15.90) feature outcomes for the registry ------------------------------------------------------
+def feat_outcomes(days, keys, sym='SPY'):
+    """-> {key: {n, hit, rate, lo, sessions, first}} over every day file's feat rows with an outcome (hit not null)"""
+    out = {}
+    for k in keys:
+        n = hit = 0; sess = set(); first = None
+        for d, D in days:
+            for r in (D.get('feat') or {}).get(sym) or []:
+                if not r or r.get('key') != k or r.get('hit') is None: continue
+                n += 1; hit += 1 if r['hit'] else 0; sess.add(d); first = first or d
+        lo = wilson(hit, n)[0] if n else 0.0
+        out[k] = dict(n=n, hit=hit, rate=(round(100.0 * hit / n, 1) if n else None), lo=round(100 * lo), sessions=len(sess), first=first)
+    return out
 
 # ---- (v15.55) TRACK requests and the sweep table -----------------------------------------------------
 REQ = os.path.join(ROOT, 'learning', 'requests.json')
@@ -464,6 +562,17 @@ def refresh_futures(days, keep_last=None):
                 _p, n, added = ap.merge_write(market, ysym, day, byday[day])
                 n_new += added; last = day; last_n = n
             out['appended'][market] = dict(minutes=n_new, newest=last, newestBars=last_n, complete=(last_n >= 386))
+        # (v15.90) the nights — <day>-night.csv per session day, for the sweep study (ONH / ONL / Asia / London)
+        try:
+            nights, _ = ap.harvest(paths, night=True)
+            for (market, ysym), byday in sorted(nights.items()):
+                n_new = 0; last = None; last_n = 0
+                for day in sorted(byday):
+                    _p, n, added = ap.merge_write(market, ysym, day, byday[day], suffix='-night')
+                    n_new += added; last = day; last_n = n
+                out['appended'].setdefault(market, {})['night'] = dict(minutes=n_new, newest=last, newestBars=last_n, full=(last_n >= 200))
+        except Exception as e:
+            out['appended']['nightError'] = str(e)
         hl = _load_tool('study-hodlod')
         for mk, outp in (('ES', 'data/es-1min/BASERATES.json'), ('NQ', 'data/futures/NQ/BASERATES.json')):
             srcs = hl.market_sources(mk)
@@ -516,14 +625,19 @@ def refresh_futures(days, keep_last=None):
 
 def refresh_sweeps():
     sys.path.insert(0, os.path.join(ROOT, 'tools'))
-    es = os.path.join(ROOT, 'data', 'es-1min', 'ES TestingData.txt')
-    if os.path.exists(es):
+    # (v15.90) the vendor file + every couriered RTH and -night CSV: the sweep corpus APPENDS like the base rates do
+    cwd0 = os.getcwd(); os.chdir(ROOT)
+    try:
         sw = __import__('study-sweeps')
-        out = sw.run(es); out.pop('events', None)
-        try: out['corpus']['file'] = os.path.relpath(es, ROOT).replace(os.sep, '/')   # (v15.68) not the machine's absolute path — a diff every night otherwise
-        except Exception: pass
-        io.open(os.path.join(ROOT, 'data', 'es-1min', 'SWEEPS.json'), 'w', encoding='utf-8').write(json.dumps(out, indent=1))
-        print('sweeps: refreshed data/es-1min/SWEEPS.json (%d sessions, %d cells)' % (out['corpus']['sessions'], out['ledger']['cells_read']))
+        srcs = sw.sources('ES')
+        if srcs:
+            out = sw.run(srcs); out.pop('events', None)
+            try: out['corpus']['file'] = 'the vendor file + data/futures/ES/*.csv'   # (v15.68) never the machine's absolute path
+            except Exception: pass
+            io.open(os.path.join(ROOT, 'data', 'es-1min', 'SWEEPS.json'), 'w', encoding='utf-8').write(json.dumps(out, indent=1))
+            print('sweeps: refreshed data/es-1min/SWEEPS.json (%d sessions: %s, %d cells)' % (out['corpus']['sessions'], out['corpus'].get('sources'), out['ledger']['cells_read']))
+    finally:
+        os.chdir(cwd0)
     # (v15.56) the book table from the panel's own day files
     sb = __import__('study-sweeps-book')
     ob = sb.run(); ob.pop('events', None)

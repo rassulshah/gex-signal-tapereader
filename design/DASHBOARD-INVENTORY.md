@@ -11,6 +11,21 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0x · v15.90 — the machine's statuses on Analysis; the READY queue on Testing ⑤; ④ on Data from the rows' needs; D-KING · D2..D5 in the IRT file (2026-09-09)
+
+**📊 Analysis:** every study row's status chip is now one of the MACHINE's — WAITING (grey: have / need / an ETA in the ⟳
+line) · READY (blue: data on hand, no reader) · READ / THIN (the number, with n) · NULL (read, no lift — kept, never on
+the face) · CUT (a question no feed can answer) — beside SHIPPED / REGISTERED / REFUSED; the H2 subsection is one NULL row
+(H2.L, the level-name table under the review's reason) plus PDC, the clock, the shape, the acceptance, the payoff, the
+node × sweep rows. Measured: every sentence under a `by the nightly` tag is the file's, composed nightly. **🧪 Testing ②:**
+H7 reads WITHDRAWN with its date and reason; H5 reads BLOCKED with the join's own n (0 of 3 extremes), never "ready".
+**⑤:** the READ-NEXT QUEUE lists the READY rows. **🗄 Data ④:** the studies by the corpus they need — have · need · ETA ·
+waiting · ready · read — from the rows' `needs` and coverage.json's counts (the tap record first: 104 rows, 0 taps).
+**The IRT file (not the face):** D-KING (white, width 2) · D2..D5 (grey, width 1), the merged derived list Atlas draws in
+the FRONT window, on EPU26 and ENQU26 beside the per-book rows. His words: *"harden the learning process … fix everything"*
+· *"we need to match atlas … FRONT"*. Probe: `__gptsDebug.futDerRows('ES1')` (the payload's rows vs his chart's labels);
+`__gptsDebug.irt().last.dWhy`; the Analysis H2 subject; the Data tab ④.
+
 ## 0w · v15.89 — the 🗄 Data tab, before Analysis: what we hold, what the studies need, what is missing (2026-09-09)
 
 **A new tab, not a new field on the face.** Read-only, seven sections (mockup B, his choice): ① a coverage calendar — a

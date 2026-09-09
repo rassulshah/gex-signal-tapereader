@@ -5,6 +5,7 @@
 // ============================================================================================
 const fs=require('fs'), vm=require('vm');
 const W_CELLS=JSON.parse(fs.readFileSync('data/es-1min/SWEEPS.json','utf8')).ledger.cells_read;   // (v15.88) the ledger grows with the level set
+const W_SESS=JSON.parse(fs.readFileSync('data/es-1min/SWEEPS.json','utf8')).corpus.sessions;   // (v15.90) the corpus appends
 const SRC=process.env.GPTS_SRC||'./current/gex-signal-tapereader.user.js';
 const src=fs.readFileSync(SRC,'utf8');
 let pass=0, fail=0;
@@ -37,7 +38,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(/EVERY FEATURE · THE LIVE BANDS/.test(html),'1g …with the full live band table under it');
   ok(/<th[^>]*>store<\/th>[\s\S]*?size[\s\S]*?fields present[\s\S]*?missing for the OPEN studies/.test(html) && /feat \(IDB\)/.test(html) && /TAP record/.test(html) && /the book corpus/.test(html),'1h ④ THE RECORD: the stores table (feat · defl · TAP · ES 1-min · the book corpus · kingRoll)');
   ok(/WHAT UNLOCKS WHEN/.test(html),'1i …with the unlock thresholds under it');
-  ok(new RegExp('last run[\\s\\S]*?reads next[\\s\\S]*?H1 at 40 · H2 at 30[\\s\\S]*?refreshes[\\s\\S]*?SWEEPS\\.json \\('+W_CELLS+' cells, 284 sessions\\)').test(html),'1j ⑤ THE NIGHTLY head: last run · reads next · refreshes · ledger');
+  ok(new RegExp('last run[\\s\\S]*?reads next[\\s\\S]*?H1 at 40 · H2 at 30[\\s\\S]*?refreshes[\\s\\S]*?SWEEPS\\.json \\('+W_CELLS+' cells, '+W_SESS+' sessions\\)').test(html),'1j ⑤ THE NIGHTLY head: last run · reads next · refreshes · ledger');
   ok(/<span class="t">THE SUITE<\/span>/.test(html) && /135 files/.test(html) && /126 green/.test(html) && /9 red/.test(html) && /test_expiry_profile\.js/.test(html) && /SELF-TEST · THE SYNTHETIC DAY/.test(html),'1k ⑥ THE SUITE shows the stamped run (files · green · red · which) then the self-test');
   const regAt=html.indexOf('<span class="t">THE REGISTER</span>');
   ok(bareP(html.slice(regAt, regAt+9000)).length===0,'1l no bare % in the register block',bareP(html.slice(regAt, regAt+9000)));

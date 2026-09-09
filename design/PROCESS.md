@@ -55,13 +55,20 @@ tap, what the measurements support — with n, or "unmeasured".
              second write earns one more run; nothing new → exit 3, silent).
              TRIGGER: the day file's mtime. If the task is not installed or python is missing, this stage
              does NOT happen and the ⚙ tab's NIGHTLY box stays red — it never silently waits for a session.
-             tools/nightly/run.py reads every day file + the register: verdicts per hypothesis (read ONCE
-             at minN, sessions from the register date), the pattern table (patterns.py), the tape coverage
-             (tape.py), the refreshed tables (SWEEPS.json, SWEEPS-BOOK.json), TRACK requests and items
-             copied, learning/log/<day>.json written (ranOn: his machine / cloud) — and then THE REGISTRY:
-             results.py writes every study whose number the log can answer into learning/results.json and
-             learning/studies.json (result · status · by:'nightly' · asOf; a thin row keeps the review's
-             sentence and shows the count so far). The sync task pushes it all within two minutes.
+             tools/nightly/run.py, in this order (v15.90): the futures corpus — every day file's couriered
+             minutes → data/futures/<MK>/<day>.csv (RTH) and <day>-night.csv (17:00 → 08:27), then ES / NQ
+             BASERATES rebuilt (study-hodlod) and the sweep tables rebuilt from the vendor file + every CSV
+             (study-sweeps → SWEEPS.json, appending like the base rates; SWEEPS-BOOK.json from the day files);
+             the record counted → learning/coverage.json (every day file's signals, the corpora, and every
+             corpus the registry names: have · per-session rate); every day file + the register: verdicts per
+             hypothesis (read ONCE at minN, sessions from the register date; H5 by its join; a withdrawn row
+             said, never counted), the pattern table (patterns.py), the tape coverage (tape.py), the feature
+             outcomes (dir.kingRoll, gateHour), TRACK requests and items copied, learning/log/<day>.json
+             written (ranOn: his machine / cloud) — and then THE REGISTRY: results.py writes every study
+             whose number the log can answer (result · status · by:'nightly' · asOf), composes the scripted
+             rows' sentences from SWEEPS.json and the feature outcomes, and sets WAITING (have / need / an
+             ETA) or READY (data on hand, no reader) on every other row; then Rec (recommend.py: the machine
+             rows, his ✓ / ✗ from the day files). The sync task pushes it all within two minutes.
              The cloud runs the same script when I am in a session (over the desktop bridge, or from GitHub).
  ⑤  REVIEW   Claude reads the log, the tables, the requests and the day file; turns a READ into a
              register row (predict + refuteIf fixed BEFORE the next session), a request into a study
@@ -80,12 +87,15 @@ tap, what the measurements support — with n, or "unmeasured".
              (the READ is a feature like any other; a READ that cannot be wrong is not a read)        ← next day
 ```
 
-The three tabs are the loop's three faces. **Dashboard = act** (what the tables support right now).
-**Analysis = ask and read** (the registry: every study, its status, its result with n; the TRACK
-field). **Testing = trust and promote** (the register, the gate, what the ladder renders and why, the
+The tabs are the loop's faces. **Dashboard = act** (what the tables support right now). **🗄 Data = count**
+(v15.89: what the record holds — every session on GitHub, the sources live, the browser's stores, what the
+studies wait for with have / need / an ETA, the gaps and what Yahoo can fill; read-only). **Analysis = ask
+and read** (the registry: every study, its status — the machine's since v15.90 — its result with n; the
+TRACK field). **Testing = trust and promote** (the register, the gate, what the ladder renders and why, the
 record, the nightly, the suite). **Learn = teach** (v15.62): his screenshots become examples checked
 against the record, the examples become rules, the rules become the deflection scorer's features
-(v15.63) — and the gauge says how good the identification has become, on blind reads only.
+(v15.63) — and the gauge says how good the identification has become, on blind reads only. **Rec = decide**
+(v15.70): every change to the face passes his ✓ there.
 
 ## 2 · The files, and who writes each
 
@@ -129,16 +139,26 @@ wait for the next installer. Either way the cloud's git history never reaches Gi
 | the mockup's look is the panel's look — one stylesheet, one skeleton | the tabs were re-typed "as mocked" twice and drifted twice | `tools/panel-css.py` == `PANEL_CSS`; the skeleton pin `test_v1562 2e` |
 | a deflection is never called from the picture alone; the gauge cannot flatter | a remembered pattern is not a measured one | `tools/node-lookup.py`; identify = Wilson lower bound of BLIND reads (`test_v1562 3f/3g/3l`) |
 
-## 4 · What is thin, what is open, what is next — honestly
+## 4 · What is thin, what is open, what is next — honestly (as of 2026-09-09, v15.90; the Data tab and the
+## registry carry the live numbers — this list is the shape, not the count)
 
-- The book corpus is **9 sessions**; every cell thin. It grows one session per export. H6 reads at 40.
-- **94 studies are OPEN on the TAP record** (v15.63): the per-tap fields (trinity, gatekeeper ratio,
-  growth into the tap, node state, both zones, extent, `wasSessionExtreme`) are not recorded yet.
-- The READ is **not yet scored**: what it said about a sweep is not written to the day file and the
-  nightly does not check whether the candidate printed the extreme. That is stage ⑪ and it is the
-  next hardening step, because a READ that is never scored cannot improve.
-- Only rules with an earned tier render a rate; **0 of 28 rules have earned one** — so the ladder's
-  grades still print "gated / thin". That is correct, and it will stay correct until the record fills.
+- **104 of 184 studies WAIT on the tap record** (v15.91, agreed, not built): the per-tap fields (book · rank ·
+  signed % · trinity, gatekeeper ratio, growth into the tap, node state, both zones, extent, `wasSessionExtreme`,
+  the liquidity level) are not recorded. Meanwhile 12 of them read THIN on the ±0.50 wobble ledger.
+- The book corpus is **13 sessions** (needs 30); it grows one session per export. H6 accrues about one
+  at-node event per three sessions — it reads at 40, months away; the tap record is the faster road.
+- The register: H1–H4 accrue about one event a session (5–7 weeks to their minN); **H5 is judged by its join
+  and reads 0 of 3 extremes joined** (the day's extreme is the open more often than not — the tap record);
+  **H7 is withdrawn** (F-23 removed its premise); H8 / H9 began 09-08; H10 is on pace (26 of 60).
+- **15 studies are READY** — data on hand, no reader written (the King-roll rows, the gatekeeper rows, the
+  price corpus's clock and weekday questions): the review writes readers; the nightly then owns them.
+- The READ is **scored only for the HOD/LOD cells** (H10, close-scored rows); the sweep candidate the READ
+  names is not yet scored (stage ⑪, v15.94).
+- Only rules with an earned tier render a rate; **no rule has earned one** — the ladder's grades still
+  print "gated / thin". Correct, and it stays correct until the record fills.
+- **His ✓ / ✗ on Rec has never been exercised live** (approved 0 · declined 0 after 24 implemented rows —
+  every decision was made in chat and the row marked at build). The mechanism is tested; the first real
+  click (R-33) proves the day-file → nightly → status path on his machine.
 
 ## 5 · How to tighten and harden it (the standing backlog, in order)
 
@@ -155,8 +175,9 @@ wait for the next installer. Either way the cloud's git history never reaches Gi
 3. **One definitions file** (`learning/definitions.json`: reclaim window, bins, the tap zone, the
    fresh-low control) read by the Python studies AND the panel, pinned equal by a test — today the
    same constants are typed in two languages.
-4. **The nightly reads one READ NEXT study per night** and writes its result back into the registry
-   (the registry as the nightly's output, not only its input).
+4. **The nightly reads one READY study per night** and writes its result back into the registry — half
+   built in v15.90 (the registry IS the nightly's output: statuses, scripted sentences, feature reads); the
+   half that remains is the READERS for the 15 READY rows (a study script each, then the machine owns it).
 5. **TRACK → DRAFT study** as a nightly step, so a request appears on the Analysis tab the next
    morning as a draft row with a proposed measure, before the review words it.
 6. **The face manifest** (`design/DASHBOARD-INVENTORY.md` §3): every dashboard element names the
@@ -165,7 +186,10 @@ wait for the next installer. Either way the cloud's git history never reaches Gi
 7. **A shipped-artifact test**: decode the .bat, load the userscript from the payload (not the
    working tree), run the smoke test on it — the suite reads the tree; the operator runs the payload.
 8. **Data-quality checks on the face**: courier age, ratio drift, gaps in the ES bars, the book's
-   age — a store that is stale says so beside the number it feeds.
+   age — a store that is stale says so beside the number it feeds. (v15.89: the 🗄 Data tab's ② and ③
+   carry the ages and the stores; the per-number badge on the face is still open.)
+9. (v15.90) **A reader per READY row**, written by the review, owned by the nightly — the backlog the
+   registry itself now lists (READY = data on hand, no reader).
 
 ## 5b · The end of day, as it runs now (2026-09-04, v15.71: no click — the panel saves the day itself)
 

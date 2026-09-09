@@ -87,7 +87,7 @@ const LOG={ date:'2026-09-08', ranOn:'his machine', patterns:{ rows:[
 {
   const run=fs.readFileSync('tools/nightly/run.py','utf8');
   ok(/_rs\.write\(ROOT, log\)/.test(run) && /ran_on = 'his machine' if os\.name == 'nt' else 'cloud'/.test(run) && /ranOn=ran_on, ranAt=/.test(run),'3a run.py writes the registry after the log and stamps ranOn (his machine / cloud) + ranAt');
-  ok(/os\.replace\(_tmp, p\)/.test(run) && /out\['corpus'\]\['file'\] = os\.path\.relpath\(es, ROOT\)/.test(run),'3b the log is written atomically (the sync task must never commit half a file); the sweep table records a relative path');
+  ok(/os\.replace\(_tmp, p\)/.test(run) && /out\['corpus'\]\['file'\] = 'the vendor file \+ data\/futures\/ES\/\*\.csv'/.test(run),'3b the log is written atomically (the sync task must never commit half a file); the sweep table names its sources, never the machine\'s path (v15.90)');
   const before=fs.statSync('learning/log/2026-09-03.json').mtimeMs;
   const h=py('tools/nightly/run.py --help');
   ok(h.code===2 && /THE NIGHTLY, IN ONE COMMAND/.test(h.out) && fs.statSync('learning/log/2026-09-03.json').mtimeMs===before,'3c an unknown flag prints the usage and exits 2 WITHOUT running (LESSONS v15.67: --help ran the nightly)',[h.code,h.out.slice(0,80)]);
@@ -95,7 +95,7 @@ const LOG={ date:'2026-09-08', ranOn:'his machine', patterns:{ rows:[
   ok(log.ranOn==='cloud' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(log.ranAt||'') && log.patterns && log.patterns.rows.length,'3d the committed 2026-09-03 log carries ranOn cloud, ranAt, the pattern table',[log.ranOn,log.ranAt]);
   const RJ=JSON.parse(fs.readFileSync('learning/results.json','utf8')); const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8'));
   const byId={}; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>ss.studies.forEach(x=>{ byId[x.id]=x; })));
-  ok(RJ.asOf>='2026-09-03' && Object.keys(RJ.results).length>=7 && byId['H1.3'] && byId['H1.3'].status==='READ NEXT' && byId['H1.3'].by==='nightly' && byId['F2.1'] && byId['F2.1'].status==='REGISTERED' && /^H2 thin: n=\d+ of 30/.test(byId['F2.1'].nightly||''),'3e the committed registry: H1.3 → READ NEXT by the nightly (H5 ready at 51), F2.1 still REGISTERED with "H2 thin: n=… of 30" (the count grows with the day files — 1 on 09-04, 2 on 09-08) beside the review’s sentence',[RJ.asOf, byId['H1.3']&&byId['H1.3'].status, byId['F2.1']&&byId['F2.1'].nightly]);
+  ok(RJ.asOf>='2026-09-03' && Object.keys(RJ.results).length>=7 && byId['H1.3'] && byId['H1.3'].status==='REGISTERED' && /^H5 blocked: n=\d+ of 50/.test(byId['H1.3'].nightly||'') && byId['F2.1'] && byId['F2.1'].status==='REGISTERED' && /^H2 thin: n=\d+ of 30/.test(byId['F2.1'].nightly||''),'3e the committed registry: H1.3 REGISTERED with H5\'s join count (v15.90: never "ready" from the ledger\'s size), F2.1 still REGISTERED with "H2 thin: n=… of 30" (the count grows with the day files — 1 on 09-04, 2 on 09-08) beside the review’s sentence',[RJ.asOf, byId['H1.3']&&byId['H1.3'].status, byId['F2.1']&&byId['F2.1'].nightly]);
 }
 
 // ---- 4 · the Windows task: the scripts, line by line -----------------------------------------------------------------------

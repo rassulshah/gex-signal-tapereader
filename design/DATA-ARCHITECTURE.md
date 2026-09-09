@@ -302,6 +302,18 @@ his machine's next nightly replaces it (the installer carries `learning/*.json`)
 day files, tape folders and logs before a build so the cloud's count is not short (v15.89, LESSONS).
 Readers: the panel's `dataBlock()` (Data ①–⑦); the mockup tool `tools/mockup-data.py` reads the same files directly.
 
+**(v15.90) `counts` — every corpus the registry names, counted:** `price` (ES BASERATES sessions) · `nq` · `sweeps` (the sweep
+corpus — the vendor + the couriered nights since v15.90) · `book` (the SPY 3-minute book from the day files) · `ledger` (the
+±0.50 deflection taps) · `kingroll` / `gate` (the day files' `dir.kingRoll` / `gateHour` feature rows with an outcome) · `tap`
+(data/taps/ — 0 until v15.91) · `vix` / `calendar` (0: no file in the repo; the browser stores hold them) — each with `have`,
+`unit`, `perSession` (for the ETA) and `first`. `results.py` reads them to set WAITING / READY on every study whose
+`needs.corpus` they name; the Data tab's ④ shows the same numbers.
+
+**(v15.90) THE NIGHT FILES.** `data/futures/<MK>/<day>-night.csv` — the overnight session (17:00 CT the evening before → 08:27),
+keyed by the SESSION day, same columns as the RTH file; written by `append-futures.py` (the nightly) only when the courier
+holds a real night (200+ minutes: ES since companion v1.18, NQ since v1.19; GC / CL never). Read by `study-sweeps.py` (with the
+RTH files and the vendor file) and by nothing else — `study-hodlod.py` skips them. Not on the installer (the nightly's writes).
+
 **The complete architecture — components, integrations, the HOD/LOD statistics pipeline, storage — is
 `design/ARCHITECTURE.md`**, generated from `tools/plan-seed.py` and rendered on ⚙ Architecture ⑥–⑨ (v15.67). This
 file remains the authority on WHO CAN REACH WHAT and the corpora on disk.

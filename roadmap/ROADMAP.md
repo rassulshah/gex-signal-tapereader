@@ -40,60 +40,61 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 - **v15.86** (2026-09-08) — THE LEARN CORPUS GROWS BY TEN CIRCLES — E005 (ES, six deflections) and E006 (NQ, four) read against the ladder's ranked lists and the node-event dollars; the LIQUIDITY LEVEL factor (PDH · PDL · PDC · ONH · ONL · AHI · ALO · LHI · LLO · POC · VAH · VAL); three new rules — L10 a −γ King is not the floor (the overshoot to the +γ node beneath), L11 a +γ King ceiling decays by the tap and is gone when the King bleeds, L12 a liquidity level at a −γ King gets swept before the turn; L1 / L2 / L5 / L6 / L7 / L9 touched · serves: DEFLECTION — identification first, his training corpus; the tap record's columns (overshoot, sweep depth, the King's $ after the tap)
 - **v15.87** (2026-09-09) — THE CORPUS APPENDS ITSELF · THE TOOL GRID — (1) his "yes": the couriered Yahoo minute bars append to the per-market corpus every night (run.py → append-futures → study-hodlod → BASERATES for ES and NQ, provenance per session, the vendor / Yahoo overlap reported — none), the panel's HODLOD_BASE literal re-baked from the file at build time (tools/bake-hodlod.py), tick.py re-runs the nightly when an installer has pasted older outputs over its log (by mtime and by results.asOf); (2) his "tools": the ⓪a A row reads the session on his tool's grid — 3-minute bars stamped by END, the open = the bar ending 08:30 (7715.00 on 09-08, not the 08:30 minute's 7711.50), the extremes' clocks are bar ends, W.End the first bar AFTER the extreme's to close through the open; his 09-08 row (HOD 8:33 · Took 3 · BOP 3 · Wick 6 · W.End 8:36 · Wick% 6 · MD $2,138) reproduced exactly; the study on the same grid (295 sessions) · serves: HOD/LOD — one definition on the face and in the study, growing by one session a day; the 14% wick that could not be
 - **v15.88** (2026-09-09) — THE AGENDA, BATCHED (companion v1.19) — (5) AHI · ALO · LHI · LLO at the standard hours (Asia 17:00–02:00 CT, London 02:00–08:30 CT — "just use whatever is standard"), his names, tier 1, on the candle's labels, the SWEPT line, the read and the Analysis H2 table; (9) the King latch OFF — "match skylit" — the rail and the export follow Skylit's King on the same tick; (10) companion v1.19 — NQ's full night, the weekly 5-minute bars, WH / WL / WPOC drawn, NQ's base rates couriered; (4') the NQ vendor corpus parsed (188 sessions → NQ BASERATES 195); (6) the first-hour turns counted and tagged, every deflection carries its hour, R-3 in the pattern table; (8) ⓪a PER MARKET — the NQ chart reads NQ; F-23 — the corpus's ONH / ONL looked ahead (the day's post-close bars were in the night), corrected: the overnight extremes are within chance like every other level, F-14's first-30-minutes edge gone · serves: DEFLECTION — the liquidity levels beside the gamma levels, his names; HOD/LOD — the NQ chart measured on NQ; match Skylit always
+- **v15.89** () — THE 🗄 DATA TAB, before Analysis — his ask 2026-09-09 ("a snapshot summary of the data we currently have, what we need for the studies, recommendations and more. If there is missing data that we can obtain from yahoo, it should mention that"; mockup B chosen, "I also want recommendations section"): ① coverage per session (six signals, counted by the nightly — learning/coverage.json) ② the sources live ③ the record on this machine (localStorage against its quota, the IndexedDB stores) ④ what the studies are waiting for, by corpus, have / need ⑤ the gaps and what Yahoo can fill (R-33 daily bars · R-34 hourly backfill · R-35 ^VIX1D proposed) ⑥ the pipeline’s clock ⑦ the DATA recommendations from Rec; read-only, no claims · serves: the loop — knowing what the record holds before asking it a question; his "When will learning occur"
 
 ## NEXT — the running build
 
-### v15.89 — THE 🗄 DATA TAB, before Analysis — his ask 2026-09-09 ("a snapshot summary of the data we currently have, what we need for the studies, recommendations and more. If there is missing data that we can obtain from yahoo, it should mention that"; mockup B chosen, "I also want recommendations section"): ① coverage per session (six signals, counted by the nightly — learning/coverage.json) ② the sources live ③ the record on this machine (localStorage against its quota, the IndexedDB stores) ④ what the studies are waiting for, by corpus, have / need ⑤ the gaps and what Yahoo can fill (R-33 daily bars · R-34 hourly backfill · R-35 ^VIX1D proposed) ⑥ the pipeline’s clock ⑦ the DATA recommendations from Rec; read-only, no claims
+### v15.90 — THE LEARNING PROCESS, HARDENED — his ask 2026-09-09 ("harden the learning process … make sure the entire learning process makes sense and fine tune it … studies that are useless or pointless … refined, targeted and useful"; "yes, fix everything"): (1) the sweep corpus APPENDS like the base rates (the nights → <day>-night.csv; study-sweeps reads the vendor + every CSV; H7 had read n = 0 for thirteen sessions) (2) THE REGISTRY IS THE MACHINE'S OUTPUT — every study carries needs:{corpus, n}; the nightly counts every corpus (coverage.json counts) and sets WAITING (have / need / an ETA at the record's rate) or READY (data on hand, no reader); the scripted sentences are composed from SWEEPS.json nightly (H2.4 / H2.5 had shown numbers F-23 withdrew); the thirteen level-name studies collapsed into H2.L (NULL — no name beats a fresh-low bounce); S1.4 / S7.3 CUT (no feed carries a nodeType); D3.3 read from the day files' King-roll rows; H5 judged by its join (0 of 3 extremes coincide with a ledger tap — the tap record is where it reads), H7 WITHDRAWN (its premise died with F-23) (3) the process docs say what runs — nine tabs, the nightly's real steps (4) THE LIST ATLAS DRAWS on the futures chart in the IRT file — D-KING · D2..D5 from the FRONT window's merged derived list ("we need to match atlas … FRONT")
 
-Serves: the loop — knowing what the record holds before asking it a question; his "When will learning occur".
+Serves: the loop, honest about what it holds and what it can read — his "When will learning occur".
 
-Done when: the tab renders from the live stores and the nightly’s coverage file; the three Yahoo recommendations sit on Rec for his ✓ / ✗; test_v1589.
+Done when: no OPEN / READ NEXT row without a machine status; the sweep corpus grows by a session a night; H7 says withdrawn; the D rows match the 7658 on his chart; test_v1590.
 
 ## AFTER THAT — in order
 
-### v15.90 — THE TAP RECORD — NEXT BUILD, his word 2026-09-09 ("your recommendation" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 110 registry studies whose corpus is the tap record read from it; H11 registered the day it starts
+### v15.91 — THE TAP RECORD — NEXT BUILD, his word 2026-09-09 ("your recommendation" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 104 registry studies whose corpus is the tap record (WAITING on it since v15.90) read from it; H11 registered the day it starts
 
-Serves: HOD/LOD · PULLBACK · 110 studies · his question: what makes a gamma level deflect.
+Serves: HOD/LOD · PULLBACK · 104 studies · his question: what makes a gamma level deflect.
 
 Done when: the design agreed one element at a time; 40 taps per cell and the first F-study reads from them with n, beside the midpoint control.
 
-### v15.91 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
+### v15.92 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
 
 Serves: HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered.
 
 Done when: mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine.
 
-### v15.92 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+### v15.93 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
 
 Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
 
 Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
 
-### v15.93 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+### v15.94 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
 
 Serves: HOD/LOD · the loop closes.
 
 Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
 
-### v15.95 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
+### v15.96 — the nightly reads one READY study per night and writes it back (v15.90 made READY the machine's word; the readers are still the review's) · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v15.96 — one definitions file (Python + panel) · the shipped-artifact test
+### v15.97 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v15.97 — the face manifest — every number on the face names its study, pinned by a test
+### v15.98 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v15.98 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v15.99 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 

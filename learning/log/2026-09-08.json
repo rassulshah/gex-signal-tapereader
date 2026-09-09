@@ -2,8 +2,8 @@
  "schema": 2,
  "date": "2026-09-08",
  "writtenBy": "tools/nightly/run.py",
- "ranOn": "his machine",
- "ranAt": "2026-09-09T14:05:29Z",
+ "ranOn": "cloud",
+ "ranAt": "2026-09-09T14:49:52Z",
  "sessions": 3,
  "episodes": 23,
  "deflEvents": 141,
@@ -55,9 +55,14 @@
    "claim": "a top-5 gamma node moves the HOD/LOD cell",
    "minN": 50,
    "pick": "defl",
-   "n": 141,
-   "verdict": "ready",
-   "bar": "ledger has 141 events \u2014 the join can be run"
+   "judgedBy": "nightly",
+   "n": 0,
+   "extremes": 3,
+   "atNode": 0,
+   "notAtNode": 0,
+   "since": "2026-09-03",
+   "verdict": "blocked",
+   "bar": "0 of 3 extremes since 2026-09-03 coincide with a ledger tap (0 at a node) \u2014 needs 50; the tap record is where this reads"
   },
   {
    "id": "H6",
@@ -76,11 +81,9 @@
    "claim": "a first-30-minute ON/PD sweep-reclaim prints the extreme more often than a bounce off any fresh low",
    "minN": 60,
    "pick": "sweepEarly",
-   "judgedBy": "nightly",
    "n": 0,
-   "sessionsAfter": 0,
-   "verdict": "thin",
-   "bar": "0 early ON/PD sweep-reclaims on sessions after 2026-08-21 (needs 60)"
+   "verdict": "withdrawn",
+   "bar": "withdrawn 2026-09-09: F-23 (v15.88): the corpus\u2019s ONH / ONL looked ahead; corrected, the first 30 minutes read 21% n=249 vs an 18% control \u2014 i"
   },
   {
    "id": "H8",
@@ -1171,25 +1174,49 @@
     "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 379,
-    "complete": false
+    "complete": false,
+    "night": {
+     "minutes": 0,
+     "newest": "2026-09-08",
+     "newestBars": 27,
+     "full": false
+    }
    },
    "ES": {
     "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 393,
-    "complete": true
+    "complete": true,
+    "night": {
+     "minutes": 0,
+     "newest": "2026-09-08",
+     "newestBars": 567,
+     "full": true
+    }
    },
    "GC": {
     "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 379,
-    "complete": false
+    "complete": false,
+    "night": {
+     "minutes": 0,
+     "newest": "2026-09-08",
+     "newestBars": 27,
+     "full": false
+    }
    },
    "NQ": {
     "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 393,
-    "complete": true
+    "complete": true,
+    "night": {
+     "minutes": 0,
+     "newest": "2026-09-08",
+     "newestBars": 27,
+     "full": false
+    }
    }
   },
   "baserates": {
@@ -1308,5 +1335,23 @@
    }
   }
  },
- "from": "2026-09-03"
+ "from": "2026-09-03",
+ "feats": {
+  "dir.kingRoll": {
+   "n": 170,
+   "hit": 102,
+   "rate": 60.0,
+   "lo": 52,
+   "sessions": 7,
+   "first": "2026-08-19"
+  },
+  "gateHour": {
+   "n": 231,
+   "hit": 110,
+   "rate": 47.6,
+   "lo": 41,
+   "sessions": 9,
+   "first": "2026-08-19"
+  }
+ }
 }

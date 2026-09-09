@@ -116,7 +116,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(r.status===0,'4d the book study self-test still passes with the two new levels');
   const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8'));
   const flat=[]; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>ss.studies.forEach(x=>flat.push(x))));
-  ok(['H2.10h','H2.10i','H2.10j','H2.10k','H2.10l'].every(id=>flat.some(x=>x.id===id)) && /PULLBACK candidate/.test(flat.find(x=>x.id==='H2.10h').result),'4e the registry carries the five level families, and says a VWAP-band sweep is a pullback candidate, not the extreme');
+  ok(['H2.L','H2.10k','H2.10l'].every(id=>flat.some(x=>x.id===id)) && /VWAP/.test(flat.find(x=>x.id==='H2.L').q) && /interior levels/.test(flat.find(x=>x.id==='H2.L').result),'4e the registry carries the level families — collapsed into H2.L in v15.90 (the VWAP bands are interior: not the extreme by construction); the EM edges and the book levels keep their rows');
   // the H2 table renders the new rows
   const g={ PAL, RATE_MIN_N, g3esc:esc, tabEmpty:t=>'<div>'+t+'</div>', sweepsBookLoad:()=>({ corpus:WB.corpus, lookup:WB.lookup }) };
   const h=build(g,['rateTxt','sweepTableHtml','panSection','panNote','panRow'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g));

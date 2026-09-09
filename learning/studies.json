@@ -19,6 +19,10 @@
        "claim": "C10",
        "corpus": "tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
@@ -31,6 +35,10 @@
        "claim": "C10 C28",
        "corpus": "tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
@@ -42,8 +50,14 @@
        "decides": "TIME",
        "claim": "C28",
        "corpus": "437 recs · book + tap record",
-       "status": "READ NEXT",
-       "result": "437 kingRoll records, never read"
+       "status": "WAITING",
+       "result": "437 kingRoll records, never read",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K1.4",
@@ -51,7 +65,13 @@
        "decides": "SIDE · LEVEL",
        "claim": "C28",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K1.5",
@@ -59,7 +79,13 @@
        "decides": "SIZE",
        "claim": "C28",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K1.6",
@@ -67,7 +93,13 @@
        "decides": "LEVEL",
        "claim": "ours",
        "corpus": "tap record + IF book",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ],
      "note": "Two books are never averaged: Skylit = flow, InsiderFinance = structure. Each King is its own row."
@@ -84,6 +116,10 @@
        "claim": "C10",
        "corpus": "tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "King as floor held 2 / 4 (thin) · turn — · resume — · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "King as floor held 2 / 4 (thin) · turn — · resume — · nightly 2026-09-08",
@@ -96,6 +132,10 @@
        "claim": "C10",
        "corpus": "tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "King as ceiling held 3 / 8 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "King as ceiling held 3 / 8 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
@@ -107,7 +147,13 @@
        "decides": "WAIT",
        "claim": "C10",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K2.4",
@@ -115,8 +161,14 @@
        "decides": "TARGET",
        "claim": "C10",
        "corpus": "11d · book",
-       "status": "THIN",
-       "result": "11 sessions"
+       "status": "WAITING",
+       "result": "11 sessions",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K2.5",
@@ -124,7 +176,13 @@
        "decides": "STOP",
        "claim": "C9",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K2.6",
@@ -133,6 +191,10 @@
        "claim": "Academy: floor rolling up = bullish",
        "corpus": "tap record (stamped, v15.72+)",
        "status": "REGISTERED",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "H8 thin: n=0 of 30 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       },
@@ -143,6 +205,10 @@
        "claim": "Academy: ceiling rolling down = bearish",
        "corpus": "tap record (stamped, v15.72+)",
        "status": "REGISTERED",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "H9 thin: n=0 of 30 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       }
@@ -159,8 +225,14 @@
        "decides": "TIME",
        "claim": "C10",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-A2"
+       "status": "WAITING",
+       "was": "S-A2",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K3.2",
@@ -168,8 +240,14 @@
        "decides": "TARGET",
        "claim": "C10",
        "corpus": "11d · book",
-       "status": "THIN",
-       "result": "11 sessions"
+       "status": "WAITING",
+       "result": "11 sessions",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K3.3",
@@ -177,7 +255,13 @@
        "decides": "SIZE",
        "claim": "C10 C13",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K3.4",
@@ -185,7 +269,13 @@
        "decides": "SIDE",
        "claim": "C10",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -200,9 +290,15 @@
        "decides": "SIDE",
        "claim": "C11",
        "corpus": "437 recs · book",
-       "status": "READ NEXT",
+       "status": "READY",
        "result": "recorded since v14; unread",
-       "was": "S-C1"
+       "was": "S-C1",
+       "needs": {
+        "corpus": "kingroll",
+        "n": 40
+       },
+       "nightly": "READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K4.2",
@@ -210,7 +306,13 @@
        "decides": "SIDE · TARGET",
        "claim": "C11",
        "corpus": "437 recs · book",
-       "status": "READ NEXT"
+       "status": "READY",
+       "needs": {
+        "corpus": "kingroll",
+        "n": 40
+       },
+       "nightly": "READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K4.3",
@@ -220,7 +322,11 @@
        "corpus": "11d · book",
        "status": "SHIPPED",
        "result": "kingmoves / kingdwell on the tab",
-       "was": "S-D1"
+       "was": "S-D1",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       }
       },
       {
        "id": "K4.4",
@@ -228,7 +334,13 @@
        "decides": "TARGET",
        "claim": "C11",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K4.5",
@@ -236,7 +348,13 @@
        "decides": "SIDE",
        "claim": "C11 C21",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K4.6",
@@ -244,7 +362,13 @@
        "decides": "SIZE",
        "claim": "C11 C13",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -259,7 +383,13 @@
        "decides": "SIZE",
        "claim": "C1",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K5.2",
@@ -267,7 +397,13 @@
        "decides": "SIZE",
        "claim": "C3 C4",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K5.3",
@@ -275,7 +411,13 @@
        "decides": "SIZE",
        "claim": "C5",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K5.4",
@@ -283,7 +425,13 @@
        "decides": "LEVEL",
        "claim": "C14",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K5.5",
@@ -291,7 +439,13 @@
        "decides": "STOP",
        "claim": "C-unwind",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -306,8 +460,14 @@
        "decides": "TARGET",
        "claim": "C13",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-A1"
+       "status": "WAITING",
+       "was": "S-A1",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K6.2",
@@ -315,8 +475,14 @@
        "decides": "LEVEL",
        "claim": "C28",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-A6"
+       "status": "WAITING",
+       "was": "S-A6",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K6.3",
@@ -324,7 +490,13 @@
        "decides": "TARGET",
        "claim": "C10 C-OPEX",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "K6.4",
@@ -332,7 +504,13 @@
        "decides": "SIZE",
        "claim": "C10 C21 C28",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     }
@@ -357,6 +535,10 @@
        "status": "THIN",
        "result": "any King held 5 / 12 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
        "script": "tools/nightly/patterns.py",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "any King held 5 / 12 (thin) · turn 2 / 3 (thin) · resume 1 / 3 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "by": "nightly"
@@ -368,6 +550,10 @@
        "claim": "C10 C28",
        "corpus": "defl ledger · tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "SPX King held 2 / 6 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
@@ -380,6 +566,10 @@
        "claim": "C10 C28",
        "corpus": "defl ledger · tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "SPY King held 1 / 3 (thin) · turn 1 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
@@ -392,6 +582,10 @@
        "claim": "C28",
        "corpus": "defl ledger · tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "QQQ King held 2 / 3 (thin) · turn — · resume — · nightly 2026-09-08",
@@ -403,7 +597,13 @@
        "decides": "SIZE",
        "claim": "C21 ours",
        "corpus": "defl ledger · tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S0.6",
@@ -411,7 +611,13 @@
        "decides": "SIZE · LEVEL",
        "claim": "C19 C10",
        "corpus": "defl ledger · tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S0.7",
@@ -420,6 +626,10 @@
        "claim": "C8 ours",
        "corpus": "defl ledger · tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 1 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "+γ King held 1 / 5 (thin) · turn — · resume — · −γ King held 1 / 1 (thin) · turn 1 / 1 (thin) · resume 0 / 1 (thin) · nightly 2026-09-08",
@@ -443,6 +653,10 @@
        "result": "SPX — · SPY — · QQQ held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-08",
        "script": "tools/nightly/patterns.py",
        "was": "S-B6",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPX — · SPY — · QQQ held 0 / 2 (thin) · turn — · resume — · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "by": "nightly"
@@ -456,6 +670,10 @@
        "status": "THIN",
        "result": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-08",
        "script": "tools/nightly/patterns.py",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPX — · SPY held 0 / 1 (thin) · turn — · resume — · QQQ — · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "by": "nightly"
@@ -466,7 +684,13 @@
        "decides": "SIZE",
        "claim": "C23 C10",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S1.4",
@@ -474,8 +698,13 @@
        "decides": "SKIP",
        "claim": "ours",
        "corpus": "API · 1 call/bar",
-       "status": "OPEN",
-       "was": "S-D6"
+       "status": "CUT",
+       "result": "CUT 2026-09-09 (the audit): no feed we hold carries a nodeType, and the panel never makes a call per bar — a comparison against a field that does not exist. His rule is to match Skylit; when Skylit's label reaches a payload we read, this becomes a decision (use theirs), not a study.",
+       "was": "S-D6",
+       "needs": {
+        "corpus": "cut",
+        "n": 0
+       }
       },
       {
        "id": "S1.5",
@@ -483,7 +712,13 @@
        "decides": "STOP",
        "claim": "C6 C23",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -498,9 +733,15 @@
        "decides": "SIZE",
        "claim": "C14",
        "corpus": "671 recs · book",
-       "status": "READ NEXT",
+       "status": "READY",
        "result": "gatekeeper records unread",
-       "was": "S-A3"
+       "was": "S-A3",
+       "needs": {
+        "corpus": "gate",
+        "n": 40
+       },
+       "nightly": "READY · gate: 231 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S2.2",
@@ -508,8 +749,14 @@
        "decides": "LEVEL",
        "claim": "C14",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B9"
+       "status": "WAITING",
+       "was": "S-B9",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S2.3",
@@ -517,7 +764,13 @@
        "decides": "TARGET",
        "claim": "C14 C15",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S2.4",
@@ -525,7 +778,13 @@
        "decides": "SIZE",
        "claim": "C14 C3",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -541,7 +800,11 @@
        "claim": "C9",
        "corpus": "8 sess · book",
        "status": "SHIPPED",
-       "result": "the deflection engine's trigger geometry"
+       "result": "the deflection engine's trigger geometry",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       }
       },
       {
        "id": "S3.2",
@@ -549,8 +812,14 @@
        "decides": "TARGET",
        "claim": "C9",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B7"
+       "status": "WAITING",
+       "was": "S-B7",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S3.3",
@@ -560,7 +829,11 @@
        "corpus": "94 ep · book",
        "status": "REFUSED",
        "result": "H3 null: 52.2% vs 52.1%, n=46/48",
-       "was": "S-B8"
+       "was": "S-B8",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       }
       },
       {
        "id": "S3.4",
@@ -568,7 +841,13 @@
        "decides": "STOP",
        "claim": "C9 ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -583,8 +862,14 @@
        "decides": "TARGET",
        "claim": "C15 C20",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B10"
+       "status": "WAITING",
+       "was": "S-B10",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S4.2",
@@ -592,7 +877,13 @@
        "decides": "TARGET",
        "claim": "C15",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S4.3",
@@ -600,7 +891,13 @@
        "decides": "TIME",
        "claim": "C15",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S4.4",
@@ -608,7 +905,13 @@
        "decides": "TARGET",
        "claim": "C15",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -623,8 +926,14 @@
        "decides": "SIDE",
        "claim": "C19",
        "corpus": "11d · book",
-       "status": "THIN",
-       "was": "S-C2"
+       "status": "WAITING",
+       "was": "S-C2",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S5.2",
@@ -632,8 +941,14 @@
        "decides": "TARGET",
        "claim": "C22",
        "corpus": "11d · book",
-       "status": "THIN",
-       "was": "S-C3"
+       "status": "WAITING",
+       "was": "S-C3",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S5.3",
@@ -643,7 +958,11 @@
        "corpus": "11d · book",
        "status": "SHIPPED",
        "result": "three passes on the tab",
-       "was": "S-D2"
+       "was": "S-D2",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       }
       },
       {
        "id": "S5.4",
@@ -651,7 +970,13 @@
        "decides": "LEVEL",
        "claim": "C19",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -666,8 +991,14 @@
        "decides": "LEVEL",
        "claim": "C21",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B5"
+       "status": "WAITING",
+       "was": "S-B5",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S6.2",
@@ -675,8 +1006,14 @@
        "decides": "SIZE",
        "claim": "C21",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B4"
+       "status": "WAITING",
+       "was": "S-B4",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S6.3",
@@ -684,7 +1021,13 @@
        "decides": "LEVEL",
        "claim": "C21 C22",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S6.4",
@@ -692,8 +1035,14 @@
        "decides": "SKIP",
        "claim": "C21",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-D4"
+       "status": "WAITING",
+       "was": "S-D4",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S6.5",
@@ -702,7 +1051,11 @@
        "claim": "C21",
        "corpus": "11d · book",
        "status": "READ",
-       "result": "exploratory; direction only"
+       "result": "exploratory; direction only",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       }
       },
       {
        "id": "S6.6",
@@ -710,8 +1063,14 @@
        "decides": "SIZE · TIME",
        "claim": "ours",
        "corpus": "defl ledger · day files (d5 · d15 · d60 recorded per bar)",
-       "status": "OPEN",
-       "result": "the dashboard shows 15 min until this reads; the row's window follows the winner"
+       "status": "READY",
+       "result": "the dashboard shows 15 min until this reads; the row's window follows the winner",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
+       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -730,6 +1089,10 @@
        "result": "SPX held 3 / 13 (thin) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 6 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-08",
        "script": "tools/nightly/patterns.py",
        "was": "S-B11",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPX held 3 / 13 (thin) · turn 0 / 2 (thin) · resume 0 / 2 (thin) · SPY held 7 / 18 = 39% (low 20%) · turn 2 / 4 (thin) · resume 1 / 4 (thin) · QQQ held 3 / 6 (thin) · turn 2 / 2 (thin) · resume 0 / 2 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "by": "nightly"
@@ -741,6 +1104,10 @@
        "claim": "C24 C1",
        "corpus": "tap record",
        "status": "THIN",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "SPX held 1 / 3 (thin) · turn — · resume — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ held 5 / 8 (thin) · turn 0 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
        "asOf": "2026-09-08",
        "result": "SPX held 1 / 3 (thin) · turn — · resume — · SPY held 2 / 7 (thin) · turn — · resume — · QQQ held 5 / 8 (thin) · turn 0 / 2 (thin) · resume 1 / 2 (thin) · nightly 2026-09-08",
@@ -752,7 +1119,12 @@
        "decides": "SKIP",
        "claim": "ours",
        "corpus": "API · 1 call/bar",
-       "status": "OPEN"
+       "status": "CUT",
+       "result": "CUT 2026-09-09 (the audit): the same as S1.4 — no nodeType in any feed we hold; the stack stamp is read from the ladder the face already draws.",
+       "needs": {
+        "corpus": "cut",
+        "n": 0
+       }
       }
      ]
     },
@@ -767,7 +1139,13 @@
        "decides": "STOP",
        "claim": "C-unwind",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S8.2",
@@ -775,8 +1153,14 @@
        "decides": "SKIP",
        "claim": "C5",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-D3"
+       "status": "WAITING",
+       "was": "S-D3",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S8.3",
@@ -784,8 +1168,14 @@
        "decides": "SKIP",
        "claim": "C18",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-D5"
+       "status": "WAITING",
+       "was": "S-D5",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "S8.4",
@@ -793,7 +1183,13 @@
        "decides": "SIZE",
        "claim": "C4 C21",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     }
@@ -818,7 +1214,11 @@
        "status": "SHIPPED",
        "result": "77% one-liner, n=196; opens / value area no better than sham",
        "script": "study-greenred.py",
-       "was": "S-C5"
+       "was": "S-C5",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "D1.2",
@@ -828,7 +1228,11 @@
        "corpus": "284d · price",
        "status": "SHIPPED",
        "result": "LOD first 146 / HOD first 138 = 51% · n=284",
-       "script": "BASERATES.json"
+       "script": "BASERATES.json",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "D1.3",
@@ -836,8 +1240,14 @@
        "decides": "SIZE",
        "claim": "C26 C27",
        "corpus": "11d · book",
-       "status": "THIN",
-       "was": "S-C4"
+       "status": "WAITING",
+       "was": "S-C4",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D1.4",
@@ -847,7 +1257,11 @@
        "corpus": "284d · price",
        "status": "READ",
        "result": "open inside ON: 253 of 275 ON sweeps reclaimed; direction split not yet read",
-       "script": "study-sweeps.py"
+       "script": "study-sweeps.py",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       }
      ]
     },
@@ -863,7 +1277,11 @@
        "claim": "ours",
        "corpus": "94 ep · book",
        "status": "READ",
-       "result": "median MFE10 on the tab; by node role thin"
+       "result": "median MFE10 on the tab; by node role thin",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       }
       },
       {
        "id": "D2.2",
@@ -871,9 +1289,15 @@
        "decides": "TARGET",
        "claim": "C30",
        "corpus": "94 ep · book",
-       "status": "THIN",
+       "status": "READY",
        "result": "H3 says held rate is flat; extent unread",
-       "was": "S-B14"
+       "was": "S-B14",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
+       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D2.3",
@@ -881,7 +1305,13 @@
        "decides": "STOP",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D2.4",
@@ -891,7 +1321,11 @@
        "corpus": "284d · price",
        "status": "READ",
        "result": "when a sweep is the extreme: median 60–89 pts to the far extreme, by level",
-       "script": "study-sweeps.py"
+       "script": "study-sweeps.py",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       }
      ]
     },
@@ -906,7 +1340,13 @@
        "decides": "SIDE",
        "claim": "C10",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D3.2",
@@ -914,15 +1354,33 @@
        "decides": "TARGET",
        "claim": "C10",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D3.3",
-       "q": "dir.kingRoll — the 437 records: follow rate",
+       "q": "dir.kingRoll — the King-roll vote's follow rate (the record's rows, per bar)",
        "decides": "SIDE",
        "claim": "C11",
        "corpus": "437 recs · book",
-       "status": "READ NEXT"
+       "status": "READ",
+       "result": "dir.kingRoll right within 10 bars: 102 / 170 = 60% (low 52%) on 7 sessions — per-bar rows, not independent events · nightly 2026-09-08",
+       "machine": {
+        "file": "FEATS",
+        "key": "dir.kingRoll"
+       },
+       "needs": {
+        "corpus": "kingroll",
+        "n": 40
+       },
+       "nightly": "dir.kingRoll right within 10 bars: 102 / 170 = 60% (low 52%) on 7 sessions — per-bar rows, not independent events · nightly 2026-09-08",
+       "asOf": "2026-09-08",
+       "by": "nightly"
       }
      ]
     },
@@ -937,7 +1395,13 @@
        "decides": "SIDE",
        "claim": "C19",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D4.2",
@@ -945,7 +1409,13 @@
        "decides": "SIDE",
        "claim": "C19",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D4.3",
@@ -953,7 +1423,13 @@
        "decides": "SIDE",
        "claim": "C-regime",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -970,7 +1446,11 @@
        "corpus": "284d ES + NQ · price",
        "status": "READ",
        "result": "in model-lodhod as xdiv; event-level read pending",
-       "script": "model-lodhod.py"
+       "script": "model-lodhod.py",
+       "needs": {
+        "corpus": "nq",
+        "n": 30
+       }
       },
       {
        "id": "D5.2",
@@ -978,7 +1458,13 @@
        "decides": "TIME",
        "claim": "lore",
        "corpus": "284d ES + NQ · price",
-       "status": "READ NEXT"
+       "status": "READY",
+       "needs": {
+        "corpus": "nq",
+        "n": 30
+       },
+       "nightly": "READY · nq: 195 sessions on hand since 2025-11-24 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "D5.3",
@@ -986,7 +1472,13 @@
        "decides": "TIME",
        "claim": "C28",
        "corpus": "437 recs · book",
-       "status": "READ NEXT"
+       "status": "READY",
+       "needs": {
+        "corpus": "kingroll",
+        "n": 40
+       },
+       "nightly": "READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     }
@@ -1008,8 +1500,14 @@
        "decides": "LEVEL",
        "claim": "C2",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-A4"
+       "status": "WAITING",
+       "was": "S-A4",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F1.2",
@@ -1018,7 +1516,11 @@
        "claim": "C9 ours",
        "corpus": "8 sess · book",
        "status": "SHIPPED",
-       "result": "DEFL_NEAR 1.0 / DEFL_THRU 1.5 ATR"
+       "result": "DEFL_NEAR 1.0 / DEFL_THRU 1.5 ATR",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       }
       },
       {
        "id": "F1.3",
@@ -1026,8 +1528,14 @@
        "decides": "SKIP",
        "claim": "C16",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B16"
+       "status": "WAITING",
+       "was": "S-B16",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F1.4",
@@ -1038,6 +1546,10 @@
        "status": "REFUSED",
        "result": "H4 null: 49.1% vs 48.6%, n=970 rows",
        "was": "S-B17",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
        "nightly": "H4 thin: n=4 of 40 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       }
@@ -1057,6 +1569,10 @@
        "status": "REGISTERED",
        "result": "tap≥1 73% n=22 vs tap0 47% n=70 · H2 reads at 30",
        "was": "S-B1",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
        "nightly": "H2 thin: n=2 of 30 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       },
@@ -1066,8 +1582,14 @@
        "decides": "SKIP",
        "claim": "C3",
        "corpus": "94 ep · book",
-       "status": "THIN",
-       "result": "n=2 third taps"
+       "status": "READY",
+       "result": "n=2 third taps",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
+       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F2.3",
@@ -1075,7 +1597,13 @@
        "decides": "SIZE",
        "claim": "C3 C10",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1090,8 +1618,14 @@
        "decides": "SIZE",
        "claim": "C4",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B2"
+       "status": "WAITING",
+       "was": "S-B2",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F3.2",
@@ -1099,8 +1633,14 @@
        "decides": "SIZE",
        "claim": "C5",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B3"
+       "status": "WAITING",
+       "was": "S-B3",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F3.3",
@@ -1108,8 +1648,14 @@
        "decides": "WAIT",
        "claim": "C6",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B15"
+       "status": "WAITING",
+       "was": "S-B15",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1124,8 +1670,14 @@
        "decides": "SIZE",
        "claim": "C21",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B4"
+       "status": "WAITING",
+       "was": "S-B4",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F4.2",
@@ -1133,7 +1685,13 @@
        "decides": "SIZE",
        "claim": "ours",
        "corpus": "tap record + IF book",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F4.3",
@@ -1142,7 +1700,11 @@
        "claim": "ours",
        "corpus": "11d · book",
        "status": "READ",
-       "result": "growth mattered, pairing did not (rollsupport)"
+       "result": "growth mattered, pairing did not (rollsupport)",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       }
       }
      ]
     },
@@ -1157,7 +1719,13 @@
        "decides": "SIZE",
        "claim": "C1",
        "corpus": "94 ep · book",
-       "status": "THIN"
+       "status": "READY",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
+       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F5.2",
@@ -1167,6 +1735,10 @@
        "corpus": "94 ep · book",
        "status": "REGISTERED",
        "result": "exploratory 32% n=34 for A — the inverse · H1 reads at 40",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
        "nightly": "H1 thin: n=5 of 40 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       },
@@ -1176,7 +1748,13 @@
        "decides": "SIZE",
        "claim": "C1",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1193,6 +1771,10 @@
        "corpus": "94 ep · book",
        "status": "REGISTERED",
        "result": "H3: 52.2% vs 52.1% · n=46/48 · gap < 8 predicted",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
        "nightly": "H3 thin: n=3 of 40 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       },
@@ -1202,7 +1784,13 @@
        "decides": "TARGET",
        "claim": "C30",
        "corpus": "94 ep · book",
-       "status": "THIN"
+       "status": "READY",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
+       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F6.3",
@@ -1210,8 +1798,14 @@
        "decides": "SIZE",
        "claim": "C29",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B13"
+       "status": "WAITING",
+       "was": "S-B13",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1226,8 +1820,14 @@
        "decides": "SIZE",
        "claim": "C28",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B12"
+       "status": "WAITING",
+       "was": "S-B12",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F7.2",
@@ -1235,7 +1835,13 @@
        "decides": "SIZE",
        "claim": "C28",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F7.3",
@@ -1243,7 +1849,13 @@
        "decides": "TIME",
        "claim": "C28",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1258,7 +1870,13 @@
        "decides": "STOP",
        "claim": "C20",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "F8.2",
@@ -1266,7 +1884,13 @@
        "decides": "STOP",
        "claim": "C15 C20",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     }
@@ -1288,7 +1912,13 @@
        "decides": "LEVEL",
        "claim": "C13 C22",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P1.2",
@@ -1296,7 +1926,13 @@
        "decides": "LEVEL",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P1.3",
@@ -1304,7 +1940,13 @@
        "decides": "LEVEL",
        "claim": "C14",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1319,7 +1961,13 @@
        "decides": "STOP",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P2.2",
@@ -1327,7 +1975,13 @@
        "decides": "LEVEL",
        "claim": "ours",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P2.3",
@@ -1335,7 +1989,13 @@
        "decides": "STOP",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1350,7 +2010,13 @@
        "decides": "TIME",
        "claim": "lore",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P3.2",
@@ -1358,7 +2024,13 @@
        "decides": "TIME",
        "claim": "lore",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P3.3",
@@ -1366,7 +2038,13 @@
        "decides": "TIME",
        "claim": "lore C10",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1381,8 +2059,14 @@
        "decides": "SIZE",
        "claim": "C21",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-B5"
+       "status": "WAITING",
+       "was": "S-B5",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P4.2",
@@ -1390,7 +2074,13 @@
        "decides": "SIZE",
        "claim": "C21",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P4.3",
@@ -1398,7 +2088,13 @@
        "decides": "SIZE",
        "claim": "C19 C22",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P4.4",
@@ -1407,7 +2103,11 @@
        "claim": "C3",
        "corpus": "94 ep · book",
        "status": "REGISTERED",
-       "result": "H2 · tap≥1 73% n=22"
+       "result": "H2 · tap≥1 73% n=22",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       }
       }
      ]
     },
@@ -1422,8 +2122,14 @@
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d · price + tap record",
-       "status": "READ NEXT",
-       "result": "H2.10h found VWAP/band sweeps are not the extreme (5–13%, n=124–207) — the right outcome for them is resume, unread"
+       "status": "WAITING",
+       "result": "H2.10h found VWAP/band sweeps are not the extreme (5–13%, n=124–207) — the right outcome for them is resume, unread",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P5.2",
@@ -1431,7 +2137,13 @@
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "tap record + 284d price",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P5.3",
@@ -1439,7 +2151,13 @@
        "decides": "SIZE",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P5.4",
@@ -1447,7 +2165,13 @@
        "decides": "SIZE",
        "claim": "ours",
        "corpus": "tap record + IF book",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1462,7 +2186,13 @@
        "decides": "SIDE",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P6.2",
@@ -1470,7 +2200,13 @@
        "decides": "STOP",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P6.3",
@@ -1478,7 +2214,13 @@
        "decides": "STOP",
        "claim": "C15",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1493,7 +2235,13 @@
        "decides": "TARGET",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P7.2",
@@ -1501,7 +2249,13 @@
        "decides": "TARGET",
        "claim": "ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "P7.3",
@@ -1509,7 +2263,13 @@
        "decides": "SIDE",
        "claim": "lore",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     }
@@ -1534,7 +2294,11 @@
        "status": "SHIPPED",
        "result": "AUC 0.879 · NOT-IN cell 85% n=230",
        "script": "model-lodhod.py",
-       "was": "S-A5"
+       "was": "S-A5",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H1.2",
@@ -1543,7 +2307,11 @@
        "claim": "—",
        "corpus": "284d · price",
        "status": "SHIPPED",
-       "result": "clock curve on the tab"
+       "result": "clock curve on the tab",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H1.3",
@@ -1551,11 +2319,14 @@
        "decides": "SIZE",
        "claim": "C17 C13",
        "corpus": "defl ledger 0/50",
-       "status": "READ NEXT",
-       "result": "H5 ready: ledger has 141 events — the join can be run · nightly 2026-09-08",
-       "nightly": "H5 ready: ledger has 141 events — the join can be run · nightly 2026-09-08",
-       "asOf": "2026-09-08",
-       "by": "nightly"
+       "status": "REGISTERED",
+       "result": "H5 — judged by the nightly's join every night (v15.90): an extreme counts when a ledger tap of the right direction sits within four minutes of it; the ±0.50 ledger rarely holds the day's extreme (0 of 3 on 2026-09-09) — the tap record is where this reads",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
+       "nightly": "H5 blocked: n=0 of 50 · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H1.4",
@@ -1564,7 +2335,11 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "0.655 standalone; no lift over the clock in ablation"
+       "result": "0.655 standalone; no lift over the clock in ablation",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H1.5",
@@ -1574,6 +2349,10 @@
        "corpus": "new sessions · close-scored rows",
        "status": "REGISTERED",
        "result": "H10 proposed: ≥ 80% · refute if the Wilson high < 80% (the 2026-09-08 review read 43% n=23 and 50% n=30 on 09-03/04 — not counted; the queue keeps only late-session rows, so this is the cell family the table trusts most)",
+       "needs": {
+        "corpus": "register",
+        "n": 0
+       },
        "nightly": "H10 thin: n=26 of 60 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       }
@@ -1585,34 +2364,50 @@
      "decides": "SIZE · STOP · TIME",
      "studies": [
       {
-       "id": "H2.1",
-       "q": "ONL sweep-and-reclaim → is the sweep's low the LOD? ONH → the HOD?",
+       "id": "H2.L",
+       "q": "THE LEVEL'S NAME — does WHICH level was swept change the rate? ONL · ONH · PDL · PDH · IBL · IBH · PDC · POC / VAH / VAL · PMH / PML · PWH / PWL · OR5 / OR15 · VWAP ± bands · the developing profile · LHI / LLO · AHI / ALO · WPOC — one question, one table",
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d · price",
-       "status": "READ",
-       "result": "ONL 22% n=125 · ONH 16% n=154 — vs a fresh-low bounce at nothing: 25% / 18% (-3 / -2pp); (v15.88, F-23) the day's own post-close bars are out of the night — the earlier 29% / 26% (+1 / +4pp) looked ahead and is withdrawn",
-       "script": "study-sweeps.py"
+       "status": "NULL",
+       "result": "NO: every named level's sweep-and-reclaim prints the extreme within chance of a bounce at nothing (the fresh-low control); the interior levels (VWAP bands, the developing profile, the opening range) are WORSE by construction. Thirteen studies (H2.1 · 2.2 · 2.3 · 2.10 · 2.10b–e · 2.10h–j3) asked this and got this answer (the audit of 2026-09-09); the names stay on the candle as labels — what matters is the sweep's SHAPE (H2.5) and the node at it (H2.7). PDC is the one name whose CI clears the control (+8pp, provisional) — its own row, H2.10.",
+       "script": "study-sweeps.py",
+       "was": "H2.1 · H2.2 · H2.3 · H2.10b–e · H2.10h–j3 (collapsed v15.90)",
+       "machine": {
+        "file": "SWEEPS",
+        "read": "levelTable"
+       },
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "36 named levels: 2 clear the fresh-low control (PDC- 29% n=119 vs 21% (+8pp); POC+ 26% n=97 vs 17% (+8pp)) — about what 36 cells produce by chance (≈0.9 expected); worse than a bounce at nothing: OR5H 10% n=220, OR15L 21% n=190, OR15H 14% n=205, VWAP- 8% n=130, VWAP+ 5% n=126, VW1L 8% n=210, VW1H 8% n=202, VW2L 12% n=185, VW2H 11% n=180, DPOC- 5% n=133, DPOC+ 3% n=125, DVAL 8% n=217, DVAH 7% n=210; within chance: ONL, ONH, PDL, PDH, IBL, IBH, PDC+, VAL, VAH, POC-, PML, PMH, PWL, PWH, WPOC-, WPOC+, OR5L, ALO, AHI, LLO, LHI · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
-       "id": "H2.2",
-       "q": "PDL / PDH sweep-and-reclaim → the extreme?",
+       "id": "H2.10",
+       "q": "PDC (prior close, the gap-fill level) — the one level name whose CI clears the fresh-low control: a sweep below it that reclaims → the LOD?",
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "PDL 23% n=87 · PDH 16% n=113 — control 24% / 18% (−1 / −2pp)",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.3",
-       "q": "IBL / IBH sweep-and-reclaim (after 09:30) → the extreme?",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "IBL 20% n=143 · IBH 16% n=148 — control 26% / 19% (−6 / −3pp)",
-       "script": "study-sweeps.py"
+       "result": "PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "script": "study-sweeps.py",
+       "machine": {
+        "file": "SWEEPS",
+        "read": "levels",
+        "levels": [
+         "PDC-",
+         "PDC+"
+        ]
+       },
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC+ 19% n=104 vs 17% · PDC- breaks on first touch 45% · PDC+ breaks on first touch 56% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "asOf": "2026-09-08",
+       "by": "nightly"
       },
       {
        "id": "H2.4",
@@ -1621,8 +2416,19 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "first 30 min: ONL 37% n=35 · ONH 27% n=41 · PDL 31% n=39 · PDH 20% n=65 — each +5 to +15pp over control; after 10:00 no better than nothing",
-       "script": "study-sweeps.py"
+       "result": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 28% (-9pp) · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "script": "study-sweeps.py",
+       "machine": {
+        "file": "SWEEPS",
+        "read": "clock"
+       },
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp) · 10:00-11:30 21% n=58 vs 21% (+0pp) · 11:30-15:00 20% n=76 vs 28% (-9pp) · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "asOf": "2026-09-08",
+       "by": "nightly"
       },
       {
        "id": "H2.5",
@@ -1631,8 +2437,19 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "depth > 8 pts 40% n=86 (+16pp) · reclaim 6–30 bars 40% n=90 (+16pp) · shallow ≤3 pt quick poke 14% n=228 (−9pp): the poke is NOT the low 86% of the time",
-       "script": "study-sweeps.py"
+       "result": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=386 vs 21% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "script": "study-sweeps.py",
+       "machine": {
+        "file": "SWEEPS",
+        "read": "shape"
+       },
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "deep (> 8 pts) 35% n=94 vs 23% · mid 21% n=139 vs 20% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23% · the quick poke 15% n=386 vs 21% · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "asOf": "2026-09-08",
+       "by": "nightly"
       },
       {
        "id": "H2.6",
@@ -1641,8 +2458,19 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "PD levels break on first touch 30% n=124 / 34% n=170 · ON 7% n=121 / 9% n=154 · IB 14% n=166 / 20% n=184",
-       "script": "study-sweeps.py"
+       "result": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · ONH 16% n=183 · PDL 31% n=126 · PDH 34% n=169 · IBL 14% n=170 · IBH 20% n=188 · PDC- 45% n=217 · PDC+ 56% n=239 · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "script": "study-sweeps.py",
+       "machine": {
+        "file": "SWEEPS",
+        "read": "acceptance"
+       },
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · ONH 16% n=183 · PDL 31% n=126 · PDH 34% n=169 · IBL 14% n=170 · IBH 20% n=188 · PDC- 45% n=217 · PDC+ 56% n=239 · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "asOf": "2026-09-08",
+       "by": "nightly"
       },
       {
        "id": "H2.7",
@@ -1650,8 +2478,12 @@
        "decides": "SIZE",
        "claim": "C13 C17",
        "corpus": "tap record · API backfill",
-       "status": "DRAFT",
-       "result": "H6 proposed: > 40% vs the 24% base (n=453 ON/PD sweep-reclaims) · refute if ≤ 30%",
+       "status": "REGISTERED",
+       "result": "H6 registered (blocked until 40 at-node sweep-reclaims on the book corpus — about one per three sessions; the tap record measures node × level at every tap): > 40% vs the 24% base (n=453 ON/PD sweep-reclaims) · refute if ≤ 30%",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
        "nightly": "H6 thin: n=1 of 40 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       },
@@ -1661,9 +2493,13 @@
        "decides": "SIZE · TIME",
        "claim": "lore",
        "corpus": "new sessions",
-       "status": "DRAFT",
-       "result": "H7 proposed: first-30-min ON/PD sweep-reclaim prints the extreme > 24% · refute if ≤ 18% (pooled 27% n=180 on the read corpus)",
-       "nightly": "H7 thin: n=0 of 60 · nightly 2026-09-08",
+       "status": "NULL",
+       "result": "H7 WITHDRAWN 2026-09-09: F-23 removed its premise (the corrected first-30-minutes read is 21% n=249 vs 18% — inside chance) and its count accrued one event per three sessions; the row stays on the register as withdrawn, never counted",
+       "needs": {
+        "corpus": "register",
+        "n": 0
+       },
+       "nightly": "H7 withdrawn: n=0 of 60 · nightly 2026-09-08",
        "asOf": "2026-09-08"
       },
       {
@@ -1672,57 +2508,13 @@
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d · price",
-       "status": "READ NEXT"
-      },
-      {
-       "id": "H2.10",
-       "q": "PDC (prior close, the gap-fill level) — sweep-and-reclaim → the extreme?",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "PDC− → LOD 30% n=120 (control 21%, +9pp) · PDC+ → HOD 19% n=105 (control 17%) · and PDC BREAKS on first touch 44% / 56% of the time — it is a magnet, not a wall",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.10b",
-       "q": "Prior-day profile — POC / VAH / VAL sweep-and-reclaim → the extreme?",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "VAL 28% n=112 (+4pp) · VAH 19% n=118 (+2pp) · POC− 27% n=108 (+4pp) · POC+ 26% n=97 (+9pp) — all inside chance of the control; they break on first touch 35–57%",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.10c",
-       "q": "Pre-market high/low (07:00–08:30 CT) — PMH / PML",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "PML 21% n=189 (control 21%) · PMH 15% n=197 (17%) — nothing; they reclaim 87% of the time and mean nothing when they do",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.10d",
-       "q": "Prior WEEK high/low — PWH / PWL",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "PWL 25% n=36 (27%) · PWH 22% n=55 (19%) — thin and flat; PW levels break on first touch 38% / 57%",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.10e",
-       "q": "Opening range 5 / 15 min — OR5 / OR15 sweeps (after the range completes)",
-       "decides": "SKIP",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "OR5L 20% n=212 (−4pp) · OR5H 10% n=215 (−7pp) · OR15L 22% n=186 (−6pp) · OR15H 14% n=201 (−7pp) — an OR sweep-reclaim is slightly WORSE than a bounce at nothing: it is the poke by construction",
-       "script": "study-sweeps.py"
+       "status": "READY",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H2.10f",
@@ -1730,8 +2522,14 @@
        "decides": "SIZE",
        "claim": "C13 ours",
        "corpus": "book · day files",
-       "status": "THIN",
-       "result": "BOOK CORPUS 11 sessions (2026-08-18 → 2026-09-03, SPY 3-min, ±0.50 zone): price sweep AT a top-5 node / the King 25% n=12 vs NOT at a node 38% n=8 · AT the King 25% n=4 · AT a wall 43% n=7 · sweeps OF the book’s levels: KING↓ 20% n=5 · KING↑ 50% n=2 · PW0↓ 0% n=4 · CW0↑ 0% n=4 — every cell thin; the corpus grows one session per export (nightly 2026-09-03 evening: 11)"
+       "status": "WAITING",
+       "result": "BOOK CORPUS 11 sessions (2026-08-18 → 2026-09-03, SPY 3-min, ±0.50 zone): price sweep AT a top-5 node / the King 25% n=12 vs NOT at a node 38% n=8 · AT the King 25% n=4 · AT a wall 43% n=7 · sweeps OF the book’s levels: KING↓ 20% n=5 · KING↑ 50% n=2 · PW0↓ 0% n=4 · CW0↑ 0% n=4 — every cell thin; the corpus grows one session per export (nightly 2026-09-03 evening: 11)",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H2.10g",
@@ -1741,55 +2539,11 @@
        "corpus": "book · day files",
        "status": "REGISTERED",
        "result": "H6 · judged by the nightly from the same table · reads at 40 at-node events on sessions from 2026-09-03",
-       "script": "study-sweeps-book.py"
-      },
-      {
-       "id": "H2.10h",
-       "q": "VWAP and its ±1σ / ±2σ bands as sweep levels (valued at the sweep bar, side = the side price came from)",
-       "decides": "SKIP · LEVEL",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "the interior levels are NOT the extreme: VWAP- 7% n=126 (control 21%) · VWAP+ 5% n=124 (control 16%) · VW1L 8% n=207 (control 28%) · VW1H 8% n=200 (control 23%) · VW2L 13% n=180 (control 28%) · VW2H 11% n=178 (control 22%) — a VWAP-band sweep is a PULLBACK candidate, not the day’s turn; the pullback outcome (resume to a new extreme) is P5.1",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.10i",
-       "q": "Today’s DEVELOPING profile — DPOC / DVAH / DVAL as sweep levels",
-       "decides": "SKIP · LEVEL",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "not the extreme, by construction inside the range: DPOC- 5% n=131 (control 28%) · DPOC+ 3% n=121 (control 23%) · DVAL 8% n=213 (control 28%) · DVAH 7% n=207 (control 22%) — pullback levels, measured for the pullback objective under P5",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.10j",
-       "q": "The London session (02:00 CT → the open) — LHI / LLO (v15.57's LDNH / LDNL, his names from v15.88)",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "result": "LLO 21% n=163 (control 24%) · LHI 16% n=170 (control 18%) — like every other level name: within chance of the fresh-low control",
-       "script": "study-sweeps.py"
-      },
-      {
-       "id": "H2.10j2",
-       "q": "The ASIA session (17:00 → 02:00 CT) — AHI / ALO as sweep levels (his four, 2026-09-08; the standard hours, 2026-09-09)",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "script": "tools/study-sweeps.py (ALO / AHI); the nightly rewrites SWEEPS.json — read the rate there, with n; the Analysis H2 table has the rows"
-      },
-      {
-       "id": "H2.10j3",
-       "q": "The prior week's POC — WPOC as a sweep level, both sides (his 'weekly POC', 2026-09-08; drawn from the companion's weekly bars, v1.19)",
-       "decides": "SIZE",
-       "claim": "lore",
-       "corpus": "284d · price",
-       "status": "READ",
-       "script": "tools/study-sweeps.py (WPOC- / WPOC+); the nightly rewrites SWEEPS.json — read the rate there, with n; the Analysis H2 table has the rows"
+       "script": "study-sweeps-book.py",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       }
       },
       {
        "id": "H2.10k",
@@ -1798,7 +2552,11 @@
        "claim": "C-EM ours",
        "corpus": "live only · needs the straddle in the corpus",
        "status": "OPEN",
-       "result": "live in the READ from v15.57; the price corpus has no straddle, so no rate yet — the tap record / API backfill measures it"
+       "result": "live in the READ from v15.57; the price corpus has no straddle, so no rate yet — the tap record / API backfill measures it",
+       "needs": {
+        "corpus": "live",
+        "n": 0
+       }
       },
       {
        "id": "H2.10l",
@@ -1806,9 +2564,15 @@
        "decides": "SIZE",
        "claim": "C30 ours",
        "corpus": "book · day files",
-       "status": "THIN",
+       "status": "WAITING",
        "result": "HVL↓ 1 of 2 · HVL↑ 1 of 2 · MAG↓ 1 of 3 · MAG↑ 1 of 2 over 9 sessions (n under 15 everywhere: thin) — grows with every export",
-       "script": "study-sweeps-book.py"
+       "script": "study-sweeps-book.py",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H2.11",
@@ -1817,8 +2581,19 @@
        "claim": "ours",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "ONL 74.5 · ONH 67.8 · PDL 84.2 · PDH 60.0 pts — the whole range, the prize",
-       "script": "study-sweeps.py"
+       "result": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "script": "study-sweeps.py",
+       "machine": {
+        "file": "SWEEPS",
+        "read": "payoff"
+       },
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts · ONH 54.5 pts · PDL 84.25 pts · PDH 60.0 pts · 290 sessions (284 vendor + 6 couriered) · nightly 2026-09-08",
+       "asOf": "2026-09-08",
+       "by": "nightly"
       },
       {
        "id": "H2.12",
@@ -1828,7 +2603,11 @@
        "corpus": "284d · price",
        "status": "REFUSED",
        "result": "swp 0.559 standalone; no lift over the clock",
-       "script": "model-lodhod.py"
+       "script": "model-lodhod.py",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       }
      ],
      "note": "First read, 79 cells over 20 level types on price, 20 more on the book corpus (thin), none pre-registered. The verdict that matters: the LEVEL'S NAME does not matter — ON, PD, PDC, POC/VAH/VAL, PM, PW, IB, OR are all within chance of a bounce off any fresh low (−7 to +9pp; the two +9s are what 79 cells produce by luck); the CLOCK, the DEPTH and the SPEED do. The node-conditioned version is H6 — the tapereader's whole reason to exist."
@@ -1844,8 +2623,14 @@
        "decides": "LEVEL",
        "claim": "C13 C10",
        "corpus": "tap record",
-       "status": "OPEN",
-       "was": "S-A1"
+       "status": "WAITING",
+       "was": "S-A1",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H3.2",
@@ -1853,7 +2638,13 @@
        "decides": "SIZE",
        "claim": "C3 C4",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H3.3",
@@ -1861,7 +2652,13 @@
        "decides": "SKIP",
        "claim": "C16",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H3.4",
@@ -1869,7 +2666,13 @@
        "decides": "LEVEL",
        "claim": "ours",
        "corpus": "tap record + IF book",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1886,7 +2689,11 @@
        "corpus": "284d · price",
        "status": "SHIPPED",
        "result": "first extreme median 33.5 min · gap 229.5 min",
-       "script": "BASERATES.json"
+       "script": "BASERATES.json",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H4.2",
@@ -1894,7 +2701,13 @@
        "decides": "TIME",
        "claim": "lore",
        "corpus": "284d · price",
-       "status": "READ NEXT"
+       "status": "READY",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H4.3",
@@ -1904,7 +2717,11 @@
        "corpus": "284d · price",
        "status": "SHIPPED",
        "result": "ladder 30/60/90/120/180 on the tab",
-       "script": "BASERATES.json"
+       "script": "BASERATES.json",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H4.4",
@@ -1912,7 +2729,13 @@
        "decides": "TIME",
        "claim": "C10",
        "corpus": "284d + tap record",
-       "status": "READ NEXT"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1929,7 +2752,11 @@
        "corpus": "284d · price",
        "status": "SHIPPED",
        "result": "rng_pts 61.4 · rng_usd 3,072",
-       "script": "BASERATES.json"
+       "script": "BASERATES.json",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H5.2",
@@ -1937,7 +2764,13 @@
        "decides": "TARGET",
        "claim": "ours",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H5.3",
@@ -1945,7 +2778,13 @@
        "decides": "TARGET",
        "claim": "lore",
        "corpus": "284d · price",
-       "status": "READ NEXT"
+       "status": "READY",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -1960,7 +2799,13 @@
        "decides": "TARGET",
        "claim": "C13 ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H6.2",
@@ -1970,7 +2815,11 @@
        "corpus": "284d · price",
        "status": "SHIPPED",
        "result": "gap_min 229.5",
-       "script": "BASERATES.json"
+       "script": "BASERATES.json",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H6.3",
@@ -1980,7 +2829,11 @@
        "corpus": "284d · price",
        "status": "SHIPPED",
        "result": "wick 61.1 mean / 40 median · n=252 · zero-wick days print 0",
-       "script": "BASERATES.json"
+       "script": "BASERATES.json",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       }
       },
       {
        "id": "H6.4",
@@ -1988,7 +2841,13 @@
        "decides": "TARGET",
        "claim": "C15",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H6.5",
@@ -1996,7 +2855,13 @@
        "decides": "TARGET · STOP",
        "claim": "C10 C13 ours",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -2011,7 +2876,13 @@
        "decides": "SIZE",
        "claim": "C-OPEX",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H7.2",
@@ -2019,7 +2890,13 @@
        "decides": "TIME",
        "claim": "lore",
        "corpus": "284d + calendar",
-       "status": "READ NEXT"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "calendar",
+        "n": 30
+       },
+       "nightly": "WAITING · calendar: 0 of 30 event days · ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "H7.3",
@@ -2027,7 +2904,13 @@
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d + ^VIX",
-       "status": "READ NEXT"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "vix",
+        "n": 200
+       },
+       "nightly": "WAITING · vix: 0 of 200 closes · ^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     }
@@ -2049,8 +2932,14 @@
        "decides": "TARGET",
        "claim": "C30",
        "corpus": "94 ep · book",
-       "status": "THIN",
-       "result": "rate flat (H3); extent unread"
+       "status": "READY",
+       "result": "rate flat (H3); extent unread",
+       "needs": {
+        "corpus": "ledger",
+        "n": 40
+       },
+       "nightly": "READY · ledger: 148 taps on hand since 2026-09-03 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "X1.2",
@@ -2058,7 +2947,13 @@
        "decides": "STOP",
        "claim": "C30",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -2073,7 +2968,13 @@
        "decides": "SIZE",
        "claim": "C-OPEX",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "X2.2",
@@ -2081,7 +2982,13 @@
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d · price",
-       "status": "READ NEXT"
+       "status": "READY",
+       "needs": {
+        "corpus": "price",
+        "n": 30
+       },
+       "nightly": "READY · price: 295 sessions on hand since 2025-06-02 — no reader yet; the review writes it · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "X2.3",
@@ -2089,7 +2996,13 @@
        "decides": "SKIP",
        "claim": "lore",
        "corpus": "284d + calendar",
-       "status": "READ NEXT"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "calendar",
+        "n": 30
+       },
+       "nightly": "WAITING · calendar: 0 of 30 event days · ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -2104,7 +3017,13 @@
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d + ^VIX",
-       "status": "READ NEXT"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "vix",
+        "n": 200
+       },
+       "nightly": "WAITING · vix: 0 of 200 closes · ^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "X3.2",
@@ -2112,7 +3031,13 @@
        "decides": "TARGET",
        "claim": "ours",
        "corpus": "11d · book",
-       "status": "THIN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "book",
+        "n": 30
+       },
+       "nightly": "WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       }
      ]
     },
@@ -2127,7 +3052,13 @@
        "decides": "SIZE",
        "claim": "C28",
        "corpus": "tap record",
-       "status": "OPEN"
+       "status": "WAITING",
+       "needs": {
+        "corpus": "tap",
+        "n": 40
+       },
+       "nightly": "WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91) · nightly 2026-09-08",
+       "asOf": "2026-09-08"
       },
       {
        "id": "X4.2",
@@ -2136,7 +3067,11 @@
        "claim": "lore",
        "corpus": "284d ES + NQ",
        "status": "READ",
-       "result": "xdiv in the model; event read pending"
+       "result": "xdiv in the model; event read pending",
+       "needs": {
+        "corpus": "nq",
+        "n": 30
+       }
       }
      ]
     }
@@ -2144,16 +3079,18 @@
   }
  ],
  "counts": {
-  "studies": 195,
+  "studies": 184,
   "byStatus": {
-   "THIN": 36,
-   "READ NEXT": 18,
-   "OPEN": 89,
-   "REGISTERED": 8,
+   "THIN": 12,
+   "WAITING": 111,
+   "REGISTERED": 10,
+   "READY": 15,
    "SHIPPED": 13,
+   "CUT": 2,
    "REFUSED": 3,
-   "READ": 26,
-   "DRAFT": 2
+   "READ": 15,
+   "NULL": 2,
+   "OPEN": 1
   }
  }
 }

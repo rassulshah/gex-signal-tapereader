@@ -26,7 +26,7 @@ and scored. Two stages that use two definitions of the same thing produce number
 | link | what happens | who | writes | tab |
 |---|---|---|---|---|
 | **1 · CAPTURE** | every bar's book (the whole tape, every market), every tap with its stamp, every read the face shows with its inputs, his items and requests — and the day file itself, written by the panel after the close (v15.71) | the panel, live | `data/<day>.json` · `data/tape/<day>/` · IndexedDB | Dashboard |
-| **2 · ANALYSIS** | every tap counted by class against the three outcomes — held (10 bars) · TURN (the node was the session's HOD / LOD) · RESUME (the trend went on to a new extreme) — with n and a Wilson bound; every study whose number the count can answer gets it | the nightly, on his machine, within ~10 minutes of the day file (the panel's own write after the close, or his 💾) | `learning/log/<day>.json` · `results.json` · `studies.json` | Analysis · Testing ⑦ |
+| **2 · ANALYSIS** | every tap counted by class against the three outcomes — held (10 bars) · TURN (the node was the session's HOD / LOD) · RESUME (the trend went on to a new extreme) — with n and a Wilson bound; every study whose number the count can answer gets it; (v15.90) every corpus counted and every other study told WAITING (have / need / ETA) or READY | the nightly, on his machine, within ~10 minutes of the day file (the panel's own write after the close, or his 💾) | `learning/log/<day>.json` · `results.json` · `studies.json` | Analysis · Testing ⑦ |
 | **3 · TESTING** | a claim written BEFORE the data it will be judged on (predict + refuteIf), read ONCE at its minimum n, on sessions after its date, against the base rate and a shuffle null; the gate — can the scorer fail | the nightly (the check every night, the read once) · the review (writes the claims; the machine drafts them from reads that clear the bar) | `learning/register.json` · the log's verdicts | Testing ① ② |
 | **4 · LEARNING** | what survived: the rules with the record's verdict beside them (agrees · contradicts · thin · not measured), the taught examples re-checked, the blind calls, the gauge | the nightly (the verdicts) · the review and the operator (the rules, the teaching) | `learning/deflections/examples.json` · `LEARNING.md` | Learn |
 | **5 · REC** | proposals TO the operator — from the nightly (pre-registered conditions: a class clear of the base at n ≥ 15; a rule the record contradicts; a hypothesis cleared) and from the review — with their evidence; his ✓ / ✗ rides the next day file; the machine never changes a rule's status, the operator never has to write one | the nightly · the review · **the operator decides** | `learning/recommendations.json` · the day file's `reco` | Rec |
@@ -66,6 +66,14 @@ An element without a degree is a bug: `design/DASHBOARD-INVENTORY.md` is the ele
 8. Every file the panel fetches rides the installer; every new assertion is mutation-tested; after an install, the live panel is probed.
 9. Nothing on the face changes except through Rec — a ✓, then a build that marks the row IMPLEMENTED with its version.
 10. Every market-specific number lives in `learning/markets.json`; adding a market is a configuration entry, never a restructure.
+11. (v15.90) **The registry's statuses and its scripted sentences are the machine's.** Every study carries `needs:{corpus, n}`;
+    the nightly counts every corpus it names (`coverage.json` counts) and sets **WAITING** (have / need / an ETA at the
+    record's own rate) or **READY** (data on hand, no reader yet) on every row it has no number for; a row with a
+    `machine` spec gets its sentence composed from its file every night (SWEEPS.json, the day files' feature outcomes) —
+    the review writes the QUESTION and the reason for a NULL, never a number that a file can write. A hypothesis the
+    review withdraws stays on the register with the date and the reason, said by the nightly, never counted again.
+12. (v15.90) **A corpus that appends, appends everywhere.** The base rates and the sweep tables read the same couriered
+    days (the RTH files and the night files); a study whose corpus stops while its sibling's grows is a bug, not a state.
 
 ## 4 · The markets
 
@@ -75,11 +83,15 @@ give price), the units (a tolerance is a number in the book's own points) and th
 1-minute bars, so the HOD/LOD statistics can be built the way ES's were once a corpus accrues; the node ladder needs a
 gamma book source (for gold: a GLD chain or a Skylit GLD ladder), to be confirmed before it is promised.
 
-## 5 · The eight tabs — the final set
+## 5 · The nine tabs — the final set (eight until 2026-09-09; the ninth is his)
 
-Dashboard (act) · 📊 Analysis (ask and read) · 🧪 Testing (trust and promote) · 📚 Learn (what we know) · 💡 Rec (what to
-change, yours to approve) · ⚙ Architecture (the how) · 🗺 Roadmap (the plan) · 📌 Open Items (your issues and questions).
-No ninth tab: a new need becomes a section of one of these.
+Dashboard (act) · 🗄 **Data** (what we hold — link 1 counted: every session on GitHub, the sources live, the record on this
+machine, what the studies wait for with have / need / an ETA, the gaps and what Yahoo can fill, the pipeline's clock, the
+DATA rows of Rec; read-only, no claims — his ask 2026-09-09, *"i want you to build a data tab and place it before the
+analysis tab"*, built as v15.89) · 📊 Analysis (ask and read) · 🧪 Testing (trust and promote) · 📚 Learn (what we know) ·
+💡 Rec (what to change, yours to approve) · ⚙ Architecture (the how) · 🗺 Roadmap (the plan) · 📌 Open Items (your issues
+and questions). No tenth tab: a new need becomes a section of one of these. (This file said "no ninth tab" until v15.90;
+the Data tab was built on his instruction a build before the structure file was changed — LESSONS v15.90.)
 
 ## 6 · The files that carry the process, in one place
 

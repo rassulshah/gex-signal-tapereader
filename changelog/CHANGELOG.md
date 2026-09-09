@@ -1,3 +1,70 @@
+## v15.90 — THE LEARNING PROCESS, HARDENED ("yes, fix everything") + THE LIST ATLAS DRAWS IN THE IRT FILE ("we need to match atlas … FRONT")
+
+> Operator, 2026-09-09: **"Im looking for you to harden the learning process. Did you integrate the data tab into the
+> learning process (ie data, analysis, testing, learning, recommendations etc.) I want you to make sure the entire
+> learning process makes sense and fine tune it. also consider if there are any pieces of it that dont make sense and are
+> useless like studies that are useless or pointless. Basically ensure that it is refined, targetted and usefull so that
+> the learning process from data collection, analysis, testing and all the other steps are on point with my
+> objectives/purpose … Also did you update the architecture and the road map. is everything upto date."** After the
+> audit: **"yes, fix evertyhing and make sure it all makes sense and is integrated and working together and aligned to
+> my objectives/purpose. make sure you fix any and all issues."** And, mid-build, on the ES1 chart's "7658 — 100%" the
+> file did not carry: **"why do i not see the 7658 in irt .. are you exporting it"** → **"we need to match atlas. are you
+> saying that the level was a derived level"** → **"FRONT"** (his chart's expiration selector).
+
+**THE AUDIT (recorded in full in session-state/AUDIT-2026-09-09.md).** Nine findings: the sweep corpus frozen on 08-21 (H7
+at n = 0 for thirteen sessions); withdrawn numbers on the Analysis tab (H2.4 / H2.5 still quoting the pre-F-23 lifts);
+thirteen studies asking one question with one answer (no named level beats a fresh-low bounce); two studies comparing
+against a field no feed carries; a stalled register (H5 "ready" at the ledger's size, H6 months away, H7 dead premise);
+the Learn rules at 0 agree; his ✓ / ✗ on Rec never used; 104 of 195 studies waiting on the unbuilt tap record with nothing
+saying how much of any corpus a row had; 18 READ NEXT rows with the data on disk for weeks.
+
+**(1) The sweep corpus appends.** `append-futures.py` writes the night — 17:00 CT the evening before → 08:27 — to
+`data/futures/<MK>/<day>-night.csv` beside the RTH file (a stub under 200 minutes is not written: GC / CL and pre-v1.19 NQ
+carry no night); `study-sweeps.py` reads the vendor file + every CSV through `sources()` / `load_all(paths)`, one source
+per day (the vendor's wins), **the prior day's levels only from the prior trading day (the four-day gap rule)** and the
+prior ISO week or the one before it; `study-hodlod` skips the night files; the nightly refreshes SWEEPS.json from every
+source and judges H7 from it. **The sweep corpus: 290 sessions = 284 vendor + 6 couriered (08-31 → 09-08), one more a
+night from here.** `corpus.sources` and `yahooFirst` carry the provenance.
+
+**(2) The registry is the machine's output.** Every study carries `needs:{corpus, n}` (derived from its corpus sentence
+in `studies-seed.py`); `coverage.py` counts every corpus the registry names — price 295 · nq 195 · sweeps 290 · book 13 ·
+ledger 148 taps · kingroll 170 rows · gate 231 · tap 0 (not recorded) · vix 0 · calendar 0 — with a per-session rate;
+`results.py` sets **WAITING** (have / need / ~N sessions at the record's rate) or **READY** (data on hand, no reader
+yet) on every row it has no number for, composes the scripted rows' sentences from SWEEPS.json every night (the level
+table, the clock, the shape, the acceptance, the payoff, PDC) and reads `dir.kingRoll` from the day files' feature
+outcomes (D3.3: 60% n=170, per-bar rows); a NULL row keeps the review's reason with the machine's table under it; a
+machine sentence never outlives its newer line. **184 studies: WAITING 111 · READY 15 · READ 15 · THIN 12 · SHIPPED 13 ·
+REGISTERED 10 · REFUSED 3 · NULL 2 · CUT 2 · OPEN 1 (live only).** The thirteen level-name studies are **H2.L, NULL** —
+"36 named levels: 2 clear the fresh-low control (PDC− +8pp n=119, POC+ +8pp n=97) — about what 36 cells produce by chance";
+PDC keeps its own provisional row; **S1.4 / S7.3 CUT** (no feed carries a nodeType); **H7 WITHDRAWN** on the register with
+the date and the reason (F-23 removed its premise; one event per three sessions), said by the nightly, never counted;
+**H5 judged by its join** — 0 of 3 extremes since 09-03 coincide with a ledger tap (the day's extreme is the open more
+often than not; the ±0.50 ledger is not where it reads) — BLOCKED with the join's own n, never "ready" from the ledger's
+size. The Analysis tab colours the new statuses; the read-next queue and Testing ⑤ speak READY; the Data tab's ④ reads the
+rows' needs and the file's counts (have · need · ETA · waiting · ready · read).
+
+**(3) The docs say what runs.** `DATA-ANALYSIS-PROCESS.md` §5 nine tabs (it said "no ninth tab" a build after the ninth
+was built), rules 11–12 (the registry's statuses and sentences are the machine's; a corpus that appends, appends
+everywhere); `PROCESS.md` stage ④ is the nightly's real step list, §4 is today's honest state, §5's backlog marks what
+v15.89 / v15.90 built and adds "a reader per READY row"; `plan-seed.py`: the nightly and the corpus components; the
+roadmap — 15.89 shipped, **15.90 this, 15.91 the tap record, 15.92 seasonality**, the rest +1.
+
+**(4) D-KING · D2..D5 — the list Atlas draws.** ES has no option book: every level on the ES1 chart is Skylit's projection
+of the SPY / SPXW / SPX books, MERGED into one node list per expiration; its top node (7658 that morning) is neither the
+SPXW King converted (7655.50) nor the SPY King (7650.00). The observer keeps the FRONT-window payload (one expiration —
+his selector) in `LASTFUTDER_FRONT`; `futDerFrontList` ranks the merged slice by |dollars| with the % against the list's
+own largest, signed; the export writes **D-KING (white, 2) · D2..D5 (grey, 1)** on the futures symbol only, on ES and NQ,
+held day-scoped like the G rows; `__gptsDebug.futDerRows('ES1')` prints the payload's rows and slices to hold against his
+chart after the install.
+
+**Tests.** `test_v1590.js` 51 (§1 the D rows on a fixture of the 09-09 shape, the FRONT keep, the ranking, the hold, the
+hook; §2 the append-futures and study-sweeps selftests, the wiring, the committed SWEEPS.json, H7 / H5 in the log, the
+register row; §3 the registry: 184 rows with needs, the statuses, H2.L, PDC, the cuts, D3.3, WAITING / READY lines, the
+counts, the panel) · 8/8 panel mutants · 6/6 Python mutants (the gap rule, the vendor-wins rule, the post-close drop,
+have < need, keepResult, the tap count) · selftests in `append-futures.py`, `study-sweeps.py`, `results.py`, `coverage.py`,
+`origin-guard.py` · 16 tests re-pinned to the appended corpus, the collapsed ids, the machine's statuses, the D rows and
+the version. **The suite: 170 files · 165 green · 5 red** (the five permanent). Companion unchanged (v1.19).
+
 ## v15.89 — THE 🗄 DATA TAB: what we hold, what the studies need, what is missing (and what Yahoo can fill) — mockup B, with the recommendations section
 
 > Operator, 2026-09-09: **"i want you to build a data tab and place it before the analysis tab. Tell me what should the

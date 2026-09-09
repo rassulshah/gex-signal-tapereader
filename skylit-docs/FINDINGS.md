@@ -922,3 +922,36 @@ WITHDRAWN and rewritten; the number to quote is the file's, with its n.
 (the clock's lift is gone — within chance); flush past 8 pts 40% n=86 vs 24% → **35% n=94 vs 23%**; slow reclaim 6–30 bars 40%
 n=90 vs 24% → **32% n=96 vs 23%**; the shallow quick poke NOT the extreme 86% n=228 → **89% n=246**. Two of F-14's three
 conditions survive at about +10pp; the third does not. The ⓪a read quotes the table live, so it already says so.
+
+## F-24 · THE SWEEP CORPUS HAD STOPPED ON 2026-08-21 WHILE THE BASE RATES GREW; ON THE APPENDING CORPUS 2 OF 36 LEVEL NAMES CLEAR THE CONTROL — WHAT 36 CELLS PRODUCE BY CHANCE (2026-09-09)
+
+**Status: CONFIRMED (a wiring fact, found by the audit of 2026-09-09; fixed in v15.90) · the level-name table PROVISIONAL, re-read
+nightly by the machine (H2.L).**
+
+**What it was.** `study-sweeps.py` read the vendor file only (284 sessions through 08-21) while `study-hodlod.py` read the
+vendor plus the couriered CSVs (295); the couriered CSVs carried RTH only, so the sweep study — which needs the night for
+ONH / ONL / Asia / London — could not have appended even if pointed at them. Every H2 rate on the Analysis tab stood on
+284 sessions for two and a half weeks, and H7 on the register, pre-registered to read "on sessions after 08-21", counted
+**n = 0 after thirteen sessions**: not thin, impossible. The register said THIN.
+
+**What was done (v15.90).** The nights ride `data/futures/<MK>/<day>-night.csv` (17:00 the evening before → 08:27, keyed by
+the session day; a stub under 200 minutes is not written); the sweep study reads the vendor file + every CSV, one source
+per day (the vendor's wins), the prior day's levels only from the prior trading day (four calendar days), the prior week
+from the prior ISO week or the one before. **290 sessions = 284 vendor + 6 couriered (08-31 → 09-08)**, one more a night.
+
+**The level-name table on the appending corpus (the machine's sentence, H2.L):** 36 named levels; **2 clear the fresh-low
+control — PDC− 29% n=119 vs 21% (+8pp) and POC+ 26% n=97 vs 17% (+8pp) — about what 36 independent cells produce by chance
+(≈0.9 expected at one-sided 2.5%)**; the interior levels (OR5 / OR15, the VWAP bands, the developing profile) are worse
+than a bounce at nothing by construction; every other name within chance. F-14 and F-23 stand: **the level's NAME does
+not matter; the sweep's SHAPE does** — deep (> 8 pts) 35% n=94 vs 23%, the flush (reclaim in 6–30 bars) 32% n=96 vs 23%,
+the shallow quick poke 11% n=249 vs 21%. PDC is the one name kept on its own row (provisional) because its CI clears the
+control; if it still clears it after a quarter of appended sessions, it earns a register row — not before.
+
+**What was withdrawn with it.** H7 (the early ON/PD sweep-reclaim) — its premise died with F-23 (21% n=249 vs 18%, inside
+chance) and its count accrued one event per three sessions; withdrawn on the register with the date and the reason,
+never edited, never counted. H5's "READY at n=141" — 141 was the ledger's size; the join, written and run, finds 0 of 3
+extremes since 09-03 coinciding with a ledger tap (the day's extreme is the open more often than not): BLOCKED with its
+own n; the tap record is where it reads.
+
+**Not superseded:** F-14 (stronger), F-23 (stands). **Rule from it:** a corpus's session count is on the Data tab beside its
+siblings'; two counts that should move together and do not are the finding.

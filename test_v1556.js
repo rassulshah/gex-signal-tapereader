@@ -113,7 +113,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8'));
   const flat=[]; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>ss.studies.forEach(x=>flat.push(x))));
   const f=flat.find(x=>x.id==='H2.10f'), g=flat.find(x=>x.id==='H2.10g');
-  ok(f && f.status==='THIN' && /BOOK CORPUS \d+ sessions/.test(f.result) && /AT a top-5 node \/ the King \d+% n=\d+ vs NOT at a node \d+% n=\d+/.test(f.result),'4e H2.10f carries the book numbers, thin, with n on every rate');
+  ok(f && (f.status==='THIN' || f.status==='WAITING') && /BOOK CORPUS \d+ sessions/.test(f.result) && /AT a top-5 node \/ the King \d+% n=\d+ vs NOT at a node \d+% n=\d+/.test(f.result),'4e H2.10f carries the book numbers, thin, with n on every rate (v15.90: WAITING while the book corpus is under 30)');
   ok(g && g.status==='REGISTERED' && /H6/.test(g.result),'4f H2.10g is the sweep × node table, registered as H6');
 }
 

@@ -131,6 +131,39 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.90 — a corpus can stop growing in silence; a status the machine did not set is a wish; the structure file lagged the structure
+(1) **The sweep corpus stopped on 2026-08-21 and nothing said so for thirteen sessions.** The base-rate study read the
+couriered days (295) while the sweep study read the vendor file only (284); H7, registered to read "on sessions after
+08-21", counted zero events — and the register said THIN, which reads as "not yet" rather than "never". Two studies on
+one corpus with two loaders is the F-23 pattern in a new place (one definition end to end); and a hypothesis whose n
+does not move in a week is a bug report, not patience. Rule: the counts of every corpus are on the Data tab now (④), and
+`needs` on every row — a THIN row whose have does not move IS the finding. Withdrawn: nothing (the numbers were right;
+the corpus was short).
+(2) **H5 had been "READY — the join can be run" for a week, at n = 141.** 141 was the ledger's size; the join had never
+been written, so "ready" meant nothing was ready. Written and run: 0 of 3 extremes since 09-03 coincide with a ledger
+tap. Rule: a status the machine did not compute is a wish, and the panel must not print one ("READY" now comes only
+from `results.py`, with the count it stands on).
+(3) **H2.4 and H2.5 quoted numbers F-23 had withdrawn the day before** — on the Analysis tab, under "by the nightly" rows
+that were in fact typed by the review. A hand-typed sentence beside a machine-written file goes stale the first night.
+Rule: a scripted row's sentence is composed from its file (`machine` spec), every night; the review writes the question.
+(4) **Thirteen studies for one answer.** Each level name got a row as it was added (his levels, my rows), and each row
+repeated "within chance of the control". A registry that grows a row per label is a list, not a set of questions. Rule:
+before adding a study, ask whether an existing row already answers it — and when a family of rows shares one answer,
+collapse them into the answer (H2.L) and keep the ids in `was`.
+(5) **`DATA-ANALYSIS-PROCESS.md` said "no ninth tab" for a build after the ninth tab shipped.** The file says "change it
+only with the operator, and record why in LESSONS"; the operator asked for the tab, and I changed the panel, the plan
+and the roadmap — and not the structure file. Same failure as v15.72's comment-vs-code: the record that claims to be
+the structure lagged the structure. Rule: a doc that pins a count (eight tabs, seven links, ten rules) is edited in the
+same build that changes the count — the test that pinned "no ninth" (test_data_analysis_process d6) was the only
+reason it was found, and it was found a build late.
+(6) **The IRT file did not carry the level he looks at most on the ES chart.** v15.81 converted each book's King one
+strike at a time at Skylit's ratio ("match Skylit's own ES1 prices") — and Atlas draws its MERGED derived list, whose
+top node (7658) is neither King's conversion. "Match Skylit" was read as "use Skylit's price for our rows"; he meant
+"put on my chart what Atlas puts on its chart". Rule: when the operator says match, export what the other screen
+DRAWS, then verify against that screen (the `futDerRows` hook exists for exactly this; use it after the install).
+(7) His ✓ / ✗ on Rec has never been exercised (0 / 0 after 24 implemented rows) — every decision was made in chat and
+the row marked at build. A mechanism that has a test and no use is unproven. To do: one real ✓ at the open.
+
 ### v15.89 — a tab is not built until it is rendered; the guard could not see what the cloud never had; origin moves while I build
 (1) **The Data tab's first render was bare.** I drew it on `tabHeader` / `tabSection` (the Analysis chrome) and the
 mockup's table / note styles are scoped to `.g3pan` (the Rec / Items chrome — `panOpen`). Every test passed: the harness

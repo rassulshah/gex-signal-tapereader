@@ -77,8 +77,12 @@
    "judgedBy": "nightly",
    "predict": "printed > 24%",
    "refuteIf": "printed <= 18% or the CI covers the fresh-low control",
-   "note": "found at 27% (n=180) vs an 18% control on sessions BEFORE 2026-08-22 (tools/study-sweeps.py). Read again ONLY on sessions after it, by the nightly, with the same definitions.",
-   "since": "2026-08-21"
+   "note": "found at 27% (n=180) vs an 18% control on sessions BEFORE 2026-08-22 (tools/study-sweeps.py). Read again ONLY on sessions after it, by the nightly, with the same definitions. · (v15.90) WITHDRAWN 2026-09-09 by the review, see withdrawn.why; the row stays, never edited, never counted.",
+   "since": "2026-08-21",
+   "withdrawn": {
+    "on": "2026-09-09",
+    "why": "F-23 (v15.88): the corpus’s ONH / ONL looked ahead; corrected, the first 30 minutes read 21% n=249 vs an 18% control — inside chance, so the premise is gone; and its count accrues about one event per three sessions (60 would take a year)"
+   }
   },
   {
    "id": "H8",

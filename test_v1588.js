@@ -36,7 +36,7 @@ eval(ex('futDayKeyNum')); eval(ex('futDayKeyOf')); eval(ex('futSessionBars')); e
   const W=JSON.parse(fs.readFileSync('./data/es-1min/SWEEPS.json','utf8')); const L=W.lookup.level;
   ok(['ALO','AHI','LLO','LHI'].every(k=>L[k] && L[k].n>=100) && !L.LDNL && !L.LDNH, '1g SWEEPS.json (the corpus, 284 sessions) has the four by name with n ≥ 100', ['ALO','AHI','LLO','LHI'].map(k=>L[k]&&L[k].n));
   const ss=fs.readFileSync('./tools/study-sweeps.py','utf8'); ok(/asia = \[b for b in on if b\[0\] >= NIGHT or b\[0\] < LONDON\]/.test(ss) && /night = \[b for b in on if b\[0\] >= NIGHT or b\[0\] < RTH_A\] or on/.test(ss), '1h the corpus study: the Asia window, and (F-23) the night is BEFORE the session — the post-close bars are out of ONH / ONL');
-  ok(L.ONL.n===125 && Math.round(100*L.ONL.rate)===22 && L.ONH.n===154, '1i F-23: ONL 22% n=125 (was 29% n=113 with the look-ahead), ONH n=154 (was 140)', [L.ONL.n, L.ONL.rate, L.ONH.n]);
+  ok(L.ONL.n>=125 && Math.round(100*L.ONL.rate)<=22 && L.ONH.n>=154, '1i F-23: ONL ≤22% n≥125 (was 29% n=113 with the look-ahead), ONH n≥154 (was 140) — the corpus appends since v15.90, so ≥', [L.ONL.n, L.ONL.rate, L.ONH.n]);
   const fnd=fs.readFileSync('./skylit-docs/FINDINGS.md','utf8'); ok(/^## F-23 · THE CORPUS'S ONH \/ ONL LOOKED AHEAD/m.test(fnd) && /PARTLY SUPERSEDED by F-23/.test(fnd), '1j FINDINGS: F-23 written, F-14 flagged partly superseded');
 }
 

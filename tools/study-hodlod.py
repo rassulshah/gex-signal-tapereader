@@ -469,7 +469,7 @@ def market_sources(market):
             if os.path.exists(c):
                 src.append(c)
                 break
-    src += sorted(glob.glob(os.path.join('data/futures', market, '*.csv')))
+    src += sorted(p for p in glob.glob(os.path.join('data/futures', market, '*.csv')) if not p.endswith('-night.csv'))   # (v15.90) the night files are the sweep study's
     return src
 
 

@@ -491,60 +491,68 @@
    "v": "15.89",
    "title": "THE 🗄 DATA TAB, before Analysis — his ask 2026-09-09 (\"a snapshot summary of the data we currently have, what we need for the studies, recommendations and more. If there is missing data that we can obtain from yahoo, it should mention that\"; mockup B chosen, \"I also want recommendations section\"): ① coverage per session (six signals, counted by the nightly — learning/coverage.json) ② the sources live ③ the record on this machine (localStorage against its quota, the IndexedDB stores) ④ what the studies are waiting for, by corpus, have / need ⑤ the gaps and what Yahoo can fill (R-33 daily bars · R-34 hourly backfill · R-35 ^VIX1D proposed) ⑥ the pipeline’s clock ⑦ the DATA recommendations from Rec; read-only, no claims",
    "serves": "the loop — knowing what the record holds before asking it a question; his \"When will learning occur\"",
-   "status": "next",
+   "status": "shipped",
+   "shipped": "2026-09-09",
    "done": "the tab renders from the live stores and the nightly’s coverage file; the three Yahoo recommendations sit on Rec for his ✓ / ✗; test_v1589"
   },
   {
    "v": "15.90",
-   "title": "THE TAP RECORD — NEXT BUILD, his word 2026-09-09 (\"your recommendation\" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 110 registry studies whose corpus is the tap record read from it; H11 registered the day it starts",
-   "serves": "HOD/LOD · PULLBACK · 110 studies · his question: what makes a gamma level deflect",
+   "title": "THE LEARNING PROCESS, HARDENED — his ask 2026-09-09 (\"harden the learning process … make sure the entire learning process makes sense and fine tune it … studies that are useless or pointless … refined, targeted and useful\"; \"yes, fix everything\"): (1) the sweep corpus APPENDS like the base rates (the nights → <day>-night.csv; study-sweeps reads the vendor + every CSV; H7 had read n = 0 for thirteen sessions) (2) THE REGISTRY IS THE MACHINE'S OUTPUT — every study carries needs:{corpus, n}; the nightly counts every corpus (coverage.json counts) and sets WAITING (have / need / an ETA at the record's rate) or READY (data on hand, no reader); the scripted sentences are composed from SWEEPS.json nightly (H2.4 / H2.5 had shown numbers F-23 withdrew); the thirteen level-name studies collapsed into H2.L (NULL — no name beats a fresh-low bounce); S1.4 / S7.3 CUT (no feed carries a nodeType); D3.3 read from the day files' King-roll rows; H5 judged by its join (0 of 3 extremes coincide with a ledger tap — the tap record is where it reads), H7 WITHDRAWN (its premise died with F-23) (3) the process docs say what runs — nine tabs, the nightly's real steps (4) THE LIST ATLAS DRAWS on the futures chart in the IRT file — D-KING · D2..D5 from the FRONT window's merged derived list (\"we need to match atlas … FRONT\")",
+   "serves": "the loop, honest about what it holds and what it can read — his \"When will learning occur\"",
+   "status": "next",
+   "done": "no OPEN / READ NEXT row without a machine status; the sweep corpus grows by a session a night; H7 says withdrawn; the D rows match the 7658 on his chart; test_v1590"
+  },
+  {
+   "v": "15.91",
+   "title": "THE TAP RECORD — NEXT BUILD, his word 2026-09-09 (\"your recommendation\" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 104 registry studies whose corpus is the tap record (WAITING on it since v15.90) read from it; H11 registered the day it starts",
+   "serves": "HOD/LOD · PULLBACK · 104 studies · his question: what makes a gamma level deflect",
    "status": "later",
    "done": "the design agreed one element at a time; 40 taps per cell and the first F-study reads from them with n, beside the midpoint control"
   },
   {
-   "v": "15.91",
+   "v": "15.92",
    "title": "SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six",
    "serves": "HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered",
    "status": "later",
    "done": "mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine"
   },
   {
-   "v": "15.92",
+   "v": "15.93",
    "title": "the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join",
    "serves": "PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'",
    "status": "later",
    "done": "30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope"
   },
   {
-   "v": "15.93",
+   "v": "15.94",
    "title": "score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured",
    "serves": "HOD/LOD · the loop closes",
    "status": "later",
    "done": "a scored READ line exists in a nightly log and renders on Testing ③ with its n"
   },
   {
-   "v": "15.95",
-   "title": "the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study",
+   "v": "15.96",
+   "title": "the nightly reads one READY study per night and writes it back (v15.90 made READY the machine's word; the readers are still the review's) · TRACK → DRAFT study",
    "serves": "the loop closes on its own",
    "status": "later",
    "done": "a study changes status without a human editing the seed"
   },
   {
-   "v": "15.96",
+   "v": "15.97",
    "title": "one definitions file (Python + panel) · the shipped-artifact test",
    "serves": "hardening",
    "status": "later",
    "done": "changing a bin in one place fails the suite until the other side follows"
   },
   {
-   "v": "15.97",
+   "v": "15.98",
    "title": "the face manifest — every number on the face names its study, pinned by a test",
    "serves": "data-driven, enforced",
    "status": "later",
    "done": "a new number on the face without a study fails the suite"
   },
   {
-   "v": "15.98",
+   "v": "15.99",
    "title": "the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move",
    "serves": "PULLBACK",
    "status": "later",
@@ -597,7 +605,7 @@
     "id": "nightly",
     "name": "THE NIGHTLY — tools/nightly/run.py (+ tick.py, patterns.py, results.py, tape.py)",
     "where": "his machine — the 'GEX nightly' Windows task (setup-gex-nightly.bat → tools/gex-nightly.bat, hidden, every 10 minutes; tick.py runs it only when the newest day file is newer than its log; Python 3 on the PATH) — and the cloud when I am in a session; no other model, no API",
-    "does": "reads the register and every day file: verdicts per hypothesis read ONCE at minN, the pattern table (held rate by setup × book, and from v15.69 the objective outcomes turn / resume from the day's own bars), the tape coverage, the refreshed sweep tables, (v15.87) the futures corpus appended from the last four day files and ES / NQ BASERATES rebuilt, new TRACK requests and items copied; (v15.87) tick.py also re-runs it when an installer has pasted older outputs over its log — by mtime, and by results.json's asOf against the log's day (2026-09-08: three installers after the 15:05 run put the 09-07 outputs back on GitHub); writes learning/log/<day>.json (ranOn: his machine / cloud) and then the study registry — every study whose number the log can answer gets it (results.py → learning/results.json, studies.json patched in place: result · status · by:'nightly' · asOf; a thin row keeps the review's sentence and shows the count so far) and the Learn tab's rules (each rule's class, its numbers, the record's verdict — agrees / contradicts / thin)",
+    "does": "reads the register and every day file: verdicts per hypothesis read ONCE at minN, the pattern table (held rate by setup × book, and from v15.69 the objective outcomes turn / resume from the day's own bars), the tape coverage, the refreshed sweep tables, (v15.87 / v15.88) the futures corpus appended from EVERY day file (RTH → <day>.csv; from v15.90 the nights → <day>-night.csv) and ES / NQ BASERATES rebuilt, (v15.90) the sweep corpus refreshed from the vendor file + every CSV (SWEEPS.json appends like the base rates), (v15.89) the record counted — learning/coverage.json (every day file's signals, the corpora, and from v15.90 every corpus the registry names: have · per-session rate), new TRACK requests and items copied; (v15.87) tick.py also re-runs it when an installer has pasted older outputs over its log — by mtime, and by results.json's asOf against the log's day (2026-09-08: three installers after the 15:05 run put the 09-07 outputs back on GitHub); writes learning/log/<day>.json (ranOn: his machine / cloud) and then the study registry — every study whose number the log can answer gets it (results.py → learning/results.json, studies.json patched in place: result · status · by:'nightly' · asOf; a thin row keeps the review's sentence and shows the count so far; (v15.90) the scripted rows' sentences composed from SWEEPS.json and the day files' feature outcomes, and EVERY other row set WAITING — have / need / an ETA from coverage.json's counts — or READY — data on hand, no reader yet; H5 judged by its join; a withdrawn hypothesis said, never counted) and the Learn tab's rules (each rule's class, its numbers, the record's verdict — agrees / contradicts / thin)",
     "cadence": "within ~10 minutes of the day file (the task); the sync pushes it ≤ 2 minutes later; the panel re-fetches the registry and the log on its 10-minute check or a reload",
     "owner": "his machine · cloud"
    },
@@ -613,7 +621,7 @@
     "id": "corpus",
     "name": "THE CORPORA — data/es-1min/ (the vendor's ES 284 sessions through 2026-08-21 and, from v15.88, its NQ 188 through 2026-08-27 — one contract each) + data/futures/<ES|NQ|GC|CL>/<day>.csv (the courier's Yahoo minutes, the continuous front month, from 2026-08-24) → BASERATES.json per market (ES 295 · NQ 195 on 2026-09-08)",
     "where": "the repo, written by the nightly (v15.87)",
-    "does": "the HOD/LOD tables: study-hodlod pools the vendor sessions and the Yahoo days with each session's source recorded (a day both hold comes from the vendor; the overlap is reported per market — ES none, NQ four days 08-24 → 08-27 read side by side: the clocks and extremes identical, the 08:27 open 0.5–7.5 pts apart); the sweep corpus (study-sweeps.py, ES 284) cuts the night at 17:00 → the open (F-23) and carries the Asia / London sessions and the weekly POC, on the tool grid (3-minute bars stamped by end, the open = the bar ending 08:30); ES 295 sessions and NQ 11 as of 2026-09-08, one more each session; the panel's boot literal is re-baked from the file at build time (tools/bake-hodlod.py) and the companion couriers the live file over it",
+    "does": "the HOD/LOD tables: study-hodlod pools the vendor sessions and the Yahoo days with each session's source recorded (a day both hold comes from the vendor; the overlap is reported per market — ES none, NQ four days 08-24 → 08-27 read side by side: the clocks and extremes identical, the 08:27 open 0.5–7.5 pts apart); the sweep corpus (study-sweeps.py — ES 284 vendor sessions + the couriered sessions whose night the courier holds, 290 on 2026-09-09, one more a night since v15.90) cuts the night at 17:00 → the open (F-23), takes the prior day's levels only from the prior trading day (the four-day gap rule) and carries the Asia / London sessions and the weekly POC, on the tool grid (3-minute bars stamped by end, the open = the bar ending 08:30); ES 295 sessions and NQ 11 as of 2026-09-08, one more each session; the panel's boot literal is re-baked from the file at build time (tools/bake-hodlod.py) and the companion couriers the live file over it",
     "cadence": "nightly, after the day file (the newest day completes from the next day's courier window)",
     "owner": "his machine (the nightly) · the cloud at build time (the bake)"
    },

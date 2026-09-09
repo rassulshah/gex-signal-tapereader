@@ -75,7 +75,7 @@ const code=src.split('\n').filter(l=>!l.trim().startsWith('//')).join('\n');
   const logs=fs.readdirSync('learning/log').filter(f=>/^2026-\d\d-\d\d\.json$/.test(f)).sort();
   const last=JSON.parse(fs.readFileSync('learning/log/'+logs[logs.length-1],'utf8'));
   ok(last.schema===2 && Array.isArray(last.hypotheses) && typeof last.preopen==='string','12c ...in schema 2: verdicts + a pre-open line',Object.keys(last));
-  ok(last.hypotheses.every(h=>['thin','cleared','refused','blocked','ready'].indexOf(h.verdict)>=0),'12d every verdict is one of thin/cleared/refused/blocked/ready');
+  ok(last.hypotheses.every(h=>['thin','cleared','refused','blocked','ready','withdrawn'].indexOf(h.verdict)>=0),'12d every verdict is one of thin/cleared/refused/blocked/ready/withdrawn (v15.90)');
   ok(last.hypotheses.filter(h=>h.verdict==='thin').every(h=>h.rate===undefined),'12e a THIN hypothesis has NO rate printed — read once, at minimum n');
 }
 

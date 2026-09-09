@@ -91,13 +91,65 @@ def studies_need(root):
     flat = [x for sj in st.get('subjects', []) for ss in sj.get('subsections', []) for x in ss.get('studies', [])]
     by = {}
     for x in flat:
-        c = x.get('corpus') or '?'
-        key = ('tap record' if 'tap record' in c else 'price corpus' if '284d' in c else 'book' if 'book' in c else 'live / API' if ('API' in c or 'live' in c) else 'other')
-        b = by.setdefault(key, dict(studies=0, open=0))
+        key = ((x.get('needs') or {}).get('corpus')) or '?'      # (v15.90) the machine-readable need, not a string sniff
+        b = by.setdefault(key, dict(studies=0, waiting=0, ready=0))
         b['studies'] += 1
-        if x.get('status') == 'OPEN':
-            b['open'] += 1
+        if x.get('status') == 'WAITING':
+            b['waiting'] += 1
+        elif x.get('status') == 'READY':
+            b['ready'] += 1
     return dict(total=len(flat), byStatus=dict((k, sum(1 for x in flat if x.get('status') == k)) for k in set(x.get('status') for x in flat)), byCorpus=by)
+
+
+# (v15.90) THE CORPORA THE REGISTRY WAITS ON, COUNTED — one id per corpus a study can name in `needs.corpus`, with what we
+# HAVE, the unit, the rate per session (for an ETA) and where it comes from. results.py reads this every night and sets
+# WAITING / READY on the rows; the Data tab's ④ reads the same numbers. Nothing here is a claim: every line is a count.
+CORPUS_UNITS = dict(price='sessions', nq='sessions', sweeps='sessions', book='sessions', ledger='taps', tap='taps',
+                    kingroll='rows', gate='rows', vix='closes', calendar='event days', live='—', register='rows')
+
+
+def corpus_counts(root=ROOT):
+    """-> {corpus id: {have, unit, perSession, sessions, first, note}} — the record, counted, per corpus the studies name."""
+    out = {}
+    def put(k, have, sessions=None, first=None, note=None):
+        ps = (float(have) / sessions) if (sessions and have) else None
+        out[k] = dict(have=have, unit=CORPUS_UNITS.get(k, '?'), perSession=(round(ps, 2) if ps is not None else None), sessions=sessions, first=first, note=note)
+    C = corpora(root)
+    es = C.get('ES') or {}; nq = C.get('NQ') or {}; sw = C.get('sweeps') or {}; bk = C.get('book') or {}
+    put('price', es.get('sessions') or 0, es.get('sessions'), es.get('first'), 'ES BASERATES: the vendor + the couriered days')
+    put('nq', nq.get('sessions') or 0, nq.get('sessions'), nq.get('first'), 'NQ BASERATES')
+    put('sweeps', sw.get('sessions') or 0, sw.get('sessions'), None, 'the sweep corpus (vendor + the couriered nights, v15.90)')
+    put('book', bk.get('sessions') or 0, bk.get('sessions'), None, 'the SPY 3-minute book from the day files')
+    # the ledger (taps), the King-roll votes and the gatekeeper rows: from the day files themselves
+    days = sorted(glob.glob(os.path.join(root, 'data', '20??-??-??.json')))
+    n_led = n_kr = n_gate = 0; s_led = s_kr = s_gate = 0; f_led = f_kr = f_gate = None
+    for pth in days:
+        d = _jload(pth) or {}
+        day = os.path.basename(pth)[:10]
+        defl = d.get('defl') or {}
+        nd = sum(len(v or []) for v in defl.values()) if isinstance(defl, dict) else 0
+        if nd:
+            n_led += nd; s_led += 1; f_led = f_led or day
+        feat = (d.get('feat') or {}).get('SPY') or []
+        kr = sum(1 for r in feat if r and r.get('key') == 'dir.kingRoll' and r.get('hit') is not None)
+        gt = sum(1 for r in feat if r and r.get('key') == 'gateHour' and r.get('hit') is not None)
+        if kr:
+            n_kr += kr; s_kr += 1; f_kr = f_kr or day
+        if gt:
+            n_gate += gt; s_gate += 1; f_gate = f_gate or day
+    put('ledger', n_led, s_led, f_led, 'the deflection ledger (±0.50 SPY wobbles) — the tap record replaces it at his scale')
+    put('kingroll', n_kr, s_kr, f_kr, 'dir.kingRoll rows with an outcome (per bar, not independent rolls)')
+    put('gate', n_gate, s_gate, f_gate, 'gateHour rows with an outcome')
+    # the tap record: not built (v15.91) — a file under data/taps/ will be counted here the day it exists
+    taps = sorted(glob.glob(os.path.join(root, 'data', 'taps', '20??-??-??.json')))
+    n_tap = 0
+    for pth in taps:
+        t = _jload(pth); n_tap += len(t.get('taps') or []) if isinstance(t, dict) else (len(t) if isinstance(t, list) else 0)
+    put('tap', n_tap, len(taps) or None, (os.path.basename(taps[0])[:10] if taps else None), 'THE TAP RECORD — not recorded yet (v15.91)' if not taps else 'data/taps/<day>.json')
+    put('vix', 0, None, None, '^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here')
+    put('calendar', 0, None, None, 'ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet')
+    put('live', 0, None, None, 'live only — no corpus')
+    return out
 
 
 def build(root=ROOT):
@@ -106,7 +158,7 @@ def build(root=ROOT):
     logs = sorted(f for f in glob.glob(os.path.join(root, 'learning', 'log', '20??-??-??.json')))
     last_log = _jload(logs[-1]) if logs else None
     return dict(schema=1, writtenBy='tools/nightly/coverage.py', asOf=time.strftime('%Y-%m-%d'), generatedAt=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                ranOn=('his machine' if os.name == 'nt' else 'cloud'), complete=COMPLETE, days=rows, corpora=corpora(root), studies=studies_need(root),
+                ranOn=('his machine' if os.name == 'nt' else 'cloud'), complete=COMPLETE, days=rows, corpora=corpora(root), counts=corpus_counts(root), studies=studies_need(root),
                 nightly=(dict(date=last_log.get('date'), ranOn=last_log.get('ranOn'), ranAt=last_log.get('ranAt'), sessions=last_log.get('sessions'),
                               episodes=last_log.get('episodes'), deflEvents=last_log.get('deflEvents')) if last_log else None),
                 tapeDays=sorted(os.path.basename(p) for p in glob.glob(os.path.join(root, 'data', 'tape', '20??-??-??'))))
@@ -144,6 +196,9 @@ def selftest():
         assert r['tape'] == ['SPXW'] and r['log'] is True and j['days'][0]['log'] is False and j['days'][0]['tape'] == []
         assert j['corpora']['ES'] == dict(sessions=295, first='2025-06-02', last='2026-09-08', vendor=284, yahoo=1, definition='')
         assert j['nightly']['deflEvents'] == 141 and j['tapeDays'] == ['2026-09-08'] and j['studies'] is None
+        c = j['counts']
+        assert c['price']['have'] == 295 and c['price']['unit'] == 'sessions' and c['ledger']['have'] == 1 and c['ledger']['sessions'] == 1 and c['tap']['have'] == 0 and 'not recorded' in c['tap']['note'], c
+        assert c['kingroll']['have'] == 0 and c['vix']['have'] == 0 and c['live']['unit'] == '—', c
         print('coverage.py selftest ok')
     finally:
         shutil.rmtree(root, ignore_errors=True)

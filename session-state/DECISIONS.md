@@ -789,3 +789,31 @@ B calendar-first); his choice: **"I like B, I also want recommendations section.
   first render was bare and the headless screenshot caught it (LESSONS v15.89).
 - **The tap record stays next** (v15.90): this build took the Data tab's slot because he asked for it now; the tap record's
   "next build, on its own" ruling is unchanged, one build later.
+
+## 2026-09-09 · v15.90 — the learning process hardened on his "fix everything"; the list Atlas draws in the IRT file ("match atlas … FRONT")
+
+His ask, whole: *"Im looking for you to harden the learning process. Did you integrate the data tab into the learning
+process (ie data, analysis, testing, learning, recommendations etc.) I want you to make sure the entire learning process
+makes sense and fine tune it. also consider if there are any pieces of it that dont make sense and are useless like
+studies that are useless or pointless. Basically ensure that it is refined, targetted and usefull so that the learning
+process from data collection, analysis, testing and all the other steps are on point with my objectives/purpose … Also
+did you update the architecture and the road map. is everything upto date."* The audit (session-state/AUDIT-2026-09-09.md)
+was answered with **"yes, fix evertyhing … make sure you fix any and all issues"** — a whole-build mandate, the one
+exception to one-at-a-time he has granted, and it covered the cuts.
+
+- **The registry's statuses are the machine's.** WAITING (have / need / ETA) and READY (data on hand, no reader) are set
+  by the nightly from the counts; OPEN and READ NEXT are gone as review words. What would change it: nothing — a status
+  the machine did not compute was the v15.90 lesson.
+- **A family of studies with one answer is one row.** The thirteen level-name sweep studies are H2.L (NULL). The level
+  names stay on the candle and the SWEPT line as labels (descriptive, his); no new "does the sweep of <name> print the
+  extreme" study is opened — the answer is on file. What would change it: a named level whose CI clears the control on
+  the appending corpus for a quarter (the machine's table will show it; PDC is the candidate).
+- **A study that compares against a field no feed carries is CUT** (S1.4 / S7.3), not left OPEN.
+- **A hypothesis whose premise a finding removes is WITHDRAWN on the register, never edited, never deleted** (H7 — F-23);
+  the nightly says so and does not count it. **A hypothesis is judged by its own join** (H5), never by a proxy count.
+- **The sweep corpus appends like the base rates** — the nights ride `<day>-night.csv`; the prior day's levels come only
+  from the prior trading day (four calendar days), the prior week from the prior ISO week or the one before.
+- **The IRT file carries what Atlas DRAWS on the futures chart**: the merged derived list, FRONT window, as D-KING · D2..D5
+  — beside the per-book rows, never instead of them. His words: *"we need to match atlas"*, *"FRONT"*. What would change
+  it: his selector (the export follows the one-expiration payload; a chart on next-2 would need the two-expiration list).
+- **The tap record is v15.91**, asked before built — unchanged by this build.

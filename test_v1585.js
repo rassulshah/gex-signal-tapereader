@@ -20,7 +20,7 @@ ok(/@version\s+15\.(8[5-9]|9\d)/.test(src) && /var GPTS_VERSION='15\.(8[5-9]|9\d
   global.ladderFor=()=>({ pct:{ '722.00':100, '721.00':44, '720.00':-9, '723.00':30, '719.00':12, '724.00':8 }, count:20, src:'ladder' }); global.tapeMap=()=>null;
   const Q=irtQqqTop(722);
   ok(Q.rows.map(r=>r.lbl).join(' ')==='G2 G3 G4 G5', '1c the NQ symbol\'s QQQ lines stay G2..G5 (his call pending)', Q.rows.map(r=>r.lbl));
-  ok(/\/\^\(XG\|SG\|G\)\[2-5\]\$\/\.test/.test(ex('irtGHeld')) && !/\[GS\]\[2-5\]/.test(ex('irtGHeld')), '1d the hold accepts XG / SG (ES) and G (NQ) rows, nothing else');
+  ok(/\/\^\(XG\|SG\|G\)\[2-5\]\$\|\^D-KING\$\|\^D\[2-5\]\$\/\.test/.test(ex('irtGHeld')) && !/\[GS\]\[2-5\]/.test(ex('irtGHeld')), '1d the hold accepts XG / SG (ES), G (NQ) and (v15.90) the D rows, nothing else');
   ok(/SG rows '\+g3esc\(IRT_LAST\.sWhy\)/.test(src), '1e the gear\'s IRT line says SG rows');
 }
 

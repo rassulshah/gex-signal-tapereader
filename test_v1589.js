@@ -35,7 +35,7 @@ ok(/@version\s+15\.(89|9\d)/.test(src) && /var GPTS_VERSION='15\.(89|9\d)';/.tes
   ok(/coverage\.py selftest ok/.test(py(['tools/nightly/coverage.py','--selftest'])), '2a tools/nightly/coverage.py --selftest');
   const run=fs.readFileSync('./tools/nightly/run.py','utf8'); ok(/coverage\.py/.test(run) && /_cv\.write\(ROOT\)/.test(run) && run.indexOf('_cv.write(ROOT)')>run.indexOf('futures = refresh_futures(days)'), '2b the nightly writes learning/coverage.json after the corpus append (so the CSVs count)');
   const CV=JSON.parse(fs.readFileSync('./learning/coverage.json','utf8'));
-  ok(CV.schema===1 && CV.days.length>=18 && CV.days[CV.days.length-1].day>='2026-09-08' && CV.corpora.ES.sessions>=295 && CV.corpora.NQ.sessions>=195 && CV.studies.total>=195, '2c the committed file: 18+ sessions, the corpora, the studies by corpus', [CV.days.length, CV.corpora.ES.sessions, CV.studies.total]);
+  ok(CV.schema===1 && CV.days.length>=18 && CV.days[CV.days.length-1].day>='2026-09-08' && CV.corpora.ES.sessions>=295 && CV.corpora.NQ.sessions>=195 && CV.studies.total>=180, '2c the committed file: 18+ sessions, the corpora, the studies by corpus (184 after the v15.90 collapse)', [CV.days.length, CV.corpora.ES.sessions, CV.studies.total]);
   const d8=CV.days.find(d=>d.day==='2026-09-08'); ok(d8 && d8.fut.ES.full===true && d8.fut.NQ.full===false && d8.csv.ES.complete===true && d8.csv.GC.complete===false && d8.log===true && d8.nodeEvents===738, '2d 2026-09-08 as counted: ES night, NQ RTH, the ES CSV complete, GC not, the log, 738 node events', d8&&[d8.fut.ES.full,d8.fut.NQ.full,d8.csv.ES,d8.csv.GC,d8.log,d8.nodeEvents]);
   const bi=fs.readFileSync('./tools/build-installer.py','utf8'); ok(/_glob\.glob\('learning\/\*\.json'\)/.test(bi), '2e learning/*.json rides the installer — coverage.json with it');
 }
@@ -53,7 +53,7 @@ ok(/@version\s+15\.(89|9\d)/.test(src) && /var GPTS_VERSION='15\.(89|9\d)';/.tes
   const g={ PAL, g3esc:esc, localStorage:ls, panOpen:()=>'<div class="g3pan">', panSection:(id,n,t,d,c,b,o,q)=>'<div class="sec"><div class="sech" data-gsec="'+id+'" title="'+esc(q||'')+'"><span class="n">'+n+'</span><span class="t">'+esc(t)+'</span></div><div class="secb">'+b+'</div></div>', tabEmpty:t=>'<div class="empty">'+esc(t)+'</div>', panFoot:()=>'<div class="foot"></div>', tabGuideBtn:()=>'', tabGuide:()=>'', TAB_GUIDE:{},
     pipeFetch:()=>Promise.resolve({ ok:false }), PIPE_RAW_BASE:'x', render:()=>{}, repoOpen:(cb)=>cb(null),
     tapeHealth:()=>({ books:{ SPXW:{ bars:127, strikesLast:271 }, SPY:{ bars:127, strikesLast:112 } } }), FEED_REJECTS:{ SPY:{ win:0 }, QQQ:{ win:0 } },
-    ifChain:()=>({ ageMin:4, stale:false }), futBarsLoad:()=>JSON.parse(store['gpts_futbars_v1']), futWeekLoad:()=>null, pipeLoad:()=>({ t:Date.now()-9*60000 }), studiesLoad:()=>null, recLoad:()=>JSON.parse(store['gpts_rec_v1']),
+    ifChain:()=>({ ageMin:4, stale:false }), futBarsLoad:()=>JSON.parse(store['gpts_futbars_v1']), futWeekLoad:()=>null, pipeLoad:()=>({ t:Date.now()-9*60000 }), studiesLoad:()=>JSON.parse(fs.readFileSync('./learning/studies.json','utf8')), recLoad:()=>JSON.parse(store['gpts_rec_v1']),
     ANALYSIS_NIGHTLY:{ date:'2026-09-08', ranOn:'his machine', ranAt:'2026-09-09T02:35:18Z', sessions:3, episodes:23, deflEvents:141, hypotheses:[{ id:'H6', n:2, minN:40 },{ id:'H7', n:0, minN:60 }], patterns:{ rows:[] } },
     fmtCT:t=>'21:35', learnLoad:()=>({ examples:[{ blind:null },{ blind:{ right:true } }] }),
     dayLineState:()=>[{ key:'saved', label:'saved', state:'g', text:'15:01 · the panel · 134 bars', tip:'' },{ key:'analysis', label:'analysis', state:'g', text:'21:35 · your machine', tip:'' },{ key:'rec', label:'rec', state:'a', text:'3 proposals waiting', tip:'' }],
@@ -71,7 +71,7 @@ ok(/@version\s+15\.(89|9\d)/.test(src) && /var GPTS_VERSION='15\.(89|9\d)';/.tes
   ok(h.indexOf('<div class="g3pan">')===0, '3a0 the block opens with panOpen() — the dashboard\'s stylesheet, not bare tables');
   ok(cells===CV.days.length && green>0 && /rows, top to bottom: the day file · ES night · NQ night · the corpus CSV complete · the tape on disk · the nightly’s log/.test(cal), '3c ① one cell per session ('+cells+'), the six rows explained', [cells, green]);
   ok(/2026-09-08 — 10\.\d+ MB · 134 snaps · 738 node events · ES 4696 \(night\) · NQ 1846 · CSV 393/.test(cal.replace(/&#39;/g,"'")), '3d …the newest cell\'s hover carries the counts', (cal.match(/2026-09-08 — [^"]*/)||[''])[0].slice(0,120));
-  ok(/ES 295 sessions \(284 vendor \+ 11 Yahoo, → 2026-09-08\) · NQ 195 · the sweep corpus 284 · the book corpus 13 · the Learn corpus 6 examples, 31 legs/.test(cal), '3e …the corpora line under it', (cal.match(/The corpora:[^<]*/)||[''])[0].slice(0,200));
+  ok(new RegExp('ES '+CV.corpora.ES.sessions+' sessions \\('+CV.corpora.ES.vendor+' vendor \\+ '+CV.corpora.ES.yahoo+' Yahoo, → '+CV.corpora.ES.last+'\\) · NQ '+CV.corpora.NQ.sessions+' · the sweep corpus '+CV.corpora.sweeps.sessions+' · the book corpus '+CV.corpora.book.sessions+' · the Learn corpus').test(cal) && CV.corpora.sweeps.sessions>=290, '3e …the corpora line under it (from the file; the sweep corpus appends since v15.90: 290+)', (cal.match(/The corpora:[^<]*/)||[''])[0].slice(0,200));
   ok(/learning\/coverage\.json has not been fetched yet/.test(f.cal(null)), '3f no coverage file yet → the honest line, not an empty calendar');
   // ② the sources
   const so=f.sources();
@@ -85,8 +85,8 @@ ok(/@version\s+15\.(89|9\d)/.test(src) && /var GPTS_VERSION='15\.(89|9\d)';/.tes
   ok(/IndexedDB · snaps<\/b><\/td><td class="r">—</.test(here) || /counting…/.test(here), '3l ③ the IndexedDB counts are async — "—" or "counting…" before they land, never a number invented');
   // ④ the needs
   const nd=f.needs(CV);
-  ok(/THE TAP RECORD \(next build\)<\/b><\/td><td class="r">104</.test(nd) && /0 taps/.test(nd) && /the price corpus[^<]*<\/b><\/td><td class="r">41</.test(nd) && /H7 re-reads after 2026-08-21: 0 of 60/.test(nd) && /H6: sweep-at-node events 2 of 40/.test(nd) && /1 blind/.test(nd), '3m ④ the studies by corpus with have / need from the log (H6 2 of 40, H7 0 of 60), one blind read');
-  ok(/195 studies: OPEN 89/.test(nd), '3n ④ the status line');
+  ok(/THE TAP RECORD \(v15\.91\)/.test(nd) && /the deflection ledger/.test(nd) && /the book corpus/.test(nd) && /<th class="r">waiting · ready · read<\/th>/.test(nd), '3m ④ the needs by corpus — the tap record first, have · need · waiting · ready · read (v15.90: from the rows\' own needs)');
+  ok(new RegExp(String(CV.studies.total)+' studies: ').test(nd) && /WAITING and READY are the machine’s words/.test(nd), '3n ④ the status line (the counts from the file; the machine\'s words explained)');
   // ⑤ the gaps
   const gp=f.gaps(CV);
   ok(/GC \/ CL 2026-09-08 incomplete \(379 \/ 379 of 393 bars\)/.test(gp) && /the NQ night — not in the courier yet/.test(gp) && /the prior week \(WH \/ WL \/ WPOC\) — not fetched/.test(gp), '3o ⑤ the partial rows come from the file and the stores: GC / CL incomplete, the NQ night, the weekly bars');
@@ -109,11 +109,11 @@ ok(/@version\s+15\.(89|9\d)/.test(src) && /var GPTS_VERSION='15\.(89|9\d)';/.tes
   ok(['R-33','R-34','R-35'].every(i=>ids.includes(i)) && R.rows.filter(r=>['R-33','R-34','R-35'].includes(r.id)).every(r=>r.kind==='DATA' && r.status==='proposed' && r.by==='review'), '4a R-33 (daily bars) · R-34 (hourly backfill) · R-35 (^VIX1D) on Rec, DATA, proposed, by the review');
   const seedR=JSON.parse(/var REC_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedR)===JSON.stringify(R), '4b REC_SEED equals the file');
   const P=JSON.parse(fs.readFileSync('./learning/plan.json','utf8')); const nx=(P.roadmap||[]).find(r=>r.status==='next');
-  ok(nx && nx.v==='15.89' && /DATA TAB/.test(nx.title) && (P.roadmap||[]).find(r=>r.v==='15.90' && /TAP RECORD/.test(r.title)), '4c the plan: 15.89 the Data tab (this build), 15.90 the tap record (next)', nx&&[nx.v]);
+  { const r89=(P.roadmap||[]).find(r=>r.v==='15.89'); ok(r89 && /DATA TAB/.test(r89.title) && /shipped|next/.test(r89.status) && (P.roadmap||[]).find(r=>/^15\.9[1-9]$/.test(r.v) && /TAP RECORD/.test(r.title)), '4c the plan: 15.89 the Data tab (shipped), the tap record after it', r89&&[r89.v, r89.status]); }
   ok((P.tabs||[]).some(t=>t.tab==='Data' && t.role==='COUNT') && (P.tabs||[]).findIndex(t=>t.tab==='Data')<(P.tabs||[]).findIndex(t=>t.tab==='Analysis'), '4d the plan\'s tabs list has Data before Analysis (the Architecture tab reads it)');
   const seedP=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedP)===JSON.stringify(P), '4e PLAN_SEED equals the file');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/^## v15\.89 /m.test(cl) && /mockup B/.test(cl.split('## v15.89')[1].split('\n## ')[0]), '4f CHANGELOG v15.89');
-  const le=fs.readFileSync('session-state/LESSONS.md','utf8'); ok((/^### (v[\d.]+)/m.exec(le)||[])[1]==='v15.89', '4g LESSONS top entry is v15.89');
+  const le=fs.readFileSync('session-state/LESSONS.md','utf8'); ok(/^### v15\.89 /m.test(le), '4g LESSONS carries the v15.89 entry (the newest-first log under §2)');
   const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/^2026-09-09/.test(cfg.version||'') && !/^2026-09-09[ab]$/.test(cfg.version), '4h .gex-config.json re-stamped', cfg.version);
 }
 console.log('test_v1589: ' + pass + ' passed, ' + fail + ' failed');

@@ -216,6 +216,151 @@ def hyp_result(verdicts, hid, asof):
     # thin / blocked: the row keeps its status, the line says how far along it is
     return ('%s %s: n=%s of %s · nightly %s' % (hid, vd or 'thin', n if n is not None else 0, minN, asof), None, n, None, None)
 
+# ---- (v15.90) THE REGISTRY IS THE MACHINE'S OUTPUT ---------------------------------------------------------------------
+# Operator, 2026-09-09: "make sure the entire learning process makes sense and fine tune it … refined, targeted and useful".
+# The audit found (a) 35 scripted studies whose sentence the review typed by hand — H2.4 / H2.5 still quoted numbers F-23
+# had withdrawn the day before; (b) 104 rows waiting on a corpus nobody had counted, with no have / need / when. So:
+#   SWEEP_READS   a row with machine:{file:'SWEEPS', read:…} gets its sentence composed from data/es-1min/SWEEPS.json nightly
+#   FEAT_READS    a row with machine:{file:'FEATS', key:…} gets the day files' feature outcome (run.py writes log.feats)
+#   corpus_status a row with needs:{corpus, n} and no machine number is WAITING (have / need / an ETA at the record's own
+#                 rate, from tools/nightly/coverage.py's counts) or READY (data on hand, no reader yet) — the machine's word
+def _pct(x):
+    return '%d%%' % _js_round(100.0 * x) if isinstance(x, (int, float)) else '—'
+
+def _lvl_line(name, L):
+    """'ONL 21% n=129 vs 25%' with the CI's verdict against the fresh-low control"""
+    r = L.get('rate'); n = L.get('n') or 0; f = L.get('fresh'); ci = L.get('ci') or [None, None]
+    tag = ''
+    if isinstance(f, (int, float)) and ci[0] is not None:
+        if ci[0] > f: tag = ' (+%dpp, clears the control)' % _js_round(100 * (r - f))
+        elif ci[1] < f: tag = ' (%dpp, worse than nothing)' % _js_round(100 * (r - f))
+    return '%s %s n=%d vs %s%s' % (name, _pct(r), n, _pct(f), tag)
+
+def sweep_read(kind, sw, spec=None):
+    """-> the sentence for one machine read of SWEEPS.json, or None when the file lacks it"""
+    if not sw or not sw.get('lookup'):
+        return None
+    lk = sw['lookup']; lv = lk.get('level') or {}; corp = sw.get('corpus') or {}
+    sess = corp.get('sessions'); src = corp.get('sources') or {}
+    tail = ' · %s sessions%s' % (sess, (' (%s vendor + %s couriered)' % (src.get('vendor'), src.get('yahoo'))) if src else '')
+    if kind == 'levelTable':
+        better = []; worse = []; within = []
+        for name, L in lv.items():
+            r = L.get('rate'); f = L.get('fresh'); ci = L.get('ci') or [None, None]
+            if not isinstance(r, (int, float)) or not isinstance(f, (int, float)) or ci[0] is None: continue
+            if ci[0] > f: better.append('%s %s n=%d vs %s (%+dpp)' % (name, _pct(r), L.get('n') or 0, _pct(f), _js_round(100 * (r - f))))
+            elif ci[1] < f: worse.append('%s %s n=%d' % (name, _pct(r), L.get('n') or 0))
+            else: within.append(name)
+        exp = 0.025 * len(lv)   # one-sided 2.5% per cell: what this many independent cells produce by chance
+        return ('%d named levels: %s%s%s' % (len(lv),
+                ('none beats the fresh-low control' if not better else ('%d clear the fresh-low control (%s) — about what %d cells produce by chance (≈%.1f expected)' % (len(better), '; '.join(better), len(lv), exp))),
+                ('; worse than a bounce at nothing: %s' % ', '.join(worse)) if worse else '',
+                ('; within chance: %s' % ', '.join(within)) if within else '') + tail)
+    if kind == 'levels':
+        names = (spec or {}).get('levels') or []
+        parts = [_lvl_line(nm, lv[nm]) for nm in names if nm in lv]
+        acc = []
+        for c in sw.get('cells') or []:
+            lab = c.get('label') or ''
+            for nm in names:
+                if lab.startswith(nm + ' sweep-reclaim') and c.get('events'):
+                    acc.append('%s breaks on first touch %s' % (nm, _pct(float(c.get('accepted') or 0) / c['events'])))
+        return ' · '.join(parts + acc) + tail if parts else None
+    if kind == 'clock':
+        ck = lk.get('clock') or {}
+        parts = ['%s %s n=%d vs %s (%+dpp)' % (b, _pct(v.get('rate')), v.get('n') or 0, _pct(v.get('fresh')), _js_round(100 * ((v.get('rate') or 0) - (v.get('fresh') or 0)))) for b, v in ck.items()]
+        return 'ON/PD sweep-reclaims by the clock: ' + ' · '.join(parts) + tail if parts else None
+    if kind == 'shape':
+        dp = lk.get('depth') or {}; sp = lk.get('speed') or {}
+        parts = []
+        for nm, lab in (('deep', 'deep (> %d pts)' % ((lk.get('bins') or {}).get('depthDeepMinPts') or 8)), ('mid', 'mid'), ('shallow', 'shallow (<= %d pts)' % ((lk.get('bins') or {}).get('depthShallowMaxPts') or 3))):
+            v = dp.get(nm)
+            if v: parts.append('%s %s n=%d vs %s' % (lab, _pct(v.get('rate')), v.get('n') or 0, _pct(v.get('fresh'))))
+        for nm, lab in (('flush', 'the flush (reclaim in 6–30 bars)'), ('poke', 'the quick poke')):
+            v = sp.get(nm)
+            if v: parts.append('%s %s n=%d vs %s' % (lab, _pct(v.get('rate')), v.get('n') or 0, _pct(v.get('fresh'))))
+        return ' · '.join(parts) + tail if parts else None
+    if kind == 'acceptance':
+        parts = []
+        for c in sw.get('cells') or []:
+            lab = c.get('label') or ''
+            if ' sweep-reclaim -> printed' in lab and not lab.startswith(' ') and c.get('events'):
+                nm = lab.split(' ')[0]
+                if nm in ('ONL', 'ONH', 'PDL', 'PDH', 'IBL', 'IBH', 'PDC-', 'PDC+'):
+                    parts.append('%s %s n=%d' % (nm, _pct(float(c.get('accepted') or 0) / c['events']), c['events']))
+        return 'breaks on first touch (no reclaim in 30 bars): ' + ' · '.join(parts) + tail if parts else None
+    if kind == 'payoff':
+        parts = []
+        for c in sw.get('cells') or []:
+            lab = c.get('label') or ''
+            if ' sweep-reclaim -> printed' in lab and not lab.startswith(' '):
+                nm = lab.split(' ')[0]
+                if nm in ('ONL', 'ONH', 'PDL', 'PDH') and c.get('pay_far_med') is not None:
+                    parts.append('%s %s pts' % (nm, c['pay_far_med']))
+        return 'median distance to the far extreme when the sweep IS the extreme: ' + ' · '.join(parts) + tail if parts else None
+    return None
+
+def sweep_results(studies, sw, asof):
+    """-> {id: result entry} for every row with machine.file == 'SWEEPS'"""
+    out = {}
+    for x in _flat(studies):
+        m = x.get('machine') or {}
+        if m.get('file') != 'SWEEPS':
+            continue
+        line = sweep_read(m.get('read'), sw, m)
+        if not line:
+            continue
+        status = 'NULL' if x.get('status') == 'NULL' else 'READ'
+        out[x['id']] = dict(line=line + ' · nightly ' + asof, status=status, keepResult=(status == 'NULL'), n=(sw.get('corpus') or {}).get('sessions'), rate=None, lo=None, src='SWEEPS.json:' + str(m.get('read')), asOf=asof, by='nightly')
+    return out
+
+def feat_results(studies, log, asof):
+    """-> {id: result entry} for every row with machine.file == 'FEATS', from log.feats (run.py, v15.90)"""
+    out = {}
+    F = (log or {}).get('feats') or {}
+    for x in _flat(studies):
+        m = x.get('machine') or {}
+        if m.get('file') != 'FEATS':
+            continue
+        f = F.get(m.get('key'))
+        if not f or not f.get('n'):
+            continue
+        n = f['n']; hit = f.get('hit', 0)
+        line = '%s right within 10 bars: %s on %s sessions — per-bar rows, not independent events · nightly %s' % (m.get('key'), _rate_txt(n, hit), f.get('sessions', '?'), asof)
+        out[x['id']] = dict(line=line, status=('READ' if n >= RATE_MIN_N else 'THIN'), n=n, rate=_js_round(100.0 * hit / n), lo=_js_round(100 * wilson_low(hit, n)), src='feats:' + str(m.get('key')), asOf=asof, by='nightly')
+    return out
+
+UNTOUCHED = ('SHIPPED', 'READ', 'REFUSED', 'REGISTERED', 'DRAFT', 'NULL', 'CUT')
+def corpus_status(studies, counts, asof, answered=()):
+    """-> {id: {status, line, keepResult:True}} — WAITING / READY on every row the machine has no number for"""
+    out = {}
+    for x in _flat(studies):
+        if x['id'] in answered or x.get('status') in UNTOUCHED:
+            continue
+        nd = x.get('needs') or {}
+        c = nd.get('corpus'); need = nd.get('n') or 0
+        if not c or c in ('live', 'register', 'cut', '?'):
+            continue
+        if c == 'tap':
+            out[x['id']] = dict(status='WAITING', line='WAITING · the tap record: 0 of %d taps — not recorded yet (v15.91) · nightly %s' % (need, asof), keepResult=True, n=0, asOf=asof, by='nightly')
+            continue
+        k = (counts or {}).get(c) or {}
+        have = k.get('have') or 0; unit = k.get('unit') or ''; ps = k.get('perSession')
+        if have < need:
+            eta = ''
+            if ps:
+                import math
+                eta = ' · ~%d sessions at %.1f/session' % (int(math.ceil((need - have) / ps)), ps)
+            elif have == 0:
+                eta = ' · ' + (k.get('note') or 'no source in the repo')
+            out[x['id']] = dict(status='WAITING', line='WAITING · %s: %d of %d %s%s · nightly %s' % (c, have, need, unit, eta, asof), keepResult=True, n=have, asOf=asof, by='nightly')
+        else:
+            out[x['id']] = dict(status='READY', line='READY · %s: %d %s on hand%s — no reader yet; the review writes it · nightly %s' % (c, have, unit, (' since ' + k['first']) if k.get('first') else '', asof), keepResult=True, n=have, asOf=asof, by='nightly')
+    return out
+
+def _flat(studies):
+    return [x for sj in (studies or {}).get('subjects') or [] for ss in sj.get('subsections') or [] for x in ss.get('studies') or []]
+
 def compute_rules(log):
     return rule_evidence(_rows(log), (log or {}).get('date') or '?')
 
@@ -243,8 +388,12 @@ def apply(studies, results):
                 if not r:
                     continue
                 x['nightly'] = r['line']; x['asOf'] = r.get('asOf'); n += 1
-                if r.get('status'):                       # a verdict: the number becomes the row's result
+                if r.get('status') and r.get('keepResult'):   # (v15.90) WAITING / READY: the machine's status, the review's sentence
+                    x['status'] = r['status']
+                elif r.get('status'):                     # a verdict: the number becomes the row's result
                     x['result'] = r['line']; x['status'] = r['status']; x['by'] = 'nightly'
+                elif x.get('by') == 'nightly':            # (v15.90) no verdict tonight, but the sentence standing is the machine's own — it must not outlive its newer line
+                    x['result'] = r['line']
                 # no verdict (thin / blocked): the review's sentence and status stand; the line rides beside them
     # the counts follow the statuses
     tot = 0; by = {}
@@ -274,6 +423,27 @@ def write(root=ROOT, log=None):
             print('results: no learning/log/<day>.json'); return None, 0
         log = json.load(io.open(p, encoding='utf-8'))
     R = compute(log); RL = compute_rules(log)
+    # (v15.90) the scripted sentences, the feature reads and the corpus statuses — the registry as the machine's output
+    sp0 = os.path.join(root, 'learning', 'studies.json')
+    S0 = json.load(io.open(sp0, encoding='utf-8')) if os.path.exists(sp0) else None
+    asof = log.get('date') or '?'
+    try:
+        swp = os.path.join(root, 'data', 'es-1min', 'SWEEPS.json')
+        sw = json.load(io.open(swp, encoding='utf-8')) if os.path.exists(swp) else None
+        R.update(sweep_results(S0, sw, asof))
+    except Exception as e:
+        print('sweep reads threw:', e)
+    try:
+        R.update(feat_results(S0, log, asof))
+    except Exception as e:
+        print('feat reads threw:', e)
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import coverage as _cov
+        counts = _cov.corpus_counts(root)
+        R.update(corpus_status(S0, counts, asof, answered=set(R.keys())))
+    except Exception as e:
+        print('corpus statuses threw:', e)
     doc = dict(schema=1, asOf=log.get('date'), writtenBy='tools/nightly/results.py', results=R, rules=RL)
     atomic_write(os.path.join(root, 'learning', 'results.json'), json.dumps(doc, ensure_ascii=False, indent=1))
     sp = os.path.join(root, 'learning', 'studies.json')
@@ -342,7 +512,60 @@ def selftest():
     assert RL['L3']['verdict'] == 'not measured' and RL['L7']['verdict'] == 'not measured'
     Ld = dict(rules=[dict(id='L1', rule='r', status='PROPOSED'), dict(id='L9', rule='r', status='CONFIRMED'), dict(id='L99', rule='r', status='PROPOSED')])
     assert apply_rules(Ld, RL) == 2 and Ld['rules'][0]['verdict'] == 'agrees' and Ld['rules'][0]['status'] == 'PROPOSED' and Ld['rules'][0]['asOf'] == '2026-09-09' and 'verdict' not in Ld['rules'][2]   # the record never changes a rule's status — the review does
-    print('results.py selftest ok · %d studies answered · %d rules judged' % (len(R), len([r for r in RL.values() if r['verdict'] in ('agrees', 'contradicts')])))
+    # (v15.90) the registry as the machine's output: the sweep sentences, the feature reads, the corpus statuses, keepResult
+    sw = dict(corpus=dict(sessions=290, sources=dict(vendor=284, yahoo=6)), lookup=dict(
+        level={'ONL': dict(rate=0.21, n=129, fresh=0.25, ci=[0.15, 0.29]), 'PDC-': dict(rate=0.29, n=119, fresh=0.21, ci=[0.22, 0.38]), 'VWAP-': dict(rate=0.08, n=130, fresh=0.21, ci=[0.04, 0.13])},
+        clock={'08:30-09:00': dict(rate=0.21, n=251, fresh=0.18), '09:00-10:00': dict(rate=0.11, n=97, fresh=0.23)},
+        depth={'deep': dict(rate=0.35, n=94, fresh=0.23), 'shallow': dict(rate=0.11, n=249, fresh=0.21)}, speed={'flush': dict(rate=0.32, n=96, fresh=0.23)}, bins=dict(depthDeepMinPts=8, depthShallowMaxPts=3)),
+        cells=[dict(label='ONL sweep-reclaim -> printed the LOD', events=150, accepted=21, pay_far_med=72.5), dict(label='PDC- sweep-reclaim -> printed the LOD', events=130, accepted=58)])
+    S3 = dict(subjects=[dict(subsections=[dict(studies=[
+        dict(id='H2.L', status='NULL', result='the review: no name matters', machine=dict(file='SWEEPS', read='levelTable'), needs=dict(corpus='price', n=30)),
+        dict(id='H2.10', status='READ', result='old', machine=dict(file='SWEEPS', read='levels', levels=['PDC-']), needs=dict(corpus='price', n=30)),
+        dict(id='H2.4', status='READ', result='+5 to +15pp (stale)', machine=dict(file='SWEEPS', read='clock'), needs=dict(corpus='price', n=30)),
+        dict(id='H2.5', status='READ', result='old', machine=dict(file='SWEEPS', read='shape'), needs=dict(corpus='price', n=30)),
+        dict(id='H2.6', status='READ', result='old', machine=dict(file='SWEEPS', read='acceptance'), needs=dict(corpus='price', n=30)),
+        dict(id='H2.11', status='READ', result='old', machine=dict(file='SWEEPS', read='payoff'), needs=dict(corpus='price', n=30)),
+        dict(id='D3.3', status='READ NEXT', result='unread', machine=dict(file='FEATS', key='dir.kingRoll'), needs=dict(corpus='kingroll', n=40)),
+        dict(id='K1.4', status='OPEN', needs=dict(corpus='tap', n=40)),
+        dict(id='K2.4', status='THIN', result='11 sessions', needs=dict(corpus='book', n=30)),
+        dict(id='K4.1', status='READ NEXT', result='unread', needs=dict(corpus='kingroll', n=40)),
+        dict(id='X3.1', status='READ NEXT', needs=dict(corpus='vix', n=200)),
+        dict(id='H2.10k', status='OPEN', needs=dict(corpus='live', n=0)),
+        dict(id='S1.4', status='CUT', needs=dict(corpus='cut', n=0)),
+        dict(id='H4.1', status='SHIPPED', needs=dict(corpus='price', n=30)),
+        dict(id='X9.9', status='OPEN', needs=dict(corpus='sweeps', n=290))])])])
+    SR = sweep_results(S3, sw, '2026-09-09')
+    assert SR['H2.L']['status'] == 'NULL' and SR['H2.L']['keepResult'] is True and SR['H2.L']['line'].startswith('3 named levels: 1 clear the fresh-low control (PDC- 29% n=119 vs 21% (+8pp)) — about what 3 cells produce by chance'), SR['H2.L']['line']
+    assert 'worse than a bounce at nothing: VWAP- 8% n=130' in SR['H2.L']['line'] and 'within chance: ONL' in SR['H2.L']['line'] and '290 sessions (284 vendor + 6 couriered)' in SR['H2.L']['line']
+    assert SR['H2.10']['line'].startswith('PDC- 29% n=119 vs 21% (+8pp, clears the control) · PDC- breaks on first touch 45%') and SR['H2.10']['status'] == 'READ' and not SR['H2.10'].get('keepResult')
+    assert SR['H2.4']['line'].startswith('ON/PD sweep-reclaims by the clock: 08:30-09:00 21% n=251 vs 18% (+3pp) · 09:00-10:00 11% n=97 vs 23% (-12pp)'), SR['H2.4']['line']
+    assert SR['H2.5']['line'].startswith('deep (> 8 pts) 35% n=94 vs 23% · shallow (<= 3 pts) 11% n=249 vs 21% · the flush (reclaim in 6–30 bars) 32% n=96 vs 23%'), SR['H2.5']['line']
+    assert SR['H2.6']['line'].startswith('breaks on first touch (no reclaim in 30 bars): ONL 14% n=150 · PDC- 45% n=130'), SR['H2.6']['line']
+    assert SR['H2.11']['line'].startswith('median distance to the far extreme when the sweep IS the extreme: ONL 72.5 pts'), SR['H2.11']['line']
+    FR = feat_results(S3, dict(feats={'dir.kingRoll': dict(n=170, hit=102, sessions=7)}), '2026-09-09')
+    assert FR['D3.3']['status'] == 'READ' and FR['D3.3']['line'].startswith('dir.kingRoll right within 10 bars: 102 / 170 = 60% (low 52%) on 7 sessions') and FR['D3.3']['rate'] == 60
+    assert feat_results(S3, dict(feats={'dir.kingRoll': dict(n=0, hit=0)}), 'x') == {}
+    counts = dict(tap=dict(have=0, unit='taps'), book=dict(have=13, unit='sessions', perSession=1.0, first='2026-08-18'), kingroll=dict(have=170, unit='rows', perSession=24.3, first='2026-08-19'),
+                  vix=dict(have=0, unit='closes', note='no file yet'), price=dict(have=295, unit='sessions'), sweeps=dict(have=290, unit='sessions', perSession=1.0))
+    CS = corpus_status(S3, counts, '2026-09-09', answered=set(SR) | set(FR))
+    assert CS['K1.4']['status'] == 'WAITING' and CS['K1.4']['line'].startswith('WAITING · the tap record: 0 of 40 taps — not recorded yet (v15.91)') and CS['K1.4']['keepResult'] is True
+    assert CS['K2.4']['status'] == 'WAITING' and CS['K2.4']['line'].startswith('WAITING · book: 13 of 30 sessions · ~17 sessions at 1.0/session'), CS['K2.4']['line']
+    assert CS['K4.1']['status'] == 'READY' and CS['K4.1']['line'].startswith('READY · kingroll: 170 rows on hand since 2026-08-19 — no reader yet'), CS['K4.1']['line']
+    assert CS['X3.1']['status'] == 'WAITING' and 'no file yet' in CS['X3.1']['line']
+    assert CS['X9.9']['status'] == 'READY', CS['X9.9']   # have == need is enough
+    assert 'D3.3' not in CS and 'H2.10k' not in CS and 'S1.4' not in CS and 'H4.1' not in CS and 'H2.L' not in CS, sorted(CS)
+    R3 = dict(SR); R3.update(FR); R3.update(CS)
+    apply(S3, dict(schema=1, results=R3))
+    st3 = {x['id']: x for x in S3['subjects'][0]['subsections'][0]['studies']}
+    assert st3['H2.L']['status'] == 'NULL' and st3['H2.L']['result'] == 'the review: no name matters' and st3['H2.L']['nightly'].startswith('3 named levels'), st3['H2.L']   # NULL keeps the reason; the table rides under it
+    assert st3['H2.4']['result'].startswith('ON/PD sweep-reclaims by the clock') and st3['H2.4']['by'] == 'nightly'   # the stale sentence is gone
+    assert st3['K2.4']['status'] == 'WAITING' and st3['K2.4']['result'] == '11 sessions' and st3['K2.4']['nightly'].startswith('WAITING · book')
+    assert st3['K4.1']['status'] == 'READY' and st3['D3.3']['status'] == 'READ' and st3['D3.3']['by'] == 'nightly'
+    # a machine sentence that stands with no verdict tonight is replaced by the machine's newer line
+    S4 = dict(subjects=[dict(subsections=[dict(studies=[dict(id='H1.3', status='REGISTERED', result='H5 ready: the join can be run', by='nightly', needs=dict(corpus='ledger', n=40))])])])
+    apply(S4, dict(schema=1, results={'H1.3': dict(line='H5 blocked: n=0 of 50 · nightly 2026-09-09', status=None, asOf='2026-09-09')}))
+    assert S4['subjects'][0]['subsections'][0]['studies'][0]['result'] == 'H5 blocked: n=0 of 50 · nightly 2026-09-09'
+    print('results.py selftest ok · %d studies answered · %d rules judged · the machine\'s statuses' % (len(R), len([r for r in RL.values() if r['verdict'] in ('agrees', 'contradicts')])))
 
 if __name__ == '__main__':
     if '--selftest' in sys.argv:

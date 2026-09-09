@@ -45,6 +45,24 @@ RTH_A, RTH_B = 8*3600+27*60, 15*3600      # 08:27 <= s < 15:00 CT, the same wind
 # production storage is a corpus-poisoning bug waiting for the one run nobody watches.
 OUT_ROOT = os.environ.get('GEX_FUTURES_OUT', 'data/futures')
 HEADER = ['Symbol', 'Date', 'VOL', 'Open', 'High', 'Low', 'Close', 'Volume']
+# (v15.90) THE NIGHT, TOO. The sweep study (study-sweeps.py) needs the overnight session — ONH / ONL, Asia, London — and
+# its corpus had stopped on the vendor's last day (2026-08-21) because these CSVs carried RTH only: H7 on the register
+# read n = 0 after thirteen sessions. The night bars (17:00 CT of the evening before → 08:27 of the session day) go to a
+# second file per SESSION day, <day>-night.csv, same columns; the RTH files are untouched (study-hodlod reads those and
+# only those — market_sources() skips the night files). The 15:00–17:00 post-close bars are dropped on purpose (F-23).
+NIGHT_A = 17*3600
+def session_day_of(dt):
+    """the session a night bar belongs to: >= 17:00 -> the next weekday; < 08:27 -> the same day; else None."""
+    from datetime import timedelta
+    sec = dt.hour*3600 + dt.minute*60 + dt.second
+    if sec >= NIGHT_A:
+        nd = dt + timedelta(days=1)
+        while nd.weekday() >= 5:      # a Friday-evening row does not exist on CME; a Sunday evening is Monday's night
+            nd = nd + timedelta(days=1)
+        return nd.strftime('%Y-%m-%d')
+    if sec < RTH_A:
+        return dt.strftime('%Y-%m-%d')
+    return None
 
 
 def day_files(argv):
@@ -53,8 +71,9 @@ def day_files(argv):
     return sorted(glob.glob('data/*.json'))
 
 
-def harvest(paths):
-    """(market, yahoo_symbol) -> { 'YYYY-MM-DD': { 'HH:MM:SS': row } }, RTH CT only."""
+def harvest(paths, night=False):
+    """(market, yahoo_symbol) -> { 'YYYY-MM-DD': { 'HH:MM:SS': row } }, RTH CT only — or, with night=True, the overnight
+    bars keyed by the SESSION day they precede (17:00 the evening before -> 08:27), stamped 'YYYY-MM-DD HH:MM:SS'."""
     out = collections.defaultdict(lambda: collections.defaultdict(dict))
     seen_files = 0
     for p in paths:
@@ -79,6 +98,14 @@ def harvest(paths):
                     t = int(r[0])
                     dt = datetime.fromtimestamp(t, tz=CT)
                     sec = dt.hour*3600 + dt.minute*60 + dt.second
+                    if night:
+                        sday = session_day_of(dt)
+                        if sday is None or dt.second:
+                            continue
+                        out[(mk, ysym)][sday][dt.strftime('%Y-%m-%d %H:%M:%S')] = [
+                            ysym, dt.strftime('%Y-%m-%d %H:%M:%S'), '',
+                            r[1], r[2], r[3], r[4], r[5] if len(r) > 5 else 0]
+                        continue
                     if not (RTH_A <= sec < RTH_B):
                         continue
                     # (v15.87) THE LIVE QUOTE IS NOT A BAR. Yahoo's last row is the in-progress minute stamped at the
@@ -94,18 +121,24 @@ def harvest(paths):
     return out, seen_files
 
 
-def merge_write(market, ysym, day, rows_by_min):
-    """Merge into any existing file for this market/day. Never destructive."""
+NIGHT_MIN = 200     # (v15.90) a night file is written only when the harvest holds a real night (the sweep study's MIN_ON) — a
+                    # RTH-only courier (GC / CL, and NQ before companion v1.19) yields a 27-minute pre-market stub, not a night
+def merge_write(market, ysym, day, rows_by_min, suffix=''):
+    """Merge into any existing file for this market/day. Never destructive. suffix '-night' (v15.90): the overnight file,
+    keyed by the full stamp (two calendar dates share one session night); a stub under NIGHT_MIN minutes is not written
+    unless the file already exists (a partial night completes from the next day file's window)."""
     d = os.path.join(OUT_ROOT, market)
     os.makedirs(d, exist_ok=True)
-    path = os.path.join(d, day + '.csv')
+    path = os.path.join(d, day + suffix + '.csv')
+    if suffix and len(rows_by_min) < NIGHT_MIN and not os.path.exists(path):
+        return path, 0, 0
     merged = {}
     if os.path.exists(path):
         with io.open(path, encoding='utf-8') as f:
             for x in csv.DictReader(f):
                 s = (x.get('Date') or '').strip()
                 if ' ' in s and s.endswith(':00'):        # (v15.87) a live-quote row written before this rule is dropped on rewrite
-                    merged[s.split(' ', 1)[1]] = [x.get(c, '') for c in HEADER]
+                    merged[(s if suffix else s.split(' ', 1)[1])] = [x.get(c, '') for c in HEADER]
     before = len(merged)
     merged.update(rows_by_min)
     if len(merged) == before and os.path.exists(path):
@@ -139,9 +172,59 @@ def main(argv):
             # letting a half day quietly enter the corpus looking whole.
             flag = '' if n >= 386 else '   <- INCOMPLETE (%d bars; the study needs >=386)' % n
             print('  %s  %4d bars  (+%d)%s' % (day, n, added, flag))
-    print('\n%d new minute(s) written under %s/' % (total_new, OUT_ROOT))
+    # (v15.90) the nights, one file per session day
+    nights, _ = harvest(paths, night=True)
+    total_night = 0
+    for (market, ysym), days in sorted(nights.items()):
+        print('\n%s  (%s)  the nights' % (market, ysym))
+        for day in sorted(days):
+            path, n, added = merge_write(market, ysym, day, days[day], suffix='-night')
+            total_night += added
+            flag = '' if n >= 200 else '   <- SHORT (%d bars; the sweep study needs >=200)' % n
+            print('  %s-night  %4d bars  (+%d)%s' % (day, n, added, flag))
+    print('\n%d new minute(s) written under %s/ · %d night minute(s)' % (total_new, OUT_ROOT, total_night))
     return 0
 
 
+def selftest():
+    """(v15.90) the nights: keyed by the SESSION day, the post-close dropped, a Sunday evening is Monday's night."""
+    import tempfile, shutil, time as _t
+    global OUT_ROOT
+    keep = OUT_ROOT; root = tempfile.mkdtemp(); OUT_ROOT = os.path.join(root, 'futures')
+    try:
+        def ts(s):
+            return int(datetime.strptime(s, '%Y-%m-%d %H:%M:%S').replace(tzinfo=CT).timestamp())
+        rows = [[ts('2026-09-04 15:30:00'), 1, 2, 0, 1, 5],      # post-close: dropped
+                [ts('2026-09-06 17:00:00'), 1, 2, 0, 1, 5],      # Sunday evening -> Monday 09-07's night
+                [ts('2026-09-07 23:30:00'), 1, 2, 0, 1, 5],      # Monday evening -> 09-08's night
+                [ts('2026-09-08 02:00:00'), 1, 2, 0, 1, 5],      # 09-08's night
+                [ts('2026-09-08 08:26:00'), 1, 2, 0, 1, 5],      # 09-08's night (the last minute before the RTH harvest)
+                [ts('2026-09-08 08:27:00'), 1, 2, 0, 1, 5],      # RTH
+                [ts('2026-09-08 08:27:41'), 1, 2, 0, 1, 0]]      # the live quote: dropped on both paths
+        day = os.path.join(root, '2026-09-08.json')
+        io.open(day, 'w').write(json.dumps(dict(futBars=dict(ES=dict(sym='ES=F', rows=rows)))))
+        got, _ = harvest([day]); night, _ = harvest([day], night=True)
+        assert list(got[('ES', 'ES=F')].keys()) == ['2026-09-08'] and list(got[('ES', 'ES=F')]['2026-09-08'].keys()) == ['08:27:00'], got
+        nd = night[('ES', 'ES=F')]
+        assert sorted(nd.keys()) == ['2026-09-07', '2026-09-08'], sorted(nd.keys())
+        assert sorted(nd['2026-09-08'].keys()) == ['2026-09-07 23:30:00', '2026-09-08 02:00:00', '2026-09-08 08:26:00'], sorted(nd['2026-09-08'].keys())
+        assert list(nd['2026-09-07'].keys()) == ['2026-09-06 17:00:00']
+        p0, n0, a0 = merge_write('ES', 'ES=F', '2026-09-08', nd['2026-09-08'], suffix='-night')
+        assert n0 == 0 and a0 == 0 and not os.path.exists(p0), 'a 3-minute stub is not a night: nothing written'
+        big = dict(('2026-09-08 %02d:%02d:00' % (h, m), ['ES=F', '2026-09-08 %02d:%02d:00' % (h, m), '', 1, 2, 0, 1, 5]) for h in range(0, 8) for m in range(0, 60))
+        big.update(nd['2026-09-08'])
+        p1, n1, a1 = merge_write('ES', 'ES=F', '2026-09-08', big, suffix='-night')
+        assert p1.endswith('2026-09-08-night.csv') and n1 == len(big) and a1 == len(big)
+        p2, n2, a2 = merge_write('ES', 'ES=F', '2026-09-08', nd['2026-09-08'], suffix='-night')
+        assert n2 == len(big) and a2 == 0, (n2, a2)                # idempotent; an existing file keeps merging
+        txt = io.open(p1).read()
+        assert txt.startswith('Symbol,Date,VOL,Open,High,Low,Close,Volume') and 'ES=F,2026-09-07 23:30:00,' in txt
+        print('append-futures selftest ok')
+    finally:
+        OUT_ROOT = keep; shutil.rmtree(root, ignore_errors=True)
+
+
 if __name__ == '__main__':
+    if '--selftest' in sys.argv:
+        selftest(); sys.exit(0)
     sys.exit(main(sys.argv[1:]))

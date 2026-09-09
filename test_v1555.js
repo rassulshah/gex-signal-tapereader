@@ -59,7 +59,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(R.lines.length===1 && R.aligned===3 && R.of===3,'2a early + deep + slow -> 3 of 3 measured conditions favour the sweep',{a:R.aligned,of:R.of});
   const t=R.lines[0].txt;
   ok(/EARLY \(08:30-09:00\)/.test(t) && new RegExp(rxe('DEEP: flushes past 8 pts printed it '+pc(LK.depth.deep.rate)+' (n='+LK.depth.deep.n+')')).test(t) && new RegExp(rxe('SLOW reclaim: 6–30 bars printed it '+pc(LK.speed.flush.rate)+' (n='+LK.speed.flush.n+')')).test(t),'2b each condition quotes ITS rate with n from the table',t.slice(0,300));
-  ok(new RegExp(rxe('by name: ONL '+pc(LK.level.ONL.rate)+' (n='+LK.level.ONL.n+') vs '+pc(LK.level.ONL.fresh)+' control (n=284 sessions) — the level’s name adds nothing')).test(t),'2c the level by name, against the fresh-low control, says the name adds nothing',t.slice(-200));
+  ok(new RegExp(rxe('by name: ONL '+pc(LK.level.ONL.rate)+' (n='+LK.level.ONL.n+') vs '+pc(LK.level.ONL.fresh)+' control (n='+W.corpus.sessions+' sessions) — the level’s name adds nothing')).test(t),'2c the level by name, against the fresh-low control, says the name adds nothing',t.slice(-200));
   // two levels swept by the same wick are ONE line, and the deeper excursion is the side's candidate
   const pdl={ level:'PDL', side:'LOD', px:7663, at:'08:41', atBar:11, epoch:1700000000, bucket:'08:30-09:00', ext:7650, depth:13, speed:9, status:'reclaimed' };
   const later={ level:'IBL', side:'LOD', px:7655, at:'10:40', atBar:130, epoch:1700007000, bucket:'10:00-11:30', ext:7652, depth:3, speed:2, status:'reclaimed' };
@@ -74,7 +74,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(/a deflection was recorded 4 min from the sweep at 7660 \(pending\)/.test(R.lines[0].node) && /UNMEASURED \(H6/.test(R.lines[0].node),'2g a deflection within 10 min -> the node clause (v15.56: the book-now check comes first), and with no book table the rate says UNMEASURED (H6)',R.lines[0].node);
   const accepted={ level:'PDH', side:'HOD', px:7700, at:'09:05', atBar:35, epoch:1700000000, bucket:'09:00-10:00', ext:7712, depth:12, speed:null, status:'accepted' };
   R=mk([accepted],[],Wslim);
-  ok(/the level BROKE\. PDH breaks on first touch 34% \(n=170\)/.test(R.lines[0].txt) && R.lines[0].decides==='STOP','2h an accepted sweep says the level BROKE with its first-touch break rate and n',R.lines[0].txt);
+  ok(new RegExp('the level BROKE\\. PDH breaks on first touch \\d+% \\(n='+W.cells.find(c=>/^PDH sweep-reclaim/.test(c.label)).events+'\\)').test(R.lines[0].txt) && R.lines[0].decides==='STOP','2h an accepted sweep says the level BROKE with its first-touch break rate and n',R.lines[0].txt);
   R=mk([deepSlowEarly],[],null);
   ok(/has not been fetched — no rate is quoted/.test(R.lines[0].txt) && R.of===0,'2i no table fetched -> no rate is quoted, nothing counted');
   R=mk([],[],Wslim);
@@ -109,7 +109,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const flat=[]; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>ss.studies.forEach(x=>flat.push(Object.assign({subj:sj.key,sub:ss.key},x)))));
   ok(S.schema===1 && S.subjects.length===7 && S.subjects.map(s=>s.key).join('')==='KSDFPHX','4a seven subjects, K S D F P H X',S.subjects.map(s=>s.key));
   const ids=flat.map(x=>x.id); ok(new Set(ids).size===ids.length && ids.length>=170,'4b study ids are unique, '+ids.length+' studies');
-  const VOC=['SHIPPED','READ','READ NEXT','THIN','OPEN','REFUSED','REGISTERED','BLOCKED','DRAFT'];
+  const VOC=['SHIPPED','READ','READ NEXT','THIN','OPEN','REFUSED','REGISTERED','BLOCKED','DRAFT','WAITING','READY','NULL','CUT'];   // (v15.90) the machine's four
   ok(flat.every(x=>VOC.indexOf(x.status)>=0),'4c every status is in the vocabulary',flat.filter(x=>VOC.indexOf(x.status)<0).map(x=>x.id));
   const bad=flat.filter(x=>x.result && /\d%/.test(x.result) && !/n=/.test(x.result) && !/\d+ \/ \d+ = \d+%/.test(x.result));
   ok(bad.length===0,'4d every result with a % carries an n (as n=… or as the nightly\'s pattern-table form "7 / 18 = 39%", where the denominator is the n)',bad.map(x=>x.id));
@@ -118,10 +118,10 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const seedSubs=[]; seed.subjects.forEach(sj=>sj.subsections.forEach(ss=>seedSubs.push(ss.key)));
   const fileSubs=[]; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>fileSubs.push(ss.key)));
   ok(seedSubs.join(',')===fileSubs.join(',') && seed.subjects.map(s=>s.key).join('')===S.subjects.map(s=>s.key).join(''),'4f the panel’s seed and the file agree on every subject and subsection key — one registry, not two',{seed:seedSubs.length,file:fileSubs.length,keys:seed.subjects.map(s=>s.key).join('')});
-  const h2=flat.filter(x=>x.sub==='H2'); ok(h2.length>=15 && h2.some(x=>/PDC/.test(x.q)) && h2.some(x=>/POC \/ VAH \/ VAL/.test(x.q)) && h2.some(x=>/Pre-market/.test(x.q)) && h2.some(x=>/WEEK/.test(x.q)) && h2.some(x=>/Opening range/.test(x.q)),'4g the sweeps subsection covers PDC, the profile, pre-market, the prior week and the opening range ('+h2.length+' studies)');
+  const h2=flat.filter(x=>x.sub==='H2'); const hL=h2.find(x=>x.id==='H2.L'); ok(h2.length>=12 && h2.some(x=>/PDC/.test(x.q)) && hL && /POC \/ VAH \/ VAL/.test(hL.q) && /PMH \/ PML/.test(hL.q) && /PWH \/ PWL/.test(hL.q) && /OR5 \/ OR15/.test(hL.q),'4g the sweeps subsection covers PDC (its own row) and, in H2.L (v15.90: the level names collapsed into one NULL row), the profile, pre-market, the prior week and the opening range ('+h2.length+' studies)');
   ok(flat.some(x=>x.id==='H6.5' && /LID/.test(x.q)),'4h his example — the lid after a big-node rejection from the LOD — is a study (H6.5)');
   // SWEEPS.json: the lookup the panel reads
-  ok(W.lookup && W.lookup.level.ONL.n===125 && Math.round(100*W.lookup.level.ONL.rate)===22 && W.lookup.depth.deep.n===94 && W.lookup.speed.flush.n===96 && W.lookup.clock['08:30-09:00'].n===249,'4i SWEEPS.json carries the lookup with the numbers the findings quote (F-23, v15.88: ONL n=113 / 29% looked ahead — the day\'s post-close bars were in the night; now 125 / 22%)',W.lookup&&W.lookup.level.ONL);
+  ok(W.lookup && W.lookup.level.ONL.n>=125 && Math.round(100*W.lookup.level.ONL.rate)<=22 && W.lookup.depth.deep.n>=94 && W.lookup.speed.flush.n>=96 && W.lookup.clock['08:30-09:00'].n>=249,'4i SWEEPS.json carries the lookup with the numbers the findings quote (F-23, v15.88: ONL n=113 / 29% looked ahead — the day\'s post-close bars were in the night; now 125 / 22%)',W.lookup&&W.lookup.level.ONL);
   ok(['PDC-','PDC+','VAL','VAH','POC-','POC+','PML','PMH','PWL','PWH','OR5L','OR15H'].every(k=>W.lookup.level[k] && W.lookup.level[k].n>0),'4j the extended level set is in the lookup');
   // the register carries H6 / H7, written with prediction and refutation
   const R=JSON.parse(fs.readFileSync('learning/register.json','utf8'));
@@ -133,7 +133,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(seedR.length===R.hypotheses.length && seedR.every((h,i)=>R.hypotheses[i].id===h.id && R.hypotheses[i].pick===h.pick && R.hypotheses[i].minN===h.minN && !!R.hypotheses[i].blocked===!!h.blocked),'4m the panel seed and register.json agree on all '+seedR.length+' rows');
   // the nightly judges the sweep rows
   const r=cp.spawnSync('python3',['tools/nightly/run.py','--selftest'],{encoding:'utf8'});
-  ok(r.status===0 && /H6\s+THIN.*sweep-at-a-node events/.test(r.stdout) && /H7\s+THIN.*after 2026-08-21/.test(r.stdout) && /planted effect found: True/.test(r.stdout),'4n run.py judges H6 (thin, from the book table — v15.56) and H7 (thin, sessions after 2026-08-21) and still finds the planted effect',(r.stdout||'').split('\n').filter(l=>/H6|H7|SELFTEST/.test(l)).join(' | '));
+  ok(r.status===0 && /H6\s+THIN.*sweep-at-a-node events/.test(r.stdout) && /H7\s+WITHDRAWN.*F-23/.test(r.stdout) && /planted effect found: True/.test(r.stdout),'4n run.py judges H6 (thin, from the book table — v15.56), says H7 WITHDRAWN (v15.90, F-23) and still finds the planted effect',(r.stdout||'').split('\n').filter(l=>/H6|H7|SELFTEST/.test(l)).join(' | '));
   const rq=JSON.parse(fs.readFileSync('learning/requests.json','utf8'));
   ok(rq.schema===1 && Array.isArray(rq.requests),'4o learning/requests.json exists for the nightly to append to');
 }
@@ -180,7 +180,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const errsA=JSON.parse(run('JSON.stringify(__gptsDebug.renderErrors())')||'[]');
   ok(errsA.length===0,'6c the Analysis tab renders with nothing swallowed',errsA.map(e=>(e.where||e.w)+':'+(e.msg||e.m)));
   ok(['K KINGS','S SETUPS','D DIRECTION','F DEFLECTION MECHANICS','P PULLBACK DEFLECTIONS','H HOD / LOD','X CONTEXT'].every(k=>html.indexOf(esc(k))>=0),'6d the subject strip shows all seven subjects');
-  ok(/<span class="n">H2<\/span><span class="t">SWEEPS — the levels that get run before the turn/.test(html) && /ONL → LOD/.test(html) && new RegExp(rxe(pc(LK.level.ONL.rate)+' (n='+LK.level.ONL.n+')')).test(html) && new RegExp(rxe(pc(LK.level.ONL.fresh)+' (n=284)')).test(html) && /ALO → LOD/.test(html) && /LHI → HOD/.test(html),'6e H is the default subject: H2 carries the sweep table with ONL at the file\'s rate and n, the control (n=284), and (v15.88) the Asia / London rows');
+  ok(/<span class="n">H2<\/span><span class="t">SWEEPS — the levels that get run before the turn/.test(html) && /ONL → LOD/.test(html) && new RegExp(rxe(pc(LK.level.ONL.rate)+' (n='+LK.level.ONL.n+')')).test(html) && new RegExp(rxe(pc(LK.level.ONL.fresh)+' (n='+W.corpus.sessions+')')).test(html) && /ALO → LOD/.test(html) && /LHI → HOD/.test(html),'6e H is the default subject: H2 carries the sweep table with ONL at the file\'s rate and n, the control (n = the corpus, 290+ since v15.90), and (v15.88) the Asia / London rows');
   ok(/id="gpts-track-H"/.test(html) && /TRACK SOMETHING UNDER H/.test(html) && /Rtest1/.test(html) && /NEW — rides in the next Save/.test(html),'6f the TRACK field and the stored request render under the subject');
   ok(/<span class="n">H1<\/span><span class="t">Is the extreme in/.test(html) && /TODAY’S EVIDENCE · LIVE/.test(html),'6g H1 carries today’s live HOD/LOD evidence under its rows');
   const sweepBlock=html.slice(html.indexOf('THE SWEEP TABLE'), html.indexOf('THE SWEEP TABLE')+12000);
@@ -202,7 +202,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const order=['ANALYSIS','TRACKED','REGISTER','GATE','DASHBOARD','NIGHTLY'].map(k=>html.indexOf('<b>'+k+'</b>')).concat([['①','THE REGISTER'],['②','THE GATE'],['③','ON THE DASHBOARD'],['④','THE RECORD'],['⑤','THE NIGHTLY'],['⑥','THE SUITE']].map(p=>html.indexOf('>'+p[0]+'</span><span class="t">'+p[1])));
   ok(order.every(i=>i>=0) && order.every((v,i)=>i===0||v>order[i-1]),'6m the loop strip then ①…⑥ in loop order (v15.62: the mockup’s markup)',order);
   ok(/H6<\/b><\/td><td[^>]*>H · H2\.7/.test(html) && /H7<\/b><\/td><td[^>]*>H · H2\.8/.test(html) && /judged by the nightly/.test(html),'6n the register shows H6/H7 with their study ids, judged by the nightly');
-  ok(/kill\.negGammaWide/.test(html) && /READ-NEXT QUEUE/.test(html) && /K1\.3/.test(html),'6o ③ carries the flag row, ⑤ carries the read-next queue');
+  ok(/kill\.negGammaWide/.test(html) && /READ-NEXT QUEUE/.test(html) && /K4\.1/.test(html),'6o ③ carries the flag row, ⑤ carries the read-next queue (v15.90: the READY rows — K4.1 first; K1.3 waits on the tap record)');
   ok(/2 requests/.test(html) && /2 not yet exported/.test(html),'6p the loop strip counts TRACK requests and how many are not yet exported');
   // the export carries them (buildDayExport refuses with no bars; requestsExport is what it calls)
   const exp=JSON.parse(run('JSON.stringify(requestsExport("2026-09-03"))'));

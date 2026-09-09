@@ -2,8 +2,8 @@
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
  "asOf": "2026-09-09",
- "generatedAt": "2026-09-09T14:05:29Z",
- "ranOn": "his machine",
+ "generatedAt": "2026-09-09T15:11:24Z",
+ "ranOn": "cloud",
  "complete": 386,
  "days": [
   {
@@ -1003,8 +1003,8 @@
    "definition": "tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending "
   },
   "sweeps": {
-   "sessions": 284,
-   "cells": 127,
+   "sessions": 290,
+   "cells": 128,
    "levels": 36
   },
   "book": {
@@ -1018,45 +1018,177 @@
    "blind": 0
   }
  },
+ "counts": {
+  "price": {
+   "have": 295,
+   "unit": "sessions",
+   "perSession": 1.0,
+   "sessions": 295,
+   "first": "2025-06-02",
+   "note": "ES BASERATES: the vendor + the couriered days"
+  },
+  "nq": {
+   "have": 195,
+   "unit": "sessions",
+   "perSession": 1.0,
+   "sessions": 195,
+   "first": "2025-11-24",
+   "note": "NQ BASERATES"
+  },
+  "sweeps": {
+   "have": 290,
+   "unit": "sessions",
+   "perSession": 1.0,
+   "sessions": 290,
+   "first": null,
+   "note": "the sweep corpus (vendor + the couriered nights, v15.90)"
+  },
+  "book": {
+   "have": 13,
+   "unit": "sessions",
+   "perSession": 1.0,
+   "sessions": 13,
+   "first": null,
+   "note": "the SPY 3-minute book from the day files"
+  },
+  "ledger": {
+   "have": 148,
+   "unit": "taps",
+   "perSession": 37.0,
+   "sessions": 4,
+   "first": "2026-09-03",
+   "note": "the deflection ledger (±0.50 SPY wobbles) — the tap record replaces it at his scale"
+  },
+  "kingroll": {
+   "have": 170,
+   "unit": "rows",
+   "perSession": 24.29,
+   "sessions": 7,
+   "first": "2026-08-19",
+   "note": "dir.kingRoll rows with an outcome (per bar, not independent rolls)"
+  },
+  "gate": {
+   "have": 231,
+   "unit": "rows",
+   "perSession": 25.67,
+   "sessions": 9,
+   "first": "2026-08-19",
+   "note": "gateHour rows with an outcome"
+  },
+  "tap": {
+   "have": 0,
+   "unit": "taps",
+   "perSession": null,
+   "sessions": null,
+   "first": null,
+   "note": "THE TAP RECORD — not recorded yet (v15.91)"
+  },
+  "vix": {
+   "have": 0,
+   "unit": "closes",
+   "perSession": null,
+   "sessions": null,
+   "first": null,
+   "note": "^VIX daily closes live only in the browser (gpts_vix_daily_v1) — R-35 / a courier file would land them here"
+  },
+  "calendar": {
+   "have": 0,
+   "unit": "event days",
+   "perSession": null,
+   "sessions": null,
+   "first": null,
+   "note": "ForexFactory events live only in the browser (gpts_evcal_v1) — no file in the repo yet"
+  },
+  "live": {
+   "have": 0,
+   "unit": "—",
+   "perSession": null,
+   "sessions": null,
+   "first": null,
+   "note": "live only — no corpus"
+  }
+ },
  "studies": {
-  "total": 195,
+  "total": 184,
   "byStatus": {
-   "READ NEXT": 18,
-   "READ": 26,
-   "OPEN": 89,
+   "REGISTERED": 10,
+   "CUT": 2,
+   "NULL": 2,
+   "THIN": 12,
+   "SHIPPED": 13,
+   "READ": 15,
+   "READY": 15,
+   "WAITING": 111,
    "REFUSED": 3,
-   "DRAFT": 2,
-   "THIN": 36,
-   "REGISTERED": 8,
-   "SHIPPED": 13
+   "OPEN": 1
   },
   "byCorpus": {
-   "tap record": {
+   "tap": {
     "studies": 104,
-    "open": 85
+    "waiting": 88,
+    "ready": 0
    },
    "book": {
-    "studies": 43,
-    "open": 0
+    "studies": 26,
+    "waiting": 19,
+    "ready": 0
    },
-   "live / API": {
-    "studies": 3,
-    "open": 3
-   },
-   "other": {
+   "kingroll": {
     "studies": 4,
-    "open": 1
+    "waiting": 0,
+    "ready": 3
    },
-   "price corpus": {
-    "studies": 41,
-    "open": 0
+   "cut": {
+    "studies": 2,
+    "waiting": 0,
+    "ready": 0
+   },
+   "gate": {
+    "studies": 1,
+    "waiting": 0,
+    "ready": 1
+   },
+   "ledger": {
+    "studies": 14,
+    "waiting": 0,
+    "ready": 6
+   },
+   "price": {
+    "studies": 23,
+    "waiting": 0,
+    "ready": 4
+   },
+   "nq": {
+    "studies": 3,
+    "waiting": 0,
+    "ready": 1
+   },
+   "register": {
+    "studies": 2,
+    "waiting": 0,
+    "ready": 0
+   },
+   "live": {
+    "studies": 1,
+    "waiting": 0,
+    "ready": 0
+   },
+   "calendar": {
+    "studies": 2,
+    "waiting": 2,
+    "ready": 0
+   },
+   "vix": {
+    "studies": 2,
+    "waiting": 2,
+    "ready": 0
    }
   }
  },
  "nightly": {
   "date": "2026-09-08",
-  "ranOn": "his machine",
-  "ranAt": "2026-09-09T12:55:22Z",
+  "ranOn": "cloud",
+  "ranAt": "2026-09-09T14:49:52Z",
   "sessions": 3,
   "episodes": 23,
   "deflEvents": 141
