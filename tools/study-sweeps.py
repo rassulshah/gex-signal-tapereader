@@ -25,9 +25,14 @@ DEFINITIONS, written before the first number was read (2026-09-03):
                   VAL is a low-side level, VAH high-side, POC both.
   PMH/PML         the pre-market: the ON bars from 07:00 CT to the open. High-side / low-side.
   PWH/PWL         the previous ISO week's RTH high/low.
+  WPOC            (v15.88) the previous ISO week's POC — the week's RTH volume profile (the same 1-point grid as POC,
+                  over five sessions); both sides, like POC. His 'weekly POC' (2026-09-08); the panel draws it from the
+                  companion's 5-minute weekly bars (v1.19), the corpus from its own minutes.
   OR5 / OR15      the opening range: the high/low of the first 5 / 15 RTH minutes; sweeps looked for
                   after the range completes.
-  LDNH/LDNL       (v15.57) the London range: the ON bars from 02:00 CT to the open.
+  AHI/ALO         (v15.88) the ASIA session: the ON bars from the Globex open 17:00 CT (the evening before) to 02:00.
+  LHI/LLO         (v15.88) the LONDON session: the ON bars from 02:00 CT to the open. (v15.57's LDNH/LDNL, renamed to
+                  his names — operator 2026-09-08: "they can be ALO, AHI, LLO, LHI"; the hours 2026-09-09: "whatever is standard".)
   VWAP, VW1/VW2   (v15.57) the session VWAP (typical price x volume, cumulative) and its +-1 / +-2 sigma
                   bands (volume-weighted sd of price about the VWAP). DYNAMIC: the level is valued at the
                   sweep bar and frozen for the reclaim; the side is the side price came FROM (a dip below the
@@ -58,7 +63,7 @@ MIN_RTH, MIN_ON = 386, 200
 RECLAIM_MAX = 30
 IB_BARS = 60
 PREMKT = 7*3600
-LONDON = 2*3600
+LONDON = 2*3600          # (v15.88) the Asia / London cut, 02:00 CT; Asia runs from NIGHT (17:00) to it
 DYN_START_VWAP, DYN_START_DEV = 5, 30
 PROF_VA = 0.70
 BUCKETS = [('08:30-09:00', 0, 30), ('09:00-10:00', 30, 90), ('10:00-11:30', 90, 180), ('11:30-15:00', 180, 391)]
@@ -258,7 +263,11 @@ def run(path):
         rth, on = S[d]
         fl = min(b[3] for b in rth); fh = max(b[2] for b in rth)
         op = rth[0][1]; cl = rth[-1][4]
-        onh = max(b[2] for b in on); onl = min(b[3] for b in on)
+        # (v15.88) THE NIGHT IS BEFORE THE SESSION. `on` also holds the day's own post-close bars (15:01-16:59, before the
+        # 17:00 roll to the next key); they came AFTER the RTH they were being measured against, and the panel's overnightHL
+        # never had them (17:00 of the prior key -> 08:29). One definition: the evening from 17:00 and the morning to the open.
+        night = [b for b in on if b[0] >= NIGHT or b[0] < RTH_A] or on
+        onh = max(b[2] for b in night); onl = min(b[3] for b in night)
         ibh = max(b[2] for b in rth[:IB_BARS]); ibl = min(b[3] for b in rth[:IB_BARS])
         openloc = 'above ON' if op > onh else ('below ON' if op < onl else 'inside ON')
         pm = [b for b in on if PREMKT <= b[0] < RTH_A]
@@ -276,9 +285,15 @@ def run(path):
         pw = weeks.get((wk[0], wk[1]-1)) or (weeks.get(max([k for k in weeks if k < wk], default=None)) if any(k < wk for k in weeks) else None)
         if pw:
             levels += [('PWL', pw[0], True, 0), ('PWH', pw[1], False, 0)]
+            if len(pw) > 2 and pw[2]:
+                wp = max(sorted(pw[2]), key=lambda k: pw[2][k])
+                levels += [('WPOC-', wp, True, 0), ('WPOC+', wp, False, 0)]
+        asia = [b for b in on if b[0] >= NIGHT or b[0] < LONDON]
+        if len(asia) >= 150:      # the panel's floor (sessionHL): a holiday evening that starts late is still a session
+            levels += [('ALO', min(b[3] for b in asia), True, 0), ('AHI', max(b[2] for b in asia), False, 0)]
         ldn = [b for b in on if LONDON <= b[0] < RTH_A]
         if len(ldn) >= 120:
-            levels += [('LDNL', min(b[3] for b in ldn), True, 0), ('LDNH', max(b[2] for b in ldn), False, 0)]
+            levels += [('LLO', min(b[3] for b in ldn), True, 0), ('LHI', max(b[2] for b in ldn), False, 0)]
         # (v15.57) DYNAMIC levels: VWAP and its bands, today's developing profile
         VS = vwap_series(rth); DP = dev_profile_series(rth)
         dyn = [('VWAP', [x[0] for x in VS], DYN_START_VWAP, None),
@@ -318,7 +333,13 @@ def run(path):
                 to_far=((fh-ev['ext']) if low else (ev['ext']-fl)),
             ))
         prev = (fl, fh, cl, prior_profile(rth))
-        weeks.setdefault(iso_week(d), [1e9, -1e9]); weeks[iso_week(d)][0] = min(weeks[iso_week(d)][0], fl); weeks[iso_week(d)][1] = max(weeks[iso_week(d)][1], fh)
+        weeks.setdefault(iso_week(d), [1e9, -1e9, {}]); weeks[iso_week(d)][0] = min(weeks[iso_week(d)][0], fl); weeks[iso_week(d)][1] = max(weeks[iso_week(d)][1], fh)
+        wv = weeks[iso_week(d)][2]                     # (v15.88) the week's volume by price, for WPOC
+        for b in rth:
+            lo_, hi_ = b[3], b[2]; v_ = b[5] if (len(b) > 5 and b[5] is not None) else 1.0
+            n_ = max(1, int(round(hi_-lo_))+1); sh_ = v_/n_
+            for k_ in range(n_):
+                px_ = int(round(lo_))+k_; wv[px_] = wv.get(px_, 0.0)+sh_
 
     def cell(rows, label):
         nonlocal ledger
@@ -345,8 +366,8 @@ def run(path):
     by_level = collections.defaultdict(list)
     for e in events:
         by_level[e['level']].append(e)
-    LEVELS = ['ONL', 'ONH', 'PDL', 'PDH', 'IBL', 'IBH', 'PDC-', 'PDC+', 'VAL', 'VAH', 'POC-', 'POC+', 'PML', 'PMH', 'PWL', 'PWH', 'OR5L', 'OR5H', 'OR15L', 'OR15H',
-              'LDNL', 'LDNH', 'VWAP-', 'VWAP+', 'VW1L', 'VW1H', 'VW2L', 'VW2H', 'DPOC-', 'DPOC+', 'DVAL', 'DVAH']
+    LEVELS = ['ONL', 'ONH', 'PDL', 'PDH', 'IBL', 'IBH', 'PDC-', 'PDC+', 'VAL', 'VAH', 'POC-', 'POC+', 'PML', 'PMH', 'PWL', 'PWH', 'WPOC-', 'WPOC+', 'OR5L', 'OR5H', 'OR15L', 'OR15H',
+              'ALO', 'AHI', 'LLO', 'LHI', 'VWAP-', 'VWAP+', 'VW1L', 'VW1H', 'VW2L', 'VW2H', 'DPOC-', 'DPOC+', 'DVAL', 'DVAH']
     def side_of(lv):
         return 'LOD' if (lv.endswith('L') or lv.endswith('-')) else 'HOD'
     for lv in LEVELS:

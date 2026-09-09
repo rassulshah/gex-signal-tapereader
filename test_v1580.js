@@ -66,7 +66,7 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
   // the shape of the change
   const mb=ex('measureBarsRaw');
   ok(/typeof dispIsFut==='function' && dispIsFut\(\) && REPLAY\.day && typeof futSessionBars==='function'/.test(mb), '1n the new dependencies are typeof-guarded — absent must mean ABSENT, never a throw (the v15.08 lesson)');
-  ok(/if\(cutMs!=null && rq\[0\]\*1000>cutMs\) break;/.test(mb) && /if\(esb\.length>=30\) return \{ bars:esb, scale:1, src:'ES', day:REPLAY\.day, approxOpen:false, shown:true \};/.test(mb), '1o the cut at the parked minute and the 30-bar floor are in the code');
+  ok(/if\(cutMs!=null && rq\[0\]\*1000>cutMs\) break;/.test(mb) && /if\(esb\.length>=30\) return \{ bars:esb, scale:1, src:\(\(typeof dispMarket==='function'\)\?dispMarket\(\):'ES'\), day:REPLAY\.day, approxOpen:false, shown:true \};/.test(mb), '1o the cut at the parked minute and the 30-bar floor are in the code');
   ok(/var RB=\(typeof replayFrameBars==='function'\)\?replayFrameBars\(\):\[\];/.test(ex('closedCandles')), '1p closedCandles reads replayFrameBars, not measureBars');
 }
 
@@ -157,7 +157,7 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
 // ---------- 3. HIS KEY LEVELS: the tiers, the sweep set, the full overnight ----------
 {
   const T=val('LEVEL_TIER');
-  ok(['PDH','PDL','ONH','ONL','VAH','VAL','POC','PWH','PWL','WPOC'].every(k=>T[k]===1) && Object.keys(T).filter(k=>T[k]===1).length===10, '3a tier 1 is his list and nothing else: PDH PDL ONH ONL VAH VAL POC + PWH PWL WPOC by name for the day they exist', Object.keys(T).filter(k=>T[k]===1));
+  ok(['PDH','PDL','ONH','ONL','VAH','VAL','POC','PWH','PWL','WPOC','AHI','ALO','LHI','LLO'].every(k=>T[k]===1) && Object.keys(T).filter(k=>T[k]===1).length===14, '3a tier 1 is his list and nothing else: PDH PDL ONH ONL VAH VAL POC + PWH PWL WPOC by name for the day they exist + (v15.88) AHI ALO LHI LLO, the four he added 2026-09-08', Object.keys(T).filter(k=>T[k]===1));
   ok(T.KING===2 && T.CW0===2 && T.PW0===2 && !('EMH' in T) && !('EML' in T) && !('IBH' in T) && !('IBL' in T) && !('PDC' in T), '3b the King is structure (tier 2, with CW0/PW0); EMH/EML, IBH/IBL and PDC are not in the map at all');
   eval(ex('levelTier'));
   ok(levelTier('KING-')===2 && levelTier('POC+')===1 && levelTier('EML')===4 && levelTier('IBL')===4 && levelTier('PDC-')===4, '3c …so levelTier says 1 for a key level, 2 for the King, 4 (unranked) for what he removed');

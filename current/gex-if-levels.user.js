@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.18
+// @version      1.19
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -593,7 +593,10 @@ var FUT_MARKETS=[
   // CT; the live feed must carry the same hours or the live level is a different level with the same
   // name. ES only: it is the corpus instrument, and 5 days x ~1,380 bars is ~6,900 rows (~300 KB).
   { k:'ES', y:'ES=F', full:true },
-  { k:'NQ', y:'NQ=F' },
+  // (v1.19) ⚠ NQ KEEPS THE WHOLE GLOBEX DAY TOO. Operator, 2026-09-09 ("yes" to the NQ night): on the NQ chart the panel
+  // draws ONH/ONL and the Asia / London levels (AHI ALO LHI LLO) from THESE bars, and ⓪a measures NQ's own session
+  // (v15.88). Another ~300 KB of localStorage; GC and CL stay RTH-only (nothing reads their night).
+  { k:'NQ', y:'NQ=F', full:true },
   { k:'GC', y:'GC=F' },
   { k:'CL', y:'CL=F' },
   // (v1.16) ⚠ VIX IS A DIFFERENT KIND OF ROW AND IS FETCHED DIFFERENTLY — see vixCourier below.
@@ -694,6 +697,50 @@ function futCourier(){
     for(var i=0;i<FUT_MARKETS.length;i++) futPull(FUT_MARKETS[i]);
   }catch(e){ log('futCourier threw', e.message); }
 }
+// ---- (v1.19) THE WEEKLY COURIER — the prior week's high, low and POC need more than 7 days ---------------------------
+// Yahoo serves 1-minute bars for ≤ 7 days, so PWH / PWL / WPOC (tier 1 on his key-level list since v15.80) were named
+// on the face and never drawn: the prior ISO week is up to 12 days back. 5-minute bars reach 60 days; one month is
+// enough for the prior week with room for a holiday. RTH-only rows (the panel cuts 08:30–15:00 CT exactly), ES and NQ,
+// ~100 KB each, polled every 6 hours — the prior week does not move during the week. Same parser, same shape, its own
+// key: the panel reads gpts_futweek_v1 and never confuses a 5-minute row with a 1-minute one.
+var FUT_WEEK_KEY='gpts_futweek_v1';
+var FUT_WEEK_MARKETS=[ { k:'ES', y:'ES=F' }, { k:'NQ', y:'NQ=F' } ];
+var FUT_WEEK_POLL_MS=6*60*60*1000;
+var futWeekLast=0;
+function futWeekStore(key, obj){
+  try{
+    var cur={}; try{ cur=JSON.parse(localStorage.getItem(FUT_WEEK_KEY)||'{}')||{}; }catch(e){}
+    cur[key]=obj; cur._v=1; cur._at=Date.now(); cur._gran='5m';
+    localStorage.setItem(FUT_WEEK_KEY, JSON.stringify(cur));
+  }catch(e){ log('futWeekStore failed', e.message); }
+}
+function futWeekPull(m){
+  try{
+    GM_xmlhttpRequest({
+      method:'GET',
+      url:'https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(m.y)+'?interval=5m&range=1mo',
+      timeout:25000,
+      onload:function(res){
+        try{
+          if(!res || res.status!==200){ futWeekStore(m.k, { err:'HTTP '+(res&&res.status), at:Date.now() }); return; }
+          var P=futParse(res.responseText||'', false);          // RTH window only — the week's levels are RTH levels
+          if(P.err){ futWeekStore(m.k, { err:P.err, at:Date.now() }); return; }
+          futWeekStore(m.k, { at:Date.now(), sym:P.sym, gran:P.gran, tz:P.tz, gmtoffset:P.gmtoffset, n:P.rows.length, rows:P.rows });
+          log('weekly bars', m.k, P.rows.length, '5-minute rows');
+        }catch(e){ futWeekStore(m.k, { err:'compute: '+e.message, at:Date.now() }); }
+      },
+      onerror:function(){ futWeekStore(m.k, { err:'network error', at:Date.now() }); },
+      ontimeout:function(){ futWeekStore(m.k, { err:'timeout', at:Date.now() }); }
+    });
+  }catch(e){ futWeekStore(m.k, { err:'GM_xmlhttpRequest unavailable: '+e.message, at:Date.now() }); }
+}
+function futWeekCourier(){
+  try{
+    if(Date.now()-futWeekLast < FUT_WEEK_POLL_MS) return;
+    futWeekLast=Date.now();
+    for(var i=0;i<FUT_WEEK_MARKETS.length;i++) futWeekPull(FUT_WEEK_MARKETS[i]);
+  }catch(e){ log('futWeekCourier threw', e.message); }
+}
 
 // ---- (v1.16) THE VIX DAILY COURIER — the one input class the corpus cannot supply -------------
 // FINDINGS F-16 measured the daily ATR and it adds NOTHING to the touch model: realized sigma
@@ -775,34 +822,42 @@ function fsideCourier(){
 // change once a day at most.
 var HLBASE_KEY='gpts_hodlod_base_v1';
 var HLBASE_URL='https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/data/es-1min/BASERATES.json';
+// (v1.19) THE SAME COURIER FOR NQ's BASE RATES — ⓪a per market (panel v15.88): on the NQ chart the E row stands on
+// data/futures/NQ/BASERATES.json (the vendor's NQ sessions + the Yahoo days, the nightly's file), under its own key.
+var HLBASE_NQ_KEY='gpts_hodlod_base_nq_v1';
+var HLBASE_NQ_URL='https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/data/futures/NQ/BASERATES.json';
 var HLBASE_POLL_MS=6*60*60*1000;
 var hlbLast=0;
+function hlBaseFetch(url, key, label){
+  GM_xmlhttpRequest({
+    method:'GET', url:url, timeout:20000,
+    onload:function(res){
+      try{
+        if(!res || res.status!==200) return;
+        var j=JSON.parse(res.responseText);
+        // ⚠ VALIDATE BEFORE STORING. A malformed or truncated payload must never reach the face —
+        // the panel falls back to its baked-in literal, which is old but known-good. Absence of
+        // data is not a reading; neither is a half-parsed one.
+        if(!j || !j.corpus || !(j.corpus.sessions>0) || !j.ladder || !j.ladder.both) return;
+        localStorage.setItem(key, JSON.stringify({ at:Date.now(), base:j }));
+        log(label+' delivered:', j.corpus.sessions, 'sessions through', j.corpus.last);
+      }catch(e){ log(label+' parse failed', e.message); }
+    },
+    onerror:function(){ log(label+' fetch failed'); },
+    ontimeout:function(){ log(label+' fetch timeout'); }
+  });
+}
 function hlBaseCourier(){
   try{
     if(Date.now()-hlbLast < HLBASE_POLL_MS) return;
     hlbLast=Date.now();
-    GM_xmlhttpRequest({
-      method:'GET', url:HLBASE_URL, timeout:20000,
-      onload:function(res){
-        try{
-          if(!res || res.status!==200) return;
-          var j=JSON.parse(res.responseText);
-          // ⚠ VALIDATE BEFORE STORING. A malformed or truncated payload must never reach the face —
-          // the panel falls back to its baked-in literal, which is old but known-good. Absence of
-          // data is not a reading; neither is a half-parsed one.
-          if(!j || !j.corpus || !(j.corpus.sessions>0) || !j.ladder || !j.ladder.both) return;
-          localStorage.setItem(HLBASE_KEY, JSON.stringify({ at:Date.now(), base:j }));
-          log('base rates delivered:', j.corpus.sessions, 'sessions through', j.corpus.last);
-        }catch(e){ log('base rates parse failed', e.message); }
-      },
-      onerror:function(){ log('base rates fetch failed'); },
-      ontimeout:function(){ log('base rates fetch timeout'); }
-    });
+    hlBaseFetch(HLBASE_URL, HLBASE_KEY, 'base rates');
+    hlBaseFetch(HLBASE_NQ_URL, HLBASE_NQ_KEY, 'NQ base rates');      // (v1.19)
   }catch(e){ log('hlBaseCourier threw', e.message); }
 }
 function tick(){ try{ if(document.visibilityState!=='visible') return;
   for(var i=0;i<SYMS.length;i++) pull(SYMS[i]);
-  evCalCourier(); futCourier(); hlBaseCourier(); vixCourier(); fsideCourier();
+  evCalCourier(); futCourier(); futWeekCourier(); hlBaseCourier(); vixCourier(); fsideCourier();   // (v1.19) + the weekly bars
 }catch(e){} }
 
 setTimeout(tick, 4000);
@@ -818,6 +873,9 @@ try{
     fut:function(){ try{ return JSON.parse(localStorage.getItem(FUTBARS_KEY)||'null'); }catch(e){ return null; } },
     futPull:function(k){ var m=null; FUT_MARKETS.forEach(function(x){ if(x.k===(k||'ES')) m=x; }); if(!m) return 'no such market'; futLast=0; futPull(m); return 'pulling '+m.y; },
     hlBase:function(){ try{ return JSON.parse(localStorage.getItem(HLBASE_KEY)||'null'); }catch(e){ return null; } },
+    hlBaseNq:function(){ try{ return JSON.parse(localStorage.getItem(HLBASE_NQ_KEY)||'null'); }catch(e){ return null; } },
+    futWeek:function(){ try{ var w=JSON.parse(localStorage.getItem(FUT_WEEK_KEY)||'null'); if(!w) return null; var o={_at:w._at}; Object.keys(w).forEach(function(k){ if(k.charAt(0)!=='_') o[k]=w[k]&&w[k].rows?{n:w[k].rows.length,at:w[k].at,first:w[k].rows[0],last:w[k].rows[w[k].rows.length-1]}:w[k]; }); return o; }catch(e){ return null; } },
+    futWeekPull:function(){ futWeekLast=0; futWeekCourier(); return 'pulling the weekly 5-minute bars'; },
     vix:function(){ try{ var v=JSON.parse(localStorage.getItem(VIX_KEY)||'null'); return v&&v.rows?{n:v.rows.length,at:v.at,last:v.rows[v.rows.length-1]}:v; }catch(e){ return null; } },
     vixPull:function(){ vixLast=0; vixCourier(); return 'pulling ^VIX'; },
     fside:function(){ try{ var f=JSON.parse(localStorage.getItem(FSIDE_KEY)||'null'); return f&&f.base?{at:f.at,sessions:f.base.corpus.sessions}:f; }catch(e){ return null; } },

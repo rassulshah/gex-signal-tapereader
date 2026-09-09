@@ -19,6 +19,9 @@ const PAL={ ink:'#e6edf3', sub:'#8b98a9', line:'#1e2530', card:'#12161f', gold:'
 const esc=s=>String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const W=JSON.parse(fs.readFileSync('data/es-1min/SWEEPS.json','utf8'));
 const Wslim={ corpus:W.corpus, lookup:W.lookup, ledger:W.ledger, cells:W.cells };
+// (v15.88, F-23) the pins below read the table's own numbers — the corpus's night was corrected (the day's post-close bars are
+// out of ONH/ONL) and the nightly rewrites the file; a literal here would pin yesterday's leak.
+const pc=x=>Math.round(100*x)+'%'; const LK=W.lookup; const rxe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 // the house rule, as a function: every % in a string must carry an n within 40 characters after it
 const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).replace(/<[^>]+>/g,' '); while((m=re.exec(txt))){ const tail=txt.slice(m.index, m.index+60); if(!/n=|\(n |n \d|sessions\)|n\s*\d+\/\d+/.test(tail)) out.push(tail.slice(0,40)); } return out; };
 
@@ -55,19 +58,19 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   let R=mk([deepSlowEarly],[],Wslim);
   ok(R.lines.length===1 && R.aligned===3 && R.of===3,'2a early + deep + slow -> 3 of 3 measured conditions favour the sweep',{a:R.aligned,of:R.of});
   const t=R.lines[0].txt;
-  ok(/EARLY \(08:30-09:00\)/.test(t) && /DEEP: flushes past 8 pts printed it 40% \(n=86\)/.test(t) && /SLOW reclaim: 6–30 bars printed it 40% \(n=90\)/.test(t),'2b each condition quotes ITS rate with n from the table',t.slice(0,300));
-  ok(/by name: ONL 29% \(n=113\) vs 28% control \(n=284 sessions\) — the level’s name adds nothing/.test(t),'2c the level by name, against the fresh-low control, says the name adds nothing',t.slice(-200));
+  ok(/EARLY \(08:30-09:00\)/.test(t) && new RegExp(rxe('DEEP: flushes past 8 pts printed it '+pc(LK.depth.deep.rate)+' (n='+LK.depth.deep.n+')')).test(t) && new RegExp(rxe('SLOW reclaim: 6–30 bars printed it '+pc(LK.speed.flush.rate)+' (n='+LK.speed.flush.n+')')).test(t),'2b each condition quotes ITS rate with n from the table',t.slice(0,300));
+  ok(new RegExp(rxe('by name: ONL '+pc(LK.level.ONL.rate)+' (n='+LK.level.ONL.n+') vs '+pc(LK.level.ONL.fresh)+' control (n=284 sessions) — the level’s name adds nothing')).test(t),'2c the level by name, against the fresh-low control, says the name adds nothing',t.slice(-200));
   // two levels swept by the same wick are ONE line, and the deeper excursion is the side's candidate
   const pdl={ level:'PDL', side:'LOD', px:7663, at:'08:41', atBar:11, epoch:1700000000, bucket:'08:30-09:00', ext:7650, depth:13, speed:9, status:'reclaimed' };
   const later={ level:'IBL', side:'LOD', px:7655, at:'10:40', atBar:130, epoch:1700007000, bucket:'10:00-11:30', ext:7652, depth:3, speed:2, status:'reclaimed' };
   const hod={ level:'ONH', side:'HOD', px:7700, at:'09:10', atBar:40, epoch:1700002400, bucket:'09:00-10:00', ext:7703, depth:3, speed:1, status:'reclaimed' };
   R=mk([deepSlowEarly,pdl,later,hod],[],Wslim);
-  ok(R.lines.filter(l=>l.kind==='sweep').length===2 && /^ONL \+ PDL swept 08:41 · 10\.00 pts through ONL · back inside in 9 bars/.test(R.lines[0].head) && /by name: ONL 29% \(n=113\)[^·]*· PDL 23% \(n=87\)/.test(R.lines[0].txt) && /^ONH swept 09:10/.test(R.lines[1].head),'2c2 one line per excursion, one excursion per side: ONL+PDL merged (deepest wins over the later IBL poke), ONH on the other side',R.lines.map(l=>l.head));
+  ok(R.lines.filter(l=>l.kind==='sweep').length===2 && /^ONL \+ PDL swept 08:41 · 10\.00 pts through ONL · back inside in 9 bars/.test(R.lines[0].head) && new RegExp(rxe('by name: ONL '+pc(LK.level.ONL.rate)+' (n='+LK.level.ONL.n+')')+'[^·]*· '+rxe('PDL '+pc(LK.level.PDL.rate)+' (n='+LK.level.PDL.n+')')).test(R.lines[0].txt) && /^ONH swept 09:10/.test(R.lines[1].head),'2c2 one line per excursion, one excursion per side: ONL+PDL merged (deepest wins over the later IBL poke), ONH on the other side',R.lines.map(l=>l.head));
   ok(/at NOTHING/.test(R.lines[0].node) && R.lines[0].decides==='SIZE','2d no deflection within 10 min -> "at NOTHING"');
   ok(bareP(R.lines[0].head+' '+t+' '+R.lines[0].node).length===0,'2e no bare % anywhere in the line',bareP(t));
   const poke={ level:'PDL', side:'LOD', px:7660, at:'10:12', atBar:102, epoch:1700000000, bucket:'10:00-11:30', ext:7658.5, depth:1.5, speed:2, status:'reclaimed' };
   R=mk([poke],[{ t:1700000000*1000+4*60*1000, strike:7660, name:'floor', cont:null }],Wslim);
-  ok(R.aligned===0 && R.of===3 && /SHALLOW: pokes of ≤ 3 pts printed it 14% \(n=228\) — NOT the extreme 86% \(n=228\) of the time/.test(R.lines[0].txt),'2f a shallow quick late poke -> 0 of 3, and says the poke is NOT the low 86% (n=228)',R.lines[0].txt.slice(0,200));
+  ok(R.aligned===0 && R.of===3 && new RegExp(rxe('SHALLOW: pokes of ≤ 3 pts printed it '+pc(LK.depth.shallow.rate)+' (n='+LK.depth.shallow.n+') — NOT the extreme '+pc(1-LK.depth.shallow.rate)+' (n='+LK.depth.shallow.n+') of the time')).test(R.lines[0].txt),'2f a shallow quick late poke -> 0 of 3, and says the poke is NOT the low ~89% (n from the table)',R.lines[0].txt.slice(0,200));
   ok(/a deflection was recorded 4 min from the sweep at 7660 \(pending\)/.test(R.lines[0].node) && /UNMEASURED \(H6/.test(R.lines[0].node),'2g a deflection within 10 min -> the node clause (v15.56: the book-now check comes first), and with no book table the rate says UNMEASURED (H6)',R.lines[0].node);
   const accepted={ level:'PDH', side:'HOD', px:7700, at:'09:05', atBar:35, epoch:1700000000, bucket:'09:00-10:00', ext:7712, depth:12, speed:null, status:'accepted' };
   R=mk([accepted],[],Wslim);
@@ -108,8 +111,8 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const ids=flat.map(x=>x.id); ok(new Set(ids).size===ids.length && ids.length>=170,'4b study ids are unique, '+ids.length+' studies');
   const VOC=['SHIPPED','READ','READ NEXT','THIN','OPEN','REFUSED','REGISTERED','BLOCKED','DRAFT'];
   ok(flat.every(x=>VOC.indexOf(x.status)>=0),'4c every status is in the vocabulary',flat.filter(x=>VOC.indexOf(x.status)<0).map(x=>x.id));
-  const bad=flat.filter(x=>x.result && /\d%/.test(x.result) && !/n=/.test(x.result));
-  ok(bad.length===0,'4d every result with a % carries an n',bad.map(x=>x.id));
+  const bad=flat.filter(x=>x.result && /\d%/.test(x.result) && !/n=/.test(x.result) && !/\d+ \/ \d+ = \d+%/.test(x.result));
+  ok(bad.length===0,'4d every result with a % carries an n (as n=… or as the nightly\'s pattern-table form "7 / 18 = 39%", where the denominator is the n)',bad.map(x=>x.id));
   ok(flat.every(x=>x.decides && /SIZE|SIDE|TARGET|STOP|SKIP|TIME|LEVEL|WAIT/.test(x.decides)),'4e every study says what it decides at the tap');
   const seed=new Function(src.slice(src.indexOf('var STUDIES_SEED='), src.indexOf('var STUDY_STATUS_COL='))+' return STUDIES_SEED;')();
   const seedSubs=[]; seed.subjects.forEach(sj=>sj.subsections.forEach(ss=>seedSubs.push(ss.key)));
@@ -118,7 +121,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const h2=flat.filter(x=>x.sub==='H2'); ok(h2.length>=15 && h2.some(x=>/PDC/.test(x.q)) && h2.some(x=>/POC \/ VAH \/ VAL/.test(x.q)) && h2.some(x=>/Pre-market/.test(x.q)) && h2.some(x=>/WEEK/.test(x.q)) && h2.some(x=>/Opening range/.test(x.q)),'4g the sweeps subsection covers PDC, the profile, pre-market, the prior week and the opening range ('+h2.length+' studies)');
   ok(flat.some(x=>x.id==='H6.5' && /LID/.test(x.q)),'4h his example — the lid after a big-node rejection from the LOD — is a study (H6.5)');
   // SWEEPS.json: the lookup the panel reads
-  ok(W.lookup && W.lookup.level.ONL.n===113 && Math.round(100*W.lookup.level.ONL.rate)===29 && W.lookup.depth.deep.n===86 && W.lookup.speed.flush.n===90 && W.lookup.clock['08:30-09:00'].n===180,'4i SWEEPS.json carries the lookup with the numbers the findings quote',W.lookup&&W.lookup.level.ONL);
+  ok(W.lookup && W.lookup.level.ONL.n===125 && Math.round(100*W.lookup.level.ONL.rate)===22 && W.lookup.depth.deep.n===94 && W.lookup.speed.flush.n===96 && W.lookup.clock['08:30-09:00'].n===249,'4i SWEEPS.json carries the lookup with the numbers the findings quote (F-23, v15.88: ONL n=113 / 29% looked ahead — the day\'s post-close bars were in the night; now 125 / 22%)',W.lookup&&W.lookup.level.ONL);
   ok(['PDC-','PDC+','VAL','VAH','POC-','POC+','PML','PMH','PWL','PWH','OR5L','OR15H'].every(k=>W.lookup.level[k] && W.lookup.level[k].n>0),'4j the extended level set is in the lookup');
   // the register carries H6 / H7, written with prediction and refutation
   const R=JSON.parse(fs.readFileSync('learning/register.json','utf8'));
@@ -177,7 +180,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const errsA=JSON.parse(run('JSON.stringify(__gptsDebug.renderErrors())')||'[]');
   ok(errsA.length===0,'6c the Analysis tab renders with nothing swallowed',errsA.map(e=>(e.where||e.w)+':'+(e.msg||e.m)));
   ok(['K KINGS','S SETUPS','D DIRECTION','F DEFLECTION MECHANICS','P PULLBACK DEFLECTIONS','H HOD / LOD','X CONTEXT'].every(k=>html.indexOf(esc(k))>=0),'6d the subject strip shows all seven subjects');
-  ok(/<span class="n">H2<\/span><span class="t">SWEEPS — the levels that get run before the turn/.test(html) && /ONL → LOD/.test(html) && /29% \(n=113\)/.test(html) && /28% \(n=284\)/.test(html),'6e H is the default subject: H2 carries the sweep table with ONL 29% (n=113) and the control 28% (n=284)');
+  ok(/<span class="n">H2<\/span><span class="t">SWEEPS — the levels that get run before the turn/.test(html) && /ONL → LOD/.test(html) && new RegExp(rxe(pc(LK.level.ONL.rate)+' (n='+LK.level.ONL.n+')')).test(html) && new RegExp(rxe(pc(LK.level.ONL.fresh)+' (n=284)')).test(html) && /ALO → LOD/.test(html) && /LHI → HOD/.test(html),'6e H is the default subject: H2 carries the sweep table with ONL at the file\'s rate and n, the control (n=284), and (v15.88) the Asia / London rows');
   ok(/id="gpts-track-H"/.test(html) && /TRACK SOMETHING UNDER H/.test(html) && /Rtest1/.test(html) && /NEW — rides in the next Save/.test(html),'6f the TRACK field and the stored request render under the subject');
   ok(/<span class="n">H1<\/span><span class="t">Is the extreme in/.test(html) && /TODAY’S EVIDENCE · LIVE/.test(html),'6g H1 carries today’s live HOD/LOD evidence under its rows');
   const sweepBlock=html.slice(html.indexOf('THE SWEEP TABLE'), html.indexOf('THE SWEEP TABLE')+12000);

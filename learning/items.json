@@ -31,10 +31,10 @@
    "text": "AHI · ALO · LHI · LLO — the session hours: Asia 17:00–02:00 CT and London 02:00–08:30 CT are proposed; his word decides before they draw (locked item, not built)",
    "date": "2026-09-08",
    "seenIn": "2026-09-08",
-   "status": "SEEN",
-   "answer": null,
+   "status": "ANSWERED",
+   "answer": "His word 2026-09-09: \"just use whatever is standard\" — Asia 17:00–02:00 CT, London 02:00–08:30 CT (fixed Chicago hours). Built as AHI / ALO / LHI / LLO in v15.88.",
    "link": "session-state/LOCKED-ITEMS.md",
-   "answeredOn": null
+   "answeredOn": "2026-09-09"
   },
   {
    "id": "I0908circ",
@@ -42,10 +42,10 @@
    "text": "E005: the first-hour turns he did not circle (ES 08:45 · 09:03 at the ONL/LLO sweep · 09:39 · 09:51; the NQ LOD 09:09 at the PDL sweep) — deflections in his sense, or skipped on purpose? The answer sets the boundary of the Learn corpus.",
    "date": "2026-09-08",
    "seenIn": "2026-09-08",
-   "status": "SEEN",
-   "answer": null,
+   "status": "ANSWERED",
+   "answer": "His ruling 2026-09-09: \"i agree i think you should also tag other hours\" — the five uncircled first-hour turns are deflections (E005 m1–m4, E006 m1), tagged by the hour; every leg carries its hour; the pattern table has the hour class (R-3, v15.88).",
    "link": "learning/deflections/LEARNING.md",
-   "answeredOn": null
+   "answeredOn": "2026-09-09"
   },
   {
    "id": "I0908tap",
@@ -54,7 +54,7 @@
    "date": "2026-09-08",
    "seenIn": "2026-09-08",
    "status": "PLANNED",
-   "answer": "Designed on paper 2026-09-08; roadmap v15.89; built one element at a time on his word; the clean sample starts 2026-09-09 (F-22).",
+   "answer": "Designed on paper 2026-09-08; roadmap v15.89; built one element at a time on his word; the clean sample starts 2026-09-09 (F-22). His word 2026-09-09 (\"your recommendation\"): the tap record is the NEXT build, on its own — v15.89, element 1 (the universe + the two controls).",
    "link": "design/TAP-RECORD.md",
    "answeredOn": "2026-09-08"
   },
@@ -64,10 +64,10 @@
    "text": "AHI · ALO · LHI · LLO on the SWEPT line, the day candle and the sweep study (operator, 2026-09-08: 'we should do it. they can be ALO, AHI, LLO, LHI')",
    "date": "2026-09-08",
    "seenIn": "2026-09-08",
-   "status": "PLANNED",
-   "answer": "Locked 2026-09-08, not built: the ES courier has the overnight bars (AHI 7725.75 · ALO 7694.75 · LHI 7718.25 · LLO 7687.50 on 09-08); the NQ courier carries none yet — its window must widen first.",
+   "status": "DONE",
+   "answer": "Built in v15.88: AHI / ALO / LHI / LLO on the candle, the SWEPT line, the read and the H2 table; the NQ chart gets them with companion v1.19.",
    "link": "session-state/LOCKED-ITEMS.md",
-   "answeredOn": "2026-09-08"
+   "answeredOn": "2026-09-09"
   },
   {
    "id": "I0909nqv",
@@ -75,10 +75,10 @@
    "text": "The NQ vendor corpus (data/es-1min/NQ TestingData.txt — 188 sessions, TAB-delimited, no header, ISO timestamps) has no parser in tools/study-hodlod.py, so NQ's BASERATES (data/futures/NQ/BASERATES.json) stands on the Yahoo days alone (11 sessions on 2026-09-08). One loader branch (the format is sniffed by tools/model-lodhod.py already) and the NQ E row would have a corpus.",
    "date": "2026-09-09",
    "seenIn": "2026-09-09",
-   "status": "OPEN",
-   "answer": "",
+   "status": "DONE",
+   "answer": "Built in v15.88: study-hodlod.py sniffs the tab / ISO format; NQ BASERATES = 188 vendor + the Yahoo days (195 on 09-08), provenance per session; the four overlapping days read side by side (identical clocks and extremes).",
    "link": "design/DATA-ARCHITECTURE.md",
-   "answeredOn": null
+   "answeredOn": "2026-09-09"
   },
   {
    "id": "I0909patch",
@@ -86,10 +86,10 @@
    "text": "Agenda item 3 — a patch-build tier? Updates are slow because every build re-runs the whole suite (167 files) and ships the whole tree; a patch tier would ship the panel alone with the touched harnesses. His yes / no (operator, 2026-09-08: 'making updates is very slow. is there a lot of unused code…' — measured: no; the time is the suite and the installer).",
    "date": "2026-09-09",
    "seenIn": "2026-09-09",
-   "status": "OPEN",
-   "answer": "",
+   "status": "ANSWERED",
+   "answer": "His word 2026-09-09 (\"your recommendation\"): no patch tier — batch several issues per build so the fixed cost (the suite, the records, the installer, the CDN wait) is paid once per batch. Closed.",
    "link": "session-state/latest-resume-note.md",
-   "answeredOn": null
+   "answeredOn": "2026-09-09"
   }
  ]
 }

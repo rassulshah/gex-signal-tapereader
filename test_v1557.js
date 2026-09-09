@@ -28,7 +28,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   const t=build(g,['levelTier'],'return levelTier;')(g);
   // (v15.80) tier 1 is HIS list and nothing else — "the king is not a key level" · "EMH and EML are not levels" · "I dont want IBL IBH PDC"
   ok(['PDH','PDL','ONH','ONL','VAH','VAL','POC-','POC+','PWH','PWL','WPOC'].every(k=>t(k)===1) && t('KING-')===2 && t('KING+')===2 && t('EMH')===4 && t('EML')===4,'1a PDH PDL ONH ONL VAH VAL POC (+ PWH PWL WPOC by name) are tier 1; the King is tier 2; the EM edges are not levels (v15.80)');
-  ok(t('CW0+')===2 && t('LDNL')===2 && t('HVL-')===2 && t('MAG+')===2 && t('PDC-')===4 && t('IBL')===4,'1b the walls, London, HVL and the magnet are tier 2; PDC and IB are out of the map (v15.80)');
+  ok(t('CW0+')===2 && t('LLO')===1 && t('LHI')===1 && t('ALO')===1 && t('AHI')===1 && t('LDNL')===4 && t('HVL-')===2 && t('MAG+')===2 && t('PDC-')===4 && t('IBL')===4,'1b the walls, HVL and the magnet are tier 2; (v15.88) the Asia / London levels are tier 1 by his names and LDNL is no name; PDC and IB are out of the map (v15.80)');
   ok(t('VWAP-')===3 && t('VW1L')===3 && t('DPOC+')===3 && t('PML')===3 && t('OR15H')===3,'1c the dynamic and minor levels are tier 3');
   ok(t('XYZ')===4,'1d an unknown level ranks last, never first');
 }
@@ -71,12 +71,13 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   for(let m=17*60;m<24*60;m++){ on2.push([ct(Math.floor(m/60),m%60)-86400, 7700, 7710, 7690, 7700, 1]); }
   const rth=[[ct(8,30),7695,7697,7693,7696,1]];
   const g={ FUTMODE:{ fam:'ES', r:10 }, irtRatio:()=>({ r:10 }), ifLadder:()=>({ rows:rows }), tradeNodes:()=>nodes, SWEEP_IB_BARS:60,
-            overnightHL:()=>({ onh:7710, onl:7680, n:on2.length, full:true }), futSessionBars:(o)=>(o===0?{ rth:rth, on:on2 }:null), priorProfile:()=>null,
-            emBand:()=>({ ok:true, high:7740, low:7650 }) };
-  const LV=build(g,['dispToEs','bookLevelsNow','sweepLevelsToday'],'return sweepLevelsToday("SPY");')(g);
+            overnightHL:()=>({ onh:7710, onl:7680, n:on2.length, full:true }), futSessionBars:(o,d,cal)=>(o===0?{ rth:rth, on:on2 }:(cal?{ rth:[], on:on2.filter(r=>r[0]<ct(0,0)) }:null)), priorProfile:()=>null,
+            emBand:()=>({ ok:true, high:7740, low:7650 }), SESS_ASIA_A:17*60, SESS_ASIA_B:2*60, SESS_LDN_B:8*60+30 };
+  const LV=build(g,['dispToEs','bookLevelsNow','sessionHL','sweepLevelsToday'],'return sweepLevelsToday("SPY");')(g);
   const by={}; LV.forEach(l=>{ by[l.name]=l; });
   ok(!by.EMH && !by.EML && !by['PDC-'] && !by['PDC+'] && !by.IBL && !by.IBH,'3a (v15.80) the expected-move edges, PDC and the IB are NOT in the sweep set — his call',Object.keys(by));
-  ok(by.LDNL && by.LDNL.px===7680 && by.LDNH && by.LDNH.px===7705,'3b the London range is the 02:00-08:29 part of a full night (7680 / 7705, not the night’s 7690 / 7710)',{l:by.LDNL,h:by.LDNH});
+  ok(by.LLO && by.LLO.px===7680 && by.LHI && by.LHI.px===7705 && !by.LDNL && !by.LDNH,'3b (v15.88) LLO / LHI — the London session is the 02:00-08:29 part of the night (7680 / 7705, not the night’s 7690 / 7710); LDNL / LDNH are gone',{l:by.LLO,h:by.LHI});
+  ok(by.ALO && by.ALO.px===7690 && by.AHI && by.AHI.px===7710,'3b2 (v15.88) ALO / AHI — the Asia session is the evening from 17:00 (the prior calendar key) plus the morning to 02:00 (7690 / 7710)',{l:by.ALO,h:by.AHI});
   ok(by['HVL-'] && by['HVL-'].px===7672 && by['MAG-'] && by['MAG-'].px===7690,'3c HVL (the FLIP row) and the magnet (Mag row) join the book levels, side by position against the open 7695',{h:by['HVL-'],m:by['MAG-']});
   // two lines by tier: a deep tier-3 poke, a tier-1 PDL flush, a tier-2 IBL, a tier-1 ONH on the other side -> PDL and ONH shown, the rest named
   const mk=(evs)=>{ const g2={ PAL, RATE_MIN_N, g3esc:esc, LEVEL_TIER:TIER, sweepsLoad:()=>Wslim, sweepsBookLoad:()=>null, sweepEventsToday:()=>evs, bookLevelsNow:()=>({ walls:[], king:null, top5:[] }), tapZoneEs:()=>5,
@@ -108,7 +109,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
 // ---- 4 · the corpus and the book carry the new levels -------------------------------------------------
 {
   const L=W.lookup.level;
-  ok(['LDNL','LDNH','VWAP-','VWAP+','VW1L','VW1H','VW2L','VW2H','DPOC-','DPOC+','DVAL','DVAH'].every(k=>L[k] && L[k].n>=15),'4a SWEEPS.json carries London, the VWAP and its bands, and today’s profile, each with n ≥ 15',Object.keys(L).length);
+  ok(['ALO','AHI','LLO','LHI','VWAP-','VWAP+','VW1L','VW1H','VW2L','VW2H','DPOC-','DPOC+','DVAL','DVAH'].every(k=>L[k] && L[k].n>=15) && !L.LDNL && !L.LDNH,'4a SWEEPS.json carries Asia and London by his names (v15.88), the VWAP and its bands, and today’s profile, each with n ≥ 15',Object.keys(L).length);
   ok(L['VW1L'].rate<0.15 && L['VW1L'].fresh>0.2 && L['DPOC-'].rate<0.10,'4b the interior levels are NOT the extreme: VWAP −1σ '+Math.round(100*L['VW1L'].rate)+'% (n='+L['VW1L'].n+') vs '+Math.round(100*L['VW1L'].fresh)+'% control; today’s POC '+Math.round(100*L['DPOC-'].rate)+'% (n='+L['DPOC-'].n+')');
   ok(WB.lookup.level['HVL-'] && WB.lookup.level['MAG+'] && WB.lookup.level['HVL-'].n>0,'4c SWEEPS-BOOK.json carries HVL and the magnet as book levels');
   const r=cp.spawnSync('python3',['tools/study-sweeps-book.py','--selftest'],{encoding:'utf8'});
@@ -119,7 +120,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   // the H2 table renders the new rows
   const g={ PAL, RATE_MIN_N, g3esc:esc, tabEmpty:t=>'<div>'+t+'</div>', sweepsBookLoad:()=>({ corpus:WB.corpus, lookup:WB.lookup }) };
   const h=build(g,['rateTxt','sweepTableHtml','panSection','panNote','panRow'],'return sweepTableHtml(__g.W);')(Object.assign({W:Wslim},g));
-  ok(/LDNL → LOD/.test(h) && /VWAP −1σ → LOD/.test(h) && /today’s POC ↓ → LOD/.test(h) && /HVL \(zero γ\)/.test(h) && /magnet/.test(h),'4f the H2 table shows London, the VWAP bands, today’s profile, HVL and the magnet');
+  ok(/ALO → LOD/.test(h) && /LLO → LOD/.test(h) && /LHI → HOD/.test(h) && /VWAP −1σ → LOD/.test(h) && /today’s POC ↓ → LOD/.test(h) && /HVL \(zero γ\)/.test(h) && /magnet/.test(h),'4f the H2 table shows London, the VWAP bands, today’s profile, HVL and the magnet');
   ok(bareP(h).length===0,'4g no bare % in the table',bareP(h));
 }
 

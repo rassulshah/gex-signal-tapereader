@@ -47,6 +47,30 @@ def load(path, ses=None):
     deliberately so there is exactly one parser and one definition of a bar."""
     ses = collections.defaultdict(list) if ses is None else ses
     with _open(path) as f:
+        head = f.readline()
+        f.seek(0)
+        # (v15.88) THE NQ VENDOR FILE IS ANOTHER FORMAT — TAB-delimited, no header, ISO stamps
+        # (ENQU26<TAB>2025-11-23T17:01<TAB>o<TAB>h<TAB>l<TAB>c<TAB>vol<TAB>0), which DATA-ARCHITECTURE §6a warned about on
+        # 2026-08-28 and which kept NQ's base rates on the Yahoo days alone through v15.87. Sniffed from the first line,
+        # parsed into the same tuple; one definition of a bar either way.
+        if '\t' in head and not head.lower().startswith('symbol'):
+            for line in f:
+                parts = line.rstrip('\r\n').split('\t')
+                if len(parts) < 6:
+                    continue
+                stamp = parts[1].strip()
+                if 'T' not in stamp:
+                    continue
+                d, t = stamp.split('T', 1)
+                p = t.split(':')
+                try:
+                    sec = int(p[0])*3600 + int(p[1])*60
+                    if not (LOAD_A <= sec < LOAD_B):
+                        continue
+                    ses[d].append((sec, float(parts[3]), float(parts[4]), float(parts[5]), float(parts[2])))
+                except (ValueError, IndexError):
+                    continue
+            return ses
         for x in csv.DictReader(f):
             s = (x.get('Date') or '').strip()
             if ' ' not in s:
@@ -439,6 +463,12 @@ def market_sources(market):
                 if not c.endswith('BASERATES.json'):
                     src.append(c)
                     break
+    if market == 'NQ':
+        # (v15.88) the NQ vendor export — ENQU26, one contract, 2025-11-23 → 2026-08-27 (tab / ISO; load() sniffs it)
+        for c in ('data/es-1min/NQ TestingData.txt', 'data/es-1min/NQ_TestingData.txt'):
+            if os.path.exists(c):
+                src.append(c)
+                break
     src += sorted(glob.glob(os.path.join('data/futures', market, '*.csv')))
     return src
 

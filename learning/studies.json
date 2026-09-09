@@ -1591,7 +1591,7 @@
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "ONL 29% n=113 · ONH 26% n=140 — vs a fresh-low bounce at nothing: 28% / 22% (+1 / +4pp)",
+       "result": "ONL 22% n=125 · ONH 16% n=154 — vs a fresh-low bounce at nothing: 25% / 18% (-3 / -2pp); (v15.88, F-23) the day's own post-close bars are out of the night — the earlier 29% / 26% (+1 / +4pp) looked ahead and is withdrawn",
        "script": "study-sweeps.py"
       },
       {
@@ -1765,13 +1765,31 @@
       },
       {
        "id": "H2.10j",
-       "q": "The London range (02:00 CT → the open) — LDNH / LDNL",
+       "q": "The London session (02:00 CT → the open) — LHI / LLO (v15.57's LDNH / LDNL, his names from v15.88)",
        "decides": "SIZE",
        "claim": "lore",
        "corpus": "284d · price",
        "status": "READ",
-       "result": "LDNL 21% n=163 (control 24%) · LDNH 16% n=170 (control 18%) — like every other level name: within chance of the fresh-low control",
+       "result": "LLO 21% n=163 (control 24%) · LHI 16% n=170 (control 18%) — like every other level name: within chance of the fresh-low control",
        "script": "study-sweeps.py"
+      },
+      {
+       "id": "H2.10j2",
+       "q": "The ASIA session (17:00 → 02:00 CT) — AHI / ALO as sweep levels (his four, 2026-09-08; the standard hours, 2026-09-09)",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "script": "tools/study-sweeps.py (ALO / AHI); the nightly rewrites SWEEPS.json — read the rate there, with n; the Analysis H2 table has the rows"
+      },
+      {
+       "id": "H2.10j3",
+       "q": "The prior week's POC — WPOC as a sweep level, both sides (his 'weekly POC', 2026-09-08; drawn from the companion's weekly bars, v1.19)",
+       "decides": "SIZE",
+       "claim": "lore",
+       "corpus": "284d · price",
+       "status": "READ",
+       "script": "tools/study-sweeps.py (WPOC- / WPOC+); the nightly rewrites SWEEPS.json — read the rate there, with n; the Analysis H2 table has the rows"
       },
       {
        "id": "H2.10k",
@@ -2126,7 +2144,7 @@
   }
  ],
  "counts": {
-  "studies": 193,
+  "studies": 195,
   "byStatus": {
    "THIN": 36,
    "READ NEXT": 18,
@@ -2134,7 +2152,7 @@
    "REGISTERED": 8,
    "SHIPPED": 13,
    "REFUSED": 3,
-   "READ": 24,
+   "READ": 26,
    "DRAFT": 2
   }
  }

@@ -22,6 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 # (v15.87) what the nightly writes besides the log — if any of these is older than the log, the run was pasted over
 OUTPUTS = ('learning/results.json', 'learning/studies.json', 'learning/recommendations.json', 'learning/deflections/examples.json',
            'data/es-1min/BASERATES.json')
+STALE_S = 3600      # (v15.88) an output more than an hour older than its log was pasted, not written by the run
 
 def newest_day(root=ROOT):
     files = sorted(glob.glob(os.path.join(root, 'data', '20??-??-??.json')))
@@ -43,9 +44,13 @@ def needs_run(root=ROOT):
     # origin guard checks at BUILD time and cannot see an install that comes later. The extracted files carry mtime 0
     # (the tar is diffable on purpose), so an output OLDER than the log means the nightly's work was pasted over: run
     # again, and the day files (the source) put it back.
+    # ⚠⚠ (v15.88) THE TOLERANCE IS AN HOUR, NOT A SECOND. v15.87 shipped this with `- 1` and the nightly re-ran itself every
+    # ten minutes on his machine from 21:05 CT on 2026-09-08 (four runs, four sync commits) — because the run writes
+    # BASERATES.json (refresh_futures) SECONDS before it writes the log, so the run's own output was "older than the log".
+    # An installer's paste is 1970 (mtime 0) or hours away; a run's own outputs are seconds. STALE_S is the fence.
     for rel in OUTPUTS:
         op = os.path.join(root, *rel.split('/'))
-        if os.path.exists(op) and os.path.getmtime(op) < os.path.getmtime(lp) - 1:
+        if os.path.exists(op) and os.path.getmtime(op) < os.path.getmtime(lp) - STALE_S:
             return day, '%s is older than the log for %s — an installer wrote over the nightly\'s outputs' % (rel, day)
     # (v15.87) ...and by CONTENT, for the case where the log itself came out of the same installer (every file at mtime
     # 0, nothing older than anything): results.json says which day it was computed for. Dated before the log's day, it
@@ -100,6 +105,8 @@ def selftest():
     lp9 = os.path.join(root, 'learning', 'log', '2026-09-09.json'); io.open(lp9, 'w').write('{}'); os.utime(lp9, (5000, 5000))
     os.utime(os.path.join(root, 'data', '2026-09-09.json'), (4000, 4000))
     rp = os.path.join(root, 'learning', 'results.json'); io.open(rp, 'w').write('{"asOf": "2026-09-09"}'); os.utime(rp, (5000, 5000))
+    assert needs_run(root) == (None, 'the log for 2026-09-09 is current')
+    os.utime(rp, (5000 - 30, 5000 - 30))                                           # (v15.88) the run's own output, 30 s before its log: CURRENT
     assert needs_run(root) == (None, 'the log for 2026-09-09 is current')
     os.utime(rp, (0, 0))                                                           # pasted by an installer (mtime 0)
     assert needs_run(root) == ('2026-09-09', 'learning/results.json is older than the log for 2026-09-09 — an installer wrote over the nightly\'s outputs')

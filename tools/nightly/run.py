@@ -425,7 +425,7 @@ def _load_tool(name):
     return m
 
 
-def refresh_futures(days, keep_last=4):
+def refresh_futures(days, keep_last=None):
     """(v15.87) the couriered Yahoo minute bars → the per-session corpus → BASERATES. -> a summary for the log.
 
     ⚠ The append is idempotent and the newest day is INCOMPLETE until the next day file's 5-day window completes it
@@ -439,7 +439,16 @@ def refresh_futures(days, keep_last=4):
     os.chdir(ROOT)
     try:
         ap = _load_tool('append-futures')
-        paths = [os.path.join('data', d + '.json') for d, _ in (days or [])[-keep_last:] if os.path.exists(os.path.join('data', d + '.json'))]
+        # (v15.88) EVERY day file, not the last four: the installer does not carry data/futures/ (the nightly's own writes), so
+        # a machine rebuilds its corpus from the day files it has — his first v15.87 run read four files and got 08-31 → 09-08
+        # (289 ES sessions where the cloud had 295). The append is idempotent and the harvest of a dozen files takes seconds.
+        # Plus the tail supplements (data/futures/<day>-tail.json — minutes read from the live store when a day file was written
+        # before the courier's last poll; the next day's window carries the same minutes).
+        import glob as _glob
+        paths = [os.path.join('data', d + '.json') for d, _ in (days or []) if os.path.exists(os.path.join('data', d + '.json'))]
+        if keep_last:
+            paths = paths[-keep_last:]
+        paths += sorted(_glob.glob(os.path.join('data', 'futures', '*-tail.json')))
         got, _seen = ap.harvest(paths)
         for (market, ysym), byday in sorted(got.items()):
             n_new = 0; last = None; last_n = 0
@@ -459,11 +468,17 @@ def refresh_futures(days, keep_last=4):
                                             vendor=sum(v for k, v in (c.get('sources') or {}).items() if not k[:4].isdigit()),
                                             yahoo=sum(v for k, v in (c.get('sources') or {}).items() if k[:4].isdigit()),
                                             incompleteDropped=c.get('incomplete_dropped'))
-        # the overlap: the sessions BOTH sources hold, with each source's took / BOP / wick% / range side by side
-        try:
-            vendor = [p for p in hl.market_sources('ES') if not os.path.basename(p)[:4].isdigit()]
-            yahoo = [p for p in hl.market_sources('ES') if os.path.basename(p)[:4].isdigit()]
-            if vendor and yahoo:
+        # the overlap: the sessions BOTH sources hold, PER MARKET, with each source's took / BOP / wick% / range side by
+        # side. (v15.88) NQ has one — the vendor's ENQU26 export ends 2026-08-27 and the Yahoo NQ days begin 08-24 — the
+        # first real vendor-vs-continuous comparison this project has; ES has none (the vendor ends 08-21, Yahoo starts 08-24).
+        out['overlap'] = {}
+        for mk in ('ES', 'NQ'):
+            try:
+                srcs = hl.market_sources(mk)
+                vendor = [p for p in srcs if not os.path.basename(p)[:4].isdigit()]
+                yahoo = [p for p in srcs if os.path.basename(p)[:4].isdigit()]
+                if not (vendor and yahoo):
+                    out['overlap'][mk] = dict(days=0, rows=[], note='one source only'); continue
                 v_ses = hl.complete(hl.load(vendor[0])); y_ses = {}
                 for yp in yahoo: y_ses.update(hl.complete(hl.load(yp)))
                 common = sorted(set(v_ses) & set(y_ses))
@@ -471,21 +486,23 @@ def refresh_futures(days, keep_last=4):
                 for d in common:
                     a, b = v_ses[d], y_ses[d]
                     def _f(bars):
-                        hi = max(bars, key=lambda r: r[1]); lo = min(bars, key=lambda r: r[2])
-                        w = hl.wick_fields(bars)
-                        return dict(took=(min(hi[0], lo[0]) - hl.RTH_A) // 60, rng=round(hi[1] - lo[2], 2), wickPct=w.get('wickPct'), bop=w.get('bop'))
+                        tb = hl.tool_bars(bars) if hasattr(hl, 'tool_bars') else bars
+                        hi = max(tb, key=lambda r: r[1]); lo = min(tb, key=lambda r: r[2])
+                        w = hl.wick_fields(tb)
+                        return dict(took=(min(hi[0], lo[0]) - hl.RTH_A) // 60, rng=round(hi[1] - lo[2], 2), wickPct=w.get('wick_pct'), bop=w.get('bop'), open=tb[0][4], hod=hi[1], lod=lo[2])
                     rows.append(dict(day=d, vendor=_f(a), yahoo=_f(b)))
-                out['overlap'] = dict(days=len(common), rows=rows[:10],
-                                      note=('none — the vendor corpus ends %s and the Yahoo sessions begin %s; pooled with provenance, nothing averaged'
-                                            % (max(v_ses) if v_ses else '?', min(y_ses) if y_ses else '?')) if not common else 'checked below')
-        except Exception as eO:
-            out['overlap'] = dict(error=str(eO))
+                out['overlap'][mk] = dict(days=len(common), rows=rows[:10],
+                                          note=(('none — the vendor corpus ends %s and the Yahoo sessions begin %s; pooled with provenance, nothing averaged'
+                                                 % (max(v_ses) if v_ses else '?', min(y_ses) if y_ses else '?')) if not common
+                                                else ('%d sessions in both (%s → %s): the vendor wins each; the two read side by side below' % (len(common), common[0], common[-1]))))
+            except Exception as eO:
+                out['overlap'][mk] = dict(error=str(eO))
     finally:
         os.chdir(cwd)
     print('futures: appended %s · BASERATES %s · overlap %s' % (
         ', '.join('%s +%d (newest %s, %s)' % (k, v['minutes'], v['newest'], 'complete' if v['complete'] else 'INCOMPLETE %d bars' % v['newestBars']) for k, v in out['appended'].items()) or 'nothing',
         ', '.join('%s %s sessions %s→%s' % (k, v.get('sessions'), v.get('first'), v.get('last')) for k, v in out['baserates'].items()) or 'none',
-        (out['overlap'] or {}).get('note') or (out['overlap'] or {}).get('days')))
+        ' · '.join('%s: %s' % (k, (v or {}).get('note') or (v or {}).get('error') or (v or {}).get('days')) for k, v in (out['overlap'] or {}).items()) or 'n/a'))
     return out
 
 

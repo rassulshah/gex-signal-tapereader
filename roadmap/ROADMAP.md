@@ -38,60 +38,61 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 - **v15.84** (2026-09-08) — THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH (F-22) — the self-fetch pins exp_mode=current&exp_count=1&nodes=500 (the 0DTE chain, every strike) whatever gex/levels URL came last (the app's three projection windows on an ES chart; the panel's own expiry sets, whose responses come back through the same hook); onFeed refuses a multi-expiration gamma payload once a single-expiration book is held (FEED_REJECTS[sym].win); the King series survive, the node universe was a mixed-window sample since 08-26 · serves: match Skylit always · every node read, ledger and feature record on one book · the level study's clean sample from 2026-09-09
 - **v15.85** (2026-09-08) — XG2–XG5 · SG2–SG5 — the IRT node lines labelled by book (R-26): the SPX book's XG, the SPY book's SG, the signed % following as before; the Kings keep their names; the QQQ King on NQ only (v15.80) pinned again on his word; the NQ symbol's QQQ lines stay G2–G5 until he answers (G or QG) · serves: match Skylit always · the IRT chart reads the book at a glance
 - **v15.86** (2026-09-08) — THE LEARN CORPUS GROWS BY TEN CIRCLES — E005 (ES, six deflections) and E006 (NQ, four) read against the ladder's ranked lists and the node-event dollars; the LIQUIDITY LEVEL factor (PDH · PDL · PDC · ONH · ONL · AHI · ALO · LHI · LLO · POC · VAH · VAL); three new rules — L10 a −γ King is not the floor (the overshoot to the +γ node beneath), L11 a +γ King ceiling decays by the tap and is gone when the King bleeds, L12 a liquidity level at a −γ King gets swept before the turn; L1 / L2 / L5 / L6 / L7 / L9 touched · serves: DEFLECTION — identification first, his training corpus; the tap record's columns (overshoot, sweep depth, the King's $ after the tap)
+- **v15.87** (2026-09-09) — THE CORPUS APPENDS ITSELF · THE TOOL GRID — (1) his "yes": the couriered Yahoo minute bars append to the per-market corpus every night (run.py → append-futures → study-hodlod → BASERATES for ES and NQ, provenance per session, the vendor / Yahoo overlap reported — none), the panel's HODLOD_BASE literal re-baked from the file at build time (tools/bake-hodlod.py), tick.py re-runs the nightly when an installer has pasted older outputs over its log (by mtime and by results.asOf); (2) his "tools": the ⓪a A row reads the session on his tool's grid — 3-minute bars stamped by END, the open = the bar ending 08:30 (7715.00 on 09-08, not the 08:30 minute's 7711.50), the extremes' clocks are bar ends, W.End the first bar AFTER the extreme's to close through the open; his 09-08 row (HOD 8:33 · Took 3 · BOP 3 · Wick 6 · W.End 8:36 · Wick% 6 · MD $2,138) reproduced exactly; the study on the same grid (295 sessions) · serves: HOD/LOD — one definition on the face and in the study, growing by one session a day; the 14% wick that could not be
 
 ## NEXT — the running build
 
-### v15.87 — THE CORPUS APPENDS ITSELF · THE TOOL GRID — (1) his "yes": the couriered Yahoo minute bars append to the per-market corpus every night (run.py → append-futures → study-hodlod → BASERATES for ES and NQ, provenance per session, the vendor / Yahoo overlap reported — none), the panel's HODLOD_BASE literal re-baked from the file at build time (tools/bake-hodlod.py), tick.py re-runs the nightly when an installer has pasted older outputs over its log (by mtime and by results.asOf); (2) his "tools": the ⓪a A row reads the session on his tool's grid — 3-minute bars stamped by END, the open = the bar ending 08:30 (7715.00 on 09-08, not the 08:30 minute's 7711.50), the extremes' clocks are bar ends, W.End the first bar AFTER the extreme's to close through the open; his 09-08 row (HOD 8:33 · Took 3 · BOP 3 · Wick 6 · W.End 8:36 · Wick% 6 · MD $2,138) reproduced exactly; the study on the same grid (295 sessions)
+### v15.88 — THE AGENDA, BATCHED (companion v1.19) — (5) AHI · ALO · LHI · LLO at the standard hours (Asia 17:00–02:00 CT, London 02:00–08:30 CT — "just use whatever is standard"), his names, tier 1, on the candle's labels, the SWEPT line, the read and the Analysis H2 table; (9) the King latch OFF — "match skylit" — the rail and the export follow Skylit's King on the same tick; (10) companion v1.19 — NQ's full night, the weekly 5-minute bars, WH / WL / WPOC drawn, NQ's base rates couriered; (4') the NQ vendor corpus parsed (188 sessions → NQ BASERATES 195); (6) the first-hour turns counted and tagged, every deflection carries its hour, R-3 in the pattern table; (8) ⓪a PER MARKET — the NQ chart reads NQ; F-23 — the corpus's ONH / ONL looked ahead (the day's post-close bars were in the night), corrected: the overnight extremes are within chance like every other level, F-14's first-30-minutes edge gone
 
-Serves: HOD/LOD — one definition on the face and in the study, growing by one session a day; the 14% wick that could not be.
+Serves: DEFLECTION — the liquidity levels beside the gamma levels, his names; HOD/LOD — the NQ chart measured on NQ; match Skylit always.
 
-Done when: the A row matches his tool's row for the day; BASERATES.last moves without a build; test_v1587 37.
+Done when: the candle wears AHI / ALO / LHI / LLO and PWH / PWL / WPOC when swept; the NQ chart's ⓪a reads NQ with its own E row after the courier's first delivery; the King moves with Skylit's; test_v1588 · 19/19 mutants.
 
 ## AFTER THAT — in order
 
-### v15.88 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
-
-Serves: HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered.
-
-Done when: mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine.
-
-### v15.89 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
-
-Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
-
-Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
-
-### v15.90 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
-
-Serves: HOD/LOD · the loop closes.
-
-Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
-
-### v15.91 — THE TAP RECORD — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 110 registry studies whose corpus is the tap record read from it; H11 registered the day it starts
+### v15.89 — THE TAP RECORD — NEXT BUILD, his word 2026-09-09 ("your recommendation" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 110 registry studies whose corpus is the tap record read from it; H11 registered the day it starts
 
 Serves: HOD/LOD · PULLBACK · 110 studies · his question: what makes a gamma level deflect.
 
 Done when: the design agreed one element at a time; 40 taps per cell and the first F-study reads from them with n, beside the midpoint control.
 
-### v15.92 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
+### v15.90 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
+
+Serves: HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered.
+
+Done when: mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine.
+
+### v15.91 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+
+Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
+
+Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
+
+### v15.92 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+
+Serves: HOD/LOD · the loop closes.
+
+Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
+
+### v15.94 — the nightly reads one READ NEXT study per night and writes it back · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v15.93 — one definitions file (Python + panel) · the shipped-artifact test
+### v15.95 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v15.94 — the face manifest — every number on the face names its study, pinned by a test
+### v15.96 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v15.95 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v15.97 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 

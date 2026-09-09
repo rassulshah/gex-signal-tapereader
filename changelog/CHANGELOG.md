@@ -1,3 +1,105 @@
+## v15.88 — THE AGENDA, BATCHED (+ companion v1.19): AHI · ALO · LHI · LLO · THE KING FOLLOWS SKYLIT · NQ'S NIGHT AND THE WEEKLY LEVELS · THE NQ CORPUS · THE HOUR ON EVERY DEFLECTION · ⓪a PER MARKET · F-23
+
+> Operator, 2026-09-09, one issue at a time ("1 issue at a time"), then "lets discuss other things also to put more
+> issues in the build": the Asia / London hours — **"just use whatever is standard"**; the King latch — **"match skylit"**;
+> companion v1.19 — **"yes"**; the NQ vendor corpus — **"i'll go with your recommendation"**; the first-hour turns he had
+> not circled — **"i agree i think you should also tag other hours"**; the tap record — **"your recommendation"** (next
+> build, on its own); the patch-build tier — **"your recommendation"** (none — batch); ⓪a per market — **"this build"**.
+> Item 4 closed with no build: **"there should be no qqq lines in es. for NQ, just use G because we dont have to distinguish
+> it like for the es which has both spy and spx."**
+
+**(1) AHI · ALO · LHI · LLO.** The standard futures clock, fixed Chicago hours: **Asia 17:00 → 02:00 CT, London 02:00 →
+08:30 CT**. `sessionHL` cuts the same night `overnightHL` assembles (the prior calendar key's evening + the session key's
+morning); tier 1 by his names; on the candle's swept labels, the SWEPT line, the sweeps read, ⓪a's level lists and the
+Analysis H2 table. v15.57's `LDNH / LDNL` were the London range under my name — renamed, not duplicated. A session counts
+from 150 bars: Yahoo's window began at 23:00 on Labor Day evening (180 Asia bars) and the AHI 7725.75 (23:46) in them is
+the level he named that day. For 09-08: **AHI 7725.75 · ALO 7694.75 · LHI 7718.25 · LLO 7687.50 (= ONL)**. The corpus
+study (`study-sweeps.py`) carries the Asia window (ALO 22% n=123 · AHI 15% n=141 — within chance of the fresh-low control,
+like every other level name) and London by his names (LLO 21% n=163 · LHI 16% n=170); H2.10j renamed, H2.10j2 registered.
+
+**(2) F-23 — the corpus's ONH / ONL looked ahead.** `load_all()` filed a session's own post-close bars (15:01–16:59) under
+its `on` list, so `onh / onl` could be set AFTER the RTH they were measured against — a look-ahead that removed failed
+sweeps. Corrected (the night = 17:00 of the evening before → the open, the panel's definition): **ONL 22% n=125 (was 29%
+n=113) · ONH 16% n=154 (was 26% n=140)** — the only two named levels with a positive lift in F-14 are within chance. The
+conditions moved with them: the first 30 minutes **21% n=249 vs 18%** (F-14's 27% vs 18% is gone), the flush past 8 pts
+**35% n=94 vs 23%**, the slow reclaim **32% n=96 vs 23%**. F-14 is flagged partly superseded; H2.1's baked sentence withdrawn;
+the tests pin the file's numbers, not literals. L7's "the first 30 minutes matter (27% vs 18%, n=180)" withdrawn.
+
+**(3) The King latch is off.** `KING_LATCH_MS` 0 and a no-hold branch in `kingLatchTick`: the crown moves on the tick the
+tape's top moves — no two-minute hold and no one-tick lag — so the rail, the IRT export and Skylit agree. The one designed
+difference from Skylit (DECISIONS 2026-09-07) is closed by his word. The flap fields stay (one number turns the hold back
+on); the export's held-King fallback for a blind tick is untouched. The 2026-08-27 flap will now show as Skylit shows it.
+
+**(4) Companion v1.19.** NQ keeps the whole Globex night (`full:true`; GC / CL stay RTH-only); a **5-minute, one-month,
+RTH-only fetch** for ES and NQ every 6 hours under `gpts_futweek_v1` — 1-minute history reaches 7 days and the prior ISO
+week is up to 12 back, which is why **WH / WL / the weekly POC** have been on his list since v15.80 and never drawn; NQ's
+BASERATES couriered under `gpts_hodlod_base_nq_v1`. The panel's `priorWeek()` cuts the ISO week before the shown day
+(Mon–Fri RTH), takes its high / low and the busiest price on the 1-point grid → **PWH / PWL / WPOC** (both sides, like
+POC) in the sweep set and ⓪a's lists; the corpus study adds `WPOC- / WPOC+` (23% / 17% vs 22% / 17% — within chance;
+H2.10j3). `__gexif.futWeek()` · `hlBaseNq()` · `futWeekPull()`.
+
+**(5) The NQ vendor corpus.** `NQ TestingData.txt` (ENQU26, tab-delimited, no header, ISO stamps — the format
+DATA-ARCHITECTURE §6a warned about on 08-28) is sniffed and parsed by `study-hodlod.py`; **NQ BASERATES = the vendor's
+188 sessions + the Yahoo days, 195 through 09-08**, provenance per session, on the tool grid, $20 a point. The nightly's
+overlap report is per market now — NQ has four shared days (08-24 → 08-27, the same September contract): the clocks,
+ranges and extremes identical, the 08:27 open 0.5–7.5 pts apart; ES still none.
+
+**(6) ⓪a per market.** I had told him the NQ corpus would move "the NQ E row" — there was no NQ E row: the section read ES
+bars and ES base rates on every chart. Now `dispMarket()` (the chart's family) drives `futSessionBars`, `measureBarsRaw`,
+`priorWeek` and `hodlodBase(market)`; on the NQ chart the candle, the A row, the read and the levels measure NQ's own bars
+and the E row stands on NQ's couriered BASERATES; `PT_USD` ($50 ES · $20 NQ) through a typeof-guarded `ptUsd()`; the
+header, the A row and the candle hovers name the market; **no baked NQ literal on purpose** — before the courier's first
+delivery the header says *no base for this market yet* and the E row does not draw (never a borrowed ES number). Found on
+the way: `measureBarsRaw` sorted its day keys lexically — the v15.79 bug in a second place (from the 10th of a month the A
+row would have stood on the 8th's bars); numeric now.
+
+**(7) The hour on every deflection; R-3.** His ruling on the first-hour turns he had not circled: count them, tagged —
+"and tag other hours". E005 gains **m1–m4** (the 08:57 high at the +γ 7695 King-to-be; the 09:12 low ON the −γ King 7675 at
+the ONL / LLO sweep, 7.5 pts through; the 09:31 low on the −γ 7680 with ONL dipped 3 pts and reclaimed; the 09:45 low
+under the growing 7700 / 7705 crown — the record's own o10 says DEFLECT at each), E006 gains **m1** (the NQ LOD 29424.75
+at 09:11, 43 pts through the PDL, between the −γ 717 and the −γ King 714); marked ⚐ uncircled. Every one of the 31 legs
+carries its hour (H1 08:30–09:30 … H6 13:30–14:00, H7 14:00–15:00; the seed derives it from `when`); L7 is rewritten as
+the hour CLASS (n=31), not a rule. The pattern table (both twins — `patterns.py` and `tapClasses`, pinned equal) gains
+`hour:1…7` and `clock:first / mid / last`; **R-3 implemented**. The Learn tab's leg table has the hour column.
+
+**(8) v15.87's nightly re-ran every ten minutes — found on GitHub while building this.** His machine installed v15.87 at
+~20:44 CT; the tick's new check fired as designed at 21:05 (the 09-08 outputs came back) — and then again at 21:15, 21:25,
+21:35: the run writes BASERATES.json seconds BEFORE it writes the log, and the one-second fence read the run's own output
+as "older than the log". Harmless (idempotent; four sync commits) and wrong. **`STALE_S` = an hour** — an installer's paste
+is 1970 or hours away, a run's outputs are seconds; the selftest holds a 30-second-older output as current. The same run
+showed the installer does not carry `data/futures/` (the nightly's own writes, by design), so his first append read only
+the last four day files and got **289** ES sessions where the cloud had 295: `refresh_futures` now harvests **every** day
+file (idempotent, seconds) plus the tail supplements (`data/futures/<day>-tail.json`, which DO ride the installer), so a
+machine rebuilds the whole corpus from what it has. His machine's 21:35 outputs (results · studies · recommendations · the
+log; a first machine row on Rec, RN-teach-L5) are merged into this build's seeds.
+
+**(9) The installer ships only what GitHub does not already hold.** The manifest re-shipped every file every build and the
+.bat crossed its 8 MB cap while building this (8.42 MB). A file whose bytes are already on origin/main is already on his
+machine (the installer pushes; the sync pushes his writes), so `build-installer.py` now drops every file whose git blob
+equals origin's and ships the rest — the origin guard has already refused anything origin moved past, so what is dropped is
+exactly what is equal. `GEX_SHIP_ALL=1` restores the full payload for a repair.
+
+**Records.** R-27 / R-28 carried over; **R-29** (the latch), **R-30** (v1.19 + the weekly levels), **R-31** (⓪a per market),
+**R-32** (the NQ corpus) implemented, by operator; the roadmap — v15.87 shipped, **v15.88 this build**, **v15.89 THE TAP
+RECORD (next, his word)**, the seasonality → v15.90, the rest +2; the Architecture lines (the corpora, the Yahoo integration,
+the Skylit King); LOCKED-ITEMS — the four levels BUILT; the Open Items (asia · circ · lev · nqv · patch answered, tap
+planned); DECISIONS 2026-09-09 (the batch); LESSONS v15.88; INVENTORY §0v; DATA-ARCHITECTURE; FINDINGS F-23; the config
+(2026-09-09b); the resume note (+ snapshot v15.87); the chat history.
+
+**Tests.** `test_v1588.js` — 63 assertions; `test_v1557` (the four by name, the Asia fixture), `test_v1555` (the file's
+numbers), `test_v1580`, `test_irt_export` (the King on the same tick), `test_hodlod`, `test_measure`, `test_nodeat`,
+`test_v1586` (the m-legs), `test_v1556` / `test_if_published` (companion 1.19), `test_v1558` re-pinned; **19/19 mutants
+killed** (`mut-v1588.py`: the Asia cut, the evening half, the floor, LLO's side, the latch back on, the one-tick lag,
+priorWeek on this week / a stub, ES on every chart ×2, the NQ multiplier, the ES literal on NQ, the hour off by one;
+NQ RTH-only, the weekly fetch at 1 minute, NQ's rates under ES's key; the night with the post-close bars, the hour class
+in Python, the NQ vendor file unlisted).
+
+**Verify at the open (2026-09-09), with v15.84–15.87:** the candle's labels wear AHI / ALO / LHI / LLO when swept (the SWEPT
+line lists them); PWH / PWL / WPOC appear after the companion's first weekly fetch (`__gexif.futWeek()` → ES / NQ rows);
+on the NQ chart the ⓪a header reads *NQ 1-min* and, after `__gexif.hlBaseNq()` shows 195 sessions, the E row is NQ's;
+the export's SPXW KING line moves with Skylit's crown; the Learn tab shows the hour column and the ⚐ legs; the Analysis
+H2 table has ALO / AHI / LLO / LHI / WPOC rows and ONL reads 22%.
+
 ## v15.87 — THE TOOL GRID ("tools") · THE CORPUS APPENDS ITSELF ("yes") · THE NIGHTLY RE-RUNS AFTER AN INSTALL
 
 > Operator, 2026-09-09, after three rounds on the A row: **"no, what im saying is how is there a wick when the hod

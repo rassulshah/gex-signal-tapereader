@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-09 · v15.87 · session `f9c89c64` — THE TOOL GRID (tools) · THE CORPUS APPENDS ITSELF (yes) · THE NIGHTLY RE-RUNS AFTER AN INSTALL
+## 2026-09-09 · v15.88 · session `f9c89c64` — THE AGENDA, BATCHED — the standard hours · match skylit · companion v1.19 · the NQ corpus · the hour on every deflection · ⓪a per market · F-23
 
-_218 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_230 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2853,8 +2853,199 @@ Now the Rec row (face changes go through Rec) and the CHANGELOG.
 Add the hover pin to test_v1587 (executed, not grepped), then run the full suite again.
 Now the resume note (head rewritten, snapshot v15.86 kept) and the chat history.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (01:18):** The code side is green except the record pins, which come after the records. Full suite now.
+Now the plan seed: the roadmap rows (15.86 shipped, 15.87 = this build, the rest shifted) and the Architecture lines (v15.84's one-window fetch, v15.87's corpus + nightly).
+Now the Rec row (face changes go through Rec) and the CHANGELOG.
+Add the hover pin to test_v1587 (executed, not grepped), then run the full suite again.
+Now the resume note (head rewritten, snapshot v15.86 kept) and the chat history.
+v15.87 is built and in your repo folder — items 1 and 2 of the agenda, closed together.
+
+**What it does**
+
+1. **The A row reads your tool's grid ("tools").** 3-minute bars stamped by their end, the open = the bar that ends 08:30 (7715.00 on 09-08, not the 08:30 minute's 7711.50), clocks are bar ends, W.End is the first bar *after* the extreme's to close through the open. Your 09-08 row reproduces exactly from the couriered bars — HOD 8:33 · Took 3 · BOP 3 · Wick 6 · W.End 8:36 · Wick% 6 · MD $2,137.50 — and the study uses the same grid (E row: took ~35m, rng ~61 pts on 295 sessions; the ladder unchanged). The A tag's hover now states the grid, so the next disagreement is read against the definition.
+2. **The corpus appends itself ("yes").** The nightly now runs append-futures → study-hodlod → BASERATES for ES (284 vendor + the Yahoo days, provenance per session, no overlap) and NQ (Yahoo only, 11 sessions). Your indicator is `BASERATES.corpus.last` — 09-08 now, 09-09 after tomorrow's nightly. The NQ vendor file still needs a parser (open item).
+3. **Something I got wrong, fixed.** I told you the nightly's 09-08 outputs "rode up with your push." They did not: the 15:21, 17:11 and 18:01 installers pasted the 09-07 results/studies/recommendations back over your machine's 15:05 run, …[trimmed]
+
+**OPERATOR:**
+> next issue.
+
+**me (01:40):** Item 3 parked as an open item (I0909patch on the Open Items tab). 
+
+**Item 4 — the NQ symbol's QQQ lines: G or QG?**
+
+Since v15.85 the ES file says which book a line comes from — `XG2–XG5` (SPX), `SG2–SG5` (SPY). The NQ file's QQQ lines still read `G2–G5`. Two choices:
+
+- **QG2–QG5** — one letter says the book, consistent with XG/SG; the QQQ King stays `QQQ KING`.
+- **G2–G5** — leave as is, since NQ carries one book and there is nothing to confuse it with.
+
+My recommendation is **QG**, by your own reasoning for XG/SG: a label should name its book, and if the NQ file ever carries a second book the lines are already right. It is a label-only change (the export's `irtGHeld` accepts `QG` alongside `G`, so the current hold re-latches on the next fresh book), one small build, no face change.
+
+QG, or G?
+
+**OPERATOR:**
+> there should be no qqq lines in es . for NQ , just use G because we dont have to distinguish it like for the es which has both spy and spx
+
+**me (01:42):** Item 4 closed with no build: G2–G5 stay on NQ, and the ES file already carries no QQQ line (since v15.80, pinned). Recorded on the Open Items tab and in DECISIONS.
+
+**Item 5 — the Asia and London session hours (for AHI · ALO · LHI · LLO)**
+
+The levels are locked; what's missing is your word on where the sessions begin and end, in Chicago time. What I have proposed, from the standard futures clock:
+
+- **Asia: 17:00 → 02:00 CT** (the Globex open through the Tokyo close)
+- **London: 02:00 → 08:30 CT** (the European open through our RTH open)
+
+So on 09-08 that read AHI 7725.75 · ALO 7694.75 (01:20) · LHI 7718.25 (05:20) · LLO 7687.50 — which is also ONL, because the night's low came in the London half.
+
+Two things to know before you answer. Many traders cut London at 08:30 CT as above, but some end it at the US cash open 08:30 and others at 07:00 or 09:00 — your other tool may have its own cut, and matching it matters more than any convention. And the NQ courier has no overnight bars yet, so the NQ levels wait on the companion until that is added (a small change, its own ask).
+
+Do the two windows above match how you read them, or give me your cuts?
+
+**OPERATOR:**
+> just use whatever is standard
+
+**me (01:47):** Standard it is — recorded: **Asia 17:00 → 02:00 CT, London 02:00 → 08:30 CT** (fixed Chicago hours, the futures-session convention).
+
+**What the build (v15.88) would do**
+
+- **AHI / ALO** — new, from the ES courier's night bars, the Asia window.
+- **LHI / LLO** — the London range already exists in the panel and the corpus under my names `LDNH / LDNL` (tier 2, same 02:00 cut). It gets your names and moves to **tier 1**, where your key levels live — so it is drawn, not just counted.
+- The four appear wherever ONH/ONL appear now: the day candle's swept labels, the SWEPT line, the sweeps read, and the Analysis H2 table (the corpus study renamed and extended, rebuilt by tonight's nightly). For 09-08 that is AHI 7725.75 · ALO 7694.75 · LHI 7718.25 · LLO 7687.50 (= ONL).
+- One caveat: the companion carries the whole Globex night for **ES only**; NQ, GC, CL are RTH-only, so on the NQ chart these four (and ONH/ONL) stay blank until the companion fetches NQ's night — one flag, but its own build (companion v1.19, which item 10's weekly levels also need).
+
+Nothing else changes on the face. Build it?
+
+**OPERATOR:**
+> lets discuss other things also to put more issues in the build
+
+**me (01:52):** Good — here is everything left on the agenda that could ride, each with the one decision it needs. Answer by number.
+
+1. **AHI · ALO · LHI · LLO** — agreed above; rides.
+
+2. **The King latch (item 9).** Today the rail and the IRT export hold the old King for up to 2 minutes during a crown flip, while Skylit shows the new one instantly — the one designed difference from Skylit. **Decision:** keep the latch, or follow Skylit's King instantly on both. My recommendation: follow Skylit — your rule is to match it so you can compare, and a 2-minute lag reads as an error when you do.
+
+3. **Companion v1.19 (item 10):** NQ's full Globex night (so the NQ chart gets ONH/ONL and the four new levels) plus a 5-minute, one-month fetch for the prior week's **WH / WL / weekly POC** (1-minute data only reaches 7 days, so the weekly levels have been named but never drawn). **Decision:** yes / no. It means a second Tampermonkey link at install time.
+
+4. **The NQ vendor corpus parser** (`NQ TestingData.txt`, 188 sessions) — tools only; the NQ E row would stand on 199 sessions instead of 11. **Decision:** yes / no.
+
+5. **The first-hour turns you did not circle (item 6)** — ES 08:45, 09:03 (at the ONL/LLO sweep), 09:39, 09:51 and the NQ LOD 09:09 at the PDL sweep. **Decision:** count them as deflections in the corpus, or not. No face change either way.
+
+6. **R-1 … R-6 on the Rec tab** — your ✓ / ✗. Only **R-3** (the tap's clock — first hour · midday · last hour — as a class in the pattern table) is small enough to ride here; R-1 (score every READ), R-2, R-4, R-5, R-6 are each their own build.
+
+7. **The tap record, element 1 (item 7)** — the universe of lines and the two controls, per the design. Its own build; say if you want it next after this one.
+
+8. **The patch-build tier (item 3)** — ship …[trimmed]
+
+**OPERATOR:**
+> 1 issue at a time
+
+**me (01:54):** Understood.
+
+**2 — the King latch.** During a crown flip, the rail and the IRT export keep the old King for up to 2 minutes while Skylit shows the new one at once. Your rule is to match Skylit so you have a source of truth to compare against — and a 2-minute lag reads as an error when you compare.
+
+**Fix:** drop the latch; the rail and the export follow Skylit's King on the same tick, so all three agree.
+
+Drop it, or keep it?
+
+**OPERATOR:**
+> match skylit
+
+**me (01:55):** Latch goes; the rail and the export follow Skylit's King on the same tick. In the build.
+
+**3 — companion v1.19: NQ's night and the weekly levels.** Two gaps in the courier: it fetches the whole Globex night for ES only, so on the NQ chart ONH/ONL (and the four new levels) stay blank; and 1-minute data only reaches 7 days back, so your **WH / WL / weekly POC** have been named on the level list but never drawn.
+
+**Fix:** the companion fetches NQ's full night (one flag) and adds a 5-minute, one-month fetch for ES and NQ, from which the panel draws the prior week's high, low and POC at tier 1 with the rest of your key levels. Installing it means a second Tampermonkey link at install time (the companion's), once.
+
+Yes, or leave it for its own build?
+
+**OPERATOR:**
+> yes
+
+**me (01:56):** Companion v1.19 is in: NQ's full night, and the prior week's WH / WL / weekly POC drawn from a 5-minute, one-month fetch.
+
+**4 — the NQ vendor corpus.** `NQ TestingData.txt` (188 sessions of NQ 1-minute, a different file format from the ES one — tab-delimited, ISO timestamps) sits in the repo unread, so the NQ E row stands on 11 Yahoo sessions.
+
+**Fix:** a loader branch in the study for that format; NQ's BASERATES pools the vendor's 188 with the Yahoo days on the tool grid, provenance recorded, same as ES. Tools only — no face change beyond the NQ E row's n going from 11 to ~199.
+
+Yes, or leave it?
+
+**OPERATOR:**
+> i'll go withyour recommendation
+
+**me (01:56):** My recommendation is yes — in the build. The NQ E row should stand on a corpus, not eleven days.
+
+**5 — the first-hour turns you did not circle.** On 09-08 the ES turned at 08:45 (7701), 09:03 (7680, at the ONL/LLO sweep with the −98% King), 09:39 (7685) and 09:51, and the NQ LOD came at 09:09 on the PDL sweep — none circled. The corpus of your examples has to say whether those are deflections in your sense or the opening excursion, because that boundary is what the identification is trained on.
+
+**Fix (my recommendation):** count them as deflections but tag them *first hour*, so the statistics can separate the opening from the rest — a turn at a level is a turn; the clock becomes a class (which is also what R-3 adds to the pattern table).
+
+Count them tagged, or leave them out?
+
+**OPERATOR:**
+> i agree i think you should also tag other hours
+
+**me (01:58):** Agreed — every deflection carries its hour (the session's seven hours, 08:30–09:30 … 14:00–15:00), which rolls up to first hour · midday · last hour. So: the five uncircled turns join E005/E006 as legs tagged *first hour*, every leg in the corpus gets its hour tag, and **R-3 is approved** — the tap's hour becomes a class in the nightly's pattern table. In the build.
+
+R-1, R-2, R-4, R-5 and R-6 stay on the Rec tab for your ✓ / ✗ — each is its own build.
+
+**6 — the tap record, element 1.** The design's first element is the universe: one row per tap of an exported line (SPX King / XG2–XG5 and SPY King / SG2–SG5 on ES; QQQ King / G2–G5 on NQ) plus the two controls — the rest of the 0DTE book at ≥ 20%, and the midpoint between adjacent lines — so a line's deflection rate is read against what a non-line does.
+
+**My recommendation:** make it the next build, on its own. This one already carries the levels, the latch, the companion, the NQ corpus and the hour tags — enough to verify at one open; the recorder deserves its own verification day.
+
+This build, or the next?
+
+**OPERATOR:**
+> your recommendation
+
+**me (01:58):** Next build, then. Recorded.
+
+**7 — the patch-build tier.** You said updates are slow. Measured, the time is not the code: it is the full suite (167 files), the records every build must carry (changelog, lessons, resume note, chat history — your standing rules, enforced by tests), the 8 MB installer, and the 5-minute CDN wait before Tampermonkey sees the update. A patch tier would skip the suite and the records for a "small" change — and a small change is exactly what slipped through as the 14% wick and the mixed-window feed.
+
+**My recommendation:** no patch tier. Batch instead — several issues per build, as we are doing now — so the fixed cost is paid once per batch, not once per fix. Close the item.
+
+Agree?
+
+**OPERATOR:**
+> your recommendation
+
+**me (02:00):** Item 7 closed: no patch tier, batch instead. That settles everything on the list — but one correction before I build, because I told you something inaccurate on item 4.
+
+I said the NQ corpus would move "the NQ E row" from 11 to ~199 sessions. **There is no NQ E row.** On the NQ chart the ⓪a section — the E row, the A row, the candle — reads **ES** bars and ES base rates; the NQ corpus feeds nothing on the face today. Parsing the NQ vendor file still builds the foundation, but it changes nothing you see.
+
+**8 — ⓪a per market.** Fix: on the NQ chart, the candle and the A row measure NQ's own bars, the E row stands on NQ's BASERATES (the vendor's 188 + the Yahoo days), and the courier carries both files. Same rows, NQ's numbers, tagged `NQ` where they now say `ES`.
+
+In this build, or later?
+
+**OPERATOR:**
+> this build
+
+**me (02:02):** Now the panel edits for the four levels.
+Now the test pins, driven by the file rather than literals.
+Now companion v1.19.
+Now the panel's weekly levels: `priorWeek(dayStr)` from the weekly store, drawn beside the rest.
+Now the per-market edits: the bars, the base, the dollars, the tags.
+Now the five legs and the hour tags.
+Now test_v1588.js — the build's own harness.
+Only the record pins remain. Now the rest of the tests touched by this build, then the full suite.
+Now the mutation pass on this build's logic, then the records.
+Now the plan seed (the roadmap and the Architecture lines).
+Now LOCKED-ITEMS, the Open Items, and the CHANGELOG.
+Now DECISIONS, LESSONS, INVENTORY, DATA-ARCHITECTURE, the config.
+Now the resume note (rewrite the head, snapshot v15.87) and the chat history.
+
 ### DECISIONS
 
+- **The agenda, batched (2026-09-09; v15.88 + companion v1.19):** *"1 issue at a time"* → *"lets discuss other things also
+  to put more issues in the build"*. Item 4: *"there should be no qqq lines in es. for NQ, just use G because we dont have
+  to distinguish it like for the es which has both spy and spx"* (no build). Item 5, the hours: *"just use whatever is
+  standard"* → Asia 17:00–02:00 CT, London 02:00–08:30 CT. Item 9, the latch: *"match skylit"* → off. Item 10, companion
+  v1.19: *"yes"*. The NQ vendor corpus: *"i'll go withyour recommendation"* → parsed. The first-hour turns: *"i agree i
+  think you should also tag other hours"* → five legs added, every leg tagged, R-3 implemented. The tap record: *"your
+  recommendation"* → next build (v15.89). The patch tier: *"your recommendation"* → none, batch. ⓪a per market, after my
+  correction that there was no NQ E row: *"this build"*.
+- **F-23 (found while cutting the night for his levels):** the sweep corpus's ONH / ONL included the session's own
+  post-close bars — a look-ahead; corrected, the overnight extremes are within chance like every level; F-14's first-30-
+  minutes edge withdrawn.
 - **The A row on his tool's grid (2026-09-09, "tools"; R-27, v15.87):** three rounds on the 14% wick — *"how is there a
   wick when the hod occurred at 8:30 … so how can there be a wick?"* · *"lookup the days candle using yahoo or any
   online resource to double check"* · *"are you saying that the 14% of the session was done in 1 minute, creating a
@@ -3159,6 +3350,15 @@ Now the resume note (head rewritten, snapshot v15.86 kept) and the chat history.
 
 ### SHIPPED
 
+**v15.88 + companion v1.19** (panel + companion + tools + installer) — AHI / ALO / LHI / LLO (sessionHL, tier 1, the corpus
+study's Asia window, LDNH / LDNL renamed); the King latch off; companion v1.19 (NQ full night, the weekly 5-minute fetch,
+NQ base rates) + priorWeek() → PWH / PWL / WPOC drawn; the NQ vendor corpus parsed (NQ BASERATES 195); the hour on every
+leg + the five uncircled legs + R-3 in both twins + the Learn tab's hour column; ⓪a per market (dispMarket, no baked NQ
+literal, PT_USD, the measureBarsRaw lexical-sort twin fixed); F-23 (the night before the session; F-14 flagged). R-3 · R-29
+· R-30 · R-31 · R-32 implemented; the roadmap (15.88 this, 15.89 the tap record next, 15.90 seasonality); LOCKED-ITEMS
+(the four levels BUILT); the Open Items; DECISIONS; LESSONS v15.88; INVENTORY §0v; DATA-ARCHITECTURE; FINDINGS F-23; config
+2026-09-09b; the resume note (+ snapshot v15.87). `test_v1588.js` 63; 19/19 mutants — and, found on GitHub mid-build: v15.87's tick re-ran the nightly every ten minutes (fence one second → an hour) and the installer's lack of data/futures/ left his corpus at 289 (every day file harvested now). **NOT YET VERIFIED on his panel.**
+
 **v15.87** (panel + installer + tools; companion v1.18 unchanged) — THE TOOL GRID: `hlToolBars` (3-minute bars stamped by
 end, from 08:27) before `hodLod` / `gdActual`, the A row's hover states the grid, "no RTH bars yet" for a pre-08:27
 grid; `study-hodlod.py` on the same grid per market; BASERATES ES 295 / NQ 11 through 09-08. THE CORPUS APPENDS ITSELF:
@@ -3405,10 +3605,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 - **His answers owed:** the NQ labels (G2–G5 or QG2–QG5); the Asia / London session hours (proposed 17:00–02:00 CT /
   02:00–08:30 CT).
 - **Q12 top 3 vs top 5 — report on ~2026-09-15** (a reminder fires in the cloud session); he keeps 5 meanwhile.
-- **v15.84 → v15.87 NOT verified live** — the open's probe list is in the resume note; the Analysis tab's asOf should
-  read 09-08 within 10 minutes of the v15.87 install (the nightly's re-run).
-- **The agenda, item 3 next:** the patch-build tier — his yes / no; then 4 the NQ labels, 5 the Asia / London hours…
-- **The NQ vendor corpus** (`NQ TestingData.txt`, tab / ISO) needs a parser before NQ's BASERATES can pool it.
+- **v15.84 → v15.88 NOT verified live** — the open's probe list is in the resume note (both scripts must be updated: the
+  panel AND companion v1.19).
+- **Next build: v15.89 THE TAP RECORD, element 1** — asked before built (design §2a).
+- **On the Rec tab for his ✓ / ✗:** R-1, R-2, R-4, R-5, R-6. **Q12** ~09-15. **The seasonality mockup** before v15.90.
 - **v15.85 (and v15.84 inside it) delivered after the close, NOT verified** — at the open: footer v15.85; the XG / SG
   labels on his IRT chart; `LASTFEED.SPY` one expiration and ~120 rows, steady; `feedRejects().SPY.win` climbing; the
   snaps' node count no longer flipping bands; the QQQ King on ENQU26 only.
@@ -3566,6 +3766,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+f91daa1 records: agenda item 4 answered — the NQ file's QQQ lines stay G2–G5 ("for NQ, just use G because we dont have to distinguish it like for the es which has both spy and spx"); no QQQ line on ES (as since v15.80); item 3 parked (I0909patch); I0908nq closed; R-26's open word answered; REC_SEED re-spliced
+9086b19 v15.87: THE TOOL GRID ("tools") — the ⓪a A row and the study read the session on his tool's grid: 3-minute bars stamped by END, the open = the bar ending 08:30's open (7715.00 on 09-08, not the 08:30 minute's 7711.50 — the 14% wick was that difference; his row reproduced exactly), the hover states it; THE CORPUS APPENDS ITSELF ("yes") — the nightly runs append-futures → study-hodlod → BASERATES (ES 295 with provenance, NQ 11), the boot literal baked from the file (tools/bake-hodlod.py), Yahoo's live-quote row dropped; THE NIGHTLY RE-RUNS AFTER AN INSTALL — tick.py by mtime and by results.asOf (the 15:21/17:11/18:01 installers had put the 09-07 outputs back over his machine's 15:05 run; I had said otherwise); R-27 · R-28; the Architecture lines for v15.84 / v15.87; test_v1587 40 · 12/12 mutants; the suite 167 files · 162 green · 5 red
 398f926 records: the Testing tab's suite stamp for v15.86 (166 files · 161 green · 5 red); the Open Items file carries Q12, the three answers owed, the tap record and the Asia/London levels
 505cfd2 v15.86: the two teaching images re-encoded for the installer's size cap (E005 112 KB, E006 138 KB)
 8372e2f v15.86: HIS TRAINING — ten circles (E005 ES · E006 NQ) read against the ladder's ranked lists and the node-event dollars; the LIQUIDITY LEVEL factor (PDH · PDL · PDC · ONH · ONL · AHI · ALO · LHI · LLO · POC · VAH · VAL); L10 a −γ King is not the floor · L11 a +γ King ceiling decays by the tap · L12 a liquidity level at a −γ King gets swept first; Q12 open (top 3 vs 5, due ~09-15); AHI/ALO/LHI/LLO locked; the tap record's §4b; test_v1586 23
@@ -3576,8 +3778,6 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 0f10203 v15.83: THE SPY BOOK'S TOP FIVE IN THE IRT EXPORT · THE SIGNED % ON EVERY NODE LINE · THE NODE LINES WEAR THEIR POLARITY — S2–S5 after the SPY King at Skylit's prices, G3 -56% / S2 +55%, yellow and its derivatives for +gamma, purple and its derivatives for −gamma (R-24); test_v1583 38 · 16/16
 5a66899 v15.82 verified on his panel 12:08 CT — merged 3,271 records / 69 bars from 08:39; the resume note and the chat history say so
 4047b30 v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE — feat = the localStorage queue ∪ the IndexedDB archive (featMergeRecs, LS wins per record), the in-memory archive kept current, featStats through the union, repoFeatDay + featSource in the day file, the matrix rebuilt (R-22, F-20's fix); test_v1582 36 · 13/13
-1fb9b1f v15.81 verified on his panel 11:31 CT — the resume note and the chat history say so
-772ff5a v15.81: THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES — the ES1/NQ1 derived books kept and self-fetched, every ES and NQ row at the price Atlas draws, the basis as the tilde-tagged fallback (R-23); the projection understood; F-20 solved (R-22 proposed); test_v1581 58 · 26/26
 ```
 
 ---

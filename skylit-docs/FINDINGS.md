@@ -610,6 +610,12 @@ Episode level: 33.3% (n=12) vs 55.6% (n=63). It is REPORTED on the face and neve
 
 ## F-14 · THE LEVEL'S NAME DOES NOT MATTER; THE FLUSH, THE CLOCK AND THE SPEED DO (2026-09-03)
 
+**⚠ PARTLY SUPERSEDED by F-23 (2026-09-09):** the numbers below were computed with the day's own post-close bars inside
+"the night" (a look-ahead in ONH/ONL). Re-run with the night cut at 17:00 → the open: the **flush** (35% n=94 vs 23%) and the
+**slow reclaim** (32% n=96 vs 23%) stand at about +10pp; the **first 30 minutes** shrink to 21% n=249 vs 18% — within chance;
+the shallow quick poke is NOT the extreme 89% of the time (n=246). The name of the level still adds nothing. The
+sentences below are kept as written on 2026-09-03; quote F-23's numbers.
+
 Event-level sweep study, `tools/study-sweeps.py`, 284 ES sessions, full Globex, 20 level types, 919
 events, two controls. Against the fair control — price at a fresh low right now, at ANY level or none —
 a sweep-and-reclaim of the overnight low, the prior-day low, the prior close, the profile levels, the
@@ -890,3 +896,29 @@ breadth needs its own guard.
 the node count per bar is written into the file but never displayed. The projection feature made the app rotate
 windows fast enough that the S rows and the SPY King in the export changed between two consecutive files, in the
 one minute both were read side by side with Skylit.
+
+## F-23 · THE CORPUS'S ONH / ONL LOOKED AHEAD — the day's own post-close bars were in "the night"; corrected, the overnight extremes are within chance like every other level (2026-09-09)
+
+**Status: CONFIRMED on the 284-session corpus (`tools/study-sweeps.py`), fixed in v15.88; F-14 stands, stronger.**
+
+**What it was.** `load_all()` files a bar under the NEXT key from 17:00, so a session's `on` list held the evening before
+and the morning — and also the session's OWN post-close bars (15:01–16:59, before the 17:00 roll). `onh`/`onl` were
+taken over all of `on`, so a day that closed near its high had an "ONH" set AFTER the RTH it was being measured against.
+The panel's `overnightHL` never had those bars (17:00 of the prior key → 08:29), so the live level and the corpus level
+were different levels with one name — the exact warning the companion's v1.18 comment carries.
+
+**What it did to the numbers.** The leak removed FAILED sweeps: on a day where price swept the true night high and ran on
+to close near the high, the post-close bars lifted the "ONH" above the RTH range and the sweep vanished from n. Before:
+ONL 29% n=113 (control 28%, +1pp) · ONH 26% n=140 (control 22%, +4pp) — the only two named levels with a positive lift in
+F-14. After: **ONL 22% n=125 (control 25%, -3pp) · ONH 16% n=154 (control 18%, -2pp) · ALO 22% n=123 (control 24%, -2pp) · AHI 15% n=141 (control 16%, -2pp) · LLO 21% n=163 (control 24%, -3pp) · LHI 16% n=170 (control 18%, -2pp)**.
+
+**What stands.** F-14's sentence — the level's NAME does not matter; the flush, the clock and the speed do — now holds
+for the overnight extremes without exception. The Asia and London sessions, added on his ask with his names, read the
+same: within chance of a fresh-low bounce at nothing. H2.1 / H2.10j / H2.10j2 carry the corrected rates from the next
+nightly (`learning/results.json`). ⚠ The baked `studies-seed.py` sentence for H2.1 ("ONL 29% … +1 / +4pp") is
+WITHDRAWN and rewritten; the number to quote is the file's, with its n.
+
+**The conditions moved too** (the ON+PD buckets count the corrected sweeps): first 30 minutes 27% n=180 vs 18% → **21% n=249 vs 18%**
+(the clock's lift is gone — within chance); flush past 8 pts 40% n=86 vs 24% → **35% n=94 vs 23%**; slow reclaim 6–30 bars 40%
+n=90 vs 24% → **32% n=96 vs 23%**; the shallow quick poke NOT the extreme 86% n=228 → **89% n=246**. Two of F-14's three
+conditions survive at about +10pp; the third does not. The ⓪a read quotes the table live, so it already says so.

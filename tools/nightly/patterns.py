@@ -48,6 +48,11 @@ PAT_CLASSES = [
     ('spx:pos', 'SPX +γ node (yellow)'), ('spx:neg', 'SPX −γ node (purple)'), ('spx:none', 'no SPX node at the tap (SPY / QQQ level)'),
     ('old:King', 'old detector · King'), ('old:Gate', 'old detector · Gate'), ('old:Rug', 'old detector · Rug'), ('old:Reverse Rug', 'old detector · Reverse Rug'), ('old:Pika', 'old detector · Pika'), ('old:Barney', 'old detector · Barney'), ('old:Floor', 'old detector · Floor'), ('old:Ceiling', 'old detector · Ceiling'),
     ('dir:up', 'deflected UP (a floor held)'), ('dir:dn', 'deflected DOWN (a ceiling held)'),
+    # (v15.88, R-3) THE CLOCK AS A CLASS — his ruling 2026-09-09 on the first-hour turns he had not circled: count them,
+    # tagged, "and tag other hours". The session's seven hours (H1 08:30–09:30 … H7 14:00–15:00) and the three roll-ups.
+    ('hour:1', 'H1 · 08:30–09:30'), ('hour:2', 'H2 · 09:30–10:30'), ('hour:3', 'H3 · 10:30–11:30'), ('hour:4', 'H4 · 11:30–12:30'),
+    ('hour:5', 'H5 · 12:30–13:30'), ('hour:6', 'H6 · 13:30–14:00'), ('hour:7', 'H7 · 14:00–15:00'),
+    ('clock:first', 'the first hour (08:30–09:30)'), ('clock:mid', 'midday (09:30–14:00)'), ('clock:last', 'the last hour (14:00–15:00)'),
 ]
 
 def wilson_low(right, n, z=1.96):
@@ -127,7 +132,26 @@ def tap_classes(e):
         c.append('dir:up')
     elif isinstance(d, (int, float)) and d < 0:
         c.append('dir:dn')
+    for hc in hour_classes(e.get('t')):
+        c.append(hc)
     return c
+
+def hour_classes(t_ms):
+    """(v15.88) the tap's hour of the session, from its epoch ms. ⚠ THE SAME FIXED −5 h THE PANEL USES (tapClasses, sessionHL,
+    futSessionBars — the courier's convention, CDT), not a tz database, so the two twins agree bar for bar; the CST half
+    of the year is one hour off in BOTH, which is the standing caveat on every clock in this project until DST arithmetic
+    lives in one place. H6 is the half hour 13:30–14:00; 'last' is H7."""
+    if not isinstance(t_ms, (int, float)) or isinstance(t_ms, bool) or t_ms <= 0:
+        return []
+    sec = int(t_ms // 1000) - 5 * 3600
+    mins = (sec % 86400) // 60
+    if mins < 510 or mins >= 900:
+        return []
+    m = mins - 510
+    h = 7 if m >= 330 else (6 if m >= 300 else m // 60 + 1)
+    out = ['hour:%d' % h]
+    out.append('clock:first' if h == 1 else ('clock:last' if h == 7 else 'clock:mid'))
+    return out
 
 def pattern_table(events):
     by = {k: dict(key=k, label=l, n=0, held=0, broke=0, pending=0, rate=None, lo=None) for k, l in PAT_CLASSES}

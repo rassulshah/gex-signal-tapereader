@@ -79,7 +79,7 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase')); eval(ex('measureBars')); ev
   ok(fs.existsSync('./data/futures/ES/2026-09-04.csv') && fs.existsSync('./data/futures/NQ/2026-09-04.csv'), '3d the per-day corpus files exist for ES and NQ');
   const ap=fs.readFileSync('./tools/append-futures.py','utf8'); ok(/RTH_A, RTH_B = 8\*3600\+27\*60, 15\*3600/.test(ap), '3e append-futures harvests from 08:27 (the tool grid\'s first minute)');
   const sh=fs.readFileSync('./tools/study-hodlod.py','utf8'); ok(/LOAD_A, LOAD_B = 8\*3600\+27\*60, 15\*3600/.test(sh) && /^BAR = 180/m.test(sh) && /def tool_bars\(/.test(sh) && /market='ES'/.test(sh), '3f study-hodlod folds on the same grid, per market');
-  const run=fs.readFileSync('./tools/nightly/run.py','utf8'); ok(/def refresh_futures\(days, keep_last=4\)/.test(run) && /futures = refresh_futures\(days\)/.test(run) && /futures=futures/.test(run), '3g the nightly appends the last four day files and rebuilds ES + NQ BASERATES, and the log carries it');
+  const run=fs.readFileSync('./tools/nightly/run.py','utf8'); ok(/def refresh_futures\(days, keep_last=(4|None)\)/.test(run) && /futures = refresh_futures\(days\)/.test(run) && /futures=futures/.test(run), '3g the nightly appends the day files (the last four at v15.87; every one from v15.88) and rebuilds ES + NQ BASERATES, and the log carries it');
   const og=fs.readFileSync('./tools/origin-guard.py','utf8'); ok(/'data\/es-1min\/BASERATES\.json'/.test(og) && /'data\/futures\/'/.test(og), '3h the origin guard treats BASERATES and data/futures/ as the nightly\'s writes');
   ok(/bake-hodlod: the literal EQUALS the file/.test(py(['tools/bake-hodlod.py','--check'])), '3i tools/bake-hodlod.py --check: the panel\'s HODLOD_BASE literal equals the file');
   ok(/RE-BAKED BY tools\/bake-hodlod\.py/.test(src) && val('HODLOD_BASE').n===BR.corpus.sessions, '3j the literal says it is baked, and its n is the file\'s');
@@ -100,9 +100,9 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase')); eval(ex('measureBars')); ev
 {
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/^## v15\.87 /m.test(cl) && /tools/.test(cl.split('## v15.87')[1].split('\n## ')[0]) && /15:21/.test(cl.split('## v15.87')[1].split('\n## ')[0]), '5a CHANGELOG v15.87 — his "tools", and the clobber told');
   const de=fs.readFileSync('session-state/DECISIONS.md','utf8'); ok(/"tools"/.test(de) && /bar ending 08:30/i.test(de), '5b DECISIONS carries his word and the open\'s definition');
-  const le=fs.readFileSync('session-state/LESSONS.md','utf8'); const top=(/^### (v[\d.]+)/m.exec(le)||[])[1]; ok(top==='v15.87', '5c LESSONS top entry is v15.87 (the newest-first log under §2)', top);
+  const le=fs.readFileSync('session-state/LESSONS.md','utf8'); ok(/^### v15\.87 /m.test(le), '5c LESSONS carries the v15.87 entry (the newest-first log under §2)');
   const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/^2026-09-09/.test(cfg.version||''), '5d .gex-config.json stamped 2026-09-09', cfg.version);
-  const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=(P.roadmap||[]).find(r=>r.status==='next'); ok(nx && nx.v==='15.87' && /tool grid/i.test(nx.title||''), '5e the plan\'s "next" item is 15.87, the tool grid', nx&&[nx.v,nx.title]);
+  const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=(P.roadmap||[]).find(r=>r.status==='next'); const r87=(P.roadmap||[]).find(r=>r.v==='15.87'); ok(r87 && /tool grid/i.test(r87.title||'') && /shipped|next/.test(r87.status), '5e the plan carries 15.87, the tool grid (next at its build, shipped after)', r87&&[r87.v,r87.status]);
 }
 console.log('test_v1587: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

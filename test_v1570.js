@@ -30,8 +30,8 @@ ok(/@version\s+15\.(7\d|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7\d|[89]\d
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8'));
   const ids=R.rows.map(r=>r.id);
   // (v15.80) the 2026-09-08 review added R-22 / R-23 (by review, proposed) — the first six stay proposed, the counts follow the rows
-  const six=['R-1','R-2','R-3','R-4','R-5','R-6'];
-  ok(R.schema===1 && six.every(i=>ids.includes(i)) && R.rows.filter(r=>r.by==='review').length>=6 && R.rows.filter(r=>r.by==='review' && six.includes(r.id)).every(r=>r.status==='proposed') && R.counts.proposed===R.rows.filter(r=>r.status==='proposed').length && !R.rows.some(r=>r.by==='nightly'),'1d the committed file: the review’s first six rows all proposed (R-22/R-23 joined them 2026-09-08), the counts equal the rows, no machine row yet; (v15.71) R-7, his own ask, rides as implemented',R.counts);
+  const six=['R-1','R-2','R-3','R-4','R-5','R-6']; const five=['R-1','R-2','R-4','R-5','R-6'];
+  ok(R.schema===1 && six.every(i=>ids.includes(i)) && R.rows.filter(r=>r.by==='review').length>=6 && R.rows.filter(r=>r.by==='review' && five.includes(r.id)).every(r=>r.status==='proposed') && R.rows.find(r=>r.id==='R-3').status==='implemented' && R.counts.proposed===R.rows.filter(r=>r.status==='proposed').length && R.rows.filter(r=>r.by==='nightly').every(r=>/^RN-/.test(r.id)),'1d the committed file: the review’s first rows proposed but R-3 (implemented v15.88 on his ruling), the counts equal the rows, the machine rows (RN-…, his machine’s nightly 2026-09-08 — RN-teach-L5 is the first) carry the RN- prefix; (v15.71) R-7, his own ask, rides as implemented',R.counts);
   ok(R.rows.every(r=>r.text && r.changes && r.evidence && r.kind && r.asOf) && !R.rows.some(r=>/illustrative/i.test(r.text)),'1e every row carries text, changes, evidence, kind, asOf — and the illustrative mockup row is NOT in the real file');
   const seed=fs.readFileSync('tools/rec-seed.py','utf8');
   ok(/R\.merge\(doc, ROWS, None, \{\}, doc\.get\('asOf'\) or '2026-09-04', \[\]\)/.test(seed) && /his decisions survive a regeneration/.test(seed),'1f the review’s seed merges by id and never touches his status');
@@ -40,10 +40,10 @@ ok(/@version\s+15\.(7\d|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7\d|[89]\d
   fs.copyFileSync('learning/recommendations.json', path.join(dir,'learning','recommendations.json'));
   fs.writeFileSync(path.join(dir,'learning','log','2026-09-08.json'), JSON.stringify({date:'2026-09-08',patterns:{rows:[]},hypotheses:[]}));
   fs.writeFileSync(path.join(dir,'learning','results.json'), JSON.stringify({schema:1,rules:{}}));
-  fs.writeFileSync(path.join(dir,'data','2026-09-08.json'), JSON.stringify({reco:{'R-1':{d:'approved',t:1788500000000,note:null},'R-3':{d:'declined',t:1788500000001,note:'later — after the reads'}}}));
+  fs.writeFileSync(path.join(dir,'data','2026-09-08.json'), JSON.stringify({reco:{'R-1':{d:'approved',t:1788500000000,note:null},'R-4':{d:'declined',t:1788500000001,note:'later — after the reads'}}}));
   const u=py('- <<\'EOF\'\nimport sys; sys.path.insert(0, "tools/nightly"); import recommend\nrecommend.update('+JSON.stringify(dir)+')\nEOF');
   const R2=JSON.parse(fs.readFileSync(path.join(dir,'learning','recommendations.json'),'utf8')); const by={}; R2.rows.forEach(r=>{ by[r.id]=r; });
-  ok(u.code===0 && by['R-1'].status==='approved' && by['R-1'].decidedOn==='2026-09-08' && by['R-3'].status==='declined' && by['R-3'].note==='later — after the reads' && by['R-2'].status==='proposed' && R2.counts.approved===1 && R2.counts.declined===1 && R2.asOf==='2026-09-08',"1g a ✓ and a ✗ in a day file's `reco` become the rows' status through the nightly — approved (with the day), declined (with his note), the rest untouched",u.err||R2.counts);
+  ok(u.code===0 && by['R-1'].status==='approved' && by['R-1'].decidedOn==='2026-09-08' && by['R-4'].status==='declined' && by['R-4'].note==='later — after the reads' && by['R-2'].status==='proposed' && R2.counts.approved===1 && R2.counts.declined===1 && R2.asOf==='2026-09-08',"1g a ✓ and a ✗ in a day file's `reco` become the rows' status through the nightly — approved (with the day), declined (with his note), the rest untouched",u.err||R2.counts);
 }
 
 // ---- 2 · the panel: the module, executed ------------------------------------------------------------------------------------------

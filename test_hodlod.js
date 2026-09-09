@@ -658,8 +658,8 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
     global.closedCandles=savedCC; global.futBarsLoad=savedFB; FUT=savedFut;
     eval(ex('hodLod')); eval(ex('hlPT'));
   }
-  ok(/out\.ptUsd=D\.isFut \? out\.ptPts\*ES_USD_PER_PT/.test(PT),
-     'p8 ...and dollars come from the ONE contract multiplier, only on a futures chart');
+  ok(/out\.ptUsd=D\.isFut \? out\.ptPts\*\(typeof ptUsd==='function'\?ptUsd\(\):ES_USD_PER_PT\)/.test(PT),
+     'p8 ...and dollars come from the ONE contract multiplier per market (v15.88: ptUsd — $50 ES, $20 NQ — typeof-guarded to the ES figure), only on a futures chart');
 
   ok(/out\.lcTag=secondIsHOD\?'HC':'LC'/.test(PT),
      'p9 the close leg is HC after a HOD and LC after a LOD — his naming');

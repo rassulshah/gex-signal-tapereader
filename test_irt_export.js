@@ -91,7 +91,8 @@ ok(kx && kx.split(',')[4]==='3', '2d drawn heaviest');
   const T2=()=>({ king:7700, pct:{ '7700.00':-100, '7710.00':96 } });   // crown just flipped
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():T2());
   const Bf=irtBuildCsv(); const kf=Bf.csv.split('\r\n').find(l=>/SPXW KING/.test(l)&&l.startsWith('EPU26,'));
-  ok(kf && /^EPU26,7727\.750000,/.test(kf), '2f a fresh flap does NOT move the exported king — the latch holds 7710', kf);
+  ok(kf && /^EPU26,7717\.750000,/.test(kf), '2f (v15.88, "match skylit") a fresh flap MOVES the exported King on the same tick — 7700 — as Skylit shows it (the v14.19 two-minute hold is off: KING_LATCH_MS 0)', kf);
+  ok(KING_LATCH_MS===0, '2f2 the hold is 0 — his word 2026-09-09, "match skylit"; 120000 was the v14.19 latch', KING_LATCH_MS);
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); LS[KING_LATCH_KEY]=undefined; delete LS[KING_LATCH_KEY]; }
 
 // ---------- 3. the SPY king ----------
@@ -329,10 +330,10 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():T2());
   const Bf=irtBuildCsv(); const L=Bf.csv.split('\r\n').filter(l=>l.startsWith('EPU26,'));
   const kf=L.find(l=>/SPXW KING/.test(l)); const g2=L.find(l=>/,XG2,/.test(l)); const g3=L.find(l=>/,XG3,/.test(l));
-  ok(kf && /^EPU26,7727\.750000,/.test(kf), '4t8 the exported King is still the latched 7710', kf);
-  ok(g2 && /^EPU26,7717\.750000,/.test(g2), '4t8b ...and the tape\'s new 100% crown (7700) is G2, not dropped and not doubled', g2);
-  ok(g3 && /^EPU26,7667\.500000,/.test(g3) && !L.some(l=>/,XG[2-5],/.test(l) && /,7727\.750000,/.test(l)),
-     '4t8c 7710 is never ALSO a G row — one level, one line', L.filter(l=>/,XG\d,/.test(l)));
+  ok(kf && /^EPU26,7717\.750000,/.test(kf), '4t8 (v15.88) the exported King is the tape\'s new crown 7700 on the same tick — no latch', kf);
+  ok(g2 && /^EPU26,7727\.750000,/.test(g2), '4t8b ...and the old crown 7710 (96%) is XG2 — the rank-2 line, not dropped and not doubled', g2);
+  ok(g3 && /^EPU26,7667\.500000,/.test(g3) && !L.some(l=>/,XG[2-5],/.test(l) && /,7717\.750000,/.test(l)),
+     '4t8c 7700 is never ALSO a G row — one level, one line', L.filter(l=>/,XG\d,/.test(l)));
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); delete LS[KING_LATCH_KEY]; }
 // ⚠ HELD like the Kings (v14.74): a blind tick must not delete four lines from his chart.
 { irtBuildCsv();                                                       // seeds today's G hold

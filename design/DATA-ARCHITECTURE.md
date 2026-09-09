@@ -224,7 +224,7 @@ one run nobody watches. **Always redirect the output root when testing.**
 | file | what | sessions |
 |---|---|---|
 | `data/es-1min/ES TestingData.txt` | EPM26 1-minute, CSV **with** a header, `Y-m-d H:M` | 284 |
-| `data/es-1min/NQ TestingData.txt` | ENQU26 1-minute, **TAB**, **no** header, `Y-m-dTH:M` | 188 |
+| `data/es-1min/NQ TestingData.txt` | ENQU26 1-minute, **TAB**, **no** header, `Y-m-dTH:M` | 188 | — (v15.88) read by `study-hodlod.py` (sniffed from the first line); pooled into `data/futures/NQ/BASERATES.json` with the Yahoo days
 
 ⚠⚠ **THE TWO FILES ARE NOT THE SAME FORMAT** — different delimiter, header and timestamp style.
 Assuming they were cost a run. `tools/model-lodhod.py::load()` sniffs all three from the file itself.
@@ -241,6 +241,18 @@ session's source recorded); `data/futures/NQ/BASERATES.json` stands on Yahoo alo
 parser in `study-hodlod.py` yet — tab / ISO). `data/futures/2026-09-08-tail.json`: the 14:44–14:59 minutes of 09-08 read
 from the live companion store, because the day file was written at 15:01 with the ~14:45 poll — the 09-09 window
 carries the same minutes and the append is idempotent.
+
+(v15.88) **Companion v1.19**: NQ keeps the whole Globex day (`full:true`) — the NQ chart's ONH / ONL and AHI / ALO / LHI / LLO come
+from it; a second fetch, `<SYM>=F?interval=5m&range=1mo` (RTH-only rows, ES and NQ, every 6 h) under `gpts_futweek_v1`, carries
+the prior ISO week for **PWH / PWL / WPOC** (1-minute history is 7 days; the prior week is up to 12 back) — read by the panel's
+`priorWeek()`, never written to the corpus (the corpus has its own weeks from its own minutes). NQ's BASERATES ride the same
+courier as ES's under `gpts_hodlod_base_nq_v1`; the panel keeps **no baked NQ literal** — before the first delivery the NQ
+chart's ⓪a says "no base for this market yet".
+
+⚠ (v15.88, **F-23**) the sweep corpus's night is 17:00 of the evening before → the open. Until v15.88 `study-sweeps.py` filed a
+session's own post-close bars (15:01–16:59) under its `on` list, so ONH / ONL could be set after the session they were measured
+against — a look-ahead that removed failed sweeps (ONL 29% → 22%, ONH 26% → 16%). The panel's `overnightHL` never had those bars;
+the two now agree. The Asia / London sessions cut the same night at 02:00 CT (his "standard": Asia 17:00–02:00, London 02:00–08:30).
 
 ## 6b · THE TAPE ON DISK (v15.66, 2026-09-04) — the whole book, every bar, every market
 

@@ -36,7 +36,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   // the ladder labels follow the flag
   ok(/add\(ONs\.onh,ONs\.full\?'ONH':'PMH'\)/.test(src) && /add\(ON\.onh,ON\.full\?'ONH':'PMH'\)/.test(src),'1d both ladder consumers label a stub PMH/PML, never ONH/ONL');
   // the companion keeps the whole day for ES
-  ok(/\{ k:'ES', y:'ES=F', full:true \}/.test(comp) && /if\(!full && \(sod<FUT_WIN_A\|\|sod>FUT_WIN_B\)\) continue;/.test(comp) && /futParse\(res\.responseText\|\|'', !!m\.full\)/.test(comp) && /@version\s+1\.18/.test(comp),'1e companion v1.18: ES is fetched without the UTC trim; the others keep it');
+  ok(/\{ k:'ES', y:'ES=F', full:true \}/.test(comp) && /if\(!full && \(sod<FUT_WIN_A\|\|sod>FUT_WIN_B\)\) continue;/.test(comp) && /futParse\(res\.responseText\|\|'', !!m\.full\)/.test(comp) && /@version\s+1\.(1[89]|[2-9]\d)/.test(comp),'1e companion v1.18+: ES is fetched without the UTC trim (v1.19: NQ too); GC and CL keep it');
 }
 
 // ---- 2 · the book's levels, in ES points --------------------------------------------------------

@@ -11,6 +11,18 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0v · v15.88 — four new labels on the candle and the SWEPT line; the King without its latch; ⓪a per market; the Learn tab's hour column (2026-09-09)
+
+**The day candle's swept labels and the SWEPT line** gain **AHI · ALO · LHI · LLO** (tier 1, his names, when swept) and
+**PWH · PWL · WPOC** (the prior week, once the companion's weekly bars are in). Measured: descriptive (a level is a fact);
+the H2 table on Analysis carries each one's sweep-and-reclaim rate against the fresh-low control (all within chance, F-23).
+**The rail's KING and the IRT export's SPXW KING line** move with Skylit's crown on the same tick — no two-minute hold.
+**⓪a on the NQ chart** reads NQ: the header *n d NQ 1-min*, the candle, the A row and the read on NQ's bars, the E row on
+NQ's BASERATES (195 sessions) once couriered — before that, *no base for this market yet* and no E row; MU / MD and HL RNG in
+NQ dollars ($20 a point). **📚 Learn**: the leg table's **hour** column and the ⚐ mark on the five legs he ruled in; L7
+reads as the hour class. His words: *"just use whatever is standard"* · *"match skylit"* · *"tag other hours"* · *"this
+build"*. Probe: `sweepLevelsToday('SPY')` names; `__gptsDebug.hodLod().src`; `__gexif.futWeek()`; `__gexif.hlBaseNq()`.
+
 ## 0u · v15.87 — the A row on his tool's grid; the E row on a corpus that grows nightly (2026-09-09, small hours)
 
 No new element. **⓪a A row** (and the HOD/LOD read, the GREEN / RED chip) now measures the session on his tool's grid —

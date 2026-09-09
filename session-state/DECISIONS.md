@@ -721,3 +721,48 @@ before the log's day; on 2026-09-08 the 15:21 / 17:11 / 18:01 installers put the
 15:05 run, on his disk and on GitHub, and I had said the opposite ("rode up with your push"). The origin guard cannot
 see an install that comes after the build; the tick can. This build ships the 09-07 outputs as GitHub holds them and
 his machine re-runs 09-08 within ten minutes of the install.
+
+## 2026-09-09 · the NQ file's QQQ lines stay G2–G5; the ES file carries no QQQ line (agenda item 4, no build)
+
+Operator: **"there should be no qqq lines in es. for NQ, just use G because we dont have to distinguish it like for the es
+which has both spy and spx."**
+
+Decided: the label names the book only where two books share a file — ES has SPX and SPY, so XG / SG; NQ has QQQ alone,
+so **G2–G5** (the QQQ King keeps its name). The ES file carries **no QQQ line** — as it has since v15.80 (`xqWhy`,
+pinned by test_v1580 §6 and test_v1585 §3). QG was proposed for consistency and declined. Closes I0908nq; R-26's one open
+word is answered. What would change it: a second book on the NQ symbol.
+
+## 2026-09-09 · v15.88 — the agenda batched: the standard hours, "match skylit", companion v1.19, the NQ corpus, the hour on every deflection, ⓪a per market, no patch tier, the tap record next; F-23
+
+His method for the session: **"1 issue at a time"** — and, once item 5 was agreed, **"lets discuss other things also to put
+more issues in the build"**; each item was still one message, one decision. His words, in order:
+
+- **"just use whatever is standard"** (the Asia / London hours) → **Asia 17:00–02:00 CT, London 02:00–08:30 CT**, fixed
+  Chicago hours as the session boxes on his other tools; the DST-mismatch weeks are not special-cased (nor there). A
+  session counts from 150 bars (a late-starting holiday evening is a session; a stub is not). What would change it: his
+  cuts. v15.57's LDNH / LDNL were the London range under my name — renamed to his, not duplicated.
+- **"match skylit"** (the King latch) → the two-minute hold is OFF; the rail and the export follow Skylit's King on the same
+  tick. DECISIONS 2026-09-07's "one designed difference" is closed. The hold is one number away (`KING_LATCH_MS`) and the
+  flap information is still computed, if a day ever shows the flap was worth hiding.
+- **"yes"** (companion v1.19) → NQ's full night; the weekly 5-minute bars for the prior ISO week (WH / WL / WPOC — named on
+  his list since v15.80, never drawn because 1-minute history is 7 days); NQ's base rates couriered. A second Tampermonkey
+  link at install time, once.
+- **"i'll go with your recommendation"** (the NQ vendor corpus) → parsed; NQ BASERATES = the vendor's 188 + the Yahoo days,
+  provenance per session; the four shared days read side by side (identical clocks and extremes — the same contract).
+- **"i agree i think you should also tag other hours"** (the first-hour turns he had not circled) → they are deflections,
+  tagged by the hour; EVERY leg carries its hour (H1–H7; first · midday · last as the roll-up); R-3 is implemented — the
+  clock is a CLASS in the pattern table, not a rule (L7 rewritten).
+- **"your recommendation"** (the tap record) → the NEXT build, on its own (v15.89): the recorder deserves its own
+  verification day, and this build already carried six items.
+- **"your recommendation"** (the patch-build tier) → none. The time is the suite, the records, the installer and the CDN
+  wait — his standing rules; a patch tier skips exactly the checks that caught the 14% wick and the mixed-window feed.
+  Batch instead. Closed.
+- **"this build"** (⓪a per market), after my correction: I had said the NQ corpus would move "the NQ E row" — there was no
+  NQ E row; the section read ES on every chart. Now the NQ chart measures NQ's bars, NQ's base, NQ's dollars, and says so;
+  with **no baked NQ literal** — until the courier has delivered, the header says "no base for this market yet" and the E
+  row does not draw. Absence of data must never render as data (D-6).
+
+**F-23, found on the way (no decision of his; recorded so it is never re-derived):** the corpus's ONH / ONL included the
+session's own post-close bars — a look-ahead that removed failed sweeps. Corrected: ONL 22% n=125 · ONH 16% n=154 (were
+29% / 26%) — within chance like every level name; the first-30-minutes edge in F-14 is gone (21% n=249 vs 18%), the flush
+(35% n=94 vs 23%) and the slow reclaim (32% n=96 vs 23%) stand at about +10pp. The number to quote is the file's, with its n.

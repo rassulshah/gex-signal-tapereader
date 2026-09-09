@@ -26,10 +26,10 @@ const MB=grab('measureBarsRaw').replace(/\/\/[^\n]*/g,'');
 ok(!!MB, 'x1 measureBars exists');
 ok(/dispIsFut\(\)/.test(MB), 'x2 it only prefers ES when the chart IS a future');
 ok(/futBarsLoad\(\)/.test(MB), 'x3 ...and reads the true ES 1-minute bars');
-ok(/scale:1, src:'ES'/.test(MB), 'x4 ES bars are already chart-scale, so scale is 1 — no conversion');
+ok(/scale:1, src:\(\(typeof dispMarket==='function'\)\?dispMarket\(\):'ES'\)/.test(MB), 'x4 futures bars are already chart-scale, so scale is 1 — no conversion; (v15.88) the src names the chart\'s market (ES on ES, NQ on NQ)');
 ok(/src:'SPY'/.test(MB), 'x5 the SPY proxy remains a fallback');
 // ⚠ a measurement whose instrument is unknown is not a measurement
-ok(/src:'ES'/.test(MB) && /src:'SPY'/.test(MB), 'x6 ...and it always SAYS which instrument it used');
+ok(/src:\(\(typeof dispMarket==='function'\)\?dispMarket\(\):'ES'\)/.test(MB) && /src:'SPY'/.test(MB), 'x6 ...and it always SAYS which instrument it used (the market, or the SPY proxy)');
 ok(/length>=30/.test(MB), 'x7 a stub session is refused rather than measured');
 
 // every consumer of the measurement path must use it

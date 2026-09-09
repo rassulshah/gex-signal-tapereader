@@ -131,6 +131,38 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.88 — a corpus can look ahead without a single bar being wrong; "the NQ E row" did not exist; the v15.79 sort bug had a twin
+(1) **F-23.** `study-sweeps.py` filed a session's own post-close bars under its `on` list and took ONH / ONL over all of it —
+so a day that closed near its high had an "overnight high" set after the session it was measured against. Every bar was
+correct; the WINDOW looked ahead, and it did so in the direction that flatters: failed sweeps vanished from n. Withdrawn:
+ONL 29% n=113 (+1pp), ONH 26% n=140 (+4pp), the first 30 minutes 27% vs 18% n=180, the flush 40% n=86, the slow reclaim
+40% n=90, the shallow poke 86% n=228 — now ONL 22% n=125, ONH 16% n=154, 21% n=249 vs 18%, 35% n=94 vs 23%, 32% n=96 vs 23%. Rule: when a study's window
+is defined by a day KEY, ask what else the key holds; and when a measured lift is small and positive only for one family
+of levels, look for the leak before the story. Found only because his four new levels made me cut the night again.
+(2) **I told him the NQ corpus would move "the NQ E row" from 11 to 199 sessions.** There was no NQ E row — the ⓪a section
+read `o.ES` on every chart (two places: `futSessionBars` and `measureBarsRaw`), and the E row stood on the one ES base.
+I described a face I had not looked at. Corrected before the build and asked ("this build"); the lesson is the same as
+v15.80's: read the source, not the label — and that includes my own descriptions of the face.
+(3) `measureBarsRaw` sorted its day keys lexically — the exact v15.79 bug (`'2026-9-8' > '2026-9-10'`) in a second
+function, four builds after the first was fixed. A lesson fixed in one place is not fixed; grep for the SHAPE
+(`Object.keys(byDay).sort()`) when a bug is found, not for the line.
+(4) I spliced REC_SEED by hand while `tools/splice-seed.py` existed for exactly that (v15.87 — the `$&` corruption came
+from the hand splice). Read `tools/` before writing a tool; this project's own rule (ITEM 18, the append leg) applies to
+its scripts too.
+(5) The Labor Day evening began at 23:00 in Yahoo's window (180 Asia bars). A floor set from a full night (240) would
+have dropped the one Asia level he had named that day. Floors are set from the data that exists, then checked against
+the day the feature was asked for.
+(6) **v15.87's re-run fence was one second and the nightly re-ran itself every ten minutes on his machine** (21:05, 21:15,
+21:25, 21:35 on 09-08): the run writes BASERATES seconds before the log, so its own output was "older than the log". A
+guard against a paste needs a fence wider than the run it guards — an hour. And the selftest had tested the paste (mtime
+0) but never the run's own ordering; the case that bit was the one not planted. Seen only because the syncs on GitHub
+repeated every ten minutes — read origin before every build, not only the guard's verdict.
+(8) The installer carried the whole manifest every build and hit its 8 MB cap on this one. A transport that re-sends
+what the receiver already has grows until it fails; the diff (by git blob against origin/main) is the payload.
+(7) The installer does not carry `data/futures/` (by design — the nightly's writes), so his first append built the corpus
+from the last four day files (289 sessions, not 295). "The nightly appends the last four" was a cloud-side shortcut that
+assumed the CSVs already existed everywhere. Every machine rebuilds from every day file now; the assumption is gone.
+
 ### v15.87 — an A-row disagreement is a definition question before it is a bug; a guard at build time cannot see an install
 (1) Three rounds were spent defending the arithmetic of a 14% wick (|7711.50 − 7717.75| / 45.5 — correct) before his
 screenshots showed the disconnect was the OPEN: his tool's 3-minute bars are stamped by END, so the bar labelled 8:30

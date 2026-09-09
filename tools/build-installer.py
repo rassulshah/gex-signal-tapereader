@@ -295,7 +295,8 @@ FILES += sorted(f for f in os.listdir('.') if f.startswith('mockuphodlod') and f
 # directory this manifest has lost. Rule from here: every file a `pipeFetch(PIPE_RAW_BASE+...)` names is
 # listed HERE, by glob, and test_installer_manifest.js pins the list against the panel's fetch calls.
 import glob as _glob
-for _p in sorted(set(_glob.glob('learning/*.json') + _glob.glob('learning/*.md') + _glob.glob('learning/log/*.json') +
+for _p in sorted(set(_glob.glob('data/futures/*-tail.json') +   # (v15.88) the tail supplements the nightly harvests (the CSVs themselves are the nightly's writes and stay off the installer)
+                     _glob.glob('learning/*.json') + _glob.glob('learning/*.md') + _glob.glob('learning/log/*.json') +
                      _glob.glob('learning/nightly/*.md') + _glob.glob('data/es-1min/*.json') + _glob.glob('review/*.json') +
                      # (v15.62) the deflection learning doc: the json the 📚 Learn tab fetches, the .md a context reads, the images
                      _glob.glob('learning/deflections/*.json') + _glob.glob('learning/deflections/*.md') + _glob.glob('learning/deflections/img/*.png'))):
@@ -346,6 +347,34 @@ if _total > _PAYLOAD_ADVISORY:
     for _s, _p in _big:
         print('  %8.2f MB  %s' % (_s/1e6, _p))
     print('  ADVISORY only — the hard gate is the finished .bat, measured after it is written.')
+
+# ⚠⚠ (v15.88) SHIP ONLY WHAT GITHUB DOES NOT ALREADY HOLD. The manifest re-shipped every file every build — the whole
+# panel, the whole chat history, every mockup and render — and the .bat crossed its 8 MB cap on 2026-09-09 (8.42 MB). A
+# file whose bytes are already on origin/main is already on his machine (the installer pushes; the sync task pushes his
+# writes within two minutes), so carrying it again moves nothing. Compared by git blob hash, so a file that is on origin
+# under the same bytes is dropped and every other file rides; `GEX_SHIP_ALL=1` restores the old behaviour for a repair.
+# The origin guard has already refused any file origin moved past, so what is dropped here is exactly what is EQUAL.
+def _origin_blobs():
+    try:
+        out = subprocess.run(['git', 'ls-tree', '-r', 'origin/main'], capture_output=True, text=True, check=True).stdout
+        return {ln.split('\t', 1)[1]: ln.split()[2] for ln in out.splitlines() if '\t' in ln}
+    except Exception as e:
+        print('origin blobs unavailable (%s) - shipping everything' % e); return None
+if os.environ.get('GEX_SHIP_ALL') != '1':
+    _ob = _origin_blobs()
+    if _ob:
+        _keep, _dropped = [], 0
+        for _p in FILES:
+            try:
+                _h = subprocess.run(['git', 'hash-object', _p], capture_output=True, text=True, check=True).stdout.strip()
+            except Exception:
+                _h = None
+            if _h and _ob.get(_p.replace(os.sep, '/')) == _h:
+                _dropped += 1
+            else:
+                _keep.append(_p)
+        print('manifest: %d files; %d identical on origin/main dropped from the payload; %d ride' % (len(FILES), _dropped, len(_keep)))
+        FILES = _keep
 
 buf = io.BytesIO()
 # mtime=0 so an unchanged tree produces an identical payload - a diffable installer

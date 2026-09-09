@@ -187,7 +187,7 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
   // ⚠ match the ASSIGNMENT, not the neighbouring arithmetic: setting `mudUsd=usd` (the day range)
   // left the `Math.abs(secPx-D.open)` on the line above intact, and the first version stayed green.
   // (v15.80) converted ONCE: |second extreme − open| × rr (D.scale) → chart points → × $50 on a future
-  ok(/var mudPts=Math\.abs\(secPx-D\.open\)\*rr;/.test(CD) && /if\(mudPts>0 && D\.isFut\) mudUsd=mudPts\*ES_USD_PER_PT;/.test(CD) && !/dr2\.scale\*ES_USD_PER_PT/.test(CD),
+  ok(/var mudPts=Math\.abs\(secPx-D\.open\)\*rr;/.test(CD) && /if\(mudPts>0 && D\.isFut\) mudUsd=mudPts\*\(typeof ptUsd==='function'\?ptUsd\(\):ES_USD_PER_PT\);/.test(CD) && !/dr2\.scale\*ES_USD_PER_PT/.test(CD),
      'n49c ...and the MUD money is the open-to-second-extreme leg in chart points × the multiplier, applied once (v15.80: it was ×10 on the ES chart)');
   ok(!/mudUsd\s*=\s*usd\b/.test(CD), 'n49d ...never from the day range');
   ok(/DAYCOL_HD \+ DAYCOL_N\*DAYCOL_ROW/.test(CD), 'n50b ...and the height is derived from the columns');

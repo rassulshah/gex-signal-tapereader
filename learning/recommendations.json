@@ -24,16 +24,6 @@
    "status": "proposed"
   },
   {
-   "id": "R-3",
-   "kind": "DATA",
-   "by": "review",
-   "asOf": "2026-09-04",
-   "text": "Add the clock as a class in the pattern table (time of the tap: first hour · midday · last hour).",
-   "changes": "every rate can be split by the time of day; the F-19 confound (an early tap has more session ahead to be undercut) becomes measurable",
-   "evidence": "F-19 names it; L7 (the taught legs cluster in the first hour and 12:00–13:15) is “not measured” until it exists",
-   "status": "proposed"
-  },
-  {
    "id": "R-4",
    "kind": "DESIGN",
    "by": "review",
@@ -108,6 +98,18 @@
    "status": "implemented",
    "version": "15.81",
    "why": "asked once after the projection reading, answered yes; shipped in v15.81 — LASTFUTDER, skylitFutPx, selfFetchFut, every ES and NQ row on the derived price with the basis as the tilde-tagged fallback"
+  },
+  {
+   "id": "R-3",
+   "kind": "DATA",
+   "by": "review",
+   "asOf": "2026-09-04",
+   "text": "Add the clock as a class in the pattern table (time of the tap: first hour · midday · last hour).",
+   "changes": "every rate can be split by the time of day; the F-19 confound (an early tap has more session ahead to be undercut) becomes measurable",
+   "evidence": "F-19 names it; L7 (the taught legs cluster in the first hour and 12:00–13:15) is “not measured” until it exists. Approved by his ruling of 2026-09-09 on the first-hour turns he had not circled: “i agree i think you should also tag other hours”",
+   "status": "implemented",
+   "version": "15.88",
+   "why": "his ruling 2026-09-09 — every deflection carries its hour (H1–H7 with first / midday / last as the roll-up) in the pattern table (both twins) and in the Learn corpus; L7 is the class, not a rule"
   },
   {
    "id": "R-12",
@@ -278,6 +280,54 @@
    "why": "“yes” — the corpus grows by one session a day on his machine, which is what “when will learning occur” needs"
   },
   {
+   "id": "R-29",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-09",
+   "text": "THE KING LATCH IS OFF — the rail and the IRT export follow Skylit’s King on the same tick (the v14.19 two-minute hold was the one designed difference from Skylit).",
+   "changes": "KING_LATCH_MS 0 and a no-hold branch in kingLatchTick (the crown moves on the tick the tape’s top moves — no one-tick lag); the flap fields stay so the hold can be turned back on by one number; the export’s held-King fallback (irtKingHeld, for a blind tick) is untouched",
+   "evidence": "his standing rule 2026-09-07: “We should match with skylit always in order to have a source of truth to compare against”; asked 2026-09-09 to keep the hold or follow Skylit: “match skylit”",
+   "status": "implemented",
+   "version": "15.88",
+   "why": "his word — a two-minute lag reads as an error when he compares the line to Skylit’s"
+  },
+  {
+   "id": "R-30",
+   "kind": "DATA",
+   "by": "operator",
+   "asOf": "2026-09-09",
+   "text": "COMPANION v1.19 — NQ keeps the whole Globex night (so the NQ chart draws ONH / ONL and AHI / ALO / LHI / LLO); a 5-minute, one-month, RTH-only fetch for ES and NQ carries the prior ISO week, from which the panel draws WH / WL / the weekly POC (PWH / PWL / WPOC — tier 1 on his list since v15.80, never drawn: 1-minute data reaches 7 days and the prior week is up to 12 back); NQ’s BASERATES couriered under its own key.",
+   "changes": "FUT_MARKETS NQ full:true; futWeekCourier (gpts_futweek_v1, every 6 h); hlBaseFetch for data/futures/NQ/BASERATES.json (gpts_hodlod_base_nq_v1); the panel’s priorWeek() (the ISO week before the shown day, its high / low and the busiest price on the 1-point grid); the corpus study adds WPOC- / WPOC+ (H2.10j3)",
+   "evidence": "his key-level list 2026-09-08: “PDH, PDL, ONL, ONH, WH, WL, Prior day POC, VAH, VAL, Weekly Poc”; asked 2026-09-09 (item 10): “yes”",
+   "status": "implemented",
+   "version": "15.88",
+   "why": "“yes” — the last two names on his list get drawn; the NQ chart gets its night"
+  },
+  {
+   "id": "R-31",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-09",
+   "text": "⓪a PER MARKET — on the NQ chart the candle, the A row, the read and the levels measure NQ’s own bars and the E row stands on NQ’s BASERATES (the vendor’s 188 sessions + the Yahoo days); the dollars are NQ dollars ($20 a point); the tags say NQ. Until the courier has delivered NQ’s file the section says “no base for this market yet” — never a borrowed ES number.",
+   "changes": "dispMarket(); futSessionBars and measureBarsRaw read the chart’s market; hodlodBase(market) with HLBASE_NQ_KEY and no baked NQ literal (hlNoBase for the empty state); PT_USD / ptUsd() typeof-guarded in the hot paths; the ⓪a header and the A row / candle hovers name the market; a lexical-sort bug in measureBarsRaw’s day keys fixed on the way (the v15.79 lesson in a second place)",
+   "evidence": "2026-09-09: I had told him the NQ corpus would move “the NQ E row” from 11 to 199 sessions — there was no NQ E row; the ⓪a section read ES on every chart. Corrected, and asked: “this build”",
+   "status": "implemented",
+   "version": "15.88",
+   "why": "his word, after the correction — the NQ chart must read NQ"
+  },
+  {
+   "id": "R-32",
+   "kind": "DATA",
+   "by": "operator",
+   "asOf": "2026-09-09",
+   "text": "THE NQ VENDOR CORPUS PARSED — “NQ TestingData.txt” (ENQU26, 188 sessions, 2025-11-24 → 2026-08-27; tab-delimited, no header, ISO stamps) joins NQ’s BASERATES with the Yahoo days, provenance per session; the nightly reports the vendor / Yahoo overlap per market (NQ: four shared days, 08-24 → 08-27, read side by side — the clocks, ranges and extremes identical, the 08:27 open 0.5–7.5 pts apart).",
+   "changes": "study-hodlod.py sniffs the format from the first line; market_sources(NQ) lists the vendor file first; refresh_futures reports the overlap for ES and NQ",
+   "evidence": "DATA-ARCHITECTURE §6a (2026-08-28) warned the two vendor files are different formats; the NQ file sat unread through v15.87. Asked 2026-09-09: “i’ll go with your recommendation” (yes)",
+   "status": "implemented",
+   "version": "15.88",
+   "why": "the NQ E row (R-31) needs a corpus, not eleven days"
+  },
+  {
    "id": "R-7",
    "kind": "FEATURE",
    "by": "operator",
@@ -315,9 +365,9 @@
   }
  ],
  "counts": {
-  "proposed": 8,
+  "proposed": 7,
   "approved": 0,
-  "implemented": 19,
+  "implemented": 24,
   "declined": 0,
   "withdrawn": 0
  }

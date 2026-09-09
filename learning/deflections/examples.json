@@ -270,7 +270,7 @@
   },
   {
    "id": "L7",
-   "rule": "TIME OF DAY: the taught deflections cluster in the first hour and in the noon window (12:00–13:15 CT) — 3 and 7 of 16 legs. An observation to measure on the 284-session corpus, not a rule to trade.",
+   "rule": "TIME OF DAY IS A CLASS, NOT A RULE: every deflection carries its hour (H1 08:30–09:30 … H7 14:00–15:00; first · midday · last as the roll-up) and the nightly's pattern table reads the held / turn / resume rates by hour (R-3). The taught legs cluster in the first hour and around noon; the sweep corpus's first-30-minutes edge did NOT survive the night's correction (F-23: 21% vs 18%, n=249 — within chance).",
    "from": [
     "E001",
     "E002",
@@ -280,11 +280,11 @@
     "E006"
    ],
    "status": "PROPOSED",
-   "n": 26,
-   "agree": 13,
-   "weak": 13,
+   "n": 31,
+   "agree": 16,
+   "weak": 15,
    "refute": 0,
-   "note": "First hour: E002 c1 09:27, E003 c1 08:42–09:00, E004 c1 08:45–09:10. Noon: E001 R2 11:57–12:06, Pb 12:20–12:36, R3 13:12; E002 c3 12:51–13:24; E003 c3 12:06, c4 13:12; E004 c3 12:10. The sweep corpus already says the first 30 minutes matter (27% vs 18%, n=180). E005 / E006 (2026-09-08): his ten circles fall at 08:48–08:57, 10:18, 11:57, 12:06, 13:15, 13:18, 13:48, 14:33, 14:54, 14:59 — six of ten after 13:15 — and he did NOT circle the first-hour turns (ES 08:45, 09:03, 09:39; the NQ LOD 09:09). As written the rule is weak on this day; the clock is a class to measure, not a rule yet.",
+   "note": "His ruling 2026-09-09 on the first-hour turns he had not circled (ES 08:57 high, 09:12 low at the ONL / LLO sweep, 09:31 low, 09:45 low; the NQ LOD 09:11 at the PDL sweep): \"i agree i think you should also tag other hours\" — counted as m1–m4 (E005) and m1 (E006), tagged H1 / H2; every leg tagged. By hour over the 31 legs: H1 7 · H2 5 · H3 3 · H4 5 · H5 5 · H6 3 · H7 3. First hour: E002 c1 09:27, E003 c1 08:42–09:00, E004 c1 08:45–09:10, E005 m1 / m2, E006 c1 / m1. Noon: E001 R2 11:57–12:06, Pb 12:20–12:36, R3 13:12; E002 c3 12:51–13:24; E003 c3 12:06, c4 13:12; E004 c3 12:10; E005 c2 12:06. Withdrawn: 'the first 30 minutes matter (27% vs 18%, n=180)' — that number carried the corpus's look-ahead (F-23).",
    "evidence": "not measured by the ledger: needs the clock as a class — to add",
    "verdict": "not measured",
    "asOf": "2026-09-08"
@@ -312,7 +312,8 @@
      "factors": [
       "king",
       "growth"
-     ]
+     ],
+     "hour": "H3"
     },
     {
      "leg": "R2",
@@ -325,7 +326,8 @@
      "factors": [
       "king",
       "growth"
-     ]
+     ],
+     "hour": "H4"
     },
     {
      "leg": "Pb",
@@ -339,7 +341,8 @@
       "growth",
       "side",
       "stack"
-     ]
+     ],
+     "hour": "H4"
     },
     {
      "leg": "R3",
@@ -354,7 +357,8 @@
       "growth",
       "magnet",
       "heavy"
-     ]
+     ],
+     "hour": "H5"
     }
    ],
    "call": {
@@ -395,7 +399,8 @@
       "new",
       "growth",
       "stack"
-     ]
+     ],
+     "hour": "H1"
     },
     {
      "leg": "c2",
@@ -407,7 +412,8 @@
      "data": "7670: −$13M (11:00) → −$17M (11:03, 48%) → −$14M (11:06, side 'above' = price pierced it) → −$11M (11:09) → reclaimed ('below') at 11:12. Growth into the tap was weak (d15 −1 … −2); the node shrank as price pierced it and price came back up through it. The weakest of the four.",
      "factors": [
       "side"
-     ]
+     ],
+     "hour": "H3"
     },
     {
      "leg": "c3",
@@ -420,7 +426,8 @@
      "factors": [
       "growth",
       "stack"
-     ]
+     ],
+     "hour": "H5"
     },
     {
      "leg": "c4",
@@ -435,7 +442,8 @@
       "growth",
       "stack",
       "side"
-     ]
+     ],
+     "hour": "H6"
     }
    ],
    "call": {
@@ -474,7 +482,8 @@
      "data": "The King at the open (08:36 7750; briefly 7790 at 08:39; 7750 again 09:00). At 09:09, the first event: 93–100%, $14M, stage Delivered, 3 taps — the circle IS those three taps. Growth into the taps is in the blind minutes before 09:09; from 09:09 it grew $14M → $34M by 09:48 while price fell to 7732 and came back. Price went through it at 09:42 (side 'below' from 09:45) and never returned.",
      "factors": [
       "king"
-     ]
+     ],
+     "hour": "H1"
     },
     {
      "leg": "c2",
@@ -488,7 +497,8 @@
       "new",
       "growth",
       "roll"
-     ]
+     ],
+     "hour": "H2"
     },
     {
      "leg": "c3",
@@ -502,7 +512,8 @@
       "king",
       "roll",
       "magnet"
-     ]
+     ],
+     "hour": "H4"
     },
     {
      "leg": "c4",
@@ -515,7 +526,8 @@
      "factors": [
       "new",
       "growth"
-     ]
+     ],
+     "hour": "H5"
     },
     {
      "leg": "c5",
@@ -530,7 +542,8 @@
       "growth",
       "rug",
       "magnet"
-     ]
+     ],
+     "hour": "H6"
     }
    ],
    "call": {
@@ -570,7 +583,8 @@
       "new",
       "growth",
       "magnet"
-     ]
+     ],
+     "hour": "H1"
     },
     {
      "leg": "c2",
@@ -583,7 +597,8 @@
      "factors": [
       "king",
       "growth"
-     ]
+     ],
+     "hour": "H2"
     },
     {
      "leg": "c3",
@@ -597,7 +612,8 @@
       "growth",
       "stack",
       "magnet"
-     ]
+     ],
+     "hour": "H4"
     }
    ],
    "call": {
@@ -639,7 +655,8 @@
       "growth",
       "stack",
       "heavy"
-     ]
+     ],
+     "hour": "H2"
     },
     {
      "leg": "c2",
@@ -652,7 +669,8 @@
      "factors": [
       "king",
       "growth"
-     ]
+     ],
+     "hour": "H4"
     },
     {
      "leg": "c3",
@@ -666,7 +684,8 @@
       "king",
       "growth",
       "heavy"
-     ]
+     ],
+     "hour": "H5"
     },
     {
      "leg": "c4",
@@ -681,7 +700,8 @@
       "growth",
       "liq",
       "heavy"
-     ]
+     ],
+     "hour": "H6"
     },
     {
      "leg": "c5",
@@ -695,7 +715,73 @@
       "king",
       "rug",
       "heavy"
-     ]
+     ],
+     "hour": "H7"
+    },
+    {
+     "leg": "m1",
+     "kind": "PULLBACK",
+     "side": "resistance",
+     "when": "08:54–08:57 CT (the bounce high 08:57)",
+     "px": "high ES 7701.25 at 08:57 (after the 08:53 low 7688.25) → 7680.00 by 09:12 (−21.25 in 15 bars)",
+     "node": "SPXW 7695 +γ — 80% at 08:45, THE KING (100%) by 09:03 (ES ~7699–7701) — with the −γ King 7675 (−100%, ES ~7679) thirteen below; SPY 768 −94% (ES 7700.7) and 770 −100% in the SPY book",
+     "data": "7695: $7M at 08:39 (FRESH, +$5M/15m, role PIN) → +γ King by 09:03 → $15M at 09:12 (TESTED, 1 tap, d15 −$2M, NOTOUCH after). 7700: $50M at 09:12 growing +$52M/15m — the node that became the day's ceiling (c1) was already building above. No liquidity level within 5 pts (ONL / LLO 7687.50 is 14 below; VAL 7713.25 12 above). UNCIRCLED by him; counted on his ruling of 2026-09-09.",
+     "factors": [
+      "king",
+      "growth",
+      "fresh"
+     ],
+     "hour": "H1",
+     "uncircled": true
+    },
+    {
+     "leg": "m2",
+     "kind": "PULLBACK",
+     "side": "support",
+     "when": "09:03–09:12 CT (the ONL / LLO 7687.50 swept from 09:03; the low 09:12)",
+     "px": "low ES 7680.00 at 09:12 → 7696.75 by 09:2x (+16.75); the sweep 7.5 pts through ONL / LLO, reclaimed within two bars",
+     "node": "SPXW 7675 −γ, THE KING (−98% at 09:03, −100% at 09:12; ES ~7679–7681) — the low printed ON it; 7680 −61% → −40% beside it; the +γ 7695 King-turned-rank-1 above; SPY 766 +46% (ES 7681.7) — the +γ node in the other book AT the low",
+     "data": "7675: −$20M at 09:12 (d15 −$6M — growing in magnitude into the tap), DECAYING → DELIVERED (2 taps at 09:15, 3 at 09:18 — the record's own o10: DEFLECT at 09:12 / 09:15 / 09:18 / 09:21 / 09:24). 7680: −$13M → −$19M (d15 −$9M). 7700 above: +$59M, +$60M/15m. Liquidity: ONL / LLO 7687.50 swept 7.5 pts (L12 — a liquidity level at a −γ King gets swept before the turn; here the low was ON the −γ King, no +γ node beneath — the SPY 766 +γ carried the turn). UNCIRCLED; counted on his ruling of 2026-09-09.",
+     "factors": [
+      "king",
+      "growth",
+      "liq",
+      "side"
+     ],
+     "hour": "H1",
+     "uncircled": true
+    },
+    {
+     "leg": "m3",
+     "kind": "PULLBACK",
+     "side": "support",
+     "when": "09:30–09:33 CT (the low 09:31)",
+     "px": "low ES 7684.50 at 09:31 (3 pts under ONL / LLO 7687.50, reclaimed the same bar) → 7692.50 by 09:42 (+8) → 7700 by 09:55 (+15.5)",
+     "node": "SPXW 7680 −γ −47% (ES ~7684) — the low printed on it; 7675 −γ −30% (the morning's King, faded) beneath; the +γ crown 7700 / 7705 (100 / 90%) fifteen above",
+     "data": "7680: −$36M at 09:30 → −$38M at 09:33 (d15 −$18M → −$5M), TESTED 1 tap — the record's own o10: DEFLECT at 09:33 / 09:36 / 09:39. 7675: −$23M, DELIVERED 4 taps by 09:30 (spent). 7700: $78M → $85M, +$18–20M/15m — the +γ King growing above (the target). Liquidity: ONL / LLO 7687.50 dipped 3 pts under and reclaimed. UNCIRCLED; counted on his ruling of 2026-09-09.",
+     "factors": [
+      "growth",
+      "liq",
+      "side"
+     ],
+     "hour": "H2",
+     "uncircled": true
+    },
+    {
+     "leg": "m4",
+     "kind": "PULLBACK",
+     "side": "support",
+     "when": "09:45–09:51 CT (the low 09:45; the break higher 09:51)",
+     "px": "low ES 7686.75 at 09:45 → 7700.00 by 09:55 (+13.25 in 10 bars) — the rally into the 7700 / 7705 crown that became c1",
+     "node": "SPXW 7680 −γ −42% (ES ~7684, 2.75 under the low), DELIVERED; 7695 +γ 23% (ES ~7699) just above; SPY 767 +47% rank 5 (ES 7690.5) — the +γ node in the other book at the low; the +γ King 7700 / 7705 (100 / 91–100%) growing above",
+     "data": "7680: −$37M at 09:45 (d15 −$1M, flat) → −$37M, DELIVERED 2–3 taps — o10 DEFLECT at 09:45. 7695: $19M → $25M by 09:54 (FRESH, +$8M/15m), o10 PIN / DEFLECT. 7700: $88M → $98M → $107M (+$7–19M/15m) and 7705 $80M → $104M (+$20–28M/15m) — the crown building as price rose into it. No liquidity level within 5 pts. UNCIRCLED; counted on his ruling of 2026-09-09.",
+     "factors": [
+      "growth",
+      "stack",
+      "fresh"
+     ],
+     "hour": "H2",
+     "uncircled": true
     },
     {
      "leg": "c6",
@@ -710,7 +796,8 @@
       "growth",
       "stack",
       "king"
-     ]
+     ],
+     "hour": "H7"
     }
    ],
    "call": {
@@ -729,7 +816,7 @@
     "L11",
     "L12"
    ],
-   "open": "NOT CIRCLED by him, for his ruling (m1–m4): 08:45 high 7701 (SPXW 7695 +80% / the SPY King 768 −100%; −21.5 pts after); 09:03–09:10 low 7680 (ONL / LLO 7687.50 swept 6.5 pts and reclaimed in one bar — the SWEPT line called it 'making LOD' — with the SPXW King 7675 −98% at ES ~7679 and SPY 766 +46% at 7681.7; +16.6 pts); 09:39 low 7685 (SPXW 7680 −47% at ES 7684; ONL / LLO held from above; +17.9); 09:51 SPY 767 +47% rank 5 at 7690.5 (+12.7). Question asked: are the first-hour turns skipped on purpose (the book still forming; the opening excursion) or because a sweep-turn is a different animal? · THE PANEL'S OWN LEDGER vs his six: `day.defl` fired 21 rows inside these six windows — 'Rug' and 'Floor deflection' at SPY 766 / 767 / 765 while price chopped, one 'Ceiling deflection' at 768.5 twenty minutes after c1 — and matched none of the six by time and level. It reads ±0.50 SPY wobbles; he reads 8–17-pt turns at the top-3 lines. The tap record (R-25, design/TAP-RECORD.md) is how the panel will see what he sees."
+   "open": "HIS RULING 2026-09-09 on the first-hour turns: \"i agree i think you should also tag other hours\" — m1–m4 are counted as deflections, tagged by the hour (H1 / H2), and every leg in the corpus carries its hour. The panel's own `defl` ledger fired 21 rows inside his six windows and matched none — it reads ±0.50 SPY wobbles; he reads 8–17-pt turns at the top-3 lines. The tap record (R-25) is designed at his scale."
   },
   {
    "id": "E006",
@@ -742,6 +829,23 @@
    "his": "here are 4 examples from the NQ to also help you learn",
    "legs": [
     {
+     "leg": "m1",
+     "kind": "LOD",
+     "side": "support",
+     "when": "09:02–09:12 CT (the PDL 29468 swept from 09:02; THE SESSION LOW 09:11)",
+     "px": "low NQ 29424.75 at 09:11 — THE SESSION LOW — 43 pts through the PDL 29468, reclaimed by 09:14 (29479.50) → 29580 by 09:3x (+155)",
+     "node": "QQQ 717 −γ (−96% at 09:09, −83% at 09:12; NQ ~29483) above the low and the −γ QQQ King 714 (−100%, NQ ~29360) 65 below it — the low printed BETWEEN the two −γ nodes, 58 under 717, at the PDL sweep; +γ 721 (34–36%, NQ ~29648) and 720 far above; in the SPY book the +γ King 765 (100%) sat at ES ~7671 — the ES low of the same minute was 7680",
+     "node_hint": "no dollar record for QQQ (E006's caveat)",
+     "data": "QQQ has no $ in the record; by the ladder: 717 −76% (08:57) → −92% (09:06) → −96% (09:09) → −83% (09:12) → −92% (09:15) — a −γ node growing in %King into the sweep, easing on the reclaim; the King 714 held −100% throughout. Liquidity: the PDL 29468 swept 43 pts and reclaimed — the deepest sweep of the day, and the session low (L12's shape with the level BELOW the −γ node this time). UNCIRCLED by him; counted on his ruling of 2026-09-09.",
+     "factors": [
+      "liq",
+      "growth",
+      "king"
+     ],
+     "hour": "H1",
+     "uncircled": true
+    },
+    {
      "leg": "c1",
      "kind": "PULLBACK",
      "side": "resistance",
@@ -752,7 +856,8 @@
      "factors": [
       "heavy",
       "growth"
-     ]
+     ],
+     "hour": "H1"
     },
     {
      "leg": "c2",
@@ -765,7 +870,8 @@
      "factors": [
       "king",
       "liq"
-     ]
+     ],
+     "hour": "H3"
     },
     {
      "leg": "c3",
@@ -777,7 +883,8 @@
      "data": "720: 32% (12:51) → 20% (13:00) → 32% (13:06) → 24% (13:12) → 20% at 13:15 — FADING into the tap by the ladder's %, and it held anyway (a weak case for L1 — or the % fell because the King grew; no $ for QQQ). 721: 26 → 31%. The high stopped 9 pts over the 720 line. Liquidity: the VAH 29592 twenty-three below the high — price closed back under the value area high after the rejection; PDH 29691 far.",
      "factors": [
       "heavy"
-     ]
+     ],
+     "hour": "H5"
     },
     {
      "leg": "c4",
@@ -791,7 +898,8 @@
       "king",
       "growth",
       "liq"
-     ]
+     ],
+     "hour": "H7"
     }
    ],
    "call": {
@@ -806,7 +914,7 @@
     "L10",
     "L12"
    ],
-   "open": "The QQQ book has no dollar record in the panel (the node-event ledger is SPX strikes only) — the NQ examples are read from the ladder's %King; the tap record (R-25) must carry the QQQ book on NQ with dollars. The courier's NQ rows carry no overnight bars — ONH / ONL / AHI / ALO / LHI / LLO for NQ need the courier's window widened."
+   "open": "The QQQ book has no dollar record in the panel (the node-event ledger is SPX strikes only) — the NQ examples are read from the ladder's %King; the tap record (R-25) must carry the QQQ book on NQ with dollars. The NQ LOD 09:11 at the PDL sweep is m1, counted on his ruling of 2026-09-09. The courier carries NQ's night from companion v1.19 (ONH / ONL / Asia / London on the NQ chart from v15.88)."
   }
  ],
  "priors": [
