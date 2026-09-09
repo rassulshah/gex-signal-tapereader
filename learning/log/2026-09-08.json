@@ -3,7 +3,7 @@
  "date": "2026-09-08",
  "writtenBy": "tools/nightly/run.py",
  "ranOn": "his machine",
- "ranAt": "2026-09-09T12:55:22Z",
+ "ranAt": "2026-09-09T14:05:29Z",
  "sessions": 3,
  "episodes": 23,
  "deflEvents": 141,
@@ -1168,25 +1168,25 @@
  "futures": {
   "appended": {
    "CL": {
-    "minutes": 1950,
+    "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 379,
     "complete": false
    },
    "ES": {
-    "minutes": 1975,
+    "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 393,
     "complete": true
    },
    "GC": {
-    "minutes": 1961,
+    "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 379,
     "complete": false
    },
    "NQ": {
-    "minutes": 1974,
+    "minutes": 0,
     "newest": "2026-09-08",
     "newestBars": 393,
     "complete": true
