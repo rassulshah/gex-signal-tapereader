@@ -2,8 +2,8 @@
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
  "asOf": "2026-09-09",
- "generatedAt": "2026-09-09T15:50:09Z",
- "ranOn": "cloud",
+ "generatedAt": "2026-09-09T15:55:21Z",
+ "ranOn": "his machine",
  "complete": 386,
  "days": [
   {
@@ -1112,15 +1112,15 @@
   "total": 184,
   "byStatus": {
    "WAITING": 111,
-   "READ": 15,
-   "SHIPPED": 13,
-   "NULL": 2,
    "REGISTERED": 10,
    "THIN": 12,
+   "READY": 15,
+   "REFUSED": 3,
    "OPEN": 1,
    "CUT": 2,
-   "READY": 15,
-   "REFUSED": 3
+   "NULL": 2,
+   "READ": 15,
+   "SHIPPED": 13
   },
   "byCorpus": {
    "tap": {
