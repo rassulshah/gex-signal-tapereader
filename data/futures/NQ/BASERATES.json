@@ -1,0 +1,167 @@
+{
+ "corpus": {
+  "sessions": 5,
+  "first": "2026-08-31",
+  "last": "2026-09-04",
+  "min_bars": 386,
+  "rth": "08:30-15:00 CT",
+  "pt_usd": 20.0,
+  "definition": "tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending 08:30-15:00 (minutes 08:27-14:59), the open = the bar ending 08:30; clocks are bar ends; the reclaim bar is after the extreme's bar",
+  "sources": {
+   "2026-08-31.csv": 1,
+   "2026-09-01.csv": 1,
+   "2026-09-02.csv": 1,
+   "2026-09-03.csv": 1,
+   "2026-09-04.csv": 1
+  },
+  "incomplete_dropped": 1
+ },
+ "sequence": {
+  "LOD_first": 3,
+  "HOD_first": 2,
+  "pct_LOD_first": 60
+ },
+ "expected": {
+  "took_min": 53.4,
+  "gap_min": 210.6,
+  "rng_pts": 260.6,
+  "rng_usd": 5213.0,
+  "rng_p25": 189.5,
+  "rng_p75": 350.2,
+  "first_clock": 33804.0,
+  "second_clock": 46440.0,
+  "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
+  "outliers_excluded": {
+   "took": 0,
+   "gap": 0,
+   "rng_pts": 0,
+   "rng_usd": 0,
+   "first_clock": 0,
+   "second_clock": 0
+  },
+  "median_for_contrast": {
+   "took_min": 30,
+   "gap_min": 228,
+   "rng_pts": 223.8,
+   "first_clock": 32400,
+   "second_clock": 47880
+  }
+ },
+ "ladder": {
+  "low": {
+   "30": {
+    "n": 8,
+    "held": 5,
+    "rate": 62
+   },
+   "60": {
+    "n": 8,
+    "held": 5,
+    "rate": 62
+   },
+   "90": {
+    "n": 6,
+    "held": 4,
+    "rate": 67
+   },
+   "120": {
+    "n": 6,
+    "held": 4,
+    "rate": 67
+   },
+   "180": {
+    "n": 4,
+    "held": 3,
+    "rate": 75
+   }
+  },
+  "high": {
+   "30": {
+    "n": 9,
+    "held": 4,
+    "rate": 44
+   },
+   "60": {
+    "n": 7,
+    "held": 4,
+    "rate": 57
+   },
+   "90": {
+    "n": 5,
+    "held": 4,
+    "rate": 80
+   },
+   "120": {
+    "n": 4,
+    "held": 3,
+    "rate": 75
+   },
+   "180": {
+    "n": 4,
+    "held": 3,
+    "rate": 75
+   }
+  },
+  "both": {
+   "30": {
+    "n": 17,
+    "held": 9,
+    "rate": 53
+   },
+   "60": {
+    "n": 15,
+    "held": 9,
+    "rate": 60
+   },
+   "90": {
+    "n": 11,
+    "held": 8,
+    "rate": 73
+   },
+   "120": {
+    "n": 10,
+    "held": 7,
+    "rate": 70
+   },
+   "180": {
+    "n": 8,
+    "held": 6,
+    "rate": 75
+   }
+  }
+ },
+ "wickFamily": {
+  "median": {
+   "wick": 93.6,
+   "wick_median": 57,
+   "wick_n": 5,
+   "bop": 40.2,
+   "bop_median": 15,
+   "bop_n": 5,
+   "mud": 170.4,
+   "mud_median": 201,
+   "mud_n": 5,
+   "wick_pct": 39.8,
+   "wick_pct_median": 42,
+   "wick_pct_n": 5,
+   "wick_pts": 99.0,
+   "wick_pts_median": 83.0,
+   "wick_pts_n": 5
+  },
+  "excluded": {
+   "never_reclaimed": 0,
+   "zero_wick": 0,
+   "outliers_tukey_1_5_iqr": {
+    "wick": 0,
+    "bop": 0,
+    "mud": 0,
+    "wick_pct": 0,
+    "wick_pts": 0
+   },
+   "rule": "operator 2026-08-28: no-wick days and crazy outliers are not averaged; a zero wick still PRINTS 0 on the day's own row"
+  },
+  "wend_definition": "first bar to CLOSE back through the session open after the first extremity"
+ },
+ "byWeekday": {},
+ "generatedAt": "2026-09-09T01:45:17Z"
+}

@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "asOf": "2026-09-07",
+ "asOf": "2026-09-08",
  "writtenBy": "tools/nightly/recommend.py",
  "rows": [
   {
@@ -71,6 +71,18 @@
    "text": "THE TAP RECORD — the level study: one row per tap of an EXPORTED line (SPX KING / XG2–XG5, SPY KING / SG2–SG5 on ES; QQQ KING / G2–G5 on NQ) plus two controls (the rest of the 0DTE book ≥ 20%, and the midpoint between adjacent lines), stamped with book · rank · signed % · the conditions at the tap (tap number, FRESH / TESTED / DELIVERED / DECAYING, growth into the tap and day-over-day, King distance, gatekeepers, the pocket behind, the other book’s line within 5 pts, his key levels, approach speed and flush, regime, trinity, the clock, before / after the first extreme) and scored in trading terms (broke / mfe / mae / reach / R; DEFLECT · PIN · BREAK at 10 and 20 bars; was it the extreme; did the move resume) — nightly, on Analysis, by book × rank and by each condition with n, always beside the control.",
    "changes": "a recorder module (the tap detector + the outcome filler, pure, on fixture bars), an IndexedDB store `taps` mirrored into the day file, a nightly reader, one table on Analysis; the 110 registry studies whose corpus is “tap record” start reading from it; H11 (fresh + growing deflects more than tested or shedding, both more than the midpoint) registered the day the record starts; nothing on the face until the report’s mockup",
    "evidence": "his words 2026-09-08: “are you running a study on the gamma levels deflection. basically testing spx and spy and qqq top 5 gamma levels and their ability to deflect and if they do deflect, under what conditions and if they dont deflect, under what conditions” · “the purpose of the study is to identify what makes gamma levels work as deflectors of price for the purpose of trading reversals from levels” · “yes” to the design; the deflection ledger has no failures in it (no denominator), the node ledger is per bar on a mixed-window book (F-22); the first hand read of 2026-09-08 (34 taps: ranks 1–3 deflected 15 of 22, ranks 4–5 3 of 12 with all three breaks) is one day, not a verdict",
+   "status": "proposed"
+  },
+  {
+   "id": "RN-teach-L5",
+   "kind": "TEACH",
+   "by": "nightly",
+   "asOf": "2026-09-08",
+   "src": "results:rules:L5",
+   "text": "L5: the record contradicts the taught rule — re-teach it against the record, or retire it.",
+   "changes": "the Learn tab’s rule L5 is rewritten or marked REFUTED by the review",
+   "evidence": "held: a −γ node 8 / 19 = 42% (low 23%) vs a +γ node 6 / 21 = 29% (low 14%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-08",
+   "n": 19,
    "status": "proposed"
   },
   {
@@ -303,7 +315,7 @@
   }
  ],
  "counts": {
-  "proposed": 7,
+  "proposed": 8,
   "approved": 0,
   "implemented": 19,
   "declined": 0,

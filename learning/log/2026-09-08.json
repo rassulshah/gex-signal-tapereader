@@ -3,7 +3,7 @@
  "date": "2026-09-08",
  "writtenBy": "tools/nightly/run.py",
  "ranOn": "his machine",
- "ranAt": "2026-09-08T20:05:16Z",
+ "ranAt": "2026-09-09T01:45:19Z",
  "sessions": 3,
  "episodes": 23,
  "deflEvents": 141,
@@ -943,6 +943,57 @@
    "market": "SPY",
    "episodes": "first tap per (strike, dir) per day",
    "scored": 44
+  }
+ },
+ "futures": {
+  "appended": {
+   "CL": {
+    "minutes": 2343,
+    "newest": "2026-09-08",
+    "newestBars": 379,
+    "complete": false
+   },
+   "ES": {
+    "minutes": 2344,
+    "newest": "2026-09-08",
+    "newestBars": 379,
+    "complete": false
+   },
+   "GC": {
+    "minutes": 2343,
+    "newest": "2026-09-08",
+    "newestBars": 379,
+    "complete": false
+   },
+   "NQ": {
+    "minutes": 2343,
+    "newest": "2026-09-08",
+    "newestBars": 379,
+    "complete": false
+   }
+  },
+  "baserates": {
+   "ES": {
+    "sessions": 289,
+    "first": "2025-06-02",
+    "last": "2026-09-04",
+    "vendor": 284,
+    "yahoo": 5,
+    "incompleteDropped": 13
+   },
+   "NQ": {
+    "sessions": 5,
+    "first": "2026-08-31",
+    "last": "2026-09-04",
+    "vendor": 0,
+    "yahoo": 5,
+    "incompleteDropped": 1
+   }
+  },
+  "overlap": {
+   "days": 0,
+   "rows": [],
+   "note": "none \u2014 the vendor corpus ends 2026-08-21 and the Yahoo sessions begin 2026-08-31; pooled with provenance, nothing averaged"
   }
  },
  "from": "2026-09-03"
