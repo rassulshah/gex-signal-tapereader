@@ -2,7 +2,7 @@
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
  "asOf": "2026-09-09",
- "generatedAt": "2026-09-09T15:55:21Z",
+ "generatedAt": "2026-09-09T19:35:20Z",
  "ranOn": "his machine",
  "complete": 386,
  "days": [
@@ -1081,7 +1081,7 @@
    "perSession": null,
    "sessions": null,
    "first": null,
-   "note": "THE TAP RECORD — not recorded yet (v15.91)"
+   "note": "THE TAP RECORD — not recorded yet (v15.93)"
   },
   "vix": {
    "have": 0,
@@ -1111,16 +1111,16 @@
  "studies": {
   "total": 184,
   "byStatus": {
-   "WAITING": 111,
+   "OPEN": 1,
+   "REFUSED": 3,
+   "NULL": 2,
    "REGISTERED": 10,
+   "READ": 15,
+   "CUT": 2,
    "THIN": 12,
    "READY": 15,
-   "REFUSED": 3,
-   "OPEN": 1,
-   "CUT": 2,
-   "NULL": 2,
-   "READ": 15,
-   "SHIPPED": 13
+   "SHIPPED": 13,
+   "WAITING": 111
   },
   "byCorpus": {
    "tap": {
@@ -1187,8 +1187,8 @@
  },
  "nightly": {
   "date": "2026-09-08",
-  "ranOn": "cloud",
-  "ranAt": "2026-09-09T14:49:52Z",
+  "ranOn": "his machine",
+  "ranAt": "2026-09-09T15:55:23Z",
   "sessions": 3,
   "episodes": 23,
   "deflEvents": 141
