@@ -50,7 +50,11 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase'));
 // assertion below fails with an empty result rather than a wrong one.
 global.futBarsLoad = () => null;                 // no courier data in the harness -> SPY fallback
 eval(ex('measureBars')); eval(ex('measureBarsRaw'));;
-eval(ex('hlClock')); eval(ex('hlDur')); eval(ex('hlTier')); eval(ex('hodLod'));
+eval(ex('hlClock')); eval(ex('hlDur')); eval(ex('hlTier'));
+// (v15.87) THE TOOL GRID — hodLod folds the minutes into 3-minute bars stamped by end (his tool's grid); load the
+// folder and its constants, or hodLod degrades to minutes and every clock below is three minutes off the definition.
+global.HL_TOOL_A=8*3600+27*60; global.HL_TOOL_B=15*3600; global.HL_TOOL_BAR=180;
+eval(ex('hlToolBars')); eval(ex('hodLod'));
 
 const OPEN = 8*3600+30*60;
 // a session builder: bars at one-minute spacing from the open
@@ -61,7 +65,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 // ---- 1 · THE BASE RATES ARE MEASURED, AND MATCH THE COMMITTED STUDY --------------------------
 {
   const B = global.HODLOD_BASE;
-  ok(!!B && B.n === 284, 'b1 the corpus is the 284-session ES set the mockup header names', B && B.n);
+  ok(!!B && B.n >= 294, 'b1 the corpus is the ES set (284 vendor sessions + the Yahoo days the nightly appends — 294 at v15.87, and it grows)', B && B.n);
   ok(Array.isArray(B.ladder) && B.ladder.length === 5, 'b2 five holding windows, as the mockup draws');
   ok(B.ladder.every(L => L.n > 0 && L.rate > 0), 'b3 every rung carries its own n — no bare percentage');
   // ⚠ MONOTONE OR THE WHOLE PREMISE IS WRONG. The section's one claim is "the longer it stands, the
@@ -98,8 +102,8 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(D.lod === 7000 && D.hod === 7100, 'h2 HOD and LOD are the true session extremes', {hod:D.hod, lod:D.lod});
   ok(D.first === 'LOD', 'h3 the LOD printed first, so it is the standing extremity');
   ok(D.second === 'HOD', 'h4 ...and the HOD is the other side');
-  ok(Math.round(D.took) === 10, 'h5 TOOK is measured from the RTH OPEN, not from the first bar', D.took);
-  ok(Math.round(D.gap) === 190, 'h6 HL GAP is the distance between the two extremes', D.gap);
+  ok(Math.round(D.took) === 12, 'h5 TOOK is measured from the RTH OPEN to the extreme\'s bar END (the tool grid, v15.87: the +10m low sits in the bar ending +12m)', D.took);
+  ok(Math.round(D.gap) === 189, 'h6 HL GAP is the distance between the two extremes\' bar ends (+12m → +201m on the grid)', D.gap);
   // ⚠⚠ THE UNIT BUG v14.57 SHIPPED. closedCandles() is the UNDERLYING book; the range must be
   // converted to CHART space BEFORE the ES multiplier, or points and dollars describe an instrument
   // the number never measured — and the E row beside it is in chart points.
@@ -116,7 +120,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // ⚠ STOOD IS MEASURED TO NOW, NOT TO THE OTHER EXTREME. The ladder asks how long the standing low
   // has survived up to this moment; measuring to the HOD would freeze it and the rung would stop
   // advancing while the low went on holding.
-  ok(Math.round(D.stood) === 320, 'h9 STOOD runs from the standing extreme to NOW, not to the other one', D.stood);
+  ok(Math.round(D.stood) === 318, 'h9 STOOD runs from the standing extreme (its bar end, +12m) to NOW, not to the other one', D.stood);
   ok(D.tier && D.tier.w === 180, 'h10 ...so a low standing 5h20m has earned the top rung');
 }
 
@@ -177,13 +181,13 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   }
   CANDLES = bars; NOWSEC = OPEN + 120*60;
   const W = hodLod('SPY');
-  ok(W.first === 'LOD' && Math.round(W.took) === 5, 'n2 TOOK is open -> first extremity', W.took);
-  ok(W.wend === OPEN + 8*60, 'n3 W.END is the first bar to CLOSE back through the open (not touch)',
+  ok(W.first === 'LOD' && Math.round(W.took) === 6, 'n2 TOOK is open -> the first extremity\'s bar end (the +5m low sits in the bar ending +6m)', W.took);
+  ok(W.wend === OPEN + 9*60, 'n3 W.END is the first bar AFTER the extreme\'s to CLOSE back through the open (not touch) — the +8m close sits in the bar ending +9m',
      W.wend && (W.wend - OPEN)/60);
   ok(Math.round(W.bop) === 3, 'n4 BOP is first extremity -> W.END', W.bop);
-  ok(Math.round(W.wick) === 8 && Math.round(W.wick) === Math.round(W.took + W.bop),
+  ok(Math.round(W.wick) === 9 && Math.round(W.wick) === Math.round(W.took + W.bop),
      'n5 WICK is open -> W.END, and equals TOOK + BOP', [W.wick, W.took, W.bop]);
-  ok(Math.round(W.mud) === 92, 'n6 MUD is W.END -> the second extremity', W.mud);
+  ok(Math.round(W.mud) === 93, 'n6 MUD is W.END -> the second extremity\'s bar end', W.mud);
   // open 100, LOD 90, HOD 130 -> range 40, excursion 10 -> 25%
   ok(W.wickPct === 25, 'n7 WICK% is a PRICE ratio: |open - extremity| / range', W.wickPct);
   // ⚠ THE UNIT TRAP THIS SECTION ALREADY SHIPPED ONCE. Wick% must be scale-free: the same session

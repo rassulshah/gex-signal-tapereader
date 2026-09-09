@@ -22,13 +22,13 @@ const BR=JSON.parse(fs.readFileSync('./data/es-1min/BASERATES.json','utf8'));
 {
   ok(BR.byWeekday && ['Mon','Tue','Wed','Thu','Fri'].every(d=>BR.byWeekday[d]), '1a BASERATES.json carries byWeekday Mon..Fri');
   ok(Object.values(BR.byWeekday).every(v=>v.sessions>=40 && v.sessions<=70) && Object.values(BR.byWeekday).reduce((a,v)=>a+v.sessions,0)===BR.corpus.sessions,
-     '1b the five blocks partition the corpus (55-60 each, summing to 284)', Object.values(BR.byWeekday).map(v=>v.sessions));
-  ok(BR.expected.took_min===33.5 && BR.expected.rng_pts===61.4 && BR.expected.first_clock===32608.6 && BR.wickFamily.median.wick_n===252,
-     '1c the POOLED block is byte-for-byte what it was — the ladder and the pooled E fields did not move', [BR.expected.took_min,BR.expected.rng_pts]);
+     '1b the five blocks partition the corpus (55-60 each, summing to corpus.sessions)', Object.values(BR.byWeekday).map(v=>v.sessions));
+  ok(BR.expected.took_min>=30 && BR.expected.took_min<=40 && BR.expected.rng_pts>=55 && BR.expected.rng_pts<=66 && BR.wickFamily.median.wick_n>=250 && /tool grid/.test(BR.corpus.definition||''),
+     '1c the POOLED block is the tool grid\'s (v15.87 moved it by DEFINITION — 33.5m/61.4pts on the minute grid became 34.8m/60.6pts on the 3-minute end-stamped grid; the corpus now grows nightly so the pins are bands)', [BR.expected.took_min,BR.expected.rng_pts]);
   ok(Object.values(BR.byWeekday).every(v=>/trimmed mean/.test(v.expected.statistic||'') && v.expected.outliers_excluded && v.wickFamily && v.wickFamily.median),
      '1d every weekday block declares the same statistic and carries its own exclusions');
-  ok(BR.byWeekday.Fri.expected.took_min===19.1 && BR.byWeekday.Tue.expected.took_min===45.6,
-     '1e the weekdays differ — Fridays reach the first extreme in ~19m, Tuesdays in ~46m (the seasonality he named, measured)', [BR.byWeekday.Fri.expected.took_min, BR.byWeekday.Tue.expected.took_min]);
+  ok(BR.byWeekday.Fri.expected.took_min<25 && BR.byWeekday.Tue.expected.took_min>40 && BR.byWeekday.Fri.expected.took_min<BR.byWeekday.Tue.expected.took_min,
+     '1e the weekdays differ — Fridays reach the first extreme in ~20m, Tuesdays in ~48m (the seasonality he named, measured; 19.1/45.6 on the minute grid, 20.3/48.1 on the tool grid)', [BR.byWeekday.Fri.expected.took_min, BR.byWeekday.Tue.expected.took_min]);
   ok(Object.values(BR.byWeekday).every(v=>v.recent && v.recent.n<=6 && v.recent.green+v.recent.red===v.recent.n && Array.isArray(v.recent.days) && v.recent.days.length===v.recent.n),
      '1f `recent` is his "last 6 per weekday": a COUNT of green and red with the days it stands on');
   const study=fs.readFileSync('./tools/study-hodlod.py','utf8');
@@ -52,10 +52,10 @@ global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.g
 {
   ok(HLBASE_MIN_DOW===40 && HL_DOWS.join()==='Mon,Tue,Wed,Thu,Fri', '2a the floor is 40 sessions per weekday; the five names');
   const N=hlBaseNormalise(BR);
-  ok(N && N.byDow && Object.keys(N.byDow).length===5 && N.byDow.Fri.n===55 && N.byDow.Fri.tookMin===19.1 && N.byDow.Fri.wick.bop===BR.byWeekday.Fri.wickFamily.median.bop,
+  ok(N && N.byDow && Object.keys(N.byDow).length===5 && N.byDow.Fri.n===BR.byWeekday.Fri.sessions && N.byDow.Fri.n>=55 && N.byDow.Fri.tookMin===BR.byWeekday.Fri.expected.took_min && N.byDow.Fri.wick.bop===BR.byWeekday.Fri.wickFamily.median.bop,
      '2b the courier payload normalises into byDow with the pooled base\'s field names', N&&N.byDow&&N.byDow.Fri);
-  ok(N.byDow.Fri.recent && N.byDow.Fri.recent.n===6 && N.byDow.Fri.recent.last==='2026-08-21', '2c …with the recent six and their newest day', N.byDow.Fri.recent);
-  ok(N.n===284 && N.tookMin===33.5 && N.ladder.length===5, '2d the pooled fields and the ladder are untouched by the weekday blocks');
+  ok(N.byDow.Fri.recent && N.byDow.Fri.recent.n===6 && N.byDow.Fri.recent.last===BR.byWeekday.Fri.recent.days.slice(-1)[0] && N.byDow.Fri.recent.last>='2026-09-04', '2c …with the recent six and their newest day (the corpus appends itself from v15.87, so the newest Friday is the file\'s, never a literal)', N.byDow.Fri.recent);
+  ok(N.n===BR.corpus.sessions && N.n>=294 && N.tookMin===BR.expected.took_min && N.ladder.length===5, '2d the pooled fields and the ladder are untouched by the weekday blocks (they are the file\'s pooled block, whatever the corpus holds tonight)');
   // a thin weekday is left out; a malformed one is skipped, never half-read
   const thin=JSON.parse(JSON.stringify(BR)); thin.byWeekday.Tue.sessions=30; thin.byWeekday.Wed.expected.first_clock='x';
   const Nt=hlBaseNormalise(thin);
@@ -70,22 +70,22 @@ global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.g
   REPLAY_ON=false; REPLAY.day=null;
   // the basis switch
   const F=hodlodBaseFor('Fri');
-  ok(F.basis && F.basis.dow==='Fri' && F.basis.n===55 && F.basis.pooled===false, '2j hodlodBaseFor(Fri) stands on the 55 Fridays', F.basis);
-  ok(F.tookMin===19.1 && F.firstClock===BR.byWeekday.Fri.expected.first_clock && F.wick.bop===BR.byWeekday.Fri.wickFamily.median.bop && F.lodFirstPct===BR.byWeekday.Fri.sequence.pct_LOD_first,
+  ok(F.basis && F.basis.dow==='Fri' && F.basis.n===BR.byWeekday.Fri.sessions && F.basis.n>=55 && F.basis.pooled===false, '2j hodlodBaseFor(Fri) stands on the Fridays alone (55 at v15.77, 57 at v15.87 — the file\'s count)', F.basis);
+  ok(F.tookMin===BR.byWeekday.Fri.expected.took_min && F.firstClock===BR.byWeekday.Fri.expected.first_clock && F.wick.bop===BR.byWeekday.Fri.wickFamily.median.bop && F.lodFirstPct===BR.byWeekday.Fri.sequence.pct_LOD_first,
      '2k …every EXPECTED field is the weekday\'s', [F.tookMin, F.firstClock]);
-  ok(JSON.stringify(F.ladder)===JSON.stringify(hodlodBase().ladder) && F.n===284, '2l …and the LADDER (hold rates by age) and its n stay POOLED — split five ways the rungs go thin');
-  ok(F.pool && F.pool.tookMin===33.5, '2m the pooled base rides along as .pool');
+  ok(JSON.stringify(F.ladder)===JSON.stringify(hodlodBase().ladder) && F.n===BR.corpus.sessions, '2l …and the LADDER (hold rates by age) and its n stay POOLED — split five ways the rungs go thin');
+  ok(F.pool && F.pool.tookMin===BR.expected.took_min, '2m the pooled base rides along as .pool');
   const P=hodlodBaseFor(null), S=hodlodBaseFor('Sat');
-  ok(P.basis.pooled===true && P.tookMin===33.5 && S.basis.pooled===true, '2n no weekday (a weekend, a bad string) → the pooled row, and basis says so');
+  ok(P.basis.pooled===true && P.tookMin===BR.expected.took_min && S.basis.pooled===true, '2n no weekday (a weekend, a bad string) → the pooled row, and basis says so');
   // a courier payload without this weekday → pooled, honestly
   LS[HLBASE_KEY]=JSON.stringify({ at:Date.now(), base:thin });
   const T=hodlodBaseFor('Tue');
-  ok(T.basis.pooled===true && T.basis.dow==='Tue' && T.tookMin===33.5, '2o a weekday the courier could not deliver falls back to the pooled row with basis.pooled=true', T.basis);
+  ok(T.basis.pooled===true && T.basis.dow==='Tue' && T.tookMin===BR.expected.took_min, '2o a weekday the courier could not deliver falls back to the pooled row with basis.pooled=true', T.basis);
   LS={};
   // the baked base is generated without the floor — hodlodBaseFor applies it itself
   const keepWed=HODLOD_BASE.byDow.Wed; HODLOD_BASE.byDow.Wed=Object.assign({}, keepWed, { n:30 });
   const Wd=hodlodBaseFor('Wed');
-  ok(Wd.basis.pooled===true && Wd.tookMin===33.5, '2p a baked weekday block under the floor (n=30) is not stood on either', Wd.basis);
+  ok(Wd.basis.pooled===true && Wd.tookMin===BR.expected.took_min, '2p a baked weekday block under the floor (n=30) is not stood on either', Wd.basis);
   HODLOD_BASE.byDow.Wed=keepWed;
 }
 
@@ -96,20 +96,20 @@ global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.g
   const baseF=hodlodBaseFor('Fri');
   const st=hlERowState(D('HOD'), baseF, false);
   ok(st.ok && st.f1==='HOD' && st.f2==='LOD' && st.first==='HOD', '3a with bars, the row reads today\'s first extreme first (HOD then LOD), as his strip does');
-  ok(st.firstClock===baseF.firstClock && st.took===19.1 && st.wend===mul(8,3600)+mul(30,60)+baseF.wick.wick*60, '3b W.End = 08:30 + the expected wick, the other fields the weekday\'s', [st.took, st.wend]);
+  ok(st.firstClock===baseF.firstClock && st.took===BR.byWeekday.Fri.expected.took_min && st.wend===mul(8,3600)+mul(30,60)+baseF.wick.wick*60, '3b W.End = 08:30 + the expected wick, the other fields the weekday\'s', [st.took, st.wend]);
   const h=hlERowHtml('SPY', D('HOD'), baseF, false);
-  ok(/<span class="et" title="n=55 — E — the EXPECTED row[^"]*">E · FRI<\/span>/.test(h), '3c the E tag names the weekday (E · FRI); its n leads the hover (v15.80: symmetrical with A · FRI)', h.slice(0,160));
+  ok(new RegExp('<span class="et" title="n='+BR.byWeekday.Fri.sessions+' — E — the EXPECTED row[^"]*">E · FRI</span>').test(h), '3c the E tag names the weekday (E · FRI); its n leads the hover (v15.80: symmetrical with A · FRI)', h.slice(0,160));
   ok(/1ST HOD<\/span>/.test(h), '3d the first-extreme chip');
   const cells=[...h.matchAll(/<span class="ec"><i[^>]*>([^<]+)<\/i><b[^>]*>([^<]+)<\/b><\/span>/g)].map(m=>[m[1],m[2]]);   // (v15.80) the label may carry a colour class
   ok(cells.map(c=>c[0]).join('|')==='HOD|took|BOP|wick|W.End|wick%|MD|LOD|HL gap|HL rng', '3e the cells, in his strip\'s order, minus the eleven he struck (v15.80: MUD reads MD when the second extreme is the LOD)', cells.map(c=>c[0]));
   ok(/<i class="hi">HOD<\/i><b class="hi">/.test(h) && /<i class="lo">MD<\/i><b class="lo">/.test(h) && /<i class="lo">LOD<\/i><b class="lo">/.test(h), '3e2 (v15.80) common-sense colours: HOD green, MD and LOD red — label and value alike');
   ok(cells.every(c=>/^~/.test(c[1])), '3f every value wears the ~ — a trimmed mean, never a forecast', cells.map(c=>c[1]));
-  ok(cells[0][1]==='~'+hlClock12(baseF.firstClock) && cells[1][1]==='~19m' && cells[9][1]==='~63.7pts · $'+Math.round(baseF.rngUsd).toLocaleString(),
+  ok(cells[0][1]==='~'+hlClock12(baseF.firstClock) && cells[1][1]==='~'+Math.round(baseF.tookMin)+'m' && cells[9][1]==='~'+baseF.rngPts+'pts · $'+Math.round(baseF.rngUsd).toLocaleString(),
      '3g the clock in 12h, took in minutes, the range in points and dollars', [cells[0][1], cells[1][1], cells[9][1]]);
   ok(!/Rly|Done|\bPB\b|\bNum\b|\bRet\b|Risk|\bExt\b|Tgt|Rwd|\bDur\b|>Time</.test(h.replace(/title="[^"]*"/g,'')), '3h none of Rly · Done · PB · Num · Ret · Risk · Ext · Tgt · Rwd · Dur · Time is on the row');
   // (v15.80) THE EXPECTATION CHIP replaces the 3/3 EVEN badge — operator: "there should also be the expectation for the day,
   // which is either a Green day or a Red day. you can place this before 1st HOD and dont need other badges … like 3/3 even"
-  ok(!/3\/3 EVEN</.test(h) && /chip ev"[^>]*>DAY \?</.test(h) && /closed 3 green \/ 3 red/.test(h), '3i no call yet: the chip reads "DAY ?" and the last six Fridays (3/3) moved into its hover');
+  ok(!/3\/3 EVEN</.test(h) && /chip ev"[^>]*>DAY \?</.test(h) && new RegExp('closed '+baseF.recent.green+' green / '+baseF.recent.red+' red').test(h), '3i no call yet: the chip reads "DAY ?" and the last six Fridays (their count, from the file) moved into its hover');
   ok(h.indexOf('DAY ?')<h.indexOf('1ST HOD'), '3i2 …placed before 1ST HOD');
   global.gdRead=()=>({ ok:true, call:'GD', brk:1, at:'09:03' });
   const hG=hlERowHtml('SPY', D('HOD'), baseF, false);
@@ -128,12 +128,14 @@ global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.g
   const hN=hlERowHtml('SPY', { ok:false, why:'no candles' }, baseF, true);
   ok(/1ST LOD 51%<\/span>/.test(hN) && /<i class="lo">LOD<\/i>/.test(hN.split('<span class="ec">')[1]||''), '3n no bars: "1ST LOD 51%" (Fridays) and the LOD clock reads first (v15.80: in red)', hN.slice(0,400));
   // the pooled fallback says ALL
-  ok(/<span class="et" title="n=284 — E — the EXPECTED row[^"]*">E · ALL<\/span>/.test(hlERowHtml('SPY', D('LOD'), hodlodBaseFor(null), false)), '3o the pooled row is tagged E · ALL, its n in the hover (v15.80: "E Tue and A Tue … symmetrical")');
-  ok(/his seasonality: Fridays against past Fridays/.test(h) && /BOP 47 · wick 45 · MUD 51/.test(h) && /hold rates in the line below stay pooled/.test(h),
+  ok(new RegExp('<span class="et" title="n='+BR.corpus.sessions+' — E — the EXPECTED row[^"]*">E · ALL</span>').test(hlERowHtml('SPY', D('LOD'), hodlodBaseFor(null), false)), '3o the pooled row is tagged E · ALL, its n in the hover (v15.80: "E Tue and A Tue … symmetrical")');
+  ok(/his seasonality: Fridays against past Fridays/.test(h) && new RegExp('BOP '+baseF.wick.bop_n+' · wick '+baseF.wick.wick_n+' · MUD '+baseF.wick.mud_n).test(h) && /hold rates in the line below stay pooled/.test(h),
      '3p the hover states the basis, the wick n per field, and that the hold rates stay pooled');
   ok(hlERowHtml('SPY', D('HOD'), { }, false)==='' && hlERowHtml('SPY', D('HOD'), null, false)==='', '3q no base → no row, no throw');
-  global.sessionDayStr=()=>'2026-09-18';
-  ok(/stale, the corpus has not been appended/.test(hlERowHtml('SPY', D('HOD'), baseF, false)), '3r …and on 2026-09-18 the same six (newest 08-21) ARE stale: 28 days, corpus not appended — said in the hover (v15.80: the badge is the expectation chip now)');
+  // (v15.87) the corpus appends itself nightly, so the newest Friday is the file's: stand 21 days past it (> the 14-day fence)
+  const staleDay=new Date(new Date(baseF.recent.last+'T12:00:00Z').getTime()+21*86400000).toISOString().slice(0,10);
+  global.sessionDayStr=()=>staleDay;
+  ok(/stale, the corpus has not been appended/.test(hlERowHtml('SPY', D('HOD'), baseF, false)), '3r …and 21 days past the newest Friday ('+baseF.recent.last+') the same six ARE stale: > 14 days, corpus not appended — said in the hover (v15.80: the badge is the expectation chip now)');
   global.sessionDayStr=()=>'2026-09-08';
 }
 

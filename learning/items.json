@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "asOf": "2026-09-08",
+ "asOf": "2026-09-09",
  "note": "issues, questions and enhancement requests from the panel (Open Items / Roadmap tabs), copied by the nightly; the review answers here and the panel reads it back",
  "items": [
   {
@@ -68,6 +68,28 @@
    "answer": "Locked 2026-09-08, not built: the ES courier has the overnight bars (AHI 7725.75 · ALO 7694.75 · LHI 7718.25 · LLO 7687.50 on 09-08); the NQ courier carries none yet — its window must widen first.",
    "link": "session-state/LOCKED-ITEMS.md",
    "answeredOn": "2026-09-08"
+  },
+  {
+   "id": "I0909nqv",
+   "kind": "issue",
+   "text": "The NQ vendor corpus (data/es-1min/NQ TestingData.txt — 188 sessions, TAB-delimited, no header, ISO timestamps) has no parser in tools/study-hodlod.py, so NQ's BASERATES (data/futures/NQ/BASERATES.json) stands on the Yahoo days alone (11 sessions on 2026-09-08). One loader branch (the format is sniffed by tools/model-lodhod.py already) and the NQ E row would have a corpus.",
+   "date": "2026-09-09",
+   "seenIn": "2026-09-09",
+   "status": "OPEN",
+   "answer": "",
+   "link": "design/DATA-ARCHITECTURE.md",
+   "answeredOn": null
+  },
+  {
+   "id": "I0909patch",
+   "kind": "question",
+   "text": "Agenda item 3 — a patch-build tier? Updates are slow because every build re-runs the whole suite (167 files) and ships the whole tree; a patch tier would ship the panel alone with the touched harnesses. His yes / no (operator, 2026-09-08: 'making updates is very slow. is there a lot of unused code…' — measured: no; the time is the suite and the installer).",
+   "date": "2026-09-09",
+   "seenIn": "2026-09-09",
+   "status": "OPEN",
+   "answer": "",
+   "link": "session-state/latest-resume-note.md",
+   "answeredOn": null
   }
  ]
 }

@@ -27,7 +27,8 @@ import io, json, math, os, subprocess, sys
 
 NIGHTLY_WRITES = ('learning/log/', 'learning/results.json', 'learning/studies.json', 'learning/recommendations.json',
                   'learning/deflections/examples.json', 'learning/items.json', 'learning/requests.json',
-                  'data/es-1min/SWEEPS.json', 'data/es-1min/SWEEPS-BOOK.json')
+                  'data/es-1min/SWEEPS.json', 'data/es-1min/SWEEPS-BOOK.json',
+                  'data/es-1min/BASERATES.json', 'data/futures/')   # (v15.87) the corpus appends itself on his machine
 STAMPS = ('ranOn', 'ranAt', 'writtenBy')
 
 

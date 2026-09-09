@@ -1,3 +1,75 @@
+## v15.87 — THE TOOL GRID ("tools") · THE CORPUS APPENDS ITSELF ("yes") · THE NIGHTLY RE-RUNS AFTER AN INSTALL
+
+> Operator, 2026-09-09, after three rounds on the A row: **"no, what im saying is how is there a wick when the hod
+> occurred at 8:30. how is that possible. do you realize that the candles are session candles and that if the hod was
+> at 8:30, then it never wen above the open, so how can there be a wick?"** … **"regarding the wick, i checked with
+> other souce and this is what it shows. see pics. You must be doing something wrong or there is a disconnect. figure
+> it out."** — his tool's row for 2026-09-08: HOD **8:33** · Took **3m** · BOP **3m** · Wick **6m** · W.End **8:36** ·
+> Wick% **6** · MUD 6h24 · LOD 3:00pm · HL Rng 45.5 · MD **$2,138**. Asked which open to stand on, he answered
+> **"tools"**. And on the corpus, 2026-09-08: **"are you also saving the daily stats from yahoo … do you have an
+> indicator below indicating that you have saved the data from yahoo finance to update our records so we have both
+> daily and intraday data. When will learning occur."** — the append existed and nothing called it; **"yes"** to wiring
+> it into the nightly.
+
+**The disconnect, found.** The panel read the session OPEN as the 08:30 *minute's* open (7711.50) and every clock as
+the minute of the extreme; his tool reads 3-minute bars **stamped by their END** — the bar labelled 8:30 is 08:27–08:30
+and its open is **7715.00**, the HOD 7717.75 sits in the bar ending **8:33**, and W.End is the first bar *after* the
+extreme's to close through the open (**8:36**). On the minute grid the wick was |7711.50 − 7717.75| / 45.5 = 14%;
+on his grid it is |7715.00 − 7717.75| / 45.5 = **6%** — the same bars, a different open. Neither was a bug in the
+arithmetic; it was two definitions under one label, and the face must read what his tool reads.
+
+**What shipped — (1) the tool grid.** `hlToolBars` folds the minute bars into 3-minute bars stamped by end (08:27 ≤ m
+< 15:00; the bar ending 08:30 is the first, the bar ending 15:00 the last) before `hodLod` and `gdActual` read them
+(typeof-guarded — DEGRADE, DO NOT DEPEND; `hodLod.grid = "tool"`); the open = the first bar's open; took / gap / stood /
+BOP / wick / MUD are bar-end clocks; the reclaim scan starts after the extreme's bar; the empty row says **"no RTH
+bars yet"** while the bars are all pre-08:27. His 09-08 row reproduces **exactly** from the couriered bars
+(`test_v1587` §2: open 7715 · HOD 7717.75 @ 8:33 · Took 3 · W.End 8:36 · BOP 3 · Wick 6 · Wick% 6 · LOD 7672.25 @
+3:00pm · Rng 45.5 · MUD 384m · MD $2,137.50). `tools/study-hodlod.py` loads from 08:27 and folds the same way, per
+market (`PT_USD` ES 50 · NQ 20 · GC 100 · CL 1000), so the E row and the A row are one definition — every E field moved
+by it (took 33.5 → 34.7 m, rng 61.4 → 60.6 pts, wick% 26 → 26, ladder 42/56/67/76/84 on 295 sessions); the file's
+`corpus.definition` states the grid.
+
+**(2) The corpus appends itself.** `tools/nightly/run.py` → `refresh_futures` after the sweeps: `append-futures` over
+the last four day files (idempotent; the newest day completes from the next day's courier window — the panel writes the
+file at 15:01 with the courier's ~14:45 poll) → `study-hodlod` → `data/es-1min/BASERATES.json` (**ES 295 sessions**:
+the vendor's 284 through 08-21 + the Yahoo days from 08-24, **provenance per session**, a day both hold comes from the
+vendor; the overlap is reported — **none**) and `data/futures/NQ/BASERATES.json` (**NQ 11 sessions**, Yahoo only); the
+log carries `futures`. `tools/bake-hodlod.py` re-bakes the panel's `HODLOD_BASE` boot literal from the file at build time
+(`--check` pinned by `test_hodlod` b5/b6/s2 and `test_v1587`); the companion couriers the live file over it as before.
+`append-futures` now drops Yahoo's **live-quote row** (the in-progress minute stamped at the quote's own second —
+`14:49:41`, o=h=l=c, volume 0 — which every session had ended on) and the 09-08 tail (14:44–14:59) was read from the
+live companion store (`data/futures/2026-09-08-tail.json`, the same minutes the 09-09 window will carry). The NQ vendor
+file (`NQ TestingData.txt`, tab / ISO format) still needs a parser — NQ stands on Yahoo alone.
+
+**(3) The nightly re-runs after an install — and the clobber, told.** On 2026-09-08 his machine's nightly ran at 15:05
+and wrote results / studies / recommendations / examples for 09-08; the **15:21, 17:11 and 18:01 installers** (v15.84–
+v15.86, built from a clone that predated the run) pasted the **09-07** copies back over them, on his machine and — through
+the installer's push — on GitHub. I had told him the nightly's outputs "rode up with your push"; they did not. The origin
+guard checks at BUILD time and cannot see an install that comes later, so `tick.py` now re-runs the nightly when any
+output is **older than the log** (the extracted files carry mtime 0) **or `results.json` is dated before the log's day**
+(the case where the log came out of the same installer). This build ships the 09-07 outputs as they stand on GitHub and
+**his machine re-runs 09-08 within 10 minutes of the install** (`asOf 09-07 < log 09-08`); the log stays his
+machine's. `origin-guard` treats BASERATES and `data/futures/` as the nightly's writes.
+
+**Tests.** `test_v1587.js` — 40 assertions (the folder, his row from the couriered bars, the A row's hover rendered, the
+two empty messages, the corpus's provenance and definition, every row on the minute, the NQ file, the tools' constants,
+`bake --check`, `tick --selftest`, the guard, the records); **12/12 mutants killed** (`mut-v1587.py`: the bar stamped by
+start, the window from 08:30, the 15:00 minute folded, the reclaim on the extreme's own bar, the fold's close / high, no
+fold, the empty message, the hover; tick's `<=` and its mtime check; the live-quote row kept); `test_hodlod` 176 re-pinned to the grid (b1 ≥ 294 — it grows; h5 12 · h6 189 · h9 318 · n2 6 · n3 +9m · n5
+9 = 6 + 3 · n6 93); `test_v1577` on the file's fields instead of the 284-session literals (the corpus moves nightly);
+`test_futbars` f2, `test_v1556` 4d (the 09-08 day file is in the clone), `test_v1567` 8a (`futures=futures`).
+
+**The record.** R-27 (the A row on his tool's grid) and R-28 (the corpus appends itself) on Rec, both implemented, by
+operator; the roadmap — v15.86 shipped, **v15.87 this build**, the seasonality → v15.88, the rest +1; the Architecture
+lines for v15.84 (one window, one breadth — owed since that build) and v15.87 (the corpora, the nightly); DECISIONS
+2026-09-09; LESSONS v15.87; INVENTORY §0u; the config (2026-09-09a); the resume note (+ snapshot v15.86); the chat history.
+
+**Verify at the open (2026-09-09), with v15.84–15.86 still unverified:** the A row's open reads the 08:27 minute's
+open (the footer's `⓪a` hover says *grid: tool*); `__gptsDebug.LASTFEED.SPY.j.expirations.length === 1` and ~120 rows
+all session; `feedRejects().SPY.win` climbing; the XG / SG labels on the IRT file; the Learn tab's E005 / E006; the
+Analysis tab's `asOf 2026-09-08` after the nightly's re-run (≤ 10 minutes after the install), and tomorrow's
+`BASERATES.last` = 2026-09-09 with **296** sessions.
+
 ## v15.86 — THE LEARN CORPUS GROWS BY TEN CIRCLES (E005 · E006) · THE LIQUIDITY LEVEL FACTOR · L10 · L11 · L12
 
 > Operator, 2026-09-08 (night): **"here are 6 deflections identified by the circles. each should be counted as 1

@@ -23,6 +23,13 @@ with its n, so nothing on the panel is a number we cannot reproduce.
 import csv, collections, glob, gzip, io, json, os, sys, statistics as st
 
 RTH_A, RTH_B = 8*3600+30*60, 15*3600
+# (v15.87) THE TOOL GRID — operator, 2026-09-09: "tools". His tool reads the session on 3-minute bars stamped by their
+# END; the bar labelled 08:30 is 08:27–08:30 and its open IS the session open (7715.00 on 09-08, where the first print
+# at 08:30:00 was 7711.50 — that one number was the whole 6% vs 14% wick disagreement). So: the minutes are loaded
+# from 08:27 up to 14:59 (the bar ending 15:00), folded into 3-minute bars stamped by end, and every clock in the wick
+# family is a bar END; the reclaim bar is the first bar AFTER the extreme's bar. The survival ladder stays on minutes.
+LOAD_A, LOAD_B = 8*3600+27*60, 15*3600          # minutes s with LOAD_A <= s < LOAD_B
+BAR = 180
 MIN_BARS = 386
 PT_USD = 50.0
 WINDOWS = [30, 60, 90, 120, 180]
@@ -48,7 +55,7 @@ def load(path, ses=None):
             p = t.split(':')
             try:
                 sec = int(p[0])*3600 + int(p[1])*60
-                if not (RTH_A <= sec <= RTH_B):
+                if not (LOAD_A <= sec < LOAD_B):
                     continue
                 ses[d].append((sec, float(x['High']), float(x['Low']), float(x['Close']),
                                float(x['Open'])))
@@ -106,9 +113,23 @@ def load_sources(paths):
 # perfectly good session for TOOK, HL GAP and HL RNG, so it is excluded from those medians NOWHERE.
 # Outliers are fenced by TUKEY 1.5xIQR, which is computed FROM THE CORPUS rather than chosen by me,
 # and every exclusion is COUNTED into the output so nothing is dropped invisibly.
+def tool_bars(mins):
+    """(v15.87) minutes (sec, high, low, close, open) sorted -> 3-minute bars (END sec, high, low, close, open) stamped
+    by their end, the first one ending 08:30 (its open = the session open, his tool's way)."""
+    out = []
+    for m in mins:
+        end = ((m[0] - LOAD_A) // BAR + 1) * BAR + LOAD_A
+        if out and out[-1][0] == end:
+            b = out[-1]; out[-1] = (end, max(b[1], m[1]), min(b[2], m[2]), m[3], b[4])
+        else:
+            out.append((end, m[1], m[2], m[3], m[4]))
+    return out
+
+
 def wick_fields(bars):
-    """bars: (sec, high, low, close, open) sorted. Returns the six fields for one session."""
-    o0, OPEN = bars[0][0], bars[0][4]
+    """bars: 3-minute TOOL bars (end_sec, high, low, close, open) sorted. Returns the six fields for one session.
+    TOOK is from 08:30 (RTH_A) to the first extreme's bar END; the reclaim bar is the first bar AFTER the extreme's."""
+    o0, OPEN = RTH_A, bars[0][4]
     hi = max(bars, key=lambda r: r[1]); lo = min(bars, key=lambda r: r[2])
     hod_t, lod_t = hi[0], lo[0]
     low_first = lod_t < hod_t
@@ -119,7 +140,7 @@ def wick_fields(bars):
     wick_pts = abs(OPEN - ext)
     wend = None
     for b in bars:
-        if b[0] < first_t:
+        if b[0] <= first_t:                      # (v15.87) the extreme's own bar never reclaims — his tool's 8:36, not 8:33
             continue
         if (b[3] >= OPEN) if low_first else (b[3] <= OPEN):
             wend = b[0]
@@ -168,7 +189,9 @@ def survival(bars, low_side):
     out.append(((bars[-1][0] - since)//60, True))
     return out
 
-def main(paths, out=None):
+def main(paths, out=None, market='ES'):
+    global PT_USD
+    PT_USD = {'ES': 50.0, 'NQ': 20.0, 'GC': 100.0, 'CL': 1000.0}.get(market, 50.0)   # (v15.87) the contract multiplier, by market
     if isinstance(paths, str):
         paths = [paths]
     raw, prov = load_sources(paths)
@@ -182,19 +205,21 @@ def main(paths, out=None):
         return None
     rows, surv_lo, surv_hi = [], [], []
     for d in days:
-        b = ses[d]
+        mins = ses[d]
+        b = tool_bars(mins)                      # (v15.87) the tool grid: 3-minute bars stamped by end, from 08:27
         hi = max(b, key=lambda r: r[1]); lo = min(b, key=lambda r: r[2])
-        hod_t, lod_t = hi[0], lo[0]
+        hod_t, lod_t = hi[0], lo[0]              # bar ENDS — his tool's clocks (HOD 8:33 = the 08:30–08:33 bar)
         first_low = lod_t < hod_t
         rng = hi[1] - lo[2]
         rec = dict(day=d, hod_t=hod_t, lod_t=lod_t, first='LOD' if first_low else 'HOD',
-                   took=(min(hod_t, lod_t)-RTH_A)//60, gap=abs(hod_t-lod_t)//60,
+                   took=max(0, min(hod_t, lod_t)-RTH_A)//60, gap=abs(hod_t-lod_t)//60,
                    rng_pts=round(rng, 2), rng_usd=round(rng*PT_USD, 2),
-                   # (v15.77) the session's colour, RTH close against RTH open — his tool's "Red Day / Green Day"
+                   # (v15.77) the session's colour, the close against the (tool) open — his tool's "Red Day / Green Day"
                    green=(b[-1][3] > b[0][4]))
         rec.update(wick_fields(b))
         rows.append(rec)
-        surv_lo += survival(b, True); surv_hi += survival(b, False)
+        rth = [m for m in mins if m[0] >= RTH_A]          # the ladder keeps counting from 08:30, on minutes
+        surv_lo += survival(rth, True); surv_hi += survival(rth, False)
 
     def ladder(sv):
         out = {}
@@ -227,7 +252,8 @@ def main(paths, out=None):
     firsts = collections.Counter(r['first'] for r in rows)
     res = dict(
         corpus=dict(sessions=len(days), first=days[0], last=days[-1],
-                    min_bars=MIN_BARS, rth='08:30-15:00 CT', pt_usd=PT_USD),
+                    min_bars=MIN_BARS, rth='08:30-15:00 CT', pt_usd=PT_USD,
+                    definition='tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending 08:30-15:00 (minutes 08:27-14:59), the open = the bar ending 08:30; clocks are bar ends; the reclaim bar is after the extreme\'s bar'),
         sequence=dict(LOD_first=firsts['LOD'], HOD_first=firsts['HOD'],
                       pct_LOD_first=round(100*firsts['LOD']/len(rows))),
         expected=dict(
@@ -429,5 +455,5 @@ if __name__ == '__main__':
                   file=sys.stderr)
             sys.exit(1)
         print('sources: %s' % ', '.join(srcs))
-        sys.exit(0 if main(srcs, outp) else 1)
+        sys.exit(0 if main(srcs, outp, market=mk) else 1)
     main(a or ['/tmp/es.csv'])

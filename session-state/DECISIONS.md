@@ -683,3 +683,41 @@ volume added along the way. The gauge on the Learn tab stays honest (blind reads
 scorer. (4) **Top 3 vs top 5 is an open item (Q12), his call on or about 2026-09-15** — he keeps 5 until then.
 Recorded for his ruling, not decided: the first-hour turns he did not circle (ES 08:45 / 09:03 / 09:39 / 09:51; the
 NQ LOD 09:09 at the PDL sweep) — whether they are deflections in his sense.
+
+## 2026-09-09 · v15.87 — the A row on his tool's grid ("tools"); the corpus appends itself ("yes"); the nightly re-runs after an install
+
+Operator, on the A row's 14% wick with the HOD "at 8:30", over three rounds: **"how is there a wick when the hod
+occurred at 8:30. how is that possible. do you realize that the candles are session candles and that if the hod was at
+8:30, then it never wen above the open, so how can there be a wick?"** · **"lookup the days candle using yahoo or any
+online resource to double check"** · **"are you saying that the 14% of the session was done in 1 minute, creating a
+wick"** · **"regarding the wick, i checked with other souce and this is what it shows. see pics. You must be doing
+something wrong or there is a disconnect. figure it out."** — his tool's row for 2026-09-08: HOD 8:33 · Took 3m · BOP
+3m · Wick 6m · W.End 8:36 · Wick% 6 · MUD 6h24 · LOD 3:00pm · HL Rng 45.5 · MD $2,138. Asked which open the row should
+stand on — the 08:30 minute's (7711.50) or his tool's (the bar ending 08:30, open 7715.00) — **"tools"**. And on the
+corpus, 2026-09-08: **"are you also saving the daily stats from yahoo … When will learning occur."** → **"yes"** to
+wiring the append into the nightly.
+
+Decided: (1) **The session is read on his tool's grid** — 3-minute bars stamped by their END; the session = the bars
+ending 08:30 … 15:00 (minutes 08:27–14:59); **the OPEN = the bar ending 08:30's open** (the 08:27 minute); the
+extremes' clocks are bar ends; took = the extreme's bar end − 08:30; **W.End = the first bar AFTER the extreme's bar
+to close through the open**; wick% = |open − first extreme| / range; MU / MD = |second extreme − open| × $50. The
+panel (`hlToolBars` before `hodLod` / `gdActual`) and the study (`study-hodlod.py`) fold the same way — one
+definition, stated in the A row's hover and in `BASERATES.corpus.definition`. What would change it: his word; the
+minute grid is one line (`HL_TOOL_BAR`) away, and every E field would move back with it (took 34.7 → 33.5 m).
+(2) **The 14% was not a bug in the arithmetic** — it was |7711.50 − 7717.75| / 45.5 on the minute grid, and 6% is
+|7715.00 − 7717.75| / 45.5 on his; two definitions under one label. A disagreement between the A row and his tool is
+a DEFINITION question first, and the hover now carries the definition so it is read against, not re-derived.
+(3) **The corpus appends itself every night** — `run.py` → `append-futures` (the last four day files; idempotent; the
+newest day completes from the next day's window) → `study-hodlod` → `BASERATES` per market; **pooled with
+provenance**: the vendor's 284 sessions (one contract, through 08-21) and the Yahoo days (the continuous front month,
+from 08-24) with each session's source recorded, a day both hold coming from the vendor; the overlap is measured and
+reported every night (none yet) — pooled, never averaged across. NQ stands on Yahoo alone until the vendor file
+(tab / ISO) has a parser. (4) **The panel's boot literal is baked from the file at build time**, never by hand
+(`tools/bake-hodlod.py`); the corpus moving without a build is the design, and the tests pin the file's fields, not
+literals. (5) **Yahoo's live-quote row is not a bar** — the in-progress minute at the quote's own second (14:49:41,
+o=h=l=c, volume 0) is dropped by the harvest; every session had ended on one. (6) **The nightly re-runs itself after an
+install** — `tick.py` runs when an output is older than the log (the installer's mtime 0) or `results.asOf` is dated
+before the log's day; on 2026-09-08 the 15:21 / 17:11 / 18:01 installers put the 09-07 outputs back over his machine's
+15:05 run, on his disk and on GitHub, and I had said the opposite ("rode up with your push"). The origin guard cannot
+see an install that comes after the build; the tick can. This build ships the 09-07 outputs as GitHub holds them and
+his machine re-runs 09-08 within ten minutes of the install.

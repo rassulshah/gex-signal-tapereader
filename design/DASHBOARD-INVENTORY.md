@@ -11,6 +11,19 @@ maps to in `learning/studies.json`, whether its number is **measured** (a rate w
 **descriptive** (a fact about now, no claim) or **unmeasured** (implies a claim it cannot back), and
 the verdict. The verdicts are proposals; his call.
 
+## 0u · v15.87 — the A row on his tool's grid; the E row on a corpus that grows nightly (2026-09-09, small hours)
+
+No new element. **⓪a A row** (and the HOD/LOD read, the GREEN / RED chip) now measures the session on his tool's grid —
+3-minute bars stamped by END, the open = the bar ending 08:30's open, every clock a bar end, W.End the first bar after
+the extreme's to close through the open — and its tag's hover states the grid (*"Grid: tool — …"*). For 2026-09-08 the
+row reads HOD 8:33 · Took 3 · BOP 3 · Wick 6 · W.End 8:36 · Wick% 6 · MD $2,138 — his tool's row, where v15.86 read
+Took 0 · Wick 1 · Wick% 14 on the 08:30 minute's open. **⓪a E row**: every expected field moved by definition (took
+~35 m, rng ~61 pts on **295** sessions through 2026-09-08 — the corpus now appends itself every night, so its n and its
+last day move without a build; the boot literal is baked from the file at build time). His words: *"tools"* · *"yes"*.
+Measured: the A row descriptive (today's own bars); the E row measured (n=295, trimmed means, the wick family with its
+own n). Probe: `__gptsDebug.hodLod()` → `grid: "tool"`, `open`; the A tag's hover; `hodlodBase().n` (295 → 296 after
+the 09-09 nightly).
+
 ## 0t · v15.86 — the Learn tab gains E005 / E006 and the liquidity factor (2026-09-08, night)
 
 No new element on the dashboard. **📚 Learn** gains two taught examples (E005 ES · six circles, E006 NQ · four, with his

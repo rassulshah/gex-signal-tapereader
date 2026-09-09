@@ -109,7 +109,7 @@ const bareP=s=>{ const out=[]; const re=/(\d+)%/g; let m; const txt=String(s).re
   ok(WB.lookup && WB.lookup.node && WB.lookup.node.atNode && typeof WB.lookup.node.atNode.n==='number' && WB.lookup.level['KING-'] && WB.lookup.level['CW0+'] && WB.corpus.unit && /SPY 3-minute/.test(WB.corpus.unit),'4b SWEEPS-BOOK.json carries the node lookup, the book levels by name, and names its unit');
   ok(WB.corpus.sessions>=5 && WB.lookup.node.atNode.n<40,'4c today the book corpus is thin ('+WB.corpus.sessions+' sessions, '+WB.lookup.node.atNode.n+' at-node events) — it says so rather than pooling');
   const rn=cp.spawnSync('python3',['tools/nightly/run.py','--selftest'],{encoding:'utf8'});
-  ok(rn.status===0 && /H6\s+THIN\s+n\s+0\/40\s+0 sweep-at-a-node events on sessions from/.test(rn.stdout),'4d the nightly judges H6 from the book table (thin, n counted from the register date), no longer "blocked"',(rn.stdout||'').split('\n').filter(l=>/H6/.test(l)).join(' | '));
+  ok(rn.status===0 && /H6\s+THIN\s+n\s+\d+\/40\s+\d+ sweep-at-a-node events on sessions from/.test(rn.stdout),'4d the nightly judges H6 from the book table (thin, n counted from the register date — 0 on 09-03, 1 once the 09-08 day file was in the clone), no longer "blocked"',(rn.stdout||'').split('\n').filter(l=>/H6/.test(l)).join(' | '));
   const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8'));
   const flat=[]; S.subjects.forEach(sj=>sj.subsections.forEach(ss=>ss.studies.forEach(x=>flat.push(x))));
   const f=flat.find(x=>x.id==='H2.10f'), g=flat.find(x=>x.id==='H2.10g');

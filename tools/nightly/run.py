@@ -289,6 +289,17 @@ def run(upto=None, write=True, reg_path=REG, days=None):
         if write: refresh_sweeps()
     except Exception as eS:
         print('sweep refresh threw:', eS)
+    # (v15.87) THE CORPUS APPENDS ITSELF. Operator, 2026-09-08: "are you also saving the daily stats from yahoo … so we
+    # have both daily and intraday data" → yes (every day file carries futBars) and no (nothing turned them into the
+    # corpus: BASERATES ended 2026-08-21 and the E row said "stale" since 09-01). Now, every night: the couriered minute
+    # bars of the last few day files → data/futures/<MK>/<day>.csv (tools/append-futures.py, idempotent; the newest day
+    # completes from the NEXT day's window) → BASERATES rebuilt for ES (the vendor corpus + every Yahoo session, with
+    # provenance; the vendor wins a day both hold) and NQ (Yahoo sessions only until the NQ vendor export gets a parser).
+    futures = None
+    try:
+        if write: futures = refresh_futures(days)
+    except Exception as eF:
+        futures = dict(error=str(eF)); print('futures refresh threw:', eF)
     # (v15.66) THE TAPE — the whole book per bar per market (data/tape/<day>/<BOOK>.json, written by the panel's 💾).
     # Reported in the log so a night that ran without it says so; the studies that need the full SPY/QQQ books
     # (the per-book patterns, NEW on SPY/QQQ, Q11's dollar axis) read it through tools/nightly/tape.py.
@@ -332,7 +343,7 @@ def run(upto=None, write=True, reg_path=REG, days=None):
     # (v15.68) where this run happened — his machine (the "GEX nightly" task, every 10 minutes after the 💾) or the cloud
     ran_on = 'his machine' if os.name == 'nt' else 'cloud'
     log = dict(schema=2, date=last, writtenBy='tools/nightly/run.py', ranOn=ran_on, ranAt=datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'), from_=frm, sessions=n_sess, episodes=len(eps),
-               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0), newItems=(newitems if write else 0), tape=tape_cov, patterns=patterns)
+               deflEvents=len(defl), null=null, hypotheses=verdicts, lodhod=cal, preopen=preopen, newRequests=(newreq if write else 0), newItems=(newitems if write else 0), tape=tape_cov, patterns=patterns, futures=futures)
     log['from'] = log.pop('from_')
     if write:
         os.makedirs(LOGD, exist_ok=True)
@@ -405,6 +416,78 @@ def ingest_items(days):
         io.open(ITEMS, 'w', encoding='utf-8').write(json.dumps(cur, indent=1, ensure_ascii=False))
         print('items: %d new -> learning/items.json (%d total)' % (added, len(cur['items'])))
     return added
+
+def _load_tool(name):
+    """tools/<name>.py has a hyphen in its name — load it by path (the same trick the tape / results loaders use)."""
+    import importlib.util as _ilu
+    sp = _ilu.spec_from_file_location(name.replace('-', '_'), os.path.join(ROOT, 'tools', name + '.py'))
+    m = _ilu.module_from_spec(sp); sp.loader.exec_module(m)
+    return m
+
+
+def refresh_futures(days, keep_last=4):
+    """(v15.87) the couriered Yahoo minute bars → the per-session corpus → BASERATES. -> a summary for the log.
+
+    ⚠ The append is idempotent and the newest day is INCOMPLETE until the next day file's 5-day window completes it
+    (the panel writes the file at 15:01 with the courier's last poll, ~14:49), so the last few files are re-read every
+    night. ⚠ PROVENANCE: the vendor corpus (one contract) and the Yahoo dailies (the continuous front month) are pooled
+    by study-hodlod with each day's source recorded; a day both hold comes from the vendor. The overlap between the
+    two is reported here so the pooling can be checked — as of 2026-09-08 there is none (the vendor ends 08-21, Yahoo
+    begins 08-24), which is stated rather than assumed."""
+    out = dict(appended={}, baserates={}, overlap=None)
+    cwd = os.getcwd()
+    os.chdir(ROOT)
+    try:
+        ap = _load_tool('append-futures')
+        paths = [os.path.join('data', d + '.json') for d, _ in (days or [])[-keep_last:] if os.path.exists(os.path.join('data', d + '.json'))]
+        got, _seen = ap.harvest(paths)
+        for (market, ysym), byday in sorted(got.items()):
+            n_new = 0; last = None; last_n = 0
+            for day in sorted(byday):
+                _p, n, added = ap.merge_write(market, ysym, day, byday[day])
+                n_new += added; last = day; last_n = n
+            out['appended'][market] = dict(minutes=n_new, newest=last, newestBars=last_n, complete=(last_n >= 386))
+        hl = _load_tool('study-hodlod')
+        for mk, outp in (('ES', 'data/es-1min/BASERATES.json'), ('NQ', 'data/futures/NQ/BASERATES.json')):
+            srcs = hl.market_sources(mk)
+            if not srcs:
+                out['baserates'][mk] = dict(error='no sources'); continue
+            res = hl.main(srcs, outp, market=mk) if 'market' in hl.main.__code__.co_varnames else hl.main(srcs, outp)
+            if res:
+                c = res.get('corpus') or {}
+                out['baserates'][mk] = dict(sessions=c.get('sessions'), first=c.get('first'), last=c.get('last'),
+                                            vendor=sum(v for k, v in (c.get('sources') or {}).items() if not k[:4].isdigit()),
+                                            yahoo=sum(v for k, v in (c.get('sources') or {}).items() if k[:4].isdigit()),
+                                            incompleteDropped=c.get('incomplete_dropped'))
+        # the overlap: the sessions BOTH sources hold, with each source's took / BOP / wick% / range side by side
+        try:
+            vendor = [p for p in hl.market_sources('ES') if not os.path.basename(p)[:4].isdigit()]
+            yahoo = [p for p in hl.market_sources('ES') if os.path.basename(p)[:4].isdigit()]
+            if vendor and yahoo:
+                v_ses = hl.complete(hl.load(vendor[0])); y_ses = {}
+                for yp in yahoo: y_ses.update(hl.complete(hl.load(yp)))
+                common = sorted(set(v_ses) & set(y_ses))
+                rows = []
+                for d in common:
+                    a, b = v_ses[d], y_ses[d]
+                    def _f(bars):
+                        hi = max(bars, key=lambda r: r[1]); lo = min(bars, key=lambda r: r[2])
+                        w = hl.wick_fields(bars)
+                        return dict(took=(min(hi[0], lo[0]) - hl.RTH_A) // 60, rng=round(hi[1] - lo[2], 2), wickPct=w.get('wickPct'), bop=w.get('bop'))
+                    rows.append(dict(day=d, vendor=_f(a), yahoo=_f(b)))
+                out['overlap'] = dict(days=len(common), rows=rows[:10],
+                                      note=('none — the vendor corpus ends %s and the Yahoo sessions begin %s; pooled with provenance, nothing averaged'
+                                            % (max(v_ses) if v_ses else '?', min(y_ses) if y_ses else '?')) if not common else 'checked below')
+        except Exception as eO:
+            out['overlap'] = dict(error=str(eO))
+    finally:
+        os.chdir(cwd)
+    print('futures: appended %s · BASERATES %s · overlap %s' % (
+        ', '.join('%s +%d (newest %s, %s)' % (k, v['minutes'], v['newest'], 'complete' if v['complete'] else 'INCOMPLETE %d bars' % v['newestBars']) for k, v in out['appended'].items()) or 'nothing',
+        ', '.join('%s %s sessions %s→%s' % (k, v.get('sessions'), v.get('first'), v.get('last')) for k, v in out['baserates'].items()) or 'none',
+        (out['overlap'] or {}).get('note') or (out['overlap'] or {}).get('days')))
+    return out
+
 
 def refresh_sweeps():
     sys.path.insert(0, os.path.join(ROOT, 'tools'))

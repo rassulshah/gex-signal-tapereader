@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-08 · v15.86 · session `f9c89c64` — HIS TRAINING — TEN CIRCLES (E005 · E006) · THE LIQUIDITY LEVELS · L10 · L11 · L12 · Q12 OPEN
+## 2026-09-09 · v15.87 · session `f9c89c64` — THE TOOL GRID (tools) · THE CORPUS APPENDS ITSELF (yes) · THE NIGHTLY RE-RUNS AFTER AN INSTALL
 
-_202 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_218 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2765,8 +2765,117 @@ Today's numbers lean toward 3 being enough (ranks 1–3 gave 15 of the 18 deflec
 Now the open item, the locked item for the Asia/London levels, and the reminder:
 Now the v15.86 records, test and build:
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> im glad you caught the various reversals (deflections). With statistics (hod/lod) and the ones you are tracking for gamma levels/nodes/ patterns, levels and more , you should be able to predict soon. did you push to git. i am getting reinstall option only instead of update
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> i ran the bat install file
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> did you save the data and do the analysis today. i am still getting reinstall
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> did 3 gamma levels including the king , catch the hod, lod and significant pullback deflections for both the es and nq ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> ive also noticed that making updates is very slow . is there a lot of unused code . does the code need to be refactored and unused code need to be archived or deleted ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> have you updated all the tabs including architecture, roadmap and open items and testing analysis and learn etc.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> did you double check the values in the actual row. why does it say wick 14% whern the bop is 1m and took 0 m . something doesn't seem right .. you need to double check and double check against yahoo finance. are you also saving the daily stats from yahoo. did it run today , do you have an indicator below indicating that you have saved the data from yahoo finance to update our records so we have both daily and intraday data. When will learning occur.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> i need to continue this session in my claude from chrome , how do i do it
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> lets go over all the issues step by step , one by one including open items so we resolve everthing
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> no, what im saying is how is there a wick when the hod occurred at 8:30. how is that possible. do you realize that the candles are session candles and that if the hod was at 8:30 , then it never wen above the open , so how can there be a wick ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> lookup the days candle using yahoo or any online resource to double check
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> are you saying that the 14% of the session was done in 1 minute , creating a wick
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> we will return to this later, lets move on to the next issue
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> regarding the wick, i checked with other souce and this is what it shows. see pics. You must be doing something wrong or there is a disconnect. figure it out.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> THE CORPUS APPENDS ITSELF · THE TOOL GRID
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> wick% 14% · pts
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (01:18):** The code side is green except the record pins, which come after the records. Full suite now.
+Now the plan seed: the roadmap rows (15.86 shipped, 15.87 = this build, the rest shifted) and the Architecture lines (v15.84's one-window fetch, v15.87's corpus + nightly).
+Now the Rec row (face changes go through Rec) and the CHANGELOG.
+Add the hover pin to test_v1587 (executed, not grepped), then run the full suite again.
+Now the resume note (head rewritten, snapshot v15.86 kept) and the chat history.
+
 ### DECISIONS
 
+- **The A row on his tool's grid (2026-09-09, "tools"; R-27, v15.87):** three rounds on the 14% wick — *"how is there a
+  wick when the hod occurred at 8:30 … so how can there be a wick?"* · *"lookup the days candle using yahoo or any
+  online resource to double check"* · *"are you saying that the 14% of the session was done in 1 minute, creating a
+  wick"* · *"we will return to this later, lets move on to the next issue"* · then his screenshots: *"i checked with
+  other souce and this is what it shows. see pics. You must be doing something wrong or there is a disconnect. figure
+  it out."* His tool: HOD 8:33 · Took 3m · BOP 3m · Wick 6m · W.End 8:36 · Wick% 6 · MD $2,138. The disconnect was the
+  OPEN — his tool's 3-minute bars are stamped by END (the bar labelled 8:30 = 08:27–08:30, open 7715.00; the panel took
+  the 08:30 minute's 7711.50). Asked which → **"tools"**. The panel and the study fold to his grid; the hover states it.
+- **The corpus appends itself (2026-09-08 → 09-09, "yes"; R-28, v15.87):** *"are you also saving the daily stats from
+  yahoo. did it run today, do you have an indicator below indicating that you have saved the data from yahoo finance to
+  update our records so we have both daily and intraday data. When will learning occur."* — the append existed and
+  nothing called it; **"yes"** to the two nightly steps. ES 295 sessions (284 vendor + the Yahoo days, provenance per
+  session, overlap none), NQ 11 (Yahoo only); the boot literal baked from the file at build time; the indicator is
+  `BASERATES.corpus.last`.
+- **The clobber told, and the nightly re-runs after an install (2026-09-09):** the 15:21 / 17:11 / 18:01 installers put
+  the 09-07 outputs back over his machine's 15:05 run (on his disk and on GitHub); I had said the opposite. `tick.py`
+  re-runs when an output is older than the log or `results.asOf` < the log's day — his machine re-runs 09-08 within
+  10 minutes of installing v15.87.
+- **The agenda (2026-09-09, "lets go over all the issues step by step, one by one including open items so we resolve
+  everthing"):** 14 items, one at a time; 1 (the wick) and 2 (the corpus) resolved by v15.87; 3 (the patch-build tier)
+  is next — his yes / no.
 - **The candle on the price axis, his key levels (2026-09-08, "build"; R-17, v15.80):** *"the levels that are swept are
   the only ones that should be indicated. EMH and EML are not levels and they should be aligned based on the y axis
   which should be the price axis"* → *"the king is not a key level. the key levels are PDH, PDL, ONL, ONH, WH, WL,
@@ -3050,6 +3159,17 @@ Now the v15.86 records, test and build:
 
 ### SHIPPED
 
+**v15.87** (panel + installer + tools; companion v1.18 unchanged) — THE TOOL GRID: `hlToolBars` (3-minute bars stamped by
+end, from 08:27) before `hodLod` / `gdActual`, the A row's hover states the grid, "no RTH bars yet" for a pre-08:27
+grid; `study-hodlod.py` on the same grid per market; BASERATES ES 295 / NQ 11 through 09-08. THE CORPUS APPENDS ITSELF:
+`run.py refresh_futures` (append-futures → study-hodlod → both BASERATES, the overlap report), `tools/bake-hodlod.py`
+(+ `--check`), the live-quote row dropped, the 09-08 tail from the live store. THE NIGHTLY RE-RUNS AFTER AN INSTALL:
+`tick.py` OUTPUTS by mtime + `results.asOf` by content; origin-guard's list. R-27 / R-28 implemented; the roadmap
+(v15.86 shipped, v15.87 this, seasonality → v15.88); the Architecture lines for v15.84 and v15.87; CHANGELOG; DECISIONS
+2026-09-09; LESSONS v15.87; INVENTORY §0u; DATA-ARCHITECTURE §4 / §6a; the config (2026-09-09a); the resume note (+
+snapshot v15.86). `test_v1587.js` 40; `test_hodlod` 176 re-pinned; `test_v1577` on the file's fields. **NOT YET
+VERIFIED on his panel** (delivered after midnight).
+
 **v15.86** (panel + installer; companion v1.18 unchanged) — THE LEARN CORPUS GROWS BY TEN CIRCLES: E005 / E006 in
 `learning/deflections/` (examples.json, LEARNING.md, `LEARN_SEED`, the two images), the LIQUIDITY LEVEL factor, L10 ·
 L11 · L12 (PROPOSED), L1 → n=24; OPEN-QUESTIONS Q12; LOCKED-ITEMS AHI · ALO · LHI · LLO; `design/TAP-RECORD.md` §4b +
@@ -3285,7 +3405,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 - **His answers owed:** the NQ labels (G2–G5 or QG2–QG5); the Asia / London session hours (proposed 17:00–02:00 CT /
   02:00–08:30 CT).
 - **Q12 top 3 vs top 5 — report on ~2026-09-15** (a reminder fires in the cloud session); he keeps 5 meanwhile.
-- **v15.86 (and v15.84 / v15.85 inside it) NOT verified live** — the open's probe is in the resume note.
+- **v15.84 → v15.87 NOT verified live** — the open's probe list is in the resume note; the Analysis tab's asOf should
+  read 09-08 within 10 minutes of the v15.87 install (the nightly's re-run).
+- **The agenda, item 3 next:** the patch-build tier — his yes / no; then 4 the NQ labels, 5 the Asia / London hours…
+- **The NQ vendor corpus** (`NQ TestingData.txt`, tab / ISO) needs a parser before NQ's BASERATES can pool it.
 - **v15.85 (and v15.84 inside it) delivered after the close, NOT verified** — at the open: footer v15.85; the XG / SG
   labels on his IRT chart; `LASTFEED.SPY` one expiration and ~120 rows, steady; `feedRejects().SPY.win` climbing; the
   snaps' node count no longer flipping bands; the QQQ King on ENQU26 only.
@@ -3443,6 +3566,9 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+398f926 records: the Testing tab's suite stamp for v15.86 (166 files · 161 green · 5 red); the Open Items file carries Q12, the three answers owed, the tap record and the Asia/London levels
+505cfd2 v15.86: the two teaching images re-encoded for the installer's size cap (E005 112 KB, E006 138 KB)
+8372e2f v15.86: HIS TRAINING — ten circles (E005 ES · E006 NQ) read against the ladder's ranked lists and the node-event dollars; the LIQUIDITY LEVEL factor (PDH · PDL · PDC · ONH · ONL · AHI · ALO · LHI · LLO · POC · VAH · VAL); L10 a −γ King is not the floor · L11 a +γ King ceiling decays by the tap · L12 a liquidity level at a −γ King gets swept first; Q12 open (top 3 vs 5, due ~09-15); AHI/ALO/LHI/LLO locked; the tap record's §4b; test_v1586 23
 17880f7 v15.85: XG2–XG5 · SG2–SG5 — the IRT node lines labelled by book (R-26); the QQQ King on NQ only pinned again on his word; THE TAP RECORD designed on paper (R-25, design/TAP-RECORD.md — nothing built); the top-3 question answered from one day's hand read (34 taps: ranks 1–3 15 of 22, ranks 4–5 3 of 12 with all three breaks); test_v1585 16 · 6/6
 2d1fcb2 v15.84: THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH — the self-fetch pins exp_mode=current&exp_count=1&nodes=500 whatever gex/levels URL came last (the app's three projection windows; the panel's own expiry sets through the same hook), onFeed refuses a multi-expiration payload once a 0DTE book is held (F-22: the recorded node count per bar flipped bands 34–61 times a session since 08-26; the King series survive); test_v1584 28 · 13/13
 2e85e0f v15.83 verified on his panel 14:18 CT — the resume note and the chat history say so
@@ -3452,9 +3578,6 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 4047b30 v15.82: THE OUTCOMES EXPORTED FROM THE ARCHIVE — feat = the localStorage queue ∪ the IndexedDB archive (featMergeRecs, LS wins per record), the in-memory archive kept current, featStats through the union, repoFeatDay + featSource in the day file, the matrix rebuilt (R-22, F-20's fix); test_v1582 36 · 13/13
 1fb9b1f v15.81 verified on his panel 11:31 CT — the resume note and the chat history say so
 772ff5a v15.81: THE IRT EXPORT ON SKYLIT'S OWN FUTURES PRICES — the ES1/NQ1 derived books kept and self-fetched, every ES and NQ row at the price Atlas draws, the basis as the tilde-tagged fallback (R-23); the projection understood; F-20 solved (R-22 proposed); test_v1581 58 · 26/26
-636327c resume note + chat history: F-20 solved (R-22), R-23 pending his answer
-1012b6f F-20: the mechanism found live (the localStorage budget sheds the queue; the exported snaps come from IDB) — FINDINGS, the review's dataHealth; R-22 (export feat from the archive) and R-23 (Skylit's ES1 prices in the export) proposed; test_v1570 1d re-pinned
-5ea641e v15.80 (2): THE E AND A ROWS ALIGNED — one 13-column grid, E · TUE / A · TUE, eagFit; the projection question answered in SKYLIT-FEEDS (the ES1 book, the merge formula, the levels compared) (R-21)
 ```
 
 ---

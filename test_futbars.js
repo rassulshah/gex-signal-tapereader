@@ -55,7 +55,7 @@ const clear = () => { delete STORE[global.HLBASE_KEY]; };
   clear();
   const B = hodlodBase();
   ok(B.src === 'baked', 'f1 with no courier payload the panel falls back to the compiled literal', B.src);
-  ok(B.n === 284, 'f2 the fallback is the 284-session corpus', B.n);
+  ok(B.n >= 294, 'f2 the fallback is the ES corpus (284 vendor + the Yahoo days; 294 at v15.87, growing nightly)', B.n);
   // ⚠ THE DEFECT THIS BUILD FIXED. v14.57/v14.58 shipped a ladder whose hover printed
   // "undefined of 1169" because the literal carried no `held`. Forty assertions passed over it.
   ok(B.ladder.every(L => typeof L.held === 'number' && L.held > 0 && L.held <= L.n),

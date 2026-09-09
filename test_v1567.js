@@ -194,7 +194,7 @@ const FIX=(()=>{ const ev=[];
 // ---- 8 · THE NIGHTLY and the records ----------------------------------------------------------------------------------
 {
   const run=fs.readFileSync('tools/nightly/run.py','utf8');
-  ok(/patterns = _pt\.table_for\(frm=frm\)/.test(run) && /tape=tape_cov, patterns=patterns\)/.test(run),'8a run.py writes the pattern table into the log as `patterns` (days from the register’s from)');
+  ok(/patterns = _pt\.table_for\(frm=frm\)/.test(run) && /tape=tape_cov, patterns=patterns(, futures=futures)?\)/.test(run),'8a run.py writes the pattern table into the log as `patterns` (days from the register’s from)');
   const log=fs.existsSync('learning/log/2026-09-03.json')?JSON.parse(fs.readFileSync('learning/log/2026-09-03.json','utf8')):null;
   ok(log && log.patterns && log.patterns.events===53 && log.patterns.stamped===0 && log.patterns.rows.some(r=>r.key==='old:Floor' && r.n===18 && r.rate===61),'8b the 2026-09-03 log carries the table: 53 taps, none stamped (pre-v15.67), old Floor 11/18 = 61%',log&&log.patterns&&log.patterns.rows.map(r=>[r.key,r.n,r.rate]));
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8');

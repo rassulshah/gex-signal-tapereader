@@ -35,7 +35,10 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 CT = ZoneInfo('America/Chicago')
-RTH_A, RTH_B = 8*3600+30*60, 15*3600      # 08:30-15:00 CT, the same window the study uses
+# (v15.87) THE TOOL GRID: the study folds minutes into 3-minute bars stamped by END, and the bar labelled 08:30 is
+# 08:27-08:30 — its open is the session open his tool reads (operator, 2026-09-09: "tools"). So the harvest starts at
+# 08:27 and stops before the 15:00 minute (which would belong to a bar ending 15:03). 393 minutes is a whole session.
+RTH_A, RTH_B = 8*3600+27*60, 15*3600      # 08:27 <= s < 15:00 CT, the same window the study loads
 # ⚠ OVERRIDABLE FOR TESTS ONLY. The first run of this tool during its own build wrote SYNTHETIC
 # fixture prices straight into data/futures/ES/ - the exact path the real corpus lives in. Nothing
 # would have flagged them: same columns, same filenames, plausible numbers. A test that writes into
@@ -76,7 +79,12 @@ def harvest(paths):
                     t = int(r[0])
                     dt = datetime.fromtimestamp(t, tz=CT)
                     sec = dt.hour*3600 + dt.minute*60 + dt.second
-                    if not (RTH_A <= sec <= RTH_B):
+                    if not (RTH_A <= sec < RTH_B):
+                        continue
+                    # (v15.87) THE LIVE QUOTE IS NOT A BAR. Yahoo's last row is the in-progress minute stamped at the
+                    # quote's own second (14:49:41, o=h=l=c, volume 0); it is not on the minute grid and it is
+                    # superseded by the real bar on the next poll. Dropped here so no session ends on a phantom row.
+                    if dt.second:
                         continue
                     out[(mk, ysym)][dt.strftime('%Y-%m-%d')][dt.strftime('%H:%M:%S')] = [
                         ysym, dt.strftime('%Y-%m-%d %H:%M:%S'), '',
@@ -96,7 +104,7 @@ def merge_write(market, ysym, day, rows_by_min):
         with io.open(path, encoding='utf-8') as f:
             for x in csv.DictReader(f):
                 s = (x.get('Date') or '').strip()
-                if ' ' in s:
+                if ' ' in s and s.endswith(':00'):        # (v15.87) a live-quote row written before this rule is dropped on rewrite
                     merged[s.split(' ', 1)[1]] = [x.get(c, '') for c in HEADER]
     before = len(merged)
     merged.update(rows_by_min)

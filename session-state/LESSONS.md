@@ -131,6 +131,24 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.87 — an A-row disagreement is a definition question before it is a bug; a guard at build time cannot see an install
+(1) Three rounds were spent defending the arithmetic of a 14% wick (|7711.50 − 7717.75| / 45.5 — correct) before his
+screenshots showed the disconnect was the OPEN: his tool's 3-minute bars are stamped by END, so the bar labelled 8:30
+opens at 08:27 (7715.00), and on that grid the wick is 6%. **Two definitions under one label is failure pattern #1
+again, on the clock this time** — a bar's stamp (start or end) is a scale. Withdrawn: the A row's 14% for 2026-09-08,
+the E row's took 33.5 m / rng 61.4 pts (now 34.7 / 60.6 on the tool grid, 295 sessions). Rule: when his tool and the
+face disagree, state both definitions first, then argue. (2) I told him the nightly's 09-08 outputs "rode up with your
+push". They did not — the 15:21 / 17:11 / 18:01 installers (built from a clone that predated his 15:05 run) pasted the
+09-07 results / studies / recommendations / examples back over them, on his machine and on GitHub, and the guard
+passed because it checks at BUILD time. **A guard that runs before the event it guards against is a comfort, not a
+guard**; `tick.py` now checks at the only time that matters, after the paste — by mtime and by `results.asOf`. (3) The
+append (`append-futures.py`) existed since v14.59 and nothing called it; his "are you also saving the daily stats from
+yahoo" found the gap in one question. A tool that exists and is not wired is the ITEM-18 pattern one size smaller —
+check the callers, not the file. (4) Every Yahoo session in the corpus ended on the live-quote row (14:49:41, volume
+0), a phantom minute that the harvest keyed by its own second. Read the LAST row of a feed as carefully as the first.
+(5) `String.prototype.replace` with a string replacement interprets `$&` / `$'` — the REC_SEED splice tripled itself
+on the `$` in "$2,138" and the harness caught it (JSON.parse failed). Splice by index, or with a function.
+
 ### v15.86 — his eye and the ledger's are two instruments; read the circles with the window-proof source
 (1) The panel's deflection ledger fired 21 rows inside his six ES windows and matched none of his six circles — it
 records ±0.50 SPY wobbles with a 2-bar confirm and calls half of them Rugs; he circles 8–17-point turns at the top-3

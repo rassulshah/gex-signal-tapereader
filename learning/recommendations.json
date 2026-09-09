@@ -242,6 +242,30 @@
    "why": "an unambiguous instruction; shipped in v15.85 — the one open word is the NQ symbol’s QQQ labels (G or QG), asked"
   },
   {
+   "id": "R-27",
+   "kind": "FEATURE",
+   "by": "operator",
+   "asOf": "2026-09-09",
+   "text": "THE A ROW ON HIS TOOL’S GRID — the ⓪a actual row (and the HOD/LOD read under it) measures the session the way his tool does: 3-minute bars stamped by END, the session = the bars ending 08:30…15:00, the OPEN = the bar ending 08:30’s open (the 08:27 minute — 7715.00 on 2026-09-08, where the 08:30 minute opened 7711.50), the extremes’ clocks are bar ends, W.End the first bar AFTER the extreme’s to close through the open; the study (BASERATES, the E row) on the same grid.",
+   "changes": "hlToolBars folds the minute bars into the grid before hodLod and gdActual read them (typeof-guarded; hodLod.grid = \"tool\"); study-hodlod.py loads from 08:27 and folds the same way, per market; every E field moved by definition (took 33.5 → 34.7 m, rng 61.4 → 60.6 pts on 295 sessions); the empty row says “no RTH bars yet” while the bars are pre-08:27",
+   "evidence": "his words 2026-09-09, after three rounds on the 14% wick that “cannot be” with a HOD at 8:30: “regarding the wick, i checked with other souce and this is what it shows. see pics. You must be doing something wrong or there is a disconnect. figure it out.” — his tool: HOD 8:33 · Took 3 m · BOP 3 m · Wick 6 m · W.End 8:36 · Wick% 6 · MD $2,138; the disconnect was the OPEN (7715.00 vs 7711.50) and the clock (bar ends); asked which to stand on, he answered “tools”; his row reproduced exactly from the couriered bars (test_v1587 §2)",
+   "status": "implemented",
+   "version": "15.87",
+   "why": "his call — the face must read what his tool reads, or every A-row disagreement is a definition argument"
+  },
+  {
+   "id": "R-28",
+   "kind": "DATA",
+   "by": "operator",
+   "asOf": "2026-09-09",
+   "text": "THE CORPUS APPENDS ITSELF — the couriered Yahoo minute bars become the per-market HOD/LOD corpus every night: run.py → append-futures (the last four day files, idempotent) → study-hodlod → BASERATES for ES (the vendor’s 284 sessions + the Yahoo days, provenance per session) and NQ (Yahoo only); the panel’s boot literal re-baked from the file at build time; the nightly re-runs itself when an installer has pasted older outputs over its log.",
+   "changes": "tools/nightly/run.py refresh_futures (after the sweeps); tools/bake-hodlod.py (--check pinned by test_hodlod b5/b6/s2 and test_v1587); tick.py OUTPUTS + the results.asOf check; origin-guard treats BASERATES and data/futures/ as the nightly’s writes; the live-quote row (Yahoo’s in-progress minute at 14:49:41, volume 0) dropped by the harvest",
+   "evidence": "his question 2026-09-08: “are you also saving the daily stats from yahoo … do you have an indicator below indicating that you have saved the data from yahoo finance to update our records so we have both daily and intraday data. When will learning occur.” — the append existed (append-futures.py) but nothing called it; he answered “yes” to wiring it into the nightly. 2026-09-08 also showed the clobber: the 15:21 / 17:11 / 18:01 installers put the 09-07 results / studies / recommendations / examples back over his machine’s 15:05 run",
+   "status": "implemented",
+   "version": "15.87",
+   "why": "“yes” — the corpus grows by one session a day on his machine, which is what “when will learning occur” needs"
+  },
+  {
    "id": "R-7",
    "kind": "FEATURE",
    "by": "operator",
@@ -281,7 +305,7 @@
  "counts": {
   "proposed": 7,
   "approved": 0,
-  "implemented": 17,
+  "implemented": 19,
   "declined": 0,
   "withdrawn": 0
  }

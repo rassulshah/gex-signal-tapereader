@@ -93,17 +93,28 @@ that ORIGINATED market data was the browser panel, and what it originated was th
   PANEL v14.59
         -> futBarsLoad() -> `futBars` key in data/YYYY-MM-DD.json
   OPERATOR'S MACHINE
-        -> push-data.bat / GEX auto-pull -> commit + push        (existing pipe)
-  CLOUD
-        -> tools/append-futures.py   -> data/futures/<SYM>/YYYY-MM-DD.csv
-        -> tools/study-hodlod.py --market ES --out data/es-1min/BASERATES.json
-        -> Drive GEX-review-inbox -> review-pull.bat -> push     (existing pipe)
-  BROWSER · companion v1.15                                       <-- THE RETURN (new)
+        -> the panel writes the day file at 15:01 (v15.71) -> the GEX sync task commits + pushes
+  OPERATOR'S MACHINE · THE GEX NIGHTLY (v15.87 — this leg used to say CLOUD, and nothing called it)
+        -> tools/nightly/run.py refresh_futures(), after the sweeps:
+        -> tools/append-futures.py   -> data/futures/<SYM>/YYYY-MM-DD.csv   (the last four day files; idempotent;
+                                        the newest day completes from the next day's 5-day window;
+                                        Yahoo's live-quote row — the in-progress minute at 14:49:41 — dropped)
+        -> tools/study-hodlod.py     -> data/es-1min/BASERATES.json  (ES: the vendor's 284 + the Yahoo days,
+                                        provenance per session, the overlap reported — none)
+                                     -> data/futures/NQ/BASERATES.json (NQ: Yahoo only, 11 sessions on 09-08)
+        -> the GEX sync task pushes them
+  CLOUD · AT BUILD TIME
+        -> tools/bake-hodlod.py      -> the panel's HODLOD_BASE literal re-baked from the file (never by hand)
+  BROWSER · companion v1.15                                       <-- THE RETURN
         -> raw.githubusercontent.com/.../BASERATES.json
         -> localStorage gpts_hodlod_base_v1 -> panel prefers it over the baked-in HODLOD_BASE
 ```
 
-Only the two marked legs are new. Everything else was already running.
+(v15.87) **The chain no longer waits for a session.** From v14.59 to v15.86 the append leg existed as a tool and ran only
+when a context ran it — his question on 2026-09-08, *"are you also saving the daily stats from yahoo … When will
+learning occur"*, found the gap. The corpus now grows by one session a night on his machine; `BASERATES.corpus.last`
+is the indicator (2026-09-08 at v15.87; tomorrow's nightly makes it 09-09). **The grid:** the study and the panel both
+read the session on his tool's grid — 3-minute bars stamped by END, the open = the bar ending 08:30's open (`corpus.definition`).
 
 ### The rules this pipeline is built on
 
@@ -223,6 +234,13 @@ is "missing", list the FOLDER before trusting the NAME.
 
 **What the daily Yahoo tap is FOR:** these corpora are static exports. The tap keeps them growing so
 the ⓪a base rates and the LOD/HOD table can be re-derived on current data instead of ageing.
+
+(v15.87) `data/futures/<ES|NQ|GC|CL>/<day>.csv` — the courier's Yahoo minutes per session from 2026-08-24, written by the
+nightly; `data/es-1min/BASERATES.json` now pools the vendor's 284 with them (**295** sessions through 2026-09-08, each
+session's source recorded); `data/futures/NQ/BASERATES.json` stands on Yahoo alone (the NQ vendor file above has no
+parser in `study-hodlod.py` yet — tab / ISO). `data/futures/2026-09-08-tail.json`: the 14:44–14:59 minutes of 09-08 read
+from the live companion store, because the day file was written at 15:01 with the ~14:45 poll — the 09-09 window
+carries the same minutes and the append is idempotent.
 
 ## 6b · THE TAPE ON DISK (v15.66, 2026-09-04) — the whole book, every bar, every market
 
