@@ -2,7 +2,7 @@
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
  "asOf": "2026-09-10",
- "generatedAt": "2026-09-10T13:15:23Z",
+ "generatedAt": "2026-09-10T20:05:19Z",
  "ranOn": "his machine",
  "complete": 386,
  "days": [
@@ -1016,20 +1016,20 @@
    },
    "csv": {
     "ES": {
-     "n": 375,
-     "complete": false
+     "n": 393,
+     "complete": true
     },
     "NQ": {
-     "n": 375,
-     "complete": false
+     "n": 393,
+     "complete": true
     },
     "GC": {
-     "n": 375,
-     "complete": false
+     "n": 393,
+     "complete": true
     },
     "CL": {
-     "n": 375,
-     "complete": false
+     "n": 393,
+     "complete": true
     }
    },
    "tape": [
@@ -1039,32 +1039,88 @@
     "VIX"
    ],
    "log": true
+  },
+  {
+   "day": "2026-09-10",
+   "mb": 10.54,
+   "version": "15.93",
+   "snaps": 124,
+   "nodeEvents": 931,
+   "defl": 42,
+   "feat": true,
+   "fut": {
+    "ES": {
+     "n": 4598,
+     "full": true,
+     "err": null
+    },
+    "NQ": {
+     "n": 4600,
+     "full": true,
+     "err": null
+    },
+    "GC": {
+     "n": 1749,
+     "full": false,
+     "err": null
+    },
+    "CL": {
+     "n": 1749,
+     "full": false,
+     "err": null
+    }
+   },
+   "csv": {
+    "ES": {
+     "n": 281,
+     "complete": false
+    },
+    "NQ": {
+     "n": 281,
+     "complete": false
+    },
+    "GC": {
+     "n": 281,
+     "complete": false
+    },
+    "CL": {
+     "n": 281,
+     "complete": false
+    }
+   },
+   "tape": [
+    "QQQ",
+    "SPXW",
+    "SPY",
+    "VIX"
+   ],
+   "log": false
   }
  ],
  "corpora": {
   "ES": {
-   "sessions": 295,
+   "sessions": 296,
    "first": "2025-06-02",
-   "last": "2026-09-08",
+   "last": "2026-09-09",
    "vendor": 284,
-   "yahoo": 11,
+   "yahoo": 12,
    "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "NQ": {
-   "sessions": 195,
+   "sessions": 196,
    "first": "2025-11-24",
-   "last": "2026-09-08",
+   "last": "2026-09-09",
    "vendor": 188,
-   "yahoo": 7,
+   "yahoo": 8,
    "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "sweeps": {
-   "sessions": 290,
+   "sessions": 291,
    "cells": 128,
    "levels": 36
   },
   "book": {
-   "sessions": 14,
+   "sessions": 15,
    "cells": 24
   },
   "learn": {
@@ -1076,58 +1132,58 @@
  },
  "counts": {
   "price": {
-   "have": 295,
+   "have": 296,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 295,
+   "sessions": 296,
    "first": "2025-06-02",
    "note": "ES BASERATES: the vendor + the couriered days"
   },
   "nq": {
-   "have": 195,
+   "have": 196,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 195,
+   "sessions": 196,
    "first": "2025-11-24",
    "note": "NQ BASERATES"
   },
   "sweeps": {
-   "have": 290,
+   "have": 291,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 290,
+   "sessions": 291,
    "first": null,
    "note": "the sweep corpus (vendor + the couriered nights, v15.90)"
   },
   "book": {
-   "have": 14,
+   "have": 15,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 14,
+   "sessions": 15,
    "first": null,
    "note": "the SPY 3-minute book from the day files"
   },
   "ledger": {
-   "have": 191,
+   "have": 233,
    "unit": "taps",
-   "perSession": 38.2,
-   "sessions": 5,
+   "perSession": 38.83,
+   "sessions": 6,
    "first": "2026-09-03",
    "note": "the deflection ledger (±0.50 SPY wobbles) — the tap record replaces it at his scale"
   },
   "kingroll": {
-   "have": 211,
+   "have": 235,
    "unit": "rows",
-   "perSession": 26.38,
-   "sessions": 8,
+   "perSession": 26.11,
+   "sessions": 9,
    "first": "2026-08-19",
    "note": "dir.kingRoll rows with an outcome (per bar, not independent rolls)"
   },
   "gate": {
-   "have": 273,
+   "have": 302,
    "unit": "rows",
-   "perSession": 27.3,
-   "sessions": 10,
+   "perSession": 27.45,
+   "sessions": 11,
    "first": "2026-08-19",
    "note": "gateHour rows with an outcome"
   },
@@ -1167,16 +1223,16 @@
  "studies": {
   "total": 184,
   "byStatus": {
-   "THIN": 11,
-   "READ": 17,
-   "OPEN": 1,
-   "READY": 15,
-   "REGISTERED": 10,
-   "CUT": 2,
    "SHIPPED": 13,
    "NULL": 2,
+   "READ": 17,
+   "OPEN": 1,
+   "THIN": 11,
    "WAITING": 110,
-   "REFUSED": 3
+   "CUT": 2,
+   "REGISTERED": 10,
+   "REFUSED": 3,
+   "READY": 15
   },
   "byCorpus": {
    "tap": {
@@ -1244,7 +1300,7 @@
  "nightly": {
   "date": "2026-09-09",
   "ranOn": "his machine",
-  "ranAt": "2026-09-09T20:05:22Z",
+  "ranAt": "2026-09-10T13:15:26Z",
   "sessions": 4,
   "episodes": 35,
   "deflEvents": 181
@@ -1252,6 +1308,7 @@
  "tapeDays": [
   "2026-09-07",
   "2026-09-08",
-  "2026-09-09"
+  "2026-09-09",
+  "2026-09-10"
  ]
 }
