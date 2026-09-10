@@ -1,8 +1,8 @@
 {
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
- "asOf": "2026-09-09",
- "generatedAt": "2026-09-09T20:05:20Z",
+ "asOf": "2026-09-10",
+ "generatedAt": "2026-09-10T13:15:23Z",
  "ranOn": "his machine",
  "complete": 386,
  "days": [
@@ -1038,7 +1038,7 @@
     "SPY",
     "VIX"
    ],
-   "log": false
+   "log": true
   }
  ],
  "corpora": {
@@ -1048,7 +1048,7 @@
    "last": "2026-09-08",
    "vendor": 284,
    "yahoo": 11,
-   "definition": "tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending "
+   "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "NQ": {
    "sessions": 195,
@@ -1056,7 +1056,7 @@
    "last": "2026-09-08",
    "vendor": 188,
    "yahoo": 7,
-   "definition": "tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending "
+   "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "sweeps": {
    "sessions": 290,
@@ -1137,7 +1137,7 @@
    "perSession": null,
    "sessions": null,
    "first": null,
-   "note": "THE TAP RECORD — not recorded yet (v15.93)"
+   "note": "THE TAP RECORD — not recorded yet (v15.94)"
   },
   "vix": {
    "have": 0,
@@ -1167,21 +1167,21 @@
  "studies": {
   "total": 184,
   "byStatus": {
-   "READY": 15,
-   "THIN": 12,
-   "REGISTERED": 10,
-   "NULL": 2,
+   "THIN": 11,
+   "READ": 17,
    "OPEN": 1,
-   "READ": 15,
-   "WAITING": 111,
-   "REFUSED": 3,
+   "READY": 15,
+   "REGISTERED": 10,
+   "CUT": 2,
    "SHIPPED": 13,
-   "CUT": 2
+   "NULL": 2,
+   "WAITING": 110,
+   "REFUSED": 3
   },
   "byCorpus": {
    "tap": {
     "studies": 104,
-    "waiting": 88,
+    "waiting": 87,
     "ready": 0
    },
    "book": {
@@ -1242,12 +1242,12 @@
   }
  },
  "nightly": {
-  "date": "2026-09-08",
+  "date": "2026-09-09",
   "ranOn": "his machine",
-  "ranAt": "2026-09-09T19:35:22Z",
-  "sessions": 3,
-  "episodes": 23,
-  "deflEvents": 141
+  "ranAt": "2026-09-09T20:05:22Z",
+  "sessions": 4,
+  "episodes": 35,
+  "deflEvents": 181
  },
  "tapeDays": [
   "2026-09-07",

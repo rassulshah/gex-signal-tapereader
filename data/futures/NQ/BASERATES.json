@@ -3,10 +3,10 @@
   "sessions": 195,
   "first": "2025-11-24",
   "last": "2026-09-08",
-  "min_bars": 386,
+  "min_bars": 383,
   "rth": "08:30-15:00 CT",
   "pt_usd": 20.0,
-  "definition": "tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending 08:30-15:00 (minutes 08:27-14:59), the open = the bar ending 08:30; clocks are bar ends; the reclaim bar is after the extreme's bar",
+  "definition": "tool grid (v15.87 \u00b7 v15.93 RTH open): 3-minute bars stamped by END over RTH (minutes 08:30-14:59, no pre-open), the open = the RTH open (the 08:30:00 print, the first bar 08:30-08:32 ending 08:33); clocks are bar ends; the reclaim bar is after the extreme's bar",
   "sources": {
    "NQ TestingData.txt": 188,
    "2026-08-28.csv": 1,
@@ -25,13 +25,13 @@
   "pct_LOD_first": 52
  },
  "expected": {
-  "took_min": 22.5,
-  "gap_min": 216.2,
-  "rng_pts": 370.4,
-  "rng_usd": 7408.6,
-  "rng_p25": 259.0,
+  "took_min": 23.9,
+  "gap_min": 215.0,
+  "rng_pts": 369.4,
+  "rng_usd": 7387.9,
+  "rng_p25": 258.2,
   "rng_p75": 469.8,
-  "first_clock": 31952.0,
+  "first_clock": 32034.1,
   "second_clock": 45463.4,
   "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
   "outliers_excluded": {
@@ -135,30 +135,30 @@
  },
  "wickFamily": {
   "median": {
-   "wick": 36.0,
-   "wick_median": 21.0,
-   "wick_n": 178,
-   "bop": 11.6,
+   "wick": 37.4,
+   "wick_median": 21,
+   "wick_n": 177,
+   "bop": 10.7,
    "bop_median": 4.5,
-   "bop_n": 178,
-   "mud": 195.4,
-   "mud_median": 189.0,
+   "bop_n": 172,
+   "mud": 193.1,
+   "mud_median": 186.0,
    "mud_n": 194,
-   "wick_pct": 26.0,
-   "wick_pct_median": 22,
-   "wick_pct_n": 193,
-   "wick_pts": 86.2,
-   "wick_pts_median": 75.8,
+   "wick_pct": 26.2,
+   "wick_pct_median": 22.0,
+   "wick_pct_n": 194,
+   "wick_pts": 85.8,
+   "wick_pts_median": 73.4,
    "wick_pts_n": 188
   },
   "excluded": {
    "never_reclaimed": 1,
    "zero_wick": 0,
    "outliers_tukey_1_5_iqr": {
-    "wick": 16,
-    "bop": 16,
+    "wick": 17,
+    "bop": 22,
     "mud": 0,
-    "wick_pct": 1,
+    "wick_pct": 0,
     "wick_pts": 6
    },
    "rule": "operator 2026-08-28: no-wick days and crazy outliers are not averaged; a zero wick still PRINTS 0 on the day's own row"
@@ -176,13 +176,13 @@
     "pct_LOD_first": 55
    },
    "expected": {
-    "took_min": 16.3,
-    "gap_min": 209.1,
-    "rng_pts": 356.4,
-    "rng_usd": 7128.0,
+    "took_min": 17.7,
+    "gap_min": 207.8,
+    "rng_pts": 354.9,
+    "rng_usd": 7097.2,
     "rng_p25": 233.0,
     "rng_p75": 467.1,
-    "first_clock": 31579.4,
+    "first_clock": 31664.1,
     "second_clock": 44777.4,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
@@ -194,40 +194,40 @@
      "second_clock": 0
     },
     "median_for_contrast": {
-     "took_min": 7.5,
+     "took_min": 12.0,
      "gap_min": 189.0,
      "rng_pts": 343.6,
-     "first_clock": 31050.0,
+     "first_clock": 31320.0,
      "second_clock": 45090.0
     }
    },
    "wickFamily": {
     "median": {
-     "wick": 33.6,
-     "wick_median": 15.0,
-     "wick_n": 36,
-     "bop": 5.8,
+     "wick": 35.1,
+     "wick_median": 18,
+     "wick_n": 35,
+     "bop": 10.6,
      "bop_median": 3,
-     "bop_n": 31,
-     "mud": 194.3,
-     "mud_median": 184.5,
+     "bop_n": 35,
+     "mud": 188.3,
+     "mud_median": 178.5,
      "mud_n": 38,
-     "wick_pct": 20.1,
-     "wick_pct_median": 19,
-     "wick_pct_n": 35,
-     "wick_pts": 64.4,
-     "wick_pts_median": 53.2,
-     "wick_pts_n": 36
+     "wick_pct": 23.2,
+     "wick_pct_median": 17.0,
+     "wick_pct_n": 38,
+     "wick_pts": 66.8,
+     "wick_pts_median": 53.0,
+     "wick_pts_n": 37
     },
     "excluded": {
      "never_reclaimed": 0,
      "zero_wick": 0,
      "outliers_tukey_1_5_iqr": {
-      "wick": 2,
-      "bop": 7,
+      "wick": 3,
+      "bop": 3,
       "mud": 0,
-      "wick_pct": 3,
-      "wick_pts": 2
+      "wick_pct": 0,
+      "wick_pts": 1
      }
     }
    },
@@ -243,7 +243,7 @@
      "2026-08-24",
      "2026-08-31"
     ],
-    "rng_pts": 370.3
+    "rng_pts": 368.2
    }
   },
   "Tue": {
@@ -256,13 +256,13 @@
     "pct_LOD_first": 57
    },
    "expected": {
-    "took_min": 26.7,
-    "gap_min": 231.3,
-    "rng_pts": 359.0,
-    "rng_usd": 7181.0,
+    "took_min": 29.3,
+    "gap_min": 228.9,
+    "rng_pts": 358.4,
+    "rng_usd": 7168.8,
     "rng_p25": 250.7,
     "rng_p75": 475.9,
-    "first_clock": 32201.5,
+    "first_clock": 32358.5,
     "second_clock": 46662.9,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
@@ -274,29 +274,29 @@
      "second_clock": 0
     },
     "median_for_contrast": {
-     "took_min": 21.0,
+     "took_min": 22.5,
      "gap_min": 252.0,
      "rng_pts": 320.5,
-     "first_clock": 31860.0,
+     "first_clock": 31950.0,
      "second_clock": 49140.0
     }
    },
    "wickFamily": {
     "median": {
-     "wick": 42.4,
+     "wick": 44.7,
      "wick_median": 27,
      "wick_n": 37,
-     "bop": 18.8,
-     "bop_median": 6.0,
-     "bop_n": 38,
-     "mud": 198.4,
-     "mud_median": 193.5,
+     "bop": 15.6,
+     "bop_median": 6,
+     "bop_n": 37,
+     "mud": 196.7,
+     "mud_median": 192.0,
      "mud_n": 42,
-     "wick_pct": 31.8,
-     "wick_pct_median": 34.0,
+     "wick_pct": 32.0,
+     "wick_pct_median": 31.0,
      "wick_pct_n": 42,
      "wick_pts": 98.5,
-     "wick_pts_median": 93.6,
+     "wick_pts_median": 82.9,
      "wick_pts_n": 40
     },
     "excluded": {
@@ -304,7 +304,7 @@
      "zero_wick": 0,
      "outliers_tukey_1_5_iqr": {
       "wick": 5,
-      "bop": 4,
+      "bop": 5,
       "mud": 0,
       "wick_pct": 0,
       "wick_pts": 2
@@ -323,7 +323,7 @@
      "2026-09-01",
      "2026-09-08"
     ],
-    "rng_pts": 361.8
+    "rng_pts": 361.3
    }
   },
   "Wed": {
@@ -336,58 +336,58 @@
     "pct_LOD_first": 48
    },
    "expected": {
-    "took_min": 13.1,
-    "gap_min": 224.1,
-    "rng_pts": 357.1,
-    "rng_usd": 7141.8,
-    "rng_p25": 253.2,
+    "took_min": 17.1,
+    "gap_min": 222.1,
+    "rng_pts": 355.9,
+    "rng_usd": 7117.9,
+    "rng_p25": 249.4,
     "rng_p75": 451.0,
-    "first_clock": 31388.8,
+    "first_clock": 31623.4,
     "second_clock": 45976.5,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
-     "took": 6,
+     "took": 5,
      "gap": 0,
      "rng_pts": 2,
      "rng_usd": 2,
-     "first_clock": 6,
+     "first_clock": 5,
      "second_clock": 0
     },
     "median_for_contrast": {
-     "took_min": 15.0,
+     "took_min": 16.5,
      "gap_min": 247.5,
      "rng_pts": 344.1,
-     "first_clock": 31500.0,
+     "first_clock": 31590.0,
      "second_clock": 47880.0
     }
    },
    "wickFamily": {
     "median": {
-     "wick": 27.8,
-     "wick_median": 19.5,
+     "wick": 30.2,
+     "wick_median": 21.0,
      "wick_n": 36,
-     "bop": 9.5,
-     "bop_median": 3,
-     "bop_n": 37,
-     "mud": 209.8,
-     "mud_median": 208.5,
+     "bop": 9.3,
+     "bop_median": 3.0,
+     "bop_n": 36,
+     "mud": 206.8,
+     "mud_median": 202.5,
      "mud_n": 40,
-     "wick_pct": 19.7,
-     "wick_pct_median": 18.5,
+     "wick_pct": 20.2,
+     "wick_pct_median": 17.5,
      "wick_pct_n": 40,
-     "wick_pts": 63.3,
-     "wick_pts_median": 48.5,
-     "wick_pts_n": 38
+     "wick_pts": 60.8,
+     "wick_pts_median": 51.2,
+     "wick_pts_n": 37
     },
     "excluded": {
      "never_reclaimed": 0,
      "zero_wick": 0,
      "outliers_tukey_1_5_iqr": {
       "wick": 4,
-      "bop": 3,
+      "bop": 4,
       "mud": 0,
       "wick_pct": 0,
-      "wick_pts": 2
+      "wick_pts": 3
      }
     }
    },
@@ -403,7 +403,7 @@
      "2026-08-26",
      "2026-09-02"
     ],
-    "rng_pts": 357.0
+    "rng_pts": 356.2
    }
   },
   "Thu": {
@@ -416,13 +416,13 @@
     "pct_LOD_first": 50
    },
    "expected": {
-    "took_min": 20.0,
-    "gap_min": 222.6,
-    "rng_pts": 388.9,
-    "rng_usd": 7779.0,
+    "took_min": 20.3,
+    "gap_min": 222.4,
+    "rng_pts": 388.3,
+    "rng_usd": 7765.9,
     "rng_p25": 290.9,
     "rng_p75": 467.8,
-    "first_clock": 31801.8,
+    "first_clock": 31817.6,
     "second_clock": 45701.1,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
@@ -443,20 +443,20 @@
    },
    "wickFamily": {
     "median": {
-     "wick": 35.8,
+     "wick": 36.4,
      "wick_median": 22.5,
      "wick_n": 34,
-     "bop": 10.8,
+     "bop": 10.6,
      "bop_median": 6,
      "bop_n": 33,
-     "mud": 196.3,
-     "mud_median": 195.0,
+     "mud": 196.0,
+     "mud_median": 193.5,
      "mud_n": 38,
-     "wick_pct": 26.8,
-     "wick_pct_median": 20.5,
+     "wick_pct": 27.2,
+     "wick_pct_median": 22.5,
      "wick_pct_n": 38,
-     "wick_pts": 98.3,
-     "wick_pts_median": 94.8,
+     "wick_pts": 102.0,
+     "wick_pts_median": 103.5,
      "wick_pts_n": 37
     },
     "excluded": {
@@ -496,13 +496,13 @@
     "pct_LOD_first": 51
    },
    "expected": {
-    "took_min": 22.0,
-    "gap_min": 191.5,
-    "rng_pts": 372.1,
-    "rng_usd": 7442.2,
-    "rng_p25": 267.4,
+    "took_min": 22.2,
+    "gap_min": 191.3,
+    "rng_pts": 370.9,
+    "rng_usd": 7417.2,
+    "rng_p25": 262.4,
     "rng_p75": 489.1,
-    "first_clock": 31918.2,
+    "first_clock": 31934.1,
     "second_clock": 44007.6,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
@@ -523,20 +523,20 @@
    },
    "wickFamily": {
     "median": {
-     "wick": 27.8,
-     "wick_median": 24,
+     "wick": 27.6,
+     "wick_median": 18,
      "wick_n": 31,
-     "bop": 10.0,
-     "bop_median": 6,
-     "bop_n": 33,
-     "mud": 176.3,
-     "mud_median": 168.0,
+     "bop": 8.7,
+     "bop_median": 6.0,
+     "bop_n": 32,
+     "mud": 175.8,
+     "mud_median": 172.5,
      "mud_n": 36,
-     "wick_pct": 29.2,
-     "wick_pct_median": 29.0,
-     "wick_pct_n": 36,
-     "wick_pts": 104.1,
-     "wick_pts_median": 106.9,
+     "wick_pct": 26.6,
+     "wick_pct_median": 26,
+     "wick_pct_n": 35,
+     "wick_pts": 99.4,
+     "wick_pts_median": 93.9,
      "wick_pts_n": 36
     },
     "excluded": {
@@ -544,9 +544,9 @@
      "zero_wick": 0,
      "outliers_tukey_1_5_iqr": {
       "wick": 5,
-      "bop": 3,
+      "bop": 4,
       "mud": 0,
-      "wick_pct": 0,
+      "wick_pct": 1,
       "wick_pts": 0
      }
     }
@@ -567,5 +567,5 @@
    }
   }
  },
- "generatedAt": "2026-09-09T20:05:09Z"
+ "generatedAt": "2026-09-10T13:15:11Z"
 }

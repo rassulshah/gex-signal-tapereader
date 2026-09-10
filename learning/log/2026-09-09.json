@@ -3,7 +3,7 @@
  "date": "2026-09-09",
  "writtenBy": "tools/nightly/run.py",
  "ranOn": "his machine",
- "ranAt": "2026-09-09T20:05:22Z",
+ "ranAt": "2026-09-10T13:15:26Z",
  "sessions": 4,
  "episodes": 35,
  "deflEvents": 181,
@@ -1215,7 +1215,7 @@
  "futures": {
   "appended": {
    "CL": {
-    "minutes": 389,
+    "minutes": 0,
     "newest": "2026-09-09",
     "newestBars": 375,
     "complete": false,
@@ -1227,19 +1227,19 @@
     }
    },
    "ES": {
-    "minutes": 375,
+    "minutes": 0,
     "newest": "2026-09-09",
     "newestBars": 375,
     "complete": false,
     "night": {
-     "minutes": 916,
+     "minutes": 0,
      "newest": "2026-09-09",
      "newestBars": 916,
      "full": true
     }
    },
    "GC": {
-    "minutes": 389,
+    "minutes": 0,
     "newest": "2026-09-09",
     "newestBars": 375,
     "complete": false,
@@ -1251,12 +1251,12 @@
     }
    },
    "NQ": {
-    "minutes": 375,
+    "minutes": 0,
     "newest": "2026-09-09",
     "newestBars": 375,
     "complete": false,
     "night": {
-     "minutes": 2959,
+     "minutes": 0,
      "newest": "2026-09-09",
      "newestBars": 917,
      "full": true
@@ -1295,18 +1295,18 @@
       "vendor": {
        "took": 3,
        "rng": 296.25,
-       "wickPct": 13,
+       "wickPct": 3,
        "bop": 3,
-       "open": 29205.5,
+       "open": 29234.25,
        "hod": 29243.0,
        "lod": 28946.75
       },
       "yahoo": {
        "took": 3,
        "rng": 296.25,
-       "wickPct": 14,
+       "wickPct": 3,
        "bop": 3,
-       "open": 29202.25,
+       "open": 29234.75,
        "hod": 29243.0,
        "lod": 28946.75
       }
@@ -1316,18 +1316,18 @@
       "vendor": {
        "took": 21,
        "rng": 276.75,
-       "wickPct": 28,
-       "bop": 6,
-       "open": 29336.75,
+       "wickPct": 38,
+       "bop": 9,
+       "open": 29309.75,
        "hod": 29414.75,
        "lod": 29138.0
       },
       "yahoo": {
        "took": 21,
        "rng": 276.75,
-       "wickPct": 28,
-       "bop": 6,
-       "open": 29336.25,
+       "wickPct": 43,
+       "bop": 12,
+       "open": 29296.25,
        "hod": 29414.75,
        "lod": 29138.0
       }
@@ -1335,22 +1335,22 @@
      {
       "day": "2026-08-26",
       "vendor": {
-       "took": 0,
-       "rng": 212.25,
-       "wickPct": 0,
+       "took": 60,
+       "rng": 211.5,
+       "wickPct": 7,
        "bop": 3,
-       "open": 29156.5,
+       "open": 29171.25,
        "hod": 29368.25,
-       "lod": 29156.0
+       "lod": 29156.75
       },
       "yahoo": {
-       "took": 0,
-       "rng": 212.0,
-       "wickPct": 2,
+       "took": 60,
+       "rng": 211.5,
+       "wickPct": 8,
        "bop": 3,
-       "open": 29160.0,
+       "open": 29174.5,
        "hod": 29368.25,
-       "lod": 29156.25
+       "lod": 29156.75
       }
      },
      {
@@ -1358,18 +1358,18 @@
       "vendor": {
        "took": 30,
        "rng": 280.0,
-       "wickPct": 49,
-       "bop": 12,
-       "open": 29561.5,
+       "wickPct": 37,
+       "bop": 6,
+       "open": 29527.25,
        "hod": 29703.75,
        "lod": 29423.75
       },
       "yahoo": {
        "took": 30,
        "rng": 280.75,
-       "wickPct": 46,
-       "bop": 12,
-       "open": 29554.0,
+       "wickPct": 36,
+       "bop": 6,
+       "open": 29524.5,
        "hod": 29704.5,
        "lod": 29423.75
       }
