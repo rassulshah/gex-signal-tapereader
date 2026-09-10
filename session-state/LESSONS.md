@@ -131,6 +131,21 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.93 — matching a second tool means matching its DEFINITION, not its number on one day; same feed, different minute, is a definition fight not a data fight
+(1) **v15.87 chased a moving target.** To match his FuturesPulse tool's wick%, v15.87 anchored the session open at 08:27
+(the pre-open) because that reproduced his 6% on 09-08. But his tool's opening minute was not stable — 08:27 on 09-08,
+08:28 on 09-09, both before the 08:30 RTH open — so the "match" held for exactly one day. Rule: when you mirror another
+tool, mirror a RULE you can state, not its output on one sample; if no stable rule reproduces the other tool's number,
+the other tool is the inconsistent one, and the canonical definition (here: the RTH open, the 08:30:00 print) is what
+both should stand on. Superseded: the v15.87 08:27 open (and its 09-08 numbers — wick% 6 → 14, MD $2,138 → $1,962.50).
+(2) **"Why don't the numbers match" was a definition question wearing a data disguise.** Both tools pull the same Yahoo
+ES=F feed; every price in the disagreement (7659.50, 7661.75, 7660.75) was a real Yahoo minute. The whole 15% vs 9% was
+which minute each labelled "the open". Rule restated (mislabeling, pattern #1): before calling two numbers a discrepancy,
+establish they are the same quantity — here, the same minute of the same feed — not just the same field name.
+(3) **A grid change that only drops the pre-open leaves every clock intact.** Moving the anchor 08:27 → 08:30 shifts no
+boundary from 08:30 on (they were already aligned), so only the open-dependent fields move. Verified: HOD/LOD/Took/W.End
+were byte-identical across the change; only wick%, the reclaim leg, and the green/red open shifted. Nothing withdrawn there.
+
 ### v15.92 — a chart he cannot read is a chart with too much on it; "match Skylit" is bounded by his eye; a family asked back in is not a family he keeps
 (1) **Three builds added lines to his chart (XG, SG, the D rows) and the fourth removed them all.** Every addition was
 his word and each one was right on its own; together they made the chart unreadable ("way too many levels"). v14.20

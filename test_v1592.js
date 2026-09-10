@@ -12,7 +12,7 @@ function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.ex
 function v(n){ return src.match(new RegExp('var '+n+'=[\\s\\S]*?;\\n'))[0]; }
 
 // ---------- 0. the version ----------
-ok(/@version\s+15\.92/.test(src) && /var GPTS_VERSION='15\.92';/.test(src), '0a v15.92 in both spots');
+ok(/@version\s+15\.9[2-9]/.test(src) && /var GPTS_VERSION='15\.9[2-9]';/.test(src), '0a v15.92 or later in both spots');
 
 // ---------- 1. futDerBookKing — one book's own King at Skylit's futures price ----------
 {
@@ -182,7 +182,7 @@ ok(/@version\s+15\.92/.test(src) && /var GPTS_VERSION='15\.92';/.test(src), '0a 
 {
   const P=JSON.parse(fs.readFileSync('./learning/plan.json','utf8'));
   const nx=(P.roadmap||[]).find(r=>r.status==='next'); const r91=(P.roadmap||[]).find(r=>r.v==='15.91');
-  ok(nx && nx.v==='15.92' && /KINGS \+ WALLS/.test(nx.title) && r91 && r91.status==='shipped' && (P.roadmap||[]).find(r=>r.v==='15.93' && /TAP RECORD/.test(r.title)) && (P.roadmap||[]).find(r=>r.v==='15.94' && /SEASONALITY/.test(r.title)), '4a the plan: 15.91 shipped, 15.92 this (next), 15.93 the tap record, 15.94 seasonality', nx&&[nx.v, nx.status]);
+  const r92=(P.roadmap||[]).find(r=>r.v==='15.92'); ok(r92 && /KINGS \+ WALLS/.test(r92.title) && r91 && r91.status==='shipped' && (P.roadmap||[]).find(r=>/TAP RECORD/.test(r.title)) && (P.roadmap||[]).find(r=>/SEASONALITY/.test(r.title)), '4a the plan: 15.91 shipped, 15.92 Kings + walls, the tap record and seasonality still on the roadmap after it (a later build may re-sequence which is next)', r92&&[r92.v, r92.status]);
   ok(/^var PLAN_SEED=/m.test(src) && JSON.stringify(JSON.parse(src.match(/^var PLAN_SEED=(.*);$/m)[1]))===JSON.stringify(P), '4b PLAN_SEED equals the file');
   ok(/the QQQ chain.s 0DTE walls are the IRT file.s CW0 \/ PW0 on the NQ symbol/.test(JSON.stringify(P)), '4c the IF integration line names the NQ walls');
   const cl=fs.readFileSync('./changelog/CHANGELOG.md','utf8'); ok(/^## v15\.92 — KINGS \+ WALLS/m.test(cl) && /eight lines/.test(cl.split('## v15.91')[0]) && /NDX KING/.test(cl.split('## v15.91')[0]) && /7635/.test(cl.split('## v15.91')[0]), '4d CHANGELOG v15.92: eight lines, NDX KING, the 7635 answer');
@@ -191,9 +191,9 @@ ok(/@version\s+15\.92/.test(src) && /var GPTS_VERSION='15\.92';/.test(src), '0a 
   const inv=fs.readFileSync('./design/DASHBOARD-INVENTORY.md','utf8'); ok(/## 0z · v15\.92 — the IRT file is eight lines/.test(inv), '4g INVENTORY §0z');
   const ifm=fs.readFileSync('./session-state/INSIDERFINANCE.md','utf8'); ok(/THE QQQ CHAIN FEEDS THE NQ WALLS/.test(ifm) && /never compare the NQ wall \(QQQ book\) with NDX KING \(NDX book\)/.test(ifm), '4h INSIDERFINANCE: the QQQ chain feeds the NQ walls, and the two-book warning');
   const sf=fs.readFileSync('./session-state/SKYLIT-FEEDS.md','utf8'); ok(/A BOOK.S OWN KING FROM ITS derived\[\] ENTRY/.test(sf), '4i SKYLIT-FEEDS: the book-King read');
-  const rn=fs.readFileSync('./session-state/latest-resume-note.md','utf8'); ok(/panel v15\.92/.test(rn.split('\n')[1]) && /v15\.92: KINGS \+ WALLS/.test(rn) && /v15\.93 THE TAP RECORD/.test(rn) && fs.existsSync('./session-state/2026-09-09_resume-v15.91.md'), '4j the resume note declares v15.92 with the v15.91 snapshot kept');
+  const rn=fs.readFileSync('./session-state/latest-resume-note.md','utf8'); ok(/v15\.92: KINGS \+ WALLS/.test(rn) && /TAP RECORD/.test(rn) && fs.existsSync('./session-state/2026-09-09_resume-v15.91.md'), '4j the resume note carries the Kings + walls block and the tap record, with the v15.91 snapshot kept');
   const cfg=JSON.parse(fs.readFileSync('./.gex-config.json','utf8')); ok(JSON.stringify(cfg).indexOf('test_v1592.js')>0 && /KINGS \+ WALLS/.test(cfg.theWhatAndTheHow.irtExport), '4k .gex-config.json lists test_v1592 and the irtExport note says Kings + walls');
-  const it=fs.readFileSync('./learning/items.json','utf8'); const lk=fs.readFileSync('./session-state/LOCKED-ITEMS.md','utf8'); ok(/roadmap v15\.93/.test(it) && /v15\.93, next/.test(lk), '4l items.json and LOCKED-ITEMS carry the tap record at v15.93');
+  const it=fs.readFileSync('./learning/items.json','utf8'); const lk=fs.readFileSync('./session-state/LOCKED-ITEMS.md','utf8'); ok(/roadmap v15\.9[3-9]/.test(it) && /v15\.9[3-9], next/.test(lk), '4l items.json and LOCKED-ITEMS carry the tap record at its roadmap slot (v15.93 at ship, re-sequenced later)');
 }
 
 console.log('\n'+pass+' passed, '+fail+' failed');

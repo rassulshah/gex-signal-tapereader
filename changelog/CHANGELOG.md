@@ -1,3 +1,30 @@
+## v15.93 — THE WICK OPEN = THE RTH OPEN ("RTH") · SAME YAHOO FEED, ONE STABLE DEFINITION OF THE SESSION OPEN
+
+> Operator, 2026-09-09, comparing his FuturesPulse tool (Wick% **9%**) with the panel (**15%**): **"check it.. it is being
+> displayed"** → **"the tool gets data from yahoo finance"** → **"RTH"**.
+
+**What differed, and why.** Every field on the A row matched his tool to the minute — HOD 10:03 · Took 1h33 · BOP 3m ·
+W.End 10:06 · LOD 10:27 · HL gap 24m · 36.25 pts / $1,812 — **except wick%**. Wick% is `|open − HOD| ÷ range`; both agree
+the HOD (7665.00) and the range (36.25), so the whole gap is the **session open**. His tool opened the wick on the
+**08:28** print (7661.75 → 9%), the panel on the **08:27** print (7659.50 → 15%, the v15.87 "tools" mirror). Both are
+**pre-open**, and his tool's opening minute was not even stable day to day (08:27 on 09-08 → 7715.00, 08:28 on 09-09 →
+7661.75). Both tools pull the **same Yahoo ES=F 1-minute feed** — so the difference was never the data, only which minute
+each called "the open". He chose the **true RTH open**: Yahoo's **08:30:00** print (7660.75 → **12%** on 09-09).
+
+**The change.** `HL_TOOL_A` (panel) and `LOAD_A` (tools/study-hodlod.py) move **08:27 → 08:30**: the first RTH bar is
+**08:30–08:32** (ending 08:33) and its open IS the session open; pre-open minutes no longer enter the extremes; **every
+clock is unchanged** (the 3-minute boundaries from 08:30 on are identical, so HOD/LOD/Took/W.End/gap/range/MUD are all
+byte-for-byte the same — only the open-dependent fields move: wick%, the wick family's reclaim, and the green/red open).
+`MIN_BARS` 386 → 383 (the 3 pre-open minutes now dropped), so the **same 295 sessions** stay complete. `study-hodlod`
+re-folds ES (295) and NQ (195) BASERATES on the RTH open; `bake-hodlod` re-bakes the panel's `HODLOD_BASE` boot literal
+from the file — the E row and the A row stay **one definition**. On 09-08 the A row now reads wick% **14** (open 7711.50)
+and MD **$1,962.50** — the numbers the panel had *before* v15.87 chased his tool's 08:27 open.
+
+**Tests.** `test_v1593.js` 14 · 2 mutants (HL_TOOL_A and LOAD_A back to 08:27, both caught); `test_v1587` rewritten to the
+RTH row (open 7711.50, wick% 14, the 08:30 grid, the study's LOAD_A); `test_v1577` / `test_v1588` / `test_hodlod` /
+`test_data_analysis_process` re-green after the re-bake; the version pins moved to 15.93. The roadmap re-sequenced:
+**15.93 this, 15.94 the tap record, 15.95 seasonality**, the rest +1. Companion unchanged (v1.19).
+
 ## v15.92 — KINGS + WALLS ("there are way too many levels on my irt charts") · NDX KING BY NAME · THE NQ WALLS · THE SHADE SAYS THE BOOK ON BOTH CHARTS
 
 > Operator, 2026-09-09: **"i realize you are tracking the kings, but there are way too many levels on my irt charts. i want

@@ -1,9 +1,9 @@
 // test_v1587.js — (v15.87) THE TOOL GRID · THE CORPUS APPENDS ITSELF
 //
 // Two of his decisions, 2026-09-09. (1) "tools": the ⓪a A row reads the session the way his tool does — 3-minute bars
-// stamped by END, the session = the bars ending 08:30…15:00, the open = the bar ending 08:30 (the 08:27 minute's open),
-// the extremes' clocks are bar ends, W.End is the first bar AFTER the extreme's to close through the open. His row for
-// 2026-09-08 (HOD 8:33 · Took 3m · BOP 3m · Wick 6m · W.End 8:36 · Wick% 6 · LOD 3:00pm · MD $2,138) is the fixture.
+// stamped by END over RTH (08:30…15:00), the open = the RTH open — the 08:30:00 print (the bar 08:30–08:32); v15.93 (was the 08:27 pre-open),
+// the extremes' clocks are bar ends, W.End is the first bar AFTER the extreme's to close through the open. His RTH row for
+// 2026-09-08 (open 7711.50 · HOD 8:33 · Took 3m · BOP 3m · Wick 6m · W.End 8:36 · Wick% 14 · LOD 3:00pm · MD $1,962.50) is the fixture.
 // (2) "yes": the couriered Yahoo minute bars append to the per-market corpus every night (append-futures → study-hodlod
 // → BASERATES, ES and NQ), the panel's boot literal is re-baked from the file at build time (bake-hodlod), and the
 // nightly re-runs itself when an installer has pasted older outputs over its log (tick.py, by mtime and by content).
@@ -23,14 +23,14 @@ global.mul=(a,b)=>a/(1/b); global.two=x=>{x=''+x;return x.length<2?'0'+x:x;};
 eval((src.match(/var HL_TOOL_A = [^\n]*;\n/)||[''])[0]);   // the three constants, one line in the panel
 eval(ex('hlToolBars'));
 {
-  ok(HL_TOOL_A===8*3600+27*60 && HL_TOOL_B===15*3600 && HL_TOOL_BAR===180, '1a the grid: from 08:27, before 15:00, 180 s bars', [HL_TOOL_A,HL_TOOL_B,HL_TOOL_BAR]);
+  ok(HL_TOOL_A===8*3600+30*60 && HL_TOOL_B===15*3600 && HL_TOOL_BAR===180, '1a the grid: from 08:30 (the RTH open, v15.93), before 15:00, 180 s bars', [HL_TOOL_A,HL_TOOL_B,HL_TOOL_BAR]);
   const S=(h,m)=>h*3600+m*60;
-  const mins=[]; for(let i=0;i<9;i++) mins.push({ so:S(8,27)+i*60, o:100+i, h:110+i, l:90-i, c:101+i, t:1000+i });
+  const mins=[]; for(let i=0;i<9;i++) mins.push({ so:S(8,30)+i*60, o:100+i, h:110+i, l:90-i, c:101+i, t:1000+i });
   const B=hlToolBars(mins);
-  ok(B.length===3 && B[0].so===S(8,30) && B[1].so===S(8,33) && B[2].so===S(8,36), '1b nine minutes from 08:27 fold into three bars ending 08:30 · 08:33 · 08:36', B.map(b=>b.so));
-  ok(B[0].o===100 && B[0].h===112 && B[0].l===88 && B[0].c===103 && B[0].n===3 && B[0].start===S(8,27) && B[0].t===1002,
+  ok(B.length===3 && B[0].so===S(8,33) && B[1].so===S(8,36) && B[2].so===S(8,39), '1b nine minutes from 08:30 fold into three bars ending 08:33 · 08:36 · 08:39', B.map(b=>b.so));
+  ok(B[0].o===100 && B[0].h===112 && B[0].l===88 && B[0].c===103 && B[0].n===3 && B[0].start===S(8,30) && B[0].t===1002,
      '1c a bar opens on its first minute, takes the highest high and lowest low, closes on its last minute (t = the last minute\'s)', B[0]);
-  ok(hlToolBars([{so:S(8,26),o:1,h:1,l:1,c:1},{so:S(15,0),o:1,h:1,l:1,c:1},{so:S(15,1),o:1,h:1,l:1,c:1}]).length===0, '1d a minute before 08:27 or at/after 15:00 belongs to no session bar');
+  ok(hlToolBars([{so:S(8,29),o:1,h:1,l:1,c:1},{so:S(15,0),o:1,h:1,l:1,c:1},{so:S(15,1),o:1,h:1,l:1,c:1}]).length===0, '1d a minute before 08:30 or at/after 15:00 belongs to no session bar');
   ok(hlToolBars([]).length===0 && hlToolBars(null).length===0 && hlToolBars([{o:1}]).length===0, '1e no bars, null, a bar without a clock → an empty grid, no throw');
   const one=hlToolBars([{so:S(14,59),o:5,h:6,l:4,c:5}]); ok(one.length===1 && one[0].so===S(15,0), '1f the 14:59 minute is the bar ending 15:00 — the last bar of the session', one);
   ok(/typeof hlToolBars==='function'/.test(ex('hodLod')) && /typeof hlToolBars==='function'/.test(ex('gdActual')), '1g hodLod and gdActual fold through the grid behind a typeof guard (DEGRADE, DO NOT DEPEND)');
@@ -46,26 +46,26 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase')); eval(ex('measureBars')); ev
 {
   const rows=fs.readFileSync('./data/futures/ES/2026-09-08.csv','utf8').trim().split('\n').slice(1).map(l=>l.split(','));
   CANDLES=rows.map(r=>{ const hm=r[1].slice(11,16).split(':'); return { so:(+hm[0])*3600+(+hm[1])*60, o:+r[3], h:+r[4], l:+r[5], c:+r[6], t:Date.parse(r[1].replace(' ','T')+'-05:00') }; });
-  ok(CANDLES.length>=379 && CANDLES[0].so===8*3600+27*60, '2a the day\'s corpus file starts at 08:27 (the open of the bar his tool labels 8:30) — '+CANDLES.length+' minutes', CANDLES[0]);
+  ok(CANDLES.length>=379 && CANDLES[0].so===8*3600+27*60, '2a the day\'s corpus file carries the pre-open (starts 08:27); the RTH grid starts at 08:30 — '+CANDLES.length+' minutes', CANDLES[0]);
   const D=hodLod('SPY');
-  ok(D.ok && D.grid==='tool' && D.open===7715, '2b the session open is the bar ending 08:30\'s open — 7715.00, his tool\'s (the 08:30 minute opened 7711.50)', [D.ok, D.grid, D.open]);
+  ok(D.ok && D.grid==='tool' && D.open===7711.5, '2b the session open is the RTH open — the 08:30 bar (7711.50 on 09-08), not the 08:27 pre-open (7715.00); v15.93', [D.ok, D.grid, D.open]);
   ok(D.first==='HOD' && D.hod===7717.75 && D.hodT===8*3600+33*60 && Math.round(D.took)===3, '2c HOD 7717.75 in the bar ending 8:33 — Took 3m', [D.first, D.hod, D.hodT, D.took]);
   ok(D.wend===8*3600+36*60 && Math.round(D.bop)===3 && Math.round(D.wick)===6, '2d W.End 8:36 — the first bar AFTER the extreme\'s to close through the open — BOP 3m · Wick 6m', [D.wend, D.bop, D.wick]);
-  ok(D.wickPct===6, '2e Wick% 6 — |7715 − 7717.75| / the range 45.5', D.wickPct);
+  ok(D.wickPct===14, '2e Wick% 14 — |7711.50 − 7717.75| / the range 45.5 (the RTH open; the 08:27 open read 6)', D.wickPct);
   ok(D.lod===7672.25 && D.lodT===15*3600 && D.second==='LOD', '2f LOD 7672.25 in the bar ending 3:00pm', [D.lod, D.lodT]);
   ok(Math.abs(D.rngPts-45.5)<1e-9 && Math.round(D.mud)===384, '2g HL Rng 45.5 pts · MUD 6h24m (W.End 8:36 → 3:00pm)', [D.rngPts, D.mud]);
-  ok(Math.abs((D.open-D.lod)*50-2137.5)<1e-9, '2h MD = |LOD − open| × $50 = $2,137.50 — his "$2,138"', (D.open-D.lod)*50);
+  ok(Math.abs((D.open-D.lod)*50-1962.5)<1e-9, '2h MD = |LOD − open| × $50 = $1,962.50 (the RTH open; the 08:27 open read $2,138)', (D.open-D.lod)*50);
   // the grid is STATED on the face — the A row's hover, rendered and read, not grepped
   global.g3esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); global.g3tip=t=>t?(' title="'+g3esc(t)+'"'):'';
-  global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.gdRead=()=>({ ok:false, why:'as it closed' }); global.gdActual=()=>({ green:false, pts:-36.75, open:7715, now:7678.25 });
+  global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.gdRead=()=>({ ok:false, why:'as it closed' }); global.gdActual=()=>({ green:false, pts:-36.75, open:7711.5, now:7678.25 });
   global.replayOn=()=>false; global.hlDayShown=()=>'2026-09-08'; global.swallow=()=>{};
   eval(['hlClock12','hlARowHtml','hlMudLabel'].map(ex).join('\n'));
   const aH=hlARowHtml('SPY', D, false);
-  ok(/Grid: tool — 3-minute bars stamped by their END \(the bar labelled 8:30 is 08:27–08:30\); the OPEN is that first bar’s open, every clock is a bar end, W\.End is the first bar after the extreme’s to close through the open\./.test(aH.replace(/&#39;|&quot;/g,"'")),
+  ok(/Grid: tool — 3-minute bars stamped by their END; the session is RTH \(08:30–15:00\) and the OPEN is the RTH open \(the 08:30:00 print, the bar 08:30–08:32\), every clock is a bar end, W\.End is the first bar after the extreme’s to close through the open\./.test(aH.replace(/&#39;|&quot;/g,"'")),
      '2k the A row\'s hover states the grid and the open\'s definition (rendered)', aH.slice(0,260));
   ok(!/Grid: tool/.test(hlARowHtml('SPY', Object.assign({}, D, { grid:undefined }), false)), '2l …and says nothing about a grid when hodLod did not fold (an older reader)');
   // the empty-grid messages
-  CANDLES=[{so:8*3600+20*60,o:1,h:1,l:1,c:1}]; const E1=hodLod('SPY'); ok(!E1.ok && E1.why==='no RTH bars yet', '2i bars before 08:27 only → "no RTH bars yet"', E1.why);
+  CANDLES=[{so:8*3600+20*60,o:1,h:1,l:1,c:1}]; const E1=hodLod('SPY'); ok(!E1.ok && E1.why==='no RTH bars yet', '2i bars before 08:30 only → "no RTH bars yet"', E1.why);
   CANDLES=[]; const E2=hodLod('SPY'); ok(!E2.ok && E2.why==='no candles', '2j no bars at all → "no candles"', E2.why);
 }
 
@@ -78,7 +78,7 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase')); eval(ex('measureBars')); ev
   ok(fs.existsSync('./data/futures/NQ/BASERATES.json') && JSON.parse(fs.readFileSync('./data/futures/NQ/BASERATES.json','utf8')).corpus.sessions>=10, '3c the NQ corpus has its own BASERATES (Yahoo only, ≥ 10 sessions)');
   ok(fs.existsSync('./data/futures/ES/2026-09-04.csv') && fs.existsSync('./data/futures/NQ/2026-09-04.csv'), '3d the per-day corpus files exist for ES and NQ');
   const ap=fs.readFileSync('./tools/append-futures.py','utf8'); ok(/RTH_A, RTH_B = 8\*3600\+27\*60, 15\*3600/.test(ap), '3e append-futures harvests from 08:27 (the tool grid\'s first minute)');
-  const sh=fs.readFileSync('./tools/study-hodlod.py','utf8'); ok(/LOAD_A, LOAD_B = 8\*3600\+27\*60, 15\*3600/.test(sh) && /^BAR = 180/m.test(sh) && /def tool_bars\(/.test(sh) && /market='ES'/.test(sh), '3f study-hodlod folds on the same grid, per market');
+  const sh=fs.readFileSync('./tools/study-hodlod.py','utf8'); ok(/LOAD_A, LOAD_B = 8\*3600\+30\*60, 15\*3600/.test(sh) && /^BAR = 180/m.test(sh) && /def tool_bars\(/.test(sh) && /market='ES'/.test(sh), '3f study-hodlod folds on the same grid (LOAD_A 08:30, the RTH open; v15.93), per market');
   const run=fs.readFileSync('./tools/nightly/run.py','utf8'); ok(/def refresh_futures\(days, keep_last=(4|None)\)/.test(run) && /futures = refresh_futures\(days\)/.test(run) && /futures=futures/.test(run), '3g the nightly appends the day files (the last four at v15.87; every one from v15.88) and rebuilds ES + NQ BASERATES, and the log carries it');
   const og=fs.readFileSync('./tools/origin-guard.py','utf8'); ok(/'data\/es-1min\/BASERATES\.json'/.test(og) && /'data\/futures\/'/.test(og), '3h the origin guard treats BASERATES and data/futures/ as the nightly\'s writes');
   ok(/bake-hodlod: the literal EQUALS the file/.test(py(['tools/bake-hodlod.py','--check'])), '3i tools/bake-hodlod.py --check: the panel\'s HODLOD_BASE literal equals the file');

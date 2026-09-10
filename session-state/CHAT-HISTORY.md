@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-09 · v15.92 · session `f9c89c64` — KINGS + WALLS — the IRT file is eight lines; NDX KING by name; the NQ walls; ⚙ IRT › Lines
+## 2026-09-09 · v15.93 · session `f9c89c64` — THE WICK OPEN = THE RTH OPEN — same Yahoo feed, one stable session open (his 'RTH')
 
-_2 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_9 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -57,9 +57,98 @@ Now the roadmap re-sequence: 15.91 shipped, 15.92 Kings + walls (this build), th
 Now the CHANGELOG entry:
 Now the resume note — read the current head to rewrite it:
 Now the chat history regeneration:
+Now the memory file, then the full suite:
+Built, tested and delivered. `installv1592.bat` is in your folder (`C:\Dev\gex-signal-tapereader`) and on the card above.
+
+**What v15.92 writes** — eight lines: `EPU26` SPXW KING · SPY KING · CW0 · PW0; `ENQU26` QQQ KING · NDX KING · CW0 · PW0. Everything else (XG, SG, G, FLIP0, the D rows) is still computed and latched every tick — the study runs on — and ⚙ IRT now has a **Lines** selector (Kings + walls / everything) if you ever want a family back; a click rewrites the file at once. NDX KING is the NDX book's own King at Skylit's price, no percentage, gold/purple, width 3; the NQ walls are InsiderFinance's QQQ 0DTE walls at Skylit's QQQ ratio; QQQ KING wears the lighter yellow now, like SPY KING on ES. Tests: 65 new, 9/9 mutants caught, suite 167 green / 5 red (the five permanent).
+
+**Steps:**
+
+1. Double-click `installv1592.bat` in your folder (it installs and pushes).
+2. Wait 5 minutes (raw CDN cache), then click **[Tape …[trimmed]
+
+**OPERATOR:**
+> double check why your values for wick% and other dont match
+
+**me (20:53):** Checked against the bars the panel measures (Yahoo's ES=F 1-minute, folded onto the tool grid) — here is where each difference comes from.
+
+**The A row.** Every field matches your tool to the minute except wick%: HOD 10:03 · took 1h33 · BOP 3m · wick 1h36 · W.End 10:06 · MD 21m · LOD 10:27 · HL gap 24m · 36.25 pts / $1,812 — all identical. Wick% is |open − HOD| ÷ range, and both sides agree on the HOD (7665.00) and the range (36.25), so the whole gap is the **open**: the panel's 8:30 bar opens at **7659.50** (our 08:27 minute's first print) → 5.50 / 36.25 = **15%**. Your 9% implies an open of **7661.75** — which in our data is the 08:27 minute's *close* / the 08:28 minute's open. On 09-08 the same rule matched your tool exactly (open 7715.00 → 6% = 6%), so the definition is right; today the two feeds (CQG EPU26 vs Yahoo ES=F) disagree on where the 8:30 bar opens by about one minute's worth of price. The panel screenshot you sent shows 9%/Took/MUD in your tool's layout, so I take it that is the tool; the panel itself reads 15% right now.
+
+**The E row ("other").** These are two different expectations, not one computed two ways. The panel's E is the Wednesday profile: trimmed means over 61 Wednesdays — HOD ~8:54a, took ~25m, BOP ~14m, wick% ~24%, LOD ~1:03p, HL gap ~3h49, range ~59.4 pts — fixed for the day. Your tool's E is anchored on today's actual first extreme (HOD ~10:03a is today's HOD; Took/Wick/W.End are dashes because they have already happened) and projects the legs after it: BOP ~13m, LOD ~12:42p = 10:03 + 2h39, MUD ~2h25 = 12:42 − (10:03 + 13m), range ~39.6 pts. A conditional expectation that moves as the day develops. Its range (39.6 vs our 59.4) also says its sample is recent or conditioned, not the whole corpus.
+
+One question, for the wick%: on your tool, w …[trimmed]
+
+**OPERATOR:**
+> check it.. it is being displayed
+
+**me (20:59):** You're out of usage credits. Switch to another model to continue.
+
+**OPERATOR:**
+> go
+
+**me (21:03):** You're out of usage credits. Switch to another model to continue.
+
+**OPERATOR:**
+> go
+
+**me (21:07):** Let me read the opening bars off your tool's chart directly.
+Read it — the window shrank and hid the chart, but I have what I need from your tool's A row (Wick% **9%**) and my panel's (Wick% **15%**), both on today.
+
+Every other field is identical to the minute: HOD 10:03 · Took 1h33 · BOP 3m · Wick 1h36 · W.End 10:06 · LOD 10:27 · HL gap 24m · HL rng 36.25pts / $1,812. The **only** field that disagrees is wick%.
+
+Wick% is `|open − HOD| ÷ range`. Both tools agree on the HOD high (7665.00) and the range (36.25), so the entire gap is the **session open**:
+
+- Your tool's 9% ⇒ open **7661.75**
+- My panel's 15% ⇒ open **7659.50**
+
+That 2.25-point difference is exactly one minute of the opening 3-minute bar. In the Yahoo ES=F 1-minute data my companion pulled, the bar ending 8:30 is 08:27+08:28+08:29, and it opens at **7659.50** (the 08:27 print). The 08:28 print — one minute later — is **7661.75**, which is the number your tool is using. So your tool and mine are folding the 8:30 bar off a one-minute-different start (mine includes 08:27, yours starts at 08:28). Both of us pull yfinance, so it's not the feed — it's which minute each calls the open.
+
+On 09-08 that same first bar happened to open at 7715.00 on both, so wick% matched (6 vs 6) and this stayed hidden; today the first two minutes are 2.25 pts apart, so it surfaced.
+
+I couldn't get the exact opening candle off your tool's canvas (zoom kept failing and the window resized), so before I change anything: is your tool's **8:30 open 7661.75** — i.e. does your grid's first RTH bar start at 08:28 rather than 08:27? If yes, I'll shift my 8:30 bar to start at 08:28 so the opens — and wick% — line up. If your open reads something else, tell me the number and I'll match to that.
+
+**OPERATOR:**
+> the tool gets the data from yahoo finanace
+
+**me (21:11):** Confirmed off your chart. Zooming your opening candles against the y-axis, your first bar opens at ~**7661.75** and wicks up to the 7665 HOD — so your tool's session open is 7661.75, exactly what the 9% implies. My panel opens the same 8:30 bar at **7659.50**.
+
+Since we both pull the identical Yahoo ES=F 1-minute series, that 2.25-point gap isn't the data — it's one minute of the opening bar. In Yahoo's minutes: 08:27 opens 7659.50, and 08:28 opens 7661.75 (= 08:27's close). My "8:30 bar" folds **08:27 + 08:28 + 08:29**, so its open is the 08:27 print (7659.50 → 15%). Your tool's "8:30 bar" folds **08:28 + 08:29 + 08:30**, so its open is the 08:28 print (7661.75 → 9%). Everything downstream — HOD, LOD, range, every clock — is identical because they don't depend on that first minute; only wick% does.
+
+The two are just labeling the 8:30 bar off a one-minute-different start. To lock onto your tool, I shift my RTH grid so the 8:30 bar runs **08:28–08:30** (open = 08:28) instead of 08:27–08:29 — one line in `hlToolBars` (`HL_TOOL_A` from 08:27 → 08:28).
+
+One thing before I build it: on 09-08 my current 08:27 start matched your tool exactly (6% vs 6%). If your tool's rule is genuinely "the 8:30 bar ends at 08:30 and includes the 08:30 minute," then on 09-08 your open was 7713.50, not the 7715.00 mine used — and we'd have differed there too, just too small to flip the rounded %. So I want to confirm your convention holds every day, not just fit today: **is your 8:30 bar always the three minutes 08:28 · 08:29 · 08:30 (opening on 08:28)?** If yes, I'll move `HL_TOOL_A` to 08:28 and ship it as v15.93; wick% will read 9% and track your tool from here.
+
+**OPERATOR:**
+> do the fix
+
+**me (21:44):** I started on it and hit a wrinkle worth ten seconds of your call before I ship — because the one-line fix I proposed would actually break your HOD clock.
+
+Here's what I found. Your tool's HOD (10:03) and LOD (10:27) come off a 3-minute grid anchored at 08:27 — the *same* grid mine uses, which is why those already match. But your **open** (7661.75) is the **08:28** minute's price, and 08:28 can't come from that same grid: I ran it, and shifting my grid start to 08:28 (my proposed `HL_TOOL_A` change) drags the HOD to 10:01. So your tool is taking the open one minute later than its own bars line up — the open is sourced separately from the extremes.
+
+That means the clean way to hit your 9% is to leave the grid/clocks exactly as they are and pin only the **open** to the minute your tool uses. One sanity flag before I hardcode it: 08:28 is *two minutes before* the 8:30 RTH open, so your tool is effectively opening in the pre-market. So the real choice is which price is "the open":
+
+- **Mirror your tool** → open = the 08:28 print (7661.75) → **wick% 9%**, matches your tool exactly, every other field already agrees.
+- **True RTH open** → open = the 08:30:00 print (7660.75, the actual cash open) → **wick% 12%**, clean and consistent with the grid, but won't match your tool's 9%.
+
+Your standing rule is match the tool, so I'll pin it to 08:28 (→ 9%) unless you say otherwise. Confirm "mirror" (or "RTH") and I ship it as v15.93 with the wick% aligned and a test that locks today's 9% in.
+
+**OPERATOR:**
+> RTH
+> isn't it miroring yahoo finance
+> 
+> _[sent while I was working — a queued message]_
+
+**me (21:50):** Good question — let me verify that against the raw feed, because it decides the fix.
+Both mirror the same Yahoo feed — let me confirm the fix reproduces cleanly before I build.
 
 ### DECISIONS
 
+- **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
+  *"check it.. it is being displayed"* → *"the tool gets data from yahoo finance"* → **"RTH"**. His FuturesPulse tool
+  showed wick% 9%, the panel 15%; every other A-row field matched. The whole gap was the session open — his tool opened on
+  the 08:28 print (pre-open), the panel on 08:27 (the v15.87 tool-mirror), both on the SAME Yahoo feed. He chose the true
+  RTH open, the 08:30:00 print (7660.75 → 12%). HL_TOOL_A / study LOAD_A 08:27 → 08:30; supersedes v15.87; the tap record
+  moves to v15.94.
 - **Kings + walls (2026-09-09; v15.92):** *"i realize you are tracking the kings, but there are way too many levels on my
   irt charts. i want to reduce it to kings along with the put and call wall only for both the ES and NQ. you can continue
   your study."* → the file is eight lines (SPXW KING · SPY KING · CW0 · PW0 on EPU26; QQQ KING · NDX KING · CW0 · PW0 on
@@ -416,6 +505,15 @@ Now the chat history regeneration:
 
 ### SHIPPED
 
+**v15.93** (panel + tools + installer; companion unchanged at v1.19) — `HL_TOOL_A` (panel) and `LOAD_A` (tools/study-hodlod.py)
+08:27 → 08:30, so the wick family / green-red open on the RTH open (the 08:30 bar), pre-open leaves the extremes, every
+clock unchanged; `MIN_BARS` 386 → 383 (same 295 sessions); BASERATES re-folded (ES 295, NQ 195); `bake-hodlod` re-baked
+`HODLOD_BASE`. Tests: `test_v1593.js` 14 · 2 mutants; `test_v1587` rewritten to the RTH row (open 7711.50, wick% 14);
+`test_v1577`/`test_v1588`/`test_hodlod`/`test_data_analysis_process` re-green after the re-bake; version pins → 15.93.
+Records: CHANGELOG, LESSONS v15.93, DECISIONS, the plan (15.92 shipped · 15.93 this · 15.94 the tap record · 15.95
+seasonality, the rest +1), items/LOCKED-ITEMS/nightly → v15.94, `.gex-config.json` 2026-09-09g (+ test_v1593), the resume
+note (+ the v15.92 snapshot), this file.
+
 **v15.92** (panel + installer; companion unchanged at v1.19) — `CFG.irt.lines` 'kw' | 'all' (merged back, default kw);
 `rows[].fam` (king · wall · node · flip · d) with `famOn` in the targets loop; the NQ node / D pushes guarded by `!lean`
 (computed and latched either way); `n` = the lines written; the whys prefixed "on the panel, not in the file (Kings +
@@ -721,6 +819,11 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 
 ### OPEN AT CLOSE
 
+- **v15.93 NOT verified live** — at the open: the A row's wick% reads off the 08:30 RTH open (≈12% on a 09-09-shaped day,
+  not 15%); the A-row hover says "the OPEN is the RTH open (the 08:30:00 print, the bar 08:30–08:32)"; after his nightly the
+  E row's wick fields re-fold on the RTH open. ⚠ A future context must not "restore" the 08:27 open to match his tool on
+  one day — his tool's open minute is unstable; RTH is his standing call (DECISIONS v15.93).
+- **Next build: v15.94 THE TAP RECORD, element 1** — asked before built.
 - **v15.92 NOT verified live** — at the open: `__gptsDebug.irt().last.rows === 8`; NDX KING on the NQ chart where Atlas draws
   the NDX book's 100% node, QQQ KING the lighter yellow; CW0 / PW0 on both charts; no XG / SG / G / FLIP0 / D line; ⚙ IRT ›
   Lines lit on Kings + walls, everything → 21-ish lines at once, back → 8. NDX KING and the NQ1 prices need the tab VISIBLE
@@ -908,6 +1011,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+ff92457 v15.92: KINGS + WALLS ("there are way too many levels on my irt charts. i want to reduce it to kings along with the put and call wall only for both the ES and NQ. you can continue your study") — the IRT file is eight lines: SPXW KING · SPY KING · CW0 · PW0 on the ES symbol, QQQ KING · NDX KING · CW0 · PW0 on the NQ symbol; every other family (XG2–5, SG2–5, G2–5, FLIP0, the D rows) still computed and latched every tick, written again by name through ⚙ IRT › Lines: everything; NDX KING = the NDX options book's own King from the NQ1 payload's NDXP book at Skylit's price (bare label — "i dont see why any king needs to have 100%" — full gold / purple, width 3, held day-scoped); the NQ walls = InsiderFinance's QQQ 0DTE walls at Skylit's QQQ ratio (NQ never had walls in the file); the shade says the book on both charts (QQQ KING the lighter pair, width 2, as SPY KING); the 7635 put wall answered (the 0DTE wall at the SPXW ratio, not an error); his machine's 10:56 files adopted (sweeps 290 — the order fix landed); test_v1592 65 · 9/9 mutants; the tap record → v15.93
 fc3abd9 v15.91: THE D ROWS BY THEIR BOOK, DEDUPED ("i'll go with your recommendation") — every merged-list row resolves to the book whose Skylit ratio turns its price back into a strike (D-SPX KING · D-NDX2 · D-QQQ3; Dn when none), written only when no line within half a point is already in the file (on FRONT the ES list IS the two books' own rows — nothing doubles; on NQ the NDX book's rows survive: the "derived King" he saw is the NDX options book's King projected onto NQ, 29355.41 / 1.00087 = 29330, a level the file never carried); the nightly appends the corpus BEFORE any judge or table reads it (his first v15.90 run read 284 on a machine that held 290); test_v1591 26 · 7/7 mutants; the tap record → v15.92
 4348a62 v15.90: THE LEARNING PROCESS, HARDENED ("yes, fix everything and make sure it all makes sense and is integrated and working together and aligned to my objectives/purpose") — (1) the sweep corpus appends: the nights → data/futures/<MK>/<day>-night.csv, study-sweeps reads the vendor + every CSV with the four-day gap rule (290 sessions, one more a night; H7 had read n=0 for thirteen sessions) (2) the registry is the machine's output: needs:{corpus,n} on every study, coverage.json counts every corpus, results.py sets WAITING (have/need/ETA) or READY (data on hand, no reader) and composes the scripted sentences from SWEEPS.json nightly (H2.4/H2.5 had quoted withdrawn numbers); the thirteen level-name studies collapsed into H2.L (NULL — 2 of 36 names clear the control: chance); S1.4/S7.3 CUT; H7 WITHDRAWN (F-23); H5 judged by its join (0 of 3 extremes coincide with a ledger tap); D3.3 read from the day files (3) the docs say what runs: nine tabs, the nightly's real steps, PROCESS §4 today, the roadmap re-sequenced (15.91 the tap record) (4) D-KING · D2..D5 — the merged derived list Atlas draws on the futures chart, FRONT window, in the IRT file ("we need to match atlas … FRONT"; the 7658 the file did not carry); AUDIT-2026-09-09.md; FINDINGS F-24; test_v1590 51 · 8/8 + 6/6 mutants; 16 tests re-pinned
 1993adb v15.89: THE 🗄 DATA TAB, before Analysis ("I like B, I also want recommendations section. build") — what we hold (the coverage calendar, a cell per day file, six signals) · the sources live (Skylit · IF · Yahoo · GitHub · the nightly) · the record on this machine (localStorage against its quota, the IDB stores counted) · what the studies are waiting for (by corpus) · the gaps with what Yahoo can fill in green (R-33 daily bars · R-34 hourly · R-35 ^VIX1D, proposed on Rec) · the pipeline's clock · the DATA rows of Rec; read-only, on the panel's own chrome; tools/nightly/coverage.py → learning/coverage.json (the nightly counts the repo; the panel fetches one file); origin-guard fetches his machine's ADDED files (the 09-07 day file, the tape for 09-07/09-08, the 09-07 log were on origin two days and the cloud's count missed them); his machine's 07:55 outputs merged (RN-hour.2-held on Rec — one session's classes); the tap record → v15.90; test_v1589 46 · 9/9 mutants; five tab-set tests re-pinned to nine tabs
@@ -919,7 +1023,6 @@ f91daa1 records: agenda item 4 answered — the NQ file's QQQ lines stay G2–G5
 505cfd2 v15.86: the two teaching images re-encoded for the installer's size cap (E005 112 KB, E006 138 KB)
 8372e2f v15.86: HIS TRAINING — ten circles (E005 ES · E006 NQ) read against the ladder's ranked lists and the node-event dollars; the LIQUIDITY LEVEL factor (PDH · PDL · PDC · ONH · ONL · AHI · ALO · LHI · LLO · POC · VAH · VAL); L10 a −γ King is not the floor · L11 a +γ King ceiling decays by the tap · L12 a liquidity level at a −γ King gets swept first; Q12 open (top 3 vs 5, due ~09-15); AHI/ALO/LHI/LLO locked; the tap record's §4b; test_v1586 23
 17880f7 v15.85: XG2–XG5 · SG2–SG5 — the IRT node lines labelled by book (R-26); the QQQ King on NQ only pinned again on his word; THE TAP RECORD designed on paper (R-25, design/TAP-RECORD.md — nothing built); the top-3 question answered from one day's hand read (34 taps: ranks 1–3 15 of 22, ranks 4–5 3 of 12 with all three breaks); test_v1585 16 · 6/6
-2d1fcb2 v15.84: THE PANEL'S OWN SPY / QQQ BOOK IS ONE WINDOW AND ONE BREADTH — the self-fetch pins exp_mode=current&exp_count=1&nodes=500 whatever gex/levels URL came last (the app's three projection windows; the panel's own expiry sets through the same hook), onFeed refuses a multi-expiration payload once a 0DTE book is held (F-22: the recorded node count per bar flipped bands 34–61 times a session since 08-26; the King series survive); test_v1584 28 · 13/13
 ```
 
 ---

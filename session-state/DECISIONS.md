@@ -853,3 +853,18 @@ exception to one-at-a-time he has granted, and it covered the cuts.
   finance has it at 7600. is this a conversion or an error?"* — neither: the window (their header shows all-expiry walls;
   the 0DTE wall is the file's by the 2026-08-28 ruling) plus Skylit's SPXW ratio. Unchanged.
 - **The tap record is v15.93** — unchanged in substance; asked before built. Seasonality v15.94; the rest +1.
+
+## 2026-09-09 · v15.93 — the wick open is the RTH open ("RTH")
+
+- **The session open for the wick family is the RTH open — the 08:30:00 CT print** (the first 3-minute bar, 08:30-08:32).
+  His word: *"RTH"*. This SUPERSEDES v15.87's 08:27 open (which mirrored his FuturesPulse tool). Why the change: the
+  wick% disagreement (panel 15% vs his tool 9%) was entirely the open; both tools pull the SAME Yahoo ES=F feed; his
+  tool's opening minute was pre-open and not stable day to day (08:27 on 09-08, 08:28 on 09-09). The RTH open is the one
+  stable definition both can share. What it changes: only the open-dependent fields (wick%, the wick reclaim, the
+  green/red open); every clock is unchanged. What would change it back: his word.
+- **One definition end to end.** `HL_TOOL_A` (panel) and `LOAD_A` (study-hodlod) both = 08:30; `MIN_BARS` 383 keeps the
+  same 295 sessions; BASERATES re-folded and `HODLOD_BASE` re-baked so the E row and A row are one definition.
+- **"Match his tool" is bounded by his tool being consistent.** Standing rule stays "match Skylit / his tool", but where
+  his tool's own output is not reproducible by a stable rule, the canonical market definition wins — his explicit call
+  each time (he chose RTH over mirroring his tool's 9%).
+- **The tap record is v15.94** — unchanged in substance; asked before built. Seasonality v15.95; the rest +1.

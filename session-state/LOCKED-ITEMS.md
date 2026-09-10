@@ -52,7 +52,7 @@ LHI 7718.25 (05:20) · LLO 7687.50 (03:02) = ONL.
 CT**. `sessionHL` in the panel (tier 1 by his names; v15.57's LDNH / LDNL renamed, not duplicated), the four on the candle's
 labels, the SWEPT line, the sweeps read and the Analysis H2 table; `study-sweeps.py` carries the Asia window (ALO / AHI n=123 /
 141 on the 284-session corpus — within chance of the fresh-low control, like every level name); the NQ night rides companion
-v1.19 so the NQ chart draws them too. The tap record's `liq` column (v15.93, next — the 🗄 Data tab took v15.89, the hardening v15.90, the D rows v15.91 and Kings + walls v15.92 on his word, 2026-09-09) reads them by name.
+v1.19 so the NQ chart draws them too. The tap record's `liq` column (v15.94, next — the 🗄 Data tab took v15.89, the hardening v15.90, the D rows v15.91, Kings + walls v15.92 and the RTH open v15.93 on his word, 2026-09-09) reads them by name.
 **Leaves this file:** when the four levels draw on the SWEPT line and the candle (a version number here), or when he
 cancels them by name.
 

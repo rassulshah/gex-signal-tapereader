@@ -23,14 +23,17 @@ with its n, so nothing on the panel is a number we cannot reproduce.
 import csv, collections, glob, gzip, io, json, os, sys, statistics as st
 
 RTH_A, RTH_B = 8*3600+30*60, 15*3600
-# (v15.87) THE TOOL GRID — operator, 2026-09-09: "tools". His tool reads the session on 3-minute bars stamped by their
-# END; the bar labelled 08:30 is 08:27–08:30 and its open IS the session open (7715.00 on 09-08, where the first print
-# at 08:30:00 was 7711.50 — that one number was the whole 6% vs 14% wick disagreement). So: the minutes are loaded
-# from 08:27 up to 14:59 (the bar ending 15:00), folded into 3-minute bars stamped by end, and every clock in the wick
-# family is a bar END; the reclaim bar is the first bar AFTER the extreme's bar. The survival ladder stays on minutes.
-LOAD_A, LOAD_B = 8*3600+27*60, 15*3600          # minutes s with LOAD_A <= s < LOAD_B
+# (v15.87) THE TOOL GRID — 3-minute bars stamped by their END; every clock in the wick family is a bar END, the reclaim
+# bar is the first bar AFTER the extreme's bar, the survival ladder stays on minutes.
+# ⚠⚠ (v15.93) THE OPEN IS THE RTH OPEN — the 08:30:00 CT print. Operator, 2026-09-09: "RTH". v15.87 had folded the bar
+# labelled 08:30 from 08:27 (its open the 08:27 print) to match his FuturesPulse tool; but his tool's opening minute was
+# not stable (08:27 on 09-08 → 7715.00, 08:28 on 09-09 → 7661.75, both pre-open), while both tools pull the SAME Yahoo
+# feed. So the open is now Yahoo's true session open, the 08:30 bar: the minutes load from 08:30 (RTH_A) up to 14:59, the
+# first 3-minute bar is 08:30–08:32 (ending 08:33) and its open IS the session open. Pre-open minutes no longer enter the
+# extremes. (On 09-09 that reads wick% 12% — open 7660.75 vs HOD 7665.00, range 36.25 — not the 15% the 08:27 open gave.)
+LOAD_A, LOAD_B = 8*3600+30*60, 15*3600          # (v15.93) minutes s with LOAD_A <= s < LOAD_B — the RTH open, no pre-open
 BAR = 180
-MIN_BARS = 386
+MIN_BARS = 383          # (v15.93) 386 - the 3 pre-open minutes now dropped, so the same sessions stay complete
 PT_USD = 50.0
 WINDOWS = [30, 60, 90, 120, 180]
 
@@ -139,7 +142,7 @@ def load_sources(paths):
 # and every exclusion is COUNTED into the output so nothing is dropped invisibly.
 def tool_bars(mins):
     """(v15.87) minutes (sec, high, low, close, open) sorted -> 3-minute bars (END sec, high, low, close, open) stamped
-    by their end, the first one ending 08:30 (its open = the session open, his tool's way)."""
+    by their end, the first one 08:30-08:32 ending 08:33 (its open = the RTH open, the 08:30:00 print; v15.93)."""
     out = []
     for m in mins:
         end = ((m[0] - LOAD_A) // BAR + 1) * BAR + LOAD_A
@@ -277,7 +280,7 @@ def main(paths, out=None, market='ES'):
     res = dict(
         corpus=dict(sessions=len(days), first=days[0], last=days[-1],
                     min_bars=MIN_BARS, rth='08:30-15:00 CT', pt_usd=PT_USD,
-                    definition='tool grid (v15.87): 3-minute bars stamped by END, the session = the bars ending 08:30-15:00 (minutes 08:27-14:59), the open = the bar ending 08:30; clocks are bar ends; the reclaim bar is after the extreme\'s bar'),
+                    definition='tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (minutes 08:30-14:59, no pre-open), the open = the RTH open (the 08:30:00 print, the first bar 08:30-08:32 ending 08:33); clocks are bar ends; the reclaim bar is after the extreme\'s bar'),
         sequence=dict(LOD_first=firsts['LOD'], HOD_first=firsts['HOD'],
                       pct_LOD_first=round(100*firsts['LOD']/len(rows))),
         expected=dict(
