@@ -1,0 +1,88 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Candle liquidity map — mockup</title>
+<style>
+  body{background:#0b0e14;color:#c9d3df;font:12px/1.5 -apple-system,system-ui,sans-serif;margin:0;padding:22px}
+  h1{font-size:13px;font-weight:800;letter-spacing:.02em;color:#e6edf5;margin:0 0 3px}
+  .sub{color:#8b98a9;font-size:11px;margin:0 0 18px}
+  .wrap{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .card{background:#0f131b;border:1px solid #1c2431;border-radius:10px;padding:16px 18px}
+  .cap{color:#8b98a9;font-size:10.5px;margin:10px 0 0;max-width:340px}
+  .k{font-weight:800}
+  .leg{margin:16px 0 0;font-size:11px;color:#8b98a9;max-width:560px}
+  .leg b{color:#c9d3df}
+  .sw{color:#f0616d}.swg{color:#2ec27e}.swa{color:#e3b341}.tg{color:#7cc7ff}
+  .q{background:#12161f;border:1px solid #26314a;border-radius:8px;padding:12px 14px;margin:18px 0 0;max-width:620px;font-size:11.5px}
+  .q b{color:#e6edf5}
+  svg text{font-family:-apple-system,system-ui,sans-serif}
+</style></head><body>
+<h1>Daily candle — the liquidity map</h1>
+<p class="sub">Mockup for your OK. Your example: a green day that <b>swept the overnight low</b> then <b>targeted the prior-full high</b>.</p>
+
+<div class="wrap">
+  <div class="card">
+    <!-- candle: green day, LOD first (swept ONL/PDL low) -> HOD second (targeted PFHI high) -->
+    <svg width="330" height="430" viewBox="0 0 330 430">
+      <!-- geometry: price 7688 (HOD, top y=40) .. 7638 (LOD, bottom y=380). open 7648, close 7684 (green) -->
+      <!-- shape spine (left): upper wick / body / lower wick as % of range -->
+      <rect x="26" y="40"  width="4" height="32"  fill="#e3b341" opacity=".55"/>
+      <rect x="26" y="72"  width="4" height="244" fill="#2ec27e" opacity=".6"/>
+      <rect x="26" y="316" width="4" height="64"  fill="#5fd08a" opacity=".55"/>
+      <text x="36" y="59"  fill="#e3b341" font-size="9">8%</text>
+      <text x="36" y="197" fill="#2ec27e" font-size="9">73%</text>
+      <text x="36" y="351" fill="#5fd08a" font-size="9">19%</text>
+
+      <!-- the bar -->
+      <line x1="118" y1="40" x2="118" y2="380" stroke="#8b98a9" stroke-width="1.6"/>
+      <rect x="105" y="72" width="26" height="244" fill="#2ec27e" fill-opacity=".16" stroke="#2ec27e" stroke-width="1.3"/>
+      <!-- open tick (left) 7648, close tick (right) 7684 -->
+      <line x1="99"  y1="316" x2="105" y2="316" stroke="#e6edf5" stroke-width="1.8"/>
+      <line x1="131" y1="72"  x2="137" y2="72"  stroke="#e6edf5" stroke-width="1.8"/>
+
+      <!-- HOD label + TOOK (v15.94 fix: took from the open, not the leg after) -->
+      <text x="118" y="26" fill="#c9d3df" font-size="11" font-weight="700" text-anchor="middle">HOD 11:50</text>
+      <text x="118" y="36" fill="#8b98a9" font-size="9"  text-anchor="middle">3h20</text>
+      <!-- LOD label + TOOK -->
+      <text x="118" y="400" fill="#c9d3df" font-size="11" font-weight="700" text-anchor="middle">LOD 09:15</text>
+      <text x="118" y="410" fill="#8b98a9" font-size="9"  text-anchor="middle">45m</text>
+
+      <!-- beside the open tick, left: reclaim + MU + $ -->
+      <text x="95" y="308" fill="#8b98a9" font-size="9" text-anchor="end">&#8617; 09:33 &#183; 18m</text>
+      <text x="95" y="298" fill="#2ec27e" font-size="9" text-anchor="end">MU 2h17 &#183; $1,800</text>
+
+      <!-- RIGHT = price axis. TARGET at the HOD, SWEPT at the LOD -->
+      <!-- TARGET: PFHI, the level the other extreme ran to (cyan, hollow ring) -->
+      <circle cx="150" cy="72" r="3.4" fill="none" stroke="#7cc7ff" stroke-width="1.6"/>
+      <text x="160" y="70"  fill="#7cc7ff" font-size="10.5" font-weight="700">PFHI 7686</text>
+      <text x="160" y="81"  fill="#7cc7ff" font-size="8.5" opacity=".85">target &#183; tagged 11:50</text>
+
+      <!-- a second draw that was NOT reached sits above, greyed (targeted but not tagged) -->
+      <circle cx="150" cy="46" r="3.2" fill="none" stroke="#5a6b82" stroke-width="1.4"/>
+      <text x="160" y="49" fill="#5a6b82" font-size="9.5">PWH 7694 &#183; next draw</text>
+
+      <!-- SWEPT at the LOD: ONL (broke=red) and PDL (reclaimed=green) -->
+      <line x1="144" y1="372" x2="156" y2="372" stroke="#f0616d" stroke-width="2"/>
+      <text x="160" y="369" fill="#f0616d" font-size="10.5" font-weight="700">ONL 7642</text>
+      <text x="160" y="380" fill="#f0616d" font-size="8.5" opacity=".9">swept 09:15 &#183; 3.2 pts through</text>
+
+      <line x1="144" y1="356" x2="156" y2="356" stroke="#2ec27e" stroke-width="2"/>
+      <text x="160" y="353" fill="#2ec27e" font-size="10.5" font-weight="700">PDL 7646</text>
+      <text x="160" y="345" fill="#2ec27e" font-size="8.5" opacity=".9">swept 09:12 &#183; reclaimed</text>
+    </svg>
+    <p class="cap"><span class="k">The story, read top-to-bottom:</span> price swept <span class="sw">ONL / PDL</span> at the low (liquidity taken), reclaimed the open at 09:33, and ran up to tag <span class="tg">PFHI</span> at the high — the <span class="tg">target</span>. <span class="tg">PWH</span> above it was the next draw, not reached.</p>
+  </div>
+
+  <div>
+    <p class="leg">
+      <b>SWEPT</b> — a level price traded through, drawn at its price beside the extreme that took it, with the minute and depth:
+      <span class="sw">&#8210; red = broke / accepted</span> &#183; <span class="swg">&#8210; green = reclaimed</span> &#183; <span class="swa">&#8210; amber = being tested now</span>.<br><br>
+      <b>TARGET</b> — <span class="tg">&#9711; cyan ring</span> at the <b>opposite extreme</b>: the level that extreme ran to and tagged (your "the other extremity"). A level in the path that was <b>not</b> reached shows as a <span style="color:#5a6b82">grey ring — "next draw"</span>.<br><br>
+      <b>Levels in the set:</b> ONH/ONL &#183; PDH/PDL &#183; <b>PFHI/PFLO</b> (new) &#183; WH/WL &#183; prior-day POC/VAH/VAL &#183; CW0/PW0 &#183; Asia AHI/ALO &#183; London LHI/LLO. Each draws the same way — only the ones actually <b>swept or tagged</b> appear, so the candle stays clean.
+    </p>
+
+    <div class="q">
+      <b>Two things to confirm before I build:</b><br>
+      1. <b>The look</b> — this styling OK (swept = flat tick + colour, target = cyan ring at the other extreme, next-draw = grey ring)? Change anything.<br>
+      2. <b>"Prior full" definition</b> — I'll compute <b>PFHI/PFLO</b> as the prior day's <b>full Globex session</b> high/low (the overnight leading in + the RTH day, ~17:00 &#8594; 15:00), as distinct from PDH/PDL which is prior <b>RTH</b> only. If you meant the prior calendar day 00:00&#8211;24:00 instead, say so.
+    </div>
+  </div>
+</div>
+</body></html>
