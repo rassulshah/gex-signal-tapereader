@@ -80,9 +80,9 @@
    "weak": 5,
    "refute": 0,
    "note": "13 of 15 measurable legs (4 legs fell in blind windows). Weak: E002 c2 (7670 −γ roughly flat, −13M → −17M) and E003 c2 (7775 grew +13–15M/15m until 09:57, then d15 +3 → 0 AT the high: the growth stalled at the tap). +γ and −γ nodes both deflected (E001 +γ King; E002 −γ King; E004 −γ King at 10:16 and +γ stack at 12:10). E005 (2026-09-08): agree c1 (7700 +$18–23M/15m into 10:18), c2 (+$28M into 12:06), c4 (the +γ 7670 +$13–15M under the flush; the −γ King itself growing in magnitude), c6 (7665 +$47M, 7670 +$30M into the LOD); weak c3 (the King at its $197M peak, then −$103M/15m the moment the third tap was in) and c5 (7690 d15 +15M then flat at the tap). E006: agree c1 (718 −45 → −59%), c4 (718 −37 → −100% into the low); weak c3 (720 fading 32 → 20% by the ladder — no $ for QQQ).",
-   "evidence": "held: growing 9 / 20 = 45% (low 26%) vs fading 7 / 20 = 35% (low 18%) — agrees (growing into the tap holds more than fading) · nightly 2026-09-10",
+   "evidence": "held: growing 14 / 25 = 56% (low 37%) vs fading 11 / 25 = 44% (low 27%) — agrees (growing into the tap holds more than fading) · nightly 2026-09-11",
    "verdict": "agrees",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L2",
@@ -100,9 +100,9 @@
    "weak": 0,
    "refute": 0,
    "note": "E001 R3 (7755 born 12:48, the session high); E002 c1 (7665/7670 born 09:21–09:27 −γ, the session low); E003 c2 (7775 born 09:33, the session high), c4 (7720 born 12:39, the 13:12 high), c5 (7705 born 13:42 −γ, the 14:00 low); E004 c1 (7700 fresh 08:45–08:57, the morning support). E005 c6 (7665 crossed 20% at 14:24, 66% and +$47M/15m at the LOD 14:59 — the session low printed on it).",
-   "evidence": "turn: a NEW node 2 / 2 (thin) vs every tap 12 / 75 = 16% (low 9%) — thin (a fresh node at the extreme IS the turn more often than any tap) · nightly 2026-09-10",
+   "evidence": "turn: a NEW node 2 / 2 (thin) vs every tap 14 / 86 = 16% (low 10%) — thin (a fresh node at the extreme IS the turn more often than any tap) · nightly 2026-09-11",
    "verdict": "thin",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L3",
@@ -121,7 +121,7 @@
    "note": "Held for three +γ Kings — E001 (King $237M → $345M with price above; price back on it by 14:23), E003 c3 (the King rolled DOWN 7790 → 7715 onto price; price rose to it and traded on it 12:36–13:12), E004 c3 (after the 7755 high price returned to the King 7735 by 13:00) — and FAILED for the −γ King of E002 c4 (7675 grew −27M → −116M under price and price rallied AWAY into the 14:59 high). The rule stays here refuted; L8 is the conditioned version and waits for a new example.",
    "evidence": "not measured by the ledger: needs the King path (price pulled back to a growing King) — not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L8",
@@ -139,7 +139,7 @@
    "note": "Born from L3's refutation, so by the protocol it does not count as confirmed until a NEW example agrees — a rule rewritten to fit its counter-example has not been tested yet. Register candidate H8 is the corpus version.",
    "evidence": "not measured by the ledger: needs the King path with the sign — not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L4",
@@ -156,7 +156,7 @@
    "note": "E001 Pb (7740: 80% resistance at 10:16 → decayed → support from 10:42 → re-grew from 11:15 → held 12:36); E002 c4 (7675 pierced at 13:39 'above' then reclaimed 'below', then the King).",
    "evidence": "not measured by the ledger: needs the side flip (a node re-growing under price) — not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L5",
@@ -174,9 +174,9 @@
    "weak": 1,
    "refute": 0,
    "note": "E002 c2 and c4 (−γ under price → up), E003 c5 (−γ 7705 under the 14:00 low → up), E004 c2 (−γ King 7735 above the 10:16 high → down). Unclear: E003 c3 (−γ 7710 at ES 7718 grew after the 12:06 low while price sat on it — the +γ King above was pulling). E005 c4 and c6 (the −γ King 7680 under price: the flush ran 10–15 pts THROUGH it both times and the turn came at the +γ node beneath); E006 c1 (−γ 718 above price = the lid on the opening drive's bounces), c2 and c4 (the −γ Kings 719 / 718 as floors, overshot 16 and 28 pts, reclaimed).",
-   "evidence": "held: a −γ node 21 / 46 = 46% (low 32%) vs a +γ node 12 / 37 = 32% (low 20%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-10",
+   "evidence": "held: a −γ node 28 / 56 = 50% (low 37%) vs a +γ node 15 / 41 = 37% (low 24%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-11",
    "verdict": "contradicts",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L6",
@@ -193,9 +193,9 @@
    "weak": 0,
    "refute": 0,
    "note": "E001 Pb (7735 + 7740, $61M + $81M), E002 c1 (7665 + 7670 + 7675 −γ, the session low), E004 c3 (7745 + 7750, $73M + $46M, the session high 5 pts between them). E005 c1 (the +γ pair 7700 / 7705 at the crown, both growing, the 10:18 high between them) and c6 (the +γ stack 7665 / 7670 + SPY 765 under the −γ King — the LOD printed on it).",
-   "evidence": "turn: pika stack + barney stack 0 / 4 (thin) vs every tap 12 / 75 = 16% (low 9%) — thin (a stack marks the extreme more often than any tap) · nightly 2026-09-10",
+   "evidence": "turn: pika stack + barney stack 0 / 5 (thin) vs every tap 14 / 86 = 16% (low 10%) — thin (a stack marks the extreme more often than any tap) · nightly 2026-09-11",
    "verdict": "thin",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L9",
@@ -214,9 +214,9 @@
    "weak": 0,
    "refute": 0,
    "note": "His words, 2026-09-03: 'this is a bread and butter setup … track this religiously.' In the four taught days 6 of 16 circled legs were taps of the King and all six deflected (E001 R1, R2 — the SPX King 7750; E002 c4 — 7675 as it became the King; E003 c1 — 7750 at the open, c3 — the King rolled onto price; E004 c2 — the −γ King 7735). That is selection, not a rate: he circled deflections, not every tap. The rate comes from the ledger (S0.1–S0.4), per book, at n ≥ 15. E005 c1–c3 (the +γ SPX King 7700 as the ceiling, three taps), c5 (the new King 7690); E006 c2, c4 (the −γ QQQ Kings 719 / 718 as floors — with the overshoot, see L10). His words 2026-09-08: the SPX / SPY / QQQ top-5 lines by book and rank are the study.",
-   "evidence": "held: any King 15 / 30 = 50% (low 33%) · SPX King 5 / 13 (thin) · SPY King 6 / 11 (thin) · QQQ King 6 / 9 (thin) · nightly 2026-09-10",
+   "evidence": "held: any King 18 / 35 = 51% (low 36%) · SPX King 6 / 14 (thin) · SPY King 7 / 14 (thin) · QQQ King 8 / 11 (thin) · nightly 2026-09-11",
    "verdict": "measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L10",
@@ -233,7 +233,7 @@
    "note": "E005 c4 (7680 −γ King at ES ~7686: low 7676.75, turn at the +γ 7670 / SPY 765, closed back above the King in the same bar), c6 (the same King, −$188M by then: the LOD 7672.25 at the +γ 7665 / 7670 stack, 12–15 pts under it); E006 c2 (719 −γ King 29566: low 29549.5, +80 in two bars), c4 (718 −γ King 29524: low 29496, the close 29543.5). The mirror of the doctrine's +γ King that holds AT the strike (E001, E005 c1–c3). Born on one day in two markets — PROPOSED, four legs, none refuting; the tap record's `mae` column is what measures it.",
    "evidence": "not measured by the ledger: needs the overshoot past a −γ King and the node that stopped it — the tap record's mae column, not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L11",
@@ -249,7 +249,7 @@
    "note": "E005 c1–c3 as one series (n=1: one ceiling, three taps). Skylit's 80 / 66 / 33 is the same claim in probabilities (F2.1 is registered on it); this is the picture of it in points.",
    "evidence": "not measured by the ledger: needs the King's dollars after each tap of a ceiling — the tap record's rankAtClose / d15-after, not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L12",
@@ -266,7 +266,7 @@
    "note": "His ask 2026-09-08: track both the gamma level and the liquidity level at every deflection — AHI / ALO / LHI / LLO added to the list (the Asia session 17:00–02:00 CT, London 02:00–08:30 CT; the ES courier has the bars, the NQ courier does not yet). One day, two markets, four legs; the tap record's `liq` column is the measurement. F-14 (284 sessions) already says the level's NAME does not matter and the FLUSH does — this is the same finding with the gamma sign on it.",
    "evidence": "not measured by the ledger: needs the liquidity level at the tap and the sweep depth — the tap record's liq column, not a tap class",
    "verdict": "not measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   },
   {
    "id": "L7",
@@ -287,7 +287,7 @@
    "note": "His ruling 2026-09-09 on the first-hour turns he had not circled (ES 08:57 high, 09:12 low at the ONL / LLO sweep, 09:31 low, 09:45 low; the NQ LOD 09:11 at the PDL sweep): \"i agree i think you should also tag other hours\" — counted as m1–m4 (E005) and m1 (E006), tagged H1 / H2; every leg tagged. By hour over the 31 legs: H1 7 · H2 5 · H3 3 · H4 5 · H5 5 · H6 3 · H7 3. First hour: E002 c1 09:27, E003 c1 08:42–09:00, E004 c1 08:45–09:10, E005 m1 / m2, E006 c1 / m1. Noon: E001 R2 11:57–12:06, Pb 12:20–12:36, R3 13:12; E002 c3 12:51–13:24; E003 c3 12:06, c4 13:12; E004 c3 12:10; E005 c2 12:06. Withdrawn: 'the first 30 minutes matter (27% vs 18%, n=180)' — that number carried the corpus's look-ahead (F-23).",
    "evidence": "not measured by the ledger: needs the clock as a class — to add",
    "verdict": "not measured",
-   "asOf": "2026-09-10"
+   "asOf": "2026-09-11"
   }
  ],
  "examples": [

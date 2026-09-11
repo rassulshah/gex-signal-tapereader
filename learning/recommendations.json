@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "asOf": "2026-09-10",
+ "asOf": "2026-09-11",
  "writtenBy": "tools/nightly/recommend.py",
  "rows": [
   {
@@ -97,27 +97,27 @@
    "id": "RN-hour.2-held",
    "kind": "RULE",
    "by": "nightly",
-   "asOf": "2026-09-10",
+   "asOf": "2026-09-11",
    "src": "patterns:hour:2:held",
-   "text": "H2 · 09:30–10:30: held 37 of 51 = 73% (Wilson low 59%) against 48% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
+   "text": "H2 · 09:30–10:30: held 42 of 57 = 74% (Wilson low 61%) against 49% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
    "changes": "the face shows this class’s held rate with its n; the register tests it on sessions it has never seen",
-   "evidence": "the nightly’s pattern table, 2026-09-10: n=51, low 59% > base 48%",
-   "n": 51,
-   "rate": 73,
-   "lo": 59,
-   "base": 48,
+   "evidence": "the nightly’s pattern table, 2026-09-11: n=57, low 61% > base 49%",
+   "n": 57,
+   "rate": 74,
+   "lo": 61,
+   "base": 49,
    "status": "proposed"
   },
   {
    "id": "RN-teach-L5",
    "kind": "TEACH",
    "by": "nightly",
-   "asOf": "2026-09-10",
+   "asOf": "2026-09-11",
    "src": "results:rules:L5",
    "text": "L5: the record contradicts the taught rule — re-teach it against the record, or retire it.",
    "changes": "the Learn tab’s rule L5 is rewritten or marked REFUTED by the review",
-   "evidence": "held: a −γ node 21 / 46 = 46% (low 32%) vs a +γ node 12 / 37 = 32% (low 20%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-10",
-   "n": 37,
+   "evidence": "held: a −γ node 28 / 56 = 50% (low 37%) vs a +γ node 15 / 41 = 37% (low 24%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-11",
+   "n": 41,
    "status": "proposed"
   },
   {
