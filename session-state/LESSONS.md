@@ -131,6 +131,69 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.96 — a multi-book overlay is the scale trap by another name; build it through the panel's OWN converter, and flag the leg you can't do exactly
+(1) **Overlaying the SPX King, the SPY King and ES candles on one axis is exactly the cross-book/scale error that has produced
+four phantom bugs here.** The safe build reused the panel's own conversions: candles from `closedCandles('SPY')` × the ratio,
+the SPY King exact via `kingAt('SPY')` × the ratio — same chain the rest of the panel uses — rather than inventing a
+strike→display formula. Rule: when a picture spans two books, convert through the code that already converts, never a fresh
+multiplier in the new function.
+(2) **The recorder stores the King STRIKE journey but not the ratio journey — so the historical SPX King can't be exact.**
+`kingDay('SPXW').moves` gives the strikes over time; converting each to display needs the SPX→SPY ratio AT that time, which is
+not recorded. Applying the current `dispScale` back is a good approximation (intraday-stable) but an approximation — so the
+line wears `~`, the panel's standing mark for a not-measured-live conversion (as the NQ ratio does). Rule: when part of a
+series is exact and part is approximate, don't hide it — flag the approximate leg and note what recording would make it exact
+(here: the ratio per bar). Deferred to the enrichment, not faked.
+(3) **The markers didn't need an uncertain data shape — the doctrine already had the rule.** Rather than depend on the ledger's
+touch-element fields (whose exact shape I hadn't pinned), the deflect/break detection is computed straight from the bars:
+`deflNodeAt`'s own doctrine — the WICK tests the line (within ~1 ATR), the CLOSE decides hold vs break. Self-contained,
+doctrine-aligned, and unit-testable without the whole render chain. Rule: when a documented rule computes the thing from data
+you already trust, prefer it over reading a stored field you'd have to reverse-engineer.
+(4) **First the view, then the factors — his order, and the honest one.** The stats layer he wants (hold-rate by roll / growth /
+polarity / confluence / trend / time-of-day …) has n=0 until the tap record accrues. Shipping the picture + the doctrine +
+n-gated shells now, with the factor backlog written down (design/KING-STUDY.md), beats waiting to ship until numbers exist —
+and it beats faking the numbers. No new withdrawal.
+
+### v15.95 — "old and not in use" is a claim to VERIFY per control, not a vibe; and a removal test must grep code shapes, not names the record repeats
+(1) **Before deleting a setting, trace whether anything READS it — the count tells you.** `grep -c` on each flag: `CFG.dir`
+had refs only in load + the button's own highlight + its handler (no consumer); `CFG.boPb` / `CFG.ftReq` / `CFG.compact` the
+same; `CFG.dir`'s "Signal Type" wrote a value nothing filtered on. Contrast `CFG.nodeThresh` (18 refs → `MIN_STRENGTH`) and
+`CFG.trendMA` (read by the trend engine AND written by the nightly): those LOOK equally legacy and are load-bearing. Rule:
+"old and not in use" is a per-control trace (find the consumer, or prove there isn't one), never a guess from how old the
+label reads. Nothing was cut without confirming zero consumers first.
+(2) **One of eight alerts had a row but no trigger.** `pbNode` rendered a checkbox row and carried a default, but there is no
+`fireAlert('pbNode')` anywhere — six of the seven fire, it never could. A control that is wired half-way (UI present, trigger
+absent) reads as alive until you check the firing side too. Rule: for an event control, verify BOTH the config surface and the
+dispatch, not just that the row exists.
+(3) **A removal test that greps the identifier finds it in the record that describes the removal.** `test_v1595` first checked
+`!/CFG\.boPb/` and went red — because the CHANGELOG-style roadmap entry embedded in `PLAN_SEED` names `CFG.boPb` as the thing
+removed. The record SHOULD name it. So the test was rewritten to assert code SHAPES the prose can't contain — `!/CFG\.boPb\s*=/`
+(no assignment), `!/>BO Pullback</` (no rendered label) — not the bare token. Also caught: `!/o\.dir===/` was too broad and hit
+an unrelated `o.dir==='dn'` on a different object; scoped to `o.dir==='both'`. Rule: a "X is gone" test greps the construct
+(assignment, tag, call), never the name, because your own records legitimately mention the name.
+
+### v15.94 — a label under an extreme must answer the question the extreme asks; a render test pins the TEXT y, which is not the value being clamped
+(1) **The "4h30" bug was a mislabel, not a miscalculation.** The number under the LOD was `P.lcMin` — the leg AFTER the
+LOD (10:27 → close) — drawn beside the LOD CLOCK, so it read as "the LOD took 4h30 from the open", which it never claimed
+to be. The fix was not arithmetic: it was to draw the number the reader expects at that spot — the TOOK FROM THE OPEN
+(HOD `D.took`, LOD `D.took + D.gap`), the same quantity `hodLod` already computes. Rule: a figure printed beside a clock
+is read as that clock's distance from the open; if it is a different leg, it is wrong no matter how correct the number is.
+False-thing-a-future-context-would-repeat: "the candle's extreme number is the leg after it" — it is the took from the open.
+(2) **`hodLod` already carried `out.took` and `out.gap`.** Before trusting a stub test, I verified the live callsite:
+`out.took=(firstT-openSec)/60`, `out.gap=|hiT-loT|/60` — both populated on the real candle. The v15.78 test stub for §1f
+predated the `took` field (it passed `gap` only), so my fix rendered `null` THERE while rendering correctly live. Rule:
+when a source change reads a new field, check the real producer sets it — a green stub can hide a null on the live path,
+and a red stub can be the stub's age, not the code's fault.
+(3) **A render-geometry test pins `text y`, which is `clamped_yl + 3`, not `yl`.** Re-pinning §2o2 I wrote the clamp
+bounds in `yl`-space (`y(H)+3`, `y(L)-1`) and it failed by exactly 3px — because the regex captures the TEXT element's y,
+and the text is emitted at `yl+3`. The original `y(H)+6` / `y(L)+2` were right all along. Rule: pin the number the regex
+actually reads; a uniform small offset between expected and actual is the render transform (here the +3 label baseline),
+not a clamp bug. Nothing withdrawn.
+(4) **Dedupe by label is the feature that let "no cap, all eighteen draw" and "one level, one price" coexist.** The v15.80
+crowd test fed 18 events of only TWO labels to stress the stacker; the v15.94 unified stack dedupes by label (a level has
+one canonical price), so that feed now collapses to 2. The requirement was always "all DISTINCT key levels draw" — the
+test now feeds his 18 distinct levels. Rule: when you add dedupe, a stress test built on duplicates is testing the old
+absence of dedupe; rebuild the stress from the real population.
+
 ### v15.93 — matching a second tool means matching its DEFINITION, not its number on one day; same feed, different minute, is a definition fight not a data fight
 (1) **v15.87 chased a moving target.** To match his FuturesPulse tool's wick%, v15.87 anchored the session open at 08:27
 (the pre-open) because that reproduced his 6% on 09-08. But his tool's opening minute was not stable — 08:27 on 09-08,

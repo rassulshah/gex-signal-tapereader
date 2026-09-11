@@ -101,7 +101,7 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase')); eval(ex('measureBars')); ev
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/^## v15\.87 /m.test(cl) && /tools/.test(cl.split('## v15.87')[1].split('\n## ')[0]) && /15:21/.test(cl.split('## v15.87')[1].split('\n## ')[0]), '5a CHANGELOG v15.87 — his "tools", and the clobber told');
   const de=fs.readFileSync('session-state/DECISIONS.md','utf8'); ok(/"tools"/.test(de) && /bar ending 08:30/i.test(de), '5b DECISIONS carries his word and the open\'s definition');
   const le=fs.readFileSync('session-state/LESSONS.md','utf8'); ok(/^### v15\.87 /m.test(le), '5c LESSONS carries the v15.87 entry (the newest-first log under §2)');
-  const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/^2026-09-09/.test(cfg.version||''), '5d .gex-config.json stamped 2026-09-09', cfg.version);
+  const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok((cfg.version||'') >= '2026-09-09', '5d .gex-config.json stamped 2026-09-09 or later (re-stamped this build)', cfg.version);
   const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=(P.roadmap||[]).find(r=>r.status==='next'); const r87=(P.roadmap||[]).find(r=>r.v==='15.87'); ok(r87 && /tool grid/i.test(r87.title||'') && /shipped|next/.test(r87.status), '5e the plan carries 15.87, the tool grid (next at its build, shipped after)', r87&&[r87.v,r87.status]);
 }
 console.log('test_v1587: ' + pass + ' passed, ' + fail + ' failed');

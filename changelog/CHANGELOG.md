@@ -1,3 +1,110 @@
+## v15.96 — THE KING CHART — PRICE vs THE SPX / SPY KINGS AS STEP LINES, DEFLECTS & BREAKS MARKED (mockup C)
+
+> Operator, 2026-09-11: **"a 3 min candle chart that display spy and spx king lines as steps, tracking their movements and
+> when and where they deflected or price broke through"** — picked mockup C, and set the order: *"first lets get the study
+> done that you have and then we will enrich it as you collect more data … build out a very robust way of identifying the
+> cause of why the king held or why the king broke."*
+
+**The view.** A new view in the node-ladder section — a toggle (`CFG.ladderView`: `grid` ⇄ `kingchart`, persisted, opt-in).
+On it: ES 3-minute candles (`closedCandles('SPY')` × the display ratio), the **SPX King** (gold, solid) and **SPY King**
+(cyan, dashed) drawn as **step lines** from `kingAt(book, bar.t)` — the King's own recorded journey (`kingDay(book).moves`),
+so the line holds a strike then jumps when the King rolls. Every **deflect (▲ held) / break (✕ through)** is marked, computed
+the doctrine way: **the WICK tests the line (within ~1 ATR, `DEFL_NEAR`), the CLOSE decides** hold vs break — the same rule
+`deflNodeAt` states. A **ledger** sits beside the chart (time · which King · held/broke · points), and below it the analytics
+layer: **sourced insights** (`doctrine` = the Academy prior — +γ brake / −γ accelerator, the 5–10pt margin, fresh-&-growing;
+`prov · n=4` = the one measured finding, a tap holds ≈ half) and an **n-gated hold-rate-by-factor shell** that reads
+`recording · n=0` until the tap record fills it.
+
+**Everything is real recorded data** — the candles, the King step journeys, and the taps (computed from the bars against the
+lines). Nothing is faked, and no rate renders without its n.
+
+**⚠ One honest scale limit.** The **SPY King is exact** through time (`kingAt('SPY')` × the ratio). The **SPX King is
+approximate** — its strike journey is recorded, but the SPX→display *ratio* journey is not, so the current `dispScale` is
+applied back and the line wears a **`~`** (consistent with how the panel already marks the NQ ratio). Making it exact means
+recording the ratio per bar — noted for the enrichment.
+
+**The factor backlog is captured** in `design/KING-STUDY.md` — his full list for "why a King held or broke": King roll
+up/down, growth vs decline, pika/barney-stack support, polarity, confluence with tracked levels, trend vs the 50-MA, time of
+day / the hour, above/below the open, and **SPX·SPY·QQQ book confluence (his "at least one matters a lot")**, plus distance/
+margin — each a factor the tap record will split hold-rate on, at n ≥ 15 with a Wilson low. First the view (this build), then
+the factors as the data accrues.
+
+**Tests.** `test_v1596.js` 17 — pins the deflect/break detection (wick tests, close decides, no phantom crossings), the
+BOTH-books `kingAt` wiring, the honest `~` SPX scale, the n-gated factor shell, the sourced insights, and the toggle end to
+end (default grid, persists, the body delegation handles the click). No existing test broke — the view is additive. Roadmap
+re-sequenced: **15.96 this (the King chart), 15.97 the tap record, 15.98 seasonality**, the rest +1. Companion unchanged
+(v1.19). ⚠ The King chart's live check is the next RTH reload on his panel — the SPX-King scale especially.
+
+## v15.95 — THE SETTINGS PANEL, TRIMMED — THE LEGACY BO-PULLBACK SIGNAL BLOCK + COMPACT + A DEAD ALERT ROW, GONE WITH THEIR CODE
+
+> Operator, 2026-09-10, after he couldn't scroll the ⚙ panel to its foot to reach a (non-existent) save button:
+> **"there are a lot of things on the settings that are old and not in use. review what needs to be removed and its
+> associated code in the javascript file."**
+
+**First, the scroll: there was never a save button to reach.** Every ⚙ control persists on the spot — the click handler calls
+`saveCfg()` (localStorage) immediately. The panel had simply outgrown its height. So the fix for the scroll *is* the cleanup:
+fewer rows, and it fits.
+
+**What was removed — each traced to a consumer first, then cut with its code:**
+- **The legacy BO-pullback signal block** — the `BO Pullback` toggle (`CFG.boPb`), `BO Followthrough Req` (`CFG.ftReq`),
+  and `Signal Type` Both/Longs/Shorts (`CFG.dir` + the `segBtn()` builder). These are the tool's *original* v8 purpose
+  (a breakout-pullback signal), inert since it became the HOD/LOD + deflection panel: each wrote a flag **no render reads**
+  (`CFG.dir` only coloured its own button). Gone: the controls, their `wireConfig` handlers, the `CFG` defaults, and the load
+  lines.
+- **Compact node cells** (`CFG.compact`) — no consumer; the v15.63 ladder-grid superseded it.
+- **The `pbNode` alert row** — the only one of the eight with **no `fireAlert('pbNode')`** anywhere; it could never fire.
+  The six that fire (feedStale, kingRoll, inplayAccum, dissipate, absorption, trap) stay untouched.
+- The stale header **"BO Pullback Config" → "Tapereader config"**, and the gear tooltip rewritten (it still named
+  "follow-through, signal type").
+
+**What stayed, because each has a real consumer** (this was a trace, not a guess): **Node Thresh** (drives `MIN_STRENGTH`,
+renamed off its "BO" label, renumbered 1) and **Trend + Trend MA** (read by the trend engine and written by the nightly
+recommender, renumbered 2). Nothing on the face changed — only dead settings and their handlers left. **The panel is
+byte-lighter and the ⚙ fits its frame.**
+
+**Tests.** `test_v1595.js` 22 — pins the removals as CODE constructs (no assignment / no load / no rendered label, tolerant
+of this record naming them), and pins the KEEPERS present and wired (Node Thresh→MIN_STRENGTH, Trend→the engine, the six
+live alerts with both row and trigger). No existing test referenced any removed control, confirming they were dead. Version
+pins already on the `15.9x` pattern; `test_v1594` 0a relaxed the same way. Roadmap re-sequenced: **15.95 this, 15.96 the tap
+record, 15.97 seasonality**, the rest +1. Companion unchanged (v1.19).
+
+## v15.94 — THE CANDLE LIQUIDITY MAP · TOOK FROM THE OPEN · PFH/PFL · SWEPT + TARGET + NEXT DRAW ON ONE AXIS
+
+> Operator, 2026-09-10: **"fix it"** (the candle showed 4h30 beside LOD 10:27 — "the difference between the open and 10:27
+> is not 4h30") → **"you must ensure you are accurately tracking the overnight low, prior day low, the prior full low, the
+> weekly low … and their corresponding highs … indicate which levels were swept and targetted for their liquidity … prior
+> day poc, vah, val, cw0, pw0 … shown when swept or targetted on the daily candle"** → **"targeted is the other extremity …
+> a green bar that swept overnight low and then went to (prior full high) the PFHI, which is the target"** → the mockup,
+> then **"this is good, just make sure the swept text doesn't overlap … fix and build"**.
+
+**The took under each extreme.** The number beside each extreme was the leg AFTER it (the LOD's was `P.lcMin`, 10:27 →
+close = 4h30), drawn under the LOD clock where it read as "the LOD took 4h30 from the open" — which it never was. It now
+shows the **TOOK FROM THE OPEN**: the first extreme's is `D.took` (what `hodLod` already computes, `(firstT-openSec)/60`),
+the second's is `D.took + D.gap`. On his 09-09 example that is HOD 1h33, LOD 1h57 — the real distances from 08:30.
+
+**PFH / PFL — the prior FULL Globex session.** New `priorFullHL(dayStr)` folds the prior RTH day (`futSessionBars(1).rth`)
+with that day's overnight (`overnightHL` on the day's own key — `futSessionBars` now returns `byDay[k].key`), giving the
+prior **full** high/low (his PFHI / PFLO), distinct from PDH / PDL (prior RTH only). Added to `LEVEL_TIER` as tier 1 and to
+`sweepLevelsToday`, so they draw on the candle and enter the sweep read like his other key levels.
+
+**One axis: SWEPT + TARGET + NEXT DRAW.** The candle's price axis now builds a single `items[]` — the swept key levels
+(ticks, as before), plus `candleDraws(sym, D, dayStr)`: the **TARGET** (cyan ring) is the un-swept level the SECOND extreme
+tagged within tol = `max(2, |px|·0.0004)` ("the other extremity" — his green day: swept ONL, targeted PFHI); the **NEXT
+DRAW** (grey ring) is the nearest un-swept level clearly beyond the second extreme. A swept level is never re-drawn as a
+target (`candleDraws` excludes swept; a `seen[]` dedupe is belt-and-braces, and collapses a level swept repeatedly to its
+one canonical price). Every item — tick and ring alike — runs through the **same** STEP anti-overlap stacking, so nothing
+collides ("make sure the swept text doesn't overlap"). The candle now also draws **CW0 / PW0** (the 0DTE walls) alongside
+tier 1. Header: **SWEPT / TARGET ▸**.
+
+**Tests.** `test_v1594.js` 20 (candleDraws on his green-day example → target PFH, next draw PDH, swept excluded; a down day;
+priorFullHL folds the night, ≥60-bar gate; the source pins), 4 mutants caught. `test_v1578` / `test_v1580` / `test_nodeat`
+re-pinned from the old leg-after / `SWEPT ▸` / 14-level-tier to **took-from-open · SWEPT / TARGET ▸ · PFH/PFL tier 1**, and
+the 18-crowd stress rebuilt on 18 **distinct** levels (the dedupe collapses a same-label crowd). Version pins moved to the
+`15.9x` pattern; `test_v1593` 0a relaxed the same way. Roadmap re-sequenced: **15.94 this (the candle liquidity map), 15.95
+the tap record, 15.96 seasonality**, the rest +1. Pre-existing red (unchanged since ≤ v15.93, harness drift on removed
+functions, NOT this build): `test_tapeking`, `test_expiry_profile`, `test_node_map`, `test_sma_cont`, `test_v1126_process`.
+Companion unchanged (v1.19). Panel `@version` / `GPTS_VERSION` / footer all **15.94**.
+
 ## v15.93 — THE WICK OPEN = THE RTH OPEN ("RTH") · SAME YAHOO FEED, ONE STABLE DEFINITION OF THE SESSION OPEN
 
 > Operator, 2026-09-09, comparing his FuturesPulse tool (Wick% **9%**) with the panel (**15%**): **"check it.. it is being

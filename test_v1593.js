@@ -17,7 +17,7 @@ function ex(n){ const re=new RegExp('function\\s+'+n+'\\s*\\(','g'); const m=re.
 function val(n){ const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([\\s\\S]*?);\\n').exec(src); return m?eval('('+m[1]+')'):undefined; }
 const py = (args) => { try { return cp.execFileSync('python3', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { return 'ERR ' + (e.stdout || '') + (e.stderr || ''); } };
 
-ok(/@version\s+15\.93/.test(src) && /var GPTS_VERSION='15\.93';/.test(src), '0a v15.93 in both spots');
+ok(/@version\s+15\.9[3-9]/.test(src) && /var GPTS_VERSION='15\.9[3-9]';/.test(src), '0a v15.93 or later in both spots');
 
 // ---- 1 · THE GRID ANCHOR IS 08:30 ----------------------------------------------------------------------------------
 global.mul=(a,b)=>a/(1/b);
@@ -74,7 +74,7 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase')); eval(ex('measureBars')); ev
   ok(/^MIN_BARS = 383/m.test(sh), '3b MIN_BARS 383 (386 − the 3 pre-open minutes) so the same 295 sessions stay complete', /^MIN_BARS = (\d+)/m.exec(sh)[1]);
   ok(/RTH open/.test(sh) && /the 08:30:00 print/.test(sh), '3c the corpus definition names the RTH open');
   const BR=JSON.parse(fs.readFileSync('./data/es-1min/BASERATES.json','utf8'));
-  ok(BR.corpus.sessions===295 && BR.corpus.min_bars===383 && /RTH open/.test(BR.corpus.definition), '3d BASERATES: 295 sessions, min_bars 383, the definition says RTH open', [BR.corpus.sessions, BR.corpus.min_bars]);
+  ok(BR.corpus.sessions>=295 && BR.corpus.min_bars===383 && /RTH open/.test(BR.corpus.definition), '3d BASERATES: 295+ sessions (grows with his nightly), min_bars 383, the definition says RTH open', [BR.corpus.sessions, BR.corpus.min_bars]);
   const chk=py(['tools/bake-hodlod.py','--check']);
   ok(!/ERR/.test(chk) && !/disagree|differ/i.test(chk), '3e the panel’s HODLOD_BASE literal equals the re-baked file (bake-hodlod --check)', chk.trim().slice(0,120));
 }

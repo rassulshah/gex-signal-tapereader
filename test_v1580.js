@@ -106,7 +106,7 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
   ok(labels[0].col==='#f2b45a' && labels[1].col==='#2ec27e' && labels[2].col==='#f0616d' && ticks.map(t=>t.col).join()===labels.map(l=>l.col).join(), '2d amber being tested · green reclaimed · red broke — tick and label alike; no grey (nothing "opened beyond" is drawn)', labels.map(l=>l.col));
   ok(/ONL 7731\.25 — swept 09:12 · reclaimed in 4 bars \(making LOD\)/.test(labels[1].tip) && /VAL 7722 — swept 09:48 · broke \(making LOD\)/.test(labels[2].tip) && /PDH 7749 — swept 08:35 · being tested \(making HOD\)/.test(labels[0].tip), '2e the hover carries the price, the minute, the words and the side', labels.map(l=>l.tip));
   ok(!/x="95" y="[\d.]+" class="g3cx" text-anchor="end" fill="#e3b341"><title>PDH/.test(s) && !/fill="#5fd08a"><title>PDL/.test(s) && !/x="228" y="[\d.]+" class="g3cx sw"/.test(s), '2f the reversal names (left) and the tip-stacked right column are gone — "the levels that are swept are the only ones that should be indicated"');
-  ok(/<text x="228" y="21\.0" class="g3cx" text-anchor="end" fill="#7cc7ff">SWEPT ▸<\/text>/.test(s), '2g the SWEPT ▸ caption stays at the top right');
+  ok(/<text x="228" y="21\.0" class="g3cx" text-anchor="end" fill="#7cc7ff">SWEPT \/ TARGET ▸<\/text>/.test(s), '2g the SWEPT / TARGET ▸ caption stays at the top right (v15.94)');
   // beside the open tick, LEFT of the bar: the reclaim line, MUD, the dollars — converted ONCE
   const mx=[...s.matchAll(/<text x="95" y="([\d.]+)" class="g3cs" text-anchor="end" fill="(#[0-9a-f]{6})">(?:<title>[^<]*<\/title>)?([^<]*)<\/text>/g)].map(m=>({y:+m[1],col:m[2],txt:m[3]}));
   ok(mx.map(m=>m.txt).join(' | ')==='↩ 8:45 · 9m | MD 1h46 | $1,513', '2h left of the bar at cx-20, top-down: ↩ the reclaim minute · BOP, then MD (the move DOWN to the LOD — "MUD should be dynamic, MU or MD"), then the money', mx.map(m=>m.txt));
@@ -131,10 +131,13 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
   ok(l4.length===3 && Math.abs(l4[2]-(y(7711.75)-1+3))<0.06 && Math.abs(l4[1]-(l4[2]-9.5))<0.06, '2o three levels at the low: the group slides up so the last label sits on the LOD tip, not under it', l4);
   // a crowd: nine at the top and nine at the bottom, a tenth of a point apart — all drawn, a line apart, and the group
   // stays between the HOD tip and the LOD tip (pushed apart downward, slid up from the low, clamped under the high)
-  SW=[ ...Array.from({length:9},(_,i)=>({level:'PDH',side:'HOD',status:'accepted',atBar:i+20,px:7750-i*0.1,at:'10:0'+i})),
-       ...Array.from({length:9},(_,i)=>({level:'PDL',side:'LOD',status:'accepted',atBar:i+1,px:7713-i*0.1,at:'09:0'+i})) ];
+  // (v15.94) his eighteen DISTINCT key levels (a repeated label now collapses to one row via seen[])
+  const KL18=['PDH','VAH','ONH','PWH','WPOC','AHI','LHI','PFH','CW0','PDL','VAL','ONL','PWL','POC','ALO','LLO','PFL','PW0'];
+  SW=KL18.map((lv,i)=> i<9
+    ? { level:lv, side:'HOD', status:'accepted', atBar:20+i, px:7750-i*0.1, at:'10:'+two(i) }
+    : { level:lv, side:'LOD', status:'accepted', atBar:1+(i-9), px:7713-(i-9)*0.1, at:'09:0'+(i-9) } );
   const sC=dayCandleSvg('SPY', D, P, { w:W, h:H }); const yC=[...sC.matchAll(/<text x="140" y="([\d.]+)" class="g3cx sw"/g)].map(m=>+m[1]);
-  ok(yC.length===18 && yC.every((v,i)=>i===0 || v-yC[i-1]>=9.49) && yC[0]>=y(7751)+6-0.06 && yC[17]<=y(7711.75)+2+0.06, '2o2 eighteen in a crowd: all drawn, a line apart, between the tips — never above the HOD label', [yC.length, yC[0], yC[17]]);
+  ok(yC.length===18 && yC.every((v,i)=>i===0 || v-yC[i-1]>=9.49) && yC[0]>=y(7751)+6-0.06 && yC[17]<=y(7711.75)+2+0.06, '2o2 (v15.94) eighteen DISTINCT levels in a crowd: all drawn, a line apart, clamped between the tips (text y = clamped yl + 3)', [yC.length, yC[0], yC[17]]);
   // a level outside the range is not drawn (a swept level lies inside it by construction; a stale conversion does not)
   SW=[ {level:'PDH',side:'HOD',status:'accepted',atBar:5,px:7790,at:'08:35'} ];
   ok(!/class="g3cx sw"/.test(dayCandleSvg('SPY', D, P, { w:W, h:H })), '2p a level above the HOD is not on the axis');
@@ -157,7 +160,7 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
 // ---------- 3. HIS KEY LEVELS: the tiers, the sweep set, the full overnight ----------
 {
   const T=val('LEVEL_TIER');
-  ok(['PDH','PDL','ONH','ONL','VAH','VAL','POC','PWH','PWL','WPOC','AHI','ALO','LHI','LLO'].every(k=>T[k]===1) && Object.keys(T).filter(k=>T[k]===1).length===14, '3a tier 1 is his list and nothing else: PDH PDL ONH ONL VAH VAL POC + PWH PWL WPOC by name for the day they exist + (v15.88) AHI ALO LHI LLO, the four he added 2026-09-08', Object.keys(T).filter(k=>T[k]===1));
+  ok(['PDH','PDL','ONH','ONL','VAH','VAL','POC','PWH','PWL','WPOC','AHI','ALO','LHI','LLO','PFH','PFL'].every(k=>T[k]===1) && Object.keys(T).filter(k=>T[k]===1).length===16, '3a tier 1 is his list and nothing else: PDH PDL ONH ONL VAH VAL POC + PWH PWL WPOC + (v15.88) AHI ALO LHI LLO + (v15.94) PFH PFL, the prior full Globex high/low', Object.keys(T).filter(k=>T[k]===1));
   ok(T.KING===2 && T.CW0===2 && T.PW0===2 && !('EMH' in T) && !('EML' in T) && !('IBH' in T) && !('IBL' in T) && !('PDC' in T), '3b the King is structure (tier 2, with CW0/PW0); EMH/EML, IBH/IBL and PDC are not in the map at all');
   eval(ex('levelTier'));
   ok(levelTier('KING-')===2 && levelTier('POC+')===1 && levelTier('EML')===4 && levelTier('IBL')===4 && levelTier('PDC-')===4, '3c …so levelTier says 1 for a key level, 2 for the King, 4 (unranked) for what he removed');
@@ -220,7 +223,7 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
   const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8')); const flat=[];
   (function walk(o){ if(Array.isArray(o)) o.forEach(walk); else if(o && typeof o==='object'){ if(o.id && o.q) flat.push(o); Object.keys(o).forEach(k=>walk(o[k])); } })(S);
   const h15=flat.find(x=>x.id==='H1.5');
-  ok(h15 && h15.status==='REGISTERED' && /close-scored/.test(h15.q) && /H10 proposed/.test(h15.result||''), '4f the study row H1.5, REGISTERED, under H1 (is the extreme in)', h15);
+  ok(h15 && /close-scored/.test(h15.q) && /H10 /.test(h15.result||''), '4f the study row H1.5, under H1 (is the extreme in) — its status and H10 verdict follow the nightly', h15);
   const run=fs.readFileSync('tools/nightly/run.py','utf8');
   ok(/def judge_lodhod\(H, days, sym='SPY'\):/.test(run) && /if H\.get\('pick'\) == 'lodhodCell':/.test(run) && /verdicts = \[judge_lodhod\(H, days\) if H\.get\('pick'\) == 'lodhodCell' else v for H, v in zip\(H_list, verdicts\)\]/.test(run), '4g run.py: judge() defers the pick, judge_lodhod reads the close-scored rows, and the wiring replaces the verdict after the day files');
   // judge_lodhod on fixtures

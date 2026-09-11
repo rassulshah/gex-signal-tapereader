@@ -35,7 +35,7 @@ global.LEVEL_TIER=val('LEVEL_TIER'); global.FUTMODE={ fam:'ES' }; global.irtRati
 let SB={ open:7700, close:7712 }; global.sessionBody=()=>SB;
 global.displayScale=()=>({ scale:10.05 });
 let SW=[]; global.sweepEventsToday=()=>SW;
-const D={ ok:true, open:7700, hod:7735, lod:7688, hodT:mul(11,3600)+mul(54,60), lodT:mul(12,3600)+mul(47,60), first:'HOD', second:'LOD', gap:53, mud:0, scale:1, rngUsd:2350, isFut:true };
+const D={ ok:true, open:7700, hod:7735, lod:7688, hodT:mul(11,3600)+mul(54,60), lodT:mul(12,3600)+mul(47,60), first:'HOD', second:'LOD', took:204, gap:53, mud:0, scale:1, rngUsd:2350, isFut:true };  // (v15.94) took = HOD's from the open (08:30→11:54 = 3h24); gap 53 → LOD at 12:47 = 4h17 from the open
 const P={ ok:true, ptPx:7728, lcMin:130 };
 {
   const s0=dayCandleSvg('SPY', D, P);
@@ -45,7 +45,7 @@ const P={ ok:true, ptPx:7728, lcMin:130 };
   const s1=dayCandleSvg('SPY', D, P, { w:230, h:264 });
   ok(/^<svg class="g3cdl tall" viewBox="0 0 230 264" width="230" height="264">/.test(s1), '1d with {w,h} the frame is the caller\'s and the class says tall', s1.slice(0,70));
   ok(/<line x1="115" y1="30\.0" x2="115" y2="224\.0"/.test(s1), '1e the bar is centred (x=115) and runs from TOP 30 to 30+HGT (CH=264-4=260, HGT=260-66=194 → 224): two label lines above and below', (s1.match(/<line x1="115"[^>]*>/)||[])[0]);
-  ok(/HOD 11:54<\/text>/.test(s1) && /LOD 12:47<\/text>/.test(s1) && />53m<\/text>/.test(s1) && />2h10<\/text>/.test(s1) && /MD 0m/.test(s1), '1f the HOD/LOD clocks, the legs after each, MD (v15.80: MUD reads MU / MD) — the labels he already had');
+  ok(/HOD 11:54<\/text>/.test(s1) && /LOD 12:47<\/text>/.test(s1) && />3h24<\/text>/.test(s1) && />4h17<\/text>/.test(s1) && /MD 0m/.test(s1), '1f the HOD/LOD clocks, the TOOK FROM THE OPEN under each (v15.94: "the difference between the open and 10:27 is not 4h30" — HOD 3h24, LOD 4h17, not the leg after), MD (v15.80: MUD reads MU / MD)');
   ok(/<text x="95" y="[\d.]+" class="g3cs" text-anchor="end" fill="#f0616d"><title>[^<]*<\/title>MD 0m<\/text>/.test(s1) && !/fill="#e3b341"><title>PDH/.test(s1), '1g (v15.80) MD sits LEFT of the bar at cx-20=95 beside the open tick, red; the reversal names are gone');
   ok(!/x="228"/.test(s1), '1h …and nothing is drawn in the right column while there are no sweeps');
   // the sweep labels — the KEY levels price swept, at their own price (test_v1580 §2 pins the axis geometry; here: the set)
@@ -62,14 +62,18 @@ const P={ ok:true, ptPx:7728, lcMin:130 };
   ok(Math.abs(right[0].y-(y(7732)+3))<0.06 && Math.abs(right[1].y-(y(7699.25)+3))<0.06, '1j each label sits on its own price line (the axis), not at a wick tip', right.map(r=>r.y));
   ok(right[0].col==='#2ec27e' && right[1].col==='#f0616d', '1k …green reclaimed · red broke', right.map(r=>r.name+':'+r.col));
   ok(/ONH 7732 — swept 10:30 · reclaimed in 2 bars \(making HOD\)/.test(right[0].tip) && /VAL 7699\.25 — swept 09:11 · broke \(making LOD\)/.test(right[1].tip), '1l each label\'s hover carries the price, the time, the status words and the side', right.map(r=>r.tip));
-  ok(/class="g3cx" text-anchor="end" fill="#7cc7ff">SWEPT ▸<\/text>/.test(s2), '1m a SWEPT ▸ caption names the axis once any sweep is drawn');
+  ok(/class="g3cx" text-anchor="end" fill="#7cc7ff">SWEPT \/ TARGET ▸<\/text>/.test(s2), '1m a SWEPT / TARGET ▸ caption names the axis once any sweep is drawn (v15.94: the axis now also carries the target / next draw)');
   const s3=dayCandleSvg('SPY', D, P);
   ok((s3.match(/class="g3cx sw"/g)||[]).length===2 && /<title>[^<]*<\/title>ONH<\/text>/.test(s3) && !/ONH 10:30/.test(s3), '1n (v15.80) the small candle wears the same axis, names only');
-  SW=[ ...Array.from({length:9},(_,i)=>({level:'PDL',side:'LOD',status:'accepted',atBar:i+1,px:7690-i*0.1,at:'09:0'+i})),
-       ...Array.from({length:9},(_,i)=>({level:'PDH',side:'HOD',status:'accepted',atBar:i+20,px:7730+i*0.1,at:'10:0'+i})) ];
+  // (v15.94) EIGHTEEN DISTINCT key levels — the same label swept repeatedly now collapses to one row
+  // (seen[] dedupe: a level has ONE canonical price), so the crowd test feeds his eighteen DISTINCT levels.
+  const KL18=['PDH','VAH','ONH','PWH','WPOC','AHI','LHI','PFH','CW0','PDL','VAL','ONL','PWL','POC','ALO','LLO','PFL','PW0'];
+  SW=KL18.map((lv,i)=> i<9
+    ? { level:lv, side:'HOD', status:'accepted', atBar:20+i, px:7734-i*0.1, at:'10:'+two(i) }
+    : { level:lv, side:'LOD', status:'accepted', atBar:1+(i-9), px:7691-(i-9)*0.1, at:'09:0'+(i-9) } );
   const s4=dayCandleSvg('SPY', D, P, { w:230, h:264 });
   const ys=[...s4.matchAll(/<text x="140" y="([\d.]+)" class="g3cx sw"/g)].map(m=>+m[1]);
-  ok(ys.length===18 && ys.every((v,i)=>i===0 || v-ys[i-1]>=9.49) && ys[0]>=36 && ys[17]<=227, '1o (v15.80) no seven-a-side cap: all eighteen key-level sweeps a tenth apart draw, a line apart, between the HOD tip (30+3, +3 baseline) and the LOD tip (224-1, +3)', [ys.length, ys[0], ys[17]]);
+  ok(ys.length===18 && ys.every((v,i)=>i===0 || v-ys[i-1]>=9.49) && ys[0]>=36 && ys[17]<=227, '1o (v15.94) no seven-a-side cap: all eighteen DISTINCT key levels draw, a line apart, between the HOD tip (30+3) and the LOD tip (224-1)', [ys.length, ys[0], ys[17]]);
   SW=[];
 }
 

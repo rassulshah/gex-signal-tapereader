@@ -131,7 +131,7 @@ ok(/@version\s+15\.(7[2-9]|[89]\d)/.test(src) && /var GPTS_VERSION='15\.(7[2-9]|
   const S=JSON.parse(fs.readFileSync('learning/studies.json','utf8')); const flat=[];
   (function walk(o){ if(Array.isArray(o)) o.forEach(walk); else if(o && typeof o==='object'){ if(o.id && o.q) flat.push(o); Object.keys(o).forEach(k=>walk(o[k])); } })(S);
   const k26=flat.find(x=>x.id==='K2.6'), k27=flat.find(x=>x.id==='K2.7');
-  ok(k26 && k26.status==='REGISTERED' && /rolling floor/.test(k26.q) && /H8 thin: n=0 of 30/.test(k26.nightly||'') && k27 && k27.status==='REGISTERED' && /H9 thin: n=0 of 30/.test(k27.nightly||''),'6h K2.6 / K2.7 on the Analysis tab, REGISTERED, the nightly’s count beside them',[k26&&k26.nightly,k27&&k27.nightly]);
+  ok(k26 && k26.status==='REGISTERED' && /rolling floor/.test(k26.q) && /H8 thin: n=\d+ of 30/.test(k26.nightly||'') && k27 && k27.status==='REGISTERED' && /H9 thin: n=\d+ of 30/.test(k27.nightly||''),'6h K2.6 / K2.7 on the Analysis tab, REGISTERED, the nightly’s count beside them',[k26&&k26.nightly,k27&&k27.nightly]);
   // judge_pat, on fixtures
   const run=fs.readFileSync('tools/nightly/run.py','utf8');
   ok(/def judge_pat\(H, P\):/.test(run) && /verdicts = \[judge_pat\(H, patterns\) if H\.get\('pick'\) == 'pat' else v for H, v in zip\(H_list, verdicts\)\]/.test(run) && /if H\.get\('pick'\) == 'pat':/.test(ex_py(run,'judge')),'6i run.py: a pattern-class hypothesis is judged from the table after it is built, never by judge_sweep');

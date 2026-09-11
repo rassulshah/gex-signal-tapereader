@@ -114,7 +114,7 @@ ok(/@version\s+15\.(89|9\d)/.test(src) && /var GPTS_VERSION='15\.(89|9\d)';/.tes
   const seedP=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedP)===JSON.stringify(P), '4e PLAN_SEED equals the file');
   const cl=fs.readFileSync('changelog/CHANGELOG.md','utf8'); ok(/^## v15\.89 /m.test(cl) && /mockup B/.test(cl.split('## v15.89')[1].split('\n## ')[0]), '4f CHANGELOG v15.89');
   const le=fs.readFileSync('session-state/LESSONS.md','utf8'); ok(/^### v15\.89 /m.test(le), '4g LESSONS carries the v15.89 entry (the newest-first log under §2)');
-  const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok(/^2026-09-09/.test(cfg.version||'') && !/^2026-09-09[ab]$/.test(cfg.version), '4h .gex-config.json re-stamped', cfg.version);
+  const cfg=JSON.parse(fs.readFileSync('.gex-config.json','utf8')); ok((cfg.version||'') >= '2026-09-09' && !/^2026-09-09[ab]$/.test(cfg.version), '4h .gex-config.json re-stamped', cfg.version);
 }
 console.log('test_v1589: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

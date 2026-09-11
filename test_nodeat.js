@@ -170,7 +170,7 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
   // ⚠ (v15.09) the names and MUD had collided — they now occupy SEPARATE columns.
   ok(/text-anchor="end"/.test(CD), 'n45b the level names right-align, clear of the MUD block');
   // (v15.80) the right column is the PRICE AXIS: every label sits at its level's own y, the tick from cx+12; the caption at W-2
-  ok(/var LXR=W-2;/.test(CD) && /var TX0=cx\+12, TX1=cx\+\(tall\?21:17\), LBX=cx\+\(tall\?25:20\);/.test(CD) && !/LXL/.test(CD), 'n45c ...the SWEPT caption at the frame edge; the swept levels on the price axis beside the bar (v15.80: the reversal column is gone)');
+  ok(/var LXR=W-2;/.test(CD) && /var TX0=cx\+12, TX1=cx\+\(tall\?21:17\), LBX=cx\+\(tall\?25:20\), MID=\(TX0\+TX1\)\/2;/.test(CD) && !/LXL/.test(CD), 'n45c ...the SWEPT caption at the frame edge; the swept levels on the price axis beside the bar (v15.80: the reversal column is gone; v15.94: MID centres the target / next-draw rings)');
   ok(/text-anchor="middle"/.test(CD), 'n46 ...because the labels stack over the bar, not beside it');
   ok(/HOD '\+hlClock\(D\.hodT\)/.test(CD) && /LOD '\+hlClock\(D\.lodT\)/.test(CD),
      'n47 both extremes carry their CLOCK, as he drew');

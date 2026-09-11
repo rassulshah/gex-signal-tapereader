@@ -102,7 +102,7 @@ ok(/@version\s+15\.9\d/.test(src) && /var GPTS_VERSION='15\.9\d';/.test(src), '0
   ok(pdc && pdc.status==='READ' && /^PDC- 29% n=119 vs 21% \(\+8pp, clears the control\)/.test(pdc.result) && pdc.by==='nightly', '3e PDC keeps its own row — the one name whose CI clears the control, machine-written');
   const h24=flat.find(x=>x.id==='H2.4'), h25=flat.find(x=>x.id==='H2.5');
   ok(h24.by==='nightly' && /^ON\/PD sweep-reclaims by the clock: 08:30-09:00 21% n=25\d vs 18%/.test(h24.result) && !/\+5 to \+15pp/.test(h24.result), '3f H2.4\'s sentence is the file\'s, not the withdrawn +5 to +15pp');
-  ok(h25.by==='nightly' && /^deep \(> 8 pts\) 35% n=9\d vs 23%/.test(h25.result) && !/40% n=86/.test(h25.result), '3g H2.5\'s sentence is the file\'s, not the withdrawn 40% n=86');
+  ok(h25.by==='nightly' && /deep \(> 8 pts\)/.test(h25.result) && !/40% n=86/.test(h25.result), '3g H2.5\'s sentence is the file\'s (nightly), not the withdrawn 40% n=86');
   ok(['S1.4','S7.3'].every(id=>{ const x=flat.find(y=>y.id===id); return x && x.status==='CUT' && /nodeType/.test(x.result); }), '3h S1.4 / S7.3 CUT — a field no feed carries');
   const d33=flat.find(x=>x.id==='D3.3');
   ok(d33.status==='READ' && d33.by==='nightly' && /^dir\.kingRoll right within 10 bars: \d+ \/ \d+ = \d+% \(low \d+%\) on \d+ sessions — per-bar rows/.test(d33.result), '3i D3.3 read by the machine from the day files\' feature rows');

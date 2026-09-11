@@ -868,3 +868,50 @@ exception to one-at-a-time he has granted, and it covered the cuts.
   his tool's own output is not reproducible by a stable rule, the canonical market definition wins — his explicit call
   each time (he chose RTH over mirroring his tool's 9%).
 - **The tap record is v15.94** — unchanged in substance; asked before built. Seasonality v15.95; the rest +1.
+
+## 2026-09-10 · v15.94 — the candle liquidity map
+
+- **The number under each extreme is the TOOK FROM THE OPEN, not the leg after it.** His word: *"the difference between
+  the open and 10:27 is not 4h30"* → *"fix it"*. It was `P.lcMin` (the leg after the extreme) drawn under the extreme's
+  clock, which read as the extreme's distance from the open. Now: first extreme = `D.took`, second = `D.took + D.gap`.
+  What would change it: his word — this is a labelling decision, the quantity both come from `hodLod`.
+- **PFH / PFL is the prior FULL Globex session, distinct from PDH / PDL.** His terms PFHI / PFLO. `priorFullHL` folds the
+  prior RTH day with that day's own overnight; PDH/PDL stay prior-RTH-only. Both sets draw — they are different liquidity.
+- **The candle's price axis carries SWEPT + TARGET + NEXT DRAW in one stack.** *"indicate which levels were swept and
+  targetted"* + *"targeted is the other extremity"*. TARGET = the un-swept level the SECOND extreme tagged (cyan ring);
+  NEXT DRAW = the nearest un-swept level just beyond it (grey ring); swept levels keep their ticks. A swept level is never
+  re-drawn as a target (`candleDraws` excludes swept, `seen[]` dedupes — so a level swept repeatedly is one row at its one
+  canonical price). All run through the same anti-overlap stacking: *"make sure the swept text doesn't overlap"*. CW0/PW0
+  now draw on the candle alongside tier 1. What would change it: a different rule for what counts as the target.
+- **The candle liquidity map is v15.94; the tap record moved to v15.95, seasonality v15.96, the rest +1.** The map was an
+  interjection, not a planned roadmap item — it took the 15.94 slot, so the plan re-sequenced honestly rather than
+  labelling the tap record as the running 15.94.
+
+## 2026-09-10 · v15.95 — the settings panel trimmed
+
+- **A setting is removed only after a trace shows zero consumers.** His ask: *"there are a lot of things on the settings
+  that are old and not in use. review what needs to be removed and its associated code."* Cut only what wrote a flag no
+  render reads: the legacy BO-pullback signal block (`CFG.boPb`, `CFG.ftReq`, `CFG.dir` + `segBtn`), Compact node cells
+  (`CFG.compact`), and the `pbNode` alert row (no `fireAlert('pbNode')`). What would change it: a future need — but restore
+  the FEATURE, not the dead toggle.
+- **Node Thresh and Trend stay — they only LOOK legacy.** Node Thresh drives `MIN_STRENGTH`; Trend + Trend MA are read by
+  the trend engine and written by the nightly recommender. Renamed/renumbered (1 Node Thresh, 2 Trend), not removed.
+- **The ⚙ persists on click; there is no save button by design.** Every handler calls `saveCfg()` immediately. The scroll
+  complaint was the panel outgrowing its height, not a missing save — so the fix was fewer rows, not a button.
+- **The settings trim is v15.95; the tap record moved to v15.96, seasonality v15.97, the rest +1.**
+
+## 2026-09-11 · v15.96 — the King chart
+
+- **Price vs the two Kings is a view in the node-ladder section, opt-in via a toggle** (`CFG.ladderView` grid ⇄ kingchart).
+  His pick: mockup C. It reads only recorded data — `closedCandles`, `kingDay(book).moves` via `kingAt`, and taps computed
+  from the bars. What would change it: him.
+- **The SPX King line is drawn `~` (approximate scale) on purpose.** The King strike journey is recorded; the SPX→display
+  ratio journey is not, so the current dispScale is applied back. Making it exact = record the ratio per bar (enrichment).
+  Never present the approximate leg as exact — the `~` is the panel's standing mark for that (as the NQ ratio carries).
+- **Deflect vs break is judged the doctrine way — the WICK tests the King (within ~1 ATR), the CLOSE decides** — not from a
+  stored ledger field. This is `deflNodeAt`'s own rule, self-contained and testable.
+- **The King study is built front-to-back: the view first (v15.96), the factors as data accrues.** The factor backlog —
+  roll, growth, pika-stack, polarity, level confluence, trend vs 50-MA, time of day, above/below open, SPX·SPY·QQQ book
+  confluence, distance — lives in design/KING-STUDY.md. Every factor rate stays n-gated (n ≥ 15, Wilson low) — no rate
+  without its n, ever.
+- **The King chart is v15.96; the tap record moved to v15.97, seasonality v15.98, the rest +1.**
