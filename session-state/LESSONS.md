@@ -131,6 +131,25 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.98 — there are THREE king histories; use the CENSUS the lanes use, and when a chart is empty name the reason instead of drawing a flat line
+(1) **The panel has three separate King records, and I used the weakest one twice.** `kingDay.moves` = a sparse "moved N×
+today" counter (2-poll confirm, capped); `KINGHIST.seq` = a dense 3-min sample; **`krOf`/`KRAW` = the roll CENSUS, the
+Atlas-comparable one the King lanes and the studies use.** The chart must use the census. Rule: before charting a
+derived series, find which of the existing records is the AUTHORITATIVE one (grep the debug hook — `__gptsDebug.kingTrack`
+named it "the only one comparable to Atlas") and read that, not the first accessor whose name matches.
+(2) **A flat line where there's no data is a LIE the user has to debug for you.** v15.96/97 drew flat lines with zero King
+data; he had to screenshot and push twice before I looked at the tracker. The census is gated off unless the panel shows live
+truth in RTH (`recorderBlind()` — replay or a frozen last-session book). Now an empty chart says *why* (parked → click LIVE),
+so the state is legible on the face. Rule: when a panel can be in a state that produces no data (replay, parked, pre-open),
+the empty view must NAME that state, never render a shape that reads as real.
+(3) **His `__gptsDebug` dumps ended three rounds of my guessing.** `kingTrack()` showed `raw:[]` for every book;
+`ladders()` showed a live 100-strike book. Together: the feed is fine, the tracker is gated off — which no amount of
+source-swapping fixes. Rule: two debug reads (the output AND the input) localize a fault faster than any number of code
+re-reads; ask for them early, not on the third fix.
+(4) **I could not screenshot his tab, and said so plainly.** The Claude-in-Chrome tools can't target a tab this session
+didn't open, and opening my own Atlas tab would double-record. Owning the limitation (and using his pasted screenshots) beat
+pretending. No withdrawal.
+
 ### v15.97 — a chart that overlays a time series on candles must match them in the SAME time unit; when in doubt, match on second-of-day, which the candles always carry
 (1) **A flat line where a stepped one belongs is a time-key mismatch, not "the King didn't move."** v15.96 drew both King
 lines dead flat. The King journey stamps moves with `Date.now()` (ms); the candle `.t` is not reliably that same

@@ -130,7 +130,7 @@ const P={ ok:true, ptPx:7728, lcMin:130 };
   const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=P.roadmap.filter(r=>r.status==='next');
   ok(P.roadmap.some(r=>r.v==='15.78' && /DAY CANDLE/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.78'))) && P.roadmap.some(r=>r.v==='15.77' && r.status==='shipped'),
      '4a the plan: v15.77 shipped, v15.78 this build or shipped', nx.map(x=>x.v));
-  ok(P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && /^15\.(79|[89]\d)$/.test(r.v)), '4b the seasonality tracking sits after this build (v15.79 or later), still mockup-first');
+  ok(P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && /^(15\.(79|[89]\d)|16\.\d\d)$/.test(r.v)), '4b the seasonality tracking sits after this build (v15.79 or later), still mockup-first');
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P), '4c PLAN_SEED equals the file');
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r15=R.rows.find(r=>r.id==='R-15');
   ok(r15 && r15.status==='implemented' && r15.version==='15.78' && r15.by==='operator' && /candle/i.test(r15.text) && /swept|sweep/i.test(r15.text), '4d R-15 on Rec, by operator, implemented in v15.78', r15&&[r15.status,r15.version]);

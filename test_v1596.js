@@ -40,10 +40,11 @@ ok(/@version\s+15\.9[6-9]/.test(src) && /var GPTS_VERSION='15\.9[6-9]';/.test(sr
 // ---------- 2. the chart is wired to REAL recorded data, at honest scale ----------
 {
   const kh=ex('kingChartHtml'), kb=ex('kingChartBars');
-  ok(/kingSteps\('SPY'/.test(kh) && /kingSteps\('SPXW'/.test(kh) && /kingDay\(book\)/.test(kh) && /nowSo-\(now-m\.t\)/.test(kh), '2a (v15.97) the step lines read kingDay(book).moves for BOTH books, matched to bars by SECOND-OF-DAY — not absolute ms, which drew a flat line');
+  ok(/kingSteps\('SPY'/.test(kh) && /kingSteps\('SPXW'/.test(kh) && /krOf\(book\)/.test(kh) && /nowSo-\(now-m\.t\)/.test(kh), '2a (v15.98) the step lines read the KING-ROLLS CENSUS krOf(book) — the Atlas-comparable source, live and in replay — matched to bars by SECOND-OF-DAY (v15.96/97 used kingDay.moves, a sparse counter → flat lines)');
   ok(/closedCandles\('SPY'\)/.test(kb), '2b the candles are the recorder’s own 3-minute bars (closedCandles)');
   ok(/kingSteps\('SPY', rr\)/.test(kh) && /kingSteps\('SPXW', spxD\)/.test(kh) && /kingChartSpxDisp/.test(src) && /SPY K ~/.test(ex('kingChartSvg')), '2c SPY King exact (× rr); SPX King approx (× the current dispScale), and the line wears ~ (honest scale)');
   ok(/wick tests, close decides/.test(kh), '2d the ledger says how a tap is judged — the doctrine rule, not a guess');
+  ok(/recorderBlind/.test(kh) && /parked \/ last-session book/.test(kh), '2e (v15.98) an empty census says WHY — the tracker is gated off while parked/replay (recorderBlind), never a flat line');
 }
 
 // ---------- 3. the stats layer is honest — no rate without its n ----------

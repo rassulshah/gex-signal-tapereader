@@ -50,57 +50,57 @@ _Generated from `tools/plan-seed.py` (the same data the 🗺 Roadmap tab renders
 
 ## NEXT — the running build
 
-### v15.97 — THE KING CHART — his ask 2026-09-11 ("a 3 min candle chart that display spy and spx king lines as steps, tracking their movements and when and where they deflected or price broke through"), picked mockup C. A view in the node-ladder section (toggle: grid ⇄ King chart, CFG.ladderView): ES 3-minute candles (closedCandles×rr) with the SPX King (gold) and SPY King (cyan dashed) drawn as STEP lines from kingAt(book, bar.t) — the recorded King journey (kingDay.moves); deflect (▲ held) / break (✕ through) markers computed the doctrine way (the WICK tests the line within ~1 ATR, the CLOSE decides); a ledger beside it (time · which King · held/broke · pts); sourced insights (doctrine + the one provisional ≈half-hold, n=4); and an n-gated hold-rate-by-factor shell that fills from the tap record. ⚠ SCALE: SPY King exact through time, SPX King approx (current dispScale applied back, wears ~) — the ratio journey isn't recorded yet. The FACTOR BACKLOG (his list: roll up/down, growth/decline, pika-stack support, polarity, level confluence, trend vs 50-MA, time of day, above/below open, SPX·SPY·QQQ book confluence, distance) is design/KING-STUDY.md, enriched as the tap record accrues
+### v15.98 — THE KING CHART — his ask 2026-09-11 ("a 3 min candle chart that display spy and spx king lines as steps, tracking their movements and when and where they deflected or price broke through"), picked mockup C. A view in the node-ladder section (toggle: grid ⇄ King chart, CFG.ladderView): ES 3-minute candles (closedCandles×rr) with the SPX King (gold) and SPY King (cyan dashed) drawn as STEP lines from kingAt(book, bar.t) — the recorded King journey (kingDay.moves); deflect (▲ held) / break (✕ through) markers computed the doctrine way (the WICK tests the line within ~1 ATR, the CLOSE decides); a ledger beside it (time · which King · held/broke · pts); sourced insights (doctrine + the one provisional ≈half-hold, n=4); and an n-gated hold-rate-by-factor shell that fills from the tap record. ⚠ SCALE: SPY King exact through time, SPX King approx (current dispScale applied back, wears ~) — the ratio journey isn't recorded yet. The FACTOR BACKLOG (his list: roll up/down, growth/decline, pika-stack support, polarity, level confluence, trend vs 50-MA, time of day, above/below open, SPX·SPY·QQQ book confluence, distance) is design/KING-STUDY.md, enriched as the tap record accrues
 
 Serves: DEFLECTION · KINGS — see where price met each King and whether it held or broke, on the axis where price is; the front end of the King study.
 
-Done when: shipped 2026-09-11 (installv1596 the view, then installv1597 the step-line fix); v15.96 drew the King lines FLAT — kingAt matched the ms-stamped moves against a bar time in a different unit and fell back to one strike per line; v15.97 steps the Kings by SECOND-OF-DAY (bar.so vs each move's age), so both lines step through the day; test_v1596 17; the live check is the next RTH reload.
+Done when: shipped 2026-09-11 (installv1596 the view, installv1597 a first step-line fix, installv1598 the real fix); v15.96 drew the King lines FLAT — kingAt matched the ms-stamped moves against a bar time in a different unit and fell back to one strike per line; v15.97 matched by SECOND-OF-DAY but still read kingDay.moves (a sparse counter); v15.98 reads the KING-ROLLS CENSUS krOf(book) - the Atlas-comparable source the King lanes use, live and in replay - and when the census is empty says WHY (the tracker is gated off while the panel is parked/replay: recorderBlind), never a flat line; test_v1596 18; the live check is the next RTH reload with the panel LIVE.
 
 ## AFTER THAT — in order
 
-### v15.98 — THE TAP RECORD — his word 2026-09-09 ("your recommendation" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 104 registry studies whose corpus is the tap record (WAITING on it since v15.90) read from it; H11 registered the day it starts — v15.98 after Kings + walls took v15.92, the RTH open took v15.93, the candle liquidity map took v15.94, the settings trim took v15.95 and the King chart took v15.96-97
+### v15.99 — THE TAP RECORD — his word 2026-09-09 ("your recommendation" → its own build): element 1, the universe + the two controls; then the outcome filler — the level study (R-25, design/TAP-RECORD.md): one row per tap of an exported line (book · rank · signed % · the conditions at the tap) plus the rest-of-book and midpoint controls, scored DEFLECT · PIN · BREAK with mfe / mae / reach / R at 10 and 20 bars, nightly by book × rank and by condition; the 104 registry studies whose corpus is the tap record (WAITING on it since v15.90) read from it; H11 registered the day it starts — v15.99 after Kings + walls took v15.92, the RTH open took v15.93, the candle liquidity map took v15.94, the settings trim took v15.95 and the King chart took v15.96-98
 
 Serves: HOD/LOD · PULLBACK · 104 studies · his question: what makes a gamma level deflect.
 
 Done when: the design agreed one element at a time; 40 taps per cell and the first F-study reads from them with n, beside the midpoint control.
 
-### v15.99 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
+### v16.00 — SEASONALITY TRACKED — his two charts on the Analysis tab: red vs green by weekday (the last 6 of each), the daily range by weekday (the last 5–6, ranked, against the 10-week average); the nightly appends the futures corpus (append-futures.py → study-hodlod.py) so the recent six are the recent six
 
 Serves: HOD/LOD · DEFLECTION — beginning- and end-of-week character, tracked rather than remembered.
 
 Done when: mockup approved; the two charts render from BASERATES byWeekday.recent; the corpus grows by one session a day on his machine.
 
-### v16.00 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
+### v16.01 — the deflection candidate score — the L-rules (growth into the tap, fresh, stack, roll, King distance, time of day, level confluence) as a live 0–100 per node as price approaches it, measured by the deflection ledger's CONTINUED / STALLED outcomes — the gauge's predict part · the per-book King rows from the ledger (S0.1–S0.4) · the H5 join
 
 Serves: PULLBACK · HOD/LOD · 'predict a deflection will occur once you see price is going to the node'.
 
 Done when: 30 scored calls exist and the gauge's predict part shows a Wilson lower bound, not a hope.
 
-### v16.01 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
+### v16.02 — score THE READ (stage ⑪) · MARK / STATE / polarity hovers say 'descriptive' until measured
 
 Serves: HOD/LOD · the loop closes.
 
 Done when: a scored READ line exists in a nightly log and renders on Testing ③ with its n.
 
-### v16.02 — the nightly reads one READY study per night and writes it back (v15.90 made READY the machine's word; the readers are still the review's) · TRACK → DRAFT study
+### v16.03 — the nightly reads one READY study per night and writes it back (v15.90 made READY the machine's word; the readers are still the review's) · TRACK → DRAFT study
 
 Serves: the loop closes on its own.
 
 Done when: a study changes status without a human editing the seed.
 
-### v16.03 — one definitions file (Python + panel) · the shipped-artifact test
+### v16.04 — one definitions file (Python + panel) · the shipped-artifact test
 
 Serves: hardening.
 
 Done when: changing a bin in one place fails the suite until the other side follows.
 
-### v16.04 — the face manifest — every number on the face names its study, pinned by a test
+### v16.05 — the face manifest — every number on the face names its study, pinned by a test
 
 Serves: data-driven, enforced.
 
 Done when: a new number on the face without a study fails the suite.
 
-### v16.05 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
+### v16.06 — the pullback outcome — RESUME to a new extreme for VWAP/value-area and node taps inside a move
 
 Serves: PULLBACK.
 

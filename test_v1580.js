@@ -252,7 +252,7 @@ ok(/@version\s+15\.(8\d|9\d)/.test(src) && /var GPTS_VERSION='15\.(8\d|9\d)';/.t
 {
   const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=P.roadmap.filter(r=>r.status==='next');
   ok(P.roadmap.some(r=>r.v==='15.80' && /PRICE AXIS/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.80'))) && P.roadmap.some(r=>r.v==='15.79' && r.status==='shipped'), '5a the plan: v15.79 shipped, v15.80 this build or shipped', nx.map(x=>x.v));
-  ok(P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && /^15\.(8[1-9]|9\d)$/.test(r.v)), '5b seasonality tracked sits after this build (v15.81 or later)');
+  ok(P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && /^(15\.(8[1-9]|9\d)|16\.\d\d)$/.test(r.v)), '5b seasonality tracked sits after this build (v15.81 or later)');
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P), '5c PLAN_SEED equals the file');
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r17=R.rows.find(r=>r.id==='R-17');
   ok(r17 && r17.status==='implemented' && r17.version==='15.80' && r17.by==='operator' && /price axis/i.test(r17.text) && /key levels/i.test(r17.why||''), '5d R-17 on Rec, by operator, implemented in v15.80', r17&&[r17.status,r17.version]);

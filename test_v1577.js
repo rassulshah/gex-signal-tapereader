@@ -156,7 +156,7 @@ global.GD_META={ n:282, fires:225, acc:76, base:51, ciLo:71, ciHi:82 }; global.g
   const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=P.roadmap.filter(r=>r.status==='next');
   ok(P.roadmap.some(r=>r.v==='15.77' && /E ROW/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.77'))) && P.roadmap.some(r=>r.v==='15.76' && r.status==='shipped'),
      '5a the plan: v15.76 shipped, v15.77 this build or shipped', nx.map(x=>x.v));
-  ok(P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && /^15\.(7[8-9]|[89]\d)$/.test(r.v) && r.status!=='shipped' || P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && r.status==='shipped')), '5b the seasonality tracking (his two charts) sits after this build, awaiting its mockup (or shipped)');
+  ok(P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && /^(15\.(7[8-9]|[89]\d)|16\.\d\d)$/.test(r.v) && r.status!=='shipped' || P.roadmap.some(r=>/SEASONALITY TRACKED/.test(r.title) && r.status==='shipped')), '5b the seasonality tracking (his two charts) sits after this build, awaiting its mockup (or shipped)');
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P), '5c PLAN_SEED equals the file');
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r14=R.rows.find(r=>r.id==='R-14');
   ok(r14 && r14.status==='implemented' && r14.version==='15.77' && r14.by==='operator' && /weekday/i.test(r14.text), '5d R-14 on Rec, by operator, implemented in v15.77', r14&&[r14.status,r14.version]);

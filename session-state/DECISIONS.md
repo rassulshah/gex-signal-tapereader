@@ -924,3 +924,13 @@ exception to one-at-a-time he has granted, and it covered the cuts.
 - **Both King journeys already existed** (SPY, and SPXW via `sampleTapeHistory('SPXW')`); the bug was the lookup, not the
   data. A line that draws-but-flat proves the source is populated.
 - **The King chart is v15.97 (two installs — the view v15.96, the step fix v15.97); the tap record moved to v15.98, the rest +1.**
+
+## 2026-09-11 · v15.98 — the King chart reads the census, and is honest when empty
+
+- **The King lines read `krOf(book)` — the King-rolls CENSUS (KRAW / the frames in replay)** — the Atlas-comparable source
+  the King lanes use, NOT `kingDay.moves` (a sparse counter). This was the v15.96/97 root cause: wrong source → flat lines.
+- **A line is drawn only from the first recorded King onward; the un-recorded morning is BLANK, not a flat seed.** And an
+  empty chart names the reason (`recorderBlind()` → parked/replay → click LIVE). A flat line where there is no data is a lie.
+- **The King tracker records only while the panel is LIVE in RTH.** If the panel is parked/replaying (recorderBlind), nothing
+  is recorded — so today's morning rolls were lost because the panel was parked until ~13:00. Not a chart bug; a state one.
+- **The King chart is v15.96–98 (three installs); the tap record moved to v15.99, the rest +1.**

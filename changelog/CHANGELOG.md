@@ -1,3 +1,31 @@
+## v15.98 — THE KING CHART, REALLY FIXED: READ THE KING-ROLLS CENSUS (krOf), AND SAY WHY WHEN IT'S EMPTY
+
+> Operator, 2026-09-11, after v15.97: **"its broken. check. the spx king is a straight line and spy only shows 1 king
+> movement there must be something wrong with the way you are tracking kings."** Then his `__gptsDebug.kingTrack()` dump:
+> every book `rolls:0, raw:[]` — the King tracker was **empty for the whole day**.
+
+**Two real problems, both mine.** (1) **Wrong source.** v15.96/97 read `kingDay.moves` — a sparse "moved N× today" *counter*
+(a 2-poll confirm guard, capped), not a journey; it held one point, so the lines drew flat. The panel has a dedicated,
+**Atlas-comparable King-rolls census** — `krOf(book)` (`KRAW`, and in replay the frames) — the same source the King lanes use.
+v15.98 reads **that**. (2) **A flat line is a lie.** The census is deliberately gated off unless the panel is showing live
+truth in RTH (`recorderBlind()` — replay, or a frozen last-session book — returns before it records). When it's empty the
+chart now **says why**: *"the panel is on a parked / last-session book, so the King tracker is paused — click LIVE."* — instead
+of drawing a flat line that looks like data.
+
+**What the dump proved.** At 13:17 CT (mid-RTH) `__gptsDebug.ladders()` read all books live and deep (SPY King 765, SPXW 7670,
+100 strikes each) — the feed was fine — yet `kingTrack()` was empty. So the tracker was gated off (the panel parked /
+`recorderBlind`), and my chart both read the wrong (also-empty) source AND hid the reason behind a flat line.
+
+**The fix.** `kingChartHtml` → `kingSteps(book)` now reads `krOf(book)` (raw crown journey per book, live and replay), matched
+to bars by second-of-day as before. If both King lines come back empty, a banner explains it — `recorderBlind()` → the parked
+message, else "no King rolls recorded yet today." SPY exact (× rr), SPX approx (× dispScale, `~`), the markers and the rest
+unchanged.
+
+**Tests.** `test_v1596.js` 18 — §2a re-pinned to `krOf(book)` (the census), §2e new (an empty census names the parked/replay
+reason via `recorderBlind`, never a flat line). Roadmap: the King chart entry is now **v15.98** (shipped as three installs);
+tap record → 15.99, the rest +1. Companion unchanged. ⚠ Live check: with the panel **LIVE** (not parked), the King lines
+should walk with the rolls; if it's parked, the banner now tells him to click LIVE.
+
 ## v15.97 — THE KING CHART FIX: THE STEP LINES WERE FLAT — STEP THE KINGS BY SECOND-OF-DAY, NOT ABSOLUTE MS
 
 > Operator, 2026-09-11, on v15.96 with a screenshot: **"why dont you show any king movements and deflections"** →
