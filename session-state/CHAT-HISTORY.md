@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-11 · v15.96 · session `f9c89c64` — IRT King questions, the record/analysis process, the record button (mockup), the daily-candle live-update Q, and THE KING CHART build (v15.96) + settings trim (v15.95)
+## 2026-09-11 · v15.97 · session `f9c89c64` — THE KING CHART (v15.96) and its step-line fix (v15.97 — flat lines were a ms-vs-second-of-day time-key bug); delivery/Drive and clickable-link questions
 
-_39 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_58 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -599,6 +599,329 @@ I have the full data map now — candles (`closedCandles`, ×ratio for ES), the 
 Vision locked in `design/KING-STUDY.md`. Let me add a LOCKED-ITEMS pointer, then find where the node-ladder section renders so I can add the view toggle and slot the chart in.
 This is a large, data-integration-heavy feature, and it's going into your live trading panel — so I'm going to build it carefully rather than rush it. I've confirmed every data source it needs exists and locked your factor vision into `design/KING-STUDY.md`. Let me find exactly where the ladder view switches so the chart slots in as a clean toggle.
 The scale handling across SPY and SPX Kings is exactly this project's #1 trap, so I'll build the overlay through the panel's own verifi …[trimmed]
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (14:22):** The v15.94 logic is verified — all four mutations caught, full suite green. Now the full project test suite to find version-pin regressions.
+17 red — most should be version pins and not-yet-written records. Let me triage what each is actually failing on.
+Let me establish the baseline — which of these were already red before my v15.94 changes, vs. genuine regressions from the candle rewrite.
+Baseline clear: `test_tapeking` was already red at v15.93 (pre-existing, not my regression); `test_nodeat`/`test_v1578`/`test_v1580` were green and my candle rewrite changed their pinned behavior (took-from-open, PFH/PFL tier 1, SWEPT/TARGET header — all user-requested). Let me read my actual rendered candle block and the failing test assertions so I update the tests to the intended behavior precisely.
+The critical check before anything else: my took-fix reads `D.took`/`D.gap`, but test 1f's `D` has `gap` and no `took` — so on the live candle the took labels would render `null` if the caller doesn't populate `D.took`. I must verify the real callsite actually sets `D.took`.
+I need to find where the real `D` object is built and confirm whether it carries `.took`. This is the make-or-break verification.
+Confirmed: real `hodLod` sets `out.took=(firstT-openSec)/60` and `out.gap=(hiT-loT)/60` — both populated on the live candle, so my took-fix reads real data correctly. The test stub 1f just predates the `took` field. Let me read the exact render of the took/MUD labels to update the test precisely.
+The §1o/§2o2 failures are because my new unified render dedups by label (`seen[it.lbl]`) — the test fed 18 events of only *two* labels (PDL×9, PDH×9), which now collapse to 2. The real requirement is "all distinct key levels draw, stacked a line apart," which dedup preserves and improves. Let me …[trimmed]
+
+**OPERATOR:**
+> how come im not seeing the other levels like 7606 and 7599 in irt .. are they top 5 or top 3 or kings ?
+
+**me (15:10):** Short version: they're not Kings and not walls — so with your current IRT setting they *can't* show up in the file, whatever their rank.
+
+Here's why. Back on 09-09 you cut the IRT export down to **Kings + walls only** — eight lines total: SPXW KING · SPY KING · CW0 · PW0 on ES, and QQQ KING · NDX KING · CW0 · PW0 on NQ. In that mode the file carries *only* the two Kings and the two walls per symbol. Everything else — the ranked gamma nodes — is still computed and latched underneath, it just doesn't get written to the file.
+
+7606 and 7599 are **node levels**, not Kings. Skylit's hierarchy is: the King is rank 1 (the biggest), then the top-5 nodes sit below it (ranks 2–5 — what the export calls XG2–XG5 on the SPX book, SG2–SG5 on the SPY book, G2–G5 on the NQ side). So they're in the top-5 set, not "top 3" (there's no separate top-3 cut in our export) and not Kings. That's exactly the family the Kings+walls setting strips out.
+
+To get them back, one toggle:
+
+1. Open the panel's **⚙** (config) tab.
+2. Find **IRT Lines**.
+3. Switch it from **Kings + walls** to **Everything**.
+
+That adds XG2–5, SG2–5, G2–5, FLIP0 and the D rows back to the file — 7606 and 7599 will be among them.
+
+One caveat before you flip it: "Everything" is what gave you the crowded chart you asked to trim in the first place, so if you only want *those two* specific levels rather than the whole node set, tell me and we can look at a middle option.
+
+Want me to read your live panel and tell you exactly which rank and which book 7606 and 7599 belong to? I can do that from the Atlas tab that's already open — just note they're ES prices (~758.3 / 757.6 in SPY scale), so I'd confirm rather than eyeball it.
+
+**OPERATOR:**
+> but is skylit showing  gamma levels 1-5 for both spy and spx .. what levels is skylit showing
+
+**me (15:21):** Good question to settle from what's actually on your screen rather than memory. Let me look at the Atlas tab.
+I can't peek at your screen live right now — the market's open and your recorder is running, and opening a second Atlas tab would disturb it — so let me answer from how Skylit's feed actually works, and give you a safe way to confirm it yourself.
+
+The key thing: on the **ES futures Atlas view you're looking at, Skylit is not drawing two separate 1–5 ladders (one SPX, one SPY).** It draws a single **merged, ranked derived list** — a King plus the next few ranked nodes (its top-5 "D" set) — pooled from more than one options book and plotted at futures prices. So any given rank you see (say the 3rd line down) can come from *either* the SPX book or the SPY book, whichever node is bigger at that point. It's one ranking, not book-by-book.
+
+That's exactly why our IRT export can split them into **XG2–5 (the SPX book)** and **SG2–5 (the SPY book)** as distinct families: our panel reads *both* books' payloads and keeps them separate, whereas Skylit's futures chart pools them into one list. So 7606 and 7599 are two of those merged ranked nodes — below the King, in the top-5 set — and which book each belongs to is decided by its ratio (SPX strikes land on multiples of 5, SPY on whole numbers).
+
+If you want the per-book 1–5 instead, that's a matter of which ticker Atlas is loaded on:
+
+1. On **ES/futures** → you get the merged derived list (what you're seeing now).
+2. Switch the Atlas ticker to **SPY** → that book's own King + top-5.
+3. Switch it to **SPX** → that book's King + top-5.
+
+Two ways to pin down 7606 / 7599 exactly without me touching the tab: either read me the labels Skylit puts next to those two lines, or I can take a proper look after the close (so I'm not open …[trimmed]
+
+**OPERATOR:**
+> why is the 7500 100% in atlas? is this king ? how come i dont see it as a king in irt
+
+**me (16:15):** Hold on — this is exactly the kind of "100% here but not there" that usually turns out to be a window or scale difference rather than a bug, so let me be careful before calling it either way.
+
+First, the clean part: in Atlas's **READ AS %King** mode, **100% = the King** by definition (it's 100% of itself, the reference every other node is measured against). So yes, 7500 is a King. The real question is *which* King — because "the King" is not one fixed thing:
+
+- **It's window-specific.** The King of the 0DTE book, the to-Friday book, and the all-expiries book can sit at three different strikes. If your Atlas window is set to something other than what the IRT export computes its King from, Atlas's 100% node (7500) and your IRT `SPXW KING` / `SPY KING` will legitimately disagree — same feed, different window.
+- **It's book-specific.** On the ES chart the line is drawn in futures/SPX scale (~7500), and the IRT export puts *both* `SPXW KING` and `SPY KING` on the ES symbol converted to that same scale — so a SPY King near ~750 shows up as ~7500-ish in the file too. Which book's King is 7500 matters.
+
+So before I tell you it's a mismatch to fix versus expected behavior, two readings so I'm comparing like-for-like:
+
+1. **Which expiry window is Atlas on right now** — 0DTE, to-Friday, or all?
+2. **What do your IRT `SPXW KING` and `SPY KING` lines currently read** (the ES-scale numbers in the file)?
+
+With those two I can tell you straight: if it's a window difference, that's working as intended; if Atlas and IRT are on the *same* window and book and still disagree, that's a real bug and we'll chase it. I'm deliberately not guessing from here because this project has a long history of "phantom" King mismatches that were really one number from a different window or scale than the o …[trimmed]
+
+**OPERATOR:**
+> Front
+
+**me (16:15):** "Front" — that's the diagnostic I needed. Let me check what window the IRT export's King lines are actually computed from, in the code, so I can tell you whether they *should* match Atlas's Front King or not.
+That "Front" is the key — it tells me exactly what 7500 is. Let me explain, because there are two different "Kings" in play here and that's the whole confusion.
+
+On your ES1 chart, Atlas isn't drawing an options book — ES has no options. It draws the **futures gamma node list for the front expiration**, and the 100% node in that list (7500) is its King. In our vocabulary that's the **D-KING** — the crown of the FRONT-window derived list, the thing we built specifically to "match Atlas … FRONT."
+
+So yes, 7500 is a King. Two reasons it isn't showing as one in your IRT file:
+
+1. **The D rows are turned off in your current setting.** `D-KING` and `D2–D5` — the rows that mirror exactly what Atlas draws on the ES chart — only write to the file in **Everything** mode. In your **Kings + walls** setting they're suppressed. So the one row that would literally say "this is Atlas's 7500 King" isn't in the file right now.
+
+2. **The Kings you *do* export are named by their options book, not by the chart.** `SPXW KING` and `SPY KING` come from the SPX-options and SPY-options books. On the front expiration, Atlas's ES node list is built *from* those same two books' top rows — so 7500 is almost certainly the very same node as one of your two exported Kings, just wearing a book label (`SPXW KING` or `SPY KING`) instead of the 100% crown you see on the chart.
+
+One check settles which it is:
+
+1. Open your `FlexLevelsExport.csv` (or look at the two gold King lines on your IRT chart).
+2. Read the `SPXW KING` and `SPY KING` values.
+3. If one of them is ~7500 → that's your 7500 King, just …[trimmed]
+
+**OPERATOR:**
+> now its correct on the irt . so maybe there was a lag or a delay and the levels in irt should be updated more quickly
+
+**me (16:18):** Good — that resolves it, and your read is right: the King did move, the file just hadn't caught up yet. Let me confirm the mechanism from the code so I give you the right lever.
+That confirms it — it was export lag, not a King problem. Here's the mechanism, and the lever is already in your hands.
+
+Your King latch is **off** (`KING_LATCH_MS = 0`, from the "match Skylit" change), so the *panel* follows Skylit's King on the same tick — no delay there. But the **CSV that IRT reads is only rewritten on a timer**, and that timer is what lagged. When the King moved, the panel knew immediately, but the file didn't get rewritten until its next scheduled write — so IRT showed the old King until then, then caught up. Exactly what you saw.
+
+You can speed it up right now, no build needed:
+
+1. Open the panel's **⚙** tab.
+2. Find **Export levels → Every**.
+3. It's a row of **1m · 3m · 5m · 15m**. You're almost certainly on 3m — click **1m**.
+
+That's the fastest the current build allows — the export is capped at a 60-second floor in code, so 1m is the floor, not 3m.
+
+Two honest caveats before you decide that's enough:
+
+- **IRT re-reads the file on *its own* schedule too.** Even if we write every 60s, Investor/RT only picks up the new file when it next polls it. If IRT's own refresh is slow, that's a separate cap on your side that our cadence can't beat — worth checking IRT's FlexLevels refresh setting.
+- **Sub-minute would be a build, and it's a real tradeoff.** If 1m still feels laggy and you want, say, 30s or write-on-King-change, I can do it — but with the latch off the King can flicker tick-to-tick, so a very fast export can make the IRT lines twitch on noise that the 3m cadence was quietly smoothing. That's a "let's talk through it" change, not something to just flip.
+
+Try **1m** …[trimmed]
+
+**OPERATOR:**
+> i selected 1m but now the setting just stay , i cannot get rid of them because i cannot scroll down to the save button if there is one.  also note there are a lot of things on the settings that are old and not in use . review what needs to be removed and its associated code in the javascript file.
+
+**me (16:22):** Two things there — an urgent one (you're stuck in the settings right now) and a bigger cleanup. Let me handle the blocker first and check the code so I tell you the right thing.
+Two findings that unblock you immediately, then the cleanup.
+
+**On the settings not saving — good news: there's nothing to save.** Every setting in that panel applies the instant you click it and writes to storage on the spot — the 1m you clicked is *already live and saved*. There is no Save button anywhere in ⚙, and none is needed (that's why you couldn't find one to scroll to). To close the panel, click the **⚙ gear icon again** — it toggles shut. You're done; 1m is in effect.
+
+The "can't scroll to the bottom" is a real bug in the settings panel, and it's the same root as your cleanup request — the panel has outgrown its own height. Let me actually do the review you asked for. Let me read the whole settings panel and cross-check each control against the code.
+The IRT cadence and every other setting there persist on click — confirmed at line 9215, `saveCfg()` fires the moment you click, writing to storage. So your 1m is saved; just click the gear to close.
+
+Now the cleanup. This is a real, worthwhile audit, but it's also exactly the kind of change that goes wrong if I guess — calling a setting "dead" when something downstream still reads it is how this project has broken before. So let me do it as a proper review you sign off on, not a blind sweep. Let me read the full settings panel first.
+That's the whole settings panel — it's one function, and it breaks into these groups. Let me quickly check whether the biggest legacy block (the original "BO Pullback" signal config) is even still wired to anything live before I recommend anything, because that's the thing most likely to be dead weight.
+Here …[trimmed]
+
+**OPERATOR:**
+> ok.. build
+
+**me (16:33):** On it — this is v15.95. Let me first nail down exactly what the Signal Type buttons write and confirm nothing in the setup machine reads these flags, plus trace Compact and Alerts so I can make the keep/kill call I promised.
+Alerts fire — line 18083-18084 does `pulseHeader`/`beep`. Let me check which of the 7 events are actually triggered, so I keep the live ones.
+Full trace done. Confirmed inert: `boPb`, `ftReq`, Signal Type (`CFG.dir`), Compact (`CFG.compact`), and the `pbNode` alert (never fired — the other 6 alerts fire and stay). Let me check test references and pin down the exact removal points before editing.
+No test references to any doomed control — clean. Let me read the exact CFG defaults and load blocks so my edits are precise.
+Now the CFG load lines:
+Now the cfgHtml panel. Let me read the current state of the header and BO block (line numbers shifted after the deletions).
+Now the header rename and the BO signal block. Let me read the current cfgHtml top region:
+Now remove the Compact node cells control:
+Now the pbNode alert row and the wireConfig handlers. Let me locate them in the shifted file:
+Now the wireConfig handlers. Let me read that region:
+Let me verify no dangling references remain, then bump the version:
+Two real leftovers: the gear tooltip still describes the old settings (`pbNodeK` at 29749 is an unrelated function — leave it). Let me fix the tooltip:
+Now bump the version to 15.95 in all three spots:
+Version bumped, syntax clean. Let me run the full suite to see what the removals and version bump break.
+Clean — no test broke from the control removals themselves (confirms nothing depended on them). The new reds are the version pin (test_v1594 0a), roadmap, and records. Let me confirm test_v1594 is only the version pin, then handle all of them.
+N …[trimmed]
+
+**OPERATOR:**
+> did you save the data for today and do the analysis and testing and carry out the process
+
+**me (02:51):** Let me check what's actually on GitHub right now, because the save and the nightly run on your machine, not here — I want to tell you what really landed rather than guess.
+Both today's data and tonight's nightly are already on GitHub. Let me confirm they're the real full session, not stubs, before I report.
+Good news, and an important clarification about who does what: I didn't do any of that — and from here I can't. But it did all happen, automatically, on your machine. I just checked GitHub to be sure rather than assume.
+
+Here's what actually landed for today (2026-09-10):
+
+**The save ✓** — `data/2026-09-10.json` is on GitHub, `writtenBy: auto`. That means the panel wrote it itself after the close (the v15.71 auto-save), no click from you. It carries the full session: 124 SPY 3-minute bars plus all the layers — snaps, events, node events, features, deflections, your track requests and items.
+
+**The analysis + testing ✓** — `learning/log/2026-09-10.json` is on GitHub, `ranOn: his machine`, at **3:05 PM CT** (right after the close). The nightly processed **5 sessions, 50 episodes, 221 deflection events**, and ran its hypotheses, the LOD/HOD read, the pre-open study, the pattern table, the futures corpus and the feature outcomes. That's the REVIEW → REGISTRY pass — the "analysis and testing" part of the loop.
+
+So the process ran end to end for today, on schedule, by the automation you built — not by me.
+
+The reason it's not me: this cloud session does **builds**. It can't reach your browser's IndexedDB (where the recording lives) and it can't push to git — so the save, the push, and the nightly are all your machine's job, and they're wired to run on their own. The one manual step still outstanding is unrelated to today's data: running today's **installer** (v15.94 + v15. …[trimmed]
+
+**OPERATOR:**
+> start recording
+
+**me (14:07):** Recording isn't something I start from here — it's automatic in your browser. Let me try to read your panel's live recorder counts to confirm it's actually capturing, rather than just telling you it should be.
+I can't reach your Atlas tab from here — it's not one this session controls, and I won't open a second Atlas tab because that would double‑record and disturb the one you've got. More to the point: there's no "start" button to press. Recording is automatic — the panel captures every bar into IndexedDB the whole time it's loaded on the open Atlas tab with a live book. After a reload (like installing v15.95) the recorder re‑attaches on its own and keeps going; you don't restart anything.
+
+So it's already recording if two things are true, and both look right: the panel's loaded (the footer shows a version) and a book is live. One thing to know about the clock, though — right now it's the overnight Globex session (ES is ticking, but the SPX/SPY options book that the recorder actually stores doesn't really run overnight). The meaningful capture is the RTH book from 08:30 CT. As long as the tab stays open and loaded, it'll pick that up on its own.
+
+If you want to *confirm* it's capturing and let me read the numbers, do this:
+
+1. On the Atlas tab, press **F12** to open DevTools, click the **Console** tab.
+2. Type this and hit Enter: `__gptsDebug.storage()`
+3. Paste me what it prints.
+
+That returns the recorder's live counts (snaps / tape / deflections). I'll tell you whether they're growing — which is the real proof it's recording. If step 2 says it's not a function, run `Object.keys(__gptsDebug)` instead and paste that, and I'll point you to the right one.
+
+One more, since you just reloaded to install: glance at the footer **💾 chip**. If it reads **DUE**, click it once a …[trimmed]
+
+**OPERATOR:**
+> i reloaded and then typed it in and it showed
+
+**me (14:14):** That output is the recorder's storage health, and it's a green light: **53% full (5,426 KB of a 10,240 KB cap), 4.8 MB of headroom, and `canWrite40KB: true`** — meaning it has plenty of room and can keep writing. And the fact that `__gptsDebug.storage()` even responded tells us the panel reloaded cleanly and its recorder subsystem is live. So recording is on and has room to run all day.
+
+Two honest caveats so you're not misreading it:
+
+The number that matters for *"is it capturing right now"* isn't in that view — `storage()` shows capacity, not the live bar counts. And right now it wouldn't be climbing anyway: it's the overnight Globex session, and the SPX/SPY options book the recorder stores doesn't really feed overnight. Counts start climbing when the **RTH book opens at 08:30 CT** — that's the real capture, and it happens on its own as long as the tab stays open.
+
+If you want to actually watch the bar counts (now or, more meaningfully, during the session), one small step:
+
+1. In the console, click the little **▶ triangle** to the left of that `{…}` result to expand it, and paste/screenshot the full object — it has fields hidden behind the `…`.
+
+That'll show me the per‑store counts (snaps / tape / deflections), and if you run it twice a minute apart during RTH and they've gone up, that's the definitive proof. For now, the takeaway is simple: you reloaded, the panel's running, storage is healthy — leave the tab open and it records the session automatically. Nothing else for you to do.
+
+**OPERATOR:**
+> int he next build lets have a record button that shows that the market is automatically recording at the top in the tapereader header. if it is not recording , clicking it should start the recording process.
+
+**me (14:17):** Good feature — and it's worth designing truthfully, because "recording" has a couple of real states (live-and-recording, replay = deliberately not recording, market closed = nothing to record). A button that says "click to start" has to do something honest in each case. Let me look at how the recorder actually signals its state so the indicator reflects reality, then I'll show you a mockup before anything gets built.
+This one's genuinely useful, and there's a good foundation already: the panel has a `recFresh` signal (a bar within ~6 min = still recording) and a `recorderBlind()` state (replay = deliberately not recording), which today only show on the day line at the bottom. Your idea moves that to the header as a live button. Let me mock it up so we agree on the look and — the important part — what "click to start" honestly does in each case, since a button can't manufacture a feed when the market's closed.
+Mockup's above (it renders inline). The button reads the recorder's actual state instead of guessing, and clicking does the honest recovery for each case:
+
+- **● REC** (green, pulsing) — live and recording, with today's bar count. Nothing to fix.
+- **❚❚ REPLAY** (amber) — you're back on the replay slider, so recording's paused by design. Click → return to live, recording resumes.
+- **▲ NOT RECORDING** (red) — market's open but no bar in ~6 min (the feed dropped). Click → reconnect (re-attach the observer + self-fetch).
+- **○ ARMED** (grey) — overnight/closed, no book to record. It'll start itself at the open.
+
+The one call I want your yes on: in that last case (market closed), a click genuinely *can't* start recording — there's no feed to capture. So I drew it as **ARMED** (grey, "starts itself at 08:30") rather than a green "recording" button that would be lying t …[trimmed]
+
+**OPERATOR:**
+> is the daily candle being updated during the day as the day develops?
+
+**me (14:22):** Good question — let me confirm from the code rather than assume, since the candle's whole point is showing the day as it develops.
+Yes — it's live. The daily candle redraws every time a new bar comes in, showing the day *as it stands right now*, not a finished shape.
+
+Mechanically: the candle is built from `hodLod(sym)`, which recomputes the session's running high and low from the RTH bars available so far (from the 08:30 open up to the latest bar), and `render()` fires on each feed update — so the HOD/LOD, the took-from-the-open under each extreme, the shape spine (wick/body/wick %), and the swept/target levels all refresh as the session develops.
+
+Three honest nuances so you read it right:
+
+It steps at the **3-minute bar cadence**, not tick-by-tick — the candle advances each time a new 3-minute bar closes, same as the rest of the panel. So between bars it holds, then updates.
+
+Early in the session, before enough has printed, it shows the **"this is not a reading" empty state** rather than a candle (that's the `D.ok` / NOREAD gate) — it populates once the day has actually made a high and a low.
+
+And the **second extreme is provisional** intraday: whichever of the HOD/LOD is still being made keeps moving, and so does its took and the target/next-draw it's reaching toward — until the day closes and the shape is final. So it's a live snapshot of the developing day, which is exactly what you'd want, just don't read the current "second extreme" as settled until the close.
+
+One thing it's *not* live for: if you're on the replay slider, the candle shows that parked historical day, frozen — it only develops in real time when you're on LIVE.
+
+**OPERATOR:**
+> currently in the node ladder section , i want to have the ability to see a different view.  The view is is a 3min price chat that tracks the spy and spx king deflections for the es .  The idea is to have a 3 min candle chart that display spy and spx king lines as steps , tracking their movements and when and where they deflected or price pbroke through .  i may also later add additional levels or call and put walls as needed. i want you to show me a few mockups of this.
+
+**me (16:39):** Great view idea — price against the two Kings as stepped lines, with the deflect/break events marked, is exactly the picture a tape reader wants. Let me check the panel's existing King colors and what King/deflection data the recorder already stores, so the mockups look native and are actually buildable, and I'll pull in the dataviz guidance before drawing.
+This view is fully backed by data the recorder already stores — 3-min candles (`closedCandles`), the King position per bar (`king`/`kingKd` in each frame), and the event-level deflection ledger (`day.defl`, one row per tap with its deflect/break outcome) — so it's genuinely buildable, not just a picture. Since it's a real chart, let me pull in the dataviz guidance before drawing.
+The data's all there (candles, per-bar King positions, and the deflection ledger with deflect/break labels), so this view is real, not decorative. Applying the dataviz method — one price axis (Kings and price share ES scale, so no dual-axis trap), the two Kings as a fixed 2-color categorical pair with line-style as a second cue, and deflect/break as reserved status marks with shape + label, not color alone. Let me build three takes.
+Let me sanity-check the mockup's JS renders without errors before sending:
+JS runs clean. Sending the mockups.
+Mockups are above (all three render inline, same sample day so you can compare treatments directly).
+
+- **A — full candles + King steps + glyphs.** The literal picture: real 3-min candles, SPX King gold (solid), SPY King cyan (dashed), a bounce-arc ▲ where price held, an ✕ where it broke through.
+- **B — price line, Kings up front.** Price as a thin line so the King steps and the interactions dominate, and each event carries the outcome (`+1 held`, `broke −5`). Reads well at panel width.
+- **C — chart + …[trimmed]
+
+**OPERATOR:**
+> i like C ,  can you put some stats and probabilities behind it .  as well as insights below it from studies explaining when kings tend to hold and when the tend to break.  anything else that you can think of , maybe different factors, confidence factor etc.
+
+**me (16:46):** Love this direction — and it's exactly where I have to be careful, because this project's hardest rule is *never show a rate without its n and date*, and several past "headline" numbers were one-day samples. The King hold/break rates come from the tap-record study, which isn't built yet (that's v15.96), so I won't invent probabilities. Let me pull the real factor list and what's actually been measured/doctrine so the stats layer shows honest shapes and cites real sources.
+This is the right instinct, and it's exactly where the project's discipline matters: the King hold/break rates come from the tap-record study (v15.96), which isn't built yet, so the honest state today is **n=0 for most of it**. I won't fabricate "Kings hold 68%" — that's the one-day-sample trap that's burned this project. What I *can* do is design the full analytics layer truthfully: real factors (your L-rules), real doctrine as the prior, the one provisional finding that exists (a tap holds ≈ half, n=4 sessions), and every number tagged with its source and n — so the shell is ready and fills in as the tap record accrues. Let me build that.
+Mockup's above. It stacks four things, and the discipline is that every number says where it's from:
+
+1. **Chart + ledger** — the C view you picked.
+2. **The read on the live tap** — a 0–100 confidence score for the King price is currently approaching, broken into factor-lean bars (+γ brake, fresh & growing, within the 5–10pt margin, confluence, time of day). It's labeled honestly: **the factor lean, not a measured probability** — it says which way the doctrine points, and it earns a real Wilson-bounded hit rate only once the tap record has scored ≥30 taps of that shape. Today: `n=0 scored`.
+3. **When Kings hold vs break** — the insights, each sourced: `doctrine` fo …[trimmed]
+
+**OPERATOR:**
+> lets build.  we can discuss later.  but i want you to start thinking on how to focus on the king study more by considering multiple factors such as a king that rolls up or down and whether that has an impact on it holding price as well as king growth and decline and whether additional high gamma nodes are supporting the king like a piku stack, the polarity of the king,  as well as levels like the levels we track and trend being above or below the 50 ma and much more. but first lets get the study done that you have and then we will enrich it as you collect more data about the king and all the additional factors,  even things like time of day , the hour we are in ,  and if we are above or below the open.  all these stats will be added to build out a very robust way of identifying the cause of why the king held or why the king broke.  even things like king confluence with qqq and spy or at least one matters alot
+
+**me (16:55):** Building it. First let me capture your King-study factor vision so it's not lost, then verify exactly what King-history and deflection data I can wire the chart to — because the step lines need the King's position at every past bar, and I want to draw real data, not fake it.
+`kingAt(sym, ms)` exists — that's the historical King lookup I need for the step line. Let me read it, the candle bar shape, and the deflection ledger export to confirm I can wire real data.
+Confirmed the step data is real: `kingDay(sym).moves` is literally an array of `{t, k}` steps per book, and `deflKingsAt` gives the time-aware kings on the display scale. Let me read the candle bar fields and the ledger export to finish the data map, then I'll capture your factor vision and build.
+I have the full data map now — candles (`closedCandles`, ×ratio for ES), the King steps (`kingDay(book).moves` = `{t,k}` points), the time-aware kings (`deflKingsAt`), and the per-King touch/deflect/break tallies (`nodeLedger`/`day.defl`). Everything the chart needs exists. Let me first record your factor vision durably so it drives the enrichment, then build the view.
+Vision locked in `design/KING-STUDY.md`. Let me add a LOCKED-ITEMS pointer, then find where the node-ladder section renders so I can add the view toggle and slot the chart in.
+This is a large, data-integration-heavy feature, and it's going into your live trading panel — so I'm going to build it carefully rather than rush it. I've confirmed every data source it needs exists and locked your factor vision into `design/KING-STUDY.md`. Let me find exactly where the ladder view switches so the chart slots in as a clean toggle.
+The scale handling across SPY and SPX Kings is exactly this project's #1 trap, so I'll build the overlay through the panel's own verifi …[trimmed]
+
+**OPERATOR:**
+> did you save this to my drive. i cant find it
+
+**me (17:36):** No — I can't save to your Drive or your computer from here, so it's not in Drive. The installer is delivered **into this chat** as a downloadable file, not to any folder. If you're looking in Google Drive, it won't be there (and for this project Drive is a stale mirror we don't use anyway — GitHub is the real store).
+
+Here's where it is and how to get it, step by step:
+
+1. Scroll up a little in **this conversation** to my last message — there's a **file card / attachment named `installv1596.bat`** (just above this). That's the file.
+2. **Click it to download.** It lands in your browser's **Downloads** folder (wherever your Chrome downloads go).
+3. Go to that Downloads folder and **double-click `installv1596.bat`**.
+
+That's the whole delivery — the `.bat` carries everything, and when you run it, *it* is what pushes the code and records to GitHub (the durable save). Nothing reaches GitHub or your `C:\Dev` folder until you double-click it.
+
+Two things worth knowing since you couldn't find it:
+
+If you don't see the card, tell me and I'll re-send it — sometimes an attachment scrolls out of view in a long thread.
+
+And if what you'd actually prefer is for me to drop the installer straight into a folder on your computer (like `C:\Dev\gex-signal-tapereader`) instead of you downloading it each time, I may be able to do that if your computer's linked to this session — say the word and I'll check whether that path is open. Otherwise, download-from-chat and double-click is the way.
+
+**OPERATOR:**
+> why didn't you give me a clickabel tampermonkey link ?
+
+**me (17:37):** You're right — I put the URLs in code formatting, which you've told me reads as no link. My mistake. Here they are as actual clickable links:
+
+**[→ Tapereader v15.96 — click to update in Tampermonkey](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js)**
+
+[Companion v1.19 — unchanged, don't reinstall](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js)
+
+One thing about the order, so the link actually works: that link pulls from GitHub, and v15.96 only reaches GitHub when you **run `installv1596.bat`** (the double-click is what pushes it). So it's:
+
+1. Download and double-click **installv1596.bat** (from the file card above).
+2. Wait **~5 minutes** (GitHub's raw CDN caches for 5 min).
+3. **Click the Tapereader link above** → Tampermonkey opens it and offers **Update** (if it says "Reinstall," the CDN hasn't refreshed yet — wait a bit and click again).
+4. **Reload the Atlas tab** — footer should read v15.96.
+
+I'll give the clickable link every build from now on, not tucked in code formatting.
+
+**OPERATOR:**
+> why dont yhou show any king movements and deflections on the king chart .. see screen
+
+**me (17:42):** I can't see your screen (no image came through), so let me diagnose from the code — the step lines and deflections both depend on the recorded King *move* journey (`kingDay(book).moves`), so if that's empty or on a different time base, you'd get candles but no King lines and therefore no markers. Let me check how those moves get recorded.
+Found the bug. Let me read the King-journey recorder to confirm.
+Two real bugs, confirmed. **`KINGDAY` only has `SPY` and `QQQ` keys — there is no `SPXW` journey at all**, so `kingAt('SPXW')` always returns null and the SPX King line can never draw. Let me check whether even the SPY journey is being populated (where `updateKingJourney` is called), since you're seeing neither line.
+There's a second King history — `KINGHIST[sym].seq` of `{t,k}` samples. Let me see which symbols it's built for, since that may include SPXW where KINGDAY doesn't.
+Found it, and it's a real bug on my side — thank you for catching it. Here's what's wrong:
+
+**The SPX King line can't draw at all.** The panel only records a King *journey* for SPY and QQQ — `KINGDAY` and the King-history sampler both cover `['SPY','QQQ']`, and `RECORDER_SYMS` excludes SPXW. So when my chart asks `kingAt('SPXW', …)` for the gold SPX step line, there's no recorded history to answer with, and it comes back empty. I assumed that lookup worked because the function existed; it doesn't have SPX data behind it. That's my mistake in v15.96.
+
+The **SPY King line and the deflection markers** are a separate question: those *do* have a data source (`KINGDAY.SPY`), so they should draw — but only if the SPY King has actually moved today (the "steps") and price has tested it (the markers, wick-tests-line/close-decides). Fresh after a reload, the journey reseeds, so early in a session it can legit …[trimmed]
+
+**OPERATOR:**
+> there should be step lines going up and down throughout the day
+
+**me (17:46):** Now I can see it clearly — both King lines draw, but they're **flat** (SPX at 7690, SPY at 7650) instead of stepping. That's a single clean bug: the King moves are timestamped in **milliseconds** (`Date.now()`), but the candle bars are almost certainly timestamped in **seconds** — so `kingAt` compares ms against seconds, the lookup never advances past the first entry, and every bar gets the same seed King → a flat line. Let me verify the candle's time unit.
+The candle likely carries `.so` (second-of-day) but not the ms `.t` my `kingAt` call needs — so `kingAt` falls back to the *current* King for every bar, drawing flat. Let me confirm the live candle's fields.
+The SPX line *does* draw (flat at 7690), so both journeys exist — my earlier "no SPXW" guess was wrong. The real cause is the time-base: `kingAt` gets a bar time it can't match against the ms-stamped moves, so it returns one constant King per line. Let me confirm the live candle's `.t` unit.
+`f.t` is milliseconds (the replay path subtracts `5*3600000` ms from it), but the live candle's time field isn't reliably matching the moves' `Date.now()` base — so `kingAt` returns one constant King per line. The robust fix is to stop matching on absolute timestamps and instead match each move to a bar by **second-of-day** (which every candle carries reliably as `.so`), converting each move's age to a second-of-day. That sidesteps the unit/timezone ambiguity entirely. This is v15.97. Let me apply it.
+Let me verify the SPXW King journey actually accumulates rolls (not just a seed), so its line will step after the fix:
+Confirmed — `sampleTapeHistory('SPXW')` is called explicitly (line 3898), so both King journeys accumulate their rolls. The flat lines were purely the lookup bug. Let me update the test to the new second-of-day …[trimmed]
 
 ### DECISIONS
 

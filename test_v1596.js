@@ -40,9 +40,9 @@ ok(/@version\s+15\.9[6-9]/.test(src) && /var GPTS_VERSION='15\.9[6-9]';/.test(sr
 // ---------- 2. the chart is wired to REAL recorded data, at honest scale ----------
 {
   const kh=ex('kingChartHtml'), kb=ex('kingChartBars');
-  ok(/kingAt\('SPY',\s*bars\[i\]\.t\)/.test(kh) && /kingAt\('SPXW',\s*bars\[i\]\.t\)/.test(kh), '2a the step lines read kingAt(book, bar.t) for BOTH books — the recorded King journey');
+  ok(/kingSteps\('SPY'/.test(kh) && /kingSteps\('SPXW'/.test(kh) && /kingDay\(book\)/.test(kh) && /nowSo-\(now-m\.t\)/.test(kh), '2a (v15.97) the step lines read kingDay(book).moves for BOTH books, matched to bars by SECOND-OF-DAY — not absolute ms, which drew a flat line');
   ok(/closedCandles\('SPY'\)/.test(kb), '2b the candles are the recorder’s own 3-minute bars (closedCandles)');
-  ok(/x\*spxD/.test(kh) && /kingChartSpxDisp/.test(src) && /SPY K ~/.test(ex('kingChartSvg')), '2c SPY King exact (a\\*rr); SPX King approx via the current dispScale, and the line wears ~ (honest scale)');
+  ok(/kingSteps\('SPY', rr\)/.test(kh) && /kingSteps\('SPXW', spxD\)/.test(kh) && /kingChartSpxDisp/.test(src) && /SPY K ~/.test(ex('kingChartSvg')), '2c SPY King exact (× rr); SPX King approx (× the current dispScale), and the line wears ~ (honest scale)');
   ok(/wick tests, close decides/.test(kh), '2d the ledger says how a tap is judged — the doctrine rule, not a guess');
 }
 

@@ -35,7 +35,7 @@ ok(/THE FILE WAS THREE LINES/.test(B) && /G2\.\.G5 — the rest of Skylit's top-
 { const P=JSON.parse(fs.readFileSync('learning/plan.json','utf8')); const nx=P.roadmap.filter(r=>r.status==='next');
   ok(P.roadmap.some(r=>r.v==='15.76' && /G2–G5 IN THE IRT EXPORT/.test(r.title) && (r.status==='shipped' || nx.some(x=>x.v==='15.76'))) && P.roadmap.some(r=>r.v==='15.75' && r.status==='shipped'),
      '2a the plan: v15.75 shipped, v15.76 this build or shipped', nx.map(x=>x.v));
-  ok(P.roadmap.some(r=>/candidate score/.test(r.title) && /^15\.(7[7-9]|[89]\d)$/.test(r.v)), '2b the candidate score sits after this build (v15.77 or later)');
+  ok(P.roadmap.some(r=>/candidate score/.test(r.title) && /^(15\.(7[7-9]|[89]\d)|16\.\d\d)$/.test(r.v)), '2b the candidate score sits after this build (v15.77 or later)');
   const seedJs=JSON.parse(/var PLAN_SEED=(\{.*?\});\n/.exec(src)[1]); ok(JSON.stringify(seedJs)===JSON.stringify(P), '2c PLAN_SEED equals the file');
   const R=JSON.parse(fs.readFileSync('learning/recommendations.json','utf8')); const r13=R.rows.find(r=>r.id==='R-13');
   ok(r13 && r13.status==='implemented' && r13.version==='15.76' && r13.by==='operator' && /G2–G5/.test(r13.text) && /Mirror Skylit/.test(r13.why||''),

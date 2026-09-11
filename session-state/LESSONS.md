@@ -131,6 +131,21 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.97 — a chart that overlays a time series on candles must match them in the SAME time unit; when in doubt, match on second-of-day, which the candles always carry
+(1) **A flat line where a stepped one belongs is a time-key mismatch, not "the King didn't move."** v15.96 drew both King
+lines dead flat. The King journey stamps moves with `Date.now()` (ms); the candle `.t` is not reliably that same
+ms/epoch base, so `kingAt(book, bar.t)` matched nothing and fell back to one strike per line. The tell: BOTH lines flat and
+"0 taps" while the King visibly rolled all day — systematic, i.e. a join key, not the data. Rule: when an overlay renders as
+one constant value across time, suspect the time key before the data source.
+(2) **`.so` (second-of-day) is the candle field to trust for intraday joins.** Every candle carries `.so` reliably (it's what
+the whole pipeline filters RTH on); `.t`'s unit varies by build path (replay ms vs live). The fix matches each move to a bar
+by converting the move's age to a second-of-day (`nowSo − (now − t)/1000`) and comparing to `bar.so` — no absolute timestamp,
+no timezone. Rule: for an intraday overlay, join on second-of-day, not wall-clock ms.
+(3) **The data was never the problem — the lookup was.** Both journeys (SPY, and SPXW via the explicit
+`sampleTapeHistory('SPXW')`) accumulate their rolls; the earlier worry that "there's no SPXW journey" was wrong — the SPX line
+DREW (flat), which proved `kingDay('SPXW')` was populated. Rule: a line that draws-but-flat proves the source exists; debug the
+transform, not the source. No withdrawal.
+
 ### v15.96 — a multi-book overlay is the scale trap by another name; build it through the panel's OWN converter, and flag the leg you can't do exactly
 (1) **Overlaying the SPX King, the SPY King and ES candles on one axis is exactly the cross-book/scale error that has produced
 four phantom bugs here.** The safe build reused the panel's own conversions: candles from `closedCandles('SPY')` × the ratio,

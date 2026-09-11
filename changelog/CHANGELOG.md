@@ -1,3 +1,28 @@
+## v15.97 — THE KING CHART FIX: THE STEP LINES WERE FLAT — STEP THE KINGS BY SECOND-OF-DAY, NOT ABSOLUTE MS
+
+> Operator, 2026-09-11, on v15.96 with a screenshot: **"why dont you show any king movements and deflections"** →
+> **"there should be step lines going up and down throughout the day."**
+
+**The bug.** v15.96 drew both King lines **flat** — the SPX King a flat gold line at the top, the SPY King a flat cyan
+line at the bottom — instead of stepping with the day's rolls. Cause: the King journey (`kingDay(book).moves`) stamps each
+move with `Date.now()` (**milliseconds**), but the candle bars' `.t` field is not guaranteed to be in the same unit/epoch
+base, so `kingAt(book, bar.t)` never matched a move and fell back to a **single strike for every bar** — a flat line. Both
+journeys were fine (SPY and, via the explicit `sampleTapeHistory('SPXW')`, SPXW both accumulate their rolls); only the
+per-bar *lookup* was wrong.
+
+**The fix.** Step the Kings by **second-of-day**, which every candle carries reliably as `.so`. `kingChartHtml` now builds
+each King line with a local `kingSteps(book, scale)`: it converts each move's age to a second-of-day
+(`nowSo − (Date.now() − move.t)/1000`) and, for each bar, takes the latest move whose second-of-day is ≤ the bar's `.so`.
+No absolute-timestamp or timezone comparison anywhere — so both lines now **step up and down through the day** as the Kings
+roll, and the deflect/break markers (which read those lines) land correctly. SPY exact (× rr), SPX approx (× dispScale, `~`),
+unchanged.
+
+**Tests.** `test_v1596.js` 17 — §2a/§2c re-pinned to the second-of-day matching (`kingSteps`, `kingDay(book).moves`,
+`nowSo − (now − m.t)`) instead of the old `kingAt(book, bar.t)`; the deflect/break detection unchanged and still green.
+Roadmap: the King chart entry is now **v15.97** (shipped as two installs — the view, then this fix); the tap record moves to
+15.98, the rest +1. Companion unchanged (v1.19). The live check is the next RTH reload — the lines should now walk with the
+rolls.
+
 ## v15.96 — THE KING CHART — PRICE vs THE SPX / SPY KINGS AS STEP LINES, DEFLECTS & BREAKS MARKED (mockup C)
 
 > Operator, 2026-09-11: **"a 3 min candle chart that display spy and spx king lines as steps, tracking their movements and

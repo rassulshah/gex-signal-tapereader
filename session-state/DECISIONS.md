@@ -915,3 +915,12 @@ exception to one-at-a-time he has granted, and it covered the cuts.
   confluence, distance — lives in design/KING-STUDY.md. Every factor rate stays n-gated (n ≥ 15, Wilson low) — no rate
   without its n, ever.
 - **The King chart is v15.96; the tap record moved to v15.97, seasonality v15.98, the rest +1.**
+
+## 2026-09-11 · v15.97 — the King chart step lines (fix)
+
+- **The King lines step by SECOND-OF-DAY, not absolute timestamp.** v15.96 matched the ms-stamped `kingDay.moves`
+  against a bar `.t` in a different unit and drew flat. The fix converts each move's age to a second-of-day and joins on
+  `bar.so`. What would change it: never — `.so` is the reliable intraday key; do not revert to a `.t`/ms join.
+- **Both King journeys already existed** (SPY, and SPXW via `sampleTapeHistory('SPXW')`); the bug was the lookup, not the
+  data. A line that draws-but-flat proves the source is populated.
+- **The King chart is v15.97 (two installs — the view v15.96, the step fix v15.97); the tap record moved to v15.98, the rest +1.**
