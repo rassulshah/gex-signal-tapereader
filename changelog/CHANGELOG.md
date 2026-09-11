@@ -1,3 +1,40 @@
+## v15.99 — THE KING CHART, THE ACTUAL FIX: DRAW FROM THE PERSISTED JOURNEY (kingDay.moves), NOT THE FROZEN CENSUS
+
+> Operator, 2026-09-11, after v15.98: **"this is very disappointing. first you cant see my screen and now you cant even
+> show the king movements today that we have been recording for weeks."** The v15.98 chart showed NOTHING — an empty
+> banner and zero King lines — worse than v15.97, which at least drew a couple.
+
+**I fixed the wrong thing in v15.98 and made it worse.** v15.98 switched the chart to read `krOf(book)` — the King-rolls
+CENSUS. That census (`KRAW`, localStorage `gpts_kingraw_v1`) is written by `ktTick`→`krTick` behind a `recorderBlind()` +
+RTH gate — and a console dump of his own storage proved it had **frozen 8 days stale**: `day: '2026-09-03'`, while the panel
+showed today. `krLoad()` rejects a stale day, so `krOf` returned empty and the chart drew nothing.
+
+**What his storage dump actually showed (2026-09-11, read live from localStorage):**
+- `gpts_kingday_v1` → **KINGDAY.SPY**: `day 2026-9-11`, **5 rolls today** (6 journey points). **KINGDAY.SPXW**: `day 2026-9-11`,
+  seed only, **0 rolls** — the SPX King genuinely held one strike all session. So v15.97's flat SPX line was *correct*; its
+  real bug was collapsing the 6 SPY points to one.
+- `gpts_kingraw_v1` (census, v15.98's source) → **`day 2026-09-03`** — 8 days stale. Dead.
+- `gpts_kingtrack_v1` (dwell lane) → also `day 2026-09-03`. Dead.
+
+**The three King stores, and why the choice matters.** (1) `KINGHIST.seq` — dense per-3-min — but **in-memory only, wiped on
+every tab reload**, which the install steps require; useless for a whole day. (2) `KRAW`/`krOf` (the census) — survives reload
+but its writer is gated off when the panel parks, and has not fired since 09-03. (3) `KINGDAY.moves` — **survives reload
+(localStorage) AND is written on the UNGATED SPY sample path**, so it holds today's real rolls. That is the right source.
+
+**The fix.** `kingChartHtml` → `kingSteps(book)` now reads `kingJourney(book)`: `kingDay(book).moves` first, `krOf(book)` as a
+fallback so the line can never silently vanish again. The bar-matching (by second-of-day) is unchanged. A book with only its
+opening seed draws a **flat held line** across the day — correct, not blank. A plain roll tally now sits beside the taps:
+*"SPY K — 5 rolls today · SPX K — held all day."* The empty banner is reserved for a true cold start.
+
+**Verified against his own data, not guessed.** Before touching the code a fourth time I had him dump all three King stores
+from the console; the fix targets the store the dump proved is live (KINGDAY), not a store I hoped was live. test_v1596 (the
+King chart) stays green; full suite 166/176 (the reds are the standing environment/DOM reds).
+
+**Left for the next build (named, not silently dropped):** the census `ktTick` has not written since 2026-09-03 — the "held /
+broke" tap stats and the Atlas-comparable roll count depend on it, so the next step is to find why `ktTick`/`krTick` stopped
+firing (is it reached? is `recorderBlind()` stuck true? is `ladderKings` returning empty?). One thing at a time — the chart
+draws first.
+
 ## v15.98 — THE KING CHART, REALLY FIXED: READ THE KING-ROLLS CENSUS (krOf), AND SAY WHY WHEN IT'S EMPTY
 
 > Operator, 2026-09-11, after v15.97: **"its broken. check. the spx king is a straight line and spy only shows 1 king

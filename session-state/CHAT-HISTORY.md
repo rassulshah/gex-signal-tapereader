@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-11 · v15.98 · session `f9c89c64` — THE KING CHART debugging — flat lines were the wrong source (kingDay.moves) AND the tracker parked; v15.98 reads the krOf census and is honest when empty; the __gptsDebug dumps; the can't-browse-Atlas limitation
+## 2026-09-11 · v15.99 · session `f9c89c64`
 
-_85 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_86 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1367,6 +1367,45 @@ v1577/v1578/v1580 newly red — let me see why, since my changes were only in th
 
 **me (18:35):** Those three are the same version-drift as before — they pin the "seasonality" roadmap entry to `15.xx`, and my re-sequencing pushed it to 16.00. Same fix as test_v1576. Let me relax them and finish the build. (I'll answer your Atlas-verify question in the delivery — short version: I can't safely browse Atlas from here, but there's a clean way to verify against it.)
 All green. Now the resume note + chat history, then final suite and build:
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (18:45):** You're right to be frustrated, and this one's on me — v15.98 made it *worse*. I switched to the `krOf` census, and that's the one source that's gated off when the panel parks, so it's empty today. Your v15.97 was reading `kingDay.moves`, which actually *had* today's afternoon rolls. I chose the wrong source. Let me find the record that genuinely holds today's data — because you're right, it's being recorded — and use that, not the gated one.
+Let me stop guessing and look at exactly what each of the three king records looks like in the code, so I can hand you one command that dumps all three at once.
+The critical finding: `KINGHIST.seq` (the dense one) is **in-memory only** — it's wiped every time you reload the Atlas tab, which the install steps tell you to do. So it's useless for "the whole day." Only three king stores actually survive a reload, and they live in localStorage. Let me confirm their exact shapes so my diagnostic reads them correctly.
+I've found it. Here's what went wrong and why v15.98 was worse than v15.97:
+
+There are three separate records of the king's movements, and they behave very differently:
+
+- **KINGHIST** (dense, every 3 min) — but it lives only in memory, so **it's wiped every time you reload the Atlas tab** — which the install steps tell you to do. Useless for "the whole day."
+- **KRAW** (the census I switched to in v15.98) — survives reload, but its writer is **switched off whenever the panel is parked or showing a stale book**. That's why today it came back empty and the chart showed nothing.
+- **KINGDAY** (the sparse journey v15.97 used) — survives reload, and on the SPY side it's **not gated at all**. This is almost certainly where today's moves actually are.
+
+So I picked the one store that gets shut off. Before I touch the chart a fourth …[trimmed]
+
+**OPERATOR:**
+> 'COPIED — click the chat box and press Ctrl+V'
+
+**me (19:08):** The clipboard has the data, but pasting the `'COPIED…'` line means the console's return text got copied instead. Let's not fight the clipboard — the screenshot route is easier for this. Step by step:
+
+1. Scroll up in the console to the earlier result — the line that starts **`▼ {KINGDAY: {…}, KRAW_census: {…}, KTRACK: {…}}`**
+2. Click the ▶ triangle to the left of **`KINGDAY`** so it opens
+3. Under it, click the ▶ next to **`SPY`**, then the ▶ next to **`SPXW`**
+4. Screenshot that and send it
+
+That shows me the `day` and the list of `moves` for both kings. If those moves are dated today (2026-09-11) with real times, KINGDAY is the live store and I'll wire the v15.99 chart straight to it.
+That's the answer, cold and clear:
+
+- **KINGDAY.SPY** — `day: 2026-9-11` (today), **5 moves** (6 points). Your SPY king rolled 5 times today. It's all there.
+- **KINGDAY.SPXW** — `day: 2026-9-11` (today), **0 moves** (just the opening seed). Your SPX king genuinely hasn't rolled today — it's held one strike all session. So a flat SPX line is *correct*, not broken.
+- **KRAW census** (what v15.98 drew from) — `day: 2026-09-03`. Frozen 8 days ago. That's the whole bug: I pointed the chart at a dead store.
+
+So two things were true at once and I misread both: v15.97's flat SPX line was actually right (0 rolls), but it collapsed your 6 SPY points down to 1 — a rendering bug — and then v15.98 "fixed" it by switching to a store that's a week stale, blanking everything.
+
+Here's my plan for v15.99, no guessing left:
+
+1. **Source = KINGDAY** (survives reload, ungated on SPY, current today) — with a fallback to the census only if KINGDAY is empty, so it can never go fully blank again.
+2. **Fix the SPY step rendering** so all 6 of today's points draw as real steps — that's the actual bug from v15.97 …[trimmed]
 
 ### DECISIONS
 

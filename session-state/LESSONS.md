@@ -131,6 +131,26 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.99 — "authoritative" is worthless if the store is not being WRITTEN; before trusting a record, check it holds TODAY's data — and prefer the ungated, reload-surviving store over the canonical one
+(1) **The v15.98 lesson was wrong, and one console dump proved it.** v15.98 said "the chart must use the census (`krOf`) —
+the Atlas-comparable one." But the census had **frozen 8 days stale** (`gpts_kingraw_v1` → `day:'2026-09-03'` while the panel
+showed 09-11), because its writer `ktTick`/`krTick` is gated by `recorderBlind()`+RTH and had not fired since. "Canonical" and
+"currently being written" are different properties; I conflated them. Rule: a source is only usable if it is *fresh* — before
+wiring a chart to a store, dump the store and confirm its day-stamp is TODAY, not just that the accessor exists.
+(2) **The right store was the ungated one that survives a reload.** Three King records: `KINGHIST.seq` (dense but **in-memory
+only — wiped on every tab reload**, which the install steps force); `KRAW`/`krOf` (survives reload but gated off when parked);
+`KINGDAY.moves` (**survives reload AND written on the ungated SPY sample path**). The humble journey counter — the one I
+dismissed in v15.98 as "the weakest" — was the only one with today's data (SPY 5 rolls, SPX seed-only). Rule: for "what
+happened all day," value a store by *survives reload* × *ungated write path*, not by how canonical it sounds.
+(3) **Two console reads of his own storage ended the guessing — after THREE blind fixes, not before.** v15.96/97/98 were all
+shipped without seeing which store held the data. One `localStorage` dump (`gpts_kingday_v1`, `gpts_kingraw_v1`,
+`gpts_kingtrack_v1`) settled it in one round. Rule: when a chart is wrong and there are competing data sources, the FIRST move
+is to make the user dump each candidate source (localStorage is reachable with zero rebuild), not to swap sources and reship.
+(4) **A blank is worse than an honest flat line.** v15.98 "fixed" a misleading flat line by producing *nothing* — a strictly
+worse outcome the user felt immediately ("you cant even show the king movements"). A fallback (`kingDay` → `krOf`) plus a
+flat-held line for a seed-only book means the chart can degrade but never vanish. Rule: when hardening against a lie, don't
+trade it for an absence; give the honest partial view and label it. No withdrawal.
+
 ### v15.98 — there are THREE king histories; use the CENSUS the lanes use, and when a chart is empty name the reason instead of drawing a flat line
 (1) **The panel has three separate King records, and I used the weakest one twice.** `kingDay.moves` = a sparse "moved N×
 today" counter (2-poll confirm, capped); `KINGHIST.seq` = a dense 3-min sample; **`krOf`/`KRAW` = the roll CENSUS, the
