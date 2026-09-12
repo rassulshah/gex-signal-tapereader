@@ -1,0 +1,160 @@
+<title>Indicator + chart + profiles</title>
+<style>
+  :root{--bg:#0b0f16;--panel:#0f131b;--line:#1a2230;--ink:#e6edf5;--sub:#8b98a9;--faint:#5a6472;
+        --up:#2ec27e;--dn:#f0616d;--exp:#d9b24a;--act:#5cc8f5}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1240px;margin:0 auto;padding:16px 12px 40px}
+  h1{font-size:16px;margin:0 0 2px}.lede{color:var(--sub);font-size:12px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  svg{display:block;width:100%;height:auto}
+  .foot{color:var(--faint);font-size:11px;margin-top:10px;line-height:1.6}
+  .foot b{color:#c9d4e2}
+</style>
+<div class="wrap">
+  <h1>Values together · candles together · 60px profiles</h1>
+  <p class="lede">Order: <span style="color:#8b98a9">names</span> · <span style="color:#d9b24a">EXP</span>+<span style="color:#5cc8f5">ACT</span> values side by side · exp+act candles side by side · ES 3-min chart · <span style="color:#e3c341">SPX γ</span> and <span style="color:#2ec27e">Δ</span> profiles (60px each). 2026-08-21 · 10:30 · illustrative.</p>
+  <div class="card"><svg id="v" viewBox="0 0 1180 500" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <p class="foot">
+    Numbers read straight across (<b style="color:#d9b24a">EXP</b> | <b style="color:#5cc8f5">ACT</b>), the two candles are adjacent for shape comparison, and each profile is a fixed
+    <b>60px</b> column growing left toward price: <b style="color:#e3c341">γ King</b> (POC) at 7695, <b style="color:#2ec27e">Δ</b> solid 15m + dashed 60m ghost. Mockup.
+  </p>
+</div>
+<script>
+var M={open:7694, e_close:7703, ph:7712, pl:7674, green_p:57,
+       ehodt:'12:12',ehod_d:'2h42', elodt:'9:52',elod_d:'22m',
+       px:7695, hod_so:7700, lod_so:7677, hodt:'10:05',hod_d:'so far', lodt:'9:48',lod_d:'18m'};
+var PLO=7664,PHI=7722, T=74,B=444;
+function yF(p){return T+(PHI-p)/(PHI-PLO)*(B-T);}
+var MARKUP=true; // LOD first -> market marks UP to make the HOD (green). HOD first -> markdown (red).
+var MUDC=MARKUP?'#2ec27e':'#f0616d';
+var CATC={up:'#2ec27e',dn:'#f0616d',wick:'#e0b64a',bop:'#5cc8f5',gap:'#b58be0',rng:'#e6edf5',seq:'#b58be0',day:'#d9b24a',mud:MUDC};
+var ROWS=[
+  ['Day','day','Green 57%','Green',false],
+  ['1ST','seq','LOD 65%','LOD ✓',false],
+  ['HOD','up','7712 · 12:12','7700* · 10:05',true],
+  ['LOD','dn','7674 · 9:52','7677 · 9:48 ✓',false],
+  ['MUD','mud','+38 · 2h20','+23 so far',false],
+  ['BOP','bop','~22m','18m',false],
+  ['WICK','wick','~38m','26m',false],
+  ['WICK%','wick','~31%','22%',false],
+  ['HL GAP','gap','2h20','42m so far',false],
+  ['HL RNG','rng','39 · $1,950','23 · 59%',false]
+];
+function bars(){var A=[[0,7694],[6,7677],[12,7700],[20,7695]],n=20,o=[],c=7694,seed=7;
+  function r(){seed=(seed*9301+49297)%233280;return seed/233280;}
+  for(var i=0;i<n;i++){var tgt=7694;for(var k=0;k<A.length-1;k++){if(i>=A[k][0]&&i<=A[k+1][0]){var f=(i-A[k][0])/(A[k+1][0]-A[k][0]);tgt=A[k][1]+f*(A[k+1][1]-A[k][1]);break;}}
+    var op=c,cl=(i===n-1?7695:tgt+(r()-0.5)*3.2),hi=Math.max(op,cl)+r()*2.2,lo=Math.min(op,cl)-r()*2.2;o.push({o:op,h:hi,l:lo,c:cl});c=cl;}return o;}
+var GN=[[7720,-14],[7715,-45],[7710,9],[7705,-13],[7700,22],[7695,100],[7690,-17],[7685,16],[7680,-8],[7675,-40],[7670,13],[7665,26]];
+var D15={7705:-18,7700:-28,7695:-8,7690:12,7685:26,7680:42,7675:30,7670:10};
+var D60={7705:-30,7700:-46,7695:-14,7690:20,7685:44,7680:70,7675:52,7670:22,7710:-16};
+
+function draw(){
+  var W=1180,s='';
+  // values together, candles together
+  var nameX=8, expX=62, actX=136;           // names + EXP + ACT packed tight, both left-aligned
+  var exCx=246, bw=24, acCx=278, abw=28;      // candles adjacent, pulled toward the values
+  var chL=336, chR=1006, axX=chL-6;
+  var gRight=1078, gMax=60;                   // gamma 60px col, grows left
+  var dRight=1152, dMax=60;                    // delta 60px col, grows left
+  var gb=M.green_p>=50;
+
+  // headers
+  s+='<text x="'+nameX+'" y="20" fill="#8b98a9" font-size="10" font-weight="700">FIELD</text>';
+  s+='<text x="'+expX+'" y="20" fill="#d9b24a" font-size="10.5" font-weight="800">EXP</text>';
+  s+='<text x="'+actX+'" y="20" fill="#5cc8f5" font-size="10.5" font-weight="800">ACT</text>';
+  s+='<text x="'+exCx+'" y="20" fill="#a98f3d" font-size="8" font-weight="700" text-anchor="middle">▮</text>';
+  s+='<text x="'+acCx+'" y="20" fill="#4f7f96" font-size="8" font-weight="700" text-anchor="middle">▮</text>';
+  s+='<text x="'+((chL+chR)/2)+'" y="20" fill="#8b98a9" font-size="10.5" font-weight="700" text-anchor="middle">ES · 3-min · developing</text>';
+  s+='<text x="'+(gRight-gMax/2)+'" y="20" fill="#c9a94a" font-size="9.5" font-weight="800" text-anchor="middle">SPX γ</text>';
+  s+='<text x="'+(dRight-dMax/2)+'" y="20" fill="#5fbf88" font-size="9.5" font-weight="800" text-anchor="middle">Δ 15·60m</text>';
+  s+='<line x1="316" y1="'+(T-14)+'" x2="316" y2="'+(B+22)+'" stroke="#1a2230"/>';
+
+  // expected targets across chart
+  [['E-HOD',M.ph],['E-LOD',M.pl]].forEach(function(k){var y=yF(k[1]);
+    s+='<line x1="'+(exCx-bw/2-3)+'" y1="'+y.toFixed(1)+'" x2="'+chR+'" y2="'+y.toFixed(1)+'" stroke="#d9b24a" stroke-width="1" stroke-dasharray="5 4" stroke-opacity=".4"/>';
+    s+='<text x="'+(chR-3)+'" y="'+(y-3).toFixed(1)+'" fill="#d9b24a" font-size="8" font-weight="700" text-anchor="end">'+k[0]+' '+k[1]+'</text>';});
+
+  // rows: names + EXP + ACT (values adjacent)
+  var y0=34, dy=(B-6-y0)/ROWS.length;
+  ROWS.forEach(function(r,i){var y=y0+dy*i+dy*0.66, lc=CATC[r[1]];
+    s+='<text x="'+nameX+'" y="'+y.toFixed(1)+'" fill="'+lc+'" font-size="10" font-weight="'+(r[1]==='rng'||r[1]==='day'?'800':'700')+'">'+r[0]+'</text>';
+    var bold=(r[1]==='rng'||r[1]==='day'||r[1]==='mud');
+    var eCol=r[1]==='day'?(gb?'#2ec27e':'#f0616d'):(r[1]==='mud'?MUDC:(r[4]?'#9c8f6d':'#e0c98a'));
+    s+='<text x="'+expX+'" y="'+y.toFixed(1)+'" fill="'+eCol+'" font-size="9.5" font-weight="'+(bold?'800':'600')+'">'+r[2]+'</text>';
+    var aCol=r[1]==='day'?(gb?'#2ec27e':'#f0616d'):(r[1]==='mud'?MUDC:(r[4]?'#7f8b9a':(r[1]==='rng'?'#e6edf5':'#bfe6ff')));
+    s+='<text x="'+actX+'" y="'+y.toFixed(1)+'" fill="'+aCol+'" font-size="9.5" font-weight="'+(bold?'800':'600')+'">'+r[3]+'</text>';
+    if(i>0){var yl=(y-dy*0.66+1).toFixed(1);
+      s+='<line x1="'+nameX+'" y1="'+yl+'" x2="228" y2="'+yl+'" stroke="#131a25"/>';
+      // faint split between EXP and ACT value columns
+      s+='<line x1="'+(actX-4)+'" y1="'+(y-dy*0.55).toFixed(1)+'" x2="'+(actX-4)+'" y2="'+(y+dy*0.2).toFixed(1)+'" stroke="#182131"/>';}
+  });
+
+  // EXP candle + time/duration
+  var eUp=M.e_close>=M.open, ecol=eUp?'#2ec27e':'#f0616d';
+  s+=candle(exCx,bw,M.open,M.e_close,M.ph,M.pl,ecol,true);
+  s+=clabel(exCx,yF(M.ph),'up','7712',M.ehodt+'·'+M.ehod_d,'#d9b24a');
+  s+=clabel(exCx,yF(M.pl),'dn','7674',M.elodt+'·'+M.elod_d,'#d9b24a');
+  s+='<text x="'+exCx+'" y="'+(B+15)+'" fill="#8b7a3f" font-size="8" text-anchor="middle">exp</text>';
+
+  // ACT candle + time/duration
+  var aUp=M.px>=M.open, acol=aUp?'#2ec27e':'#f0616d';
+  s+=candle(acCx,abw,M.open,M.px,M.hod_so,M.lod_so,acol,false);
+  s+='<line x1="'+acCx+'" y1="'+yF(M.hod_so).toFixed(1)+'" x2="'+acCx+'" y2="'+yF(M.ph).toFixed(1)+'" stroke="#2ec27e" stroke-width="1.2" stroke-dasharray="2 2" stroke-opacity=".5"/>';
+  s+=clabel(acCx,yF(M.hod_so),'up','7700*',M.hodt+'·'+M.hod_d,'#2ec27e');
+  s+=clabel(acCx,yF(M.lod_so),'dn','7677✓',M.lodt+'·'+M.lod_d,'#f0616d');
+  s+='<text x="'+acCx+'" y="'+(B+15)+'" fill="#4f7f96" font-size="8" text-anchor="middle">act</text>';
+
+  // chart grid + price axis (left of chart)
+  for(var g=7670;g<PHI;g+=5){var y=yF(g);
+    s+='<line x1="'+chL+'" y1="'+y.toFixed(1)+'" x2="'+chR+'" y2="'+y.toFixed(1)+'" stroke="#141c28"/>'+
+       '<text x="'+axX+'" y="'+(y+3).toFixed(1)+'" fill="#3a4656" font-size="7.5" text-anchor="end">'+g+'</text>';}
+  var cs=bars(),n=cs.length,pl=chL+8,pr=chR-8,cw=Math.max(3,(pr-pl)/n*0.58);
+  for(var i=0;i<n;i++){var d=cs[i],x=pl+(i+0.5)*((pr-pl)/n),u=d.c>=d.o,cc=u?'#2ec27e':'#f0616d';
+    s+='<line x1="'+x.toFixed(1)+'" y1="'+yF(d.h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+yF(d.l).toFixed(1)+'" stroke="#66707e"/>';
+    var yb=Math.min(yF(d.o),yF(d.c)),hb=Math.max(1,Math.abs(yF(d.o)-yF(d.c)));
+    s+='<rect x="'+(x-cw/2).toFixed(1)+'" y="'+yb.toFixed(1)+'" width="'+cw.toFixed(1)+'" height="'+hb.toFixed(1)+'" fill="'+cc+'" fill-opacity="'+(u?0.5:0.8)+'" stroke="'+cc+'"/>';}
+  var nowx=pl+(n-0.5)*((pr-pl)/n);
+  s+='<line x1="'+nowx.toFixed(1)+'" y1="'+T+'" x2="'+nowx.toFixed(1)+'" y2="'+B+'" stroke="#2b3646" stroke-dasharray="2 3"/>';
+  s+='<text x="'+nowx.toFixed(1)+'" y="'+(T-4)+'" fill="#8b98a9" font-size="8" text-anchor="middle">10:30</text>';
+  [['9:30',0],['9:48',6],['10:05',12],['10:30',20]].forEach(function(t){var x=pl+(t[1]+0.5)*((pr-pl)/n);
+    s+='<text x="'+x.toFixed(1)+'" y="'+(B+15)+'" fill="#5a6472" font-size="8" text-anchor="middle">'+t[0]+'</text>';});
+
+  var barH=Math.abs(yF(7695)-yF(7700))*0.74;
+
+  // ===== GAMMA profile (60px, faces left) =====
+  s+='<rect x="'+(gRight-gMax-4)+'" y="'+(T-2)+'" width="'+(gMax+8)+'" height="'+(B-T+4)+'" fill="rgba(227,195,65,.03)"/>';
+  var RANK={};GN.slice().sort(function(a,b){return Math.abs(b[1])-Math.abs(a[1]);}).forEach(function(nd,i){RANK[nd[0]]=i+1;});
+  GN.forEach(function(nd){var st=nd[0],v=nd[1],rk=RANK[st],king=rk===1,len=Math.max(3,Math.abs(v)/100*gMax),y=yF(st)-barH/2;
+    var fill=king?'#fff0a6':(rk<=5?(v>=0?'#e3c341':'#a86fe0'):(v>=0?'#7a6a2b':'#5f4a83'));
+    s+='<rect x="'+(gRight-len).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+len.toFixed(1)+'" height="'+barH.toFixed(1)+'" fill="'+fill+'"'+(king?' stroke="#fff" stroke-width="0.8"':'')+' rx="1"/>';
+    if(len>26){var tc=king?'#3a2f07':(v>0?'#2a2205':'#241633');s+='<text x="'+(gRight-3).toFixed(1)+'" y="'+(yF(st)+2.5).toFixed(1)+'" fill="'+tc+'" font-size="6.5" font-weight="700" text-anchor="end">'+(king?'K':((v>0?'+':'')+v))+'</text>';}
+  });
+  s+='<text x="'+(gRight-gMax/2)+'" y="'+(B+15)+'" fill="#b9a35a" font-size="7.5" text-anchor="middle">|%King|</text>';
+
+  // ===== DELTA profile (60px, faces left): 60m ghost + 15m solid =====
+  s+='<rect x="'+(dRight-dMax-4)+'" y="'+(T-2)+'" width="'+(dMax+8)+'" height="'+(B-T+4)+'" fill="rgba(46,194,126,.03)"/>';
+  var mx=0;for(var k in D60)mx=Math.max(mx,Math.abs(D60[k]));
+  for(var k in D60){var st=+k,v=D60[k],len=Math.max(2,Math.abs(v)/mx*dMax),y=yF(st)-barH/2, col=v>=0?'#2ec27e':'#f0616d';
+    s+='<rect x="'+(dRight-len).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+len.toFixed(1)+'" height="'+barH.toFixed(1)+'" fill="none" stroke="'+col+'" stroke-width="1" stroke-dasharray="3 2" stroke-opacity=".55" rx="1"/>';}
+  for(var k in D15){var st=+k,v=D15[k],len=Math.max(2,Math.abs(v)/mx*dMax),y=yF(st)-barH/2, col=v>=0?'#2ec27e':'#f0616d';
+    s+='<rect x="'+(dRight-len).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+len.toFixed(1)+'" height="'+barH.toFixed(1)+'" fill="'+col+'" fill-opacity="0.55" stroke="'+col+'" stroke-width="0.8" rx="1"/>';}
+  s+='<text x="'+(dRight-dMax/2)+'" y="'+(B+15)+'" fill="#5fbf88" font-size="7.5" text-anchor="middle">buy−sell</text>';
+
+  document.getElementById('v').innerHTML=s;
+}
+function clabel(cx,yc,dir,val,sub,col){
+  var y1=dir==='up'?yc-11:yc+9, y2=dir==='up'?yc-3:yc+17;
+  return '<text x="'+cx+'" y="'+y1.toFixed(1)+'" fill="'+col+'" font-size="8" font-weight="800" text-anchor="middle">'+val+'</text>'+
+         '<text x="'+cx+'" y="'+y2.toFixed(1)+'" fill="'+col+'" font-size="6.5" opacity=".85" text-anchor="middle">'+sub+'</text>';
+}
+function candle(cx,bw,o,c,hi,lo,col,ghost){
+  var yb=Math.min(yF(o),yF(c)),hb=Math.max(4,Math.abs(yF(o)-yF(c)));
+  var w='<line x1="'+cx+'" y1="'+yF(hi).toFixed(1)+'" x2="'+cx+'" y2="'+yF(lo).toFixed(1)+'" stroke="'+col+'" stroke-width="'+(ghost?1.3:2)+'"'+(ghost?' stroke-dasharray="4 3" stroke-opacity=".85"':'')+'/>';
+  var b=ghost
+    ? '<rect x="'+(cx-bw/2)+'" y="'+yb.toFixed(1)+'" width="'+bw+'" height="'+hb.toFixed(1)+'" fill="none" stroke="'+col+'" stroke-width="1.4" stroke-dasharray="4 3" rx="2"/>'
+    : '<rect x="'+(cx-bw/2)+'" y="'+yb.toFixed(1)+'" width="'+bw+'" height="'+hb.toFixed(1)+'" fill="'+col+'" fill-opacity="0.5" stroke="'+col+'" stroke-width="1.4" rx="2"/>';
+  return w+b;
+}
+draw();
+</script>
