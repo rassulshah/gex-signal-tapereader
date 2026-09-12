@@ -1,0 +1,124 @@
+<title>Indicator + price chart</title>
+<style>
+  :root{--bg:#0b0f16;--panel:#0f131b;--line:#1a2230;--ink:#e6edf5;--sub:#8b98a9;--faint:#5a6472;
+        --up:#2ec27e;--dn:#f0616d;--exp:#d9b24a;--act:#5cc8f5}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1120px;margin:0 auto;padding:16px 12px 40px}
+  h1{font-size:16px;margin:0 0 2px}.lede{color:var(--sub);font-size:12px;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  svg{display:block;width:100%;height:auto}
+  .foot{color:var(--faint);font-size:11px;margin-top:10px;line-height:1.6}
+  .foot b{color:#c9d4e2}
+</style>
+<div class="wrap">
+  <h1>Paired candles, tightened up</h1>
+  <p class="lede">Order: <span style="color:#8b98a9">names</span> · <span style="color:#d9b24a">expected values</span> · <span style="color:#d9b24a">expected candle</span> · <span style="color:#5cc8f5">actual candle</span> · <span style="color:#5cc8f5">actual values</span> — candles adjacent in the middle, columns packed with no dead space, then the chart. 2026-08-21 · 10:30 · illustrative.</p>
+  <div class="card"><svg id="v" viewBox="0 0 1000 470" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <p class="foot">
+    The two candles now sit side by side so you compare the shapes directly, and the whole block is a tight ~330px so the chart gets the room.
+    <b>EXP</b> values hug the expected candle on its left, <b>ACT</b> values hug the actual candle on its right. Mockup.
+  </p>
+</div>
+<script>
+var M={open:7694, e_close:7703, ph:7712, pl:7674, green_p:57,
+       px:7695, hod_so:7700, lod_so:7677};
+var PLO=7666,PHI=7720, T=72,B=440;
+function yF(p){return T+(PHI-p)/(PHI-PLO)*(B-T);}
+var CATC={up:'#2ec27e',dn:'#f0616d',wick:'#e0b64a',bop:'#5cc8f5',gap:'#b58be0',rng:'#e6edf5',seq:'#b58be0'};
+// [label, cat, expVal, actVal, pending?]
+var ROWS=[
+  ['1ST','seq','LOD 65%','LOD ✓',false],
+  ['HOD','up','7712 · 12:12','7700* · 10:05',true],
+  ['LOD','dn','7674 · 9:52','7677 · 9:48 ✓',false],
+  ['MU','up','+18 · 2h42','+6 so far',false],
+  ['MD','dn','-20 · 22m','-17 · 18m',false],
+  ['BOP','bop','~22m','18m',false],
+  ['WICK','wick','~38m','26m',false],
+  ['WICK%','wick','~31%','22%',false],
+  ['HL GAP','gap','2h20','42m so far',false],
+  ['HL RNG','rng','39 · $1,950','23 · 59%',false]
+];
+function bars(){var A=[[0,7694],[6,7677],[12,7700],[20,7695]],n=20,o=[],c=7694,seed=7;
+  function r(){seed=(seed*9301+49297)%233280;return seed/233280;}
+  for(var i=0;i<n;i++){var tgt=7694;for(var k=0;k<A.length-1;k++){if(i>=A[k][0]&&i<=A[k+1][0]){var f=(i-A[k][0])/(A[k+1][0]-A[k][0]);tgt=A[k][1]+f*(A[k+1][1]-A[k][1]);break;}}
+    var op=c,cl=(i===n-1?7695:tgt+(r()-0.5)*3.2),hi=Math.max(op,cl)+r()*2.2,lo=Math.min(op,cl)-r()*2.2;o.push({o:op,h:hi,l:lo,c:cl});c=cl;}return o;}
+
+function draw(){
+  var W=1000,s='';
+  // TIGHT columns
+  var nameX=10, expVx=148, exCx=172, bw=30, acCx=212, abw=34, actX=238;
+  var chL=336, chR=958, axX=W-4;
+  var gb=M.green_p>=50, biasCol=gb?'#2ec27e':'#f0616d';
+
+  // headers
+  s+='<text x="'+nameX+'" y="22" fill="#8b98a9" font-size="10" font-weight="700">FIELD</text>';
+  s+='<text x="'+expVx+'" y="22" fill="#d9b24a" font-size="10.5" font-weight="800" text-anchor="end">EXP</text>';
+  s+='<text x="'+exCx+'" y="22" fill="#a98f3d" font-size="8" font-weight="700" text-anchor="middle">▮</text>';
+  s+='<text x="'+acCx+'" y="22" fill="#4f7f96" font-size="8" font-weight="700" text-anchor="middle">▮</text>';
+  s+='<text x="'+actX+'" y="22" fill="#5cc8f5" font-size="10.5" font-weight="800">ACT</text>';
+  s+='<text x="'+((chL+chR)/2)+'" y="22" fill="#8b98a9" font-size="10.5" font-weight="700" text-anchor="middle">ES · 3-min · developing</text>';
+  s+='<text x="'+nameX+'" y="40" fill="'+biasCol+'" font-size="9.5" font-weight="800">'+(gb?'GREEN '+M.green_p:'RED '+(100-M.green_p))+'%</text>';
+  s+='<text x="'+actX+'" y="40" fill="#b58be0" font-size="9.5" font-weight="700">1ST LOD</text>';
+
+  // expected targets across (exp candle -> chart right)
+  [['E-HOD',M.ph],['E-LOD',M.pl]].forEach(function(k){var y=yF(k[1]);
+    s+='<line x1="'+(exCx-bw/2-3)+'" y1="'+y.toFixed(1)+'" x2="'+chR+'" y2="'+y.toFixed(1)+'" stroke="#d9b24a" stroke-width="1" stroke-dasharray="5 4" stroke-opacity=".45"/>';
+    s+='<text x="'+(chR-3)+'" y="'+(y-3).toFixed(1)+'" fill="#d9b24a" font-size="8" font-weight="700" text-anchor="end">'+k[0]+' '+k[1]+'</text>';});
+
+  // rows
+  var y0=54, dy=(B-6-y0)/ROWS.length;
+  ROWS.forEach(function(r,i){var y=y0+dy*i+dy*0.66, lc=CATC[r[1]];
+    s+='<text x="'+nameX+'" y="'+y.toFixed(1)+'" fill="'+lc+'" font-size="10" font-weight="'+(r[1]==='rng'?'800':'700')+'">'+r[0]+'</text>';
+    s+='<text x="'+expVx+'" y="'+y.toFixed(1)+'" fill="'+(r[4]?'#9c8f6d':'#e0c98a')+'" font-size="9.5" font-weight="'+(r[1]==='rng'?'800':'600')+'" text-anchor="end">'+r[2]+'</text>';
+    s+='<text x="'+actX+'" y="'+y.toFixed(1)+'" fill="'+(r[4]?'#7f8b9a':(r[1]==='rng'?'#e6edf5':'#bfe6ff'))+'" font-size="9.5" font-weight="'+(r[1]==='rng'?'800':'600')+'">'+r[3]+'</text>';
+    if(i>0){var yl=(y-dy*0.66+1).toFixed(1);
+      s+='<line x1="'+nameX+'" y1="'+yl+'" x2="'+(expVx)+'" y2="'+yl+'" stroke="#131a25"/>';
+      s+='<line x1="'+actX+'" y1="'+yl+'" x2="322" y2="'+yl+'" stroke="#131a25"/>';}
+  });
+
+  // EXP candle (left of the pair)
+  var eUp=M.e_close>=M.open, ecol=eUp?'#2ec27e':'#f0616d';
+  s+=candle(exCx,bw,M.open,M.e_close,M.ph,M.pl,ecol,true);
+  s+='<text x="'+exCx+'" y="'+(yF(M.ph)-5).toFixed(1)+'" fill="#d9b24a" font-size="7.5" font-weight="800" text-anchor="middle">'+M.ph+'</text>';
+  s+='<text x="'+exCx+'" y="'+(yF(M.pl)+10).toFixed(1)+'" fill="#d9b24a" font-size="7.5" font-weight="800" text-anchor="middle">'+M.pl+'</text>';
+  s+='<text x="'+exCx+'" y="'+(B+15)+'" fill="#8b7a3f" font-size="8" text-anchor="middle">exp</text>';
+
+  // ACT candle (right of the pair)
+  var aUp=M.px>=M.open, acol=aUp?'#2ec27e':'#f0616d';
+  s+=candle(acCx,abw,M.open,M.px,M.hod_so,M.lod_so,acol,false);
+  s+='<line x1="'+acCx+'" y1="'+yF(M.hod_so).toFixed(1)+'" x2="'+acCx+'" y2="'+yF(M.ph).toFixed(1)+'" stroke="#2ec27e" stroke-width="1.2" stroke-dasharray="2 2" stroke-opacity=".55"/>';
+  s+='<text x="'+acCx+'" y="'+(yF(M.hod_so)-5).toFixed(1)+'" fill="#2ec27e" font-size="7.5" font-weight="800" text-anchor="middle">'+M.hod_so+'*</text>';
+  s+='<text x="'+acCx+'" y="'+(yF(M.lod_so)+10).toFixed(1)+'" fill="#f0616d" font-size="7.5" font-weight="800" text-anchor="middle">'+M.lod_so+'✓</text>';
+  s+='<text x="'+(acCx+abw/2+2)+'" y="'+(yF((M.hod_so+M.ph)/2)+3).toFixed(1)+'" fill="#2ec27e" font-size="7" font-weight="700">+'+(M.ph-M.hod_so)+'</text>';
+  s+='<text x="'+acCx+'" y="'+(B+15)+'" fill="#4f7f96" font-size="8" text-anchor="middle">act</text>';
+
+  // grid + right axis
+  for(var g=7670;g<PHI;g+=5){var y=yF(g);
+    s+='<line x1="'+chL+'" y1="'+y.toFixed(1)+'" x2="'+chR+'" y2="'+y.toFixed(1)+'" stroke="#141c28"/>'+
+       '<text x="'+axX+'" y="'+(y+3).toFixed(1)+'" fill="#5a6472" font-size="8" text-anchor="end">'+g+'</text>';}
+
+  // chart bars
+  var cs=bars(),n=cs.length,pl=chL+8,pr=chR-60,cw=Math.max(3,(pr-pl)/n*0.6);
+  for(var i=0;i<n;i++){var d=cs[i],x=pl+(i+0.5)*((pr-pl)/n),u=d.c>=d.o,cc=u?'#2ec27e':'#f0616d';
+    s+='<line x1="'+x.toFixed(1)+'" y1="'+yF(d.h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+yF(d.l).toFixed(1)+'" stroke="#66707e"/>';
+    var yb=Math.min(yF(d.o),yF(d.c)),hb=Math.max(1,Math.abs(yF(d.o)-yF(d.c)));
+    s+='<rect x="'+(x-cw/2).toFixed(1)+'" y="'+yb.toFixed(1)+'" width="'+cw.toFixed(1)+'" height="'+hb.toFixed(1)+'" fill="'+cc+'" fill-opacity="'+(u?0.5:0.8)+'" stroke="'+cc+'"/>';}
+  var nowx=pl+(n-0.5)*((pr-pl)/n);
+  s+='<line x1="'+nowx.toFixed(1)+'" y1="'+T+'" x2="'+nowx.toFixed(1)+'" y2="'+B+'" stroke="#2b3646" stroke-dasharray="2 3"/>';
+  s+='<text x="'+nowx.toFixed(1)+'" y="'+(T-4)+'" fill="#8b98a9" font-size="8" text-anchor="middle">now 10:30</text>';
+  [['9:30',0],['9:48',6],['10:05',12],['10:30',20]].forEach(function(t){var x=pl+(t[1]+0.5)*((pr-pl)/n);
+    s+='<text x="'+x.toFixed(1)+'" y="'+(B+16)+'" fill="#5a6472" font-size="8" text-anchor="middle">'+t[0]+'</text>';});
+
+  document.getElementById('v').innerHTML=s;
+}
+function candle(cx,bw,o,c,hi,lo,col,ghost){
+  var yb=Math.min(yF(o),yF(c)),hb=Math.max(4,Math.abs(yF(o)-yF(c)));
+  var w='<line x1="'+cx+'" y1="'+yF(hi).toFixed(1)+'" x2="'+cx+'" y2="'+yF(lo).toFixed(1)+'" stroke="'+col+'" stroke-width="'+(ghost?1.3:2)+'"'+(ghost?' stroke-dasharray="4 3" stroke-opacity=".85"':'')+'/>';
+  var b=ghost
+    ? '<rect x="'+(cx-bw/2)+'" y="'+yb.toFixed(1)+'" width="'+bw+'" height="'+hb.toFixed(1)+'" fill="none" stroke="'+col+'" stroke-width="1.4" stroke-dasharray="4 3" rx="2"/>'
+    : '<rect x="'+(cx-bw/2)+'" y="'+yb.toFixed(1)+'" width="'+bw+'" height="'+hb.toFixed(1)+'" fill="'+col+'" fill-opacity="0.5" stroke="'+col+'" stroke-width="1.4" rx="2"/>';
+  return w+b;
+}
+draw();
+</script>
