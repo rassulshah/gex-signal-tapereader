@@ -95,7 +95,7 @@ int cppExtension::destroy(void) { return RTX_OK; }
 // ---- constructor: seed safe defaults so the first draw is valid -----------
 DayModel::DayModel() : cppExtension()
 {
-    exp.valid = false; act.valid = false; lastBar = 0;
+    expC.valid = false; actC.valid = false; lastBar = 0;
     cfg.side = 0;          // Left margin (per the settled §10.1 layout)
     cfg.layout = 0;        // Pair (side by side)
     cfg.width = 34;
