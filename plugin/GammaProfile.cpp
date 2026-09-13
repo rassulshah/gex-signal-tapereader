@@ -381,8 +381,12 @@ void GammaProfile::render(const Settings& S)
                        : (short)(tip - sgn * (r + 2));  // inside the tip
             RCT bub; bub.set((short)(cx - r), (short)(p.v - r), (short)(cx + r), (short)(p.v + r));
             setPen(C_DARK, 1, P_SOLID); CBRUSH bb(C_DARK, PAT_SOLID); bb.set(); bub.drawOval(DRAW_OPAQUE);
+            // center the numeral exactly on the strike (cx, p.v) using measured metrics
             FONT f; f.id = HELVETICA; f.size = (short)(S.font - 1); f.style = BOLD; setFont(f);
-            setTextColor(C_WHT); bub.drawText(rk, true, false);
+            int lead=0, asc=0, desc=0; getFontMetrics(&lead, &asc, &desc);
+            short tw = (short)getTextWidth(rk, -1);
+            PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(p.v + (asc - desc)/2);
+            setTextColor(C_WHT); tp.drawText(rk);
         }
 
         // % OUTSIDE the tip (or inside), signed
