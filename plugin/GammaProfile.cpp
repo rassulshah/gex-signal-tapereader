@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -39,6 +40,9 @@ static const COLOR C_FLIPC= 0x00E6EDF5;  // flip
 static const COLOR C_CYAN = 0x004FD0E0;  // EM band
 static const COLOR C_SPOT = 0x005B6B7E;  // spot marker
 static const COLOR C_SPYK = 0x0069D0A0;  // SPY King line (secondary book)
+static const COLOR C_SUP  = 0x003FB27A;  // support side stripe (green, below spot)
+static const COLOR C_RES  = 0x00D15B6B;  // resistance side stripe (red, above spot)
+static const COLOR C_AIR  = 0x003A4658;  // air-pocket band (translucent grey)
 
 static COLOR lerpColor(COLOR a, COLOR b, float t) {
     if (t < 0) t = 0; if (t > 1) t = 1;
@@ -58,6 +62,7 @@ struct PIdx {
     int showpct, pctpos, hideu, rank, rankpos, rankscope, type, kinglabel, font;
     int kline, cw, pw, flip, em, lstyle, lpos, extk, topnodes, topstyle, spyking;
     int header, spot;
+    int roles, regime, panelpos, defbands, confl, legend;   // structure read (appended v0.35)
 };
 static PIdx PX;
 
@@ -66,6 +71,7 @@ struct Settings {
     int pctpos, hideu, rankpos, rankscope, font, lstyle, lpos, topstyle;
     bool detach, round, amp, trans, showpct, rank, type;
     bool kline, cw, pw, flip, em, extk, topnodes, spyking, header, spot;
+    bool roles, regime, defbands, confl, legend; int panelpos;   // structure read
     COLOR cpos, cneg, cmid;
     char kinglabel[24];
 };
@@ -98,6 +104,9 @@ public:
     void textLJ(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);
     void textC (short cx,     short y, const char* s, COLOR col, int sz, bool bold);
     void hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps);
+    void bandPrice(float p1, float p2, short lx, short rx, COLOR col);
+    void drawPanel(RCT pane, const Settings& S, float net, int fIdx, int cIdx, int kIdx);
+    void drawLegend(RCT pane, const Settings& S);
     void drawLevel(int lastBar, short lx, short rx, int idx, COLOR col, const char* label,
                    bool extend, const Settings& S);
 };
@@ -120,6 +129,7 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=true;
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false;
     cfg.header=true; cfg.spot=true;
+    cfg.roles=true; cfg.regime=true; cfg.panelpos=0; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
 }
 
 // ---- parameter callbacks: dialog controls are valid here, so read + cache.
@@ -209,6 +219,14 @@ int cppExtension::setup(void)
     // CONTEXT
     PX.header = pc++; setBoolParameter   ("Title header (top-left)", true);
     PX.spot   = pc++; setBoolParameter   ("Spot price line (dotted)", true, SL);
+    // STRUCTURE READ (appended v0.35 -- new params go at the END so existing
+    // instances keep their numbering)
+    PX.roles   = pc++; setBoolParameter  ("Structure labels (Floor/Ceiling/Gate/Air)", true);
+    PX.regime  = pc++; setBoolParameter  ("Regime + read panel", true, SL);
+    PX.panelpos= pc++; setListParameter  ("Panel at", 0, "Bottom-L;Bottom-R;Top-L;Top-R");
+    PX.defbands= pc++; setBoolParameter  ("Deflection bands", false, SL);
+    PX.confl   = pc++; setBoolParameter  ("EM confluence marks", false);
+    PX.legend  = pc++; setBoolParameter  ("Polarity legend", false, SL);
     return RTX_OK;
 }
 
@@ -276,6 +294,12 @@ void GammaProfile::readSettings(Settings& S)
     S.spyking  = isBoxChecked(PX.spyking) != 0;
     S.header= isBoxChecked(PX.header) != 0;
     S.spot  = isBoxChecked(PX.spot) != 0;
+    S.roles   = isBoxChecked(PX.roles) != 0;
+    S.regime  = isBoxChecked(PX.regime) != 0;
+    S.panelpos= getListIndex(PX.panelpos);
+    S.defbands= isBoxChecked(PX.defbands) != 0;
+    S.confl   = isBoxChecked(PX.confl) != 0;
+    S.legend  = isBoxChecked(PX.legend) != 0;
     dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
@@ -369,6 +393,58 @@ void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps)
     PNT a; a.set(0, 0.0f); a.h = lx; a.v = y; a.setDrawPosition();
     PNT b; b.set(0, 0.0f); b.h = rx; b.v = y; b.drawLineTo();
 }
+// Translucent price band across [lx,rx] between two price levels.
+void GammaProfile::bandPrice(float p1, float p2, short lx, short rx, COLOR col)
+{
+    PNT a; a.set(0, p1); PNT b; b.set(0, p2);
+    short y1 = a.v < b.v ? a.v : b.v, y2 = a.v < b.v ? b.v : a.v;
+    RCT rc; rc.set(lx, y1, rx, y2);
+    rc.draw(0, col, col, DRAW_TRANSLUCENT, PAT_SOLID);
+}
+// Regime + read panel, anchored to a pane corner (moveable via "Panel at").
+void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, int cIdx, int kIdx)
+{
+    short lineH = (short)(S.font + 7);
+    short pw = 300, ph = (short)(2*lineH + 14);
+    short L = (short)(pane.left + 8),  R = (short)(pane.right - pw - 8);
+    short T = (short)(pane.top + 8),   B = (short)(pane.bottom - ph - 8);
+    short x, y;
+    switch (S.panelpos) { case 1: x=R; y=B; break; case 2: x=L; y=T; break; case 3: x=R; y=T; break; default: x=L; y=B; }
+    RCT box; box.set(x, y, (short)(x+pw), (short)(y+ph));
+    box.draw(1, C_GREY, C_DARK, DRAW_OPAQUE, PAT_SOLID);
+
+    bool neg = net < 0;
+    COLOR rc = neg ? S.cneg : S.cpos;
+    char l0[96];
+    sprintf_s(l0, sizeof(l0), neg ? "REGIME  -gamma : follow / don't fade (wicks)"
+                                  : "REGIME  +gamma : fade extremes (mean-revert)");
+    short ly0 = (short)(y + 6 + lineH/2);
+    textLJ((short)(x+10), ly0, l0, rc, S.font-1, true);
+
+    char l1[128];
+    char cs[40]="R n/a", fs[40]="S n/a", ks[40]="";
+    if (cIdx>=0) sprintf_s(cs, sizeof(cs), "R %d %+d%%", (int)(strikes[cIdx].price+0.5f), (int)strikes[cIdx].pct);
+    if (fIdx>=0) sprintf_s(fs, sizeof(fs), "S %d %+d%%", (int)(strikes[fIdx].price+0.5f), (int)strikes[fIdx].pct);
+    if (kIdx>=0) sprintf_s(ks, sizeof(ks), "KING %d %+d%%", (int)(strikes[kIdx].price+0.5f), (int)strikes[kIdx].pct);
+    sprintf_s(l1, sizeof(l1), "%s   %s   %s", cs, ks, fs);
+    short ly1 = (short)(y + 6 + lineH + lineH/2);
+    textLJ((short)(x+10), ly1, l1, C_TXT, S.font-1, false);
+}
+// Polarity legend (character, not strength). Placed opposite the panel's row.
+void GammaProfile::drawLegend(RCT pane, const Settings& S)
+{
+    short lineH=(short)(S.font+6), pw=286, ph=(short)(2*lineH+14);
+    short x=(short)(pane.left+8);
+    short y = (S.panelpos>=2) ? (short)(pane.bottom-ph-8) : (short)(pane.top+8);
+    RCT box; box.set(x, y, (short)(x+pw), (short)(y+ph));
+    box.draw(1, C_GREY, C_DARK, DRAW_OPAQUE, PAT_SOLID);
+    RCT sw;  sw.set((short)(x+10),(short)(y+9),(short)(x+22),(short)(y+9+11));
+    sw.draw(0, S.cpos, S.cpos, DRAW_OPAQUE, PAT_SOLID);
+    textLJ((short)(x+30),(short)(y+9+6),"+gamma gold: pins / fades", C_TXT, S.font-1, false);
+    RCT sw2; sw2.set((short)(x+10),(short)(y+9+lineH),(short)(x+22),(short)(y+9+lineH+11));
+    sw2.draw(0, S.cneg, S.cneg, DRAW_OPAQUE, PAT_SOLID);
+    textLJ((short)(x+30),(short)(y+9+lineH+6),"-gamma magenta: breaks / wicks", C_TXT, S.font-1, false);
+}
 
 // ---- level rail -----------------------------------------------------------
 void GammaProfile::drawLevel(int lastBar, short lx, short rx, int idx, COLOR col,
@@ -443,6 +519,27 @@ void GammaProfile::render(const Settings& S)
     float maxAbs = 100.0f;
     if (S.scale == 1) { maxAbs = 1.0f; for (size_t i=0;i<strikes.size();i++){ float a=std::fabs(strikes[i].pct); if(a>maxAbs)maxAbs=a; } }
 
+    // ---- structural roles: King / Ceiling / Floor / Gatekeeper --------------
+    // 0 none, 1 KING, 2 CEIL (biggest above spot), 3 FLOOR (biggest below spot),
+    // 4 GATE (a significant node between spot and the King).
+    float sp = hasSpot ? spotPx : 0.0f;
+    int kIdx=-1, fIdx=-1, cIdx=-1; float fBest=-1, cBest=-1;
+    for (size_t i=0;i<strikes.size();i++) if (strikes[i].king){ kIdx=(int)i; if(!hasSpot) sp=strikes[i].price; }
+    for (size_t i=0;i<strikes.size();i++){
+        float a=std::fabs(strikes[i].pct);
+        if      (strikes[i].price < sp)                     { if(a>fBest){fBest=a; fIdx=(int)i;} }
+        else if (strikes[i].price > sp && !strikes[i].king) { if(a>cBest){cBest=a; cIdx=(int)i;} }
+    }
+    std::vector<int> role(strikes.size(), 0);
+    if (kIdx>=0) role[kIdx]=1;
+    if (cIdx>=0) role[cIdx]=2;
+    if (fIdx>=0) role[fIdx]=3;
+    if (kIdx>=0){
+        float kp=strikes[kIdx].price, lo=sp<kp?sp:kp, hi=sp<kp?kp:sp;
+        for (size_t i=0;i<strikes.size();i++)
+            if (role[i]==0 && strikes[i].price>lo && strikes[i].price<hi && std::fabs(strikes[i].pct)>=10.0f) role[i]=4;
+    }
+
     // header
     if (S.header) {
         char h[96];
@@ -453,10 +550,40 @@ void GammaProfile::render(const Settings& S)
 
     // spot marker
     if (S.spot && hasSpot) {
-        PNT sp; sp.set(lastBar, spotPx);
+        PNT spm; spm.set(lastBar, spotPx);
         setPen(C_SPOT, 1, P_DOT);
         PNT a; a.set(0, spotPx); a.setDrawPosition();
         PNT b; b.set(lastBar, spotPx); b.drawLineTo();
+    }
+
+    // ---- air pockets: >=3 consecutive thin-gamma strikes = fast pathway -----
+    if (S.roles && strikes.size() >= 3) {
+        std::vector<int> ord(strikes.size());
+        for (size_t i=0;i<strikes.size();i++) ord[i]=(int)i;
+        std::sort(ord.begin(), ord.end(), [&](int a,int b){ return strikes[a].price < strikes[b].price; });
+        size_t i=0;
+        while (i < ord.size()) {
+            if (std::fabs(strikes[ord[i]].pct) < 8.0f) {
+                size_t j=i; while (j+1<ord.size() && std::fabs(strikes[ord[j+1]].pct) < 8.0f) j++;
+                if (j - i + 1 >= 3) {
+                    bandPrice(strikes[ord[i]].price, strikes[ord[j]].price, paneL, paneR, C_AIR);
+                    PNT mid; mid.set(lastBar, (strikes[ord[i]].price + strikes[ord[j]].price)/2.0f);
+                    textLJ((short)(paneL+8), mid.v, "AIR POCKET", C_GREY, S.font-1, false);
+                }
+                i = j + 1;
+            } else i++;
+        }
+    }
+
+    // ---- deflection bands: the +/-5pt tap window around the top-5 nodes ------
+    if (S.defbands) {
+        for (size_t i=0;i<strikes.size();i++) if (strikes[i].rank>=1 && strikes[i].rank<=5) {
+            COLOR c = strikes[i].pct>=0 ? S.cpos : S.cneg;
+            PNT hi; hi.set(lastBar, strikes[i].price+5.0f);
+            PNT lo; lo.set(lastBar, strikes[i].price-5.0f);
+            hlinePx(hi.v, paneL, paneR, c, P_DOT);
+            hlinePx(lo.v, paneL, paneR, c, P_DOT);
+        }
     }
 
     PEN_STYLE tps = S.topstyle==1 ? P_DOT : (S.topstyle==2 ? P_DASH : P_SOLID);
@@ -490,12 +617,33 @@ void GammaProfile::render(const Settings& S)
         short bl = sgn < 0 ? tip : anchor, br = sgn < 0 ? anchor : tip;
         drawBar(bl, top, br, bot, col, S.round, S.trans);
 
-        // node TYPE centered inside the bar (KING label overridable)
+        // structural role: support/resistance side stripe at the base + role tag
+        // (takes precedence over the plain node-type label)
+        int rl = S.roles ? role[i] : 0;
+        if (rl) {
+            COLOR sr = (s.price < sp) ? C_SUP : C_RES;   // green support / red resistance
+            short s1, s2; if (sgn<0){ s1=(short)(anchor-3); s2=anchor; } else { s1=anchor; s2=(short)(anchor+3); }
+            RCT st; st.set(s1, (short)(p.v-barH/2-1), s2, (short)(p.v+barH/2+1));
+            st.draw(0, sr, sr, DRAW_OPAQUE, PAT_SOLID);
+            const char* rn = rl==1?"KING":(rl==2?"CEIL":(rl==3?"FLOOR":"GATE"));
+            COLOR ic = inkOn(col);
+            if (sgn<0) textRJ((short)(anchor-8), p.v, rn, ic, S.font, true);
+            else       textLJ((short)(anchor+8), p.v, rn, ic, S.font, true);
+        }
+
+        // node TYPE centered inside the bar (only when no role tag is shown)
         const char* tlabel = s.king ? S.kinglabel : s.type.c_str();
-        if (S.type && tlabel && tlabel[0] && len > (short)(S.font * 2)) {
+        if (S.type && !rl && tlabel && tlabel[0] && len > (short)(S.font * 2)) {
             COLOR ic = inkOn(col);
             short cxbar = (short)((anchor + tip) / 2);   // horizontal center of the bar
             textC(cxbar, p.v, tlabel, ic, S.font, true);
+        }
+
+        // EM confluence: cyan tick at the tip when the node sits on an EM edge
+        if (S.confl && ((has[4] && std::fabs(s.price-lvl[4])<=3.0f) || (has[5] && std::fabs(s.price-lvl[5])<=3.0f))) {
+            setPen(C_CYAN, 2, P_SOLID);
+            PNT a; a.set(0,0.0f); a.h=tip; a.v=(short)(p.v-6); a.setDrawPosition();
+            PNT b; b.set(0,0.0f); b.h=tip; b.v=(short)(p.v+6); b.drawLineTo();
         }
 
         // RANK bubble
@@ -545,6 +693,13 @@ void GammaProfile::render(const Settings& S)
         hlinePx(probe.v, paneL, paneR, C_SPYK, ps);
         textLJ((short)(paneL + 4), (short)(probe.v - S.font - 2), "SPY KING", C_SPYK, S.font, false);
     }
+
+    // regime + read panel (net signed gamma -> fade vs follow), then legend
+    if (S.regime) {
+        float net = 0.0f; for (size_t i=0;i<strikes.size();i++) net += strikes[i].pct;
+        drawPanel(pane, S, net, fIdx, cIdx, kIdx);
+    }
+    if (S.legend) drawLegend(pane, S);
 }
 
 // ---- draw() ---------------------------------------------------------------
@@ -562,6 +717,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.34");
+    p->setVersion("0.35");
     return p;
 }
