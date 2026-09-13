@@ -19,6 +19,8 @@ for %%G in (
   "%LocalAppData%\Programs\Git\bin\git.exe"
 ) do if exist "%%~G" if not defined GIT set "GIT=%%~G"
 if not defined GIT for /f "delims=" %%G in ('where git 2^>nul') do if not defined GIT set "GIT=%%G"
+REM GitHub Desktop bundles git (this is the one that works on this machine):
+if not defined GIT for /d %%D in ("%LocalAppData%\GitHubDesktop\app-*") do if exist "%%D\resources\app\git\cmd\git.exe" set "GIT=%%D\resources\app\git\cmd\git.exe"
 if not defined GIT (
   echo [ERROR] Could not find git.exe.
   echo         Install "Git for Windows", or use GitHub Desktop / VS Code instead.
