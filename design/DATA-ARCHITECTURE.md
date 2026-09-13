@@ -2,6 +2,16 @@
 
 **Written 2026-08-28. THIS FILE IS READ ON EVERY `load gex`** (`.gex-config.json` → `projectFiles`).
 
+## NEW CONSUMER (2026-09-13): the IRT gamma-profile plugin
+A C++ RTX extension (`lsGammaProfile.dll`) now reads a data file and draws the gamma profile on the
+EPU26 chart. **Transport:** it reads `%USERPROFILE%\InvestorRT\rtx\lsFlexLevels\GammaProfile.csv` —
+the SAME per-user folder the FlexLevels export already writes to (rides the existing
+`repoKvGet('irtDir')` FileSystemDirectoryHandle plumbing). Today that CSV is **hand-built** from the
+Skylit tape; **Phase 0** wires the panel to write it live (the panel already holds the per-strike
+book via `tapeMap`/`__gptsDebug.LASTFEED`, the IF levels, and the 0DTE EM). The plugin is a pure
+consumer — it never fetches; it only reads the file the browser writes. Full detail:
+`plugin/GAMMA-PROFILE-PLUGIN.md`; export spec: `design/spec-phase0-gamma-export.md`.
+
 **Why it exists.** The operator asked, three times across two sessions, whether a process existed to
 fetch ES data daily. Answering took a full-history search each time, because *every fact about who
 fetches what lived in `session-state/`* — `YAHOO-PIPELINE.md`, `INSIDERFINANCE.md`, `SKYLIT-FEEDS.md`

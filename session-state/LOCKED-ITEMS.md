@@ -6,6 +6,17 @@ _Created 2026-08-27._
 
 ---
 
+## ⭐ ACTIVE (2026-09-13): IRT GAMMA-PROFILE PLUGIN — built & working
+A separate C++ RTX Investor/RT extension (`lsGammaProfile.dll`) was built this session and now
+renders the real SPX gamma node profile + level rail + a 34-control settings panel on the EPU26
+chart. **To continue it, read `plugin/GAMMA-PROFILE-PLUGIN.md` (authoritative) and
+`session-state/2026-09-13_resume-plugin.md`.** NOT YET BUILT for the plugin: **Phase 0** (wire the
+panel to write `GammaProfile.csv` live with the real SPX→ES conversion — spec
+`design/spec-phase0-gamma-export.md`), visual tuning, patterns (Phase 6), delta (Phase 7). The panel
+(v15.99) itself was not changed this session.
+
+---
+
 ## WHY THIS FILE EXISTS — read this before you skip it
 
 On 2026-08-27 the operator said, three separate times, that a Yahoo Finance solution already existed
