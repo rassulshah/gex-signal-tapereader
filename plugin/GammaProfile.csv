@@ -1,25 +1,14 @@
-# GammaProfile.csv  — SAMPLE (hand-made) for the RTX plugin's first run.
-# Prices are in the CHART's price space (EPU26 / ES). Centered on today's live
-# King (ES 7673.5 from FlexLevelsExport.csv). The panel will overwrite this file
-# in Phase 0; until then the plugin draws from this sample.
-#
-# STRIKE,<price>,<pctKing -100..100>,<rank>,<isKing 0|1>
-STRIKE,7643.5,-16,13,0
-STRIKE,7648.5,-28,11,0
-STRIKE,7653.5,-40,9,0
-STRIKE,7658.5,-52,7,0
-STRIKE,7663.5,-66,5,0
-STRIKE,7668.5,-78,3,0
-STRIKE,7673.5,100,1,1
-STRIKE,7678.5,82,2,0
-STRIKE,7683.5,70,4,0
-STRIKE,7688.5,55,6,0
-STRIKE,7693.5,44,8,0
-STRIKE,7698.5,30,10,0
-STRIKE,7703.5,18,12,0
-KING,7673.5
-CW,7693.5
-PW,7653.5
-FLIP,7668.5
-EMH,7690.0
-EML,7657.0
+# REAL SPY gamma book from Skylit (LASTFEED), snapshot 2026-09-11T19:59:00Z (Thu 2:59pm ET)
+# SPY spot 764.56 -> ES 7659.00 | scale 10.0175 | King SPY 765 -> ES 7663.41
+# STRIKE,<ES price>,<pctKing -100..100>,<rank>,<isKing 0|1>
+STRIKE,7643.37,-31,3,0
+STRIKE,7653.39,-9,5,0
+STRIKE,7663.41,-100,1,1
+STRIKE,7673.43,42,2,0
+STRIKE,7683.44,10,4,0
+STRIKE,7693.46,9,6,0
+STRIKE,7703.48,4,7,0
+STRIKE,7713.50,3,8,0
+KING,7663.41
+EMH,7691.11
+EML,7638.89
