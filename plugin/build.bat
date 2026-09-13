@@ -1,13 +1,17 @@
 @echo off
 REM ===========================================================================
-REM  build.bat  —  compile GammaProfile.cpp into GammaProfile.dll (x64)
+REM  build.bat  —  compile GammaProfile.cpp into lsGammaProfile.dll (x64)
 REM
-REM  RUN THIS FROM:  "x64 Native Tools Command Prompt for VS 2022"
-REM  (Start menu -> type that exact name. It puts cl.exe + the CRT on PATH.)
+REM  RUN THIS FROM:  "x64 Native Tools Command Prompt for VS" (Run as Administrator
+REM  so the install-copy into Program Files succeeds).
 REM  Then:   cd /d "C:\Dev\gex-signal-tapereader\plugin"   and   build.bat
+REM
+REM  NOTE: Investor/RT only loads RTX DLLs whose name starts with "ls", so the
+REM  output is lsGammaProfile.dll.
 REM ===========================================================================
 setlocal enabledelayedexpansion
 
+set "OUT=lsGammaProfile.dll"
 set "SDK=C:\Program Files\LinnSoft\InvestorRT\sdk\c++"
 set "LIB143=%SDK%\lib\irtsdkV143-x64.lib"
 set "DLLDIR=C:\Program Files\LinnSoft\InvestorRT\dllx64"
@@ -21,12 +25,12 @@ if not exist "%SDK%\include\irtsdk.h" (
 where cl >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] cl.exe is not on PATH.
-  echo         Open "x64 Native Tools Command Prompt for VS 2022" and run build.bat from there.
+  echo         Open "x64 Native Tools Command Prompt for VS" and run build.bat from there.
   exit /b 1
 )
 
-echo Compiling GammaProfile.cpp ...
-cl /nologo /LD /EHsc /O2 /MD GammaProfile.cpp /I "%SDK%\include" /Fe:GammaProfile.dll /link "%LIB143%"
+echo Compiling GammaProfile.cpp -^> %OUT% ...
+cl /nologo /LD /EHsc /O2 /MD GammaProfile.cpp /I "%SDK%\include" /Fe:%OUT% /link "%LIB143%"
 if errorlevel 1 (
   echo.
   echo [BUILD FAILED] See the compiler/linker errors above.
@@ -36,24 +40,27 @@ if errorlevel 1 (
 )
 
 echo.
-echo [BUILD OK]  GammaProfile.dll created in %cd%
+echo [BUILD OK]  %OUT% created in %cd%
 echo.
 
 echo Installing to "%DLLDIR%" ...
 if not exist "%DLLDIR%" (
-  echo [WARN] dllx64 folder not found at "%DLLDIR%". Copy GammaProfile.dll there manually.
+  echo [WARN] dllx64 folder not found at "%DLLDIR%". Copy %OUT% there manually.
   goto :done
 )
-copy /Y GammaProfile.dll "%DLLDIR%\GammaProfile.dll" >nul
+REM remove the earlier (wrongly-named) build if it is present
+del "%DLLDIR%\GammaProfile.dll" 2>nul
+copy /Y %OUT% "%DLLDIR%\%OUT%" >nul
 if errorlevel 1 (
   echo [WARN] Could not copy into Program Files ^(access denied?^).
-  echo        Re-run this prompt as Administrator, OR copy GammaProfile.dll into:
+  echo        Re-run this prompt as Administrator, OR copy %OUT% into:
   echo        %DLLDIR%
 ) else (
-  echo [INSTALLED]  %DLLDIR%\GammaProfile.dll
+  echo [INSTALLED]  %DLLDIR%\%OUT%
 )
 
 :done
 echo.
-echo Next: in Investor/RT, open your EPU26 3-min chart, add indicator -^> RTX -^> GammaProfile.
+echo Next: fully quit and reopen Investor/RT, then on the EPU26 3-min chart:
+echo   Add Indicator -^> RTX Extensions -^> lsGammaProfile  (between lsFootprint and lsGapRunner).
 endlocal
