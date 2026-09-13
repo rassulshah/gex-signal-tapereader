@@ -65,13 +65,15 @@ struct GStrike { float price; float pct; int rank; bool king; std::string type; 
 // ---------------------------------------------------------------------------
 class GammaProfile : public cppExtension {
 public:
-    GammaProfile() : cppExtension() {}
+    GammaProfile();
+    virtual int calc(int iStartBar);    // read+cache settings here (params valid in calc)
     virtual int draw(void);
 
     std::vector<GStrike> strikes;
     float lvl[6]; bool has[6];   // KING,CW,PW,FLIP,EMH,EML
     float spotPx; bool hasSpot;
     std::string book;
+    Settings cfg;                // cached settings (populated in calc, used in draw)
 
     void load();
     void readSettings(Settings& S);
@@ -87,6 +89,24 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::calc(int)     { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
+
+// ---- constructor: cache safe defaults so the first draw (before calc) is valid
+GammaProfile::GammaProfile() : cppExtension()
+{
+    cfg.width=130; cfg.side=0; cfg.detach=true; cfg.thick=0; cfg.round=true;
+    cfg.filter=1; cfg.thresh=20; cfg.below=0; cfg.scale=0;
+    cfg.cpos=D_POS; cfg.cneg=D_NEG; cfg.cmid=D_MID; cfg.kingcol=0; cfg.amp=false; cfg.trans=false;
+    cfg.showpct=true; cfg.pctpos=0; cfg.hideu=5; cfg.rank=true; cfg.rankpos=0; cfg.rankscope=0; cfg.type=true; cfg.font=12;
+    cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=true; cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.extn=false;
+    cfg.header=true; cfg.spot=true;
+}
+
+// ---- calc(): params are valid here — read them into the cache
+int GammaProfile::calc(int)
+{
+    readSettings(cfg);
+    return RTX_OK;
+}
 
 // ---- parameter panel ------------------------------------------------------
 int cppExtension::setup(void)
@@ -355,13 +375,13 @@ void GammaProfile::render(const Settings& S)
         bool inScope = (S.rankscope == 1) ? (s.rank>=1 && s.rank<=3) : (s.rank>=1 && s.rank<=5);
         if (S.rank && inScope) {
             char rk[8]; sprintf_s(rk, sizeof(rk), "%d", s.rank);
-            short r = (short)(S.font/2 + 5);
+            short r = (short)(S.font * 0.9f + 4);        // circle big enough to hold the numeral
             short cx = (S.rankpos == 1)                 // outside the tip
                        ? (short)(tip + sgn * (r + 4))
                        : (short)(tip - sgn * (r + 2));  // inside the tip
             RCT bub; bub.set((short)(cx - r), (short)(p.v - r), (short)(cx + r), (short)(p.v + r));
             setPen(C_DARK, 1, P_SOLID); CBRUSH bb(C_DARK, PAT_SOLID); bb.set(); bub.drawOval(DRAW_OPAQUE);
-            FONT f; f.id = HELVETICA; f.size = (short)S.font; f.style = BOLD; setFont(f);
+            FONT f; f.id = HELVETICA; f.size = (short)(S.font - 1); f.style = BOLD; setFont(f);
             setTextColor(C_WHT); bub.drawText(rk, true, false);
         }
 
@@ -392,8 +412,7 @@ void GammaProfile::render(const Settings& S)
 int GammaProfile::draw(void)
 {
     load();
-    Settings S; readSettings(S);
-    render(S);
+    render(cfg);       // use the cached settings (read in calc, valid even when the dialog is closed)
     return RTX_OK;
 }
 
