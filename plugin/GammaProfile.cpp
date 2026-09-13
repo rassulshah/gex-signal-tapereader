@@ -141,62 +141,66 @@ int GammaProfile::parmsUpdt(unsigned int)     { readSettings(cfg); return RTX_OK
 int cppExtension::setup(void)
 {
     // Parameter-layout version. IRT stores an instance's parameter values by
-    // position; bumping this tells it the layout changed so it resets stored
-    // values to the defaults below instead of restoring them into the wrong
-    // controls. BUMP THIS whenever parameters are reordered or inserted.
-    // (Going forward, new parameters are APPENDED at the end so this stays put.)
-    setParameterVersion(3);
-    setParameterDialogHeight(42);
+    // position; bumping this marks the layout as changed. BUMP whenever
+    // parameters are reordered/inserted. (New params are APPENDED at the end
+    // from here on, so existing instances keep mapping and this stays put.)
+    setParameterVersion(4);
+    setParameterDialogHeight(30);   // shorter: controls are paired two per row
 
-    setLabelParameter("\x97\x97 PROFILE \x97\x97");
-    PX.book   = getParameterCount(); setListParameter   ("Book (data)", 0, "Auto;SPX;SPY");
-    PX.width  = getParameterCount(); setIntegerParameter("Width (px)", 130);
+    // Controls are laid out two per row via kParmAppendSameLine to use the
+    // dialog's width (IRT fixes that width for its standard footer) and cut the
+    // height. Each section header carries a one-line description of what it does.
+    const short SL = kParmAppendSameLine;
+
+    setLabelParameter("\x97 PROFILE   data book, size & placement of the strip");
+    PX.book   = getParameterCount(); setListParameter   ("Book", 0, "Auto;SPX;SPY");
+    PX.width  = getParameterCount(); setIntegerParameter("Width px", 130, 0, SL);
     PX.side   = getParameterCount(); setListParameter   ("Side", 0, "Right;Left");
-    PX.thick  = getParameterCount(); setListParameter   ("Bar thickness", 0, "Auto;Thin;Medium;Thick");
+    PX.thick  = getParameterCount(); setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
     PX.detach = getParameterCount(); setBoolParameter   ("Detach from bars", true);
-    PX.round  = getParameterCount(); setBoolParameter   ("Rounded ends", true, kParmAppendSameLine);
+    PX.round  = getParameterCount(); setBoolParameter   ("Rounded ends", true, SL);
 
-    setLabelParameter("\x97\x97 NODES \x97\x97");
-    PX.filter = getParameterCount(); setListParameter   ("Filter", 1, "Top 3;Top 5;Top 8;Top 10;>= Threshold;All");
-    PX.thresh = getParameterCount(); setIntegerParameter("Threshold %", 20);
-    PX.below  = getParameterCount(); setListParameter   ("Below threshold", 0, "Grey out;Hide");
-    PX.scale  = getParameterCount(); setListParameter   ("Scale bars to", 0, "King=100%;Visible max");
+    setLabelParameter("\x97 NODES   which strikes show as bars, and how they scale");
+    PX.filter = getParameterCount(); setListParameter   ("Show", 1, "Top 3;Top 5;Top 8;Top 10;>= Threshold;All");
+    PX.thresh = getParameterCount(); setIntegerParameter("Threshold %", 20, 0, SL);
+    PX.below  = getParameterCount(); setListParameter   ("Sub-threshold", 0, "Grey out;Hide");
+    PX.scale  = getParameterCount(); setListParameter   ("Scale to", 0, "King=100%;Visible max", 0, SL);
 
-    setLabelParameter("\x97\x97 COLOR \x97\x97");
+    setLabelParameter("\x97 COLOR   gamma polarity colours for the bars");
     PX.cpos   = getParameterCount(); setColorParameter  ("+Gamma", D_POS);
-    PX.cneg   = getParameterCount(); setColorParameter  ("-Gamma", D_NEG);
+    PX.cneg   = getParameterCount(); setColorParameter  ("-Gamma", D_NEG, 0, SL);
     PX.cmid   = getParameterCount(); setColorParameter  ("Midpoint", D_MID);
-    PX.kingcol= getParameterCount(); setListParameter   ("King colored by", 0, "Polarity;Distinct");
+    PX.kingcol= getParameterCount(); setListParameter   ("King colour", 0, "Polarity;Distinct", 0, SL);
     PX.amp    = getParameterCount(); setBoolParameter   ("Amplify polarity", false);
-    PX.trans  = getParameterCount(); setBoolParameter   ("Translucent", false, kParmAppendSameLine);
+    PX.trans  = getParameterCount(); setBoolParameter   ("Translucent bars", false, SL);
 
-    setLabelParameter("\x97\x97 LABELS \x97\x97");
+    setLabelParameter("\x97 LABELS   the % / node-name / rank text on each bar");
     PX.showpct= getParameterCount(); setBoolParameter   ("Show %", true);
-    PX.pctpos = getParameterCount(); setListParameter   ("% position", 0, "Outside;Inside");
-    PX.hideu  = getParameterCount(); setIntegerParameter("Hide % under (abs)", 5);
+    PX.pctpos = getParameterCount(); setListParameter   ("% at", 0, "Outside;Inside", 0, SL);
+    PX.hideu  = getParameterCount(); setIntegerParameter("Hide % under", 5);
+    PX.font   = getParameterCount(); setIntegerParameter("Font size (pt)", 12, 0, SL);
     PX.rank   = getParameterCount(); setBoolParameter   ("Rank badge", true);
-    PX.rankpos= getParameterCount(); setListParameter   ("Rank position", 0, "Inside;Outside");
-    PX.rankscope=getParameterCount();setListParameter   ("Rank scope", 0, "Top 5;Top 3");
-    PX.type   = getParameterCount(); setBoolParameter   ("Node type inside", true);
-    PX.kinglabel=getParameterCount();setListParameter   ("King label", 0, "KING;GPoc;GPOC;GEX;POC;GAMMA");
-    PX.font   = getParameterCount(); setIntegerParameter("Font size", 12);
+    PX.type   = getParameterCount(); setBoolParameter   ("Node name inside", true, SL);
+    PX.rankpos= getParameterCount(); setListParameter   ("Rank at", 0, "Inside;Outside");
+    PX.rankscope=getParameterCount();setListParameter   ("Rank for", 0, "Top 5;Top 3", 0, SL);
+    PX.kinglabel=getParameterCount();setListParameter   ("King name", 0, "KING;GPoc;GPOC;GEX;POC;GAMMA");
 
-    setLabelParameter("\x97\x97 LEVELS \x97\x97");
+    setLabelParameter("\x97 LEVELS   horizontal price lines across the chart");
     PX.kline  = getParameterCount(); setBoolParameter   ("King", true);
-    PX.cw     = getParameterCount(); setBoolParameter   ("Call Wall", true, kParmAppendSameLine);
-    PX.pw     = getParameterCount(); setBoolParameter   ("Put Wall", true, kParmAppendSameLine);
+    PX.cw     = getParameterCount(); setBoolParameter   ("Call Wall", true, SL);
+    PX.pw     = getParameterCount(); setBoolParameter   ("Put Wall", true, SL);
     PX.flip   = getParameterCount(); setBoolParameter   ("Flip", true);
-    PX.em     = getParameterCount(); setBoolParameter   ("EM H/L", true, kParmAppendSameLine);
+    PX.em     = getParameterCount(); setBoolParameter   ("EM H/L", true, SL);
+    PX.extk   = getParameterCount(); setBoolParameter   ("Extend King", false, SL);
     PX.lstyle = getParameterCount(); setListParameter   ("Line style", 0, "Solid;Dot;Dash");
-    PX.lpos   = getParameterCount(); setListParameter   ("Label position", 0, "Left;Center;Right");
-    PX.extk   = getParameterCount(); setBoolParameter   ("Extend King line", false);
+    PX.lpos   = getParameterCount(); setListParameter   ("Label at", 0, "Left;Center;Right", 0, SL);
     PX.topnodes=getParameterCount(); setBoolParameter   ("Top-node lines", false);
-    PX.topstyle=getParameterCount(); setListParameter   ("Top-node line", 1, "Solid;Dot;Dash");
+    PX.topstyle=getParameterCount(); setListParameter   ("Line", 1, "Solid;Dot;Dash", 0, SL);
     PX.spyking= getParameterCount(); setBoolParameter   ("SPY King line", false);
 
-    setLabelParameter("\x97\x97 CONTEXT \x97\x97");
-    PX.header = getParameterCount(); setBoolParameter   ("Header", true);
-    PX.spot   = getParameterCount(); setBoolParameter   ("Spot marker", true, kParmAppendSameLine);
+    setLabelParameter("\x97 CONTEXT   title text & the current-price line");
+    PX.header = getParameterCount(); setBoolParameter   ("Title header (top-left text)", true);
+    PX.spot   = getParameterCount(); setBoolParameter   ("Spot price line (dotted)", true);
     return RTX_OK;
 }
 
@@ -398,12 +402,9 @@ void GammaProfile::render(const Settings& S)
     }
     if (barH < 3) barH = 3; if (barH > 40) barH = 40;
 
-    // PROPORTIONAL TEXT: node labels (type / % / rank) couple GENTLY to bar
-    // thickness -- a thick bar reads a little larger, a thin bar a little smaller.
-    // The multiplier is tightly capped so Auto thickness on a zoomed-out chart
-    // (where barH can auto-size to 40px) can never blow the text up.
-    float ts = (float)barH / 14.0f; if (ts < 0.9f) ts = 0.9f; if (ts > 1.35f) ts = 1.35f;
-    int efont = (int)(S.font * ts + 0.5f); if (efont < 8) efont = 8; if (efont > 22) efont = 22;
+    // ALL text (%, node name, rank, levels, header) uses ONE size: the user's
+    // "Font size" setting (default 12pt). Bar thickness no longer changes text
+    // size -- predictable, and the user scales everything with one control.
 
     // scale reference
     float maxAbs = 100.0f;
@@ -458,24 +459,24 @@ void GammaProfile::render(const Settings& S)
 
         // node TYPE centered inside the bar (KING label overridable)
         const char* tlabel = s.king ? S.kinglabel : s.type.c_str();
-        if (S.type && tlabel && tlabel[0] && len > (short)(efont)) {
+        if (S.type && tlabel && tlabel[0] && len > (short)(S.font * 2)) {
             COLOR ic = inkOn(col);
             short cxbar = (short)((anchor + tip) / 2);   // horizontal center of the bar
-            textC(cxbar, p.v, tlabel, ic, efont, true);
+            textC(cxbar, p.v, tlabel, ic, S.font, true);
         }
 
         // RANK bubble
         bool inScope = (S.rankscope == 1) ? (s.rank>=1 && s.rank<=3) : (s.rank>=1 && s.rank<=5);
         if (S.rank && inScope) {
             char rk[8]; sprintf_s(rk, sizeof(rk), "%d", s.rank);
-            short r = (short)(efont * 0.9f + 4);         // circle big enough to hold the numeral
+            short r = (short)(S.font * 0.9f + 4);         // circle big enough to hold the numeral
             short cx = (S.rankpos == 1)                 // outside the tip
                        ? (short)(tip + sgn * (r + 4))
                        : (short)(tip - sgn * (r + 2));  // inside the tip
             RCT bub; bub.set((short)(cx - r), (short)(p.v - r), (short)(cx + r), (short)(p.v + r));
             setPen(C_DARK, 1, P_SOLID); CBRUSH bb(C_DARK, PAT_SOLID); bb.set(); bub.drawOval(DRAW_OPAQUE);
             // center the numeral exactly on the strike (cx, p.v) using measured metrics
-            FONT f; f.id = HELVETICA; f.size = (short)(efont - 1); f.style = BOLD; setFont(f);
+            FONT f; f.id = HELVETICA; f.size = (short)(S.font - 1); f.style = BOLD; setFont(f);
             int lead=0, asc=0, desc=0; getFontMetrics(&lead, &asc, &desc);
             short tw = (short)getTextWidth(rk, -1);
             PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(p.v + (asc - desc)/2);
@@ -487,11 +488,11 @@ void GammaProfile::render(const Settings& S)
             char pc[12]; sprintf_s(pc, sizeof(pc), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
             if (S.pctpos == 1) {  // inside near base
                 COLOR ic = inkOn(col);
-                if (sgn < 0) textLJ((short)(tip + 4), p.v, pc, ic, efont, false);
-                else         textRJ((short)(tip - 4), p.v, pc, ic, efont, false);
+                if (sgn < 0) textLJ((short)(tip + 4), p.v, pc, ic, S.font, false);
+                else         textRJ((short)(tip - 4), p.v, pc, ic, S.font, false);
             } else {              // outside the tip
-                if (sgn < 0) textRJ((short)(tip - 6), p.v, pc, C_TXT, efont, false);
-                else         textLJ((short)(tip + 6), p.v, pc, C_TXT, efont, false);
+                if (sgn < 0) textRJ((short)(tip - 6), p.v, pc, C_TXT, S.font, false);
+                else         textLJ((short)(tip + 6), p.v, pc, C_TXT, S.font, false);
             }
         }
     }
@@ -527,7 +528,7 @@ extern "C" cppExtension *CreateExtension(void)
     GammaProfile *p = new GammaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("IRT Gamma Profile \x97 per-strike gamma histogram + level rail, tape-matched, with full settings. Reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.31");
+    p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
+    p->setVersion("0.32");
     return p;
 }
