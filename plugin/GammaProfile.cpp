@@ -53,6 +53,18 @@ static COLOR lerpColor(COLOR a, COLOR b, float t) {
 }
 static float luma(COLOR c){ return 0.2126f*((c>>16)&0xFF) + 0.7152f*((c>>8)&0xFF) + 0.0722f*(c&0xFF); }
 static COLOR inkOn(COLOR c){ return luma(c) > 140.0f ? C_DARK : C_WHT; }
+// Short tags for CSV-provided node types (patterns arrive in Phase 6).
+static const char* abbrevType(const std::string& t){
+    if (t=="PIKA")   return "P";
+    if (t=="BARNEY") return "B";
+    if (t=="RUG")    return "R";
+    if (t=="RRUG"||t=="RREV"||t=="REVRUG") return "RR";
+    if (t=="GK"||t=="GATEKEEPER") return "G";
+    if (t=="KING")   return "K";
+    if (t=="CEIL"||t=="CEILING") return "C";
+    if (t=="FLOOR")  return "F";
+    return t.c_str();
+}
 
 // ---- parameter indices, filled in setup() (single-instance -> file static) --
 struct PIdx {
@@ -63,6 +75,7 @@ struct PIdx {
     int kline, cw, pw, flip, em, lstyle, lpos, extk, topnodes, topstyle, spyking;
     int header, spot;
     int roles, regime, panelpos, defbands, confl, legend;   // structure read (appended v0.35)
+    int headerpos;                                          // header placement (appended v0.36)
 };
 static PIdx PX;
 
@@ -72,6 +85,7 @@ struct Settings {
     bool detach, round, amp, trans, showpct, rank, type;
     bool kline, cw, pw, flip, em, extk, topnodes, spyking, header, spot;
     bool roles, regime, defbands, confl, legend; int panelpos;   // structure read
+    int headerpos;
     COLOR cpos, cneg, cmid;
     char kinglabel[24];
 };
@@ -120,15 +134,15 @@ int cppExtension::destroy(void) { return RTX_OK; }
 // ---- constructor: cache safe defaults so the first draw (before calc) is valid
 GammaProfile::GammaProfile() : cppExtension()
 {
-    cfg.book=0; cfg.width=130; cfg.side=0; cfg.detach=true; cfg.thick=0; cfg.round=true;
+    cfg.book=0; cfg.width=100; cfg.side=0; cfg.detach=true; cfg.thick=0; cfg.round=true;
     cfg.filter=1; cfg.thresh=20; cfg.below=0; cfg.scale=0;
     cfg.cpos=D_POS; cfg.cneg=D_NEG; cfg.cmid=D_MID; cfg.kingcol=0; cfg.amp=false; cfg.trans=false;
     cfg.showpct=true; cfg.pctpos=0; cfg.hideu=5; cfg.rank=true; cfg.rankpos=0; cfg.rankscope=0;
-    cfg.type=true; cfg.font=12;
-    strncpy(cfg.kinglabel, "KING", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
+    cfg.type=true; cfg.font=10;
+    strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=true;
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false;
-    cfg.header=true; cfg.spot=true;
+    cfg.header=true; cfg.spot=true; cfg.headerpos=0;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=0; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
 }
 
@@ -177,7 +191,7 @@ int cppExtension::setup(void)
 
     // PROFILE
     PX.book   = pc++; setListParameter   ("Book", 0, "Auto;SPX;SPY");
-    PX.width  = pc++; setIntegerParameter("Width px", 130, 0, SL);
+    PX.width  = pc++; setIntegerParameter("Width px", 100, 0, SL);
     PX.side   = pc++; setListParameter   ("Side", 0, "Right;Left");
     PX.thick  = pc++; setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
     PX.detach = pc++; setBoolParameter   ("Detach from bars", true);
@@ -198,12 +212,12 @@ int cppExtension::setup(void)
     PX.showpct= pc++; setBoolParameter   ("Show %", true);
     PX.pctpos = pc++; setListParameter   ("% at", 0, "Outside;Inside", 0, SL);
     PX.hideu  = pc++; setIntegerParameter("Hide % under", 5);
-    PX.font   = pc++; setIntegerParameter("Font size (pt)", 12, 0, SL);
+    PX.font   = pc++; setIntegerParameter("Font size (pt)", 10, 0, SL);
     PX.rank   = pc++; setBoolParameter   ("Rank badge", true);
     PX.type   = pc++; setBoolParameter   ("Node name inside", true, SL);
     PX.rankpos= pc++; setListParameter   ("Rank at", 0, "Inside;Outside");
-    PX.rankscope=pc++;setListParameter   ("Rank for", 0, "Top 5;Top 3", 0, SL);
-    PX.kinglabel=pc++;setListParameter   ("King name", 0, "KING;GPoc;GPOC;GEX;POC;GAMMA");
+    PX.rankscope=pc++;setListParameter   ("Rank for (non-TopN filters)", 0, "Top 5;Top 3", 0, SL);
+    PX.kinglabel=pc++;setListParameter   ("King name", 0, "K;KING;GPoc;GPOC;GEX;POC;GAMMA");
     // LEVELS -- the five line toggles on one row, as requested
     PX.kline  = pc++; setBoolParameter   ("King line", true);
     PX.cw     = pc++; setBoolParameter   ("Call Wall", true, SL);
@@ -223,10 +237,11 @@ int cppExtension::setup(void)
     // instances keep their numbering)
     PX.roles   = pc++; setBoolParameter  ("Structure labels (Floor/Ceiling/Gate/Air)", true);
     PX.regime  = pc++; setBoolParameter  ("Regime + read panel", true, SL);
-    PX.panelpos= pc++; setListParameter  ("Panel at", 0, "Bottom-L;Bottom-R;Top-L;Top-R");
+    PX.panelpos= pc++; setListParameter  ("Panel at", 0, "Bottom-L;Bottom-C;Bottom-R;Top-L;Top-C;Top-R");
     PX.defbands= pc++; setBoolParameter  ("Deflection bands", false, SL);
     PX.confl   = pc++; setBoolParameter  ("EM confluence marks", false);
     PX.legend  = pc++; setBoolParameter  ("Polarity legend", false, SL);
+    PX.headerpos=pc++; setListParameter  ("Header at", 0, "Top-L;Top-C;Top-R;Bottom-L;Bottom-C;Bottom-R");
     return RTX_OK;
 }
 
@@ -240,7 +255,7 @@ static void dbgDump(const char* when, const Settings& S)
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.debug.txt";
     std::ofstream f(path.c_str(), std::ios::app);
     if (!f.is_open()) return;
-    f << "v0.34 " << when
+    f << "v0.36 " << when
       << " | IDX font="   << PX.font   << " hideu=" << PX.hideu << " showpct=" << PX.showpct
       << " rank="         << PX.rank   << " type="  << PX.type  << " filter="  << PX.filter
       << " width="        << PX.width
@@ -300,6 +315,7 @@ void GammaProfile::readSettings(Settings& S)
     S.defbands= isBoxChecked(PX.defbands) != 0;
     S.confl   = isBoxChecked(PX.confl) != 0;
     S.legend  = isBoxChecked(PX.legend) != 0;
+    S.headerpos = getListIndex(PX.headerpos);
     dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
@@ -351,16 +367,17 @@ void GammaProfile::load()
 // ---- small drawing helpers ------------------------------------------------
 void GammaProfile::drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans)
 {
+    // "Translucent" = fade the bar toward the dark chart ground so candles/grid
+    // read through it. Deterministic (no reliance on a host translucent mode)
+    // and it keeps rounded ends.
+    COLOR c = trans ? lerpColor(col, C_DARK, 0.55f) : col;
     RCT rc; rc.set(l, t, r, b);
-    if (trans) {
-        // see-through bar (square corners -- the rounded path can't blend)
-        rc.draw(0, col, col, DRAW_TRANSLUCENT, PAT_SOLID);
-    } else if (rounded) {
-        setPen(col, 1, P_SOLID);
-        CBRUSH br(col, PAT_SOLID); br.set();
+    if (rounded) {
+        setPen(c, 1, P_SOLID);
+        CBRUSH br(c, PAT_SOLID); br.set();
         rc.drawRounded(6, 6);
     } else {
-        rc.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID);
+        rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
     }
 }
 void GammaProfile::textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold)
@@ -401,41 +418,50 @@ void GammaProfile::bandPrice(float p1, float p2, short lx, short rx, COLOR col)
     RCT rc; rc.set(lx, y1, rx, y2);
     rc.draw(0, col, col, DRAW_TRANSLUCENT, PAT_SOLID);
 }
-// Regime + read panel, anchored to a pane corner (moveable via "Panel at").
+// Regime + read panel, anchored to any of six pane positions ("Panel at").
+// Dataviz: a colored swatch carries the polarity identity; the text stays in
+// neutral ink so it reads cleanly on the dark box.
 void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, int cIdx, int kIdx)
 {
-    short lineH = (short)(S.font + 7);
-    short pw = 300, ph = (short)(2*lineH + 14);
-    short L = (short)(pane.left + 8),  R = (short)(pane.right - pw - 8);
-    short T = (short)(pane.top + 8),   B = (short)(pane.bottom - ph - 8);
-    short x, y;
-    switch (S.panelpos) { case 1: x=R; y=B; break; case 2: x=L; y=T; break; case 3: x=R; y=T; break; default: x=L; y=B; }
+    short lineH = (short)(S.font + 8);
+    short pw = 328, ph = (short)(2*lineH + 16);
+    short L = (short)(pane.left + 8);
+    short C = (short)((pane.left + pane.right)/2 - pw/2);
+    short R = (short)(pane.right - pw - 8);
+    short B = (short)(pane.bottom - ph - 8);
+    short T = (short)(pane.top + 8);
+    short x = (S.panelpos%3==0) ? L : (S.panelpos%3==1 ? C : R);   // 0 L, 1 C, 2 R
+    short y = (S.panelpos < 3)  ? B : T;                           // 0-2 bottom, 3-5 top
+
     RCT box; box.set(x, y, (short)(x+pw), (short)(y+ph));
     box.draw(1, C_GREY, C_DARK, DRAW_OPAQUE, PAT_SOLID);
 
     bool neg = net < 0;
-    COLOR rc = neg ? S.cneg : S.cpos;
+    COLOR rcol = neg ? S.cneg : S.cpos;
+    short ly0 = (short)(y + 9 + lineH/2);
+    RCT sw; sw.set((short)(x+10), (short)(ly0-5), (short)(x+21), (short)(ly0+5));
+    sw.draw(0, rcol, rcol, DRAW_OPAQUE, PAT_SOLID);
     char l0[96];
-    sprintf_s(l0, sizeof(l0), neg ? "REGIME  -gamma : follow / don't fade (wicks)"
-                                  : "REGIME  +gamma : fade extremes (mean-revert)");
-    short ly0 = (short)(y + 6 + lineH/2);
-    textLJ((short)(x+10), ly0, l0, rc, S.font-1, true);
+    sprintf_s(l0, sizeof(l0), neg ? "REGIME  FOLLOW / don't fade  (-gamma, wicks)"
+                                  : "REGIME  FADE extremes  (+gamma, revert)");
+    textLJ((short)(x+28), ly0, l0, C_TXT, S.font, true);
 
     char l1[128];
-    char cs[40]="R n/a", fs[40]="S n/a", ks[40]="";
+    char cs[40]="R  n/a", fs[40]="S  n/a", ks[40]="";
     if (cIdx>=0) sprintf_s(cs, sizeof(cs), "R %d %+d%%", (int)(strikes[cIdx].price+0.5f), (int)strikes[cIdx].pct);
     if (fIdx>=0) sprintf_s(fs, sizeof(fs), "S %d %+d%%", (int)(strikes[fIdx].price+0.5f), (int)strikes[fIdx].pct);
     if (kIdx>=0) sprintf_s(ks, sizeof(ks), "KING %d %+d%%", (int)(strikes[kIdx].price+0.5f), (int)strikes[kIdx].pct);
-    sprintf_s(l1, sizeof(l1), "%s   %s   %s", cs, ks, fs);
-    short ly1 = (short)(y + 6 + lineH + lineH/2);
-    textLJ((short)(x+10), ly1, l1, C_TXT, S.font-1, false);
+    sprintf_s(l1, sizeof(l1), "%s     %s     %s", cs, ks, fs);
+    short ly1 = (short)(y + 9 + lineH + lineH/2);
+    textLJ((short)(x+10), ly1, l1, C_TXT, S.font, false);
 }
 // Polarity legend (character, not strength). Placed opposite the panel's row.
 void GammaProfile::drawLegend(RCT pane, const Settings& S)
 {
     short lineH=(short)(S.font+6), pw=286, ph=(short)(2*lineH+14);
     short x=(short)(pane.left+8);
-    short y = (S.panelpos>=2) ? (short)(pane.bottom-ph-8) : (short)(pane.top+8);
+    // sit opposite the panel's row so they don't overlap
+    short y = (S.panelpos < 3) ? (short)(pane.top+8) : (short)(pane.bottom-ph-8);
     RCT box; box.set(x, y, (short)(x+pw), (short)(y+ph));
     box.draw(1, C_GREY, C_DARK, DRAW_OPAQUE, PAT_SOLID);
     RCT sw;  sw.set((short)(x+10),(short)(y+9),(short)(x+22),(short)(y+9+11));
@@ -540,12 +566,18 @@ void GammaProfile::render(const Settings& S)
             if (role[i]==0 && strikes[i].price>lo && strikes[i].price<hi && std::fabs(strikes[i].pct)>=10.0f) role[i]=4;
     }
 
-    // header
+    // header (positionable: 0 TL,1 TC,2 TR,3 BL,4 BC,5 BR)
     if (S.header) {
         char h[96];
         int kingStrike = 0; for (size_t i=0;i<strikes.size();i++) if (strikes[i].king) kingStrike=(int)(strikes[i].price+0.5f);
         sprintf_s(h, sizeof(h), "%s gamma  King %d", book.c_str(), kingStrike);
-        textLJ((short)(paneL + 6), (short)(pane.top + S.font + 2), h, C_TXT, S.font, true);
+        FONT hf; hf.id=HELVETICA; hf.size=(short)S.font; hf.style=BOLD; setFont(hf);
+        short tw = (short)getTextWidth(h, -1);
+        int hp = S.headerpos;
+        short hy = (hp<3) ? (short)(pane.top + S.font + 4) : (short)(pane.bottom - S.font - 4);
+        short cx = (short)((paneL+paneR)/2 - tw/2);
+        short hx = (hp%3==0) ? (short)(paneL+6) : (hp%3==1 ? cx : (short)(paneR - tw - 8));
+        textLJ(hx, hy, h, C_TXT, S.font, true);
     }
 
     // spot marker
@@ -605,7 +637,7 @@ void GammaProfile::render(const Settings& S)
         short tip = (short)(anchor + sgn * len);
 
         // color
-        float t = ab / 100.0f; if (S.amp) t = t <= 0 ? 0 : (float)std::sqrt(t);
+        float t = ab / 100.0f; if (S.amp) t = t <= 0 ? 0 : (float)std::pow(t, 0.4f);   // amplify: steeper saturation
         COLOR col = (s.pct >= 0) ? lerpColor(S.cmid, S.cpos, t) : lerpColor(S.cmid, S.cneg, t);
         if (s.king && S.kingcol == 1) col = D_KING;
         if (!primary) col = C_GREY;
@@ -625,14 +657,14 @@ void GammaProfile::render(const Settings& S)
             short s1, s2; if (sgn<0){ s1=(short)(anchor-3); s2=anchor; } else { s1=anchor; s2=(short)(anchor+3); }
             RCT st; st.set(s1, (short)(p.v-barH/2-1), s2, (short)(p.v+barH/2+1));
             st.draw(0, sr, sr, DRAW_OPAQUE, PAT_SOLID);
-            const char* rn = rl==1?"KING":(rl==2?"CEIL":(rl==3?"FLOOR":"GATE"));
+            const char* rn = rl==1 ? S.kinglabel : (rl==2?"C":(rl==3?"F":"G"));   // K(name)/C/F/G
             COLOR ic = inkOn(col);
             if (sgn<0) textRJ((short)(anchor-8), p.v, rn, ic, S.font, true);
             else       textLJ((short)(anchor+8), p.v, rn, ic, S.font, true);
         }
 
         // node TYPE centered inside the bar (only when no role tag is shown)
-        const char* tlabel = s.king ? S.kinglabel : s.type.c_str();
+        const char* tlabel = s.king ? S.kinglabel : abbrevType(s.type);
         if (S.type && !rl && tlabel && tlabel[0] && len > (short)(S.font * 2)) {
             COLOR ic = inkOn(col);
             short cxbar = (short)((anchor + tip) / 2);   // horizontal center of the bar
@@ -646,8 +678,10 @@ void GammaProfile::render(const Settings& S)
             PNT b; b.set(0,0.0f); b.h=tip; b.v=(short)(p.v+6); b.drawLineTo();
         }
 
-        // RANK bubble
-        bool inScope = (S.rankscope == 1) ? (s.rank>=1 && s.rank<=3) : (s.rank>=1 && s.rank<=5);
+        // RANK bubble -- scope follows the Show filter (Top3->3, Top5->5, ...);
+        // for the non-TopN filters it falls back to the "Rank for" setting.
+        int rankMax = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
+        bool inScope = (s.rank>=1 && s.rank<=rankMax);
         if (S.rank && inScope) {
             char rk[8]; sprintf_s(rk, sizeof(rk), "%d", s.rank);
             short r = (short)(S.font * 0.9f + 4);         // circle big enough to hold the numeral
@@ -717,6 +751,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.35");
+    p->setVersion("0.36");
     return p;
 }
