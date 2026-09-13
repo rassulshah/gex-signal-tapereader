@@ -11,9 +11,9 @@
  *
  *  Full settings panel (see setup()). Build: x64 Release, link irtsdkV143-x64.lib.
  *
- *  Parameter indices are captured dynamically via getParameterCount() into PX
- *  (below), so inserting section-header labels or new controls can never shift a
- *  control's index out from under readSettings().
+ *  Parameter indices are numbered explicitly (pc++), one per control, with NO
+ *  setLabelParameter section headers -- a label row shifts IRT's parameter
+ *  numbering and silently scrambles every setting read after it.
  ********************************************************************************/
 #include "irtsdk.h"
 #include <fstream>
@@ -212,6 +212,27 @@ int cppExtension::setup(void)
     return RTX_OK;
 }
 
+// ---- self-diagnostic: append what we actually read to a file the bridge can
+// stage, so the parameter mapping can be VERIFIED empirically, not assumed.
+// (Writes GammaProfile.debug.txt beside the CSV; harmless, deletable.)
+static void dbgDump(const char* when, const Settings& S)
+{
+    const char* up = getenv("USERPROFILE");
+    if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.debug.txt";
+    std::ofstream f(path.c_str(), std::ios::app);
+    if (!f.is_open()) return;
+    f << "v0.34 " << when
+      << " | IDX font="   << PX.font   << " hideu=" << PX.hideu << " showpct=" << PX.showpct
+      << " rank="         << PX.rank   << " type="  << PX.type  << " filter="  << PX.filter
+      << " width="        << PX.width
+      << " | READ font="  << S.font    << " hideu=" << S.hideu  << " showpct=" << (int)S.showpct
+      << " rank="         << (int)S.rank << " type=" << (int)S.type << " filter=" << S.filter
+      << " width="        << S.width   << " thresh=" << S.thresh << " detach=" << (int)S.detach
+      << "\n";
+    f.close();
+}
+
 // ---- read settings --------------------------------------------------------
 void GammaProfile::readSettings(Settings& S)
 {
@@ -255,6 +276,7 @@ void GammaProfile::readSettings(Settings& S)
     S.spyking  = isBoxChecked(PX.spyking) != 0;
     S.header= isBoxChecked(PX.header) != 0;
     S.spot  = isBoxChecked(PX.spot) != 0;
+    dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
 // ---- data load ------------------------------------------------------------
@@ -540,6 +562,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.33");
+    p->setVersion("0.34");
     return p;
 }
