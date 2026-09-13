@@ -14,7 +14,8 @@ setlocal enabledelayedexpansion
 set "OUT=lsGammaProfile.dll"
 set "SDK=C:\Program Files\LinnSoft\InvestorRT\sdk\c++"
 set "LIB143=%SDK%\lib\irtsdkV143-x64.lib"
-set "DLLDIR=C:\Program Files\LinnSoft\InvestorRT\dllx64"
+REM Investor/RT scans the PER-USER extension folder, not Program Files:
+set "DLLDIR=%USERPROFILE%\InvestorRT\dllx64"
 
 if not exist "%SDK%\include\irtsdk.h" (
   echo [ERROR] Cannot find the SDK at "%SDK%".
