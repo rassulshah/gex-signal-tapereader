@@ -15,6 +15,48 @@ panel to write `GammaProfile.csv` live with the real SPX→ES conversion — spe
 `design/spec-phase0-gamma-export.md`), visual tuning, patterns (Phase 6), delta (Phase 7). The panel
 (v15.99) itself was not changed this session.
 
+### 📋 GAMMA-PROFILE TUNING BACKLOG — operator batch, 2026-09-13 (one-at-a-time, not yet built)
+His words, 2026-09-13 morning (a 14-item batch given at once; being worked ONE AT A TIME per PROJECT-CONSTANTS).
+Feasibility verified against `irtsdk.h` this session. An item leaves this list only by being BUILT (version)
+or CANCELLED by him.
+
+**BUGS (dead options / wrong behaviour):**
+1. **Bars pulse when the chart is zoomed/scrolled** — "when I move the candles closer the bars go to their
+   intended size, when I move them back they shrink." Root cause: `render()` shrinks `w` to `room = paneR - lastX - 6`,
+   and `lastX` (right edge of last candle) moves as the chart scrolls → bar length rescales. FIX: keep bar width FIXED
+   at `S.width`; detach reserves a fixed right-margin strip instead of adapting to available room. **← chosen first.**
+2. **"Extend top-node lines" does nothing** — `P_EXTN`/`S.extn` is read but never used in `render()`. Top-N node
+   horizontal lines are simply not drawn. Must implement, and make them customizable (color/style/width).
+3. **"Extend King line" does nothing** — `P_EXTK`/`S.extk` read but never used. `drawLevel` stops at `lastBar`;
+   extend should run the line to the pane's right edge / future margin. Verify it works after.
+4. **% doesn't re-align on bar-thickness change** — "when I change bar thickness it should auto-update the
+   percentages and align them properly." Needs the exact misalignment confirmed (screenshot) in its turn.
+
+**SETTINGS-PANEL PLUMBING (feasible, mostly no mockup needed):**
+5. **SPX/SPY instrument selector** — auto-select book by chart symbol (ES has no data → default SPX); allow manual
+   SPX (default) / SPY. `setListParameter("Book","Auto;SPX;SPY")` → picks which CSV to read. (Second profile = add the
+   indicator twice with different Book. Needs a SPY CSV — ties to Phase 0 data pipeline.)
+6. **Delta profile** — the signed-dollar delta profile we discussed. NEEDS the footprint/delta feed (Phase 7) — not
+   available yet. Deferred with a note, not dropped.
+7. **Rename "King" label** — `setStringParameter("King label","KING")` so he can set e.g. "GPoc". Blank = default.
+8. **Add Top 8 / Top 10** to the Filter list (currently Top 3;Top 5;>=Threshold;All). Generalize the hardcoded
+   rank<=3/<=5 logic to top-N. Same for Rank scope.
+9. **Font size** — already exists (`P_FONT`, default 12). He wants it usable/bigger range; consider native
+   `setFontParameter` (family+size+style) instead of a plain int.
+10. **Section headers** in the settings dialog — feasible via `setLabelParameter("— LAYOUT —")` etc. (LAYOUT / NODES /
+    COLOR / LABELS / LEVELS / CONTEXT).
+11. **Horizontal (side-by-side) checkboxes** — feasible via `kParmAppendSameLine` flag on `setBoolParameter`, to stop
+    King/CallWall/PutWall/Flip etc. eating vertical space.
+12. **King text centered more in the node bar** — node TYPE label currently sits at the bar base (`anchor-6`); move
+    to the bar's horizontal center.
+13. **Customizable top-node lines + lines for OTHER kings** (e.g. SPY King) — color/style/width controls, plus a
+    line at a secondary book's King. Ties to #2 line implementation and #5 book selector.
+
+**NOT POSSIBLE natively:**
+14. **Tooltips on settings controls** — IRT auto-generates the parameter dialog and exposes NO tooltip/hint API
+    (verified: no tooltip/hint/help method in `irtsdk.h`). Alternatives: a one-line help `setLabelParameter` per
+    section, or a Help section at the dialog bottom. Told the operator; awaiting his pick.
+
 ---
 
 ## WHY THIS FILE EXISTS — read this before you skip it
