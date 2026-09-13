@@ -44,3 +44,6 @@ tools/gex-nightly.lock
 
 # (v15.72) the desktop app drops every file I send into this folder — not the record
 Claude outputs/
+
+# diagnostic scratch from the plugin write-verify (safe to delete)
+plugin/GammaProfile.sentinel.cpp
