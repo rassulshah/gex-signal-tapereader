@@ -34,15 +34,34 @@
 #include <cstdio>
 
 // ---- palette (0x00RRGGBB) -------------------------------------------------
-static const COLOR C_GOLD   = 0x00E3C341;   // +gamma node
-static const COLOR C_PURPLE = 0x00A86FE0;   // -gamma node
-static const COLOR C_KING   = 0x00FFF0A6;   // King / POC
+// Diverging heatmap to match the Skylit tape: green at ~0, gold at strong +gamma,
+// magenta at strong -gamma. The King is colored by its own polarity (not a special
+// color) exactly like the tape, and stays distinct as the largest bar + KING label.
+static const COLOR C_GREEN  = 0x00179E5C;   // gamma ~ 0 (tape midpoint)
+static const COLOR C_GOLD   = 0x00E3C341;   // strong +gamma (tape yellow)
+static const COLOR C_MAGENTA= 0x00C43BAF;   // strong -gamma (tape magenta)
+static const COLOR C_PURPLE = 0x00A86FE0;   // (legacy) -gamma node
+static const COLOR C_KING   = 0x00FFF0A6;   // (legacy) King / POC
 static const COLOR C_INK    = 0x00202020;   // label ink on bright bars
 static const COLOR C_PINK   = 0x00FF5DB0;   // walls
 static const COLOR C_WHITE  = 0x00E6EDF5;   // flip
 static const COLOR C_CYAN   = 0x004FD0E0;   // expected-move band
 
 static const short MARGIN = 130;            // px width of the reserved histogram strip
+
+// linear blend of two 0x00RRGGBB colors, t in [0,1]
+static COLOR lerpColor(COLOR a, COLOR b, float t) {
+    if (t < 0) t = 0; if (t > 1) t = 1;
+    int ar=(a>>16)&0xFF, ag=(a>>8)&0xFF, ab=a&0xFF;
+    int br=(b>>16)&0xFF, bg=(b>>8)&0xFF, bb=b&0xFF;
+    int r=(int)(ar+(br-ar)*t+0.5f), g=(int)(ag+(bg-ag)*t+0.5f), bl=(int)(ab+(bb-ab)*t+0.5f);
+    return (COLOR)(((COLOR)r<<16) | ((COLOR)g<<8) | (COLOR)bl);
+}
+// diverging heatmap by signed %King: 0 -> green, +100 -> gold, -100 -> magenta
+static COLOR nodeColor(float pct) {
+    float t = (pct < 0 ? -pct : pct) / 100.0f;
+    return (pct >= 0) ? lerpColor(C_GREEN, C_GOLD, t) : lerpColor(C_GREEN, C_MAGENTA, t);
+}
 
 struct GStrike { float price; float pct; int rank; bool king; };
 
@@ -138,7 +157,7 @@ void GammaProfile::render()
         PNT p; p.set(lastBar, s.price);
         short len = (short)(std::fabs(s.pct) / 100.0f * MARGIN);
         if (len < 3) len = 3;
-        COLOR col = s.king ? C_KING : (s.pct >= 0 ? C_GOLD : C_PURPLE);
+        COLOR col = nodeColor(s.pct);   // polarity+magnitude heatmap, matches the tape
 
         RCT bar;
         bar.set((short)(right - len), (short)(p.v - barH / 2),
