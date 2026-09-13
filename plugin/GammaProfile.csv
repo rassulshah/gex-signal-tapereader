@@ -30,4 +30,20 @@ KING,7675
 EMH,7689.11
 EML,7636.89
 SPOT,7657
+SPYKING,7667.5
 BOOK,SPX
+# ---- DAY MODEL (read by lsDayModel; the gamma plugin ignores these keys) ----
+# DAYEXP / DAYACT : open,high,low,close  (expected model day / actual developing day)
+DAYEXP,7648,7685,7638,7666
+DAYACT,7648,7672,7641,7657
+WEEKDAY,Fri
+# later increments (labels / MUD box / swept levels) — data staged, not drawn in v0.1
+# DAYHOD / DAYLOD : value,time,duration-from-open  ; DAYMUD : pts,time,dollar
+DAYHOD,7672,12:58pm,3h 28m
+DAYLOD,7641,10:12am,0h 42m
+DAYMUD,+31,2h 46m,15680
+DAYEHOD,7685
+DAYELOD,7638
+SWEPT,PDH,7669,09:41am,R
+SWEPT,ONL,7644,10:12am,B
+SWEPT,PDC,7654,11:20am,T
