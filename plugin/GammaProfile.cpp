@@ -66,7 +66,11 @@ struct GStrike { float price; float pct; int rank; bool king; std::string type; 
 class GammaProfile : public cppExtension {
 public:
     GammaProfile();
-    virtual int calc(int iStartBar);    // read+cache settings here (params valid in calc)
+    // Read settings ONLY from the parameter callbacks (dialog controls are valid there);
+    // the constructor seeds safe defaults so the closed-dialog state renders correctly.
+    virtual int parmsLoad(void);
+    virtual int parmsApply(void);
+    virtual int parmsUpdt(unsigned int iParmNumber);
     virtual int draw(void);
 
     std::vector<GStrike> strikes;
@@ -101,12 +105,17 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.header=true; cfg.spot=true;
 }
 
-// ---- calc(): params are valid here — read them into the cache
-int GammaProfile::calc(int)
+// ---- parameter callbacks: dialog controls are valid here, so read + cache.
+// parmsLoad is guarded: only accept the read if a control reads a plausible value,
+// otherwise keep the constructor defaults (so the profile always renders).
+int GammaProfile::parmsLoad(void)
 {
-    readSettings(cfg);
+    int probe = getIntegerValue(P_FONT);
+    if (probe >= 6 && probe <= 40) readSettings(cfg);
     return RTX_OK;
 }
+int GammaProfile::parmsApply(void)            { readSettings(cfg); return RTX_OK; }
+int GammaProfile::parmsUpdt(unsigned int)     { readSettings(cfg); return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
 int cppExtension::setup(void)
