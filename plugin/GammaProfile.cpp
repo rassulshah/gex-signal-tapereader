@@ -140,6 +140,12 @@ int GammaProfile::parmsUpdt(unsigned int)     { readSettings(cfg); return RTX_OK
 // shift a control's number.
 int cppExtension::setup(void)
 {
+    // Parameter-layout version. IRT stores an instance's parameter values by
+    // position; bumping this tells it the layout changed so it resets stored
+    // values to the defaults below instead of restoring them into the wrong
+    // controls. BUMP THIS whenever parameters are reordered or inserted.
+    // (Going forward, new parameters are APPENDED at the end so this stays put.)
+    setParameterVersion(3);
     setParameterDialogHeight(42);
 
     setLabelParameter("\x97\x97 PROFILE \x97\x97");
@@ -392,11 +398,12 @@ void GammaProfile::render(const Settings& S)
     }
     if (barH < 3) barH = 3; if (barH > 40) barH = 40;
 
-    // PROPORTIONAL TEXT: node labels (type / % / rank) scale with bar thickness
-    // so a thick bar carries proportionally larger text, a thin bar smaller.
-    // Anchored to the user's Font size at a ~12px reference bar.
-    float ts = (float)barH / 12.0f; if (ts < 0.85f) ts = 0.85f; if (ts > 2.2f) ts = 2.2f;
-    int efont = (int)(S.font * ts + 0.5f); if (efont < 7) efont = 7; if (efont > 48) efont = 48;
+    // PROPORTIONAL TEXT: node labels (type / % / rank) couple GENTLY to bar
+    // thickness -- a thick bar reads a little larger, a thin bar a little smaller.
+    // The multiplier is tightly capped so Auto thickness on a zoomed-out chart
+    // (where barH can auto-size to 40px) can never blow the text up.
+    float ts = (float)barH / 14.0f; if (ts < 0.9f) ts = 0.9f; if (ts > 1.35f) ts = 1.35f;
+    int efont = (int)(S.font * ts + 0.5f); if (efont < 8) efont = 8; if (efont > 22) efont = 22;
 
     // scale reference
     float maxAbs = 100.0f;
@@ -521,6 +528,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("IRT Gamma Profile \x97 per-strike gamma histogram + level rail, tape-matched, with full settings. Reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.3");
+    p->setVersion("0.31");
     return p;
 }
