@@ -125,82 +125,90 @@ GammaProfile::GammaProfile() : cppExtension()
 // ---- parameter callbacks: dialog controls are valid here, so read + cache.
 // parmsLoad is guarded: only accept the read if a control reads a plausible value,
 // otherwise keep the constructor defaults (so the profile always renders).
+// All three guard on a plausible font read: if the dialog somehow hands back a
+// nonsense value we keep the cached settings rather than corrupt the render.
+// Threshold % is only meaningful when Show = ">= Threshold" (filter index 4);
+// grey it out otherwise so it doesn't read like a second live control.
 int GammaProfile::parmsLoad(void)
+{
+    int probe = getIntegerValue(PX.font);
+    if (probe >= 6 && probe <= 48) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
+    return RTX_OK;
+}
+int GammaProfile::parmsApply(void)
 {
     int probe = getIntegerValue(PX.font);
     if (probe >= 6 && probe <= 48) readSettings(cfg);
     return RTX_OK;
 }
-int GammaProfile::parmsApply(void)            { readSettings(cfg); return RTX_OK; }
-int GammaProfile::parmsUpdt(unsigned int)     { readSettings(cfg); return RTX_OK; }
+int GammaProfile::parmsUpdt(unsigned int)
+{
+    int probe = getIntegerValue(PX.font);
+    if (probe >= 6 && probe <= 48) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
+    return RTX_OK;
+}
 
 // ---- parameter panel ------------------------------------------------------
-// Each control's index is captured from getParameterCount() the instant before
-// it is declared, so section-header labels (which DO consume an index) never
-// shift a control's number.
+// IMPORTANT: parameter indices are numbered EXPLICITLY here (pc++), one per
+// control. Do NOT use setLabelParameter for section headers -- a label row
+// shifts IRT's internal parameter numbering out from under the value getters
+// (getListIndex / isBoxChecked / getIntegerValue), which silently scrambles
+// every setting declared after it. That bug greyed nodes, dropped labels and
+// reset Width. Controls only, counted 1:1, is the reliable scheme.
+// Two-per-row layout is via kParmAppendSameLine (pure layout; each same-line
+// control still gets its own index, so it does not affect numbering).
 int cppExtension::setup(void)
 {
-    // Parameter-layout version. IRT stores an instance's parameter values by
-    // position; bumping this marks the layout as changed. BUMP whenever
-    // parameters are reordered/inserted. (New params are APPENDED at the end
-    // from here on, so existing instances keep mapping and this stays put.)
-    setParameterVersion(4);
-    setParameterDialogHeight(30);   // shorter: controls are paired two per row
+    setParameterVersion(5);
+    setParameterDialogHeight(26);
 
-    // Controls are laid out two per row via kParmAppendSameLine to use the
-    // dialog's width (IRT fixes that width for its standard footer) and cut the
-    // height. Each section header carries a one-line description of what it does.
     const short SL = kParmAppendSameLine;
+    int pc = 0;                        // the TRUE parameter index, one per control
 
-    setLabelParameter("\x97 PROFILE   data book, size & placement of the strip");
-    PX.book   = getParameterCount(); setListParameter   ("Book", 0, "Auto;SPX;SPY");
-    PX.width  = getParameterCount(); setIntegerParameter("Width px", 130, 0, SL);
-    PX.side   = getParameterCount(); setListParameter   ("Side", 0, "Right;Left");
-    PX.thick  = getParameterCount(); setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
-    PX.detach = getParameterCount(); setBoolParameter   ("Detach from bars", true);
-    PX.round  = getParameterCount(); setBoolParameter   ("Rounded ends", true, SL);
-
-    setLabelParameter("\x97 NODES   which strikes show as bars, and how they scale");
-    PX.filter = getParameterCount(); setListParameter   ("Show", 1, "Top 3;Top 5;Top 8;Top 10;>= Threshold;All");
-    PX.thresh = getParameterCount(); setIntegerParameter("Threshold %", 20, 0, SL);
-    PX.below  = getParameterCount(); setListParameter   ("Sub-threshold", 0, "Grey out;Hide");
-    PX.scale  = getParameterCount(); setListParameter   ("Scale to", 0, "King=100%;Visible max", 0, SL);
-
-    setLabelParameter("\x97 COLOR   gamma polarity colours for the bars");
-    PX.cpos   = getParameterCount(); setColorParameter  ("+Gamma", D_POS);
-    PX.cneg   = getParameterCount(); setColorParameter  ("-Gamma", D_NEG, 0, SL);
-    PX.cmid   = getParameterCount(); setColorParameter  ("Midpoint", D_MID);
-    PX.kingcol= getParameterCount(); setListParameter   ("King colour", 0, "Polarity;Distinct", 0, SL);
-    PX.amp    = getParameterCount(); setBoolParameter   ("Amplify polarity", false);
-    PX.trans  = getParameterCount(); setBoolParameter   ("Translucent bars", false, SL);
-
-    setLabelParameter("\x97 LABELS   the % / node-name / rank text on each bar");
-    PX.showpct= getParameterCount(); setBoolParameter   ("Show %", true);
-    PX.pctpos = getParameterCount(); setListParameter   ("% at", 0, "Outside;Inside", 0, SL);
-    PX.hideu  = getParameterCount(); setIntegerParameter("Hide % under", 5);
-    PX.font   = getParameterCount(); setIntegerParameter("Font size (pt)", 12, 0, SL);
-    PX.rank   = getParameterCount(); setBoolParameter   ("Rank badge", true);
-    PX.type   = getParameterCount(); setBoolParameter   ("Node name inside", true, SL);
-    PX.rankpos= getParameterCount(); setListParameter   ("Rank at", 0, "Inside;Outside");
-    PX.rankscope=getParameterCount();setListParameter   ("Rank for", 0, "Top 5;Top 3", 0, SL);
-    PX.kinglabel=getParameterCount();setListParameter   ("King name", 0, "KING;GPoc;GPOC;GEX;POC;GAMMA");
-
-    setLabelParameter("\x97 LEVELS   horizontal price lines across the chart");
-    PX.kline  = getParameterCount(); setBoolParameter   ("King", true);
-    PX.cw     = getParameterCount(); setBoolParameter   ("Call Wall", true, SL);
-    PX.pw     = getParameterCount(); setBoolParameter   ("Put Wall", true, SL);
-    PX.flip   = getParameterCount(); setBoolParameter   ("Flip", true);
-    PX.em     = getParameterCount(); setBoolParameter   ("EM H/L", true, SL);
-    PX.extk   = getParameterCount(); setBoolParameter   ("Extend King", false, SL);
-    PX.lstyle = getParameterCount(); setListParameter   ("Line style", 0, "Solid;Dot;Dash");
-    PX.lpos   = getParameterCount(); setListParameter   ("Label at", 0, "Left;Center;Right", 0, SL);
-    PX.topnodes=getParameterCount(); setBoolParameter   ("Top-node lines", false);
-    PX.topstyle=getParameterCount(); setListParameter   ("Line", 1, "Solid;Dot;Dash", 0, SL);
-    PX.spyking= getParameterCount(); setBoolParameter   ("SPY King line", false);
-
-    setLabelParameter("\x97 CONTEXT   title text & the current-price line");
-    PX.header = getParameterCount(); setBoolParameter   ("Title header (top-left text)", true);
-    PX.spot   = getParameterCount(); setBoolParameter   ("Spot price line (dotted)", true);
+    // PROFILE
+    PX.book   = pc++; setListParameter   ("Book", 0, "Auto;SPX;SPY");
+    PX.width  = pc++; setIntegerParameter("Width px", 130, 0, SL);
+    PX.side   = pc++; setListParameter   ("Side", 0, "Right;Left");
+    PX.thick  = pc++; setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
+    PX.detach = pc++; setBoolParameter   ("Detach from bars", true);
+    PX.round  = pc++; setBoolParameter   ("Rounded ends", true, SL);
+    // NODES
+    PX.filter = pc++; setListParameter   ("Show", 1, "Top 3;Top 5;Top 8;Top 10;>= Threshold;All");
+    PX.thresh = pc++; setIntegerParameter("Threshold %", 20, 0, SL);
+    PX.below  = pc++; setListParameter   ("Sub-threshold", 0, "Grey out;Hide");
+    PX.scale  = pc++; setListParameter   ("Scale to", 0, "King=100%;Visible max", 0, SL);
+    // COLOR
+    PX.cpos   = pc++; setColorParameter  ("+Gamma", D_POS);
+    PX.cneg   = pc++; setColorParameter  ("-Gamma", D_NEG, 0, SL);
+    PX.cmid   = pc++; setColorParameter  ("Midpoint", D_MID);
+    PX.kingcol= pc++; setListParameter   ("King colour", 0, "Polarity;Distinct", 0, SL);
+    PX.amp    = pc++; setBoolParameter   ("Amplify polarity", false);
+    PX.trans  = pc++; setBoolParameter   ("Translucent bars", false, SL);
+    // LABELS
+    PX.showpct= pc++; setBoolParameter   ("Show %", true);
+    PX.pctpos = pc++; setListParameter   ("% at", 0, "Outside;Inside", 0, SL);
+    PX.hideu  = pc++; setIntegerParameter("Hide % under", 5);
+    PX.font   = pc++; setIntegerParameter("Font size (pt)", 12, 0, SL);
+    PX.rank   = pc++; setBoolParameter   ("Rank badge", true);
+    PX.type   = pc++; setBoolParameter   ("Node name inside", true, SL);
+    PX.rankpos= pc++; setListParameter   ("Rank at", 0, "Inside;Outside");
+    PX.rankscope=pc++;setListParameter   ("Rank for", 0, "Top 5;Top 3", 0, SL);
+    PX.kinglabel=pc++;setListParameter   ("King name", 0, "KING;GPoc;GPOC;GEX;POC;GAMMA");
+    // LEVELS -- the five line toggles on one row, as requested
+    PX.kline  = pc++; setBoolParameter   ("King line", true);
+    PX.cw     = pc++; setBoolParameter   ("Call Wall", true, SL);
+    PX.pw     = pc++; setBoolParameter   ("Put Wall", true, SL);
+    PX.flip   = pc++; setBoolParameter   ("Flip", true, SL);
+    PX.em     = pc++; setBoolParameter   ("EM H/L", true, SL);
+    PX.extk   = pc++; setBoolParameter   ("Extend King line", false);
+    PX.topnodes=pc++; setBoolParameter   ("Top-node lines", false, SL);
+    PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash");
+    PX.lpos   = pc++; setListParameter   ("Label at", 0, "Left;Center;Right", 0, SL);
+    PX.topstyle=pc++; setListParameter   ("Top-node style", 1, "Solid;Dot;Dash");
+    PX.spyking= pc++; setBoolParameter   ("SPY King line", false, SL);
+    // CONTEXT
+    PX.header = pc++; setBoolParameter   ("Title header (top-left)", true);
+    PX.spot   = pc++; setBoolParameter   ("Spot price line (dotted)", true, SL);
     return RTX_OK;
 }
 
@@ -298,12 +306,15 @@ void GammaProfile::load()
 void GammaProfile::drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans)
 {
     RCT rc; rc.set(l, t, r, b);
-    if (rounded) {
+    if (trans) {
+        // see-through bar (square corners -- the rounded path can't blend)
+        rc.draw(0, col, col, DRAW_TRANSLUCENT, PAT_SOLID);
+    } else if (rounded) {
         setPen(col, 1, P_SOLID);
         CBRUSH br(col, PAT_SOLID); br.set();
         rc.drawRounded(6, 6);
     } else {
-        rc.draw(0, col, col, trans ? DRAW_TRANSLUCENT : DRAW_OPAQUE, PAT_SOLID);
+        rc.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID);
     }
 }
 void GammaProfile::textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold)
@@ -529,6 +540,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.32");
+    p->setVersion("0.33");
     return p;
 }
