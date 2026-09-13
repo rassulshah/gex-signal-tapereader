@@ -126,7 +126,7 @@ int cppExtension::setup(void)
     setBoolParameter   ("Flip line", true);
     setBoolParameter   ("EM High/Low lines", true);
     setListParameter   ("Line style", 0, "Solid;Dot;Dash");
-    setListParameter   ("Level label position", 0, "Right;Center;Left");
+    setListParameter   ("Level label position", 0, "Left;Center;Right");
     setBoolParameter   ("Extend King line", false);
     setBoolParameter   ("Extend top-node lines", false);
     // Context
@@ -250,10 +250,11 @@ void GammaProfile::drawLevel(int lastBar, short lx, short rx, int idx, COLOR col
     setPen(col, 1, ps);
     PNT a; a.set(0, lvl[idx]);        a.setDrawPosition();
     PNT b; b.set(lastBar, lvl[idx]);  b.drawLineTo();
-    short y = a.v; PNT probe; probe.set(lastBar, lvl[idx]); y = probe.v;
-    if (S.lpos == 2)      textLJ((short)(lx + 4), (short)(y - S.font - 2), label, col, S.font, false);   // left
-    else if (S.lpos == 1) textLJ((short)((lx+rx)/2), (short)(y - S.font - 2), label, col, S.font, false); // center-ish
-    else                  textRJ((short)(rx - 4), (short)(y - S.font - 2), label, col, S.font, false);    // right
+    if (!label || !label[0]) return;   // line only (no label — used for KING, which the node labels)
+    PNT probe; probe.set(lastBar, lvl[idx]); short y = probe.v;
+    if (S.lpos == 0)      textLJ((short)(lx + 4),            (short)(y - S.font - 2), label, col, S.font, false); // left (default)
+    else if (S.lpos == 1) textLJ((short)((lx + rx)/2 - 20),  (short)(y - S.font - 2), label, col, S.font, false); // center
+    else                  textRJ((short)(rx - 4),            (short)(y - S.font - 2), label, col, S.font, false); // right
 }
 
 // ---- render ---------------------------------------------------------------
@@ -379,7 +380,7 @@ void GammaProfile::render(const Settings& S)
     }
 
     // level rail
-    if (S.kline) drawLevel(lastBar, paneL, paneR, 0, D_KING,  "KING",      S);
+    if (S.kline) drawLevel(lastBar, paneL, paneR, 0, D_KING,  "",          S);  // line only; the node labels KING
     if (S.cw)    drawLevel(lastBar, paneL, paneR, 1, C_PINK,  "CALL WALL", S);
     if (S.pw)    drawLevel(lastBar, paneL, paneR, 2, C_PINK,  "PUT WALL",  S);
     if (S.flip)  drawLevel(lastBar, paneL, paneR, 3, C_FLIPC, "FLIP",      S);
