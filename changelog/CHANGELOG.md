@@ -1,3 +1,29 @@
+## lsDayModel v0.6 + lsGammaProfile v0.37 — THE DAY MODEL CANDLE (a new IRT indicator), gamma defaults, Talon curriculum (2026-09-14)
+
+Built a NEW, SEPARATE RTX indicator **lsDayModel** — kept apart from lsGammaProfile so its settings
+dialog / parameter numbering can never scramble the mature gamma profile. It draws the day-model
+CANDLE (design §10.3): expected (ghost, dashed) + actual (solid developing) candles, price-aligned
+in a reserved margin — split wicks, colour by close-vs-open; the actual candle carries HOD/LOD tips
+(value / time / duration), a MUD box, and two-line swept-level ticks (NAME PRICE / time), plus a
+day-of-week header; the expected candle mirrors it with E-HOD/E-LOD tips + an E-MUD box in dim ghost
+ink (**SAMPLE model values in the CSV** until the Phase-4b feed writes real ones); a bordered
+background panel stops chart price labels bleeding through; 17 explicit-pc++ settings (NO
+setLabelParameter). v0.1 → v0.6 this session. **Full status + CSV schema: `design/DAY-MODEL-PLUGIN.md`.**
+The CSV the plugin reads is still a HAND-MADE fixture — Phase 0 ("panel writes it") is not wired.
+
+**lsGammaProfile → v0.37**: new DEFAULTS only — Title header OFF, EM H/L OFF, Panel at = Bottom-C.
+Parameter version left at 5, so existing instances keep their settings (apply by toggling the 3
+manually or re-adding). Display version bumped 0.36 → 0.37 so the operator can confirm the rebuild.
+
+**Talon curriculum** — a 62-question interrogation of Skylit's in-app AI (app.skylit.ai/talon),
+captured to `skylit-docs/TALON-LEARNINGS.md`, to sharpen gamma reads. Headline doctrine: regime =
+sign of the LOCAL gamma pocket at spot (NOT net book or King sign); wall (positive) vs magnet
+(negative) is decided by SIGN; the "Hierarchy of Influence" magnitude > regime > pattern > trinity;
+tap-decay 80/66/33; Rug/Reverse-Rug geometry; the A+ confluence gate; a 5-step pre-trade checklist;
+and Q41's "big-but-spent node = trap" — the strongest case for feeding node freshness/tap-count
+(available via Skylit's get_node_enrichment) into the pipeline. Flags where Talon re-affirms
+doctrine that our FINDINGS F-21 measured otherwise (growth-as-predictor).
+
 ## v15.99 — THE KING CHART, THE ACTUAL FIX: DRAW FROM THE PERSISTED JOURNEY (kingDay.moves), NOT THE FROZEN CENSUS
 
 > Operator, 2026-09-11, after v15.98: **"this is very disappointing. first you cant see my screen and now you cant even
