@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.00
+// @version      16.01
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -244,6 +244,8 @@ function loadCfg(){
         if(typeof o.irt.nqSym==='string') CFG.irt.nqSym=o.irt.nqSym;
         if(typeof o.irt.nqRatio==='number' && o.irt.nqRatio>0) CFG.irt.nqRatio=o.irt.nqRatio;
         if(o.irt.lines==='kw' || o.irt.lines==='all') CFG.irt.lines=o.irt.lines;   // (v15.92)
+        if(typeof o.irt.futAuto==='boolean') CFG.irt.futAuto=o.irt.futAuto;         // (v16.01) front-month auto-roll
+        if(typeof o.irt.profileOn==='boolean') CFG.irt.profileOn=o.irt.profileOn;   // (v16.01) GammaProfile.csv writer
       }
     MIN_STRENGTH = CFG.nodeThresh;
     saveCfg(); // persist under v8 key after any migration
@@ -763,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.00';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.01';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -5468,6 +5470,39 @@ function irtNqRatio(cfgI){
   try{ if(typeof NQ_RATIO==='number' && NQ_RATIO>1) return { r:NQ_RATIO, live:false, src:'const' }; }catch(e3){}
   return { r:null, live:false, src:'none' };
 }
+// (v16.01) FRONT-MONTH AUTO-ROLL. ES/NQ roll quarterly (Mar H · Jun M · Sep U · Dec Z). Hard-coding the
+// contract meant the file sat on an expiring book until the operator retyped it — exactly how the day
+// model fell off the December chart. This derives the IRT contract from the date, rolling ~8 calendar
+// days before the 3rd-Friday expiry (the CME equity-index liquidity roll), so the file follows the
+// contract he is actually charting. Manual entry in the Fut/NQ box turns auto OFF (futAuto=false) for
+// an override; ticking Auto (or clearing the box) turns it back on.
+function irtThirdFriday(year, month0){ var f=new Date(year, month0, 1), day=f.getDay(); var firstFri=1+((5-day)+7)%7; return new Date(year, month0, firstFri+14); }
+function irtFrontQuarter(d){
+  d=d||new Date();
+  var Q=[2,5,8,11];   // Mar Jun Sep Dec, 0-based
+  for(var yr=d.getFullYear(); yr<=d.getFullYear()+1; yr++){
+    for(var i=0;i<Q.length;i++){
+      var exp=irtThirdFriday(yr, Q[i]);
+      var roll=new Date(exp.getTime()); roll.setDate(roll.getDate()-8);
+      if(d < roll) return { m:Q[i], yr:yr };
+    }
+  }
+  return null;
+}
+function irtFrontSym(prefix, d){ var q=irtFrontQuarter(d); if(!q) return null; var code={2:'H',5:'M',8:'U',11:'Z'}[q.m]; return prefix+code+String(q.yr).slice(-2); }
+function esFrontSym(d){ return irtFrontSym('EP', d); }      // ES  -> EPU26 / EPZ26 …
+function nqFrontSym(d){ return irtFrontSym('ENQ', d); }     // NQ  -> ENQU26 / ENQZ26 …
+// resolve the auto symbols into CFG right before an export / a render, so BOTH the FlexLevels file and
+// the gamma-profile file use the front month without either builder needing to know about the roll.
+function irtResolveAutoSym(){
+  try{
+    var I=CFG.irt||(CFG.irt={});
+    if(I.futAuto!==false){
+      var es=esFrontSym(); if(es) I.futSym=es;
+      var nq=nqFrontSym(); if(nq) I.nqSym=nq;
+    }
+  }catch(e){}
+}
 function irtBuildCsv(){
   // (v14.20, operator-directed: "too many levels — step back to only exporting the kings")
   // THE FILE WAS THREE LINES: SPXW KING + SPY KING as EPU26, QQQ KING as ENQU26. Everything else
@@ -6174,6 +6209,7 @@ function irtExportNow(force){
   try{
     var cfgI=CFG.irt||{};
     if(!force && !cfgI.on) return;
+    irtResolveAutoSym();                 // (v16.01) roll the contract to the front month if Auto is on
     var built=irtBuildCsv();
     if(!built){ IRT_LAST={t:Date.now(),rows:0,how:null,err:'no levels / no symbol set'}; return; }
     repoKvGet('irtDir', function(h){
@@ -6439,6 +6475,7 @@ function gammaProfileExportNow(force){
   try{
     var cfgI=CFG.irt||{};
     if(!force && !(cfgI.on && cfgI.profileOn!==false)) return;
+    irtResolveAutoSym();                 // (v16.01) same front-month contract as the FlexLevels file
     var built=gammaProfileBuild();
     if(!built){ GP_LAST={t:Date.now(),rows:0,err:'nothing to write (no tape and no session)',gWhy:GP_LAST.gWhy,dWhy:GP_LAST.dWhy}; return; }
     repoKvGet('irtDir', function(h){
@@ -9321,7 +9358,8 @@ function cfgHtml(){
   var html='';
   html+='<div style="color:'+PAL.ink+';font-size:12px;font-weight:700;padding:1px 2px 5px 2px;border-bottom:1px solid '+PAL.line+';margin-bottom:4px">Tapereader config</div>';
   // (v11.4) IRT FlexLevels export block — first in the gear so it is easy to reach
-  var I=CFG.irt||{};
+  var I=CFG.irt||(CFG.irt={});
+  irtResolveAutoSym();   // (v16.01) show the front-month contract in the Fut/NQ boxes when Auto is on
   html+='<div style="color:'+PAL.ink+';font-size:11px;font-weight:800;padding:3px 2px 3px 2px;border-bottom:1px solid '+PAL.line+';margin-bottom:3px" '+
     'title="Writes the live gamma levels as a Linnsoft FlexLevels CSV on a timer. In Investor/RT add the FlexLevels indicator and point its File preference at the exported file. Best folder: C:\\Users\\<you>\\InvestorRT\\rtx\\lsFlexLevels (IRT reads it directly); a Google-Drive-synced folder also works for a second machine.">IRT FlexLevels export</div>';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" title="Master switch: export the levels file on the timer below.">'+
@@ -9329,7 +9367,8 @@ function cfgHtml(){
   html+='<div style="padding:2px 4px" title="How often the CSV is rewritten."><div style="margin-bottom:2px">Every</div><div style="display:flex;gap:3px">'+
     [60,180,300,900].map(function(sc){ var on=(I.secs||180)===sc; return '<span class="gpts-irt-secs" data-secs="'+sc+'" style="cursor:pointer;padding:1px 8px;border-radius:4px;border:1px solid '+(on?PAL.blue:PAL.line)+';color:'+(on?PAL.blue:PAL.sub)+';font-size:10px;font-weight:700">'+(sc/60)+'m</span>'; }).join('')+'</div></div>';
   html+='<div style="display:flex;gap:6px;align-items:center;padding:2px 4px">'+
-    '<label style="font-size:10px;color:'+PAL.sub+'" title="The FUTURES symbol as IRT charts it (contract rolls quarterly — update it each roll, e.g. EPU26 = ES Sep 2026). Levels are converted with the live ES/SPY ratio; ~ marks a last-known ratio.">Fut <input type="text" class="gpts-irt-fut" value="'+(I.futSym||'')+'" style="width:58px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
+    '<label style="font-size:10px;color:'+PAL.sub+';display:flex;align-items:center;gap:2px" title="Auto-roll the ES/NQ contract to the front month, ~8 days before each quarterly expiry (Mar H · Jun M · Sep U · Dec Z). Untick, or type a symbol below, to pin a contract manually.">Auto <input type="checkbox" class="gpts-irt-fut-auto" '+(I.futAuto!==false?'checked':'')+' style="cursor:pointer"></label>'+
+    '<label style="font-size:10px;color:'+PAL.sub+'" title="The FUTURES symbol as IRT charts it (e.g. EPZ26 = ES Dec 2026). With Auto on this is filled from the front month; typing here pins it and turns Auto off. Levels convert with the live ES/SPY ratio; ~ marks a last-known ratio.">Fut <input type="text" class="gpts-irt-fut" value="'+(I.futSym||'')+'" style="width:58px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
     '<label style="font-size:10px;color:'+PAL.sub+'" title="Optional second symbol at SPY prices (e.g. SPY). Blank = off.">ETF <input type="text" class="gpts-irt-etf" value="'+(I.etfSym||'')+'" style="width:44px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
     '<span class="gpts-irt-dir" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Pick the folder ONCE (e.g. InvestorRT\\rtx\\lsFlexLevels, or a Google-Drive-synced folder). The handle persists; every export writes silently.">📁 folder</span>'+
     '<span class="gpts-irt-now" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Write the file right now.">⟳ now</span>'+
@@ -9518,8 +9557,10 @@ function wireConfig(){
   // (v15.92) the Lines selector — Kings + walls / everything; the file is rewritten at once so the chart changes now
   var irtL=elCfg.querySelectorAll('.gpts-irt-lines');
   for(var li=0;li<irtL.length;li++){ (function(el){ el.addEventListener('click', function(){ CFG.irt=CFG.irt||{}; var v=el.getAttribute('data-lines'); CFG.irt.lines=(v==='all')?'all':'kw'; saveCfg(); IRT_TICK_LAST=0; try{ if(CFG.irt.on) irtExportNow(false); }catch(eX){} renderCfg(); }); })(irtL[li]); }
+  var irtFA=elCfg.querySelector('.gpts-irt-fut-auto');
+  if(irtFA) irtFA.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.futAuto=irtFA.checked; if(irtFA.checked) irtResolveAutoSym(); saveCfg(); try{ if(CFG.irt.on){ irtExportNow(false); gammaProfileExportNow(false); } }catch(eX){} renderCfg(); });
   var irtF=elCfg.querySelector('.gpts-irt-fut');
-  if(irtF) irtF.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.futSym=(irtF.value||'').trim().toUpperCase(); saveCfg(); });
+  if(irtF) irtF.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.futSym=(irtF.value||'').trim().toUpperCase(); CFG.irt.futAuto=false; saveCfg(); renderCfg(); });   // (v16.01) typing a symbol pins it and turns Auto off
   var irtE=elCfg.querySelector('.gpts-irt-etf');
   if(irtE) irtE.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.etfSym=(irtE.value||'').trim().toUpperCase(); saveCfg(); });
   var irtD=elCfg.querySelector('.gpts-irt-dir');
@@ -9545,7 +9586,7 @@ function wireConfig(){
   var irtNqOn=elCfg.querySelector('.gpts-irt-nqon');
   if(irtNqOn) irtNqOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqOn=irtNqOn.checked; saveCfg(); });
   var irtNqS=elCfg.querySelector('.gpts-irt-nqsym');
-  if(irtNqS) irtNqS.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqSym=(irtNqS.value||'').trim().toUpperCase(); saveCfg(); });
+  if(irtNqS) irtNqS.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqSym=(irtNqS.value||'').trim().toUpperCase(); CFG.irt.futAuto=false; saveCfg(); renderCfg(); });   // (v16.01) pinning NQ also turns Auto off
   var irtNqR=elCfg.querySelector('.gpts-irt-nqr');
   if(irtNqR) irtNqR.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; var v=parseFloat(irtNqR.value); if(isFinite(v)&&v>0) CFG.irt.nqRatio=v; saveCfg(); renderCfg(); });
   var irtN=elCfg.querySelector('.gpts-irt-now');
