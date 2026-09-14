@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.05
+// @version      16.06
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.05';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.06';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6390,7 +6390,11 @@ function gammaProfileBuild(){
       if(!isFinite(k)||typeof p!=='number'||!isFinite(p)) return;
       var es=esOfSpx(k); if(es==null){ noRatio=true; return; }
       var isK=(Math.abs(k-kK)<0.001);
-      strikes.push({ es:es, pct:isK?(kingNeg?-100:100):Math.round(p), isK:isK });
+      // (v16.06) the tape ALREADY signs the King (ladderCellParse: "-$19,187K" -> pct -100, preserved by
+      // kingResolve). v16.05 overrode it with +100 when kingNeg missed — the bug. Use the tape's own sign;
+      // force magnitude 100 for the King so a parse blip can't shrink it. kingNeg is the belt-and-braces.
+      var pv = isK ? (((p<0)||kingNeg)?-100:100) : Math.round(p);
+      strikes.push({ es:es, pct:pv, isK:isK });
     });
     if(strikes.length){
       var byMag=strikes.slice().sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.es-b.es); });
