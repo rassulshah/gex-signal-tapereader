@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.06
+// @version      16.07
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.06';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.07';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6408,7 +6408,10 @@ function gammaProfileBuild(){
   // ---- 2) the DAY MODEL rows — ES-native (the chart's own bars); the candle the plugin draws -------
   var sym=null; try{ sym=(typeof activeSym==='function')?activeSym():null; }catch(e){}
   var D=null, SB=null;
-  try{ if(sym){ D=(typeof measureBars==='function')?measureBars(sym):null; } }catch(e){}
+  // (v16.07) hodLod, NOT measureBars. measureBars returns {bars,scale,src} only — no .ok/.hod/.lod/wick
+  // family, so `D.ok` was always undefined and the whole day section was skipped (no DAY rows). hodLod is
+  // the panel's own day measurement (tool grid + wick family) — the same one dayCandleSvg draws.
+  try{ if(sym){ D=(typeof hodLod==='function')?hodLod(sym):null; } }catch(e){}
   try{ if(sym){ SB=(typeof sessionBody==='function')?sessionBody(sym):null; } }catch(e){}
   var dWhy='no session read';
   if(D && D.ok && SB && typeof SB.open==='number'){
