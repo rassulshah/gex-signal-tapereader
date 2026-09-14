@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.13
+// @version      16.14
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -774,7 +774,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.13';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.14';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3583,6 +3583,30 @@ function loadKingTrack(){
   }catch(e){}
 }
 function saveKingTrack(){ try{ KTRK.day=todayKey(); localStorage.setItem(KTRK_KEY, JSON.stringify(KTRK)); }catch(e){} }
+// (v16.14) AUTHORITATIVE KING FROM THE TAPE. The derived futures feed is a sparse projection whose
+// strongest-|gamma| node is NOT always Skylit's King (live case: it crowned the -96% node at 7620 while
+// the real King — the +100% node the gamma profile & Atlas both show — was 7599). Read the King straight
+// from the same tape the gamma profile uses (tapeMapLive), convert its strike to the chart's futures price
+// with skylitFutPx, and take the tape's own King polarity. This makes the King Tracker line agree with the
+// gamma profile, the regime chip, and Atlas — and it kills the comb, because Skylit's King doesn't chatter.
+function ktrkTapeKing(B){
+  try{
+    var srcs=Array.isArray(B.srcs)?B.srcs:[String(B.srcs||'')];
+    for(var i=0;i<srcs.length;i++){
+      var sy=srcs[i], TT=null;
+      try{ TT=tapeMapLive(sy); }catch(eT){}
+      if(!TT || !TT.pct || TT.king==null) continue;
+      var kStrike=TT.king, conv=null;
+      try{ conv=skylitFutPx(B.fut, sy, kStrike); }catch(eC){}
+      if(!conv || typeof conv.px!=='number' || !isFinite(conv.px)) continue;
+      var neg=(TT.kingNeg===true) || !!(TT.bookKing && TT.bookKing.neg===true);
+      var kp=TT.pct[kStrike.toFixed(2)];
+      var sign=(neg || (typeof kp==='number' && kp<0)) ? -1 : 1;
+      return { k: conv.px, strike: Math.round(kStrike), pct: 100*sign, ageS: 0, src: sy, why:'tape '+sy };
+    }
+  }catch(e){}
+  return null;
+}
 function ktrkSample(){
   try{
     var cfgI=CFG.irt||{}; if(!(cfgI.on && cfgI.profileOn!==false)) return;   // only while the profile export runs
@@ -3593,7 +3617,10 @@ function ktrkSample(){
       var B=KTRK_BOOKS[i], K=null;
       var arr=KTRK[B.book] || (KTRK[B.book]=[]);
       var incumbent=arr.length?arr[arr.length-1].strike:null;   // (v16.13) sticky King anchor for hysteresis
-      try{ K=(typeof futDerBookKing==='function')?futDerBookKing(B.fut, B.srcs, { incumbent:incumbent, margin:KTRK_HYST }):null; }catch(eK){}
+      try{ K=ktrkTapeKing(B); }catch(eKT){}                      // (v16.14) authoritative Skylit tape King — matches the gamma profile + Atlas
+      if(!K || K.k==null || K.strike==null){                     // fallback: the sparse derived feed, with hysteresis
+        try{ K=(typeof futDerBookKing==='function')?futDerBookKing(B.fut, B.srcs, { incumbent:incumbent, margin:KTRK_HYST }):null; }catch(eK){}
+      }
       if(!K || K.k==null || K.strike==null) continue;
       KTRK_NOW[B.book]={ es:K.k, strike:K.strike, ageS:K.ageS, pct:K.pct };
       if(!arr.length){ arr.push({ so:so, es:K.k, strike:K.strike }); changed=true; continue; }   // seed
