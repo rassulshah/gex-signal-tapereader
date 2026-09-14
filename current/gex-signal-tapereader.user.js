@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.09
+// @version      16.10
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.09';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.10';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6566,6 +6566,9 @@ function gammaProfileBuild(){
     out.push('WEEKDAY,'+dow+','+gpDate());   // (v16.08) weekday + date, e.g. WEEKDAY,Fri,11 Sep
     out.push('BOOK,ES');
   }
+  // (v16.10) ASOF — the write time (CT sec-of-day), so the plugins can flag a STALE file on the chart
+  // instead of drawing an old book as if it were live. The plugin compares it to its own local clock.
+  try{ out.push('ASOF,'+ctNowSecOfDay()); }catch(eAS){}
   // ---- 4) KING TRACKER rows (v16.09) — the stepped-line journeys, for lsKingTracker ------------
   // Independent of the day section: the four books' Kings in their chart's own futures price. Each
   // KINGTRACK row is one confirmed step {fam, book, secOfDay, futPrice, strike}; the KINGNOW row is
@@ -9698,6 +9701,44 @@ function wireConfig(){
         if(hit) irtGrantFolder();
       }catch(e){}
     }, true);
+  }
+  // (v16.10) SELF-HEAL — the export must never sit silently stale again. Chrome drops the folder
+  // permission on reload/restart/wake and the 180s timer CANNOT re-request it (no user activation) —
+  // exactly how the CSV froze overnight and the plugin drew a stale book all morning. Two heals, both
+  // driven by a gesture or the tab returning, so they CAN re-grant where the timer cannot:
+  //   1. ANY real click on the page, WHEN the export is on AND stale, re-grants + flushes both files
+  //      (irtGrantFolder requests permission SYNCHRONOUSLY on the cached handle — the gesture-safe
+  //      path; on an already-granted handle it resolves silently and just re-writes). Throttled, and
+  //      gated on staleness so a fresh, granted export is never disturbed or re-prompted.
+  //   2. When Atlas returns to the foreground, kick the tick and write at once — a mere background
+  //      usually keeps the grant, so this resumes with no gesture needed.
+  if(!window.__gptsHealWired){
+    window.__gptsHealWired=true;
+    var gptsExportStale=function(){
+      try{
+        var c=CFG.irt||{}; if(!(c.on && c.profileOn!==false)) return false;
+        var secs=(c.secs||180)*1000;
+        var lastW=Math.max((GP_LAST&&GP_LAST.t)||0, (typeof IRT_LAST!=='undefined'&&IRT_LAST&&IRT_LAST.t)||0);
+        return (Date.now()-lastW) > Math.max(2*secs, 300000);   // 2 ticks or 5 min, whichever is larger
+      }catch(e){ return false; }
+    };
+    document.addEventListener('pointerdown', function(){
+      try{
+        if(Date.now()-(window.__gptsHealLast||0) < 8000) return;   // throttle
+        if(!gptsExportStale()) return;                             // only when actually stale
+        window.__gptsHealLast=Date.now();
+        irtGrantFolder();                                          // re-grant (gesture-safe) + flush both
+      }catch(e){}
+    }, true);
+    document.addEventListener('visibilitychange', function(){
+      try{
+        if(document.hidden) return;
+        if(!(CFG.irt && CFG.irt.on)) return;
+        IRT_TICK_LAST=0;                                           // let the next tick fire immediately
+        try{ irtExportNow(false); }catch(e1){}                     // resume now if the grant survived
+        try{ gammaProfileExportNow(false); }catch(e2){}
+      }catch(e){}
+    }, false);
   }
   var irtNqOn=elCfg.querySelector('.gpts-irt-nqon');
   if(irtNqOn) irtNqOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqOn=irtNqOn.checked; saveCfg(); });
