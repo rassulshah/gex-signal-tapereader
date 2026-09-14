@@ -15,11 +15,20 @@
   read via the parameter callbacks (parmsLoad/Apply/Updt) and cached — see the plugin doc gotcha #3.
 - **Build tooling:** `plugin/compile.bat` (double-click, no admin) + `plugin/build.bat`.
 
-## NEXT (in order)
-1. **Phase 0** — wire the panel to write `GammaProfile.csv` live with the real SPX→ES conversion
-   (fixes alignment + makes it self-updating). Spec: `design/spec-phase0-gamma-export.md`.
-2. Visual tuning vs the mockup; decide FlexLevels-lines retirement + NQ coverage + secondary King.
-3. Phase 6 patterns (doctrine-gated); Phase 7 delta (needs footprint feed).
+## THE INDICATOR ROADMAP (operator's order) — status 2026-09-14
+1. ✅ **Gamma profile** (lsGammaProfile v0.37) — BUILT & rendering.
+2. ✅ **Day-model candle** (lsDayModel v0.7) — BUILT. `design/DAY-MODEL-PLUGIN.md`.
+3. 🔨 **Day-model stats strip** (lsDayStats v0.1) — SOURCE READY; compile + calibrate. §10.2 Block 1,
+   two rows A/E. `design/DAY-MODEL-PLUGIN.md` (stats section).
+4. 🔨 **King Tracker** (lsKingTracker v0.1) — SOURCE READY; compile + calibrate. Stepped King lines,
+   SPX/SPY on ES + QQQ/NDX on NQ. `design/KING-TRACKER.md`.
+
+Done underneath: **Phase 0** — the panel WRITES `GammaProfile.csv` live (real SPX→ES via
+`skylitFutPx('ES1','SPXW')`), self-updating, front-month auto-roll (panel v16.00/16.01). All four plugins
+share that one CSV — full schema in `session-state/2026-09-14_resume-v16.09.md`.
+
+Later (not started): visual tuning vs the mockup; FlexLevels-lines retirement; the READ box + elapsed-time
+ladder (the AUC-0.879 classifier layer, a separate strip); Phase 6 patterns (doctrine-gated); Phase 7 delta.
 
 ---
 

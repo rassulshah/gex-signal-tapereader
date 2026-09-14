@@ -1,5 +1,24 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-11 (v15.99, the King chart draws from kingDay.moves — the census was stale) · panel v15.99 · companion v1.19 · supersedes every earlier resume note (the v15.98 note is kept as 2026-09-11_resume-v15.98.md)_
+_written 2026-09-02, amended 2026-09-14 (v16.09) · **panel v16.09** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.7, (new source) lsDayStats v0.1 + lsKingTracker v0.1 · supersedes every earlier resume note_
+
+# ⚠⚠⚠ IRT INDICATOR ECOSYSTEM — CURRENT FOCUS (2026-09-14). READ `session-state/2026-09-14_resume-v16.09.md` FIRST.
+
+The live work is the IRT (Investor/RT) indicators drawn on his real ES/NQ futures charts, fed by a compact
+`GammaProfile.csv` the panel now WRITES. **Four RTX plugins share that one CSV** (each ignores the others' rows):
+`lsGammaProfile` (gamma histogram + level rail, BUILT), `lsDayModel` (the day CANDLE, BUILT v0.7), and — source
+ready this session, compile+calibrate next — `lsDayStats` (the §10.2 stats strip) + `lsKingTracker` (stepped King
+lines: SPX/SPY on ES, QQQ/NDX on NQ). The full CSV schema, the build flow, and what to verify live are in the
+2026-09-14 session note.
+
+**⚠ THE DAY MODEL (do not re-discover — a prior context did not know it and it cost time).** TWO evidence bases,
+never fused: (1) the EXPECTED **candle geometry** = `hodlodBaseFor(weekday)` → **BASERATES.json / HODLOD_BASE**
+(297 ES sessions, per weekday, trimmed mean; firstClock/secondClock, took/gap, range±IQR, wick family). (2) the
+**READ/classifier** = `tools/model-lodhod.py` (HLTAB, **AUC 0.879**, posr×minutes) — "has the HOD/LOD printed?".
+The classifier is a SEPARATE layer, is NOT the candle, and is NOT written to the CSV. `mockups/hodlod-v2-SPEC.md`.
+
+**⚠ THE KING-SOURCE LESSON.** The gamma nodes read `tapeMapLive('SPXW')` (the CURRENT DOM tape) — NOT
+`tapeMap('SPXW')` (serves a STALE saved book after the close; a derived lane at 100% out-votes the real King).
+`ladderCellParse` already SIGNS the King; `kingResolve` preserves it — never override the sign.
 
 
 # ⚠⚠⚠ THE WHAT AND THE HOW — STANDING, EVERY CONTEXT, BEFORE ANYTHING ELSE

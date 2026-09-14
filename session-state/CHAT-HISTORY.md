@@ -11242,3 +11242,34 @@ lives only in the sandbox until an installer `.bat` carries it out from the oper
 
 
 _(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+---
+
+## SESSION 2026-09-14 (panel v16.02 → v16.09 · lsDayModel v0.7 · NEW lsDayStats v0.1 + lsKingTracker v0.1)
+
+**Operator prompts, verbatim (replies dropped):**
+- "A. but dont we have a model already that calculates this"
+- "before we go any further , you need to lookup the model we worked on yesterday and i hope its the right one, we even created mockups from it. make sure you are using the model which you forward tested , back tested and did a lot of testing on . check the history in detail"
+- "we agreed on a great model but i dont remember. check the architecture documents also. then you created additional documents that have the latest model ."
+- "i remeber that there were multiple tests done to ensure that it was a great model ."
+- "i think when you did the save yesterday , you may have used additional files because it was too big.. check this and other files"
+- "Yes , and we have to get back to implementing the indicator"
+- "i think so . lets go with this.. do you see it mentioned anywhere in the architecture or any documents"
+- "how can you not see it when you are on the same tab ?" … "why is the spxw tape different than the nodes being displayed. The percentages dont match. compare with the tape"
+- "i am trading the ES futures, so dont you take the spxw and convert it , like atlas and then export ?"
+- "you must figure out how to read atlas and skylit like you did before, you are on the same tab and did this before"
+- "i reloaded" (×N) · "i clicked the now button" · (pasted console: SPXW-derived 3 strikes King −100 @7658 → no feed → DOM tape 100 strikes King +100 @ SPX7675→ES7678.5)
+- "the day model shows a panel that says Fri and is empty"
+- "the expected candle is being cut off on the left . for the sweptlevels , just use highs and lows like the prior day high, full high , weekly high , overnight high and all the corresponding lows, make sure you use abbreviations. etc."
+- "make sure everything is correct and ready for tomorrow. make sure you update the expected candle to have the options selected that we just discused and the up color green and downcolor red and swept options etc by default. Under Fri on the daily candle model add the date as well. also check why the spxw king line from flext levels is below the magenta king"
+- "I also need a new indicator called king tracker which tracks the king movements throughout the day … for the SPX and then i'll have one for the spy king. they will be stepped lines that move throughout the day"
+- "ok.. now whats next.."
+- "In the mean time get the builds ready for the day model statistics and the king tracker, which i will have for spy and spx as well as for qqq and ndx on the nq futures chart."
+- "remember to make their options robust on their settings"
+- "we will work on the rest tomorrow. save everything , make sure you get the chat history and you made the mistake of not knowing the dayily model, which should not happen again so make sure you save and update docs and the tabs and architecture etc. so if i have to continue in a new session , it will know everything you know."
+
+**What was done:** (1) confirmed the DAY MODEL via git/docs/re-running model-lodhod.py — candle = BASERATES/HODLOD_BASE, READ = HLTAB AUC 0.879, kept unfused. (2) Fixed the gamma % bug end-to-end (wrong book → `tapeMapLive('SPXW')` DOM tape; the King is already signed). (3) Fixed the day candle (`hodLod` not `measureBars`), King sign, swept→highs/lows, EXP cut-off, plugin default reset (setParameterVersion 5), header date. (4) Added `DAYSA/DAYSE` stats rows + the `KTRK` four-book King-tracker journey (`KINGTRACK`/`KINGNOW`) to the panel (v16.09). (5) Wrote `plugin/DayStats.cpp` (lsDayStats v0.1) + `plugin/KingTracker.cpp` (lsKingTracker v0.1) with robust settings + their build/compile .bat scripts. (6) Comprehensive save: this history, `2026-09-14_resume-v16.09.md`, latest-resume-note header + day-model callout, CHANGELOG v16.02–16.09, DAY-MODEL-PLUGIN.md, new KING-TRACKER.md, IRT-BUILD-PLAN roadmap, snapshot v1609.
+
+**Open at close:** compile + calibrate lsDayStats and lsKingTracker on the live charts tomorrow; the King-tracker clock→bar timezone offset is the one thing to verify (there's a "Clock offset (min)" setting for it). The FlexLevels-vs-gamma King gap is an after-hours artifact (both read live at the open).
+
+_(compressed — operator prompts verbatim; replies dropped.)_

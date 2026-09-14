@@ -28,22 +28,36 @@ The **candle** piece of the day model (design §10.3), both candles in a reserve
 ## Version history
 - v0.1 candle pair · v0.2 finished actual candle (HOD/LOD tips, MUD box, swept ticks) ·
   v0.3 background panel + adjustable spacing + E-HOD/E-LOD/E-C · v0.4 day header, E-lines toggle,
-  swept-tag price · v0.5 two-line swept tags · **v0.6 expected candle time/duration/MUD**.
+  swept-tag price · v0.5 two-line swept tags · v0.6 expected candle time/duration/MUD ·
+  **v0.7 (2026-09-14) `setParameterVersion(5)` reset to correct defaults (candles/MUD/swept ON, up
+  green/down red), left-margin EXP-tip cut-off fixed (`annoL`), header shows weekday + date.**
 
 ## CSV schema (day-model rows; gamma plugin ignores them)
 ```
 DAYEXP,o,h,l,c            DAYACT,o,h,l,c
 DAYHOD,value,time,dur     DAYLOD,value,time,dur     DAYMUD,pts,time,dollar
-DAYEHOD,value,time,dur    DAYELOD,value,time,dur    DAYEMUD,pts,time,dollar   (expected — SAMPLE)
-SWEPT,name,price,time,R|B|T        WEEKDAY,Mon..Fri
+DAYEHOD,value,time,dur    DAYELOD,value,time,dur    DAYEMUD,pts,time,dollar   (expected — now LIVE)
+SWEPT,name,price,time,R|B|T   (highs & lows only: PDH/PDL·ONH/ONL·PWH/PWL·PFH/PFL)   WEEKDAY,Mon..Fri,date
 ```
 
+## THE STATS STRIP — lsDayStats (design §10.2) — SOURCE READY v0.1 (2026-09-14)
+The SECOND day-model piece, a SEPARATE plugin (`plugin/DayStats.cpp` → `lsDayStats.dll`), reads two new CSV
+rows and renders Block 1 of §10.2: two rows, ACTUAL (A) over EXPECTED (E, the base-rate median, marked `~`),
+columns `1ST · [1st] · Took · BOP · Wick · W.End · Wick% · MUD · MUDt(=HL Gap−BOP) · 2ND · [2nd] · HL Gap ·
+HL Rng`. A corner text panel (not price-aligned; no INSTRUMENT_SCALE). Robust settings (8 params, explicit
+`pc++`, `setParameterVersion(1)`): Corner, Font, Actual row, Expected row, Column headers, Background panel,
+X/Y inset. The two rows it consumes (ONE fixed 17-field order; raw sec-of-day clocks, raw minutes, 2dp prices,
+empty = unknown — the plugin formats to 12h / "Xh Ym"):
+```
+DAYSA,first,firstPx,firstClkSo,tookMin,bopMin,wickMin,wendSo,wickPct,mudMin,second,secondPx,secondClkSo,gapMin,rngPts,rngUsd,,     (actual, from hodLod)
+DAYSE,first,firstPx,firstClkSo,tookMin,bopMin,wickMin,wendSo,wickPct,mudMin,second,secondPx,secondClkSo,gapMin,rngPts,rngUsd,rngP25,rngP75   (expected, from hodlodBaseFor)
+```
+Build: `plugin/compile-daystats.bat` (double-click) or `build-daystats.bat`. **Block 2 (elapsed-time ladder)
+and Block 3 (the READ box) are the AUC-0.879 classifier layer — a LATER, separate strip, not in lsDayStats.**
+
 ## What's NEXT
-1. **Statistics strip** (design §10.2) — the SECOND day-model piece: top EXP/ACT rows (`1ST · [1st] ·
-   Took · BOP · Wick · W.End · Wick% · MUD · MUD t · [2nd] · HL Gap · HL Rng`, dynamic first-extreme,
-   MUD-t = HL Gap − BOP, weekday header, 12h times / Xh Ym durations). **← current build.** Needs a few
-   extra stat fields added to the CSV export (BOP/Wick/W.End/Wick%/HLGap for ACT and EXP); the ACT
-   values are in `measureBars` (bop/wick/wend/wickPct/gap), the EXP values in `hodlodBaseFor().wick`.
+1. Compile lsDayStats, add it to the chart, calibrate column widths / corner position against the live pane.
+2. See `design/KING-TRACKER.md` for lsKingTracker (also source-ready v0.1) — #4 on the roadmap.
 
 ## DONE (panel v16.00 / v16.01)
 - **Phase 0 transport** — the panel WRITES `GammaProfile.csv` (per-strike gamma + levels + day-model),

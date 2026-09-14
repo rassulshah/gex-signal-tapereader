@@ -1,3 +1,45 @@
+## v16.02–v16.09 — gamma % fixed, day candle live, + TWO new plugins ready (stats strip, King tracker) (2026-09-14)
+
+**Panel v16.09. New plugin source: lsDayStats v0.1 + lsKingTracker v0.1. lsDayModel bumped to v0.7.**
+
+**v16.02→16.06 — the gamma % bug (FIXED).** Profile node percentages didn't match the SPXW tape. Root cause:
+sourcing the wrong book. THE KING-SOURCE LESSON: `tapeMap('SPXW')` serves a STALE saved book after the close
+(`lastBookLoad`) and a derived lane at 100% can out-vote the real King. `tapeMapLive('SPXW')` reads the CURRENT
+DOM tape (readTapeFromDOM→ladderFor) = the book he sees. `ladderCellParse` ALREADY signs the King (`-$18,087K`
+→ −100); v16.05 captured `kingNeg` in `laddersByDollar`; v16.06 uses the tape's own signed pct rather than
+overriding it. Confirmed live (7705 +8, 7700 +30, 7680 +59, 7690 −12) and the magenta King rendered.
+
+**v16.07 — the day candle (FIXED).** DAY rows weren't exporting: used `measureBars(sym)` (returns
+`{bars,scale,src}`, no `.ok`) instead of `hodLod(sym)` (the panel's real day measurement + wick family, the same
+`dayCandleSvg` draws). Switched to `hodLod`.
+
+**v16.08 — tomorrow-ready.** SWEPT rows filtered to highs & lows only (PDH/PDL·ONH/ONL·PWH/PWL·PFH/PFL, PFH/PFL
+= prior full Globex high/low), abbreviated; `m.at` is already a clock string (passing it to `gpClk` made
+"NaN:NaNa" — write it straight). WEEKDAY row carries the date. lsDayModel `setParameterVersion(5)` resets the
+dialog to correct defaults (candles/MUD/swept ON, up green/down red) — the empty "Fri" panel was the
+show-Expected/show-Actual toggles unchecked. Left-margin EXP-tip cut-off fixed (`annoL`). Header "Fri 11 Sep".
+
+**v16.09 — data feeds + two new plugins (SOURCE READY; compile & calibrate next).**
+- **Stats-strip rows** `DAYSA` (actual, from `hodLod`) + `DAYSE` (expected, from `hodlodBaseFor`) — one fixed
+  17-field order (raw sec-of-day clocks, raw minutes, 2dp prices; the plugin formats). Columns: 1ST·[1st]·Took·
+  BOP·Wick·W.End·Wick%·MUD·MUDt(=HL Gap−BOP)·2ND·[2nd]·HL Gap·HL Rng.
+- **King-tracker journey** — new `KTRK` store (SEPARATE from `KINGDAY`) samples the four books' Kings every 30s
+  via `futDerBookKing()` in each book's own futures price, flicker-guarded (2 polls) on a confirmed strike
+  change → `KINGTRACK,fam,book,secOfDay,futPx,strike` steps + a `KINGNOW,fam,book,futPx,strike,pct` live level.
+  Books: ES1 → SPX(`SPXW/SPX`)+SPY; NQ1 → QQQ+NDX(`NDXP/NDX`). Both futures payloads self-fetch every 60s, so
+  all four populate regardless of the active chart.
+- **`plugin/DayStats.cpp`** (lsDayStats v0.1) — §10.2 stats strip, two rows A/E, corner text panel; robust
+  settings (corner, font, per-row toggles, headers, background, insets; `setParameterVersion(1)`).
+- **`plugin/KingTracker.cpp`** (lsKingTracker v0.1) — TIME-indexed stepped lines; ES chart draws SPX+SPY, NQ
+  chart QQQ+NDX (family auto-detected from the root symbol, override setting). Maps a roll's CT clock to a chart
+  bar via `RTARRAYI(barDateTime).getBarNumber(kDATE_GE)` (+ manual scan fallback); robust settings (per-book
+  toggle+colour, line width, right-edge labels, roll dots, **Clock offset (min)** for tz calibration, font).
+- Build scripts: `build-daystats.bat`/`compile-daystats.bat`, `build-kingtracker.bat`/`compile-kingtracker.bat`.
+- ⚠ To verify live: the King-tracker clock→bar mapping assumes IRT's chart timezone = CT; tune "Clock offset
+  (min)" against a known roll. On ES, `KINGNOW` SPX should sit on the gamma magenta King at the open.
+
+---
+
 ## v16.00 / v16.01 — PHASE 0 LIVE FEED: the panel WRITES GammaProfile.csv, and the contract auto-rolls (2026-09-14)
 
 **The problem this fixes.** The RTX plugins (lsGammaProfile, lsDayModel) read `GammaProfile.csv`, but that
