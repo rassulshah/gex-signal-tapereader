@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.03
+// @version      16.04
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.03';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.04';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6362,52 +6362,44 @@ function gpDow(){
 function gammaProfileBuild(){
   var cfgI=CFG.irt||{};
   var out=[];
-  // ---- 1) the SPX gamma ladder + King — FROM THE NATIVE SPXW FEED (the tape itself), to ES (v16.03) --
-  // ⚠⚠ v16.02 read the ES1 *derived* SPXW lane and it was a SPARSE projection (3 nodes, King at the
-  // wrong strike). The book the TAPE shows is the FULL native SPXW feed the panel captures as LASTSPXW
-  // (j.levels[last].l = the whole ~100-strike SPX book — exactly what extractWalls reads to crown the
-  // King). King = the strike with the largest |v| (= 7675); %King = round(100*|v|/kingV) signed by
-  // net/d. Each SPX strike is converted to ES with Skylit's own SPXW ratio (skylitFutPx('ES1','SPXW')),
-  // persisted last-good so a brief gap doesn't blank it. This is the tape, strike-for-strike, in ES.
-  // NOT tapeMap (stale/mis-crowned after the close) and NOT the derived lane (sparse).
+  // ---- 1) the SPX gamma ladder + King — FROM THE LIVE DOM TAPE (v16.04) ----
+  // LASTSPXW is empty (onFeed DISCARDS SPXW feeds that lack a derived array — verified live on his
+  // machine, gWhy 'no SPXW feed captured'), and the ES1 derived lane is a sparse 3-node projection. The
+  // FULL SPXW book — the tape — is in the rendered DOM, which tapeMapLive() reads (readTapeFromDOM /
+  // ladderFor). ⚠ tapeMapLive, NOT tapeMap: tapeMap() serves a STALE saved book after the close — that
+  // was the +100% mis-crowned King. tapeMapLive reads the CURRENT DOM (the frozen close book after
+  // hours, the live one in RTH) = the same book on his tape. The neighbour %s come signed from the
+  // tape; the King is 100 unsigned there, so its polarity is taken from bookKing.neg (the tape draws
+  // the King as a signed $K cell). Strikes SPX->ES via Skylit's SPXW ratio, persisted last-good.
   var SKY_ES=(typeof SKY_FUT!=='undefined' && SKY_FUT.ES)||'ES1';
-  var gWhy='no SPXW feed captured yet (Atlas must have fetched the SPXW book — it drives the tape)';
-  var spxwBook=null;
-  try{
-    var LX=(typeof LASTSPXW!=='undefined')?LASTSPXW:null;
-    if(LX && LX.j && LX.j.levels && LX.j.levels.length){
-      var Ll=LX.j.levels[LX.j.levels.length-1];
-      if(Ll && Ll.l && Ll.l.length) spxwBook={ rows:Ll.l, ageS:Math.round((Date.now()-(LX.ts||0))/1000) };
-    }
-  }catch(e){}
+  var gWhy='no DOM tape read for SPXW (is the SPXW book visible on the chart?)';
+  var TT=null; try{ TT=tapeMapLive('SPXW'); }catch(e){}
   var esOfSpx=function(spxPx){
     if(typeof spxPx!=='number'||!isFinite(spxPx)) return null;
     try{ var s=skylitFutPx(SKY_ES,'SPXW',spxPx); if(s&&typeof s.px==='number'&&isFinite(s.px)) return Math.round(s.px/0.25)*0.25; }catch(e){}
     try{ var og=JSON.parse(localStorage.getItem(GP_SPXWR_KEY)||'null'); if(og&&og.r>0&&(Date.now()-og.t)<14*86400000) return Math.round(spxPx*og.r/0.25)*0.25; }catch(e){}
     return null;
   };
-  if(spxwBook){
-    var kingV=0, kingK=null, kingSg=1;
-    var sgOf=function(r){ return (typeof r.net==='number')?(r.net<0?-1:1):((typeof r.d==='number')?(r.d<0?-1:1):(r.v<0?-1:1)); };
-    spxwBook.rows.forEach(function(r){ if(r&&typeof r.v==='number'&&isFinite(r.v)){ var a=Math.abs(r.v); if(a>kingV){ kingV=a; kingK=r.k; kingSg=sgOf(r); } } });
-    try{ var sp=skylitFutPx(SKY_ES,'SPXW',kingK); if(sp&&sp.ratio>0) localStorage.setItem(GP_SPXWR_KEY, JSON.stringify({r:sp.ratio,t:Date.now()})); }catch(e){}
-    if(kingV>0 && kingK!=null){
-      var strikes=[];
-      spxwBook.rows.forEach(function(r){
-        if(!r||typeof r.k!=='number'||typeof r.v!=='number'||!isFinite(r.k)||!isFinite(r.v)) return;
-        var es=esOfSpx(r.k); if(es==null) return;
-        strikes.push({ es:es, pct:Math.round(100*Math.abs(r.v)/kingV)*sgOf(r), isK:(r.k===kingK) });
-      });
-      if(strikes.length){
-        var byMag=strikes.slice().sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.es-b.es); });
-        byMag.forEach(function(x,i){ x.rank=i+1; });
-        strikes.sort(function(a,b){ return a.es-b.es; });
-        strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)); });
-        var kes=esOfSpx(kingK);
-        if(kes!=null) out.push('KING,'+gpF2(kes));
-        gWhy='live from native SPXW feed ('+strikes.length+' strikes · King '+(kingSg<0?'-':'+')+'100% @ SPX '+kingK+' -> ES '+(kes!=null?kes:'?')+' · '+spxwBook.ageS+'s old)';
-      } else gWhy='SPXW feed present but no SPX->ES ratio yet (needs the ES1 payload once)';
-    } else gWhy='SPXW feed carried no gamma';
+  if(TT && TT.pct && TT.king!=null){
+    var kK=TT.king;
+    var kingNeg=!!(TT.bookKing && TT.bookKing.neg===true);
+    try{ var sp=skylitFutPx(SKY_ES,'SPXW',kK); if(sp&&sp.ratio>0) localStorage.setItem(GP_SPXWR_KEY, JSON.stringify({r:sp.ratio,t:Date.now()})); }catch(e){}
+    var strikes=[], noRatio=false;
+    Object.keys(TT.pct).forEach(function(kk){
+      var k=parseFloat(kk), p=TT.pct[kk];
+      if(!isFinite(k)||typeof p!=='number'||!isFinite(p)) return;
+      var es=esOfSpx(k); if(es==null){ noRatio=true; return; }
+      var isK=(Math.abs(k-kK)<0.001);
+      strikes.push({ es:es, pct:isK?(kingNeg?-100:100):Math.round(p), isK:isK });
+    });
+    if(strikes.length){
+      var byMag=strikes.slice().sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.es-b.es); });
+      byMag.forEach(function(x,i){ x.rank=i+1; });
+      strikes.sort(function(a,b){ return a.es-b.es; });
+      strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)); });
+      var kes=esOfSpx(kK); if(kes!=null) out.push('KING,'+gpF2(kes));
+      gWhy='live from DOM tape ('+strikes.length+' strikes · King '+(kingNeg?'-':'+')+'100% @ SPX '+kK+' -> ES '+(kes!=null?kes:'?')+')';
+    } else gWhy=noRatio?'DOM tape read but no SPX->ES ratio yet (needs the ES1 payload once — chart on ES + export on)':'DOM tape read but no strikes parsed';
   }
   // ---- 2) the DAY MODEL rows — ES-native (the chart's own bars); the candle the plugin draws -------
   var sym=null; try{ sym=(typeof activeSym==='function')?activeSym():null; }catch(e){}
