@@ -1,5 +1,5 @@
 /********************************************************************************
- *  DayModel.cpp  —  Investor/RT RTX extension  (day model — candle pair)
+ *  DayModel.cpp  —  Investor/RT RTX extension  (day model — the candle)
  *
  *  Draws the EXPECTED (ghost) + ACTUAL (developing) day candles in a reserved
  *  margin, price-aligned to the instrument axis (INSTRUMENT_SCALE). A SEPARATE
@@ -8,18 +8,21 @@
  *
  *  Reads %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\GammaProfile.csv (shared with
  *  the gamma plugin; each plugin ignores the other's rows):
- *       DAYEXP,<open>,<high>,<low>,<close>     (expected model day)
- *       DAYACT,<open>,<high>,<low>,<close>     (actual developing day)
+ *       DAYEXP,<o>,<h>,<l>,<c>              expected model day
+ *       DAYACT,<o>,<h>,<l>,<c>              actual developing day
+ *       DAYHOD,<value>,<time>,<duration>    actual HOD  (tip label)
+ *       DAYLOD,<value>,<time>,<duration>    actual LOD  (tip label)
+ *       DAYMUD,<pts>,<time>,<dollar>        MUD box inside the body
+ *       SWEPT,<name>,<price>,<time>,<R|B|T> swept level (dashed tick + tag)
  *
- *  v0.1 — the candle PAIR only (bodies, split wicks, colour by close-vs-open,
- *  ghost vs solid). The HOD/LOD tip labels, MUD box, swept-level ticks and the
- *  day-model statistics strip are the next increments (data already staged in
- *  the CSV: DAYHOD / DAYLOD / DAYMUD / SWEPT / WEEKDAY).
+ *  v0.2 — the finished candle: bodies, split wicks, colour by close-vs-open,
+ *  ghost vs solid, HOD/LOD tip labels (value/time/duration), the MUD box in the
+ *  body, and swept-level ticks with tags to the right. The statistics strip is
+ *  the next increment.
  *
  *  Parameter indices are numbered EXPLICITLY (pc++), one per control, with NO
  *  setLabelParameter section headers -- a label row shifts IRT's parameter
  *  numbering out from under the value getters and silently scrambles settings.
- *  (Same hard-won rule as the gamma plugin.)
  ********************************************************************************/
 #include "irtsdk.h"
 #include <fstream>
@@ -32,11 +35,12 @@
 #include <cstring>
 
 // ---- palette --------------------------------------------------------------
-static const COLOR C_UP   = 0x0033B36B;  // up candle (close >= open)  green
-static const COLOR C_DN   = 0x00D1493F;  // down candle                red
+static const COLOR C_UP   = 0x0033B36B;  // up candle / swept-reclaimed   green
+static const COLOR C_DN   = 0x00D1493F;  // down candle / swept-broke      red
 static const COLOR C_TXT  = 0x00DFE7F0;  // neutral label ink
 static const COLOR C_DARK = 0x00101418;  // dark ink / outline
 static const COLOR C_WHT  = 0x00FFFFFF;
+static const COLOR C_AMBER= 0x00E0A030;  // swept level being tested      amber
 
 static COLOR lerpColor(COLOR a, COLOR b, float t) {
     if (t < 0) t = 0; if (t > 1) t = 1;
@@ -49,16 +53,18 @@ static COLOR lerpColor(COLOR a, COLOR b, float t) {
 // ---- parameter indices ----------------------------------------------------
 struct PIdx {
     int side, layout, width, gap, showexp, showact, cup, cdn, font, labels;
+    int hilo, mud, swept;   // finished-candle toggles (appended v0.2)
 };
 static PIdx PX;
 
 struct Settings {
     int side, layout, width, gap, font;
-    bool showexp, showact, labels;
+    bool showexp, showact, labels, hilo, mud, swept;
     COLOR cup, cdn;
 };
 
 struct DayCandle { float o, h, l, c; bool valid; };
+struct SweptLvl  { float price; std::string name, time; char state; };
 
 // ---------------------------------------------------------------------------
 class DayModel : public cppExtension {
@@ -70,6 +76,11 @@ public:
     virtual int draw(void);
 
     DayCandle expC, actC;
+    // finished-candle data
+    float hodV, lodV; std::string hodT, hodD, lodT, lodD; bool hasHod, hasLod;
+    std::string mudP, mudT, mudDol; bool hasMud;
+    std::vector<SweptLvl> swepts;
+
     Settings cfg;
     int lastBar;
 
@@ -83,7 +94,9 @@ public:
     void rectOutline(short l, short t, short r, short b, COLOR col, PEN_STYLE ps);
     void rectFill(short l, short t, short r, short b, COLOR fill, COLOR outline);
     void textC(short cx, short y, const char* s, COLOR col, int sz, bool bold);
+    void textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold);
     void drawCandle(short cx, const DayCandle& d, bool ghost, const Settings& S);
+    void drawActExtras(short cx, const Settings& S);
 };
 
 // ---- base-vtable resolvers ------------------------------------------------
@@ -96,16 +109,20 @@ int cppExtension::destroy(void) { return RTX_OK; }
 DayModel::DayModel() : cppExtension()
 {
     expC.valid = false; actC.valid = false; lastBar = 0;
+    hasHod = false; hasLod = false; hasMud = false;
     cfg.side = 0;          // Left margin (per the settled §10.1 layout)
     cfg.layout = 0;        // Pair (side by side)
-    cfg.width = 34;
+    cfg.width = 46;
     cfg.gap = 12;
     cfg.showexp = true;
     cfg.showact = true;
     cfg.cup = C_UP;
     cfg.cdn = C_DN;
     cfg.font = 10;
-    cfg.labels = true;
+    cfg.labels = false;    // the dashed one is obviously EXP -- no EXP/ACT tags by default
+    cfg.hilo = true;
+    cfg.mud = true;
+    cfg.swept = true;
 }
 
 // ---- parameter callbacks (dialog controls valid here; guard on a plausible
@@ -134,22 +151,25 @@ int DayModel::parmsUpdt(unsigned int)
 // parameter numbering and scrambles the getters -- see the gamma plugin).
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
-    setParameterDialogHeight(14);
+    setParameterVersion(2);           // bumped for the v0.2 toggles
+    setParameterDialogHeight(18);
 
     const short SL = kParmAppendSameLine;
     int pc = 0;
 
     PX.side    = pc++; setListParameter   ("Side", 0, "Left;Right");
     PX.layout  = pc++; setListParameter   ("Layout", 0, "Pair;Overlay", 0, SL);
-    PX.width   = pc++; setIntegerParameter("Candle width px", 34);
+    PX.width   = pc++; setIntegerParameter("Candle width px", 46, 0);   // explicit width fixes the "???"
     PX.gap     = pc++; setIntegerParameter("Margin gap px", 12, 0, SL);
     PX.showexp = pc++; setBoolParameter   ("Expected candle (ghost)", true);
     PX.showact = pc++; setBoolParameter   ("Actual candle (solid)", true, SL);
     PX.cup     = pc++; setColorParameter  ("Up colour", C_UP);
     PX.cdn     = pc++; setColorParameter  ("Down colour", C_DN, 0, SL);
-    PX.font    = pc++; setIntegerParameter("Font size (pt)", 10);
-    PX.labels  = pc++; setBoolParameter   ("EXP/ACT labels", true, SL);
+    PX.hilo    = pc++; setBoolParameter   ("HOD/LOD tips", true);
+    PX.mud     = pc++; setBoolParameter   ("MUD box", true, SL);
+    PX.swept   = pc++; setBoolParameter   ("Swept levels", true, SL);
+    PX.font    = pc++; setIntegerParameter("Font size (pt)", 10, 0);
+    PX.labels  = pc++; setBoolParameter   ("EXP/ACT tags", false, SL);
     return RTX_OK;
 }
 
@@ -164,6 +184,9 @@ void DayModel::readSettings(Settings& S)
     S.showact= isBoxChecked(PX.showact) != 0;
     COLOR cu=(COLOR)(getIntegerValue(PX.cup)&0xFFFFFF); S.cup = cu ? cu : C_UP;
     COLOR cd=(COLOR)(getIntegerValue(PX.cdn)&0xFFFFFF); S.cdn = cd ? cd : C_DN;
+    S.hilo   = isBoxChecked(PX.hilo)  != 0;
+    S.mud    = isBoxChecked(PX.mud)   != 0;
+    S.swept  = isBoxChecked(PX.swept) != 0;
     S.font   = getIntegerValue(PX.font);   if (S.font < 7)   S.font = 7;   if (S.font > 40) S.font = 40;
     S.labels = isBoxChecked(PX.labels) != 0;
 }
@@ -172,6 +195,7 @@ void DayModel::readSettings(Settings& S)
 void DayModel::load()
 {
     expC.valid = false; actC.valid = false;
+    hasHod = false; hasLod = false; hasMud = false; swepts.clear();
     const char* up = getenv("USERPROFILE");
     if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
@@ -183,13 +207,23 @@ void DayModel::load()
         if (line.empty() || line[0] == '#') continue;
         std::vector<std::string> t; std::stringstream ss(line); std::string it;
         while (std::getline(ss, it, ',')) t.push_back(it);
-        if (t.size() < 5) continue;
-        if (t[0] == "DAYEXP") {
+        if (t.size() < 2) continue;
+        if (t[0] == "DAYEXP" && t.size() >= 5) {
             expC.o=(float)atof(t[1].c_str()); expC.h=(float)atof(t[2].c_str());
             expC.l=(float)atof(t[3].c_str()); expC.c=(float)atof(t[4].c_str()); expC.valid=true;
-        } else if (t[0] == "DAYACT") {
+        } else if (t[0] == "DAYACT" && t.size() >= 5) {
             actC.o=(float)atof(t[1].c_str()); actC.h=(float)atof(t[2].c_str());
             actC.l=(float)atof(t[3].c_str()); actC.c=(float)atof(t[4].c_str()); actC.valid=true;
+        } else if (t[0] == "DAYHOD" && t.size() >= 4) {
+            hodV=(float)atof(t[1].c_str()); hodT=t[2]; hodD=t[3]; hasHod=true;
+        } else if (t[0] == "DAYLOD" && t.size() >= 4) {
+            lodV=(float)atof(t[1].c_str()); lodT=t[2]; lodD=t[3]; hasLod=true;
+        } else if (t[0] == "DAYMUD" && t.size() >= 4) {
+            mudP=t[1]; mudT=t[2]; mudDol=t[3]; hasMud=true;
+        } else if (t[0] == "SWEPT" && t.size() >= 5) {
+            SweptLvl s; s.name=t[1]; s.price=(float)atof(t[2].c_str()); s.time=t[3];
+            s.state = t[4].empty() ? 'T' : t[4][0];
+            swepts.push_back(s);
         }
     }
 }
@@ -230,6 +264,13 @@ void DayModel::textC(short cx, short y, const char* s, COLOR col, int sz, bool b
     setTextColor(col);
     PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(y + (asc - desc)/2); tp.drawText(s);
 }
+void DayModel::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
+{
+    FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
+    setTextColor(col);
+    RCT rc; rc.set(leftX, (short)(y - sz), (short)(leftX + 220), (short)(y + sz));
+    rc.drawText(s, false, false);   // left-justified, vertically centred on y
+}
 
 // ---- one candle -----------------------------------------------------------
 // ghost = expected (dashed outline, no fill, chart shows through);
@@ -250,17 +291,64 @@ void DayModel::drawCandle(short cx, const DayCandle& d, bool ghost, const Settin
 
     // body
     if (bodyBot - bodyTop < 2) {
-        // doji: open == close -> a flat cross-bar
-        hline(bodyTop, L, R, col, ps);
+        hline(bodyTop, L, R, col, ps);                      // doji: flat cross-bar
     } else if (ghost) {
         rectOutline(L, bodyTop, R, bodyBot, col, P_DASH);   // ghost = outline only
     } else {
         rectFill(L, bodyTop, R, bodyBot, col, lerpColor(col, C_DARK, 0.45f));
     }
 
-    // EXP / ACT label just under the low
+    // optional EXP / ACT tag (off by default)
     if (S.labels) {
         textC(cx, (short)(lY + S.font + 3), ghost ? "EXP" : "ACT", col, S.font - 1, true);
+    }
+}
+
+// ---- actual-candle extras: HOD/LOD tips, MUD box, swept ticks -------------
+void DayModel::drawActExtras(short cx, const Settings& S)
+{
+    if (!actC.valid) return;
+    short half = (short)(S.width / 2);
+    short L = (short)(cx - half), R = (short)(cx + half);
+    int fs = S.font - 1; if (fs < 7) fs = 7;
+    short step = (short)(fs + 3);
+
+    // HOD tip: value nearest the high tip, then time, then duration, stacked upward
+    if (S.hilo && hasHod) {
+        short hY = yOf(actC.h);
+        char v[24]; sprintf_s(v, sizeof(v), "HOD %d", (int)(hodV + 0.5f));
+        textC(cx, (short)(hY - step),     v,            C_TXT, fs, true);
+        textC(cx, (short)(hY - 2*step),   hodT.c_str(), C_TXT, fs, false);
+        textC(cx, (short)(hY - 3*step),   hodD.c_str(), C_TXT, fs, false);
+    }
+    // LOD tip: stacked downward below the low tip
+    if (S.hilo && hasLod) {
+        short lY = yOf(actC.l);
+        char v[24]; sprintf_s(v, sizeof(v), "LOD %d", (int)(lodV + 0.5f));
+        textC(cx, (short)(lY + step),     v,            C_TXT, fs, true);
+        textC(cx, (short)(lY + 2*step),   lodT.c_str(), C_TXT, fs, false);
+        textC(cx, (short)(lY + 3*step),   lodD.c_str(), C_TXT, fs, false);
+    }
+    // MUD box inside the body: MUD pts / time / dollar
+    if (S.mud && hasMud) {
+        short oY = yOf(actC.o), cY = yOf(actC.c);
+        short mid = (short)((oY + cY) / 2);
+        char m[24]; sprintf_s(m, sizeof(m), "MUD %s", mudP.c_str());
+        char d[24]; sprintf_s(d, sizeof(d), "$%s", mudDol.c_str());
+        textC(cx, (short)(mid - step), m,             C_WHT, fs, true);
+        textC(cx, mid,                 mudT.c_str(),  C_WHT, fs, false);
+        textC(cx, (short)(mid + step), d,             C_WHT, fs, false);
+    }
+    // swept levels: a dashed tick across the candle + a tag to the RIGHT
+    if (S.swept) {
+        for (size_t i = 0; i < swepts.size(); i++) {
+            const SweptLvl& s = swepts[i];
+            short y = yOf(s.price);
+            COLOR sc = (s.state=='R') ? C_UP : (s.state=='B') ? C_DN : C_AMBER;
+            hline(y, L, R, sc, P_DOT);
+            char tag[48]; sprintf_s(tag, sizeof(tag), "%s %s", s.name.c_str(), s.time.c_str());
+            textLJ((short)(R + 5), y, tag, sc, fs, false);
+        }
     }
 }
 
@@ -293,7 +381,7 @@ void DayModel::render(const Settings& S)
 
     // Expected behind, Actual on top (matters in Overlay).
     if (S.showexp && expC.valid) drawCandle(expCx, expC, true,  S);
-    if (S.showact && actC.valid) drawCandle(actCx, actC, false, S);
+    if (S.showact && actC.valid) { drawCandle(actCx, actC, false, S); drawActExtras(actCx, S); }
 }
 
 // ---- draw() ---------------------------------------------------------------
@@ -311,6 +399,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.1");
+    p->setVersion("0.2");
     return p;
 }
