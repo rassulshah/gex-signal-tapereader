@@ -83,6 +83,9 @@ public:
     // finished-candle data
     float hodV, lodV; std::string hodT, hodD, lodT, lodD; bool hasHod, hasLod;
     std::string mudP, mudT, mudDol; bool hasMud;
+    // expected-candle extras (time/duration/MUD from the model feed)
+    std::string ehodT, ehodD, elodT, elodD; bool hasEHodT, hasELodT;
+    std::string emudP, emudT, emudDol; bool hasEMud;
     std::vector<SweptLvl> swepts;
     std::string weekday;
 
@@ -116,6 +119,7 @@ DayModel::DayModel() : cppExtension()
 {
     expC.valid = false; actC.valid = false; lastBar = 0;
     hasHod = false; hasLod = false; hasMud = false;
+    hasEHodT = false; hasELodT = false; hasEMud = false;
     cfg.side = 0;          // Left margin (per the settled §10.1 layout)
     cfg.layout = 0;        // Pair (side by side)
     cfg.width = 46;
@@ -214,6 +218,7 @@ void DayModel::load()
 {
     expC.valid = false; actC.valid = false;
     hasHod = false; hasLod = false; hasMud = false; swepts.clear(); weekday.clear();
+    hasEHodT = false; hasELodT = false; hasEMud = false;
     const char* up = getenv("USERPROFILE");
     if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
@@ -242,6 +247,12 @@ void DayModel::load()
             SweptLvl s; s.name=t[1]; s.price=(float)atof(t[2].c_str()); s.time=t[3];
             s.state = t[4].empty() ? 'T' : t[4][0];
             swepts.push_back(s);
+        } else if (t[0] == "DAYEHOD" && t.size() >= 4) {
+            ehodT=t[2]; ehodD=t[3]; hasEHodT=true;
+        } else if (t[0] == "DAYELOD" && t.size() >= 4) {
+            elodT=t[2]; elodD=t[3]; hasELodT=true;
+        } else if (t[0] == "DAYEMUD" && t.size() >= 4) {
+            emudP=t[1]; emudT=t[2]; emudDol=t[3]; hasEMud=true;
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
         }
@@ -378,18 +389,32 @@ void DayModel::drawActExtras(short cx, const Settings& S)
 // ---- expected-candle extras: E-HOD / E-LOD / E-C value tips ---------------
 void DayModel::drawExpExtras(short cx, const Settings& S)
 {
-    if (!expC.valid || !S.hilo) return;
+    if (!expC.valid) return;
     int fs = S.font - 1; if (fs < 7) fs = 7;
     short step = (short)(fs + 3);
     COLOR ink = lerpColor(C_TXT, C_DARK, 0.28f);   // dimmer, matches the ghost
     char v[24];
-    short hY = yOf(expC.h);
-    sprintf_s(v, sizeof(v), "E-HOD %d", (int)(expC.h + 0.5f));  textC(cx, (short)(hY - step), v, ink, fs, false);
-    short lY = yOf(expC.l);
-    sprintf_s(v, sizeof(v), "E-LOD %d", (int)(expC.l + 0.5f));  textC(cx, (short)(lY + step), v, ink, fs, false);
-    // expected close, centred in the ghost body
-    short cY = yOf(expC.c);
-    sprintf_s(v, sizeof(v), "E-C %d", (int)(expC.c + 0.5f));    textC(cx, cY, v, ink, fs, false);
+    // E-HOD tip: value, then expected time + duration (when the model feed has them), stacked up
+    if (S.hilo) {
+        short hY = yOf(expC.h);
+        sprintf_s(v, sizeof(v), "E-HOD %d", (int)(expC.h + 0.5f)); textC(cx, (short)(hY - step), v, ink, fs, false);
+        if (hasEHodT) { textC(cx, (short)(hY - 2*step), ehodT.c_str(), ink, fs, false);
+                        textC(cx, (short)(hY - 3*step), ehodD.c_str(), ink, fs, false); }
+        short lY = yOf(expC.l);
+        sprintf_s(v, sizeof(v), "E-LOD %d", (int)(expC.l + 0.5f)); textC(cx, (short)(lY + step), v, ink, fs, false);
+        if (hasELodT) { textC(cx, (short)(lY + 2*step), elodT.c_str(), ink, fs, false);
+                        textC(cx, (short)(lY + 3*step), elodD.c_str(), ink, fs, false); }
+    }
+    // expected MUD box inside the ghost body (mirrors the actual candle, dim ink)
+    if (S.mud && hasEMud) {
+        short oY = yOf(expC.o), cY = yOf(expC.c);
+        short mid = (short)((oY + cY) / 2);
+        char m[24]; sprintf_s(m, sizeof(m), "E-MUD %s", emudP.c_str());
+        char d[24]; sprintf_s(d, sizeof(d), "$%s", emudDol.c_str());
+        textC(cx, (short)(mid - step), m,             ink, fs, true);
+        textC(cx, mid,                 emudT.c_str(), ink, fs, false);
+        textC(cx, (short)(mid + step), d,             ink, fs, false);
+    }
 }
 
 // ---- render ---------------------------------------------------------------
@@ -471,6 +496,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.5");
+    p->setVersion("0.6");
     return p;
 }
