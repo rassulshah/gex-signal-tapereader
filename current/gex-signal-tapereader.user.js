@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.01
+// @version      16.02
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.01';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.02';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6362,40 +6362,54 @@ function gpDow(){
 function gammaProfileBuild(){
   var cfgI=CFG.irt||{};
   var out=[];
-  // ---- the SPX->ES ruler: Skylit's own SPXW ES ratio (~1.0003), persisted last-good for a brief gap
+  // ---- 1) the SPX gamma ladder + King — SOURCED FROM SKYLIT'S OWN SPXW->ES PROJECTION (v16.02) ----
+  // ⚠⚠ NOT tapeMap('SPXW'). Operator caught it: the profile disagreed with the SPXW tape — the King's
+  // SIGN was even flipped (tape King 7675 is -gamma; the export printed it +100%). Two documented ways
+  // tapeMap returns the wrong book: after the close it serves a STALE saved book (lastBookLoad), and a
+  // derived lane sitting at 100% can OUT-VOTE the real King (the v10.58 note at feedStructMap). So it
+  // crowned a +gamma strike and every % was relative to the wrong King.
+  // THE RIGHT SOURCE, and what Atlas itself draws: the ES1 payload's derived[] array, source 'SPXW' —
+  // the SPXW book already projected to ES prices by Skylit's own ratio. Each row: k = ES price, v =
+  // gamma, net/d = sign. King = max |v|; %King = round(100*|v|/kingV) signed. Prices AND percentages
+  // then come from ONE book and match the tape strike-for-strike (King 7675 -100%, 7680 +62%, ...).
   var SKY_ES=(typeof SKY_FUT!=='undefined' && SKY_FUT.ES)||'ES1';
-  var T=null; try{ T=tapeMap('SPXW'); }catch(e){}
-  var spxwR=null;
-  try{ var kk0=(T&&typeof T.king==='number')?T.king:null;
-       if(kk0!=null){ var sp0=skylitFutPx(SKY_ES,'SPXW',kk0); if(sp0&&sp0.ratio>0) spxwR=sp0.ratio; } }catch(e){}
-  if(spxwR){ try{ localStorage.setItem(GP_SPXWR_KEY, JSON.stringify({r:spxwR,t:Date.now()})); }catch(e){} }
-  else { try{ var og=JSON.parse(localStorage.getItem(GP_SPXWR_KEY)||'null'); if(og&&og.r>0&&(Date.now()-og.t)<14*86400000) spxwR=og.r; }catch(e){} }
-  var esOfSpx=function(spxPx){
-    if(typeof spxPx!=='number'||!isFinite(spxPx)) return null;
-    try{ var s=skylitFutPx(SKY_ES,'SPXW',spxPx); if(s&&typeof s.px==='number'&&isFinite(s.px)) return Math.round(s.px/0.25)*0.25; }catch(e){}
-    if(spxwR) return Math.round(spxPx*spxwR/0.25)*0.25;
+  var gWhy='no ES1 SPXW-derived payload yet (chart must be on ES, export on, ~1 min to self-fetch)';
+  var derSPXW=function(){
+    var cands=[ (typeof LASTFUTDER_FRONT!=='undefined'&&LASTFUTDER_FRONT)?LASTFUTDER_FRONT[SKY_ES]:null,
+                (typeof LASTFUTDER!=='undefined'&&LASTFUTDER)?LASTFUTDER[SKY_ES]:null ];
+    for(var c=0;c<cands.length;c++){
+      var P=cands[c]; if(!P||!P.j||!P.j.derived||!P.j.derived.length) continue;
+      var srcs=['SPXW','SPX'];
+      for(var s=0;s<srcs.length;s++){
+        for(var i=0;i<P.j.derived.length;i++){
+          var d=P.j.derived[i];
+          if(d && d.source===srcs[s] && d.ratio>0){
+            var L=(d.levels&&d.levels.length)?d.levels[d.levels.length-1]:null;
+            if(L&&L.l&&L.l.length) return { rows:L.l, ratio:d.ratio, source:d.source, ageS:Math.round((Date.now()-(P.ts||0))/1000) };
+          }
+        }
+      }
+    }
     return null;
   };
-  // ---- 1) the SPX gamma ladder + King (only when the SPX->ES ruler resolves) ----
-  var gWhy='no SPXW tape';
-  if(T && T.pct){
-    var kK=(typeof T.king==='number')?T.king:null;
-    try{ var KL=kingLatchTick(T.king); if(KL&&typeof KL.k==='number') kK=KL.k; }catch(e){}
-    var ranked=[];
-    Object.keys(T.pct).forEach(function(kk){ var k=parseFloat(kk), p=T.pct[kk];
-      if(!isFinite(k)||typeof p!=='number'||!isFinite(p)) return; ranked.push({k:k,pct:p}); });
-    ranked.sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.k-b.k); });
-    var rankOf={}; ranked.forEach(function(n,i){ rankOf[n.k]=i+1; });
-    var wrote=0;
-    ranked.slice().sort(function(a,b){ return a.k-b.k; }).forEach(function(n){
-      var es=esOfSpx(n.k); if(es==null) return;
-      var isK=(kK!=null && Math.abs(n.k-kK)<0.001)?1:0;
-      out.push('STRIKE,'+gpF2(es)+','+Math.round(n.pct)+','+(rankOf[n.k]||0)+','+isK); wrote++;
-    });
-    if(wrote){
-      gWhy='live ('+wrote+' strikes'+(spxwR?(' · SPXW ratio '+spxwR.toFixed(6)):'')+')';
-      if(kK!=null){ var ke=esOfSpx(kK); if(ke!=null) out.push('KING,'+gpF2(ke)); }
-    } else gWhy=spxwR?'ruler ok but no strike converted':'no ES1 payload yet — SPX ladder waits for the ES1 ratio';
+  var DB=derSPXW();
+  if(DB){
+    var kingV=0, kingRow=null;
+    DB.rows.forEach(function(r){ if(r&&typeof r.v==='number'&&isFinite(r.v)){ var a=Math.abs(r.v); if(a>kingV){ kingV=a; kingRow=r; } } });
+    if(kingV>0 && kingRow){
+      var sgOf=function(r){ return (typeof r.net==='number')?(r.net<0?-1:1):((typeof r.d==='number')?(r.d<0?-1:1):(r.v<0?-1:1)); };
+      var strikes=[];
+      DB.rows.forEach(function(r){
+        if(!r||typeof r.k!=='number'||typeof r.v!=='number'||!isFinite(r.k)||!isFinite(r.v)) return;
+        strikes.push({ es:Math.round(r.k/0.25)*0.25, pct:Math.round(100*Math.abs(r.v)/kingV)*sgOf(r), isK:(r===kingRow) });
+      });
+      var byMag=strikes.slice().sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.es-b.es); });
+      byMag.forEach(function(x,i){ x.rank=i+1; });
+      strikes.sort(function(a,b){ return a.es-b.es; });
+      strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)); });
+      out.push('KING,'+gpF2(Math.round(kingRow.k/0.25)*0.25));
+      gWhy='live from SPXW-derived ('+strikes.length+' strikes · King '+(sgOf(kingRow)<0?'-':'+')+'100% @ '+Math.round(kingRow.k)+' · '+DB.ageS+'s old)';
+    } else gWhy='SPXW-derived payload carried no gamma';
   }
   // ---- 2) the DAY MODEL rows — ES-native (the chart's own bars); the candle the plugin draws -------
   var sym=null; try{ sym=(typeof activeSym==='function')?activeSym():null; }catch(e){}
