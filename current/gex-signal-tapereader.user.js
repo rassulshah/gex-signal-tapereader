@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.12
+// @version      16.08
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.12';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.08';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3543,62 +3543,6 @@ function updateKingJourney(sym, king){
   }
 }
 function kingDay(sym){ return KINGDAY[sym]; }
-// ===== (v16.09) KING TRACKER journey — the stepped line of each book's King, in FUTURES price =====
-// SEPARATE from KINGDAY (which tracks the SPY/QQQ *strike* for the panel's "Moved N× today"). KTRK
-// follows the FOUR books the operator wants drawn on the futures charts, each ALREADY in the chart's
-// own price space, read from the derived futures payloads via futDerBookKing():
-//   ES chart : SPX King (SPXW/SPX book on ES1) · SPY King (SPY book on ES1)
-//   NQ chart : QQQ King (QQQ book on NQ1)       · NDX King (NDXP/NDX book on NQ1)
-// A step is recorded ONLY on a CONFIRMED King-STRIKE change (KTRK_CONFIRM_N consecutive samples on
-// the same new strike — a one-poll flicker cannot add a step). Each point is {so:secOfDay, es:fut
-// price, strike}; es is the book's own futures price at the moment of the roll, so the stepped line
-// sits where that King actually stood. Persisted per trading day; resets on a new day. lsKingTracker
-// reads the KINGTRACK rows (history) + the KINGNOW row (the live right-edge level).
-var KTRK_BOOKS = [
-  { book:'SPX', fam:'ES', fut:'ES1', srcs:['SPXW','SPX'] },
-  { book:'SPY', fam:'ES', fut:'ES1', srcs:['SPY'] },
-  { book:'QQQ', fam:'NQ', fut:'NQ1', srcs:['QQQ'] },
-  { book:'NDX', fam:'NQ', fut:'NQ1', srcs:['NDXP','NDX'] }
-];
-var KTRK = { day:null, SPX:[], SPY:[], QQQ:[], NDX:[] };          // book -> [{so,es,strike}]
-var KTRK_NOW = { SPX:null, SPY:null, QQQ:null, NDX:null };        // book -> {es,strike,ageS,pct} latest live King
-var KTRK_KEY = 'gpts_kingtrack_v1';
-var KTRK_CONFIRM = { SPX:{k:null,n:0}, SPY:{k:null,n:0}, QQQ:{k:null,n:0}, NDX:{k:null,n:0} };
-var KTRK_CONFIRM_N = 2;
-function ktrkFresh(){ return { day:todayKey(), SPX:[], SPY:[], QQQ:[], NDX:[] }; }
-function loadKingTrack(){
-  try{
-    var raw=localStorage.getItem(KTRK_KEY); if(!raw) return;
-    var o=JSON.parse(raw); if(o && o.day===todayKey()){ KTRK=o; }
-  }catch(e){}
-}
-function saveKingTrack(){ try{ KTRK.day=todayKey(); localStorage.setItem(KTRK_KEY, JSON.stringify(KTRK)); }catch(e){} }
-function ktrkSample(){
-  try{
-    var cfgI=CFG.irt||{}; if(!(cfgI.on && cfgI.profileOn!==false)) return;   // only while the profile export runs
-    var dk=todayKey();
-    if(KTRK.day!==dk){ KTRK=ktrkFresh(); KTRK_CONFIRM={ SPX:{k:null,n:0}, SPY:{k:null,n:0}, QQQ:{k:null,n:0}, NDX:{k:null,n:0} }; }
-    var so=ctNowSecOfDay(), changed=false;
-    for(var i=0;i<KTRK_BOOKS.length;i++){
-      var B=KTRK_BOOKS[i], K=null;
-      try{ K=(typeof futDerBookKing==='function')?futDerBookKing(B.fut, B.srcs):null; }catch(eK){}
-      if(!K || K.k==null || K.strike==null) continue;
-      KTRK_NOW[B.book]={ es:K.k, strike:K.strike, ageS:K.ageS, pct:K.pct };
-      var arr=KTRK[B.book] || (KTRK[B.book]=[]);
-      if(!arr.length){ arr.push({ so:so, es:K.k, strike:K.strike }); changed=true; continue; }   // seed
-      var last=arr[arr.length-1];
-      if(Math.abs(K.strike-last.strike)<0.001){ KTRK_CONFIRM[B.book]={k:null,n:0}; continue; }    // same King strike — no step
-      var cf=KTRK_CONFIRM[B.book];
-      if(cf.k!=null && Math.abs(cf.k-K.strike)<0.001){ cf.n++; } else { cf.k=K.strike; cf.n=1; }
-      if(cf.n>=KTRK_CONFIRM_N){
-        arr.push({ so:so, es:K.k, strike:K.strike });
-        if(arr.length>60) arr.shift();
-        KTRK_CONFIRM[B.book]={k:null,n:0}; changed=true;
-      }
-    }
-    if(changed) saveKingTrack();
-  }catch(e){}
-}
 function nodeHistory(sym, k){
   var store=HIST[sym]; if(!store) return null;
   var rec=store[k.toFixed(2)];
@@ -6261,46 +6205,7 @@ function irtPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
   window.showDirectoryPicker({mode:'readwrite'}).then(function(h){ repoKvSet('irtDir', h); IRT_LAST={t:Date.now(),rows:0,how:'folder set',err:null}; renderCfg(); }).catch(function(){});
 }
-// (v16.12) CLOSE THIS TAB'S PANEL. When Atlas is open in MORE THAN ONE TAB, two panels write the IRT
-// files and fight — the file flickers between versions and the candle/stats blink. The ✕ in the header
-// mutes THIS tab: it hides the panel AND stops this tab's IRT writes (irtExportNow / gammaProfileExportNow
-// both bail when muted), so the tab you're actually using is the only writer. A small ● (top-right)
-// reopens it. State is per-TAB (sessionStorage), so each tab is independent and it survives a reload of
-// that tab — the extra tab you closed stays quiet until you click ● or fully close the tab.
-var PANEL_MUTED=false; try{ PANEL_MUTED=(sessionStorage.getItem('gpts_muted')==='1'); }catch(ePM){}
-function panelReopenDot(show){
-  try{
-    var d=document.getElementById('gpts-reopen');
-    if(show){
-      if(!d){
-        d=document.createElement('div'); d.id='gpts-reopen'; d.textContent='●';
-        d.title='This panel is CLOSED on this tab — it is not writing the IRT files. Click to reopen.';
-        d.style.cssText='position:fixed;top:6px;right:6px;z-index:2147483647;cursor:pointer;color:#E0A030;'+
-          'font-size:15px;line-height:1;background:#141A22;border:1px solid #394654;border-radius:50%;'+
-          'width:22px;height:22px;display:flex;align-items:center;justify-content:center';
-        d.addEventListener('click', panelReopen);
-        document.body.appendChild(d);
-      }
-      d.style.display='flex';
-    } else if(d){ d.style.display='none'; }
-  }catch(e){}
-}
-function panelClose(){
-  try{ sessionStorage.setItem('gpts_muted','1'); }catch(e){}
-  PANEL_MUTED=true;
-  try{ if(PANEL) PANEL.style.display='none'; }catch(e){}
-  try{ if(typeof WINWIN!=='undefined' && WINWIN && !WINWIN.closed) WINWIN.close(); }catch(e){}   // also close a popped-out window
-  panelReopenDot(true);
-}
-function panelReopen(){
-  try{ sessionStorage.removeItem('gpts_muted'); }catch(e){}
-  PANEL_MUTED=false;
-  try{ if(PANEL) PANEL.style.display=''; }catch(e){}
-  panelReopenDot(false);
-  try{ if(CFG.irt && CFG.irt.on){ IRT_TICK_LAST=0; } }catch(e){}   // resume writing at once
-}
 function irtExportNow(force){
-  if(PANEL_MUTED) return;   // (v16.12) a closed/muted tab never writes — see panelClose()
   try{
     var cfgI=CFG.irt||{};
     if(!force && !cfgI.on) return;
@@ -6446,8 +6351,6 @@ var GP_FILE='GammaProfile.csv';
 var GP_SPXWR_KEY='gpts_gp_spxwr_v1';
 var GP_LAST={t:0, rows:0, err:null};
 function gpF2(x){ return (typeof x==='number'&&isFinite(x))?x.toFixed(2):''; }
-function gpN1(x){ return (typeof x==='number'&&isFinite(x))?x.toFixed(1):''; }   // (v16.09) raw minutes for the stats strip; lsDayStats formats
-function gpI(x){ return (typeof x==='number'&&isFinite(x))?String(Math.round(x)):''; }   // (v16.09) raw secOfDay / int; lsDayStats formats to 12h
 function gpDur(min){ try{ return (min==null)?'':((typeof hlDur==='function')?hlDur(min):(Math.round(min)+'m')); }catch(e){ return ''; } }
 function gpClk(sec){ try{ return (sec==null)?'':((typeof hlClock12==='function')?hlClock12(sec):''); }catch(e){ return ''; } }
 function gpShownDate(){
@@ -6514,62 +6417,53 @@ function gammaProfileBuild(){
   try{ if(sym){ D=(typeof hodLod==='function')?hodLod(sym):null; } }catch(e){}
   try{ if(sym){ SB=(typeof sessionBody==='function')?sessionBody(sym):null; } }catch(e){}
   var dWhy='no session read';
-  // (v16.11) THE OPEN-ANCHORED SPLIT. The EXPECTED candle + expected stats are anchored on the RTH
-  // OPEN and the base-rate model — they need ONLY SB.open, not a completed hodLod measurement. They
-  // used to sit inside `if(D && D.ok ...)`, so at the OPEN (before enough RTH bars form, hodLod.ok is
-  // false) the WHOLE day model vanished — candle and stats both. Now the gate is just SB.open: the
-  // expected candle/stats and the developing ACTUAL body draw from the open; the ACTUAL measurement
-  // (HOD/LOD tips, MUD, swept, the DAYSA stat row) fills in once hodLod is ready.
-  if(SB && typeof SB.open==='number'){
+  if(D && D.ok && SB && typeof SB.open==='number'){
     var O=SB.open, C=SB.close, HI=SB.hi, LO=SB.lo;
     var ptUsdV=(typeof ptUsd==='function')?ptUsd():50;
-    var openSecGP=mul(8,3600)+mul(30,60);
-    var dow=gpDow();
-    var E=null; try{ E=(typeof hodlodBaseFor==='function')?hodlodBaseFor(dow):null; }catch(eE){}
-    var haveE=!!(E && typeof E.rngPts==='number' && E.rngPts>0);
-    // ACTUAL candle body — from sessionBody, available from the open (a small developing candle)
+    // ACTUAL candle
     out.push('DAYACT,'+gpF2(O)+','+gpF2(HI)+','+gpF2(LO)+','+gpF2(C));
-    // ---- ACTUAL measurement extras — need hodLod (RTH bars): tips, MUD, swept, the DAYSA stat row ----
-    if(D && D.ok){
-      var hodIsFirst=(D.first==='HOD');
-      var hodDur=hodIsFirst?D.took:(D.took+D.gap);
-      var lodDur=hodIsFirst?(D.took+D.gap):D.took;
-      out.push('DAYHOD,'+gpF2(HI)+','+gpClk(D.hodT)+','+gpDur(hodDur));
-      out.push('DAYLOD,'+gpF2(LO)+','+gpClk(D.lodT)+','+gpDur(lodDur));
-      if(D.reclaimed && D.mud!=null){
-        var secPx=(D.second==='HOD')?HI:LO;
-        var mudPts=secPx-O;                        // signed toward the 2nd extreme (already ES)
-        out.push('DAYMUD,'+(mudPts>=0?'+':'')+mudPts.toFixed(1)+','+gpDur(D.mud)+','+Math.round(Math.abs(mudPts)*ptUsdV));
-      }
-      // swept key HIGHS & LOWS ONLY (operator): PDH/PDL · ONH/ONL · PWH/PWL · PFH/PFL (prior full Globex).
-      // ⚠ m.at is ALREADY a clock string — write it straight through (gpClk expects seconds → "NaN:NaNa").
-      try{
-        var SW=(typeof sweepEventsShown==='function')?(sweepEventsShown(sym)||[]):[];
-        var swScale=1;
-        try{ if(!(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES')){ var RRi=irtRatio(); if(RRi&&RRi.r>1) swScale=1/RRi.r; } }catch(eSS){}
-        var SWEPT_HL={ PDH:1, PDL:1, ONH:1, ONL:1, PWH:1, PWL:1, PFH:1, PFL:1 };
-        var seenSw={};
-        SW.forEach(function(m){
-          var base=String(m.level||'').replace(/[-+]$/,'');
-          if(!SWEPT_HL[base]) return;
-          if(m.atBar===0 && m.status!=='reclaimed') return;
-          if(seenSw[base]) return; seenSw[base]=1;
-          var st=(m.status==='reclaimed')?'R':((m.status==='accepted')?'B':'T');
-          var t=(m.at!=null && m.at!=='')?String(m.at):'';
-          out.push('SWEPT,'+base+','+gpF2(m.px*swScale)+','+t+','+st);
-        });
-      }catch(eSW){}
-      // DAYSA — the ACTUAL stat row (17 fields, raw units; lsDayStats formats)
-      try{
-        var aFirstPx=(D.first==='LOD')?LO:HI, aSecondPx=(D.second==='LOD')?LO:HI;
-        out.push('DAYSA,'+D.first+','+gpF2(aFirstPx)+','+gpI(D.firstT)+','+gpN1(D.took)+','+gpN1(D.bop)+','+gpN1(D.wick)+','+gpI(D.wend)+','+gpI(D.wickPct)+','+gpN1(D.mud)+','+D.second+','+gpF2(aSecondPx)+','+gpI(D.secondT)+','+gpN1(D.gap)+','+gpN1(D.rngPts)+','+gpI(D.rngUsd)+',,');
-      }catch(eSA){}
+    // HOD/LOD tips: value, clock, and TOOK from the open (first extreme = D.took; second = D.took + D.gap)
+    var hodIsFirst=(D.first==='HOD');
+    var hodDur=hodIsFirst?D.took:(D.took+D.gap);
+    var lodDur=hodIsFirst?(D.took+D.gap):D.took;
+    out.push('DAYHOD,'+gpF2(HI)+','+gpClk(D.hodT)+','+gpDur(hodDur));
+    out.push('DAYLOD,'+gpF2(LO)+','+gpClk(D.lodT)+','+gpDur(lodDur));
+    // MUD — the move from the reclaim of the open to the SECOND extreme (design 10.2), signed to it
+    if(D.reclaimed && D.mud!=null){
+      var secPx=(D.second==='HOD')?HI:LO;
+      var mudPts=secPx-O;                        // signed toward the 2nd extreme (already ES)
+      out.push('DAYMUD,'+(mudPts>=0?'+':'')+mudPts.toFixed(1)+','+gpDur(D.mud)+','+Math.round(Math.abs(mudPts)*ptUsdV));
     }
-    // ---- EXPECTED candle + stats — OPEN-ANCHORED, need only O + the base model (draw from the open) ----
-    // hodlodBaseFor(dow): firstClock/secondClock (sec), tookMin/gapMin, rngPts/rngUsd (+ IQR),
-    // lodFirstPct, wick{wick,bop,mud,wickPct}. Envelope anchored on today's RTH open, split symmetrically
-    // (v1 — the IF-EM band is symmetric about the anchor; a directional split is a later refinement).
-    if(haveE){
+    // swept key levels (tier-1 + CW0/PW0), each at its own ES price, with the sweep state
+    try{
+      var SW=(typeof sweepEventsShown==='function')?(sweepEventsShown(sym)||[]):[];
+      var swScale=1;
+      try{ if(!(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES')){ var RRi=irtRatio(); if(RRi&&RRi.r>1) swScale=1/RRi.r; } }catch(e){}
+      // (v16.08) HIGHS & LOWS ONLY (operator): PDH/PDL · ONH/ONL · PWH/PWL (weekly) · PFH/PFL (prior full
+      // Globex = his "full high/low") — the reference highs and lows, abbreviated. NOT the POC/VA levels.
+      // ⚠ m.at is ALREADY a clock string (sweepClock, e.g. "09:41am") — write it straight through. Passing
+      // it to gpClk (which expects seconds) is what produced "NaN:NaNa".
+      var SWEPT_HL={ PDH:1, PDL:1, ONH:1, ONL:1, PWH:1, PWL:1, PFH:1, PFL:1 };
+      var seenSw={};
+      SW.forEach(function(m){
+        var base=String(m.level||'').replace(/[-+]$/,'');
+        if(!SWEPT_HL[base]) return;                          // highs & lows only
+        if(m.atBar===0 && m.status!=='reclaimed') return;    // opened beyond it — not swept
+        if(seenSw[base]) return; seenSw[base]=1;
+        var st=(m.status==='reclaimed')?'R':((m.status==='accepted')?'B':'T');
+        var t=(m.at!=null && m.at!=='')?String(m.at):'';     // already a formatted clock string
+        out.push('SWEPT,'+base+','+gpF2(m.px*swScale)+','+t+','+st);
+      });
+    }catch(e){}
+    // ---- 3) EXPECTED candle — the TESTED base-rate model for the shown weekday --------------------
+    // hodlodBaseFor(dow): firstClock/secondClock (sec), tookMin/gapMin (min), rngPts, rngUsd,
+    // lodFirstPct, wick{mud,...}. We anchor the expected envelope on TODAY'S actual RTH open so EXP and
+    // ACT read side by side, and split the expected range symmetrically (the design's "blended with the
+    // IF EM" — the EM band is symmetric about the anchor). v1 placement; a directional split is a later
+    // refinement. Times/durations/range are the model's real per-weekday numbers, not samples.
+    var dow=gpDow();
+    var E=null; try{ E=(typeof hodlodBaseFor==='function')?hodlodBaseFor(dow):null; }catch(e){}
+    if(E && typeof E.rngPts==='number' && E.rngPts>0){
       var eHi=O+E.rngPts/2, eLo=O-E.rngPts/2;
       out.push('DAYEXP,'+gpF2(O)+','+gpF2(eHi)+','+gpF2(eLo)+','+gpF2(O));   // neutral body until a directional-close model lands
       var lodFirst=(typeof E.lodFirstPct==='number')?(E.lodFirstPct>=50):true;
@@ -6579,42 +6473,17 @@ function gammaProfileBuild(){
       var eLodDur=lodFirst?E.tookMin:((E.tookMin||0)+(E.gapMin||0));
       out.push('DAYEHOD,'+gpF2(eHi)+','+gpClk(eHodClk)+','+gpDur(eHodDur));
       out.push('DAYELOD,'+gpF2(eLo)+','+gpClk(eLodClk)+','+gpDur(eLodDur));
-      var eMudT=(E.wick&&E.wick.mud!=null)?E.wick.mud:null;
+      // E-MUD: the expected move to the 2nd extreme ~ the expected range; duration from the wick family
+      var eMudT=(E.wick&&E.wick.mud!=null)?E.wick.mud:((E.gapMin!=null&&E.tookMin!=null)?null:null);
       var eMudUsd=(typeof E.rngUsd==='number')?Math.round(E.rngUsd):Math.round(E.rngPts*ptUsdV);
       out.push('DAYEMUD,+'+E.rngPts.toFixed(1)+','+gpDur(eMudT)+','+eMudUsd);
-      // DAYSE — the EXPECTED stat row (17 fields; rngP25/P75 = the IQR band)
-      try{
-        var eFirst=lodFirst?'LOD':'HOD', eSecond=lodFirst?'HOD':'LOD';
-        var eFirstPx=(eFirst==='LOD')?eLo:eHi, eSecondPx=(eSecond==='LOD')?eLo:eHi;
-        var eW=E.wick||{};
-        var eWendSo=(typeof eW.wick==='number')?(openSecGP+eW.wick*60):null;   // W.End = open + wick(open→reclaim)
-        out.push('DAYSE,'+eFirst+','+gpF2(eFirstPx)+','+gpI(E.firstClock)+','+gpN1(E.tookMin)+','+gpN1(eW.bop)+','+gpN1(eW.wick)+','+gpI(eWendSo)+','+gpI(eW.wickPct)+','+gpN1(eW.mud)+','+eSecond+','+gpF2(eSecondPx)+','+gpI(E.secondClock)+','+gpN1(E.gapMin)+','+gpN1(E.rngPts)+','+gpI(E.rngUsd)+','+gpN1(E.rngP25)+','+gpN1(E.rngP75));
-      }catch(eSE){}
-      dWhy='live ('+dow+' n='+((E.basis&&E.basis.n)||'?')+(E.basis&&E.basis.pooled?' pooled':'')+(D&&D.ok?'':' · open, awaiting bars')+')';
+      dWhy='live ('+dow+' n='+((E.basis&&E.basis.n)||'?')+(E.basis&&E.basis.pooled?' pooled':'')+')';
     } else dWhy='candle live, no expected base for '+dow;
-    // SPOT / weekday header — always
+    // SPOT — the latest close in ES (native), and the weekday
     out.push('SPOT,'+gpF2(C));
-    out.push('WEEKDAY,'+dow+','+gpDate());   // weekday + date, e.g. WEEKDAY,Fri,11 Sep
+    out.push('WEEKDAY,'+dow+','+gpDate());   // (v16.08) weekday + date, e.g. WEEKDAY,Fri,11 Sep
     out.push('BOOK,ES');
   }
-  // (v16.10) ASOF — the write time (CT sec-of-day), so the plugins can flag a STALE file on the chart
-  // instead of drawing an old book as if it were live. The plugin compares it to its own local clock.
-  try{ out.push('ASOF,'+ctNowSecOfDay()); }catch(eAS){}
-  // ---- 4) KING TRACKER rows (v16.09) — the stepped-line journeys, for lsKingTracker ------------
-  // Independent of the day section: the four books' Kings in their chart's own futures price. Each
-  // KINGTRACK row is one confirmed step {fam, book, secOfDay, futPrice, strike}; the KINGNOW row is
-  // the live right-edge level (kept aligned with the gamma-profile magenta King). lsKingTracker on
-  // the ES chart reads fam=ES (SPX·SPY); on NQ it reads fam=NQ (QQQ·NDX).
-  try{
-    ktrkSample();   // sample now too, so an export never lags the 30s timer
-    for(var kb=0; kb<KTRK_BOOKS.length; kb++){
-      var KB=KTRK_BOOKS[kb], seq=KTRK[KB.book]||[];
-      for(var kp=0; kp<seq.length; kp++){ var P=seq[kp];
-        out.push('KINGTRACK,'+KB.fam+','+KB.book+','+gpI(P.so)+','+gpF2(P.es)+','+gpI(P.strike)); }
-      var NW=KTRK_NOW[KB.book];
-      if(NW && NW.es!=null) out.push('KINGNOW,'+KB.fam+','+KB.book+','+gpF2(NW.es)+','+gpI(NW.strike)+','+gpI(NW.pct));
-    }
-  }catch(eKT){}
   try{ GP_LAST.gWhy=gWhy; GP_LAST.dWhy=dWhy; }catch(e){}
   if(!out.length) return null;
   return { csv:out.join('\r\n')+'\r\n', n:out.length };
@@ -6622,7 +6491,6 @@ function gammaProfileBuild(){
 // mirror irtExportNow: same folder handle, same in-place write (keepExistingData + truncate), same
 // permission handling — only the file name and the builder differ.
 function gammaProfileExportNow(force){
-  if(PANEL_MUTED) return;   // (v16.12) a closed/muted tab never writes — see panelClose()
   try{
     var cfgI=CFG.irt||{};
     if(!force && !(cfgI.on && cfgI.profileOn!==false)) return;
@@ -8583,17 +8451,6 @@ function buildPanel(){
   clr.addEventListener('mousedown', function(e){ e.stopPropagation(); });
   clr.addEventListener('click', function(e){ e.stopPropagation(); clearSignalsAll(); });
   right.appendChild(clr);
-  // (v16.12) ✕ — close THIS tab's panel (hide it + stop this tab writing the IRT files), so a second
-  // Atlas tab can't fight the one you're using. Reopen with the ● dot (top-right of the page).
-  var xbtn=document.createElement('span');
-  xbtn.id='gpts-close'; xbtn.innerHTML='&#10005;';
-  xbtn.title='Close this tab’s panel — hides it AND stops THIS tab writing the IRT files, so a second Atlas tab can’t fight the one you’re using. Reopen with the ● dot at the top-right of the page.';
-  css(xbtn,{cursor:'pointer', color:PAL.sub, fontSize:'13px', lineHeight:'1', padding:'0 2px', fontWeight:'800'});
-  xbtn.addEventListener('mouseenter', function(){ xbtn.style.color=PAL.shortAccent||'#D1493F'; });
-  xbtn.addEventListener('mouseleave', function(){ xbtn.style.color=PAL.sub; });
-  xbtn.addEventListener('mousedown', function(e){ e.stopPropagation(); });
-  xbtn.addEventListener('click', function(e){ e.stopPropagation(); panelClose(); });
-  right.appendChild(xbtn);
   hdr.appendChild(right);
   PANEL.appendChild(hdr);
 
@@ -9744,44 +9601,6 @@ function wireConfig(){
         if(hit) irtGrantFolder();
       }catch(e){}
     }, true);
-  }
-  // (v16.10) SELF-HEAL — the export must never sit silently stale again. Chrome drops the folder
-  // permission on reload/restart/wake and the 180s timer CANNOT re-request it (no user activation) —
-  // exactly how the CSV froze overnight and the plugin drew a stale book all morning. Two heals, both
-  // driven by a gesture or the tab returning, so they CAN re-grant where the timer cannot:
-  //   1. ANY real click on the page, WHEN the export is on AND stale, re-grants + flushes both files
-  //      (irtGrantFolder requests permission SYNCHRONOUSLY on the cached handle — the gesture-safe
-  //      path; on an already-granted handle it resolves silently and just re-writes). Throttled, and
-  //      gated on staleness so a fresh, granted export is never disturbed or re-prompted.
-  //   2. When Atlas returns to the foreground, kick the tick and write at once — a mere background
-  //      usually keeps the grant, so this resumes with no gesture needed.
-  if(!window.__gptsHealWired){
-    window.__gptsHealWired=true;
-    var gptsExportStale=function(){
-      try{
-        var c=CFG.irt||{}; if(!(c.on && c.profileOn!==false)) return false;
-        var secs=(c.secs||180)*1000;
-        var lastW=Math.max((GP_LAST&&GP_LAST.t)||0, (typeof IRT_LAST!=='undefined'&&IRT_LAST&&IRT_LAST.t)||0);
-        return (Date.now()-lastW) > Math.max(2*secs, 300000);   // 2 ticks or 5 min, whichever is larger
-      }catch(e){ return false; }
-    };
-    document.addEventListener('pointerdown', function(){
-      try{
-        if(Date.now()-(window.__gptsHealLast||0) < 8000) return;   // throttle
-        if(!gptsExportStale()) return;                             // only when actually stale
-        window.__gptsHealLast=Date.now();
-        irtGrantFolder();                                          // re-grant (gesture-safe) + flush both
-      }catch(e){}
-    }, true);
-    document.addEventListener('visibilitychange', function(){
-      try{
-        if(document.hidden) return;
-        if(!(CFG.irt && CFG.irt.on)) return;
-        IRT_TICK_LAST=0;                                           // let the next tick fire immediately
-        try{ irtExportNow(false); }catch(e1){}                     // resume now if the grant survived
-        try{ gammaProfileExportNow(false); }catch(e2){}
-      }catch(e){}
-    }, false);
   }
   var irtNqOn=elCfg.querySelector('.gpts-irt-nqon');
   if(irtNqOn) irtNqOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqOn=irtNqOn.checked; saveCfg(); });
@@ -31615,12 +31434,9 @@ function boot(){
   futCfgLoad();       // (v10.55 PART E) the futures auto/force override (gpts_futcfg_v1)
   eventTagLoad();     // (v10.55 PART F) today's event tag, if the user set one (gpts_event_v1)
   loadKingDay();      // King persistence: rehydrate today's journey
-  loadKingTrack();    // (v16.09) rehydrate today's King-tracker stepped-line journey (4 books)
-  try{ if(!window.__gptsKtrkTimer){ window.__gptsKtrkTimer=setInterval(function(){ try{ ktrkSample(); }catch(e){} }, 30000); } }catch(eKT){}   // sample the 4 Kings every 30s for crisp roll times
   MIN_STRENGTH = CFG.nodeThresh;
   TODAY=ctTodayStr();
   buildPanel();
-  if(PANEL_MUTED){ try{ if(PANEL) PANEL.style.display='none'; }catch(ePm){} try{ panelReopenDot(true); }catch(ePm2){} }   // (v16.12) this tab was closed — stay muted, show the ● reopen dot
   injectSliderCss();
   restoreState();
   pbLogRestore();              // (v11.0 G7) today's pullback-node log survives a reload
