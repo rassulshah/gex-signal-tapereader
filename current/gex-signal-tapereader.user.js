@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.04
+// @version      16.05
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.04';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.05';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2436,7 +2436,7 @@ function readLaddersByDollar(){
     if(seenCont.indexOf(L.cont)>=0) continue; seenCont.push(L.cont);
     var sym=ladderSymbolOf(L.cont); var isMain=(L.cont.tagName==='TBODY'||L.cont.tagName==='TABLE'||!!L.cont.closest&&!!L.cont.closest('table'));
     var key=isMain?'main':sym; if(!key) continue;     // the main table is 'main' (it shows whichever symbol the chart is on); Trinity panes by symbol
-    var pct={}, vel={}, king=null, kingKd=null, count=0, hiK=null, rival=null;
+    var pct={}, vel={}, king=null, kingKd=null, count=0, hiK=null, rival=null, kingNeg=null;   // (v16.05) kingNeg: the King $K cell's sign
     // ISO expiry headers of this ladder, in column order (main table only; the Trinity panes have none)
     var expiries=[]; try{ var tb=L.cont.closest?L.cont.closest('table'):null; var th=tb?tb.querySelector('thead'):null;
       if(th){ var hm=(th.textContent||'').match(/20\d{2}-\d{2}-\d{2}/g); if(hm) expiries=hm; } }catch(eEx){}
@@ -2450,7 +2450,7 @@ function readLaddersByDollar(){
     if(isMain && valIdx!==L.strikeIdx+1){ var bkCell=kingRow&&kingRow.cells[valIdx]; var bkp=bkCell?ladderCellParse(bkCell, true):null; bookKing={k:kingRow?kingRow.k:null, col:valIdx, kd:bkp?bkp.kd:null, neg:/^[\-−]/.test((bkCell&&bkCell.textContent||'').replace(/\s+/g,''))}; valIdx=L.strikeIdx+1; }
     for(var r=0;r<L.rows.length;r++){ var rw=L.rows[r]; var cell=rw.cells[valIdx]; if(!cell) continue; var pc=ladderCellParse(cell, !!isMain); if(!pc||pc.pct==null) continue;
       var kk=rw.k.toFixed(2); pct[kk]=pc.pct; if(pc.vel!=null) vel[kk]=pc.vel; count++;
-      if(pc.kd!=null && (!isMain || valIdx===L.strikeIdx+1)){ if(king==null){ king=rw.k; kingKd=pc.kd; } else if(king!==rw.k) rival=rw.k; }
+      if(pc.kd!=null && (!isMain || valIdx===L.strikeIdx+1)){ if(king==null){ king=rw.k; kingKd=pc.kd; try{ kingNeg=/^[\-−]/.test((cell.textContent||'').replace(/\s+/g,'')); }catch(eKN){} } else if(king!==rw.k) rival=rw.k; }   // (v16.05) capture the King's polarity from its $K cell (the trinity minus IS present, e.g. "-$18,087K")
       if(pc.hi){ if(hiK==null) hiK=rw.k; else if(hiK!==rw.k) hiK=-1; } }
     // (v11.6) EVERY EXPIRATION COLUMN, not just the nearest. The ladder has carried 5 expiry columns since
     // 2026-08-19 and the reader used column 1 only, so the panel saw 0DTE gamma and threw the rest away. The
@@ -2478,7 +2478,7 @@ function readLaddersByDollar(){
       if(hiK!=null && hiK>0 && Math.abs(pct[hiK.toFixed(2)]||0)===100){ king=hiK; kingSrc='highlight'; }
       else { var bk=null, bv=-1; for(var q3 in pct){ if(Math.abs(pct[q3])>bv){ bv=Math.abs(pct[q3]); bk=parseFloat(q3); } } king=bk; kingSrc='maxpct'; }
     }
-    var res={ pct:pct, vel:vel, king:king, kingKd:kingKd, count:count, kingSrc:kingSrc, kingTagged:(kingSrc==='dollar'||kingSrc==='highlight')?king:null,
+    var res={ pct:pct, vel:vel, king:king, kingKd:kingKd, kingNeg:kingNeg, count:count, kingSrc:kingSrc, kingTagged:(kingSrc==='dollar'||kingSrc==='highlight')?king:null,
               kingConflict:false, src:isMain?'main':'trinity', sym:key, bookKing:bookKing, rows:L.rows.length,
               expiries:expiries, cols:cols };
     if(rival!=null){ res.kingConflict=true; res.parseSuspect='two-dollar-cells'; res.kingRival=rival; }
@@ -3014,7 +3014,7 @@ function readTapeFromDOM(sym){
   // (v11.2) THE $K-ANCHORED LADDER FIRST. Trinity pane for this symbol (true %King) → main table → legacy finders.
   try{ var LD=ladderFor(sym); if(LD && LD.count>=5 && LD.king!=null){ var rL=kingResolve(LD.pct, (LD.kingSrc==='dollar')?LD.king:null, LD.count);
       if(LD.kingSrc!=='dollar'){ rL.king=LD.king; rL.kingSrc=LD.kingSrc; if(LD.kingSrc==='highlight') rL.kingTagged=LD.king; }
-      rL.kingKd=LD.kingKd; rL.vel=LD.vel; rL.ladderSrc=LD.src;
+      rL.kingKd=LD.kingKd; rL.vel=LD.vel; rL.ladderSrc=LD.src; rL.kingNeg=LD.kingNeg;   // (v16.05) carry the King's polarity through
       // (v11.4.1) the BOOK King ($K in a later expiry column) only exists on the main table — carry it
       // across when the Trinity pane is the one being read, so `bk` keeps recording the King-dollar trend.
       rL.bookKing=LD.bookKing; if(!rL.bookKing && LD.src==='trinity'){ try{ var MN=(laddersByDollar()||{}).main; if(MN && MN.bookKing) rL.bookKing=MN.bookKing;
@@ -6382,7 +6382,7 @@ function gammaProfileBuild(){
   };
   if(TT && TT.pct && TT.king!=null){
     var kK=TT.king;
-    var kingNeg=!!(TT.bookKing && TT.bookKing.neg===true);
+    var kingNeg=(TT.kingNeg===true) || !!(TT.bookKing && TT.bookKing.neg===true);   // (v16.05) polarity from the tape's King $K cell sign
     try{ var sp=skylitFutPx(SKY_ES,'SPXW',kK); if(sp&&sp.ratio>0) localStorage.setItem(GP_SPXWR_KEY, JSON.stringify({r:sp.ratio,t:Date.now()})); }catch(e){}
     var strikes=[], noRatio=false;
     Object.keys(TT.pct).forEach(function(kk){
