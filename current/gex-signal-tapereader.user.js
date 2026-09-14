@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      15.99
+// @version      16.00
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -763,7 +763,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.99';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.00';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6133,7 +6133,7 @@ function irtGrantFolder(){
     if(IRT_DIR_H && IRT_DIR_H.requestPermission){
       IRT_DIR_H.requestPermission({mode:'readwrite'}).then(function(st){
         if(st==='granted'){ IRT_LAST={t:Date.now(),rows:0,how:'permission granted',err:null};
-                            try{ irtExportNow(true); }catch(e1){} }
+                            try{ irtExportNow(true); }catch(e1){} try{ gammaProfileExportNow(true); }catch(e1b){} }
         else { IRT_LAST={t:Date.now(),rows:0,how:null,err:'permission '+st+' — the file cannot be written'}; }
         try{ renderCfg(); }catch(e2){}
       }).catch(function(e){
@@ -6154,6 +6154,7 @@ function irtGrantFolder(){
         if(st==='granted'){
           IRT_LAST={t:Date.now(),rows:0,how:'permission granted',err:null};
           try{ irtExportNow(true); }catch(e1){}          // prove it immediately, not next tick
+          try{ gammaProfileExportNow(true); }catch(e1b){}
         } else {
           IRT_LAST={t:Date.now(),rows:0,how:null,err:'permission '+st+' — the file cannot be written'};
         }
@@ -6272,6 +6273,7 @@ function irtTick(){
     if(now-IRT_TICK_LAST < secs*1000) return;
     IRT_TICK_LAST=now;
     irtExportNow(false);
+    gammaProfileExportNow(false);   // (Phase 0) the compact profile/day-model CSV, same cadence
   }catch(e){}
 }
 window.__gptsDebug.irt=function(){ var b=null; try{ b=irtBuildCsv(); }catch(e){ b=String(e); } return { cfg:CFG.irt||null, last:IRT_LAST, preview:(b&&b.csv)?b.csv.split('\r\n').slice(0,8):b }; };
@@ -6288,6 +6290,185 @@ window.__gptsDebug.futDerRows=function(sym){ sym=sym||'ES1'; var o={ sym:sym }; 
 }catch(e){ o.err=String(e&&e.message||e); } return o; };
 window.__gptsDebug.futDer=function(){ var o={}; try{ Object.keys(LASTFUTDER).forEach(function(s){ var F=LASTFUTDER[s]; o[s]={ ageS:Math.round((Date.now()-F.ts)/1000), newestT:futDerNewestT(F.j),
   books:(F.j.derived||[]).map(function(d){ var L=d.levels&&d.levels.length?d.levels[d.levels.length-1]:null; return { source:d.source, ratio:d.ratio, rows:L&&L.l?L.l.length:0, t:L?L.t:null, spot:L?L.s:null }; }) }; }); }catch(e){ o.err=String(e&&e.message||e); } return o; };
+// ============================================================================================
+// (Phase 0) GAMMA PROFILE EXPORT — the COMPACT csv the RTX plugins parse (lsGammaProfile + lsDayModel).
+// A SEPARATE file from FlexLevelsExport.csv, written to the SAME lsFlexLevels folder handle, so the
+// existing kings+walls lines are untouched. Everything is in the chart's futures-symbol ES price
+// space, so the profile and the day-model candle track live price on ANY contract (the roll fix that
+// motivated this: a static SPX-price fixture sat off-screen the moment the chart rolled U -> Z).
+//
+// SCHEMA — one row per line, \r\n:
+//   STRIKE,<esPx>,<signed %King>,<rank>,<isKing 0|1>
+//   KING,<esPx>   SPOT,<esPx>   BOOK,ES
+//   DAYACT,o,h,l,c   DAYHOD,val,time,dur   DAYLOD,val,time,dur   DAYMUD,±pts,mud-t,$
+//   DAYEXP,o,h,l,c   DAYEHOD,val,time,dur  DAYELOD,val,time,dur   DAYEMUD,±pts,time,$
+//   SWEPT,name,<esPx>,time,R|B|T   WEEKDAY,Mon..Fri
+//
+// SPX-book rows (STRIKE/KING) are SPX->ES via Skylit's OWN SPXW ES ratio (skylitFutPx) — NOT R.r,
+// which is the ~10x SPY ratio; the SPX->ES basis is a couple of points, and using the SPY ratio is
+// how a level would land 60,000 pts off. The DAY rows are ES-NATIVE (measureBars/sessionBody read the
+// ES chart's own 1-min bars) so they need no conversion. The EXPECTED candle comes from the TESTED
+// base-rate model (hodlodBaseFor -> BASERATES.json / HODLOD_BASE, 297 sessions, per weekday),
+// anchored on today's actual RTH open; the classifier (the READ, AUC 0.879) is a SEPARATE layer and
+// is not written here.
+var GP_FILE='GammaProfile.csv';
+var GP_SPXWR_KEY='gpts_gp_spxwr_v1';
+var GP_LAST={t:0, rows:0, err:null};
+function gpF2(x){ return (typeof x==='number'&&isFinite(x))?x.toFixed(2):''; }
+function gpDur(min){ try{ return (min==null)?'':((typeof hlDur==='function')?hlDur(min):(Math.round(min)+'m')); }catch(e){ return ''; } }
+function gpClk(sec){ try{ return (sec==null)?'':((typeof hlClock12==='function')?hlClock12(sec):''); }catch(e){ return ''; } }
+function gpDow(){
+  try{ var ds=(typeof hlDayShown==='function')?hlDayShown():null; if(!ds && typeof ctTodayStr==='function') ds=ctTodayStr();
+    var d = ds ? new Date(ds+'T12:00:00') : new Date();
+    return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+  }catch(e){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()]; }
+}
+function gammaProfileBuild(){
+  var cfgI=CFG.irt||{};
+  var out=[];
+  // ---- the SPX->ES ruler: Skylit's own SPXW ES ratio (~1.0003), persisted last-good for a brief gap
+  var SKY_ES=(typeof SKY_FUT!=='undefined' && SKY_FUT.ES)||'ES1';
+  var T=null; try{ T=tapeMap('SPXW'); }catch(e){}
+  var spxwR=null;
+  try{ var kk0=(T&&typeof T.king==='number')?T.king:null;
+       if(kk0!=null){ var sp0=skylitFutPx(SKY_ES,'SPXW',kk0); if(sp0&&sp0.ratio>0) spxwR=sp0.ratio; } }catch(e){}
+  if(spxwR){ try{ localStorage.setItem(GP_SPXWR_KEY, JSON.stringify({r:spxwR,t:Date.now()})); }catch(e){} }
+  else { try{ var og=JSON.parse(localStorage.getItem(GP_SPXWR_KEY)||'null'); if(og&&og.r>0&&(Date.now()-og.t)<14*86400000) spxwR=og.r; }catch(e){} }
+  var esOfSpx=function(spxPx){
+    if(typeof spxPx!=='number'||!isFinite(spxPx)) return null;
+    try{ var s=skylitFutPx(SKY_ES,'SPXW',spxPx); if(s&&typeof s.px==='number'&&isFinite(s.px)) return Math.round(s.px/0.25)*0.25; }catch(e){}
+    if(spxwR) return Math.round(spxPx*spxwR/0.25)*0.25;
+    return null;
+  };
+  // ---- 1) the SPX gamma ladder + King (only when the SPX->ES ruler resolves) ----
+  var gWhy='no SPXW tape';
+  if(T && T.pct){
+    var kK=(typeof T.king==='number')?T.king:null;
+    try{ var KL=kingLatchTick(T.king); if(KL&&typeof KL.k==='number') kK=KL.k; }catch(e){}
+    var ranked=[];
+    Object.keys(T.pct).forEach(function(kk){ var k=parseFloat(kk), p=T.pct[kk];
+      if(!isFinite(k)||typeof p!=='number'||!isFinite(p)) return; ranked.push({k:k,pct:p}); });
+    ranked.sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.k-b.k); });
+    var rankOf={}; ranked.forEach(function(n,i){ rankOf[n.k]=i+1; });
+    var wrote=0;
+    ranked.slice().sort(function(a,b){ return a.k-b.k; }).forEach(function(n){
+      var es=esOfSpx(n.k); if(es==null) return;
+      var isK=(kK!=null && Math.abs(n.k-kK)<0.001)?1:0;
+      out.push('STRIKE,'+gpF2(es)+','+Math.round(n.pct)+','+(rankOf[n.k]||0)+','+isK); wrote++;
+    });
+    if(wrote){
+      gWhy='live ('+wrote+' strikes'+(spxwR?(' · SPXW ratio '+spxwR.toFixed(6)):'')+')';
+      if(kK!=null){ var ke=esOfSpx(kK); if(ke!=null) out.push('KING,'+gpF2(ke)); }
+    } else gWhy=spxwR?'ruler ok but no strike converted':'no ES1 payload yet — SPX ladder waits for the ES1 ratio';
+  }
+  // ---- 2) the DAY MODEL rows — ES-native (the chart's own bars); the candle the plugin draws -------
+  var sym=null; try{ sym=(typeof activeSym==='function')?activeSym():null; }catch(e){}
+  var D=null, SB=null;
+  try{ if(sym){ D=(typeof measureBars==='function')?measureBars(sym):null; } }catch(e){}
+  try{ if(sym){ SB=(typeof sessionBody==='function')?sessionBody(sym):null; } }catch(e){}
+  var dWhy='no session read';
+  if(D && D.ok && SB && typeof SB.open==='number'){
+    var O=SB.open, C=SB.close, HI=SB.hi, LO=SB.lo;
+    var ptUsdV=(typeof ptUsd==='function')?ptUsd():50;
+    // ACTUAL candle
+    out.push('DAYACT,'+gpF2(O)+','+gpF2(HI)+','+gpF2(LO)+','+gpF2(C));
+    // HOD/LOD tips: value, clock, and TOOK from the open (first extreme = D.took; second = D.took + D.gap)
+    var hodIsFirst=(D.first==='HOD');
+    var hodDur=hodIsFirst?D.took:(D.took+D.gap);
+    var lodDur=hodIsFirst?(D.took+D.gap):D.took;
+    out.push('DAYHOD,'+gpF2(HI)+','+gpClk(D.hodT)+','+gpDur(hodDur));
+    out.push('DAYLOD,'+gpF2(LO)+','+gpClk(D.lodT)+','+gpDur(lodDur));
+    // MUD — the move from the reclaim of the open to the SECOND extreme (design 10.2), signed to it
+    if(D.reclaimed && D.mud!=null){
+      var secPx=(D.second==='HOD')?HI:LO;
+      var mudPts=secPx-O;                        // signed toward the 2nd extreme (already ES)
+      out.push('DAYMUD,'+(mudPts>=0?'+':'')+mudPts.toFixed(1)+','+gpDur(D.mud)+','+Math.round(Math.abs(mudPts)*ptUsdV));
+    }
+    // swept key levels (tier-1 + CW0/PW0), each at its own ES price, with the sweep state
+    try{
+      var SW=(typeof sweepEventsShown==='function')?(sweepEventsShown(sym)||[]):[];
+      var swScale=1;
+      try{ if(!(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES')){ var RRi=irtRatio(); if(RRi&&RRi.r>1) swScale=1/RRi.r; } }catch(e){}
+      var seenSw={};
+      SW.forEach(function(m){
+        var base=String(m.level||'').replace(/[-+]$/,'');
+        if(base==='EMH'||base==='EML') return;
+        if(m.atBar===0 && m.status!=='reclaimed') return;   // opened beyond it — not swept
+        if(!((typeof levelTier==='function'&&levelTier(m.level)===1)||base==='CW0'||base==='PW0')) return;
+        if(seenSw[base]) return; seenSw[base]=1;
+        var st=(m.status==='reclaimed')?'R':((m.status==='accepted')?'B':'T');
+        out.push('SWEPT,'+base+','+gpF2(m.px*swScale)+','+gpClk(m.at!=null?m.at:m.so)+','+st);
+      });
+    }catch(e){}
+    // ---- 3) EXPECTED candle — the TESTED base-rate model for the shown weekday --------------------
+    // hodlodBaseFor(dow): firstClock/secondClock (sec), tookMin/gapMin (min), rngPts, rngUsd,
+    // lodFirstPct, wick{mud,...}. We anchor the expected envelope on TODAY'S actual RTH open so EXP and
+    // ACT read side by side, and split the expected range symmetrically (the design's "blended with the
+    // IF EM" — the EM band is symmetric about the anchor). v1 placement; a directional split is a later
+    // refinement. Times/durations/range are the model's real per-weekday numbers, not samples.
+    var dow=gpDow();
+    var E=null; try{ E=(typeof hodlodBaseFor==='function')?hodlodBaseFor(dow):null; }catch(e){}
+    if(E && typeof E.rngPts==='number' && E.rngPts>0){
+      var eHi=O+E.rngPts/2, eLo=O-E.rngPts/2;
+      out.push('DAYEXP,'+gpF2(O)+','+gpF2(eHi)+','+gpF2(eLo)+','+gpF2(O));   // neutral body until a directional-close model lands
+      var lodFirst=(typeof E.lodFirstPct==='number')?(E.lodFirstPct>=50):true;
+      var eHodClk=lodFirst?E.secondClock:E.firstClock;
+      var eLodClk=lodFirst?E.firstClock:E.secondClock;
+      var eHodDur=lodFirst?((E.tookMin||0)+(E.gapMin||0)):E.tookMin;
+      var eLodDur=lodFirst?E.tookMin:((E.tookMin||0)+(E.gapMin||0));
+      out.push('DAYEHOD,'+gpF2(eHi)+','+gpClk(eHodClk)+','+gpDur(eHodDur));
+      out.push('DAYELOD,'+gpF2(eLo)+','+gpClk(eLodClk)+','+gpDur(eLodDur));
+      // E-MUD: the expected move to the 2nd extreme ~ the expected range; duration from the wick family
+      var eMudT=(E.wick&&E.wick.mud!=null)?E.wick.mud:((E.gapMin!=null&&E.tookMin!=null)?null:null);
+      var eMudUsd=(typeof E.rngUsd==='number')?Math.round(E.rngUsd):Math.round(E.rngPts*ptUsdV);
+      out.push('DAYEMUD,+'+E.rngPts.toFixed(1)+','+gpDur(eMudT)+','+eMudUsd);
+      dWhy='live ('+dow+' n='+((E.basis&&E.basis.n)||'?')+(E.basis&&E.basis.pooled?' pooled':'')+')';
+    } else dWhy='candle live, no expected base for '+dow;
+    // SPOT — the latest close in ES (native), and the weekday
+    out.push('SPOT,'+gpF2(C));
+    out.push('WEEKDAY,'+dow);
+    out.push('BOOK,ES');
+  }
+  try{ GP_LAST.gWhy=gWhy; GP_LAST.dWhy=dWhy; }catch(e){}
+  if(!out.length) return null;
+  return { csv:out.join('\r\n')+'\r\n', n:out.length };
+}
+// mirror irtExportNow: same folder handle, same in-place write (keepExistingData + truncate), same
+// permission handling — only the file name and the builder differ.
+function gammaProfileExportNow(force){
+  try{
+    var cfgI=CFG.irt||{};
+    if(!force && !(cfgI.on && cfgI.profileOn!==false)) return;
+    var built=gammaProfileBuild();
+    if(!built){ GP_LAST={t:Date.now(),rows:0,err:'nothing to write (no tape and no session)',gWhy:GP_LAST.gWhy,dWhy:GP_LAST.dWhy}; return; }
+    repoKvGet('irtDir', function(h){
+      if(!(h && h.getFileHandle)){ GP_LAST={t:Date.now(),rows:0,err:'no folder picked'}; return; }
+      var doWrite=function(){
+        var bytes; try{ bytes=new Blob([built.csv]).size; }catch(eB){ bytes=built.csv.length; }
+        h.getFileHandle(GP_FILE,{create:true})
+          .then(function(fh){ return fh.createWritable({keepExistingData:true}); })
+          .then(function(w){ return w.write({type:'write', position:0, data:built.csv}).then(function(){ return w.truncate(bytes); }).then(function(){ return w.close(); }); })
+          .then(function(){ GP_LAST={t:Date.now(),rows:built.n,err:null,inPlace:true,gWhy:GP_LAST.gWhy,dWhy:GP_LAST.dWhy}; })
+          .catch(function(eW){
+            try{ h.getFileHandle(GP_FILE,{create:true}).then(function(fh){ return fh.createWritable(); })
+              .then(function(w){ return w.write(built.csv).then(function(){ return w.close(); }); })
+              .then(function(){ GP_LAST={t:Date.now(),rows:built.n,err:null,inPlace:false,gWhy:GP_LAST.gWhy,dWhy:GP_LAST.dWhy}; })
+              .catch(function(e2){ GP_LAST={t:Date.now(),rows:0,err:''+e2}; });
+            }catch(e3){ GP_LAST={t:Date.now(),rows:0,err:''+eW}; }
+          });
+      };
+      if(h.queryPermission){
+        h.queryPermission({mode:'readwrite'}).then(function(st){
+          if(st==='granted'){ doWrite(); return; }
+          // no gesture on a timer -> irtExportNow already surfaces the one-click prompt; don't double it
+          GP_LAST={t:Date.now(),rows:0,err:'folder permission needs one click (see the IRT export status)'};
+        }).catch(doWrite);
+      } else doWrite();
+    });
+  }catch(e){ GP_LAST={t:Date.now(),rows:0,err:''+e}; }
+}
+window.__gptsDebug.gp=function(){ var b=null; try{ b=gammaProfileBuild(); }catch(e){ b=String(e); } return { last:GP_LAST, preview:(b&&b.csv)?b.csv.split('\r\n').slice(0,40):b }; };
+window.__gptsDebug.gpExport=function(){ gammaProfileExportNow(true); return GP_LAST; };
 var REPO_LAST_SAVE=null;
 // (v15.71) THE SAVE RUNS ITSELF. Operator, 2026-09-04: "the next step is to automatically have the application trigger the
 // save button instead of me clicking it … if the save button has not been pressed and the time is [after market hours],
@@ -9331,7 +9512,7 @@ function wireConfig(){
   if(evI) evI.addEventListener('change', function(){ try{ eventTagSet(evI.value); }catch(e){} render(); });
   // (v11.4) IRT export controls
   var irtOn=elCfg.querySelector('.gpts-irt-on');
-  if(irtOn) irtOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.on=irtOn.checked; saveCfg(); if(irtOn.checked){ IRT_TICK_LAST=0; irtExportNow(false); } renderCfg(); });
+  if(irtOn) irtOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.on=irtOn.checked; saveCfg(); if(irtOn.checked){ IRT_TICK_LAST=0; irtExportNow(false); gammaProfileExportNow(false); } renderCfg(); });
   var irtS=elCfg.querySelectorAll('.gpts-irt-secs');
   for(var si=0;si<irtS.length;si++){ (function(el){ el.addEventListener('click', function(){ CFG.irt=CFG.irt||{}; CFG.irt.secs=parseInt(el.getAttribute('data-secs'),10)||180; saveCfg(); IRT_TICK_LAST=0; renderCfg(); }); })(irtS[si]); }
   // (v15.92) the Lines selector — Kings + walls / everything; the file is rewritten at once so the chart changes now
@@ -9368,7 +9549,7 @@ function wireConfig(){
   var irtNqR=elCfg.querySelector('.gpts-irt-nqr');
   if(irtNqR) irtNqR.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; var v=parseFloat(irtNqR.value); if(isFinite(v)&&v>0) CFG.irt.nqRatio=v; saveCfg(); renderCfg(); });
   var irtN=elCfg.querySelector('.gpts-irt-now');
-  if(irtN) irtN.addEventListener('click', function(){ irtExportNow(true); setTimeout(renderCfg, 600); });
+  if(irtN) irtN.addEventListener('click', function(){ irtExportNow(true); gammaProfileExportNow(true); setTimeout(renderCfg, 600); });
   var spyF=elCfg.querySelector('.gpts-spyflag');
   if(spyF) spyF.addEventListener('change', function(){ CFG.spyFlag=spyF.checked; saveCfg(); render(); });
   // (v15.95) BO Pullback / Followthrough / Signal Type handlers removed with their controls.
