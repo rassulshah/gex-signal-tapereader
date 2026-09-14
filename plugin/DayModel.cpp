@@ -87,7 +87,7 @@ public:
     std::string ehodT, ehodD, elodT, elodD; bool hasEHodT, hasELodT;
     std::string emudP, emudT, emudDol; bool hasEMud;
     std::vector<SweptLvl> swepts;
-    std::string weekday;
+    std::string weekday, daydate;
 
     Settings cfg;
     int lastBar;
@@ -165,7 +165,10 @@ int DayModel::parmsUpdt(unsigned int)
 // parameter numbering and scrambles the getters -- see the gamma plugin).
 int cppExtension::setup(void)
 {
-    setParameterVersion(4);           // bumped for header + E-lines
+    setParameterVersion(5);           // (v0.7) BUMPED to reset persisted state -> the correct defaults:
+                                      // Expected+Actual candles ON, MUD box ON, Swept levels ON,
+                                      // Up colour green / Down colour red. IRT re-applies the setX
+                                      // defaults below whenever this number changes.
     setParameterDialogHeight(22);
 
     const short SL = kParmAppendSameLine;
@@ -217,7 +220,7 @@ void DayModel::readSettings(Settings& S)
 void DayModel::load()
 {
     expC.valid = false; actC.valid = false;
-    hasHod = false; hasLod = false; hasMud = false; swepts.clear(); weekday.clear();
+    hasHod = false; hasLod = false; hasMud = false; swepts.clear(); weekday.clear(); daydate.clear();
     hasEHodT = false; hasELodT = false; hasEMud = false;
     const char* up = getenv("USERPROFILE");
     if (!up) return;
@@ -255,6 +258,7 @@ void DayModel::load()
             emudP=t[1]; emudT=t[2]; emudDol=t[3]; hasEMud=true;
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
+            if (t.size() >= 3) daydate = t[2];   // (v0.7) optional date, e.g. "11 Sep"
         }
     }
 }
@@ -431,17 +435,21 @@ void DayModel::render(const Settings& S)
     short inner = (short)S.spacing;          // gap between the two candles in Pair layout
     int fs = S.font - 1; if (fs < 7) fs = 7;
     short step = (short)(fs + 3);
+    // (v0.7) LEFT-ANNOTATION ALLOWANCE. The EXP candle's tips (E-HOD / E-MUD) are CENTRED on its column,
+    // so on the left margin they spill past the pane's left edge and clip. Reserve room to their left and
+    // extend the panel to cover them. ~half the widest tip ("E-MUD +63.2" / a 12h clock).
+    short annoL = (short)(fs * 5 + 8);
 
     short expCx, actCx;
     if (S.layout == 1) {                     // Overlay: same column
-        short cx = (S.side == 1) ? (short)(paneR - S.gap - half) : (short)(paneL + S.gap + half);
+        short cx = (S.side == 1) ? (short)(paneR - S.gap - half) : (short)(paneL + S.gap + annoL + half);
         expCx = cx; actCx = cx;
     } else {                                 // Pair: two columns; ACT nearest price
         if (S.side == 1) {                   // Right margin: ACT on the right
             actCx = (short)(paneR - S.gap - half);
             expCx = (short)(actCx - S.width - inner);
         } else {                             // Left margin (default): ACT on the right of the pair
-            expCx = (short)(paneL + S.gap + half);
+            expCx = (short)(paneL + S.gap + annoL + half);
             actCx = (short)(expCx + S.width + inner);
         }
     }
@@ -449,7 +457,7 @@ void DayModel::render(const Settings& S)
     // panel bounds (shared by the background fill and the header)
     short xLc = expCx < actCx ? expCx : actCx;
     short xRc = expCx > actCx ? expCx : actCx;
-    short xL = (short)(xLc - half - 6);
+    short xL = (short)(xLc - half - (S.side == 1 ? 6 : annoL));   // (v0.7) cover the EXP tips on the left margin
     short xR = (short)(xRc + half + (S.swept ? 84 : 8));    // room for the (now narrower) swept tags
     float hiP = -1e9f, loP = 1e9f;
     if (expC.valid) { if (expC.h>hiP) hiP=expC.h; if (expC.l<loP) loP=expC.l; }
@@ -464,10 +472,11 @@ void DayModel::render(const Settings& S)
         bgr.draw(1, C_BORDER, C_PANEL, DRAW_OPAQUE, PAT_SOLID);
     }
 
-    // day-of-week header, top-centre of the panel
+    // day-of-week header (+ date), top-centre of the panel
     if (S.header) {
-        const char* wd = weekday.empty() ? "DAY" : weekday.c_str();
-        textC((short)((xL + xR) / 2), (short)(yT + step - 2), wd, C_TXT, S.font, true);
+        std::string hdr = weekday.empty() ? "DAY" : weekday;
+        if (!daydate.empty()) { hdr += " "; hdr += daydate; }   // (v0.7) "Fri 11 Sep"
+        textC((short)((xL + xR) / 2), (short)(yT + step - 2), hdr.c_str(), C_TXT, S.font, true);
     }
 
     // optional E-HOD / E-LOD reference lines across the pane
@@ -496,6 +505,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.6");
+    p->setVersion("0.7");
     return p;
 }

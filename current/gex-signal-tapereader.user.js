@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.07
+// @version      16.08
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.07';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.08';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6353,11 +6353,14 @@ var GP_LAST={t:0, rows:0, err:null};
 function gpF2(x){ return (typeof x==='number'&&isFinite(x))?x.toFixed(2):''; }
 function gpDur(min){ try{ return (min==null)?'':((typeof hlDur==='function')?hlDur(min):(Math.round(min)+'m')); }catch(e){ return ''; } }
 function gpClk(sec){ try{ return (sec==null)?'':((typeof hlClock12==='function')?hlClock12(sec):''); }catch(e){ return ''; } }
-function gpDow(){
+function gpShownDate(){
   try{ var ds=(typeof hlDayShown==='function')?hlDayShown():null; if(!ds && typeof ctTodayStr==='function') ds=ctTodayStr();
-    var d = ds ? new Date(ds+'T12:00:00') : new Date();
-    return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
-  }catch(e){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()]; }
+    return ds ? new Date(ds+'T12:00:00') : new Date();
+  }catch(e){ return new Date(); }
+}
+function gpDow(){ try{ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][gpShownDate().getDay()]; }catch(e){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()]; } }
+function gpDate(){   // "11 Sep" — the shown session's date for the candle header
+  try{ var d=gpShownDate(); return d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]; }catch(e){ return ''; }
 }
 function gammaProfileBuild(){
   var cfgI=CFG.irt||{};
@@ -6436,15 +6439,20 @@ function gammaProfileBuild(){
       var SW=(typeof sweepEventsShown==='function')?(sweepEventsShown(sym)||[]):[];
       var swScale=1;
       try{ if(!(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES')){ var RRi=irtRatio(); if(RRi&&RRi.r>1) swScale=1/RRi.r; } }catch(e){}
+      // (v16.08) HIGHS & LOWS ONLY (operator): PDH/PDL · ONH/ONL · PWH/PWL (weekly) · PFH/PFL (prior full
+      // Globex = his "full high/low") — the reference highs and lows, abbreviated. NOT the POC/VA levels.
+      // ⚠ m.at is ALREADY a clock string (sweepClock, e.g. "09:41am") — write it straight through. Passing
+      // it to gpClk (which expects seconds) is what produced "NaN:NaNa".
+      var SWEPT_HL={ PDH:1, PDL:1, ONH:1, ONL:1, PWH:1, PWL:1, PFH:1, PFL:1 };
       var seenSw={};
       SW.forEach(function(m){
         var base=String(m.level||'').replace(/[-+]$/,'');
-        if(base==='EMH'||base==='EML') return;
-        if(m.atBar===0 && m.status!=='reclaimed') return;   // opened beyond it — not swept
-        if(!((typeof levelTier==='function'&&levelTier(m.level)===1)||base==='CW0'||base==='PW0')) return;
+        if(!SWEPT_HL[base]) return;                          // highs & lows only
+        if(m.atBar===0 && m.status!=='reclaimed') return;    // opened beyond it — not swept
         if(seenSw[base]) return; seenSw[base]=1;
         var st=(m.status==='reclaimed')?'R':((m.status==='accepted')?'B':'T');
-        out.push('SWEPT,'+base+','+gpF2(m.px*swScale)+','+gpClk(m.at!=null?m.at:m.so)+','+st);
+        var t=(m.at!=null && m.at!=='')?String(m.at):'';     // already a formatted clock string
+        out.push('SWEPT,'+base+','+gpF2(m.px*swScale)+','+t+','+st);
       });
     }catch(e){}
     // ---- 3) EXPECTED candle — the TESTED base-rate model for the shown weekday --------------------
@@ -6473,7 +6481,7 @@ function gammaProfileBuild(){
     } else dWhy='candle live, no expected base for '+dow;
     // SPOT — the latest close in ES (native), and the weekday
     out.push('SPOT,'+gpF2(C));
-    out.push('WEEKDAY,'+dow);
+    out.push('WEEKDAY,'+dow+','+gpDate());   // (v16.08) weekday + date, e.g. WEEKDAY,Fri,11 Sep
     out.push('BOOK,ES');
   }
   try{ GP_LAST.gWhy=gWhy; GP_LAST.dWhy=dWhy; }catch(e){}
