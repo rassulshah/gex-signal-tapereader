@@ -140,10 +140,10 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.showpct=true; cfg.pctpos=0; cfg.hideu=5; cfg.rank=true; cfg.rankpos=0; cfg.rankscope=0;
     cfg.type=true; cfg.font=10;
     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
-    cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=true;
+    cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false;
-    cfg.header=true; cfg.spot=true; cfg.headerpos=0;
-    cfg.roles=true; cfg.regime=true; cfg.panelpos=0; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
+    cfg.header=false; cfg.spot=true; cfg.headerpos=0;
+    cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
 }
 
 // ---- parameter callbacks: dialog controls are valid here, so read + cache.
@@ -223,7 +223,7 @@ int cppExtension::setup(void)
     PX.cw     = pc++; setBoolParameter   ("Call Wall", true, SL);
     PX.pw     = pc++; setBoolParameter   ("Put Wall", true, SL);
     PX.flip   = pc++; setBoolParameter   ("Flip", true, SL);
-    PX.em     = pc++; setBoolParameter   ("EM H/L", true, SL);
+    PX.em     = pc++; setBoolParameter   ("EM H/L", false, SL);
     PX.extk   = pc++; setBoolParameter   ("Extend King line", false);
     PX.topnodes=pc++; setBoolParameter   ("Top-node lines", false, SL);
     PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash");
@@ -231,13 +231,13 @@ int cppExtension::setup(void)
     PX.topstyle=pc++; setListParameter   ("Top-node style", 1, "Solid;Dot;Dash");
     PX.spyking= pc++; setBoolParameter   ("SPY King line", false, SL);
     // CONTEXT
-    PX.header = pc++; setBoolParameter   ("Title header (top-left)", true);
+    PX.header = pc++; setBoolParameter   ("Title header (top-left)", false);
     PX.spot   = pc++; setBoolParameter   ("Spot price line (dotted)", true, SL);
     // STRUCTURE READ (appended v0.35 -- new params go at the END so existing
     // instances keep their numbering)
     PX.roles   = pc++; setBoolParameter  ("Structure labels (Floor/Ceiling/Gate/Air)", true);
     PX.regime  = pc++; setBoolParameter  ("Regime + read panel", true, SL);
-    PX.panelpos= pc++; setListParameter  ("Panel at", 0, "Bottom-L;Bottom-C;Bottom-R;Top-L;Top-C;Top-R");
+    PX.panelpos= pc++; setListParameter  ("Panel at", 1, "Bottom-L;Bottom-C;Bottom-R;Top-L;Top-C;Top-R");
     PX.defbands= pc++; setBoolParameter  ("Deflection bands", false, SL);
     PX.confl   = pc++; setBoolParameter  ("EM confluence marks", false);
     PX.legend  = pc++; setBoolParameter  ("Polarity legend", false, SL);
@@ -751,6 +751,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.36");
+    p->setVersion("0.37");
     return p;
 }

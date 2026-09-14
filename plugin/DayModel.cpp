@@ -366,8 +366,11 @@ void DayModel::drawActExtras(short cx, const Settings& S)
             short y = yOf(s.price);
             COLOR sc = (s.state=='R') ? C_UP : (s.state=='B') ? C_DN : C_AMBER;
             hline(y, L, R, sc, P_DOT);
-            char tag[56]; sprintf_s(tag, sizeof(tag), "%s %d %s", s.name.c_str(), (int)(s.price + 0.5f), s.time.c_str());
-            textLJ((short)(R + 5), y, tag, sc, fs, false);
+            // two lines to save horizontal space: "NAME PRICE" on top, time below
+            char l1[40]; sprintf_s(l1, sizeof(l1), "%s %d", s.name.c_str(), (int)(s.price + 0.5f));
+            short hh = (short)(fs / 2 + 1);
+            textLJ((short)(R + 5), (short)(y - hh),     l1,             sc, fs, false);
+            textLJ((short)(R + 5), (short)(y + hh + 1), s.time.c_str(), sc, fs, false);
         }
     }
 }
@@ -422,7 +425,7 @@ void DayModel::render(const Settings& S)
     short xLc = expCx < actCx ? expCx : actCx;
     short xRc = expCx > actCx ? expCx : actCx;
     short xL = (short)(xLc - half - 6);
-    short xR = (short)(xRc + half + (S.swept ? 116 : 8));   // room for swept tags on the right
+    short xR = (short)(xRc + half + (S.swept ? 84 : 8));    // room for the (now narrower) swept tags
     float hiP = -1e9f, loP = 1e9f;
     if (expC.valid) { if (expC.h>hiP) hiP=expC.h; if (expC.l<loP) loP=expC.l; }
     if (actC.valid) { if (actC.h>hiP) hiP=actC.h; if (actC.l<loP) loP=actC.l; }
@@ -468,6 +471,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.4");
+    p->setVersion("0.5");
     return p;
 }
