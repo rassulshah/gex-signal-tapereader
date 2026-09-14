@@ -1,29 +1,38 @@
 @echo off
 REM ===========================================================================
-REM  compile-daystats.bat  —  DOUBLE-CLICK THIS to rebuild the lsDayStats plugin.
-REM  No admin needed. No cmd window to open. It sets up the compiler for you.
+REM  compile-daystats.bat  --  DOUBLE-CLICK THIS to rebuild the lsDayStats plugin.
+REM  Finds Visual Studio, loads the x64 compiler, then calls build-daystats.bat.
 REM  ONLY rule: close Investor/RT first (a loaded DLL can't be replaced).
-REM  SEPARATE plugin -- building it does not touch the other RTX plugins.
 REM ===========================================================================
 title Build lsDayStats
-
+set "PLUGDIR=C:\Dev\gex-signal-tapereader\plugin"
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" set "VSWHERE=%ProgramFiles%\Microsoft Visual Studio\Installer\vswhere.exe"
+if not exist "%VSWHERE%" goto :novs
+
 set "VSINST="
 for /f "usebackq tokens=*" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul`) do set "VSINST=%%i"
-if not defined VSINST (
-  echo [ERROR] Could not find Visual Studio's C++ tools.
-  echo         Open an "x64 Native Tools Command Prompt for VS" and run build-daystats.bat instead.
-  echo.
-  pause
-  exit /b 1
-)
+if not defined VSINST goto :novs
+
 call "%VSINST%\VC\Auxiliary\Build\vcvars64.bat" >nul
+if errorlevel 1 goto :novcvars
 
-cd /d "C:\Dev\gex-signal-tapereader\plugin"
+cd /d "%PLUGDIR%"
 call build-daystats.bat
+goto :end
 
+:novs
+echo [ERROR] Could not find Visual Studio's C++ tools.
+echo         Open an "x64 Native Tools Command Prompt for VS", then run:
+echo             cd /d "%PLUGDIR%"
+echo             build-daystats.bat
+goto :end
+:novcvars
+echo [ERROR] Failed to initialize the x64 compiler environment (vcvars64).
+goto :end
+:end
 echo.
 echo ---------------------------------------------------------------------------
-echo Done. Reopen Investor/RT to load the new build.  (Press a key to close.)
-pause >nul
+echo Done. Reopen Investor/RT to load the new build.
+echo.
+pause

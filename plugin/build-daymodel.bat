@@ -1,58 +1,49 @@
 @echo off
 REM ===========================================================================
-REM  build-daymodel.bat  —  compile DayModel.cpp -> lsDayModel.dll (x64)
-REM
-REM  EASIEST: double-click  compile-daymodel.bat  (sets up the compiler for you).
-REM  Or run this from an "x64 Native Tools Command Prompt for VS".
-REM  NO admin needed -- installs to your per-user InvestorRT folder.
+REM  build-daymodel.bat  --  compile DayModel.cpp -> lsDayModel.dll (x64)
+REM  Run from an "x64 Native Tools Command Prompt for VS", or let
+REM  compile-daymodel.bat set up the compiler and call this for you.
 REM  Close Investor/RT first: a loaded DLL cannot be replaced.
-REM  This is a SEPARATE plugin from lsGammaProfile -- it does not touch it.
 REM ===========================================================================
-setlocal enabledelayedexpansion
-
+setlocal
 set "OUT=lsDayModel.dll"
 set "SDK=C:\Program Files\LinnSoft\InvestorRT\sdk\c++"
 set "LIB143=%SDK%\lib\irtsdkV143-x64.lib"
 set "DLLDIR=%USERPROFILE%\InvestorRT\dllx64"
 
-if not exist "%SDK%\include\irtsdk.h" (
-  echo [ERROR] Cannot find the SDK at "%SDK%". Edit the SDK path at the top of this file.
-  exit /b 1
-)
+if not exist "%SDK%\include\irtsdk.h" goto :nosdk
 where cl >nul 2>nul
-if errorlevel 1 (
-  echo [ERROR] cl.exe is not on PATH. Double-click compile-daymodel.bat, or open an
-  echo         "x64 Native Tools Command Prompt for VS" and run build-daymodel.bat there.
-  exit /b 1
-)
+if errorlevel 1 goto :nocl
 
 echo Compiling DayModel.cpp -^> %OUT% ...
 cl /nologo /LD /EHsc /O2 /MD DayModel.cpp /I "%SDK%\include" /Fe:%OUT% /link "%LIB143%"
-if errorlevel 1 (
-  echo.
-  echo [BUILD FAILED] See the compiler/linker errors above.
-  exit /b 1
-)
+if errorlevel 1 goto :failed
+
 echo.
 echo [BUILD OK]  %OUT%
 echo.
-
-echo Installing to "%DLLDIR%" ...
-if not exist "%DLLDIR%" (
-  echo [WARN] Extension folder not found: "%DLLDIR%".
-  goto :done
-)
+if not exist "%DLLDIR%" goto :nodir
 del "%DLLDIR%\DayModel.dll" 2>nul
 copy /Y %OUT% "%DLLDIR%\%OUT%" >nul
-if errorlevel 1 (
-  echo [WARN] Could not replace the DLL -- is Investor/RT still running?
-  echo        Close it completely ^(all windows + the system-tray icon; check Task Manager^),
-  echo        then run this again.
-) else (
-  echo [INSTALLED]  %DLLDIR%\%OUT%
-)
+if errorlevel 1 goto :copyfail
+echo [INSTALLED]  %DLLDIR%\%OUT%
+goto :ok
 
-:done
+:nosdk
+echo [ERROR] Cannot find the SDK at "%SDK%". Edit the SDK path at the top of this file.
+goto :ok
+:nocl
+echo [ERROR] cl.exe is not on PATH. Use compile-daymodel.bat, or an x64 Native Tools Command Prompt.
+goto :ok
+:failed
 echo.
-echo Next: reopen Investor/RT -- it loads the new build on startup.
+echo [BUILD FAILED] See the compiler/linker errors above.
+goto :ok
+:nodir
+echo [WARN] Extension folder not found: "%DLLDIR%".  DLL built but not installed.
+goto :ok
+:copyfail
+echo [WARN] Could not replace the DLL -- is Investor/RT still running? Close it fully and rerun.
+goto :ok
+:ok
 endlocal
