@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#include <ctime>
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -108,9 +109,12 @@ public:
     float spotPx; bool hasSpot;
     float spyKingPx; bool hasSpyKing;
     std::string book;
+    double asofSo;               // (v0.38) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     Settings cfg;                // cached settings (populated in parms callbacks, used in draw)
 
     void load();
+    void drawStaleBadge();       // (v0.38) red badge if the CSV has gone cold (shared across all 4 plugins)
+    void applyContractOffset();  // (v0.39) shift the whole book onto the chart's own contract price
     void readSettings(Settings& S);
     void render(const Settings& S);
     void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
@@ -323,7 +327,7 @@ void GammaProfile::readSettings(Settings& S)
 void GammaProfile::load()
 {
     for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; }
-    hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX";
+    hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX"; asofSo = -1;
     const char* up = getenv("USERPROFILE");
     if (!up) { strikes.clear(); return; }
     // Book selector: Auto(0) and SPX(1) read GammaProfile.csv; SPY(2) reads GammaProfile-SPY.csv.
@@ -359,6 +363,7 @@ void GammaProfile::load()
             else if (t[0] == "SPOT")    { spotPx=v; hasSpot=true; }
             else if (t[0] == "SPYKING") { spyKingPx=v; hasSpyKing=true; }
             else if (t[0] == "BOOK" && t.size()>=2) { book=t[1]; }
+            else if (t[0] == "ASOF") { asofSo = v; }
         }
     }
     strikes.swap(tmp);
@@ -740,8 +745,57 @@ void GammaProfile::render(const Settings& S)
 int GammaProfile::draw(void)
 {
     load();
+    applyContractOffset();  // (v0.39) align to this chart's contract BEFORE render maps prices to Y
     render(cfg);       // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
+    drawStaleBadge();  // (v0.38) warn if the CSV is cold, regardless of what render drew
     return RTX_OK;
+}
+
+// ---- (v0.39) CONTRACT ALIGNMENT — the whole book is priced in the panel's space (Skylit ES1 / cash,
+// SPOT is the anchor). This chart may be a DIFFERENT contract (e.g. EPZ26 December, ~+70 over cash from
+// carry), so everything would draw off the bottom. Shift every price by (this chart's own last close −
+// SPOT): that anchors SPOT to the chart's live price and carries the whole book with it, so the King,
+// nodes and levels sit where they belong regardless of which contract is charted. It self-corrects each
+// redraw as the spread moves. Clamped so a wrong chart / bad SPOT can never fling the book to nonsense.
+void GammaProfile::applyContractOffset()
+{
+    if (!hasSpot) return;
+    long n = getBarCount(); if (n < 1) return;
+    RTARRAY close(barClose);
+    float chartClose = close[(int)n - 1];
+    if (!(chartClose > 0)) return;
+    float off = chartClose - spotPx;
+    if (off < -300.0f || off > 300.0f) return;      // implausible → leave as-is
+    if (off > -0.01f && off < 0.01f) return;        // already aligned
+    for (size_t i = 0; i < strikes.size(); i++) strikes[i].price += off;
+    for (int i = 0; i < 6; i++) if (has[i]) lvl[i] += off;
+    spotPx += off;
+    if (hasSpyKing) spyKingPx += off;
+}
+
+// ---- (v0.38) STALE badge — shared logic across all four plugins ------------
+// The panel stamps each export with ASOF,<CT sec-of-day>. Compare to the chart clock (assumed CT, same
+// as the King tracker); if the data is older than ~4 min (the panel writes every ~3 min), a frozen file
+// is drawing an old book — flag it so it can never be mistaken for live. Handles the overnight wrap.
+void GammaProfile::drawStaleBadge()
+{
+    if (asofSo < 0) return;
+    RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
+    double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
+    double ageMin = (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+    if (ageMin <= 4.0) return;
+    char b[40];
+    if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
+    else                sprintf_s(b, sizeof(b), "STALE %dm", (int)(ageMin + 0.5));
+    RCT pane; pane.getPaneRect(false);
+    FONT f; f.id = HELVETICA; f.size = 11; f.style = BOLD; setFont(f);
+    short tw = (short)getTextWidth(b, -1);
+    short x = (short)(pane.left + 6), y = (short)(pane.top + 6);
+    RCT bg; bg.set(x, y, (short)(x + tw + 14), (short)(y + 18));
+    bg.draw(1, 0x00C0392B, 0x003A1416, DRAW_OPAQUE, PAT_SOLID);
+    setTextColor(0x00FF9A8F);
+    RCT tr; tr.set((short)(x + 7), (short)(y + 1), (short)(x + tw + 14), (short)(y + 17));
+    tr.drawText(b, false, false);
 }
 
 // ---- factory --------------------------------------------------------------
@@ -751,6 +805,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.37");
+    p->setVersion("0.39");
     return p;
 }

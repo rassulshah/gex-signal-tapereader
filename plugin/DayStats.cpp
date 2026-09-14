@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
 // ---- palette --------------------------------------------------------------
 static const COLOR C_TXT   = 0x00DFE7F0;  // actual (A) ink            near-white
@@ -78,9 +79,14 @@ public:
 
     StatRow A, E;
     std::string weekday, daydate;
+    double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
+    float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
+    float priceOff;            // (v0.3) chart-contract offset applied to the displayed price labels
     Settings cfg;
 
     void load();
+    void drawStaleBadge();     // (v0.2) red badge if the CSV has gone cold
+    void applyContractOffset();// (v0.3) match the [1st]/[2nd] price labels to the chart's contract
     void readSettings(Settings& S);
     void render(const Settings& S);
     // helpers
@@ -172,7 +178,7 @@ std::string DayStats::dur(double m)
 std::string DayStats::px1(const std::string& raw)
 {
     if (raw.empty()) return "--";
-    double v = atof(raw.c_str());
+    double v = atof(raw.c_str()) + priceOff;   // (v0.3) show the price in the chart's contract
     char b[16]; sprintf_s(b, sizeof(b), "%d", (int)(v + 0.5));
     return std::string(b);
 }
@@ -193,7 +199,8 @@ short DayStats::textW(const char* s, int sz, bool bold)
 // ---- data load ------------------------------------------------------------
 void DayStats::load()
 {
-    A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear();
+    A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1;
+    hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -228,6 +235,10 @@ void DayStats::load()
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
             if (t.size() >= 3) daydate = t[2];
+        } else if (t[0] == "ASOF" && t.size() >= 2) {
+            asofSo = atof(t[1].c_str());
+        } else if (t[0] == "SPOT" && t.size() >= 2) {
+            spotPx = (float)atof(t[1].c_str()); hasSpot = true;
         }
     }
 }
@@ -342,7 +353,45 @@ void DayStats::render(const Settings& S)
 }
 
 // ---- draw() ---------------------------------------------------------------
-int DayStats::draw(void) { load(); render(cfg); return RTX_OK; }
+int DayStats::draw(void) { load(); applyContractOffset(); render(cfg); drawStaleBadge(); return RTX_OK; }
+
+// ---- (v0.3) contract offset for the displayed price labels ([1st]/[2nd]) — match the day candle: the
+// prices are in the panel's cash space; shift by (this chart's last close − SPOT) so they read in the
+// chart's contract. Text-only (this panel isn't price-aligned), so it just biases px1().
+void DayStats::applyContractOffset()
+{
+    priceOff = 0.0f;
+    if (!hasSpot) return;
+    long n = getBarCount(); if (n < 1) return;
+    RTARRAY close(barClose);
+    float chartClose = close[(int)n - 1];
+    if (!(chartClose > 0)) return;
+    float off = chartClose - spotPx;
+    if (off < -300.0f || off > 300.0f) return;   // implausible → no offset
+    priceOff = off;
+}
+
+// ---- (v0.2) STALE badge — ASOF,<CT sec-of-day> vs the chart clock; > ~4 min ⇒ frozen file (overnight-safe)
+void DayStats::drawStaleBadge()
+{
+    if (asofSo < 0) return;
+    RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
+    double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
+    double ageMin = (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+    if (ageMin <= 4.0) return;
+    char b[40];
+    if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
+    else                sprintf_s(b, sizeof(b), "STALE %dm", (int)(ageMin + 0.5));
+    RCT pane; pane.getPaneRect(false);
+    FONT f; f.id = HELVETICA; f.size = 11; f.style = BOLD; setFont(f);
+    short tw = (short)getTextWidth(b, -1);
+    short x = (short)(pane.left + 6), y = (short)(pane.top + 6);
+    RCT bg; bg.set(x, y, (short)(x + tw + 14), (short)(y + 18));
+    bg.draw(1, 0x00C0392B, 0x003A1416, DRAW_OPAQUE, PAT_SOLID);
+    setTextColor(0x00FF9A8F);
+    RCT tr; tr.set((short)(x + 7), (short)(y + 1), (short)(x + tw + 14), (short)(y + 17));
+    tr.drawText(b, false, false);
+}
 
 // ---- factory --------------------------------------------------------------
 extern "C" cppExtension *CreateExtension(void)
@@ -351,6 +400,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.1");
+    p->setVersion("0.3");
     return p;
 }

@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
 // ---- palette --------------------------------------------------------------
 static const COLOR C_UP    = 0x0033B36B;  // up candle / swept-reclaimed   green
@@ -88,11 +89,15 @@ public:
     std::string emudP, emudT, emudDol; bool hasEMud;
     std::vector<SweptLvl> swepts;
     std::string weekday, daydate;
+    double asofSo;              // (v0.8) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
+    float spotPx; bool hasSpot; // (v0.9) SPOT anchor for the contract offset
 
     Settings cfg;
     int lastBar;
 
     void load();
+    void drawStaleBadge();     // (v0.8) red badge if the CSV has gone cold
+    void applyContractOffset();// (v0.9) shift the candle onto this chart's own contract price
     void readSettings(Settings& S);
     void render(const Settings& S);
     // helpers
@@ -221,7 +226,7 @@ void DayModel::load()
 {
     expC.valid = false; actC.valid = false;
     hasHod = false; hasLod = false; hasMud = false; swepts.clear(); weekday.clear(); daydate.clear();
-    hasEHodT = false; hasELodT = false; hasEMud = false;
+    hasEHodT = false; hasELodT = false; hasEMud = false; asofSo = -1; hasSpot = false; spotPx = 0.0f;
     const char* up = getenv("USERPROFILE");
     if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
@@ -259,6 +264,10 @@ void DayModel::load()
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
             if (t.size() >= 3) daydate = t[2];   // (v0.7) optional date, e.g. "11 Sep"
+        } else if (t[0] == "ASOF" && t.size() >= 2) {
+            asofSo = atof(t[1].c_str());
+        } else if (t[0] == "SPOT" && t.size() >= 2) {
+            spotPx = (float)atof(t[1].c_str()); hasSpot = true;
         }
     }
 }
@@ -494,8 +503,54 @@ void DayModel::render(const Settings& S)
 int DayModel::draw(void)
 {
     load();
+    applyContractOffset();   // (v0.9) align to this chart's contract BEFORE render maps prices to Y
     render(cfg);
+    drawStaleBadge();   // (v0.8) warn if the CSV is cold, regardless of what render drew
     return RTX_OK;
+}
+
+// ---- (v0.9) CONTRACT ALIGNMENT — the candle is priced in the panel's space (cash / SPY×10, SPOT is the
+// anchor). If this chart is a different contract (EPZ26 December, ~+70 over cash), the candle draws off
+// the bottom. Shift every price by (this chart's last close − SPOT) so the candle sits on the chart.
+void DayModel::applyContractOffset()
+{
+    if (!hasSpot) return;
+    long n = getBarCount(); if (n < 1) return;
+    RTARRAY close(barClose);
+    float chartClose = close[(int)n - 1];
+    if (!(chartClose > 0)) return;
+    float off = chartClose - spotPx;
+    if (off < -300.0f || off > 300.0f) return;   // implausible → leave as-is
+    if (off > -0.01f && off < 0.01f) return;      // already aligned
+    if (expC.valid) { expC.o+=off; expC.h+=off; expC.l+=off; expC.c+=off; }
+    if (actC.valid) { actC.o+=off; actC.h+=off; actC.l+=off; actC.c+=off; }
+    if (hasHod) hodV+=off;
+    if (hasLod) lodV+=off;
+    for (size_t i = 0; i < swepts.size(); i++) swepts[i].price += off;
+}
+
+// ---- (v0.8) STALE badge — the panel stamps ASOF,<CT sec-of-day> each export; compare to the chart
+// clock (assumed CT). Older than ~4 min (panel writes every ~3 min) ⇒ a frozen file drawing an old
+// book. Handles the overnight wrap so a file left cold overnight reads hours, not a negative age.
+void DayModel::drawStaleBadge()
+{
+    if (asofSo < 0) return;
+    RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
+    double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
+    double ageMin = (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+    if (ageMin <= 4.0) return;
+    char b[40];
+    if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
+    else                sprintf_s(b, sizeof(b), "STALE %dm", (int)(ageMin + 0.5));
+    RCT pane; pane.getPaneRect(false);
+    FONT f; f.id = HELVETICA; f.size = 11; f.style = BOLD; setFont(f);
+    short tw = (short)getTextWidth(b, -1);
+    short x = (short)(pane.left + 6), y = (short)(pane.top + 6);
+    RCT bg; bg.set(x, y, (short)(x + tw + 14), (short)(y + 18));
+    bg.draw(1, 0x00C0392B, 0x003A1416, DRAW_OPAQUE, PAT_SOLID);
+    setTextColor(0x00FF9A8F);
+    RCT tr; tr.set((short)(x + 7), (short)(y + 1), (short)(x + tw + 14), (short)(y + 17));
+    tr.drawText(b, false, false);
 }
 
 // ---- factory --------------------------------------------------------------
@@ -505,6 +560,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.7");
+    p->setVersion("0.9");
     return p;
 }

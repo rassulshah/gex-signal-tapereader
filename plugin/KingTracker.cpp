@@ -85,8 +85,12 @@ public:
     BookTrk book[NBOOK];
     Settings cfg;
     int lastBar;
+    double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
+    float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
 
     void load();
+    void drawStaleBadge();     // (v0.2) red badge if the CSV has gone cold
+    void applyContractOffset();// (v0.3) shift the King lines onto this chart's own contract price
     void readSettings(Settings& S);
     void render(const Settings& S);
     int  chartFamily(const Settings& S);        // returns 1 ES / 2 NQ
@@ -164,6 +168,7 @@ void KingTracker::readSettings(Settings& S)
 void KingTracker::load()
 {
     for (int i = 0; i < NBOOK; i++) { book[i].steps.clear(); book[i].hasNow = false; }
+    asofSo = -1; hasSpot = false; spotPx = 0.0f;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -187,6 +192,10 @@ void KingTracker::load()
             book[bi].nowStrike = atoi(t[4].c_str());
             book[bi].nowPct = (t.size() > 5) ? atoi(t[5].c_str()) : 0;
             book[bi].hasNow = true;
+        } else if (t[0] == "ASOF" && t.size() >= 2) {
+            asofSo = atof(t[1].c_str());
+        } else if (t[0] == "SPOT" && t.size() >= 2) {
+            spotPx = (float)atof(t[1].c_str()); hasSpot = true;
         }
     }
 }
@@ -302,7 +311,50 @@ void KingTracker::render(const Settings& S)
 }
 
 // ---- draw() ---------------------------------------------------------------
-int KingTracker::draw(void) { load(); render(cfg); return RTX_OK; }
+int KingTracker::draw(void) { load(); applyContractOffset(); render(cfg); drawStaleBadge(); return RTX_OK; }
+
+// ---- (v0.3) CONTRACT ALIGNMENT — the ES King prices are in the panel's ES space (SPOT is the ES-cash
+// anchor). If the ES chart is a different contract (EPZ26 December, ~+70 over cash), shift every King
+// price by (this chart's last close − SPOT) so the lines sit on the chart. On an NQ chart the books are
+// ~29k, so chartClose − SPOT is huge and hits the clamp → no shift (the NQ books already draw in NQ1
+// space; a dedicated NQ spot anchor is a later refinement).
+void KingTracker::applyContractOffset()
+{
+    if (!hasSpot) return;
+    long n = getBarCount(); if (n < 1) return;
+    RTARRAY close(barClose);
+    float chartClose = close[(int)n - 1];
+    if (!(chartClose > 0)) return;
+    float off = chartClose - spotPx;
+    if (off < -300.0f || off > 300.0f) return;   // implausible (incl. the ES/NQ cross) → leave as-is
+    if (off > -0.01f && off < 0.01f) return;      // already aligned
+    for (int b = 0; b < NBOOK; b++) {
+        for (size_t i = 0; i < book[b].steps.size(); i++) book[b].steps[i].px += off;
+        if (book[b].hasNow) book[b].nowPx += off;
+    }
+}
+
+// ---- (v0.2) STALE badge — ASOF,<CT sec-of-day> vs the chart clock; > ~4 min ⇒ frozen file (overnight-safe)
+void KingTracker::drawStaleBadge()
+{
+    if (asofSo < 0) return;
+    RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
+    double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
+    double ageMin = (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+    if (ageMin <= 4.0) return;
+    char b[40];
+    if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
+    else                sprintf_s(b, sizeof(b), "STALE %dm", (int)(ageMin + 0.5));
+    RCT pane; pane.getPaneRect(false);
+    FONT f; f.id = HELVETICA; f.size = 11; f.style = BOLD; setFont(f);
+    short tw = (short)getTextWidth(b, -1);
+    short x = (short)(pane.left + 6), y = (short)(pane.top + 6);
+    RCT bg; bg.set(x, y, (short)(x + tw + 14), (short)(y + 18));
+    bg.draw(1, 0x00C0392B, 0x003A1416, DRAW_OPAQUE, PAT_SOLID);
+    setTextColor(0x00FF9A8F);
+    RCT tr; tr.set((short)(x + 7), (short)(y + 1), (short)(x + tw + 14), (short)(y + 17));
+    tr.drawText(b, false, false);
+}
 
 // ---- factory --------------------------------------------------------------
 extern "C" cppExtension *CreateExtension(void)
@@ -311,6 +363,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.1");
+    p->setVersion("0.3");
     return p;
 }
