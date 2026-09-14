@@ -99,6 +99,7 @@ public:
     void drawStaleBadge();     // (v0.8) red badge if the CSV has gone cold
     void applyContractOffset();// (v0.9) fallback: shift the CSV candle onto this chart (pre-open)
     bool measureChartDay();    // (v0.10) ACTUAL candle straight from the chart's own RTH session bars
+    void computeChartLevels(); // (v0.11) PDH/PDL + overnight H/L from the chart's own bars (exact)
     void readSettings(Settings& S);
     void render(const Settings& S);
     // helpers
@@ -508,9 +509,54 @@ int DayModel::draw(void)
     // the ES session high/low by definition — no cash→contract guesswork. If the session hasn't opened
     // yet (no RTH bars), fall back to shifting the CSV candle onto the chart.
     if (!measureChartDay()) applyContractOffset();
+    computeChartLevels();   // (v0.11) override PDH/PDL/ONH/ONL swept prices with exact chart values
     render(cfg);
     drawStaleBadge();   // (v0.8) warn if the CSV is cold, regardless of what render drew
     return RTX_OK;
+}
+
+// ---- (v0.11) CHART-NATIVE REFERENCE LEVELS -----------------------------------------------------------
+// PDH/PDL (prior RTH day high/low) and ONH/ONL (overnight high/low) are pure price levels IRT already
+// knows, so read them straight from the chart's own bars — exact on whatever contract is charted. We keep
+// the panel's sweep STATUS/TIME (R/B/T) by matching on the level name; only the PRICE is replaced. The
+// other swept levels (PWH/PWL/PFH/PFL) keep the panel value (open-anchored) until they're made native too.
+void DayModel::computeChartLevels()
+{
+    if (swepts.empty()) return;
+    long n = getBarCount(); if (n < 2) return;
+    RTARRAY  hi(barHigh), lo(barLow);
+    RTARRAYI dt(barDateTime);
+    struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
+    int todayKey = (lt.tm_year + 1900) * 10000 + (lt.tm_mon + 1) * 100 + lt.tm_mday;
+    const int RTH_O = 8 * 3600 + 30 * 60, RTH_S = 15 * 3600, EVE = 17 * 3600;
+    // prior trading date = the largest date < today that has an RTH bar
+    int priorKey = 0;
+    for (int i = (int)n - 1; i >= 0; i--) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        int k = (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
+        int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+        if (k < todayKey && sod >= RTH_O && sod <= RTH_S) { priorKey = k; break; }
+    }
+    float pdh = -1e9f, pdl = 1e9f, onh = -1e9f, onl = 1e9f; bool hp = false, ho = false;
+    for (int i = 0; i < (int)n; i++) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        int k = (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
+        int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+        if (priorKey && k == priorKey && sod >= RTH_O && sod <= RTH_S) {
+            if (hi[i] > pdh) pdh = hi[i]; if (lo[i] < pdl) pdl = lo[i]; hp = true;
+        }
+        // overnight into today: prior evening (>=17:00) through today's pre-open (<08:30)
+        if ((priorKey && k == priorKey && sod >= EVE) || (k == todayKey && sod < RTH_O)) {
+            if (hi[i] > onh) onh = hi[i]; if (lo[i] < onl) onl = lo[i]; ho = true;
+        }
+    }
+    for (size_t i = 0; i < swepts.size(); i++) {
+        const std::string& nm = swepts[i].name;
+        if      (hp && nm == "PDH") swepts[i].price = pdh;
+        else if (hp && nm == "PDL") swepts[i].price = pdl;
+        else if (ho && nm == "ONH") swepts[i].price = onh;
+        else if (ho && nm == "ONL") swepts[i].price = onl;
+    }
 }
 
 // ---- (v0.10) MEASURE THE ACTUAL CANDLE FROM THE CHART ITSELF -----------------------------------------
@@ -602,6 +648,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.10");
+    p->setVersion("0.11");
     return p;
 }
