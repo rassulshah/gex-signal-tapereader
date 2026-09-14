@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.11
+// @version      16.12
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.11';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.12';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6261,7 +6261,46 @@ function irtPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
   window.showDirectoryPicker({mode:'readwrite'}).then(function(h){ repoKvSet('irtDir', h); IRT_LAST={t:Date.now(),rows:0,how:'folder set',err:null}; renderCfg(); }).catch(function(){});
 }
+// (v16.12) CLOSE THIS TAB'S PANEL. When Atlas is open in MORE THAN ONE TAB, two panels write the IRT
+// files and fight — the file flickers between versions and the candle/stats blink. The ✕ in the header
+// mutes THIS tab: it hides the panel AND stops this tab's IRT writes (irtExportNow / gammaProfileExportNow
+// both bail when muted), so the tab you're actually using is the only writer. A small ● (top-right)
+// reopens it. State is per-TAB (sessionStorage), so each tab is independent and it survives a reload of
+// that tab — the extra tab you closed stays quiet until you click ● or fully close the tab.
+var PANEL_MUTED=false; try{ PANEL_MUTED=(sessionStorage.getItem('gpts_muted')==='1'); }catch(ePM){}
+function panelReopenDot(show){
+  try{
+    var d=document.getElementById('gpts-reopen');
+    if(show){
+      if(!d){
+        d=document.createElement('div'); d.id='gpts-reopen'; d.textContent='●';
+        d.title='This panel is CLOSED on this tab — it is not writing the IRT files. Click to reopen.';
+        d.style.cssText='position:fixed;top:6px;right:6px;z-index:2147483647;cursor:pointer;color:#E0A030;'+
+          'font-size:15px;line-height:1;background:#141A22;border:1px solid #394654;border-radius:50%;'+
+          'width:22px;height:22px;display:flex;align-items:center;justify-content:center';
+        d.addEventListener('click', panelReopen);
+        document.body.appendChild(d);
+      }
+      d.style.display='flex';
+    } else if(d){ d.style.display='none'; }
+  }catch(e){}
+}
+function panelClose(){
+  try{ sessionStorage.setItem('gpts_muted','1'); }catch(e){}
+  PANEL_MUTED=true;
+  try{ if(PANEL) PANEL.style.display='none'; }catch(e){}
+  try{ if(typeof WINWIN!=='undefined' && WINWIN && !WINWIN.closed) WINWIN.close(); }catch(e){}   // also close a popped-out window
+  panelReopenDot(true);
+}
+function panelReopen(){
+  try{ sessionStorage.removeItem('gpts_muted'); }catch(e){}
+  PANEL_MUTED=false;
+  try{ if(PANEL) PANEL.style.display=''; }catch(e){}
+  panelReopenDot(false);
+  try{ if(CFG.irt && CFG.irt.on){ IRT_TICK_LAST=0; } }catch(e){}   // resume writing at once
+}
 function irtExportNow(force){
+  if(PANEL_MUTED) return;   // (v16.12) a closed/muted tab never writes — see panelClose()
   try{
     var cfgI=CFG.irt||{};
     if(!force && !cfgI.on) return;
@@ -6583,6 +6622,7 @@ function gammaProfileBuild(){
 // mirror irtExportNow: same folder handle, same in-place write (keepExistingData + truncate), same
 // permission handling — only the file name and the builder differ.
 function gammaProfileExportNow(force){
+  if(PANEL_MUTED) return;   // (v16.12) a closed/muted tab never writes — see panelClose()
   try{
     var cfgI=CFG.irt||{};
     if(!force && !(cfgI.on && cfgI.profileOn!==false)) return;
@@ -8543,6 +8583,17 @@ function buildPanel(){
   clr.addEventListener('mousedown', function(e){ e.stopPropagation(); });
   clr.addEventListener('click', function(e){ e.stopPropagation(); clearSignalsAll(); });
   right.appendChild(clr);
+  // (v16.12) ✕ — close THIS tab's panel (hide it + stop this tab writing the IRT files), so a second
+  // Atlas tab can't fight the one you're using. Reopen with the ● dot (top-right of the page).
+  var xbtn=document.createElement('span');
+  xbtn.id='gpts-close'; xbtn.innerHTML='&#10005;';
+  xbtn.title='Close this tab’s panel — hides it AND stops THIS tab writing the IRT files, so a second Atlas tab can’t fight the one you’re using. Reopen with the ● dot at the top-right of the page.';
+  css(xbtn,{cursor:'pointer', color:PAL.sub, fontSize:'13px', lineHeight:'1', padding:'0 2px', fontWeight:'800'});
+  xbtn.addEventListener('mouseenter', function(){ xbtn.style.color=PAL.shortAccent||'#D1493F'; });
+  xbtn.addEventListener('mouseleave', function(){ xbtn.style.color=PAL.sub; });
+  xbtn.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+  xbtn.addEventListener('click', function(e){ e.stopPropagation(); panelClose(); });
+  right.appendChild(xbtn);
   hdr.appendChild(right);
   PANEL.appendChild(hdr);
 
@@ -31569,6 +31620,7 @@ function boot(){
   MIN_STRENGTH = CFG.nodeThresh;
   TODAY=ctTodayStr();
   buildPanel();
+  if(PANEL_MUTED){ try{ if(PANEL) PANEL.style.display='none'; }catch(ePm){} try{ panelReopenDot(true); }catch(ePm2){} }   // (v16.12) this tab was closed — stay muted, show the ● reopen dot
   injectSliderCss();
   restoreState();
   pbLogRestore();              // (v11.0 G7) today's pullback-node log survives a reload
