@@ -97,7 +97,8 @@ public:
 
     void load();
     void drawStaleBadge();     // (v0.8) red badge if the CSV has gone cold
-    void applyContractOffset();// (v0.9) shift the candle onto this chart's own contract price
+    void applyContractOffset();// (v0.9) fallback: shift the CSV candle onto this chart (pre-open)
+    bool measureChartDay();    // (v0.10) ACTUAL candle straight from the chart's own RTH session bars
     void readSettings(Settings& S);
     void render(const Settings& S);
     // helpers
@@ -130,7 +131,7 @@ DayModel::DayModel() : cppExtension()
     cfg.width = 46;
     cfg.spacing = 24;      // gap between EXP and ACT (was hardcoded 8 -- too close)
     cfg.gap = 12;
-    cfg.bg = true;
+    cfg.bg = false;   // (v0.10) OFF by default — the big panel was tinting the chart
     cfg.showexp = true;
     cfg.showact = true;
     cfg.cup = C_UP;
@@ -170,7 +171,7 @@ int DayModel::parmsUpdt(unsigned int)
 // parameter numbering and scrambles the getters -- see the gamma plugin).
 int cppExtension::setup(void)
 {
-    setParameterVersion(5);           // (v0.7) BUMPED to reset persisted state -> the correct defaults:
+    setParameterVersion(6);           // (v0.7) BUMPED to reset persisted state -> the correct defaults:
                                       // Expected+Actual candles ON, MUD box ON, Swept levels ON,
                                       // Up colour green / Down colour red. IRT re-applies the setX
                                       // defaults below whenever this number changes.
@@ -184,7 +185,7 @@ int cppExtension::setup(void)
     PX.width   = pc++; setIntegerParameter("Candle width px", 46, 0);
     PX.spacing = pc++; setIntegerParameter("Pair spacing px", 24, 0, SL);
     PX.gap     = pc++; setIntegerParameter("Margin gap px", 12, 0);
-    PX.bg      = pc++; setBoolParameter   ("Background fill", true, SL);
+    PX.bg      = pc++; setBoolParameter   ("Background fill", false, SL);
     PX.showexp = pc++; setBoolParameter   ("Expected candle (ghost)", true);
     PX.showact = pc++; setBoolParameter   ("Actual candle (solid)", true, SL);
     PX.cup     = pc++; setColorParameter  ("Up colour", C_UP);
@@ -503,10 +504,51 @@ void DayModel::render(const Settings& S)
 int DayModel::draw(void)
 {
     load();
-    applyContractOffset();   // (v0.9) align to this chart's contract BEFORE render maps prices to Y
+    // (v0.10) The ACTUAL candle is measured straight from THIS chart's own RTH session bars, so it IS
+    // the ES session high/low by definition — no cash→contract guesswork. If the session hasn't opened
+    // yet (no RTH bars), fall back to shifting the CSV candle onto the chart.
+    if (!measureChartDay()) applyContractOffset();
     render(cfg);
     drawStaleBadge();   // (v0.8) warn if the CSV is cold, regardless of what render drew
     return RTX_OK;
+}
+
+// ---- (v0.10) MEASURE THE ACTUAL CANDLE FROM THE CHART ITSELF -----------------------------------------
+// Scan the chart's own bars for TODAY's RTH session (08:30–15:00 CT — the day-model window) and build the
+// actual candle O/H/L/C + HOD/LOD from them. That makes the actual candle exactly the ES session high/low
+// the operator sees, regardless of which contract is charted. The EXPECTED ghost + swept levels (which
+// come from the panel in cash space) are re-anchored by the OPEN spread (dOpen − the panel's cash open),
+// a stable per-day anchor, so they read against the same chart. Returns false pre-open (no RTH bars yet),
+// so draw() can fall back to the offset path.
+bool DayModel::measureChartDay()
+{
+    long n = getBarCount(); if (n < 2) return false;
+    RTARRAY  op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
+    RTARRAYI dt(barDateTime);
+    struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
+    int lastY = lt.tm_year, lastM = lt.tm_mon, lastD = lt.tm_mday;
+    const int RTH_OPEN = 8 * 3600 + 30 * 60;   // 08:30 CT
+    const int RTH_STOP = 15 * 3600;            // 15:00 CT
+    float dOpen = 0, dHi = -1e9f, dLo = 1e9f, dClose = 0; bool have = false;
+    for (int i = 0; i < (int)n; i++) {
+        struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime((RTDATE)dt[i], &tmv);
+        if (tmv.tm_year != lastY || tmv.tm_mon != lastM || tmv.tm_mday != lastD) continue;   // today only
+        int sod = tmv.tm_hour * 3600 + tmv.tm_min * 60 + tmv.tm_sec;
+        if (sod < RTH_OPEN || sod > RTH_STOP) continue;                                       // RTH only
+        if (!have) { dOpen = op[i]; have = true; }
+        if (hi[i] > dHi) dHi = hi[i];
+        if (lo[i] < dLo) dLo = lo[i];
+        dClose = cl[i];
+    }
+    if (!have || !(dHi > dLo)) return false;
+    float csvActO = actC.valid ? actC.o : dOpen;
+    float dayOff  = dOpen - csvActO;            // open-anchored spread (stable across the day)
+    actC.o = dOpen; actC.h = dHi; actC.l = dLo; actC.c = dClose; actC.valid = true;   // exact ES session
+    if (hasHod) hodV = dHi;
+    if (hasLod) lodV = dLo;
+    if (expC.valid) { expC.o += dayOff; expC.h += dayOff; expC.l += dayOff; expC.c += dayOff; }
+    for (size_t i = 0; i < swepts.size(); i++) swepts[i].price += dayOff;
+    return true;
 }
 
 // ---- (v0.9) CONTRACT ALIGNMENT — the candle is priced in the panel's space (cash / SPY×10, SPOT is the
@@ -560,6 +602,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.9");
+    p->setVersion("0.10");
     return p;
 }
