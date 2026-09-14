@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.10
+// @version      16.11
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -765,7 +765,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.10';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.11';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6475,53 +6475,62 @@ function gammaProfileBuild(){
   try{ if(sym){ D=(typeof hodLod==='function')?hodLod(sym):null; } }catch(e){}
   try{ if(sym){ SB=(typeof sessionBody==='function')?sessionBody(sym):null; } }catch(e){}
   var dWhy='no session read';
-  if(D && D.ok && SB && typeof SB.open==='number'){
+  // (v16.11) THE OPEN-ANCHORED SPLIT. The EXPECTED candle + expected stats are anchored on the RTH
+  // OPEN and the base-rate model — they need ONLY SB.open, not a completed hodLod measurement. They
+  // used to sit inside `if(D && D.ok ...)`, so at the OPEN (before enough RTH bars form, hodLod.ok is
+  // false) the WHOLE day model vanished — candle and stats both. Now the gate is just SB.open: the
+  // expected candle/stats and the developing ACTUAL body draw from the open; the ACTUAL measurement
+  // (HOD/LOD tips, MUD, swept, the DAYSA stat row) fills in once hodLod is ready.
+  if(SB && typeof SB.open==='number'){
     var O=SB.open, C=SB.close, HI=SB.hi, LO=SB.lo;
     var ptUsdV=(typeof ptUsd==='function')?ptUsd():50;
-    // ACTUAL candle
-    out.push('DAYACT,'+gpF2(O)+','+gpF2(HI)+','+gpF2(LO)+','+gpF2(C));
-    // HOD/LOD tips: value, clock, and TOOK from the open (first extreme = D.took; second = D.took + D.gap)
-    var hodIsFirst=(D.first==='HOD');
-    var hodDur=hodIsFirst?D.took:(D.took+D.gap);
-    var lodDur=hodIsFirst?(D.took+D.gap):D.took;
-    out.push('DAYHOD,'+gpF2(HI)+','+gpClk(D.hodT)+','+gpDur(hodDur));
-    out.push('DAYLOD,'+gpF2(LO)+','+gpClk(D.lodT)+','+gpDur(lodDur));
-    // MUD — the move from the reclaim of the open to the SECOND extreme (design 10.2), signed to it
-    if(D.reclaimed && D.mud!=null){
-      var secPx=(D.second==='HOD')?HI:LO;
-      var mudPts=secPx-O;                        // signed toward the 2nd extreme (already ES)
-      out.push('DAYMUD,'+(mudPts>=0?'+':'')+mudPts.toFixed(1)+','+gpDur(D.mud)+','+Math.round(Math.abs(mudPts)*ptUsdV));
-    }
-    // swept key levels (tier-1 + CW0/PW0), each at its own ES price, with the sweep state
-    try{
-      var SW=(typeof sweepEventsShown==='function')?(sweepEventsShown(sym)||[]):[];
-      var swScale=1;
-      try{ if(!(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES')){ var RRi=irtRatio(); if(RRi&&RRi.r>1) swScale=1/RRi.r; } }catch(e){}
-      // (v16.08) HIGHS & LOWS ONLY (operator): PDH/PDL · ONH/ONL · PWH/PWL (weekly) · PFH/PFL (prior full
-      // Globex = his "full high/low") — the reference highs and lows, abbreviated. NOT the POC/VA levels.
-      // ⚠ m.at is ALREADY a clock string (sweepClock, e.g. "09:41am") — write it straight through. Passing
-      // it to gpClk (which expects seconds) is what produced "NaN:NaNa".
-      var SWEPT_HL={ PDH:1, PDL:1, ONH:1, ONL:1, PWH:1, PWL:1, PFH:1, PFL:1 };
-      var seenSw={};
-      SW.forEach(function(m){
-        var base=String(m.level||'').replace(/[-+]$/,'');
-        if(!SWEPT_HL[base]) return;                          // highs & lows only
-        if(m.atBar===0 && m.status!=='reclaimed') return;    // opened beyond it — not swept
-        if(seenSw[base]) return; seenSw[base]=1;
-        var st=(m.status==='reclaimed')?'R':((m.status==='accepted')?'B':'T');
-        var t=(m.at!=null && m.at!=='')?String(m.at):'';     // already a formatted clock string
-        out.push('SWEPT,'+base+','+gpF2(m.px*swScale)+','+t+','+st);
-      });
-    }catch(e){}
-    // ---- 3) EXPECTED candle — the TESTED base-rate model for the shown weekday --------------------
-    // hodlodBaseFor(dow): firstClock/secondClock (sec), tookMin/gapMin (min), rngPts, rngUsd,
-    // lodFirstPct, wick{mud,...}. We anchor the expected envelope on TODAY'S actual RTH open so EXP and
-    // ACT read side by side, and split the expected range symmetrically (the design's "blended with the
-    // IF EM" — the EM band is symmetric about the anchor). v1 placement; a directional split is a later
-    // refinement. Times/durations/range are the model's real per-weekday numbers, not samples.
+    var openSecGP=mul(8,3600)+mul(30,60);
     var dow=gpDow();
-    var E=null; try{ E=(typeof hodlodBaseFor==='function')?hodlodBaseFor(dow):null; }catch(e){}
-    if(E && typeof E.rngPts==='number' && E.rngPts>0){
+    var E=null; try{ E=(typeof hodlodBaseFor==='function')?hodlodBaseFor(dow):null; }catch(eE){}
+    var haveE=!!(E && typeof E.rngPts==='number' && E.rngPts>0);
+    // ACTUAL candle body — from sessionBody, available from the open (a small developing candle)
+    out.push('DAYACT,'+gpF2(O)+','+gpF2(HI)+','+gpF2(LO)+','+gpF2(C));
+    // ---- ACTUAL measurement extras — need hodLod (RTH bars): tips, MUD, swept, the DAYSA stat row ----
+    if(D && D.ok){
+      var hodIsFirst=(D.first==='HOD');
+      var hodDur=hodIsFirst?D.took:(D.took+D.gap);
+      var lodDur=hodIsFirst?(D.took+D.gap):D.took;
+      out.push('DAYHOD,'+gpF2(HI)+','+gpClk(D.hodT)+','+gpDur(hodDur));
+      out.push('DAYLOD,'+gpF2(LO)+','+gpClk(D.lodT)+','+gpDur(lodDur));
+      if(D.reclaimed && D.mud!=null){
+        var secPx=(D.second==='HOD')?HI:LO;
+        var mudPts=secPx-O;                        // signed toward the 2nd extreme (already ES)
+        out.push('DAYMUD,'+(mudPts>=0?'+':'')+mudPts.toFixed(1)+','+gpDur(D.mud)+','+Math.round(Math.abs(mudPts)*ptUsdV));
+      }
+      // swept key HIGHS & LOWS ONLY (operator): PDH/PDL · ONH/ONL · PWH/PWL · PFH/PFL (prior full Globex).
+      // ⚠ m.at is ALREADY a clock string — write it straight through (gpClk expects seconds → "NaN:NaNa").
+      try{
+        var SW=(typeof sweepEventsShown==='function')?(sweepEventsShown(sym)||[]):[];
+        var swScale=1;
+        try{ if(!(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES')){ var RRi=irtRatio(); if(RRi&&RRi.r>1) swScale=1/RRi.r; } }catch(eSS){}
+        var SWEPT_HL={ PDH:1, PDL:1, ONH:1, ONL:1, PWH:1, PWL:1, PFH:1, PFL:1 };
+        var seenSw={};
+        SW.forEach(function(m){
+          var base=String(m.level||'').replace(/[-+]$/,'');
+          if(!SWEPT_HL[base]) return;
+          if(m.atBar===0 && m.status!=='reclaimed') return;
+          if(seenSw[base]) return; seenSw[base]=1;
+          var st=(m.status==='reclaimed')?'R':((m.status==='accepted')?'B':'T');
+          var t=(m.at!=null && m.at!=='')?String(m.at):'';
+          out.push('SWEPT,'+base+','+gpF2(m.px*swScale)+','+t+','+st);
+        });
+      }catch(eSW){}
+      // DAYSA — the ACTUAL stat row (17 fields, raw units; lsDayStats formats)
+      try{
+        var aFirstPx=(D.first==='LOD')?LO:HI, aSecondPx=(D.second==='LOD')?LO:HI;
+        out.push('DAYSA,'+D.first+','+gpF2(aFirstPx)+','+gpI(D.firstT)+','+gpN1(D.took)+','+gpN1(D.bop)+','+gpN1(D.wick)+','+gpI(D.wend)+','+gpI(D.wickPct)+','+gpN1(D.mud)+','+D.second+','+gpF2(aSecondPx)+','+gpI(D.secondT)+','+gpN1(D.gap)+','+gpN1(D.rngPts)+','+gpI(D.rngUsd)+',,');
+      }catch(eSA){}
+    }
+    // ---- EXPECTED candle + stats — OPEN-ANCHORED, need only O + the base model (draw from the open) ----
+    // hodlodBaseFor(dow): firstClock/secondClock (sec), tookMin/gapMin, rngPts/rngUsd (+ IQR),
+    // lodFirstPct, wick{wick,bop,mud,wickPct}. Envelope anchored on today's RTH open, split symmetrically
+    // (v1 — the IF-EM band is symmetric about the anchor; a directional split is a later refinement).
+    if(haveE){
       var eHi=O+E.rngPts/2, eLo=O-E.rngPts/2;
       out.push('DAYEXP,'+gpF2(O)+','+gpF2(eHi)+','+gpF2(eLo)+','+gpF2(O));   // neutral body until a directional-close model lands
       var lodFirst=(typeof E.lodFirstPct==='number')?(E.lodFirstPct>=50):true;
@@ -6531,39 +6540,22 @@ function gammaProfileBuild(){
       var eLodDur=lodFirst?E.tookMin:((E.tookMin||0)+(E.gapMin||0));
       out.push('DAYEHOD,'+gpF2(eHi)+','+gpClk(eHodClk)+','+gpDur(eHodDur));
       out.push('DAYELOD,'+gpF2(eLo)+','+gpClk(eLodClk)+','+gpDur(eLodDur));
-      // E-MUD: the expected move to the 2nd extreme ~ the expected range; duration from the wick family
-      var eMudT=(E.wick&&E.wick.mud!=null)?E.wick.mud:((E.gapMin!=null&&E.tookMin!=null)?null:null);
+      var eMudT=(E.wick&&E.wick.mud!=null)?E.wick.mud:null;
       var eMudUsd=(typeof E.rngUsd==='number')?Math.round(E.rngUsd):Math.round(E.rngPts*ptUsdV);
       out.push('DAYEMUD,+'+E.rngPts.toFixed(1)+','+gpDur(eMudT)+','+eMudUsd);
-      dWhy='live ('+dow+' n='+((E.basis&&E.basis.n)||'?')+(E.basis&&E.basis.pooled?' pooled':'')+')';
-    } else dWhy='candle live, no expected base for '+dow;
-    // ---- (v16.09) THE STATS STRIP rows — §10.2, for lsDayStats -----------------------------------
-    // ONE fixed 17-field order for the ACTUAL (DAYSA) and EXPECTED (DAYSE) rows, so lsDayStats reads
-    // them positionally and formats them itself (raw secOfDay for clocks, raw minutes for durations,
-    // prices at 2dp; empty field = unknown). The strip renders them, A over E, as:
-    //   1ST · [1st] · Took · BOP · Wick · W.End · Wick% · MUD · MUD t(=HL Gap−BOP) · [2nd] · HL Gap · HL Rng
-    // FIELDS: first, firstPx, firstClkSo, tookMin, bopMin, wickMin, wendSo, wickPct, mudMin,
-    //         second, secondPx, secondClkSo, gapMin, rngPts, rngUsd, rngP25, rngP75
-    // DAYSA leaves rngP25/rngP75 empty (an IQR band is a base-rate concept, not a measurement).
-    var openSecGP=mul(8,3600)+mul(30,60);
-    try{
-      var aFirstPx=(D.first==='LOD')?LO:HI, aSecondPx=(D.second==='LOD')?LO:HI;
-      out.push('DAYSA,'+D.first+','+gpF2(aFirstPx)+','+gpI(D.firstT)+','+gpN1(D.took)+','+gpN1(D.bop)+','+gpN1(D.wick)+','+gpI(D.wend)+','+gpI(D.wickPct)+','+gpN1(D.mud)+','+D.second+','+gpF2(aSecondPx)+','+gpI(D.secondT)+','+gpN1(D.gap)+','+gpN1(D.rngPts)+','+gpI(D.rngUsd)+',,');
-    }catch(eSA){}
-    try{
-      if(E && typeof E.rngPts==='number' && E.rngPts>0){
-        var esHi=O+E.rngPts/2, esLo=O-E.rngPts/2;
-        var eFirst=((typeof E.lodFirstPct==='number')?(E.lodFirstPct>=50):true)?'LOD':'HOD';
-        var eSecond=(eFirst==='LOD')?'HOD':'LOD';
-        var eFirstPx=(eFirst==='LOD')?esLo:esHi, eSecondPx=(eSecond==='LOD')?esLo:esHi;
+      // DAYSE — the EXPECTED stat row (17 fields; rngP25/P75 = the IQR band)
+      try{
+        var eFirst=lodFirst?'LOD':'HOD', eSecond=lodFirst?'HOD':'LOD';
+        var eFirstPx=(eFirst==='LOD')?eLo:eHi, eSecondPx=(eSecond==='LOD')?eLo:eHi;
         var eW=E.wick||{};
-        var eWendSo=(typeof eW.wick==='number')?(openSecGP+eW.wick*60):null;   // W.End = open + wick(open→reclaim) duration
+        var eWendSo=(typeof eW.wick==='number')?(openSecGP+eW.wick*60):null;   // W.End = open + wick(open→reclaim)
         out.push('DAYSE,'+eFirst+','+gpF2(eFirstPx)+','+gpI(E.firstClock)+','+gpN1(E.tookMin)+','+gpN1(eW.bop)+','+gpN1(eW.wick)+','+gpI(eWendSo)+','+gpI(eW.wickPct)+','+gpN1(eW.mud)+','+eSecond+','+gpF2(eSecondPx)+','+gpI(E.secondClock)+','+gpN1(E.gapMin)+','+gpN1(E.rngPts)+','+gpI(E.rngUsd)+','+gpN1(E.rngP25)+','+gpN1(E.rngP75));
-      }
-    }catch(eSE){}
-    // SPOT — the latest close in ES (native), and the weekday
+      }catch(eSE){}
+      dWhy='live ('+dow+' n='+((E.basis&&E.basis.n)||'?')+(E.basis&&E.basis.pooled?' pooled':'')+(D&&D.ok?'':' · open, awaiting bars')+')';
+    } else dWhy='candle live, no expected base for '+dow;
+    // SPOT / weekday header — always
     out.push('SPOT,'+gpF2(C));
-    out.push('WEEKDAY,'+dow+','+gpDate());   // (v16.08) weekday + date, e.g. WEEKDAY,Fri,11 Sep
+    out.push('WEEKDAY,'+dow+','+gpDate());   // weekday + date, e.g. WEEKDAY,Fri,11 Sep
     out.push('BOOK,ES');
   }
   // (v16.10) ASOF — the write time (CT sec-of-day), so the plugins can flag a STALE file on the chart
