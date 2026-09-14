@@ -1,3 +1,37 @@
+## v16.00 / v16.01 — PHASE 0 LIVE FEED: the panel WRITES GammaProfile.csv, and the contract auto-rolls (2026-09-14)
+
+**The problem this fixes.** The RTX plugins (lsGammaProfile, lsDayModel) read `GammaProfile.csv`, but that
+file was a HAND-MADE Sep-12 fixture in SPX price space. So the day-model candle sat at ~7638–7685 and fell
+off-screen the moment the operator rolled his IRT chart from EPU26 (Sep) to EPZ26 (Dec) — "it displayed and
+then disappeared." The model was static test data, not live.
+
+**v16.00 — the panel now writes the file.** New `gammaProfileBuild()` + `gammaProfileExportNow()` write
+`GammaProfile.csv` into the SAME `lsFlexLevels` folder handle as `FlexLevelsExport.csv` (untouched), on the
+same 180s tick + the ⇩ Export-now button + the grant/pick paths, behind `CFG.irt.profileOn` (default on).
+Rows: `STRIKE,es,%King,rank,king` · `KING` · `SPOT` · `BOOK` from `tapeMap('SPXW')`; `DAYACT/DAYHOD/DAYLOD/
+DAYMUD` (actual candle) from `measureBars`+`sessionBody`; `SWEPT` from `sweepEventsShown`; `WEEKDAY`; and the
+EXPECTED candle `DAYEXP/DAYEHOD/DAYELOD/DAYEMUD`.
+- ⚠ THE RULER. SPX-book rows convert SPX→ES with Skylit's OWN SPXW ES ratio (`skylitFutPx('ES1','SPXW',k)`,
+  ~1.0003), persisted last-good — NOT `R.r` (the ~10× SPY ratio), which would throw a level 60,000 pts off.
+  The DAY rows are ES-NATIVE (measureBars reads the ES chart's bars), so they need no conversion. Writing at
+  the current futures symbol's ES price is what makes the whole book follow the contract — the roll fix.
+- ⚠ THE EXPECTED MODEL. `DAYE*` comes from `hodlodBaseFor(weekday)` — the TESTED base-rate model
+  (BASERATES.json / HODLOD_BASE, 297 ES sessions, per weekday: firstClock/secondClock, took/gap, range,
+  wick family), anchored on today's actual RTH open (range split symmetrically for v1 — "blended with the IF
+  EM"). This REPLACES the SAMPLE fixture values. The classifier (the READ, AUC 0.879, model-lodhod.py) is a
+  SEPARATE layer and is deliberately NOT written here — the two evidence bases stay unfused (hodlod-v2-SPEC).
+  Confirmed the model + its testing before wiring: AUC 0.879 reproduced from the corpus, docs agree
+  (ARCHITECTURE-E2E-WORKFLOW, DASHBOARD-INVENTORY, PROCESS). Debug: `__gptsDebug.gp()` / `.gpExport()`.
+
+**v16.01 — front-month AUTO-ROLL.** ES/NQ roll quarterly (Mar H · Jun M · Sep U · Dec Z). Hard-coding the
+contract is exactly why the candle fell off the Dec chart, so the panel now derives the IRT contract from the
+date, rolling ~8 calendar days before the 3rd-Friday expiry (the CME equity-index liquidity roll):
+`esFrontSym()` / `nqFrontSym()` → `irtResolveAutoSym()` sets `CFG.irt.futSym`/`nqSym` before every export, so
+BOTH files follow the front month. New **Auto** checkbox in the gear (default on); typing a symbol pins it and
+turns Auto off. Verified across the calendar: EPU26 pre-Sep-10, EPZ26 after, EPH27 after Dec-10, EPM27 in Mar.
+
+**NEXT: the stats-strip indicator** (§10.2) — the SECOND day-model piece: the top EXP/ACT rows.
+
 ## lsDayModel v0.6 + lsGammaProfile v0.37 — THE DAY MODEL CANDLE (a new IRT indicator), gamma defaults, Talon curriculum (2026-09-14)
 
 Built a NEW, SEPARATE RTX indicator **lsDayModel** — kept apart from lsGammaProfile so its settings

@@ -42,8 +42,12 @@
 
 ---
 
-## Phase 0 — DATA EXPORT & SCHEMA  ·  *buildable now, blocks everything*
-The panel writes a per-session file the plugin reads. Sketch (pin exactly at build):
+## Phase 0 — DATA EXPORT & SCHEMA  ·  ✅ DONE (panel v16.00/16.01)
+The panel writes `GammaProfile.csv` (compact CSV, NOT the proposed JSON — the plugins parse CSV) into the
+`lsFlexLevels` folder, in the current futures symbol's ES price space, with front-month auto-roll. STRIKE/
+KING/SPOT/BOOK + DAYACT/DAYHOD/DAYLOD/DAYMUD + DAYEXP/DAYEHOD/DAYELOD/DAYEMUD (from HODLOD_BASE) + SWEPT +
+WEEKDAY. `gammaProfileBuild()` in the userscript. Remaining for the stats strip: add BOP/Wick/W.End/Wick%/
+HLGap stat fields (ACT from measureBars, EXP from hodlodBaseFor). Original sketch (kept for reference):
 - **per-strike gamma** (whole book, 5-pt): `strike, pctKing, signedGamma, rank, isKing`.
 - **levels:** `callWall, putWall, flip, emHigh, emLow, em0dte, spxKing, spyKing`.
 - **day-model:** EXP + ACT for every field, with `MUD_t = HL_Gap − BOP` computed, dynamic first-extreme flagged.
