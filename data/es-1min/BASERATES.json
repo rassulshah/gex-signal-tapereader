@@ -1,8 +1,8 @@
 {
  "corpus": {
-  "sessions": 297,
+  "sessions": 298,
   "first": "2025-06-02",
-  "last": "2026-09-10",
+  "last": "2026-09-11",
   "min_bars": 383,
   "rth": "08:30-15:00 CT",
   "pt_usd": 50.0,
@@ -21,24 +21,25 @@
    "2026-09-04.csv": 1,
    "2026-09-08.csv": 1,
    "2026-09-09.csv": 1,
-   "2026-09-10.csv": 1
+   "2026-09-10.csv": 1,
+   "2026-09-11.csv": 1
   },
   "incomplete_dropped": 13
  },
  "sequence": {
   "LOD_first": 154,
-  "HOD_first": 143,
+  "HOD_first": 144,
   "pct_LOD_first": 52
  },
  "expected": {
   "took_min": 35.8,
-  "gap_min": 222.7,
-  "rng_pts": 60.3,
-  "rng_usd": 3012.8,
-  "rng_p25": 40.9,
-  "rng_p75": 77.9,
-  "first_clock": 32748.5,
-  "second_clock": 46658.2,
+  "gap_min": 222.1,
+  "rng_pts": 60.1,
+  "rng_usd": 3007.4,
+  "rng_p25": 40.8,
+  "rng_p75": 77.7,
+  "first_clock": 32747.2,
+  "second_clock": 46620.0,
   "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
   "outliers_excluded": {
    "took": 16,
@@ -49,92 +50,92 @@
    "second_clock": 0
   },
   "median_for_contrast": {
-   "took_min": 24,
-   "gap_min": 228,
+   "took_min": 24.0,
+   "gap_min": 228.0,
    "rng_pts": 55.5,
-   "first_clock": 32040,
-   "second_clock": 47880
+   "first_clock": 32040.0,
+   "second_clock": 47880.0
   }
  },
  "ladder": {
   "low": {
    "30": {
-    "n": 575,
-    "held": 263,
+    "n": 577,
+    "held": 264,
     "rate": 46
    },
    "60": {
-    "n": 427,
-    "held": 250,
+    "n": 429,
+    "held": 251,
     "rate": 59
    },
    "90": {
-    "n": 352,
-    "held": 235,
+    "n": 353,
+    "held": 236,
     "rate": 67
    },
    "120": {
-    "n": 295,
-    "held": 226,
+    "n": 296,
+    "held": 227,
     "rate": 77
    },
    "180": {
-    "n": 242,
-    "held": 204,
+    "n": 243,
+    "held": 205,
     "rate": 84
    }
   },
   "high": {
    "30": {
-    "n": 641,
-    "held": 247,
+    "n": 642,
+    "held": 248,
     "rate": 39
    },
    "60": {
-    "n": 420,
-    "held": 229,
+    "n": 421,
+    "held": 230,
     "rate": 55
    },
    "90": {
-    "n": 320,
-    "held": 217,
+    "n": 321,
+    "held": 218,
     "rate": 68
    },
    "120": {
-    "n": 273,
-    "held": 204,
+    "n": 274,
+    "held": 205,
     "rate": 75
    },
    "180": {
-    "n": 215,
-    "held": 180,
+    "n": 216,
+    "held": 181,
     "rate": 84
    }
   },
   "both": {
    "30": {
-    "n": 1216,
-    "held": 510,
+    "n": 1219,
+    "held": 512,
     "rate": 42
    },
    "60": {
-    "n": 847,
-    "held": 479,
+    "n": 850,
+    "held": 481,
     "rate": 57
    },
    "90": {
-    "n": 672,
-    "held": 452,
+    "n": 674,
+    "held": 454,
     "rate": 67
    },
    "120": {
-    "n": 568,
-    "held": 430,
+    "n": 570,
+    "held": 432,
     "rate": 76
    },
    "180": {
-    "n": 457,
-    "held": 384,
+    "n": 459,
+    "held": 386,
     "rate": 84
    }
   }
@@ -142,20 +143,20 @@
  "wickFamily": {
   "median": {
    "wick": 62.1,
-   "wick_median": 36.0,
-   "wick_n": 284,
+   "wick_median": 36,
+   "wick_n": 285,
    "bop": 15.4,
-   "bop_median": 6.0,
-   "bop_n": 262,
-   "mud": 194.6,
-   "mud_median": 189.0,
-   "mud_n": 296,
-   "wick_pct": 25.7,
-   "wick_pct_median": 21.0,
-   "wick_pct_n": 292,
+   "bop_median": 6,
+   "bop_n": 263,
+   "mud": 193.9,
+   "mud_median": 189,
+   "mud_n": 297,
+   "wick_pct": 25.9,
+   "wick_pct_median": 21,
+   "wick_pct_n": 293,
    "wick_pts": 14.1,
    "wick_pts_median": 11.0,
-   "wick_pts_n": 285
+   "wick_pts_n": 286
   },
   "excluded": {
    "never_reclaimed": 1,
@@ -493,57 +494,57 @@
    }
   },
   "Fri": {
-   "sessions": 57,
+   "sessions": 58,
    "first": "2025-06-06",
-   "last": "2026-09-04",
+   "last": "2026-09-11",
    "sequence": {
     "LOD_first": 29,
-    "HOD_first": 28,
-    "pct_LOD_first": 51
+    "HOD_first": 29,
+    "pct_LOD_first": 50
    },
    "expected": {
-    "took_min": 21.2,
-    "gap_min": 193.1,
-    "rng_pts": 63.2,
-    "rng_usd": 3161.4,
+    "took_min": 19.9,
+    "gap_min": 190.6,
+    "rng_pts": 62.6,
+    "rng_usd": 3130.6,
     "rng_p25": 39.2,
-    "rng_p75": 89.4,
-    "first_clock": 31871.0,
-    "second_clock": 44728.4,
+    "rng_p75": 89.2,
+    "first_clock": 31793.9,
+    "second_clock": 44565.5,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
-     "took": 8,
+     "took": 9,
      "gap": 0,
      "rng_pts": 2,
      "rng_usd": 2,
-     "first_clock": 8,
+     "first_clock": 9,
      "second_clock": 0
     },
     "median_for_contrast": {
-     "took_min": 18,
-     "gap_min": 186,
-     "rng_pts": 59.0,
-     "first_clock": 31680,
-     "second_clock": 44820
+     "took_min": 18.0,
+     "gap_min": 186.0,
+     "rng_pts": 57.4,
+     "first_clock": 31680.0,
+     "second_clock": 44730.0
     }
    },
    "wickFamily": {
     "median": {
-     "wick": 42.5,
-     "wick_median": 24,
-     "wick_n": 51,
-     "bop": 16.4,
-     "bop_median": 6,
-     "bop_n": 51,
-     "mud": 166.5,
-     "mud_median": 153,
-     "mud_n": 57,
-     "wick_pct": 28.9,
-     "wick_pct_median": 25,
-     "wick_pct_n": 57,
+     "wick": 43.0,
+     "wick_median": 24.0,
+     "wick_n": 52,
+     "bop": 16.7,
+     "bop_median": 6.0,
+     "bop_n": 52,
+     "mud": 163.9,
+     "mud_median": 147.0,
+     "mud_n": 58,
+     "wick_pct": 29.4,
+     "wick_pct_median": 25.5,
+     "wick_pct_n": 58,
      "wick_pts": 16.4,
-     "wick_pts_median": 12.5,
-     "wick_pts_n": 56
+     "wick_pts_median": 13.2,
+     "wick_pts_n": 57
     },
     "excluded": {
      "never_reclaimed": 0,
@@ -559,19 +560,19 @@
    },
    "recent": {
     "n": 6,
-    "green": 4,
-    "red": 2,
+    "green": 3,
+    "red": 3,
     "days": [
-     "2026-06-26",
      "2026-07-10",
      "2026-07-17",
      "2026-08-21",
      "2026-08-28",
-     "2026-09-04"
+     "2026-09-04",
+     "2026-09-11"
     ],
-    "rng_pts": 64.5
+    "rng_pts": 52.8
    }
   }
  },
- "generatedAt": "2026-09-11T20:05:13Z"
+ "generatedAt": "2026-09-14T20:05:11Z"
 }

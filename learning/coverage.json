@@ -1,8 +1,8 @@
 {
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
- "asOf": "2026-09-11",
- "generatedAt": "2026-09-11T20:05:26Z",
+ "asOf": "2026-09-14",
+ "generatedAt": "2026-09-14T20:05:22Z",
  "ranOn": "his machine",
  "complete": 386,
  "days": [
@@ -1128,19 +1128,75 @@
    },
    "csv": {
     "ES": {
-     "n": 381,
+     "n": 393,
+     "complete": true
+    },
+    "NQ": {
+     "n": 393,
+     "complete": true
+    },
+    "GC": {
+     "n": 393,
+     "complete": true
+    },
+    "CL": {
+     "n": 393,
+     "complete": true
+    }
+   },
+   "tape": [
+    "QQQ",
+    "SPXW",
+    "SPY",
+    "VIX"
+   ],
+   "log": true
+  },
+  {
+   "day": "2026-09-14",
+   "mb": 9.99,
+   "version": "16.12",
+   "snaps": 128,
+   "nodeEvents": 762,
+   "defl": 43,
+   "feat": true,
+   "fut": {
+    "ES": {
+     "n": 5036,
+     "full": true,
+     "err": null
+    },
+    "NQ": {
+     "n": 5037,
+     "full": true,
+     "err": null
+    },
+    "GC": {
+     "n": 1837,
+     "full": false,
+     "err": null
+    },
+    "CL": {
+     "n": 1837,
+     "full": false,
+     "err": null
+    }
+   },
+   "csv": {
+    "ES": {
+     "n": 369,
      "complete": false
     },
     "NQ": {
-     "n": 381,
+     "n": 369,
      "complete": false
     },
     "GC": {
-     "n": 381,
+     "n": 369,
      "complete": false
     },
     "CL": {
-     "n": 381,
+     "n": 369,
      "complete": false
     }
    },
@@ -1155,28 +1211,28 @@
  ],
  "corpora": {
   "ES": {
-   "sessions": 297,
+   "sessions": 298,
    "first": "2025-06-02",
-   "last": "2026-09-10",
+   "last": "2026-09-11",
    "vendor": 284,
-   "yahoo": 13,
+   "yahoo": 14,
    "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "NQ": {
-   "sessions": 197,
+   "sessions": 198,
    "first": "2025-11-24",
-   "last": "2026-09-10",
+   "last": "2026-09-11",
    "vendor": 188,
-   "yahoo": 9,
+   "yahoo": 10,
    "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "sweeps": {
-   "sessions": 292,
+   "sessions": 293,
    "cells": 128,
    "levels": 36
   },
   "book": {
-   "sessions": 16,
+   "sessions": 17,
    "cells": 24
   },
   "learn": {
@@ -1188,58 +1244,58 @@
  },
  "counts": {
   "price": {
-   "have": 297,
+   "have": 298,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 297,
+   "sessions": 298,
    "first": "2025-06-02",
    "note": "ES BASERATES: the vendor + the couriered days"
   },
   "nq": {
-   "have": 197,
+   "have": 198,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 197,
+   "sessions": 198,
    "first": "2025-11-24",
    "note": "NQ BASERATES"
   },
   "sweeps": {
-   "have": 292,
+   "have": 293,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 292,
+   "sessions": 293,
    "first": null,
    "note": "the sweep corpus (vendor + the couriered nights, v15.90)"
   },
   "book": {
-   "have": 16,
+   "have": 17,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 16,
+   "sessions": 17,
    "first": null,
    "note": "the SPY 3-minute book from the day files"
   },
   "ledger": {
-   "have": 263,
+   "have": 306,
    "unit": "taps",
-   "perSession": 37.57,
-   "sessions": 7,
+   "perSession": 38.25,
+   "sessions": 8,
    "first": "2026-09-03",
    "note": "the deflection ledger (±0.50 SPY wobbles) — the tap record replaces it at his scale"
   },
   "kingroll": {
-   "have": 236,
+   "have": 257,
    "unit": "rows",
-   "perSession": 23.6,
-   "sessions": 10,
+   "perSession": 23.36,
+   "sessions": 11,
    "first": "2026-08-19",
    "note": "dir.kingRoll rows with an outcome (per bar, not independent rolls)"
   },
   "gate": {
-   "have": 342,
+   "have": 411,
    "unit": "rows",
-   "perSession": 28.5,
-   "sessions": 12,
+   "perSession": 31.62,
+   "sessions": 13,
    "first": "2026-08-19",
    "note": "gateHour rows with an outcome"
   },
@@ -1279,16 +1335,16 @@
  "studies": {
   "total": 184,
   "byStatus": {
+   "REFUSED": 4,
+   "THIN": 9,
    "SHIPPED": 13,
    "WAITING": 110,
-   "REFUSED": 4,
-   "NULL": 2,
+   "CUT": 2,
+   "READ": 19,
    "REGISTERED": 9,
+   "NULL": 2,
    "OPEN": 1,
-   "READ": 18,
-   "READY": 15,
-   "THIN": 10,
-   "CUT": 2
+   "READY": 15
   },
   "byCorpus": {
    "tap": {
@@ -1354,18 +1410,19 @@
   }
  },
  "nightly": {
-  "date": "2026-09-10",
+  "date": "2026-09-11",
   "ranOn": "his machine",
-  "ranAt": "2026-09-10T20:05:22Z",
-  "sessions": 5,
-  "episodes": 50,
-  "deflEvents": 221
+  "ranAt": "2026-09-11T20:05:30Z",
+  "sessions": 6,
+  "episodes": 68,
+  "deflEvents": 249
  },
  "tapeDays": [
   "2026-09-07",
   "2026-09-08",
   "2026-09-09",
   "2026-09-10",
-  "2026-09-11"
+  "2026-09-11",
+  "2026-09-14"
  ]
 }

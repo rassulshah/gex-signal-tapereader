@@ -1,8 +1,8 @@
 {
  "corpus": {
-  "sessions": 197,
+  "sessions": 198,
   "first": "2025-11-24",
-  "last": "2026-09-10",
+  "last": "2026-09-11",
   "min_bars": 383,
   "rth": "08:30-15:00 CT",
   "pt_usd": 20.0,
@@ -17,24 +17,25 @@
    "2026-09-04.csv": 1,
    "2026-09-08.csv": 1,
    "2026-09-09.csv": 1,
-   "2026-09-10.csv": 1
+   "2026-09-10.csv": 1,
+   "2026-09-11.csv": 1
   },
   "incomplete_dropped": 9
  },
  "sequence": {
-  "LOD_first": 103,
+  "LOD_first": 104,
   "HOD_first": 94,
-  "pct_LOD_first": 52
+  "pct_LOD_first": 53
  },
  "expected": {
-  "took_min": 23.9,
-  "gap_min": 213.5,
-  "rng_pts": 367.9,
-  "rng_usd": 7358.0,
-  "rng_p25": 255.6,
-  "rng_p75": 467.8,
-  "first_clock": 32032.2,
-  "second_clock": 45369.1,
+  "took_min": 24.2,
+  "gap_min": 212.7,
+  "rng_pts": 366.8,
+  "rng_usd": 7337.0,
+  "rng_p25": 255.4,
+  "rng_p75": 466.8,
+  "first_clock": 32050.7,
+  "second_clock": 45331.8,
   "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
   "outliers_excluded": {
    "took": 13,
@@ -45,120 +46,120 @@
    "second_clock": 0
   },
   "median_for_contrast": {
-   "took_min": 18,
-   "gap_min": 213,
-   "rng_pts": 359.2,
-   "first_clock": 31680,
-   "second_clock": 46440
+   "took_min": 18.0,
+   "gap_min": 213.0,
+   "rng_pts": 352.8,
+   "first_clock": 31680.0,
+   "second_clock": 46260.0
   }
  },
  "ladder": {
   "low": {
    "30": {
-    "n": 349,
-    "held": 172,
+    "n": 351,
+    "held": 173,
     "rate": 49
    },
    "60": {
-    "n": 255,
-    "held": 168,
+    "n": 257,
+    "held": 169,
     "rate": 66
    },
    "90": {
-    "n": 222,
-    "held": 164,
+    "n": 223,
+    "held": 165,
     "rate": 74
    },
    "120": {
-    "n": 200,
-    "held": 160,
+    "n": 201,
+    "held": 161,
     "rate": 80
    },
    "180": {
-    "n": 167,
-    "held": 147,
+    "n": 168,
+    "held": 148,
     "rate": 88
    }
   },
   "high": {
    "30": {
-    "n": 389,
-    "held": 169,
+    "n": 391,
+    "held": 170,
     "rate": 43
    },
    "60": {
-    "n": 266,
-    "held": 153,
-    "rate": 58
+    "n": 268,
+    "held": 154,
+    "rate": 57
    },
    "90": {
-    "n": 212,
-    "held": 147,
+    "n": 213,
+    "held": 148,
     "rate": 69
    },
    "120": {
-    "n": 185,
-    "held": 142,
+    "n": 186,
+    "held": 143,
     "rate": 77
    },
    "180": {
-    "n": 154,
-    "held": 127,
-    "rate": 82
+    "n": 155,
+    "held": 128,
+    "rate": 83
    }
   },
   "both": {
    "30": {
-    "n": 738,
-    "held": 341,
+    "n": 742,
+    "held": 343,
     "rate": 46
    },
    "60": {
-    "n": 521,
-    "held": 321,
+    "n": 525,
+    "held": 323,
     "rate": 62
    },
    "90": {
-    "n": 434,
-    "held": 311,
+    "n": 436,
+    "held": 313,
     "rate": 72
    },
    "120": {
-    "n": 385,
-    "held": 302,
-    "rate": 78
+    "n": 387,
+    "held": 304,
+    "rate": 79
    },
    "180": {
-    "n": 321,
-    "held": 274,
+    "n": 323,
+    "held": 276,
     "rate": 85
    }
   }
  },
  "wickFamily": {
   "median": {
-   "wick": 37.6,
-   "wick_median": 21,
-   "wick_n": 179,
-   "bop": 10.6,
-   "bop_median": 3,
-   "bop_n": 173,
-   "mud": 191.5,
-   "mud_median": 184.5,
-   "mud_n": 196,
-   "wick_pct": 26.0,
-   "wick_pct_median": 22,
-   "wick_pct_n": 195,
+   "wick": 38.0,
+   "wick_median": 21.0,
+   "wick_n": 180,
+   "bop": 11.7,
+   "bop_median": 6.0,
+   "bop_n": 178,
+   "mud": 190.6,
+   "mud_median": 183,
+   "mud_n": 197,
+   "wick_pct": 26.1,
+   "wick_pct_median": 22.0,
+   "wick_pct_n": 196,
    "wick_pts": 85.8,
-   "wick_pts_median": 73.4,
-   "wick_pts_n": 190
+   "wick_pts_median": 74.0,
+   "wick_pts_n": 191
   },
   "excluded": {
    "never_reclaimed": 1,
    "zero_wick": 0,
    "outliers_tukey_1_5_iqr": {
     "wick": 17,
-    "bop": 23,
+    "bop": 19,
     "mud": 0,
     "wick_pct": 1,
     "wick_pts": 6
@@ -489,23 +490,23 @@
    }
   },
   "Fri": {
-   "sessions": 37,
+   "sessions": 38,
    "first": "2025-12-05",
-   "last": "2026-09-04",
+   "last": "2026-09-11",
    "sequence": {
-    "LOD_first": 19,
+    "LOD_first": 20,
     "HOD_first": 18,
-    "pct_LOD_first": 51
+    "pct_LOD_first": 53
    },
    "expected": {
-    "took_min": 22.2,
-    "gap_min": 191.3,
-    "rng_pts": 370.9,
-    "rng_usd": 7417.2,
-    "rng_p25": 262.4,
-    "rng_p75": 489.1,
-    "first_clock": 31934.1,
-    "second_clock": 44007.6,
+    "took_min": 23.9,
+    "gap_min": 187.3,
+    "rng_pts": 365.3,
+    "rng_usd": 7306.4,
+    "rng_p25": 257.9,
+    "rng_p75": 482.9,
+    "first_clock": 32034.9,
+    "second_clock": 43848.9,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
      "took": 3,
@@ -516,39 +517,39 @@
      "second_clock": 0
     },
     "median_for_contrast": {
-     "took_min": 18,
-     "gap_min": 186,
-     "rng_pts": 371.2,
-     "first_clock": 31680,
-     "second_clock": 44100
+     "took_min": 18.0,
+     "gap_min": 184.5,
+     "rng_pts": 370.6,
+     "first_clock": 31680.0,
+     "second_clock": 43920.0
     }
    },
    "wickFamily": {
     "median": {
-     "wick": 27.6,
-     "wick_median": 18,
-     "wick_n": 31,
-     "bop": 8.7,
+     "wick": 35.8,
+     "wick_median": 25.5,
+     "wick_n": 34,
+     "bop": 10.4,
      "bop_median": 6.0,
-     "bop_n": 32,
-     "mud": 175.8,
-     "mud_median": 172.5,
-     "mud_n": 36,
-     "wick_pct": 26.6,
-     "wick_pct_median": 26,
-     "wick_pct_n": 35,
-     "wick_pts": 99.4,
-     "wick_pts_median": 93.9,
-     "wick_pts_n": 36
+     "bop_n": 34,
+     "mud": 171.4,
+     "mud_median": 165,
+     "mud_n": 37,
+     "wick_pct": 28.9,
+     "wick_pct_median": 28,
+     "wick_pct_n": 37,
+     "wick_pts": 99.0,
+     "wick_pts_median": 85.8,
+     "wick_pts_n": 37
     },
     "excluded": {
      "never_reclaimed": 1,
      "zero_wick": 0,
      "outliers_tukey_1_5_iqr": {
-      "wick": 5,
-      "bop": 4,
+      "wick": 3,
+      "bop": 3,
       "mud": 0,
-      "wick_pct": 1,
+      "wick_pct": 0,
       "wick_pts": 0
      }
     }
@@ -558,16 +559,16 @@
     "green": 1,
     "red": 5,
     "days": [
-     "2026-07-31",
      "2026-08-07",
      "2026-08-14",
      "2026-08-21",
      "2026-08-28",
-     "2026-09-04"
+     "2026-09-04",
+     "2026-09-11"
     ],
-    "rng_pts": 343.5
+    "rng_pts": 263.5
    }
   }
  },
- "generatedAt": "2026-09-11T20:05:14Z"
+ "generatedAt": "2026-09-14T20:05:12Z"
 }

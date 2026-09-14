@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "asOf": "2026-09-11",
+ "asOf": "2026-09-14",
  "writtenBy": "tools/nightly/recommend.py",
  "rows": [
   {
@@ -97,27 +97,42 @@
    "id": "RN-hour.2-held",
    "kind": "RULE",
    "by": "nightly",
-   "asOf": "2026-09-11",
+   "asOf": "2026-09-14",
    "src": "patterns:hour:2:held",
-   "text": "H2 · 09:30–10:30: held 42 of 57 = 74% (Wilson low 61%) against 49% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
+   "text": "H2 · 09:30–10:30: held 51 of 69 = 74% (Wilson low 62%) against 50% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
    "changes": "the face shows this class’s held rate with its n; the register tests it on sessions it has never seen",
-   "evidence": "the nightly’s pattern table, 2026-09-11: n=57, low 61% > base 49%",
-   "n": 57,
+   "evidence": "the nightly’s pattern table, 2026-09-14: n=69, low 62% > base 50%",
+   "n": 69,
    "rate": 74,
-   "lo": 61,
-   "base": 49,
+   "lo": 62,
+   "base": 50,
+   "status": "proposed"
+  },
+  {
+   "id": "RN-spx.none-turn",
+   "kind": "RULE",
+   "by": "nightly",
+   "asOf": "2026-09-14",
+   "src": "patterns:spx:none:turn",
+   "text": "no SPX node at the tap (SPY / QQQ level): turn 9 of 25 = 36% (Wilson low 20%) against 19% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
+   "changes": "the face shows this class’s turn rate with its n; the register tests it on sessions it has never seen",
+   "evidence": "the nightly’s pattern table, 2026-09-14: n=25, low 20% > base 19%",
+   "n": 25,
+   "rate": 36,
+   "lo": 20,
+   "base": 19,
    "status": "proposed"
   },
   {
    "id": "RN-teach-L5",
    "kind": "TEACH",
    "by": "nightly",
-   "asOf": "2026-09-11",
+   "asOf": "2026-09-14",
    "src": "results:rules:L5",
    "text": "L5: the record contradicts the taught rule — re-teach it against the record, or retire it.",
    "changes": "the Learn tab’s rule L5 is rewritten or marked REFUTED by the review",
-   "evidence": "held: a −γ node 28 / 56 = 50% (low 37%) vs a +γ node 15 / 41 = 37% (low 24%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-11",
-   "n": 41,
+   "evidence": "held: a −γ node 37 / 78 = 47% (low 37%) vs a +γ node 16 / 44 = 36% (low 24%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-14",
+   "n": 44,
    "status": "proposed"
   },
   {
@@ -410,7 +425,7 @@
   }
  ],
  "counts": {
-  "proposed": 11,
+  "proposed": 12,
   "approved": 0,
   "implemented": 24,
   "declined": 0,
