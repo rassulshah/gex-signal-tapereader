@@ -59,6 +59,10 @@ the chart no longer needs it (KINGDAY is primary), but the Atlas-comparable roll
 > **THE DAY MODEL now lives in `design/DAY-MODEL.md` — the ONE source of truth. Read it first for anything about
 > the expected candle / READ. It documents both layers, the 3 adaptive stages + coefficients, what's null, the
 > self-calibration pipeline, and the file/function map. If any doc, tab or comment disagrees with it, it is stale.**
+>
+> **INDICATOR QA: `design/IRT-VS-SKYLIT-TESTING-PLAN.md` — the standing plan to check IRT indicators against Skylit
+> (source of truth) at 5 CT checkpoints/day. GOLDEN RULE: same-moment snapshots only (a stale CSV vs live Atlas is
+> noise). Two gates: Skylit↔CSV (panel) and CSV↔IRT (plugin). Logs → `testing/irt-vs-skylit/`. First live run: next RTH.**
 
 # ⚠⚠ 2026-09-15 — v16.19: STAGE-3 (60-MIN IB) + THE INDICATOR SWEEP (all null — do NOT re-test)
 
