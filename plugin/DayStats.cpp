@@ -84,6 +84,9 @@ public:
     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
     float priceOff;            // (v0.3) chart-contract offset applied to the displayed price labels
+    // (v0.5) THE READ — the validated HLTAB classifier (AUC 0.879), center-justified on the title line.
+    // "HAS THE EXTREME PRINTED?"  readFirst = HOD|LOD, readPct = the cell %, readCall = IN|NOTIN|HOLD.
+    bool hasRead; std::string readFirst, readCall; double readPosr, readPct; long readN;
     Settings cfg;
 
     void load();
@@ -93,6 +96,7 @@ public:
     void render(const Settings& S);
     // helpers
     void textLJ(short x, short y, const char* s, COLOR col, int sz, bool bold);
+    void textCJ(short xc, short y, const char* s, COLOR col, int sz, bool bold);  // (v0.5) centre on xc
     short textW(const char* s, int sz, bool bold);
     static double num(const std::string& s);   // "" -> -1
     std::string clk(double so);                 // secOfDay -> "9:12am"
@@ -197,12 +201,19 @@ short DayStats::textW(const char* s, int sz, bool bold)
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
     return (short)getTextWidth(s, -1);
 }
+// (v0.5) centre a string on xc (used for the READ line on the title row)
+void DayStats::textCJ(short xc, short y, const char* s, COLOR col, int sz, bool bold)
+{
+    short w = textW(s, sz, bold);
+    textLJ((short)(xc - w / 2), y, s, col, sz, bold);
+}
 
 // ---- data load ------------------------------------------------------------
 void DayStats::load()
 {
     A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1;
     hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
+    hasRead = false; readFirst.clear(); readCall.clear(); readPosr = -1; readPct = -1; readN = 0;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -241,6 +252,14 @@ void DayStats::load()
             asofSo = atof(t[1].c_str());
         } else if (t[0] == "SPOT" && t.size() >= 2) {
             spotPx = (float)atof(t[1].c_str()); hasSpot = true;
+        } else if (t[0] == "READ" && t.size() >= 6) {
+            // READ,<first HOD|LOD>,<posr%>,<cellPct or blank>,<cellN>,<call IN|NOTIN|HOLD>
+            readFirst = t[1];
+            readPosr  = num(t[2]);
+            readPct   = t[3].empty() ? -1 : atof(t[3].c_str());
+            readN     = atol(t[4].c_str());
+            readCall  = t[5];
+            hasRead   = true;
         }
     }
 }
@@ -347,6 +366,17 @@ void DayStats::render(const Settings& S)
     std::string title = "DAY STATS";
     if (!weekday.empty()) { title += " - "; title += weekday; if (!daydate.empty()) { title += " "; title += daydate; } }
     textLJ(tx, y, title.c_str(), C_TITLE, fs, true);
+    // (v0.5) THE READ — center-justified on the DAY STATS title line (operator: "the prediction line like HOD IN /
+    // LOD IN ... center justified in the line at the top where it says Day Stats"). This is the validated HLTAB
+    // classifier: "has the standing extreme printed?"  IN = green (trust it), NOT IN = amber (the move isn't over).
+    if (hasRead && !readFirst.empty()) {
+        std::string rl = readFirst;
+        COLOR rcol = C_TITLE;
+        if      (readCall == "IN")    { rl += " IN";     rcol = C_UPG;  }
+        else if (readCall == "NOTIN") { rl += " NOT IN"; rcol = C_HEAD; }
+        if (readPct >= 0) { char pb[16]; sprintf_s(pb, sizeof(pb), "  %d%%", (int)(readPct + 0.5)); rl += pb; }
+        textCJ((short)(x0 + blockW / 2), y, rl.c_str(), rcol, fs, true);
+    }
     y = (short)(y + lineH);
 
     // header row
@@ -415,6 +445,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.4");
+    p->setVersion("0.5");
     return p;
 }

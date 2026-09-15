@@ -375,15 +375,16 @@ void DayModel::drawActExtras(short cx, const Settings& S)
         textC(cx, (short)(lY + 2*step),   lodT.c_str(), C_TXT, fs, false);
         textC(cx, (short)(lY + 3*step),   lodD.c_str(), C_TXT, fs, false);
     }
-    // MUD box inside the body: MUD pts / time / dollar
+    // MUD box inside the body: label / points / time / dollar
+    // (v0.13) operator: "MUD should be on another line above the number of points" — label and value split.
     if (S.mud && hasMud) {
         short oY = yOf(actC.o), cY = yOf(actC.c);
         short mid = (short)((oY + cY) / 2);
-        char m[24]; sprintf_s(m, sizeof(m), "MUD %s", mudP.c_str());
         char d[24]; sprintf_s(d, sizeof(d), "$%s", mudDol.c_str());
-        textC(cx, (short)(mid - step), m,             C_WHT, fs, true);
-        textC(cx, mid,                 mudT.c_str(),  C_WHT, fs, false);
-        textC(cx, (short)(mid + step), d,             C_WHT, fs, false);
+        textC(cx, (short)(mid - 2*step), "MUD",          C_WHT, fs, true);   // label on its own line, above the points
+        textC(cx, (short)(mid - step),   mudP.c_str(),   C_WHT, fs, true);   // the number of points
+        textC(cx, mid,                   mudT.c_str(),   C_WHT, fs, false);
+        textC(cx, (short)(mid + step),   d,              C_WHT, fs, false);
     }
     // swept levels: a dashed tick across the candle + a tag to the RIGHT
     if (S.swept) {
@@ -421,14 +422,15 @@ void DayModel::drawExpExtras(short cx, const Settings& S)
                         textC(cx, (short)(lY + 3*step), elodD.c_str(), ink, fs, false); }
     }
     // expected MUD box inside the ghost body (mirrors the actual candle, dim ink)
+    // (v0.13) label above the points, same as the actual MUD box.
     if (S.mud && hasEMud) {
         short oY = yOf(expC.o), cY = yOf(expC.c);
         short mid = (short)((oY + cY) / 2);
-        char m[24]; sprintf_s(m, sizeof(m), "E-MUD %s", emudP.c_str());
         char d[24]; sprintf_s(d, sizeof(d), "$%s", emudDol.c_str());
-        textC(cx, (short)(mid - step), m,             ink, fs, true);
-        textC(cx, mid,                 emudT.c_str(), ink, fs, false);
-        textC(cx, (short)(mid + step), d,             ink, fs, false);
+        textC(cx, (short)(mid - 2*step), "E-MUD",        ink, fs, true);
+        textC(cx, (short)(mid - step),   emudP.c_str(),  ink, fs, true);
+        textC(cx, mid,                   emudT.c_str(),  ink, fs, false);
+        textC(cx, (short)(mid + step),   d,              ink, fs, false);
     }
 }
 
@@ -657,6 +659,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.12");
+    p->setVersion("0.13");
     return p;
 }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.16
+// @version      16.17
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -774,7 +774,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6611,6 +6611,18 @@ function gammaProfileBuild(){
         var aFirstPx=(D.first==='LOD')?LO:HI, aSecondPx=(D.second==='LOD')?LO:HI;
         out.push('DAYSA,'+D.first+','+gpF2(aFirstPx)+','+gpI(D.firstT)+','+gpN1(D.took)+','+gpN1(D.bop)+','+gpN1(D.wick)+','+gpI(D.wend)+','+gpI(D.wickPct)+','+gpN1(D.mud)+','+D.second+','+gpF2(aSecondPx)+','+gpI(D.secondT)+','+gpN1(D.gap)+','+gpN1(D.rngPts)+','+gpI(D.rngUsd)+',,');
       }catch(eSA){}
+      // (v16.17) THE READ — the validated HLTAB classifier (AUC 0.879, F-4/F-5), the model's ADAPTIVE layer:
+      // re-read every export from posr (how far price has travelled off the standing extreme) x minutes-since-open.
+      // This is the same READ the browser panel shows; it was never written to the CSV, so no plugin could draw it.
+      // Schema:  READ,<first HOD|LOD>,<posr%>,<cellPct 0-100 or blank>,<cellN>,<call IN|NOTIN|HOLD>
+      //   IN   = crossed the 70% threshold (extreme likely printed).  NOTIN = <=20% (the STRONGER call, 85% vs 63%).
+      try{
+        var CALL=(typeof lodhodCall==='function')?lodhodCall(D):null;
+        if(CALL){
+          var _callTag=CALL.in?'IN':(CALL.notIn?'NOTIN':'HOLD');
+          out.push('READ,'+D.first+','+Math.round(100*(D.posr||0))+','+(CALL.p!=null?Math.round(CALL.p):'')+','+(CALL.n||0)+','+_callTag);
+        }
+      }catch(eRD){}
     }
     // ---- EXPECTED candle + stats — OPEN-ANCHORED, need only O + the base model (draw from the open) ----
     // hodlodBaseFor(dow): firstClock/secondClock (sec), tookMin/gapMin, rngPts/rngUsd (+ IQR),
@@ -6618,7 +6630,14 @@ function gammaProfileBuild(){
     // (v1 — the IF-EM band is symmetric about the anchor; a directional split is a later refinement).
     if(haveE){
       var eHi=O+E.rngPts/2, eLo=O-E.rngPts/2;
-      out.push('DAYEXP,'+gpF2(O)+','+gpF2(eHi)+','+gpF2(eLo)+','+gpF2(O));   // neutral body until a directional-close model lands
+      // (v16.17) THE EXPECTED BODY — a FAINT directional lean, not a forecast. F-6 measured that a *predicted*
+      // green/red close is overconfident ceremony (sign-now already 83%, extra features never change the call),
+      // so the honest body is the weekday's directional BASE RATE, shown small. Lean = (green-red)/n of the recent
+      // same-weekday window, capped at 15% of the range so a noisy n can't draw a misleading body. eClose≠O now.
+      var eLean=0;
+      try{ if(E.recent && E.recent.green!=null && E.recent.red!=null){ var _t=(E.recent.green||0)+(E.recent.red||0); if(_t>0) eLean=((E.recent.green||0)-(E.recent.red||0))/_t; } }catch(eLn){}
+      var eClose=O + eLean*(E.rngPts*0.15);
+      out.push('DAYEXP,'+gpF2(O)+','+gpF2(eHi)+','+gpF2(eLo)+','+gpF2(eClose));   // (v16.17) faint weekday-base-rate lean
       var lodFirst=(typeof E.lodFirstPct==='number')?(E.lodFirstPct>=50):true;
       var eHodClk=lodFirst?E.secondClock:E.firstClock;
       var eLodClk=lodFirst?E.firstClock:E.secondClock;
