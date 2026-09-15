@@ -1,5 +1,22 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.18) · **panel v16.18** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.19) · **panel v16.19** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 — v16.19: STAGE-3 (60-MIN IB) + THE INDICATOR SWEEP (all null — do NOT re-test)
+
+**He asked whether indicators/IB/divergence/momentum/volume would improve the model. I TESTED them all over the
+corpus (out-of-fold) instead of guessing. Result — the opening range already captures the day's volatility, so
+almost nothing adds skill. Do not re-run these:**
+- RANGE (on top of open30, MAE 19.4): +volume 19.5 (nothing), +relative-volume 19.5, +|drive| 19.6 (worse),
+  +gap 19.7 (worse), +prior-day-range 19.5 (subsumed). **Only +open60 helped: 19.4 → 18.6 (~4%).**
+- DIRECTION (drive30 68%): open-location 50%, gap 46%, rvol-gated 60% (thin) — nothing beats the opening drive.
+- **BUILT: stage-3.** Once 60 min of RTH is in, RANGE re-anchors to the 60-min initial balance
+  (`open60 = 25.47 + 1.099*IB60`, MAE 18.5, R^2 0.32); direction still the opening-30-min drive. Self-calibrating
+  (study-hodlod `_predict_block` fits `open60` nightly into BASERATES.predict; the panel reads it, literal is fallback).
+  Stage ladder now: exante (pre-open) → open30 (≥30 min) → open60 (≥60 min). `EXPMODEL` row names the stage.
+- **The ONE real unexplored lever is the GEX STRUCTURE (King distance, air-pocket width, node density at the open) —
+  H5, still "blocked" on the event-level ledger the nightly is accruing. That is where future modelling effort goes,
+  NOT classical indicators. Do not add indicators; measure structure when the ledger exists.**
+
 
 # ⚠⚠ 2026-09-15 — v16.18: THE EXPECTED CANDLE IS NOW A PREDICTIVE, ADAPTIVE, SELF-CALIBRATING MODEL
 

@@ -247,11 +247,13 @@ def main(paths, out=None, market='ES'):
         # (v16.18) THE ADAPTIVE-MODEL FEATURES — opening-range and opening-drive, tool grid, same scale as rng_pts.
         # OPEN30 = the first 30 minutes of RTH (tool bars ending at/before 09:00); drives the predictive expected range.
         o30 = [r for r in b if r[0] <= RTH_A + 30*60]
+        o60 = [r for r in b if r[0] <= RTH_A + 60*60]
         if o30:
             rec['or30'] = round(max(x[1] for x in o30) - min(x[2] for x in o30), 2)     # opening 30-min range (pts)
             rec['drive30'] = 1 if o30[-1][3] > o30[0][4] else (-1 if o30[-1][3] < o30[0][4] else 0)  # close30 vs open sign
         else:
             rec['or30'] = None; rec['drive30'] = 0
+        rec['or60'] = round(max(x[1] for x in o60) - min(x[2] for x in o60), 2) if o60 else None  # opening 60-min range (the initial balance)
         rows.append(rec)
         rth = [m for m in mins if m[0] >= RTH_A]          # the ladder keeps counting from 08:30, on minutes
         surv_lo += survival(rth, True); surv_hi += survival(rth, False)
@@ -409,6 +411,12 @@ def _predict_block(rows):
     if fit:
         out['open30'] = dict(a=fit[0], b=fit[1], mae=fit[2], r2=fit[3], n=len(o),
                              feature='opening 30-min range (pts)')
+    # OPEN60 — the full initial balance; a touch sharper than open30, used once an hour of RTH is in
+    o6 = [(r['or60'], r['rng_pts']) for r in rows if r.get('or60') and r['rng_pts'] is not None]
+    fit = _ols1([x for x, _ in o6], [y for _, y in o6]) if o6 else None
+    if fit:
+        out['open60'] = dict(a=fit[0], b=fit[1], mae=fit[2], r2=fit[3], n=len(o6),
+                             feature='opening 60-min range / initial balance (pts)')
     # EXANTE — the prior RTH day's range (rows are chronological: days sorted ascending)
     ex = [(rows[i - 1]['rng_pts'], rows[i]['rng_pts'])
           for i in range(1, len(rows))

@@ -1,3 +1,13 @@
+## v16.19 — stage-3 (60-min IB) + the indicator sweep (2026-09-15)
+
+Tested indicators/volume/momentum/gap/open-location for incremental value (out-of-fold). Verdict: the opening
+range already captures the day's volatility, so none add skill (volume 19.5, |drive| 19.6, gap 19.7 vs open30
+19.4; direction: open-loc 50%, gap 46% vs drive30 68%). ONLY the 60-min initial balance helped (19.4->18.6).
+- Built stage-3: once 60 min of RTH is in, expected range re-anchors to open60 = 25.47 + 1.099*IB60 (MAE 18.5,
+  R^2 0.32); direction still the opening-30-min drive. Self-calibrating (study-hodlod fits open60 nightly).
+- Stage ladder: exante -> open30 -> open60. Recommendation recorded: no classical indicators; the GEX structure
+  (H5, currently blocked on the event ledger) is the real future lever.
+
 ## v16.18 — the expected candle becomes a predictive, adaptive, self-calibrating model (2026-09-15)
 
 Backtest of the OLD expected candle (weekday mean): NOT predictive — R^2 2.3%, MAE 24.2pt. Rebuilt from the

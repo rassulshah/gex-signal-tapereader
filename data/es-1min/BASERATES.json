@@ -583,6 +583,14 @@
    "n": 298,
    "feature": "opening 30-min range (pts)"
   },
+  "open60": {
+   "a": 25.473,
+   "b": 1.0991,
+   "mae": 18.52,
+   "r2": 0.32,
+   "n": 298,
+   "feature": "opening 60-min range / initial balance (pts)"
+  },
   "exante": {
    "a": 40.662,
    "b": 0.3613,
@@ -599,5 +607,5 @@
   },
   "note": "weekday means are a reference (R^2 ~2%); these predict from today's tape. MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68."
  },
- "generatedAt": "2026-09-15T03:54:13Z"
+ "generatedAt": "2026-09-15T04:12:29Z"
 }

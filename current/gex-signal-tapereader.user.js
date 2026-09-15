@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.18
+// @version      16.19
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -774,7 +774,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.19';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6643,6 +6643,7 @@ function gammaProfileBuild(){
         var PM=(E && E.predict)?E.predict:null;
         var Cx=(PM && PM.exante)?PM.exante:{ a:41.95, b:0.351 };
         var C3=(PM && PM.open30)?PM.open30:{ a:26.48, b:1.441 };
+        var C6=(PM && PM.open60)?PM.open60:{ a:25.47, b:1.099 };
         var MBx=(typeof measureBars==='function' && sym)?measureBars(sym):null;
         var scl=(MBx && typeof MBx.scale==='number' && MBx.scale>0)?MBx.scale:1;
         var csx=(MBx && typeof hlToolBars==='function')?hlToolBars(MBx.bars||[]):[];
@@ -6650,14 +6651,19 @@ function gammaProfileBuild(){
         var rthx=csx.filter(function(b){ return b && typeof b.so==='number' && b.so>=oSx; });
         var elapsed=rthx.length?(rthx[rthx.length-1].so-oSx)/60:-1;
         if(elapsed>=30){
+          // DIRECTION is always the opening drive (first 30 min, 68%); RANGE upgrades to the 60-min IB once an hour is in.
           var o30=rthx.filter(function(b){ return b.so < oSx+30*60; });
           if(o30.length){
             var h3=null,l3=null,c3=null,o3=o30[0].o;
             for(var q3=0;q3<o30.length;q3++){ var b3=o30[q3]; if(b3.h!=null&&(h3==null||b3.h>h3))h3=b3.h; if(b3.l!=null&&(l3==null||b3.l<l3))l3=b3.l; if(b3.c!=null)c3=b3.c; }
-            if(h3!=null&&l3!=null){
-              eRng=C3.a + C3.b*((h3-l3)*scl); eBasis='open30';               // opening-range anchor (R^2 30%)
-              if(c3!=null && o3!=null){ var drv=c3-o3; eDriveSign=drv>0?1:(drv<0?-1:0); }   // opening drive -> body lean (68%)
+            if(c3!=null && o3!=null){ var drv=c3-o3; eDriveSign=drv>0?1:(drv<0?-1:0); }   // opening drive -> body lean (68%)
+            if(elapsed>=60){
+              var o60=rthx.filter(function(b){ return b.so < oSx+60*60; });
+              var h6=null,l6=null;
+              for(var q6=0;q6<o60.length;q6++){ var b6=o60[q6]; if(b6.h!=null&&(h6==null||b6.h>h6))h6=b6.h; if(b6.l!=null&&(l6==null||b6.l<l6))l6=b6.l; }
+              if(h6!=null&&l6!=null){ eRng=C6.a + C6.b*((h6-l6)*scl); eBasis='open60'; }    // 60-min initial balance (MAE 18.5, ~4% sharper than open30)
             }
+            if(eBasis!=='open60' && h3!=null && l3!=null){ eRng=C3.a + C3.b*((h3-l3)*scl); eBasis='open30'; }  // opening-range anchor (R^2 30%)
           }
         } else {
           var pdR=null; try{ var P1=(typeof futSessionBars==='function')?futSessionBars(1):null;
@@ -24530,7 +24536,7 @@ var HODLOD_BASE = {
   // are a REFERENCE (weak); these predict the day's RANGE from today's tape: open30 (a+b*openingRange30, the strong
   // one), exante (a+b*priorDayRange), and dir30 (how often the opening drive called the close). The panel reads these
   // into the expected candle; the literal is the boot fallback until the courier delivers the live file.
-  predict: {"open30": {"a": 25.907, "b": 1.444, "mae": 18.97, "r2": 0.303, "n": 298, "feature": "opening 30-min range (pts)"}, "exante": {"a": 40.662, "b": 0.3613, "mae": 21.88, "r2": 0.13, "n": 297, "feature": "prior-day range (pts)"}, "dir30": {"acc": 0.674, "n": 291, "base": 0.523, "feature": "sign(opening 30-min drive) -> close direction"}, "note": "weekday means are a reference (R^2 ~2%); these predict from today's tape. MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68."},
+  predict: {"open30": {"a": 25.907, "b": 1.444, "mae": 18.97, "r2": 0.303, "n": 298, "feature": "opening 30-min range (pts)"}, "open60": {"a": 25.473, "b": 1.0991, "mae": 18.52, "r2": 0.32, "n": 298, "feature": "opening 60-min range / initial balance (pts)"}, "exante": {"a": 40.662, "b": 0.3613, "mae": 21.88, "r2": 0.13, "n": 297, "feature": "prior-day range (pts)"}, "dir30": {"acc": 0.674, "n": 291, "base": 0.523, "feature": "sign(opening 30-min drive) -> close direction"}, "note": "weekday means are a reference (R^2 ~2%); these predict from today's tape. MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68."},
   // (v15.77) THE SAME ROW PER WEEKDAY — his seasonality. Generated from BASERATES.json byWeekday by the
   // build (tools/study-hodlod.py); the courier replaces it the same way it replaces the rest. Each
   // weekday is ~55-60 sessions: a fifth of the corpus, and the face says so. `recent` is his tool's
