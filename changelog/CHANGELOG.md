@@ -1,3 +1,25 @@
+## v16.25 + lsKingTracker 0.5 — tighter anchor + the King LINES land on the Dec contract too (2026-09-15)
+
+Follow-up to v16.24 after live verification (measured on the operator's EPZ26 chart): lsGammaProfile 0.40 worked —
+the gamma King jumped 7564→7643 (~80pt fix) and the G flood collapsed — but it landed ~10-14 below price where Atlas
+has it ~at price, because SCALEREF was a node-median estimate biased ~10 high.
+- **Panel v16.25 — SCALEREF tightened.** Primary source is now the ES1 derived payload's OWN SPXW spot
+  (`derived[SPXW].levels[last].s`, host/ES scale = the true front price) instead of the node-median. Fallbacks:
+  the SPXW ladder price → esOfSpx, then the node-median. Sanity-gated to within 200 pts of the King's ES. This
+  drops the gamma-King residual from ~10 to ~0 — no plugin recompile needed for the gamma rail, just the reload.
+- **lsKingTracker 0.5 — same bug as lsGammaProfile had.** Its `applyContractOffset` (v0.3) anchored on SPOT
+  (Dec-ish), so off≈0 and the front-scale King *lines* (KINGNOW/KINGTRACK futPrice, esOfSpx) stayed a full spread
+  below price — this is the "kings not correct" the operator saw. Now anchors on **SCALEREF** (front scale, = the
+  King prices' scale): off = chartClose − SCALEREF = the Sep→Dec spread → the SPX/SPY King step-lines land on the
+  Dec chart. Falls back to SPOT if absent; the ±300 clamp still protects the NQ books on an NQ chart.
+- **lsDayModel / lsDayStats — no change needed.** Their day rows (DAYACT/DAYEXP/DAYSA) are already ~Dec scale
+  (SPY×D.scale), and `measureChartDay` open-anchors the expected candle to the chart's OWN open (self-correcting),
+  while lsDayStats is a text strip that shifts its printed prices by chartClose−SPOT. Both self-align on the Dec
+  chart without the front-basis shift. (Verify the candle live; if the ~1% SPY-ratio residual shows, that's a
+  separate day-model scale item, not the contract basis.)
+Deploy: panel 16.24→16.25 (`node --check` clean); lsKingTracker 0.4→0.5 (needs recompile). Order: reload Atlas
+first (tightens the gamma King + feeds SCALEREF to the King tracker), then recompile lsKingTracker.
+
 ## v16.24 + lsGammaProfile 0.40 — the King/nodes finally land on the charted (Dec) contract (2026-09-15)
 
 Diagnosed live (Atlas + tape + IRT, same moment): the operator charts **EPZ26 (December)** while the panel reads

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.24
+// @version      16.25
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.24';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6612,18 +6612,35 @@ function gammaProfileBuild(){
       // below price on his chart. The RTX plugins can't know the front price on their own, so we hand it to
       // them here; each plugin adds basis = (its chart's price) - SCALEREF to every level, which is the
       // Sep->Dec calendar spread, and lands the level on the charted contract. Once the front itself rolls to
-      // Dec, SCALEREF equals the chart and basis -> 0 — self-healing, nothing to undo. Primary source is the
-      // SPXW ladder's own index price (esOfSpx -> front-ES); fallback is the median of the strongest nodes'
-      // ES values, which straddle the current index within a few points and are already in front-ES units.
+      // Dec, SCALEREF equals the chart and basis -> 0 — self-healing, nothing to undo.
+      // (v16.25) PRIMARY source is the ES1 derived payload's OWN SPXW spot (`s` on the last levels slice) —
+      // it is host-scale (ES, same units as the pre-converted rows' `k`), i.e. the true front price, so the
+      // King lands where Atlas has it. Fallbacks: the SPXW ladder's own price -> esOfSpx, then the median of
+      // the strongest nodes' ES values (straddle the index within a few pts). Sanity-gated to within 200 pts
+      // of the King's ES so a bad spot can never fling the anchor.
       try{
-        var scaleRef=null, spxNow=null;
-        try{ var LDp=ladderFor('SPXW'); if(LDp && typeof LDp.price==='number' && isFinite(LDp.price) && LDp.price>1000) spxNow=LDp.price; }catch(eLP){}
-        if(spxNow!=null) scaleRef=esOfSpx(spxNow);
+        var scaleRef=null;
+        try{
+          var Fsr=(typeof LASTFUTDER!=='undefined' && LASTFUTDER)?LASTFUTDER[SKY_ES]:null;
+          if(Fsr && Fsr.j && Fsr.j.derived){
+            for(var dsi=0; dsi<Fsr.j.derived.length; dsi++){
+              var dd=Fsr.j.derived[dsi];
+              if(dd && dd.source==='SPXW' && dd.ratio>0 && dd.levels && dd.levels.length){
+                var Ld=dd.levels[dd.levels.length-1];
+                if(Ld && typeof Ld.s==='number' && isFinite(Ld.s) && Ld.s>1000) scaleRef=Ld.s;
+                break;
+              }
+            }
+          }
+        }catch(eFS){}
+        if(scaleRef==null){ try{ var LDp=ladderFor('SPXW'); if(LDp && typeof LDp.price==='number' && isFinite(LDp.price) && LDp.price>1000) scaleRef=esOfSpx(LDp.price); }catch(eLP){} }
         if(scaleRef==null){
           var ea=strikes.slice().sort(function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); }).slice(0,8)
                         .map(function(x){ return x.es; }).sort(function(a,b){ return a-b; });
           if(ea.length) scaleRef=ea[Math.floor(ea.length/2)];
         }
+        // sanity: the front price is always near-money vs the King; reject a wild value
+        if(scaleRef!=null && isFinite(scaleRef) && kes!=null && Math.abs(scaleRef-kes)>200){ scaleRef=null; }
         if(scaleRef!=null && isFinite(scaleRef)) out.push('SCALEREF,'+gpF2(scaleRef));
       }catch(eSR){}
       gWhy='live from DOM tape ('+strikes.length+' strikes · King '+(kingNeg?'-':'+')+'100% @ SPX '+kK+' -> ES '+(kes!=null?kes:'?')+')';

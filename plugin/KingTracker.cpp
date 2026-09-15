@@ -87,6 +87,7 @@ public:
     int lastBar;
     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
+    float scaleRef; bool hasScaleRef;   // (v0.5) front-month ES anchor (SCALEREF row) — the King prices' scale
 
     void load();
     void drawStaleBadge();     // (v0.2) red badge if the CSV has gone cold
@@ -168,7 +169,7 @@ void KingTracker::readSettings(Settings& S)
 void KingTracker::load()
 {
     for (int i = 0; i < NBOOK; i++) { book[i].steps.clear(); book[i].hasNow = false; }
-    asofSo = -1; hasSpot = false; spotPx = 0.0f;
+    asofSo = -1; hasSpot = false; spotPx = 0.0f; hasScaleRef = false; scaleRef = 0.0f;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -196,6 +197,8 @@ void KingTracker::load()
             asofSo = atof(t[1].c_str());
         } else if (t[0] == "SPOT" && t.size() >= 2) {
             spotPx = (float)atof(t[1].c_str()); hasSpot = true;
+        } else if (t[0] == "SCALEREF" && t.size() >= 2) {
+            scaleRef = (float)atof(t[1].c_str()); hasScaleRef = true;
         }
     }
 }
@@ -320,12 +323,21 @@ int KingTracker::draw(void) { load(); applyContractOffset(); render(cfg); drawSt
 // space; a dedicated NQ spot anchor is a later refinement).
 void KingTracker::applyContractOffset()
 {
-    if (!hasSpot) return;
     long n = getBarCount(); if (n < 1) return;
     RTARRAY close(barClose);
     float chartClose = close[(int)n - 1];
     if (!(chartClose > 0)) return;
-    float off = chartClose - spotPx;
+    // (v0.5) ANCHOR ON SCALEREF, NOT SPOT. The ES King prices (KINGNOW/KINGTRACK futPrice) are in the
+    // panel's front-month ES scale (esOfSpx); SPOT is the day model's own value, ~this chart's (Dec) scale
+    // during the roll, so anchoring on it made off≈0 and the front-scale King lines stayed a full calendar
+    // spread below price. SCALEREF is the front price those King prices are in, so off = chartClose −
+    // SCALEREF = the Sep→Dec spread → the lines land on the charted contract. Falls back to SPOT if absent.
+    // The ±300 clamp still protects the NQ books on an NQ chart (chartClose~29k − SCALEREF~7.6k is huge).
+    float anchor = 0.0f; bool have = false;
+    if (hasScaleRef && scaleRef > 0.0f) { anchor = scaleRef; have = true; }
+    else if (hasSpot)                   { anchor = spotPx;   have = true; }
+    if (!have) return;
+    float off = chartClose - anchor;
     if (off < -300.0f || off > 300.0f) return;   // implausible (incl. the ES/NQ cross) → leave as-is
     if (off > -0.01f && off < 0.01f) return;      // already aligned
     for (int b = 0; b < NBOOK; b++) {
@@ -363,6 +375,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.4");
+    p->setVersion("0.5");
     return p;
 }

@@ -1,5 +1,23 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.24) · **panel v16.24** · companion v1.19 · RTX plugins: **lsGammaProfile v0.40**, **lsDayModel v0.14**, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.25) · **panel v16.25** · companion v1.19 · RTX plugins: **lsGammaProfile v0.40**, **lsDayModel v0.14**, lsDayStats v0.5, **lsKingTracker v0.5** · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 — v16.25 + lsKingTracker 0.5: TIGHTER ANCHOR + King LINES on the Dec contract
+
+Follow-up to v16.24 (read that section next). **Live-verified v16.24 first:** gamma King jumped 7564→7643 (~80pt
+fix), G flood gone — but landed ~10-14 low because SCALEREF was a node-median biased ~10 high.
+- **Panel v16.25:** SCALEREF now = the ES1 derived payload's own SPXW spot (`derived[SPXW].levels[last].s`, host/ES
+  = true front price), fallbacks ladder-price→esOfSpx then node-median, sanity-gated ±200 of the King. Gamma-King
+  residual ~10→~0. **No gamma recompile needed — just the Atlas reload.**
+- **lsKingTracker 0.5:** had the SAME SPOT-anchor bug lsGammaProfile did — the front-scale King step-LINES stayed a
+  full spread below price ("kings not correct"). Now anchors on SCALEREF → SPX/SPY King lines land on the Dec chart.
+  SPOT fallback; ±300 clamp still protects NQ books. **Needs recompile (compile-kingtracker.bat).**
+- **lsDayModel / lsDayStats — deliberately untouched:** their rows are ~Dec scale (SPY×D.scale) and self-align
+  (measureChartDay open-anchors the expected candle to the chart's own open; DayStats shifts printed prices by
+  chartClose−SPOT). ⚠ If the day candle still looks off after this, it's the ~1% SPY-ratio residual (a SEPARATE
+  day-model scale item — the panel's `sessionBodyRaw` D.scale runs ~1% hot), NOT the contract basis. Verify live.
+⚠ DEPLOY ORDER: reload Atlas (panel 16.25 → tighter gamma King + SCALEREF for the King tracker), THEN recompile
+lsKingTracker: `cd /d "C:\Dev\gex-signal-tapereader\plugin"` then `compile-kingtracker.bat`, close IRT for the DLL
+swap, reopen, confirm 0.5.
 
 # ⚠⚠ 2026-09-15 — v16.24 + lsGammaProfile 0.40: THE CONTRACT-BASIS FIX (front ES1 vs charted EPZ26 Dec)
 
