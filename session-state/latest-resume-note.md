@@ -1,7 +1,42 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.17) · **panel v16.17** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.18) · **panel v16.18** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
 
-# ⚠⚠ 2026-09-15 — v16.17 + lsDayStats v0.5 + lsDayModel v0.13: THE MODEL MADE ADAPTIVE (THE READ ON THE CHART)
+# ⚠⚠ 2026-09-15 — v16.18: THE EXPECTED CANDLE IS NOW A PREDICTIVE, ADAPTIVE, SELF-CALIBRATING MODEL
+
+**His ask:** *"make sure I have a solid prediction model for the expected candle... make it a better predictive,
+adaptive model that works."* I backtested the OLD model and told him the truth: the weekday-mean expected candle
+is NOT predictive — **R² 2.3%, MAE 24.2pt** — it draws the same ~56pt Monday every Monday. So I built a real one.
+
+**What the data says (out-of-fold, 283 ES sessions, `/tmp` backtest reproduced by tools/study-hodlod.py):**
+- **OPEN30 (the strong predictor):** `range = 25.9 + 1.44 × openingRange30` → **R² 30%, MAE 19.5pt**. The opening
+  30-min range predicts the day's range ~13× better than the weekday. Available 30 min into RTH.
+- **EXANTE (at the open):** `range = 40.7 + 0.36 × priorDayRange` → MAE 23.0 (beats weekday's 24.2).
+- **DIR30 (direction):** sign of the opening-30-min DRIVE calls the close **68%** (base 53%). A modest body lean.
+- **Dropped as NULL:** gap (46%), prior-day direction (50%), and the v16.17 recent-weekday body lean (47% — worse
+  than a coin flip; F-6 predicted it, the backtest confirmed it).
+
+**How it works now (panel export, `if(haveE)` block ~L6631):**
+- Pre-open / first 30 min → EXANTE (prior-day range) if available, else the weekday mean.
+- 30 min in → re-anchor the expected RANGE to today's opening-30-min range (OPEN30), and lean the body with the
+  opening drive. A wide open now predicts a big day (would have flagged 14-Sep); a quiet open predicts a small one.
+- Clamp: expected range held within 0.4×–2.5× the weekday mean so one bad bar can't draw an absurd candle.
+- `EXPMODEL,<basis>,<rngPts>,<driveSign>` CSV row exposes which stage drew the candle.
+- ⚠ SCALE: uses `measureBars(sym).bars` (ES-native on the ES chart) via `hlToolBars` — same tool grid + RTH open +
+  ES points as the corpus, so the coefficients transfer. Do NOT use `closedCandles` here (SPY-scale, ×rr).
+
+**SELF-CALIBRATING (his "auto/adapting" requirement):** the coefficients are NOT hardcoded — `tools/study-hodlod.py`
+now fits them every night (`_predict_block`, RTH-only inputs) and writes `BASERATES.predict`; `tools/bake-hodlod.py`
+carries them into the `HODLOD_BASE.predict` literal; `hlBaseNormalise` passes `predict` through so the couriered live
+file overrides the literal. So as the corpus grows, the model re-fits itself. Panel literals are the boot fallback.
+Verified: baked open30 a=25.9 b=1.44 R²0.30, exante a=40.7 b=0.36, dir30 0.674 (298 sessions).
+
+**⚠ NEXT / OPEN:** the READ layer (HLTAB, AUC 0.879) is the OTHER predictive piece and answers "has the extreme
+printed" — a rendered elapsed-time ladder is still unbuilt. The expected model's DIRECTION is only 68% (modest);
+adding today's GEX structure (King distance, air pocket) to the range/direction is untested and F-4-gated (don't add
+complexity that doesn't earn it — measure first). VERIFY LIVE: expected range should widen on a wide open, and the
+`EXPMODEL` basis should read `exante` pre-open, `open30` after ~09:00 CT.
+
+# ⚠⚠ 2026-09-15 — v16.17 + lsDayStats v0.5 + lsDayModel v0.13: THE READ ON THE CHART (still current)
 
 **His ask:** *"fix everything and make the model auto ... lookup how it is self enhancing ... make sure it is a really
 good model, lookup all the testing we did ... make sure it is adapting."* Driven by the day-model investigation.

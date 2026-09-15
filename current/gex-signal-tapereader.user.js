@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.17
+// @version      16.18
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -774,7 +774,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6629,15 +6629,49 @@ function gammaProfileBuild(){
     // lodFirstPct, wick{wick,bop,mud,wickPct}. Envelope anchored on today's RTH open, split symmetrically
     // (v1 — the IF-EM band is symmetric about the anchor; a directional split is a later refinement).
     if(haveE){
-      var eHi=O+E.rngPts/2, eLo=O-E.rngPts/2;
-      // (v16.17) THE EXPECTED BODY — a FAINT directional lean, not a forecast. F-6 measured that a *predicted*
-      // green/red close is overconfident ceremony (sign-now already 83%, extra features never change the call),
-      // so the honest body is the weekday's directional BASE RATE, shown small. Lean = (green-red)/n of the recent
-      // same-weekday window, capped at 15% of the range so a noisy n can't draw a misleading body. eClose≠O now.
-      var eLean=0;
-      try{ if(E.recent && E.recent.green!=null && E.recent.red!=null){ var _t=(E.recent.green||0)+(E.recent.red||0); if(_t>0) eLean=((E.recent.green||0)-(E.recent.red||0))/_t; } }catch(eLn){}
-      var eClose=O + eLean*(E.rngPts*0.15);
-      out.push('DAYEXP,'+gpF2(O)+','+gpF2(eHi)+','+gpF2(eLo)+','+gpF2(eClose));   // (v16.17) faint weekday-base-rate lean
+      // ===== (v16.18) THE ADAPTIVE EXPECTED MODEL — range predicted from TODAY's tape, not just the weekday. =====
+      // Out-of-fold over 283 ES sessions (tools/study-hodlod.py): weekday-mean is NOT predictive — R^2 2.3%, MAE 24.2pt.
+      //   OPEN30 (once 30 min of RTH is in):  range = 26.48 + 1.441*openingRange30   -> R^2 30%, MAE 19.5pt
+      //   EXANTE (pre-open / first 30 min):   range = 41.95 + 0.351*priorDayRange     ->        MAE 23.0pt
+      //   DIRECTION: sign of the opening-30-min DRIVE predicts the close 68% (base 53%) -> a modest body lean, ≥30 min.
+      //   gap and prior-day direction were NULL (46% / 50%) and the recent-weekday lean was 47% — all dropped.
+      // Coefficients live in BASERATES.predict (re-fit nightly = self-calibrating); the literals here are the fallback.
+      // ⚠ SCALE: measureBars(sym).bars are ES-native on the ES chart (scale 1); ×scale converts otherwise. Same tool
+      // grid + RTH open + ES points as the corpus, so the coefficients transfer node-for-node.
+      var eRng=E.rngPts, eBasis='weekday', eDriveSign=0;
+      try{
+        var PM=(E && E.predict)?E.predict:null;
+        var Cx=(PM && PM.exante)?PM.exante:{ a:41.95, b:0.351 };
+        var C3=(PM && PM.open30)?PM.open30:{ a:26.48, b:1.441 };
+        var MBx=(typeof measureBars==='function' && sym)?measureBars(sym):null;
+        var scl=(MBx && typeof MBx.scale==='number' && MBx.scale>0)?MBx.scale:1;
+        var csx=(MBx && typeof hlToolBars==='function')?hlToolBars(MBx.bars||[]):[];
+        var oSx=mul(8,3600)+mul(30,60);
+        var rthx=csx.filter(function(b){ return b && typeof b.so==='number' && b.so>=oSx; });
+        var elapsed=rthx.length?(rthx[rthx.length-1].so-oSx)/60:-1;
+        if(elapsed>=30){
+          var o30=rthx.filter(function(b){ return b.so < oSx+30*60; });
+          if(o30.length){
+            var h3=null,l3=null,c3=null,o3=o30[0].o;
+            for(var q3=0;q3<o30.length;q3++){ var b3=o30[q3]; if(b3.h!=null&&(h3==null||b3.h>h3))h3=b3.h; if(b3.l!=null&&(l3==null||b3.l<l3))l3=b3.l; if(b3.c!=null)c3=b3.c; }
+            if(h3!=null&&l3!=null){
+              eRng=C3.a + C3.b*((h3-l3)*scl); eBasis='open30';               // opening-range anchor (R^2 30%)
+              if(c3!=null && o3!=null){ var drv=c3-o3; eDriveSign=drv>0?1:(drv<0?-1:0); }   // opening drive -> body lean (68%)
+            }
+          }
+        } else {
+          var pdR=null; try{ var P1=(typeof futSessionBars==='function')?futSessionBars(1):null;
+            if(P1 && P1.rth && P1.rth.length){ var ph=-1e18,pl=1e18,pp; for(pp=0;pp<P1.rth.length;pp++){ var rp=P1.rth[pp]; if(rp[2]>ph)ph=rp[2]; if(rp[3]<pl)pl=rp[3]; } if(ph>pl) pdR=ph-pl; } }catch(ep){}
+          if(pdR!=null){ eRng=Cx.a + Cx.b*pdR; eBasis='exante'; }             // prior-day range (MAE 23.0 < weekday 24.2)
+        }
+        if(E.rngPts>0){ var loB=E.rngPts*0.4, hiB=E.rngPts*2.5; if(eRng<loB)eRng=loB; if(eRng>hiB)eRng=hiB; }  // clamp: one bad bar can't draw an absurd candle
+        if(!(eRng>0)){ eRng=E.rngPts; eBasis='weekday'; }
+      }catch(ePM){ eRng=E.rngPts; eBasis='weekday'; }
+      var eHi=O+eRng/2, eLo=O-eRng/2;
+      // directional body: lean the close toward the opening drive (68% hit), modest magnitude; neutral (close=open) until 30 min.
+      var eClose=O + (eDriveSign!==0 ? eDriveSign*(eRng*0.25) : 0);
+      out.push('DAYEXP,'+gpF2(O)+','+gpF2(eHi)+','+gpF2(eLo)+','+gpF2(eClose));   // (v16.18) adaptive range + opening-drive body
+      out.push('EXPMODEL,'+eBasis+','+gpN1(eRng)+','+eDriveSign);                 // (v16.18) which stage drew the candle (for the strip/READ)
       var lodFirst=(typeof E.lodFirstPct==='number')?(E.lodFirstPct>=50):true;
       var eHodClk=lodFirst?E.secondClock:E.firstClock;
       var eLodClk=lodFirst?E.firstClock:E.secondClock;
@@ -6646,17 +6680,17 @@ function gammaProfileBuild(){
       out.push('DAYEHOD,'+gpF2(eHi)+','+gpClk(eHodClk)+','+gpDur(eHodDur));
       out.push('DAYELOD,'+gpF2(eLo)+','+gpClk(eLodClk)+','+gpDur(eLodDur));
       var eMudT=(E.wick&&E.wick.mud!=null)?E.wick.mud:null;
-      var eMudUsd=(typeof E.rngUsd==='number')?Math.round(E.rngUsd):Math.round(E.rngPts*ptUsdV);
-      out.push('DAYEMUD,+'+E.rngPts.toFixed(1)+','+gpDur(eMudT)+','+eMudUsd);
-      // DAYSE — the EXPECTED stat row (17 fields; rngP25/P75 = the IQR band)
+      var eMudUsd=Math.round(eRng*ptUsdV);
+      out.push('DAYEMUD,+'+eRng.toFixed(1)+','+gpDur(eMudT)+','+eMudUsd);
+      // DAYSE — the EXPECTED stat row (17 fields; rngPts is the ADAPTIVE range, rngP25/P75 = the weekday IQR band for context)
       try{
         var eFirst=lodFirst?'LOD':'HOD', eSecond=lodFirst?'HOD':'LOD';
         var eFirstPx=(eFirst==='LOD')?eLo:eHi, eSecondPx=(eSecond==='LOD')?eLo:eHi;
         var eW=E.wick||{};
         var eWendSo=(typeof eW.wick==='number')?(openSecGP+eW.wick*60):null;   // W.End = open + wick(open→reclaim)
-        out.push('DAYSE,'+eFirst+','+gpF2(eFirstPx)+','+gpI(E.firstClock)+','+gpN1(E.tookMin)+','+gpN1(eW.bop)+','+gpN1(eW.wick)+','+gpI(eWendSo)+','+gpI(eW.wickPct)+','+gpN1(eW.mud)+','+eSecond+','+gpF2(eSecondPx)+','+gpI(E.secondClock)+','+gpN1(E.gapMin)+','+gpN1(E.rngPts)+','+gpI(E.rngUsd)+','+gpN1(E.rngP25)+','+gpN1(E.rngP75));
+        out.push('DAYSE,'+eFirst+','+gpF2(eFirstPx)+','+gpI(E.firstClock)+','+gpN1(E.tookMin)+','+gpN1(eW.bop)+','+gpN1(eW.wick)+','+gpI(eWendSo)+','+gpI(eW.wickPct)+','+gpN1(eW.mud)+','+eSecond+','+gpF2(eSecondPx)+','+gpI(E.secondClock)+','+gpN1(E.gapMin)+','+gpN1(eRng)+','+gpI(eMudUsd)+','+gpN1(E.rngP25)+','+gpN1(E.rngP75));
       }catch(eSE){}
-      dWhy='live ('+dow+' n='+((E.basis&&E.basis.n)||'?')+(E.basis&&E.basis.pooled?' pooled':'')+(D&&D.ok?'':' · open, awaiting bars')+')';
+      dWhy='live ('+dow+' '+eBasis+' n='+((E.basis&&E.basis.n)||'?')+(D&&D.ok?'':' · open, awaiting bars')+')';
     } else dWhy='candle live, no expected base for '+dow;
     // SPOT / weekday header — always
     out.push('SPOT,'+gpF2(C));
@@ -24460,12 +24494,12 @@ var HODLOD_BASE = {
   // appends itself every night (the nightly runs append-futures + study-hodlod), so the file moves without a build and
   // this literal is the boot fallback as of the build; the companion couriers the live file over it (v14.59).
   // Definition: tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (minutes 08:30-14:59, no pre-open), the open = the RTH open (the 08:30:00 print, the first bar 08:30-08:32 ending 08:33); clocks are bar ends; the reclaim bar is after the extreme's bar
-  n: 296, first: "2025-06-02", last: "2026-09-09",
+  n: 298, first: "2025-06-02", last: "2026-09-11",
   // ⚠ `held` WAS MISSING AND THE HOVER PRINTED "undefined of 1169" FROM v14.57 THROUGH v14.58.
   // 42 assertions passed over it because not one of them executed the hover text. That is failure
   // pattern #8 exactly: a test that greps the source instead of running it. test_hodlod now
   // renders the tip and greps the OUTPUT for 'undefined'.
-  ladder: [{w:30,rate:42,n:1213,held:508}, {w:60,rate:56,n:845,held:477}, {w:90,rate:67,n:670,held:450}, {w:120,rate:76,n:566,held:428}, {w:180,rate:84,n:455,held:382}],
+  ladder: [{w:30,rate:42,n:1219,held:512}, {w:60,rate:57,n:850,held:481}, {w:90,rate:67,n:674,held:454}, {w:120,rate:76,n:570,held:432}, {w:180,rate:84,n:459,held:386}],
   // ⚠⚠ EVERY E FIELD IS A TRIMMED MEAN, not a median. Operator 2026-08-28, after I had switched
   // only the wick columns: "i thought they were all averages." He was right and the split was mine
   // - one row must be one statistic. Tukey 1.5xIQR outliers are excluded before averaging, per
@@ -24473,11 +24507,11 @@ var HODLOD_BASE = {
   // ⚠ WHAT MOVED (v14.62), so nobody re-derives the old numbers and thinks the study broke:
   //     Took 21m -> 34m · HL Gap 3h58 -> 3h50 · Rng 56.5 -> 61.4pts · 1st 8:51 -> 9:03
   // The medians are kept below purely for the hover's mean-vs-median disclosure.
-  tookMin: 35.8, gapMin: 223.4,
-  rngPts: 60.3, rngUsd: 3017.3,
-  rngP25: 41.0, rngP75: 78.1,
-  firstClock: 32747.1, secondClock: 46700.9,
-  medTook: 24.0, medGap: 228.0, medRng: 55.6, medFirstClock: 32040.0, medSecondClock: 47970.0,
+  tookMin: 35.8, gapMin: 222.1,
+  rngPts: 60.1, rngUsd: 3007.4,
+  rngP25: 40.8, rngP75: 77.7,
+  firstClock: 32747.2, secondClock: 46620.0,
+  medTook: 24.0, medGap: 228.0, medRng: 55.5, medFirstClock: 32040.0, medSecondClock: 47880.0,
   lodFirstPct: 52,
   // (v14.61) THE WICK FAMILY, MEASURED over the same sessions that reproduce the ladder. The vendor
   // corpus reached GitHub 2026-08-28 as `data/es-1min/ES TestingData.txt` (406,155 rows, EPM26).
@@ -24488,10 +24522,15 @@ var HODLOD_BASE = {
   // overstate all of them.
   // ⚠ The median is very different on this right-skewed data (BOP mean ~14m vs median ~7m) and the
   // hover says so - the choice of statistic is his, and it is disclosed rather than assumed.
-  wick: { bop:15.4, wick:62.1, mud:195.2, wickPct:25.7,
+  wick: { bop:15.4, wick:62.1, mud:193.9, wickPct:25.9,
           bopMed:6, wickMed:36, mudMed:189, wickPctMed:21,
-          bop_n:261, wick_n:283, mud_n:295, wickPct_n:291,
+          bop_n:263, wick_n:285, mud_n:297, wickPct_n:293,
           zeroWick:0, neverReclaimed:1 },
+  // (v16.18) THE ADAPTIVE / PREDICTIVE MODEL — re-fit nightly by study-hodlod (self-calibrating). The weekday means
+  // are a REFERENCE (weak); these predict the day's RANGE from today's tape: open30 (a+b*openingRange30, the strong
+  // one), exante (a+b*priorDayRange), and dir30 (how often the opening drive called the close). The panel reads these
+  // into the expected candle; the literal is the boot fallback until the courier delivers the live file.
+  predict: {"open30": {"a": 25.907, "b": 1.444, "mae": 18.97, "r2": 0.303, "n": 298, "feature": "opening 30-min range (pts)"}, "exante": {"a": 40.662, "b": 0.3613, "mae": 21.88, "r2": 0.13, "n": 297, "feature": "prior-day range (pts)"}, "dir30": {"acc": 0.674, "n": 291, "base": 0.523, "feature": "sign(opening 30-min drive) -> close direction"}, "note": "weekday means are a reference (R^2 ~2%); these predict from today's tape. MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68."},
   // (v15.77) THE SAME ROW PER WEEKDAY — his seasonality. Generated from BASERATES.json byWeekday by the
   // build (tools/study-hodlod.py); the courier replaces it the same way it replaces the rest. Each
   // weekday is ~55-60 sessions: a fifth of the corpus, and the face says so. `recent` is his tool's
@@ -24501,8 +24540,8 @@ var HODLOD_BASE = {
     Mon: {"n":57,"first":"2025-06-02","last":"2026-08-31","tookMin":32.2,"gapMin":230.5,"rngPts":55.5,"rngUsd":2772.5,"rngP25":34.4,"rngP75":74.2,"firstClock":32531.5,"secondClock":47245.3,"medTook":24,"medGap":255,"medRng":50.8,"lodFirstPct":60,"wick":{"bop":13.3,"wick":58.9,"mud":201.4,"wickPct":24.1,"bopMed":6,"wickMed":33,"mudMed":232.5,"wickPctMed":21.0,"bop_n":49,"wick_n":53,"mud_n":56,"wickPct_n":54},"recent":{"n":6,"green":2,"red":4,"last":"2026-08-31","rngPts":56.6}},
     Tue: {"n":63,"first":"2025-06-03","last":"2026-09-08","tookMin":47.8,"gapMin":234.8,"rngPts":52.2,"rngUsd":2611.0,"rngP25":40.0,"rngP75":72.0,"firstClock":33468.6,"secondClock":47557.1,"medTook":33,"medGap":246,"medRng":52.0,"lodFirstPct":57,"wick":{"bop":16.2,"wick":75.4,"mud":198.0,"wickPct":30.0,"bopMed":9,"wickMed":45,"mudMed":180,"wickPctMed":25,"bop_n":53,"wick_n":61,"mud_n":63,"wickPct_n":63},"recent":{"n":6,"green":1,"red":5,"last":"2026-09-08","rngPts":44.0}},
     Wed: {"n":62,"first":"2025-06-04","last":"2026-09-09","tookMin":28.9,"gapMin":224.9,"rngPts":59.0,"rngUsd":2950.2,"rngP25":39.8,"rngP75":75.7,"firstClock":32332.5,"secondClock":46858.1,"medTook":21.0,"medGap":213.0,"medRng":56.6,"lodFirstPct":44,"wick":{"bop":11.8,"wick":50.4,"mud":200.8,"wickPct":23.0,"bopMed":7.5,"wickMed":30.0,"mudMed":187.5,"wickPctMed":19.0,"bop_n":54,"wick_n":56,"mud_n":62,"wickPct_n":60},"recent":{"n":6,"green":4,"red":2,"last":"2026-09-09","rngPts":47.4}},
-    Thu: {"n":57,"first":"2025-06-05","last":"2026-09-03","tookMin":36.9,"gapMin":232.5,"rngPts":69.6,"rngUsd":3478.6,"rngP25":44.8,"rngP75":92.2,"firstClock":32815.6,"secondClock":47011.6,"medTook":27,"medGap":240,"medRng":61.2,"lodFirstPct":47,"wick":{"bop":21.0,"wick":64.8,"mud":208.7,"wickPct":22.3,"bopMed":6,"wickMed":51,"mudMed":207,"wickPctMed":18,"bop_n":55,"wick_n":57,"mud_n":57,"wickPct_n":57},"recent":{"n":6,"green":3,"red":3,"last":"2026-09-03","rngPts":70.9}},
-    Fri: {"n":57,"first":"2025-06-06","last":"2026-09-04","tookMin":21.2,"gapMin":193.1,"rngPts":63.2,"rngUsd":3161.4,"rngP25":39.2,"rngP75":89.4,"firstClock":31871.0,"secondClock":44728.4,"medTook":18,"medGap":186,"medRng":59.0,"lodFirstPct":51,"wick":{"bop":16.4,"wick":42.5,"mud":166.5,"wickPct":28.9,"bopMed":6,"wickMed":24,"mudMed":153,"wickPctMed":25,"bop_n":51,"wick_n":51,"mud_n":57,"wickPct_n":57},"recent":{"n":6,"green":4,"red":2,"last":"2026-09-04","rngPts":64.5}}
+    Thu: {"n":58,"first":"2025-06-05","last":"2026-09-10","tookMin":37.0,"gapMin":228.7,"rngPts":69.0,"rngUsd":3447.8,"rngP25":43.5,"rngP75":92.0,"firstClock":32821.1,"secondClock":46787.6,"medTook":28.5,"medGap":234.0,"medRng":60.8,"lodFirstPct":48,"wick":{"bop":20.8,"wick":64.6,"mud":205.2,"wickPct":22.6,"bopMed":6.0,"wickMed":51.0,"mudMed":204.0,"wickPctMed":18.0,"bop_n":56,"wick_n":58,"mud_n":58,"wickPct_n":58},"recent":{"n":6,"green":3,"red":3,"last":"2026-09-10","rngPts":57.6}},
+    Fri: {"n":58,"first":"2025-06-06","last":"2026-09-11","tookMin":19.9,"gapMin":190.6,"rngPts":62.6,"rngUsd":3130.6,"rngP25":39.2,"rngP75":89.2,"firstClock":31793.9,"secondClock":44565.5,"medTook":18.0,"medGap":186.0,"medRng":57.4,"lodFirstPct":50,"wick":{"bop":16.7,"wick":43.0,"mud":163.9,"wickPct":29.4,"bopMed":6.0,"wickMed":24.0,"mudMed":147.0,"wickPctMed":25.5,"bop_n":52,"wick_n":52,"mud_n":58,"wickPct_n":58},"recent":{"n":6,"green":3,"red":3,"last":"2026-09-11","rngPts":52.8}}
   }
 };
 // ---- (v14.59) THE BASE RATES NOW TRAVEL ON THEIR OWN ----------------------------------------
@@ -24596,6 +24635,7 @@ function hlBaseNormalise(j){
              rngP25:E.rng_p25, rngP75:E.rng_p75,
              firstClock:E.first_clock, secondClock:E.second_clock,
              lodFirstPct:S.pct_LOD_first,
+             predict:(j.predict && typeof j.predict==='object')?j.predict:null,   // (v16.18) adaptive-model coefficients (open30/exante/dir30), re-fit nightly
              byDow:(typeof hlBaseByDow==='function')?hlBaseByDow(j):{} };   // the weekday blocks ride along; their absence is not a refusal
   }catch(e){ return null; }
 }

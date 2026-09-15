@@ -574,5 +574,30 @@
    }
   }
  },
- "generatedAt": "2026-09-14T20:05:11Z"
+ "predict": {
+  "open30": {
+   "a": 25.907,
+   "b": 1.444,
+   "mae": 18.97,
+   "r2": 0.303,
+   "n": 298,
+   "feature": "opening 30-min range (pts)"
+  },
+  "exante": {
+   "a": 40.662,
+   "b": 0.3613,
+   "mae": 21.88,
+   "r2": 0.13,
+   "n": 297,
+   "feature": "prior-day range (pts)"
+  },
+  "dir30": {
+   "acc": 0.674,
+   "n": 291,
+   "base": 0.523,
+   "feature": "sign(opening 30-min drive) -> close direction"
+  },
+  "note": "weekday means are a reference (R^2 ~2%); these predict from today's tape. MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68."
+ },
+ "generatedAt": "2026-09-15T03:54:13Z"
 }

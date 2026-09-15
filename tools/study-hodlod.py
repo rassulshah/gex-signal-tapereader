@@ -244,6 +244,14 @@ def main(paths, out=None, market='ES'):
                    # (v15.77) the session's colour, the close against the (tool) open — his tool's "Red Day / Green Day"
                    green=(b[-1][3] > b[0][4]))
         rec.update(wick_fields(b))
+        # (v16.18) THE ADAPTIVE-MODEL FEATURES — opening-range and opening-drive, tool grid, same scale as rng_pts.
+        # OPEN30 = the first 30 minutes of RTH (tool bars ending at/before 09:00); drives the predictive expected range.
+        o30 = [r for r in b if r[0] <= RTH_A + 30*60]
+        if o30:
+            rec['or30'] = round(max(x[1] for x in o30) - min(x[2] for x in o30), 2)     # opening 30-min range (pts)
+            rec['drive30'] = 1 if o30[-1][3] > o30[0][4] else (-1 if o30[-1][3] < o30[0][4] else 0)  # close30 vs open sign
+        else:
+            rec['or30'] = None; rec['drive30'] = 0
         rows.append(rec)
         rth = [m for m in mins if m[0] >= RTH_A]          # the ladder keeps counting from 08:30, on minutes
         surv_lo += survival(rth, True); surv_hi += survival(rth, False)
@@ -344,6 +352,13 @@ def main(paths, out=None, market='ES'):
     # ⚠ The pooled block above is UNCHANGED: the ladder (hold rates by age) stays pooled — split five
     # ways its rungs go thin — and the panel reads it from the same place it always did.
     res['byWeekday'] = weekday_blocks(rows)
+    # ---- (v16.18) THE PREDICTIVE / ADAPTIVE MODEL — coefficients re-fit here every night = self-calibrating -------
+    # The weekday means are a REFERENCE, not a prediction (R^2 ~2%). These earn skill from TODAY's tape:
+    #   OPEN30  range = a + b*openingRange30   (available 30 min into RTH; the strong one, R^2 ~30%)
+    #   EXANTE  range = a + b*priorDayRange     (available at the open; beats the weekday mean)
+    #   DIR30   how often the sign of the opening-30-min drive matched the day's close direction (a body lean)
+    # The panel reads this block from HODLOD_BASE.predict; if absent it falls back to literals. See FINDINGS F-4/F-6.
+    res['predict'] = _predict_block(rows)
     # the mix, so a consumer can see a pooled corpus rather than discover it
     mix = collections.Counter(prov[d] for d in days)
     res['corpus']['sources'] = dict(mix)
@@ -361,6 +376,59 @@ def main(paths, out=None, market='ES'):
 
 
 WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+
+
+def _ols1(xs, ys):
+    """Single-feature ordinary least squares, closed form (no numpy — the nightly must run anywhere).
+    Returns (a, b, mae, r2) for y ~= a + b*x, MAE and R^2 in-sample."""
+    n = len(xs)
+    if n < 8:
+        return None
+    mx = sum(xs) / n; my = sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    if sxx <= 0:
+        return None
+    b = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
+    a = my - b * mx
+    resid = [y - (a + b * x) for x, y in zip(xs, ys)]
+    mae = sum(abs(e) for e in resid) / n
+    sst = sum((y - my) ** 2 for y in ys)
+    r2 = (1 - sum(e * e for e in resid) / sst) if sst > 0 else 0.0
+    return round(a, 3), round(b, 4), round(mae, 2), round(r2, 3)
+
+
+def _predict_block(rows):
+    """Fit the adaptive expected-range models over the corpus. RTH-only inputs so the nightly can re-bake them.
+    OPEN30: rng ~ a + b*or30.  EXANTE: rng ~ a + b*priorDayRange (the previous session's range, chronological).
+    DIR30: accuracy of sign(opening-drive) vs the day's green/red close. All in the same points/tool-grid scale
+    as rng_pts, so the panel's coefficients and today's opening range are one definition."""
+    out = {}
+    # OPEN30 — the opening-range anchor
+    o = [(r['or30'], r['rng_pts']) for r in rows if r.get('or30') and r['rng_pts'] is not None]
+    fit = _ols1([x for x, _ in o], [y for _, y in o]) if o else None
+    if fit:
+        out['open30'] = dict(a=fit[0], b=fit[1], mae=fit[2], r2=fit[3], n=len(o),
+                             feature='opening 30-min range (pts)')
+    # EXANTE — the prior RTH day's range (rows are chronological: days sorted ascending)
+    ex = [(rows[i - 1]['rng_pts'], rows[i]['rng_pts'])
+          for i in range(1, len(rows))
+          if rows[i - 1]['rng_pts'] is not None and rows[i]['rng_pts'] is not None]
+    fit = _ols1([x for x, _ in ex], [y for _, y in ex]) if ex else None
+    if fit:
+        out['exante'] = dict(a=fit[0], b=fit[1], mae=fit[2], r2=fit[3], n=len(ex),
+                             feature='prior-day range (pts)')
+    # DIR30 — the opening drive as a direction call
+    dd = [r for r in rows if r.get('drive30') and r.get('green') is not None]
+    tot = sum(1 for r in dd if r['drive30'] != 0)
+    ok = sum(1 for r in dd if r['drive30'] != 0 and ((r['drive30'] > 0) == bool(r['green'])))
+    base = sum(1 for r in rows if r.get('green')) / len(rows) if rows else None
+    if tot:
+        out['dir30'] = dict(acc=round(ok / tot, 3), n=tot,
+                            base=round(base, 3) if base is not None else None,
+                            feature='sign(opening 30-min drive) -> close direction')
+    out['note'] = ("weekday means are a reference (R^2 ~2%); these predict from today's tape. "
+                   "MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68.")
+    return out
 
 
 def expected_block(rows):

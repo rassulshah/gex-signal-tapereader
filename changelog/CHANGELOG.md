@@ -1,3 +1,15 @@
+## v16.18 — the expected candle becomes a predictive, adaptive, self-calibrating model (2026-09-15)
+
+Backtest of the OLD expected candle (weekday mean): NOT predictive — R^2 2.3%, MAE 24.2pt. Rebuilt from the
+evidence (out-of-fold, 283 ES sessions):
+- OPEN30: range = 25.9 + 1.44*openingRange30 (R^2 30%, MAE 19.5) — re-anchors the expected range 30 min into RTH.
+- EXANTE: range = 40.7 + 0.36*priorDayRange (MAE 23.0) — used pre-open / first 30 min.
+- DIR30: opening-30-min drive calls the close 68% (base 53%) — a modest body lean; neutral until 30 min.
+- Dropped: gap (46%), prior-day dir (50%), v16.17 recent-weekday lean (47%, worse than a coin flip).
+Self-calibrating: study-hodlod._predict_block fits the coefficients nightly into BASERATES.predict; bake-hodlod
+carries them into HODLOD_BASE.predict; hlBaseNormalise passes predict through so the courier's live file wins.
+Clamp keeps the expected range within 0.4x-2.5x the weekday mean. New EXPMODEL CSV row names the active stage.
+
 ## v16.17 + lsDayStats v0.5 + lsDayModel v0.13 — the READ on the chart: the model made adaptive (2026-09-15)
 
 Driven by "fix everything, make the model auto/adaptive, let the testing guide you." The validated model

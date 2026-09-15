@@ -94,6 +94,11 @@ def render(J):
   // ⚠ The median is very different on this right-skewed data (BOP mean ~14m vs median ~7m) and the
   // hover says so - the choice of statistic is his, and it is disclosed rather than assumed.
   wick: %s,
+  // (v16.18) THE ADAPTIVE / PREDICTIVE MODEL — re-fit nightly by study-hodlod (self-calibrating). The weekday means
+  // are a REFERENCE (weak); these predict the day's RANGE from today's tape: open30 (a+b*openingRange30, the strong
+  // one), exante (a+b*priorDayRange), and dir30 (how often the opening drive called the close). The panel reads these
+  // into the expected candle; the literal is the boot fallback until the courier delivers the live file.
+  predict: %s,
   // (v15.77) THE SAME ROW PER WEEKDAY — his seasonality. Generated from BASERATES.json byWeekday by the
   // build (tools/study-hodlod.py); the courier replaces it the same way it replaces the rest. Each
   // weekday is ~55-60 sessions: a fifth of the corpus, and the face says so. `recent` is his tool's
@@ -107,7 +112,7 @@ def render(J):
        num(E.get('took_min')), num(E.get('gap_min')), num(E.get('rng_pts')), num(E.get('rng_usd')),
        num(E.get('rng_p25')), num(E.get('rng_p75')), num(E.get('first_clock')), num(E.get('second_clock')),
        num(M.get('took_min')), num(M.get('gap_min')), num(M.get('rng_pts')), num(M.get('first_clock')), num(M.get('second_clock')),
-       num(S.get('pct_LOD_first')), wick_block(W, X), dows)
+       num(S.get('pct_LOD_first')), wick_block(W, X), json.dumps(J.get('predict') or {}, ensure_ascii=False), dows)
 
 
 def main(argv):
