@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.15
+// @version      16.16
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -774,7 +774,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.15';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -5662,7 +5662,7 @@ function irtBuildCsv(){
     if(Lx.undScale>0) return k*Lx.undScale;
     return (k*Lx.dispScale)/R.r;
   };
-  var T=null; try{ T=tapeMap('SPXW'); }catch(eT){}
+  var T=null; try{ T=tapeMapLive('SPXW'); }catch(eT){}   // (v16.16) LIVE book (was stale tapeMap) — aligns the FlexLevels SPXW KING with the King Tracker & gamma King; tapeMap serves a frozen saved book after the close
   var kK=null;   // the EXPORTED King's strike (the latched crown) — the G ranking drops this one
   // ⚠⚠ (v15.81) SKYLIT'S OWN PRICE FOR EVERY ES ROW (R-23). `esOf(book, strike)` asks the ES1 payload Skylit publishes
   // for that strike's price on the ES chart — the derived row's k, already converted by Skylit's live ratio — and the
