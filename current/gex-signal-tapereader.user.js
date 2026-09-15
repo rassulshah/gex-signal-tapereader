@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.14
+// @version      16.15
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -774,7 +774,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.14';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.15';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3571,10 +3571,11 @@ var KTRK_BOOKS = [
 ];
 var KTRK = { day:null, SPX:[], SPY:[], QQQ:[], NDX:[] };          // book -> [{so,es,strike}]
 var KTRK_NOW = { SPX:null, SPY:null, QQQ:null, NDX:null };        // book -> {es,strike,ageS,pct} latest live King
-var KTRK_KEY = 'gpts_kingtrack_v2';   // (v16.13) bumped to discard v1's chattered comb history; rebuilds clean under hysteresis
+var KTRK_KEY = 'gpts_kingtrack_v3';   // (v16.15) bumped again to discard the SPY/NDX 761<->762 comb history; rebuilds clean under anti-oscillation
 var KTRK_CONFIRM = { SPX:{k:null,n:0}, SPY:{k:null,n:0}, QQQ:{k:null,n:0}, NDX:{k:null,n:0} };
 var KTRK_CONFIRM_N = 4;                // (v16.13) ~2 min dwell before a confirmed roll (was 2 = 60s)
 var KTRK_HYST = 0.15;                  // (v16.13) a challenger must lead the incumbent King's strength by 15% to roll
+var KTRK_OSC_LOOKBACK = 3;             // (v16.15) suppress a roll to any strike the line was on in the last N recorded steps — kills the 761<->762 / 29125<->29375 chatter
 function ktrkFresh(){ return { day:todayKey(), SPX:[], SPY:[], QQQ:[], NDX:[] }; }
 function loadKingTrack(){
   try{
@@ -3622,6 +3623,14 @@ function ktrkSample(){
         try{ K=(typeof futDerBookKing==='function')?futDerBookKing(B.fut, B.srcs, { incumbent:incumbent, margin:KTRK_HYST }):null; }catch(eK){}
       }
       if(!K || K.k==null || K.strike==null) continue;
+      // (v16.15) ANTI-OSCILLATION — a "new" King that is a strike the line was recently sitting on is not a
+      // roll, it's the King chattering between two near-tied strikes (blue SPY 761<->762, NDX 29125<->29375).
+      // Hold the incumbent and do NOT repaint; only a strike the line has NOT been on lately is a real roll.
+      if(incumbent!=null && Math.abs(K.strike-incumbent)>0.001){
+        var oscBack=false;
+        for(var rz=Math.max(0,arr.length-KTRK_OSC_LOOKBACK); rz<arr.length; rz++){ if(Math.abs(arr[rz].strike-K.strike)<0.001){ oscBack=true; break; } }
+        if(oscBack){ KTRK_NOW[B.book]={ es:arr[arr.length-1].es, strike:incumbent, ageS:K.ageS, pct:K.pct }; KTRK_CONFIRM[B.book]={k:null,n:0}; continue; }
+      }
       KTRK_NOW[B.book]={ es:K.k, strike:K.strike, ageS:K.ageS, pct:K.pct };
       if(!arr.length){ arr.push({ so:so, es:K.k, strike:K.strike }); changed=true; continue; }   // seed
       var last=arr[arr.length-1];
