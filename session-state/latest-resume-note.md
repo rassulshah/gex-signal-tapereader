@@ -1,5 +1,22 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.21) · **panel v16.21** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.22) · **panel v16.22** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 — v16.22: THE KING STUDY IS RTH-ONLY (the roll count was after-hours chatter)
+
+His console dump of `gpts_kingday_v1` was the whole story — SPY journey = 29 rolls, ALL after-hours
+(`761@22:32 762@22:37 761@22:40 …` bouncing between two adjacent strikes 22:32–23:57), SPXW = none. Those
+after-hours flips filled the 30-move buffer and EVICTED the real RTH journey → the line drew flat (all moves at
+so≈81000, past every RTH bar) and the count was nonsense. The earlier "SPX 13 rolls" was the stale `krOf` census
+fallback. Operator: **"limit the study to king node during rth."** Done, four ways:
+- **Recording gated to RTH** — `updateKingJourney` returns outside 08:30–15:00 CT. No after-hours rolls recorded.
+- **Display + roll count + deflection bars all RTH-only** — a journey already polluted with after-hours flips draws
+  clean immediately (the 761↔762 moves are filtered on the draw side; `kingChartBars` caps at the RTH close).
+- **`KING_CONFIRM_N` 2→4** — a strike must DWELL 4 polls to count as a roll; rapid near-tied flips drop, a real
+  sustained roll still records. Verified: 761↔762 ×6 → 0 rolls; sustained 762 ×4 → 1 roll.
+- **Dropped the `krOf` census fallback** (frozen since 09-03) — an empty journey draws no line, never stale data.
+⚠ SPXW journeys during RTH via `trackSpxwNodes → sampleTapeHistory('SPXW')` (empty now only because after-hours).
+**VERIFY tomorrow RTH:** roll count should be a handful matching Atlas, SPX line should step and sit on the gamma
+King, deflection ledger a few clustered taps. The existing polluted journey already draws clean tonight.
 
 # ⚠⚠ 2026-09-15 — v16.21: KING CHART, FLAT LINES + OVER-COUNTED DEFLECTIONS FIXED
 

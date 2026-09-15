@@ -1,3 +1,17 @@
+## v16.22 — King study limited to RTH: the roll count is real now (2026-09-15)
+
+His console dump was decisive: the King journey was ALL after-hours chatter — SPY bouncing 761<->762 every few
+minutes 22:32-23:57 (29 fake "rolls"), which filled the 30-move buffer and evicted the real RTH journey, so the
+line drew flat (every move at so~81000, past every RTH bar) and the count was nonsense. SPXW journey was empty
+(the earlier "13 rolls" came from the stale krOf census fallback). Per his "limit the study to king node during
+rth":
+- RECORDING gated to RTH (updateKingJourney returns outside 08:30-15:00 CT) — no more after-hours chatter recorded.
+- DISPLAY + roll count + deflection bars all RTH-only, so an already-polluted journey draws clean without waiting
+  for the store to reset (the after-hours 761<->762 moves are filtered out on the draw side).
+- KING_CONFIRM_N 2->4: a strike must DWELL 4 polls to count as a roll, so rapid near-tied flips are dropped while a
+  real sustained roll still records. Verified: rapid 761<->762 x6 -> 0 rolls; sustained 762 x4 -> 1 roll.
+- Dropped the krOf census fallback (frozen since 09-03) — an empty journey draws no line, never stale data.
+Existing polluted journey draws clean immediately; a fresh RTH journey (incl. SPXW) builds tomorrow during RTH.
 ## v16.21 — King chart: flat lines + over-counted deflections FIXED (2026-09-15)
 
 His screenshot: both King lines FLAT all day though the ledger said "SPY K 10 rolls · SPX K 13 rolls" (recording
