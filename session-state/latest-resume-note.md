@@ -1,5 +1,37 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.22) · **panel v16.22** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.23) · **panel v16.23** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, **lsDayModel v0.14**, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 — v16.23 + lsDayModel 0.14: THREE ROBUSTNESS FIXES (config ✕, auto-regrant, stale-candle guard)
+
+Three operator pains, all "I don't want to get involved every time," fixed in one pass. **Panel v16.23 is deployed
+(committed to `C:\Dev`, sync-pushed); lsDayModel 0.14 is SOURCE-ONLY — it needs a recompile+install to take effect.**
+
+1. **"i cant even close the tapereader config."** The gear toggled the config but there was no visible close control.
+   Added a real **✕** in the config title bar (`cfgHtml` → `.gpts-cfg-close` span, ~L9720; wired in `wireConfig`,
+   ~L9903: `stopPropagation` + hide). The gear still toggles it too.
+2. **The recurring folder re-grant** ("please make sure there is a fix … so i dont have to get involved evrerytime").
+   Chrome wipes the File System Access permission to `prompt` on EVERY page load (the handle survives in IndexedDB,
+   the grant does not), so the IRT + GammaProfile export goes silent after each reload until a click carries a fresh
+   `requestPermission()`. New **`irtArmGestureResume()`** (~L6291) arms a ONE-TIME capture-phase document
+   click/keydown listener that re-requests the grant **synchronously inside that first gesture** (a `.then()` chain
+   loses activation — the v14.53 lesson) and, on `granted`, resets `IRT_TICK_LAST` and fires both writers at once.
+   Armed at boot (~L8801) AND re-armed from all three `needsGesture` branches in `irtExportNow` (~L6478/6485/6490),
+   so a MID-SESSION lapse also self-heals on the next click anywhere. If the grant persisted it resolves `granted`
+   with no prompt; worst case he approves ONE prompt on his first click. This is the closest to "never get involved"
+   the browser permits — a timer can never carry the grant (no activation), only a gesture can.
+3. **The huge, mis-aligned "expected" candle "printing for no reason."** ROOT CAUSE was a STALE CSV, not the model:
+   the file was cold since 23:58 the night before (folder grant had lapsed — see #2), so lsDayModel drew the frozen
+   `DAYEXP` candle onto a book that no longer matched the chart. **lsDayModel 0.14** adds a STALE GUARD:
+   `staleAgeMin()` (ONE shared age calc for the badge + the guard, overnight-wrap aware) and, past **15 min** since
+   `ASOF` (five missed 3-min writes, well beyond jitter), the EXPECTED candle + its E-lines + annotations STOP
+   drawing and are excluded from the panel bounds (no ballooned panel). The ACTUAL candle is measured live from the
+   chart's own RTH bars (`measureChartDay`) so it keeps drawing; the STALE badge (v0.8, ≥4 min) still explains why
+   EXP is gone. If stale AND no actual candle yet (pre-open with a cold file), only the badge shows.
+
+**⚠ TO FINISH #3:** recompile lsDayModel and install the DLL — `compile-daymodel.bat` (a FRESH cmd window: PATH
+overflows if builds run back-to-back), then **close IRT** before replacing `lsDayModel.dll` (IRT holds the DLL open),
+reopen IRT. Confirm the settings dialog shows **0.14**. Until then the stale guard is not live; #1 and #2 are live
+now (panel v16.23) after a **5-min** raw-cache wait + an Atlas tab RELOAD.
 
 # ⚠⚠ 2026-09-15 — v16.22: THE KING STUDY IS RTH-ONLY (the roll count was after-hours chatter)
 

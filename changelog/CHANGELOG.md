@@ -1,3 +1,27 @@
+## v16.23 + lsDayModel 0.14 — three robustness fixes: config ✕, auto-regrant, stale candle guard (2026-09-15)
+
+Three operator pains, all "I don't want to get involved every time," fixed in one pass:
+- **"i cant even close the tapereader config"** — the gear toggled the config but there was no visible close. Added
+  a real **✕** button in the config title bar (cfgHtml `.gpts-cfg-close`, wired in wireConfig) that hides the panel;
+  the gear still toggles it too.
+- **The recurring re-grant** ("please make sure there is a fix for this so i dont have to get involved evrerytime").
+  Chrome wipes the File System Access permission to 'prompt' on every page load, so the IRT/GammaProfile export goes
+  silent after each reload until a click carries a fresh requestPermission(). New `irtArmGestureResume()` arms a
+  ONE-TIME capture-phase document click/keydown listener that re-requests the grant **synchronously inside that first
+  gesture** (a .then() chain loses activation — the v14.53 lesson) and, on 'granted', resets IRT_TICK_LAST and fires
+  both writers immediately. Armed at boot and re-armed from all three needsGesture branches in irtExportNow, so a
+  mid-session lapse also self-heals on the next click anywhere on the page. If the grant already persisted it
+  resolves 'granted' with no prompt; worst case the operator approves ONE prompt on their first click.
+- **The huge, mis-aligned "expected" candle that "prints for no reason"** — root cause was a STALE CSV: the file was
+  cold since 23:58 the night before, so lsDayModel drew the frozen DAYEXP candle onto a book that no longer matched
+  the chart. lsDayModel **0.14** adds a STALE GUARD: `staleAgeMin()` (one shared age calc for the badge + guard) and,
+  past 15 min since ASOF (five missed 3-min writes, well beyond jitter), the EXPECTED candle, its E-lines and
+  annotations STOP drawing and are excluded from the panel bounds — no more ballooned panel. The ACTUAL candle is
+  measured live from the chart's own RTH bars (measureChartDay) so it keeps drawing; the STALE badge still explains
+  why EXP is gone. If stale AND no actual candle yet, only the badge shows.
+Deploy: panel bumped 16.22→16.23 (both @version + GPTS_VERSION), `node --check` clean; DayModel 0.13→0.14. lsDayModel
+needs a recompile+install (compile-daymodel.bat, IRT closed) to take effect — the .cpp change alone does nothing.
+
 ## v16.22 — King study limited to RTH: the roll count is real now (2026-09-15)
 
 His console dump was decisive: the King journey was ALL after-hours chatter — SPY bouncing 761<->762 every few

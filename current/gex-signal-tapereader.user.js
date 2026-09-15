@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.22
+// @version      16.23
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.22';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.23';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6280,6 +6280,45 @@ function irtQqqKing(){
 //      SYNCHRONOUSLY inside the click.
 var IRT_DIR_H=null;
 try{ repoKvGet('irtDir', function(h){ IRT_DIR_H=h||null; }); }catch(eDH){}
+// (v16.23) AUTO-RESUME THE FOLDER GRANT ON THE FIRST GESTURE — so the operator never hunts for the 🔓 button.
+// Chrome WIPES the File System Access permission to 'prompt' on every page load (the handle survives in
+// IndexedDB, the grant does not), so after each reload the export goes silent until a click carries a fresh
+// requestPermission(). We arm a ONE-TIME document listener: the first click/keypress ANYWHERE re-requests the
+// permission INSIDE that gesture (requestPermission must run synchronously in the handler — a queryPermission
+// .then() chain loses the activation, the v14.53 lesson) and resumes both writers. If the grant already persisted
+// requestPermission resolves 'granted' with no prompt; if it lapsed the operator approves one prompt on their
+// first click, wherever they click. This is the closest to "never get involved" the browser allows.
+var IRT_GESTURE_ARMED=false;
+function irtArmGestureResume(){
+  if(IRT_GESTURE_ARMED) return;
+  try{ if(!(CFG.irt && CFG.irt.on)) return; }catch(eA){ return; }
+  IRT_GESTURE_ARMED=true;
+  var handler=function(){
+    document.removeEventListener('click', handler, true);
+    document.removeEventListener('keydown', handler, true);
+    IRT_GESTURE_ARMED=false;
+    // ⚠ requestPermission MUST run synchronously inside this gesture (v14.53). The handle we grant on
+    // must be the SAME directory entry irtExportNow writes to — it looks the handle up fresh from
+    // IndexedDB ('irtDir'), so grant on IRT_DIR_H (the boot-cached handle for that same entry; Chrome
+    // keys the permission to the entry, not the JS object) and fall back to a fresh lookup if the boot
+    // cache is still empty. A repoKvGet callback is async and would lose the activation, so we do NOT
+    // await it before requesting — we request on whatever synchronous handle we have.
+    try{
+      var h=IRT_DIR_H;
+      if(h && h.requestPermission){
+        h.requestPermission({mode:'readwrite'}).then(function(st){
+          if(st==='granted'){ IRT_DIR_H=h; IRT_TICK_LAST=0; try{ irtExportNow(false); }catch(eX){} try{ gammaProfileExportNow(false); }catch(eX2){} }
+        }).catch(function(){});
+      } else {
+        // boot cache not populated yet — re-arm so the NEXT gesture (by when the async lookup has run) carries it
+        IRT_GESTURE_ARMED=false;
+        try{ repoKvGet('irtDir', function(hh){ IRT_DIR_H=hh||IRT_DIR_H; }); }catch(eLK){}
+        try{ irtArmGestureResume(); }catch(eRA){}
+      }
+    }catch(e2){}
+  };
+  try{ document.addEventListener('click', handler, true); document.addEventListener('keydown', handler, true); }catch(eL){ IRT_GESTURE_ARMED=false; }
+}
 function irtGrantFolder(){
   // the synchronous path: a cached handle means requestPermission() runs INSIDE the gesture
   try{
@@ -6435,17 +6474,20 @@ function irtExportNow(force){
             try{ active=!!(navigator.userActivation && navigator.userActivation.isActive); }catch(eU){ active=false; }
             if(!active){
               IRT_LAST={t:Date.now(), rows:0, how:null, needsGesture:true,
-                        err:'FOLDER PERMISSION NEEDS ONE CLICK — Chrome drops it on every page load. Open the gear and press ⇩ Export now (or re-pick the IRT folder); exports then resume on their own.'};
+                        err:'FOLDER PERMISSION NEEDS ONE CLICK — Chrome drops it on every page load. Any click on the page now re-grants it and exports resume on their own (v16.23); or press ⇩ Export now in the gear.'};
+              try{ irtArmGestureResume(); }catch(eAR){}   // (v16.23) the next click anywhere re-grants + resumes
               return;
             }
             h.requestPermission({mode:'readwrite'}).then(function(st2){
               if(st2==='granted') doWrite();
-              else IRT_LAST={t:Date.now(), rows:0, how:null, needsGesture:true,
-                             err:'folder permission denied — re-pick the IRT folder in the gear'};
+              else { IRT_LAST={t:Date.now(), rows:0, how:null, needsGesture:true,
+                             err:'folder permission denied — any click on the page retries it (v16.23), or re-pick the IRT folder in the gear'};
+                     try{ irtArmGestureResume(); }catch(eAR2){} }
             }).catch(function(eP){
               // ⚠ THE MISSING .catch. Without it this rejection was invisible and the panel froze.
               IRT_LAST={t:Date.now(), rows:0, how:null, needsGesture:true,
-                        err:'permission request refused ('+((eP&&eP.name)||eP)+') — press ⇩ Export now in the gear once'};
+                        err:'permission request refused ('+((eP&&eP.name)||eP)+') — any click on the page retries it (v16.23), or press ⇩ Export now in the gear once'};
+              try{ irtArmGestureResume(); }catch(eAR3){}
             });
           }).catch(doWrite);
         }
@@ -8756,6 +8798,7 @@ function buildPanel(){
   zoomLoad(); zoomApply();
   makeDraggable([hdr, elBody]);   // drag from the header OR anywhere in the body
   makeResizable(grip);
+  try{ irtArmGestureResume(); }catch(eAG){}   // (v16.23) first click after load re-grants the folder + resumes the export
 }
 
 function toggleCfg(){
@@ -9682,7 +9725,10 @@ function kingChartHtml(sym){
 
 function cfgHtml(){
   var html='';
-  html+='<div style="color:'+PAL.ink+';font-size:12px;font-weight:700;padding:1px 2px 5px 2px;border-bottom:1px solid '+PAL.line+';margin-bottom:4px">Tapereader config</div>';
+  // (v16.23) a clear ✕ to CLOSE the config — the gear toggles it too, but the operator could not find the close.
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:1px 2px 5px 2px;border-bottom:1px solid '+PAL.line+';margin-bottom:4px">'+
+    '<span style="color:'+PAL.ink+';font-size:12px;font-weight:700">Tapereader config</span>'+
+    '<span class="gpts-cfg-close" title="Close config (or click the gear)" style="cursor:pointer;color:'+PAL.sub+';font-size:15px;font-weight:800;line-height:1;padding:0 4px">&#10005;</span></div>';
   // (v11.4) IRT FlexLevels export block — first in the gear so it is easy to reach
   var I=CFG.irt||(CFG.irt={});
   irtResolveAutoSym();   // (v16.01) show the front-month contract in the Fut/NQ boxes when Auto is on
@@ -9864,6 +9910,8 @@ function injectSliderCss(){
 
 function wireConfig(){
   if(!elCfg) return;
+  // (v16.23) the ✕ closes the config panel.
+  try{ var cfgX=elCfg.querySelector('.gpts-cfg-close'); if(cfgX) cfgX.addEventListener('click', function(e){ e.stopPropagation(); if(elCfg) elCfg.style.display='none'; }); }catch(eCX){}
   // (v10.55 PART E/F) the futures override + the event tag.
   var futs=elCfg.querySelectorAll('.gpts-fut');
   for(var fi=0;fi<futs.length;fi++){

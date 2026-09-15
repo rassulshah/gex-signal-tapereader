@@ -20,6 +20,10 @@
  *  HOD/LOD tips (value/time/duration) + MUD box + swept ticks; expected candle
  *  E-HOD / E-LOD / E-C tips; background panel; adjustable EXP<->ACT spacing;
  *  day-of-week header; optional E-HOD/E-LOD reference lines. Stats strip next.
+ *  v0.14 — STALE GUARD: past 15 min since ASOF the frozen EXPECTED candle stops
+ *  drawing (it and its E-lines/annotations), so a cold overnight CSV no longer
+ *  prints a huge mis-aligned candle. Actual candle (chart-measured) still draws;
+ *  STALE badge still shown. Age computed once in staleAgeMin() for badge+guard.
  *
  *  Parameter indices are numbered EXPLICITLY (pc++), one per control, with NO
  *  setLabelParameter section headers -- a label row shifts IRT's parameter
@@ -96,6 +100,7 @@ public:
     int lastBar;
 
     void load();
+    double staleAgeMin();      // (v0.14) minutes since ASOF write (CT), overnight-wrap aware; <0 = unknown
     void drawStaleBadge();     // (v0.8) red badge if the CSV has gone cold
     void applyContractOffset();// (v0.9) fallback: shift the CSV candle onto this chart (pre-open)
     bool measureChartDay();    // (v0.10) ACTUAL candle straight from the chart's own RTH session bars
@@ -438,6 +443,11 @@ void DayModel::drawExpExtras(short cx, const Settings& S)
 void DayModel::render(const Settings& S)
 {
     if (!expC.valid && !actC.valid) return;
+    // (v0.14) STALE GUARD (see the long note below at the draw calls): a badly stale CSV means the
+    // EXPECTED candle is frozen onto an old book. Decide it up-front so the panel bounds, background,
+    // E-lines and the candle itself all agree — no oversized panel sized to a candle we won't draw.
+    bool expStale = (staleAgeMin() >= 15.0);
+    if (expStale && !actC.valid) { drawStaleBadge(); return; }   // nothing live to show; badge tells why
     long n = getBarCount(); if (n < 1) return;
     lastBar = (int)n - 1;
 
@@ -473,7 +483,7 @@ void DayModel::render(const Settings& S)
     short xL = (short)(xLc - half - (S.side == 1 ? 6 : annoL));   // (v0.7) cover the EXP tips on the left margin
     short xR = (short)(xRc + half + (S.swept ? 84 : 8));    // room for the (now narrower) swept tags
     float hiP = -1e9f, loP = 1e9f;
-    if (expC.valid) { if (expC.h>hiP) hiP=expC.h; if (expC.l<loP) loP=expC.l; }
+    if (expC.valid && !expStale) { if (expC.h>hiP) hiP=expC.h; if (expC.l<loP) loP=expC.l; }   // (v0.14) skip frozen EXP
     if (actC.valid) { if (actC.h>hiP) hiP=actC.h; if (actC.l<loP) loP=actC.l; }
     short headH = (short)(S.header ? (step + 6) : 0);
     short yT = (short)(yOf(hiP) - 3*step - 10 - headH);
@@ -492,14 +502,21 @@ void DayModel::render(const Settings& S)
         textC((short)((xL + xR) / 2), (short)(yT + step - 2), hdr.c_str(), C_TXT, S.font, true);
     }
 
+    // (v0.14) STALE GUARD (expStale decided at the top of render) — the EXPECTED candle is the CSV DAYEXP
+    // row; when the panel stops writing it freezes onto a book that no longer matches the chart, and the
+    // operator sees a huge, mis-aligned candle "printing for no reason" (operator-reported 2026-09-15, file
+    // cold since 23:58 the night before). Past 15 min — five missed 3-min writes, well beyond normal jitter
+    // — we STOP drawing the expected candle and its annotations. The ACTUAL candle is measured live from
+    // THIS chart's own bars (measureChartDay), so it stays; the STALE badge still explains why EXP is gone.
+
     // optional E-HOD / E-LOD reference lines across the pane
-    if (S.elines && expC.valid) {
+    if (S.elines && expC.valid && !expStale) {
         hline(yOf(expC.h), paneL, paneR, C_ELINE, P_DASH);
         hline(yOf(expC.l), paneL, paneR, C_ELINE, P_DASH);
     }
 
     // Expected behind, Actual on top (matters in Overlay).
-    if (S.showexp && expC.valid) { drawCandle(expCx, expC, true,  S); drawExpExtras(expCx, S); }
+    if (S.showexp && expC.valid && !expStale) { drawCandle(expCx, expC, true,  S); drawExpExtras(expCx, S); }
     if (S.showact && actC.valid) { drawCandle(actCx, actC, false, S); drawActExtras(actCx, S); }
 }
 
@@ -631,12 +648,21 @@ void DayModel::applyContractOffset()
 // ---- (v0.8) STALE badge — the panel stamps ASOF,<CT sec-of-day> each export; compare to the chart
 // clock (assumed CT). Older than ~4 min (panel writes every ~3 min) ⇒ a frozen file drawing an old
 // book. Handles the overnight wrap so a file left cold overnight reads hours, not a negative age.
-void DayModel::drawStaleBadge()
+// (v0.14) ONE age computation, shared by the badge and the expected-candle guard. Returns minutes since
+// the panel's ASOF write in chart-local (CT) time, handling the overnight wrap so a file left cold
+// overnight reads hours, not a negative age. <0 when ASOF is unknown (nothing to judge).
+double DayModel::staleAgeMin()
 {
-    if (asofSo < 0) return;
+    if (asofSo < 0) return -1.0;
     RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
     double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
-    double ageMin = (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+    return (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+}
+
+void DayModel::drawStaleBadge()
+{
+    double ageMin = staleAgeMin();
+    if (ageMin < 0) return;
     if (ageMin <= 4.0) return;
     char b[40];
     if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
@@ -659,6 +685,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.13");
+    p->setVersion("0.14");
     return p;
 }
