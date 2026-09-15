@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.21
+// @version      16.22
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.22';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3520,7 +3520,7 @@ function fcHistSessions(sym){
 var KINGDAY = { SPY:null, QQQ:null, SPXW:null, NDX:null };
 var KINGDAY_KEY = 'gpts_kingday_v1';
 var KING_CONFIRM = { SPY:{k:null,n:0}, QQQ:{k:null,n:0}, SPXW:{k:null,n:0}, NDX:{k:null,n:0} }; // flicker guard
-var KING_CONFIRM_N = 2; // require this many consecutive polls on a new strike
+var KING_CONFIRM_N = 4; // (v16.22) require this many consecutive polls on a new strike — a strike must DWELL to count as a roll (was 2; 761↔762 chatter)
 function loadKingDay(){
   try{
     var raw=localStorage.getItem(KINGDAY_KEY);
@@ -3535,27 +3535,31 @@ function loadKingDay(){
 function saveKingDay(){ try{ localStorage.setItem(KINGDAY_KEY, JSON.stringify(KINGDAY)); }catch(e){} }
 function updateKingJourney(sym, king){
   if(typeof king!=='number') return;
+  // (v16.22) RTH ONLY. THE BUG THE OPERATOR'S DUMP EXPOSED: after the close the thin book flips the King between two
+  // adjacent strikes (SPY 761<->762 recorded 22:32–23:57), and every flip was appended as a "roll" — 29 after-hours
+  // flips filled the 30-move buffer and EVICTED the real RTH journey, so the chart drew flat (all moves at so≈81000,
+  // past every RTH bar) and the roll count was nonsense. Atlas rolls only intraday. So: journey ONLY during RTH.
+  var soNow=ctNowSecOfDay();
+  if(soNow < (mul(8,3600)+mul(30,60)) || soNow >= mul(15,3600)) return;
   var dk=todayKey();
   var kd=KINGDAY[sym];
-  if(!kd || kd.day!==dk){ // new day (or first ever) -> fresh journey seeded at current King
-    // (v16.21) STAMP THE MOVE WITH ITS SECOND-OF-DAY at record time (so), not just ms. The chart matches moves to
-    // bars by second-of-day; deriving `so` from `now` at draw time broke on a PARKED / prior-day view (a Monday
-    // move read against Tuesday's clock went negative → every bar took the last King → a FLAT line all day). With
-    // `so` recorded here it is day-independent and a parked session's rolls draw correctly.
-    kd=KINGDAY[sym]={ day:dk, cur:king, moves:[{k:king, dir:0, t:Date.now(), so:ctNowSecOfDay()}], count:0 };
+  if(!kd || kd.day!==dk){ // new day (or first ever) -> fresh journey seeded at the current King (the first RTH sample)
+    // (v16.21) stamp each move with its own second-of-day so a parked / prior-day view maps by it, not now-relative.
+    kd=KINGDAY[sym]={ day:dk, cur:king, moves:[{k:king, dir:0, t:Date.now(), so:soNow}], count:0 };
     KING_CONFIRM[sym]={k:null,n:0};
     saveKingDay();
     return;
   }
   if(Math.abs(king-kd.cur)<0.001){ KING_CONFIRM[sym]={k:null,n:0}; return; } // unchanged
-  // Candidate change: require KING_CONFIRM_N consecutive polls on the SAME new
-  // strike before recording, so a flicker cannot inflate the count.
+  // Candidate change: require KING_CONFIRM_N consecutive polls on the SAME new strike before recording. (v16.22)
+  // raised 2→4 so a strike must genuinely DWELL to count as a roll — a rapid 761↔762 alternation never accumulates
+  // 4 on one strike, so near-tied chatter is dropped, while a real sustained roll still records.
   var cf=KING_CONFIRM[sym];
   if(cf.k!=null && Math.abs(cf.k-king)<0.001){ cf.n++; }
   else { cf.k=king; cf.n=1; }
   if(cf.n>=KING_CONFIRM_N){
     var dir = king>kd.cur ? 1 : -1;
-    kd.moves.push({k:king, dir:dir, t:Date.now(), so:ctNowSecOfDay()});   // (v16.21) record-time second-of-day
+    kd.moves.push({k:king, dir:dir, t:Date.now(), so:soNow});   // (v16.21) record-time second-of-day
     if(kd.moves.length>30) kd.moves.shift();
     kd.cur=king; kd.count=(kd.count||0)+1;
     KING_CONFIRM[sym]={k:null,n:0};
@@ -9493,9 +9497,12 @@ function wireStepIcons(){
 function kingChartRR(){ try{ var d=displayScale&&displayScale(); if(d&&d.scale>0) return d.scale; }catch(e){} try{ if(typeof FUTMODE!=='undefined'&&FUTMODE&&FUTMODE.r>0) return FUTMODE.r; }catch(e2){} return 1; }
 function kingChartSpxDisp(){ try{ var L=ifLadder('SPY'); if(L&&!L.err&&L.dispScale>0) return L.dispScale; }catch(e){} return 1; }
 function kingChartBars(){
+  // (v16.22) RTH ONLY — the whole King study (line, rolls AND deflections) is limited to 08:30–15:00 CT, per the
+  // operator: "limit the study to king node during rth." After-hours bars (and the King's after-hours chatter) are
+  // out of the study entirely.
   var c=[]; try{ c=closedCandles('SPY')||[]; }catch(e){ return []; }
-  var openSec=mul(8,3600)+mul(30,60), out=[];
-  for(var i=0;i<c.length;i++){ var b=c[i]; if(b && typeof b.so==='number' && b.so>=openSec && b.o!=null && b.c!=null) out.push(b); }
+  var openSec=mul(8,3600)+mul(30,60), closeSec=mul(15,3600), out=[];
+  for(var i=0;i<c.length;i++){ var b=c[i]; if(b && typeof b.so==='number' && b.so>=openSec && b.so<closeSec && b.o!=null && b.c!=null) out.push(b); }
   return out.slice(-130);
 }
 function kingChartClock(ms){ try{ return new Date(ms).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Chicago'}); }catch(e){ return '?'; } }
@@ -9580,9 +9587,10 @@ function kingChartHtml(sym){
   // A book with only its seed draws a FLAT held line across the day — correct, NOT blank. Match to bars by
   // SECOND-OF-DAY (each point's age → so), which the candles carry reliably as .so.
   function kingJourney(book){
+    // (v16.22) THE JOURNEY ONLY — no krOf census fallback. The census (ktTick/krTick) has been frozen since
+    // 2026-09-03; falling back to it drew stale data. An empty journey draws no line (honest), never a lie.
     var j=[];
     try{ var kd=kingDay(book); if(kd && kd.moves && kd.moves.length) j=kd.moves.map(function(m){ return {t:m.t, k:m.k, so:m.so}; }); }catch(e){}   // (v16.21) keep .so
-    if(!j.length){ try{ var c=krOf(book)||[]; j=c.map(function(m){ return {t:m.t, k:m.k, so:m.so}; }); }catch(e2){} }   // fallback: never blank silently
     return j.sort(function(a,b){ return a.t-b.t; });
   }
   function kingSteps(book, conv){
@@ -9592,8 +9600,11 @@ function kingChartHtml(sym){
     // (v16.21) MATCH BY SECOND-OF-DAY, day-independent. Prefer the move's own recorded `so` (v16.21+); else
     // convert its ms to CT second-of-day ABSOLUTELY (not now-relative), so a parked / prior-day session draws its
     // real rolls instead of a flat line. The old `nowSo-(now-m.t)` math only worked while viewing the live day.
+    // (v16.22) RTH-ONLY on the DRAW side too, so a journey already polluted with after-hours flips (the operator's
+    // 761↔762 at 22:xx) draws clean without waiting for the store to reset — only moves inside 08:30–15:00 CT count.
+    var rthA=mul(8,3600)+mul(30,60), rthB=mul(15,3600);
     var pts=mv.map(function(m){ var so=(typeof m.so==='number')?m.so:msToCtSecOfDay(m.t); return { so:so, k:m.k }; })
-              .filter(function(p){ return typeof p.so==='number' && isFinite(p.so) && typeof p.k==='number'; })
+              .filter(function(p){ return typeof p.so==='number' && isFinite(p.so) && p.so>=rthA && p.so<rthB && typeof p.k==='number'; })
               .sort(function(a,b){ return a.so-b.so; });
     if(!pts.length) return bars.map(function(){ return null; });
     // draw from the first recorded point (the seed at open) onward; bars before it get null — no line — so a
@@ -9611,7 +9622,11 @@ function kingChartHtml(sym){
     try{ var og=JSON.parse(localStorage.getItem(GP_SPXWR_KEY)||'null'); if(og&&og.r>0&&(Date.now()-og.t)<14*86400000) return spx*og.r; }catch(e2){}
     return null;
   }
-  function rollCount(book){ try{ var kd=kingDay(book); if(kd && kd.moves) return Math.max(0, kd.moves.length-1); }catch(e){} try{ return Math.max(0,(krOf(book)||[]).length-1); }catch(e2){} return 0; }
+  function rollCount(book){ // (v16.22) RTH rolls only, no stale census — matches the drawn line
+    try{ var kd=kingDay(book); if(kd && kd.moves){ var a=mul(8,3600)+mul(30,60), b=mul(15,3600);
+      var n=kd.moves.filter(function(m){ var so=(typeof m.so==='number')?m.so:msToCtSecOfDay(m.t); return typeof so==='number' && so>=a && so<b; }).length;
+      return Math.max(0, n-1); } }catch(e){}
+    return 0; }
   var kSPY=kingSteps('SPY', rr), kSPX=kingSteps('SPXW', esOfSpxKC);   // (v16.20) SPX in EXACT ES, not dispScale
   var rollSPY=rollCount('SPY'), rollSPX=rollCount('SPXW');
   // (v15.99) haveKings is now true whenever the daily journey has at least its opening seed — which is almost
