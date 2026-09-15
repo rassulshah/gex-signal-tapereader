@@ -11,6 +11,11 @@
  *
  *  Full settings panel (see setup()). Build: x64 Release, link irtsdkV143-x64.lib.
  *
+ *  v0.40 — CONTRACT ALIGNMENT anchors on the new SCALEREF row (the front-month ES
+ *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
+ *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
+ *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *
  *  Parameter indices are numbered explicitly (pc++), one per control, with NO
  *  setLabelParameter section headers -- a label row shifts IRT's parameter
  *  numbering and silently scrambles every setting read after it.
@@ -107,6 +112,7 @@ public:
     std::vector<GStrike> strikes;
     float lvl[6]; bool has[6];   // KING,CW,PW,FLIP,EMH,EML
     float spotPx; bool hasSpot;
+    float scaleRef; bool hasScaleRef;   // (v0.40) front-month ES anchor the ladder is scaled to (SCALEREF row)
     float spyKingPx; bool hasSpyKing;
     std::string book;
     double asofSo;               // (v0.38) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
@@ -328,6 +334,7 @@ void GammaProfile::load()
 {
     for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; }
     hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX"; asofSo = -1;
+    hasScaleRef = false; scaleRef = 0.0f;
     const char* up = getenv("USERPROFILE");
     if (!up) { strikes.clear(); return; }
     // Book selector: Auto(0) and SPX(1) read GammaProfile.csv; SPY(2) reads GammaProfile-SPY.csv.
@@ -361,6 +368,7 @@ void GammaProfile::load()
             else if (t[0] == "EMH")     { lvl[4]=v; has[4]=true; }
             else if (t[0] == "EML")     { lvl[5]=v; has[5]=true; }
             else if (t[0] == "SPOT")    { spotPx=v; hasSpot=true; }
+            else if (t[0] == "SCALEREF"){ scaleRef=v; hasScaleRef=true; }
             else if (t[0] == "SPYKING") { spyKingPx=v; hasSpyKing=true; }
             else if (t[0] == "BOOK" && t.size()>=2) { book=t[1]; }
             else if (t[0] == "ASOF") { asofSo = v; }
@@ -759,18 +767,31 @@ int GammaProfile::draw(void)
 // redraw as the spread moves. Clamped so a wrong chart / bad SPOT can never fling the book to nonsense.
 void GammaProfile::applyContractOffset()
 {
-    if (!hasSpot) return;
     long n = getBarCount(); if (n < 1) return;
     RTARRAY close(barClose);
     float chartClose = close[(int)n - 1];
     if (!(chartClose > 0)) return;
-    float off = chartClose - spotPx;
+    // (v0.40) ANCHOR ON SCALEREF, NOT SPOT. The ladder (King, nodes, walls) is priced in the panel's
+    // front-month scale (Skylit ES1, via esOfSpx). SPOT is the day-model's own value, and during the
+    // quarterly roll it is already ~this chart's (Dec) scale — so anchoring on it made off≈0 and left the
+    // front-scale ladder ~one calendar-spread (~60-90 pts) below price. SCALEREF is the front price the
+    // ladder IS in, so off = chartClose − SCALEREF is exactly that spread; shifting by it lands the whole
+    // book on the charted contract, and →0 on its own once the front rolls to this contract. Fall back to
+    // SPOT only when SCALEREF is absent (older panel, or a book that doesn't write it).
+    float anchor = 0.0f; bool have = false;
+    if (hasScaleRef && scaleRef > 0.0f) { anchor = scaleRef; have = true; }
+    else if (hasSpot)                   { anchor = spotPx;   have = true; }
+    if (!have) return;
+    float off = chartClose - anchor;
     if (off < -300.0f || off > 300.0f) return;      // implausible → leave as-is
-    if (off > -0.01f && off < 0.01f) return;        // already aligned
     for (size_t i = 0; i < strikes.size(); i++) strikes[i].price += off;
     for (int i = 0; i < 6; i++) if (has[i]) lvl[i] += off;
-    spotPx += off;
     if (hasSpyKing) spyKingPx += off;
+    // The spot marker AND the role (King/Ceiling/Floor/Gatekeeper) test want the chart's LIVE price, not the
+    // shifted CSV spot — so pin spot to the chart close. This is also what breaks the "everything is a
+    // Gatekeeper" flood: with spot and King finally on the SAME (chart) scale, only the nodes genuinely
+    // between price and the King fall inside the gate band.
+    spotPx = chartClose; hasSpot = true;
 }
 
 // ---- (v0.38) STALE badge — shared logic across all four plugins ------------
@@ -805,6 +826,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.39");
+    p->setVersion("0.40");
     return p;
 }

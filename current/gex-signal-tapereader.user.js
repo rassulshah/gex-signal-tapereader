@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.23
+// @version      16.24
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.23';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.24';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6606,6 +6606,26 @@ function gammaProfileBuild(){
       strikes.sort(function(a,b){ return a.es-b.es; });
       strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)); });
       var kes=esOfSpx(kK); if(kes!=null) out.push('KING,'+gpF2(kes));
+      // (v16.24) SCALEREF — the front-month ES price this gamma ladder is scaled to (esOfSpx = the ES1
+      // payload's SPX->ES ratio, ~1.0006). During the quarterly roll the operator charts the NEXT contract
+      // (e.g. EPZ26 Dec) which trades ~60-90 pts ABOVE the front (ES1), so every gamma level lands that far
+      // below price on his chart. The RTX plugins can't know the front price on their own, so we hand it to
+      // them here; each plugin adds basis = (its chart's price) - SCALEREF to every level, which is the
+      // Sep->Dec calendar spread, and lands the level on the charted contract. Once the front itself rolls to
+      // Dec, SCALEREF equals the chart and basis -> 0 — self-healing, nothing to undo. Primary source is the
+      // SPXW ladder's own index price (esOfSpx -> front-ES); fallback is the median of the strongest nodes'
+      // ES values, which straddle the current index within a few points and are already in front-ES units.
+      try{
+        var scaleRef=null, spxNow=null;
+        try{ var LDp=ladderFor('SPXW'); if(LDp && typeof LDp.price==='number' && isFinite(LDp.price) && LDp.price>1000) spxNow=LDp.price; }catch(eLP){}
+        if(spxNow!=null) scaleRef=esOfSpx(spxNow);
+        if(scaleRef==null){
+          var ea=strikes.slice().sort(function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); }).slice(0,8)
+                        .map(function(x){ return x.es; }).sort(function(a,b){ return a-b; });
+          if(ea.length) scaleRef=ea[Math.floor(ea.length/2)];
+        }
+        if(scaleRef!=null && isFinite(scaleRef)) out.push('SCALEREF,'+gpF2(scaleRef));
+      }catch(eSR){}
       gWhy='live from DOM tape ('+strikes.length+' strikes · King '+(kingNeg?'-':'+')+'100% @ SPX '+kK+' -> ES '+(kes!=null?kes:'?')+')';
     } else gWhy=noRatio?'DOM tape read but no SPX->ES ratio yet (needs the ES1 payload once — chart on ES + export on)':'DOM tape read but no strikes parsed';
   }

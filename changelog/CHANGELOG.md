@@ -1,3 +1,29 @@
+## v16.24 + lsGammaProfile 0.40 — the King/nodes finally land on the charted (Dec) contract (2026-09-15)
+
+Diagnosed live (Atlas + tape + IRT, same moment): the operator charts **EPZ26 (December)** while the panel reads
+Atlas's **ES1 (front, Sep)** book, so every gamma level was written in front-month scale and drawn ~65–90 pts BELOW
+the Dec price — the King (7564) sat ~87 pts under price, the "7564 node" looked absent near price, and the giant
+spot↔King gap flooded the rail with Gatekeeper ("G") tags. Root cause is the **quarterly roll**: front is Sep,
+expiring 9/18; the charted contract is Dec.
+- **Node/King VALUES verified correct vs Atlas** first: Atlas yellow-Kings 7560 (=tape 7560→ES7564); nodes 7584 (68%
+  = tape 68%), 7599 (58%≈tape 59%); SPY King 758/760 (=tape 758, roll jitter). The values were never the problem —
+  only the position (scale).
+- **lsGammaProfile ALREADY had a contract-offset** (`applyContractOffset`, v0.39) but anchored on **SPOT** — which
+  the day model writes in ~Dec scale (SPY×ratio), so off≈0 and it never shifted the front-scale ladder. Fixed by
+  anchoring on a new **SCALEREF** row.
+- **Panel (v16.24):** `gammaProfileBuild` now emits `SCALEREF,<frontES>` — the front-month ES price the gamma ladder
+  is scaled to (esOfSpx of the SPXW index price; fallback = median ES of the strongest nodes, which straddle the
+  index). Additive row; no other plugin affected.
+- **lsGammaProfile (0.40):** `applyContractOffset` anchors on SCALEREF (front scale, same as the nodes) → off =
+  chartClose − SCALEREF = the exact Sep→Dec spread → shifts the whole book onto the Dec chart. Falls back to SPOT
+  when SCALEREF is absent. **Spot is pinned to the chart's live close** for the marker AND the Gatekeeper role test,
+  which also collapses the G flood (King and spot finally on the same scale). Self-heals to 0 once front rolls to Dec.
+- **Still open (not in this build, told the operator):** the air-pocket band over-shades the whole thin far-OTM zone
+  above price (needs a cap); the panel writes **no CW/PW/FLIP/EM rows** so those flex levels never draw; and the same
+  SCALEREF anchor needs rolling into lsKingTracker / lsDayModel / lsDayStats next.
+Deploy: panel 16.23→16.24 (`node --check` clean), lsGammaProfile 0.39→0.40 (needs recompile: compile-gammaprofile.bat,
+IRT closed). Order: reload Atlas first (so the CSV carries SCALEREF), then recompile the plugin.
+
 ## v16.23 + lsDayModel 0.14 — three robustness fixes: config ✕, auto-regrant, stale candle guard (2026-09-15)
 
 Three operator pains, all "I don't want to get involved every time," fixed in one pass:

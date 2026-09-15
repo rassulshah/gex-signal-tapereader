@@ -1,5 +1,39 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.23) · **panel v16.23** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, **lsDayModel v0.14**, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.24) · **panel v16.24** · companion v1.19 · RTX plugins: **lsGammaProfile v0.40**, **lsDayModel v0.14**, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 — v16.24 + lsGammaProfile 0.40: THE CONTRACT-BASIS FIX (front ES1 vs charted EPZ26 Dec)
+
+**THE session's big finding, diagnosed live (Atlas + tape + IRT at one moment).** The operator charts **EPZ26
+(December)**; the panel reads Atlas's **ES1 (front month, Sep — expires 9/18)** and writes gamma levels in front
+scale. Dec trades ~65–90 pts ABOVE front (calendar carry), so every King/node was drawn that far BELOW price on his
+chart. Symptoms he reported: King "7564 not in IRT" (it was — ~87 pts under the Dec price), and "a lot of nodes with
+G" (the spot↔King gap spanned ~100 pts because SPOT was ~Dec scale while the King was front scale).
+
+⚠ **The node VALUES are correct — I verified vs Atlas:** Atlas yellow-Kings 7560 (=tape 7560→ES 7564); nodes 7584
+68% (=tape 68%), 7599 58% (≈tape 59%); SPY King 758 (=tape 758, ±1 roll jitter). Only the *position* (scale) was
+wrong. Do NOT "fix" node values — they read the book right.
+
+**The fix (anchor everything to a front-price reference, shift in the plugin):**
+- **Panel v16.24** — `gammaProfileBuild` emits **`SCALEREF,<frontES>`**: the front-month ES price the ladder is
+  scaled to (esOfSpx of the SPXW index; fallback = median ES of the strongest nodes). Additive; harmless to others.
+- **lsGammaProfile 0.40** — it ALREADY had `applyContractOffset` (v0.39) but anchored on **SPOT**, which the day
+  model writes in ~Dec scale, so off≈0 and it never shifted the front-scale ladder. Now it anchors on **SCALEREF**
+  (front scale = the nodes' scale): off = chartClose − SCALEREF = the Sep→Dec spread → the whole book lands on the
+  Dec chart. **Spot is pinned to the chart's live close** for the marker + the Gatekeeper role test → collapses the
+  G flood. Falls back to SPOT if SCALEREF absent. Self-heals to 0 once the front itself rolls to Dec (after 9/18).
+
+**⚠ DEPLOY ORDER (told the operator):** (1) reload Atlas so the CSV starts carrying SCALEREF; (2) recompile
+lsGammaProfile — `cd /d "C:\Dev\gex-signal-tapereader\plugin"` then `compile-gammaprofile.bat`, **close IRT** before
+it swaps `lsGammaProfile.dll`, reopen, confirm **0.40** in the settings dialog. Panel changes go live on the Atlas
+reload (5-min raw-cache wait).
+
+**⚠ STILL OPEN — the same SCALEREF anchor must roll into the other three plugins** (lsKingTracker, lsDayModel,
+lsDayStats) so the King line, day candle and stats align too — otherwise only the gamma rail is corrected. Plus two
+separate gaps found this session: (a) the **air-pocket band over-shades** the whole thin far-OTM zone above price
+(the "top area shaded wrong" — needs a cap so it only bands BETWEEN real nodes); (b) the panel writes **no
+CW/PW/FLIP/EM rows**, so the flex walls never draw (the plugin is built for them; nothing to draw). Neither is in
+this build. The anchor value is a node-median approximation (~few pts) — refine to the true SPXW index price if a
+clean source is wired.
 
 # ⚠⚠ 2026-09-15 — v16.23 + lsDayModel 0.14: THREE ROBUSTNESS FIXES (config ✕, auto-regrant, stale-candle guard)
 
