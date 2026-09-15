@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "asOf": "2026-09-14",
+ "asOf": "2026-09-15",
  "writtenBy": "tools/nightly/recommend.py",
  "rows": [
   {
@@ -97,42 +97,27 @@
    "id": "RN-hour.2-held",
    "kind": "RULE",
    "by": "nightly",
-   "asOf": "2026-09-14",
+   "asOf": "2026-09-15",
    "src": "patterns:hour:2:held",
-   "text": "H2 · 09:30–10:30: held 51 of 69 = 74% (Wilson low 62%) against 50% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
+   "text": "H2 · 09:30–10:30: held 54 of 76 = 71% (Wilson low 60%) against 51% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
    "changes": "the face shows this class’s held rate with its n; the register tests it on sessions it has never seen",
-   "evidence": "the nightly’s pattern table, 2026-09-14: n=69, low 62% > base 50%",
-   "n": 69,
-   "rate": 74,
-   "lo": 62,
-   "base": 50,
-   "status": "proposed"
-  },
-  {
-   "id": "RN-spx.none-turn",
-   "kind": "RULE",
-   "by": "nightly",
-   "asOf": "2026-09-14",
-   "src": "patterns:spx:none:turn",
-   "text": "no SPX node at the tap (SPY / QQQ level): turn 9 of 25 = 36% (Wilson low 20%) against 19% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
-   "changes": "the face shows this class’s turn rate with its n; the register tests it on sessions it has never seen",
-   "evidence": "the nightly’s pattern table, 2026-09-14: n=25, low 20% > base 19%",
-   "n": 25,
-   "rate": 36,
-   "lo": 20,
-   "base": 19,
+   "evidence": "the nightly’s pattern table, 2026-09-15: n=76, low 60% > base 51%",
+   "n": 76,
+   "rate": 71,
+   "lo": 60,
+   "base": 51,
    "status": "proposed"
   },
   {
    "id": "RN-teach-L5",
    "kind": "TEACH",
    "by": "nightly",
-   "asOf": "2026-09-14",
+   "asOf": "2026-09-15",
    "src": "results:rules:L5",
    "text": "L5: the record contradicts the taught rule — re-teach it against the record, or retire it.",
    "changes": "the Learn tab’s rule L5 is rewritten or marked REFUTED by the review",
-   "evidence": "held: a −γ node 37 / 78 = 47% (low 37%) vs a +γ node 16 / 44 = 36% (low 24%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-14",
-   "n": 44,
+   "evidence": "held: a −γ node 43 / 90 = 48% (low 38%) vs a +γ node 22 / 53 = 42% (low 29%) — contradicts (a −γ node holds less than a +γ node) · nightly 2026-09-15",
+   "n": 53,
    "status": "proposed"
   },
   {
@@ -422,13 +407,29 @@
    "status": "implemented",
    "version": "15.73",
    "why": "approved on the mockup 2026-09-05 (“i like it.”); shipped in v15.73"
+  },
+  {
+   "id": "RN-spx.none-turn",
+   "kind": "RULE",
+   "by": "nightly",
+   "asOf": "2026-09-14",
+   "src": "patterns:spx:none:turn",
+   "text": "no SPX node at the tap (SPY / QQQ level): turn 9 of 25 = 36% (Wilson low 20%) against 19% of every tap — register it out of sample from the next session, and put the number on the face for this class.",
+   "changes": "the face shows this class’s turn rate with its n; the register tests it on sessions it has never seen",
+   "evidence": "the nightly’s pattern table, 2026-09-14: n=25, low 20% > base 19%",
+   "n": 25,
+   "rate": 36,
+   "lo": 20,
+   "base": 19,
+   "status": "withdrawn",
+   "why": "the condition no longer held on 2026-09-15"
   }
  ],
  "counts": {
-  "proposed": 12,
+  "proposed": 11,
   "approved": 0,
   "implemented": 24,
   "declined": 0,
-  "withdrawn": 0
+  "withdrawn": 1
  }
 }
