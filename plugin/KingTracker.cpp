@@ -37,8 +37,8 @@
 #include <ctime>
 
 // ---- palette --------------------------------------------------------------
-static const COLOR C_SPX = 0x00E040C0;  // SPX King  magenta (matches gamma King)
-static const COLOR C_SPY = 0x0040C0E0;  // SPY King  cyan
+static const COLOR C_SPX = 0x00F0D024;  // SPX King  yellow  (v0.4 default matches the operator's picker selection)
+static const COLOR C_SPY = 0x00F5883A;  // SPY King  orange  (v0.4 default matches the operator's picker selection)
 static const COLOR C_QQQ = 0x0033B36B;  // QQQ King  green
 static const COLOR C_NDX = 0x00E0A030;  // NDX King  amber
 
@@ -363,6 +363,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.3");
+    p->setVersion("0.4");
     return p;
 }

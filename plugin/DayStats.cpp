@@ -44,6 +44,8 @@ static const COLOR C_PANEL = 0x00141A22;  // background panel fill     dark slat
 static const COLOR C_BORDER= 0x00394654;  // panel border              slate grey
 static const COLOR C_GOOD  = 0x0033B36B;  // A beats/near E where relevant (unused v0.1)
 static const COLOR C_RULE  = 0x00263039;  // faint row rule
+static const COLOR C_UPG   = 0x002EC27E;  // (v0.4) HOD / markup     green
+static const COLOR C_DNR   = 0x00F0616D;  // (v0.4) LOD / markdown   red
 
 // ---- parameter indices ----------------------------------------------------
 struct PIdx { int corner, showA, showE, showhdr, bg, font, xoff, yoff; };
@@ -258,7 +260,7 @@ void DayStats::render(const Settings& S)
     // build the 14 columns, each: header + A cell + E cell (E prefixed '~')
     static const int NCOL = 14;
     const char* hdr[NCOL] = { "", "1ST", "TOOK", "BOP", "WICK", "W.END", "WICK%",
-                              "MUD", "MUDt", "2ND", "HL GAP", "HL RNG$", "HL RNGp", "IQR" };
+                              "MUD", "MUDt", "2ND", "HL GAP", "HL RNG", "", "IQR" };
     std::string aCell[NCOL], eCell[NCOL];
 
     // A cells
@@ -275,8 +277,8 @@ void DayStats::render(const Settings& S)
         aCell[8]= dur(aMudt);
         aCell[9]= A.second + " " + clk(A.secondClk) + " " + px1(A.secondPx);
         aCell[10]= dur(A.gap);
-        aCell[11]= A.rngUsd.empty()?"--":("$"+A.rngUsd);
-        aCell[12]= A.rngPts.empty()?"--":(A.rngPts+"p");
+        aCell[11]= (A.rngUsd.empty()?std::string("--"):("$"+A.rngUsd)) + (A.rngPts.empty()?std::string(""):("  "+A.rngPts+"p"));   // (v0.4) $ and points in one cell
+        aCell[12]= "";
         aCell[13]= "";
     }
     // E cells (base-rate medians; '~' marks them)
@@ -293,9 +295,21 @@ void DayStats::render(const Settings& S)
         eCell[8]= "~"+dur(eMudt);
         eCell[9]= E.second + " ~" + clk(E.secondClk);
         eCell[10]= "~"+dur(E.gap);
-        eCell[11]= E.rngUsd.empty()?"--":("~$"+E.rngUsd);
-        eCell[12]= E.rngPts.empty()?"--":("~"+E.rngPts+"p");
+        eCell[11]= (E.rngUsd.empty()?std::string("--"):("~$"+E.rngUsd)) + (E.rngPts.empty()?std::string(""):("  ~"+E.rngPts+"p"));   // (v0.4) $ and points in one cell
+        eCell[12]= "";
         eCell[13]= (!E.rngP25.empty() && !E.rngP75.empty()) ? (E.rngP25+"-"+E.rngP75) : "";
+    }
+
+    // (v0.4) per-cell colour-coding for the ACTUAL row — operator spec: the LOD extreme reads red, the HOD
+    // extreme green, and MUD by the day's phase (markup = the LOD was made first and price marked up → green;
+    // markdown = the HOD was made first → red).
+    COLOR aCol[NCOL]; for (int c = 0; c < NCOL; c++) aCol[c] = C_TXT;
+    if (A.valid) {
+        bool firstLOD = (A.first == "LOD"), firstHOD = (A.first == "HOD");
+        bool secLOD   = (A.second == "LOD"), secHOD  = (A.second == "HOD");
+        if      (firstLOD) aCol[1] = C_DNR;   else if (firstHOD) aCol[1] = C_UPG;   // 1ST extreme
+        if      (secLOD)   aCol[9] = C_DNR;   else if (secHOD)   aCol[9] = C_UPG;   // 2ND extreme
+        if      (firstLOD) aCol[7] = C_UPG;   else if (firstHOD) aCol[7] = C_DNR;   // MUD: markup green / markdown red
     }
 
     // column widths = max over header / A / E
@@ -340,14 +354,15 @@ void DayStats::render(const Settings& S)
         for (int c = 1; c < NCOL; c++) textLJ((short)(tx + colX[c]), y, hdr[c], C_HEAD, fs, true);
         y = (short)(y + lineH);
     }
-    // A row
-    if (S.showA && A.valid) {
-        for (int c = 0; c < NCOL; c++) if (!aCell[c].empty()) textLJ((short)(tx + colX[c]), y, aCell[c].c_str(), C_TXT, fs, (c==0));
-        y = (short)(y + lineH);
-    }
-    // E row
+    // (v0.4) EXPECTED row on TOP, then ACTUAL below (operator-directed row order)
+    // E row (expected / base rate — the reference line)
     if (S.showE && E.valid) {
         for (int c = 0; c < NCOL; c++) if (!eCell[c].empty()) textLJ((short)(tx + colX[c]), y, eCell[c].c_str(), C_EXP, fs, (c==0));
+        y = (short)(y + lineH);
+    }
+    // A row (actual — colour-coded per aCol)
+    if (S.showA && A.valid) {
+        for (int c = 0; c < NCOL; c++) if (!aCell[c].empty()) textLJ((short)(tx + colX[c]), y, aCell[c].c_str(), aCol[c], fs, (c==0));
         y = (short)(y + lineH);
     }
 }
@@ -400,6 +415,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.3");
+    p->setVersion("0.4");
     return p;
 }
