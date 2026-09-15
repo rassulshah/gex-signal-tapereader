@@ -33,8 +33,10 @@ stats."*
 
 ### Block 1 — the two extremities, actual vs expected
 
-Two rows, `A` (actual, today) over `E` (expected, the 284-day median), so every live number is read
-against its own base rate on the line beneath it.
+Two rows, `A` (actual, today) over `E` (expected), so every live number is read against its expectation on
+the line beneath it. ⚠ As of v16.18 the `E` RANGE is no longer the static 284-day median — it is the
+ADAPTIVE model (predicted from today's opening range; the clocks/wick family stay the weekday reference).
+See `design/DAY-MODEL.md`. Block 3 (the READ) is unchanged and is the AUC-0.879 classifier, a separate layer.
 
     1ST        TOOK    BOP     WICK    W.END    WICK%   MUD
     A  LOD 09:12  42m    18m     1h00    09:30    31%     56m…

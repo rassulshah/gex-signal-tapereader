@@ -1,6 +1,10 @@
 # RESUME NOTE — read this before anything else
 _written 2026-09-02, amended 2026-09-15 (v16.19) · **panel v16.19** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
 
+> **THE DAY MODEL now lives in `design/DAY-MODEL.md` — the ONE source of truth. Read it first for anything about
+> the expected candle / READ. It documents both layers, the 3 adaptive stages + coefficients, what's null, the
+> self-calibration pipeline, and the file/function map. If any doc, tab or comment disagrees with it, it is stale.**
+
 # ⚠⚠ 2026-09-15 — v16.19: STAGE-3 (60-MIN IB) + THE INDICATOR SWEEP (all null — do NOT re-test)
 
 **He asked whether indicators/IB/divergence/momentum/volume would improve the model. I TESTED them all over the

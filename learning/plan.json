@@ -605,6 +605,14 @@
    "serves": "PULLBACK",
    "status": "later",
    "done": "a resume rate with n renders on a tier-3 READ line"
+  },
+  {
+   "v": "16.19",
+   "title": "THE EXPECTED CANDLE MADE PREDICTIVE + ADAPTIVE + SELF-CALIBRATING (design/DAY-MODEL.md is the one source of truth) — the old weekday-mean candle was NOT predictive (R^2 2.3%); the RANGE is now predicted from today's tape in three stages (exante priorDayRange pre-open → open30 openingRange R^2 30% → open60 initial balance R^2 32%), the body leans with the opening-30-min drive (68% vs 53% base), coefficients re-fit nightly (study-hodlod _predict_block → BASERATES.predict → HODLOD_BASE.predict). Indicators/volume/momentum/gap tested and REJECTED as null. The READ (HLTAB, AUC 0.879 — a SEPARATE layer, 'has the extreme printed') now writes to the CSV and renders center-justified on the DayStats title line. The one unexplored lever is the GEX structure (H5, blocked on the event ledger).",
+   "serves": "HOD/LOD — an expected candle that predicts today's range instead of drawing the average day",
+   "status": "shipped",
+   "date": "2026-09-15",
+   "done": "EXPMODEL basis walks exante→open30→open60 through the morning; the expected candle carries a body; BASERATES.predict re-fits nightly"
   }
  ],
  "system": {
