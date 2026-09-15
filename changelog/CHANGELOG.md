@@ -1,3 +1,17 @@
+## v16.17 + lsDayStats v0.5 + lsDayModel v0.13 — the READ on the chart: the model made adaptive (2026-09-15)
+
+Driven by "fix everything, make the model auto/adaptive, let the testing guide you." The validated model
+(HLTAB READ, AUC 0.879, F-4/F-7) already ran in the browser but was never in the CSV, so no RTX plugin could
+draw it. WHY these choices: F-6 says a predicted green/red close is overconfident ceremony (sign-now is already
+83%), so the expected body is a faint weekday base-rate lean, not a forecast; F-4 says ship the 2-axis table, not
+a regression. Auto (post-close write + nightly rebake) was already built (v15.68/v15.71); self-enhance harness is
+real but young (8/10 hypotheses thin, ~11 live sessions).
+
+- panel v16.17: NEW `READ` CSV row (posr × minutes → IN/NOTIN/HOLD, from lodhodCall); EXPECTED candle gets a body
+  (eClose = open + faint recent-weekday lean, capped 15%).
+- lsDayStats v0.5: renders the READ center-justified on the DAY STATS title line (textCJ); v0.4 red cells + E-on-top ship.
+- lsDayModel v0.13: MUD label on its own line above the points (actual + E-MUD).
+
 ## v16.02–v16.09 — gamma % fixed, day candle live, + TWO new plugins ready (stats strip, King tracker) (2026-09-14)
 
 **Panel v16.09. New plugin source: lsDayStats v0.1 + lsKingTracker v0.1. lsDayModel bumped to v0.7.**

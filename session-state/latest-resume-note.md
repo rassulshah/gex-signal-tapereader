@@ -1,5 +1,44 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-14 (v16.09) · **panel v16.09** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.7, (new source) lsDayStats v0.1 + lsKingTracker v0.1 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.17) · **panel v16.17** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 — v16.17 + lsDayStats v0.5 + lsDayModel v0.13: THE MODEL MADE ADAPTIVE (THE READ ON THE CHART)
+
+**His ask:** *"fix everything and make the model auto ... lookup how it is self enhancing ... make sure it is a really
+good model, lookup all the testing we did ... make sure it is adapting."* Driven by the day-model investigation.
+
+**What the testing actually says (the evidence that drove this — do not re-litigate):**
+- **The good model already existed but was STRANDED IN THE BROWSER.** The validated layer is the **HLTAB READ**
+  (`tools/model-lodhod.py`, FINDINGS **F-4**): AUC **0.879**, 2-axis (posr × minutes-since-open), regime-STABLE
+  (better on volatile days, 0.899), transfers ES↔NQ (**F-7**). Adding a 3rd axis made it WORSE; a 5-feature
+  regression is ceremony — **ship the table**. It runs live in the Chrome READ box but was **never written to the
+  CSV**, so no RTX plugin could show it. THAT was the gap.
+- **The candle is climatology** — `hodlodBaseFor(dow)` → BASERATES.json (298 sessions, per-weekday trimmed mean),
+  symmetric, `close=open`. It reports the CENTRE and by design excludes outliers (operator 2026-08-28), so a 2×
+  range day (Mon 14 Sep: actual +113.3 vs expected +55.5, IQR 34–74) reads as "unexpected" — correct behaviour,
+  a genuine top-decile day, NOT a model failure.
+- **DO NOT BUILD a predicted green/red close (F-6):** sign-now already = 83%, extra features never change the call,
+  and it's overconfident. So the expected body is the weekday BASE-RATE lean, faint, never a forecast.
+- **Self-enhance loop is real but YOUNG:** register.json (10 hypotheses) + `tools/nightly/run.py` (Wilson + shuffle
+  null). 8/10 are THIN — only ~11 live-export sessions scored since 2026-09-03. It fills with sessions; can't force it.
+- **AUTO is already built:** panel auto-writes the day after the close and retries (v15.71); the "GEX nightly" task
+  rebakes BASERATES within ~10 min (v15.68). Nothing to rebuild — VERIFY the scheduled task is installed.
+
+**What shipped (all on origin):**
+- **panel v16.17** — (1) NEW `READ` CSV row: `READ,<first>,<posr%>,<cellPct>,<cellN>,<call IN|NOTIN|HOLD>` from
+  `lodhodCall(D)` — the HLTAB READ, the model's ADAPTIVE layer, now on the chart (line ~6614). NOTIN is the STRONGER
+  call (85% vs 63%). (2) EXPECTED candle now has a BODY: `eClose = O + lean·(rngPts·0.15)`, lean = recent-6 weekday
+  (green−red)/n, capped 15% — faint base-rate lean, F-6-honest (line ~6633). DAYEXP close≠open now.
+- **lsDayStats v0.5** — parses `READ`, renders it CENTER-JUSTIFIED on the DAY STATS title line ("LOD IN 84%",
+  green=IN / amber=NOT IN) via new `textCJ`. (v0.4 red-cell colouring + E-on-top + combined $/pt cells were already
+  in source — they ship now on first compile.)
+- **lsDayModel v0.13** — MUD box: label on its OWN line above the points ("MUD" / "+113.3" / time / $), actual + E-MUD.
+
+**⚠ NEXT / OPEN (evidence-gated, not started):** recent-regime blend on the expected RANGE (F-4 warns: don't add
+complexity that doesn't earn it — hold unless he asks); bake full-corpus weekday greenPct so the body lean isn't n=6
+noisy; the elapsed-time READ ladder as its own strip. Verify live: the READ line needs live 1-min bars to populate.
+
+---
+_(prior history below)_
 
 # ⚠⚠⚠ IRT INDICATOR ECOSYSTEM — CURRENT FOCUS (2026-09-14). READ `session-state/2026-09-14_resume-v16.09.md` FIRST.
 
