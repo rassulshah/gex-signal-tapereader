@@ -1,7 +1,23 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.20) · **panel v16.20** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.21) · **panel v16.21** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
 
-# ⚠⚠ 2026-09-15 — v16.20: THE KING CHART FIXED (SPX King tracked + placed exactly on Atlas)
+# ⚠⚠ 2026-09-15 — v16.21: KING CHART, FLAT LINES + OVER-COUNTED DEFLECTIONS FIXED
+
+His screenshot (v16.20 installed): both King lines FLAT all day, though the ledger read "SPY K 10 rolls · SPX K 13
+rolls today" — so RECORDING WAS FINE; the DRAW was broken — plus ~26 "held" taps, one every few bars.
+- **Flat lines = a time-mapping bug.** `kingSteps` derived each move's second-of-day from `now` (`nowSo-(now-m.t)`).
+  On a PARKED / prior-day view (across midnight) that goes NEGATIVE, so every bar took the last King → flat.
+  Fix (v16.21): stamp each move with its own `so` at record time (`updateKingJourney`), keep it through
+  `kingJourney`, map by it; older moves (no `so`) fall back to `msToCtSecOfDay(m.t)` — an ABSOLUTE CT second-of-day
+  matching the candle `.so` base (`naiveSecOfDay` = CT wall-clock). So existing rolls draw correctly too, no
+  re-record needed. Verified: 6 rolls → a 6-step line.
+- **Over-counted deflections.** `kingChartEvents` pushed one event per BAR near the line. Now ONE event per TOUCH
+  (contiguous run, tolerating a 1-bar poke-out): break if the close crossed to the far side during the touch, else
+  held. Verified: a 15-bar hover → 1 event (was ~7-8).
+- ⚠ VERIFY on his reload: the SPX/SPY King lines should now STEP with the rolls (not flat), and the tap ledger
+  should show a handful of clustered taps, not one per bar. The deflection pts is the touch's most extreme close-vs-King.
+
+# ⚠⚠ 2026-09-15 — v16.20: THE KING CHART (SPX King tracked + placed exactly on Atlas)
 
 The panel's King chart (node-ladder section toggle → "kingchart"; `kingChartHtml`, ~L9544) draws the SPX + SPY
 Kings as step lines with deflect/break stats. Two real bugs, both fixed — diagnosed from the code + the KINGNOW

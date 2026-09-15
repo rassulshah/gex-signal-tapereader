@@ -1,3 +1,15 @@
+## v16.21 — King chart: flat lines + over-counted deflections FIXED (2026-09-15)
+
+His screenshot: both King lines FLAT all day though the ledger said "SPY K 10 rolls · SPX K 13 rolls" (recording
+was FINE) and ~26 "held" taps firing every few bars.
+- FLAT LINES were a DRAW bug: kingSteps mapped each move to a second-of-day with now-relative math
+  (nowSo-(now-m.t)); on a PARKED / prior-day view (across midnight) that goes negative, so every bar took the
+  last King -> a flat line. Fix: stamp each move with its own second-of-day at record time (updateKingJourney),
+  keep it through kingJourney, and map by it; older moves fall back to msToCtSecOfDay(m.t) — an ABSOLUTE CT
+  second-of-day that matches the candle .so base (naiveSecOfDay). Verified: 6 rolls -> a 6-step line, not flat.
+- OVER-COUNTED DEFLECTIONS: kingChartEvents pushed an event on EVERY bar near the line. Now one event per TOUCH
+  (a contiguous run near the line, tolerating a 1-bar poke-out): break if the close crossed to the far side during
+  the touch, else held. Verified: a 15-bar hover -> 1 event (was ~7-8).
 ## v16.20 — the King chart fixed: SPX King now tracked + placed exactly on Atlas (2026-09-15)
 
 The panel's King chart (price vs the SPX/SPY Kings as steps, with deflect/break stats) had two real bugs:
