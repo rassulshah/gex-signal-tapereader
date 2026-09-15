@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.20
+// @version      16.21
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -419,6 +419,10 @@ function ctMinutesSinceMidnight(){ var d=ctNow(); return mul(d.getHours(),60)+d.
 function pastReset(){ return ctMinutesSinceMidnight() >= mul(8,60)+30; }
 function ctTodayStr(){ return ctDateStr(); }
 function ctNowSecOfDay(){ var d=ctNow(); return mul(d.getHours(),3600)+mul(d.getMinutes(),60)+d.getSeconds(); }
+// (v16.21) ABSOLUTE CT second-of-day of any REAL ms epoch — day-independent, so a parked / prior-day King move
+// maps to its own clock, not a now-relative offset that goes negative across midnight. Matches the candle .so
+// base (convertFiberCandles uses naiveSecOfDay = CT wall-clock second-of-day), so King steps line up with bars.
+function msToCtSecOfDay(ms){ try{ var d=new Date(new Date(ms).toLocaleString('en-US',{timeZone:'America/Chicago'})); return mul(d.getHours(),3600)+mul(d.getMinutes(),60)+d.getSeconds(); }catch(e){ return null; } }
 function ctOffsetSec(){
   var d=new Date();
   var c=new Date(d.toLocaleString('en-US',{timeZone:'America/Chicago'}));
@@ -774,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.20';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3534,7 +3538,11 @@ function updateKingJourney(sym, king){
   var dk=todayKey();
   var kd=KINGDAY[sym];
   if(!kd || kd.day!==dk){ // new day (or first ever) -> fresh journey seeded at current King
-    kd=KINGDAY[sym]={ day:dk, cur:king, moves:[{k:king, dir:0, t:Date.now()}], count:0 };
+    // (v16.21) STAMP THE MOVE WITH ITS SECOND-OF-DAY at record time (so), not just ms. The chart matches moves to
+    // bars by second-of-day; deriving `so` from `now` at draw time broke on a PARKED / prior-day view (a Monday
+    // move read against Tuesday's clock went negative → every bar took the last King → a FLAT line all day). With
+    // `so` recorded here it is day-independent and a parked session's rolls draw correctly.
+    kd=KINGDAY[sym]={ day:dk, cur:king, moves:[{k:king, dir:0, t:Date.now(), so:ctNowSecOfDay()}], count:0 };
     KING_CONFIRM[sym]={k:null,n:0};
     saveKingDay();
     return;
@@ -3547,7 +3555,7 @@ function updateKingJourney(sym, king){
   else { cf.k=king; cf.n=1; }
   if(cf.n>=KING_CONFIRM_N){
     var dir = king>kd.cur ? 1 : -1;
-    kd.moves.push({k:king, dir:dir, t:Date.now()});
+    kd.moves.push({k:king, dir:dir, t:Date.now(), so:ctNowSecOfDay()});   // (v16.21) record-time second-of-day
     if(kd.moves.length>30) kd.moves.shift();
     kd.cur=king; kd.count=(kd.count||0)+1;
     KING_CONFIRM[sym]={k:null,n:0};
@@ -9492,21 +9500,35 @@ function kingChartBars(){
 }
 function kingChartClock(ms){ try{ return new Date(ms).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Chicago'}); }catch(e){ return '?'; } }
 // the deflect/break events, computed from the bars against each king line (doctrine: wick tests, close decides)
+// (v16.21) ONE EVENT PER TOUCH, not per bar. The old version pushed a deflect/break on EVERY bar whose wick came
+// near the line and only de-duped immediate neighbours, so price PARKED at a King printed a tap every few bars (the
+// operator's "counting multiple deflections" — 26 held on one screenshot). Now a contiguous run of bars near the
+// line is ONE episode: it opens when the wick first enters ~1 ATR of the King, tolerates a single bar poking out,
+// and seals as ONE event when price leaves — a BREAK if the close crossed to the far side during the touch (wick
+// tests, close decides), else a HELD deflection. The reported pts is the touch's most extreme close-vs-King.
 function kingChartEvents(bars, kSPY, kSPX, atrES){
-  var ev=[], near=Math.max(0.5, (DEFL_NEAR||1)*atrES), i, defs=[['SPY',kSPY],['SPX',kSPX]];
-  for(var d=0; d<defs.length; d++){ var book=defs[d][0], KL=defs[d][1];
-    for(i=1;i<bars.length;i++){ var kl=KL[i], klp=KL[i-1]; if(kl==null||klp==null) continue;
-      var rr=kingChartRR(), hi=bars[i].h*rr, lo=bars[i].l*rr, cl=bars[i].c*rr, pc=bars[i-1].c*rr;
-      var tested=(lo<=kl+near && hi>=kl-near);          // the wick came within ~1 ATR of the line
-      if(!tested) continue;
-      var crossed=((pc-klp)>0)!==((cl-kl)>0) && Math.abs(cl-kl)>near*0.25;   // the close flipped sides
-      ev.push({ i:i, t:bars[i].t, px:kl, book:book, type:crossed?'break':'deflect', pts:(Math.round((cl-kl)*10)/10) });
+  var near=Math.max(0.5, (DEFL_NEAR||1)*atrES), rr=kingChartRR(), out=[], defs=[['SPY',kSPY],['SPX',kSPX]], d, i;
+  for(d=0; d<defs.length; d++){
+    var book=defs[d][0], KL=defs[d][1], ep=null, outRun=0;
+    for(i=1;i<bars.length;i++){
+      var kl=KL[i];
+      var hi=(kl!=null)?bars[i].h*rr:0, lo=(kl!=null)?bars[i].l*rr:0, cl=bars[i].c*rr, pc=bars[i-1]?bars[i-1].c*rr:cl;
+      var tested=(kl!=null) && (lo<=kl+near && hi>=kl-near);   // the wick came within ~1 ATR of the line
+      if(tested){
+        outRun=0;
+        if(!ep) ep={ side:(pc-kl)>=0?1:-1, px:kl, iClose:i, tClose:bars[i].t, crossed:false, pts:Math.round((cl-kl)*10)/10 };
+        var sideNow=(cl-kl)>=0?1:-1;
+        if(sideNow!==ep.side && Math.abs(cl-kl)>near*0.25) ep.crossed=true;   // the close flipped to the far side
+        var exc=Math.round((cl-kl)*10)/10; if(Math.abs(exc)>Math.abs(ep.pts)) ep.pts=exc;
+        ep.iClose=i; ep.tClose=bars[i].t; ep.px=kl;
+      } else if(ep){
+        outRun++;
+        if(outRun>=2 || kl==null){ out.push({ i:ep.iClose, t:ep.tClose, px:ep.px, book:book, type:ep.crossed?'break':'deflect', pts:ep.pts }); ep=null; outRun=0; }
+      }
     }
+    if(ep) out.push({ i:ep.iClose, t:ep.tClose, px:ep.px, book:book, type:ep.crossed?'break':'deflect', pts:ep.pts });
   }
-  // one event per (book) per touch cluster — drop a deflect immediately followed by another on the same bar-neighbourhood
-  ev.sort(function(a,b){ return a.i-b.i; });
-  var out=[], last={};
-  for(i=0;i<ev.length;i++){ var e=ev[i], key=e.book; if(last[key]!=null && e.i-last[key]<=1 && ev[i-1] && ev[i-1].type===e.type) continue; out.push(e); last[key]=e.i; }
+  out.sort(function(a,b){ return a.i-b.i; });
   return out;
 }
 function kingChartSvg(W, H, plotW, bars, kSPY, kSPX, ev){
@@ -9559,16 +9581,21 @@ function kingChartHtml(sym){
   // SECOND-OF-DAY (each point's age → so), which the candles carry reliably as .so.
   function kingJourney(book){
     var j=[];
-    try{ var kd=kingDay(book); if(kd && kd.moves && kd.moves.length) j=kd.moves.map(function(m){ return {t:m.t, k:m.k}; }); }catch(e){}
-    if(!j.length){ try{ var c=krOf(book)||[]; j=c.map(function(m){ return {t:m.t, k:m.k}; }); }catch(e2){} }   // fallback: never blank silently
+    try{ var kd=kingDay(book); if(kd && kd.moves && kd.moves.length) j=kd.moves.map(function(m){ return {t:m.t, k:m.k, so:m.so}; }); }catch(e){}   // (v16.21) keep .so
+    if(!j.length){ try{ var c=krOf(book)||[]; j=c.map(function(m){ return {t:m.t, k:m.k, so:m.so}; }); }catch(e2){} }   // fallback: never blank silently
     return j.sort(function(a,b){ return a.t-b.t; });
   }
   function kingSteps(book, conv){
     var mv=kingJourney(book);
     if(!mv.length) return bars.map(function(){ return null; });
     var apply=(typeof conv==='function')?conv:function(k){ return k*conv; };
-    var nowSo=ctNowSecOfDay(), now=Date.now();
-    var pts=mv.map(function(m){ return { so: nowSo-(now-m.t)/1000, k:m.k }; }).sort(function(a,b){ return a.so-b.so; });
+    // (v16.21) MATCH BY SECOND-OF-DAY, day-independent. Prefer the move's own recorded `so` (v16.21+); else
+    // convert its ms to CT second-of-day ABSOLUTELY (not now-relative), so a parked / prior-day session draws its
+    // real rolls instead of a flat line. The old `nowSo-(now-m.t)` math only worked while viewing the live day.
+    var pts=mv.map(function(m){ var so=(typeof m.so==='number')?m.so:msToCtSecOfDay(m.t); return { so:so, k:m.k }; })
+              .filter(function(p){ return typeof p.so==='number' && isFinite(p.so) && typeof p.k==='number'; })
+              .sort(function(a,b){ return a.so-b.so; });
+    if(!pts.length) return bars.map(function(){ return null; });
     // draw from the first recorded point (the seed at open) onward; bars before it get null — no line — so a
     // late start (panel parked earlier) reads honestly as a gap, not a strike drawn back to the morning.
     return bars.map(function(b){ if(b.so < pts[0].so-90) return null; var k=null, j; for(j=0;j<pts.length;j++){ if(pts[j].so<=b.so+1) k=pts[j].k; else break; } if(k==null) k=pts[0].k; return (typeof k==='number')?apply(k):null; });
