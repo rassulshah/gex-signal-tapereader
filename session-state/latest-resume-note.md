@@ -1,5 +1,27 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.19) · **panel v16.19** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 (v16.20) · **panel v16.20** · companion v1.19 · RTX plugins: lsGammaProfile v0.37, lsDayModel v0.13, lsDayStats v0.5, lsKingTracker v0.4 · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 — v16.20: THE KING CHART FIXED (SPX King tracked + placed exactly on Atlas)
+
+The panel's King chart (node-ladder section toggle → "kingchart"; `kingChartHtml`, ~L9544) draws the SPX + SPY
+Kings as step lines with deflect/break stats. Two real bugs, both fixed — diagnosed from the code + the KINGNOW
+data, NOT guessed:
+1. **SPX journey wasn't persisted.** `KINGDAY`/`loadKingDay` handled SPY+QQQ only; the SPXW journey was created
+   live (`updateKingJourney` on the `sampleTapeHistory('SPXW')` path) but dropped on the install-forced reload →
+   the chart fell back to the `krOf` census (frozen since 2026-09-03) → SPX King line flat/stale. Fix: SPXW + NDX
+   are first-class in `KINGDAY` init, `KING_CONFIRM`, `KINGHIST`, and `loadKingDay`'s rehydrate list.
+2. **SPX line was ~7 pts off Atlas.** It was drawn with `dispScale` (~1.0015); the Atlas-verified conversion is
+   `esOfSpx` (skylitFutPx / persisted GP_SPXWR, ~1.00058). Fix: `kingSteps` now takes a converter; SPX uses
+   `esOfSpxKC` (exact ES), SPY still uses `rr`. Verified against KINGNOW (strike 7595 → ES 7599.37): new line
+   0.00 pts off the gamma King (24/24 node-for-node with Atlas); old dispScale line was +7.0.
+
+**Deflect/break stats** compute in `kingChartEvents` from the (now correct) lines. The **hold-rate-by-factor**
+panel is n-gated and fills from the tap record (design/KING-STUDY.md) — not a bug, data-accrual.
+**⚠ OPEN / verify live during RTH:** the SPX/SPY King steps should sit on the gamma Kings and match Atlas; watch
+that the SPX steps walk with the rolls (not flat). Note: the journey samples `tapeMap('SPXW')` while the gamma
+King uses `tapeMapLive` — they agree during RTH (tapeMap only goes stale after the close); if they ever diverge
+intraday, switch the journey to tapeMapLive. The krOf census (`ktTick`/`krTick`) is still frozen since 09-03 —
+the chart no longer needs it (KINGDAY is primary), but the Atlas-comparable roll tally would want it revived.
 
 > **THE DAY MODEL now lives in `design/DAY-MODEL.md` — the ONE source of truth. Read it first for anything about
 > the expected candle / READ. It documents both layers, the 3 adaptive stages + coefficients, what's null, the

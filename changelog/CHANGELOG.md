@@ -1,3 +1,16 @@
+## v16.20 — the King chart fixed: SPX King now tracked + placed exactly on Atlas (2026-09-15)
+
+The panel's King chart (price vs the SPX/SPY Kings as steps, with deflect/break stats) had two real bugs:
+- The SPX King journey was created live but NOT persisted — KINGDAY/loadKingDay handled SPY+QQQ only, so the
+  install-forced reload dropped it and the chart fell back to the krOf census (frozen since 2026-09-03) → the
+  SPX King line went flat/stale. Fix: SPXW + NDX are first-class in KINGDAY init, KING_CONFIRM, KINGHIST and
+  loadKingDay's rehydrate — the SPX/NDX journey now survives a reload.
+- The SPX King line was drawn with dispScale (~1.0015), sitting ~7 pts OFF the real King. Fix: draw it with the
+  Atlas-verified esOfSpx conversion (skylitFutPx / persisted GP_SPXWR ratio ~1.00058) — verified against the
+  KINGNOW data, the new line lands 0.00 pts off the gamma King (which is 24/24 node-for-node with Atlas).
+Result: the SPX King steps track correctly and the deflect/break events compute against a correctly-placed line.
+The hold-rate-by-factor panel stays n-gated (fills from the tap record). Live RTH visual check vs Atlas pending.
+
 ## v16.19 — stage-3 (60-min IB) + the indicator sweep (2026-09-15)
 
 Tested indicators/volume/momentum/gap/open-location for incremental value (out-of-fold). Verdict: the opening
