@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-16 · v16.32 · session `f9c89c64` — v16.32 — Day Stats E row conditional on the morning; EM study; IF extras
+## 2026-09-16 · v16.33 · session `f9c89c64` — v16.33 — candle: IF EM + placement; daily record; v16.32 Day Stats; studies
 
-_131 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_144 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1687,6 +1687,156 @@ What would improve it is the lesson from the candle study applied column by colu
 
 **me (21:39):** Now the docs, snapshot and chat history.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (20:55):** Clean now. Delivering the mockup.
+Both mockups are drawn the way they would sit on the IRT rail, on the real IF book from 14:26.
+
+**#1 — wall depth.** The only new thing on the rail is a small pill beside the existing CW / PW tag (and after the wall on the regime chip's second line): `0D` means the wall is ≥70% today's expiry — a level for this session only, fade the first test, gone at 3:00; `WK` means the week's expiries carry most of it — it holds through the week and a break is a bigger event; `MO` means the monthly book sits on it — a structural level. It comes from the per-expiry chain the companion already holds, so no new fetch; the 30% / 70% thresholds are a starting point to be measured, like everything else. This is the one I'd build first: it's one pill, it answers "how much should I respect this wall?", and nothing existing changes.
+
+**#2 — the curve's slope.** One word on the regime chip — `STEEP↓` or `flat` — from the companion's own net-gamma-vs-spot scan (the one that already finds the flip). Steep on the downside means a wall break runs; flat means it stalls. The curve panel in the mockup is only there to show where the word comes from; it would not be drawn on IRT. The same number would later feed the day model's expected-candle skew (item C), but that's a separate, measured step.
+
+Which one do you want to go with — #1 first, as recommended, or would you like to change anything on the pill (placement, the three names, the thresholds) before I build it?
+
+**OPERATOR:**
+> now consider how you could use IF information in the other indicators like king tracker or day model etc.
+
+**me (20:57):** Here is where IF's structure could add something to each of the other plugins, judged against what each one does today and what the companion already carries. Nothing below needs a new fetch — the FLIP / CW / PW / EM rows are already in `GammaProfile.csv`, which every plugin reads.
+
+**lsDayModel (the expected day).** This is the biggest opportunity. The model today is purely statistical: yesterday's bars and the day-type stats give it a projected high and low. IF gives it three things it has no other way to know. First, the expected move (the EMH / EML rows built in 16.31) is the options market's own range budget for today — the model can draw its statistical range and the implied range together, and when they disagree that is itself a read (stat range wider than EM on a +gamma day means the stat range is probably optimistic). Second, the walls are hard edges: a projected high that sits beyond the 0DTE call wall should be capped or marked low-odds, because the wall is exactly the level the day model doesn't know about. Third, the regime sign gives the candle its skew — below the flip the expected range widens and the tail points down; above it the range narrows and the candle compresses. That is item C, and the slope word from mockup #2 is the same number feeding it. Everything here can be built from the CSV rows that already exist.
+
+**lsKingTracker (the King's journey).** It tracks Skylit's flow King and its rolls. IF's King — the largest |net| in the 0DTE chain, which is what IF calls the Magnet — is the standing King, and it moves slowly. Drawing it as a second, quieter track under the flow King gives a read the tracker cannot make today: when the flow King rolls onto the strike where the standing book already sits, that is agreement (the flow is confirming the struc …[trimmed]
+
+**OPERATOR:**
+> regarding the day model, when IF is selected, what if you used the expected move to calculate them .  is its result better or worse
+
+**me (21:03):** Short answer: probably better before the open and for the first half hour, probably not after — but that is a guess until it's measured, and it can be measured with the tool that built the current model.
+
+What the day model does today (v16.18, `tools/study-hodlod.py`, out-of-fold over 283 ES sessions): before 30 minutes of RTH it predicts the day's range from the prior day's range (MAE 23.0 pts); once 30 minutes are in it switches to the opening range (MAE 19.5); after an hour, the initial balance (MAE 18.5). The weekday mean it replaced was MAE 24.2 — barely predictive. The candle is then drawn symmetric around the open, with a body lean from the opening drive.
+
+Why EM should beat the ex-ante stage: the prior day's range is backward-looking and unconditional; the 0DTE straddle is the market's forward price of today's volatility, and it already knows things yesterday's range cannot — that today is FOMC, that the week's event risk is in, that IV collapsed overnight. Implied vol subsuming historical vol is one of the better-established results in the literature, so I'd expect the EM stage to come in under 23.0. Why it probably loses after 30 minutes: the EM is set once at the open and doesn't update, while the opening range is today's actual realized behaviour. The likely best model is a blend — EM ex-ante, then EM and the opening range together — but that is exactly what the fit would tell us.
+
+Two things to get right if we try it. First, the EM is not the range: the straddle prices the expected |close − open|, and for a random walk the high-low range averages about twice that, so EM would go in as a fitted coefficient (`range = a + b·EM`), not as the candle's half-width directly. Second, it must be on the ES scale via the ratio, like everything else — today's `feat.emba …[trimmed]
+
+**OPERATOR:**
+> run the study .  I want to know how good EM is and if it will improve the model espected high and low
+
+**me (21:11):** Got all 332 rows. Closing the tab and assembling the series.
+The study is done: 299 ES sessions (June 2025 to yesterday), same corpus, grid and error measure as the existing day model, scored out-of-fold so no day grades itself. The EM series is CBOE's VIX1D at the open, which is the 0DTE straddle at 08:30 seen through CBOE's formula; it agrees with the panel's own straddle pins in level on the 9 clean days we have.
+
+**How good is the EM?** Better than anything the model has. Before the open it beats the prior-day-range stage 18.3 vs 22.6 points (−19%), and on its own it also beats the 30-minute and 60-minute stages (19.4 / 19.0) — a number known at the open forecasts the day's range better than the first hour's own range does. Added to those stages it takes another 9% off. The prior-day range is dead once the EM is in (its coefficient drops to 0.007). Where it helps most is the tails: the current stage over-calls quiet days by 12 points and under-calls event days by 13; the EM is unbiased in both. Its own failure mode is the day after a vol spike, when implied vol is still high and the tape has calmed.
+
+**Will it improve the expected high and low?** Only slightly — about one point — and the study shows why. Even a *perfect* range, placed symmetric round the open the way the candle is drawn today, still misses the high and the low by 18.4 points each. The candle's error is placement, not width: it is the point you made on Tuesday ("28 points of upside that never printed"), now measured. The lever that does move the high and low is placing the candle by where the open sits in the opening range — at 60 minutes in, the high error drops from 17.4 to 12.8 and the low from 22.0 to 16.8, a quarter off both.
+
+So the recommendation, nothing built: placement first (that is where …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> just  show me the mockup for the recommendation
+> 
+> _[sent while I was working — a queued message]_
+> does the EH and EL update during the day from IF
+> 
+> _[sent while I was working — a queued message]_
+
+**me (21:22):** Clean. Delivering.
+The push is on origin (your sync loop took it at 16:18, commit `f25725a`); the clone is aligned.
+
+The mockup is the same two candles the plugin draws now — dashed ghost for expected, solid for actual — with today's model on the left and the recommendation on the right, both at the 60-minute stage so it's a fair comparison. Tuesday is the one to look at: today's model drew +31 / −31 and the day printed +2.8 / −40.8; the recommendation draws +9.6 / −45.6 from the same tape, because the open sat in the top 8% of the first hour's range and the EM said a 55-point day. Friday is a quiet day where both are too wide (the EM over-called it after Thursday's vol), and Monday is the honest miss — a 125-point trend day that no 55-point candle can draw, though the recommendation at least leans it upward.
+
+On your second question — no, the day model's E-HOD / E-LOD would not follow IF through the day, and they shouldn't. The EM the study measured is the 0DTE straddle *at the open*; that is the number pinned once and used for the whole day's range. The live straddle decays every hour (it's pricing less and less remaining time), so if the candle tracked it, the candle would shrink mechanically into the close regardless of what the tape did. What updates the candle is the tape itself: the EM-only ghost at 08:30, the opening range entering the width and placement at 09:00, and the initial balance replacing it at 09:30 — the bottom strip in the mockup shows exactly that progression on Tuesday. After 09:30 it is fixed, as it is today.
+
+The rows that *do* follow IF through the day are the EM H/L lines on the gamma-profile rail (16.31): those are re-read on every export as chain spot ± the current straddle, so they narrow and re-centre as the session goes on. Two different …[trimmed]
+
+**OPERATOR:**
+> have you considered all the indicators
+
+**me (21:26):** Not in the first pass, no — it tested only the EM and the opening range. So I ran a second pass just now with every other input that has a history in the corpus, same 283 sessions, same folds, same error measure (it's §7 of the study doc, `tools/study-day-inputs.py`, synced to your repo).
+
+For the range, added to the EM model at each stage: the overnight (Globex) range, the gap off the prior close, the prior-day range, VIX1D's prior close, and the day of the week. None of them moves the error by more than 0.3 points in either direction, which is noise. The 08:30 EM already carries whatever those carry.
+
+For placement before the open — where the open sits in the overnight range, where it sits in the prior day's range, the signed gap — all of them fit an upside share of about 0.5 with a slope near zero. There is no placement signal before the tape prints, so the candle stays symmetric until 30 minutes in; after that, adding those to the opening-range position changes nothing (12.79 / 17.42 → 12.76 / 17.60 at 60 minutes).
+
+What I could not test are the inputs you'd most want tested: the regime sign, the distance from the open to the 0DTE flip, the walls, the King and its polarity, Trinity. None of them exists in the corpus — IF levels and the tape's King are recorded only since 24 August, seventeen sessions, which cannot be fit. Those are exactly item C's point 3 (a −γ trend day should skew the candle), and the way to get the answer is a one-row daily record written by the panel from tomorrow on — regime sign at the open, flip distance, walls, King — with this study re-run when about sixty days exist. That would be a small panel change, and I'd want to agree its exact fields with you before building it.
+
+So the recommendation stands as measured: the EM for the range, the o …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (21:28):** Pushed via your sync loop (`03ba84e`, 16:28) — the second-pass script, the study doc §7, the changelog and the raw output are all on origin, and the clone is aligned.
+
+**OPERATOR:**
+> I am curious about the day stats , how can that model be improved?
+
+**me (21:30):** Short version: the Day Stats strip has the same disease the candle had, in a purer form. Every number on its E row is a weekday average, and the weekday tells you almost nothing about the day. I measured it on the same 300 sessions before answering, so here is what the strip's own numbers look like against the corpus.
+
+The 1ST clock is a trimmed mean of a very skewed distribution: the first extreme prints at a median of 24 minutes after the open (56% within 30 minutes, 74% within the hour), but the mean sits at 45 minutes, so the E row's "first at ~09:05" is a time that is neither typical nor useful. The weekday version of it errs by 40 minutes on average — exactly the same as ignoring the weekday (40.3), and worse than a plain median (36). The 2ND clock is the same story: a mean around 13:56, an error of about 92 minutes either way, weekday or not; 39% of second extremes print in the last hour and 29% in the last 30 minutes, which one clock cannot express. The 1ST = LOD/HOD call is 52% LOD across the corpus and 44–60% by weekday — a coin toss dressed as an expectation. The wick family (Took, BOP, Wick, W.End, Wick%, MUD) is measured well but unconditionally, so it reads the same on every day regardless of what the open did.
+
+What would improve it is the lesson from the candle study applied column by column: make the E row conditional on the day as it unfolds, and make it distributional where a single number lies. Three things have signal in the corpus already. The sequence call improves once 30 minutes are in — an open in the bottom third of the opening range gives LOD-first 59%, in the top third 39%, and a down opening drive 40%; that's modest, but once Layer 2's READ says an extreme is IN (the classifier at AUC 0.879) the 1ST column is simply known, and the strip sho …[trimmed]
+
+**OPERATOR:**
+> i'll go with your recommendation ,  do what you need to do but make sure you test and confirm that the model is better than base
+
+**me (21:39):** Now the docs, snapshot and chat history.
+Built as panel **v16.32**, on origin (`b234542`), measured against base before a line was written.
+
+**The test, out-of-fold on 300 sessions, with the base re-derived inside each fold so it is scored the same way.** The 1ST = LOD/HOD call goes from 48% (the weekday majority — worse than a coin) to 59% at 30 minutes and 61% at 60 minutes, and becomes a fact once the READ says the extreme is in. The 1ST clock goes from 38.4 minutes of error to 33.3 (−13%) — pooled median before the open, the opening-range table at 30 minutes, and at 60 minutes the rule that an open in the outer third of the first hour makes that hour's extreme on the open's side the day's first, with its clock already known. The 2ND clock does **not** improve: nothing known in the morning predicts it (93 minutes of error whichever feature is tried), so the build carries the pooled median and makes no claim — the honest display for it is the ladder (39% of second extremes print in the last hour), which is a plugin change I'd mock up before touching. Took and HL Gap follow the clocks.
+
+What changed: the E row's clocks and 1ST come from the new staged model instead of the weekday mean; the DAYEHOD/DAYELOD tips and the DAYSE row carry them; a `CONDE` row says which stage drew them; the tables live in BASERATES.json (the nightly re-fits them) with a baked fallback. lsDayStats itself is untouched — same 17-field row. Tests: 27 new assertions with 4 mutations firing, Gate A 61/61, test_hodlod 176/176 (I re-baked the base literal, which had drifted from the nightly's file since the 11th — five pre-existing failures now green), smoke clean, save guards green.
+
+To install, step by step:
+
+Step 1 — wait until about 16:50 CT (the CDN caches for five minutes), then click [Update …[trimmed]
+
+**OPERATOR:**
+> the bottom line , is the day model candle and the day stats going to be better ?  Is there any additional data that you need to improve it even further ?
+
+**me (21:45):** **Day Stats — yes, from tomorrow, on two of its three predicted columns.** The 1ST = LOD/HOD call goes from a coin toss (48%) to 61% after the first hour and to a known fact once the READ fires; the 1ST clock error drops 13%. The 2ND clock does not get better, because nothing available in the morning predicts when the second extreme prints — the honest fix there is to show the distribution instead of a time, which is a strip change I'd mock up first. Everything else on the strip (the wick family, the range) is as it was.
+
+**The day-model candle — it will be, but it isn't yet.** The study says placement cuts the expected high/low error by a quarter after the first hour and the EM takes 19% off the range before the open; those numbers are out-of-fold on 299 sessions, so I trust them. But the candle is unchanged until you say go on the mockup I sent — that's your standing rule, and I'd rather keep it than build both models in one evening. Two honest limits even after it's built: before 30 minutes the candle stays symmetric (no placement signal pre-open), and trend days like Monday will still be under-drawn, because a 125-point day can't be predicted from a 55-point implied move.
+
+**Data that would improve it further, in order of what it would buy:**
+
+The daily record row is the big one. Regime sign at the open, distance from the open to the 0DTE flip, the walls, the King's position and polarity, Trinity agreement — none of this exists in the corpus, and it is exactly the input that should skew a −gamma trend day. Seventeen days are recorded; about sixty are needed to test it. It's a small panel change (one row per day), and it starts the clock — every day without it is a day we can't use later.
+
+The real straddle EM pinned daily. The study ran on VIX1D as a stand-in; the l …[trimmed]
+
+**OPERATOR:**
+> I am particularly interested in whether key levels (which you have) like overnight high and low and day high and low etc., can improve these numbers even more
+
+**me (21:49):** I tested it properly — every level the panel tracks (ONH/ONL, PDH/PDL, prior close, Asia, London, pre-market, prior week's high/low), four different ways, on 279 sessions with the same out-of-fold scoring as the EM study — and the answer is no, not for these numbers.
+
+As range inputs (room to the nearest level up and down, the span of the overnight-plus-prior-day envelope) they add between 0.03 and 0.22 points of error — noise. As placement inputs before the open (where the open sits among the levels, how much room there is each way) the fitted slopes are essentially zero: where the open sits relative to last night's or yesterday's range tells you nothing about which way today's range hangs, and after the first hour the opening range already carries everything. As magnets, the day's high sits within 5 points of a level 45% of the time versus 41% for a same-distance high shuffled in from another day; the low shows no effect at all. And the practical rule — snap the expected high/low to a level when one is within 5 or 8 points — moves the error by a tenth of a point.
+
+The one thing worth keeping an eye on: when a level sits about 5 points inside the expected extreme, the day gets through it less often than through a plain price at the same distance (32% vs 39% on the high side, 20% vs 43% on the low side). But each of those cells is 15–25 days, the 8- and 12-point rows contradict it on one side each, and I won't build on that. It's recorded in the doc to re-run when the corpus has doubled.
+
+Where the levels do earn their keep is where you already have them: the sweep study and the SWEPT row — when a sweep-and-reclaim of ONL or PDL happens, how often that print is the low. That's an event read at the moment the tape touches the level, not a forecast made before it has. So …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (21:51):** Pushed via your sync loop (`013c10b`, 16:50) — the key-levels study, its doc and the changelog entry are on origin, and the clone is aligned.
+
+**OPERATOR:**
+> what is your recommendation in trying to improve these models further , with data we have or indicators ?
+
+**me (21:53):** My recommendation has three parts, in this order.
+
+**First, ship the two gains already measured.** Placement by the opening range and the EM in the range are the largest improvements anything in this evening's work has found (−25% on the expected high/low, −19% on the pre-open range), and they're waiting only on your go on the mockup. Nothing below is likely to beat them, so they should go in before anything else is tried.
+
+**Second, start recording the inputs we can't test yet — tomorrow, not later.** Every predictor with a history in the corpus has now been tried: the EM and the opening range work, and the prior-day range, overnight range, gap, weekday, next-day implied vol, and all the key levels do not. What's left untested is exactly the set the doctrine says should matter — the regime sign at the open, the distance to the 0DTE flip, the walls, the King's position and polarity, Trinity — and the reason it's untested is that none of it exists in the corpus. A one-row daily record from the panel (those fields plus the real straddle EM and an event-day flag from the companion's calendar) costs almost nothing, and in about sixty sessions it lets the same study answer whether a −gamma open widens the candle or skews it, which is the one hypothesis that could fix the days both models miss worst — the event days and the trend days like Monday. Every day without the row is a day we can't use later.
+
+**Third, one more evening of tests on data we already hold, aimed at the right target.** The candle's remaining error isn't spread evenly; it's concentrated in trend days, where a 55-point candle meets a 125-point day. Shaving another point of average error matters less than knowing *when the candle is going to be wrong*. Three things in the corpus haven't been tried and bear o …[trimmed]
+
+**OPERATOR:**
+> ok.  lets build the updated indicators and using insider finance
+
+**me (21:56):** Plugins take DAYEXP as given — no symmetry assumption, so this is panel-only. Writing the code.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -2557,6 +2707,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+013c10b gex: sync 16-Wed-09 16:50
+b234542 gex: sync 16-Wed-09 16:42
 03ba84e gex: sync 16-Wed-09 16:28
 f25725a gex: sync 16-Wed-09 16:18
 6311cf7 gex: sync 16-Wed-09 16:06
@@ -2567,8 +2719,6 @@ d7410bb review: nightly/weekly files pulled from Drive inbox 16-Wed-09
 8e445ce gex: sync 16-Wed-09 14:36
 e768e7f gex: sync 16-Wed-09 14:30
 78f7a20 gex: sync 16-Wed-09 14:20
-4d69692 gex: sync 16-Wed-09 14:18
-2316a46 gex: sync 16-Wed-09 14:12
 ```
 
 ---

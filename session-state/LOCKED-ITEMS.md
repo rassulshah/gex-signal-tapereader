@@ -94,6 +94,9 @@ numbers were ~30 min behind the tape. FLIP 7690.79 / sign NEG stood against a sp
 Proposal: FLIP row carries the payload age (`FLIP,<es>,<spx>,0DTE,calc,<payloadAgeMin>`); the plugin greys the sign
 when their payload is older than ~10 min and the regime line says "flip <n>m old". One element; discuss before build.
 
+### ✅ C · THE DAY CANDLE MODEL — BUILT 2026-09-16 19:15 (panel v16.33): the IF 0DTE straddle in the range at every stage +
+### placement by the opening range (points 1 + 2 of the diagnosis below, measured in design/EM-RANGE-STUDY.md); point 3
+### (regime skew) now RECORDABLE — the daily record row ships in the same build; test at ~60 sessions
 ### C · THE DAY CANDLE MODEL — operator: "why is the day candle model so bad, look at the results today"
 Diagnosed with today's numbers (Tue 15 Sep, Dec scale, from the open): expected HOD +31 / LOD −31 / close −15.5 /
 range 62 (open60 stage) vs actual HOD **+2.8** (8:33a) / LOD −40.8 (9:54a) / close −27.5 / range 43.5. LOD and close
@@ -127,6 +130,10 @@ model is better than base." `design/DAYSTATS-COND-STUDY.md`: 1ST clock 38.4 → 
 clock — plugin change, mockup first; (ii) wick% conditional on the open's OR position — unmeasured; (iii) the daily
 record row (regime sign at the open, flip distance, walls, King) so the doctrine inputs can be tested — panel change,
 fields to agree.
+
+### ✅ H · THE DAILY RECORD ROW — BUILT 2026-09-16 19:15 (panel v16.33): `dayRecord` in the day file (regime sign, flip,
+walls, King, EM, event, open) taken in the first 15 min. OPEN under H: re-run study-em-range / a regime-skew study when
+~60 records exist; re-fit `GP_EM_MODEL` on the real straddle pins then (VIX1D proxy until).
 
 ### CARRIED OPEN (unchanged tonight)
 - Q12 top-3-vs-top-5 gamma lines (per-rank deflection table, sessions since 09-09) — operator asked "would I have

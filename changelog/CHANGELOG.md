@@ -1,3 +1,28 @@
+## v16.33 — the day-model candle: the IF expected move in the range + placement by the opening range; the daily record (2026-09-16, ~19:15 CT)
+
+Operator: "ok. let's build the updated indicators and using insider finance." Built from `design/EM-RANGE-STUDY.md`
+(n=299, out-of-fold) — nothing here is a guess:
+- **The EM pin** (`gpDayEmPin`): the SPX 0DTE ATM straddle from InsiderFinance (the companion's `dte0.em`), taken ONCE at
+  the first export after the open — clean within 15 min, flagged `est` to 60 min, refused after (legacy stages stand),
+  refused when the front expiry is not today (dte0NotToday) or the straddle is an expired book's residue (EM_MIN_FRAC).
+  SPX points × the SPX→ES ratio (irtRatio) = ES points. ES chart only (dispMarket).
+- **The range** (`gpDayModel`): pre-open `1.73 + 1.33·EM` (replaces the prior-day range: 18.3 vs 22.6); 30 min
+  `3.52 + 0.79·OR30 + 0.85·EM`; 60 min `2.36 + 0.66·IB + 0.82·EM` (17.6 / 17.3 vs 19.4 / 19.0). No pin → the v16.18 stages.
+- **Placement**: upside share `f = 0.805 − 0.617·pos30` → `0.879 − 0.77·pos60` (clamped 0.05–0.95), symmetric pre-open;
+  `eHi = O + f·rng`, `eLo = O − (1−f)·rng` (E-HOD 17.4 → 12.8, E-LOD 22.0 → 16.8 at 60 min). The leaned close stays
+  inside the candle. Placement applies with or without an EM pin.
+- `EXPMODEL` row gains `<f>,<emEs>,<pin|est>`; basis words `em-exante` / `em-open30` / `em-open60`.
+- **The daily record** (`gpDayRecordTake`, `dayRecord` in the day file): at the first export in the first 15 minutes —
+  openEs, spotSpx, ratio, emSpx/emEs (+est), flipSpx, cwSpx, pwSpx, netGEX0, payloadT, regime {sign,type,conf,conflict},
+  king {spx,neg}, the calendar's event titles. The doctrine inputs no corpus holds, so they can be TESTED in ~60 sessions
+  (item C point 3). Kept 40 days in localStorage; the day file carries it out.
+- Coefficients are literals (`GP_EM_MODEL`) fit on the VIX1D-open proxy; `study-em-range.py` re-fits on the real pins
+  once the record has ~60 of them. Nothing on the plugins: lsDayModel draws DAYEXP as given (no symmetry assumed).
+Tests: `test_daymodel_em.js` 34/34 + 4 mutations fire (Tue 15 Sep reproduces the mockup: +14.1/−34.6 at 30 min, ~+9.6/−45.6
+at 60 min vs actual +2.8/−40.8); Gate A 61/61; test_hodlod 176/176; test_daystats_cond 27/27; smoke clean.
+⚠ The pin needs the Atlas tab open at 08:30 CT (the companion keeps polling while hidden since 1.20; the panel's export
+timer runs while the page is open). Opened later: `est` up to 09:30, then the prior-day stage — the candle says which.
+
 ## STUDY — key levels vs the expected high / low and the range (2026-09-16, ~18:40 CT) — NO CODE CHANGE
 
 Operator: "whether key levels (which you have) like overnight high and low and day high and low etc. can improve these

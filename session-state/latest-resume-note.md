@@ -1,5 +1,26 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 18:10 CT (v16.32 build) · **panel v16.32** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 19:15 CT (v16.33 build) · **panel v16.33** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~19:15 CT — v16.33: THE CANDLE (IF EM + PLACEMENT) + THE DAILY RECORD. START HERE.
+
+**Built and on origin (awaiting his Tampermonkey update — one link, no compile):** panel **16.33**. Operator: "ok. let's
+build the updated indicators and using insider finance." (1) The day-model candle's range now uses the **0DTE straddle
+from InsiderFinance pinned at the open** (`gpDayEmPin`, clean ≤15 min, `est` ≤60 min, otherwise the v16.18 stages) at
+every stage, and the candle is **placed** by where the open sits in the opening range / initial balance (`gpDayModel`;
+symmetric pre-open). Both from `design/EM-RANGE-STUDY.md` (n=299 out-of-fold: range −19% pre-open, E-HOD/E-LOD −25% at
+60 min). (2) **The daily record** (`gpDayRecordTake` → `dayRecord` in the day file): regime sign, flip distance, walls,
+King, EM, event — taken in the first 15 min after the open — so the doctrine inputs can be TESTED in ~60 sessions. Read
+`design/EM-RANGE-STUDY.md` §7 and `design/KEY-LEVELS-STUDY.md` before proposing any other predictor: everything with a
+history has been tried (EM + opening range work; prior-day range, overnight, gap, weekday, VIX1D close, all key levels:
+null). v16.32 (the Day Stats E row conditional on the morning) is in the same update.
+
+**Tomorrow's eyes-on:** at 08:30 the candle should draw symmetric with basis `em-exante` (EXPMODEL row) if Atlas was open;
+at 09:00 it places (`em-open30`); at 09:30 `em-open60`. DAYSE's 1ST/2ND clocks switch stages the same way (`CONDE` row).
+If Atlas opened late the basis reads the legacy stage and the EM field is blank — expected, not a bug.
+
+**Still on the table, in order:** the IF extras (#1 wall-depth pill, mockup delivered) · the lsDayStats LADDER for the 2ND
+clock (mockup first) · one evening on volume / prior-close location / a trend-day flag (recommendation given, not
+started) · the NQ cross-check · re-fit `GP_EM_MODEL` on the real pins at ~60 days · items E, F step 9, D opens.
 
 # ⚠⚠⚠ 2026-09-16 ~18:10 CT — v16.32: THE DAY STATS E ROW, CONDITIONAL ON THE MORNING. START HERE.
 

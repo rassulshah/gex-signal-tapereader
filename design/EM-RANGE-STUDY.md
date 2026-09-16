@@ -159,3 +159,10 @@ sessions), which cannot be fit. They are exactly the doctrine inputs item C poin
 skew the candle); the way to get the answer is a one-row daily record (regime sign at the open, flip distance, walls,
 King) written by the panel from today on, and this study re-run when ~60 days exist. Until then the recommendation
 stands as measured: EM for the range, the opening range for placement, nothing else.
+
+## 8. Shipped — panel v16.33 (2026-09-16 19:15 CT)
+Both recommendations of §6 are built: the EM (the InsiderFinance 0DTE straddle pinned at the open — `gpDayEmPin`) in
+the range at every stage, and placement by the opening range / initial balance (`gpDayModel`), with the coefficients
+of §2 and §4 as literals (`GP_EM_MODEL`). The daily record (§5's guard) ships in the same build (`gpDayRecordTake`), so
+the model moves onto the real straddle series once ~60 pins exist. `test_daymodel_em.js` reproduces Tue 15 Sep from the
+mockup. Placement applies even without a pin; without a pin the range falls back to the v16.18 stages.
