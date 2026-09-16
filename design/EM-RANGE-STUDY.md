@@ -129,3 +129,33 @@ use (the first hour is inside the day), applied to *where* the candle sits inste
 3. Record the pinned straddle EM daily so (1) is re-fit on the real series.
 
 Order if built: (2) first — it is where the expected high/low improve; (1) second. One at a time, mockup first.
+
+## 7. "Have you considered all the indicators?" — the second pass (`tools/study-day-inputs.py`, n=283)
+
+Operator's question after the mockup. Every other input that HAS a history in the corpus was added to the EM model at
+each stage, and tested for placement too — same folds, same MAE. n=283 because the overnight session needs the
+vendor 1-minute file (the Yahoo dailies are RTH-only).
+
+| added to the EM range model | pre-open | 30 min | 60 min |
+|---|---|---|---|
+| EM model alone (reference) | 18.47 | 17.80 | 17.58 |
+| + overnight (Globex) range | +0.09 | +0.02 | +0.07 |
+| + \|gap\| (open − prior close) | +0.17 | +0.06 | +0.13 |
+| + prior-day range | +0.05 | 0.00 | +0.05 |
+| + VIX1D prior close (next-day implied) | +0.04 | +0.18 | +0.13 |
+| + day of week | +0.01 | −0.04 | −0.02 |
+
+Nothing moves the range by more than 0.3 points either way — noise. The overnight range, the gap, yesterday's range,
+the weekday and the next-day implied all carry nothing the 08:30 EM does not already carry.
+
+Placement PRE-OPEN: the open's position in the overnight range, in the prior day's range, and the signed gap all fit an
+upside share of ~0.5 with slopes near zero (E-HOD/E-LOD 17.4 / 23.2 vs 17.4 / 23.3 symmetric). **Before 30 minutes there
+is no placement signal in the data; the candle stays symmetric.** At 30 / 60 minutes, adding those to pos30 / pos60
+changes nothing (14.24 / 20.31 → 14.22 / 20.42; 12.79 / 17.42 → 12.76 / 17.60).
+
+**Not testable yet** — no history in the corpus: the regime sign, the distance from the open to the 0DTE flip, the
+walls, the King and its polarity, Trinity. IF levels and the tape's King are recorded only since 2026-08-24 (~17
+sessions), which cannot be fit. They are exactly the doctrine inputs item C point 3 asks about (a −γ trend day should
+skew the candle); the way to get the answer is a one-row daily record (regime sign at the open, flip distance, walls,
+King) written by the panel from today on, and this study re-run when ~60 days exist. Until then the recommendation
+stands as measured: EM for the range, the opening range for placement, nothing else.

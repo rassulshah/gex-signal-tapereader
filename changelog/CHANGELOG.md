@@ -12,6 +12,10 @@ the open sits in the first hour: high/low MAE 17.4/22.0 → 12.8/16.8 (−25%). 
 into the range second, record the pinned straddle daily. Reasoning that was wrong going in: I expected the EM to lose
 to the 30/60-minute stages after the open; it beats them — implied vol at the open carries more about the day's range
 than the first hour's own range does.
+Second pass (`tools/study-day-inputs.py`, n=283, operator: "have you considered all the indicators"): overnight range,
+gap, prior-day range, VIX1D close, weekday add nothing to the EM range (all within ±0.3); pre-open placement from the
+overnight / prior-day position or the gap is null — the candle stays symmetric until 30 min. Regime / flip / walls /
+King untestable (17 days of history) → needs a daily record row first. Study doc §7.
 ⚠ Browser note: a `navigate` without a tabId landed on the Atlas tab (the panel's host page) for ~10 s before I sent
 it back; Atlas reloaded to /atlas, state is in localStorage. Never navigate without an explicit, freshly created tab.
 

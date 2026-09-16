@@ -1,0 +1,44 @@
+sessions with every input: 283 of 300 (2025-06-03 → 2026-08-21); overnight sessions found 296
+
+== RANGE — each candidate ADDED to the EM model, out-of-fold MAE (n=283) ==
+model                                             MAE  MAE-HI  MAE-LO  fit
+pre-open: EM model (reference)                  18.47   17.39   23.29  [2.465, 1.32]
+   + overnight range                            18.56   17.41   23.32  [2.264, 1.336, -0.011]  (+0.09)
+   + |gap|                                      18.64   17.38   23.35  [2.179, 1.346, -0.035]  (+0.17)
+   + prior-day range                            18.52   17.38   23.33  [2.486, 1.308, 0.009]  (+0.05)
+   + VIX1D prior close                          18.51   17.46   23.30  [0.871, 1.067, 0.22]  (+0.04)
+   + day of week                                18.48   17.49   23.24  [-2.11, 1.318, 5.309, 3.063, 12.187, 2.734]  (+0.01)
+   + overnight range + |gap|                    18.65   17.39   23.37  [2.425, 1.327, 0.017, -0.044]  (+0.18)
+30 min: EM model (reference)                    17.80   17.31   22.84  [4.19, 0.802, 0.832]
+   + overnight range                            17.82   17.33   22.83  [3.107, 0.822, 0.91, -0.062]  (+0.02)
+   + |gap|                                      17.86   17.29   22.88  [3.729, 0.815, 0.868, -0.061]  (+0.06)
+   + prior-day range                            17.80   17.33   22.84  [4.144, 0.813, 0.867, -0.029]  (+0.00)
+   + VIX1D prior close                          17.98   17.39   22.86  [2.819, 0.786, 0.629, 0.184]  (+0.18)
+   + day of week                                17.76   17.40   22.79  [-0.87, 0.777, 0.845, 5.76, 5.221, 10.809, 3.742]  (-0.04)
+   + overnight range + |gap|                    17.96   17.31   22.89  [3.27, 0.823, 0.901, -0.033, -0.044]  (+0.16)
+60 min: EM model (reference)                    17.58   17.34   22.60  [3.136, 0.659, 0.815]
+   + overnight range                            17.65   17.37   22.59  [2.177, 0.667, 0.886, -0.053]  (+0.07)
+   + |gap|                                      17.71   17.35   22.67  [2.79, 0.66, 0.845, -0.043]  (+0.13)
+   + prior-day range                            17.63   17.33   22.62  [3.137, 0.659, 0.815, 0.0]  (+0.05)
+   + VIX1D prior close                          17.71   17.45   22.60  [1.302, 0.67, 0.513, 0.254]  (+0.13)
+   + day of week                                17.56   17.40   22.54  [-1.232, 0.649, 0.825, 4.661, 4.132, 10.794, 1.434]  (-0.02)
+   + overnight range + |gap|                    17.86   17.37   22.68  [2.269, 0.666, 0.882, -0.037, -0.025]  (+0.28)
+
+== PLACEMENT — upside share predicted from each candidate; MAE of E-HOD / E-LOD (n=283) ==
+model                                           MAE-HI  MAE-LO  upside-share fit
+pre-open (EM range): symmetric (today)           17.39   23.29  -
+pre-open (EM range): pos_on: open in overnight range   17.52   23.26  [0.531, -0.051]
+pre-open (EM range): pos_pd: open in prior-day range   17.36   23.16  [0.535, -0.054]
+pre-open (EM range): gap_s: signed gap / EM      17.34   23.26  [0.508, -0.045]
+pre-open (EM range): pos_on + pos_pd             17.39   23.20  [0.527, 0.017, -0.057]
+pre-open (EM range): pos_on + pos_pd + gap_s     17.34   23.26  [0.512, 0.029, -0.039, -0.022]
+30 min (OR30 + EM range): symmetric (today)      17.31   22.84  -
+30 min (OR30 + EM range): pos30                  14.24   20.31  [0.805, -0.613]
+30 min (OR30 + EM range): pos30 + pos_on         14.28   20.32  [0.819, -0.612, -0.025]
+30 min (OR30 + EM range): pos30 + pos_pd         14.26   20.31  [0.82, -0.608, -0.028]
+30 min (OR30 + EM range): pos30 + pos_on + pos_pd + gap_s   14.22   20.42  [0.805, -0.607, 0.019, -0.02, -0.013]
+60 min (IB + EM range): symmetric (today)        17.34   22.60  -
+60 min (IB + EM range): pos60                    12.79   17.42  [0.876, -0.763]
+60 min (IB + EM range): pos60 + pos_on           12.80   17.47  [0.871, -0.764, 0.01]
+60 min (IB + EM range): pos60 + pos_pd           12.83   17.46  [0.88, -0.761, -0.008]
+60 min (IB + EM range): pos60 + pos_on + pos_pd + gap_s   12.76   17.60  [0.85, -0.762, 0.039, 0.011, -0.029]
