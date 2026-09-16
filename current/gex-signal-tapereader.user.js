@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.27
+// @version      16.28
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.27';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.28';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6654,7 +6654,13 @@ function gammaProfileBuild(){
       // member >= 30% of the King, a thinner node breaks the run, biggest >= 40%, named once on the biggest member; the
       // rugs with price's side, v15.64) applied to this ladder. RUG / RRUG / PIKA / BARNEY on the named node; PIKAM /
       // BARNEYM on the other members of a stack. The plugin prints them inside the bars (P / B / R / RR, p / b).
-      var spotSpxP=null; try{ var LDs=ladderFor('SPXW'); if(LDs && typeof LDs.price==='number' && LDs.price>1000) spotSpxP=LDs.price; }catch(eLs){}
+      // (v16.27.1) the SPXW SPOT: the Trinity header ("SPXW $7609.45") first — the ladder object carries no price
+      // (the first live export wrote REGIME …,no spot); then the companion's chain spot; then SCALEREF back through
+      // the SPX->ES ratio. Without it the regime row has no sign and no type.
+      var spotSpxP=null;
+      try{ var XM=(typeof readTrinityHeaders==='function')?readTrinityHeaders():null; if(XM && XM.SPXW && typeof XM.SPXW.px==='number' && XM.SPXW.px>1000) spotSpxP=XM.SPXW.px; }catch(eXm){}
+      if(spotSpxP==null){ try{ var LDs=ladderFor('SPXW'); if(LDs && typeof LDs.price==='number' && LDs.price>1000) spotSpxP=LDs.price; }catch(eLs){} }
+      if(spotSpxP==null){ try{ var IFs=(typeof ifChain==='function')?ifChain('SPX'):null; if(IFs && !IFs.err && !IFs.stale && typeof IFs.spot==='number' && IFs.spot>1000) spotSpxP=IFs.spot; }catch(eIs){} }
       var patOf={};
       try{
         var thrP=(CFG&&CFG.nodeThresh)||20;
@@ -6728,6 +6734,7 @@ function gammaProfileBuild(){
       }catch(eIFr){}
       // (v16.27) REGIME row — see gpRegime() above. Written even when the flip is missing (sign NA, type still read).
       try{
+        if(spotSpxP==null){ try{ var ogr=JSON.parse(localStorage.getItem(GP_SPXWR_KEY)||'null'); if(ogr && ogr.r>0 && typeof scaleRef==='number' && scaleRef>1000) spotSpxP=scaleRef/ogr.r; }catch(eOg){} }
         var RG=gpRegime(strikes, spotSpxP, flipSpx);
         if(RG) out.push('REGIME,'+RG.sign+','+RG.type+','+RG.conf+','+(RG.conflict?1:0)+','+(flipSpx!=null?flipSpx.toFixed(2):'')+','+String(RG.note).replace(/,/g,' '));
       }catch(eRG){}
