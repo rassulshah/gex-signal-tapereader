@@ -1,3 +1,16 @@
+## v16.28 + lsGammaProfile 0.43 — first-eyes-on fixes to the build below (2026-09-16, ~11:25 CT)
+
+His first screenshot after installing: the row read `REGIME,NA,FORMING,low,0,7620.72,no spot` and the plugin printed
+"AT flip | FORMING | no edge â€” wait". Three defects, all from the same ten minutes:
+- **No SPXW spot**: `ladderFor('SPXW')` carries no `.price`, so the sign was NA, the type FORMING, and the rug's
+  price-side rule had no price (a RUG tag fired on 7500 with spot 120 pts above it). Spot now comes from the Trinity
+  header (`readTrinityHeaders().SPXW.px`), then the companion's chain spot, then SCALEREF ÷ the SPX→ES ratio.
+- **NA drawn as "AT flip"**: the plugin's sign text only knew NEG / POS / else. NA now prints "flip n/a" with a grey
+  swatch — no sign call is a state, not the flip.
+- **Mojibake**: an em dash in a C++ literal ("no edge — wait") renders as â€” in IRT's ANSI text. Plain hyphen.
+What was RIGHT on that screenshot: FLIP 7691 0DTE tick at price, PW on 7600, the b members of the 7600–7615 barney
+stack with B on 7610, F on 7610 (the floor), no G flood, the CSV rows all present.
+
 ## v16.27 + lsGammaProfile 0.42 + lsKingTracker 0.6 — doctrine labels, the REGIME row, CW/PW/FLIP on the nodes (2026-09-16, live session)
 
 **Operator:** "now I see some labels that don't make sense like G at multiple places … implement gatekeeper, rug, rrug,

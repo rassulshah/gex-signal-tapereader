@@ -509,8 +509,8 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
         const char* tact = (rgType.find("TREND") == 0) ? "FOLLOW, don't fade"
                          : (rgType == "WHIPSAW")       ? "fade EXTREMES only / sit out"
                          : (rgType == "RANGE")         ? "FADE the extremes"
-                         :                               "no edge — wait";
-        const char* sg = neg ? "-gamma" : (rgSign == "POS" ? "+gamma" : "AT flip");
+                         :                               "no edge - wait";
+        const char* sg = neg ? "-gamma" : (rgSign == "POS" ? "+gamma" : (rgSign == "AT" ? "AT flip" : "flip n/a"));
         std::string ty = rgType; if (ty.empty()) ty = "FORMING";
         if (ty == "TREND_UP") ty = "TREND UP"; else if (ty == "TREND_DN") ty = "TREND DOWN";
         sprintf_s(l0, sizeof(l0), "REGIME  %s%s  |  %s  |  %s%s",
@@ -522,6 +522,7 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     }
     COLOR rcol = neg ? S.cneg : S.cpos;
     if (hasRegime && rgSign == "AT") rcol = C_FLIPC;
+    if (hasRegime && rgSign != "AT" && rgSign != "POS" && rgSign != "NEG") rcol = C_GREY;   // no flip / no spot: no sign call
     short ly0 = (short)(y + 9 + lineH/2);
     RCT sw; sw.set((short)(x+10), (short)(ly0-5), (short)(x+21), (short)(ly0+5));
     sw.draw(0, rcol, rcol, DRAW_OPAQUE, PAT_SOLID);
@@ -974,6 +975,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.42");
+    p->setVersion("0.43");
     return p;
 }
