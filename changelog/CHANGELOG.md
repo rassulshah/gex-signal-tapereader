@@ -1,3 +1,11 @@
+## companion v1.20 — the couriers keep running while Atlas is hidden during the session (2026-09-16, ~13:40 CT)
+
+Operator: "build the fixes." The IF / YF lamps read 10m at 13:24 because he was trading from other tabs (FOMC) and the
+companion's `tick()` returns when `document.visibilityState !== 'visible'`. At 20 minutes the chain is stale, the
+FLIP / CW / PW rows are withheld by design and the regime sign goes NA — the IRT chart loses its levels precisely while
+he is trading. Now: during the Chicago session (07:00–16:00 CT, Mon–Fri) the couriers poll regardless of visibility;
+outside it the polite gate stays. The panel's own export tick was never gated (IRT 0m throughout).
+
 ## lsGammaProfile 0.46 + lsKingTracker 0.7 — the profile stops breathing with the tape (2026-09-16, ~13:25 CT)
 
 Operator: "the entire profile is moving up and down." Cause: the contract offset was `live last close − SCALEREF`, but

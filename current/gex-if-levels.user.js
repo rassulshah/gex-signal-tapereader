@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.19
+// @version      1.20
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -855,7 +855,16 @@ function hlBaseCourier(){
     hlBaseFetch(HLBASE_NQ_URL, HLBASE_NQ_KEY, 'NQ base rates');      // (v1.19)
   }catch(e){ log('hlBaseCourier threw', e.message); }
 }
-function tick(){ try{ if(document.visibilityState!=='visible') return;
+// (v1.20) THE COURIERS RUN THROUGH THE SESSION WHETHER OR NOT THE ATLAS TAB IS ON SCREEN. The visibility gate
+// (a hidden tab makes no network calls) is polite outside market hours, but it starved the IRT export: on
+// 2026-09-16 the operator traded from other tabs on FOMC and the panel's IF / YF lamps read 10m, heading for the
+// 20-minute stale cut that drops the FLIP / CW / PW rows and blanks the regime sign. During the Chicago session
+// (07:00-16:00 CT, weekdays) the couriers now poll regardless of visibility; outside it the gate stays.
+function inSessionCT(){
+  try{ var d=new Date(Date.now()-5*3600000); var dow=d.getUTCDay(); var m=d.getUTCHours()*60+d.getUTCMinutes();
+       return dow>=1 && dow<=5 && m>=7*60 && m<16*60; }catch(e){ return false; }
+}
+function tick(){ try{ if(document.visibilityState!=='visible' && !inSessionCT()) return;
   for(var i=0;i<SYMS.length;i++) pull(SYMS[i]);
   evCalCourier(); futCourier(); futWeekCourier(); hlBaseCourier(); vixCourier(); fsideCourier();   // (v1.19) + the weekly bars
 }catch(e){} }
