@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.26
+// @version      16.27
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.26';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.27';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6563,6 +6563,50 @@ function gpDow(){ try{ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][gpShow
 function gpDate(){   // "11 Sep" — the shown session's date for the candle header
   try{ var d=gpShownDate(); return d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]; }catch(e){ return ''; }
 }
+// (v16.27) THE REGIME ROW — two questions, two sources (DECISIONS: "IF prices the day, Skylit reads the character"):
+//   SIGN  = which side of InsiderFinance's 0DTE zero-gamma (the flip) spot sits — POS / NEG, or AT within a buffer so a
+//           spot sitting on the flip does not flap the label. Their contracts, our 0DTE filter (gammaFlip), reconciled
+//           against their page on 2026-09-16 (flip 7620.7 vs their 7617.0 minutes apart; walls 7675 / 7600 exact).
+//   TYPE  = the Academy's three day types (learn/gamma-regimes) read from THIS ladder's structure with the same
+//           thresholds as gexRegime(): skew of top-3 mass one side of price >= REGIME_TREND_SKEW -> TREND; both edges
+//           standing with a hollow middle (edge/mid >= REGIME_WHIP_EDGEMID) and -gamma in charge -> WHIPSAW; both edges
+//           with +gamma in charge -> RANGE. "In charge" = the absolute-value rule: the sign of the three largest nodes
+//           within GP_NEAR_PTS of spot. Velocity = the King's confirmed rolls today (rolling floors/ceilings: 2 = signal).
+//   CONFLICT = the two books disagree on polarity (surfaced, never resolved here).
+// The plugin DISPLAYS this row; its old "sum of every %King" is now only a labelled fallback.
+var GP_FLIP_BUFFER_PTS=3;    // within this many SPX pts of the flip = AT the flip, no sign call
+var GP_NEAR_PTS=30;          // the nodes that decide polarity "in charge" sit within this many SPX pts of spot (~6 strikes)
+function gpRegime(strikes, spotSpx, flipSpx){
+  if(!strikes || !strikes.length) return null;
+  var sign='NA';
+  if(typeof spotSpx==='number' && typeof flipSpx==='number'){ var d=spotSpx-flipSpx; sign=(Math.abs(d)<=GP_FLIP_BUFFER_PTS)?'AT':(d>0?'POS':'NEG'); }
+  var px=(typeof spotSpx==='number')?spotSpx:null;
+  if(px==null) return { sign:sign, type:'FORMING', conf:'low', conflict:false, note:'no spot' };
+  var prom=strikes.filter(function(x){ return Math.abs(x.pct)>=REGIME_SIG_PCT; });
+  var byMag=function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); };
+  var near=prom.filter(function(x){ return Math.abs(x.spx-px)<=GP_NEAR_PTS; }).sort(byMag).slice(0,3);
+  if(!near.length) near=prom.slice().sort(byMag).slice(0,3);
+  var polSum=near.reduce(function(a,x){ return a+x.pct; },0), skyNeg=polSum<0;
+  var rolls=0; try{ rolls=Math.max(0,((KTRK&&KTRK.SPX)||[]).length-1); }catch(eR){}
+  var type='MIXED', conf='low', skew=null, edgeMid=null;
+  if(prom.length<2){ type='FORMING'; }
+  else {
+    var above=prom.filter(function(x){ return x.spx>px; }).map(function(x){ return Math.abs(x.pct); }).sort(function(a,b){ return b-a; });
+    var below=prom.filter(function(x){ return x.spx<px; }).map(function(x){ return Math.abs(x.pct); }).sort(function(a,b){ return b-a; });
+    var up=sum3(above), dn=sum3(below), heavy=Math.max(up,dn), light=Math.min(up,dn)||0.0001; skew=heavy/light;
+    var byK=prom.slice().sort(function(a,b){ return a.spx-b.spx; }), lo=byK[0], hi=byK[byK.length-1];
+    var midMax=0; byK.forEach(function(x){ if(x.spx>lo.spx && x.spx<hi.spx) midMax=Math.max(midMax,Math.abs(x.pct)); });
+    edgeMid=(midMax>0)?(((Math.abs(lo.pct)+Math.abs(hi.pct))/2)/midMax):Infinity;
+    var edgesBoth=(lo.spx<px && hi.spx>px);
+    if(skew>=REGIME_TREND_SKEW){ type=(up>=dn)?'TREND_UP':'TREND_DN'; conf=(skyNeg&&rolls>=2)?'high':(skew>=2.4?'med':'low'); }
+    else if(edgesBoth && edgeMid>=REGIME_WHIP_EDGEMID && skyNeg){ type='WHIPSAW'; conf=(edgeMid>=3)?'high':'med'; }
+    else if(edgesBoth && !skyNeg){ type='RANGE'; conf=(edgeMid>=REGIME_WHIP_EDGEMID)?'high':'med'; }
+    else if(edgesBoth && skyNeg){ type='WHIPSAW'; conf='low'; }   // -gamma between two standing edges, full middle: violent range, low conviction
+  }
+  var conflict=(sign==='POS'&&skyNeg)||(sign==='NEG'&&!skyNeg);
+  var note='skew '+(skew!=null?skew.toFixed(1):'-')+'x rolls '+rolls+' near '+(skyNeg?'-g':'+g')+' '+Math.round(polSum);
+  return { sign:sign, type:type, conf:conf, conflict:conflict, note:note, rolls:rolls, skyNeg:skyNeg };
+}
 function gammaProfileBuild(){
   var cfgI=CFG.irt||{};
   var out=[];
@@ -6604,9 +6648,28 @@ function gammaProfileBuild(){
       var byMag=strikes.slice().sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.es-b.es); });
       byMag.forEach(function(x,i){ x.rank=i+1; });
       strikes.sort(function(a,b){ return a.es-b.es; });
-      // (v16.26) 7th field = the raw SPXW strike (field 6 = type, left empty) so lsGammaProfile's "Tape columns" can
-      // print the SAME strike Skylit's SPXW ladder shows (7575, 7580, ...) next to each node, not the ES-converted price.
-      strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)+',,'+(isFinite(x.spx)?x.spx:'')); });
+      // (v16.26) 7th field = the raw SPXW strike so lsGammaProfile's "Tape columns" can print the SAME strike Skylit's
+      // SPXW ladder shows (7575, 7580, ...) next to each node, not the ES-converted price.
+      // (v16.27) 6th field = the PATTERN TAG, from the SAME doctrine detectors the Dashboard runs (gridSetups: S6 stacks —
+      // member >= 30% of the King, a thinner node breaks the run, biggest >= 40%, named once on the biggest member; the
+      // rugs with price's side, v15.64) applied to this ladder. RUG / RRUG / PIKA / BARNEY on the named node; PIKAM /
+      // BARNEYM on the other members of a stack. The plugin prints them inside the bars (P / B / R / RR, p / b).
+      var spotSpxP=null; try{ var LDs=ladderFor('SPXW'); if(LDs && typeof LDs.price==='number' && LDs.price>1000) spotSpxP=LDs.price; }catch(eLs){}
+      var patOf={};
+      try{
+        var thrP=(CFG&&CFG.nodeThresh)||20;
+        var gnodes=strikes.filter(function(x){ return Math.abs(x.pct)>=thrP; }).map(function(x){ return { book:'SPX', k:x.spx, pct:x.pct, disp:x.spx, pos:x.pct>0 }; });
+        gnodes.sort(function(a,b){ return b.disp-a.disp; });
+        var byP=(typeof gridSetups==='function')?gridSetups(gnodes,{px:spotSpxP}):{};
+        Object.keys(byP).forEach(function(kk){
+          var kinds=(byP[kk]||[]).map(function(q){ return q.kind; }), t=null;
+          if(kinds.indexOf('rug')>=0) t='RUG'; else if(kinds.indexOf('rrug')>=0) t='RRUG';
+          else if(kinds.indexOf('pika')>=0) t='PIKA'; else if(kinds.indexOf('barney')>=0) t='BARNEY';
+          else if(kinds.indexOf('stk pika')>=0) t='PIKAM'; else if(kinds.indexOf('stk barney')>=0) t='BARNEYM';
+          if(t) patOf[String(parseFloat(kk))]=t;
+        });
+      }catch(ePat){}
+      strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)+','+(patOf[String(x.spx)]||'')+','+(isFinite(x.spx)?x.spx:'')); });
       var kes=esOfSpx(kK); if(kes!=null) out.push('KING,'+gpF2(kes));
       // (v16.24) SCALEREF — the front-month ES price this gamma ladder is scaled to (esOfSpx = the ES1
       // payload's SPX->ES ratio, ~1.0006). During the quarterly roll the operator charts the NEXT contract
@@ -6645,6 +6708,29 @@ function gammaProfileBuild(){
         if(scaleRef!=null && isFinite(scaleRef) && kes!=null && Math.abs(scaleRef-kes)>200){ scaleRef=null; }
         if(scaleRef!=null && isFinite(scaleRef)) out.push('SCALEREF,'+gpF2(scaleRef));
       }catch(eSR){}
+      // (v16.27) FLIP / CW / PW — InsiderFinance's 0DTE book on this ladder's ES scale, so lsGammaProfile can tag the
+      // wall NODES (CW / PW) and tick the flip on the strip. Rows: <es>,<spx>,<window>,<src>. The window is 0DTE and
+      // ONLY 0DTE (his call 2026-08-28 and again 2026-09-16: "make sure you select 0 DTE (today)"); there is no
+      // all-expiry fallback — a stale or missing chain means the rows are ABSENT, never a different question's answer.
+      // src=calc: their contracts, our 0DTE filter (gammaFlip / levelsFor), reconciled against their page 2026-09-16.
+      var flipSpx=null;
+      try{
+        var IFC=(typeof ifChain==='function')?ifChain('SPX'):null;
+        if(IFC && !IFC.err && !IFC.stale && IFC.dte0){
+          var gf0=IFC.dte0.gf, lv0=IFC.dte0.lv, cwSpx=null, pwSpx=null;
+          if(gf0 && typeof gf0.flip==='number' && gf0.flip>1000) flipSpx=gf0.flip;
+          if(lv0 && typeof lv0.cr==='number' && lv0.cr>1000) cwSpx=lv0.cr;
+          if(lv0 && typeof lv0.ps==='number' && lv0.ps>1000) pwSpx=lv0.ps;
+          var fe=(flipSpx!=null)?esOfSpx(flipSpx):null; if(fe!=null) out.push('FLIP,'+gpF2(fe)+','+flipSpx.toFixed(2)+',0DTE,calc');
+          var ce=(cwSpx!=null)?esOfSpx(cwSpx):null;     if(ce!=null) out.push('CW,'+gpF2(ce)+','+cwSpx+',0DTE,calc');
+          var pe=(pwSpx!=null)?esOfSpx(pwSpx):null;     if(pe!=null) out.push('PW,'+gpF2(pe)+','+pwSpx+',0DTE,calc');
+        }
+      }catch(eIFr){}
+      // (v16.27) REGIME row — see gpRegime() above. Written even when the flip is missing (sign NA, type still read).
+      try{
+        var RG=gpRegime(strikes, spotSpxP, flipSpx);
+        if(RG) out.push('REGIME,'+RG.sign+','+RG.type+','+RG.conf+','+(RG.conflict?1:0)+','+(flipSpx!=null?flipSpx.toFixed(2):'')+','+String(RG.note).replace(/,/g,' '));
+      }catch(eRG){}
       gWhy='live from DOM tape ('+strikes.length+' strikes · King '+(kingNeg?'-':'+')+'100% @ SPX '+kK+' -> ES '+(kes!=null?kes:'?')+')';
     } else gWhy=noRatio?'DOM tape read but no SPX->ES ratio yet (needs the ES1 payload once — chart on ES + export on)':'DOM tape read but no strikes parsed';
   }

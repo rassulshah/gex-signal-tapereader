@@ -333,6 +333,20 @@ void KingTracker::applyContractOffset()
     // spread below price. SCALEREF is the front price those King prices are in, so off = chartClose −
     // SCALEREF = the Sep→Dec spread → the lines land on the charted contract. Falls back to SPOT if absent.
     // The ±300 clamp still protects the NQ books on an NQ chart (chartClose~29k − SCALEREF~7.6k is huge).
+    // (v0.6) HISTORY IN THE CURRENT SCALE. Each KINGTRACK step stores the ES price AT THE TIME OF THE ROLL.
+    // When Skylit's ES1 rolls to the next contract mid-session (it did on 2026-09-16 between 09:47 and
+    // 10:38 — 7688 became 7757 for the same SPX 7685 King), the earlier steps are still in the OLD scale
+    // while KINGNOW and SCALEREF are in the NEW one, so the pre-roll line drew a full calendar spread too
+    // low with a phantom step at the roll. The strike is scale-free, so re-derive every step's price as
+    // strike x (nowPx / nowStrike) — the ratio the CURRENT price is in. Basis drift within a day is a
+    // point or two; the roll is ~70. Only when a KINGNOW row gives the ratio; otherwise the stored prices.
+    for (int b = 0; b < NBOOK; b++) {
+        if (book[b].hasNow && book[b].nowStrike > 0 && book[b].nowPx > 0.0f) {
+            float r = book[b].nowPx / (float)book[b].nowStrike;
+            for (size_t i = 0; i < book[b].steps.size(); i++)
+                if (book[b].steps[i].strike > 0) book[b].steps[i].px = (float)book[b].steps[i].strike * r;
+        }
+    }
     float anchor = 0.0f; bool have = false;
     if (hasScaleRef && scaleRef > 0.0f) { anchor = scaleRef; have = true; }
     else if (hasSpot)                   { anchor = spotPx;   have = true; }
@@ -375,6 +389,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.5");
+    p->setVersion("0.6");
     return p;
 }

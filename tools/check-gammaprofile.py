@@ -93,10 +93,19 @@ def main(argv):
         espx = num(kn_spx[0][2]); strike = num(kn_spx[0][3]) if len(kn_spx[0])>3 else None
         if espx and strike:
             ratio = espx/strike
-            if not (1.0003 <= ratio <= 1.0010):
-                fail('SPX→ES scale off: %.2f/%.2f = %.5f (expect ~1.0006)' % (espx, strike, ratio))
+            # (2026-09-16) The SPX->ES ratio is the FRONT-MONTH basis, and the front month changes: it was
+            # ~1.0006 on the September contract and ~1.0094 the moment Skylit rolled ES1 to December
+            # (10:xx CT on 2026-09-16, two days before quad-witch). A fixed band therefore FAILS every
+            # roll. The right expectation is the ladder's own anchor: SCALEREF is the ES1 price the strikes
+            # are scaled to, so SCALEREF / (SPXW spot) is the live ratio. We do not carry the SPXW spot in the
+            # CSV, so the check is: the ratio must be a plausible index basis (0.99..1.03, i.e. within ~3% —
+            # ES trades within a few tens of points of SPX in either direction) AND the flagged King's ES
+            # price must agree with SCALEREF-scale within the same basis. A ratio outside that band is a real
+            # mapping error (the SPY ratio, ~10x, or a raw SPX price with no conversion, 1.0000 exactly).
+            if not (0.990 <= ratio <= 1.030) or abs(ratio - 1.0) < 0.00005:
+                fail('SPX→ES scale off: %.2f/%.2f = %.5f (expect a front-month basis, 1.0003..1.02; exactly 1.0000 = unconverted)' % (espx, strike, ratio))
             else:
-                ok('SPX→ES scale ok: %.5f (strike %g → ES %.2f)' % (ratio, strike, espx))
+                ok('SPX→ES scale ok: %.5f (strike %g → ES %.2f; front-month basis %+.1f pts)' % (ratio, strike, espx, espx - strike))
         if king_es is not None and espx is not None and abs(king_es - espx) > 2:
             warn('KING %.2f vs KINGNOW SPX ES %.2f differ by >2 (roll between writes?)' % (king_es, espx))
 

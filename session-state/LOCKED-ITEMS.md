@@ -8,10 +8,12 @@ _Created 2026-08-27._
 
 ## ⭐⭐ ACTIVE (2026-09-15 EVENING): THREE AGREED ITEMS FOR TOMORROW — discussed, doctrine-checked, NOT BUILT
 
-Operator's close: **"save everything, we will do it tomorrow."** All three were discussed one at a time and agreed;
-none has code yet. Doctrine gate was run for A (FOLLOWING on every rule). Build order agreed: A + B in ONE gamma
+Operator's close: **"save everything, we will do it tomorrow."** All three were discussed one at a time and agreed.
+**2026-09-16 11:xx CT: A and B BUILT (v16.27 / lsGammaProfile 0.42 / lsKingTracker 0.6), awaiting his install; C still open.** Doctrine gate was run for A (FOLLOWING on every rule). Build order agreed: A + B in ONE gamma
 build (one userscript update + one recompile), C only after the study.
 
+### ✅ A · PATTERN LABELS PER DOCTRINE — BUILT 2026-09-16 (lsGammaProfile 0.42 + panel v16.27; awaiting his install + eyes-on)
+#### (spec as agreed, kept for the record)
 ### A · PATTERN LABELS PER DOCTRINE (lsGammaProfile) — operator: "G at multiple places… implement gatekeeper,
 ### rug, rrug, pika, airpocket correctly"
 Current plugin rule tags EVERY node ≥10% between spot and the King "G" (the flood). Correct rules, all FOLLOWING:
@@ -29,6 +31,8 @@ Current plugin rule tags EVERY node ≥10% between spot and the King "G" (the fl
 - **Rule zero** (`heatseeker-patterns`): "Magnitude overrides pattern" — thin nodes get NO tag.
 All computable inside the plugin (it has spot=chartClose, King, every node's sign/size/rank + the new SPX strike).
 
+### ✅ B · REGIME ROW + FLIP/CW/PW ON THE NODES — BUILT 2026-09-16 (panel v16.27 `gpRegime()` + rows; lsGammaProfile 0.42 displays; lines AND labels as options)
+#### (spec as agreed, kept for the record; the dropdown finding and the reconciliation are in the AMENDED block below)
 ### B · REGIME FROM THE PANEL, NOT THE PLUGIN'S SUM (+ the missing FLIP/CW/PW rows) — operator asked "how are
 ### you calculating the regime" then "is it better from InsiderFinance" then "what is your recommendation" → "ok"
 Plugin today: `net = Σ pct over all 100 nodes; <0 → FOLLOW else FADE` (GammaProfile.cpp L776). Defects: distance-
@@ -59,8 +63,12 @@ was considered and REJECTED (IF carries no vega). Recommendation agreed:
   THEMSELVES in the bar/histogram." → lsGammaProfile tags the node whose SPX strike = Call Wall "CW", = Put Wall "PW",
   and marks the Zero Gamma price on the rail as the flip (it is a price, not a strike — a tick + label at 7617.03, not a
   node tag). Panel writes `FLIP` / `CW` / `PW` rows with the window (ES scale via esOfSpx, raw SPX strike beside).
-  OPEN (ask before build): keep the separate horizontal FLIP/CW/PW lines as well, or replace them with the on-node
-  callouts? Mockup first (his standing rule).
+  ANSWERED (operator, 10:40): "keep them as options, so you can have an option of lines or labels" → existing line
+  toggles untouched + one new bool "Level labels on nodes (CW / PW / FLIP)" appended LAST. Built without a mockup on
+  his "build" — first eyes-on is the acceptance test.
+- ⚠ THE DROPDOWN CANNOT BE SELECTED BY US: the companion fetches the page from Atlas (server default = all-expiry).
+  0DTE flip/walls = our filter over their chain (`dte0.gf.flip`, `dte0.lv`), RECONCILED against his 0DTE screenshot
+  2026-09-16 (walls exact, flip 7620.7 vs 7617.0 minutes apart). INSIDERFINANCE.md §4 updated.
 
 ### C · THE DAY CANDLE MODEL — operator: "why is the day candle model so bad, look at the results today"
 Diagnosed with today's numbers (Tue 15 Sep, Dec scale, from the open): expected HOD +31 / LOD −31 / close −15.5 /

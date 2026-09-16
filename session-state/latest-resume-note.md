@@ -1,5 +1,32 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 late evening (SAVE, v16.26) · **panel v16.26** · companion v1.19 · RTX plugins: **lsGammaProfile v0.41**, **lsDayModel v0.15**, lsDayStats v0.5, **lsKingTracker v0.5** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 late morning (v16.27 build) · **panel v16.27** · companion v1.19 · RTX plugins: **lsGammaProfile v0.42**, lsDayModel v0.15, lsDayStats v0.5, **lsKingTracker v0.6** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 LIVE SESSION — A + B BUILT (v16.27 · lsGammaProfile 0.42 · lsKingTracker 0.6). START HERE.
+
+**Deployed to origin; his install is the next step** (Tampermonkey update → close IRT → `compile-gammaprofile.bat` +
+`compile-kingtracker.bat` → reopen). Until he installs, the chart still runs 0.41 / 16.26 and the CSV has no
+REGIME / FLIP / CW / PW rows and no pattern tags. **What shipped and why: `changelog/CHANGELOG.md` head.**
+
+**The morning, in order (so the next context knows what was verified and what was not):**
+1. 09:21 — recording confirmed (v16.26 lamps IRT 0m · IF 1m · YF 1m · FF 4ev, no replay banner). He restarted IRT.
+2. 09:47 — **a real same-moment test**: the CSV (09:47:09), Atlas's SPXW ladder and the IRT rail agree row-for-row on
+   strike / %King / rank (7635 +3 … 7580 −10; badges 5 on 7610, 4 on 7605), King 7685 SPX = 7689.25 front = 7755 Dec,
+   SCALEREF 7614.06 vs ES1 7613.50. Day rows match DAY STATS. Only the two agreed defects showed: the G flood (A) and
+   the regime line flapping FOLLOW→FADE between 09:27 and 09:48 on nothing (B).
+3. **Skylit rolled ES1 to December between 09:47 and 10:38** (tab 7604 → 7686; CSV KING 7689.25 → 7756.75, SCALEREF
+   7614 → 7687). The basis fix self-healed (King stayed at 7756 on his chart). Fallout fixed today: the validator's
+   September scale band (T2 10:38 FAIL was the roll, not data) and lsKingTracker's history scale (0.6).
+4. The regime conversation (how / standard / IF / 0DTE): settled as sign = spot vs the 0DTE flip, type = Skylit
+   structure, conflict surfaced. **His screenshot showed IF's header follows its expiry dropdown** (0DTE: ZG 7617.03,
+   CW 7675, PW 7600) — our capture had documented the default. The companion cannot select it (it fetches the page from
+   Atlas); ours-over-their-chain reconciled: `dte0.gf.flip 7620.72 · cr 7675 · ps 7600` (his console paste, ~10:20).
+5. He asked for CW / PW / FLIP "called out on the nodes themselves" → "keep them as options — lines or labels" →
+   "build". Built without a mockup on his word; **first eyes-on after install is the acceptance test** — expect
+   questions about tag placement (CW/PW beyond the tip, FLIP tick across the strip).
+
+**Open after this build:** C (day candle: measure first with `tools/study-hodlod.py`, LOCKED-ITEMS C) · Q12 top-3 vs
+top-5 · the scheduled T-runs' log rows for today · the T2 lesson: **a device write can be clobbered by a scheduled
+run's repo reset** — always re-stage and confirm the file after a commit, and confirm origin.
 
 # ⚠⚠⚠ SAVE 2026-09-15 ~9 PM CT — "save everything, we will do it tomorrow." START HERE.
 

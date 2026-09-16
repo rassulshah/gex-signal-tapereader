@@ -1,6 +1,51 @@
-## PLANNED / NOT YET BUILT — agreed 2026-09-15 evening, for 2026-09-16 (see LOCKED-ITEMS ⭐⭐ ACTIVE)
+## v16.27 + lsGammaProfile 0.42 + lsKingTracker 0.6 — doctrine labels, the REGIME row, CW/PW/FLIP on the nodes (2026-09-16, live session)
 
-- **lsGammaProfile 0.42 (one build):** (A) doctrine-correct pattern labels — Gatekeeper = the single dominant
+**Operator:** "now I see some labels that don't make sense like G at multiple places … implement gatekeeper, rug, rrug,
+pika, air pocket correctly" · "how are you calculating the regime?" · "I want the call wall, put wall, zero gamma (flip)
+called out on the nodes themselves in the bar/histogram" · "keep them as options — lines or labels" · "build".
+
+**lsGammaProfile 0.42 (recompile).**
+- **Gatekeeper = ONE node**: the largest |%King| strictly between spot and the King, only if ≥ 30% of the King
+  (`GK_MIN_PCT`; patternpedia/pattern-the-gatekeeper, the panel's own `gatekeeper()`). 0.41 tagged every node ≥ 10% on
+  the path — the "G everywhere" flood. The King is no longer a Ceiling/Floor candidate.
+- **Air pocket = bounded both sides**: a thin run (≥ 3 strikes under 8%) is banded only between two nodes ≥ 20%
+  (learn/air-pockets-velocity: a gap BETWEEN nodes, a pathway). The far-OTM tail is never shaded again. Magenta tint
+  when the run's residual gamma is net negative.
+- **Pattern tags** from the panel's 6th STRIKE field drawn inside the bars — P / B on the biggest member of a pika /
+  barney stack, p / b on the other members, R / RR on the rug's yellow node — alongside the base role tag (a Rug ceiling
+  is "C" and "R").
+- **REGIME line reads the panel's row** (sign · type · tactic · !CONFLICT) instead of Σ %King; the sum remains only as a
+  labelled fallback for a CSV without the row. The panel widens to fit; FLIP joins the second line.
+- **Level labels on nodes (CW / PW / FLIP)** — new bool appended LAST (default on): the wall nodes carry "CW" / "PW"
+  beyond the tip (matched by SPX strike), the flip is a dashed tick across the bar strip with "FLIP 0DTE". The existing
+  Call Wall / Put Wall / Flip LINE toggles are untouched — lines, labels, or both.
+
+**Panel v16.27 (Tampermonkey update).**
+- `STRIKE` 6th field = pattern tag from `gridSetups()` — the SAME doctrine detectors the Dashboard runs (S6 stacks:
+  member ≥ 30% King, thinner node breaks the run, biggest ≥ 40%; rugs with price's side) applied to the SPXW ladder.
+- `FLIP,<es>,<spx>,0DTE,calc` · `CW,…` · `PW,…` from InsiderFinance's 0DTE book via the companion's `dte0.gf.flip` /
+  `dte0.lv.cr/ps`, on the ladder's ES scale. Absent (never all-expiry) when the chain is stale or missing.
+- `REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note>` — `gpRegime()`: sign = spot vs the 0DTE flip with a 3-pt
+  AT buffer; type = Range / Trend / Whipsaw from the ladder's structure with `gexRegime()`'s thresholds plus the
+  absolute-value polarity of the three largest nodes within 30 pts of spot, and the King's confirmed rolls today as
+  velocity; conflict = the two books disagree on polarity. Tested on the 10:44 ladder: NEG · WHIPSAW low (−γ stack
+  7600–7615 under price between standing edges, 2 rolls).
+
+**lsKingTracker 0.6 (recompile).** History drawn at `strike × (nowPx ÷ nowStrike)`, so the pre-roll steps stay on the
+current contract's scale. Reason: Skylit rolled ES1 to December mid-session today (09:47→10:38; 7688 → 7757 for the
+same 7685 King); the stored step prices were in the old scale and the line would have shown a phantom ~70-pt step.
+
+**tools/check-gammaprofile.py.** The SPX→ES scale gate accepts any plausible front-month basis (0.99–1.03, never
+exactly 1.0000) instead of the September band 1.0003–1.0010 — the T2 run at 10:38 failed on the roll, not on data.
+
+**Learned.** (1) IF's header follows its expiry dropdown — our capture documented the default. (2) The companion cannot
+select the dropdown: it fetches the page from Atlas; the 0DTE numbers are ours-over-their-chain, reconciled today
+(flip 7620.7 vs 7617.0 minutes apart, walls 7675/7600 exact). (3) The scheduled T2 run resets the repo folder — a
+device write made between its start and the next sync was lost once; re-committed and verified.
+
+## PLANNED / NOT YET BUILT — agreed 2026-09-15 evening (C remains; A and B shipped above 2026-09-16)
+
+- ~~lsGammaProfile 0.42 (one build): (A) doctrine-correct pattern labels~~ **BUILT 2026-09-16, see above.** (A) doctrine-correct pattern labels — Gatekeeper = the single dominant
   blocker between spot and King (≥30% King), air pocket only when bounded by real nodes on both sides, rug / reverse
   rug by the heatseeker-patterns structure, pika / barney clusters by FINDINGS S6, "magnitude overrides pattern";
   (B) the regime line DISPLAYS a panel-written `REGIME` row (sign = price vs IF Zero Gamma; type = Range / Trend /

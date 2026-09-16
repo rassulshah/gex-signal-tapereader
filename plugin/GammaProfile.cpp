@@ -5,9 +5,10 @@
  *  (INSTRUMENT_SCALE). Reads %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\GammaProfile.csv
  *  (or GammaProfile-SPY.csv when Book = SPY).
  *
- *  CSV: STRIKE,<price>,<pctKing -100..100>,<rank>,<isKing 0|1>[,<type>]
- *       KING,<p>  CW,<p>  PW,<p>  FLIP,<p>  EMH,<p>  EML,<p>  SPOT,<p>
- *       SPYKING,<p>   BOOK,<name>
+ *  CSV: STRIKE,<price>,<pctKing -100..100>,<rank>,<isKing 0|1>,<type>,<spx strike>
+ *       KING,<p>  CW,<p>,<spx>,<win>,<src>  PW,...  FLIP,...  EMH,<p>  EML,<p>  SPOT,<p>
+ *       SCALEREF,<front ES>  REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note>
+ *       SPYKING,<p>   BOOK,<name>   ASOF,<sec>
  *
  *  Full settings panel (see setup()). Build: x64 Release, link irtsdkV143-x64.lib.
  *
@@ -15,6 +16,18 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.42 — DOCTRINE LABELS + REGIME ROW + LEVEL CALLOUTS (operator, 2026-09-15/16):
+ *    · Gatekeeper = ONE node: the largest |%King| strictly between spot and the King,
+ *      and only if >= GK_MIN_PCT (30% of King). No more "G on every node" flood.
+ *    · Air pocket = a thin run (>=3 strikes under AIR_THIN_PCT) BOUNDED on BOTH sides
+ *      by a significant node (>= AIR_EDGE_PCT); the far-OTM tail is never banded.
+ *    · Pattern tags (P/B/R/RR) arrive in the STRIKE row's 6th field from the panel and
+ *      draw INSIDE the bar even when a role tag (K/C/F/G) sits at the base.
+ *    · REGIME row from the panel (sign = spot vs IF 0DTE flip; type = Range/Trend/
+ *      Whipsaw from the Skylit structure read) replaces the distance-blind sum of
+ *      %King; the sum is only a labelled fallback when the row is absent.
+ *    · "Level labels" (appended LAST): CW / PW tags on the wall nodes and a FLIP tick
+ *      on the bar strip, as an alternative to (or alongside) the level LINES.
  *
  *  Parameter indices are numbered explicitly (pc++), one per control, with NO
  *  setLabelParameter section headers -- a label row shifts IRT's parameter
@@ -49,6 +62,13 @@ static const COLOR C_SPYK = 0x0069D0A0;  // SPY King line (secondary book)
 static const COLOR C_SUP  = 0x003FB27A;  // support side stripe (green, below spot)
 static const COLOR C_RES  = 0x00D15B6B;  // resistance side stripe (red, above spot)
 static const COLOR C_AIR  = 0x003A4658;  // air-pocket band (translucent grey)
+static const COLOR C_AIRN = 0x00512A48;  // (v0.42) air-pocket band when the run leans -gamma (violent pathway)
+// (v0.42) doctrine thresholds — mirror the panel's detectors (gatekeeper(): magnitude-ranked, REGIME_SIG_PCT;
+// FINDINGS S6: a pattern member is >=30% of the King). Tunable, documented, never silently changed.
+static const float GK_MIN_PCT   = 30.0f;  // a Gatekeeper must be at least this % of the King
+static const float AIR_THIN_PCT = 8.0f;   // a strike under this |%King| is "thin" (part of a pocket)
+static const float AIR_EDGE_PCT = 20.0f;  // a pocket is only a pocket between nodes at least this big
+static const int   AIR_MIN_RUN  = 3;      // and at least this many thin strikes wide
 
 static COLOR lerpColor(COLOR a, COLOR b, float t) {
     if (t < 0) t = 0; if (t > 1) t = 1;
@@ -63,6 +83,8 @@ static COLOR inkOn(COLOR c){ return luma(c) > 140.0f ? C_DARK : C_WHT; }
 static const char* abbrevType(const std::string& t){
     if (t=="PIKA")   return "P";
     if (t=="BARNEY") return "B";
+    if (t=="PIKAM")  return "p";     // (v0.42) a member of a pika stack (the name sits on the biggest member)
+    if (t=="BARNEYM")return "b";     // (v0.42) a member of a barney stack
     if (t=="RUG")    return "R";
     if (t=="RRUG"||t=="RREV"||t=="REVRUG") return "RR";
     if (t=="GK"||t=="GATEKEEPER") return "G";
@@ -83,6 +105,7 @@ struct PIdx {
     int roles, regime, panelpos, defbands, confl, legend;   // structure read (appended v0.35)
     int headerpos;                                          // header placement (appended v0.36)
     int tapecols;                                           // Skylit-style [SPX strike | %King] columns (appended v0.41)
+    int lvllabels;                                          // CW/PW tags on the wall nodes + FLIP tick on the strip (appended v0.42)
 };
 static PIdx PX;
 
@@ -94,6 +117,7 @@ struct Settings {
     bool roles, regime, defbands, confl, legend; int panelpos;   // structure read
     int headerpos;
     bool tapecols;
+    bool lvllabels;
     COLOR cpos, cneg, cmid;
     char kinglabel[24];
 };
@@ -113,6 +137,10 @@ public:
 
     std::vector<GStrike> strikes;
     float lvl[6]; bool has[6];   // KING,CW,PW,FLIP,EMH,EML
+    float lvlSpx[6];             // (v0.42) the raw SPX strike each level row carried (0 = none) — matches nodes by strike
+    std::string lvlWin[6];       // (v0.42) the window the row was computed in ("0DTE"), for the label
+    // (v0.42) REGIME row from the panel: REGIME,<sign NEG|POS|AT>,<type>,<conf>,<conflict 0|1>,<flip spx>,<note>
+    bool hasRegime; std::string rgSign, rgType, rgConf, rgNote; bool rgConflict; float rgFlipSpx;
     float spotPx; bool hasSpot;
     float scaleRef; bool hasScaleRef;   // (v0.40) front-month ES anchor the ladder is scaled to (SCALEREF row)
     float spyKingPx; bool hasSpyKing;
@@ -154,7 +182,7 @@ GammaProfile::GammaProfile() : cppExtension()
     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false;
-    cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false;
+    cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false; cfg.lvllabels=true;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
 }
 
@@ -254,7 +282,8 @@ int cppExtension::setup(void)
     PX.confl   = pc++; setBoolParameter  ("EM confluence marks", false);
     PX.legend  = pc++; setBoolParameter  ("Polarity legend", false, SL);
     PX.headerpos=pc++; setListParameter  ("Header at", 0, "Top-L;Top-C;Top-R;Bottom-L;Bottom-C;Bottom-R");
-    PX.tapecols =pc++; setBoolParameter  ("Tape columns (SPX strike | %King, right edge)", false);   // (v0.41) appended LAST
+    PX.tapecols =pc++; setBoolParameter  ("Tape columns (SPX strike | %King, right edge)", false);   // (v0.41) appended
+    PX.lvllabels=pc++; setBoolParameter  ("Level labels on nodes (CW / PW / FLIP)", true);           // (v0.42) appended LAST
     return RTX_OK;
 }
 
@@ -268,7 +297,7 @@ static void dbgDump(const char* when, const Settings& S)
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.debug.txt";
     std::ofstream f(path.c_str(), std::ios::app);
     if (!f.is_open()) return;
-    f << "v0.36 " << when
+    f << "v0.42 " << when
       << " | IDX font="   << PX.font   << " hideu=" << PX.hideu << " showpct=" << PX.showpct
       << " rank="         << PX.rank   << " type="  << PX.type  << " filter="  << PX.filter
       << " width="        << PX.width
@@ -330,13 +359,15 @@ void GammaProfile::readSettings(Settings& S)
     S.legend  = isBoxChecked(PX.legend) != 0;
     S.headerpos = getListIndex(PX.headerpos);
     S.tapecols  = isBoxChecked(PX.tapecols) != 0;
+    S.lvllabels = isBoxChecked(PX.lvllabels) != 0;
     dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
 // ---- data load ------------------------------------------------------------
 void GammaProfile::load()
 {
-    for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; }
+    for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; lvlSpx[i] = 0.0f; lvlWin[i].clear(); }
+    hasRegime = false; rgSign.clear(); rgType.clear(); rgConf.clear(); rgNote.clear(); rgConflict = false; rgFlipSpx = 0.0f;
     hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX"; asofSo = -1;
     hasScaleRef = false; scaleRef = 0.0f;
     const char* up = getenv("USERPROFILE");
@@ -366,10 +397,24 @@ void GammaProfile::load()
             tmp.push_back(s);
         } else if (t.size() >= 2) {
             float v = (float)atof(t[1].c_str());
+            // (v0.42) level rows may carry: <es price>,<spx strike>,<window>,<src>. Older panels write only the price.
             if      (t[0] == "KING")    { lvl[0]=v; has[0]=true; }
-            else if (t[0] == "CW")      { lvl[1]=v; has[1]=true; }
-            else if (t[0] == "PW")      { lvl[2]=v; has[2]=true; }
-            else if (t[0] == "FLIP")    { lvl[3]=v; has[3]=true; }
+            else if (t[0] == "CW" || t[0] == "PW" || t[0] == "FLIP") {
+                int li = (t[0] == "CW") ? 1 : (t[0] == "PW" ? 2 : 3);
+                lvl[li]=v; has[li]=true;
+                if (t.size() >= 3) lvlSpx[li] = (float)atof(t[2].c_str());
+                if (t.size() >= 4) lvlWin[li] = t[3];
+            }
+            else if (t[0] == "REGIME") {
+                // REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note...>
+                hasRegime = true;
+                rgSign = t[1];
+                rgType = (t.size() >= 3) ? t[2] : std::string();
+                rgConf = (t.size() >= 4) ? t[3] : std::string();
+                rgConflict = (t.size() >= 5) && atoi(t[4].c_str()) != 0;
+                rgFlipSpx = (t.size() >= 6) ? (float)atof(t[5].c_str()) : 0.0f;
+                rgNote.clear(); for (size_t q = 6; q < t.size(); q++) { if (q > 6) rgNote += ","; rgNote += t[q]; }
+            }
             else if (t[0] == "EMH")     { lvl[4]=v; has[4]=true; }
             else if (t[0] == "EML")     { lvl[5]=v; has[5]=true; }
             else if (t[0] == "SPOT")    { spotPx=v; hasSpot=true; }
@@ -442,7 +487,7 @@ void GammaProfile::bandPrice(float p1, float p2, short lx, short rx, COLOR col)
 void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, int cIdx, int kIdx)
 {
     short lineH = (short)(S.font + 8);
-    short pw = 328, ph = (short)(2*lineH + 16);
+    short pw = (short)(S.font * 34), ph = (short)(2*lineH + 16);   // (v0.42) wide enough for the regime line
     short L = (short)(pane.left + 8);
     short C = (short)((pane.left + pane.right)/2 - pw/2);
     short R = (short)(pane.right - pw - 8);
@@ -454,22 +499,41 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     RCT box; box.set(x, y, (short)(x+pw), (short)(y+ph));
     box.draw(1, C_GREY, C_DARK, DRAW_OPAQUE, PAT_SOLID);
 
-    bool neg = net < 0;
+    // (v0.42) THE REGIME ROW FROM THE PANEL, when present. Sign = spot vs InsiderFinance's 0DTE zero-gamma
+    // (the flip), type = the Skylit structure read (Range / Trend / Whipsaw — learn/gamma-regimes), conflict =
+    // the two books disagree (surfaced, never resolved here). The old "sum of every %King" is only the fallback
+    // for a CSV that predates the row, and it says so.
+    bool neg; char l0[160];
+    if (hasRegime) {
+        neg = (rgSign == "NEG");
+        const char* tact = (rgType.find("TREND") == 0) ? "FOLLOW, don't fade"
+                         : (rgType == "WHIPSAW")       ? "fade EXTREMES only / sit out"
+                         : (rgType == "RANGE")         ? "FADE the extremes"
+                         :                               "no edge — wait";
+        const char* sg = neg ? "-gamma" : (rgSign == "POS" ? "+gamma" : "AT flip");
+        std::string ty = rgType; if (ty.empty()) ty = "FORMING";
+        if (ty == "TREND_UP") ty = "TREND UP"; else if (ty == "TREND_DN") ty = "TREND DOWN";
+        sprintf_s(l0, sizeof(l0), "REGIME  %s%s  |  %s  |  %s%s",
+                  sg, (rgFlipSpx > 0.0f ? "" : ""), ty.c_str(), tact, rgConflict ? "  !CONFLICT" : "");
+    } else {
+        neg = net < 0;
+        sprintf_s(l0, sizeof(l0), neg ? "REGIME (sum, no row)  FOLLOW / don't fade  (-gamma)"
+                                      : "REGIME (sum, no row)  FADE extremes  (+gamma)");
+    }
     COLOR rcol = neg ? S.cneg : S.cpos;
+    if (hasRegime && rgSign == "AT") rcol = C_FLIPC;
     short ly0 = (short)(y + 9 + lineH/2);
     RCT sw; sw.set((short)(x+10), (short)(ly0-5), (short)(x+21), (short)(ly0+5));
     sw.draw(0, rcol, rcol, DRAW_OPAQUE, PAT_SOLID);
-    char l0[96];
-    sprintf_s(l0, sizeof(l0), neg ? "REGIME  FOLLOW / don't fade  (-gamma, wicks)"
-                                  : "REGIME  FADE extremes  (+gamma, revert)");
-    textLJ((short)(x+28), ly0, l0, C_TXT, S.font, true);
+    textLJ((short)(x+28), ly0, l0, rgConflict ? 0x00FF9A8F : C_TXT, S.font, true);
 
     char l1[128];
     char cs[40]="R  n/a", fs[40]="S  n/a", ks[40]="";
     if (cIdx>=0) sprintf_s(cs, sizeof(cs), "R %d %+d%%", (int)(strikes[cIdx].price+0.5f), (int)strikes[cIdx].pct);
     if (fIdx>=0) sprintf_s(fs, sizeof(fs), "S %d %+d%%", (int)(strikes[fIdx].price+0.5f), (int)strikes[fIdx].pct);
     if (kIdx>=0) sprintf_s(ks, sizeof(ks), "KING %d %+d%%", (int)(strikes[kIdx].price+0.5f), (int)strikes[kIdx].pct);
-    sprintf_s(l1, sizeof(l1), "%s     %s     %s", cs, ks, fs);
+    char fl[40]=""; if (has[3]) sprintf_s(fl, sizeof(fl), "     FLIP %d%s", (int)(lvl[3]+0.5f), lvlWin[3].empty()?"":(" "+lvlWin[3]).c_str());
+    sprintf_s(l1, sizeof(l1), "%s     %s     %s%s", cs, ks, fs, fl);
     short ly1 = (short)(y + 9 + lineH + lineH/2);
     textLJ((short)(x+10), ly1, l1, C_TXT, S.font, false);
 }
@@ -569,24 +633,35 @@ void GammaProfile::render(const Settings& S)
     if (S.scale == 1) { maxAbs = 1.0f; for (size_t i=0;i<strikes.size();i++){ float a=std::fabs(strikes[i].pct); if(a>maxAbs)maxAbs=a; } }
 
     // ---- structural roles: King / Ceiling / Floor / Gatekeeper --------------
-    // 0 none, 1 KING, 2 CEIL (biggest above spot), 3 FLOOR (biggest below spot),
-    // 4 GATE (a significant node between spot and the King).
+    // 0 none, 1 KING, 2 CEIL (biggest |node| above spot), 3 FLOOR (biggest |node| below spot),
+    // 4 GATE — (v0.42) DOCTRINE: "the Gatekeeper" is ONE node, the dominant blocker strictly
+    // between spot and the King (patternpedia/pattern-the-gatekeeper; core-concepts §Gatekeeper
+    // Nodes; the panel's gatekeeper() ranks by MAGNITUDE, not nearness). It must be a real node
+    // (>= GK_MIN_PCT of the King). v0.41 tagged EVERY node >=10% on the path — the "G everywhere"
+    // flood the operator called out. The King itself is never a ceiling/floor candidate.
     float sp = hasSpot ? spotPx : 0.0f;
     int kIdx=-1, fIdx=-1, cIdx=-1; float fBest=-1, cBest=-1;
     for (size_t i=0;i<strikes.size();i++) if (strikes[i].king){ kIdx=(int)i; if(!hasSpot) sp=strikes[i].price; }
     for (size_t i=0;i<strikes.size();i++){
+        if (strikes[i].king) continue;
         float a=std::fabs(strikes[i].pct);
-        if      (strikes[i].price < sp)                     { if(a>fBest){fBest=a; fIdx=(int)i;} }
-        else if (strikes[i].price > sp && !strikes[i].king) { if(a>cBest){cBest=a; cIdx=(int)i;} }
+        if      (strikes[i].price < sp) { if(a>fBest){fBest=a; fIdx=(int)i;} }
+        else if (strikes[i].price > sp) { if(a>cBest){cBest=a; cIdx=(int)i;} }
     }
     std::vector<int> role(strikes.size(), 0);
     if (kIdx>=0) role[kIdx]=1;
     if (cIdx>=0) role[cIdx]=2;
     if (fIdx>=0) role[fIdx]=3;
+    int gIdx=-1;
     if (kIdx>=0){
-        float kp=strikes[kIdx].price, lo=sp<kp?sp:kp, hi=sp<kp?kp:sp;
-        for (size_t i=0;i<strikes.size();i++)
-            if (role[i]==0 && strikes[i].price>lo && strikes[i].price<hi && std::fabs(strikes[i].pct)>=10.0f) role[i]=4;
+        float kp=strikes[kIdx].price, lo=sp<kp?sp:kp, hi=sp<kp?kp:sp, gBest=-1;
+        for (size_t i=0;i<strikes.size();i++){
+            if (strikes[i].king) continue;
+            float a=std::fabs(strikes[i].pct);
+            if (strikes[i].price>lo && strikes[i].price<hi && a>=GK_MIN_PCT && a>gBest){ gBest=a; gIdx=(int)i; }
+        }
+        // the Gatekeeper tag wins over Ceiling/Floor on that one node: it is the more specific read
+        if (gIdx>=0) role[gIdx]=4;
     }
 
     // header (positionable: 0 TL,1 TC,2 TR,3 BL,4 BC,5 BR)
@@ -611,19 +686,28 @@ void GammaProfile::render(const Settings& S)
         PNT b; b.set(lastBar, spotPx); b.drawLineTo();
     }
 
-    // ---- air pockets: >=3 consecutive thin-gamma strikes = fast pathway -----
+    // ---- air pockets: a thin run BETWEEN two real nodes = a fast pathway -----
+    // (v0.42) DOCTRINE (learn/air-pockets-velocity; core-concepts §Air Pockets): an air pocket is a
+    // low-exposure GAP between two significant nodes — trade THROUGH it, target the far side. So a
+    // thin run is banded ONLY when a node >= AIR_EDGE_PCT closes it on BOTH sides. v0.41 banded any
+    // thin run, which shaded the whole far-OTM tail ("the top area is constantly shaded"). The band
+    // leans magenta when the run's residual gamma is net negative (the violent version).
     if (S.roles && strikes.size() >= 3) {
         std::vector<int> ord(strikes.size());
         for (size_t i=0;i<strikes.size();i++) ord[i]=(int)i;
         std::sort(ord.begin(), ord.end(), [&](int a,int b){ return strikes[a].price < strikes[b].price; });
         size_t i=0;
         while (i < ord.size()) {
-            if (std::fabs(strikes[ord[i]].pct) < 8.0f) {
-                size_t j=i; while (j+1<ord.size() && std::fabs(strikes[ord[j+1]].pct) < 8.0f) j++;
-                if (j - i + 1 >= 3) {
-                    bandPrice(strikes[ord[i]].price, strikes[ord[j]].price, paneL, paneR, C_AIR);
+            if (std::fabs(strikes[ord[i]].pct) < AIR_THIN_PCT) {
+                size_t j=i; float runSum=0.0f;
+                while (j+1<ord.size() && std::fabs(strikes[ord[j+1]].pct) < AIR_THIN_PCT) j++;
+                for (size_t q=i; q<=j; q++) runSum += strikes[ord[q]].pct;
+                bool lowEdge  = (i>0)            && std::fabs(strikes[ord[i-1]].pct) >= AIR_EDGE_PCT;
+                bool highEdge = (j+1<ord.size()) && std::fabs(strikes[ord[j+1]].pct) >= AIR_EDGE_PCT;
+                if ((int)(j - i + 1) >= AIR_MIN_RUN && lowEdge && highEdge) {
+                    bandPrice(strikes[ord[i]].price, strikes[ord[j]].price, paneL, paneR, runSum < 0 ? C_AIRN : C_AIR);
                     PNT mid; mid.set(lastBar, (strikes[ord[i]].price + strikes[ord[j]].price)/2.0f);
-                    textLJ((short)(paneL+8), mid.v, "AIR POCKET", C_GREY, S.font-1, false);
+                    textLJ((short)(paneL+8), mid.v, runSum < 0 ? "AIR POCKET (-g)" : "AIR POCKET", C_GREY, S.font-1, false);
                 }
                 i = j + 1;
             } else i++;
@@ -686,12 +770,35 @@ void GammaProfile::render(const Settings& S)
             else       textLJ((short)(anchor+8), p.v, rn, ic, S.font, true);
         }
 
-        // node TYPE centered inside the bar (only when no role tag is shown)
-        const char* tlabel = s.king ? S.kinglabel : abbrevType(s.type);
-        if (S.type && !rl && tlabel && tlabel[0] && len > (short)(S.font * 2)) {
+        // node PATTERN tag (P/B/R/RR from the panel's doctrine detectors) centered inside the bar.
+        // (v0.42) drawn even when a role tag (C/F/G) sits at the base — a Rug ceiling is both "C" and "R",
+        // and the operator asked for the patterns. The King's name is the base tag, not repeated inside.
+        const char* tlabel = s.king ? "" : abbrevType(s.type);
+        if (S.type && tlabel && tlabel[0] && len > (short)(S.font * 2)) {
             COLOR ic = inkOn(col);
             short cxbar = (short)((anchor + tip) / 2);   // horizontal center of the bar
             textC(cxbar, p.v, tlabel, ic, S.font, true);
+        }
+        // (v0.42) LEVEL LABELS ON THE NODE: the wall nodes carry "CW" / "PW" just beyond the tip (outside the
+        // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
+        const char* wtag = 0;
+        if (S.lvllabels) {
+            for (int li = 1; li <= 2 && !wtag; li++) {
+                if (!has[li]) continue;
+                bool hit = (lvlSpx[li] > 0.0f && s.spx > 0.0f) ? (std::fabs(lvlSpx[li] - s.spx) < 0.01f)
+                                                                : (std::fabs(lvl[li] - s.price) < 1.0f);
+                if (hit) wtag = (li == 1) ? "CW" : "PW";
+            }
+        }
+        short wtagW = 0;
+        if (wtag) {
+            FONT wf; wf.id = HELVETICA; wf.size = (short)(S.font - 1); wf.style = BOLD; setFont(wf);
+            wtagW = (short)(getTextWidth(wtag, -1) + 6);
+            int rankMaxW = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
+            bool bubbleOut = S.rank && S.rankpos == 1 && s.rank >= 1 && s.rank <= rankMaxW;
+            short past = bubbleOut ? (short)(2 * (S.font * 0.9f + 4) + 8) : 6;
+            if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, C_PINK, S.font - 1, true);
+            else         textLJ((short)(tip + past), p.v, wtag, C_PINK, S.font - 1, true);
         }
 
         // EM confluence: cyan tick at the tip when the node sits on an EM edge
@@ -728,9 +835,9 @@ void GammaProfile::render(const Settings& S)
                 COLOR ic = inkOn(col);
                 if (sgn < 0) textLJ((short)(tip + 4), p.v, pc, ic, S.font, false);
                 else         textRJ((short)(tip - 4), p.v, pc, ic, S.font, false);
-            } else {              // outside the tip
-                if (sgn < 0) textRJ((short)(tip - 6), p.v, pc, C_TXT, S.font, false);
-                else         textLJ((short)(tip + 6), p.v, pc, C_TXT, S.font, false);
+            } else {              // outside the tip (shifted past a CW/PW tag when one is drawn there)
+                if (sgn < 0) textRJ((short)(tip - 6 - wtagW), p.v, pc, C_TXT, S.font, false);
+                else         textLJ((short)(tip + 6 + wtagW), p.v, pc, C_TXT, S.font, false);
             }
         }
 
@@ -753,6 +860,17 @@ void GammaProfile::render(const Settings& S)
                 textRJ(c2, p.v, pk, tc, S.font, s.king);
             }
         }
+    }
+
+    // (v0.42) FLIP tick — the zero-gamma level is a PRICE, not a strike, so it cannot tag a node: a short dashed
+    // tick across the bar strip at that price, labelled FLIP (+ window), in the flip colour. Independent of the line.
+    if (S.lvllabels && has[3]) {
+        PNT fp; fp.set(lastBar, lvl[3]);
+        short x1 = (sgn < 0) ? (short)(anchor - w) : anchor, x2 = (sgn < 0) ? anchor : (short)(anchor + w);
+        hlinePx(fp.v, x1, x2, C_FLIPC, P_DASH);
+        char fl[24]; sprintf_s(fl, sizeof(fl), "FLIP%s%s", lvlWin[3].empty() ? "" : " ", lvlWin[3].c_str());
+        if (sgn < 0) textRJ((short)(anchor - 8), (short)(fp.v - S.font/2 - 1), fl, C_FLIPC, S.font - 1, true);
+        else         textLJ((short)(anchor + 8), (short)(fp.v - S.font/2 - 1), fl, C_FLIPC, S.font - 1, true);
     }
 
     // level rail
@@ -856,6 +974,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.41");
+    p->setVersion("0.42");
     return p;
 }

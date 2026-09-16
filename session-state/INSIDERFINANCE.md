@@ -115,6 +115,17 @@ comparing our `toFri` slice against their all-expiry total.
 
 ## 4. WHAT WE TAKE FROM THEIR HEADER (quoted, not recomputed)
 
+⚠⚠ **(2026-09-16) THEIR HEADER FOLLOWS THE PAGE'S EXPIRY DROPDOWN.** The operator switched the dropdown to
+"Today (0DTE)" and the header re-rendered: Net GEX −$1.5B · Call Wall 7675 · Put Wall 7600 · **Zero Gamma 7617.03**
+(spot 7612.44, ~09:55 CT). The "all-expiry" header below is what the page shows in its DEFAULT state — and the
+default is ALL the companion can ever see, because the companion does not run on their tab: it runs on Atlas and
+FETCHES the page (GM_xmlhttpRequest), so it gets the server-rendered default and the dropdown is not there to click.
+**The 0DTE numbers therefore come from OUR window filter over THEIR chain** (`dte0.gf.flip`, `dte0.lv.cr/ps`), which
+is the same provenance as CW0/PW0 (v14.80). **RECONCILED 2026-09-16 ~10:20 CT:** ours `flip 7620.72 · cr 7675 ·
+ps 7600 · spot 7620.52` vs their 0DTE header `7617.03 · 7675 · 7600` at 7612.44 minutes earlier — walls exact, flip
+within the spot move. If their page ever exposes the window in the URL, fetch that and take theirs verbatim.
+
+
 Read by `hdrText()` / `hdrNum()`, gated by `levelSane()` (a price level must sit within 0.5×–2× of spot):
 
     Zero Gamma  $7647.89     → our FLIP
