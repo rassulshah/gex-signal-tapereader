@@ -1,3 +1,15 @@
+## PLANNED / NOT YET BUILT — agreed 2026-09-15 evening, for 2026-09-16 (see LOCKED-ITEMS ⭐⭐ ACTIVE)
+
+- **lsGammaProfile 0.42 (one build):** (A) doctrine-correct pattern labels — Gatekeeper = the single dominant
+  blocker between spot and King (≥30% King), air pocket only when bounded by real nodes on both sides, rug / reverse
+  rug by the heatseeker-patterns structure, pika / barney clusters by FINDINGS S6, "magnitude overrides pattern";
+  (B) the regime line DISPLAYS a panel-written `REGIME` row (sign = price vs IF Zero Gamma; type = Range / Trend /
+  Whipsaw; velocity; conflict flag) instead of the distance-blind Σ%King, and the panel writes the missing
+  `FLIP` / `CW` / `PW` rows (panel v16.27).
+- **Day candle model (C):** measure first (`study-hodlod.py`): a READ-clamp on the printed extreme + a drive/regime-
+  skewed range vs the symmetric ±½ range that projected 28 pts of upside on a trend-down Tuesday. Decide after.
+- Reasoning and every quoted doctrine rule: `session-state/LOCKED-ITEMS.md`.
+
 ## v16.26 + lsGammaProfile 0.41 + lsDayModel 0.15 — Tape columns + the candle-low session fix (2026-09-15)
 
 Two items from the evening's live audit (both Kings/gamma verified aligned with Atlas + tape at that point).

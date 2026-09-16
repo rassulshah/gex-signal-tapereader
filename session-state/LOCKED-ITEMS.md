@@ -6,6 +6,73 @@ _Created 2026-08-27._
 
 ---
 
+## ⭐⭐ ACTIVE (2026-09-15 EVENING): THREE AGREED ITEMS FOR TOMORROW — discussed, doctrine-checked, NOT BUILT
+
+Operator's close: **"save everything, we will do it tomorrow."** All three were discussed one at a time and agreed;
+none has code yet. Doctrine gate was run for A (FOLLOWING on every rule). Build order agreed: A + B in ONE gamma
+build (one userscript update + one recompile), C only after the study.
+
+### A · PATTERN LABELS PER DOCTRINE (lsGammaProfile) — operator: "G at multiple places… implement gatekeeper,
+### rug, rrug, pika, airpocket correctly"
+Current plugin rule tags EVERY node ≥10% between spot and the King "G" (the flood). Correct rules, all FOLLOWING:
+- **Gatekeeper** (`patternpedia/pattern-the-gatekeeper`, `core-concepts` §Gatekeeper Nodes): the SINGLE dominant
+  blocker — largest node strictly between spot and the King, only if high-value (≥30% King). One G max. (The
+  panel's own `gatekeeper(sym)` v10.27 already encodes exactly this — magnitude-ranked, ratio vs the next node
+  beyond; the plugin just never used it.)
+- **Air pocket** (`learn/air-pockets-velocity`, `core-concepts` §Air Pockets): a thin zone BETWEEN nodes, a
+  pathway. Band only a thin run BOUNDED by a significant node on both sides — never the outer far-OTM tail (that
+  was the "top area shaded"). Colour by polarity (−γ pocket = violent).
+- **Rug / Reverse Rug** (`learn/heatseeker-patterns`): +γ node ABOVE spot with −γ BELOW spot, spot below the +γ
+  node → tag that +γ node R; exact mirror → RR. (Panel's rugDetect already requires price's side, v15.64.)
+- **Pika / Barney** (`learn/heatseeker-patterns` + FINDINGS S6, measured): dense cluster of +γ (pika) / −γ
+  (barney) nodes — member ≥30% of King, a thinner node breaks the run, biggest ≥40%, ≥2 members → tag P / B.
+- **Rule zero** (`heatseeker-patterns`): "Magnitude overrides pattern" — thin nodes get NO tag.
+All computable inside the plugin (it has spot=chartClose, King, every node's sign/size/rank + the new SPX strike).
+
+### B · REGIME FROM THE PANEL, NOT THE PLUGIN'S SUM (+ the missing FLIP/CW/PW rows) — operator asked "how are
+### you calculating the regime" then "is it better from InsiderFinance" then "what is your recommendation" → "ok"
+Plugin today: `net = Σ pct over all 100 nodes; <0 → FOLLOW else FADE` (GammaProfile.cpp L776). Defects: distance-
+blind (a far-OTM node tips it), two regimes only (a WHIPSAW day reads "follow"), ignores velocity, doesn't use the
+flip. Settled split (DECISIONS v11.77, INSIDERFINANCE.md L156-164): **IF prices the day** (FLIP = IF's Zero Gamma,
+band, EM, walls); **Skylit reads the character** (regime chip = gamma+vanna −G/−V, velocity) — moving the chip to IF
+was considered and REJECTED (IF carries no vega). Recommendation agreed:
+1. Panel writes `REGIME,<sign>,<type>,<flip>,<velocity>,<conflict>`: sign = price vs IF Zero Gamma; type = the
+   doctrine's THREE (`learn/gamma-regimes`: Range→fade / Trend→follow / Whipsaw→fade extremes only or sit out)
+   from the panel's existing structure classifier (Rainbow Road/Mixed/skew, ~L10620) + velocity (King growing?
+   floors rolling?); conflict flag when Skylit's gamma sign ≠ IF flip (surface, don't resolve — DECISIONS L98).
+2. Plugin DISPLAYS that row instead of computing. Same words as the Dashboard.
+3. Same pass: panel writes `FLIP` (IF Zero Gamma), `CW`, `PW` rows — the plugin already draws them (found missing
+   2026-09-15). ⚠ Window landmine: IF's zero-gamma flips sign by window (dte0 −$6.86B / toFri −$16.41B / all
+   +$13.34B, 2026-08-23, all correct) — pin the window, never compare across.
+
+### C · THE DAY CANDLE MODEL — operator: "why is the day candle model so bad, look at the results today"
+Diagnosed with today's numbers (Tue 15 Sep, Dec scale, from the open): expected HOD +31 / LOD −31 / close −15.5 /
+range 62 (open60 stage) vs actual HOD **+2.8** (8:33a) / LOD −40.8 (9:54a) / close −27.5 / range 43.5. LOD and close
+misses (10, 12) are INSIDE the documented MAE 18.5; the day was "so bad" because of ONE thing — **28 pts of upside
+that never printed**, and that is STRUCTURAL, not calibration:
+1. The range is placed SYMMETRICALLY ±½ about the open by construction; only the CLOSE leans (¼ range) with the
+   68%-reliable opening drive. A trend day is one-sided → a centred range guarantees the miss on the wrong side.
+2. Layer 2 printed `READ,HOD,…,100,IN` (HOD already printed) and Layer 1 kept drawing HOD +31 — DAY-MODEL.md's
+   "do not merge them" kept the two questions apart but let the candle project an extreme the READ had ruled out.
+3. Regime is not an input: today was textbook −γ + rapid accumulation + rolling floors = TREND day
+   (`learn/gamma-regimes`), which should skew the range one way; the model treats every day as a range day.
+Proposed (NOT agreed yet — operator said "we will do it tomorrow"): (a) let the READ CLAMP the geometry — once
+HOD/LOD IN at high confidence, pin that side to the actual extreme, hand the remaining range to the other side (keep
+the layers as separate QUESTIONS; let Layer 2's answer constrain Layer 1's drawing); (b) skew the range by drive /
+regime (e.g. 80/20 on a trend regime) instead of only tilting the close; (c) **MEASURE FIRST** — today is n=1;
+run `tools/study-hodlod.py` over the recorded sessions to see how much (a)+(b) cut HOD/LOD error before changing
+the model. Recommendation on the table: run the study, then decide.
+
+### CARRIED OPEN (unchanged tonight)
+- Q12 top-3-vs-top-5 gamma lines (per-rank deflection table, sessions since 09-09) — operator asked "would I have
+  seen it with Top 5" → answered (yes, ranks 2/3 are in Top 5); the measured question is still open.
+- Full same-moment RTH audit (T1 09:05 CT): confirm the King-roll history against Atlas's 0DTE ladder AS ROLLS
+  HAPPEN (Atlas live shows only the current King; the "Rolling front + 3 · 3 Days" view is a DIFFERENT window).
+- SCALEREF is ES-only: an NQ chart's QQQ/NDX King lines get no basis shift (clamp protects them; needs an NQ anchor).
+- lsDayStats: still SPOT-anchored (its rows are ~Dec scale via SPY×D.scale, ~1% hot) — untouched, verify.
+
+---
+
 ## ⭐ ACTIVE (2026-09-13): IRT GAMMA-PROFILE PLUGIN — built & working
 A separate C++ RTX Investor/RT extension (`lsGammaProfile.dll`) was built this session and now
 renders the real SPX gamma node profile + level rail + a 34-control settings panel on the EPU26

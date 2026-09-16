@@ -1,5 +1,35 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 evening (v16.26) · **panel v16.26** · companion v1.19 · RTX plugins: **lsGammaProfile v0.41**, **lsDayModel v0.15**, lsDayStats v0.5, **lsKingTracker v0.5** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 late evening (SAVE, v16.26) · **panel v16.26** · companion v1.19 · RTX plugins: **lsGammaProfile v0.41**, **lsDayModel v0.15**, lsDayStats v0.5, **lsKingTracker v0.5** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ SAVE 2026-09-15 ~9 PM CT — "save everything, we will do it tomorrow." START HERE.
+
+**Everything with code is BUILT, DEPLOYED, INSTALLED and LIVE-VERIFIED on his machine** (origin `e1da736`): panel
+v16.26 · lsGammaProfile 0.41 (Tape columns ON, strike|%King matching Skylit's ladder row-for-row) · lsDayModel 0.15
+(candle low holds the RTH day, 7644 not 7652) · lsKingTracker 0.5. The King, the nodes, the SPXW→ES mapping
+(ES = SPX + 4.25, ratio 1.000558 on all 100 nodes, = Skylit's own ES1 payload) and the Dec basis (~+76) are ALL
+verified consistent with Atlas + tape. **Nothing is broken. Nothing is half-built.**
+
+**TOMORROW'S ORDER (agreed, one at a time) — read `session-state/LOCKED-ITEMS.md` ⭐⭐ ACTIVE 2026-09-15 first:**
+1. **A + B in ONE gamma build**: pattern labels per doctrine (Gatekeeper = ONE dominant blocker; air pocket bounded
+   both sides; rug/rrug; pika/barney with S6 thresholds; magnitude overrides pattern) + the panel-written REGIME row
+   (IF flip sign · three doctrine types · velocity · conflict flag) displayed by the plugin + the missing FLIP/CW/PW
+   rows. One userscript update, one `compile-gammaprofile.bat`. Doctrine gate already run (all FOLLOWING).
+2. **C — the day candle**: his "why is it so bad" is diagnosed (LOCKED-ITEMS C): structural symmetric range + the
+   READ not clamping the geometry + no regime input. Recommendation on the table: **run `tools/study-hodlod.py`
+   FIRST** to measure a READ-clamp + drive-skewed range across the recorded sessions, then decide. Do not hardcode a
+   skew from one Tuesday.
+3. **09:05 T1 same-moment audit** (scheduled) — confirm King rolls vs Atlas's 0DTE ladder as they happen.
+4. Q12 (top-3 vs top-5) when there's a gap.
+
+**How this session went, so the next one behaves the same way:** he pushed hard on VERIFICATION — "did you
+actually compare…", "check my screen", "look at the other monitor" — and every time he was right to. Twice I
+declared a mismatch that was the documented trap (front-vs-Dec scale coincidence 7579≈7581; the Atlas chart on a
+"Rolling front + 3 · 3 Days" window vs the 0DTE tape). **Before calling anything a mismatch: pin BOOK, WINDOW and
+SCALE, same moment.** He accepts "I haven't built it yet, I was waiting for your go" — he does NOT accept a claim of
+verification that wasn't done. Give step-by-step (cmd, not PowerShell; the full `cd /d` line; close IRT for the DLL
+swap; the raw GitHub link as a clickable link). Show a mockup before UI changes (he asked, and the first one had a
+`top` global collision — renamed). Computer-use grants expire in ~hours and must be re-approved from the DESKTOP app
+(phone approval never attaches); the claude-in-chrome extension was unusable on the Atlas tab all night.
 
 # ⚠⚠ 2026-09-15 EVENING — v16.26 + lsGammaProfile 0.41 + lsDayModel 0.15: Tape columns + candle-low fix
 
