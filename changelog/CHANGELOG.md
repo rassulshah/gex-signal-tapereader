@@ -1,3 +1,12 @@
+## lsGammaProfile 0.44 — the regime chip's second line is PW · FLIP · CW (2026-09-16, ~12:00 CT)
+
+Operator: "regarding the regime chip, it has levels at the bottom, those levels should be Put Wall, Flip, Call Wall."
+The second line was R (ceiling) / KING / S (floor) from the node roles. It is now the three InsiderFinance 0DTE levels,
+chart price first and the SPX strike in brackets, each in its level colour (PW green · FLIP flip-white · CW red);
+a missing row prints n/a. "Not sure the regime is updating — it still says AT flip": at 11:57 the CSV still read
+`REGIME,NA,FORMING,…,no spot` and the chip still showed the â€” mojibake, i.e. 16.28 / 0.43 were not installed yet
+(the FLIP row itself was moving: 7620.72 → 7621.96). Nothing further to fix for that; install.
+
 ## v16.28 + lsGammaProfile 0.43 — first-eyes-on fixes to the build below (2026-09-16, ~11:25 CT)
 
 His first screenshot after installing: the row read `REGIME,NA,FORMING,low,0,7620.72,no spot` and the plugin printed

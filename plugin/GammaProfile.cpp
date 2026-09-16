@@ -528,15 +528,21 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     sw.draw(0, rcol, rcol, DRAW_OPAQUE, PAT_SOLID);
     textLJ((short)(x+28), ly0, l0, rgConflict ? 0x00FF9A8F : C_TXT, S.font, true);
 
-    char l1[128];
-    char cs[40]="R  n/a", fs[40]="S  n/a", ks[40]="";
-    if (cIdx>=0) sprintf_s(cs, sizeof(cs), "R %d %+d%%", (int)(strikes[cIdx].price+0.5f), (int)strikes[cIdx].pct);
-    if (fIdx>=0) sprintf_s(fs, sizeof(fs), "S %d %+d%%", (int)(strikes[fIdx].price+0.5f), (int)strikes[fIdx].pct);
-    if (kIdx>=0) sprintf_s(ks, sizeof(ks), "KING %d %+d%%", (int)(strikes[kIdx].price+0.5f), (int)strikes[kIdx].pct);
-    char fl[40]=""; if (has[3]) sprintf_s(fl, sizeof(fl), "     FLIP %d%s", (int)(lvl[3]+0.5f), lvlWin[3].empty()?"":(" "+lvlWin[3]).c_str());
-    sprintf_s(l1, sizeof(l1), "%s     %s     %s%s", cs, ks, fs, fl);
+    // (v0.44) THE SECOND LINE IS THE THREE IF LEVELS — operator, 2026-09-16: "it has levels at the bottom, those levels
+    // should be Put Wall, Flip, Call Wall." Chart-scale price first (what the axis shows), the SPX strike in brackets
+    // (what Skylit / IF print), each in its level colour. A missing row prints n/a rather than borrowing a node.
+    char l1[200]; char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a";
+    if (has[2]) { if (lvlSpx[2] > 0) sprintf_s(pwS, sizeof(pwS), "PW %d (%d)",   (int)(lvl[2]+0.5f), (int)(lvlSpx[2]+0.5f)); else sprintf_s(pwS, sizeof(pwS), "PW %d",   (int)(lvl[2]+0.5f)); }
+    if (has[3]) { if (lvlSpx[3] > 0) sprintf_s(flS, sizeof(flS), "FLIP %d (%d)", (int)(lvl[3]+0.5f), (int)(lvlSpx[3]+0.5f)); else sprintf_s(flS, sizeof(flS), "FLIP %d", (int)(lvl[3]+0.5f)); }
+    if (has[1]) { if (lvlSpx[1] > 0) sprintf_s(cwS, sizeof(cwS), "CW %d (%d)",   (int)(lvl[1]+0.5f), (int)(lvlSpx[1]+0.5f)); else sprintf_s(cwS, sizeof(cwS), "CW %d",   (int)(lvl[1]+0.5f)); }
     short ly1 = (short)(y + 9 + lineH + lineH/2);
-    textLJ((short)(x+10), ly1, l1, C_TXT, S.font, false);
+    // three coloured segments, laid out left to right with measured widths
+    FONT lf; lf.id = HELVETICA; lf.size = (short)S.font; lf.style = PLAIN; setFont(lf);
+    short gap = (short)(S.font * 2), cx1 = (short)(x + 10);
+    textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); cx1 = (short)(cx1 + getTextWidth(pwS, -1) + gap);
+    textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); cx1 = (short)(cx1 + getTextWidth(flS, -1) + gap);
+    textLJ(cx1, ly1, cwS, C_RES,   S.font, false);
+    (void)fIdx; (void)cIdx; (void)kIdx; sprintf_s(l1, sizeof(l1), "%s", "");
 }
 // Polarity legend (character, not strength). Placed opposite the panel's row.
 void GammaProfile::drawLegend(RCT pane, const Settings& S)
@@ -975,6 +981,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.43");
+    p->setVersion("0.44");
     return p;
 }
