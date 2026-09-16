@@ -1,3 +1,38 @@
+## v16.29 + lsGammaProfile 0.45 + lsDayStats 0.6 — the regression suite, the bracket, the audit sidecar (2026-09-16, ~13:00 CT)
+
+**Operator:** "I'll go with your recommendation" (bracket) · "I also want a thorough regression build for the gamma
+profile … testing to ensure that Skylit tape and Atlas chart match IRT … get datapoints from Atlas as well as
+screenshots … documented to keep a trail" · "the SPY King level that is drawn should include the SPY level, SPY King 757
+… ensure it is mapped to ES correctly" · "remove the IQR in the day stats".
+
+**The suite — `testing/gamma-profile/REGRESSION.md` (plan), `RESULTS.md` (trail), `CHECKLIST.md` (eyes-on), `runs/`.**
+- **Gate A** `test_gammaprofile_build.js`: runs `gammaProfileBuild()` on fixture A (the 09:47 CT ladder verified
+  against Atlas and IRT) and a synthetic fixture B; 40 assertions on every CSV row; 3 mutations prove they fire.
+- **Gate B (logic)** `plugin/GammaProfileLogic.h` + `plugin/test_gammaprofile_logic.cpp` (+ `run-logic-tests.bat`):
+  every decision the plugin makes (roles, the ONE gatekeeper, G·C / G·F, bounded air pockets, stacks → brackets,
+  level→node matching, the contract offset, top-N, the regime text) extracted from the DLL into a header with no SDK,
+  57 assertions, 3 mutations fire. The DLL now calls the same functions the test pins.
+- **Live** `tools/gp-regress.py`: CSV + the new `GammaProfile.audit.json` (+ an Atlas-screenshot transcription + an
+  IRT-screenshot transcription + the screenshots) → Gate A re-derived from the panel's own Atlas read, the Atlas
+  screen diffed against that read, and the EXPECTED chart printed and diffed against what IRT shows. Writes
+  `runs/<date>/<HHMM>.md`, appends to `RESULTS.md`.
+
+**Panel v16.29.** `GammaProfile.audit.json` written beside the CSV on every export — the tape as read, King and
+polarity, the SPX→ES and SPY→ES ratios, the spot and its source, SCALEREF, the companion's 0DTE numbers, the regime
+read, the roll count, the version. It is the Atlas datapoint at the CSV's own timestamp. FlexLevels `SPY KING` label
+now carries the strike (`SPY KING 757`); its ES price is unchanged — Skylit's own SPY→ES1 ratio (`skylitFutPx`), the
+same mapping the KINGNOW row and Atlas's SPY-derived nodes use (audit `ratio.SPY` makes it checkable).
+
+**lsGammaProfile 0.45.** Stack members lose the lowercase letter; a thin **bracket** in the family colour spans the
+run at the base of the strip, with one B / P on the biggest member. The pattern letter moves **beside the rank bubble**
+(it was centred and the bubble hid it on 7600). **G·C / G·F** when the gatekeeper is also the ceiling / floor (the
+ceiling was invisible on 12:xx when 7610 was both). Logic moved to `GammaProfileLogic.h`.
+
+**lsDayStats 0.6.** The IQR column is gone (the P25–P75 band still rides in the DAYSE row, just not drawn).
+
+**Learned.** The first regression written for this plugin found nothing new — because the operator's eyes had found
+everything already, one defect per screenshot, over three days. That is the cost the suite is meant to remove.
+
 ## lsGammaProfile 0.44 — the regime chip's second line is PW · FLIP · CW (2026-09-16, ~12:00 CT)
 
 Operator: "regarding the regime chip, it has levels at the bottom, those levels should be Put Wall, Flip, Call Wall."

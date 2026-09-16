@@ -1,5 +1,30 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 late morning (v16.27 build) · **panel v16.27** · companion v1.19 · RTX plugins: **lsGammaProfile v0.42**, lsDayModel v0.15, lsDayStats v0.5, **lsKingTracker v0.6** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 early afternoon (v16.29 build) · **panel v16.29** · companion v1.19 · RTX plugins: **lsGammaProfile v0.45**, lsDayModel v0.15, **lsDayStats v0.6**, **lsKingTracker v0.6** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~13:00 CT — THE REGRESSION SUITE (item D) + 0.45 / 16.29 / DayStats 0.6. START HERE.
+
+**Read `testing/gamma-profile/REGRESSION.md` before touching lsGammaProfile or `gammaProfileBuild`.** Three layers now
+exist and must stay green: `test_gammaprofile_build.js` (Gate A, 40), `plugin/test_gammaprofile_logic.cpp` (Gate B
+logic, 57 — the plugin's decisions live in `plugin/GammaProfileLogic.h`), `tools/gp-regress.py` (the live same-moment
+run from the CSV + `GammaProfile.audit.json` + Atlas/IRT screenshot transcriptions). Trail: `RESULTS.md`, `runs/`.
+
+**Versions on origin:** panel 16.29 (audit sidecar; `SPY KING <strike>` label), lsGammaProfile 0.45 (bracket, tag
+beside bubble, G·C), lsKingTracker 0.6, lsDayStats 0.6 (IQR removed), lsDayModel 0.15. **His install state when this
+was written:** panel 16.28 running, lsGammaProfile DLL = 0.42 (compiled 11:12), KingTracker 0.5, DayStats 0.5 —
+i.e. the 0.43/0.44/0.45 and KingTracker 0.6 changes are NOT on his chart until he runs the three compile bats.
+
+**Next, in order:** (1) he installs (Tampermonkey 16.29 · close IRT · compile-gammaprofile / compile-kingtracker /
+compile-daystats · reopen) → (2) the FIRST LIVE RUN: computer-use approval, Atlas + IRT screenshots at one minute,
+transcribe both, stage CSV + audit, `gp-regress.py --shots …`, record in RESULTS.md — that run is the acceptance test
+for the bracket / G·C / tag placement he has not seen yet → (3) `run-logic-tests.bat` on his MSVC once → (4) C (the day
+candle: measure first) → (5) T-run upgrade to gp-regress.
+
+**Regime facts settled today (don't reopen):** sign = spot vs InsiderFinance's 0DTE zero-gamma (`dte0.gf.flip`, ours
+over their chain, reconciled against their 0DTE header 2026-09-16: walls exact, flip within the spot move) with a 3-pt
+AT buffer; type = Range / Trend / Whipsaw from the ladder's structure (`gpRegime`, `gexRegime` thresholds + the
+absolute-value polarity of the three largest nodes within 30 pts + King rolls); conflict surfaced. The companion cannot
+select IF's dropdown (it fetches the page); their header follows the dropdown on THEIR tab only. Cadence: the CSV
+writes on the IRT export timer (3 m default; 1 m chip available), the plugin re-reads on every redraw.
 
 # ⚠⚠⚠ 2026-09-16 LIVE SESSION — A + B BUILT (v16.27 · lsGammaProfile 0.42 · lsKingTracker 0.6). START HERE.
 

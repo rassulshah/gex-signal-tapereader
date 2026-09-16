@@ -276,10 +276,12 @@ void DayStats::render(const Settings& S)
     short lineH = (short)(fs + 5);
     short colGap = (short)(textW("0", fs, false) * 2 + 6);
 
-    // build the 14 columns, each: header + A cell + E cell (E prefixed '~')
-    static const int NCOL = 14;
+    // build the 12 columns, each: header + A cell + E cell (E prefixed '~')
+    // (v0.6) the IQR column (the weekday range's P25-P75 band) is gone — operator, 2026-09-16: "remove the IQR in
+    // the day stats". The band still rides in the DAYSE row (fields 16/17) for the record; it is just not drawn.
+    static const int NCOL = 12;
     const char* hdr[NCOL] = { "", "1ST", "TOOK", "BOP", "WICK", "W.END", "WICK%",
-                              "MUD", "MUDt", "2ND", "HL GAP", "HL RNG", "", "IQR" };
+                              "MUD", "MUDt", "2ND", "HL GAP", "HL RNG" };
     std::string aCell[NCOL], eCell[NCOL];
 
     // A cells
@@ -297,8 +299,6 @@ void DayStats::render(const Settings& S)
         aCell[9]= A.second + " " + clk(A.secondClk) + " " + px1(A.secondPx);
         aCell[10]= dur(A.gap);
         aCell[11]= (A.rngUsd.empty()?std::string("--"):("$"+A.rngUsd)) + (A.rngPts.empty()?std::string(""):("  "+A.rngPts+"p"));   // (v0.4) $ and points in one cell
-        aCell[12]= "";
-        aCell[13]= "";
     }
     // E cells (base-rate medians; '~' marks them)
     if (E.valid) {
@@ -315,8 +315,6 @@ void DayStats::render(const Settings& S)
         eCell[9]= E.second + " ~" + clk(E.secondClk);
         eCell[10]= "~"+dur(E.gap);
         eCell[11]= (E.rngUsd.empty()?std::string("--"):("~$"+E.rngUsd)) + (E.rngPts.empty()?std::string(""):("  ~"+E.rngPts+"p"));   // (v0.4) $ and points in one cell
-        eCell[12]= "";
-        eCell[13]= (!E.rngP25.empty() && !E.rngP75.empty()) ? (E.rngP25+"-"+E.rngP75) : "";
     }
 
     // (v0.4) per-cell colour-coding for the ACTUAL row — operator spec: the LOD extreme reads red, the HOD
@@ -445,6 +443,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.5");
+    p->setVersion("0.6");
     return p;
 }

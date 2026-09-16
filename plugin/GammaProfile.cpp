@@ -34,6 +34,7 @@
  *  numbering and silently scrambles every setting read after it.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "GammaProfileLogic.h"   // (v0.45) the decisions, testable without IRT
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -63,12 +64,7 @@ static const COLOR C_SUP  = 0x003FB27A;  // support side stripe (green, below sp
 static const COLOR C_RES  = 0x00D15B6B;  // resistance side stripe (red, above spot)
 static const COLOR C_AIR  = 0x003A4658;  // air-pocket band (translucent grey)
 static const COLOR C_AIRN = 0x00512A48;  // (v0.42) air-pocket band when the run leans -gamma (violent pathway)
-// (v0.42) doctrine thresholds — mirror the panel's detectors (gatekeeper(): magnitude-ranked, REGIME_SIG_PCT;
-// FINDINGS S6: a pattern member is >=30% of the King). Tunable, documented, never silently changed.
-static const float GK_MIN_PCT   = 30.0f;  // a Gatekeeper must be at least this % of the King
-static const float AIR_THIN_PCT = 8.0f;   // a strike under this |%King| is "thin" (part of a pocket)
-static const float AIR_EDGE_PCT = 20.0f;  // a pocket is only a pocket between nodes at least this big
-static const int   AIR_MIN_RUN  = 3;      // and at least this many thin strikes wide
+// (v0.45) the doctrine thresholds and every decision now live in GammaProfileLogic.h (gpl::), unit-tested.
 
 static COLOR lerpColor(COLOR a, COLOR b, float t) {
     if (t < 0) t = 0; if (t > 1) t = 1;
@@ -79,20 +75,7 @@ static COLOR lerpColor(COLOR a, COLOR b, float t) {
 }
 static float luma(COLOR c){ return 0.2126f*((c>>16)&0xFF) + 0.7152f*((c>>8)&0xFF) + 0.0722f*(c&0xFF); }
 static COLOR inkOn(COLOR c){ return luma(c) > 140.0f ? C_DARK : C_WHT; }
-// Short tags for CSV-provided node types (patterns arrive in Phase 6).
-static const char* abbrevType(const std::string& t){
-    if (t=="PIKA")   return "P";
-    if (t=="BARNEY") return "B";
-    if (t=="PIKAM")  return "p";     // (v0.42) a member of a pika stack (the name sits on the biggest member)
-    if (t=="BARNEYM")return "b";     // (v0.42) a member of a barney stack
-    if (t=="RUG")    return "R";
-    if (t=="RRUG"||t=="RREV"||t=="REVRUG") return "RR";
-    if (t=="GK"||t=="GATEKEEPER") return "G";
-    if (t=="KING")   return "K";
-    if (t=="CEIL"||t=="CEILING") return "C";
-    if (t=="FLOOR")  return "F";
-    return t.c_str();
-}
+// (v0.45) pattern tags: gpl::patternTag() — P / B on the named stack member, R / RR on the rug.
 
 // ---- parameter indices, filled in setup() (single-instance -> file static) --
 struct PIdx {
@@ -503,26 +486,11 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // (the flip), type = the Skylit structure read (Range / Trend / Whipsaw — learn/gamma-regimes), conflict =
     // the two books disagree (surfaced, never resolved here). The old "sum of every %King" is only the fallback
     // for a CSV that predates the row, and it says so.
-    bool neg; char l0[160];
-    if (hasRegime) {
-        neg = (rgSign == "NEG");
-        const char* tact = (rgType.find("TREND") == 0) ? "FOLLOW, don't fade"
-                         : (rgType == "WHIPSAW")       ? "fade EXTREMES only / sit out"
-                         : (rgType == "RANGE")         ? "FADE the extremes"
-                         :                               "no edge - wait";
-        const char* sg = neg ? "-gamma" : (rgSign == "POS" ? "+gamma" : (rgSign == "AT" ? "AT flip" : "flip n/a"));
-        std::string ty = rgType; if (ty.empty()) ty = "FORMING";
-        if (ty == "TREND_UP") ty = "TREND UP"; else if (ty == "TREND_DN") ty = "TREND DOWN";
-        sprintf_s(l0, sizeof(l0), "REGIME  %s%s  |  %s  |  %s%s",
-                  sg, (rgFlipSpx > 0.0f ? "" : ""), ty.c_str(), tact, rgConflict ? "  !CONFLICT" : "");
-    } else {
-        neg = net < 0;
-        sprintf_s(l0, sizeof(l0), neg ? "REGIME (sum, no row)  FOLLOW / don't fade  (-gamma)"
-                                      : "REGIME (sum, no row)  FADE extremes  (+gamma)");
-    }
+    gpl::RegimeText RT = gpl::regimeLine(hasRegime, rgSign, rgType, rgConflict, net);
+    bool neg = RT.neg; char l0[200]; sprintf_s(l0, sizeof(l0), "%s", RT.line.c_str());
     COLOR rcol = neg ? S.cneg : S.cpos;
-    if (hasRegime && rgSign == "AT") rcol = C_FLIPC;
-    if (hasRegime && rgSign != "AT" && rgSign != "POS" && rgSign != "NEG") rcol = C_GREY;   // no flip / no spot: no sign call
+    if (RT.at) rcol = C_FLIPC;
+    if (RT.na) rcol = C_GREY;   // no flip / no spot: no sign call
     short ly0 = (short)(y + 9 + lineH/2);
     RCT sw; sw.set((short)(x+10), (short)(ly0-5), (short)(x+21), (short)(ly0+5));
     sw.draw(0, rcol, rcol, DRAW_OPAQUE, PAT_SOLID);
@@ -639,37 +607,18 @@ void GammaProfile::render(const Settings& S)
     float maxAbs = 100.0f;
     if (S.scale == 1) { maxAbs = 1.0f; for (size_t i=0;i<strikes.size();i++){ float a=std::fabs(strikes[i].pct); if(a>maxAbs)maxAbs=a; } }
 
-    // ---- structural roles: King / Ceiling / Floor / Gatekeeper --------------
-    // 0 none, 1 KING, 2 CEIL (biggest |node| above spot), 3 FLOOR (biggest |node| below spot),
-    // 4 GATE — (v0.42) DOCTRINE: "the Gatekeeper" is ONE node, the dominant blocker strictly
-    // between spot and the King (patternpedia/pattern-the-gatekeeper; core-concepts §Gatekeeper
-    // Nodes; the panel's gatekeeper() ranks by MAGNITUDE, not nearness). It must be a real node
-    // (>= GK_MIN_PCT of the King). v0.41 tagged EVERY node >=10% on the path — the "G everywhere"
-    // flood the operator called out. The King itself is never a ceiling/floor candidate.
-    float sp = hasSpot ? spotPx : 0.0f;
-    int kIdx=-1, fIdx=-1, cIdx=-1; float fBest=-1, cBest=-1;
-    for (size_t i=0;i<strikes.size();i++) if (strikes[i].king){ kIdx=(int)i; if(!hasSpot) sp=strikes[i].price; }
-    for (size_t i=0;i<strikes.size();i++){
-        if (strikes[i].king) continue;
-        float a=std::fabs(strikes[i].pct);
-        if      (strikes[i].price < sp) { if(a>fBest){fBest=a; fIdx=(int)i;} }
-        else if (strikes[i].price > sp) { if(a>cBest){cBest=a; cIdx=(int)i;} }
-    }
-    std::vector<int> role(strikes.size(), 0);
-    if (kIdx>=0) role[kIdx]=1;
-    if (cIdx>=0) role[cIdx]=2;
-    if (fIdx>=0) role[fIdx]=3;
-    int gIdx=-1;
-    if (kIdx>=0){
-        float kp=strikes[kIdx].price, lo=sp<kp?sp:kp, hi=sp<kp?kp:sp, gBest=-1;
-        for (size_t i=0;i<strikes.size();i++){
-            if (strikes[i].king) continue;
-            float a=std::fabs(strikes[i].pct);
-            if (strikes[i].price>lo && strikes[i].price<hi && a>=GK_MIN_PCT && a>gBest){ gBest=a; gIdx=(int)i; }
-        }
-        // the Gatekeeper tag wins over Ceiling/Floor on that one node: it is the more specific read
-        if (gIdx>=0) role[gIdx]=4;
-    }
+    // ---- structural roles: King / Ceiling / Floor / Gatekeeper (gpl::roles, unit-tested) ------
+    // (v0.42) DOCTRINE: "the Gatekeeper" is ONE node, the dominant blocker strictly between spot and the
+    // King (patternpedia/pattern-the-gatekeeper; the panel's gatekeeper() ranks by MAGNITUDE), >= 30% of
+    // the King. v0.41 tagged every node >=10% on the path — the "G everywhere" flood. (v0.45) when the
+    // gatekeeper is also the ceiling / floor the tag reads G·C / G·F, so the ceiling is never lost.
+    std::vector<gpl::Node> gn(strikes.size());
+    for (size_t i=0;i<strikes.size();i++){ gn[i].price=strikes[i].price; gn[i].pct=strikes[i].pct; gn[i].rank=strikes[i].rank;
+                                           gn[i].king=strikes[i].king; gn[i].spx=strikes[i].spx; gn[i].type=strikes[i].type; }
+    gpl::Roles RL = gpl::roles(gn, spotPx, hasSpot);
+    float sp = hasSpot ? spotPx : ((RL.kIdx>=0) ? strikes[RL.kIdx].price : 0.0f);
+    int kIdx=RL.kIdx, fIdx=RL.fIdx, cIdx=RL.cIdx;
+    std::vector<int>& role = RL.role;
 
     // header (positionable: 0 TL,1 TC,2 TR,3 BL,4 BC,5 BR)
     if (S.header) {
@@ -693,31 +642,16 @@ void GammaProfile::render(const Settings& S)
         PNT b; b.set(lastBar, spotPx); b.drawLineTo();
     }
 
-    // ---- air pockets: a thin run BETWEEN two real nodes = a fast pathway -----
-    // (v0.42) DOCTRINE (learn/air-pockets-velocity; core-concepts §Air Pockets): an air pocket is a
-    // low-exposure GAP between two significant nodes — trade THROUGH it, target the far side. So a
-    // thin run is banded ONLY when a node >= AIR_EDGE_PCT closes it on BOTH sides. v0.41 banded any
-    // thin run, which shaded the whole far-OTM tail ("the top area is constantly shaded"). The band
-    // leans magenta when the run's residual gamma is net negative (the violent version).
-    if (S.roles && strikes.size() >= 3) {
-        std::vector<int> ord(strikes.size());
-        for (size_t i=0;i<strikes.size();i++) ord[i]=(int)i;
-        std::sort(ord.begin(), ord.end(), [&](int a,int b){ return strikes[a].price < strikes[b].price; });
-        size_t i=0;
-        while (i < ord.size()) {
-            if (std::fabs(strikes[ord[i]].pct) < AIR_THIN_PCT) {
-                size_t j=i; float runSum=0.0f;
-                while (j+1<ord.size() && std::fabs(strikes[ord[j+1]].pct) < AIR_THIN_PCT) j++;
-                for (size_t q=i; q<=j; q++) runSum += strikes[ord[q]].pct;
-                bool lowEdge  = (i>0)            && std::fabs(strikes[ord[i-1]].pct) >= AIR_EDGE_PCT;
-                bool highEdge = (j+1<ord.size()) && std::fabs(strikes[ord[j+1]].pct) >= AIR_EDGE_PCT;
-                if ((int)(j - i + 1) >= AIR_MIN_RUN && lowEdge && highEdge) {
-                    bandPrice(strikes[ord[i]].price, strikes[ord[j]].price, paneL, paneR, runSum < 0 ? C_AIRN : C_AIR);
-                    PNT mid; mid.set(lastBar, (strikes[ord[i]].price + strikes[ord[j]].price)/2.0f);
-                    textLJ((short)(paneL+8), mid.v, runSum < 0 ? "AIR POCKET (-g)" : "AIR POCKET", C_GREY, S.font-1, false);
-                }
-                i = j + 1;
-            } else i++;
+    // ---- air pockets: a thin run BETWEEN two real nodes = a fast pathway (gpl::airPockets) -----
+    // DOCTRINE (learn/air-pockets-velocity): a low-exposure GAP between two significant nodes — trade THROUGH
+    // it. Banded ONLY when a node >= 20% closes it on BOTH sides; the far-OTM tail is never shaded. Magenta
+    // tint when the run's residual gamma is net negative (the violent version).
+    if (S.roles) {
+        std::vector<gpl::Pocket> pk = gpl::airPockets(gn);
+        for (size_t q=0; q<pk.size(); q++) {
+            bandPrice(pk[q].lo, pk[q].hi, paneL, paneR, pk[q].neg ? C_AIRN : C_AIR);
+            PNT mid; mid.set(lastBar, (pk[q].lo + pk[q].hi)/2.0f);
+            textLJ((short)(paneL+8), mid.v, pk[q].neg ? "AIR POCKET (-g)" : "AIR POCKET", C_GREY, S.font-1, false);
         }
     }
 
@@ -771,31 +705,33 @@ void GammaProfile::render(const Settings& S)
             short s1, s2; if (sgn<0){ s1=(short)(anchor-3); s2=anchor; } else { s1=anchor; s2=(short)(anchor+3); }
             RCT st; st.set(s1, (short)(p.v-barH/2-1), s2, (short)(p.v+barH/2+1));
             st.draw(0, sr, sr, DRAW_OPAQUE, PAT_SOLID);
-            const char* rn = rl==1 ? S.kinglabel : (rl==2?"C":(rl==3?"F":"G"));   // K(name)/C/F/G
+            const char* rn = gpl::roleTag(rl, S.kinglabel);   // K(name) / C / F / G / G·C / G·F
             COLOR ic = inkOn(col);
             if (sgn<0) textRJ((short)(anchor-8), p.v, rn, ic, S.font, true);
             else       textLJ((short)(anchor+8), p.v, rn, ic, S.font, true);
         }
 
-        // node PATTERN tag (P/B/R/RR from the panel's doctrine detectors) centered inside the bar.
-        // (v0.42) drawn even when a role tag (C/F/G) sits at the base — a Rug ceiling is both "C" and "R",
-        // and the operator asked for the patterns. The King's name is the base tag, not repeated inside.
-        const char* tlabel = s.king ? "" : abbrevType(s.type);
-        if (S.type && tlabel && tlabel[0] && len > (short)(S.font * 2)) {
+        // node PATTERN tag (P / B on the named stack member, R / RR on the rug's yellow node) INSIDE the bar.
+        // (v0.42) drawn even when a role tag (C/F/G) sits at the base — a Rug ceiling is both "C" and "R".
+        // (v0.45) placed just inside the TIP, beside the rank bubble, not centred: centred, the bubble sat on
+        // top of it on the shorter bars (7600's tag was invisible under its "5"). Members carry no letter —
+        // the bracket below marks the run (the operator chose the bracket over a letter on every member).
+        const char* tlabel = s.king ? "" : gpl::patternTag(s.type);
+        if (S.type && tlabel && tlabel[0] && len > (short)(S.font * 3)) {
             COLOR ic = inkOn(col);
-            short cxbar = (short)((anchor + tip) / 2);   // horizontal center of the bar
-            textC(cxbar, p.v, tlabel, ic, S.font, true);
+            int rankMaxT = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
+            bool bubbleIn = S.rank && S.rankpos == 0 && s.rank >= 1 && s.rank <= rankMaxT;
+            short r0 = (short)(S.font * 0.9f + 4);
+            short inset = bubbleIn ? (short)(2 * r0 + 6) : 6;          // clear the bubble when it is inside the tip
+            if (sgn < 0) textLJ((short)(tip + inset), p.v, tlabel, ic, S.font, true);
+            else         textRJ((short)(tip - inset), p.v, tlabel, ic, S.font, true);
         }
         // (v0.42) LEVEL LABELS ON THE NODE: the wall nodes carry "CW" / "PW" just beyond the tip (outside the
         // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
         const char* wtag = 0;
         if (S.lvllabels) {
-            for (int li = 1; li <= 2 && !wtag; li++) {
-                if (!has[li]) continue;
-                bool hit = (lvlSpx[li] > 0.0f && s.spx > 0.0f) ? (std::fabs(lvlSpx[li] - s.spx) < 0.01f)
-                                                                : (std::fabs(lvl[li] - s.price) < 1.0f);
-                if (hit) wtag = (li == 1) ? "CW" : "PW";
-            }
+            if (has[1] && gpl::levelNode(gn, lvl[1], lvlSpx[1]) == (int)i) wtag = "CW";
+            else if (has[2] && gpl::levelNode(gn, lvl[2], lvlSpx[2]) == (int)i) wtag = "PW";
         }
         short wtagW = 0;
         if (wtag) {
@@ -869,6 +805,21 @@ void GammaProfile::render(const Settings& S)
         }
     }
 
+    // (v0.45) STACK BRACKETS — one thin bar along the base of the strip spanning each pika / barney run, in the
+    // family's colour, so the stack reads as a SHAPE (its extent) with a single P / B on its biggest member.
+    if (S.type) {
+        std::vector<gpl::Stack> sk = gpl::stacks(gn);
+        for (size_t q=0; q<sk.size(); q++) {
+            if (sk[q].n < 2) continue;
+            PNT a; a.set(lastBar, sk[q].lo); PNT b; b.set(lastBar, sk[q].hi);
+            short y1 = (short)((a.v < b.v ? a.v : b.v) - barH/2), y2 = (short)((a.v < b.v ? b.v : a.v) + barH/2);
+            short bx = (sgn < 0) ? (short)(anchor + 2) : (short)(anchor - 5);
+            RCT br; br.set(bx, y1, (short)(bx + 3), y2);
+            COLOR bc = sk[q].pos ? S.cpos : S.cneg;
+            br.draw(0, bc, bc, DRAW_OPAQUE, PAT_SOLID);
+        }
+    }
+
     // (v0.42) FLIP tick — the zero-gamma level is a PRICE, not a strike, so it cannot tag a node: a short dashed
     // tick across the bar strip at that price, labelled FLIP (+ window), in the flip colour. Independent of the line.
     if (S.lvllabels && has[3]) {
@@ -933,12 +884,8 @@ void GammaProfile::applyContractOffset()
     // ladder IS in, so off = chartClose − SCALEREF is exactly that spread; shifting by it lands the whole
     // book on the charted contract, and →0 on its own once the front rolls to this contract. Fall back to
     // SPOT only when SCALEREF is absent (older panel, or a book that doesn't write it).
-    float anchor = 0.0f; bool have = false;
-    if (hasScaleRef && scaleRef > 0.0f) { anchor = scaleRef; have = true; }
-    else if (hasSpot)                   { anchor = spotPx;   have = true; }
-    if (!have) return;
-    float off = chartClose - anchor;
-    if (off < -300.0f || off > 300.0f) return;      // implausible → leave as-is
+    float off = 0.0f;
+    if (!gpl::contractOffset(chartClose, hasScaleRef, scaleRef, hasSpot, spotPx, off)) return;   // no anchor / implausible → leave as-is
     for (size_t i = 0; i < strikes.size(); i++) strikes[i].price += off;
     for (int i = 0; i < 6; i++) if (has[i]) lvl[i] += off;
     if (hasSpyKing) spyKingPx += off;
@@ -981,6 +928,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.44");
+    p->setVersion("0.45");
     return p;
 }

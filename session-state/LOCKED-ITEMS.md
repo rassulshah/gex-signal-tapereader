@@ -70,6 +70,15 @@ was considered and REJECTED (IF carries no vega). Recommendation agreed:
   0DTE flip/walls = our filter over their chain (`dte0.gf.flip`, `dte0.lv`), RECONCILED against his 0DTE screenshot
   2026-09-16 (walls exact, flip 7620.7 vs 7617.0 minutes apart). INSIDERFINANCE.md §4 updated.
 
+### ✅ D · THE GAMMA-PROFILE REGRESSION SUITE — BUILT 2026-09-16 (v16.29 / lsGammaProfile 0.45); FIRST LIVE RUN PENDING
+Operator: "a thorough regression build for the gamma profile … Skylit tape and Atlas chart match IRT … datapoints from
+Atlas as well as screenshots … documented to keep a trail … results and notes documented." Built: Gate A test, Gate B
+logic test + header, the live runner with the audit sidecar, REGRESSION.md / RESULTS.md / CHECKLIST.md / runs/.
+**Open inside D:** (1) the first live run with both screenshots after he installs 16.29 + 0.45 (needs computer-use
+approval on the desktop); (2) `run-logic-tests.bat` has not yet been run on his MSVC; (3) upgrade the scheduled T1–T5
+checkpoints to run `gp-regress.py` from the audit (no screens) instead of `check-gammaprofile.py` alone; (4) a fixture
+for a Trend day and an air-pocket day once one is recorded (fixture A has neither).
+
 ### C · THE DAY CANDLE MODEL — operator: "why is the day candle model so bad, look at the results today"
 Diagnosed with today's numbers (Tue 15 Sep, Dec scale, from the open): expected HOD +31 / LOD −31 / close −15.5 /
 range 62 (open60 stage) vs actual HOD **+2.8** (8:33a) / LOD −40.8 (9:54a) / close −27.5 / range 43.5. LOD and close
