@@ -45,6 +45,23 @@ was considered and REJECTED (IF carries no vega). Recommendation agreed:
    2026-09-15). ⚠ Window landmine: IF's zero-gamma flips sign by window (dte0 −$6.86B / toFri −$16.41B / all
    +$13.34B, 2026-08-23, all correct) — pin the window, never compare across.
 
+#### B — AMENDED 2026-09-16 ~10:15 CT (operator, live, with a screenshot of IF's GEX page)
+- ⚠ **IF's header numbers FOLLOW THE EXPIRY DROPDOWN.** With "Today (0DTE)" selected the header reads Net GEX −$1.5B ·
+  Call Wall 7675 · Put Wall 7600 · **Zero Gamma 7617.03** (spot 7612.44). INSIDERFINANCE.md §4 says the header is
+  all-expiry — that was only the DEFAULT dropdown state at capture. The companion scrapes whatever window the dropdown is
+  on, and the panel tags the walls `wallsAreAllExpiry` regardless. Fix INSIDERFINANCE.md §4 in the same build.
+- Operator: "I had to select 0 gamma, it was all expirations by default, so make sure you select 0 DTE (Today) so you
+  implement it right, then you will have the walls and the zero level too." → the COMPANION must ensure the dropdown is
+  on **Today (0DTE)** (check the label at every poll; select it if not; wait for the header to re-render; then scrape) and
+  tag every header value with the window it was read under. Regime sign = spot vs THEIR 0DTE Zero Gamma (+ buffer); our
+  `gammaFlip()` on the 0DTE chain is the backstop and must be reconciled against their number once (like net GEX was).
+- Operator: "since I have a lot of levels, I want the call wall, put wall, zero gamma (flip) called out ON THE NODES
+  THEMSELVES in the bar/histogram." → lsGammaProfile tags the node whose SPX strike = Call Wall "CW", = Put Wall "PW",
+  and marks the Zero Gamma price on the rail as the flip (it is a price, not a strike — a tick + label at 7617.03, not a
+  node tag). Panel writes `FLIP` / `CW` / `PW` rows with the window (ES scale via esOfSpx, raw SPX strike beside).
+  OPEN (ask before build): keep the separate horizontal FLIP/CW/PW lines as well, or replace them with the on-node
+  callouts? Mockup first (his standing rule).
+
 ### C · THE DAY CANDLE MODEL — operator: "why is the day candle model so bad, look at the results today"
 Diagnosed with today's numbers (Tue 15 Sep, Dec scale, from the open): expected HOD +31 / LOD −31 / close −15.5 /
 range 62 (open60 stage) vs actual HOD **+2.8** (8:33a) / LOD −40.8 (9:54a) / close −27.5 / range 43.5. LOD and close
