@@ -254,6 +254,15 @@ def main(paths, out=None, market='ES'):
         else:
             rec['or30'] = None; rec['drive30'] = 0
         rec['or60'] = round(max(x[1] for x in o60) - min(x[2] for x in o60), 2) if o60 else None  # opening 60-min range (the initial balance)
+        # (v16.32) THE CONDITIONAL STATS FEATURES — where the open sits in the opening window and the window's extreme clocks
+        for W, ow in ((30, o30), (60, o60)):
+            if ow:
+                hw = max(ow, key=lambda x: x[1]); lw = min(ow, key=lambda x: x[2]); rw = hw[1] - lw[2]
+                rec['pos%d' % W] = round((b[0][4] - lw[2]) / rw, 3) if rw > 0 else 0.5
+                rec['tH%d' % W] = (hw[0] - RTH_A) // 60; rec['tL%d' % W] = (lw[0] - RTH_A) // 60
+            else:
+                rec['pos%d' % W] = None; rec['tH%d' % W] = None; rec['tL%d' % W] = None
+        rec['t1'] = (min(hod_t, lod_t) - RTH_A) // 60; rec['t2'] = (max(hod_t, lod_t) - RTH_A) // 60
         rows.append(rec)
         rth = [m for m in mins if m[0] >= RTH_A]          # the ladder keeps counting from 08:30, on minutes
         surv_lo += survival(rth, True); surv_hi += survival(rth, False)
@@ -361,6 +370,13 @@ def main(paths, out=None, market='ES'):
     #   DIR30   how often the sign of the opening-30-min drive matched the day's close direction (a body lean)
     # The panel reads this block from HODLOD_BASE.predict; if absent it falls back to literals. See FINDINGS F-4/F-6.
     res['predict'] = _predict_block(rows)
+    # ---- (v16.32) THE CONDITIONAL STATS — the E row's 1ST / 2ND clocks and 1ST = LOD/HOD, conditional on the morning.
+    # tools/study-daystats-cond.py (2026-09-16, n=300, out-of-fold): the weekday trimmed means err 38 min on the 1ST clock and
+    # call 1ST = LOD/HOD right 48% of the time (worse than a coin). Pooled medians: 36.5 min. Conditional on where the open
+    # sits in the opening range (terciles): 1ST accuracy 59% at 30 min, 61% at 60 min; the 1ST clock = the clock of the
+    # window's extreme on the open's side when the open sits in an outer third: 33.3 min at 60 min (-13% vs base).
+    # The 2ND clock is NOT predictable from the morning (93 min either way) - the pooled median is carried, honestly.
+    res['condstats'] = _cond_block(rows)
     # the mix, so a consumer can see a pooled corpus rather than discover it
     mix = collections.Counter(prov[d] for d in days)
     res['corpus']['sources'] = dict(mix)
@@ -436,6 +452,28 @@ def _predict_block(rows):
                             feature='sign(opening 30-min drive) -> close direction')
     out['note'] = ("weekday means are a reference (R^2 ~2%); these predict from today's tape. "
                    "MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68.")
+    return out
+
+
+def _cond_block(rows):
+    """Pooled medians + the pos-tercile tables (n, 1ST median, 2ND median, LOD-first %) for the 30- and 60-minute windows.
+    Minutes after the 08:30 open. The panel (hodlodCondE) reads this from HODLOD_BASE.condstats; literals are its fallback."""
+    ok = [r for r in rows if r.get('t1') is not None]
+    if len(ok) < 40:
+        return None
+    med = lambda xs: round(st.median(xs), 1) if xs else None
+    out = dict(n=len(ok), t1Med=med([r['t1'] for r in ok]), t2Med=med([r['t2'] for r in ok]),
+               lodPct=round(100 * sum(1 for r in ok if r['first'] == 'LOD') / len(ok)))
+    for W in (30, 60):
+        tab = []
+        for b in range(3):
+            lo, hi = b / 3.0, (b + 1) / 3.0
+            sub = [r for r in ok if r.get('pos%d' % W) is not None and (lo <= r['pos%d' % W] < hi or (b == 2 and r['pos%d' % W] >= hi))]
+            tab.append(dict(n=len(sub), t1=med([r['t1'] for r in sub]), t2=med([r['t2'] for r in sub]),
+                            lodPct=round(100 * sum(1 for r in sub if r['first'] == 'LOD') / len(sub)) if sub else None))
+        out['pos%d' % W] = tab
+    out['orClockRule'] = 'outer third: 1ST clock = the clock of the opening window\'s extreme on the open\'s side'
+    out['note'] = 'study-daystats-cond.py 2026-09-16: 1ST clock MAE base 38.4 -> 33.3 (60 min); 1ST acc 0.48 -> 0.61; 2ND clock not predictable (93 min)'
     return out
 
 

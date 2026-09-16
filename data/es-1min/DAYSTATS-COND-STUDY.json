@@ -1,0 +1,67 @@
+{
+ "n": 300,
+ "first": "2025-06-02",
+ "last": "2026-09-15",
+ "models": {
+  "BASE: weekday trimmed mean / majority (the panel today)": {
+   "t1": 38.4,
+   "t2": 93.1,
+   "gap": 90.8,
+   "acc": 0.483
+  },
+  "pre-open: pooled median / majority": {
+   "t1": 36.5,
+   "t2": 93.6,
+   "gap": 95.0,
+   "acc": 0.517
+  },
+  "30 min: conditional on pos30 tercile": {
+   "t1": 36.6,
+   "t2": 95.5,
+   "gap": 97.2,
+   "acc": 0.593
+  },
+  "30 min: pos30 tercile x drive": {
+   "t1": 36.4,
+   "t2": 95.7,
+   "gap": 96.9,
+   "acc": 0.573
+  },
+  "30 min: OR-extreme clock when open in outer third": {
+   "t1": 36.8,
+   "t2": 95.5,
+   "gap": 100.5,
+   "acc": 0.593
+  },
+  "30 min: READ input (close far from a running extreme)": {
+   "t1": 37.0,
+   "t2": 93.4,
+   "gap": 98.1,
+   "acc": 0.593
+  },
+  "60 min: conditional on pos60 tercile": {
+   "t1": 36.2,
+   "t2": 94.4,
+   "gap": 97.4,
+   "acc": 0.613
+  },
+  "60 min: pos60 tercile x drive": {
+   "t1": 36.3,
+   "t2": 95.1,
+   "gap": 99.2,
+   "acc": 0.64
+  },
+  "60 min: OR-extreme clock when open in outer third": {
+   "t1": 33.3,
+   "t2": 94.4,
+   "gap": 98.0,
+   "acc": 0.613
+  },
+  "60 min: READ input (close far from a running extreme)": {
+   "t1": 33.6,
+   "t2": 93.5,
+   "gap": 97.6,
+   "acc": 0.643
+  }
+ }
+}

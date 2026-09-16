@@ -120,6 +120,14 @@ point 1 above. (iii) placement by where the open sits in the opening range cuts 
 (17.4/22.0 → 12.8/16.8). Proposal on the table (nothing built): placement first, EM into the range second, record the
 pinned straddle daily to re-fit on the real series. Regime skew (point 3) still unmeasured — no regime history.
 
+### ✅ G · THE DAY STATS E ROW CONDITIONAL ON THE MORNING — BUILT 2026-09-16 18:10 (panel v16.32); awaiting install
+Operator: "how can [the day stats] model be improved?" → "I'll go with your recommendation … test and confirm that the
+model is better than base." `design/DAYSTATS-COND-STUDY.md`: 1ST clock 38.4 → 33.3 min, 1ST = LOD/HOD 0.48 → 0.61,
+2ND clock unchanged (not predictable — say so). OPEN under G: (i) the lsDayStats LADDER for the 2ND clock instead of a
+clock — plugin change, mockup first; (ii) wick% conditional on the open's OR position — unmeasured; (iii) the daily
+record row (regime sign at the open, flip distance, walls, King) so the doctrine inputs can be tested — panel change,
+fields to agree.
+
 ### CARRIED OPEN (unchanged tonight)
 - Q12 top-3-vs-top-5 gamma lines (per-rank deflection table, sessions since 09-09) — operator asked "would I have
   seen it with Top 5" → answered (yes, ranks 2/3 are in Top 5); the measured question is still open.

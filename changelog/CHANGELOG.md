@@ -1,3 +1,20 @@
+## v16.32 — the Day Stats E row conditional on the morning (2026-09-16, ~18:10 CT)
+
+Operator: "how can [the day stats] model be improved?" → "I'll go with your recommendation, do what you need to do but make
+sure you test and confirm that the model is better than base." MEASURED FIRST (`tools/study-daystats-cond.py`,
+`design/DAYSTATS-COND-STUDY.md`, n=300, out-of-fold, base re-derived per fold): the weekday trimmed means the E row has
+carried since v14.62 err 38.4 min on the 1ST clock and call 1ST = LOD/HOD right 48% of the time — worse than a coin.
+BUILT: `hodlodCondE()` + `gpOpenWindow()` — by stage: pre-open pooled medians (36.5 / 52%) → 30 min the open's position
+in the opening range, terciles (59%) → 60 min the initial balance, and in the outer thirds the 1ST clock = the clock of
+the window's extreme on the open's side (33.3 min, −13%; 61%) → READ IN (HLTAB, AUC 0.879): the 1ST is the actual first
+extreme. The 2ND clock is NOT predictable from the morning (93 min whichever way) — the pooled median is carried and no
+claim is made; the ladder display for it is a proposed lsDayStats change (mockup first). Tables: `condstats` in
+BASERATES.json (study-hodlod emits it nightly; hlBaseNormalise passes it) with `GP_COND_FALLBACK` baked. New CSV row
+`CONDE,<basis>,<t1>,<t2>,<lod%>,<n>`; DAYEHOD / DAYELOD / DAYSE carry the conditional clocks; `dWhy` names the basis.
+Tests: `test_daystats_cond.js` 27/27 + 4 mutations fire; Gate A 61/61; test_hodlod 176/176 (the literal re-baked with
+`bake-hodlod.py` — it had drifted from the nightly's file since 09-11, five pre-existing fails now green); smoke clean.
+No plugin change: lsDayStats reads the same 17-field DAYSE row.
+
 ## STUDY — the expected move vs the day model's range and high/low (2026-09-16, ~17:30 CT) — NO CODE CHANGE
 
 Operator: "what if you used the expected move to calculate [the expected high/low], is it better or worse" → "run the

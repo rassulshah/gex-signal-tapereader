@@ -609,5 +609,53 @@
   },
   "note": "weekday means are a reference (R^2 ~2%); these predict from today's tape. MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68."
  },
- "generatedAt": "2026-09-16T20:05:16Z"
+ "condstats": {
+  "n": 300,
+  "t1Med": 24.0,
+  "t2Med": 286.5,
+  "lodPct": 52,
+  "pos30": [
+   {
+    "n": 114,
+    "t1": 21.0,
+    "t2": 286.5,
+    "lodPct": 59
+   },
+   {
+    "n": 81,
+    "t1": 33,
+    "t2": 294,
+    "lodPct": 58
+   },
+   {
+    "n": 105,
+    "t1": 21,
+    "t2": 282,
+    "lodPct": 39
+   }
+  ],
+  "pos60": [
+   {
+    "n": 108,
+    "t1": 16.5,
+    "t2": 303.0,
+    "lodPct": 66
+   },
+   {
+    "n": 93,
+    "t1": 36,
+    "t2": 306,
+    "lodPct": 53
+   },
+   {
+    "n": 99,
+    "t1": 21,
+    "t2": 267,
+    "lodPct": 35
+   }
+  ],
+  "orClockRule": "outer third: 1ST clock = the clock of the opening window's extreme on the open's side",
+  "note": "study-daystats-cond.py 2026-09-16: 1ST clock MAE base 38.4 -> 33.3 (60 min); 1ST acc 0.48 -> 0.61; 2ND clock not predictable (93 min)"
+ },
+ "generatedAt": "2026-09-16T21:35:04Z"
 }

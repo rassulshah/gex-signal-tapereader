@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-11 · v15.99 · session `f9c89c64`
+## 2026-09-16 · v16.32 · session `f9c89c64` — v16.32 — Day Stats E row conditional on the morning; EM study; IF extras
 
-_86 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_131 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1407,6 +1407,286 @@ Here's my plan for v15.99, no guessing left:
 1. **Source = KINGDAY** (survives reload, ungated on SPY, current today) — with a fallback to the census only if KINGDAY is empty, so it can never go fully blank again.
 2. **Fix the SPY step rendering** so all 6 of today's points draw as real steps — that's the actual bug from v15.97 …[trimmed]
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> make sure you are recording the marekt is open'
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> im going to restart irt give me 2 min
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> ok. irt is up too
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> did you do a test
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> are there any fixes that need to be done? are you saysing the indicators are all consistent with atlas and the skylit tape ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> how are yo ucalculating the regime. explain simply
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> ok.. is this the standard way to caluculate it ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> does the regime in insider finance update throughout the day?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> i need to know the right approach that is correct to calculate the gamma regime
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> do you have to calculate the regime from IF or does it just say whether we are in positive or negative gamma regime
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> in IF there should be a 0 dte flip level and below it its negative gamma, is this true
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> look at the pic, it has a zero gamma level for 0 dte why not use this level ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> ok.. just note that i had to select 0 gamma, it was all expirations by default , so make sure you select 0 dte (today) so you implement it right, then you will have the walls adn the zero level too. Also , since i have a lot of levels , i want the call wall put wall zero gamma (flip ) called out on the nodes themselves in the bar /histogram.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> keep them as options , so you can have an option of lines or labels
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> regarding the regime chip , it has levels at the bottom, those levels should be Put Wall , Flip , Call Wall. Also , im not sure if the regime is being updated because it still says it is at flip.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> im not sure if you update the regime chip on time. check if there is an issue
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> currently do you have test scenarios for each indicator like for the gamma profile … basically a complete regression on the gamma profile ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> what is b as a label. look at the labels and tel me if they are correct
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> i'll go with your recomendation . i also want a thorough regression build for the the gamma profile. It must also have testing to ensure that skylit tape and atlas chart match IRT . Infact you should get datapoints from atlas as well as screenshots and ensure everything is consistent. The regression should be documented to keep a trail so it can be referenced int the future and results and notes should also be documented.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> I also want the spy king level that is drawn to include the spy level so it should be something like SPY King 757. You need to ensure that it is mapped to ES correctly.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> also remove the IQR inthe day stats model
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> regarding the levels swept, i dont thisnk it matches irt .
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> start checking everything. also note that the entire provile is moving up and down
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> build the fixes
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> can you perform a test on the gamma profile to ensure that it is complete . i want to make sure that it is a completed feature, so run the regression . But before you do that I want to ask you , if i wanted to replace skylit with Inside Finance, would it be possible ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> investigate it properly and do a thorough impact analysis of using IF option. review the results . document them , create a step by step plan of providing the option of using IF vs Skylit. and then build
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> what do these levels mean in insider finance
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> ok.. i want to test the IF version of the gamma profile. can you mock it up first
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> which levels are you not showing from IF . for example are you showing the levels it mentions under signals that i gave you a screen shot of ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> lets discuss one by one
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> what do you mean by the skylit rail, i am considering using IF means you use IF data instead of skylit
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> yes Add it . I want to try using as much from IF as possible . even the nodes would be from IF . They actually have a table view that allows you to see the strikes and the gamma at each strike in a table.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> go to this site. https://www.insiderfinance.io/gamma-exposure/SPX. they have additional information . tell me how i could use the additioanal informaiton for trading
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> which one is relevant for day trading and consider what we have built so far, gamma profile, day model, day stats, king tracker , regime , etc. which featrues would add any time of value in terms of support and resistand or direction or predictiion
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> show me the mockups, remember that this is going to be implremented in IRT
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> C:\Dev\gex-signal-tapereader\plugin
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> STEEP↓/flat
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (20:55):** Clean now. Delivering the mockup.
+Both mockups are drawn the way they would sit on the IRT rail, on the real IF book from 14:26.
+
+**#1 — wall depth.** The only new thing on the rail is a small pill beside the existing CW / PW tag (and after the wall on the regime chip's second line): `0D` means the wall is ≥70% today's expiry — a level for this session only, fade the first test, gone at 3:00; `WK` means the week's expiries carry most of it — it holds through the week and a break is a bigger event; `MO` means the monthly book sits on it — a structural level. It comes from the per-expiry chain the companion already holds, so no new fetch; the 30% / 70% thresholds are a starting point to be measured, like everything else. This is the one I'd build first: it's one pill, it answers "how much should I respect this wall?", and nothing existing changes.
+
+**#2 — the curve's slope.** One word on the regime chip — `STEEP↓` or `flat` — from the companion's own net-gamma-vs-spot scan (the one that already finds the flip). Steep on the downside means a wall break runs; flat means it stalls. The curve panel in the mockup is only there to show where the word comes from; it would not be drawn on IRT. The same number would later feed the day model's expected-candle skew (item C), but that's a separate, measured step.
+
+Which one do you want to go with — #1 first, as recommended, or would you like to change anything on the pill (placement, the three names, the thresholds) before I build it?
+
+**OPERATOR:**
+> now consider how you could use IF information in the other indicators like king tracker or day model etc.
+
+**me (20:57):** Here is where IF's structure could add something to each of the other plugins, judged against what each one does today and what the companion already carries. Nothing below needs a new fetch — the FLIP / CW / PW / EM rows are already in `GammaProfile.csv`, which every plugin reads.
+
+**lsDayModel (the expected day).** This is the biggest opportunity. The model today is purely statistical: yesterday's bars and the day-type stats give it a projected high and low. IF gives it three things it has no other way to know. First, the expected move (the EMH / EML rows built in 16.31) is the options market's own range budget for today — the model can draw its statistical range and the implied range together, and when they disagree that is itself a read (stat range wider than EM on a +gamma day means the stat range is probably optimistic). Second, the walls are hard edges: a projected high that sits beyond the 0DTE call wall should be capped or marked low-odds, because the wall is exactly the level the day model doesn't know about. Third, the regime sign gives the candle its skew — below the flip the expected range widens and the tail points down; above it the range narrows and the candle compresses. That is item C, and the slope word from mockup #2 is the same number feeding it. Everything here can be built from the CSV rows that already exist.
+
+**lsKingTracker (the King's journey).** It tracks Skylit's flow King and its rolls. IF's King — the largest |net| in the 0DTE chain, which is what IF calls the Magnet — is the standing King, and it moves slowly. Drawing it as a second, quieter track under the flow King gives a read the tracker cannot make today: when the flow King rolls onto the strike where the standing book already sits, that is agreement (the flow is confirming the struc …[trimmed]
+
+**OPERATOR:**
+> regarding the day model, when IF is selected, what if you used the expected move to calculate them .  is its result better or worse
+
+**me (21:03):** Short answer: probably better before the open and for the first half hour, probably not after — but that is a guess until it's measured, and it can be measured with the tool that built the current model.
+
+What the day model does today (v16.18, `tools/study-hodlod.py`, out-of-fold over 283 ES sessions): before 30 minutes of RTH it predicts the day's range from the prior day's range (MAE 23.0 pts); once 30 minutes are in it switches to the opening range (MAE 19.5); after an hour, the initial balance (MAE 18.5). The weekday mean it replaced was MAE 24.2 — barely predictive. The candle is then drawn symmetric around the open, with a body lean from the opening drive.
+
+Why EM should beat the ex-ante stage: the prior day's range is backward-looking and unconditional; the 0DTE straddle is the market's forward price of today's volatility, and it already knows things yesterday's range cannot — that today is FOMC, that the week's event risk is in, that IV collapsed overnight. Implied vol subsuming historical vol is one of the better-established results in the literature, so I'd expect the EM stage to come in under 23.0. Why it probably loses after 30 minutes: the EM is set once at the open and doesn't update, while the opening range is today's actual realized behaviour. The likely best model is a blend — EM ex-ante, then EM and the opening range together — but that is exactly what the fit would tell us.
+
+Two things to get right if we try it. First, the EM is not the range: the straddle prices the expected |close − open|, and for a random walk the high-low range averages about twice that, so EM would go in as a fitted coefficient (`range = a + b·EM`), not as the candle's half-width directly. Second, it must be on the ES scale via the ratio, like everything else — today's `feat.emba …[trimmed]
+
+**OPERATOR:**
+> run the study .  I want to know how good EM is and if it will improve the model espected high and low
+
+**me (21:11):** Got all 332 rows. Closing the tab and assembling the series.
+The study is done: 299 ES sessions (June 2025 to yesterday), same corpus, grid and error measure as the existing day model, scored out-of-fold so no day grades itself. The EM series is CBOE's VIX1D at the open, which is the 0DTE straddle at 08:30 seen through CBOE's formula; it agrees with the panel's own straddle pins in level on the 9 clean days we have.
+
+**How good is the EM?** Better than anything the model has. Before the open it beats the prior-day-range stage 18.3 vs 22.6 points (−19%), and on its own it also beats the 30-minute and 60-minute stages (19.4 / 19.0) — a number known at the open forecasts the day's range better than the first hour's own range does. Added to those stages it takes another 9% off. The prior-day range is dead once the EM is in (its coefficient drops to 0.007). Where it helps most is the tails: the current stage over-calls quiet days by 12 points and under-calls event days by 13; the EM is unbiased in both. Its own failure mode is the day after a vol spike, when implied vol is still high and the tape has calmed.
+
+**Will it improve the expected high and low?** Only slightly — about one point — and the study shows why. Even a *perfect* range, placed symmetric round the open the way the candle is drawn today, still misses the high and the low by 18.4 points each. The candle's error is placement, not width: it is the point you made on Tuesday ("28 points of upside that never printed"), now measured. The lever that does move the high and low is placing the candle by where the open sits in the opening range — at 60 minutes in, the high error drops from 17.4 to 12.8 and the low from 22.0 to 16.8, a quarter off both.
+
+So the recommendation, nothing built: placement first (that is where …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> just  show me the mockup for the recommendation
+> 
+> _[sent while I was working — a queued message]_
+> does the EH and EL update during the day from IF
+> 
+> _[sent while I was working — a queued message]_
+
+**me (21:22):** Clean. Delivering.
+The push is on origin (your sync loop took it at 16:18, commit `f25725a`); the clone is aligned.
+
+The mockup is the same two candles the plugin draws now — dashed ghost for expected, solid for actual — with today's model on the left and the recommendation on the right, both at the 60-minute stage so it's a fair comparison. Tuesday is the one to look at: today's model drew +31 / −31 and the day printed +2.8 / −40.8; the recommendation draws +9.6 / −45.6 from the same tape, because the open sat in the top 8% of the first hour's range and the EM said a 55-point day. Friday is a quiet day where both are too wide (the EM over-called it after Thursday's vol), and Monday is the honest miss — a 125-point trend day that no 55-point candle can draw, though the recommendation at least leans it upward.
+
+On your second question — no, the day model's E-HOD / E-LOD would not follow IF through the day, and they shouldn't. The EM the study measured is the 0DTE straddle *at the open*; that is the number pinned once and used for the whole day's range. The live straddle decays every hour (it's pricing less and less remaining time), so if the candle tracked it, the candle would shrink mechanically into the close regardless of what the tape did. What updates the candle is the tape itself: the EM-only ghost at 08:30, the opening range entering the width and placement at 09:00, and the initial balance replacing it at 09:30 — the bottom strip in the mockup shows exactly that progression on Tuesday. After 09:30 it is fixed, as it is today.
+
+The rows that *do* follow IF through the day are the EM H/L lines on the gamma-profile rail (16.31): those are re-read on every export as chain spot ± the current straddle, so they narrow and re-centre as the session goes on. Two different …[trimmed]
+
+**OPERATOR:**
+> have you considered all the indicators
+
+**me (21:26):** Not in the first pass, no — it tested only the EM and the opening range. So I ran a second pass just now with every other input that has a history in the corpus, same 283 sessions, same folds, same error measure (it's §7 of the study doc, `tools/study-day-inputs.py`, synced to your repo).
+
+For the range, added to the EM model at each stage: the overnight (Globex) range, the gap off the prior close, the prior-day range, VIX1D's prior close, and the day of the week. None of them moves the error by more than 0.3 points in either direction, which is noise. The 08:30 EM already carries whatever those carry.
+
+For placement before the open — where the open sits in the overnight range, where it sits in the prior day's range, the signed gap — all of them fit an upside share of about 0.5 with a slope near zero. There is no placement signal before the tape prints, so the candle stays symmetric until 30 minutes in; after that, adding those to the opening-range position changes nothing (12.79 / 17.42 → 12.76 / 17.60 at 60 minutes).
+
+What I could not test are the inputs you'd most want tested: the regime sign, the distance from the open to the 0DTE flip, the walls, the King and its polarity, Trinity. None of them exists in the corpus — IF levels and the tape's King are recorded only since 24 August, seventeen sessions, which cannot be fit. Those are exactly item C's point 3 (a −γ trend day should skew the candle), and the way to get the answer is a one-row daily record written by the panel from tomorrow on — regime sign at the open, flip distance, walls, King — with this study re-run when about sixty days exist. That would be a small panel change, and I'd want to agree its exact fields with you before building it.
+
+So the recommendation stands as measured: the EM for the range, the o …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (21:28):** Pushed via your sync loop (`03ba84e`, 16:28) — the second-pass script, the study doc §7, the changelog and the raw output are all on origin, and the clone is aligned.
+
+**OPERATOR:**
+> I am curious about the day stats , how can that model be improved?
+
+**me (21:30):** Short version: the Day Stats strip has the same disease the candle had, in a purer form. Every number on its E row is a weekday average, and the weekday tells you almost nothing about the day. I measured it on the same 300 sessions before answering, so here is what the strip's own numbers look like against the corpus.
+
+The 1ST clock is a trimmed mean of a very skewed distribution: the first extreme prints at a median of 24 minutes after the open (56% within 30 minutes, 74% within the hour), but the mean sits at 45 minutes, so the E row's "first at ~09:05" is a time that is neither typical nor useful. The weekday version of it errs by 40 minutes on average — exactly the same as ignoring the weekday (40.3), and worse than a plain median (36). The 2ND clock is the same story: a mean around 13:56, an error of about 92 minutes either way, weekday or not; 39% of second extremes print in the last hour and 29% in the last 30 minutes, which one clock cannot express. The 1ST = LOD/HOD call is 52% LOD across the corpus and 44–60% by weekday — a coin toss dressed as an expectation. The wick family (Took, BOP, Wick, W.End, Wick%, MUD) is measured well but unconditionally, so it reads the same on every day regardless of what the open did.
+
+What would improve it is the lesson from the candle study applied column by column: make the E row conditional on the day as it unfolds, and make it distributional where a single number lies. Three things have signal in the corpus already. The sequence call improves once 30 minutes are in — an open in the bottom third of the opening range gives LOD-first 59%, in the top third 39%, and a down opening drive 40%; that's modest, but once Layer 2's READ says an extreme is IN (the classifier at AUC 0.879) the 1ST column is simply known, and the strip sho …[trimmed]
+
+**OPERATOR:**
+> i'll go with your recommendation ,  do what you need to do but make sure you test and confirm that the model is better than base
+
+**me (21:39):** Now the docs, snapshot and chat history.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -2277,18 +2557,18 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
-26c87e4 v15.93: THE WICK OPEN = THE RTH OPEN ("RTH") — comparing the panel's wick% (15%) with his FuturesPulse tool (9%): every A-row field matched except wick%, and the whole gap was the session open; his tool opened on the 08:28 print, the panel on 08:27 (the v15.87 tool-mirror), both pre-open, and both pull the SAME Yahoo ES=F feed ("the tool gets data from yahoo finance") — so it was never the data, only which minute each called "the open"; he chose the true RTH open, Yahoo's 08:30:00 print (7660.75 -> 12% on 09-09). HL_TOOL_A (panel) and LOAD_A (study-hodlod) 08:27 -> 08:30: the first RTH bar is 08:30-08:32, its open IS the session open, pre-open leaves the extremes, every clock unchanged; MIN_BARS 386 -> 383 (same 295 sessions); BASERATES re-folded (ES 295, NQ 195), HODLOD_BASE re-baked, E row and A row one definition. On 09-08 the A row now reads wick% 14 (open 7711.50), MD $1,962.50 — the numbers before v15.87 chased his tool. test_v1593 14 + 2 mutants; test_v1587 rewritten to the RTH row; his machine's 15:06 nightly outputs adopted; the tap record -> v15.94
-ff92457 v15.92: KINGS + WALLS ("there are way too many levels on my irt charts. i want to reduce it to kings along with the put and call wall only for both the ES and NQ. you can continue your study") — the IRT file is eight lines: SPXW KING · SPY KING · CW0 · PW0 on the ES symbol, QQQ KING · NDX KING · CW0 · PW0 on the NQ symbol; every other family (XG2–5, SG2–5, G2–5, FLIP0, the D rows) still computed and latched every tick, written again by name through ⚙ IRT › Lines: everything; NDX KING = the NDX options book's own King from the NQ1 payload's NDXP book at Skylit's price (bare label — "i dont see why any king needs to have 100%" — full gold / purple, width 3, held day-scoped); the NQ walls = InsiderFinance's QQQ 0DTE walls at Skylit's QQQ ratio (NQ never had walls in the file); the shade says the book on both charts (QQQ KING the lighter pair, width 2, as SPY KING); the 7635 put wall answered (the 0DTE wall at the SPXW ratio, not an error); his machine's 10:56 files adopted (sweeps 290 — the order fix landed); test_v1592 65 · 9/9 mutants; the tap record → v15.93
-fc3abd9 v15.91: THE D ROWS BY THEIR BOOK, DEDUPED ("i'll go with your recommendation") — every merged-list row resolves to the book whose Skylit ratio turns its price back into a strike (D-SPX KING · D-NDX2 · D-QQQ3; Dn when none), written only when no line within half a point is already in the file (on FRONT the ES list IS the two books' own rows — nothing doubles; on NQ the NDX book's rows survive: the "derived King" he saw is the NDX options book's King projected onto NQ, 29355.41 / 1.00087 = 29330, a level the file never carried); the nightly appends the corpus BEFORE any judge or table reads it (his first v15.90 run read 284 on a machine that held 290); test_v1591 26 · 7/7 mutants; the tap record → v15.92
-4348a62 v15.90: THE LEARNING PROCESS, HARDENED ("yes, fix everything and make sure it all makes sense and is integrated and working together and aligned to my objectives/purpose") — (1) the sweep corpus appends: the nights → data/futures/<MK>/<day>-night.csv, study-sweeps reads the vendor + every CSV with the four-day gap rule (290 sessions, one more a night; H7 had read n=0 for thirteen sessions) (2) the registry is the machine's output: needs:{corpus,n} on every study, coverage.json counts every corpus, results.py sets WAITING (have/need/ETA) or READY (data on hand, no reader) and composes the scripted sentences from SWEEPS.json nightly (H2.4/H2.5 had quoted withdrawn numbers); the thirteen level-name studies collapsed into H2.L (NULL — 2 of 36 names clear the control: chance); S1.4/S7.3 CUT; H7 WITHDRAWN (F-23); H5 judged by its join (0 of 3 extremes coincide with a ledger tap); D3.3 read from the day files (3) the docs say what runs: nine tabs, the nightly's real steps, PROCESS §4 today, the roadmap re-sequenced (15.91 the tap record) (4) D-KING · D2..D5 — the merged derived list Atlas draws on the futures chart, FRONT window, in the IRT file ("we need to match atlas … FRONT"; the 7658 the file did not carry); AUDIT-2026-09-09.md; FINDINGS F-24; test_v1590 51 · 8/8 + 6/6 mutants; 16 tests re-pinned
-1993adb v15.89: THE 🗄 DATA TAB, before Analysis ("I like B, I also want recommendations section. build") — what we hold (the coverage calendar, a cell per day file, six signals) · the sources live (Skylit · IF · Yahoo · GitHub · the nightly) · the record on this machine (localStorage against its quota, the IDB stores counted) · what the studies are waiting for (by corpus) · the gaps with what Yahoo can fill in green (R-33 daily bars · R-34 hourly · R-35 ^VIX1D, proposed on Rec) · the pipeline's clock · the DATA rows of Rec; read-only, on the panel's own chrome; tools/nightly/coverage.py → learning/coverage.json (the nightly counts the repo; the panel fetches one file); origin-guard fetches his machine's ADDED files (the 09-07 day file, the tape for 09-07/09-08, the 09-07 log were on origin two days and the cloud's count missed them); his machine's 07:55 outputs merged (RN-hour.2-held on Rec — one session's classes); the tap record → v15.90; test_v1589 46 · 9/9 mutants; five tab-set tests re-pinned to nine tabs
-f5b3bb1 mockups: the 🗄 DATA tab (proposed 2026-09-09) — A sources-first, B coverage-calendar-first; tools/mockup-data.py reads every number from the repo and his browser's stores; the resume note carries the open thread
-4e0ee3c v15.88 + companion v1.19: THE AGENDA, BATCHED — AHI · ALO · LHI · LLO at the standard hours ("just use whatever is standard": Asia 17:00–02:00, London 02:00–08:30 CT; LDNH/LDNL renamed to his names, tier 1); the King latch OFF ("match skylit": the rail and the export follow Skylit's crown on the same tick); companion v1.19 ("yes": NQ's full night, the weekly 5-minute bars → PWH/PWL/WPOC drawn, NQ's base rates couriered); the NQ vendor corpus parsed (NQ BASERATES 195 = 188 + Yahoo, the four shared days identical); the hour on every deflection ("i agree i think you should also tag other hours": E005 m1–m4, E006 m1, R-3 in both twins, L7 the hour class); ⓪a PER MARKET ("this build": the NQ chart reads NQ — no NQ E row existed; no baked NQ literal; the measureBarsRaw lexical-sort twin fixed); F-23 (the corpus's ONH/ONL looked ahead — corrected, F-14 partly superseded); v15.87's tick fence one second → an hour (it re-ran every ten minutes on his machine); the harvest over every day file; his machine's 21:35 outputs merged; R-3 · R-29–R-32; test_v1588 63 · 19/19 mutants
-f91daa1 records: agenda item 4 answered — the NQ file's QQQ lines stay G2–G5 ("for NQ, just use G because we dont have to distinguish it like for the es which has both spy and spx"); no QQQ line on ES (as since v15.80); item 3 parked (I0909patch); I0908nq closed; R-26's open word answered; REC_SEED re-spliced
-9086b19 v15.87: THE TOOL GRID ("tools") — the ⓪a A row and the study read the session on his tool's grid: 3-minute bars stamped by END, the open = the bar ending 08:30's open (7715.00 on 09-08, not the 08:30 minute's 7711.50 — the 14% wick was that difference; his row reproduced exactly), the hover states it; THE CORPUS APPENDS ITSELF ("yes") — the nightly runs append-futures → study-hodlod → BASERATES (ES 295 with provenance, NQ 11), the boot literal baked from the file (tools/bake-hodlod.py), Yahoo's live-quote row dropped; THE NIGHTLY RE-RUNS AFTER AN INSTALL — tick.py by mtime and by results.asOf (the 15:21/17:11/18:01 installers had put the 09-07 outputs back over his machine's 15:05 run; I had said otherwise); R-27 · R-28; the Architecture lines for v15.84 / v15.87; test_v1587 40 · 12/12 mutants; the suite 167 files · 162 green · 5 red
-398f926 records: the Testing tab's suite stamp for v15.86 (166 files · 161 green · 5 red); the Open Items file carries Q12, the three answers owed, the tap record and the Asia/London levels
-505cfd2 v15.86: the two teaching images re-encoded for the installer's size cap (E005 112 KB, E006 138 KB)
-8372e2f v15.86: HIS TRAINING — ten circles (E005 ES · E006 NQ) read against the ladder's ranked lists and the node-event dollars; the LIQUIDITY LEVEL factor (PDH · PDL · PDC · ONH · ONL · AHI · ALO · LHI · LLO · POC · VAH · VAL); L10 a −γ King is not the floor · L11 a +γ King ceiling decays by the tap · L12 a liquidity level at a −γ King gets swept first; Q12 open (top 3 vs 5, due ~09-15); AHI/ALO/LHI/LLO locked; the tap record's §4b; test_v1586 23
+03ba84e gex: sync 16-Wed-09 16:28
+f25725a gex: sync 16-Wed-09 16:18
+6311cf7 gex: sync 16-Wed-09 16:06
+d7410bb review: nightly/weekly files pulled from Drive inbox 16-Wed-09
+94cb921 gex: sync 16-Wed-09 15:44
+8b4c2f0 gex: sync 16-Wed-09 15:06
+4edda0b gex: sync 16-Wed-09 15:02
+8e445ce gex: sync 16-Wed-09 14:36
+e768e7f gex: sync 16-Wed-09 14:30
+78f7a20 gex: sync 16-Wed-09 14:20
+4d69692 gex: sync 16-Wed-09 14:18
+2316a46 gex: sync 16-Wed-09 14:12
 ```
 
 ---

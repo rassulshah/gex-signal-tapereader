@@ -1,5 +1,18 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 17:30 CT (EM study) · **panel v16.31** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 18:10 CT (v16.32 build) · **panel v16.32** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~18:10 CT — v16.32: THE DAY STATS E ROW, CONDITIONAL ON THE MORNING. START HERE.
+
+**Built and on origin (awaiting his Tampermonkey update):** panel **16.32**. The E row's 1ST / 2ND clocks, Took, HL Gap
+and 1ST = LOD/HOD now come from `hodlodCondE()` by stage (pre-open medians → pos30 terciles → pos60 + the OR-extreme
+clock rule → READ IN = the actual first extreme) instead of the weekday trimmed mean. Measured first, out-of-fold, base
+re-derived per fold (`design/DAYSTATS-COND-STUDY.md`): 1ST clock 38.4 → 33.3 min, 1ST accuracy 0.48 → 0.61 (→ a fact
+at READ IN); the 2ND clock is NOT predictable (93 min either way) — pooled median carried, no claim. New `CONDE` row.
+His instruction: "test and confirm that the model is better than base" — done in the doc, per target, including the
+one that is not. lsDayStats unchanged (same DAYSE row). Proposed next for the strip (mockup first): the LADDER for the
+2ND clock ("in the last hour 39%") instead of a clock. Also still on the table: the candle (placement + EM,
+`design/EM-RANGE-STUDY.md`, mockup delivered), the IF extras (#1 wall-depth pill), the daily record row for regime /
+flip / King so they can be tested at all.
 
 # ⚠⚠⚠ 2026-09-16 ~17:30 CT — IF FOR THE OTHER PLUGINS + THE EM STUDY (item C measured). START HERE.
 
