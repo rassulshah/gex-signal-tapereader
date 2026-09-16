@@ -18,9 +18,9 @@ eval(['GPTS_VERSION','GP_FILE','GP_SPXWR_KEY','GP_LAST','GP_AUDIT_FILE','GP_AUDI
  'GRID_STACK_STEPS','GRID_STACK_MIN_PCT','GRID_STACK_MAX_PCT','GRID_RUG_FLOOR_STEPS'].map(v).join(''));
 var PANEL_MUTED=false;
 eval(['GP_IF_FILE','GP_IF_BUILT'].map(v).join(''));
-eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gammaProfileBuildIF','gammaProfileBuild'].map(ex).join('\n'));
+eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gpEmRows','gammaProfileBuildIF','gammaProfileBuild'].map(ex).join('\n'));
 // the helpers the code calls must be reachable from a mutant built with new Function (global scope) — see section 8
-Object.assign(global, { gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gammaProfileBuildIF, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
+Object.assign(global, { gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gpEmRows, gammaProfileBuildIF, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
 
 // ---- the world, stubbed to the 09:47 CT snapshot ----
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
@@ -149,6 +149,14 @@ ok(R9.FLIP && R9.CW && R9.PW && R9.CW[0][1]==='7675' && R9.PW[0][1]==='7600', '9
 ok(R9.BOOK && R9.BOOK[0][0]==='IF0DTE', '9.8 BOOK row says IF0DTE (the plugin header prints "IF 0DTE")');
 ok(R9.REGIME && R9.REGIME[0][0]==='AT', '9.9 REGIME sign: spot 7620.52 is within 3 pts of the flip 7620.72 -> AT (same flip, same rule)', R9.REGIME);
 ok(!R9.KINGTRACK && !R9.DAYACT, '9.10 no KINGTRACK / day rows in the IF file (those plugins read GammaProfile.csv)');
+// (v16.31) expected-move rows, both files, from the chain's spot +/- the ATM straddle
+IFC.dte0.em={ em:42.5, pct:0.56, k:7620, call:21.1, put:21.4 };
+const B9e=gammaProfileBuild(); const R9e=rows(B9e.csv), R9i=rows(GP_IF_BUILT);
+ok(R9e.EMH && R9e.EML && Math.abs(parseFloat(R9e.EMH[0][1])-(7620.52+42.5))<0.01 && Math.abs(parseFloat(R9e.EML[0][1])-(7620.52-42.5))<0.01 && R9e.EMH[0][2]==='0DTE', '9.16 EMH / EML = chain spot +/- em (7663.02 / 7578.02), 0DTE, in the Skylit file', {h:R9e.EMH,l:R9e.EML});
+ok(R9i.EMH && R9i.EML && R9i.EMH[0][1]===R9e.EMH[0][1], '9.17 ...and identical in the IF file');
+ok(Math.abs(parseFloat(R9e.EMH[0][0])-es(7663.02))<0.001, '9.18 EMH on the ES scale via the shared mapper');
+ok(B9e.audit.ifProf.raw && B9e.audit.ifProf.raw.find(x=>x[0]===7675)[1]===1063.3 && B9e.audit.ifProf.em.em===42.5, '9.19 audit.ifProf.raw carries net $M per strike (7675 = +1063.3, reconcilable against their Table view) and the em');
+delete IFC.dte0.em; gammaProfileBuild(); ok(!rows(GP_IF_BUILT).EMH, '9.20 no em in the chain -> no EM rows');
 const ranks9=R9.STRIKE.slice().sort((a,b)=>parseInt(a[2])-parseInt(b[2])).slice(0,4).map(t=>parseFloat(t[5]));
 ok(ranks9[0]===7675 && ranks9[1]===7625 && ranks9[2]===7640 && ranks9[3]===7600, '9.11 ranks 1..4 = 7675, 7625, 7640, 7600 (by |%King|)', ranks9);
 ok(IFI.ok && IFI.king===7675 && IFI.coverage===96.9 && IFI.spotSrc==='panel', '9.12 audit.ifProf carries king / coverage / spot source', IFI);

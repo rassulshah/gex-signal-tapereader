@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.30
+// @version      16.31
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.31';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6634,6 +6634,22 @@ function gpEsOfSpx(spxPx){
 // (sign = the same flip), pattern tags from the same gridSetups() — Skylit-doctrine shapes on a non-Skylit ladder, which
 // the design doc states plainly. ABSENT when the chain is stale or missing (the FLIP rule: absent, never wrong).
 // The file carries no KINGTRACK / day rows: lsKingTracker / lsDayModel / lsDayStats read GammaProfile.csv, unchanged.
+// (v16.31) EXPECTED MOVE ROWS — operator (element 3, 2026-09-16): "yes, add it." The companion prices the 0DTE ATM
+// straddle every poll (`dte0.em` = { em, pct, k, call, put }); the plugin has drawn EMH / EML lines since 0.3x and
+// nothing ever wrote the rows. EMH/EML = the chain's own spot +/- em (the spot the straddle was priced at, so the
+// band is the one their page implies), on the ES scale. Same staleness rule as FLIP: absent when the chain is stale.
+function gpEmRows(IFC){
+  var out=[];
+  try{
+    if(!IFC || IFC.err || IFC.stale || !IFC.dte0) return out;
+    var em=IFC.dte0.em; if(!em || typeof em.em!=='number' || !(em.em>0)) return out;
+    var sp=(typeof IFC.spot==='number' && IFC.spot>1000)?IFC.spot:null; if(sp==null) return out;
+    var hi=sp+em.em, lo=sp-em.em, he=gpEsOfSpx(hi), le=gpEsOfSpx(lo);
+    if(he!=null) out.push('EMH,'+gpF2(he)+','+hi.toFixed(2)+',0DTE,calc');
+    if(le!=null) out.push('EML,'+gpF2(le)+','+lo.toFixed(2)+',0DTE,calc');
+  }catch(e){}
+  return out;
+}
 var GP_IF_FILE='GammaProfile-IF.csv';
 var GP_IF_BUILT=null;   // the IF book's CSV text from the last build (null = absent this export)
 function gammaProfileBuildIF(scaleRef, spotSpxP, flipSpx){
@@ -6675,6 +6691,7 @@ function gammaProfileBuildIF(scaleRef, spotSpxP, flipSpx){
     var fe=(fSpx!=null)?gpEsOfSpx(fSpx):null; if(fe!=null) out.push('FLIP,'+gpF2(fe)+','+fSpx.toFixed(2)+',0DTE,calc');
     var ce=(cwSpx!=null)?gpEsOfSpx(cwSpx):null; if(ce!=null) out.push('CW,'+gpF2(ce)+','+cwSpx+',0DTE,calc');
     var pe=(pwSpx!=null)?gpEsOfSpx(pwSpx):null; if(pe!=null) out.push('PW,'+gpF2(pe)+','+pwSpx+',0DTE,calc');
+    gpEmRows(IFC).forEach(function(r){ out.push(r); });   // (v16.31) EMH / EML
     try{ var RG=gpRegime(nodes.map(function(n){ return { spx:n.spx, pct:n.pct, isK:n.isK }; }), spotSpxP, fSpx);
          if(RG) out.push('REGIME,'+RG.sign+','+RG.type+','+RG.conf+','+(RG.conflict?1:0)+','+(fSpx!=null?fSpx.toFixed(2):'')+','+String(RG.note).replace(/,/g,' ')); }catch(eRG){}
     if(typeof spotSpxP==='number'){ var se=gpEsOfSpx(spotSpxP); if(se!=null) out.push('SPOT,'+gpF2(se)); }
@@ -6682,6 +6699,8 @@ function gammaProfileBuildIF(scaleRef, spotSpxP, flipSpx){
     try{ out.push('ASOF,'+ctNowSecOfDay()); }catch(eAS){}
     info.ok=true; info.king=kingNode.spx; info.n=nodes.length; info.maxAbs=+maxAbs.toFixed(1); info.coverage=lv.gexProfCoverage; info.payloadT=IFC.payloadT||null;
     info.prof=nodes.map(function(n){ return [n.spx, n.pct]; });
+    info.raw=nodes.map(function(n){ return [n.spx, +n.net.toFixed(1)]; });   // (v16.31) net $M per strike — reconciles against their Table view (Net GEX column)
+    info.em=IFC.dte0.em||null;
     return { csv:out.join('\r\n')+'\r\n', n:out.length, info:info };
   }catch(e){ info.why='threw: '+(e&&e.message||e); return { csv:null, info:info }; }
 }
@@ -6811,6 +6830,7 @@ function gammaProfileBuild(){
           var fe=(flipSpx!=null)?esOfSpx(flipSpx):null; if(fe!=null) out.push('FLIP,'+gpF2(fe)+','+flipSpx.toFixed(2)+',0DTE,calc');
           var ce=(cwSpx!=null)?esOfSpx(cwSpx):null;     if(ce!=null) out.push('CW,'+gpF2(ce)+','+cwSpx+',0DTE,calc');
           var pe=(pwSpx!=null)?esOfSpx(pwSpx):null;     if(pe!=null) out.push('PW,'+gpF2(pe)+','+pwSpx+',0DTE,calc');
+          gpEmRows(IFC).forEach(function(r){ out.push(r); });   // (v16.31) EMH / EML
         }
       }catch(eIFr){}
       // (v16.27) REGIME row — see gpRegime() above. Written even when the flip is missing (sign NA, type still read).

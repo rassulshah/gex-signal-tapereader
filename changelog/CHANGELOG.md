@@ -1,3 +1,16 @@
+## v16.31 — expected-move rows (EMH / EML) + the IF Table reconciliation hook (2026-09-16, ~15:40 CT)
+
+Operator, one element at a time on "use as much from IF as possible": element 1 (Magnet) = the IF book's King, nothing
+to add; element 2 (their "Resistance @ 7590.25") IDENTIFIED from his screenshot as the 0DTE Zero Gamma = our FLIP row,
+and "Volatility @ spot" = the chip's −gamma sign — nothing to add; element 3 (expected move): "yes, add it." →
+`gpEmRows()`: EMH / EML = the chain's own spot ± the 0DTE ATM straddle (`dte0.em`), ES scale, 0DTE, in BOTH files;
+lsGammaProfile has drawn them since 0.3x behind the "EM H/L" toggle (off by default). Absent when the chain is stale.
+Also: `audit.ifProf.raw` = net $M per strike, so the IF book can be reconciled against their Table view (Net GEX
+column) at the same minute — that view is the same per-strike number our companion computes (call + put GEX from
+gamma × OI), and a bar-for-bar match is the eyes-on check for the IF book. Their Intraday ΔGEX panel shows ~120
+snapshots/hour, so their normal cadence is ~30 s; the 30-min lag seen at 14:23 was an FOMC-hour anomaly (item E
+becomes "flag when abnormal", not "always show").
+
 ## v16.30 + lsGammaProfile 0.47 — the InsiderFinance book as a selectable second gamma profile (2026-09-16, ~15:05 CT)
 
 **Operator:** "if I wanted to replace Skylit with InsiderFinance, would it be possible?" → "investigate it properly and do a
