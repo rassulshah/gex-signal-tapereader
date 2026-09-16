@@ -1,3 +1,15 @@
+## lsDayModel 0.16 — the swept PDH read three pre-open minutes (2026-09-16, ~13:15 CT)
+
+Operator (screenshot, PDH 7690 circled against IRT's own pDHI 7687.00): "regarding the levels swept, I don't think it
+matches IRT." The panel's CSV said `SWEPT,PDH,7687.00` — correct, and equal to IRT. The 7690 came from the PLUGIN's own
+chart-native override (v0.11 `computeChartLevels`, which re-reads PDH/PDL/ONH/ONL from the chart's bars so they are exact
+on the charted contract): it took every bar stamped 08:30..15:00 as RTH, and on his 3-minute chart the bar STAMPED 08:30
+is the 08:27–08:30 bar — Investor/RT stamps that chart's bars at the bar's END. Yesterday's 08:27–08:29 minutes printed
+7690.25 (the courier's ES=F bars agree: RTH high 7687.0 from 08:30, 7690.25 in the three minutes before). Fix: detect the
+stamp convention from the chart itself (a bar stamped exactly 17:00:00 exists only under START stamping, one stamped
+16:00:00 only under END) and shift the RTH / overnight windows accordingly — (08:30, 15:00] when end-stamped. The same
+window now drives the ACTUAL candle (`measureChartDay`). Unchanged behaviour on a start-stamped chart.
+
 ## v16.29 + lsGammaProfile 0.45 + lsDayStats 0.6 — the regression suite, the bracket, the audit sidecar (2026-09-16, ~13:00 CT)
 
 **Operator:** "I'll go with your recommendation" (bracket) · "I also want a thorough regression build for the gamma

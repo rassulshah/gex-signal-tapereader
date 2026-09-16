@@ -108,6 +108,7 @@ public:
     void applyContractOffset();// (v0.9) fallback: shift the CSV candle onto this chart (pre-open)
     bool measureChartDay();    // (v0.10) ACTUAL candle straight from the chart's own RTH session bars
     void computeChartLevels(); // (v0.11) PDH/PDL + overnight H/L from the chart's own bars (exact)
+    void detectBarStamp();   // (v0.16) start- vs end-stamped bars (sets g_endStamped)
     void readSettings(Settings& S);
     void render(const Settings& S);
     // helpers
@@ -527,6 +528,7 @@ void DayModel::render(const Settings& S)
 int DayModel::draw(void)
 {
     load();
+    detectBarStamp();   // (v0.16) start- or end-stamped bars decide which bar opens the RTH day
     // (v0.10) The ACTUAL candle is measured straight from THIS chart's own RTH session bars, so it IS
     // the ES session high/low by definition — no cash→contract guesswork. If the session hasn't opened
     // yet (no RTH bars), fall back to shifting the CSV candle onto the chart.
@@ -536,6 +538,40 @@ int DayModel::draw(void)
     drawStaleBadge();   // (v0.8) warn if the CSV is cold, regardless of what render drew
     return RTX_OK;
 }
+
+// ---- (v0.16) BAR STAMP CONVENTION — the one thing that decides which bar is the FIRST of the RTH day ----------
+// Investor/RT can stamp an intraday bar with its START or its END time (a chart preference). On a 3-minute chart
+// aligned to the 17:00 session open, the 08:27-08:30 bar is stamped 08:27 (start) or 08:30 (end). Treating an
+// END-stamped 08:30 bar as RTH lets three PRE-OPEN minutes into the prior-day high: 2026-09-16 the plugin printed
+// PDH 7690 (the 08:27 spike, 7690.25) while IRT's own pDHI read 7687.00 — operator: "regarding the levels swept,
+// I don't think it matches IRT." Detect the convention from the chart itself: a Full-Session 17:00-16:00 chart has a
+// bar stamped exactly 17:00:00 only when START-stamped, and one stamped exactly 16:00:00 only when END-stamped.
+// Any other session start/stop works the same way (the first bar is stamped at the boundary under one convention
+// and one period past it under the other). If neither boundary stamp is found, START is assumed (the old behaviour).
+static bool g_endStamped = false;
+void DayModel::detectBarStamp()
+{
+    long n = getBarCount(); if (n < 2) { g_endStamped = false; return; }
+    RTARRAYI dt(barDateTime);
+    int seenStart = 0, seenEnd = 0;
+    int from = (int)n - 1, to = (int)n - 2000; if (to < 0) to = 0;
+    for (int i = from; i >= to; i--) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+        if (sod == 17 * 3600) seenStart++;          // a bar STARTING at the 17:00 session open
+        if (sod == 16 * 3600) seenEnd++;            // a bar ENDING at the 16:00 session close
+    }
+    g_endStamped = (seenEnd > 0 && seenStart == 0);
+}
+// RTH membership under the detected convention: START-stamped = [08:30, 15:00), END-stamped = (08:30, 15:00].
+static bool inRth(int sod)
+{
+    const int O = 8 * 3600 + 30 * 60, S = 15 * 3600;
+    return g_endStamped ? (sod > O && sod <= S) : (sod >= O && sod < S);
+}
+// overnight membership (prior evening >= 17:00 through today's pre-open): START = [17:00 ..) & [.. 08:30); END = (17:00 ..] & (.. 08:30]
+static bool inEvening(int sod){ const int E = 17 * 3600; return g_endStamped ? (sod > E) : (sod >= E); }
+static bool inPreOpen(int sod){ const int O = 8 * 3600 + 30 * 60; return g_endStamped ? (sod <= O) : (sod < O); }
 
 // ---- (v0.11) CHART-NATIVE REFERENCE LEVELS -----------------------------------------------------------
 // PDH/PDL (prior RTH day high/low) and ONH/ONL (overnight high/low) are pure price levels IRT already
@@ -550,25 +586,24 @@ void DayModel::computeChartLevels()
     RTARRAYI dt(barDateTime);
     struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
     int todayKey = (lt.tm_year + 1900) * 10000 + (lt.tm_mon + 1) * 100 + lt.tm_mday;
-    const int RTH_O = 8 * 3600 + 30 * 60, RTH_S = 15 * 3600, EVE = 17 * 3600;
-    // prior trading date = the largest date < today that has an RTH bar
+    // (v0.16) the RTH / overnight windows follow the chart's bar-stamp convention (detectBarStamp, above)
     int priorKey = 0;
     for (int i = (int)n - 1; i >= 0; i--) {
         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
         int k = (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
         int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
-        if (k < todayKey && sod >= RTH_O && sod <= RTH_S) { priorKey = k; break; }
+        if (k < todayKey && inRth(sod)) { priorKey = k; break; }
     }
     float pdh = -1e9f, pdl = 1e9f, onh = -1e9f, onl = 1e9f; bool hp = false, ho = false;
     for (int i = 0; i < (int)n; i++) {
         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
         int k = (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
         int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
-        if (priorKey && k == priorKey && sod >= RTH_O && sod <= RTH_S) {
+        if (priorKey && k == priorKey && inRth(sod)) {
             if (hi[i] > pdh) pdh = hi[i]; if (lo[i] < pdl) pdl = lo[i]; hp = true;
         }
-        // overnight into today: prior evening (>=17:00) through today's pre-open (<08:30)
-        if ((priorKey && k == priorKey && sod >= EVE) || (k == todayKey && sod < RTH_O)) {
+        // overnight into today: prior evening (17:00 on) through today's pre-open (to 08:30)
+        if ((priorKey && k == priorKey && inEvening(sod)) || (k == todayKey && inPreOpen(sod))) {
             if (hi[i] > onh) onh = hi[i]; if (lo[i] < onl) onl = lo[i]; ho = true;
         }
     }
@@ -600,7 +635,6 @@ bool DayModel::measureChartDay()
     // @ 9:54a (operator: "the actual candle low and the price chart low are different"). The day model IS the RTH
     // day (08:30–15:00 CT), so measure exactly that window of the most recent RTH day: today's if it has bars, else
     // step back (over a weekend too) so the completed day keeps showing overnight until the next open.
-    const int RTH_OPEN = 8 * 3600 + 30 * 60, RTH_STOP = 15 * 3600;
     struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
     float dOpen = 0, dHi = -1e9f, dLo = 1e9f, dClose = 0; bool have = false;
     for (int back = 0; back <= 4 && !have; back++) {
@@ -613,7 +647,7 @@ bool DayModel::measureChartDay()
             struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime((RTDATE)dt[i], &tmv);
             if (tmv.tm_year != wY || tmv.tm_mon != wM || tmv.tm_mday != wD) continue;
             int sod = tmv.tm_hour * 3600 + tmv.tm_min * 60 + tmv.tm_sec;
-            if (sod < RTH_OPEN || sod > RTH_STOP) continue;
+            if (!inRth(sod)) continue;   // (v0.16) stamp-aware RTH window
             if (!have) { dOpen = op[i]; have = true; }
             if (hi[i] > dHi) dHi = hi[i];
             if (lo[i] < dLo) dLo = lo[i];
@@ -691,6 +725,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.15");
+    p->setVersion("0.16");
     return p;
 }

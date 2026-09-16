@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 early afternoon (v16.29 build) · **panel v16.29** · companion v1.19 · RTX plugins: **lsGammaProfile v0.45**, lsDayModel v0.15, **lsDayStats v0.6**, **lsKingTracker v0.6** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 early afternoon (v16.29 build) · **panel v16.29** · companion v1.19 · RTX plugins: **lsGammaProfile v0.45**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.6** · supersedes every earlier resume note_
 
 # ⚠⚠⚠ 2026-09-16 ~13:00 CT — THE REGRESSION SUITE (item D) + 0.45 / 16.29 / DayStats 0.6. START HERE.
 
@@ -9,12 +9,19 @@ logic, 57 — the plugin's decisions live in `plugin/GammaProfileLogic.h`), `too
 run from the CSV + `GammaProfile.audit.json` + Atlas/IRT screenshot transcriptions). Trail: `RESULTS.md`, `runs/`.
 
 **Versions on origin:** panel 16.29 (audit sidecar; `SPY KING <strike>` label), lsGammaProfile 0.45 (bracket, tag
-beside bubble, G·C), lsKingTracker 0.6, lsDayStats 0.6 (IQR removed), lsDayModel 0.15. **His install state when this
+beside bubble, G·C), lsKingTracker 0.6, lsDayStats 0.6 (IQR removed), lsDayModel 0.16 (bar-stamp-aware RTH window: the swept PDH read the 08:27-08:30 bar as RTH on his end-stamped chart). **His install state when this
 was written:** panel 16.28 running, lsGammaProfile DLL = 0.42 (compiled 11:12), KingTracker 0.5, DayStats 0.5 —
 i.e. the 0.43/0.44/0.45 and KingTracker 0.6 changes are NOT on his chart until he runs the three compile bats.
 
+**⚠⚠ DEPLOY LANDMINE FOUND 13:40 CT — READ BEFORE ANY `device_commit_files`:** the device bridge caches a staged
+source by PATH + MTIME. `/mnt/user-data/outputs/` does not always advance a file's mtime on `cp`, so re-committing the
+SAME staged path after editing re-sends the PREVIOUS bytes and reports "written". That is what "lost" the 16.28
+userscript (11:21), the 0.44 GammaProfile.cpp (11:58) and DayModel 0.16 (13:37) — each landed only on the second try
+from a path whose mtime differed. RULE: stage every commit into a FRESH directory (`/mnt/user-data/outputs/deploy-<HHMMSS>/`),
+then confirm with `device_list_dir` that the device file's SIZE matches the clone's before waiting for the sync.
+
 **Next, in order:** (1) he installs (Tampermonkey 16.29 · close IRT · compile-gammaprofile / compile-kingtracker /
-compile-daystats · reopen) → (2) the FIRST LIVE RUN: computer-use approval, Atlas + IRT screenshots at one minute,
+compile-daystats / compile-daymodel · reopen) → (2) the FIRST LIVE RUN: computer-use approval, Atlas + IRT screenshots at one minute,
 transcribe both, stage CSV + audit, `gp-regress.py --shots …`, record in RESULTS.md — that run is the acceptance test
 for the bracket / G·C / tag placement he has not seen yet → (3) `run-logic-tests.bat` on his MSVC once → (4) C (the day
 candle: measure first) → (5) T-run upgrade to gp-regress.
