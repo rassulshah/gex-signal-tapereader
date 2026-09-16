@@ -1,0 +1,193 @@
+{
+  "schema": "gex-log/v1",
+  "date": "2026-09-15",
+  "bars": 91,
+  "effectiveN": 9.1,
+  "regime": {
+    "tag": "chop",
+    "opex": false,
+    "event": false
+  },
+  "dataHealth": "ok",
+  "dataHealthNote": "4206 records / 91 bars / 130 snapshots; 70% coverage; not collapsed",
+  "baseline": {
+    "up": 27,
+    "dn": 64,
+    "n": 91,
+    "driftPct": 70
+  },
+  "topPerformers": [
+    {
+      "key": "levelstate",
+      "n": 88,
+      "scored": 84,
+      "rate": 81,
+      "votes": "balanced",
+      "mfe": 0.598,
+      "mae": -0.934,
+      "byRegime": {
+        "chop": 73,
+        "mixed": 77,
+        "trend": 80
+      },
+      "note": "Strongest feature across all regimes; consistent high hold-rate on level state transitions"
+    },
+    {
+      "key": "pbEntry.60",
+      "n": 74,
+      "scored": 31,
+      "rate": 90,
+      "votes": "balanced",
+      "mfe": 0.607,
+      "mae": -1.389,
+      "note": "Very high rate but limited n (incomplete forward window on late bars); 60-minute pull-back zone effective"
+    },
+    {
+      "key": "attract",
+      "n": 89,
+      "scored": 82,
+      "rate": 61,
+      "votes": "balanced",
+      "byRegime": {
+        "mixed": 77,
+        "chop": 49
+      },
+      "note": "Strong on mixed regime (77%), weak on chop (49%); attraction pattern stronger when structure not fully settled"
+    },
+    {
+      "key": "dir.trend5",
+      "n": 91,
+      "scored": 89,
+      "rate": 64,
+      "votes": "balanced",
+      "byRegime": {
+        "na": 100,
+        "mixed": 78,
+        "chop": 51
+      },
+      "note": "Consistent SMA-50 momentum signal; dominates in non-chop (100% na, 78% mixed)"
+    },
+    {
+      "key": "bias.confirm",
+      "n": 91,
+      "scored": 89,
+      "rate": 64,
+      "votes": {
+        "DNTREND": 49,
+        "DNTREND BRK": 25,
+        "UPTREND": 5,
+        "UPTREND BRK": 12
+      },
+      "oneWay": false,
+      "note": "Downward bias day (74 down vs 17 up votes). Rate monotone across states despite regime imbalance."
+    },
+    {
+      "key": "leg.pbDetect",
+      "n": 91,
+      "scored": 79,
+      "rate": 65,
+      "byRegime": {
+        "mixed": 74,
+        "chop": 45
+      },
+      "note": "Pull-back detection strong; deflection rate climbs with node accumulation (78% vs dec)"
+    },
+    {
+      "key": "netGamma",
+      "n": 91,
+      "scored": 89,
+      "rate": 61,
+      "byRegime": {
+        "na": 100,
+        "mixed": 74,
+        "chop": 47
+      },
+      "note": "Gamma state reflects accumulated exposure; strong in na/mixed, weak in chop"
+    }
+  ],
+  "deadOrZero": [
+    {
+      "key": "act",
+      "n": 89,
+      "scored": 0,
+      "votes": {
+        "SIDE": 64,
+        "DN": 23,
+        "UP": 2
+      },
+      "note": "Votes recorded but no scoring (threshold or logic not triggered); one-way bias suggests regime/chop cap"
+    },
+    {
+      "key": "dex",
+      "n": 91,
+      "scored": 0,
+      "votes": "empty",
+      "note": "No votes fired all day; feature appears quiescent"
+    },
+    {
+      "key": "emband",
+      "n": 89,
+      "scored": 0,
+      "note": "EM bandwidth feature did not fire; likely no significant expansion/compression today"
+    },
+    {
+      "key": "emread",
+      "n": 89,
+      "scored": 0,
+      "note": "EM reading feature idle; order flow did not cross alert threshold"
+    },
+    {
+      "key": "farside",
+      "n": 88,
+      "scored": 69,
+      "rate": 0,
+      "votes": {
+        "LOD": 70
+      },
+      "oneWay": true,
+      "note": "One-way LOD votes (70/70), 0% hit—this is a regime/direction signal, not an edge. Day moved down; far-side 'does not reach' on down days is baseline. Do not score one-way factors as edges."
+    },
+    {
+      "key": "leg.handoff",
+      "n": 91,
+      "scored": 13,
+      "rate": 0,
+      "note": "Handoff detection fired rarely and did not resolve; node dissipation/transfer sparse today"
+    }
+  ],
+  "oneWayBias": [
+    {
+      "key": "farside",
+      "votes": "LOD 70/70",
+      "rate": 0,
+      "verdict": "Regime signal (downward day), not an edge. Flag and do not score as evidence."
+    },
+    {
+      "key": "bias.confirm",
+      "votes": "DN 74/91, UP 17/91",
+      "rate": 64,
+      "verdict": "Strong downward bias on chop day; rate is balanced by regime (chop 51%, mixed 78%). Does earn weight."
+    }
+  ],
+  "contradictions": [],
+  "questions": [
+    {
+      "id": "lodhod_live",
+      "issue": "lodhod scored only 1 bar (resolved=0 out of 1), insufficient for evaluation",
+      "note": "Feature is immature; needs many more sessions of forward scoring to accumulate n"
+    },
+    {
+      "id": "levelstate_regime_lift",
+      "issue": "levelstate is strong everywhere—does it lift baseline drift or is it regime-dependent?",
+      "measurement_needed": "Pool levelstate holds across regimes vs baseline drift direction"
+    },
+    {
+      "id": "attract_regime_split",
+      "issue": "Attract 77% mixed vs 49% chop—is this a real split or a regime artifact?",
+      "note": "Mixed regime n=22 is thin; 3 more sessions would clarify"
+    }
+  ],
+  "notes": "Data health OK. Day was choppy with downward bias (70% of bars moved down). One-way factors fired but scored as regime signals, not edges. Levelstate dominated; leg engine and gamma state consistent. No forward-test data yet for lodhod (n=1 resolved). Effective n = 9.1 independent observations; no weight conclusions from one day.",
+  "headline": "Choppy day with downward bias. Levelstate 81%, leg.pbDetect 65%, attract strong in mixed regime. No forward-test power; effective n=9.1; lodhod immature (n=1). Features are healthy, votes are recorded, learning loop now can close.",
+  "power": "one day = ~9 independent observations (91 bars ÷ 10-bar forward window); no weight conclusions can be drawn from a single day"
+}
