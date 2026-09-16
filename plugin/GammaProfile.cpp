@@ -16,6 +16,8 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.48 — contract offset anchored on the last RTH bar at or before ASOF (SCALEREF freezes at the cash close;
+ *          the evening / pre-open chart moves on — the book drew 22 pts high after hours on 2026-09-16).
  *  v0.47 — Book: IF reads GammaProfile-IF.csv (InsiderFinance 0DTE chain, same grammar). The
  *  header prints "IF 0DTE" from the BOOK row. Nothing else differs between the two books on the rail.
  *  v0.42 — DOCTRINE LABELS + REGIME ROW + LEVEL CALLOUTS (operator, 2026-09-15/16):
@@ -886,13 +888,25 @@ void GammaProfile::applyContractOffset()
     // the live close when ASOF is absent or no bar matches (pre-open, a CSV from another day).
     float chartClose = close[(int)n - 1];
     if (asofSo >= 0) {
+        // (GP 0.48 / KT 0.8) ANCHOR ON THE LAST *RTH* BAR AT OR BEFORE ASOF. SCALEREF is Skylit's ES1 spot, derived from
+        // the SPX options book — it FREEZES at the cash close (15:00 CT) and does not move overnight or pre-open, while
+        // this chart keeps trading. Anchoring on the evening bar made off = (evening move) + basis: on 2026-09-16 at
+        // 17:xx CT the chart sat at 7644.50 against a SCALEREF still 7622.00, and the whole IF book drew 22 pts high
+        // (PW 7550 -> 7645 instead of 7621). The basis is only measurable when BOTH sides are live, i.e. inside RTH,
+        // so: on the ASOF date take the last bar stamped at or before ASOF whose stamp is inside 08:30-15:00; after
+        // the close that is the 15:00 bar; before the open it is the previous session's 15:00 bar (earlier dates are
+        // searched, RTH stamps only). Falls back to the live close only when no RTH bar exists in the window.
         RTARRAYI dt(barDateTime);
         struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-        for (int i = (int)n - 1; i >= 0 && i >= (int)n - 600; i--) {
+        const double RTH_A = 8 * 3600.0 + 30 * 60.0, RTH_B = 15 * 3600.0;
+        for (int i = (int)n - 1; i >= 0 && i >= (int)n - 3000; i--) {
             struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-            if (t.tm_year != lt.tm_year || t.tm_mon != lt.tm_mon || t.tm_mday != lt.tm_mday) break;
+            bool sameDay = (t.tm_year == lt.tm_year && t.tm_mon == lt.tm_mon && t.tm_mday == lt.tm_mday);
             double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-            if (sod <= asofSo + 1.0) { if (close[i] > 0) chartClose = close[i]; break; }
+            if (sameDay && sod > asofSo + 1.0) continue;          // written before this bar
+            if (sod < RTH_A || sod > RTH_B + 1.0) continue;       // not an RTH stamp: SCALEREF was not live here
+            if (close[i] > 0) chartClose = close[i];
+            break;
         }
     }
     if (!(chartClose > 0)) return;
@@ -947,6 +961,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.47");
+    p->setVersion("0.48");
     return p;
 }

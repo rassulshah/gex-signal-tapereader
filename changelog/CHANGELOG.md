@@ -1,3 +1,13 @@
+## lsGammaProfile 0.48 / lsKingTracker 0.8 — the contract offset anchors on the last RTH bar (2026-09-16, ~19:45 CT)
+
+Operator's screenshot at ~17:xx CT with Book = IF on 0.47: PW 7645 (7550), CW 7771 (7675) — every level 22 pts above where
+it maps during RTH (7550 × 1.0094 = 7621). Cause: SCALEREF is Skylit's ES1 spot derived from the SPX options book and it
+FREEZES at the cash close (the Atlas title still read "ES1 $7622.00" while the chart traded 7644.50); the 0.46 anchor
+compared the chart's close at ASOF — an evening bar — with that frozen quote, so the basis absorbed the evening move.
+Fix: anchor on the last bar stamped inside 08:30–15:00 CT at or before ASOF (after the close: the 15:00 bar; pre-open:
+the previous session's 15:00 bar; inside RTH: unchanged). Both plugins. g++ shim clean; logic test 57/57. No panel change.
+During RTH nothing changes; the fix is for the evening and pre-open reads.
+
 ## v16.33 — the day-model candle: the IF expected move in the range + placement by the opening range; the daily record (2026-09-16, ~19:15 CT)
 
 Operator: "ok. let's build the updated indicators and using insider finance." Built from `design/EM-RANGE-STUDY.md`

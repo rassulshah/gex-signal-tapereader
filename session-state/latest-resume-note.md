@@ -1,5 +1,14 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 19:15 CT (v16.33 build) · **panel v16.33** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 19:45 CT (GP 0.48 / KT 0.8) · **panel v16.33** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.48**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.8** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~19:45 CT — lsGammaProfile 0.48 / lsKingTracker 0.8: THE AFTER-HOURS OFFSET. START HERE.
+
+His first look at Book = IF (0.47 installed, 16.32/16.33 panel) at ~17:xx CT: the IF book drew 22 pts high. SCALEREF
+(Skylit's ES1 spot, from the SPX options book) freezes at the cash close; the chart does not; the 0.46 ASOF-bar anchor
+absorbed the evening move. Fixed by anchoring on the last RTH-stamped bar at or before ASOF (both plugins). He needs
+`compile-gammaprofile.bat` + `compile-kingtracker.bat` (IRT closed). Inside RTH the old and new anchors agree. Also seen
+in that screenshot, working as designed: the Day Stats E row reading `1ST HOD ~10:48am` = the READ-IN branch of 16.32
+(the actual first extreme once the classifier calls it), `2ND ~1:36pm` = the pos60-middle row.
 
 # ⚠⚠⚠ 2026-09-16 ~19:15 CT — v16.33: THE CANDLE (IF EM + PLACEMENT) + THE DAILY RECORD. START HERE.
 
