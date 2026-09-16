@@ -1,3 +1,25 @@
+## v16.26 + lsGammaProfile 0.41 + lsDayModel 0.15 — Tape columns + the candle-low session fix (2026-09-15)
+
+Two items from the evening's live audit (both Kings/gamma verified aligned with Atlas + tape at that point).
+- **lsGammaProfile 0.41 — "Tape columns (SPX strike | %King)"** (new setting, OFF by default, appended LAST so no
+  parameter index shifts). Operator: "add two columns, a spx price column and the %king column ... so I can compare
+  what Skylit shows, which is the spxw price and its %king, to the same columns in irt." With Side=Right the bars are
+  already flush against the pane edge, so the strip is reserved at the edge and the bars shift inward by its width;
+  each node row prints the RAW SPXW strike (7575, 7580 — the ladder's digits, NOT the ES-converted price) and the
+  signed %King, right-justified at the edge. The outside-% label folds into the column (not drawn twice). Greyed
+  (sub-threshold) rows print grey; the King prints in the King colour. Side=Left mirrors it at the left edge.
+- **Panel v16.26** — STRIKE rows carry a 7th field, the raw SPXW strike (field 6 = type, left empty), so the plugin can
+  print the exact ladder strike. Additive; other plugins ignore it.
+- **lsDayModel 0.15 — the candle-low fix.** Root cause of "the actual candle low and the price chart low are
+  different": `measureChartDay` used getStartStop(getDaySessionNumber()) = whatever session the chart is in NOW. On a
+  Full-Session (17:00-16:00) chart that block rolls onto the NEW evening session after the close, so at 8 PM the actual
+  candle measured the evening session's low (7652) while DAYLOD still said 7643.50 @ 9:54a. Now it measures the RTH
+  window (08:30-15:00 CT) of the most recent RTH day (steps back up to 4 days over a weekend), so the completed day
+  keeps showing overnight until the next open. Not a basis issue — a session-window one.
+Deploy: panel 16.25→16.26 (`node --check` clean); lsGammaProfile 0.40→0.41 + lsDayModel 0.14→0.15 (both need
+recompile). Order: reload Atlas (so STRIKE rows carry the strike), then compile-gammaprofile.bat + compile-daymodel.bat
+(fresh cmd each; IRT closed for the swaps). Then flip "Tape columns" on in the gamma settings.
+
 ## v16.25 + lsKingTracker 0.5 — tighter anchor + the King LINES land on the Dec contract too (2026-09-15)
 
 Follow-up to v16.24 after live verification (measured on the operator's EPZ26 chart): lsGammaProfile 0.40 worked —

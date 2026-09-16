@@ -1,5 +1,25 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-15 (v16.25) · **panel v16.25** · companion v1.19 · RTX plugins: **lsGammaProfile v0.40**, **lsDayModel v0.14**, lsDayStats v0.5, **lsKingTracker v0.5** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-15 evening (v16.26) · **panel v16.26** · companion v1.19 · RTX plugins: **lsGammaProfile v0.41**, **lsDayModel v0.15**, lsDayStats v0.5, **lsKingTracker v0.5** · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-15 EVENING — v16.26 + lsGammaProfile 0.41 + lsDayModel 0.15: Tape columns + candle-low fix
+
+**Evening live audit result (8 PM CT, overnight book):** gamma King, nodes and King lines ALL verified aligned — Atlas
+SPXW ladder yellow-King 7500 = tape 7500 = IRT 7581 (Dec, basis ~+76 from the live overnight bar); ranks 1/2/3
+match cell-for-cell. Two operator "mismatches" were the documented traps: (a) IRT's King "7577" vs an Atlas node
+"7579" = same digits, different contracts (the 7579 is a front-scale secondary node = IRT 7655); (b) the Atlas chart
+was on **"Rolling front + 3 · 3 Days"** (4 expirations) while the tape/IRT read 0DTE — window mismatch, not a bug.
+- **lsGammaProfile 0.41 — "Tape columns"** (new, OFF by default, appended last): prints [raw SPXW strike | %King] per
+  node at the pane edge (bars shift inward), so IRT reads row-for-row against Skylit's SPXW ladder. Outside-% folds
+  into the column. **Needs recompile; then turn the setting ON.**
+- **Panel v16.26:** STRIKE rows carry the raw SPXW strike as a 7th field (type at 6, empty). Additive.
+- **lsDayModel 0.15 — candle-low session bug FIXED:** measureChartDay now measures the RTH day (08:30-15:00 of the most
+  recent RTH day, stepping back over weekends), not IRT's rolling session — after the close it no longer jumps to the
+  evening session's low. Operator-reported (7652 vs DAYLOD 7643.50). **Needs recompile.**
+⚠ DEPLOY ORDER: reload Atlas → `cd /d "C:\Dev\gex-signal-tapereader\plugin"` then `compile-gammaprofile.bat`, then
+(fresh cmd) `compile-daymodel.bat`, IRT closed for each DLL swap; confirm 0.41 / 0.15; enable "Tape columns".
+⚠ STILL OPEN: the air-pocket band over-shades the whole thin far-OTM zone (needs a cap — only band BETWEEN real
+nodes); the panel writes no CW/PW/FLIP/EM rows (walls never draw); Q12 top-3-vs-top-5 analysis; the full same-moment
+RTH audit (T1 09:05) to confirm the King-roll history against Atlas's 0DTE ladder as rolls happen.
 
 # ⚠⚠ 2026-09-15 — v16.25 + lsKingTracker 0.5: TIGHTER ANCHOR + King LINES on the Dec contract
 

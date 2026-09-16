@@ -82,6 +82,7 @@ struct PIdx {
     int header, spot;
     int roles, regime, panelpos, defbands, confl, legend;   // structure read (appended v0.35)
     int headerpos;                                          // header placement (appended v0.36)
+    int tapecols;                                           // Skylit-style [SPX strike | %King] columns (appended v0.41)
 };
 static PIdx PX;
 
@@ -92,11 +93,12 @@ struct Settings {
     bool kline, cw, pw, flip, em, extk, topnodes, spyking, header, spot;
     bool roles, regime, defbands, confl, legend; int panelpos;   // structure read
     int headerpos;
+    bool tapecols;
     COLOR cpos, cneg, cmid;
     char kinglabel[24];
 };
 
-struct GStrike { float price; float pct; int rank; bool king; std::string type; };
+struct GStrike { float price; float pct; int rank; bool king; std::string type; float spx; };   // spx = raw SPXW strike (v0.41)
 
 // ---------------------------------------------------------------------------
 class GammaProfile : public cppExtension {
@@ -152,7 +154,7 @@ GammaProfile::GammaProfile() : cppExtension()
     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false;
-    cfg.header=false; cfg.spot=true; cfg.headerpos=0;
+    cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
 }
 
@@ -252,6 +254,7 @@ int cppExtension::setup(void)
     PX.confl   = pc++; setBoolParameter  ("EM confluence marks", false);
     PX.legend  = pc++; setBoolParameter  ("Polarity legend", false, SL);
     PX.headerpos=pc++; setListParameter  ("Header at", 0, "Top-L;Top-C;Top-R;Bottom-L;Bottom-C;Bottom-R");
+    PX.tapecols =pc++; setBoolParameter  ("Tape columns (SPX strike | %King, right edge)", false);   // (v0.41) appended LAST
     return RTX_OK;
 }
 
@@ -326,6 +329,7 @@ void GammaProfile::readSettings(Settings& S)
     S.confl   = isBoxChecked(PX.confl) != 0;
     S.legend  = isBoxChecked(PX.legend) != 0;
     S.headerpos = getListIndex(PX.headerpos);
+    S.tapecols  = isBoxChecked(PX.tapecols) != 0;
     dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
@@ -358,6 +362,7 @@ void GammaProfile::load()
             s.rank  = atoi(t[3].c_str());
             s.king  = (atoi(t[4].c_str()) != 0);
             s.type  = (t.size() >= 6) ? t[5] : (s.king ? std::string("KING") : std::string());
+            s.spx   = (t.size() >= 7) ? (float)atof(t[6].c_str()) : 0.0f;   // (v0.41) raw SPXW strike, 0 if the panel predates it
             tmp.push_back(s);
         } else if (t.size() >= 2) {
             float v = (float)atof(t[1].c_str());
@@ -522,18 +527,23 @@ void GammaProfile::render(const Settings& S)
     // zoomed or scrolled. The old code tied width to the gap between the last
     // candle and the pane edge (which moves as you scroll) -> bars pulsed.
     short w = (short)S.width;
+    // (v0.41) TAPE COLUMNS — a Skylit-ladder-style strip [SPX strike | %King] pinned to the pane edge on the
+    // bar side. The bars are shifted inward by the strip width so the columns sit BESIDE them (the operator's
+    // sketch: bars, then the values at the edge), and read row-for-row against Skylit's SPXW ladder.
+    short colW = S.tapecols ? (short)(S.font * 9 + 8) : 0;
     short anchor;                 // base of bars
     int sgn;                      // +1 grows right, -1 grows left
-    if (S.side == 1) {            // Left margin: anchor at pane left, grow right
-        anchor = (short)(paneL + 2);
+    if (S.side == 1) {            // Left margin: anchor at pane left (+ column strip), grow right
+        anchor = (short)(paneL + 2 + colW);
         sgn = +1;
-    } else {                      // Right margin (default): anchor at pane right, grow left
+    } else {                      // Right margin (default): anchor at pane right (− column strip), grow left
         sgn = -1;
+        short edge = (short)(paneR - colW);
         if (S.detach) {
-            anchor = paneR;                       // fixed strip pinned to the right margin
+            anchor = edge;                        // fixed strip pinned to the right margin (inside the columns)
         } else {
             short a = (short)(lastX + w + 6);      // hug the candles (moves with them, fixed width)
-            anchor = a < paneR ? a : paneR;
+            anchor = a < edge ? a : edge;
         }
     }
 
@@ -711,8 +721,8 @@ void GammaProfile::render(const Settings& S)
             setTextColor(C_WHT); tp.drawText(rk);
         }
 
-        // % OUTSIDE the tip (or inside), signed
-        if (S.showpct && ab >= (float)S.hideu) {
+        // % OUTSIDE the tip (or inside), signed — (v0.41) folded into the tape column when that is on
+        if (S.showpct && !S.tapecols && ab >= (float)S.hideu) {
             char pc[12]; sprintf_s(pc, sizeof(pc), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
             if (S.pctpos == 1) {  // inside near base
                 COLOR ic = inkOn(col);
@@ -721,6 +731,26 @@ void GammaProfile::render(const Settings& S)
             } else {              // outside the tip
                 if (sgn < 0) textRJ((short)(tip - 6), p.v, pc, C_TXT, S.font, false);
                 else         textLJ((short)(tip + 6), p.v, pc, C_TXT, S.font, false);
+            }
+        }
+
+        // (v0.41) TAPE COLUMNS: [SPX strike | %King] at the pane edge, on this node's row. The strike is the
+        // RAW SPXW strike the panel carried (7575, 7580, ...) — the same digits Skylit's ladder prints — NOT the
+        // ES-converted price, so the two ladders compare cell-for-cell. Greyed (sub-threshold) nodes print grey.
+        if (S.tapecols) {
+            char sk[16], pk[12];
+            if (s.spx > 0.0f) sprintf_s(sk, sizeof(sk), "%d", (int)(s.spx + 0.5f)); else sk[0] = 0;
+            sprintf_s(pk, sizeof(pk), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
+            COLOR tc = primary ? (s.king ? D_KING : C_TXT) : C_GREY;
+            short half = (short)(colW / 2);
+            if (S.side == 1) {        // left edge: strike column then % column, growing right
+                short c1 = (short)(paneL + 4), c2 = (short)(paneL + 4 + half);
+                if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
+                textLJ(c2, p.v, pk, tc, S.font, s.king);
+            } else {                  // right edge (default): strike column left, % column right-justified at the edge
+                short c1 = (short)(paneR - colW + 4), c2 = (short)(paneR - 4);
+                if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
+                textRJ(c2, p.v, pk, tc, S.font, s.king);
             }
         }
     }
@@ -826,6 +856,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.40");
+    p->setVersion("0.41");
     return p;
 }

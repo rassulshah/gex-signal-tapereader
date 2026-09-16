@@ -24,6 +24,9 @@
  *  drawing (it and its E-lines/annotations), so a cold overnight CSV no longer
  *  prints a huge mis-aligned candle. Actual candle (chart-measured) still draws;
  *  STALE badge still shown. Age computed once in staleAgeMin() for badge+guard.
+ *  v0.15 — measureChartDay measures the RTH DAY (08:30-15:00) of the most recent
+ *  RTH day, not IRT's rolling session, so the actual candle's low no longer jumps
+ *  to the evening session after the close (the 7652-vs-7643.50 mismatch).
  *
  *  Parameter indices are numbered EXPLICITLY (pc++), one per control, with NO
  *  setLabelParameter section headers -- a label row shifts IRT's parameter
@@ -590,29 +593,32 @@ bool DayModel::measureChartDay()
     long n = getBarCount(); if (n < 2) return false;
     RTARRAY  op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
     RTARRAYI dt(barDateTime);
-    // PRIMARY: IRT's OWN day-session bounds (tz-agnostic — this IS "the session" the operator sees).
-    RTDATE sStart = 0, sStop = 0; bool sessOk = false;
-    short ds = getDaySessionNumber();
-    if (getStartStop(&sStart, &sStop, ds) == RTX_OK && sStart > 0 && sStop > sStart) sessOk = true;
-    // FALLBACK: today's RTH by wall clock (08:30–15:00), used only if the session API gives nothing.
-    struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-    int lastY = lt.tm_year, lastM = lt.tm_mon, lastD = lt.tm_mday;
+    // (v0.15) THE RTH DAY, ALWAYS — not IRT's rolling session. The old PRIMARY used getStartStop(getDaySessionNumber()),
+    // i.e. whatever session the chart is in RIGHT NOW. On a "Full Session 17:00-16:00" futures chart that is the
+    // overnight+RTH block, and after the close it rolls onto the NEW evening session — so at 8 PM the "actual" candle
+    // was measuring the evening session's low (7652) while the DAY STATS labels still said the RTH low was 7643.50
+    // @ 9:54a (operator: "the actual candle low and the price chart low are different"). The day model IS the RTH
+    // day (08:30–15:00 CT), so measure exactly that window of the most recent RTH day: today's if it has bars, else
+    // step back (over a weekend too) so the completed day keeps showing overnight until the next open.
     const int RTH_OPEN = 8 * 3600 + 30 * 60, RTH_STOP = 15 * 3600;
+    struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
     float dOpen = 0, dHi = -1e9f, dLo = 1e9f, dClose = 0; bool have = false;
-    for (int i = 0; i < (int)n; i++) {
-        RTDATE bd = (RTDATE)dt[i];
-        if (sessOk) {
-            if (bd < sStart || bd > sStop) continue;                         // in IRT's session
-        } else {
-            struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(bd, &tmv);
-            if (tmv.tm_year != lastY || tmv.tm_mon != lastM || tmv.tm_mday != lastD) continue;
+    for (int back = 0; back <= 4 && !have; back++) {
+        // the calendar day to measure: the last bar's local date, minus `back` days
+        struct tm want = lt; want.tm_mday -= back; want.tm_hour = 12; want.tm_min = 0; want.tm_sec = 0; want.tm_isdst = -1;
+        time_t wt = mktime(&want); struct tm wn; memset(&wn, 0, sizeof(wn)); localtime_s(&wn, &wt);
+        int wY = wn.tm_year, wM = wn.tm_mon, wD = wn.tm_mday;
+        dHi = -1e9f; dLo = 1e9f; have = false;
+        for (int i = 0; i < (int)n; i++) {
+            struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime((RTDATE)dt[i], &tmv);
+            if (tmv.tm_year != wY || tmv.tm_mon != wM || tmv.tm_mday != wD) continue;
             int sod = tmv.tm_hour * 3600 + tmv.tm_min * 60 + tmv.tm_sec;
             if (sod < RTH_OPEN || sod > RTH_STOP) continue;
+            if (!have) { dOpen = op[i]; have = true; }
+            if (hi[i] > dHi) dHi = hi[i];
+            if (lo[i] < dLo) dLo = lo[i];
+            dClose = cl[i];
         }
-        if (!have) { dOpen = op[i]; have = true; }
-        if (hi[i] > dHi) dHi = hi[i];
-        if (lo[i] < dLo) dLo = lo[i];
-        dClose = cl[i];
     }
     if (!have || !(dHi > dLo)) return false;
     float csvActO = actC.valid ? actC.o : dOpen;
@@ -685,6 +691,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.14");
+    p->setVersion("0.15");
     return p;
 }

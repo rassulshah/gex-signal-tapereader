@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.25
+// @version      16.26
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.26';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6598,13 +6598,15 @@ function gammaProfileBuild(){
       // kingResolve). v16.05 overrode it with +100 when kingNeg missed — the bug. Use the tape's own sign;
       // force magnitude 100 for the King so a parse blip can't shrink it. kingNeg is the belt-and-braces.
       var pv = isK ? (((p<0)||kingNeg)?-100:100) : Math.round(p);
-      strikes.push({ es:es, pct:pv, isK:isK });
+      strikes.push({ es:es, pct:pv, isK:isK, spx:k });   // (v16.26) keep the raw SPXW strike for the plugin's tape columns
     });
     if(strikes.length){
       var byMag=strikes.slice().sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.es-b.es); });
       byMag.forEach(function(x,i){ x.rank=i+1; });
       strikes.sort(function(a,b){ return a.es-b.es; });
-      strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)); });
+      // (v16.26) 7th field = the raw SPXW strike (field 6 = type, left empty) so lsGammaProfile's "Tape columns" can
+      // print the SAME strike Skylit's SPXW ladder shows (7575, 7580, ...) next to each node, not the ES-converted price.
+      strikes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)+',,'+(isFinite(x.spx)?x.spx:'')); });
       var kes=esOfSpx(kK); if(kes!=null) out.push('KING,'+gpF2(kes));
       // (v16.24) SCALEREF — the front-month ES price this gamma ladder is scaled to (esOfSpx = the ES1
       // payload's SPX->ES ratio, ~1.0006). During the quarterly roll the operator charts the NEXT contract
