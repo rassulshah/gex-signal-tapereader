@@ -875,7 +875,23 @@ void GammaProfile::applyContractOffset()
 {
     long n = getBarCount(); if (n < 1) return;
     RTARRAY close(barClose);
+    // (GP 0.46 / KT 0.7) ANCHOR ON THE BAR THE CSV WAS WRITTEN AT, NOT THE LIVE CLOSE. SCALEREF is the ES1 price at the
+    // panel's export (ASOF); comparing it to the LIVE last close made off = (price now - price 0..3 min ago) + basis, so
+    // the whole profile slid up and down with every tick between exports — operator, 2026-09-16 13:20: "the entire
+    // profile is moving up and down". The basis is a property of the two contracts, not of the last tick: take the
+    // chart's close at the ASOF second (the last bar stamped at or before it on the last bar's date). Falls back to
+    // the live close when ASOF is absent or no bar matches (pre-open, a CSV from another day).
     float chartClose = close[(int)n - 1];
+    if (asofSo >= 0) {
+        RTARRAYI dt(barDateTime);
+        struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
+        for (int i = (int)n - 1; i >= 0 && i >= (int)n - 600; i--) {
+            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+            if (t.tm_year != lt.tm_year || t.tm_mon != lt.tm_mon || t.tm_mday != lt.tm_mday) break;
+            double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+            if (sod <= asofSo + 1.0) { if (close[i] > 0) chartClose = close[i]; break; }
+        }
+    }
     if (!(chartClose > 0)) return;
     // (v0.40) ANCHOR ON SCALEREF, NOT SPOT. The ladder (King, nodes, walls) is priced in the panel's
     // front-month scale (Skylit ES1, via esOfSpx). SPOT is the day-model's own value, and during the
@@ -928,6 +944,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.45");
+    p->setVersion("0.46");
     return p;
 }

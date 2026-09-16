@@ -1,3 +1,12 @@
+## lsGammaProfile 0.46 + lsKingTracker 0.7 — the profile stops breathing with the tape (2026-09-16, ~13:25 CT)
+
+Operator: "the entire profile is moving up and down." Cause: the contract offset was `live last close − SCALEREF`, but
+SCALEREF is the ES1 price at the panel's EXPORT (ASOF, up to 3 min old), so every tick between exports moved the whole
+book by (price now − price then). Now that Skylit's ES1 IS the charted December contract the true basis is ~0 and this
+drift was the only thing left in the offset. Fix (both plugins): anchor on the chart's close at the ASOF second — the
+last bar stamped at or before it on the last bar's date — so off = basis, a property of the two contracts, not of the
+last tick. Falls back to the live close when ASOF is missing or no bar matches.
+
 ## lsDayModel 0.16 — the swept PDH read three pre-open minutes (2026-09-16, ~13:15 CT)
 
 Operator (screenshot, PDH 7690 circled against IRT's own pDHI 7687.00): "regarding the levels swept, I don't think it
