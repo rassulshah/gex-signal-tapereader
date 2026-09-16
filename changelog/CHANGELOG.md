@@ -1,3 +1,29 @@
+## v16.30 + lsGammaProfile 0.47 — the InsiderFinance book as a selectable second gamma profile (2026-09-16, ~15:05 CT)
+
+**Operator:** "if I wanted to replace Skylit with InsiderFinance, would it be possible?" → "investigate it properly and do a
+thorough impact analysis of using IF option. review the results. document them, create a step by step plan of providing
+the option of using IF vs Skylit. and then build."
+
+**The investigation and the plan: `design/IF-BOOK-OPTION.md`.** Measured on today's data the two books are different
+instruments (top-10 strike overlap 4/10; sign disagreements at 7500 / 7615 / 7650; IF's −88 put wall at 7625 absent
+from the tape, the tape's −γ stack 7600–7615 absent from IF). REPLACING Skylit would drop the King rolls, velocity, the
+doctrine detectors' measured rates, Trinity, the whole learning record and the panel's host page — not recommended.
+ADDING IF as a second book is additive and low-risk — built.
+
+**Panel v16.30.** `gammaProfileBuildIF()` writes `GammaProfile-IF.csv` beside `GammaProfile.csv` on every export: the
+companion's `dte0.lv.gexProf` (per-strike call/put $M, already stored since v1.12) → net = call + put, %King = 100 × net
+/ max|net|, King = the largest |net|, ranks by magnitude, the SAME SPX→ES mapping (`gpEsOfSpx`, now shared), the same
+SCALEREF / FLIP / CW / PW, a `REGIME` row read on IF's own structure with the same flip sign, pattern tags from the same
+`gridSetups()` (Skylit-doctrine shapes on a non-Skylit ladder — stated in the design doc), `BOOK,IF0DTE`. Absent (a
+one-row file) when the chain is stale — the FLIP rule. Builds even with no Skylit tape (its own spot fallback). The
+audit carries `ifProf`. Test §9 (16 assertions) pins it on the 10:20 CT chain paste.
+
+**lsGammaProfile 0.47.** `Book: Auto;SPX;SPY;IF` — IF reads `GammaProfile-IF.csv`; header "IF 0DTE gamma King …".
+Nothing else differs, so a second instance with Book = IF, Side = Left puts the two books side by side on one rail.
+
+**Runner.** `gp-regress.py` recognises `BOOK,IF0DTE` and derives Gate A from `audit.ifProf`; `--atlas-read` is
+ignored for the IF book (Atlas is not its source). Fixture `fixtureIF-1020` passes 19/19.
+
 ## companion v1.20 — the couriers keep running while Atlas is hidden during the session (2026-09-16, ~13:40 CT)
 
 Operator: "build the fixes." The IF / YF lamps read 10m at 13:24 because he was trading from other tabs (FOMC) and the

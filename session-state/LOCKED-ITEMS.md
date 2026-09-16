@@ -79,6 +79,15 @@ approval on the desktop); (2) `run-logic-tests.bat` has not yet been run on his 
 checkpoints to run `gp-regress.py` from the audit (no screens) instead of `check-gammaprofile.py` alone; (4) a fixture
 for a Trend day and an air-pocket day once one is recorded (fixture A has neither).
 
+### ✅ F · THE IF BOOK OPTION — BUILT 2026-09-16 15:05 (v16.30 / lsGammaProfile 0.47); awaiting install + the first
+### side-by-side run
+Operator: replace Skylit with IF? → investigate, impact analysis, document, plan, build. Analysis + plan:
+`design/IF-BOOK-OPTION.md` (verdict: ADD, don't replace). Built: `GammaProfile-IF.csv` from the companion's 0DTE chain,
+`Book: IF` in the plugin, test §9, runner support. **Open inside F:** (1) his install (Tampermonkey 16.30, compile-
+gammaprofile.bat, a second lsGammaProfile instance with Book=IF / Side=Left); (2) the first same-minute run of both
+books → RESULTS.md; (3) the doctrine question — what IF's book is FOR on the rail (design doc §5 step 9) — one element,
+discuss before any further build; (4) whether IF's book should carry pattern tags at all (default ON; per-instance off).
+
 ### E · IF PAYLOAD AGE ON THE FLIP ROW — proposed 2026-09-16 14:35 (run 2), NOT AGREED YET
 Run 2 (FOMC, ES −100 pts/hour): the companion fetched IF 3 min earlier, but IF's own `payloadT` was 13:54 CT — their
 numbers were ~30 min behind the tape. FLIP 7690.79 / sign NEG stood against a spot of 7510; `!CONFLICT` fired as designed.

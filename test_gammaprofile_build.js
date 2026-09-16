@@ -17,9 +17,10 @@ eval(['GPTS_VERSION','GP_FILE','GP_SPXWR_KEY','GP_LAST','GP_AUDIT_FILE','GP_AUDI
  'REGIME_TREND_SKEW','REGIME_WHIP_EDGEMID','REGIME_RAINBOW_MIN','REGIME_SIG_PCT',
  'GRID_STACK_STEPS','GRID_STACK_MIN_PCT','GRID_STACK_MAX_PCT','GRID_RUG_FLOOR_STEPS'].map(v).join(''));
 var PANEL_MUTED=false;
-eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gammaProfileBuild'].map(ex).join('\n'));
+eval(['GP_IF_FILE','GP_IF_BUILT'].map(v).join(''));
+eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gammaProfileBuildIF','gammaProfileBuild'].map(ex).join('\n'));
 // the helpers the code calls must be reachable from a mutant built with new Function (global scope) — see section 8
-Object.assign(global, { gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
+Object.assign(global, { gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gammaProfileBuildIF, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
 
 // ---- the world, stubbed to the 09:47 CT snapshot ----
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
@@ -129,6 +130,35 @@ ok(R4.REGIME[0][0]==='AT', '7.3 spot within 3 pts of the flip -> AT (the buffer 
 TRI=null; global.ladderFor=()=>null;
 const B5=gammaProfileBuild(); const R5=rows(B5.csv);
 ok(R5.REGIME && R5.REGIME[0][0]!=='NA' && B5.audit.spot.src==='ifchain', '7.4 no Trinity header, no ladder price -> the companion\'s chain spot is used (never "no spot" while a spot exists)', {row:R5.REGIME, src:B5.audit.spot.src});
+
+// ======================= 9. THE IF BOOK (v16.30) — GammaProfile-IF.csv from the companion's 0DTE chain =======================
+// fixture: the operator's console paste of 2026-09-16 ~10:20 CT (dte0.lv.gexProf, [strike, call $M, put $M<0]) — 69 strikes
+const GEXPROF=[[7380,0,-50.7],[7400,1.3,-67.2],[7405,0.1,-55.1],[7440,0.2,-54.5],[7450,3.3,-86.3],[7460,1.5,-55.9],[7465,0.2,-45.7],[7470,1.5,-69.2],[7475,1.6,-82.8],[7480,1.5,-67.7],[7485,1.1,-39.2],[7490,2.7,-81.4],[7495,4.9,-56.5],[7500,20.8,-350.5],[7505,8.3,-55.7],[7510,12.8,-100.3],[7515,12.7,-87.5],[7520,145.8,-189.8],[7525,161.3,-464.6],[7530,19.1,-184],[7535,14,-151.1],[7540,18.4,-198],[7545,12.3,-126.2],[7550,39.9,-345.6],[7555,24.4,-90.2],[7560,46.8,-197.2],[7565,26,-143.3],[7570,67.5,-300],[7575,98.5,-454.3],[7580,180.8,-425.1],[7585,314.4,-401],[7590,294.4,-393],[7595,226.8,-428.4],[7600,560.8,-1003.2],[7605,196.6,-141.2],[7610,274.4,-262.3],[7615,267.5,-95.3],[7620,619.2,-181.1],[7625,407,-1345.2],[7630,273.8,-154.7],[7635,338.8,-245.9],[7640,572,-116.5],[7645,334.5,-224.5],[7650,1972.1,-1581.2],[7655,473.1,-267.5],[7660,500.8,-108.6],[7665,313.1,-100.3],[7670,497.6,-232.7],[7675,1324.4,-261.1],[7680,390.1,-204.8],[7685,485.2,-74.3],[7690,251.2,-49.1],[7695,204,-20],[7700,488.8,-120.7],[7705,138.2,-276.3],[7710,169,-11.3],[7715,85.8,-134.5],[7720,206.8,-19.7],[7725,129,-8.7],[7730,197.3,-131.6],[7735,61.3,-2.8],[7740,98,-66.2],[7745,35.3,-5.7],[7750,68.2,-12.2],[7755,94,-1.6],[7765,57.7,-0.8],[7775,49.1,-1.4],[7780,77.2,-0.5],[7790,45.6,-0.4]];
+TT={ pct:TAPE_A, king:7685, kingNeg:false, ladderSrc:'trinity' }; TRI={ SPXW:{ px:7620.52 } }; global.ladderFor=()=>({});
+IFC={ err:null, stale:false, ageMin:2, spot:7620.52, payloadT:'2026-09-16T15:20:00Z', dte0:{ exps:[20260916], gf:{ flip:7620.72, netAtSpot:-35638037 }, lv:{ cr:7675, ps:7600, gexProf:GEXPROF, gexProfCoverage:96.9 } } };
+const B9=gammaProfileBuild(); const IFCSV=GP_IF_BUILT; ok(!!IFCSV, '9.0 the IF book builds alongside the Skylit file');
+const R9=rows(IFCSV||''); const IFI=B9.audit.ifProf;
+ok((R9.STRIKE||[]).length===69 && IFI.n===69, '9.1 one STRIKE row per gexProf strike (69)', (R9.STRIKE||[]).length);
+const k9=R9.STRIKE.find(t=>t[3]==='1'); ok(k9 && parseFloat(k9[5])===7675 && k9[1]==='100' && k9[2]==='1', '9.2 IF King = 7675 (net +$1063M, the largest |net|), +100, rank 1', k9);
+const pct9={}; R9.STRIKE.forEach(t=>{ pct9[parseFloat(t[5])]=parseInt(t[1],10); });
+ok(pct9[7625]===-88 && pct9[7600]===-42 && pct9[7500]===-31 && pct9[7640]===43, '9.3 %King = 100 x net / max|net|, puts negative: 7625 -88, 7600 -42, 7500 -31, 7640 +43', {7625:pct9[7625],7600:pct9[7600],7500:pct9[7500],7640:pct9[7640]});
+ok(R9.STRIKE.every(t=>Math.abs(parseFloat(t[0])-es(parseFloat(t[5])))<0.001), '9.4 every IF ES price uses the SAME SPX->ES mapping as the Skylit file');
+ok(R9.KING && Math.abs(parseFloat(R9.KING[0][0])-es(7675))<0.001, '9.5 KING row = ES of 7675');
+ok(R9.SCALEREF && parseFloat(R9.SCALEREF[0][0])===7613.5, '9.6 SCALEREF shared with the Skylit file (same anchor -> same rail)');
+ok(R9.FLIP && R9.CW && R9.PW && R9.CW[0][1]==='7675' && R9.PW[0][1]==='7600', '9.7 FLIP / CW / PW rows identical in source to the Skylit file');
+ok(R9.BOOK && R9.BOOK[0][0]==='IF0DTE', '9.8 BOOK row says IF0DTE (the plugin header prints "IF 0DTE")');
+ok(R9.REGIME && R9.REGIME[0][0]==='AT', '9.9 REGIME sign: spot 7620.52 is within 3 pts of the flip 7620.72 -> AT (same flip, same rule)', R9.REGIME);
+ok(!R9.KINGTRACK && !R9.DAYACT, '9.10 no KINGTRACK / day rows in the IF file (those plugins read GammaProfile.csv)');
+const ranks9=R9.STRIKE.slice().sort((a,b)=>parseInt(a[2])-parseInt(b[2])).slice(0,4).map(t=>parseFloat(t[5]));
+ok(ranks9[0]===7675 && ranks9[1]===7625 && ranks9[2]===7640 && ranks9[3]===7600, '9.11 ranks 1..4 = 7675, 7625, 7640, 7600 (by |%King|)', ranks9);
+ok(IFI.ok && IFI.king===7675 && IFI.coverage===96.9 && IFI.spotSrc==='panel', '9.12 audit.ifProf carries king / coverage / spot source', IFI);
+IFC={ err:null, stale:true, ageMin:45, spot:7620.52, dte0:{ gf:{ flip:7620.72 }, lv:{ cr:7675, ps:7600, gexProf:GEXPROF } } };
+gammaProfileBuild(); ok(GP_IF_BUILT===null && B9.audit.ifProf.ok===true, '9.13 a STALE chain -> no IF file this export (absent, never an old book drawn as live)');
+IFC={ err:null, stale:false, ageMin:1, spot:7620.52, dte0:{ gf:{ flip:7620.72 }, lv:{ cr:7675, ps:7600 } } };
+gammaProfileBuild(); ok(GP_IF_BUILT===null, '9.14 a chain without gexProf (companion < 1.12) -> no IF file');
+TT=null; IFC={ err:null, stale:false, ageMin:1, spot:7620.52, dte0:{ gf:{ flip:7620.72 }, lv:{ cr:7675, ps:7600, gexProf:GEXPROF } } };
+const B9b=gammaProfileBuild(); ok(!!GP_IF_BUILT && /BOOK,IF0DTE/.test(GP_IF_BUILT), '9.15 the IF book still builds with NO Skylit tape at all (its own spot fallback)');
+TT={ pct:TAPE_A, king:7685, kingNeg:false, ladderSrc:'trinity' }; IFC={ err:null, stale:false, ageMin:2, spot:7609.9, dte0:{ gf:{ flip:7620.72 }, lv:{ cr:7675, ps:7600 } } };
 
 // ======================= 8. mutation check — the assertions must fire =======================
 // a MUTANT of gammaProfileBuild, built from the mutated source in global scope; `run` receives it explicitly

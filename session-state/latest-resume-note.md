@@ -1,5 +1,24 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 early afternoon (v16.29 build) · **panel v16.29** · companion v1.19 · RTX plugins: **lsGammaProfile v0.45**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.6** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 15:05 CT (v16.30 build) · **panel v16.30** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 15:05 CT — THE IF BOOK (item F) + the afternoon's fixes. START HERE.
+
+**Latest on origin:** panel 16.30 · companion 1.20 · lsGammaProfile 0.47 · lsKingTracker 0.7 · lsDayModel 0.16 ·
+lsDayStats 0.6. His last known installs: panel 16.29, companion 1.20, DLLs uncertain (GammaProfile 0.45 or 0.46 at
+14:26; KingTracker / DayModel / DayStats possibly still old). **Every DLL needs one more compile pass.**
+
+**What the afternoon built, in order:** the moving-profile fix (0.46 / KT 0.7: offset anchored on the ASOF bar) ·
+DayModel 0.16 (bar-stamp-aware RTH window; swept PDH 7690→7687 = IRT) · companion 1.20 (couriers keep polling while
+Atlas is hidden during the session) · two live regression runs (`testing/gamma-profile/RESULTS.md`: 13:25 and 14:26 —
+the 7630 question RESOLVED as my misread of the velocity chip; IF's payload found 30 min behind on FOMC → item E) ·
+**the IF book (item F)**: `design/IF-BOOK-OPTION.md` is the investigation, the numbers, the verdict (ADD, don't
+replace) and the step-by-step plan; steps 1–6 built, 7–9 are his install, the first side-by-side run, and the
+doctrine question of what IF's book is FOR.
+
+**Next, in order:** (1) install: Tampermonkey [16.30] + close IRT + compile-gammaprofile / -kingtracker / -daymodel /
+-daystats + reopen; add a second lsGammaProfile with Book = IF, Side = Left. (2) `gp-regress.py` on BOTH files at one
+minute (the Skylit run with an Atlas zoom, the IF run without) → RESULTS.md. (3) Item E (flip payload age) — discuss.
+(4) C (day candle, measure first). (5) design doc §5 step 9.
 
 # ⚠⚠⚠ 2026-09-16 ~13:00 CT — THE REGRESSION SUITE (item D) + 0.45 / 16.29 / DayStats 0.6. START HERE.
 

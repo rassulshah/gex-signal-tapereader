@@ -10,6 +10,7 @@ Detail and screenshots in `runs/<date>/`. The suite itself is described in `REGR
 |---|---|---|---|
 | 2026-09-16 | `test_gammaprofile_build.js` (Gate A) | 40 / 40 + 3 mutations fire | first version, fixture A (09:47 CT) + fixture B (synthetic rug/pika/RANGE) |
 | 2026-09-16 | `plugin/test_gammaprofile_logic.cpp` (Gate B logic) | 57 / 57 + 3 mutations fire | g++ in the cloud; `run-logic-tests.bat` not yet run on the operator's MSVC |
+| 2026-09-16 | `test_gammaprofile_build.js` §9 (IF book) + `gp-regress.py` on `fixtureIF-1020` | 16 / 16 + 19 / 19 | v16.30; the IF builder on the 10:20 CT chain paste |
 | 2026-09-16 | `tools/smoke.js` | clean | — |
 | 2026-09-16 | `test_irt_export.js` / `test_v1592.js` | 23 / 11 pre-existing failures | **unrelated to this work** — identical on the pre-change source; parked, not fixed |
 

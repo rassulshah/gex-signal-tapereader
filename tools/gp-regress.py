@@ -100,6 +100,14 @@ def main():
 
     # ---------------- Gate A: the ladder ----------------
     tape = AU.get('tape') or {}; ratio = (AU.get('ratio') or {}).get('SPXW'); king = AU.get('king'); kingNeg = AU.get('kingNeg')
+    # (v16.30) THE IF BOOK: GammaProfile-IF.csv carries BOOK,IF0DTE; its "tape" is the audit's ifProf (the normalised
+    # InsiderFinance 0DTE ladder the panel derived from the companion's gexProf) and its King is ifProf.king.
+    book_row = R.get('BOOK', [['']])[0][0]
+    if book_row == 'IF0DTE':
+        ip = AU.get('ifProf') or {}
+        tape = {('%.2f' % k): v for k, v in (ip.get('prof') or [])}
+        king = ip.get('king'); kingNeg = (tape.get('%.2f' % king, 0) < 0) if king is not None else None
+        add(ip.get('ok') is True, 'A', 'IF book: audit.ifProf ok (king %s, %s strikes, coverage %s%%, spot from %s, payload %s)' % (king, ip.get('n'), ip.get('coverage'), ip.get('spotSrc'), ip.get('payloadT')))
     strikes = R.get('STRIKE', [])
     add(ratio is not None and ratio > 0.98, 'A', 'SPX->ES ratio present in the audit: %s (front-month basis %+.1f pts on the King)' % (ratio, (king * ratio - king) if (ratio and king) else float('nan')))
     add(len(strikes) == len(tape), 'A', 'STRIKE rows (%d) == tape strikes the panel read (%d)' % (len(strikes), len(tape)))
@@ -147,13 +155,18 @@ def main():
             add(sign == 'NA', 'A', 'REGIME sign NA when spot or flip is missing (spot %s, flip %s, fresh %s)' % (spot, flip_spx, fresh))
         add(typ in ('RANGE', 'TREND_UP', 'TREND_DN', 'WHIPSAW', 'MIXED', 'FORMING'), 'A', 'REGIME type is one of the six (%s, %s)' % (typ, conf))
         au_rg = AU.get('regime') or {}
-        add(au_rg.get('type') == typ and au_rg.get('sign') == sign, 'A', 'REGIME row == the audit\'s regime read')
+        if book_row == 'IF0DTE':
+            add(sign == (AU.get('regime') or {}).get('sign', sign), 'A', 'IF book: REGIME sign == the Skylit file\'s sign (same flip, same spot); type %s is read on IF\'s own structure' % typ)
+        else:
+            add(au_rg.get('type') == typ and au_rg.get('sign') == sign, 'A', 'REGIME row == the audit\'s regime read')
     else:
         add(False, 'A', 'REGIME row present')
     add((AU.get('spot') or {}).get('src') in ('trinity', 'ladder', 'ifchain'), 'A', 'spot source named: %s (spx %s)' % ((AU.get('spot') or {}).get('src'), spot))
 
     # ---------------- ATLAS cross-check ----------------
-    if a.atlas_read:
+    if a.atlas_read and book_row == 'IF0DTE':
+        warn('ATLAS', 'IF book: the Atlas screen is not this book\'s source; --atlas-read ignored')
+    elif a.atlas_read:
         AR = json.load(open(a.atlas_read)); diffs = []; missing = []
         for k, v in AR.items():
             if k in ('king', 'es1', 'notes'): continue
@@ -209,13 +222,13 @@ def main():
     now = datetime.datetime.now()
     day = now.strftime('%Y-%m-%d'); od = os.path.join(a.out, day); os.makedirs(od, exist_ok=True)
     stamp = hhmm(asof).replace(':', '')[:4] if asof is not None else now.strftime('%H%M')
-    name = stamp + (('-' + a.label) if a.label else '') + '.md'
+    name = stamp + ('-IF' if book_row == 'IF0DTE' else '') + (('-' + a.label) if a.label else '') + '.md'
     shots = []
     for s in a.shots:
         if os.path.exists(s):
             dst = os.path.join(od, stamp + '-' + os.path.basename(s)); shutil.copy(s, dst); shots.append(os.path.basename(dst))
     verdict = 'PASS' if fails == 0 else 'FAIL'
-    lines = ['# lsGammaProfile regression — %s %s CT — %s' % (day, hhmm(asof), verdict), '',
+    lines = ['# lsGammaProfile regression — %s %s CT — %s%s' % (day, hhmm(asof), verdict, ' — IF BOOK' if book_row == 'IF0DTE' else ''), '',
              '_CSV ASOF %s · panel %s · King %s (%s) · ratio %s · spot %s (%s) · SCALEREF %s · flip %s · CW %s · PW %s · rolls %s_' % (
                  hhmm(asof), AU.get('v'), king, '-' if kingNeg else '+', ratio, spot, (AU.get('spot') or {}).get('src'), SR, flip_spx, cr, ps, (AU.get('rolls') or {}).get('SPX')), '']
     if a.note: lines += ['**Operator / runner note:** ' + a.note, '']

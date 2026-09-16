@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version      16.29
+// @version      16.30
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -778,7 +778,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='16.29';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='16.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6618,6 +6618,73 @@ function gpRegime(strikes, spotSpx, flipSpx){
 // ensure everything is consistent." The sidecar IS the Atlas datapoint at the CSV's own timestamp.
 var GP_AUDIT_FILE='GammaProfile.audit.json';
 var GP_AUDIT=null;
+// (v16.30) the SPX->ES mapper both builders share: Skylit's own SPXW->ES1 ratio, persisted last-good for 14 days
+function gpEsOfSpx(spxPx){
+  if(typeof spxPx!=='number'||!isFinite(spxPx)) return null;
+  var SKY_ES=(typeof SKY_FUT!=='undefined' && SKY_FUT.ES)||'ES1';
+  try{ var s=skylitFutPx(SKY_ES,'SPXW',spxPx); if(s&&typeof s.px==='number'&&isFinite(s.px)) return Math.round(s.px/0.25)*0.25; }catch(e){}
+  try{ var og=JSON.parse(localStorage.getItem(GP_SPXWR_KEY)||'null'); if(og&&og.r>0&&(Date.now()-og.t)<14*86400000) return Math.round(spxPx*og.r/0.25)*0.25; }catch(e){}
+  return null;
+}
+// (v16.30) THE INSIDERFINANCE BOOK — GammaProfile-IF.csv, the same row grammar from THEIR 0DTE chain (design/IF-BOOK-
+// OPTION.md). Operator: "provide the option of using IF vs Skylit." The companion already stores the per-strike profile
+// (`dte0.lv.gexProf` = [strike, call $M, put $M<0], trimmed at 1% of the max gross); net = call + put, positive =
+// dealers long gamma (their convention, verified to the decimal). %King = 100 x net / max|net|. Everything else is the
+// Skylit builder's: the ES mapping, SCALEREF, FLIP / CW / PW (already IF), the regime read on THIS ladder's structure
+// (sign = the same flip), pattern tags from the same gridSetups() — Skylit-doctrine shapes on a non-Skylit ladder, which
+// the design doc states plainly. ABSENT when the chain is stale or missing (the FLIP rule: absent, never wrong).
+// The file carries no KINGTRACK / day rows: lsKingTracker / lsDayModel / lsDayStats read GammaProfile.csv, unchanged.
+var GP_IF_FILE='GammaProfile-IF.csv';
+var GP_IF_BUILT=null;   // the IF book's CSV text from the last build (null = absent this export)
+function gammaProfileBuildIF(scaleRef, spotSpxP, flipSpx){
+  var out=[], info={ ok:false, why:'', king:null, n:0, maxAbs:null };
+  try{
+    var IFC=(typeof ifChain==='function')?ifChain('SPX'):null;
+    if(!IFC || IFC.err){ info.why='no chain'; return { csv:null, info:info }; }
+    if(IFC.stale){ info.why='chain stale ('+IFC.ageMin+'m)'; return { csv:null, info:info }; }
+    var lv=IFC.dte0&&IFC.dte0.lv, gp=lv&&lv.gexProf;
+    if(!gp || !gp.length){ info.why='no gexProf in the chain (companion < 1.12?)'; return { csv:null, info:info }; }
+    if(typeof spotSpxP!=='number' && typeof IFC.spot==='number' && IFC.spot>1000){ spotSpxP=IFC.spot; info.spotSrc='ifchain'; } else info.spotSrc='panel';
+    var nodes=[], maxAbs=0;
+    gp.forEach(function(r){ if(!r||r.length<3) return; var k=+r[0], net=(+r[1]||0)+(+r[2]||0); if(!isFinite(k)||!isFinite(net)) return;
+      var es=gpEsOfSpx(k); if(es==null) return; nodes.push({ spx:k, es:es, net:net }); if(Math.abs(net)>maxAbs) maxAbs=Math.abs(net); });
+    if(!nodes.length || !(maxAbs>0)){ info.why='no usable strikes'; return { csv:null, info:info }; }
+    var kingNode=null;
+    nodes.forEach(function(n){ n.pct=Math.round(100*n.net/maxAbs); if(Math.abs(n.net)===maxAbs && !kingNode) kingNode=n; });
+    kingNode.isK=true; nodes.forEach(function(n){ if(n!==kingNode) n.isK=false; });
+    var byMag=nodes.slice().sort(function(a,b){ return (Math.abs(b.pct)-Math.abs(a.pct))||(a.spx-b.spx); });
+    byMag.forEach(function(x,i){ x.rank=i+1; });
+    nodes.sort(function(a,b){ return a.spx-b.spx; });
+    var patOf={};
+    try{
+      var thrP=(CFG&&CFG.nodeThresh)||20;
+      var gnodes=nodes.filter(function(x){ return Math.abs(x.pct)>=thrP; }).map(function(x){ return { book:'SPX', k:x.spx, pct:x.pct, disp:x.spx, pos:x.pct>0 }; });
+      gnodes.sort(function(a,b){ return b.disp-a.disp; });
+      var byP=(typeof gridSetups==='function')?gridSetups(gnodes,{px:spotSpxP}):{};
+      Object.keys(byP).forEach(function(kk){ var kinds=(byP[kk]||[]).map(function(q){ return q.kind; }), t=null;
+        if(kinds.indexOf('rug')>=0) t='RUG'; else if(kinds.indexOf('rrug')>=0) t='RRUG';
+        else if(kinds.indexOf('pika')>=0) t='PIKA'; else if(kinds.indexOf('barney')>=0) t='BARNEY';
+        else if(kinds.indexOf('stk pika')>=0) t='PIKAM'; else if(kinds.indexOf('stk barney')>=0) t='BARNEYM';
+        if(t) patOf[String(parseFloat(kk))]=t; });
+    }catch(ePat){}
+    nodes.forEach(function(x){ out.push('STRIKE,'+gpF2(x.es)+','+x.pct+','+x.rank+','+(x.isK?1:0)+','+(patOf[String(x.spx)]||'')+','+x.spx); });
+    out.push('KING,'+gpF2(kingNode.es));
+    if(typeof scaleRef==='number' && isFinite(scaleRef)) out.push('SCALEREF,'+gpF2(scaleRef));
+    var gf0=IFC.dte0.gf, cwSpx=(lv&&lv.cr>1000)?lv.cr:null, pwSpx=(lv&&lv.ps>1000)?lv.ps:null;
+    var fSpx=(gf0&&typeof gf0.flip==='number'&&gf0.flip>1000)?gf0.flip:null;
+    var fe=(fSpx!=null)?gpEsOfSpx(fSpx):null; if(fe!=null) out.push('FLIP,'+gpF2(fe)+','+fSpx.toFixed(2)+',0DTE,calc');
+    var ce=(cwSpx!=null)?gpEsOfSpx(cwSpx):null; if(ce!=null) out.push('CW,'+gpF2(ce)+','+cwSpx+',0DTE,calc');
+    var pe=(pwSpx!=null)?gpEsOfSpx(pwSpx):null; if(pe!=null) out.push('PW,'+gpF2(pe)+','+pwSpx+',0DTE,calc');
+    try{ var RG=gpRegime(nodes.map(function(n){ return { spx:n.spx, pct:n.pct, isK:n.isK }; }), spotSpxP, fSpx);
+         if(RG) out.push('REGIME,'+RG.sign+','+RG.type+','+RG.conf+','+(RG.conflict?1:0)+','+(fSpx!=null?fSpx.toFixed(2):'')+','+String(RG.note).replace(/,/g,' ')); }catch(eRG){}
+    if(typeof spotSpxP==='number'){ var se=gpEsOfSpx(spotSpxP); if(se!=null) out.push('SPOT,'+gpF2(se)); }
+    out.push('BOOK,IF0DTE');
+    try{ out.push('ASOF,'+ctNowSecOfDay()); }catch(eAS){}
+    info.ok=true; info.king=kingNode.spx; info.n=nodes.length; info.maxAbs=+maxAbs.toFixed(1); info.coverage=lv.gexProfCoverage; info.payloadT=IFC.payloadT||null;
+    info.prof=nodes.map(function(n){ return [n.spx, n.pct]; });
+    return { csv:out.join('\r\n')+'\r\n', n:out.length, info:info };
+  }catch(e){ info.why='threw: '+(e&&e.message||e); return { csv:null, info:info }; }
+}
 function gammaProfileBuild(){
   var cfgI=CFG.irt||{};
   var out=[];
@@ -6635,12 +6702,7 @@ function gammaProfileBuild(){
   var SKY_ES=(typeof SKY_FUT!=='undefined' && SKY_FUT.ES)||'ES1';
   var gWhy='no DOM tape read for SPXW (is the SPXW book visible on the chart?)';
   var TT=null; try{ TT=tapeMapLive('SPXW'); }catch(e){}
-  var esOfSpx=function(spxPx){
-    if(typeof spxPx!=='number'||!isFinite(spxPx)) return null;
-    try{ var s=skylitFutPx(SKY_ES,'SPXW',spxPx); if(s&&typeof s.px==='number'&&isFinite(s.px)) return Math.round(s.px/0.25)*0.25; }catch(e){}
-    try{ var og=JSON.parse(localStorage.getItem(GP_SPXWR_KEY)||'null'); if(og&&og.r>0&&(Date.now()-og.t)<14*86400000) return Math.round(spxPx*og.r/0.25)*0.25; }catch(e){}
-    return null;
-  };
+  var esOfSpx=gpEsOfSpx;   // (v16.30) shared with the IF builder
   if(TT && TT.pct && TT.king!=null){
     var kK=TT.king;
     var kingNeg=(TT.kingNeg===true) || !!(TT.bookKing && TT.bookKing.neg===true);   // (v16.05) polarity from the tape's King $K cell sign
@@ -6931,6 +6993,9 @@ function gammaProfileBuild(){
       if(NW && NW.es!=null) out.push('KINGNOW,'+KB.fam+','+KB.book+','+gpF2(NW.es)+','+gpI(NW.strike)+','+gpI(NW.pct));
     }
   }catch(eKT){}
+  // (v16.30) the IF book — built even when the Skylit tape is absent (its own spot fallback), from the same scale anchor
+  try{ var IFB=gammaProfileBuildIF((typeof scaleRef==='number')?scaleRef:null, (typeof spotSpxP==='number')?spotSpxP:null, (typeof flipSpx==='number')?flipSpx:null);
+       AU.ifProf=IFB.info; GP_IF_BUILT=IFB.csv; }catch(eIFB){ GP_IF_BUILT=null; AU.ifProf={ ok:false, why:'threw' }; }
   try{ GP_LAST.gWhy=gWhy; GP_LAST.dWhy=dWhy; }catch(e){}
   try{ AU.rolls={ SPX:((KTRK&&KTRK.SPX)||[]).length-1, SPY:((KTRK&&KTRK.SPY)||[]).length-1 }; AU.kingNow=KTRK_NOW; AU.gWhy=gWhy; AU.dWhy=dWhy; AU.fut=(typeof FUTMODE!=='undefined')?{ fam:FUTMODE.fam, r:FUTMODE.r }:null; }catch(eAU9){}
   GP_AUDIT=AU;
@@ -6976,6 +7041,14 @@ function gammaProfileExportNow(force){
 // (v16.29) the audit sidecar write — fail-soft, never blocks or fails the CSV write it follows
 function gpAuditWrite(h, AU){
   try{
+    // (v16.30) the IF book rides with the audit write: present when the chain is fresh, otherwise the file is TRUNCATED
+    // to a single BOOK row so a stale book never draws as live (lsGammaProfile shows an empty rail rather than an old one)
+    try{
+      var ifTxt=GP_IF_BUILT || ('BOOK,IF0DTE\r\nASOF,'+ctNowSecOfDay()+'\r\n');
+      h.getFileHandle(GP_IF_FILE,{create:true}).then(function(fh){ return fh.createWritable(); })
+        .then(function(w){ return w.write(ifTxt).then(function(){ return w.close(); }); })
+        .then(function(){ GP_LAST.ifFile=Date.now(); }).catch(function(eI){ GP_LAST.ifErr=''+eI; });
+    }catch(eI0){}
     if(!h || !AU) return;
     var txt=JSON.stringify(AU);
     h.getFileHandle(GP_AUDIT_FILE,{create:true}).then(function(fh){ return fh.createWritable(); })
@@ -6986,6 +7059,7 @@ function gpAuditWrite(h, AU){
 }
 window.__gptsDebug.gp=function(){ var b=null; try{ b=gammaProfileBuild(); }catch(e){ b=String(e); } return { last:GP_LAST, preview:(b&&b.csv)?b.csv.split('\r\n').slice(0,40):b, audit:GP_AUDIT }; };
 window.__gptsDebug.gpAudit=function(){ try{ gammaProfileBuild(); }catch(e){} return GP_AUDIT; };
+window.__gptsDebug.gpIF=function(){ try{ gammaProfileBuild(); }catch(e){} return { csv:(GP_IF_BUILT||'').split('\r\n').slice(0,60), info:GP_AUDIT&&GP_AUDIT.ifProf }; };
 window.__gptsDebug.gpExport=function(){ gammaProfileExportNow(true); return GP_LAST; };
 var REPO_LAST_SAVE=null;
 // (v15.71) THE SAVE RUNS ITSELF. Operator, 2026-09-04: "the next step is to automatically have the application trigger the

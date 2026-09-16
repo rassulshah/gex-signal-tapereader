@@ -104,6 +104,12 @@ tape (±1, King, ES1 vs SCALEREF), and every Gate B expectation vs the IRT trans
 
 ---
 
+### 1e. The IF book (v16.30)
+`GammaProfile-IF.csv` (BOOK,IF0DTE) is the same grammar from InsiderFinance's 0DTE chain (`design/IF-BOOK-OPTION.md`).
+Gate A §9 pins the builder on the 10:20 CT chain paste (`fixtures/fixtureIF-1020.*`); the runner recognises the BOOK row
+and derives the expected rows from `audit.ifProf`; the Atlas cross-check does not apply (Atlas is not its source). Gate
+B logic and the checklist are identical — the plugin does not know which book it is drawing.
+
 ## 2. When to run what
 
 | event | run |

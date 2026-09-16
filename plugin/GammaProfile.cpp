@@ -16,6 +16,8 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.47 — Book: IF reads GammaProfile-IF.csv (InsiderFinance 0DTE chain, same grammar). The
+ *  header prints "IF 0DTE" from the BOOK row. Nothing else differs between the two books on the rail.
  *  v0.42 — DOCTRINE LABELS + REGIME ROW + LEVEL CALLOUTS (operator, 2026-09-15/16):
  *    · Gatekeeper = ONE node: the largest |%King| strictly between spot and the King,
  *      and only if >= GK_MIN_PCT (30% of King). No more "G on every node" flood.
@@ -213,7 +215,7 @@ int cppExtension::setup(void)
     int pc = 0;                        // the TRUE parameter index, one per control
 
     // PROFILE
-    PX.book   = pc++; setListParameter   ("Book", 0, "Auto;SPX;SPY");
+    PX.book   = pc++; setListParameter   ("Book", 0, "Auto;SPX;SPY;IF");   // (v0.47) IF = the InsiderFinance 0DTE book, GammaProfile-IF.csv
     PX.width  = pc++; setIntegerParameter("Width px", 100, 0, SL);
     PX.side   = pc++; setListParameter   ("Side", 0, "Right;Left");
     PX.thick  = pc++; setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
@@ -355,9 +357,10 @@ void GammaProfile::load()
     hasScaleRef = false; scaleRef = 0.0f;
     const char* up = getenv("USERPROFILE");
     if (!up) { strikes.clear(); return; }
-    // Book selector: Auto(0) and SPX(1) read GammaProfile.csv; SPY(2) reads GammaProfile-SPY.csv.
-    // (Auto currently defaults to the SPX book; true symbol-driven auto arrives with the live feed.)
-    const char* fname = (cfg.book == 2) ? "GammaProfile-SPY.csv" : "GammaProfile.csv";
+    // Book selector: Auto(0) and SPX(1) read GammaProfile.csv (the Skylit tape); SPY(2) GammaProfile-SPY.csv;
+    // (v0.47) IF(3) GammaProfile-IF.csv — the InsiderFinance 0DTE chain in the same row grammar (design/IF-BOOK-OPTION.md).
+    // A second lsGammaProfile instance with Book = IF and Side = Left puts the two books side by side on one rail.
+    const char* fname = (cfg.book == 2) ? "GammaProfile-SPY.csv" : (cfg.book == 3 ? "GammaProfile-IF.csv" : "GammaProfile.csv");
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\" + fname;
     std::ifstream f(path.c_str());
     if (!f.is_open()) { strikes.clear(); return; }
@@ -624,7 +627,7 @@ void GammaProfile::render(const Settings& S)
     if (S.header) {
         char h[96];
         int kingStrike = 0; for (size_t i=0;i<strikes.size();i++) if (strikes[i].king) kingStrike=(int)(strikes[i].price+0.5f);
-        sprintf_s(h, sizeof(h), "%s gamma  King %d", book.c_str(), kingStrike);
+        sprintf_s(h, sizeof(h), "%s gamma  King %d", (book == "IF0DTE") ? "IF 0DTE" : book.c_str(), kingStrike);
         FONT hf; hf.id=HELVETICA; hf.size=(short)S.font; hf.style=BOLD; setFont(hf);
         short tw = (short)getTextWidth(h, -1);
         int hp = S.headerpos;
@@ -944,6 +947,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.46");
+    p->setVersion("0.47");
     return p;
 }
