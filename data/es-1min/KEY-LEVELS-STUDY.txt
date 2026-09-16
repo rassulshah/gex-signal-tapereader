@@ -1,0 +1,60 @@
+sessions with every level: 279 (2025-06-09 → 2026-08-21)
+
+== A. RANGE — level features added to the EM model (out-of-fold MAE, n=279) ==
+pre-open: EM model                            18.57   17.44   23.37
+   + room to nearest level up & down          18.62   17.49   23.41  (+0.05)
+   + level envelope (ON ∪ PD span)            18.75   17.44   23.45  (+0.18)
+   + envelope + rooms                         18.79   17.49   23.48  (+0.22)
+60 min: EM model                              17.69   17.37   22.71
+   + room to nearest level up & down          17.72   17.44   22.72  (+0.03)
+   + level envelope (ON ∪ PD span)            17.88   17.38   22.79  (+0.19)
+   + envelope + rooms                         17.88   17.44   22.80  (+0.19)
+
+== B. PLACEMENT — upside share from the open's position among the levels (MAE E-HOD / E-LOD) ==
+pre-open (EM range): symmetric                         17.44   23.37  -
+pre-open (EM range): room share up/(up+down)           17.52   23.52  [0.514, -0.028]
+pre-open (EM range): position in ON∪PD envelope        17.54   23.26  [0.556, -0.092]
+pre-open (EM range): both                              17.58   23.40  [0.606, -0.074, -0.12]
+60 min (IB + EM): pos60 (the built recommendation)     12.83   17.55  [0.877, -0.765]
+60 min (IB + EM): pos60 + room share                   12.83   17.66  [0.904, -0.767, -0.058]
+60 min (IB + EM): pos60 + envelope position            12.85   17.57  [0.889, -0.763, -0.021]
+
+== C. MAGNET — share of days whose HOD (LOD) sits within k pts of a level above (below) the open, vs chance ==
+  k=2 pts: HOD on a level   23% (chance   49%) · LOD on a level   23% (chance   40%)
+  k=3 pts: HOD on a level   31% (chance   64%) · LOD on a level   29% (chance   55%)
+  k=5 pts: HOD on a level   45% (chance   80%) · LOD on a level   46% (chance   74%)
+  which level (k=3): LOD@PML 33, HOD@PMH 31, LOD@LLO 30, HOD@ONH 30, HOD@LHI 30, LOD@ONL 28, LOD@ALO 19, HOD@PDH 18, HOD@PWH 16, LOD@PDC 16, HOD@AHI 16, LOD@PDL 14
+
+== D. SNAP — move E-HOD / E-LOD to the nearest level within X pts of it (60-min placed model, out-of-fold) ==
+  snap within  0 pts: MAE E-HOD  12.83  E-LOD  17.55
+  snap within  2 pts: MAE E-HOD  12.80  E-LOD  17.55
+  snap within  3 pts: MAE E-HOD  12.78  E-LOD  17.61
+  snap within  5 pts: MAE E-HOD  12.73  E-LOD  17.42
+  snap within  8 pts: MAE E-HOD  12.66  E-LOD  17.49
+  snap within 12 pts: MAE E-HOD  12.81  E-LOD  17.59
+
+== D. CAP — when E-HOD sits d pts ABOVE the nearest level above the open, how often does the day get through that level? ==
+  E-HOD below level  n= 12  day traded through the level  33%
+  E-HOD 0-5 over     n= 15  day traded through the level  33%
+  E-HOD 5-15 over    n= 70  day traded through the level  61%
+  E-HOD 15+ over     n=181  day traded through the level  99%
+  E-LOD above level  n= 23  day traded through the level  30%
+  E-LOD 0-5 under    n= 24  day traded through the level  25%
+  E-LOD 5-15 under   n= 56  day traded through the level  55%
+  E-LOD 15+ under    n=176  day traded through the level  99%
+== C′. MAGNET, permutation control — HOD/LOD within k pts of a level, real vs a same-distance extreme from another day ==
+  k=2: HOD on a level   23% vs permuted   21% · LOD on a level   23% vs permuted   23%
+  k=3: HOD on a level   31% vs permuted   28% · LOD on a level   29% vs permuted   31%
+  k=5: HOD on a level   45% vs permuted   41% · LOD on a level   46% vs permuted   44%
+
+== D′. THROUGH-RATE at a level vs at a plain price the same distance under E-HOD (above E-LOD) ==
+  H  E-HOD  -3 pts beyond the price:  level n=  5 through  60%   plain price n=244 through  26%
+  H  E-HOD  +2 pts beyond the price:  level n= 10 through  40%   plain price n=228 through  35%
+  H  E-HOD  +5 pts beyond the price:  level n= 22 through  32%   plain price n=213 through  39%
+  H  E-HOD  +8 pts beyond the price:  level n= 26 through  54%   plain price n=217 through  54%
+  H  E-HOD +12 pts beyond the price:  level n= 11 through  73%   plain price n=235 through  70%
+  L  E-LOD  -3 pts beyond the price:  level n= 11 through  36%   plain price n=238 through  28%
+  L  E-LOD  +2 pts beyond the price:  level n= 17 through  35%   plain price n=239 through  36%
+  L  E-LOD  +5 pts beyond the price:  level n= 15 through  20%   plain price n=219 through  43%
+  L  E-LOD  +8 pts beyond the price:  level n= 23 through  61%   plain price n=227 through  46%
+  L  E-LOD +12 pts beyond the price:  level n= 14 through  29%   plain price n=231 through  71%

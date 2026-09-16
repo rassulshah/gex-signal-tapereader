@@ -1,3 +1,12 @@
+## STUDY — key levels vs the expected high / low and the range (2026-09-16, ~18:40 CT) — NO CODE CHANGE
+
+Operator: "whether key levels (which you have) like overnight high and low and day high and low etc. can improve these
+numbers even more." `tools/study-key-levels.py` + `design/KEY-LEVELS-STUDY.md` (n=279, out-of-fold, ONH/ONL, PDH/PDL,
+PDC, Asia, London, pre-market, PWH/PWL). Verdict: NO for these numbers — range +0.03…+0.22 (noise), placement slopes
+~0 pre-open and nothing beside pos60 after the hour, extremes on a level 45% vs 41% permuted (k=5), snap-to-level −0.1 pt.
+One hint on 15–25 days per cell (a level within ~5 pts inside the expected extreme stops the day more often than a
+plain price) — recorded, not built. Levels stay where they work: the sweep study / the SWEPT row, at the event.
+
 ## v16.32 — the Day Stats E row conditional on the morning (2026-09-16, ~18:10 CT)
 
 Operator: "how can [the day stats] model be improved?" → "I'll go with your recommendation, do what you need to do but make
