@@ -18,3 +18,4 @@ Detail and screenshots in `runs/<date>/`. The suite itself is described in `REGR
 | date | CSV time | panel | verdict | checks | note | run |
 |---|---|---|---|---|---|---|
 | 2026-09-16 | 09:47:09 | 16.26 (pre-suite, manual) | PASS (manual) | rail vs CSV vs Atlas row-for-row; King 7685 = 7689.25 = 7755 Dec; SCALEREF 7614.06 vs ES1 7613.50 | done by hand in-session before the runner existed; became fixture A | — |
+| 2026-09-16 | 13:25:02 | 16.29 (DLL 0.45) | FAIL 26/29 | 18/18 Gate A · Atlas King/ES1 match · FLIP/PW/F/K/bracket/regime seen | 3 fails: 7630 Atlas −50 vs tape 0 (UNRESOLVED, needs a zoomed Atlas read); C on 7685 off-pane; badge 5 snapshot gap | [1325-live1](runs/2026-09-16/1325-live1.md) |

@@ -156,11 +156,13 @@ def main():
     if a.atlas_read:
         AR = json.load(open(a.atlas_read)); diffs = []; missing = []
         for k, v in AR.items():
+            if k in ('king', 'es1', 'notes'): continue
             key = '%.2f' % float(k); tp = tape.get(key)
             if tp is None: missing.append(k); continue
             if abs(float(v) - tp) > 1.5: diffs.append((k, v, tp))
         add(not missing, 'ATLAS', 'every strike read off the Atlas screen exists in the tape the panel read' + ('' if not missing else ' — missing: %s' % missing))
-        add(not diffs, 'ATLAS', '%d Atlas-screen values within +/-1 of the panel\'s tape' % len(AR) + ('' if not diffs else ' — off: %s' % diffs))
+        nvals = len([k for k in AR if k not in ('king', 'es1', 'notes')])
+        add(not diffs, 'ATLAS', '%d Atlas-screen values within +/-1.5 of the panel\'s tape' % nvals + ('' if not diffs else ' — off: %s' % diffs))
         if 'king' in AR: add(float(AR['king']) == king, 'ATLAS', 'Atlas King %s == panel King %s' % (AR['king'], king))
         if 'es1' in AR and SR: add(abs(float(AR['es1']) - SR) <= 1.0, 'ATLAS', 'Atlas ES1 %s vs SCALEREF %s within 1 pt' % (AR['es1'], SR))
     else:
@@ -180,7 +182,7 @@ def main():
         for n in nodes:
             if n['type'] in ('PIKA', 'PIKAM', 'BARNEY', 'BARNEYM'): st.setdefault('P' if n['type'].startswith('PIKA') else 'B', []).append(n['spx'])
         exp['brackets'] = {k: [min(v), max(v)] for k, v in st.items()}
-        exp['named'] = {('%g' % n['spx']): {'PIKA': 'P', 'BARNEY': 'B', 'RUG': 'R', 'RRUG': 'RR'}[n['type']] for n in nodes if n['type'] in ('PIKA', 'BARNEY', 'RUG', 'RRUG')}
+        exp['named'] = {('%g' % n['spx']): {'PIKA': 'P', 'BARNEY': 'B', 'RUG': 'R', 'RRUG': 'RR'}[n['type']] for n in nodes if n['type'] in ('PIKA', 'BARNEY', 'RUG', 'RRUG') and not n['king']}   # the King's name wins on its own bar
         exp['air'] = [(lo, hi, neg) for lo, hi, neg in air_pockets(nodes)]
         if RG: exp['regime'] = regime_line(RG[0][0], RG[0][1], RG[0][3] == '1')
         exp['basis_note'] = 'chart price = ES price + (chart last close - SCALEREF %s)' % SR
