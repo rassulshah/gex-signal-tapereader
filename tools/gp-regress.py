@@ -195,7 +195,10 @@ def main():
         if 'cw' in IR: add(str(IR['cw']) == str(exp.get('cw')), 'B', 'CW tag on %s (expected %s)' % (IR['cw'], exp.get('cw')))
         if 'pw' in IR: add(str(IR['pw']) == str(exp.get('pw')), 'B', 'PW tag on %s (expected %s)' % (IR['pw'], exp.get('pw')))
         if 'flip_between' in IR: add(list(IR['flip_between']) == list(exp.get('flip_between') or []), 'B', 'FLIP tick between %s (expected %s)' % (IR['flip_between'], exp.get('flip_between')))
-        if 'top5' in IR: add(sorted(IR['top5']) == sorted(exp.get('top5') or []), 'B', 'top-5 badges on %s (expected %s)' % (IR['top5'], exp.get('top5')))
+        if 'top5' in IR:
+            seen = set(IR['top5']); expected = set(exp.get('top5') or [])
+            partial = len(IR['top5']) < 5
+            add(seen <= expected if partial else seen == expected, 'B', 'top-5 badges on %s (expected %s)%s' % (IR['top5'], exp.get('top5'), ' — partial read, subset check' if partial else ''))
         if 'regime' in IR: add(IR['regime'].replace(' ', '') == (exp.get('regime') or '').replace(' ', ''), 'B', 'regime line reads "%s" (expected "%s")' % (IR['regime'], exp.get('regime')))
         for k, v in (IR.get('named') or {}).items(): add(exp.get('named', {}).get(k) == v, 'B', 'pattern letter %s on %s (expected %s)' % (v, k, exp.get('named', {}).get(k)))
     else:

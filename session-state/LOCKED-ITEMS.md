@@ -79,6 +79,12 @@ approval on the desktop); (2) `run-logic-tests.bat` has not yet been run on his 
 checkpoints to run `gp-regress.py` from the audit (no screens) instead of `check-gammaprofile.py` alone; (4) a fixture
 for a Trend day and an air-pocket day once one is recorded (fixture A has neither).
 
+### E · IF PAYLOAD AGE ON THE FLIP ROW — proposed 2026-09-16 14:35 (run 2), NOT AGREED YET
+Run 2 (FOMC, ES −100 pts/hour): the companion fetched IF 3 min earlier, but IF's own `payloadT` was 13:54 CT — their
+numbers were ~30 min behind the tape. FLIP 7690.79 / sign NEG stood against a spot of 7510; `!CONFLICT` fired as designed.
+Proposal: FLIP row carries the payload age (`FLIP,<es>,<spx>,0DTE,calc,<payloadAgeMin>`); the plugin greys the sign
+when their payload is older than ~10 min and the regime line says "flip <n>m old". One element; discuss before build.
+
 ### C · THE DAY CANDLE MODEL — operator: "why is the day candle model so bad, look at the results today"
 Diagnosed with today's numbers (Tue 15 Sep, Dec scale, from the open): expected HOD +31 / LOD −31 / close −15.5 /
 range 62 (open60 stage) vs actual HOD **+2.8** (8:33a) / LOD −40.8 (9:54a) / close −27.5 / range 43.5. LOD and close
