@@ -111,6 +111,14 @@ the layers as separate QUESTIONS; let Layer 2's answer constrain Layer 1's drawi
 regime (e.g. 80/20 on a trend regime) instead of only tilting the close; (c) **MEASURE FIRST** — today is n=1;
 run `tools/study-hodlod.py` over the recorded sessions to see how much (a)+(b) cut HOD/LOD error before changing
 the model. Recommendation on the table: run the study, then decide.
+**MEASURED 2026-09-16 evening — `design/EM-RANGE-STUDY.md` (n=299 ES sessions, 2025-06 → 2026-09, out-of-fold):**
+(i) the expected move (VIX1D-open proxy for the 0DTE straddle) is the best RANGE predictor at every stage — beats the
+prior-day stage 18.3 vs 22.6 MAE (−19%), beats even OPEN30/OPEN60 (19.4/19.0) on its own, sharpens them 9% when
+added; the prior-day range is dead beside it (coef 0.007). (ii) the expected HIGH/LOW barely move from the range
+(~1 pt) — a PERFECT range placed symmetric round the open still leaves 18.4 pts/side: the error is PLACEMENT, exactly
+point 1 above. (iii) placement by where the open sits in the opening range cuts the high/low error −26%/−24% at 60 min
+(17.4/22.0 → 12.8/16.8). Proposal on the table (nothing built): placement first, EM into the range second, record the
+pinned straddle daily to re-fit on the real series. Regime skew (point 3) still unmeasured — no regime history.
 
 ### CARRIED OPEN (unchanged tonight)
 - Q12 top-3-vs-top-5 gamma lines (per-rank deflection table, sessions since 09-09) — operator asked "would I have

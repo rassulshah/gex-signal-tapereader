@@ -1,5 +1,28 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 15:05 CT (v16.30 build) · **panel v16.30** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 17:30 CT (EM study) · **panel v16.31** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.47**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.7** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~17:30 CT — IF FOR THE OTHER PLUGINS + THE EM STUDY (item C measured). START HERE.
+
+**Where the discussion stands (nothing built since 16.31 / 0.47).** After the IF book, he asked how IF could feed the
+OTHER plugins. Answered, in order of value: (1) lsDayModel — EM as the range budget, walls as hard caps on the projected
+extremes, regime sign as the candle skew; (2) lsKingTracker — IF's King (their Magnet) as a slow "standing" track under
+the flow King (agreement = confirmation, flow King with nothing behind it on IF = hedge-node signature); (3) lsDayStats —
+realized range / EM per day; (4) FlexLevels SPY walls — leave. NOT: their intraday ΔGEX as a REAL-vs-HEDGE read (OI is
+static; payload lags). He then asked whether the EM would make the expected high/low better or worse → "run the study".
+
+**The study — `design/EM-RANGE-STUDY.md` (read it; n=299, 2025-06 → 2026-09, out-of-fold).** EM = best range predictor
+at every stage (18.3 vs prior-day 22.6; beats OPEN30/OPEN60 alone; +9% on them when added). The expected HIGH/LOW barely
+move (~1 pt): a PERFECT range placed symmetric round the open still errs 18.4/side — the candle's error is PLACEMENT.
+Placement by where the open sits in the first hour: 17.4/22.0 → 12.8/16.8 (−25%). Proposal on the table, his rule
+applies (discuss, mockup, one at a time): placement first, EM into the range second, record the pinned straddle daily.
+Proxy caveat: VIX1D-open stands in for the straddle (level agrees 0.91–1.36× on 9 clean pins; not a validation).
+
+**Also pending from the afternoon:** the two IF-extras mockups (`if-extras-mockup.html`: #1 wall-depth pill 0D/WK/MO on
+CW/PW, #2 slope word on the regime chip) — delivered, awaiting his pick; his installs (16.31 + four DLL compiles + second
+lsGammaProfile Book=IF); the first side-by-side run; items E, C(build), F step 9.
+
+⚠ Browser landmine (new): `navigate` without a tabId took over the ATLAS tab (the panel's host) — always create a fresh
+tab first and pass its id. Atlas was sent back within ~10 s; the recorder's state lives in localStorage.
 
 # ⚠⚠⚠ 2026-09-16 15:05 CT — THE IF BOOK (item F) + the afternoon's fixes. START HERE.
 

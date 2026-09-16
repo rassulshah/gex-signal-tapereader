@@ -1,0 +1,156 @@
+{
+ "n": 299,
+ "first": "2025-06-03",
+ "last": "2026-09-15",
+ "models": {
+  "constant (mean range)": {
+   "n": 299,
+   "mae": 25.43,
+   "med": 21.64,
+   "mae_hi": 19.77,
+   "mae_lo": 23.51,
+   "inside": 0.291,
+   "beta": [
+    63.9
+   ]
+  },
+  "EXANTE: prior-day range": {
+   "n": 299,
+   "mae": 22.64,
+   "med": 17.75,
+   "mae_hi": 18.41,
+   "mae_lo": 23.06,
+   "inside": 0.298,
+   "beta": [
+    41.747,
+    0.346
+   ]
+  },
+  "EM (VIX1D prior close)": {
+   "n": 299,
+   "mae": 20.26,
+   "med": 15.45,
+   "mae_hi": 18.27,
+   "mae_lo": 22.82,
+   "inside": 0.237,
+   "beta": [
+    14.56,
+    0.806
+   ]
+  },
+  "EM (VIX1D open)": {
+   "n": 299,
+   "mae": 18.31,
+   "med": 13.21,
+   "mae_hi": 17.53,
+   "mae_lo": 22.59,
+   "inside": 0.201,
+   "beta": [
+    1.728,
+    1.329
+   ]
+  },
+  "EM prior close + prior-day range": {
+   "n": 299,
+   "mae": 20.29,
+   "med": 15.44,
+   "mae_hi": 18.15,
+   "mae_lo": 22.86,
+   "inside": 0.231,
+   "beta": [
+    14.443,
+    0.746,
+    0.059
+   ]
+  },
+  "EM open + prior-day range": {
+   "n": 299,
+   "mae": 18.39,
+   "med": 13.51,
+   "mae_hi": 17.49,
+   "mae_lo": 22.62,
+   "inside": 0.204,
+   "beta": [
+    1.745,
+    1.32,
+    0.007
+   ]
+  },
+  "OPEN30: opening 30-min range": {
+   "n": 299,
+   "mae": 19.42,
+   "med": 15.82,
+   "mae_hi": 17.94,
+   "mae_lo": 21.96,
+   "inside": 0.221,
+   "beta": [
+    26.253,
+    1.438
+   ]
+  },
+  "OPEN30 + EM prior close": {
+   "n": 299,
+   "mae": 18.65,
+   "med": 14.85,
+   "mae_hi": 17.79,
+   "mae_lo": 22.13,
+   "inside": 0.224,
+   "beta": [
+    9.747,
+    1.024,
+    0.446
+   ]
+  },
+  "OPEN30 + EM open": {
+   "n": 299,
+   "mae": 17.61,
+   "med": 14.12,
+   "mae_hi": 17.43,
+   "mae_lo": 22.21,
+   "inside": 0.217,
+   "beta": [
+    3.52,
+    0.791,
+    0.848
+   ]
+  },
+  "OPEN60: initial balance": {
+   "n": 299,
+   "mae": 19.02,
+   "med": 15.31,
+   "mae_hi": 17.9,
+   "mae_lo": 21.5,
+   "inside": 0.204,
+   "beta": [
+    25.77,
+    1.095
+   ]
+  },
+  "OPEN60 + EM prior close": {
+   "n": 299,
+   "mae": 17.92,
+   "med": 14.59,
+   "mae_hi": 17.77,
+   "mae_lo": 21.75,
+   "inside": 0.201,
+   "beta": [
+    6.075,
+    0.817,
+    0.48
+   ]
+  },
+  "OPEN60 + EM open": {
+   "n": 299,
+   "mae": 17.25,
+   "med": 13.54,
+   "mae_hi": 17.4,
+   "mae_lo": 21.95,
+   "inside": 0.201,
+   "beta": [
+    2.362,
+    0.661,
+    0.824
+   ]
+  }
+ }
+}

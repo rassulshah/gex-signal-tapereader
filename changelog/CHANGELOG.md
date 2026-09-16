@@ -1,3 +1,20 @@
+## STUDY — the expected move vs the day model's range and high/low (2026-09-16, ~17:30 CT) — NO CODE CHANGE
+
+Operator: "what if you used the expected move to calculate [the expected high/low], is it better or worse" → "run the
+study". `tools/study-em-range.py` + `data/vix1d-daily.txt` (CBOE VIX1D daily open/close, fetched via his browser — the
+cloud cannot reach cdn.cboe.com) + `design/EM-RANGE-STUDY.md` + `data/es-1min/EM-RANGE-STUDY.json`. n=299 ES sessions
+2025-06-02 → 2026-09-15, same corpus/grid/MAE as study-hodlod, 10 chronological folds.
+RESULT: the EM (VIX1D open = the 0DTE straddle at 08:30) is the best range predictor at every stage — 18.3 vs 22.6
+(prior-day), and better than OPEN30/OPEN60 alone (19.4/19.0); added to them, 17.6/17.3. The prior-day range is
+redundant beside it (coef 0.007). BUT the expected high/low improve only ~1 pt: a perfect range placed symmetric round
+the open still errs 18.4/side — the candle's problem is PLACEMENT (item C point 1, now measured). Placement from where
+the open sits in the first hour: high/low MAE 17.4/22.0 → 12.8/16.8 (−25%). Proposal (not built): placement first, EM
+into the range second, record the pinned straddle daily. Reasoning that was wrong going in: I expected the EM to lose
+to the 30/60-minute stages after the open; it beats them — implied vol at the open carries more about the day's range
+than the first hour's own range does.
+⚠ Browser note: a `navigate` without a tabId landed on the Atlas tab (the panel's host page) for ~10 s before I sent
+it back; Atlas reloaded to /atlas, state is in localStorage. Never navigate without an explicit, freshly created tab.
+
 ## v16.31 — expected-move rows (EMH / EML) + the IF Table reconciliation hook (2026-09-16, ~15:40 CT)
 
 Operator, one element at a time on "use as much from IF as possible": element 1 (Magnet) = the IF book's King, nothing
