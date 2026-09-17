@@ -179,4 +179,17 @@ ok(m2!=='-100', '8.2 MUTATION: dropping the King\'s sign is caught by 6.3', m2);
 let m3=withSrc(s=>s.replace("if(IFC && !IFC.err && !IFC.stale && IFC.dte0){","if(IFC && !IFC.err && IFC.dte0){"), (fn)=>{ IFC={ err:null, stale:true, ageMin:45, dte0:{ gf:{ flip:7600 }, lv:{ cr:7705, ps:7540 } } }; const RR=rows(fn().csv); IFC={ err:null, stale:false, ageMin:2, spot:7609.9, dte0:{ gf:{ flip:7620.72 }, lv:{ cr:7675, ps:7600 } } }; return !!RR.FLIP; });
 ok(m3===true, '8.3 MUTATION: ignoring staleness writes a flip from a stale chain — 7.1 would catch it');
 
+// ---- §10 (v16.34) SCALEREF carries the vendor minute of its own quote ---------------------------------------------
+ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCALEREF is the price alone — the plugins fall back to the RTH rule', R.SCALEREF);
+{
+  // 2026-09-16 14:26:00 CT = 19:26:00 UTC (CDT) = epoch 1789586760 — the minute Skylit's ES1 froze on FOMC day
+  global.LASTFUTDER={ ES1:{ j:{ derived:[ { source:'SPY', ratio:SPY_RATIO, levels:[{s:7622.0, t:1789586760}] }, { source:'SPXW', ratio:RATIO, levels:[{s:7622.0, t:1789586760}] } ] } } };
+  const B10=gammaProfileBuild(); const R10=rows(B10.csv);
+  ok(R10.SCALEREF && R10.SCALEREF[0].length===3 && parseFloat(R10.SCALEREF[0][0])===7622 && R10.SCALEREF[0][1]==='51960' && R10.SCALEREF[0][2]==='2026-09-16',
+     '10.1 with levels[].t the row is SCALEREF,7622.00,51960 (14:26:00 CT),2026-09-16 — the plugin anchors on THAT bar', R10.SCALEREF);
+  const IF10=rows(global.__gptsDebug && __gptsDebug.gpIF ? (__gptsDebug.gpIF().csv||'') : '');
+  ok(!IF10.SCALEREF || IF10.SCALEREF[0].length===3, '10.2 the IF book carries the same timed row', IF10.SCALEREF);
+  ok(B10.audit && B10.audit.scaleRefT===1789586760, '10.3 the audit records the quote time', B10.audit && B10.audit.scaleRefT);
+  global.LASTFUTDER={ ES1:{ j:{ derived:[ { source:'SPY', ratio:SPY_RATIO, levels:[{s:7613.5}] }, { source:'SPXW', ratio:RATIO, levels:[{s:7613.5}] } ] } } };
+}
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

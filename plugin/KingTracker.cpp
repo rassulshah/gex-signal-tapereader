@@ -88,6 +88,7 @@ public:
     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
     float scaleRef; bool hasScaleRef;   // (v0.5) front-month ES anchor (SCALEREF row) — the King prices' scale
+    double scaleRefSo; int scaleRefY, scaleRefM, scaleRefD;   // (v0.9) the CT minute + date of that quote (panel 16.34); so<0 = unknown
 
     void load();
     void drawStaleBadge();     // (v0.2) red badge if the CSV has gone cold
@@ -169,7 +170,7 @@ void KingTracker::readSettings(Settings& S)
 void KingTracker::load()
 {
     for (int i = 0; i < NBOOK; i++) { book[i].steps.clear(); book[i].hasNow = false; }
-    asofSo = -1; hasSpot = false; spotPx = 0.0f; hasScaleRef = false; scaleRef = 0.0f;
+    asofSo = -1; hasSpot = false; spotPx = 0.0f; hasScaleRef = false; scaleRef = 0.0f; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -198,7 +199,8 @@ void KingTracker::load()
         } else if (t[0] == "SPOT" && t.size() >= 2) {
             spotPx = (float)atof(t[1].c_str()); hasSpot = true;
         } else if (t[0] == "SCALEREF" && t.size() >= 2) {
-            scaleRef = (float)atof(t[1].c_str()); hasScaleRef = true;
+            scaleRef = (float)atof(t[1].c_str()); hasScaleRef = true; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
+            if (t.size() >= 4) { scaleRefSo = atof(t[2].c_str()); sscanf(t[3].c_str(), "%d-%d-%d", &scaleRefY, &scaleRefM, &scaleRefD); }   // (v0.9) the quote's own minute
         }
     }
 }
@@ -332,26 +334,37 @@ void KingTracker::applyContractOffset()
     // chart's close at the ASOF second (the last bar stamped at or before it on the last bar's date). Falls back to
     // the live close when ASOF is absent or no bar matches (pre-open, a CSV from another day).
     float chartClose = close[(int)n - 1];
-    if (asofSo >= 0) {
-        // (GP 0.48 / KT 0.8) ANCHOR ON THE LAST *RTH* BAR AT OR BEFORE ASOF. SCALEREF is Skylit's ES1 spot, derived from
-        // the SPX options book — it FREEZES at the cash close (15:00 CT) and does not move overnight or pre-open, while
-        // this chart keeps trading. Anchoring on the evening bar made off = (evening move) + basis: on 2026-09-16 at
-        // 17:xx CT the chart sat at 7644.50 against a SCALEREF still 7622.00, and the whole IF book drew 22 pts high
-        // (PW 7550 -> 7645 instead of 7621). The basis is only measurable when BOTH sides are live, i.e. inside RTH,
-        // so: on the ASOF date take the last bar stamped at or before ASOF whose stamp is inside 08:30-15:00; after
-        // the close that is the 15:00 bar; before the open it is the previous session's 15:00 bar (earlier dates are
-        // searched, RTH stamps only). Falls back to the live close only when no RTH bar exists in the window.
+    {
+        // (GP 0.49 / KT 0.9) ANCHOR ON THE BAR OF THE SCALEREF QUOTE ITSELF. From panel 16.34 the row is
+        // SCALEREF,<px>,<CT sec-of-day>,<CT date> — the vendor minute of Skylit's ES1 spot. That spot freezes whenever their
+        // series stops (the cash close daily; 14:26 CT on FOMC 2026-09-16), so the ONLY bar whose close is comparable to
+        // it is the bar of that minute. Older rows (no time): the 0.48 rule — the last RTH-stamped bar at or before ASOF.
         RTARRAYI dt(barDateTime);
-        struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-        const double RTH_A = 8 * 3600.0 + 30 * 60.0, RTH_B = 15 * 3600.0;
-        for (int i = (int)n - 1; i >= 0 && i >= (int)n - 3000; i--) {
-            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-            bool sameDay = (t.tm_year == lt.tm_year && t.tm_mon == lt.tm_mon && t.tm_mday == lt.tm_mday);
-            double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-            if (sameDay && sod > asofSo + 1.0) continue;          // written before this bar
-            if (sod < RTH_A || sod > RTH_B + 1.0) continue;       // not an RTH stamp: SCALEREF was not live here
-            if (close[i] > 0) chartClose = close[i];
-            break;
+        bool anchored = false;
+        if (scaleRefSo >= 0 && scaleRefY > 0) {
+            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 6000; i--) {
+                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+                int y = t.tm_year + 1900, m = t.tm_mon + 1, d = t.tm_mday;
+                if (y > scaleRefY || (y == scaleRefY && (m > scaleRefM || (m == scaleRefM && d > scaleRefD)))) continue;   // after the quote's day
+                if (y < scaleRefY || (y == scaleRefY && (m < scaleRefM || (m == scaleRefM && d < scaleRefD)))) break;      // before it: not on this chart
+                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+                if (sod > scaleRefSo + 1.0) continue;
+                if (close[i] > 0) { chartClose = close[i]; anchored = true; }
+                break;
+            }
+        }
+        if (!anchored && asofSo >= 0) {
+            struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
+            const double RTH_A = 8 * 3600.0 + 30 * 60.0, RTH_B = 15 * 3600.0;
+            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 3000; i--) {
+                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+                bool sameDay = (t.tm_year == lt.tm_year && t.tm_mon == lt.tm_mon && t.tm_mday == lt.tm_mday);
+                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+                if (sameDay && sod > asofSo + 1.0) continue;
+                if (sod < RTH_A || sod > RTH_B + 1.0) continue;
+                if (close[i] > 0) chartClose = close[i];
+                break;
+            }
         }
     }
     if (!(chartClose > 0)) return;
@@ -417,6 +430,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.8");
+    p->setVersion("0.9");
     return p;
 }

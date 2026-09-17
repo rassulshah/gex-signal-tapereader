@@ -1,5 +1,14 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 19:45 CT (GP 0.48 / KT 0.8) · **panel v16.33** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.48**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.8** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 21:05 CT (v16.34 / GP 0.49 / KT 0.9) · **panel v16.34** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.49**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.9** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~21:05 CT — v16.34 / GP 0.49 / KT 0.9: SCALEREF NOW CARRIES ITS OWN MINUTE. START HERE.
+
+0.48's "anchor on the 15:00 bar" was still wrong at 20:51 (PW drawn at the live price): Skylit's ES1 spot had frozen at
+**14:26 CT** on FOMC day, not at the close. The fix that cannot be wrong by a clock assumption: the panel writes
+`SCALEREF,<px>,<CT sod>,<CT date>` from the vendor minute of the quote (`levels[].t`), the plugins anchor on the bar of
+THAT minute; no time → the RTH rule. He needs: Tampermonkey 16.34 + `compile-gammaprofile.bat` + `compile-kingtracker.bat`
+(IRT closed). ⚠ The 0.48 RTH-rule fallback stays as the path for older CSVs. Open, seen tonight: the Day Stats A row's
+HOD/LOD drifting +16/+18 after the close (the panel's Yahoo day bars re-scaled) — check first thing tomorrow.
 
 # ⚠⚠⚠ 2026-09-16 ~19:45 CT — lsGammaProfile 0.48 / lsKingTracker 0.8: THE AFTER-HOURS OFFSET. START HERE.
 

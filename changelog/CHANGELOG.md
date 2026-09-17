@@ -1,3 +1,18 @@
+## v16.34 + lsGammaProfile 0.49 / lsKingTracker 0.9 — SCALEREF carries the minute of its own quote (2026-09-16, ~21:05 CT)
+
+Operator, 20:51 CT, on 0.48: "it changed" — PW 7663 (7550) with the chart at 7663: still riding the live price. 0.48's
+15:00 anchor assumed Skylit's ES1 froze at the cash close; on FOMC day it froze at **14:26 CT** (7622 = SPX ~7551 × 1.0094,
+the 14:26 level; the Atlas title still read "ES1 $7622.00" at 20:51 with the chart at 7663). No fixed clock can be
+right: the only comparable bar is the bar of the quote's own minute. The gamma payload is a minute series with the
+vendor's times (`levels[].t`, epoch s) — so the panel now writes `SCALEREF,<px>,<CT sec-of-day>,<CT date>` from the last
+slice's `t` (the IF file carries the same row; the audit records `scaleRefT`), and both plugins anchor the contract offset
+on the chart bar at that minute on that date, falling back to the 0.48 RTH rule when the row has no time (older panel,
+or the ladder / median fallbacks). Gate A §10 (65/65): no `t` → price alone; with `t` = 14:26:00 CT → `51960,2026-09-16`.
+g++ shim clean on both plugins. Reasoning that was wrong going in: I assumed the freeze was the cash close because that
+is when the options book stops; the feed can stop earlier, and only its own timestamp says when.
+Also from his 19:45 / 20:51 screenshots: the Day Stats A row's HOD/LOD moved 7722/7598 → 7738/7614 → 7740/7616 across the
+evening — the panel's Yahoo ES=F day bars are being re-scaled after the close (not a plugin matter; first check tomorrow).
+
 ## lsGammaProfile 0.48 / lsKingTracker 0.8 — the contract offset anchors on the last RTH bar (2026-09-16, ~19:45 CT)
 
 Operator's screenshot at ~17:xx CT with Book = IF on 0.47: PW 7645 (7550), CW 7771 (7675) — every level 22 pts above where

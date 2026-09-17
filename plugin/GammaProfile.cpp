@@ -7,7 +7,7 @@
  *
  *  CSV: STRIKE,<price>,<pctKing -100..100>,<rank>,<isKing 0|1>,<type>,<spx strike>
  *       KING,<p>  CW,<p>,<spx>,<win>,<src>  PW,...  FLIP,...  EMH,<p>  EML,<p>  SPOT,<p>
- *       SCALEREF,<front ES>  REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note>
+ *       SCALEREF,<front ES>[,<CT sod>,<CT date>]  REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note>
  *       SPYKING,<p>   BOOK,<name>   ASOF,<sec>
  *
  *  Full settings panel (see setup()). Build: x64 Release, link irtsdkV143-x64.lib.
@@ -16,6 +16,8 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.49 — SCALEREF,<px>,<sod>,<date> (panel 16.34): the offset anchors on the bar of the quote's OWN minute — Skylit's
+ *          series froze at 14:26 CT on FOMC 2026-09-16, so even the 15:00 bar was wrong by the last half hour's move.
  *  v0.48 — contract offset anchored on the last RTH bar at or before ASOF (SCALEREF freezes at the cash close;
  *          the evening / pre-open chart moves on — the book drew 22 pts high after hours on 2026-09-16).
  *  v0.47 — Book: IF reads GammaProfile-IF.csv (InsiderFinance 0DTE chain, same grammar). The
@@ -130,6 +132,7 @@ public:
     bool hasRegime; std::string rgSign, rgType, rgConf, rgNote; bool rgConflict; float rgFlipSpx;
     float spotPx; bool hasSpot;
     float scaleRef; bool hasScaleRef;   // (v0.40) front-month ES anchor the ladder is scaled to (SCALEREF row)
+    double scaleRefSo; int scaleRefY, scaleRefM, scaleRefD;   // (v0.49) the CT minute + date of that quote (panel 16.34); so<0 = unknown
     float spyKingPx; bool hasSpyKing;
     std::string book;
     double asofSo;               // (v0.38) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
@@ -355,7 +358,7 @@ void GammaProfile::load()
 {
     for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; lvlSpx[i] = 0.0f; lvlWin[i].clear(); }
     hasRegime = false; rgSign.clear(); rgType.clear(); rgConf.clear(); rgNote.clear(); rgConflict = false; rgFlipSpx = 0.0f;
-    hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX"; asofSo = -1;
+    hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX"; asofSo = -1; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
     hasScaleRef = false; scaleRef = 0.0f;
     const char* up = getenv("USERPROFILE");
     if (!up) { strikes.clear(); return; }
@@ -406,7 +409,8 @@ void GammaProfile::load()
             else if (t[0] == "EMH")     { lvl[4]=v; has[4]=true; }
             else if (t[0] == "EML")     { lvl[5]=v; has[5]=true; }
             else if (t[0] == "SPOT")    { spotPx=v; hasSpot=true; }
-            else if (t[0] == "SCALEREF"){ scaleRef=v; hasScaleRef=true; }
+            else if (t[0] == "SCALEREF"){ scaleRef=v; hasScaleRef=true; scaleRefSo=-1; scaleRefY=scaleRefM=scaleRefD=0;
+                if (t.size() >= 4) { scaleRefSo = atof(t[2].c_str()); sscanf(t[3].c_str(), "%d-%d-%d", &scaleRefY, &scaleRefM, &scaleRefD); } }   // (v0.49) the quote's own minute
             else if (t[0] == "SPYKING") { spyKingPx=v; hasSpyKing=true; }
             else if (t[0] == "BOOK" && t.size()>=2) { book=t[1]; }
             else if (t[0] == "ASOF") { asofSo = v; }
@@ -887,26 +891,37 @@ void GammaProfile::applyContractOffset()
     // chart's close at the ASOF second (the last bar stamped at or before it on the last bar's date). Falls back to
     // the live close when ASOF is absent or no bar matches (pre-open, a CSV from another day).
     float chartClose = close[(int)n - 1];
-    if (asofSo >= 0) {
-        // (GP 0.48 / KT 0.8) ANCHOR ON THE LAST *RTH* BAR AT OR BEFORE ASOF. SCALEREF is Skylit's ES1 spot, derived from
-        // the SPX options book — it FREEZES at the cash close (15:00 CT) and does not move overnight or pre-open, while
-        // this chart keeps trading. Anchoring on the evening bar made off = (evening move) + basis: on 2026-09-16 at
-        // 17:xx CT the chart sat at 7644.50 against a SCALEREF still 7622.00, and the whole IF book drew 22 pts high
-        // (PW 7550 -> 7645 instead of 7621). The basis is only measurable when BOTH sides are live, i.e. inside RTH,
-        // so: on the ASOF date take the last bar stamped at or before ASOF whose stamp is inside 08:30-15:00; after
-        // the close that is the 15:00 bar; before the open it is the previous session's 15:00 bar (earlier dates are
-        // searched, RTH stamps only). Falls back to the live close only when no RTH bar exists in the window.
+    {
+        // (GP 0.49 / KT 0.9) ANCHOR ON THE BAR OF THE SCALEREF QUOTE ITSELF. From panel 16.34 the row is
+        // SCALEREF,<px>,<CT sec-of-day>,<CT date> — the vendor minute of Skylit's ES1 spot. That spot freezes whenever their
+        // series stops (the cash close daily; 14:26 CT on FOMC 2026-09-16), so the ONLY bar whose close is comparable to
+        // it is the bar of that minute. Older rows (no time): the 0.48 rule — the last RTH-stamped bar at or before ASOF.
         RTARRAYI dt(barDateTime);
-        struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-        const double RTH_A = 8 * 3600.0 + 30 * 60.0, RTH_B = 15 * 3600.0;
-        for (int i = (int)n - 1; i >= 0 && i >= (int)n - 3000; i--) {
-            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-            bool sameDay = (t.tm_year == lt.tm_year && t.tm_mon == lt.tm_mon && t.tm_mday == lt.tm_mday);
-            double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-            if (sameDay && sod > asofSo + 1.0) continue;          // written before this bar
-            if (sod < RTH_A || sod > RTH_B + 1.0) continue;       // not an RTH stamp: SCALEREF was not live here
-            if (close[i] > 0) chartClose = close[i];
-            break;
+        bool anchored = false;
+        if (scaleRefSo >= 0 && scaleRefY > 0) {
+            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 6000; i--) {
+                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+                int y = t.tm_year + 1900, m = t.tm_mon + 1, d = t.tm_mday;
+                if (y > scaleRefY || (y == scaleRefY && (m > scaleRefM || (m == scaleRefM && d > scaleRefD)))) continue;   // after the quote's day
+                if (y < scaleRefY || (y == scaleRefY && (m < scaleRefM || (m == scaleRefM && d < scaleRefD)))) break;      // before it: not on this chart
+                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+                if (sod > scaleRefSo + 1.0) continue;
+                if (close[i] > 0) { chartClose = close[i]; anchored = true; }
+                break;
+            }
+        }
+        if (!anchored && asofSo >= 0) {
+            struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
+            const double RTH_A = 8 * 3600.0 + 30 * 60.0, RTH_B = 15 * 3600.0;
+            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 3000; i--) {
+                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+                bool sameDay = (t.tm_year == lt.tm_year && t.tm_mon == lt.tm_mon && t.tm_mday == lt.tm_mday);
+                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+                if (sameDay && sod > asofSo + 1.0) continue;
+                if (sod < RTH_A || sod > RTH_B + 1.0) continue;
+                if (close[i] > 0) chartClose = close[i];
+                break;
+            }
         }
     }
     if (!(chartClose > 0)) return;
@@ -961,6 +976,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.48");
+    p->setVersion("0.49");
     return p;
 }
