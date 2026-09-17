@@ -1,3 +1,9 @@
+## lsGammaProfile 0.52 — the Magnet (King) on the regime chip, after the PW (2026-09-16, ~21:50 CT)
+
+Operator: "add the Magnet (King) to the Regime Chip. It can be right after PW." Chip line 2 now reads
+`PW <chart> (<spx>) [pill]  <King name> <chart> (<spx>)  FLIP …  CW … [pill]` — the King's chart price from the KING row, its
+SPX strike from the King node, in the King's colour (Distinct when chosen, else its polarity). `compile-gammaprofile.bat`.
+
 ## lsGammaProfile 0.51 — the depth pill placed right (2026-09-16, ~21:45 CT)
 
 Operator, screenshot 21:33: "can't you see it isn't aligned right." The pill was drawn at the position the outside % label

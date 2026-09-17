@@ -17,6 +17,7 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.52 — the Magnet (King) on the chip's second line, right after the PW (operator, 21:40).
  *  v0.51 — pill placement: outward order bubble · tag · pill · % (the pill had covered the % label); chip gaps measured.
  *  v0.50 — IF extras: the wall DEPTH pill (0D / WK / MO from the CW / PW rows' 6th field) beside the node tag and on
  *          the chip's second line; the SLOPE row's word (STEEP dn / STEEP up / flat) after the sign on the chip's first.
@@ -542,7 +543,15 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // (v0.44) THE SECOND LINE IS THE THREE IF LEVELS — operator, 2026-09-16: "it has levels at the bottom, those levels
     // should be Put Wall, Flip, Call Wall." Chart-scale price first (what the axis shows), the SPX strike in brackets
     // (what Skylit / IF print), each in its level colour. A missing row prints n/a rather than borrowing a node.
-    char l1[200]; char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a";
+    char l1[200]; char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a", kgS[48]="";
+    // (v0.52) THE MAGNET (KING) AFTER THE PW — operator, 2026-09-16 21:40: "add the Magnet (King) to the Regime Chip, right
+    // after PW." Chart price from the KING row (already offset onto this contract), the SPX strike from the King node; the
+    // label is the configured King name (K / KING / GPoc ...), in the King's own colour.
+    if (has[0] && kIdx >= 0 && kIdx < (int)strikes.size()) {
+        float kspx = strikes[kIdx].spx;
+        if (kspx > 0) sprintf_s(kgS, sizeof(kgS), "%s %d (%d)", S.kinglabel, (int)(lvl[0]+0.5f), (int)(kspx+0.5f));
+        else          sprintf_s(kgS, sizeof(kgS), "%s %d", S.kinglabel, (int)(lvl[0]+0.5f));
+    }
     if (has[2]) { if (lvlSpx[2] > 0) sprintf_s(pwS, sizeof(pwS), "PW %d (%d)",   (int)(lvl[2]+0.5f), (int)(lvlSpx[2]+0.5f)); else sprintf_s(pwS, sizeof(pwS), "PW %d",   (int)(lvl[2]+0.5f)); }
     if (has[3]) { if (lvlSpx[3] > 0) sprintf_s(flS, sizeof(flS), "FLIP %d (%d)", (int)(lvl[3]+0.5f), (int)(lvlSpx[3]+0.5f)); else sprintf_s(flS, sizeof(flS), "FLIP %d", (int)(lvl[3]+0.5f)); }
     if (has[1]) { if (lvlSpx[1] > 0) sprintf_s(cwS, sizeof(cwS), "CW %d (%d)",   (int)(lvl[1]+0.5f), (int)(lvlSpx[1]+0.5f)); else sprintf_s(cwS, sizeof(cwS), "CW %d",   (int)(lvl[1]+0.5f)); }
@@ -553,10 +562,12 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // (v0.51) widths measured in the font the text is drawn with (textLJ sets S.font PLAIN), a real gap before the pill
     textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(pwS, -1) + 8);
     if (has[2] && !lvlDepth[2].empty()) cx1 = (short)(cx1 + drawDepthPill(cx1, ly1, lvlDepth[2], S) + gap); else cx1 = (short)(cx1 + gap - 8);
+    if (kgS[0]) { COLOR kc = (S.kingcol == 1) ? D_KING : ((kIdx >= 0 && strikes[kIdx].pct < 0) ? S.cneg : S.cpos);
+                  textLJ(cx1, ly1, kgS, kc, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(kgS, -1) + gap); }   // (v0.52)
     textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(flS, -1) + gap);
     textLJ(cx1, ly1, cwS, C_RES,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(cwS, -1) + 8);
     if (has[1] && !lvlDepth[1].empty()) drawDepthPill(cx1, ly1, lvlDepth[1], S);
-    (void)fIdx; (void)cIdx; (void)kIdx; sprintf_s(l1, sizeof(l1), "%s", "");
+    (void)fIdx; (void)cIdx; sprintf_s(l1, sizeof(l1), "%s", "");
 }
 // Polarity legend (character, not strength). Placed opposite the panel's row.
 void GammaProfile::drawLegend(RCT pane, const Settings& S)
@@ -1022,6 +1033,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.51");
+    p->setVersion("0.52");
     return p;
 }
