@@ -8,13 +8,15 @@
  *
  *    ES chart : SPX King (magenta) · SPY King (cyan)
  *    NQ chart : QQQ King (green)   · NDX King (amber)
+ *    (v0.11) Source = IF : the IF Magnet journey instead (book IF on ES, IFQ on NQ; panel 16.38) — InsiderFinance's
+ *    0DTE King, one source OR the other (operator: "switch back and forth between IF and Skylit"), IF colour.
  *
  *  A SEPARATE indicator from lsDayModel / lsDayStats / lsGammaProfile, so its
  *  dialog and parameter numbering never destabilise the others.
  *
  *  Reads %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\GammaProfile.csv (shared; each
  *  plugin ignores the other's rows):
- *     KINGTRACK,<fam ES|NQ>,<book SPX|SPY|QQQ|NDX>,<secOfDay>,<futPrice>,<strike>
+ *     KINGTRACK,<fam ES|NQ>,<book SPX|SPY|QQQ|NDX|IF|IFQ>,<secOfDay>,<futPrice>,<strike>
  *          one confirmed step (a King-strike change) at its futures price/time
  *     KINGNOW,<fam>,<book>,<futPrice>,<strike>,<pct>
  *          the live right-edge level (kept aligned with the gamma magenta King)
@@ -43,6 +45,7 @@ static const COLOR C_SPX = 0x00F0D024;  // SPX King  yellow  (v0.4 default match
 static const COLOR C_SPY = 0x00F5883A;  // SPY King  orange  (v0.4 default matches the operator's picker selection)
 static const COLOR C_QQQ = 0x0033B36B;  // QQQ King  green
 static const COLOR C_NDX = 0x00E0A030;  // NDX King  amber
+static const COLOR C_IF  = 0x00FF60D0;  // (v0.11) IF Magnet  magenta-pink — the IF rail's own colour family, so the eye knows which source is on
 
 // darker outline for the filled roll dots
 static COLOR darker(COLOR a) {
@@ -51,11 +54,11 @@ static COLOR darker(COLOR a) {
     return (COLOR)(((COLOR)ar<<16) | ((COLOR)ag<<8) | (COLOR)ab);
 }
 
-// the four books; index 0..3
-enum { B_SPX = 0, B_SPY, B_QQQ, B_NDX, NBOOK };
-static const char* BOOK_NAME[NBOOK] = { "SPX", "SPY", "QQQ", "NDX" };
-static const char* BOOK_FAM [NBOOK] = { "ES",  "ES",  "NQ",  "NQ"  };
-static const COLOR BOOK_DEF [NBOOK] = { C_SPX, C_SPY, C_QQQ, C_NDX };
+// the six books; index 0..5 — (v0.11) IF = InsiderFinance's SPX 0DTE Magnet journey (panel 16.38), IFQ = its QQQ one
+enum { B_SPX = 0, B_SPY, B_QQQ, B_NDX, B_IF, B_IFQ, NBOOK };
+static const char* BOOK_NAME[NBOOK] = { "SPX", "SPY", "QQQ", "NDX", "IF",  "IFQ" };
+static const char* BOOK_FAM [NBOOK] = { "ES",  "ES",  "NQ",  "NQ",  "ES",  "NQ"  };
+static const COLOR BOOK_DEF [NBOOK] = { C_SPX, C_SPY, C_QQQ, C_NDX, C_IF,  C_IF  };
 
 typedef ktl::Step Step;   // (v0.10) KingTrackerLogic.h
 typedef ktl::Book BookTrk;
@@ -64,6 +67,7 @@ typedef ktl::Book BookTrk;
 struct PIdx {
     int family, width, offset, labels, dots, font;
     int show[NBOOK], col[NBOOK];
+    int source;          // (v0.11) Skylit | IF
 };
 static PIdx PX;
 
@@ -73,6 +77,7 @@ struct Settings {
     bool labels, dots;
     bool show[NBOOK];
     COLOR col[NBOOK];
+    bool sourceIF;       // (v0.11) false = Skylit's tape King (SPX/SPY · QQQ/NDX), true = IF's Magnet (IF · IFQ)
 };
 
 // ---------------------------------------------------------------------------
@@ -122,6 +127,7 @@ KingTracker::KingTracker() : cppExtension()
     cfg.labels = true;
     cfg.dots   = true;
     cfg.font   = 10;
+    cfg.sourceIF = false;   // (v0.11) Skylit until he switches
     for (int i = 0; i < NBOOK; i++) { cfg.show[i] = true; cfg.col[i] = BOOK_DEF[i]; book[i].hasNow = false; }
 }
 
@@ -151,6 +157,12 @@ int cppExtension::setup(void)
     PX.dots   = pc++; setBoolParameter   ("Roll-point dots", true, SL);
     PX.offset = pc++; setIntegerParameter("Clock offset (min)", 0, 0);
     PX.font   = pc++; setIntegerParameter("Font size (pt)", 10, 0, SL);
+    // (v0.11) appended AFTER the v0.1 parameters so saved instances keep their indices; the IF books have no Show box —
+    // the Source switch is their visibility (one source or the other, never both)
+    PX.source     = pc++; setListParameter ("Source", 0, "Skylit;IF");
+    PX.col[B_IF]  = pc++; setColorParameter("IF colour", C_IF, 0, SL);
+    PX.col[B_IFQ] = PX.col[B_IF];
+    PX.show[B_IF] = PX.show[B_IFQ] = -1;
     return RTX_OK;
 }
 
@@ -159,9 +171,10 @@ void KingTracker::readSettings(Settings& S)
     S.family = getListIndex(PX.family);
     S.width  = getIntegerValue(PX.width);   if (S.width < 1) S.width = 1; if (S.width > 8) S.width = 8;
     for (int i = 0; i < NBOOK; i++) {
-        S.show[i] = isBoxChecked(PX.show[i]) != 0;
+        S.show[i] = (PX.show[i] < 0) ? true : (isBoxChecked(PX.show[i]) != 0);   // (v0.11) the IF books have no box
         COLOR c = (COLOR)(getIntegerValue(PX.col[i]) & 0xFFFFFF); S.col[i] = c ? c : BOOK_DEF[i];
     }
+    S.sourceIF = (getListIndex(PX.source) == 1);   // (v0.11)
     S.labels = isBoxChecked(PX.labels) != 0;
     S.dots   = isBoxChecked(PX.dots)   != 0;
     S.offset = getIntegerValue(PX.offset);  if (S.offset < -720) S.offset = -720; if (S.offset > 720) S.offset = 720;
@@ -280,7 +293,7 @@ void KingTracker::render(const Settings& S)
 
     for (int b = 0; b < NBOOK; b++) {
         if (!S.show[b]) continue;
-        if (strcmp(BOOK_FAM[b], famStr) != 0) continue;   // only this chart's family
+        if (!ktl::bookDrawn(BOOK_NAME[b], BOOK_FAM[b], famStr, S.sourceIF)) continue;   // (v0.11) this chart's family AND the chosen source
         BookTrk& T = book[b];
         if (T.steps.empty() && !T.hasNow) continue;
         COLOR col = S.col[b];
@@ -400,6 +413,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.10");
+    p->setVersion("0.11");
     return p;
 }

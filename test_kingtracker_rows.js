@@ -11,20 +11,23 @@ function extract(name) {
   return SRC.slice(i, j + 1);
 }
 function extractVar(name) { const m = SRC.match(new RegExp('\\nvar ' + name + '\\s*=[^\\n]*?;')); if (!m) throw new Error('no var ' + name); return m[0].replace(/\/\/.*$/, '') + '\n'; }
-const CODE = [extractVar('KTRK_CONFIRM_N'), extractVar('KTRK_HYST'), extractVar('KTRK_OSC_LOOKBACK'), extract('ktrkFresh'), extract('ktrkSample')].join('\n');
+const CODE = [extractVar('KTRK_CONFIRM_N'), extractVar('KTRK_HYST'), extractVar('KTRK_OSC_LOOKBACK'), extract('ktrkConfirmFresh'), extract('ktrkFresh'), extract('ktrkIfKing'), extract('ktrkSample')].join('\n');
 
 // the world: four books, the tape King per book supplied by the test; the clock and the day supplied by the test
-const W = { so: 30780, day: '2026-9-16', king: {}, saved: 0 };
+const W = { so: 30780, day: '2026-9-16', king: {}, saved: 0, ifc: null };
 function build(code) {
   const pre = `
     var CFG={ irt:{ on:true } };
-    var KTRK_BOOKS=[ { book:'SPX', fam:'ES', fut:'ES1', srcs:['SPXW','SPX'] }, { book:'SPY', fam:'ES', fut:'ES1', srcs:['SPY'] }, { book:'QQQ', fam:'NQ', fut:'NQ1', srcs:['QQQ'] }, { book:'NDX', fam:'NQ', fut:'NQ1', srcs:['NDXP','NDX'] } ];
+    var KTRK_BOOKS=[ { book:'SPX', fam:'ES', fut:'ES1', srcs:['SPXW','SPX'] }, { book:'SPY', fam:'ES', fut:'ES1', srcs:['SPY'] }, { book:'QQQ', fam:'NQ', fut:'NQ1', srcs:['QQQ'] }, { book:'NDX', fam:'NQ', fut:'NQ1', srcs:['NDXP','NDX'] },
+                     { book:'IF', fam:'ES', fut:'ES1', srcs:[], ifSym:'SPX', conv:'SPXW' }, { book:'IFQ', fam:'NQ', fut:'NQ1', srcs:[], ifSym:'QQQ', conv:'QQQ' } ];
     function todayKey(){ return __W.day; }
     function ctNowSecOfDay(){ return __W.so; }
     function ktrkTapeKing(B){ return __W.king[B.book] || null; }
     function futDerBookKing(){ return null; }
     function saveKingTrack(){ __W.saved++; }
-    var KTRK=ktrkFresh(), KTRK_NOW={ SPX:null, SPY:null, QQQ:null, NDX:null }, KTRK_CONFIRM={ SPX:{k:null,n:0}, SPY:{k:null,n:0}, QQQ:{k:null,n:0}, NDX:{k:null,n:0} };
+    function ifChain(sym){ return (__W.ifc && __W.ifc[sym]) || null; }
+    function skylitFutPx(fut, book, px){ return { px: px * (book === 'SPXW' ? 1.0094 : (book === 'QQQ' ? 41.2 : 1)), ratio: 1 }; }
+    var KTRK=ktrkFresh(), KTRK_NOW={ SPX:null, SPY:null, QQQ:null, NDX:null, IF:null, IFQ:null }, KTRK_CONFIRM=ktrkConfirmFresh();
   `;
   return new Function('__W', pre + code + '\nreturn { sample:ktrkSample, state:()=>({KTRK,KTRK_NOW,KTRK_CONFIRM}), N:KTRK_CONFIRM_N, LB:KTRK_OSC_LOOKBACK, setOn:(v)=>{ CFG.irt.on=v; } };')(W);
 }
@@ -63,6 +66,31 @@ ok(S.KTRK.day === '2026-9-17' && S.KTRK.SPX.length === 1 && S.KTRK.SPX[0].strike
 // the export is off -> nothing samples
 { const M2 = build(CODE); M2.setOn(false); W.day = '2026-9-16'; W.king = { SPX: { k: 7500, strike: 7500 } }; M2.sample(); ok(M2.state().KTRK.SPX.length === 0, 'export off -> no sampling'); }
 
+// ---- (v16.38) THE IF MAGNET BOOKS — the same sampler on InsiderFinance's 0DTE chain (the largest |net| strike of gexProf)
+{ const Mi = build(CODE); W.day = '2026-9-16'; W.so = 30780; W.king = {}; W.saved = 0;
+  const chain = (rows, extra) => Object.assign({ err: null, stale: false, ageMin: 2, dte0: { lv: { gexProf: rows } } }, extra || {});
+  W.ifc = { SPX: chain([[7600, -2e8, -1e8], [7650, 1e8, 5e7], [7675, 3e8, 1.5e8], [7700, 1e8, 0]]), QQQ: chain([[600, 1e7, 2e7], [605, -5e7, -2e7]]) };
+  let s = tick(Mi, undefined, 0);
+  ok(s.KTRK.IF.length === 1 && s.KTRK.IF[0].strike === 7675 && Math.abs(s.KTRK.IF[0].es - 7675 * 1.0094) < 0.01 && s.KTRK_NOW.IF.pct === 100, 'IF: the Magnet is the largest |net| strike (7675, calls + puts) at strike x the SPXW ratio, +100', s.KTRK.IF);
+  ok(s.KTRK.IFQ.length === 1 && s.KTRK.IFQ[0].strike === 605 && Math.abs(s.KTRK.IFQ[0].es - 605 * 41.2) < 0.01 && s.KTRK_NOW.IFQ.pct === -100, 'IFQ: the QQQ chain\'s Magnet (605, net negative -> -100) on the NQ scale', s.KTRK.IFQ);
+  ok(s.KTRK.SPX.length === 0, 'the tape books are untouched by the chain (no tape King supplied)');
+  // a new Magnet must dwell like any King
+  W.ifc.SPX = chain([[7600, -2e8, -1e8], [7650, 1e8, 5e7], [7675, 3e8, 1.5e8], [7700, 5e8, 0]]);
+  for (let i = 1; i < Mi.N; i++) s = tick(Mi);
+  ok(s.KTRK.IF.length === 1 && s.KTRK_NOW.IF.strike === 7700, 'IF: a new Magnet (7700) dwells ' + Mi.N + ' samples before it is a step; KINGNOW shows it meanwhile');
+  s = tick(Mi); ok(s.KTRK.IF.length === 2 && s.KTRK.IF[1].strike === 7700, 'IF: the roll confirms on the ' + Mi.N + 'th sample');
+  // a stale or missing chain samples nothing — no phantom step, no repaint
+  W.ifc.SPX = chain([[7600, -9e8, 0]], { stale: true }); s = tick(Mi);
+  ok(s.KTRK.IF.length === 2 && s.KTRK_NOW.IF.strike === 7700, 'IF: a STALE chain does not sample (the line holds 7700, no 7600 step)');
+  W.ifc.SPX = chain([[7600, -9e8, 0]], { err: 'down' }); s = tick(Mi);
+  ok(s.KTRK.IF.length === 2, 'IF: a chain in error does not sample');
+  W.ifc = null; s = tick(Mi);
+  ok(s.KTRK.IF.length === 2 && s.KTRK.IFQ.length === 1, 'IF: no companion at all -> both IF books hold');
+  W.ifc = { SPX: chain([]) }; s = tick(Mi); ok(s.KTRK.IF.length === 2, 'IF: an empty gexProf does not sample');
+  ok(/out\.push\('KINGTRACK,'\+KB\.fam\+','\+KB\.book/.test(SRC) && /\{ book:'IF',\s+fam:'ES'/.test(SRC) && /\{ book:'IFQ', fam:'NQ'/.test(SRC), 'the export loop writes the IF / IFQ books with the same KINGTRACK / KINGNOW grammar (KingTrackerLogic.h parses them)');
+  ok(/AU\.rolls=\{[^}]*IF:\(\(KTRK&&KTRK\.IF\)\|\|\[\]\)\.length-1/.test(SRC), 'the audit carries the IF roll count');
+  W.ifc = null; }
+
 // ---- the rows the export writes (wiring — the logic above is executed)
 ok(/out\.push\('KINGTRACK,'\+KB\.fam\+','\+KB\.book\+','\+gpI\(P\.so\)\+','\+gpF2\(P\.es\)\+','\+gpI\(P\.strike\)\)/.test(SRC), 'KINGTRACK,<fam>,<book>,<so>,<es>,<strike> — the grammar lsKingTracker parses (KingTrackerLogic.h)');
 ok(/out\.push\('KINGNOW,'\+KB\.fam\+','\+KB\.book\+','\+gpF2\(NW\.es\)\+','\+gpI\(NW\.strike\)\+','\+gpI\(NW\.pct\)\)/.test(SRC), 'KINGNOW,<fam>,<book>,<es>,<strike>,<pct>');
@@ -75,5 +103,5 @@ function mutated(re, rep) { const c = CODE.replace(re, rep); if (c === CODE) thr
 { const Mx = mutated(/if\(oscBack\)\{/, 'if(false){'); W.day = '2026-9-16'; W.so = 30780; tick(Mx, { k: 7504, strike: 7500 }, 0);
   for (let i = 0; i < 4; i++) tick(Mx, { k: 7604, strike: 7600 }); for (let i = 0; i < 4; i++) tick(Mx, { k: 7504, strike: 7500 });
   ok(Mx.state().KTRK.SPX.length === 3, 'mutation: dropping the anti-oscillation lets 7500 -> 7600 -> 7500 record three steps'); }
-console.log((fails ? 'FAIL ' : 'PASS ') + (n - fails) + '/' + n + ' assertions (King tracker rows — the panel side)');
+console.log((fails ? 'FAIL ' : 'PASS ') + (n - fails) + '/' + n + ' assertions (King tracker rows — the panel side, v16.38 IF books)');
 process.exit(fails ? 1 : 0);

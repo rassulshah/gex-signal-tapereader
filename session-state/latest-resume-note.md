@@ -1,5 +1,16 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 03:30 CT (v16.37 / the all-indicator regression) · **panel v16.37** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.56**, **lsDayModel v0.17**, **lsDayStats v0.8**, **lsKingTracker v0.10** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 04:00 CT (v16.38 / KT 0.11) · **panel v16.38** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.56**, **lsDayModel v0.17**, **lsDayStats v0.8**, **lsKingTracker v0.11** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~04:00 CT — v16.38 + lsKingTracker 0.11: THE KING TRACKER SWITCHES SKYLIT ⇄ IF. START HERE.
+
+He asked whether the King tracker had the IF option — it did not (the 16th's 17:30 proposal had dropped out of every
+list). His decision: **"switch back and forth between IF and Skylit"** — one source or the other, like the gamma
+profile's Book. Built: the panel samples IF's 0DTE Magnet as its own journeys (`IF` on the SPX chain for ES, `IFQ` on
+QQQ for NQ; same dwell / anti-oscillation; stale chain → no sample), and lsKingTracker 0.11 has a `Source` list
+(Skylit | IF, **default Skylit**) + an IF colour; on IF only the Magnet draws (no IF SPY book exists, so SPY hides).
+Regression updated with the build (KT rows 32, logic 21; all 21 suites green). **He needs: Tampermonkey 16.38 +
+`compile-kingtracker.bat`, then Source in the indicator's settings.** Still to install from the 03:30 build: the other
+three compile bats (GP 0.56 / DM 0.17 / DS 0.8) and the first `regress.bat` run on his MSVC.
 
 # ⚠⚠⚠ 2026-09-17 ~03:30 CT — v16.37 + GP 0.56 / DM 0.17 / DS 0.8 / KT 0.10: THE REGRESSION FOR ALL FOUR INDICATORS. START HERE.
 

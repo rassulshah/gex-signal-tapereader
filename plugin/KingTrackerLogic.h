@@ -4,6 +4,7 @@
 //     ES1 (2026-09-16: 7688 → 7757 for the same SPX 7685) does not leave a phantom step
 //   · the anchor for the contract offset (SCALEREF first, SPOT as the fallback) and its clamp
 //   · the stale age with the overnight wrap (shared shape with lsDayModel)
+//   · (v0.11) the Source switch: Skylit's tape books or IF's Magnet books, one or the other
 // The anchor BAR itself is ContractOffsetLogic.h (shared with lsGammaProfile).
 #pragma once
 #include <string>
@@ -50,6 +51,16 @@ inline bool offsetFor(float chartClose, float anchor, float& off)
     return true;
 }
 inline void shift(Book& b, float off) { for (size_t i = 0; i < b.steps.size(); i++) b.steps[i].px += off; if (b.hasNow) b.nowPx += off; }
+
+// (v0.11) THE SOURCE SWITCH — Skylit (the tape King: SPX/SPY on ES, QQQ/NDX on NQ) or IF (InsiderFinance's 0DTE Magnet,
+// the panel's `IF` book on ES and `IFQ` on NQ). One or the other, never both — the operator's rule for this indicator
+// ("switch back and forth between IF and Skylit"). A book of the other chart family is never drawn either way.
+inline bool bookDrawn(const std::string& book, const std::string& bookFam, const std::string& chartFam, bool sourceIF)
+{
+    if (bookFam != chartFam) return false;
+    bool isIF = (book == "IF" || book == "IFQ");
+    return sourceIF ? isIF : !isIF;
+}
 
 inline double staleAge(double asofSo, double localSo)
 {

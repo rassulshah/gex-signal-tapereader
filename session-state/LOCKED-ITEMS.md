@@ -6,6 +6,12 @@ _Created 2026-08-27._
 
 ---
 
+## ✅ BUILT 2026-09-17 — lsKingTracker Source = Skylit | IF (v16.38 / KT 0.11)
+Proposed 2026-09-16 17:30 (IF's Magnet for the King tracker), lost from the lists, raised by him 2026-09-17: "the king
+tracker should be able to switch back and forth between IF and skylit". Built as a switch (default Skylit). Awaiting his
+install + eyes-on. The other 17:30 proposals for IF in lsDayModel are BUILT (16.33 EM + placement); lsDayStats
+realized-range/EM per day is NOT built and not agreed — ask before proposing again.
+
 ## ✅ BUILT 2026-09-17 — THE REGRESSION FOR ALL FOUR INDICATORS (operator, 2026-09-16 late: "extend the regression to the other indicators … keep updating the test cases … fire it collectively or separately")
 `tools/regress.py [all|gamma|daymodel|daystats|kingtracker]` / `regress.bat`; `testing/REGRESSION.md`; Gate A/B/L per
 indicator; logic headers for DM/DS/KT/offset; `AU.day` on the audit (16.37). **Standing rule from here (BUILD-CHECKLIST

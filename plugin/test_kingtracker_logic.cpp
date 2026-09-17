@@ -48,6 +48,14 @@ int main()
     CHECK(!ktl::offsetFor(29000.0f, 7622.0f, off), "the NQ books on an NQ chart against an ES SCALEREF: refused (> 300)");
     ktl::shift(B, 3.0f);
     CHECK(std::fabs(B.nowPx - 7760.30f) < 0.01f && std::fabs(B.steps[2].px - 7760.30f) < 0.05f, "the shift moves every step and KINGNOW together");
+    // ---- (v0.11) the Source switch: Skylit's tape books or IF's Magnet books, one or the other, this chart's family only
+    CHECK(ktl::bookDrawn("SPX", "ES", "ES", false) && ktl::bookDrawn("SPY", "ES", "ES", false) && !ktl::bookDrawn("IF", "ES", "ES", false), "Source Skylit on ES: SPX and SPY drawn, IF not");
+    CHECK(ktl::bookDrawn("IF", "ES", "ES", true) && !ktl::bookDrawn("SPX", "ES", "ES", true) && !ktl::bookDrawn("SPY", "ES", "ES", true), "Source IF on ES: only the IF Magnet — the SPX and SPY tape Kings hide (no IF SPY book exists)");
+    CHECK(ktl::bookDrawn("IFQ", "NQ", "NQ", true) && !ktl::bookDrawn("IF", "ES", "NQ", true) && !ktl::bookDrawn("QQQ", "NQ", "NQ", true), "Source IF on NQ: IFQ only");
+    CHECK(!ktl::bookDrawn("QQQ", "NQ", "ES", false) && !ktl::bookDrawn("IFQ", "NQ", "ES", true), "a book of the other family is never drawn, whichever source");
+    // the IF rows parse with the same grammar
+    ktl::Book IFB; std::string f2, b2;
+    CHECK(ktl::parseNow(split("KINGNOW,ES,IF,7757.30,7685,-100"), f2, b2, IFB) && b2 == "IF" && IFB.nowStrike == 7685 && IFB.nowPct == -100, "KINGNOW,ES,IF parses like any book (a negative Magnet carries -100)");
     // ---- the stale age
     CHECK(ktl::staleAge(-1, 1) < 0 && ktl::staleAge(35229, 35229 + 180) == 3.0 && ktl::staleAge(23 * 3600 + 50 * 60, 10 * 60) == 20.0, "stale age: unknown, 3 min, the overnight wrap");
     printf("\n%d passed, %d failed\n", passes, fails);

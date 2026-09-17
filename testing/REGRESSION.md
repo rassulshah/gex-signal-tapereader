@@ -48,7 +48,7 @@ error — `session-state/INSIDERFINANCE.md`).
 | **gamma** — lsGammaProfile | `test_gammaprofile_build.js` (65 + 3 mutations; fixtures A 09:47 / B synthetic / IF 10:20) · `test_if_extras.js` (24: depth pill, slope word, level rows) | `test_gammaprofile_logic.cpp` (57 + 3 mutations) · `test_contractoffset_logic.cpp` (15: the SCALEREF-minute anchor, shared with KT) | `gamma-profile/fixtures/` fixtureA-0947 · fixtureIF-1020 · 1325 · 1426 (Gate A of the runner; the Atlas/IRT transcriptions of 1325/1426 are live-run records, not regressions) | `gamma-profile/CHECKLIST.md` |
 | **daymodel** — lsDayModel | `test_daymodel_em.js` (34: EM blend, placement, pin, daily record) · `test_day_export.js` (38: the WHOLE day section end to end + the audit re-derivation + a placement mutation) · `test_hodlod.js` (176: the base rates) | `test_daymodel_logic.cpp` (23: bar stamp, windows, PDH/PDL/ONH/ONL, the actual day, offsets, stale) | `day-model/fixtures/synth-1033` (the 10:33 CT synthetic morning `test_day_export.js` writes with `GPTS_DUMP=`) | `day-model/CHECKLIST.md` |
 | **daystats** — lsDayStats | `test_daystats_cond.js` (27: the conditional E row) · `test_day_export.js` · `test_hodlod.js` | `test_daystats_logic.cpp` (19: rows, clocks, the twelve cells, the ladder, tones) | `day-stats/fixtures/synth-1033` | `day-stats/CHECKLIST.md` |
-| **kingtracker** — lsKingTracker | `test_kingtracker_rows.js` (21 + 2 mutations: the sampler's dwell, the anti-oscillation, the rows) | `test_kingtracker_logic.cpp` (16: grammar, the v0.6 re-derivation, anchor, clamp, stale) · `test_contractoffset_logic.cpp` | `king-tracker/fixtures/synth-1033` | `king-tracker/CHECKLIST.md` |
+| **kingtracker** — lsKingTracker | `test_kingtracker_rows.js` (32 + 2 mutations: the sampler's dwell, the anti-oscillation, the rows; 16.38 the IF / IFQ Magnet books — reduction, scale, dwell, stale / error / empty chains) | `test_kingtracker_logic.cpp` (21: grammar, the v0.6 re-derivation, anchor, clamp, stale; 0.11 the Source switch `bookDrawn`) · `test_contractoffset_logic.cpp` | `king-tracker/fixtures/synth-1033` | `king-tracker/CHECKLIST.md` |
 
 Shared suites run once per invocation (`test_hodlod.js`, `test_day_export.js`, `test_contractoffset_logic.cpp`) and are
 listed under every indicator they cover. `tools/regress.py --syntax` additionally compiles each plugin `.cpp` against the
@@ -68,7 +68,7 @@ screenshot, and appends one line to that indicator's `RESULTS.md`. `--irt-read` 
 - gamma: `{"tags":{"7660":"G.C"},"cw":"7675","pw":"7600","flip_between":[7620,7625],"top5":[...],"regime":"..."}`
 - daymodel: `{"offset": 0.0 | "chart_close": 7702.25, "exp":{"o":..,"h":..,"l":..,"c":..}, "act":{...}, "basis":"em-open60"}` (chart prices; ±1 pt)
 - daystats: `{"offset": 0.0, "A":[12 cells or null], "E":[12 cells or null]}` (spaces ignored; a null skips a cell)
-- kingtracker: `{"offset": 0.0, "SPX":{"now": 7757.3, "steps":[[...]], "strike_label": 7685}, "SPY":{...}}`
+- kingtracker: `{"offset": 0.0, "SPX":{"now": 7757.3, "steps":[[...]], "strike_label": 7685}, "SPY":{...}, "IF":{...}}` (transcribe the books the chart's Source draws: Skylit → SPX + SPY, IF → IF)
 
 `--dry` runs the checks without writing anything — that is how `tools/regress.py` runs the fixture pairs (Gate L).
 

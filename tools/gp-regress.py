@@ -424,7 +424,7 @@ def main_other(a, R, AU):
     else:   # kingtracker
         rolls = AU.get('rolls') or {}; KN = AU.get('kingNow') or {}
         fam = 'ES'
-        for book in ('SPX', 'SPY'):
+        for book in ('SPX', 'SPY', 'IF'):   # (16.38) IF = InsiderFinance's Magnet journey, drawn when lsKingTracker's Source = IF
             steps = [t for t in R.get('KINGTRACK', []) if len(t) >= 5 and t[0] == fam and t[1] == book]
             now = [t for t in R.get('KINGNOW', []) if len(t) >= 4 and t[0] == fam and t[1] == book]
             n = len(steps)
@@ -435,7 +435,7 @@ def main_other(a, R, AU):
                 add(all(so[i] < so[i + 1] for i in range(n - 1)), 'A', '%s: the steps are in time order' % book)
                 add(all(num(steps[i][4]) != num(steps[i + 1][4]) for i in range(n - 1)), 'A', '%s: no two consecutive steps on the same strike' % book)
                 ratios = [num(t[3]) / num(t[4]) for t in steps if num(t[4])]
-                add(all(0.95 < r < 1.05 for r in ratios) if book == 'SPX' else all(9.5 < r < 10.6 for r in ratios), 'A', '%s: every step price / strike is the book\'s ratio (%s)' % (book, ', '.join('%.4f' % r for r in ratios[:6])))
+                add(all(0.95 < r < 1.05 for r in ratios) if book in ('SPX', 'IF') else all(9.5 < r < 10.6 for r in ratios), 'A', '%s: every step price / strike is the book\'s ratio (%s)' % (book, ', '.join('%.4f' % r for r in ratios[:6])))
             kn = KN.get(book)
             if kn and kn.get('es') is not None:
                 add(bool(now) and abs(num(now[0][2]) - kn['es']) < 0.011 and num(now[0][3]) == kn.get('strike'), 'A', '%s: KINGNOW %s == audit kingNow (%s @ %s)' % (book, ','.join(now[0][2:]) if now else 'absent', kn.get('es'), kn.get('strike')))
@@ -443,6 +443,8 @@ def main_other(a, R, AU):
                     last = num(steps[-1][4])
                     if last == kn.get('strike'): add(True, 'A', '%s: the last step is the live King (%s)' % (book, last))
                     else: warn('A', '%s: KINGNOW %s differs from the last step %s — a challenger dwelling (not yet confirmed KTRK_CONFIRM_N times), or the strip has moved since' % (book, kn.get('strike'), last))
+            elif book == 'IF' and not now and not n:
+                warn('A', 'IF: no Magnet journey in this export (panel < 16.38, or the companion was down all day)')
             else:
                 add(not now, 'A', '%s: no KINGNOW row when the audit has no live King' % book)
             # the expected chart (KingTrackerLogic.h: every step re-derived as strike x nowPx/nowStrike, then + the SCALEREF offset)
@@ -450,8 +452,9 @@ def main_other(a, R, AU):
                 r = num(now[0][2]) / num(now[0][3])
                 exp[book] = { 'steps': [[hhmm(num(t[2])), num(t[4]), round(num(t[4]) * r + off, 2)] for t in steps], 'now': [num(now[0][3]), round(num(now[0][2]) + off, 2), now[0][4] if len(now[0]) > 4 else ''], 'ratio_now': round(r, 5) }
         exp['basis_note'] = 'chart price = re-derived price + (chart close at the SCALEREF minute - SCALEREF %s); offset used here: %+.2f; the plugin refuses an offset > 300' % (SR, off)
+        exp['source_note'] = 'lsKingTracker Source = Skylit draws SPX + SPY; Source = IF draws only the IF Magnet (0.11) — transcribe whichever the chart is on'
         if IR:
-            for book in ('SPX', 'SPY'):
+            for book in ('SPX', 'SPY', 'IF'):
                 if book in IR and book in exp:
                     if 'now' in IR[book]: add(abs(num(IR[book]['now']) - exp[book]['now'][1]) <= 1.0, 'B', '%s: the live King line on IRT at %s (expected %s on the chart)' % (book, IR[book]['now'], exp[book]['now'][1]))
                     if 'steps' in IR[book]: add(len(IR[book]['steps']) == len(exp[book]['steps']), 'B', '%s: %d steps drawn (expected %d)' % (book, len(IR[book]['steps']), len(exp[book]['steps'])))

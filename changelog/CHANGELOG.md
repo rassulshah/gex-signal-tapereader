@@ -1,3 +1,27 @@
+## v16.38 + lsKingTracker 0.11 — the King tracker switches between Skylit and IF (2026-09-17, ~04:00 CT)
+
+Operator: "did you update kingtracker to have the option to include IF" — no; the 17:30 proposal of the 16th (IF's Magnet
+as a track under the flow King) had fallen out of the resume note and off LOCKED-ITEMS. Decision: "the king tracker
+should be able to switch back and forth between IF and skylit" — a SWITCH, like the gamma profile's Book, not two tracks.
+
+- **Panel 16.38:** two new journeys sampled by `ktrkSample` beside the four tape books — `IF` (the SPX 0DTE chain, for
+  the ES chart) and `IFQ` (the QQQ chain, for NQ). `ktrkIfKing` reads the Magnet exactly as `gammaProfileBuildIF` does
+  (the largest |net| = calls + puts strike of `gexProf`), converts it with the matching tape book's Skylit ratio so it
+  sits on the same scale as the tape King, carries ±100 by the net's sign, and returns nothing on a stale / errored /
+  empty chain (no phantom step, no repaint). Same dwell (KTRK_CONFIRM_N) and anti-oscillation rules; the day file
+  gets `KINGTRACK,ES,IF,…` / `KINGNOW,ES,IF,…`; `AU.rolls.IF`. Both journeys are always recorded, so the switch in IRT
+  is instant either way. Older saved journeys (no IF key) are extended in place (`KTRK[B.book] ||= []`).
+- **lsKingTracker 0.11:** a `Source` list (Skylit | IF, default Skylit) and an `IF colour` (magenta-pink, the IF rail's
+  family), appended AFTER the v0.1 parameters so saved instances keep their indices. `ktl::bookDrawn` decides: Skylit
+  → SPX + SPY on ES / QQQ + NDX on NQ; IF → the IF book on ES / IFQ on NQ — one or the other, never both. There is no
+  IF SPY book (the companion pulls SPX and QQQ), so on Source = IF the SPY line hides. Label reads `IF <strike>`.
+- **Regression (the standing rule):** `test_kingtracker_rows.js` 21 → 32 (the Magnet reduction, the NQ scale, the dwell
+  on a new Magnet, stale / error / missing / empty chains, the rows and the audit); `test_kingtracker_logic.cpp` 16 → 21
+  (`bookDrawn` on both charts, the IF row grammar); `gp-regress.py --indicator kingtracker` checks the IF book too and
+  its expected picture says which source draws what. Full run: 21 suites ALL GREEN; smoke clean.
+
+Install: Tampermonkey 16.38 + `compile-kingtracker.bat`; then Source in the lsKingTracker settings.
+
 ## v16.37 + lsGammaProfile 0.56 / lsDayModel 0.17 / lsDayStats 0.8 / lsKingTracker 0.10 — THE REGRESSION FOR ALL FOUR INDICATORS (2026-09-17, ~03:30 CT)
 
 Operator: "I had told you to make a regression and you did it for gamma profile. This regression needs to be extended to
