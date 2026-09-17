@@ -378,3 +378,12 @@ is safe to browse in any tab; the standing rule is NEVER a second /atlas tab (do
   ATLAS chart corrupting STATE.SPY) remains an Atlas-only concern.
 - STILL UNVISITED: Portal (redirect mystery), the five Nexus sub-pages, Talon itself, the bottom
   icon bar. All believed pipeline-inert; finish on any reconnected session.
+
+### (2026-09-17 17:50 CT) THE DERIVED SLICE ROLLS TO THE NEXT EXPIRY AFTER THE CLOSE — and the monthly book can own it
+Measured on his page: `snapshot.slices[0]` was exp 2026-09-18 (the third Friday) with the five = the derived "SPX"
+(monthly) book's nodes (7700 / 7675 / 7575 / 7500 / 7625 through ratio 1.0092), while the Trinity ladders still showed
+today's SPXW (King 7700) and SPY (King 765). Three derived books in the ES1 payload: SPY (ratio ~10.106), SPXW and SPX
+(one ratio, ~1.0092). During RTH (11:18) the slice was today's 0DTE and SPY + SPXW dominated. Panel 16.42 records the
+slice in the audit (`AU.atlas`); 16.43 ranks the rails' badges from it. The slice's `v` is NOT a simple scaling of the
+book rows' `v` (factors 52–68 across rows) — treat it as Atlas's own ranking, not something to re-derive from the ladders.
+

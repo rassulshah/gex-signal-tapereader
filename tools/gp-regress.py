@@ -160,15 +160,48 @@ def main():
         for k, v in spy_t.items():
             pool.append(('SPY', float(k), v, (round(float(k) * rspy / 0.25) * 0.25) if rspy else float(k)))
         pool.sort(key=lambda r: (-abs(r[2]), r[3], r[0]))
-        want = {(r[0], r[1]): i + 1 for i, r in enumerate(pool)}
         this_book = 'SPY' if book_row == 'SPY' else 'SPX'
-        off8 = []
-        for t in strikes:
-            if len(t) < 7: off8.append(('no field 8', t[5])); continue
-            exp8 = want.get((this_book, num(t[5])))
-            if exp8 is None or int(t[6] or 0) != exp8: off8.append((t[5], t[6], exp8))
-        add(not off8, 'A', 'every STRIKE row\'s pooled rank (field 8) == the SPY + SPXW pool re-derived from the audit (%d SPX + %d SPY rows)' % (len(spx_t), len(spy_t)) + ('' if not off8 else ' — off: %s' % off8[:5]))
-        top5 = [(r[0], int(r[1]) if r[0] == 'SPX' else int(r[1])) for r in pool[:5]]
+        # (16.43) the pool's SOURCE: Atlas's own merged slice when the payload was fresh (poolSrc = atlas), else own-%
+        at = AU.get('atlas') or {}
+        if AU.get('poolSrc') == 'atlas' and at.get('ok') and at.get('rows'):
+            spyR = spxR = 0.0
+            for b_ in (at.get('books') or []):
+                if b_.get('source') == 'SPY': spyR = b_.get('ratio') or 0.0
+                elif b_.get('source') in ('SPXW', 'SPX') and not spxR: spxR = b_.get('ratio') or 0.0
+            def map_row(k):
+                if spyR > 1:
+                    a_ = k / spyR; ra = round(a_)
+                    if abs(a_ - ra) <= 0.03 and 100 < ra < 2000: return ('SPY', ra)
+                if spxR > 0:
+                    b2 = k / spxR; rb = round(b2 / 5.0) * 5
+                    if abs(b2 - rb) <= 0.25 and rb > 1000: return ('SPX', rb)
+                return None
+            want = {}; apool = []; rk = 0
+            for r in at['rows']:
+                m = map_row(r[0])
+                if m is None or m in want: continue
+                rk += 1; want[m] = rk
+                es_ = next((x[3] for x in (AU.get('pool') or []) if x[0] == m[0] and int(x[1]) == int(m[1])), r[0])
+                apool.append((m[0], float(m[1]), r[1], es_))
+            add(rk >= 1, 'A', 'poolSrc = atlas: %d of Atlas\'s %d slice rows map to a rail strike through the payload ratios (SPY %.4f, SPX %.4f)' % (rk, len(at['rows']), spyR, spxR))
+            pool = apool; pool_label = 'Atlas\'s merged slice (poolSrc = atlas)'
+            off8 = []
+            for t in strikes:
+                if len(t) < 7: off8.append(('no field 8', t[5])); continue
+                exp8 = want.get((this_book, float(num(t[5]))))
+                f8 = t[6]
+                if exp8 is None:
+                    if f8 != '': off8.append((t[5], f8, 'not in the slice'))
+                elif int(f8 or 0) != exp8: off8.append((t[5], f8, exp8))
+        else:
+            want = {(r[0], r[1]): i + 1 for i, r in enumerate(pool)}; pool_label = 'the SPY + SPXW own-%% pool (poolSrc = %s)' % (AU.get('poolSrc') or 'own')
+            off8 = []
+            for t in strikes:
+                if len(t) < 7: off8.append(('no field 8', t[5])); continue
+                exp8 = want.get((this_book, num(t[5])))
+                if exp8 is None or int(t[6] or 0) != exp8: off8.append((t[5], t[6], exp8))
+        add(not off8, 'A', 'every STRIKE row\'s pooled rank (field 8) == %s re-derived from the audit (%d SPX + %d SPY rows)' % (pool_label, len(spx_t), len(spy_t)) + ('' if not off8 else ' — off: %s' % off8[:5]))
+        top5 = [(r[0], int(r[1])) for r in pool[:5]]
         au5 = [(r[0], int(r[1])) for r in (AU.get('pool') or [])[:5]]
         add(top5 == au5, 'A', 'the pool\'s five (%s) == the audit\'s' % ' '.join('%s %d' % x for x in top5))
         ATLAS_POOL = [dict(book=r[0], strike=r[1], pct=r[2], es=r[3], badge=i + 1) for i, r in enumerate(pool[:5])]

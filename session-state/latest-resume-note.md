@@ -1,5 +1,15 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 17:45 CT (v16.42 / GP 0.67) · **panel v16.42** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.67**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 18:05 CT (v16.43 / GP 0.67) · **panel v16.43** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.67**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~18:05 CT — v16.43: THE POOL IS ATLAS'S OWN RANKING. START HERE.
+
+16.42's audit showed Atlas's after-close five all from the monthly SPX book on the 2026-09-18 slice (third Friday
+tomorrow); ours shared one. 16.43: the pooled rank = the merged slice's order when the payload is fresh, mapped to rail
+strikes via the ratios (SPY whole strike / SPX 5-wide; SPXW + monthly share the SPX rail); stale/absent -> own-%;
+`AU.poolSrc`. Gate A §13 pins tonight's payload; Gate L re-derives from the slice. **He needs: Tampermonkey 16.43
+(5 min, reload Atlas). Acceptance: the runner on the next export (Atlas's five == ours, poolSrc = atlas) + his IRT
+screenshot beside Atlas.** Tomorrow RTH: the slice is today's 0DTE again — SPY + SPXW dominate, as at 11:18.
+Open question for him: on monthly-expiry evenings the SPX rail badges 7675 (−15 % on the SPXW tape) because Atlas does.
 
 # ⚠⚠⚠ 2026-09-17 ~17:45 CT — v16.42: AU.atlas — what Atlas drew, same second; the runner diffs the five. START HERE.
 

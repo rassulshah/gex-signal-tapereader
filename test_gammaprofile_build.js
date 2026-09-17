@@ -18,12 +18,13 @@ eval(['GPTS_VERSION','GP_FILE','GP_SPXWR_KEY','GP_LAST','GP_AUDIT_FILE','GP_AUDI
  'GRID_STACK_STEPS','GRID_STACK_MIN_PCT','GRID_STACK_MAX_PCT','GRID_RUG_FLOOR_STEPS'].map(v).join(''));
 var PANEL_MUTED=false;
 eval(['GP_IF_FILE','GP_IF_BUILT'].map(v).join(''));
-eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gpEmRows','gpWallDepth','gpSlopeWord','gpLevelRows','gammaProfileBuildIF','gpSpyStrikes','gpAtlasPool','gammaProfileBuildSPY','gammaProfileBuild'].map(ex).join('\n'));
+eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gpEmRows','gpWallDepth','gpSlopeWord','gpLevelRows','gammaProfileBuildIF','gpSpyStrikes','gpAtlasSlice','gpAtlasMapRow','gpAtlasPool','gammaProfileBuildSPY','gammaProfileBuild'].map(ex).join('\n'));
+eval(['GP_ATLAS_MAX_AGE_S'].map(v).join(''));   // (v16.43)
 eval(['GP_SPY_FILE','GP_SPY_BUILT'].map(v).join(''));   // (v16.40)
 eval(['GP_SINCE_KEY','GP_SINCE'].map(v).join('')); eval(['gpSinceLoad','gpSinceStamp'].map(ex).join('\n'));   // (v16.41)
 var GP_DEPTH_T0=0.70, GP_DEPTH_TW=0.70, GP_SLOPE_STEEP=0.10;   // (v16.35) the IF-extras thresholds
 // the helpers the code calls must be reachable from a mutant built with new Function (global scope) — see section 8
-Object.assign(global, { gpSinceLoad, gpSinceStamp, GP_SINCE_KEY, GP_SINCE_MIN, gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gpEmRows, gpWallDepth, gpSlopeWord, gpLevelRows, GP_DEPTH_T0, GP_DEPTH_TW, GP_SLOPE_STEEP, gammaProfileBuildIF, gpSpyStrikes, gpAtlasPool, gammaProfileBuildSPY, GP_SPY_FILE, GP_SPY_BUILT, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
+Object.assign(global, { gpAtlasSlice, gpAtlasMapRow, GP_ATLAS_MAX_AGE_S, gpSinceLoad, gpSinceStamp, GP_SINCE_KEY, GP_SINCE_MIN, gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gpEmRows, gpWallDepth, gpSlopeWord, gpLevelRows, GP_DEPTH_T0, GP_DEPTH_TW, GP_SLOPE_STEEP, gammaProfileBuildIF, gpSpyStrikes, gpAtlasPool, gammaProfileBuildSPY, GP_SPY_FILE, GP_SPY_BUILT, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
 
 // ---- the world, stubbed to the 09:47 CT snapshot ----
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
@@ -267,5 +268,46 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
     ok(f9(rows(Bm.csv),7650)!=='35229', '12.11 mutation: a stamp rewritten every export no longer holds the first minute (the assertions bite)', f9(rows(Bm.csv),7650));
     global.gpSinceStamp=keep; delete LS[GP_SINCE_KEY]; GP_SINCE=null; global.GP_SINCE=null; }
   global.ctNowSecOfDay=()=>35229; TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
+}
+// ---- §13 (v16.43) THE POOL IS ATLAS'S OWN RANKING — the payload of 2026-09-17 17:50 CT, after the close, verbatim -----
+{
+  // the merged slice Atlas drew (ES price, scaled $): all five from the monthly SPX book; SPY 765 (the SPY King) NOT among them
+  const SLICE=[ {k:7770.78,v:1565327e3,net:1}, {k:7745.55,v:1288846e3,net:-1}, {k:7644.63,v:1281081e3,net:1}, {k:7568.94,v:1097663e3,net:1}, {k:7695.09,v:1043870e3,net:1}, {k:7731.2,v:900000e3,net:-1} ];
+  const mkPayload=(ts)=>({ j:{ expirations:['2026-09-17','2026-09-18'], snapshot:{ slices:[ { exp:'2026-09-18', l:SLICE } ] },
+    derived:[ { source:'SPY',  ratio:10.106145837430995, levels:[{ s:7706.79, l:[ {k:7731.2,v:-168769e3,net:-1},{k:7690.78,v:-99836e3,net:-1} ] }] },
+              { source:'SPXW', ratio:1.0091920309543607, levels:[{ s:7709.28, l:[ {k:7705.18,v:156775e3,net:1} ] }] },
+              { source:'SPX',  ratio:1.0091920309543607, levels:[{ s:7709.68, l:[ {k:7770.78,v:23849e3,net:1},{k:7568.94,v:21001e3,net:1} ] }] } ] }, ts:ts });
+  const SPXT={ '7700.00':100,'7675.00':-15,'7625.00':-8,'7600.00':-94,'7575.00':-3,'7500.00':0,'7605.00':-32 };
+  const SPYT={ '765.00':-100,'761.00':-68,'763.00':-52,'760.00':34 };
+  const keepTT=TT; TT={ pct:SPXT, king:7700, kingNeg:false, ladderSrc:'trinity' };
+  global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:(sym==='SPY'?{ pct:SPYT, king:765, kingNeg:true, ladderSrc:'trinity' }:null));
+  const f8=(RR,spx)=>{ const t=(RR.STRIKE||[]).find(x=>parseFloat(x[5])===spx); return t?t[6]:undefined; };
+  // the mapping rule by itself
+  ok(JSON.stringify(gpAtlasMapRow(7770.78, 10.106145837430995, 1.0091920309543607))==='{"book":"SPX","k":7700}', '13.1 7770.78 / 1.0092 = 7700.0 -> the SPX rail\'s 7700');
+  ok(JSON.stringify(gpAtlasMapRow(7731.2, 10.106145837430995, 1.0091920309543607))==='{"book":"SPY","k":765}', '13.2 7731.2 / 10.106 = 765.0 -> the SPY rail\'s 765 (the SPY test runs first: a whole SPY strike wins)');
+  ok(gpAtlasMapRow(7733.3, 10.106145837430995, 1.0091920309543607)===null, '13.3 a price that is neither a SPY strike nor a 5-wide SPX strike maps nowhere');
+  // fresh payload -> Atlas's ranking
+  global.LASTFUTDER={ ES1: mkPayload(Date.now()-9000) };
+  const B1=gammaProfileBuild(); const R1=rows(B1.csv), S1=rows(GP_SPY_BUILT);
+  ok(B1.audit.atlas && B1.audit.atlas.ok && B1.audit.atlas.slice==='2026-09-18' && B1.audit.atlas.rows[0][0]===7770.78 && B1.audit.atlas.rows[0][1]===100, '13.4 the audit records the merged slice Atlas drew (exp, rows: ES, %, $K, rank)', B1.audit.atlas && B1.audit.atlas.rows);
+  ok(B1.audit.poolSrc==='atlas', '13.5 the pool\'s source is Atlas when the payload is fresh', B1.audit.poolSrc);
+  ok(f8(R1,7700)==='1' && f8(R1,7675)==='2' && f8(R1,7575)==='3' && f8(R1,7500)==='4' && f8(R1,7625)==='5', '13.6 the SPX rail\'s pooled ranks = the slice\'s order (7700 ① 7675 ② 7575 ③ 7500 ④ 7625 ⑤) — the monthly SPX nodes land on the SPXW strikes', [f8(R1,7700),f8(R1,7675),f8(R1,7575),f8(R1,7500),f8(R1,7625)]);
+  ok(f8(R1,7600)==='' && f8(R1,7605)==='', '13.7 SPXW 7600 (-94% in its own book) is NOT pooled — Atlas did not draw it — so it draws grey, no badge', [f8(R1,7600), f8(R1,7605)]);
+  ok(f8(S1,765)==='6' && f8(S1,761)==='', '13.8 SPY 765 is sixth in the slice -> pooled 6 (outside the five); SPY 761 unpooled', [f8(S1,765), f8(S1,761)]);
+  ok(B1.audit.pool[0][0]==='SPX' && B1.audit.pool[0][1]===7700 && B1.audit.pool[4][1]===7625 && B1.audit.pool[5][0]==='SPY' && B1.audit.pool[5][1]===765, '13.9 the audit\'s pool list is the mapped slice in order', B1.audit.pool);
+  // stale payload -> the own-% fallback, and the audit says so
+  global.LASTFUTDER={ ES1: mkPayload(Date.now()-400000) };
+  const B2=gammaProfileBuild(); const R2=rows(B2.csv);
+  ok(B2.audit.poolSrc==='own' && +f8(R2,7600)<=5 && +f8(R2,7675)>5, '13.10 a payload older than 5 min: the own-% pool (7600 -94% is in the five, 7675 -15% is not) and poolSrc = own', [B2.audit.poolSrc, f8(R2,7600), f8(R2,7675)]);
+  ok(B2.audit.atlas && B2.audit.atlas.ok && B2.audit.atlas.ageS>=400, '13.11 ... while the audit still records the stale slice with its age', B2.audit.atlas && B2.audit.atlas.ageS);
+  // no payload at all -> own
+  delete global.LASTFUTDER;
+  const B3=gammaProfileBuild(); ok(B3.audit.poolSrc==='own' && B3.audit.atlas && !B3.audit.atlas.ok, '13.12 no payload: own-% pool, the audit says why', [B3.audit.poolSrc, B3.audit.atlas]);
+  // mutation: ranking the slice by our own-% instead of Atlas's order would put 7600 in
+  { const mut=ex('gpAtlasPool').replace("if(rank>=1) return out2;","if(false) return out2;"); ok(mut!==ex('gpAtlasPool'), '13.13 mutation applies');
+    const keep=global.gpAtlasPool; eval(mut); global.gpAtlasPool=gpAtlasPool; global.LASTFUTDER={ ES1: mkPayload(Date.now()-9000) };
+    const Bm=gammaProfileBuild(); ok(f8(rows(Bm.csv),7675)!=='2', '13.14 mutation: without Atlas\'s ranking 7675 is no longer second (the assertions bite)', f8(rows(Bm.csv),7675));
+    global.gpAtlasPool=keep; delete global.LASTFUTDER; }
+  TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
 }
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

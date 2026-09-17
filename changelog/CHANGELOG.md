@@ -1,3 +1,20 @@
+## v16.43 — the pool is Atlas's own ranking (2026-09-17, ~18:05 CT)
+
+16.42's first audit settled it: at 17:50 CT Atlas's ES1 five were 7770.78 / 7745.55 / 7644.63 / 7568.94 / 7695.09 — all
+from the derived "SPX" (monthly) book, on the 2026-09-18 slice (the third Friday: the September monthly expires tomorrow;
+once today's 0DTE expired at the close the slice rolled). Our own-% SPY + SPXW pool shared one of them. The 11:18 rule
+was measured on one window and assumed for all. Operator: "yes" to ranking from Atlas's slice.
+- `gpAtlasPool(spx, spy, atlas)`: when the page's payload is fresh (<= 300 s) the pooled rank is the merged slice's own
+  order — the rows Atlas ranks — each mapped to a rail strike through the payload's ratios (`gpAtlasMapRow`: SPY when
+  k / ratio is a whole strike, else SPX when k / ratio is a 5-wide strike; SPXW and monthly SPX share the ratio and the
+  ES price, so both land on the SPX rail). Rows not in the slice are unpooled (grey, no badge). Payload absent or stale
+  -> the own-% pool; `AU.poolSrc` = atlas | own, `AU.poolUnmapped` lists any slice price that maps to no rail.
+- Gate A §13 (+14, tonight's payload verbatim as the fixture: 7700 ① 7675 ② 7575 ③ 7500 ④ 7625 ⑤, SPXW 7600 −94 % unpooled,
+  SPY 765 sixth; stale -> own; a mutation). Gate L re-derives field 8 from the slice when poolSrc = atlas and keeps the
+  16.42 "Atlas's five == ours" check.
+- Consequence he accepted: after the close and on monthly-expiry days the badges sit on SPX strikes whose SPXW % is
+  small — that is Atlas's own view.
+
 ## v16.42 — the audit records what Atlas itself drew; the runner diffs the five (2026-09-17, ~17:45 CT)
 
 Operator: "I don't think IRT's top 5 match the top 5 in Atlas." Looking at his Atlas tab after the close: the ES1 chart's
