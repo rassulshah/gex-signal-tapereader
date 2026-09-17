@@ -1,5 +1,14 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 04:00 CT (v16.38 / KT 0.11) · **panel v16.38** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.56**, **lsDayModel v0.17**, **lsDayStats v0.8**, **lsKingTracker v0.11** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 06:10 CT (KT 0.12 / GP 0.57 / DM 0.18 / DS 0.9) · **panel v16.38** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.57**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.12** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~06:10 CT — KT 0.12 (+ GP 0.57 / DM 0.18 / DS 0.9): SOURCE FIRST, AND THE FONT GUARD. START HERE.
+
+His 0.11 eyes-on: Source = IF applied, yet SPX/SPY still drew and no Magnet. Cause: every plugin's parms callbacks only
+read the dialog when Font size read 6..48 — he runs 3 — so NO King tracker setting had ever reached the plugin. KT 0.12:
+guard = the Source list; Source is the first row, the rows the source does not draw are greyed; `setParameterVersion(2)`
+(defaults re-read). The other three plugins got the probe widened (1..200). **He needs all four compile bats** (IRT
+closed), then Source = IF in lsKingTracker; the Magnet line also needs panel 16.38 exporting (his screenshot showed
+STALE 14m — reload Atlas). Not yet seen working on his chart — the next screenshot is the acceptance.
 
 # ⚠⚠⚠ 2026-09-17 ~04:00 CT — v16.38 + lsKingTracker 0.11: THE KING TRACKER SWITCHES SKYLIT ⇄ IF. START HERE.
 

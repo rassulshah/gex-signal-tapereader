@@ -162,19 +162,19 @@ DayModel::DayModel() : cppExtension()
 int DayModel::parmsLoad(void)
 {
     int probe = getIntegerValue(PX.font);
-    if (probe >= 6 && probe <= 48) readSettings(cfg);
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
     return RTX_OK;
 }
 int DayModel::parmsApply(void)
 {
     int probe = getIntegerValue(PX.font);
-    if (probe >= 6 && probe <= 48) readSettings(cfg);
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
     return RTX_OK;
 }
 int DayModel::parmsUpdt(unsigned int)
 {
     int probe = getIntegerValue(PX.font);
-    if (probe >= 6 && probe <= 48) readSettings(cfg);
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
     return RTX_OK;
 }
 
@@ -675,6 +675,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.17");
+    p->setVersion("0.18");
     return p;
 }

@@ -1,3 +1,24 @@
+## lsKingTracker 0.12 + GP 0.57 / DM 0.18 / DS 0.9 — Source at the top, the rows it does not draw greyed, and THE FONT GUARD THAT ATE HIS SETTINGS (2026-09-17, ~06:10 CT)
+
+Operator, 0.11 screenshot with Source = IF applied: "the source should be at the top. also spx king and spy king are both
+still checked even if IF is selected. I also don't see the magnet." The chart still drew SPX 7540 / SPY 752 and no IF line.
+
+WHY: since 0.1 every plugin's parmsLoad/Apply/Updt only read the dialog when the FONT parameter read 6..48 — a
+plausibility probe against IRT calling the callbacks before the parameters exist. He runs Font size 3. So on his chart
+nothing typed into the King tracker dialog had reached the plugin at all — Source = IF was applied in the dialog and the
+plugin kept its constructor defaults (Skylit, all books). The same probe sits in lsGammaProfile, lsDayModel and
+lsDayStats (fonts 10/11 there, so it had not bitten yet).
+- **KT 0.12:** the probe is the Source list itself (0 or 1; anything else = no dialog yet). `Source` is now the FIRST row
+  with the IF Magnet colour beside it; the four Skylit rows (box + colour) grey out when Source = IF and the IF colour
+  greys when Skylit (`enableParameter`, `syncEnable`), so the dialog says what the chart will do — the boxes keep their
+  state for when he switches back. Labels read "SPX King (ES, Skylit)". `setParameterVersion(2)` because the row order
+  changed: saved instances re-read defaults (his colours are the defaults; re-set width/font if he had changed them).
+- **GP 0.57 / DM 0.18 / DS 0.9:** the probe widened to 1..200 so a small font can never swallow a dialog again (the
+  readSettings clamp to ≥7 pt is unchanged). No other change.
+Not testable from here (SDK callbacks) — recorded in `testing/king-tracker/CHECKLIST.md` as an eyes-on line.
+Also: the Magnet line needs panel 16.38 running and exporting (his screenshot showed STALE 14m — the export had
+stopped); the IF journey seeds at the first sample after the reload.
+
 ## v16.38 + lsKingTracker 0.11 — the King tracker switches between Skylit and IF (2026-09-17, ~04:00 CT)
 
 Operator: "did you update kingtracker to have the option to include IF" — no; the 17:30 proposal of the 16th (IF's Magnet

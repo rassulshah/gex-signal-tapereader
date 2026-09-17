@@ -117,9 +117,9 @@ DayStats::DayStats() : cppExtension()
 }
 
 // ---- parameter callbacks (guard on a plausible font read) -----------------
-int DayStats::parmsLoad(void)  { int p=getIntegerValue(PX.font); if (p>=6 && p<=48) readSettings(cfg); return RTX_OK; }
-int DayStats::parmsApply(void) { int p=getIntegerValue(PX.font); if (p>=6 && p<=48) readSettings(cfg); return RTX_OK; }
-int DayStats::parmsUpdt(unsigned int) { int p=getIntegerValue(PX.font); if (p>=6 && p<=48) readSettings(cfg); return RTX_OK; }
+int DayStats::parmsLoad(void)  { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
+int DayStats::parmsApply(void) { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
+int DayStats::parmsUpdt(unsigned int) { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
 int cppExtension::setup(void)
@@ -362,6 +362,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.8");
+    p->setVersion("0.9");
     return p;
 }

@@ -17,7 +17,7 @@ assistant's replies only.
 
 ## 2026-09-17 · v16.38 · session `f9c89c64`
 
-_218 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_223 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2827,6 +2827,81 @@ Go, or would you rather start on IF as the default like the gamma profile?
 Now the plugin (0.11): the two IF books, the `Source` switch, and its decision in the logic header.
 Now the panel-side test cases (the IF sampler) and the runner's King checks.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (03:19):** Now the `AU.day` block in the panel (16.37) — it goes right after the day section so every input the model used is on the audit.
+Now the end-to-end Gate A test for the day section — it runs `gammaProfileBuild` with a pinned morning, checks the rows, then feeds the audit to `day-derive.js` and diffs.
+Now add `test_day_export.js` to the map and extend the live runner with `--indicator`.
+Now the docs. First the master `testing/REGRESSION.md`.
+All 47 files landed. The sync loop pushes within ~2 minutes; I'll verify origin then.
+Origin (`21c1db1`, synced 22:34 your clock) carries the whole build byte-for-byte; the clone is realigned.
+
+**What's built — the regression now covers all four indicators, and runs collectively or one at a time.**
+
+`python3 tools/regress.py` (cloud) / `regress.bat [gamma|daymodel|daystats|kingtracker]` (your machine). Each indicator has three gates: **A** — node tests that execute the panel's builders and pin every CSV row; **B** — C++ logic tests, with lsDayModel, lsDayStats, lsKingTracker and the shared contract-offset anchor each moved into an SDK-free `*Logic.h` (the .cpp files delegate; no behaviour change); **L** — the live runner (`gp-regress.py --indicator …`) re-run on pinned CSV + audit fixtures. New this build: `test_kingtracker_rows.js` (the sampler's dwell, anti-oscillation, rows), `test_day_export.js` (the whole day section end to end, then `day-derive.js` must reproduce every row from the audit), and an `AU.day` block on the audit so a candle or E row can always be re-derived. Every run prints one table and appends a dated block to `testing/RESULTS.md`; master doc `testing/REGRESSION.md`, a `CHECKLIST.md` per indicator, and the standing rule is now on the build checklist: touch an indicator → update its cases in the same commit → its r …[trimmed]
+
+**OPERATOR:**
+> did you update kingtracker to have the option to include IF
+
+**me (05:33):** No. That one was proposed on the 16th (~17:30, when you asked how IF could feed the other indicators) and never came back for a decision — the 22:00 resume note's "nothing unbuilt except…" list dropped it, and it isn't on LOCKED-ITEMS either. lsKingTracker 0.10 still follows only the Skylit flow King from `GammaProfile.csv`; the IF King only appears on the regime chip of the IF rail.
+
+What was on the table, so we can pick it up properly:
+
+IF's King is the largest |net| strike in the 0DTE chain — the Magnet, a standing book that moves slowly. The idea was a second, quieter stepped track under the flow King: the panel would sample IF's King the same way `ktrkSample` samples the tape King (same dwell / anti-oscillation rules, its own `KINGTRACK,ES,IF,…` / `KINGNOW,ES,IF,…` rows), and the plugin would draw it as a thinner dashed line with a `Book` option — Skylit / IF / Both, defaulting to Both. The read it gives that the tracker can't make today: the flow King rolling onto the strike where the standing book already sits is agreement; a flow King with nothing behind it on IF is the hedge-node signature.
+
+Per your rule I'd mock it up before touching code — one element. The one thing to settle first: do you want the IF King as a **second track alongside** the Skylit King (default Both, switchable), or as a **switch** like the gamma profile's Book dropdown (one or the other, IF default)?
+
+**OPERATOR:**
+> the king tracker should be able to switch back and forth between IF and skylit
+
+**me (05:35):** Understood — a switch, like the gamma profile's Book dropdown, not two tracks. Before I build, here is the design in one pass so you can say go or change something.
+
+**The switch.** lsKingTracker gets a `Source` option: **Skylit** (today's behaviour, the flow King from the tape) or **IF** (the 0DTE Magnet — the largest |net| strike in InsiderFinance's chain, the same King the IF rail's chip shows). Default stays Skylit until you say otherwise; you flip it in the indicator's settings, exactly like Book on the gamma profile. Nothing else on the line changes: same stepped line, same dwell rule (4 samples ≈ 2 min before a roll counts), same anti-oscillation, same SCALEREF anchor onto your Dec chart.
+
+**What the panel adds.** A fifth journey, book `IF` (fam ES), sampled every 30 s from the companion's SPX 0DTE chain alongside the four tape books, written as its own rows: `KINGTRACK,ES,IF,<so>,<es>,<strike>` and `KINGNOW,ES,IF,<es>,<strike>,<pct>`. Both journeys are always recorded, so switching in IRT is instant and you can flip back without losing the day.
+
+**One consequence to be aware of.** IF only carries SPX and QQQ chains — there is no IF SPY book. So on Source = IF the SPX line becomes the IF Magnet and the SPY line is hidden (on Skylit it comes back). On an NQ chart the same applies to QQQ vs NDX.
+
+**Regression, per the new rule:** `test_kingtracker_rows.js` gets the IF sampler cases (seed, dwell, a stale chain → no sample), `test_kingtracker_logic.cpp` the `IF` book parsing and the source switch, and the runner's King checks extend to the IF rows.
+
+Delivery would be panel 16.38 + lsKingTracker 0.11 (`compile-kingtracker.bat`).
+
+Go, or would you rather start on IF as the default like the gamma profile?
+
+**OPERATOR:**
+> yes
+
+**me (05:36):** Now the panel side (16.38): the IF books, the Magnet reader, the audit.
+Now the plugin (0.11): the two IF books, the `Source` switch, and its decision in the logic header.
+Now the panel-side test cases (the IF sampler) and the runner's King checks.
+Built, pushed and verified on origin (panel 16.38, lsKingTracker 0.11).
+
+What changed: the panel now samples IF's 0DTE Magnet (the largest |net| strike in the chain — the same King the IF rail's chip shows) as its own journey beside the tape Kings, with the same 2-minute dwell and anti-oscillation rules, and never samples from a stale chain. lsKingTracker gets a `Source` setting — **Skylit** (as today) or **IF** — one or the other. On IF only the Magnet line draws, in a magenta-pink so you can tell which source is on; the SPY line hides because IF has no SPY book. Default is Skylit until you flip it. Both journeys are always recorded, so switching is instant in either direction. Regression updated with the build (King tracker rows 21→32, logic 16→21; all 21 suites green).
+
+**Install — step by step:**
+
+1. Wait ~5 minutes for the CDN, then click: https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — Tampermonkey should offer **Update** to 16.38. Reload the Atlas tab.
+2. Close IRT (the DLL is in use while it's open).
+3. Open a new cmd window and run:
+   ```
+   cd /d "C:\Dev\gex-signal-tapereader\plugin"
+   compile-kingtracker.bat
+   ```
+   If you haven't run the three from the earlier build yet, do them in the same window: `compile-gammaprofile.bat`, `compile-daymodel.bat`, `compile-daystats.bat`.
+4. Reopen IRT, open the lsKingTracker settings on the ES chart, and set **Source** to **IF** (the new field sits at the bottom of the dialog, with the IF colour beside it). Swit …[trimmed]
+
+**OPERATOR:**
+> have you been running the analysis on all this stored data for the last couple of days.  look at the king tracker it doesn't have an option for IF .  it should be either IF or Skylit
+
+**me (05:51):** Two answers.
+
+**The IF option is there — it's the `Source` dropdown at the bottom of your dialog.** In your screenshot it reads `Source: Skylit` with the pink `IF colour` swatch beside it. Click the arrow on that dropdown and the second entry is **IF**; pick it, Apply, and the chart switches to the Magnet line (SPX/SPY hide, the IF line draws in that pink). Switch back the same way. I made it a dropdown rather than another checkbox row precisely so it can't be both at once — but if you'd rather see it as a pair of radio-style choices or a checkbox "Use IF instead of Skylit", say so and I'll change the control.
+
+**The stored data — yes, the analysis has been running, with one honest gap.** Your nightly on the machine ran both evenings (15th at 20:05 CT: 8 sessions, 102 episodes, 324 deflection events; 16th at 20:05: 9 sessions, 121 episodes, 398), and the ES base rates the day model and day stats read from were rebuilt at 21:10 CT last night on 300 sessions through 2026-09-15 — so today's expected candle and E row are on the freshest corpus. The gap: the daily record (regime at the open, flip distance, walls, King, the EM pin) only began with 16.33 last night and is taken in the first 15 minutes after the open, so its first row is today's — that series needs roughly 60 sessions before the doctrine inputs can be tested against the day's range the way the EM was. Nothing to run on it yet; it accumulates on its own.
+
+**OPERATOR:**
+> first of all the source should be at the top .  also spx king and spy king are both still checked event if IF is slected .  I aslso dont see the magnet
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -3697,6 +3772,10 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+07cd6ed gex: sync 17-Thu-09  0:42
+938d914 gex: sync 17-Thu-09  0:34
+1c015af gex: sync 17-Thu-09  0:32
+f8ba930 gex: sync 17-Thu-09  0:30
 21c1db1 gex: sync 16-Wed-09 22:34
 e4cde5c gex: sync 16-Wed-09 22:02
 16320f3 gex: sync 16-Wed-09 22:00
@@ -3705,10 +3784,6 @@ e4cde5c gex: sync 16-Wed-09 22:02
 96a7e7a gex: sync 16-Wed-09 21:44
 ff99bb5 gex: sync 16-Wed-09 21:38
 cb3aa13 gex: sync 16-Wed-09 21:36
-d0a787b gex: sync 16-Wed-09 21:32
-589da41 gex: sync 16-Wed-09 21:30
-bf2c902 gex: sync 16-Wed-09 21:16
-8cb5848 gex: sync 16-Wed-09 21:14
 ```
 
 ---

@@ -199,19 +199,19 @@ GammaProfile::GammaProfile() : cppExtension()
 int GammaProfile::parmsLoad(void)
 {
     int probe = getIntegerValue(PX.font);
-    if (probe >= 6 && probe <= 48) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
     return RTX_OK;
 }
 int GammaProfile::parmsApply(void)
 {
     int probe = getIntegerValue(PX.font);
-    if (probe >= 6 && probe <= 48) readSettings(cfg);
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
     return RTX_OK;
 }
 int GammaProfile::parmsUpdt(unsigned int)
 {
     int probe = getIntegerValue(PX.font);
-    if (probe >= 6 && probe <= 48) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
     return RTX_OK;
 }
 
@@ -1025,6 +1025,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.56");
+    p->setVersion("0.57");
     return p;
 }

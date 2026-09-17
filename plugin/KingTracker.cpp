@@ -10,6 +10,8 @@
  *    NQ chart : QQQ King (green)   · NDX King (amber)
  *    (v0.11) Source = IF : the IF Magnet journey instead (book IF on ES, IFQ on NQ; panel 16.38) — InsiderFinance's
  *    0DTE King, one source OR the other (operator: "switch back and forth between IF and Skylit"), IF colour.
+ *    (v0.12) Source is the FIRST row; the rows the source does not draw are greyed; the font guard that swallowed
+ *    every dialog change at Font size 3 is gone.
  *
  *  A SEPARATE indicator from lsDayModel / lsDayStats / lsGammaProfile, so its
  *  dialog and parameter numbering never destabilise the others.
@@ -101,6 +103,8 @@ public:
     void drawStaleBadge();     // (v0.2) red badge if the CSV has gone cold
     void applyContractOffset();// (v0.3) shift the King lines onto this chart's own contract price
     void readSettings(Settings& S);
+    bool dialogReady();        // (v0.12) the parameters exist (the Source list reads 0 or 1)
+    void syncEnable();         // (v0.12) grey out the rows the chosen Source does not draw
     void render(const Settings& S);
     int  chartFamily(const Settings& S);        // returns 1 ES / 2 NQ
     short yOf(float price);
@@ -131,38 +135,50 @@ KingTracker::KingTracker() : cppExtension()
     for (int i = 0; i < NBOOK; i++) { cfg.show[i] = true; cfg.col[i] = BOOK_DEF[i]; book[i].hasNow = false; }
 }
 
-// ---- parameter callbacks (guard on a plausible font read) -----------------
-int KingTracker::parmsLoad(void)  { int p=getIntegerValue(PX.font); if (p>=6 && p<=48) readSettings(cfg); return RTX_OK; }
-int KingTracker::parmsApply(void) { int p=getIntegerValue(PX.font); if (p>=6 && p<=48) readSettings(cfg); return RTX_OK; }
-int KingTracker::parmsUpdt(unsigned int) { int p=getIntegerValue(PX.font); if (p>=6 && p<=48) readSettings(cfg); return RTX_OK; }
+// ---- parameter callbacks ---------------------------------------------------
+// (v0.12) THE GUARD THAT ATE HIS SETTINGS. 0.1-0.11 only read the dialog when the font parameter read 6..48 — a
+// plausibility check against IRT calling these before the parameters exist. He runs Font size 3, so on his chart
+// NOTHING typed into the dialog ever reached the plugin: Source = IF applied and the tape Kings kept drawing
+// (2026-09-17 screenshot). The guard is now the Source list itself (0 or 1 — anything else is an unbuilt dialog).
+bool KingTracker::dialogReady() { int sIx = getListIndex(PX.source); return sIx == 0 || sIx == 1; }
+void KingTracker::syncEnable()
+{
+    // grey out what the chosen source does not draw, so the dialog says what the chart will do
+    bool ifOn = (getListIndex(PX.source) == 1);
+    for (int i = 0; i < B_IF; i++) { enableParameter(PX.show[i], !ifOn); enableParameter(PX.col[i], !ifOn); }
+    enableParameter(PX.col[B_IF], ifOn);
+}
+int KingTracker::parmsLoad(void)  { if (dialogReady()) { readSettings(cfg); syncEnable(); } return RTX_OK; }
+int KingTracker::parmsApply(void) { if (dialogReady()) { readSettings(cfg); syncEnable(); } return RTX_OK; }
+int KingTracker::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); syncEnable(); } return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);            // v0.1 first release — establishes the defaults below
+    setParameterVersion(2);            // (v0.12) the Source row moved to the TOP (operator) — a new layout, so saved v1 instances re-read defaults
     setParameterDialogHeight(20);
     const short SL = kParmAppendSameLine;
     int pc = 0;
+    // (v0.12) SOURCE FIRST — it decides everything below it: Skylit draws the tape Kings (SPX / SPY on ES, QQQ / NDX on NQ),
+    // IF draws InsiderFinance's 0DTE Magnet (one line per chart family) and the tape rows are greyed out (syncEnable).
+    PX.source     = pc++; setListParameter ("Source", 0, "Skylit;IF");
+    PX.col[B_IF]  = pc++; setColorParameter("IF Magnet colour", C_IF, 0, SL);
+    PX.col[B_IFQ] = PX.col[B_IF];
+    PX.show[B_IF] = PX.show[B_IFQ] = -1;   // the IF books have no Show box — the Source switch is their visibility
     PX.family = pc++; setListParameter   ("Chart family", 0, "Auto;ES;NQ");
     PX.width  = pc++; setIntegerParameter("Line width px", 2, 0, SL);
-    PX.show[B_SPX] = pc++; setBoolParameter ("SPX King (ES)", true);
+    PX.show[B_SPX] = pc++; setBoolParameter ("SPX King (ES, Skylit)", true);
     PX.col [B_SPX] = pc++; setColorParameter("SPX colour", C_SPX, 0, SL);
-    PX.show[B_SPY] = pc++; setBoolParameter ("SPY King (ES)", true);
+    PX.show[B_SPY] = pc++; setBoolParameter ("SPY King (ES, Skylit)", true);
     PX.col [B_SPY] = pc++; setColorParameter("SPY colour", C_SPY, 0, SL);
-    PX.show[B_QQQ] = pc++; setBoolParameter ("QQQ King (NQ)", true);
+    PX.show[B_QQQ] = pc++; setBoolParameter ("QQQ King (NQ, Skylit)", true);
     PX.col [B_QQQ] = pc++; setColorParameter("QQQ colour", C_QQQ, 0, SL);
-    PX.show[B_NDX] = pc++; setBoolParameter ("NDX King (NQ)", true);
+    PX.show[B_NDX] = pc++; setBoolParameter ("NDX King (NQ, Skylit)", true);
     PX.col [B_NDX] = pc++; setColorParameter("NDX colour", C_NDX, 0, SL);
     PX.labels = pc++; setBoolParameter   ("Right-edge labels", true);
     PX.dots   = pc++; setBoolParameter   ("Roll-point dots", true, SL);
     PX.offset = pc++; setIntegerParameter("Clock offset (min)", 0, 0);
     PX.font   = pc++; setIntegerParameter("Font size (pt)", 10, 0, SL);
-    // (v0.11) appended AFTER the v0.1 parameters so saved instances keep their indices; the IF books have no Show box —
-    // the Source switch is their visibility (one source or the other, never both)
-    PX.source     = pc++; setListParameter ("Source", 0, "Skylit;IF");
-    PX.col[B_IF]  = pc++; setColorParameter("IF colour", C_IF, 0, SL);
-    PX.col[B_IFQ] = PX.col[B_IF];
-    PX.show[B_IF] = PX.show[B_IFQ] = -1;
     return RTX_OK;
 }
 
@@ -413,6 +429,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.11");
+    p->setVersion("0.12");
     return p;
 }

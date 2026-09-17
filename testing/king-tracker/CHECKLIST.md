@@ -9,6 +9,9 @@ Use with the **expected picture** `tools/gp-regress.py --indicator kingtracker` 
 - [ ] The live King line (right edge) sits beside the gamma profile's magenta King bar — the two indicators read the same `KINGNOW`.
 - [ ] The SPY line at strike × the SPY→ES ratio (≈ SPY strike × 10), labelled `SPY KING <strike>`.
 
+## The dialog (0.12)
+- [ ] `Source` is the first row; with IF chosen the four Skylit rows are greyed and only the IF Magnet line draws (pink); with Skylit the IF colour is greyed and SPX + SPY draw. If the chart does not follow the dialog, the font-probe bug is back — check `dialogReady()`.
+
 ## Steps
 - [ ] The number of steps drawn = the runner's count (rolls + 1); the clocks read as the runner lists them.
 - [ ] A challenger the sampler is still dwelling on is NOT a step (KTRK_CONFIRM_N samples); the runner warns when KINGNOW differs from the last step.
