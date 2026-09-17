@@ -10,7 +10,9 @@ Use with the **expected picture** `tools/gp-regress.py --indicator kingtracker` 
 - [ ] The SPY line at strike × the SPY→ES ratio (≈ SPY strike × 10), labelled `SPY KING <strike>`.
 
 ## The dialog (0.12)
-- [ ] `Source` is the first row; with IF chosen the four Skylit rows are greyed and only the IF Magnet line draws (pink); with Skylit the IF colour is greyed and SPX + SPY draw. If the chart does not follow the dialog, the font-probe bug is back — check `dialogReady()`.
+- [ ] `Source` (default IF) is the first row; with IF chosen the four Skylit rows are greyed and only the IF Magnet line draws — gold where the Magnet was +gamma, magenta where it was -gamma, step by step (0.13); with Skylit the IF colour is greyed and SPX + SPY draw. If the chart does not follow the dialog, the font-probe bug is back — check `dialogReady()`.
+
+- [ ] The dialog's numbers are sane (width / font / offset as he set them, no black colour anywhere) — garbage there is the position-scramble signature; `migrateScrambled()` should have repaired it on load.
 
 ## Steps
 - [ ] The number of steps drawn = the runner's count (rolls + 1); the clocks read as the runner lists them.

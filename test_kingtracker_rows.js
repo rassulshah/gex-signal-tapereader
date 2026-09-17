@@ -58,6 +58,7 @@ for (let i = 0; i < M.N + 1; i++) S = tick(M, { k: 7604.25, strike: 7600, pct: 1
 ok(S.KTRK.SPX.length === 3 && S.KTRK_NOW.SPX.strike === 7685 && S.KTRK_NOW.SPX.es === 7688.37, 'back to 7600 (a strike within the last ' + M.LB + ' steps) is chatter: no step, KINGNOW holds the incumbent');
 for (let i = 0; i < M.N; i++) S = tick(M, { k: 7757.30, strike: 7750, pct: -100 });
 ok(S.KTRK.SPX.length === 4 && S.KTRK.SPX[3].strike === 7750 && S.KTRK_NOW.SPX.pct === -100, 'a genuinely new strike (7750, negative King) rolls after the dwell; the pct rides on KINGNOW');
+ok(S.KTRK.SPX[0].pct === 100 && S.KTRK.SPX[3].pct === -100, '(16.39) every step keeps the polarity it was sampled with (7500 +100 … 7750 -100)', S.KTRK.SPX.map(x => x.pct));
 // the SPY book is independent and a missing King leaves it untouched
 ok(!S.KTRK_NOW.SPY && S.KTRK.SPY.length === 0, 'no SPY King supplied -> the SPY journey stays empty');
 // a new day resets the journey
@@ -92,7 +93,7 @@ ok(S.KTRK.day === '2026-9-17' && S.KTRK.SPX.length === 1 && S.KTRK.SPX[0].strike
   W.ifc = null; }
 
 // ---- the rows the export writes (wiring — the logic above is executed)
-ok(/out\.push\('KINGTRACK,'\+KB\.fam\+','\+KB\.book\+','\+gpI\(P\.so\)\+','\+gpF2\(P\.es\)\+','\+gpI\(P\.strike\)\)/.test(SRC), 'KINGTRACK,<fam>,<book>,<so>,<es>,<strike> — the grammar lsKingTracker parses (KingTrackerLogic.h)');
+ok(/out\.push\('KINGTRACK,'\+KB\.fam\+','\+KB\.book\+','\+gpI\(P\.so\)\+','\+gpF2\(P\.es\)\+','\+gpI\(P\.strike\)\+','\+gpI\(P\.pct\)\)/.test(SRC), 'KINGTRACK,<fam>,<book>,<so>,<es>,<strike>,<pct> — the grammar lsKingTracker parses (KingTrackerLogic.h); (16.39) the step\'s polarity is the 7th field');
 ok(/out\.push\('KINGNOW,'\+KB\.fam\+','\+KB\.book\+','\+gpF2\(NW\.es\)\+','\+gpI\(NW\.strike\)\+','\+gpI\(NW\.pct\)\)/.test(SRC), 'KINGNOW,<fam>,<book>,<es>,<strike>,<pct>');
 ok(/AU\.rolls=\{ SPX:\(\(KTRK&&KTRK\.SPX\)\|\|\[\]\)\.length-1/.test(SRC), 'the audit carries the roll count (steps - 1)');
 

@@ -13,14 +13,16 @@
 
 namespace ktl {
 
-struct Step { double so; float px; int strike; };
+struct Step { double so; float px; int strike; int pct; Step() : so(0), px(0), strike(0), pct(0) {} };   // (v0.13) pct = the step's polarity (+/-100), 0 when the row did not carry it
 struct Book { std::vector<Step> steps; bool hasNow; float nowPx; int nowStrike, nowPct; Book() : hasNow(false), nowPx(0), nowStrike(0), nowPct(0) {} };
 
 // KINGTRACK,<fam>,<book>,<so>,<px>,<strike>  → a step;  KINGNOW,<fam>,<book>,<px>,<strike>[,<pct>]  → the current King
 inline bool parseTrack(const std::vector<std::string>& t, std::string& fam, std::string& book, Step& st)
 {
     if (t.size() < 6 || t[0] != "KINGTRACK") return false;
-    fam = t[1]; book = t[2]; st.so = atof(t[3].c_str()); st.px = (float)atof(t[4].c_str()); st.strike = atoi(t[5].c_str()); return true;
+    fam = t[1]; book = t[2]; st.so = atof(t[3].c_str()); st.px = (float)atof(t[4].c_str()); st.strike = atoi(t[5].c_str());
+    st.pct = (t.size() > 6 && !t[6].empty()) ? atoi(t[6].c_str()) : 0;   // (v0.13) panel 16.39 writes the polarity; older rows leave it 0
+    return true;
 }
 inline bool parseNow(const std::vector<std::string>& t, std::string& fam, std::string& book, Book& b)
 {
@@ -60,6 +62,16 @@ inline bool bookDrawn(const std::string& book, const std::string& bookFam, const
     if (bookFam != chartFam) return false;
     bool isIF = (book == "IF" || book == "IFQ");
     return sourceIF ? isIF : !isIF;
+}
+
+// (v0.13) THE IF MAGNET'S COLOUR IS ITS POLARITY (operator: "colour should depend on whether it is positive or negative
+// gamma") — the gamma profile's own gold / magenta. Each step is coloured by the polarity it was sampled with; a step
+// from a pre-16.39 row (pct 0) and the live right edge take KINGNOW's polarity; nothing known -> positive (gold).
+inline int polarity(int stepPct, const Book& b)
+{
+    if (stepPct < 0) return -1; if (stepPct > 0) return 1;
+    if (b.hasNow && b.nowPct < 0) return -1;
+    return 1;
 }
 
 inline double staleAge(double asofSo, double localSo)

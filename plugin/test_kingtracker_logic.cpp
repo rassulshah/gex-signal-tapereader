@@ -56,6 +56,14 @@ int main()
     // the IF rows parse with the same grammar
     ktl::Book IFB; std::string f2, b2;
     CHECK(ktl::parseNow(split("KINGNOW,ES,IF,7757.30,7685,-100"), f2, b2, IFB) && b2 == "IF" && IFB.nowStrike == 7685 && IFB.nowPct == -100, "KINGNOW,ES,IF parses like any book (a negative Magnet carries -100)");
+    // ---- (v0.13) the polarity colour of the IF Magnet, and the 7-field row
+    ktl::Step s7; std::string f7, b7;
+    CHECK(ktl::parseTrack(split("KINGTRACK,ES,IF,33608,7688.37,7685,-100"), f7, b7, s7) && s7.pct == -100, "(16.39) KINGTRACK's 7th field is the step's polarity");
+    CHECK(ktl::parseTrack(split("KINGTRACK,ES,IF,33608,7688.37,7685"), f7, b7, s7) && s7.pct == 0, "a 6-field row (pre-16.39) parses with the polarity unknown (0)");
+    ktl::Book PB; PB.hasNow = true; PB.nowPct = -100;
+    CHECK(ktl::polarity(100, PB) == 1 && ktl::polarity(-100, PB) == -1, "a step's own polarity wins: +100 gold, -100 magenta");
+    CHECK(ktl::polarity(0, PB) == -1, "a step without a polarity takes KINGNOW's (here negative)");
+    ktl::Book PN; CHECK(ktl::polarity(0, PN) == 1, "nothing known -> positive (gold)");
     // ---- the stale age
     CHECK(ktl::staleAge(-1, 1) < 0 && ktl::staleAge(35229, 35229 + 180) == 3.0 && ktl::staleAge(23 * 3600 + 50 * 60, 10 * 60) == 20.0, "stale age: unknown, 3 min, the overnight wrap");
     printf("\n%d passed, %d failed\n", passes, fails);

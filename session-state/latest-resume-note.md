@@ -1,5 +1,15 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 06:10 CT (KT 0.12 / GP 0.57 / DM 0.18 / DS 0.9) · **panel v16.38** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.57**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.12** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 07:20 CT (v16.39 / KT 0.13) · **panel v16.39** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.57**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.13** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~07:20 CT — v16.39 + KT 0.13: IF DEFAULT, POLARITY COLOURS, THE SCRAMBLE REPAIRED. START HERE.
+
+His 0.12 dialog was scrambled (IRT stores values by position; moving Source to the top shifted them — width 16776960,
+black NDX, black Magnet → invisible IF line). He answered with requirements instead of a choice: IF default; the
+Magnet's colour = its gamma sign; black never an option. Built: panel 16.39 writes each step's polarity (7th field);
+KT 0.13 defaults to IF, colours the Magnet gold/magenta per step (gamma profile colours), refuses black for any book,
+and `migrateScrambled()` restores his known layout on load. **Never reorder the parameter list again** (in the .cpp).
+He needs: Tampermonkey 16.39 + close/reopen IRT once GEX build logs INSTALLED (read `plugin/out/BUILD-STATUS.txt`).
+Acceptance = his next screenshot: gold/magenta IF line on the ES chart, sane numbers in the dialog.
 
 # ⚠⚠⚠ 2026-09-17 ~06:40 CT — GEX BUILD: THE PLUGINS COMPILE AND INSTALL THEMSELVES. START HERE.
 

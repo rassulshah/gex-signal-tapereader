@@ -1,3 +1,21 @@
+## v16.39 + lsKingTracker 0.13 — IF by default, the Magnet coloured by its polarity, the 0.12 scramble repaired (2026-09-17, ~07:20 CT)
+
+Operator, on the 0.12 dialog: "IF should be default. Color should depend on whether it is positive or negative gamma" and
+"black color should not be an option for NDX because the chart background is black." The 0.12 dialog he sent showed
+width 16776960, font 16736464, NDX black, IF Magnet black: IRT keeps a saved instance's values BY POSITION, and moving
+Source to the top slid every saved number one or two fields over (16776960 is his old yellow SPX colour). The black
+NDX and the black Magnet were that scramble, which is also why the IF line was invisible.
+- **Panel 16.39:** every King step keeps the polarity it was sampled with (`pct`), written as KINGTRACK's 7th field
+  (blank on older steps). `test_kingtracker_rows.js` 33.
+- **KT 0.13:** Source defaults to IF. The IF Magnet has no colour row: each step is drawn in its own polarity's colour —
+  the gamma profile's gold (+γ) / magenta (−γ) — and the right edge in KINGNOW's (`ktl::polarity`; pre-16.39 steps take
+  KINGNOW's). A black or near-black colour is never drawn for any book (falls back to the book's default). On load,
+  `migrateScrambled()` recognises the 0.12 signature (a width or font no human typed) and puts every field back to his
+  layout (width 3, font 3, offset 0, SPX + SPY on, QQQ + NDX off, labels off, dots on, default colours) — nothing to
+  retype. `test_kingtracker_logic.cpp` 26. ⚠ Lesson recorded in the .cpp: never reorder the parameters again.
+Install: GEX build compiles and installs 0.13 by itself (close IRT for the copy); Tampermonkey 16.39 for the polarity
+field — without it the whole Magnet line takes KINGNOW's current polarity, which is still right at the right edge.
+
 ## GEX build — the plugins compile and install themselves (2026-09-17, ~06:40 CT)
 
 Operator: "is there a more automated way of doing the compile so I don't have to do it every single time in a command
