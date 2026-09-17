@@ -113,13 +113,21 @@ def main():
     # (v16.30) THE IF BOOK: GammaProfile-IF.csv carries BOOK,IF0DTE; its "tape" is the audit's ifProf (the normalised
     # InsiderFinance 0DTE ladder the panel derived from the companion's gexProf) and its King is ifProf.king.
     book_row = R.get('BOOK', [['']])[0][0]
+    if book_row == 'SPY':
+        # (16.40) THE SPY BOOK: GammaProfile-SPY.csv — the SPY tape on the ES scale by Skylit's SPY ratio; its audit is spyProf
+        sp = AU.get('spyProf') or {}
+        tape = {('%.2f' % k): v for k, v in (sp.get('prof') or [])}
+        king = sp.get('king'); kingNeg = bool(sp.get('kingNeg'))
+        ratio = sp.get('ratio') or (AU.get('ratio') or {}).get('SPY')
+        add(sp.get('ok') is True, 'A', 'SPY book: audit.spyProf ok (king %s, %s strikes, ratio %s)' % (king, sp.get('n'), ratio))
     if book_row == 'IF0DTE':
         ip = AU.get('ifProf') or {}
         tape = {('%.2f' % k): v for k, v in (ip.get('prof') or [])}
         king = ip.get('king'); kingNeg = (tape.get('%.2f' % king, 0) < 0) if king is not None else None
         add(ip.get('ok') is True, 'A', 'IF book: audit.ifProf ok (king %s, %s strikes, coverage %s%%, spot from %s, payload %s)' % (king, ip.get('n'), ip.get('coverage'), ip.get('spotSrc'), ip.get('payloadT')))
     strikes = R.get('STRIKE', [])
-    add(ratio is not None and ratio > 0.98, 'A', 'SPX->ES ratio present in the audit: %s (front-month basis %+.1f pts on the King)' % (ratio, (king * ratio - king) if (ratio and king) else float('nan')))
+    if book_row == 'SPY': add(ratio is not None and 9.5 < ratio < 10.6, 'A', 'SPY->ES ratio present in the audit: %s' % ratio)
+    else: add(ratio is not None and ratio > 0.98, 'A', 'SPX->ES ratio present in the audit: %s (front-month basis %+.1f pts on the King)' % (ratio, (king * ratio - king) if (ratio and king) else float('nan')))
     add(len(strikes) == len(tape), 'A', 'STRIKE rows (%d) == tape strikes the panel read (%d)' % (len(strikes), len(tape)))
     bad_es, bad_pct, bad_spx = [], [], []
     nodes = []
@@ -138,6 +146,32 @@ def main():
     add(not bad_pct, 'A', 'every %King equals the tape (King forced to +/-100 by its sign)' + ('' if not bad_pct else ' — off: %s' % bad_pct[:5]))
     ranked = sorted(nodes, key=lambda n: (-abs(n['pct']), n['spx']))
     add(all(ranked[i]['rank'] == i + 1 for i in range(min(10, len(ranked)))), 'A', 'ranks 1..10 follow |%King| (ties to the lower strike)')
+    # (16.40) THE ATLAS POOL: field 8 of every STRIKE row is the row's rank in the SPY + SPXW pool (each book's own %King,
+    # ties on |%| to the lower ES price) — re-derived here from the audit's two tapes and diffed row for row
+    ATLAS_POOL = None
+    if AU.get('pool') is not None and book_row in ('ES', 'SPY', ''):
+        spx_t = AU.get('tape') or {}; spy_t = {('%.2f' % k): v for k, v in ((AU.get('spyProf') or {}).get('prof') or [])}
+        rsp = (AU.get('ratio') or {}).get('SPXW'); rspy = ((AU.get('spyProf') or {}).get('ratio')) or (AU.get('ratio') or {}).get('SPY')
+        pool = []
+        kx = AU.get('king'); kneg = AU.get('kingNeg')
+        for k, v in spx_t.items():
+            kk = float(k); pv = (-100 if (v < 0 or kneg) else 100) if (kx is not None and abs(kk - kx) < 0.001) else round(v)
+            pool.append(('SPX', kk, pv, es_of(kk, rsp) if rsp else kk))
+        for k, v in spy_t.items():
+            pool.append(('SPY', float(k), v, (round(float(k) * rspy / 0.25) * 0.25) if rspy else float(k)))
+        pool.sort(key=lambda r: (-abs(r[2]), r[3], r[0]))
+        want = {(r[0], r[1]): i + 1 for i, r in enumerate(pool)}
+        this_book = 'SPY' if book_row == 'SPY' else 'SPX'
+        off8 = []
+        for t in strikes:
+            if len(t) < 7: off8.append(('no field 8', t[5])); continue
+            exp8 = want.get((this_book, num(t[5])))
+            if exp8 is None or int(t[6] or 0) != exp8: off8.append((t[5], t[6], exp8))
+        add(not off8, 'A', 'every STRIKE row\'s pooled rank (field 8) == the SPY + SPXW pool re-derived from the audit (%d SPX + %d SPY rows)' % (len(spx_t), len(spy_t)) + ('' if not off8 else ' — off: %s' % off8[:5]))
+        top5 = [(r[0], int(r[1]) if r[0] == 'SPX' else int(r[1])) for r in pool[:5]]
+        au5 = [(r[0], int(r[1])) for r in (AU.get('pool') or [])[:5]]
+        add(top5 == au5, 'A', 'the pool\'s five (%s) == the audit\'s' % ' '.join('%s %d' % x for x in top5))
+        ATLAS_POOL = [dict(book=r[0], strike=r[1], pct=r[2], es=r[3], badge=i + 1) for i, r in enumerate(pool[:5])]
     kn = [n for n in nodes if n['king']]
     add(len(kn) == 1 and kn[0]['spx'] == king, 'A', 'exactly one King flag, on the tape King %s' % king)
     KING = num(R.get('KING', [['']])[0][0]); add(KING is not None and kn and abs(KING - kn[0]['es']) < 0.001, 'A', 'KING row (%s) == the flagged strike\'s ES' % KING)
@@ -193,6 +227,7 @@ def main():
 
     # ---------------- Gate B: the expected chart ----------------
     exp = {}
+    if ATLAS_POOL: exp['atlas_pool'] = ATLAS_POOL   # (16.40) the five badges as the two rails share them under Rank = Atlas merge
     if nodes and spot:
         tags = roles(nodes, spot)
         exp['tags'] = {('%g' % k): v for k, v in tags.items()}

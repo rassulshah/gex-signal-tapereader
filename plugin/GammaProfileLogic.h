@@ -201,6 +201,13 @@ inline bool contractOffset(float chartClose, bool hasScaleRef, float scaleRef, b
     return true;
 }
 
+// ---- (v0.59) the rank the rail draws with -----------------------------------
+// Rank = Book: the within-book rank (field 4). Rank = Atlas merge: the POOLED rank (field 8, panel 16.40) — the row's
+// place in the SPY + SPXW pool Atlas draws on the ES chart, each book scaled to its own King. A row the panel did not
+// pool (older panel, or the IF book) gets NO_RANK, so it draws grey and unbadged — never a within-book rank in disguise.
+static const int NO_RANK = 9999;
+inline int effectiveRank(int bookRank, int pooledRank, bool atlasMerge) { return atlasMerge ? (pooledRank >= 1 ? pooledRank : NO_RANK) : bookRank; }
+
 // ---- top-N / primary -------------------------------------------------------
 inline int topNFor(int filter) { return (filter==0)?3 : (filter==1)?5 : (filter==2)?8 : (filter==3)?10 : 0; }
 inline bool isPrimary(const Node& n, int filter, int thresh)

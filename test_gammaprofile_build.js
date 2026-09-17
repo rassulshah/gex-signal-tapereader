@@ -18,10 +18,11 @@ eval(['GPTS_VERSION','GP_FILE','GP_SPXWR_KEY','GP_LAST','GP_AUDIT_FILE','GP_AUDI
  'GRID_STACK_STEPS','GRID_STACK_MIN_PCT','GRID_STACK_MAX_PCT','GRID_RUG_FLOOR_STEPS'].map(v).join(''));
 var PANEL_MUTED=false;
 eval(['GP_IF_FILE','GP_IF_BUILT'].map(v).join(''));
-eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gpEmRows','gpWallDepth','gpSlopeWord','gpLevelRows','gammaProfileBuildIF','gammaProfileBuild'].map(ex).join('\n'));
+eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gpEmRows','gpWallDepth','gpSlopeWord','gpLevelRows','gammaProfileBuildIF','gpSpyStrikes','gpAtlasPool','gammaProfileBuildSPY','gammaProfileBuild'].map(ex).join('\n'));
+eval(['GP_SPY_FILE','GP_SPY_BUILT'].map(v).join(''));   // (v16.40)
 var GP_DEPTH_T0=0.70, GP_DEPTH_TW=0.70, GP_SLOPE_STEEP=0.10;   // (v16.35) the IF-extras thresholds
 // the helpers the code calls must be reachable from a mutant built with new Function (global scope) — see section 8
-Object.assign(global, { gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gpEmRows, gpWallDepth, gpSlopeWord, gpLevelRows, GP_DEPTH_T0, GP_DEPTH_TW, GP_SLOPE_STEEP, gammaProfileBuildIF, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
+Object.assign(global, { gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gpEmRows, gpWallDepth, gpSlopeWord, gpLevelRows, GP_DEPTH_T0, GP_DEPTH_TW, GP_SLOPE_STEEP, gammaProfileBuildIF, gpSpyStrikes, gpAtlasPool, gammaProfileBuildSPY, GP_SPY_FILE, GP_SPY_BUILT, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
 
 // ---- the world, stubbed to the 09:47 CT snapshot ----
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
@@ -192,5 +193,39 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
   ok(!IF10.SCALEREF || IF10.SCALEREF[0].length===3, '10.2 the IF book carries the same timed row', IF10.SCALEREF);
   ok(B10.audit && B10.audit.scaleRefT===1789586760, '10.3 the audit records the quote time', B10.audit && B10.audit.scaleRefT);
   global.LASTFUTDER={ ES1:{ j:{ derived:[ { source:'SPY', ratio:SPY_RATIO, levels:[{s:7613.5}] }, { source:'SPXW', ratio:RATIO, levels:[{s:7613.5}] } ] } } };
+}
+// ======================= 11. THE SPY BOOK + THE ATLAS POOL (v16.40) — GammaProfile-SPY.csv and the pooled rank =======================
+// The morning of 2026-09-17, measured on the live ES1 feed (nodes=5, 0DTE): SPY 763 -100 / 762 +71 / 760 -54 / 761 +36 / 765 -16
+// against SPXW 7650 +100 / 7655 +66 / 7635 +25 / 7645 +19 / 7630 +13 -> Atlas's five = SPY 763, SPX 7650, SPY 762, SPX 7655, SPY 760.
+{
+  const SPXT={ '7650.00':100,'7655.00':66,'7635.00':25,'7645.00':19,'7630.00':13,'7640.00':3,'7660.00':-9,'7625.00':5 };
+  const SPYT={ '763.00':-100,'762.00':71,'760.00':-54,'761.00':36,'765.00':-16,'764.00':12,'759.00':-8 };
+  const keepTT=TT; TT={ pct:SPXT, king:7650, kingNeg:false, ladderSrc:'trinity' };
+  global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:(sym==='SPY'?{ pct:SPYT, king:763, kingNeg:true, ladderSrc:'trinity' }:null));
+  const B11=gammaProfileBuild(); const R11=rows(B11.csv); const S11=rows(GP_SPY_BUILT||'');
+  const mr=(RR,spx)=>{ const t=(RR.STRIKE||[]).find(x=>parseFloat(x[5])===spx); return t?t[6]:undefined; };
+  ok(R11.STRIKE.every(t=>t.length===7), '11.1 every SPX STRIKE row carries an 8th field (the pooled rank)', R11.STRIKE[0]);
+  // (this fixture's ratios are September's: SPX 7650 -> 7654.25 sits BELOW SPY 763 -> 7712, so the |100| tie goes to SPX here;
+  //  on the live Dec ratio 7650 -> 7718.7 sits above 7710 and Atlas listed SPY 763 first — the rule is the same, the prices differ)
+  ok(mr(R11,7650)==='1' && mr(R11,7655)==='4' && mr(R11,7635)==='7', '11.2 SPX pooled ranks: 7650 -> 1 (the |100| tie to the lower ES price), 7655 -> 4, 7635 -> 7 (below the five)', [mr(R11,7650),mr(R11,7655),mr(R11,7635)]);
+  ok(S11.BOOK && S11.BOOK[0][0]==='SPY' && S11.STRIKE && S11.STRIKE.length===7, '11.3 GammaProfile-SPY.csv: BOOK,SPY with the seven SPY strikes', S11.BOOK);
+  ok(mr(S11,763)==='2' && mr(S11,762)==='3' && mr(S11,760)==='5' && mr(S11,761)==='6', '11.4 SPY pooled ranks: 763 -> 2, 762 -> 3, 760 -> 5, 761 -> 6 (the five split 2 SPX + 3 SPY)', [mr(S11,763),mr(S11,762),mr(S11,760),mr(S11,761)]);
+  const k11=S11.STRIKE.find(t=>t[3]==='1');
+  ok(k11 && parseFloat(t=k11[5])===763 && k11[1]==='-100' && k11[2]==='1' && Math.abs(parseFloat(k11[0])-Math.round(763*SPY_RATIO/0.25)*0.25)<0.001, '11.5 the SPY King: 763, -100 (negative King), within-book rank 1, ES = 763 x the SPY ratio on the 0.25 grid', k11);
+  ok(S11.KING && Math.abs(parseFloat(S11.KING[0][0])-parseFloat(k11[0]))<0.001, '11.6 the SPY file\'s KING row = the King\'s ES', S11.KING);
+  ok(S11.SCALEREF && S11.REGIME && S11.FLIP && S11.CW && S11.PW, '11.7 the SPY file carries the market rows the SPX file has (SCALEREF, REGIME, FLIP, CW, PW; SPOT rides when the day section wrote one)', Object.keys(S11));
+  ok(!S11.KINGTRACK && !S11.DAYSA && !S11.DAYEXP, '11.8 ... and none of the SPX file\'s King-tracker or day rows');
+  ok(B11.audit.pool && B11.audit.pool.slice(0,5).map(r=>r[0]+r[1]).join(' ')==='SPX7650 SPY763 SPY762 SPX7655 SPY760', '11.9 the audit\'s pool = Atlas\'s five, own-% order, the |100| tie to the lower ES price', B11.audit.pool);
+  ok(B11.audit.spyProf && B11.audit.spyProf.ok && B11.audit.spyProf.king===763 && B11.audit.spyProf.n===7, '11.10 the audit records the SPY book', B11.audit.spyProf);
+  // no SPY tape: the SPX file still ranks its own rows in a one-book pool, the SPY file is a BOOK-only stub
+  global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
+  const B11b=gammaProfileBuild(); const R11b=rows(B11b.csv);
+  ok(mr(R11b,7650)==='1' && mr(R11b,7655)==='2' && GP_SPY_BUILT===null && B11b.audit.spyProf && !B11b.audit.spyProf.ok, '11.11 no SPY tape: the pool is the SPX book alone (7650 -> 1), no SPY file, the audit says why', [mr(R11b,7650), GP_SPY_BUILT, B11b.audit.spyProf]);
+  // mutation: a pool ranked by within-book rank instead of own-% would put SPX 7655 (rank 2 in its book) ahead of SPY 762
+  { const mut=ex('gpAtlasPool').replace('(Math.abs(b.pct)-Math.abs(a.pct)) || (a.es-b.es)','(a.es-b.es)'); ok(mut!==ex('gpAtlasPool'), '11.12 mutation applies');
+    const keep=global.gpAtlasPool; eval(mut); global.gpAtlasPool=gpAtlasPool; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:(sym==='SPY'?{ pct:SPYT, king:763, kingNeg:true }:null));
+    const Bm=gammaProfileBuild(); ok(mr(rows(Bm.csv),7655)!=='4', '11.13 mutation: a pool not ranked by own-% no longer puts SPX 7655 fourth (the assertions bite)', mr(rows(Bm.csv),7655));
+    global.gpAtlasPool=keep; }
+  TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
 }
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

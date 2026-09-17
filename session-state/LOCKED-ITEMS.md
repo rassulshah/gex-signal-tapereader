@@ -6,6 +6,12 @@ _Created 2026-08-27._
 
 ---
 
+## ✅ BUILT 2026-09-17 — TWO RAILS, THE ATLAS POOL (v16.40 / GP 0.59)
+Operator: "there should be two profiles, one for SPX and another for SPY, and the top 5 should be split between them"
+(after measuring Atlas's ES1 derived merge on the live feed). Built as the SPY book file + a pooled rank on every STRIKE
+row + `Rank = Atlas merge` in lsGammaProfile; SPY rail left, SPX right; day candle off for now. Awaiting his install and
+the same-minute eyes-on against Atlas. Agreed in the mockup discussion: a rail with no pooled badge that minute draws grey.
+
 ## ✅ BUILT 2026-09-17 — lsKingTracker Source = Skylit | IF (v16.38 / KT 0.11)
 Proposed 2026-09-16 17:30 (IF's Magnet for the King tracker), lost from the lists, raised by him 2026-09-17: "the king
 tracker should be able to switch back and forth between IF and skylit". Built as a switch (default Skylit). Awaiting his

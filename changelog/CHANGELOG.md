@@ -1,3 +1,27 @@
+## v16.40 + lsGammaProfile 0.59 — the SPY book and the Atlas pool: two rails, five badges shared (2026-09-17, ~10:40 CT)
+
+Operator, after checking Atlas's ES1 view against IRT: "our implementation of top 5 is inconsistent with Atlas and there
+should be two profiles, one for SPX and another for SPY, and the top 5 should be split between them" → mockup agreed,
+"build". Measured on the live feed that morning (nodes=5, 0DTE): Atlas's ES chart is ONE POOL of the SPY and SPXW books,
+each scaled to its own King (= 100), the five taken by that own-book percentage — both Kings always in, the rest as the
+percentages fall (SPY 763 ①, SPX 7650 ②, SPY 762 ③, SPX 7655 ④, SPY 760 ⑤ at 10:0x). Not a dollar ranking; the monthly
+SPX book is not in it.
+- **Panel 16.40:** `GammaProfile-SPY.csv` — the SPY tape in the same grammar (ES by Skylit's SPY ratio, the raw SPY strike in
+  field 7, the market rows of the SPX file carried over: SCALEREF, FLIP/CW/PW/SLOPE, EM, REGIME, SPOT). Book = SPY in the
+  plugin had been a dead option since 0.47 — the file was never written. `gpAtlasPool`: every row of both books by its own
+  %King, ranked together (ties on |%| to the lower ES price, as the feed lists them); the rank goes into an 8th STRIKE
+  field in BOTH files; the audit carries `pool` (the top ten), `poolN`, `spyProf`. `__gptsDebug.gpSPY()`.
+- **GP 0.59:** `Rank` option (Book | Atlas merge), appended at the END of the dialog (the KT 0.12 lesson). Under Atlas merge
+  every strike draws with its pooled rank through the one `rank` field, so badges, the Top-N cut, the top-node lines and
+  the deflection bands all follow it; an unpooled row (IF book, an older panel) gets NO_RANK — grey, unbadged, never a
+  book rank in disguise. `gpl::effectiveRank`, pinned (logic 63).
+- **Regression:** Gate A §11 (78): the SPY file, the pooled ranks on both files, the pool order, the no-SPY-tape case, a
+  mutation; `gp-regress.py` re-derives the pool from the audit's two tapes and diffs field 8 on either file, and prints
+  the five badges as `atlas_pool` for the eyes-on check. All 21 suites green; smoke clean.
+His setup: two lsGammaProfile instances — SPY: Side = Left, Book = SPY, Rank = Atlas merge · SPX: Side = Right, Book = SPX,
+Rank = Atlas merge; the day candle off for now; the IF switch unchanged. A rail with no pooled badge that minute draws
+grey (what Atlas would show), per the mockup discussion.
+
 ## lsKingTracker 0.15 — no black King colours, in the dialog too (2026-09-17, ~09:55 CT)
 
 Operator: "I noticed the king colors were default black — you know not to use black because my chart in IRT is black."

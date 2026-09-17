@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Two rails — Atlas merge</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.35 Helvetica,Arial,sans-serif}
+ .wrap{padding:14px 18px}
+ h1{font-size:15px;margin:0 0 4px;font-weight:600}
+ .sub{color:#8a97a6;font-size:12px;margin-bottom:10px}
+ .chart{position:relative;width:1180px;height:560px;background:#000;border:1px solid #222;overflow:hidden}
+ .axis{position:absolute;right:0;top:0;bottom:0;width:58px;border-left:1px solid #2a2f36;background:#050607}
+ .tick{position:absolute;right:6px;color:#9aa5b1;font-size:11px;transform:translateY(-50%)}
+ .grid{position:absolute;left:0;right:58px;height:1px;background:#15181c}
+ .rail{position:absolute;top:0;bottom:0;width:300px}
+ .rail.left{left:0}.rail.right{right:58px}
+ .bar{position:absolute;height:12px;border-radius:6px;transform:translateY(-50%)}
+ .lbl{position:absolute;transform:translateY(-50%);font-size:11px;white-space:nowrap}
+ .badge{display:inline-block;width:16px;height:16px;border-radius:50%;background:#101418;border:1px solid #dfe7f0;color:#dfe7f0;text-align:center;line-height:16px;font-size:10px;font-weight:700;margin:0 3px;vertical-align:middle}
+ .book{position:absolute;top:8px;font-size:11px;font-weight:700;letter-spacing:.5px;color:#8a97a6}
+ .book.l{left:10px}.book.r{right:10px}
+ .grey{color:#566472}
+ .price{position:absolute;left:300px;right:358px;top:0;bottom:0}
+ .cndl{position:absolute;width:6px;background:#2f8f5b}
+ .note{margin-top:12px;color:#8a97a6;font-size:12px;max-width:1180px}
+ .kv{display:grid;grid-template-columns:auto auto;gap:2px 14px;margin-top:8px;font-size:12px}
+ .kv b{color:#dfe7f0;font-weight:600}
+</style></head><body><div class="wrap">
+<h1>Two rails, one pool — SPY left · SPX right · badges from the Atlas merge</h1>
+<div class="sub">This morning's real pool (0DTE, 10:0x CT): SPY 763 ① · SPX 7650 ② · SPY 762 ③ · SPX 7655 ④ · SPY 760 ⑤ — three on the SPY rail, two on the SPX rail. Percentages stay each book's own; only the badges are shared.</div>
+<div class="chart" id="c"></div>
+<div class="note">
+ <b>What changes:</b> the badge numbers come from the pooled rank (SPY + SPXW, each scaled to its own King, top 5 by that percentage) instead of the within-book rank; a bar without a pooled badge draws grey, exactly like a sub-threshold bar today. Each book's King always carries a badge (both are 100% in the pool). <b>Rank = Book</b> keeps today's behaviour.
+ <div class="kv">
+  <span>SPY rail (left)</span><b>Side = Left · Book = SPY · Rank = Atlas merge · Show = Top 5</b>
+  <span>SPX rail (right)</span><b>Side = Right · Book = SPX · Rank = Atlas merge · Show = Top 5</b>
+  <span>Day candle</span><b>off for now (its space becomes the SPY rail)</b>
+  <span>IF rail</span><b>unchanged — Book = IF on either instance, switch as today</b>
+ </div>
+</div>
+</div>
+<script>
+(function(){
+ var c=document.getElementById('c'); var H=560, top=7740, bot=7670; function y(p){ return (top-p)/(top-bot)*H; }
+ // axis + grid
+ var axis=document.createElement('div'); axis.className='axis'; c.appendChild(axis);
+ for(var p=7670;p<=7740;p+=10){ var t=document.createElement('div'); t.className='tick'; t.style.top=y(p)+'px'; t.textContent=p; axis.appendChild(t); var g=document.createElement('div'); g.className='grid'; g.style.top=y(p)+'px'; c.appendChild(g); }
+ // a few candles for context
+ var pr=document.createElement('div'); pr.className='price'; c.appendChild(pr);
+ var cs=[[7688,7700],[7696,7712],[7704,7716],[7700,7708],[7695,7706],[7690,7703]];
+ cs.forEach(function(v,i){ var d=document.createElement('div'); d.className='cndl'; d.style.left=(60+i*70)+'px'; d.style.top=y(v[1])+'px'; d.style.height=(y(v[0])-y(v[1]))+'px'; if(i%2) d.style.background='#b83a3a'; pr.appendChild(d); });
+ var gold='#e3c341', mag='#c43baf', grey='#566472';
+ function rail(side, book, rows){
+  var r=document.createElement('div'); r.className='rail '+side; c.appendChild(r);
+  var bk=document.createElement('div'); bk.className='book '+(side==='left'?'l':'r'); bk.textContent=book+' book'; r.appendChild(bk);
+  rows.forEach(function(n){
+   var w=Math.round(Math.abs(n.pct)*1.6), col=n.badge?(n.pct<0?mag:gold):grey;
+   var b=document.createElement('div'); b.className='bar'; b.style.top=y(n.es)+'px'; b.style.width=w+'px'; b.style.background=col; if(!n.badge) b.style.opacity=.55;
+   var l=document.createElement('div'); l.className='lbl'; l.style.top=y(n.es)+'px';
+   var txt=(n.badge?'<span class="badge">'+n.badge+'</span>':'')+'<span style="color:'+(n.badge?'#dfe7f0':grey)+'">'+(n.king?(n.name||'K')+' ':'')+n.strike+' '+(n.pct>0?'+':'')+n.pct+'%</span>';
+   if(side==='left'){ b.style.left='0'; l.style.left=(w+8)+'px'; l.innerHTML=txt; } else { b.style.right='0'; l.style.right=(w+8)+'px'; l.innerHTML=txt; }
+   r.appendChild(b); r.appendChild(l);
+  });
+ }
+ rail('left','SPY',[
+  {strike:763,es:7710.1,pct:-100,badge:1,king:true,name:'K'},
+  {strike:762,es:7700.0,pct:71,badge:3},
+  {strike:760,es:7679.8,pct:-54,badge:5},
+  {strike:761,es:7689.9,pct:36},
+  {strike:765,es:7730.3,pct:-16}]);
+ rail('right','SPX',[
+  {strike:7650,es:7718.7,pct:100,badge:2,king:true,name:'GPoc'},
+  {strike:7655,es:7723.8,pct:66,badge:4},
+  {strike:7635,es:7703.6,pct:25},
+  {strike:7645,es:7713.7,pct:19},
+  {strike:7630,es:7698.6,pct:13}]);
+})();
+</script></body></html>

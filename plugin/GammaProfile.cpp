@@ -3,9 +3,10 @@
  *
  *  Per-strike gamma histogram + level rail, drawn on the instrument price axis
  *  (INSTRUMENT_SCALE). Reads %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\GammaProfile.csv
- *  (or GammaProfile-SPY.csv when Book = SPY).
+ *  (or GammaProfile-SPY.csv when Book = SPY — written by the panel since 16.40; Rank = Atlas merge shares the
+ *  five badges between a SPY rail and an SPX rail the way Atlas pools the two books).
  *
- *  CSV: STRIKE,<price>,<pctKing -100..100>,<rank>,<isKing 0|1>,<type>,<spx strike>
+ *  CSV: STRIKE,<price>,<pctKing -100..100>,<rank>,<isKing 0|1>,<type>,<spx strike>[,<pooled rank>]   (v0.59: field 8 = the Atlas pool)
  *       KING,<p>  CW,<p>,<spx>,<win>,<src>  PW,...  FLIP,...  EMH,<p>  EML,<p>  SPOT,<p>
  *       CW/PW,<es>,<spx>,<win>,<src>[,<depth 0D|WK|MO>,<s0>,<sW>]  SLOPE,<word>,<sDn>,<sUp>,<rDn>,<rUp>
  *       SCALEREF,<front ES>[,<CT sod>,<CT date>]  REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note>
@@ -99,6 +100,7 @@ struct PIdx {
     int cpos, cneg, cmid, kingcol, amp, trans;
     int showpct, pctpos, hideu, rank, rankpos, rankscope, type, kinglabel, font;
     int kline, cw, pw, flip, em, lstyle, lpos, extk, topnodes, topstyle, spyking;
+    int rankmode;   // (v0.59) Book | Atlas merge
     int header, spot;
     int roles, regime, panelpos, defbands, confl, legend;   // structure read (appended v0.35)
     int headerpos;                                          // header placement (appended v0.36)
@@ -110,6 +112,7 @@ static PIdx PX;
 struct Settings {
     int book, width, side, thick, filter, thresh, below, scale, kingcol;
     int pctpos, hideu, rankpos, rankscope, font, lstyle, lpos, topstyle;
+    int rankmode;   // (v0.59) 0 = within-book rank, 1 = the pooled (Atlas merge) rank
     bool detach, round, amp, trans, showpct, rank, type;
     bool kline, cw, pw, flip, em, extk, topnodes, spyking, header, spot;
     bool roles, regime, defbands, confl, legend; int panelpos;   // structure read
@@ -120,7 +123,7 @@ struct Settings {
     char kinglabel[24];
 };
 
-struct GStrike { float price; float pct; int rank; bool king; std::string type; float spx; };   // spx = raw SPXW strike (v0.41)
+struct GStrike { float price; float pct; int rank; bool king; std::string type; float spx; int mrank; GStrike() : price(0), pct(0), rank(0), king(false), spx(0), mrank(0) {} };   // spx = raw strike (v0.41); mrank = the pooled rank (v0.59, panel 16.40)
 
 // ---------------------------------------------------------------------------
 class GammaProfile : public cppExtension {
@@ -184,7 +187,7 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.type=true; cfg.font=10;
     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
-    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false;
+    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=0;
     cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false; cfg.lvllabels=true;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
 }
@@ -270,6 +273,10 @@ int cppExtension::setup(void)
     PX.extk   = pc++; setBoolParameter   ("Extend King line", false);
     PX.topnodes=pc++; setBoolParameter   ("Top-node lines", false, SL);
     PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash");
+    // (v0.59) APPENDED — IRT stores a saved instance's values by position (the KT 0.12 scramble); new rows go at the end.
+    // Rank = Atlas merge: badges and the Top-N cut from the POOLED rank (the SPY + SPXW pool Atlas draws, panel 16.40),
+    // so a SPY rail (Side = Left, Book = SPY) and an SPX rail share the five exactly as Atlas allocates them.
+    PX.rankmode = pc++; setListParameter ("Rank", 0, "Book;Atlas merge");
     PX.lpos   = pc++; setListParameter   ("Label at", 0, "Left;Center;Right", 0, SL);
     PX.topstyle=pc++; setListParameter   ("Top-node style", 1, "Solid;Dot;Dash");
     PX.spyking= pc++; setBoolParameter   ("SPY King line", false, SL);
@@ -347,6 +354,7 @@ void GammaProfile::readSettings(Settings& S)
     S.flip  = isBoxChecked(PX.flip) != 0;
     S.em    = isBoxChecked(PX.em) != 0;
     S.lstyle= getListIndex(PX.lstyle);
+    { int rm = getListIndex(PX.rankmode); S.rankmode = (rm == 1) ? 1 : 0; }   // (v0.59)
     S.lpos  = getListIndex(PX.lpos);
     S.extk  = isBoxChecked(PX.extk) != 0;
     S.topnodes = isBoxChecked(PX.topnodes) != 0;
@@ -399,6 +407,7 @@ void GammaProfile::load()
             s.king  = (atoi(t[4].c_str()) != 0);
             s.type  = (t.size() >= 6) ? t[5] : (s.king ? std::string("KING") : std::string());
             s.spx   = (t.size() >= 7) ? (float)atof(t[6].c_str()) : 0.0f;   // (v0.41) raw SPXW strike, 0 if the panel predates it
+            s.mrank = (t.size() >= 8 && !t[7].empty()) ? atoi(t[7].c_str()) : 0;   // (v0.59) the pooled rank (panel 16.40); 0 = not pooled
             tmp.push_back(s);
         } else if (t.size() >= 2) {
             float v = (float)atof(t[1].c_str());
@@ -952,6 +961,9 @@ int GammaProfile::draw(void)
 {
     load();
     applyContractOffset();  // (v0.39) align to this chart's contract BEFORE render maps prices to Y
+    // (v0.59) Rank = Atlas merge: every strike draws with its POOLED rank — badges, the Top-N cut, the top-node lines and
+    // the deflection bands all follow it through the one `rank` field; an unpooled row (IF book, old panel) gets NO_RANK
+    for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
     render(cfg);       // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
     drawStaleBadge();  // (v0.38) warn if the CSV is cold, regardless of what render drew
     return RTX_OK;
@@ -1042,6 +1054,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.58");
+    p->setVersion("0.59");
     return p;
 }

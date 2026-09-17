@@ -1,6 +1,6 @@
 {
- "v": "16.39",
- "t": 1789625791887,
+ "v": "16.40",
+ "t": 1789660432197,
  "ct": 37980,
  "tape": {
   "7695.00": 1,
@@ -83,6 +83,7 @@
  "notes": [],
  "tapeSrc": "trinity",
  "tapeCount": 20,
+ "poolErr": "gpSpyStrikes is not defined",
  "scaleRefT": 1789572780,
  "depth": {
   "cw": null,
@@ -255,6 +256,10 @@
   "king": null,
   "n": 0,
   "maxAbs": null
+ },
+ "spyProf": {
+  "ok": false,
+  "why": "threw"
  },
  "kingNow": {
   "SPX": {

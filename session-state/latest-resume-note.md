@@ -1,5 +1,17 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 07:20 CT (v16.39 / KT 0.13) · **panel v16.39** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.58**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 10:40 CT (v16.40 / GP 0.59) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.59**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~10:40 CT — v16.40 + GP 0.59: THE SPY BOOK + THE ATLAS POOL (two rails, five badges shared). START HERE.
+
+He compared Atlas's ES1 view to IRT: ES has NO native book on Skylit — the ES chart is the DERIVED layer, one pool of the
+SPY and SPXW books each scaled to its own King, top five by that percentage (both Kings always in; 3 SPY + 2 SPX that
+morning; measured on the live feed, raw dollars — NOT a dollar ranking, monthly SPX excluded). His call: two rails, SPY
+LEFT and SPX RIGHT, the five badges split as Atlas splits them; the day candle off for now. Built: the panel writes
+`GammaProfile-SPY.csv` (Book = SPY had been dead since 0.47) and an 8th STRIKE field = the pooled rank on both files;
+GP 0.59 `Rank = Atlas merge` draws from it (unpooled rows grey). Mockup: `two-rails-mockup.html`. **He needs: Tampermonkey
+16.40 + GEX build installs 0.59 (restart IRT), then a SECOND lsGammaProfile instance: Side = Left, Book = SPY, Rank =
+Atlas merge; the existing one Book = SPX, Rank = Atlas merge.** Eyes-on = his next screenshot vs Atlas (same minute).
+Still open: Derived-window caveat (the pool is 0DTE like the nodes=5 request; his page selector may differ).
 
 # ⚠ 2026-09-17 ~09:55 CT — KT 0.15: the dialog's black colour swatches (0.13 used setIntegerValue on colour rows — wrong setter) repaired with setParameterColor; black never shown or drawn. GEX build installs it; restart IRT.
 

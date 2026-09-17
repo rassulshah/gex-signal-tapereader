@@ -206,6 +206,14 @@ int main()
         for (size_t i=0;i<r.line.size();i++) if ((unsigned char)r.line[i] > 127) { CHECK(false, "non-ASCII byte in a regime line"); break; }
     }
 
+    // ---- (v0.59) the rank the rail draws with: Book or the Atlas pool
+    CHECK(gpl::effectiveRank(3, 0, false) == 3 && gpl::effectiveRank(3, 7, false) == 3, "Rank = Book: the within-book rank, whatever the pool says");
+    CHECK(gpl::effectiveRank(3, 7, true) == 7 && gpl::effectiveRank(1, 2, true) == 2, "Rank = Atlas merge: the pooled rank (SPX 7650 is 1 in its book, 2 in the pool)");
+    CHECK(gpl::effectiveRank(1, 0, true) == gpl::NO_RANK, "an unpooled row under Atlas merge gets NO_RANK — never its book rank in disguise");
+    { gpl::Node n; n.rank = gpl::effectiveRank(2, 0, true); n.pct = 66; CHECK(!gpl::isPrimary(n, 1, 20), "... so it is not primary under Top 5: grey, no badge"); }
+    { gpl::Node n; n.rank = gpl::effectiveRank(2, 4, true); n.pct = 66; CHECK(gpl::isPrimary(n, 1, 20) && !gpl::isPrimary(n, 0, 20), "SPX 7655: pooled 4 -> primary under Top 5, not under Top 3"); }
+    { gpl::Node n; n.rank = gpl::effectiveRank(3, 6, true); n.pct = 36; CHECK(!gpl::isPrimary(n, 1, 20), "SPY 761: pooled 6 -> outside the five (Atlas showed it grey)"); }
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

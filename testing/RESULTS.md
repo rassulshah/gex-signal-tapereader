@@ -174,3 +174,38 @@ _KT 0.15: black colour rows repaired in the dialog_
 | kingtracker | S | `KingTracker.cpp` | ok | ok |
 
 _host: vm, C++: g++_
+
+## 2026-09-17 15:53  ·  gamma daymodel daystats kingtracker  ·  panel 16.40 / companion 1.21 / GP 0.59 / DM 0.18 / DS 0.9 / KT 0.15  ·  ALL GREEN
+
+_v16.40 / GP 0.59: the SPY book + the Atlas pool; Rank = Atlas merge_
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 78/78 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 63/63 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 18/18 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 19/19 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 18/18 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 18/18 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+| daymodel | A | `test_daymodel_em.js` | 34/34 | ok |
+| daymodel | A | `test_day_export.js` | 38/38 | ok |
+| daymodel | A | `test_hodlod.js` | 176/176 | ok |
+| daymodel | B | `test_daymodel_logic.cpp` | 23/23 | ok |
+| daymodel | L | `synth-1033 (live runner)` | 10/10 | ok |
+| daymodel | S | `DayModel.cpp` | ok | ok |
+| daystats | A | `test_daystats_cond.js` | 27/27 | ok |
+| daystats | A | `test_day_export.js` | 38/38 | ok |
+| daystats | A | `test_hodlod.js` | 176/176 | ok |
+| daystats | B | `test_daystats_logic.cpp` | 19/19 | ok |
+| daystats | L | `synth-1033 (live runner)` | 9/9 | ok |
+| daystats | S | `DayStats.cpp` | ok | ok |
+| kingtracker | A | `test_kingtracker_rows.js` | 33/33 | ok |
+| kingtracker | B | `test_kingtracker_logic.cpp` | 30/30 | ok |
+| kingtracker | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
+| kingtracker | S | `KingTracker.cpp` | ok | ok |
+
+_host: vm, C++: g++_
