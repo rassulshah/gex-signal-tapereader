@@ -1,3 +1,11 @@
+## lsGammaProfile 0.53 — Book defaults to IF (2026-09-16, ~21:55 CT)
+
+Operator, on "which book is the primary rail": "I only want to see one or the other and should be able to switch between
+them. Let's try IF as default for now." One lsGammaProfile instance; the Book dropdown (Auto / SPX / SPY / IF) is the
+switch; a new instance now starts on IF. Existing instances keep their saved Book. The doctrine tags on the IF rail are
+Skylit-doctrine shapes on a non-Skylit ladder (IF-BOOK-OPTION.md §6) — on by default, `Node name inside` turns them off.
+lsKingTracker still follows the Skylit King (GammaProfile.csv); the chip's King on the IF rail is IF's.
+
 ## lsGammaProfile 0.52 — the Magnet (King) on the regime chip, after the PW (2026-09-16, ~21:50 CT)
 
 Operator: "add the Magnet (King) to the Regime Chip. It can be right after PW." Chip line 2 now reads

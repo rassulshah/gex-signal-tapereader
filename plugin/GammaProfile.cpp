@@ -17,6 +17,7 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.53 — Book defaults to IF (one rail, switch the Book dropdown to compare; operator 2026-09-16).
  *  v0.52 — the Magnet (King) on the chip's second line, right after the PW (operator, 21:40).
  *  v0.51 — pill placement: outward order bubble · tag · pill · % (the pill had covered the % label); chip gaps measured.
  *  v0.50 — IF extras: the wall DEPTH pill (0D / WK / MO from the CW / PW rows' 6th field) beside the node tag and on
@@ -173,7 +174,7 @@ int cppExtension::destroy(void) { return RTX_OK; }
 // ---- constructor: cache safe defaults so the first draw (before calc) is valid
 GammaProfile::GammaProfile() : cppExtension()
 {
-    cfg.book=0; cfg.width=100; cfg.side=0; cfg.detach=true; cfg.thick=0; cfg.round=true;
+    cfg.book=3; cfg.width=100; cfg.side=0; cfg.detach=true; cfg.thick=0; cfg.round=true;
     cfg.filter=1; cfg.thresh=20; cfg.below=0; cfg.scale=0;
     cfg.cpos=D_POS; cfg.cneg=D_NEG; cfg.cmid=D_MID; cfg.kingcol=0; cfg.amp=false; cfg.trans=false;
     cfg.showpct=true; cfg.pctpos=0; cfg.hideu=5; cfg.rank=true; cfg.rankpos=0; cfg.rankscope=0;
@@ -229,7 +230,7 @@ int cppExtension::setup(void)
     int pc = 0;                        // the TRUE parameter index, one per control
 
     // PROFILE
-    PX.book   = pc++; setListParameter   ("Book", 0, "Auto;SPX;SPY;IF");   // (v0.47) IF = the InsiderFinance 0DTE book, GammaProfile-IF.csv
+    PX.book   = pc++; setListParameter   ("Book", 3, "Auto;SPX;SPY;IF");   // (v0.47) IF = the InsiderFinance 0DTE book, GammaProfile-IF.csv · (v0.53) IF is the DEFAULT: operator 2026-09-16, "one or the other, switchable; IF as default for now"
     PX.width  = pc++; setIntegerParameter("Width px", 100, 0, SL);
     PX.side   = pc++; setListParameter   ("Side", 0, "Right;Left");
     PX.thick  = pc++; setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
@@ -1033,6 +1034,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.52");
+    p->setVersion("0.53");
     return p;
 }

@@ -140,6 +140,10 @@ companion 1.21 / lsGammaProfile 0.50 / lsDayStats 0.7); awaiting install. OPEN u
 (0.70 / 0.70) and the slope threshold (0.10) once the rows have a history; the "wall at 5 pts inside the expected
 extreme stops the day" hint (KEY-LEVELS-STUDY §4) could use the depth tag as a conditioning variable.
 
+### DECIDED 2026-09-16 21:55 — ONE RAIL, SWITCHABLE, IF DEFAULT (lsGammaProfile 0.53). F step 9 ("what is IF's book FOR")
+answered by use: IF is the rail he looks at; Skylit is one dropdown away. Still UNANSWERED (asked 21:50, no reply yet):
+item E (IF payload-age flag), the volume / trend-day-flag study, the NQ cross-check.
+
 ### CARRIED OPEN (unchanged tonight)
 - Q12 top-3-vs-top-5 gamma lines (per-rank deflection table, sessions since 09-09) — operator asked "would I have
   seen it with Top 5" → answered (yes, ranks 2/3 are in Top 5); the measured question is still open.
