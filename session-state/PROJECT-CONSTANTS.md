@@ -669,3 +669,13 @@ RULE: the repo is the first place to look, not the last. The Academy docs, the I
 - **git add -A on the user's machine sweeps ANYTHING in the repo folder** — that is how ~28MB of
   old installers entered mockups/ at v13.8. .gitignore now blocks gexdrop*.zip / applygex*.bat /
   pushgex*.bat / install-v*.bat, and the applier unstages them belt-and-braces.
+
+## 2026-09-17 — "APPENDED" IS A LINE NUMBER, NOT A WORD (GP 0.59 → 0.60)
+
+IRT stores a saved instance's parameter values BY POSITION. GP 0.59 added `Rank` with a comment reading "APPENDED" and a
+commit saying "at the end" — and put it after "Line style", mid-list, no version bump. Fourteen rows shifted on both of his
+instances, six hours after KT 0.12 had done the same thing and been repaired. The check is mechanical: the new row's
+`pc++` line must be the one immediately above `return RTX_OK;` in `setup()`, and a reviewer reads THAT line, not the
+comment. If a row must move anyway, bump `setParameterVersion` (defaults, he re-enters a few fields) rather than
+shipping a silent scramble.
+

@@ -151,6 +151,9 @@ public:
     std::string book;
     double asofSo;               // (v0.38) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     Settings cfg;                // cached settings (populated in parms callbacks, used in draw)
+    // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
+    short stPaneL, stPaneR, stAnchor, stColW; int stPrimary, stDrawn; bool stRendered;
+    void writeStatus();
 
     void load();
     void drawStaleBadge();       // (v0.38) red badge if the CSV has gone cold (shared across all 4 plugins)
@@ -190,6 +193,7 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=0;
     cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false; cfg.lvllabels=true;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
+    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
 }
 
 // ---- parameter callbacks: dialog controls are valid here, so read + cache.
@@ -229,7 +233,7 @@ int GammaProfile::parmsUpdt(unsigned int)
 // control still gets its own index, so it does not affect numbering).
 int cppExtension::setup(void)
 {
-    setParameterVersion(5);
+    setParameterVersion(6);   // (v0.60) bumped: the Rank row moved to the end (see there) — saved instances reset to defaults
     setParameterDialogHeight(26);
 
     const short SL = kParmAppendSameLine;
@@ -273,10 +277,6 @@ int cppExtension::setup(void)
     PX.extk   = pc++; setBoolParameter   ("Extend King line", false);
     PX.topnodes=pc++; setBoolParameter   ("Top-node lines", false, SL);
     PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash");
-    // (v0.59) APPENDED — IRT stores a saved instance's values by position (the KT 0.12 scramble); new rows go at the end.
-    // Rank = Atlas merge: badges and the Top-N cut from the POOLED rank (the SPY + SPXW pool Atlas draws, panel 16.40),
-    // so a SPY rail (Side = Left, Book = SPY) and an SPX rail share the five exactly as Atlas allocates them.
-    PX.rankmode = pc++; setListParameter ("Rank", 0, "Book;Atlas merge");
     PX.lpos   = pc++; setListParameter   ("Label at", 0, "Left;Center;Right", 0, SL);
     PX.topstyle=pc++; setListParameter   ("Top-node style", 1, "Solid;Dot;Dash");
     PX.spyking= pc++; setBoolParameter   ("SPY King line", false, SL);
@@ -293,7 +293,14 @@ int cppExtension::setup(void)
     PX.legend  = pc++; setBoolParameter  ("Polarity legend", false, SL);
     PX.headerpos=pc++; setListParameter  ("Header at", 0, "Top-L;Top-C;Top-R;Bottom-L;Bottom-C;Bottom-R");
     PX.tapecols =pc++; setBoolParameter  ("Tape columns (SPX strike | %King, right edge)", false);   // (v0.41) appended
-    PX.lvllabels=pc++; setBoolParameter  ("Level labels on nodes (CW / PW / FLIP)", true);           // (v0.42) appended LAST
+    PX.lvllabels=pc++; setBoolParameter  ("Level labels on nodes (CW / PW / FLIP)", true);           // (v0.42) appended
+    // (v0.60) Rank = Atlas merge: badges and the Top-N cut from the POOLED rank (the SPY + SPXW pool Atlas draws, panel
+    // 16.40), so a SPY rail (Side = Left, Book = SPY) and an SPX rail share the five exactly as Atlas allocates them.
+    // ⚠ 0.59 put this row after "Line style" — MID-LIST. IRT stores a saved instance's values BY POSITION, so every row
+    // after it (Label at … Level labels, 14 of them) read its neighbour's saved value: the KT 0.12 scramble, repeated.
+    // 0.60 moves it here, LAST, and bumps the parameter version to 6 so IRT resets both saved instances to the defaults
+    // instead of carrying the scrambled values. NEW ROWS GO BELOW THIS ONE. NOTHING ABOVE IT MOVES. EVER.
+    PX.rankmode = pc++; setListParameter ("Rank", 0, "Book;Atlas merge");
     return RTX_OK;
 }
 
@@ -678,6 +685,8 @@ void GammaProfile::render(const Settings& S)
         }
     }
 
+    stPaneL = paneL; stPaneR = paneR; stAnchor = anchor; stColW = colW; stRendered = true;   // (v0.60) for the status file
+
     // bar thickness
     short barH = 6;
     if (S.thick == 1) barH = 6; else if (S.thick == 2) barH = 12; else if (S.thick == 3) barH = 20;
@@ -771,6 +780,7 @@ void GammaProfile::render(const Settings& S)
         else if (S.filter == 4) primary = (ab >= (float)S.thresh);
         else                    primary = true;
         if (!primary && S.below == 1) continue;   // hide
+        if (primary) stPrimary++; stDrawn++;      // (v0.60)
 
         PNT p; p.set(lastBar, s.price);
         short len = (short)(ab / maxAbs * w); if (len < 3) len = 3;
@@ -964,9 +974,25 @@ int GammaProfile::draw(void)
     // (v0.59) Rank = Atlas merge: every strike draws with its POOLED rank — badges, the Top-N cut, the top-node lines and
     // the deflection bands all follow it through the one `rank` field; an unpooled row (IF book, old panel) gets NO_RANK
     for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
+    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
     render(cfg);       // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
     drawStaleBadge();  // (v0.38) warn if the CSV is cold, regardless of what render drew
+    writeStatus();     // (v0.60) this instance's line, for the two-rail check from outside
     return RTX_OK;
+}
+
+// (v0.60) One file per instance (book + side), rewritten after every draw. Operator, 2026-09-17, two lsGammaProfile
+// instances (SPY Left / SPX Right): "it displays one or the other but not both" — the file says, per instance, which
+// CSV it read, how many strikes it holds, where it anchored and how many bars it actually drew.
+void GammaProfile::writeStatus()
+{
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.status-" + gpl::bookName(cfg.book) + "-" + (cfg.side == 1 ? "Left" : "Right") + ".txt";
+    std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
+    time_t now = time(0); struct tm t; localtime_s(&t, &now);
+    char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
+    f << "# lsGammaProfile 0.60  written " << ts << "  (this instance's last draw)\n"
+      << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered) << "\n";
 }
 
 // ---- (v0.39) CONTRACT ALIGNMENT — the whole book is priced in the panel's space (Skylit ES1 / cash,
@@ -1054,6 +1080,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.59");
+    p->setVersion("0.60");
     return p;
 }

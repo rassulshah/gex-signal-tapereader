@@ -214,6 +214,15 @@ int main()
     { gpl::Node n; n.rank = gpl::effectiveRank(2, 4, true); n.pct = 66; CHECK(gpl::isPrimary(n, 1, 20) && !gpl::isPrimary(n, 0, 20), "SPX 7655: pooled 4 -> primary under Top 5, not under Top 3"); }
     { gpl::Node n; n.rank = gpl::effectiveRank(3, 6, true); n.pct = 36; CHECK(!gpl::isPrimary(n, 1, 20), "SPY 761: pooled 6 -> outside the five (Atlas showed it grey)"); }
 
+    // ---- (v0.60) the per-instance status line (two rails verified from outside)
+    { std::string l = gpl::statusLine(2, 1, 11, true, 0, 1400, 2, 0, 40, 3, 11, true);
+      CHECK(l == "GPSTATUS,SPY,Left,GammaProfile-SPY.csv,11,Atlas,0,1400,2,0,40,3,11,1", "SPY rail, Left: the status names its book, side, file and anchor"); }
+    { std::string l = gpl::statusLine(1, 0, 15, true, 0, 1400, 1398, 0, 90, 2, 15, true);
+      CHECK(l.find("GPSTATUS,SPX,Right,GammaProfile.csv,15,Atlas,") == 0 && l.find(",90,2,15,1") != std::string::npos, "SPX rail, Right: its own line, from GammaProfile.csv"); }
+    { std::string l = gpl::statusLine(3, 0, 0, false, 0, 0, 0, 0, 100, 0, 0, false);
+      CHECK(l == "GPSTATUS,IF,Right,GammaProfile-IF.csv,0,Book,0,0,0,0,100,0,0,0", "an instance that loaded nothing says so: 0 strikes, rendered 0"); }
+    CHECK(std::string(gpl::bookName(0)) == "Auto" && std::string(gpl::bookFile(0)) == "GammaProfile.csv" && std::string(gpl::bookFile(1)) == "GammaProfile.csv", "Auto and SPX both read the Skylit SPX file");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

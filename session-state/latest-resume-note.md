@@ -1,5 +1,17 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 10:40 CT (v16.40 / GP 0.59) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.59**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 11:35 CT (GP 0.60) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.60**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~11:35 CT — GP 0.60: THE RANK ROW MOVED TO THE END + A STATUS FILE PER INSTANCE. START HERE.
+
+With two 0.59 instances (SPY Left / SPX Right) he saw ONE rail: "it displays one or the other but not both". The 0.59
+diff shows `Rank` was inserted after "Line style", mid-list, no version bump — the KT 0.12 scramble repeated the same
+morning it was repaired there (fourteen rows after it read their neighbour's saved value on both instances). 0.60 moves
+Rank to the END, bumps the parameter version to 6 (IRT resets both instances to defaults — **he re-enters Book, Side,
+Width, Hide % under, Rank on each**), and writes `GammaProfile.status-<Book>-<Side>.txt` after every draw (GPSTATUS line:
+file, strikes, anchor, bars drawn, rendered). **Next: GEX build installs 0.60 → he restarts IRT → sets the two instances
+→ read the two status files over the bridge.** Two files with `rendered 1` and both rails on screen = done (then the
+same-minute screenshot vs Atlas). One file, or `rendered 0` / `strikes 0`, = the real cause, named by gate. Not yet
+proven that the scramble hid the rail: Book/Side/Width sit above the insertion point and were untouched.
 
 # ⚠⚠⚠ 2026-09-17 ~10:40 CT — v16.40 + GP 0.59: THE SPY BOOK + THE ATLAS POOL (two rails, five badges shared). START HERE.
 

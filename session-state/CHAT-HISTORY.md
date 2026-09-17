@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-17 · v16.40 · session `f9c89c64`
+## 2026-09-17 · v16.40 · session `f9c89c64` — GP 0.60 — the Rank row moved to the end + per-instance status file
 
-_321 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_326 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -4180,6 +4180,43 @@ One thing to decide before I build: when a rail has no pooled badge on a given m
 **me (15:50):** Now the panel side (16.40): the SPY book file, the Atlas pool, the pooled rank on every STRIKE row.
 Now the plugin (GP 0.59): the pooled rank, the `Rank` option, and the logic pinned.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> IF should be default. Color should depend on whether it is positive or negative gamma
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> so if i select top 2, it will only show the spy and spx king node ?
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> it doesnt show both rails
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> it displays one or the other but not both
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> unpushed commits / uncommitted changes
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (16:30):** Now I'll build GP 0.60: the per-instance status file plus the parameter-position fix (0.59 inserted "Rank" mid-list — I need to correct that).
+Now the plugin: members, render counters, the status write, the parameter-order fix, and the version.
+Regression is green (67/67 Gate B with the new status-line cases; syntax compile OK). Now the SAVE DONE records.
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (16:30):** Now I'll build GP 0.60: the per-instance status file plus the parameter-position fix (0.59 inserted "Rank" mid-list — I need to correct that).
+Now the plugin: members, render counters, the status write, the parameter-order fix, and the version.
+Regression is green (67/67 Gate B with the new status-line cases; syntax compile OK). Now the SAVE DONE records.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -5050,6 +5087,9 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+451ed07 gex: sync 17-Thu-09 11:22
+dfc3371 gex: sync 17-Thu-09 10:58
+832e11a gex: sync 17-Thu-09 10:42
 18a91b5 gex: sync 17-Thu-09  9:50
 20b7c7e gex: sync 17-Thu-09  9:46
 72dd26a gex: sync 17-Thu-09  9:44
@@ -5059,9 +5099,6 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 f789e44 gex: sync 17-Thu-09  1:08
 cbdc874 gex: sync 17-Thu-09  1:04
 ccfbda4 gex: sync 17-Thu-09  0:58
-f023cac gex: sync 17-Thu-09  0:48
-07cd6ed gex: sync 17-Thu-09  0:42
-938d914 gex: sync 17-Thu-09  0:34
 ```
 
 ---

@@ -1,3 +1,25 @@
+## lsGammaProfile 0.60 — the Rank row moved to the END (0.59 put it mid-list: the scramble, repeated) + a per-instance status file (2026-09-17, ~11:35 CT)
+
+Operator, with two 0.59 instances on the chart (SPY Left / SPX Right, both Rank = Atlas merge): "it displays one or the
+other but not both". Reading the 0.59 diff for the cause found a landmine I had planted THAT SAME MORNING while writing
+"appended at the end" in the commit: `PX.rankmode` was inserted after "Line style", not after "Level labels" — MID-LIST,
+with no parameter-version bump. IRT stores a saved instance's values by position, so on both instances the fourteen rows
+after it (Label at, Top-node style, SPY King line, Title header, Spot line, Structure labels, Regime panel, Panel at,
+Deflection bands, EM confluence, Legend, Header at, Tape columns, Level labels) read their upper neighbour's saved value —
+the KT 0.12 scramble again, six hours after `migrateScrambled()` repaired it there and the note said "never reorder the
+parameter list again". Whether that is what hides the second rail is not yet proven (the values before "Line style" —
+Book, Side, Width, Show — were untouched), which is why this build also adds the diagnostic.
+- **The fix:** `Rank` is now the LAST row; `setParameterVersion(6)` so IRT drops the scrambled saved values and both
+  instances come up with the defaults. **He re-enters, per instance: Book, Side, Width px, Hide % under, Rank** (five
+  fields; everything else default). The comment above the row now says in capitals what the rule is.
+- **The diagnostic:** `GammaProfile.status-<Book>-<Side>.txt` beside the CSV, rewritten after every draw of THAT instance
+  (`gpl::statusLine`, Gate B +4): `GPSTATUS,<book>,<side>,<file>,<strikes>,<Book|Atlas>,<paneL>,<paneR>,<anchor>,<colW>,
+  <width>,<primary>,<drawn>,<rendered>`. Two files = two instances drawing; a file with `rendered 0` or `strikes 0` names
+  the gate the gap is in (load vs render) without a screenshot.
+- Regression: gamma green (78 · 24 · 67 · 15 · six live fixtures · syntax). No panel change.
+- Lesson, recorded in PROJECT-CONSTANTS: "appended" is checked by reading the LAST `pc++` line of `setup()`, not the
+  commit message. A new row's `pc++` must be the line immediately above `return RTX_OK;`.
+
 ## v16.40 + lsGammaProfile 0.59 — the SPY book and the Atlas pool: two rails, five badges shared (2026-09-17, ~10:40 CT)
 
 Operator, after checking Atlas's ES1 view against IRT: "our implementation of top 5 is inconsistent with Atlas and there

@@ -7,6 +7,10 @@ _Created 2026-08-27._
 ---
 
 ## ✅ BUILT 2026-09-17 — TWO RAILS, THE ATLAS POOL (v16.40 / GP 0.59)
+
+_GP 0.60 (11:35 CT): 0.59's Rank row sat mid-list → both saved instances scrambled; moved to the end, parameter version 6
+(defaults), per-instance `GammaProfile.status-<Book>-<Side>.txt`. His "one or the other but not both" is OPEN until the
+two status files are read after his restart. Offered, not asked for: a "Top 2" entry in Show (would be appended)._
 Operator: "there should be two profiles, one for SPX and another for SPY, and the top 5 should be split between them"
 (after measuring Atlas's ES1 derived merge on the live feed). Built as the SPY book file + a pooled rank on every STRIKE
 row + `Rank = Atlas merge` in lsGammaProfile; SPY rail left, SPX right; day candle off for now. Awaiting his install and

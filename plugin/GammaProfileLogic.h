@@ -14,6 +14,7 @@
 #define GAMMA_PROFILE_LOGIC_H
 
 #include <vector>
+#include <cstdio>
 #include <string>
 #include <cmath>
 #include <algorithm>
@@ -239,6 +240,21 @@ inline RegimeText regimeLine(bool hasRow, const std::string& sign, const std::st
                        : "REGIME (sum, no row)  FADE extremes  (+gamma)";
     }
     return r;
+}
+
+// (v0.60) THE STATUS LINE — what THIS instance did on its last draw, written to GammaProfile.status-<Book>-<Side>.txt
+// beside the CSV, so two rails can be verified from outside (operator, 2026-09-17: "it displays one or the other but
+// not both" — the file says whether the second instance loaded, where it anchored and how many bars it drew).
+// Grammar:  GPSTATUS,<book Auto|SPX|SPY|IF>,<side Right|Left>,<file>,<strikes>,<rank Book|Atlas>,<paneL>,<paneR>,<anchor>,<colW>,<width>,<primary>,<drawn>,<rendered 1|0>
+inline const char* bookName(int book) { return book == 1 ? "SPX" : book == 2 ? "SPY" : book == 3 ? "IF" : "Auto"; }
+inline const char* bookFile(int book) { return book == 2 ? "GammaProfile-SPY.csv" : (book == 3 ? "GammaProfile-IF.csv" : "GammaProfile.csv"); }
+inline std::string statusLine(int book, int side, int strikes, bool atlasMerge, int paneL, int paneR, int anchor, int colW, int width,
+                              int primary, int drawn, bool rendered)
+{
+    char buf[200];
+    snprintf(buf, sizeof(buf), "GPSTATUS,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d", bookName(book), side == 1 ? "Left" : "Right", bookFile(book),
+             strikes, atlasMerge ? "Atlas" : "Book", paneL, paneR, anchor, colW, width, primary, drawn, rendered ? 1 : 0);
+    return std::string(buf);
 }
 
 } // namespace gpl
