@@ -1,5 +1,7 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 07:20 CT (v16.39 / KT 0.13) · **panel v16.39** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.57**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.13** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 07:20 CT (v16.39 / KT 0.13) · **panel v16.39** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.58**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.13** · supersedes every earlier resume note_
+
+# ⚠⚠ 2026-09-17 ~07:45 CT — GP 0.58: the regime chip box now sized to its content (the CW had run outside it), pill 4 px from its text. Installs itself via GEX build.
 
 # ⚠⚠⚠ 2026-09-17 ~07:20 CT — v16.39 + KT 0.13: IF DEFAULT, POLARITY COLOURS, THE SCRAMBLE REPAIRED. START HERE.
 

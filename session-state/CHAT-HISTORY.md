@@ -17,7 +17,7 @@ assistant's replies only.
 
 ## 2026-09-17 · v16.39 · session `f9c89c64`
 
-_238 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_248 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -3143,6 +3143,161 @@ Now the plugin (0.13): IF default, polarity colours, no IF colour parameter, and
 > 
 > _[sent while I was working — a queued message]_
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (03:19):** Now the `AU.day` block in the panel (16.37) — it goes right after the day section so every input the model used is on the audit.
+Now the end-to-end Gate A test for the day section — it runs `gammaProfileBuild` with a pinned morning, checks the rows, then feeds the audit to `day-derive.js` and diffs.
+Now add `test_day_export.js` to the map and extend the live runner with `--indicator`.
+Now the docs. First the master `testing/REGRESSION.md`.
+All 47 files landed. The sync loop pushes within ~2 minutes; I'll verify origin then.
+Origin (`21c1db1`, synced 22:34 your clock) carries the whole build byte-for-byte; the clone is realigned.
+
+**What's built — the regression now covers all four indicators, and runs collectively or one at a time.**
+
+`python3 tools/regress.py` (cloud) / `regress.bat [gamma|daymodel|daystats|kingtracker]` (your machine). Each indicator has three gates: **A** — node tests that execute the panel's builders and pin every CSV row; **B** — C++ logic tests, with lsDayModel, lsDayStats, lsKingTracker and the shared contract-offset anchor each moved into an SDK-free `*Logic.h` (the .cpp files delegate; no behaviour change); **L** — the live runner (`gp-regress.py --indicator …`) re-run on pinned CSV + audit fixtures. New this build: `test_kingtracker_rows.js` (the sampler's dwell, anti-oscillation, rows), `test_day_export.js` (the whole day section end to end, then `day-derive.js` must reproduce every row from the audit), and an `AU.day` block on the audit so a candle or E row can always be re-derived. Every run prints one table and appends a dated block to `testing/RESULTS.md`; master doc `testing/REGRESSION.md`, a `CHECKLIST.md` per indicator, and the standing rule is now on the build checklist: touch an indicator → update its cases in the same commit → its r …[trimmed]
+
+**OPERATOR:**
+> did you update kingtracker to have the option to include IF
+
+**me (05:33):** No. That one was proposed on the 16th (~17:30, when you asked how IF could feed the other indicators) and never came back for a decision — the 22:00 resume note's "nothing unbuilt except…" list dropped it, and it isn't on LOCKED-ITEMS either. lsKingTracker 0.10 still follows only the Skylit flow King from `GammaProfile.csv`; the IF King only appears on the regime chip of the IF rail.
+
+What was on the table, so we can pick it up properly:
+
+IF's King is the largest |net| strike in the 0DTE chain — the Magnet, a standing book that moves slowly. The idea was a second, quieter stepped track under the flow King: the panel would sample IF's King the same way `ktrkSample` samples the tape King (same dwell / anti-oscillation rules, its own `KINGTRACK,ES,IF,…` / `KINGNOW,ES,IF,…` rows), and the plugin would draw it as a thinner dashed line with a `Book` option — Skylit / IF / Both, defaulting to Both. The read it gives that the tracker can't make today: the flow King rolling onto the strike where the standing book already sits is agreement; a flow King with nothing behind it on IF is the hedge-node signature.
+
+Per your rule I'd mock it up before touching code — one element. The one thing to settle first: do you want the IF King as a **second track alongside** the Skylit King (default Both, switchable), or as a **switch** like the gamma profile's Book dropdown (one or the other, IF default)?
+
+**OPERATOR:**
+> the king tracker should be able to switch back and forth between IF and skylit
+
+**me (05:35):** Understood — a switch, like the gamma profile's Book dropdown, not two tracks. Before I build, here is the design in one pass so you can say go or change something.
+
+**The switch.** lsKingTracker gets a `Source` option: **Skylit** (today's behaviour, the flow King from the tape) or **IF** (the 0DTE Magnet — the largest |net| strike in InsiderFinance's chain, the same King the IF rail's chip shows). Default stays Skylit until you say otherwise; you flip it in the indicator's settings, exactly like Book on the gamma profile. Nothing else on the line changes: same stepped line, same dwell rule (4 samples ≈ 2 min before a roll counts), same anti-oscillation, same SCALEREF anchor onto your Dec chart.
+
+**What the panel adds.** A fifth journey, book `IF` (fam ES), sampled every 30 s from the companion's SPX 0DTE chain alongside the four tape books, written as its own rows: `KINGTRACK,ES,IF,<so>,<es>,<strike>` and `KINGNOW,ES,IF,<es>,<strike>,<pct>`. Both journeys are always recorded, so switching in IRT is instant and you can flip back without losing the day.
+
+**One consequence to be aware of.** IF only carries SPX and QQQ chains — there is no IF SPY book. So on Source = IF the SPX line becomes the IF Magnet and the SPY line is hidden (on Skylit it comes back). On an NQ chart the same applies to QQQ vs NDX.
+
+**Regression, per the new rule:** `test_kingtracker_rows.js` gets the IF sampler cases (seed, dwell, a stale chain → no sample), `test_kingtracker_logic.cpp` the `IF` book parsing and the source switch, and the runner's King checks extend to the IF rows.
+
+Delivery would be panel 16.38 + lsKingTracker 0.11 (`compile-kingtracker.bat`).
+
+Go, or would you rather start on IF as the default like the gamma profile?
+
+**OPERATOR:**
+> yes
+
+**me (05:36):** Now the panel side (16.38): the IF books, the Magnet reader, the audit.
+Now the plugin (0.11): the two IF books, the `Source` switch, and its decision in the logic header.
+Now the panel-side test cases (the IF sampler) and the runner's King checks.
+Built, pushed and verified on origin (panel 16.38, lsKingTracker 0.11).
+
+What changed: the panel now samples IF's 0DTE Magnet (the largest |net| strike in the chain — the same King the IF rail's chip shows) as its own journey beside the tape Kings, with the same 2-minute dwell and anti-oscillation rules, and never samples from a stale chain. lsKingTracker gets a `Source` setting — **Skylit** (as today) or **IF** — one or the other. On IF only the Magnet line draws, in a magenta-pink so you can tell which source is on; the SPY line hides because IF has no SPY book. Default is Skylit until you flip it. Both journeys are always recorded, so switching is instant in either direction. Regression updated with the build (King tracker rows 21→32, logic 16→21; all 21 suites green).
+
+**Install — step by step:**
+
+1. Wait ~5 minutes for the CDN, then click: https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — Tampermonkey should offer **Update** to 16.38. Reload the Atlas tab.
+2. Close IRT (the DLL is in use while it's open).
+3. Open a new cmd window and run:
+   ```
+   cd /d "C:\Dev\gex-signal-tapereader\plugin"
+   compile-kingtracker.bat
+   ```
+   If you haven't run the three from the earlier build yet, do them in the same window: `compile-gammaprofile.bat`, `compile-daymodel.bat`, `compile-daystats.bat`.
+4. Reopen IRT, open the lsKingTracker settings on the ES chart, and set **Source** to **IF** (the new field sits at the bottom of the dialog, with the IF colour beside it). Swit …[trimmed]
+
+**OPERATOR:**
+> have you been running the analysis on all this stored data for the last couple of days.  look at the king tracker it doesn't have an option for IF .  it should be either IF or Skylit
+
+**me (05:51):** Two answers.
+
+**The IF option is there — it's the `Source` dropdown at the bottom of your dialog.** In your screenshot it reads `Source: Skylit` with the pink `IF colour` swatch beside it. Click the arrow on that dropdown and the second entry is **IF**; pick it, Apply, and the chart switches to the Magnet line (SPX/SPY hide, the IF line draws in that pink). Switch back the same way. I made it a dropdown rather than another checkbox row precisely so it can't be both at once — but if you'd rather see it as a pair of radio-style choices or a checkbox "Use IF instead of Skylit", say so and I'll change the control.
+
+**The stored data — yes, the analysis has been running, with one honest gap.** Your nightly on the machine ran both evenings (15th at 20:05 CT: 8 sessions, 102 episodes, 324 deflection events; 16th at 20:05: 9 sessions, 121 episodes, 398), and the ES base rates the day model and day stats read from were rebuilt at 21:10 CT last night on 300 sessions through 2026-09-15 — so today's expected candle and E row are on the freshest corpus. The gap: the daily record (regime at the open, flip distance, walls, King, the EM pin) only began with 16.33 last night and is taken in the first 15 minutes after the open, so its first row is today's — that series needs roughly 60 sessions before the doctrine inputs can be tested against the day's range the way the EM was. Nothing to run on it yet; it accumulates on its own.
+
+**OPERATOR:**
+> first of all the source should be at the top .  also spx king and spy king are both still checked event if IF is slected .  I aslso dont see the magnet
+
+**me (05:58):** Your screenshot found a real bug, and it explains all three things you saw.
+
+**Why the chart ignored the dialog.** Since the first release, every plugin only reads its dialog when the Font size field reads between 6 and 48 — a sanity probe against IRT calling the callbacks before the parameters exist. You run Font size 3. So nothing you set in the King tracker dialog had ever reached the plugin: Source = IF was applied in the dialog, but the plugin kept drawing its defaults (Skylit, SPX and SPY). That is also why the Magnet never appeared. The same probe sat in the gamma profile, day model and day stats — it hadn't bitten there only because those fonts are 10 and 11.
+
+**Fixed, on origin now:** lsKingTracker 0.12 — `Source` is the first row of the dialog with the IF Magnet colour beside it; when IF is chosen the four Skylit rows grey out (they keep their ticks for when you switch back), when Skylit is chosen the IF colour greys; the probe is now the Source list itself. The other three plugins got the probe widened so a small font can never swallow a setting again (GP 0.57, DM 0.18, DS 0.9 — no other change).
+
+**Step by step:**
+
+1. Reload the Atlas tab and check the panel footer says 16.38 — your screenshot showed STALE 14m, so the export had stopped; the Magnet journey only starts once 16.38 is exporting.
+2. Close IRT.
+3. New cmd window:
+   ```
+   cd /d "C:\Dev\gex-signal-tapereader\plugin"
+   compile-kingtracker.bat
+   compile-gammaprofile.bat
+   compile-daymodel.bat
+   compile-daystats.bat
+   ```
+4. Reopen IRT. Because the King tracker's dialog layout changed, it re-reads defaults — open its settings once: set **Source = IF** (top row), and put back Line width 3 / Font 3 if you want them. Apply.
+
+You should then see one pink `IF <strike>` line at the Magnet's strike an …[trimmed]
+
+**OPERATOR:**
+> is there a more automated way of doing the compile so i dont have to do it every single time in a commnd window
+
+**me (06:06):** Yes — it's on your machine now, the same way the "GEX sync" task works.
+
+**How it works.** A hidden Windows task, "GEX build", runs every 2 minutes. Each tick it checks whether any plugin's source changed (the .cpp plus its logic headers); if so it compiles it into `plugin\out\` using the same compiler line as the compile bats. Then it copies the DLL into Investor/RT's extension folder — and since a loaded DLL can't be replaced, that copy simply waits while IRT is open and succeeds within two minutes of you closing it. So when I ship a plugin build, it compiles and installs itself, and your only step is to restart Investor/RT. I can read its log and status file over the bridge, so I'll be able to confirm a build compiled rather than ask you.
+
+**One-time setup — step by step:**
+
+1. Close Investor/RT (so the first run can install all four current builds: KT 0.12, GP 0.57, DM 0.18, DS 0.9).
+2. In `C:\Dev\gex-signal-tapereader`, double-click **`setup-gex-build.bat`**. It registers the task and runs the first build straight away — about a minute for all four; the window shows the status when done.
+3. Reopen Investor/RT, open the lsKingTracker settings, set Source = IF (top row). Done.
+
+From then on, the routine after I say "plugin build shipped" is just: close IRT, wait a couple of minutes (or check `tools\gex-build.log` — it says PENDING while IRT is open, then INSTALLED), reopen IRT. If it ever says BUILD FAILED, the compiler output is in `plugin\out\<Name>.compile.txt` and I'll read it from here.
+
+For a manual build there's also `plugin\compile-all.bat` — one double-click for all four — and the per-plugin bats still work.
+
+✅ SAVE DONE — CHANGELOG, resume note (new START HERE: how a plugin now deploys, and that the status file is to be read over the bridge instead of askin …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (06:09):** Pushed by your sync loop (`f789e44`, 01:08) — origin carries `setup-gex-build.bat`, `tools/gex-build.bat` and the hidden launcher; the clone is realigned and there is nothing unpushed. The cloud can't push directly, which is why the hook sees a commit for the two minutes between my delivery to your folder and the sync.
+
+**OPERATOR:**
+> how about you tell me when its done so i know when to restart irt
+
+**me (06:09):** It's done — all four compiled and installed at 01:08:35–38 on your clock: lsGammaProfile 0.57, lsDayModel 0.18, lsDayStats 0.9, lsKingTracker 0.12, each into `C:\Users\rassul\InvestorRT\dllx64`. (You evidently ran the setup with IRT closed, so nothing sat pending.)
+
+**Restart Investor/RT now.** Then open the lsKingTracker settings: `Source` is the top row — set it to IF and Apply. You should see the Skylit rows grey out, a single pink `IF <strike>` line at the Magnet, and no SPX/SPY lines; flip it back to Skylit and they return. If the chart doesn't follow the dialog this time, send me the screenshot — that would mean the font-probe bug is still biting somewhere and I'll go after it.
+
+From now on this is the routine: I ship a plugin build, read the log from here, and tell you "installed — restart IRT" once it says so.
+The dialog is now right (Source on top, the Skylit rows grey out on IF), but the numbers in it are scrambled — Line width 16776960, Font 16736464, Clock offset 1, the colours shifted one row (SPX orange, SPY green, NDX black, IF Magnet black). That's my doing: Investor/RT stores an indicator's settings by position, and moving Source to the top shifted every saved value into the wrong slot (16776960 is your old yellow SPX colour landing in the width field). The plugin clamps width and font so the chart still draws, but the colours are wrong and the IF line is black on black — which is why you see nothing on IF.
+
+Two ways out, and it's your call:
+Panel first (16.39): each step carries its polarity, the row gets a 7th field.
+Now the plugin (0.13): IF default, polarity colours, no IF colour parameter, and the settings migration.
+
+**OPERATOR:**
+> black color should not be an option for ndx because the chart background is black
+> 
+> _[sent while I was working — a queued message]_
+
+**me (06:18):** Delivered. Now I'll watch the build task and tell you when 0.13 is installed.
+
+**OPERATOR:**
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+> why is the CW not in the box and why is there a space before the WK badge
+> 
+> _[sent while I was working — a queued message]_
+
+**me (06:21):** lsKingTracker 0.13 compiled at 01:20:05 on your clock and is waiting for Investor/RT to close (PENDING). **Close IRT, wait about two minutes, reopen it** — Source will already be IF, the Magnet draws gold where it was +gamma and magenta where it was −gamma, and the scrambled numbers in the dialog get repaired automatically on load. Also click the Tampermonkey update for 16.39 (it adds each step's polarity to the file): https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — then reload Atlas.
+
+Looking at the chip now (the CW outside the box, the space before the WK pill).
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -4013,6 +4168,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+c6be26e v16.39 + lsKingTracker 0.13: IF is the default source, the Magnet is coloured by its polarity per step (KINGTRACK 7th field), black never drawn, the 0.12 parameter scramble repaired on load
 f789e44 gex: sync 17-Thu-09  1:08
 cbdc874 gex: sync 17-Thu-09  1:04
 ccfbda4 gex: sync 17-Thu-09  0:58
@@ -4024,7 +4180,6 @@ f8ba930 gex: sync 17-Thu-09  0:30
 21c1db1 gex: sync 16-Wed-09 22:34
 e4cde5c gex: sync 16-Wed-09 22:02
 16320f3 gex: sync 16-Wed-09 22:00
-4347664 gex: sync 16-Wed-09 21:54
 ```
 
 ---

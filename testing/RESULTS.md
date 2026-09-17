@@ -129,3 +129,21 @@ _v16.39 / KT 0.13: polarity per step, IF default, the 0.12 scramble repair_
 | kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
 
 _host: vm, C++: g++_
+
+## 2026-09-17 06:22  ·  gamma  ·  panel 16.39 / companion 1.21 / GP 0.58 / DM 0.18 / DS 0.9 / KT 0.13  ·  ALL GREEN
+
+_GP 0.58: the chip sized to its content, tight pills_
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 65/65 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 57/57 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 18/18 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 19/19 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 18/18 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 18/18 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+
+_host: vm, C++: g++_

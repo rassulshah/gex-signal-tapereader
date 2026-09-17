@@ -1,3 +1,11 @@
+## lsGammaProfile 0.58 — the regime chip is as wide as its content; the pill sits tight (2026-09-17, ~07:45 CT)
+
+Operator, chip screenshot: "why is the CW not in the box and why is there a space before the WK badge." The box had
+been a fixed font x 34 since 0.42 (sized for the regime line alone); 0.52 put the King on the second line and 0.50 the
+pills, so the CW ran out past the right edge. Now both lines are composed and measured first and the box is drawn to
+the wider of the two (+22 px, never narrower than font x 20). The text-to-pill space drops from 8 to 4 px and the
+widths are measured with explicit lengths. `compile-gammaprofile.bat` — or nothing: GEX build installs it.
+
 ## v16.39 + lsKingTracker 0.13 — IF by default, the Magnet coloured by its polarity, the 0.12 scramble repaired (2026-09-17, ~07:20 CT)
 
 Operator, on the 0.12 dialog: "IF should be default. Color should depend on whether it is positive or negative gamma" and

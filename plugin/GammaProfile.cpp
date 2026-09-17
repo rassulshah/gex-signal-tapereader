@@ -520,7 +520,36 @@ void GammaProfile::bandPrice(float p1, float p2, short lx, short rx, COLOR col)
 void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, int cIdx, int kIdx)
 {
     short lineH = (short)(S.font + 8);
-    short pw = (short)(S.font * 34), ph = (short)(2*lineH + 16);   // (v0.42) wide enough for the regime line
+    short ph = (short)(2*lineH + 16);
+    // (v0.58) THE BOX IS AS WIDE AS ITS CONTENT. 0.42 fixed it at font x 34 for the regime line; 0.52 put the King on the
+    // second line and 0.50 the pills, and the CW ran out past the right edge ("why is the CW not in the box"). Both lines
+    // are composed and MEASURED first, then the box is drawn to the wider of the two.
+    gpl::RegimeText RT = gpl::regimeLine(hasRegime, rgSign, rgType, rgConflict, net);
+    std::string rl = RT.line;
+    if (!slopeWord.empty() && !RT.na) { size_t bar = rl.find(" | "); if (bar != std::string::npos) rl.insert(bar, " " + slopeWord); }
+    char l0[200]; sprintf_s(l0, sizeof(l0), "%s", rl.c_str());
+    char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a", kgS[48]="";
+    if (has[0] && kIdx >= 0 && kIdx < (int)strikes.size()) {
+        float kspx = strikes[kIdx].spx;
+        if (kspx > 0) sprintf_s(kgS, sizeof(kgS), "%s %d (%d)", S.kinglabel, (int)(lvl[0]+0.5f), (int)(kspx+0.5f));
+        else          sprintf_s(kgS, sizeof(kgS), "%s %d", S.kinglabel, (int)(lvl[0]+0.5f));
+    }
+    if (has[2]) { if (lvlSpx[2] > 0) sprintf_s(pwS, sizeof(pwS), "PW %d (%d)",   (int)(lvl[2]+0.5f), (int)(lvlSpx[2]+0.5f)); else sprintf_s(pwS, sizeof(pwS), "PW %d",   (int)(lvl[2]+0.5f)); }
+    if (has[3]) { if (lvlSpx[3] > 0) sprintf_s(flS, sizeof(flS), "FLIP %d (%d)", (int)(lvl[3]+0.5f), (int)(lvlSpx[3]+0.5f)); else sprintf_s(flS, sizeof(flS), "FLIP %d", (int)(lvl[3]+0.5f)); }
+    if (has[1]) { if (lvlSpx[1] > 0) sprintf_s(cwS, sizeof(cwS), "CW %d (%d)",   (int)(lvl[1]+0.5f), (int)(lvlSpx[1]+0.5f)); else sprintf_s(cwS, sizeof(cwS), "CW %d",   (int)(lvl[1]+0.5f)); }
+    FONT lf; lf.id = HELVETICA; lf.size = (short)S.font; lf.style = PLAIN; setFont(lf);
+    const short gap = (short)(S.font * 2), tight = 4;   // gap between items; tight = the text-to-pill space (was 8: "why is there a space before the WK badge")
+    short pillPW = (has[2] && !lvlDepth[2].empty()) ? pillW(lvlDepth[2], S) : 0;
+    short pillCW = (has[1] && !lvlDepth[1].empty()) ? pillW(lvlDepth[1], S) : 0;
+    setFont(lf);
+    short w1 = (short)(getTextWidth(pwS, (int)strlen(pwS)) + (pillPW ? tight + pillPW : 0) + gap
+                     + (kgS[0] ? getTextWidth(kgS, (int)strlen(kgS)) + gap : 0)
+                     + getTextWidth(flS, (int)strlen(flS)) + gap
+                     + getTextWidth(cwS, (int)strlen(cwS)) + (pillCW ? tight + pillCW : 0));
+    FONT bf; bf.id = HELVETICA; bf.size = (short)S.font; bf.style = BOLD; setFont(bf);
+    short w0 = (short)(28 + getTextWidth(l0, (int)strlen(l0)));   // the swatch + its gap precede the regime text
+    short pw = (short)((w0 > w1 ? w0 : w1) + 22);
+    if (pw < (short)(S.font * 20)) pw = (short)(S.font * 20);
     short L = (short)(pane.left + 8);
     short C = (short)((pane.left + pane.right)/2 - pw/2);
     short R = (short)(pane.right - pw - 8);
@@ -536,11 +565,8 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // (the flip), type = the Skylit structure read (Range / Trend / Whipsaw — learn/gamma-regimes), conflict =
     // the two books disagree (surfaced, never resolved here). The old "sum of every %King" is only the fallback
     // for a CSV that predates the row, and it says so.
-    gpl::RegimeText RT = gpl::regimeLine(hasRegime, rgSign, rgType, rgConflict, net);
-    // (v0.50) the curve's slope word rides after the sign: "REGIME  -gamma STEEP dn | RANGE | ..." (IF extras #2)
-    std::string rl = RT.line;
-    if (!slopeWord.empty() && !RT.na) { size_t bar = rl.find(" | "); if (bar != std::string::npos) rl.insert(bar, " " + slopeWord); }
-    bool neg = RT.neg; char l0[200]; sprintf_s(l0, sizeof(l0), "%s", rl.c_str());
+    // (v0.50) the curve's slope word rides after the sign: "REGIME  -gamma STEEP dn | RANGE | ..." (IF extras #2) — composed above
+    bool neg = RT.neg;
     COLOR rcol = neg ? S.cneg : S.cpos;
     if (RT.at) rcol = C_FLIPC;
     if (RT.na) rcol = C_GREY;   // no flip / no spot: no sign call
@@ -552,31 +578,22 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // (v0.44) THE SECOND LINE IS THE THREE IF LEVELS — operator, 2026-09-16: "it has levels at the bottom, those levels
     // should be Put Wall, Flip, Call Wall." Chart-scale price first (what the axis shows), the SPX strike in brackets
     // (what Skylit / IF print), each in its level colour. A missing row prints n/a rather than borrowing a node.
-    char l1[200]; char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a", kgS[48]="";
     // (v0.52) THE MAGNET (KING) AFTER THE PW — operator, 2026-09-16 21:40: "add the Magnet (King) to the Regime Chip, right
     // after PW." Chart price from the KING row (already offset onto this contract), the SPX strike from the King node; the
-    // label is the configured King name (K / KING / GPoc ...), in the King's own colour.
-    if (has[0] && kIdx >= 0 && kIdx < (int)strikes.size()) {
-        float kspx = strikes[kIdx].spx;
-        if (kspx > 0) sprintf_s(kgS, sizeof(kgS), "%s %d (%d)", S.kinglabel, (int)(lvl[0]+0.5f), (int)(kspx+0.5f));
-        else          sprintf_s(kgS, sizeof(kgS), "%s %d", S.kinglabel, (int)(lvl[0]+0.5f));
-    }
-    if (has[2]) { if (lvlSpx[2] > 0) sprintf_s(pwS, sizeof(pwS), "PW %d (%d)",   (int)(lvl[2]+0.5f), (int)(lvlSpx[2]+0.5f)); else sprintf_s(pwS, sizeof(pwS), "PW %d",   (int)(lvl[2]+0.5f)); }
-    if (has[3]) { if (lvlSpx[3] > 0) sprintf_s(flS, sizeof(flS), "FLIP %d (%d)", (int)(lvl[3]+0.5f), (int)(lvlSpx[3]+0.5f)); else sprintf_s(flS, sizeof(flS), "FLIP %d", (int)(lvl[3]+0.5f)); }
-    if (has[1]) { if (lvlSpx[1] > 0) sprintf_s(cwS, sizeof(cwS), "CW %d (%d)",   (int)(lvl[1]+0.5f), (int)(lvlSpx[1]+0.5f)); else sprintf_s(cwS, sizeof(cwS), "CW %d",   (int)(lvl[1]+0.5f)); }
+    // label is the configured King name (K / KING / GPoc ...), in the King's own colour. Strings composed above (0.58).
     short ly1 = (short)(y + 9 + lineH + lineH/2);
-    // three coloured segments, laid out left to right with measured widths
-    FONT lf; lf.id = HELVETICA; lf.size = (short)S.font; lf.style = PLAIN; setFont(lf);
-    short gap = (short)(S.font * 2), cx1 = (short)(x + 10);
-    // (v0.51) widths measured in the font the text is drawn with (textLJ sets S.font PLAIN), a real gap before the pill
-    textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(pwS, -1) + 8);
-    if (has[2] && !lvlDepth[2].empty()) cx1 = (short)(cx1 + drawDepthPill(cx1, ly1, lvlDepth[2], S) + gap); else cx1 = (short)(cx1 + gap - 8);
+    // the coloured segments, laid out left to right with the SAME measured widths the box was sized with
+    setFont(lf);
+    short cx1 = (short)(x + 10);
+    textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(pwS, (int)strlen(pwS)));
+    if (pillPW) { cx1 = (short)(cx1 + tight); cx1 = (short)(cx1 + drawDepthPill(cx1, ly1, lvlDepth[2], S)); }
+    cx1 = (short)(cx1 + gap);
     if (kgS[0]) { COLOR kc = (S.kingcol == 1) ? D_KING : ((kIdx >= 0 && strikes[kIdx].pct < 0) ? S.cneg : S.cpos);
-                  textLJ(cx1, ly1, kgS, kc, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(kgS, -1) + gap); }   // (v0.52)
-    textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(flS, -1) + gap);
-    textLJ(cx1, ly1, cwS, C_RES,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(cwS, -1) + 8);
-    if (has[1] && !lvlDepth[1].empty()) drawDepthPill(cx1, ly1, lvlDepth[1], S);
-    (void)fIdx; (void)cIdx; sprintf_s(l1, sizeof(l1), "%s", "");
+                  textLJ(cx1, ly1, kgS, kc, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(kgS, (int)strlen(kgS)) + gap); }   // (v0.52)
+    textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(flS, (int)strlen(flS)) + gap);
+    textLJ(cx1, ly1, cwS, C_RES,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(cwS, (int)strlen(cwS)));
+    if (pillCW) { cx1 = (short)(cx1 + tight); drawDepthPill(cx1, ly1, lvlDepth[1], S); }
+    (void)fIdx; (void)cIdx;
 }
 // Polarity legend (character, not strength). Placed opposite the panel's row.
 void GammaProfile::drawLegend(RCT pane, const Settings& S)
@@ -1025,6 +1042,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.57");
+    p->setVersion("0.58");
     return p;
 }
