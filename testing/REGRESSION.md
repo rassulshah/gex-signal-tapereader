@@ -86,7 +86,7 @@ screenshot, and appends one line to that indicator's `RESULTS.md`. `--irt-read` 
 ## 5. Known limits (honest)
 
 - Colours and pixel placement are checked by eye against each `CHECKLIST.md`, not by code (the 0.51 → 0.55 pill saga).
-- The day fixtures are SYNTHETIC (a constructed morning) until a real 16.37 export is staged; the first real pair goes
+- The King tracker has REAL fixtures from 2026-09-17 (0942-ready / 0943-skylit / 0944-if, with the plugin's status file — the toggle test, all green). The day fixtures are SYNTHETIC (a constructed morning) until a real 16.37 export is staged; the first real pair goes
   into `day-model/fixtures/` and `day-stats/fixtures/` as `<HHMM>.csv/.audit.json` and into the `live` list in
   `tools/regress.py`.
 - `run-logic-tests.bat` / `regress.bat` have not yet been run on his MSVC — the cloud runs the identical files with g++.
