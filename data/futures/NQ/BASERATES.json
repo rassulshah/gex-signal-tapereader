@@ -1,8 +1,8 @@
 {
  "corpus": {
-  "sessions": 200,
+  "sessions": 201,
   "first": "2025-11-24",
-  "last": "2026-09-15",
+  "last": "2026-09-16",
   "min_bars": 383,
   "rth": "08:30-15:00 CT",
   "pt_usd": 20.0,
@@ -20,120 +20,121 @@
    "2026-09-10.csv": 1,
    "2026-09-11.csv": 1,
    "2026-09-14.csv": 1,
-   "2026-09-15.csv": 1
+   "2026-09-15.csv": 1,
+   "2026-09-16.csv": 1
   },
   "incomplete_dropped": 9
  },
  "sequence": {
   "LOD_first": 105,
-  "HOD_first": 95,
+  "HOD_first": 96,
   "pct_LOD_first": 52
  },
  "expected": {
   "took_min": 23.3,
-  "gap_min": 213.6,
-  "rng_pts": 368.1,
-  "rng_usd": 7361.5,
-  "rng_p25": 255.3,
-  "rng_p75": 468.8,
+  "gap_min": 213.7,
+  "rng_pts": 368.7,
+  "rng_usd": 7374.7,
+  "rng_p25": 255.4,
+  "rng_p75": 471.5,
   "first_clock": 31995.2,
-  "second_clock": 45379.8,
+  "second_clock": 45413.7,
   "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
   "outliers_excluded": {
-   "took": 15,
+   "took": 16,
    "gap": 0,
    "rng_pts": 6,
    "rng_usd": 6,
-   "first_clock": 15,
+   "first_clock": 16,
    "second_clock": 0
   },
   "median_for_contrast": {
-   "took_min": 18.0,
-   "gap_min": 216.0,
-   "rng_pts": 352.8,
-   "first_clock": 31680.0,
-   "second_clock": 46440.0
+   "took_min": 18,
+   "gap_min": 219,
+   "rng_pts": 359.2,
+   "first_clock": 31680,
+   "second_clock": 46440
   }
  },
  "ladder": {
   "low": {
    "30": {
-    "n": 354,
-    "held": 174,
+    "n": 356,
+    "held": 175,
     "rate": 49
    },
    "60": {
-    "n": 259,
+    "n": 260,
     "held": 170,
-    "rate": 66
+    "rate": 65
    },
    "90": {
-    "n": 225,
+    "n": 226,
     "held": 166,
-    "rate": 74
+    "rate": 73
    },
    "120": {
-    "n": 203,
+    "n": 204,
     "held": 162,
-    "rate": 80
+    "rate": 79
    },
    "180": {
-    "n": 170,
+    "n": 171,
     "held": 149,
-    "rate": 88
+    "rate": 87
    }
   },
   "high": {
    "30": {
-    "n": 395,
-    "held": 172,
-    "rate": 44
+    "n": 398,
+    "held": 173,
+    "rate": 43
    },
    "60": {
-    "n": 271,
-    "held": 156,
+    "n": 272,
+    "held": 157,
     "rate": 58
    },
    "90": {
-    "n": 215,
-    "held": 150,
+    "n": 216,
+    "held": 151,
     "rate": 70
    },
    "120": {
-    "n": 188,
-    "held": 145,
+    "n": 189,
+    "held": 146,
     "rate": 77
    },
    "180": {
-    "n": 156,
-    "held": 129,
+    "n": 157,
+    "held": 130,
     "rate": 83
    }
   },
   "both": {
    "30": {
-    "n": 749,
-    "held": 346,
+    "n": 754,
+    "held": 348,
     "rate": 46
    },
    "60": {
-    "n": 530,
-    "held": 326,
-    "rate": 62
+    "n": 532,
+    "held": 327,
+    "rate": 61
    },
    "90": {
-    "n": 440,
-    "held": 316,
+    "n": 442,
+    "held": 317,
     "rate": 72
    },
    "120": {
-    "n": 391,
-    "held": 307,
-    "rate": 79
+    "n": 393,
+    "held": 308,
+    "rate": 78
    },
    "180": {
-    "n": 326,
-    "held": 278,
+    "n": 328,
+    "held": 279,
     "rate": 85
    }
   }
@@ -143,27 +144,27 @@
    "wick": 37.7,
    "wick_median": 21.0,
    "wick_n": 182,
-   "bop": 10.8,
-   "bop_median": 3,
-   "bop_n": 177,
-   "mud": 191.8,
-   "mud_median": 186,
-   "mud_n": 199,
-   "wick_pct": 26.2,
+   "bop": 11.6,
+   "bop_median": 6.0,
+   "bop_n": 180,
+   "mud": 191.1,
+   "mud_median": 184.5,
+   "mud_n": 200,
+   "wick_pct": 26.0,
    "wick_pct_median": 22,
    "wick_pct_n": 199,
-   "wick_pts": 85.2,
-   "wick_pts_median": 72.8,
-   "wick_pts_n": 193
+   "wick_pts": 85.6,
+   "wick_pts_median": 73.4,
+   "wick_pts_n": 194
   },
   "excluded": {
    "never_reclaimed": 1,
    "zero_wick": 0,
    "outliers_tukey_1_5_iqr": {
-    "wick": 17,
-    "bop": 22,
+    "wick": 18,
+    "bop": 20,
     "mud": 0,
-    "wick_pct": 0,
+    "wick_pct": 1,
     "wick_pts": 6
    },
    "rule": "operator 2026-08-28: no-wick days and crazy outliers are not averaged; a zero wick still PRINTS 0 on the day's own row"
@@ -332,38 +333,38 @@
    }
   },
   "Wed": {
-   "sessions": 41,
+   "sessions": 42,
    "first": "2025-11-26",
-   "last": "2026-09-09",
+   "last": "2026-09-16",
    "sequence": {
     "LOD_first": 19,
-    "HOD_first": 22,
-    "pct_LOD_first": 46
+    "HOD_first": 23,
+    "pct_LOD_first": 45
    },
    "expected": {
     "took_min": 17.6,
-    "gap_min": 218.6,
-    "rng_pts": 352.8,
-    "rng_usd": 7056.3,
-    "rng_p25": 244.9,
-    "rng_p75": 438.0,
+    "gap_min": 218.7,
+    "rng_pts": 356.4,
+    "rng_usd": 7128.2,
+    "rng_p25": 246.2,
+    "rng_p75": 470.6,
     "first_clock": 31655.0,
-    "second_clock": 45772.7,
+    "second_clock": 45925.7,
     "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
     "outliers_excluded": {
-     "took": 5,
+     "took": 6,
      "gap": 0,
      "rng_pts": 2,
      "rng_usd": 2,
-     "first_clock": 5,
+     "first_clock": 6,
      "second_clock": 0
     },
     "median_for_contrast": {
-     "took_min": 18,
-     "gap_min": 243,
-     "rng_pts": 342.0,
-     "first_clock": 31680,
-     "second_clock": 47520
+     "took_min": 18.0,
+     "gap_min": 232.5,
+     "rng_pts": 344.1,
+     "first_clock": 31680.0,
+     "second_clock": 47880.0
     }
    },
    "wickFamily": {
@@ -374,25 +375,25 @@
      "bop": 10.3,
      "bop_median": 3,
      "bop_n": 37,
-     "mud": 202.1,
-     "mud_median": 198,
-     "mud_n": 41,
-     "wick_pct": 21.1,
-     "wick_pct_median": 18,
-     "wick_pct_n": 41,
-     "wick_pts": 62.9,
-     "wick_pts_median": 52.6,
-     "wick_pts_n": 38
+     "mud": 198.6,
+     "mud_median": 196.5,
+     "mud_n": 42,
+     "wick_pct": 21.4,
+     "wick_pct_median": 18.5,
+     "wick_pct_n": 42,
+     "wick_pts": 72.5,
+     "wick_pts_median": 60.2,
+     "wick_pts_n": 41
     },
     "excluded": {
      "never_reclaimed": 0,
      "zero_wick": 0,
      "outliers_tukey_1_5_iqr": {
-      "wick": 4,
-      "bop": 4,
+      "wick": 5,
+      "bop": 5,
       "mud": 0,
       "wick_pct": 0,
-      "wick_pts": 3
+      "wick_pts": 1
      }
     }
    },
@@ -401,14 +402,14 @@
     "green": 2,
     "red": 4,
     "days": [
-     "2026-08-05",
      "2026-08-12",
      "2026-08-19",
      "2026-08-26",
      "2026-09-02",
-     "2026-09-09"
+     "2026-09-09",
+     "2026-09-16"
     ],
-    "rng_pts": 267.5
+    "rng_pts": 281.7
    }
   },
   "Thu": {
@@ -574,36 +575,86 @@
  },
  "predict": {
   "open30": {
-   "a": 139.672,
-   "b": 1.2912,
-   "mae": 106.46,
-   "r2": 0.325,
-   "n": 200,
+   "a": 143.26,
+   "b": 1.2782,
+   "mae": 107.14,
+   "r2": 0.32,
+   "n": 201,
    "feature": "opening 30-min range (pts)"
   },
   "open60": {
-   "a": 105.672,
-   "b": 1.1487,
-   "mae": 97.97,
-   "r2": 0.45,
-   "n": 200,
+   "a": 110.526,
+   "b": 1.1343,
+   "mae": 99.09,
+   "r2": 0.441,
+   "n": 201,
    "feature": "opening 60-min range / initial balance (pts)"
   },
   "exante": {
-   "a": 265.971,
-   "b": 0.3144,
-   "mae": 127.18,
-   "r2": 0.099,
-   "n": 199,
+   "a": 267.926,
+   "b": 0.3113,
+   "mae": 127.43,
+   "r2": 0.097,
+   "n": 200,
    "feature": "prior-day range (pts)"
   },
   "dir30": {
-   "acc": 0.693,
-   "n": 199,
-   "base": 0.52,
+   "acc": 0.69,
+   "n": 200,
+   "base": 0.517,
    "feature": "sign(opening 30-min drive) -> close direction"
   },
   "note": "weekday means are a reference (R^2 ~2%); these predict from today's tape. MAE/R^2 in-sample; out-of-fold on 283 ES sessions was open30 19.5 / exante 23.0 / dir30 0.68."
  },
- "generatedAt": "2026-09-16T20:05:17Z"
+ "condstats": {
+  "n": 201,
+  "t1Med": 18,
+  "t2Med": 264,
+  "lodPct": 52,
+  "pos30": [
+   {
+    "n": 76,
+    "t1": 18.0,
+    "t2": 277.5,
+    "lodPct": 66
+   },
+   {
+    "n": 61,
+    "t1": 21,
+    "t2": 219,
+    "lodPct": 56
+   },
+   {
+    "n": 64,
+    "t1": 10.5,
+    "t2": 274.5,
+    "lodPct": 33
+   }
+  ],
+  "pos60": [
+   {
+    "n": 74,
+    "t1": 13.5,
+    "t2": 262.5,
+    "lodPct": 72
+   },
+   {
+    "n": 62,
+    "t1": 24.0,
+    "t2": 264.0,
+    "lodPct": 58
+   },
+   {
+    "n": 65,
+    "t1": 6,
+    "t2": 264,
+    "lodPct": 25
+   }
+  ],
+  "t2LastHrPct": 37,
+  "t2Last30Pct": 28,
+  "orClockRule": "outer third: 1ST clock = the clock of the opening window's extreme on the open's side",
+  "note": "study-daystats-cond.py 2026-09-16: 1ST clock MAE base 38.4 -> 33.3 (60 min); 1ST acc 0.48 -> 0.61; 2ND clock not predictable (93 min)"
+ },
+ "generatedAt": "2026-09-17T20:15:17Z"
 }
