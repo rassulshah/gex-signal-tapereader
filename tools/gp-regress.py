@@ -89,6 +89,7 @@ def main():
     ap.add_argument('--label', default='')
     ap.add_argument('--indicator', default='gamma', choices=['gamma', 'daymodel', 'daystats', 'kingtracker'])
     ap.add_argument('--dry', action='store_true', help='check only: no run file, no RESULTS.md line (tools/regress.py runs the fixtures this way)')
+    ap.add_argument('--kt-status', help='kingtracker: the plugin\'s KingTracker.status.txt (0.14) — the toggle test: which source, which books drawn')
     a = ap.parse_args()
 
     R = read_csv(a.csv)
@@ -451,6 +452,27 @@ def main_other(a, R, AU):
             if n and now and num(now[0][3]):
                 r = num(now[0][2]) / num(now[0][3])
                 exp[book] = { 'steps': [[hhmm(num(t[2])), num(t[4]), round(num(t[4]) * r + off, 2)] for t in steps], 'now': [num(now[0][3]), round(num(now[0][2]) + off, 2), now[0][4] if len(now[0]) > 4 else ''], 'ratio_now': round(r, 5) }
+        # (0.14) THE TOGGLE TEST — the plugin's own status file says what it drew; it must agree with its Source and with the CSV
+        if a.kt_status and os.path.exists(a.kt_status):
+            KS = {}; src = None
+            for line in open(a.kt_status, encoding='utf-8', errors='replace'):
+                t = line.strip().split(',')
+                if t[0] == 'KTSTATUS' and len(t) >= 9: src = t[1]; KS[t[3]] = dict(fam=t[2], drawn=t[4] == '1', steps=int(t[5]), strike=num(t[6]), pct=num(t[7]), off=num(t[8]))
+            add(src in ('Skylit', 'IF'), 'B', 'status file: Source = %s' % src)
+            fam_books = {'Skylit': ['SPX', 'SPY'], 'IF': ['IF']}.get(src, [])
+            hidden = {'Skylit': ['IF'], 'IF': ['SPX', 'SPY']}.get(src, [])
+            for bk in fam_books:
+                st = KS.get(bk)
+                csv_n = len([t for t in R.get('KINGTRACK', []) if len(t) >= 5 and t[0] == fam and t[1] == bk])
+                if st is None: add(False, 'B', '%s: no status line' % bk); continue
+                add(st['drawn'] == (csv_n > 0 or any(len(t) >= 4 and t[1] == bk for t in R.get('KINGNOW', []))), 'B', '%s: drawn=%s under Source %s (CSV has %d steps)' % (bk, st['drawn'], src, csv_n))
+                add(st['steps'] == csv_n, 'B', '%s: the plugin loaded %d steps == the CSV\'s %d' % (bk, st['steps'], csv_n))
+                kn = KN.get(bk)
+                if kn and st['strike']: add(st['strike'] == kn.get('strike') and st['pct'] == kn.get('pct'), 'B', '%s: the plugin\'s KINGNOW %s %+d == the panel\'s (%s %+d)' % (bk, st['strike'], st['pct'] or 0, kn.get('strike'), kn.get('pct') or 0))
+            for bk in hidden:
+                st = KS.get(bk)
+                if st: add(not st['drawn'], 'B', '%s: NOT drawn under Source %s' % (bk, src))
+            exp['toggle'] = dict(source=src, drawn=[b for b, v in KS.items() if v['drawn']], offset=(KS.get('IF') or KS.get('SPX') or {}).get('off'))
         exp['basis_note'] = 'chart price = re-derived price + (chart close at the SCALEREF minute - SCALEREF %s); offset used here: %+.2f; the plugin refuses an offset > 300' % (SR, off)
         exp['source_note'] = 'lsKingTracker Source = Skylit draws SPX + SPY; Source = IF draws only the IF Magnet (0.11) — transcribe whichever the chart is on'
         if IR:

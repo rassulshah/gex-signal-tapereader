@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <cstdio>
 
 namespace ktl {
 
@@ -72,6 +73,18 @@ inline int polarity(int stepPct, const Book& b)
     if (stepPct < 0) return -1; if (stepPct > 0) return 1;
     if (b.hasNow && b.nowPct < 0) return -1;
     return 1;
+}
+
+// (v0.14) THE STATUS LINE — what this draw put on the chart, one line per book, written to KingTracker.status.txt beside
+// the CSV so the toggle can be VERIFIED from outside (the operator flips Source, the file says which journey is drawn).
+// Grammar:  KTSTATUS,<source Skylit|IF>,<chartFam>,<book>,<drawn 1|0>,<steps>,<nowStrike>,<nowPct>,<offset>
+inline std::string statusLine(bool sourceIF, const std::string& chartFam, const std::string& book, const std::string& bookFam, const Book& b, float off)
+{
+    char buf[160];
+    bool drawn = bookDrawn(book, bookFam, chartFam, sourceIF) && (!b.steps.empty() || b.hasNow);
+    snprintf(buf, sizeof(buf), "KTSTATUS,%s,%s,%s,%d,%d,%d,%d,%.2f", sourceIF ? "IF" : "Skylit", chartFam.c_str(), book.c_str(), drawn ? 1 : 0,
+             (int)b.steps.size(), b.hasNow ? b.nowStrike : 0, b.hasNow ? b.nowPct : 0, off);
+    return std::string(buf);
 }
 
 inline double staleAge(double asofSo, double localSo)

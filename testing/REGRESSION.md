@@ -68,7 +68,7 @@ screenshot, and appends one line to that indicator's `RESULTS.md`. `--irt-read` 
 - gamma: `{"tags":{"7660":"G.C"},"cw":"7675","pw":"7600","flip_between":[7620,7625],"top5":[...],"regime":"..."}`
 - daymodel: `{"offset": 0.0 | "chart_close": 7702.25, "exp":{"o":..,"h":..,"l":..,"c":..}, "act":{...}, "basis":"em-open60"}` (chart prices; ±1 pt)
 - daystats: `{"offset": 0.0, "A":[12 cells or null], "E":[12 cells or null]}` (spaces ignored; a null skips a cell)
-- kingtracker: `{"offset": 0.0, "SPX":{"now": 7757.3, "steps":[[...]], "strike_label": 7685}, "SPY":{...}, "IF":{...}}` (transcribe the books the chart's Source draws: Skylit → SPX + SPY, IF → IF)
+- kingtracker: `{"offset": 0.0, "SPX":{"now": 7757.3, "steps":[[...]], "strike_label": 7685}, "SPY":{...}, "IF":{...}}` (transcribe the books the chart's Source draws: Skylit → SPX + SPY, IF → IF). **The toggle test (0.14):** add `--kt-status KingTracker.status.txt` (written by the plugin after every draw) — the runner checks the Source, that only that source's books are drawn, their step counts against the CSV and their KINGNOW against the panel's.
 
 `--dry` runs the checks without writing anything — that is how `tools/regress.py` runs the fixture pairs (Gate L).
 

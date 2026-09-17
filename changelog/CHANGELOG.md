@@ -1,3 +1,13 @@
+## lsKingTracker 0.14 — the status file: the toggle is testable from outside (2026-09-17, ~09:50 CT)
+
+Operator: "I want to be able to toggle back and forth between IF and Skylit and want you to test this." Driving IRT's
+settings dialog over the desktop bridge was not reliable (the ultrawide arrives at a third of its resolution and the
+dialog did not open on a double-click), so the test is made from the plugin's side: after every draw it writes
+`%USERPROFILE%\InvestorRT\rtx\lsFlexLevels\KingTracker.status.txt` — one `KTSTATUS,<source>,<chartFam>,<book>,<drawn>,
+<steps>,<nowStrike>,<nowPct>,<offset>` line per book (`ktl::statusLine`, pinned in the logic test), plus ASOF. The
+operator flips Source in the dialog; the file (and `gp-regress.py --indicator kingtracker --kt-status`) says which
+journey the chart is drawing and that it matches the CSV and the panel's KINGNOW. GEX build installs it.
+
 ## lsGammaProfile 0.58 — the regime chip is as wide as its content; the pill sits tight (2026-09-17, ~07:45 CT)
 
 Operator, chip screenshot: "why is the CW not in the box and why is there a space before the WK badge." The box had

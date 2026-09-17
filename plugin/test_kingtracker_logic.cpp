@@ -64,6 +64,12 @@ int main()
     CHECK(ktl::polarity(100, PB) == 1 && ktl::polarity(-100, PB) == -1, "a step's own polarity wins: +100 gold, -100 magenta");
     CHECK(ktl::polarity(0, PB) == -1, "a step without a polarity takes KINGNOW's (here negative)");
     ktl::Book PN; CHECK(ktl::polarity(0, PN) == 1, "nothing known -> positive (gold)");
+    // ---- (v0.14) the status line the toggle test reads
+    ktl::Book SB; SB.hasNow = true; SB.nowStrike = 7600; SB.nowPct = 100; ktl::Step st1; st1.strike = 7500; SB.steps.push_back(st1);
+    CHECK(ktl::statusLine(true, "ES", "IF", "ES", SB, 3.25f) == "KTSTATUS,IF,ES,IF,1,1,7600,100,3.25", "Source IF: the IF book reports drawn=1 with its steps, KINGNOW and the offset");
+    CHECK(ktl::statusLine(true, "ES", "SPX", "ES", SB, 3.25f) == "KTSTATUS,IF,ES,SPX,0,1,7600,100,3.25", "Source IF: the SPX book reports drawn=0 (its data is still there, just not drawn)");
+    CHECK(ktl::statusLine(false, "ES", "SPX", "ES", SB, 0.0f) == "KTSTATUS,Skylit,ES,SPX,1,1,7600,100,0.00" && ktl::statusLine(false, "ES", "IF", "ES", SB, 0.0f).find(",IF,0,") != std::string::npos, "Source Skylit: SPX drawn, IF not");
+    ktl::Book EB; CHECK(ktl::statusLine(true, "ES", "IF", "ES", EB, 0.0f) == "KTSTATUS,IF,ES,IF,0,0,0,0,0.00", "an empty book is never 'drawn' whichever source");
     // ---- the stale age
     CHECK(ktl::staleAge(-1, 1) < 0 && ktl::staleAge(35229, 35229 + 180) == 3.0 && ktl::staleAge(23 * 3600 + 50 * 60, 10 * 60) == 20.0, "stale age: unknown, 3 min, the overnight wrap");
     printf("\n%d passed, %d failed\n", passes, fails);

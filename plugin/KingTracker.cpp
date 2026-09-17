@@ -109,6 +109,8 @@ public:
     bool dialogReady();        // (v0.12) the parameters exist (the Source list reads 0 or 1)
     void syncEnable();         // (v0.12) grey out the rows the chosen Source does not draw
     void migrateScrambled();   // (v0.13) undo the 0.12 position shift on a saved instance
+    void writeStatus(const Settings& S);   // (v0.14) KingTracker.status.txt — what this draw drew
+    float lastOffset;          // (v0.14) the contract offset applied on this draw
     void render(const Settings& S);
     int  chartFamily(const Settings& S);        // returns 1 ES / 2 NQ
     short yOf(float price);
@@ -128,7 +130,7 @@ int cppExtension::destroy(void) { return RTX_OK; }
 // ---- constructor: safe defaults -------------------------------------------
 KingTracker::KingTracker() : cppExtension()
 {
-    lastBar = 0;
+    lastBar = 0; lastOffset = 0.0f;
     cfg.family = 0;      // Auto
     cfg.width  = 2;
     cfg.offset = 0;      // clock offset minutes (tz/basis calibration)
@@ -371,7 +373,18 @@ void KingTracker::render(const Settings& S)
 }
 
 // ---- draw() ---------------------------------------------------------------
-int KingTracker::draw(void) { load(); applyContractOffset(); render(cfg); drawStaleBadge(); return RTX_OK; }
+// (v0.14) the status file: one KTSTATUS line per book after every draw (the toggle test reads it; testing/REGRESSION.md)
+void KingTracker::writeStatus(const Settings& S)
+{
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\KingTracker.status.txt";
+    std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
+    const char* famStr = (chartFamily(S) == 2) ? "NQ" : "ES";
+    f << "VERSION,0.14\n";
+    for (int b = 0; b < NBOOK; b++) f << ktl::statusLine(S.sourceIF, famStr, BOOK_NAME[b], BOOK_FAM[b], book[b], lastOffset) << "\n";
+    f << "ASOF," << asofSo << "\n";
+}
+int KingTracker::draw(void) { load(); applyContractOffset(); render(cfg); drawStaleBadge(); writeStatus(cfg); return RTX_OK; }
 
 // ---- (v0.3) CONTRACT ALIGNMENT — the ES King prices are in the panel's ES space (SPOT is the ES-cash
 // anchor). If the ES chart is a different contract (EPZ26 December, ~+70 over cash), shift every King
@@ -420,9 +433,10 @@ void KingTracker::applyContractOffset()
     // strike x (nowPx / nowStrike) — the ratio the CURRENT price is in. Basis drift within a day is a
     // point or two; the roll is ~70. Only when a KINGNOW row gives the ratio; otherwise the stored prices.
     for (int b = 0; b < NBOOK; b++) ktl::rederive(book[b]);                     // (v0.10) KingTrackerLogic.h
-    float anchor = 0.0f, off = 0.0f;
+    float anchor = 0.0f, off = 0.0f; lastOffset = 0.0f;
     if (!ktl::anchorPrice(hasScaleRef, scaleRef, hasSpot, spotPx, anchor)) return;
     if (!ktl::offsetFor(chartClose, anchor, off)) return;
+    lastOffset = off;   // (v0.14) reported in the status file
     for (int b = 0; b < NBOOK; b++) ktl::shift(book[b], off);
 }
 
@@ -455,6 +469,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.13");
+    p->setVersion("0.14");
     return p;
 }
