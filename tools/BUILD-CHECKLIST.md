@@ -64,6 +64,10 @@ undocumented. That has already happened repeatedly in this project.
    catch a wrong price; v11.70 shipped a forecast ban that passed on inserted forecast text. Third
    occurrence. `eval(ex('fn'))` with stubs costs 47ms. **Then mutate the source and confirm the
    assertions fire** — an assertion that never fails buys false confidence, which is worse than none.
+2a. **(2026-09-17) PLUGIN DEPLOY = commit the .cpp/.h over the bridge, wait 2 minutes, READ `plugin/out/BUILD-STATUS.txt`
+   and `tools/gex-build.log` over the bridge** — "GEX build" (setup-gex-build.bat, once) compiles and installs the DLL by
+   itself; PENDING means Investor/RT is open. Tell him only "restart IRT" once the log says INSTALLED (or BUILD FAILED with
+   the compile.txt). Never ask him to open a command window for a plugin build again.
 2b. **(2026-09-17) THE INDICATOR REGRESSION — `python3 tools/regress.py`** (or one: `gamma | daymodel | daystats |
    kingtracker`). Gate A node suites + Gate B C++ logic suites + Gate L (the live runner on the pinned fixture pairs),
    one table, one dated block appended to `testing/RESULTS.md`. **A build that touches an indicator's sources (named in

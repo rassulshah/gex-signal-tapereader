@@ -1,6 +1,16 @@
 # RESUME NOTE — read this before anything else
 _written 2026-09-02, amended 2026-09-17 06:10 CT (KT 0.12 / GP 0.57 / DM 0.18 / DS 0.9) · **panel v16.38** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.57**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.12** · supersedes every earlier resume note_
 
+# ⚠⚠⚠ 2026-09-17 ~06:40 CT — GEX BUILD: THE PLUGINS COMPILE AND INSTALL THEMSELVES. START HERE.
+
+He asked for a way out of the command window. `setup-gex-build.bat` (run once) installs a hidden 2-minute task that
+compiles any plugin whose source changed into `plugin\out\` and copies the DLL into IRT's folder as soon as IRT is closed
+(PENDING → INSTALLED in `tools/gex-build.log`; `plugin/out/BUILD-STATUS.txt` at a glance — READ IT OVER THE BRIDGE to
+verify a build compiled instead of asking him). From here the deploy of a .cpp is: commit over the bridge → wait 2 min →
+read the status file → tell him "restart IRT". The compile-*.bat and `plugin/compile-all.bat` remain for manual use.
+**He needs to run `setup-gex-build.bat` once** (first run builds all four; with IRT open they sit PENDING until he
+closes it). Then KT 0.12 / GP 0.57 / DM 0.18 / DS 0.9 install themselves — Source = IF in the King tracker after that.
+
 # ⚠⚠⚠ 2026-09-17 ~06:10 CT — KT 0.12 (+ GP 0.57 / DM 0.18 / DS 0.9): SOURCE FIRST, AND THE FONT GUARD. START HERE.
 
 His 0.11 eyes-on: Source = IF applied, yet SPX/SPY still drew and no Magnet. Cause: every plugin's parms callbacks only

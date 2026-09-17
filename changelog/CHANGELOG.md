@@ -1,3 +1,18 @@
+## GEX build — the plugins compile and install themselves (2026-09-17, ~06:40 CT)
+
+Operator: "is there a more automated way of doing the compile so I don't have to do it every single time in a command
+window." Yes: `setup-gex-build.bat` (repo root, run ONCE) registers a hidden Windows task "GEX build" — the same shape as
+"GEX sync" — that runs `tools/gex-build.bat` every 2 minutes. Each tick, per plugin: hash the .cpp + its logic headers
+(certutil, no PowerShell); if the hash differs from the last build, compile into `plugin\out\` (vcvars64 through vswhere,
+the same cl line as build-*.bat) and log BUILT <version>; then, if the built DLL is not the installed one, copy it into
+`%USERPROFILE%\InvestorRT\dllx64`. A loaded DLL cannot be replaced, so with Investor/RT open the copy fails and is retried
+every tick — the log says PENDING once; close IRT and it says INSTALLED within two minutes; reopen IRT to load it. So a
+plugin build now lands over the bridge, compiles itself, installs itself, and his only step is to restart Investor/RT.
+Log `tools/gex-build.log`; one-glance status `plugin/out/BUILD-STATUS.txt` (both readable over the bridge, so the build
+result can be verified from here instead of asked). `plugin/compile-all.bat` for a manual all-four build in one click;
+the per-plugin compile-*.bat stay. `plugin/out/`, the log and the lock are git-ignored (the sync must not commit them).
+Not yet run on his machine — the first run builds all four (about a minute).
+
 ## lsKingTracker 0.12 + GP 0.57 / DM 0.18 / DS 0.9 — Source at the top, the rows it does not draw greyed, and THE FONT GUARD THAT ATE HIS SETTINGS (2026-09-17, ~06:10 CT)
 
 Operator, 0.11 screenshot with Source = IF applied: "the source should be at the top. also spx king and spy king are both
