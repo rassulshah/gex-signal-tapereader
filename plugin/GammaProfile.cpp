@@ -158,6 +158,8 @@ public:
     // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
     short stPaneL, stPaneR, stAnchor, stColW; int stPrimary, stDrawn; bool stRendered;
     std::string stMain, stSpy;   // (v0.61) Book = Both: one GPSTATUS line per rail
+    short forceBarH;              // (v0.62) >0: the SPY rail draws at the SPX rail's thickness (Book = Both)
+    short barThickness(const Settings& S, const std::vector<GStrike>& v);   // (v0.62) the one thickness rule
     void writeStatus();
 
     void load();
@@ -199,7 +201,7 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=0; cfg.spywidth=40; lastOff=0.0f;
     cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false; cfg.lvllabels=true;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
-    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
+    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false; forceBarH = 0;
 }
 
 // ---- parameter callbacks: dialog controls are valid here, so read + cache.
@@ -718,18 +720,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
 
     stPaneL = paneL; stPaneR = paneR; stAnchor = anchor; stColW = colW; stRendered = true;   // (v0.60) for the status file
 
-    // bar thickness
-    short barH = 6;
-    if (S.thick == 1) barH = 6; else if (S.thick == 2) barH = 12; else if (S.thick == 3) barH = 20;
-    else { // Auto from spacing
-        if (strikes.size() >= 2) {
-            PNT a; a.set(lastBar, strikes[0].price);
-            PNT b; b.set(lastBar, strikes[1].price);
-            short d = (short)std::abs((int)b.v - (int)a.v);
-            barH = d > 4 ? (short)(d * 0.78f) : 6;
-        }
-    }
-    if (barH < 3) barH = 3; if (barH > 40) barH = 40;
+    // bar thickness — (v0.62) one rule (barThickness); the SPY rail of Book = Both inherits the SPX rail's (forceBarH)
+    short barH = (railOnly && forceBarH > 0) ? forceBarH : barThickness(S, strikes);
 
     // ALL text (%, node name, rank, levels, header) uses ONE size: the user's
     // "Font size" setting (default 12pt). Bar thickness no longer changes text
@@ -853,7 +845,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
         if (S.type && tlabel && tlabel[0] && len > (short)(S.font * 3)) {
             COLOR ic = inkOn(col);
             int rankMaxT = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
-            bool bubbleIn = S.rank && S.rankpos == 0 && s.rank >= 1 && s.rank <= rankMaxT;
+            bool bubbleIn = S.rank && !gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxT;   // (v0.62)
             short r0 = (short)(S.font * 0.9f + 4);
             short inset = bubbleIn ? (short)(2 * r0 + 6) : 6;          // clear the bubble when it is inside the tip
             if (sgn < 0) textLJ((short)(tip + inset), p.v, tlabel, ic, S.font, true);
@@ -871,7 +863,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             FONT wf; wf.id = HELVETICA; wf.size = (short)(S.font - 1); wf.style = BOLD; setFont(wf);
             wtagW = (short)(getTextWidth(wtag, -1) + 6);
             int rankMaxW = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
-            bool bubbleOut = S.rank && S.rankpos == 1 && s.rank >= 1 && s.rank <= rankMaxW;
+            bool bubbleOut = S.rank && gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxW;   // (v0.62)
             short past = bubbleOut ? (short)(2 * (S.font * 0.9f + 4) + 8) : 6;
             if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, C_PINK, S.font - 1, true);
             else         textLJ((short)(tip + past), p.v, wtag, C_PINK, S.font - 1, true);
@@ -900,7 +892,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
         if (S.rank && inScope) {
             char rk[8]; sprintf_s(rk, sizeof(rk), "%d", s.rank);
             short r = (short)(S.font * 0.9f + 4);         // circle big enough to hold the numeral
-            short cx = (S.rankpos == 1)                 // outside the tip
+            short cx = gpl::bubbleOutside(S.rankpos, len, r)   // (v0.62) outside when asked OR when the bar cannot hold it
                        ? (short)(tip + sgn * (r + 4))
                        : (short)(tip - sgn * (r + 2));  // inside the tip
             RCT bub; bub.set((short)(cx - r), (short)(p.v - r), (short)(cx + r), (short)(p.v + r));
@@ -998,6 +990,17 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     if (S.legend) drawLegend(pane, S);
 }
 
+// (v0.62) the thickness rule, computed ONCE per draw on the SPX strikes so both rails of Book = Both share it
+short GammaProfile::barThickness(const Settings& S, const std::vector<GStrike>& v)
+{
+    if (S.thick == 1) return 6; if (S.thick == 2) return 12; if (S.thick == 3) return 20;
+    long n = getBarCount(); if (n < 2 || v.size() < 2) return 6;
+    int lastBar = (int)n - 1;
+    PNT a; a.set(lastBar, v[0].price);
+    PNT b; b.set(lastBar, v[1].price);
+    return (short)gpl::autoBarH(std::abs((int)b.v - (int)a.v));
+}
+
 // ---- draw() ---------------------------------------------------------------
 int GammaProfile::draw(void)
 {
@@ -1012,17 +1015,21 @@ int GammaProfile::draw(void)
     for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
     stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
     Settings M = cfg; M.side = RLY.mainSide;   // (v0.61) Both: the SPX rail is on the right whatever Side says
-    render(M);         // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
+    forceBarH = 0;
     if (RLY.both) {
-        // (v0.61) the SPY rail: the SPY book's bars on the LEFT, bars + badges + % only (levels/panel drew once above)
-        stMain = gpl::statusLine(1, 0, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered);
+        // (v0.61) the SPY rail: the SPY book's bars on the LEFT, bars + badges + % only. (v0.62) drawn FIRST, at the SPX
+        // rail's thickness, so the levels, the regime chip and the read panel of the SPX rail always sit on top of it.
+        forceBarH = barThickness(M, strikes);
         strikes.swap(strikesSpy);
-        stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
         Settings L = cfg; L.side = RLY.spySide; L.width = RLY.spyWidth; L.detach = true; L.tapecols = false;
         render(L, true);
         strikes.swap(strikesSpy);
         stSpy = gpl::statusLine(2, 1, (int)strikesSpy.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, RLY.spyWidth, stPrimary, stDrawn, stRendered);
-    } else { stMain.clear(); stSpy.clear(); }
+        stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
+    }
+    render(M);         // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
+    if (RLY.both) stMain = gpl::statusLine(1, 0, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered);
+    else { stMain.clear(); stSpy.clear(); }
     drawStaleBadge();  // (v0.38) warn if the CSV is cold, regardless of what render drew
     writeStatus();     // (v0.60) this instance's line, for the two-rail check from outside
     return RTX_OK;
@@ -1038,7 +1045,7 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.61  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile 0.62  written " << ts << "  (this instance's last draw)\n";
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
     else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered) << "\n";
 }
@@ -1129,6 +1136,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.61");
+    p->setVersion("0.62");
     return p;
 }

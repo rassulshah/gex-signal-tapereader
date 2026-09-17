@@ -1,5 +1,14 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 11:55 CT (GP 0.61) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.61**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 12:25 CT (GP 0.62) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.62**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~12:25 CT — GP 0.62: the SPY rail at the SPX thickness, bubbles outside short bars, SPY rail drawn first. START HERE.
+
+0.61 Both WORKED (status file: both rails rendered, 2 + 3 primaries) but looked broken: SPY bars 40 px tall / 6–11 px
+long (auto thickness from the 10-pt SPY spacing × width 40), bubbles off the pane, the SPY rail painted over the regime
+chip. 0.62: `gpl::autoBarH` shared from the SPX rail, `gpl::bubbleOutside` (bar shorter than the bubble → outside),
+SPY rail drawn first. **He needs: GEX build → close IRT → INSTALLED → reopen; set SPY rail width ≥ 120.** Acceptance:
+his screenshot — SPY bars as lines with ①④⑤ visible, chip clean — then the same-minute compare vs Atlas.
+Note: the status file is named by cfg.side (his instance is Side = Left → `GammaProfile.status-Both-Left.txt`).
 
 # ⚠⚠⚠ 2026-09-17 ~11:55 CT — GP 0.61: BOOK = BOTH — one instance, SPY rail left + SPX rail right. START HERE.
 

@@ -230,6 +230,11 @@ int main()
     { gpl::RailLayout r = gpl::railLayout(4, 0, 90, 0); CHECK(r.spyWidth == 90, "SPY width 0 = same as the SPX rail"); }
     CHECK(std::string(gpl::bookName(4)) == "Both" && std::string(gpl::bookFile(4)) == "GammaProfile.csv", "Both names itself; its main file is the SPX tape");
 
+    // ---- (v0.62) the bubble on a short bar, the shared thickness
+    CHECK(!gpl::bubbleOutside(0, 40, 10) && gpl::bubbleOutside(0, 11, 10) && gpl::bubbleOutside(0, 23, 10) && !gpl::bubbleOutside(0, 24, 10), "Rank at = Inside: inside only when the bar is at least 2r+4 long (11 px at r=10 -> outside)");
+    CHECK(gpl::bubbleOutside(1, 400, 10), "Rank at = Outside: always outside");
+    CHECK(gpl::autoBarH(31) == 24 && gpl::autoBarH(62) == 40 && gpl::autoBarH(4) == 6 && gpl::autoBarH(3) == 6, "auto thickness: 0.78 x spacing, capped 40, 6 below 5 px (the SPX 5-pt spacing -> ~24; the SPY 10-pt spacing would hit the cap)");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

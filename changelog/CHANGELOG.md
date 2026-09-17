@@ -1,3 +1,17 @@
+## lsGammaProfile 0.62 — the SPY rail learns it shares the pane (2026-09-17, ~12:25 CT)
+
+Operator's first Both screenshot (0.61): "the nodes on the left are being cut off … something wrong with the regime chip".
+Zoomed: the SPY bars were 40 px TALL and 6–11 px LONG — auto thickness from the SPY strike spacing (10 ES points, twice
+SPX) hit the cap while width 40 made a -27% bar 11 px — semicircle blobs at the pane edge with their rank bubbles off the
+pane (④ ⑤ invisible; the status file said 3 primaries drawn). And the SPY rail was drawn AFTER the SPX rail, so its bars
+and % labels painted over the regime chip. "fix, especially the ui issues".
+- `gpl::autoBarH` — the one thickness rule; `barThickness()` computed on the SPX strikes once per draw and handed to the
+  SPY rail (`forceBarH`), so both rails are the same 20-ish px lines.
+- `gpl::bubbleOutside(rankpos, len, r)` — the rank bubble goes outside the tip when the bar is shorter than 2r+4 px,
+  on either rail; "Rank at" still decides for bars long enough. The pattern-tag / wall-tag insets follow the same rule.
+- Draw order: SPY rail first, then the SPX rail with its levels, chip and panel on top.
+- Gate B +3 (75). No parameter change. Recommended: SPY rail width ≥ 120 (his 40 stays too short to read).
+
 ## lsGammaProfile 0.61 — Book = Both: one instance, two rails (2026-09-17, ~11:55 CT)
 
 Operator: "was there any reason why you didn't build an option to have both profiles so I don't have to add another

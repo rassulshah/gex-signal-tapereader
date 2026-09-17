@@ -272,5 +272,15 @@ inline std::string statusLine(int book, int side, int strikes, bool atlasMerge, 
     return std::string(buf);
 }
 
+// (v0.62) THE RANK BUBBLE GOES OUTSIDE THE TIP WHEN THE BAR CANNOT HOLD IT — operator's 0.61 screenshot: at SPY rail
+// width 40 a -27% bar is 11 px long, the bubble (radius ~10) drawn "inside" its tip landed off the pane edge, so ④ and ⑤
+// were invisible. "Rank at" is still honoured for a bar long enough (2r + 4 px) to carry the bubble inside.
+inline bool bubbleOutside(int rankpos, int barLen, int radius) { return rankpos == 1 || barLen < 2 * radius + 4; }
+
+// (v0.62) ONE THICKNESS FOR BOTH RAILS. Auto thickness comes from the strike spacing in pixels; the SPY strikes are 10 ES
+// points apart (twice SPX), so the SPY rail's bars hit the 40 px cap while 6-11 px long — semicircle blobs at the pane
+// edge (his screenshot). The SPX rail's thickness is computed once and handed to the SPY rail.
+inline int autoBarH(int spacingPx) { int h = spacingPx > 4 ? (int)(spacingPx * 0.78f) : 6; if (h < 3) h = 3; if (h > 40) h = 40; return h; }
+
 } // namespace gpl
 #endif

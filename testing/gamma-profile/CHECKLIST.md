@@ -39,4 +39,6 @@ The run file gets: the screenshot file names, every unticked line with what was 
 - [ ] The five badges split across the two rails exactly as Atlas's ES1 view (same minute) — both Kings badged; a SPY bar with no pooled badge draws grey.
 - [ ] Levels (King / CW / PW / FLIP), the regime chip and the read panel appear ONCE (from the SPX file); the SPY rail carries no C/F/G tags, no CW/PW tags.
 - [ ] `GammaProfile.status-Both-Right.txt` has TWO GPSTATUS lines (SPX then SPY), both `rendered 1`, strike counts matching the two CSVs.
+- [ ] (0.62) Both rails' bars are the SAME thickness; a short SPY bar (e.g. -27% at width 120) carries its bubble OUTSIDE its tip, fully on the pane.
+- [ ] (0.62) The regime chip, the read panel and the level lines sit ON TOP of the SPY rail — no SPY % label or bar painted over the chip.
 
