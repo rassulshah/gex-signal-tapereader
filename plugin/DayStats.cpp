@@ -80,6 +80,7 @@ public:
     virtual int draw(void);
 
     StatRow A, E;
+    std::string condBasis; int condLastHr, condLast30;   // (v0.7) the CONDE row — the E clocks' stage + the 2ND ladder
     std::string weekday, daydate;
     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
@@ -211,7 +212,7 @@ void DayStats::textCJ(short xc, short y, const char* s, COLOR col, int sz, bool 
 // ---- data load ------------------------------------------------------------
 void DayStats::load()
 {
-    A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1;
+    A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1; condBasis.clear(); condLastHr = -1; condLast30 = -1;
     hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
     hasRead = false; readFirst.clear(); readCall.clear(); readPosr = -1; readPct = -1; readN = 0;
     const char* up = getenv("USERPROFILE"); if (!up) return;
@@ -245,6 +246,9 @@ void DayStats::load()
             r.rngP75    = (t.size() > 17) ? t[17] : "";
             r.valid     = true;
             if (t[0] == "DAYSA") A = r; else E = r;
+        } else if (t[0] == "CONDE" && t.size() >= 6) {
+            // (v0.7) CONDE,<basis>,<t1>,<t2>,<lod%>,<n>[,<lastHr%>,<last30%>] — which stage drew the E clocks (panel 16.32/16.35)
+            condBasis = t[1]; condLastHr = (t.size() >= 7) ? atoi(t[6].c_str()) : -1; condLast30 = (t.size() >= 8) ? atoi(t[7].c_str()) : -1;
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
             if (t.size() >= 3) daydate = t[2];
@@ -304,7 +308,8 @@ void DayStats::render(const Settings& S)
     if (E.valid) {
         double eMudt = (E.gap >= 0 && E.bop >= 0) ? (E.gap - E.bop) : -1;
         eCell[0]="E";
-        eCell[1]= E.first + " ~" + clk(E.firstClk);
+        // (v0.7) a READ-IN 1ST is the actual first extreme, not an expectation: print it with '=' instead of '~'
+        eCell[1]= E.first + (condBasis.rfind("read-in", 0) == 0 ? " =" : " ~") + clk(E.firstClk);
         eCell[2]= "~"+dur(E.took);
         eCell[3]= "~"+dur(E.bop);
         eCell[4]= "~"+dur(E.wick);
@@ -312,7 +317,9 @@ void DayStats::render(const Settings& S)
         eCell[6]= (E.wickPct>=0) ? ("~"+std::to_string((int)(E.wickPct+0.5))+"%") : "--";
         eCell[7]= "~"+dur(E.mud);
         eCell[8]= "~"+dur(eMudt);
-        eCell[9]= E.second + " ~" + clk(E.secondClk);
+        // (v0.7) THE 2ND CLOCK IS A DISTRIBUTION, NOT A TIME (study-daystats-cond: 93 min MAE whatever the morning says):
+        // the median stays, and the share of days whose second extreme prints in the LAST HOUR rides beside it.
+        eCell[9]= E.second + " ~" + clk(E.secondClk) + (condLastHr >= 0 ? ("  " + std::to_string(condLastHr) + "% last hr") : std::string());
         eCell[10]= "~"+dur(E.gap);
         eCell[11]= (E.rngUsd.empty()?std::string("--"):("~$"+E.rngUsd)) + (E.rngPts.empty()?std::string(""):("  ~"+E.rngPts+"p"));   // (v0.4) $ and points in one cell
     }
@@ -443,6 +450,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.6");
+    p->setVersion("0.7");
     return p;
 }

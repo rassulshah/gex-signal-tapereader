@@ -7,6 +7,7 @@
  *
  *  CSV: STRIKE,<price>,<pctKing -100..100>,<rank>,<isKing 0|1>,<type>,<spx strike>
  *       KING,<p>  CW,<p>,<spx>,<win>,<src>  PW,...  FLIP,...  EMH,<p>  EML,<p>  SPOT,<p>
+ *       CW/PW,<es>,<spx>,<win>,<src>[,<depth 0D|WK|MO>,<s0>,<sW>]  SLOPE,<word>,<sDn>,<sUp>,<rDn>,<rUp>
  *       SCALEREF,<front ES>[,<CT sod>,<CT date>]  REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note>
  *       SPYKING,<p>   BOOK,<name>   ASOF,<sec>
  *
@@ -16,6 +17,8 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.50 — IF extras: the wall DEPTH pill (0D / WK / MO from the CW / PW rows' 6th field) beside the node tag and on
+ *          the chip's second line; the SLOPE row's word (STEEP dn / STEEP up / flat) after the sign on the chip's first.
  *  v0.49 — SCALEREF,<px>,<sod>,<date> (panel 16.34): the offset anchors on the bar of the quote's OWN minute — Skylit's
  *          series froze at 14:26 CT on FOMC 2026-09-16, so even the 15:00 bar was wrong by the last half hour's move.
  *  v0.48 — contract offset anchored on the last RTH bar at or before ASOF (SCALEREF freezes at the cash close;
@@ -130,6 +133,8 @@ public:
     std::string lvlWin[6];       // (v0.42) the window the row was computed in ("0DTE"), for the label
     // (v0.42) REGIME row from the panel: REGIME,<sign NEG|POS|AT>,<type>,<conf>,<conflict 0|1>,<flip spx>,<note>
     bool hasRegime; std::string rgSign, rgType, rgConf, rgNote; bool rgConflict; float rgFlipSpx;
+    std::string lvlDepth[6];     // (v0.50) the wall's depth tag from the CW / PW row (0D / WK / MO), empty = none
+    std::string slopeWord;       // (v0.50) the SLOPE row's word (STEEP dn / STEEP up / flat), empty = none
     float spotPx; bool hasSpot;
     float scaleRef; bool hasScaleRef;   // (v0.40) front-month ES anchor the ladder is scaled to (SCALEREF row)
     double scaleRefSo; int scaleRefY, scaleRefM, scaleRefD;   // (v0.49) the CT minute + date of that quote (panel 16.34); so<0 = unknown
@@ -146,6 +151,8 @@ public:
     void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
     void textLJ(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);
+    short pillW(const std::string& tag, const Settings& S);                       // (v0.50)
+    short drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S);   // (v0.50) returns its width (0 when no tag)
     void textC (short cx,     short y, const char* s, COLOR col, int sz, bool bold);
     void hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps);
     void bandPrice(float p1, float p2, short lx, short rx, COLOR col);
@@ -356,7 +363,8 @@ void GammaProfile::readSettings(Settings& S)
 // ---- data load ------------------------------------------------------------
 void GammaProfile::load()
 {
-    for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; lvlSpx[i] = 0.0f; lvlWin[i].clear(); }
+    for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; lvlSpx[i] = 0.0f; lvlWin[i].clear(); lvlDepth[i].clear(); }
+    slopeWord.clear();
     hasRegime = false; rgSign.clear(); rgType.clear(); rgConf.clear(); rgNote.clear(); rgConflict = false; rgFlipSpx = 0.0f;
     hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX"; asofSo = -1; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
     hasScaleRef = false; scaleRef = 0.0f;
@@ -395,7 +403,9 @@ void GammaProfile::load()
                 lvl[li]=v; has[li]=true;
                 if (t.size() >= 3) lvlSpx[li] = (float)atof(t[2].c_str());
                 if (t.size() >= 4) lvlWin[li] = t[3];
+                if (t.size() >= 6 && (t[5] == "0D" || t[5] == "WK" || t[5] == "MO")) lvlDepth[li] = t[5];   // (v0.50) depth tag
             }
+            else if (t[0] == "SLOPE" && t.size() >= 2) { slopeWord = t[1]; }   // (v0.50) the curve's slope, one word
             else if (t[0] == "REGIME") {
                 // REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note...>
                 hasRegime = true;
@@ -441,6 +451,26 @@ void GammaProfile::textRJ(short rightX, short y, const char* s, COLOR col, int s
     setTextColor(col);
     RCT rc; rc.set((short)(rightX - 260), (short)(y - sz), rightX, (short)(y + sz));
     rc.drawText(s, false, true);      // not centered, right-justified
+}
+// (v0.50) THE DEPTH PILL — a small bordered box with the tag in the depth colour: 0D pink (this session only), WK amber
+// (holds through the week), MO cyan (the monthly book sits on it). Drawn beside the CW / PW tag on the node and after
+// the wall on the chip's second line. Colours are the mockup's; the tag comes from the panel (gpWallDepth).
+static COLOR depthColour(const std::string& tag) { return tag == "0D" ? 0x00AF3BC4 : (tag == "WK" ? 0x0041C3E3 : 0x00E0D04F); }
+short GammaProfile::pillW(const std::string& tag, const Settings& S)
+{
+    if (tag.empty()) return 0;
+    FONT f; f.id = HELVETICA; f.size = (short)(S.font - 2); f.style = BOLD; setFont(f);
+    return (short)(getTextWidth(tag.c_str(), -1) + 8);
+}
+short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S)
+{
+    if (tag.empty()) return 0;
+    short w = pillW(tag, S), h = (short)(S.font + 2);
+    COLOR c = depthColour(tag);
+    RCT box; box.set(leftX, (short)(y - h/2), (short)(leftX + w), (short)(y + h/2));
+    box.draw(1, c, C_DARK, DRAW_OPAQUE, PAT_SOLID);
+    textLJ((short)(leftX + 4), y, tag.c_str(), c, S.font - 2, true);
+    return w;
 }
 void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
 {
@@ -496,7 +526,10 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // the two books disagree (surfaced, never resolved here). The old "sum of every %King" is only the fallback
     // for a CSV that predates the row, and it says so.
     gpl::RegimeText RT = gpl::regimeLine(hasRegime, rgSign, rgType, rgConflict, net);
-    bool neg = RT.neg; char l0[200]; sprintf_s(l0, sizeof(l0), "%s", RT.line.c_str());
+    // (v0.50) the curve's slope word rides after the sign: "REGIME  -gamma STEEP dn | RANGE | ..." (IF extras #2)
+    std::string rl = RT.line;
+    if (!slopeWord.empty() && !RT.na) { size_t bar = rl.find(" | "); if (bar != std::string::npos) rl.insert(bar, " " + slopeWord); }
+    bool neg = RT.neg; char l0[200]; sprintf_s(l0, sizeof(l0), "%s", rl.c_str());
     COLOR rcol = neg ? S.cneg : S.cpos;
     if (RT.at) rcol = C_FLIPC;
     if (RT.na) rcol = C_GREY;   // no flip / no spot: no sign call
@@ -516,9 +549,11 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // three coloured segments, laid out left to right with measured widths
     FONT lf; lf.id = HELVETICA; lf.size = (short)S.font; lf.style = PLAIN; setFont(lf);
     short gap = (short)(S.font * 2), cx1 = (short)(x + 10);
-    textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); cx1 = (short)(cx1 + getTextWidth(pwS, -1) + gap);
+    textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); cx1 = (short)(cx1 + getTextWidth(pwS, -1) + 4);
+    if (has[2]) cx1 = (short)(cx1 + drawDepthPill(cx1, ly1, lvlDepth[2], S) + gap - 4); else cx1 = (short)(cx1 + gap - 4);
     textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); cx1 = (short)(cx1 + getTextWidth(flS, -1) + gap);
-    textLJ(cx1, ly1, cwS, C_RES,   S.font, false);
+    textLJ(cx1, ly1, cwS, C_RES,   S.font, false); cx1 = (short)(cx1 + getTextWidth(cwS, -1) + 4);
+    if (has[1]) drawDepthPill(cx1, ly1, lvlDepth[1], S);
     (void)fIdx; (void)cIdx; (void)kIdx; sprintf_s(l1, sizeof(l1), "%s", "");
 }
 // Polarity legend (character, not strength). Placed opposite the panel's row.
@@ -751,6 +786,10 @@ void GammaProfile::render(const Settings& S)
             short past = bubbleOut ? (short)(2 * (S.font * 0.9f + 4) + 8) : 6;
             if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, C_PINK, S.font - 1, true);
             else         textLJ((short)(tip + past), p.v, wtag, C_PINK, S.font - 1, true);
+            // (v0.50) the depth pill beside the tag (IF extras #1): 0D = today's expiry only, WK = the week, MO = the monthly
+            { const std::string& dtag = (wtag[0] == 'C') ? lvlDepth[1] : lvlDepth[2];
+              if (!dtag.empty()) { if (sgn < 0) drawDepthPill((short)(tip - past - wtagW - 2 - pillW(dtag, S)), p.v, dtag, S);
+                                   else         drawDepthPill((short)(tip + past + wtagW + 2), p.v, dtag, S); } }
         }
 
         // EM confluence: cyan tick at the tip when the node sits on an EM edge
@@ -976,6 +1015,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.49");
+    p->setVersion("0.50");
     return p;
 }

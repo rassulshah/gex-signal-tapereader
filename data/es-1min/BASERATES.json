@@ -654,8 +654,10 @@
     "lodPct": 35
    }
   ],
+  "t2LastHrPct": 39,
+  "t2Last30Pct": 29,
   "orClockRule": "outer third: 1ST clock = the clock of the opening window's extreme on the open's side",
   "note": "study-daystats-cond.py 2026-09-16: 1ST clock MAE base 38.4 -> 33.3 (60 min); 1ST acc 0.48 -> 0.61; 2ND clock not predictable (93 min)"
  },
- "generatedAt": "2026-09-16T21:35:04Z"
+ "generatedAt": "2026-09-17T02:10:22Z"
 }

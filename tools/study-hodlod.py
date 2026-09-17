@@ -472,6 +472,8 @@ def _cond_block(rows):
             tab.append(dict(n=len(sub), t1=med([r['t1'] for r in sub]), t2=med([r['t2'] for r in sub]),
                             lodPct=round(100 * sum(1 for r in sub if r['first'] == 'LOD') / len(sub)) if sub else None))
         out['pos%d' % W] = tab
+    out['t2LastHrPct'] = round(100 * sum(1 for r in ok if r['t2'] >= 330) / len(ok))     # (v16.35) the 2ND clock's ladder: last hour of RTH
+    out['t2Last30Pct'] = round(100 * sum(1 for r in ok if r['t2'] >= 360) / len(ok))     #   and the last 30 minutes
     out['orClockRule'] = 'outer third: 1ST clock = the clock of the opening window\'s extreme on the open\'s side'
     out['note'] = 'study-daystats-cond.py 2026-09-16: 1ST clock MAE base 38.4 -> 33.3 (60 min); 1ST acc 0.48 -> 0.61; 2ND clock not predictable (93 min)'
     return out

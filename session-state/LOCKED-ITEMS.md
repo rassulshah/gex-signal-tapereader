@@ -135,6 +135,11 @@ fields to agree.
 walls, King, EM, event, open) taken in the first 15 min. OPEN under H: re-run study-em-range / a regime-skew study when
 ~60 records exist; re-fit `GP_EM_MODEL` on the real straddle pins then (VIX1D proxy until).
 
+### ✅ I · THE IF EXTRAS (#1 wall-depth pill, #2 slope word) + THE 2ND-CLOCK LADDER — BUILT 2026-09-16 22:00 (v16.35 /
+companion 1.21 / lsGammaProfile 0.50 / lsDayStats 0.7); awaiting install. OPEN under I: measure the depth thresholds
+(0.70 / 0.70) and the slope threshold (0.10) once the rows have a history; the "wall at 5 pts inside the expected
+extreme stops the day" hint (KEY-LEVELS-STUDY §4) could use the depth tag as a conditioning variable.
+
 ### CARRIED OPEN (unchanged tonight)
 - Q12 top-3-vs-top-5 gamma lines (per-rank deflection table, sessions since 09-09) — operator asked "would I have
   seen it with Top 5" → answered (yes, ranks 2/3 are in Top 5); the measured question is still open.

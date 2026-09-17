@@ -1,5 +1,15 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 21:05 CT (v16.34 / GP 0.49 / KT 0.9) · **panel v16.34** · **companion v1.20** · RTX plugins: **lsGammaProfile v0.49**, **lsDayModel v0.16**, **lsDayStats v0.6**, **lsKingTracker v0.9** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 22:00 CT (v16.35 / companion 1.21 / GP 0.50 / DS 0.7) · **panel v16.35** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.50**, **lsDayModel v0.16**, **lsDayStats v0.7**, **lsKingTracker v0.9** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~22:00 CT — v16.35 / companion 1.21 / GP 0.50 / DS 0.7: THE IF EXTRAS + THE 2ND LADDER. START HERE.
+
+Operator: "all the things we talked about" → built: the wall-depth pill (0D / WK / MO on the CW / PW tags and the chip's
+second line), the slope word on the chip's first line (STEEP dn / STEEP up / flat, from companion 1.21's `gf.sDn/sUp`),
+and lsDayStats' 2ND-clock ladder ("39% last hr") + "=" for a read-in 1ST. Thresholds (`GP_DEPTH_T0/TW` 0.70,
+`GP_SLOPE_STEEP` 0.10) are hand-set starting points — the CW/PW rows carry the shares so they can be measured. Nothing
+from the day's discussions is now unbuilt except: the daily record's use (needs ~60 days), the volume / trend-day-flag
+evening, the NQ cross-check, re-fitting `GP_EM_MODEL` on real pins. His install: Tampermonkey panel 16.35 + companion 1.21,
+`compile-gammaprofile.bat` + `compile-daystats.bat` (+ `compile-kingtracker.bat` if 0.9 was not compiled yet).
 
 # ⚠⚠⚠ 2026-09-16 ~21:05 CT — v16.34 / GP 0.49 / KT 0.9: SCALEREF NOW CARRIES ITS OWN MINUTE. START HERE.
 
