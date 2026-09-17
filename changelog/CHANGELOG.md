@@ -1,3 +1,20 @@
+## lsGammaProfile 0.66 — the tape column tightened (2026-09-17, ~17:10 CT)
+
+"reduce the space between the %King and the price in the rails by 50%": the strip is font x 7 + 8 (was x 9 + 8) — at
+font 10 the gap between the strike and its % goes from ~25 px to ~15 px on the left strip, ~36 to ~16 on the right; the
+bars start that much closer to the edge on both rails.
+
+## lsGammaProfile 0.65 — the version bump does NOT reset: repair-on-load (2026-09-17, ~16:50 CT)
+
+His first 0.64 dialog: Font 0, Hide % under 1547868, King line width "F", black +/-Gamma, Show Top 3, Sub-threshold Hide,
+Panel at Bottom-L — the old saved values mapped by position onto the 27 new rows. "i think you messed something up." The
+parameter-version bump I relied on (0.60, 0.64) does not reload the defaults on a saved instance; what works is the King
+tracker's repair-on-load (KT 0.13). `scrambled()` — any row reading a value its control cannot produce (font outside
+1..200, hide-% outside 0..100, widths outside their ranges, a black gamma colour) — and `migrateScrambled()` puts EVERY
+row back to the reviewed defaults in the dialog with the proper setters (setParameterColor for colours), then reads.
+Fires once; never again after his first Apply. He re-enters nothing.
+- PROJECT-CONSTANTS: "setParameterVersion does not reset saved values — repair on load, like KT 0.13."
+
 ## v16.41 + lsGammaProfile 0.64 — the reviewed dialog, both Kings, MAG, time-bounded node bands (2026-09-17, ~15:40 CT)
 
 The operator reviewed the dialog element by element and then asked for the Atlas look: "this would be displayed instead of

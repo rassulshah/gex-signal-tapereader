@@ -169,6 +169,7 @@ public:
     void drawStaleBadge();       // (v0.38) red badge if the CSV has gone cold (shared across all 4 plugins)
     void applyContractOffset();  // (v0.39) shift the whole book onto the chart's own contract price
     void readSettings(Settings& S);
+    bool scrambled(); void migrateScrambled();   // (v0.65) the repair-on-load (the version bump does not reset)
     void render(const Settings& S, bool railOnly = false);   // (v0.61) railOnly: bars + badges + % only (the SPY rail of Book = Both)
     void loadSpy();                                          // (v0.61) STRIKE rows of GammaProfile-SPY.csv -> strikesSpy
     void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
@@ -217,22 +218,51 @@ GammaProfile::GammaProfile() : cppExtension()
 // nonsense value we keep the cached settings rather than corrupt the render.
 // Threshold % is only meaningful when Show = ">= Threshold" (filter index 4);
 // grey it out otherwise so it doesn't read like a second live control.
+// (v0.65) THE VERSION BUMP DOES NOT RESET A SAVED INSTANCE. 0.64 went to parameter version 7 believing IRT would reload the
+// defaults (the DayModel 0.7 comment said so); his first 0.64 dialog read Font 0, Hide % under 1547868, King line width "F",
+// black colours, Show Top 3 — the old values mapped by position onto the new rows. What works is the King tracker's
+// repair-on-load (KT 0.13): when any row reads a value the list cannot produce, put EVERY row back to the reviewed defaults
+// IN THE DIALOG (the setters — setParameterColor for colour rows, never setIntegerValue), then read. Runs once; after his
+// first Apply the values are sane and it never fires again.
+bool GammaProfile::scrambled()
+{
+    int f = getIntegerValue(PX.font), h = getIntegerValue(PX.hideu), w = getIntegerValue(PX.width), t = getIntegerValue(PX.thresh);
+    int bh = getIntegerValue(PX.bandh), kw = getIntegerValue(PX.klinew), sw = getIntegerValue(PX.spywidth);
+    if (f < 1 || f > 200 || h < 0 || h > 100 || w < 0 || w > 1000 || t < 0 || t > 100) return true;
+    if (bh < 0 || bh > 50 || kw < 0 || kw > 20 || sw < 0 || sw > 1000) return true;
+    COLOR cp = (COLOR)(getIntegerValue(PX.cpos) & 0xFFFFFF), cn = (COLOR)(getIntegerValue(PX.cneg) & 0xFFFFFF);
+    if (cp == 0 || cn == 0) return true;   // black is never a gamma colour on his black chart
+    return false;
+}
+void GammaProfile::migrateScrambled()
+{
+    if (!scrambled()) return;
+    setListIndex(PX.book, 4); setIntegerValue(PX.width, 90); setListIndex(PX.side, 0); setListIndex(PX.thick, 0);
+    setListIndex(PX.filter, 1); setIntegerValue(PX.thresh, 20); setListIndex(PX.below, 0); setListIndex(PX.scale, 0);
+    setParameterColor(PX.cpos, D_POS); setParameterColor(PX.cneg, D_NEG); setParameterColor(PX.cmid, D_MID); setListIndex(PX.kingcol, 0);
+    setIntegerValue(PX.hideu, 0); setIntegerValue(PX.font, 10); checkBox(PX.rank, true); checkBox(PX.type, true);
+    setListIndex(PX.rankpos, 0); setListIndex(PX.rankscope, 0); setListIndex(PX.kinglabel, 0);
+    checkBox(PX.kline, true); checkBox(PX.cw, true); checkBox(PX.pw, true); checkBox(PX.flip, true); checkBox(PX.em, false);
+    checkBox(PX.extk, false); setListIndex(PX.lstyle, 0); setListIndex(PX.lpos, 0);
+    checkBox(PX.roles, true); checkBox(PX.regime, true); setListIndex(PX.panelpos, 1); checkBox(PX.tapecols, true);
+    checkBox(PX.lvllabels, true); setIntegerValue(PX.spywidth, 120); checkBox(PX.bands, true); setIntegerValue(PX.bandh, 3); setIntegerValue(PX.klinew, 2);
+}
 int GammaProfile::parmsLoad(void)
 {
-    int probe = getIntegerValue(PX.font);
-    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
+    migrateScrambled();
+    readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4);
     return RTX_OK;
 }
 int GammaProfile::parmsApply(void)
 {
-    int probe = getIntegerValue(PX.font);
-    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
+    migrateScrambled();
+    readSettings(cfg);
     return RTX_OK;
 }
 int GammaProfile::parmsUpdt(unsigned int)
 {
-    int probe = getIntegerValue(PX.font);
-    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) { readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4); }
+    migrateScrambled();
+    readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4);
     return RTX_OK;
 }
 
@@ -701,7 +731,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // (v0.41) TAPE COLUMNS — a Skylit-ladder-style strip [SPX strike | %King] pinned to the pane edge on the
     // bar side. The bars are shifted inward by the strip width so the columns sit BESIDE them (the operator's
     // sketch: bars, then the values at the edge), and read row-for-row against Skylit's SPXW ladder.
-    short colW = S.tapecols ? (short)(S.font * 9 + 8) : 0;
+    short colW = S.tapecols ? (short)(S.font * 7 + 8) : 0;   // (v0.66) was font x 9 + 8: "reduce the space between the %King and the price by 50%"
     short anchor;                 // base of bars
     int sgn;                      // +1 grows right, -1 grows left
     if (S.side == 1) {            // Left margin: anchor at pane left (+ column strip), grow right
@@ -1081,7 +1111,7 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.64  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile 0.66  written " << ts << "  (this instance's last draw)\n";
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
     else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff) << "\n";
     // (v0.63) what the dialog is actually feeding the draw — so "the chip should be centered" can be checked against the setting
@@ -1186,6 +1216,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.64");
+    p->setVersion("0.66");
     return p;
 }

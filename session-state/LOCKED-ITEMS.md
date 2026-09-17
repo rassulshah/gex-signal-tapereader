@@ -8,6 +8,7 @@ _Created 2026-08-27._
 
 ## ✅ BUILT 2026-09-17 — TWO RAILS, THE ATLAS POOL (v16.40 / GP 0.59)
 
+_GP 0.65 (16:50 CT): repair-on-load — the version bump did not reset his instance (scrambled 0.64 dialog)._
 _v16.41 + GP 0.64 (15:40 CT): the reviewed dialog (v7), node bands from first-seen, both Kings, MAG, chip. BUILT; awaiting his install + same-minute Atlas compare. Chip centring: was the setting (panelpos=0), now default Bottom-C._
 _GP 0.63 (12:45 CT): rail clear of the price scale, tape columns both rails + left background, GPSETTINGS/GPRECT in the status file. OPEN: the chip at Bottom-L vs "centered" — read the status file after his restart._
 _GP 0.62 (12:25 CT): SPY rail at the SPX thickness, bubbles outside short bars, SPY rail drawn first — awaiting his screenshot._

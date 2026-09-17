@@ -679,3 +679,12 @@ instances, six hours after KT 0.12 had done the same thing and been repaired. Th
 comment. If a row must move anyway, bump `setParameterVersion` (defaults, he re-enters a few fields) rather than
 shipping a silent scramble.
 
+## 2026-09-17 — setParameterVersion DOES NOT RESET A SAVED INSTANCE (GP 0.64 → 0.65)
+
+Bumping the parameter version (0.60: 5→6, 0.64: 6→7) did not reload the defaults on his saved instance; IRT kept the old
+values by position (Font 0, Hide % 1547868, black colours after 0.64). The only thing that has ever repaired a scrambled
+instance here is REPAIR ON LOAD: detect an impossible value in parmsLoad/Apply/Updt and set every row to the intended
+defaults with the proper setters (setParameterColor for colour rows — setIntegerValue leaves them black), then read.
+KT 0.13 did it first; GP 0.65 does the same. Bump the version anyway when rows move (it marks the layout), but never
+count on it.
+
