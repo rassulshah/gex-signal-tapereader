@@ -1,5 +1,12 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 22:00 CT (v16.35 / companion 1.21 / GP 0.50 / DS 0.7) · **panel v16.35** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.55**, **lsDayModel v0.16**, **lsDayStats v0.7**, **lsKingTracker v0.9** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 22:00 CT (v16.35 / companion 1.21 / GP 0.50 / DS 0.7) · **panel v16.36** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.55**, **lsDayModel v0.16**, **lsDayStats v0.7**, **lsKingTracker v0.9** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-16 ~22:25 CT — v16.36 + lsGammaProfile 0.55. START HERE.
+
+Late fixes on his eyes-on: the E row no longer copies the actual 1ST once the READ is IN (it printed the same clock and
+TOOK as the A row — "how can that be?"); the depth pill sits on the same line as its neighbours (0.55, after 0.51/0.54
+missed it); the King (Magnet) is on the chip after the PW (0.52); IF is the default Book, one rail, switch by dropdown
+(0.53). Latest: panel 16.36 · companion 1.21 · GP 0.55 · DS 0.7 · KT 0.9 · DM 0.16.
 
 # ⚠⚠⚠ 2026-09-16 ~22:00 CT — v16.35 / companion 1.21 / GP 0.50 / DS 0.7: THE IF EXTRAS + THE 2ND LADDER. START HERE.
 

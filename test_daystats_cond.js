@@ -62,7 +62,7 @@ e = M.hodlodCondE(base, 66, w30, M.gpOpenWindow(upDay.slice(0, 12), O, 60), null
 ok(e.basis === 'pos30-bottom', 'incomplete 60-min window -> the 30-min row stands');
 // READ IN: the 1ST is the actual first extreme
 e = M.hodlodCondE(base, 95, w30, w60, { ok: true, first: 'LOD', firstT: O + 3 * 60 }, { in: true, p: 80 });
-ok(e.basis === 'read-in-LOD' && e.lodPct === 100 && e.t1 === 3, 'READ IN: 1ST = the actual LOD at minute 3');
+ok(e.basis === 'pos60-bottom+orclock' && e.readIn === 'LOD' && e.lodPct === 66, 'READ IN (v16.36): the E row keeps the stage\'s expectation; the call is only noted', e);
 e = M.hodlodCondE(base, 95, w30, w60, { ok: true, first: 'HOD', firstT: O + 3 * 60 }, { in: false, p: 40 });
 ok(e.basis === 'pos60-bottom+orclock', 'READ not IN: the table stands');
 // courier tables win over the fallback
@@ -89,13 +89,13 @@ function countFails(Mx) {
   const t = (c) => { if (!c) f++; };
   const e1 = Mx.hodlodCondE(base, 66, w30, w60, null, null); t(e1.basis === 'pos60-bottom+orclock' && e1.t1 === 3 && e1.lodPct === 66);
   const e2 = Mx.hodlodCondE(base, 33, w30, null, null, null); t(e2.basis === 'pos30-bottom' && e2.t1 === 21);
-  const e3 = Mx.hodlodCondE(base, 95, w30, w60, { ok: true, first: 'LOD', firstT: O + 3 * 60 }, { in: true }); t(e3.lodPct === 100 && e3.t1 === 3);
+  const e3 = Mx.hodlodCondE(base, 95, w30, w60, { ok: true, first: 'LOD', firstT: O + 3 * 60 }, { in: true }); t(e3.readIn === 'LOD');
   const e4 = Mx.hodlodCondE(base, 66, w30, M.gpOpenWindow(upDay.slice(0, 12), O, 60), null, null); t(e4.basis === 'pos30-bottom');
   return f;
 }
 ok(countFails(mutated(/elapsed>=60 && w60 && w60\.complete/, 'elapsed>=60 && w60')) > 0, 'mutation: ignoring window completeness fires');
 ok(countFails(mutated(/if\(W===60 && b!==1\)/, 'if(false)')) > 0, 'mutation: dropping the OR-clock rule fires');
-ok(countFails(mutated(/CALL && CALL\.in &&/, 'CALL && false &&')) > 0, 'mutation: ignoring the READ fires');
+ok(countFails(mutated(/CALL && CALL\.in &&/, 'CALL && false &&')) > 0, 'mutation: dropping the READ note fires');
 ok(countFails(mutated(/return p<1\/3\?0:\(p<2\/3\?1:2\);/, 'return 1;')) > 0, 'mutation: collapsing the terciles fires');
 
 console.log((fails ? 'FAIL ' : 'PASS ') + (n - fails) + '/' + n + ' assertions (conditional E row, v16.32)');

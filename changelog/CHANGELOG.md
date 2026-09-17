@@ -1,3 +1,12 @@
+## v16.36 — the Day Stats E row stays an EXPECTATION after the READ (2026-09-16, ~22:25 CT)
+
+Operator: "the took and the 1st hod time is the same exact. how can that be?" — because 16.32's read-in branch replaced
+the E row's 1ST clock with the ACTUAL first extreme once the classifier called it IN, so E and A printed the same 10:48am
+and the same 2h 18m. Correct by construction, useless on a strip whose job is A against E; the READ's verdict already
+sits in the header ("HOD IN 100%"). Now the E row keeps the STAGE's expectation (pos60 table / OR-clock rule) all day
+and the call is only noted on the record (`readIn`). lsDayStats' "=" marker (0.7) no longer triggers; no plugin change.
+test_daystats_cond 27/27; Gate A 65/65; smoke clean.
+
 ## lsGammaProfile 0.55 — the pill on the same line as its neighbours (2026-09-16, ~22:15 CT)
 
 Operator, 0.54 screenshot: "the WK badge is slightly misaligned." Zoomed: the pill (box + metric-placed text, centred on y)
