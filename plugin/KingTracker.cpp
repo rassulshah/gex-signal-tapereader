@@ -109,6 +109,7 @@ public:
     bool dialogReady();        // (v0.12) the parameters exist (the Source list reads 0 or 1)
     void syncEnable();         // (v0.12) grey out the rows the chosen Source does not draw
     void migrateScrambled();   // (v0.13) undo the 0.12 position shift on a saved instance
+    void unblackColours();     // (v0.15) a black colour row is put back to the book's default, in the dialog
     void writeStatus(const Settings& S);   // (v0.14) KingTracker.status.txt — what this draw drew
     float lastOffset;          // (v0.14) the contract offset applied on this draw
     void render(const Settings& S);
@@ -164,11 +165,22 @@ void KingTracker::migrateScrambled()
     setIntegerValue(PX.width, 3); setIntegerValue(PX.font, 3); setIntegerValue(PX.offset, 0);
     setListIndex(PX.family, 0);
     checkBox(PX.show[B_SPX], true); checkBox(PX.show[B_SPY], true); checkBox(PX.show[B_QQQ], false); checkBox(PX.show[B_NDX], false);
-    for (int i = 0; i < B_IF; i++) setIntegerValue(PX.col[i], (int)BOOK_DEF[i]);
+    for (int i = 0; i < B_IF; i++) setParameterColor(PX.col[i], BOOK_DEF[i]);   // (v0.15) the COLOUR setter — setIntegerValue left the swatches black
     checkBox(PX.labels, false); checkBox(PX.dots, true);
 }
-int KingTracker::parmsLoad(void)  { if (dialogReady()) { migrateScrambled(); readSettings(cfg); syncEnable(); } return RTX_OK; }
-int KingTracker::parmsApply(void) { if (dialogReady()) { readSettings(cfg); syncEnable(); } return RTX_OK; }
+// (v0.15) BLACK IS NEVER A KING COLOUR — his chart background is black. Any colour row that reads black or near-black
+// (the 0.12 scramble left several, and 0.13's repair used the wrong setter so the swatches stayed black) is put back to
+// the book's default IN THE DIALOG, not just on the chart, so what he sees is what draws.
+void KingTracker::unblackColours()
+{
+    for (int i = 0; i < B_IF; i++) {
+        COLOR c = (COLOR)(getIntegerValue(PX.col[i]) & 0xFFFFFF);
+        int mx = (int)((c >> 16) & 0xFF); if ((int)((c >> 8) & 0xFF) > mx) mx = (int)((c >> 8) & 0xFF); if ((int)(c & 0xFF) > mx) mx = (int)(c & 0xFF);
+        if (mx < 0x30) setParameterColor(PX.col[i], BOOK_DEF[i]);
+    }
+}
+int KingTracker::parmsLoad(void)  { if (dialogReady()) { migrateScrambled(); unblackColours(); readSettings(cfg); syncEnable(); } return RTX_OK; }
+int KingTracker::parmsApply(void) { if (dialogReady()) { unblackColours(); readSettings(cfg); syncEnable(); } return RTX_OK; }
 int KingTracker::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); syncEnable(); } return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
@@ -380,7 +392,7 @@ void KingTracker::writeStatus(const Settings& S)
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\KingTracker.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     const char* famStr = (chartFamily(S) == 2) ? "NQ" : "ES";
-    f << "VERSION,0.14\n";
+    f << "VERSION,0.15\n";
     for (int b = 0; b < NBOOK; b++) f << ktl::statusLine(S.sourceIF, famStr, BOOK_NAME[b], BOOK_FAM[b], book[b], lastOffset) << "\n";
     f << "ASOF," << asofSo << "\n";
 }
@@ -469,6 +481,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.14");
+    p->setVersion("0.15");
     return p;
 }

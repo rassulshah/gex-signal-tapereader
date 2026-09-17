@@ -160,3 +160,17 @@ _KT 0.14: the status file (toggle test hook)_
 | kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
 
 _host: vm, C++: g++_
+
+## 2026-09-17 14:48  ·  kingtracker  ·  panel 16.39 / companion 1.21 / GP 0.58 / DM 0.18 / DS 0.9 / KT 0.15  ·  ALL GREEN
+
+_KT 0.15: black colour rows repaired in the dialog_
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| kingtracker | A | `test_kingtracker_rows.js` | 33/33 | ok |
+| kingtracker | B | `test_kingtracker_logic.cpp` | 30/30 | ok |
+| kingtracker | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
+| kingtracker | S | `KingTracker.cpp` | ok | ok |
+
+_host: vm, C++: g++_

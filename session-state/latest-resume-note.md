@@ -1,5 +1,7 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 07:20 CT (v16.39 / KT 0.13) · **panel v16.39** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.58**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.14** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 07:20 CT (v16.39 / KT 0.13) · **panel v16.39** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.58**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠ 2026-09-17 ~09:55 CT — KT 0.15: the dialog's black colour swatches (0.13 used setIntegerValue on colour rows — wrong setter) repaired with setParameterColor; black never shown or drawn. GEX build installs it; restart IRT.
 
 # ✅ 2026-09-17 09:42–09:44 CT — THE TOGGLE TEST PASSED on his live chart (KT 0.14, real exports): IF 25/25 → he flipped to Skylit 27/27 (SPX + SPY drawn, IF not) → back to IF 25/25 (IF drawn, SPX/SPY not); the switch takes effect on Apply, no restart. Runs + fixtures in `testing/king-tracker/` (0942-ready, 0943-skylit, 0944-if). The King tracker's IF work is DONE and accepted by test.
 

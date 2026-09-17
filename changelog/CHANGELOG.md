@@ -1,3 +1,11 @@
+## lsKingTracker 0.15 — no black King colours, in the dialog too (2026-09-17, ~09:55 CT)
+
+Operator: "I noticed the king colors were default black — you know not to use black because my chart in IRT is black."
+0.13's scramble repair wrote the default colours with setIntegerValue, which does not set a colour parameter — the chart
+drew the defaults (readSettings already refused black) but the dialog's swatches stayed black. 0.15 uses the SDK's
+colour setter (setParameterColor) and, on every load and Apply, puts any black / near-black colour row back to the book's
+default so the dialog shows what draws. Lesson: colour parameters have their own setter/getter pair.
+
 ## lsKingTracker 0.14 — the status file: the toggle is testable from outside (2026-09-17, ~09:50 CT)
 
 Operator: "I want to be able to toggle back and forth between IF and Skylit and want you to test this." Driving IRT's
