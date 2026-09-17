@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 22:00 CT (v16.35 / companion 1.21 / GP 0.50 / DS 0.7) · **panel v16.35** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.53**, **lsDayModel v0.16**, **lsDayStats v0.7**, **lsKingTracker v0.9** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-16 22:00 CT (v16.35 / companion 1.21 / GP 0.50 / DS 0.7) · **panel v16.35** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.54**, **lsDayModel v0.16**, **lsDayStats v0.7**, **lsKingTracker v0.9** · supersedes every earlier resume note_
 
 # ⚠⚠⚠ 2026-09-16 ~22:00 CT — v16.35 / companion 1.21 / GP 0.50 / DS 0.7: THE IF EXTRAS + THE 2ND LADDER. START HERE.
 

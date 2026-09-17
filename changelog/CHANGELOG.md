@@ -1,3 +1,10 @@
+## lsGammaProfile 0.54 — the depth pill drawn like the rank bubble (2026-09-16, ~22:05 CT)
+
+Operator, screenshot 21:58 (still the 0.50 DLL — no King on the chip): "did you fix the WK badge … its placement is messed
+up." Beyond 0.51's ordering fix, the pill itself is now drawn the proven way — the box from the measured text width, the
+glyphs placed by font metrics inside it (the rank bubble's method) — instead of textLJ's 260-px rectangle, which put the
+letters beside the box. One font size up (S.font−1). `compile-gammaprofile.bat`.
+
 ## lsGammaProfile 0.53 — Book defaults to IF (2026-09-16, ~21:55 CT)
 
 Operator, on "which book is the primary rail": "I only want to see one or the other and should be able to switch between
