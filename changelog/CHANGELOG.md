@@ -1,3 +1,10 @@
+## lsGammaProfile 0.51 — the depth pill placed right (2026-09-16, ~21:45 CT)
+
+Operator, screenshot 21:33: "can't you see it isn't aligned right." The pill was drawn at the position the outside % label
+already occupied ("+48%" half under the WK box) and sat tight against the chip's "(7550)". Fix: the outward order from the
+tip is bubble · tag · pill · % — the % label now clears tag + pill (`outerW`); on the chip the widths are measured in the
+font the text is drawn with and the pill gets a real gap. Compile-checked. `compile-gammaprofile.bat` again.
+
 ## v16.35 + companion 1.21 + lsGammaProfile 0.50 + lsDayStats 0.7 — the IF extras and the 2ND-clock ladder (2026-09-16, ~22:00 CT)
 
 Operator: "did you implement all the changes like to the regime chip" → "all the things we talked about." Three items

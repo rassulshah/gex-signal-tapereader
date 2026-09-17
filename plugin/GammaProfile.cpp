@@ -17,6 +17,7 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.51 — pill placement: outward order bubble · tag · pill · % (the pill had covered the % label); chip gaps measured.
  *  v0.50 — IF extras: the wall DEPTH pill (0D / WK / MO from the CW / PW rows' 6th field) beside the node tag and on
  *          the chip's second line; the SLOPE row's word (STEEP dn / STEEP up / flat) after the sign on the chip's first.
  *  v0.49 — SCALEREF,<px>,<sod>,<date> (panel 16.34): the offset anchors on the bar of the quote's OWN minute — Skylit's
@@ -549,11 +550,12 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     // three coloured segments, laid out left to right with measured widths
     FONT lf; lf.id = HELVETICA; lf.size = (short)S.font; lf.style = PLAIN; setFont(lf);
     short gap = (short)(S.font * 2), cx1 = (short)(x + 10);
-    textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); cx1 = (short)(cx1 + getTextWidth(pwS, -1) + 4);
-    if (has[2]) cx1 = (short)(cx1 + drawDepthPill(cx1, ly1, lvlDepth[2], S) + gap - 4); else cx1 = (short)(cx1 + gap - 4);
-    textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); cx1 = (short)(cx1 + getTextWidth(flS, -1) + gap);
-    textLJ(cx1, ly1, cwS, C_RES,   S.font, false); cx1 = (short)(cx1 + getTextWidth(cwS, -1) + 4);
-    if (has[1]) drawDepthPill(cx1, ly1, lvlDepth[1], S);
+    // (v0.51) widths measured in the font the text is drawn with (textLJ sets S.font PLAIN), a real gap before the pill
+    textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(pwS, -1) + 8);
+    if (has[2] && !lvlDepth[2].empty()) cx1 = (short)(cx1 + drawDepthPill(cx1, ly1, lvlDepth[2], S) + gap); else cx1 = (short)(cx1 + gap - 8);
+    textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(flS, -1) + gap);
+    textLJ(cx1, ly1, cwS, C_RES,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(cwS, -1) + 8);
+    if (has[1] && !lvlDepth[1].empty()) drawDepthPill(cx1, ly1, lvlDepth[1], S);
     (void)fIdx; (void)cIdx; (void)kIdx; sprintf_s(l1, sizeof(l1), "%s", "");
 }
 // Polarity legend (character, not strength). Placed opposite the panel's row.
@@ -777,7 +779,7 @@ void GammaProfile::render(const Settings& S)
             if (has[1] && gpl::levelNode(gn, lvl[1], lvlSpx[1]) == (int)i) wtag = "CW";
             else if (has[2] && gpl::levelNode(gn, lvl[2], lvlSpx[2]) == (int)i) wtag = "PW";
         }
-        short wtagW = 0;
+        short wtagW = 0, outerW = 0;   // (v0.51) outerW = tag + pill: what the outside % label must clear
         if (wtag) {
             FONT wf; wf.id = HELVETICA; wf.size = (short)(S.font - 1); wf.style = BOLD; setFont(wf);
             wtagW = (short)(getTextWidth(wtag, -1) + 6);
@@ -787,9 +789,14 @@ void GammaProfile::render(const Settings& S)
             if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, C_PINK, S.font - 1, true);
             else         textLJ((short)(tip + past), p.v, wtag, C_PINK, S.font - 1, true);
             // (v0.50) the depth pill beside the tag (IF extras #1): 0D = today's expiry only, WK = the week, MO = the monthly
+            // (v0.51) order outward from the tip: bubble, tag, pill, then the % label — the pill was drawn over the % (his
+            // screenshot 21:33: "+48%" half under a WK box). outerW carries tag + pill so the % label clears both.
+            outerW = (short)(past - 6 + wtagW);
             { const std::string& dtag = (wtag[0] == 'C') ? lvlDepth[1] : lvlDepth[2];
-              if (!dtag.empty()) { if (sgn < 0) drawDepthPill((short)(tip - past - wtagW - 2 - pillW(dtag, S)), p.v, dtag, S);
-                                   else         drawDepthPill((short)(tip + past + wtagW + 2), p.v, dtag, S); } }
+              if (!dtag.empty()) { short pw = pillW(dtag, S);
+                                   if (sgn < 0) drawDepthPill((short)(tip - past - wtagW - 3 - pw), p.v, dtag, S);
+                                   else         drawDepthPill((short)(tip + past + wtagW + 3), p.v, dtag, S);
+                                   outerW = (short)(outerW + pw + 5); } }
         }
 
         // EM confluence: cyan tick at the tip when the node sits on an EM edge
@@ -827,8 +834,8 @@ void GammaProfile::render(const Settings& S)
                 if (sgn < 0) textLJ((short)(tip + 4), p.v, pc, ic, S.font, false);
                 else         textRJ((short)(tip - 4), p.v, pc, ic, S.font, false);
             } else {              // outside the tip (shifted past a CW/PW tag when one is drawn there)
-                if (sgn < 0) textRJ((short)(tip - 6 - wtagW), p.v, pc, C_TXT, S.font, false);
-                else         textLJ((short)(tip + 6 + wtagW), p.v, pc, C_TXT, S.font, false);
+                if (sgn < 0) textRJ((short)(tip - 6 - outerW), p.v, pc, C_TXT, S.font, false);   // (v0.51) past tag + pill
+                else         textLJ((short)(tip + 6 + outerW), p.v, pc, C_TXT, S.font, false);
             }
         }
 
@@ -1015,6 +1022,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.50");
+    p->setVersion("0.51");
     return p;
 }
