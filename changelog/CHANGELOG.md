@@ -1,3 +1,20 @@
+## lsGammaProfile 0.63 — the rail stops short of the price scale; tape columns on both rails, with a background on the left; the status file says what the dialog feeds (2026-09-17, ~12:45 CT)
+
+Operator's 0.62 screenshot: "the tapes are missing for both spy and spx. maybe have a background for the tape on the
+left to see it clearly. double check the alignment and values. regime chip should be centered." Findings: (1) the SPX
+bars ran UNDER the price scale — `getPaneRect(false)` on his chart reaches the scale, and it was the 71 px tape-column
+strip (on since the 0.59 scramble) that had kept the bars clear of it; with Tape columns off after the version-6 reset
+the rail sat under the axis. (2) Tape columns is a setting — off after the reset — and 0.61 had switched it off on the
+SPY rail unconditionally. (3) The chip at Bottom-L with "Bottom-C" expected cannot be judged without knowing what the
+dialog feeds the draw.
+- `gpl::usableRight(paneL, paneR, scaleL, scaleR)` (Gate B +2): when `getScaleRect()` lies inside the pane, the rail's
+  right edge is the scale's left − 2; the chip / header / legend centre on the same usable width.
+- The SPY rail honours Tape columns (SPY strike | %); a pane-tall dark background behind the LEFT strip.
+- Status file: GPSTATUS gains a 15th field, the contract offset (chart = CSV + offset); a `GPRECT` line (raw pane right,
+  scale rect) and a `GPSETTINGS` line (every cached setting) — the "is it the setting or the draw" question answered
+  from the export folder. Test expectations updated (78).
+- He needs: Tape columns ON in the dialog (it is a checkbox, near the bottom); nothing else changes.
+
 ## lsGammaProfile 0.62 — the SPY rail learns it shares the pane (2026-09-17, ~12:25 CT)
 
 Operator's first Both screenshot (0.61): "the nodes on the left are being cut off … something wrong with the regime chip".

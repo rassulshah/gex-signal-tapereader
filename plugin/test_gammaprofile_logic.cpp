@@ -216,11 +216,13 @@ int main()
 
     // ---- (v0.60) the per-instance status line (two rails verified from outside)
     { std::string l = gpl::statusLine(2, 1, 11, true, 0, 1400, 2, 0, 40, 3, 11, true);
-      CHECK(l == "GPSTATUS,SPY,Left,GammaProfile-SPY.csv,11,Atlas,0,1400,2,0,40,3,11,1", "SPY rail, Left: the status names its book, side, file and anchor"); }
+      CHECK(l == "GPSTATUS,SPY,Left,GammaProfile-SPY.csv,11,Atlas,0,1400,2,0,40,3,11,1,0.00", "SPY rail, Left: the status names its book, side, file and anchor"); }
     { std::string l = gpl::statusLine(1, 0, 15, true, 0, 1400, 1398, 0, 90, 2, 15, true);
-      CHECK(l.find("GPSTATUS,SPX,Right,GammaProfile.csv,15,Atlas,") == 0 && l.find(",90,2,15,1") != std::string::npos, "SPX rail, Right: its own line, from GammaProfile.csv"); }
+      CHECK(l.find("GPSTATUS,SPX,Right,GammaProfile.csv,15,Atlas,") == 0 && l.find(",90,2,15,1,") != std::string::npos, "SPX rail, Right: its own line, from GammaProfile.csv"); }
     { std::string l = gpl::statusLine(3, 0, 0, false, 0, 0, 0, 0, 100, 0, 0, false);
-      CHECK(l == "GPSTATUS,IF,Right,GammaProfile-IF.csv,0,Book,0,0,0,0,100,0,0,0", "an instance that loaded nothing says so: 0 strikes, rendered 0"); }
+      CHECK(l == "GPSTATUS,IF,Right,GammaProfile-IF.csv,0,Book,0,0,0,0,100,0,0,0,0.00", "an instance that loaded nothing says so: 0 strikes, rendered 0"); }
+    { std::string l = gpl::statusLine(1, 0, 15, true, 0, 1196, 1158, 0, 90, 2, 15, true, 3.25f);
+      CHECK(l.find(",1,3.25") != std::string::npos, "(0.63) the offset rides last: chart price = CSV price + 3.25"); }
     CHECK(std::string(gpl::bookName(0)) == "Auto" && std::string(gpl::bookFile(0)) == "GammaProfile.csv" && std::string(gpl::bookFile(1)) == "GammaProfile.csv", "Auto and SPX both read the Skylit SPX file");
 
     // ---- (v0.61) Book = Both: one instance, SPY rail left, SPX rail right
@@ -234,6 +236,10 @@ int main()
     CHECK(!gpl::bubbleOutside(0, 40, 10) && gpl::bubbleOutside(0, 11, 10) && gpl::bubbleOutside(0, 23, 10) && !gpl::bubbleOutside(0, 24, 10), "Rank at = Inside: inside only when the bar is at least 2r+4 long (11 px at r=10 -> outside)");
     CHECK(gpl::bubbleOutside(1, 400, 10), "Rank at = Outside: always outside");
     CHECK(gpl::autoBarH(31) == 24 && gpl::autoBarH(62) == 40 && gpl::autoBarH(4) == 6 && gpl::autoBarH(3) == 6, "auto thickness: 0.78 x spacing, capped 40, 6 below 5 px (the SPX 5-pt spacing -> ~24; the SPY 10-pt spacing would hit the cap)");
+
+    // ---- (v0.63) the right edge the rail may use: clear of the price scale when IRT's pane rect reaches it
+    CHECK(gpl::usableRight(0, 1196, 1160, 1200) == 1158, "scale inside the pane: the rail stops 2 px short of the scale");
+    CHECK(gpl::usableRight(0, 1196, 1196, 1240) == 1196 && gpl::usableRight(0, 1196, 0, 0) == 1196, "scale outside the pane (or unknown): the pane edge as before");
 
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;

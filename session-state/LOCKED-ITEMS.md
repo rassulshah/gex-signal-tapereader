@@ -8,6 +8,7 @@ _Created 2026-08-27._
 
 ## ✅ BUILT 2026-09-17 — TWO RAILS, THE ATLAS POOL (v16.40 / GP 0.59)
 
+_GP 0.63 (12:45 CT): rail clear of the price scale, tape columns both rails + left background, GPSETTINGS/GPRECT in the status file. OPEN: the chip at Bottom-L vs "centered" — read the status file after his restart._
 _GP 0.62 (12:25 CT): SPY rail at the SPX thickness, bubbles outside short bars, SPY rail drawn first — awaiting his screenshot._
 _GP 0.61 (11:55 CT): Book = Both — one instance, two rails; awaiting his install + same-minute screenshot vs Atlas._
 _GP 0.60 (11:35 CT): 0.59's Rank row sat mid-list → both saved instances scrambled; moved to the end, parameter version 6

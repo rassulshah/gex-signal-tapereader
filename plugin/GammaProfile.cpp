@@ -158,6 +158,7 @@ public:
     // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
     short stPaneL, stPaneR, stAnchor, stColW; int stPrimary, stDrawn; bool stRendered;
     std::string stMain, stSpy;   // (v0.61) Book = Both: one GPSTATUS line per rail
+    short stScaleL, stScaleR, stPaneRaw;   // (v0.63) the scale rect and the raw pane right, for the status file
     short forceBarH;              // (v0.62) >0: the SPY rail draws at the SPX rail's thickness (Book = Both)
     short barThickness(const Settings& S, const std::vector<GStrike>& v);   // (v0.62) the one thickness rule
     void writeStatus();
@@ -201,7 +202,7 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=0; cfg.spywidth=40; lastOff=0.0f;
     cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false; cfg.lvllabels=true;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
-    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false; forceBarH = 0;
+    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false; forceBarH = 0; stScaleL = stScaleR = stPaneRaw = 0;
 }
 
 // ---- parameter callbacks: dialog controls are valid here, so read + cache.
@@ -687,7 +688,10 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     int lastBar = (int)n - 1;
 
     RCT pane; pane.getPaneRect(false);
-    short paneL = pane.left, paneR = pane.right;
+    RCT scale; scale.getScaleRect();   // (v0.63) the price scale — the rail must stop short of it
+    short paneL = pane.left, paneR = (short)gpl::usableRight(pane.left, pane.right, scale.left, scale.right);
+    stScaleL = scale.left; stScaleR = scale.right; stPaneRaw = pane.right;
+    pane.right = paneR;   // the chip / legend / header centre on the same usable width
 
     // right edge of the last price bar (candles end here)
     PNT lb; lb.set(lastBar, strikes[0].price);
@@ -719,6 +723,13 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     }
 
     stPaneL = paneL; stPaneR = paneR; stAnchor = anchor; stColW = colW; stRendered = true;   // (v0.60) for the status file
+
+    // (v0.63) A BACKGROUND BEHIND THE LEFT TAPE COLUMNS — operator: "maybe have a background for the tape on the left to
+    // see it clearly" — the strip sits over the candles' left margin, so it gets an opaque dark box, pane-tall.
+    if (S.tapecols && S.side == 1 && colW > 0) {
+        RCT bg; bg.set(paneL, pane.top, (short)(paneL + colW + 2), pane.bottom);
+        bg.draw(0, C_DARK, C_DARK, DRAW_OPAQUE, PAT_SOLID);
+    }
 
     // bar thickness — (v0.62) one rule (barThickness); the SPY rail of Book = Both inherits the SPX rail's (forceBarH)
     short barH = (railOnly && forceBarH > 0) ? forceBarH : barThickness(S, strikes);
@@ -1021,14 +1032,14 @@ int GammaProfile::draw(void)
         // rail's thickness, so the levels, the regime chip and the read panel of the SPX rail always sit on top of it.
         forceBarH = barThickness(M, strikes);
         strikes.swap(strikesSpy);
-        Settings L = cfg; L.side = RLY.spySide; L.width = RLY.spyWidth; L.detach = true; L.tapecols = false;
+        Settings L = cfg; L.side = RLY.spySide; L.width = RLY.spyWidth; L.detach = true;   // (v0.63) tape columns follow the setting on this rail too (SPY strike | %)
         render(L, true);
         strikes.swap(strikesSpy);
-        stSpy = gpl::statusLine(2, 1, (int)strikesSpy.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, RLY.spyWidth, stPrimary, stDrawn, stRendered);
+        stSpy = gpl::statusLine(2, 1, (int)strikesSpy.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, RLY.spyWidth, stPrimary, stDrawn, stRendered, lastOff);
         stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
     }
     render(M);         // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
-    if (RLY.both) stMain = gpl::statusLine(1, 0, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered);
+    if (RLY.both) stMain = gpl::statusLine(1, 0, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff);
     else { stMain.clear(); stSpy.clear(); }
     drawStaleBadge();  // (v0.38) warn if the CSV is cold, regardless of what render drew
     writeStatus();     // (v0.60) this instance's line, for the two-rail check from outside
@@ -1045,9 +1056,21 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.62  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile 0.63  written " << ts << "  (this instance's last draw)\n";
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
-    else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered) << "\n";
+    else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff) << "\n";
+    // (v0.63) what the dialog is actually feeding the draw — so "the chip should be centered" can be checked against the setting
+    f << "GPRECT,paneRight=" << stPaneRaw << ",scaleL=" << stScaleL << ",scaleR=" << stScaleR << "\n"
+      << "GPSETTINGS,book=" << cfg.book << ",width=" << cfg.width << ",side=" << cfg.side << ",thick=" << cfg.thick << ",detach=" << (int)cfg.detach
+      << ",filter=" << cfg.filter << ",thresh=" << cfg.thresh << ",below=" << cfg.below << ",scale=" << cfg.scale
+      << ",showpct=" << (int)cfg.showpct << ",pctpos=" << cfg.pctpos << ",hideu=" << cfg.hideu << ",font=" << cfg.font
+      << ",rank=" << (int)cfg.rank << ",rankpos=" << cfg.rankpos << ",type=" << (int)cfg.type
+      << ",kline=" << (int)cfg.kline << ",cw=" << (int)cfg.cw << ",pw=" << (int)cfg.pw << ",flip=" << (int)cfg.flip << ",em=" << (int)cfg.em
+      << ",lstyle=" << cfg.lstyle << ",lpos=" << cfg.lpos << ",extk=" << (int)cfg.extk << ",topnodes=" << (int)cfg.topnodes << ",topstyle=" << cfg.topstyle
+      << ",spyking=" << (int)cfg.spyking << ",header=" << (int)cfg.header << ",spot=" << (int)cfg.spot << ",roles=" << (int)cfg.roles
+      << ",regime=" << (int)cfg.regime << ",panelpos=" << cfg.panelpos << ",defbands=" << (int)cfg.defbands << ",confl=" << (int)cfg.confl
+      << ",legend=" << (int)cfg.legend << ",headerpos=" << cfg.headerpos << ",tapecols=" << (int)cfg.tapecols << ",lvllabels=" << (int)cfg.lvllabels
+      << ",rankmode=" << cfg.rankmode << ",spywidth=" << cfg.spywidth << "\n";
 }
 
 // ---- (v0.39) CONTRACT ALIGNMENT — the whole book is priced in the panel's space (Skylit ES1 / cash,
@@ -1136,6 +1159,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.62");
+    p->setVersion("0.63");
     return p;
 }

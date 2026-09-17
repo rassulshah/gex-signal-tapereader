@@ -1,5 +1,15 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 12:25 CT (GP 0.62) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.62**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 12:45 CT (GP 0.63) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.63**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~12:45 CT — GP 0.63: the rail clear of the price scale, tape columns on both rails (+ left background), GPSETTINGS in the status file. START HERE.
+
+0.62 screenshot: SPX bars under the price scale (the pane rect reaches the scale; the tape strip had been hiding this),
+"tapes missing" (Tape columns off after the reset + 0.61 forced it off on the SPY rail), chip at Bottom-L while he
+expects centre. 0.63: `gpl::usableRight` (scale rect), tape columns on the SPY rail with a dark background, GPSTATUS
+15th field = offset, GPRECT + GPSETTINGS lines. **He needs: GEX build → close IRT → INSTALLED → reopen; tick "Tape
+columns"; send a screenshot.** Then READ `GammaProfile.status-Both-Left.txt`: if `panelpos=1` and the chip draws left,
+that is a draw bug; if `panelpos=0`, it is the setting (or IRT did not reset on the version bump — then say so).
+Values check: chart price = CSV price + the offset in the status line.
 
 # ⚠⚠⚠ 2026-09-17 ~12:25 CT — GP 0.62: the SPY rail at the SPX thickness, bubbles outside short bars, SPY rail drawn first. START HERE.
 

@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-17 · v16.40 · session `f9c89c64` — GP 0.62 — SPY rail thickness, bubbles outside short bars, draw order
+## 2026-09-17 · v16.40 · session `f9c89c64` — GP 0.63 — rail clear of the scale, tape columns both rails, GPSETTINGS
 
-_336 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_344 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -4374,6 +4374,128 @@ Build 0.62?
 **OPERATOR:**
 > fix ,  expecially the ui issues
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (16:30):** Now I'll build GP 0.60: the per-instance status file plus the parameter-position fix (0.59 inserted "Rank" mid-list — I need to correct that).
+Now the plugin: members, render counters, the status write, the parameter-order fix, and the version.
+Regression is green (67/67 Gate B with the new status-line cases; syntax compile OK). Now the SAVE DONE records.
+Committed. Now deploying to his machine via the bridge.
+Found something while reading the 0.59 diff for the missing rail, and it's my mistake: the new **Rank** row was inserted after "Line style" — mid-list — not at the end as I'd said. IRT stores saved values by position, so on **both** your instances the 14 rows after it (Label at … Level labels) silently read their neighbour's saved value. That's the same scramble KT 0.12 had this morning.
+
+GP 0.60 is on your machine now (GEX build compiles it within 2 min; it installs the moment IRT is closed). It moves Rank to the end and bumps the parameter version, so IRT resets both instances to defaults — and it writes a status file per instance (`GammaProfile.status-SPY-Left.txt` / `GammaProfile.status-SPX-Right.txt`) after every draw, so I can see from here which instance loads and draws, without a screenshot.
+
+I'll tell you when it's installed. Then: restart IRT, and on each lsGammaProfile instance re-enter five fields — **Book, Side, Width px, Hide % under, Rank** (left: SPY / Left / 40 / 5 / Atlas merge; right: SPX / Right / 90 / 0 / Atlas merge). Everything else stays default.
+GP 0.60 compiled on your machine at 11:34 and is waiting for IRT to close.
+
+**Close Investor/RT now**, wait about two minutes (I'll confirm INSTALLED), then reopen it and set the five fields on each instance:
+
+| | Left rail | Right rail |
+|---|---|---|
+| Book | SPY | SPX |
+| Side | Left | Right |
+| …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (16:35):** The GEX sync pushed the 0.60 deploy at 11:34 (origin `54a95d3`, identical content); the clone is now reset to origin/main, so there's nothing unpushed.
+
+Still waiting on your side: close IRT so the 0.60 DLL installs, then reopen and set the five fields on each instance as in the table above.
+
+**OPERATOR:**
+> was there any reason why you didn't build an option to have  both profiles so i dont have to add another gamma profile indicator
+
+**me (16:41):** No good reason — it was a lapse. I followed the precedent already in the plugin (0.47's "a second instance with Book = IF, Side = Left") and the mockup I showed you listed two instances, so I built to that without asking whether you wanted one. A single-instance mode is the better product: one dialog, one restart, no duplicate settings, and none of the two-instance behaviour we're now debugging.
+
+Here's what I'd build as GP 0.61, one element:
+
+**Book gets a fifth entry, "Both" — SPY rail on the left, SPX rail on the right, from one instance.** It loads both files, draws the SPY rail at the left margin and the SPX rail at the right, Rank = Atlas merge applies to both so the five badges split as Atlas splits them. The levels (CW / PW / FLIP / King line), the regime chip and the read panel draw once, from the SPX file, as today. Side is ignored in Both mode. The entry goes at the end of the Book list so nothing you've saved shifts.
+
+One question inside that element: you set the two rails differently (width 40 / 90, hide-% 5 / 0). In Both mode I'd add one appended row, **"SPY rail width px"** (default 40), and let Width px mean the SPX rail; "Hide % under" would be shared. Fine, or do you want the SPY rail to have its own hide-% too?
+
+If you say build, you'd restart IRT once for 0.61 and set one instance (Book = Both, Rank = Atlas merge) — no need to do the 0.60 two-instance setup first.
+
+**OPERATOR:**
+> yes its fine to share. build
+
+**me (16:46):** The script aborted before writing (nothing changed). The escape sequence in the status-write match was wrong; let me check the actual text and rerun.
+GP 0.61 is on your machine — Book = Both, one instance, two rails. GEX build compiles it within ~2 min; I'll confirm when it's built, then it installs the moment IRT is closed.
+GP 0.61 compiled on your machine at 11:50 and is pushed to origin. It installs itself the moment IRT is closed.
+
+Step 1 — Close Investor/RT, wait two minutes (the build log will flip to INSTALLED).
+
+Step 2 — Reopen IRT. Delete the second lsGammaProfile instance (the SPY / Left one).
+
+Step 3 — Open the remaining lsGammaProfile's dialog. The version bump reset it to defaults, so set: **Book = Both** (last entry in the list), **Width px = 90**, **Hide % under = 0** (or 5 — it's shared now), and at the bottom **Rank = Atlas merge**, **SPY rail width px = 40**. Apply.
+
+Step 4 — Tell me when it's drawn. I'll read `GammaProfile.status-Both-Right.txt` from the export folder (it should carry two lines, SPX then SPY, both rendered) and we compare your screenshot against Atlas at the same minute.
+
+**OPERATOR:**
+> you did not give me confirmation tha it was installed
+
+**me (16:58):** Confirmed: lsGammaProfile 0.61 **INSTALLED** at 11:58:02 CT.
+
+Step 1 — Reopen Investor/RT.
+
+Step 2 — Delete the second lsGammaProfile instance (the SPY / Left one).
+
+Step 3 — Open the remaining lsGammaProfile's dialog (it will show defaults after the reset) and set: **Book = Both**, **Width px = 90**, **Hide % under = 0**, and at the bottom **Rank = Atlas merge**, **SPY rail width px = 40**. Apply.
+
+Step 4 — Tell me when it's drawn and I'll read the status file and check both rails from here.
+
+**OPERATOR:**
+> i think you need to double check
+
+**me (17:10):** Checked from the export folder rather than the screenshot. The status file says both rails drew at 12:09:24:
+
+```
+GPSTATUS,SPX,Right,GammaProfile.csv,100,Atlas,0,1196,1196,0,90,2,100,1
+GPSTATUS,SPY,Left,GammaProfile-SPY.csv,100,Atlas,0,1196,2,0,40,3,100,1
+```
+
+SPX rail: 100 strikes, anchored at the right edge, 2 primaries (② King 7650, ③ 7655) — matches your screen. SPY rail: 100 strikes, anchored at the left edge, **3 primaries (① 763, ④ 760, ⑤ 764)** — but your screen shows only ①. So the rail is there; ④ and ⑤ are drawn and invisible.
+
+The cause is the width. At 40 px, a −27 % bar is 11 px long and a −23 % bar is 9 px. The rank bubble sits *inside* the tip and is about 20 px across, so on those bars it's centred a few pixels left of the pane edge — clipped off the chart. ① survives because its bar is the full 40 px. (The bars themselves are also too short to see behind the % labels, which is why the left side reads as labels only.)
+
+Two ways to see it right now, no build: set **SPY rail width px** to something like 120, or set **Rank at = Outside**.
+
+The proper fix, one element: **when a bar is shorter than its bubble, the badge goes outside the tip automatically** — both rails, any width, "Rank at" still honoured for bars long enough to hold it. Want that as 0.62?
+
+**OPERATOR:**
+> there is something wrong with the regime chip  also . the nodes on the left are being cutt off. i think the alignment is incorrect.
+
+**me (17:11):** Two separate things, both real. Zoomed in on your screenshot:
+
+**The left rail.** The SPY bars are being drawn — as 40 px *tall* blobs. Bar thickness is "Auto from spacing", and SPY strikes are 10 ES points apart (twice the SPX spacing), so the SPY rail's bars come out at the 40 px cap, while their *length* at width 40 is 6–11 px for a −14 % / −27 % node. A 6 px-long, 40 px-tall rounded bar is a semicircle blob at the pane edge — those dark half-discs at the far left — and its rank bubble lands off the pane. ① only looks right because 100 % fills the full 40 px, making a square. Nothing is misaligned; the rail is anchored at x = 2 as the status file says.
+
+**The regime chip.** The SPY rail is drawn *after* the SPX rail and its chip, so the SPY bars and % labels paint on top of the chip — that "−6%" and the yellow blob at "REGIME" are the SPY 7660 node sitting on it. The O/H/L box in the middle is IRT's own cursor data window, and the "15 7742.00" / Circle-toolbar strip is IRT's too; the chip is at Bottom-L, under all of them.
+
+Proposed 0.62, three fixes to the same problem (the SPY rail doesn't know it shares the pane):
+
+1. The SPY rail uses the **same bar thickness as the SPX rail** (one spacing rule for both), so its bars are 20 px lines, not blobs.
+2. A rank bubble **moves outside the tip when the bar is shorter than the bubble** — on either rail.
+3. The SPY rail draws **first**, so the levels, the chip and the panel always sit on top of it.
+
+And one setting on your side, no build: SPY rail width 40 is too short to read at any thickness — 120 would make a −27 % bar 32 px. Chip position stays yours (Panel at); Bottom-C clears IRT's toolbar if you want it out of that corner.
+
+Build 0.62?
+
+**OPERATOR:**
+> fix ,  expecially the ui issues
+
+**me (17:16):** GP 0.62 is on your machine (SPY rail at the SPX thickness, bubbles outside short bars, SPY rail drawn under the chip). GEX build compiles it within ~2 min. You can **close IRT now** — it installs the moment IRT is closed, and I'll confirm INSTALLED before you reopen.
+Confirmed: lsGammaProfile 0.62 **INSTALLED** at 12:20:01 CT.
+
+Step 1 — Reopen Investor/RT.
+
+Step 2 — In the lsGammaProfile dialog, set **SPY rail width px** to 120 (your other settings are kept — nothing was reset this time). Apply.
+
+Step 3 — Send me the screenshot. I'll read the status file at the same minute and compare against Atlas.
+
+**OPERATOR:**
+> I think the tajpes are missing for both spy and spx. maybe have a background for the tape on the left to see it clearly.   double check the alignement and values. regime chip should be centered.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -5244,6 +5366,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+41339ad gex: sync 17-Thu-09 12:16
+e133cc3 gex: sync 17-Thu-09 12:14
 75ae206 gex: sync 17-Thu-09 11:50
 54a95d3 gex: sync 17-Thu-09 11:34
 451ed07 gex: sync 17-Thu-09 11:22
@@ -5254,8 +5378,6 @@ dfc3371 gex: sync 17-Thu-09 10:58
 72dd26a gex: sync 17-Thu-09  9:44
 795412e gex: sync 17-Thu-09  9:36
 76a6635 gex: sync 17-Thu-09  1:24
-39f37a7 gex: sync 17-Thu-09  1:20
-f789e44 gex: sync 17-Thu-09  1:08
 ```
 
 ---

@@ -41,4 +41,7 @@ The run file gets: the screenshot file names, every unticked line with what was 
 - [ ] `GammaProfile.status-Both-Right.txt` has TWO GPSTATUS lines (SPX then SPY), both `rendered 1`, strike counts matching the two CSVs.
 - [ ] (0.62) Both rails' bars are the SAME thickness; a short SPY bar (e.g. -27% at width 120) carries its bubble OUTSIDE its tip, fully on the pane.
 - [ ] (0.62) The regime chip, the read panel and the level lines sit ON TOP of the SPY rail — no SPY % label or bar painted over the chip.
+- [ ] (0.63) No bar, badge or % label under the price scale; the SPX rail's tip is left of the axis labels.
+- [ ] (0.63) Tape columns on: [SPX strike | %] at the right edge, [SPY strike | %] at the left edge on a dark strip; rows align with the bars.
+- [ ] (0.63) `GPSETTINGS` line: panelpos matches the dialog; the chip draws where panelpos says (1 = Bottom-C).
 
