@@ -185,7 +185,8 @@ def main():
     for name, val in (('FLIP', flip_spx), ('CW', cr), ('PW', ps)):
         row = R.get(name)
         if fresh and val:
-            add(row is not None and abs(num(row[0][0]) - es_of(val, ratio)) < 0.001 and row[0][2] == '0DTE', 'A', '%s row = companion 0DTE %s -> ES %s, window 0DTE' % (name, val, row[0][0] if row else None))
+            lvl_ratio = (AU.get('ratio') or {}).get('SPXW') or ratio   # (16.40) the level rows are SPX strikes on every file, the SPY file included
+            add(row is not None and abs(num(row[0][0]) - es_of(val, lvl_ratio)) < 0.001 and row[0][2] == '0DTE', 'A', '%s row = companion 0DTE %s -> ES %s, window 0DTE' % (name, val, row[0][0] if row else None))
         else:
             add(row is None, 'A', '%s row ABSENT because the chain is %s (never an all-expiry substitute)' % (name, 'stale' if ifc.get('stale') else ('missing' if not ifc else 'without a value')))
     # ---------------- Gate A: REGIME ----------------

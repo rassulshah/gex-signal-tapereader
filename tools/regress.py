@@ -35,7 +35,7 @@ INDICATORS = {
         gateB=['test_gammaprofile_logic.cpp', 'test_contractoffset_logic.cpp'],
         # Gate A only on the pinned exports: the 1325/1426 Atlas + IRT transcriptions carry resolution/timing 'fails' documented in
         # testing/gamma-profile/RESULTS.md (a 3% cell's sign by colour, a 1.1-pt ES1 gap on a 100-pt/hour tape) — not regressions
-        live=[('testing/gamma-profile/fixtures/fixtureA-0947', []), ('testing/gamma-profile/fixtures/fixtureIF-1020', []), ('testing/gamma-profile/fixtures/GammaProfile-1325', []), ('testing/gamma-profile/fixtures/GammaProfile-1426', [])],
+        live=[('testing/gamma-profile/fixtures/fixtureA-0947', []), ('testing/gamma-profile/fixtures/fixtureIF-1020', []), ('testing/gamma-profile/fixtures/GammaProfile-1325', []), ('testing/gamma-profile/fixtures/GammaProfile-1426', []), ('testing/gamma-profile/fixtures/1118-pool', []), ('testing/gamma-profile/fixtures/1118-pool-SPY', [])],
         cpp='GammaProfile.cpp'),
     'daymodel': dict(
         title='lsDayModel',
