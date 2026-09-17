@@ -47,7 +47,7 @@ The run file gets: the screenshot file names, every unticked line with what was 
 
 ## GP 0.64 + panel 16.41 — the reviewed dialog, bands, both Kings, MAG
 - [ ] Dialog after the version-7 reset reads: Book = Both SPY and SPX · Width 90 · Tape columns on · Hide % under 0 · Panel at Bottom-C · SPY rail width 120 · Node bands on · Band height 3 · King line width 2 — nothing re-entered.
-- [ ] No top-node lines; each node >= 5 % has a BAND from the bar it was first seen (the CSV's 9th field) to the current bar, between the strips, gold (+) / magenta (−), Kings strongest — compare the band's start bar with the moment the node appeared on Atlas (eyes-on; the runner prints `band_start_earliest`).
+- [ ] No top-node lines; each PRIMARY node (the Show filter: badge-carrying Top-N, or >= Threshold) has a BAND from the bar it was first seen (the CSV's 9th field) to the current bar, between the strips, gold (+) / magenta (−), Kings strongest — compare the band's start bar with the moment the node appeared on Atlas (eyes-on; the runner prints `band_start_earliest`).
 - [ ] BOTH King lines (SPX from the KING row, SPY from the SPY rail), 2 px, polarity colour; the chip's second line PW · Mag · K (SPX) · K (SPY) · FLIP · CW, box wide enough for all of it.
 - [ ] MAG on the Skylit node whose strike == KINGNOW,ES,IF's strike (and only that one), in the Magnet's polarity colour; CW / PW pills padded evenly.
 - [ ] "Hide % under" blanks the % cell in the tape column for nodes under it; the strike still prints.

@@ -1,3 +1,11 @@
+## lsGammaProfile 0.67 — node bands only on the primary nodes (2026-09-17, ~17:20 CT)
+
+First 0.66 screenshot: "the highlighting is not right. it's just highlighting almost every spx node." 0.64 banded every
+node the panel stamped (>= 5 % of its King) and after hours that is nearly the whole SPX ladder; the translucent draw on
+his black chart is not the faint wash of the mockup. The bands replaced the top-node lines, so they now cover exactly the
+set those covered: the primary nodes of the Show filter (the pooled Top-N with badges, or >= Threshold, or all under All).
+Strength still by |%| (Kings full). The panel keeps stamping every node >= 5 % — the plugin decides what to draw.
+
 ## lsGammaProfile 0.66 — the tape column tightened (2026-09-17, ~17:10 CT)
 
 "reduce the space between the %King and the price in the rails by 50%": the strip is font x 7 + 8 (was x 9 + 8) — at

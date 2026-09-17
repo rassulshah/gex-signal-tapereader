@@ -1,7 +1,7 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 17:10 CT (GP 0.66) · **panel v16.41** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.66**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 17:20 CT (GP 0.67) · **panel v16.41** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.67**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
-# (17:10 CT — GP 0.66 folded in: the tape strip is font x 7 + 8, the strike-to-% gap halved at his request.)
+# (17:20 CT — GP 0.67: bands ONLY on the primary nodes (the Show filter's set, like the top-node lines they replaced) — 0.64's "every node >= 5%" was a wall after hours. 0.66: the tape strip is font x 7 + 8, the strike-to-% gap halved at his request.)
 
 # ⚠⚠⚠ 2026-09-17 ~16:50 CT — GP 0.65: THE VERSION BUMP DOES NOT RESET — repair-on-load added. START HERE.
 

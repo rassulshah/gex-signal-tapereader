@@ -832,12 +832,18 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // (v0.64) NODE BANDS — the node's line, bounded in time: from the bar it was first seen (the CSV's 9th field) to the
     // current bar, between the two tape strips, polarity colour faded by its % of its own King, translucent under the
     // candles' ink. Replaces the top-node lines. Drawn for every stamped node of THIS rail (the panel stamps >= 5%).
+    // (v0.67) ONLY THE PRIMARY NODES — the same set the top-node lines covered (the Show filter: the pooled Top-N, or >=
+    // Threshold, the ones with badges). 0.64 banded every node >= 5% and after hours that was the whole SPX ladder
+    // ("it's just highlighting almost every spx node"); on the real chart the translucent draw is not faint.
     if (S.bands && !bars.empty()) {
         short bx2 = (short)(paneR - colW - 2);                      // stop at the SPX strip (both rails use the same colW)
         short bx0 = (short)(paneL + 2 + colW);                      // never under the SPY strip
+        int topNb = (S.filter==0)?3 : (S.filter==1)?5 : (S.filter==2)?8 : (S.filter==3)?10 : 0;
         for (size_t i = 0; i < strikes.size(); i++) {
             const GStrike& s = strikes[i];
             if (s.since < 0) continue;
+            bool prim = (S.filter <= 3) ? (s.rank >= 1 && s.rank <= topNb) : (S.filter == 4 ? std::fabs(s.pct) >= (float)S.thresh : true);
+            if (!prim) continue;
             int bi = gpl::bandStartIndex(bars.empty() ? 0 : &bars[0], (int)bars.size(), s.since);
             if (bi < 0) continue;
             PNT a; a.set(barsFrom + bi, s.price); short x1 = (short)(a.h - getPixelsPerBar()/2); if (x1 < bx0) x1 = bx0;
@@ -1111,7 +1117,7 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.66  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile 0.67  written " << ts << "  (this instance's last draw)\n";
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
     else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff) << "\n";
     // (v0.63) what the dialog is actually feeding the draw — so "the chip should be centered" can be checked against the setting
@@ -1216,6 +1222,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.66");
+    p->setVersion("0.67");
     return p;
 }
