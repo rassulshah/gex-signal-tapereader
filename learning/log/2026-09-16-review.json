@@ -1,0 +1,161 @@
+{
+  "date": "2026-09-16",
+  "reviewed": "2026-09-16T22:47:00Z",
+  "panelVersion": "16.29",
+  "dataHealthVerdict": "ok",
+  "dataHealth": {
+    "records": 3861,
+    "distinctBars": 84,
+    "barsCoveredPct": 65,
+    "snapshots": 130,
+    "effectiveN": 13.0,
+    "note": "forward windows overlap: 84 bars ÷ 10-bar fwd = 13 effective obs"
+  },
+  "dayCharacter": {
+    "direction": "STRONG UP BIAS",
+    "observations": "75/84 bars voted UPTREND or UPTREND_BRK in bias.confirm; 65 UPTREND + 10 UPTREND_BRK + 6 FLAT + 3 DNTREND. Not monotone (oneWay=false) but heavily directional.",
+    "nodeEvents": {
+      "total": 898,
+      "breakdown": "DISSIP:344, ACCUM:280, ROLL:123, TURN_UP:89, TURN_DN:62"
+    }
+  },
+  "keyFindings": [
+    {
+      "category": "STRUCTURAL (High Confidence)",
+      "features": [
+        {
+          "name": "levelstate",
+          "rate": 78,
+          "n": 72,
+          "mfe": 1.23,
+          "mae": -1.504,
+          "note": "STRONG and consistent across regimes (chop:65%, mixed:75%, trend:81%). Hold/break fidelity excellent."
+        },
+        {
+          "name": "rshuf",
+          "rate": 89,
+          "n": 28,
+          "note": "Very high rate but modest n. Regime split: chop 25%, mixed 40%, trend 38% — slight uptrend bias."
+        },
+        {
+          "name": "ledger.touch",
+          "rate": 69,
+          "n": 45,
+          "note": "Order book touch signals — solid n and rate. Weak in trend regime (6%) suggests book tactics may break in extended moves."
+        }
+      ]
+    },
+    {
+      "category": "ENTRY SIGNALS (Mixed Strength)",
+      "features": [
+        {
+          "name": "pbEntry.60",
+          "rate": 84,
+          "n": 32,
+          "scored": 32,
+          "warning": "⚠⚠ INCOMPLETE FORWARD WINDOWS. n=32 scored from 64 bars; last ~30 min have no resolved outcomes. Do not treat 84% as final.",
+          "regime": "chop:48%, mixed:58%, trend:25%"
+        },
+        {
+          "name": "pbEntry",
+          "rate": 71,
+          "n": 31,
+          "regime": "chop:22%, mixed:35%, trend:31%"
+        },
+        {
+          "name": "defl.trigger",
+          "rate": 68,
+          "n": 28,
+          "votes": "UP:75, DN:3, NONE:6",
+          "note": "Vote split perfectly mirrors daily bias (UP-dominant). On neutral days, watch this carefully."
+        }
+      ]
+    },
+    {
+      "category": "DIRECTION PREDICTORS (Baseline Despite Daily Bias)",
+      "features": [
+        {
+          "name": "bias.confirm + leg.dir",
+          "rate": 48,
+          "n": 75,
+          "votes": "UPTREND:65, FLAT:6, UPTREND_BRK:10, DNTREND:3",
+          "warning": "⚠ With 75/84 bars voting UP, 48% hit is BELOW the one-way free ride. Votes are 79% UP, but rate is 48%. Possible calibration issue: either (a) feature is backward-scaled, (b) MFE/MAE window does not align with vote polarity, or (c) feature predicts something other than the voted direction.",
+          "byRegime": "chop:49%, mixed:40%, trend:38%"
+        },
+        {
+          "name": "dir.drift",
+          "rate": 49,
+          "n": 68,
+          "votes": "AGREE_DN:67, NONE:12, AGREE_UP:4",
+          "warning": "AGREE_DN dominates (67/83) yet day was heavily UP. This feature may be measuring pullback probability, not directional follow-through."
+        },
+        {
+          "name": "acm + attract + node",
+          "rate": 52-53,
+          "n": 72-79,
+          "note": "Consistent near-baseline 52% across a heavily biased day. Regime splits show weak trend performance (trend: 44-44% vs chop: 49-49%)."
+        }
+      ]
+    },
+    {
+      "category": "LODHOD (2026-08-28 Priority Feature)",
+      "features": [
+        {
+          "name": "lodhod",
+          "rate": 100,
+          "n": 2,
+          "resolved": 1,
+          "scored": 1,
+          "votes": "HOD:2",
+          "warning": "⚠⚠⚠ INSUFFICIENT DATA. n=2 total, only 1 resolved. Both from chop regime. The backtest (94% IN, 72% NOT IN from F-12) is a table lookup on 1-minute bars; this live rate is meaningless. Needs >=20 sessions to establish live baseline. Do NOT enter into rules.json.",
+          "nextStep": "Collect daily over 2-3 weeks before confidence statement."
+        }
+      ]
+    },
+    {
+      "category": "ZERO-SCORING FEATURES (Not Firing)",
+      "features": [
+        "dex, flow, piles, predictors, spxnodes, emband, emread, emstatus, emspread (all n=0 or rate=null)",
+        "These features either had no triggering conditions or produced no resolved outcomes. Monitor for data pipeline issues."
+      ]
+    }
+  ],
+  "concernFlags": [
+    {
+      "severity": "MEDIUM",
+      "issue": "Directional features baseline despite strong daily bias",
+      "details": "On a day where 75/84 bars voted UPTREND, features like bias.confirm (48%), leg.dir (48%), and dir.relation (47%) returned 48% hit — at or below the random baseline of ~50%. Either (a) these features are designed to detect reversals/consolidations (not follow-through), (b) the MFE/MAE window is misaligned with the forward decision, or (c) there is a sign-flip bug. Regime analysis shows trend bars underperform (38-40% vs chop 40-50%), suggesting these features may be weak in directional extension.",
+      "action": "Check feature definition against MFE/MAE window. If designed for reversal detection, relabel. If designed for direction, debug the vote-vs-outcome alignment. Test on at least 10 more biased days before adjusting weights."
+    },
+    {
+      "severity": "LOW",
+      "issue": "Data coverage at 65% bars",
+      "details": "Only 65% of the 84 bars produced records; 35% are gaps. This is within tolerance but worth monitoring. Check whether gaps correlate with specific times or market regimes (e.g., overnight vs RTH).",
+      "action": "If >5 consecutive days drop below 60%, file a defect in the tapereader or feature capture layer."
+    },
+    {
+      "severity": "LOW",
+      "issue": "pbEntry.60 incomplete — do not trust the 84% rate",
+      "details": "Of 64 bars eligible for 60-minute forward scoring, only 32 are fully resolved. The last ~30 minutes of the session have no forward outcome yet. The 84% rate is an artifact of selection bias (only the cleanly-resolved bars are scored).",
+      "action": "Exclude pbEntry.60 from any rules or thresholds. Re-score after market close +60m."
+    }
+  ],
+  "positiveSignals": [
+    "levelstate is working as intended: 78% hit, strong n=72, consistent across regimes. Recommend increasing weight if it is currently de-emphasised.",
+    "ledger.touch and pbEntry show solid mid-60s performance — order-flow signals have measurable edge on this day.",
+    "rshuf 89% is high confidence (modulo small n). Watch whether this sustained strength on other days."
+  ],
+  "measurementGaps": [
+    "farside: no bars recorded. Check whether the feature feed from ES 1-minute is operational. (F-14 and F-15 are backtest results; live performance unknown.)",
+    "lodhod: n=1 resolved. Per F-2 and BRIEF.md, do not propose a live threshold until n>=20 sessions.",
+    "Cross-market divergence (xdiv): Not tested; NQ corpus not present in repo. F-2 notes this explicitly."
+  ],
+  "dataIntegrity": {
+    "sourceBytes": 9203344,
+    "snapshots": 130,
+    "digestedAt": "2026-09-16T22:47:00Z",
+    "digestSchema": "gex-digest/v1",
+    "rulesAsOf": "2026-08-28"
+  },
+  "briefForPanel": "Strong up day (75/84 bars), data OK (65% coverage). Structural features (levelstate 78%, ledger 69%, pbEntry 71%) firing cleanly. Direction predictors stuck at 48-49% despite heavy daily bias — investigate vote-outcome alignment. lodhod emerging (n=2, insufficient). farside not recording."
+}
