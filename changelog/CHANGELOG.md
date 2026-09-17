@@ -1,3 +1,24 @@
+## v16.35 + companion 1.21 + lsGammaProfile 0.50 + lsDayStats 0.7 — the IF extras and the 2ND-clock ladder (2026-09-16, ~22:00 CT)
+
+Operator: "did you implement all the changes like to the regime chip" → "all the things we talked about." Three items
+that were mocked up and waiting:
+- **#1 Wall depth** (`gpWallDepth`): the wall strike's |net gamma| in the 0DTE window over the whole book (the companion's
+  per-window `gexProf`: dte0 / toFri / all) → `0D` (≥70% today's expiry: this session only), `WK` (≥70% through Friday),
+  `MO` otherwise (the monthly sits on it). The CW / PW rows carry `,<tag>,<s0>,<sW>` as fields 6–8; lsGammaProfile 0.50
+  draws the pill beside the CW / PW node tag and after each wall on the chip's second line (pink / amber / cyan). No
+  companion change needed — the profiles were already there. ⚖ thresholds hand-set, to be measured (the audit carries the shares).
+- **#2 The curve's slope word** (`gpSlopeWord`): companion 1.21 keeps the net-gamma-vs-price scan's slope 10 pts below
+  and above spot (`gf.sDn` / `gf.sUp`, $B per pt); the panel words it against the window's gross — a 10-pt move that
+  shifts ≥10% of the gross is `STEEP dn` / `STEEP up`, else `flat` — in a `SLOPE` row; the chip's first line reads
+  "-gamma STEEP dn | RANGE | …". ASCII only (the em-dash lesson). ⚖ threshold hand-set, to be measured.
+- **The 2ND clock's ladder** (lsDayStats 0.7): the study said the second extreme's time is not predictable (93 min MAE
+  either way), so the E row now prints the share of days whose second extreme lands in the LAST HOUR beside the median
+  ("LOD ~1:36pm  39% last hr"); `condstats.t2LastHrPct/t2Last30Pct` from the nightly, on the `CONDE` row (fields 7–8).
+  Also: a READ-IN 1ST prints "HOD =10:48am" (a fact) instead of "~" (an expectation).
+Shared: `gpLevelRows()` writes FLIP / CW / PW / SLOPE for both builders (Skylit and IF files). Tests: `test_if_extras.js`
+24/24 + 2 mutations; Gate A 65/65 (helpers exposed to the mutants); DayStats / day-model / hodlod tests green; smoke clean;
+three plugins g++-shim clean; logic test 57/57.
+
 ## v16.34 + lsGammaProfile 0.49 / lsKingTracker 0.9 — SCALEREF carries the minute of its own quote (2026-09-16, ~21:05 CT)
 
 Operator, 20:51 CT, on 0.48: "it changed" — PW 7663 (7550) with the chart at 7663: still riding the live price. 0.48's

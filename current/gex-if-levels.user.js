@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.20
+// @version      1.21
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -453,7 +453,11 @@ function gammaFlip(opts, spot, keep, todayNum){
       prevS=S; prevV=v;
     }
     if(best==null) return null;
-    return { flip:best, netAtSpot:netAt(spot) };
+    // (v1.21) THE CURVE'S SLOPE EITHER SIDE OF SPOT — the same net-gamma-vs-price scan that finds the flip, kept
+    // instead of discarded: $B of net gamma per 1 pt over the 10 pts below spot (sDn) and above it (sUp). The
+    // panel words it on the regime chip (STEEP dn / STEEP up / flat) against the window's gross (gpSlopeWord).
+    var n0=netAt(spot), nDn=netAt(spot-10), nUp=netAt(spot+10);
+    return { flip:best, netAtSpot:n0, sDn:+((n0-nDn)/10/1e9).toFixed(4), sUp:+((nUp-n0)/10/1e9).toFixed(4) };
   }catch(e){ return null; }
 }
 function computeAll(ch){
