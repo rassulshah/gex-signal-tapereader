@@ -1,3 +1,15 @@
+## v16.42 — the audit records what Atlas itself drew; the runner diffs the five (2026-09-17, ~17:45 CT)
+
+Operator: "I don't think IRT's top 5 match the top 5 in Atlas." Looking at his Atlas tab after the close: the ES1 chart's
+labels were 7771 (100 %), 7746 (80 %), 7695 (66 %), 7645 (80 %) — through the SPX ratio those are strikes 7700 / 7675 /
+7625 / 7575 with percentages that are NOT the SPXW ladder's (7675 −15 %, 7625 −8 %, 7575 −3 %) — i.e. after hours
+Atlas's derived slice is drawing a DIFFERENT window/book than the SPY + SPXW 0DTE tapes our pool is built from (the
+"Derived-window caveat" left open on 16.40). Rather than argue from a screenshot: `gpAtlasSlice()` reads the page's own
+ES1 payload (the merged derived slice Atlas draws: ES price, scaled value, sign; plus each derived book's rows and ratio)
+and the audit carries it every export as `AU.atlas`; `__gptsDebug.gpAtlas()` shows it live. `gp-regress.py` now checks
+"the five Atlas drew == our pooled five (±1.5 pt)" and prints Atlas's five in the expected picture. The first export of
+16.42 will say, in numbers, where the two differ — and the pool rule gets corrected from that, not from a guess.
+
 ## lsGammaProfile 0.67 — node bands only on the primary nodes (2026-09-17, ~17:20 CT)
 
 First 0.66 screenshot: "the highlighting is not right. it's just highlighting almost every spx node." 0.64 banded every

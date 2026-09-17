@@ -1,5 +1,15 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 17:20 CT (GP 0.67) · **panel v16.41** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.67**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 17:45 CT (v16.42 / GP 0.67) · **panel v16.42** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.67**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~17:45 CT — v16.42: AU.atlas — what Atlas drew, same second; the runner diffs the five. START HERE.
+
+He says IRT's five ≠ Atlas's five. His Atlas tab after the close drew 7771/7746/7695/7645 (100/80/66/80 %) — SPX-ratio
+strikes 7700/7675/7625/7575 with percentages that are not the SPXW 0DTE ladder's → after hours the derived slice is a
+different window/book than our SPY + SPXW pool (the open "Derived-window caveat"). 16.42 records the page's own merged
+derived slice in the audit (`AU.atlas`, rows [ES, %, $K, rank] + per-book rows/ratio) and `gp-regress.py` checks
+Atlas's five == ours. **NEXT: after his Tampermonkey update (wait 5 min, reload Atlas), stage GammaProfile.audit.json,
+read AU.atlas, and correct `gpAtlasPool` to Atlas's actual rule (which books, which window, after-hours behaviour).**
+Do not change the pool before the numbers are in hand.
 
 # (17:20 CT — GP 0.67: bands ONLY on the primary nodes (the Show filter's set, like the top-node lines they replaced) — 0.64's "every node >= 5%" was a wall after hours. 0.66: the tape strip is font x 7 + 8, the strike-to-% gap halved at his request.)
 

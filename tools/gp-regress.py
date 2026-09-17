@@ -148,7 +148,7 @@ def main():
     add(all(ranked[i]['rank'] == i + 1 for i in range(min(10, len(ranked)))), 'A', 'ranks 1..10 follow |%King| (ties to the lower strike)')
     # (16.40) THE ATLAS POOL: field 8 of every STRIKE row is the row's rank in the SPY + SPXW pool (each book's own %King,
     # ties on |%| to the lower ES price) — re-derived here from the audit's two tapes and diffed row for row
-    ATLAS_POOL = None; BAND_EARLIEST = None
+    ATLAS_POOL = None; BAND_EARLIEST = None; ATLAS_FIVE = None
     if AU.get('pool') is not None and book_row in ('ES', 'SPY', ''):
         spx_t = AU.get('tape') or {}; spy_t = {('%.2f' % k): v for k, v in ((AU.get('spyProf') or {}).get('prof') or [])}
         rsp = (AU.get('ratio') or {}).get('SPXW'); rspy = ((AU.get('spyProf') or {}).get('ratio')) or (AU.get('ratio') or {}).get('SPY')
@@ -172,6 +172,18 @@ def main():
         au5 = [(r[0], int(r[1])) for r in (AU.get('pool') or [])[:5]]
         add(top5 == au5, 'A', 'the pool\'s five (%s) == the audit\'s' % ' '.join('%s %d' % x for x in top5))
         ATLAS_POOL = [dict(book=r[0], strike=r[1], pct=r[2], es=r[3], badge=i + 1) for i, r in enumerate(pool[:5])]
+        # (16.42) THE COMPARISON WITH ATLAS ITSELF: the audit carries the merged derived slice the page received at the same
+        # second (AU.atlas.rows: [ES price, % of the slice's max, $K, rank]). Atlas draws its top N from that slice; our five
+        # must be the same five ES prices (±1.5 pt for rounding / the ratio). Skipped when the payload was absent or stale.
+        at = AU.get('atlas') or {}
+        if at.get('ok') and at.get('rows'):
+            ak = [r[0] for r in at['rows'][:5]]
+            ATLAS_FIVE = [(r[0], r[1], r[3]) for r in at['rows'][:5]]
+            ours = [(p['book'], p['strike'], p['es']) for p in ATLAS_POOL]
+            hit = [k for k in ak if any(abs(k - e[2]) <= 1.5 for e in ours)]
+            miss = [k for k in ak if k not in hit]
+            add(len(hit) == len(ak), 'A', 'ATLAS: the five Atlas drew (%s) == our pooled five (%s)' % (' '.join('%.2f' % k for k in ak), ' '.join('%s %s@%.2f' % e for e in ours)) + ('' if not miss else ' — Atlas had %s we do not' % miss))
+            if at.get('ageS') is not None: add(at['ageS'] <= 300, 'A', 'the Atlas payload was %ss old at the export (<= 300)' % at['ageS'])
     # (16.41) FIRST-SEEN (field 9): present iff |%| >= 5, equal to the audit's since map for this book, never after ASOF —
     # the plugin's band start; against Atlas the check is eyes-on (Atlas's per-strike history is client-side only, SKYLIT-FEEDS)
     if AU.get('since') is not None and book_row in ('ES', 'SPY', ''):
@@ -249,6 +261,7 @@ def main():
     exp = {}
     if ATLAS_POOL: exp['atlas_pool'] = ATLAS_POOL   # (16.40) the five badges as the two rails share them under Rank = Atlas merge
     if BAND_EARLIEST: exp['band_start_earliest'] = BAND_EARLIEST   # (16.41) the earliest node band on the chart starts here
+    if ATLAS_FIVE is not None: exp['atlas_five'] = ATLAS_FIVE   # (16.42) the five Atlas itself drew at the export second (ES price, %, rank)
     if nodes and spot:
         tags = roles(nodes, spot)
         exp['tags'] = {('%g' % k): v for k, v in tags.items()}
