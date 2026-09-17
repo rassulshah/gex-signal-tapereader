@@ -64,6 +64,13 @@ undocumented. That has already happened repeatedly in this project.
    catch a wrong price; v11.70 shipped a forecast ban that passed on inserted forecast text. Third
    occurrence. `eval(ex('fn'))` with stubs costs 47ms. **Then mutate the source and confirm the
    assertions fire** — an assertion that never fails buys false confidence, which is worse than none.
+2b. **(2026-09-17) THE INDICATOR REGRESSION — `python3 tools/regress.py`** (or one: `gamma | daymodel | daystats |
+   kingtracker`). Gate A node suites + Gate B C++ logic suites + Gate L (the live runner on the pinned fixture pairs),
+   one table, one dated block appended to `testing/RESULTS.md`. **A build that touches an indicator's sources (named in
+   `tools/regress.py` → `INDICATORS[...]['sources']`) updates THAT indicator's cases in the same commit** — a new row,
+   field or decision gets its assertion first; a grammar change gets a new fixture pair. Master doc:
+   `testing/REGRESSION.md`. Operator's mandate: "keep updating the test cases, so you can fire the regression either
+   collectively or separately for the indicators."
 3. **Smoke test** — `node tools/smoke.js`. Loads the whole script in a DOM stub, calls every debug hook,
    AND fails on anything a render catch swallowed. A section that renders empty because its own
    try/catch ate a ReferenceError looks exactly like a section with nothing to show; this is the only

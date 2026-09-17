@@ -47,3 +47,4 @@ Claude outputs/
 
 # diagnostic scratch from the plugin write-verify (safe to delete)
 plugin/GammaProfile.sentinel.cpp
+plugin/.regress-bin/

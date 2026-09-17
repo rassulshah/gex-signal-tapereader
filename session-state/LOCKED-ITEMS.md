@@ -6,6 +6,12 @@ _Created 2026-08-27._
 
 ---
 
+## ✅ BUILT 2026-09-17 — THE REGRESSION FOR ALL FOUR INDICATORS (operator, 2026-09-16 late: "extend the regression to the other indicators … keep updating the test cases … fire it collectively or separately")
+`tools/regress.py [all|gamma|daymodel|daystats|kingtracker]` / `regress.bat`; `testing/REGRESSION.md`; Gate A/B/L per
+indicator; logic headers for DM/DS/KT/offset; `AU.day` on the audit (16.37). **Standing rule from here (BUILD-CHECKLIST
+2b): a build that touches an indicator updates its cases in the same commit.** Open under it: (i) `regress.bat` never run
+on his MSVC; (ii) the day/King fixtures are synthetic until his first real 16.37 CSV+audit pair is staged in.
+
 ## ⭐⭐ ACTIVE (2026-09-15 EVENING): THREE AGREED ITEMS FOR TOMORROW — discussed, doctrine-checked, NOT BUILT
 
 Operator's close: **"save everything, we will do it tomorrow."** All three were discussed one at a time and agreed.

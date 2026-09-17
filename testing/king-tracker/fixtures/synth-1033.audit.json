@@ -1,0 +1,274 @@
+{
+ "v": "16.37",
+ "t": 1789615557700,
+ "ct": 37980,
+ "tape": {
+  "7695.00": 1,
+  "7690.00": -18,
+  "7685.00": 100,
+  "7680.00": 16,
+  "7675.00": 31,
+  "7670.00": 0,
+  "7665.00": 12,
+  "7660.00": 63,
+  "7655.00": -10,
+  "7650.00": -18,
+  "7645.00": -4,
+  "7640.00": 4,
+  "7635.00": 3,
+  "7630.00": -11,
+  "7625.00": -2,
+  "7620.00": 8,
+  "7615.00": -28,
+  "7610.00": -49,
+  "7605.00": -54,
+  "7600.00": -40
+ },
+ "king": 7685,
+ "kingNeg": false,
+ "spot": {
+  "src": "trinity",
+  "trinity": 7619.45,
+  "es1": null,
+  "spy": 760.27,
+  "spx": 7619.45,
+  "spxUsed": 7619.45
+ },
+ "ratio": {
+  "SPXW": 1.0094,
+  "src": "payload",
+  "SPY": 10.10757
+ },
+ "scaleRef": 7690.5,
+ "ifc": {
+  "err": null,
+  "stale": false,
+  "ageMin": 2,
+  "spot": 7619.9,
+  "payloadT": "2026-09-16T15:30:00Z",
+  "dte0": {
+   "exps": [
+    20260916
+   ],
+   "gf": {
+    "flip": 7620.72,
+    "netAtSpot": -35638037,
+    "sDn": -0.02,
+    "sUp": 0.01
+   },
+   "cr": 7675,
+   "ps": 7600,
+   "netGEX": 440821085
+  }
+ },
+ "regime": {
+  "sign": "AT",
+  "type": "WHIPSAW",
+  "conf": "low",
+  "conflict": false,
+  "note": "skew 1.4x rolls 0 near -g -143",
+  "rolls": 0,
+  "skyNeg": true
+ },
+ "pat": {
+  "7600": "BARNEYM",
+  "7605": "BARNEY",
+  "7610": "BARNEYM"
+ },
+ "rolls": {
+  "SPX": 0,
+  "SPY": -1
+ },
+ "notes": [],
+ "tapeSrc": "trinity",
+ "tapeCount": 20,
+ "scaleRefT": 1789572780,
+ "depth": {
+  "cw": null,
+  "pw": null
+ },
+ "slope": null,
+ "flipSpx": 7620.72,
+ "day": {
+  "dow": "Wed",
+  "open": 7690,
+  "close": 7702.2,
+  "hi": 7724,
+  "lo": 7676,
+  "ptUsd": 50,
+  "elapsed": 123,
+  "w30": {
+   "h": 7714,
+   "l": 7683,
+   "tH": 30,
+   "tL": 3,
+   "open": 7690,
+   "close": 7711,
+   "pos": 0.22580645161290322,
+   "n": 10,
+   "complete": true
+  },
+  "w60": {
+   "h": 7724,
+   "l": 7683,
+   "tH": 48,
+   "tL": 3,
+   "open": 7690,
+   "close": 7723,
+   "pos": 0.17073170731707318,
+   "n": 20,
+   "complete": true
+  },
+  "scl": 1,
+  "base": {
+   "n": 60,
+   "pooled": false,
+   "rngPts": 52,
+   "rngP25": 34.4,
+   "rngP75": 75.7,
+   "wick": {
+    "bop": 12,
+    "wick": 50,
+    "wickPct": 23,
+    "mud": 201
+   },
+   "hasCond": true,
+   "condstats": {
+    "n": 300,
+    "t1Med": 24,
+    "t2Med": 286.5,
+    "lodPct": 52,
+    "t2LastHrPct": 39,
+    "t2Last30Pct": 29,
+    "pos30": [
+     {
+      "n": 114,
+      "t1": 21,
+      "t2": 286.5,
+      "lodPct": 59
+     },
+     {
+      "n": 81,
+      "t1": 33,
+      "t2": 294,
+      "lodPct": 58
+     },
+     {
+      "n": 105,
+      "t1": 21,
+      "t2": 282,
+      "lodPct": 39
+     }
+    ],
+    "pos60": [
+     {
+      "n": 108,
+      "t1": 16.5,
+      "t2": 303,
+      "lodPct": 66
+     },
+     {
+      "n": 93,
+      "t1": 36,
+      "t2": 306,
+      "lodPct": 53
+     },
+     {
+      "n": 99,
+      "t1": 21,
+      "t2": 267,
+      "lodPct": 35
+     }
+    ]
+   },
+   "predict": {
+    "exante": {
+     "a": 41.95,
+     "b": 0.351
+    },
+    "open30": {
+     "a": 26.48,
+     "b": 1.441
+    },
+    "open60": {
+     "a": 25.47,
+     "b": 1.099
+    }
+   }
+  },
+  "pdR": null,
+  "emEs": 38.55908000000001,
+  "em": {
+   "emSpx": 38.2,
+   "est": false,
+   "atMin": 2,
+   "date": "2026-09-16"
+  },
+  "model": {
+   "rng": 61.235681920000005,
+   "basis": "em-open60",
+   "drive": 1,
+   "f": 0.7475365853658537,
+   "hi": 7735.775912565026,
+   "lo": 7674.540230645026,
+   "close": 7705.30892048
+  },
+  "cond": {
+   "t1": 3,
+   "t2": 303,
+   "lodPct": 66,
+   "basis": "pos60-bottom+orclock",
+   "n": 108,
+   "lastHrPct": 39,
+   "last30Pct": 29,
+   "readIn": "HOD"
+  },
+  "actual": {
+   "first": "HOD",
+   "firstT": 33480,
+   "took": 48,
+   "bop": 3,
+   "wick": 9,
+   "wend": 31140,
+   "wickPct": 18,
+   "mud": 54,
+   "second": "LOD",
+   "secondT": 36720,
+   "gap": 54,
+   "rngPts": 48,
+   "rngUsd": 2400,
+   "posr": 0.55,
+   "reclaimed": true
+  },
+  "call": {
+   "in": true,
+   "notIn": false,
+   "p": 88,
+   "n": 41,
+   "first": "HOD"
+  }
+ },
+ "ifProf": {
+  "ok": false,
+  "why": "no gexProf in the chain (companion < 1.12?)",
+  "king": null,
+  "n": 0,
+  "maxAbs": null
+ },
+ "kingNow": {
+  "SPX": {
+   "es": 7689.14,
+   "strike": 7685,
+   "pct": 100
+  },
+  "SPY": null,
+  "QQQ": null,
+  "NDX": null
+ },
+ "gWhy": "live from DOM tape (20 strikes · King +100% @ SPX 7685 -> ES 7757.25)",
+ "dWhy": "live (Wed em-open60 pos60-bottom+orclock n=60)",
+ "fut": {
+  "fam": "ES",
+  "r": 10.107
+ }
+}

@@ -33,6 +33,7 @@
  *  numbering out from under the value getters and silently scrambles settings.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "DayModelLogic.h"   // (v0.17) the decisions, testable without IRT — plugin/test_daymodel_logic.cpp
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -109,6 +110,7 @@ public:
     bool measureChartDay();    // (v0.10) ACTUAL candle straight from the chart's own RTH session bars
     void computeChartLevels(); // (v0.11) PDH/PDL + overnight H/L from the chart's own bars (exact)
     void detectBarStamp();   // (v0.16) start- vs end-stamped bars (sets g_endStamped)
+    void loadBars(std::vector<dml::Bar>& out, int maxBars);   // (v0.17) the chart's bars as plain records for DayModelLogic.h
     void readSettings(Settings& S);
     void render(const Settings& S);
     // helpers
@@ -549,29 +551,30 @@ int DayModel::draw(void)
 // Any other session start/stop works the same way (the first bar is stamped at the boundary under one convention
 // and one period past it under the other). If neither boundary stamp is found, START is assumed (the old behaviour).
 static bool g_endStamped = false;
+// (v0.17) the chart's bars as plain records for DayModelLogic.h (the last `maxBars` of them)
+void DayModel::loadBars(std::vector<dml::Bar>& out, int maxBars)
+{
+    long n = getBarCount(); out.clear(); if (n < 1) return;
+    RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose); RTARRAYI dt(barDateTime);
+    int from = (int)n - maxBars; if (from < 0) from = 0;
+    out.reserve((size_t)((int)n - from));
+    for (int i = from; i < (int)n; i++) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        dml::Bar b; b.y = t.tm_year + 1900; b.m = t.tm_mon + 1; b.d = t.tm_mday;
+        b.sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec; b.o = op[i]; b.h = hi[i]; b.l = lo[i]; b.c = cl[i];
+        out.push_back(b);
+    }
+}
 void DayModel::detectBarStamp()
 {
-    long n = getBarCount(); if (n < 2) { g_endStamped = false; return; }
-    RTARRAYI dt(barDateTime);
-    int seenStart = 0, seenEnd = 0;
-    int from = (int)n - 1, to = (int)n - 2000; if (to < 0) to = 0;
-    for (int i = from; i >= to; i--) {
-        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-        int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
-        if (sod == 17 * 3600) seenStart++;          // a bar STARTING at the 17:00 session open
-        if (sod == 16 * 3600) seenEnd++;            // a bar ENDING at the 16:00 session close
-    }
-    g_endStamped = (seenEnd > 0 && seenStart == 0);
+    std::vector<dml::Bar> bars; loadBars(bars, 2000);
+    g_endStamped = dml::endStamped(bars.empty() ? 0 : &bars[0], (int)bars.size());
 }
 // RTH membership under the detected convention: START-stamped = [08:30, 15:00), END-stamped = (08:30, 15:00].
-static bool inRth(int sod)
-{
-    const int O = 8 * 3600 + 30 * 60, S = 15 * 3600;
-    return g_endStamped ? (sod > O && sod <= S) : (sod >= O && sod < S);
-}
+static bool inRth(int sod) { return dml::inRth(sod, g_endStamped); }
 // overnight membership (prior evening >= 17:00 through today's pre-open): START = [17:00 ..) & [.. 08:30); END = (17:00 ..] & (.. 08:30]
-static bool inEvening(int sod){ const int E = 17 * 3600; return g_endStamped ? (sod > E) : (sod >= E); }
-static bool inPreOpen(int sod){ const int O = 8 * 3600 + 30 * 60; return g_endStamped ? (sod <= O) : (sod < O); }
+static bool inEvening(int sod){ return dml::inEvening(sod, g_endStamped); }
+static bool inPreOpen(int sod){ return dml::inPreOpen(sod, g_endStamped); }
 
 // ---- (v0.11) CHART-NATIVE REFERENCE LEVELS -----------------------------------------------------------
 // PDH/PDL (prior RTH day high/low) and ONH/ONL (overnight high/low) are pure price levels IRT already
@@ -581,38 +584,15 @@ static bool inPreOpen(int sod){ const int O = 8 * 3600 + 30 * 60; return g_endSt
 void DayModel::computeChartLevels()
 {
     if (swepts.empty()) return;
-    long n = getBarCount(); if (n < 2) return;
-    RTARRAY  hi(barHigh), lo(barLow);
-    RTARRAYI dt(barDateTime);
-    struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-    int todayKey = (lt.tm_year + 1900) * 10000 + (lt.tm_mon + 1) * 100 + lt.tm_mday;
-    // (v0.16) the RTH / overnight windows follow the chart's bar-stamp convention (detectBarStamp, above)
-    int priorKey = 0;
-    for (int i = (int)n - 1; i >= 0; i--) {
-        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-        int k = (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
-        int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
-        if (k < todayKey && inRth(sod)) { priorKey = k; break; }
-    }
-    float pdh = -1e9f, pdl = 1e9f, onh = -1e9f, onl = 1e9f; bool hp = false, ho = false;
-    for (int i = 0; i < (int)n; i++) {
-        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-        int k = (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
-        int sod = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
-        if (priorKey && k == priorKey && inRth(sod)) {
-            if (hi[i] > pdh) pdh = hi[i]; if (lo[i] < pdl) pdl = lo[i]; hp = true;
-        }
-        // overnight into today: prior evening (17:00 on) through today's pre-open (to 08:30)
-        if ((priorKey && k == priorKey && inEvening(sod)) || (k == todayKey && inPreOpen(sod))) {
-            if (hi[i] > onh) onh = hi[i]; if (lo[i] < onl) onl = lo[i]; ho = true;
-        }
-    }
+    std::vector<dml::Bar> bars; loadBars(bars, 20000);
+    if (bars.size() < 2) return;
+    dml::Levels L = dml::chartLevels(&bars[0], (int)bars.size(), g_endStamped);   // (v0.17) DayModelLogic.h
     for (size_t i = 0; i < swepts.size(); i++) {
         const std::string& nm = swepts[i].name;
-        if      (hp && nm == "PDH") swepts[i].price = pdh;
-        else if (hp && nm == "PDL") swepts[i].price = pdl;
-        else if (ho && nm == "ONH") swepts[i].price = onh;
-        else if (ho && nm == "ONL") swepts[i].price = onl;
+        if      (L.hp && nm == "PDH") swepts[i].price = L.pdh;
+        else if (L.hp && nm == "PDL") swepts[i].price = L.pdl;
+        else if (L.ho && nm == "ONH") swepts[i].price = L.onh;
+        else if (L.ho && nm == "ONL") swepts[i].price = L.onl;
     }
 }
 
@@ -625,41 +605,14 @@ void DayModel::computeChartLevels()
 // so draw() can fall back to the offset path.
 bool DayModel::measureChartDay()
 {
-    long n = getBarCount(); if (n < 2) return false;
-    RTARRAY  op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
-    RTARRAYI dt(barDateTime);
-    // (v0.15) THE RTH DAY, ALWAYS — not IRT's rolling session. The old PRIMARY used getStartStop(getDaySessionNumber()),
-    // i.e. whatever session the chart is in RIGHT NOW. On a "Full Session 17:00-16:00" futures chart that is the
-    // overnight+RTH block, and after the close it rolls onto the NEW evening session — so at 8 PM the "actual" candle
-    // was measuring the evening session's low (7652) while the DAY STATS labels still said the RTH low was 7643.50
-    // @ 9:54a (operator: "the actual candle low and the price chart low are different"). The day model IS the RTH
-    // day (08:30–15:00 CT), so measure exactly that window of the most recent RTH day: today's if it has bars, else
-    // step back (over a weekend too) so the completed day keeps showing overnight until the next open.
-    struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-    float dOpen = 0, dHi = -1e9f, dLo = 1e9f, dClose = 0; bool have = false;
-    for (int back = 0; back <= 4 && !have; back++) {
-        // the calendar day to measure: the last bar's local date, minus `back` days
-        struct tm want = lt; want.tm_mday -= back; want.tm_hour = 12; want.tm_min = 0; want.tm_sec = 0; want.tm_isdst = -1;
-        time_t wt = mktime(&want); struct tm wn; memset(&wn, 0, sizeof(wn)); localtime_s(&wn, &wt);
-        int wY = wn.tm_year, wM = wn.tm_mon, wD = wn.tm_mday;
-        dHi = -1e9f; dLo = 1e9f; have = false;
-        for (int i = 0; i < (int)n; i++) {
-            struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime((RTDATE)dt[i], &tmv);
-            if (tmv.tm_year != wY || tmv.tm_mon != wM || tmv.tm_mday != wD) continue;
-            int sod = tmv.tm_hour * 3600 + tmv.tm_min * 60 + tmv.tm_sec;
-            if (!inRth(sod)) continue;   // (v0.16) stamp-aware RTH window
-            if (!have) { dOpen = op[i]; have = true; }
-            if (hi[i] > dHi) dHi = hi[i];
-            if (lo[i] < dLo) dLo = lo[i];
-            dClose = cl[i];
-        }
-    }
-    if (!have || !(dHi > dLo)) return false;
-    float csvActO = actC.valid ? actC.o : dOpen;
-    float dayOff  = dOpen - csvActO;            // open-anchored spread (stable across the day)
-    actC.o = dOpen; actC.h = dHi; actC.l = dLo; actC.c = dClose; actC.valid = true;   // exact ES session
-    if (hasHod) hodV = dHi;
-    if (hasLod) lodV = dLo;
+    std::vector<dml::Bar> bars; loadBars(bars, 20000);
+    if (bars.size() < 2) return false;
+    dml::DayMeasure M = dml::measureDay(&bars[0], (int)bars.size(), g_endStamped);   // (v0.17) DayModelLogic.h: the most recent RTH day
+    if (!M.ok) return false;
+    float dayOff = dml::dayOffset(M.o, actC.valid, actC.o);   // open-anchored spread (stable across the day)
+    actC.o = M.o; actC.h = M.h; actC.l = M.l; actC.c = M.c; actC.valid = true;   // exact ES session
+    if (hasHod) hodV = M.h;
+    if (hasLod) lodV = M.l;
     if (expC.valid) { expC.o += dayOff; expC.h += dayOff; expC.l += dayOff; expC.c += dayOff; }
     for (size_t i = 0; i < swepts.size(); i++) swepts[i].price += dayOff;
     return true;
@@ -673,11 +626,8 @@ void DayModel::applyContractOffset()
     if (!hasSpot) return;
     long n = getBarCount(); if (n < 1) return;
     RTARRAY close(barClose);
-    float chartClose = close[(int)n - 1];
-    if (!(chartClose > 0)) return;
-    float off = chartClose - spotPx;
-    if (off < -300.0f || off > 300.0f) return;   // implausible → leave as-is
-    if (off > -0.01f && off < 0.01f) return;      // already aligned
+    float chartClose = close[(int)n - 1], off = 0.0f;
+    if (!dml::contractOffset(chartClose, spotPx, off)) return;   // (v0.17) clamp + "already aligned" in DayModelLogic.h
     if (expC.valid) { expC.o+=off; expC.h+=off; expC.l+=off; expC.c+=off; }
     if (actC.valid) { actC.o+=off; actC.h+=off; actC.l+=off; actC.c+=off; }
     if (hasHod) hodV+=off;
@@ -696,14 +646,14 @@ double DayModel::staleAgeMin()
     if (asofSo < 0) return -1.0;
     RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
     double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
-    return (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+    return dml::staleAge(asofSo, localSo);   // (v0.17) DayModelLogic.h
 }
 
 void DayModel::drawStaleBadge()
 {
     double ageMin = staleAgeMin();
     if (ageMin < 0) return;
-    if (ageMin <= 4.0) return;
+    if (!dml::staleBadgeShown(ageMin)) return;
     char b[40];
     if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
     else                sprintf_s(b, sizeof(b), "STALE %dm", (int)(ageMin + 0.5));
@@ -725,6 +675,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.16");
+    p->setVersion("0.17");
     return p;
 }

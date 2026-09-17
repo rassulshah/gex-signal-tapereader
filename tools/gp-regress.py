@@ -4,6 +4,10 @@ gp-regress.py — the lsGammaProfile LIVE regression runner (Gate A + Gate B exp
 
   python3 tools/gp-regress.py --csv GammaProfile.csv --audit GammaProfile.audit.json \
       [--atlas-read atlas.json] [--irt-read irt.json] [--shots shot1.png shot2.png] [--note "..."] [--out testing/gamma-profile/runs]
+  python3 tools/gp-regress.py --indicator daymodel|daystats|kingtracker --csv ... --audit ... [--irt-read irt.json] [--shots ...]
+      (v16.37) the same same-moment run for the other three indicators: the day rows are re-derived from the audit's AU.day
+      block by tools/day-derive.js (the panel's own functions), the King rows against AU.kingNow / AU.rolls; each prints the
+      EXPECTED chart / strip for its eyes-on checklist and writes testing/<indicator folder>/runs/<date>/<HHMM>.md + RESULTS.md.
 
 What it checks, and where each gap would live (design/IRT-VS-SKYLIT-TESTING-PLAN.md):
   GATE A  Atlas -> CSV.  The audit sidecar is what the panel READ from Atlas at the CSV's own timestamp (the tape,
@@ -17,7 +21,7 @@ What it checks, and where each gap would live (design/IRT-VS-SKYLIT-TESTING-PLAN
   Every run writes testing/gamma-profile/runs/<date>/<HHMM>.md (inputs, every check, the screenshots' file names,
   the operator's notes) and appends one line to testing/gamma-profile/RESULTS.md. Exit code = failures.
 """
-import argparse, json, os, sys, datetime, math, shutil
+import argparse, json, os, sys, datetime, math, shutil, subprocess
 
 def num(x):
     try: return float(x)
@@ -83,10 +87,15 @@ def main():
     ap.add_argument('--atlas-read'); ap.add_argument('--irt-read'); ap.add_argument('--shots', nargs='*', default=[])
     ap.add_argument('--note', default=''); ap.add_argument('--out', default='testing/gamma-profile/runs')
     ap.add_argument('--label', default='')
+    ap.add_argument('--indicator', default='gamma', choices=['gamma', 'daymodel', 'daystats', 'kingtracker'])
+    ap.add_argument('--dry', action='store_true', help='check only: no run file, no RESULTS.md line (tools/regress.py runs the fixtures this way)')
     a = ap.parse_args()
 
     R = read_csv(a.csv)
     AU = json.load(open(a.audit, encoding='utf-8'))
+    if a.indicator != 'gamma':
+        if a.out == 'testing/gamma-profile/runs': a.out = OTHER_FOLDERS[a.indicator] + '/runs'
+        return main_other(a, R, AU)
     results = []   # (status, section, message)
     def add(ok, sec, msg): results.append(('ok' if ok else 'FAIL', sec, msg))
     def warn(sec, msg): results.append(('warn', sec, msg))
@@ -219,6 +228,10 @@ def main():
 
     # ---------------- write the run ----------------
     fails = sum(1 for s, _, _ in results if s == 'FAIL')
+    if a.dry:
+        for s, sec, m in results: print('  %-4s [%s] %s' % (s, sec, m))
+        print('=== gp-regress (dry): %s — %d checks, %d failed ===' % ('PASS' if fails == 0 else 'FAIL', len([r for r in results if r[0] != 'warn']), fails))
+        return fails
     now = datetime.datetime.now()
     day = now.strftime('%Y-%m-%d'); od = os.path.join(a.out, day); os.makedirs(od, exist_ok=True)
     stamp = hhmm(asof).replace(':', '')[:4] if asof is not None else now.strftime('%H%M')
@@ -250,6 +263,238 @@ def main():
     for s, sec, m in results: print('  %-4s [%s] %s' % (s, sec, m))
     print('=== gp-regress: %s — %d checks, %d failed -> %s ===' % (verdict, len([r for r in results if r[0] != 'warn']), fails, os.path.join(od, name)))
     return fails
+
+# =====================================================================================================================
+# (v16.37) THE OTHER THREE INDICATORS — same rules: same moment, every row re-derived from what the panel recorded,
+# the expected picture printed for the eyes-on check, one run file + one RESULTS line.
+# =====================================================================================================================
+OTHER_FOLDERS = { 'daymodel': 'testing/day-model', 'daystats': 'testing/day-stats', 'kingtracker': 'testing/king-tracker' }
+OTHER_TITLES = { 'daymodel': 'lsDayModel', 'daystats': 'lsDayStats', 'kingtracker': 'lsKingTracker' }
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+def hhmm(so):
+    if so is None: return '?'
+    so = int(so); return '%02d:%02d:%02d' % (so // 3600, (so % 3600) // 60, so % 60)
+
+# ---- lsDayStats' formatting, ported from plugin/DayStatsLogic.h (the C++ test pins the C++; this prints the expected strip)
+def ds_clk(so):
+    if so is None or so < 0: return '--'
+    so = int(so); h = so // 3600; m = (so % 3600) // 60
+    ap = 'am' if h < 12 else 'pm'; h12 = h % 12
+    if h12 == 0: h12 = 12
+    return '%d:%02d%s' % (h12, m, ap)
+def ds_dur(mn):
+    if mn is None or mn < 0: return '--'
+    t = int(round(mn)); h = t // 60; m = t % 60
+    return ('%dh %02dm' % (h, m)) if h else ('%dm' % m)
+def ds_px1(raw, off):
+    v = num(raw)
+    return '--' if v is None else '%d' % round(v + off)
+def ds_pct(v, tilde):
+    return '--' if (v is None or v < 0) else ('~%d%%' % round(v) if tilde else '%d%%' % round(v))
+def ds_cells(row, off, expected, cond=None):
+    """row = the 17 DAYSA/DAYSE fields; -> the 12 cells lsDayStats prints"""
+    f = lambda i: row[i] if i < len(row) else ''
+    first, second = f(0), f(9)
+    t = lambda i: num(f(i))
+    tl = '~' if expected else ''
+    eq = (cond and cond.get('basis', '').startswith('read-in')) and expected
+    c = [''] * 12
+    c[0] = 'E' if expected else 'A'
+    c[1] = ('%s %s%s' % (first, '=' if eq else tl, ds_clk(t(2)))) if expected else ('%s %s %s' % (first, ds_clk(t(2)), ds_px1(f(1), off)))
+    c[2] = tl + ds_dur(t(3)); c[3] = tl + ds_dur(t(4)); c[4] = tl + ds_dur(t(5)); c[5] = tl + ds_clk(t(6)); c[6] = ds_pct(t(7), expected)
+    c[7] = tl + ds_dur(t(8))
+    mudt = (t(12) or 0) - (t(4) or 0) if (t(12) is not None and t(4) is not None) else None
+    c[8] = tl + ds_dur(mudt)
+    if expected:
+        c[9] = '%s %s%s' % (second, tl, ds_clk(t(11)))
+        if cond and cond.get('lastHr') is not None and cond.get('lastHr') >= 0: c[9] += '  %d%% last hr' % cond['lastHr']
+    else:
+        c[9] = '%s %s %s' % (second, ds_clk(t(11)), ds_px1(f(10), off))
+    c[10] = tl + ds_dur(t(12))
+    c[11] = ('~$%s  %sp' % (f(14), f(13))) if expected else ('$%s  %sp' % (f(14), f(13)))
+    return c
+
+def derive_day(audit_path):
+    try:
+        out = subprocess.run(['node', os.path.join(HERE, 'day-derive.js'), audit_path], capture_output=True, text=True, timeout=60)
+        if out.returncode != 0: return { 'err': 'day-derive.js rc %s: %s' % (out.returncode, (out.stderr or '')[-300:]) }
+        return json.loads(out.stdout)
+    except Exception as e:
+        return { 'err': str(e) }
+
+def row_eq(a, b, tol=None):
+    """CSV row (list of str) vs derived row; numeric fields compared with a tolerance when given"""
+    if a is None or b is None or len(a) != len(b): return False
+    for x, y in zip(a, b):
+        if x == y: continue
+        nx, ny = num(x), num(y)
+        if tol is not None and nx is not None and ny is not None and abs(nx - ny) <= tol: continue
+        return False
+    return True
+
+def main_other(a, R, AU):
+    results = []
+    def add(ok, sec, msg): results.append(('ok' if ok else 'FAIL', sec, msg))
+    def warn(sec, msg): results.append(('warn', sec, msg))
+    asof = num(R.get('ASOF', [['']])[0][0]); au_ct = AU.get('ct')
+    add(asof is not None and au_ct is not None and abs(asof - au_ct) <= 5, 'time', 'CSV ASOF %s and audit ct %s are the same export (<=5s)' % (asof, au_ct))
+    SR = num(R.get('SCALEREF', [['']])[0][0]); SRrow = R.get('SCALEREF', [['']])[0]
+    SPOT = num(R.get('SPOT', [['']])[0][0])
+    IR = json.load(open(a.irt_read)) if a.irt_read else None
+    off = num(IR.get('offset')) if (IR and IR.get('offset') is not None) else ((num(IR['chart_close']) - SR) if (IR and IR.get('chart_close') is not None and SR) else 0.0)
+    exp = {}
+    ind = a.indicator
+    if ind in ('daymodel', 'daystats'):
+        Y = AU.get('day')
+        add(bool(Y) and not Y.get('err'), 'A', 'the audit carries AU.day (panel >= 16.37): %s' % ('yes' if Y and not Y.get('err') else (Y or {}).get('err', 'absent — the day rows cannot be re-derived')))
+        DER = derive_day(a.audit) if (Y and not Y.get('err')) else { 'err': 'no AU.day' }
+        if DER.get('err'):
+            add(False, 'A', 'day-derive.js: %s' % DER['err'])
+        else:
+            el = Y.get('elapsed')
+            stage = 'pre-open' if (el is None or el < 30) else ('open30' if el < 60 else 'open60')
+            if ind == 'daymodel':
+                for k, tol in (('DAYACT', 0.011), ('DAYEXP', 0.011), ('EXPMODEL', 0.051)):
+                    csv = R.get(k, [None])[0]; der = DER.get(k)
+                    add(row_eq(csv, der, tol), 'A', '%s row re-derived from the audit == the CSV (%s vs %s)' % (k, ','.join(csv or ['absent']), ','.join(der or ['absent'])))
+                EM = R.get('EXPMODEL', [None])[0]
+                if EM:
+                    basis = EM[0]
+                    okb = { 'pre-open': ('exante', 'em-exante', 'weekday'), 'open30': ('open30', 'em-open30', 'weekday'), 'open60': ('open60', 'em-open60', 'weekday') }[stage]
+                    add(basis in okb, 'A', 'basis %s fits the stage (%s min after the open -> %s)' % (basis, el, '/'.join(okb)))
+                    f = num(EM[3]); add(f is not None and 0.05 <= f <= 0.95, 'A', 'placement f %s inside [0.05, 0.95]' % EM[3])
+                    if stage == 'pre-open': add(f == 0.5, 'A', 'pre-open: the candle is symmetric (f 0.50)')
+                    add((EM[5] in ('pin', 'est') and EM[4] != '') or (EM[5] == '' and EM[4] == '' and not basis.startswith('em-')), 'A', 'EM %s (%s): present with a pin state, or absent with a non-EM basis' % (EM[4] or '-', EM[5] or '-'))
+                    if Y.get('em') and Y['em'].get('atMin') is not None: add(Y['em']['atMin'] <= 60, 'A', 'the EM was pinned %s min after the open (<= 60)' % Y['em']['atMin'])
+                DE = R.get('DAYEXP', [None])[0]
+                if DE:
+                    o, h, l, c = [num(x) for x in DE[:4]]
+                    add(h is not None and l is not None and h >= o >= l and h >= c >= l, 'A', 'DAYEXP O %s inside [L %s, H %s], close %s inside too' % (o, l, h, c))
+                    exp['expected_candle_es'] = dict(o=o, h=h, l=l, c=c)
+                    exp['expected_candle_chart'] = dict(o=o + off, h=h + off, l=l + off, c=c + off)
+                DA = R.get('DAYACT', [None])[0]
+                if DA:
+                    exp['actual_candle_es'] = dict(zip('ohlc', [num(x) for x in DA[:4]]))
+                    exp['actual_candle_chart'] = dict(zip('ohlc', [num(x) + off for x in DA[:4]]))
+                exp['model'] = DER.get('model'); exp['stage'] = stage; exp['elapsed_min'] = el
+                for k in ('DAYEHOD', 'DAYELOD', 'DAYHOD', 'DAYLOD', 'DAYEMUD', 'DAYMUD'):
+                    if k in R: exp[k] = R[k][0]
+                exp['basis_note'] = 'chart price = ES price + (chart close at the SCALEREF minute %s - SCALEREF %s); offset used here: %+.2f' % (SRrow[1] if len(SRrow) > 1 else '?', SR, off)
+                if IR:
+                    for k in ('exp', 'act'):
+                        if k in IR:
+                            want = exp['expected_candle_chart' if k == 'exp' else 'actual_candle_chart']
+                            for f_ in ('h', 'l', 'c', 'o'):
+                                if f_ in IR[k]: add(abs(num(IR[k][f_]) - want[f_]) <= 1.0, 'B', 'IRT %s candle %s = %s (expected %.2f on the chart)' % (k, f_, IR[k][f_], want[f_]))
+                    if 'basis' in IR: add(IR['basis'] == (EM[0] if EM else None), 'B', 'IRT basis chip reads %s (expected %s)' % (IR['basis'], EM[0] if EM else None))
+                else:
+                    warn('B', 'no --irt-read: the IRT candle was not transcribed; the expected chart below is the checklist')
+            else:   # daystats
+                for k, tol in (('DAYSA', 0.011), ('DAYSE', 0.011), ('CONDE', 0.051)):
+                    csv = R.get(k, [None])[0]; der = DER.get(k)
+                    if k == 'DAYSA' and csv is None and der is None:
+                        warn('A', 'no DAYSA row yet (hodLod not ready) — consistent with the audit (no actual)'); continue
+                    add(row_eq(csv, der, tol), 'A', '%s row re-derived from the audit == the CSV (%s vs %s)' % (k, ','.join(csv or ['absent']), ','.join(der or ['absent'])))
+                CE = R.get('CONDE', [None])[0]
+                if CE:
+                    b = CE[0]
+                    okb = { 'pre-open': ('pre-open',), 'open30': ('pos30-bottom', 'pos30-middle', 'pos30-top', 'pre-open'), 'open60': ('pos60-bottom+orclock', 'pos60-middle', 'pos60-top+orclock', 'pos30-bottom', 'pos30-middle', 'pos30-top', 'pre-open') }[stage]
+                    add(b in okb, 'A', 'CONDE basis %s fits the stage (%s min -> %s)' % (b, el, '/'.join(okb)))
+                    add(num(CE[2]) is not None and num(CE[1]) is not None and num(CE[2]) > num(CE[1]), 'A', 'CONDE t2 %s > t1 %s' % (CE[2], CE[1]))
+                    add(len(CE) >= 7 and CE[5] != '' and CE[6] != '', 'A', 'CONDE carries the 2ND ladder (%s%% last hr / %s%% last 30)' % (CE[5] if len(CE) > 5 else '?', CE[6] if len(CE) > 6 else '?'))
+                SA = R.get('DAYSA', [None])[0]; SE = R.get('DAYSE', [None])[0]
+                if SA and SE:
+                    add(not (SA[2] == SE[2] and SA[3] == SE[3] and (Y.get('call') or {}).get('in')), 'A', '(16.36) the E row does not copy the actual 1ST clock/took after the READ (A %s/%s vs E %s/%s)' % (SA[2], SA[3], SE[2], SE[3]))
+                cond = { 'basis': CE[0], 'lastHr': num(CE[5]) if len(CE) > 5 and CE[5] != '' else -1 } if CE else None
+                if SA: exp['A_cells'] = ds_cells(SA, off, False)
+                if SE: exp['E_cells'] = ds_cells(SE, off, True, cond)
+                exp['stage'] = stage; exp['elapsed_min'] = el; exp['cond'] = DER.get('cond')
+                exp['basis_note'] = 'A prices land on the chart (+%.2f); E clocks = open + t1 / t2; the 2ND cell carries the ladder' % off
+                if IR:
+                    for k in ('A', 'E'):
+                        if k in IR:
+                            want = exp.get(k + '_cells') or []
+                            for i, cell in enumerate(IR[k]):
+                                if cell is None or cell == '': continue
+                                w = want[i] if i < len(want) else None
+                                add(str(cell).replace(' ', '') == (w or '').replace(' ', ''), 'B', 'IRT %s cell %d reads "%s" (expected "%s")' % (k, i, cell, w))
+                else:
+                    warn('B', 'no --irt-read: the IRT strip was not transcribed; the expected cells below are the checklist')
+    else:   # kingtracker
+        rolls = AU.get('rolls') or {}; KN = AU.get('kingNow') or {}
+        fam = 'ES'
+        for book in ('SPX', 'SPY'):
+            steps = [t for t in R.get('KINGTRACK', []) if len(t) >= 5 and t[0] == fam and t[1] == book]
+            now = [t for t in R.get('KINGNOW', []) if len(t) >= 4 and t[0] == fam and t[1] == book]
+            n = len(steps)
+            if book in rolls and rolls[book] is not None and rolls[book] >= 0:
+                add(n == rolls[book] + 1, 'A', '%s: %d KINGTRACK steps == audit rolls %s + 1' % (book, n, rolls[book]))
+            if n:
+                so = [num(t[2]) for t in steps]
+                add(all(so[i] < so[i + 1] for i in range(n - 1)), 'A', '%s: the steps are in time order' % book)
+                add(all(num(steps[i][4]) != num(steps[i + 1][4]) for i in range(n - 1)), 'A', '%s: no two consecutive steps on the same strike' % book)
+                ratios = [num(t[3]) / num(t[4]) for t in steps if num(t[4])]
+                add(all(0.95 < r < 1.05 for r in ratios) if book == 'SPX' else all(9.5 < r < 10.6 for r in ratios), 'A', '%s: every step price / strike is the book\'s ratio (%s)' % (book, ', '.join('%.4f' % r for r in ratios[:6])))
+            kn = KN.get(book)
+            if kn and kn.get('es') is not None:
+                add(bool(now) and abs(num(now[0][2]) - kn['es']) < 0.011 and num(now[0][3]) == kn.get('strike'), 'A', '%s: KINGNOW %s == audit kingNow (%s @ %s)' % (book, ','.join(now[0][2:]) if now else 'absent', kn.get('es'), kn.get('strike')))
+                if n:
+                    last = num(steps[-1][4])
+                    if last == kn.get('strike'): add(True, 'A', '%s: the last step is the live King (%s)' % (book, last))
+                    else: warn('A', '%s: KINGNOW %s differs from the last step %s — a challenger dwelling (not yet confirmed KTRK_CONFIRM_N times), or the strip has moved since' % (book, kn.get('strike'), last))
+            else:
+                add(not now, 'A', '%s: no KINGNOW row when the audit has no live King' % book)
+            # the expected chart (KingTrackerLogic.h: every step re-derived as strike x nowPx/nowStrike, then + the SCALEREF offset)
+            if n and now and num(now[0][3]):
+                r = num(now[0][2]) / num(now[0][3])
+                exp[book] = { 'steps': [[hhmm(num(t[2])), num(t[4]), round(num(t[4]) * r + off, 2)] for t in steps], 'now': [num(now[0][3]), round(num(now[0][2]) + off, 2), now[0][4] if len(now[0]) > 4 else ''], 'ratio_now': round(r, 5) }
+        exp['basis_note'] = 'chart price = re-derived price + (chart close at the SCALEREF minute - SCALEREF %s); offset used here: %+.2f; the plugin refuses an offset > 300' % (SR, off)
+        if IR:
+            for book in ('SPX', 'SPY'):
+                if book in IR and book in exp:
+                    if 'now' in IR[book]: add(abs(num(IR[book]['now']) - exp[book]['now'][1]) <= 1.0, 'B', '%s: the live King line on IRT at %s (expected %s on the chart)' % (book, IR[book]['now'], exp[book]['now'][1]))
+                    if 'steps' in IR[book]: add(len(IR[book]['steps']) == len(exp[book]['steps']), 'B', '%s: %d steps drawn (expected %d)' % (book, len(IR[book]['steps']), len(exp[book]['steps'])))
+                    if 'strike_label' in IR[book]: add(num(IR[book]['strike_label']) == exp[book]['now'][0], 'B', '%s: the label reads strike %s (expected %s)' % (book, IR[book]['strike_label'], exp[book]['now'][0]))
+        else:
+            warn('B', 'no --irt-read: the IRT lines were not transcribed; the expected chart below is the checklist')
+    # ---- write the run
+    fails = sum(1 for s, _, _ in results if s == 'FAIL')
+    if a.dry:
+        for s_, sec, m in results: print('  %-4s [%s] %s' % (s_, sec, m))
+        print('=== gp-regress %s (dry): %s — %d checks, %d failed ===' % (ind, 'PASS' if fails == 0 else 'FAIL', len([r for r in results if r[0] != 'warn']), fails))
+        return fails
+    now_ = datetime.datetime.now(); day = now_.strftime('%Y-%m-%d'); od = os.path.join(a.out, day); os.makedirs(od, exist_ok=True)
+    stamp = hhmm(asof).replace(':', '')[:4] if asof is not None else now_.strftime('%H%M')
+    name = stamp + (('-' + a.label) if a.label else '') + '.md'
+    shots = []
+    for s_ in a.shots:
+        if os.path.exists(s_):
+            dst = os.path.join(od, stamp + '-' + os.path.basename(s_)); shutil.copy(s_, dst); shots.append(os.path.basename(dst))
+    verdict = 'PASS' if fails == 0 else 'FAIL'
+    lines = ['# %s regression — %s %s CT — %s' % (OTHER_TITLES[ind], day, hhmm(asof), verdict), '',
+             '_CSV ASOF %s · panel %s · SPOT %s · SCALEREF %s · elapsed %s min · rolls %s_' % (hhmm(asof), AU.get('v'), SPOT, SR, (AU.get('day') or {}).get('elapsed'), AU.get('rolls')), '']
+    if a.note: lines += ['**Operator / runner note:** ' + a.note, '']
+    if shots: lines += ['Screenshots: ' + ', '.join('`%s`' % s_ for s_ in shots), '']
+    for sec, title in (('time', 'Timing'), ('A', 'Gate A — the panel\'s read -> CSV (re-derived from the audit)'), ('B', 'Gate B — CSV -> IRT')):
+        rows = [r for r in results if r[1] == sec]
+        if not rows: continue
+        lines.append('## ' + title); lines.append('')
+        for s_, _, m in rows: lines.append('- %s  %s' % ({'ok': '✅', 'FAIL': '❌', 'warn': '⚠️'}[s_], m))
+        lines.append('')
+    if exp: lines += ['## Expected picture (the Gate B checklist for the IRT screenshot)', '', '```json', json.dumps(exp, indent=1, default=str), '```', '']
+    with open(os.path.join(od, name), 'w', encoding='utf-8') as f: f.write('\n'.join(lines))
+    res_path = os.path.join(os.path.dirname(a.out.rstrip('/')), 'RESULTS.md')
+    new = not os.path.exists(res_path)
+    with open(res_path, 'a', encoding='utf-8') as f:
+        if new: f.write('# %s — live runs (same moment: CSV + audit + IRT screenshot)\n\n| date | CSV time | panel | verdict | checks | note | run |\n|---|---|---|---|---|---|---|\n' % OTHER_TITLES[ind])
+        f.write('| %s | %s | %s | %s | %d/%d | %s | [%s](runs/%s/%s) |\n' % (day, hhmm(asof), AU.get('v'), verdict, sum(1 for s_, _, _ in results if s_ == 'ok'), len([r for r in results if r[0] != 'warn']),
+                (a.note or '').replace('|', '/')[:80], name.replace('.md', ''), day, name))
+    for s_, sec, m in results: print('  %-4s [%s] %s' % (s_, sec, m))
+    if exp: print('--- expected picture ---'); print(json.dumps(exp, indent=1, default=str))
+    print('=== gp-regress %s: %s — %d checks, %d failed -> %s ===' % (ind, verdict, len([r for r in results if r[0] != 'warn']), fails, os.path.join(od, name)))
+    return fails
+
 
 if __name__ == '__main__':
     sys.exit(main())

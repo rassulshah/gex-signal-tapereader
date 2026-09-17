@@ -7,6 +7,10 @@ referenced in the future and results and notes should also be documented."_
 
 Results trail: **`RESULTS.md`** (one line per run) · per-run detail + screenshots: **`runs/<date>/`**.
 
+_2026-09-17: this suite is one of four — the master document is **`testing/REGRESSION.md`**, the runner for all of them
+`tools/regress.py [all|gamma|daymodel|daystats|kingtracker]` (`regress.bat` on his machine), the all-indicator trail
+`testing/RESULTS.md`. The pinned fixture pairs here (A-0947, IF-1020, 1325, 1426) run as Gate L on every build._
+
 ---
 
 ## 0. What "consistent" means here — the pipeline and its three gates

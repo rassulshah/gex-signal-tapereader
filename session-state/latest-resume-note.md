@@ -1,5 +1,28 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-16 22:00 CT (v16.35 / companion 1.21 / GP 0.50 / DS 0.7) · **panel v16.36** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.55**, **lsDayModel v0.16**, **lsDayStats v0.7**, **lsKingTracker v0.9** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 03:30 CT (v16.37 / the all-indicator regression) · **panel v16.37** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.56**, **lsDayModel v0.17**, **lsDayStats v0.8**, **lsKingTracker v0.10** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~03:30 CT — v16.37 + GP 0.56 / DM 0.17 / DS 0.8 / KT 0.10: THE REGRESSION FOR ALL FOUR INDICATORS. START HERE.
+
+His last instruction of the 16th: *"I had told you to make a regression and you did it for gamma profile. This regression
+needs to be extended to the other indicators and you need to keep updating the test cases, so you can fire the regression
+either collectively or separately for the indicators."* Built and green (21 suites): **`python3 tools/regress.py
+[all|gamma|daymodel|daystats|kingtracker]`** here, **`regress.bat [indicator]`** on his machine; master doc
+**`testing/REGRESSION.md`**, trail **`testing/RESULTS.md`**. Three gates per indicator — A (node, executes the panel's
+builders), B (C++ logic headers, no SDK: `DayModelLogic.h` / `DayStatsLogic.h` / `KingTrackerLogic.h` /
+`ContractOffsetLogic.h` are NEW and the four .cpp now delegate to them — a refactor, no behaviour change), L (the live
+runner `gp-regress.py --indicator …` re-run on pinned CSV+audit fixtures). New this build: `test_kingtracker_rows.js`,
+`test_day_export.js` (the whole day section end to end, then `tools/day-derive.js` must reproduce every row from the
+audit), the panel's **`AU.day`** audit block (every input the candle and the E row used), the runner for the other three
+with the expected picture + `CHECKLIST.md` per indicator. **It caught one on its first run:** the pre-EM range stages had
+used `<` on the opening window (the 09:00 bar dropped) while everything else and both studies use `<=` — fixed in 16.37.
+**Standing rule (BUILD-CHECKLIST 2b): touch an indicator → update its cases in the same commit → its regression green.**
+
+He needs (nothing is installed yet from this build): Tampermonkey **16.37** (panel; AU.day) + `compile-gammaprofile.bat`,
+`compile-daymodel.bat`, `compile-daystats.bat`, `compile-kingtracker.bat` (refactors; the shared anchor). Then, once, on
+his machine: `regress.bat` — the first run of the suites on MSVC (never done). Next: stage his first real 16.37 export
+(CSV + audit) as the day fixtures (`testing/day-model/fixtures/`, `day-stats/`, `king-tracker/`, and the `live` lists in
+`tools/regress.py`) — the day fixtures are SYNTHETIC until then. Still open from the 16th: the Day Stats A-row HOD/LOD
+drift after the close (first check with a live export), item E, the volume/trend-day evening, the NQ cross-check.
 
 # ⚠⚠⚠ 2026-09-16 ~22:25 CT — v16.36 + lsGammaProfile 0.55. START HERE.
 

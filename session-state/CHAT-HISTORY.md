@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-17 · v16.36 · session `f9c89c64` — v16.36 — E row stays an expectation; GP 0.51–0.55 pill/King/IF default; tonight\x27s builds
+## 2026-09-17 · v16.37 · session `f9c89c64`
 
-_211 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_215 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -2752,6 +2752,33 @@ As for the rest of that screenshot — everything else from tonight is in it and
 > 
 > _[sent while I was working — a queued message]_
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> I only want to see one or the other and should be able to switch between them. lets try IF as default for now.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> I had told you to make a regression and you did it for gamma profile . this regression needs to be extended to the other indicators and you need to keep updating the test cases , so you can fire the regression either collectively or seperately for the indicators
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> the first sample SEEDS the journey (7500 @ 08:33)
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> export off -> no sampling
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (03:19):** Now the `AU.day` block in the panel (16.37) — it goes right after the day section so every input the model used is on the audit.
+Now the end-to-end Gate A test for the day section — it runs `gammaProfileBuild` with a pinned morning, checks the rows, then feeds the audit to `day-derive.js` and diffs.
+Now add `test_day_export.js` to the map and extend the live runner with `--indicator`.
+Now the docs. First the master `testing/REGRESSION.md`.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -3622,6 +3649,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+3bc41fe v16.36: the Day Stats E row keeps the stage's expectation after the READ (it had copied the actual 1ST)
 16320f3 gex: sync 16-Wed-09 22:00
 4347664 gex: sync 16-Wed-09 21:54
 94066bb gex: sync 16-Wed-09 21:48
@@ -3633,7 +3661,6 @@ d0a787b gex: sync 16-Wed-09 21:32
 bf2c902 gex: sync 16-Wed-09 21:16
 8cb5848 gex: sync 16-Wed-09 21:14
 0693f50 gex: sync 16-Wed-09 21:04
-6cd8151 gex: sync 16-Wed-09 20:58
 ```
 
 ---

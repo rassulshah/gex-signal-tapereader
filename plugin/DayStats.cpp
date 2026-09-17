@@ -25,6 +25,7 @@
  *  from under the getters and silently scrambles settings — see the gamma plugin).
  ********************************************************************************/
 #include "irtsdk.h"
+#include "DayStatsLogic.h"   // (v0.8) the row grammar, the formatting and the cells, testable without IRT
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -58,17 +59,7 @@ struct Settings {
 };
 
 // one parsed stats row (raw strings; formatted at render)
-struct StatRow {
-    bool valid;
-    std::string first, second;
-    std::string firstPx, secondPx;
-    double firstClk, secondClk, wendSo;   // secOfDay (<0 = missing)
-    double took, bop, wick, mud, gap;     // minutes (<0 = missing)
-    double wickPct;                       // percent (<0 = missing)
-    std::string rngPts, rngUsd, rngP25, rngP75;
-    StatRow() : valid(false), firstClk(-1), secondClk(-1), wendSo(-1),
-                took(-1), bop(-1), wick(-1), mud(-1), gap(-1), wickPct(-1) {}
-};
+typedef dsl::StatRow StatRow;   // (v0.8) DayStatsLogic.h
 
 // ---------------------------------------------------------------------------
 class DayStats : public cppExtension {
@@ -163,32 +154,9 @@ void DayStats::readSettings(Settings& S)
 // ---- number/format helpers ------------------------------------------------
 double DayStats::num(const std::string& s) { if (s.empty()) return -1; return atof(s.c_str()); }
 
-std::string DayStats::clk(double so)
-{
-    if (so < 0) return "--";
-    int s = (int)(so + 0.5);
-    int h = s / 3600, m = (s % 3600) / 60;
-    const char* ap = (h < 12) ? "am" : "pm";
-    int h12 = h % 12; if (h12 == 0) h12 = 12;
-    char b[16]; sprintf_s(b, sizeof(b), "%d:%02d%s", h12, m, ap);
-    return std::string(b);
-}
-std::string DayStats::dur(double m)
-{
-    if (m < 0) return "--";
-    int mins = (int)(m + 0.5);
-    char b[16];
-    if (mins >= 60) sprintf_s(b, sizeof(b), "%dh %02dm", mins / 60, mins % 60);
-    else            sprintf_s(b, sizeof(b), "%dm", mins);
-    return std::string(b);
-}
-std::string DayStats::px1(const std::string& raw)
-{
-    if (raw.empty()) return "--";
-    double v = atof(raw.c_str()) + priceOff;   // (v0.3) show the price in the chart's contract
-    char b[16]; sprintf_s(b, sizeof(b), "%d", (int)(v + 0.5));
-    return std::string(b);
-}
+std::string DayStats::clk(double so)              { return dsl::clk(so); }              // (v0.8) DayStatsLogic.h
+std::string DayStats::dur(double m)               { return dsl::dur(m); }
+std::string DayStats::px1(const std::string& raw) { return dsl::px1(raw, priceOff); }
 
 void DayStats::textLJ(short x, short y, const char* s, COLOR col, int sz, bool bold)
 {
@@ -226,29 +194,11 @@ void DayStats::load()
         while (std::getline(ss, it, ',')) t.push_back(it);
         if (t.size() < 2) continue;
         if ((t[0] == "DAYSA" || t[0] == "DAYSE") && t.size() >= 16) {
-            StatRow r;
-            r.first     = t[1];
-            r.firstPx   = t[2];
-            r.firstClk  = num(t[3]);
-            r.took      = num(t[4]);
-            r.bop       = num(t[5]);
-            r.wick      = num(t[6]);
-            r.wendSo    = num(t[7]);
-            r.wickPct   = num(t[8]);
-            r.mud       = num(t[9]);
-            r.second    = t[10];
-            r.secondPx  = t[11];
-            r.secondClk = num(t[12]);
-            r.gap       = num(t[13]);
-            r.rngPts    = t[14];
-            r.rngUsd    = t[15];
-            r.rngP25    = (t.size() > 16) ? t[16] : "";
-            r.rngP75    = (t.size() > 17) ? t[17] : "";
-            r.valid     = true;
+            StatRow r; dsl::parseStatRow(t, r);   // (v0.8) DayStatsLogic.h
             if (t[0] == "DAYSA") A = r; else E = r;
         } else if (t[0] == "CONDE" && t.size() >= 6) {
             // (v0.7) CONDE,<basis>,<t1>,<t2>,<lod%>,<n>[,<lastHr%>,<last30%>] — which stage drew the E clocks (panel 16.32/16.35)
-            condBasis = t[1]; condLastHr = (t.size() >= 7) ? atoi(t[6].c_str()) : -1; condLast30 = (t.size() >= 8) ? atoi(t[7].c_str()) : -1;
+            dsl::Cond c; dsl::parseCond(t, c); condBasis = c.basis; condLastHr = c.lastHr; condLast30 = c.last30;   // (v0.8) DayStatsLogic.h
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
             if (t.size() >= 3) daydate = t[2];
@@ -288,53 +238,15 @@ void DayStats::render(const Settings& S)
                               "MUD", "MUDt", "2ND", "HL GAP", "HL RNG" };
     std::string aCell[NCOL], eCell[NCOL];
 
-    // A cells
-    if (A.valid) {
-        double aMudt = (A.gap >= 0 && A.bop >= 0) ? (A.gap - A.bop) : -1;
-        aCell[0]="A"; eCell[0]="";
-        aCell[1]= A.first + " " + clk(A.firstClk) + " " + px1(A.firstPx);
-        aCell[2]= dur(A.took);
-        aCell[3]= dur(A.bop);
-        aCell[4]= dur(A.wick);
-        aCell[5]= clk(A.wendSo);
-        aCell[6]= (A.wickPct>=0) ? (std::to_string((int)(A.wickPct+0.5))+"%") : "--";
-        aCell[7]= dur(A.mud);
-        aCell[8]= dur(aMudt);
-        aCell[9]= A.second + " " + clk(A.secondClk) + " " + px1(A.secondPx);
-        aCell[10]= dur(A.gap);
-        aCell[11]= (A.rngUsd.empty()?std::string("--"):("$"+A.rngUsd)) + (A.rngPts.empty()?std::string(""):("  "+A.rngPts+"p"));   // (v0.4) $ and points in one cell
-    }
-    // E cells (base-rate medians; '~' marks them)
-    if (E.valid) {
-        double eMudt = (E.gap >= 0 && E.bop >= 0) ? (E.gap - E.bop) : -1;
-        eCell[0]="E";
-        // (v0.7) a READ-IN 1ST is the actual first extreme, not an expectation: print it with '=' instead of '~'
-        eCell[1]= E.first + (condBasis.rfind("read-in", 0) == 0 ? " =" : " ~") + clk(E.firstClk);
-        eCell[2]= "~"+dur(E.took);
-        eCell[3]= "~"+dur(E.bop);
-        eCell[4]= "~"+dur(E.wick);
-        eCell[5]= "~"+clk(E.wendSo);
-        eCell[6]= (E.wickPct>=0) ? ("~"+std::to_string((int)(E.wickPct+0.5))+"%") : "--";
-        eCell[7]= "~"+dur(E.mud);
-        eCell[8]= "~"+dur(eMudt);
-        // (v0.7) THE 2ND CLOCK IS A DISTRIBUTION, NOT A TIME (study-daystats-cond: 93 min MAE whatever the morning says):
-        // the median stays, and the share of days whose second extreme prints in the LAST HOUR rides beside it.
-        eCell[9]= E.second + " ~" + clk(E.secondClk) + (condLastHr >= 0 ? ("  " + std::to_string(condLastHr) + "% last hr") : std::string());
-        eCell[10]= "~"+dur(E.gap);
-        eCell[11]= (E.rngUsd.empty()?std::string("--"):("~$"+E.rngUsd)) + (E.rngPts.empty()?std::string(""):("  ~"+E.rngPts+"p"));   // (v0.4) $ and points in one cell
-    }
+    // (v0.8) the cells come from DayStatsLogic.h — the same strings the logic test pins
+    if (A.valid) { dsl::actualCells(A, priceOff, aCell); eCell[0] = ""; }
+    if (E.valid) { dsl::Cond c; c.basis = condBasis; c.lastHr = condLastHr; c.last30 = condLast30; dsl::expectedCells(E, c, eCell); }
 
     // (v0.4) per-cell colour-coding for the ACTUAL row — operator spec: the LOD extreme reads red, the HOD
     // extreme green, and MUD by the day's phase (markup = the LOD was made first and price marked up → green;
     // markdown = the HOD was made first → red).
     COLOR aCol[NCOL]; for (int c = 0; c < NCOL; c++) aCol[c] = C_TXT;
-    if (A.valid) {
-        bool firstLOD = (A.first == "LOD"), firstHOD = (A.first == "HOD");
-        bool secLOD   = (A.second == "LOD"), secHOD  = (A.second == "HOD");
-        if      (firstLOD) aCol[1] = C_DNR;   else if (firstHOD) aCol[1] = C_UPG;   // 1ST extreme
-        if      (secLOD)   aCol[9] = C_DNR;   else if (secHOD)   aCol[9] = C_UPG;   // 2ND extreme
-        if      (firstLOD) aCol[7] = C_UPG;   else if (firstHOD) aCol[7] = C_DNR;   // MUD: markup green / markdown red
-    }
+    if (A.valid) { int tone[dsl::NCOL]; dsl::actualTone(A, tone); for (int c = 0; c < NCOL; c++) aCol[c] = tone[c] > 0 ? C_UPG : (tone[c] < 0 ? C_DNR : C_TXT); }
 
     // column widths = max over header / A / E
     short colW[NCOL];
@@ -450,6 +362,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.7");
+    p->setVersion("0.8");
     return p;
 }

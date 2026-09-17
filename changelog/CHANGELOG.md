@@ -1,3 +1,51 @@
+## v16.37 + lsGammaProfile 0.56 / lsDayModel 0.17 / lsDayStats 0.8 / lsKingTracker 0.10 — THE REGRESSION FOR ALL FOUR INDICATORS (2026-09-17, ~03:30 CT)
+
+Operator: "I had told you to make a regression and you did it for gamma profile. This regression needs to be extended to
+the other indicators and you need to keep updating the test cases, so you can fire the regression either collectively or
+separately for the indicators." Master doc `testing/REGRESSION.md`; runner `tools/regress.py [all|gamma|daymodel|daystats|
+kingtracker]` (cloud) and `regress.bat` (his machine — finds Python, Node and MSVC through vswhere the way
+`run-logic-tests.bat` does); trail `testing/RESULTS.md` (one dated block per run, all indicators). Exit code = failing suites.
+
+WHAT WAS BUILT, and why each piece exists:
+- **The plugins' decisions moved into SDK-free headers so they can be tested at all.** `DayModelLogic.h` (bar-stamp
+  detection, the RTH/evening/pre-open windows, PDH/PDL/ONH/ONL, the actual day, the open-anchored spread, offsets, stale),
+  `DayStatsLogic.h` (row grammar incl. CONDE, clocks, the twelve cells, the ladder, the tones), `KingTrackerLogic.h`
+  (grammar, the v0.6 re-derivation, anchor, clamp, shift, stale), `ContractOffsetLogic.h` (the SCALEREF-minute anchor,
+  shared by lsGammaProfile and lsKingTracker). The .cpp files delegate; behaviour unchanged (0.56 / 0.17 / 0.8 / 0.10 are
+  refactors + `applyContractOffset` through the shared anchor). Gate B: `test_daymodel_logic.cpp` 23, `test_daystats_logic.cpp`
+  19, `test_kingtracker_logic.cpp` 16, `test_contractoffset_logic.cpp` 15 (+ the existing gamma 57). `run-logic-tests.bat`
+  builds and runs all five, or one by name.
+- **Gate A for the King tracker's panel side** — `test_kingtracker_rows.js` (21 + 2 mutations): `ktrkSample` executed with
+  a stubbed tape — the seed, the KTRK_CONFIRM_N dwell, the dwell reset, the anti-oscillation lookback, a new day, export
+  off — and the KINGTRACK / KINGNOW grammar the plugin parses.
+- **Gate A for the WHOLE day section, end to end** — `test_day_export.js` (38): `gammaProfileBuild()` on a constructed
+  10:33 CT morning (bars, base with condstats/predict, an EM pin, the READ) asserts DAYACT / DAYEXP / EXPMODEL / CONDE /
+  DAYSE / DAYSA, the pre-open stage at 12 min, the no-EM path, and a placement mutation. THEN it feeds the audit to
+  `tools/day-derive.js` and requires every row back — the exact check the live runner makes on a real export.
+- **`AU.day` on the audit (16.37)** — every input the day model and the conditional E row used at that export (open,
+  elapsed, both opening windows incl. their close, scale, base incl. condstats/predict, prior-day range, the EM pin, the
+  model output, the CE, the actual day, the call). Without it no one can say WHY a candle was drawn where it was.
+- **The live runner for the other three** — `tools/gp-regress.py --indicator daymodel|daystats|kingtracker`: the day
+  rows re-derived from `AU.day` by the panel's own functions (`day-derive.js`), stage-vs-elapsed rules, the 16.36 rule
+  (E never copies A's 1ST after the READ), the King rows vs `AU.rolls`/`AU.kingNow` and the v0.6 re-derivation; each prints
+  the EXPECTED picture (candle in chart price / the twelve cells / the steps) for its `CHECKLIST.md`, takes `--irt-read`,
+  writes `testing/<indicator>/runs/<date>/<HHMM>.md` + `RESULTS.md`. `--dry` = check only; `tools/regress.py` runs the
+  pinned fixture pairs that way as Gate L (gamma: A-0947, IF-1020, 1325, 1426 · the others: `synth-1033`, written by
+  `GPTS_DUMP=<dir> node test_day_export.js`).
+
+WHAT IT CAUGHT ON THE FIRST RUN (the reason regressions exist): the pre-EM range stages (16.18) filtered the opening
+window as `b.so < open+30·60` — the 09:00 bar dropped — while `gpOpenWindow`, the EM model, the conditional E row and BOTH
+studies (`study-hodlod.py`, `study-em-range.py`: `r[0] <= RTH_A + 30*60`) include the bar ending on the minute. One bar
+short of the coefficients' own definition, and two different windows inside one export. 16.37: the stages and the opening
+drive read `w30GP` / `w60GP` (`gpOpenWindow` now carries the window's close). Recorded in `testing/REGRESSION.md` §4.
+
+Standing rule, now on `tools/BUILD-CHECKLIST.md` 2b: a build that touches an indicator's sources (named in
+`tools/regress.py`) updates that indicator's cases in the same commit, and is not done until its regression is green.
+Also: `tools/shim/shim.h` (the MSVC-isms for the cloud's g++ syntax check, `--syntax`), `plugin/.regress-bin/` ignored.
+Not yet: `regress.bat` / `run-logic-tests.bat` on his MSVC; a REAL 16.37 export as the day fixtures (synthetic until then).
+Full run 2026-09-17 03:2x CT: 21 suites, ALL GREEN (gamma 65/24/57/15 + 4 fixtures · daymodel 34/38/176/23 + 1 ·
+daystats 27/38/176/19 + 1 · kingtracker 21/16/15 + 1); smoke clean.
+
 ## v16.36 — the Day Stats E row stays an EXPECTATION after the READ (2026-09-16, ~22:25 CT)
 
 Operator: "the took and the 1st hod time is the same exact. how can that be?" — because 16.32's read-in branch replaced

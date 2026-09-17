@@ -26,6 +26,8 @@
  *  Parameter indices numbered EXPLICITLY (pc++); NO setLabelParameter headers.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested
+#include "KingTrackerLogic.h"      // (v0.10) the row grammar, the re-derivation, the anchor — testable without IRT
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -55,8 +57,8 @@ static const char* BOOK_NAME[NBOOK] = { "SPX", "SPY", "QQQ", "NDX" };
 static const char* BOOK_FAM [NBOOK] = { "ES",  "ES",  "NQ",  "NQ"  };
 static const COLOR BOOK_DEF [NBOOK] = { C_SPX, C_SPY, C_QQQ, C_NDX };
 
-struct Step { double so; float px; int strike; };
-struct BookTrk { std::vector<Step> steps; bool hasNow; float nowPx; int nowStrike, nowPct; };
+typedef ktl::Step Step;   // (v0.10) KingTrackerLogic.h
+typedef ktl::Book BookTrk;
 
 // ---- parameter indices ----------------------------------------------------
 struct PIdx {
@@ -183,17 +185,15 @@ void KingTracker::load()
         if (t.size() < 2) continue;
         int bi = -1;
         if (t[0] == "KINGTRACK" && t.size() >= 6) {
-            for (int i = 0; i < NBOOK; i++) if (t[2] == BOOK_NAME[i]) { bi = i; break; }
+            std::string fam, bk; Step s; if (!ktl::parseTrack(t, fam, bk, s)) continue;   // (v0.10) KingTrackerLogic.h
+            for (int i = 0; i < NBOOK; i++) if (bk == BOOK_NAME[i]) { bi = i; break; }
             if (bi < 0) continue;
-            Step s; s.so = atof(t[3].c_str()); s.px = (float)atof(t[4].c_str()); s.strike = atoi(t[5].c_str());
             book[bi].steps.push_back(s);
         } else if (t[0] == "KINGNOW" && t.size() >= 5) {
-            for (int i = 0; i < NBOOK; i++) if (t[2] == BOOK_NAME[i]) { bi = i; break; }
+            std::string fam, bk; ktl::Book nb; if (!ktl::parseNow(t, fam, bk, nb)) continue;
+            for (int i = 0; i < NBOOK; i++) if (bk == BOOK_NAME[i]) { bi = i; break; }
             if (bi < 0) continue;
-            book[bi].nowPx = (float)atof(t[3].c_str());
-            book[bi].nowStrike = atoi(t[4].c_str());
-            book[bi].nowPct = (t.size() > 5) ? atoi(t[5].c_str()) : 0;
-            book[bi].hasNow = true;
+            book[bi].nowPx = nb.nowPx; book[bi].nowStrike = nb.nowStrike; book[bi].nowPct = nb.nowPct; book[bi].hasNow = true;
         } else if (t[0] == "ASOF" && t.size() >= 2) {
             asofSo = atof(t[1].c_str());
         } else if (t[0] == "SPOT" && t.size() >= 2) {
@@ -335,37 +335,20 @@ void KingTracker::applyContractOffset()
     // the live close when ASOF is absent or no bar matches (pre-open, a CSV from another day).
     float chartClose = close[(int)n - 1];
     {
-        // (GP 0.49 / KT 0.9) ANCHOR ON THE BAR OF THE SCALEREF QUOTE ITSELF. From panel 16.34 the row is
-        // SCALEREF,<px>,<CT sec-of-day>,<CT date> — the vendor minute of Skylit's ES1 spot. That spot freezes whenever their
-        // series stops (the cash close daily; 14:26 CT on FOMC 2026-09-16), so the ONLY bar whose close is comparable to
-        // it is the bar of that minute. Older rows (no time): the 0.48 rule — the last RTH-stamped bar at or before ASOF.
+        // (GP 0.56 / KT 0.10) THE ANCHOR RULE LIVES IN plugin/ContractOffsetLogic.h (col::anchorIndex) — shared by both
+        // plugins and pinned by plugin/test_contractoffset_logic.cpp, after it failed twice on 2026-09-16 while it lived
+        // behind the SDK in each .cpp. The bars are handed over as plain (date, sec-of-day, close) records.
         RTARRAYI dt(barDateTime);
-        bool anchored = false;
-        if (scaleRefSo >= 0 && scaleRefY > 0) {
-            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 6000; i--) {
-                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-                int y = t.tm_year + 1900, m = t.tm_mon + 1, d = t.tm_mday;
-                if (y > scaleRefY || (y == scaleRefY && (m > scaleRefM || (m == scaleRefM && d > scaleRefD)))) continue;   // after the quote's day
-                if (y < scaleRefY || (y == scaleRefY && (m < scaleRefM || (m == scaleRefM && d < scaleRefD)))) break;      // before it: not on this chart
-                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-                if (sod > scaleRefSo + 1.0) continue;
-                if (close[i] > 0) { chartClose = close[i]; anchored = true; }
-                break;
-            }
+        int from = (int)n - 6000; if (from < 0) from = 0;
+        std::vector<col::Bar> bars; bars.reserve((size_t)((int)n - from));
+        for (int i = from; i < (int)n; i++) {
+            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+            col::Bar b; b.y = t.tm_year + 1900; b.m = t.tm_mon + 1; b.d = t.tm_mday;
+            b.sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec; b.close = close[i];
+            bars.push_back(b);
         }
-        if (!anchored && asofSo >= 0) {
-            struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-            const double RTH_A = 8 * 3600.0 + 30 * 60.0, RTH_B = 15 * 3600.0;
-            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 3000; i--) {
-                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-                bool sameDay = (t.tm_year == lt.tm_year && t.tm_mon == lt.tm_mon && t.tm_mday == lt.tm_mday);
-                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-                if (sameDay && sod > asofSo + 1.0) continue;
-                if (sod < RTH_A || sod > RTH_B + 1.0) continue;
-                if (close[i] > 0) chartClose = close[i];
-                break;
-            }
-        }
+        int ai = col::anchorIndex(bars.empty() ? 0 : &bars[0], (int)bars.size(), asofSo, scaleRefSo, scaleRefY, scaleRefM, scaleRefD);
+        if (ai >= 0) chartClose = bars[(size_t)ai].close;
     }
     if (!(chartClose > 0)) return;
     // (v0.5) ANCHOR ON SCALEREF, NOT SPOT. The ES King prices (KINGNOW/KINGTRACK futPrice) are in the
@@ -381,24 +364,11 @@ void KingTracker::applyContractOffset()
     // low with a phantom step at the roll. The strike is scale-free, so re-derive every step's price as
     // strike x (nowPx / nowStrike) — the ratio the CURRENT price is in. Basis drift within a day is a
     // point or two; the roll is ~70. Only when a KINGNOW row gives the ratio; otherwise the stored prices.
-    for (int b = 0; b < NBOOK; b++) {
-        if (book[b].hasNow && book[b].nowStrike > 0 && book[b].nowPx > 0.0f) {
-            float r = book[b].nowPx / (float)book[b].nowStrike;
-            for (size_t i = 0; i < book[b].steps.size(); i++)
-                if (book[b].steps[i].strike > 0) book[b].steps[i].px = (float)book[b].steps[i].strike * r;
-        }
-    }
-    float anchor = 0.0f; bool have = false;
-    if (hasScaleRef && scaleRef > 0.0f) { anchor = scaleRef; have = true; }
-    else if (hasSpot)                   { anchor = spotPx;   have = true; }
-    if (!have) return;
-    float off = chartClose - anchor;
-    if (off < -300.0f || off > 300.0f) return;   // implausible (incl. the ES/NQ cross) → leave as-is
-    if (off > -0.01f && off < 0.01f) return;      // already aligned
-    for (int b = 0; b < NBOOK; b++) {
-        for (size_t i = 0; i < book[b].steps.size(); i++) book[b].steps[i].px += off;
-        if (book[b].hasNow) book[b].nowPx += off;
-    }
+    for (int b = 0; b < NBOOK; b++) ktl::rederive(book[b]);                     // (v0.10) KingTrackerLogic.h
+    float anchor = 0.0f, off = 0.0f;
+    if (!ktl::anchorPrice(hasScaleRef, scaleRef, hasSpot, spotPx, anchor)) return;
+    if (!ktl::offsetFor(chartClose, anchor, off)) return;
+    for (int b = 0; b < NBOOK; b++) ktl::shift(book[b], off);
 }
 
 // ---- (v0.2) STALE badge — ASOF,<CT sec-of-day> vs the chart clock; > ~4 min ⇒ frozen file (overnight-safe)
@@ -407,7 +377,7 @@ void KingTracker::drawStaleBadge()
     if (asofSo < 0) return;
     RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
     double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
-    double ageMin = (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
+    double ageMin = ktl::staleAge(asofSo, localSo);   // (v0.10) KingTrackerLogic.h
     if (ageMin <= 4.0) return;
     char b[40];
     if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
@@ -430,6 +400,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.9");
+    p->setVersion("0.10");
     return p;
 }

@@ -48,7 +48,8 @@
  *  numbering and silently scrambles every setting read after it.
  ********************************************************************************/
 #include "irtsdk.h"
-#include "GammaProfileLogic.h"   // (v0.45) the decisions, testable without IRT
+#include "GammaProfileLogic.h"     // (v0.45) the decisions, testable without IRT
+#include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -957,37 +958,20 @@ void GammaProfile::applyContractOffset()
     // the live close when ASOF is absent or no bar matches (pre-open, a CSV from another day).
     float chartClose = close[(int)n - 1];
     {
-        // (GP 0.49 / KT 0.9) ANCHOR ON THE BAR OF THE SCALEREF QUOTE ITSELF. From panel 16.34 the row is
-        // SCALEREF,<px>,<CT sec-of-day>,<CT date> — the vendor minute of Skylit's ES1 spot. That spot freezes whenever their
-        // series stops (the cash close daily; 14:26 CT on FOMC 2026-09-16), so the ONLY bar whose close is comparable to
-        // it is the bar of that minute. Older rows (no time): the 0.48 rule — the last RTH-stamped bar at or before ASOF.
+        // (GP 0.56 / KT 0.10) THE ANCHOR RULE LIVES IN plugin/ContractOffsetLogic.h (col::anchorIndex) — shared by both
+        // plugins and pinned by plugin/test_contractoffset_logic.cpp, after it failed twice on 2026-09-16 while it lived
+        // behind the SDK in each .cpp. The bars are handed over as plain (date, sec-of-day, close) records.
         RTARRAYI dt(barDateTime);
-        bool anchored = false;
-        if (scaleRefSo >= 0 && scaleRefY > 0) {
-            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 6000; i--) {
-                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-                int y = t.tm_year + 1900, m = t.tm_mon + 1, d = t.tm_mday;
-                if (y > scaleRefY || (y == scaleRefY && (m > scaleRefM || (m == scaleRefM && d > scaleRefD)))) continue;   // after the quote's day
-                if (y < scaleRefY || (y == scaleRefY && (m < scaleRefM || (m == scaleRefM && d < scaleRefD)))) break;      // before it: not on this chart
-                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-                if (sod > scaleRefSo + 1.0) continue;
-                if (close[i] > 0) { chartClose = close[i]; anchored = true; }
-                break;
-            }
+        int from = (int)n - 6000; if (from < 0) from = 0;
+        std::vector<col::Bar> bars; bars.reserve((size_t)((int)n - from));
+        for (int i = from; i < (int)n; i++) {
+            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+            col::Bar b; b.y = t.tm_year + 1900; b.m = t.tm_mon + 1; b.d = t.tm_mday;
+            b.sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec; b.close = close[i];
+            bars.push_back(b);
         }
-        if (!anchored && asofSo >= 0) {
-            struct tm lt; memset(&lt, 0, sizeof(lt)); getLocaltime((RTDATE)dt[(int)n - 1], &lt);
-            const double RTH_A = 8 * 3600.0 + 30 * 60.0, RTH_B = 15 * 3600.0;
-            for (int i = (int)n - 1; i >= 0 && i >= (int)n - 3000; i--) {
-                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-                bool sameDay = (t.tm_year == lt.tm_year && t.tm_mon == lt.tm_mon && t.tm_mday == lt.tm_mday);
-                double sod = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-                if (sameDay && sod > asofSo + 1.0) continue;
-                if (sod < RTH_A || sod > RTH_B + 1.0) continue;
-                if (close[i] > 0) chartClose = close[i];
-                break;
-            }
-        }
+        int ai = col::anchorIndex(bars.empty() ? 0 : &bars[0], (int)bars.size(), asofSo, scaleRefSo, scaleRefY, scaleRefM, scaleRefD);
+        if (ai >= 0) chartClose = bars[(size_t)ai].close;
     }
     if (!(chartClose > 0)) return;
     // (v0.40) ANCHOR ON SCALEREF, NOT SPOT. The ladder (King, nodes, walls) is priced in the panel's
@@ -1041,6 +1025,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.55");
+    p->setVersion("0.56");
     return p;
 }
