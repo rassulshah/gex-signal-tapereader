@@ -1,0 +1,155 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>GP 0.64 mockup — two tapes, IF levels, one chip, node bands</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.35 Helvetica,Arial,sans-serif}
+ .wrap{padding:14px 18px}
+ h1{font-size:15px;margin:0 0 4px;font-weight:600}
+ h2{font-size:13px;margin:18px 0 6px;font-weight:600;color:#8a97a6}
+ .sub{color:#8a97a6;font-size:12px;margin-bottom:10px}
+ .chart{position:relative;width:1200px;height:560px;background:#000;border:1px solid #222;overflow:hidden;font-size:11px}
+ .axis{position:absolute;right:0;top:0;bottom:0;width:56px;border-left:1px solid #2a2f36;background:#050607}
+ .tick{position:absolute;right:6px;color:#9aa5b1;transform:translateY(-50%)}
+ .grid{position:absolute;left:0;right:56px;height:1px;background:#15181c}
+ .strip{position:absolute;top:0;bottom:0;background:#101418}
+ .strip.l{left:0;width:98px}.strip.r{right:56px;width:98px}
+ .row{position:absolute;transform:translateY(-50%);white-space:nowrap}
+ .bar{position:absolute;height:22px;border-radius:11px;transform:translateY(-50%)}
+ .badge{display:inline-block;width:18px;height:18px;border-radius:50%;background:#101418;border:1px solid #dfe7f0;color:#fff;text-align:center;line-height:18px;font-size:10px;font-weight:700;vertical-align:middle}
+ .kline{position:absolute;left:0;right:56px;height:2px}
+ .tline{position:absolute;left:0;right:56px;height:0;border-top:1px dotted}
+ .pill{display:inline-block;border:1px solid #c43baf;color:#c43baf;border-radius:3px;padding:0 4px;font-size:10px;font-weight:700;margin-left:4px;line-height:14px;vertical-align:middle}
+ .tag{font-weight:700;font-size:11px}
+ .chip{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:#101418;border:1px solid #566472;padding:8px 12px;font-size:12px;white-space:nowrap}
+ .chip .sw{display:inline-block;width:11px;height:10px;background:#566472;margin-right:8px;vertical-align:middle}
+ .chip .l2{margin-top:6px}
+ .chip .l2 span{margin-right:18px}
+ .cndl{position:absolute;width:6px}
+ .band{position:absolute;right:156px;transform:translateY(-50%)}
+ .xaxis{position:absolute;left:100px;right:156px;bottom:0;height:16px;border-top:1px solid #2a2f36;background:#050607;font-size:10px;color:#9aa5b1}
+ .xt{position:absolute;bottom:2px;transform:translateX(-50%)}
+ .since{position:absolute;font-size:9px;color:#8a97a6;transform:translateY(-50%)}
+ .note{margin-top:10px;color:#8a97a6;font-size:12px;max-width:1200px}
+ .note b{color:#dfe7f0;font-weight:600}
+ table.dlg{border-collapse:collapse;font-size:12px;margin-top:6px}
+ table.dlg td{padding:3px 10px;border-bottom:1px solid #1c2128;vertical-align:top}
+ table.dlg td.k{color:#8a97a6;width:180px}
+ table.dlg td.v{color:#dfe7f0}
+ table.dlg td.n{color:#8a97a6;font-size:11px}
+ .rm{color:#566472;text-decoration:line-through}
+ .new{color:#e3c341}
+ .two{display:flex;gap:28px}
+</style></head><body><div class="wrap">
+<h1>GP 0.64 — two tapes (Skylit SPY · SPX), the IF levels, one regime chip, time-bounded node bands</h1>
+<div class="sub">This minute's real files (14:47 CT, offset +3.54): pool ① SPX 7640 · ② SPY 763 · ③ SPX 7635 · ④ SPX 7645 · ⑤ SPY 762. IF: Mag 7635 (+), CW 7645 <span class="pill">0D</span>, PW 6975 (below the pane), FLIP n/a this minute. Regime NA | TREND DOWN.</div>
+<div class="chart" id="c"></div>
+<div class="note">
+ <b>What you are looking at.</b> Left strip = the SPY tape [strike | % of the SPY King], right strip = the SPX tape [strike | % of the SPX King], both on a dark background; bars grow inward from their strip (SPY width 120, SPX width 90), same thickness on both rails. Badges are the pooled Atlas rank (automatic — no Rank row). <b>Both Kings</b> get a King line (2 px, polarity colour) and <b>every pooled top node on either rail</b> gets a dotted top-node line (1 px). IF level labels on the nodes: <b>CW</b> on SPX 7645 with its depth pill, <b>MAG</b> on SPX 7635 — exact strike only. The chip is centred (Bottom-C), sized to its longer line, and names PW · Mag · both Kings · FLIP · CW; the pill has equal padding both sides. <b>Node bands replace the top-node lines.</b> Each node of either book gets a translucent band <b>from the bar it was first seen at this strike to the current bar</b> — nothing to the left of that — <b>gold for +gamma, magenta for −gamma</b>, opacity by its % of its own King, 3 ES points tall, under the candles. The Kings' start times here are real (KINGTRACK rows: SPX 7640 since 14:20, SPY 763 since 10:18); the other start times are illustrative because <b>the panel does not yet export a first-seen time per strike</b> — that is a 9th STRIKE field in panel 16.41, and the plugin draws the band from it. Nodes under "Hide % under" get no band. The King lines stay (they are the King's price, not its history).
+</div>
+
+<h2>The dialog after the review (defaults shown = your settings, so the version-6→7 reset lands on them)</h2>
+<div class="two">
+<table class="dlg">
+<tr><td class="k">Book</td><td class="v new">Both SPY and SPX</td><td class="n">Auto · SPX · SPY · IF · Both SPY and SPX</td></tr>
+<tr><td class="k">Width px</td><td class="v new">90</td><td class="n">the SPX rail (Right)</td></tr>
+<tr><td class="k">Side</td><td class="v">Right</td><td class="n">ignored when Both</td></tr>
+<tr><td class="k">Thickness</td><td class="v">Auto</td><td class="n">one thickness for both rails</td></tr>
+<tr><td class="k rm">Detach from bars · Rounded ends</td><td class="v rm">—</td><td class="n">always on, rows removed</td></tr>
+<tr><td class="k">Show</td><td class="v">Top 5</td><td class="n">Top 3 · Top 5 · Top 8 · Top 10 · ≥ Threshold · All</td></tr>
+<tr><td class="k">Threshold %</td><td class="v">20</td><td class="n">only for ≥ Threshold</td></tr>
+<tr><td class="k">Sub-threshold</td><td class="v">Grey out</td><td class="n">Grey out · Hide</td></tr>
+<tr><td class="k">Scale to</td><td class="v">King = 100 %</td><td class="n"></td></tr>
+<tr><td class="k">+Gamma · −Gamma · Midpoint</td><td class="v">gold · magenta · teal</td><td class="n"></td></tr>
+<tr><td class="k">King colour</td><td class="v">Polarity</td><td class="n">Polarity · Distinct</td></tr>
+<tr><td class="k rm">Amplify polarity · Translucent bars</td><td class="v rm">—</td><td class="n">removed</td></tr>
+<tr><td class="k rm">Show % · % at</td><td class="v rm">—</td><td class="n">the % lives in the tape column</td></tr>
+<tr><td class="k">Hide % under</td><td class="v new">0</td><td class="n">applies to the tape column</td></tr>
+<tr><td class="k">Font size (pt)</td><td class="v">10</td><td class="n"></td></tr>
+<tr><td class="k">Rank badge · Node name inside</td><td class="v">on · on</td><td class="n"></td></tr>
+<tr><td class="k">Rank at · Rank for</td><td class="v">Inside · Top 5</td><td class="n">Inside flips outside on a short bar</td></tr>
+<tr><td class="k">King name</td><td class="v">K</td><td class="n"></td></tr>
+</table>
+<table class="dlg">
+<tr><td class="k">King line · Call Wall · Put Wall · Flip · EM H/L</td><td class="v">on · on · on · on · off</td><td class="n">King line = BOTH Kings when Both</td></tr>
+<tr><td class="k">Extend King line</td><td class="v">off</td><td class="n"></td></tr>
+<tr><td class="k rm">Top-node lines · Top-node style</td><td class="v rm">—</td><td class="n">replaced by the node bands</td></tr>
+<tr><td class="k">Line style · Label at</td><td class="v">Solid · Left</td><td class="n"></td></tr>
+<tr><td class="k rm">SPY King line</td><td class="v rm">—</td><td class="n">never worked (no SPYKING row); covered by King line</td></tr>
+<tr><td class="k rm">Title header · Spot price line · Header at</td><td class="v rm">—</td><td class="n">removed</td></tr>
+<tr><td class="k">Structure labels</td><td class="v">on</td><td class="n">Floor / Ceiling / Gate / Air, SPX rail</td></tr>
+<tr><td class="k">Regime + read panel</td><td class="v">on</td><td class="n"></td></tr>
+<tr><td class="k">Panel at</td><td class="v new">Bottom-C</td><td class="n"></td></tr>
+<tr><td class="k rm">Deflection bands · EM confluence · Polarity legend</td><td class="v rm">—</td><td class="n">removed</td></tr>
+<tr><td class="k">Tape columns</td><td class="v new">on</td><td class="n">both rails, dark background</td></tr>
+<tr><td class="k new">Show IF level labels on nodes</td><td class="v new">on</td><td class="n">CW · PW · FLIP tick · MAG (exact strike)</td></tr>
+<tr><td class="k rm">Rank</td><td class="v rm">—</td><td class="n">merged automatically when Both</td></tr>
+<tr><td class="k">SPY rail width px</td><td class="v new">120</td><td class="n">0 = same as Width px</td></tr>
+<tr><td class="k new">Node bands</td><td class="v new">on</td><td class="n">new — from first-seen bar to now, polarity colour, opacity by %, under the candles</td></tr>
+<tr><td class="k new">King line width px</td><td class="v new">2</td><td class="n">new</td></tr>
+<tr><td class="k new">Band height (ES pts)</td><td class="v new">3</td><td class="n">new</td></tr>
+</table>
+</div>
+<div class="note">36 rows → 27. Nothing above a kept row moves except by the removals themselves, and the version bump makes IRT re-read the defaults, so the saved-by-position values cannot scramble.</div>
+</div>
+<script>
+(function(){
+ var c=document.getElementById('c'); var H=560, top=7742, bot=7662; function y(p){ return (top-p)/(top-bot)*H; }
+ var gold='#e3c341', mag='#c43baf', grey='#566472', pink='#ff5db0', txt='#dfe7f0';
+ var axis=document.createElement('div'); axis.className='axis'; c.appendChild(axis);
+ for(var p=7665;p<=7740;p+=5){ var t=document.createElement('div'); t.className='tick'; t.style.top=y(p)+'px'; t.textContent=p; axis.appendChild(t); var g=document.createElement('div'); g.className='grid'; g.style.top=y(p)+'px'; c.appendChild(g); }
+ // TIME AXIS: 08:30 -> 14:50 CT across the price area (x = 100 .. 1044)
+ var X0=100, X1=1044, T0=8.5*60, T1=14*60+50; function x(hm){ return X0+(hm-T0)/(T1-T0)*(X1-X0); }
+ var xa=document.createElement('div'); xa.className='xaxis'; c.appendChild(xa);
+ [['08:30',510],['09:30',570],['10:30',630],['11:30',690],['12:30',750],['13:30',810],['14:30',870]].forEach(function(t){ var d=document.createElement('div'); d.className='xt'; d.style.left=(x(t[1])-X0)+'px'; d.textContent=t[0]; xa.appendChild(d); });
+ // NODE BANDS (Atlas-style heat), TIME-BOUNDED: from the bar the node was first seen at this strike (the panel's per-strike
+ // "since" field) to the current bar; polarity colour; opacity by % of its own King; 3 ES pts tall. No band before the node existed.
+ function band(price,pct,sinceHM,label){ var d=document.createElement('div'); d.className='band'; d.style.left=x(sinceHM)+'px'; d.style.top=y(price)+'px'; d.style.height=(y(0)-y(3))+'px'; d.style.background=(pct<0?'#c43baf':'#e3c341'); d.style.opacity=(0.06+0.40*Math.abs(pct)/100).toFixed(2); c.appendChild(d);
+   if(label){ var l=document.createElement('div'); l.className='since'; l.style.left=(x(sinceHM)+3)+'px'; l.style.top=(y(price)-11)+'px'; l.textContent=label; c.appendChild(l);} }
+ // candles
+ var cs=[[7690,7706],[7698,7716],[7708,7722],[7704,7714],[7699,7712],[7702,7716],[7706,7719],[7708,7713],[7703,7711],[7706,7712]];
+ cs.forEach(function(v,i){ var d=document.createElement('div'); d.className='cndl'; d.style.left=(300+i*60)+'px'; d.style.top=y(v[1])+'px'; d.style.height=(y(v[0])-y(v[1]))+'px'; d.style.background=(i%3==1)?'#b83a3a':'#2f8f5b'; c.appendChild(d); });
+ // strips
+ var sl=document.createElement('div'); sl.className='strip l'; c.appendChild(sl);
+ var sr=document.createElement('div'); sr.className='strip r'; c.appendChild(sr);
+ var OFF=3.54;
+ // King lines (2px, polarity) + top-node lines (1px dotted)
+ function kline(price,col){ var k=document.createElement('div'); k.className='kline'; k.style.top=y(price)+'px'; k.style.background=col; c.appendChild(k); }
+ function tline(price,col){ var k=document.createElement('div'); k.className='tline'; k.style.top=y(price)+'px'; k.style.borderColor=col; c.appendChild(k); }
+ var spx=[ {s:7640,es:7708.75,pct:-100,b:1,king:1,since:14*60+20,sl:'since 14:20'},{s:7635,es:7703.75,pct:69,b:3,pat:'R',mag:1,since:13*60+38,sl:'since 13:38'},{s:7645,es:7713.75,pct:49,b:4,cw:1,since:11*60+6,sl:'since 11:06'},{s:7650,es:7718.75,pct:27,b:6,since:8*60+55},{s:7625,es:7693.50,pct:8,since:12*60+40},{s:7660,es:7729,pct:4},{s:7620,es:7688.5,pct:3},{s:7665,es:7734,pct:2},{s:7610,es:7678.5,pct:2},{s:7675,es:7744,pct:2} ];
+ var spy=[ {s:763,es:7710.5,pct:-100,b:2,king:1,since:10*60+18,sl:'since 10:18'},{s:762,es:7700.25,pct:32,b:5,pat:'R',since:9*60+38,sl:'since 09:38'},{s:761,es:7690.25,pct:18,b:7,since:13*60+5},{s:764,es:7720.5,pct:7,since:14*60+2},{s:760,es:7680,pct:5,since:9*60+2},{s:766,es:7740.75,pct:4},{s:765,es:7730.75,pct:3},{s:767,es:7750.75,pct:2},{s:759,es:7670,pct:1} ];
+ function rail(rows, side, W){
+  rows.forEach(function(n){
+   var price=n.es+OFF, prim=n.b&&n.b<=5, col=prim?(n.pct<0?mag:gold):grey;
+   if(Math.abs(n.pct)>=5) band(price,n.pct,n.since,n.sl);
+   if(n.king) kline(price,n.pct<0?mag:gold);   // top-node LINES are gone: the band is the node's line, bounded in time
+   var len=Math.max(3,Math.round(Math.abs(n.pct)/100*W));
+   var b=document.createElement('div'); b.className='bar'; b.style.top=y(price)+'px'; b.style.width=len+'px'; b.style.background=col; if(!prim) b.style.opacity=.6;
+   var r=document.createElement('div'); r.className='row'; r.style.top=y(price)+'px'; r.style.color=prim?txt:grey; r.style.fontWeight=n.king?'700':'400';
+   var pc=(n.pct>0?'+':'')+n.pct+'%';
+   if(side==='l'){ b.style.left='100px'; r.style.left='6px'; r.innerHTML='<span style="display:inline-block;width:40px">'+n.s+'</span><span style="display:inline-block;width:44px;text-align:right">'+pc+'</span>'; }
+   else { b.style.right='156px'; r.style.right='60px'; r.innerHTML='<span style="display:inline-block;width:40px">'+n.s+'</span><span style="display:inline-block;width:44px;text-align:right">'+pc+'</span>'; }
+   c.appendChild(b); c.appendChild(r);
+   // badge + tags at the tip
+   if(prim){
+    var t=document.createElement('div'); t.className='row'; t.style.top=y(price)+'px';
+    var inside = len>=26; var html='<span class="badge">'+n.b+'</span>';
+    var tags=''; if(n.king) tags+='<span class="tag" style="color:#101418;background:'+col+';padding:0 4px;border-radius:3px;margin-left:4px">K</span>';
+    if(n.pat) tags+='<span class="tag" style="color:#101418;margin-left:4px">'+n.pat+'</span>';
+    var outer=''; if(n.cw) outer+='<span class="tag" style="color:'+pink+';margin-left:6px">CW</span><span class="pill">0D</span>';
+    if(n.mag) outer+='<span class="tag" style="color:'+gold+';margin-left:6px">MAG</span>';
+    if(side==='l'){ var tip=100+len; if(inside){ t.style.left=(tip-24)+'px'; t.innerHTML=html+outer; } else { t.style.left=(tip+4)+'px'; t.innerHTML=html+outer; } }
+    else { var tipr=156+len; if(inside){ t.style.right=(tipr-24)+'px'; t.innerHTML=(n.king?'<span class="tag" style="color:#101418;margin-right:6px"></span>':'')+outer.replace(/margin-left/g,'margin-right')+html; } else { t.style.right=(tipr+4)+'px'; t.innerHTML=outer.replace(/margin-left/g,'margin-right')+html; } }
+    c.appendChild(t);
+   }
+  });
+ }
+ rail(spy,'l',120); rail(spx,'r',90);
+ // CW line + label (pink)
+ var cwp=7713.75+OFF; var cw=document.createElement('div'); cw.className='tline'; cw.style.top=y(cwp)+'px'; cw.style.borderTop='1px solid '+pink; c.appendChild(cw);
+ var cwl=document.createElement('div'); cwl.className='row'; cwl.style.top=(y(cwp)-9)+'px'; cwl.style.left='104px'; cwl.style.color=pink; cwl.textContent='CALL WALL'; c.appendChild(cwl);
+ // chip
+ var chip=document.createElement('div'); chip.className='chip';
+ chip.innerHTML='<div><span class="sw"></span><b>REGIME  flip n/a  |  TREND DOWN  |  FOLLOW, don\'t fade</b></div>'
+  +'<div class="l2"><span style="color:#3fb27a">PW 7041 (6975)</span><span style="color:'+gold+'">Mag 7709 (7635)</span><span style="color:'+mag+'">K 7712 (7640)</span><span style="color:'+mag+'">K 7714 (763)</span><span style="color:#e6edf5">FLIP n/a</span><span style="color:#d15b6b">CW 7717 (7645)<span class="pill">0D</span></span></div>';
+ c.appendChild(chip);
+})();
+</script></body></html>

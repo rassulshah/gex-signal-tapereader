@@ -94,27 +94,27 @@ static COLOR inkOn(COLOR c){ return luma(c) > 140.0f ? C_DARK : C_WHT; }
 // (v0.45) pattern tags: gpl::patternTag() — P / B on the named stack member, R / RR on the rug.
 
 // ---- parameter indices, filled in setup() (single-instance -> file static) --
+// (v0.64) THE DIALOG AFTER THE OPERATOR'S REVIEW (2026-09-17): 36 rows -> 27. Removed (now constants in readSettings):
+// Detach from bars, Rounded ends, Amplify polarity, Translucent bars, Show %, % at, SPY King line, Top-node lines,
+// Top-node style, Title header, Spot price line, Header at, Deflection bands, EM confluence, Polarity legend, Rank.
+// Parameter version 7: IRT resets every instance to these defaults, which ARE his settings.
 struct PIdx {
-    int book, width, side, thick, detach, round;
+    int book, width, side, thick;
     int filter, thresh, below, scale;
-    int cpos, cneg, cmid, kingcol, amp, trans;
-    int showpct, pctpos, hideu, rank, rankpos, rankscope, type, kinglabel, font;
-    int kline, cw, pw, flip, em, lstyle, lpos, extk, topnodes, topstyle, spyking;
-    int rankmode;   // (v0.59) Book | Atlas merge
-    int header, spot;
-    int roles, regime, panelpos, defbands, confl, legend;   // structure read (appended v0.35)
-    int headerpos;                                          // header placement (appended v0.36)
-    int tapecols;                                           // Skylit-style [SPX strike | %King] columns (appended v0.41)
-    int lvllabels;                                          // CW/PW tags on the wall nodes + FLIP tick on the strip (appended v0.42)
-    int spywidth;                                           // (v0.61) the SPY rail's width when Book = Both (appended LAST)
+    int cpos, cneg, cmid, kingcol;
+    int hideu, font, rank, type, rankpos, rankscope, kinglabel;
+    int kline, cw, pw, flip, em, extk, lstyle, lpos;
+    int roles, regime, panelpos, tapecols, lvllabels, spywidth;
+    int bands, bandh, klinew;   // (v0.64) node bands on/off, band height in ES points, King line width px
 };
 static PIdx PX;
 
 struct Settings {
     int book, width, side, thick, filter, thresh, below, scale, kingcol;
     int pctpos, hideu, rankpos, rankscope, font, lstyle, lpos, topstyle;
-    int rankmode;   // (v0.59) 0 = within-book rank, 1 = the pooled (Atlas merge) rank
+    int rankmode;   // (v0.59) 0 = within-book rank, 1 = the pooled (Atlas merge) rank — (v0.64) automatic: 1 when Book = Both
     int spywidth;   // (v0.61) Book = Both: the SPY rail's width px (0 = same as Width px)
+    bool bands; int bandh, klinew;   // (v0.64)
     bool detach, round, amp, trans, showpct, rank, type;
     bool kline, cw, pw, flip, em, extk, topnodes, spyking, header, spot;
     bool roles, regime, defbands, confl, legend; int panelpos;   // structure read
@@ -125,7 +125,7 @@ struct Settings {
     char kinglabel[24];
 };
 
-struct GStrike { float price; float pct; int rank; bool king; std::string type; float spx; int mrank; GStrike() : price(0), pct(0), rank(0), king(false), spx(0), mrank(0) {} };   // spx = raw strike (v0.41); mrank = the pooled rank (v0.59, panel 16.40)
+struct GStrike { float price; float pct; int rank; bool king; std::string type; float spx; int mrank; double since; GStrike() : price(0), pct(0), rank(0), king(false), spx(0), mrank(0), since(-1) {} };   // since = first-seen CT sec (v0.64, panel 16.41), <0 none   // spx = raw strike (v0.41); mrank = the pooled rank (v0.59, panel 16.40)
 
 // ---------------------------------------------------------------------------
 class GammaProfile : public cppExtension {
@@ -153,6 +153,8 @@ public:
     double scaleRefSo; int scaleRefY, scaleRefM, scaleRefD;   // (v0.49) the CT minute + date of that quote (panel 16.34); so<0 = unknown
     float spyKingPx; bool hasSpyKing;
     std::string book;
+    bool hasIfMag; float ifMagPx, ifMagSpx, ifMagPct;   // (v0.64) the IF Magnet from KINGNOW,ES,IF (price, SPX strike, polarity)
+    std::vector<col::Bar> bars; int barsFrom;          // (v0.64) the chart's last bars (date, sod, close) + the chart index of bars[0], for the band starts
     double asofSo;               // (v0.38) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     Settings cfg;                // cached settings (populated in parms callbacks, used in draw)
     // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
@@ -175,7 +177,7 @@ public:
     short pillW(const std::string& tag, const Settings& S);                       // (v0.50)
     short drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S);   // (v0.50) returns its width (0 when no tag)
     void textC (short cx,     short y, const char* s, COLOR col, int sz, bool bold);
-    void hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps);
+    void hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps, int wpx = 1);
     void bandPrice(float p1, float p2, short lx, short rx, COLOR col);
     void drawPanel(RCT pane, const Settings& S, float net, int fIdx, int cIdx, int kIdx);
     void drawLegend(RCT pane, const Settings& S);
@@ -192,16 +194,19 @@ int cppExtension::destroy(void) { return RTX_OK; }
 // ---- constructor: cache safe defaults so the first draw (before calc) is valid
 GammaProfile::GammaProfile() : cppExtension()
 {
-    cfg.book=3; cfg.width=100; cfg.side=0; cfg.detach=true; cfg.thick=0; cfg.round=true;
+    // (v0.64) the defaults ARE his settings (the review of 2026-09-17): Both SPY and SPX, width 90 / SPY 120, tape on, chip centred
+    cfg.book=4; cfg.width=90; cfg.side=0; cfg.detach=true; cfg.thick=0; cfg.round=true;
     cfg.filter=1; cfg.thresh=20; cfg.below=0; cfg.scale=0;
     cfg.cpos=D_POS; cfg.cneg=D_NEG; cfg.cmid=D_MID; cfg.kingcol=0; cfg.amp=false; cfg.trans=false;
-    cfg.showpct=true; cfg.pctpos=0; cfg.hideu=5; cfg.rank=true; cfg.rankpos=0; cfg.rankscope=0;
+    cfg.showpct=true; cfg.pctpos=0; cfg.hideu=0; cfg.rank=true; cfg.rankpos=0; cfg.rankscope=0;
     cfg.type=true; cfg.font=10;
     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
-    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=0; cfg.spywidth=40; lastOff=0.0f;
-    cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false; cfg.lvllabels=true;
+    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=1; cfg.spywidth=120; lastOff=0.0f;
+    cfg.header=false; cfg.spot=false; cfg.headerpos=0; cfg.tapecols=true; cfg.lvllabels=true;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
+    cfg.bands=true; cfg.bandh=3; cfg.klinew=2;
+    hasIfMag=false; ifMagPx=ifMagSpx=ifMagPct=0.0f; barsFrom=0;
     stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false; forceBarH = 0; stScaleL = stScaleR = stPaneRaw = 0;
 }
 
@@ -242,19 +247,20 @@ int GammaProfile::parmsUpdt(unsigned int)
 // control still gets its own index, so it does not affect numbering).
 int cppExtension::setup(void)
 {
-    setParameterVersion(6);   // (v0.60) bumped: the Rank row moved to the end (see there) — saved instances reset to defaults
-    setParameterDialogHeight(26);
+    // (v0.64) VERSION 7 — the list below is the operator's reviewed dialog (2026-09-17). IRT stores a saved instance's values
+    // BY POSITION: a row may only ever be APPENDED below the last one (the `pc++` line immediately above `return RTX_OK;`);
+    // anything else needs another version bump. Removed rows are constants in readSettings().
+    setParameterVersion(7);
+    setParameterDialogHeight(20);
 
     const short SL = kParmAppendSameLine;
     int pc = 0;                        // the TRUE parameter index, one per control
 
     // PROFILE
-    PX.book   = pc++; setListParameter   ("Book", 3, "Auto;SPX;SPY;IF;Both");   // (v0.61) Both = SPY rail left + SPX rail right, one instance (entry APPENDED to the list: saved indices keep meaning)   // (v0.47) IF = the InsiderFinance 0DTE book, GammaProfile-IF.csv · (v0.53) IF is the DEFAULT: operator 2026-09-16, "one or the other, switchable; IF as default for now"
-    PX.width  = pc++; setIntegerParameter("Width px", 100, 0, SL);
-    PX.side   = pc++; setListParameter   ("Side", 0, "Right;Left");
-    PX.thick  = pc++; setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
-    PX.detach = pc++; setBoolParameter   ("Detach from bars", true);
-    PX.round  = pc++; setBoolParameter   ("Rounded ends", true, SL);
+    PX.book   = pc++; setListParameter   ("Book", 4, "Auto;SPX;SPY;IF;Both SPY and SPX");   // (v0.61/0.64) Both = SPY rail left + SPX rail right, one instance — the default
+    PX.width  = pc++; setIntegerParameter("Width px", 90, 0, SL);                              // the SPX rail
+    PX.side   = pc++; setListParameter   ("Side", 0, "Right;Left");                            // ignored when Both
+    PX.thick  = pc++; setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);   // one thickness for both rails
     // NODES
     PX.filter = pc++; setListParameter   ("Show", 1, "Top 3;Top 5;Top 8;Top 10;>= Threshold;All");
     PX.thresh = pc++; setIntegerParameter("Threshold %", 20, 0, SL);
@@ -265,52 +271,33 @@ int cppExtension::setup(void)
     PX.cneg   = pc++; setColorParameter  ("-Gamma", D_NEG, 0, SL);
     PX.cmid   = pc++; setColorParameter  ("Midpoint", D_MID);
     PX.kingcol= pc++; setListParameter   ("King colour", 0, "Polarity;Distinct", 0, SL);
-    PX.amp    = pc++; setBoolParameter   ("Amplify polarity", false);
-    PX.trans  = pc++; setBoolParameter   ("Translucent bars", false, SL);
     // LABELS
-    PX.showpct= pc++; setBoolParameter   ("Show %", true);
-    PX.pctpos = pc++; setListParameter   ("% at", 0, "Outside;Inside", 0, SL);
-    PX.hideu  = pc++; setIntegerParameter("Hide % under", 5);
+    PX.hideu  = pc++; setIntegerParameter("Hide % under", 0);                                  // applies to the tape column
     PX.font   = pc++; setIntegerParameter("Font size (pt)", 10, 0, SL);
     PX.rank   = pc++; setBoolParameter   ("Rank badge", true);
     PX.type   = pc++; setBoolParameter   ("Node name inside", true, SL);
-    PX.rankpos= pc++; setListParameter   ("Rank at", 0, "Inside;Outside");
+    PX.rankpos= pc++; setListParameter   ("Rank at", 0, "Inside;Outside");                     // Inside flips outside on a short bar
     PX.rankscope=pc++;setListParameter   ("Rank for (non-TopN filters)", 0, "Top 5;Top 3", 0, SL);
     PX.kinglabel=pc++;setListParameter   ("King name", 0, "K;KING;GPoc;GPOC;GEX;POC;GAMMA");
-    // LEVELS -- the five line toggles on one row, as requested
-    PX.kline  = pc++; setBoolParameter   ("King line", true);
+    // LEVELS
+    PX.kline  = pc++; setBoolParameter   ("King line", true);                                   // BOTH Kings when Both
     PX.cw     = pc++; setBoolParameter   ("Call Wall", true, SL);
     PX.pw     = pc++; setBoolParameter   ("Put Wall", true, SL);
     PX.flip   = pc++; setBoolParameter   ("Flip", true, SL);
     PX.em     = pc++; setBoolParameter   ("EM H/L", false, SL);
     PX.extk   = pc++; setBoolParameter   ("Extend King line", false);
-    PX.topnodes=pc++; setBoolParameter   ("Top-node lines", false, SL);
-    PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash");
-    PX.lpos   = pc++; setListParameter   ("Label at", 0, "Left;Center;Right", 0, SL);
-    PX.topstyle=pc++; setListParameter   ("Top-node style", 1, "Solid;Dot;Dash");
-    PX.spyking= pc++; setBoolParameter   ("SPY King line", false, SL);
-    // CONTEXT
-    PX.header = pc++; setBoolParameter   ("Title header (top-left)", false);
-    PX.spot   = pc++; setBoolParameter   ("Spot price line (dotted)", true, SL);
-    // STRUCTURE READ (appended v0.35 -- new params go at the END so existing
-    // instances keep their numbering)
+    PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash", 0, SL);
+    PX.lpos   = pc++; setListParameter   ("Label at", 0, "Left;Center;Right");
+    // STRUCTURE
     PX.roles   = pc++; setBoolParameter  ("Structure labels (Floor/Ceiling/Gate/Air)", true);
     PX.regime  = pc++; setBoolParameter  ("Regime + read panel", true, SL);
     PX.panelpos= pc++; setListParameter  ("Panel at", 1, "Bottom-L;Bottom-C;Bottom-R;Top-L;Top-C;Top-R");
-    PX.defbands= pc++; setBoolParameter  ("Deflection bands", false, SL);
-    PX.confl   = pc++; setBoolParameter  ("EM confluence marks", false);
-    PX.legend  = pc++; setBoolParameter  ("Polarity legend", false, SL);
-    PX.headerpos=pc++; setListParameter  ("Header at", 0, "Top-L;Top-C;Top-R;Bottom-L;Bottom-C;Bottom-R");
-    PX.tapecols =pc++; setBoolParameter  ("Tape columns (SPX strike | %King, right edge)", false);   // (v0.41) appended
-    PX.lvllabels=pc++; setBoolParameter  ("Level labels on nodes (CW / PW / FLIP)", true);           // (v0.42) appended
-    // (v0.60) Rank = Atlas merge: badges and the Top-N cut from the POOLED rank (the SPY + SPXW pool Atlas draws, panel
-    // 16.40), so a SPY rail (Side = Left, Book = SPY) and an SPX rail share the five exactly as Atlas allocates them.
-    // ⚠ 0.59 put this row after "Line style" — MID-LIST. IRT stores a saved instance's values BY POSITION, so every row
-    // after it (Label at … Level labels, 14 of them) read its neighbour's saved value: the KT 0.12 scramble, repeated.
-    // 0.60 moves it here, LAST, and bumps the parameter version to 6 so IRT resets both saved instances to the defaults
-    // instead of carrying the scrambled values. NEW ROWS GO BELOW THIS ONE. NOTHING ABOVE IT MOVES. EVER.
-    PX.rankmode = pc++; setListParameter ("Rank", 0, "Book;Atlas merge");
-    PX.spywidth = pc++; setIntegerParameter("SPY rail width px (Book = Both)", 40, 0, SL);   // (v0.61) appended LAST; 0 = same as Width px
+    PX.tapecols =pc++; setBoolParameter  ("Tape columns (strike | %King, both rails)", true, SL);
+    PX.lvllabels=pc++; setBoolParameter  ("Show IF level labels on nodes (CW / PW / FLIP / MAG)", true);
+    PX.spywidth = pc++; setIntegerParameter("SPY rail width px (Book = Both)", 120, 0, SL);   // 0 = same as Width px
+    PX.bands   = pc++; setBoolParameter  ("Node bands (first-seen bar to now, polarity colour)", true);
+    PX.bandh   = pc++; setIntegerParameter("Band height (ES pts)", 3, 0, SL);
+    PX.klinew  = pc++; setIntegerParameter("King line width px", 2);                          // (v0.64) APPENDED LAST — new rows go BELOW this one
     return RTX_OK;
 }
 
@@ -324,13 +311,13 @@ static void dbgDump(const char* when, const Settings& S)
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.debug.txt";
     std::ofstream f(path.c_str(), std::ios::app);
     if (!f.is_open()) return;
-    f << "v0.42 " << when
-      << " | IDX font="   << PX.font   << " hideu=" << PX.hideu << " showpct=" << PX.showpct
+    f << "v0.64 " << when
+      << " | IDX font="   << PX.font   << " hideu=" << PX.hideu << " book=" << PX.book
       << " rank="         << PX.rank   << " type="  << PX.type  << " filter="  << PX.filter
       << " width="        << PX.width
-      << " | READ font="  << S.font    << " hideu=" << S.hideu  << " showpct=" << (int)S.showpct
+      << " | READ font="  << S.font    << " hideu=" << S.hideu  << " book=" << S.book
       << " rank="         << (int)S.rank << " type=" << (int)S.type << " filter=" << S.filter
-      << " width="        << S.width   << " thresh=" << S.thresh << " detach=" << (int)S.detach
+      << " width="        << S.width   << " thresh=" << S.thresh << " tapecols=" << (int)S.tapecols
       << "\n";
     f.close();
 }
@@ -342,8 +329,6 @@ void GammaProfile::readSettings(Settings& S)
     S.width = getIntegerValue(PX.width); if (S.width < 40) S.width = 40; if (S.width > 400) S.width = 400;
     S.side  = getListIndex(PX.side);
     S.thick = getListIndex(PX.thick);
-    S.detach= isBoxChecked(PX.detach) != 0;
-    S.round = isBoxChecked(PX.round) != 0;
     S.filter= getListIndex(PX.filter);
     S.thresh= getIntegerValue(PX.thresh); if (S.thresh < 0) S.thresh = 0;
     S.below = getListIndex(PX.below);
@@ -352,43 +337,39 @@ void GammaProfile::readSettings(Settings& S)
     COLOR cn=(COLOR)(getIntegerValue(PX.cneg)&0xFFFFFF); S.cneg = cn ? cn : D_NEG;
     COLOR cm=(COLOR)(getIntegerValue(PX.cmid)&0xFFFFFF); S.cmid = cm ? cm : D_MID;
     S.kingcol  = getListIndex(PX.kingcol);
-    S.amp      = isBoxChecked(PX.amp) != 0;
-    S.trans    = isBoxChecked(PX.trans) != 0;
-    S.showpct  = isBoxChecked(PX.showpct) != 0;
-    S.pctpos   = getListIndex(PX.pctpos);
     S.hideu    = getIntegerValue(PX.hideu); if (S.hideu < 0) S.hideu = 0;
+    S.font     = getIntegerValue(PX.font); if (S.font < 7) S.font = 7; if (S.font > 40) S.font = 40;
     S.rank     = isBoxChecked(PX.rank) != 0;
+    S.type     = isBoxChecked(PX.type) != 0;
     S.rankpos  = getListIndex(PX.rankpos);
     S.rankscope= getListIndex(PX.rankscope);   // 0=Top5, 1=Top3
-    S.type     = isBoxChecked(PX.type) != 0;
     { char kl[24]=""; getListSelection(PX.kinglabel, kl, sizeof(kl));
       if (!kl[0]) strncpy(kl, "KING", sizeof(kl));
       strncpy(S.kinglabel, kl, sizeof(S.kinglabel)); S.kinglabel[sizeof(S.kinglabel)-1]=0; }
-    S.font     = getIntegerValue(PX.font); if (S.font < 7) S.font = 7; if (S.font > 40) S.font = 40;
     S.kline = isBoxChecked(PX.kline) != 0;
     S.cw    = isBoxChecked(PX.cw) != 0;
     S.pw    = isBoxChecked(PX.pw) != 0;
     S.flip  = isBoxChecked(PX.flip) != 0;
     S.em    = isBoxChecked(PX.em) != 0;
-    S.lstyle= getListIndex(PX.lstyle);
-    { int rm = getListIndex(PX.rankmode); S.rankmode = (rm == 1) ? 1 : 0; }   // (v0.59)
-    S.lpos  = getListIndex(PX.lpos);
     S.extk  = isBoxChecked(PX.extk) != 0;
-    S.topnodes = isBoxChecked(PX.topnodes) != 0;
-    S.topstyle = getListIndex(PX.topstyle);
-    S.spyking  = isBoxChecked(PX.spyking) != 0;
-    S.header= isBoxChecked(PX.header) != 0;
-    S.spot  = isBoxChecked(PX.spot) != 0;
+    S.lstyle= getListIndex(PX.lstyle);
+    S.lpos  = getListIndex(PX.lpos);
     S.roles   = isBoxChecked(PX.roles) != 0;
     S.regime  = isBoxChecked(PX.regime) != 0;
     S.panelpos= getListIndex(PX.panelpos);
-    S.defbands= isBoxChecked(PX.defbands) != 0;
-    S.confl   = isBoxChecked(PX.confl) != 0;
-    S.legend  = isBoxChecked(PX.legend) != 0;
-    S.headerpos = getListIndex(PX.headerpos);
     S.tapecols  = isBoxChecked(PX.tapecols) != 0;
     S.lvllabels = isBoxChecked(PX.lvllabels) != 0;
-    S.spywidth  = getIntegerValue(PX.spywidth); if (S.spywidth < 0) S.spywidth = 0;   // (v0.61)
+    S.spywidth  = getIntegerValue(PX.spywidth); if (S.spywidth < 0) S.spywidth = 0;
+    S.bands  = isBoxChecked(PX.bands) != 0;
+    S.bandh  = getIntegerValue(PX.bandh); if (S.bandh < 1) S.bandh = 1; if (S.bandh > 20) S.bandh = 20;
+    S.klinew = getIntegerValue(PX.klinew); if (S.klinew < 1) S.klinew = 1; if (S.klinew > 6) S.klinew = 6;
+    // (v0.64) the rows the review removed — constants, so every code path they gate keeps one known behaviour
+    S.detach = true; S.round = true; S.amp = false; S.trans = false;
+    S.showpct = true; S.pctpos = 0;              // the % at the tip when the tape is off; in the column when it is on
+    S.spyking = false; S.topnodes = false; S.topstyle = 1;
+    S.header = false; S.spot = false; S.headerpos = 0;
+    S.defbands = false; S.confl = false; S.legend = false;
+    S.rankmode = (S.book == 4) ? 1 : 0;          // the Atlas merge is automatic when both books draw
     dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
@@ -404,6 +385,7 @@ static GStrike parseStrike(const std::vector<std::string>& t)
     s.type  = (t.size() >= 6) ? t[5] : (s.king ? std::string("KING") : std::string());
     s.spx   = (t.size() >= 7) ? (float)atof(t[6].c_str()) : 0.0f;   // (v0.41) raw SPXW strike, 0 if the panel predates it
     s.mrank = (t.size() >= 8 && !t[7].empty()) ? atoi(t[7].c_str()) : 0;   // (v0.59) the pooled rank (panel 16.40); 0 = not pooled
+    s.since = (t.size() >= 9 && !t[8].empty()) ? atof(t[8].c_str()) : -1.0;  // (v0.64) first-seen CT second (panel 16.41); <0 = no band
     return s;
 }
 
@@ -431,6 +413,7 @@ void GammaProfile::load()
     hasRegime = false; rgSign.clear(); rgType.clear(); rgConf.clear(); rgNote.clear(); rgConflict = false; rgFlipSpx = 0.0f;
     hasSpot = false; spotPx = 0.0f; hasSpyKing = false; spyKingPx = 0.0f; book = "SPX"; asofSo = -1; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
     hasScaleRef = false; scaleRef = 0.0f;
+    hasIfMag = false; ifMagPx = ifMagSpx = ifMagPct = 0.0f;
     const char* up = getenv("USERPROFILE");
     if (!up) { strikes.clear(); return; }
     // Book selector: Auto(0) and SPX(1) read GammaProfile.csv (the Skylit tape); SPY(2) GammaProfile-SPY.csv;
@@ -479,6 +462,9 @@ void GammaProfile::load()
                 if (t.size() >= 4) { scaleRefSo = atof(t[2].c_str()); sscanf(t[3].c_str(), "%d-%d-%d", &scaleRefY, &scaleRefM, &scaleRefD); } }   // (v0.49) the quote's own minute
             else if (t[0] == "SPYKING") { spyKingPx=v; hasSpyKing=true; }
             else if (t[0] == "BOOK" && t.size()>=2) { book=t[1]; }
+            // (v0.64) KINGNOW,ES,IF,<price>,<spx strike>,<polarity> — the InsiderFinance Magnet (the King tracker's row), for the
+            // MAG tag on the Skylit node at that exact strike and the Mag entry in the chip
+            else if (t[0] == "KINGNOW" && t.size() >= 5 && t[1] == "ES" && t[2] == "IF") { ifMagPx = (float)atof(t[3].c_str()); ifMagSpx = (float)atof(t[4].c_str()); ifMagPct = (t.size() >= 6) ? (float)atof(t[5].c_str()) : 0.0f; hasIfMag = ifMagPx > 0; }
             else if (t[0] == "ASOF") { asofSo = v; }
         }
     }
@@ -516,7 +502,7 @@ short GammaProfile::pillW(const std::string& tag, const Settings& S)
 {
     if (tag.empty()) return 0;
     FONT f; f.id = HELVETICA; f.size = (short)(S.font - 1); f.style = BOLD; setFont(f);
-    return (short)(getTextWidth(tag.c_str(), (int)tag.size()) + 10);
+    return (short)(getTextWidth(tag.c_str(), (int)tag.size()) + 14);   // (v0.64) 7 px each side: "a space before but not after" — the bold glyphs ran past the measured width
 }
 short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S)
 {
@@ -530,7 +516,7 @@ short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag, 
     COLOR c = depthColour(tag);
     RCT box; box.set(leftX, (short)(cy - h/2), (short)(leftX + w), (short)(cy + h/2));
     box.draw(1, c, C_DARK, DRAW_OPAQUE, PAT_SOLID);
-    textLJ((short)(leftX + 5), y, tag.c_str(), c, S.font - 1, true);
+    textLJ((short)(leftX + 6), y, tag.c_str(), c, S.font - 1, true);
     return w;
 }
 void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
@@ -550,9 +536,9 @@ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bo
     PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(y + (asc - desc)/2); tp.drawText(s);
 }
 // Horizontal line in pixel space (lets a level reach into the right margin).
-void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps)
+void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps, int wpx)
 {
-    setPen(col, 1, ps);
+    setPen(col, (short)(wpx < 1 ? 1 : wpx), ps);
     PNT a; a.set(0, 0.0f); a.h = lx; a.v = y; a.setDrawPosition();
     PNT b; b.set(0, 0.0f); b.h = rx; b.v = y; b.drawLineTo();
 }
@@ -578,12 +564,16 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     std::string rl = RT.line;
     if (!slopeWord.empty() && !RT.na) { size_t bar = rl.find(" | "); if (bar != std::string::npos) rl.insert(bar, " " + slopeWord); }
     char l0[200]; sprintf_s(l0, sizeof(l0), "%s", rl.c_str());
-    char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a", kgS[48]="";
+    char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a", kgS[48]="", kgS2[48]="", mgS[48]="";
     if (has[0] && kIdx >= 0 && kIdx < (int)strikes.size()) {
         float kspx = strikes[kIdx].spx;
         if (kspx > 0) sprintf_s(kgS, sizeof(kgS), "%s %d (%d)", S.kinglabel, (int)(lvl[0]+0.5f), (int)(kspx+0.5f));
         else          sprintf_s(kgS, sizeof(kgS), "%s %d", S.kinglabel, (int)(lvl[0]+0.5f));
     }
+    // (v0.64) the SPY King when both books draw, and the IF Magnet (KINGNOW,ES,IF) — "both Kings should be mentioned in the chip"
+    int kSpy = -1; for (size_t q = 0; q < strikesSpy.size(); q++) if (strikesSpy[q].king) { kSpy = (int)q; break; }
+    if (cfg.book == 4 && kSpy >= 0) sprintf_s(kgS2, sizeof(kgS2), "%s %d (%d)", S.kinglabel, (int)(strikesSpy[(size_t)kSpy].price+0.5f), (int)(strikesSpy[(size_t)kSpy].spx+0.5f));
+    if (hasIfMag) sprintf_s(mgS, sizeof(mgS), "Mag %d (%d)", (int)(ifMagPx+0.5f), (int)(ifMagSpx+0.5f));
     if (has[2]) { if (lvlSpx[2] > 0) sprintf_s(pwS, sizeof(pwS), "PW %d (%d)",   (int)(lvl[2]+0.5f), (int)(lvlSpx[2]+0.5f)); else sprintf_s(pwS, sizeof(pwS), "PW %d",   (int)(lvl[2]+0.5f)); }
     if (has[3]) { if (lvlSpx[3] > 0) sprintf_s(flS, sizeof(flS), "FLIP %d (%d)", (int)(lvl[3]+0.5f), (int)(lvlSpx[3]+0.5f)); else sprintf_s(flS, sizeof(flS), "FLIP %d", (int)(lvl[3]+0.5f)); }
     if (has[1]) { if (lvlSpx[1] > 0) sprintf_s(cwS, sizeof(cwS), "CW %d (%d)",   (int)(lvl[1]+0.5f), (int)(lvlSpx[1]+0.5f)); else sprintf_s(cwS, sizeof(cwS), "CW %d",   (int)(lvl[1]+0.5f)); }
@@ -593,7 +583,9 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     short pillCW = (has[1] && !lvlDepth[1].empty()) ? pillW(lvlDepth[1], S) : 0;
     setFont(lf);
     short w1 = (short)(getTextWidth(pwS, (int)strlen(pwS)) + (pillPW ? tight + pillPW : 0) + gap
+                     + (mgS[0] ? getTextWidth(mgS, (int)strlen(mgS)) + gap : 0)
                      + (kgS[0] ? getTextWidth(kgS, (int)strlen(kgS)) + gap : 0)
+                     + (kgS2[0] ? getTextWidth(kgS2, (int)strlen(kgS2)) + gap : 0)
                      + getTextWidth(flS, (int)strlen(flS)) + gap
                      + getTextWidth(cwS, (int)strlen(cwS)) + (pillCW ? tight + pillCW : 0));
     FONT bf; bf.id = HELVETICA; bf.size = (short)S.font; bf.style = BOLD; setFont(bf);
@@ -638,8 +630,12 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     textLJ(cx1, ly1, pwS, C_SUP,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(pwS, (int)strlen(pwS)));
     if (pillPW) { cx1 = (short)(cx1 + tight); cx1 = (short)(cx1 + drawDepthPill(cx1, ly1, lvlDepth[2], S)); }
     cx1 = (short)(cx1 + gap);
+    if (mgS[0]) { COLOR mc = (ifMagPct < 0) ? S.cneg : S.cpos;   // (v0.64) the Magnet, right after PW, in its polarity
+                  textLJ(cx1, ly1, mgS, mc, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(mgS, (int)strlen(mgS)) + gap); }
     if (kgS[0]) { COLOR kc = (S.kingcol == 1) ? D_KING : ((kIdx >= 0 && strikes[kIdx].pct < 0) ? S.cneg : S.cpos);
                   textLJ(cx1, ly1, kgS, kc, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(kgS, (int)strlen(kgS)) + gap); }   // (v0.52)
+    if (kgS2[0]) { COLOR kc2 = (S.kingcol == 1) ? D_KING : ((strikesSpy[(size_t)kSpy].pct < 0) ? S.cneg : S.cpos);   // (v0.64) the SPY King
+                  textLJ(cx1, ly1, kgS2, kc2, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(kgS2, (int)strlen(kgS2)) + gap); }
     textLJ(cx1, ly1, flS, C_FLIPC, S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(flS, (int)strlen(flS)) + gap);
     textLJ(cx1, ly1, cwS, C_RES,   S.font, false); setFont(lf); cx1 = (short)(cx1 + getTextWidth(cwS, (int)strlen(cwS)));
     if (pillCW) { cx1 = (short)(cx1 + tight); drawDepthPill(cx1, ly1, lvlDepth[1], S); }
@@ -668,7 +664,7 @@ void GammaProfile::drawLevel(int lastBar, short lx, short rx, int idx, COLOR col
 {
     if (!has[idx]) return;
     PEN_STYLE ps = S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID);
-    setPen(col, 1, ps);
+    setPen(col, (short)(idx == 0 ? S.klinew : 1), ps);   // (v0.64) the King line at its own width
     PNT a; a.set(0, lvl[idx]);        a.setDrawPosition();
     PNT b; b.set(lastBar, lvl[idx]);
     if (extend) b.h = rx;             // stretch into the right margin
@@ -803,6 +799,31 @@ void GammaProfile::render(const Settings& S, bool railOnly)
 
     PEN_STYLE tps = S.topstyle==1 ? P_DOT : (S.topstyle==2 ? P_DASH : P_SOLID);
 
+    // (v0.64) NODE BANDS — the node's line, bounded in time: from the bar it was first seen (the CSV's 9th field) to the
+    // current bar, between the two tape strips, polarity colour faded by its % of its own King, translucent under the
+    // candles' ink. Replaces the top-node lines. Drawn for every stamped node of THIS rail (the panel stamps >= 5%).
+    if (S.bands && !bars.empty()) {
+        short bx2 = (short)(paneR - colW - 2);                      // stop at the SPX strip (both rails use the same colW)
+        short bx0 = (short)(paneL + 2 + colW);                      // never under the SPY strip
+        for (size_t i = 0; i < strikes.size(); i++) {
+            const GStrike& s = strikes[i];
+            if (s.since < 0) continue;
+            int bi = gpl::bandStartIndex(bars.empty() ? 0 : &bars[0], (int)bars.size(), s.since);
+            if (bi < 0) continue;
+            PNT a; a.set(barsFrom + bi, s.price); short x1 = (short)(a.h - getPixelsPerBar()/2); if (x1 < bx0) x1 = bx0;
+            if (x1 >= bx2) continue;
+            COLOR pc = (s.pct >= 0) ? S.cpos : S.cneg;
+            COLOR bc = lerpColor(C_DARK, pc, gpl::bandStrength(s.pct));
+            bandPrice(s.price - S.bandh/2.0f, s.price + S.bandh/2.0f, x1, bx2, bc);
+        }
+    }
+    // (v0.64) the SPY rail's King line — the King line row covers BOTH Kings when Both (the SPY King line row is gone)
+    if (railOnly && S.kline && kIdx >= 0) {
+        PNT kp; kp.set(lastBar, strikes[kIdx].price);
+        COLOR kc = (S.kingcol == 1) ? D_KING : (strikes[kIdx].pct < 0 ? S.cneg : S.cpos);
+        hlinePx(kp.v, paneL, S.extk ? paneR : (short)(kp.h + getPixelsPerBar()/2), kc, S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID), S.klinew);
+    }
+
     // bars
     for (size_t i = 0; i < strikes.size(); i++) {
         GStrike& s = strikes[i];
@@ -864,10 +885,12 @@ void GammaProfile::render(const Settings& S, bool railOnly)
         }
         // (v0.42) LEVEL LABELS ON THE NODE: the wall nodes carry "CW" / "PW" just beyond the tip (outside the
         // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
-        const char* wtag = 0;
+        const char* wtag = 0; COLOR wcol = C_PINK;
         if (S.lvllabels && !railOnly) {
             if (has[1] && gpl::levelNode(gn, lvl[1], lvlSpx[1]) == (int)i) wtag = "CW";
             else if (has[2] && gpl::levelNode(gn, lvl[2], lvlSpx[2]) == (int)i) wtag = "PW";
+            // (v0.64) MAG — the InsiderFinance Magnet on the Skylit node at EXACTLY that strike (never the nearest: the books differ)
+            else if (hasIfMag && s.spx > 0.0f && std::fabs(s.spx - ifMagSpx) < 0.001f) { wtag = "MAG"; wcol = (ifMagPct < 0) ? S.cneg : S.cpos; }
         }
         short wtagW = 0, outerW = 0;   // (v0.51) outerW = tag + pill: what the outside % label must clear
         if (wtag) {
@@ -876,13 +899,13 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             int rankMaxW = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
             bool bubbleOut = S.rank && gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxW;   // (v0.62)
             short past = bubbleOut ? (short)(2 * (S.font * 0.9f + 4) + 8) : 6;
-            if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, C_PINK, S.font - 1, true);
-            else         textLJ((short)(tip + past), p.v, wtag, C_PINK, S.font - 1, true);
+            if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, wcol, S.font - 1, true);
+            else         textLJ((short)(tip + past), p.v, wtag, wcol, S.font - 1, true);
             // (v0.50) the depth pill beside the tag (IF extras #1): 0D = today's expiry only, WK = the week, MO = the monthly
             // (v0.51) order outward from the tip: bubble, tag, pill, then the % label — the pill was drawn over the % (his
             // screenshot 21:33: "+48%" half under a WK box). outerW carries tag + pill so the % label clears both.
             outerW = (short)(past - 6 + wtagW);
-            { const std::string& dtag = (wtag[0] == 'C') ? lvlDepth[1] : lvlDepth[2];
+            { const std::string& dtag = (wtag[0] == 'C') ? lvlDepth[1] : (wtag[0] == 'P' ? lvlDepth[2] : std::string());
               if (!dtag.empty()) { short pw = pillW(dtag, S);
                                    if (sgn < 0) drawDepthPill((short)(tip - past - wtagW - 3 - pw), p.v, dtag, S);
                                    else         drawDepthPill((short)(tip + past + wtagW + 3), p.v, dtag, S);
@@ -936,16 +959,17 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             char sk[16], pk[12];
             if (s.spx > 0.0f) sprintf_s(sk, sizeof(sk), "%d", (int)(s.spx + 0.5f)); else sk[0] = 0;
             sprintf_s(pk, sizeof(pk), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
+            if (ab < (float)S.hideu) pk[0] = 0;   // (v0.64) "Hide % under" applies to the column
             COLOR tc = primary ? (s.king ? D_KING : C_TXT) : C_GREY;
             short half = (short)(colW / 2);
             if (S.side == 1) {        // left edge: strike column then % column, growing right
                 short c1 = (short)(paneL + 4), c2 = (short)(paneL + 4 + half);
                 if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
-                textLJ(c2, p.v, pk, tc, S.font, s.king);
+                if (pk[0]) textLJ(c2, p.v, pk, tc, S.font, s.king);
             } else {                  // right edge (default): strike column left, % column right-justified at the edge
                 short c1 = (short)(paneR - colW + 4), c2 = (short)(paneR - 4);
                 if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
-                textRJ(c2, p.v, pk, tc, S.font, s.king);
+                if (pk[0]) textRJ(c2, p.v, pk, tc, S.font, s.king);
             }
         }
     }
@@ -978,7 +1002,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     }
 
     // level rail
-    if (S.kline) drawLevel(lastBar, paneL, paneR, 0, D_KING,  "",          S.extk, S);  // line only; the node labels KING
+    { COLOR kc = D_KING; if (S.kingcol != 1 && kIdx >= 0) kc = strikes[kIdx].pct < 0 ? S.cneg : S.cpos;   // (v0.64) polarity, like its bar
+      if (S.kline) drawLevel(lastBar, paneL, paneR, 0, kc, "", S.extk, S); }  // line only; the node labels KING
     if (S.cw)    drawLevel(lastBar, paneL, paneR, 1, C_PINK,  "CALL WALL", false,  S);
     if (S.pw)    drawLevel(lastBar, paneL, paneR, 2, C_PINK,  "PUT WALL",  false,  S);
     if (S.flip)  drawLevel(lastBar, paneL, paneR, 3, C_FLIPC, "FLIP",      false,  S);
@@ -1056,7 +1081,7 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.63  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile 0.64  written " << ts << "  (this instance's last draw)\n";
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
     else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff) << "\n";
     // (v0.63) what the dialog is actually feeding the draw — so "the chip should be centered" can be checked against the setting
@@ -1067,10 +1092,10 @@ void GammaProfile::writeStatus()
       << ",rank=" << (int)cfg.rank << ",rankpos=" << cfg.rankpos << ",type=" << (int)cfg.type
       << ",kline=" << (int)cfg.kline << ",cw=" << (int)cfg.cw << ",pw=" << (int)cfg.pw << ",flip=" << (int)cfg.flip << ",em=" << (int)cfg.em
       << ",lstyle=" << cfg.lstyle << ",lpos=" << cfg.lpos << ",extk=" << (int)cfg.extk << ",topnodes=" << (int)cfg.topnodes << ",topstyle=" << cfg.topstyle
-      << ",spyking=" << (int)cfg.spyking << ",header=" << (int)cfg.header << ",spot=" << (int)cfg.spot << ",roles=" << (int)cfg.roles
-      << ",regime=" << (int)cfg.regime << ",panelpos=" << cfg.panelpos << ",defbands=" << (int)cfg.defbands << ",confl=" << (int)cfg.confl
-      << ",legend=" << (int)cfg.legend << ",headerpos=" << cfg.headerpos << ",tapecols=" << (int)cfg.tapecols << ",lvllabels=" << (int)cfg.lvllabels
-      << ",rankmode=" << cfg.rankmode << ",spywidth=" << cfg.spywidth << "\n";
+      << ",roles=" << (int)cfg.roles << ",regime=" << (int)cfg.regime << ",panelpos=" << cfg.panelpos
+      << ",tapecols=" << (int)cfg.tapecols << ",lvllabels=" << (int)cfg.lvllabels << ",rankmode=" << cfg.rankmode << ",spywidth=" << cfg.spywidth
+      << ",bands=" << (int)cfg.bands << ",bandh=" << cfg.bandh << ",klinew=" << cfg.klinew
+      << ",ifmag=" << (hasIfMag ? (int)(ifMagSpx+0.5f) : 0) << ",bars=" << bars.size() << "\n";
 }
 
 // ---- (v0.39) CONTRACT ALIGNMENT — the whole book is priced in the panel's space (Skylit ES1 / cash,
@@ -1096,7 +1121,8 @@ void GammaProfile::applyContractOffset()
         // behind the SDK in each .cpp. The bars are handed over as plain (date, sec-of-day, close) records.
         RTARRAYI dt(barDateTime);
         int from = (int)n - 6000; if (from < 0) from = 0;
-        std::vector<col::Bar> bars; bars.reserve((size_t)((int)n - from));
+        bars.clear(); bars.reserve((size_t)((int)n - from));   // (v0.64) kept as a member: the band starts index into it
+        barsFrom = from;
         for (int i = from; i < (int)n; i++) {
             struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
             col::Bar b; b.y = t.tm_year + 1900; b.m = t.tm_mon + 1; b.d = t.tm_mday;
@@ -1120,6 +1146,7 @@ void GammaProfile::applyContractOffset()
     lastOff = off;   // (v0.61) the SPY rail of Book = Both is shifted by the same spread in draw()
     for (int i = 0; i < 6; i++) if (has[i]) lvl[i] += off;
     if (hasSpyKing) spyKingPx += off;
+    if (hasIfMag) ifMagPx += off;   // (v0.64)
     // The spot marker AND the role (King/Ceiling/Floor/Gatekeeper) test want the chart's LIVE price, not the
     // shifted CSV spot — so pin spot to the chart close. This is also what breaks the "everything is a
     // Gatekeeper" flood: with spot and King finally on the SAME (chart) scale, only the nodes genuinely
@@ -1159,6 +1186,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.63");
+    p->setVersion("0.64");
     return p;
 }

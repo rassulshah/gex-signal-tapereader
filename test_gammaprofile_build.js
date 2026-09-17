@@ -20,9 +20,10 @@ var PANEL_MUTED=false;
 eval(['GP_IF_FILE','GP_IF_BUILT'].map(v).join(''));
 eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gpEmRows','gpWallDepth','gpSlopeWord','gpLevelRows','gammaProfileBuildIF','gpSpyStrikes','gpAtlasPool','gammaProfileBuildSPY','gammaProfileBuild'].map(ex).join('\n'));
 eval(['GP_SPY_FILE','GP_SPY_BUILT'].map(v).join(''));   // (v16.40)
+eval(['GP_SINCE_KEY','GP_SINCE'].map(v).join('')); eval(['gpSinceLoad','gpSinceStamp'].map(ex).join('\n'));   // (v16.41)
 var GP_DEPTH_T0=0.70, GP_DEPTH_TW=0.70, GP_SLOPE_STEEP=0.10;   // (v16.35) the IF-extras thresholds
 // the helpers the code calls must be reachable from a mutant built with new Function (global scope) — see section 8
-Object.assign(global, { gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gpEmRows, gpWallDepth, gpSlopeWord, gpLevelRows, GP_DEPTH_T0, GP_DEPTH_TW, GP_SLOPE_STEEP, gammaProfileBuildIF, gpSpyStrikes, gpAtlasPool, gammaProfileBuildSPY, GP_SPY_FILE, GP_SPY_BUILT, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
+Object.assign(global, { gpSinceLoad, gpSinceStamp, GP_SINCE_KEY, GP_SINCE_MIN, gpF2, gpN1, gpI, gpDur, gpClk, gpShownDate, gpDow, gpDate, sum3, gridStep, gridSetups, gpRegime, gpEsOfSpx, gpEmRows, gpWallDepth, gpSlopeWord, gpLevelRows, GP_DEPTH_T0, GP_DEPTH_TW, GP_SLOPE_STEEP, gammaProfileBuildIF, gpSpyStrikes, gpAtlasPool, gammaProfileBuildSPY, GP_SPY_FILE, GP_SPY_BUILT, GP_IF_FILE, GP_IF_BUILT, GPTS_VERSION, GP_FILE, GP_SPXWR_KEY, GP_LAST, GP_AUDIT_FILE, GP_AUDIT, GP_FLIP_BUFFER_PTS, GP_NEAR_PTS, REGIME_TREND_SKEW, REGIME_WHIP_EDGEMID, REGIME_RAINBOW_MIN, REGIME_SIG_PCT, GRID_STACK_STEPS, GRID_STACK_MIN_PCT, GRID_STACK_MAX_PCT, GRID_RUG_FLOOR_STEPS, PANEL_MUTED });
 
 // ---- the world, stubbed to the 09:47 CT snapshot ----
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
@@ -204,7 +205,7 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
   global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:(sym==='SPY'?{ pct:SPYT, king:763, kingNeg:true, ladderSrc:'trinity' }:null));
   const B11=gammaProfileBuild(); const R11=rows(B11.csv); const S11=rows(GP_SPY_BUILT||'');
   const mr=(RR,spx)=>{ const t=(RR.STRIKE||[]).find(x=>parseFloat(x[5])===spx); return t?t[6]:undefined; };
-  ok(R11.STRIKE.every(t=>t.length===7), '11.1 every SPX STRIKE row carries an 8th field (the pooled rank)', R11.STRIKE[0]);
+  ok(R11.STRIKE.every(t=>t.length===8), '11.1 every SPX STRIKE row carries an 8th field (the pooled rank) and a 9th (first-seen, 16.41)', R11.STRIKE[0]);
   // (this fixture's ratios are September's: SPX 7650 -> 7654.25 sits BELOW SPY 763 -> 7712, so the |100| tie goes to SPX here;
   //  on the live Dec ratio 7650 -> 7718.7 sits above 7710 and Atlas listed SPY 763 first — the rule is the same, the prices differ)
   ok(mr(R11,7650)==='1' && mr(R11,7655)==='4' && mr(R11,7635)==='7', '11.2 SPX pooled ranks: 7650 -> 1 (the |100| tie to the lower ES price), 7655 -> 4, 7635 -> 7 (below the five)', [mr(R11,7650),mr(R11,7655),mr(R11,7635)]);
@@ -227,5 +228,44 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
     const Bm=gammaProfileBuild(); ok(mr(rows(Bm.csv),7655)!=='4', '11.13 mutation: a pool not ranked by own-% no longer puts SPX 7655 fourth (the assertions bite)', mr(rows(Bm.csv),7655));
     global.gpAtlasPool=keep; }
   TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
+}
+// ---- §12 (v16.41) FIRST-SEEN PER STRIKE — the 9th field, the plugin's band start ------------------------------------
+{
+  const SPXT={ '7650.00':100,'7655.00':66,'7635.00':25,'7645.00':19,'7630.00':13,'7660.00':4,'7640.00':2 };
+  const SPYT={ '763.00':-100,'762.00':71,'760.00':-54,'761.00':36,'765.00':-16,'764.00':12,'759.00':-8 };
+  const keepTT=TT; TT={ pct:SPXT, king:7650, kingNeg:false, ladderSrc:'trinity' };
+  global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:(sym==='SPY'?{ pct:SPYT, king:763, kingNeg:true, ladderSrc:'trinity' }:null));
+  delete LS[GP_SINCE_KEY]; GP_SINCE=null; global.GP_SINCE=null;
+  const f9=(RR,spx)=>{ const t=(RR.STRIKE||[]).find(x=>parseFloat(x[5])===spx); return t?t[7]:undefined; };
+  global.ctNowSecOfDay=()=>35229;
+  const B1=gammaProfileBuild(); const R1=rows(B1.csv), S1=rows(GP_SPY_BUILT);
+  ok(f9(R1,7650)==='35229' && f9(R1,7655)==='35229' && f9(S1,763)==='35229' && f9(S1,762)==='35229', '12.1 first export: every node >= 5% is stamped with THIS export\'s CT second (both books)', [f9(R1,7650), f9(S1,763)]);
+  ok(f9(R1,7660)==='' && f9(R1,7640)==='', '12.2 a node under 5% of its King carries no stamp (no band)', [f9(R1,7660), f9(R1,7640)]);
+  ok(B1.audit.since && B1.audit.since.SPX['7650']===35229 && B1.audit.since.SPY['763']===35229, '12.3 the audit carries the since map per book (Gate L re-derives the field from it)', B1.audit.since);
+  // three minutes later: the stamps HOLD; 7660 climbs to 9% -> stamped now; 7630 drops to 3% -> cleared
+  global.ctNowSecOfDay=()=>35409;
+  TT={ pct:Object.assign({}, SPXT, { '7660.00':9, '7630.00':3 }), king:7650, kingNeg:false, ladderSrc:'trinity' };
+  const B2=gammaProfileBuild(); const R2=rows(B2.csv);
+  ok(f9(R2,7650)==='35229' && f9(R2,7655)==='35229', '12.4 three minutes on: the surviving nodes keep their FIRST stamp (the band starts where the node started)', [f9(R2,7650), f9(R2,7655)]);
+  ok(f9(R2,7660)==='35409', '12.5 a node that climbs over 5% is stamped at the export that first saw it there', f9(R2,7660));
+  ok(f9(R2,7630)==='', '12.6 a node that drops under 5% loses its stamp (the band ends)', f9(R2,7630));
+  // it comes back: a NEW band, not the old start
+  global.ctNowSecOfDay=()=>35589;
+  TT={ pct:Object.assign({}, SPXT, { '7660.00':9 }), king:7650, kingNeg:false, ladderSrc:'trinity' };
+  const B3=gammaProfileBuild(); const R3=rows(B3.csv);
+  ok(f9(R3,7630)==='35589', '12.7 ... and when it returns the band restarts at the return, not at its first life', f9(R3,7630));
+  // a panel reload keeps the stamps (localStorage), a new CT date drops them
+  GP_SINCE=null; global.GP_SINCE=null;
+  const B4=gammaProfileBuild(); ok(f9(rows(B4.csv),7650)==='35229', '12.8 a panel reload (in-memory map gone) reads the stamps back from localStorage', f9(rows(B4.csv),7650));
+  global.ctTodayStr=()=>'2026-09-17'; GP_SINCE=null; global.GP_SINCE=null;
+  const B5=gammaProfileBuild(); ok(f9(rows(B5.csv),7650)==='35589', '12.9 a new CT date starts every band afresh', f9(rows(B5.csv),7650));
+  global.ctTodayStr=()=>'2026-09-16'; delete LS[GP_SINCE_KEY]; GP_SINCE=null; global.GP_SINCE=null;
+  // mutation: a stamp that is overwritten every export would make every band start "now"
+  { const mut=ex('gpSinceStamp').replace('if(!(k in m)) m[k]=nowSod;','m[k]=nowSod;'); ok(mut!==ex('gpSinceStamp'), '12.10 mutation applies');
+    const keep=global.gpSinceStamp; eval(mut); global.gpSinceStamp=gpSinceStamp;
+    global.ctNowSecOfDay=()=>35229; gammaProfileBuild(); global.ctNowSecOfDay=()=>35409; const Bm=gammaProfileBuild();
+    ok(f9(rows(Bm.csv),7650)!=='35229', '12.11 mutation: a stamp rewritten every export no longer holds the first minute (the assertions bite)', f9(rows(Bm.csv),7650));
+    global.gpSinceStamp=keep; delete LS[GP_SINCE_KEY]; GP_SINCE=null; global.GP_SINCE=null; }
+  global.ctNowSecOfDay=()=>35229; TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
 }
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

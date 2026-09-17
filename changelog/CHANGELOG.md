@@ -1,3 +1,33 @@
+## v16.41 + lsGammaProfile 0.64 — the reviewed dialog, both Kings, MAG, time-bounded node bands (2026-09-17, ~15:40 CT)
+
+The operator reviewed the dialog element by element and then asked for the Atlas look: "this would be displayed instead of
+a line across. it should also use the x axis and only show where it is supposed to instead of across the entire screen".
+Mockup agreed (`design/gp064-mockup.html`, built from the 14:47 files). "build. make sure you have the ability to verify
+against atlas, so it should be consistent with atlas."
+- **Panel 16.41 — the 9th STRIKE field = first-seen.** `gpSinceStamp(book, strikes, sod)`: the CT second a strike first
+  showed >= 5 % of its OWN King today, per book (SPX and SPY files), held while it stays >= 5 %, cleared when it drops
+  (a return starts a new band), reset on a new CT date, persisted in localStorage (`gpts_gp_since_v1`) so a reload does
+  not restart every band. Audit `AU.since = {SPX:{strike:sod}, SPY:{…}}`. Gate A §12 (+11 incl. a mutation: a stamp
+  rewritten every export no longer holds the first minute). Gate L: field 9 == the audit's map, stamped iff |%| >= 5,
+  never after ASOF; `band_start_earliest` in the expected picture. Against Atlas the band START is eyes-on — Atlas's
+  per-strike history is client-side only (SKYLIT-FEEDS) — the five badges and the % remain the fetched comparison.
+- **GP 0.64 — the dialog, version 7 (36 rows -> 27; defaults = his settings, so the reset lands on them):** Book default
+  "Both SPY and SPX", Width 90, Tape columns on, Hide % under 0 (applies to the column), Panel at Bottom-C, "Show IF level
+  labels on nodes" on, SPY rail width 120. Removed: Detach, Rounded, Amplify, Translucent, Show %, % at, SPY King line
+  (never worked — no SPYKING row was ever written), Top-node lines/style (replaced by the bands), Title header, Spot line,
+  Header at, Deflection bands, EM confluence, Polarity legend, Rank (the merge is automatic when Both). New: **Node bands**
+  (on), **Band height (ES pts)** 3, **King line width px** 2.
+- **Node bands** (`gpl::bandStartIndex`, `gpl::bandStrength`, Gate B +7): from the first bar of the last bar's date at or
+  after the node's first-seen second to the current bar, between the two strips, polarity colour faded by |%| of its own
+  King, translucent, under the bars. A since before the day's first bar starts at that bar; a CSV from another day draws none.
+- **Both Kings:** the King line row draws the SPX King (via the KING row) AND the SPY King (from the SPY rail) at "King
+  line width", each in its polarity colour (Distinct keeps the pale King colour). The chip's second line: PW · **Mag** ·
+  K (SPX) · **K (SPY)** · FLIP · CW, each King in its polarity; the box is measured with all of them.
+- **MAG on the node:** the IF Magnet is read from the file's own `KINGNOW,ES,IF,<price>,<strike>,<polarity>` row; the tag
+  goes on the Skylit node at EXACTLY that strike (never the nearest — the books differ), in the Magnet's polarity colour.
+- The depth pill is padded 7 px each side (was tight on the right: "a space before but not after").
+- Regression gamma green (89 · 24 · 85 · 15 · six live fixtures · syntax). Eyes-on: `testing/gamma-profile/CHECKLIST.md` 0.64.
+
 ## lsGammaProfile 0.63 — the rail stops short of the price scale; tape columns on both rails, with a background on the left; the status file says what the dialog feeds (2026-09-17, ~12:45 CT)
 
 Operator's 0.62 screenshot: "the tapes are missing for both spy and spx. maybe have a background for the tape on the

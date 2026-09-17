@@ -1,5 +1,17 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 12:45 CT (GP 0.63) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.63**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 15:40 CT (v16.41 / GP 0.64) · **panel v16.41** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.64**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~15:40 CT — v16.41 + GP 0.64: THE REVIEWED DIALOG, BOTH KINGS, MAG, TIME-BOUNDED NODE BANDS. START HERE.
+
+He reviewed every dialog row (see CHANGELOG 0.64 for the full list) and asked for Atlas's look: the node's line becomes a
+BAND from the bar the node was first seen to now, polarity colour, opacity by %. Panel 16.41 stamps a 9th STRIKE field
+(first-seen CT second, >= 5 % of own King, per book, persisted, reset daily); GP 0.64 draws the band from it, draws BOTH
+King lines, puts Mag + both Kings in the chip, tags MAG on the exact-strike Skylit node, and ships the 27-row dialog at
+parameter version 7 with defaults = his settings. **He needs: Tampermonkey 16.41 (wait 5 min after the push, reload Atlas)
++ GEX build 0.64 (close IRT → INSTALLED → reopen). After the reset he re-enters NOTHING — check the dialog reads Both SPY
+and SPX / 90 / tape on / Bottom-C / 120.** Bands start at the minute 16.41 first saw each node — full history from
+tomorrow's open. Acceptance: his screenshot vs Atlas same minute: badges + % (fetched, runner) and band starts (eyes-on).
+Verify from the export folder: `GammaProfile.status-Both-*.txt` (GPSETTINGS shows bands=1, ifmag=<strike>, bars=N).
 
 # ⚠⚠⚠ 2026-09-17 ~12:45 CT — GP 0.63: the rail clear of the price scale, tape columns on both rails (+ left background), GPSETTINGS in the status file. START HERE.
 

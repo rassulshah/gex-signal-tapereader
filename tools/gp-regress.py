@@ -148,7 +148,7 @@ def main():
     add(all(ranked[i]['rank'] == i + 1 for i in range(min(10, len(ranked)))), 'A', 'ranks 1..10 follow |%King| (ties to the lower strike)')
     # (16.40) THE ATLAS POOL: field 8 of every STRIKE row is the row's rank in the SPY + SPXW pool (each book's own %King,
     # ties on |%| to the lower ES price) — re-derived here from the audit's two tapes and diffed row for row
-    ATLAS_POOL = None
+    ATLAS_POOL = None; BAND_EARLIEST = None
     if AU.get('pool') is not None and book_row in ('ES', 'SPY', ''):
         spx_t = AU.get('tape') or {}; spy_t = {('%.2f' % k): v for k, v in ((AU.get('spyProf') or {}).get('prof') or [])}
         rsp = (AU.get('ratio') or {}).get('SPXW'); rspy = ((AU.get('spyProf') or {}).get('ratio')) or (AU.get('ratio') or {}).get('SPY')
@@ -172,6 +172,25 @@ def main():
         au5 = [(r[0], int(r[1])) for r in (AU.get('pool') or [])[:5]]
         add(top5 == au5, 'A', 'the pool\'s five (%s) == the audit\'s' % ' '.join('%s %d' % x for x in top5))
         ATLAS_POOL = [dict(book=r[0], strike=r[1], pct=r[2], es=r[3], badge=i + 1) for i, r in enumerate(pool[:5])]
+    # (16.41) FIRST-SEEN (field 9): present iff |%| >= 5, equal to the audit's since map for this book, never after ASOF —
+    # the plugin's band start; against Atlas the check is eyes-on (Atlas's per-strike history is client-side only, SKYLIT-FEEDS)
+    if AU.get('since') is not None and book_row in ('ES', 'SPY', ''):
+        this_book = 'SPY' if book_row == 'SPY' else 'SPX'
+        sm = (AU.get('since') or {}).get(this_book) or {}
+        asof = num(R.get('ASOF', [['']])[0][0])
+        off9 = []
+        for t in strikes:
+            if len(t) < 8: off9.append(('no field 9', t[5])); continue
+            k = t[5]; pv = num(t[1]) or 0; f9 = t[7]
+            want9 = sm.get(str(int(float(k))) if float(k) == int(float(k)) else k, sm.get(k))
+            if abs(pv) >= 5:
+                if f9 == '' or want9 is None or int(f9) != int(want9): off9.append((k, f9, want9))
+                elif asof is not None and int(f9) > asof + 5: off9.append((k, f9, 'after ASOF %s' % asof))
+            elif f9 != '': off9.append((k, f9, 'under 5% but stamped'))
+        add(not off9, 'A', 'field 9 (first-seen CT second) == the audit\'s since map for %s, stamped iff |%%| >= 5, never after ASOF' % this_book + ('' if not off9 else ' — off: %s' % off9[:5]))
+        if sm:
+            earliest = min(int(v) for v in sm.values()); h, m_ = divmod(earliest // 60, 60)
+            BAND_EARLIEST = '%02d:%02d' % (h, m_)
     kn = [n for n in nodes if n['king']]
     add(len(kn) == 1 and kn[0]['spx'] == king, 'A', 'exactly one King flag, on the tape King %s' % king)
     KING = num(R.get('KING', [['']])[0][0]); add(KING is not None and kn and abs(KING - kn[0]['es']) < 0.001, 'A', 'KING row (%s) == the flagged strike\'s ES' % KING)
@@ -229,6 +248,7 @@ def main():
     # ---------------- Gate B: the expected chart ----------------
     exp = {}
     if ATLAS_POOL: exp['atlas_pool'] = ATLAS_POOL   # (16.40) the five badges as the two rails share them under Rank = Atlas merge
+    if BAND_EARLIEST: exp['band_start_earliest'] = BAND_EARLIEST   # (16.41) the earliest node band on the chart starts here
     if nodes and spot:
         tags = roles(nodes, spot)
         exp['tags'] = {('%g' % k): v for k, v in tags.items()}

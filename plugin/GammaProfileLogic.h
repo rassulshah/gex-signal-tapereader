@@ -16,6 +16,7 @@
 #include <vector>
 #include <cstdio>
 #include <string>
+#include "ContractOffsetLogic.h"   // (v0.64) col::Bar — the band start is found on the chart's own bars
 #include <cmath>
 #include <algorithm>
 
@@ -292,6 +293,26 @@ inline bool bubbleOutside(int rankpos, int barLen, int radius) { return rankpos 
 // points apart (twice SPX), so the SPY rail's bars hit the 40 px cap while 6-11 px long — semicircle blobs at the pane
 // edge (his screenshot). The SPX rail's thickness is computed once and handed to the SPY rail.
 inline int autoBarH(int spacingPx) { int h = spacingPx > 4 ? (int)(spacingPx * 0.78f) : 6; if (h < 3) h = 3; if (h > 40) h = 40; return h; }
+
+// (v0.64) NODE BANDS — the band replaces the top-node line and is BOUNDED IN TIME: from the bar the node was first seen at
+// this strike (panel 16.41's 9th STRIKE field, CT sec-of-day, today) to the current bar. Atlas draws a node's heat from the
+// moment it appears; a line across the whole screen said nothing about WHEN. The start bar is the first bar of the last
+// bar's date whose sec-of-day >= since; a since before the day's first bar starts at that first bar (the chart began
+// after the node); -1 = no bar of that date at all (a CSV from another day) -> no band.
+inline int bandStartIndex(const col::Bar* bars, int n, double since)
+{
+    if (!bars || n < 1 || since < 0) return -1;
+    int ly = bars[n-1].y, lm = bars[n-1].m, ld = bars[n-1].d;
+    int first = -1;
+    for (int i = 0; i < n; i++) {
+        if (bars[i].y != ly || bars[i].m != lm || bars[i].d != ld) continue;
+        if (first < 0) first = i;
+        if (bars[i].sod >= since) return i;
+    }
+    return first >= 0 ? n - 1 : -1;   // every bar of the day is before since: the node arrived on the current bar
+}
+// the band's colour: the polarity colour faded toward the ground by the node's % of its own King (Kings full, 5% faint)
+inline float bandStrength(float pct) { float a = pct < 0 ? -pct : pct; if (a > 100) a = 100; return 0.15f + 0.85f * (a / 100.0f); }
 
 } // namespace gpl
 #endif

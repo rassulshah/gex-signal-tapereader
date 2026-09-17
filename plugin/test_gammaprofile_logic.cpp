@@ -241,6 +241,18 @@ int main()
     CHECK(gpl::usableRight(0, 1196, 1160, 1200) == 1158, "scale inside the pane: the rail stops 2 px short of the scale");
     CHECK(gpl::usableRight(0, 1196, 1196, 1240) == 1196 && gpl::usableRight(0, 1196, 0, 0) == 1196, "scale outside the pane (or unknown): the pane edge as before");
 
+    // ---- (v0.64) the node band's start bar (from the panel's first-seen second) and its strength
+    { col::Bar b[6]; int so[6] = { 34200, 34380, 34560, 34740, 34920, 35100 };   // 09:30 .. 09:45 CT, 3-min bars, same day
+      for (int i = 0; i < 6; i++) { b[i].y = 2026; b[i].m = 9; b[i].d = 17; b[i].sod = so[i]; b[i].close = 7700; }
+      CHECK(gpl::bandStartIndex(b, 6, 34560) == 2 && gpl::bandStartIndex(b, 6, 34500) == 2, "the band starts at the first bar at or after the first-seen second (09:36 -> bar 2; 09:35 -> bar 2)");
+      CHECK(gpl::bandStartIndex(b, 6, 30000) == 0, "first seen before the day's first bar: the band starts at the first bar");
+      CHECK(gpl::bandStartIndex(b, 6, 36000) == 5, "first seen after the last bar's second (the node arrived this bar): the current bar");
+      CHECK(gpl::bandStartIndex(b, 6, -1) == -1 && gpl::bandStartIndex(0, 0, 34560) == -1, "no since / no bars -> no band");
+      b[5].y = 2026; b[5].m = 9; b[5].d = 18; for (int i = 0; i < 5; i++) b[i].d = 17;
+      CHECK(gpl::bandStartIndex(b, 6, 34200) == 5, "only the last bar's DATE counts: yesterday's bars never start a band");
+      b[5].d = 16; CHECK(gpl::bandStartIndex(b, 6, 34200) == 5, "(the last bar alone is 'its date')"); }
+    CHECK(gpl::bandStrength(-100) == 1.0f && gpl::bandStrength(100) == 1.0f && gpl::bandStrength(5) < 0.2f && gpl::bandStrength(50) > gpl::bandStrength(20), "band strength: Kings full, 5% faint, monotone in |%|");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }
