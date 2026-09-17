@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-17 · v16.40 · session `f9c89c64` — GP 0.60 — the Rank row moved to the end + per-instance status file
+## 2026-09-17 · v16.40 · session `f9c89c64` — GP 0.61 — Book = Both, one instance two rails
 
-_326 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_329 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -4217,6 +4217,53 @@ _— the context was COMPACTED here: the turns above are the transcript's own re
 Now the plugin: members, render counters, the status write, the parameter-order fix, and the version.
 Regression is green (67/67 Gate B with the new status-line cases; syntax compile OK). Now the SAVE DONE records.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (16:30):** Now I'll build GP 0.60: the per-instance status file plus the parameter-position fix (0.59 inserted "Rank" mid-list — I need to correct that).
+Now the plugin: members, render counters, the status write, the parameter-order fix, and the version.
+Regression is green (67/67 Gate B with the new status-line cases; syntax compile OK). Now the SAVE DONE records.
+Committed. Now deploying to his machine via the bridge.
+Found something while reading the 0.59 diff for the missing rail, and it's my mistake: the new **Rank** row was inserted after "Line style" — mid-list — not at the end as I'd said. IRT stores saved values by position, so on **both** your instances the 14 rows after it (Label at … Level labels) silently read their neighbour's saved value. That's the same scramble KT 0.12 had this morning.
+
+GP 0.60 is on your machine now (GEX build compiles it within 2 min; it installs the moment IRT is closed). It moves Rank to the end and bumps the parameter version, so IRT resets both instances to defaults — and it writes a status file per instance (`GammaProfile.status-SPY-Left.txt` / `GammaProfile.status-SPX-Right.txt`) after every draw, so I can see from here which instance loads and draws, without a screenshot.
+
+I'll tell you when it's installed. Then: restart IRT, and on each lsGammaProfile instance re-enter five fields — **Book, Side, Width px, Hide % under, Rank** (left: SPY / Left / 40 / 5 / Atlas merge; right: SPX / Right / 90 / 0 / Atlas merge). Everything else stays default.
+GP 0.60 compiled on your machine at 11:34 and is waiting for IRT to close.
+
+**Close Investor/RT now**, wait about two minutes (I'll confirm INSTALLED), then reopen it and set the five fields on each instance:
+
+| | Left rail | Right rail |
+|---|---|---|
+| Book | SPY | SPX |
+| Side | Left | Right |
+| …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (16:35):** The GEX sync pushed the 0.60 deploy at 11:34 (origin `54a95d3`, identical content); the clone is now reset to origin/main, so there's nothing unpushed.
+
+Still waiting on your side: close IRT so the 0.60 DLL installs, then reopen and set the five fields on each instance as in the table above.
+
+**OPERATOR:**
+> was there any reason why you didn't build an option to have  both profiles so i dont have to add another gamma profile indicator
+
+**me (16:41):** No good reason — it was a lapse. I followed the precedent already in the plugin (0.47's "a second instance with Book = IF, Side = Left") and the mockup I showed you listed two instances, so I built to that without asking whether you wanted one. A single-instance mode is the better product: one dialog, one restart, no duplicate settings, and none of the two-instance behaviour we're now debugging.
+
+Here's what I'd build as GP 0.61, one element:
+
+**Book gets a fifth entry, "Both" — SPY rail on the left, SPX rail on the right, from one instance.** It loads both files, draws the SPY rail at the left margin and the SPX rail at the right, Rank = Atlas merge applies to both so the five badges split as Atlas splits them. The levels (CW / PW / FLIP / King line), the regime chip and the read panel draw once, from the SPX file, as today. Side is ignored in Both mode. The entry goes at the end of the Book list so nothing you've saved shifts.
+
+One question inside that element: you set the two rails differently (width 40 / 90, hide-% 5 / 0). In Both mode I'd add one appended row, **"SPY rail width px"** (default 40), and let Width px mean the SPX rail; "Hide % under" would be shared. Fine, or do you want the SPY rail to have its own hide-% too?
+
+If you say build, you'd restart IRT once for 0.61 and set one instance (Book = Both, Rank = Atlas merge) — no need to do the 0.60 two-instance setup first.
+
+**OPERATOR:**
+> yes its fine to share. build
+
+**me (16:46):** The script aborted before writing (nothing changed). The escape sequence in the status-write match was wrong; let me check the actual text and rerun.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -5087,6 +5134,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+54a95d3 gex: sync 17-Thu-09 11:34
 451ed07 gex: sync 17-Thu-09 11:22
 dfc3371 gex: sync 17-Thu-09 10:58
 832e11a gex: sync 17-Thu-09 10:42
@@ -5098,7 +5146,6 @@ dfc3371 gex: sync 17-Thu-09 10:58
 39f37a7 gex: sync 17-Thu-09  1:20
 f789e44 gex: sync 17-Thu-09  1:08
 cbdc874 gex: sync 17-Thu-09  1:04
-ccfbda4 gex: sync 17-Thu-09  0:58
 ```
 
 ---

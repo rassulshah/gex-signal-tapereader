@@ -106,6 +106,7 @@ struct PIdx {
     int headerpos;                                          // header placement (appended v0.36)
     int tapecols;                                           // Skylit-style [SPX strike | %King] columns (appended v0.41)
     int lvllabels;                                          // CW/PW tags on the wall nodes + FLIP tick on the strip (appended v0.42)
+    int spywidth;                                           // (v0.61) the SPY rail's width when Book = Both (appended LAST)
 };
 static PIdx PX;
 
@@ -113,6 +114,7 @@ struct Settings {
     int book, width, side, thick, filter, thresh, below, scale, kingcol;
     int pctpos, hideu, rankpos, rankscope, font, lstyle, lpos, topstyle;
     int rankmode;   // (v0.59) 0 = within-book rank, 1 = the pooled (Atlas merge) rank
+    int spywidth;   // (v0.61) Book = Both: the SPY rail's width px (0 = same as Width px)
     bool detach, round, amp, trans, showpct, rank, type;
     bool kline, cw, pw, flip, em, extk, topnodes, spyking, header, spot;
     bool roles, regime, defbands, confl, legend; int panelpos;   // structure read
@@ -137,6 +139,8 @@ public:
     virtual int draw(void);
 
     std::vector<GStrike> strikes;
+    std::vector<GStrike> strikesSpy;   // (v0.61) Book = Both: the SPY book's STRIKE rows (GammaProfile-SPY.csv), drawn as the left rail
+    float lastOff;                     // (v0.61) the contract offset applied to `strikes`, re-applied to strikesSpy
     float lvl[6]; bool has[6];   // KING,CW,PW,FLIP,EMH,EML
     float lvlSpx[6];             // (v0.42) the raw SPX strike each level row carried (0 = none) — matches nodes by strike
     std::string lvlWin[6];       // (v0.42) the window the row was computed in ("0DTE"), for the label
@@ -153,13 +157,15 @@ public:
     Settings cfg;                // cached settings (populated in parms callbacks, used in draw)
     // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
     short stPaneL, stPaneR, stAnchor, stColW; int stPrimary, stDrawn; bool stRendered;
+    std::string stMain, stSpy;   // (v0.61) Book = Both: one GPSTATUS line per rail
     void writeStatus();
 
     void load();
     void drawStaleBadge();       // (v0.38) red badge if the CSV has gone cold (shared across all 4 plugins)
     void applyContractOffset();  // (v0.39) shift the whole book onto the chart's own contract price
     void readSettings(Settings& S);
-    void render(const Settings& S);
+    void render(const Settings& S, bool railOnly = false);   // (v0.61) railOnly: bars + badges + % only (the SPY rail of Book = Both)
+    void loadSpy();                                          // (v0.61) STRIKE rows of GammaProfile-SPY.csv -> strikesSpy
     void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
     void textLJ(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);
@@ -190,7 +196,7 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.type=true; cfg.font=10;
     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
-    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=0;
+    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=0; cfg.spywidth=40; lastOff=0.0f;
     cfg.header=false; cfg.spot=true; cfg.headerpos=0; cfg.tapecols=false; cfg.lvllabels=true;
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
     stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
@@ -240,7 +246,7 @@ int cppExtension::setup(void)
     int pc = 0;                        // the TRUE parameter index, one per control
 
     // PROFILE
-    PX.book   = pc++; setListParameter   ("Book", 3, "Auto;SPX;SPY;IF");   // (v0.47) IF = the InsiderFinance 0DTE book, GammaProfile-IF.csv · (v0.53) IF is the DEFAULT: operator 2026-09-16, "one or the other, switchable; IF as default for now"
+    PX.book   = pc++; setListParameter   ("Book", 3, "Auto;SPX;SPY;IF;Both");   // (v0.61) Both = SPY rail left + SPX rail right, one instance (entry APPENDED to the list: saved indices keep meaning)   // (v0.47) IF = the InsiderFinance 0DTE book, GammaProfile-IF.csv · (v0.53) IF is the DEFAULT: operator 2026-09-16, "one or the other, switchable; IF as default for now"
     PX.width  = pc++; setIntegerParameter("Width px", 100, 0, SL);
     PX.side   = pc++; setListParameter   ("Side", 0, "Right;Left");
     PX.thick  = pc++; setListParameter   ("Thickness", 0, "Auto;Thin;Medium;Thick", 0, SL);
@@ -301,6 +307,7 @@ int cppExtension::setup(void)
     // 0.60 moves it here, LAST, and bumps the parameter version to 6 so IRT resets both saved instances to the defaults
     // instead of carrying the scrambled values. NEW ROWS GO BELOW THIS ONE. NOTHING ABOVE IT MOVES. EVER.
     PX.rankmode = pc++; setListParameter ("Rank", 0, "Book;Atlas merge");
+    PX.spywidth = pc++; setIntegerParameter("SPY rail width px (Book = Both)", 40, 0, SL);   // (v0.61) appended LAST; 0 = same as Width px
     return RTX_OK;
 }
 
@@ -378,10 +385,42 @@ void GammaProfile::readSettings(Settings& S)
     S.headerpos = getListIndex(PX.headerpos);
     S.tapecols  = isBoxChecked(PX.tapecols) != 0;
     S.lvllabels = isBoxChecked(PX.lvllabels) != 0;
+    S.spywidth  = getIntegerValue(PX.spywidth); if (S.spywidth < 0) S.spywidth = 0;   // (v0.61)
     dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
 // ---- data load ------------------------------------------------------------
+// STRIKE,<es price>,<pct>,<rank>,<king 0|1>[,<type>[,<raw strike>[,<pooled rank>]]]
+static GStrike parseStrike(const std::vector<std::string>& t)
+{
+    GStrike s;
+    s.price = (float)atof(t[1].c_str());
+    s.pct   = (float)atof(t[2].c_str());
+    s.rank  = atoi(t[3].c_str());
+    s.king  = (atoi(t[4].c_str()) != 0);
+    s.type  = (t.size() >= 6) ? t[5] : (s.king ? std::string("KING") : std::string());
+    s.spx   = (t.size() >= 7) ? (float)atof(t[6].c_str()) : 0.0f;   // (v0.41) raw SPXW strike, 0 if the panel predates it
+    s.mrank = (t.size() >= 8 && !t[7].empty()) ? atoi(t[7].c_str()) : 0;   // (v0.59) the pooled rank (panel 16.40); 0 = not pooled
+    return s;
+}
+
+// (v0.61) Book = Both: the SPY book's STRIKE rows only — its market rows (SCALEREF, walls, REGIME, SPOT) are the SPX
+// file's copies (panel 16.40 carries them over), so the levels and the panel stay single-sourced from load().
+void GammaProfile::loadSpy()
+{
+    strikesSpy.clear();
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile-SPY.csv";
+    std::ifstream f(path.c_str()); if (!f.is_open()) return;
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        std::vector<std::string> t; std::stringstream ss(line); std::string it;
+        while (std::getline(ss, it, ',')) t.push_back(it);
+        if (t.size() >= 5 && t[0] == "STRIKE") strikesSpy.push_back(parseStrike(t));
+    }
+}
+
 void GammaProfile::load()
 {
     for (int i = 0; i < 6; i++) { has[i] = false; lvl[i] = 0.0f; lvlSpx[i] = 0.0f; lvlWin[i].clear(); lvlDepth[i].clear(); }
@@ -394,7 +433,7 @@ void GammaProfile::load()
     // Book selector: Auto(0) and SPX(1) read GammaProfile.csv (the Skylit tape); SPY(2) GammaProfile-SPY.csv;
     // (v0.47) IF(3) GammaProfile-IF.csv — the InsiderFinance 0DTE chain in the same row grammar (design/IF-BOOK-OPTION.md).
     // A second lsGammaProfile instance with Book = IF and Side = Left puts the two books side by side on one rail.
-    const char* fname = (cfg.book == 2) ? "GammaProfile-SPY.csv" : (cfg.book == 3 ? "GammaProfile-IF.csv" : "GammaProfile.csv");
+    const char* fname = gpl::bookFile(cfg.book);   // (v0.61) Both -> the SPX file here; loadSpy() reads the SPY file beside it
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\" + fname;
     std::ifstream f(path.c_str());
     if (!f.is_open()) { strikes.clear(); return; }
@@ -407,15 +446,7 @@ void GammaProfile::load()
         while (std::getline(ss, it, ',')) t.push_back(it);
         if (t.empty()) continue;
         if (t[0] == "STRIKE" && t.size() >= 5) {
-            GStrike s;
-            s.price = (float)atof(t[1].c_str());
-            s.pct   = (float)atof(t[2].c_str());
-            s.rank  = atoi(t[3].c_str());
-            s.king  = (atoi(t[4].c_str()) != 0);
-            s.type  = (t.size() >= 6) ? t[5] : (s.king ? std::string("KING") : std::string());
-            s.spx   = (t.size() >= 7) ? (float)atof(t[6].c_str()) : 0.0f;   // (v0.41) raw SPXW strike, 0 if the panel predates it
-            s.mrank = (t.size() >= 8 && !t[7].empty()) ? atoi(t[7].c_str()) : 0;   // (v0.59) the pooled rank (panel 16.40); 0 = not pooled
-            tmp.push_back(s);
+            tmp.push_back(parseStrike(t));
         } else if (t.size() >= 2) {
             float v = (float)atof(t[1].c_str());
             // (v0.42) level rows may carry: <es price>,<spx strike>,<window>,<src>. Older panels write only the price.
@@ -647,7 +678,7 @@ void GammaProfile::drawLevel(int lastBar, short lx, short rx, int idx, COLOR col
 }
 
 // ---- render ---------------------------------------------------------------
-void GammaProfile::render(const Settings& S)
+void GammaProfile::render(const Settings& S, bool railOnly)
 {
     if (strikes.empty()) return;
     long n = getBarCount(); if (n < 2) return;
@@ -722,7 +753,7 @@ void GammaProfile::render(const Settings& S)
     std::vector<int>& role = RL.role;
 
     // header (positionable: 0 TL,1 TC,2 TR,3 BL,4 BC,5 BR)
-    if (S.header) {
+    if (S.header && !railOnly) {
         char h[96];
         int kingStrike = 0; for (size_t i=0;i<strikes.size();i++) if (strikes[i].king) kingStrike=(int)(strikes[i].price+0.5f);
         sprintf_s(h, sizeof(h), "%s gamma  King %d", (book == "IF0DTE") ? "IF 0DTE" : book.c_str(), kingStrike);
@@ -736,7 +767,7 @@ void GammaProfile::render(const Settings& S)
     }
 
     // spot marker
-    if (S.spot && hasSpot) {
+    if (S.spot && hasSpot && !railOnly) {
         PNT spm; spm.set(lastBar, spotPx);
         setPen(C_SPOT, 1, P_DOT);
         PNT a; a.set(0, spotPx); a.setDrawPosition();
@@ -747,7 +778,7 @@ void GammaProfile::render(const Settings& S)
     // DOCTRINE (learn/air-pockets-velocity): a low-exposure GAP between two significant nodes — trade THROUGH
     // it. Banded ONLY when a node >= 20% closes it on BOTH sides; the far-OTM tail is never shaded. Magenta
     // tint when the run's residual gamma is net negative (the violent version).
-    if (S.roles) {
+    if (S.roles && !railOnly) {
         std::vector<gpl::Pocket> pk = gpl::airPockets(gn);
         for (size_t q=0; q<pk.size(); q++) {
             bandPrice(pk[q].lo, pk[q].hi, paneL, paneR, pk[q].neg ? C_AIRN : C_AIR);
@@ -757,7 +788,7 @@ void GammaProfile::render(const Settings& S)
     }
 
     // ---- deflection bands: the +/-5pt tap window around the top-5 nodes ------
-    if (S.defbands) {
+    if (S.defbands && !railOnly) {
         for (size_t i=0;i<strikes.size();i++) if (strikes[i].rank>=1 && strikes[i].rank<=5) {
             COLOR c = strikes[i].pct>=0 ? S.cpos : S.cneg;
             PNT hi; hi.set(lastBar, strikes[i].price+5.0f);
@@ -793,7 +824,7 @@ void GammaProfile::render(const Settings& S)
         if (!primary) col = C_GREY;
 
         // top-node line: a horizontal rail at each primary node, in the node's colour
-        if (S.topnodes && primary) hlinePx(p.v, paneL, paneR, col, tps);
+        if (S.topnodes && primary && !railOnly) hlinePx(p.v, paneL, paneR, col, tps);
 
         short top = (short)(p.v - barH/2), bot = (short)(p.v + barH/2);
         short bl = sgn < 0 ? tip : anchor, br = sgn < 0 ? anchor : tip;
@@ -801,7 +832,7 @@ void GammaProfile::render(const Settings& S)
 
         // structural role: support/resistance side stripe at the base + role tag
         // (takes precedence over the plain node-type label)
-        int rl = S.roles ? role[i] : 0;
+        int rl = (S.roles && !railOnly) ? role[i] : 0;   // (v0.61) the SPY rail carries no structure tags — they are the SPX book's read
         if (rl) {
             COLOR sr = (s.price < sp) ? C_SUP : C_RES;   // green support / red resistance
             short s1, s2; if (sgn<0){ s1=(short)(anchor-3); s2=anchor; } else { s1=anchor; s2=(short)(anchor+3); }
@@ -831,7 +862,7 @@ void GammaProfile::render(const Settings& S)
         // (v0.42) LEVEL LABELS ON THE NODE: the wall nodes carry "CW" / "PW" just beyond the tip (outside the
         // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
         const char* wtag = 0;
-        if (S.lvllabels) {
+        if (S.lvllabels && !railOnly) {
             if (has[1] && gpl::levelNode(gn, lvl[1], lvlSpx[1]) == (int)i) wtag = "CW";
             else if (has[2] && gpl::levelNode(gn, lvl[2], lvlSpx[2]) == (int)i) wtag = "PW";
         }
@@ -856,7 +887,7 @@ void GammaProfile::render(const Settings& S)
         }
 
         // EM confluence: cyan tick at the tip when the node sits on an EM edge
-        if (S.confl && ((has[4] && std::fabs(s.price-lvl[4])<=3.0f) || (has[5] && std::fabs(s.price-lvl[5])<=3.0f))) {
+        if (S.confl && !railOnly && ((has[4] && std::fabs(s.price-lvl[4])<=3.0f) || (has[5] && std::fabs(s.price-lvl[5])<=3.0f))) {
             setPen(C_CYAN, 2, P_SOLID);
             PNT a; a.set(0,0.0f); a.h=tip; a.v=(short)(p.v-6); a.setDrawPosition();
             PNT b; b.set(0,0.0f); b.h=tip; b.v=(short)(p.v+6); b.drawLineTo();
@@ -918,7 +949,7 @@ void GammaProfile::render(const Settings& S)
 
     // (v0.45) STACK BRACKETS — one thin bar along the base of the strip spanning each pika / barney run, in the
     // family's colour, so the stack reads as a SHAPE (its extent) with a single P / B on its biggest member.
-    if (S.type) {
+    if (S.type && !railOnly) {
         std::vector<gpl::Stack> sk = gpl::stacks(gn);
         for (size_t q=0; q<sk.size(); q++) {
             if (sk[q].n < 2) continue;
@@ -933,6 +964,7 @@ void GammaProfile::render(const Settings& S)
 
     // (v0.42) FLIP tick — the zero-gamma level is a PRICE, not a strike, so it cannot tag a node: a short dashed
     // tick across the bar strip at that price, labelled FLIP (+ window), in the flip colour. Independent of the line.
+    if (railOnly) return;   // (v0.61) the SPY rail stops here: the levels, the SPY King line, the panel and the legend are the SPX rail's
     if (S.lvllabels && has[3]) {
         PNT fp; fp.set(lastBar, lvl[3]);
         short x1 = (sgn < 0) ? (short)(anchor - w) : anchor, x2 = (sgn < 0) ? anchor : (short)(anchor + w);
@@ -970,12 +1002,27 @@ void GammaProfile::render(const Settings& S)
 int GammaProfile::draw(void)
 {
     load();
+    gpl::RailLayout RLY = gpl::railLayout(cfg.book, cfg.side, cfg.width, cfg.spywidth);   // (v0.61)
+    if (RLY.both) loadSpy(); else strikesSpy.clear();
+    lastOff = 0.0f;
     applyContractOffset();  // (v0.39) align to this chart's contract BEFORE render maps prices to Y
+    for (size_t i = 0; i < strikesSpy.size(); i++) { strikesSpy[i].price += lastOff; strikesSpy[i].rank = gpl::effectiveRank(strikesSpy[i].rank, strikesSpy[i].mrank, cfg.rankmode == 1); }
     // (v0.59) Rank = Atlas merge: every strike draws with its POOLED rank — badges, the Top-N cut, the top-node lines and
     // the deflection bands all follow it through the one `rank` field; an unpooled row (IF book, old panel) gets NO_RANK
     for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
     stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
-    render(cfg);       // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
+    Settings M = cfg; M.side = RLY.mainSide;   // (v0.61) Both: the SPX rail is on the right whatever Side says
+    render(M);         // use the cached settings (read in parms callbacks, valid even when the dialog is closed)
+    if (RLY.both) {
+        // (v0.61) the SPY rail: the SPY book's bars on the LEFT, bars + badges + % only (levels/panel drew once above)
+        stMain = gpl::statusLine(1, 0, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered);
+        strikes.swap(strikesSpy);
+        stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
+        Settings L = cfg; L.side = RLY.spySide; L.width = RLY.spyWidth; L.detach = true; L.tapecols = false;
+        render(L, true);
+        strikes.swap(strikesSpy);
+        stSpy = gpl::statusLine(2, 1, (int)strikesSpy.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, RLY.spyWidth, stPrimary, stDrawn, stRendered);
+    } else { stMain.clear(); stSpy.clear(); }
     drawStaleBadge();  // (v0.38) warn if the CSV is cold, regardless of what render drew
     writeStatus();     // (v0.60) this instance's line, for the two-rail check from outside
     return RTX_OK;
@@ -991,8 +1038,9 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.60  written " << ts << "  (this instance's last draw)\n"
-      << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered) << "\n";
+    f << "# lsGammaProfile 0.61  written " << ts << "  (this instance's last draw)\n";
+    if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
+    else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered) << "\n";
 }
 
 // ---- (v0.39) CONTRACT ALIGNMENT — the whole book is priced in the panel's space (Skylit ES1 / cash,
@@ -1039,6 +1087,7 @@ void GammaProfile::applyContractOffset()
     float off = 0.0f;
     if (!gpl::contractOffset(chartClose, hasScaleRef, scaleRef, hasSpot, spotPx, off)) return;   // no anchor / implausible → leave as-is
     for (size_t i = 0; i < strikes.size(); i++) strikes[i].price += off;
+    lastOff = off;   // (v0.61) the SPY rail of Book = Both is shifted by the same spread in draw()
     for (int i = 0; i < 6; i++) if (has[i]) lvl[i] += off;
     if (hasSpyKing) spyKingPx += off;
     // The spot marker AND the role (King/Ceiling/Floor/Gatekeeper) test want the chart's LIVE price, not the
@@ -1080,6 +1129,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.60");
+    p->setVersion("0.61");
     return p;
 }

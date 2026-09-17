@@ -1,3 +1,21 @@
+## lsGammaProfile 0.61 — Book = Both: one instance, two rails (2026-09-17, ~11:55 CT)
+
+Operator: "was there any reason why you didn't build an option to have both profiles so I don't have to add another
+gamma profile indicator" — no good reason; 0.59 followed the 0.47 two-instance precedent and the mockup I had shown
+listed two instances. He agreed the SPY rail shares "Hide % under" and every other setting: "yes its fine to share. build".
+- **Book gains a fifth entry, `Both`** (appended to the list — saved indices keep their meaning): the SPX book on the
+  RIGHT (Side is ignored), the SPY book on the LEFT, from one instance. `gpl::railLayout` (Gate B +5) decides the sides
+  and the SPY width; `loadSpy()` reads only the STRIKE rows of `GammaProfile-SPY.csv` (its market rows are the SPX
+  file's copies, so levels / regime / panel stay single-sourced); the SPY strikes get the same contract offset
+  (`lastOff`) and the same `effectiveRank` treatment; `render(S, railOnly=true)` draws the SPY rail as bars + badges +
+  % + pattern tags only — no levels, structure tags, wall tags, stack brackets, FLIP tick, panel or legend.
+- **`SPY rail width px (Book = Both)`** — appended LAST (after Rank), default 40, 0 = same as Width px, clamped 40..400.
+- The status file in Both mode carries TWO GPSTATUS lines (SPX rail, then SPY rail).
+- The two-instance path (Book = SPY on a second instance) still works; Both is the recommended setup.
+- Parameter version stays 6 (the 0.60 bump; 0.60 was never loaded on his machine — it was PENDING when this shipped).
+- Regression: gamma green (78 · 24 · 72 · 15 · six live fixtures · syntax). Eyes-on: `testing/gamma-profile/CHECKLIST.md`
+  "Book = Both". No panel change.
+
 ## lsGammaProfile 0.60 — the Rank row moved to the END (0.59 put it mid-list: the scramble, repeated) + a per-instance status file (2026-09-17, ~11:35 CT)
 
 Operator, with two 0.59 instances on the chart (SPY Left / SPX Right, both Rank = Atlas merge): "it displays one or the

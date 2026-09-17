@@ -246,8 +246,23 @@ inline RegimeText regimeLine(bool hasRow, const std::string& sign, const std::st
 // beside the CSV, so two rails can be verified from outside (operator, 2026-09-17: "it displays one or the other but
 // not both" — the file says whether the second instance loaded, where it anchored and how many bars it drew).
 // Grammar:  GPSTATUS,<book Auto|SPX|SPY|IF>,<side Right|Left>,<file>,<strikes>,<rank Book|Atlas>,<paneL>,<paneR>,<anchor>,<colW>,<width>,<primary>,<drawn>,<rendered 1|0>
-inline const char* bookName(int book) { return book == 1 ? "SPX" : book == 2 ? "SPY" : book == 3 ? "IF" : "Auto"; }
-inline const char* bookFile(int book) { return book == 2 ? "GammaProfile-SPY.csv" : (book == 3 ? "GammaProfile-IF.csv" : "GammaProfile.csv"); }
+inline const char* bookName(int book) { return book == 1 ? "SPX" : book == 2 ? "SPY" : book == 3 ? "IF" : book == 4 ? "Both" : "Auto"; }
+inline const char* bookFile(int book) { return book == 2 ? "GammaProfile-SPY.csv" : (book == 3 ? "GammaProfile-IF.csv" : "GammaProfile.csv"); }   // Both (4): the SPX file is the main rail; the SPY file is loaded beside it
+
+// (v0.61) BOOK = BOTH — one instance, two rails (operator, 2026-09-17: "was there any reason why you didn't build an
+// option to have both profiles so I don't have to add another gamma profile indicator" — no good reason). The main rail
+// is the SPX book on the RIGHT (Side is ignored), the SPY rail on the LEFT with its own width; levels, regime and the
+// read panel draw once, from the SPX file. Hide % under and every other setting are shared.
+struct RailLayout { bool both; int mainSide; int spySide; int spyWidth; };
+inline RailLayout railLayout(int book, int side, int width, int spyWidth)
+{
+    RailLayout r; r.both = (book == 4);
+    r.mainSide = r.both ? 0 : side;                       // 0 = Right, 1 = Left
+    r.spySide  = 1;
+    r.spyWidth = r.both ? (spyWidth >= 40 ? (spyWidth <= 400 ? spyWidth : 400) : (spyWidth > 0 ? 40 : width)) : 0;   // 0 = no SPY rail
+    (void)width;
+    return r;
+}
 inline std::string statusLine(int book, int side, int strikes, bool atlasMerge, int paneL, int paneR, int anchor, int colW, int width,
                               int primary, int drawn, bool rendered)
 {

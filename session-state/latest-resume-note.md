@@ -1,5 +1,16 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 11:35 CT (GP 0.60) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.60**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 11:55 CT (GP 0.61) · **panel v16.40** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.61**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~11:55 CT — GP 0.61: BOOK = BOTH — one instance, SPY rail left + SPX rail right. START HERE.
+
+He asked why two instances were needed at all ("so I don't have to add another gamma profile indicator") — no good
+reason. Built: Book = Both (fifth entry, appended), SPX rail RIGHT (Side ignored), SPY rail LEFT at the new LAST row
+"SPY rail width px" (default 40; 0 = same as Width px); Hide % under and everything else shared (his call); levels,
+regime chip and panel once, from the SPX file; the status file carries two GPSTATUS lines. `gpl::railLayout` pinned.
+**He needs: GEX build installs 0.61 (close IRT → INSTALLED → reopen), then ONE lsGammaProfile instance: Book = Both,
+Rank = Atlas merge, Width px 90, SPY rail width 40; delete the second instance.** Acceptance: his screenshot vs Atlas
+at the same minute + `GammaProfile.status-Both-Right.txt` with two `rendered 1` lines (read over the bridge).
+The 0.60 two-instance diagnosis is moot unless Both also shows one rail — then the status file names the gate.
 
 # ⚠⚠⚠ 2026-09-17 ~11:35 CT — GP 0.60: THE RANK ROW MOVED TO THE END + A STATUS FILE PER INSTANCE. START HERE.
 

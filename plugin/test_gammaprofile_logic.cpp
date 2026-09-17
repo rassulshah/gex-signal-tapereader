@@ -223,6 +223,13 @@ int main()
       CHECK(l == "GPSTATUS,IF,Right,GammaProfile-IF.csv,0,Book,0,0,0,0,100,0,0,0", "an instance that loaded nothing says so: 0 strikes, rendered 0"); }
     CHECK(std::string(gpl::bookName(0)) == "Auto" && std::string(gpl::bookFile(0)) == "GammaProfile.csv" && std::string(gpl::bookFile(1)) == "GammaProfile.csv", "Auto and SPX both read the Skylit SPX file");
 
+    // ---- (v0.61) Book = Both: one instance, SPY rail left, SPX rail right
+    { gpl::RailLayout r = gpl::railLayout(4, 1, 90, 40); CHECK(r.both && r.mainSide == 0 && r.spySide == 1 && r.spyWidth == 40, "Both: the SPX rail is RIGHT even with Side = Left; the SPY rail LEFT at its own width"); }
+    { gpl::RailLayout r = gpl::railLayout(1, 1, 90, 40); CHECK(!r.both && r.mainSide == 1 && r.spyWidth == 0, "Book = SPX: Side is honoured, no SPY rail"); }
+    { gpl::RailLayout r = gpl::railLayout(4, 0, 90, 500); CHECK(r.spyWidth == 400, "the SPY width is clamped like Width px (40..400)"); }
+    { gpl::RailLayout r = gpl::railLayout(4, 0, 90, 0); CHECK(r.spyWidth == 90, "SPY width 0 = same as the SPX rail"); }
+    CHECK(std::string(gpl::bookName(4)) == "Both" && std::string(gpl::bookFile(4)) == "GammaProfile.csv", "Both names itself; its main file is the SPX tape");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

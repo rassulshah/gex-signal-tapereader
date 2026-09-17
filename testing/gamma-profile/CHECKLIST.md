@@ -33,3 +33,10 @@ within a minute of the CSV's `ASOF`. Tick each line; transcribe what IRT shows i
 
 ## What to write down
 The run file gets: the screenshot file names, every unticked line with what was seen instead, and the operator's words.
+
+## Book = Both (GP 0.61) — one instance, two rails
+- [ ] Book = Both, Rank = Atlas merge: the SPX rail on the RIGHT (whatever Side says), the SPY rail on the LEFT at "SPY rail width px".
+- [ ] The five badges split across the two rails exactly as Atlas's ES1 view (same minute) — both Kings badged; a SPY bar with no pooled badge draws grey.
+- [ ] Levels (King / CW / PW / FLIP), the regime chip and the read panel appear ONCE (from the SPX file); the SPY rail carries no C/F/G tags, no CW/PW tags.
+- [ ] `GammaProfile.status-Both-Right.txt` has TWO GPSTATUS lines (SPX then SPY), both `rendered 1`, strike counts matching the two CSVs.
+
