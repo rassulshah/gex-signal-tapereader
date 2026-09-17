@@ -17,6 +17,7 @@
  *  price the ladder is scaled to) instead of SPOT, so the King/nodes land on the
  *  charted contract during the quarterly roll (EPZ26 Dec ~+70 over front); spot is
  *  pinned to the chart's live close for the marker and the Gatekeeper role test.
+ *  v0.55 — the pill's text drawn like its neighbours (textLJ), the box centred where those glyphs actually land.
  *  v0.54 — the depth pill drawn like the rank bubble (measured box, metric-placed text); one size up.
  *  v0.53 — Book defaults to IF (one rail, switch the Book dropdown to compare; operator 2026-09-16).
  *  v0.52 — the Magnet (King) on the chip's second line, right after the PW (operator, 21:40).
@@ -469,17 +470,16 @@ short GammaProfile::pillW(const std::string& tag, const Settings& S)
 short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S)
 {
     if (tag.empty()) return 0;
-    // (v0.54) drawn the way the rank bubble is: the box from the MEASURED text width, the text placed by font metrics
-    // inside it — textLJ's 260-px rectangle put the glyphs beside the box rather than in it (his screenshot 21:58).
-    FONT f; f.id = HELVETICA; f.size = (short)(S.font - 1); f.style = BOLD; setFont(f);
-    short tw = (short)getTextWidth(tag.c_str(), (int)tag.size());
-    short w = (short)(tw + 10), h = (short)(S.font + 6);
+    // (v0.55) THE TEXT IS DRAWN EXACTLY LIKE ITS NEIGHBOURS (textLJ at the same y), so it can never sit on a different
+    // line from "PW" or "PW 7624 (7550)". Measured on his 0.54 screenshot: textLJ's glyphs land ~0.45 x font BELOW y
+    // (the rect draw baselines low), so the box is centred there, not on y — the metric-placed text of 0.54 sat 4 px
+    // above everything beside it.
+    short w = pillW(tag, S), h = (short)(S.font + 5);
+    short cy = (short)(y + (short)(S.font * 0.45f + 0.5f));
     COLOR c = depthColour(tag);
-    RCT box; box.set(leftX, (short)(y - h/2), (short)(leftX + w), (short)(y + h/2));
+    RCT box; box.set(leftX, (short)(cy - h/2), (short)(leftX + w), (short)(cy + h/2));
     box.draw(1, c, C_DARK, DRAW_OPAQUE, PAT_SOLID);
-    int lead=0, asc=0, desc=0; getFontMetrics(&lead, &asc, &desc);
-    setFont(f); setTextColor(c);
-    PNT tp; tp.h = (short)(leftX + 5); tp.v = (short)(y + (asc - desc)/2); tp.drawText(tag.c_str());
+    textLJ((short)(leftX + 5), y, tag.c_str(), c, S.font - 1, true);
     return w;
 }
 void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
@@ -1041,6 +1041,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.54");
+    p->setVersion("0.55");
     return p;
 }

@@ -1,3 +1,10 @@
+## lsGammaProfile 0.55 — the pill on the same line as its neighbours (2026-09-16, ~22:15 CT)
+
+Operator, 0.54 screenshot: "the WK badge is slightly misaligned." Zoomed: the pill (box + metric-placed text, centred on y)
+sat ~4 px ABOVE the textLJ-drawn "PW" / "PW 7624 (7550)" beside it — IRT's rect drawText lands its glyphs ~0.45 x font
+below y. Fix: the pill's text is drawn with textLJ at the same y as its neighbours (so it cannot differ from them), and
+the box is centred where those glyphs land. `compile-gammaprofile.bat`.
+
 ## lsGammaProfile 0.54 — the depth pill drawn like the rank bubble (2026-09-16, ~22:05 CT)
 
 Operator, screenshot 21:58 (still the 0.50 DLL — no King on the chip): "did you fix the WK badge … its placement is messed
