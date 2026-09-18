@@ -73,6 +73,7 @@ public:
     StatRow A, E;
     std::string condBasis; int condLastHr, condLast30;   // (v0.7) the CONDE row — the E clocks' stage + the 2ND ladder
     int condP20, condP50, condP80;                       // (v0.11) the 2ND clock's percentiles (panel 16.45), minutes after the open
+    dsl::Read2 read2;                                    // (v0.12) the second extreme's read (panel 16.46)
     std::string weekday, daydate;
     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
@@ -182,7 +183,7 @@ void DayStats::textCJ(short xc, short y, const char* s, COLOR col, int sz, bool 
 // ---- data load ------------------------------------------------------------
 void DayStats::load()
 {
-    A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1; condBasis.clear(); condLastHr = -1; condLast30 = -1; condP20 = condP50 = condP80 = -1;
+    A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1; condBasis.clear(); condLastHr = -1; condLast30 = -1; condP20 = condP50 = condP80 = -1; read2 = dsl::Read2();
     hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
     hasRead = false; readFirst.clear(); readCall.clear(); readPosr = -1; readPct = -1; readN = 0;
     const char* up = getenv("USERPROFILE"); if (!up) return;
@@ -201,6 +202,8 @@ void DayStats::load()
         } else if (t[0] == "CONDE" && t.size() >= 6) {
             // (v0.7) CONDE,<basis>,<t1>,<t2>,<lod%>,<n>[,<lastHr%>,<last30%>] — which stage drew the E clocks (panel 16.32/16.35)
             dsl::Cond c; dsl::parseCond(t, c); condBasis = c.basis; condLastHr = c.lastHr; condLast30 = c.last30; condP20 = c.p20; condP50 = c.p50; condP80 = c.p80;   // (v0.8) DayStatsLogic.h · (v0.11) + percentiles
+        } else if (t[0] == "READ2") {
+            dsl::parseRead2(t, read2);   // (v0.12)
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
             if (t.size() >= 3) daydate = t[2];
@@ -294,16 +297,17 @@ void DayStats::render(const Settings& S)
         if      (readCall == "IN")    { rl += " IN";     rcol = C_UPG;  }
         else if (readCall == "NOTIN") { rl += " NOT IN"; rcol = C_HEAD; }
         if (readPct >= 0) { char pb[16]; sprintf_s(pb, sizeof(pb), "  %d%%", (int)(readPct + 0.5)); rl += pb; }
-        // (v0.11) THE SECOND HALF: when the 1ST is called IN, say when the 2ND is likely — "LOD after 10:42am 80%" — one rung
-        // at a time by the chart clock (dsl::secondRung); after the close, the actual 2ND from the A row.
-        if (readCall == "IN") {
+        // (v0.12) THE SECOND HALF: the second extreme's own read (READ2, panel 16.46) — "LOD IN 80%", or "LOD IN 25% · if not,
+        // ~10:09am (50%)" while it is probably still ahead; after the close, the actual 2ND from the A row. (0.11's descending
+        // rungs are gone: the operator wants one rising number per extreme, not a probability that expires with the clock.)
+        {
             std::string second = (readFirst == "HOD") ? "LOD" : (readFirst == "LOD" ? "HOD" : "");
             RTDATE nowD = currentDate(); struct tm tn; memset(&tn, 0, sizeof(tn)); getLocaltime(nowD, &tn);
             double nowSo = tn.tm_hour * 3600.0 + tn.tm_min * 60.0 + tn.tm_sec;
             bool closed = nowSo >= 54000.0 || nowSo < 30600.0;
-            dsl::Cond c2; c2.basis = condBasis; c2.lastHr = condLastHr; c2.last30 = condLast30; c2.p20 = condP20; c2.p50 = condP50; c2.p80 = condP80;
-            std::string r2 = dsl::secondRung(second, c2, nowSo, closed, (A.valid && A.second == second) ? A.secondClk : -1.0);
-            if (!r2.empty()) rl += "   \xB7   " + r2;
+            dsl::Read2 r2 = read2; if (!r2.valid && !second.empty()) r2.side = second;
+            std::string s2 = dsl::secondLine(r2, asofSo, closed, (A.valid && !r2.side.empty() && A.second == r2.side) ? A.secondClk : -1.0);
+            if (!s2.empty()) rl += "   \xB7   " + s2;
         }
         textCJ((short)(x0 + blockW / 2), y, rl.c_str(), rcol, fs, true);
     }
@@ -398,6 +402,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.11");
+    p->setVersion("0.12");
     return p;
 }

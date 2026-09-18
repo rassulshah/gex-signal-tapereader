@@ -75,6 +75,14 @@ int main()
       CHECK(P.p20 == 132 && P.p50 == 267 && P.p80 == 372 && P.lastHr == 39, "CONDE fields 9-11 parse; an 8-field row (old panel) leaves them -1");
       std::vector<std::string> t8 = {"CONDE","pre-open","24","286.5","52","300","39","29"}; dsl::Cond Q; dsl::parseCond(t8, Q); CHECK(Q.p20 == -1 && Q.lastHr == 39, "(old row)"); }
 
+    // ---- (0.12) the second extreme's read (READ2) and its line
+    { std::vector<std::string> t = {"READ2","LOD","25","0.201","300.0","51.0","0.220","9","70430","baked"}; dsl::Read2 r; CHECK(dsl::parseRead2(t, r) && r.side == "LOD" && r.p == 25 && r.arrival == 9 && r.src == "baked", "READ2 parses: side, p, features, arrival, source");
+      CHECK(dsl::secondLine(r, 36000, false, -1) == "LOD IN 25%  · if not, ~10:09am (50%)", "p < 50: the probability plus the arrival from the export's own clock (10:00 + 9 min)");
+      r.p = 80; CHECK(dsl::secondLine(r, 39600, false, -1) == "LOD IN 80%", "p >= 50: the probability alone (no clock for something probably done)");
+      CHECK(dsl::secondLine(r, 60000, true, 32940) == "LOD IN 9:09am", "after the close with the actual 2ND: IN + its clock");
+      std::vector<std::string> bad = {"READ2","XOD","25"}; dsl::Read2 q; CHECK(!dsl::parseRead2(bad, q) && dsl::secondLine(q, 36000, false, -1) == "", "a malformed row draws nothing");
+      r.p = 25; r.arrival = -1; CHECK(dsl::secondLine(r, 36000, false, -1) == "LOD IN 25%", "no arrival median for the bin: the probability alone"); }
+
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

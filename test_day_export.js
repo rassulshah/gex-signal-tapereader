@@ -16,7 +16,8 @@ eval(['GPTS_VERSION','GP_FILE','GP_SPXWR_KEY','GP_LAST','GP_AUDIT_FILE','GP_AUDI
 eval(vObj('GP_EM_MODEL')+vObj('GP_COND_FALLBACK'));
 var PANEL_MUTED=false, GP_DEPTH_T0=0.70, GP_DEPTH_TW=0.70, GP_SLOPE_STEEP=0.10;
 eval(['gpF2','gpN1','gpI','gpDur','gpClk','gpShownDate','gpDow','gpDate','sum3','gridStep','gridSetups','gpRegime','gpEsOfSpx','gpEmRows','gpWallDepth','gpSlopeWord','gpLevelRows',
-      'gpOpenWindow','hodlodCondE','gpDayModel','gammaProfileBuildIF','gammaProfileBuild'].map(ex).join('\n'));
+      'gpOpenWindow','hodlodCondE','gpDayModel','siNormalise','siBase','siFeats','siPredict','siDbin','hlSecondRead','gammaProfileBuildIF','gammaProfileBuild'].map(ex).join('\n'));
+eval(['SECONDIN_BASE'].map(v).join(''));   // (16.46) the second-extreme model's baked block
 
 // ---- the world: 2026-09-16, the export at 10:33 CT (123 min after the open), the SPXW tape of 09:47 for the gamma section
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
@@ -82,6 +83,26 @@ const CE=R.CONDE && R.CONDE[0];
 ok(CE && CE[0]==='pos60-bottom+orclock' && CE[1]==='3.0', '1.8 CONDE: open at the bottom of the first hour -> the 1ST clock is the window low\'s clock (3 min)', CE);
 ok(CE && CE[3]==='66' && CE[5]==='39' && CE[6]==='29', '1.9 CONDE: 66% LOD-first, the 2ND ladder 39 / 29', CE);
 ok(CE && CE[7]==='162' && CE[8]==='306' && CE[9]==='384', '1.9b (16.45) CONDE fields 9-11: the stage\'s 2ND-clock p20 / p50 / p80 in minutes after the open (pos60-bottom: 162 / 306 / 384 -> the READ line\'s "LOD after 11:12 80%")', CE);
+// ---- (16.46) READ2 — the second extreme's read: LOD at 10:33 on this synthetic day (low 7676 at 102 min, close ~7702 = 21 min later)
+const R2=R.READ2 && R.READ2[0];
+ok(R2 && R2[0]==='LOD' && R2.length===9, '1.9c READ2 row: side LOD (HOD was first), nine fields', R2);
+{ const p=parseInt(R2[1]), d=parseFloat(R2[2]), ml=parseFloat(R2[3]), age=parseFloat(R2[4]), sh=parseFloat(R2[5]);
+  ok(Math.abs(ml-267)<0.6 && Math.abs(age-21)<0.6, '1.9d ... minutes left 267 (10:33 -> 15:00), the low is 21 min old', [ml, age]);
+  ok(sh>0.5 && d>0.3, '1.9e ... the close sits well off the low (share > 0.5 of the range, d > 0.3 sigma)', [sh, d]);
+  const pp=siPredict(SECONDIN_BASE, d, ml, age, sh);
+  ok(p===Math.round(100*pp), '1.9f ... p == the baked model applied to the row\'s own features', [p, pp]);
+  ok(R2[8]==='baked' && R2[7]!=='' , '1.9g ... source baked (no courier in the harness), an arrival median for that d-bin', [R2[8], R2[7]]); }
+// the model itself, the numbers that matter: a low price is sitting ON reads far lower than one it has run away from
+{ const near=siPredict(SECONDIN_BASE, 0.10, 240, 30, 0.10), far=siPredict(SECONDIN_BASE, 1.50, 240, 120, 0.75);
+  ok(near<0.35 && far>0.85 && far>near, '1.9h the model: on the low (0.1 sigma) -> IN < 35%; 1.5 sigma off it for 2 h -> IN > 85%', [near.toFixed(2), far.toFixed(2)]);
+  // d is already in units of the REMAINING typical move (sigma = rv x sqrt(bars left)), so the same ABSOLUTE distance is more sigmas late in the day
+  const dist=8, rv=1.0, dE=dist/(rv*Math.sqrt(330/3)), dL=dist/(rv*Math.sqrt(60/3));
+  const early=siPredict(SECONDIN_BASE, dE, 330, 60, 0.6), late=siPredict(SECONDIN_BASE, dL, 60, 60, 0.6);
+  ok(dL>dE && late>early, '1.9i ... the same 8-point distance is 0.76 sigma with 330 min left and 1.79 sigma with 60 min left -> reads more IN late', [dE.toFixed(2), early.toFixed(2), dL.toFixed(2), late.toFixed(2)]); }
+// the courier floors: a refit that fails them is refused, one that clears them is taken
+{ const bad=JSON.parse(JSON.stringify(SECONDIN_BASE)); bad.oof.auc=0.80; ok(siNormalise(bad)===null, '1.9j siNormalise refuses a refit with AUC below the floor');
+  const bad2=JSON.parse(JSON.stringify(SECONDIN_BASE)); bad2.oof.maxCalErr=0.12; ok(siNormalise(bad2)===null, '1.9k ... or a calibration decile off by more than 0.08');
+  const good=JSON.parse(JSON.stringify(SECONDIN_BASE)); good.w[0]=-4.0; ok(siNormalise(good)!==null && siNormalise(good).w[0]===-4.0, '1.9l ... and takes one that clears them (the nightly refit)'); }
 const SE=R.DAYSE && R.DAYSE[0];
 ok(SE && SE[0]==='LOD' && SE[2]===String(OPEN+3*60) && SE[9]==='HOD' && SE[11]===String(OPEN+303*60), '1.10 DAYSE: LOD first at 08:33, HOD at 13:33 (t2 303)', SE);
 ok(SE && SE[3]==='3.0' && SE[12]==='300.0', '1.11 DAYSE took 3.0 / gap 300.0', SE);

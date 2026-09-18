@@ -21,3 +21,8 @@ Screenshot file names, every unticked line with what was seen instead, the opera
 - [ ] With the 1ST called IN, the title line reads "HOD IN 96%  ·  LOD after HH:MMam 80%" before that clock; the clock = 08:30 + CONDE field 9 minutes; then "after <p50> 50%", then "39% last hr", "29% last 30", "any minute"; after the close "LOD IN <A row's 2ND clock>".
 - [ ] NOT IN / HOLD calls show only the first half, as before.
 
+## DS 0.12 + panel 16.46 — the second extreme's read
+- [ ] Title line: "HOD IN 96%  ·  LOD IN <p>%" once the READ has a call; p from the CSV's READ2 row; "· if not, ~HH:MM (50%)" only while p < 50 (HH:MM = the export's ASOF + the arrival minutes); after the close "LOD IN <A row's 2ND clock>".
+- [ ] p rises through the morning as price leaves the running extreme; it drops back when price revisits it (as at 10:00 on 2026-09-17).
+- [ ] READ2's src reads `baked` until the first nightly refit lands (then `nightly`); the runner's expected picture prints `second_read`.
+

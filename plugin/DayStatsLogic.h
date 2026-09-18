@@ -154,4 +154,29 @@ inline std::string secondRung(const std::string& second, const Cond& C, double n
     return second + " any minute";
 }
 
+// (0.12) THE SECOND EXTREME'S READ — READ2,<side>,<p in 0-100>,<d>,<minsLeft>,<age>,<share>,<arrival min or blank>,<n>,<src>
+// (panel 16.46: the logistic "is the running extreme on the other side the day's final one", refit nightly). The line:
+//   "LOD IN 80%"                                  p >= 50: the probability alone
+//   "LOD IN 25%  · if not, ~10:09am (50%)"        p < 50: plus the median first-passage arrival from the bar the row was written at
+//   after the close with the actual 2ND known:    "LOD IN 9:09am" (the A row's clock)
+// Operator, 2026-09-17: "I want to know if the extremity is in or not and the likelihood" — one number per extreme, rising with evidence.
+struct Read2 { std::string side, src; int p; double d, minsLeft, age, share, arrival; long n; bool valid; Read2() : p(-1), d(0), minsLeft(-1), age(-1), share(0), arrival(-1), n(0), valid(false) {} };
+inline bool parseRead2(const std::vector<std::string>& t, Read2& r)
+{
+    if (t.size() < 7 || t[0] != "READ2") return false;
+    r.side = t[1]; r.p = atoi(t[2].c_str()); r.d = atof(t[3].c_str()); r.minsLeft = num(t[4]); r.age = num(t[5]); r.share = atof(t[6].c_str());
+    r.arrival = (t.size() >= 8 && !t[7].empty()) ? atof(t[7].c_str()) : -1; r.n = (t.size() >= 9) ? atol(t[8].c_str()) : 0; r.src = (t.size() >= 10) ? t[9] : "";
+    r.valid = (r.side == "HOD" || r.side == "LOD") && r.p >= 0 && r.p <= 100;
+    return r.valid;
+}
+inline std::string secondLine(const Read2& r, double asofSo, bool closed, double actualSecondSo)
+{
+    if (closed && actualSecondSo >= 0 && !r.side.empty()) return r.side + " IN " + clk(actualSecondSo);
+    if (!r.valid) return "";
+    char b[80]; snprintf(b, sizeof(b), "%s IN %d%%", r.side.c_str(), r.p);
+    std::string s = b;
+    if (r.p < 50 && r.arrival >= 0 && asofSo >= 0) s += "  · if not, ~" + clk(asofSo + r.arrival * 60.0) + " (50%)";
+    return s;
+}
+
 } // namespace dsl

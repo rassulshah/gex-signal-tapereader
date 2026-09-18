@@ -377,6 +377,13 @@ def main(paths, out=None, market='ES'):
     # window's extreme on the open's side when the open sits in an outer third: 33.3 min at 60 min (-13% vs base).
     # The 2ND clock is NOT predictable from the morning (93 min either way) - the pooled median is carried, honestly.
     res['condstats'] = _cond_block(rows)
+    # (16.46) the second-extreme "is it in" model, refit on the whole corpus every night and out-of-fold scored (tools/secondin.py)
+    try:
+        from importlib.machinery import SourceFileLoader as _SFL
+        _si = _SFL('secondin', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'secondin.py')).load_module()
+        res['secondIn'] = _si.block(ses, tool_bars)
+    except Exception as e:
+        res['secondIn'] = None; print('secondIn: not fitted (%s)' % e, file=sys.stderr)
     # the mix, so a consumer can see a pooled corpus rather than discover it
     mix = collections.Counter(prov[d] for d in days)
     res['corpus']['sources'] = dict(mix)

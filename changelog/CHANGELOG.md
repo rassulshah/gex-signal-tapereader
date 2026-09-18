@@ -1,3 +1,26 @@
+## v16.46 + lsDayStats 0.12 — "LOD IN 80%": the second extreme's read, a nightly-refit model (2026-09-17, ~22:30 CT)
+
+Operator, after rejecting the descending rungs: "I want to know if the extremity is in or not and the likelihood ... give
+me a good model and a simple line ... make sure the model is self calibrating and using the data that we get daily."
+- **The model (`tools/secondin.py`):** at each 3-minute bar, is the running extreme on the OTHER side the day's final one?
+  Logistic on [d = |close − extreme| / (σ of 3-min changes × √bars left), ln(minutes left), age, share of range]. Tested
+  out-of-fold BY DAY on 301 sessions / 70,430 readings: AUC 0.883 (time-only 0.683), Brier 0.132, calibrated at every
+  decile (max error 0.024), ≥ 70 % readings = 52 % of all and right 90 %, ≤ 30 % right 85 %. The "if not, ~time (50 %)"
+  arrival = the median first-passage minutes by d-bin, covered 50.7 %. Newest-20-sessions check (Aug 19 → Sep 16): AUC
+  0.823, low deciles under-confident (recent days' second extremes earlier than the long corpus) — recorded, and folded
+  in by every refit. `study-second-in.py` compared TIME / the shipped far-side table / a refit table / the logit.
+- **Self-calibrating:** `study-hodlod.py` now writes `secondIn` (weights, timing, OOF scores, rolling-20, floors) into
+  BASERATES.json every nightly; the panel takes it through the base-rate courier only if it clears the floors (≥ 150
+  sessions, ≥ 15,000 readings, AUC ≥ 0.84, every decile within 0.08) — `siNormalise`; else the baked `SECONDIN_BASE`.
+- **Panel 16.46:** `hlSecondRead(rthx, side, oSx)` from the panel's own tool bars; `READ2,<side>,<p>,<d>,<minsLeft>,<age>,
+  <share>,<arrival min>,<n>,<src>` every export for the side the READ did not call first; `AU.day.second`.
+  `day-derive.js` re-derives p through the baked weights; Gate A 1.9c–1.9l (+10); Gate L checks the row (a nightly-refit
+  row may differ in p; features must match). Synthetic fixtures regenerated.
+- **lsDayStats 0.12:** `dsl::parseRead2` / `dsl::secondLine` (Gate B +6): "HOD IN 96% · LOD IN 80%"; "· if not, ~10:09am
+  (50%)" only while p < 50; after the close "LOD IN 9:09am". 0.11's rungs removed from the line.
+- Mockup on the real 2026-09-17 session: `design/second-in-mockup.html` (25 % at 10:00 with price on the low, 80 % at 11:00).
+- Regression: all four indicators green.
+
 ## study-second-quantile.py — is "LOD after T 80%" better than the base rate? (2026-09-17, ~21:55 CT)
 
 Operator: "did you check to see if you could make a model for predicting it also that is better than the base rate?" — I

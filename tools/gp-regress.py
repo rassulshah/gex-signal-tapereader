@@ -499,6 +499,19 @@ def main_other(a, R, AU):
                     if k == 'DAYSA' and csv is None and der is None:
                         warn('A', 'no DAYSA row yet (hodLod not ready) — consistent with the audit (no actual)'); continue
                     add(row_eq(csv, der, tol), 'A', '%s row re-derived from the audit == the CSV (%s vs %s)' % (k, ','.join(csv or ['absent']), ','.join(der or ['absent'])))
+                # (16.46) READ2 — the second extreme's read: p re-derived through the BAKED weights from the audit's features. A row
+                # from a nightly refit (src = nightly) may differ in p (the courier's weights are not in the audit); side, features
+                # and the arrival bin must still match.
+                r2 = R.get('READ2', [None])[0]; d2 = DER.get('READ2')
+                if r2 and d2:
+                    same_feats = r2[0] == d2[0] and all(abs(num(r2[i]) - num(d2[i])) <= 0.01 for i in (2, 3, 4, 5))
+                    if r2[8] == 'baked': add(same_feats and r2[1] == d2[1], 'A', 'READ2 re-derived from the audit == the CSV (%s vs %s)' % (','.join(r2), ','.join(d2)))
+                    else: add(same_feats, 'A', 'READ2 (nightly refit): side + features match the audit; p %s vs baked %s' % (r2[1], d2[1]))
+                    p2 = num(r2[1])
+                    add(p2 is not None and 0 <= p2 <= 100, 'A', 'READ2 p in 0..100 (%s)' % r2[1])
+                    exp['second_read'] = '%s IN %s%%' % (r2[0], r2[1]) + (('  if not, ~+%s min (50%%)' % r2[7]) if r2[7] and p2 is not None and p2 < 50 else '')
+                elif r2 or d2:
+                    add(False, 'A', 'READ2 present in %s only' % ('the CSV' if r2 else 'the re-derivation'))
                 CE = R.get('CONDE', [None])[0]
                 if CE:
                     b = CE[0]

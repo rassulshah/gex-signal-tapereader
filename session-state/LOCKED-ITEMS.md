@@ -8,6 +8,7 @@ _Created 2026-08-27._
 
 ## ✅ BUILT 2026-09-17 — TWO RAILS, THE ATLAS POOL (v16.40 / GP 0.59)
 
+_v16.46 + DS 0.12 (22:30 CT): the second extreme's read (READ2) — BUILT, tested OOF; nightly refit + courier floors. Next: the rolling-20 calibration in the testing tab; eyes-on tomorrow._
 _v16.45 + DS 0.11 (21:40 CT): the READ line's second extreme rung — BUILT; awaiting his install + tomorrow's eyes-on. The hod/lod ladder rebake is DONE (test_hodlod green)._
 _DS 0.10 (21:05 CT): A-row prices from the chart's own session extremes — the 'A-row drift after close' item CLOSED. OPEN: rebake the hod/lod ladder (BASERATES.json regenerated 15:16, test_hodlod b5/b6/s2)._
 _v16.44 (19:20 CT): VERIFIED live — Atlas's five == IRT's five. Pooled nodes always stamped; runner + harness fixes._

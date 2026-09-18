@@ -1,5 +1,15 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 21:40 CT (v16.45 / GP 0.69 / DS 0.11) · **panel v16.45** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.11**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 22:30 CT (v16.46 / GP 0.69 / DS 0.12) · **panel v16.46** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.12**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~22:30 CT — v16.46 + DS 0.12: "HOD IN 96% · LOD IN 80%" — THE SECOND EXTREME'S READ, A NIGHTLY-REFIT MODEL. START HERE.
+
+He rejected the descending rungs ("I don't want the probabilities going down") and asked for one rising number per
+extreme + a good, tested, self-calibrating model. Built: `tools/secondin.py` (logistic on the chart's own bars; OOF AUC
+0.883, calibrated, floors), refit every nightly into BASERATES.secondIn, courier-gated (`siNormalise`); panel writes
+READ2 every export; DS 0.12 prints "LOD IN 80%" (+ "if not, ~HH:MM (50%)" while < 50 %; the A-row clock after the close).
+**He needs: Tampermonkey 16.46 + close IRT (DS 0.12, DS 0.10/0.11, GP 0.69 all pending) → reopen → Level labels at = Off.**
+Watch tomorrow: the number should climb through the morning once the first extreme is called; compare against the
+mockup's shape. The rolling-20 check is in BASERATES.secondIn.rolling20 — show it in the testing tab next (not built).
 
 # ⚠ 21:55 CT — STUDY (tools/study-second-quantile.py): the stage p20 16.45 ships is NOT better than the base rate; the 1ST-clock tercile is (−10 % pinball) and the SURVIVAL p20 (re-fit on days whose 2ND is still ahead) is what keeps "80 %" honest as the day passes. NEXT BUILD (agreed?): the panel re-computes the rung every export from a baked survival table × 1ST-clock tercile; plugin unchanged.
 
