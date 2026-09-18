@@ -1,3 +1,21 @@
+## v16.51 — the King's sign in the REGRESSION; two more places the same mistake lived (2026-09-18, ~10:40 CT)
+
+Operator: "make sure you add it to the regression .. is there anything else you may have missed".
+- **Gate L (`gp-regress.py`, every book):** the King row reads ±100; its sign == the audit's kingNeg (the $K cell's own sign);
+  == the tape's sign at the King; and, when the King's ES price is in Atlas's own slice, == Atlas's sign there. Run on the
+  09:46 export it FAILS twice — SPX: CSV −100 beside kingNeg false (the first-character bug); SPY: +100 beside Atlas's −53
+  at 7685.4 — exactly what the eyes-on missed. A pre-16.50 audit (the pinned 09-17 fixtures record the bug) warns instead
+  of failing: the record stays the record.
+- **Gate A (`regress.py gamma`):** `test_ladder_dollar.js` (the tape reader, 6a–6e the King's sign on both paths, 7a–7b
+  below) and `test_mode_king.js` join the gamma gate — the reader was never in it.
+- **Missed too, fixed now:** (1) `bookKing.neg` (the main table's EXPIRATIONS view) used the same first-character test →
+  the parsed sign. (2) `tapeMapLive`'s fallback ORDER: an unreadable ladder went straight to the feed, whose King is the
+  payload's largest |v| — a DIFFERENT strike can come back for one export (09-18: SPY 759 at 09:46, 761 at 10:04, both
+  "the King"; the KINGTRACK steps and the rails followed it). Now the last DOM read stands for 90 s before the feed serves
+  (7a / 7b). The King tracker's polarity (`ktrkSample`: neg || pct < 0) follows the corrected sources unchanged.
+- Checked and left alone: the regime chip's "+gamma" is spot-vs-flip (a different definition, right as is); the MAG's sign is
+  InsiderFinance's own; the GP chip / bands / KT colours all read the CSV sign, so they correct themselves on 16.51.
+
 ## v16.50 — THE KING'S SIGN: the SPY King exported +100 while Atlas showed −$208,644K (2026-09-18, ~10:20 CT)
 
 Operator: "is spy king negative or positive" → "then why is it showing as positive. why didn't you catch this when I asked

@@ -120,5 +120,16 @@ ok(a5.main && a5.main.pct['771.00']===-23, '4g main table "-7%-6%" style rows st
   global.extractWalls=(j)=>({ price:769.5, king:761, walls:[{k:761,pct:100,pos:true},{k:760,pct:91,pos:false}] });
   const g=feedStructMap('SPY'); ok(g && g.pct['761.00']===100 && g.kingNeg===false, '6e ...and a +γ King is +100, kingNeg false', g && [g.pct['761.00'], g.kingNeg]); }
 
+// ---------- (16.51) tapeMapLive: a one-second DOM gap serves the last DOM read (<= 90 s), NOT the feed's different King
+{ eval(ex('tapeMapLive')); global.LASTDISP={SPY:'gamma'}; let calls=0; global.document={ querySelectorAll:()=>[] }; LADDER_CACHE={t:0,data:null};   // no ladder in the DOM for this block
+  eval("readTapeFromDOM=function(sym){ calls++; return calls===1?{ pct:{'761.00':-100,'760.00':-96}, king:761, kingNeg:true, count:5 }:null; }");   // rebound in scope, like feedStructMap below
+  // feedStructMap was eval'd into THIS scope by 6d (a module-scope declaration shadows a global stub — PROJECT-CONSTANTS): rebind it here
+  eval("feedStructMap=function(sym){ return { pct:{'759.00':100}, king:759, count:5, fromFeed:true }; }");
+  TAPE_CACHE={}; const first=tapeMapLive('SPY'); TAPE_CACHE.SPY.t=Date.now()-5000;   // 5 s old, past the 1 s hot cache
+  const second=tapeMapLive('SPY');
+  ok(first && first.king===761 && second && second.king===761 && !second.fromFeed, '7a a DOM read 5 s old stands over the feed when the ladder is unreadable this second (King stays 761, not the feed\'s 759)', second && [second.king, second.fromFeed]);
+  TAPE_CACHE.SPY.t=Date.now()-120000; const third=tapeMapLive('SPY');
+  ok(third && third.fromFeed===true && third.king===759, '7b ...past 90 s the feed serves', third && [third.king, third.fromFeed]); }
+
 console.log('test_ladder_dollar: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

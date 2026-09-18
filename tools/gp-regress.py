@@ -242,6 +242,28 @@ def main():
     kn = [n for n in nodes if n['king']]
     add(len(kn) == 1 and kn[0]['spx'] == king, 'A', 'exactly one King flag, on the tape King %s' % king)
     KING = num(R.get('KING', [['']])[0][0]); add(KING is not None and kn and abs(KING - kn[0]['es']) < 0.001, 'A', 'KING row (%s) == the flagged strike\'s ES' % KING)
+    # (16.50) THE KING'S SIGN — the SPY King exported +100 on 2026-09-18 while Atlas showed "−$208,644K" and this runner passed:
+    # it checked strikes, ranks and magnitudes and never the King's sign. Three ways, all must agree: the CSV's King row, the
+    # audit's kingNeg (the sign the panel read from the $K cell), and — when the King's ES price is in Atlas's own slice —
+    # Atlas's sign for it. Any King whose |pct| is not 100 is wrong outright.
+    if kn:
+        kp = kn[0]['pct']
+        add(abs(kp) == 100, 'A', 'the King row reads +/-100 (%s)' % kp)
+        # a pre-16.50 audit RECORDS the bug (kingNeg from the cell's first character; the feed path always +100): the pinned
+        # 2026-09-17 fixtures carry it. Those get a warning, not a failure — the record is the record; the check bites from 16.50.
+        def vnum(v):
+            try: return float(str(v).split('.')[0] + '.' + ''.join(str(v).split('.')[1:2]))
+            except Exception: return 0.0
+        signs_reliable = vnum(AU.get('v')) >= 16.50
+        sign_add = add if signs_reliable else (lambda okv, sec, msg: (add(True, sec, msg) if okv else warn(sec, 'pre-16.50 audit (%s): ' % AU.get('v') + msg)))
+        if kingNeg is not None: sign_add((kp < 0) == bool(kingNeg), 'A', 'the King row\'s SIGN (%s) == the audit\'s kingNeg (%s) — the $K cell\'s own sign' % ('-' if kp < 0 else '+', kingNeg))
+        tk = tape.get('%.2f' % king) if king is not None else None
+        if tk is not None: sign_add((tk < 0) == (kp < 0), 'A', 'the King row\'s sign == the tape\'s sign at the King (%s)' % tk)
+        at = AU.get('atlas') or {}
+        if at.get('ok') and at.get('rows'):
+            near = [r for r in at['rows'] if len(r) >= 2 and abs(float(r[0]) - kn[0]['es']) <= 1.5]
+            if near: sign_add((float(near[0][1]) < 0) == (kp < 0), 'A', 'ATLAS agrees on the King\'s sign: its row at %.2f reads %s' % (float(near[0][0]), near[0][1]))
+            else: warn('A', 'the King\'s ES %.2f is not in Atlas\'s slice this export (%d rows) — sign not cross-checked' % (kn[0]['es'], len(at['rows'])))
     SR = num(R.get('SCALEREF', [['']])[0][0]); add(SR is not None and AU.get('scaleRef') is not None and abs(SR - AU['scaleRef']) < 0.01, 'A', 'SCALEREF %s == the ES1 payload spot the panel read (%s)' % (SR, AU.get('scaleRef')))
     if SR and kn: add(abs(SR - kn[0]['es']) <= 200, 'A', 'SCALEREF within 200 pts of the King (sanity)')
 

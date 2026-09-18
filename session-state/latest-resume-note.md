@@ -1,7 +1,9 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.50 / GP 0.71 / DS 0.15) · **panel v16.50** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.71**, **lsDayModel v0.18**, **lsDayStats v0.15**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.51 / GP 0.71 / DS 0.15) · **panel v16.51** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.71**, **lsDayModel v0.18**, **lsDayStats v0.15**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
 # (2026-09-18 ~00:10 CT — GP 0.70: one label per IF level — the line's text only when the level is not tagged on a node (gpl::lineLabelWanted); he saw CALL WALL beside the SPY strip and CW on the SPX node at once. Close IRT → INSTALLED → reopen; no dialog change needed.)
+
+# (2026-09-18 ~10:40 CT — v16.51: the King's sign is in Gate L (fails on the 09:46 export, warns on pre-16.50 fixtures) and test_ladder_dollar / test_mode_king are in the gamma Gate A; bookKing.neg fixed the same way; tapeMapLive keeps the last DOM read 90 s before the feed (the feed's King can be a different strike). **He needs: Tampermonkey 16.51 (5 min, reload Atlas) — supersedes 16.50.**)
 
 # ⚠⚠ 2026-09-18 ~10:20 CT — v16.50: THE SPY KING'S SIGN WAS WRONG (+100 while Atlas showed −$208,644K). He caught it; I had "compared with the tape" without comparing signs. feedStructMap (+100 unconditionally) and the ladder scan's first-character test were the two paths; both now read the King's own $K sign. **He needs: Tampermonkey 16.50 (5 min, reload Atlas).** After it: the SPY rail's King bar/band goes magenta when −γ; the chip's SPY King polarity and KINGTRACK's 7th field follow. Verify: `__gptsDebug.gpAudit()` kingNeg == (tape[king] < 0), and the SPY csv King row's pct sign == the Atlas cell's $K sign.
 
