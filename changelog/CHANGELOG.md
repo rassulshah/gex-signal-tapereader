@@ -1,3 +1,25 @@
+## v16.52 — ONE ACTIVE TAB PER ORIGIN (the guard he asked for); an absent strike is not a dropped band (2026-09-18, ~12:40 CT)
+
+Operator: "i have 3 tabs but i thought i closed the panel in them so only 1 panel exists. can you double check as well as
+create some type of guard."
+- **The check:** ✕ (16.12) muted the two EXPORTS only. Every other writer kept running in every Atlas tab — the King
+  journey (KINGDAY), the King tracker's 30-second samples (KTRK), the tap record, the first-seen stamps, the day record,
+  the EM pin — and they all live in localStorage / IndexedDB, which every tab of app.skylit.ai shares. A GC1 or SPXW tab
+  sampling its own page wrote into the stores the ES1 tab read back. So "one panel" was true of the writes to IRT and false
+  of everything the panel remembers.
+- **The guard (`leaderTick` / `tabActive`):** a heartbeat record in localStorage names one active tab; every other tab is
+  PASSIVE — `tick()` renders what it has and returns before the recorders, `onFeed()` records nothing, `ktrkSample()` does
+  not sample, both exports refuse. Rank: a live ES-futures chart (3) beats an ES-family chart (2) beats anything else (1);
+  equal ranks tie on the tab id, stably. A muted (✕) tab never leads and drops the key it held; a leader whose tab closes
+  stops beating and another unmuted tab takes over within ~6 s. A passive, unmuted tab shows a red strip at the top:
+  "PASSIVE — another Atlas tab (EPZ26, active since 12:31) is recording and exporting … close that tab or close this
+  panel." `__gptsDebug.leader()` says who. `test_leader.js` 15/15 (two tabs on one fake store), in the gamma Gate A.
+- **Seen in the same look:** every SPY band restarted at 11:59:28 — the SPY pane read 5 rows instead of 8 once, and
+  `gpSinceStamp` treated "absent from the read" as "dropped under 5%": the stamps were wiped and re-issued. Now an absent
+  strike keeps its first-seen stamp for 10 minutes (the tape changing shape for real is longer than a render gap); a strike
+  PRESENT and under the floor still ends its band and restarts on return (12.6 / 12.7 unchanged). Gate A 12.10–12.12.
+- Export cadence, for the record: his "Every" is 1 min; the plugin redraws on every tick; the tape read is cached 1 s.
+
 ## lsGammaProfile 0.72 — the chip's Kings name their book (2026-09-18, ~10:55 CT)
 
 Operator: "look at the regime chip, is it consistent. are the prices in the brackets consistently ES or not" → the rule was

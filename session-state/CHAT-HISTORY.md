@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-18 · v16.51 · session `f9c89c64` — the King's sign in the regression (Gate L + Gate A); bookKing.neg; tapeMapLive keeps the last DOM read before the feed
+## 2026-09-18 · v16.52 · session `f9c89c64` — one active tab per origin (leader election); absent strikes keep their band stamp; the chip's Kings name their book
 
-_762 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_789 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -10085,6 +10085,321 @@ Step 2: reload the Atlas tab. The SPY King's bar and band go magenta, the chip's
 
 **me (15:31):** Now the runner checks: the King's sign on every book, against the audit and against Atlas's own slice.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (02:34):** The sync pushed the build; now the plugin compile status.
+Deployed and pushed (commit `e11b12a`), the raw URL now serves 16.46, and the GEX build compiled `lsDayStats.dll "0.12"` at 21:30 CT — both DayStats 0.12 and GammaProfile 0.69 are sitting PENDING, waiting for IRT to close.
+
+Steps, in order:
+
+1. Panel: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — it should offer **Update to 16.46**. If it offers Reinstall, wait five minutes and click again. Then reload the Atlas tab.
+
+2. Close Investor/RT. Tell me "closed" and I'll confirm INSTALLED before you reopen.
+
+3. Reopen IRT. In the Gamma Profile dialog set **Level labels at = Off** (the CW/PW/FLIP/MAG labels then come only from "Show IF level labels on nodes", so they stop appearing twice).
+
+What to expect on the READ line tomorrow morning: from the first bars it prints `HOD IN p% · LOD IN p%`, both numbers moving with price every three minutes; whichever side is under 50% carries `· if not, ~time (50%)`; once a side clears 50% the clock drops; after the close both turn into the printed times. The Day Stats A-row now uses the chart's own RTH high/low, so the header values will match your bars.
+
+**OPERATOR:**
+> closed
+
+**me (02:46):** INSTALLED — GammaProfile 0.69 and DayStats 0.12 both went in at 21:46 CT (the DLLs stayed locked for a couple of ticks after you closed, which is normal).
+
+Step 1: Reopen Investor/RT.
+
+Step 2: Open the Gamma Profile dialog and set **Level labels at = Off**, OK.
+
+Step 3: Look at the Day Stats header — it should read `DAY STATS - Thu 17 Sep` with `HOD IN 8:33am · LOD IN 9:09am` after today's close, and the A-row high/low should match your chart's bars. Tomorrow from the open it switches to the live `HOD IN p% · LOD IN p%` form.
+
+**OPERATOR:**
+> its being cut off , move to center.  the took values make no sense.  How si the expected value 3m ?    Do a sanity check of all the expected values.   also the HOD in and LOD in, check them , how would it have looked at 9am?
+> The first extemity should always be first.
+> 
+> _[sent while I was working — a queued message]_
+> so if the lod occurs , it should be before the HOD and vice versa
+> 
+> _[sent while I was working — a queued message]_
+
+**me (02:59):** Now the replay of 2026-09-17 with the panel's own functions, bar by bar.
+Now the DayStats 0.13 edits: the read line in the logic header, centre anchors, the left clamp, and the wider text rect.
+Now the panel fix (16.47): the EM's scale, plus the audit field and the re-derivation's own check.
+Now the export test: the stub must model the real `irtRatio` (ES per SPY), and a guard that a 10× scale can never reach the model again.
+Now prove the runner catches tonight's live export (the 10× one) and passes the fixed synthetic one.
+Now the records: CHANGELOG, resume note, checklist, snapshot, chat history, guards.
+Pushed (`89c9b6b`), panel 16.47 is on the raw URL, and `lsDayStats.dll "0.13"` compiled at 22:08 CT — PENDING for IRT to close.
+
+**What I fixed now**
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.47 (if it says Reinstall, wait 5 min and click again) → reload Atlas.
+
+Step 2: close IRT, tell me "closed", I confirm INSTALLED.
+
+Step 3: reopen IRT → Day Stats dialog → **Corner = Top-center** (two new entries at the end of the list; nothing else moved). The panel now also never starts left of the pane, whatever corner you pick.
+
+Also in 0.13: after the close both halves print their clocks (`HOD IN 8:33am · LOD IN 9:09am`), and the first extreme always leads — that was already the rule in the code (the left slot is whichever printed first, so a LOD-first day reads `LOD IN … · HOD IN …`); it is now pinned by a test so it can't drift.
+
+**The sanity check — one real bug, three design problems**
+
+HL RNG ~$8625 ~172.5p was a bug. The 0DTE straddle EM (27.55 SPX points on Thursday) was converted to ES with the ES-per-SPY ratio (10.1×) instead of ES-per-SPX (1.009×), so the range model go …[trimmed]
+
+**OPERATOR:**
+> both .. do it
+
+**me (03:14):** Now the panel changes: the orclock rule off, and the first extreme's own read (READ1).
+Now the tests: cond tests without orclock, and the export test's READ1 section.
+Panel side green. Now DayStats 0.14: parse READ1 and drive the first half from it.
+Both done, pushed (`bf36a55`), and `lsDayStats.dll "0.14"` compiled at 22:20 CT — PENDING for IRT to close.
+
+What changed:
+
+1. The E row no longer copies the tape. The 60-minute stage's "or-clock" rule is gone, so 1ST/TOOK are the stage's own median — for a day like Thursday that reads `HOD ~8:51am · ~21m` over the actual `8:33am · 3m`. A mutation test now guards that the rule stays gone, and the runner fails any export whose basis carries it.
+
+2. One model on both halves. The panel now writes a `READ1` row for the first extreme through the same logistic that drives the second half, and the plugin prints the left half from it: `HOD IN 74%`, with `· if not, ~11:42am (50%)` while it's under 50, green at ≥70, amber at ≤30. Before 9:06 (the model's 36-minute gate) the left half is the old lookup cell, so the line still reads from 8:45 and switches once. Replayed on Thursday: 9:06 `HOD IN 70% · LOD IN 6% · if not, ~9:15am`; 10:00 `HOD IN 74% · LOD IN 25% · if not, ~10:09am`; 11:00 `HOD IN 44% · if not, ~11:42am · LOD IN 80%`; 2:00pm `HOD IN 86% · LOD IN 98%`.
+
+Steps:
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.48 (Reinstall = wait 5 min, click again) → reload Atlas.
+
+Step 2: close IRT and tell me "closed" — DS 0.14 installs (0.13 is folded in), I confirm INSTALLED.
+
+Step 3: reopen IRT → Day Stats dialog → Corner = Top-center.
+
+Still open on the E row, for whenever you want it: BOP/WICK/W.END/WICK%/MUD are Thursday means rather than med …[trimmed]
+
+**OPERATOR:**
+> closed
+
+**me (03:31):** Still locked at the 22:30 tick (it took two cycles last time too) — waiting for the next one.
+INSTALLED — DayStats 0.14 went in at 22:32 CT.
+
+Step 1: reopen Investor/RT.
+
+Step 2: Day Stats dialog → Corner = **Top-center** → OK.
+
+Step 3: check the header: tonight it should read `HOD IN 8:33am · LOD IN 9:09am` in green, and the E row's 1ST/TOOK should now show the stage median (≈ `HOD ~8:51am · ~21m`) instead of echoing the A row. Tomorrow from 8:45 the left half reads on its own, and from 9:06 both halves come from the model.
+
+**OPERATOR:**
+> cosed
+
+**me (03:39):** Nothing is pending — all four plugins show installed (DayStats 0.14 went in at 22:32, my last message was the confirmation). You can reopen IRT now: Day Stats dialog → Corner = Top-center → OK, then check the header line and the E row's 1ST/TOOK.
+
+**OPERATOR:**
+> once again the expected is showing 3m .. this is not real
+
+**me (03:40):** The plugin is right — it's the panel that hasn't changed. The file it reads was written at 22:39 CT and still carries the old rows (`CONDE,pos60-top+orclock,3.0…` and the 172.5 range), which means the Atlas tab is still running panel 16.46: neither the 3m fix nor the range fix is in it yet.
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — it should say **Update** to 16.48. If it says Reinstall, the cache hasn't turned over; wait 5 minutes and click again.
+
+Step 2: reload the Atlas tab (an installed update does nothing to a page that's already open).
+
+Step 3: wait for the next export (a couple of minutes) — the Day Stats panel picks up the new file on its own, no IRT restart needed. The E row should then read ~8:51am / ~21m and a range around $2445 / 48.9p.
+
+If you want to confirm which version the tab is running, the panel's version badge in its header shows it.
+
+**OPERATOR:**
+> how can Expected 1st and took be the exact same as the actual ?
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (03:41):** Because of a rule I wrote in 16.32 and only removed tonight, in 16.48 — and your Atlas tab is still on 16.46, so the old rule is still writing the file (the export at 22:40 CT still says `pos60-top+orclock, 3.0`).
+
+What the old rule did: once the first hour was in, if the open sat in the top or bottom third of that hour's range, it set the expected 1ST clock to the time of that hour's high (or low). On almost every day the day's first extreme *is* that same bar, so "expected" became a copy of the actual — 8:33 and 3m on both rows. It scored better as a forecast, which is why it went in, but an expectation that just reads the tape back is useless next to the A row, which is your point.
+
+In 16.48 the E row uses the stage's own median instead: for a top-third open like Thursday that is `HOD ~8:51am · TOOK ~21m`, and it never touches the actual bars. Also in that build: the HL RNG fix (172.5 → ~48.9) and both READ halves from the model.
+
+To get it: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.48 (if it offers Reinstall, wait 5 minutes and click again) → reload the Atlas tab → the E row changes on the next export, a couple of minutes later, without touching IRT.
+
+**OPERATOR:**
+> ok,  i updated to 16.48 panel and restarted IRT
+
+**me (03:51):** The 16.48 export just landed (22:49 CT) and it's what it should be: the E row now reads `HOD ~8:51am · TOOK ~21m` (the stage's median — basis `pos60-top`, no more copying), and the range is `~$2445 ~48.9p` instead of $8625 — the EM is 27.8 ES points now, not 278. The live runner passes 10/10 on it.
+
+Your Day Stats panel picks the new file up on its own; it should already show the new E row. If the Corner isn't at Top-center yet, that's the one dialog change left.
+
+One note for tonight's view: after the close the model doesn't write READ1/READ2 (it stops inside the last 6 minutes of the session), so the header stays on the two actual clocks — `HOD IN 8:33am · LOD IN 9:09am`. The live "IN p%" halves start tomorrow: the left one from 8:45, both from 9:06.
+
+**OPERATOR:**
+> why does the call wall and flip still display twice. it is on both rails
+
+**me (04:03):** Two features were labelling the same level: "Show IF level labels on nodes" puts CW/PW on the SPX node and the FLIP tick, and "Level labels at" — which your dialog has at Left, not Off — writes CALL WALL / PUT WALL / FLIP at the left end of each line, which is right beside the SPY strip. Hence one on each rail.
+
+GP 0.70 makes it one label per level: the line only carries its text when that level is *not* already labelled on a node (so a wall whose strike isn't a rail node still gets its line label), and Off still means none. It compiled at 23:02 CT and is PENDING.
+
+Step 1: close IRT, tell me "closed".
+
+Step 2: reopen — no dialog change needed; CW, PW and FLIP should each appear once, on the SPX side.
+
+**OPERATOR:**
+> closed
+
+**me (04:08):** INSTALLED — GammaProfile 0.70 went in at 23:08 CT. Reopen IRT; no dialog change needed. CW, PW and FLIP should each show once, on the SPX side, with nothing beside the SPY strip.
+
+**OPERATOR:**
+> okay now have you been giving the data for analysis every night
+
+**me (04:20):** Yes. The nightly job's log on your machine shows it ran on every trading day this week — Sep 10, 11, 14, 15, 16 and 17 (the last at 15:15 CT) — and each run did its three things: appended the day's ES/NQ/CL/GC bars, rebuilt BASERATES.json (296 → 301 sessions over the week, through Sep 16), and pushed via the sync task.
+
+Two things worth knowing:
+
+Sep 17 itself isn't in the base rates yet. The 15:15 run pulled 382 of the session's 390 bars, so it was marked incomplete and held back; today's run picks it up as session 302.
+
+The second-extreme model's nightly refit hasn't happened yet either, because that code shipped last night at 21:30, after the run. The BASERATES you have now carries the version I fit in the cloud (through Sep 16). Today's run at ~15:05 CT will be the first that refits it on your machine, and the panel only takes the refit if it clears the floors (AUC ≥ 0.84, calibration within 0.08, ≥150 sessions). I'll check the log after it runs and confirm it went through.
+
+**OPERATOR:**
+> can you check the king chart , and see if its issues have been resolved like multiple consecutive deflections etc.  take a look and review and resolve.    after that do a save  and save everything as well as update the tabs . we will pickup tomorrow
+
+**me (04:24):** Now replay Thursday's King chart events with the panel's own function, the CSV's recorded King steps, and the ES bars.
+Now the records for 16.49 and the session close-out.
+Saved and pushed (`841652a`), 16.49 on origin. Here's where the King chart stands.
+
+**The King chart itself is clean.** I replayed Thursday with the panel's own event code, the recorded King steps and the ES bars: 8 events all day (SPX 3, SPY 5), none consecutive — one per touch, which is what the September 15 fix promised. The one pair at 9:15 (SPY and SPX both "deflect") is the same bounce read against two lines 1.4 pts apart, not a double count.
+
+**The flood was in the tap record, and it was real.** The recorder was asking every level "did price tap you and leave" and writing every yes. On Thursday one rejection off 764.5 at 8:53 was written as four ceiling deflections (764.5, 764, 763.5, 763 — every level the wick had crossed on the way up), and one bounce off 759.5 between 9:21 and 9:30 became ten. 43 events on a 36-point day. A level price went through isn't a level it deflected from, so 16.49 keeps only the level at the swing's extreme, one per direction. Tested (16/16 plus the recorder guard). The nightly's pattern tables will thin out from tonight as the record refills — that's the fix, not drift.
+
+Saved: CHANGELOG, resume note (tomorrow's order at the top), LOCKED-ITEMS (the E-row wick family sits there as offered, not agreed), snapshot v1649, chat history, all guards green. Tabs: the Roadmap is current through 16.49 with the next items listed, and the Testing tab's suite stamp is 16.49 (130 green, the same 52 old version-pinned reds).
+
+Tomorrow, in order:
+
+1. Tampermonkey → 16.49 (5 min, reload Atlas). No IRT change.
+2. Watch the READ line from 8:45 (left half only) and 9:06 (both halves). …[trimmed]
+
+**OPERATOR:**
+> im back make sure you are recording
+
+**me (14:39):** Yes — it's recording. Checked the live panel just now (9:38 CT): tape read live from the DOM (100 strikes, King +100% at SPX 7650 → ES 7715.5), session live on the Friday base (em-open60 stage), Atlas pool active, 22 three-minute SPY bars banked since the open, last export to IRT written at 9:38:49, and last-session mode is off.
+
+One thing: the tab is still on panel 16.48 — last night's 16.49 (the one-deflection-per-swing fix) isn't in it yet. When you have a quiet moment: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update → reload the Atlas tab. The journey and the day's record survive a reload; you'd lose about one export cycle.
+
+**OPERATOR:**
+> ok
+
+**me (14:39):** Good — the tab's back on Atlas. I'll leave it running; ping me when you've updated to 16.49 or if anything on the READ line or the E row looks off this morning.
+
+**OPERATOR:**
+> reloaded
+
+**me (14:41):** 16.49 is live: the reload came back reading the tape (King at SPX 7650), 23 bars banked from the open, session live on the Friday stage, Atlas pool on, and an export written at 9:41:14 CT. Nothing was lost in the reload. Recording continues.
+
+**OPERATOR:**
+> compare with dom tape
+
+**me (14:48):** The task runs the repo's own `gex-build.bat`, so I can teach it the constant.
+They match. I read the live tape at 9:46:57 and ran the runner on the 9:46:50 export: Atlas's five equal ours (24/24 on the gamma checks), Day Stats and Day Model checks all pass.
+
+Strip by strip against your screenshot: SPX 7660 +16% (tape 17), 7650 −100% K rank 1, 7645 +7%, 7635 rank 3, 7630 +55% (50), 7620 −13% (−11), 7615 −22% (−20), 7610 +2% (1), 7605 −20% (−18), 7600 −48% (−41); SPY 759 +100% K rank 2, 758 −39% (−37), 757 −38%. The one-to-seven-point gaps are the tape moving between the export and my read — seven seconds apart the pool's fifth slot swapped from 7600 to 7575. Both King lines sit at 7715.0 and 7685.5 against Atlas's 7714.92 and 7685.4. The bands start where the nodes were first seen (K ~9:05, rank 4 ~9:15, rank 3 ~9:40).
+
+The strip itself is doing what it should: E row 8:51 / 21m over the A row's 8:33 / 3m, range 49.5p, and the line reads `HOD IN 66% · LOD IN 19% · if not, ~9:54am` — 27 points under the high 72 minutes on, 5 points off the low.
+
+Two small things I fixed while looking, both PENDING until you next close IRT (no rush, nothing on the chart is wrong): the "Â·" before "if not" is a character-encoding slip in the plugin (DS 0.15), and the Gamma Profile's status file was labelling itself 0.69 under 0.70 — a hard-coded string, now the real version (GP 0.71). Pushed; they compile on the next build tick.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (14:52):** Pushed by the sync task (`5461488`, 9:52 CT); the clone is aligned with origin, nothing unpushed.
+
+**OPERATOR:**
+> is spy king negative or positive
+
+**me (15:04):** Negative. As of 10:04:41 CT the SPY King is 761 at −100% (it rolled up from 759 during the last few minutes — 759 is now −95%, 760 −94%, a three-strike negative cluster from 759 to 761, all Barney-tagged). On the pooled rank it sits 3rd (SPY 761 −53%), behind SPX 7650 (−100%) and SPX 7635.
+
+Note the SPX King at 7650 is also negative-gamma right now, so both Kings are on the −gamma side: doctrine says wicky, overshoot-prone interaction rather than a smooth pin.
+
+**OPERATOR:**
+> then why is it showing as positive . why didn't you catch this when i asked you to check .  you keep missing simple things
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:08):** Found it. Two paths give the King a sign, and one of them can't say "negative".
+You're right, and I missed it. My "compare with the tape" matched strikes, ranks and sizes and took the King's colour as given. I've now read the actual Atlas cell for the SPY King: `761 · +1% · −$208,644K` — negative, while the panel was exporting it as +100.
+
+Why it showed positive: the panel had two ways to read a King's sign, and one of them could only say "positive." When the ladder in the DOM couldn't be read for a second (a pane mid-render, or the tab sitting on that Stage page at 9:38), the panel fell back to the feed and wrote the King as +100 no matter what. And the DOM reader itself judged the sign by the first character of the cell — which is the velocity chip ("+1%"), not the dollar figure. That's why 759 read +100 at 9:46, 761 −100 at 10:04 and +100 again at 10:06: whichever path served that second.
+
+Fixed in 16.50: both paths read the King's own dollar sign; tests pin the live cell text in both polarities. Pushed in a couple of minutes.
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.50 (Reinstall = wait 5 min, click again).
+
+Step 2: reload the Atlas tab. The SPY King's bar and band go magenta, the chip's SPY King polarity and the King tracker's colouring follow on the next export — no IRT change.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (15:13):** Pushed by the sync task (`7e90ab5`, 10:12 CT) — 16.50 is on the raw URL and the clone matches origin; nothing unpushed.
+
+**OPERATOR:**
+> make sure you add it to the regression .. is there anything esle you may have missed
+
+**me (15:31):** Now the runner checks: the King's sign on every book, against the audit and against Atlas's own slice.
+Done and pushed (`8c70a8e`) as 16.51.
+
+In the regression now: the live runner checks every book's King row for ±100, and that its sign agrees three ways — with the audit's own read of the dollar cell, with the tape at the King, and with Atlas's slice at the King's price. Run against this morning's 9:46 export it fails exactly where I should have looked: the SPX King −100 beside an audit saying positive, and the SPY King +100 beside Atlas's −53. The tape-reader test and the King-mode test are also in the gamma gate now — they weren't before.
+
+Two more things I found on the sweep, both fixed in 16.51:
+
+1. The main table's "book King" had the same first-character sign test — now the parsed sign.
+2. Worse than the sign: when the ladder was unreadable for a second, the panel went straight to the feed, whose King is the payload's biggest bar — which can be a *different strike*. That's why the SPY King bounced 759 → 761 → 759 across exports this morning and the tracker drew steps that weren't rolls. Now the last real ladder read stands for 90 seconds before the feed is consulted.
+
+Checked and fine: the regime chip's "+gamma" is spot-vs-flip (a different thing, correct); MAG's sign is InsiderFinance's own; the profile's colours, chip and King tracker all read the corrected sign automatically.
+
+16.51 supersedes 16.50, so one more click: https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update (5-minute cache as always) → reload Atlas.
+
+**OPERATOR:**
+> look at the regime chip , is it consistent . are the prices in the brckets consistently ES or not
+
+**me (15:39):** Yes, it's consistent, but the two numbers mean two different things, and the brackets are never ES.
+
+The first number is the level on your chart (ES, contract-adjusted). The bracket is the strike in the book's own units: SPX for everything from InsiderFinance and the SPX King (PW 7550, Mag 7600, K 7650, FLIP 7626, CW 7680), and SPY for the SPY King (760). That's the rule everywhere on the chip — it's just that 7650 and 760 sit next to each other with nothing saying which book each is.
+
+I checked the six ES numbers against the file the plugin read: PW 7614.75, Mag 7665.05, K 7715.75, SPY K 7695.25, FLIP 7691.75, CW 7746.00 — the chip shows each one +4 (7619, 7669, 7720, 7700, 7696, 7750). That's the same contract offset applied to all six, so they line up with the rails on that draw; at your screenshot moment the offset was about +4 because the tape was moving fast within the bar (the status file shows it back at +0.6 a minute later). Consistent, if a bit jumpy in a fast tape.
+
+If you want the brackets to read unambiguously, one change: `K 7720 (SPX 7650) · K 7700 (SPY 760)` — the book name inside the bracket on the two Kings only, everything else stays SPX by definition. Want that?
+
+**OPERATOR:**
+> make the prices ES and the prices that are in the brackets their book prices
+> lets gow with your suggestion
+> 
+> _[sent while I was working — a queued message]_
+
+**me (15:43):** Done and pushed (`fa3f49e`). GammaProfile 0.72: the two Kings name their book in the bracket — `K 7720 (SPX 7650) · K 7700 (SPY 760)` — and PW, Mag, FLIP and CW keep their bare SPX number, since that's the only book they can be in. The ES numbers in front stay the chart's contract, all six with the same offset.
+
+It compiles on the next build tick and installs together with 0.71 and DayStats 0.15 the next time you close IRT — the queue is now three cosmetic changes (the chip labels, the status-file version, the "Â·" dot), none urgent, so whenever suits you: close IRT, tell me "closed", I confirm INSTALLED.
+
+**OPERATOR:**
+> i closed and reopened
+
+**me (15:51):** All in. The build status shows every plugin installed at 10:50, and your reopened IRT is already running GammaProfile 0.72 — the status file now says so itself (`lsGammaProfile 0.72 written 10:51:09`, which is the version-constant fix doing its job). DayStats 0.15 went in with it, so the "Â·" should be a clean dot on the READ line, and the chip's Kings should read `K … (SPX 7650) · K … (SPY 760)`.
+
+**OPERATOR:**
+> how often is the gamma profile updated ?
+
+**me (16:01):** Three clocks are involved, and the slowest one is a setting you control.
+
+The panel rewrites the profile files (`GammaProfile.csv` and the SPY file) on the "Every" setting in its IRT section — the choices are 1, 3, 5 or 15 minutes, default 3. Each write is a fresh read of the tape at that moment. This morning's exports were landing about 60–90 seconds apart (9:38:49 → 9:41:14, 10:04:41 → 10:06:01), which looks like the 1-minute setting plus the wait for the next panel refresh; if you want to confirm which you have, it's the row of chips next to "Every" in the panel's IRT settings.
+
+Below that, the tape itself: the panel reads Skylit's ladder from the page, cached for one second, so an export is never more than a second stale relative to what Atlas shows.
+
+Above that, the plugin: lsGammaProfile re-reads the file on every chart draw — every tick, every new bar, every scroll — so the rails and the chip change within a second of the panel writing. If nothing has been written for 10 minutes or more the plugin shows a red STALE badge, so a dead export can't sit there looking live.
+
+So in practice: the chart lags Atlas by whatever "Every" is set to, plus up to a second.
+
+**OPERATOR:**
+> i want you to check the gamma profiles because the 760 spy is king but it is not being highlighted in irt
+> now it is ..  i guess there is a significant delay
+> 
+> _[sent while I was working — a queued message]_
+
+**me (17:10):** Two things, one of which matters more than the delay.
+
+The delay first: the chart can only change when the panel writes the file, and that's on the "Every" setting in the panel's IRT section — 1, 3, 5 or 15 minutes, default 3. The King at 760 was in the file at 12:08:42 with the K flag and rank 3, and the plugin drew it on its next redraw at 12:09:28, so the plugin side is seconds; the wait is the export interval. If you want the tightest loop, set Every to 1 min — the write is cheap.
+
+The bigger thing: you have three Atlas tabs open right now — ES1, GC1 and SPXW — and the panel runs in every one of them. Only the ES1 tab should be on `/atlas`. The others read whatever ladder is on their own page, and if either has been granted the export folder they write the same files, so the King can come from the wrong tab's tape and the timestamps interleave — that would also look like "delay" or a King that flickers. Please close the GC1 and SPXW Atlas tabs (or move them off `/atlas` — every other Skylit page is safe), keep the ES1 one, and tell me if the highlighting still lags after that.
+
+**OPERATOR:**
+> i think it is already 1 min.  i have 3 tabs but i thought i closed the panel in them so only 1 panel exists.   can you double check as well as create sometype of guard
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -10955,6 +11270,8 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+fa3f49e gex: sync 18-Fri-09 10:42
+8c70a8e gex: sync 18-Fri-09 10:36
 7e90ab5 gex: sync 18-Fri-09 10:12
 5461488 gex: sync 18-Fri-09  9:52
 841652a gex: sync 17-Thu-09 23:36
@@ -10965,8 +11282,6 @@ bf36a55 gex: sync 17-Thu-09 22:20
 e11b12a gex: sync 17-Thu-09 21:30
 ef562e9 gex: sync 17-Thu-09 21:22
 3fd43e4 gex: sync 17-Thu-09 21:08
-367f318 gex: sync 17-Thu-09 21:04
-167b2f2 gex: sync 17-Thu-09 20:52
 ```
 
 ---

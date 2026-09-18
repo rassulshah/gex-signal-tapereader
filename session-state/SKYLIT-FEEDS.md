@@ -387,3 +387,7 @@ today's SPXW (King 7700) and SPY (King 765). Three derived books in the ES1 payl
 slice in the audit (`AU.atlas`); 16.43 ranks the rails' badges from it. The slice's `v` is NOT a simple scaling of the
 book rows' `v` (factors 52–68 across rows) — treat it as Atlas's own ranking, not something to re-derive from the ladders.
 
+
+
+## 2026-09-18 — ONE ACTIVE TAB (v16.52)
+"Never open a second /atlas tab" is now enforced by the script: a localStorage heartbeat (`gpts_leader_v1`) names one active tab; every other Atlas tab of the origin is passive (reads only, red strip). The ✕ on the panel mutes a tab AND makes it yield. Rank: live ES-futures chart > ES-family chart > other. All Atlas tabs must run the same script version for the guard to hold — an older script in one tab knows nothing of the key.

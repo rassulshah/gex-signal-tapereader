@@ -255,11 +255,21 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
   TT={ pct:Object.assign({}, SPXT, { '7660.00':9 }), king:7650, kingNeg:false, ladderSrc:'trinity' };
   const B3=gammaProfileBuild(); const R3=rows(B3.csv);
   ok(f9(R3,7630)==='35589', '12.7 ... and when it returns the band restarts at the return, not at its first life', f9(R3,7630));
+  // (16.52) a strike ABSENT from one read is not a drop: its stamp survives up to 10 min; past that it is gone
+  { global.ctNowSecOfDay=()=>35700; const noKing7655=Object.assign({}, SPXT, { '7660.00':9 }); delete noKing7655['7655.00'];
+    TT={ pct:noKing7655, king:7650, kingNeg:false, ladderSrc:'trinity' }; const Ba=gammaProfileBuild(); const Ra=rows(Ba.csv);
+    ok(Ra.STRIKE.every(r=>r[4]!=='7655'), '12.10 the read without 7655: no row for it this export');
+    global.ctNowSecOfDay=()=>35880; TT={ pct:Object.assign({}, SPXT, { '7660.00':9 }), king:7650, kingNeg:false, ladderSrc:'trinity' }; const Bb=gammaProfileBuild();
+    ok(f9(rows(Bb.csv),7655)==='35229', '12.11 ...back 3 min later: the ORIGINAL stamp (the band did not restart on a read that simply lacked the row)', f9(rows(Bb.csv),7655));
+    global.ctNowSecOfDay=()=>36000; TT={ pct:noKing7655, king:7650, kingNeg:false, ladderSrc:'trinity' }; gammaProfileBuild();
+    global.ctNowSecOfDay=()=>36700; gammaProfileBuild();   // absent 11+ min
+    global.ctNowSecOfDay=()=>36800; TT={ pct:Object.assign({}, SPXT, { '7660.00':9 }), king:7650, kingNeg:false, ladderSrc:'trinity' }; const Bc=gammaProfileBuild();
+    ok(f9(rows(Bc.csv),7655)==='36800', '12.12 absent for more than 10 min: the tape changed shape — a fresh stamp on its return', f9(rows(Bc.csv),7655)); }
   // a panel reload keeps the stamps (localStorage), a new CT date drops them
   GP_SINCE=null; global.GP_SINCE=null;
   const B4=gammaProfileBuild(); ok(f9(rows(B4.csv),7650)==='35229', '12.8 a panel reload (in-memory map gone) reads the stamps back from localStorage', f9(rows(B4.csv),7650));
   global.ctTodayStr=()=>'2026-09-17'; GP_SINCE=null; global.GP_SINCE=null;
-  const B5=gammaProfileBuild(); ok(f9(rows(B5.csv),7650)==='35589', '12.9 a new CT date starts every band afresh', f9(rows(B5.csv),7650));
+  const B5=gammaProfileBuild(); ok(f9(rows(B5.csv),7650)==='36800', '12.9 a new CT date starts every band afresh (stamped at this export\'s clock, 36800 after the 12.10-12.12 block)', f9(rows(B5.csv),7650));
   global.ctTodayStr=()=>'2026-09-16'; delete LS[GP_SINCE_KEY]; GP_SINCE=null; global.GP_SINCE=null;
   // mutation: a stamp that is overwritten every export would make every band start "now"
   { const mut=ex('gpSinceStamp').replace('if(!(k in m)) m[k]=nowSod;','m[k]=nowSod;'); ok(mut!==ex('gpSinceStamp'), '12.10 mutation applies');

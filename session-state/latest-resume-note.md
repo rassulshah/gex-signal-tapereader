@@ -1,7 +1,9 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.51 / GP 0.72 / DS 0.15) · **panel v16.51** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.72**, **lsDayModel v0.18**, **lsDayStats v0.15**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.52 / GP 0.72 / DS 0.15) · **panel v16.52** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.72**, **lsDayModel v0.18**, **lsDayStats v0.15**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
 # (2026-09-18 ~00:10 CT — GP 0.70: one label per IF level — the line's text only when the level is not tagged on a node (gpl::lineLabelWanted); he saw CALL WALL beside the SPY strip and CW on the SPX node at once. Close IRT → INSTALLED → reopen; no dialog change needed.)
+
+# ⚠⚠ 2026-09-18 ~12:40 CT — v16.52: ONE ACTIVE TAB PER ORIGIN. He had three /atlas tabs (ES1, GC1, SPXW) with the panels ✕-closed in two; ✕ muted only the exports — the King journey, KTRK samples, tap record, since stamps and day record kept writing from every tab into the SHARED localStorage/IDB. Now a localStorage heartbeat names one active tab (live ES-futures chart wins); the rest are passive (no record, no export, red strip on the panel). Also: an absent strike keeps its band stamp 10 min (every SPY band had restarted at 11:59:28 after one 5-row read). **He needs: Tampermonkey 16.52 (5 min, reload ALL Atlas tabs — the guard is in the script, so every tab must run 16.52 or an old-script tab still writes).** Verify: `__gptsDebug.leader()` in the ES1 tab says active:true; the others show the PASSIVE strip or are ✕-muted.
 
 # (2026-09-18 ~10:55 CT — GP 0.72: the chip's two Kings name their book — "K 7720 (SPX 7650) · K 7700 (SPY 760)"; IF levels unchanged. PENDING with 0.71 / DS 0.15 until IRT closes.)
 
