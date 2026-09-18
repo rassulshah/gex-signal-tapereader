@@ -1,0 +1,49 @@
+{
+ "n": 301,
+ "first": "2025-06-02",
+ "last": "2026-09-16",
+ "q": 0.2,
+ "models": {
+  "pooled (the base rate)": {
+   "coverage": 0.791,
+   "clock": 150.3,
+   "pinball": 34.96
+  },
+  "pos30 tercile": {
+   "coverage": 0.784,
+   "clock": 158.9,
+   "pinball": 34.74
+  },
+  "pos60 tercile": {
+   "coverage": 0.794,
+   "clock": 162.1,
+   "pinball": 35.22
+  },
+  "first extreme side (HOD|LOD)": {
+   "coverage": 0.807,
+   "clock": 157.0,
+   "pinball": 34.41
+  },
+  "1ST clock tercile": {
+   "coverage": 0.787,
+   "clock": 162.2,
+   "pinball": 31.46
+  },
+  "first side x 1ST clock tercile": {
+   "coverage": 0.781,
+   "clock": 166.8,
+   "pinball": 31.98
+  },
+  "1ST clock tercile x pos60": {
+   "coverage": 0.777,
+   "clock": 170.7,
+   "pinball": 32.47
+  },
+  "weekday": {
+   "coverage": 0.794,
+   "clock": 160.4,
+   "pinball": 34.5
+  }
+ },
+ "note": "coverage ~80% = honest; a later mean clock at the same coverage = more informative; lower pinball = better quantile"
+}

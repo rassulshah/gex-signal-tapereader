@@ -1,3 +1,17 @@
+## study-second-quantile.py — is "LOD after T 80%" better than the base rate? (2026-09-17, ~21:55 CT)
+
+Operator: "did you check to see if you could make a model for predicting it also that is better than the base rate?" — I
+had not; the earlier study only showed the 2ND clock is unpredictable as a POINT (~93 min MAE for every model). A quantile
+is a different claim, so: out-of-fold, 301 sessions, q = 0.20 (`data/es-1min/SECOND-QUANTILE-STUDY.json`).
+- The base rate (pooled p20 = 11:00) covers 79.1 %, pinball 34.96. **The stage tables 16.45 shipped (pos60 terciles) do
+  NOT beat it** (35.22). The 1ST extreme's own clock tercile — known once the READ calls it IN — is the best single
+  conditioning (pinball 31.46, −10 %, clock 11:12 at 78.7 %); first-side × 1ST-clock 31.98.
+- **The survival view is the real gain:** a static p20 becomes trivially true as the day passes (by 12:00 its "80 %"
+  covers 93–100 % — it says nothing), while the p20 re-fit on days whose 2ND is still ahead keeps ~80 % coverage and
+  moves out: 11:18 at 60 min, 12:06 at 120, 12:38 at 180, 13:18 at 240 after the open.
+- Not yet built: the rung should be the SURVIVAL p20 (given the 2ND has not printed), conditioned on the 1ST's clock
+  tercile — the panel re-computes it every export from a baked survival table; the plugin's rung logic is unchanged.
+
 ## v16.45 + lsDayStats 0.11 — the READ line predicts the SECOND extreme: "HOD IN 96% · LOD after 10:42am 80%" (2026-09-17, ~21:40 CT)
 
 Operator: "the prediction at the top should also be like HOD in X%, LOD after <time> 80% ... so it predicts if the first
