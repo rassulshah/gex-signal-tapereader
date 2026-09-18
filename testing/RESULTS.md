@@ -1012,3 +1012,43 @@ _host: vm, C++: g++_
 | kingtracker | S | `KingTracker.cpp` | ok | ok |
 
 _host: vm, C++: g++_
+
+## 2026-09-18 15:39  ·  gamma  ·  panel 16.51 / companion 1.21 / GP ? / DM 0.18 / DS 0.15 / KT 0.15  ·  ALL GREEN
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 105/105 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | A | `test_ladder_dollar.js` | 30/30 | ok |
+| gamma | A | `test_mode_king.js` | 29/29 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 93/93 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 21/21 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 22/22 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 21/21 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 21/21 | ok |
+| gamma | L | `1118-pool (live runner)` | 22/22 | ok |
+| gamma | L | `1118-pool-SPY (live runner)` | 23/23 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+
+_host: vm, C++: g++_
+
+## 2026-09-18 15:40  ·  gamma  ·  panel 16.51 / companion 1.21 / GP ? / DM 0.18 / DS 0.15 / KT 0.15  ·  ALL GREEN
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 105/105 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | A | `test_ladder_dollar.js` | 30/30 | ok |
+| gamma | A | `test_mode_king.js` | 29/29 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 93/93 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 21/21 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 22/22 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 21/21 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 21/21 | ok |
+| gamma | L | `1118-pool (live runner)` | 22/22 | ok |
+| gamma | L | `1118-pool-SPY (live runner)` | 23/23 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+
+_host: vm, C++: g++_

@@ -57,3 +57,6 @@ The run file gets: the screenshot file names, every unticked line with what was 
 - [ ] With node labels on and Level labels at = Left: CW / PW / FLIP appear once each (on the SPX node / the FLIP tick), no CALL WALL / PUT WALL / FLIP text beside the SPY strip.
 - [ ] A wall whose strike is not a rail node still gets its line label at the chosen side.
 - [ ] Node labels off: the line labels come back wherever Level labels at says.
+
+## 0.72 (2026-09-18) — the chip's Kings
+- [ ] Chip line 2 reads "PW 7619 (7550) · Mag … · K 7720 (SPX 7650) · K 7700 (SPY 760) · FLIP … · CW …" — the two Kings name their book, the rest bare SPX.

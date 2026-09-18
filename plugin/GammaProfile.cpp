@@ -62,7 +62,7 @@
 #include <algorithm>
 #include <ctime>
 
-static const char* GP_VERSION = "0.71";   // (v0.71) ONE version string: the factory and the status file both read it
+static const char* GP_VERSION = "0.72";   // (v0.71) ONE version string: the factory and the status file both read it
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -603,16 +603,17 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a", kgS[48]="", kgS2[48]="", mgS[48]="";
     if (has[0] && kIdx >= 0 && kIdx < (int)strikes.size()) {
         float kspx = strikes[kIdx].spx;
-        if (kspx > 0) sprintf_s(kgS, sizeof(kgS), "%s %d (%d)", S.kinglabel, (int)(lvl[0]+0.5f), (int)(kspx+0.5f));
-        else          sprintf_s(kgS, sizeof(kgS), "%s %d", S.kinglabel, (int)(lvl[0]+0.5f));
+        sprintf_s(kgS, sizeof(kgS), "%s", gpl::chipLevel(S.kinglabel, lvl[0], "SPX", kspx).c_str());   // (v0.72) ES (SPX strike)
     }
     // (v0.64) the SPY King when both books draw, and the IF Magnet (KINGNOW,ES,IF) — "both Kings should be mentioned in the chip"
     int kSpy = -1; for (size_t q = 0; q < strikesSpy.size(); q++) if (strikesSpy[q].king) { kSpy = (int)q; break; }
-    if (cfg.book == 4 && kSpy >= 0) sprintf_s(kgS2, sizeof(kgS2), "%s %d (%d)", S.kinglabel, (int)(strikesSpy[(size_t)kSpy].price+0.5f), (int)(strikesSpy[(size_t)kSpy].spx+0.5f));
-    if (hasIfMag) sprintf_s(mgS, sizeof(mgS), "Mag %d (%d)", (int)(ifMagPx+0.5f), (int)(ifMagSpx+0.5f));
-    if (has[2]) { if (lvlSpx[2] > 0) sprintf_s(pwS, sizeof(pwS), "PW %d (%d)",   (int)(lvl[2]+0.5f), (int)(lvlSpx[2]+0.5f)); else sprintf_s(pwS, sizeof(pwS), "PW %d",   (int)(lvl[2]+0.5f)); }
-    if (has[3]) { if (lvlSpx[3] > 0) sprintf_s(flS, sizeof(flS), "FLIP %d (%d)", (int)(lvl[3]+0.5f), (int)(lvlSpx[3]+0.5f)); else sprintf_s(flS, sizeof(flS), "FLIP %d", (int)(lvl[3]+0.5f)); }
-    if (has[1]) { if (lvlSpx[1] > 0) sprintf_s(cwS, sizeof(cwS), "CW %d (%d)",   (int)(lvl[1]+0.5f), (int)(lvlSpx[1]+0.5f)); else sprintf_s(cwS, sizeof(cwS), "CW %d",   (int)(lvl[1]+0.5f)); }
+    // (v0.72) the two Kings name their book in the bracket ("K 7720 (SPX 7650) · K 7700 (SPY 760)") — operator: "lets go with your
+    // suggestion". The InsiderFinance levels and the Magnet stay "(7550)": SPX by definition, as before.
+    if (cfg.book == 4 && kSpy >= 0) sprintf_s(kgS2, sizeof(kgS2), "%s", gpl::chipLevel(S.kinglabel, strikesSpy[(size_t)kSpy].price, "SPY", strikesSpy[(size_t)kSpy].spx).c_str());
+    if (hasIfMag) sprintf_s(mgS, sizeof(mgS), "%s", gpl::chipLevel("Mag", ifMagPx, "", ifMagSpx).c_str());
+    if (has[2]) sprintf_s(pwS, sizeof(pwS), "%s", gpl::chipLevel("PW",   lvl[2], "", lvlSpx[2]).c_str());
+    if (has[3]) sprintf_s(flS, sizeof(flS), "%s", gpl::chipLevel("FLIP", lvl[3], "", lvlSpx[3]).c_str());
+    if (has[1]) sprintf_s(cwS, sizeof(cwS), "%s", gpl::chipLevel("CW",   lvl[1], "", lvlSpx[1]).c_str());
     FONT lf; lf.id = HELVETICA; lf.size = (short)S.font; lf.style = PLAIN; setFont(lf);
     const short gap = (short)(S.font * 2), tight = 4;   // gap between items; tight = the text-to-pill space (was 8: "why is there a space before the WK badge")
     short pillPW = (has[2] && !lvlDepth[2].empty()) ? pillW(lvlDepth[2], S) : 0;

@@ -1,3 +1,13 @@
+## lsGammaProfile 0.72 — the chip's Kings name their book (2026-09-18, ~10:55 CT)
+
+Operator: "look at the regime chip, is it consistent. are the prices in the brackets consistently ES or not" → the rule was
+consistent (ES first, the book's own price in the bracket) but "K 7720 (7650)" and "K 7700 (760)" sat side by side with
+nothing naming SPX vs SPY. Offered the book name on the two Kings only; "lets go with your suggestion".
+- `gpl::chipLevel(label, es, book, bookPx)`: "K 7720 (SPX 7650) · K 7700 (SPY 760)"; PW / Mag / FLIP / CW keep "(7550)" —
+  SPX by definition. Gate B +4 (93). Verified the six ES numbers on his 10:37 chip against the file: each is the row's ES
+  plus the same contract offset (+4 at that draw — a fast bar; +0.6 a minute later).
+- Compiles on the next build tick; installs with 0.71 / DS 0.15 when IRT next closes.
+
 ## v16.51 — the King's sign in the REGRESSION; two more places the same mistake lived (2026-09-18, ~10:40 CT)
 
 Operator: "make sure you add it to the regression .. is there anything else you may have missed".

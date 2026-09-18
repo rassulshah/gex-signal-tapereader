@@ -198,6 +198,18 @@ inline bool lineLabelWanted(bool nodeLabelsOn, bool labelledOnNode, int lpos)
     return true;
 }
 
+// (0.72) THE CHIP'S LEVELS: "<label> <ES on the chart> (<book> <the book's own price>)". Operator, 2026-09-18: "make the prices ES
+// and the prices that are in the brackets their book prices" — 7650 (SPX) and 760 (SPY) sat side by side with nothing naming
+// the book. ES first, always the chart's contract; the bracket names the book its price is in.
+inline std::string chipLevel(const char* label, float esPx, const char* book, float bookPx)
+{
+    char b[64];
+    if (bookPx > 0 && book && book[0]) snprintf(b, sizeof(b), "%s %d (%s %d)", label, (int)(esPx + 0.5f), book, (int)(bookPx + 0.5f));
+    else if (bookPx > 0)               snprintf(b, sizeof(b), "%s %d (%d)", label, (int)(esPx + 0.5f), (int)(bookPx + 0.5f));   // no book named: SPX by definition
+    else                               snprintf(b, sizeof(b), "%s %d", label, (int)(esPx + 0.5f));
+    return std::string(b);
+}
+
 // ---- contract offset -------------------------------------------------------
 // off = chartClose - anchor, anchor = SCALEREF (the front ES price the ladder is scaled to) else SPOT.
 // Clamped to +-300: a wrong chart (NQ) or a bad anchor must never fling the book.

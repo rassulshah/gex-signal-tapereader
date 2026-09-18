@@ -259,6 +259,12 @@ int main()
     CHECK(gpl::lineLabelWanted(false, true, 2), "node labels off: the line labels it wherever 'Level labels at' says");
     CHECK(!gpl::lineLabelWanted(false, false, 3) && !gpl::lineLabelWanted(true, false, 3), "Level labels at = Off: never on the line");
 
+    // ---- (0.72) the chip's levels: ES first, the bracket names the book
+    CHECK(gpl::chipLevel("K", 7719.6f, "SPX", 7650) == "K 7720 (SPX 7650)", "the SPX King: 'K 7720 (SPX 7650)'");
+    CHECK(gpl::chipLevel("K", 7699.8f, "SPY", 760) == "K 7700 (SPY 760)", "the SPY King: 'K 7700 (SPY 760)' — the book named, no more 7650 beside 760");
+    CHECK(gpl::chipLevel("FLIP", 7695.7f, "", 7626.3f) == "FLIP 7696 (7626)", "an IF level: the bare SPX number in the bracket, as before");
+    CHECK(gpl::chipLevel("CW", 7750.0f, "SPX", 0) == "CW 7750", "no book price known: the ES alone");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }
