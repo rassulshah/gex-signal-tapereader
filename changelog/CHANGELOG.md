@@ -1,3 +1,13 @@
+## lsGammaProfile 0.70 — one label per IF level (2026-09-17, ~23:10 CT)
+
+Operator: "why does the call wall and flip still display twice. it is on both rails." His settings (GPSETTINGS): lvllabels=1
+AND lpos=0 — the node tags (CW / PW on the SPX node, the FLIP tick) and the level line's own label at Left (beside the SPY
+strip) were two features labelling the same level; 0.68's Off only switched the second one off by hand.
+- `gpl::lineLabelWanted(nodeLabelsOn, labelledOnNode, lpos)`: the line carries its text only when the level is NOT already
+  labelled on a node (and never at Off). A wall whose strike is not a rail node keeps its line label — every level is
+  labelled exactly once. The dialog row reads "Level labels at (only levels not labelled on a node)" (same position).
+- Gate B +4 (89).
+
 ## v16.48 + lsDayStats 0.14 — the E row never copies the tape; one model on both halves of the READ line (2026-09-17, ~23:45 CT)
 
 Operator, offered the two first: "both .. do it".
