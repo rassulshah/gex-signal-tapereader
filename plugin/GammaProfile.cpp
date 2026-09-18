@@ -317,7 +317,7 @@ int cppExtension::setup(void)
     PX.em     = pc++; setBoolParameter   ("EM H/L", false, SL);
     PX.extk   = pc++; setBoolParameter   ("Extend King line", false);
     PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash", 0, SL);
-    PX.lpos   = pc++; setListParameter   ("Label at", 0, "Left;Center;Right");
+    PX.lpos   = pc++; setListParameter   ("Level labels at", 0, "Left;Center;Right;Off");   // (v0.68) Left = inside the SPY strip, Right = before the SPX strip, Off = lines only ("Off" APPENDED to the list)
     // STRUCTURE
     PX.roles   = pc++; setBoolParameter  ("Structure labels (Floor/Ceiling/Gate/Air)", true);
     PX.regime  = pc++; setBoolParameter  ("Regime + read panel", true, SL);
@@ -695,13 +695,17 @@ void GammaProfile::drawLevel(int lastBar, short lx, short rx, int idx, COLOR col
     if (!has[idx]) return;
     PEN_STYLE ps = S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID);
     setPen(col, (short)(idx == 0 ? S.klinew : 1), ps);   // (v0.64) the King line at its own width
-    PNT a; a.set(0, lvl[idx]);        a.setDrawPosition();
+    PNT a; a.set(0, lvl[idx]); if (a.h < lx) a.h = lx;   // (v0.68) the line never runs under the SPY strip
+    a.setDrawPosition();
     PNT b; b.set(lastBar, lvl[idx]);
-    if (extend) b.h = rx;             // stretch into the right margin
+    if (extend || b.h > rx) b.h = rx; // stretch into the right margin — but never under the SPX strip
     b.drawLineTo();
     if (!label || !label[0]) return;   // line only (no label — used for KING, which the node labels)
     PNT probe; probe.set(lastBar, lvl[idx]); short y = probe.v;
-    if (S.lpos == 0)      textLJ((short)(lx + 4),            (short)(y - S.font - 2), label, col, S.font, false); // left (default)
+    // (v0.68) lx / rx are the PRICE AREA's edges (between the two tape strips when Book = Both) — operator: "the call wall and
+    // others are also being listed on the spy rail". Left = just inside the SPY strip, Right = just before the SPX strip, Off = none.
+    if (S.lpos == 3) return;
+    if (S.lpos == 0)      textLJ((short)(lx + 4),            (short)(y - S.font - 2), label, col, S.font, false); // left
     else if (S.lpos == 1) textLJ((short)((lx + rx)/2 - 20),  (short)(y - S.font - 2), label, col, S.font, false); // center
     else                  textRJ((short)(rx - 4),            (short)(y - S.font - 2), label, col, S.font, false); // right
 }
@@ -857,7 +861,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     if (railOnly && S.kline && kIdx >= 0) {
         PNT kp; kp.set(lastBar, strikes[kIdx].price);
         COLOR kc = (S.kingcol == 1) ? D_KING : (strikes[kIdx].pct < 0 ? S.cneg : S.cpos);
-        hlinePx(kp.v, paneL, S.extk ? paneR : (short)(kp.h + getPixelsPerBar()/2), kc, S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID), S.klinew);
+        short kx1 = (short)(paneL + 2 + colW), kx2 = S.extk ? (short)(paneR - colW - 2) : (short)(kp.h + getPixelsPerBar()/2); if (kx2 > paneR - colW - 2) kx2 = (short)(paneR - colW - 2);   // (v0.68) the price area only
+        hlinePx(kp.v, kx1, kx2, kc, S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID), S.klinew);
     }
 
     // bars
@@ -1039,12 +1044,14 @@ void GammaProfile::render(const Settings& S, bool railOnly)
 
     // level rail
     { COLOR kc = D_KING; if (S.kingcol != 1 && kIdx >= 0) kc = strikes[kIdx].pct < 0 ? S.cneg : S.cpos;   // (v0.64) polarity, like its bar
-      if (S.kline) drawLevel(lastBar, paneL, paneR, 0, kc, "", S.extk, S); }  // line only; the node labels KING
-    if (S.cw)    drawLevel(lastBar, paneL, paneR, 1, C_PINK,  "CALL WALL", false,  S);
-    if (S.pw)    drawLevel(lastBar, paneL, paneR, 2, C_PINK,  "PUT WALL",  false,  S);
-    if (S.flip)  drawLevel(lastBar, paneL, paneR, 3, C_FLIPC, "FLIP",      false,  S);
-    if (S.em)    drawLevel(lastBar, paneL, paneR, 4, C_CYAN,  "EM-H",      false,  S);
-    if (S.em)    drawLevel(lastBar, paneL, paneR, 5, C_CYAN,  "EM-L",      false,  S);
+      // (v0.68) the level rail lives in the PRICE AREA: from the SPY strip's right edge (Book = Both) to the SPX strip's left edge
+      short lvL = (short)((cfg.book == 4 && S.tapecols) ? (paneL + 2 + colW) : paneL), lvR = (short)(paneR - colW - 2);
+      if (S.kline) drawLevel(lastBar, lvL, lvR, 0, kc, "", S.extk, S);   // line only; the node labels KING
+    if (S.cw)    drawLevel(lastBar, lvL, lvR, 1, C_PINK,  "CALL WALL", false,  S);
+    if (S.pw)    drawLevel(lastBar, lvL, lvR, 2, C_PINK,  "PUT WALL",  false,  S);
+    if (S.flip)  drawLevel(lastBar, lvL, lvR, 3, C_FLIPC, "FLIP",      false,  S);
+    if (S.em)    drawLevel(lastBar, lvL, lvR, 4, C_CYAN,  "EM-H",      false,  S);
+    if (S.em)    drawLevel(lastBar, lvL, lvR, 5, C_CYAN,  "EM-L",      false,  S); }
 
     // secondary-book King (inert until a SPYKING row exists in the CSV)
     if (S.spyking && hasSpyKing) {
@@ -1117,7 +1124,7 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.67  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile 0.68  written " << ts << "  (this instance's last draw)\n";
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
     else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff) << "\n";
     // (v0.63) what the dialog is actually feeding the draw — so "the chip should be centered" can be checked against the setting
@@ -1222,6 +1229,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.67");
+    p->setVersion("0.68");
     return p;
 }
