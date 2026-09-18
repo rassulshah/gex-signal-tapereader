@@ -53,9 +53,9 @@ global.futSessionBars=(n)=>({ rth:[[0,7600,7660,7600,7650],[1,7650,7655,7602,761
 const E={ n:300, rngPts:52, rngUsd:2600, rngP25:34.4, rngP75:75.7, tookMin:38, gapMin:93, firstClock:OPEN+38*60, secondClock:OPEN+131*60, lodFirstPct:48,
           wick:{ bop:12, wick:50, wickPct:23, mud:201 }, basis:{ dow:'Wed', n:60, pooled:false },
           predict:{ exante:{ a:41.95, b:0.351 }, open30:{ a:26.48, b:1.441 }, open60:{ a:25.47, b:1.099 } },
-          condstats:{ n:300, t1Med:24, t2Med:286.5, lodPct:52, t2LastHrPct:39, t2Last30Pct:29,
-            pos30:[{n:114,t1:21,t2:286.5,lodPct:59},{n:81,t1:33,t2:294,lodPct:58},{n:105,t1:21,t2:282,lodPct:39}],
-            pos60:[{n:108,t1:16.5,t2:303,lodPct:66},{n:93,t1:36,t2:306,lodPct:53},{n:99,t1:21,t2:267,lodPct:35}] } };
+          condstats:{ n:300, t1Med:24, t2Med:286.5, lodPct:52, t2LastHrPct:39, t2Last30Pct:29, t2P20:147, t2P50:288, t2P80:381,   // (16.45) the percentiles ride with the tables
+            pos30:[{n:114,t1:21,t2:286.5,lodPct:59,t2P20:192,t2P50:285,t2P80:381},{n:81,t1:33,t2:294,lodPct:58,t2P20:144,t2P50:294,t2P80:372},{n:105,t1:21,t2:282,lodPct:39,t2P20:135,t2P50:282,t2P80:381}],
+            pos60:[{n:108,t1:16.5,t2:303,lodPct:66,t2P20:162,t2P50:306,t2P80:384},{n:93,t1:36,t2:306,lodPct:53,t2P20:192,t2P50:306,t2P80:378},{n:99,t1:21,t2:267,lodPct:35,t2P20:132,t2P50:267,t2P80:372}] } };
 global.hodlodBaseFor=()=>E;
 global.gpDayEmPin=()=>({ emSpx:38.2, est:false, atMin:2, date:'2026-09-16' });   // pinned at the open: 38.2 SPX -> 38.56 ES
 global.gpDayRecordTake=()=>null; global.sweepEventsShown=()=>[]; global.lodhodCall=(d)=>({ in:true, notIn:false, p:88, n:41, first:d.first });
@@ -81,6 +81,7 @@ ok(DE && Math.abs(parseFloat(DE[1])-(7690+expF*expRng))<0.1 && Math.abs(parseFlo
 const CE=R.CONDE && R.CONDE[0];
 ok(CE && CE[0]==='pos60-bottom+orclock' && CE[1]==='3.0', '1.8 CONDE: open at the bottom of the first hour -> the 1ST clock is the window low\'s clock (3 min)', CE);
 ok(CE && CE[3]==='66' && CE[5]==='39' && CE[6]==='29', '1.9 CONDE: 66% LOD-first, the 2ND ladder 39 / 29', CE);
+ok(CE && CE[7]==='162' && CE[8]==='306' && CE[9]==='384', '1.9b (16.45) CONDE fields 9-11: the stage\'s 2ND-clock p20 / p50 / p80 in minutes after the open (pos60-bottom: 162 / 306 / 384 -> the READ line\'s "LOD after 11:12 80%")', CE);
 const SE=R.DAYSE && R.DAYSE[0];
 ok(SE && SE[0]==='LOD' && SE[2]===String(OPEN+3*60) && SE[9]==='HOD' && SE[11]===String(OPEN+303*60), '1.10 DAYSE: LOD first at 08:33, HOD at 13:33 (t2 303)', SE);
 ok(SE && SE[3]==='3.0' && SE[12]==='300.0', '1.11 DAYSE took 3.0 / gap 300.0', SE);

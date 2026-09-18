@@ -1,3 +1,22 @@
+## v16.45 + lsDayStats 0.11 — the READ line predicts the SECOND extreme: "HOD IN 96% · LOD after 10:42am 80%" (2026-09-17, ~21:40 CT)
+
+Operator: "the prediction at the top should also be like HOD in X%, LOD after <time> 80% ... so it predicts if the first
+extremity is in and when the 2nd extremity will be in with high probability" → "what is the best way to build it, you
+tell me". Built as one descending rung, so the line never states a probability the clock has already falsified:
+before p20 "LOD after 10:42am 80%" (on 80 % of the stage's days the 2ND printed after that clock) → before p50 "LOD after
+12:57pm 50%" → before 14:00 "LOD 39% last hr" (the ladder the E row already had) → before 14:30 "LOD 29% last 30" →
+"LOD any minute" → after the close "LOD IN 9:09am" (the A row's actual). Only when the READ has called the 1ST IN.
+- **Study:** `study-hodlod.py` condstats now carries t2P20 / t2P50 / t2P80 (nearest-rank, minutes after the open) pooled
+  and per pos-tercile; re-run on the corpus (301 sessions, 2025-06-02 → 2026-09-16): pooled 147 / 288 / 381; pos60 top
+  132 / 267 / 372 (today's stage — today's LOD at 9:09 was a p20 case). `bake-hodlod.py` re-baked the panel's ladder
+  (test_hodlod green again — the BASERATES drift from the 15:16 sync is closed).
+- **Panel 16.45:** `GP_COND_FALLBACK` rebaked (n=301) with the percentiles; `hodlodCondE` picks the stage row's own
+  percentiles; CONDE gains fields 9–11 (p20, p50, p80). `day-derive.js` re-derives them. Gate A: test_day_export 1.9b,
+  test_daystats_cond assertions updated to the rebaked fallback; synthetic fixtures regenerated.
+- **lsDayStats 0.11:** `dsl::secondRung(second, Cond, nowSo, closed, actualSecondSo)` (Gate B +9, 34); the READ line
+  appends " · <rung>" when the call is IN; an 8-field CONDE (old panel) degrades to the last rungs.
+- Regression: all four indicators green.
+
 ## lsDayStats 0.10 — the ACTUAL row's prices are the chart's own session high / low (2026-09-17, ~21:05 CT)
 
 Operator: "why haven't you fixed the header values." The A row's HOD price read 7722 → 7718 → 7716 → 7711 → 7710 → 7708

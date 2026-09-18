@@ -462,15 +462,21 @@ def _cond_block(rows):
     if len(ok) < 40:
         return None
     med = lambda xs: round(st.median(xs), 1) if xs else None
+    def pct(xs, q):                      # (16.45) a percentile of the 2ND clock: "LOD after <p20> 80%" — the nearest-rank rule
+        if not xs: return None
+        xs = sorted(xs); k = max(0, min(len(xs) - 1, int(round(q * (len(xs) - 1)))))
+        return round(xs[k], 1)
     out = dict(n=len(ok), t1Med=med([r['t1'] for r in ok]), t2Med=med([r['t2'] for r in ok]),
-               lodPct=round(100 * sum(1 for r in ok if r['first'] == 'LOD') / len(ok)))
+               lodPct=round(100 * sum(1 for r in ok if r['first'] == 'LOD') / len(ok)),
+               t2P20=pct([r['t2'] for r in ok], 0.20), t2P50=pct([r['t2'] for r in ok], 0.50), t2P80=pct([r['t2'] for r in ok], 0.80))
     for W in (30, 60):
         tab = []
         for b in range(3):
             lo, hi = b / 3.0, (b + 1) / 3.0
             sub = [r for r in ok if r.get('pos%d' % W) is not None and (lo <= r['pos%d' % W] < hi or (b == 2 and r['pos%d' % W] >= hi))]
             tab.append(dict(n=len(sub), t1=med([r['t1'] for r in sub]), t2=med([r['t2'] for r in sub]),
-                            lodPct=round(100 * sum(1 for r in sub if r['first'] == 'LOD') / len(sub)) if sub else None))
+                            lodPct=round(100 * sum(1 for r in sub if r['first'] == 'LOD') / len(sub)) if sub else None,
+                            t2P20=pct([r['t2'] for r in sub], 0.20), t2P50=pct([r['t2'] for r in sub], 0.50), t2P80=pct([r['t2'] for r in sub], 0.80)))
         out['pos%d' % W] = tab
     out['t2LastHrPct'] = round(100 * sum(1 for r in ok if r['t2'] >= 330) / len(ok))     # (v16.35) the 2ND clock's ladder: last hour of RTH
     out['t2Last30Pct'] = round(100 * sum(1 for r in ok if r['t2'] >= 360) / len(ok))     #   and the last 30 minutes

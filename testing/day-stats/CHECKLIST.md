@@ -16,3 +16,8 @@ cells exactly as `DayStatsLogic.h` formats them). Screenshot within a minute of 
 
 ## What to write down
 Screenshot file names, every unticked line with what was seen instead, the operator's words.
+
+## DS 0.11 + panel 16.45 — the READ line's second half
+- [ ] With the 1ST called IN, the title line reads "HOD IN 96%  ·  LOD after HH:MMam 80%" before that clock; the clock = 08:30 + CONDE field 9 minutes; then "after <p50> 50%", then "39% last hr", "29% last 30", "any minute"; after the close "LOD IN <A row's 2ND clock>".
+- [ ] NOT IN / HOLD calls show only the first half, as before.
+

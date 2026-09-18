@@ -20,7 +20,7 @@ struct StatRow {
     std::string rngPts, rngUsd, rngP25, rngP75;
     StatRow() : valid(false), firstClk(-1), secondClk(-1), wendSo(-1), took(-1), bop(-1), wick(-1), mud(-1), gap(-1), wickPct(-1) {}
 };
-struct Cond { std::string basis; int lastHr, last30; Cond() : lastHr(-1), last30(-1) {} };
+struct Cond { std::string basis; int lastHr, last30; int p20, p50, p80; Cond() : lastHr(-1), last30(-1), p20(-1), p50(-1), p80(-1) {} };   // (0.11) + the 2ND clock's percentiles, minutes after the open
 
 inline double num(const std::string& s) { return s.empty() ? -1.0 : atof(s.c_str()); }
 
@@ -38,6 +38,7 @@ inline bool parseCond(const std::vector<std::string>& t, Cond& c)
 {
     if (t.size() < 6) return false;
     c.basis = t[1]; c.lastHr = (t.size() >= 7) ? atoi(t[6].c_str()) : -1; c.last30 = (t.size() >= 8) ? atoi(t[7].c_str()) : -1;
+    c.p20 = (t.size() >= 9 && !t[8].empty()) ? atoi(t[8].c_str()) : -1; c.p50 = (t.size() >= 10 && !t[9].empty()) ? atoi(t[9].c_str()) : -1; c.p80 = (t.size() >= 11 && !t[10].empty()) ? atoi(t[10].c_str()) : -1;   // (0.11, panel 16.45)
     return true;
 }
 
@@ -128,6 +129,29 @@ inline bool chartExtremes(const int* y, const int* m, const int* d, const double
         any = true;
     }
     return any;
+}
+
+// (0.11) THE SECOND HALF OF THE READ LINE — operator, 2026-09-17: "HOD in X%, LOD after <time> 80% ... so it predicts if the
+// first extremity is in and when the 2nd extremity will be in with high probability". One rung at a time, descending as
+// the session passes each clock, so the line never states a probability the clock has already falsified:
+//   before p20  -> "LOD after 10:42  80%"   (on 80% of the stage's days the 2ND printed after p20)
+//   before p50  -> "LOD after 12:57  50%"
+//   before 14:00 -> "LOD 39% last hr"       (the ladder the E row already prints)
+//   before 14:30 -> "LOD 29% last 30"
+//   after       -> "LOD any minute"
+//   after the close, with the actual 2ND known -> "LOD IN 9:09am" (the A row's second clock)
+// second = the extreme the READ did not call ("LOD" when the READ says HOD IN). nowSo = chart clock, CT sec-of-day.
+inline std::string secondRung(const std::string& second, const Cond& C, double nowSo, bool closed, double actualSecondSo)
+{
+    const double OPEN = 30600.0;   // 08:30 CT
+    if (second.empty()) return "";
+    if (closed && actualSecondSo >= 0) return second + " IN " + clk(actualSecondSo);
+    char b[64];
+    if (C.p20 >= 0 && nowSo < OPEN + C.p20 * 60.0) { snprintf(b, sizeof(b), "%s after %s  80%%", second.c_str(), clk(OPEN + C.p20 * 60.0).c_str()); return b; }
+    if (C.p50 >= 0 && nowSo < OPEN + C.p50 * 60.0) { snprintf(b, sizeof(b), "%s after %s  50%%", second.c_str(), clk(OPEN + C.p50 * 60.0).c_str()); return b; }
+    if (C.lastHr >= 0 && nowSo < 50400.0) { snprintf(b, sizeof(b), "%s %d%% last hr", second.c_str(), C.lastHr); return b; }
+    if (C.last30 >= 0 && nowSo < 52200.0) { snprintf(b, sizeof(b), "%s %d%% last 30", second.c_str(), C.last30); return b; }
+    return second + " any minute";
 }
 
 } // namespace dsl

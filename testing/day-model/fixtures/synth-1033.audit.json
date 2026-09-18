@@ -1,6 +1,6 @@
 {
- "v": "16.40",
- "t": 1789660432197,
+ "v": "16.45",
+ "t": 1789696862435,
  "ct": 37980,
  "tape": {
   "7695.00": 1,
@@ -83,7 +83,12 @@
  "notes": [],
  "tapeSrc": "trinity",
  "tapeCount": 20,
+ "atlas": {
+  "ok": false,
+  "why": "threw"
+ },
  "poolErr": "gpSpyStrikes is not defined",
+ "sinceErr": "gpSinceStamp is not defined",
  "scaleRefT": 1789572780,
  "depth": {
   "cw": null,
@@ -142,24 +147,36 @@
     "lodPct": 52,
     "t2LastHrPct": 39,
     "t2Last30Pct": 29,
+    "t2P20": 147,
+    "t2P50": 288,
+    "t2P80": 381,
     "pos30": [
      {
       "n": 114,
       "t1": 21,
       "t2": 286.5,
-      "lodPct": 59
+      "lodPct": 59,
+      "t2P20": 192,
+      "t2P50": 285,
+      "t2P80": 381
      },
      {
       "n": 81,
       "t1": 33,
       "t2": 294,
-      "lodPct": 58
+      "lodPct": 58,
+      "t2P20": 144,
+      "t2P50": 294,
+      "t2P80": 372
      },
      {
       "n": 105,
       "t1": 21,
       "t2": 282,
-      "lodPct": 39
+      "lodPct": 39,
+      "t2P20": 135,
+      "t2P50": 282,
+      "t2P80": 381
      }
     ],
     "pos60": [
@@ -167,19 +184,28 @@
       "n": 108,
       "t1": 16.5,
       "t2": 303,
-      "lodPct": 66
+      "lodPct": 66,
+      "t2P20": 162,
+      "t2P50": 306,
+      "t2P80": 384
      },
      {
       "n": 93,
       "t1": 36,
       "t2": 306,
-      "lodPct": 53
+      "lodPct": 53,
+      "t2P20": 192,
+      "t2P50": 306,
+      "t2P80": 378
      },
      {
       "n": 99,
       "t1": 21,
       "t2": 267,
-      "lodPct": 35
+      "lodPct": 35,
+      "t2P20": 132,
+      "t2P50": 267,
+      "t2P80": 372
      }
     ]
    },
@@ -223,6 +249,9 @@
    "n": 108,
    "lastHrPct": 39,
    "last30Pct": 29,
+   "t2P20": 162,
+   "t2P50": 306,
+   "t2P80": 384,
    "readIn": "HOD"
   },
   "actual": {

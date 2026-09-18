@@ -615,24 +615,36 @@
   "t1Med": 24,
   "t2Med": 288,
   "lodPct": 51,
+  "t2P20": 147,
+  "t2P50": 288,
+  "t2P80": 381,
   "pos30": [
    {
     "n": 114,
     "t1": 21.0,
     "t2": 286.5,
-    "lodPct": 59
+    "lodPct": 59,
+    "t2P20": 192,
+    "t2P50": 285,
+    "t2P80": 381
    },
    {
     "n": 82,
     "t1": 33.0,
     "t2": 295.5,
-    "lodPct": 57
+    "lodPct": 57,
+    "t2P20": 144,
+    "t2P50": 294,
+    "t2P80": 372
    },
    {
     "n": 105,
     "t1": 21,
     "t2": 282,
-    "lodPct": 39
+    "lodPct": 39,
+    "t2P20": 135,
+    "t2P50": 282,
+    "t2P80": 381
    }
   ],
   "pos60": [
@@ -640,19 +652,28 @@
     "n": 108,
     "t1": 16.5,
     "t2": 303.0,
-    "lodPct": 66
+    "lodPct": 66,
+    "t2P20": 162,
+    "t2P50": 306,
+    "t2P80": 384
    },
    {
     "n": 94,
     "t1": 36.0,
     "t2": 307.5,
-    "lodPct": 52
+    "lodPct": 52,
+    "t2P20": 192,
+    "t2P50": 306,
+    "t2P80": 378
    },
    {
     "n": 99,
     "t1": 21,
     "t2": 267,
-    "lodPct": 35
+    "lodPct": 35,
+    "t2P20": 132,
+    "t2P50": 267,
+    "t2P80": 372
    }
   ],
   "t2LastHrPct": 39,
@@ -660,5 +681,5 @@
   "orClockRule": "outer third: 1ST clock = the clock of the opening window's extreme on the open's side",
   "note": "study-daystats-cond.py 2026-09-16: 1ST clock MAE base 38.4 -> 33.3 (60 min); 1ST acc 0.48 -> 0.61; 2ND clock not predictable (93 min)"
  },
- "generatedAt": "2026-09-17T20:15:16Z"
+ "generatedAt": "2026-09-18T01:58:20Z"
 }

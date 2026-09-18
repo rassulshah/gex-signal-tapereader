@@ -62,7 +62,7 @@ if (E) {
   const D = Y.actual ? Object.assign({ ok: true }, Y.actual) : null;
   const CE = M.hodlodCondE(baseForCond, el, Y.w30, Y.w60, D, Y.call);
   out.cond = CE;
-  out.CONDE = [CE.basis, n1(CE.t1), n1(CE.t2), I(CE.lodPct), I(CE.n), I(CE.lastHrPct), I(CE.last30Pct)];
+  out.CONDE = [CE.basis, n1(CE.t1), n1(CE.t2), I(CE.lodPct), I(CE.n), I(CE.lastHrPct), I(CE.last30Pct), I(CE.t2P20), I(CE.t2P50), I(CE.t2P80)];   // (16.45) + the 2ND clock's p20 / p50 / p80
   const openSec = 8 * 3600 + 30 * 60, firstClock = openSec + CE.t1 * 60, secondClock = openSec + CE.t2 * 60;
   const lodFirst = CE.lodPct >= 50, eFirst = lodFirst ? 'LOD' : 'HOD', eSecond = lodFirst ? 'HOD' : 'LOD';
   const W = E.wick || {}, wend = (typeof W.wick === 'number') ? openSec + W.wick * 60 : null, mudUsd = Math.round(rng * (Y.ptUsd || 50));

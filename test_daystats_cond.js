@@ -43,7 +43,7 @@ ok(M.gpOpenWindow([], O, 30) === null, 'no bars -> null');
 // ---- hodlodCondE by stage
 const base = { condstats: null };                                  // no courier tables -> the baked fallback
 let e = M.hodlodCondE(base, 10, M.gpOpenWindow(upDay.slice(0, 3), O, 30), null, null, null);
-ok(e.basis === 'pre-open' && e.t1 === 24 && e.t2 === 286.5 && e.lodPct === 52, 'pre-open: pooled medians / majority');
+ok(e.basis === 'pre-open' && e.t1 === 24 && e.t2 === 288 && e.lodPct === 51 && e.t2P20 === 147 && e.t2P50 === 288, 'pre-open: pooled medians / majority (fallback rebaked 2026-09-17, n=301) + the 2ND-clock percentiles (16.45)');
 e = M.hodlodCondE(base, 33, w30, null, null, null);
 ok(e.basis === 'pos30-bottom' && e.t1 === 21 && e.lodPct === 59, '30 min, open at the OR bottom: the bottom-tercile row');
 e = M.hodlodCondE(base, 66, w30, w60, null, null);
@@ -56,7 +56,7 @@ ok(e.basis === 'pos60-top+orclock' && e.t1 === 3 && e.lodPct === 35, 'open at th
 // middle third: no OR-clock rule, the table row
 const midDay = bars(20, k => ({ o: 7684, h: 7690 + (k % 3), l: 7678 - (k % 2), c: 7684 + (k % 2) }));
 e = M.hodlodCondE(base, 66, M.gpOpenWindow(midDay, O, 30), M.gpOpenWindow(midDay, O, 60), null, null);
-ok(e.basis === 'pos60-middle' && e.t1 === 36 && e.lodPct === 53, 'middle third: the middle row, no OR-clock rule');
+ok(e.basis === 'pos60-middle' && e.t1 === 36 && e.lodPct === 52 && e.t2P20 === 192 && e.t2P50 === 306 && e.t2P80 === 378, 'middle third: the middle row, no OR-clock rule; its own percentiles (16.45)');
 // 60 min elapsed but the 60-window incomplete (gap in bars) -> stays on the 30-min row
 e = M.hodlodCondE(base, 66, w30, M.gpOpenWindow(upDay.slice(0, 12), O, 60), null, null);
 ok(e.basis === 'pos30-bottom', 'incomplete 60-min window -> the 30-min row stands');

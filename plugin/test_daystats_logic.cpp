@@ -62,6 +62,19 @@ int main()
       CHECK(ok && X.hi == 7722.25f && X.lo == 7687.25f && X.hiSod == 30780 && X.loSod == 32940, "only that day's RTH bars count: not yesterday, not the 08:20 pre-open bar, not the 16:40 after-hours bar");
       CHECK(!dsl::chartExtremes(yy, mm, dd, so, hh, ll, 5, 2026, 9, 18, X), "a day with no RTH bar -> false"); }
 
+    // ---- (0.11) the READ line's second half: one rung, descending with the clock
+    { dsl::Cond C; C.lastHr = 39; C.last30 = 29; C.p20 = 132; C.p50 = 267; C.p80 = 372;   // pos60-top, 2026-09-17
+      CHECK(dsl::secondRung("LOD", C, 30600 + 60 * 60, false, -1) == "LOD after 10:42am  80%", "before p20: 'LOD after 10:42am 80%' (132 min after the open)");
+      CHECK(dsl::secondRung("LOD", C, 30600 + 200 * 60, false, -1) == "LOD after 12:57pm  50%", "past p20, before p50: the median rung");
+      CHECK(dsl::secondRung("LOD", C, 30600 + 300 * 60, false, -1) == "LOD 39% last hr", "past p50, before 14:00: the last-hour share");
+      CHECK(dsl::secondRung("LOD", C, 50400 + 600, false, -1) == "LOD 29% last 30", "14:00-14:30: the last-30 share");
+      CHECK(dsl::secondRung("LOD", C, 52200 + 60, false, -1) == "LOD any minute", "after 14:30: any minute");
+      CHECK(dsl::secondRung("HOD", C, 60000, true, 32940) == "HOD IN 9:09am", "after the close with the actual 2ND known: IN + its clock");
+      dsl::Cond N; CHECK(dsl::secondRung("LOD", N, 40000, false, -1) == "LOD any minute" && dsl::secondRung("", C, 40000, false, -1) == "", "no percentiles (old panel): the last rung only; no second extreme: nothing");
+      std::vector<std::string> t = {"CONDE","pos60-top+orclock","3.0","267.0","35","99","39","29","132","267","372"}; dsl::Cond P; dsl::parseCond(t, P);
+      CHECK(P.p20 == 132 && P.p50 == 267 && P.p80 == 372 && P.lastHr == 39, "CONDE fields 9-11 parse; an 8-field row (old panel) leaves them -1");
+      std::vector<std::string> t8 = {"CONDE","pre-open","24","286.5","52","300","39","29"}; dsl::Cond Q; dsl::parseCond(t8, Q); CHECK(Q.p20 == -1 && Q.lastHr == 39, "(old row)"); }
+
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }
