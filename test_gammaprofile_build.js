@@ -227,7 +227,7 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
   { const mut=ex('gpAtlasPool').replace('(Math.abs(b.pct)-Math.abs(a.pct)) || (a.es-b.es)','(a.es-b.es)'); ok(mut!==ex('gpAtlasPool'), '11.12 mutation applies');
     const keep=global.gpAtlasPool; eval(mut); global.gpAtlasPool=gpAtlasPool; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:(sym==='SPY'?{ pct:SPYT, king:763, kingNeg:true }:null));
     const Bm=gammaProfileBuild(); ok(mr(rows(Bm.csv),7655)!=='4', '11.13 mutation: a pool not ranked by own-% no longer puts SPX 7655 fourth (the assertions bite)', mr(rows(Bm.csv),7655));
-    global.gpAtlasPool=keep; }
+    global.gpAtlasPool=keep; eval(ex('gpAtlasPool')); global.gpAtlasPool=gpAtlasPool; }   // re-eval: a direct eval's function declaration lands in the module scope, not just global
   TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
 }
 // ---- §12 (v16.41) FIRST-SEEN PER STRIKE — the 9th field, the plugin's band start ------------------------------------
@@ -266,7 +266,7 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
     const keep=global.gpSinceStamp; eval(mut); global.gpSinceStamp=gpSinceStamp;
     global.ctNowSecOfDay=()=>35229; gammaProfileBuild(); global.ctNowSecOfDay=()=>35409; const Bm=gammaProfileBuild();
     ok(f9(rows(Bm.csv),7650)!=='35229', '12.11 mutation: a stamp rewritten every export no longer holds the first minute (the assertions bite)', f9(rows(Bm.csv),7650));
-    global.gpSinceStamp=keep; delete LS[GP_SINCE_KEY]; GP_SINCE=null; global.GP_SINCE=null; }
+    global.gpSinceStamp=keep; eval(ex('gpSinceStamp')); global.gpSinceStamp=gpSinceStamp; delete LS[GP_SINCE_KEY]; GP_SINCE=null; global.GP_SINCE=null; }
   global.ctNowSecOfDay=()=>35229; TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
 }
 // ---- §13 (v16.43) THE POOL IS ATLAS'S OWN RANKING — the payload of 2026-09-17 17:50 CT, after the close, verbatim -----
@@ -294,6 +294,10 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
   ok(f8(R1,7700)==='1' && f8(R1,7675)==='2' && f8(R1,7575)==='3' && f8(R1,7500)==='4' && f8(R1,7625)==='5', '13.6 the SPX rail\'s pooled ranks = the slice\'s order (7700 ① 7675 ② 7575 ③ 7500 ④ 7625 ⑤) — the monthly SPX nodes land on the SPXW strikes', [f8(R1,7700),f8(R1,7675),f8(R1,7575),f8(R1,7500),f8(R1,7625)]);
   ok(f8(R1,7600)==='' && f8(R1,7605)==='', '13.7 SPXW 7600 (-94% in its own book) is NOT pooled — Atlas did not draw it — so it draws grey, no badge', [f8(R1,7600), f8(R1,7605)]);
   ok(f8(S1,765)==='6' && f8(S1,761)==='', '13.8 SPY 765 is sixth in the slice -> pooled 6 (outside the five); SPY 761 unpooled', [f8(S1,765), f8(S1,761)]);
+  const f9b=(RR,spx)=>{ const t=(RR.STRIKE||[]).find(x=>parseFloat(x[5])===spx); return t?t[7]:undefined; };
+  ok(f9b(R1,7500)!=='' && f9b(R1,7575)!=='', '13.8b (16.44) a pooled node is stamped first-seen whatever its own %: 7500 (0%) and 7575 (-3%) carry a band start (they are Atlas\'s #4 and #3)', [f9b(R1,7500), f9b(R1,7575)]);
+  // the mutant-leak guard: after a mutation block the ORIGINAL must be back (a direct eval declares into the module scope)
+  ok(ex('gpAtlasPool').indexOf('if(rank>=1) return out2;')>=0 && gpAtlasPool.toString().indexOf('if(rank>=1) return out2;')>=0, '13.8c the live gpAtlasPool is the original, not a leaked mutant');
   ok(B1.audit.pool[0][0]==='SPX' && B1.audit.pool[0][1]===7700 && B1.audit.pool[4][1]===7625 && B1.audit.pool[5][0]==='SPY' && B1.audit.pool[5][1]===765, '13.9 the audit\'s pool list is the mapped slice in order', B1.audit.pool);
   // stale payload -> the own-% fallback, and the audit says so
   global.LASTFUTDER={ ES1: mkPayload(Date.now()-400000) };
@@ -307,7 +311,7 @@ ok(R.SCALEREF && R.SCALEREF[0].length===1, '10.0 fixture A (no levels[].t): SCAL
   { const mut=ex('gpAtlasPool').replace("if(rank>=1) return out2;","if(false) return out2;"); ok(mut!==ex('gpAtlasPool'), '13.13 mutation applies');
     const keep=global.gpAtlasPool; eval(mut); global.gpAtlasPool=gpAtlasPool; global.LASTFUTDER={ ES1: mkPayload(Date.now()-9000) };
     const Bm=gammaProfileBuild(); ok(f8(rows(Bm.csv),7675)!=='2', '13.14 mutation: without Atlas\'s ranking 7675 is no longer second (the assertions bite)', f8(rows(Bm.csv),7675));
-    global.gpAtlasPool=keep; delete global.LASTFUTDER; }
+    global.gpAtlasPool=keep; eval(ex('gpAtlasPool')); global.gpAtlasPool=gpAtlasPool; delete global.LASTFUTDER; }
   TT=keepTT; global.tapeMapLive=(sym)=>(sym==='SPXW'?TT:null);
 }
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

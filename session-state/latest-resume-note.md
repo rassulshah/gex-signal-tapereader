@@ -1,5 +1,7 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 18:05 CT (v16.43 / GP 0.67) · **panel v16.43** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.67**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 19:20 CT (v16.44 / GP 0.67) · **panel v16.44** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.67**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ✅ 2026-09-17 ~19:15 CT — VERIFIED: Atlas's five == IRT's five (16.43 live, poolSrc = atlas, runner 24/24 after the fix). v16.44: a pooled node is stamped first-seen whatever its own % (7575 / 7500 had no band); the runner's ES column; the harness mutant leak fixed (PROJECT-CONSTANTS). **He needs Tampermonkey 16.44 (panel only).** Tomorrow RTH is the real day-long test.
 
 # ⚠⚠⚠ 2026-09-17 ~18:05 CT — v16.43: THE POOL IS ATLAS'S OWN RANKING. START HERE.
 

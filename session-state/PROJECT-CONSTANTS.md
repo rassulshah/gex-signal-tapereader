@@ -688,3 +688,11 @@ defaults with the proper setters (setParameterColor for colour rows — setInteg
 KT 0.13 did it first; GP 0.65 does the same. Bump the version anyway when rows move (it marks the layout), but never
 count on it.
 
+## 2026-09-17 — MUTATION BLOCKS MUST RE-EVAL THE ORIGINAL (test_gammaprofile_build.js)
+
+`eval(mut)` inside a `{ }` block in sloppy mode declares the mutant FUNCTION into the enclosing function scope — the
+module scope the eval'd code under test resolves — so `global.<fn>=keep` restores nothing that matters. Sections after
+11.12 ran against the mutant for a day and one assertion (13.10) passed by coincidence. Pattern now: after the mutation
+assertions, `eval(ex('<fn>')); global.<fn>=<fn>;` and a guard that the live function's source contains a line the mutant
+removed. Any new mutation block copies this.
+

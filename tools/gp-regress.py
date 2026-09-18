@@ -181,7 +181,7 @@ def main():
                 m = map_row(r[0])
                 if m is None or m in want: continue
                 rk += 1; want[m] = rk
-                es_ = next((x[3] for x in (AU.get('pool') or []) if x[0] == m[0] and int(x[1]) == int(m[1])), r[0])
+                es_ = next((x[4] for x in (AU.get('pool') or []) if len(x) >= 5 and x[0] == m[0] and int(x[1]) == int(m[1])), r[0])   # pool rows: [book, strike, pct, rank, es]
                 apool.append((m[0], float(m[1]), r[1], es_))
             add(rk >= 1, 'A', 'poolSrc = atlas: %d of Atlas\'s %d slice rows map to a rail strike through the payload ratios (SPY %.4f, SPX %.4f)' % (rk, len(at['rows']), spyR, spxR))
             pool = apool; pool_label = 'Atlas\'s merged slice (poolSrc = atlas)'

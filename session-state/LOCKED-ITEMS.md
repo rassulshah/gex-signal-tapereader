@@ -8,6 +8,7 @@ _Created 2026-08-27._
 
 ## ✅ BUILT 2026-09-17 — TWO RAILS, THE ATLAS POOL (v16.40 / GP 0.59)
 
+_v16.44 (19:20 CT): VERIFIED live — Atlas's five == IRT's five. Pooled nodes always stamped; runner + harness fixes._
 _v16.43 (18:05 CT): BUILT — the pool ranks from Atlas's merged slice (poolSrc = atlas), own-% fallback. Awaiting his update + the runner's check on the first 16.43 export._
 _v16.42 (17:45 CT): AU.atlas — Atlas's own five recorded every export; OPEN: correct the pool rule from it (his "IRT top 5 ≠ Atlas top 5")._
 _GP 0.65 (16:50 CT): repair-on-load — the version bump did not reset his instance (scrambled 0.64 dialog)._

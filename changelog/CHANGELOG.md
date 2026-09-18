@@ -1,3 +1,17 @@
+## v16.44 — a pooled node always gets its band; the runner's ES column; the harness's mutant leak (2026-09-17, ~19:20 CT)
+
+First 16.43 export, verified: Atlas 7770.78 / 7745.55 / 7644.63 / 7568.94 / 7695.09 == IRT SPX 7700 ① 7675 ② 7575 ③
+7500 ④ 7625 ⑤, poolSrc = atlas, payload 2 s old; the strips match the ladders row for row.
+- **Bands for Atlas's five whatever their own %:** 7575 (−3 % on the SPXW tape) and 7500 (0 %) — Atlas's #3 and #4 —
+  had no first-seen stamp because the stamp fired only at ≥ 5 % of the own King. `gpSinceStamp(book, strikes, sod,
+  pooled)` now also stamps any node in the pool's top 10. Gate A 13.8b.
+- **Runner:** the "Atlas's five == ours" line read the pool row's rank as its ES price (a false FAIL on the first live
+  run); fixed (pool rows are [book, strike, pct, rank, es]).
+- **Harness bug, real and old:** a mutation block's direct `eval(mut)` declares the mutant function into the MODULE scope
+  (sloppy-mode direct eval), which is the binding `gammaProfileBuild` resolves — restoring `global.<fn>` left the mutant
+  live for every later section. §12 and §13 had been running against the 11.12 mutant (the own-% pool sorted by ES) and
+  13.10 passed by coincidence. Every mutation block now re-evaluates the original; 13.8c guards it. PROJECT-CONSTANTS.
+
 ## v16.43 — the pool is Atlas's own ranking (2026-09-17, ~18:05 CT)
 
 16.42's first audit settled it: at 17:50 CT Atlas's ES1 five were 7770.78 / 7745.55 / 7644.63 / 7568.94 / 7695.09 — all
