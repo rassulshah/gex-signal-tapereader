@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-18 · v16.48 · session `f9c89c64` — the E row never copies the tape (no +orclock); READ1 — one model on both halves of the READ line; DS 0.14
+## 2026-09-18 · v16.49 · session `f9c89c64` — session close: the King chart reviewed (events one per touch), one deflection per swing in the tap record, the tabs current
 
-_710 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_722 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -9440,6 +9440,173 @@ HL RNG ~$8625 ~172.5p was a bug. The 0DTE straddle EM (27.55 SPX points on Thurs
 Now the tests: cond tests without orclock, and the export test's READ1 section.
 Panel side green. Now DayStats 0.14: parse READ1 and drive the first half from it.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (02:34):** The sync pushed the build; now the plugin compile status.
+Deployed and pushed (commit `e11b12a`), the raw URL now serves 16.46, and the GEX build compiled `lsDayStats.dll "0.12"` at 21:30 CT — both DayStats 0.12 and GammaProfile 0.69 are sitting PENDING, waiting for IRT to close.
+
+Steps, in order:
+
+1. Panel: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — it should offer **Update to 16.46**. If it offers Reinstall, wait five minutes and click again. Then reload the Atlas tab.
+
+2. Close Investor/RT. Tell me "closed" and I'll confirm INSTALLED before you reopen.
+
+3. Reopen IRT. In the Gamma Profile dialog set **Level labels at = Off** (the CW/PW/FLIP/MAG labels then come only from "Show IF level labels on nodes", so they stop appearing twice).
+
+What to expect on the READ line tomorrow morning: from the first bars it prints `HOD IN p% · LOD IN p%`, both numbers moving with price every three minutes; whichever side is under 50% carries `· if not, ~time (50%)`; once a side clears 50% the clock drops; after the close both turn into the printed times. The Day Stats A-row now uses the chart's own RTH high/low, so the header values will match your bars.
+
+**OPERATOR:**
+> closed
+
+**me (02:46):** INSTALLED — GammaProfile 0.69 and DayStats 0.12 both went in at 21:46 CT (the DLLs stayed locked for a couple of ticks after you closed, which is normal).
+
+Step 1: Reopen Investor/RT.
+
+Step 2: Open the Gamma Profile dialog and set **Level labels at = Off**, OK.
+
+Step 3: Look at the Day Stats header — it should read `DAY STATS - Thu 17 Sep` with `HOD IN 8:33am · LOD IN 9:09am` after today's close, and the A-row high/low should match your chart's bars. Tomorrow from the open it switches to the live `HOD IN p% · LOD IN p%` form.
+
+**OPERATOR:**
+> its being cut off , move to center.  the took values make no sense.  How si the expected value 3m ?    Do a sanity check of all the expected values.   also the HOD in and LOD in, check them , how would it have looked at 9am?
+> The first extemity should always be first.
+> 
+> _[sent while I was working — a queued message]_
+> so if the lod occurs , it should be before the HOD and vice versa
+> 
+> _[sent while I was working — a queued message]_
+
+**me (02:59):** Now the replay of 2026-09-17 with the panel's own functions, bar by bar.
+Now the DayStats 0.13 edits: the read line in the logic header, centre anchors, the left clamp, and the wider text rect.
+Now the panel fix (16.47): the EM's scale, plus the audit field and the re-derivation's own check.
+Now the export test: the stub must model the real `irtRatio` (ES per SPY), and a guard that a 10× scale can never reach the model again.
+Now prove the runner catches tonight's live export (the 10× one) and passes the fixed synthetic one.
+Now the records: CHANGELOG, resume note, checklist, snapshot, chat history, guards.
+Pushed (`89c9b6b`), panel 16.47 is on the raw URL, and `lsDayStats.dll "0.13"` compiled at 22:08 CT — PENDING for IRT to close.
+
+**What I fixed now**
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.47 (if it says Reinstall, wait 5 min and click again) → reload Atlas.
+
+Step 2: close IRT, tell me "closed", I confirm INSTALLED.
+
+Step 3: reopen IRT → Day Stats dialog → **Corner = Top-center** (two new entries at the end of the list; nothing else moved). The panel now also never starts left of the pane, whatever corner you pick.
+
+Also in 0.13: after the close both halves print their clocks (`HOD IN 8:33am · LOD IN 9:09am`), and the first extreme always leads — that was already the rule in the code (the left slot is whichever printed first, so a LOD-first day reads `LOD IN … · HOD IN …`); it is now pinned by a test so it can't drift.
+
+**The sanity check — one real bug, three design problems**
+
+HL RNG ~$8625 ~172.5p was a bug. The 0DTE straddle EM (27.55 SPX points on Thursday) was converted to ES with the ES-per-SPY ratio (10.1×) instead of ES-per-SPX (1.009×), so the range model go …[trimmed]
+
+**OPERATOR:**
+> both .. do it
+
+**me (03:14):** Now the panel changes: the orclock rule off, and the first extreme's own read (READ1).
+Now the tests: cond tests without orclock, and the export test's READ1 section.
+Panel side green. Now DayStats 0.14: parse READ1 and drive the first half from it.
+Both done, pushed (`bf36a55`), and `lsDayStats.dll "0.14"` compiled at 22:20 CT — PENDING for IRT to close.
+
+What changed:
+
+1. The E row no longer copies the tape. The 60-minute stage's "or-clock" rule is gone, so 1ST/TOOK are the stage's own median — for a day like Thursday that reads `HOD ~8:51am · ~21m` over the actual `8:33am · 3m`. A mutation test now guards that the rule stays gone, and the runner fails any export whose basis carries it.
+
+2. One model on both halves. The panel now writes a `READ1` row for the first extreme through the same logistic that drives the second half, and the plugin prints the left half from it: `HOD IN 74%`, with `· if not, ~11:42am (50%)` while it's under 50, green at ≥70, amber at ≤30. Before 9:06 (the model's 36-minute gate) the left half is the old lookup cell, so the line still reads from 8:45 and switches once. Replayed on Thursday: 9:06 `HOD IN 70% · LOD IN 6% · if not, ~9:15am`; 10:00 `HOD IN 74% · LOD IN 25% · if not, ~10:09am`; 11:00 `HOD IN 44% · if not, ~11:42am · LOD IN 80%`; 2:00pm `HOD IN 86% · LOD IN 98%`.
+
+Steps:
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.48 (Reinstall = wait 5 min, click again) → reload Atlas.
+
+Step 2: close IRT and tell me "closed" — DS 0.14 installs (0.13 is folded in), I confirm INSTALLED.
+
+Step 3: reopen IRT → Day Stats dialog → Corner = Top-center.
+
+Still open on the E row, for whenever you want it: BOP/WICK/W.END/WICK%/MUD are Thursday means rather than med …[trimmed]
+
+**OPERATOR:**
+> closed
+
+**me (03:31):** Still locked at the 22:30 tick (it took two cycles last time too) — waiting for the next one.
+INSTALLED — DayStats 0.14 went in at 22:32 CT.
+
+Step 1: reopen Investor/RT.
+
+Step 2: Day Stats dialog → Corner = **Top-center** → OK.
+
+Step 3: check the header: tonight it should read `HOD IN 8:33am · LOD IN 9:09am` in green, and the E row's 1ST/TOOK should now show the stage median (≈ `HOD ~8:51am · ~21m`) instead of echoing the A row. Tomorrow from 8:45 the left half reads on its own, and from 9:06 both halves come from the model.
+
+**OPERATOR:**
+> cosed
+
+**me (03:39):** Nothing is pending — all four plugins show installed (DayStats 0.14 went in at 22:32, my last message was the confirmation). You can reopen IRT now: Day Stats dialog → Corner = Top-center → OK, then check the header line and the E row's 1ST/TOOK.
+
+**OPERATOR:**
+> once again the expected is showing 3m .. this is not real
+
+**me (03:40):** The plugin is right — it's the panel that hasn't changed. The file it reads was written at 22:39 CT and still carries the old rows (`CONDE,pos60-top+orclock,3.0…` and the 172.5 range), which means the Atlas tab is still running panel 16.46: neither the 3m fix nor the range fix is in it yet.
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — it should say **Update** to 16.48. If it says Reinstall, the cache hasn't turned over; wait 5 minutes and click again.
+
+Step 2: reload the Atlas tab (an installed update does nothing to a page that's already open).
+
+Step 3: wait for the next export (a couple of minutes) — the Day Stats panel picks up the new file on its own, no IRT restart needed. The E row should then read ~8:51am / ~21m and a range around $2445 / 48.9p.
+
+If you want to confirm which version the tab is running, the panel's version badge in its header shows it.
+
+**OPERATOR:**
+> how can Expected 1st and took be the exact same as the actual ?
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (03:41):** Because of a rule I wrote in 16.32 and only removed tonight, in 16.48 — and your Atlas tab is still on 16.46, so the old rule is still writing the file (the export at 22:40 CT still says `pos60-top+orclock, 3.0`).
+
+What the old rule did: once the first hour was in, if the open sat in the top or bottom third of that hour's range, it set the expected 1ST clock to the time of that hour's high (or low). On almost every day the day's first extreme *is* that same bar, so "expected" became a copy of the actual — 8:33 and 3m on both rows. It scored better as a forecast, which is why it went in, but an expectation that just reads the tape back is useless next to the A row, which is your point.
+
+In 16.48 the E row uses the stage's own median instead: for a top-third open like Thursday that is `HOD ~8:51am · TOOK ~21m`, and it never touches the actual bars. Also in that build: the HL RNG fix (172.5 → ~48.9) and both READ halves from the model.
+
+To get it: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.48 (if it offers Reinstall, wait 5 minutes and click again) → reload the Atlas tab → the E row changes on the next export, a couple of minutes later, without touching IRT.
+
+**OPERATOR:**
+> ok,  i updated to 16.48 panel and restarted IRT
+
+**me (03:51):** The 16.48 export just landed (22:49 CT) and it's what it should be: the E row now reads `HOD ~8:51am · TOOK ~21m` (the stage's median — basis `pos60-top`, no more copying), and the range is `~$2445 ~48.9p` instead of $8625 — the EM is 27.8 ES points now, not 278. The live runner passes 10/10 on it.
+
+Your Day Stats panel picks the new file up on its own; it should already show the new E row. If the Corner isn't at Top-center yet, that's the one dialog change left.
+
+One note for tonight's view: after the close the model doesn't write READ1/READ2 (it stops inside the last 6 minutes of the session), so the header stays on the two actual clocks — `HOD IN 8:33am · LOD IN 9:09am`. The live "IN p%" halves start tomorrow: the left one from 8:45, both from 9:06.
+
+**OPERATOR:**
+> why does the call wall and flip still display twice. it is on both rails
+
+**me (04:03):** Two features were labelling the same level: "Show IF level labels on nodes" puts CW/PW on the SPX node and the FLIP tick, and "Level labels at" — which your dialog has at Left, not Off — writes CALL WALL / PUT WALL / FLIP at the left end of each line, which is right beside the SPY strip. Hence one on each rail.
+
+GP 0.70 makes it one label per level: the line only carries its text when that level is *not* already labelled on a node (so a wall whose strike isn't a rail node still gets its line label), and Off still means none. It compiled at 23:02 CT and is PENDING.
+
+Step 1: close IRT, tell me "closed".
+
+Step 2: reopen — no dialog change needed; CW, PW and FLIP should each appear once, on the SPX side.
+
+**OPERATOR:**
+> closed
+
+**me (04:08):** INSTALLED — GammaProfile 0.70 went in at 23:08 CT. Reopen IRT; no dialog change needed. CW, PW and FLIP should each show once, on the SPX side, with nothing beside the SPY strip.
+
+**OPERATOR:**
+> okay now have you been giving the data for analysis every night
+
+**me (04:20):** Yes. The nightly job's log on your machine shows it ran on every trading day this week — Sep 10, 11, 14, 15, 16 and 17 (the last at 15:15 CT) — and each run did its three things: appended the day's ES/NQ/CL/GC bars, rebuilt BASERATES.json (296 → 301 sessions over the week, through Sep 16), and pushed via the sync task.
+
+Two things worth knowing:
+
+Sep 17 itself isn't in the base rates yet. The 15:15 run pulled 382 of the session's 390 bars, so it was marked incomplete and held back; today's run picks it up as session 302.
+
+The second-extreme model's nightly refit hasn't happened yet either, because that code shipped last night at 21:30, after the run. The BASERATES you have now carries the version I fit in the cloud (through Sep 16). Today's run at ~15:05 CT will be the first that refits it on your machine, and the panel only takes the refit if it clears the floors (AUC ≥ 0.84, calibration within 0.08, ≥150 sessions). I'll check the log after it runs and confirm it went through.
+
+**OPERATOR:**
+> can you check the king chart , and see if its issues have been resolved like multiple consecutive deflections etc.  take a look and review and resolve.    after that do a save  and save everything as well as update the tabs . we will pickup tomorrow
+
+**me (04:24):** Now replay Thursday's King chart events with the panel's own function, the CSV's recorded King steps, and the ES bars.
+Now the records for 16.49 and the session close-out.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -10310,6 +10477,9 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+30eb922 gex: sync 17-Thu-09 23:02
+031c1b9 gex: sync 17-Thu-09 23:00
+bf36a55 gex: sync 17-Thu-09 22:20
 89c9b6b gex: sync 17-Thu-09 22:08
 e11b12a gex: sync 17-Thu-09 21:30
 ef562e9 gex: sync 17-Thu-09 21:22
@@ -10319,9 +10489,6 @@ ef562e9 gex: sync 17-Thu-09 21:22
 3037e27 gex: sync 17-Thu-09 20:44
 4613707 gex: sync 17-Thu-09 19:30
 7d2bfee gex: sync 17-Thu-09 19:28
-7eef585 gex: sync 17-Thu-09 19:16
-dace573 gex: sync 17-Thu-09 17:50
-83db85e gex: sync 17-Thu-09 17:40
 ```
 
 ---

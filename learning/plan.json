@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "written": "2026-09-04",
+ "written": "2026-09-18",
  "process": {
   "name": "the Data Analysis process",
   "doc": "design/DATA-ANALYSIS-PROCESS.md",
@@ -547,8 +547,10 @@
    "v": "15.99",
    "title": "THE KING CHART — his ask 2026-09-11 (\"a 3 min candle chart that display spy and spx king lines as steps, tracking their movements and when and where they deflected or price broke through\"), picked mockup C. A view in the node-ladder section (toggle: grid ⇄ King chart, CFG.ladderView): ES 3-minute candles (closedCandles×rr) with the SPX King (gold) and SPY King (cyan dashed) drawn as STEP lines from kingAt(book, bar.t) — the recorded King journey (kingDay.moves); deflect (▲ held) / break (✕ through) markers computed the doctrine way (the WICK tests the line within ~1 ATR, the CLOSE decides); a ledger beside it (time · which King · held/broke · pts); sourced insights (doctrine + the one provisional ≈half-hold, n=4); and an n-gated hold-rate-by-factor shell that fills from the tap record. ⚠ SCALE: SPY King exact through time, SPX King approx (current dispScale applied back, wears ~) — the ratio journey isn't recorded yet. The FACTOR BACKLOG (his list: roll up/down, growth/decline, pika-stack support, polarity, level confluence, trend vs 50-MA, time of day, above/below open, SPX·SPY·QQQ book confluence, distance) is design/KING-STUDY.md, enriched as the tap record accrues",
    "serves": "DEFLECTION · KINGS — see where price met each King and whether it held or broke, on the axis where price is; the front end of the King study",
-   "status": "next",
-   "done": "shipped 2026-09-11 (installv1596 the view, installv1597 a first step-line fix, installv1598 the real fix); v15.96 drew the King lines FLAT — kingAt matched the ms-stamped moves against a bar time in a different unit and fell back to one strike per line; v15.97 matched by SECOND-OF-DAY but still read kingDay.moves (a sparse counter); v15.98 read the KING-ROLLS CENSUS krOf(book) - but that census (KRAW, written by ktTick behind a recorderBlind+RTH gate) had frozen 8 days STALE (day 2026-09-03 while the panel showed today), so krLoad rejected it and the chart went BLANK; v15.99 reads the PERSISTED DAILY JOURNEY kingDay.moves instead - the store that survives a tab reload (localStorage) and is written on the UNGATED SPY sample path (measured 2026-09-11: SPY 5 rolls today, SPXW seed-only = held) - with krOf as a fallback so it can never blank again; a book with only its seed draws a FLAT HELD line, not blank; a plain roll tally (SPY N rolls / SPX held) sits beside the taps; test_v1596 18; the SEPARATE bug that the census ktTick has not written since 2026-09-03 is noted for the next build (the held/broke stats depend on it)"
+   "status": "shipped",
+   "done": "shipped 2026-09-11 (installv1596 the view, installv1597 a first step-line fix, installv1598 the real fix); v15.96 drew the King lines FLAT — kingAt matched the ms-stamped moves against a bar time in a different unit and fell back to one strike per line; v15.97 matched by SECOND-OF-DAY but still read kingDay.moves (a sparse counter); v15.98 read the KING-ROLLS CENSUS krOf(book) - but that census (KRAW, written by ktTick behind a recorderBlind+RTH gate) had frozen 8 days STALE (day 2026-09-03 while the panel showed today), so krLoad rejected it and the chart went BLANK; v15.99 reads the PERSISTED DAILY JOURNEY kingDay.moves instead - the store that survives a tab reload (localStorage) and is written on the UNGATED SPY sample path (measured 2026-09-11: SPY 5 rolls today, SPXW seed-only = held) - with krOf as a fallback so it can never blank again; a book with only its seed draws a FLAT HELD line, not blank; a plain roll tally (SPY N rolls / SPX held) sits beside the taps; test_v1596 18; the SEPARATE bug that the census ktTick has not written since 2026-09-03 is noted for the next build (the held/broke stats depend on it)",
+   "date": "2026-09-15",
+   "note": "built as 16.20 / 16.21 / 16.22 (the SPX King persisted and placed on Atlas; one event per touch; RTH only)"
   },
   {
    "v": "16.00",
@@ -613,6 +615,75 @@
    "status": "shipped",
    "date": "2026-09-15",
    "done": "EXPMODEL basis walks exante→open30→open60 through the morning; the expected candle carries a body; BASERATES.predict re-fits nightly"
+  },
+  {
+   "v": "16.20-16.22",
+   "title": "THE KING CHART FIXED — the SPX King journey persisted and placed exactly on Atlas (esOfSpx), one deflect/break event per TOUCH (a 15-bar hover -> 1 event, was 7-8), RTH only, no stale census fallback",
+   "serves": "HOD/LOD · PULLBACK (the King as the turning node)",
+   "status": "shipped",
+   "date": "2026-09-15"
+  },
+  {
+   "v": "16.32-16.37",
+   "title": "THE CONDITIONAL E ROW + THE ADAPTIVE DAY MODEL — the E clocks from the morning's opening window (pos30/pos60 terciles), the 60-min IB stage, the EM in the range and the candle's placement (EM-RANGE-STUDY, n=299 OOF), the day/King fixtures and the live runner per indicator",
+   "serves": "HOD/LOD (when and where the extremes come)",
+   "status": "shipped",
+   "date": "2026-09-16"
+  },
+  {
+   "v": "16.38-16.40",
+   "title": "lsKingTracker Source = Skylit | IF (the Magnet journey, polarity-coloured), the four-indicator regression (Gate A / B / L) and tools/regress.py",
+   "serves": "the loop",
+   "status": "shipped",
+   "date": "2026-09-17"
+  },
+  {
+   "v": "16.41-16.44 · GP 0.64-0.69",
+   "title": "THE REVIEWED GAMMA PROFILE — Book = Both (SPY + SPX rails, tape columns), the 27-row dialog at his defaults, node BANDS from first-seen (Atlas's orbs, time-bounded, polarity colour), both Kings + Mag in the chip, the pool ranked from Atlas's own slice (verified five == five), repair-on-load for the scrambled dialog",
+   "serves": "the chart he trades from",
+   "status": "shipped",
+   "date": "2026-09-17"
+  },
+  {
+   "v": "16.45-16.48 · DS 0.10-0.14",
+   "title": "THE READ LINE, BOTH EXTREMES — \"HOD IN 74% · LOD IN 80%\" from one self-calibrating model (tools/secondin.py: logistic on the chart's own bars, OOF AUC 0.883, refit nightly into BASERATES.secondIn behind floors), the E row never copies the tape (no +orclock), the A row's prices from the chart's own bars, the Day Stats panel centred",
+   "serves": "HOD/LOD (is it in, and when the other comes)",
+   "status": "shipped",
+   "date": "2026-09-17"
+  },
+  {
+   "v": "16.47 · GP 0.70",
+   "title": "TWO SANITY BUGS — the EM converted with the ES/SPY ratio (10x: every expected range since 16.33 was the 2.5x clamp) and the IF levels labelled twice (line + node) — one label per level",
+   "serves": "trust in every number on the strip",
+   "status": "shipped",
+   "date": "2026-09-17"
+  },
+  {
+   "v": "16.49",
+   "title": "ONE DEFLECTION PER SWING — the recorder wrote a deflection at every level the wick had crossed (09-17: one rejection off 764.5 = four ceiling deflections; one bounce off 759.5 = ten); now the level at the swing's extreme only. The King chart's own events were already one per touch (replayed 09-17: 8 events, 0 consecutive)",
+   "serves": "PULLBACK · the tap record's honesty",
+   "status": "shipped",
+   "date": "2026-09-18"
+  },
+  {
+   "v": "next",
+   "title": "THE E ROW'S WICK FAMILY — BOP · WICK · W.END · WICK% · MUD are weekday MEANS that do not compose (TOOK + BOP != WICK); medians composed like the A row; MUD as the move in pts · $ (spec 10.2), MUDt the duration",
+   "serves": "HOD/LOD (an E row that reads against the A row)",
+   "status": "next",
+   "offered": "2026-09-17",
+   "note": "offered, not agreed — one element at a time"
+  },
+  {
+   "v": "next",
+   "title": "the rolling-20 calibration of the second-extreme model shown on the Testing tab (BASERATES.secondIn.rolling20), so drift is visible, not silent",
+   "serves": "the loop",
+   "status": "next"
+  },
+  {
+   "v": "later",
+   "title": "the READ line's first half before 36 min — today the 2026-08 HLTAB cell; a calibrated early read needs its own study (18-36 min readings were NOT calibrated, max error 0.183)",
+   "serves": "HOD/LOD",
+   "status": "later"
   }
  ],
  "system": {

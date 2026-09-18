@@ -61,5 +61,27 @@ STATE.SPY={ price:771.0, walls:[{k:770,pos:false}], candles:[
 var d3=deflectionAt('SPY',770);
 ok(d3 && d3.pos===false, '-gamma node deflection captures pos=false (flavor: counter-character)');
 
+// ---- (16.49) ONE DEFLECTION PER SWING — the 2026-09-17 08:53 flood: a rejection off 764.5 read as four ceiling deflections
+eval(ex('deflSwingPick'));
+STATE.SPY={ price:761.2, candles:[
+  C(762.8,763.4,763.2), C(763.1,764.6,764.2),   // the run up: the wick reaches 764.6 — 763 / 763.5 / 764 are crossed, 764.5 is the extreme
+  C(762.0,764.0,762.3), C(761.0,762.4,761.2), C(760.9,761.6,761.2)   // the rejection down, sustained
+]};
+var Ls=[763.0,763.5,764.0,764.5].map(function(k){ return { k:k }; });
+var cands=Ls.map(function(L){ return { L:L, d:deflectionAt('SPY',L.k) }; }).filter(function(c){ return !!c.d; });
+ok(cands.length===4 && cands.every(function(c){ return c.d.dir===-1; }), 'deflectionAt alone says all four levels were tapped and left (the flood: '+cands.length+' candidates, all down)');
+var pick=deflSwingPick('SPY', cands);
+ok(pick.length===1 && pick[0].L.k===764.5, 'deflSwingPick keeps ONE: the level nearest the swing high (764.5) — 763 / 763.5 / 764 were passed through, not deflected from');
+// a bounce and a rejection in the same window keep one each
+STATE.SPY={ price:761.5, candles:[
+  C(759.4,760.2,759.9), C(759.6,761.0,760.8), C(760.9,763.6,763.2), C(761.4,762.6,762.0), C(761.2,762.2,761.5)
+]};
+var Lb=[759.5,760.0,760.5,763.0,763.5].map(function(k){ return { k:k }; });
+var cb=Lb.map(function(L){ return { L:L, d:deflectionAt('SPY',L.k) }; }).filter(function(c){ return !!c.d; });
+var pb=deflSwingPick('SPY', cb);
+ok(pb.length===2 && pb.some(function(c){ return c.d.dir>0 && c.L.k===759.5; }) && pb.some(function(c){ return c.d.dir<0 && c.L.k===763.5; }), 'a bounce and a rejection in one window: one UP (the level at the low, 759.5) and one DOWN (the level at the high, 763.5) — got '+pb.map(function(c){ return c.L.k+(c.d.dir>0?'up':'dn'); }).join(','));
+ok(deflSwingPick('SPY', []).length===0, 'no candidates: nothing');
+ok(/deflSwingPick\(sym, cands\)\.forEach/.test(ex('recordDeflections')), 'recordDeflections records through deflSwingPick (the guard that the flood cannot return)');
+
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

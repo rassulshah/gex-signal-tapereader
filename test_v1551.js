@@ -140,17 +140,20 @@ function exOutcome(key){
   g.RECORDER_SYMS=['SPY']; g.TODAY='2026-09-03';
   g.recorderBlind=()=>false;
   g.nodeMapModel=()=>({ ok:true, levels:[{k:765}] });
-  g.STATE={ SPY:{ price:764.9, candles:new Array(12) } };
+  // (16.49) the stub models the real shapes: dir is a NUMBER (+1 / -1) and the candles carry lows — recordDeflections now
+  // picks one deflection per swing through deflSwingPick, which reads both
+  g.STATE={ SPY:{ price:764.9, candles:[{l:764.6,h:765.4,c:765.0},{l:764.7,h:765.2,c:764.9},{l:764.8,h:765.1,c:764.9}] } };
   const day={ date:'2026-09-03' };
   g.recorderLoad=()=>({}); g.recorderDay=()=>day;
-  g.deflectionAt=()=>({ dir:'up', awayPts:0.3, bars:2 });
+  g.DEFLECT_WINDOW=8;
+  g.deflectionAt=()=>({ dir:1, awayPts:0.3, bars:2 });
   g.classifyDeflection=()=>({ name:'pullback', chips:[] });
   g.deflSetupKey=()=>'pb.up';
   g.DEFL_FWD_BARS=10; g.RECORDER_MAX_EVENTS=500;
   g.labelDeflectionOutcomes=()=>false;
   g.recorderSave=()=>{};
   g.repoUpsertDefl=(s,d,a)=>calls.push([s,d,a.length]);
-  const code=Object.keys(g).map(k=>'var '+k+'=__g.'+k+';').join('\n')+'\n'+ex('recordDeflections')+'\nrecordDeflections("SPY");';
+  const code=Object.keys(g).map(k=>'var '+k+'=__g.'+k+';').join('\n')+'\n'+ex('deflSwingPick')+'\n'+ex('recordDeflections')+'\nrecordDeflections("SPY");';
   (new Function('__g',code))(g);
   ok(calls.length===1 && calls[0][0]==='SPY' && calls[0][1]==='2026-09-03' && calls[0][2]===1,'4g a new deflection is mirrored to IDB in the same pass that saved it',calls);
 }

@@ -1,7 +1,28 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 23:45 CT (v16.48 / GP 0.70 / DS 0.14) · **panel v16.48** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.70**, **lsDayModel v0.18**, **lsDayStats v0.14**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.49 / GP 0.70 / DS 0.14) · **panel v16.49** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.70**, **lsDayModel v0.18**, **lsDayStats v0.14**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
 # (2026-09-18 ~00:10 CT — GP 0.70: one label per IF level — the line's text only when the level is not tagged on a node (gpl::lineLabelWanted); he saw CALL WALL beside the SPY strip and CW on the SPX node at once. Close IRT → INSTALLED → reopen; no dialog change needed.)
+
+# ⚠⚠⚠ 2026-09-18 ~00:45 CT — SESSION CLOSE: v16.49 (one deflection per swing), the King chart reviewed, the tabs current. START HERE.
+
+**His state when this was written:** panel 16.48 running (16.49 on origin, NOT yet clicked), GP 0.70 / DS 0.14 / DM 0.18 /
+KT 0.15 INSTALLED and reopened. Corner = Top-center may or may not have been set (he was told twice). "We will pickup tomorrow."
+**First thing tomorrow, in order:**
+1. Tampermonkey → 16.49 (5 min, reload Atlas). No IRT change.
+2. 8:45–9:03 the READ line's left half is the HLTAB cell; from 9:06 both halves are the model ("HOD IN p% · LOD IN p%",
+   "· if not, ~clock (50%)" while < 50). Compare with the 09-17 replay shape in CHANGELOG 16.48. The E row's 1ST/TOOK must
+   NOT equal the A row's (no +orclock); HL RNG ~40–60 pts, not 172.5.
+3. ~15:05 CT the nightly runs: the first refit of `secondIn` on his machine (secondin.py shipped after the 09-17 run) and
+   09-17 joins the corpus (302 sessions). Read `tools/gex-nightly.log` + BASERATES.secondIn.oof; the panel takes the refit
+   only past the floors. Also the first night the tap record is written one-per-swing (16.49) — the pattern tables will
+   move; say so before he reads it as drift.
+4. Gamma profile eyes-on vs Atlas (bands from real first-seen, the pool's five, one label per level — GP 0.70).
+**The King chart (his question tonight):** kingChartEvents is one event per touch — replayed 09-17: 8 events, 0
+consecutive (CHANGELOG 16.49). The FLOOD was in the tap record (`day.defl`): every level the wick crossed was written as a
+deflection (4 at 08:53, 10 in 09:21–09:30). 16.49 `deflSwingPick` keeps the level at the swing's extreme, one per direction.
+Not verified on his live tab (it was outside the browser group); verify tomorrow from the day file's `defl` count (was 43).
+**OPEN (offered, not agreed — one at a time):** the E row's wick family (means → composed medians; MUD as a move); the
+rolling-20 calibration on the Testing tab; an early (< 36 min) first-half read needs its own study.
 
 # ⚠⚠⚠ 2026-09-17 ~23:45 CT — v16.48 + DS 0.14: THE E ROW NEVER COPIES THE TAPE · ONE MODEL ON BOTH HALVES OF THE READ LINE. START HERE.
 

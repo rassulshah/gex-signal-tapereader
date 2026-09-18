@@ -6,6 +6,18 @@ _Created 2026-08-27._
 
 ---
 
+## 📌 OFFERED 2026-09-17, NOT YET AGREED — the E row's wick family (BOP · WICK · W.END · WICK% · MUD)
+The strip's E cells for the wick family are weekday MEANS (E.wick.bop 20.8 vs the median 6) and do not compose (TOOK + BOP
+≠ WICK) while the A row's identities are exact; MUD and MUDt are two durations of one leg (spec §10.2: MUD = the move in
+pts · $). Proposal on the table: medians composed like the A row (WICK = TOOK + BOP → W.END; MUDt = HL GAP − BOP), MUD =
+|2ND − open| pts · $ (E from the expected candle). He has not said yes; ask, one element at a time. Leaves this file when
+built or when he cancels it.
+
+## ✅ BUILT 2026-09-17/18 — the sanity-check builds (16.47 → 16.49, GP 0.70, DS 0.13 / 0.14)
+_The EM 10× (16.47) · the panel centred + both clocks after the close (DS 0.13) · no +orclock, READ1 = one model on both
+halves (16.48 / DS 0.14) · one label per IF level (GP 0.70) · one deflection per swing in the tap record (16.49). All
+awaiting his eyes-on 2026-09-18 RTH._
+
 ## ✅ BUILT 2026-09-17 — TWO RAILS, THE ATLAS POOL (v16.40 / GP 0.59)
 
 _v16.46 + DS 0.12 (22:30 CT): the second extreme's read (READ2) — BUILT, tested OOF; nightly refit + courier floors. Next: the rolling-20 calibration in the testing tab; eyes-on tomorrow._

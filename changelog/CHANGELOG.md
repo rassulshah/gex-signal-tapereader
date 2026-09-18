@@ -1,3 +1,28 @@
+## v16.49 — the King chart reviewed; ONE DEFLECTION PER SWING in the tap record (2026-09-18, ~00:40 CT)
+
+Operator: "check the king chart, and see if its issues have been resolved like multiple consecutive deflections etc. take a
+look and review and resolve."
+- **The King chart's events (v16.21's fix) hold.** Replayed 2026-09-17 with the panel's own `kingChartEvents` on the
+  session's ES 3-min bars and the KINGTRACK steps the panel recorded (SPX 8:54 → 7719.7, 9:10 → 7679.8, 13:34, 14:20,
+  14:55; SPY 8:54, 9:38, 10:18): **8 events all day (SPX 3 · SPY 5), 0 consecutive same-book events within 3 bars** —
+  9:15 SPY + SPX deflect (the two lines 1.4 pts apart, the same bounce), 9:51 SPY break, 10:09 SPX deflect, 10:18 / 12:21 /
+  14:51 SPY deflect, 14:51 SPX break. One per touch, as designed. (His live tab was not in the browser group tonight, so
+  the KINGDAY journey itself was not read; the replay used the recorded steps. Scratch: `king-replay.js`.)
+- **The flood that IS still there — the tap record (`day.defl`).** `recordDeflections` asked `deflectionAt` of EVERY level
+  and wrote each "yes": 09-17 08:53 ONE rejection off 764.5 became four "Ceiling deflection:dn" (764.5 / 764 / 763.5 / 763 —
+  every level the wick had crossed on the way up); 09:21–09:30 one bounce off 759.5 became ten "up" deflections across
+  759.5–763 (King / Gate / Floor / Rug at each level). 43 events on a 36-point day. A level price went THROUGH is not a level
+  it deflected FROM. Doctrine (execution-doctrine, the deflection zone: enter and REVERSE away — FOLLOWING): the node that
+  turned price is the one at the swing's extreme. `deflSwingPick(sym, cands)`: per direction, of this bar's candidates, only
+  the level nearest the window's extreme (highest high for a rejection, lowest low for a bounce) is recorded. test_deflection
+  16/16 (the 08:53 fixture: 4 candidates → 1; a bounce and a rejection in one window → one each; the recordDeflections guard);
+  test_v1551 4g's stub now models the real shapes (dir a number, candles with lows).
+  Consequence: the nightly's pattern / continuation tables see far fewer, cleaner tap events from tonight on; base rates
+  built on the flood (H-rules over `defl`) will shift as the record refills — recorded here so the shift is not read as drift.
+- **The tabs:** `learning/plan.json` roadmap brought current (15.99 shipped as 16.20–16.22; 16.20 → 16.49 added; next: the E
+  row's wick family, the rolling-20 calibration on the Testing tab; later: an early first-half read). `learning/suite.json`
+  re-stamped by `tools/run-tests.sh` (the 52 pre-16.40 version-pinned reds are unchanged).
+
 ## lsGammaProfile 0.70 — one label per IF level (2026-09-17, ~23:10 CT)
 
 Operator: "why does the call wall and flip still display twice. it is on both rails." His settings (GPSETTINGS): lvllabels=1
