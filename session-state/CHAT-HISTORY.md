@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-18 · v16.44 · session `f9c89c64` — v16.44 — pooled nodes stamped; runner ES column; harness mutant leak
+## 2026-09-18 · v16.44 · session `f9c89c64` — GP 0.68 — level labels at Left/Center/Right/Off; lines in the price area
 
-_505 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_537 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -6716,6 +6716,428 @@ Step 2 — Tell me when the footer shows v16.43. On the next export (within 3 mi
 
 **3. The five — not matching yet, and expected.** The audit says the panel is still **16.42**, so the badges are the old own-% pool (765 ① 7700 ② 7600 ③ 761 ④ 763 ⑤). Atlas's five right now, from its own slice: 7700 (100) · 7675 (−85) · 7575 (82) · 7500 (70) · 7625 (68). Once you click [Update the panel to 16.43](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) and reload Atlas, the next export puts the badges on those five (all on the SPX rail tonight; SPY 765 drops to sixth), and the runner confirms it from the audit.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (16:30):** Now I'll build GP 0.60: the per-instance status file plus the parameter-position fix (0.59 inserted "Rank" mid-list — I need to correct that).
+Now the plugin: members, render counters, the status write, the parameter-order fix, and the version.
+Regression is green (67/67 Gate B with the new status-line cases; syntax compile OK). Now the SAVE DONE records.
+Committed. Now deploying to his machine via the bridge.
+Found something while reading the 0.59 diff for the missing rail, and it's my mistake: the new **Rank** row was inserted after "Line style" — mid-list — not at the end as I'd said. IRT stores saved values by position, so on **both** your instances the 14 rows after it (Label at … Level labels) silently read their neighbour's saved value. That's the same scramble KT 0.12 had this morning.
+
+GP 0.60 is on your machine now (GEX build compiles it within 2 min; it installs the moment IRT is closed). It moves Rank to the end and bumps the parameter version, so IRT resets both instances to defaults — and it writes a status file per instance (`GammaProfile.status-SPY-Left.txt` / `GammaProfile.status-SPX-Right.txt`) after every draw, so I can see from here which instance loads and draws, without a screenshot.
+
+I'll tell you when it's installed. Then: restart IRT, and on each lsGammaProfile instance re-enter five fields — **Book, Side, Width px, Hide % under, Rank** (left: SPY / Left / 40 / 5 / Atlas merge; right: SPX / Right / 90 / 0 / Atlas merge). Everything else stays default.
+GP 0.60 compiled on your machine at 11:34 and is waiting for IRT to close.
+
+**Close Investor/RT now**, wait about two minutes (I'll confirm INSTALLED), then reopen it and set the five fields on each instance:
+
+| | Left rail | Right rail |
+|---|---|---|
+| Book | SPY | SPX |
+| Side | Left | Right |
+| …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (16:35):** The GEX sync pushed the 0.60 deploy at 11:34 (origin `54a95d3`, identical content); the clone is now reset to origin/main, so there's nothing unpushed.
+
+Still waiting on your side: close IRT so the 0.60 DLL installs, then reopen and set the five fields on each instance as in the table above.
+
+**OPERATOR:**
+> was there any reason why you didn't build an option to have  both profiles so i dont have to add another gamma profile indicator
+
+**me (16:41):** No good reason — it was a lapse. I followed the precedent already in the plugin (0.47's "a second instance with Book = IF, Side = Left") and the mockup I showed you listed two instances, so I built to that without asking whether you wanted one. A single-instance mode is the better product: one dialog, one restart, no duplicate settings, and none of the two-instance behaviour we're now debugging.
+
+Here's what I'd build as GP 0.61, one element:
+
+**Book gets a fifth entry, "Both" — SPY rail on the left, SPX rail on the right, from one instance.** It loads both files, draws the SPY rail at the left margin and the SPX rail at the right, Rank = Atlas merge applies to both so the five badges split as Atlas splits them. The levels (CW / PW / FLIP / King line), the regime chip and the read panel draw once, from the SPX file, as today. Side is ignored in Both mode. The entry goes at the end of the Book list so nothing you've saved shifts.
+
+One question inside that element: you set the two rails differently (width 40 / 90, hide-% 5 / 0). In Both mode I'd add one appended row, **"SPY rail width px"** (default 40), and let Width px mean the SPX rail; "Hide % under" would be shared. Fine, or do you want the SPY rail to have its own hide-% too?
+
+If you say build, you'd restart IRT once for 0.61 and set one instance (Book = Both, Rank = Atlas merge) — no need to do the 0.60 two-instance setup first.
+
+**OPERATOR:**
+> yes its fine to share. build
+
+**me (16:46):** The script aborted before writing (nothing changed). The escape sequence in the status-write match was wrong; let me check the actual text and rerun.
+GP 0.61 is on your machine — Book = Both, one instance, two rails. GEX build compiles it within ~2 min; I'll confirm when it's built, then it installs the moment IRT is closed.
+GP 0.61 compiled on your machine at 11:50 and is pushed to origin. It installs itself the moment IRT is closed.
+
+Step 1 — Close Investor/RT, wait two minutes (the build log will flip to INSTALLED).
+
+Step 2 — Reopen IRT. Delete the second lsGammaProfile instance (the SPY / Left one).
+
+Step 3 — Open the remaining lsGammaProfile's dialog. The version bump reset it to defaults, so set: **Book = Both** (last entry in the list), **Width px = 90**, **Hide % under = 0** (or 5 — it's shared now), and at the bottom **Rank = Atlas merge**, **SPY rail width px = 40**. Apply.
+
+Step 4 — Tell me when it's drawn. I'll read `GammaProfile.status-Both-Right.txt` from the export folder (it should carry two lines, SPX then SPY, both rendered) and we compare your screenshot against Atlas at the same minute.
+
+**OPERATOR:**
+> you did not give me confirmation tha it was installed
+
+**me (16:58):** Confirmed: lsGammaProfile 0.61 **INSTALLED** at 11:58:02 CT.
+
+Step 1 — Reopen Investor/RT.
+
+Step 2 — Delete the second lsGammaProfile instance (the SPY / Left one).
+
+Step 3 — Open the remaining lsGammaProfile's dialog (it will show defaults after the reset) and set: **Book = Both**, **Width px = 90**, **Hide % under = 0**, and at the bottom **Rank = Atlas merge**, **SPY rail width px = 40**. Apply.
+
+Step 4 — Tell me when it's drawn and I'll read the status file and check both rails from here.
+
+**OPERATOR:**
+> i think you need to double check
+
+**me (17:10):** Checked from the export folder rather than the screenshot. The status file says both rails drew at 12:09:24:
+
+```
+GPSTATUS,SPX,Right,GammaProfile.csv,100,Atlas,0,1196,1196,0,90,2,100,1
+GPSTATUS,SPY,Left,GammaProfile-SPY.csv,100,Atlas,0,1196,2,0,40,3,100,1
+```
+
+SPX rail: 100 strikes, anchored at the right edge, 2 primaries (② King 7650, ③ 7655) — matches your screen. SPY rail: 100 strikes, anchored at the left edge, **3 primaries (① 763, ④ 760, ⑤ 764)** — but your screen shows only ①. So the rail is there; ④ and ⑤ are drawn and invisible.
+
+The cause is the width. At 40 px, a −27 % bar is 11 px long and a −23 % bar is 9 px. The rank bubble sits *inside* the tip and is about 20 px across, so on those bars it's centred a few pixels left of the pane edge — clipped off the chart. ① survives because its bar is the full 40 px. (The bars themselves are also too short to see behind the % labels, which is why the left side reads as labels only.)
+
+Two ways to see it right now, no build: set **SPY rail width px** to something like 120, or set **Rank at = Outside**.
+
+The proper fix, one element: **when a bar is shorter than its bubble, the badge goes outside the tip automatically** — both rails, any width, "Rank at" still honoured for bars long enough to hold it. Want that as 0.62?
+
+**OPERATOR:**
+> there is something wrong with the regime chip  also . the nodes on the left are being cutt off. i think the alignment is incorrect.
+
+**me (17:11):** Two separate things, both real. Zoomed in on your screenshot:
+
+**The left rail.** The SPY bars are being drawn — as 40 px *tall* blobs. Bar thickness is "Auto from spacing", and SPY strikes are 10 ES points apart (twice the SPX spacing), so the SPY rail's bars come out at the 40 px cap, while their *length* at width 40 is 6–11 px for a −14 % / −27 % node. A 6 px-long, 40 px-tall rounded bar is a semicircle blob at the pane edge — those dark half-discs at the far left — and its rank bubble lands off the pane. ① only looks right because 100 % fills the full 40 px, making a square. Nothing is misaligned; the rail is anchored at x = 2 as the status file says.
+
+**The regime chip.** The SPY rail is drawn *after* the SPX rail and its chip, so the SPY bars and % labels paint on top of the chip — that "−6%" and the yellow blob at "REGIME" are the SPY 7660 node sitting on it. The O/H/L box in the middle is IRT's own cursor data window, and the "15 7742.00" / Circle-toolbar strip is IRT's too; the chip is at Bottom-L, under all of them.
+
+Proposed 0.62, three fixes to the same problem (the SPY rail doesn't know it shares the pane):
+
+1. The SPY rail uses the **same bar thickness as the SPX rail** (one spacing rule for both), so its bars are 20 px lines, not blobs.
+2. A rank bubble **moves outside the tip when the bar is shorter than the bubble** — on either rail.
+3. The SPY rail draws **first**, so the levels, the chip and the panel always sit on top of it.
+
+And one setting on your side, no build: SPY rail width 40 is too short to read at any thickness — 120 would make a −27 % bar 32 px. Chip position stays yours (Panel at); Bottom-C clears IRT's toolbar if you want it out of that corner.
+
+Build 0.62?
+
+**OPERATOR:**
+> fix ,  expecially the ui issues
+
+**me (17:16):** GP 0.62 is on your machine (SPY rail at the SPX thickness, bubbles outside short bars, SPY rail drawn under the chip). GEX build compiles it within ~2 min. You can **close IRT now** — it installs the moment IRT is closed, and I'll confirm INSTALLED before you reopen.
+Confirmed: lsGammaProfile 0.62 **INSTALLED** at 12:20:01 CT.
+
+Step 1 — Reopen Investor/RT.
+
+Step 2 — In the lsGammaProfile dialog, set **SPY rail width px** to 120 (your other settings are kept — nothing was reset this time). Apply.
+
+Step 3 — Send me the screenshot. I'll read the status file at the same minute and compare against Atlas.
+
+**OPERATOR:**
+> I think the tajpes are missing for both spy and spx. maybe have a background for the tape on the left to see it clearly.   double check the alignement and values. regime chip should be centered.
+
+**me (17:37):** Three findings from the 0.62 screenshot, and 0.63 is on your machine for them:
+
+1. **The SPX bars were running under the price scale.** The pane rectangle IRT gives the plugin reaches the axis on your chart; the tape-column strip (71 px wide) had been keeping the bars clear of it, and it went off with the reset. 0.63 reads the scale rectangle and stops the rail 2 px short of it — bars, badges, tape and the chip all use that edge.
+2. **The tapes aren't gone — "Tape columns" is a checkbox** (near the bottom of the dialog), off after the reset. And 0.61 had wrongly forced it off on the SPY rail. 0.63 draws it on both rails — [SPY strike | %] on the left on a dark background strip, [SPX strike | %] on the right.
+3. **The chip**: the status file now also records every setting the draw is using, so after your restart I can tell you whether "Panel at" is actually Bottom-C and the draw is wrong, or the setting itself is Bottom-L.
+
+GEX build compiles it within ~2 min. **Close IRT now**; I'll confirm INSTALLED, then reopen, tick **Tape columns**, Apply, and send a screenshot.
+Still PENDING at 12:46 — IRT hasn't been closed yet. Whenever you close it, the install happens on the next 2-minute tick; tell me once it's closed and I'll confirm INSTALLED before you reopen.
+
+**OPERATOR:**
+> i reopened .. did you install already
+
+**me (19:42):** Yes — installed at **14:00:01 CT** (the build log line: `GammaProfile: INSTALLED … lsGammaProfile.dll`).
+
+One check: the status file in the export folder was last written at 12:34 by 0.62, so the chart hasn't drawn since. If you reopened IRT *after* 14:00, you're on 0.63 and it just needs the chart to draw; if you reopened before 14:00, IRT loaded the old file — close and reopen once more.
+
+Then: tick **Tape columns** in the lsGammaProfile dialog, Apply, and send the screenshot. I'll read the status file at the same time (it will say 0.63 in its header) and check the tape values, the alignment and the chip setting.
+
+**OPERATOR:**
+> why is there no rail for either
+
+**me (19:49):** Both rails are drawing — the status file at 14:47:58 (0.63 running) says so, and it also says why it doesn't look like a rail. Its settings line, straight from your dialog:
+
+```
+tapecols=0  panelpos=0  spywidth=40  side=1  width=90  rankmode=1
+```
+
+So, four things, all settings, no build:
+
+1. **Tape columns is OFF** (`tapecols=0`). The "rail" you're missing is that strip — [strike | %] rows at the edge. Without it the bars are just short blocks with a badge (the yellow ① K block at the right edge *is* the SPX King bar). Tick **Tape columns** and Apply.
+2. **Panel at = Bottom-L** (`panelpos=0`). The chip is exactly where the setting puts it. Set **Panel at = Bottom-C**.
+3. **SPY rail width is still 40** (`spywidth=40`). Set **SPY rail width px = 120**.
+4. The grey translucent column on the left (x 0–90, full height, candles showing through) is not lsGammaProfile — nothing in it draws that. It has the look of the **lsDayModel day candle** (its expected range is taller than the visible pane, so it fills the height). You said you'd turn that off for now; if it's back on, the SPY rail is sitting behind it.
+
+Values check at that minute: offset 3.54 (chart = CSV + 3.54), SPX King 7640 → CSV 7708.75 → chart 7712.3, and your screenshot has ① K at ~7712. Pool: SPY 763 ②, SPX 7635 ③, SPX 7645 ④, SPY 762 ⑤ — three SPY / two SPX on the left/right split matches the badges you see.
+
+Do the three settings, Apply, and send one more screenshot.
+
+**OPERATOR:**
+> Lets review each element step by step in the gamma profile options. the tape columns should be slected by default, width px should be 90 by default.   Book should have Both Spy and Spx instead of Both. Remove the Detach from bar and Round ends because those options are not necessary both should be checked and removed. Amplify polarity and Transluscent bars can be removed.  Is the reason show p% outside or inside not working because we already have rails ?
+
+**me (20:23):** Taking them in order:
+
+1. **Tape columns default ON** — agreed.
+2. **Width px default 90** — agreed.
+3. **Book: "Both" → "Both SPY and SPX"** — agreed (list entry renamed; the saved value doesn't change).
+4. **Detach from bars / Rounded ends removed**, both hard-coded on — agreed.
+5. **Amplify polarity / Translucent bars removed** — agreed.
+6. **"% at Outside / Inside" not working** — not because of the rails. Since 0.41, when Tape columns is on, the % is printed *in the tape column* and the "Show %" / "% at" controls are skipped (the code says: fold the % into the strip). So with the tape on, those two rows do nothing; with the tape off, they place the % at the tip. Once Tape columns is default-on, I'd remove "Show %" and "% at" as well, and "Hide % under" applies to the column — say if you'd rather keep them.
+
+One thing you need to know before we go on: **removing rows changes every position after them**, which is the scramble landmine. The sanctioned way is a parameter-version bump — IRT resets the instance to the new defaults, and you re-enter only what differs from them. So this review should finish before I build, and I'll make the defaults *your* settings (Book = Both SPY and SPX, Width 90, Tape columns on, Rank = Atlas merge, SPY rail width 120, Panel at = Bottom-C, Hide % under 0) so that after the reset you touch nothing.
+
+The rows still to review, in dialog order: **Show / Threshold % / Sub-threshold / Scale to** · **+Gamma / −Gamma / Midpoint / King colour** · **Hide % under / Font size / Rank badge / Node name inside / Rank at / Rank for / King name** · **King line / Call Wall / Put Wall / Flip / EM H/L / Extend King line / Top-node lines / Line style / Label at / Top-node style / SPY King line** · **Title header / Spot price line / Structure labels / Regim …[trimmed]
+
+**OPERATOR:**
+> top node lines seem to only work for spx top nodes. same with King  line. add the ability to define the thickness of the nodes  including the king and the top nodes. remove title header and spot price line options. double check if Spy King line is working or not.  Regime Panel should be Bottom C by default. Remove deflection bands.Remove EM confluence marks nd Polarity legend, Header at ,  Remove Rank Book and  Atlas merge, it should automatically be merged when there are  both books.
+
+**me (20:33):** Confirmed and answered, in your order:
+
+1. **Top-node lines / King line only on SPX** — correct, and it's mine: in Both mode the SPY rail is drawn "bars only", so its top nodes get no lines and its King no line. Fix: in Both mode the pooled top nodes on *either* rail get the line, and both Kings get the King line (SPX gold, SPY magenta/gold by its own polarity, same as its bar).
+2. **Thickness** — I'd add two rows, appended: **King line width px** (default 2) and **Top-node line width px** (default 1); the walls / flip keep the existing Line style at 1 px. Say if you want one width for all lines instead.
+3. **Title header, Spot price line — removed** (and not drawn).
+4. **SPY King line — it has never worked.** It waits for a `SPYKING` row that the panel has never written (the comment in the code even says "inert until a SPYKING row exists"). With item 1 the King line covers both Kings in Both mode, so I'd **remove the SPY King line row** rather than fix it.
+5. **Regime panel default Bottom-C** — agreed.
+6. **Deflection bands, EM confluence marks, Polarity legend, Header at — removed.**
+7. **Rank row removed** — merge is automatic when Book = Both SPY and SPX; a single book ranks within itself.
+
+Rows not yet mentioned, which I'll keep as they are unless you say otherwise: Show / Threshold % / Sub-threshold / Scale to · +Gamma / −Gamma / Midpoint / King colour · Hide % under / Font size / Rank badge / Node name inside / Rank at / Rank for / King name · King line / Call Wall / Put Wall / Flip / EM H/L / Extend King line / Line style / Label at / Top-node style · Structure labels / Regime + read panel / Panel at / Level labels / SPY rail width (default 120).
+
+Anything to change in that list? If not, I build 0.64 with the version bump — the reset lands on your settings, so y …[trimmed]
+
+**OPERATOR:**
+> Both Kings should be mentioned in the Regime chip if more than 1 book is showing and the regime box  should autosize to accomodate the second king. Level labels on nodes shuld be autochecked.  Since we are showing spy and spx , mag can bee added to the Level labels on nodes option so it can be added to a node. Since these levels are from IF update to say Show IF Level labels on nodes. Also in the regime chip, the badge that has MO or 0D needs a space in the badge after the word . currently ther eis a space before but not after (in the badge)  Is there anything you can think of.  the idea here is to make this gamma profile show two tapes and still the key levels and regime informaiton from IF .  Tell me what you think
+
+**me (20:40):** All agreed, with the mechanics:
+
+1. **Both Kings in the chip** when two books show — second line becomes `PW · K 7712 (7640) · K 7714 (763) · FLIP · CW`, each King in its own polarity colour; the box is already sized from the measured text, so it grows with it.
+2. **Level labels on nodes: default on**, renamed **"Show IF level labels on nodes"** — honest name: CW / PW / FLIP on the chip and on the nodes are the InsiderFinance levels, not Skylit's.
+3. **MAG on a node.** The IF Magnet is already in the file every minute (`KINGNOW,ES,IF,7705.57,7635,100` — price, SPX strike, polarity), so no new export is needed. The rule I'd use: tag **MAG** only on the Skylit node whose strike *equals* the Magnet's strike (7635 → SPX 7635), the same exact-strike rule CW/PW use — never the "nearest" node, because IF and Skylit are different books and a near-miss tag would claim an agreement that isn't there. The Magnet also goes into the chip as `Mag 7709 (7635)` in its polarity colour, right after PW where you had asked for it.
+4. **Pill spacing** — the 0D / MO pill has its padding on the left only; it becomes symmetric.
+
+What I think of the idea: it's the right shape. Skylit's two books are what price is *reacting to* on the ES tape (the pool is literally Atlas's ES view), and IF's structure levels are what price is *ranging between* — putting both on one chart is the pairing the two data sources were built for, and the chip is the right place for the cross-book read because it's the only element that names its book. Three things I'd add or watch:
+
+- **The chip should say when the books disagree on the King.** Skylit's SPX King is 7640, IF's Magnet is 7635 right now — five points apart, both "the" King. Rather than let the eye find it, the chip could show the Mag and the two Kings side …[trimmed]
+
+**OPERATOR:**
+> Show me mockup
+> is there a way to show obs simiilar to skylit in irt ?
+> 
+> _[sent while I was working — a queued message]_
+
+**me (20:45):** The mockup is up. Two things to look at in it: the SPY strip on the left and the SPX strip on the right are each [strike | % of *their own* King], the badges are the shared pool (three SPX, two SPY this minute), and the chip's second line now reads PW · Mag · K (SPX) · K (SPY) · FLIP · CW with the pill padded evenly. Below the chart is the dialog as it would read after the review — 27 rows, struck-through ones removed, gold ones changed or new.
+
+On your other question — "OBs similar to Skylit": which do you mean? Atlas's node *heat bands* (the horizontal glow it draws across the chart at each node, brighter with % of King), or order blocks in the price-action sense? If it's the heat bands, yes — the plugin already has the per-node price and %, so a translucent band across the chart per top node, opacity by %, is one more row in this build. If it's order blocks, that's a different indicator (it needs the candles, not the gamma files) and I'd scope it separately.
+
+Say "build" for 0.64 as mocked, with or without the bands.
+
+**OPERATOR:**
+> show me mockup . they should be colored by polarity
+
+**me (20:46):** Bands added, coloured by polarity. The two Kings (both −gamma this minute) are the strong magenta bands; the +gamma nodes — SPX 7635 (69 %), 7645 (49 %), 7650 (27 %), SPY 762 (32 %), 761 (18 %) — are gold at an opacity that follows their % of their own King, so the small ones (≤ 8 %) are faint washes rather than lines. Bands sit under the candles, span the price area between the two strips, and a node under "Hide % under" gets none.
+
+That makes 0.64: everything from the review, plus **Node bands** (on by default). Build?
+
+**OPERATOR:**
+> okay so this would be displayed instead of a line across .  it shoudl also use the x axis and only show where it is supposed to instead of acrosse the entire screen.. can you show a mockup
+
+**me (20:48):** Yes — the band *is* the node's line, bounded in time: it begins at the bar the node was first seen at that strike and runs to now, so a node that appeared at 13:38 (SPX 7635) has nothing to its left, while SPY 762, on the tape since 09:38, reaches most of the way across. Polarity colour, opacity by % of its own King, under the candles. Top-node lines and their style row go; the King lines stay, since those are the King's price, not its history.
+
+One thing you need to know before "build": the start times need data the panel doesn't export yet. Only the Kings have a real start time today (the KINGTRACK rows — SPX 7640 since 14:20, SPY 763 since 10:18 are real in the mockup); the other nodes' start times in the mockup are illustrative. So this is two builds in one: **panel 16.41** adds a 9th STRIKE field, the CT second the strike first appeared on the tape at ≥ 5 % (it resets when the node drops off and comes back), and **GP 0.64** draws the band from it. Until the panel has run a while, a node's band starts at the moment 16.41 first saw it — by tomorrow's open that's exact.
+
+The King bands would also carry the King's *roll* history if you want it later (KINGTRACK already has each step); for now the band is one flat run from first-seen.
+
+Build 16.41 + 0.64?
+
+**OPERATOR:**
+> build.  make sure you have the ability to verify against atlas, so it should be consistent with atlas
+
+**me (20:51):** Now the panel side (16.41): the per-strike first-seen stamp.
+Now the plugin 0.64 — logic first (band start rule, tested), then the .cpp.
+Built and on your machine: **panel 16.41 + lsGammaProfile 0.64**. Regression all green (gamma: 89 · 24 · 85 · 15 · six live fixtures · compile). GEX sync pushes within ~2 min; GEX build compiles 0.64 right after.
+
+**How it's verified against Atlas:** the five badges and every % are re-derived from the audit and checked by the runner (as before); the band *start* is the new 9th STRIKE field (first-seen second, ≥ 5 % of own King), checked against the audit's map and ASOF, and the runner prints the earliest band start for the eyes-on compare — Atlas's per-strike history is client-side only, so the start bar is a screenshot comparison, not a fetch.
+
+Steps once I say the sync has pushed (I'll confirm):
+
+1. Wait five minutes, then click [Update the panel to 16.41](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) and **reload the Atlas tab**. Bands begin at the minute 16.41 first sees each node — full-day history from tomorrow's open.
+2. Close IRT; I'll confirm INSTALLED; reopen.
+3. Open the lsGammaProfile dialog once — it should already read Both SPY and SPX / 90 / tape on / Bottom-C / 120 / bands on. Re-enter nothing. Apply, and send the screenshot beside Atlas at the same minute.
+Both halves are through: the push landed at 16:00 CT (the raw URL already serves 16.41), and GEX build compiled lsGammaProfile 0.64 at 16:00:06 — it's PENDING, waiting for IRT to close.
+
+Step 1 — Click [Update the panel to 16.41](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) (if Tampermonkey offers "Reinstall" instead of "Update", wait a c …[trimmed]
+
+**OPERATOR:**
+> closed irt
+
+**me (21:41):** Confirmed: lsGammaProfile 0.64 **INSTALLED** at 16:40:02 CT.
+
+Step 1 — Reopen IRT.
+
+Step 2 — Open the lsGammaProfile dialog once and check it reads: Book = Both SPY and SPX · Width px 90 · Tape columns on · Panel at Bottom-C · SPY rail width 120 · Node bands on · Band height 3 · King line width 2. Re-enter nothing; Apply.
+
+Step 3 — Make sure the panel shows 16.41 (reload the Atlas tab if you haven't since clicking the update link), then send the IRT screenshot with Atlas at the same minute. The bands will be short for now — they start at the minute 16.41 first saw each node.
+
+**OPERATOR:**
+> i think you messed something up
+
+**me (22:05):** The version-7 bump did **not** reset the saved values — IRT mapped the old values onto the new rows by position (Font size 0, Hide % under 1547868, King line width "F", black colours, Top 3, Hide…). My assumption was wrong; the King tracker's repair-on-load is what actually works. Building 0.65 with the same repair now — it restores every row to the reviewed defaults the first time the dialog loads, so you re-enter nothing.
+GP 0.65 is on your machine. It repairs the scrambled dialog itself: the first time the dialog loads it detects the impossible values and puts every row back to the reviewed defaults (Both SPY and SPX · 90 · tape on · Bottom-C · 120 · bands on · gold/magenta). You re-enter nothing.
+
+Cancel that dialog for now (don't Apply the scrambled values). GEX build compiles 0.65 within ~2 min; then **close IRT**, I confirm INSTALLED, reopen, open the dialog — it should read the defaults — and Apply.
+
+**OPERATOR:**
+> also reduct eht espace between the % king and the price in the rails by 50%
+> 
+> _[sent while I was working — a queued message]_
+
+**me (22:10):** GP 0.66 (the repair-on-load plus your halved tape gap) compiled at 17:08 CT and is waiting to install.
+
+Step 1 — Cancel the scrambled dialog if it's still open, then close IRT. Tell me when it's closed; I'll confirm INSTALLED.
+
+Step 2 — Reopen IRT, open the lsGammaProfile dialog: it should now read Both SPY and SPX · 90 · Top 5 · Grey out · gold / magenta · Hide % under 0 · Font 10 · Bottom-C · Tape columns on · 120 · bands on · 3 · 2. Apply.
+
+Step 3 — Screenshot beside Atlas at the same minute.
+
+**OPERATOR:**
+> the highlighting is not right . its just highlighting almost every spx node
+
+**me (22:15):** The bands are on every node ≥ 5 %, which is what I put in the mockup — but on the real chart, with the translucent draw, "faint" isn't faint, and after hours the whole SPX ladder is ≥ 5 %. That's a wall, not a highlight. The bands replaced the **top-node lines**, so they should cover the same set those did: the primary nodes — the pooled Top-N (or ≥ Threshold) that carry badges — not every stamped node. Fixing that now (0.67).
+
+**OPERATOR:**
+> the the idea is to be similar to Atlas which has the top 5 (including kings) orbs/ markings
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (22:19):** That's exactly what 0.67 does: the bands follow the badge set — Show = Top 5 → the pooled five, both Kings always in it, nothing else. Compiled at ~17:18 on the sync; checking the install.
+GP 0.67 is built (17:18 CT) and waiting: bands on the five only — the pooled Top 5 with both Kings, same set as the badges, exactly Atlas's five orbs. Nothing else changes.
+
+Close IRT, tell me, I confirm INSTALLED, reopen. The dialog will already be correct (0.65's repair is in this build), so just Apply and send the screenshot.
+
+**OPERATOR:**
+> the idea is that the top five have these bands and these bands dont extend throughout the chart from left to right  just like atlas has markings and they serve as magnets and support and resistance
+
+**me (22:22):** Understood, and that's what's built: the five with badges — Kings always among them — each get a band that starts at the bar the node first appeared and runs to the current bar, nothing to the left of it; a node outside the five gets no band. They sit under the candles at the node's price, so they read as the magnet / support / resistance the price is working against, like Atlas's orbs.
+
+Two things to know so tomorrow's chart doesn't surprise you:
+
+1. **Today's bands are stubs.** The start times only exist since 16.41 went in (~16:00), so every band begins there. From tomorrow's open each band starts where the node actually appeared.
+2. **One gap vs Atlas: history after a node leaves the five.** Atlas keeps a node's past heat on the chart after it fades. Ours draws only the current export, so when a node drops out of the five its band disappears with it rather than stopping where it ended. If you want the trail to stay — a band that ends at the bar the node left and stays drawn — that needs the panel to export each node's finished segments (start, end, strike, polarity) and the plugin to draw them; one more build, and I'd mock it up first.
+
+0.67 is waiting to install — close IRT when you're ready and I'll confirm.
+
+**OPERATOR:**
+> i closed irt
+
+**me (22:24):** Confirmed: lsGammaProfile 0.67 **INSTALLED** at 17:22:01 CT.
+
+Step 1 — Reopen IRT.
+
+Step 2 — Open the lsGammaProfile dialog; it should now read the defaults (Both SPY and SPX · 90 · Top 5 · Grey out · gold / magenta · Hide % under 0 · Font 10 · Bottom-C · Tape columns on · 120 · bands on · 3 · 2). Apply.
+
+Step 3 — Screenshot with Atlas at the same minute. I'll read the status file too (its GPSETTINGS line should show `bands=1`, sane values, and `ifmag=<strike>`).
+That's the build working as specified — and the status file confirms the dialog repaired itself (`font=10 … panelpos=1 tapecols=1 spywidth=120 bands=1 bandh=3 klinew=2 ifmag=7635`).
+
+What you're seeing, checked against the 17:28 files:
+
+- **Bands on the five only:** ① SPY 765 (gold, at the very top — it's under the Day Stats panel), ② SPX 7640, ③ SPX 7600, ④ SPY 761, ⑤ SPY 763 (magenta). No other node has one.
+- **They start at 17:10** — every node's first-seen second in the CSV is 61824 = 17:10:24, the minute 16.41 first ran. That's why they're stubs at the right edge; from tomorrow's open each starts where the node actually appeared.
+- **Both King lines, 2 px, polarity:** the gold line across the top is the SPY King line (765, +gamma); the SPX King line is at 7700/7704.
+- **MAG** sits on 7635, **CW** on 7640, chip centred with Mag · K 7774 (7700) · K 7734 (765) · FLIP · CW.
+- The SPY rail is sparse (8 strikes) because Atlas's SPY ladder is short after the close; it fills in RTH.
+
+Nothing to change from this screenshot. The real test is tomorrow's open — a side-by-side with Atlas at the same minute, which is when the band starts mean something.
+
+**OPERATOR:**
+> i don think irt top 5 match the top 5 in atlas
+
+**me (22:38):** You're right, and I can see it on your Atlas tab: right now its ES1 chart labels 7771 (100 %), 7746 (80 %), 7695 (66 %), 7645 (80 %). Through the SPX ratio those are strikes 7700 / 7675 / 7625 / 7575 — and those percentages are **not** the SPXW ladder's (which reads 7675 −15 %, 7625 −8 %, 7575 −3 %). So after the close Atlas's derived layer is drawing a different window or book than the SPY + SPXW 0DTE tapes our pool is built from. That's the "derived-window caveat" I'd left open on 16.40, and it means the pool rule I measured at 11:18 is incomplete.
+
+Rather than guess again, I built the instrument: **panel 16.42** records, in every export's audit, the exact merged slice Atlas draws on ES1 (each node's ES price, scaled value, sign, rank) plus each derived book's rows and ratio, and the runner now checks "Atlas's five == our five" on every export. Once you've updated, the audit will say in numbers which books and window Atlas is using, and I correct `gpAtlasPool` from that.
+
+Step 1 — In about five minutes, click [Update the panel to 16.42](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js), then reload the Atlas tab.
+
+Step 2 — Tell me once it's running (the panel footer shows v16.42). I'll pull the audit and report Atlas's five vs ours, and what rule makes them match.
+
+No IRT restart for this one — it's panel-only.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:42):** The sync pushed 16.42 at 17:40 CT (origin `83db85e`, raw URL already serving 16.42); the clone is aligned, nothing unpushed.
+
+Whenever you're ready: click [Update the panel to 16.42](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js), reload the Atlas tab, and tell me — I'll pull the audit and show you Atlas's five next to ours.
+
+**OPERATOR:**
+> i closed irt
+
+**me (22:42):** Nothing was waiting on IRT this time — 0.67 was already installed at 17:22, and 16.42 is panel-only. You can reopen IRT whenever you like.
+
+What I need is the Tampermonkey side: click [Update the panel to 16.42](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js), reload the Atlas tab, and tell me when the footer shows v16.42. Then I pull the audit and lay out Atlas's five against ours.
+
+**OPERATOR:**
+> i reloaded
+
+**me (22:45):** Got it — the numbers, from the payload Atlas itself received 9 seconds before I looked:
+
+**Atlas's five (the merged derived slice it draws, expiry 2026-09-18):**
+7770.78 (100 %) · 7745.55 (−82 %) · 7644.63 (82 %) · 7568.94 (70 %) · 7695.09 (67 %) — exactly the labels on your Atlas chart (7771 / 7746 / 7645 / 7695).
+
+**Ours:** SPY 765 ① · SPX 7700 ② · SPX 7600 ③ · SPY 761 ④ · SPY 763 ⑤ — only 7700 overlaps.
+
+The cause is in the payload's three derived books. Atlas's five are all from the **SPX book** (source "SPX" — the monthly, ratio 1.0092: 7700 / 7675 / 7575 / 7500 / 7625), not from SPY or SPXW. Tomorrow is the third Friday — the September monthly expiry — so once today's 0DTE slice expired at the close, the derived slice rolled to 2026-09-18 and the monthly book dominates it. At 11:18 this morning the slice was today's 0DTE, where SPY + SPXW dominate, which is why my pool rule matched Atlas then and not now. My rule was measured on one window and assumed for all.
+
+So the honest rule is: **Atlas's five = the top five of the merged slice, whatever books they come from.** The fix I propose (16.43): the pool takes its ranking straight from that slice — the same rows Atlas ranks — and each of the five lands on the rail at its strike: SPY-ratio rows on the SPY rail, SPX-ratio rows (SPXW *and* monthly SPX, which Atlas draws at the same ES price) on the SPX rail. The tape's % stays each book's own. If the payload is missing or older than 5 minutes the pool falls back to today's own-% rule and the audit says so. The runner's new "Atlas's five == ours" check then becomes the acceptance test every export.
+
+One consequence to be aware of: after the close, and on monthly-expiry days, badges will sit on SPX strikes whose SPXW % looks small (7675 reads −15 % on the SPXW tape but is …[trimmed]
+
+**OPERATOR:**
+> yes
+
+**me (22:46):** Now the Gate A cases for the Atlas-ranked pool (using tonight's real payload as the fixture) and the runner's re-derivation.
+Now the runner: re-derive field 8 from Atlas's slice when `poolSrc = atlas`.
+16.43 is built, pushed (17:50 CT) and already served at the raw URL. Gate A pins tonight's real payload as a fixture (7700 ① 7675 ② 7575 ③ 7500 ④ 7625 ⑤, SPXW 7600 unpooled, SPY 765 sixth); the runner re-derives every badge from Atlas's slice and checks Atlas's five == ours on each export.
+
+Step 1 — In five minutes, click [Update the panel to 16.43](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js), then reload the Atlas tab.
+
+Step 2 — Tell me when the footer shows v16.43. On the next export (within 3 min) I'll run the check against the live audit and you should see IRT's badges move to 7700 / 7675 / 7575 / 7500 / 7625 on the SPX rail — Atlas's five tonight. No IRT restart needed.
+
+**OPERATOR:**
+> compare irt chart with the tape and see if they are aligned and match
+
+**me (00:05):** Checked against the live files (19:04 CT export) and your Atlas tab. Three parts:
+
+**1. The tape values — match, row for row.**
+
+| Rail | IRT strip | Atlas ladder |
+|---|---|---|
+| SPY | 765 −100 · 764 −8 · 763 −52 · 762 +27 · 761 −68 · 760 +34 · 759 −49 | 765 King (−$145M) · 764 −8 · 763 −52 · 762 27 · 761 −68 · 760 34 · 759 −49 |
+| SPX | 7670 −31 · 7660 +33 · 7655 −11 · 7650 −24 · 7645 0 · 7640 +5 · 7635 −3 · 7630 +13 · 7625 −8 · 7620 −9 · 7615 −31 · 7610 −3 · 7605 −32 · 7600 −94 | identical, every row |
+
+**2. The placement — aligned, with one thing to know.** Each strike sits at strike × Skylit's own ES1 ratio, plus the contract offset (+2.97 tonight = your EPZ26 close minus Skylit's ES1 quote at the same minute). Skylit's ES1 rolled to December at 15:16 CT today (the King track jumps 7713 → 7770 at that second), so the SPX ratio is now 1.0092 and every SPX strike draws ~70 points above its cash value: 7670 on the strip is at 7740 on your axis, 7600 at 7670. That's correct for a December chart — cash 7700 *is* Dec 7770 — and it's why the SPX King 7700 (chart 7774, as the chip says) is above the top of your visible pane.
+
+**3. The five — not matching yet, and expected.** The audit says the panel is still **16.42**, so the badges are the old own-% pool (765 ① 7700 ② 7600 ③ 761 ④ 763 ⑤). Atlas's five right now, from its own slice: 7700 (100) · 7675 (−85) · 7575 (82) · 7500 (70) · 7625 (68). Once you click [Update the panel to 16.43](https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js) and reload Atlas, the next export puts the badges on those five (all on the SPX rail tonight; SPY 765 drops to sixth), and the runner confirms it from the audit.
+16.44 is pushed (19:16 CT) and served. Summary of where things stand a …[trimmed]
+
+**OPERATOR:**
+> the call wall and other s are alsois also being listed on the spy rail even though they are already on spx.
+
+**me (00:26):** Those are the level lines' labels — "CALL WALL" and "FLIP" are printed
+
+**OPERATOR:**
+> provide an option so i can indicate where i want the labels
+
+**me (00:27):** The dialog already has "Label at" (Left · Center · Right) — it just puts "Left" at the pane edge, which is now the SPY strip. GP 0.68 makes that row do the right thing for two rails:
+
+- **Left** = just inside the SPY strip, **Center**, **Right** = just before the SPX strip (next to the CW / MAG tags), and a new **Off** entry (appended, so nothing shifts).
+- The level lines themselves (King, CW, PW, FLIP, EM) run only across the price area between the two strips, not under either tape.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -7586,6 +8008,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+7eef585 gex: sync 17-Thu-09 19:16
 dace573 gex: sync 17-Thu-09 17:50
 83db85e gex: sync 17-Thu-09 17:40
 5654ba0 gex: sync 17-Thu-09 17:18
@@ -7597,7 +8020,6 @@ ef4a935 gex: sync 17-Thu-09 15:16
 9bd73c6 gex: sync 17-Thu-09 15:14
 3246e85 gex: sync 17-Thu-09 12:38
 41339ad gex: sync 17-Thu-09 12:16
-e133cc3 gex: sync 17-Thu-09 12:14
 ```
 
 ---

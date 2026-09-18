@@ -1,3 +1,11 @@
+## lsGammaProfile 0.68 — "Level labels at": Left · Center · Right · Off, and the level lines stay in the price area (2026-09-17, ~19:35 CT)
+
+Operator: "the call wall and others are also being listed on the spy rail" → "provide an option so I can indicate where I
+want the labels". The existing "Label at" row is now "Level labels at" with Left = just inside the SPY strip, Center,
+Right = just before the SPX strip (beside the CW / MAG node tags), and Off (appended to the list — saved values keep
+their meaning). The King / CW / PW / FLIP / EM lines and both King lines run only across the price area between the two
+strips when Book = Both, never under a tape.
+
 ## v16.44 — a pooled node always gets its band; the runner's ES column; the harness's mutant leak (2026-09-17, ~19:20 CT)
 
 First 16.43 export, verified: Atlas 7770.78 / 7745.55 / 7644.63 / 7568.94 / 7695.09 == IRT SPX 7700 ① 7675 ② 7575 ③
