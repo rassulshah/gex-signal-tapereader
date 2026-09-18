@@ -1,3 +1,43 @@
+## v16.47 + lsDayStats 0.13 — the EM was 10x (E range 172.5 on a 36-point day); the panel centres; both clocks after the close (2026-09-17, ~23:15 CT)
+
+His first evening with DS 0.12, four things at once: "its being cut off, move to center · the took values make no sense.
+How is the expected value 3m? · do a sanity check of all the expected values · the HOD in and LOD in, check them, how
+would it have looked at 9am?" and then "the first extremity should always be first ... if the lod occurs, it should be
+before the HOD and vice versa."
+- **THE BUG THE SANITY CHECK FOUND — HL RNG ~$8625 ~172.5p.** 16.33 converts the 0DTE straddle EM (SPX points, 27.55 on
+  09-17) to ES points with `irtRatio()`, which is ES per SPY (~10.1): emEs 278.4. The range model then hit its 2.5× clamp
+  (69 × 2.5 = 172.5). Every E-row range and every expected candle since 16.33 was the clamp, not the model. 16.47:
+  `gpEsPerSpx()` = irtRatio / spxRatio (ES/SPY ÷ SPX/SPY ≈ 1.009), bounded 0.95–1.06, else unit; `AU.day.esSpx` records
+  it. The fixed model on 09-17: 2.362 + 0.661 × 35.75 + 0.824 × 27.8 = **48.9 pts (~$2445)** against the 36.5 actual.
+  WHY THE TESTS PASSED: `test_day_export.js` stubbed `irtRatio` to return the ES/SPX ratio — a stub modelling the wrong
+  function — and `gp-regress.py` re-derived from the same wrong emEs. Now: the stubs model the live functions (irtRatio
+  = ES/SPY, spxRatio = SPX/SPY), Gate A 1.3b–1.3f (the scale, the unit fallback, the implausible-quotient fallback, the
+  audit field, the row's magnitude), and Gate L fails any audit whose emEs/emSpx is outside 0.95–1.06 — it FAILS on
+  tonight's live export (10.107) and passes the fixture.
+- **lsDayStats 0.13 — the panel's place.** "Corner" gains **Top-center / Bottom-center** (entries 4 / 5 APPENDED; IRT stores
+  the index — nothing reorders), and every anchor is clamped so the block never starts left of the pane (`dsl::anchorX`):
+  the right edge overflows on a narrow pane, the title and the READ line stay. The text rect was 300 px wide — the READ
+  line with its arrival clock is longer; it is now the text's own width.
+- **The READ line, whole (`dsl::readLine`):** the first extreme leads (his rule; it did, and is now pinned by a test with
+  LOD first), and after the close BOTH halves print their clocks — "HOD IN 8:33am · LOD IN 9:09am" (0.12 had "HOD IN
+  96%" beside "LOD IN 9:09am"). Gate B 40 → 50.
+- **The 9am replay (scratch, the panel's own functions on the day file's ES 1-min rows, 09-17):** at 9:00 the line would
+  have read "HOD 40%" alone — the second half needs 36 minutes / 12 bars (the model's own gate). From 9:06: "HOD 47% ·
+  LOD IN 6% · if not, ~9:15am (50%)"; the low printed 9:09. 10:00 "LOD IN 25% · if not, ~10:09am"; 11:00 "LOD IN 80%";
+  1:00pm 95%; 2:30pm 99%. The FIRST half is still the 2026-08 HLTAB table (posr octile × 45-min block) and it wobbles:
+  47 → 32 → 40 → 47 → 58 → 45 → 33 → 76 → 62 → 49 (11:00) → 57 (1:00pm) → 96. Scratch study (`si-both-sides`): the
+  secondin logistic scored on the FIRST extreme's readings is AUC 0.859, calibrated (max 0.033), ≥ 70 % right 90 % — it
+  can carry both halves. An 18-minute gate is NOT calibrated (18–36 min: max error 0.183); 36 stays.
+- **The E row's sanity check (NOT changed — for discussion, one at a time):** (1) 1ST ~8:33am / TOOK ~3m: the stage's
+  "+orclock" rule copies the opening hour's extreme clock, so it equals the A row whenever the first extreme is inside the
+  first hour — a tautology dressed as an expectation; the stage median without it is 21 min (8:51am). (2) BOP ~21m ·
+  WICK ~1h05m · W.END ~9:34am · WICK% ~23% · MUD ~3h25m are Thursday MEANS (bop 20.8 / wick 64.6 / mud 205 / 22.6) where
+  the medians are 6 / 51 / 204 / 18, and they do not compose (TOOK 3 + BOP 21 ≠ WICK 65) while the A row's identities are
+  exact. (3) MUD and MUDt are two durations for one thing; the A row prints them identical by construction (33m / 33m);
+  §10.2 says MUD = the move (pts · $), MUDt = its duration. (4) 2ND ~12:57pm · HL GAP 4h24m: the stage medians, arithmetic
+  right. (5) HL RNG: the 10× bug above.
+- Regression: daystats / daymodel / gamma green; synthetic fixtures regenerated (AU.day.esSpx).
+
 ## v16.46 + lsDayStats 0.12 — "LOD IN 80%": the second extreme's read, a nightly-refit model (2026-09-17, ~22:30 CT)
 
 Operator, after rejecting the descending rungs: "I want to know if the extremity is in or not and the likelihood ... give

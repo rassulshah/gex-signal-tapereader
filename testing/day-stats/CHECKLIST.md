@@ -26,3 +26,10 @@ Screenshot file names, every unticked line with what was seen instead, the opera
 - [ ] p rises through the morning as price leaves the running extreme; it drops back when price revisits it (as at 10:00 on 2026-09-17).
 - [ ] READ2's src reads `baked` until the first nightly refit lands (then `nightly`); the runner's expected picture prints `second_read`.
 
+
+## 0.13 (2026-09-17) — the panel's place, both clocks after the close
+- [ ] Corner = Top-center: the block sits on the pane's midline, its left edge never left of the pane (a narrow pane overflows on the RIGHT).
+- [ ] After the close: "HOD IN 8:33am   ·   LOD IN 9:09am" — both halves clocks, green.
+- [ ] LOD-first day: the line starts with LOD (his rule: "if the lod occurs, it should be before the HOD and vice versa").
+- [ ] The READ line with "· if not, ~10:09am (50%)" is not clipped at 300 px.
+- [ ] E row HL RNG is model-sized (09-17 re-derived: ~$2445 ~48.9p, not ~$8625 ~172.5p) — the 16.47 EM scale fix.

@@ -470,6 +470,15 @@ def main_other(a, R, AU):
                     if stage == 'pre-open': add(f == 0.5, 'A', 'pre-open: the candle is symmetric (f 0.50)')
                     add((EM[5] in ('pin', 'est') and EM[4] != '') or (EM[5] == '' and EM[4] == '' and not basis.startswith('em-')), 'A', 'EM %s (%s): present with a pin state, or absent with a non-EM basis' % (EM[4] or '-', EM[5] or '-'))
                     if Y.get('em') and Y['em'].get('atMin') is not None: add(Y['em']['atMin'] <= 60, 'A', 'the EM was pinned %s min after the open (<= 60)' % Y['em']['atMin'])
+                    # (16.47) THE EM'S SCALE: ES points per SPX point is ~1.01. On 2026-09-17 the panel multiplied by the ES/SPY ratio
+                    # (10.1x): emEs 278.4 for a 27.55-point straddle, the range clamped at 2.5x the weekday (172.5) — and this runner
+                    # passed, because it re-derived from the same wrong emEs. The audit now carries the scale; a quotient outside
+                    # 0.95-1.06 fails here whatever the CSV agrees with.
+                    if Y.get('em') and Y['em'].get('emSpx') and Y.get('emEs') is not None:
+                        q = float(Y['emEs']) / float(Y['em']['emSpx'])
+                        add(0.95 <= q <= 1.06, 'A', 'EM scale emEs/emSpx = %.3f (ES per SPX, 0.95-1.06; 10x means the SPY ratio was used)' % q)
+                        if Y.get('esSpx'): add(abs(float(Y['esSpx']['r']) - q) < 1e-6, 'A', 'AU.day.esSpx %s is the scale the EM was converted with' % Y['esSpx'].get('src'))
+                        else: warn('A', 'no AU.day.esSpx (panel < 16.47)')
                 DE = R.get('DAYEXP', [None])[0]
                 if DE:
                     o, h, l, c = [num(x) for x in DE[:4]]

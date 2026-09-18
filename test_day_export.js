@@ -44,7 +44,13 @@ const bars=[]; { let px=7690; for(let so=OPEN+180; so<=NOW; so+=180){ const m=(s
   else { c=7677+(m-102)*1.2; h=c+2; l=c-1; }
   bars.push({ so, o:px, h, l, c }); px=c; } }
 const HI=Math.max(...bars.map(b=>b.h)), LO=Math.min(...bars.map(b=>b.l)), CLOSE=bars[bars.length-1].c;
-global.activeSym=()=>'ES'; global.dispMarket=()=>'ES'; global.ptUsd=()=>50; global.irtRatio=()=>({ r:RATIO });
+global.activeSym=()=>'ES'; global.dispMarket=()=>'ES'; global.ptUsd=()=>50;
+// (16.47) THE STUBS MODEL THE REAL FUNCTIONS: irtRatio() is ES per SPY (~10.1), spxRatio() is SPX per SPY (~10.0). Until 16.47
+// this stub returned the ES/SPX ratio for irtRatio, and the export multiplied the SPX-point EM by it — the test passed while the
+// live panel shipped a 10x EM (2026-09-17: 278.4 ES points for a 27.55-point straddle). A stub that models the wrong function
+// proves nothing; 1.3b below pins the live shape.
+global.irtRatio=()=>({ r:SPY_RATIO, live:true, src:'live' }); global.spxRatio=()=>({ r:SPY_RATIO/RATIO, src:'SPXW' });
+for(const f of ['gpEsPerSpx']) eval('global.'+f+'='+ex(f));
 global.measureBars=()=>({ bars, scale:1, src:'test' }); global.hlToolBars=(b)=>b;
 global.sessionBody=()=>({ open:7690, close:CLOSE, hi:HI, lo:LO });
 const D={ ok:true, first:'HOD', firstT:OPEN+48*60, hodT:OPEN+48*60, lodT:OPEN+102*60, took:48, bop:3, wick:9, wend:OPEN+9*60, wickPct:18, mud:54, second:'LOD', secondT:OPEN+102*60, gap:54,
@@ -76,6 +82,14 @@ ok(EM && Math.abs(parseFloat(EM[1])-expRng)<0.06, '1.3 range = a + b*IB60 + c*EM
 const pos60=(7690-7683)/or60, expF=Math.max(0.05, Math.min(0.95, GP_EM_MODEL.place60.a+GP_EM_MODEL.place60.b*pos60));
 ok(EM && Math.abs(parseFloat(EM[3])-expF)<0.006, '1.4 placement f from the open\'s position in the first hour ('+pos60.toFixed(2)+' -> '+expF.toFixed(2)+')', EM);
 ok(EM && EM[4]===emEs.toFixed(1) && EM[5]==='pin', '1.5 EM in ES points and the pin state', EM);
+// (16.47) the scale itself, with the LIVE ratio shapes: ES/SPY ÷ SPX/SPY = ES/SPX; without the SPX lane it is unit, never 10x
+{ const X=gpEsPerSpx(); ok(Math.abs(X.r-RATIO)<1e-9 && X.src.indexOf('spx/spy')>0, '1.3b gpEsPerSpx = irtRatio/spxRatio = '+RATIO, X);
+  const keep=global.spxRatio; global.spxRatio=()=>({ r:null, src:null }); const U=gpEsPerSpx(); global.spxRatio=keep;
+  ok(U.r===1.0 && U.src==='unit', '1.3c no SPX lane in the feed: unit scale (SPX ~ ES within 1%), NOT the ES/SPY ratio', U);
+  global.spxRatio=()=>({ r:SPY_RATIO/12, src:'SPXW' }); const W=gpEsPerSpx(); global.spxRatio=keep;
+  ok(W.r===1.0, '1.3d an implausible quotient (outside 0.95-1.06) falls back to unit', W);
+  ok(AU.day && AU.day.esSpx && Math.abs(AU.day.esSpx.r-RATIO)<1e-9, '1.3e AU.day.esSpx records the scale the EM was converted with', AU.day && AU.day.esSpx);
+  ok(EM && parseFloat(EM[4])<60, '1.3f the EM on the row is SPX-sized (a 38.2-point straddle is ~38.6 ES points, not ~386)', EM); }
 ok(EM && EM[2]==='1', '1.6 the opening drive is up (close(30) > open)', EM);
 const DE=R.DAYEXP && R.DAYEXP[0];
 ok(DE && Math.abs(parseFloat(DE[1])-(7690+expF*expRng))<0.1 && Math.abs(parseFloat(DE[2])-(7690-(1-expF)*expRng))<0.1, '1.7 DAYEXP hi/lo placed by f', DE);

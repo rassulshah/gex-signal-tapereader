@@ -178,5 +178,41 @@ inline std::string secondLine(const Read2& r, double asofSo, bool closed, double
     if (r.p < 50 && r.arrival >= 0 && asofSo >= 0) s += "  · if not, ~" + clk(asofSo + r.arrival * 60.0) + " (50%)";
     return s;
 }
+// (v0.13) THE WHOLE READ LINE. The FIRST extreme always leads — operator, 2026-09-17: "if the lod occurs, it should be
+// before the HOD and vice versa" — so the left half is whichever extreme printed first (the READ row's side while the
+// session runs; the A row's 1ST after the close). After the close, with the A row known, the left half prints the
+// clock exactly as the right half does ("HOD IN 8:33am  ·  LOD IN 9:09am") — 0.12 left it at "HOD IN 96%" beside
+// "LOD IN 9:09am", one half live and one half settled, which the operator saw on the first evening.
+//   first: HOD|LOD · call: IN|NOTIN|"" · pct: the cell % (<0 = none) · closed + actualFirstSo: the A row's 1ST clock
+//   second: the right half, already composed by secondLine ("" = none)
+inline std::string readLine(const std::string& first, const std::string& call, double pct, bool closed, double actualFirstSo, const std::string& second)
+{
+    if (first.empty()) return "";
+    std::string rl;
+    if (closed && actualFirstSo >= 0) rl = first + " IN " + clk(actualFirstSo);
+    else {
+        rl = first;
+        if      (call == "IN")    rl += " IN";
+        else if (call == "NOTIN") rl += " NOT IN";
+        if (pct >= 0) { char pb[16]; snprintf(pb, sizeof(pb), "  %d%%", (int)(pct + 0.5)); rl += pb; }
+    }
+    if (!second.empty()) rl += "   \xB7   " + second;
+    return rl;
+}
+// (v0.13) THE PANEL'S LEFT EDGE. Operator, 2026-09-17: "its being cut off, move to center". The block is anchored to a
+// corner; on a pane narrower than the block a right-anchored panel starts left of the pane and its first columns are
+// gone. Centre anchors (list entries 4 / 5) put the block on the pane's midline; every anchor is then clamped so the
+// block never starts left of pane.left + inset — the RIGHT edge is what overflows, and the READ line stays visible.
+//   corner: 0 TL · 1 TR · 2 BL · 3 BR · 4 top-centre · 5 bottom-centre
+inline int anchorX(int corner, int paneL, int paneR, int blockW, int xoff)
+{
+    int x;
+    if      (corner == 1 || corner == 3) x = paneR - xoff - blockW;
+    else if (corner == 4 || corner == 5) x = (paneL + paneR) / 2 - blockW / 2;
+    else                                 x = paneL + xoff;
+    if (x < paneL + xoff) x = paneL + xoff;
+    return x;
+}
+inline bool anchorBottom(int corner) { return corner == 2 || corner == 3 || corner == 5; }
 
 } // namespace dsl

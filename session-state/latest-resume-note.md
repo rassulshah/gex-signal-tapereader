@@ -1,5 +1,39 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 22:30 CT (v16.46 / GP 0.69 / DS 0.12) · **panel v16.46** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.12**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 23:15 CT (v16.47 / GP 0.69 / DS 0.13) · **panel v16.47** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.13**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~23:15 CT — v16.47 + DS 0.13: THE EM WAS 10× · THE PANEL CENTRES · BOTH CLOCKS AFTER THE CLOSE. START HERE.
+
+His first look at DS 0.12 (the evening panel): cut off at the left; "the took values make no sense. How is the expected
+value 3m?"; "do a sanity check of all the expected values"; "how would it have looked at 9am?"; "the first extremity
+should always be first ... if the lod occurs, it should be before the HOD and vice versa" (it does; now pinned by test).
+- **BUG, FIXED (16.47):** the 0DTE straddle EM was converted SPX → ES with `irtRatio()` = ES per SPY (10.1×): emEs 278
+  for a 27.55-point straddle, the range model clamped at 2.5× the weekday (172.5 pts ≈ $8625 on a 36.5-point day) —
+  since 16.33, every E range / expected candle was the clamp. `gpEsPerSpx()` (≈ 1.009), `AU.day.esSpx`; Gate A 1.3b–f;
+  Gate L now FAILS an audit whose emEs/emSpx is outside 0.95–1.06 (tonight's live export fails it, the fixture passes).
+  Lesson (PROJECT-CONSTANTS): a stub that models the wrong function proves nothing — test_day_export's `irtRatio` stub
+  returned the SPX ratio, and the runner re-derived from the same wrong number.
+- **DS 0.13:** Corner + Top-center / Bottom-center (appended entries 4 / 5), left-clamped anchors (`dsl::anchorX`),
+  `dsl::readLine` (first extreme leads; after the close "HOD IN 8:33am · LOD IN 9:09am"), text rect = the text's width.
+- **He needs: Tampermonkey 16.47 (5 min, reload Atlas) + close IRT (DS 0.13) → INSTALLED → reopen → Corner = Top-center.**
+- **OPEN THREAD — the E row, one element at a time (nothing changed yet; his call):**
+  1. TOOK / 1ST: the stage's `+orclock` rule copies the opening hour's extreme clock (tautological once the first extreme
+     is inside the first hour — most days). Proposal: the stage median without it (pos60-top: 21 min → "HOD ~8:51am").
+     `study-daystats-cond.py` measured orclock at MAE 38.4 → 33.3 — a real gain as a forecast, but not what he wants on an
+     E row beside the A row. If he says drop it: `hodlodCondE` `+orclock` branch off; CONDE basis loses the suffix;
+     day-derive / Gate A / fixtures / the runner follow; condstats keeps the rule text for the record.
+  2. BOP · WICK · W.END · WICK% · MUD are weekday MEANS (E.wick.bop 20.8 vs bopMed 6) and do not compose. Proposal:
+     medians, composed like the A row (WICK = TOOK + BOP → W.END = open + WICK; MUDt = HL GAP − BOP).
+  3. MUD vs MUDt: two durations for one thing (A row identical by construction). §10.2: MUD = the move (pts · $), MUDt =
+     the duration. Proposal: MUD = |2ND − open| in pts and $ (E: from the expected candle), MUDt unchanged.
+  4. The READ line's FIRST half is still the 2026-08 HLTAB table and wobbles (9/17: 47 → 32 → 40 → 47 → 58 → 45 → 33 →
+     76 → 62 → 49 at 11:00 → 57 at 1:00pm); the secondin logistic on the first side is AUC 0.859, calibrated (scratch
+     study, OOF by day). Proposal: one model, both halves (`hlSecondRead` on both sides; READ2 grows a second row or the
+     READ row takes p from the logit); the 36-minute gate stays (18–36 min is not calibrated, max error 0.183). Before
+     36 min the line shows the first half only.
+- **9am replay (09-17, the panel's own functions on the day file's ES 1-min rows):** 9:00 "HOD 40%" alone; 9:06 "HOD 47%
+  · LOD IN 6% · if not, ~9:15am (50%)" (the low printed 9:09); 10:00 "LOD IN 25% · if not, ~10:09am"; 11:00 80 %; 1:00pm
+  95 %; 2:30pm 99 %. Scratch: `replay-0917.js` (rebuild from the CHANGELOG entry if needed — the panel's ex() harness +
+  data/2026-09-17.json futBars.ES rows, CT = ET − 1h).
 
 # ⚠⚠⚠ 2026-09-17 ~22:30 CT — v16.46 + DS 0.12: "HOD IN 96% · LOD IN 80%" — THE SECOND EXTREME'S READ, A NIGHTLY-REFIT MODEL. START HERE.
 
@@ -7,7 +41,7 @@ He rejected the descending rungs ("I don't want the probabilities going down") a
 extreme + a good, tested, self-calibrating model. Built: `tools/secondin.py` (logistic on the chart's own bars; OOF AUC
 0.883, calibrated, floors), refit every nightly into BASERATES.secondIn, courier-gated (`siNormalise`); panel writes
 READ2 every export; DS 0.12 prints "LOD IN 80%" (+ "if not, ~HH:MM (50%)" while < 50 %; the A-row clock after the close).
-**He needs: Tampermonkey 16.46 + close IRT (DS 0.12, DS 0.10/0.11, GP 0.69 all pending) → reopen → Level labels at = Off.**
+(Done 23:00 CT: 16.46 installed, DS 0.12 + GP 0.69 INSTALLED 21:46 CT, reopened.)
 Watch tomorrow: the number should climb through the morning once the first extreme is called; compare against the
 mockup's shape. The rolling-20 check is in BASERATES.secondIn.rolling20 — show it in the testing tab next (not built).
 

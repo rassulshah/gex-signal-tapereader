@@ -131,7 +131,7 @@ int cppExtension::setup(void)
     setParameterDialogHeight(12);
     const short SL = kParmAppendSameLine;
     int pc = 0;
-    PX.corner  = pc++; setListParameter   ("Corner", 0, "Top-left;Top-right;Bottom-left;Bottom-right");
+    PX.corner  = pc++; setListParameter   ("Corner", 0, "Top-left;Top-right;Bottom-left;Bottom-right;Top-center;Bottom-center");   // (v0.13) centre anchors APPENDED — IRT stores the index
     PX.font    = pc++; setIntegerParameter("Font size (pt)", 11, 0, SL);
     PX.showA   = pc++; setBoolParameter   ("Actual row (A)", true);
     PX.showE   = pc++; setBoolParameter   ("Expected row (E)", true, SL);
@@ -165,7 +165,8 @@ void DayStats::textLJ(short x, short y, const char* s, COLOR col, int sz, bool b
 {
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
     setTextColor(col);
-    RCT rc; rc.set(x, (short)(y - sz), (short)(x + 300), (short)(y + sz));
+    short w = (short)getTextWidth(s, -1); if (w < 300) w = 300;                       // (v0.13) the READ line runs past 300 px with its arrival clock
+    RCT rc; rc.set(x, (short)(y - sz), (short)(x + w + 4), (short)(y + sz));
     rc.drawText(s, false, false);   // left-justified, vertically centred on y
 }
 short DayStats::textW(const char* s, int sz, bool bold)
@@ -269,14 +270,10 @@ void DayStats::render(const Settings& S)
     short blockW = (short)(totalW + 12);
     short blockH = (short)(titleH + rows * lineH + 10);
 
-    // anchor to the chosen corner
-    short x0, y0;
-    switch (S.corner) {
-        case 1:  x0 = (short)(pane.right - S.xoff - blockW); y0 = (short)(pane.top + S.yoff); break;   // TR
-        case 2:  x0 = (short)(pane.left  + S.xoff);          y0 = (short)(pane.bottom - S.yoff - blockH); break; // BL
-        case 3:  x0 = (short)(pane.right - S.xoff - blockW); y0 = (short)(pane.bottom - S.yoff - blockH); break; // BR
-        default: x0 = (short)(pane.left  + S.xoff);          y0 = (short)(pane.top + S.yoff); break;   // TL
-    }
+    // anchor to the chosen corner — (v0.13) or the pane's midline (Top-centre / Bottom-centre), never starting left of
+    // the pane (dsl::anchorX): the operator's first evening had the right-anchored block cut off at the left
+    short x0 = (short)dsl::anchorX(S.corner, pane.left, pane.right, blockW, S.xoff);
+    short y0 = dsl::anchorBottom(S.corner) ? (short)(pane.bottom - S.yoff - blockH) : (short)(pane.top + S.yoff);
 
     if (S.bg) { RCT bg; bg.set(x0, y0, (short)(x0 + blockW), (short)(y0 + blockH));
                 bg.draw(1, C_BORDER, C_PANEL, DRAW_OPAQUE, PAT_SOLID); }
@@ -292,23 +289,23 @@ void DayStats::render(const Settings& S)
     // LOD IN ... center justified in the line at the top where it says Day Stats"). This is the validated HLTAB
     // classifier: "has the standing extreme printed?"  IN = green (trust it), NOT IN = amber (the move isn't over).
     if (hasRead && !readFirst.empty()) {
-        std::string rl = readFirst;
-        COLOR rcol = C_TITLE;
-        if      (readCall == "IN")    { rl += " IN";     rcol = C_UPG;  }
-        else if (readCall == "NOTIN") { rl += " NOT IN"; rcol = C_HEAD; }
-        if (readPct >= 0) { char pb[16]; sprintf_s(pb, sizeof(pb), "  %d%%", (int)(readPct + 0.5)); rl += pb; }
         // (v0.12) THE SECOND HALF: the second extreme's own read (READ2, panel 16.46) — "LOD IN 80%", or "LOD IN 25% · if not,
         // ~10:09am (50%)" while it is probably still ahead; after the close, the actual 2ND from the A row. (0.11's descending
         // rungs are gone: the operator wants one rising number per extreme, not a probability that expires with the clock.)
-        {
-            std::string second = (readFirst == "HOD") ? "LOD" : (readFirst == "LOD" ? "HOD" : "");
-            RTDATE nowD = currentDate(); struct tm tn; memset(&tn, 0, sizeof(tn)); getLocaltime(nowD, &tn);
-            double nowSo = tn.tm_hour * 3600.0 + tn.tm_min * 60.0 + tn.tm_sec;
-            bool closed = nowSo >= 54000.0 || nowSo < 30600.0;
-            dsl::Read2 r2 = read2; if (!r2.valid && !second.empty()) r2.side = second;
-            std::string s2 = dsl::secondLine(r2, asofSo, closed, (A.valid && !r2.side.empty() && A.second == r2.side) ? A.secondClk : -1.0);
-            if (!s2.empty()) rl += "   \xB7   " + s2;
-        }
+        // (v0.13) THE WHOLE LINE is dsl::readLine: the first extreme leads, and after the close BOTH halves print their clocks.
+        RTDATE nowD = currentDate(); struct tm tn; memset(&tn, 0, sizeof(tn)); getLocaltime(nowD, &tn);
+        double nowSo = tn.tm_hour * 3600.0 + tn.tm_min * 60.0 + tn.tm_sec;
+        bool closed = nowSo >= 54000.0 || nowSo < 30600.0;
+        std::string first = readFirst; double firstSo = -1.0;
+        if (closed && A.valid && (A.first == "HOD" || A.first == "LOD")) { first = A.first; firstSo = A.firstClk; }
+        std::string second = (first == "HOD") ? "LOD" : (first == "LOD" ? "HOD" : "");
+        dsl::Read2 r2 = read2; if (!r2.valid && !second.empty()) r2.side = second;
+        std::string s2 = dsl::secondLine(r2, asofSo, closed, (A.valid && !r2.side.empty() && A.second == r2.side) ? A.secondClk : -1.0);
+        std::string rl = dsl::readLine(first, readCall, readPct, closed, firstSo, s2);
+        COLOR rcol = C_TITLE;
+        if      (closed && firstSo >= 0) rcol = C_UPG;
+        else if (readCall == "IN")       rcol = C_UPG;
+        else if (readCall == "NOTIN")    rcol = C_HEAD;
         textCJ((short)(x0 + blockW / 2), y, rl.c_str(), rcol, fs, true);
     }
     y = (short)(y + lineH);
@@ -402,6 +399,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.12");
+    p->setVersion("0.13");
     return p;
 }

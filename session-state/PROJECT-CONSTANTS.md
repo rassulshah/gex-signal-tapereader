@@ -698,3 +698,13 @@ removed. Any new mutation block copies this.
 Addendum (GP 0.69): the repair must run ONCE per load and must not test colour rows — IRT can keep returning black for a
 colour row after setParameterColor, and a repair that re-fires on parmsUpdt undoes every click the operator makes.
 
+
+## 2026-09-17 — A STUB THAT MODELS THE WRONG FUNCTION PROVES NOTHING (the 10× EM)
+
+`test_day_export.js` stubbed `irtRatio()` to return the ES/SPX ratio (1.0094). The live `irtRatio()` is ES per SPY
+(~10.1). The export multiplied the SPX-point straddle EM by it; the test passed (its stub agreed with its expectation),
+the live runner passed (it re-derived from the same wrong `emEs` in the audit), and every E range / expected candle since
+16.33 was the 2.5× clamp — 172.5 points on a 36-point day — until the operator read the strip and asked. Rules: (1) a stub
+carries the REAL function's shape and scale, with a comment naming what it models; (2) a re-derivation that reads a value
+from the audit and feeds it back is not a check of that value — add an independent bound on it (Gate L: emEs/emSpx in
+0.95–1.06); (3) any conversion between books goes through one named helper (`gpEsPerSpx`) with a plausibility bound.

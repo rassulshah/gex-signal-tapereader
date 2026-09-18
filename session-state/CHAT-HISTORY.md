@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-18 · v16.46 · session `f9c89c64` — v16.46 + DS 0.12 — the second extreme's read (LOD IN 80%)
+## 2026-09-18 · v16.47 · session `f9c89c64` — the EM was 10x, the panel centres, both clocks after the close; the E row's sanity check and the 9am replay
 
-_705 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_707 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -9334,6 +9334,48 @@ One number per extreme: the probability it has already printed, which only rises
 **me (02:26):** Now the Gate A cases (the READ2 row on the synthetic day, re-derived from the audit) and lsDayStats 0.12.
 Now lsDayStats 0.12 — print it.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (02:34):** The sync pushed the build; now the plugin compile status.
+Deployed and pushed (commit `e11b12a`), the raw URL now serves 16.46, and the GEX build compiled `lsDayStats.dll "0.12"` at 21:30 CT — both DayStats 0.12 and GammaProfile 0.69 are sitting PENDING, waiting for IRT to close.
+
+Steps, in order:
+
+1. Panel: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — it should offer **Update to 16.46**. If it offers Reinstall, wait five minutes and click again. Then reload the Atlas tab.
+
+2. Close Investor/RT. Tell me "closed" and I'll confirm INSTALLED before you reopen.
+
+3. Reopen IRT. In the Gamma Profile dialog set **Level labels at = Off** (the CW/PW/FLIP/MAG labels then come only from "Show IF level labels on nodes", so they stop appearing twice).
+
+What to expect on the READ line tomorrow morning: from the first bars it prints `HOD IN p% · LOD IN p%`, both numbers moving with price every three minutes; whichever side is under 50% carries `· if not, ~time (50%)`; once a side clears 50% the clock drops; after the close both turn into the printed times. The Day Stats A-row now uses the chart's own RTH high/low, so the header values will match your bars.
+
+**OPERATOR:**
+> closed
+
+**me (02:46):** INSTALLED — GammaProfile 0.69 and DayStats 0.12 both went in at 21:46 CT (the DLLs stayed locked for a couple of ticks after you closed, which is normal).
+
+Step 1: Reopen Investor/RT.
+
+Step 2: Open the Gamma Profile dialog and set **Level labels at = Off**, OK.
+
+Step 3: Look at the Day Stats header — it should read `DAY STATS - Thu 17 Sep` with `HOD IN 8:33am · LOD IN 9:09am` after today's close, and the A-row high/low should match your chart's bars. Tomorrow from the open it switches to the live `HOD IN p% · LOD IN p%` form.
+
+**OPERATOR:**
+> its being cut off , move to center.  the took values make no sense.  How si the expected value 3m ?    Do a sanity check of all the expected values.   also the HOD in and LOD in, check them , how would it have looked at 9am?
+> The first extemity should always be first.
+> 
+> _[sent while I was working — a queued message]_
+> so if the lod occurs , it should be before the HOD and vice versa
+> 
+> _[sent while I was working — a queued message]_
+
+**me (02:59):** Now the replay of 2026-09-17 with the panel's own functions, bar by bar.
+Now the DayStats 0.13 edits: the read line in the logic header, centre anchors, the left clamp, and the wider text rect.
+Now the panel fix (16.47): the EM's scale, plus the audit field and the re-derivation's own check.
+Now the export test: the stub must model the real `irtRatio` (ES per SPY), and a guard that a 10× scale can never reach the model again.
+Now prove the runner catches tonight's live export (the 10× one) and passes the fixed synthetic one.
+Now the records: CHANGELOG, resume note, checklist, snapshot, chat history, guards.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -10204,6 +10246,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+e11b12a gex: sync 17-Thu-09 21:30
 ef562e9 gex: sync 17-Thu-09 21:22
 3fd43e4 gex: sync 17-Thu-09 21:08
 367f318 gex: sync 17-Thu-09 21:04
@@ -10215,7 +10258,6 @@ ef562e9 gex: sync 17-Thu-09 21:22
 dace573 gex: sync 17-Thu-09 17:50
 83db85e gex: sync 17-Thu-09 17:40
 5654ba0 gex: sync 17-Thu-09 17:18
-0b54bae gex: sync 17-Thu-09 17:08
 ```
 
 ---

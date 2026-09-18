@@ -83,6 +83,19 @@ int main()
       std::vector<std::string> bad = {"READ2","XOD","25"}; dsl::Read2 q; CHECK(!dsl::parseRead2(bad, q) && dsl::secondLine(q, 36000, false, -1) == "", "a malformed row draws nothing");
       r.p = 25; r.arrival = -1; CHECK(dsl::secondLine(r, 36000, false, -1) == "LOD IN 25%", "no arrival median for the bin: the probability alone"); }
 
+    // ---- (0.13) the whole READ line: the first extreme leads; after the close both halves print their clocks
+    { CHECK(dsl::readLine("HOD", "IN", 96, false, -1, "LOD IN 80%") == "HOD IN  96%   \xB7   LOD IN 80%", "live, HOD first: 'HOD IN 96% · LOD IN 80%'");
+      CHECK(dsl::readLine("LOD", "", 45, false, -1, "HOD IN 25%  \xC2\xB7 if not, ~10:09am (50%)").rfind("LOD  45%   \xB7   HOD IN 25%", 0) == 0, "LOD first: the LOD leads, the HOD is the second half (operator: 'if the lod occurs, it should be before the HOD and vice versa')");
+      CHECK(dsl::readLine("HOD", "NOTIN", 12, false, -1, "") == "HOD NOT IN  12%", "NOT IN, no second half yet: the first half alone");
+      CHECK(dsl::readLine("HOD", "IN", 96, true, 30780, "LOD IN 9:09am") == "HOD IN 8:33am   \xB7   LOD IN 9:09am", "after the close: BOTH clocks (0.12 printed 'HOD IN 96%' beside 'LOD IN 9:09am')");
+      CHECK(dsl::readLine("HOD", "IN", 96, true, -1, "LOD IN 95%") == "HOD IN  96%   \xB7   LOD IN 95%", "closed but no A row: the live halves stay");
+      CHECK(dsl::readLine("", "IN", 96, false, -1, "x") == "", "no first extreme: nothing"); }
+    // ---- (0.13) the block's anchor: centre entries, and never cut off at the left
+    { CHECK(dsl::anchorX(0, 60, 1400, 1000, 8) == 68 && dsl::anchorX(1, 60, 1400, 1000, 8) == 392, "TL / TR anchors as before on a wide pane");
+      CHECK(dsl::anchorX(4, 60, 1400, 1000, 8) == 230 && dsl::anchorX(5, 60, 1400, 1000, 8) == 230, "Top-centre / Bottom-centre: the block on the pane's midline");
+      CHECK(dsl::anchorX(1, 60, 900, 1000, 8) == 68 && dsl::anchorX(4, 60, 900, 1000, 8) == 68, "a block wider than the pane: clamped to the left inset (the right overflows, the READ line stays)");
+      CHECK(!dsl::anchorBottom(0) && !dsl::anchorBottom(1) && !dsl::anchorBottom(4) && dsl::anchorBottom(2) && dsl::anchorBottom(3) && dsl::anchorBottom(5), "bottom anchors: BL, BR, Bottom-centre"); }
+
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }
