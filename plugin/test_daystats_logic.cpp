@@ -48,6 +48,20 @@ int main()
     CHECK(tone[1] == 1 && tone[9] == -1 && tone[7] == -1, "HOD first -> 1ST green, LOD second -> 2ND red, MUD red (markdown after a first HOD)");
     dsl::StatRow B = A; B.first = "LOD"; B.second = "HOD"; dsl::actualTone(B, tone);
     CHECK(tone[1] == -1 && tone[9] == 1 && tone[7] == 1, "LOD first -> 1ST red, 2ND green, MUD green (markup)");
+    // ---- (v0.10) the A row's prices are the chart's own session extremes (the after-hours drift: 7722 -> 7708)
+    { dsl::StatRow C; C.first = "HOD"; C.second = "LOD"; C.firstPx = "7716.25"; C.secondPx = "7680.50"; C.rngPts = "35.8"; C.rngUsd = "1788";
+      dsl::applyChartExtremes(C, 7722.25, 7687.25, true);
+      CHECK(C.firstPx == "7722.25" && C.secondPx == "7687.25", "HOD first: the chart's high is the 1ST price, its low the 2ND (no offset)");
+      CHECK(C.rngPts == "35.0" && C.rngUsd == "1750", "the range follows the chart's H-L ($50/pt)");
+      dsl::StatRow D = C; D.first = "LOD"; D.second = "HOD"; dsl::applyChartExtremes(D, 7722.25, 7687.25, true);
+      CHECK(D.firstPx == "7687.25" && D.secondPx == "7722.25", "LOD first: swapped");
+      dsl::StatRow E2 = C; E2.firstPx = "1"; dsl::applyChartExtremes(E2, 0, 0, false); CHECK(E2.firstPx == "1", "no chart day: the panel's prices stay");
+      int yy[5] = {2026,2026,2026,2026,2026}, mm[5] = {9,9,9,9,9}, dd[5] = {16,17,17,17,17}; double so[5] = {50000, 30000, 30780, 32940, 60000};
+      float hh[5] = {7800, 7790, 7722.25f, 7700, 7799}, ll[5] = {7600, 7610, 7710, 7687.25f, 7690};
+      dsl::Ext X; bool ok = dsl::chartExtremes(yy, mm, dd, so, hh, ll, 5, 2026, 9, 17, X);
+      CHECK(ok && X.hi == 7722.25f && X.lo == 7687.25f && X.hiSod == 30780 && X.loSod == 32940, "only that day's RTH bars count: not yesterday, not the 08:20 pre-open bar, not the 16:40 after-hours bar");
+      CHECK(!dsl::chartExtremes(yy, mm, dd, so, hh, ll, 5, 2026, 9, 18, X), "a day with no RTH bar -> false"); }
+
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

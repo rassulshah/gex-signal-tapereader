@@ -84,6 +84,7 @@ public:
     void load();
     void drawStaleBadge();     // (v0.2) red badge if the CSV has gone cold
     void applyContractOffset();// (v0.3) match the [1st]/[2nd] price labels to the chart's contract
+    void applyChartExtremes(); // (v0.10) the A row's prices = the chart's own session high / low
     void readSettings(Settings& S);
     void render(const Settings& S);
     // helpers
@@ -315,7 +316,30 @@ void DayStats::render(const Settings& S)
 }
 
 // ---- draw() ---------------------------------------------------------------
-int DayStats::draw(void) { load(); applyContractOffset(); render(cfg); drawStaleBadge(); return RTX_OK; }
+int DayStats::draw(void) { load(); applyContractOffset(); applyChartExtremes(); render(cfg); drawStaleBadge(); return RTX_OK; }
+
+// (v0.10) THE ACTUAL ROW'S PRICES ARE THE CHART'S OWN SESSION HIGH / LOW (dsl::applyChartExtremes) — the panel's prices
+// were Skylit ES1's (September until the 15:16 roll) and the live-close bias made them drift all evening (7722 → 7708).
+// The day: the WEEKDAY row's date when the panel wrote one, else the last bar's date. RTH bars only. When the chart has
+// no RTH bar for that day (a chart of another contract, or before the open) the panel's prices stay, with the old bias.
+void DayStats::applyChartExtremes()
+{
+    if (!A.valid) return;
+    long n = getBarCount(); if (n < 2) return;
+    RTARRAY hi(barHigh), lo(barLow); RTARRAYI dt(barDateTime);
+    int from = (int)n - 3000; if (from < 0) from = 0;
+    std::vector<int> yy, mm, dd; std::vector<double> so; std::vector<float> hh, ll;
+    for (int i = from; i < (int)n; i++) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        yy.push_back(t.tm_year + 1900); mm.push_back(t.tm_mon + 1); dd.push_back(t.tm_mday);
+        so.push_back(t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec); hh.push_back(hi[i]); ll.push_back(lo[i]);
+    }
+    int wy = yy.back(), wm = mm.back(), wd = dd.back();
+    if (daydate.size() >= 10) { int y2, m2, d2; if (sscanf(daydate.c_str(), "%d-%d-%d", &y2, &m2, &d2) == 3) { wy = y2; wm = m2; wd = d2; } }
+    dsl::Ext X;
+    bool have = dsl::chartExtremes(&yy[0], &mm[0], &dd[0], &so[0], &hh[0], &ll[0], (int)yy.size(), wy, wm, wd, X);
+    if (have) { dsl::applyChartExtremes(A, X.hi, X.lo, true); priceOff = 0.0f; }   // chart facts need no bias
+}
 
 // ---- (v0.3) contract offset for the displayed price labels ([1st]/[2nd]) — match the day candle: the
 // prices are in the panel's cash space; shift by (this chart's last close − SPOT) so they read in the
@@ -362,6 +386,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.9");
+    p->setVersion("0.10");
     return p;
 }

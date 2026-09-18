@@ -97,4 +97,37 @@ inline void actualTone(const StatRow& A, int* tone)
     tone[7] = fL ? 1 : (fH ? -1 : 0);   // MUD: markup after a first LOD (green) / markdown after a first HOD (red)
 }
 
+// (v0.10) THE ACTUAL ROW'S PRICES ARE CHART FACTS. Operator, 2026-09-17 evening: "why haven't you fixed the header values"
+// — the A row's HOD price read 7722, 7718, 7716, 7711, 7710, 7708 across the evening. The panel's DAYSA prices are in
+// Skylit's ES1 space (the September contract until ES1 rolled to December at 15:16 CT) and the plugin biased them by
+// (live chart close − SPOT), which moves with every after-hours tick and jumped at the roll. The charted contract's own
+// session high / low ARE the actual HOD / LOD, so they replace the panel's prices, with no offset at all; the range
+// follows. The clocks, durations and ordering stay the panel's (they are time facts, not price facts).
+inline std::string fmtPx(double v) { char b[32]; snprintf(b, sizeof(b), "%.2f", v); return std::string(b); }
+inline void applyChartExtremes(StatRow& A, double chartHi, double chartLo, bool have)
+{
+    if (!have || !(chartHi > chartLo) || chartHi <= 0) return;
+    A.firstPx  = fmtPx(A.first  == "LOD" ? chartLo : chartHi);
+    A.secondPx = fmtPx(A.second == "HOD" ? chartHi : chartLo);
+    double pts = chartHi - chartLo;
+    char b[32]; snprintf(b, sizeof(b), "%.1f", pts); A.rngPts = b;
+    snprintf(b, sizeof(b), "%d", (int)(pts * 50.0 + 0.5)); A.rngUsd = b;   // ES: $50 a point
+}
+// the session's high / low on the chart's own bars: the bars of `y-m-d` (the day the rows describe) inside RTH
+// (08:30–15:00 CT); returns false when that day has no RTH bar on the chart
+struct Ext { double hi, lo; int hiSod, loSod; };
+inline bool chartExtremes(const int* y, const int* m, const int* d, const double* sod, const float* hi, const float* lo, int n,
+                          int wy, int wm, int wd, Ext& out)
+{
+    bool any = false; out.hi = -1; out.lo = 1e12; out.hiSod = out.loSod = -1;
+    for (int i = 0; i < n; i++) {
+        if (y[i] != wy || m[i] != wm || d[i] != wd) continue;
+        if (sod[i] < 30600 || sod[i] > 54000) continue;
+        if (hi[i] > out.hi) { out.hi = hi[i]; out.hiSod = (int)sod[i]; }
+        if (lo[i] < out.lo) { out.lo = lo[i]; out.loSod = (int)sod[i]; }
+        any = true;
+    }
+    return any;
+}
+
 } // namespace dsl

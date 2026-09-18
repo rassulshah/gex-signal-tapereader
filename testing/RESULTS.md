@@ -543,3 +543,16 @@ _host: vm, C++: g++_
 | gamma | S | `GammaProfile.cpp` | ok | ok |
 
 _host: vm, C++: g++_
+
+## 2026-09-18 01:49  ·  daystats  ·  panel 16.44 / companion 1.21 / GP 0.69 / DM 0.18 / DS 0.10 / KT 0.15  ·  1 suite(s) FAILED
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| daystats | A | `test_daystats_cond.js` | 27/27 | ok |
+| daystats | A | `test_day_export.js` | 38/38 | ok |
+| daystats | A | `test_hodlod.js` | 172/176 | **FAIL** |
+| daystats | B | `test_daystats_logic.cpp` | 25/25 | ok |
+| daystats | L | `synth-1033 (live runner)` | 9/9 | ok |
+| daystats | S | `DayStats.cpp` | ok | ok |
+
+_host: vm, C++: g++_

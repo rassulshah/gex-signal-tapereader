@@ -1,3 +1,15 @@
+## lsDayStats 0.10 — the ACTUAL row's prices are the chart's own session high / low (2026-09-17, ~21:05 CT)
+
+Operator: "why haven't you fixed the header values." The A row's HOD price read 7722 → 7718 → 7716 → 7711 → 7710 → 7708
+across the evening, the LOD 7672 → 7675 → 7673. Cause: the panel's DAYSA prices are Skylit ES1's (the September contract
+until ES1 rolled to December at 15:16 CT) and 0.3 biased them by (LIVE chart close − SPOT) — the same live-close mistake
+GP 0.46 removed from the profile, never removed here. The charted contract's session high / low ARE the actual HOD / LOD,
+so `dsl::chartExtremes` (that day's RTH bars, 08:30–15:00 CT; the WEEKDAY row's date, else the last bar's date) and
+`dsl::applyChartExtremes` replace the prices and the range, with no bias; clocks and durations stay the panel's (time
+facts). Gate B +6 (25). Falls back to the panel's prices when the chart has no RTH bar for the day (before the open).
+Known unrelated: `test_hodlod.js` b5/b6/s2 fail since his machine's 15:16 sync regenerated `data/es-1min/BASERATES.json`
+— the baked ladder needs a rebake (open item, not a plugin matter).
+
 ## lsGammaProfile 0.69 — the repair fires once, and never on the colour rows (2026-09-17, ~20:50 CT)
 
 "It won't let me select Off and cannot select the checkboxes either." 0.65's `scrambled()` counted a black +Gamma / −Gamma
