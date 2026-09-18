@@ -1,5 +1,7 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 23:45 CT (v16.48 / GP 0.69 / DS 0.14) · **panel v16.48** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.14**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 23:45 CT (v16.48 / GP 0.70 / DS 0.14) · **panel v16.48** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.70**, **lsDayModel v0.18**, **lsDayStats v0.14**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# (2026-09-18 ~00:10 CT — GP 0.70: one label per IF level — the line's text only when the level is not tagged on a node (gpl::lineLabelWanted); he saw CALL WALL beside the SPY strip and CW on the SPX node at once. Close IRT → INSTALLED → reopen; no dialog change needed.)
 
 # ⚠⚠⚠ 2026-09-17 ~23:45 CT — v16.48 + DS 0.14: THE E ROW NEVER COPIES THE TAPE · ONE MODEL ON BOTH HALVES OF THE READ LINE. START HERE.
 

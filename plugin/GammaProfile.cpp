@@ -321,7 +321,7 @@ int cppExtension::setup(void)
     PX.em     = pc++; setBoolParameter   ("EM H/L", false, SL);
     PX.extk   = pc++; setBoolParameter   ("Extend King line", false);
     PX.lstyle = pc++; setListParameter   ("Line style", 0, "Solid;Dot;Dash", 0, SL);
-    PX.lpos   = pc++; setListParameter   ("Level labels at", 0, "Left;Center;Right;Off");   // (v0.68) Left = inside the SPY strip, Right = before the SPX strip, Off = lines only ("Off" APPENDED to the list)
+    PX.lpos   = pc++; setListParameter   ("Level labels at (only levels not labelled on a node)", 0, "Left;Center;Right;Off");   // (v0.70) one label per level   // (v0.68) Left = inside the SPY strip, Right = before the SPX strip, Off = lines only ("Off" APPENDED to the list)
     // STRUCTURE
     PX.roles   = pc++; setBoolParameter  ("Structure labels (Floor/Ceiling/Gate/Air)", true);
     PX.regime  = pc++; setBoolParameter  ("Regime + read panel", true, SL);
@@ -1051,9 +1051,15 @@ void GammaProfile::render(const Settings& S, bool railOnly)
       // (v0.68) the level rail lives in the PRICE AREA: from the SPY strip's right edge (Book = Both) to the SPX strip's left edge
       short lvL = (short)((cfg.book == 4 && S.tapecols) ? (paneL + 2 + colW) : paneL), lvR = (short)(paneR - colW - 2);
       if (S.kline) drawLevel(lastBar, lvL, lvR, 0, kc, "", S.extk, S);   // line only; the node labels KING
-    if (S.cw)    drawLevel(lastBar, lvL, lvR, 1, C_PINK,  "CALL WALL", false,  S);
-    if (S.pw)    drawLevel(lastBar, lvL, lvR, 2, C_PINK,  "PUT WALL",  false,  S);
-    if (S.flip)  drawLevel(lastBar, lvL, lvR, 3, C_FLIPC, "FLIP",      false,  S);
+    // (v0.70) ONE LABEL PER LEVEL (gpl::lineLabelWanted): when the node labels are on and the wall sits on a rail node (CW / PW
+    // tag) or the FLIP tick is drawn, the line draws WITHOUT its text — the operator saw "CALL WALL" beside the SPY strip
+    // (Level labels at = Left) and "CW" on the SPX node at once: "it is on both rails".
+    bool onNode1 = S.lvllabels && has[1] && gpl::levelNode(gn, lvl[1], lvlSpx[1]) >= 0;
+    bool onNode2 = S.lvllabels && has[2] && gpl::levelNode(gn, lvl[2], lvlSpx[2]) >= 0;
+    bool onNode3 = S.lvllabels && has[3];   // the FLIP tick + label
+    if (S.cw)    drawLevel(lastBar, lvL, lvR, 1, C_PINK,  gpl::lineLabelWanted(S.lvllabels, onNode1, S.lpos) ? "CALL WALL" : "", false, S);
+    if (S.pw)    drawLevel(lastBar, lvL, lvR, 2, C_PINK,  gpl::lineLabelWanted(S.lvllabels, onNode2, S.lpos) ? "PUT WALL"  : "", false, S);
+    if (S.flip)  drawLevel(lastBar, lvL, lvR, 3, C_FLIPC, gpl::lineLabelWanted(S.lvllabels, onNode3, S.lpos) ? "FLIP"      : "", false, S);
     if (S.em)    drawLevel(lastBar, lvL, lvR, 4, C_CYAN,  "EM-H",      false,  S);
     if (S.em)    drawLevel(lastBar, lvL, lvR, 5, C_CYAN,  "EM-L",      false,  S); }
 
@@ -1233,6 +1239,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.69");
+    p->setVersion("0.70");
     return p;
 }

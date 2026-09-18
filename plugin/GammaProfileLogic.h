@@ -187,6 +187,17 @@ inline int levelNode(const std::vector<Node>& s, float lvlPrice, float lvlSpx)
     return -1;
 }
 
+// (0.70) ONE LABEL PER LEVEL. Operator, 2026-09-17 23:05: "why does the call wall and flip still display twice. it is on both
+// rails" — the node tag (CW / PW on the SPX node, the FLIP tick) and the line's own label at Left (beside the SPY strip)
+// were two features labelling the same level. Rule: the line carries its text only when the level is NOT already
+// labelled on a node — and never when "Level labels at" is Off (3).
+inline bool lineLabelWanted(bool nodeLabelsOn, bool labelledOnNode, int lpos)
+{
+    if (lpos == 3) return false;
+    if (nodeLabelsOn && labelledOnNode) return false;
+    return true;
+}
+
 // ---- contract offset -------------------------------------------------------
 // off = chartClose - anchor, anchor = SCALEREF (the front ES price the ladder is scaled to) else SPOT.
 // Clamped to +-300: a wrong chart (NQ) or a bad anchor must never fling the book.

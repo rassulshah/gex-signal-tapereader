@@ -253,6 +253,12 @@ int main()
       b[5].d = 16; CHECK(gpl::bandStartIndex(b, 6, 34200) == 5, "(the last bar alone is 'its date')"); }
     CHECK(gpl::bandStrength(-100) == 1.0f && gpl::bandStrength(100) == 1.0f && gpl::bandStrength(5) < 0.2f && gpl::bandStrength(50) > gpl::bandStrength(20), "band strength: Kings full, 5% faint, monotone in |%|");
 
+    // ---- (0.70) one label per level
+    CHECK(!gpl::lineLabelWanted(true, true, 0), "node labels on + the wall is on a node: the line carries no text (was 'CALL WALL' beside the SPY strip AND 'CW' on the node)");
+    CHECK(gpl::lineLabelWanted(true, false, 0), "node labels on but the wall's strike is not a rail node: the line labels it (once)");
+    CHECK(gpl::lineLabelWanted(false, true, 2), "node labels off: the line labels it wherever 'Level labels at' says");
+    CHECK(!gpl::lineLabelWanted(false, false, 3) && !gpl::lineLabelWanted(true, false, 3), "Level labels at = Off: never on the line");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

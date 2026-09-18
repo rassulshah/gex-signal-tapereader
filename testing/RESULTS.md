@@ -780,3 +780,21 @@ _host: vm, C++: g++_
 | kingtracker | S | `KingTracker.cpp` | ok | ok |
 
 _host: vm, C++: g++_
+
+## 2026-09-18 03:59  ·  gamma  ·  panel 16.48 / companion 1.21 / GP 0.70 / DM 0.18 / DS 0.14 / KT 0.15  ·  ALL GREEN
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 105/105 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 89/89 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 18/18 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 19/19 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 18/18 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 18/18 | ok |
+| gamma | L | `1118-pool (live runner)` | 20/20 | ok |
+| gamma | L | `1118-pool-SPY (live runner)` | 21/21 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+
+_host: vm, C++: g++_

@@ -52,3 +52,8 @@ The run file gets: the screenshot file names, every unticked line with what was 
 - [ ] MAG on the Skylit node whose strike == KINGNOW,ES,IF's strike (and only that one), in the Magnet's polarity colour; CW / PW pills padded evenly.
 - [ ] "Hide % under" blanks the % cell in the tape column for nodes under it; the strike still prints.
 
+
+## 0.70 (2026-09-18) — one label per level
+- [ ] With node labels on and Level labels at = Left: CW / PW / FLIP appear once each (on the SPX node / the FLIP tick), no CALL WALL / PUT WALL / FLIP text beside the SPY strip.
+- [ ] A wall whose strike is not a rail node still gets its line label at the chosen side.
+- [ ] Node labels off: the line labels come back wherever Level labels at says.
