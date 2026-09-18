@@ -1,8 +1,8 @@
 {
  "schema": 1,
  "writtenBy": "tools/nightly/coverage.py",
- "asOf": "2026-09-17",
- "generatedAt": "2026-09-17T20:15:32Z",
+ "asOf": "2026-09-18",
+ "generatedAt": "2026-09-18T20:15:35Z",
  "ranOn": "his machine",
  "complete": 386,
  "days": [
@@ -1356,15 +1356,71 @@
      "complete": false
     },
     "NQ": {
-     "n": 382,
+     "n": 393,
+     "complete": true
+    },
+    "GC": {
+     "n": 393,
+     "complete": true
+    },
+    "CL": {
+     "n": 393,
+     "complete": true
+    }
+   },
+   "tape": [
+    "QQQ",
+    "SPXW",
+    "SPY",
+    "VIX"
+   ],
+   "log": true
+  },
+  {
+   "day": "2026-09-18",
+   "mb": 7.77,
+   "version": "16.52",
+   "snaps": 159,
+   "nodeEvents": 68,
+   "defl": 37,
+   "feat": true,
+   "fut": {
+    "ES": {
+     "n": null,
+     "full": false,
+     "err": null
+    },
+    "NQ": {
+     "n": 6422,
+     "full": true,
+     "err": null
+    },
+    "GC": {
+     "n": 2322,
+     "full": false,
+     "err": null
+    },
+    "CL": {
+     "n": 2322,
+     "full": false,
+     "err": null
+    }
+   },
+   "csv": {
+    "ES": {
+     "n": null,
+     "complete": false
+    },
+    "NQ": {
+     "n": 374,
      "complete": false
     },
     "GC": {
-     "n": 382,
+     "n": 374,
      "complete": false
     },
     "CL": {
-     "n": 382,
+     "n": 374,
      "complete": false
     }
    },
@@ -1387,11 +1443,11 @@
    "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "NQ": {
-   "sessions": 201,
+   "sessions": 202,
    "first": "2025-11-24",
-   "last": "2026-09-16",
+   "last": "2026-09-17",
    "vendor": 188,
-   "yahoo": 13,
+   "yahoo": 14,
    "definition": "tool grid (v15.87 · v15.93 RTH open): 3-minute bars stamped by END over RTH (min"
   },
   "sweeps": {
@@ -1400,7 +1456,7 @@
    "levels": 36
   },
   "book": {
-   "sessions": 20,
+   "sessions": 21,
    "cells": 24
   },
   "learn": {
@@ -1420,10 +1476,10 @@
    "note": "ES BASERATES: the vendor + the couriered days"
   },
   "nq": {
-   "have": 201,
+   "have": 202,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 201,
+   "sessions": 202,
    "first": "2025-11-24",
    "note": "NQ BASERATES"
   },
@@ -1436,34 +1492,34 @@
    "note": "the sweep corpus (vendor + the couriered nights, v15.90)"
   },
   "book": {
-   "have": 20,
+   "have": 21,
    "unit": "sessions",
    "perSession": 1.0,
-   "sessions": 20,
+   "sessions": 21,
    "first": null,
    "note": "the SPY 3-minute book from the day files"
   },
   "ledger": {
-   "have": 465,
+   "have": 502,
    "unit": "taps",
-   "perSession": 42.27,
-   "sessions": 11,
+   "perSession": 41.83,
+   "sessions": 12,
    "first": "2026-09-03",
    "note": "the deflection ledger (±0.50 SPY wobbles) — the tap record replaces it at his scale"
   },
   "kingroll": {
-   "have": 332,
+   "have": 347,
    "unit": "rows",
-   "perSession": 23.71,
-   "sessions": 14,
+   "perSession": 23.13,
+   "sessions": 15,
    "first": "2026-08-19",
    "note": "dir.kingRoll rows with an outcome (per bar, not independent rolls)"
   },
   "gate": {
-   "have": 582,
+   "have": 601,
    "unit": "rows",
-   "perSession": 36.38,
-   "sessions": 16,
+   "perSession": 35.35,
+   "sessions": 17,
    "first": "2026-08-19",
    "note": "gateHour rows with an outcome"
   },
@@ -1503,16 +1559,16 @@
  "studies": {
   "total": 184,
   "byStatus": {
-   "SHIPPED": 13,
-   "REFUSED": 4,
+   "WAITING": 110,
    "THIN": 4,
    "NULL": 2,
-   "READY": 15,
-   "OPEN": 1,
-   "CUT": 2,
+   "REFUSED": 4,
    "REGISTERED": 9,
+   "OPEN": 1,
+   "SHIPPED": 13,
+   "READY": 15,
    "READ": 24,
-   "WAITING": 110
+   "CUT": 2
   },
   "byCorpus": {
    "tap": {
@@ -1578,12 +1634,12 @@
   }
  },
  "nightly": {
-  "date": "2026-09-16",
+  "date": "2026-09-17",
   "ranOn": "his machine",
-  "ranAt": "2026-09-16T20:05:36Z",
-  "sessions": 9,
-  "episodes": 121,
-  "deflEvents": 398
+  "ranAt": "2026-09-17T20:15:37Z",
+  "sessions": 10,
+  "episodes": 137,
+  "deflEvents": 440
  },
  "tapeDays": [
   "2026-09-07",
@@ -1594,6 +1650,7 @@
   "2026-09-14",
   "2026-09-15",
   "2026-09-16",
-  "2026-09-17"
+  "2026-09-17",
+  "2026-09-18"
  ]
 }
