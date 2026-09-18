@@ -170,6 +170,7 @@ public:
     void applyContractOffset();  // (v0.39) shift the whole book onto the chart's own contract price
     void readSettings(Settings& S);
     bool scrambled(); void migrateScrambled();   // (v0.65) the repair-on-load (the version bump does not reset)
+    bool repaired;                                // (v0.69) the repair ran (or was not needed) this load
     void render(const Settings& S, bool railOnly = false);   // (v0.61) railOnly: bars + badges + % only (the SPY rail of Book = Both)
     void loadSpy();                                          // (v0.61) STRIKE rows of GammaProfile-SPY.csv -> strikesSpy
     void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
@@ -208,7 +209,7 @@ GammaProfile::GammaProfile() : cppExtension()
     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
     cfg.bands=true; cfg.bandh=3; cfg.klinew=2;
     hasIfMag=false; ifMagPx=ifMagSpx=ifMagPct=0.0f; barsFrom=0;
-    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false; forceBarH = 0; stScaleL = stScaleR = stPaneRaw = 0;
+    stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false; forceBarH = 0; stScaleL = stScaleR = stPaneRaw = 0; repaired = false;
 }
 
 // ---- parameter callbacks: dialog controls are valid here, so read + cache.
@@ -230,13 +231,16 @@ bool GammaProfile::scrambled()
     int bh = getIntegerValue(PX.bandh), kw = getIntegerValue(PX.klinew), sw = getIntegerValue(PX.spywidth);
     if (f < 1 || f > 200 || h < 0 || h > 100 || w < 0 || w > 1000 || t < 0 || t > 100) return true;
     if (bh < 0 || bh > 50 || kw < 0 || kw > 20 || sw < 0 || sw > 1000) return true;
-    COLOR cp = (COLOR)(getIntegerValue(PX.cpos) & 0xFFFFFF), cn = (COLOR)(getIntegerValue(PX.cneg) & 0xFFFFFF);
-    if (cp == 0 || cn == 0) return true;   // black is never a gamma colour on his black chart
+    // (v0.69) the colour rows are NOT a scramble test: IRT kept reading them as black after the repair, so the repair fired
+    // on EVERY dialog click and nothing could be changed ("it won't let me select Off and cannot select the checkboxes").
+    // A black swatch is harmless — readSettings falls back to the gold / magenta defaults when a colour reads 0.
     return false;
 }
 void GammaProfile::migrateScrambled()
 {
-    if (!scrambled()) return;
+    if (repaired) return;                  // (v0.69) once per instance load, never on a later click
+    if (!scrambled()) { repaired = true; return; }
+    repaired = true;
     setListIndex(PX.book, 4); setIntegerValue(PX.width, 90); setListIndex(PX.side, 0); setListIndex(PX.thick, 0);
     setListIndex(PX.filter, 1); setIntegerValue(PX.thresh, 20); setListIndex(PX.below, 0); setListIndex(PX.scale, 0);
     setParameterColor(PX.cpos, D_POS); setParameterColor(PX.cneg, D_NEG); setParameterColor(PX.cmid, D_MID); setListIndex(PX.kingcol, 0);
@@ -1124,7 +1128,7 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.68  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile 0.69  written " << ts << "  (this instance's last draw)\n";
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
     else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff) << "\n";
     // (v0.63) what the dialog is actually feeding the draw — so "the chip should be centered" can be checked against the setting
@@ -1229,6 +1233,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.68");
+    p->setVersion("0.69");
     return p;
 }

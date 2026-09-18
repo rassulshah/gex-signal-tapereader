@@ -1,5 +1,7 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 19:35 CT (v16.44 / GP 0.68) · **panel v16.44** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.68**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 20:50 CT (v16.44 / GP 0.69) · **panel v16.44** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.9**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# (20:50 CT — GP 0.69: the repair-on-load fired on every click (black colour rows) and froze the dialog; now once per load, colours excluded. Restart IRT, then Level labels at = Off.)
 
 # (19:35 CT — GP 0.68: "Level labels at" Left / Center / Right / Off; level lines confined to the price area between the strips. GEX build → restart IRT; he picks Right or Off.)
 

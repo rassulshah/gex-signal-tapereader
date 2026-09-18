@@ -1,3 +1,10 @@
+## lsGammaProfile 0.69 — the repair fires once, and never on the colour rows (2026-09-17, ~20:50 CT)
+
+"It won't let me select Off and cannot select the checkboxes either." 0.65's `scrambled()` counted a black +Gamma / −Gamma
+swatch as a scramble; IRT kept reading those rows as black after the repair, so every dialog click (parmsUpdt) re-ran the
+full reset and undid the click. Now: the colour rows are not a test (readSettings already falls back to gold / magenta
+when a colour reads 0), and the repair runs at most once per instance load (`repaired`).
+
 ## lsGammaProfile 0.68 — "Level labels at": Left · Center · Right · Off, and the level lines stay in the price area (2026-09-17, ~19:35 CT)
 
 Operator: "the call wall and others are also being listed on the spy rail" → "provide an option so I can indicate where I

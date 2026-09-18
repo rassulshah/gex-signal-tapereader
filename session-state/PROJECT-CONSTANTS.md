@@ -695,4 +695,6 @@ module scope the eval'd code under test resolves — so `global.<fn>=keep` resto
 11.12 ran against the mutant for a day and one assertion (13.10) passed by coincidence. Pattern now: after the mutation
 assertions, `eval(ex('<fn>')); global.<fn>=<fn>;` and a guard that the live function's source contains a line the mutant
 removed. Any new mutation block copies this.
+Addendum (GP 0.69): the repair must run ONCE per load and must not test colour rows — IRT can keep returning black for a
+colour row after setParameterColor, and a repair that re-fires on parmsUpdt undoes every click the operator makes.
 
