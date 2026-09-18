@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-18 · v16.47 · session `f9c89c64` — the EM was 10x, the panel centres, both clocks after the close; the E row's sanity check and the 9am replay
+## 2026-09-18 · v16.48 · session `f9c89c64` — the E row never copies the tape (no +orclock); READ1 — one model on both halves of the READ line; DS 0.14
 
-_707 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_710 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -9376,6 +9376,70 @@ Now the export test: the stub must model the real `irtRatio` (ES per SPY), and a
 Now prove the runner catches tonight's live export (the 10× one) and passes the fixed synthetic one.
 Now the records: CHANGELOG, resume note, checklist, snapshot, chat history, guards.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (02:34):** The sync pushed the build; now the plugin compile status.
+Deployed and pushed (commit `e11b12a`), the raw URL now serves 16.46, and the GEX build compiled `lsDayStats.dll "0.12"` at 21:30 CT — both DayStats 0.12 and GammaProfile 0.69 are sitting PENDING, waiting for IRT to close.
+
+Steps, in order:
+
+1. Panel: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js — it should offer **Update to 16.46**. If it offers Reinstall, wait five minutes and click again. Then reload the Atlas tab.
+
+2. Close Investor/RT. Tell me "closed" and I'll confirm INSTALLED before you reopen.
+
+3. Reopen IRT. In the Gamma Profile dialog set **Level labels at = Off** (the CW/PW/FLIP/MAG labels then come only from "Show IF level labels on nodes", so they stop appearing twice).
+
+What to expect on the READ line tomorrow morning: from the first bars it prints `HOD IN p% · LOD IN p%`, both numbers moving with price every three minutes; whichever side is under 50% carries `· if not, ~time (50%)`; once a side clears 50% the clock drops; after the close both turn into the printed times. The Day Stats A-row now uses the chart's own RTH high/low, so the header values will match your bars.
+
+**OPERATOR:**
+> closed
+
+**me (02:46):** INSTALLED — GammaProfile 0.69 and DayStats 0.12 both went in at 21:46 CT (the DLLs stayed locked for a couple of ticks after you closed, which is normal).
+
+Step 1: Reopen Investor/RT.
+
+Step 2: Open the Gamma Profile dialog and set **Level labels at = Off**, OK.
+
+Step 3: Look at the Day Stats header — it should read `DAY STATS - Thu 17 Sep` with `HOD IN 8:33am · LOD IN 9:09am` after today's close, and the A-row high/low should match your chart's bars. Tomorrow from the open it switches to the live `HOD IN p% · LOD IN p%` form.
+
+**OPERATOR:**
+> its being cut off , move to center.  the took values make no sense.  How si the expected value 3m ?    Do a sanity check of all the expected values.   also the HOD in and LOD in, check them , how would it have looked at 9am?
+> The first extemity should always be first.
+> 
+> _[sent while I was working — a queued message]_
+> so if the lod occurs , it should be before the HOD and vice versa
+> 
+> _[sent while I was working — a queued message]_
+
+**me (02:59):** Now the replay of 2026-09-17 with the panel's own functions, bar by bar.
+Now the DayStats 0.13 edits: the read line in the logic header, centre anchors, the left clamp, and the wider text rect.
+Now the panel fix (16.47): the EM's scale, plus the audit field and the re-derivation's own check.
+Now the export test: the stub must model the real `irtRatio` (ES per SPY), and a guard that a 10× scale can never reach the model again.
+Now prove the runner catches tonight's live export (the 10× one) and passes the fixed synthetic one.
+Now the records: CHANGELOG, resume note, checklist, snapshot, chat history, guards.
+Pushed (`89c9b6b`), panel 16.47 is on the raw URL, and `lsDayStats.dll "0.13"` compiled at 22:08 CT — PENDING for IRT to close.
+
+**What I fixed now**
+
+Step 1: click https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js → Update to 16.47 (if it says Reinstall, wait 5 min and click again) → reload Atlas.
+
+Step 2: close IRT, tell me "closed", I confirm INSTALLED.
+
+Step 3: reopen IRT → Day Stats dialog → **Corner = Top-center** (two new entries at the end of the list; nothing else moved). The panel now also never starts left of the pane, whatever corner you pick.
+
+Also in 0.13: after the close both halves print their clocks (`HOD IN 8:33am · LOD IN 9:09am`), and the first extreme always leads — that was already the rule in the code (the left slot is whichever printed first, so a LOD-first day reads `LOD IN … · HOD IN …`); it is now pinned by a test so it can't drift.
+
+**The sanity check — one real bug, three design problems**
+
+HL RNG ~$8625 ~172.5p was a bug. The 0DTE straddle EM (27.55 SPX points on Thursday) was converted to ES with the ES-per-SPY ratio (10.1×) instead of ES-per-SPX (1.009×), so the range model go …[trimmed]
+
+**OPERATOR:**
+> both .. do it
+
+**me (03:14):** Now the panel changes: the orclock rule off, and the first extreme's own read (READ1).
+Now the tests: cond tests without orclock, and the export test's READ1 section.
+Panel side green. Now DayStats 0.14: parse READ1 and drive the first half from it.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -10246,6 +10310,7 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+89c9b6b gex: sync 17-Thu-09 22:08
 e11b12a gex: sync 17-Thu-09 21:30
 ef562e9 gex: sync 17-Thu-09 21:22
 3fd43e4 gex: sync 17-Thu-09 21:08
@@ -10257,7 +10322,6 @@ ef562e9 gex: sync 17-Thu-09 21:22
 7eef585 gex: sync 17-Thu-09 19:16
 dace573 gex: sync 17-Thu-09 17:50
 83db85e gex: sync 17-Thu-09 17:40
-5654ba0 gex: sync 17-Thu-09 17:18
 ```
 
 ---

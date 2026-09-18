@@ -1,3 +1,28 @@
+## v16.48 + lsDayStats 0.14 — the E row never copies the tape; one model on both halves of the READ line (2026-09-17, ~23:45 CT)
+
+Operator, offered the two first: "both .. do it".
+- **The OR-clock rule is off (`hodlodCondE`).** 16.32's "+orclock" put the opening hour's extreme clock on the E row's 1ST in
+  the outer terciles — a better FORECAST (study-daystats-cond: MAE 38.4 → 33.3) but, whenever the first extreme is inside
+  the first hour, the actual first extreme read back as its own expectation ("HOD ~8:33am · TOOK ~3m" over "HOD 8:33am ·
+  3m"). Now the stage's own median: 09-17 (pos60-top) reads HOD ~8:51am · TOOK ~21m. CONDE basis loses the suffix;
+  BASERATES.condstats.orClockRule stays as the record of what was measured; nothing reads it. Gate A: test_daystats_cond
+  (the mutation now guards that the rule stays gone), test_day_export 1.8 / 1.10 / 1.11 / 1.11b (E TOOK ≠ A TOOK) / 2.5;
+  Gate L: no +orclock in the basis.
+- **READ1 — the first extreme's read from the same model.** `hlSecondRead(rthx, D.first, oSx)` every export → `READ1,<side>,
+  <p>,<d>,<minsLeft>,<age>,<share>,<arrival>,<n>,<src>` (the READ2 shape); `AU.day.first`. The 2026-08 HLTAB READ row stays
+  (CALL still feeds the E row's note and the far side). day-derive re-derives both rows; Gate A 1.9m–1.9q; Gate L checks
+  READ1 like READ2, that the two name opposite sides at the same bar, and that READ1's side is the DAYSA 1ST.
+- **lsDayStats 0.14:** `dsl::firstHalf` — the left half from READ1 ("HOD IN 74%", "· if not, ~11:42am (50%)" while p < 50);
+  before the model's 36-minute gate the HLTAB cell as before (the line reads from 8:45 and switches once, at 9:06); after
+  the close the clock. `dsl::firstTone`: green ≥ 70, amber ≤ 30, plain between — from the model's p. Rows are reset per
+  load so an absent READ1 cannot linger. Gate B 50 → 60.
+- 09-17 replayed with both halves on the model: 9:06 "HOD IN 70% · LOD IN 6% · if not, ~9:15am"; 10:00 "HOD IN 74% ·
+  LOD IN 25% · if not, ~10:09am"; 11:00 "HOD IN 44% · if not, ~11:42am · LOD IN 80%" (price 10 pts under a high that had
+  stood 2.5 h on a 36-point day — the model's honest 44 %); 2:00pm "HOD IN 86% · LOD IN 98%"; 2:30pm 92 / 99.
+- NOT done (open, his call, one at a time): E BOP · WICK · W.END · WICK% · MUD are weekday MEANS and do not compose; MUD vs
+  MUDt two durations of one leg (§10.2: MUD = the move in pts · $).
+- Regression: all four indicators green.
+
 ## v16.47 + lsDayStats 0.13 — the EM was 10x (E range 172.5 on a 36-point day); the panel centres; both clocks after the close (2026-09-17, ~23:15 CT)
 
 His first evening with DS 0.12, four things at once: "its being cut off, move to center · the took values make no sense.

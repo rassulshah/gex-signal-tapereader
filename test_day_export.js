@@ -94,7 +94,7 @@ ok(EM && EM[2]==='1', '1.6 the opening drive is up (close(30) > open)', EM);
 const DE=R.DAYEXP && R.DAYEXP[0];
 ok(DE && Math.abs(parseFloat(DE[1])-(7690+expF*expRng))<0.1 && Math.abs(parseFloat(DE[2])-(7690-(1-expF)*expRng))<0.1, '1.7 DAYEXP hi/lo placed by f', DE);
 const CE=R.CONDE && R.CONDE[0];
-ok(CE && CE[0]==='pos60-bottom+orclock' && CE[1]==='3.0', '1.8 CONDE: open at the bottom of the first hour -> the 1ST clock is the window low\'s clock (3 min)', CE);
+ok(CE && CE[0]==='pos60-bottom' && CE[1]==='16.5', '1.8 CONDE: open at the bottom of the first hour -> the stage\'s own median 1ST clock (16.5 min), NOT the window low\'s clock (16.48: the E row never copies the tape — "how is the expected value 3m?")', CE);
 ok(CE && CE[3]==='66' && CE[5]==='39' && CE[6]==='29', '1.9 CONDE: 66% LOD-first, the 2ND ladder 39 / 29', CE);
 ok(CE && CE[7]==='162' && CE[8]==='306' && CE[9]==='384', '1.9b (16.45) CONDE fields 9-11: the stage\'s 2ND-clock p20 / p50 / p80 in minutes after the open (pos60-bottom: 162 / 306 / 384 -> the READ line\'s "LOD after 11:12 80%")', CE);
 // ---- (16.46) READ2 — the second extreme's read: LOD at 10:33 on this synthetic day (low 7676 at 102 min, close ~7702 = 21 min later)
@@ -106,7 +106,15 @@ ok(R2 && R2[0]==='LOD' && R2.length===9, '1.9c READ2 row: side LOD (HOD was firs
   const pp=siPredict(SECONDIN_BASE, d, ml, age, sh);
   ok(p===Math.round(100*pp), '1.9f ... p == the baked model applied to the row\'s own features', [p, pp]);
   ok(R2[8]==='baked' && R2[7]!=='' , '1.9g ... source baked (no courier in the harness), an arrival median for that d-bin', [R2[8], R2[7]]); }
-// the model itself, the numbers that matter: a low price is sitting ON reads far lower than one it has run away from
+// ---- (16.48) READ1 — the FIRST extreme's read, the same model: HOD at 09:18 on this day, 7724, close ~7702 at 10:33 (75 min old)
+const R1=R.READ1 && R.READ1[0];
+ok(R1 && R1[0]==='HOD' && R1.length===9, '1.9m READ1 row: side HOD (the first extreme), nine fields — the same shape as READ2', R1);
+{ const p=parseInt(R1[1]), d=parseFloat(R1[2]), ml=parseFloat(R1[3]), age=parseFloat(R1[4]), sh=parseFloat(R1[5]);
+  ok(Math.abs(ml-267)<0.6 && Math.abs(age-75)<0.6, '1.9n ... the same bar as READ2 (267 min left), the high is 75 min old', [ml, age]);
+  ok(p===Math.round(100*siPredict(SECONDIN_BASE, d, ml, age, sh)), '1.9o ... p == the baked model on the row\'s own features', [p]);
+  ok(R1[0]!==R2[0] && R1[0]===R.DAYSA[0][0], '1.9p ... READ1 is the DAYSA 1ST side, READ2 the other', [R1[0], R2[0], R.DAYSA[0][0]]);
+  ok(AU.day && AU.day.first && AU.day.first.ok && AU.day.first.side==='HOD' && Math.abs(AU.day.first.age-age)<0.6, '1.9q AU.day.first carries the same read', AU.day && AU.day.first); }
+
 { const near=siPredict(SECONDIN_BASE, 0.10, 240, 30, 0.10), far=siPredict(SECONDIN_BASE, 1.50, 240, 120, 0.75);
   ok(near<0.35 && far>0.85 && far>near, '1.9h the model: on the low (0.1 sigma) -> IN < 35%; 1.5 sigma off it for 2 h -> IN > 85%', [near.toFixed(2), far.toFixed(2)]);
   // d is already in units of the REMAINING typical move (sigma = rv x sqrt(bars left)), so the same ABSOLUTE distance is more sigmas late in the day
@@ -118,8 +126,9 @@ ok(R2 && R2[0]==='LOD' && R2.length===9, '1.9c READ2 row: side LOD (HOD was firs
   const bad2=JSON.parse(JSON.stringify(SECONDIN_BASE)); bad2.oof.maxCalErr=0.12; ok(siNormalise(bad2)===null, '1.9k ... or a calibration decile off by more than 0.08');
   const good=JSON.parse(JSON.stringify(SECONDIN_BASE)); good.w[0]=-4.0; ok(siNormalise(good)!==null && siNormalise(good).w[0]===-4.0, '1.9l ... and takes one that clears them (the nightly refit)'); }
 const SE=R.DAYSE && R.DAYSE[0];
-ok(SE && SE[0]==='LOD' && SE[2]===String(OPEN+3*60) && SE[9]==='HOD' && SE[11]===String(OPEN+303*60), '1.10 DAYSE: LOD first at 08:33, HOD at 13:33 (t2 303)', SE);
-ok(SE && SE[3]==='3.0' && SE[12]==='300.0', '1.11 DAYSE took 3.0 / gap 300.0', SE);
+ok(SE && SE[0]==='LOD' && SE[2]===String(OPEN+16.5*60) && SE[9]==='HOD' && SE[11]===String(OPEN+303*60), '1.10 DAYSE: LOD first at 08:46:30 (the stage median 16.5), HOD at 13:33 (t2 303)', SE);
+ok(SE && SE[3]==='16.5' && SE[12]==='286.5', '1.11 DAYSE took 16.5 / gap 286.5 (t2 - t1)', SE);
+ok(SE && R.DAYSA && R.DAYSA[0] && SE[3]!==R.DAYSA[0][3], '1.11b the E row\'s TOOK differs from the A row\'s (48.0): an expectation, not the tape read back', [SE[3], R.DAYSA[0][3]]);
 const SA=R.DAYSA && R.DAYSA[0];
 ok(SA && SA[0]==='HOD' && SA[1]===HI.toFixed(2) && SA[2]===String(OPEN+48*60) && SA[3]==='48.0' && SA[9]==='LOD' && SA[13]===(HI-LO).toFixed(1), '1.12 DAYSA = the actual measurement', SA);
 ok(SE && SA && SE[2]!==SA[2], '1.13 (16.36) the E row does NOT copy the actual 1ST clock after the READ');
@@ -129,7 +138,7 @@ ok(Y && !Y.err && Y.open===7690 && Y.elapsed===123 && Y.dow==='Wed', '2.1 AU.day
 ok(Y && Y.w30 && Y.w60 && Y.w60.complete && Y.w60.h===7724 && Y.w60.l===7683 && Math.abs(Y.w60.pos-pos60)<1e-9, '2.2 AU.day carries both opening windows', Y && Y.w60);
 ok(Y && Y.emEs!=null && Math.abs(Y.emEs-emEs)<1e-6 && Y.em && Y.em.est===false && Y.em.emSpx===38.2, '2.3 AU.day carries the EM pin', Y && Y.em);
 ok(Y && Y.model && Y.model.basis==='em-open60' && Math.abs(Y.model.f-expF)<1e-9 && Y.model.drive===1, '2.4 AU.day carries the model output', Y && Y.model);
-ok(Y && Y.cond && Y.cond.basis==='pos60-bottom+orclock' && Y.cond.readIn==='HOD', '2.5 AU.day carries the conditional E row and the READ note', Y && Y.cond);
+ok(Y && Y.cond && Y.cond.basis==='pos60-bottom' && Y.cond.readIn==='HOD', '2.5 AU.day carries the conditional E row (no +orclock) and the READ note', Y && Y.cond);
 ok(Y && Y.actual && Y.actual.first==='HOD' && Y.actual.took===48 && Y.call && Y.call.in===true, '2.6 AU.day carries the actual day and the call', Y && Y.actual);
 ok(Y && Y.base && Y.base.hasCond===true && Y.base.n===60 && Y.base.rngPts===52 && Y.base.predict, '2.7 AU.day carries the base (n, range, predict, condstats)', Y && Y.base);
 // ---- 3. THE RE-DERIVATION — tools/day-derive.js on this audit must reproduce every day row of the CSV

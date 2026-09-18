@@ -74,6 +74,7 @@ public:
     std::string condBasis; int condLastHr, condLast30;   // (v0.7) the CONDE row — the E clocks' stage + the 2ND ladder
     int condP20, condP50, condP80;                       // (v0.11) the 2ND clock's percentiles (panel 16.45), minutes after the open
     dsl::Read2 read2;                                    // (v0.12) the second extreme's read (panel 16.46)
+    dsl::Read2 read1;                                    // (v0.14) the first extreme's read (panel 16.48), same model
     std::string weekday, daydate;
     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
@@ -187,6 +188,7 @@ void DayStats::load()
     A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1; condBasis.clear(); condLastHr = -1; condLast30 = -1; condP20 = condP50 = condP80 = -1; read2 = dsl::Read2();
     hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
     hasRead = false; readFirst.clear(); readCall.clear(); readPosr = -1; readPct = -1; readN = 0;
+    read1 = dsl::Read2(); read2 = dsl::Read2();   // (v0.14) a row absent from this export must not linger from the last
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -205,6 +207,8 @@ void DayStats::load()
             dsl::Cond c; dsl::parseCond(t, c); condBasis = c.basis; condLastHr = c.lastHr; condLast30 = c.last30; condP20 = c.p20; condP50 = c.p50; condP80 = c.p80;   // (v0.8) DayStatsLogic.h · (v0.11) + percentiles
         } else if (t[0] == "READ2") {
             dsl::parseRead2(t, read2);   // (v0.12)
+        } else if (t[0] == "READ1") {
+            dsl::parseRead2(t, read1);   // (v0.14) the first extreme's read, same shape
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
             weekday = t[1];
             if (t.size() >= 3) daydate = t[2];
@@ -301,11 +305,11 @@ void DayStats::render(const Settings& S)
         std::string second = (first == "HOD") ? "LOD" : (first == "LOD" ? "HOD" : "");
         dsl::Read2 r2 = read2; if (!r2.valid && !second.empty()) r2.side = second;
         std::string s2 = dsl::secondLine(r2, asofSo, closed, (A.valid && !r2.side.empty() && A.second == r2.side) ? A.secondClk : -1.0);
-        std::string rl = dsl::readLine(first, readCall, readPct, closed, firstSo, s2);
-        COLOR rcol = C_TITLE;
-        if      (closed && firstSo >= 0) rcol = C_UPG;
-        else if (readCall == "IN")       rcol = C_UPG;
-        else if (readCall == "NOTIN")    rcol = C_HEAD;
+        // (v0.14) the first half from READ1 (the same model) when the panel wrote one; the HLTAB cell before 36 min
+        std::string h1 = dsl::firstHalf(read1, first, readCall, readPct, closed, firstSo, asofSo);
+        std::string rl = h1; if (!s2.empty()) rl += "   \xB7   " + s2;
+        int tone = dsl::firstTone(read1, first, readCall, closed, firstSo);
+        COLOR rcol = tone > 0 ? C_UPG : (tone < 0 ? C_HEAD : C_TITLE);
         textCJ((short)(x0 + blockW / 2), y, rl.c_str(), rcol, fs, true);
     }
     y = (short)(y + lineH);
@@ -399,6 +403,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.13");
+    p->setVersion("0.14");
     return p;
 }

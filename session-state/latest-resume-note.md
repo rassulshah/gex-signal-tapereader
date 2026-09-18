@@ -1,5 +1,21 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-17 23:15 CT (v16.47 / GP 0.69 / DS 0.13) · **panel v16.47** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.13**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-17 23:45 CT (v16.48 / GP 0.69 / DS 0.14) · **panel v16.48** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.69**, **lsDayModel v0.18**, **lsDayStats v0.14**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+
+# ⚠⚠⚠ 2026-09-17 ~23:45 CT — v16.48 + DS 0.14: THE E ROW NEVER COPIES THE TAPE · ONE MODEL ON BOTH HALVES OF THE READ LINE. START HERE.
+
+"both .. do it" → (1) `hodlodCondE`'s +orclock branch is gone: the E row's 1ST / TOOK are the stage's own median (09-17:
+HOD ~8:51am · ~21m, not the tape's 8:33 · 3m); test_daystats_cond's mutation guards that it stays gone. (2) The panel
+writes `READ1` (the first extreme through `hlSecondRead`, same row shape as READ2; `AU.day.first`); DS 0.14 prints the
+left half from it ("HOD IN 74%" / "· if not, ~clock (50%)" while < 50) and falls back to the HLTAB cell only before the
+model's 36-minute gate; tone green ≥ 70 / amber ≤ 30. Runner: READ1 == re-derivation, opposite sides, side == DAYSA 1ST.
+**He needs: Tampermonkey 16.48 (5 min, reload Atlas) + close IRT (DS 0.14; 0.13 also pending) → INSTALLED → reopen →
+Corner = Top-center.** Tomorrow: watch the line from 8:45 (HLTAB half only) → 9:06 (both halves, the model) through the
+day; compare with the replay shape in the CHANGELOG; the E row's 1ST should read ~8:51-ish on a top-tercile open, never
+the A row's clock.
+**STILL OPEN on the E row (his call, one at a time — offered, not agreed):** BOP · WICK · W.END · WICK% · MUD are weekday
+MEANS (E.wick.bop 20.8 vs bopMed 6) and do not compose (TOOK + BOP ≠ WICK); MUD / MUDt are two durations of one leg (§10.2:
+MUD = the move in pts · $). Proposal: medians, composed like the A row (WICK = TOOK + BOP → W.END; MUDt = HL GAP − BOP);
+MUD = |2ND − open| pts · $ (E from the expected candle).
 
 # ⚠⚠⚠ 2026-09-17 ~23:15 CT — v16.47 + DS 0.13: THE EM WAS 10× · THE PANEL CENTRES · BOTH CLOCKS AFTER THE CLOSE. START HERE.
 
@@ -14,7 +30,7 @@ should always be first ... if the lod occurs, it should be before the HOD and vi
   returned the SPX ratio, and the runner re-derived from the same wrong number.
 - **DS 0.13:** Corner + Top-center / Bottom-center (appended entries 4 / 5), left-clamped anchors (`dsl::anchorX`),
   `dsl::readLine` (first extreme leads; after the close "HOD IN 8:33am · LOD IN 9:09am"), text rect = the text's width.
-- **He needs: Tampermonkey 16.47 (5 min, reload Atlas) + close IRT (DS 0.13) → INSTALLED → reopen → Corner = Top-center.**
+- (superseded by 16.48 / DS 0.14 above)
 - **OPEN THREAD — the E row, one element at a time (nothing changed yet; his call):**
   1. TOOK / 1ST: the stage's `+orclock` rule copies the opening hour's extreme clock (tautological once the first extreme
      is inside the first hour — most days). Proposal: the stage median without it (pos60-top: 21 min → "HOD ~8:51am").

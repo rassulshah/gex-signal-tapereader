@@ -33,3 +33,10 @@ Screenshot file names, every unticked line with what was seen instead, the opera
 - [ ] LOD-first day: the line starts with LOD (his rule: "if the lod occurs, it should be before the HOD and vice versa").
 - [ ] The READ line with "· if not, ~10:09am (50%)" is not clipped at 300 px.
 - [ ] E row HL RNG is model-sized (09-17 re-derived: ~$2445 ~48.9p, not ~$8625 ~172.5p) — the 16.47 EM scale fix.
+
+## 0.14 (2026-09-17) — one model on both halves
+- [ ] 8:45–9:03: the left half is the HLTAB cell ("HOD 40%"), no right half; from 9:06 both halves read "X IN p%" from the model.
+- [ ] The left half carries "· if not, ~clock (50%)" while its p < 50, exactly like the right half.
+- [ ] Tone: green at ≥ 70, amber at ≤ 30, white between — from the model's p, not the old IN / NOT IN call.
+- [ ] E row 1ST / TOOK are the stage's median (a top-tercile open reads ~8:51am · ~21m), never the A row's clock (16.48: no +orclock).
+- [ ] After the close both halves are clocks, green.

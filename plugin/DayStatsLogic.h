@@ -163,7 +163,7 @@ inline std::string secondRung(const std::string& second, const Cond& C, double n
 struct Read2 { std::string side, src; int p; double d, minsLeft, age, share, arrival; long n; bool valid; Read2() : p(-1), d(0), minsLeft(-1), age(-1), share(0), arrival(-1), n(0), valid(false) {} };
 inline bool parseRead2(const std::vector<std::string>& t, Read2& r)
 {
-    if (t.size() < 7 || t[0] != "READ2") return false;
+    if (t.size() < 7 || (t[0] != "READ2" && t[0] != "READ1")) return false;   // (v0.14) READ1 = the first extreme's read, same shape
     r.side = t[1]; r.p = atoi(t[2].c_str()); r.d = atof(t[3].c_str()); r.minsLeft = num(t[4]); r.age = num(t[5]); r.share = atof(t[6].c_str());
     r.arrival = (t.size() >= 8 && !t[7].empty()) ? atof(t[7].c_str()) : -1; r.n = (t.size() >= 9) ? atol(t[8].c_str()) : 0; r.src = (t.size() >= 10) ? t[9] : "";
     r.valid = (r.side == "HOD" || r.side == "LOD") && r.p >= 0 && r.p <= 100;
@@ -185,6 +185,28 @@ inline std::string secondLine(const Read2& r, double asofSo, bool closed, double
 // "LOD IN 9:09am", one half live and one half settled, which the operator saw on the first evening.
 //   first: HOD|LOD · call: IN|NOTIN|"" · pct: the cell % (<0 = none) · closed + actualFirstSo: the A row's 1ST clock
 //   second: the right half, already composed by secondLine ("" = none)
+// (v0.14) THE FIRST HALF FROM THE SAME MODEL. Operator: "both .. do it" — the READ1 row (panel 16.48, the secondin logistic
+// on the first extreme: AUC 0.859, calibrated) drives the left half exactly as READ2 drives the right: "HOD IN 74%", and
+// "· if not, ~11:42am (50%)" while p < 50. The HLTAB cell (call / pct) is the fallback only while READ1 is absent — the
+// first 36 minutes, before the model's gate — so the line reads from 8:45 and switches once, at 9:06.
+inline std::string firstHalf(const Read2& r1, const std::string& first, const std::string& call, double pct, bool closed, double actualFirstSo, double asofSo)
+{
+    if (first.empty()) return "";
+    if (closed && actualFirstSo >= 0) return first + " IN " + clk(actualFirstSo);
+    if (r1.valid && r1.side == first) return secondLine(r1, asofSo, false, -1);
+    std::string rl = first;
+    if      (call == "IN")    rl += " IN";
+    else if (call == "NOTIN") rl += " NOT IN";
+    if (pct >= 0) { char pb[16]; snprintf(pb, sizeof(pb), "  %d%%", (int)(pct + 0.5)); rl += pb; }
+    return rl;
+}
+// the tone of the line: 1 green (>= 70, or IN), -1 amber (<= 30, or NOT IN), 0 plain — from the model's p when READ1 drives it
+inline int firstTone(const Read2& r1, const std::string& first, const std::string& call, bool closed, double actualFirstSo)
+{
+    if (closed && actualFirstSo >= 0) return 1;
+    if (r1.valid && r1.side == first) return r1.p >= 70 ? 1 : (r1.p <= 30 ? -1 : 0);
+    return call == "IN" ? 1 : (call == "NOTIN" ? -1 : 0);
+}
 inline std::string readLine(const std::string& first, const std::string& call, double pct, bool closed, double actualFirstSo, const std::string& second)
 {
     if (first.empty()) return "";

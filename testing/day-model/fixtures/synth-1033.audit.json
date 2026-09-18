@@ -1,6 +1,6 @@
 {
- "v": "16.47",
- "t": 1789700646492,
+ "v": "16.48",
+ "t": 1789701362658,
  "ct": 37980,
  "tape": {
   "7695.00": 1,
@@ -246,10 +246,10 @@
    "close": 7705.30892048
   },
   "cond": {
-   "t1": 3,
+   "t1": 16.5,
    "t2": 303,
    "lodPct": 66,
-   "basis": "pos60-bottom+orclock",
+   "basis": "pos60-bottom",
    "n": 108,
    "lastHrPct": 39,
    "last30Pct": 29,
@@ -295,6 +295,20 @@
    "arrivalMin": 81,
    "n": 70430,
    "days": 301
+  },
+  "first": {
+   "ok": true,
+   "side": "HOD",
+   "src": "baked",
+   "p": 0.7637446917871009,
+   "d": 0.8491787976382069,
+   "ml": 267,
+   "age": 75,
+   "share": 0.45416666666667044,
+   "mins": 123,
+   "arrivalMin": 75,
+   "n": 70430,
+   "days": 301
   }
  },
  "ifProf": {
@@ -319,7 +333,7 @@
   "NDX": null
  },
  "gWhy": "live from DOM tape (20 strikes · King +100% @ SPX 7685 -> ES 7757.25)",
- "dWhy": "live (Wed em-open60 pos60-bottom+orclock n=60)",
+ "dWhy": "live (Wed em-open60 pos60-bottom n=60)",
  "fut": {
   "fam": "ES",
   "r": 10.107

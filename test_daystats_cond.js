@@ -47,12 +47,12 @@ ok(e.basis === 'pre-open' && e.t1 === 24 && e.t2 === 288 && e.lodPct === 51 && e
 e = M.hodlodCondE(base, 33, w30, null, null, null);
 ok(e.basis === 'pos30-bottom' && e.t1 === 21 && e.lodPct === 59, '30 min, open at the OR bottom: the bottom-tercile row');
 e = M.hodlodCondE(base, 66, w30, w60, null, null);
-ok(e.basis === 'pos60-bottom+orclock' && e.t1 === 3 && e.lodPct === 66 && e.t2 === 303, '60 min, outer third: 1ST clock = the window low\'s clock (minute 3), LOD 66%');
+ok(e.basis === 'pos60-bottom' && e.t1 === 16.5 && e.lodPct === 66 && e.t2 === 303, '60 min, outer third: the bottom-tercile row\'s own median (16.5), LOD 66% — 16.48: NO +orclock, the E row never copies the tape');
 ok(e.t2 > e.t1, '2ND after 1ST');
 // the mirror: open at the TOP of its first hour -> HOD first, clock of the window high
 const dnDay = bars(20, k => ({ o: 7684 - k, h: (k === 0 ? 7685 : 7684 - k * 0.9), l: 7682 - k * 1.4, c: 7683 - k }));
 e = M.hodlodCondE(base, 66, M.gpOpenWindow(dnDay, O, 30), M.gpOpenWindow(dnDay, O, 60), null, null);
-ok(e.basis === 'pos60-top+orclock' && e.t1 === 3 && e.lodPct === 35, 'open at the top: HOD-first (LOD 35%), the window high\'s clock');
+ok(e.basis === 'pos60-top' && e.t1 === 21 && e.lodPct === 35, 'open at the top: HOD-first (LOD 35%), the top row\'s median 21 (09-17 reads HOD ~8:51am, not ~8:33am)');
 // middle third: no OR-clock rule, the table row
 const midDay = bars(20, k => ({ o: 7684, h: 7690 + (k % 3), l: 7678 - (k % 2), c: 7684 + (k % 2) }));
 e = M.hodlodCondE(base, 66, M.gpOpenWindow(midDay, O, 30), M.gpOpenWindow(midDay, O, 60), null, null);
@@ -62,9 +62,9 @@ e = M.hodlodCondE(base, 66, w30, M.gpOpenWindow(upDay.slice(0, 12), O, 60), null
 ok(e.basis === 'pos30-bottom', 'incomplete 60-min window -> the 30-min row stands');
 // READ IN: the 1ST is the actual first extreme
 e = M.hodlodCondE(base, 95, w30, w60, { ok: true, first: 'LOD', firstT: O + 3 * 60 }, { in: true, p: 80 });
-ok(e.basis === 'pos60-bottom+orclock' && e.readIn === 'LOD' && e.lodPct === 66, 'READ IN (v16.36): the E row keeps the stage\'s expectation; the call is only noted', e);
+ok(e.basis === 'pos60-bottom' && e.t1 === 16.5 && e.readIn === 'LOD' && e.lodPct === 66, 'READ IN (v16.36): the E row keeps the stage\'s expectation; the call is only noted', e);
 e = M.hodlodCondE(base, 95, w30, w60, { ok: true, first: 'HOD', firstT: O + 3 * 60 }, { in: false, p: 40 });
-ok(e.basis === 'pos60-bottom+orclock', 'READ not IN: the table stands');
+ok(e.basis === 'pos60-bottom', 'READ not IN: the table stands');
 // courier tables win over the fallback
 const courier = { condstats: { n: 400, t1Med: 20, t2Med: 280, lodPct: 55, pos30: [{ n: 100, t1: 18, t2: 270, lodPct: 62 }, { n: 100, t1: 30, t2: 290, lodPct: 50 }, { n: 100, t1: 19, t2: 280, lodPct: 40 }], pos60: [{ n: 100, t1: 15, t2: 300, lodPct: 68 }, { n: 100, t1: 35, t2: 305, lodPct: 52 }, { n: 100, t1: 20, t2: 265, lodPct: 33 }] } };
 e = M.hodlodCondE(courier, 33, w30, null, null, null);
@@ -87,14 +87,16 @@ function mutated(re, rep) { const c = CODE.replace(re, rep); if (c === CODE) thr
 function countFails(Mx) {
   let f = 0;
   const t = (c) => { if (!c) f++; };
-  const e1 = Mx.hodlodCondE(base, 66, w30, w60, null, null); t(e1.basis === 'pos60-bottom+orclock' && e1.t1 === 3 && e1.lodPct === 66);
+  const e1 = Mx.hodlodCondE(base, 66, w30, w60, null, null); t(e1.basis === 'pos60-bottom' && e1.t1 === 16.5 && e1.lodPct === 66);
   const e2 = Mx.hodlodCondE(base, 33, w30, null, null, null); t(e2.basis === 'pos30-bottom' && e2.t1 === 21);
   const e3 = Mx.hodlodCondE(base, 95, w30, w60, { ok: true, first: 'LOD', firstT: O + 3 * 60 }, { in: true }); t(e3.readIn === 'LOD');
   const e4 = Mx.hodlodCondE(base, 66, w30, M.gpOpenWindow(upDay.slice(0, 12), O, 60), null, null); t(e4.basis === 'pos30-bottom');
   return f;
 }
 ok(countFails(mutated(/elapsed>=60 && w60 && w60\.complete/, 'elapsed>=60 && w60')) > 0, 'mutation: ignoring window completeness fires');
-ok(countFails(mutated(/if\(W===60 && b!==1\)/, 'if(false)')) > 0, 'mutation: dropping the OR-clock rule fires');
+// (16.48) the OR-clock rule is GONE — a guard that it stays gone: putting it back (the 1ST clock = the window's extreme clock) fires
+ok(countFails(mutated(/out\.t1=row\.t1; out\.t2=row\.t2;/, 'out.t1=(W===60 && b!==1)?((b===0)?win.tL:win.tH):row.t1; out.t2=row.t2;')) > 0, 'mutation: re-adding the OR-clock rule (the E row copying the tape) fires');
+ok(!/orclock/.test(CODE.split('function hodlodCondE')[1].split('\n}')[0].replace(/\/\/.*$/gm, '')), 'the live hodlodCondE carries no +orclock branch (comments aside)');
 ok(countFails(mutated(/CALL && CALL\.in &&/, 'CALL && false &&')) > 0, 'mutation: dropping the READ note fires');
 ok(countFails(mutated(/return p<1\/3\?0:\(p<2\/3\?1:2\);/, 'return 1;')) > 0, 'mutation: collapsing the terciles fires');
 

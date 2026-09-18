@@ -511,21 +511,28 @@ def main_other(a, R, AU):
                 # (16.46) READ2 — the second extreme's read: p re-derived through the BAKED weights from the audit's features. A row
                 # from a nightly refit (src = nightly) may differ in p (the courier's weights are not in the audit); side, features
                 # and the arrival bin must still match.
-                r2 = R.get('READ2', [None])[0]; d2 = DER.get('READ2')
-                if r2 and d2:
-                    same_feats = r2[0] == d2[0] and all(abs(num(r2[i]) - num(d2[i])) <= 0.01 for i in (2, 3, 4, 5))
-                    if r2[8] == 'baked': add(same_feats and r2[1] == d2[1], 'A', 'READ2 re-derived from the audit == the CSV (%s vs %s)' % (','.join(r2), ','.join(d2)))
-                    else: add(same_feats, 'A', 'READ2 (nightly refit): side + features match the audit; p %s vs baked %s' % (r2[1], d2[1]))
-                    p2 = num(r2[1])
-                    add(p2 is not None and 0 <= p2 <= 100, 'A', 'READ2 p in 0..100 (%s)' % r2[1])
-                    exp['second_read'] = '%s IN %s%%' % (r2[0], r2[1]) + (('  if not, ~+%s min (50%%)' % r2[7]) if r2[7] and p2 is not None and p2 < 50 else '')
-                elif r2 or d2:
-                    add(False, 'A', 'READ2 present in %s only' % ('the CSV' if r2 else 'the re-derivation'))
+                # (16.48) READ1 — the first extreme's read, the same model: the same check. The two rows must name opposite sides.
+                for key, expk in (('READ2', 'second_read'), ('READ1', 'first_read')):
+                    r2 = R.get(key, [None])[0]; d2 = DER.get(key)
+                    if r2 and d2:
+                        same_feats = r2[0] == d2[0] and all(abs(num(r2[i]) - num(d2[i])) <= 0.01 for i in (2, 3, 4, 5))
+                        if r2[8] == 'baked': add(same_feats and r2[1] == d2[1], 'A', '%s re-derived from the audit == the CSV (%s vs %s)' % (key, ','.join(r2), ','.join(d2)))
+                        else: add(same_feats, 'A', '%s (nightly refit): side + features match the audit; p %s vs baked %s' % (key, r2[1], d2[1]))
+                        p2 = num(r2[1])
+                        add(p2 is not None and 0 <= p2 <= 100, 'A', '%s p in 0..100 (%s)' % (key, r2[1]))
+                        exp[expk] = '%s IN %s%%' % (r2[0], r2[1]) + (('  if not, ~+%s min (50%%)' % r2[7]) if r2[7] and p2 is not None and p2 < 50 else '')
+                    elif r2 or d2:
+                        add(False, 'A', '%s present in %s only' % (key, 'the CSV' if r2 else 'the re-derivation'))
+                r1 = R.get('READ1', [None])[0]; r2 = R.get('READ2', [None])[0]
+                if r1 and r2: add(r1[0] != r2[0] and abs(num(r1[3]) - num(r2[3])) <= 0.01, 'A', 'READ1 (%s) and READ2 (%s) are opposite sides at the same bar' % (r1[0], r2[0]))
+                DA0 = R.get('DAYSA', [None])[0]
+                if r1 and DA0: add(r1[0] == DA0[0], 'A', 'READ1 side %s == the DAYSA 1ST %s' % (r1[0], DA0[0]))
                 CE = R.get('CONDE', [None])[0]
                 if CE:
                     b = CE[0]
-                    okb = { 'pre-open': ('pre-open',), 'open30': ('pos30-bottom', 'pos30-middle', 'pos30-top', 'pre-open'), 'open60': ('pos60-bottom+orclock', 'pos60-middle', 'pos60-top+orclock', 'pos30-bottom', 'pos30-middle', 'pos30-top', 'pre-open') }[stage]
+                    okb = { 'pre-open': ('pre-open',), 'open30': ('pos30-bottom', 'pos30-middle', 'pos30-top', 'pre-open'), 'open60': ('pos60-bottom', 'pos60-middle', 'pos60-top', 'pos30-bottom', 'pos30-middle', 'pos30-top', 'pre-open') }[stage]
                     add(b in okb, 'A', 'CONDE basis %s fits the stage (%s min -> %s)' % (b, el, '/'.join(okb)))
+                    add('orclock' not in b, 'A', 'CONDE basis carries no +orclock (16.48: the E row never copies the tape)')
                     add(num(CE[2]) is not None and num(CE[1]) is not None and num(CE[2]) > num(CE[1]), 'A', 'CONDE t2 %s > t1 %s' % (CE[2], CE[1]))
                     add(len(CE) >= 7 and CE[5] != '' and CE[6] != '', 'A', 'CONDE carries the 2ND ladder (%s%% last hr / %s%% last 30)' % (CE[5] if len(CE) > 5 else '?', CE[6] if len(CE) > 6 else '?'))
                 SA = R.get('DAYSA', [None])[0]; SE = R.get('DAYSE', [None])[0]

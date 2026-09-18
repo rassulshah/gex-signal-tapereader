@@ -90,6 +90,17 @@ int main()
       CHECK(dsl::readLine("HOD", "IN", 96, true, 30780, "LOD IN 9:09am") == "HOD IN 8:33am   \xB7   LOD IN 9:09am", "after the close: BOTH clocks (0.12 printed 'HOD IN 96%' beside 'LOD IN 9:09am')");
       CHECK(dsl::readLine("HOD", "IN", 96, true, -1, "LOD IN 95%") == "HOD IN  96%   \xB7   LOD IN 95%", "closed but no A row: the live halves stay");
       CHECK(dsl::readLine("", "IN", 96, false, -1, "x") == "", "no first extreme: nothing"); }
+    // ---- (0.14) the first half from READ1 (the same model); the HLTAB cell only before the model's gate
+    { std::vector<std::string> t = {"READ1","HOD","74","0.310","300.0","87.0","0.290","27","70430","baked"}; dsl::Read2 r1; CHECK(dsl::parseRead2(t, r1) && r1.side == "HOD" && r1.p == 74, "READ1 parses through parseRead2 (same shape as READ2)");
+      CHECK(dsl::firstHalf(r1, "HOD", "", 47, false, -1, 36000) == "HOD IN 74%", "READ1 present: 'HOD IN 74%' from the model, not the HLTAB cell's 47");
+      r1.p = 44; CHECK(dsl::firstHalf(r1, "HOD", "IN", 96, false, -1, 39600) == "HOD IN 44%  \xC2\xB7 if not, ~11:27am (50%)", "p < 50: the arrival clock, like the second half (11:00 + 27 min)");
+      dsl::Read2 none; CHECK(dsl::firstHalf(none, "HOD", "", 40, false, -1, 32400) == "HOD  40%", "no READ1 yet (before 36 min): the HLTAB cell as before");
+      CHECK(dsl::firstHalf(none, "HOD", "NOTIN", 12, false, -1, 32400) == "HOD NOT IN  12%", "... with its call");
+      CHECK(dsl::firstHalf(r1, "HOD", "", 47, true, 30780, 60000) == "HOD IN 8:33am", "after the close: the clock, whatever the rows say");
+      r1.side = "LOD"; CHECK(dsl::firstHalf(r1, "HOD", "IN", 96, false, -1, 36000) == "HOD IN  96%", "a READ1 for the other side is ignored (a stale row): the cell stands");
+      r1.side = "HOD"; r1.p = 74; CHECK(dsl::firstTone(r1, "HOD", "", false, -1) == 1, "tone: >= 70 green");
+      r1.p = 50; CHECK(dsl::firstTone(r1, "HOD", "IN", false, -1) == 0, "tone: 31-69 plain even if the old cell said IN");
+      r1.p = 12; CHECK(dsl::firstTone(r1, "HOD", "", false, -1) == -1 && dsl::firstTone(none, "HOD", "NOTIN", false, -1) == -1 && dsl::firstTone(none, "HOD", "", true, 30780) == 1, "tone: <= 30 amber; no READ1 -> the call; closed -> green"); }
     // ---- (0.13) the block's anchor: centre entries, and never cut off at the left
     { CHECK(dsl::anchorX(0, 60, 1400, 1000, 8) == 68 && dsl::anchorX(1, 60, 1400, 1000, 8) == 392, "TL / TR anchors as before on a wide pane");
       CHECK(dsl::anchorX(4, 60, 1400, 1000, 8) == 230 && dsl::anchorX(5, 60, 1400, 1000, 8) == 230, "Top-centre / Bottom-centre: the block on the pane's midline");

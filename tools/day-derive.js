@@ -65,12 +65,15 @@ if (E) {
   out.CONDE = [CE.basis, n1(CE.t1), n1(CE.t2), I(CE.lodPct), I(CE.n), I(CE.lastHrPct), I(CE.last30Pct), I(CE.t2P20), I(CE.t2P50), I(CE.t2P80)];   // (16.45) + the 2ND clock's p20 / p50 / p80
   // (16.46) READ2 — the second extreme's read, re-derived from the audit's recorded features through the BAKED weights (the
   // audit says which source the panel used; a nightly refit would differ, and the compare below tolerates that by noting src)
-  if (Y.second && Y.second.ok) {
-    const S2 = Y.second, p = M.siPredict(M.SECONDIN_BASE, S2.d, S2.ml, S2.age, S2.share);
+  // (16.48) READ1 — the first extreme's read, the same model and row shape (AU.day.first)
+  const readRow = (S2) => {
+    const p = M.siPredict(M.SECONDIN_BASE, S2.d, S2.ml, S2.age, S2.share);
     const tb = M.SECONDIN_BASE.timing[String(M.siDbin(M.SECONDIN_BASE, S2.d))];
-    out.second = { side: S2.side, p, arrival: (tb && typeof tb.med === 'number') ? tb.med : null, src: S2.src };
-    out.READ2 = [S2.side, String(Math.round(100 * p)), S2.d.toFixed(3), n1(S2.ml), n1(S2.age), S2.share.toFixed(3), (tb && typeof tb.med === 'number') ? I(tb.med) : '', I(M.SECONDIN_BASE.n), S2.src === 'nightly' ? 'nightly' : 'baked'];
-  }
+    return { obj: { side: S2.side, p, arrival: (tb && typeof tb.med === 'number') ? tb.med : null, src: S2.src },
+             row: [S2.side, String(Math.round(100 * p)), S2.d.toFixed(3), n1(S2.ml), n1(S2.age), S2.share.toFixed(3), (tb && typeof tb.med === 'number') ? I(tb.med) : '', I(M.SECONDIN_BASE.n), S2.src === 'nightly' ? 'nightly' : 'baked'] };
+  };
+  if (Y.second && Y.second.ok) { const r = readRow(Y.second); out.second = r.obj; out.READ2 = r.row; }
+  if (Y.first && Y.first.ok) { const r = readRow(Y.first); out.first = r.obj; out.READ1 = r.row; }
   const openSec = 8 * 3600 + 30 * 60, firstClock = openSec + CE.t1 * 60, secondClock = openSec + CE.t2 * 60;
   const lodFirst = CE.lodPct >= 50, eFirst = lodFirst ? 'LOD' : 'HOD', eSecond = lodFirst ? 'HOD' : 'LOD';
   const W = E.wick || {}, wend = (typeof W.wick === 'number') ? openSec + W.wick * 60 : null, mudUsd = Math.round(rng * (Y.ptUsd || 50));
