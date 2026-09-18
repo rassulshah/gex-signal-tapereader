@@ -1,3 +1,24 @@
+## 2026-09-18 09:50 CT — RTH eyes-on: the chart vs the DOM tape (16.49 live); GP 0.71 + DS 0.15 (two cosmetic fixes)
+
+Operator: "compare with dom tape" (his 09:45 screenshot). Read the live panel at 09:46:57 and ran the runner on the 09:46:50
+export (`gp-regress --indicator gamma|daystats|daymodel`): gamma 24/24 (Atlas's five == ours, poolSrc atlas), daystats
+16/16 (READ1 66 / READ2 19 re-derived == the CSV, opposite sides, READ1 side == DAYSA 1ST), daymodel 12/12.
+- **Strips vs tape, minute-for-minute:** SPX 7660 +16 (tape 17) · 7650 −100 K rank 1 · 7645 +7 · 7635 rank 3 · 7630 +55 (50)
+  · 7625 rank 4 · 7620 −13 (−11) · 7615 −22 (−20) · 7610 +2 (1) · 7605 −20 (−18) · 7600 −48 (−41). SPY 759 +100 K rank 2 ·
+  758 −39 (−37) · 757 −38 (−38). The differences are the tape moving between the export and the read (7 s apart the pool's
+  five changed: 9:46:50 had 7655 / 7600 in it, 9:46:57 had SPY 759 / 7575). Both Kings on the rails at 7715.0 / 7685.5,
+  Atlas's 7714.92 / 7685.4. The bands: K from ~9:05, rank 4 (7625) from ~9:15, rank 3 (7635) from ~9:40 — first-seen.
+- **The READ line, first live morning:** 09:45 "HOD IN 66% · LOD IN 19% · if not, ~9:54am (50%)" — HOD 8:33 at 7715, price
+  27 pts under it 72 min later → 66; LOD 9:18 at 7683 with price 5 pts off it → 19, arrival ~9 min. The E row reads
+  HOD ~8:51am · TOOK ~21m over the A row's 8:33 · 3m (no +orclock), HL RNG ~$2476 ~49.5p (the EM fix) — both as intended.
+- **Two things seen and fixed:** (1) the arrival clause printed "Â· if not" — the UTF-8 middle dot in `secondLine` drawn as
+  Latin-1 by IRT; DS 0.15 prints the one-byte dot everywhere (Gate B pins it). (2) the GP status file's header said 0.69
+  under 0.70 — a literal, not the version; GP 0.71 has ONE `GP_VERSION` constant read by the factory and the status file,
+  and `gex-build.bat` reads the constant's definition line when setVersion() carries a name. (3) The runner's field-9 check
+  still said "stamped iff |%| >= 5" and failed on the pooled 7575 / 7635 (16.44: a pooled node is stamped whatever its %);
+  now a stamp is right iff the audit's since map carries it.
+- Both DLLs compile on the next GEX build tick and install when IRT next closes — no rush; nothing on the chart is wrong.
+
 ## v16.49 — the King chart reviewed; ONE DEFLECTION PER SWING in the tap record (2026-09-18, ~00:40 CT)
 
 Operator: "check the king chart, and see if its issues have been resolved like multiple consecutive deflections etc. take a

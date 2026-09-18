@@ -175,7 +175,7 @@ inline std::string secondLine(const Read2& r, double asofSo, bool closed, double
     if (!r.valid) return "";
     char b[80]; snprintf(b, sizeof(b), "%s IN %d%%", r.side.c_str(), r.p);
     std::string s = b;
-    if (r.p < 50 && r.arrival >= 0 && asofSo >= 0) s += "  · if not, ~" + clk(asofSo + r.arrival * 60.0) + " (50%)";
+    if (r.p < 50 && r.arrival >= 0 && asofSo >= 0) s += "  \xB7 if not, ~" + clk(asofSo + r.arrival * 60.0) + " (50%)";   // (0.15) one byte: IRT draws Latin-1, the UTF-8 dot printed as "Â·" (his 09-18 09:45 screenshot)
     return s;
 }
 // (v0.13) THE WHOLE READ LINE. The FIRST extreme always leads — operator, 2026-09-17: "if the lod occurs, it should be

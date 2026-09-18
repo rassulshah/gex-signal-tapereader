@@ -1,7 +1,9 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.49 / GP 0.70 / DS 0.14) · **panel v16.49** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.70**, **lsDayModel v0.18**, **lsDayStats v0.14**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.49 / GP 0.71 / DS 0.15) · **panel v16.49** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.71**, **lsDayModel v0.18**, **lsDayStats v0.15**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
 # (2026-09-18 ~00:10 CT — GP 0.70: one label per IF level — the line's text only when the level is not tagged on a node (gpl::lineLabelWanted); he saw CALL WALL beside the SPY strip and CW on the SPX node at once. Close IRT → INSTALLED → reopen; no dialog change needed.)
+
+# (2026-09-18 09:50 CT — RTH EYES-ON DONE, 16.49 live in his tab since 09:41: the strips match the DOM tape minute for minute, Atlas's five == ours (runner 24/24), the READ line reads "HOD IN 66% · LOD IN 19% · if not, ~9:54am", the E row is the stage median (8:51 / 21m) and the range 49.5p. Two cosmetic fixes PENDING his next IRT close: DS 0.15 (the "Â·" byte) and GP 0.71 (the status header said 0.69 — a literal; now GP_VERSION). CHANGELOG has the numbers.)
 
 # ⚠⚠⚠ 2026-09-18 ~00:45 CT — SESSION CLOSE: v16.49 (one deflection per swing), the King chart reviewed, the tabs current. START HERE.
 

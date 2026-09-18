@@ -86,6 +86,8 @@ REM ---- :ver  -> VER  the setVersion("x.y") of the plugin (outside any block: t
 :ver
 set VER=
 for /f "tokens=2 delims=()" %%v in ('findstr /c:"setVersion(" "%PLUG%\%NAME%.cpp"') do set VER=%%v
+REM (GP 0.71) a plugin that passes a CONSTANT (setVersion(GP_VERSION)) carries the literal on its definition line
+if /i "!VER!"=="GP_VERSION" for /f "tokens=2 delims==;" %%v in ('findstr /c:"GP_VERSION = " "%PLUG%\%NAME%.cpp"') do set VER=%%v
 goto :eof
 
 REM ---- :hashof <file>  -> H  (certutil, no PowerShell) -------------------------

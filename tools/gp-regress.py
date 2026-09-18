@@ -231,8 +231,11 @@ def main():
             if abs(pv) >= 5:
                 if f9 == '' or want9 is None or int(f9) != int(want9): off9.append((k, f9, want9))
                 elif asof is not None and int(f9) > asof + 5: off9.append((k, f9, 'after ASOF %s' % asof))
-            elif f9 != '': off9.append((k, f9, 'under 5% but stamped'))
-        add(not off9, 'A', 'field 9 (first-seen CT second) == the audit\'s since map for %s, stamped iff |%%| >= 5, never after ASOF' % this_book + ('' if not off9 else ' — off: %s' % off9[:5]))
+            elif f9 != '':
+                # (16.44) a POOLED node is stamped whatever its own % (Atlas ranks it; 7575 / 7500 had no band) — the audit's
+                # since map is the panel's store, which only ever stamps >= 5 % or pooled; a stamp the map does not carry is wrong
+                if want9 is None or int(f9) != int(want9): off9.append((k, f9, 'under 5%, stamped, not in the since map'))
+        add(not off9, 'A', 'field 9 (first-seen CT second) == the audit\'s since map for %s, stamped iff |%%| >= 5 or pooled, never after ASOF' % this_book + ('' if not off9 else ' — off: %s' % off9[:5]))
         if sm:
             earliest = min(int(v) for v in sm.values()); h, m_ = divmod(earliest // 60, 60)
             BAND_EARLIEST = '%02d:%02d' % (h, m_)

@@ -62,6 +62,8 @@
 #include <algorithm>
 #include <ctime>
 
+static const char* GP_VERSION = "0.71";   // (v0.71) ONE version string: the factory and the status file both read it
+
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
 static const COLOR D_NEG  = 0x00C43BAF;  // -gamma  (magenta)
@@ -1134,7 +1136,7 @@ void GammaProfile::writeStatus()
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     time_t now = time(0); struct tm t; localtime_s(&t, &now);
     char ts[32]; sprintf_s(ts, sizeof(ts), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-    f << "# lsGammaProfile 0.69  written " << ts << "  (this instance's last draw)\n";
+    f << "# lsGammaProfile " << GP_VERSION << "  written " << ts << "  (this instance's last draw)\n";   // (v0.71) the constant, not a literal — 0.70 still said 0.69
     if (cfg.book == 4) f << stMain << "\n" << stSpy << "\n";   // (v0.61) Both: the SPX rail's line, then the SPY rail's
     else f << gpl::statusLine(cfg.book, cfg.side, (int)strikes.size(), cfg.rankmode == 1, stPaneL, stPaneR, stAnchor, stColW, cfg.width, stPrimary, stDrawn, stRendered, lastOff) << "\n";
     // (v0.63) what the dialog is actually feeding the draw — so "the chip should be centered" can be checked against the setting
@@ -1239,6 +1241,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Gamma node profile + level rail (reads lsFlexLevels\\GammaProfile.csv)");
-    p->setVersion("0.70");
+    p->setVersion(GP_VERSION);
     return p;
 }
