@@ -100,5 +100,25 @@ ok(mk===765 && mx===100, '4f tapemax agrees with the $K tag — all three King v
 global.document={ querySelectorAll:(sel)=>page.querySelectorAll(sel) }; LADDER_CACHE={t:0,data:null};
 const a5=readLaddersByDollar();
 ok(a5.main && a5.main.pct['771.00']===-23, '4g main table "-7%-6%" style rows still read value-first (771 → −23 after rescale)', a5.main&&a5.main.pct['771.00']);
+// ---------- (16.50) THE KING'S SIGN — the live SPY King row of 2026-09-18 10:06 CT: "761 | +1%−$208,644K" (a velocity chip
+// LEADS the negative dollar figure). The old test looked at the first character of the cell ("+") and said POSITIVE; the
+// parsed $K sign says negative. And feedStructMap wrote the King as +100 whatever its sign.
+{ const tail=[[758,'0%\u221231%',''],[757,'0%\u221233%',''],[756,'0%\u221212%',''],[755,'0%\u221227%',''],[754,'0%2%',''],[753,'0%1%',''],[752,'0%0%',''],[751,'0%0%',''],[750,'0%0%',''],[749,'0%0%',''],[748,'0%0%',''],[747,'0%0%','']];
+  const negRows=[[762,'0%\u221224%',''],[761,'+1%\u2212$208,644K','rgb(253, 231, 37)'],[760,'0%\u221296%',''],[759,'0%\u221291%','']].concat(tail);
+  const page6=div([pane('SPY','769.50',negRows)]); global.document={ querySelectorAll:(sel)=>page6.querySelectorAll(sel) }; LADDER_CACHE={t:0,data:null};
+  const a6=readLaddersByDollar();
+  ok(a6.SPY && a6.SPY.king===761 && a6.SPY.pct['761.00']===-100, '6a a King cell "+1%−$208,644K" reads −100 (the $K sign, Unicode minus)', a6.SPY && [a6.SPY.king, a6.SPY.pct['761.00']]);
+  ok(a6.SPY && a6.SPY.kingNeg===true, '6b ...and kingNeg is TRUE — the velocity chip in front no longer makes the text test say positive', a6.SPY && a6.SPY.kingNeg);
+  const posRows=[[762,'0%\u221224%',''],[761,'+1%$208,644K','rgb(253, 231, 37)'],[760,'0%\u221296%',''],[759,'0%\u221291%','']].concat(tail);
+  const page7=div([pane('SPY','769.50',posRows)]); global.document={ querySelectorAll:(sel)=>page7.querySelectorAll(sel) }; LADDER_CACHE={t:0,data:null};
+  const a7=readLaddersByDollar();
+  ok(a7.SPY && a7.SPY.pct['761.00']===100 && a7.SPY.kingNeg===false, '6c an unsigned $K is a +γ King: +100, kingNeg false', a7.SPY && [a7.SPY.pct['761.00'], a7.SPY.kingNeg]); }
+{ eval(ex('feedStructMap')); global.LASTFEED={ SPY:{ j:{ levels:[{ s:769.5, l:[{k:761,v:-208644,d:-1},{k:760,v:-190000,d:-1},{k:765,v:50000,d:1},{k:755,v:-40000,d:-1},{k:770,v:30000,d:1}] }] } } };
+  global.extractWalls=(j)=>({ price:769.5, king:761, walls:[{k:761,pct:100,pos:false},{k:760,pct:91,pos:false},{k:765,pct:24,pos:true},{k:755,pct:19,pos:false},{k:770,pct:14,pos:true}] });
+  const f=feedStructMap('SPY');
+  ok(f && f.pct['761.00']===-100 && f.kingNeg===true, '6d feedStructMap: a −γ King is −100 with kingNeg true (was +100 unconditionally — the path that served while the tab sat on a Stage page)', f && [f.pct['761.00'], f.kingNeg]);
+  global.extractWalls=(j)=>({ price:769.5, king:761, walls:[{k:761,pct:100,pos:true},{k:760,pct:91,pos:false}] });
+  const g=feedStructMap('SPY'); ok(g && g.pct['761.00']===100 && g.kingNeg===false, '6e ...and a +γ King is +100, kingNeg false', g && [g.pct['761.00'], g.kingNeg]); }
+
 console.log('test_ladder_dollar: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

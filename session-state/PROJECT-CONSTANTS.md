@@ -708,3 +708,10 @@ the live runner passed (it re-derived from the same wrong `emEs` in the audit), 
 carries the REAL function's shape and scale, with a comment naming what it models; (2) a re-derivation that reads a value
 from the audit and feeds it back is not a check of that value — add an independent bound on it (Gate L: emEs/emSpx in
 0.95–1.06); (3) any conversion between books goes through one named helper (`gpEsPerSpx`) with a plausibility bound.
+
+## 2026-09-18 — A TAPE COMPARISON CHECKS SIGNS, NOT JUST STRIKES AND SIZES (the SPY King +100)
+
+Asked to "compare with the DOM tape", the check matched strikes, ranks and magnitudes and passed; the SPY King was drawn
++100 (gold) while Atlas showed "−$208,644K". The sign came from two code paths, one of which could only say positive.
+Rule: every node compared to the tape is compared as a SIGNED value, King included, and the King's sign is read from its
+own dollar figure — never from the first character of a cell (a velocity chip can lead it) and never defaulted.

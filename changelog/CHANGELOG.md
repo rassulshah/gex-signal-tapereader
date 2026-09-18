@@ -1,3 +1,24 @@
+## v16.50 — THE KING'S SIGN: the SPY King exported +100 while Atlas showed −$208,644K (2026-09-18, ~10:20 CT)
+
+Operator: "is spy king negative or positive" → "then why is it showing as positive. why didn't you catch this when I asked
+you to check. you keep missing simple things." He was right: my 09:46 comparison checked strikes, ranks and magnitudes
+against the tape and took the King's colour as given. The SPY rail read 759 +100% (gold) at 09:45 and 761 +100% at 10:06
+while the Atlas cell for the SPY King read "+1%−$208,644K" — negative.
+- **Two paths gave the King a sign, and one could not say negative.** (1) `feedStructMap` — served whenever the DOM ladder is
+  unreadable for a second (a Trinity pane mid-render) or the display is not pure gamma, and for the whole time the tab sat
+  on a Stage page this morning (09:38) — wrote the King as +100 unconditionally and carried no kingNeg. (2) The DOM ladder
+  scan set `kingNeg` from "does the cell text start with a minus"; the live cell starts with the VELOCITY chip ("+1%−$208,
+  644K"), so it said positive even though `ladderCellParse` had read the $K's own sign correctly. The export then wrote
+  ±100 from whichever path had served that second — hence 759 +100 at 09:46, 761 −100 at 10:04, 761 +100 at 10:06.
+  The SPX King showed the same split inside one audit: `tape[7650] = −100` beside `kingNeg = false` / gWhy "+100%".
+- **Fix:** feedStructMap takes the King wall's own `pos` (−100 / kingNeg true for a −γ King); the ladder scan takes
+  `pc.neg` (the parsed $K sign); the export and the audit's kingNeg / gWhy follow the tape's own sign. test_ladder_dollar
+  6a–6e (the live cell as a fixture, both signs, both paths); build / mode-king / tape / day-export suites green.
+- What it changes on the chart: the SPY King's bar and band colour (magenta for −γ, as the SPX King already showed), the
+  chip's SPY King polarity, the KINGTRACK polarity field the King tracker colours by. Nothing about placement or rank.
+- Lesson (PROJECT-CONSTANTS): a comparison against the tape must include the SIGN of every node it checks — magnitude and
+  rank matching is not a match.
+
 ## 2026-09-18 09:50 CT — RTH eyes-on: the chart vs the DOM tape (16.49 live); GP 0.71 + DS 0.15 (two cosmetic fixes)
 
 Operator: "compare with dom tape" (his 09:45 screenshot). Read the live panel at 09:46:57 and ran the runner on the 09:46:50
