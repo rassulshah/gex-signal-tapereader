@@ -1,0 +1,134 @@
+{
+  "schema": "gex-log/v1",
+  "runType": "nightly",
+  "date": "2026-09-17",
+  "time": "evening (~1.5-2.5h after close)",
+  "dataArrivedOK": true,
+  "dataHealthVerdict": "ok",
+  "snapshotsRecorded": 117,
+  "distinctBars": 80,
+  "barsCoveredPct": 68,
+  "featureRecords": 3625,
+  "effectiveN": 11.7,
+  "effectiveNNote": "one day = ~11.7 independent observations; no weight conclusions can be drawn from a single day",
+  "regimeDistribution": {
+    "chop": {
+      "n": 60,
+      "pct": 77.9
+    },
+    "na": {
+      "n": 9,
+      "pct": 11.7
+    },
+    "trend": {
+      "n": 6,
+      "pct": 7.8
+    },
+    "mixed": {
+      "n": 5,
+      "pct": 6.5
+    }
+  },
+  "contradictions": [],
+  "factorsSummary": {
+    "totalEvaluated": 73,
+    "oneWay": 3,
+    "highRate_70plus": 9,
+    "dead_scored0": 12
+  },
+  "oneWayFactors": [
+    {
+      "key": "defl.trigger",
+      "rate": 47,
+      "n": 15,
+      "votes": {
+        "dn": 8,
+        "up": 72
+      },
+      "note": "90% UP votes, not evidence"
+    },
+    {
+      "key": "farside",
+      "rate": 0,
+      "n": 21,
+      "votes": {
+        "LOD": 23
+      },
+      "note": "100% LOD votes, specialized measure"
+    },
+    {
+      "key": "lodhod",
+      "rate": null,
+      "n": 0,
+      "votes": {
+        "HOD": 2
+      },
+      "note": "n too small, backtest (94% IN, 72% NOT IN) not live rate"
+    }
+  ],
+  "highRateFactors": [
+    {
+      "key": "levelstate",
+      "rate": 94,
+      "n": 66,
+      "mfe": 1.083,
+      "mae": -0.726,
+      "note": "Highest confidence level-state holder"
+    },
+    {
+      "key": "rshuf",
+      "rate": 85,
+      "n": 13,
+      "mfe": 1.083,
+      "mae": -0.726,
+      "note": "Small n but high agreement"
+    },
+    {
+      "key": "gateHour",
+      "rate": 84,
+      "n": 51,
+      "mfe": 1.115,
+      "mae": -0.716,
+      "note": "Hour-of-day gate consistent"
+    },
+    {
+      "key": "nextStop",
+      "rate": 78,
+      "n": 76,
+      "mfe": 1.115,
+      "mae": -0.716,
+      "note": "Next level target"
+    },
+    {
+      "key": "levels",
+      "rate": 75,
+      "n": 76,
+      "mfe": 1.115,
+      "mae": -0.716,
+      "note": "Base level support/resistance"
+    }
+  ],
+  "deadFactors": [
+    "act",
+    "dex",
+    "emband",
+    "empace",
+    "emread",
+    "exp.breadth",
+    "flow",
+    "piles",
+    "predictors",
+    "rolllatch",
+    "spxnodes"
+  ],
+  "keyObservations": [
+    "Data health normal: 68% bar coverage, no collapsed records",
+    "Chop-dominant day: 78% of bars classified as chop regime; only 8% trend",
+    "Leg features voting in high unison: leg.dir, leg.magnet, leg.pbDetect, leg.pbPredict, leg.roll all show 89% UP votes (dn:8, up:71)",
+    "This unified voting is regime-specific, not evidence of edge on this day",
+    "levelstate, gateHour, and nextStop show high hit rates (75-94%), but sample size cautions apply",
+    "11 dead factors (scored=0) remain disabled; no new activity recorded"
+  ],
+  "preOpenBrief": "Chop-dominant regime (78%); data health normal; leg features in consensus (89% UP votes), but small independent observations (~12) prevent weight conclusions.",
+  "notes": "This is a nightly review. No weight proposals or rules.json edits are permitted. The panel decides whether to promote any findings through applyProposals(). Next weekly analysis will pool this session with others to evaluate sustained patterns."
+}
