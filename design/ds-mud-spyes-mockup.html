@@ -1,0 +1,112 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Day Stats MUD in dollars · the MUDt timeline · the SPY strip with ES prices</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.4 Helvetica,Arial,sans-serif}
+ .wrap{padding:16px 20px;max-width:1180px}
+ h1{font-size:15px;margin:0 0 4px;font-weight:600}
+ h2{font-size:12px;margin:24px 0 8px;font-weight:600;color:#c9d2dc;letter-spacing:.04em;text-transform:uppercase}
+ .sub{color:#8a97a6;font-size:12px;margin-bottom:8px;max-width:820px}
+ .sub b{color:#dfe7f0}
+ /* the Day Stats panel, as lsDayStats draws it */
+ .panel{background:#141a22;border:1px solid #394654;padding:5px 9px 7px;display:inline-block;font:11px/1.55 Helvetica,Arial,sans-serif}
+ .title{display:flex;gap:18px;align-items:baseline}
+ .t{color:#fff;font-weight:700}
+ .read{margin:0 auto;font-weight:700;color:#2ec27e}
+ table.g{border-collapse:collapse;margin-top:2px}
+ table.g th{color:#e0a030;text-align:left;font-weight:700;padding:0 12px 0 0;white-space:nowrap}
+ table.g td{padding:0 12px 0 0;white-space:nowrap}
+ .e td{color:#9ab0c4}.e td:first-child{font-weight:700}
+ .a td{color:#dfe7f0}.a td:first-child{font-weight:700}
+ .up{color:#2ec27e!important}.dn{color:#f0616d!important}
+ .new{outline:1px dashed #f2b45a;outline-offset:1px}
+ .was{color:#6f7a87;text-decoration:line-through}
+ /* timeline */
+ .tl{position:relative;height:118px;width:780px;margin-top:6px;background:#0f1216;border:1px solid #2a2f36}
+ .ax{position:absolute;left:30px;right:30px;top:62px;height:1px;background:#394654}
+ .tk{position:absolute;top:56px;width:1px;height:13px;background:#8a97a6}
+ .tkl{position:absolute;top:72px;font:11px/1.2 Helvetica,Arial,sans-serif;white-space:nowrap;transform:translateX(-50%);text-align:center}
+ .span{position:absolute;height:8px;border-radius:3px}
+ .spl{position:absolute;font:11px/1 Helvetica,Arial,sans-serif;white-space:nowrap;transform:translateX(-50%)}
+ /* SPY strip */
+ .row{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+ .card{background:#000;border:1px solid #2a2f36}
+ .card.pick{border-color:#2ec27e}
+ .cap{font:11px/1 Helvetica,Arial,sans-serif;color:#8a97a6;padding:6px 8px;background:#0f1216;border-bottom:1px solid #2a2f36;white-space:nowrap}
+ .cap .ok{color:#2ec27e}
+ .strip{padding:8px 10px 10px;font:10px/1.9 Helvetica,Arial,sans-serif;white-space:pre}
+ .pos{color:#e3c341}.neg{color:#c43baf}.grey{color:#6f7a87}.wht{color:#dfe7f0}.dim{color:#8a97a6}
+ .k{font-weight:700}
+ table.m{border-collapse:collapse;font-size:12px;margin-top:10px}
+ table.m td{padding:5px 14px 5px 0;border-bottom:1px solid #1c2128;color:#c9d2dc;vertical-align:top}
+ table.m td.k2{color:#8a97a6;white-space:nowrap}
+ code{font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;color:#9ad1ff}
+ .note{color:#8a97a6;font-size:12px;max-width:820px;margin-top:10px}
+ .note b{color:#dfe7f0}
+</style></head><body><div class="wrap">
+
+<h1>Three changes, on Friday's real numbers</h1>
+<div class="sub">Friday 18 Sep, ES: open <b>7712</b> · LOD <b>7677 at 11:27am</b> · open reclaimed <b>1:48pm</b> · HOD <b>7720 at 2:57pm</b>. Converted from the day rows at the SPY→ES ratio 10.127, so the points are ±0.5.</div>
+
+<h2>1 · MUD becomes the move in dollars, followed by (points)</h2>
+<div class="panel">
+ <div class="title"><span class="t">DAY STATS - Fri 18 Sep</span><span class="read">LOD IN 11:27am &nbsp;·&nbsp; HOD IN 2:57pm</span></div>
+ <table class="g">
+ <tr><th></th><th>1ST</th><th>TOOK</th><th>BOP</th><th>WICK</th><th>W.END</th><th>WICK%</th><th>MUD</th><th>MUDt</th><th>2ND</th><th>HL GAP</th><th>HL RNG</th></tr>
+ <tr class="e"><td>E</td><td>HOD ~8:51am</td><td>~21m</td><td>~17m</td><td>~43m</td><td>~9:13am</td><td>~29%</td><td class="new">~$1,197 (23.9p)</td><td>~3h 49m</td><td>LOD ~12:57pm &nbsp;39% last hr</td><td>~4h 06m</td><td>~$1,534 &nbsp;~30.7p</td></tr>
+ <tr class="a"><td>A</td><td class="dn">LOD 11:27am 7677</td><td>2h 57m</td><td>2h 21m</td><td>5h 18m</td><td>1:48pm</td><td>81%</td><td class="new up">$413 (8.3p)</td><td>1h 09m</td><td class="up">HOD 2:57pm 7720</td><td>3h 30m</td><td>$2,163 &nbsp;43.3p</td></tr>
+ </table>
+</div>
+<div class="note">Today both MUD cells show a <span class="was">duration</span> — the same number as MUDt, so the strip had one duration twice and no size for the move. The spec (09-12, §10.2) says <b>MUD = the move, MUDt = its duration</b>. The move is the markup / markdown leg MUDt times: <b>from the open being reclaimed to the 2nd extreme</b> — <code>|2nd extreme − open|</code>. Friday: HOD 7720 − open 7712 = <b>8.3 points, $413</b> (green: a markup after a first LOD, as the colour rule already says). The E row uses the expected candle: <code>|expected 2nd extreme − open|</code> = 23.9 points, $1,197. <b>The A row is measured from the chart's own bars</b> (its RTH open and its 2nd extreme), like the HOD / LOD prices already are, so it is right on the contract you trade whichever tab is recording.</div>
+
+<h2>2 · MUDt 1h 09m is right — it is not the LOD-to-HOD time. That one is HL GAP, 3h 30m</h2>
+<div class="tl">
+  <div class="ax"></div>
+  <!-- 8:30 at x=30, 15:00 at x=750 -> 720 px / 390 min = 1.846 px/min -->
+  <div class="tk" style="left:30px"></div><div class="tkl" style="left:30px;color:#8a97a6">8:30<br>open</div>
+  <div class="tk" style="left:392px;background:#f0616d"></div><div class="tkl" style="left:392px;color:#f0616d">11:27<br>LOD</div>
+  <div class="tk" style="left:652px;background:#e0a030"></div><div class="tkl" style="left:652px;color:#e0a030">1:48<br>open reclaimed</div>
+  <!-- HOD 14:57 = 387 min -> 30 + 714 = 744 -->
+  <div class="tk" style="left:744px;background:#2ec27e"></div><div class="tkl" style="left:744px;color:#2ec27e">2:57<br>HOD</div>
+  <!-- spans -->
+  <div class="span" style="left:392px;width:352px;top:14px;background:#3a4a5c"></div><div class="spl" style="left:568px;top:3px;color:#c9d2dc">HL GAP 3h 30m — LOD to HOD</div>
+  <div class="span" style="left:392px;width:260px;top:36px;background:#6b5321"></div><div class="spl" style="left:522px;top:25px;color:#e0a030">BOP 2h 21m</div>
+  <div class="span" style="left:652px;width:92px;top:36px;background:#1f5a3c"></div><div class="spl" style="left:698px;top:25px;color:#2ec27e">MUDt 1h 09m</div>
+</div>
+<div class="note">MUDt is <b>HL GAP − BOP</b> by your definition of 2026-09-12 (checked then against your own strip: 48m − 15m = 33m). After the LOD at 11:27 price took <b>2h 21m (BOP)</b> just to get back to the open at 1:48, and only then ran up to the HOD in <b>1h 09m</b> — that last leg is MUDt, the markup. The whole LOD-to-HOD time is the <b>HL GAP</b> column: <b>3h 30m</b>. So nothing is miscalculated — the numbers add up exactly: 2h 21m + 1h 09m = 3h 30m.<br><br><b>Your call:</b> keep MUDt as the markup leg (open reclaimed → 2nd extreme, which is what makes it differ from HL GAP), or change it — but if MUDt became LOD → HOD it would print the same number as HL GAP.</div>
+
+<h2>3 · The SPY strip shows the ES price beside each SPY strike</h2>
+<div class="row">
+  <div class="card"><div class="cap">now</div><div class="strip">
+<span class="wht">763</span>  <span class="pos">+22%</span>
+<span class="wht">762</span>  <span class="pos">+22%</span>
+<span class="k wht">761</span>  <span class="k neg">&minus;58%</span>
+<span class="k wht">760</span>  <span class="k neg">&minus;100%</span>
+<span class="wht">759</span>  <span class="neg">&minus;48%</span>
+<span class="grey">758</span>  <span class="grey">&minus;23%</span></div></div>
+
+  <div class="card pick"><div class="cap"><span class="ok">as you wrote it</span> — SPY strike, ES price, then %King</div><div class="strip">
+<span class="wht">763 7727</span>  <span class="pos">+22%</span>
+<span class="wht">762 7717</span>  <span class="pos">+22%</span>
+<span class="k wht">761 7707</span>  <span class="k neg">&minus;58%</span>
+<span class="k wht">760 7697</span>  <span class="k neg">&minus;100%</span>
+<span class="wht">759 7686</span>  <span class="neg">&minus;48%</span>
+<span class="grey">758 7676</span>  <span class="grey">&minus;23%</span></div></div>
+
+  <div class="card"><div class="cap">variant — ES price in a dimmer ink</div><div class="strip">
+<span class="wht">763</span> <span class="dim">7727</span>  <span class="pos">+22%</span>
+<span class="wht">762</span> <span class="dim">7717</span>  <span class="pos">+22%</span>
+<span class="k wht">761</span> <span class="dim">7707</span>  <span class="k neg">&minus;58%</span>
+<span class="k wht">760</span> <span class="dim">7697</span>  <span class="k neg">&minus;100%</span>
+<span class="wht">759</span> <span class="dim">7686</span>  <span class="neg">&minus;48%</span>
+<span class="grey">758</span> <span class="dim">7676</span>  <span class="grey">&minus;23%</span></div></div>
+</div>
+<table class="m">
+<tr><td class="k2">the ES price</td><td>the price the plugin already places the bar at — the SPY strike on the ES scale plus the contract offset — so the number matches the price axis next to it, rounded to a whole point.</td></tr>
+<tr><td class="k2">spacing</td><td>one character between the SPY strike and its ES price, then the agreed 2 characters before the %King (the pending 0.73 rule).</td></tr>
+<tr><td class="k2">strip width</td><td>the SPY strip gets wider by "7717 ". The SPX strip must not widen with it, so each strip is sized to its own text (0.73 shared one width across both); the level and King lines stop at each strip's own edge.</td></tr>
+<tr><td class="k2">SPX strip</td><td>unchanged — you asked for the SPY strip only.</td></tr>
+</table>
+
+<div class="note" style="margin-top:22px"><b>Also found while reading Friday's rows:</b> since 1:44pm the recording tab has not been an ES chart (the SPXW tab, then USO), so the day rows after that were written on the SPY scale — the file's A-row dollar fields are blank. Your strip still reads right because the plugin takes the prices and range from the chart's own bars. For Monday: keep an ES1 Atlas tab open and it takes the recording back by itself. I can also make a non-ES tab stop writing the day rows altogether — say if you want that in the batch.</div>
+
+</div></body></html>
