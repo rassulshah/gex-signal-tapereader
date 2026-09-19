@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tape strip — level tags ON TOP of the price / %King (mockup)</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.4 Helvetica,Arial,sans-serif}
+ .wrap{padding:16px 20px;display:flex;gap:44px;align-items:flex-start;flex-wrap:wrap}
+ h1{font-size:15px;margin:0 0 6px;font-weight:600}
+ .sub{color:#8a97a6;font-size:12px;margin-bottom:12px;max-width:560px}
+ .chart{position:relative;background:#000;border:1px solid #2a2f36;width:150px;height:560px}
+ .strip{position:absolute;right:0;top:0;bottom:0;width:78px;background:#000;border-left:1px solid #1b2028}
+ .bar{position:absolute;height:26px;border-radius:4px;background:#5b6675}
+ .row{position:absolute;right:6px;width:70px;height:26px}
+ .tag{position:absolute;left:0;top:-9px;font:italic 700 9px/1 Helvetica,Arial,sans-serif;letter-spacing:.04em;white-space:nowrap}
+ .px{position:absolute;left:0;top:8px;font:10px/1 Helvetica,Arial,sans-serif;color:#9aa6b3;white-space:nowrap}
+ .px b{font-weight:400}
+ .pos{color:#e3c341}.neg{color:#c43baf}
+ .cw{color:#f0616d}.pw{color:#2ec27e}.flip{color:#5cc8f5}.mag{color:#e3c341}.magn{color:#c43baf}.k{color:#e3c341}.g{color:#c9d2dc}.c{color:#c9d2dc}.f{color:#c9d2dc}.b{color:#c9d2dc}
+ .pill{display:inline-block;font:700 7px/1 Helvetica,Arial,sans-serif;padding:1px 3px;border-radius:2px;margin-left:3px;vertical-align:top;letter-spacing:.04em}
+ .p0d{background:#2b4763;color:#7cc7ff}.pwk{background:#1f3a4a;color:#5cc8f5}.pmo{background:#5a4520;color:#f2b45a}
+ .bub{position:absolute;width:15px;height:15px;border-radius:8px;background:#e6edf5;color:#000;font:700 9px/15px Helvetica,Arial,sans-serif;text-align:center}
+ .band{position:absolute;left:0;height:26px;opacity:.35}
+ .line{position:absolute;left:0;right:78px;height:0;border-top:1px solid}
+ .note{color:#8a97a6;font-size:12px;max-width:560px;margin-top:10px}
+ .note b{color:#dfe7f0}
+ .legend{font-size:12px;color:#8a97a6;margin-top:14px;line-height:1.7}
+ .legend i{font-style:italic;font-weight:700}
+</style></head><body>
+<div class="wrap">
+<div>
+<h1>Level tags ON TOP of the price / %King text</h1>
+<div class="sub">The right-hand tape strip of the SPX rail, drawn as lsGammaProfile draws it (font 10, price then %King in the polarity colour). Every level or role tag now sits in the 9 px of space <b>directly above its own price text</b>, left-aligned with the price, small italic, in the level's colour. The depth pill (0D / WK / MO) rides beside the tag. Nothing sits beyond the bar tips any more.</div>
+
+<div class="chart">
+  <!-- bars (schematic) -->
+  <div class="bar" style="right:84px;width:40px;top:26px;background:#e3c341"></div>
+  <div class="bar" style="right:84px;width:8px;top:96px"></div>
+  <div class="bar" style="right:84px;width:20px;top:166px;background:#c43baf"></div>
+  <div class="bar" style="right:84px;width:6px;top:236px;background:#c43baf"></div>
+  <div class="bar" style="right:84px;width:36px;top:306px;background:#e3c341"></div>
+  <div class="bar" style="right:84px;width:28px;top:376px;background:#e3c341"></div>
+  <div class="bar" style="right:84px;width:66px;top:446px;background:#c43baf"></div>
+  <div class="bar" style="right:84px;width:10px;top:516px"></div>
+  <!-- rank bubbles -->
+  <div class="bub" style="right:130px;top:31px">3</div>
+  <div class="bub" style="right:130px;top:451px">1</div>
+  <!-- King line + bands -->
+  <div class="line" style="top:459px;border-color:#c43baf;border-top-width:2px"></div>
+  <div class="band" style="top:446px;right:150px;width:60px;background:#c43baf"></div>
+  <div class="line" style="top:249px;border-color:#f0616d"></div>
+  <div class="line" style="top:189px;border-color:#2ec27e"></div>
+
+  <div class="strip">
+    <div class="row" style="top:26px"><div class="tag c">C</div><div class="px">7695 <b class="pos">+37%</b></div></div>
+    <div class="row" style="top:96px"><div class="px">7690 <b class="neg">−7%</b></div></div>
+    <div class="row" style="top:166px"><div class="tag pw">PW<span class="pill pwk">WK</span></div><div class="px">7685 <b class="neg">−26%</b></div></div>
+    <div class="row" style="top:236px"><div class="tag cw">CW<span class="pill p0d">0D</span></div><div class="px">7680 <b class="neg">−4%</b></div></div>
+    <div class="row" style="top:306px"><div class="tag g">G</div><div class="px">7675 <b class="pos">+38%</b></div></div>
+    <div class="row" style="top:376px"><div class="tag mag">MAG</div><div class="px">7670 <b class="pos">+30%</b></div></div>
+    <div class="row" style="top:446px"><div class="tag k">K</div><div class="px">7650 <b class="neg">−100%</b></div></div>
+    <div class="row" style="top:516px"><div class="tag b">B</div><div class="px">7665 <b class="pos">+10%</b></div></div>
+    <!-- FLIP is a price, not a strike: a tick between rows with its tag above the tick -->
+    <div style="position:absolute;left:0;right:0;top:214px;border-top:1px dashed #5cc8f5"></div>
+    <div class="tag flip" style="left:6px;top:204px">FLIP 7682</div>
+  </div>
+</div>
+<div class="legend">
+  <i class="k">K</i> the King · <i class="cw">CW</i> call wall · <i class="pw">PW</i> put wall · <i class="mag">MAG</i> the IF Magnet (gold +γ / <span class="magn">magenta −γ</span>) · <i class="flip">FLIP</i> zero-gamma (a price: tag above its tick) · <i>G C F B</i> gatekeeper · ceiling · floor · barney (structure roles, plain)<br>
+  pills: <span class="pill p0d">0D</span> today only · <span class="pill pwk">WK</span> the week · <span class="pill pmo">MO</span> the monthly
+</div>
+</div>
+
+<div>
+<h1>Rules the plugin would follow</h1>
+<div class="note">
+<b>1. Where.</b> The tag's baseline is 1 px above the row's price text, left edge on the price's left edge. Rows are 26 px apart at font 10, so there is room; at font 8 the tag drops to 8 px.<br><br>
+<b>2. One tag per row, in priority.</b> K &gt; CW / PW &gt; MAG &gt; G &gt; C / F &gt; B / P. A strike that is both the King and the call wall shows <i>K·CW</i> — the two joined with a middle dot, never two lines.<br><br>
+<b>3. Colour is the level's, not the node's.</b> CW red, PW green, FLIP cyan, MAG by its own polarity, K by the King's polarity, roles in plain grey. The price and % keep the polarity colour exactly as now.<br><br>
+<b>4. FLIP</b> is a price between strikes: the dashed tick across the strip stays, its tag moves from beside the bars to <i>above the tick</i>, inside the strip.<br><br>
+<b>5. What goes away.</b> The tags beyond the bar tips (CW / PW / MAG beside the tip), the pill beside the tip, and the line labels at Left / Center / Right — the level line still draws, its name is now on the strip. "Level labels at" becomes unused.<br><br>
+<b>6. Both rails.</b> The SPY strip gets the same treatment for its own tags (K, roles); IF levels stay on the SPX strip only, as today.
+</div>
+<div class="note" style="margin-top:18px"><b>Open for you:</b> (a) tag above <i>both</i> price and % (as drawn) or above the % only, right-aligned? (b) Keep the role letters (G C F B) on the strip, or only the IF levels + K? (c) Italic, or plain small caps?</div>
+</div>
+</div>
+</body></html>
