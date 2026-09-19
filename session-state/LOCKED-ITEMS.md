@@ -6,6 +6,12 @@ _Created 2026-08-27._
 
 ---
 
+## 🔒 AGREED 2026-09-19, NOT YET BUILT — level tags ON TOP of the strip's price / %King (design/gp-tag-above-mockup.html)
+Operator 09-18: "I want to move the position of the labels on top of the price and %king rail"; 09-19 (screenshot, WK / PW /
+FLIP 0DTE still beside the bar tips): "didn't i explain that the labels should be on top of the rails". The mockup's three open
+questions (above price+% or % only; keep role letters G/C/F/B; italic or small caps) were never answered and the item was
+dropped from the builds — my miss. Ask the three, then build. Also queued: the dialog regroup (design/gp-dialog-regroup-mockup.html).
+
 ## ✅ BUILT 2026-09-19 — GP 0.75: separate King / top-node / IF level line styles; top nodes as Bands or Lines (width Fixed or By %King); IF "None (labels only)"; Mag line
 Standing requirement (his words): "I should have the ability to also only have labels without any lines" — any future line
 family must keep a labels-only choice. CHANGELOG has the detail.

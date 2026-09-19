@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Gamma Profile settings, regrouped</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.4 Helvetica,Arial,sans-serif}
+ .wrap{padding:16px 20px;max-width:1180px}
+ h1{font-size:15px;margin:0 0 4px;font-weight:600}
+ h2{font-size:12px;margin:22px 0 8px;font-weight:600;color:#c9d2dc;letter-spacing:.04em;text-transform:uppercase}
+ .sub,.note{color:#8a97a6;font-size:12px;max-width:900px}
+ .sub b,.note b{color:#dfe7f0}
+ .row{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+ /* the Windows dialog */
+ .dlg{width:440px;background:#f0f0f0;color:#000;border:1px solid #888;font:12px/1.2 "Segoe UI",Tahoma,Arial,sans-serif;box-shadow:0 4px 18px #0008}
+ .tb{background:#fff;padding:6px 8px;border-bottom:1px solid #ccc;font-size:12px}
+ .body{padding:6px 10px 10px}
+ .sec{display:flex;align-items:center;gap:6px;margin:10px 0 4px;font-weight:700;font-size:11px;color:#1a4f8b;letter-spacing:.05em}
+ .sec:after{content:"";flex:1;border-top:1px solid #9bb3cf}
+ .r{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:3px 0}
+ .r.one{grid-template-columns:1fr}
+ .c{display:flex;align-items:center;gap:5px;white-space:nowrap;min-width:0}
+ .c .l{flex:0 0 auto}
+ .sel,.inp{flex:1;min-width:0;background:#fff;border:1px solid #7a7a7a;padding:1px 4px;height:17px;display:flex;align-items:center;justify-content:space-between;overflow:hidden}
+ .sel:after{content:"▾";font-size:10px;color:#333;margin-left:4px}
+ .inp{flex:0 0 52px}
+ .cb{width:12px;height:12px;border:1px solid #333;background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1}
+ .sw{width:34px;height:13px;border:1px solid #555}
+ .new{outline:2px solid #2ec27e;outline-offset:1px}
+ .fix{outline:2px dashed #e0a030;outline-offset:1px}
+ table.m{border-collapse:collapse;font-size:12px;margin-top:6px;max-width:680px}
+ table.m td{padding:5px 12px 5px 0;border-bottom:1px solid #1c2128;color:#c9d2dc;vertical-align:top}
+ table.m td:first-child{color:#8a97a6;white-space:nowrap}
+ .key{display:inline-block;width:12px;height:10px;vertical-align:middle;margin-right:4px}
+</style></head><body><div class="wrap">
+<h1>Gamma Profile settings: regrouped</h1>
+<div class="sub">Every setting you have today, nothing removed and nothing new, sorted into <b>seven sections</b> that follow how you use the plugin: what's drawn, the nodes, their colours, then the three line families (King, top nodes, IF levels), then the panel. Each section is two columns. The values shown are <b>your current values</b>, read from your screenshot.</div>
+
+<div class="row" style="margin-top:14px">
+<div class="dlg">
+ <div class="tb">Update RTX GammaProfile 0.76 RTX[EPZ26 (3m*) 0]</div>
+ <div class="body">
+
+ <div class="sec">BOOK &amp; LAYOUT</div>
+ <div class="r"><div class="c"><span class="l">Book:</span><span class="sel">Both SPY and SPX</span></div><div class="c"><span class="l">Side:</span><span class="sel">Right</span></div></div>
+ <div class="r"><div class="c"><span class="l">SPX rail width px:</span><span class="inp">90</span></div><div class="c fix"><span class="l">SPY rail width px:</span><span class="inp">120</span></div></div>
+ <div class="r"><div class="c"><span class="l">Thickness:</span><span class="sel">Medium</span></div><div class="c"><span class="l">Font size (pt):</span><span class="inp">10</span></div></div>
+ <div class="r"><div class="c"><span class="cb">✔</span><span class="l">Tape columns (strike | %King)</span></div><div class="c"><span class="l">Scale to:</span><span class="sel">King=100%</span></div></div>
+
+ <div class="sec">NODES</div>
+ <div class="r"><div class="c"><span class="l">Show:</span><span class="sel">Top 5</span></div><div class="c"><span class="l">Threshold %:</span><span class="inp" style="color:#888">20</span></div></div>
+ <div class="r"><div class="c"><span class="l">Sub-threshold:</span><span class="sel">Grey out</span></div><div class="c"><span class="l">Hide nodes under %:</span><span class="inp">0</span></div></div>
+ <div class="r"><div class="c"><span class="cb">✔</span><span class="l">Rank badge</span></div><div class="c"><span class="l">Rank at:</span><span class="sel">Inside</span></div></div>
+ <div class="r"><div class="c"><span class="cb">✔</span><span class="l">Node name inside</span></div><div class="c"><span class="l">Rank for (not Top N):</span><span class="sel">Top 5</span></div></div>
+ <div class="r"><div class="c"><span class="l">King name:</span><span class="sel">GPOC</span></div><div class="c"><span class="cb">✔</span><span class="l">Structure labels (F/C/G/Air)</span></div></div>
+
+ <div class="sec">COLOURS</div>
+ <div class="r"><div class="c"><span class="l">+Gamma:</span><span class="sw" style="background:#e3c341"></span><span class="l" style="margin-left:10px">−Gamma:</span><span class="sw" style="background:#c43baf"></span></div><div class="c"><span class="l">Midpoint:</span><span class="sw" style="background:#1f9a5c"></span><span class="l" style="margin-left:6px">King:</span><span class="sel">Polarity</span></div></div>
+
+ <div class="sec">KING LINE</div>
+ <div class="r"><div class="c"><span class="cb">✔</span><span class="l">King line</span></div><div class="c"><span class="cb"></span><span class="l">Extend King line</span></div></div>
+ <div class="r"><div class="c"><span class="l">Style:</span><span class="sel">Dot</span></div><div class="c"><span class="l">Width px:</span><span class="inp">2</span></div></div>
+
+ <div class="sec">TOP NODES</div>
+ <div class="r"><div class="c"><span class="cb"></span><span class="l">Draw top nodes</span></div><div class="c"><span class="l">Drawn as:</span><span class="sel">Bands</span></div></div>
+ <div class="r"><div class="c"><span class="l">Band height (ES pts):</span><span class="inp">3</span></div><div class="c"><span class="l">Line style:</span><span class="sel">Dot</span></div></div>
+ <div class="r"><div class="c"><span class="l">Line width:</span><span class="sel">Fixed 1 px</span></div><div class="c"></div></div>
+
+ <div class="sec">IF LEVELS</div>
+ <div class="r one"><div class="c"><span class="cb">✔</span>Call Wall&nbsp;&nbsp;<span class="cb">✔</span>Put Wall&nbsp;&nbsp;<span class="cb">✔</span>Flip&nbsp;&nbsp;<span class="cb"></span>Mag&nbsp;&nbsp;<span class="cb">✔</span>EM H/L</div></div>
+ <div class="r"><div class="c fix"><span class="l">Line style:</span><span class="sel">Solid</span></div><div class="c fix"><span class="l">Labels at:</span><span class="sel">Left</span></div></div>
+ <div class="r one"><div class="c"><span class="cb">✔</span><span class="l">Tag IF levels on their nodes (CW / PW / FLIP / MAG)</span></div></div>
+
+ <div class="sec">READ PANEL</div>
+ <div class="r"><div class="c"><span class="cb">✔</span><span class="l">Regime + read panel</span></div><div class="c"><span class="l">Panel at:</span><span class="sel">Bottom-C</span></div></div>
+ </div>
+</div>
+
+<div style="flex:1;min-width:360px">
+<h2 style="margin-top:0">What changes</h2>
+<table class="m">
+<tr><td>Grouping</td><td>Settings that belong together sit together. Today the Top node rows are split across the bottom, "Band height" sits beside the SPY width, and the King line style sits next to "Extend".</td></tr>
+<tr><td>Shorter names</td><td>Inside a section the section name is dropped: "King line style" → <b>Style</b> under KING LINE, "Top node line style" → <b>Line style</b> under TOP NODES. "Node bands (first-seen bar to now, polarity colour)" → <b>Draw top nodes</b>.</td></tr>
+<tr><td><span class="key" style="outline:2px dashed #e0a030"></span>Fixed</td><td>Three settings whose labels are cut off or missing in your screenshot: <b>SPY rail width</b> ("SPY rail width px (Book =" with no box), the <b>IF line style</b> (a "Solid" box with no name) and the <b>Labels at</b> box (a "Left" box with no name). They now fit.</td></tr>
+<tr><td>Width</td><td>"Width px" becomes <b>SPX rail width px</b>, next to the SPY one.</td></tr>
+<tr><td>Mag</td><td>"Mag line (IF Magnet)" joins the IF level tick boxes as <b>Mag</b>.</td></tr>
+<tr><td>Section titles</td><td>The blue headings need a text-only row in the dialog. In 0.6x one of those shifted every setting below it, so I would test it first on a copy. If IRT still shifts them, the sections are kept apart by order and a blank gap instead.</td></tr>
+</table>
+
+<h2>The one cost</h2>
+<div class="note">IRT saves your settings <b>by row position</b>, which is why rows have only ever been added at the bottom. Reordering them means a new settings version, and your chart opens <b>once</b> with the plugin's defaults. To make that invisible, <b>the new defaults are your current settings</b> (the values in this mockup, taken from your screenshot), so the chart should open looking the same. The only value I can't see is the SPY rail width (its box is cut off). I've used 120, the default.</div>
+</div>
+</div>
+</div></body></html>
