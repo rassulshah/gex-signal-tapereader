@@ -62,7 +62,7 @@
 #include <algorithm>
 #include <ctime>
 
-static const char* GP_VERSION = "0.72";   // (v0.71) ONE version string: the factory and the status file both read it
+static const char* GP_VERSION = "0.73";   // (v0.71) ONE version string: the factory and the status file both read it
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -161,6 +161,10 @@ public:
     Settings cfg;                // cached settings (populated in parms callbacks, used in draw)
     // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
     short stPaneL, stPaneR, stAnchor, stColW; int stPrimary, stDrawn; bool stRendered;
+    struct TapeW { int skW, esW, pW, spaceW, colW, pctOff; bool withEs; TapeW() : skW(0), esW(0), pW(0), spaceW(3), colW(0), pctOff(0), withEs(false) {} };
+    TapeW tw[2];                       // (v0.73) [0] the main rail's strip, [1] the SPY rail's (Book = Both), measured once per draw
+    void measureOne(const std::vector<GStrike>& v, const Settings& S, bool withEs, TapeW& out);
+    void measureTape(const Settings& S);   // (v0.73)
     std::string stMain, stSpy;   // (v0.61) Book = Both: one GPSTATUS line per rail
     short stScaleL, stScaleR, stPaneRaw;   // (v0.63) the scale rect and the raw pane right, for the status file
     short forceBarH;              // (v0.62) >0: the SPY rail draws at the SPX rail's thickness (Book = Both)
@@ -178,6 +182,8 @@ public:
     void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
     void textLJ(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);
+    void textRJc(short rightX, short y, const char* s, COLOR col, int sz, bool bold);   // (v0.73) centred ON y
+    void textLJc(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);   // (v0.73) centred ON y
     short pillW(const std::string& tag, const Settings& S);                       // (v0.50)
     short drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S);   // (v0.50) returns its width (0 when no tag)
     void textC (short cx,     short y, const char* s, COLOR col, int sz, bool bold);
@@ -548,11 +554,11 @@ short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag, 
     // (the rect draw baselines low), so the box is centred there, not on y — the metric-placed text of 0.54 sat 4 px
     // above everything beside it.
     short w = pillW(tag, S), h = (short)(S.font + 5);
-    short cy = (short)(y + (short)(S.font * 0.45f + 0.5f));
+    short cy = y;   // (v0.73) the tag text is centred ON y now (textLJc), so the box is too — it was y + 0.45 x font to match the low text
     COLOR c = depthColour(tag);
     RCT box; box.set(leftX, (short)(cy - h/2), (short)(leftX + w), (short)(cy + h/2));
     box.draw(1, c, C_DARK, DRAW_OPAQUE, PAT_SOLID);
-    textLJ((short)(leftX + 6), y, tag.c_str(), c, S.font - 1, true);
+    textLJc((short)(leftX + 6), y, tag.c_str(), c, S.font - 1, true);
     return w;
 }
 void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
@@ -562,6 +568,14 @@ void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz
     RCT rc; rc.set(leftX, (short)(y - sz), (short)(leftX + 260), (short)(y + sz));
     rc.drawText(s, false, false);     // left-justified
 }
+// (v0.73) CENTRED ON A PRICE. The rect draw above baselines LOW: its glyphs land ~0.45 x font BELOW y (measured on his 0.54
+// screenshot, see drawDepthPill). Every label meant to sit ON a price — the tape strip, the % beside a bar, the role /
+// pattern / level tags at the bar — drew 4-5 px under its bar at font 10. Invisible at Auto thickness (a fat bar covers
+// it), obvious at Medium: operator, 2026-09-19, "the node is slightly above, it is not aligned — both SPY and SPX".
+// Same glyph path, shifted up by the measured offset, so nothing else about the text changes.
+static short lowShift(int sz) { return (short)(sz * 0.45f + 0.5f); }
+void GammaProfile::textLJc(short leftX, short y, const char* s, COLOR col, int sz, bool bold)  { textLJ(leftX,  (short)(y - lowShift(sz)), s, col, sz, bold); }
+void GammaProfile::textRJc(short rightX, short y, const char* s, COLOR col, int sz, bool bold) { textRJ(rightX, (short)(y - lowShift(sz)), s, col, sz, bold); }
 // Centered on (cx, y) both axes, using measured metrics.
 void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bool bold)
 {
@@ -570,6 +584,43 @@ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bo
     short tw = (short)getTextWidth(s, -1);
     setTextColor(col);
     PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(y + (asc - desc)/2); tp.drawText(s);
+}
+// (v0.73) THE TAPE STRIP: measured, not a fixed font x 7 + 8. Strike and % strings exactly as the strip draws them, bold (the
+// King row is bold and bold is the wider face, so every row fits).
+static void tapeStrings(const GStrike& s, int hideu, char* sk, size_t nsk, char* pk, size_t npk)
+{
+    if (s.spx > 0.0f) sprintf_s(sk, nsk, "%d", (int)(s.spx + 0.5f)); else sk[0] = 0;
+    sprintf_s(pk, npk, "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct >= 0 ? 0.5f : -0.5f)));
+    if (std::fabs(s.pct) < (float)hideu) pk[0] = 0;
+}
+// (v0.73) Each book is measured on its own (the SPY strip also carries the ES price, so it is wider than the SPX strip):
+//   skW  the widest strike text   esW  the widest ES price text (0 when the strip does not show it)   pW  the widest %
+// The strip: [pad] strike [1 space] ES [2 spaces] %King [pad]. The level lines / King lines / bands stop at each strip's OWN
+// edge (stripL / stripR in render) — 0.73's first cut shared one width across both rails.
+static const COLOR C_DIMES = 0x008A97A6;   // (v0.73) the ES price beside a SPY strike: dimmer than the strike (his pick of the variant)
+void GammaProfile::measureOne(const std::vector<GStrike>& v, const Settings& S, bool withEs, TapeW& out)
+{
+    out = TapeW(); out.withEs = withEs;
+    if (!S.tapecols) return;
+    FONT f; f.id = HELVETICA; f.size = (short)S.font; f.style = BOLD; setFont(f);
+    out.spaceW = (int)getTextWidth(" ", -1);
+    char sk[16], pk[12], es[16];
+    for (size_t i = 0; i < v.size(); i++) {
+        tapeStrings(v[i], S.hideu, sk, sizeof(sk), pk, sizeof(pk));
+        if (sk[0]) { int w = (int)getTextWidth(sk, -1); if (w > out.skW) out.skW = w; }
+        if (pk[0]) { int w = (int)getTextWidth(pk, -1); if (w > out.pW) out.pW = w; }
+        if (withEs && v[i].price > 0.0f) { sprintf_s(es, sizeof(es), "%d", (int)(v[i].price + 0.5f)); int w = (int)getTextWidth(es, -1); if (w > out.esW) out.esW = w; }
+    }
+    int lead = out.skW + ((withEs && out.esW > 0) ? out.spaceW + out.esW : 0);
+    gpl::TapeCols T = gpl::tapeCols(4, out.spaceW, lead, out.pW, gpl::TAPE_GAP_CHARS);
+    out.colW = T.colW; out.pctOff = T.pctOff;
+}
+void GammaProfile::measureTape(const Settings& S)
+{
+    // strikes = the main book (SPY itself when Book = SPY); strikesSpy = the SPY rail of Book = Both. Measured BEFORE the
+    // Both block swaps the two vectors, so tw[0] is always the main rail and tw[1] the SPY rail.
+    measureOne(strikes, S, S.book == 2, tw[0]);
+    measureOne(strikesSpy, S, true, tw[1]);
 }
 // Horizontal line in pixel space (lets a level reach into the right margin).
 void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps, int wpx)
@@ -742,7 +793,12 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // (v0.41) TAPE COLUMNS — a Skylit-ladder-style strip [SPX strike | %King] pinned to the pane edge on the
     // bar side. The bars are shifted inward by the strip width so the columns sit BESIDE them (the operator's
     // sketch: bars, then the values at the edge), and read row-for-row against Skylit's SPXW ladder.
-    short colW = S.tapecols ? (short)(S.font * 7 + 8) : 0;   // (v0.66) was font x 9 + 8: "reduce the space between the %King and the price by 50%"
+    const TapeW& TW = tw[railOnly ? 1 : 0];   // (v0.73) this rail's strip, measured in measureTape (N = 2 characters); was font x 7 + 8
+    short colW = S.tapecols ? (short)TW.colW : 0;
+    // the strips at the two pane edges, for everything that must stop short of them (level lines, King lines, bands): with
+    // Book = Both the SPY strip is on the left and is wider (it carries the ES price) — each edge uses its own strip's width
+    bool bothStrips = (cfg.book == 4 && S.tapecols);
+    short stripL = bothStrips ? (short)tw[1].colW : colW, stripR = bothStrips ? (short)tw[0].colW : colW;
     short anchor;                 // base of bars
     int sgn;                      // +1 grows right, -1 grows left
     if (S.side == 1) {            // Left margin: anchor at pane left (+ column strip), grow right
@@ -847,8 +903,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // Threshold, the ones with badges). 0.64 banded every node >= 5% and after hours that was the whole SPX ladder
     // ("it's just highlighting almost every spx node"); on the real chart the translucent draw is not faint.
     if (S.bands && !bars.empty()) {
-        short bx2 = (short)(paneR - colW - 2);                      // stop at the SPX strip (both rails use the same colW)
-        short bx0 = (short)(paneL + 2 + colW);                      // never under the SPY strip
+        short bx2 = (short)(paneR - stripR - 2);                    // stop at the SPX strip (v0.73: its own width)
+        short bx0 = (short)(paneL + 2 + stripL);                    // never under the SPY strip
         int topNb = (S.filter==0)?3 : (S.filter==1)?5 : (S.filter==2)?8 : (S.filter==3)?10 : 0;
         for (size_t i = 0; i < strikes.size(); i++) {
             const GStrike& s = strikes[i];
@@ -868,7 +924,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     if (railOnly && S.kline && kIdx >= 0) {
         PNT kp; kp.set(lastBar, strikes[kIdx].price);
         COLOR kc = (S.kingcol == 1) ? D_KING : (strikes[kIdx].pct < 0 ? S.cneg : S.cpos);
-        short kx1 = (short)(paneL + 2 + colW), kx2 = S.extk ? (short)(paneR - colW - 2) : (short)(kp.h + getPixelsPerBar()/2); if (kx2 > paneR - colW - 2) kx2 = (short)(paneR - colW - 2);   // (v0.68) the price area only
+        short kx1 = (short)(paneL + 2 + stripL), kx2 = S.extk ? (short)(paneR - stripR - 2) : (short)(kp.h + getPixelsPerBar()/2); if (kx2 > paneR - stripR - 2) kx2 = (short)(paneR - stripR - 2);   // (v0.73) each strip's own edge   // (v0.68) the price area only
         hlinePx(kp.v, kx1, kx2, kc, S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID), S.klinew);
     }
 
@@ -912,8 +968,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             st.draw(0, sr, sr, DRAW_OPAQUE, PAT_SOLID);
             const char* rn = gpl::roleTag(rl, S.kinglabel);   // K(name) / C / F / G / G·C / G·F
             COLOR ic = inkOn(col);
-            if (sgn<0) textRJ((short)(anchor-8), p.v, rn, ic, S.font, true);
-            else       textLJ((short)(anchor+8), p.v, rn, ic, S.font, true);
+            if (sgn<0) textRJc((short)(anchor-8), p.v, rn, ic, S.font, true);
+            else       textLJc((short)(anchor+8), p.v, rn, ic, S.font, true);
         }
 
         // node PATTERN tag (P / B on the named stack member, R / RR on the rug's yellow node) INSIDE the bar.
@@ -928,8 +984,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             bool bubbleIn = S.rank && !gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxT;   // (v0.62)
             short r0 = (short)(S.font * 0.9f + 4);
             short inset = bubbleIn ? (short)(2 * r0 + 6) : 6;          // clear the bubble when it is inside the tip
-            if (sgn < 0) textLJ((short)(tip + inset), p.v, tlabel, ic, S.font, true);
-            else         textRJ((short)(tip - inset), p.v, tlabel, ic, S.font, true);
+            if (sgn < 0) textLJc((short)(tip + inset), p.v, tlabel, ic, S.font, true);
+            else         textRJc((short)(tip - inset), p.v, tlabel, ic, S.font, true);
         }
         // (v0.42) LEVEL LABELS ON THE NODE: the wall nodes carry "CW" / "PW" just beyond the tip (outside the
         // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
@@ -947,8 +1003,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             int rankMaxW = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
             bool bubbleOut = S.rank && gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxW;   // (v0.62)
             short past = bubbleOut ? (short)(2 * (S.font * 0.9f + 4) + 8) : 6;
-            if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, wcol, S.font - 1, true);
-            else         textLJ((short)(tip + past), p.v, wtag, wcol, S.font - 1, true);
+            if (sgn < 0) textRJc((short)(tip - past), p.v, wtag, wcol, S.font - 1, true);
+            else         textLJc((short)(tip + past), p.v, wtag, wcol, S.font - 1, true);
             // (v0.50) the depth pill beside the tag (IF extras #1): 0D = today's expiry only, WK = the week, MO = the monthly
             // (v0.51) order outward from the tip: bubble, tag, pill, then the % label — the pill was drawn over the % (his
             // screenshot 21:33: "+48%" half under a WK box). outerW carries tag + pill so the % label clears both.
@@ -992,11 +1048,11 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             char pc[12]; sprintf_s(pc, sizeof(pc), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
             if (S.pctpos == 1) {  // inside near base
                 COLOR ic = inkOn(col);
-                if (sgn < 0) textLJ((short)(tip + 4), p.v, pc, ic, S.font, false);
-                else         textRJ((short)(tip - 4), p.v, pc, ic, S.font, false);
+                if (sgn < 0) textLJc((short)(tip + 4), p.v, pc, ic, S.font, false);
+                else         textRJc((short)(tip - 4), p.v, pc, ic, S.font, false);
             } else {              // outside the tip (shifted past a CW/PW tag when one is drawn there)
-                if (sgn < 0) textRJ((short)(tip - 6 - outerW), p.v, pc, C_TXT, S.font, false);   // (v0.51) past tag + pill
-                else         textLJ((short)(tip + 6 + outerW), p.v, pc, C_TXT, S.font, false);
+                if (sgn < 0) textRJc((short)(tip - 6 - outerW), p.v, pc, C_TXT, S.font, false);   // (v0.51) past tag + pill
+                else         textLJc((short)(tip + 6 + outerW), p.v, pc, C_TXT, S.font, false);
             }
         }
 
@@ -1005,20 +1061,18 @@ void GammaProfile::render(const Settings& S, bool railOnly)
         // ES-converted price, so the two ladders compare cell-for-cell. Greyed (sub-threshold) nodes print grey.
         if (S.tapecols) {
             char sk[16], pk[12];
-            if (s.spx > 0.0f) sprintf_s(sk, sizeof(sk), "%d", (int)(s.spx + 0.5f)); else sk[0] = 0;
-            sprintf_s(pk, sizeof(pk), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
-            if (ab < (float)S.hideu) pk[0] = 0;   // (v0.64) "Hide % under" applies to the column
+            tapeStrings(s, S.hideu, sk, sizeof(sk), pk, sizeof(pk));   // (v0.64) "Hide % under" applies to the column
             COLOR tc = primary ? (s.king ? D_KING : C_TXT) : C_GREY;
-            short half = (short)(colW / 2);
-            if (S.side == 1) {        // left edge: strike column then % column, growing right
-                short c1 = (short)(paneL + 4), c2 = (short)(paneL + 4 + half);
-                if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
-                if (pk[0]) textLJ(c2, p.v, pk, tc, S.font, s.king);
-            } else {                  // right edge (default): strike column left, % column right-justified at the edge
-                short c1 = (short)(paneR - colW + 4), c2 = (short)(paneR - 4);
-                if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
-                if (pk[0]) textRJ(c2, p.v, pk, tc, S.font, s.king);
-            }
+            // (v0.73) ONE RULE ON BOTH RAILS: strike at the strip's inner edge, % exactly N (= 2) character-spaces after this rail's
+            // widest strike — left-justified, so the % column aligns and the gap is the same on the SPY and SPX strips
+            short c1 = (S.side == 1) ? (short)(paneL + 4) : (short)(paneR - colW + 4);
+            short c2 = (short)(c1 + TW.pctOff);
+            if (sk[0]) textLJc(c1, p.v, sk, tc, S.font, s.king);
+            // (v0.73) THE ES PRICE beside a SPY strike, in the dimmer ink — operator 2026-09-19: "update the price in the spy rail to
+            // include the es price mapping, like 762 ESPrice" (he chose the dim variant). The price the bar sits at, whole points.
+            if (TW.withEs && TW.esW > 0 && s.price > 0.0f) { char es[16]; sprintf_s(es, sizeof(es), "%d", (int)(s.price + 0.5f));
+                textLJc((short)(c1 + TW.skW + TW.spaceW), p.v, es, primary ? C_DIMES : C_GREY, S.font, false); }
+            if (pk[0]) textLJc(c2, p.v, pk, tc, S.font, s.king);
         }
     }
 
@@ -1052,7 +1106,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // level rail
     { COLOR kc = D_KING; if (S.kingcol != 1 && kIdx >= 0) kc = strikes[kIdx].pct < 0 ? S.cneg : S.cpos;   // (v0.64) polarity, like its bar
       // (v0.68) the level rail lives in the PRICE AREA: from the SPY strip's right edge (Book = Both) to the SPX strip's left edge
-      short lvL = (short)((cfg.book == 4 && S.tapecols) ? (paneL + 2 + colW) : paneL), lvR = (short)(paneR - colW - 2);
+      short lvL = (short)(bothStrips ? (paneL + 2 + stripL) : paneL), lvR = (short)(paneR - stripR - 2);   // (v0.73) each strip's own edge
       if (S.kline) drawLevel(lastBar, lvL, lvR, 0, kc, "", S.extk, S);   // line only; the node labels KING
     // (v0.70) ONE LABEL PER LEVEL (gpl::lineLabelWanted): when the node labels are on and the wall sits on a rail node (CW / PW
     // tag) or the FLIP tick is drawn, the line draws WITHOUT its text — the operator saw "CALL WALL" beside the SPY strip
@@ -1106,6 +1160,7 @@ int GammaProfile::draw(void)
     // the deflection bands all follow it through the one `rank` field; an unpooled row (IF book, old panel) gets NO_RANK
     for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
     stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
+    measureTape(cfg);   // (v0.73) each rail's strip measured from its own book (the SPY strip carries the ES price)
     Settings M = cfg; M.side = RLY.mainSide;   // (v0.61) Both: the SPX rail is on the right whatever Side says
     forceBarH = 0;
     if (RLY.both) {

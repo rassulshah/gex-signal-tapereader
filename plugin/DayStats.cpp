@@ -77,6 +77,7 @@ public:
     dsl::Read2 read1;                                    // (v0.14) the first extreme's read (panel 16.48), same model
     std::string weekday, daydate;
     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
+    double eOpen;               // (v0.16) the expected candle's open (DAYEXP), <=0 = unknown
     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
     float priceOff;            // (v0.3) chart-contract offset applied to the displayed price labels
     // (v0.5) THE READ — the validated HLTAB classifier (AUC 0.879), center-justified on the title line.
@@ -89,6 +90,7 @@ public:
     void applyContractOffset();// (v0.3) match the [1st]/[2nd] price labels to the chart's contract
     void applyChartExtremes(); // (v0.10) the A row's prices = the chart's own session high / low
     void readSettings(Settings& S);
+    void syncSettings();       // (v0.16) readSettings behind the font guard — called by the parms callbacks AND every draw
     void render(const Settings& S);
     // helpers
     void textLJ(short x, short y, const char* s, COLOR col, int sz, bool bold);
@@ -121,9 +123,16 @@ DayStats::DayStats() : cppExtension()
 }
 
 // ---- parameter callbacks (guard on a plausible font read) -----------------
-int DayStats::parmsLoad(void)  { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
-int DayStats::parmsApply(void) { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
-int DayStats::parmsUpdt(unsigned int) { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
+// (v0.16) THE SAVED SETTINGS ARE READ ON EVERY DRAW, NOT ONLY IN THE DIALOG CALLBACKS. Operator, 2026-09-19: "Day Stats seems
+// to go to upper left even though when I open up the options it says top center, then I have to select top center again and
+// apply." IRT can call parmsLoad before a restored instance's values are populated — the font reads 0, the guard below skips
+// readSettings, and `cfg` keeps the CONSTRUCTOR's defaults (Corner = Top-left) until an Apply fires parmsApply. The dialog was
+// right all along; the plugin just never read it. syncSettings() runs at the top of draw() as well, behind the same guard, so
+// the first draw after the values exist applies the saved Corner / font / insets. Eight reads per draw — nothing.
+void DayStats::syncSettings() { int p = getIntegerValue(PX.font); if (p >= 1 && p <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); }
+int DayStats::parmsLoad(void)  { syncSettings(); return RTX_OK; }
+int DayStats::parmsApply(void) { syncSettings(); return RTX_OK; }
+int DayStats::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
 int cppExtension::setup(void)
@@ -189,6 +198,7 @@ void DayStats::load()
     hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
     hasRead = false; readFirst.clear(); readCall.clear(); readPosr = -1; readPct = -1; readN = 0;
     read1 = dsl::Read2(); read2 = dsl::Read2();   // (v0.14) a row absent from this export must not linger from the last
+    eOpen = -1;   // (v0.16)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -207,6 +217,8 @@ void DayStats::load()
             dsl::Cond c; dsl::parseCond(t, c); condBasis = c.basis; condLastHr = c.lastHr; condLast30 = c.last30; condP20 = c.p20; condP50 = c.p50; condP80 = c.p80;   // (v0.8) DayStatsLogic.h · (v0.11) + percentiles
         } else if (t[0] == "READ2") {
             dsl::parseRead2(t, read2);   // (v0.12)
+        } else if (t[0] == "DAYEXP" && t.size() >= 2) {
+            eOpen = atof(t[1].c_str());   // (v0.16) DAYEXP,<open>,<eHi>,<eLo>,<eClose> — the expected candle's open, for the E row's MUD move
         } else if (t[0] == "READ1") {
             dsl::parseRead2(t, read1);   // (v0.14) the first extreme's read, same shape
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
@@ -226,6 +238,7 @@ void DayStats::load()
             hasRead   = true;
         }
     }
+    dsl::setMud(E, eOpen);   // (v0.16) the E row's MUD move: |the expected 2nd extreme - the expected candle's open|, ES points
 }
 
 // ---- render ---------------------------------------------------------------
@@ -333,7 +346,7 @@ void DayStats::render(const Settings& S)
 }
 
 // ---- draw() ---------------------------------------------------------------
-int DayStats::draw(void) { load(); applyContractOffset(); applyChartExtremes(); render(cfg); drawStaleBadge(); return RTX_OK; }
+int DayStats::draw(void) { syncSettings(); load(); applyContractOffset(); applyChartExtremes(); render(cfg); drawStaleBadge(); return RTX_OK; }
 
 // (v0.10) THE ACTUAL ROW'S PRICES ARE THE CHART'S OWN SESSION HIGH / LOW (dsl::applyChartExtremes) — the panel's prices
 // were Skylit ES1's (September until the 15:16 roll) and the live-close bias made them drift all evening (7722 → 7708).
@@ -343,19 +356,22 @@ void DayStats::applyChartExtremes()
 {
     if (!A.valid) return;
     long n = getBarCount(); if (n < 2) return;
-    RTARRAY hi(barHigh), lo(barLow); RTARRAYI dt(barDateTime);
+    RTARRAY op(barOpen), hi(barHigh), lo(barLow); RTARRAYI dt(barDateTime);
     int from = (int)n - 3000; if (from < 0) from = 0;
-    std::vector<int> yy, mm, dd; std::vector<double> so; std::vector<float> hh, ll;
+    std::vector<int> yy, mm, dd; std::vector<double> so; std::vector<float> oo, hh, ll;
     for (int i = from; i < (int)n; i++) {
         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
         yy.push_back(t.tm_year + 1900); mm.push_back(t.tm_mon + 1); dd.push_back(t.tm_mday);
-        so.push_back(t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec); hh.push_back(hi[i]); ll.push_back(lo[i]);
+        so.push_back(t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec); oo.push_back(op[i]); hh.push_back(hi[i]); ll.push_back(lo[i]);
     }
     int wy = yy.back(), wm = mm.back(), wd = dd.back();
     if (daydate.size() >= 10) { int y2, m2, d2; if (sscanf(daydate.c_str(), "%d-%d-%d", &y2, &m2, &d2) == 3) { wy = y2; wm = m2; wd = d2; } }
+    // (v0.16) the session read is stamp-aware (DayModel 0.16's rule: on an end-stamped chart the 08:30 bar is the pre-open bar)
+    // and carries the RTH OPEN, for the MUD move: |the chart's 2nd extreme - the chart's open|, in the chart's own points
     dsl::Ext X;
-    bool have = dsl::chartExtremes(&yy[0], &mm[0], &dd[0], &so[0], &hh[0], &ll[0], (int)yy.size(), wy, wm, wd, X);
-    if (have) { dsl::applyChartExtremes(A, X.hi, X.lo, true); priceOff = 0.0f; }   // chart facts need no bias
+    bool endSt = dsl::endStampedSods(&so[0], (int)so.size());
+    bool have = dsl::chartSession(&yy[0], &mm[0], &dd[0], &so[0], &oo[0], &hh[0], &ll[0], (int)yy.size(), wy, wm, wd, endSt, X);
+    if (have) { dsl::applyChartExtremes(A, X.hi, X.lo, true); priceOff = 0.0f; dsl::setMud(A, X.open); }   // chart facts need no bias
 }
 
 // ---- (v0.3) contract offset for the displayed price labels ([1st]/[2nd]) — match the day candle: the
@@ -403,6 +419,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.15");
+    p->setVersion("0.16");
     return p;
 }

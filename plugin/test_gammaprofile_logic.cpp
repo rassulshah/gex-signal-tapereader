@@ -265,6 +265,19 @@ int main()
     CHECK(gpl::chipLevel("FLIP", 7695.7f, "", 7626.3f) == "FLIP 7696 (7626)", "an IF level: the bare SPX number in the bracket, as before");
     CHECK(gpl::chipLevel("CW", 7750.0f, "SPX", 0) == "CW 7750", "no book price known: the ES alone");
 
+    // ---- (0.73) the tape strip: one rule on both rails — the % N characters after the widest strike, the strip sized to fit
+    { gpl::TapeCols a = gpl::tapeCols(4, 3, 30, 32, gpl::TAPE_GAP_CHARS);
+      CHECK(gpl::TAPE_GAP_CHARS == 2, "N = 2 character-spaces (his choice: 'lets go with your recommendation')");
+      CHECK(a.pctOff == 30 + 2 * 3 && a.colW == 4 + 36 + 32 + 4, "SPX (4-digit strike 30 px, space 3 px): % at +36, strip 76 px");
+      gpl::TapeCols b = gpl::tapeCols(4, 3, 23, 32, gpl::TAPE_GAP_CHARS);
+      CHECK(b.pctOff - 23 == a.pctOff - 30, "SPY (3-digit strike 23 px): the gap after the strike is the SAME 6 px as on SPX — consistent");
+      gpl::TapeCols c = gpl::tapeCols(4, 4, 30, 32, gpl::TAPE_GAP_CHARS);
+      CHECK(c.pctOff - 30 == 2 * 4, "a bigger font (space 4 px): the gap follows, still exactly 2 characters");
+      gpl::TapeCols e = gpl::tapeCols(4, 3, 23 + 3 + 30, 32, gpl::TAPE_GAP_CHARS);   // the SPY strip: "762" 23 px, a space, "7717" 30 px
+      CHECK(e.pctOff == 56 + 6 && e.colW == 4 + 62 + 32 + 4, "SPY with its ES price: the % 2 characters after the ES price, the strip 102 px (wider than the SPX strip's 76)");
+      gpl::TapeCols d = gpl::tapeCols(4, 0, -5, -1, -2);
+      CHECK(d.pctOff == 0 && d.colW == 8, "degenerate inputs clamp: no negative widths, no negative gap"); }
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

@@ -210,6 +210,28 @@ inline std::string chipLevel(const char* label, float esPx, const char* book, fl
     return std::string(b);
 }
 
+// (0.73) THE TAPE STRIP'S SPACING, ONE RULE FOR BOTH RAILS. Operator, 2026-09-19: "add 1 space between the price and the
+// percent king in the spx rail and remove 2 spaces in the spy rail" -> "make spy and spx consistent" -> "lets go with your
+// recommendation": the % starts exactly N CHARACTER-SPACES after the strike column, N = 2 on both rails. Until 0.72 the SPY
+// strip put the % at colW/2 and the SPX strip pinned it to the pane edge — two different rules, so the gap was whatever was
+// left over (~3 characters on SPY, ~1 on SPX at font 10). Widths are MEASURED at the strip's font (space, widest strike,
+// widest %), so the gap stays N real characters at any Font size.
+//   pad        px between the strip's outer edge and its text (4, as before)
+//   spaceW     one space character at the strip's font
+//   strikeW    the widest strike text on THIS rail (the % column starts after it, so every row's % aligns)
+//   pctW       the widest % text across BOTH rails (the strip width is shared: the level lines stop at both strips)
+//   nChars     2
+const int TAPE_GAP_CHARS = 2;
+struct TapeCols { int pctOff, colW; };   // pctOff: from the strip's inner-text start (edge + pad) to the % column
+inline TapeCols tapeCols(int pad, int spaceW, int strikeW, int pctW, int nChars)
+{
+    TapeCols t;
+    if (spaceW < 1) spaceW = 1; if (nChars < 0) nChars = 0; if (strikeW < 0) strikeW = 0; if (pctW < 0) pctW = 0;
+    t.pctOff = strikeW + nChars * spaceW;
+    t.colW   = pad + t.pctOff + pctW + pad;
+    return t;
+}
+
 // ---- contract offset -------------------------------------------------------
 // off = chartClose - anchor, anchor = SCALEREF (the front ES price the ladder is scaled to) else SPOT.
 // Clamped to +-300: a wrong chart (NQ) or a bad anchor must never fling the book.

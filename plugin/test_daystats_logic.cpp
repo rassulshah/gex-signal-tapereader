@@ -33,11 +33,11 @@ int main()
     std::string a[dsl::NCOL], e[dsl::NCOL];
     dsl::actualCells(A, 0.0, a);
     CHECK(a[0] == "A" && a[1] == "HOD 10:48am 7741" && a[2] == "2h 18m" && a[3] == "12m" && a[4] == "50m" && a[5] == "9:20am" && a[6] == "18%", "A cells 0-6: HOD 10:48am 7741 · 2h 18m · 12m · 50m · 9:20am · 18%");
-    CHECK(a[7] == "3h 21m" && a[8] == "3h 30m" && a[9] == "LOD 2:30pm 7617" && a[10] == "3h 42m" && a[11] == "$6200  124.0p", "A cells 7-11: MUD 3h 21m · MUDt 3h 30m (gap - bop) · LOD 2:30pm 7617 · 3h 42m · $6200  124.0p");
+    CHECK(a[7] == "--" && a[8] == "3h 30m" && a[9] == "LOD 2:30pm 7617" && a[10] == "3h 42m" && a[11] == "$6,200  124.0p", "A cells 7-11: MUD -- until the chart's open is known (0.16: MUD is money, never a duration) · MUDt 3h 30m (gap - bop) · LOD 2:30pm 7617 · 3h 42m · $6,200  124.0p");
     dsl::expectedCells(E, C, e);
     CHECK(e[0] == "E" && e[1] == "HOD ~10:48am" && e[2] == "~2h 18m" && e[6] == "~23%", "E cells: the ~ on every expectation");
     CHECK(e[9] == "LOD ~1:36pm  39% last hr", "the 2ND cell carries the ladder: 'LOD ~1:36pm  39% last hr'");
-    CHECK(e[11] == "~$2247  44.9p" || e[11] == "~$2247  ~44.9p", "the E range cell");
+    CHECK(e[11] == "~$2,247  ~44.9p", "the E range cell (0.16: thousands comma)");
     dsl::expectedCells(E, C6, e);
     CHECK(e[9] == "LOD ~1:36pm", "no ladder on the CONDE row -> no suffix");
     dsl::Cond Cr; Cr.basis = "read-in-HOD"; Cr.lastHr = 39;
@@ -102,6 +102,26 @@ int main()
       r1.p = 50; CHECK(dsl::firstTone(r1, "HOD", "IN", false, -1) == 0, "tone: 31-69 plain even if the old cell said IN");
       r1.p = 12; CHECK(dsl::firstTone(r1, "HOD", "", false, -1) == -1 && dsl::firstTone(none, "HOD", "NOTIN", false, -1) == -1 && dsl::firstTone(none, "HOD", "", true, 30780) == 1, "tone: <= 30 amber; no READ1 -> the call; closed -> green"); }
     CHECK(dsl::secondLine(dsl::Read2(), 0, false, -1).find("\xC2") == std::string::npos && std::string("\xB7").size() == 1, "(0.15) the middle dot is ONE byte everywhere the plugin prints it — IRT draws Latin-1, a UTF-8 dot shows as \"\xC2\xB7\"");
+    // ---- (0.16) MUD = the move in dollars followed by (points); the chart's own open, stamp-aware
+    { CHECK(dsl::usd(413.4) == "$413" && dsl::usd(1197) == "$1,197" && dsl::usd(1234567) == "$1,234,567" && dsl::usd(-1) == "--", "money with a thousands comma");
+      CHECK(dsl::mudCell(8.26, false) == "$413 (8.3p)" && dsl::mudCell(23.94, true) == "~$1,197 (23.9p)" && dsl::mudCell(-1, false) == "--", "MUD: '$413 (8.3p)' actual, '~$1,197 (23.9p)' expected (his 09-18 numbers)");
+      dsl::StatRow F; F.valid = true; F.first = "LOD"; F.second = "HOD"; F.secondPx = "7719.90"; dsl::setMud(F, 7711.64);
+      CHECK(F.mudPts > 8.25 && F.mudPts < 8.27, "the A move: HOD 7719.90 - open 7711.64 = 8.26 points (the markup leg MUDt times)");
+      dsl::StatRow G; G.valid = true; G.second = "LOD"; G.secondPx = "737.56"; dsl::setMud(G, 761.50);
+      CHECK(G.mudPts > 23.93 && G.mudPts < 23.95, "the E move: |expected LOD - expected open| — a difference, right even when the rows came from a SPY-scale tab");
+      dsl::StatRow H; H.valid = true; H.secondPx = "7719.90"; dsl::setMud(H, -1); CHECK(H.mudPts < 0, "no open known: MUD stays unknown (--)");
+      std::string a2[dsl::NCOL]; F.gap = 210; F.bop = 141; dsl::actualCells(F, 0.0, a2);
+      CHECK(a2[7] == "$413 (8.3p)" && a2[8] == "1h 09m", "the strip: MUD '$413 (8.3p)', MUDt '1h 09m' — money and time in their own cells, never the same duration twice");
+      // stamp-aware session: an END-stamped chart (a 16:00 bar, no 17:00 bar) — the 08:30 bar is PRE-OPEN, the RTH open is the 08:33 bar's
+      int yy[6] = {2026,2026,2026,2026,2026,2026}, mm[6] = {9,9,9,9,9,9}, dd[6] = {18,18,18,18,18,18};
+      double so[6] = {30600, 30780, 41220, 53820, 54000, 57600};
+      float oo[6] = {7700, 7711.75f, 7690, 7715, 7716, 7717}, hh[6] = {7730, 7714, 7692, 7719.9f, 7718, 7760}, ll[6] = {7695, 7709, 7676.7f, 7712, 7714, 7650};
+      bool endSt = dsl::endStampedSods(so, 6); dsl::Ext X; bool ok = dsl::chartSession(yy, mm, dd, so, oo, hh, ll, 6, 2026, 9, 18, endSt, X);
+      CHECK(endSt && ok && X.open == 7711.75f && X.openSod == 30780, "end-stamped: the open is the 08:33 bar's (7711.75), not the 08:30 pre-open bar's (7700)");
+      CHECK(X.hi == 7719.9f && X.lo == 7676.7f, "...and the session's high / low skip the pre-open bar (7730 / 7695) and the 16:00 bar");
+      double so2[6] = {30600, 30780, 41220, 53820, 54000, 61200};   // a 17:00 bar exists: start-stamped
+      dsl::Ext Y; ok = dsl::chartSession(yy, mm, dd, so2, oo, hh, ll, 6, 2026, 9, 18, dsl::endStampedSods(so2, 6), Y);
+      CHECK(ok && Y.open == 7700 && Y.openSod == 30600, "start-stamped: the 08:30 bar IS the first RTH bar"); }
     // ---- (0.13) the block's anchor: centre entries, and never cut off at the left
     { CHECK(dsl::anchorX(0, 60, 1400, 1000, 8) == 68 && dsl::anchorX(1, 60, 1400, 1000, 8) == 392, "TL / TR anchors as before on a wide pane");
       CHECK(dsl::anchorX(4, 60, 1400, 1000, 8) == 230 && dsl::anchorX(5, 60, 1400, 1000, 8) == 230, "Top-centre / Bottom-centre: the block on the pane's midline");

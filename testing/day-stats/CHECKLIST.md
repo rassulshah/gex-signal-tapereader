@@ -40,3 +40,8 @@ Screenshot file names, every unticked line with what was seen instead, the opera
 - [ ] Tone: green at ≥ 70, amber at ≤ 30, white between — from the model's p, not the old IN / NOT IN call.
 - [ ] E row 1ST / TOOK are the stage's median (a top-tercile open reads ~8:51am · ~21m), never the A row's clock (16.48: no +orclock).
 - [ ] After the close both halves are clocks, green.
+
+## 0.16 (2026-09-19)
+- [ ] Close and reopen IRT: Day Stats opens at the saved Top-center with NO Apply.
+- [ ] MUD reads "$413 (8.3p)" (A) and "~$1,197 (23.9p)" (E) style — money then points, never a duration; MUDt is the duration.
+- [ ] HL RNG money has a thousands comma.

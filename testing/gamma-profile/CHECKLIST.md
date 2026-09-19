@@ -60,3 +60,9 @@ The run file gets: the screenshot file names, every unticked line with what was 
 
 ## 0.72 (2026-09-18) — the chip's Kings
 - [ ] Chip line 2 reads "PW 7619 (7550) · Mag … · K 7720 (SPX 7650) · K 7700 (SPY 760) · FLIP … · CW …" — the two Kings name their book, the rest bare SPX.
+
+## 0.73 (2026-09-19)
+- [ ] Thickness = Medium: every strip price / % sits on its bar's line (was 4-5 px low), both rails; tags and % beside the bars too.
+- [ ] SPY strip reads "762 7717  −96%" — the ES price dimmer, matching the price axis; SPX strip "7650  −100%", no ES.
+- [ ] Both strips: exactly 2 characters between the strike (or ES price) and the %; the SPX strip is narrower than the SPY strip.
+- [ ] The level lines / King lines / bands stop at each strip's own edge — none runs under either strip.

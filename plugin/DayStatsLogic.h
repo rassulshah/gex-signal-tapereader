@@ -18,7 +18,8 @@ struct StatRow {
     double took, bop, wick, mud, gap;     // minutes (<0 = missing)
     double wickPct;                       // percent (<0 = missing)
     std::string rngPts, rngUsd, rngP25, rngP75;
-    StatRow() : valid(false), firstClk(-1), secondClk(-1), wendSo(-1), took(-1), bop(-1), wick(-1), mud(-1), gap(-1), wickPct(-1) {}
+    double mudPts;                        // (0.16) the MUD move in points (|2nd extreme - open|), <0 = unknown
+    StatRow() : valid(false), firstClk(-1), secondClk(-1), wendSo(-1), took(-1), bop(-1), wick(-1), mud(-1), gap(-1), wickPct(-1), mudPts(-1) {}
 };
 struct Cond { std::string basis; int lastHr, last30; int p20, p50, p80; Cond() : lastHr(-1), last30(-1), p20(-1), p50(-1), p80(-1) {} };   // (0.11) + the 2ND clock's percentiles, minutes after the open
 
@@ -63,6 +64,36 @@ inline std::string px1(const std::string& raw, double priceOff)
 }
 inline std::string pct(double v, bool tilde) { if (v < 0) return "--"; char b[16]; snprintf(b, sizeof(b), "%s%d%%", tilde ? "~" : "", (int)(v + 0.5)); return std::string(b); }
 
+// (0.16) money with a thousands comma ("$1,197"); MUD is the move in dollars followed by (points) — operator, 2026-09-19:
+// "the MUD field for actual and expected have time, when it should be dollars followed by (points)". ES: $50 a point.
+inline std::string usd(double v)
+{
+    if (v < 0) return "--";
+    long n = (long)(v + 0.5); std::string d = std::to_string(n), o;
+    int c = 0; for (int i = (int)d.size() - 1; i >= 0; i--) { o.insert(o.begin(), d[i]); if (++c % 3 == 0 && i > 0) o.insert(o.begin(), ','); }
+    return "$" + o;
+}
+inline std::string mudCell(double pts, bool expected)
+{
+    if (pts < 0) return "--";
+    char b[24]; snprintf(b, sizeof(b), " (%.1fp)", pts);
+    return (expected ? "~" : "") + usd(pts * 50.0) + b;
+}
+inline std::string rngCell(const std::string& usdRaw, const std::string& pts, bool expected)
+{
+    std::string m = usdRaw.empty() ? std::string("--") : ((expected ? "~" : "") + usd(atof(usdRaw.c_str())));
+    return m + (pts.empty() ? std::string("") : ((expected ? "  ~" : "  ") + pts + "p"));
+}
+// the MUD move: from the open (reclaimed at W.END) to the 2nd extreme — the leg MUDt times. A row: the chart's own RTH open and
+// its 2nd extreme (chart facts, like the prices since 0.10). E row: the expected candle's 2nd extreme against its open (DAYEXP),
+// a difference, so it is in ES points whatever tab wrote the rows.
+inline void setMud(StatRow& R, double open)
+{
+    if (!R.valid || !(open > 0) || R.secondPx.empty()) return;
+    double sp = atof(R.secondPx.c_str()); if (!(sp > 0)) return;
+    R.mudPts = sp > open ? sp - open : open - sp;
+}
+
 const int NCOL = 12;
 // the ACTUAL row's twelve cells, exactly as printed
 inline void actualCells(const StatRow& A, double priceOff, std::string* c)
@@ -71,10 +102,10 @@ inline void actualCells(const StatRow& A, double priceOff, std::string* c)
     c[0] = "A";
     c[1] = A.first + " " + clk(A.firstClk) + " " + px1(A.firstPx, priceOff);
     c[2] = dur(A.took); c[3] = dur(A.bop); c[4] = dur(A.wick); c[5] = clk(A.wendSo); c[6] = pct(A.wickPct, false);
-    c[7] = dur(A.mud); c[8] = dur(mudt);
+    c[7] = mudCell(A.mudPts, false); c[8] = dur(mudt);   // (0.16) MUD = the move $ (points); MUDt = its duration
     c[9] = A.second + " " + clk(A.secondClk) + " " + px1(A.secondPx, priceOff);
     c[10] = dur(A.gap);
-    c[11] = (A.rngUsd.empty() ? std::string("--") : ("$" + A.rngUsd)) + (A.rngPts.empty() ? std::string("") : ("  " + A.rngPts + "p"));
+    c[11] = rngCell(A.rngUsd, A.rngPts, false);
 }
 // the EXPECTED row's twelve cells: '~' marks an expectation; a READ-IN 1ST prints '='; the 2ND carries its ladder
 inline void expectedCells(const StatRow& E, const Cond& C, std::string* c)
@@ -83,10 +114,10 @@ inline void expectedCells(const StatRow& E, const Cond& C, std::string* c)
     c[0] = "E";
     c[1] = E.first + (C.basis.rfind("read-in", 0) == 0 ? " =" : " ~") + clk(E.firstClk);
     c[2] = "~" + dur(E.took); c[3] = "~" + dur(E.bop); c[4] = "~" + dur(E.wick); c[5] = "~" + clk(E.wendSo); c[6] = pct(E.wickPct, true);
-    c[7] = "~" + dur(E.mud); c[8] = "~" + dur(mudt);
+    c[7] = mudCell(E.mudPts, true); c[8] = "~" + dur(mudt);   // (0.16) MUD = the expected move ~$ (points)
     c[9] = E.second + " ~" + clk(E.secondClk) + (C.lastHr >= 0 ? ("  " + std::to_string(C.lastHr) + "% last hr") : std::string());
     c[10] = "~" + dur(E.gap);
-    c[11] = (E.rngUsd.empty() ? std::string("--") : ("~$" + E.rngUsd)) + (E.rngPts.empty() ? std::string("") : ("  ~" + E.rngPts + "p"));
+    c[11] = rngCell(E.rngUsd, E.rngPts, true);
 }
 // colour rule for the ACTUAL row: 0 = plain, 1 = up (green), -1 = down (red), per column
 inline void actualTone(const StatRow& A, int* tone)
@@ -116,7 +147,31 @@ inline void applyChartExtremes(StatRow& A, double chartHi, double chartLo, bool 
 }
 // the session's high / low on the chart's own bars: the bars of `y-m-d` (the day the rows describe) inside RTH
 // (08:30–15:00 CT); returns false when that day has no RTH bar on the chart
-struct Ext { double hi, lo; int hiSod, loSod; };
+struct Ext { double hi, lo; int hiSod, loSod; double open; int openSod; Ext() : hi(-1), lo(1e12), hiSod(-1), loSod(-1), open(-1), openSod(-1) {} };
+// (0.16) THE BAR-STAMP CONVENTION (DayModel 0.16's rule): end-stamped = a bar stamped at the 16:00 close exists and none at the
+// 17:00 open. On an end-stamped chart the bar stamped 08:30 is the PRE-OPEN bar (08:27-08:30) — its open is not the RTH open,
+// and its high / low are not the session's. RTH: end-stamped (08:30, 15:00]; start-stamped [08:30, 15:00).
+inline bool endStampedSods(const double* sod, int n)
+{
+    int seenStart = 0, seenEnd = 0, to = n - 2000; if (to < 0) to = 0;
+    for (int i = n - 1; i >= to; i--) { if ((int)sod[i] == 17 * 3600) seenStart++; if ((int)sod[i] == 16 * 3600) seenEnd++; }
+    return seenEnd > 0 && seenStart == 0;
+}
+inline bool inRthS(double sod, bool endSt) { const int O = 30600, S = 54000; return endSt ? (sod > O && sod <= S) : (sod >= O && sod < S); }
+// the chart's own session on `y-m-d`: high / low over its RTH bars, and the OPEN = the first RTH bar's open
+inline bool chartSession(const int* y, const int* m, const int* d, const double* sod, const float* op, const float* hi, const float* lo, int n,
+                         int wy, int wm, int wd, bool endSt, Ext& out)
+{
+    bool any = false; out = Ext();
+    for (int i = 0; i < n; i++) {
+        if (y[i] != wy || m[i] != wm || d[i] != wd || !inRthS(sod[i], endSt)) continue;
+        if (!any) { out.open = op[i]; out.openSod = (int)sod[i]; }
+        if (hi[i] > out.hi) { out.hi = hi[i]; out.hiSod = (int)sod[i]; }
+        if (lo[i] < out.lo) { out.lo = lo[i]; out.loSod = (int)sod[i]; }
+        any = true;
+    }
+    return any;
+}
 inline bool chartExtremes(const int* y, const int* m, const int* d, const double* sod, const float* hi, const float* lo, int n,
                           int wy, int wm, int wd, Ext& out)
 {

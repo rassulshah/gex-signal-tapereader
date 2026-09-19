@@ -31,7 +31,7 @@ INDICATORS = {
         title='lsGammaProfile',
         sources=['current/gex-signal-tapereader.user.js (gammaProfileBuild, gpRegime, gpLevelRows, gpWallDepth, gpSlopeWord, the IF builder)',
                  'current/gex-if-levels.user.js (gammaFlip, gexProf, windows)', 'plugin/GammaProfile.cpp', 'plugin/GammaProfileLogic.h', 'plugin/ContractOffsetLogic.h'],
-        gateA=['test_gammaprofile_build.js', 'test_if_extras.js', 'test_ladder_dollar.js', 'test_mode_king.js', 'test_leader.js'],   # (16.50) the tape reader and the King's sign are the gamma book's Gate A too
+        gateA=['test_gammaprofile_build.js', 'test_if_extras.js', 'test_ladder_dollar.js', 'test_mode_king.js', 'test_leader.js', 'test_plugin_settings.js'],   # (16.50) the tape reader and the King's sign are the gamma book's Gate A too
         gateB=['test_gammaprofile_logic.cpp', 'test_contractoffset_logic.cpp'],
         # Gate A only on the pinned exports: the 1325/1426 Atlas + IRT transcriptions carry resolution/timing 'fails' documented in
         # testing/gamma-profile/RESULTS.md (a 3% cell's sign by colour, a 1.1-pt ES1 gap on a 100-pt/hour tape) — not regressions
@@ -49,7 +49,7 @@ INDICATORS = {
         title='lsDayStats',
         sources=['current/gex-signal-tapereader.user.js (hodlodCondE, gpOpenWindow, the CONDE/DAYSA/DAYSE rows, hlBaseNormalise, AU.day)', 'tools/day-derive.js',
                  'tools/study-hodlod.py (condstats) + BASERATES.json', 'plugin/DayStats.cpp', 'plugin/DayStatsLogic.h'],
-        gateA=['test_daystats_cond.js', 'test_day_export.js', 'test_hodlod.js'],
+        gateA=['test_daystats_cond.js', 'test_day_export.js', 'test_hodlod.js', 'test_plugin_settings.js'],
         gateB=['test_daystats_logic.cpp'],
         live=[('testing/day-stats/fixtures/synth-1033', [])],
         cpp='DayStats.cpp'),

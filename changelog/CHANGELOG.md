@@ -1,3 +1,29 @@
+## lsGammaProfile 0.73 + lsDayStats 0.16 — the parked batch, built (2026-09-19)
+
+Collected over the evening of 09-18/19 and held as `pending/2026-09-19_gp073-ds016.patch` at his request ("do not create build
+yet, I am still considering other changes"); "build" -> applied, the patch retired in the same commit.
+- **GP 0.73 — the tape strips.** (1) One spacing rule on both rails: the % starts exactly 2 character-spaces after the strike
+  column (`gpl::tapeCols`, `TAPE_GAP_CHARS = 2`), measured with getTextWidth at the strip's font — until 0.72 the SPY strip used
+  colW/2 and the SPX strip pinned the % to the pane edge, so the gaps were leftovers (~3 characters on SPY, ~1 on SPX). The %
+  is left-justified on both strips (the SPX right edge goes ragged — agreed). (2) The SPY strip carries the ES price the bar
+  sits at, in a dimmer ink (C_DIMES, his pick): "762 7717  −96%". (3) Each strip is measured from its own book (`measureOne`,
+  `tw[0]` / `tw[1]`) and the level lines, King lines and bands stop at each strip's own edge (`stripL` / `stripR`) — they used
+  to assume one shared width. (4) Labels centred ON their price: IRT's rect text lands ~0.45 x font below y (measured in 0.55);
+  every label at a bar's price drew 4-5 px low — hidden at Auto thickness, obvious at Medium ("the node is slightly above, it is
+  not aligned, both SPY and SPX"). `textLJc` / `textRJc` shift by the measured offset; the depth pill re-centred on y.
+- **DS 0.16.** (1) The saved Corner applies on reopen: IRT can call parmsLoad before a restored instance's values exist, the font
+  guard skipped readSettings, and the constructor's Top-left drew until an Apply. `syncSettings()` runs at the top of every draw
+  and in all three callbacks. (2) MUD is the move in dollars followed by (points): "$413 (8.3p)" / "~$1,197 (23.9p)" —
+  |2nd extreme − open|, the leg MUDt times. A row from the chart's own RTH open and 2nd extreme (`chartSession`, stamp-aware per
+  DayModel 0.16: on an end-stamped chart the 08:30 bar is the pre-open bar); E row from DAYSE's 2nd extreme vs DAYEXP's open.
+  Money gets a thousands comma (HL RNG too). MUDt unchanged: HL GAP − BOP by his 09-12 definition — Friday's 1h 09m is the
+  leg from the open being reclaimed (1:48) to the HOD (2:57); the LOD-to-HOD time is HL GAP, 3h 30m.
+- Gate B: gammaprofile 99, daystats 70. Gate A: `test_plugin_settings.js` (11 source guards: the settings read on draw, every
+  price-anchored label centred, the ES price on the SPY strip, each strip's own edge) in both the gamma and daystats gates.
+- Mockups: design/gp-tape-gap-mockup.html, design/ds-mud-spyes-mockup.html. Not in this build (offered): the same settings-on-draw
+  guard for lsDayModel and lsKingTracker (their defaults equal his settings, so it does not show); level tags above the
+  price/%King text (design/gp-tag-above-mockup.html, three open questions).
+
 ## v16.52 — ONE ACTIVE TAB PER ORIGIN (the guard he asked for); an absent strike is not a dropped band (2026-09-18, ~12:40 CT)
 
 Operator: "i have 3 tabs but i thought i closed the panel in them so only 1 panel exists. can you double check as well as
