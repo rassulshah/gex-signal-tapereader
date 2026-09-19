@@ -17,7 +17,7 @@ const gp=fs.readFileSync('plugin/GammaProfile.cpp','utf8');
 const lowOnPrice=(gp.match(/\btext(LJ|RJ)\([^;]*\bp\.v\b[^;]*\);/g)||[]);
 ok(lowOnPrice.length===0, '5 no label is drawn at a bar\'s price (p.v) with the low-baseline helpers — every one goes through textLJc / textRJc', lowOnPrice.slice(0,3));
 ok(/static short lowShift\(int sz\) \{ return \(short\)\(sz \* 0\.45f \+ 0\.5f\); \}/.test(gp), '6 the shift is the measured 0.45 x font (the offset the depth pill was built around in 0.55)');
-ok(/short cy = y;/.test(gp) && /textLJc\(\(short\)\(leftX \+ 6\), y, tag\.c_str\(\)/.test(gp), '7 the depth pill is centred on y with its text (it used to sit low to match the low text)');
+ok(/short cy = y;/.test(gp) && /textLJc\(\(short\)\(leftX \+ gpl::PILL_PAD\), y, tag\.c_str\(\)/.test(gp), '7 the depth pill is centred on y with its text (it used to sit low to match the low text)');
 ok((gp.match(/textLJc\(c[12], p\.v,/g)||[]).length===2, '8 the tape strip (strike and %King) is centred on its bar on both rails');
 
 // ---- (GP 0.73) the SPY strip carries the ES price in the dimmer ink; each strip is sized to its own text
@@ -39,6 +39,13 @@ ok((gp.match(/false, ifs, 1, lp, S\)/g)||[]).length===6, '18 CW, PW, Flip, EM-H,
 ok(/lvl\[0\], kc, "", S\.extk, S\.lstyle, S\.klinew/.test(gp) && /hlinePx\(kp\.v, kx1, kx2, kc, penOf\(S\.lstyle\), S\.klinew\)/.test(gp), '19 both King lines use the King style at the King width');
 { const k=gp.indexOf('if (S.tnmode == 1) {'), blk=gp.slice(k, k+700);
   ok(k>0 && blk.indexOf('if (s.king) continue;')>0 && blk.indexOf('penOf(S.tnstyle), gpl::nodeLineWidth(s.pct, S.tnwidth == 1, S.klinew)')>0, '20 Lines mode: the top node style, 1 px or By %King, the King not drawn twice'); }
+
+// ---- (GP 0.76) IF / King tags ON TOP of the strip row; symmetric pills
+ok(/if \(wtag && tagTop\) \{ topW = wtag; topWc = wcol; wtag = 0; \}/.test(gp), '21 a CW / PW / MAG tag that fits above its row is NOT drawn beside the bar tip any more');
+ok(/if \(s\.king && tagTop\) rn = "";/.test(gp), '22 the King name leaves the bar when it goes above the row; G / C / F stay in the bar');
+ok(/gpl::tagRow\(c1, kw \+ dw \+ ww \+ gpl::BOLD_OVERRUN, TW\.spaceW, pw, leftLim, \(int\)paneR - 2\)/.test(gp) && /gpl::tagCentreY\(p\.v, S\.font\)/.test(gp), '23 the tag starts on the strike, pill one space after, 1 px above the row text, shifted left at the pane edge');
+ok(/gpl::pillWidth\(getTextWidth/.test(gp) && /textLJc\(\(short\)\(leftX \+ gpl::PILL_PAD\)/.test(gp), '24 every pill: the same pad left and right of its text');
+ok(/textLJc\(stripC1, \(short\)\(fp\.v - \(S\.font - 1\) \/ 2 - 2\), fl, C_FLIPC/.test(gp), '25 FLIP: tag above its tick on the strike column when the tape strip is on');
 
 console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

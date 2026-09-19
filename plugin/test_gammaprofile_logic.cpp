@@ -301,6 +301,21 @@ int main()
     CHECK(gpl::nodeLineWidth(100, true, 5) == 5 && gpl::nodeLineWidth(150, true, 5) == 5 && gpl::nodeLineWidth(3, true, 5) == 1, "never over the King's width (the King is the thickest), never under 1");
     CHECK(gpl::nodeLineWidth(40, true, 0) == 1, "a bad King width reads as 1");
 
+    // ---- (0.76) tags on top of the strip; symmetric badges
+    CHECK(gpl::pillWidth(14) == 14 + 2 + 12 && gpl::pillWidth(0) == 0, "pill = text + bold overrun + 6 px each side");
+    { int w = gpl::pillWidth(14), left = gpl::PILL_PAD, right = w - gpl::PILL_PAD - (14 + gpl::BOLD_OVERRUN);
+      CHECK(left == right, "the gap left of the text == the gap right of it (his 'not symmetrically spaced')"); }
+    { gpl::TagRow r = gpl::tagRow(100, 16, 3, 28, 0, 1000);
+      CHECK(r.tagX == 100 && r.pillX == 100 + 16 + 3 && r.total == 16 + 3 + 28, "tag on the strike's left edge, pill one space after it");
+      gpl::TagRow n = gpl::tagRow(100, 16, 3, 0, 0, 1000);
+      CHECK(n.pillX == -1 && n.total == 16, "no pill: the tag alone");
+      gpl::TagRow e = gpl::tagRow(980, 16, 3, 28, 0, 1000);
+      CHECK(e.tagX == 1000 - 47 && e.pillX - e.tagX == 19, "past the pane edge: the whole row shifts left, spacing kept");
+      gpl::TagRow l = gpl::tagRow(5, 40, 3, 28, 10, 20);
+      CHECK(l.tagX == 10, "never left of the strip's own edge"); }
+    CHECK(gpl::tagFitsAbove(26, 10) && !gpl::tagFitsAbove(25, 10), "font 10: rows 26 px apart take a tag above, 25 do not");
+    CHECK(gpl::tagCentreY(300, 10) == 300 - (5 + 1 + 7), "the tag line centres 1 px above the row's text");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

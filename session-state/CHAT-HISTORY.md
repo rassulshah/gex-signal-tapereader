@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-19 · vGP 0.75 · session `f9c89c64` — Separate line styles: King / top nodes / IF levels; labels only
+## 2026-09-19 · v16.52 · session `f9c89c64` — GP 0.76: tags on top of the strip; symmetric badges
 
-_808 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_824 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -10544,6 +10544,272 @@ Say "build" when you're happy, or tell me what to change.
 
 **me (03:47):** Now the records: CHANGELOG, resume note, LOCKED-ITEMS, chat history.
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (03:23):** `top` clashes with window.top — rename.
+I've sent you the mockup for the 0.74 build (it's also saved in your repo's `design` folder as `gp074-mockup.html`). It has two parts:
+
+1. **Hide nodes under %.** It shows the setting at 0 next to 20, on both rails. At 20, each node under 20% disappears completely: the bar, its strip row, its badge and its band. The two Kings (SPY 761 and SPX 7650) always stay.
+2. **Line style.** It shows the King lines at width 2 in Solid, Dot and Dash. Before, Windows drew any line wider than 1 pixel as solid, so only the thin call wall, put wall and flip lines changed with the setting. Now both King lines follow Dot or Dash too.
+
+The numbers in the mockup are made up but shaped like Friday's books, so it shows the look, not a real snapshot.
+
+The build itself hasn't changed. When you're ready:
+
+1. Close IRT and tell me "closed".
+2. I'll confirm the install and tell you when to reopen.
+
+**OPERATOR:**
+> is the line style only for king ?
+> what about top 5
+> 
+> _[sent while I was working — a queued message]_
+
+**me (03:32):** No, it isn't only for the King. The **Line style** setting applies to every level line: both King lines (SPX and SPY), Call Wall, Put Wall, FLIP, and EM-H / EM-L. At width 1 the style always showed on those. The King line is 2 px wide, and that's the only line where it never showed, until 0.74.
+
+**The top 5 don't have lines anymore, so Line style has nothing to style there.**
+
+- **Node bands:** Since 0.64 each top node is drawn as a band instead of a line. The band is a see-through strip in the node's colour, starting at the bar where the node first appeared. A band is a filled strip, so a dot or dash style doesn't apply to it.
+- **Old style setting removed:** The old "top node line style" setting was removed in that same review.
+- **Deflection bands:** If you have "Deflection bands" on, each top-5 node also gets two thin lines 5 points above and below it. Those are always dotted, whatever Line style says. They may be what looked to you like "the line style for top 5".
+
+If you want the deflection bands to follow Line style too, that's a small change. Tell me and I'll show you a mockup first.
+
+**OPERATOR:**
+> I should have the opton to apply node bands or line style.
+
+**me (03:36):** I've sent you a mockup of the option, but nothing is built. It's also saved in your repo's `design` folder as `gp-topnode-lines-mockup.html`.
+
+- **New setting:** "Top nodes drawn as", with a choice of **Bands** (what you have now) or **Lines**. It would go at the bottom of the settings window, so no existing setting moves.
+- **Lines:** Each top node gets a thin 1-pixel line in its colour. The line follows the Line style setting (Solid, Dot or Dash), and Band height doesn't apply to it.
+- **Same nodes either way:** It's the same nodes (your Show filter, e.g. Top 5), starting at the bar where each node first appeared and stopping at each price strip's edge.
+- **Node bands tick box:** It stays the on/off switch for both. Off means no bands and no lines.
+- **King:** It keeps its own thicker line and isn't drawn twice.
+
+**Decision for you:** should the top-node lines use the **same Line style** as the King and the Call Wall, Put Wall and Flip lines (one setting, as the mockup shows)? Or do you want a **separate style setting** for them, so the King could stay solid while the top nodes are dotted?
+
+**OPERATOR:**
+> i want a seperate line style for the king than the top 5 nodes. There should also be an option to automatically make the line thicker based on the %king. obviously this will make the king the thickest because it is 100%.  I want a seperate line style for levels we get from IF (eg Call wall, Put wall, Flip, Mag), should i decide to display them , right now they are only displyed in the rail by default.
+
+**me (03:44):** I've sent you the mockup of the three separate line styles. Nothing is built yet, and the mockup is saved in your repo's `design` folder as `gp-line-styles-mockup.html`.
+
+**Existing setting renamed:** "Line style" becomes **King line style**, in the same spot. From then on it styles only the two King lines.
+
+**New settings, added at the bottom so nothing moves:**
+- **Top nodes drawn as:** Bands or Lines.
+- **Top node line style:** Solid, Dot or Dash, used when the top nodes are drawn as Lines.
+- **Top node line width:** Fixed 1 px, or **By %King**.
+  - With By %King, each node's width is its %King times the King line width. The King is 100%, so it's always the thickest.
+  - With your current King width of 2, every node comes out 1 or 2 px and the difference is hard to see. Set the King width to 4–6 to see it clearly.
+- **IF level line style:** Solid, Dot or Dash, for Call Wall, Put Wall, Flip, Mag and EM H/L.
+- **Mag line:** a tick box, off by default. Today the Magnet only shows as the MAG tag on its node; this also draws it as a line, in the node's colour.
+
+The Call Wall, Put Wall and Flip lines already have their own on/off tick boxes. Those tick boxes are on by default, so if you only see these levels as tags on the nodes, they're probably switched off in your settings.
+
+Say "build" when you're happy, or tell me what to change.
+
+**OPERATOR:**
+> remember that i should have the ability to also only have labels wihtout any lines.   build
+
+**me (03:47):** Now the records: CHANGELOG, resume note, LOCKED-ITEMS, chat history.
+Now waiting for the sync and the Windows build.
+Your "labels only, no lines" requirement is built in and recorded as a standing rule. GP 0.75 compiled and is already installed, because IRT was closed, so all you need to do is reopen IRT.
+
+1. **Open IRT** and your ES chart.
+2. **Open the Gamma Profile settings.** "Line style" is now called **King line style**, and it only styles the two King lines. Five new settings are at the bottom:
+   - **Top nodes drawn as:** Bands or Lines.
+   - **Top node line style:** Solid, Dot or Dash.
+   - **Top node line width:** Fixed 1 px, or By %King. By %King needs a King line width of 4–6 before the difference is easy to see.
+   - **IF level line style:** Solid, Dot, Dash, or **None (labels only)**. It covers Call Wall, Put Wall, Flip, Mag and EM.
+   - **Mag line:** a tick box, off by default.
+3. **Try labels only:** set IF level line style to None (labels only) and click Apply. You should see the words CALL WALL, PUT WALL and FLIP with no lines. A level that already has its tag on a node doesn't get a second label.
+4. **Try the node lines:** set Top nodes drawn as = Lines, Top node line width = By %King and King line width = 5, then Apply. The biggest nodes should be the thickest lines, and the King the thickest of all.
+
+For the King and the top nodes, labels only already works with existing tick boxes. Untick "King line" and the K tag stays on its node. Untick "Node bands" and the nodes stay on the rails with no line or band.
+
+Because these five settings are new, your saved chart should open with them at their defaults: Bands, Dot, Fixed 1 px, Solid and Mag off. So the chart should look the same until you change them.
+
+**OPERATOR:**
+> redo the settings so that they are grouped better and more orderly . right now everythig is too messy . show me a mockup
+> didn't i explain tha the labels should be on top of the rails.  did you implement the fixes we talked about.  see pic
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (10:56):** Yes, you did explain it: you asked for the labels to sit on top of the price and %King. I made a mockup for that (`gp-tag-above-mockup.html` in the `design` folder), but it ended with three open questions. They never got answered, and then I built 0.73–0.75 without coming back to them. That's my miss. It's now marked as agreed and not yet built, so it won't drop again.
+
+The settings-window mockup is above. Below are the three questions for the tags. My recommendation is first in each.
+
+**OPERATOR:**
+> didn't i explain tha the labels should be on top of the rails.  did you implement the fixes we talked about.  see pic
+> Continue from where you left off.
+
+**me (11:29):** I've sent a mockup of the labels on top of the price and %King, built from your three answers and redrawn from your screenshot:
+
+- **PW and the WK box** move off the bar tip and sit just above "7645 +7%", starting where the strike starts.
+- **FLIP 0DTE** sits just above its dashed line, inside the price column, instead of out over the chart.
+- **K** gets the same spot above its row, on both price columns.
+- **CW and MAG** get the same spot on the SPX side.
+- **The rank bubbles and the G / C / F / B letters** stay where they are.
+- **When rows are packed too close** for a label to fit above, it falls back to beside the bar, so it's never lost.
+
+This item is now on the agreed-but-not-built list with your answers written in, so it can't get dropped again.
+
+Two things are waiting for your OK, and I can build them together as GP 0.76:
+
+1. **Labels on top of the price column**, from this mockup.
+2. **The regrouped settings window**, from the mockup before this one. It has one cost: because the settings change order, the chart opens once with the plugin's default settings. I'll make those defaults your current settings, so it should look the same. The one value I couldn't read in your screenshot is the SPY rail width, so I'll use 120; if yours is different, you'd re-set it once.
+
+Say "build" for both, or name the one you want.
+
+The mockups are saved on your computer, but the automatic upload to GitHub hasn't run since about 6 this morning. That doesn't affect anything yet; it only matters once there's a build.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (11:30):** The two unpushed commits have now reached GitHub through the automatic sync from your computer (at 6:30 this morning), and my working copy matches GitHub again. Nothing needs doing on your side.
+
+Still waiting on you: say "build" for GP 0.76 (the labels on top of the price column plus the regrouped settings window), or name the one you want.
+
+**OPERATOR:**
+> this looks good , but i see the badges for wk and other badges are not symmetrically spaced. fix this and build
+
+**me (11:33):** Guard 7 pinned the old "+6" literal; updating it to the PILL_PAD form.
+
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**me (03:23):** `top` clashes with window.top — rename.
+I've sent you the mockup for the 0.74 build (it's also saved in your repo's `design` folder as `gp074-mockup.html`). It has two parts:
+
+1. **Hide nodes under %.** It shows the setting at 0 next to 20, on both rails. At 20, each node under 20% disappears completely: the bar, its strip row, its badge and its band. The two Kings (SPY 761 and SPX 7650) always stay.
+2. **Line style.** It shows the King lines at width 2 in Solid, Dot and Dash. Before, Windows drew any line wider than 1 pixel as solid, so only the thin call wall, put wall and flip lines changed with the setting. Now both King lines follow Dot or Dash too.
+
+The numbers in the mockup are made up but shaped like Friday's books, so it shows the look, not a real snapshot.
+
+The build itself hasn't changed. When you're ready:
+
+1. Close IRT and tell me "closed".
+2. I'll confirm the install and tell you when to reopen.
+
+**OPERATOR:**
+> is the line style only for king ?
+> what about top 5
+> 
+> _[sent while I was working — a queued message]_
+
+**me (03:32):** No, it isn't only for the King. The **Line style** setting applies to every level line: both King lines (SPX and SPY), Call Wall, Put Wall, FLIP, and EM-H / EM-L. At width 1 the style always showed on those. The King line is 2 px wide, and that's the only line where it never showed, until 0.74.
+
+**The top 5 don't have lines anymore, so Line style has nothing to style there.**
+
+- **Node bands:** Since 0.64 each top node is drawn as a band instead of a line. The band is a see-through strip in the node's colour, starting at the bar where the node first appeared. A band is a filled strip, so a dot or dash style doesn't apply to it.
+- **Old style setting removed:** The old "top node line style" setting was removed in that same review.
+- **Deflection bands:** If you have "Deflection bands" on, each top-5 node also gets two thin lines 5 points above and below it. Those are always dotted, whatever Line style says. They may be what looked to you like "the line style for top 5".
+
+If you want the deflection bands to follow Line style too, that's a small change. Tell me and I'll show you a mockup first.
+
+**OPERATOR:**
+> I should have the opton to apply node bands or line style.
+
+**me (03:36):** I've sent you a mockup of the option, but nothing is built. It's also saved in your repo's `design` folder as `gp-topnode-lines-mockup.html`.
+
+- **New setting:** "Top nodes drawn as", with a choice of **Bands** (what you have now) or **Lines**. It would go at the bottom of the settings window, so no existing setting moves.
+- **Lines:** Each top node gets a thin 1-pixel line in its colour. The line follows the Line style setting (Solid, Dot or Dash), and Band height doesn't apply to it.
+- **Same nodes either way:** It's the same nodes (your Show filter, e.g. Top 5), starting at the bar where each node first appeared and stopping at each price strip's edge.
+- **Node bands tick box:** It stays the on/off switch for both. Off means no bands and no lines.
+- **King:** It keeps its own thicker line and isn't drawn twice.
+
+**Decision for you:** should the top-node lines use the **same Line style** as the King and the Call Wall, Put Wall and Flip lines (one setting, as the mockup shows)? Or do you want a **separate style setting** for them, so the King could stay solid while the top nodes are dotted?
+
+**OPERATOR:**
+> i want a seperate line style for the king than the top 5 nodes. There should also be an option to automatically make the line thicker based on the %king. obviously this will make the king the thickest because it is 100%.  I want a seperate line style for levels we get from IF (eg Call wall, Put wall, Flip, Mag), should i decide to display them , right now they are only displyed in the rail by default.
+
+**me (03:44):** I've sent you the mockup of the three separate line styles. Nothing is built yet, and the mockup is saved in your repo's `design` folder as `gp-line-styles-mockup.html`.
+
+**Existing setting renamed:** "Line style" becomes **King line style**, in the same spot. From then on it styles only the two King lines.
+
+**New settings, added at the bottom so nothing moves:**
+- **Top nodes drawn as:** Bands or Lines.
+- **Top node line style:** Solid, Dot or Dash, used when the top nodes are drawn as Lines.
+- **Top node line width:** Fixed 1 px, or **By %King**.
+  - With By %King, each node's width is its %King times the King line width. The King is 100%, so it's always the thickest.
+  - With your current King width of 2, every node comes out 1 or 2 px and the difference is hard to see. Set the King width to 4–6 to see it clearly.
+- **IF level line style:** Solid, Dot or Dash, for Call Wall, Put Wall, Flip, Mag and EM H/L.
+- **Mag line:** a tick box, off by default. Today the Magnet only shows as the MAG tag on its node; this also draws it as a line, in the node's colour.
+
+The Call Wall, Put Wall and Flip lines already have their own on/off tick boxes. Those tick boxes are on by default, so if you only see these levels as tags on the nodes, they're probably switched off in your settings.
+
+Say "build" when you're happy, or tell me what to change.
+
+**OPERATOR:**
+> remember that i should have the ability to also only have labels wihtout any lines.   build
+
+**me (03:47):** Now the records: CHANGELOG, resume note, LOCKED-ITEMS, chat history.
+Now waiting for the sync and the Windows build.
+Your "labels only, no lines" requirement is built in and recorded as a standing rule. GP 0.75 compiled and is already installed, because IRT was closed, so all you need to do is reopen IRT.
+
+1. **Open IRT** and your ES chart.
+2. **Open the Gamma Profile settings.** "Line style" is now called **King line style**, and it only styles the two King lines. Five new settings are at the bottom:
+   - **Top nodes drawn as:** Bands or Lines.
+   - **Top node line style:** Solid, Dot or Dash.
+   - **Top node line width:** Fixed 1 px, or By %King. By %King needs a King line width of 4–6 before the difference is easy to see.
+   - **IF level line style:** Solid, Dot, Dash, or **None (labels only)**. It covers Call Wall, Put Wall, Flip, Mag and EM.
+   - **Mag line:** a tick box, off by default.
+3. **Try labels only:** set IF level line style to None (labels only) and click Apply. You should see the words CALL WALL, PUT WALL and FLIP with no lines. A level that already has its tag on a node doesn't get a second label.
+4. **Try the node lines:** set Top nodes drawn as = Lines, Top node line width = By %King and King line width = 5, then Apply. The biggest nodes should be the thickest lines, and the King the thickest of all.
+
+For the King and the top nodes, labels only already works with existing tick boxes. Untick "King line" and the K tag stays on its node. Untick "Node bands" and the nodes stay on the rails with no line or band.
+
+Because these five settings are new, your saved chart should open with them at their defaults: Bands, Dot, Fixed 1 px, Solid and Mag off. So the chart should look the same until you change them.
+
+**OPERATOR:**
+> redo the settings so that they are grouped better and more orderly . right now everythig is too messy . show me a mockup
+> didn't i explain tha the labels should be on top of the rails.  did you implement the fixes we talked about.  see pic
+> [2 images attached]
+> 
+> _[sent while I was working — a queued message]_
+
+**me (10:56):** Yes, you did explain it: you asked for the labels to sit on top of the price and %King. I made a mockup for that (`gp-tag-above-mockup.html` in the `design` folder), but it ended with three open questions. They never got answered, and then I built 0.73–0.75 without coming back to them. That's my miss. It's now marked as agreed and not yet built, so it won't drop again.
+
+The settings-window mockup is above. Below are the three questions for the tags. My recommendation is first in each.
+
+**OPERATOR:**
+> didn't i explain tha the labels should be on top of the rails.  did you implement the fixes we talked about.  see pic
+> Continue from where you left off.
+
+**me (11:29):** I've sent a mockup of the labels on top of the price and %King, built from your three answers and redrawn from your screenshot:
+
+- **PW and the WK box** move off the bar tip and sit just above "7645 +7%", starting where the strike starts.
+- **FLIP 0DTE** sits just above its dashed line, inside the price column, instead of out over the chart.
+- **K** gets the same spot above its row, on both price columns.
+- **CW and MAG** get the same spot on the SPX side.
+- **The rank bubbles and the G / C / F / B letters** stay where they are.
+- **When rows are packed too close** for a label to fit above, it falls back to beside the bar, so it's never lost.
+
+This item is now on the agreed-but-not-built list with your answers written in, so it can't get dropped again.
+
+Two things are waiting for your OK, and I can build them together as GP 0.76:
+
+1. **Labels on top of the price column**, from this mockup.
+2. **The regrouped settings window**, from the mockup before this one. It has one cost: because the settings change order, the chart opens once with the plugin's default settings. I'll make those defaults your current settings, so it should look the same. The one value I couldn't read in your screenshot is the SPY rail width, so I'll use 120; if yours is different, you'd re-set it once.
+
+Say "build" for both, or name the one you want.
+
+The mockups are saved on your computer, but the automatic upload to GitHub hasn't run since about 6 this morning. That doesn't affect anything yet; it only matters once there's a build.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (11:30):** The two unpushed commits have now reached GitHub through the automatic sync from your computer (at 6:30 this morning), and my working copy matches GitHub again. Nothing needs doing on your side.
+
+Still waiting on you: say "build" for GP 0.76 (the labels on top of the price column plus the regrouped settings window), or name the one you want.
+
+**OPERATOR:**
+> this looks good , but i see the badges for wk and other badges are not symmetrically spaced. fix this and build
+
+**me (11:33):** Guard 7 pinned the old "+6" literal; updating it to the PILL_PAD form.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -11414,6 +11680,9 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
+a10b172 gex: sync 19-Sat-09  6:30
+33f27cc gex: sync 19-Sat-09  5:58
+5e3ca64 gex: sync 18-Fri-09 22:50
 1f90375 gex: sync 18-Fri-09 22:44
 409142f gex: sync 18-Fri-09 22:36
 fcd1adc gex: sync 18-Fri-09 22:24
@@ -11423,9 +11692,6 @@ e1a8622 gex: sync 18-Fri-09 22:18
 7dd4712 gex: sync 18-Fri-09 19:58
 db904f2 gex: sync 18-Fri-09 19:56
 1985e4a gex: sync 18-Fri-09 19:50
-e047c5f gex: sync 18-Fri-09 19:20
-21befca gex: sync 18-Fri-09 16:06
-486e42c review: nightly/weekly files pulled from Drive inbox 18-Fri-09
 ```
 
 ---

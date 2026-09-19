@@ -6,11 +6,19 @@ _Created 2026-08-27._
 
 ---
 
-## 🔒 AGREED 2026-09-19, NOT YET BUILT — level tags ON TOP of the strip's price / %King (design/gp-tag-above-mockup.html)
+## 📌 OFFERED 2026-09-19, WAITING FOR HIS OK — the dialog regroup (design/gp-dialog-regroup-mockup.html)
+Seven sections (Book & layout · Nodes · Colours · King line · Top nodes · IF levels · Read panel), shorter names, the three cut-off
+labels fixed. Needs setParameterVersion(8) — the saved instance opens once on defaults, so the defaults become HIS settings from
+his 09-19 dialog screenshot (Book Both, 90, Right, Medium, Top 5, 20, Grey out, King=100%, hide 0, font 10, rank badge on, name
+inside on, Inside, Top 5, GPOC, King line on, CW/PW/Flip/EM on, extend off, King style Dot, labels Left, structure on, regime on,
+Bottom-C, tape on, IF tags on, SPY width 120 (unreadable), Node bands OFF, band 3, King width 2, Bands, Dot, Fixed, Solid, Mag off).
+Section-title rows (setLabelParameter) must be probed first: in 0.6x one shifted the numbering.
+
+## ✅ BUILT 2026-09-19 (GP 0.76) — level tags ON TOP of the strip's price / %King (design/gp-tag-above-mockup.html)
 Operator 09-18: "I want to move the position of the labels on top of the price and %king rail"; 09-19 (screenshot, WK / PW /
 FLIP 0DTE still beside the bar tips): "didn't i explain that the labels should be on top of the rails". The mockup's three open
 questions (above price+% or % only; keep role letters G/C/F/B; italic or small caps) were never answered and the item was
-dropped from the builds — my miss. ANSWERED 2026-09-19: above price + % (left edge on the strike, 1 px above); IF levels + K only (G/C/F/B stay in the bars); plain bold, font-1. FLIP tag above its tick inside the strip; pill after the tag; K·CW when shared; SPY strip gets K only; fallback to beside-the-tip when rows are too tight. Mockup: design/gp-tags-on-strip-mockup.html. Waiting for "build". Also queued: the dialog regroup (design/gp-dialog-regroup-mockup.html).
+dropped from the builds — my miss. ANSWERED 2026-09-19: above price + % (left edge on the strike, 1 px above); IF levels + K only (G/C/F/B stay in the bars); plain bold, font-1. FLIP tag above its tick inside the strip; pill after the tag; K·CW when shared; SPY strip gets K only; fallback to beside-the-tip when rows are too tight. Mockup: design/gp-tags-on-strip-mockup.html. Built as GP 0.76. Also queued: the dialog regroup (design/gp-dialog-regroup-mockup.html).
 
 ## ✅ BUILT 2026-09-19 — GP 0.75: separate King / top-node / IF level line styles; top nodes as Bands or Lines (width Fixed or By %King); IF "None (labels only)"; Mag line
 Standing requirement (his words): "I should have the ability to also only have labels without any lines" — any future line

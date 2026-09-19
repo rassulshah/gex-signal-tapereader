@@ -1368,3 +1368,163 @@ _host: vm, C++: g++_
 | kingtracker | S | `KingTracker.cpp` | ok | ok |
 
 _host: vm, C++: g++_
+
+## 2026-09-19 11:33  ·  gamma daymodel daystats kingtracker  ·  panel 16.52 / companion 1.21 / GP ? / DM 0.18 / DS 0.16 / KT 0.15  ·  2 suite(s) FAILED
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 108/108 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | A | `test_ladder_dollar.js` | 30/30 | ok |
+| gamma | A | `test_mode_king.js` | 29/29 | ok |
+| gamma | A | `test_leader.js` | 15/15 | ok |
+| gamma | A | `test_plugin_settings.js` | 24/25 | **FAIL** |
+| gamma | B | `test_gammaprofile_logic.cpp` | 122/122 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 21/21 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 22/22 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 21/21 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 21/21 | ok |
+| gamma | L | `1118-pool (live runner)` | 22/22 | ok |
+| gamma | L | `1118-pool-SPY (live runner)` | 23/23 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+| daymodel | A | `test_daymodel_em.js` | 34/34 | ok |
+| daymodel | A | `test_day_export.js` | 60/60 | ok |
+| daymodel | A | `test_hodlod.js` | 176/176 | ok |
+| daymodel | B | `test_daymodel_logic.cpp` | 23/23 | ok |
+| daymodel | L | `synth-1033 (live runner)` | 12/12 | ok |
+| daymodel | S | `DayModel.cpp` | ok | ok |
+| daystats | A | `test_daystats_cond.js` | 28/28 | ok |
+| daystats | A | `test_day_export.js` | 60/60 | ok |
+| daystats | A | `test_hodlod.js` | 176/176 | ok |
+| daystats | A | `test_plugin_settings.js` | 24/25 | **FAIL** |
+| daystats | B | `test_daystats_logic.cpp` | 70/70 | ok |
+| daystats | L | `synth-1033 (live runner)` | 16/16 | ok |
+| daystats | S | `DayStats.cpp` | ok | ok |
+| kingtracker | A | `test_kingtracker_rows.js` | 33/33 | ok |
+| kingtracker | B | `test_kingtracker_logic.cpp` | 30/30 | ok |
+| kingtracker | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
+| kingtracker | S | `KingTracker.cpp` | ok | ok |
+
+_host: vm, C++: g++_
+
+## 2026-09-19 11:34  ·  gamma daymodel daystats kingtracker  ·  panel 16.52 / companion 1.21 / GP ? / DM 0.18 / DS 0.16 / KT 0.15  ·  ALL GREEN
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 108/108 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | A | `test_ladder_dollar.js` | 30/30 | ok |
+| gamma | A | `test_mode_king.js` | 29/29 | ok |
+| gamma | A | `test_leader.js` | 15/15 | ok |
+| gamma | A | `test_plugin_settings.js` | 25/25 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 122/122 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 21/21 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 22/22 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 21/21 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 21/21 | ok |
+| gamma | L | `1118-pool (live runner)` | 22/22 | ok |
+| gamma | L | `1118-pool-SPY (live runner)` | 23/23 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+| daymodel | A | `test_daymodel_em.js` | 34/34 | ok |
+| daymodel | A | `test_day_export.js` | 60/60 | ok |
+| daymodel | A | `test_hodlod.js` | 176/176 | ok |
+| daymodel | B | `test_daymodel_logic.cpp` | 23/23 | ok |
+| daymodel | L | `synth-1033 (live runner)` | 12/12 | ok |
+| daymodel | S | `DayModel.cpp` | ok | ok |
+| daystats | A | `test_daystats_cond.js` | 28/28 | ok |
+| daystats | A | `test_day_export.js` | 60/60 | ok |
+| daystats | A | `test_hodlod.js` | 176/176 | ok |
+| daystats | A | `test_plugin_settings.js` | 25/25 | ok |
+| daystats | B | `test_daystats_logic.cpp` | 70/70 | ok |
+| daystats | L | `synth-1033 (live runner)` | 16/16 | ok |
+| daystats | S | `DayStats.cpp` | ok | ok |
+| kingtracker | A | `test_kingtracker_rows.js` | 33/33 | ok |
+| kingtracker | B | `test_kingtracker_logic.cpp` | 30/30 | ok |
+| kingtracker | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
+| kingtracker | S | `KingTracker.cpp` | ok | ok |
+
+_host: vm, C++: g++_
+
+## 2026-09-19 11:34  ·  gamma daymodel daystats kingtracker  ·  panel 16.52 / companion 1.21 / GP ? / DM 0.18 / DS 0.16 / KT 0.15  ·  ALL GREEN
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 108/108 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | A | `test_ladder_dollar.js` | 30/30 | ok |
+| gamma | A | `test_mode_king.js` | 29/29 | ok |
+| gamma | A | `test_leader.js` | 15/15 | ok |
+| gamma | A | `test_plugin_settings.js` | 25/25 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 122/122 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 21/21 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 22/22 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 21/21 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 21/21 | ok |
+| gamma | L | `1118-pool (live runner)` | 22/22 | ok |
+| gamma | L | `1118-pool-SPY (live runner)` | 23/23 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+| daymodel | A | `test_daymodel_em.js` | 34/34 | ok |
+| daymodel | A | `test_day_export.js` | 60/60 | ok |
+| daymodel | A | `test_hodlod.js` | 176/176 | ok |
+| daymodel | B | `test_daymodel_logic.cpp` | 23/23 | ok |
+| daymodel | L | `synth-1033 (live runner)` | 12/12 | ok |
+| daymodel | S | `DayModel.cpp` | ok | ok |
+| daystats | A | `test_daystats_cond.js` | 28/28 | ok |
+| daystats | A | `test_day_export.js` | 60/60 | ok |
+| daystats | A | `test_hodlod.js` | 176/176 | ok |
+| daystats | A | `test_plugin_settings.js` | 25/25 | ok |
+| daystats | B | `test_daystats_logic.cpp` | 70/70 | ok |
+| daystats | L | `synth-1033 (live runner)` | 16/16 | ok |
+| daystats | S | `DayStats.cpp` | ok | ok |
+| kingtracker | A | `test_kingtracker_rows.js` | 33/33 | ok |
+| kingtracker | B | `test_kingtracker_logic.cpp` | 30/30 | ok |
+| kingtracker | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
+| kingtracker | S | `KingTracker.cpp` | ok | ok |
+
+_host: vm, C++: g++_
+
+## 2026-09-19 11:35  ·  gamma daymodel daystats kingtracker  ·  panel 16.52 / companion 1.21 / GP ? / DM 0.18 / DS 0.16 / KT 0.15  ·  ALL GREEN
+
+| indicator | gate | suite | result | status |
+|---|---|---|---|---|
+| gamma | A | `test_gammaprofile_build.js` | 108/108 | ok |
+| gamma | A | `test_if_extras.js` | 24/24 | ok |
+| gamma | A | `test_ladder_dollar.js` | 30/30 | ok |
+| gamma | A | `test_mode_king.js` | 29/29 | ok |
+| gamma | A | `test_leader.js` | 15/15 | ok |
+| gamma | A | `test_plugin_settings.js` | 25/25 | ok |
+| gamma | B | `test_gammaprofile_logic.cpp` | 122/122 | ok |
+| gamma | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| gamma | L | `fixtureA-0947 (live runner)` | 21/21 | ok |
+| gamma | L | `fixtureIF-1020 (live runner)` | 22/22 | ok |
+| gamma | L | `GammaProfile-1325 (live runner)` | 21/21 | ok |
+| gamma | L | `GammaProfile-1426 (live runner)` | 21/21 | ok |
+| gamma | L | `1118-pool (live runner)` | 22/22 | ok |
+| gamma | L | `1118-pool-SPY (live runner)` | 23/23 | ok |
+| gamma | S | `GammaProfile.cpp` | ok | ok |
+| daymodel | A | `test_daymodel_em.js` | 34/34 | ok |
+| daymodel | A | `test_day_export.js` | 60/60 | ok |
+| daymodel | A | `test_hodlod.js` | 176/176 | ok |
+| daymodel | B | `test_daymodel_logic.cpp` | 23/23 | ok |
+| daymodel | L | `synth-1033 (live runner)` | 12/12 | ok |
+| daymodel | S | `DayModel.cpp` | ok | ok |
+| daystats | A | `test_daystats_cond.js` | 28/28 | ok |
+| daystats | A | `test_day_export.js` | 60/60 | ok |
+| daystats | A | `test_hodlod.js` | 176/176 | ok |
+| daystats | A | `test_plugin_settings.js` | 25/25 | ok |
+| daystats | B | `test_daystats_logic.cpp` | 70/70 | ok |
+| daystats | L | `synth-1033 (live runner)` | 16/16 | ok |
+| daystats | S | `DayStats.cpp` | ok | ok |
+| kingtracker | A | `test_kingtracker_rows.js` | 33/33 | ok |
+| kingtracker | B | `test_kingtracker_logic.cpp` | 30/30 | ok |
+| kingtracker | B | `test_contractoffset_logic.cpp` | 15/15 | ok |
+| kingtracker | L | `synth-1033 (live runner)` | 7/7 | ok |
+| kingtracker | S | `KingTracker.cpp` | ok | ok |
+
+_host: vm, C++: g++_

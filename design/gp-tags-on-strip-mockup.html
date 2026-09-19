@@ -18,6 +18,7 @@
 <div class="sub">Your answers: the tags sit <b>above the price and %</b>, only the <b>IF levels + the King</b> move there (the G / C / F / B letters stay in the bars), in <b>plain bold</b>. This redraws your screenshot of the SPX rail, with the same nodes and the same tags.</div>
 <div class="row" id="r"></div>
 <table class="m">
+<tr><td>Spacing</td><td><b>Fixed after your review:</b> the gap between the tag and its pill is one character space, and inside the pill the text has the same 6 px on its left and its right. Every pill (0D / WK / MO, here and in the regime chip) follows the same rule.</td></tr>
 <tr><td>Where</td><td>The tag's bottom sits 1 px above the row's strike text, and its left edge lines up with the strike. The pill (0D / WK / MO) goes right after the tag, e.g. <b>PW WK</b>.</td></tr>
 <tr><td>Which</td><td><b>K</b> (the King, in its polarity colour) · <b>CW</b> / <b>PW</b> (pink, as today) · <b>MAG</b> (its polarity colour). If one strike holds two of them, they share one line: <b>K·CW</b>.</td></tr>
 <tr><td>FLIP</td><td>FLIP is a price between strikes, so it has no row. Its dashed tick crosses the strip and its tag (<b>FLIP 0DTE</b>) sits just above the tick, inside the strip, instead of out over the chart.</td></tr>
@@ -42,7 +43,8 @@ function draw(isNew){
    if(rank) s+=`<circle cx="${bx-12}" cy="${y}" r="9" fill="#1c232c"/><text x="${bx-12}" y="${y+3.5}" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">${rank}</text>`;
    s+=`<text x="${stripX}" y="${y+3.5}" font-size="11" fill="#dfe7f0">${k}</text><text x="${stripX+36}" y="${y+3.5}" font-size="11" fill="${p[0]=='-'?'#c43baf':'#dfe7f0'}">${p}</text>`;
    if(tag){
-     if(isNew){ s+=`<text x="${stripX}" y="${y-8}" font-size="10" font-weight="700" fill="#f06fa0">${tag}</text><rect x="${stripX+21}" y="${y-18}" width="20" height="11" fill="none" stroke="#5cc8f5"/><text x="${stripX+23}" y="${y-9}" font-size="8" font-weight="700" fill="#5cc8f5">${pill}</text>`; }
+     if(isNew){ const cy=y-13, tw=16, sp=3, pw=14, pad=6, bw=pw+2+2*pad, px=stripX+tw+sp;   // v0.76: tag | 1 space | pill, pad 6 each side
+       s+=`<text x="${stripX}" y="${cy+3.5}" font-size="10" font-weight="700" fill="#f06fa0">${tag}</text><rect x="${px}" y="${cy-7}" width="${bw}" height="14" fill="none" stroke="#5cc8f5"/><text x="${px+pad}" y="${cy+3.5}" font-size="9" font-weight="700" fill="#5cc8f5" textLength="${pw+2}">${pill}</text>`; }
      else { s+=`<text x="${bx-46}" y="${y+4}" font-size="10" font-weight="700" fill="#f06fa0">${tag}</text><rect x="${bx-75}" y="${y-6}" width="22" height="12" fill="none" stroke="#5cc8f5"/><text x="${bx-72}" y="${y+4}" font-size="9" font-weight="700" fill="#5cc8f5">${pill}</text>`; }
    }
  });

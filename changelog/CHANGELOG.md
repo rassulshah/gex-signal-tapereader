@@ -1,3 +1,21 @@
+## lsGammaProfile 0.76 — IF / King tags ON TOP of the strip row; symmetric badges (2026-09-19)
+
+Operator 09-18: "I want to move the position of the labels on top of the price and %king rail". The mockup
+(gp-tag-above-mockup) ended with three questions that were never answered, and 0.73–0.75 shipped without it — my miss. 09-19,
+screenshot with WK / PW / FLIP 0DTE still beside the bar tips: "didn't i explain that the labels should be on top of the rails".
+His answers: above price + %, IF levels + the King only (G / C / F / B stay in the bars), plain bold. On the mockup
+(gp-tags-on-strip-mockup): "the badges for wk and other badges are not symmetrically spaced. fix this and build".
+- **Tags on top:** with Tape columns on, CW / PW / MAG and the King's name draw above their row: left edge on the strike,
+  1 px above the row's text (`gpl::tagCentreY`), bold at font − 1, King·CW joined by a middle dot. The depth pill follows the
+  tag. The whole line shifts left if it would pass the pane edge (`gpl::tagRow`). The SPY strip gets its King only.
+- **FLIP:** the dashed tick now runs from the bars across the strip; FLIP + window sits just above it on the strike column.
+- **Fallback:** a row closer than 2 × font + 6 px to the row above (`gpl::tagFitsAbove`) keeps the old beside-the-tip tag, so
+  nothing overlaps on a squeezed chart. Tape columns off = unchanged.
+- **Symmetric badges:** tag | one character space | pill; inside every pill the text has PILL_PAD (6 px) on both sides —
+  `gpl::pillWidth` = text + BOLD_OVERRUN (2, measured 0.64) + 2 × pad. Applies to the chip's pills too.
+- Gate B 122 (+8), `test_plugin_settings.js` 25 (+5). Not in this build: the dialog regroup (gp-dialog-regroup-mockup) — waiting
+  for his OK (it needs a parameter-version bump; defaults = his current settings).
+
 ## lsGammaProfile 0.75 — three line families, each its own style; labels only; top nodes as lines, width by %King (2026-09-19)
 
 Operator (after the 0.74 mockup): "is the line style only for king?" → "what about top 5" → "I should have the option to apply
