@@ -278,6 +278,20 @@ int main()
       gpl::TapeCols d = gpl::tapeCols(4, 0, -5, -1, -2);
       CHECK(d.pctOff == 0 && d.colW == 8, "degenerate inputs clamp: no negative widths, no negative gap"); }
 
+    // ---- (0.74) Hide nodes under % hides the NODE; a styled line wider than 1 px keeps its style
+    CHECK(gpl::nodeHidden(12, false, 20) && gpl::nodeHidden(-19.9f, false, 20), "under the setting (either sign): hidden");
+    CHECK(!gpl::nodeHidden(20, false, 20) && !gpl::nodeHidden(-55, false, 20), "at or over the setting: drawn");
+    CHECK(!gpl::nodeHidden(5, true, 20) && !gpl::nodeHidden(-100, true, 50), "the King never hides");
+    CHECK(!gpl::nodeHidden(1, false, 0), "0 = hide nothing (the default)");
+    { std::vector<gpl::Seg> sol = gpl::dashSegments(10, 110, 0, 2);
+      CHECK(sol.size() == 1 && sol[0].a == 10 && sol[0].b == 110, "solid: one stroke");
+      std::vector<gpl::Seg> dot = gpl::dashSegments(10, 30, 1, 2);   // on 2, off 4
+      CHECK(dot.size() == 4 && dot[0].a == 10 && dot[0].b == 11 && dot[1].a == 16 && dot[3].a == 28 && dot[3].b == 29, "dot at 2 px: 2 on / 4 off from the line's start");
+      std::vector<gpl::Seg> dash = gpl::dashSegments(0, 40, 2, 2);   // on 8, off 4
+      CHECK(dash.size() == 4 && dash[0].b == 7 && dash[1].a == 12 && dash[3].a == 36 && dash[3].b == 40, "dash at 2 px: 8 on / 4 off, the last clipped at the end");
+      std::vector<gpl::Seg> rev = gpl::dashSegments(40, 0, 2, 2);
+      CHECK(rev.size() == dash.size() && rev[0].a == 0, "x1 > x2 is normalised"); }
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

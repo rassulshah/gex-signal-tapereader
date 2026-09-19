@@ -1,3 +1,17 @@
+## lsGammaProfile 0.74 — "Hide nodes under %" hides the node; the King line shows the Line style (2026-09-19)
+
+Operator: "hide under % only hides the %King, it doesn't hide the nodes. you need to fix this for the spy and the spx rails.
+There is no line style for the king. the current line style seems to be for top 5. double check."
+- **Hide.** Since 0.64 the row blanked only the % text (the strip and beside the bar). `gpl::nodeHidden(pct, king, hideu)`: a
+  node under the setting is not drawn at all — bar, badge, tags, band, strip row — on both rails (both render through the
+  same loop). The King never hides; 0 hides nothing. A wall on a hidden node is not tagged there, so its line keeps its label.
+  Hidden rows do not size the strip. Dialog row renamed in place: "Hide nodes under %".
+- **Line style.** It was wired to every level line including the King — but the King line is 2 px ("King line width") and
+  Windows draws any pen wider than 1 px SOLID whatever its style; the 1-px CW / PW / FLIP lines showed the dots, so the row
+  looked like it belonged to them. `hlinePx` now draws a wide dotted / dashed line as solid segments (`gpl::dashSegments`:
+  dot = w on / 2w off, dash = 4w on / 2w off), and `drawLevel` draws through it — the SPX King, the SPY King and every level.
+- Gate B 107 (+8), `test_plugin_settings.js` 14 (+3).
+
 ## lsGammaProfile 0.73 + lsDayStats 0.16 — the parked batch, built (2026-09-19)
 
 Collected over the evening of 09-18/19 and held as `pending/2026-09-19_gp073-ds016.patch` at his request ("do not create build

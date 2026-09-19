@@ -25,5 +25,10 @@ ok(/textLJc\(\(short\)\(c1 \+ TW\.skW \+ TW\.spaceW\), p\.v, es, primary \? C_DI
 ok(/measureOne\(strikesSpy, S, true, tw\[1\]\)/.test(gp) && /measureOne\(strikes, S, S\.book == 2, tw\[0\]\)/.test(gp), '10 the SPY rail (Both) and a single SPY rail show the ES price; the SPX rail does not');
 ok(!/paneR - colW - 2|paneL \+ 2 \+ colW\)/.test(gp.replace(/anchor = \(short\)\(paneL \+ 2 \+ colW\);/,'')), '11 no line / band stops at "the other strip" by THIS strip\'s width any more — stripL / stripR, each strip\'s own');
 
+// ---- (GP 0.74) Hide nodes under % hides the node on both rails; the King line keeps the Line style at any width
+ok(/float ab = std::fabs\(s\.pct\);\s*if \(gpl::nodeHidden\(s\.pct, s\.king, S\.hideu\)\) continue;/.test(gp), '12 the bar loop (both rails render through it) skips a hidden node before anything of it is drawn');
+ok(/if \(s\.since < 0\) continue;\s*if \(gpl::nodeHidden/.test(gp), '13 ...and it gets no band');
+ok(/hlinePx\(a\.v, a\.h, b\.h, col, ps, idx == 0 \? S\.klinew : 1\)/.test(gp) && /gpl::dashSegments\(lx, rx, ps == P_DOT \? 1 : 2, w\)/.test(gp), '14 every level line (the King included) goes through hlinePx, which draws a wide dotted / dashed line as segments');
+
 console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -66,3 +66,7 @@ The run file gets: the screenshot file names, every unticked line with what was 
 - [ ] SPY strip reads "762 7717  −96%" — the ES price dimmer, matching the price axis; SPX strip "7650  −100%", no ES.
 - [ ] Both strips: exactly 2 characters between the strike (or ES price) and the %; the SPX strip is narrower than the SPY strip.
 - [ ] The level lines / King lines / bands stop at each strip's own edge — none runs under either strip.
+
+## 0.74 (2026-09-19)
+- [ ] Hide nodes under % = 20: every node under 20% disappears (bar, badge, strip row, band) on BOTH rails; the Kings stay.
+- [ ] Line style = Dot / Dash: the SPX King line and the SPY King line are dotted / dashed at width 2, like the CW / PW / FLIP lines.

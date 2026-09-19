@@ -1,7 +1,9 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.52 / GP 0.73 / DS 0.16) · **panel v16.52** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.73**, **lsDayModel v0.18**, **lsDayStats v0.16**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.52 / GP 0.74 / DS 0.16) · **panel v16.52** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.74**, **lsDayModel v0.18**, **lsDayStats v0.16**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
 # (2026-09-18 ~00:10 CT — GP 0.70: one label per IF level — the line's text only when the level is not tagged on a node (gpl::lineLabelWanted); he saw CALL WALL beside the SPY strip and CW on the SPX node at once. Close IRT → INSTALLED → reopen; no dialog change needed.)
+
+# (2026-09-19 — GP 0.74: "Hide nodes under %" hides the whole node on both rails (it only blanked the % text); the King line shows Line style (Windows draws pens > 1 px solid — wide dotted/dashed lines are now drawn as segments). Built with 0.73 / DS 0.16 pending → one IRT restart installs all three.)
 
 # ⚠⚠ 2026-09-19 — BUILT: GP 0.73 + DS 0.16 (the parked batch). Tape strips: % 2 characters after the strike on both rails, the SPY strip's ES price in dim ink, each strip its own width, every label centred on its bar (the 0.45 x font low baseline). Day Stats: the saved Corner read on every draw; MUD = $ (points) from the chart's stamp-aware open. **He needs: close IRT → INSTALLED → reopen.** Verify: Medium thickness, strip text on the bar's line; SPY strip "762 7717  −96%"; Day Stats opens at Top-center without an Apply; MUD "$… (…p)". Still offered, not agreed: the same settings-on-draw guard for DayModel / KingTracker; tags above the strip text (gp-tag-above-mockup, 3 questions); a non-ES leader tab should stop writing the day rows (since 13:44 on 09-18 the rows were SPY-scale).
 

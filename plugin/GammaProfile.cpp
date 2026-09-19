@@ -62,7 +62,7 @@
 #include <algorithm>
 #include <ctime>
 
-static const char* GP_VERSION = "0.73";   // (v0.71) ONE version string: the factory and the status file both read it
+static const char* GP_VERSION = "0.74";   // (v0.71) ONE version string: the factory and the status file both read it
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -314,7 +314,7 @@ int cppExtension::setup(void)
     PX.cmid   = pc++; setColorParameter  ("Midpoint", D_MID);
     PX.kingcol= pc++; setListParameter   ("King colour", 0, "Polarity;Distinct", 0, SL);
     // LABELS
-    PX.hideu  = pc++; setIntegerParameter("Hide % under", 0);                                  // applies to the tape column
+    PX.hideu  = pc++; setIntegerParameter("Hide nodes under %", 0);                            // (v0.74) hides the NODE, both rails (was the % text only) — label renamed in place
     PX.font   = pc++; setIntegerParameter("Font size (pt)", 10, 0, SL);
     PX.rank   = pc++; setBoolParameter   ("Rank badge", true);
     PX.type   = pc++; setBoolParameter   ("Node name inside", true, SL);
@@ -606,6 +606,7 @@ void GammaProfile::measureOne(const std::vector<GStrike>& v, const Settings& S, 
     out.spaceW = (int)getTextWidth(" ", -1);
     char sk[16], pk[12], es[16];
     for (size_t i = 0; i < v.size(); i++) {
+        if (gpl::nodeHidden(v[i].pct, v[i].king, S.hideu)) continue;   // (v0.74) a hidden row does not size the strip
         tapeStrings(v[i], S.hideu, sk, sizeof(sk), pk, sizeof(pk));
         if (sk[0]) { int w = (int)getTextWidth(sk, -1); if (w > out.skW) out.skW = w; }
         if (pk[0]) { int w = (int)getTextWidth(pk, -1); if (w > out.pW) out.pW = w; }
@@ -625,9 +626,20 @@ void GammaProfile::measureTape(const Settings& S)
 // Horizontal line in pixel space (lets a level reach into the right margin).
 void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps, int wpx)
 {
-    setPen(col, (short)(wpx < 1 ? 1 : wpx), ps);
-    PNT a; a.set(0, 0.0f); a.h = lx; a.v = y; a.setDrawPosition();
-    PNT b; b.set(0, 0.0f); b.h = rx; b.v = y; b.drawLineTo();
+    int w = wpx < 1 ? 1 : wpx;
+    if (w == 1 || ps == P_SOLID) {        // a 1-px pen draws its own dots / dashes; a solid line is one stroke
+        setPen(col, (short)w, ps);
+        PNT a; a.set(0, 0.0f); a.h = lx; a.v = y; a.setDrawPosition();
+        PNT b; b.set(0, 0.0f); b.h = rx; b.v = y; b.drawLineTo();
+        return;
+    }
+    // (v0.74) wider than 1 px: Windows would draw it solid — draw the dots / dashes as solid segments (gpl::dashSegments)
+    setPen(col, (short)w, P_SOLID);
+    std::vector<gpl::Seg> sg = gpl::dashSegments(lx, rx, ps == P_DOT ? 1 : 2, w);
+    for (size_t i = 0; i < sg.size(); i++) {
+        PNT a; a.set(0, 0.0f); a.h = (short)sg[i].a; a.v = y; a.setDrawPosition();
+        PNT b; b.set(0, 0.0f); b.h = (short)sg[i].b; b.v = y; b.drawLineTo();
+    }
 }
 // Translucent price band across [lx,rx] between two price levels.
 void GammaProfile::bandPrice(float p1, float p2, short lx, short rx, COLOR col)
@@ -752,12 +764,11 @@ void GammaProfile::drawLevel(int lastBar, short lx, short rx, int idx, COLOR col
 {
     if (!has[idx]) return;
     PEN_STYLE ps = S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID);
-    setPen(col, (short)(idx == 0 ? S.klinew : 1), ps);   // (v0.64) the King line at its own width
     PNT a; a.set(0, lvl[idx]); if (a.h < lx) a.h = lx;   // (v0.68) the line never runs under the SPY strip
-    a.setDrawPosition();
     PNT b; b.set(lastBar, lvl[idx]);
     if (extend || b.h > rx) b.h = rx; // stretch into the right margin — but never under the SPX strip
-    b.drawLineTo();
+    // (v0.74) through hlinePx, so a King line wider than 1 px still shows the Line style (Windows draws wide pens solid)
+    hlinePx(a.v, a.h, b.h, col, ps, idx == 0 ? S.klinew : 1);   // (v0.64) the King line at its own width
     if (!label || !label[0]) return;   // line only (no label — used for KING, which the node labels)
     PNT probe; probe.set(lastBar, lvl[idx]); short y = probe.v;
     // (v0.68) lx / rx are the PRICE AREA's edges (between the two tape strips when Book = Both) — operator: "the call wall and
@@ -909,6 +920,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
         for (size_t i = 0; i < strikes.size(); i++) {
             const GStrike& s = strikes[i];
             if (s.since < 0) continue;
+            if (gpl::nodeHidden(s.pct, s.king, S.hideu)) continue;   // (v0.74) a hidden node has no band either
             bool prim = (S.filter <= 3) ? (s.rank >= 1 && s.rank <= topNb) : (S.filter == 4 ? std::fabs(s.pct) >= (float)S.thresh : true);
             if (!prim) continue;
             int bi = gpl::bandStartIndex(bars.empty() ? 0 : &bars[0], (int)bars.size(), s.since);
@@ -932,6 +944,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     for (size_t i = 0; i < strikes.size(); i++) {
         GStrike& s = strikes[i];
         float ab = std::fabs(s.pct);
+        if (gpl::nodeHidden(s.pct, s.king, S.hideu)) continue;   // (v0.74) "Hide nodes under %": the whole node — bar, badge, tags, strip row
 
         int topN = (S.filter==0)?3 : (S.filter==1)?5 : (S.filter==2)?8 : (S.filter==3)?10 : 0;
         bool primary;
@@ -1111,8 +1124,10 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // (v0.70) ONE LABEL PER LEVEL (gpl::lineLabelWanted): when the node labels are on and the wall sits on a rail node (CW / PW
     // tag) or the FLIP tick is drawn, the line draws WITHOUT its text — the operator saw "CALL WALL" beside the SPY strip
     // (Level labels at = Left) and "CW" on the SPX node at once: "it is on both rails".
-    bool onNode1 = S.lvllabels && has[1] && gpl::levelNode(gn, lvl[1], lvlSpx[1]) >= 0;
-    bool onNode2 = S.lvllabels && has[2] && gpl::levelNode(gn, lvl[2], lvlSpx[2]) >= 0;
+    // (v0.74) a wall on a HIDDEN node is not tagged there (the node is not drawn), so the line keeps its label
+    int n1 = has[1] ? gpl::levelNode(gn, lvl[1], lvlSpx[1]) : -1, n2 = has[2] ? gpl::levelNode(gn, lvl[2], lvlSpx[2]) : -1;
+    bool onNode1 = S.lvllabels && n1 >= 0 && !gpl::nodeHidden(strikes[(size_t)n1].pct, strikes[(size_t)n1].king, S.hideu);
+    bool onNode2 = S.lvllabels && n2 >= 0 && !gpl::nodeHidden(strikes[(size_t)n2].pct, strikes[(size_t)n2].king, S.hideu);
     bool onNode3 = S.lvllabels && has[3];   // the FLIP tick + label
     if (S.cw)    drawLevel(lastBar, lvL, lvR, 1, C_PINK,  gpl::lineLabelWanted(S.lvllabels, onNode1, S.lpos) ? "CALL WALL" : "", false, S);
     if (S.pw)    drawLevel(lastBar, lvL, lvR, 2, C_PINK,  gpl::lineLabelWanted(S.lvllabels, onNode2, S.lpos) ? "PUT WALL"  : "", false, S);

@@ -232,6 +232,32 @@ inline TapeCols tapeCols(int pad, int spaceW, int strikeW, int pctW, int nChars)
     return t;
 }
 
+// (0.74) "HIDE NODES UNDER %" HIDES THE NODE. Operator, 2026-09-19: "hide under % only hides the %King, it doesn't hide the
+// nodes — fix this for the spy and the spx rails." 0.64 applied the row to the % text only; the bar, its badge, its tags, its
+// band and its strip row all kept drawing. A node whose |%King| is under the setting is now not drawn at all, on either rail.
+// The King never hides (it is +/-100 by definition); 0 = hide nothing.
+inline bool nodeHidden(float pct, bool king, int hideu)
+{
+    if (hideu <= 0 || king) return false;
+    float a = pct < 0 ? -pct : pct;
+    return a < (float)hideu;
+}
+// (0.74) A STYLED LINE WIDER THAN 1 px. Windows draws any pen wider than 1 px SOLID whatever its dot / dash style, so the King
+// line (2 px, "King line width") never showed the Line style — operator: "there is no line style for the king, the current line
+// style seems to be for top 5" (the 1-px CW / PW / FLIP lines did show it). A dotted or dashed wide line is drawn as solid
+// segments. style: 0 solid, 1 dot, 2 dash. Segments are [x, x+on) every on+off px, clipped to [x1, x2].
+struct Seg { int a, b; };
+inline std::vector<Seg> dashSegments(int x1, int x2, int style, int w)
+{
+    std::vector<Seg> out; if (x2 < x1) { int t = x1; x1 = x2; x2 = t; }
+    if (w < 1) w = 1;
+    if (style != 1 && style != 2) { Seg g; g.a = x1; g.b = x2; out.push_back(g); return out; }
+    int on  = (style == 1) ? w : (4 * w < 6 ? 6 : 4 * w);
+    int off = (style == 1) ? (2 * w < 2 ? 2 : 2 * w) : (2 * w < 4 ? 4 : 2 * w);
+    for (int x = x1; x <= x2; x += on + off) { Seg g; g.a = x; g.b = (x + on - 1 < x2) ? x + on - 1 : x2; out.push_back(g); }
+    return out;
+}
+
 // ---- contract offset -------------------------------------------------------
 // off = chartClose - anchor, anchor = SCALEREF (the front ES price the ladder is scaled to) else SPOT.
 // Clamped to +-300: a wrong chart (NQ) or a bad anchor must never fling the book.
