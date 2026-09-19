@@ -48,7 +48,7 @@ index 2f106a4..b9e5d12 100644
      return p;
  }
 diff --git a/plugin/GammaProfile.cpp b/plugin/GammaProfile.cpp
-index cadb888..6d35c7a 100644
+index cadb888..76f79af 100644
 --- a/plugin/GammaProfile.cpp
 +++ b/plugin/GammaProfile.cpp
 @@ -62,7 +62,7 @@
@@ -70,7 +70,16 @@ index cadb888..6d35c7a 100644
      std::string stMain, stSpy;   // (v0.61) Book = Both: one GPSTATUS line per rail
      short stScaleL, stScaleR, stPaneRaw;   // (v0.63) the scale rect and the raw pane right, for the status file
      short forceBarH;              // (v0.62) >0: the SPY rail draws at the SPX rail's thickness (Book = Both)
-@@ -206,7 +209,7 @@ GammaProfile::GammaProfile() : cppExtension()
+@@ -178,6 +181,8 @@ public:
+     void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
+     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
+     void textLJ(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);
++    void textRJc(short rightX, short y, const char* s, COLOR col, int sz, bool bold);   // (v0.73) centred ON y
++    void textLJc(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);   // (v0.73) centred ON y
+     short pillW(const std::string& tag, const Settings& S);                       // (v0.50)
+     short drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S);   // (v0.50) returns its width (0 when no tag)
+     void textC (short cx,     short y, const char* s, COLOR col, int sz, bool bold);
+@@ -206,7 +211,7 @@ GammaProfile::GammaProfile() : cppExtension()
      cfg.type=true; cfg.font=10;
      strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
      cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
@@ -79,7 +88,36 @@ index cadb888..6d35c7a 100644
      cfg.header=false; cfg.spot=false; cfg.headerpos=0; cfg.tapecols=true; cfg.lvllabels=true;
      cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
      cfg.bands=true; cfg.bandh=3; cfg.klinew=2;
-@@ -571,6 +574,37 @@ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bo
+@@ -548,11 +553,11 @@ short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag,
+     // (the rect draw baselines low), so the box is centred there, not on y — the metric-placed text of 0.54 sat 4 px
+     // above everything beside it.
+     short w = pillW(tag, S), h = (short)(S.font + 5);
+-    short cy = (short)(y + (short)(S.font * 0.45f + 0.5f));
++    short cy = y;   // (v0.73) the tag text is centred ON y now (textLJc), so the box is too — it was y + 0.45 x font to match the low text
+     COLOR c = depthColour(tag);
+     RCT box; box.set(leftX, (short)(cy - h/2), (short)(leftX + w), (short)(cy + h/2));
+     box.draw(1, c, C_DARK, DRAW_OPAQUE, PAT_SOLID);
+-    textLJ((short)(leftX + 6), y, tag.c_str(), c, S.font - 1, true);
++    textLJc((short)(leftX + 6), y, tag.c_str(), c, S.font - 1, true);
+     return w;
+ }
+ void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
+@@ -562,6 +567,14 @@ void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz
+     RCT rc; rc.set(leftX, (short)(y - sz), (short)(leftX + 260), (short)(y + sz));
+     rc.drawText(s, false, false);     // left-justified
+ }
++// (v0.73) CENTRED ON A PRICE. The rect draw above baselines LOW: its glyphs land ~0.45 x font BELOW y (measured on his 0.54
++// screenshot, see drawDepthPill). Every label meant to sit ON a price — the tape strip, the % beside a bar, the role /
++// pattern / level tags at the bar — drew 4-5 px under its bar at font 10. Invisible at Auto thickness (a fat bar covers
++// it), obvious at Medium: operator, 2026-09-19, "the node is slightly above, it is not aligned — both SPY and SPX".
++// Same glyph path, shifted up by the measured offset, so nothing else about the text changes.
++static short lowShift(int sz) { return (short)(sz * 0.45f + 0.5f); }
++void GammaProfile::textLJc(short leftX, short y, const char* s, COLOR col, int sz, bool bold)  { textLJ(leftX,  (short)(y - lowShift(sz)), s, col, sz, bold); }
++void GammaProfile::textRJc(short rightX, short y, const char* s, COLOR col, int sz, bool bold) { textRJ(rightX, (short)(y - lowShift(sz)), s, col, sz, bold); }
+ // Centered on (cx, y) both axes, using measured metrics.
+ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bool bold)
+ {
+@@ -571,6 +584,37 @@ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bo
      setTextColor(col);
      PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(y + (asc - desc)/2); tp.drawText(s);
  }
@@ -117,7 +155,7 @@ index cadb888..6d35c7a 100644
  // Horizontal line in pixel space (lets a level reach into the right margin).
  void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps, int wpx)
  {
-@@ -742,7 +776,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -742,7 +786,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
      // (v0.41) TAPE COLUMNS — a Skylit-ladder-style strip [SPX strike | %King] pinned to the pane edge on the
      // bar side. The bars are shifted inward by the strip width so the columns sit BESIDE them (the operator's
      // sketch: bars, then the values at the edge), and read row-for-row against Skylit's SPXW ladder.
@@ -127,7 +165,56 @@ index cadb888..6d35c7a 100644
      short anchor;                 // base of bars
      int sgn;                      // +1 grows right, -1 grows left
      if (S.side == 1) {            // Left margin: anchor at pane left (+ column strip), grow right
-@@ -1005,20 +1040,14 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -912,8 +957,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+             st.draw(0, sr, sr, DRAW_OPAQUE, PAT_SOLID);
+             const char* rn = gpl::roleTag(rl, S.kinglabel);   // K(name) / C / F / G / G·C / G·F
+             COLOR ic = inkOn(col);
+-            if (sgn<0) textRJ((short)(anchor-8), p.v, rn, ic, S.font, true);
+-            else       textLJ((short)(anchor+8), p.v, rn, ic, S.font, true);
++            if (sgn<0) textRJc((short)(anchor-8), p.v, rn, ic, S.font, true);
++            else       textLJc((short)(anchor+8), p.v, rn, ic, S.font, true);
+         }
+ 
+         // node PATTERN tag (P / B on the named stack member, R / RR on the rug's yellow node) INSIDE the bar.
+@@ -928,8 +973,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+             bool bubbleIn = S.rank && !gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxT;   // (v0.62)
+             short r0 = (short)(S.font * 0.9f + 4);
+             short inset = bubbleIn ? (short)(2 * r0 + 6) : 6;          // clear the bubble when it is inside the tip
+-            if (sgn < 0) textLJ((short)(tip + inset), p.v, tlabel, ic, S.font, true);
+-            else         textRJ((short)(tip - inset), p.v, tlabel, ic, S.font, true);
++            if (sgn < 0) textLJc((short)(tip + inset), p.v, tlabel, ic, S.font, true);
++            else         textRJc((short)(tip - inset), p.v, tlabel, ic, S.font, true);
+         }
+         // (v0.42) LEVEL LABELS ON THE NODE: the wall nodes carry "CW" / "PW" just beyond the tip (outside the
+         // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
+@@ -947,8 +992,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+             int rankMaxW = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
+             bool bubbleOut = S.rank && gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxW;   // (v0.62)
+             short past = bubbleOut ? (short)(2 * (S.font * 0.9f + 4) + 8) : 6;
+-            if (sgn < 0) textRJ((short)(tip - past), p.v, wtag, wcol, S.font - 1, true);
+-            else         textLJ((short)(tip + past), p.v, wtag, wcol, S.font - 1, true);
++            if (sgn < 0) textRJc((short)(tip - past), p.v, wtag, wcol, S.font - 1, true);
++            else         textLJc((short)(tip + past), p.v, wtag, wcol, S.font - 1, true);
+             // (v0.50) the depth pill beside the tag (IF extras #1): 0D = today's expiry only, WK = the week, MO = the monthly
+             // (v0.51) order outward from the tip: bubble, tag, pill, then the % label — the pill was drawn over the % (his
+             // screenshot 21:33: "+48%" half under a WK box). outerW carries tag + pill so the % label clears both.
+@@ -992,11 +1037,11 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+             char pc[12]; sprintf_s(pc, sizeof(pc), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
+             if (S.pctpos == 1) {  // inside near base
+                 COLOR ic = inkOn(col);
+-                if (sgn < 0) textLJ((short)(tip + 4), p.v, pc, ic, S.font, false);
+-                else         textRJ((short)(tip - 4), p.v, pc, ic, S.font, false);
++                if (sgn < 0) textLJc((short)(tip + 4), p.v, pc, ic, S.font, false);
++                else         textRJc((short)(tip - 4), p.v, pc, ic, S.font, false);
+             } else {              // outside the tip (shifted past a CW/PW tag when one is drawn there)
+-                if (sgn < 0) textRJ((short)(tip - 6 - outerW), p.v, pc, C_TXT, S.font, false);   // (v0.51) past tag + pill
+-                else         textLJ((short)(tip + 6 + outerW), p.v, pc, C_TXT, S.font, false);
++                if (sgn < 0) textRJc((short)(tip - 6 - outerW), p.v, pc, C_TXT, S.font, false);   // (v0.51) past tag + pill
++                else         textLJc((short)(tip + 6 + outerW), p.v, pc, C_TXT, S.font, false);
+             }
+         }
+ 
+@@ -1005,20 +1050,14 @@ void GammaProfile::render(const Settings& S, bool railOnly)
          // ES-converted price, so the two ladders compare cell-for-cell. Greyed (sub-threshold) nodes print grey.
          if (S.tapecols) {
              char sk[16], pk[12];
@@ -150,12 +237,12 @@ index cadb888..6d35c7a 100644
 +            // widest strike — left-justified, so the % column aligns and the gap is the same on the SPY and SPX strips
 +            short c1 = (S.side == 1) ? (short)(paneL + 4) : (short)(paneR - colW + 4);
 +            short c2 = (short)(c1 + gpl::tapeCols(4, tapeSpaceW, railSW, 0, gpl::TAPE_GAP_CHARS).pctOff);
-+            if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
-+            if (pk[0]) textLJ(c2, p.v, pk, tc, S.font, s.king);
++            if (sk[0]) textLJc(c1, p.v, sk, tc, S.font, s.king);
++            if (pk[0]) textLJc(c2, p.v, pk, tc, S.font, s.king);
          }
      }
  
-@@ -1106,6 +1135,7 @@ int GammaProfile::draw(void)
+@@ -1106,6 +1145,7 @@ int GammaProfile::draw(void)
      // the deflection bands all follow it through the one `rank` field; an unpooled row (IF book, old panel) gets NO_RANK
      for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
      stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
@@ -221,10 +308,10 @@ index caa27b4..3f61422 100644
 \ No newline at end of file
 diff --git a/test_plugin_settings.js b/test_plugin_settings.js
 new file mode 100644
-index 0000000..00838ae
+index 0000000..88abca3
 --- /dev/null
 +++ b/test_plugin_settings.js
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,24 @@
 +// (DS 0.16) THE SAVED SETTINGS REACH THE DRAW. Operator, 2026-09-19: Day Stats opened at the top-left although its dialog said
 +// Top-center; re-selecting Top-center + Apply fixed it until the next reopen. IRT can call parmsLoad before a restored
 +// instance's values exist (the font reads 0), the guard skips readSettings, and the constructor's defaults draw until an Apply.
@@ -238,12 +325,30 @@ index 0000000..00838ae
 +ok(/getIntegerValue\(PX\.font\)/.test(sync) && /readSettings\(cfg\)/.test(sync) && /p >= 1 && p <= 200/.test(sync), '2 syncSettings keeps the font guard (values not yet populated -> skip, retry next draw)', sync.slice(0,160));
 +ok(['parmsLoad(void)','parmsApply(void)','parmsUpdt(unsigned int)'].every(n=>/\{\s*syncSettings\(\);\s*return RTX_OK;\s*\}/.test(fn('int DayStats::'+n))), '3 all three dialog callbacks go through the same routine (one place to get it right)');
 +ok(!/int DayStats::parms\w+\([^)]*\)\s*\{[^}]*readSettings\(cfg\)/.test(ds), '4 no callback reads the settings on its own any more');
++// ---- (GP 0.73) labels anchored at a price are CENTRED on it. IRT's rect text lands ~0.45 x font below y (measured, GP 0.55);
++// at Medium thickness the strip's price and %King sat visibly under their bars (operator 2026-09-19, both rails).
++const gp=fs.readFileSync('plugin/GammaProfile.cpp','utf8');
++const lowOnPrice=(gp.match(/\btext(LJ|RJ)\([^;]*\bp\.v\b[^;]*\);/g)||[]);
++ok(lowOnPrice.length===0, '5 no label is drawn at a bar\'s price (p.v) with the low-baseline helpers — every one goes through textLJc / textRJc', lowOnPrice.slice(0,3));
++ok(/static short lowShift\(int sz\) \{ return \(short\)\(sz \* 0\.45f \+ 0\.5f\); \}/.test(gp), '6 the shift is the measured 0.45 x font (the offset the depth pill was built around in 0.55)');
++ok(/short cy = y;/.test(gp) && /textLJc\(\(short\)\(leftX \+ 6\), y, tag\.c_str\(\)/.test(gp), '7 the depth pill is centred on y with its text (it used to sit low to match the low text)');
++ok((gp.match(/textLJc\(c[12], p\.v,/g)||[]).length===2, '8 the tape strip (strike and %King) is centred on its bar on both rails');
++
 +console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
 +process.exit(fail?1:0);
 diff --git a/tools/regress.py b/tools/regress.py
-index bcf8125..3e24374 100644
+index bcf8125..ace838c 100644
 --- a/tools/regress.py
 +++ b/tools/regress.py
+@@ -31,7 +31,7 @@ INDICATORS = {
+         title='lsGammaProfile',
+         sources=['current/gex-signal-tapereader.user.js (gammaProfileBuild, gpRegime, gpLevelRows, gpWallDepth, gpSlopeWord, the IF builder)',
+                  'current/gex-if-levels.user.js (gammaFlip, gexProf, windows)', 'plugin/GammaProfile.cpp', 'plugin/GammaProfileLogic.h', 'plugin/ContractOffsetLogic.h'],
+-        gateA=['test_gammaprofile_build.js', 'test_if_extras.js', 'test_ladder_dollar.js', 'test_mode_king.js', 'test_leader.js'],   # (16.50) the tape reader and the King's sign are the gamma book's Gate A too
++        gateA=['test_gammaprofile_build.js', 'test_if_extras.js', 'test_ladder_dollar.js', 'test_mode_king.js', 'test_leader.js', 'test_plugin_settings.js'],   # (16.50) the tape reader and the King's sign are the gamma book's Gate A too
+         gateB=['test_gammaprofile_logic.cpp', 'test_contractoffset_logic.cpp'],
+         # Gate A only on the pinned exports: the 1325/1426 Atlas + IRT transcriptions carry resolution/timing 'fails' documented in
+         # testing/gamma-profile/RESULTS.md (a 3% cell's sign by colour, a 1.1-pt ES1 gap on a 100-pt/hour tape) — not regressions
 @@ -49,7 +49,7 @@ INDICATORS = {
          title='lsDayStats',
          sources=['current/gex-signal-tapereader.user.js (hodlodCondE, gpOpenWindow, the CONDE/DAYSA/DAYSE rows, hlBaseNormalise, AU.day)', 'tools/day-derive.js',

@@ -25,5 +25,9 @@ If a patch no longer applies (other work touched the same lines), re-create it f
    instance's values exist; the font guard skipped readSettings and the constructor's Top-left drew until an Apply.
    `syncSettings()` (the same guard) now runs at the top of every draw() and in all three callbacks. New `test_plugin_settings.js`
    (4) in the daystats Gate A.
+3. **GP 0.73 — labels centred ON their price.** IRT's rect text lands ~0.45 x font below its y (measured in 0.55); every label
+   at a bar's price (the tape strip, the % beside a bar, role / pattern / level tags) drew 4-5 px under the bar. Hidden at Auto
+   thickness, visible at Medium — operator 2026-09-19: "the node is slightly above, it is not aligned, both SPY and SPX".
+   `textLJc` / `textRJc` shift by the measured offset; the depth pill re-centred on y. `test_plugin_settings.js` 5-8.
    Not in this patch, same latent pattern: lsDayModel (font guard) and lsKingTracker (`dialogReady`) also read settings only in
    the callbacks. Their defaults happen to equal his settings, so it does not show; a non-default setting would.
