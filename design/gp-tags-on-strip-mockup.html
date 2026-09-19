@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tags on top of the strip</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.4 Helvetica,Arial,sans-serif}
+ .wrap{padding:16px 20px;max-width:1100px}
+ h1{font-size:15px;margin:0 0 4px;font-weight:600}
+ .sub,.note{color:#8a97a6;font-size:12px;max-width:860px}
+ .sub b,.note b{color:#dfe7f0}
+ .row{display:flex;gap:26px;flex-wrap:wrap;margin-top:12px}
+ .card{background:#000;border:1px solid #2a2f36}.card.pick{border-color:#2ec27e}
+ .cap{font:11px/1 Helvetica,Arial,sans-serif;color:#8a97a6;padding:6px 8px;background:#0f1216;border-bottom:1px solid #2a2f36}
+ .cap .ok{color:#2ec27e}
+ table.m{border-collapse:collapse;font-size:12px;margin-top:14px;max-width:860px}
+ table.m td{padding:5px 12px 5px 0;border-bottom:1px solid #1c2128;color:#c9d2dc;vertical-align:top}
+ table.m td:first-child{color:#8a97a6;white-space:nowrap}
+</style></head><body><div class="wrap">
+<h1>Level tags on top of the strip text</h1>
+<div class="sub">Your answers: the tags sit <b>above the price and %</b>, only the <b>IF levels + the King</b> move there (the G / C / F / B letters stay in the bars), in <b>plain bold</b>. This redraws your screenshot of the SPX rail, with the same nodes and the same tags.</div>
+<div class="row" id="r"></div>
+<table class="m">
+<tr><td>Where</td><td>The tag's bottom sits 1 px above the row's strike text, and its left edge lines up with the strike. The pill (0D / WK / MO) goes right after the tag, e.g. <b>PW WK</b>.</td></tr>
+<tr><td>Which</td><td><b>K</b> (the King, in its polarity colour) · <b>CW</b> / <b>PW</b> (pink, as today) · <b>MAG</b> (its polarity colour). If one strike holds two of them, they share one line: <b>K·CW</b>.</td></tr>
+<tr><td>FLIP</td><td>FLIP is a price between strikes, so it has no row. Its dashed tick crosses the strip and its tag (<b>FLIP 0DTE</b>) sits just above the tick, inside the strip, instead of out over the chart.</td></tr>
+<tr><td>What leaves the bars</td><td>The PW / CW / MAG tags and the WK pill beside the bar tips. The rank bubbles and the G / C / F / B letters stay where they are.</td></tr>
+<tr><td>SPY strip</td><td>The same treatment for its King (<b>K</b> above its row). The IF levels belong to the SPX book, so they stay on the SPX strip only, as today.</td></tr>
+<tr><td>Tight rows</td><td>If rows are closer than two text heights (a small chart or big font), the tag can't fit above its row. It then goes back beside the bar tip, as today, so it is never lost or drawn over another row.</td></tr>
+</table>
+<script>
+const H=540, W=200, stripX=112;
+const rows=[[7665,'+10%',0.15,'#6f7a87',40],[7660,'+6%',0.08,'#6f7a87',82],[7655,'+16%',0.2,'#6f7a87',160],[7650,'+19%',0.22,'#6f7a87',236],[7645,'+7%',0.12,'#2ec27e',300,'PW','WK',2],[7640,'+5%',0.07,'#6f7a87',376],[7635,'+16%',0.2,'#2ec27e',446,null,null,3],[7630,'-15%',0.18,'#6f7a87',520]];
+function draw(isNew){
+ let s=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">`;
+ s+=`<line x1="0" y1="324" x2="${W}" y2="324" stroke="#2ec27e" stroke-width="1"/>`;
+ // flip tick at y 270
+ const fy=270;
+ s+=`<line x1="${isNew?stripX:6}" y1="${fy}" x2="${isNew?W-4:70}" y2="${fy}" stroke="#dfe7f0" stroke-dasharray="4 3"/>`;
+ s+= isNew ? `<text x="${stripX}" y="${fy-3}" font-size="9" font-weight="700" fill="#dfe7f0">FLIP 0DTE</text>`
+           : `<text x="16" y="${fy+4}" font-size="9" font-weight="700" fill="#dfe7f0">FLIP 0DTE</text>`;
+ rows.forEach(([k,p,a,c,y,tag,pill,rank])=>{
+   const len=Math.max(4,a*40), bx=stripX-8-len;
+   s+=`<rect x="${bx}" y="${y-5}" width="${len}" height="10" rx="3" fill="${c}"/>`;
+   if(rank) s+=`<circle cx="${bx-12}" cy="${y}" r="9" fill="#1c232c"/><text x="${bx-12}" y="${y+3.5}" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">${rank}</text>`;
+   s+=`<text x="${stripX}" y="${y+3.5}" font-size="11" fill="#dfe7f0">${k}</text><text x="${stripX+36}" y="${y+3.5}" font-size="11" fill="${p[0]=='-'?'#c43baf':'#dfe7f0'}">${p}</text>`;
+   if(tag){
+     if(isNew){ s+=`<text x="${stripX}" y="${y-8}" font-size="10" font-weight="700" fill="#f06fa0">${tag}</text><rect x="${stripX+21}" y="${y-18}" width="20" height="11" fill="none" stroke="#5cc8f5"/><text x="${stripX+23}" y="${y-9}" font-size="8" font-weight="700" fill="#5cc8f5">${pill}</text>`; }
+     else { s+=`<text x="${bx-46}" y="${y+4}" font-size="10" font-weight="700" fill="#f06fa0">${tag}</text><rect x="${bx-75}" y="${y-6}" width="22" height="12" fill="none" stroke="#5cc8f5"/><text x="${bx-72}" y="${y+4}" font-size="9" font-weight="700" fill="#5cc8f5">${pill}</text>`; }
+   }
+ });
+ return s+'</svg>';
+}
+const card=(t,c,svg)=>`<div class="card ${c}"><div class="cap">${t}</div>${svg}</div>`;
+document.getElementById('r').innerHTML=card('Today (your screenshot)','',draw(false))+card('<span class="ok">New</span>: tags on top of the strip','pick',draw(true));
+</script>
+</div></body></html>

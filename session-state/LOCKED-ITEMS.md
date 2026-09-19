@@ -10,7 +10,7 @@ _Created 2026-08-27._
 Operator 09-18: "I want to move the position of the labels on top of the price and %king rail"; 09-19 (screenshot, WK / PW /
 FLIP 0DTE still beside the bar tips): "didn't i explain that the labels should be on top of the rails". The mockup's three open
 questions (above price+% or % only; keep role letters G/C/F/B; italic or small caps) were never answered and the item was
-dropped from the builds — my miss. Ask the three, then build. Also queued: the dialog regroup (design/gp-dialog-regroup-mockup.html).
+dropped from the builds — my miss. ANSWERED 2026-09-19: above price + % (left edge on the strike, 1 px above); IF levels + K only (G/C/F/B stay in the bars); plain bold, font-1. FLIP tag above its tick inside the strip; pill after the tag; K·CW when shared; SPY strip gets K only; fallback to beside-the-tip when rows are too tight. Mockup: design/gp-tags-on-strip-mockup.html. Waiting for "build". Also queued: the dialog regroup (design/gp-dialog-regroup-mockup.html).
 
 ## ✅ BUILT 2026-09-19 — GP 0.75: separate King / top-node / IF level line styles; top nodes as Bands or Lines (width Fixed or By %King); IF "None (labels only)"; Mag line
 Standing requirement (his words): "I should have the ability to also only have labels without any lines" — any future line
