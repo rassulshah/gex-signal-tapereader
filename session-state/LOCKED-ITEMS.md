@@ -6,6 +6,10 @@ _Created 2026-08-27._
 
 ---
 
+## 🅿 AGREED 2026-09-19, CODED, NOT BUILT — GP 0.73 tape spacing (N = 2 on both rails) + DS 0.16 Corner fix
+`pending/2026-09-19_gp073-ds016.patch` (see pending/README.md). He asked explicitly NOT to build yet — he is still considering
+other changes and wants them in one build. Apply the patch as part of that build; do not put it in plugin/ on its own.
+
 ## 📌 OFFERED 2026-09-17, NOT YET AGREED — the E row's wick family (BOP · WICK · W.END · WICK% · MUD)
 The strip's E cells for the wick family are weekday MEANS (E.wick.bop 20.8 vs the median 6) and do not compose (TOOK + BOP
 ≠ WICK) while the A row's identities are exact; MUD and MUDt are two durations of one leg (spec §10.2: MUD = the move in

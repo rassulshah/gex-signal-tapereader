@@ -1,103 +1,79 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Tape strips — the gap between price and %King</title>
+<html><head><meta charset="utf-8"><title>Tape strips — one spacing rule for both rails</title>
 <style>
  body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.4 Helvetica,Arial,sans-serif}
- .wrap{padding:16px 20px;max-width:1100px}
+ .wrap{padding:16px 20px;max-width:1120px}
  h1{font-size:15px;margin:0 0 4px;font-weight:600}
- h2{font-size:12px;margin:18px 0 8px;font-weight:600;color:#c9d2dc;letter-spacing:.04em;text-transform:uppercase}
- .sub{color:#8a97a6;font-size:12px;margin-bottom:6px;max-width:680px}
- .pair{display:flex;gap:30px;align-items:flex-start;flex-wrap:wrap}
- .card{background:#000;border:1px solid #2a2f36;padding:0}
+ h2{font-size:12px;margin:22px 0 8px;font-weight:600;color:#c9d2dc;letter-spacing:.04em;text-transform:uppercase}
+ .sub{color:#8a97a6;font-size:12px;margin-bottom:10px;max-width:740px}
+ .row{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+ .card{background:#000;border:1px solid #2a2f36}
+ .card.pick{border-color:#2ec27e}
  .cap{font:11px/1 Helvetica,Arial,sans-serif;color:#8a97a6;padding:6px 8px;background:#0f1216;border-bottom:1px solid #2a2f36;white-space:nowrap}
- .cap b{color:#dfe7f0}
- .strip{position:relative;height:200px;background:#000}
- /* every text node is Helvetica 10px, exactly as the plugin draws it (FONT size 10) */
- .t{position:absolute;font:10px/1 Helvetica,Arial,sans-serif;white-space:nowrap}
- .t.b{font-weight:700}
+ .cap b{color:#dfe7f0}.cap .ok{color:#2ec27e}.cap .old{color:#f2b45a}
+ /* the gap is made of LITERAL space characters at the plugin's own font — count them on screen */
+ .strip{padding:8px 10px 10px;font:10px/1.9 Helvetica,Arial,sans-serif;white-space:pre}
  .pos{color:#e3c341}.neg{color:#c43baf}.grey{color:#6f7a87}.wht{color:#dfe7f0}
- .edge{position:absolute;top:0;bottom:0;width:1px;background:#243041}
- .rule{position:absolute;top:0;bottom:0;width:1px;background:#3a2b57}
- .gapmark{position:absolute;height:8px;border-left:1px solid #f2b45a;border-right:1px solid #f2b45a;border-bottom:1px solid #f2b45a}
- .gaplbl{position:absolute;font:9px/1 Helvetica,Arial,sans-serif;color:#f2b45a;white-space:nowrap}
- table.m{border-collapse:collapse;font-size:12px;margin-top:8px}
- table.m td{padding:4px 14px 4px 0;border-bottom:1px solid #1c2128;color:#c9d2dc;vertical-align:top}
- table.m td.k{color:#8a97a6;white-space:nowrap}
+ .k{font-weight:700}
+ table.m{border-collapse:collapse;font-size:12px;margin-top:10px}
+ table.m td{padding:5px 14px 5px 0;border-bottom:1px solid #1c2128;color:#c9d2dc;vertical-align:top}
+ table.m td.k2{color:#8a97a6;white-space:nowrap}
  code{font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;color:#9ad1ff}
- .note{color:#8a97a6;font-size:12px;max-width:680px;margin-top:10px}
+ .note{color:#8a97a6;font-size:12px;max-width:740px;margin-top:12px}
  .note b{color:#dfe7f0}
 </style></head><body><div class="wrap">
 
-<h1>The gap between the price and the %King, on each strip</h1>
-<div class="sub">Drawn at the real geometry: Helvetica 10 px, column width <code>font&times;7+8 = 78 px</code>, the SPY strip's split at <code>colW/2 = 39 px</code>. One space at this font is <b>~2.8 px</b>. Left of each pair is what your chart draws now; right is the proposal.</div>
+<h1>One rule, both rails: the % starts N characters after the strike</h1>
+<div class="sub">You asked for the two strips to be spaced the same. That makes it one number, not two — and the number has to honour both directions you gave: the SPX gap <b>wider by one</b>, the SPY gap <b>narrower</b>. <b>N = 2 characters</b> is the value that does both. The gaps below are literal space characters at Helvetica 10, the plugin's own font, so you can count them.</div>
 
-<h2>SPX strip — right edge · <b>+1 space</b></h2>
-<div class="pair">
-  <div class="card">
-    <div class="cap">NOW — strike left, % right-justified at the edge</div>
-    <div class="strip" style="width:170px">
-      <div class="edge" style="left:92px"></div>
-      <!-- c1 = paneR-colW+4 = 96 ; c2 right-justified at paneR-4 = 166 -->
-      <div class="t wht" style="left:96px;top:14px">7695</div><div class="t pos" style="right:4px;top:14px">+37%</div>
-      <div class="t wht" style="left:96px;top:44px">7690</div><div class="t neg" style="right:4px;top:44px">−7%</div>
-      <div class="t wht" style="left:96px;top:74px">7685</div><div class="t neg" style="right:4px;top:74px">−26%</div>
-      <div class="t b pos" style="left:96px;top:104px">7650</div><div class="t b neg" style="right:4px;top:104px">−100%</div>
-      <div class="t wht" style="left:96px;top:134px">7675</div><div class="t pos" style="right:4px;top:134px">+38%</div>
-      <div class="t grey" style="left:96px;top:164px">7670</div><div class="t grey" style="right:4px;top:164px">+30%</div>
-      <div class="gapmark" style="left:119px;width:24px;top:116px"></div><div class="gaplbl" style="left:112px;top:126px">23 px</div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="cap"><b>PROPOSED</b> — the column is one space wider, so the strike sits one space further left</div>
-    <div class="strip" style="width:170px">
-      <div class="edge" style="left:89px"></div>
-      <div class="t wht" style="left:93px;top:14px">7695</div><div class="t pos" style="right:4px;top:14px">+37%</div>
-      <div class="t wht" style="left:93px;top:44px">7690</div><div class="t neg" style="right:4px;top:44px">−7%</div>
-      <div class="t wht" style="left:93px;top:74px">7685</div><div class="t neg" style="right:4px;top:74px">−26%</div>
-      <div class="t b pos" style="left:93px;top:104px">7650</div><div class="t b neg" style="right:4px;top:104px">−100%</div>
-      <div class="t wht" style="left:93px;top:134px">7675</div><div class="t pos" style="right:4px;top:134px">+38%</div>
-      <div class="t grey" style="left:93px;top:164px">7670</div><div class="t grey" style="right:4px;top:164px">+30%</div>
-      <div class="gapmark" style="left:116px;width:27px;top:116px"></div><div class="gaplbl" style="left:108px;top:126px">26 px  (+1 space)</div>
-    </div>
-  </div>
+<h2>Proposed &nbsp;·&nbsp; N = 2 on both strips</h2>
+<div class="row">
+  <div class="card pick"><div class="cap">SPY strip &nbsp;<span class="ok">2 characters</span> &nbsp;<span class="old">(was ~3)</span></div><div class="strip">
+<span class="wht">763</span>  <span class="pos">+22%</span>
+<span class="wht">762</span>  <span class="neg">&minus;58%</span>
+<span class="k wht">761</span>  <span class="k neg">&minus;100%</span>
+<span class="wht">760</span>  <span class="neg">&minus;48%</span>
+<span class="wht">759</span>  <span class="neg">&minus;23%</span>
+<span class="grey">758</span>  <span class="grey">+9%</span></div></div>
+
+  <div class="card pick"><div class="cap">SPX strip &nbsp;<span class="ok">2 characters</span> &nbsp;<span class="old">(was ~1)</span></div><div class="strip">
+<span class="wht">7695</span>  <span class="pos">+37%</span>
+<span class="wht">7690</span>  <span class="neg">&minus;7%</span>
+<span class="wht">7685</span>  <span class="neg">&minus;26%</span>
+<span class="wht">7680</span>  <span class="neg">&minus;4%</span>
+<span class="k wht">7650</span>  <span class="k neg">&minus;100%</span>
+<span class="wht">7675</span>  <span class="pos">+38%</span>
+<span class="grey">7670</span>  <span class="grey">+30%</span></div></div>
 </div>
 
-<h2>SPY strip — left edge · <b>&minus;2 spaces</b></h2>
-<div class="pair">
-  <div class="card">
-    <div class="cap">NOW — strike at +4, % at +4+39</div>
-    <div class="strip" style="width:170px">
-      <div class="edge" style="left:80px"></div>
-      <div class="t wht" style="left:4px;top:14px">763</div><div class="t pos" style="left:43px;top:14px">+22%</div>
-      <div class="t wht" style="left:4px;top:44px">762</div><div class="t neg" style="left:43px;top:44px">−58%</div>
-      <div class="t b neg" style="left:4px;top:74px">761</div><div class="t b neg" style="left:43px;top:74px">−100%</div>
-      <div class="t wht" style="left:4px;top:104px">760</div><div class="t neg" style="left:43px;top:104px">−48%</div>
-      <div class="t wht" style="left:4px;top:134px">759</div><div class="t neg" style="left:43px;top:134px">−23%</div>
-      <div class="t grey" style="left:4px;top:164px">758</div><div class="t grey" style="left:43px;top:164px">+9%</div>
-      <div class="gapmark" style="left:21px;width:22px;top:86px"></div><div class="gaplbl" style="left:18px;top:96px">22 px</div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="cap"><b>PROPOSED</b> — the % column starts two spaces earlier</div>
-    <div class="strip" style="width:170px">
-      <div class="edge" style="left:74px"></div>
-      <div class="t wht" style="left:4px;top:14px">763</div><div class="t pos" style="left:37px;top:14px">+22%</div>
-      <div class="t wht" style="left:4px;top:44px">762</div><div class="t neg" style="left:37px;top:44px">−58%</div>
-      <div class="t b neg" style="left:4px;top:74px">761</div><div class="t b neg" style="left:37px;top:74px">−100%</div>
-      <div class="t wht" style="left:4px;top:104px">760</div><div class="t neg" style="left:37px;top:104px">−48%</div>
-      <div class="t wht" style="left:4px;top:134px">759</div><div class="t neg" style="left:37px;top:134px">−23%</div>
-      <div class="t grey" style="left:4px;top:164px">758</div><div class="t grey" style="left:37px;top:164px">+9%</div>
-      <div class="gapmark" style="left:21px;width:16px;top:86px"></div><div class="gaplbl" style="left:14px;top:96px">16 px  (&minus;2 spaces)</div>
-    </div>
-  </div>
+<h2>The alternative, if you want it tighter still</h2>
+<div class="row">
+  <div class="card"><div class="cap">SPY strip &nbsp;1 character</div><div class="strip">
+<span class="wht">763</span> <span class="pos">+22%</span>
+<span class="wht">762</span> <span class="neg">&minus;58%</span>
+<span class="k wht">761</span> <span class="k neg">&minus;100%</span>
+<span class="wht">760</span> <span class="neg">&minus;48%</span>
+<span class="wht">759</span> <span class="neg">&minus;23%</span>
+<span class="grey">758</span> <span class="grey">+9%</span></div></div>
+
+  <div class="card"><div class="cap">SPX strip &nbsp;1 character &nbsp;<span style="color:#8a97a6">(unchanged from today)</span></div><div class="strip">
+<span class="wht">7695</span> <span class="pos">+37%</span>
+<span class="wht">7690</span> <span class="neg">&minus;7%</span>
+<span class="wht">7685</span> <span class="neg">&minus;26%</span>
+<span class="wht">7680</span> <span class="neg">&minus;4%</span>
+<span class="k wht">7650</span> <span class="k neg">&minus;100%</span>
+<span class="wht">7675</span> <span class="pos">+38%</span>
+<span class="grey">7670</span> <span class="grey">+30%</span></div></div>
 </div>
 
-<h2>What changes in the code</h2>
+<h2>What the rule changes</h2>
 <table class="m">
-<tr><td class="k">the unit</td><td>one space at the strip's own font, measured with <code>getTextWidth(" ")</code> — not a hard-coded pixel count, so it holds at font 8 and font 14 alike</td></tr>
-<tr><td class="k">SPX (right edge)</td><td>the strike moves left by one space; the % stays right-justified at the pane edge. The column is one space wider, so the bars, the level lines and the price area all start one space further in — everything that reads <code>colW</code> follows automatically.</td></tr>
-<tr><td class="k">SPY (left edge)</td><td>the % column's start goes from <code>colW/2</code> to <code>colW/2 &minus; 2 spaces</code>. The strike stays at the pane edge; the strip's own width is unchanged, so the SPY rail does not move.</td></tr>
-<tr><td class="k">one place</td><td><code>gpl::tapeCols(font, side, spaceW)</code> in the logic header, pinned by Gate B — today the two offsets are computed inline in the render, once per rail.</td></tr>
+<tr><td class="k2">today</td><td>each strip places the % at its own <b>fixed column offset</b> — <code>colW/2</code> on the SPY strip, flush against the pane edge on the SPX strip. Two different rules, so the two strips can never look alike, and neither gap is a number anyone chose: it is whatever is left after the strike text.</td></tr>
+<tr><td class="k2">proposed</td><td>one rule for both: the % starts <b>exactly N character-spaces after the strike text ends</b>, N measured with <code>getTextWidth(" ")</code> at that strip's own font. Same N on both rails, so they match at any Font size.</td></tr>
+<tr><td class="k2">what you give up</td><td>on the SPX strip the percentages are right-justified at the pane edge today, so their right edges line up. Measuring from the left instead means <code>&minus;100%</code> and <code>+4%</code> no longer end flush — the right edge goes ragged, as it already is on the SPY strip. That is the price of the two strips matching; there is no way to have both.</td></tr>
+<tr><td class="k2">one place</td><td><code>gpl::tapeCols(font, spaceW, strikeW, nChars)</code> in the logic header, called by both rails, pinned by Gate B — today the offsets are computed inline in the render, differently per side.</td></tr>
 </table>
-<div class="note"><b>Note on the SPY strip:</b> at &minus;2 spaces the widest case, a three-digit strike beside <code>&minus;100%</code>, leaves ~16 px of air — still clear. A fourth digit (it will not happen on SPY) would touch.</div>
+
+<div class="note"><b>Say "build 2" or "build 1"</b> and it ships as GP 0.73. If the ragged right edge on the SPX strip bothers you once you see it live, the fix is one number and one line.</div>
 
 </div></body></html>

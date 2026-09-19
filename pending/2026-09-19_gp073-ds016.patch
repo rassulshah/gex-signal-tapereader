@@ -1,0 +1,255 @@
+diff --git a/plugin/DayStats.cpp b/plugin/DayStats.cpp
+index 2f106a4..b9e5d12 100644
+--- a/plugin/DayStats.cpp
++++ b/plugin/DayStats.cpp
+@@ -89,6 +89,7 @@ public:
+     void applyContractOffset();// (v0.3) match the [1st]/[2nd] price labels to the chart's contract
+     void applyChartExtremes(); // (v0.10) the A row's prices = the chart's own session high / low
+     void readSettings(Settings& S);
++    void syncSettings();       // (v0.16) readSettings behind the font guard — called by the parms callbacks AND every draw
+     void render(const Settings& S);
+     // helpers
+     void textLJ(short x, short y, const char* s, COLOR col, int sz, bool bold);
+@@ -121,9 +122,16 @@ DayStats::DayStats() : cppExtension()
+ }
+ 
+ // ---- parameter callbacks (guard on a plausible font read) -----------------
+-int DayStats::parmsLoad(void)  { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
+-int DayStats::parmsApply(void) { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
+-int DayStats::parmsUpdt(unsigned int) { int p=getIntegerValue(PX.font); if (p>=1 && p<=200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); return RTX_OK; }
++// (v0.16) THE SAVED SETTINGS ARE READ ON EVERY DRAW, NOT ONLY IN THE DIALOG CALLBACKS. Operator, 2026-09-19: "Day Stats seems
++// to go to upper left even though when I open up the options it says top center, then I have to select top center again and
++// apply." IRT can call parmsLoad before a restored instance's values are populated — the font reads 0, the guard below skips
++// readSettings, and `cfg` keeps the CONSTRUCTOR's defaults (Corner = Top-left) until an Apply fires parmsApply. The dialog was
++// right all along; the plugin just never read it. syncSettings() runs at the top of draw() as well, behind the same guard, so
++// the first draw after the values exist applies the saved Corner / font / insets. Eight reads per draw — nothing.
++void DayStats::syncSettings() { int p = getIntegerValue(PX.font); if (p >= 1 && p <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); }
++int DayStats::parmsLoad(void)  { syncSettings(); return RTX_OK; }
++int DayStats::parmsApply(void) { syncSettings(); return RTX_OK; }
++int DayStats::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
+ 
+ // ---- parameter panel ------------------------------------------------------
+ int cppExtension::setup(void)
+@@ -333,7 +341,7 @@ void DayStats::render(const Settings& S)
+ }
+ 
+ // ---- draw() ---------------------------------------------------------------
+-int DayStats::draw(void) { load(); applyContractOffset(); applyChartExtremes(); render(cfg); drawStaleBadge(); return RTX_OK; }
++int DayStats::draw(void) { syncSettings(); load(); applyContractOffset(); applyChartExtremes(); render(cfg); drawStaleBadge(); return RTX_OK; }
+ 
+ // (v0.10) THE ACTUAL ROW'S PRICES ARE THE CHART'S OWN SESSION HIGH / LOW (dsl::applyChartExtremes) — the panel's prices
+ // were Skylit ES1's (September until the 15:16 roll) and the live-close bias made them drift all evening (7722 → 7708).
+@@ -403,6 +411,6 @@ extern "C" cppExtension *CreateExtension(void)
+     p->setArrayCount(1);
+     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
+     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
+-    p->setVersion("0.15");
++    p->setVersion("0.16");
+     return p;
+ }
+diff --git a/plugin/GammaProfile.cpp b/plugin/GammaProfile.cpp
+index cadb888..6d35c7a 100644
+--- a/plugin/GammaProfile.cpp
++++ b/plugin/GammaProfile.cpp
+@@ -62,7 +62,7 @@
+ #include <algorithm>
+ #include <ctime>
+ 
+-static const char* GP_VERSION = "0.72";   // (v0.71) ONE version string: the factory and the status file both read it
++static const char* GP_VERSION = "0.73";   // (v0.71) ONE version string: the factory and the status file both read it
+ 
+ // ---- default palette (matches the Skylit tape) ----------------------------
+ static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
+@@ -161,6 +161,9 @@ public:
+     Settings cfg;                // cached settings (populated in parms callbacks, used in draw)
+     // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
+     short stPaneL, stPaneR, stAnchor, stColW; int stPrimary, stDrawn; bool stRendered;
++    short tapeColW, tapeSpaceW;        // (v0.73) the shared strip width and one space at its font, measured once per draw across both books
++    void measureTape(const Settings& S);   // (v0.73)
++    short railStrikeW(const Settings& S);  // (v0.73) the widest strike text on the rail being rendered
+     std::string stMain, stSpy;   // (v0.61) Book = Both: one GPSTATUS line per rail
+     short stScaleL, stScaleR, stPaneRaw;   // (v0.63) the scale rect and the raw pane right, for the status file
+     short forceBarH;              // (v0.62) >0: the SPY rail draws at the SPX rail's thickness (Book = Both)
+@@ -206,7 +209,7 @@ GammaProfile::GammaProfile() : cppExtension()
+     cfg.type=true; cfg.font=10;
+     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
+     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
+-    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=1; cfg.spywidth=120; lastOff=0.0f;
++    tapeColW=0; tapeSpaceW=3; cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=1; cfg.spywidth=120; lastOff=0.0f;
+     cfg.header=false; cfg.spot=false; cfg.headerpos=0; cfg.tapecols=true; cfg.lvllabels=true;
+     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
+     cfg.bands=true; cfg.bandh=3; cfg.klinew=2;
+@@ -571,6 +574,37 @@ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bo
+     setTextColor(col);
+     PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(y + (asc - desc)/2); tp.drawText(s);
+ }
++// (v0.73) THE TAPE STRIP: measured, not a fixed font x 7 + 8. Strike and % strings exactly as the strip draws them, bold (the
++// King row is bold and bold is the wider face, so every row fits). Both books feed one width — the level lines and the King
++// line stop at "paneL + 2 + colW" and "paneR - colW - 2", which assumes the two strips are the same width.
++static void tapeStrings(const GStrike& s, int hideu, char* sk, size_t nsk, char* pk, size_t npk)
++{
++    if (s.spx > 0.0f) sprintf_s(sk, nsk, "%d", (int)(s.spx + 0.5f)); else sk[0] = 0;
++    sprintf_s(pk, npk, "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct >= 0 ? 0.5f : -0.5f)));
++    if (std::fabs(s.pct) < (float)hideu) pk[0] = 0;
++}
++void GammaProfile::measureTape(const Settings& S)
++{
++    tapeColW = 0; tapeSpaceW = 0;
++    if (!S.tapecols) return;
++    FONT f; f.id = HELVETICA; f.size = (short)S.font; f.style = BOLD; setFont(f);
++    int spaceW = (int)getTextWidth(" ", -1), sW = 0, pW = 0; char sk[16], pk[12];
++    const std::vector<GStrike>* books[2] = { &strikes, &strikesSpy };
++    for (int b = 0; b < 2; b++) for (size_t i = 0; i < books[b]->size(); i++) {
++        tapeStrings((*books[b])[i], S.hideu, sk, sizeof(sk), pk, sizeof(pk));
++        if (sk[0]) { int w = (int)getTextWidth(sk, -1); if (w > sW) sW = w; }
++        if (pk[0]) { int w = (int)getTextWidth(pk, -1); if (w > pW) pW = w; }
++    }
++    gpl::TapeCols T = gpl::tapeCols(4, spaceW, sW, pW, gpl::TAPE_GAP_CHARS);
++    tapeColW = (short)T.colW; tapeSpaceW = (short)spaceW;
++}
++short GammaProfile::railStrikeW(const Settings& S)
++{
++    FONT f; f.id = HELVETICA; f.size = (short)S.font; f.style = BOLD; setFont(f);
++    int sW = 0; char sk[16], pk[12];
++    for (size_t i = 0; i < strikes.size(); i++) { tapeStrings(strikes[i], S.hideu, sk, sizeof(sk), pk, sizeof(pk)); if (sk[0]) { int w = (int)getTextWidth(sk, -1); if (w > sW) sW = w; } }
++    return (short)sW;
++}
+ // Horizontal line in pixel space (lets a level reach into the right margin).
+ void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps, int wpx)
+ {
+@@ -742,7 +776,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+     // (v0.41) TAPE COLUMNS — a Skylit-ladder-style strip [SPX strike | %King] pinned to the pane edge on the
+     // bar side. The bars are shifted inward by the strip width so the columns sit BESIDE them (the operator's
+     // sketch: bars, then the values at the edge), and read row-for-row against Skylit's SPXW ladder.
+-    short colW = S.tapecols ? (short)(S.font * 7 + 8) : 0;   // (v0.66) was font x 9 + 8: "reduce the space between the %King and the price by 50%"
++    short colW = S.tapecols ? tapeColW : 0;   // (v0.73) measured by measureTape (both books, N = 2 characters); was font x 7 + 8 (0.66), font x 9 + 8 before
++    short railSW = S.tapecols ? railStrikeW(S) : 0;   // (v0.73) this rail's widest strike text — the % column starts N characters after it
+     short anchor;                 // base of bars
+     int sgn;                      // +1 grows right, -1 grows left
+     if (S.side == 1) {            // Left margin: anchor at pane left (+ column strip), grow right
+@@ -1005,20 +1040,14 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+         // ES-converted price, so the two ladders compare cell-for-cell. Greyed (sub-threshold) nodes print grey.
+         if (S.tapecols) {
+             char sk[16], pk[12];
+-            if (s.spx > 0.0f) sprintf_s(sk, sizeof(sk), "%d", (int)(s.spx + 0.5f)); else sk[0] = 0;
+-            sprintf_s(pk, sizeof(pk), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
+-            if (ab < (float)S.hideu) pk[0] = 0;   // (v0.64) "Hide % under" applies to the column
++            tapeStrings(s, S.hideu, sk, sizeof(sk), pk, sizeof(pk));   // (v0.64) "Hide % under" applies to the column
+             COLOR tc = primary ? (s.king ? D_KING : C_TXT) : C_GREY;
+-            short half = (short)(colW / 2);
+-            if (S.side == 1) {        // left edge: strike column then % column, growing right
+-                short c1 = (short)(paneL + 4), c2 = (short)(paneL + 4 + half);
+-                if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
+-                if (pk[0]) textLJ(c2, p.v, pk, tc, S.font, s.king);
+-            } else {                  // right edge (default): strike column left, % column right-justified at the edge
+-                short c1 = (short)(paneR - colW + 4), c2 = (short)(paneR - 4);
+-                if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
+-                if (pk[0]) textRJ(c2, p.v, pk, tc, S.font, s.king);
+-            }
++            // (v0.73) ONE RULE ON BOTH RAILS: strike at the strip's inner edge, % exactly N (= 2) character-spaces after this rail's
++            // widest strike — left-justified, so the % column aligns and the gap is the same on the SPY and SPX strips
++            short c1 = (S.side == 1) ? (short)(paneL + 4) : (short)(paneR - colW + 4);
++            short c2 = (short)(c1 + gpl::tapeCols(4, tapeSpaceW, railSW, 0, gpl::TAPE_GAP_CHARS).pctOff);
++            if (sk[0]) textLJ(c1, p.v, sk, tc, S.font, s.king);
++            if (pk[0]) textLJ(c2, p.v, pk, tc, S.font, s.king);
+         }
+     }
+ 
+@@ -1106,6 +1135,7 @@ int GammaProfile::draw(void)
+     // the deflection bands all follow it through the one `rank` field; an unpooled row (IF book, old panel) gets NO_RANK
+     for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
+     stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
++    measureTape(cfg);   // (v0.73) one strip width for both rails, measured from both books
+     Settings M = cfg; M.side = RLY.mainSide;   // (v0.61) Both: the SPX rail is on the right whatever Side says
+     forceBarH = 0;
+     if (RLY.both) {
+diff --git a/plugin/GammaProfileLogic.h b/plugin/GammaProfileLogic.h
+index 5215df0..1dcdabc 100644
+--- a/plugin/GammaProfileLogic.h
++++ b/plugin/GammaProfileLogic.h
+@@ -210,6 +210,28 @@ inline std::string chipLevel(const char* label, float esPx, const char* book, fl
+     return std::string(b);
+ }
+ 
++// (0.73) THE TAPE STRIP'S SPACING, ONE RULE FOR BOTH RAILS. Operator, 2026-09-19: "add 1 space between the price and the
++// percent king in the spx rail and remove 2 spaces in the spy rail" -> "make spy and spx consistent" -> "lets go with your
++// recommendation": the % starts exactly N CHARACTER-SPACES after the strike column, N = 2 on both rails. Until 0.72 the SPY
++// strip put the % at colW/2 and the SPX strip pinned it to the pane edge — two different rules, so the gap was whatever was
++// left over (~3 characters on SPY, ~1 on SPX at font 10). Widths are MEASURED at the strip's font (space, widest strike,
++// widest %), so the gap stays N real characters at any Font size.
++//   pad        px between the strip's outer edge and its text (4, as before)
++//   spaceW     one space character at the strip's font
++//   strikeW    the widest strike text on THIS rail (the % column starts after it, so every row's % aligns)
++//   pctW       the widest % text across BOTH rails (the strip width is shared: the level lines stop at both strips)
++//   nChars     2
++const int TAPE_GAP_CHARS = 2;
++struct TapeCols { int pctOff, colW; };   // pctOff: from the strip's inner-text start (edge + pad) to the % column
++inline TapeCols tapeCols(int pad, int spaceW, int strikeW, int pctW, int nChars)
++{
++    TapeCols t;
++    if (spaceW < 1) spaceW = 1; if (nChars < 0) nChars = 0; if (strikeW < 0) strikeW = 0; if (pctW < 0) pctW = 0;
++    t.pctOff = strikeW + nChars * spaceW;
++    t.colW   = pad + t.pctOff + pctW + pad;
++    return t;
++}
++
+ // ---- contract offset -------------------------------------------------------
+ // off = chartClose - anchor, anchor = SCALEREF (the front ES price the ladder is scaled to) else SPOT.
+ // Clamped to +-300: a wrong chart (NQ) or a bad anchor must never fling the book.
+diff --git a/plugin/test_gammaprofile_logic.cpp b/plugin/test_gammaprofile_logic.cpp
+index caa27b4..3f61422 100644
+--- a/plugin/test_gammaprofile_logic.cpp
++++ b/plugin/test_gammaprofile_logic.cpp
+@@ -265,6 +265,17 @@ int main()
+     CHECK(gpl::chipLevel("FLIP", 7695.7f, "", 7626.3f) == "FLIP 7696 (7626)", "an IF level: the bare SPX number in the bracket, as before");
+     CHECK(gpl::chipLevel("CW", 7750.0f, "SPX", 0) == "CW 7750", "no book price known: the ES alone");
+ 
++    // ---- (0.73) the tape strip: one rule on both rails — the % N characters after the widest strike, the strip sized to fit
++    { gpl::TapeCols a = gpl::tapeCols(4, 3, 30, 32, gpl::TAPE_GAP_CHARS);
++      CHECK(gpl::TAPE_GAP_CHARS == 2, "N = 2 character-spaces (his choice: 'lets go with your recommendation')");
++      CHECK(a.pctOff == 30 + 2 * 3 && a.colW == 4 + 36 + 32 + 4, "SPX (4-digit strike 30 px, space 3 px): % at +36, strip 76 px");
++      gpl::TapeCols b = gpl::tapeCols(4, 3, 23, 32, gpl::TAPE_GAP_CHARS);
++      CHECK(b.pctOff - 23 == a.pctOff - 30, "SPY (3-digit strike 23 px): the gap after the strike is the SAME 6 px as on SPX — consistent");
++      gpl::TapeCols c = gpl::tapeCols(4, 4, 30, 32, gpl::TAPE_GAP_CHARS);
++      CHECK(c.pctOff - 30 == 2 * 4, "a bigger font (space 4 px): the gap follows, still exactly 2 characters");
++      gpl::TapeCols d = gpl::tapeCols(4, 0, -5, -1, -2);
++      CHECK(d.pctOff == 0 && d.colW == 8, "degenerate inputs clamp: no negative widths, no negative gap"); }
++
+     printf("=== %d passed, %d failed ===\n", passes, fails);
+     return fails;
+ }
+\ No newline at end of file
+diff --git a/test_plugin_settings.js b/test_plugin_settings.js
+new file mode 100644
+index 0000000..00838ae
+--- /dev/null
++++ b/test_plugin_settings.js
+@@ -0,0 +1,15 @@
++// (DS 0.16) THE SAVED SETTINGS REACH THE DRAW. Operator, 2026-09-19: Day Stats opened at the top-left although its dialog said
++// Top-center; re-selecting Top-center + Apply fixed it until the next reopen. IRT can call parmsLoad before a restored
++// instance's values exist (the font reads 0), the guard skips readSettings, and the constructor's defaults draw until an Apply.
++// Pins: DayStats reads its settings through ONE guarded routine, from all three callbacks AND at the top of every draw.
++const fs=require('fs');
++let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
++const ds=fs.readFileSync('plugin/DayStats.cpp','utf8');
++const fn=(name)=>{ const i=ds.indexOf(name); if(i<0) return ''; const b=ds.indexOf('{',i); let d=0; for(let k=b;k<ds.length;k++){ if(ds[k]==='{')d++; else if(ds[k]==='}'){ d--; if(d===0) return ds.slice(i,k+1); } } return ''; };
++const draw=fn('int DayStats::draw(void)'), sync=fn('void DayStats::syncSettings()');
++ok(/^int DayStats::draw\(void\)\s*\{\s*syncSettings\(\);/.test(draw), '1 draw() reads the saved settings FIRST — the Corner applies on the first draw after a reopen, no Apply needed', draw.slice(0,90));
++ok(/getIntegerValue\(PX\.font\)/.test(sync) && /readSettings\(cfg\)/.test(sync) && /p >= 1 && p <= 200/.test(sync), '2 syncSettings keeps the font guard (values not yet populated -> skip, retry next draw)', sync.slice(0,160));
++ok(['parmsLoad(void)','parmsApply(void)','parmsUpdt(unsigned int)'].every(n=>/\{\s*syncSettings\(\);\s*return RTX_OK;\s*\}/.test(fn('int DayStats::'+n))), '3 all three dialog callbacks go through the same routine (one place to get it right)');
++ok(!/int DayStats::parms\w+\([^)]*\)\s*\{[^}]*readSettings\(cfg\)/.test(ds), '4 no callback reads the settings on its own any more');
++console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
++process.exit(fail?1:0);
+diff --git a/tools/regress.py b/tools/regress.py
+index bcf8125..3e24374 100644
+--- a/tools/regress.py
++++ b/tools/regress.py
+@@ -49,7 +49,7 @@ INDICATORS = {
+         title='lsDayStats',
+         sources=['current/gex-signal-tapereader.user.js (hodlodCondE, gpOpenWindow, the CONDE/DAYSA/DAYSE rows, hlBaseNormalise, AU.day)', 'tools/day-derive.js',
+                  'tools/study-hodlod.py (condstats) + BASERATES.json', 'plugin/DayStats.cpp', 'plugin/DayStatsLogic.h'],
+-        gateA=['test_daystats_cond.js', 'test_day_export.js', 'test_hodlod.js'],
++        gateA=['test_daystats_cond.js', 'test_day_export.js', 'test_hodlod.js', 'test_plugin_settings.js'],
+         gateB=['test_daystats_logic.cpp'],
+         live=[('testing/day-stats/fixtures/synth-1033', [])],
+         cpp='DayStats.cpp'),
