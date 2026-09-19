@@ -6,6 +6,10 @@ _Created 2026-08-27._
 
 ---
 
+## ✅ BUILT 2026-09-19 — GP 0.75: separate King / top-node / IF level line styles; top nodes as Bands or Lines (width Fixed or By %King); IF "None (labels only)"; Mag line
+Standing requirement (his words): "I should have the ability to also only have labels without any lines" — any future line
+family must keep a labels-only choice. CHANGELOG has the detail.
+
 ## ✅ BUILT 2026-09-19 (was parked) — GP 0.73 (tape spacing N = 2, labels centred on their price, the SPY strip's ES price in dim ink, per-strip widths) + DS 0.16 (Corner read on every draw, MUD = $ (points))
 Applied from pending/ on his "build"; the patch retired in the same commit. CHANGELOG has the detail.
 

@@ -1,6 +1,8 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.52 / GP 0.74 / DS 0.16) · **panel v16.52** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.74**, **lsDayModel v0.18**, **lsDayStats v0.16**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.52 / GP 0.75 / DS 0.16) · **panel v16.52** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.75**, **lsDayModel v0.18**, **lsDayStats v0.16**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
+
+# (2026-09-19 — GP 0.75: "Line style" → King line style; appended Top nodes drawn as (Bands/Lines), Top node line style, Top node line width (Fixed / By %King), IF level line style (incl. None = labels only), Mag line. Standing: every line family keeps a labels-only choice. Built with 0.74 / 0.73 / DS 0.16 pending → one IRT restart installs all. Verify: dialog bottom rows; Lines + By %King with King width 5; IF None shows CALL WALL / PUT WALL / FLIP text only.)
 # (2026-09-18 ~00:10 CT — GP 0.70: one label per IF level — the line's text only when the level is not tagged on a node (gpl::lineLabelWanted); he saw CALL WALL beside the SPY strip and CW on the SPX node at once. Close IRT → INSTALLED → reopen; no dialog change needed.)
 
 # (2026-09-19 — GP 0.74: "Hide nodes under %" hides the whole node on both rails (it only blanked the % text); the King line shows Line style (Windows draws pens > 1 px solid — wide dotted/dashed lines are now drawn as segments). Built with 0.73 / DS 0.16 pending → one IRT restart installs all three.)

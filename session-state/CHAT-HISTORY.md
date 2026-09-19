@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-18 · v16.52 · session `f9c89c64` — one active tab per origin (leader election); absent strikes keep their band stamp; the chip's Kings name their book
+## 2026-09-19 · vGP 0.75 · session `f9c89c64` — Separate line styles: King / top nodes / IF levels; labels only
 
-_789 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
+_808 operator prompts · transcript `f9c89c64-9bb5-5731-9865-4b59996e2783.jsonl`_
 
 ### THE EXCHANGE
 
@@ -10400,6 +10400,150 @@ The bigger thing: you have three Atlas tabs open right now — ES1, GC1 and SPXW
 **OPERATOR:**
 > i think it is already 1 min.  i have 3 tabs but i thought i closed the panel in them so only 1 panel exists.   can you double check as well as create sometype of guard
 
+_— the context was COMPACTED here: the turns above are the transcript's own record, written before the compaction; what follows is recovered from the summary, then the turns after it —_
+
+**OPERATOR:**
+> i opened a new tab , can you read it and is the data being saved
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> can you make this the active tab and continue saving
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> I want to move the position of the labels on top of the price and %king rail . here is an example. show me an example mockup where different levels are placed on top of the price and %king rail
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> see above
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> add 1 space between the price and the percent king in the spx rail and remove 2 spaces in the spy rail. show me mockup
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> when i said space or two spaces , i meant character space
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> so for example the spy rail looks like it has 3 spaces between the spy price and the %king. I want to reduct it by 2 so there is only 1 character of space . do you understand
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> this looks good , but can you make spy and spx consistent in the amount of spacing
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> lets go with your recommendation. for the Day Stats , it seems to goto upper left even though when i open up the options for it , it says top center, then i have to select top center again and apply . can you fix this . also. don not create build yet. i am still considering other changes
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> I also want to update the price in the spy rail to include the es price mapping. So it would be like 762 ESPrice how is it that the Actual lod time is 11:27 and the HOD is 2:57 , but the MUDt is only 1h and 9 minutes. clearly the time from the lod to hod is more than that. Also the MUD field for actual and expected have time, when it should be dollars followed by (points) . Fix and provide mockup.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> I selected medium node thickness and the node is slightly above . it is not aligned. this is for both spy and spx
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> looks good , i like the variant for the spx price
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> hide under % only hides the king percentage , it doesn't hid the nodes. you need to fix this for the spy and the spx rails. There is no line style for the king. the current line style seems to be for top 5. double check.
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> let me know when you have completed the build and i should restart irt
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**OPERATOR:**
+> Hide nodes under %
+> 
+> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+
+**me (03:23):** `top` clashes with window.top — rename.
+I've sent you the mockup for the 0.74 build (it's also saved in your repo's `design` folder as `gp074-mockup.html`). It has two parts:
+
+1. **Hide nodes under %.** It shows the setting at 0 next to 20, on both rails. At 20, each node under 20% disappears completely: the bar, its strip row, its badge and its band. The two Kings (SPY 761 and SPX 7650) always stay.
+2. **Line style.** It shows the King lines at width 2 in Solid, Dot and Dash. Before, Windows drew any line wider than 1 pixel as solid, so only the thin call wall, put wall and flip lines changed with the setting. Now both King lines follow Dot or Dash too.
+
+The numbers in the mockup are made up but shaped like Friday's books, so it shows the look, not a real snapshot.
+
+The build itself hasn't changed. When you're ready:
+
+1. Close IRT and tell me "closed".
+2. I'll confirm the install and tell you when to reopen.
+
+**OPERATOR:**
+> is the line style only for king ?
+> what about top 5
+> 
+> _[sent while I was working — a queued message]_
+
+**me (03:32):** No, it isn't only for the King. The **Line style** setting applies to every level line: both King lines (SPX and SPY), Call Wall, Put Wall, FLIP, and EM-H / EM-L. At width 1 the style always showed on those. The King line is 2 px wide, and that's the only line where it never showed, until 0.74.
+
+**The top 5 don't have lines anymore, so Line style has nothing to style there.**
+
+- **Node bands:** Since 0.64 each top node is drawn as a band instead of a line. The band is a see-through strip in the node's colour, starting at the bar where the node first appeared. A band is a filled strip, so a dot or dash style doesn't apply to it.
+- **Old style setting removed:** The old "top node line style" setting was removed in that same review.
+- **Deflection bands:** If you have "Deflection bands" on, each top-5 node also gets two thin lines 5 points above and below it. Those are always dotted, whatever Line style says. They may be what looked to you like "the line style for top 5".
+
+If you want the deflection bands to follow Line style too, that's a small change. Tell me and I'll show you a mockup first.
+
+**OPERATOR:**
+> I should have the opton to apply node bands or line style.
+
+**me (03:36):** I've sent you a mockup of the option, but nothing is built. It's also saved in your repo's `design` folder as `gp-topnode-lines-mockup.html`.
+
+- **New setting:** "Top nodes drawn as", with a choice of **Bands** (what you have now) or **Lines**. It would go at the bottom of the settings window, so no existing setting moves.
+- **Lines:** Each top node gets a thin 1-pixel line in its colour. The line follows the Line style setting (Solid, Dot or Dash), and Band height doesn't apply to it.
+- **Same nodes either way:** It's the same nodes (your Show filter, e.g. Top 5), starting at the bar where each node first appeared and stopping at each price strip's edge.
+- **Node bands tick box:** It stays the on/off switch for both. Off means no bands and no lines.
+- **King:** It keeps its own thicker line and isn't drawn twice.
+
+**Decision for you:** should the top-node lines use the **same Line style** as the King and the Call Wall, Put Wall and Flip lines (one setting, as the mockup shows)? Or do you want a **separate style setting** for them, so the King could stay solid while the top nodes are dotted?
+
+**OPERATOR:**
+> i want a seperate line style for the king than the top 5 nodes. There should also be an option to automatically make the line thicker based on the %king. obviously this will make the king the thickest because it is 100%.  I want a seperate line style for levels we get from IF (eg Call wall, Put wall, Flip, Mag), should i decide to display them , right now they are only displyed in the rail by default.
+
+**me (03:44):** I've sent you the mockup of the three separate line styles. Nothing is built yet, and the mockup is saved in your repo's `design` folder as `gp-line-styles-mockup.html`.
+
+**Existing setting renamed:** "Line style" becomes **King line style**, in the same spot. From then on it styles only the two King lines.
+
+**New settings, added at the bottom so nothing moves:**
+- **Top nodes drawn as:** Bands or Lines.
+- **Top node line style:** Solid, Dot or Dash, used when the top nodes are drawn as Lines.
+- **Top node line width:** Fixed 1 px, or **By %King**.
+  - With By %King, each node's width is its %King times the King line width. The King is 100%, so it's always the thickest.
+  - With your current King width of 2, every node comes out 1 or 2 px and the difference is hard to see. Set the King width to 4–6 to see it clearly.
+- **IF level line style:** Solid, Dot or Dash, for Call Wall, Put Wall, Flip, Mag and EM H/L.
+- **Mag line:** a tick box, off by default. Today the Magnet only shows as the MAG tag on its node; this also draws it as a line, in the node's colour.
+
+The Call Wall, Put Wall and Flip lines already have their own on/off tick boxes. Those tick boxes are on by default, so if you only see these levels as tags on the nodes, they're probably switched off in your settings.
+
+Say "build" when you're happy, or tell me what to change.
+
+**OPERATOR:**
+> remember that i should have the ability to also only have labels wihtout any lines.   build
+
+**me (03:47):** Now the records: CHANGELOG, resume note, LOCKED-ITEMS, chat history.
+
 ### DECISIONS
 
 - **The wick open = the RTH open (2026-09-09; v15.93):** *"double check why your values for wick% and other dont match"* →
@@ -11270,18 +11414,18 @@ examples.json + LEARNING.md + `LEARN_SEED`; the plan (v15.64 the running build, 
 ### COMMITS THIS CONTEXT
 
 ```
-fa3f49e gex: sync 18-Fri-09 10:42
-8c70a8e gex: sync 18-Fri-09 10:36
-7e90ab5 gex: sync 18-Fri-09 10:12
-5461488 gex: sync 18-Fri-09  9:52
-841652a gex: sync 17-Thu-09 23:36
-30eb922 gex: sync 17-Thu-09 23:02
-031c1b9 gex: sync 17-Thu-09 23:00
-bf36a55 gex: sync 17-Thu-09 22:20
-89c9b6b gex: sync 17-Thu-09 22:08
-e11b12a gex: sync 17-Thu-09 21:30
-ef562e9 gex: sync 17-Thu-09 21:22
-3fd43e4 gex: sync 17-Thu-09 21:08
+1f90375 gex: sync 18-Fri-09 22:44
+409142f gex: sync 18-Fri-09 22:36
+fcd1adc gex: sync 18-Fri-09 22:24
+e1a8622 gex: sync 18-Fri-09 22:18
+0457ecc gex: sync 18-Fri-09 22:10
+3723966 gex: sync 18-Fri-09 20:04
+7dd4712 gex: sync 18-Fri-09 19:58
+db904f2 gex: sync 18-Fri-09 19:56
+1985e4a gex: sync 18-Fri-09 19:50
+e047c5f gex: sync 18-Fri-09 19:20
+21befca gex: sync 18-Fri-09 16:06
+486e42c review: nightly/weekly files pulled from Drive inbox 18-Fri-09
 ```
 
 ---

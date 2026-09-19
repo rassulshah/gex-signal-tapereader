@@ -28,7 +28,17 @@ ok(!/paneR - colW - 2|paneL \+ 2 \+ colW\)/.test(gp.replace(/anchor = \(short\)\
 // ---- (GP 0.74) Hide nodes under % hides the node on both rails; the King line keeps the Line style at any width
 ok(/float ab = std::fabs\(s\.pct\);\s*if \(gpl::nodeHidden\(s\.pct, s\.king, S\.hideu\)\) continue;/.test(gp), '12 the bar loop (both rails render through it) skips a hidden node before anything of it is drawn');
 ok(/if \(s\.since < 0\) continue;\s*if \(gpl::nodeHidden/.test(gp), '13 ...and it gets no band');
-ok(/hlinePx\(a\.v, a\.h, b\.h, col, ps, idx == 0 \? S\.klinew : 1\)/.test(gp) && /gpl::dashSegments\(lx, rx, ps == P_DOT \? 1 : 2, w\)/.test(gp), '14 every level line (the King included) goes through hlinePx, which draws a wide dotted / dashed line as segments');
+ok(/hlinePx\(a\.v, a\.h, b\.h, col, penOf\(style\), wpx\)/.test(gp) && /gpl::dashSegments\(lx, rx, ps == P_DOT \? 1 : 2, w\)/.test(gp), '14 every level line (the King included) goes through hlinePx, which draws a wide dotted / dashed line as segments');
+
+// ---- (GP 0.75) three line families, each its own style; labels only; top nodes as lines, width by %King
+ok(/PX\.lstyle = pc\+\+; setListParameter   \("King line style"/.test(gp), '15 "Line style" renamed IN PLACE to "King line style" (same row, same position)');
+const tail=gp.slice(gp.indexOf('PX.klinew  = pc++'), gp.indexOf('return RTX_OK;', gp.indexOf('PX.klinew  = pc++')));
+ok(['PX.tnmode','PX.tnstyle','PX.tnwidth','PX.ifstyle','PX.magline'].every((k,i,a)=>tail.indexOf(k)>0 && (i===0 || tail.indexOf(k)>tail.indexOf(a[i-1]))), '16 the five new rows are APPENDED after King line width, in order — no row moved');
+ok(/"Solid;Dot;Dash;None \(labels only\)"/.test(gp) && /if \(gpl::styleDrawsLine\(style\)\) hlinePx/.test(gp), '17 the IF level style has "None (labels only)": the label draws, the line does not');
+ok((gp.match(/false, ifs, 1, lp, S\)/g)||[]).length===6, '18 CW, PW, Flip, EM-H, EM-L and Mag all use the IF level style, not the King style');
+ok(/lvl\[0\], kc, "", S\.extk, S\.lstyle, S\.klinew/.test(gp) && /hlinePx\(kp\.v, kx1, kx2, kc, penOf\(S\.lstyle\), S\.klinew\)/.test(gp), '19 both King lines use the King style at the King width');
+{ const k=gp.indexOf('if (S.tnmode == 1) {'), blk=gp.slice(k, k+700);
+  ok(k>0 && blk.indexOf('if (s.king) continue;')>0 && blk.indexOf('penOf(S.tnstyle), gpl::nodeLineWidth(s.pct, S.tnwidth == 1, S.klinew)')>0, '20 Lines mode: the top node style, 1 px or By %King, the King not drawn twice'); }
 
 console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

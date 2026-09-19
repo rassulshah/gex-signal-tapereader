@@ -292,6 +292,15 @@ int main()
       std::vector<gpl::Seg> rev = gpl::dashSegments(40, 0, 2, 2);
       CHECK(rev.size() == dash.size() && rev[0].a == 0, "x1 > x2 is normalised"); }
 
+    // ---- (0.75) separate line styles: King / top nodes / IF levels; labels only; width by %King
+    CHECK(gpl::listOr(1, 3, 0) == 1 && gpl::listOr(-1, 3, 1) == 1 && gpl::listOr(7, 4, 0) == 0, "an appended list row read out of range takes its default");
+    CHECK(gpl::styleDrawsLine(0) && gpl::styleDrawsLine(1) && gpl::styleDrawsLine(2) && !gpl::styleDrawsLine(3), "Solid / Dot / Dash draw a line; None (labels only) does not");
+    CHECK(gpl::ifLabelPos(3, 3) == 2 && gpl::ifLabelPos(3, 1) == 3 && gpl::ifLabelPos(0, 3) == 0, "labels only + Level labels at = Off -> Right (something must show); a line style keeps Off");
+    CHECK(gpl::nodeLineWidth(47, false, 5) == 1 && gpl::nodeLineWidth(-96, false, 5) == 1, "Fixed: 1 px whatever the %King");
+    CHECK(gpl::nodeLineWidth(22, true, 5) == 1 && gpl::nodeLineWidth(-47, true, 5) == 2 && gpl::nodeLineWidth(61, true, 5) == 3 && gpl::nodeLineWidth(-96, true, 5) == 5, "By %King at King width 5: 22%->1, 47%->2, 61%->3, 96%->5 (the mockup's numbers)");
+    CHECK(gpl::nodeLineWidth(100, true, 5) == 5 && gpl::nodeLineWidth(150, true, 5) == 5 && gpl::nodeLineWidth(3, true, 5) == 1, "never over the King's width (the King is the thickest), never under 1");
+    CHECK(gpl::nodeLineWidth(40, true, 0) == 1, "a bad King width reads as 1");
+
     printf("=== %d passed, %d failed ===\n", passes, fails);
     return fails;
 }

@@ -1,3 +1,30 @@
+## lsGammaProfile 0.75 — three line families, each its own style; labels only; top nodes as lines, width by %King (2026-09-19)
+
+Operator (after the 0.74 mockup): "is the line style only for king?" → "what about top 5" → "I should have the option to apply
+node bands or line style" → "I want a separate line style for the king than the top 5 nodes. There should also be an option to
+automatically make the line thicker based on the %king … I want a separate line style for levels we get from IF (Call wall,
+Put wall, Flip, Mag)" → "remember that I should have the ability to also only have labels without any lines. build".
+Mockups: `design/gp-topnode-lines-mockup.html`, `design/gp-line-styles-mockup.html`.
+- **Why:** until 0.74 one "Line style" row drove the King AND every IF level line; the top nodes had no lines at all since 0.64
+  (bands replaced them; the ±5 deflection bands are always dotted). He wants the three families styled independently.
+- **Dialog:** "Line style" renamed in place → **King line style** (the two King lines only). APPENDED after King line width
+  (no row moved): **Top nodes drawn as** (Bands / Lines) · **Top node line style** (Solid / Dot / Dash, default Dot) · **Top
+  node line width** (Fixed 1 px / By %King) · **IF level line style** (Solid / Dot / Dash / **None (labels only)**) · **Mag line**
+  (IF Magnet, off by default).
+- **Lines mode:** same nodes (the Show filter), same start (first-seen bar), same stop (each strip's edge), full polarity
+  colour; the King is skipped (its own King line). The Node bands tick box stays the on/off for both.
+- **By %King:** `gpl::nodeLineWidth` = |%King| × King line width, rounded, 1..King width — the King is always the thickest.
+  At the default King width 2 the spread is only 1–2 px; 4–6 shows it.
+- **Labels only:** `gpl::styleDrawsLine(3) == false` — CW / PW / Flip / Mag / EM draw their label with no line. The one-label
+  rule still holds (a level tagged on its node draws no second label). Labels only + "Level labels at = Off" would show
+  nothing, so it falls back to Right (`gpl::ifLabelPos`). The King "labels only" is the existing King line tick box (the node
+  carries K); the top nodes' labels are the rail.
+- **Mag line:** at the KINGNOW,ES,IF price (offset-adjusted), polarity colour like its MAG tag; unlabelled when the MAG tag is
+  on a visible node (not the CW / PW node).
+- Appended list rows read out of range on a 0.74 saved instance → `gpl::listOr` takes the default; the repair-on-load sets them.
+- Gate B 114 (+7), `test_plugin_settings.js` 20 (+6: rename in place, append order, labels only, IF rows on the IF style, the
+  King style on both Kings, Lines mode).
+
 ## lsGammaProfile 0.74 — "Hide nodes under %" hides the node; the King line shows the Line style (2026-09-19)
 
 Operator: "hide under % only hides the %King, it doesn't hide the nodes. you need to fix this for the spy and the spx rails.
