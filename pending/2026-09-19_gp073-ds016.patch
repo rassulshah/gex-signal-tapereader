@@ -1,8 +1,16 @@
 diff --git a/plugin/DayStats.cpp b/plugin/DayStats.cpp
-index 2f106a4..b9e5d12 100644
+index 2f106a4..7fb02d8 100644
 --- a/plugin/DayStats.cpp
 +++ b/plugin/DayStats.cpp
-@@ -89,6 +89,7 @@ public:
+@@ -77,6 +77,7 @@ public:
+     dsl::Read2 read1;                                    // (v0.14) the first extreme's read (panel 16.48), same model
+     std::string weekday, daydate;
+     double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
++    double eOpen;               // (v0.16) the expected candle's open (DAYEXP), <=0 = unknown
+     float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
+     float priceOff;            // (v0.3) chart-contract offset applied to the displayed price labels
+     // (v0.5) THE READ — the validated HLTAB classifier (AUC 0.879), center-justified on the title line.
+@@ -89,6 +90,7 @@ public:
      void applyContractOffset();// (v0.3) match the [1st]/[2nd] price labels to the chart's contract
      void applyChartExtremes(); // (v0.10) the A row's prices = the chart's own session high / low
      void readSettings(Settings& S);
@@ -10,7 +18,7 @@ index 2f106a4..b9e5d12 100644
      void render(const Settings& S);
      // helpers
      void textLJ(short x, short y, const char* s, COLOR col, int sz, bool bold);
-@@ -121,9 +122,16 @@ DayStats::DayStats() : cppExtension()
+@@ -121,9 +123,16 @@ DayStats::DayStats() : cppExtension()
  }
  
  // ---- parameter callbacks (guard on a plausible font read) -----------------
@@ -30,7 +38,32 @@ index 2f106a4..b9e5d12 100644
  
  // ---- parameter panel ------------------------------------------------------
  int cppExtension::setup(void)
-@@ -333,7 +341,7 @@ void DayStats::render(const Settings& S)
+@@ -189,6 +198,7 @@ void DayStats::load()
+     hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
+     hasRead = false; readFirst.clear(); readCall.clear(); readPosr = -1; readPct = -1; readN = 0;
+     read1 = dsl::Read2(); read2 = dsl::Read2();   // (v0.14) a row absent from this export must not linger from the last
++    eOpen = -1;   // (v0.16)
+     const char* up = getenv("USERPROFILE"); if (!up) return;
+     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
+     std::ifstream f(path.c_str()); if (!f.is_open()) return;
+@@ -207,6 +217,8 @@ void DayStats::load()
+             dsl::Cond c; dsl::parseCond(t, c); condBasis = c.basis; condLastHr = c.lastHr; condLast30 = c.last30; condP20 = c.p20; condP50 = c.p50; condP80 = c.p80;   // (v0.8) DayStatsLogic.h · (v0.11) + percentiles
+         } else if (t[0] == "READ2") {
+             dsl::parseRead2(t, read2);   // (v0.12)
++        } else if (t[0] == "DAYEXP" && t.size() >= 2) {
++            eOpen = atof(t[1].c_str());   // (v0.16) DAYEXP,<open>,<eHi>,<eLo>,<eClose> — the expected candle's open, for the E row's MUD move
+         } else if (t[0] == "READ1") {
+             dsl::parseRead2(t, read1);   // (v0.14) the first extreme's read, same shape
+         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
+@@ -226,6 +238,7 @@ void DayStats::load()
+             hasRead   = true;
+         }
+     }
++    dsl::setMud(E, eOpen);   // (v0.16) the E row's MUD move: |the expected 2nd extreme - the expected candle's open|, ES points
+ }
+ 
+ // ---- render ---------------------------------------------------------------
+@@ -333,7 +346,7 @@ void DayStats::render(const Settings& S)
  }
  
  // ---- draw() ---------------------------------------------------------------
@@ -39,7 +72,35 @@ index 2f106a4..b9e5d12 100644
  
  // (v0.10) THE ACTUAL ROW'S PRICES ARE THE CHART'S OWN SESSION HIGH / LOW (dsl::applyChartExtremes) — the panel's prices
  // were Skylit ES1's (September until the 15:16 roll) and the live-close bias made them drift all evening (7722 → 7708).
-@@ -403,6 +411,6 @@ extern "C" cppExtension *CreateExtension(void)
+@@ -343,19 +356,22 @@ void DayStats::applyChartExtremes()
+ {
+     if (!A.valid) return;
+     long n = getBarCount(); if (n < 2) return;
+-    RTARRAY hi(barHigh), lo(barLow); RTARRAYI dt(barDateTime);
++    RTARRAY op(barOpen), hi(barHigh), lo(barLow); RTARRAYI dt(barDateTime);
+     int from = (int)n - 3000; if (from < 0) from = 0;
+-    std::vector<int> yy, mm, dd; std::vector<double> so; std::vector<float> hh, ll;
++    std::vector<int> yy, mm, dd; std::vector<double> so; std::vector<float> oo, hh, ll;
+     for (int i = from; i < (int)n; i++) {
+         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+         yy.push_back(t.tm_year + 1900); mm.push_back(t.tm_mon + 1); dd.push_back(t.tm_mday);
+-        so.push_back(t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec); hh.push_back(hi[i]); ll.push_back(lo[i]);
++        so.push_back(t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec); oo.push_back(op[i]); hh.push_back(hi[i]); ll.push_back(lo[i]);
+     }
+     int wy = yy.back(), wm = mm.back(), wd = dd.back();
+     if (daydate.size() >= 10) { int y2, m2, d2; if (sscanf(daydate.c_str(), "%d-%d-%d", &y2, &m2, &d2) == 3) { wy = y2; wm = m2; wd = d2; } }
++    // (v0.16) the session read is stamp-aware (DayModel 0.16's rule: on an end-stamped chart the 08:30 bar is the pre-open bar)
++    // and carries the RTH OPEN, for the MUD move: |the chart's 2nd extreme - the chart's open|, in the chart's own points
+     dsl::Ext X;
+-    bool have = dsl::chartExtremes(&yy[0], &mm[0], &dd[0], &so[0], &hh[0], &ll[0], (int)yy.size(), wy, wm, wd, X);
+-    if (have) { dsl::applyChartExtremes(A, X.hi, X.lo, true); priceOff = 0.0f; }   // chart facts need no bias
++    bool endSt = dsl::endStampedSods(&so[0], (int)so.size());
++    bool have = dsl::chartSession(&yy[0], &mm[0], &dd[0], &so[0], &oo[0], &hh[0], &ll[0], (int)yy.size(), wy, wm, wd, endSt, X);
++    if (have) { dsl::applyChartExtremes(A, X.hi, X.lo, true); priceOff = 0.0f; dsl::setMud(A, X.open); }   // chart facts need no bias
+ }
+ 
+ // ---- (v0.3) contract offset for the displayed price labels ([1st]/[2nd]) — match the day candle: the
+@@ -403,6 +419,6 @@ extern "C" cppExtension *CreateExtension(void)
      p->setArrayCount(1);
      p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
      p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
@@ -47,8 +108,118 @@ index 2f106a4..b9e5d12 100644
 +    p->setVersion("0.16");
      return p;
  }
+diff --git a/plugin/DayStatsLogic.h b/plugin/DayStatsLogic.h
+index 3234bbb..3521095 100644
+--- a/plugin/DayStatsLogic.h
++++ b/plugin/DayStatsLogic.h
+@@ -18,7 +18,8 @@ struct StatRow {
+     double took, bop, wick, mud, gap;     // minutes (<0 = missing)
+     double wickPct;                       // percent (<0 = missing)
+     std::string rngPts, rngUsd, rngP25, rngP75;
+-    StatRow() : valid(false), firstClk(-1), secondClk(-1), wendSo(-1), took(-1), bop(-1), wick(-1), mud(-1), gap(-1), wickPct(-1) {}
++    double mudPts;                        // (0.16) the MUD move in points (|2nd extreme - open|), <0 = unknown
++    StatRow() : valid(false), firstClk(-1), secondClk(-1), wendSo(-1), took(-1), bop(-1), wick(-1), mud(-1), gap(-1), wickPct(-1), mudPts(-1) {}
+ };
+ struct Cond { std::string basis; int lastHr, last30; int p20, p50, p80; Cond() : lastHr(-1), last30(-1), p20(-1), p50(-1), p80(-1) {} };   // (0.11) + the 2ND clock's percentiles, minutes after the open
+ 
+@@ -63,6 +64,36 @@ inline std::string px1(const std::string& raw, double priceOff)
+ }
+ inline std::string pct(double v, bool tilde) { if (v < 0) return "--"; char b[16]; snprintf(b, sizeof(b), "%s%d%%", tilde ? "~" : "", (int)(v + 0.5)); return std::string(b); }
+ 
++// (0.16) money with a thousands comma ("$1,197"); MUD is the move in dollars followed by (points) — operator, 2026-09-19:
++// "the MUD field for actual and expected have time, when it should be dollars followed by (points)". ES: $50 a point.
++inline std::string usd(double v)
++{
++    if (v < 0) return "--";
++    long n = (long)(v + 0.5); std::string d = std::to_string(n), o;
++    int c = 0; for (int i = (int)d.size() - 1; i >= 0; i--) { o.insert(o.begin(), d[i]); if (++c % 3 == 0 && i > 0) o.insert(o.begin(), ','); }
++    return "$" + o;
++}
++inline std::string mudCell(double pts, bool expected)
++{
++    if (pts < 0) return "--";
++    char b[24]; snprintf(b, sizeof(b), " (%.1fp)", pts);
++    return (expected ? "~" : "") + usd(pts * 50.0) + b;
++}
++inline std::string rngCell(const std::string& usdRaw, const std::string& pts, bool expected)
++{
++    std::string m = usdRaw.empty() ? std::string("--") : ((expected ? "~" : "") + usd(atof(usdRaw.c_str())));
++    return m + (pts.empty() ? std::string("") : ((expected ? "  ~" : "  ") + pts + "p"));
++}
++// the MUD move: from the open (reclaimed at W.END) to the 2nd extreme — the leg MUDt times. A row: the chart's own RTH open and
++// its 2nd extreme (chart facts, like the prices since 0.10). E row: the expected candle's 2nd extreme against its open (DAYEXP),
++// a difference, so it is in ES points whatever tab wrote the rows.
++inline void setMud(StatRow& R, double open)
++{
++    if (!R.valid || !(open > 0) || R.secondPx.empty()) return;
++    double sp = atof(R.secondPx.c_str()); if (!(sp > 0)) return;
++    R.mudPts = sp > open ? sp - open : open - sp;
++}
++
+ const int NCOL = 12;
+ // the ACTUAL row's twelve cells, exactly as printed
+ inline void actualCells(const StatRow& A, double priceOff, std::string* c)
+@@ -71,10 +102,10 @@ inline void actualCells(const StatRow& A, double priceOff, std::string* c)
+     c[0] = "A";
+     c[1] = A.first + " " + clk(A.firstClk) + " " + px1(A.firstPx, priceOff);
+     c[2] = dur(A.took); c[3] = dur(A.bop); c[4] = dur(A.wick); c[5] = clk(A.wendSo); c[6] = pct(A.wickPct, false);
+-    c[7] = dur(A.mud); c[8] = dur(mudt);
++    c[7] = mudCell(A.mudPts, false); c[8] = dur(mudt);   // (0.16) MUD = the move $ (points); MUDt = its duration
+     c[9] = A.second + " " + clk(A.secondClk) + " " + px1(A.secondPx, priceOff);
+     c[10] = dur(A.gap);
+-    c[11] = (A.rngUsd.empty() ? std::string("--") : ("$" + A.rngUsd)) + (A.rngPts.empty() ? std::string("") : ("  " + A.rngPts + "p"));
++    c[11] = rngCell(A.rngUsd, A.rngPts, false);
+ }
+ // the EXPECTED row's twelve cells: '~' marks an expectation; a READ-IN 1ST prints '='; the 2ND carries its ladder
+ inline void expectedCells(const StatRow& E, const Cond& C, std::string* c)
+@@ -83,10 +114,10 @@ inline void expectedCells(const StatRow& E, const Cond& C, std::string* c)
+     c[0] = "E";
+     c[1] = E.first + (C.basis.rfind("read-in", 0) == 0 ? " =" : " ~") + clk(E.firstClk);
+     c[2] = "~" + dur(E.took); c[3] = "~" + dur(E.bop); c[4] = "~" + dur(E.wick); c[5] = "~" + clk(E.wendSo); c[6] = pct(E.wickPct, true);
+-    c[7] = "~" + dur(E.mud); c[8] = "~" + dur(mudt);
++    c[7] = mudCell(E.mudPts, true); c[8] = "~" + dur(mudt);   // (0.16) MUD = the expected move ~$ (points)
+     c[9] = E.second + " ~" + clk(E.secondClk) + (C.lastHr >= 0 ? ("  " + std::to_string(C.lastHr) + "% last hr") : std::string());
+     c[10] = "~" + dur(E.gap);
+-    c[11] = (E.rngUsd.empty() ? std::string("--") : ("~$" + E.rngUsd)) + (E.rngPts.empty() ? std::string("") : ("  ~" + E.rngPts + "p"));
++    c[11] = rngCell(E.rngUsd, E.rngPts, true);
+ }
+ // colour rule for the ACTUAL row: 0 = plain, 1 = up (green), -1 = down (red), per column
+ inline void actualTone(const StatRow& A, int* tone)
+@@ -116,7 +147,31 @@ inline void applyChartExtremes(StatRow& A, double chartHi, double chartLo, bool
+ }
+ // the session's high / low on the chart's own bars: the bars of `y-m-d` (the day the rows describe) inside RTH
+ // (08:30–15:00 CT); returns false when that day has no RTH bar on the chart
+-struct Ext { double hi, lo; int hiSod, loSod; };
++struct Ext { double hi, lo; int hiSod, loSod; double open; int openSod; Ext() : hi(-1), lo(1e12), hiSod(-1), loSod(-1), open(-1), openSod(-1) {} };
++// (0.16) THE BAR-STAMP CONVENTION (DayModel 0.16's rule): end-stamped = a bar stamped at the 16:00 close exists and none at the
++// 17:00 open. On an end-stamped chart the bar stamped 08:30 is the PRE-OPEN bar (08:27-08:30) — its open is not the RTH open,
++// and its high / low are not the session's. RTH: end-stamped (08:30, 15:00]; start-stamped [08:30, 15:00).
++inline bool endStampedSods(const double* sod, int n)
++{
++    int seenStart = 0, seenEnd = 0, to = n - 2000; if (to < 0) to = 0;
++    for (int i = n - 1; i >= to; i--) { if ((int)sod[i] == 17 * 3600) seenStart++; if ((int)sod[i] == 16 * 3600) seenEnd++; }
++    return seenEnd > 0 && seenStart == 0;
++}
++inline bool inRthS(double sod, bool endSt) { const int O = 30600, S = 54000; return endSt ? (sod > O && sod <= S) : (sod >= O && sod < S); }
++// the chart's own session on `y-m-d`: high / low over its RTH bars, and the OPEN = the first RTH bar's open
++inline bool chartSession(const int* y, const int* m, const int* d, const double* sod, const float* op, const float* hi, const float* lo, int n,
++                         int wy, int wm, int wd, bool endSt, Ext& out)
++{
++    bool any = false; out = Ext();
++    for (int i = 0; i < n; i++) {
++        if (y[i] != wy || m[i] != wm || d[i] != wd || !inRthS(sod[i], endSt)) continue;
++        if (!any) { out.open = op[i]; out.openSod = (int)sod[i]; }
++        if (hi[i] > out.hi) { out.hi = hi[i]; out.hiSod = (int)sod[i]; }
++        if (lo[i] < out.lo) { out.lo = lo[i]; out.loSod = (int)sod[i]; }
++        any = true;
++    }
++    return any;
++}
+ inline bool chartExtremes(const int* y, const int* m, const int* d, const double* sod, const float* hi, const float* lo, int n,
+                           int wy, int wm, int wd, Ext& out)
+ {
 diff --git a/plugin/GammaProfile.cpp b/plugin/GammaProfile.cpp
-index cadb888..76f79af 100644
+index cadb888..54e8145 100644
 --- a/plugin/GammaProfile.cpp
 +++ b/plugin/GammaProfile.cpp
 @@ -62,7 +62,7 @@
@@ -60,17 +231,18 @@ index cadb888..76f79af 100644
  
  // ---- default palette (matches the Skylit tape) ----------------------------
  static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
-@@ -161,6 +161,9 @@ public:
+@@ -161,6 +161,10 @@ public:
      Settings cfg;                // cached settings (populated in parms callbacks, used in draw)
      // (v0.60) what the last draw did — written to GammaProfile.status-<Book>-<Side>.txt (gpl::statusLine) after every draw
      short stPaneL, stPaneR, stAnchor, stColW; int stPrimary, stDrawn; bool stRendered;
-+    short tapeColW, tapeSpaceW;        // (v0.73) the shared strip width and one space at its font, measured once per draw across both books
++    struct TapeW { int skW, esW, pW, spaceW, colW, pctOff; bool withEs; TapeW() : skW(0), esW(0), pW(0), spaceW(3), colW(0), pctOff(0), withEs(false) {} };
++    TapeW tw[2];                       // (v0.73) [0] the main rail's strip, [1] the SPY rail's (Book = Both), measured once per draw
++    void measureOne(const std::vector<GStrike>& v, const Settings& S, bool withEs, TapeW& out);
 +    void measureTape(const Settings& S);   // (v0.73)
-+    short railStrikeW(const Settings& S);  // (v0.73) the widest strike text on the rail being rendered
      std::string stMain, stSpy;   // (v0.61) Book = Both: one GPSTATUS line per rail
      short stScaleL, stScaleR, stPaneRaw;   // (v0.63) the scale rect and the raw pane right, for the status file
      short forceBarH;              // (v0.62) >0: the SPY rail draws at the SPX rail's thickness (Book = Both)
-@@ -178,6 +181,8 @@ public:
+@@ -178,6 +182,8 @@ public:
      void drawBar(short l, short t, short r, short b, COLOR col, bool rounded, bool trans);
      void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
      void textLJ(short leftX,  short y, const char* s, COLOR col, int sz, bool bold);
@@ -79,16 +251,7 @@ index cadb888..76f79af 100644
      short pillW(const std::string& tag, const Settings& S);                       // (v0.50)
      short drawDepthPill(short leftX, short y, const std::string& tag, const Settings& S);   // (v0.50) returns its width (0 when no tag)
      void textC (short cx,     short y, const char* s, COLOR col, int sz, bool bold);
-@@ -206,7 +211,7 @@ GammaProfile::GammaProfile() : cppExtension()
-     cfg.type=true; cfg.font=10;
-     strncpy(cfg.kinglabel, "K", sizeof(cfg.kinglabel)); cfg.kinglabel[sizeof(cfg.kinglabel)-1]=0;
-     cfg.kline=true; cfg.cw=true; cfg.pw=true; cfg.flip=true; cfg.em=false;
--    cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=1; cfg.spywidth=120; lastOff=0.0f;
-+    tapeColW=0; tapeSpaceW=3; cfg.lstyle=0; cfg.lpos=0; cfg.extk=false; cfg.topnodes=false; cfg.topstyle=1; cfg.spyking=false; cfg.rankmode=1; cfg.spywidth=120; lastOff=0.0f;
-     cfg.header=false; cfg.spot=false; cfg.headerpos=0; cfg.tapecols=true; cfg.lvllabels=true;
-     cfg.roles=true; cfg.regime=true; cfg.panelpos=1; cfg.defbands=false; cfg.confl=false; cfg.legend=false;
-     cfg.bands=true; cfg.bandh=3; cfg.klinew=2;
-@@ -548,11 +553,11 @@ short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag,
+@@ -548,11 +554,11 @@ short GammaProfile::drawDepthPill(short leftX, short y, const std::string& tag,
      // (the rect draw baselines low), so the box is centred there, not on y — the metric-placed text of 0.54 sat 4 px
      // above everything beside it.
      short w = pillW(tag, S), h = (short)(S.font + 5);
@@ -102,7 +265,7 @@ index cadb888..76f79af 100644
      return w;
  }
  void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
-@@ -562,6 +567,14 @@ void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz
+@@ -562,6 +568,14 @@ void GammaProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz
      RCT rc; rc.set(leftX, (short)(y - sz), (short)(leftX + 260), (short)(y + sz));
      rc.drawText(s, false, false);     // left-justified
  }
@@ -117,55 +280,85 @@ index cadb888..76f79af 100644
  // Centered on (cx, y) both axes, using measured metrics.
  void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bool bold)
  {
-@@ -571,6 +584,37 @@ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bo
+@@ -571,6 +585,43 @@ void GammaProfile::textC(short cx, short y, const char* s, COLOR col, int sz, bo
      setTextColor(col);
      PNT tp; tp.h = (short)(cx - tw/2); tp.v = (short)(y + (asc - desc)/2); tp.drawText(s);
  }
 +// (v0.73) THE TAPE STRIP: measured, not a fixed font x 7 + 8. Strike and % strings exactly as the strip draws them, bold (the
-+// King row is bold and bold is the wider face, so every row fits). Both books feed one width — the level lines and the King
-+// line stop at "paneL + 2 + colW" and "paneR - colW - 2", which assumes the two strips are the same width.
++// King row is bold and bold is the wider face, so every row fits).
 +static void tapeStrings(const GStrike& s, int hideu, char* sk, size_t nsk, char* pk, size_t npk)
 +{
 +    if (s.spx > 0.0f) sprintf_s(sk, nsk, "%d", (int)(s.spx + 0.5f)); else sk[0] = 0;
 +    sprintf_s(pk, npk, "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct >= 0 ? 0.5f : -0.5f)));
 +    if (std::fabs(s.pct) < (float)hideu) pk[0] = 0;
 +}
-+void GammaProfile::measureTape(const Settings& S)
++// (v0.73) Each book is measured on its own (the SPY strip also carries the ES price, so it is wider than the SPX strip):
++//   skW  the widest strike text   esW  the widest ES price text (0 when the strip does not show it)   pW  the widest %
++// The strip: [pad] strike [1 space] ES [2 spaces] %King [pad]. The level lines / King lines / bands stop at each strip's OWN
++// edge (stripL / stripR in render) — 0.73's first cut shared one width across both rails.
++static const COLOR C_DIMES = 0x008A97A6;   // (v0.73) the ES price beside a SPY strike: dimmer than the strike (his pick of the variant)
++void GammaProfile::measureOne(const std::vector<GStrike>& v, const Settings& S, bool withEs, TapeW& out)
 +{
-+    tapeColW = 0; tapeSpaceW = 0;
++    out = TapeW(); out.withEs = withEs;
 +    if (!S.tapecols) return;
 +    FONT f; f.id = HELVETICA; f.size = (short)S.font; f.style = BOLD; setFont(f);
-+    int spaceW = (int)getTextWidth(" ", -1), sW = 0, pW = 0; char sk[16], pk[12];
-+    const std::vector<GStrike>* books[2] = { &strikes, &strikesSpy };
-+    for (int b = 0; b < 2; b++) for (size_t i = 0; i < books[b]->size(); i++) {
-+        tapeStrings((*books[b])[i], S.hideu, sk, sizeof(sk), pk, sizeof(pk));
-+        if (sk[0]) { int w = (int)getTextWidth(sk, -1); if (w > sW) sW = w; }
-+        if (pk[0]) { int w = (int)getTextWidth(pk, -1); if (w > pW) pW = w; }
++    out.spaceW = (int)getTextWidth(" ", -1);
++    char sk[16], pk[12], es[16];
++    for (size_t i = 0; i < v.size(); i++) {
++        tapeStrings(v[i], S.hideu, sk, sizeof(sk), pk, sizeof(pk));
++        if (sk[0]) { int w = (int)getTextWidth(sk, -1); if (w > out.skW) out.skW = w; }
++        if (pk[0]) { int w = (int)getTextWidth(pk, -1); if (w > out.pW) out.pW = w; }
++        if (withEs && v[i].price > 0.0f) { sprintf_s(es, sizeof(es), "%d", (int)(v[i].price + 0.5f)); int w = (int)getTextWidth(es, -1); if (w > out.esW) out.esW = w; }
 +    }
-+    gpl::TapeCols T = gpl::tapeCols(4, spaceW, sW, pW, gpl::TAPE_GAP_CHARS);
-+    tapeColW = (short)T.colW; tapeSpaceW = (short)spaceW;
++    int lead = out.skW + ((withEs && out.esW > 0) ? out.spaceW + out.esW : 0);
++    gpl::TapeCols T = gpl::tapeCols(4, out.spaceW, lead, out.pW, gpl::TAPE_GAP_CHARS);
++    out.colW = T.colW; out.pctOff = T.pctOff;
 +}
-+short GammaProfile::railStrikeW(const Settings& S)
++void GammaProfile::measureTape(const Settings& S)
 +{
-+    FONT f; f.id = HELVETICA; f.size = (short)S.font; f.style = BOLD; setFont(f);
-+    int sW = 0; char sk[16], pk[12];
-+    for (size_t i = 0; i < strikes.size(); i++) { tapeStrings(strikes[i], S.hideu, sk, sizeof(sk), pk, sizeof(pk)); if (sk[0]) { int w = (int)getTextWidth(sk, -1); if (w > sW) sW = w; } }
-+    return (short)sW;
++    // strikes = the main book (SPY itself when Book = SPY); strikesSpy = the SPY rail of Book = Both. Measured BEFORE the
++    // Both block swaps the two vectors, so tw[0] is always the main rail and tw[1] the SPY rail.
++    measureOne(strikes, S, S.book == 2, tw[0]);
++    measureOne(strikesSpy, S, true, tw[1]);
 +}
  // Horizontal line in pixel space (lets a level reach into the right margin).
  void GammaProfile::hlinePx(short y, short lx, short rx, COLOR col, PEN_STYLE ps, int wpx)
  {
-@@ -742,7 +786,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -742,7 +793,12 @@ void GammaProfile::render(const Settings& S, bool railOnly)
      // (v0.41) TAPE COLUMNS — a Skylit-ladder-style strip [SPX strike | %King] pinned to the pane edge on the
      // bar side. The bars are shifted inward by the strip width so the columns sit BESIDE them (the operator's
      // sketch: bars, then the values at the edge), and read row-for-row against Skylit's SPXW ladder.
 -    short colW = S.tapecols ? (short)(S.font * 7 + 8) : 0;   // (v0.66) was font x 9 + 8: "reduce the space between the %King and the price by 50%"
-+    short colW = S.tapecols ? tapeColW : 0;   // (v0.73) measured by measureTape (both books, N = 2 characters); was font x 7 + 8 (0.66), font x 9 + 8 before
-+    short railSW = S.tapecols ? railStrikeW(S) : 0;   // (v0.73) this rail's widest strike text — the % column starts N characters after it
++    const TapeW& TW = tw[railOnly ? 1 : 0];   // (v0.73) this rail's strip, measured in measureTape (N = 2 characters); was font x 7 + 8
++    short colW = S.tapecols ? (short)TW.colW : 0;
++    // the strips at the two pane edges, for everything that must stop short of them (level lines, King lines, bands): with
++    // Book = Both the SPY strip is on the left and is wider (it carries the ES price) — each edge uses its own strip's width
++    bool bothStrips = (cfg.book == 4 && S.tapecols);
++    short stripL = bothStrips ? (short)tw[1].colW : colW, stripR = bothStrips ? (short)tw[0].colW : colW;
      short anchor;                 // base of bars
      int sgn;                      // +1 grows right, -1 grows left
      if (S.side == 1) {            // Left margin: anchor at pane left (+ column strip), grow right
-@@ -912,8 +957,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -847,8 +903,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+     // Threshold, the ones with badges). 0.64 banded every node >= 5% and after hours that was the whole SPX ladder
+     // ("it's just highlighting almost every spx node"); on the real chart the translucent draw is not faint.
+     if (S.bands && !bars.empty()) {
+-        short bx2 = (short)(paneR - colW - 2);                      // stop at the SPX strip (both rails use the same colW)
+-        short bx0 = (short)(paneL + 2 + colW);                      // never under the SPY strip
++        short bx2 = (short)(paneR - stripR - 2);                    // stop at the SPX strip (v0.73: its own width)
++        short bx0 = (short)(paneL + 2 + stripL);                    // never under the SPY strip
+         int topNb = (S.filter==0)?3 : (S.filter==1)?5 : (S.filter==2)?8 : (S.filter==3)?10 : 0;
+         for (size_t i = 0; i < strikes.size(); i++) {
+             const GStrike& s = strikes[i];
+@@ -868,7 +924,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+     if (railOnly && S.kline && kIdx >= 0) {
+         PNT kp; kp.set(lastBar, strikes[kIdx].price);
+         COLOR kc = (S.kingcol == 1) ? D_KING : (strikes[kIdx].pct < 0 ? S.cneg : S.cpos);
+-        short kx1 = (short)(paneL + 2 + colW), kx2 = S.extk ? (short)(paneR - colW - 2) : (short)(kp.h + getPixelsPerBar()/2); if (kx2 > paneR - colW - 2) kx2 = (short)(paneR - colW - 2);   // (v0.68) the price area only
++        short kx1 = (short)(paneL + 2 + stripL), kx2 = S.extk ? (short)(paneR - stripR - 2) : (short)(kp.h + getPixelsPerBar()/2); if (kx2 > paneR - stripR - 2) kx2 = (short)(paneR - stripR - 2);   // (v0.73) each strip's own edge   // (v0.68) the price area only
+         hlinePx(kp.v, kx1, kx2, kc, S.lstyle==1 ? P_DOT : (S.lstyle==2 ? P_DASH : P_SOLID), S.klinew);
+     }
+ 
+@@ -912,8 +968,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
              st.draw(0, sr, sr, DRAW_OPAQUE, PAT_SOLID);
              const char* rn = gpl::roleTag(rl, S.kinglabel);   // K(name) / C / F / G / G·C / G·F
              COLOR ic = inkOn(col);
@@ -176,7 +369,7 @@ index cadb888..76f79af 100644
          }
  
          // node PATTERN tag (P / B on the named stack member, R / RR on the rug's yellow node) INSIDE the bar.
-@@ -928,8 +973,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -928,8 +984,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
              bool bubbleIn = S.rank && !gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxT;   // (v0.62)
              short r0 = (short)(S.font * 0.9f + 4);
              short inset = bubbleIn ? (short)(2 * r0 + 6) : 6;          // clear the bubble when it is inside the tip
@@ -187,7 +380,7 @@ index cadb888..76f79af 100644
          }
          // (v0.42) LEVEL LABELS ON THE NODE: the wall nodes carry "CW" / "PW" just beyond the tip (outside the
          // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
-@@ -947,8 +992,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -947,8 +1003,8 @@ void GammaProfile::render(const Settings& S, bool railOnly)
              int rankMaxW = (S.filter <= 3) ? topN : (S.rankscope==1 ? 3 : 5);
              bool bubbleOut = S.rank && gpl::bubbleOutside(S.rankpos, len, (int)(S.font * 0.9f + 4)) && s.rank >= 1 && s.rank <= rankMaxW;   // (v0.62)
              short past = bubbleOut ? (short)(2 * (S.font * 0.9f + 4) + 8) : 6;
@@ -198,7 +391,7 @@ index cadb888..76f79af 100644
              // (v0.50) the depth pill beside the tag (IF extras #1): 0D = today's expiry only, WK = the week, MO = the monthly
              // (v0.51) order outward from the tip: bubble, tag, pill, then the % label — the pill was drawn over the % (his
              // screenshot 21:33: "+48%" half under a WK box). outerW carries tag + pill so the % label clears both.
-@@ -992,11 +1037,11 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -992,11 +1048,11 @@ void GammaProfile::render(const Settings& S, bool railOnly)
              char pc[12]; sprintf_s(pc, sizeof(pc), "%s%d%%", s.pct > 0 ? "+" : "", (int)(s.pct + (s.pct>=0?0.5f:-0.5f)));
              if (S.pctpos == 1) {  // inside near base
                  COLOR ic = inkOn(col);
@@ -214,7 +407,7 @@ index cadb888..76f79af 100644
              }
          }
  
-@@ -1005,20 +1050,14 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+@@ -1005,20 +1061,18 @@ void GammaProfile::render(const Settings& S, bool railOnly)
          // ES-converted price, so the two ladders compare cell-for-cell. Greyed (sub-threshold) nodes print grey.
          if (S.tapecols) {
              char sk[16], pk[12];
@@ -236,17 +429,30 @@ index cadb888..76f79af 100644
 +            // (v0.73) ONE RULE ON BOTH RAILS: strike at the strip's inner edge, % exactly N (= 2) character-spaces after this rail's
 +            // widest strike — left-justified, so the % column aligns and the gap is the same on the SPY and SPX strips
 +            short c1 = (S.side == 1) ? (short)(paneL + 4) : (short)(paneR - colW + 4);
-+            short c2 = (short)(c1 + gpl::tapeCols(4, tapeSpaceW, railSW, 0, gpl::TAPE_GAP_CHARS).pctOff);
++            short c2 = (short)(c1 + TW.pctOff);
 +            if (sk[0]) textLJc(c1, p.v, sk, tc, S.font, s.king);
++            // (v0.73) THE ES PRICE beside a SPY strike, in the dimmer ink — operator 2026-09-19: "update the price in the spy rail to
++            // include the es price mapping, like 762 ESPrice" (he chose the dim variant). The price the bar sits at, whole points.
++            if (TW.withEs && TW.esW > 0 && s.price > 0.0f) { char es[16]; sprintf_s(es, sizeof(es), "%d", (int)(s.price + 0.5f));
++                textLJc((short)(c1 + TW.skW + TW.spaceW), p.v, es, primary ? C_DIMES : C_GREY, S.font, false); }
 +            if (pk[0]) textLJc(c2, p.v, pk, tc, S.font, s.king);
          }
      }
  
-@@ -1106,6 +1145,7 @@ int GammaProfile::draw(void)
+@@ -1052,7 +1106,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
+     // level rail
+     { COLOR kc = D_KING; if (S.kingcol != 1 && kIdx >= 0) kc = strikes[kIdx].pct < 0 ? S.cneg : S.cpos;   // (v0.64) polarity, like its bar
+       // (v0.68) the level rail lives in the PRICE AREA: from the SPY strip's right edge (Book = Both) to the SPX strip's left edge
+-      short lvL = (short)((cfg.book == 4 && S.tapecols) ? (paneL + 2 + colW) : paneL), lvR = (short)(paneR - colW - 2);
++      short lvL = (short)(bothStrips ? (paneL + 2 + stripL) : paneL), lvR = (short)(paneR - stripR - 2);   // (v0.73) each strip's own edge
+       if (S.kline) drawLevel(lastBar, lvL, lvR, 0, kc, "", S.extk, S);   // line only; the node labels KING
+     // (v0.70) ONE LABEL PER LEVEL (gpl::lineLabelWanted): when the node labels are on and the wall sits on a rail node (CW / PW
+     // tag) or the FLIP tick is drawn, the line draws WITHOUT its text — the operator saw "CALL WALL" beside the SPY strip
+@@ -1106,6 +1160,7 @@ int GammaProfile::draw(void)
      // the deflection bands all follow it through the one `rank` field; an unpooled row (IF book, old panel) gets NO_RANK
      for (size_t i = 0; i < strikes.size(); i++) strikes[i].rank = gpl::effectiveRank(strikes[i].rank, strikes[i].mrank, cfg.rankmode == 1);
      stPaneL = stPaneR = stAnchor = stColW = 0; stPrimary = stDrawn = 0; stRendered = false;
-+    measureTape(cfg);   // (v0.73) one strip width for both rails, measured from both books
++    measureTape(cfg);   // (v0.73) each rail's strip measured from its own book (the SPY strip carries the ES price)
      Settings M = cfg; M.side = RLY.mainSide;   // (v0.61) Both: the SPX rail is on the right whatever Side says
      forceBarH = 0;
      if (RLY.both) {
@@ -283,11 +489,56 @@ index 5215df0..1dcdabc 100644
  // ---- contract offset -------------------------------------------------------
  // off = chartClose - anchor, anchor = SCALEREF (the front ES price the ladder is scaled to) else SPOT.
  // Clamped to +-300: a wrong chart (NQ) or a bad anchor must never fling the book.
+diff --git a/plugin/test_daystats_logic.cpp b/plugin/test_daystats_logic.cpp
+index ad4849e..6d6e672 100644
+--- a/plugin/test_daystats_logic.cpp
++++ b/plugin/test_daystats_logic.cpp
+@@ -33,11 +33,11 @@ int main()
+     std::string a[dsl::NCOL], e[dsl::NCOL];
+     dsl::actualCells(A, 0.0, a);
+     CHECK(a[0] == "A" && a[1] == "HOD 10:48am 7741" && a[2] == "2h 18m" && a[3] == "12m" && a[4] == "50m" && a[5] == "9:20am" && a[6] == "18%", "A cells 0-6: HOD 10:48am 7741 · 2h 18m · 12m · 50m · 9:20am · 18%");
+-    CHECK(a[7] == "3h 21m" && a[8] == "3h 30m" && a[9] == "LOD 2:30pm 7617" && a[10] == "3h 42m" && a[11] == "$6200  124.0p", "A cells 7-11: MUD 3h 21m · MUDt 3h 30m (gap - bop) · LOD 2:30pm 7617 · 3h 42m · $6200  124.0p");
++    CHECK(a[7] == "--" && a[8] == "3h 30m" && a[9] == "LOD 2:30pm 7617" && a[10] == "3h 42m" && a[11] == "$6,200  124.0p", "A cells 7-11: MUD -- until the chart's open is known (0.16: MUD is money, never a duration) · MUDt 3h 30m (gap - bop) · LOD 2:30pm 7617 · 3h 42m · $6,200  124.0p");
+     dsl::expectedCells(E, C, e);
+     CHECK(e[0] == "E" && e[1] == "HOD ~10:48am" && e[2] == "~2h 18m" && e[6] == "~23%", "E cells: the ~ on every expectation");
+     CHECK(e[9] == "LOD ~1:36pm  39% last hr", "the 2ND cell carries the ladder: 'LOD ~1:36pm  39% last hr'");
+-    CHECK(e[11] == "~$2247  44.9p" || e[11] == "~$2247  ~44.9p", "the E range cell");
++    CHECK(e[11] == "~$2,247  ~44.9p", "the E range cell (0.16: thousands comma)");
+     dsl::expectedCells(E, C6, e);
+     CHECK(e[9] == "LOD ~1:36pm", "no ladder on the CONDE row -> no suffix");
+     dsl::Cond Cr; Cr.basis = "read-in-HOD"; Cr.lastHr = 39;
+@@ -102,6 +102,26 @@ int main()
+       r1.p = 50; CHECK(dsl::firstTone(r1, "HOD", "IN", false, -1) == 0, "tone: 31-69 plain even if the old cell said IN");
+       r1.p = 12; CHECK(dsl::firstTone(r1, "HOD", "", false, -1) == -1 && dsl::firstTone(none, "HOD", "NOTIN", false, -1) == -1 && dsl::firstTone(none, "HOD", "", true, 30780) == 1, "tone: <= 30 amber; no READ1 -> the call; closed -> green"); }
+     CHECK(dsl::secondLine(dsl::Read2(), 0, false, -1).find("\xC2") == std::string::npos && std::string("\xB7").size() == 1, "(0.15) the middle dot is ONE byte everywhere the plugin prints it — IRT draws Latin-1, a UTF-8 dot shows as \"\xC2\xB7\"");
++    // ---- (0.16) MUD = the move in dollars followed by (points); the chart's own open, stamp-aware
++    { CHECK(dsl::usd(413.4) == "$413" && dsl::usd(1197) == "$1,197" && dsl::usd(1234567) == "$1,234,567" && dsl::usd(-1) == "--", "money with a thousands comma");
++      CHECK(dsl::mudCell(8.26, false) == "$413 (8.3p)" && dsl::mudCell(23.94, true) == "~$1,197 (23.9p)" && dsl::mudCell(-1, false) == "--", "MUD: '$413 (8.3p)' actual, '~$1,197 (23.9p)' expected (his 09-18 numbers)");
++      dsl::StatRow F; F.valid = true; F.first = "LOD"; F.second = "HOD"; F.secondPx = "7719.90"; dsl::setMud(F, 7711.64);
++      CHECK(F.mudPts > 8.25 && F.mudPts < 8.27, "the A move: HOD 7719.90 - open 7711.64 = 8.26 points (the markup leg MUDt times)");
++      dsl::StatRow G; G.valid = true; G.second = "LOD"; G.secondPx = "737.56"; dsl::setMud(G, 761.50);
++      CHECK(G.mudPts > 23.93 && G.mudPts < 23.95, "the E move: |expected LOD - expected open| — a difference, right even when the rows came from a SPY-scale tab");
++      dsl::StatRow H; H.valid = true; H.secondPx = "7719.90"; dsl::setMud(H, -1); CHECK(H.mudPts < 0, "no open known: MUD stays unknown (--)");
++      std::string a2[dsl::NCOL]; F.gap = 210; F.bop = 141; dsl::actualCells(F, 0.0, a2);
++      CHECK(a2[7] == "$413 (8.3p)" && a2[8] == "1h 09m", "the strip: MUD '$413 (8.3p)', MUDt '1h 09m' — money and time in their own cells, never the same duration twice");
++      // stamp-aware session: an END-stamped chart (a 16:00 bar, no 17:00 bar) — the 08:30 bar is PRE-OPEN, the RTH open is the 08:33 bar's
++      int yy[6] = {2026,2026,2026,2026,2026,2026}, mm[6] = {9,9,9,9,9,9}, dd[6] = {18,18,18,18,18,18};
++      double so[6] = {30600, 30780, 41220, 53820, 54000, 57600};
++      float oo[6] = {7700, 7711.75f, 7690, 7715, 7716, 7717}, hh[6] = {7730, 7714, 7692, 7719.9f, 7718, 7760}, ll[6] = {7695, 7709, 7676.7f, 7712, 7714, 7650};
++      bool endSt = dsl::endStampedSods(so, 6); dsl::Ext X; bool ok = dsl::chartSession(yy, mm, dd, so, oo, hh, ll, 6, 2026, 9, 18, endSt, X);
++      CHECK(endSt && ok && X.open == 7711.75f && X.openSod == 30780, "end-stamped: the open is the 08:33 bar's (7711.75), not the 08:30 pre-open bar's (7700)");
++      CHECK(X.hi == 7719.9f && X.lo == 7676.7f, "...and the session's high / low skip the pre-open bar (7730 / 7695) and the 16:00 bar");
++      double so2[6] = {30600, 30780, 41220, 53820, 54000, 61200};   // a 17:00 bar exists: start-stamped
++      dsl::Ext Y; ok = dsl::chartSession(yy, mm, dd, so2, oo, hh, ll, 6, 2026, 9, 18, dsl::endStampedSods(so2, 6), Y);
++      CHECK(ok && Y.open == 7700 && Y.openSod == 30600, "start-stamped: the 08:30 bar IS the first RTH bar"); }
+     // ---- (0.13) the block's anchor: centre entries, and never cut off at the left
+     { CHECK(dsl::anchorX(0, 60, 1400, 1000, 8) == 68 && dsl::anchorX(1, 60, 1400, 1000, 8) == 392, "TL / TR anchors as before on a wide pane");
+       CHECK(dsl::anchorX(4, 60, 1400, 1000, 8) == 230 && dsl::anchorX(5, 60, 1400, 1000, 8) == 230, "Top-centre / Bottom-centre: the block on the pane's midline");
 diff --git a/plugin/test_gammaprofile_logic.cpp b/plugin/test_gammaprofile_logic.cpp
-index caa27b4..3f61422 100644
+index caa27b4..1dff793 100644
 --- a/plugin/test_gammaprofile_logic.cpp
 +++ b/plugin/test_gammaprofile_logic.cpp
-@@ -265,6 +265,17 @@ int main()
+@@ -265,6 +265,19 @@ int main()
      CHECK(gpl::chipLevel("FLIP", 7695.7f, "", 7626.3f) == "FLIP 7696 (7626)", "an IF level: the bare SPX number in the bracket, as before");
      CHECK(gpl::chipLevel("CW", 7750.0f, "SPX", 0) == "CW 7750", "no book price known: the ES alone");
  
@@ -299,6 +550,8 @@ index caa27b4..3f61422 100644
 +      CHECK(b.pctOff - 23 == a.pctOff - 30, "SPY (3-digit strike 23 px): the gap after the strike is the SAME 6 px as on SPX — consistent");
 +      gpl::TapeCols c = gpl::tapeCols(4, 4, 30, 32, gpl::TAPE_GAP_CHARS);
 +      CHECK(c.pctOff - 30 == 2 * 4, "a bigger font (space 4 px): the gap follows, still exactly 2 characters");
++      gpl::TapeCols e = gpl::tapeCols(4, 3, 23 + 3 + 30, 32, gpl::TAPE_GAP_CHARS);   // the SPY strip: "762" 23 px, a space, "7717" 30 px
++      CHECK(e.pctOff == 56 + 6 && e.colW == 4 + 62 + 32 + 4, "SPY with its ES price: the % 2 characters after the ES price, the strip 102 px (wider than the SPX strip's 76)");
 +      gpl::TapeCols d = gpl::tapeCols(4, 0, -5, -1, -2);
 +      CHECK(d.pctOff == 0 && d.colW == 8, "degenerate inputs clamp: no negative widths, no negative gap"); }
 +
@@ -308,10 +561,10 @@ index caa27b4..3f61422 100644
 \ No newline at end of file
 diff --git a/test_plugin_settings.js b/test_plugin_settings.js
 new file mode 100644
-index 0000000..88abca3
+index 0000000..8b6a8c4
 --- /dev/null
 +++ b/test_plugin_settings.js
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,29 @@
 +// (DS 0.16) THE SAVED SETTINGS REACH THE DRAW. Operator, 2026-09-19: Day Stats opened at the top-left although its dialog said
 +// Top-center; re-selecting Top-center + Apply fixed it until the next reopen. IRT can call parmsLoad before a restored
 +// instance's values exist (the font reads 0), the guard skips readSettings, and the constructor's defaults draw until an Apply.
@@ -333,6 +586,11 @@ index 0000000..88abca3
 +ok(/static short lowShift\(int sz\) \{ return \(short\)\(sz \* 0\.45f \+ 0\.5f\); \}/.test(gp), '6 the shift is the measured 0.45 x font (the offset the depth pill was built around in 0.55)');
 +ok(/short cy = y;/.test(gp) && /textLJc\(\(short\)\(leftX \+ 6\), y, tag\.c_str\(\)/.test(gp), '7 the depth pill is centred on y with its text (it used to sit low to match the low text)');
 +ok((gp.match(/textLJc\(c[12], p\.v,/g)||[]).length===2, '8 the tape strip (strike and %King) is centred on its bar on both rails');
++
++// ---- (GP 0.73) the SPY strip carries the ES price in the dimmer ink; each strip is sized to its own text
++ok(/textLJc\(\(short\)\(c1 \+ TW\.skW \+ TW\.spaceW\), p\.v, es, primary \? C_DIMES : C_GREY/.test(gp), '9 the ES price is drawn one space after the SPY strike, centred on the bar, in C_DIMES (grey on a sub-threshold row)');
++ok(/measureOne\(strikesSpy, S, true, tw\[1\]\)/.test(gp) && /measureOne\(strikes, S, S\.book == 2, tw\[0\]\)/.test(gp), '10 the SPY rail (Both) and a single SPY rail show the ES price; the SPX rail does not');
++ok(!/paneR - colW - 2|paneL \+ 2 \+ colW\)/.test(gp.replace(/anchor = \(short\)\(paneL \+ 2 \+ colW\);/,'')), '11 no line / band stops at "the other strip" by THIS strip\'s width any more — stripL / stripR, each strip\'s own');
 +
 +console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
 +process.exit(fail?1:0);

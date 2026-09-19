@@ -29,5 +29,14 @@ If a patch no longer applies (other work touched the same lines), re-create it f
    at a bar's price (the tape strip, the % beside a bar, role / pattern / level tags) drew 4-5 px under the bar. Hidden at Auto
    thickness, visible at Medium — operator 2026-09-19: "the node is slightly above, it is not aligned, both SPY and SPX".
    `textLJc` / `textRJc` shift by the measured offset; the depth pill re-centred on y. `test_plugin_settings.js` 5-8.
+4. **GP 0.73 — the SPY strip carries the ES price.** "762 7717  −96%": the SPY strike, one space, the ES price the bar sits at
+   (whole points) in a dimmer ink (C_DIMES — he picked the variant), then 2 characters to the %King. Each strip is now measured
+   from its own book (`measureOne`, `tw[0]` main / `tw[1]` SPY rail) and the level lines, King lines and bands stop at each
+   strip's own edge (`stripL` / `stripR`). Book = SPY single rail shows the ES price too; the SPX strip does not.
+5. **DS 0.16 — MUD is the move in dollars followed by (points).** "$413 (8.3p)" / "~$1,197 (23.9p)": |2nd extreme − open|,
+   the leg MUDt times. A row from the chart's own RTH open and 2nd extreme (`chartSession`, stamp-aware per DayModel 0.16 —
+   on an end-stamped chart the 08:30 bar is the pre-open bar); E row from DAYSE's 2nd extreme vs DAYEXP's open. Money gets a
+   thousands comma (HL RNG too). MUDt unchanged — it is HL GAP − BOP by his 09-12 definition; Friday: 3h30 − 2h21 = 1h09,
+   the LOD-to-HOD time is HL GAP. Gate B 70 (+10). Mockup: design/ds-mud-spyes-mockup.html ("looks good").
    Not in this patch, same latent pattern: lsDayModel (font guard) and lsKingTracker (`dialogReady`) also read settings only in
    the callbacks. Their defaults happen to equal his settings, so it does not show; a non-default setting would.

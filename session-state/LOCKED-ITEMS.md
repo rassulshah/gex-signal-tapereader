@@ -6,7 +6,7 @@ _Created 2026-08-27._
 
 ---
 
-## 🅿 AGREED 2026-09-19, CODED, NOT BUILT — GP 0.73 tape spacing (N = 2 on both rails) + DS 0.16 Corner fix
+## 🅿 AGREED 2026-09-19, CODED, NOT BUILT — GP 0.73 (tape spacing N = 2, labels centred on their price, the SPY strip's ES price in dim ink, per-strip widths) + DS 0.16 (Corner read on every draw, MUD = $ (points))
 `pending/2026-09-19_gp073-ds016.patch` (see pending/README.md). He asked explicitly NOT to build yet — he is still considering
 other changes and wants them in one build. Apply the patch as part of that build; do not put it in plugin/ on its own.
 
