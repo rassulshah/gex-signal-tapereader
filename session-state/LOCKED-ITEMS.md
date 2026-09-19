@@ -6,7 +6,7 @@ _Created 2026-08-27._
 
 ---
 
-## 📌 OFFERED 2026-09-19, WAITING FOR HIS OK — the dialog regroup (design/gp-dialog-regroup-mockup.html)
+## ✅ BUILT 2026-09-19 (GP 0.77, "ok build") — the dialog regroup (design/gp-dialog-regroup-mockup.html)
 Seven sections (Book & layout · Nodes · Colours · King line · Top nodes · IF levels · Read panel), shorter names, the three cut-off
 labels fixed. Needs setParameterVersion(8) — the saved instance opens once on defaults, so the defaults become HIS settings from
 his 09-19 dialog screenshot (Book Both, 90, Right, Medium, Top 5, 20, Grey out, King=100%, hide 0, font 10, rank badge on, name

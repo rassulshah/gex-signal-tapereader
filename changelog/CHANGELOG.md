@@ -1,3 +1,24 @@
+## lsGammaProfile 0.77 — the settings dialog regrouped (parameter version 8) (2026-09-19)
+
+Operator (dialog screenshot): "redo the settings so that they are grouped better and more orderly. right now everything is too
+messy. show me a mockup" → design/gp-dialog-regroup-mockup.html → "ok build".
+- **Order:** BOOK & LAYOUT (Book | Side · SPX rail width | SPY rail width · Thickness | Font · Tape columns | Scale to) · NODES
+  (Show | Threshold · Sub-threshold | Hide nodes under % · Rank badge | Rank at · Node name inside | Rank for · King name |
+  Structure labels) · COLOURS (+Gamma | −Gamma | Midpoint | King colour) · KING LINE (King line | Extend · style | width) · TOP
+  NODES (Draw top nodes | drawn as · Band height | line style · line width) · IF LEVELS (Call Wall | Put Wall | Flip | Mag | EM
+  H/L · IF line style | IF labels at · Tag IF levels on their nodes) · READ PANEL (Regime + read panel | Panel at).
+- **Renamed:** Width px → SPX rail width px; Node bands (…) → Draw top nodes; Mag line (IF Magnet) → Mag; IF level line style
+  (…) → IF line style; Level labels at (…) → IF labels at; Show IF level labels on nodes → Tag IF levels on their nodes. The three
+  cut-off labels in his screenshot (SPY rail width, the IF style box, the labels-at box) now fit.
+- **No section-title rows** — setLabelParameter shifted every setting below it in 0.6x; the sections are the order alone.
+  (The mockup's blue headings were conditional on a probe; not risked on his live instance.)
+- **The one-time reset:** IRT keeps values by position. `setParameterVersion(8)`; a v7 instance reads its old Side (0/1) in the
+  new SPX-width slot → `scrambled()` (width floor 20) → `migrateScrambled()` writes the defaults once — and the defaults are HIS
+  settings from the 09-19 screenshot (Medium, GPOC, EM on, King Dot, bands off, 90 / 120, Bottom-C, …). SPY width 120 is a guess
+  (its box was cut off).
+- `test_plugin_settings.js` 32 (+7): version 8, every v7 row kept once, the agreed order, his v7 values simulated into the new
+  slots → caught, the reset writes his settings and covers every row, no label rows.
+
 ## lsGammaProfile 0.76 — IF / King tags ON TOP of the strip row; symmetric badges (2026-09-19)
 
 Operator 09-18: "I want to move the position of the labels on top of the price and %king rail". The mockup

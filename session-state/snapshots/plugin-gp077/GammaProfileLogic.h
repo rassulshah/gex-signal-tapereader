@@ -1,0 +1,439 @@
+/********************************************************************************
+ *  GammaProfileLogic.h  —  the DECISIONS lsGammaProfile makes, with no drawing
+ *  and no Investor/RT SDK, so they can be unit-tested (test_gammaprofile_logic.cpp)
+ *  with any C++ compiler and pinned against the doctrine fixtures.
+ *
+ *  (v0.45, 2026-09-16) Extracted from GammaProfile.cpp after three days in which every
+ *  defect in this plugin was found by the operator's eyes and none by a test.
+ *
+ *  Doctrine sources (the gate): skylit-docs/patternpedia/pattern-the-gatekeeper.md,
+ *  skylit-docs/learn/air-pockets-velocity.md, skylit-docs/learn/heatseeker-patterns.md,
+ *  skylit-docs/FINDINGS.md S6 (stacks), core-concepts §Gatekeeper / §Air Pockets.
+ ********************************************************************************/
+#ifndef GAMMA_PROFILE_LOGIC_H
+#define GAMMA_PROFILE_LOGIC_H
+
+#include <vector>
+#include <cstdio>
+#include <string>
+#include "ContractOffsetLogic.h"   // (v0.64) col::Bar — the band start is found on the chart's own bars
+#include <cmath>
+#include <algorithm>
+
+namespace gpl {
+
+// One STRIKE row after the contract offset has been applied (price = chart scale).
+struct Node {
+    float price;        // chart-scale price (ES on this chart)
+    float pct;          // signed %King, -100..100
+    int   rank;         // 1 = biggest |pct|
+    bool  king;
+    float spx;          // raw SPX strike (0 if the panel predates it)
+    std::string type;   // "", RUG, RRUG, PIKA, PIKAM, BARNEY, BARNEYM (from the panel)
+};
+
+// ---- thresholds (mirror the panel: gatekeeper() ranks by magnitude; REGIME_SIG_PCT=20;
+//      FINDINGS S6: a stack member is >= 30% of the King) ----
+static const float GK_MIN_PCT   = 30.0f;   // a Gatekeeper must be at least this % of the King
+static const float AIR_THIN_PCT = 8.0f;    // a strike under this |%| is "thin" (part of a pocket)
+static const float AIR_EDGE_PCT = 20.0f;   // a pocket only exists between nodes at least this big
+static const int   AIR_MIN_RUN  = 3;       // and at least this many thin strikes wide
+
+// ---- roles ---------------------------------------------------------------
+// 0 none · 1 KING · 2 CEIL (biggest |node| above spot, King excluded) · 3 FLOOR (biggest below)
+// 4 GATE (the ONE dominant blocker strictly between spot and the King, >= GK_MIN_PCT)
+// 5 GATE+CEIL (the gatekeeper is also the ceiling) · 6 GATE+FLOOR
+enum Role { R_NONE=0, R_KING=1, R_CEIL=2, R_FLOOR=3, R_GATE=4, R_GATE_CEIL=5, R_GATE_FLOOR=6 };
+
+struct Roles {
+    int kIdx, cIdx, fIdx, gIdx;
+    std::vector<int> role;
+};
+
+inline Roles roles(const std::vector<Node>& s, float spot, bool hasSpot, float gkMinPct = GK_MIN_PCT)
+{
+    Roles R; R.kIdx = R.cIdx = R.fIdx = R.gIdx = -1; R.role.assign(s.size(), R_NONE);
+    float sp = hasSpot ? spot : 0.0f;
+    for (size_t i = 0; i < s.size(); i++) if (s[i].king) { R.kIdx = (int)i; if (!hasSpot) sp = s[i].price; }
+    float fBest = -1, cBest = -1;
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i].king) continue;
+        float a = std::fabs(s[i].pct);
+        if      (s[i].price < sp) { if (a > fBest) { fBest = a; R.fIdx = (int)i; } }
+        else if (s[i].price > sp) { if (a > cBest) { cBest = a; R.cIdx = (int)i; } }
+    }
+    if (R.kIdx >= 0) R.role[R.kIdx] = R_KING;
+    if (R.cIdx >= 0) R.role[R.cIdx] = R_CEIL;
+    if (R.fIdx >= 0) R.role[R.fIdx] = R_FLOOR;
+    if (R.kIdx >= 0) {
+        float kp = s[R.kIdx].price, lo = sp < kp ? sp : kp, hi = sp < kp ? kp : sp, gBest = -1;
+        for (size_t i = 0; i < s.size(); i++) {
+            if (s[i].king) continue;
+            float a = std::fabs(s[i].pct);
+            if (s[i].price > lo && s[i].price < hi && a >= gkMinPct && a > gBest) { gBest = a; R.gIdx = (int)i; }
+        }
+        if (R.gIdx >= 0) {
+            // the gatekeeper keeps its ceiling/floor identity when it is the same node ("G·C" / "G·F")
+            R.role[R.gIdx] = (R.gIdx == R.cIdx) ? R_GATE_CEIL : (R.gIdx == R.fIdx ? R_GATE_FLOOR : R_GATE);
+        }
+    }
+    return R;
+}
+
+inline const char* roleTag(int role, const char* kingLabel)
+{
+    switch (role) {
+        case R_KING:       return kingLabel;
+        case R_CEIL:       return "C";
+        case R_FLOOR:      return "F";
+        case R_GATE:       return "G";
+        case R_GATE_CEIL:  return "G\xB7" "C";   // G·C (ANSI middle dot, renders in IRT's text)
+        case R_GATE_FLOOR: return "G\xB7" "F";
+        default:           return "";
+    }
+}
+
+// ---- air pockets ---------------------------------------------------------
+// A thin run (>= minRun strikes under thinPct) bounded on BOTH sides by a node >= edgePct.
+// Indices refer to the price-ascending order of `s` (returned in `ord`).
+struct Pocket { float lo, hi; int n; bool neg; };
+
+inline std::vector<Pocket> airPockets(const std::vector<Node>& s,
+                                      float thinPct = AIR_THIN_PCT, float edgePct = AIR_EDGE_PCT, int minRun = AIR_MIN_RUN)
+{
+    std::vector<Pocket> out;
+    if (s.size() < 3) return out;
+    std::vector<int> ord(s.size());
+    for (size_t i = 0; i < s.size(); i++) ord[i] = (int)i;
+    std::sort(ord.begin(), ord.end(), [&](int a, int b){ return s[a].price < s[b].price; });
+    size_t i = 0;
+    while (i < ord.size()) {
+        if (std::fabs(s[ord[i]].pct) < thinPct) {
+            size_t j = i; float runSum = 0.0f;
+            while (j + 1 < ord.size() && std::fabs(s[ord[j+1]].pct) < thinPct) j++;
+            for (size_t q = i; q <= j; q++) runSum += s[ord[q]].pct;
+            bool lowEdge  = (i > 0)              && std::fabs(s[ord[i-1]].pct) >= edgePct;
+            bool highEdge = (j + 1 < ord.size()) && std::fabs(s[ord[j+1]].pct) >= edgePct;
+            if ((int)(j - i + 1) >= minRun && lowEdge && highEdge) {
+                Pocket p; p.lo = s[ord[i]].price; p.hi = s[ord[j]].price; p.n = (int)(j - i + 1); p.neg = runSum < 0;
+                out.push_back(p);
+            }
+            i = j + 1;
+        } else i++;
+    }
+    return out;
+}
+
+// ---- stacks (pika / barney) -------------------------------------------------
+// The panel names a stack ONCE (PIKA / BARNEY on the biggest member) and marks the other members
+// (PIKAM / BARNEYM). A stack = the contiguous run (in price order) of same-family tags.
+struct Stack { float lo, hi; int n; bool pos; int namedIdx; };
+
+inline bool isStackTag(const std::string& t, bool& pos, bool& named)
+{
+    if (t == "PIKA")    { pos = true;  named = true;  return true; }
+    if (t == "PIKAM")   { pos = true;  named = false; return true; }
+    if (t == "BARNEY")  { pos = false; named = true;  return true; }
+    if (t == "BARNEYM") { pos = false; named = false; return true; }
+    return false;
+}
+
+inline std::vector<Stack> stacks(const std::vector<Node>& s)
+{
+    std::vector<Stack> out;
+    std::vector<int> ord(s.size());
+    for (size_t i = 0; i < s.size(); i++) ord[i] = (int)i;
+    std::sort(ord.begin(), ord.end(), [&](int a, int b){ return s[a].price < s[b].price; });
+    size_t i = 0;
+    while (i < ord.size()) {
+        bool pos = false, named = false;
+        if (!isStackTag(s[ord[i]].type, pos, named)) { i++; continue; }
+        Stack st; st.lo = s[ord[i]].price; st.hi = st.lo; st.n = 1; st.pos = pos; st.namedIdx = named ? ord[i] : -1;
+        size_t j = i;
+        while (j + 1 < ord.size()) {
+            bool p2, n2;
+            if (!isStackTag(s[ord[j+1]].type, p2, n2) || p2 != pos) break;
+            // a second NAMED member starts a new stack (two adjacent stacks of the same family)
+            if (n2 && st.namedIdx >= 0) break;
+            j++; st.hi = s[ord[j]].price; st.n++; if (n2) st.namedIdx = ord[j];
+        }
+        out.push_back(st);
+        i = j + 1;
+    }
+    return out;
+}
+
+// Short tag for the bar: the named member carries P / B, the rug's yellow node R / RR; members carry nothing
+// (v0.45: the bracket marks the run — the operator chose the bracket over a letter on every member).
+inline const char* patternTag(const std::string& t)
+{
+    if (t == "PIKA")   return "P";
+    if (t == "BARNEY") return "B";
+    if (t == "RUG")    return "R";
+    if (t == "RRUG" || t == "RREV" || t == "REVRUG") return "RR";
+    if (t == "GK" || t == "GATEKEEPER") return "G";
+    return "";
+}
+
+// ---- level -> node matching ------------------------------------------------
+// A wall (CW / PW) tags the node with the same SPX strike; without a strike, the node within 1 pt.
+inline int levelNode(const std::vector<Node>& s, float lvlPrice, float lvlSpx)
+{
+    for (size_t i = 0; i < s.size(); i++) {
+        bool hit = (lvlSpx > 0.0f && s[i].spx > 0.0f) ? (std::fabs(lvlSpx - s[i].spx) < 0.01f)
+                                                       : (std::fabs(lvlPrice - s[i].price) < 1.0f);
+        if (hit) return (int)i;
+    }
+    return -1;
+}
+
+// (0.70) ONE LABEL PER LEVEL. Operator, 2026-09-17 23:05: "why does the call wall and flip still display twice. it is on both
+// rails" — the node tag (CW / PW on the SPX node, the FLIP tick) and the line's own label at Left (beside the SPY strip)
+// were two features labelling the same level. Rule: the line carries its text only when the level is NOT already
+// labelled on a node — and never when "Level labels at" is Off (3).
+inline bool lineLabelWanted(bool nodeLabelsOn, bool labelledOnNode, int lpos)
+{
+    if (lpos == 3) return false;
+    if (nodeLabelsOn && labelledOnNode) return false;
+    return true;
+}
+
+// (0.72) THE CHIP'S LEVELS: "<label> <ES on the chart> (<book> <the book's own price>)". Operator, 2026-09-18: "make the prices ES
+// and the prices that are in the brackets their book prices" — 7650 (SPX) and 760 (SPY) sat side by side with nothing naming
+// the book. ES first, always the chart's contract; the bracket names the book its price is in.
+inline std::string chipLevel(const char* label, float esPx, const char* book, float bookPx)
+{
+    char b[64];
+    if (bookPx > 0 && book && book[0]) snprintf(b, sizeof(b), "%s %d (%s %d)", label, (int)(esPx + 0.5f), book, (int)(bookPx + 0.5f));
+    else if (bookPx > 0)               snprintf(b, sizeof(b), "%s %d (%d)", label, (int)(esPx + 0.5f), (int)(bookPx + 0.5f));   // no book named: SPX by definition
+    else                               snprintf(b, sizeof(b), "%s %d", label, (int)(esPx + 0.5f));
+    return std::string(b);
+}
+
+// (0.73) THE TAPE STRIP'S SPACING, ONE RULE FOR BOTH RAILS. Operator, 2026-09-19: "add 1 space between the price and the
+// percent king in the spx rail and remove 2 spaces in the spy rail" -> "make spy and spx consistent" -> "lets go with your
+// recommendation": the % starts exactly N CHARACTER-SPACES after the strike column, N = 2 on both rails. Until 0.72 the SPY
+// strip put the % at colW/2 and the SPX strip pinned it to the pane edge — two different rules, so the gap was whatever was
+// left over (~3 characters on SPY, ~1 on SPX at font 10). Widths are MEASURED at the strip's font (space, widest strike,
+// widest %), so the gap stays N real characters at any Font size.
+//   pad        px between the strip's outer edge and its text (4, as before)
+//   spaceW     one space character at the strip's font
+//   strikeW    the widest strike text on THIS rail (the % column starts after it, so every row's % aligns)
+//   pctW       the widest % text across BOTH rails (the strip width is shared: the level lines stop at both strips)
+//   nChars     2
+const int TAPE_GAP_CHARS = 2;
+struct TapeCols { int pctOff, colW; };   // pctOff: from the strip's inner-text start (edge + pad) to the % column
+inline TapeCols tapeCols(int pad, int spaceW, int strikeW, int pctW, int nChars)
+{
+    TapeCols t;
+    if (spaceW < 1) spaceW = 1; if (nChars < 0) nChars = 0; if (strikeW < 0) strikeW = 0; if (pctW < 0) pctW = 0;
+    t.pctOff = strikeW + nChars * spaceW;
+    t.colW   = pad + t.pctOff + pctW + pad;
+    return t;
+}
+
+// (0.74) "HIDE NODES UNDER %" HIDES THE NODE. Operator, 2026-09-19: "hide under % only hides the %King, it doesn't hide the
+// nodes — fix this for the spy and the spx rails." 0.64 applied the row to the % text only; the bar, its badge, its tags, its
+// band and its strip row all kept drawing. A node whose |%King| is under the setting is now not drawn at all, on either rail.
+// The King never hides (it is +/-100 by definition); 0 = hide nothing.
+inline bool nodeHidden(float pct, bool king, int hideu)
+{
+    if (hideu <= 0 || king) return false;
+    float a = pct < 0 ? -pct : pct;
+    return a < (float)hideu;
+}
+// (0.74) A STYLED LINE WIDER THAN 1 px. Windows draws any pen wider than 1 px SOLID whatever its dot / dash style, so the King
+// line (2 px, "King line width") never showed the Line style — operator: "there is no line style for the king, the current line
+// style seems to be for top 5" (the 1-px CW / PW / FLIP lines did show it). A dotted or dashed wide line is drawn as solid
+// segments. style: 0 solid, 1 dot, 2 dash. Segments are [x, x+on) every on+off px, clipped to [x1, x2].
+struct Seg { int a, b; };
+inline std::vector<Seg> dashSegments(int x1, int x2, int style, int w)
+{
+    std::vector<Seg> out; if (x2 < x1) { int t = x1; x1 = x2; x2 = t; }
+    if (w < 1) w = 1;
+    if (style != 1 && style != 2) { Seg g; g.a = x1; g.b = x2; out.push_back(g); return out; }
+    int on  = (style == 1) ? w : (4 * w < 6 ? 6 : 4 * w);
+    int off = (style == 1) ? (2 * w < 2 ? 2 : 2 * w) : (2 * w < 4 ? 4 : 2 * w);
+    for (int x = x1; x <= x2; x += on + off) { Seg g; g.a = x; g.b = (x + on - 1 < x2) ? x + on - 1 : x2; out.push_back(g); }
+    return out;
+}
+
+// (0.75) THREE LINE FAMILIES, EACH WITH ITS OWN STYLE. Operator, 2026-09-19: "I want a separate line style for the king than the
+// top 5 nodes", "an option to automatically make the line thicker based on the %king — obviously this will make the king the
+// thickest because it is 100%", "a separate line style for levels we get from IF (Call wall, Put wall, Flip, Mag)", and "remember
+// that i should have the ability to also only have labels without any lines".
+// A list row read back out of range (a 0.74 saved instance has no value for an appended row) takes its default.
+inline int listOr(int v, int n, int def) { return (v >= 0 && v < n) ? v : def; }
+// style 0 Solid, 1 Dot, 2 Dash draw a line; 3 = "None (labels only)"
+inline bool styleDrawsLine(int style) { return style >= 0 && style <= 2; }
+// labels only + "Level labels at = Off" would show nothing at all: the label falls back to Right (just before the SPX strip)
+inline int ifLabelPos(int lpos, int ifstyle) { return (!styleDrawsLine(ifstyle) && lpos == 3) ? 2 : lpos; }
+// "Top node line width = By %King": |%King| x the King line width, rounded, never under 1, never over the King's own width —
+// the King (100%) is always the thickest. Fixed = 1 px.
+inline int nodeLineWidth(float pct, bool byPct, int klinew)
+{
+    if (klinew < 1) klinew = 1;
+    if (!byPct) return 1;
+    float a = pct < 0 ? -pct : pct; if (a > 100.0f) a = 100.0f;
+    int w = (int)(a / 100.0f * (float)klinew + 0.5f);
+    return w < 1 ? 1 : (w > klinew ? klinew : w);
+}
+
+// (0.76) LEVEL TAGS ON TOP OF THE STRIP. Operator, 2026-09-18: "I want to move the position of the labels on top of the price and
+// %king rail"; 2026-09-19 (WK / PW / FLIP still beside the bar tips): "didn't i explain that the labels should be on top of the
+// rails". His answers: above price + %, the IF levels + the King only (G / C / F / B stay in the bars), plain bold.
+// Then, on the mockup: "the badges for wk and other badges are not symmetrically spaced" -> one spacing rule:
+//   tag | one space | pill, and inside the pill the SAME pad on both sides of the text.
+// PILL: IRT's bold glyphs run ~2 px past getTextWidth (measured 0.64), so the visible text is textW + BOLD_OVERRUN; the box is
+// that plus PILL_PAD on each side and the text starts PILL_PAD in -> left gap == right gap by construction.
+const int PILL_PAD = 6, BOLD_OVERRUN = 2;
+inline int pillWidth(int textW) { return textW <= 0 ? 0 : textW + BOLD_OVERRUN + 2 * PILL_PAD; }
+struct TagRow { int tagX, pillX, total; };
+// x = the strike's left edge; rightLimit = the last pixel the row may use (the pane edge). The tag starts ON the strike; if the
+// tag + pill would run past rightLimit the whole row shifts left (never splits), but never left of leftLimit.
+inline TagRow tagRow(int x, int tagW, int spaceW, int pillW, int leftLimit, int rightLimit)
+{
+    TagRow r; if (tagW < 0) tagW = 0; if (spaceW < 0) spaceW = 0;
+    r.total = tagW + (pillW > 0 ? spaceW + pillW : 0);
+    int x0 = x;
+    if (x0 + r.total > rightLimit) x0 = rightLimit - r.total;
+    if (x0 < leftLimit) x0 = leftLimit;
+    r.tagX = x0; r.pillX = pillW > 0 ? x0 + tagW + spaceW : -1;
+    return r;
+}
+// Does a tag fit ABOVE its row? rowGap = pixels from this row's centre to the nearest drawn row above (a large number when
+// none). The row's text is ~font tall centred on the row, the tag line is a pill (font + 5) tall: it needs half a row + 1 px
+// + the pill + the next row's lower half -> 2 x font + 6. Tighter rows fall back to beside the bar tip (as before 0.76).
+inline bool tagFitsAbove(int rowGap, int font) { return rowGap >= 2 * font + 6; }
+// the tag line's centre, 1 px above the row's text
+inline int tagCentreY(int rowY, int font) { return rowY - (font / 2 + 1 + (font + 5) / 2); }
+
+// ---- contract offset -------------------------------------------------------
+// off = chartClose - anchor, anchor = SCALEREF (the front ES price the ladder is scaled to) else SPOT.
+// Clamped to +-300: a wrong chart (NQ) or a bad anchor must never fling the book.
+inline bool contractOffset(float chartClose, bool hasScaleRef, float scaleRef, bool hasSpot, float spot, float& off)
+{
+    off = 0.0f;
+    if (!(chartClose > 0.0f)) return false;
+    float anchor;
+    if (hasScaleRef && scaleRef > 0.0f) anchor = scaleRef;
+    else if (hasSpot)                   anchor = spot;
+    else return false;
+    off = chartClose - anchor;
+    if (off < -300.0f || off > 300.0f) { off = 0.0f; return false; }
+    return true;
+}
+
+// ---- (v0.59) the rank the rail draws with -----------------------------------
+// Rank = Book: the within-book rank (field 4). Rank = Atlas merge: the POOLED rank (field 8, panel 16.40) — the row's
+// place in the SPY + SPXW pool Atlas draws on the ES chart, each book scaled to its own King. A row the panel did not
+// pool (older panel, or the IF book) gets NO_RANK, so it draws grey and unbadged — never a within-book rank in disguise.
+static const int NO_RANK = 9999;
+inline int effectiveRank(int bookRank, int pooledRank, bool atlasMerge) { return atlasMerge ? (pooledRank >= 1 ? pooledRank : NO_RANK) : bookRank; }
+
+// ---- top-N / primary -------------------------------------------------------
+inline int topNFor(int filter) { return (filter==0)?3 : (filter==1)?5 : (filter==2)?8 : (filter==3)?10 : 0; }
+inline bool isPrimary(const Node& n, int filter, int thresh)
+{
+    int topN = topNFor(filter);
+    if (filter <= 3) return (n.rank >= 1 && n.rank <= topN);
+    if (filter == 4) return std::fabs(n.pct) >= (float)thresh;
+    return true;
+}
+
+// ---- regime line text --------------------------------------------------------
+struct RegimeText { std::string line; bool neg; bool at; bool na; };
+inline RegimeText regimeLine(bool hasRow, const std::string& sign, const std::string& type, bool conflict, float netSum)
+{
+    RegimeText r; r.neg = false; r.at = false; r.na = false;
+    if (hasRow) {
+        r.neg = (sign == "NEG"); r.at = (sign == "AT"); r.na = !(r.neg || r.at || sign == "POS");
+        std::string tact = (type.find("TREND") == 0) ? "FOLLOW, don't fade"
+                         : (type == "WHIPSAW")       ? "fade EXTREMES only / sit out"
+                         : (type == "RANGE")         ? "FADE the extremes"
+                         :                             "no edge - wait";
+        std::string sg = r.neg ? "-gamma" : (sign == "POS" ? "+gamma" : (r.at ? "AT flip" : "flip n/a"));
+        std::string ty = type.empty() ? "FORMING" : type;
+        if (ty == "TREND_UP") ty = "TREND UP"; else if (ty == "TREND_DN") ty = "TREND DOWN";
+        r.line = "REGIME  " + sg + "  |  " + ty + "  |  " + tact + (conflict ? "  !CONFLICT" : "");
+    } else {
+        r.neg = netSum < 0;
+        r.line = r.neg ? "REGIME (sum, no row)  FOLLOW / don't fade  (-gamma)"
+                       : "REGIME (sum, no row)  FADE extremes  (+gamma)";
+    }
+    return r;
+}
+
+// (v0.60) THE STATUS LINE — what THIS instance did on its last draw, written to GammaProfile.status-<Book>-<Side>.txt
+// beside the CSV, so two rails can be verified from outside (operator, 2026-09-17: "it displays one or the other but
+// not both" — the file says whether the second instance loaded, where it anchored and how many bars it drew).
+// Grammar:  GPSTATUS,<book Auto|SPX|SPY|IF|Both>,<side Right|Left>,<file>,<strikes>,<rank Book|Atlas>,<paneL>,<paneR>,<anchor>,<colW>,<width>,<primary>,<drawn>,<rendered 1|0>[,<offset>]
+// (v0.63) the 15th field is the contract offset applied to the rail's prices (chart price = CSV price + offset), so a
+// screenshot's axis can be checked against the CSV without guessing the basis.
+inline const char* bookName(int book) { return book == 1 ? "SPX" : book == 2 ? "SPY" : book == 3 ? "IF" : book == 4 ? "Both" : "Auto"; }
+inline const char* bookFile(int book) { return book == 2 ? "GammaProfile-SPY.csv" : (book == 3 ? "GammaProfile-IF.csv" : "GammaProfile.csv"); }   // Both (4): the SPX file is the main rail; the SPY file is loaded beside it
+
+// (v0.61) BOOK = BOTH — one instance, two rails (operator, 2026-09-17: "was there any reason why you didn't build an
+// option to have both profiles so I don't have to add another gamma profile indicator" — no good reason). The main rail
+// is the SPX book on the RIGHT (Side is ignored), the SPY rail on the LEFT with its own width; levels, regime and the
+// read panel draw once, from the SPX file. Hide % under and every other setting are shared.
+struct RailLayout { bool both; int mainSide; int spySide; int spyWidth; };
+inline RailLayout railLayout(int book, int side, int width, int spyWidth)
+{
+    RailLayout r; r.both = (book == 4);
+    r.mainSide = r.both ? 0 : side;                       // 0 = Right, 1 = Left
+    r.spySide  = 1;
+    r.spyWidth = r.both ? (spyWidth >= 40 ? (spyWidth <= 400 ? spyWidth : 400) : (spyWidth > 0 ? 40 : width)) : 0;   // 0 = no SPY rail
+    (void)width;
+    return r;
+}
+inline std::string statusLine(int book, int side, int strikes, bool atlasMerge, int paneL, int paneR, int anchor, int colW, int width,
+                              int primary, int drawn, bool rendered, float offset = 0.0f)
+{
+    char buf[220];
+    snprintf(buf, sizeof(buf), "GPSTATUS,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d,%.2f", bookName(book), side == 1 ? "Left" : "Right", bookFile(book),
+             strikes, atlasMerge ? "Atlas" : "Book", paneL, paneR, anchor, colW, width, primary, drawn, rendered ? 1 : 0, offset);
+    return std::string(buf);
+}
+
+// (v0.63) THE RIGHT EDGE THE RAIL MAY USE. His 0.62 screenshot: the SPX bars ran under the price scale — the pane rect
+// IRT hands back reaches the scale's left edge (or past it) on his chart, and only the tape columns (71 px) had been
+// keeping the bars clear of it. When the scale rect sits inside the pane, the rail's right edge is the scale's left.
+inline int usableRight(int paneL, int paneR, int scaleL, int scaleR)
+{
+    if (scaleL > paneL && scaleL < paneR && scaleR >= scaleL) return scaleL - 2;
+    return paneR;
+}
+
+// (v0.62) THE RANK BUBBLE GOES OUTSIDE THE TIP WHEN THE BAR CANNOT HOLD IT — operator's 0.61 screenshot: at SPY rail
+// width 40 a -27% bar is 11 px long, the bubble (radius ~10) drawn "inside" its tip landed off the pane edge, so ④ and ⑤
+// were invisible. "Rank at" is still honoured for a bar long enough (2r + 4 px) to carry the bubble inside.
+inline bool bubbleOutside(int rankpos, int barLen, int radius) { return rankpos == 1 || barLen < 2 * radius + 4; }
+
+// (v0.62) ONE THICKNESS FOR BOTH RAILS. Auto thickness comes from the strike spacing in pixels; the SPY strikes are 10 ES
+// points apart (twice SPX), so the SPY rail's bars hit the 40 px cap while 6-11 px long — semicircle blobs at the pane
+// edge (his screenshot). The SPX rail's thickness is computed once and handed to the SPY rail.
+inline int autoBarH(int spacingPx) { int h = spacingPx > 4 ? (int)(spacingPx * 0.78f) : 6; if (h < 3) h = 3; if (h > 40) h = 40; return h; }
+
+// (v0.64) NODE BANDS — the band replaces the top-node line and is BOUNDED IN TIME: from the bar the node was first seen at
+// this strike (panel 16.41's 9th STRIKE field, CT sec-of-day, today) to the current bar. Atlas draws a node's heat from the
+// moment it appears; a line across the whole screen said nothing about WHEN. The start bar is the first bar of the last
+// bar's date whose sec-of-day >= since; a since before the day's first bar starts at that first bar (the chart began
+// after the node); -1 = no bar of that date at all (a CSV from another day) -> no band.
+inline int bandStartIndex(const col::Bar* bars, int n, double since)
+{
+    if (!bars || n < 1 || since < 0) return -1;
+    int ly = bars[n-1].y, lm = bars[n-1].m, ld = bars[n-1].d;
+    int first = -1;
+    for (int i = 0; i < n; i++) {
+        if (bars[i].y != ly || bars[i].m != lm || bars[i].d != ld) continue;
+        if (first < 0) first = i;
+        if (bars[i].sod >= since) return i;
+    }
+    return first >= 0 ? n - 1 : -1;   // every bar of the day is before since: the node arrived on the current bar
+}
+// the band's colour: the polarity colour faded toward the ground by the node's % of its own King (Kings full, 5% faint)
+inline float bandStrength(float pct) { float a = pct < 0 ? -pct : pct; if (a > 100) a = 100; return 0.15f + 0.85f * (a / 100.0f); }
+
+} // namespace gpl
+#endif

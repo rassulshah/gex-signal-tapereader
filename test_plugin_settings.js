@@ -31,9 +31,8 @@ ok(/if \(s\.since < 0\) continue;\s*if \(gpl::nodeHidden/.test(gp), '13 ...and i
 ok(/hlinePx\(a\.v, a\.h, b\.h, col, penOf\(style\), wpx\)/.test(gp) && /gpl::dashSegments\(lx, rx, ps == P_DOT \? 1 : 2, w\)/.test(gp), '14 every level line (the King included) goes through hlinePx, which draws a wide dotted / dashed line as segments');
 
 // ---- (GP 0.75) three line families, each its own style; labels only; top nodes as lines, width by %King
-ok(/PX\.lstyle = pc\+\+; setListParameter   \("King line style"/.test(gp), '15 "Line style" renamed IN PLACE to "King line style" (same row, same position)');
-const tail=gp.slice(gp.indexOf('PX.klinew  = pc++'), gp.indexOf('return RTX_OK;', gp.indexOf('PX.klinew  = pc++')));
-ok(['PX.tnmode','PX.tnstyle','PX.tnwidth','PX.ifstyle','PX.magline'].every((k,i,a)=>tail.indexOf(k)>0 && (i===0 || tail.indexOf(k)>tail.indexOf(a[i-1]))), '16 the five new rows are APPENDED after King line width, in order — no row moved');
+ok(/PX\.lstyle = pc\+\+; setListParameter   \("King line style"/.test(gp), '15 the King has its own "King line style" row');
+ok(/PX\.tnmode = pc\+\+/.test(gp) && /PX\.tnstyle= pc\+\+/.test(gp) && /PX\.tnwidth= pc\+\+/.test(gp) && /PX\.ifstyle= pc\+\+/.test(gp) && /PX\.magline= pc\+\+/.test(gp), '16 the 0.75 rows are all still declared');
 ok(/"Solid;Dot;Dash;None \(labels only\)"/.test(gp) && /if \(gpl::styleDrawsLine\(style\)\) hlinePx/.test(gp), '17 the IF level style has "None (labels only)": the label draws, the line does not');
 ok((gp.match(/false, ifs, 1, lp, S\)/g)||[]).length===6, '18 CW, PW, Flip, EM-H, EM-L and Mag all use the IF level style, not the King style');
 ok(/lvl\[0\], kc, "", S\.extk, S\.lstyle, S\.klinew/.test(gp) && /hlinePx\(kp\.v, kx1, kx2, kc, penOf\(S\.lstyle\), S\.klinew\)/.test(gp), '19 both King lines use the King style at the King width');
@@ -46,6 +45,23 @@ ok(/if \(s\.king && tagTop\) rn = "";/.test(gp), '22 the King name leaves the ba
 ok(/gpl::tagRow\(c1, kw \+ dw \+ ww \+ gpl::BOLD_OVERRUN, TW\.spaceW, pw, leftLim, \(int\)paneR - 2\)/.test(gp) && /gpl::tagCentreY\(p\.v, S\.font\)/.test(gp), '23 the tag starts on the strike, pill one space after, 1 px above the row text, shifted left at the pane edge');
 ok(/gpl::pillWidth\(getTextWidth/.test(gp) && /textLJc\(\(short\)\(leftX \+ gpl::PILL_PAD\)/.test(gp), '24 every pill: the same pad left and right of its text');
 ok(/textLJc\(stripC1, \(short\)\(fp\.v - \(S\.font - 1\) \/ 2 - 2\), fl, C_FLIPC/.test(gp), '25 FLIP: tag above its tick on the strike column when the tape strip is on');
+
+// ---- (GP 0.77) THE REGROUP: version 8, every row kept, a v7 instance is caught and reset to HIS settings
+const setupSrc=gp.slice(gp.indexOf('int cppExtension::setup(void)'), gp.indexOf('return RTX_OK;', gp.indexOf('int cppExtension::setup(void)')));
+const order=[...setupSrc.matchAll(/PX\.(\w+)\s*=\s*pc\+\+/g)].map(m=>m[1]);
+const V7=['book','width','side','thick','filter','thresh','below','scale','cpos','cneg','cmid','kingcol','hideu','font','rank','type','rankpos','rankscope','kinglabel','kline','cw','pw','flip','em','extk','lstyle','lpos','roles','regime','panelpos','tapecols','lvllabels','spywidth','bands','bandh','klinew','tnmode','tnstyle','tnwidth','ifstyle','magline'];
+ok(/setParameterVersion\(8\)/.test(gp), '26 parameter version 8');
+ok(order.length===V7.length && V7.every(k=>order.includes(k)) && new Set(order).size===order.length, '27 every v7 row is still there, once — nothing removed, nothing added', order.length);
+ok(order.join()==='book,side,width,spywidth,thick,font,tapecols,scale,filter,thresh,below,hideu,rank,rankpos,type,rankscope,kinglabel,roles,cpos,cneg,cmid,kingcol,kline,extk,lstyle,klinew,bands,tnmode,bandh,tnstyle,tnwidth,cw,pw,flip,magline,em,ifstyle,lpos,lvllabels,regime,panelpos', '28 the agreed section order (Book & layout, Nodes, Colours, King line, Top nodes, IF levels, Read panel)');
+// his v7 values (09-19 dialog screenshot), by v7 position -> what each NEW slot reads on first load
+const HIS={book:4,width:90,side:0,thick:2,filter:1,thresh:20,below:0,scale:0,cpos:0x41c3e3,cneg:0xaf3bc4,cmid:0x5c9a1f,kingcol:0,hideu:0,font:10,rank:1,type:1,rankpos:0,rankscope:0,kinglabel:3,kline:1,cw:1,pw:1,flip:1,em:1,extk:0,lstyle:1,lpos:0,roles:1,regime:1,panelpos:1,tapecols:1,lvllabels:1,spywidth:120,bands:0,bandh:3,klinew:2,tnmode:0,tnstyle:1,tnwidth:0,ifstyle:0,magline:0};
+const readAs=k=>HIS[V7[order.indexOf(k)]];
+ok(readAs('width')<20 && /w < 20 \|\| w > 1000/.test(gp), '29 his v7 instance is CAUGHT: the new SPX-width slot reads his old Side ('+readAs('width')+') -> scrambled() -> the one-time reset', readAs('width'));
+const mig=gp.slice(gp.indexOf('void GammaProfile::migrateScrambled()'), gp.indexOf('int GammaProfile::parmsLoad'));
+const want={'setListIndex(PX.thick, 2)':1,'setListIndex(PX.kinglabel, 3)':1,'checkBox(PX.em, true)':1,'setListIndex(PX.lstyle, 1)':1,'checkBox(PX.bands, false)':1,'setIntegerValue(PX.width, 90)':1,'setIntegerValue(PX.spywidth, 120)':1,'setListIndex(PX.panelpos, 1)':1,'setListIndex(PX.tnstyle, 1)':1};
+ok(Object.keys(want).every(k=>mig.includes(k)), '30 the reset writes HIS settings (Medium, GPOC, EM on, King Dot, bands off, 90 / 120, Bottom-C, top node Dot)');
+ok(order.every(k=>new RegExp('PX\\.'+k+'\\b').test(mig)), '31 the reset covers every row', order.filter(k=>!new RegExp('PX\\.'+k+'\\b').test(mig)));
+ok(!/setLabelParameter\s*\(/.test(setupSrc), '32 no label rows in the dialog (they shift the numbering)');
 
 console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
