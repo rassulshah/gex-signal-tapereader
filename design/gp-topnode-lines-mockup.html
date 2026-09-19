@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Top nodes: bands or lines</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.4 Helvetica,Arial,sans-serif}
+ .wrap{padding:16px 20px;max-width:1180px}
+ h1{font-size:15px;margin:0 0 4px;font-weight:600}
+ h2{font-size:12px;margin:22px 0 8px;font-weight:600;color:#c9d2dc;letter-spacing:.04em;text-transform:uppercase}
+ .sub{color:#8a97a6;font-size:12px;margin-bottom:8px;max-width:860px}
+ .sub b{color:#dfe7f0}
+ .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+ .card{background:#000;border:1px solid #2a2f36}
+ .card.pick{border-color:#2ec27e}
+ .cap{font:11px/1 Helvetica,Arial,sans-serif;color:#8a97a6;padding:6px 8px;background:#0f1216;border-bottom:1px solid #2a2f36;white-space:nowrap}
+ .cap b{color:#dfe7f0}.cap .ok{color:#2ec27e}
+ svg text{font-family:Helvetica,Arial,sans-serif}
+ .note{color:#8a97a6;font-size:12px;max-width:860px;margin-top:10px}
+ .note b{color:#dfe7f0}
+</style></head><body><div class="wrap">
+
+<h1>Top nodes drawn as: Bands or Lines</h1>
+<div class="sub">One new row, <b>appended at the bottom</b> of the dialog (no rows moved): <b>Top nodes drawn as</b> — <b>Bands</b> (today) or <b>Lines</b>. Lines follow the same <b>Line style</b> row as the King and the levels. Same nodes either way (your Show filter, Top 5 here), same start (the bar each node was first seen), same polarity colour, stopping at each strip's edge. Hide nodes under % = 20. Values illustrative.</div>
+<div class="row" id="r1"></div>
+<div class="row" style="margin-top:18px" id="r2"></div>
+<table style="border-collapse:collapse;font-size:12px;margin-top:16px;color:#c9d2dc">
+<tr><td style="color:#8a97a6;padding:5px 14px 5px 0">Bands</td><td>unchanged: a translucent strip, Band height (ES pts) tall, fainter the smaller the node.</td></tr>
+<tr><td style="color:#8a97a6;padding:5px 14px 5px 0">Lines</td><td>1 px, full polarity colour, Solid / Dot / Dash from <b>Line style</b>. Band height is ignored.</td></tr>
+<tr><td style="color:#8a97a6;padding:5px 14px 5px 0">Node bands tick box</td><td>stays the on / off switch for both: off = no band and no line.</td></tr>
+<tr><td style="color:#8a97a6;padding:5px 14px 5px 0">King</td><td>keeps its own King line (width 2) — it is not drawn twice.</td></tr>
+</table>
+<div class="note"><b>One question:</b> should the Lines use the <b>same Line style</b> as the King and levels (one setting, shown here), or get <b>their own style row</b> so the King can be solid while the top nodes are dotted?</div>
+<script>
+// illustrative — SPY book (strike, ES, %King) and SPX book (strike, ES, %King)
+const SPY=[[763,7727,22],[762,7717,-96],[761,7707,-100,1],[760,7697,-48],[759,7686,-23],[758,7676,-31],[757,7666,-12],[756,7656,8]];
+const SPX=[[7665,7730,17],[7660,7725,-61],[7655,7720,12],[7650,7715,-100,1],[7645,7710,7],[7640,7705,10],[7635,7700,-53],[7630,7695,49],[7625,7690,47],[7620,7685,-13],[7615,7680,-22],[7610,7675,2]];
+const POS='#e3c341', NEG='#c43baf', GREY='#566472', DIM='#8a97a6', TXT='#dfe7f0';
+const W=520, H=330, yTop=18, yBot=312, pHi=7732, pLo=7650;
+const y=px=>yTop+(pHi-px)/(pHi-pLo)*(yBot-yTop);
+
+// start bar (x) per node — first-seen
+const START={7660:180,7635:230,7630:160,7625:290,7615:340,762:200,760:260,759:320,758:150};
+function chart(mode, style){
+  let s=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  const spyW=100, spxW=76, x2=W-spxW-2;
+  s+=`<rect x="0" y="0" width="${spyW}" height="${H}" fill="#101418"/>`;
+  const dash = style==='Dot' ? '2 4' : style==='Dash' ? '8 4' : '';
+  const d1 = style==='Dot' ? '1 2' : style==='Dash' ? '4 3' : '';
+  // node marks under the candles
+  const mark=(es,p,x)=>{ const col=p<0?NEG:POS, a=Math.abs(p)/100;
+    if(mode==='Bands'){ const h=Math.abs(y(es-1.5)-y(es+1.5)); return `<rect x="${x}" y="${y(es)-h/2}" width="${x2-x}" height="${h}" fill="${col}" fill-opacity="${(0.15+0.35*a).toFixed(2)}"/>`; }
+    return `<line x1="${x}" y1="${y(es)}" x2="${x2}" y2="${y(es)}" stroke="${col}" stroke-width="1" ${d1?`stroke-dasharray="${d1}"`:''}/>`; };
+  SPX.forEach(r=>{ if(!r[3] && START[r[0]]) s+=mark(r[1],r[2],START[r[0]]); });
+  SPY.forEach(r=>{ if(!r[3] && START[r[0]] && Math.abs(r[2])>=20) s+=mark(r[1],r[2],START[r[0]]); });
+  for(let i=0;i<34;i++){ const x=150+i*6, c=7700+Math.sin(i/3)*12-i*0.4, o=c+((i%3)-1)*3, hi=Math.max(o,c)+3, lo=Math.min(o,c)-3, up=c>=o;
+    s+=`<line x1="${x}" y1="${y(hi)}" x2="${x}" y2="${y(lo)}" stroke="#66707e"/><rect x="${x-2}" y="${y(Math.max(o,c))}" width="4" height="${Math.max(1,Math.abs(y(o)-y(c)))}" fill="${up?'#2ec27e':'#f0616d'}" fill-opacity=".7"/>`; }
+  const kl=(py)=>`<line x1="${spyW+2}" y1="${y(py)}" x2="${x2}" y2="${y(py)}" stroke="${NEG}" stroke-width="2" ${dash?`stroke-dasharray="${dash}"`:''}/>`;
+  s+=kl(7707)+kl(7715);
+  SPY.forEach(r=>{ const [k,es,p,K]=r, a=Math.abs(p); if(!K && a<20) return;
+    const col=p<0?NEG:POS, len=Math.max(3,a/100*80), yy=y(es);
+    s+=`<rect x="${spyW+2}" y="${yy-6}" width="${len}" height="12" rx="3" fill="${col}"/><text x="4" y="${yy+3.5}" font-size="10" fill="${TXT}" ${K?'font-weight="700"':''}>${k}</text><text x="25" y="${yy+3.5}" font-size="10" fill="${DIM}">${es}</text><text x="58" y="${yy+3.5}" font-size="10" fill="${col}" ${K?'font-weight="700"':''}>${p>0?'+':''}${p}%</text>`; });
+  SPX.forEach(r=>{ const [k,es,p,K]=r, a=Math.abs(p); if(!K && a<20) return;
+    const col=p<0?NEG:POS, len=Math.max(3,a/100*80), yy=y(es), anc=W-spxW;
+    s+=`<rect x="${anc-len}" y="${yy-6}" width="${len}" height="12" rx="3" fill="${col}"/><text x="${anc+4}" y="${yy+3.5}" font-size="10" fill="${TXT}" ${K?'font-weight="700"':''}>${k}</text><text x="${anc+34}" y="${yy+3.5}" font-size="10" fill="${col}" ${K?'font-weight="700"':''}>${p>0?'+':''}${p}%</text>`; });
+  return s+'</svg>';
+}
+const card=(t,c,svg)=>`<div class="card ${c||''}"><div class="cap">${t}</div>${svg}</div>`;
+document.getElementById('r1').innerHTML=card('Top nodes drawn as = <b>Bands</b> (today)','',chart('Bands','Solid'))+card('<span class="ok">Top nodes drawn as = <b>Lines</b></span>, Line style = <b>Solid</b>','pick',chart('Lines','Solid'));
+document.getElementById('r2').innerHTML=card('<span class="ok"><b>Lines</b></span>, Line style = <b>Dot</b>','pick',chart('Lines','Dot'))+card('<span class="ok"><b>Lines</b></span>, Line style = <b>Dash</b>','pick',chart('Lines','Dash'));
+</script></div></body></html>
