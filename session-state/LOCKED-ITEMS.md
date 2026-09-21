@@ -13,7 +13,16 @@ _Created 2026-08-27._
    Regime line · PW · Mag · Flip · CW · SPX King · SPY King · EM H/L (new, default off) · Depth pills. Fixed order PW · Mag ·
    SPX K · SPY K · FLIP · CW · EM; unticked items close up; all unticked = no chip. No version bump (append only).
 3. (he is still adding items)
-(0.78 shipped separately: the settings-on-draw repair. Also NEW IDEA 2026-09-21, not designed yet: a live-data indicator — writes the chart's bars to a file (baseline of what the chart holds, then appended live), one per chart/timeframe, for an agent to read.)
+(0.78 shipped separately: the settings-on-draw repair.)
+
+## 🅿 PARKED 2026-09-21 — the LIVE CHART DATA indicator (his idea; "leave it out for now until I get the fields named")
+An RTX dropped on any chart (any instrument / timeframe) writes that chart's bars to a file: a baseline of everything the chart
+holds, then one line per COMPLETED bar (his answer: completed is enough). Columns = the bar fields always (time, OHLC, volume,
+bid/ask volume, delta where present) + "all chart data which includes indicators": a typed list of indicator LABELS in the
+settings (SDK: RTARRAY::getChartIndicator(label, arrayNo, instanceNo) — no enumerate-all call), `VOL#2` for a repeated label,
+`RTX` (drawing-only extensions) skipped. Header line names the columns; a changed list restarts the file. His reference:
+`ES LTF fields.txt` (IRT chart export, 118 columns, 6,520 ES 3-min bars from 2026-08-31; VOL x3, MOM x2, zz* x2, RTX x34).
+NEXT: he names the subset of fields, then mockup (dialog + file sample) → build.
 
 ## ✅ BUILT 2026-09-19 (GP 0.77, "ok build") — the dialog regroup (design/gp-dialog-regroup-mockup.html)
 Seven sections (Book & layout · Nodes · Colours · King line · Top nodes · IF levels · Read panel), shorter names, the three cut-off
