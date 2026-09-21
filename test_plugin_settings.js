@@ -63,5 +63,12 @@ ok(Object.keys(want).every(k=>mig.includes(k)), '30 the reset writes HIS setting
 ok(order.every(k=>new RegExp('PX\\.'+k+'\\b').test(mig)), '31 the reset covers every row', order.filter(k=>!new RegExp('PX\\.'+k+'\\b').test(mig)));
 ok(!/setLabelParameter\s*\(/.test(setupSrc), '32 no label rows in the dialog (they shift the numbering)');
 
+// ---- (GP 0.78) the settings are checked and read on EVERY draw; the v7 repair has no once-gate
+const gpfn=(name)=>{ const i=gp.indexOf(name); if(i<0) return ''; const b=gp.indexOf('{',i); let d=0; for(let k=b;k<gp.length;k++){ if(gp[k]==='{')d++; else if(gp[k]==='}'){ d--; if(d===0) return gp.slice(i,k+1); } } return ''; };
+ok(/^int GammaProfile::draw\(void\)\s*\{\s*syncSettings\(\);/.test(gpfn('int GammaProfile::draw(void)')), '33 GP draw() syncs the settings FIRST (the DS 0.16 pattern)');
+ok(['parmsLoad(void)','parmsApply(void)','parmsUpdt(unsigned int)'].every(n=>/\{\s*syncSettings\(\);\s*return RTX_OK;\s*\}/.test(gpfn('int GammaProfile::'+n))), '34 all three GP callbacks go through syncSettings');
+ok(!/if \(repaired\) return;/.test(gpfn('void GammaProfile::migrateScrambled()')) && /migrateScrambled\(\);/.test(gpfn('void GammaProfile::syncSettings()')), '35 the v7 repair re-checks on every sync — no once-gate (his second open shipped the old values past it)');
+ok(/if \(f < 1 \|\| f > 200\) return;/.test(gpfn('void GammaProfile::syncSettings()')), '36 unpopulated values (font 0) are skipped, retried next draw');
+
 console.log('test_plugin_settings: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

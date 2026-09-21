@@ -13,6 +13,7 @@ _Created 2026-08-27._
    Regime line · PW · Mag · Flip · CW · SPX King · SPY King · EM H/L (new, default off) · Depth pills. Fixed order PW · Mag ·
    SPX K · SPY K · FLIP · CW · EM; unticked items close up; all unticked = no chip. No version bump (append only).
 3. (he is still adding items)
+(0.78 shipped separately: the settings-on-draw repair. Also NEW IDEA 2026-09-21, not designed yet: a live-data indicator — writes the chart's bars to a file (baseline of what the chart holds, then appended live), one per chart/timeframe, for an agent to read.)
 
 ## ✅ BUILT 2026-09-19 (GP 0.77, "ok build") — the dialog regroup (design/gp-dialog-regroup-mockup.html)
 Seven sections (Book & layout · Nodes · Colours · King line · Top nodes · IF levels · Read panel), shorter names, the three cut-off

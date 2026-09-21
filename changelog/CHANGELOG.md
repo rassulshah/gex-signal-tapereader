@@ -1,3 +1,17 @@
+## lsGammaProfile 0.78 — the settings are checked on every draw (the v7 values came back on the second open) (2026-09-21)
+
+Operator (dialog screenshot, second reopen after 0.77): "something happened that changed the ui and the settings". The boxes held
+his OLD v7 values BY POSITION: SPX width 0 (= Side), SPY width 2 (= Medium), font 20 (= Threshold), Threshold 12860335 (= the
+−Gamma colour), black swatches, tape off, Top 3, King line 1 px Solid.
+- **Why:** the repair (`migrateScrambled`) ran once per load. IRT can call parmsLoad before the restored values exist (the DS
+  0.16 lesson, forgotten here): the check saw the compiled defaults, set `repaired`, and the v7 values landed afterwards.
+  The first open happened to order the calls the other way, so 0.77 looked right once.
+- **Fix:** `syncSettings()` = repair-if-scrambled + read (font-guarded), from all three callbacks AND the top of every draw.
+  No once-gate: the test only fires on values no row can hold (colours are not tested), so it cannot repeat-fire on a sane
+  instance. Until he saves the chart page with the new values, IRT restores the v7 set every open — and the plugin now
+  repairs it the moment it arrives.
+- `test_plugin_settings.js` 36 (+4).
+
 ## lsGammaProfile 0.77 — the settings dialog regrouped (parameter version 8) (2026-09-19)
 
 Operator (dialog screenshot): "redo the settings so that they are grouped better and more orderly. right now everything is too

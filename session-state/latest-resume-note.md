@@ -1,9 +1,11 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.52 / GP 0.77 / DS 0.16) · **panel v16.52** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.77**, **lsDayModel v0.18**, **lsDayStats v0.16**, **lsKingTracker v0.15** · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-18 00:45 CT (v16.52 / GP 0.78 / DS 0.16) · **panel v16.52** · **companion v1.21** · RTX plugins: **lsGammaProfile v0.78**, **lsDayModel v0.18**, **lsDayStats v0.16**, **lsKingTracker v0.15** · supersedes every earlier resume note_
 
 
 
 
+
+# (2026-09-21 — GP 0.78: settings checked + read on EVERY draw (syncSettings; the v7 repair lost its once-gate). His 0.77 second open showed the v7 values by position. He must SAVE the chart page after the repair so IRT stops restoring the v7 set. Batch 0.79 pending his "build": King colour → King; regime chip item tick boxes (gp-chip-items-mockup). New idea: live bar-data-to-file indicator — discuss first.)
 # (2026-09-19 — GP 0.77: the settings dialog regrouped into 7 sections (parameter version 8). A saved v7 instance is reset ONCE to his settings (the defaults = his 09-19 screenshot). Built with 0.76 pending → one IRT restart installs both. Verify: dialog order; values unchanged; SPY rail width (guessed 120). No section-title rows (label rows shift numbering).)
 # (2026-09-19 — GP 0.76: CW / PW / MAG and the King's name sit ON TOP of their strip row (above strike + %), pill one space after, symmetric pill padding; FLIP tag above its tick on the strip; tight rows fall back to beside the tip. He needs: close IRT → INSTALLED → reopen. OPEN: the dialog regroup mockup — waiting for his OK (LOCKED-ITEMS).)
 # (2026-09-19 — GP 0.75: "Line style" → King line style; appended Top nodes drawn as (Bands/Lines), Top node line style, Top node line width (Fixed / By %King), IF level line style (incl. None = labels only), Mag line. Standing: every line family keeps a labels-only choice. Built with 0.74 / 0.73 / DS 0.16 pending → one IRT restart installs all. Verify: dialog bottom rows; Lines + By %King with King width 5; IF None shows CALL WALL / PUT WALL / FLIP text only.)
