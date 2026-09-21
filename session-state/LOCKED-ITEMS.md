@@ -6,6 +6,14 @@ _Created 2026-08-27._
 
 ---
 
+
+## 📦 BATCH FOR GP 0.78 — "i want to add more to the build before building it" (2026-09-21). DO NOT BUILD until he says "build".
+1. Rename "King colour" → "King" (in place; the colours line clips "Polarity" in his 0.77 dialog screenshot).
+2. Regime chip item selection (design/gp-chip-items-mockup.html, shown, not yet approved): tick boxes APPENDED after Panel at —
+   Regime line · PW · Mag · Flip · CW · SPX King · SPY King · EM H/L (new, default off) · Depth pills. Fixed order PW · Mag ·
+   SPX K · SPY K · FLIP · CW · EM; unticked items close up; all unticked = no chip. No version bump (append only).
+3. (he is still adding items)
+
 ## ✅ BUILT 2026-09-19 (GP 0.77, "ok build") — the dialog regroup (design/gp-dialog-regroup-mockup.html)
 Seven sections (Book & layout · Nodes · Colours · King line · Top nodes · IF levels · Read panel), shorter names, the three cut-off
 labels fixed. Needs setParameterVersion(8) — the saved instance opens once on defaults, so the defaults become HIS settings from

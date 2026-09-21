@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Regime chip: choose what it shows</title>
+<style>
+ body{margin:0;background:#0b0d10;color:#dfe7f0;font:13px/1.4 Helvetica,Arial,sans-serif}
+ .wrap{padding:16px 20px;max-width:1150px}
+ h1{font-size:15px;margin:0 0 4px;font-weight:600}
+ h2{font-size:12px;margin:22px 0 8px;font-weight:600;color:#c9d2dc;letter-spacing:.04em;text-transform:uppercase}
+ .sub,.note{color:#8a97a6;font-size:12px;max-width:900px}.sub b,.note b{color:#dfe7f0}
+ .row{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+ .dlg{width:440px;background:#f0f0f0;color:#000;border:1px solid #888;font:12px/1.2 "Segoe UI",Tahoma,Arial,sans-serif}
+ .body{padding:8px 10px}
+ .r{display:flex;gap:14px;margin:5px 0;align-items:center;white-space:nowrap}
+ .cb{width:12px;height:12px;border:1px solid #333;background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;margin-right:4px;vertical-align:-2px}
+ .sel{background:#fff;border:1px solid #7a7a7a;padding:1px 4px;min-width:110px;display:inline-block}.sel:after{content:" ▾";font-size:10px}
+ .old{color:#777}.new{outline:2px solid #2ec27e;outline-offset:2px}
+ .chip{display:inline-block;background:#141a22;border:1px solid #394654;padding:6px 10px 8px;font:12px/1.7 Helvetica,Arial,sans-serif;white-space:nowrap}
+ .l0{font-weight:700;color:#dfe7f0}
+ .pill{display:inline-block;font:700 10px/1 Helvetica,Arial,sans-serif;padding:2px 6px;border:1px solid;margin-left:4px;vertical-align:1px}
+ .g{margin-right:22px}
+ .sup{color:#2ec27e}.res{color:#f0616d}.flip{color:#e08a3c}.neg{color:#c43baf}.pos{color:#e3c341}.em{color:#5cc8f5}
+ .cap{color:#8a97a6;font-size:11px;margin:12px 0 4px}
+ table.m{border-collapse:collapse;font-size:12px;margin-top:6px;max-width:900px}
+ table.m td{padding:5px 12px 5px 0;border-bottom:1px solid #1c2128;color:#c9d2dc;vertical-align:top}
+ table.m td:first-child{color:#8a97a6;white-space:nowrap}
+</style></head><body><div class="wrap">
+<h1>Regime chip: choose what it shows</h1>
+<div class="sub">One tick box per item in the chip, in the <b>READ PANEL</b> section, added <b>below Panel at</b>. Adding rows at the bottom doesn't move anything, so there's no settings reset. All boxes start ticked (today's chip), except <b>EM H/L</b>, which is new to the chip. The prices are illustrative.</div>
+
+<h2>The dialog, READ PANEL section</h2>
+<div class="dlg"><div class="body">
+ <div class="r old"><span><span class="cb">✔</span>Regime + read panel</span><span>Panel at: <span class="sel">Bottom-C</span></span></div>
+ <div class="new">
+ <div class="r"><b>Chip shows:</b> <span><span class="cb">✔</span>Regime line</span><span><span class="cb">✔</span>PW</span><span><span class="cb">✔</span>Mag</span><span><span class="cb">✔</span>Flip</span><span><span class="cb">✔</span>CW</span></div>
+ <div class="r"><span style="visibility:hidden"><b>Chip shows:</b></span> <span><span class="cb">✔</span>SPX King</span><span><span class="cb">✔</span>SPY King</span><span><span class="cb"></span>EM H/L</span><span><span class="cb">✔</span>Depth pills</span></div>
+ </div>
+</div></div>
+
+<h2>The chip with different selections</h2>
+<div class="cap">All ticked (today's chip, as it looks now)</div>
+<div class="chip"><div class="l0">REGIME &nbsp;−γ STEEP dn | RANGE | below FLIP</div>
+<div><span class="g sup">PW 7624 (7550)<span class="pill" style="border-color:#5cc8f5;color:#5cc8f5">WK</span></span><span class="g neg">Mag 7700 (7630)</span><span class="g neg">GPOC 7720 (SPX 7650)</span><span class="g neg">GPOC 7700 (SPY 760)</span><span class="g flip">FLIP 7682 (7610)</span><span class="res">CW 7746 (7675)<span class="pill" style="border-color:#7cc7ff;color:#7cc7ff">0D</span></span></div></div>
+
+<div class="cap">Only the two Kings and FLIP</div>
+<div class="chip"><div class="l0">REGIME &nbsp;−γ STEEP dn | RANGE | below FLIP</div>
+<div><span class="g neg">GPOC 7720 (SPX 7650)</span><span class="g neg">GPOC 7700 (SPY 760)</span><span class="flip">FLIP 7682 (7610)</span></div></div>
+
+<div class="cap">PW, CW and EM H/L, with no regime line and no pills</div>
+<div class="chip"><div><span class="g sup">PW 7624 (7550)</span><span class="g em">EM 7661 – 7738</span><span class="res">CW 7746 (7675)</span></div></div>
+
+<h2>Rules</h2>
+<table class="m">
+<tr><td>Order</td><td>Fixed, from low to high in the book's logic, as today: PW · Mag · SPX King · SPY King · FLIP · CW, then EM H/L. An unticked item is skipped and the gap closes up.</td></tr>
+<tr><td>Box width</td><td>The chip keeps sizing itself to what it shows, so a short selection makes a small chip.</td></tr>
+<tr><td>Regime line</td><td>Unticked, the chip is a single line of levels. If every box is unticked, no chip is drawn (same as unticking "Regime + read panel").</td></tr>
+<tr><td>SPY King</td><td>Only shown when Book = Both SPY and SPX, as today.</td></tr>
+<tr><td>EM H/L</td><td>New: the expected-move edges as "EM low – high" in cyan, ES prices. Shown when the EM rows are in the file.</td></tr>
+<tr><td>Depth pills</td><td>The 0D / WK / MO badges beside PW and CW. Unticked, just the prices.</td></tr>
+<tr><td>Also in this batch</td><td>"King colour" is renamed <b>King</b>, so the colours line fits and "Polarity" is no longer cut off.</td></tr>
+</table>
+<div class="note" style="margin-top:12px">Nothing is built. It waits in the batch until you say "build".</div>
+</div></body></html>
