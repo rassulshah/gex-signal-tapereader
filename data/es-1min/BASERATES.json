@@ -30,7 +30,7 @@
    "2026-09-18.csv": 1,
    "2026-09-21.csv": 1
   },
-  "incomplete_dropped": 12
+  "incomplete_dropped": 13
  },
  "sequence": {
   "LOD_first": 157,
@@ -685,5 +685,5 @@
   "note": "study-daystats-cond.py 2026-09-16: 1ST clock MAE base 38.4 -> 33.3 (60 min); 1ST acc 0.48 -> 0.61; 2ND clock not predictable (93 min)"
  },
  "secondIn": null,
- "generatedAt": "2026-09-21T20:15:20Z"
+ "generatedAt": "2026-09-22T20:05:15Z"
 }
