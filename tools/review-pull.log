@@ -31,3 +31,10 @@ To https://github.com/rassulshah/gex-signal-tapereader.git
 Fri 09/18/2026 16:05:05.21 pushed 1 file(s) 
 Tue 09/22/2026 16:05:01.68 skipped 2026-09-21.json - already in repo (logs are append-only) 
 Wed 09/23/2026 16:05:01.54 skipped 2026-09-22.json - already in repo (logs are append-only) 
+Thu 09/24/2026 16:05:01.44 placed 2026-09-23-nightly-llm-review.json -> C:\Dev\gex-signal-tapereader\learning\log\2026-09-23-nightly-llm-review.json 
+[main d98426f] review: nightly/weekly files pulled from Drive inbox 24-Thu-09
+ 1 file changed, 202 insertions(+)
+ create mode 100644 learning/log/2026-09-23-nightly-llm-review.json
+To https://github.com/rassulshah/gex-signal-tapereader.git
+   518964e..d98426f  main -> main
+Thu 09/24/2026 16:05:04.87 pushed 1 file(s) 
