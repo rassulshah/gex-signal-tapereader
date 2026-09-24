@@ -1,0 +1,202 @@
+{
+  "schema": "gex-log/v1",
+  "runType": "nightly",
+  "date": "2026-09-23",
+  "time": "evening (~1.5-2.5h after close)",
+  "dataArrivedOK": true,
+  "dataHealthVerdict": "ok",
+  "snapshotsRecorded": 64,
+  "distinctBars": 63,
+  "barsCoveredPct": 98,
+  "featureRecords": 2988,
+  "effectiveN": 6.4,
+  "effectiveNNote": "one day = ~6.4 independent observations (bars ÷ 10-bar window); no weight conclusions from single day",
+  "regimeDistribution": {
+    "na": {
+      "n": 423,
+      "pct": 14.2
+    },
+    "trend": {
+      "n": 330,
+      "pct": 11.0
+    },
+    "mixed": {
+      "n": 1048,
+      "pct": 35.1
+    },
+    "chop": {
+      "n": 1187,
+      "pct": 39.7
+    }
+  },
+  "nodeEvents": {
+    "total": 281,
+    "breakdown": {
+      "ACCUM": 81,
+      "DISSIP": 97,
+      "TURN_UP": 33,
+      "ROLL": 57,
+      "TURN_DN": 13
+    },
+    "outcomes": {
+      "NOTOUCH": 159,
+      "PIN": 46,
+      "DEFLECT": 28,
+      "BREAK": 23,
+      "GRAZE": 1
+    }
+  },
+  "contradictions": [],
+  "factorsSummary": {
+    "totalEvaluated": 48,
+    "oneWay": 2,
+    "highRate_50plus": 10,
+    "dead_scored0": 10
+  },
+  "oneWayFactors": [
+    {
+      "key": "farside",
+      "rate": 0,
+      "n": 63,
+      "scored": 40,
+      "votes": {
+        "LOD": 48
+      },
+      "note": "Voting in one direction only, not evidence of edge"
+    },
+    {
+      "key": "lodhod",
+      "rate": null,
+      "n": 27,
+      "scored": 0,
+      "votes": {
+        "HOD": 27
+      },
+      "note": "Voting in one direction only, not evidence of edge"
+    }
+  ],
+  "highRateFactors": [
+    {
+      "key": "rshuf",
+      "rate": 100,
+      "n": 63,
+      "scored": 8,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 0,
+      "note": "Hit rate 100% on 8 scored bars"
+    },
+    {
+      "key": "levelstate",
+      "rate": 97,
+      "n": 63,
+      "scored": 39,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 0,
+      "note": "Hit rate 97% on 39 scored bars"
+    },
+    {
+      "key": "pbEntry.60",
+      "rate": 86,
+      "n": 63,
+      "scored": 28,
+      "mfe": 0.584,
+      "mae": -1.468,
+      "votes_count": 0,
+      "note": "Hit rate 86% on 28 scored bars"
+    },
+    {
+      "key": "map.lean",
+      "rate": 75,
+      "n": 63,
+      "scored": 4,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 0,
+      "note": "Hit rate 75% on 4 scored bars"
+    },
+    {
+      "key": "pbEntry",
+      "rate": 72,
+      "n": 63,
+      "scored": 32,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 0,
+      "note": "Hit rate 72% on 32 scored bars"
+    },
+    {
+      "key": "map.transfer",
+      "rate": 62,
+      "n": 63,
+      "scored": 8,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 8,
+      "note": "Hit rate 62% on 8 scored bars"
+    },
+    {
+      "key": "nextStop.60",
+      "rate": 61,
+      "n": 63,
+      "scored": 46,
+      "mfe": 0.584,
+      "mae": -1.468,
+      "votes_count": 0,
+      "note": "Hit rate 61% on 46 scored bars"
+    },
+    {
+      "key": "leg.pbDetect",
+      "rate": 59,
+      "n": 63,
+      "scored": 34,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 63,
+      "note": "Hit rate 59% on 34 scored bars"
+    },
+    {
+      "key": "acm",
+      "rate": 58,
+      "n": 63,
+      "scored": 55,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 0,
+      "note": "Hit rate 58% on 55 scored bars"
+    },
+    {
+      "key": "node",
+      "rate": 58,
+      "n": 63,
+      "scored": 55,
+      "mfe": 0.419,
+      "mae": -1.056,
+      "votes_count": 0,
+      "note": "Hit rate 58% on 55 scored bars"
+    }
+  ],
+  "deadFactors": [
+    "act",
+    "dex",
+    "empace",
+    "emread",
+    "flow",
+    "leg.handoff",
+    "piles",
+    "predictors",
+    "rolllatch",
+    "spxnodes"
+  ],
+  "keyObservations": [
+    "Data health: OK - 63 distinct bars, 98% coverage",
+    "Feature records: 2988 total, 2567 resolved",
+    "Effective sample size: 6.4 independent observations (bars=64, fwd_window=10)",
+    "Regime distribution: chop dominant (1187 bars), total coverage across regimes",
+    "10 factors have scored=0 (no signal capture this session)",
+    "Strongest factors: rshuf(100%), levelstate(97%), pbEntry.60(86%) - but effective n=6.4 prevents weight conclusions"
+  ],
+  "preOpenBrief": "Data clean; effective n=6.4 limits weight conclusions. 10 factors >50% hit rate. 2 one-way votes (regime-specific, not edge).",
+  "notes": "NIGHTLY REVIEW (v1). No weight proposals or rules.json edits permitted. Digest-based analysis from day file. Contradictions check deferred (requires bar-level read). Weekly run will aggregate with prior sessions for learning decisions."
+}
