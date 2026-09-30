@@ -55,9 +55,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int market, corner, font, trade, todo, clock; };
+struct PIdx { int market, corner, font, trade, todo, clock, layout; };
 static PIdx PX;
-struct Settings { int market = 0, corner = 0, font = 10, clock = 0; bool trade = true, todo = true; };
+struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0; bool trade = true, todo = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -76,6 +76,10 @@ public:
     void readSettings(Settings& S);
     void load();
     void render(const Settings& S);
+    void renderFull(const Settings& S);
+    void renderSmall(const Settings& S);
+    void miniBoxes(short& x, short y, const std::vector<dl::Row>& rows, short sz);
+    std::string fit(const std::string& s, int maxW, int sz, bool bold);
     short U(float v) { return (short)(v * u + 0.5f); }
     void fill(short l, short t, short r, short b, COLOR c);
     void frame(short l, short t, short r, short b, COLOR c, bool dashed);
@@ -113,6 +117,7 @@ int cppExtension::setup(void)
     PX.trade  = pc++; setBoolParameter("TRADE line", true, SL);
     PX.todo   = pc++; setBoolParameter("WHAT TO DO box", true);
     PX.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
+    PX.layout = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");      // (1.1) appended LAST: saved positions stay put
     return RTX_OK;
 }
 
@@ -123,6 +128,7 @@ void DealerRead::readSettings(Settings& S)
     S.font = getIntegerValue(PX.font); if (S.font < 7) S.font = 10;   // (1.0.1) a first dialog can show ??? / a wrong number if (S.font > 20) S.font = 20;
     S.trade = isBoxChecked(PX.trade) != 0; S.todo = isBoxChecked(PX.todo) != 0;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
+    S.layout = getListIndex(PX.layout); if (S.layout < 0 || S.layout > 3) S.layout = 0;
 }
 
 void DealerRead::load()
@@ -229,7 +235,7 @@ void DealerRead::checklist(short x, short y, short w, short h, const std::string
     }
 }
 
-void DealerRead::render(const Settings& S)
+void DealerRead::renderFull(const Settings& S)
 {
     u = S.font / 10.0f;
     int fs = S.font;
@@ -316,12 +322,158 @@ void DealerRead::render(const Settings& S)
     }
 }
 
+
+// ---- (1.1) operator 2026-09-29: "too much space" -> D STACKED is the default: the level on its own row on top, one line of
+// WHAT TO DO, then the two checklists side by side; the strip fits the pane width. Compact (2 lines) / Mini (1 line) too.
+std::string DealerRead::fit(const std::string& s, int maxW, int sz, bool bold)
+{
+    std::string t = s;
+    if (maxW <= 0) return "";
+    while (!t.empty() && textW(t.c_str(), sz, bold) > maxW) t = t.substr(0, t.size() - 1);
+    return t;
+}
+void DealerRead::miniBoxes(short& x, short y, const std::vector<dl::Row>& rows, short sz)
+{
+    for (size_t i = 0; i < rows.size() && i < 3; i++) { checkBox(x, y, sz, rows[i].st); x = (short)(x + sz + U(4)); }
+}
+void DealerRead::render(const Settings& S) { if (S.layout == 3) renderFull(S); else renderSmall(S); }
+
+void DealerRead::renderSmall(const Settings& S)
+{
+    u = S.font / 10.0f;
+    int fs = S.font;
+    RCT pane; pane.getPaneRect(false);
+    RCT scale; scale.getScaleRect();
+    short paneR = pane.right;
+    if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
+    short avail = (short)(paneR - pane.left - U(12));
+    short W = U(860); if (W > avail) W = avail; if (W < U(400)) W = U(400);
+    short H = S.layout == 0 ? U(150) : (S.layout == 1 ? U(44) : U(22));
+    if (!D.hasLevel || !D.hasPrice) H = U(22);
+    short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (short)(pane.left + U(6));
+    short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6)) : (short)(pane.top + U(6));
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, D.learn);
+    char b[200];
+    // stale (drawn at the right end of the first line)
+    RTDATE now = currentDate(); struct tm tt; memset(&tt, 0, sizeof(tt)); getLocaltime(now, &tt);
+    double age = dl::staleMin(D.asofSo + S.clock * 60.0, tt.tm_hour * 3600.0 + tt.tm_min * 60.0 + tt.tm_sec);
+    std::string stale;
+    if (D.hasPrice && age > 10.0) { if (age >= 90) sprintf_s(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5)); stale = b; }
+    if (!D.hasPrice) {
+        sprintf_s(b, sizeof(b), "Dealer Read: no data for %s (root %s)", mkt.empty() ? "?" : mkt.c_str(), root.c_str());
+        text((short)(x0 + U(8)), (short)(y0 + H / 2), b, C_MUTED, fs - 1, false, 0);
+        return;
+    }
+    if (!D.hasLevel) {
+        sprintf_s(b, sizeof(b), "%s  no key level within 0.6 EM   -   %s", mkt.c_str(), D.bookLine.c_str());
+        text((short)(x0 + U(8)), (short)(y0 + H / 2), fit(b, W - U(90), fs - 1, false).c_str(), C_MUTED, fs - 1, false, 0);
+        if (!stale.empty()) text((short)(x0 + W - U(8)), (short)(y0 + H / 2), stale.c_str(), C_RED, fs - 1, true, 2);
+        return;
+    }
+    std::string trade;
+    for (size_t i = 0; i < D.trade.size(); i++) {
+        const std::string& k = D.trade[i].k;
+        if (k == "RECORD" || k == "SWEEP ROOM") continue;
+        std::string v = D.trade[i].v; size_t zp = v.find(" zone edge"); if (zp != std::string::npos) v = v.substr(0, zp);
+        size_t pp = v.find(" ("); if (k == "TARGET" && pp != std::string::npos) v = v.substr(0, pp);
+        trade += (trade.empty() ? "" : "  ") + std::string(k == "TARGET" ? "TGT" : k.c_str()) + " " + v;
+    }
+    sprintf_s(b, sizeof(b), "%s %s  %s", mkt.c_str(), dl::fmtPx(D.lvlPx, mkt).c_str(), D.lvlLabel.c_str());
+    std::string lvl = b;
+    COLOR wcol = (D.wallCol == 'A' || D.wall.empty()) ? C_AMBER : C_BLUE;
+    short box = U(12);
+
+    if (S.layout == 2) {                                   // ---- MINI: one line
+        short y = (short)(y0 + H / 2), x = (short)(x0 + U(8));
+        sprintf_s(b, sizeof(b), "%s - %s", lvl.c_str(), dl::phaseName(D.phase));
+        text(x, y, b, C_INK, fs - 1, true, 0); x = (short)(x + textW(b, fs - 1, true) + U(12));
+        text(x, y, "LEVEL", wcol, fs - 1, true, 0); x = (short)(x + textW("LEVEL", fs - 1, true) + U(6));
+        miniBoxes(x, y, D.wall, box); x = (short)(x + U(4));
+        std::string ws = D.wallScore; text(x, y, ws.c_str(), colOf(D.wallCol), fs - 1, true, 0); x = (short)(x + textW(ws.c_str(), fs - 1, true) + U(14));
+        text(x, y, "FUEL", C_AMBER, fs - 1, true, 0); x = (short)(x + textW("FUEL", fs - 1, true) + U(6));
+        miniBoxes(x, y, D.fuel, box); x = (short)(x + U(4));
+        text(x, y, D.fuelScore.c_str(), colOf(D.fuelCol), fs - 1, true, 0); x = (short)(x + textW(D.fuelScore.c_str(), fs - 1, true) + U(14));
+        int room = (int)(x0 + W - U(10) - (stale.empty() ? 0 : textW(stale.c_str(), fs - 1, true) + U(10))) - x;
+        text(x, y, fit(trade, room, fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+        if (!stale.empty()) text((short)(x0 + W - U(8)), y, stale.c_str(), C_RED, fs - 1, true, 2);
+        return;
+    }
+    if (S.layout == 1) {                                   // ---- COMPACT: two lines
+        short y1 = (short)(y0 + U(12)), y2 = (short)(y0 + U(32)), x = (short)(x0 + U(8));
+        text(x, y1, lvl.c_str(), C_INK, fs - 1, true, 0); x = (short)(x + textW(lvl.c_str(), fs - 1, true) + U(8));
+        text(x, y1, dl::phaseName(D.phase), C_TABONB, fs - 2, true, 0); x = (short)(x + textW(dl::phaseName(D.phase), fs - 2, true) + U(12));
+        std::string wt = fit(D.wallTitle, U(170), fs - 2, true);
+        text(x, y1, wt.c_str(), wcol, fs - 2, true, 0); x = (short)(x + textW(wt.c_str(), fs - 2, true) + U(8));
+        for (size_t i = 0; i < D.wall.size() && i < 3; i++) { checkBox(x, y1, box, D.wall[i].st); x = (short)(x + box + U(3)); text(x, y1, D.wall[i].n.c_str(), C_MUTED, fs - 3, false, 0); x = (short)(x + textW(D.wall[i].n.c_str(), fs - 3, false) + U(8)); }
+        text(x, y1, "FUEL", C_AMBER, fs - 2, true, 0); x = (short)(x + textW("FUEL", fs - 2, true) + U(6));
+        for (size_t i = 0; i < D.fuel.size() && i < 3; i++) { checkBox(x, y1, box, D.fuel[i].st); x = (short)(x + box + U(3)); text(x, y1, D.fuel[i].n.c_str(), C_INK, fs - 3, false, 0); x = (short)(x + textW(D.fuel[i].n.c_str(), fs - 3, false) + U(8)); }
+        text((short)(x0 + W - U(8)), y1, D.fuelScore.c_str(), colOf(D.fuelCol), fs - 2, true, 2);
+        x = (short)(x0 + U(8));
+        text(x, y2, trade.c_str(), C_INK, fs - 2, false, 0); x = (short)(x + textW(trade.c_str(), fs - 2, false) + U(14));
+        int room = (int)(x0 + W - U(10) - (stale.empty() ? 0 : textW(stale.c_str(), fs - 2, true) + U(10))) - x;
+        text(x, y2, fit(">> " + D.doText, room, fs - 2, true).c_str(), C_DOTXT, fs - 2, true, 0);
+        if (!stale.empty()) text((short)(x0 + W - U(8)), y2, stale.c_str(), C_RED, fs - 2, true, 2);
+        return;
+    }
+    // ---- STACKED (D): row 1 the level, row 2 WHAT TO DO, then the two checklists side by side
+    short r1t = (short)(y0 + U(4)), r1h = U(22), y1 = (short)(r1t + r1h / 2);
+    fill((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBG);
+    frame((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBRD, false);
+    short x = (short)(x0 + U(10));
+    text(x, y1, lvl.c_str(), C_INK, fs - 1, true, 0); x = (short)(x + textW(lvl.c_str(), fs - 1, true) + U(14));
+    short tabW = U(58), tabH = U(14);
+    for (int i = 0; i < 5; i++) {
+        bool on = i == D.phase, done = i < D.phase;
+        fill(x, (short)(y1 - tabH / 2), (short)(x + tabW), (short)(y1 + tabH / 2), on ? C_TABON : C_TABOFF);
+        frame(x, (short)(y1 - tabH / 2), (short)(x + tabW), (short)(y1 + tabH / 2), on ? C_TABONB : C_TABOFB, false);
+        text((short)(x + tabW / 2), y1, dl::phaseName(i), on ? C_INK : (done ? C_GREEN : C_MUTED), fs - 3, true, 1);
+        x = (short)(x + tabW + U(3));
+    }
+    x = (short)(x + U(12));
+    // flags (news) and stale at the right end, the trade numbers between
+    short rx = (short)(x0 + W - U(10));
+    if (!stale.empty()) { text(rx, y1, stale.c_str(), C_RED, fs - 2, true, 2); rx = (short)(rx - textW(stale.c_str(), fs - 2, true) - U(10)); }
+    for (int i = (int)D.flags.size() - 1; i >= 0; i--) {
+        const dl::KV& f = D.flags[(size_t)i];
+        if (f.col == 'G') continue;                    // only what needs attention (a news release soon, old data)
+        text(rx, y1, f.k.c_str(), colOf(f.col), fs - 2, true, 2); rx = (short)(rx - textW(f.k.c_str(), fs - 2, true) - U(10));
+    }
+    text(x, y1, fit(trade, rx - x, fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+    short y2 = (short)(r1t + r1h + U(12));
+    if (S.todo) text((short)(x0 + U(10)), y2, fit(">> " + D.doText, W - U(20), fs - 2, true).c_str(), C_DOTXT, fs - 2, true, 0);
+    short ct = (short)(y2 + U(10)), cb = (short)(y0 + H - U(4)), cw = (short)((W - U(12)) / 2);
+    for (int k = 0; k < 2; k++) {
+        short cx = (short)(x0 + U(4) + k * (cw + U(4)));
+        const std::vector<dl::Row>& rows = k == 0 ? D.wall : D.fuel;
+        COLOR tc = k == 0 ? wcol : C_AMBER;
+        std::string sc = k == 0 ? D.wallScore : D.fuelScore; char scol = k == 0 ? D.wallCol : D.fuelCol;
+        fill(cx, ct, (short)(cx + cw), cb, C_BOXBG);
+        frame(cx, ct, (short)(cx + cw), cb, tc, false);
+        short ty = (short)(ct + U(11));
+        int scW = textW(sc.c_str(), fs - 1, true);
+        std::string title = fit(k == 0 ? D.wallTitle : std::string("FUEL"), cw - scW - U(24), fs - 1, true);
+        text((short)(cx + U(6)), ty, title.c_str(), tc, fs - 1, true, 0);
+        text((short)(cx + cw - U(6)), ty, sc.c_str(), colOf(scol), fs - 1, true, 2);
+        short ry = (short)(ct + U(33));
+        for (size_t i = 0; i < rows.size() && i < 3; i++) {
+            const dl::Row& r = rows[i];
+            checkBox((short)(cx + U(6)), ry, box, r.st);
+            text((short)(cx + U(24)), ry, r.n.c_str(), C_INK, fs - 2, true, 0);
+            meter((short)(cx + U(78)), ry, U(84), U(10), r);
+            short wx = (short)(cx + U(172));
+            text(wx, ry, fit(r.why, cw - U(178), fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+            ry = (short)(ry + U(24));
+        }
+    }
+}
+
 void DealerRead::writeStatus(const char* what)
 {
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -338,6 +490,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read: level + fuel checklists, phase, TRADE line (reads lsFlexLevels\\LRA-Dealer-<MKT>.csv)");
-    p->setVersion("1.0.1");
+    p->setVersion("1.1");
     return p;
 }
