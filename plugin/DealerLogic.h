@@ -172,10 +172,11 @@ inline bool fits(int textW, int nodeLen, int pad = 8) { return nodeLen >= textW 
 
 // Node labels: "4215 +33 (29-56)" on the gamma node, "SELL 82" on the delta node
 inline std::string strikeTxt(float k) { char b[32]; if (std::fabs(k - std::floor(k + 0.5f)) < 1e-4f) snprintf(b, sizeof(b), "%d", (int)std::floor(k + 0.5f)); else snprintf(b, sizeof(b), "%g", k); return b; }
-inline std::string gammaLabel(const Node& n)
+inline std::string gammaLabel(const Node& n)   // (Profile 1.3.5, Rassul 2026-09-30) "4220  10  (9 to 17)" - no + sign, no whisker
 {
-    char b[80]; snprintf(b, sizeof(b), "%s  %+.0f  (%+.0f..%+.0f)", strikeTxt(n.k).c_str(), n.g, n.lo, n.hi); return b;
+    char b[96]; snprintf(b, sizeof(b), "%s  %ld  (%ld to %ld)", strikeTxt(n.k).c_str(), std::lround(n.g), std::lround(n.lo), std::lround(n.hi)); return b;   // lround: never "-0"
 }
+inline std::string gammaShort(const Node& n) { char b[48]; snprintf(b, sizeof(b), "%s  %ld", strikeTxt(n.k).c_str(), std::lround(n.g)); return b; }
 // (Profile 1.3.4, Rassul 2026-09-30) just the number: green = dealers buy, red = dealers sell already says which way
 inline std::string deltaLabel(const Node& n) { char b[32]; snprintf(b, sizeof(b), "%.0f", std::fabs(n.d)); return b; }
 

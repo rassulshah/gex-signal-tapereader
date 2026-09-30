@@ -203,7 +203,7 @@ void DealerRead::meter(short x, short y, short w, short h, const dl::Row& r)
 {
     fill(x, (short)(y - h / 2), (short)(x + w), (short)(y + h / 2), C_TRACK);
     short mid = (short)(x + w / 2);
-    int fs = (int)(8 * u + 0.5f);
+    int fs = (int)(9 * u + 0.5f);   // (1.2.3) 8 -> 9
     if (!r.hasV) { text(mid, y, r.lab.c_str(), C_MUTED, fs, false, 1); return; }
     short ln = (short)(w / 2 * std::fabs(r.v) / 100.0f);
     COLOR c = r.v >= 0 ? C_GREEN : C_RED;
@@ -427,33 +427,34 @@ void DealerRead::renderSmall(const Settings& S)
         if (!stale.empty()) text((short)(x0 + W - U(8)), y2, stale.c_str(), C_RED, fs - 2, true, 2);
         return;
     }
+    // (1.2.3, Rassul 2026-09-30: "enough space to make the font a little bigger") every text in the stacked layout +1 pt
     // ---- STACKED (D): row 1 the level, row 2 WHAT TO DO, then the two checklists side by side
-    short r1t = (short)(y0 + U(4)), r1h = U(22), y1 = (short)(r1t + r1h / 2);
+    short r1t = (short)(y0 + U(4)), r1h = U(24), y1 = (short)(r1t + r1h / 2);
     fill((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBG);
     frame((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBRD, false);
     short x = (short)(x0 + U(10));
-    text(x, y1, lvl.c_str(), C_INK, fs - 1, true, 0); x = (short)(x + textW(lvl.c_str(), fs - 1, true) + U(14));
-    short tabW = U(50), tabH = U(14);
+    text(x, y1, lvl.c_str(), C_INK, fs, true, 0); x = (short)(x + textW(lvl.c_str(), fs, true) + U(14));
+    short tabW = U(54), tabH = U(16);
     for (int i = 0; i < dl::NPHASE; i++) {
         bool on = i == D.phase, done = i < D.phase;
         fill(x, (short)(y1 - tabH / 2), (short)(x + tabW), (short)(y1 + tabH / 2), on ? C_TABON : C_TABOFF);
         frame(x, (short)(y1 - tabH / 2), (short)(x + tabW), (short)(y1 + tabH / 2), on ? C_TABONB : C_TABOFB, false);
-        text((short)(x + tabW / 2), y1, dl::phaseName(i), on ? C_INK : (done ? C_GREEN : C_MUTED), fs - 4, true, 1);
+        text((short)(x + tabW / 2), y1, dl::phaseName(i), on ? C_INK : (done ? C_GREEN : C_MUTED), fs - 3, true, 1);
         x = (short)(x + tabW + U(2));
     }
     x = (short)(x + U(12));
     // flags (news) and stale at the right end, the trade numbers between
     short rx = (short)(x0 + W - U(10));
-    if (!stale.empty()) { text(rx, y1, stale.c_str(), C_RED, fs - 2, true, 2); rx = (short)(rx - textW(stale.c_str(), fs - 2, true) - U(10)); }
+    if (!stale.empty()) { text(rx, y1, stale.c_str(), C_RED, fs - 1, true, 2); rx = (short)(rx - textW(stale.c_str(), fs - 1, true) - U(10)); }
     for (int i = (int)D.flags.size() - 1; i >= 0; i--) {
         const dl::KV& f = D.flags[(size_t)i];
         if (f.col == 'G') continue;                    // only what needs attention (a news release soon, old data)
-        text(rx, y1, f.k.c_str(), colOf(f.col), fs - 2, true, 2); rx = (short)(rx - textW(f.k.c_str(), fs - 2, true) - U(10));
+        text(rx, y1, f.k.c_str(), colOf(f.col), fs - 1, true, 2); rx = (short)(rx - textW(f.k.c_str(), fs - 1, true) - U(10));
     }
-    text(x, y1, fit(trade, rx - x, fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+    text(x, y1, fit(trade, rx - x, fs - 1, false).c_str(), C_INK, fs - 1, false, 0);
     // (1.2) the chip row: SWEEP - Trapped, TRIGGER - RevBar / RevVol / RevWave (any one lights the TRIGGER tab), each lit
     // chip with its value and its study number (Rassul 2026-09-29)
-    short yc = (short)(r1t + r1h + U(11));
+    short yc = (short)(r1t + r1h + U(12));
     {
         short cx = (short)(x0 + U(10));
         std::string grp;
@@ -462,20 +463,20 @@ void DealerRead::renderSmall(const Settings& S)
             if (g.group != grp) {
                 if (!grp.empty()) cx = (short)(cx + U(8));
                 grp = g.group;
-                text(cx, yc, grp.c_str(), C_MUTED, fs - 3, true, 0); cx = (short)(cx + textW(grp.c_str(), fs - 3, true) + U(6));
+                text(cx, yc, grp.c_str(), C_MUTED, fs - 2, true, 0); cx = (short)(cx + textW(grp.c_str(), fs - 2, true) + U(6));
             }
             std::string lab = g.name + (g.on && !g.val.empty() ? "  " + g.val : "") + (g.on && g.group == "TRIGGER" ? "  - " + g.note : "");
             COLOR c = !g.on ? C_GREY : (g.name == "RevBar" ? C_GREEN : g.name == "RevVol" ? 0x0038BDF8 : g.name == "RevWave" ? 0x00A78BFA : 0x0094A3B8);
-            int tw = textW(lab.c_str(), fs - 3, g.on) + U(22);
+            int tw = textW(lab.c_str(), fs - 2, g.on) + U(24);
             if (cx + tw > x0 + W - U(8)) break;
-            frame(cx, (short)(yc - U(7)), (short)(cx + tw), (short)(yc + U(7)), c, false);
-            checkBox((short)(cx + U(3)), yc, U(9), g.on ? "ok" : "wait");
-            text((short)(cx + U(16)), yc, lab.c_str(), g.on ? c : C_MUTED, fs - 3, g.on, 0);
+            frame(cx, (short)(yc - U(8)), (short)(cx + tw), (short)(yc + U(8)), c, false);
+            checkBox((short)(cx + U(3)), yc, U(10), g.on ? "ok" : "wait");
+            text((short)(cx + U(17)), yc, lab.c_str(), g.on ? c : C_MUTED, fs - 2, g.on, 0);
             cx = (short)(cx + tw + U(5));
         }
     }
-    short y2 = (short)(yc + U(17));
-    if (S.todo) text((short)(x0 + U(10)), y2, fit(">> " + D.doText, W - U(20), fs - 2, true).c_str(), C_DOTXT, fs - 2, true, 0);
+    short y2 = (short)(yc + U(18));
+    if (S.todo) text((short)(x0 + U(10)), y2, fit(">> " + D.doText, W - U(20), fs - 1, true).c_str(), C_DOTXT, fs - 1, true, 0);
     short ct = (short)(y2 + U(10)), cb = (short)(y0 + H - U(4)), cw = (short)((W - U(12)) / 2);
     for (int k = 0; k < 2; k++) {
         short cx = (short)(x0 + U(4) + k * (cw + U(4)));
@@ -484,26 +485,26 @@ void DealerRead::renderSmall(const Settings& S)
         std::string sc = k == 0 ? D.wallScore : D.fuelScore; char scol = k == 0 ? D.wallCol : D.fuelCol;
         fill(cx, ct, (short)(cx + cw), cb, C_BOXBG);
         frame(cx, ct, (short)(cx + cw), cb, tc, false);
-        short ty = (short)(ct + U(11));
-        int scW = textW(sc.c_str(), fs - 1, true);
-        std::string title = fit(k == 0 ? D.wallTitle : std::string("FUEL"), cw - scW - U(24), fs - 1, true);
-        text((short)(cx + U(6)), ty, title.c_str(), tc, fs - 1, true, 0);
+        short ty = (short)(ct + U(12));
+        int scW = textW(sc.c_str(), fs, true);
+        std::string title = fit(k == 0 ? D.wallTitle : std::string("FUEL"), cw - scW - U(24), fs, true);
+        text((short)(cx + U(6)), ty, title.c_str(), tc, fs, true, 0);
         if (false && S.explain) {   // (1.1.2) no text on the chart beyond the checklist itself - the description explains   // (1.1) what the box answers, in the room left on the title line
             const char* q = k == 0 ? "  is the wall getting stronger? (gamma)" : "  are dealers reversing their trade? (delta flow)";
             int used = textW(title.c_str(), fs - 1, true) + U(6);
             std::string qq = fit(q, cw - scW - U(24) - used, fs - 3, false);
             text((short)(cx + U(6) + used), ty, qq.c_str(), C_MUTED, fs - 3, false, 0);
         }
-        text((short)(cx + cw - U(6)), ty, sc.c_str(), colOf(scol), fs - 1, true, 2);
-        short ry = (short)(ct + U(31));
+        text((short)(cx + cw - U(6)), ty, sc.c_str(), colOf(scol), fs, true, 2);
+        short ry = (short)(ct + U(33));
         for (size_t i = 0; i < rows.size() && i < 3; i++) {
             const dl::Row& r = rows[i];
             checkBox((short)(cx + U(6)), ry, box, r.st);
-            text((short)(cx + U(24)), ry, r.n.c_str(), C_INK, fs - 2, true, 0);
-            meter((short)(cx + U(78)), ry, U(80), U(10), r);
-            short wx = (short)(cx + U(222));      // (1.1.3) past the meter AND its value label ("7% vol" ran into the reason)
-            text(wx, ry, fit(r.why, cw - U(228), fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
-            ry = (short)(ry + U(22));
+            text((short)(cx + U(26)), ry, r.n.c_str(), C_INK, fs - 1, true, 0);
+            meter((short)(cx + U(84)), ry, U(84), U(12), r);
+            short wx = (short)(cx + U(226));      // (1.1.3) past the meter AND its value label ("7% vol" ran into the reason)
+            text(wx, ry, fit(r.why, cw - U(232), fs - 1, false).c_str(), C_INK, fs - 1, false, 0);
+            ry = (short)(ry + U(23));
         }
     }
 }

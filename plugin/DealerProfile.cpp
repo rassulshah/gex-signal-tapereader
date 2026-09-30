@@ -3,7 +3,8 @@
  *
  *  THE DEALER PROFILE: two nodes per strike on the right edge of the price pane, facing price.
  *     upper node  synthetic GAMMA on arrival (futures per 0.1 EM): cyan = dealers long gamma (a WALL), lime = short (FUEL)
- *                 white whisker = the range for an earlier / later arrival; dashed outline = MenthorQ's snapshot now
+ *                 "4220  10  (9 to 17)": 10 at the usual pace, 9 if price gets there twice as fast, 17 twice as slow
+ *                 (1.3.5 - the whisker line is gone, Rassul 2026-09-30); outline = MenthorQ's snapshot now
  *     lower node  synthetic DELTA: futures dealers must trade because of this strike on the way there (green BUY / red SELL)
  *  Values sit INSIDE the nodes when they fit (operator 2026-09-29: no text outside the nodes); the rest is on the
  *  whole-book banner (top-left) and the legend line. Strikes beyond 1.2 EM fade.
@@ -28,7 +29,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.4";   // 1.3.4: cyan wall / lime fuel; delta node shows just the number (DealerLogic.h)
+static const char* DP_VERSION = "1.3.5";   // 1.3.4: cyan wall / lime fuel; delta = just the number. 1.3.5: "4220  10  (9 to 17)", no whisker
 static const COLOR C_WALL  = 0x0022D3EE;   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00A3E635;   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -107,7 +108,7 @@ int cppExtension::setup(void)
     PX.width   = pc++; setIntegerParameter("Profile width px", 260, 0, SL);
     PX.labels  = pc++; setBoolParameter("Values inside the nodes", true);
     PX.snap    = pc++; setBoolParameter("Snapshot outline", true, SL);
-    PX.whisk   = pc++; setBoolParameter("Arrival-range whisker", true);
+    PX.whisk   = pc++; setBoolParameter("(whisker removed - the range is in the text)", false);   // 1.3.5: kept for its position, unused
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
     PX.banner  = pc++; setBoolParameter("Whole-book banner", true);
     PX.legend  = pc++; setBoolParameter("(key moved to the description above)", false, SL);
@@ -116,7 +117,7 @@ int cppExtension::setup(void)
     // (1.3.3) HOW TO READ IT, in the settings (the description box cuts long text off): open a list to read every line.
     // Appended LAST so saved values keep their positions; nothing reads them.
     PX.keyPill = pc++; setListParameter("Pill (open to read)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Yellow pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
-    PX.keyNode = pc++; setListParameter("Nodes (open to read)", 0, "Upper node = GAMMA when price gets there (futures per 0.1 EM);Cyan = WALL: dealers lean against every tick - stops a sweep;Lime = FUEL: dealers chase the move - then unwind it after the turn;Lower node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Whisker = earlier or later arrival;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215 +32 wall with SELL 81 on the way = the high");
+    PX.keyNode = pc++; setListParameter("Nodes (open to read)", 0, "Upper node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Cyan = WALL: dealers lean against every tick - stops a sweep;Lime = FUEL: dealers chase the move - then unwind it after the turn;Lower node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with 81 sold on the way = the high");
     return RTX_OK;
 }
 
@@ -252,7 +253,7 @@ void DealerProfile::render(const Settings& S)
         if (S.snap && Ls > 1) dashRect((short)(anchor - Ls), gt, anchor, gb, fade(C_SNAP, ft));
         if (Ld > 0) box((short)(anchor - Ld), dt_, anchor, db, dc);
         if (Ld > 2 && dl::strengthBars(N.dp) == 3) outline((short)(anchor - Ld), dt_, anchor, db);
-        if (S.whisk && !N.far && std::fabs(N.hi - N.lo) >= 1.0f) {
+        if (false && S.whisk && !N.far && std::fabs(N.hi - N.lo) >= 1.0f) {   // (1.3.5) no whisker: "(9 to 17)" is in the node's text
             int a = dl::barLen(N.lo, gmax, W), b = dl::barLen(N.hi, gmax, W);
             short ym = (short)((gt + gb) / 2), cap = (short)(nodeH / 2 > 2 ? nodeH / 2 : 2);
             short x1 = (short)(anchor - (a > b ? a : b)), x2 = (short)(anchor - (a < b ? a : b));
@@ -262,12 +263,13 @@ void DealerProfile::render(const Settings& S)
         }
         if (S.labels && !N.far && nodeH >= S.font - 1) {
             std::string gl = dl::gammaLabel(N), dlab = dl::deltaLabel(N);
+            if (!dl::fits(textW(gl.c_str(), S.font, true), Lg)) gl = dl::gammaShort(N);   // (1.3.5) short node: "4220  10"
             if (dl::fits(textW(gl.c_str(), S.font, true), Lg)) textRJ((short)(anchor - 4), (short)((gt + gb) / 2), gl.c_str(), C_DARK, S.font, true);
             if (dl::fits(textW(dlab.c_str(), S.font, true), Ld)) textRJ((short)(anchor - 4), (short)((dt_ + db) / 2), dlab.c_str(), N.d < 0 ? 0x00FFFFFF : C_DARK, S.font, true);
         }
         if (S.labels && !N.far && nodeH >= S.font - 3) {   // (1.2) the strength share right OUTSIDE each node: % of a normal 15 min of volume
             int reachG = Lg; if (S.snap && Ls > reachG) reachG = Ls;
-            if (S.whisk) { int a2 = dl::barLen(N.lo, gmax, W), b2 = dl::barLen(N.hi, gmax, W); if (a2 > reachG) reachG = a2; if (b2 > reachG) reachG = b2; }
+            if (false && S.whisk) { int a2 = dl::barLen(N.lo, gmax, W), b2 = dl::barLen(N.hi, gmax, W); if (a2 > reachG) reachG = a2; if (b2 > reachG) reachG = b2; }
             // (1.2) [lightning if LIVE] [strength bars] [%]  right outside the node, coloured by band (Rassul 2026-09-29)
             if (Lg > 0 && N.gp >= 0) strengthMark((short)(anchor - reachG - 4), (short)((gt + gb) / 2), N.gp, N.live, S.font);
             if (Ld > 0 && N.dp >= 0) strengthMark((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), N.dp, false, S.font);
@@ -378,6 +380,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Upper node = gamma when price gets there (cyan wall stops a sweep, lime fuel chases it). Lower node = futures dealers must trade on the way. Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). Open the two lists below for every detail.");
-    p->setVersion("1.3.4");
+    p->setVersion("1.3.5");
     return p;
 }

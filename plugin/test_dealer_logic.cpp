@@ -65,7 +65,7 @@ int main()
     CHECK(gm >= 44.0f && dm >= 63.0f, "the scale covers the 4215 whisker and its delta");
     CHECK(dl::barLen(45.0f, 90.0f, 200) == 100 && dl::barLen(-500, 90, 200) == 200, "bar length is proportional and capped");
     CHECK(dl::fits(60, 80) && !dl::fits(60, 62), "text goes inside a node only when it fits");
-    CHECK(dl::gammaLabel(*n4215) == "4215  +35  (+32..+44)" && dl::deltaLabel(*n4215) == "63", "node labels");
+    CHECK(dl::gammaLabel(*n4215) == "4215  35  (32 to 45)" && dl::gammaShort(*n4215) == "4215  35" && dl::deltaLabel(*n4215) == "63", "node labels");
     // stale
     CHECK(std::fabs(dl::staleMin(31500, 31800) - 5.0) < 1e-9 && dl::staleMin(86000, 100) > 0 && dl::staleMin(-1, 5) == 0, "stale minutes, across midnight");
     
