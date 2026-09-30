@@ -100,7 +100,7 @@ int DealerProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(16);
+    setParameterDialogHeight(17);   // (1.3.5) room for the how-to guide
     const short SL = kParmAppendSameLine;
     int pc = 0;
     // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
@@ -118,6 +118,22 @@ int cppExtension::setup(void)
     // Appended LAST so saved values keep their positions; nothing reads them.
     PX.keyPill = pc++; setListParameter("Pill (open to read)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Yellow pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
     PX.keyNode = pc++; setListParameter("Nodes (open to read)", 0, "Upper node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Cyan = WALL: dealers lean against every tick - stops a sweep;Lime = FUEL: dealers chase the move - then unwind it after the turn;Lower node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
+    // (1.3.5, Rassul 2026-09-30: "keep an example of the read in the settings - a How-to guide ... use all the blank space")
+    // one full row per line (a checkbox label shows the whole line); appended LAST so saved values keep their positions;
+    // nothing reads them
+    pc++; setBoolParameter("HOW TO READ A STRIKE - 9/29 Gold 4215 at 08:45 (the high)", false);
+    pc++; setBoolParameter("1 WHERE: price 23 pts under 4215, heading up", false);
+    pc++; setBoolParameter("2 DELTA (lower node): SELL 81 = dealers sell 81 on the way", false);
+    pc++; setBoolParameter("   up -> against the rally: the push fades before the level", false);
+    pc++; setBoolParameter("3 GAMMA (upper node): 4215  32  (28 to 46), CYAN = a WALL", false);
+    pc++; setBoolParameter("   every 5.5 pts higher, dealers sell 32 more futures", false);
+    pc++; setBoolParameter("   46 if price grinds up slowly, 28 if it spikes in", false);
+    pc++; setBoolParameter("4 SIZE: yellow pill 2.8% of a normal 15 min = meaningful", false);
+    pc++; setBoolParameter("5 VERDICT: headwind + wall = the high holds. Wait for the", false);
+    pc++; setBoolParameter("   sweep + a trigger, then short. (It held.)", false);
+    pc++; setBoolParameter("LIME = FUEL: dealers chase the move -> overshoot, snap back", false);
+    pc++; setBoolParameter("   12:57: SELL 222 into 4175 (lime) -> swept, then dealers", false);
+    pc++; setBoolParameter("   bought 700 / 606 / 931 back = the long", false);
     return RTX_OK;
 }
 
@@ -379,7 +395,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Profile. Upper node = gamma when price gets there (cyan wall stops a sweep, lime fuel chases it). Lower node = futures dealers must trade on the way. Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). Open the two lists below for every detail.");
+    p->setDescription("LRA Dealer Profile. Upper node = gamma when price gets there (cyan wall stops a sweep, lime fuel chases it). Lower node = futures dealers must trade on the way. Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). The HOW TO READ guide is below; open the two lists for every detail.");
     p->setVersion("1.3.5");
     return p;
 }

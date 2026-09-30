@@ -107,7 +107,7 @@ int DealerRead::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); 
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(14);
+    setParameterDialogHeight(18);   // (1.2.3) room for the how-to guide
     const short SL = kParmAppendSameLine;
     int pc = 0;
     // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
@@ -124,6 +124,22 @@ int cppExtension::setup(void)
     PX.keyFuel = pc++; setListParameter("FUEL box (open to read)", 0, "FUEL box = are dealers reversing their trade? (delta flow);COVER = dealers trading your way >= 5% of 15-min volume;GAMMA = their short gamma shrinking = the fuel is being used;VANNA = IV falling = their hedges unwind your way;STORED n = futures they will trade on the way (before the sweep);PRIMED = COVER + one more green / AT RISK = no real covering");
     PX.lift    = pc++; setIntegerParameter("Lift from the bottom (px)", 30, 0);   // (1.2.2) clear of the chart's button bar
     PX.keyTrig = pc++; setListParameter("Phases + triggers (open to read)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");      // (1.1) appended LAST: saved positions stay put
+    // (1.2.3, Rassul 2026-09-30: "keep an example of the read in the settings - a How-to guide ... use all the blank space")
+    // one full row per line (a checkbox label shows the whole line); appended LAST so saved values keep their positions;
+    // nothing reads them
+    pc++; setBoolParameter("HOW TO READ IT - 9/29 Gold 09:36, short under 4,203.80", false);
+    pc++; setBoolParameter("1 TABS = where the trade is: APPROACH > SWEEP > TRIGGER >", false);
+    pc++; setBoolParameter("   RECLAIM > RETEST > TRADE (green = done, lit = now)", false);
+    pc++; setBoolParameter("2 SWEEP chip: Trapped 1,402 lots 2.1x = buyers trapped", false);
+    pc++; setBoolParameter("3 TRIGGER chip: RevWave leg 1.9x = the turn printed", false);
+    pc++; setBoolParameter("   (holds 88-95%) - any trigger lights the TRIGGER tab", false);
+    pc++; setBoolParameter("4 >> WHAT TO DO: short on the first pullback", false);
+    pc++; setBoolParameter("5 LEVEL box = the wall behind your stop: 3/3 SOLID", false);
+    pc++; setBoolParameter("   SPEED +4 COLOR +5 ZOMMA +1 = retest meets a stronger wall", false);
+    pc++; setBoolParameter("6 FUEL box = what powers the move: 1/3 AT RISK", false);
+    pc++; setBoolParameter("   COVER 0% vol = dealers not buying back yet (needs 5%+)", false);
+    pc++; setBoolParameter("7 VERDICT: in the trade, wall solid, fuel not confirmed ->", false);
+    pc++; setBoolParameter("   tighten the stop / take target 1 if COVER stays red", false);
     return RTX_OK;
 }
 
@@ -530,7 +546,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerRead *p = new DealerRead();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. Open the three lists below for every check explained.");
+    p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. The HOW TO READ guide is below; open the three lists for every check explained.");
     p->setVersion("1.2.3");
     return p;
 }
