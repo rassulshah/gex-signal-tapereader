@@ -451,7 +451,7 @@ void DealerRead::renderSmall(const Settings& S)
     short avail = (short)(paneR - pane.left - U(12));
     short W = (short)(U(860) * S.widthPct / 100); if (W > avail) W = avail; if (W < U(340)) W = U(340);   // (1.2.4) width %
     short H = S.layout == 0 ? U(132) : (S.layout == 1 ? U(44) : U(22));   // (1.2.6) stacked 176 -> 132 (compact, same font)
-    if (!D.hasLevel || !D.hasPrice) H = U(40);
+    if (!D.hasLevel || !D.hasPrice) H = D.next.empty() ? U(40) : (short)(U(40) + U(16) * (short)D.next.size());   // (1.3.4) + the NEXT lines
     short HA = D.scn.empty() ? U(92) : U(174);            // (1.3.0) no level = NOW only (no empty scenario boxes)
     bool sep = S.apos <= 2;                               // (1.3.0, Rassul: "the analyst text is supposed to be on top and the read at the bottom")
     short HT = S.show == 1 ? HA : (S.show == 2 && !sep ? (short)(H + HA + U(4)) : H);
@@ -483,7 +483,12 @@ void DealerRead::renderSmall(const Settings& S)
     if (!D.hasLevel) {                                   // (1.2.2) two readable lines instead of one faint one
         sprintf_s(b, sizeof(b), "%s DEALER READ  -  waiting: no key level within 0.6 EM of %s", mkt.c_str(), dl::fmtPx(D.px, mkt).c_str());
         text((short)(x0 + U(8)), (short)(y0 + U(12)), fit(b, W - U(90), fs - 1, true).c_str(), C_INK, fs - 1, true, 0);
-        text((short)(x0 + U(8)), (short)(y0 + U(29)), fit(D.bookLine, W - U(16), fs - 2, false).c_str(), D.book < 0 ? C_AMBER : C_BLUE, fs - 2, false, 0);
+        short ny = (short)(y0 + U(29));
+        for (size_t i = 0; i < D.next.size(); i++) {      // (1.3.4, Rassul: "there is nothing there") the nearest level above / below and why it is not a trade yet
+            text((short)(x0 + U(8)), ny, fit(D.next[i], W - U(16), fs - 1, false).c_str(), C_INK, fs - 1, false, 0);
+            ny = (short)(ny + U(16));
+        }
+        text((short)(x0 + U(8)), ny, fit(D.bookLine, W - U(16), fs - 2, false).c_str(), D.book < 0 ? C_AMBER : C_BLUE, fs - 2, false, 0);
         if (!stale.empty()) text((short)(x0 + W - U(8)), (short)(y0 + U(12)), stale.c_str(), C_RED, fs - 1, true, 2);
         return;
     }
@@ -647,7 +652,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.3.3\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.3.4\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -664,6 +669,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read: is the level holding, and are dealers reversing? The guide is below the settings.");
-    p->setVersion("1.3.3");
+    p->setVersion("1.3.4");
     return p;
 }

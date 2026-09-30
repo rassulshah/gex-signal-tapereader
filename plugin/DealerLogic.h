@@ -41,6 +41,7 @@ struct Data {
     std::vector<KV> trade; std::vector<KV> flags;
     std::vector<Trig> trig;
     std::string doText, bookLine; bool learn = false;
+    std::vector<std::string> next;   // (2026-09-30) NEXT|above|below: what the Read watches when there is no level
     std::string fuelTitle, keyName, mqName, sideWord, noWall;   // (file 1.2) the price level then the MenthorQ level; NO WALL text
     std::vector<Row> xrows;                                       // (Read 1.2.6) TAPE / CHARM
     std::string aNow, aTime, aBias; char aBiasCol = 'N';          // (Read 1.2.6) the Analyst: NOW paragraph + bias
@@ -130,6 +131,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "DO" && t.size() >= 2) { D.doText = t[1]; return true; }
     if (k == "TRIG" && t.size() >= 6) { Trig g; g.group = t[1]; g.name = t[2]; g.on = t[3] == "1"; g.val = t[4]; g.note = t[5]; D.trig.push_back(g); return true; }
     if (k == "BOOKLINE" && t.size() >= 2) { D.bookLine = t[1]; return true; }
+    if (k == "NEXT") { D.next.assign(t.begin() + 1, t.end()); return true; }
     if (k == "LEARN" && t.size() >= 2) { D.learn = t[1] == "1"; return true; }
     return false;
 }
