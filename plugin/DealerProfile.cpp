@@ -29,7 +29,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.5";   // 1.3.4: cyan wall / lime fuel; delta = just the number. 1.3.5: "4220  10  (9 to 17)", no whisker
+static const char* DP_VERSION = "1.3.5";   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x0022D3EE;   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00A3E635;   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -117,7 +117,7 @@ int cppExtension::setup(void)
     // (1.3.3) HOW TO READ IT, in the settings (the description box cuts long text off): open a list to read every line.
     // Appended LAST so saved values keep their positions; nothing reads them.
     PX.keyPill = pc++; setListParameter("Pill (open to read)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Yellow pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
-    PX.keyNode = pc++; setListParameter("Nodes (open to read)", 0, "Upper node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Cyan = WALL: dealers lean against every tick - stops a sweep;Lime = FUEL: dealers chase the move - then unwind it after the turn;Lower node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with 81 sold on the way = the high");
+    PX.keyNode = pc++; setListParameter("Nodes (open to read)", 0, "Upper node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Cyan = WALL: dealers lean against every tick - stops a sweep;Lime = FUEL: dealers chase the move - then unwind it after the turn;Lower node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
     return RTX_OK;
 }
 
