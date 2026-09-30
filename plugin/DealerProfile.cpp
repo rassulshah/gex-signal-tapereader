@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.1";
+static const char* DP_VERSION = "1.1.1";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -108,7 +108,7 @@ int cppExtension::setup(void)
     PX.whisk   = pc++; setBoolParameter("Arrival-range whisker", true);
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
     PX.banner  = pc++; setBoolParameter("Whole-book banner", true);
-    PX.legend  = pc++; setBoolParameter("How-to-read lines", true, SL);
+    PX.legend  = pc++; setBoolParameter("(key moved to the description above)", false, SL);
     PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     return RTX_OK;
@@ -258,7 +258,7 @@ void DealerProfile::render(const Settings& S)
         textLJ((short)(bx + 10), (short)(by + (S.font + 12) / 2), D.bookLine.c_str(), D.book < 0 ? C_FUEL : C_WALL, S.font + 1, true);
         by = (short)(by + S.font + 16);
     }
-    if (S.legend) {       // (1.1) operator 2026-09-29: say what each node is FOR, not only what it is
+    if (false && S.legend) {   // (1.1.1) operator 2026-09-29: "no more text on the chart - add it to the indicator" (the description)       // (1.1) operator 2026-09-29: say what each node is FOR, not only what it is
         short ly = (short)(by + S.font / 2 + 2), lh = (short)(S.font + 5);
         textLJ((short)(bx + 2), ly, "GAMMA node (upper): how hard this strike pushes back WHEN PRICE GETS THERE.  Blue = WALL, dealers lean against every tick - stops a sweep and turns it.  Amber = FUEL, dealers chase the move there.", C_INK, S.font - 1, false);
         textLJ((short)(bx + 2), (short)(ly + lh), "DELTA node (lower): futures dealers MUST trade on the way to this strike (green buy / red sell) - the push into your level, and the stock they unwind after the turn (fuel for the reversal).", C_INK, S.font - 1, false);
@@ -305,6 +305,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.1");
+    p->setVersion("1.1.1");
     return p;
 }

@@ -118,7 +118,7 @@ int cppExtension::setup(void)
     PX.todo   = pc++; setBoolParameter("WHAT TO DO box", true);
     PX.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     PX.layout = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");
-    PX.explain = pc++; setBoolParameter("Explain each box", true, SL);      // (1.1) appended LAST: saved positions stay put
+    PX.explain = pc++; setBoolParameter("(explanations are in the description above)", false, SL);      // (1.1) appended LAST: saved positions stay put
     return RTX_OK;
 }
 
@@ -456,7 +456,7 @@ void DealerRead::renderSmall(const Settings& S)
         int scW = textW(sc.c_str(), fs - 1, true);
         std::string title = fit(k == 0 ? D.wallTitle : std::string("FUEL"), cw - scW - U(24), fs - 1, true);
         text((short)(cx + U(6)), ty, title.c_str(), tc, fs - 1, true, 0);
-        if (S.explain) {   // (1.1) what the box answers, in the room left on the title line
+        if (false && S.explain) {   // (1.1.2) no text on the chart beyond the checklist itself - the description explains   // (1.1) what the box answers, in the room left on the title line
             const char* q = k == 0 ? "  is the wall getting stronger? (gamma)" : "  are dealers reversing their trade? (delta flow)";
             int used = textW(title.c_str(), fs - 1, true) + U(6);
             std::string qq = fit(q, cw - scW - U(24) - used, fs - 3, false);
@@ -481,7 +481,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.1.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.1.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -498,6 +498,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box (gamma): SPEED = price walking into the gamma peak, COLOR = 0DTE strength growing with time, ZOMMA = IV not loosening the wall. FUEL box (delta flow): COVER = dealers actually reversing (5%+ of volume), GAMMA = their short gamma shrinking, VANNA = IV helping. Green = on your side. Top row: phase, stop, target, R:R. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.1.1");
+    p->setVersion("1.1.2");
     return p;
 }
