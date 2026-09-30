@@ -30,7 +30,8 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.9";   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
+static const char* DP_VERSION = "1.3.10";   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+//   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -52,7 +53,7 @@ static COLOR fade(COLOR a, float t)   // toward the dark ground
 
 struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode; };
 static PIdx PX;
-struct Settings { int market = 0, width = 260, font = 9, clock = 0; bool labels = true, banner = true, legend = true, snap = true, whisk = true, fadefar = true; };
+struct Settings { int market = 0, width = 260, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true; };
 
 class DealerProfile : public cppExtension {
 public:
@@ -114,14 +115,14 @@ int cppExtension::setup(void)
     PX.snap    = pc++; setBoolParameter("Snapshot outline", true, SL);
     PX.whisk   = pc++; setBoolParameter("(unused)", false);   // 1.3.5: kept for its position, unused
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
-    PX.banner  = pc++; setBoolParameter("Whole-book banner", true);
+    PX.banner  = pc++; setBoolParameter("Whole-book banner", false);
     PX.legend  = pc++; setBoolParameter("(unused)", false, SL);
     PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     // (1.3.3) HOW TO READ IT, in the settings (the description box cuts long text off): open a list to read every line.
     // Appended LAST so saved values keep their positions; nothing reads them.
     PX.keyPill = pc++; setListParameter("Pill colours (open)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Orange pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
-    PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Yellow = WALL: dealers lean against every tick - stops a sweep;Purple = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
+    PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points: the Read's book line);Yellow = WALL: dealers lean against every tick - stops a sweep;Purple = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
     // (1.3.5, Rassul 2026-09-30: "keep an example of the read in the settings - a How-to guide ... use all the blank space")
     // one full row per line (a checkbox label shows the whole line); appended LAST so saved values keep their positions;
     // nothing reads them
@@ -445,6 +446,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Read each strike top to bottom: upper node = futures dealers must trade on the way (delta), lower node = gamma when price gets there (yellow wall stops a sweep, purple fuel chases it). Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). The HOW TO READ guide is below; open the two lists for every detail.");
-    p->setVersion("1.3.9");
+    p->setVersion("1.3.10");
     return p;
 }
