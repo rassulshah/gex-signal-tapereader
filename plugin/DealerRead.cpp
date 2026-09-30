@@ -25,8 +25,8 @@
 #include <cstring>
 #include <ctime>
 
-static const COLOR C_BLUE  = 0x003987E5;
-static const COLOR C_AMBER = 0x00D99A1E;
+static const COLOR C_BLUE  = 0x0022D3EE;   // WALL = CYAN (1.2.3, Rassul 2026-09-30); the name stays
+static const COLOR C_AMBER = 0x00A3E635;   // FUEL = LIME (1.2.3); the name stays
 static const COLOR C_GREEN = 0x0022C55E;
 static const COLOR C_RED   = 0x00EF4444;
 static const COLOR C_YEL   = 0x00FCD34D;
@@ -513,7 +513,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2.3\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -530,6 +530,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. Open the three lists below for every check explained.");
-    p->setVersion("1.2.2");
+    p->setVersion("1.2.3");
     return p;
 }
