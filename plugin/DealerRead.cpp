@@ -400,7 +400,7 @@ void DealerRead::renderAnalyst(const Settings& S, short x0, short y0, short W, s
     int fs = S.font;
     fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, false);
-    short bt = (short)(y0 + U(3)), bh = U(74);   // (1.3.1) NOW = 5 lines (Rassul: "4-5 sentences", each with its why)
+    short bt = (short)(y0 + U(3)), bh = U(86);   // (1.3.3, Rassul: "the NOW section ... should be 10pt") 5 lines at the full font   // (1.3.1) NOW = 5 lines (Rassul: "4-5 sentences", each with its why)
     fill((short)(x0 + U(3)), bt, (short)(x0 + W - U(3)), (short)(bt + bh), C_DOBG);
     frame((short)(x0 + U(3)), bt, (short)(x0 + W - U(3)), (short)(bt + bh), C_DOBRD, false);
     char b[120];
@@ -411,9 +411,9 @@ void DealerRead::renderAnalyst(const Settings& S, short x0, short y0, short W, s
     int biasW = D.aBias.empty() ? 0 : textW(D.aBias.c_str(), fs - 1, true) + U(16);
     if (!D.aBias.empty()) text((short)(x0 + W - U(9)), l1, D.aBias.c_str(), colOf(D.aBiasCol), fs - 1, true, 2);
     std::string para = D.aNow.empty() ? std::string("The Analyst writes here after the next Reader update (every 5 minutes).") : D.aNow;
-    std::vector<std::string> ln = wrapWords(para, W - U(18) - labW - biasW, W - U(18), fs - 2, false, 5);
+    std::vector<std::string> ln = wrapWords(para, W - U(18) - labW - biasW, W - U(18), fs, false, 5);
     for (size_t i = 0; i < ln.size(); i++)
-        text((short)(x0 + U(9) + (i == 0 ? labW : 0)), (short)(l1 + (short)i * U(14)), ln[i].c_str(), C_INK, fs - 2, false, 0);
+        text((short)(x0 + U(9) + (i == 0 ? labW : 0)), (short)(l1 + (short)i * U(16)), ln[i].c_str(), C_INK, fs, false, 0);
     if (D.scn.empty()) return;                            // (1.3.0) no level: NOW only
     short st = (short)(bt + bh + U(3)), sb = (short)(y0 + H - U(3));
     short cw = (short)((W - U(12)) / 3);
@@ -452,7 +452,7 @@ void DealerRead::renderSmall(const Settings& S)
     short W = (short)(U(860) * S.widthPct / 100); if (W > avail) W = avail; if (W < U(340)) W = U(340);   // (1.2.4) width %
     short H = S.layout == 0 ? U(132) : (S.layout == 1 ? U(44) : U(22));   // (1.2.6) stacked 176 -> 132 (compact, same font)
     if (!D.hasLevel || !D.hasPrice) H = U(40);
-    short HA = D.scn.empty() ? U(80) : U(162);            // (1.3.0) no level = NOW only (no empty scenario boxes)
+    short HA = D.scn.empty() ? U(92) : U(174);            // (1.3.0) no level = NOW only (no empty scenario boxes)
     bool sep = S.apos <= 2;                               // (1.3.0, Rassul: "the analyst text is supposed to be on top and the read at the bottom")
     short HT = S.show == 1 ? HA : (S.show == 2 && !sep ? (short)(H + HA + U(4)) : H);
     short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (S.corner >= 4 ? (short)((pane.left + paneR) / 2 - W / 2) : (short)(pane.left + U(6)));
@@ -647,7 +647,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.3.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.3.3\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -664,6 +664,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read: is the level holding, and are dealers reversing? The guide is below the settings.");
-    p->setVersion("1.3.2");
+    p->setVersion("1.3.3");
     return p;
 }
