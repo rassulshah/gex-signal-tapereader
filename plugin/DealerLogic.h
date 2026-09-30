@@ -23,7 +23,7 @@
 
 namespace dl {
 
-struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0, gp = -1, dp = -1; bool far = false; };   // gp / dp: % of a normal 15 min of volume (-1 = none)
+struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0, gp = -1, dp = -1; bool far = false, live = false; };   // live: COVER confirmed dealers trading here   // gp / dp: % of a normal 15 min of volume (-1 = none)
 struct Trig { std::string group, name, val, note; bool on = false; };
 struct Row  { std::string n, lab, st, why; bool hasV = false; float v = 0; };
 struct KV   { std::string k, v; char col = 'W'; };
@@ -84,6 +84,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "NODE" && t.size() >= 8) {
         Node n; n.k = f(t[1]); n.g = f(t[2]); n.lo = f(t[3]); n.hi = f(t[4]); n.snap = f(t[5]); n.d = f(t[6]); n.far = t[7] == "1";
         if (t.size() >= 10) { if (!t[8].empty()) n.gp = f(t[8]); if (!t[9].empty()) n.dp = f(t[9]); }   // (1.1) the strength share
+        if (t.size() >= 11) n.live = t[10] == "1";                                                        // (1.2) the live mark
         if (n.k > 0) { D.nodes.push_back(n); return true; }
         return false;
     }
@@ -207,6 +208,9 @@ template <class W> inline std::vector<std::string> wrap(const std::string& text,
 static const int NPHASE = 6;
 inline const char* phaseName(int i) { static const char* P[] = { "APPROACH", "SWEEP", "TRIGGER", "RECLAIM", "RETEST", "TRADE" }; return (i >= 0 && i < NPHASE) ? P[i] : ""; }
 // the strength share shown right outside a node: "2.8%" under 10, "14%" from 10
+// (1.2) strength bars beside the %: 0 quiet (< 0.25%), 1 small (0.25-1%), 2 meaningful (1-3%), 3 big (3%+) - the 9/25 first
+// bands (worked 1.5% vs failed 0.9%; the big 9/25 lows 3.2% / 5.2%); the nightly study will set them per market
+inline int strengthBars(float p) { if (p < 0.25f) return 0; if (p < 1.0f) return 1; if (p < 3.0f) return 2; return 3; }
 inline std::string pctTxt(float p) { if (p < 0) return ""; char b[16]; if (p < 10) snprintf(b, sizeof(b), "%.1f%%", p); else snprintf(b, sizeof(b), "%.0f%%", p); return b; }
 
 }  // namespace dl

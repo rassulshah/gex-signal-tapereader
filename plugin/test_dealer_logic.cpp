@@ -27,6 +27,9 @@ int main()
     CHECK(n4215 && std::fabs(n4215->g - 35.0f) < 0.05f && n4215->lo < n4215->g && n4215->hi > n4215->g && n4215->d < 0 && !n4215->far, "4215: +35 on arrival, whisker around it, dealers SELL");
     CHECK(n4215 && std::fabs(n4215->gp - 2.8f) < 0.01f && std::fabs(n4215->dp - 5.0f) < 0.01f, "(1.1) its strength share: 2.8% / 5.0% of a normal 15 min");
     CHECK(dl::pctTxt(2.8f) == "2.8%" && dl::pctTxt(14.2f) == "14%" && dl::pctTxt(-1) == "", "share text");
+    CHECK(dl::strengthBars(0.1f) == 0 && dl::strengthBars(0.5f) == 1 && dl::strengthBars(2.8f) == 2 && dl::strengthBars(5.0f) == 3, "(1.2) strength bars: quiet / small / meaningful / big");
+    CHECK(n4215 && !n4215->live, "(1.2) 09:36: COVER not confirmed -> no live mark");
+    { dl::Data L2; dl::parseLine(L2, "NODE|4215|35|32|44|20|-63|0|2.8|5.0|1"); CHECK(L2.nodes.size() == 1 && L2.nodes[0].live, "a NODE with the live flag"); }
     { bool okf = true; int nf = 0; for (size_t i = 0; i < D.nodes.size(); i++) { bool beyond = std::fabs(D.nodes[i].k - D.px) > 1.2f * D.em; if (beyond != D.nodes[i].far) okf = false; nf += D.nodes[i].far; }
       CHECK(okf && nf >= 1, "far = beyond 1.2 EM, exactly"); }
     CHECK(D.hasLevel && D.phase == 3 && D.side == 'R' && std::fabs(D.lvlPx - 4203.8f) < 0.01f, "LEVEL PDH 4203.80, RECLAIM (phase 3 of 6), resistance");

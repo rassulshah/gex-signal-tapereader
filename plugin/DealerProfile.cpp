@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.2";
+static const char* DP_VERSION = "1.2.1";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -80,6 +80,7 @@ public:
     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
     void textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold);
     int  textW(const char* s, int sz, bool bold);
+    void strengthMark(short rightX, short y, float pct, bool live, int font);
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -251,9 +252,9 @@ void DealerProfile::render(const Settings& S)
         if (S.labels && !N.far && nodeH >= S.font - 3) {   // (1.2) the strength share right OUTSIDE each node: % of a normal 15 min of volume
             int reachG = Lg; if (S.snap && Ls > reachG) reachG = Ls;
             if (S.whisk) { int a2 = dl::barLen(N.lo, gmax, W), b2 = dl::barLen(N.hi, gmax, W); if (a2 > reachG) reachG = a2; if (b2 > reachG) reachG = b2; }
-            std::string gs = dl::pctTxt(N.gp), ds = dl::pctTxt(N.dp);
-            if (!gs.empty() && (Lg > 0)) textRJ((short)(anchor - reachG - 4), (short)((gt + gb) / 2), gs.c_str(), N.g >= 0 ? C_WALL : C_FUEL, S.font - 1, true);
-            if (!ds.empty() && (Ld > 0)) textRJ((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), ds.c_str(), N.d >= 0 ? C_BUY : C_SELL, S.font - 1, true);
+            // (1.2) [lightning if LIVE] [strength bars] [%]  right outside the node, coloured by band (Rassul 2026-09-29)
+            if (Lg > 0 && N.gp >= 0) strengthMark((short)(anchor - reachG - 4), (short)((gt + gb) / 2), N.gp, N.live, S.font);
+            if (Ld > 0 && N.dp >= 0) strengthMark((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), N.dp, false, S.font);
         }
     }
     // whole-book banner + legend (top-left of the pane)
@@ -270,6 +271,38 @@ void DealerProfile::render(const Settings& S)
         textLJ((short)(bx + 2), ly, "GAMMA node (upper): how hard this strike pushes back WHEN PRICE GETS THERE.  Blue = WALL, dealers lean against every tick - stops a sweep and turns it.  Amber = FUEL, dealers chase the move there.", C_INK, S.font - 1, false);
         textLJ((short)(bx + 2), (short)(ly + lh), "DELTA node (lower): futures dealers MUST trade on the way to this strike (green buy / red sell) - the push into your level, and the stock they unwind after the turn (fuel for the reversal).", C_INK, S.font - 1, false);
         textLJ((short)(bx + 2), (short)(ly + 2 * lh), "Use both: the delta node says if there is flow to push price into the level; the gamma node says if the level stops it.  Whisker = earlier/later arrival, dashed = MenthorQ's number now.", C_MUTED, S.font - 1, false);
+    }
+}
+
+// (1.2) the strength mark, drawn right-to-left ending at rightX: "2.8%" in its band colour, then 0-3 rising bars, then a
+// lightning bolt when COVER has confirmed dealers are actually trading at this level. Shapes, not glyphs (IRT text is ASCII).
+static COLOR bandCol(int b) { return b == 0 ? 0x006B7280 : b == 1 ? 0x00E5E7EB : b == 2 ? 0x00FCD34D : 0x00FFFFFF; }
+void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, int font)
+{
+    int b = dl::strengthBars(pct);
+    std::string t = dl::pctTxt(pct);
+    int fsz = font - 1; if (fsz < 6) fsz = 6;
+    bool bold = b >= 2;
+    int tw = textW(t.c_str(), fsz, bold);
+    textRJ(rightX, y, t.c_str(), bandCol(b), fsz, bold);
+    short x = (short)(rightX - tw - 4);
+    if (b > 0) {
+        short bw = 3, gap = 2, hmax = (short)(fsz > 8 ? fsz - 1 : 7);
+        for (int i = 2; i >= 0; i--) {                       // three slots, the lit ones rising left to right
+            short h = (short)(hmax * (i + 1) / 3); if (h < 2) h = 2;
+            COLOR c = i < b ? bandCol(b) : 0x00374151;
+            box((short)(x - bw), (short)(y + hmax / 2 - h), x, (short)(y + hmax / 2), c);
+            x = (short)(x - bw - gap);
+        }
+        x = (short)(x - 2);
+    }
+    if (live) {                                              // a small yellow lightning bolt
+        short h = (short)(fsz + 2), w = (short)(h / 2 + 1);
+        short top = (short)(y - h / 2), bot = (short)(y + h / 2), l = (short)(x - w), r = x;
+        COLOR c = 0x00FACC15;
+        line(r, top, (short)(l + 1), (short)(y + 1), c, 2);
+        line((short)(l + 1), (short)(y + 1), (short)(r - 1), (short)(y - 1), c, 2);
+        line((short)(r - 1), (short)(y - 1), l, bot, c, 2);
     }
 }
 
@@ -311,7 +344,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. The % right outside each node = its size as a share of a normal 15 minutes of futures volume (how much of the market dealers must be). Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.2");
+    p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Right outside each node: its size as a share of a normal 15 minutes of futures volume, with strength bars (none = under 0.25% quiet, 1 = small, 2 = 1-3% meaningful, 3 = 3%+ big, the 9/25 first bands) and a lightning bolt when COVER confirms dealers are actually trading there after the turn. Bars = where it CAN happen, bolt = it IS happening. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
+    p->setVersion("1.2.1");
     return p;
 }
