@@ -55,7 +55,7 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int market, corner, font, trade, todo, clock, layout, explain; };
+struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig; };
 static PIdx PX;
 struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
@@ -107,7 +107,7 @@ int DealerRead::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); 
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(10);
+    setParameterDialogHeight(14);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
@@ -118,7 +118,11 @@ int cppExtension::setup(void)
     PX.todo   = pc++; setBoolParameter("WHAT TO DO box", true);
     PX.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     PX.layout = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");
-    PX.explain = pc++; setBoolParameter("(explanations are in the description above)", false, SL);      // (1.1) appended LAST: saved positions stay put
+    PX.explain = pc++; setBoolParameter("(explanations: open the lists below)", false, SL);
+    // (1.2.1) HOW TO READ IT, in the settings (the description box cuts long text off); appended LAST, nothing reads them
+    PX.keyLvl  = pc++; setListParameter("LEVEL box (open to read)", 0, "LEVEL box = is the wall getting stronger? (gamma) - titled by its MenthorQ level;SPEED = price walking INTO the gamma peak (after the sweep: a retest meets a stronger wall);COLOR = today's options getting stronger with time (0DTE);ZOMMA = IV steady or falling - IV rising loosens the wall (the veto);SOLID = all 3 green after the sweep / AT RISK = one turned red");
+    PX.keyFuel = pc++; setListParameter("FUEL box (open to read)", 0, "FUEL box = are dealers reversing their trade? (delta flow);COVER = dealers trading your way >= 5% of 15-min volume;GAMMA = their short gamma shrinking = the fuel is being used;VANNA = IV falling = their hedges unwind your way;STORED n = futures they will trade on the way (before the sweep);PRIMED = COVER + one more green / AT RISK = no real covering");
+    PX.keyTrig = pc++; setListParameter("Phases + triggers (open to read)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");      // (1.1) appended LAST: saved positions stay put
     return RTX_OK;
 }
 
@@ -506,7 +510,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -522,7 +526,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerRead *p = new DealerRead();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box (gamma): SPEED = price walking into the gamma peak, COLOR = 0DTE strength growing with time, ZOMMA = IV not loosening the wall. FUEL box (delta flow): COVER = dealers actually reversing (5%+ of volume), GAMMA = their short gamma shrinking, VANNA = IV helping. Green = on your side. Top row: phase (APPROACH, SWEEP, TRIGGER, RECLAIM, RETEST, TRADE), stop, target, R:R. Chips: SWEEP - Trapped (breakout traders stuck = fuel); TRIGGER - RevBar (big turn bar, holds 77%), RevVol (2x volume turn bar, no edge yet), RevWave (first leg away 1.9x the average, holds 88-95%, enter on the first pullback). Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.2");
+    p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. Open the three lists below for every check explained.");
+    p->setVersion("1.2.1");
     return p;
 }

@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.2";
+static const char* DP_VERSION = "1.3.3";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -48,7 +48,7 @@ static COLOR fade(COLOR a, float t)   // toward the dark ground
     return (COLOR)(((COLOR)ar << 16) | ((COLOR)ag << 8) | (COLOR)ab);
 }
 
-struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock; };
+struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode; };
 static PIdx PX;
 struct Settings { int market = 0, width = 260, font = 9, clock = 0; bool labels = true, banner = true, legend = true, snap = true, whisk = true, fadefar = true; };
 
@@ -99,20 +99,24 @@ int DealerProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(14);
+    setParameterDialogHeight(16);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     PX.width   = pc++; setIntegerParameter("Profile width px", 260, 0, SL);
     PX.labels  = pc++; setBoolParameter("Values inside the nodes", true);
-    PX.snap    = pc++; setBoolParameter("Snapshot outline (dashed)", true, SL);
+    PX.snap    = pc++; setBoolParameter("Snapshot outline", true, SL);
     PX.whisk   = pc++; setBoolParameter("Arrival-range whisker", true);
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
     PX.banner  = pc++; setBoolParameter("Whole-book banner", true);
     PX.legend  = pc++; setBoolParameter("(key moved to the description above)", false, SL);
     PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
+    // (1.3.3) HOW TO READ IT, in the settings (the description box cuts long text off): open a list to read every line.
+    // Appended LAST so saved values keep their positions; nothing reads them.
+    PX.keyPill = pc++; setListParameter("Pill (open to read)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Yellow pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
+    PX.keyNode = pc++; setListParameter("Nodes (open to read)", 0, "Upper node = GAMMA when price gets there (futures per 0.1 EM);Blue = WALL: dealers lean against every tick - stops a sweep;Amber = FUEL: dealers chase the move - then unwind it after the turn;Lower node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Whisker = earlier or later arrival;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215 +32 wall with SELL 81 on the way = the high");
     return RTX_OK;
 }
 
@@ -311,7 +315,7 @@ void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, in
         COLOR fill = b == 1 ? 0x00334155 : (b == 2 ? 0x00FCD34D : 0x00FFFFFF);   // (1.3.1) dark pill lighter: visible on black
         COLOR ink  = b == 1 ? 0x00F1F5F9 : 0x000B0F19;
         short padx = 6, h = (short)(fsz + 6);
-        short w = (short)(tw + 2 * padx);
+        short w = (short)(tw + 2 * padx + 2);                     // (1.3.3) + the bold overrun, so both sides match
         short l = (short)(rightX - w), t0 = (short)(y - h / 2), bt = (short)(t0 + h);
         setPen(fill, 1, P_SOLID);
         CBRUSH br(fill, PAT_SOLID); br.set();
@@ -373,7 +377,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Right outside each node: its size as a share of a normal 15 minutes of futures volume, in a pill coloured by band (grey text = under 0.25% quiet, dark pill = small, yellow pill = 1-3% meaningful, white pill = 3%+ big, the 9/25 first bands); a white outline marks a market-moving node (3%+) and a lightning bolt when COVER confirms dealers are actually trading there after the turn. Pill and outline = where it CAN happen, bolt = it IS happening. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.3.2");
+    p->setDescription("LRA Dealer Profile. Upper node = gamma when price gets there (blue wall stops a sweep, amber fuel chases it). Lower node = futures dealers must trade on the way. Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). Open the two lists below for every detail.");
+    p->setVersion("1.3.3");
     return p;
 }
