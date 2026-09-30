@@ -3,7 +3,7 @@
  *
  *  THE DEALER PROFILE: two nodes per strike on the right edge of the price pane, facing price.
  *     (1.3.6: delta on TOP, gamma below)
- *     lower node  synthetic GAMMA on arrival (futures per 0.1 EM): cyan = dealers long gamma (a WALL), lime = short (FUEL)
+ *     lower node  synthetic GAMMA on arrival (futures per 0.1 EM): yellow = dealers long gamma (a WALL), purple = short (FUEL)
  *                 "4220  10  (9 to 17)": 10 at the usual pace, 9 if price gets there twice as fast, 17 twice as slow
  *                 (1.3.5 - the whisker line is gone, Rassul 2026-09-30); outline = MenthorQ's snapshot now
  *     upper node  synthetic DELTA: futures dealers must trade because of this strike on the way there (green BUY / red SELL)
@@ -30,9 +30,9 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.8";   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
-static const COLOR C_WALL  = 0x0022D3EE;   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
-static const COLOR C_FUEL  = 0x00A3E635;   // short gamma: LIME (delta keeps green buy / red sell)
+static const char* DP_VERSION = "1.3.9";   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
+static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
+static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
 static const COLOR C_SELL  = 0x00EF4444;   // dealers sell
 static const COLOR C_WHISK = 0x00F8FAFC;   // arrival range
@@ -121,7 +121,7 @@ int cppExtension::setup(void)
     // (1.3.3) HOW TO READ IT, in the settings (the description box cuts long text off): open a list to read every line.
     // Appended LAST so saved values keep their positions; nothing reads them.
     PX.keyPill = pc++; setListParameter("Pill colours (open)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Yellow pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
-    PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Cyan = WALL: dealers lean against every tick - stops a sweep;Lime = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
+    PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Yellow = WALL: dealers lean against every tick - stops a sweep;Purple = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
     // (1.3.5, Rassul 2026-09-30: "keep an example of the read in the settings - a How-to guide ... use all the blank space")
     // one full row per line (a checkbox label shows the whole line); appended LAST so saved values keep their positions;
     // nothing reads them
@@ -135,8 +135,8 @@ int cppExtension::setup(void)
     pc++; setBoolParameter("SELL 81 = dealers sell 81", false);
     pc++; setBoolParameter("On the way up: a headwind", false);
     pc++; setBoolParameter("Step 3  GAMMA (lower node)", false);
-    pc++; setBoolParameter("Reads 4215 32 (28 to 46) CYAN", false);
-    pc++; setBoolParameter("Cyan = WALL: dealers lean in", false);
+    pc++; setBoolParameter("Reads 4215 32 (28-46) YELLOW", false);
+    pc++; setBoolParameter("Yellow = WALL: dealers lean in", false);
     pc++; setBoolParameter("Sell 32 more per 5.5 pts up", false);
     pc++; setBoolParameter("Slow = 46, a spike = 28", false);
     pc++; setBoolParameter("Step 4  SIZE = the pill", false);
@@ -144,7 +144,7 @@ int cppExtension::setup(void)
     pc++; setBoolParameter("Step 5  VERDICT", false);
     pc++; setBoolParameter("Headwind + wall = high holds", false);
     pc++; setBoolParameter("Wait for sweep + a trigger", false);
-    pc++; setBoolParameter("LIME node = FUEL: overshoot", false);
+    pc++; setBoolParameter("Purple node = FUEL: overshoot", false);
     return RTX_OK;
 }
 
@@ -296,7 +296,7 @@ void DealerProfile::render(const Settings& S)
         if (S.labels && !N.far && nodeH >= S.font - 1) {
             std::string gl = dl::gammaLabel(N), dlab = dl::deltaLabel(N);
             if (!dl::fits(textW(gl.c_str(), S.font, true), Lg)) gl = dl::gammaShort(N);   // (1.3.5) short node: "4220  10"
-            if (dl::fits(textW(gl.c_str(), S.font, true), Lg)) textRJ((short)(anchor - 4), (short)((gt + gb) / 2), gl.c_str(), C_DARK, S.font, true);
+            if (dl::fits(textW(gl.c_str(), S.font, true), Lg)) textRJ((short)(anchor - 4), (short)((gt + gb) / 2), gl.c_str(), N.g < 0 ? 0x00FFFFFF : C_DARK, S.font, true);   // (1.3.9) white on purple
             if (dl::fits(textW(dlab.c_str(), S.font, true), Ld)) textRJ((short)(anchor - 4), (short)((dt_ + db) / 2), dlab.c_str(), N.d < 0 ? 0x00FFFFFF : C_DARK, S.font, true);
         }
         if (S.labels && !N.far && nodeH >= S.font - 3) {   // (1.2) the strength share right OUTSIDE each node: % of a normal 15 min of volume
@@ -444,7 +444,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Profile. Read each strike top to bottom: upper node = futures dealers must trade on the way (delta), lower node = gamma when price gets there (cyan wall stops a sweep, lime fuel chases it). Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). The HOW TO READ guide is below; open the two lists for every detail.");
-    p->setVersion("1.3.8");
+    p->setDescription("LRA Dealer Profile. Read each strike top to bottom: upper node = futures dealers must trade on the way (delta), lower node = gamma when price gets there (yellow wall stops a sweep, purple fuel chases it). Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). The HOW TO READ guide is below; open the two lists for every detail.");
+    p->setVersion("1.3.9");
     return p;
 }

@@ -25,8 +25,9 @@
 #include <cstring>
 #include <ctime>
 
-static const COLOR C_BLUE  = 0x0022D3EE;   // WALL = CYAN (1.2.3, Rassul 2026-09-30); the name stays
-static const COLOR C_AMBER = 0x00A3E635;   // FUEL = LIME (1.2.3); the name stays
+static const COLOR C_BLUE  = 0x00E3C341;   // WALL = YELLOW (1.2.7, Skylit colours, Rassul 2026-09-30); the name stays
+static const COLOR C_MQ    = 0x0022D3EE;   // MenthorQ level text = cyan, as the MQ lines on the chart
+static const COLOR C_AMBER = 0x00C084FC;   // FUEL = PURPLE (1.2.7, Skylit; a lighter purple so text reads on black); the name stays
 static const COLOR C_GREEN = 0x0022C55E;
 static const COLOR C_RED   = 0x00EF4444;
 static const COLOR C_YEL   = 0x00FCD34D;
@@ -536,7 +537,7 @@ void DealerRead::renderSmall(const Settings& S)
     frame((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBRD, false);
     short x = (short)(x0 + U(10));
     text(x, y1, lvl.c_str(), C_INK, fs, true, 0); x = (short)(x + textW(lvl.c_str(), fs, true) + U(8));
-    if (!lvlMq.empty()) { text(x, y1, lvlMq.c_str(), C_BLUE, fs, true, 0); x = (short)(x + textW(lvlMq.c_str(), fs, true) + U(14)); }
+    if (!lvlMq.empty()) { text(x, y1, lvlMq.c_str(), C_MQ, fs, true, 0); x = (short)(x + textW(lvlMq.c_str(), fs, true) + U(14)); }
     else x = (short)(x + U(6));
     short tabW = U(54), tabH = U(14);
     for (int i = 0; i < dl::NPHASE; i++) {
@@ -640,7 +641,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2.6\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2.7\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -657,6 +658,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. The HOW TO READ guide is below; open the three lists for every check explained.");
-    p->setVersion("1.2.6");
+    p->setVersion("1.2.7");
     return p;
 }
