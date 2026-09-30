@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.4";
+static const char* DP_VERSION = "1.3.4";   // 1.3.4: cyan wall / lime fuel; delta node shows just the number (DealerLogic.h)
 static const COLOR C_WALL  = 0x0022D3EE;   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00A3E635;   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy

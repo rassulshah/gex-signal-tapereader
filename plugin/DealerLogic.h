@@ -176,7 +176,8 @@ inline std::string gammaLabel(const Node& n)
 {
     char b[80]; snprintf(b, sizeof(b), "%s  %+.0f  (%+.0f..%+.0f)", strikeTxt(n.k).c_str(), n.g, n.lo, n.hi); return b;
 }
-inline std::string deltaLabel(const Node& n) { char b[32]; snprintf(b, sizeof(b), "%s %.0f", n.d > 0 ? "BUY" : "SELL", std::fabs(n.d)); return b; }
+// (Profile 1.3.4, Rassul 2026-09-30) just the number: green = dealers buy, red = dealers sell already says which way
+inline std::string deltaLabel(const Node& n) { char b[32]; snprintf(b, sizeof(b), "%.0f", std::fabs(n.d)); return b; }
 
 // Price text with thousands separators, decimals by market (HG / EU 4, NG 3, else 2; a whole strike has none)
 inline std::string fmtPx(float v, const std::string& m, bool strike = false)
