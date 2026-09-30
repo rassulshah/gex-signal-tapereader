@@ -55,9 +55,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig; };
+struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift; };
 static PIdx PX;
-struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -122,6 +122,7 @@ int cppExtension::setup(void)
     // (1.2.1) HOW TO READ IT, in the settings (the description box cuts long text off); appended LAST, nothing reads them
     PX.keyLvl  = pc++; setListParameter("LEVEL box (open to read)", 0, "LEVEL box = is the wall getting stronger? (gamma) - titled by its MenthorQ level;SPEED = price walking INTO the gamma peak (after the sweep: a retest meets a stronger wall);COLOR = today's options getting stronger with time (0DTE);ZOMMA = IV steady or falling - IV rising loosens the wall (the veto);SOLID = all 3 green after the sweep / AT RISK = one turned red");
     PX.keyFuel = pc++; setListParameter("FUEL box (open to read)", 0, "FUEL box = are dealers reversing their trade? (delta flow);COVER = dealers trading your way >= 5% of 15-min volume;GAMMA = their short gamma shrinking = the fuel is being used;VANNA = IV falling = their hedges unwind your way;STORED n = futures they will trade on the way (before the sweep);PRIMED = COVER + one more green / AT RISK = no real covering");
+    PX.lift    = pc++; setIntegerParameter("Lift from the bottom (px)", 30, 0);   // (1.2.2) clear of the chart's button bar
     PX.keyTrig = pc++; setListParameter("Phases + triggers (open to read)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");      // (1.1) appended LAST: saved positions stay put
     return RTX_OK;
 }
@@ -134,6 +135,7 @@ void DealerRead::readSettings(Settings& S)
     S.trade = isBoxChecked(PX.trade) != 0; S.todo = isBoxChecked(PX.todo) != 0;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
     S.layout = getListIndex(PX.layout); if (S.layout < 0 || S.layout > 3) S.layout = 0;
+    S.lift = getIntegerValue(PX.lift); if (S.lift < 0 || S.lift > 400) S.lift = 30;
     S.explain = isBoxChecked(PX.explain) != 0;
 }
 
@@ -253,7 +255,7 @@ void DealerRead::renderFull(const Settings& S)
     short W = U(1466), H = top ? U(176) : U(150);
     if (!D.hasLevel) { W = U(900); H = U(44); }
     short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (short)(pane.left + U(6));
-    short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6)) : (short)(pane.top + U(6));
+    short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
     fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, D.learn);
 
@@ -355,9 +357,9 @@ void DealerRead::renderSmall(const Settings& S)
     short avail = (short)(paneR - pane.left - U(12));
     short W = U(860); if (W > avail) W = avail; if (W < U(400)) W = U(400);
     short H = S.layout == 0 ? U(176) : (S.layout == 1 ? U(44) : U(22));
-    if (!D.hasLevel || !D.hasPrice) H = U(22);
+    if (!D.hasLevel || !D.hasPrice) H = U(40);
     short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (short)(pane.left + U(6));
-    short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6)) : (short)(pane.top + U(6));
+    short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
     fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, D.learn);
     char b[200];
@@ -371,10 +373,11 @@ void DealerRead::renderSmall(const Settings& S)
         text((short)(x0 + U(8)), (short)(y0 + H / 2), b, C_MUTED, fs - 1, false, 0);
         return;
     }
-    if (!D.hasLevel) {
-        sprintf_s(b, sizeof(b), "%s  no key level within 0.6 EM   -   %s", mkt.c_str(), D.bookLine.c_str());
-        text((short)(x0 + U(8)), (short)(y0 + H / 2), fit(b, W - U(90), fs - 1, false).c_str(), C_MUTED, fs - 1, false, 0);
-        if (!stale.empty()) text((short)(x0 + W - U(8)), (short)(y0 + H / 2), stale.c_str(), C_RED, fs - 1, true, 2);
+    if (!D.hasLevel) {                                   // (1.2.2) two readable lines instead of one faint one
+        sprintf_s(b, sizeof(b), "%s DEALER READ  -  waiting: no key level within 0.6 EM of %s", mkt.c_str(), dl::fmtPx(D.px, mkt).c_str());
+        text((short)(x0 + U(8)), (short)(y0 + U(12)), fit(b, W - U(90), fs - 1, true).c_str(), C_INK, fs - 1, true, 0);
+        text((short)(x0 + U(8)), (short)(y0 + U(29)), fit(D.bookLine, W - U(16), fs - 2, false).c_str(), D.book < 0 ? C_AMBER : C_BLUE, fs - 2, false, 0);
+        if (!stale.empty()) text((short)(x0 + W - U(8)), (short)(y0 + U(12)), stale.c_str(), C_RED, fs - 1, true, 2);
         return;
     }
     std::string trade;
@@ -510,7 +513,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -527,6 +530,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. Open the three lists below for every check explained.");
-    p->setVersion("1.2.1");
+    p->setVersion("1.2.2");
     return p;
 }
