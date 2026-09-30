@@ -395,7 +395,8 @@ void DealerProfile::writeStatus(const char* what)
 void DealerProfile::exportBars()
 {
     long n = getBarCount(); if (n < 2 || mkt.empty()) return;
-    RTARRAY o(barOpen), h(barHigh), l(barLow), c(barClose), v(barVolume);
+    RTARRAY o(barOpen), h(barHigh), l(barLow), c(barClose);
+    RTARRAYI v(barVolume);                                   // volume is an integer array in the SDK
     RTARRAYI dtm(barDateTime);
     float lc = c[(int)n - 1];
     time_t now = time(0);
