@@ -350,7 +350,7 @@ void DealerRead::renderSmall(const Settings& S)
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
     short avail = (short)(paneR - pane.left - U(12));
     short W = U(860); if (W > avail) W = avail; if (W < U(400)) W = U(400);
-    short H = S.layout == 0 ? U(150) : (S.layout == 1 ? U(44) : U(22));
+    short H = S.layout == 0 ? U(158) : (S.layout == 1 ? U(44) : U(22));
     if (!D.hasLevel || !D.hasPrice) H = U(22);
     short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (short)(pane.left + U(6));
     short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6)) : (short)(pane.top + U(6));
@@ -463,15 +463,15 @@ void DealerRead::renderSmall(const Settings& S)
             text((short)(cx + U(6) + used), ty, qq.c_str(), C_MUTED, fs - 3, false, 0);
         }
         text((short)(cx + cw - U(6)), ty, sc.c_str(), colOf(scol), fs - 1, true, 2);
-        short ry = (short)(ct + U(33));
+        short ry = (short)(ct + U(31));
         for (size_t i = 0; i < rows.size() && i < 3; i++) {
             const dl::Row& r = rows[i];
             checkBox((short)(cx + U(6)), ry, box, r.st);
             text((short)(cx + U(24)), ry, r.n.c_str(), C_INK, fs - 2, true, 0);
-            meter((short)(cx + U(78)), ry, U(84), U(10), r);
-            short wx = (short)(cx + U(172));
-            text(wx, ry, fit(r.why, cw - U(178), fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
-            ry = (short)(ry + U(24));
+            meter((short)(cx + U(78)), ry, U(80), U(10), r);
+            short wx = (short)(cx + U(222));      // (1.1.3) past the meter AND its value label ("7% vol" ran into the reason)
+            text(wx, ry, fit(r.why, cw - U(228), fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+            ry = (short)(ry + U(22));
         }
     }
 }
@@ -481,7 +481,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.1.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.1.3\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -498,6 +498,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box (gamma): SPEED = price walking into the gamma peak, COLOR = 0DTE strength growing with time, ZOMMA = IV not loosening the wall. FUEL box (delta flow): COVER = dealers actually reversing (5%+ of volume), GAMMA = their short gamma shrinking, VANNA = IV helping. Green = on your side. Top row: phase, stop, target, R:R. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.1.2");
+    p->setVersion("1.1.3");
     return p;
 }
