@@ -338,6 +338,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read: level + fuel checklists, phase, TRADE line (reads lsFlexLevels\\LRA-Dealer-<MKT>.csv)");
-    p->setVersion("1.0");
+    p->setVersion("1.0.1");
     return p;
 }

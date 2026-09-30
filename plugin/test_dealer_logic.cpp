@@ -46,6 +46,7 @@ int main()
     CHECK(dl::marketForRoot("EP") == "ES" && dl::marketForRoot("ENQ") == "NQ" && dl::marketForRoot("GCE") == "GC" && dl::marketForRoot("CLE") == "CL"
           && dl::marketForRoot("CPE") == "HG" && dl::marketForRoot("NGE") == "NG" && dl::marketForRoot("EU6") == "EU" && dl::marketForRoot("MES") == "ES", "IRT roots -> markets");
     CHECK(dl::marketForRoot("ZB") == "", "an unknown root -> no market");
+    CHECK(dl::marketForRoot("QGC") == "GC" && dl::marketForRoot("QG") == "NG" && dl::marketForRoot("QES") == "ES" && dl::marketForRoot("QNQ") == "NQ", "(1.0.1) his CQG roots: QGC is GOLD, not NG");
     CHECK(dl::marketFor(4, "EP") == "GC" && dl::marketFor(0, "GCE") == "GC", "the Market setting overrides Auto");
     // offset
     float off = 0;

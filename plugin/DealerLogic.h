@@ -116,13 +116,15 @@ inline Data parseText(const std::string& text)
 inline std::string marketForRoot(const std::string& rootIn)
 {
     std::string r; for (size_t i = 0; i < rootIn.size(); i++) r += (char)toupper((unsigned char)rootIn[i]);
-    if (r.find("NQ") != std::string::npos) return "NQ";
-    if (r.rfind("EP", 0) == 0 || r.rfind("ES", 0) == 0 || r.rfind("MES", 0) == 0) return "ES";
-    if (r.rfind("GC", 0) == 0 || r.rfind("MGC", 0) == 0) return "GC";
-    if (r.rfind("CL", 0) == 0 || r.rfind("MCL", 0) == 0 || r.rfind("QM", 0) == 0) return "CL";
-    if (r.rfind("CP", 0) == 0 || r.rfind("HG", 0) == 0 || r.rfind("MHG", 0) == 0) return "HG";
-    if (r.rfind("NG", 0) == 0 || r.rfind("QG", 0) == 0) return "NG";
-    if (r.rfind("EU", 0) == 0 || r.rfind("6E", 0) == 0 || r.rfind("M6E", 0) == 0 || r.rfind("E6", 0) == 0) return "EU";
+    // (1.0.1) "contains", checked in this order: his GC chart's root is "QGC" - 1.0 matched its "QG" prefix to NG
+    auto has = [&](const char* k) { return r.find(k) != std::string::npos; };
+    if (has("NQ")) return "NQ";
+    if (has("GC")) return "GC";
+    if (has("CL") || r == "QM") return "CL";
+    if (has("HG") || has("CP")) return "HG";
+    if (has("NG") || r == "QG") return "NG";
+    if (has("EU") || has("6E") || has("E6")) return "EU";
+    if (has("ES") || has("EP")) return "ES";
     return "";
 }
 static const char* MARKETS[] = { "Auto", "ES", "NQ", "CL", "GC", "HG", "NG", "EU" };
