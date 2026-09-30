@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.1";
+static const char* DP_VERSION = "1.3.2";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -172,7 +172,7 @@ void DealerProfile::line(short x1, short y1, short x2, short y2, COLOR c, int w)
 }
 void DealerProfile::dashRect(short l, short t, short r, short b, COLOR c)
 {
-    setPen(c, 1, P_DOT);
+    setPen(c, 1, P_SOLID);   // (1.3.2) operator: "the border of the node is dashed, make it solid"
     PNT p; p.set(0, 0.0f);
     p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
 }
@@ -316,7 +316,13 @@ void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, in
         setPen(fill, 1, P_SOLID);
         CBRUSH br(fill, PAT_SOLID); br.set();
         RCT rc; rc.set(l, t0, rightX, bt); rc.drawRounded(6, 6);   // (1.3.1) a pill, not an oval (the corner was h - 2)
-        textLJ((short)(l + padx), y, t.c_str(), ink, fsz, true);  // left-aligned inside the measured width: centred by construction
+        {   // (1.3.2) centre the text on the pill by its measured metrics (GammaProfile textC) - the rect draw left uneven sides
+            FONT f; f.id = HELVETICA; f.size = (short)fsz; f.style = BOLD; setFont(f);
+            int lead = 0, asc = 0, desc = 0; getFontMetrics(&lead, &asc, &desc);
+            short twc = (short)getTextWidth(t.c_str(), -1);
+            setTextColor(ink);
+            PNT tp; tp.set(0, 0.0f); tp.h = (short)(l + (w - twc) / 2); tp.v = (short)(y + (asc - desc) / 2); tp.drawText(t.c_str());
+        }
         x = (short)(l - 4);
     }
     if (live) {                                              // the yellow lightning bolt: COVER confirmed dealers trading here
@@ -368,6 +374,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Right outside each node: its size as a share of a normal 15 minutes of futures volume, in a pill coloured by band (grey text = under 0.25% quiet, dark pill = small, yellow pill = 1-3% meaningful, white pill = 3%+ big, the 9/25 first bands); a white outline marks a market-moving node (3%+) and a lightning bolt when COVER confirms dealers are actually trading there after the turn. Pill and outline = where it CAN happen, bolt = it IS happening. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.3.1");
+    p->setVersion("1.3.2");
     return p;
 }
