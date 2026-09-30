@@ -120,7 +120,7 @@ void DealerRead::readSettings(Settings& S)
 {
     S.market = getListIndex(PX.market);
     S.corner = getListIndex(PX.corner); if (S.corner < 0 || S.corner > 3) S.corner = 0;
-    S.font = getIntegerValue(PX.font); if (S.font < 7) S.font = 7; if (S.font > 20) S.font = 20;
+    S.font = getIntegerValue(PX.font); if (S.font < 7) S.font = 10;   // (1.0.1) a first dialog can show ??? / a wrong number if (S.font > 20) S.font = 20;
     S.trade = isBoxChecked(PX.trade) != 0; S.todo = isBoxChecked(PX.todo) != 0;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
 }

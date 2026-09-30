@@ -120,7 +120,7 @@ void DealerProfile::readSettings(Settings& S)
     S.width = getIntegerValue(PX.width); if (S.width < 40) S.width = 260; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
     S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = isBoxChecked(PX.whisk) != 0;
     S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = isBoxChecked(PX.legend) != 0;
-    S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 6; if (S.font > 24) S.font = 24;
+    S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 9; if (S.font > 24) S.font = 24;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
 }
 
