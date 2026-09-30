@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.2.2";
+static const char* DP_VERSION = "1.3";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -81,6 +81,7 @@ public:
     void textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold);
     int  textW(const char* s, int sz, bool bold);
     void strengthMark(short rightX, short y, float pct, bool live, int font);
+    void outline(short l, short t, short r, short b);
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -234,8 +235,10 @@ void DealerProfile::render(const Settings& S)
         short gt = (short)(y - gap - nodeH), gb = (short)(y - gap), dt_ = (short)(y + gap), db = (short)(y + gap + nodeH);
         COLOR gc = fade(N.g >= 0 ? C_WALL : C_FUEL, ft), dc = fade(N.d >= 0 ? C_BUY : C_SELL, ft);
         if (Lg > 0) box((short)(anchor - Lg), gt, anchor, gb, gc);
+        if (Lg > 2 && dl::strengthBars(N.gp) == 3) outline((short)(anchor - Lg), gt, anchor, gb);   // (1.3) market-moving: 3%+
         if (S.snap && Ls > 1) dashRect((short)(anchor - Ls), gt, anchor, gb, fade(C_SNAP, ft));
         if (Ld > 0) box((short)(anchor - Ld), dt_, anchor, db, dc);
+        if (Ld > 2 && dl::strengthBars(N.dp) == 3) outline((short)(anchor - Ld), dt_, anchor, db);
         if (S.whisk && !N.far && std::fabs(N.hi - N.lo) >= 1.0f) {
             int a = dl::barLen(N.lo, gmax, W), b = dl::barLen(N.hi, gmax, W);
             short ym = (short)((gt + gb) / 2), cap = (short)(nodeH / 2 > 2 ? nodeH / 2 : 2);
@@ -276,27 +279,37 @@ void DealerProfile::render(const Settings& S)
 
 // (1.2) the strength mark, drawn right-to-left ending at rightX: "2.8%" in its band colour, then 0-3 rising bars, then a
 // lightning bolt when COVER has confirmed dealers are actually trading at this level. Shapes, not glyphs (IRT text is ASCII).
+void DealerProfile::outline(short l, short t, short r, short b)
+{
+    setPen(0x00FFFFFF, 2, P_SOLID);
+    PNT p; p.set(0, 0.0f);
+    p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
+}
 static COLOR bandCol(int b) { return b == 0 ? 0x006B7280 : b == 1 ? 0x00E5E7EB : b == 2 ? 0x00FCD34D : 0x00FFFFFF; }
 void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, int font)
 {
+    // (1.3) Rassul 2026-09-29: "pill and the outline for market moving nodes" - the % sits in a rounded pill coloured by
+    // its band (quiet = grey text only, small = dark pill, meaningful = yellow pill, big = white pill); the bolt goes left
     int b = dl::strengthBars(pct);
     std::string t = dl::pctTxt(pct);
     int fsz = font - 1; if (fsz < 6) fsz = 6;
-    bool bold = b >= 2;
-    int tw = textW(t.c_str(), fsz, bold);
-    textRJ(rightX, y, t.c_str(), bandCol(b), fsz, bold);
-    short x = (short)(rightX - tw - 9);                       // (1.2.2) more room between the bars and the %
-    if (b > 0) {
-        short bw = 5, gap = 2, hmax = (short)(fsz + 4 > 12 ? fsz + 4 : 12);   // (1.2.2) bigger bars (were 3 x 7 px)
-        for (int i = 2; i >= 0; i--) {                       // three slots, the lit ones rising left to right
-            short h = (short)(hmax * (i + 1) / 3); if (h < 2) h = 2;
-            COLOR c = i < b ? bandCol(b) : 0x00374151;
-            box((short)(x - bw), (short)(y + hmax / 2 - h), x, (short)(y + hmax / 2), c);
-            x = (short)(x - bw - gap);
-        }
-        x = (short)(x - 2);
+    int tw = textW(t.c_str(), fsz, b >= 1);
+    short x = rightX;
+    if (b == 0) {
+        textRJ(rightX, y, t.c_str(), 0x006B7280, fsz, false);
+        x = (short)(rightX - tw - 4);
+    } else {
+        COLOR fill = b == 1 ? 0x001F2937 : (b == 2 ? 0x00FCD34D : 0x00FFFFFF);
+        COLOR ink  = b == 1 ? 0x00E5E7EB : 0x000B0F19;
+        short padx = 5, h = (short)(fsz + 5);
+        short l = (short)(rightX - tw - 2 * padx), t0 = (short)(y - h / 2), bt = (short)(y + h / 2);
+        setPen(fill, 1, P_SOLID);
+        CBRUSH br(fill, PAT_SOLID); br.set();
+        RCT rc; rc.set(l, t0, rightX, bt); rc.drawRounded((short)(h - 2), (short)(h - 2));
+        textRJ((short)(rightX - padx), y, t.c_str(), ink, fsz, true);
+        x = (short)(l - 4);
     }
-    if (live) {                                              // a small yellow lightning bolt
+    if (live) {                                              // the yellow lightning bolt: COVER confirmed dealers trading here
         short h = (short)(fsz + 2), w = (short)(h / 2 + 1);
         short top = (short)(y - h / 2), bot = (short)(y + h / 2), l = (short)(x - w), r = x;
         COLOR c = 0x00FACC15;
@@ -344,7 +357,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Right outside each node: its size as a share of a normal 15 minutes of futures volume, with strength bars (none = under 0.25% quiet, 1 = small, 2 = 1-3% meaningful, 3 = 3%+ big, the 9/25 first bands) and a lightning bolt when COVER confirms dealers are actually trading there after the turn. Bars = where it CAN happen, bolt = it IS happening. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.2.2");
+    p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Right outside each node: its size as a share of a normal 15 minutes of futures volume, in a pill coloured by band (grey text = under 0.25% quiet, dark pill = small, yellow pill = 1-3% meaningful, white pill = 3%+ big, the 9/25 first bands); a white outline marks a market-moving node (3%+) and a lightning bolt when COVER confirms dealers are actually trading there after the turn. Pill and outline = where it CAN happen, bolt = it IS happening. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
+    p->setVersion("1.3");
     return p;
 }
