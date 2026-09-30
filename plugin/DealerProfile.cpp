@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3";
+static const char* DP_VERSION = "1.3.1";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -216,7 +216,16 @@ void DealerProfile::render(const Settings& S)
         return;
     }
     float gmax = 0, dmax = 0;
-    { dl::Data V = D; V.nodes.clear(); for (size_t i = 0; i < D.nodes.size(); i++) if (!D.nodes[i].far) V.nodes.push_back(D.nodes[i]); dl::scales(V.nodes.empty() ? D : V, gmax, dmax); }
+    {   // (1.3.1) scale to the nodes ON SCREEN: a big strike off the visible price range (9/29 night: 4,150 at -47) shrank every
+        // node in view to a few pixels
+        dl::Data V = D; V.nodes.clear();
+        for (size_t i = 0; i < D.nodes.size(); i++) {
+            if (D.nodes[i].far) continue;
+            short yy = yOf(D.nodes[i].k + off);
+            if (yy >= pane.top && yy <= pane.bottom) V.nodes.push_back(D.nodes[i]);
+        }
+        dl::scales(V.nodes.empty() ? D : V, gmax, dmax);
+    }
     // strike spacing in pixels
     float step = 0;
     for (size_t i = 1; i < D.nodes.size(); i++) { float d = D.nodes[i].k - D.nodes[i - 1].k; if (d > 0 && (step == 0 || d < step)) step = d; }
@@ -299,14 +308,15 @@ void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, in
         textRJ(rightX, y, t.c_str(), 0x006B7280, fsz, false);
         x = (short)(rightX - tw - 4);
     } else {
-        COLOR fill = b == 1 ? 0x001F2937 : (b == 2 ? 0x00FCD34D : 0x00FFFFFF);
-        COLOR ink  = b == 1 ? 0x00E5E7EB : 0x000B0F19;
-        short padx = 5, h = (short)(fsz + 5);
-        short l = (short)(rightX - tw - 2 * padx), t0 = (short)(y - h / 2), bt = (short)(y + h / 2);
+        COLOR fill = b == 1 ? 0x00334155 : (b == 2 ? 0x00FCD34D : 0x00FFFFFF);   // (1.3.1) dark pill lighter: visible on black
+        COLOR ink  = b == 1 ? 0x00F1F5F9 : 0x000B0F19;
+        short padx = 6, h = (short)(fsz + 6);
+        short w = (short)(tw + 2 * padx);
+        short l = (short)(rightX - w), t0 = (short)(y - h / 2), bt = (short)(t0 + h);
         setPen(fill, 1, P_SOLID);
         CBRUSH br(fill, PAT_SOLID); br.set();
-        RCT rc; rc.set(l, t0, rightX, bt); rc.drawRounded((short)(h - 2), (short)(h - 2));
-        textRJ((short)(rightX - padx), y, t.c_str(), ink, fsz, true);
+        RCT rc; rc.set(l, t0, rightX, bt); rc.drawRounded(6, 6);   // (1.3.1) a pill, not an oval (the corner was h - 2)
+        textLJ((short)(l + padx), y, t.c_str(), ink, fsz, true);  // left-aligned inside the measured width: centred by construction
         x = (short)(l - 4);
     }
     if (live) {                                              // the yellow lightning bolt: COVER confirmed dealers trading here
@@ -358,6 +368,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Right outside each node: its size as a share of a normal 15 minutes of futures volume, in a pill coloured by band (grey text = under 0.25% quiet, dark pill = small, yellow pill = 1-3% meaningful, white pill = 3%+ big, the 9/25 first bands); a white outline marks a market-moving node (3%+) and a lightning bolt when COVER confirms dealers are actually trading there after the turn. Pill and outline = where it CAN happen, bolt = it IS happening. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.3");
+    p->setVersion("1.3.1");
     return p;
 }
