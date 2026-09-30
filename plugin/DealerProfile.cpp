@@ -30,7 +30,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.12";   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+static const char* DP_VERSION = "1.4.0";   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
@@ -295,6 +295,19 @@ void DealerProfile::render(const Settings& S)
             if (Lg > 0 && N.gp >= 0) strengthMark((short)(anchor - reachG - 4), (short)((gt + gb) / 2), N.gp, N.live, S.font);
             if (Ld > 0 && N.dp >= 0) strengthMark((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), N.dp, false, S.font);
         }
+        // (1.4.0, Rassul 2026-09-30, mockup v26) the strikes the Analyst and the Read talk about: KEY (the level), TGT (the target
+        // wall), MAG (the 0DTE magnet) - a small chip at the left end of the strike's gamma node
+        for (size_t j = 0; j < D.tags.size(); j++) {
+            const dl::Data::Tag& T = D.tags[j];
+            if (std::fabs(T.k - N.k) > step * 0.5f) continue;
+            int fsz = S.font - 1; if (fsz < 7) fsz = 7;
+            int tw = textW(T.text.c_str(), fsz, true) + 8;
+            COLOR bg = T.col == 'A' ? 0x00C084FC : T.col == 'B' ? C_WALL : T.col == 'G' ? C_BUY : T.col == 'C' ? 0x0022D3EE : C_INK;
+            short ch = (short)(fsz + 5), cy = (short)((gt + gb) / 2);
+            short x2 = Lg >= tw + 8 ? (short)(anchor - Lg + 3 + tw) : (short)(anchor - (Lg > 0 ? Lg : 0) - 60);
+            box((short)(x2 - tw), (short)(cy - ch / 2), x2, (short)(cy + ch / 2), bg);
+            textLJ((short)(x2 - tw + 4), cy, T.text.c_str(), C_DARK, fsz, true);
+        }
     }
     // whole-book banner + legend (top-left of the pane)
     short bx = (short)(pane.left + 8), by = (short)(pane.top + 6);
@@ -382,7 +395,8 @@ void DealerProfile::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nSTATE," << what << "\n";
+    f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nSTATE," << what
+      << "\nREACH," << (cfg.width + 70) << "\n";   // (1.4.0) px the Profile takes from the scale's edge: the Read / Analyst stay left of it
 }
 
 // (1.3.7, Rassul 2026-09-30: the Read went blank overnight - MenthorQ's price freezes outside RTH) the chart's own last 200
@@ -434,6 +448,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("1.3.12");
+    p->setVersion("1.4.0");
     return p;
 }

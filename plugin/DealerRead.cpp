@@ -80,6 +80,11 @@ public:
     void render(const Settings& S);
     void renderFull(const Settings& S);
     void renderSmall(const Settings& S);
+    void renderV14(const Settings& S);                 // (1.4.0) mockup v27: Dealers + Magnet on top, the Key Level box below
+    short topBox(const Settings& S, short x0, short y0, short W);
+    void keyBox(const Settings& S, short x0, short y0, short W, short H, bool wallLvl, const std::vector<dl::Row>& rows, const dl::Row* tape, const std::string& stale);
+    void tick(short x, short y, short sz, COLOR c);
+    bool inV14 = false; int profReach = 330; long long reachStamp = -2;   // px the Profile takes from the scale edge (its status file)
     void renderAnalyst(const Settings& S, short x0, short y0, short W, short H);
     std::vector<std::string> wrapWords(const std::string& s, int firstW, int restW, int sz, bool bold, int maxLines);
     void miniBoxes(short& x, short y, const std::vector<dl::Row>& rows, short sz);
@@ -177,6 +182,15 @@ void DealerRead::load()
     if (mkt.empty()) { D = dl::Data(); loadedPath.clear(); return; }
     const char* up = getenv("USERPROFILE"); if (!up) { D = dl::Data(); return; }
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Dealer-" + mkt + ".csv";
+    {   // (1.4.0) how far the Profile reaches in from the scale (its status file, REACH,<px>) - the boxes stay left of it
+        std::string sp = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
+        long long ss_ = dl::fileStamp(sp);
+        if (ss_ >= 0 && ss_ != reachStamp) {
+            reachStamp = ss_;
+            std::ifstream g(sp.c_str()); std::string ln;
+            while (std::getline(g, ln)) if (ln.rfind("REACH,", 0) == 0) { int r = atoi(ln.c_str() + 6); if (r >= 60 && r <= 1500) profReach = r; }
+        }
+    }
     long long st = dl::fileStamp(path);
     if (st >= 0 && st == loadedStamp && path == loadedPath) return;      // unchanged: keep what is parsed (no disk read)
     D = dl::Data();
@@ -440,8 +454,155 @@ void DealerRead::renderAnalyst(const Settings& S, short x0, short y0, short W, s
 
 void DealerRead::render(const Settings& S) { if (S.layout == 3) renderFull(S); else renderSmall(S); }
 
+void DealerRead::tick(short x, short y, short sz, COLOR c)
+{   // a checkmark, sz px wide, centred on y
+    line(x, y, (short)(x + sz / 3), (short)(y + sz / 3), c, 3);
+    line((short)(x + sz / 3), (short)(y + sz / 3), (short)(x + sz), (short)(y - sz / 2), c, 3);
+}
+
+short DealerRead::topBox(const Settings& S, short x0, short y0, short W)
+{   // Dealers: ... / (faint line) / Magnet: ... / Agrees | Fights | Pinned: ... on its own line. Returns the height.
+    int fs = S.font;
+    short lh = U(16), pad = U(9);
+    int labD = textW("Dealers:", fs, true) + U(6), labM = textW("Magnet:", fs, true) + U(6);
+    std::vector<std::string> L1 = wrapWords(D.aDeal, W - 2 * pad - labD, W - 2 * pad, fs, false, 3);
+    std::string mag = D.aMag, rel, relW;
+    size_t p = std::string::npos;
+    const char* keys[3] = { "Agrees:", "Fights:", "Pinned:" };
+    for (int i = 0; i < 3; i++) { size_t q = mag.find(keys[i]); if (q != std::string::npos && q < p) p = q; }
+    if (p != std::string::npos) { rel = mag.substr(p); mag = mag.substr(0, p); while (!mag.empty() && mag.back() == ' ') mag.pop_back(); }
+    std::vector<std::string> L2 = mag.empty() ? std::vector<std::string>() : wrapWords(mag, W - 2 * pad - labM, W - 2 * pad, fs, false, 3);
+    std::vector<std::string> L3;
+    int labR = 0;
+    if (!rel.empty()) {
+        size_t c = rel.find(':'); relW = rel.substr(0, c + 1); rel = rel.substr(c + 1); while (!rel.empty() && rel[0] == ' ') rel.erase(0, 1);
+        labR = textW(relW.c_str(), fs, true) + U(6);
+        L3 = wrapWords(rel, W - 2 * pad - labR, W - 2 * pad, fs, false, 2);
+    }
+    short H = (short)(U(8) + lh * (short)L1.size() + (L2.empty() ? 0 : U(10) + lh * (short)(L2.size() + L3.size())) + U(4));
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_DOBG);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_DOBRD, false);
+    short y = (short)(y0 + U(4) + lh / 2);
+    text((short)(x0 + pad), y, "Dealers:", C_TABONB, fs, true, 0);
+    for (size_t i = 0; i < L1.size(); i++) { text((short)(x0 + pad + (i == 0 ? labD : 0)), y, L1[i].c_str(), C_INK, fs, false, 0); y = (short)(y + lh); }
+    if (!L2.empty()) {
+        short ys = (short)(y - lh / 2 + U(4));
+        line((short)(x0 + pad), ys, (short)(x0 + W - pad), ys, 0x00164E63, 1);
+        y = (short)(y + U(10));
+        text((short)(x0 + pad), y, "Magnet:", C_MQ, fs, true, 0);
+        for (size_t i = 0; i < L2.size(); i++) { text((short)(x0 + pad + (i == 0 ? labM : 0)), y, L2[i].c_str(), C_INK, fs, false, 0); y = (short)(y + lh); }
+        if (!L3.empty()) {
+            COLOR rc = relW[0] == 'A' ? C_GREEN : relW[0] == 'F' ? C_RED : 0x00F59E0B;
+            text((short)(x0 + pad), y, relW.c_str(), rc, fs, true, 0);
+            for (size_t i = 0; i < L3.size(); i++) { text((short)(x0 + pad + (i == 0 ? labR : 0)), y, L3[i].c_str(), C_INK, fs, false, 0); y = (short)(y + lh); }
+        }
+    }
+    return H;
+}
+
+void DealerRead::keyBox(const Settings& S, short x0, short y0, short W, short H, bool wallLvl, const std::vector<dl::Row>& rows,
+                        const dl::Row* tape, const std::string& stale)
+{   // Key Level heading / the trade checklist (a light band) / the 3 greeks / TAPE / STOP + TGT
+    int fs = S.font;
+    COLOR bc = wallLvl ? C_BLUE : C_AMBER, bg = wallLvl ? 0x00161203 : 0x0012091F, band = wallLvl ? 0x00262006 : 0x00231433;
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), bg);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), bc, false);
+    short pad = U(9), y = (short)(y0 + U(13));
+    text((short)(x0 + pad), y, "Key Level:", C_MUTED, fs, true, 0);
+    int kl = textW("Key Level:", fs, true) + U(6);
+    text((short)(x0 + pad + kl), y, fit(D.keyLvl, W - 2 * pad - kl - (stale.empty() ? 0 : textW(stale.c_str(), fs - 1, true) + U(10)), fs, true).c_str(), bc, fs, true, 0);
+    if (!stale.empty()) text((short)(x0 + W - pad), y, stale.c_str(), C_RED, fs - 1, true, 2);
+    // checklist band
+    short bt = (short)(y0 + U(26)), bb = (short)(bt + U(28));
+    fill((short)(x0 + pad), bt, (short)(x0 + W - pad), bb, band);
+    short cy = (short)((bt + bb) / 2), cx = (short)(x0 + pad + U(6));
+    for (size_t i = 0; i < D.chk.size() && i < 3; i++) {
+        const dl::Data::Chk& c = D.chk[i];
+        bool ok = c.st == "ok";
+        fill(cx, (short)(cy - U(7)), (short)(cx + U(14)), (short)(cy + U(7)), C_TRACK);
+        text((short)(cx + U(7)), cy, c.n.c_str(), C_INK, fs - 3, true, 1);
+        cx = (short)(cx + U(19));
+        tick(cx, cy, U(12), ok ? C_GREEN : 0x004B5563);
+        cx = (short)(cx + U(17));
+        text(cx, cy, c.name.c_str(), C_INK, fs - 1, false, 0);
+        cx = (short)(cx + textW(c.name.c_str(), fs - 1, false) + U(5));
+        text(cx, cy, c.val.c_str(), ok ? C_INK : C_MUTED, fs - 2, false, 0);
+        cx = (short)(cx + textW(c.val.c_str(), fs - 2, false) + U(12));
+    }
+    // greeks
+    y = (short)(bb + U(14));
+    for (size_t i = 0; i < rows.size() && i < 3; i++) {
+        const dl::Row& r = rows[i];
+        checkBox((short)(x0 + pad), y, U(11), r.st);
+        text((short)(x0 + pad + U(18)), y, r.n.c_str(), C_INK, fs, true, 0);
+        meter((short)(x0 + pad + U(86)), y, U(96), U(11), r);
+        text((short)(x0 + pad + U(190)), y, fit(r.why, W - pad - U(190) - pad, fs, false).c_str(), C_INK, fs, false, 0);
+        y = (short)(y + U(20));
+    }
+    short ys = (short)(y - U(8));
+    line((short)(x0 + 1), ys, (short)(x0 + W - 1), ys, 0x003B0764, 1);
+    y = (short)(ys + U(12));
+    if (tape) {
+        text((short)(x0 + pad), y, "TAPE", C_INK, fs - 1, false, 0);
+        text((short)(x0 + pad + textW("TAPE", fs - 1, false) + U(6)), y, fit(tape->why, W - 2 * pad - U(50), fs - 1, false).c_str(), C_MUTED, fs - 1, false, 0);
+        y = (short)(y + U(12));
+        line((short)(x0 + 1), y, (short)(x0 + W - 1), y, 0x003B0764, 1);
+        y = (short)(y + U(12));
+    }
+    text((short)(x0 + pad), y, D.stopTxt.c_str(), 0x00FCA5A5, fs, true, 0);
+    text((short)(x0 + pad + textW(D.stopTxt.c_str(), fs, true) + U(20)), y, fit(D.tgtTxt, W - 2 * pad - textW(D.stopTxt.c_str(), fs, true) - U(20), fs, true).c_str(), 0x0086EFAC, fs, true, 0);
+}
+
+void DealerRead::renderV14(const Settings& S)
+{
+    u = S.font / 10.0f;
+    RCT pane; pane.getPaneRect(false);
+    RCT scale; scale.getScaleRect();
+    short paneR = pane.right;
+    if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
+    short clearR = (short)(paneR - profReach - U(8));        // stay left of the Profile
+    char b[120];
+    RTDATE now = currentDate(); struct tm tt; memset(&tt, 0, sizeof(tt)); getLocaltime(now, &tt);
+    double age = dl::staleMin(D.asofSo + S.clock * 60.0, tt.tm_hour * 3600.0 + tt.tm_min * 60.0 + tt.tm_sec);
+    std::string stale;
+    if (D.hasPrice && age > 10.0) { if (age >= 90) sprintf_s(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5)); stale = b; }
+    // the Dealers + Magnet box (top)
+    if (S.show >= 1 && !D.aDeal.empty()) {
+        short W = (short)(U(860) * S.widthPct / 100);
+        short x0 = (short)(pane.left + U(6) + S.moveX);
+        if (S.apos == 1) x0 = (short)((pane.left + clearR) / 2 - W / 2);
+        if (S.apos == 2) x0 = (short)(clearR - W);
+        if (x0 + W > clearR) W = (short)(clearR - x0);
+        if (W < U(300)) W = U(300);
+        topBox(S, x0, (short)(pane.top + S.atop), W);
+    }
+    if (S.show == 1) return;
+    if (D.keyLvl.empty()) {                                    // no level: the "waiting" box with NEXT (1.3.4)
+        Settings S2 = S; S2.show = 0; inV14 = true; renderSmall(S2); inV14 = false; return;
+    }
+    bool wallLvl = D.noWall.empty() && !D.wall.empty();
+    std::vector<dl::Row> rows;
+    if (wallLvl) rows = D.wall;
+    else {
+        for (size_t i = 0; i < D.fuel.size(); i++) if (D.fuel[i].n != "GAMMA") rows.push_back(D.fuel[i]);
+        for (size_t i = 0; i < D.xrows.size(); i++) if (D.xrows[i].n == "CHARM") rows.push_back(D.xrows[i]);
+    }
+    const dl::Row* tape = 0;
+    for (size_t i = 0; i < D.xrows.size(); i++) if (D.xrows[i].n == "TAPE") tape = &D.xrows[i];
+    short W = (short)(U(450) * S.widthPct / 100); if (W < U(340)) W = U(340);
+    short H = (short)(U(26) + U(28) + U(14) + U(20) * (short)(rows.size() < 3 ? rows.size() : 3) + U(4) + (tape ? U(24) : 0) + U(20));
+    bool right = S.corner == 1 || S.corner == 3, bottom = S.corner <= 1 || S.corner == 4;
+    short x0 = right ? (short)(clearR - W) : (S.corner >= 4 ? (short)((pane.left + clearR) / 2 - W / 2) : (short)(pane.left + U(6)));
+    x0 = (short)(x0 + S.moveX);
+    if (x0 + W > clearR) x0 = (short)(clearR - W);
+    if (x0 < pane.left + 2) x0 = (short)(pane.left + 2);
+    short y0 = bottom ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
+    keyBox(S, x0, y0, W, H, wallLvl, rows, tape, stale);
+}
+
 void DealerRead::renderSmall(const Settings& S)
 {
+    if (S.layout == 0 && !inV14 && (!D.aDeal.empty() || !D.keyLvl.empty())) { renderV14(S); return; }   // (1.4.0) mockup v27
     u = S.font / 10.0f;
     int fs = S.font;
     RCT pane; pane.getPaneRect(false);
@@ -652,7 +813,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.3.4\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.4.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -669,6 +830,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read: is the level holding, and are dealers reversing? The guide is below the settings.");
-    p->setVersion("1.3.4");
+    p->setVersion("1.4.0");
     return p;
 }

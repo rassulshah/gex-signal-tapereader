@@ -47,6 +47,13 @@ struct Data {
     std::string aNow, aTime, aBias; char aBiasCol = 'N';          // (Read 1.2.6) the Analyst: NOW paragraph + bias
     struct Scn { std::string title, act, odds, l1, l2, l3; char col = 'N'; };
     std::vector<Scn> scn;                                         // the Analyst's 3 scenarios
+    // (file 1.3 / Read 1.4 / Profile 1.4, mockup v27) Dealers + Magnet paragraphs; the Read's Key Level, checklist, STOP / TGT;
+    // the Profile's tags (KEY / TGT / MAG)
+    std::string aDeal, aMag, keyLvl, stopTxt, tgtTxt;
+    struct Chk { std::string n, name, st, val; };
+    std::vector<Chk> chk;
+    struct Tag { float k = 0; std::string text; char col = 'W'; };
+    std::vector<Tag> tags;
 };
 
 // (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
@@ -132,6 +139,12 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "TRIG" && t.size() >= 6) { Trig g; g.group = t[1]; g.name = t[2]; g.on = t[3] == "1"; g.val = t[4]; g.note = t[5]; D.trig.push_back(g); return true; }
     if (k == "BOOKLINE" && t.size() >= 2) { D.bookLine = t[1]; return true; }
     if (k == "NEXT") { D.next.assign(t.begin() + 1, t.end()); return true; }
+    if (k == "ADEAL" && t.size() >= 2) { D.aDeal = t[1]; return true; }
+    if (k == "AMAG" && t.size() >= 2) { D.aMag = t[1]; return true; }
+    if (k == "KEYLVL" && t.size() >= 2) { D.keyLvl = t[1]; return true; }
+    if (k == "CHK" && t.size() >= 5) { Data::Chk c; c.n = t[1]; c.name = t[2]; c.st = t[3]; c.val = t[4]; D.chk.push_back(c); return true; }
+    if (k == "STOPTGT" && t.size() >= 3) { D.stopTxt = t[1]; D.tgtTxt = t[2]; return true; }
+    if (k == "TAG" && t.size() >= 4) { Data::Tag g; g.k = f(t[1]); g.text = t[2]; g.col = col1(t[3]); if (g.k > 0) { D.tags.push_back(g); return true; } return false; }
     if (k == "LEARN" && t.size() >= 2) { D.learn = t[1] == "1"; return true; }
     return false;
 }
