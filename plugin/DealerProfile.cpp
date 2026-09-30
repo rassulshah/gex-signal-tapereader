@@ -120,7 +120,7 @@ int cppExtension::setup(void)
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     // (1.3.3) HOW TO READ IT, in the settings (the description box cuts long text off): open a list to read every line.
     // Appended LAST so saved values keep their positions; nothing reads them.
-    PX.keyPill = pc++; setListParameter("Pill colours (open)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Yellow pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
+    PX.keyPill = pc++; setListParameter("Pill colours (open)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Orange pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
     PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points are in the top banner);Yellow = WALL: dealers lean against every tick - stops a sweep;Purple = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
     // (1.3.5, Rassul 2026-09-30: "keep an example of the read in the settings - a How-to guide ... use all the blank space")
     // one full row per line (a checkbox label shows the whole line); appended LAST so saved values keep their positions;
@@ -140,7 +140,7 @@ int cppExtension::setup(void)
     pc++; setBoolParameter("Sell 32 more per 5.5 pts up", false);
     pc++; setBoolParameter("Slow = 46, a spike = 28", false);
     pc++; setBoolParameter("Step 4  SIZE = the pill", false);
-    pc++; setBoolParameter("Yellow 2.8% = meaningful", false);
+    pc++; setBoolParameter("Orange 2.8% = meaningful", false);
     pc++; setBoolParameter("Step 5  VERDICT", false);
     pc++; setBoolParameter("Headwind + wall = high holds", false);
     pc++; setBoolParameter("Wait for sweep + a trigger", false);
@@ -332,7 +332,7 @@ void DealerProfile::outline(short l, short t, short r, short b)
     PNT p; p.set(0, 0.0f);
     p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
 }
-static COLOR bandCol(int b) { return b == 0 ? 0x006B7280 : b == 1 ? 0x00E5E7EB : b == 2 ? 0x00FCD34D : 0x00FFFFFF; }
+static COLOR bandCol(int b) { return b == 0 ? 0x006B7280 : b == 1 ? 0x00E5E7EB : b == 2 ? 0x00F97316 : 0x00FFFFFF; }   // (1.3.9) meaningful = ORANGE (yellow is the wall now)
 void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, int font)
 {
     // (1.3) Rassul 2026-09-29: "pill and the outline for market moving nodes" - the % sits in a rounded pill coloured by
@@ -346,7 +346,7 @@ void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, in
         textRJ(rightX, y, t.c_str(), 0x006B7280, fsz, false);
         x = (short)(rightX - tw - 4);
     } else {
-        COLOR fill = b == 1 ? 0x00334155 : (b == 2 ? 0x00FCD34D : 0x00FFFFFF);   // (1.3.1) dark pill lighter: visible on black
+        COLOR fill = b == 1 ? 0x00334155 : (b == 2 ? 0x00F97316 : 0x00FFFFFF);   // (1.3.9) orange, not yellow (the wall colour)   // (1.3.1) dark pill lighter: visible on black
         COLOR ink  = b == 1 ? 0x00F1F5F9 : 0x000B0F19;
         short padx = 6, h = (short)(fsz + 6);
         short w = (short)(tw + 2 * padx + 2);                     // (1.3.3) + the bold overrun, so both sides match
