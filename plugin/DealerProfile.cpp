@@ -30,7 +30,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.11";   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+static const char* DP_VERSION = "1.3.12";   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
@@ -104,24 +104,36 @@ int DealerProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg
 
 int cppExtension::setup(void)
 {
-    // (1.3.11, Rassul 2026-09-30: "look at all the checkboxes that are not suppose to be there") the guide is an "(open)"
-    // list, not checkbox rows; parameter version 2 = a fresh, clean layout (defaults = Rassul's settings, banner off)
-    setParameterVersion(2);
-    setParameterDialogHeight(7);
+    // (1.3.12, Rassul 2026-09-30) only real settings have a control; the guide is plain text (setLabelParameter) below.
+    // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
+    setParameterVersion(3);
+    setParameterDialogHeight(20);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     PX.width   = pc++; setIntegerParameter("Profile width px", 260, 0, SL);
-    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0, SL);
+    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
+    PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     PX.labels  = pc++; setBoolParameter("Values inside the nodes", true);
     PX.snap    = pc++; setBoolParameter("Snapshot outline", true, SL);
-    PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
-    PX.banner  = pc++; setBoolParameter("Whole-book banner", false);
-    PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
-    PX.keyHow  = pc++; setListParameter("HOW TO READ A STRIKE (open)", 0, "Example: Gold 4215 on 9/29 at 08:45;Step 1 - WHERE is price? 23 pts under 4215, going up;Step 2 - DELTA (upper node): SELL 81 = dealers sell 81 futures on the way up - a headwind;Step 3 - GAMMA (lower node): 4215  32 (28 to 46) in YELLOW = a WALL - dealers lean against the move;They sell 32 more per 5.5 pts up - if price gets there fast only 28, if slowly 46;Step 4 - SIZE = the pill: orange 2.8% = meaningful;Step 5 - VERDICT: headwind + wall = the high should hold - wait for the sweep + a trigger;A PURPLE node = FUEL: dealers chase it - price overshoots, then comes back");
-    PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points: the Read's book line);Yellow = WALL: dealers lean against every tick - stops a sweep;Purple = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now", 0, SL);
-    PX.keyPill = pc++; setListParameter("Pill colours (open)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Orange pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep)", 0, SL);
-    PX.whisk = -1; PX.legend = -1;
+    PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true);
+    PX.banner  = pc++; setBoolParameter("Whole-book banner", false, SL);
+    pc++; setLabelParameter("HOW TO READ A STRIKE - example: Gold 4215, 9/29 08:45", 380);
+    pc++; setLabelParameter("Read each strike top to bottom: DELTA, then GAMMA", 380);
+    pc++; setLabelParameter("Step 1  WHERE is price? 23 pts under 4215, going up", 380);
+    pc++; setLabelParameter("Step 2  DELTA (upper node): SELL 81 = dealers sell 81", 380);
+    pc++; setLabelParameter("On the way up that selling is a headwind for price", 380);
+    pc++; setLabelParameter("Step 3  GAMMA (lower node): 4215  32 (28 to 46) yellow", 380);
+    pc++; setLabelParameter("Yellow = WALL: dealers sell 32 more per 5.5 pts up", 380);
+    pc++; setLabelParameter("Purple = FUEL: dealers chase - overshoot, then back", 380);
+    pc++; setLabelParameter("(28 to 46) = if price gets there fast / slowly", 380);
+    pc++; setLabelParameter("Step 4  SIZE = the pill: orange 2.8% = meaningful", 380);
+    pc++; setLabelParameter("Pill: grey under 0.25% quiet, dark under 1%, orange 1-3%", 380);
+    pc++; setLabelParameter("White pill + outline = 3%+ = market-moving", 380);
+    pc++; setLabelParameter("Step 5  VERDICT: headwind + wall = the high holds", 380);
+    pc++; setLabelParameter("Wait for the sweep + a trigger before you trade", 380);
+    pc++; setLabelParameter("Thin outline = MenthorQ's number right now", 380);
+    PX.keyHow = PX.keyNode = PX.keyPill = PX.whisk = PX.legend = -1;
     return RTX_OK;
 }
 
@@ -421,7 +433,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Profile. Read each strike top to bottom: upper node = futures dealers must trade on the way (delta), lower node = gamma when price gets there (yellow wall stops a sweep, purple fuel chases it). Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). The HOW TO READ guide is below; open the two lists for every detail.");
-    p->setVersion("1.3.11");
+    p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
+    p->setVersion("1.3.12");
     return p;
 }

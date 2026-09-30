@@ -110,11 +110,11 @@ int DealerRead::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); 
 
 int cppExtension::setup(void)
 {
-    // (1.3.0, Rassul 2026-09-30: "look at all the checkboxes that are not suppose to be there") the guide is no longer a
-    // stack of checkbox rows: every explanation is an "(open)" list, the only checkboxes left are real switches.
-    // Parameter version 2 = a fresh, clean layout (the old version-1 rows are dropped once). Defaults = Rassul's settings.
-    setParameterVersion(2);
-    setParameterDialogHeight(9);
+    // (1.3.2, Rassul 2026-09-30: "why cant you have the how-to below fuel as text" / "many dropdowns that shouldnt even be
+    // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
+    // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
+    setParameterVersion(3);
+    setParameterDialogHeight(24);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
@@ -126,15 +126,28 @@ int cppExtension::setup(void)
     PX.show     = pc++; setListParameter("Show", 2, "Read;Analyst;Both", 0, SL);
     PX.lift     = pc++; setIntegerParameter("Read: lift from bottom (px)", 30, 0);
     PX.moveX    = pc++; setIntegerParameter("Move right (px)", 0, 0, SL);
-    PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, 0, SL);
     PX.apos     = pc++; setListParameter("Analyst position", 0, "Top left;Top centre;Top right;Above the Read");
     PX.atop     = pc++; setIntegerParameter("Analyst: down from top (px)", 30, 0, SL);
-    PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, 0);
-    PX.keyHow   = pc++; setListParameter("HOW TO READ IT (open)", 0, "Example: Gold 9/29 09:36 short;Step 1 - the TABS: where the trade is - APPROACH > SWEEP > TRIGGER > RECLAIM;Step 2 - SWEEP chip: Trapped - 1,402 lots stuck on the wrong side = fuel;Step 3 - TRIGGER chip: RevWave - first leg away 1.9x the average (holds 88-95%);Step 4 - the >> line = what to do: short the first pullback;Step 5 - WALL box: 3/3 SOLID - a retest meets a stronger wall;Step 6 - FUEL box: 1/3 AT RISK - COVER 0% = dealers are not buying back yet;Verdict: take it, but tighten the stop / take target 1;ANALYST (top): NOW = where price is, the 0DTE clock, dealers, greeks, options;Its 3 boxes = A / B / C scenarios, labelled by how often each has worked in this market");
-    PX.keyTrig  = pc++; setListParameter("Phases / triggers (open)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");
-    PX.keyLvl   = pc++; setListParameter("WALL box (open)", 0, "WALL box = is the wall getting stronger? (gamma) - titled by its MenthorQ level;SPEED = price walking INTO the gamma peak (after the sweep: a retest meets a stronger wall);COLOR = today's options getting stronger with time (0DTE);ZOMMA = IV steady or falling - IV rising loosens the wall (the veto);SOLID = all 3 green after the sweep / AT RISK = one turned red");
-    PX.keyFuel  = pc++; setListParameter("FUEL box (open)", 0, "FUEL box = are dealers reversing their trade? (delta flow);COVER = dealers trading your way >= 5% of 15-min volume;GAMMA = their short gamma shrinking = the fuel is being used;VANNA = IV falling = their hedges unwind your way;STORED n = futures they will trade on the way (before the sweep);PRIMED = COVER + one more green / AT RISK = no real covering");
-    PX.explain  = -1;
+    PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, 0);
+    PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
+    pc++; setLabelParameter("HOW TO READ IT - example: Gold 9/29 09:36, short", 380);
+    pc++; setLabelParameter("Step 1  TABS: the phase - Approach > Sweep > Trigger", 380);
+    pc++; setLabelParameter("Step 2  SWEEP chip 'Trapped': 1,402 lots stuck = fuel", 380);
+    pc++; setLabelParameter("Step 3  TRIGGER 'RevWave': leg 1.9x, holds 88-95%", 380);
+    pc++; setLabelParameter("Step 4  >> line = what to do: short the first pullback", 380);
+    pc++; setLabelParameter("Step 5  WALL 3/3 SOLID: a retest meets a stronger wall", 380);
+    pc++; setLabelParameter("Step 6  FUEL 1/3 AT RISK: COVER 0% = no dealer buyback", 380);
+    pc++; setLabelParameter("Verdict: take it - tighten the stop, take target 1", 380);
+    pc++; setLabelParameter("TRIGGERS: RevBar = turn bar 2.5x range (holds 77%)", 380);
+    pc++; setLabelParameter("RevVol = turn bar 2x volume  /  RevWave = leg 1.9x", 380);
+    pc++; setLabelParameter("WALL box = is the wall getting stronger? (gamma)", 380);
+    pc++; setLabelParameter("SPEED, COLOR, ZOMMA green = wall holding; IV up = veto", 380);
+    pc++; setLabelParameter("FUEL box = are dealers reversing their trade? (delta)", 380);
+    pc++; setLabelParameter("COVER = dealers trade your way, 5%+ of 15-min volume", 380);
+    pc++; setLabelParameter("Check = on your side, cross = against, dot = waiting", 380);
+    pc++; setLabelParameter("ANALYST (top): NOW = what dealers must do, and why", 380);
+    pc++; setLabelParameter("A / B / C = scenarios; why = the options behind it", 380);
+    PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
 
@@ -634,7 +647,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.3.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.3.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -650,7 +663,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerRead *p = new DealerRead();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. The HOW TO READ guide is below; open the three lists for every check explained.");
-    p->setVersion("1.3.1");
+    p->setDescription("LRA Dealer Read: is the level holding, and are dealers reversing? The guide is below the settings.");
+    p->setVersion("1.3.2");
     return p;
 }
