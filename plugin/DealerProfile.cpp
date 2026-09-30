@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.2.1";
+static const char* DP_VERSION = "1.2.2";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -285,9 +285,9 @@ void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, in
     bool bold = b >= 2;
     int tw = textW(t.c_str(), fsz, bold);
     textRJ(rightX, y, t.c_str(), bandCol(b), fsz, bold);
-    short x = (short)(rightX - tw - 4);
+    short x = (short)(rightX - tw - 9);                       // (1.2.2) more room between the bars and the %
     if (b > 0) {
-        short bw = 3, gap = 2, hmax = (short)(fsz > 8 ? fsz - 1 : 7);
+        short bw = 5, gap = 2, hmax = (short)(fsz + 4 > 12 ? fsz + 4 : 12);   // (1.2.2) bigger bars (were 3 x 7 px)
         for (int i = 2; i >= 0; i--) {                       // three slots, the lit ones rising left to right
             short h = (short)(hmax * (i + 1) / 3); if (h < 2) h = 2;
             COLOR c = i < b ? bandCol(b) : 0x00374151;
@@ -345,6 +345,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Right outside each node: its size as a share of a normal 15 minutes of futures volume, with strength bars (none = under 0.25% quiet, 1 = small, 2 = 1-3% meaningful, 3 = 3%+ big, the 9/25 first bands) and a lightning bolt when COVER confirms dealers are actually trading there after the turn. Bars = where it CAN happen, bolt = it IS happening. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.2.1");
+    p->setVersion("1.2.2");
     return p;
 }
