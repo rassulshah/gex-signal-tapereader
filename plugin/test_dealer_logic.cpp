@@ -82,6 +82,16 @@ int main()
               && E.wallTitle == "No Wall" && E.noWall.find("FUEL (-13") != std::string::npos
               && E.fuelTitle == "FUEL for ONL 4,198 + PS 0D / HVL 0D 4,200 Support" && E.fuelScore == "0/3 AT RISK", "names / no wall / fuel title");
     }
+    {   // (Read 1.2.6) TAPE / CHARM rows and the Analyst
+        dl::Data A;
+        dl::parseLine(A, "XROW|TAPE|-11.7|1.0x vol|wait|last 15 min: no side in control, volume 1.0x normal");
+        dl::parseLine(A, "ANOW|Gold is at 4,191, 7 pts under ONL 4,198.|11:18");
+        dl::parseLine(A, "ABIAS|SHORT the rally into 4,198|R");
+        dl::parseLine(A, "ASCN|A REJECTION at 4,198|SHORT|most likely|R|a poke into 4,198|go short when it turns|options at 4,200: 3.4k puts");
+        dl::parseLine(A, "ASCN|B FLUSH to 4,180|WAIT > LONG|if 4,186 breaks|L|l1|l2");
+        CHECK(A.xrows.size() == 1 && A.xrows[0].n == "TAPE" && A.aTime == "11:18" && A.aBias == "SHORT the rally into 4,198" && A.aBiasCol == 'R'
+              && A.scn.size() == 2 && A.scn[0].l3 == "options at 4,200: 3.4k puts" && A.scn[1].l3.empty() && A.scn[1].col == 'L', "tape + analyst rows");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

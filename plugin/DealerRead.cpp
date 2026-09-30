@@ -55,9 +55,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct; };
+struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show; };
 static PIdx PX;
-struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 0; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -79,6 +79,8 @@ public:
     void render(const Settings& S);
     void renderFull(const Settings& S);
     void renderSmall(const Settings& S);
+    void renderAnalyst(const Settings& S, short x0, short y0, short W, short H);
+    std::vector<std::string> wrapWords(const std::string& s, int firstW, int restW, int sz, bool bold, int maxLines);
     void miniBoxes(short& x, short y, const std::vector<dl::Row>& rows, short sz);
     std::string fit(const std::string& s, int maxW, int sz, bool bold);
     short U(float v) { return (short)(v * u + 0.5f); }
@@ -119,31 +121,34 @@ int cppExtension::setup(void)
     PX.todo   = pc++; setBoolParameter("WHAT TO DO box", true);
     PX.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     PX.layout = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");
-    PX.explain = pc++; setBoolParameter("(explanations: open the lists below)", false, SL);
+    PX.explain = pc++; setBoolParameter("(unused)", false, SL);
     // (1.2.1) HOW TO READ IT, in the settings (the description box cuts long text off); appended LAST, nothing reads them
-    PX.keyLvl  = pc++; setListParameter("LEVEL box (open to read)", 0, "LEVEL box = is the wall getting stronger? (gamma) - titled by its MenthorQ level;SPEED = price walking INTO the gamma peak (after the sweep: a retest meets a stronger wall);COLOR = today's options getting stronger with time (0DTE);ZOMMA = IV steady or falling - IV rising loosens the wall (the veto);SOLID = all 3 green after the sweep / AT RISK = one turned red");
+    PX.keyLvl  = pc++; setListParameter("WALL box (open to read)", 0, "LEVEL box = is the wall getting stronger? (gamma) - titled by its MenthorQ level;SPEED = price walking INTO the gamma peak (after the sweep: a retest meets a stronger wall);COLOR = today's options getting stronger with time (0DTE);ZOMMA = IV steady or falling - IV rising loosens the wall (the veto);SOLID = all 3 green after the sweep / AT RISK = one turned red");
     PX.keyFuel = pc++; setListParameter("FUEL box (open to read)", 0, "FUEL box = are dealers reversing their trade? (delta flow);COVER = dealers trading your way >= 5% of 15-min volume;GAMMA = their short gamma shrinking = the fuel is being used;VANNA = IV falling = their hedges unwind your way;STORED n = futures they will trade on the way (before the sweep);PRIMED = COVER + one more green / AT RISK = no real covering");
     PX.lift    = pc++; setIntegerParameter("Lift from the bottom (px)", 30, 0);   // (1.2.2) clear of the chart's button bar
-    PX.keyTrig = pc++; setListParameter("Phases + triggers (open to read)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");      // (1.1) appended LAST: saved positions stay put
-    // (1.2.3, Rassul 2026-09-30: "keep an example of the read in the settings - a How-to guide ... use all the blank space")
-    // one full row per line (a checkbox label shows the whole line); appended LAST so saved values keep their positions;
-    // nothing reads them
-    pc++; setBoolParameter("HOW TO READ IT - 9/29 Gold 09:36, short under 4,203.80", false);
-    pc++; setBoolParameter("1 TABS = where the trade is: APPROACH > SWEEP > TRIGGER >", false);
-    pc++; setBoolParameter("   RECLAIM > RETEST > TRADE (green = done, lit = now)", false);
-    pc++; setBoolParameter("2 SWEEP chip: Trapped 1,402 lots 2.1x = buyers trapped", false);
-    pc++; setBoolParameter("3 TRIGGER chip: RevWave leg 1.9x = the turn printed", false);
-    pc++; setBoolParameter("   (holds 88-95%) - any trigger lights the TRIGGER tab", false);
-    pc++; setBoolParameter("4 >> WHAT TO DO: short on the first pullback", false);
-    pc++; setBoolParameter("5 WALL box = the wall behind your stop: 3/3 SOLID", false);
-    pc++; setBoolParameter("   SPEED +4 COLOR +5 ZOMMA +1 = retest meets a stronger wall", false);
-    pc++; setBoolParameter("6 FUEL box = what powers the move: 1/3 AT RISK", false);
-    pc++; setBoolParameter("   COVER 0% vol = dealers not buying back yet (needs 5%+)", false);
-    pc++; setBoolParameter("7 VERDICT: in the trade, wall solid, fuel not confirmed ->", false);
-    pc++; setBoolParameter("   tighten the stop / take target 1 if COVER stays red", false);
+    PX.keyTrig = pc++; setListParameter("Phases/triggers (open)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");      // (1.1) appended LAST: saved positions stay put
+    // (1.2.3) HOW TO READ guide, one row per line. (1.2.6) IRT shows only ~30 characters of a row that starts with a
+    // digit or a space - every line is now <= 30 characters and starts with a letter. Nothing reads them.
+    pc++; setBoolParameter("HOW TO READ IT", false);
+    pc++; setBoolParameter("Example: Gold 9/29 09:36 short", false);
+    pc++; setBoolParameter("Step 1  TABS = where trade is", false);
+    pc++; setBoolParameter("Approach>Sweep>Trigger>Reclaim", false);
+    pc++; setBoolParameter("Step 2  SWEEP chip: Trapped", false);
+    pc++; setBoolParameter("Trapped: 1,402 lots = stuck", false);
+    pc++; setBoolParameter("Step 3  TRIGGER chip: RevWave", false);
+    pc++; setBoolParameter("Leg 1.9x - holds 88-95%", false);
+    pc++; setBoolParameter("Step 4  >> line = what to do", false);
+    pc++; setBoolParameter("Short the first pullback", false);
+    pc++; setBoolParameter("Step 5  WALL box: 3/3 SOLID", false);
+    pc++; setBoolParameter("A retest meets a stronger wall", false);
+    pc++; setBoolParameter("Step 6  FUEL box: 1/3 AT RISK", false);
     // (1.2.4, Rassul 2026-09-30: "add a placement setting") appended LAST so saved values keep their positions
     PX.moveX    = pc++; setIntegerParameter("Move right (px, - = left)", 0, 0);
     PX.widthPct = pc++; setIntegerParameter("Width (% of normal, 40-100)", 100, 0, SL);
+    // (1.2.6) the rest of the guide + the Analyst switch (appended LAST: saved positions stay put)
+    pc++; setBoolParameter("COVER 0% = no dealer buyback", false);
+    pc++; setBoolParameter("Verdict: tighten stop / tgt 1", false);
+    PX.show = pc++; setListParameter("Show", 0, "Read;Analyst;Both (Analyst on top)");
     return RTX_OK;
 }
 
@@ -153,6 +158,7 @@ void DealerRead::readSettings(Settings& S)
     S.corner = getListIndex(PX.corner); if (S.corner < 0 || S.corner > 5) S.corner = 0;
     S.moveX = getIntegerValue(PX.moveX); if (S.moveX < -3000 || S.moveX > 3000) S.moveX = 0;
     S.widthPct = getIntegerValue(PX.widthPct); if (S.widthPct < 40 || S.widthPct > 100) S.widthPct = 100;   // a fresh dialog can read 0
+    S.show = getListIndex(PX.show); if (S.show < 0 || S.show > 2) S.show = 0;
     S.font = getIntegerValue(PX.font); if (S.font < 7) S.font = 10;   // (1.0.1) a first dialog can show ??? / a wrong number if (S.font > 20) S.font = 20;
     S.trade = isBoxChecked(PX.trade) != 0; S.todo = isBoxChecked(PX.todo) != 0;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
@@ -370,6 +376,66 @@ void DealerRead::miniBoxes(short& x, short y, const std::vector<dl::Row>& rows, 
 {
     for (size_t i = 0; i < rows.size() && i < 3; i++) { checkBox(x, y, sz, rows[i].st); x = (short)(x + sz + U(4)); }
 }
+// (1.2.6) word wrap by measured width: line 1 may be shorter (a label sits in front of it)
+std::vector<std::string> DealerRead::wrapWords(const std::string& s, int firstW, int restW, int sz, bool bold, int maxLines)
+{
+    std::vector<std::string> out; std::string cur, word;
+    std::vector<std::string> words; std::stringstream ss(s); while (ss >> word) words.push_back(word);
+    for (size_t i = 0; i < words.size(); i++) {
+        std::string t = cur.empty() ? words[i] : cur + " " + words[i];
+        int lim = out.empty() ? firstW : restW;
+        if (textW(t.c_str(), sz, bold) <= lim || cur.empty()) { cur = t; continue; }
+        out.push_back(cur); cur = words[i];
+        if ((int)out.size() == maxLines) { cur.clear(); break; }
+    }
+    if (!cur.empty() && (int)out.size() < maxLines) out.push_back(cur);
+    return out;
+}
+
+// (1.2.6, Rassul 2026-09-30) THE ANALYST: NOW (3 lines of plain words: where price is, what dealers must do, the greeks / tape
+// / options) + the bias, then 3 scenarios - what happens and why, and what to act on. Stop / target / R:R stay in the Read.
+void DealerRead::renderAnalyst(const Settings& S, short x0, short y0, short W, short H)
+{
+    int fs = S.font;
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, false);
+    short bt = (short)(y0 + U(3)), bh = U(46);
+    fill((short)(x0 + U(3)), bt, (short)(x0 + W - U(3)), (short)(bt + bh), C_DOBG);
+    frame((short)(x0 + U(3)), bt, (short)(x0 + W - U(3)), (short)(bt + bh), C_DOBRD, false);
+    char b[120];
+    sprintf_s(b, sizeof(b), "NOW %s  %s %s", D.aTime.c_str(), mkt.c_str(), dl::fmtPx(D.px, mkt).c_str());
+    short l1 = (short)(bt + U(9));
+    text((short)(x0 + U(9)), l1, b, C_TABONB, fs - 1, true, 0);
+    int labW = textW(b, fs - 1, true) + U(12);
+    int biasW = D.aBias.empty() ? 0 : textW(D.aBias.c_str(), fs - 1, true) + U(16);
+    if (!D.aBias.empty()) text((short)(x0 + W - U(9)), l1, D.aBias.c_str(), colOf(D.aBiasCol), fs - 1, true, 2);
+    std::string para = D.aNow.empty() ? std::string("The Analyst writes here after the next Reader update (every 5 minutes).") : D.aNow;
+    std::vector<std::string> ln = wrapWords(para, W - U(18) - labW - biasW, W - U(18), fs - 2, false, 3);
+    for (size_t i = 0; i < ln.size(); i++)
+        text((short)(x0 + U(9) + (i == 0 ? labW : 0)), (short)(l1 + (short)i * U(14)), ln[i].c_str(), C_INK, fs - 2, false, 0);
+    short st = (short)(bt + bh + U(3)), sb = (short)(y0 + H - U(3));
+    short cw = (short)((W - U(12)) / 3);
+    for (size_t i = 0; i < 3; i++) {
+        short cx = (short)(x0 + U(3) + (short)i * (cw + U(3)));
+        COLOR c = i < D.scn.size() ? colOf(D.scn[i].col) : C_GREY;
+        if (i < D.scn.size() && D.scn[i].col == 'L') c = C_AMBER;          // lime (the fuel colour)
+        if (i < D.scn.size() && D.scn[i].col == 'N') c = C_MUTED;
+        fill(cx, st, (short)(cx + cw), sb, C_BOXBG);
+        frame(cx, st, (short)(cx + cw), sb, c, false);
+        if (i >= D.scn.size()) continue;
+        const dl::Data::Scn& s = D.scn[i];
+        short ty = (short)(st + U(10));
+        int oddW = textW(s.odds.c_str(), fs - 3, false);
+        text((short)(cx + cw - U(6)), ty, s.odds.c_str(), C_MUTED, fs - 3, false, 2);
+        int actW = textW(s.act.c_str(), fs - 1, true);
+        text((short)(cx + cw - U(14) - oddW), ty, s.act.c_str(), C_INK, fs - 1, true, 2);
+        text((short)(cx + U(6)), ty, fit(s.title, cw - U(26) - oddW - actW, fs - 1, true).c_str(), c, fs - 1, true, 0);
+        text((short)(cx + U(6)), (short)(ty + U(17)), fit(s.l1, cw - U(12), fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+        text((short)(cx + U(6)), (short)(ty + U(32)), fit(s.l2, cw - U(12), fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+        if (!s.l3.empty()) text((short)(cx + U(6)), (short)(ty + U(47)), fit(s.l3, cw - U(12), fs - 2, false).c_str(), C_TABONB, fs - 2, false, 0);   // the options there
+    }
+}
+
 void DealerRead::render(const Settings& S) { if (S.layout == 3) renderFull(S); else renderSmall(S); }
 
 void DealerRead::renderSmall(const Settings& S)
@@ -382,11 +448,18 @@ void DealerRead::renderSmall(const Settings& S)
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
     short avail = (short)(paneR - pane.left - U(12));
     short W = (short)(U(860) * S.widthPct / 100); if (W > avail) W = avail; if (W < U(340)) W = U(340);   // (1.2.4) width %
-    short H = S.layout == 0 ? U(176) : (S.layout == 1 ? U(44) : U(22));
+    short H = S.layout == 0 ? U(132) : (S.layout == 1 ? U(44) : U(22));   // (1.2.6) stacked 176 -> 132 (compact, same font)
     if (!D.hasLevel || !D.hasPrice) H = U(40);
+    short HA = U(134);                                    // (1.2.6) the Analyst strip (NOW 3 lines + scenarios 3 lines)
+    short HT = S.show == 1 ? HA : (S.show == 2 ? (short)(H + HA + U(4)) : H);
     short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (S.corner >= 4 ? (short)((pane.left + paneR) / 2 - W / 2) : (short)(pane.left + U(6)));
-    short y0 = (S.corner <= 1 || S.corner == 4) ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
+    short y0 = (S.corner <= 1 || S.corner == 4) ? (short)(pane.bottom - HT - U(6) - S.lift) : (short)(pane.top + U(6));
     x0 = (short)(x0 + S.moveX);                          // (1.2.4) the sideways nudge
+    if (S.show >= 1) {                                    // (1.2.6) the Analyst: on its own, or on top of the Read
+        renderAnalyst(S, x0, y0, W, HA);
+        if (S.show == 1) return;
+        y0 = (short)(y0 + HA + U(4));
+    }
     fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, D.learn);
     char b[200];
@@ -458,14 +531,14 @@ void DealerRead::renderSmall(const Settings& S)
     }
     // (1.2.3, Rassul 2026-09-30: "enough space to make the font a little bigger") every text in the stacked layout +1 pt
     // ---- STACKED (D): row 1 the level, row 2 WHAT TO DO, then the two checklists side by side
-    short r1t = (short)(y0 + U(4)), r1h = U(24), y1 = (short)(r1t + r1h / 2);
+    short r1t = (short)(y0 + U(4)), r1h = U(20), y1 = (short)(r1t + r1h / 2);   // (1.2.6) compact
     fill((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBG);
     frame((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBRD, false);
     short x = (short)(x0 + U(10));
     text(x, y1, lvl.c_str(), C_INK, fs, true, 0); x = (short)(x + textW(lvl.c_str(), fs, true) + U(8));
     if (!lvlMq.empty()) { text(x, y1, lvlMq.c_str(), C_BLUE, fs, true, 0); x = (short)(x + textW(lvlMq.c_str(), fs, true) + U(14)); }
     else x = (short)(x + U(6));
-    short tabW = U(54), tabH = U(16);
+    short tabW = U(54), tabH = U(14);
     for (int i = 0; i < dl::NPHASE; i++) {
         bool on = i == D.phase, done = i < D.phase;
         fill(x, (short)(y1 - tabH / 2), (short)(x + tabW), (short)(y1 + tabH / 2), on ? C_TABON : C_TABOFF);
@@ -485,7 +558,7 @@ void DealerRead::renderSmall(const Settings& S)
     text(x, y1, fit(trade, rx - x, fs - 1, false).c_str(), C_INK, fs - 1, false, 0);
     // (1.2) the chip row: SWEEP - Trapped, TRIGGER - RevBar / RevVol / RevWave (any one lights the TRIGGER tab), each lit
     // chip with its value and its study number (Rassul 2026-09-29)
-    short yc = (short)(r1t + r1h + U(12));
+    short yc = (short)(r1t + r1h + U(10));
     {
         short cx = (short)(x0 + U(10));
         std::string grp;
@@ -500,15 +573,30 @@ void DealerRead::renderSmall(const Settings& S)
             COLOR c = !g.on ? C_GREY : (g.name == "RevBar" ? C_GREEN : g.name == "RevVol" ? 0x0038BDF8 : g.name == "RevWave" ? 0x00A78BFA : 0x0094A3B8);
             int tw = textW(lab.c_str(), fs - 2, g.on) + U(24);
             if (cx + tw > x0 + W - U(8)) break;
-            frame(cx, (short)(yc - U(8)), (short)(cx + tw), (short)(yc + U(8)), c, false);
+            frame(cx, (short)(yc - U(7)), (short)(cx + tw), (short)(yc + U(7)), c, false);
             checkBox((short)(cx + U(3)), yc, U(10), g.on ? "ok" : "wait");
             text((short)(cx + U(17)), yc, lab.c_str(), g.on ? c : C_MUTED, fs - 2, g.on, 0);
             cx = (short)(cx + tw + U(5));
         }
+        // (1.2.6, Rassul 2026-09-30: "adding tape and charm at the top in the already available space is fine") TAPE + CHARM
+        // in the rest of the chip row: check box, name, the reason - no extra height
+        short room = (short)(x0 + W - U(10) - (cx + U(14)));
+        if (!D.xrows.empty() && room > U(120)) {
+            short xx = (short)(cx + U(14)), each = (short)(room / (short)D.xrows.size());
+            for (size_t i = 0; i < D.xrows.size() && i < 2; i++) {
+                const dl::Row& q = D.xrows[i];
+                checkBox(xx, yc, U(10), q.st);
+                text((short)(xx + U(14)), yc, q.n.c_str(), stCol(q.st) == C_GREY ? C_MUTED : stCol(q.st), fs - 2, true, 0);
+                short nx = (short)(xx + U(14) + textW(q.n.c_str(), fs - 2, true) + U(6));
+                std::string w = q.why; size_t cp = w.find(": "); if (cp != std::string::npos && cp < 20) w = w.substr(cp + 2);
+                text(nx, yc, fit(w, xx + each - nx - U(10), fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
+                xx = (short)(xx + each);
+            }
+        }
     }
-    short y2 = (short)(yc + U(18));
+    short y2 = (short)(yc + U(15));
     if (S.todo) text((short)(x0 + U(10)), y2, fit(">> " + D.doText, W - U(20), fs - 1, true).c_str(), C_DOTXT, fs - 1, true, 0);
-    short ct = (short)(y2 + U(10)), cb = (short)(y0 + H - U(4)), cw = (short)((W - U(12)) / 2);
+    short ct = (short)(y2 + U(9)), cb = (short)(y0 + H - U(4)), cw = (short)((W - U(12)) / 2);
     for (int k = 0; k < 2; k++) {
         short cx = (short)(x0 + U(4) + k * (cw + U(4)));
         const std::vector<dl::Row>& rows = k == 0 ? D.wall : D.fuel;
@@ -516,10 +604,11 @@ void DealerRead::renderSmall(const Settings& S)
         std::string sc = k == 0 ? D.wallScore : D.fuelScore; char scol = k == 0 ? D.wallCol : D.fuelCol;
         fill(cx, ct, (short)(cx + cw), cb, C_BOXBG);
         frame(cx, ct, (short)(cx + cw), cb, tc, false);
-        short ty = (short)(ct + U(12));
+        short ty = (short)(ct + U(10));
+        bool noWallBox = k == 0 && rows.empty() && !D.noWall.empty();
         int scW = textW(sc.c_str(), fs, true);
         std::string title = fit(k == 0 ? D.wallTitle : (D.fuelTitle.empty() ? std::string("FUEL") : D.fuelTitle), cw - scW - U(24), fs, true);
-        text((short)(cx + U(6)), ty, title.c_str(), tc, fs, true, 0);
+        if (!noWallBox) text((short)(cx + U(6)), ty, title.c_str(), tc, fs, true, 0);
         if (false && S.explain) {   // (1.1.2) no text on the chart beyond the checklist itself - the description explains   // (1.1) what the box answers, in the room left on the title line
             const char* q = k == 0 ? "  is the wall getting stronger? (gamma)" : "  are dealers reversing their trade? (delta flow)";
             int used = textW(title.c_str(), fs - 1, true) + U(6);
@@ -527,20 +616,21 @@ void DealerRead::renderSmall(const Settings& S)
             text((short)(cx + U(6) + used), ty, qq.c_str(), C_MUTED, fs - 3, false, 0);
         }
         text((short)(cx + cw - U(6)), ty, sc.c_str(), colOf(scol), fs, true, 2);
-        if (k == 0 && rows.empty() && !D.noWall.empty()) {   // (1.2.4) no wall: say it once, big, and why
-            text((short)(cx + cw / 2), (short)((ct + cb) / 2 - U(6)), "NO WALL", C_MUTED, fs + 6, true, 1);
-            text((short)(cx + cw / 2), (short)((ct + cb) / 2 + U(20)), fit(D.noWall, cw - U(16), fs - 1, false).c_str(), C_INK, fs - 1, false, 1);
+        if (noWallBox) {                                  // (1.2.6) compact: NO WALL + why, top-left (no big empty box)
+            text((short)(cx + U(8)), ty, "NO WALL", C_MUTED, fs, true, 0);
+            std::vector<std::string> ln = wrapWords(D.noWall, cw - U(16), cw - U(16), fs - 1, false, 3);
+            for (size_t i = 0; i < ln.size(); i++) text((short)(cx + U(8)), (short)(ty + U(17) + (short)i * U(15)), ln[i].c_str(), C_INK, fs - 1, false, 0);
             continue;
         }
-        short ry = (short)(ct + U(33));
+        short ry = (short)(ct + U(27));
         for (size_t i = 0; i < rows.size() && i < 3; i++) {
             const dl::Row& r = rows[i];
             checkBox((short)(cx + U(6)), ry, box, r.st);
             text((short)(cx + U(26)), ry, r.n.c_str(), C_INK, fs - 1, true, 0);
-            meter((short)(cx + U(84)), ry, U(84), U(12), r);
+            meter((short)(cx + U(84)), ry, U(84), U(10), r);
             short wx = (short)(cx + U(226));      // (1.1.3) past the meter AND its value label ("7% vol" ran into the reason)
             text(wx, ry, fit(r.why, cw - U(232), fs - 1, false).c_str(), C_INK, fs - 1, false, 0);
-            ry = (short)(ry + U(23));
+            ry = (short)(ry + U(17));
         }
     }
 }
@@ -550,7 +640,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2.5\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2.6\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -567,6 +657,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. The HOW TO READ guide is below; open the three lists for every check explained.");
-    p->setVersion("1.2.5");
+    p->setVersion("1.2.6");
     return p;
 }

@@ -42,6 +42,10 @@ struct Data {
     std::vector<Trig> trig;
     std::string doText, bookLine; bool learn = false;
     std::string fuelTitle, keyName, mqName, sideWord, noWall;   // (file 1.2) the price level then the MenthorQ level; NO WALL text
+    std::vector<Row> xrows;                                       // (Read 1.2.6) TAPE / CHARM
+    std::string aNow, aTime, aBias; char aBiasCol = 'N';          // (Read 1.2.6) the Analyst: NOW paragraph + bias
+    struct Scn { std::string title, act, odds, l1, l2, l3; char col = 'N'; };
+    std::vector<Scn> scn;                                         // the Analyst's 3 scenarios
 };
 
 // (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
@@ -115,6 +119,10 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "FUELHDR" && t.size() >= 4) { D.fuelTitle = t[1]; D.fuelScore = t[2]; D.fuelCol = col1(t[3]); return true; }
     if (k == "NAMES" && t.size() >= 4) { D.keyName = t[1]; D.mqName = t[2]; D.sideWord = t[3]; return true; }
     if (k == "NOWALL" && t.size() >= 2) { D.noWall = t[1]; return true; }
+    if (k == "XROW") { Row r; if (!parseRow(t, r)) return false; D.xrows.push_back(r); return true; }
+    if (k == "ANOW" && t.size() >= 2) { D.aNow = t[1]; D.aTime = t.size() >= 3 ? t[2] : ""; return true; }
+    if (k == "ABIAS" && t.size() >= 3) { D.aBias = t[1]; D.aBiasCol = col1(t[2]); return true; }
+    if (k == "ASCN" && t.size() >= 7) { Data::Scn s; s.title = t[1]; s.act = t[2]; s.odds = t[3]; s.col = col1(t[4]); s.l1 = t[5]; s.l2 = t[6]; if (t.size() >= 8) s.l3 = t[7]; D.scn.push_back(s); return true; }
     if (k == "WALLROW") { Row r; if (!parseRow(t, r)) return false; D.wall.push_back(r); return true; }
     if (k == "FUELROW") { Row r; if (!parseRow(t, r)) return false; D.fuel.push_back(r); return true; }
     if (k == "TRADE" && t.size() >= 4) { KV v; v.k = t[1]; v.v = t[2]; v.col = col1(t[3]); D.trade.push_back(v); return true; }
