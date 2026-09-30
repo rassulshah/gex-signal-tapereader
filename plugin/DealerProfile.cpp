@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.1.1";
+static const char* DP_VERSION = "1.2";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -248,6 +248,13 @@ void DealerProfile::render(const Settings& S)
             if (dl::fits(textW(gl.c_str(), S.font, true), Lg)) textRJ((short)(anchor - 4), (short)((gt + gb) / 2), gl.c_str(), C_DARK, S.font, true);
             if (dl::fits(textW(dlab.c_str(), S.font, true), Ld)) textRJ((short)(anchor - 4), (short)((dt_ + db) / 2), dlab.c_str(), N.d < 0 ? 0x00FFFFFF : C_DARK, S.font, true);
         }
+        if (S.labels && !N.far && nodeH >= S.font - 3) {   // (1.2) the strength share right OUTSIDE each node: % of a normal 15 min of volume
+            int reachG = Lg; if (S.snap && Ls > reachG) reachG = Ls;
+            if (S.whisk) { int a2 = dl::barLen(N.lo, gmax, W), b2 = dl::barLen(N.hi, gmax, W); if (a2 > reachG) reachG = a2; if (b2 > reachG) reachG = b2; }
+            std::string gs = dl::pctTxt(N.gp), ds = dl::pctTxt(N.dp);
+            if (!gs.empty() && (Lg > 0)) textRJ((short)(anchor - reachG - 4), (short)((gt + gb) / 2), gs.c_str(), N.g >= 0 ? C_WALL : C_FUEL, S.font - 1, true);
+            if (!ds.empty() && (Ld > 0)) textRJ((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), ds.c_str(), N.d >= 0 ? C_BUY : C_SELL, S.font - 1, true);
+        }
     }
     // whole-book banner + legend (top-left of the pane)
     short bx = (short)(pane.left + 8), by = (short)(pane.top + 6);
@@ -304,7 +311,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.1.1");
+    p->setDescription("LRA Dealer Profile. Two nodes per strike. GAMMA (upper): how hard the strike pushes back when price gets there - blue WALL stops a sweep, amber FUEL chases it. DELTA (lower): futures dealers must trade on the way there - the push into your level and the stock they unwind after the turn. The % right outside each node = its size as a share of a normal 15 minutes of futures volume (how much of the market dealers must be). Example 9/29 Gold: 4215 gamma +32 (wall) with SELL 81 on the way = the high. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
+    p->setVersion("1.2");
     return p;
 }

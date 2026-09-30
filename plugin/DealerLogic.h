@@ -23,7 +23,8 @@
 
 namespace dl {
 
-struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0; bool far = false; };
+struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0, gp = -1, dp = -1; bool far = false; };   // gp / dp: % of a normal 15 min of volume (-1 = none)
+struct Trig { std::string group, name, val, note; bool on = false; };
 struct Row  { std::string n, lab, st, why; bool hasV = false; float v = 0; };
 struct KV   { std::string k, v; char col = 'W'; };
 
@@ -37,6 +38,7 @@ struct Data {
     std::string wallTitle, wallScore; char wallCol = 'N'; std::vector<Row> wall;
     std::string fuelScore; char fuelCol = 'N'; std::vector<Row> fuel;
     std::vector<KV> trade; std::vector<KV> flags;
+    std::vector<Trig> trig;
     std::string doText, bookLine; bool learn = false;
 };
 
@@ -81,6 +83,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "BOOK" && t.size() >= 2) { D.book = f(t[1]); D.hasBook = true; return true; }
     if (k == "NODE" && t.size() >= 8) {
         Node n; n.k = f(t[1]); n.g = f(t[2]); n.lo = f(t[3]); n.hi = f(t[4]); n.snap = f(t[5]); n.d = f(t[6]); n.far = t[7] == "1";
+        if (t.size() >= 10) { if (!t[8].empty()) n.gp = f(t[8]); if (!t[9].empty()) n.dp = f(t[9]); }   // (1.1) the strength share
         if (n.k > 0) { D.nodes.push_back(n); return true; }
         return false;
     }
@@ -89,7 +92,7 @@ inline bool parseLine(Data& D, const std::string& line)
         if (t.size() < 6) return false;
         D.hasLevel = true; D.lvlLabel = t[1]; D.lvlPx = f(t[2]); D.phase = atoi(t[3].c_str()); D.ctx = t[4];
         if (D.phase < 0) D.phase = 0;
-        if (D.phase > 4) D.phase = 4;
+        if (D.phase > 5) D.phase = 5;
         D.side = (t.size() >= 6 && !t[5].empty()) ? t[5][0] : 'R';
         return true;
     }
@@ -100,6 +103,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "TRADE" && t.size() >= 4) { KV v; v.k = t[1]; v.v = t[2]; v.col = col1(t[3]); D.trade.push_back(v); return true; }
     if (k == "FLAG" && t.size() >= 3) { KV v; v.k = t[1]; v.col = col1(t[2]); D.flags.push_back(v); return true; }
     if (k == "DO" && t.size() >= 2) { D.doText = t[1]; return true; }
+    if (k == "TRIG" && t.size() >= 6) { Trig g; g.group = t[1]; g.name = t[2]; g.on = t[3] == "1"; g.val = t[4]; g.note = t[5]; D.trig.push_back(g); return true; }
     if (k == "BOOKLINE" && t.size() >= 2) { D.bookLine = t[1]; return true; }
     if (k == "LEARN" && t.size() >= 2) { D.learn = t[1] == "1"; return true; }
     return false;
@@ -199,6 +203,10 @@ template <class W> inline std::vector<std::string> wrap(const std::string& text,
     return out;
 }
 
-inline const char* phaseName(int i) { static const char* P[] = { "APPROACH", "SWEEP", "RECLAIM", "RETEST", "TRADE" }; return (i >= 0 && i < 5) ? P[i] : ""; }
+// (1.1) six phases: TRIGGER = RevBar / RevVol / RevWave printed (Rassul 2026-09-29)
+static const int NPHASE = 6;
+inline const char* phaseName(int i) { static const char* P[] = { "APPROACH", "SWEEP", "TRIGGER", "RECLAIM", "RETEST", "TRADE" }; return (i >= 0 && i < NPHASE) ? P[i] : ""; }
+// the strength share shown right outside a node: "2.8%" under 10, "14%" from 10
+inline std::string pctTxt(float p) { if (p < 0) return ""; char b[16]; if (p < 10) snprintf(b, sizeof(b), "%.1f%%", p); else snprintf(b, sizeof(b), "%.0f%%", p); return b; }
 
 }  // namespace dl

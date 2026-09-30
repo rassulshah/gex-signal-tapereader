@@ -270,8 +270,8 @@ void DealerRead::renderFull(const Settings& S)
     short ly = (short)(y0 + U(18));
     text((short)(x0 + U(10)), ly, b, C_INK, fs + 1, true, 0);
     text((short)(x0 + U(10)), (short)(ly + U(22)), D.ctx.c_str(), C_MUTED, fs - 1, false, 0);
-    short tabY = (short)(ly + U(44)), tabW = U(72), tabH = U(18);
-    for (int i = 0; i < 5; i++) {
+    short tabY = (short)(ly + U(44)), tabW = U(58), tabH = U(18);
+    for (int i = 0; i < dl::NPHASE; i++) {
         short tx = (short)(x0 + U(10) + i * (tabW + U(3)));
         bool on = i == D.phase, done = i < D.phase;
         fill(tx, (short)(tabY - tabH / 2), (short)(tx + tabW), (short)(tabY + tabH / 2), on ? C_TABON : C_TABOFF);
@@ -350,7 +350,7 @@ void DealerRead::renderSmall(const Settings& S)
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
     short avail = (short)(paneR - pane.left - U(12));
     short W = U(860); if (W > avail) W = avail; if (W < U(400)) W = U(400);
-    short H = S.layout == 0 ? U(158) : (S.layout == 1 ? U(44) : U(22));
+    short H = S.layout == 0 ? U(176) : (S.layout == 1 ? U(44) : U(22));
     if (!D.hasLevel || !D.hasPrice) H = U(22);
     short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (short)(pane.left + U(6));
     short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6)) : (short)(pane.top + U(6));
@@ -404,7 +404,9 @@ void DealerRead::renderSmall(const Settings& S)
     if (S.layout == 1) {                                   // ---- COMPACT: two lines
         short y1 = (short)(y0 + U(12)), y2 = (short)(y0 + U(32)), x = (short)(x0 + U(8));
         text(x, y1, lvl.c_str(), C_INK, fs - 1, true, 0); x = (short)(x + textW(lvl.c_str(), fs - 1, true) + U(8));
-        text(x, y1, dl::phaseName(D.phase), C_TABONB, fs - 2, true, 0); x = (short)(x + textW(dl::phaseName(D.phase), fs - 2, true) + U(12));
+        text(x, y1, dl::phaseName(D.phase), C_TABONB, fs - 2, true, 0); x = (short)(x + textW(dl::phaseName(D.phase), fs - 2, true) + U(6));
+        for (size_t i = 0; i < D.trig.size(); i++) if (D.trig[i].on) { text(x, y1, D.trig[i].name.c_str(), C_GREEN, fs - 3, true, 0); x = (short)(x + textW(D.trig[i].name.c_str(), fs - 3, true) + U(6)); }
+        x = (short)(x + U(6));
         std::string wt = fit(D.wallTitle, U(170), fs - 2, true);
         text(x, y1, wt.c_str(), wcol, fs - 2, true, 0); x = (short)(x + textW(wt.c_str(), fs - 2, true) + U(8));
         for (size_t i = 0; i < D.wall.size() && i < 3; i++) { checkBox(x, y1, box, D.wall[i].st); x = (short)(x + box + U(3)); text(x, y1, D.wall[i].n.c_str(), C_MUTED, fs - 3, false, 0); x = (short)(x + textW(D.wall[i].n.c_str(), fs - 3, false) + U(8)); }
@@ -424,13 +426,13 @@ void DealerRead::renderSmall(const Settings& S)
     frame((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBRD, false);
     short x = (short)(x0 + U(10));
     text(x, y1, lvl.c_str(), C_INK, fs - 1, true, 0); x = (short)(x + textW(lvl.c_str(), fs - 1, true) + U(14));
-    short tabW = U(58), tabH = U(14);
-    for (int i = 0; i < 5; i++) {
+    short tabW = U(50), tabH = U(14);
+    for (int i = 0; i < dl::NPHASE; i++) {
         bool on = i == D.phase, done = i < D.phase;
         fill(x, (short)(y1 - tabH / 2), (short)(x + tabW), (short)(y1 + tabH / 2), on ? C_TABON : C_TABOFF);
         frame(x, (short)(y1 - tabH / 2), (short)(x + tabW), (short)(y1 + tabH / 2), on ? C_TABONB : C_TABOFB, false);
-        text((short)(x + tabW / 2), y1, dl::phaseName(i), on ? C_INK : (done ? C_GREEN : C_MUTED), fs - 3, true, 1);
-        x = (short)(x + tabW + U(3));
+        text((short)(x + tabW / 2), y1, dl::phaseName(i), on ? C_INK : (done ? C_GREEN : C_MUTED), fs - 4, true, 1);
+        x = (short)(x + tabW + U(2));
     }
     x = (short)(x + U(12));
     // flags (news) and stale at the right end, the trade numbers between
@@ -442,7 +444,30 @@ void DealerRead::renderSmall(const Settings& S)
         text(rx, y1, f.k.c_str(), colOf(f.col), fs - 2, true, 2); rx = (short)(rx - textW(f.k.c_str(), fs - 2, true) - U(10));
     }
     text(x, y1, fit(trade, rx - x, fs - 2, false).c_str(), C_INK, fs - 2, false, 0);
-    short y2 = (short)(r1t + r1h + U(12));
+    // (1.2) the chip row: SWEEP - Trapped, TRIGGER - RevBar / RevVol / RevWave (any one lights the TRIGGER tab), each lit
+    // chip with its value and its study number (Rassul 2026-09-29)
+    short yc = (short)(r1t + r1h + U(11));
+    {
+        short cx = (short)(x0 + U(10));
+        std::string grp;
+        for (size_t i = 0; i < D.trig.size(); i++) {
+            const dl::Trig& g = D.trig[i];
+            if (g.group != grp) {
+                if (!grp.empty()) cx = (short)(cx + U(8));
+                grp = g.group;
+                text(cx, yc, grp.c_str(), C_MUTED, fs - 3, true, 0); cx = (short)(cx + textW(grp.c_str(), fs - 3, true) + U(6));
+            }
+            std::string lab = g.name + (g.on && !g.val.empty() ? "  " + g.val : "") + (g.on && g.group == "TRIGGER" ? "  - " + g.note : "");
+            COLOR c = !g.on ? C_GREY : (g.name == "RevBar" ? C_GREEN : g.name == "RevVol" ? 0x0038BDF8 : g.name == "RevWave" ? 0x00A78BFA : 0x0094A3B8);
+            int tw = textW(lab.c_str(), fs - 3, g.on) + U(22);
+            if (cx + tw > x0 + W - U(8)) break;
+            frame(cx, (short)(yc - U(7)), (short)(cx + tw), (short)(yc + U(7)), c, false);
+            checkBox((short)(cx + U(3)), yc, U(9), g.on ? "ok" : "wait");
+            text((short)(cx + U(16)), yc, lab.c_str(), g.on ? c : C_MUTED, fs - 3, g.on, 0);
+            cx = (short)(cx + tw + U(5));
+        }
+    }
+    short y2 = (short)(yc + U(17));
     if (S.todo) text((short)(x0 + U(10)), y2, fit(">> " + D.doText, W - U(20), fs - 2, true).c_str(), C_DOTXT, fs - 2, true, 0);
     short ct = (short)(y2 + U(10)), cb = (short)(y0 + H - U(4)), cw = (short)((W - U(12)) / 2);
     for (int k = 0; k < 2; k++) {
@@ -481,7 +506,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.1.3\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -497,7 +522,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerRead *p = new DealerRead();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box (gamma): SPEED = price walking into the gamma peak, COLOR = 0DTE strength growing with time, ZOMMA = IV not loosening the wall. FUEL box (delta flow): COVER = dealers actually reversing (5%+ of volume), GAMMA = their short gamma shrinking, VANNA = IV helping. Green = on your side. Top row: phase, stop, target, R:R. Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
-    p->setVersion("1.1.3");
+    p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box (gamma): SPEED = price walking into the gamma peak, COLOR = 0DTE strength growing with time, ZOMMA = IV not loosening the wall. FUEL box (delta flow): COVER = dealers actually reversing (5%+ of volume), GAMMA = their short gamma shrinking, VANNA = IV helping. Green = on your side. Top row: phase (APPROACH, SWEEP, TRIGGER, RECLAIM, RETEST, TRADE), stop, target, R:R. Chips: SWEEP - Trapped (breakout traders stuck = fuel); TRIGGER - RevBar (big turn bar, holds 77%), RevVol (2x volume turn bar, no edge yet), RevWave (first leg away 1.9x the average, holds 88-95%, enter on the first pullback). Reads lsFlexLevels\\LRA-Dealer-<MKT>.csv");
+    p->setVersion("1.2");
     return p;
 }
