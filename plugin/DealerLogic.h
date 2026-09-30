@@ -40,6 +40,7 @@ struct Data {
     std::vector<KV> trade; std::vector<KV> flags;
     std::vector<Trig> trig;
     std::string doText, bookLine; bool learn = false;
+    std::string fuelTitle, keyName, mqName, sideWord, noWall;   // (file 1.2) the price level then the MenthorQ level; NO WALL text
 };
 
 inline std::vector<std::string> split(const std::string& line, char sep = '|')
@@ -98,7 +99,9 @@ inline bool parseLine(Data& D, const std::string& line)
         return true;
     }
     if (k == "WALLHDR" && t.size() >= 4) { D.wallTitle = t[1]; D.wallScore = t[2]; D.wallCol = col1(t[3]); return true; }
-    if (k == "FUELHDR" && t.size() >= 4) { D.fuelScore = t[2]; D.fuelCol = col1(t[3]); return true; }
+    if (k == "FUELHDR" && t.size() >= 4) { D.fuelTitle = t[1]; D.fuelScore = t[2]; D.fuelCol = col1(t[3]); return true; }
+    if (k == "NAMES" && t.size() >= 4) { D.keyName = t[1]; D.mqName = t[2]; D.sideWord = t[3]; return true; }
+    if (k == "NOWALL" && t.size() >= 2) { D.noWall = t[1]; return true; }
     if (k == "WALLROW") { Row r; if (!parseRow(t, r)) return false; D.wall.push_back(r); return true; }
     if (k == "FUELROW") { Row r; if (!parseRow(t, r)) return false; D.fuel.push_back(r); return true; }
     if (k == "TRADE" && t.size() >= 4) { KV v; v.k = t[1]; v.v = t[2]; v.col = col1(t[3]); D.trade.push_back(v); return true; }

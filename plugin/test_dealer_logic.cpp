@@ -72,6 +72,16 @@ int main()
     CHECK(dl::fmtPx(4203.8f, "GC") == "4,203.80" && dl::fmtPx(4200.0f, "GC", true) == "4,200" && dl::fmtPx(4.9512f, "HG") == "4.9512" && dl::fmtPx(27123.25f, "NQ") == "27,123.25", "prices with separators, decimals by market");
     std::vector<std::string> w = dl::wrap("Expect the sweep into a stiffening wall at 4,215. Short only after reclaim.", 30, [](const std::string& s) { return (int)s.size(); });
     CHECK(w.size() == 3 && w[0].size() <= 30 && w[2] == "Short only after reclaim.", "word wrap by measured width");
+    {   // (Read 1.2.4) the price level then the MenthorQ level; NO WALL; the FUEL title
+        dl::Data E;
+        dl::parseLine(E, "NAMES|ONL 4,198|PS 0D / HVL 0D 4,200|Support");
+        dl::parseLine(E, "WALLHDR|No Wall||N");
+        dl::parseLine(E, "NOWALL|4,200 is FUEL (-13 per 5.8 pts) - it holds only if dealers cover (see FUEL)");
+        dl::parseLine(E, "FUELHDR|FUEL for ONL 4,198 + PS 0D / HVL 0D 4,200 Support|0/3 AT RISK|R");
+        CHECK(E.keyName == "ONL 4,198" && E.mqName == "PS 0D / HVL 0D 4,200" && E.sideWord == "Support" && E.wall.empty()
+              && E.wallTitle == "No Wall" && E.noWall.find("FUEL (-13") != std::string::npos
+              && E.fuelTitle == "FUEL for ONL 4,198 + PS 0D / HVL 0D 4,200 Support" && E.fuelScore == "0/3 AT RISK", "names / no wall / fuel title");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

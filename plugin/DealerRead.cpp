@@ -55,9 +55,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift; };
+struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct; };
 static PIdx PX;
-struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -112,7 +112,7 @@ int cppExtension::setup(void)
     int pc = 0;
     // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
     PX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    PX.corner = pc++; setListParameter("Dock at", 0, "Bottom left;Bottom right;Top left;Top right", 0, SL);
+    PX.corner = pc++; setListParameter("Position", 0, "Bottom left;Bottom right;Top left;Top right;Bottom centre;Top centre", 0, SL);   // (1.2.4) + the two centres (appended: saved 0-3 unchanged)
     PX.font   = pc++; setIntegerParameter("Font size (pt)", 10, 0);
     PX.trade  = pc++; setBoolParameter("TRADE line", true, SL);
     PX.todo   = pc++; setBoolParameter("WHAT TO DO box", true);
@@ -134,19 +134,24 @@ int cppExtension::setup(void)
     pc++; setBoolParameter("3 TRIGGER chip: RevWave leg 1.9x = the turn printed", false);
     pc++; setBoolParameter("   (holds 88-95%) - any trigger lights the TRIGGER tab", false);
     pc++; setBoolParameter("4 >> WHAT TO DO: short on the first pullback", false);
-    pc++; setBoolParameter("5 LEVEL box = the wall behind your stop: 3/3 SOLID", false);
+    pc++; setBoolParameter("5 WALL box = the wall behind your stop: 3/3 SOLID", false);
     pc++; setBoolParameter("   SPEED +4 COLOR +5 ZOMMA +1 = retest meets a stronger wall", false);
     pc++; setBoolParameter("6 FUEL box = what powers the move: 1/3 AT RISK", false);
     pc++; setBoolParameter("   COVER 0% vol = dealers not buying back yet (needs 5%+)", false);
     pc++; setBoolParameter("7 VERDICT: in the trade, wall solid, fuel not confirmed ->", false);
     pc++; setBoolParameter("   tighten the stop / take target 1 if COVER stays red", false);
+    // (1.2.4, Rassul 2026-09-30: "add a placement setting") appended LAST so saved values keep their positions
+    PX.moveX    = pc++; setIntegerParameter("Move right (px, - = left)", 0, 0);
+    PX.widthPct = pc++; setIntegerParameter("Width (% of normal, 40-100)", 100, 0, SL);
     return RTX_OK;
 }
 
 void DealerRead::readSettings(Settings& S)
 {
     S.market = getListIndex(PX.market);
-    S.corner = getListIndex(PX.corner); if (S.corner < 0 || S.corner > 3) S.corner = 0;
+    S.corner = getListIndex(PX.corner); if (S.corner < 0 || S.corner > 5) S.corner = 0;
+    S.moveX = getIntegerValue(PX.moveX); if (S.moveX < -3000 || S.moveX > 3000) S.moveX = 0;
+    S.widthPct = getIntegerValue(PX.widthPct); if (S.widthPct < 40 || S.widthPct > 100) S.widthPct = 100;   // a fresh dialog can read 0
     S.font = getIntegerValue(PX.font); if (S.font < 7) S.font = 10;   // (1.0.1) a first dialog can show ??? / a wrong number if (S.font > 20) S.font = 20;
     S.trade = isBoxChecked(PX.trade) != 0; S.todo = isBoxChecked(PX.todo) != 0;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
@@ -268,10 +273,11 @@ void DealerRead::renderFull(const Settings& S)
     short paneR = pane.right;
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
     bool top = S.trade;
-    short W = U(1466), H = top ? U(176) : U(150);
+    short W = (short)(U(1466) * S.widthPct / 100), H = top ? U(176) : U(150);
     if (!D.hasLevel) { W = U(900); H = U(44); }
-    short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (short)(pane.left + U(6));
-    short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
+    short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (S.corner >= 4 ? (short)((pane.left + paneR) / 2 - W / 2) : (short)(pane.left + U(6)));
+    short y0 = (S.corner <= 1 || S.corner == 4) ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
+    x0 = (short)(x0 + S.moveX);                          // (1.2.4) the sideways nudge
     fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, D.learn);
 
@@ -336,7 +342,7 @@ void DealerRead::renderFull(const Settings& S)
     }
     COLOR wcol = (D.wallCol == 'A' || D.wall.empty()) ? C_AMBER : C_BLUE;
     checklist(cx, cy, cw, ch, D.wallTitle, wcol, D.wallScore, D.wallCol, D.wall, true, fs);
-    checklist((short)(cx + cw + gap), cy, cw, ch, "FUEL", C_AMBER, D.fuelScore, D.fuelCol, D.fuel, false, fs);
+    checklist((short)(cx + cw + gap), cy, cw, ch, D.fuelTitle.empty() ? std::string("FUEL") : D.fuelTitle, C_AMBER, D.fuelScore, D.fuelCol, D.fuel, false, fs);
     // stale
     RTDATE now = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(now, &t);
     double age = dl::staleMin(D.asofSo + S.clock * 60.0, t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec);
@@ -371,11 +377,12 @@ void DealerRead::renderSmall(const Settings& S)
     short paneR = pane.right;
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
     short avail = (short)(paneR - pane.left - U(12));
-    short W = U(860); if (W > avail) W = avail; if (W < U(400)) W = U(400);
+    short W = (short)(U(860) * S.widthPct / 100); if (W > avail) W = avail; if (W < U(340)) W = U(340);   // (1.2.4) width %
     short H = S.layout == 0 ? U(176) : (S.layout == 1 ? U(44) : U(22));
     if (!D.hasLevel || !D.hasPrice) H = U(40);
-    short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (short)(pane.left + U(6));
-    short y0 = (S.corner <= 1) ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
+    short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (S.corner >= 4 ? (short)((pane.left + paneR) / 2 - W / 2) : (short)(pane.left + U(6)));
+    short y0 = (S.corner <= 1 || S.corner == 4) ? (short)(pane.bottom - H - U(6) - S.lift) : (short)(pane.top + U(6));
+    x0 = (short)(x0 + S.moveX);                          // (1.2.4) the sideways nudge
     fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_GROUND);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, D.learn);
     char b[200];
@@ -406,6 +413,8 @@ void DealerRead::renderSmall(const Settings& S)
     }
     sprintf_s(b, sizeof(b), "%s %s  %s", mkt.c_str(), dl::fmtPx(D.lvlPx, mkt).c_str(), D.lvlLabel.c_str());
     std::string lvl = b;
+    std::string lvlMq;                                     // (1.2.4) "GC  ONL 4,198 + MQ PS 0D / HVL 0D 4,200" (the MQ part cyan)
+    if (!D.keyName.empty()) { lvl = mkt + "  " + D.keyName; if (!D.mqName.empty()) lvlMq = "+ MQ " + D.mqName; }
     COLOR wcol = (D.wallCol == 'A' || D.wall.empty()) ? C_AMBER : C_BLUE;
     short box = U(12);
 
@@ -449,7 +458,9 @@ void DealerRead::renderSmall(const Settings& S)
     fill((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBG);
     frame((short)(x0 + U(4)), r1t, (short)(x0 + W - U(4)), (short)(r1t + r1h), C_DOBRD, false);
     short x = (short)(x0 + U(10));
-    text(x, y1, lvl.c_str(), C_INK, fs, true, 0); x = (short)(x + textW(lvl.c_str(), fs, true) + U(14));
+    text(x, y1, lvl.c_str(), C_INK, fs, true, 0); x = (short)(x + textW(lvl.c_str(), fs, true) + U(8));
+    if (!lvlMq.empty()) { text(x, y1, lvlMq.c_str(), C_BLUE, fs, true, 0); x = (short)(x + textW(lvlMq.c_str(), fs, true) + U(14)); }
+    else x = (short)(x + U(6));
     short tabW = U(54), tabH = U(16);
     for (int i = 0; i < dl::NPHASE; i++) {
         bool on = i == D.phase, done = i < D.phase;
@@ -497,13 +508,13 @@ void DealerRead::renderSmall(const Settings& S)
     for (int k = 0; k < 2; k++) {
         short cx = (short)(x0 + U(4) + k * (cw + U(4)));
         const std::vector<dl::Row>& rows = k == 0 ? D.wall : D.fuel;
-        COLOR tc = k == 0 ? wcol : C_AMBER;
+        COLOR tc = k == 0 ? (rows.empty() && !D.noWall.empty() ? C_GREY : wcol) : C_AMBER;
         std::string sc = k == 0 ? D.wallScore : D.fuelScore; char scol = k == 0 ? D.wallCol : D.fuelCol;
         fill(cx, ct, (short)(cx + cw), cb, C_BOXBG);
         frame(cx, ct, (short)(cx + cw), cb, tc, false);
         short ty = (short)(ct + U(12));
         int scW = textW(sc.c_str(), fs, true);
-        std::string title = fit(k == 0 ? D.wallTitle : std::string("FUEL"), cw - scW - U(24), fs, true);
+        std::string title = fit(k == 0 ? D.wallTitle : (D.fuelTitle.empty() ? std::string("FUEL") : D.fuelTitle), cw - scW - U(24), fs, true);
         text((short)(cx + U(6)), ty, title.c_str(), tc, fs, true, 0);
         if (false && S.explain) {   // (1.1.2) no text on the chart beyond the checklist itself - the description explains   // (1.1) what the box answers, in the room left on the title line
             const char* q = k == 0 ? "  is the wall getting stronger? (gamma)" : "  are dealers reversing their trade? (delta flow)";
@@ -512,6 +523,11 @@ void DealerRead::renderSmall(const Settings& S)
             text((short)(cx + U(6) + used), ty, qq.c_str(), C_MUTED, fs - 3, false, 0);
         }
         text((short)(cx + cw - U(6)), ty, sc.c_str(), colOf(scol), fs, true, 2);
+        if (k == 0 && rows.empty() && !D.noWall.empty()) {   // (1.2.4) no wall: say it once, big, and why
+            text((short)(cx + cw / 2), (short)((ct + cb) / 2 - U(6)), "NO WALL", C_MUTED, fs + 6, true, 1);
+            text((short)(cx + cw / 2), (short)((ct + cb) / 2 + U(20)), fit(D.noWall, cw - U(16), fs - 1, false).c_str(), C_INK, fs - 1, false, 1);
+            continue;
+        }
         short ry = (short)(ct + U(33));
         for (size_t i = 0; i < rows.size() && i < 3; i++) {
             const dl::Row& r = rows[i];
@@ -530,7 +546,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2.3\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2.4\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -547,6 +563,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. The HOW TO READ guide is below; open the three lists for every check explained.");
-    p->setVersion("1.2.3");
+    p->setVersion("1.2.4");
     return p;
 }
