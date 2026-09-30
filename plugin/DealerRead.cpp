@@ -56,9 +56,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show; };
+struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
-struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 0; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -110,46 +110,31 @@ int DealerRead::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); 
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
-    setParameterDialogHeight(18);   // (1.2.3) room for the how-to guide
+    // (1.3.0, Rassul 2026-09-30: "look at all the checkboxes that are not suppose to be there") the guide is no longer a
+    // stack of checkbox rows: every explanation is an "(open)" list, the only checkboxes left are real switches.
+    // Parameter version 2 = a fresh, clean layout (the old version-1 rows are dropped once). Defaults = Rassul's settings.
+    setParameterVersion(2);
+    setParameterDialogHeight(9);
     const short SL = kParmAppendSameLine;
     int pc = 0;
-    // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
-    PX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    PX.corner = pc++; setListParameter("Position", 0, "Bottom left;Bottom right;Top left;Top right;Bottom centre;Top centre", 0, SL);   // (1.2.4) + the two centres (appended: saved 0-3 unchanged)
-    PX.font   = pc++; setIntegerParameter("Font size (pt)", 10, 0);
-    PX.trade  = pc++; setBoolParameter("TRADE line", true, SL);
-    PX.todo   = pc++; setBoolParameter("WHAT TO DO box", true);
-    PX.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
-    PX.layout = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");
-    PX.explain = pc++; setBoolParameter("(unused)", false, SL);
-    // (1.2.1) HOW TO READ IT, in the settings (the description box cuts long text off); appended LAST, nothing reads them
-    PX.keyLvl  = pc++; setListParameter("WALL box (open to read)", 0, "LEVEL box = is the wall getting stronger? (gamma) - titled by its MenthorQ level;SPEED = price walking INTO the gamma peak (after the sweep: a retest meets a stronger wall);COLOR = today's options getting stronger with time (0DTE);ZOMMA = IV steady or falling - IV rising loosens the wall (the veto);SOLID = all 3 green after the sweep / AT RISK = one turned red");
-    PX.keyFuel = pc++; setListParameter("FUEL box (open to read)", 0, "FUEL box = are dealers reversing their trade? (delta flow);COVER = dealers trading your way >= 5% of 15-min volume;GAMMA = their short gamma shrinking = the fuel is being used;VANNA = IV falling = their hedges unwind your way;STORED n = futures they will trade on the way (before the sweep);PRIMED = COVER + one more green / AT RISK = no real covering");
-    PX.lift    = pc++; setIntegerParameter("Lift from the bottom (px)", 30, 0);   // (1.2.2) clear of the chart's button bar
-    PX.keyTrig = pc++; setListParameter("Phases/triggers (open)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");      // (1.1) appended LAST: saved positions stay put
-    // (1.2.3) HOW TO READ guide, one row per line. (1.2.6) IRT shows only ~30 characters of a row that starts with a
-    // digit or a space - every line is now <= 30 characters and starts with a letter. Nothing reads them.
-    pc++; setBoolParameter("HOW TO READ IT", false);
-    pc++; setBoolParameter("Example: Gold 9/29 09:36 short", false);
-    pc++; setBoolParameter("Step 1  TABS = where trade is", false);
-    pc++; setBoolParameter("Approach>Sweep>Trigger>Reclaim", false);
-    pc++; setBoolParameter("Step 2  SWEEP chip: Trapped", false);
-    pc++; setBoolParameter("Trapped: 1,402 lots = stuck", false);
-    pc++; setBoolParameter("Step 3  TRIGGER chip: RevWave", false);
-    pc++; setBoolParameter("Leg 1.9x - holds 88-95%", false);
-    pc++; setBoolParameter("Step 4  >> line = what to do", false);
-    pc++; setBoolParameter("Short the first pullback", false);
-    pc++; setBoolParameter("Step 5  WALL box: 3/3 SOLID", false);
-    pc++; setBoolParameter("A retest meets a stronger wall", false);
-    pc++; setBoolParameter("Step 6  FUEL box: 1/3 AT RISK", false);
-    // (1.2.4, Rassul 2026-09-30: "add a placement setting") appended LAST so saved values keep their positions
-    PX.moveX    = pc++; setIntegerParameter("Move right (px, - = left)", 0, 0);
-    PX.widthPct = pc++; setIntegerParameter("Width (% of normal, 40-100)", 100, 0, SL);
-    // (1.2.6) the rest of the guide + the Analyst switch (appended LAST: saved positions stay put)
-    pc++; setBoolParameter("COVER 0% = no dealer buyback", false);
-    pc++; setBoolParameter("Verdict: tighten stop / tgt 1", false);
-    PX.show = pc++; setListParameter("Show", 0, "Read;Analyst;Both (Analyst on top)");
+    PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
+    PX.corner   = pc++; setListParameter("Read position", 0, "Bottom left;Bottom right;Top left;Top right;Bottom centre;Top centre", 0, SL);
+    PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, 0);
+    PX.trade    = pc++; setBoolParameter("TRADE line", true, SL);
+    PX.todo     = pc++; setBoolParameter("WHAT TO DO box", true, SL);
+    PX.layout   = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");
+    PX.show     = pc++; setListParameter("Show", 2, "Read;Analyst;Both", 0, SL);
+    PX.lift     = pc++; setIntegerParameter("Read: lift from bottom (px)", 30, 0);
+    PX.moveX    = pc++; setIntegerParameter("Move right (px)", 0, 0, SL);
+    PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, 0, SL);
+    PX.apos     = pc++; setListParameter("Analyst position", 0, "Top left;Top centre;Top right;Above the Read");
+    PX.atop     = pc++; setIntegerParameter("Analyst: down from top (px)", 30, 0, SL);
+    PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, 0);
+    PX.keyHow   = pc++; setListParameter("HOW TO READ IT (open)", 0, "Example: Gold 9/29 09:36 short;Step 1 - the TABS: where the trade is - APPROACH > SWEEP > TRIGGER > RECLAIM;Step 2 - SWEEP chip: Trapped - 1,402 lots stuck on the wrong side = fuel;Step 3 - TRIGGER chip: RevWave - first leg away 1.9x the average (holds 88-95%);Step 4 - the >> line = what to do: short the first pullback;Step 5 - WALL box: 3/3 SOLID - a retest meets a stronger wall;Step 6 - FUEL box: 1/3 AT RISK - COVER 0% = dealers are not buying back yet;Verdict: take it, but tighten the stop / take target 1;ANALYST (top): NOW = where price is, the 0DTE clock, dealers, greeks, options;Its 3 boxes = A / B / C scenarios, labelled by how often each has worked in this market");
+    PX.keyTrig  = pc++; setListParameter("Phases / triggers (open)", 0, "APPROACH > SWEEP > TRIGGER > RECLAIM > RETEST > TRADE;SWEEP chip: Trapped = 2x-volume break bar that failed - fuel;TRIGGER: RevBar = turn bar 2.5x range closing in the turn's third (holds 77%);TRIGGER: RevVol = turn bar 2x volume (no edge yet);TRIGGER: RevWave = first leg away 1.9x the average (holds 88-95%) - enter the first pullback;Green check = on your side / red cross = against / ! = watch / dot = waiting;Dashed border = still learning for this market");
+    PX.keyLvl   = pc++; setListParameter("WALL box (open)", 0, "WALL box = is the wall getting stronger? (gamma) - titled by its MenthorQ level;SPEED = price walking INTO the gamma peak (after the sweep: a retest meets a stronger wall);COLOR = today's options getting stronger with time (0DTE);ZOMMA = IV steady or falling - IV rising loosens the wall (the veto);SOLID = all 3 green after the sweep / AT RISK = one turned red");
+    PX.keyFuel  = pc++; setListParameter("FUEL box (open)", 0, "FUEL box = are dealers reversing their trade? (delta flow);COVER = dealers trading your way >= 5% of 15-min volume;GAMMA = their short gamma shrinking = the fuel is being used;VANNA = IV falling = their hedges unwind your way;STORED n = futures they will trade on the way (before the sweep);PRIMED = COVER + one more green / AT RISK = no real covering");
+    PX.explain  = -1;
     return RTX_OK;
 }
 
@@ -159,13 +144,15 @@ void DealerRead::readSettings(Settings& S)
     S.corner = getListIndex(PX.corner); if (S.corner < 0 || S.corner > 5) S.corner = 0;
     S.moveX = getIntegerValue(PX.moveX); if (S.moveX < -3000 || S.moveX > 3000) S.moveX = 0;
     S.widthPct = getIntegerValue(PX.widthPct); if (S.widthPct < 40 || S.widthPct > 100) S.widthPct = 100;   // a fresh dialog can read 0
-    S.show = getListIndex(PX.show); if (S.show < 0 || S.show > 2) S.show = 0;
+    S.show = getListIndex(PX.show); if (S.show < 0 || S.show > 2) S.show = 2;
+    S.apos = getListIndex(PX.apos); if (S.apos < 0 || S.apos > 3) S.apos = 0;
+    S.atop = getIntegerValue(PX.atop); if (S.atop < 0 || S.atop > 600) S.atop = 30;
     S.font = getIntegerValue(PX.font); if (S.font < 7) S.font = 10;   // (1.0.1) a first dialog can show ??? / a wrong number if (S.font > 20) S.font = 20;
     S.trade = isBoxChecked(PX.trade) != 0; S.todo = isBoxChecked(PX.todo) != 0;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
     S.layout = getListIndex(PX.layout); if (S.layout < 0 || S.layout > 3) S.layout = 0;
     S.lift = getIntegerValue(PX.lift); if (S.lift < 0 || S.lift > 400) S.lift = 30;
-    S.explain = isBoxChecked(PX.explain) != 0;
+    S.explain = false;
 }
 
 void DealerRead::load()
@@ -414,6 +401,7 @@ void DealerRead::renderAnalyst(const Settings& S, short x0, short y0, short W, s
     std::vector<std::string> ln = wrapWords(para, W - U(18) - labW - biasW, W - U(18), fs - 2, false, 4);
     for (size_t i = 0; i < ln.size(); i++)
         text((short)(x0 + U(9) + (i == 0 ? labW : 0)), (short)(l1 + (short)i * U(14)), ln[i].c_str(), C_INK, fs - 2, false, 0);
+    if (D.scn.empty()) return;                            // (1.3.0) no level: NOW only
     short st = (short)(bt + bh + U(3)), sb = (short)(y0 + H - U(3));
     short cw = (short)((W - U(12)) / 3);
     for (size_t i = 0; i < 3; i++) {
@@ -451,12 +439,17 @@ void DealerRead::renderSmall(const Settings& S)
     short W = (short)(U(860) * S.widthPct / 100); if (W > avail) W = avail; if (W < U(340)) W = U(340);   // (1.2.4) width %
     short H = S.layout == 0 ? U(132) : (S.layout == 1 ? U(44) : U(22));   // (1.2.6) stacked 176 -> 132 (compact, same font)
     if (!D.hasLevel || !D.hasPrice) H = U(40);
-    short HA = U(148);                                    // (1.2.6) the Analyst strip (NOW 3 lines + scenarios 3 lines)
-    short HT = S.show == 1 ? HA : (S.show == 2 ? (short)(H + HA + U(4)) : H);
+    short HA = D.scn.empty() ? U(66) : U(148);            // (1.3.0) no level = NOW only (no empty scenario boxes)
+    bool sep = S.apos <= 2;                               // (1.3.0, Rassul: "the analyst text is supposed to be on top and the read at the bottom")
+    short HT = S.show == 1 ? HA : (S.show == 2 && !sep ? (short)(H + HA + U(4)) : H);
     short x0 = (S.corner == 1 || S.corner == 3) ? (short)(paneR - W - U(6)) : (S.corner >= 4 ? (short)((pane.left + paneR) / 2 - W / 2) : (short)(pane.left + U(6)));
     short y0 = (S.corner <= 1 || S.corner == 4) ? (short)(pane.bottom - HT - U(6) - S.lift) : (short)(pane.top + U(6));
     x0 = (short)(x0 + S.moveX);                          // (1.2.4) the sideways nudge
-    if (S.show >= 1) {                                    // (1.2.6) the Analyst: on its own, or on top of the Read
+    if (S.show >= 1 && sep) {                             // (1.3.0) the Analyst at the top of the chart, the Read where it is
+        short ax = S.apos == 0 ? (short)(pane.left + U(6)) : (S.apos == 2 ? (short)(paneR - W - U(6)) : (short)((pane.left + paneR) / 2 - W / 2));
+        renderAnalyst(S, (short)(ax + S.moveX), (short)(pane.top + S.atop), W, HA);
+        if (S.show == 1) return;
+    } else if (S.show >= 1) {                             // "Above the Read": stacked, as before
         renderAnalyst(S, x0, y0, W, HA);
         if (S.show == 1) return;
         y0 = (short)(y0 + HA + U(4));
@@ -641,7 +634,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2.8\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.3.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -658,6 +651,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. The HOW TO READ guide is below; open the three lists for every check explained.");
-    p->setVersion("1.2.8");
+    p->setVersion("1.3.0");
     return p;
 }

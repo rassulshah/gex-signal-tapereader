@@ -30,7 +30,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.10";   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+static const char* DP_VERSION = "1.3.11";   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
@@ -51,7 +51,7 @@ static COLOR fade(COLOR a, float t)   // toward the dark ground
     return (COLOR)(((COLOR)ar << 16) | ((COLOR)ag << 8) | (COLOR)ab);
 }
 
-struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode; };
+struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode, keyHow; };
 static PIdx PX;
 struct Settings { int market = 0, width = 260, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true; };
 
@@ -104,48 +104,24 @@ int DealerProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
-    setParameterDialogHeight(19);   // (1.3.8) room for the 18-line guide
+    // (1.3.11, Rassul 2026-09-30: "look at all the checkboxes that are not suppose to be there") the guide is an "(open)"
+    // list, not checkbox rows; parameter version 2 = a fresh, clean layout (defaults = Rassul's settings, banner off)
+    setParameterVersion(2);
+    setParameterDialogHeight(7);
     const short SL = kParmAppendSameLine;
     int pc = 0;
-    // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     PX.width   = pc++; setIntegerParameter("Profile width px", 260, 0, SL);
+    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0, SL);
     PX.labels  = pc++; setBoolParameter("Values inside the nodes", true);
     PX.snap    = pc++; setBoolParameter("Snapshot outline", true, SL);
-    PX.whisk   = pc++; setBoolParameter("(unused)", false);   // 1.3.5: kept for its position, unused
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
     PX.banner  = pc++; setBoolParameter("Whole-book banner", false);
-    PX.legend  = pc++; setBoolParameter("(unused)", false, SL);
-    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
-    // (1.3.3) HOW TO READ IT, in the settings (the description box cuts long text off): open a list to read every line.
-    // Appended LAST so saved values keep their positions; nothing reads them.
-    PX.keyPill = pc++; setListParameter("Pill colours (open)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Orange pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep);Bands = 9/25 first look - the nightly study will set them per market");
-    PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points: the Read's book line);Yellow = WALL: dealers lean against every tick - stops a sweep;Purple = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now;Example 9/29 Gold: 4215  32 (28 to 46) wall with SELL 81 on the way = the high");
-    // (1.3.5, Rassul 2026-09-30: "keep an example of the read in the settings - a How-to guide ... use all the blank space")
-    // one full row per line (a checkbox label shows the whole line); appended LAST so saved values keep their positions;
-    // nothing reads them
-    // (1.3.8) the guide: IRT shows only ~30 characters of a row that starts with a digit or a space - every line is now
-    // <= 30 characters and starts with a letter (13 rows here, 5 more appended last)
-    pc++; setBoolParameter("HOW TO READ A STRIKE", false);
-    pc++; setBoolParameter("Example: Gold 4215, 9/29 08:45", false);
-    pc++; setBoolParameter("Step 1  WHERE is price?", false);
-    pc++; setBoolParameter("Price 23 pts under, going up", false);
-    pc++; setBoolParameter("Step 2  DELTA (upper node)", false);
-    pc++; setBoolParameter("SELL 81 = dealers sell 81", false);
-    pc++; setBoolParameter("On the way up: a headwind", false);
-    pc++; setBoolParameter("Step 3  GAMMA (lower node)", false);
-    pc++; setBoolParameter("Reads 4215 32 (28-46) YELLOW", false);
-    pc++; setBoolParameter("Yellow = WALL: dealers lean in", false);
-    pc++; setBoolParameter("Sell 32 more per 5.5 pts up", false);
-    pc++; setBoolParameter("Slow = 46, a spike = 28", false);
-    pc++; setBoolParameter("Step 4  SIZE = the pill", false);
-    pc++; setBoolParameter("Orange 2.8% = meaningful", false);
-    pc++; setBoolParameter("Step 5  VERDICT", false);
-    pc++; setBoolParameter("Headwind + wall = high holds", false);
-    pc++; setBoolParameter("Wait for sweep + a trigger", false);
-    pc++; setBoolParameter("Purple node = FUEL: overshoot", false);
+    PX.keyHow  = pc++; setListParameter("HOW TO READ A STRIKE (open)", 0, "Example: Gold 4215 on 9/29 at 08:45;Step 1 - WHERE is price? 23 pts under 4215, going up;Step 2 - DELTA (upper node): SELL 81 = dealers sell 81 futures on the way up - a headwind;Step 3 - GAMMA (lower node): 4215  32 (28 to 46) in YELLOW = a WALL - dealers lean against the move;They sell 32 more per 5.5 pts up - if price gets there fast only 28, if slowly 46;Step 4 - SIZE = the pill: orange 2.8% = meaningful;Step 5 - VERDICT: headwind + wall = the high should hold - wait for the sweep + a trigger;A PURPLE node = FUEL: dealers chase it - price overshoots, then comes back");
+    PX.keyNode = pc++; setListParameter("Node colours (open)", 0, "Read each strike top to bottom: DELTA then GAMMA;Upper node = DELTA: futures dealers must trade on the way there;Green = dealers buy / red = dealers sell;Lower node = GAMMA when price gets there: futures per 0.1 EM (the points: the Read's book line);Yellow = WALL: dealers lean against every tick - stops a sweep;Purple = FUEL: dealers chase the move - then unwind it after the turn;(9 to 17) = if price gets there twice as fast / twice as slow;Thin outline = MenthorQ's number right now", 0, SL);
+    PX.keyPill = pc++; setListParameter("Pill colours (open)", 0, "The pill = the node's size vs a normal 15 min of futures volume;Grey text = under 0.25%: quiet - ignore it;Dark pill = 0.25-1%: small - context only;Orange pill = 1-3%: meaningful;WHITE pill + white outline = 3%+: MARKET-MOVING;Bolt = dealers ARE trading there now (COVER 5%+ after the sweep)", 0, SL);
+    PX.whisk = -1; PX.legend = -1;
     return RTX_OK;
 }
 
@@ -153,8 +129,8 @@ void DealerProfile::readSettings(Settings& S)
 {
     S.market = getListIndex(PX.market);
     S.width = getIntegerValue(PX.width); if (S.width < 40) S.width = 260; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
-    S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = isBoxChecked(PX.whisk) != 0;
-    S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = isBoxChecked(PX.legend) != 0;
+    S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = false;
+    S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = false;
     S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 9; if (S.font > 24) S.font = 24;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
 }
@@ -446,6 +422,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Read each strike top to bottom: upper node = futures dealers must trade on the way (delta), lower node = gamma when price gets there (yellow wall stops a sweep, purple fuel chases it). Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). The HOW TO READ guide is below; open the two lists for every detail.");
-    p->setVersion("1.3.10");
+    p->setVersion("1.3.11");
     return p;
 }
