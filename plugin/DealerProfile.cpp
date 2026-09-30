@@ -30,7 +30,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.3.6";   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
+static const char* DP_VERSION = "1.3.7";   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x0022D3EE;   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00A3E635;   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -67,6 +67,9 @@ public:
     std::string mkt, root;
     float off;
     int lastBar;
+    long long loadedStamp = -2; std::string loadedPath;   // (1.3.7) re-read the file only when it changed
+    long expN = 0; float expC = 0; time_t expT = 0;          // (1.3.7) the chart-bar export
+    void exportBars();
 
     bool dialogReady();
     void readSettings(Settings& S);
@@ -150,17 +153,20 @@ void DealerProfile::readSettings(Settings& S)
 
 void DealerProfile::load()
 {
-    D = dl::Data();
     char buf[32] = {0};
     const char* rs = getRootSymbol(buf);
     root = rs ? rs : "";
     mkt = dl::marketFor(cfg.market, root);
-    if (mkt.empty()) return;
-    const char* up = getenv("USERPROFILE"); if (!up) return;
+    if (mkt.empty()) { D = dl::Data(); loadedPath.clear(); return; }
+    const char* up = getenv("USERPROFILE"); if (!up) { D = dl::Data(); return; }
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Dealer-" + mkt + ".csv";
-    std::ifstream f(path.c_str()); if (!f.is_open()) return;
+    long long st = dl::fileStamp(path);
+    if (st >= 0 && st == loadedStamp && path == loadedPath) return;      // unchanged: keep what is parsed (no disk read)
+    D = dl::Data();
+    std::ifstream f(path.c_str()); if (!f.is_open()) { loadedPath.clear(); return; }
     std::stringstream ss; ss << f.rdbuf();
     D = dl::parseText(ss.str());
+    loadedStamp = st; loadedPath = path;
 }
 
 // the chart may be another contract than MenthorQ's front future: shift by (close at the file's minute - PRICE)
@@ -383,12 +389,44 @@ void DealerProfile::writeStatus(const char* what)
     f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nSTATE," << what << "\n";
 }
 
+// (1.3.7, Rassul 2026-09-30: the Read went blank overnight - MenthorQ's price freezes outside RTH) the chart's own last 200
+// bars -> LRA-IRT-Bars-<MKT>.csv, so the Reader always has the live price, highs / lows and volume (sweeps, triggers) even at
+// night. Written when a bar changes, at most every 15 s; raw chart prices plus the contract offset the Reader takes off.
+void DealerProfile::exportBars()
+{
+    long n = getBarCount(); if (n < 2 || mkt.empty()) return;
+    RTARRAY o(barOpen), h(barHigh), l(barLow), c(barClose), v(barVolume);
+    RTARRAYI dtm(barDateTime);
+    float lc = c[(int)n - 1];
+    time_t now = time(0);
+    if (now - expT < 15) return;
+    if (n == expN && lc == expC && now - expT < 60) return;
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-IRT-Bars-" + mkt + ".csv";
+    std::string tmp = path + ".tmp";
+    {
+        std::ofstream f(tmp.c_str(), std::ios::trunc); if (!f.is_open()) return;
+        char b[160];
+        sprintf_s(b, sizeof(b), "IRTBARS|1|%s|%s|%.6f|%ld\n", mkt.c_str(), root.c_str(), (double)off, (long)now); f << b;
+        int from = (int)n - 200; if (from < 0) from = 0;
+        for (int i = from; i < (int)n; i++) {
+            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dtm[i], &t);
+            sprintf_s(b, sizeof(b), "%04d-%02d-%02d %02d:%02d:%02d|%.6f|%.6f|%.6f|%.6f|%.0f\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+                      t.tm_hour, t.tm_min, t.tm_sec, (double)o[i], (double)h[i], (double)l[i], (double)c[i], (double)v[i]);
+            f << b;
+        }
+    }
+    std::remove(path.c_str());
+    if (std::rename(tmp.c_str(), path.c_str()) == 0) { expN = n; expC = lc; expT = now; }
+}
+
 int DealerProfile::draw(void)
 {
     load();
     alignContract();
     render(cfg);
     staleBadge();
+    exportBars();
     writeStatus(D.nodes.empty() ? "no data" : "drawn");
     return RTX_OK;
 }
@@ -399,6 +437,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile. Read each strike top to bottom: upper node = futures dealers must trade on the way (delta), lower node = gamma when price gets there (cyan wall stops a sweep, lime fuel chases it). Pill = size vs a normal 15 min of volume; white pill + outline = market-moving (3%+). The HOW TO READ guide is below; open the two lists for every detail.");
-    p->setVersion("1.3.6");
+    p->setVersion("1.3.7");
     return p;
 }

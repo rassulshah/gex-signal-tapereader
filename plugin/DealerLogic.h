@@ -14,6 +14,7 @@
  ********************************************************************************/
 #pragma once
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 #include <sstream>
 #include <cstdlib>
@@ -42,6 +43,18 @@ struct Data {
     std::string doText, bookLine; bool learn = false;
     std::string fuelTitle, keyName, mqName, sideWord, noWall;   // (file 1.2) the price level then the MenthorQ level; NO WALL text
 };
+
+// (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
+// dealer file ONLY when this changes - not on every repaint (IRT showed "Not Responding" while every draw re-read it)
+inline long long fileStamp(const std::string& path)
+{
+#ifdef _WIN32
+    struct _stat64 st; if (_stat64(path.c_str(), &st) != 0) return -1;
+#else
+    struct stat st; if (stat(path.c_str(), &st) != 0) return -1;
+#endif
+    return (long long)st.st_mtime * 1000003LL + (long long)st.st_size;
+}
 
 inline std::vector<std::string> split(const std::string& line, char sep = '|')
 {

@@ -75,6 +75,7 @@ public:
     bool dialogReady();
     void readSettings(Settings& S);
     void load();
+    long long loadedStamp = -2; std::string loadedPath;   // (1.2.5) re-read the file only when it changed
     void render(const Settings& S);
     void renderFull(const Settings& S);
     void renderSmall(const Settings& S);
@@ -162,17 +163,20 @@ void DealerRead::readSettings(Settings& S)
 
 void DealerRead::load()
 {
-    D = dl::Data();
     char buf[32] = {0};
     const char* rs = getRootSymbol(buf);
     root = rs ? rs : "";
     mkt = dl::marketFor(cfg.market, root);
-    if (mkt.empty()) return;
-    const char* up = getenv("USERPROFILE"); if (!up) return;
+    if (mkt.empty()) { D = dl::Data(); loadedPath.clear(); return; }
+    const char* up = getenv("USERPROFILE"); if (!up) { D = dl::Data(); return; }
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Dealer-" + mkt + ".csv";
-    std::ifstream f(path.c_str()); if (!f.is_open()) return;
+    long long st = dl::fileStamp(path);
+    if (st >= 0 && st == loadedStamp && path == loadedPath) return;      // unchanged: keep what is parsed (no disk read)
+    D = dl::Data();
+    std::ifstream f(path.c_str()); if (!f.is_open()) { loadedPath.clear(); return; }
     std::stringstream ss; ss << f.rdbuf();
     D = dl::parseText(ss.str());
+    loadedStamp = st; loadedPath = path;
 }
 
 void DealerRead::fill(short l, short t, short r, short b, COLOR c) { RCT rc; rc.set(l, t, r, b); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
@@ -546,7 +550,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.2.4\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.2.5\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
@@ -563,6 +567,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read. Is the level price is working on solid? LEVEL box = the wall (gamma), FUEL box = are dealers reversing (delta flow). Top rows: phase, SWEEP / TRIGGER chips, stop, target, R:R, what to do. The HOW TO READ guide is below; open the three lists for every check explained.");
-    p->setVersion("1.2.4");
+    p->setVersion("1.2.5");
     return p;
 }
