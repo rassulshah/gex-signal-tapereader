@@ -28,7 +28,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.0";
+static const char* DP_VERSION = "1.0.1";
 static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
 static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -117,7 +117,7 @@ int cppExtension::setup(void)
 void DealerProfile::readSettings(Settings& S)
 {
     S.market = getListIndex(PX.market);
-    S.width = getIntegerValue(PX.width); if (S.width < 60) S.width = 60; if (S.width > 900) S.width = 900;
+    S.width = getIntegerValue(PX.width); if (S.width < 40) S.width = 260; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
     S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = isBoxChecked(PX.whisk) != 0;
     S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = isBoxChecked(PX.legend) != 0;
     S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 6; if (S.font > 24) S.font = 24;
@@ -301,6 +301,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: synthetic gamma + delta per strike (reads lsFlexLevels\\LRA-Dealer-<MKT>.csv)");
-    p->setVersion("1.0");
+    p->setVersion("1.0.1");
     return p;
 }
