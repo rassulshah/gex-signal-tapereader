@@ -1,0 +1,306 @@
+/********************************************************************************
+ *  DealerProfile.cpp  --  Investor/RT RTX extension  lsDealerProfile  (v1.0, 2026-09-29)
+ *
+ *  THE DEALER PROFILE: two nodes per strike on the right edge of the price pane, facing price.
+ *     upper node  synthetic GAMMA on arrival (futures per 0.1 EM): blue = dealers long gamma (a WALL), amber = short (FUEL)
+ *                 white whisker = the range for an earlier / later arrival; dashed outline = MenthorQ's snapshot now
+ *     lower node  synthetic DELTA: futures dealers must trade because of this strike on the way there (green BUY / red SELL)
+ *  Values sit INSIDE the nodes when they fit (operator 2026-09-29: no text outside the nodes); the rest is on the
+ *  whole-book banner (top-left) and the legend line. Strikes beyond 1.2 EM fade.
+ *
+ *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Dealer-<MKT>.csv, written every 5 min by the LRA Reader
+ *  (level-reversal-analytics analytics/lra/dealer_irt.py). Grammar and decisions: DealerLogic.h (tested,
+ *  test_dealer_logic.cpp). The market comes from the chart's root symbol (EP -> ES, GCE -> GC ...) unless set.
+ *
+ *  A separate indicator from lsDealerRead (the checklist strip), so each can be on or off, on any chart.
+ *  Parameters are read ONLY in the parms callbacks (GAMMA-PROFILE-PLUGIN.md gotcha 3); positions numbered explicitly.
+ *  Never black: the chart background is black.
+ ********************************************************************************/
+#include "irtsdk.h"
+#include "DealerLogic.h"
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <cmath>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+
+static const char* DP_VERSION = "1.0";
+static const COLOR C_WALL  = 0x003987E5;   // long gamma: blue
+static const COLOR C_FUEL  = 0x00D99A1E;   // short gamma: amber
+static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
+static const COLOR C_SELL  = 0x00EF4444;   // dealers sell
+static const COLOR C_WHISK = 0x00F8FAFC;   // arrival range
+static const COLOR C_SNAP  = 0x00E5E7EB;   // snapshot outline
+static const COLOR C_INK   = 0x00E5E7EB;
+static const COLOR C_MUTED = 0x009CA3AF;
+static const COLOR C_DARK  = 0x000B0F19;   // fills and text ON a coloured node only (never a line)
+static const COLOR C_BANNERBG = 0x001C1305;
+
+static COLOR fade(COLOR a, float t)   // toward the dark ground
+{
+    int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+    int br = (C_DARK >> 16) & 0xFF, bg = (C_DARK >> 8) & 0xFF, bb = C_DARK & 0xFF;
+    ar = (int)(ar + (br - ar) * t); ag = (int)(ag + (bg - ag) * t); ab = (int)(ab + (bb - ab) * t);
+    return (COLOR)(((COLOR)ar << 16) | ((COLOR)ag << 8) | (COLOR)ab);
+}
+
+struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock; };
+static PIdx PX;
+struct Settings { int market = 0, width = 260, font = 9, clock = 0; bool labels = true, banner = true, legend = true, snap = true, whisk = true, fadefar = true; };
+
+class DealerProfile : public cppExtension {
+public:
+    DealerProfile();
+    virtual int parmsLoad(void);
+    virtual int parmsApply(void);
+    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int draw(void);
+
+    Settings cfg;
+    dl::Data D;
+    std::string mkt, root;
+    float off;
+    int lastBar;
+
+    bool dialogReady();
+    void readSettings(Settings& S);
+    void load();
+    void alignContract();
+    void render(const Settings& S);
+    void staleBadge();
+    void writeStatus(const char* what);
+    short yOf(float price);
+    void box(short l, short t, short r, short b, COLOR c);
+    void dashRect(short l, short t, short r, short b, COLOR c);
+    void line(short x1, short y1, short x2, short y2, COLOR c, int w);
+    void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
+    void textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold);
+    int  textW(const char* s, int sz, bool bold);
+};
+
+int cppExtension::init(void)    { return RTX_OK; }
+int cppExtension::calc(int)     { return RTX_OK; }
+int cppExtension::done(void)    { return RTX_OK; }
+int cppExtension::destroy(void) { return RTX_OK; }
+
+DealerProfile::DealerProfile() : cppExtension() { off = 0.0f; lastBar = 0; }
+
+bool DealerProfile::dialogReady() { int i = getListIndex(PX.market); return i >= 0 && i <= 7; }
+int DealerProfile::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+int DealerProfile::parmsApply(void) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+int DealerProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+
+int cppExtension::setup(void)
+{
+    setParameterVersion(1);
+    setParameterDialogHeight(14);
+    const short SL = kParmAppendSameLine;
+    int pc = 0;
+    // IRT keeps a saved instance's values BY POSITION: append new rows at the end, never reorder
+    PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
+    PX.width   = pc++; setIntegerParameter("Profile width px", 260, 0, SL);
+    PX.labels  = pc++; setBoolParameter("Values inside the nodes", true);
+    PX.snap    = pc++; setBoolParameter("Snapshot outline (dashed)", true, SL);
+    PX.whisk   = pc++; setBoolParameter("Arrival-range whisker", true);
+    PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
+    PX.banner  = pc++; setBoolParameter("Whole-book banner", true);
+    PX.legend  = pc++; setBoolParameter("Legend line", true, SL);
+    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
+    PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
+    return RTX_OK;
+}
+
+void DealerProfile::readSettings(Settings& S)
+{
+    S.market = getListIndex(PX.market);
+    S.width = getIntegerValue(PX.width); if (S.width < 60) S.width = 60; if (S.width > 900) S.width = 900;
+    S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = isBoxChecked(PX.whisk) != 0;
+    S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = isBoxChecked(PX.legend) != 0;
+    S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 6; if (S.font > 24) S.font = 24;
+    S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
+}
+
+void DealerProfile::load()
+{
+    D = dl::Data();
+    char buf[32] = {0};
+    const char* rs = getRootSymbol(buf);
+    root = rs ? rs : "";
+    mkt = dl::marketFor(cfg.market, root);
+    if (mkt.empty()) return;
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Dealer-" + mkt + ".csv";
+    std::ifstream f(path.c_str()); if (!f.is_open()) return;
+    std::stringstream ss; ss << f.rdbuf();
+    D = dl::parseText(ss.str());
+}
+
+// the chart may be another contract than MenthorQ's front future: shift by (close at the file's minute - PRICE)
+void DealerProfile::alignContract()
+{
+    off = 0.0f;
+    long n = getBarCount(); if (n < 1 || !D.hasPrice) return;
+    RTARRAY close(barClose);
+    RTARRAYI dt(barDateTime);
+    float c = close[(int)n - 1];
+    if (D.asofSo >= 0) {
+        double want = D.asofSo + cfg.clock * 60.0;
+        int from = (int)n - 3000; if (from < 0) from = 0;
+        for (int i = (int)n - 1; i >= from; i--) {
+            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+            double so = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+            bool sameDay = (D.y == 0) || (t.tm_year + 1900 == D.y && t.tm_mon + 1 == D.mo && t.tm_mday == D.d);
+            if (sameDay && so <= want) { c = close[i]; break; }
+        }
+    }
+    float o = 0; if (dl::offsetFor(c, D.px, o)) off = o;
+}
+
+short DealerProfile::yOf(float price) { PNT p; p.set(lastBar, price); return p.v; }
+void DealerProfile::box(short l, short t, short r, short b, COLOR c) { RCT rc; rc.set(l, t, r, b); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
+void DealerProfile::line(short x1, short y1, short x2, short y2, COLOR c, int w)
+{
+    setPen(c, (short)w, P_SOLID);
+    PNT a; a.set(0, 0.0f); a.h = x1; a.v = y1; a.setDrawPosition();
+    PNT b; b.set(0, 0.0f); b.h = x2; b.v = y2; b.drawLineTo();
+}
+void DealerProfile::dashRect(short l, short t, short r, short b, COLOR c)
+{
+    setPen(c, 1, P_DOT);
+    PNT p; p.set(0, 0.0f);
+    p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
+}
+int DealerProfile::textW(const char* s, int sz, bool bold)
+{
+    FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
+    return (int)getTextWidth(s, -1);
+}
+// the rect text draw baselines low (~0.45 x font below y, GammaProfile v0.73): shift up so it sits ON y
+void DealerProfile::textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold)
+{
+    FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
+    setTextColor(col);
+    short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
+    RCT rc; rc.set((short)(rightX - 400), (short)(yy - sz), rightX, (short)(yy + sz));
+    rc.drawText(s, false, true);
+}
+void DealerProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
+{
+    FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
+    setTextColor(col);
+    short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
+    RCT rc; rc.set(leftX, (short)(yy - sz), (short)(leftX + 900), (short)(yy + sz));
+    rc.drawText(s, false, false);
+}
+
+void DealerProfile::render(const Settings& S)
+{
+    long n = getBarCount(); if (n < 2) return;
+    lastBar = (int)n - 1;
+    RCT pane; pane.getPaneRect(false);
+    RCT scale; scale.getScaleRect();
+    short paneR = pane.right;
+    if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
+    short anchor = (short)(paneR - 2);
+    int W = S.width;
+
+    if (!D.hasPrice || D.nodes.empty()) {
+        char b[96]; sprintf_s(b, sizeof(b), "Dealer Profile: no data for %s (root %s)", mkt.empty() ? "?" : mkt.c_str(), root.c_str());
+        textLJ((short)(pane.left + 8), (short)(pane.top + 14), b, C_MUTED, S.font, false);
+        return;
+    }
+    float gmax = 0, dmax = 0;
+    { dl::Data V = D; V.nodes.clear(); for (size_t i = 0; i < D.nodes.size(); i++) if (!D.nodes[i].far) V.nodes.push_back(D.nodes[i]); dl::scales(V.nodes.empty() ? D : V, gmax, dmax); }
+    // strike spacing in pixels
+    float step = 0;
+    for (size_t i = 1; i < D.nodes.size(); i++) { float d = D.nodes[i].k - D.nodes[i - 1].k; if (d > 0 && (step == 0 || d < step)) step = d; }
+    if (step <= 0) step = D.em * 0.1f;
+    int hs = std::abs((int)yOf(D.nodes[0].k + off) - (int)yOf(D.nodes[0].k + step + off));
+    if (hs < 6) hs = 6;
+    int nodeH = (int)(hs * 0.42f); if (nodeH < 3) nodeH = 3;
+    int gap = hs >= 12 ? 1 : 0;
+
+    for (size_t i = 0; i < D.nodes.size(); i++) {
+        const dl::Node& N = D.nodes[i];
+        short y = yOf(N.k + off);
+        if (y < pane.top - hs || y > pane.bottom + hs) continue;
+        float ft = (S.fadefar && N.far) ? 0.65f : 0.0f;
+        int Lg = dl::barLen(N.g, gmax, W), Ls = dl::barLen(N.snap, gmax, W), Ld = dl::barLen(N.d, dmax, W);
+        short gt = (short)(y - gap - nodeH), gb = (short)(y - gap), dt_ = (short)(y + gap), db = (short)(y + gap + nodeH);
+        COLOR gc = fade(N.g >= 0 ? C_WALL : C_FUEL, ft), dc = fade(N.d >= 0 ? C_BUY : C_SELL, ft);
+        if (Lg > 0) box((short)(anchor - Lg), gt, anchor, gb, gc);
+        if (S.snap && Ls > 1) dashRect((short)(anchor - Ls), gt, anchor, gb, fade(C_SNAP, ft));
+        if (Ld > 0) box((short)(anchor - Ld), dt_, anchor, db, dc);
+        if (S.whisk && !N.far && std::fabs(N.hi - N.lo) >= 1.0f) {
+            int a = dl::barLen(N.lo, gmax, W), b = dl::barLen(N.hi, gmax, W);
+            short ym = (short)((gt + gb) / 2), cap = (short)(nodeH / 2 > 2 ? nodeH / 2 : 2);
+            short x1 = (short)(anchor - (a > b ? a : b)), x2 = (short)(anchor - (a < b ? a : b));
+            line(x1, ym, x2, ym, C_WHISK, 1);
+            line(x1, (short)(ym - cap), x1, (short)(ym + cap), C_WHISK, 1);
+            line(x2, (short)(ym - cap), x2, (short)(ym + cap), C_WHISK, 1);
+        }
+        if (S.labels && !N.far && nodeH >= S.font - 1) {
+            std::string gl = dl::gammaLabel(N), dlab = dl::deltaLabel(N);
+            if (dl::fits(textW(gl.c_str(), S.font, true), Lg)) textRJ((short)(anchor - 4), (short)((gt + gb) / 2), gl.c_str(), C_DARK, S.font, true);
+            if (dl::fits(textW(dlab.c_str(), S.font, true), Ld)) textRJ((short)(anchor - 4), (short)((dt_ + db) / 2), dlab.c_str(), N.d < 0 ? 0x00FFFFFF : C_DARK, S.font, true);
+        }
+    }
+    // whole-book banner + legend (top-left of the pane)
+    short bx = (short)(pane.left + 8), by = (short)(pane.top + 6);
+    if (S.banner && !D.bookLine.empty()) {
+        int tw = textW(D.bookLine.c_str(), S.font + 1, true);
+        RCT bg; bg.set(bx, by, (short)(bx + tw + 20), (short)(by + S.font + 12));
+        bg.draw(1, C_FUEL, C_BANNERBG, DRAW_OPAQUE, PAT_SOLID);
+        textLJ((short)(bx + 10), (short)(by + (S.font + 12) / 2), D.bookLine.c_str(), D.book < 0 ? C_FUEL : C_WALL, S.font + 1, true);
+        by = (short)(by + S.font + 16);
+    }
+    if (S.legend)
+        textLJ((short)(bx + 2), (short)(by + S.font / 2 + 2), "upper node gamma on arrival (whisker = early/late arrival, dashed = snapshot)  -  lower node delta dealers must trade", C_MUTED, S.font - 1, false);
+}
+
+void DealerProfile::staleBadge()
+{
+    if (D.asofSo < 0) return;
+    RTDATE now = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(now, &t);
+    double age = dl::staleMin(D.asofSo + cfg.clock * 60.0, t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec);
+    if (age <= 10.0) return;
+    char b[40]; if (age >= 90) sprintf_s(b, sizeof(b), "DEALER DATA STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "DEALER DATA STALE %dm", (int)(age + 0.5));
+    RCT pane; pane.getPaneRect(false);
+    int tw = textW(b, 10, true);
+    short x = (short)(pane.right - tw - 90), y = (short)(pane.top + 6);
+    RCT bg; bg.set(x, y, (short)(x + tw + 14), (short)(y + 18));
+    bg.draw(1, 0x00C0392B, 0x003A1416, DRAW_OPAQUE, PAT_SOLID);
+    textLJ((short)(x + 7), (short)(y + 9), b, 0x00FF9A8F, 10, true);
+}
+
+void DealerProfile::writeStatus(const char* what)
+{
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
+    std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
+    f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nSTATE," << what << "\n";
+}
+
+int DealerProfile::draw(void)
+{
+    load();
+    alignContract();
+    render(cfg);
+    staleBadge();
+    writeStatus(D.nodes.empty() ? "no data" : "drawn");
+    return RTX_OK;
+}
+
+extern "C" cppExtension *CreateExtension(void)
+{
+    DealerProfile *p = new DealerProfile();
+    p->setArrayCount(1);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
+    p->setDescription("LRA Dealer Profile: synthetic gamma + delta per strike (reads lsFlexLevels\\LRA-Dealer-<MKT>.csv)");
+    p->setVersion("1.0");
+    return p;
+}
