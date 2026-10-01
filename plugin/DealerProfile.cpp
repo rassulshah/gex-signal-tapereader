@@ -30,7 +30,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.4.0";   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+static const char* DP_VERSION = "1.5.0";   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
@@ -51,9 +51,10 @@ static COLOR fade(COLOR a, float t)   // toward the dark ground
     return (COLOR)(((COLOR)ar << 16) | ((COLOR)ag << 8) | (COLOR)ab);
 }
 
-struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode, keyHow; };
+struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode, keyHow, inds; };
 static PIdx PX;
-struct Settings { int market = 0, width = 260, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true; };
+struct Settings { int market = 0, width = 260, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true;
+                  std::string inds = "cob_bull,cob_bear"; };   // (1.5.0) his custom indicators copied into the bar file
 
 class DealerProfile : public cppExtension {
 public:
@@ -86,7 +87,7 @@ public:
     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
     void textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold);
     int  textW(const char* s, int sz, bool bold);
-    void strengthMark(short rightX, short y, float pct, bool live, int font);
+    void strengthMark(short rightX, short y, float pct, bool live, int font, COLOR base);
     void outline(short l, short t, short r, short b);
 };
 
@@ -107,7 +108,7 @@ int cppExtension::setup(void)
     // (1.3.12, Rassul 2026-09-30) only real settings have a control; the guide is plain text (setLabelParameter) below.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
     setParameterVersion(3);
-    setParameterDialogHeight(20);
+    setParameterDialogHeight(23);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
@@ -118,6 +119,7 @@ int cppExtension::setup(void)
     PX.snap    = pc++; setBoolParameter("Snapshot outline", true, SL);
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true);
     PX.banner  = pc++; setBoolParameter("Whole-book banner", false, SL);
+    PX.inds    = pc++; setStringParameter("Your indicators in the bar file (names, comma)", "cob_bull,cob_bear", 160);
     pc++; setLabelParameter("HOW TO READ A STRIKE - example: Gold 4215, 9/29 08:45", 380);
     pc++; setLabelParameter("Read each strike top to bottom: DELTA, then GAMMA", 380);
     pc++; setLabelParameter("Step 1  WHERE is price? 23 pts under 4215, going up", 380);
@@ -127,12 +129,14 @@ int cppExtension::setup(void)
     pc++; setLabelParameter("Yellow = WALL: dealers sell 32 more per 5.5 pts up", 380);
     pc++; setLabelParameter("Purple = FUEL: dealers chase - overshoot, then back", 380);
     pc++; setLabelParameter("(28 to 46) = if price gets there fast / slowly", 380);
-    pc++; setLabelParameter("Step 4  SIZE = the pill: orange 2.8% = meaningful", 380);
-    pc++; setLabelParameter("Pill: grey under 0.25% quiet, dark under 1%, orange 1-3%", 380);
-    pc++; setLabelParameter("White pill + outline = 3%+ = market-moving", 380);
+    pc++; setLabelParameter("Step 4  SIZE = the pill, in its node's colour: 2.8% half", 380);
+    pc++; setLabelParameter("Solid = 3%+ HEAVY (market-moving), half = 1-3% BIG", 380);
+    pc++; setLabelParameter("Faint = 0.25-1% MODERATE, outline only = LIGHT", 380);
     pc++; setLabelParameter("Step 5  VERDICT: headwind + wall = the high holds", 380);
     pc++; setLabelParameter("Wait for the sweep + a trigger before you trade", 380);
     pc++; setLabelParameter("Thin outline = MenthorQ's number right now", 380);
+    pc++; setLabelParameter("BAR FILE: your indicators by name, e.g. cob_bull,cob_bear", 380);
+    pc++; setLabelParameter("  they go to the Reader to check its CoB / RBar triggers", 380);
     PX.keyHow = PX.keyNode = PX.keyPill = PX.whisk = PX.legend = -1;
     return RTX_OK;
 }
@@ -145,6 +149,8 @@ void DealerProfile::readSettings(Settings& S)
     S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = false;
     S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 9; if (S.font > 24) S.font = 24;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
+    char ib[200]; memset(ib, 0, sizeof(ib));
+    if (getParameterText(PX.inds, ib, sizeof(ib) - 1) == RTX_OK && ib[0] && ib[0] != ' ') S.inds = ib;   // blank (an older saved layout) = the default; "none" = off
 }
 
 void DealerProfile::load()
@@ -292,8 +298,8 @@ void DealerProfile::render(const Settings& S)
             int reachG = Lg; if (S.snap && Ls > reachG) reachG = Ls;
             if (false && S.whisk) { int a2 = dl::barLen(N.lo, gmax, W), b2 = dl::barLen(N.hi, gmax, W); if (a2 > reachG) reachG = a2; if (b2 > reachG) reachG = b2; }
             // (1.2) [lightning if LIVE] [strength bars] [%]  right outside the node, coloured by band (Rassul 2026-09-29)
-            if (Lg > 0 && N.gp >= 0) strengthMark((short)(anchor - reachG - 4), (short)((gt + gb) / 2), N.gp, N.live, S.font);
-            if (Ld > 0 && N.dp >= 0) strengthMark((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), N.dp, false, S.font);
+            if (Lg > 0 && N.gp >= 0) strengthMark((short)(anchor - reachG - 4), (short)((gt + gb) / 2), N.gp, N.live, S.font, gc);
+            if (Ld > 0 && N.dp >= 0) strengthMark((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), N.dp, false, S.font, dc);
         }
         // (1.4.0, Rassul 2026-09-30, mockup v26) the strikes the Analyst and the Read talk about: KEY (the level), TGT (the target
         // wall), MAG (the 0DTE magnet) - a small chip at the left end of the strike's gamma node
@@ -335,28 +341,36 @@ void DealerProfile::outline(short l, short t, short r, short b)
     p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
 }
 static COLOR bandCol(int b) { return b == 0 ? 0x006B7280 : b == 1 ? 0x00E5E7EB : b == 2 ? 0x00F97316 : 0x00FFFFFF; }   // (1.3.9) meaningful = ORANGE (yellow is the wall now)
-void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, int font)
+static COLOR mix(COLOR c, float a)   // the colour at alpha a over the black chart (no line is ever black)
 {
-    // (1.3) Rassul 2026-09-29: "pill and the outline for market moving nodes" - the % sits in a rounded pill coloured by
-    // its band (quiet = grey text only, small = dark pill, meaningful = yellow pill, big = white pill); the bolt goes left
+    int r = (int)(((c >> 16) & 0xFF) * a), g = (int)(((c >> 8) & 0xFF) * a), b = (int)((c & 0xFF) * a);
+    return (COLOR)((r << 16) | (g << 8) | b);
+}
+static bool darkInk(COLOR c)        // dark text on a bright fill, white on a dark one (purple)
+{
+    float l = 0.299f * ((c >> 16) & 0xFF) + 0.587f * ((c >> 8) & 0xFF) + 0.114f * (c & 0xFF);
+    return l >= 150.0f;
+}
+void DealerProfile::strengthMark(short rightX, short y, float pct, bool live, int font, COLOR base)
+{
+    // (1.5.0, option D - Rassul 2026-09-30, as the Reader's size chips) the % pill takes the colour of the node it sizes:
+    // HEAVY 3%+ solid, BIG 1-3% half, MODERATE 0.25-1% faint fill + coloured text, LIGHT under 0.25% outline only
     int b = dl::strengthBars(pct);
     std::string t = dl::pctTxt(pct);
     int fsz = font - 1; if (fsz < 6) fsz = 6;
-    int tw = textW(t.c_str(), fsz, b >= 1);
+    int tw = textW(t.c_str(), fsz, true);
     short x = rightX;
-    if (b == 0) {
-        textRJ(rightX, y, t.c_str(), 0x006B7280, fsz, false);
-        x = (short)(rightX - tw - 4);
-    } else {
-        COLOR fill = b == 1 ? 0x00334155 : (b == 2 ? 0x00F97316 : 0x00FFFFFF);   // (1.3.9) orange, not yellow (the wall colour)   // (1.3.1) dark pill lighter: visible on black
-        COLOR ink  = b == 1 ? 0x00F1F5F9 : 0x000B0F19;
+    {
+        COLOR fill = b == 3 ? base : b == 2 ? mix(base, 0.55f) : b == 1 ? mix(base, 0.22f) : 0x00000000;
+        COLOR ink  = b == 3 ? (darkInk(base) ? 0x000B0F19 : 0x00FFFFFF) : b == 2 ? (darkInk(fill) ? 0x000B0F19 : 0x00FFFFFF) : base;
+        COLOR edge = b == 0 ? mix(base, 0.6f) : fill;
         short padx = 6, h = (short)(fsz + 6);
-        short w = (short)(tw + 2 * padx + 2);                     // (1.3.3) + the bold overrun, so both sides match
+        short w = (short)(tw + 2 * padx + 2);
         short l = (short)(rightX - w), t0 = (short)(y - h / 2), bt = (short)(t0 + h);
-        setPen(fill, 1, P_SOLID);
+        setPen(edge, 1, P_SOLID);
         CBRUSH br(fill, PAT_SOLID); br.set();
-        RCT rc; rc.set(l, t0, rightX, bt); rc.drawRounded(6, 6);   // (1.3.1) a pill, not an oval (the corner was h - 2)
-        {   // (1.3.2) centre the text on the pill by its measured metrics (GammaProfile textC) - the rect draw left uneven sides
+        RCT rc; rc.set(l, t0, rightX, bt); rc.drawRounded(6, 6);
+        {
             FONT f; f.id = HELVETICA; f.size = (short)fsz; f.style = BOLD; setFont(f);
             int lead = 0, asc = 0, desc = 0; getFontMetrics(&lead, &asc, &desc);
             short twc = (short)getTextWidth(t.c_str(), -1);
@@ -415,18 +429,44 @@ void DealerProfile::exportBars()
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-IRT-Bars-" + mkt + ".csv";
     std::string tmp = path + ".tmp";
+    // (1.5.0, Rassul 2026-09-30) his own indicators (cob_bull, cob_bear ... by name, set in the settings) ride along, one
+    // column each, so the Reader can check its rebuilt triggers against the chart's - the chart is the source of truth
+    std::vector<std::string> names; std::vector<RTARRAY*> arrs;
     {
-        std::ofstream f(tmp.c_str(), std::ios::trunc); if (!f.is_open()) return;
-        char b[160];
-        sprintf_s(b, sizeof(b), "IRTBARS|1|%s|%s|%.6f|%ld\n", mkt.c_str(), root.c_str(), (double)off, (long)now); f << b;
+        std::string cur; std::string all = cfg.inds + ",";
+        for (size_t i = 0; i < all.size(); i++) {
+            char ch = all[i];
+            if (ch == ',' || ch == ';') {
+                while (!cur.empty() && cur.back() == ' ') cur.pop_back();
+                if (!cur.empty() && names.size() < 8) {
+                    RTARRAY* a = new RTARRAY(fEmptyArray);
+                    char nm[80]; memset(nm, 0, sizeof(nm)); strncpy_s(nm, sizeof(nm), cur.c_str(), _TRUNCATE);
+                    if ((a->getChartIndicator(nm) == RTX_OK && a->count > 0) || (a->getCustomIndicator(nm, 1, true) == RTX_OK && a->count > 0)) { names.push_back(cur); arrs.push_back(a); } else delete a;
+                }
+                cur.clear();
+            } else if (!(cur.empty() && ch == ' ') && ch != '|') cur += ch;
+        }
+    }
+    std::string nl; for (size_t j = 0; j < names.size(); j++) nl += (j ? "," : "") + names[j];
+    {
+        std::ofstream f(tmp.c_str(), std::ios::trunc); if (!f.is_open()) { for (size_t j = 0; j < arrs.size(); j++) delete arrs[j]; return; }
+        char b[200];
+        sprintf_s(b, sizeof(b), "IRTBARS|2|%s|%s|%.6f|%ld|%s\n", mkt.c_str(), root.c_str(), (double)off, (long)now, nl.c_str()); f << b;
         int from = (int)n - 200; if (from < 0) from = 0;
         for (int i = from; i < (int)n; i++) {
             struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dtm[i], &t);
             sprintf_s(b, sizeof(b), "%04d-%02d-%02d %02d:%02d:%02d|%.6f|%.6f|%.6f|%.6f|%.0f\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                       t.tm_hour, t.tm_min, t.tm_sec, (double)o[i], (double)h[i], (double)l[i], (double)c[i], (double)v[i]);
-            f << b;
+            std::string row(b); if (!row.empty() && row.back() == '\n') row.pop_back();
+            for (size_t j = 0; j < arrs.size(); j++) {
+                long k = (long)i - ((long)n - arrs[j]->count);           // the indicator's array ends on the chart's last bar
+                char vb[32]; if (k >= 0 && k < arrs[j]->count) sprintf_s(vb, sizeof(vb), "|%.4f", (double)(*arrs[j])[(int)k]); else sprintf_s(vb, sizeof(vb), "|");
+                row += vb;
+            }
+            f << row << "\n";
         }
     }
+    for (size_t j = 0; j < arrs.size(); j++) delete arrs[j];
     std::remove(path.c_str());
     if (std::rename(tmp.c_str(), path.c_str()) == 0) { expN = n; expC = lc; expT = now; }
 }
@@ -448,6 +488,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("1.4.0");
+    p->setVersion("1.5.0");
     return p;
 }

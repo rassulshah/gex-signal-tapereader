@@ -54,6 +54,9 @@ struct Data {
     std::vector<Chk> chk;
     struct Tag { float k = 0; std::string text; char col = 'W'; };
     std::vector<Tag> tags;
+    // (file 1.4 / Read 1.5, mockups v28 + v29) the level VERDICT under the Key Level: will the level hold after the reclaim so
+    // the stop beyond the sweep is not hit? The Reader's Strength (lra/strength.py): STRONG / OK / WEAK / BROKEN, points / of
+    std::string vLabel, vText; int vPts = -1, vOf = 0;
 };
 
 // (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
@@ -143,6 +146,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "AMAG" && t.size() >= 2) { D.aMag = t[1]; return true; }
     if (k == "KEYLVL" && t.size() >= 2) { D.keyLvl = t[1]; return true; }
     if (k == "CHK" && t.size() >= 5) { Data::Chk c; c.n = t[1]; c.name = t[2]; c.st = t[3]; c.val = t[4]; D.chk.push_back(c); return true; }
+    if (k == "VERDICT" && t.size() >= 5) { D.vLabel = t[1]; D.vPts = atoi(t[2].c_str()); D.vOf = atoi(t[3].c_str()); D.vText = t[4]; return true; }
     if (k == "STOPTGT" && t.size() >= 3) { D.stopTxt = t[1]; D.tgtTxt = t[2]; return true; }
     if (k == "TAG" && t.size() >= 4) { Data::Tag g; g.k = f(t[1]); g.text = t[2]; g.col = col1(t[3]); if (g.k > 0) { D.tags.push_back(g); return true; } return false; }
     if (k == "LEARN" && t.size() >= 2) { D.learn = t[1] == "1"; return true; }

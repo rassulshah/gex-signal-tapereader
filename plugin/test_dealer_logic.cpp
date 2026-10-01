@@ -92,6 +92,12 @@ int main()
         CHECK(A.xrows.size() == 1 && A.xrows[0].n == "TAPE" && A.aTime == "11:18" && A.aBias == "SHORT the rally into 4,198" && A.aBiasCol == 'R'
               && A.scn.size() == 2 && A.scn[0].l3 == "options at 4,200: 3.4k puts" && A.scn[1].l3.empty() && A.scn[1].col == 'L', "tape + analyst rows");
     }
+    {   // (Read 1.5) the level verdict
+        dl::Data V;
+        dl::parseLine(V, "VERDICT|WEAK|0|2|no floor: a pocket 4,165-4,176 under the level - a sweep can run through your stop");
+        CHECK(V.vLabel == "WEAK" && V.vPts == 0 && V.vOf == 2 && V.vText.find("pocket") != std::string::npos, "verdict row");
+        dl::Data W2; CHECK(W2.vPts == -1 && W2.vLabel.empty(), "no verdict = none drawn");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }
