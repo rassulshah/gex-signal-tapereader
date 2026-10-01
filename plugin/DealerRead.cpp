@@ -14,6 +14,7 @@
  *  Pinned on its own line); bottom box order = Key Level, VERDICT (the Reader's Strength: will the level hold after the
  *  reclaim so the stop beyond the sweep is not hit), greeks, TAPE, then the trade checklist right above STOP / TGT.
  *
+ *  1.6.1 (2026-10-01, Reader 2.49): settings text only - STP/RESWEEP, counted vs shown votes, DEADLINE. No new parameters.
  *  1.6.0 (2026-10-01, one decision system): when the file has the decision rows (lra/verdict.py) the bottom box is the
  *  same as the Reader panel - VERDICT (SUPPORTED / MIXED / OPPOSED + side + tally), the votes and the dealer lines with
  *  check / cross / dash / circle marks, the BOOK trust flag, then the PLAN band (TRIGGER, STOP, TARGET + R). Setting
@@ -131,7 +132,7 @@ int cppExtension::setup(void)
     // (1.3.2, Rassul 2026-09-30: "why cant you have the how-to below fuel as text" / "many dropdowns that shouldnt even be
     // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
-    setParameterVersion(4);
+    setParameterVersion(5);   // (1.6.1) one settings line added
     setParameterDialogHeight(25);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -155,15 +156,16 @@ int cppExtension::setup(void)
     pc++; setLabelParameter("BOTTOM box, same as the Reader panel. Every line:", 380);
     pc++; setLabelParameter("  check = supports the trade, cross = against it,", 380);
     pc++; setLabelParameter("  dash = neutral, circle = not measured yet", 380);
-    pc++; setLabelParameter("VERDICT = the votes added up, e.g. SUPPORTED SHORT 4/5", 380);
+    pc++; setLabelParameter("VERDICT = the COUNTED votes, e.g. SUPPORTED SHORT 2/2", 380);
     pc++; setLabelParameter("  SUPPORTED = more than half support, at most 1 against", 380);
     pc++; setLabelParameter("  OPPOSED = more against than for; else MIXED", 380);
-    pc++; setLabelParameter("VOTES: RE-SWEEP % (tested), DEALERS, TAPE, MAGNET,", 380);
-    pc++; setLabelParameter("  RANGE used (tested), WALL LIFE (walls only)", 380);
-    pc++; setLabelParameter("DEALERS = DELTA + GAMMA + NET together (one vote)", 380);
+    pc++; setLabelParameter("COUNTED: STP/RESWEEP (LOW/MED/HIGH stop risk, tested),", 380);
+    pc++; setLabelParameter("  DEALERS = GAMMA + NET (not used for CL / NG)", 380);
+    pc++; setLabelParameter("SHOWN, not counted yet: NEXT, LIFE (tested nightly)", 380);
     pc++; setLabelParameter("  BOOK flipped = the dealer read may be backwards", 380);
     pc++; setLabelParameter("PLAN: TRIGGER = your CoB / RBar, STOP = 1 tick past the", 380);
-    pc++; setLabelParameter("  sweep (est. until swept), TARGET = next strong wall + R", 380);
+    pc++; setLabelParameter("  sweep (est. until swept), TARGET = NEXT / next wall + R,", 380);
+    pc++; setLabelParameter("  DEADLINE = when the 0DTE behind the trade expires", 380);
     pc++; setLabelParameter("View: Summary = the same read written as sentences", 380);
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
@@ -945,7 +947,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.6.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.6.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)
