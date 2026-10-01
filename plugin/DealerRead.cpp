@@ -629,15 +629,16 @@ void DealerRead::keyBoxV2(const Settings& S, short x0, short y0, short W, short 
     if (!stale.empty()) text((short)(x0 + W - pad), y, stale.c_str(), C_RED, fs - 1, true, 2);
     // the VERDICT band
     y = (short)(y0 + U(26));
-    COLOR vc = D.v2Word == "SUPPORTED" ? C_GREEN : D.v2Word == "OPPOSED" ? C_RED : C_MUTED;
-    COLOR vbg = D.v2Word == "SUPPORTED" ? 0x00052E16 : D.v2Word == "OPPOSED" ? 0x002A0E12 : 0x00111827;
+    bool v2No = D.v2Word == "OPPOSED" || D.v2Word == "NO TRADE";
+    COLOR vc = D.v2Word == "SUPPORTED" ? C_GREEN : v2No ? C_RED : C_MUTED;
+    COLOR vbg = D.v2Word == "SUPPORTED" ? 0x00052E16 : v2No ? 0x002A0E12 : 0x00111827;
     short vt = y, vb = (short)(y + U(22));
     fill((short)(x0 + pad), vt, (short)(x0 + W - pad), vb, vbg);
     fill((short)(x0 + pad), vt, (short)(x0 + pad + U(3)), vb, vc);
     short cy = (short)((vt + vb) / 2), cx = (short)(x0 + pad + U(10));
-    mark(cx, cy, U(14), D.v2Word == "SUPPORTED" ? "ok" : D.v2Word == "OPPOSED" ? "bad" : D.v2Word == "WAIT" ? "wait" : "neutral");
+    mark(cx, cy, U(14), D.v2Word == "SUPPORTED" ? "ok" : v2No ? "bad" : D.v2Word == "WAIT" ? "wait" : "neutral");
     cx = (short)(cx + U(22));
-    char b[96]; sprintf_s(b, sizeof(b), "%s %s %d/%d", D.v2Word.c_str(), D.v2Side.c_str(), D.v2Sup, D.v2Meas);
+    char b[96]; if (D.v2Word == "NO TRADE") sprintf_s(b, sizeof(b), "NO TRADE %s - re-swept", D.v2Side.c_str()); else sprintf_s(b, sizeof(b), "%s %s %d/%d", D.v2Word.c_str(), D.v2Side.c_str(), D.v2Sup, D.v2Meas);
     text(cx, cy, b, vc, fs + 1, true, 0);
     cx = (short)(cx + textW(b, fs + 1, true) + U(10));
     if (D.v2Wait > 0) { sprintf_s(b, sizeof(b), "%d waiting", D.v2Wait); text(cx, cy, b, C_MUTED, fs - 1, false, 0); }
