@@ -611,7 +611,7 @@ short DealerRead::keyBoxV2H(const Settings& S, short W)
         std::vector<std::string> L = wrapWords(D.summary, W - U(18), W - U(18), S.font, false, 9);
         return (short)(U(26) + U(26) + U(16) * (short)(L.empty() ? 1 : L.size()) + U(10));
     }
-    size_t nl = D.votes.size(), nr = D.dlines.size() + (D.bookState.empty() ? 0 : 1);
+    size_t nl = D.votes.size(), nr = D.dlines.size();
     size_t n = nl > nr ? nl : nr;
     return (short)(U(26) + U(26) + U(19) * (short)n + U(8) + U(28) + U(8));
 }
@@ -660,7 +660,7 @@ void DealerRead::keyBoxV2(const Settings& S, short x0, short y0, short W, short 
     };
     for (size_t i = 0; i < D.votes.size(); i++) { row((short)(x0 + pad), yl, D.votes[i].q, D.votes[i].n, D.votes[i].v, colW); yl = (short)(yl + U(19)); }
     for (size_t i = 0; i < D.dlines.size(); i++) { row((short)(x0 + pad + colW), yr, D.dlines[i].q, D.dlines[i].n, D.dlines[i].v, colW); yr = (short)(yr + U(19)); }
-    if (!D.bookState.empty()) { row((short)(x0 + pad + colW), yr, bookQ(D.bookState), "BOOK", D.bookState + (D.bookPct.empty() ? "" : " " + D.bookPct + "%"), colW); yr = (short)(yr + U(19)); }
+    // (1.6.0, Rassul 2026-10-01: BOOK works in the background, not level information) only its FLIPPED warning shows, in the VERDICT band
     y = (short)((yl > yr ? yl : yr) - U(4));
     line((short)(x0 + pad + colW - U(6)), (short)(y0 + U(26) + U(22) + U(10)), (short)(x0 + pad + colW - U(6)), (short)(y - U(6)), 0x00334155, 1);
     // the PLAN band: TRIGGER / STOP / TARGET
