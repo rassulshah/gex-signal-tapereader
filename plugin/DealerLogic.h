@@ -57,6 +57,12 @@ struct Data {
     // (file 1.4 / Read 1.5, mockups v28 + v29) the level VERDICT under the Key Level: will the level hold after the reclaim so
     // the stop beyond the sweep is not hit? The Reader's Strength (lra/strength.py): STRONG / OK / WEAK / BROKEN, points / of
     std::string vLabel, vText; int vPts = -1, vOf = 0;
+    // (file 1.5 / Read 1.6.0, Rassul 2026-10-01: one decision system) the verdict tally, its votes, the dealer lines, the
+    // plan and the summary - written by lra/verdict.py, the same as the Reader panel. q = ok / bad / neutral / wait
+    struct Vote { std::string n, q, v; };
+    bool hasV2 = false; std::string v2Word, v2Side; int v2Sup = 0, v2Meas = 0, v2Wait = 0, v2Opp = 0;
+    std::vector<Vote> votes, dlines, plan;
+    std::string bookState, bookPct, summary;
 };
 
 // (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
@@ -150,6 +156,13 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "STOPTGT" && t.size() >= 3) { D.stopTxt = t[1]; D.tgtTxt = t[2]; return true; }
     if (k == "TAG" && t.size() >= 4) { Data::Tag g; g.k = f(t[1]); g.text = t[2]; g.col = col1(t[3]); if (g.k > 0) { D.tags.push_back(g); return true; } return false; }
     if (k == "LEARN" && t.size() >= 2) { D.learn = t[1] == "1"; return true; }
+    if (k == "VERDICT2" && t.size() >= 7) { D.hasV2 = true; D.v2Word = t[1]; D.v2Side = t[2]; D.v2Sup = atoi(t[3].c_str()); D.v2Meas = atoi(t[4].c_str()); D.v2Wait = atoi(t[5].c_str()); D.v2Opp = atoi(t[6].c_str()); return true; }
+    if ((k == "VOTE" || k == "DLINE" || k == "PLAN") && t.size() >= 4) {
+        Data::Vote v; v.n = t[1]; v.q = t[2]; v.v = t[3];
+        (k == "VOTE" ? D.votes : k == "DLINE" ? D.dlines : D.plan).push_back(v); return true;
+    }
+    if (k == "BOOKCHK" && t.size() >= 3) { D.bookState = t[1]; D.bookPct = t[2]; return true; }
+    if (k == "SUMMARY" && t.size() >= 2) { D.summary = t[1]; return true; }
     return false;
 }
 

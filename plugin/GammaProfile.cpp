@@ -62,7 +62,7 @@
 #include <algorithm>
 #include <ctime>
 
-static const char* GP_VERSION = "0.78";   // (v0.71) ONE version string: the factory and the status file both read it
+static const char* GP_VERSION = "0.79";   // (v0.71) ONE version string: the factory and the status file both read it
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -687,7 +687,7 @@ void GammaProfile::drawPanel(RCT pane, const Settings& S, float net, int fIdx, i
     char pwS[48]="PW n/a", flS[48]="FLIP n/a", cwS[48]="CW n/a", kgS[48]="", kgS2[48]="", mgS[48]="";
     if (has[0] && kIdx >= 0 && kIdx < (int)strikes.size()) {
         float kspx = strikes[kIdx].spx;
-        sprintf_s(kgS, sizeof(kgS), "%s", gpl::chipLevel(S.kinglabel, lvl[0], "SPX", kspx).c_str());   // (v0.72) ES (SPX strike)
+        sprintf_s(kgS, sizeof(kgS), "%s%s", gpl::chipLevel(S.kinglabel, lvl[0], "SPX", kspx).c_str(), strikes[kIdx].pct < 0 ? " SLICE" : " PIN");   // (v0.72) ES (SPX strike); (v0.79) PIN / SLICE
     }
     // (v0.64) the SPY King when both books draw, and the IF Magnet (KINGNOW,ES,IF) — "both Kings should be mentioned in the chip"
     int kSpy = -1; for (size_t q = 0; q < strikesSpy.size(); q++) if (strikesSpy[q].king) { kSpy = (int)q; break; }
@@ -1135,7 +1135,10 @@ void GammaProfile::render(const Settings& S, bool railOnly)
             if (pk[0]) textLJc(c2, p.v, pk, tc, S.font, s.king);
             // (v0.76) THE TAG ON TOP OF THE ROW: [King name][·][CW / PW / MAG] | one space | [0D / WK / MO pill], bold, font - 1,
             // left edge on the strike, 1 px above the row's text. Shifted left as a whole if it would run past the pane edge.
-            const char* kTop = (s.king && tagTop && S.kinglabel[0]) ? S.kinglabel : 0;
+            // (v0.79, Rassul 2026-10-01: one decision system) the King says what it does, the same as the Read's magnet:
+            // long gamma (+) = it PINS price, short gamma (-) = dealers chase through it, it SLICES - never a magnet
+            std::string kLab = (s.king && S.kinglabel[0]) ? std::string(S.kinglabel) + (s.pct < 0 ? " SLICE" : " PIN") : std::string();
+            const char* kTop = (s.king && tagTop && S.kinglabel[0]) ? kLab.c_str() : 0;
             if (tagTop && (kTop || topW)) {
                 FONT tf; tf.id = HELVETICA; tf.size = (short)(S.font - 1); tf.style = BOLD; setFont(tf);
                 COLOR kc2 = (S.kingcol == 1) ? D_KING : (s.pct < 0 ? S.cneg : S.cpos);

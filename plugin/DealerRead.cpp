@@ -14,6 +14,11 @@
  *  Pinned on its own line); bottom box order = Key Level, VERDICT (the Reader's Strength: will the level hold after the
  *  reclaim so the stop beyond the sweep is not hit), greeks, TAPE, then the trade checklist right above STOP / TGT.
  *
+ *  1.6.0 (2026-10-01, one decision system): when the file has the decision rows (lra/verdict.py) the bottom box is the
+ *  same as the Reader panel - VERDICT (SUPPORTED / MIXED / OPPOSED + side + tally), the votes and the dealer lines with
+ *  check / cross / dash / circle marks, the BOOK trust flag, then the PLAN band (TRIGGER, STOP, TARGET + R). Setting
+ *  View: Standard / Summary - Summary shows the whole read as sentences instead. Older files: the 1.5 layout.
+ *
  *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Dealer-<MKT>.csv (LRA analytics/lra/dealer_irt.py); grammar in
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
  ********************************************************************************/
@@ -60,9 +65,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
+struct PIdx { int view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
-struct Settings { int market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -89,6 +94,9 @@ public:
     std::vector<std::string> verdictLines(const Settings& S, short W);   // (1.5.0) the VERDICT text, wrapped
     void keyBox(const Settings& S, short x0, short y0, short W, short H, bool wallLvl, const std::vector<dl::Row>& rows, const dl::Row* tape, const std::string& stale);
     void tick(short x, short y, short sz, COLOR c);
+    void mark(short x, short y, short sz, const std::string& q);   // (1.6.0) check / cross / dash / circle
+    short keyBoxV2H(const Settings& S, short W);
+    void keyBoxV2(const Settings& S, short x0, short y0, short W, short H, bool wallLvl, const std::string& stale);
     bool inV14 = false; int profReach = 330; long long reachStamp = -2;   // px the Profile takes from the scale edge (its status file)
     void renderAnalyst(const Settings& S, short x0, short y0, short W, short H);
     std::vector<std::string> wrapWords(const std::string& s, int firstW, int restW, int sz, bool bold, int maxLines);
@@ -123,7 +131,7 @@ int cppExtension::setup(void)
     // (1.3.2, Rassul 2026-09-30: "why cant you have the how-to below fuel as text" / "many dropdowns that shouldnt even be
     // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
-    setParameterVersion(3);
+    setParameterVersion(4);
     setParameterDialogHeight(25);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -140,22 +148,23 @@ int cppExtension::setup(void)
     PX.atop     = pc++; setIntegerParameter("Analyst: down from top (px)", 30, 0, SL);
     PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, 0);
     PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
-    pc++; setLabelParameter("HOW TO READ IT - example: Gold long at PDL 4,176.30", 380);
+    PX.view     = pc++; setListParameter("View", 0, "Standard;Summary");   // (1.6.0) Summary = the whole read as sentences
+    pc++; setLabelParameter("HOW TO READ IT - example: ES short at LH 7,756.50 + CR 0D", 380);
     pc++; setLabelParameter("TOP box = MAGNET: where dealers pull price into expiry", 380);
-    pc++; setLabelParameter("  e.g. 0DTE GW 4,230 untouched, options expire 12:30", 380);
-    pc++; setLabelParameter("  dealers long gamma there: they sell above, buy below", 380);
-    pc++; setLabelParameter("  Agrees = it helps your trade and is a 2nd target", 380);
-    pc++; setLabelParameter("  Fights = take profits early / Pinned = chop to expiry", 380);
-    pc++; setLabelParameter("BOTTOM box: Key Level = price level + MenthorQ level", 380);
-    pc++; setLabelParameter("VERDICT = will the level hold after the sweep?", 380);
-    pc++; setLabelParameter("  STRONG 2/2 = a gamma floor beyond your stop + above HVL", 380);
-    pc++; setLabelParameter("  OK = one missing, WEAK = none: a sweep can run your stop", 380);
-    pc++; setLabelParameter("  BROKEN = price went through the stop zone - no trade", 380);
-    pc++; setLabelParameter("Greeks: check = your way, cross = against, dot = waiting", 380);
-    pc++; setLabelParameter("TAPE = who controlled the last 15 min of volume", 380);
-    pc++; setLabelParameter("Checklist: 1 sweep the key level, 2 gamma, 3 trigger", 380);
-    pc++; setLabelParameter("  trigger = CoB or RBar (your only two triggers)", 380);
-    pc++; setLabelParameter("STOP = 1 tick past the sweep, TGT = next strong wall", 380);
+    pc++; setLabelParameter("  Agrees = a 2nd target / Fights = take profits early", 380);
+    pc++; setLabelParameter("BOTTOM box, same as the Reader panel. Every line:", 380);
+    pc++; setLabelParameter("  check = supports the trade, cross = against it,", 380);
+    pc++; setLabelParameter("  dash = neutral, circle = not measured yet", 380);
+    pc++; setLabelParameter("VERDICT = the votes added up, e.g. SUPPORTED SHORT 4/5", 380);
+    pc++; setLabelParameter("  SUPPORTED = more than half support, at most 1 against", 380);
+    pc++; setLabelParameter("  OPPOSED = more against than for; else MIXED", 380);
+    pc++; setLabelParameter("VOTES: RE-SWEEP % (tested), DEALERS, TAPE, MAGNET,", 380);
+    pc++; setLabelParameter("  RANGE used (tested), WALL LIFE (walls only)", 380);
+    pc++; setLabelParameter("DEALERS = DELTA + GAMMA + NET together (one vote)", 380);
+    pc++; setLabelParameter("  BOOK flipped = the dealer read may be backwards", 380);
+    pc++; setLabelParameter("PLAN: TRIGGER = your CoB / RBar, STOP = 1 tick past the", 380);
+    pc++; setLabelParameter("  sweep (est. until swept), TARGET = next strong wall + R", 380);
+    pc++; setLabelParameter("View: Summary = the same read written as sentences", 380);
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
@@ -174,6 +183,7 @@ void DealerRead::readSettings(Settings& S)
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
     S.layout = getListIndex(PX.layout); if (S.layout < 0 || S.layout > 3) S.layout = 0;
     S.lift = getIntegerValue(PX.lift); if (S.lift < 0 || S.lift > 400) S.lift = 30;
+    S.view = getListIndex(PX.view); if (S.view < 0 || S.view > 1) S.view = 0;
     S.explain = false;
 }
 
@@ -585,6 +595,81 @@ void DealerRead::keyBox(const Settings& S, short x0, short y0, short W, short H,
     text((short)(x0 + pad + textW(D.stopTxt.c_str(), fs, true) + U(20)), y, fit(D.tgtTxt, W - 2 * pad - textW(D.stopTxt.c_str(), fs, true) - U(20), fs, true).c_str(), 0x0086EFAC, fs, true, 0);
 }
 
+void DealerRead::mark(short x, short y, short sz, const std::string& q)
+{   // (1.6.0) the Reader's marks: check = supports the trade, cross = against, dash = neutral, circle = waiting
+    if (q == "ok") { line(x, y, (short)(x + sz / 3), (short)(y + sz / 3), C_GREEN, 3); line((short)(x + sz / 3), (short)(y + sz / 3), (short)(x + sz), (short)(y - sz / 2), C_GREEN, 3); }
+    else if (q == "bad") { short h = (short)(sz / 2); line(x, (short)(y - h), (short)(x + sz), (short)(y + h), C_RED, 3); line(x, (short)(y + h), (short)(x + sz), (short)(y - h), C_RED, 3); }
+    else if (q == "neutral") { line((short)(x + 1), y, (short)(x + sz - 1), y, C_MUTED, 3); }
+    else { short h = (short)(sz / 2 - 1); frame((short)(x + 1), (short)(y - h), (short)(x + sz - 1), (short)(y + h), C_GREY, false); }
+}
+
+static std::string bookQ(const std::string& st) { return st == "MATCH" ? "ok" : st == "FLIP" ? "bad" : st == "MIXED" ? "neutral" : "wait"; }
+
+short DealerRead::keyBoxV2H(const Settings& S, short W)
+{
+    if (S.view == 1) {
+        std::vector<std::string> L = wrapWords(D.summary, W - U(18), W - U(18), S.font, false, 9);
+        return (short)(U(26) + U(26) + U(16) * (short)(L.empty() ? 1 : L.size()) + U(10));
+    }
+    size_t nl = D.votes.size(), nr = D.dlines.size() + (D.bookState.empty() ? 0 : 1);
+    size_t n = nl > nr ? nl : nr;
+    return (short)(U(26) + U(26) + U(19) * (short)n + U(8) + U(28) + U(8));
+}
+
+void DealerRead::keyBoxV2(const Settings& S, short x0, short y0, short W, short H, bool wallLvl, const std::string& stale)
+{   // (1.6.0) Key Level / VERDICT / votes | dealer lines + BOOK / PLAN band - or the Summary view
+    int fs = S.font;
+    COLOR bc = wallLvl ? C_BLUE : C_AMBER, bg = wallLvl ? 0x00161203 : 0x0012091F, band = wallLvl ? 0x00262006 : 0x00231433;
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), bg);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), bc, false);
+    short pad = U(9), y = (short)(y0 + U(13));
+    text((short)(x0 + pad), y, "Key Level:", C_MUTED, fs, true, 0);
+    int kl = textW("Key Level:", fs, true) + U(6);
+    text((short)(x0 + pad + kl), y, fit(D.keyLvl, W - 2 * pad - kl - (stale.empty() ? 0 : textW(stale.c_str(), fs - 1, true) + U(10)), fs, true).c_str(), bc, fs, true, 0);
+    if (!stale.empty()) text((short)(x0 + W - pad), y, stale.c_str(), C_RED, fs - 1, true, 2);
+    // the VERDICT band
+    y = (short)(y0 + U(26));
+    COLOR vc = D.v2Word == "SUPPORTED" ? C_GREEN : D.v2Word == "OPPOSED" ? C_RED : C_MUTED;
+    COLOR vbg = D.v2Word == "SUPPORTED" ? 0x00052E16 : D.v2Word == "OPPOSED" ? 0x002A0E12 : 0x00111827;
+    short vt = y, vb = (short)(y + U(22));
+    fill((short)(x0 + pad), vt, (short)(x0 + W - pad), vb, vbg);
+    fill((short)(x0 + pad), vt, (short)(x0 + pad + U(3)), vb, vc);
+    short cy = (short)((vt + vb) / 2), cx = (short)(x0 + pad + U(10));
+    mark(cx, cy, U(14), D.v2Word == "SUPPORTED" ? "ok" : D.v2Word == "OPPOSED" ? "bad" : D.v2Word == "WAIT" ? "wait" : "neutral");
+    cx = (short)(cx + U(22));
+    char b[96]; sprintf_s(b, sizeof(b), "%s %s %d/%d", D.v2Word.c_str(), D.v2Side.c_str(), D.v2Sup, D.v2Meas);
+    text(cx, cy, b, vc, fs + 1, true, 0);
+    cx = (short)(cx + textW(b, fs + 1, true) + U(10));
+    if (D.v2Wait > 0) { sprintf_s(b, sizeof(b), "%d waiting", D.v2Wait); text(cx, cy, b, C_MUTED, fs - 1, false, 0); }
+    if (D.bookState == "FLIP") { std::string fb = "BOOK FLIPPED " + D.bookPct + "% - read may be backwards"; text((short)(x0 + W - pad - U(6)), cy, fit(fb, W / 2, fs - 1, true).c_str(), C_RED, fs - 1, true, 2); }
+    y = (short)(vb + U(6));
+    if (S.view == 1) {                                     // the Summary view: the whole read as sentences
+        std::vector<std::string> L = wrapWords(D.summary, W - U(18), W - U(18), fs, false, 9);
+        y = (short)(y + U(10));
+        for (size_t i = 0; i < L.size(); i++) { text((short)(x0 + pad), y, L[i].c_str(), C_INK, fs, false, 0); y = (short)(y + U(16)); }
+        return;
+    }
+    // votes (left) | the dealer lines + BOOK (right): mark, NAME, value
+    short colW = (short)((W - 2 * pad) / 2), yl = (short)(y + U(10)), yr = yl;
+    auto row = [&](short x, short yy, const std::string& q, const std::string& n, const std::string& v, short w) {
+        mark(x, yy, U(12), q);
+        text((short)(x + U(18)), yy, n.c_str(), C_INK, fs, true, 0);
+        int nw = textW(n.c_str(), fs, true) + U(6);
+        text((short)(x + U(18) + nw), yy, fit(v, w - U(18) - nw - U(6), fs - 1, false).c_str(), 0x00CBD5E1, fs - 1, false, 0);
+    };
+    for (size_t i = 0; i < D.votes.size(); i++) { row((short)(x0 + pad), yl, D.votes[i].q, D.votes[i].n, D.votes[i].v, colW); yl = (short)(yl + U(19)); }
+    for (size_t i = 0; i < D.dlines.size(); i++) { row((short)(x0 + pad + colW), yr, D.dlines[i].q, D.dlines[i].n, D.dlines[i].v, colW); yr = (short)(yr + U(19)); }
+    if (!D.bookState.empty()) { row((short)(x0 + pad + colW), yr, bookQ(D.bookState), "BOOK", D.bookState + (D.bookPct.empty() ? "" : " " + D.bookPct + "%"), colW); yr = (short)(yr + U(19)); }
+    y = (short)((yl > yr ? yl : yr) - U(4));
+    line((short)(x0 + pad + colW - U(6)), (short)(y0 + U(26) + U(22) + U(10)), (short)(x0 + pad + colW - U(6)), (short)(y - U(6)), 0x00334155, 1);
+    // the PLAN band: TRIGGER / STOP / TARGET
+    short bt = (short)(y + U(2)), bb = (short)(bt + U(28));
+    fill((short)(x0 + pad), bt, (short)(x0 + W - pad), bb, band);
+    short py = (short)((bt + bb) / 2), px = (short)(x0 + pad + U(6));
+    short pw = (short)((W - 2 * pad - U(12)) / (D.plan.empty() ? 1 : (short)D.plan.size()));
+    for (size_t i = 0; i < D.plan.size(); i++) { row(px, py, D.plan[i].q, D.plan[i].n, D.plan[i].v, pw); px = (short)(px + pw); }
+}
+
 void DealerRead::renderV14(const Settings& S)
 {
     u = S.font / 10.0f;
@@ -622,6 +707,18 @@ void DealerRead::renderV14(const Settings& S)
     const dl::Row* tape = 0;
     for (size_t i = 0; i < D.xrows.size(); i++) if (D.xrows[i].n == "TAPE") tape = &D.xrows[i];
     short W = (short)(U(450) * S.widthPct / 100); if (W < U(340)) W = U(340);
+    if (D.hasV2) {                                         // (1.6.0) the decision layer, the same as the Reader panel
+        if (W < U(560)) W = U(560);
+        short H2 = keyBoxV2H(S, W);
+        bool right2 = S.corner == 1 || S.corner == 3, bottom2 = S.corner <= 1 || S.corner == 4;
+        short x2 = right2 ? (short)(clearR - W) : (S.corner >= 4 ? (short)((pane.left + clearR) / 2 - W / 2) : (short)(pane.left + U(6)));
+        x2 = (short)(x2 + S.moveX);
+        if (x2 + W > clearR) x2 = (short)(clearR - W);
+        if (x2 < pane.left + 2) x2 = (short)(pane.left + 2);
+        short y2 = bottom2 ? (short)(pane.bottom - H2 - U(6) - S.lift) : (short)(pane.top + U(6));
+        keyBoxV2(S, x2, y2, W, H2, wallLvl, stale);
+        return;
+    }
     size_t nv = D.vLabel.empty() ? 0 : verdictLines(S, W).size(); if (!D.vLabel.empty() && nv == 0) nv = 1;
     short vH = D.vLabel.empty() ? 0 : (short)(U(8) + U(15) * (short)nv + U(4));
     short H = (short)(U(26) + vH + U(10) + U(20) * (short)(rows.size() < 3 ? rows.size() : 3) + U(4) + (tape ? U(12) : 0) + U(2) + U(28) + U(14) + U(14));
@@ -847,7 +944,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.5.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,1.6.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 int DealerRead::draw(void)

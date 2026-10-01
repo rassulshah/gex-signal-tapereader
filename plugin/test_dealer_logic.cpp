@@ -98,6 +98,21 @@ int main()
         CHECK(V.vLabel == "WEAK" && V.vPts == 0 && V.vOf == 2 && V.vText.find("pocket") != std::string::npos, "verdict row");
         dl::Data W2; CHECK(W2.vPts == -1 && W2.vLabel.empty(), "no verdict = none drawn");
     }
+    {   // (Read 1.6.0) the decision layer: verdict tally, votes, dealer lines, BOOK flag, plan, summary (lra/verdict.py)
+        dl::Data V;
+        const char* rows[] = { "VERDICT2|SUPPORTED|SHORT|4|5|1|0", "VOTE|RE-SWEEP|ok|14%", "VOTE|DEALERS|ok|2 of 3", "DLINE|DELTA|ok|sell 310 0.60%",
+            "DLINE|GAMMA|ok|wall 1.40%", "DLINE|NET|neutral|+2%", "VOTE|TAPE|ok|sellers 1.4x", "VOTE|MAGNET|neutral|none", "VOTE|RANGE|ok|38% ADR",
+            "VOTE|WALL LIFE|wait|", "BOOKCHK|MATCH|78", "PLAN|TRIGGER|wait|wait CoB / RBar", "PLAN|STOP|ok|7,766.25 est",
+            "PLAN|TARGET|ok|7,733.50 wall 3.2R est", "SUMMARY|ES: supported short (4 of 5 votes), 1 still waiting." };
+        for (const char* r : rows) dl::parseLine(V, r);
+        CHECK(V.hasV2 && V.v2Word == "SUPPORTED" && V.v2Side == "SHORT" && V.v2Sup == 4 && V.v2Meas == 5 && V.v2Wait == 1 && V.v2Opp == 0, "VERDICT2 tally");
+        CHECK(V.votes.size() == 6 && V.votes[1].n == "DEALERS" && V.votes[5].q == "wait" && V.votes[5].v.empty(), "six votes, an empty value kept");
+        CHECK(V.dlines.size() == 3 && V.dlines[2].n == "NET" && V.dlines[2].q == "neutral", "the dealer lines under DEALERS");
+        CHECK(V.bookState == "MATCH" && V.bookPct == "78", "BOOK trust flag");
+        CHECK(V.plan.size() == 3 && V.plan[1].v == "7,766.25 est" && V.plan[2].q == "ok", "plan: trigger, stop est, target");
+        CHECK(V.summary.find("supported short") != std::string::npos, "summary text");
+        dl::Data O; CHECK(!O.hasV2 && O.votes.empty() && O.summary.empty(), "an older file = no decision rows (the old layout is drawn)");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }
