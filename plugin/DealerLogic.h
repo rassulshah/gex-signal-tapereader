@@ -6,7 +6,8 @@
  *  draw. Fields are separated by '|'. Rows:
  *     VERSION|1.0            ASOF|<CT sec-of-day>|<yyyy-mm-dd>      MARKET|GC      PRICE|<px>|<em>
  *     BOOK|<gamma at price, fut per 0.1 EM>|FUEL|WALL|short|long
- *     NODE|<strike>|<gamma on arrival>|<lo>|<hi>|<snapshot>|<delta flow, + = BUY>|<far 0/1>
+ *     NODE|<strike>|<gamma on arrival>|<lo>|<hi>|<snapshot>|<delta flow, + = BUY>|<far 0/1>|<gp>|<dp>|<live>|<net GEX $/pt>|<0DTE net GEX $/pt>
+ *          (file 1.5 / Profile 2.0, 2026-10-02: the last two = MenthorQ's own net GEX at the strike, all expiries and today's 0DTE)
  *     LEVEL|<key label>|<px>|<phase 0..4>|<context text>|S|R           (LEVEL|NONE = nothing near)
  *     WALLHDR|<title>|<score>|<G/R/A/Y/N>     WALLROW|<name>|<meter -100..100 or NA>|<label>|ok|bad|watch|wait|<why>
  *     FUELHDR|FUEL|<score>|<col>               FUELROW|... (as WALLROW)
@@ -24,7 +25,7 @@
 
 namespace dl {
 
-struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0, gp = -1, dp = -1; bool far = false, live = false; };   // live: COVER confirmed dealers trading here   // gp / dp: % of a normal 15 min of volume (-1 = none)
+struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0, gp = -1, dp = -1, usd = 0, usd0 = 0; bool far = false, live = false, hasUsd = false; };   // live: COVER confirmed dealers trading here   // gp / dp: % of a normal 15 min of volume (-1 = none)
 struct Trig { std::string group, name, val, note; bool on = false; };
 struct Row  { std::string n, lab, st, why; bool hasV = false; float v = 0; };
 struct KV   { std::string k, v; char col = 'W'; };
@@ -120,6 +121,7 @@ inline bool parseLine(Data& D, const std::string& line)
         Node n; n.k = f(t[1]); n.g = f(t[2]); n.lo = f(t[3]); n.hi = f(t[4]); n.snap = f(t[5]); n.d = f(t[6]); n.far = t[7] == "1";
         if (t.size() >= 10) { if (!t[8].empty()) n.gp = f(t[8]); if (!t[9].empty()) n.dp = f(t[9]); }   // (1.1) the strength share
         if (t.size() >= 11) n.live = t[10] == "1";                                                        // (1.2) the live mark
+        if (t.size() >= 13 && !t[11].empty()) { n.usd = f(t[11]); n.usd0 = f(t[12]); n.hasUsd = true; }   // (2.0) net GEX per strike
         if (n.k > 0) { D.nodes.push_back(n); return true; }
         return false;
     }
@@ -222,6 +224,23 @@ inline void scales(const Data& D, float& gmax, float& dmax)
     }
 }
 inline int barLen(float v, float vmax, int width) { if (vmax <= 0) return 0; float r = std::fabs(v) / vmax; if (r > 1) r = 1; return (int)(r * width + 0.5f); }
+
+// (Profile 2.0, Rassul 2026-10-02: "there is no way it is supposed to look like this") the profile = one bar per strike of
+// MenthorQ's net GEX ($ of dealer delta change per 1-pt move): red = dealers short gamma, green = long; the scale is the
+// largest |net GEX| among the strikes on screen
+inline float usdMax(const std::vector<Node>& v) { float m = 1e-6f; for (size_t i = 0; i < v.size(); i++) if (v[i].hasUsd && std::fabs(v[i].usd) > m) m = std::fabs(v[i].usd); return m; }
+inline bool anyUsd(const Data& D) { for (size_t i = 0; i < D.nodes.size(); i++) if (D.nodes[i].hasUsd) return true; return false; }
+// "-3.9M", "420K", "8K", "-950" - MenthorQ's own way of writing it
+inline std::string usdLabel(float v)
+{
+    char b[32]; float a = std::fabs(v);
+    if (a >= 1e6f) snprintf(b, sizeof(b), "%s%.1fM", v < 0 ? "-" : "", a / 1e6f);
+    else if (a >= 1e3f) snprintf(b, sizeof(b), "%s%.0fK", v < 0 ? "-" : "", a / 1e3f);
+    else snprintf(b, sizeof(b), "%s%.0f", v < 0 ? "-" : "", a);
+    return b;
+}
+// the 0DTE part drawn inside a bar: only when it has the bar's sign, never longer than the bar
+inline float odtePart(const Node& n) { if (!n.hasUsd || n.usd == 0 || (n.usd0 < 0) != (n.usd < 0)) return 0; return std::fabs(n.usd0) < std::fabs(n.usd) ? std::fabs(n.usd0) : std::fabs(n.usd); }
 
 // Text inside a node only when the node is long enough to hold it
 inline bool fits(int textW, int nodeLen, int pad = 8) { return nodeLen >= textW + pad; }

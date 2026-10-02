@@ -30,6 +30,15 @@ int main()
     CHECK(dl::strengthBars(0.1f) == 0 && dl::strengthBars(0.5f) == 1 && dl::strengthBars(2.8f) == 2 && dl::strengthBars(5.0f) == 3, "(1.2) strength bars: quiet / small / meaningful / big");
     CHECK(n4215 && !n4215->live, "(1.2) 09:36: COVER not confirmed -> no live mark");
     { dl::Data L2; dl::parseLine(L2, "NODE|4215|35|32|44|20|-63|0|2.8|5.0|1"); CHECK(L2.nodes.size() == 1 && L2.nodes[0].live, "a NODE with the live flag"); }
+    {   // (Profile 2.0) net GEX per strike, as MenthorQ shows it
+        dl::Data L3; dl::parseLine(L3, "NODE|4150|-29|-29|-29|-53|-724|0|1.4|34|0|-3945425|-1822449");
+        CHECK(L3.nodes.size() == 1 && L3.nodes[0].hasUsd && std::fabs(L3.nodes[0].usd + 3945425.0f) < 1.0f, "NODE carries net GEX $");
+        CHECK(dl::usdLabel(L3.nodes[0].usd) == "-3.9M", "-3,945,425 -> -3.9M");
+        CHECK(dl::usdLabel(420495.0f) == "420K" && dl::usdLabel(7894.0f) == "8K" && dl::usdLabel(-950.0f) == "-950", "K / plain labels");
+        CHECK(std::fabs(dl::odtePart(L3.nodes[0]) - 1822449.0f) < 1.0f, "0DTE part of a short strike");
+        dl::Node m; m.hasUsd = true; m.usd = 7894; m.usd0 = -223276; CHECK(dl::odtePart(m) == 0, "0DTE of the other sign is not drawn inside");
+        dl::Data L4; dl::parseLine(L4, "NODE|4215|35|32|44|20|-63|0|2.8|5.0|1"); CHECK(!dl::anyUsd(L4), "an old file has no net GEX: classic drawing");
+    }
     { bool okf = true; int nf = 0; for (size_t i = 0; i < D.nodes.size(); i++) { bool beyond = std::fabs(D.nodes[i].k - D.px) > 1.2f * D.em; if (beyond != D.nodes[i].far) okf = false; nf += D.nodes[i].far; }
       CHECK(okf && nf >= 1, "far = beyond 1.2 EM, exactly"); }
     CHECK(D.hasLevel && D.phase == 3 && D.side == 'R' && std::fabs(D.lvlPx - 4203.8f) < 0.01f, "LEVEL PDH 4203.80, RECLAIM (phase 3 of 6), resistance");

@@ -1,7 +1,11 @@
 /********************************************************************************
  *  DealerProfile.cpp  --  Investor/RT RTX extension  lsDealerProfile  (v1.0, 2026-09-29)
  *
- *  THE DEALER PROFILE: two nodes per strike on the right edge of the price pane, facing price.
+ *  2.0.0 (2026-10-02): THE DEALER PROFILE = one bar per strike of MenthorQ's net GEX (dealer delta change in $ per 1-pt
+ *     move): red = dealers SHORT gamma (fuel: they chase price), green = LONG (wall: they lean against it), the darker part
+ *     = today's 0DTE (gone at expiry), the value ("-3.9M") on the bar. Same numbers as MenthorQ's Net GEX panel. The running
+ *     BUY / SELL total moved to the Dealer Read. Files without net GEX (older Reader) still draw the 1.x nodes below.
+ *  1.x: two nodes per strike on the right edge of the price pane, facing price.
  *     (1.3.6: delta on TOP, gamma below)
  *     lower node  synthetic GAMMA on arrival (futures per 0.1 EM): yellow = dealers long gamma (a WALL), purple = short (FUEL)
  *                 "4220  10  (9 to 17)": 10 at the usual pace, 9 if price gets there twice as fast, 17 twice as slow
@@ -30,7 +34,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "1.5.0";   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+static const char* DP_VERSION = "2.0.0";   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
@@ -115,26 +119,26 @@ int cppExtension::setup(void)
     PX.width   = pc++; setIntegerParameter("Profile width px", 260, 0, SL);
     PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
-    PX.labels  = pc++; setBoolParameter("Values inside the nodes", true);
-    PX.snap    = pc++; setBoolParameter("Snapshot outline", true, SL);
+    PX.labels  = pc++; setBoolParameter("Values on the bars", true);
+    PX.snap    = pc++; setBoolParameter("Snapshot outline (1.x files)", true, SL);
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true);
     PX.banner  = pc++; setBoolParameter("Whole-book banner", false, SL);
     PX.inds    = pc++; setStringParameter("Your indicators in the bar file (names, comma)", "cob_bull,cob_bear", 160);
-    pc++; setLabelParameter("HOW TO READ A STRIKE - example: Gold 4215, 9/29 08:45", 380);
-    pc++; setLabelParameter("Read each strike top to bottom: DELTA, then GAMMA", 380);
-    pc++; setLabelParameter("Step 1  WHERE is price? 23 pts under 4215, going up", 380);
-    pc++; setLabelParameter("Step 2  DELTA (upper node): SELL 81 = dealers sell 81", 380);
-    pc++; setLabelParameter("On the way up that selling is a headwind for price", 380);
-    pc++; setLabelParameter("Step 3  GAMMA (lower node): 4215  32 (28 to 46) yellow", 380);
-    pc++; setLabelParameter("Yellow = WALL: dealers sell 32 more per 5.5 pts up", 380);
-    pc++; setLabelParameter("Purple = FUEL: dealers chase - overshoot, then back", 380);
-    pc++; setLabelParameter("(28 to 46) = if price gets there fast / slowly", 380);
-    pc++; setLabelParameter("Step 4  SIZE = the pill, in its node's colour: 2.8% half", 380);
-    pc++; setLabelParameter("Solid = 3%+ HEAVY (market-moving), half = 1-3% BIG", 380);
-    pc++; setLabelParameter("Faint = 0.25-1% MODERATE, outline only = LIGHT", 380);
-    pc++; setLabelParameter("Step 5  VERDICT: headwind + wall = the high holds", 380);
-    pc++; setLabelParameter("Wait for the sweep + a trigger before you trade", 380);
-    pc++; setLabelParameter("Thin outline = MenthorQ's number right now", 380);
+    pc++; setLabelParameter("HOW TO READ THE PROFILE (2.0) - example: Gold 2 Oct 12:25", 380);
+    pc++; setLabelParameter("One bar per strike = MenthorQ's net GEX at that strike", 380);
+    pc++; setLabelParameter("= $ of delta dealers must hedge per 1-pt move there", 380);
+    pc++; setLabelParameter("RED = dealers SHORT gamma = FUEL: they sell into drops", 380);
+    pc++; setLabelParameter("  and buy into rallies - moves run THROUGH red strikes", 380);
+    pc++; setLabelParameter("GREEN = dealers LONG gamma = WALL: they lean against", 380);
+    pc++; setLabelParameter("  price - moves slow down / stall at green strikes", 380);
+    pc++; setLabelParameter("Darker part next to the scale = today's 0DTE share:", 380);
+    pc++; setLabelParameter("  it disappears at the options expiry (GC 12:30 CT)", 380);
+    pc++; setLabelParameter("Example: 4150 -3.9M (half 0DTE) = the biggest short", 380);
+    pc++; setLabelParameter("  strike under price: a drop into it speeds up", 380);
+    pc++; setLabelParameter("Example: 4225 +420K, 4195 +327K = small walls above", 380);
+    pc++; setLabelParameter("Same numbers as MenthorQ's Net GEX panel (Intra)", 380);
+    pc++; setLabelParameter("Faded bars = beyond 1.2 EM. BUY/SELL: see Dealer Read", 380);
+    pc++; setLabelParameter("Bars scale to the biggest strike on screen", 380);
     pc++; setLabelParameter("BAR FILE: your indicators by name, e.g. cob_bull,cob_bear", 380);
     pc++; setLabelParameter("  they go to the Reader to check its CoB / RBar triggers", 380);
     PX.keyHow = PX.keyNode = PX.keyPill = PX.whisk = PX.legend = -1;
@@ -265,6 +269,42 @@ void DealerProfile::render(const Settings& S)
     int nodeH = (int)(hs * 0.42f); if (nodeH < 3) nodeH = 3;
     int gap = hs >= 12 ? 1 : 0;
 
+    if (dl::anyUsd(D)) {   // ---- 2.0.0: net GEX per strike (MenthorQ's numbers)
+        std::vector<dl::Node> vis;
+        for (size_t i = 0; i < D.nodes.size(); i++) { short yy = yOf(D.nodes[i].k + off); if (yy >= pane.top && yy <= pane.bottom) vis.push_back(D.nodes[i]); }
+        float umax = dl::usdMax(vis.empty() ? D.nodes : vis);
+        int barH = hs - 2 * gap - 1; if (barH > 2 * nodeH + 2) barH = 2 * nodeH + 2; if (barH < 3) barH = 3;
+        for (size_t i = 0; i < D.nodes.size(); i++) {
+            const dl::Node& N = D.nodes[i];
+            if (!N.hasUsd) continue;
+            short y = yOf(N.k + off);
+            if (y < pane.top - hs || y > pane.bottom + hs) continue;
+            float ft = (S.fadefar && N.far) ? 0.55f : 0.0f;
+            int L = dl::barLen(N.usd, umax, W), L0 = dl::barLen(dl::odtePart(N), umax, W);
+            short t = (short)(y - barH / 2), b = (short)(t + barH);
+            COLOR c = fade(N.usd < 0 ? C_SELL : C_BUY, ft), c0 = fade(N.usd < 0 ? C_SELL : C_BUY, ft + (1.0f - ft) * 0.45f);
+            if (L > 0) box((short)(anchor - L), t, anchor, b, c);
+            if (L0 > 0) box((short)(anchor - L0), t, anchor, b, c0);          // today's 0DTE: the darker part next to the scale
+            if (S.labels && barH >= S.font - 3) {
+                std::string lab = dl::usdLabel(N.usd);
+                int tw = textW(lab.c_str(), S.font, true);
+                if (L - L0 > 0 && dl::fits(tw, L - L0)) textLJ((short)(anchor - L + 3), y, lab.c_str(), N.usd < 0 ? 0x00FFFFFF : C_DARK, S.font, true);
+                else textRJ((short)(anchor - L - 3), y, lab.c_str(), c, S.font, true);     // values on (or right at) every bar
+            }
+            for (size_t j = 0; j < D.tags.size(); j++) {   // KEY / TGT / MAG chips stay, left of the bar
+                const dl::Data::Tag& T = D.tags[j];
+                if (std::fabs(T.k - N.k) > step * 0.5f) continue;
+                int fsz = S.font - 1; if (fsz < 7) fsz = 7;
+                int tw2 = textW(T.text.c_str(), fsz, true) + 8;
+                COLOR bg = T.col == 'A' ? 0x00C084FC : T.col == 'B' ? C_WALL : T.col == 'G' ? C_BUY : T.col == 'C' ? 0x0022D3EE : C_INK;
+                short ch = (short)(fsz + 5);
+                short x2 = (short)(anchor - L - 60);
+                box((short)(x2 - tw2), (short)(y - ch / 2), x2, (short)(y + ch / 2), bg);
+                textLJ((short)(x2 - tw2 + 4), y, T.text.c_str(), C_DARK, fsz, true);
+            }
+        }
+        return;
+    }
     for (size_t i = 0; i < D.nodes.size(); i++) {
         const dl::Node& N = D.nodes[i];
         short y = yOf(N.k + off);
