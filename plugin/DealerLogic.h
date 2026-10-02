@@ -12,6 +12,11 @@
  *     WALLHDR|<title>|<score>|<G/R/A/Y/N>     WALLROW|<name>|<meter -100..100 or NA>|<label>|ok|bad|watch|wait|<why>
  *     FUELHDR|FUEL|<score>|<col>               FUELROW|... (as WALLROW)
  *     TRADE|<key>|<value>|<col>   FLAG|<text>|<col>   DO|<text>   BOOKLINE|<text>   LEARN|1
+ *  (file 1.6 / Read 2.0 / Sig 1.0, 2026-10-02 - lra/forced.py) forced futures by cause, gamma strength, the reasons:
+ *     FSUM|<from HH:MM>|<to>|<gamma>|<vanna>|<charm>|<positions>|<futures traded>|<px from>|<px to>|<iv from %>|<iv to %>
+ *     FWIN|<from>|<to>|<gamma>|<vanna>|<charm>|<positions>|<futures traded>          (every grid window, last 40)
+ *     GSTR|<HH:MM>|<px>|<iv %>|<gamma/pt>|<speed -0.25 EM>|<speed +0.25 EM>|<zomma IV+1>|<zomma IV-1>|<color +30m>|<color +60m>
+ *     SIG|<yyyy-mm-dd HH:MM:SS CT>|<code SC Van Chm PutS CallB CallS PutB>|<B = dealers buy / S = sell>|<value>|<text>
  ********************************************************************************/
 #pragma once
 #include <string>
@@ -64,6 +69,14 @@ struct Data {
     bool hasV2 = false; std::string v2Word, v2Side; int v2Sup = 0, v2Meas = 0, v2Wait = 0, v2Opp = 0;
     std::vector<Vote> votes, dlines, plan;
     std::string bookState, bookPct, summary;
+    // (file 1.6) forced futures: what made dealers buy / sell between grids, gamma strength, and the Dealer Sig reasons
+    struct FWin { std::string ta, tb, pa, pb; float gam = 0, van = 0, cha = 0, pos = 0, fut = 0, iva = 0, ivb = 0; };
+    bool hasFsum = false; FWin fsum; std::vector<FWin> fwin;
+    struct GStr { std::string t, px; float iv = 0, g = 0, sdn = 0, sup = 0, zp = 0, zm = 0, c30 = 0, c60 = 0; };
+    bool hasGstr = false; GStr gstr;
+    struct Sig { int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0; std::string code, text; char side = 'B'; float v = 0; };
+    std::vector<Sig> sigs;
+    std::string ferr;
 };
 
 // (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
@@ -165,7 +178,37 @@ inline bool parseLine(Data& D, const std::string& line)
     }
     if (k == "BOOKCHK" && t.size() >= 3) { D.bookState = t[1]; D.bookPct = t[2]; return true; }
     if (k == "SUMMARY" && t.size() >= 2) { D.summary = t[1]; return true; }
+    if ((k == "FSUM" && t.size() >= 12) || (k == "FWIN" && t.size() >= 8)) {
+        Data::FWin w; w.ta = t[1]; w.tb = t[2]; w.gam = f(t[3]); w.van = f(t[4]); w.cha = f(t[5]); w.pos = f(t[6]); w.fut = f(t[7]);
+        if (k == "FSUM") { w.pa = t[8]; w.pb = t[9]; w.iva = f(t[10]); w.ivb = f(t[11]); D.fsum = w; D.hasFsum = true; }
+        else D.fwin.push_back(w);
+        return true;
+    }
+    if (k == "GSTR" && t.size() >= 11) {
+        Data::GStr g; g.t = t[1]; g.px = t[2]; g.iv = f(t[3]); g.g = f(t[4]); g.sdn = f(t[5]); g.sup = f(t[6]); g.zp = f(t[7]); g.zm = f(t[8]);
+        g.c30 = f(t[9]); g.c60 = f(t[10]); D.gstr = g; D.hasGstr = true; return true;
+    }
+    if (k == "SIG" && t.size() >= 6) {
+        Data::Sig g;
+        if (sscanf(t[1].c_str(), "%d-%d-%d %d:%d:%d", &g.y, &g.mo, &g.d, &g.h, &g.mi, &g.s) < 5 || t[2].empty()) return false;
+        g.code = t[2]; g.side = t[3] == "S" ? 'S' : 'B'; g.v = f(t[4]); g.text = t[5]; D.sigs.push_back(g); return true;
+    }
+    if (k == "FERR" && t.size() >= 2) { D.ferr = t[1]; return true; }
     return false;
+}
+
+// (Read 2.0) "+589" / "-10" / "0" - the sign says who: + dealers BUY futures, - dealers SELL
+inline std::string signedN(float v) { char b[24]; long n = std::lround(v); if (n > 0) snprintf(b, sizeof(b), "+%ld", n); else snprintf(b, sizeof(b), "%ld", n); return b; }
+// share of the futures traded, "8.6%" ("" when no volume)
+inline std::string shareTxt(float v, float fut) { if (fut <= 0) return ""; char b[16]; float p = 100.0f * std::fabs(v) / fut; snprintf(b, sizeof(b), p < 10 ? "%.1f%%" : "%.0f%%", p); return b; }
+// how much gamma changes, in % of gamma now: speed / zomma / color ("-23%" = dealers trade 23% less per point)
+inline std::string gChange(float now, float other) { if (std::fabs(now) < 1e-6f) return ""; char b[16]; snprintf(b, sizeof(b), "%+.0f%%", 100.0f * (std::fabs(other) - std::fabs(now)) / std::fabs(now)); return b; }
+// the reasons a chart bar (local y/mo/d, sec of day) shows: every SIG known at or after the bar start and before the next bar
+inline bool sigInBar(const Data::Sig& g, int y, int mo, int d, double so0, double so1)
+{
+    if (g.y != y || g.mo != mo || g.d != d) return false;
+    double so = g.h * 3600.0 + g.mi * 60.0 + g.s;
+    return so >= so0 && so < so1;
 }
 
 inline Data parseText(const std::string& text)

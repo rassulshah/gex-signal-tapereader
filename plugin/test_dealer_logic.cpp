@@ -122,6 +122,23 @@ int main()
         CHECK(V.summary.find("supported short") != std::string::npos, "summary text");
         dl::Data O; CHECK(!O.hasV2 && O.votes.empty() && O.summary.empty(), "an older file = no decision rows (the old layout is drawn)");
     }
+    {   // (file 1.6 / Read 2.0 / Sig 1.0) forced futures, gamma strength, reasons (lra/forced.py, GC 1 Oct)
+        dl::Data F;
+        const char* rows[] = { "FSUM|10:15|10:40|589|-10|14|0|6871|4185.90|4202.10|27.32|27.49", "FWIN|10:15|10:20|196|-4|3|0|1549",
+            "FWIN|10:20|10:30|204|-6|6|0|1340", "GSTR|10:15|4185.90|27.32|-40.9|-50.5|-31.6|-38.8|-43.1|-40.8|-40.6",
+            "SIG|2026-10-01 10:20:00|SC|B|196|dealers bought 196 back as price moved (12.6% of futures)",
+            "SIG|2026-10-01 10:50:00|SC|S|-168|dealers sold 168 back", "SIG|bad|SC|B|1|x", "FERR|KeyError: x" };
+        for (const char* r : rows) dl::parseLine(F, r);
+        CHECK(F.hasFsum && F.fsum.ta == "10:15" && F.fsum.gam == 589 && F.fsum.van == -10 && F.fsum.fut == 6871 && F.fsum.pb == "4202.10" && std::fabs(F.fsum.ivb - 27.49f) < 1e-3, "FSUM");
+        CHECK(F.fwin.size() == 2 && F.fwin[1].gam == 204 && F.fwin[1].fut == 1340, "FWIN rows");
+        CHECK(F.hasGstr && std::fabs(F.gstr.g + 40.9f) < 1e-3 && std::fabs(F.gstr.sup + 31.6f) < 1e-3 && F.gstr.t == "10:15", "GSTR");
+        CHECK(F.sigs.size() == 2 && F.sigs[0].code == "SC" && F.sigs[0].side == 'B' && F.sigs[0].h == 10 && F.sigs[0].mi == 20 && F.sigs[1].side == 'S', "SIG rows, a bad time dropped");
+        CHECK(F.ferr == "KeyError: x", "FERR");
+        CHECK(dl::signedN(589.4f) == "+589" && dl::signedN(-10.2f) == "-10" && dl::signedN(0.2f) == "0", "signed numbers");
+        CHECK(dl::shareTxt(593, 6871) == "8.6%" && dl::shareTxt(1, 0).empty(), "share of futures");
+        CHECK(dl::gChange(-40.9f, -31.6f) == "-23%" && dl::gChange(-40.9f, -50.5f) == "+23%", "gamma change in %");
+        CHECK(dl::sigInBar(F.sigs[0], 2026, 10, 1, 10 * 3600 + 18 * 60, 10 * 3600 + 21 * 60) && !dl::sigInBar(F.sigs[0], 2026, 10, 1, 10 * 3600 + 21 * 60, 10 * 3600 + 24 * 60), "a reason lands in the bar that contains its time");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

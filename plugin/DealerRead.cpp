@@ -20,6 +20,10 @@
  *  check / cross / dash / circle marks, the BOOK trust flag, then the PLAN band (TRIGGER, STOP, TARGET + R). Setting
  *  View: Standard / Summary - Summary shows the whole read as sentences instead. Older files: the 1.5 layout.
  *
+ *  2.0.0 (2026-10-02): the DEALER REASONS box (Reasons box: Top centre / left / right / Off) - forced futures by cause
+ *  (gamma / vanna / charm / positions, each as a share of the futures traded), gamma strength with speed / zomma / color,
+ *  and the reasons lsDealerSig marks on the bars. File 1.6 rows FSUM / GSTR / SIG (lra/forced.py).
+ *
  *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Dealer-<MKT>.csv (LRA analytics/lra/dealer_irt.py); grammar in
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
  ********************************************************************************/
@@ -66,9 +70,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
+struct PIdx { int rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
-struct Settings { int view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -114,6 +118,7 @@ public:
     void checklist(short x, short y, short w, short h, const std::string& title, COLOR tcol, const std::string& score, char scol,
                    const std::vector<dl::Row>& rows, bool wall, int fs);
     void writeStatus(const char* what);
+    void renderReasons(const Settings& S);            // (2.0.0) DEALER REASONS: forced futures by cause, gamma strength, reasons
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -132,8 +137,8 @@ int cppExtension::setup(void)
     // (1.3.2, Rassul 2026-09-30: "why cant you have the how-to below fuel as text" / "many dropdowns that shouldnt even be
     // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
-    setParameterVersion(5);   // (1.6.1) one settings line added
-    setParameterDialogHeight(25);
+    setParameterVersion(6);   // (2.0.0) the DEALER REASONS box: two settings added after View
+    setParameterDialogHeight(38);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
@@ -150,6 +155,8 @@ int cppExtension::setup(void)
     PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, 0);
     PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     PX.view     = pc++; setListParameter("View", 0, "Standard;Summary");   // (1.6.0) Summary = the whole read as sentences
+    PX.rpos     = pc++; setListParameter("Reasons box", 0, "Top centre;Top left;Top right;Off");   // (2.0.0)
+    PX.rtop     = pc++; setIntegerParameter("Reasons: down from top (px)", 30, 0, SL);
     pc++; setLabelParameter("HOW TO READ IT - example: ES short at LH 7,756.50 + CR 0D", 380);
     pc++; setLabelParameter("TOP box = MAGNET: where dealers pull price into expiry", 380);
     pc++; setLabelParameter("  Agrees = a 2nd target / Fights = take profits early", 380);
@@ -167,6 +174,18 @@ int cppExtension::setup(void)
     pc++; setLabelParameter("  sweep (est. until swept), TARGET = NEXT / next wall + R,", 380);
     pc++; setLabelParameter("  DEADLINE = when the 0DTE behind the trade expires", 380);
     pc++; setLabelParameter("View: Summary = the same read written as sentences", 380);
+    pc++; setLabelParameter("DEALER REASONS box (options market only, all MODELLED):", 380);
+    pc++; setLabelParameter("  FORCED FUTURES = what made dealers buy (+) / sell (-)", 380);
+    pc++; setLabelParameter("  since the current run started: Gamma = price moved,", 380);
+    pc++; setLabelParameter("  Vanna = IV moved, Charm = time passed, Positions =", 380);
+    pc++; setLabelParameter("  customers sold puts / bought calls (dealers buy) or the", 380);
+    pc++; setLabelParameter("  reverse; % = share of the futures actually traded", 380);
+    pc++; setLabelParameter("  e.g. GC 1 Oct 10:15-10:40: Gamma +589, Vanna -10, Charm", 380);
+    pc++; setLabelParameter("  +14 = +593, 8.6% of 6,871 traded: price did the work", 380);
+    pc++; setLabelParameter("  GAMMA STRENGTH = futures dealers trade per 1 pt now;", 380);
+    pc++; setLabelParameter("  Speed = if price moves 0.25 EM, Zomma = if IV moves 1", 380);
+    pc++; setLabelParameter("  pt, Color = in 30 / 60 min. -23% = 23% less buying", 380);
+    pc++; setLabelParameter("  REASONS = the Dealer Sig marks, newest first", 380);
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
@@ -186,6 +205,8 @@ void DealerRead::readSettings(Settings& S)
     S.layout = getListIndex(PX.layout); if (S.layout < 0 || S.layout > 3) S.layout = 0;
     S.lift = getIntegerValue(PX.lift); if (S.lift < 0 || S.lift > 400) S.lift = 30;
     S.view = getListIndex(PX.view); if (S.view < 0 || S.view > 1) S.view = 0;
+    S.rpos = getListIndex(PX.rpos); if (S.rpos < 0 || S.rpos > 3) S.rpos = 0;
+    S.rtop = getIntegerValue(PX.rtop); if (S.rtop < 0 || S.rtop > 900) S.rtop = 30;
     S.explain = false;
 }
 
@@ -947,13 +968,113 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,1.6.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,2.0.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+}
+
+// (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
+// position change is also forcing dealers to buy back futures, and also see how speed zomma and color are impacting gamma")
+// The DEALER REASONS box (mockup Dealer Read Forced Futures): FORCED FUTURES by cause since the current run started, with
+// each part's share of the futures traded; GAMMA STRENGTH and how speed / zomma / color change it; the Dealer Sig reasons.
+void DealerRead::renderReasons(const Settings& S)
+{
+    if (S.rpos == 3 || mkt.empty()) return;
+    if (!D.hasFsum && !D.hasGstr && D.sigs.empty() && D.ferr.empty()) return;
+    u = S.font / 10.0f;
+    int fs = S.font;
+    RCT pane; pane.getPaneRect(false);
+    const COLOR CG = 0x004EA3FF, CV = 0x00C08CFF, CC = 0x00FFB347, CP = 0x003FD0A8;
+    short W = U(560), lh = U(17), pad = U(10);
+    int nSig = (int)D.sigs.size() < 4 ? (int)D.sigs.size() : 4;
+    short H = (short)(pad + lh                                   // title
+              + (D.hasFsum ? lh * 5 + U(6) : 0)                   // FORCED + 4 causes
+              + (D.hasGstr ? lh * 4 + U(6) : 0)                   // GAMMA STRENGTH + 3
+              + (nSig ? lh * (nSig + 1) + U(6) : 0)
+              + (D.ferr.empty() ? 0 : lh) + pad);
+    short x0;
+    short right = (short)(pane.right - profReach - U(12));
+    if (S.rpos == 1) x0 = (short)(pane.left + U(10));
+    else if (S.rpos == 2) x0 = (short)(right - W);
+    else x0 = (short)((pane.left + right) / 2 - W / 2);
+    if (x0 < pane.left + U(4)) x0 = (short)(pane.left + U(4));
+    short y0 = (short)(pane.top + S.rtop);
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BOXBG);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, D.learn);
+    short y = (short)(y0 + pad + lh / 2);
+    text((short)(x0 + pad), y, "DEALER REASONS", C_TABONB, fs + 1, true, 0);
+    std::string hdr = mkt + (D.hasGstr ? "  grid " + D.gstr.t : "");
+    text((short)(x0 + W - pad), y, hdr.c_str(), C_MUTED, fs - 1, false, 2);
+    y = (short)(y + lh);
+    short xName = (short)(x0 + pad), xBar = (short)(x0 + U(120)), bw = U(150), xPct = (short)(xBar + bw + U(8)), xWhy = (short)(xPct + U(52));
+    if (D.hasFsum) {
+        const dl::Data::FWin& F = D.fsum;
+        float tot = F.gam + F.van + F.cha + F.pos;
+        y = (short)(y + U(6));
+        std::string t1 = "FORCED FUTURES " + F.ta + " - " + F.tb;
+        text(xName, y, t1.c_str(), C_INK, fs, true, 0);
+        char tb[96]; snprintf(tb, sizeof(tb), "dealers %s %s = %s of %ld traded", tot >= 0 ? "BUY" : "SELL", dl::signedN(tot).c_str(), dl::shareTxt(tot, F.fut).c_str(), std::lround(F.fut));
+        text((short)(x0 + W - pad), y, tb, tot >= 0 ? C_GREEN : C_RED, fs, true, 2);
+        y = (short)(y + lh);
+        float vals[4] = { F.gam, F.van, F.cha, F.pos };
+        float mx = 1; for (int i = 0; i < 4; i++) if (std::fabs(vals[i]) > mx) mx = std::fabs(vals[i]);
+        const char* names[4] = { "Gamma  price", "Vanna  IV", "Charm  time", "Positions" };
+        COLOR cols[4] = { CG, CV, CC, CP };
+        char why[4][96];
+        snprintf(why[0], 96, "price %s -> %s", F.pa.c_str(), F.pb.c_str());
+        snprintf(why[1], 96, "front IV %.2f -> %.2f%%", F.iva, F.ivb);
+        snprintf(why[2], 96, "time %s -> %s", F.ta.c_str(), F.tb.c_str());
+        why[3][0] = 0;
+        for (int i = 0; i < 4; i++) {
+            text(xName, y, names[i], cols[i], fs - 1, true, 0);
+            fill(xBar, (short)(y - U(5)), (short)(xBar + bw), (short)(y + U(5)), C_TRACK);
+            short mid = (short)(xBar + bw / 2), ln = (short)(bw / 2 * std::fabs(vals[i]) / mx);
+            if (vals[i] >= 0) fill(mid, (short)(y - U(5)), (short)(mid + ln), (short)(y + U(5)), C_GREEN);
+            else fill((short)(mid - ln), (short)(y - U(5)), mid, (short)(y + U(5)), C_RED);
+            std::string v = dl::signedN(vals[i]);
+            if (vals[i] >= 0) text((short)(mid - U(3)), y, v.c_str(), C_INK, fs - 1, true, 2);
+            else text((short)(mid + U(3)), y, v.c_str(), C_INK, fs - 1, true, 0);
+            text(xPct, y, dl::shareTxt(vals[i], F.fut).c_str(), C_MUTED, fs - 1, false, 0);
+            text(xWhy, y, fit(why[i], x0 + W - pad - xWhy, fs - 1, false).c_str(), C_MUTED, fs - 1, false, 0);
+            y = (short)(y + lh);
+        }
+    }
+    if (D.hasGstr) {
+        const dl::Data::GStr& G = D.gstr;
+        y = (short)(y + U(6));
+        char t2[96]; snprintf(t2, sizeof(t2), "GAMMA STRENGTH %.1f / pt at %s", G.g, G.px.c_str());
+        text(xName, y, t2, C_INK, fs, true, 0);
+        y = (short)(y + lh);
+        char r[3][128];
+        snprintf(r[0], 128, "price 0.25 EM lower %.1f (%s)   higher %.1f (%s)", G.sdn, dl::gChange(G.g, G.sdn).c_str(), G.sup, dl::gChange(G.g, G.sup).c_str());
+        snprintf(r[1], 128, "IV +1 pt %.1f (%s)   IV -1 pt %.1f (%s)", G.zp, dl::gChange(G.g, G.zp).c_str(), G.zm, dl::gChange(G.g, G.zm).c_str());
+        snprintf(r[2], 128, "in 30 min %.1f (%s)   in 60 min %.1f (%s)", G.c30, dl::gChange(G.g, G.c30).c_str(), G.c60, dl::gChange(G.g, G.c60).c_str());
+        const char* nm[3] = { "Speed", "Zomma", "Color" };
+        for (int i = 0; i < 3; i++) {
+            text(xName, y, nm[i], CG, fs - 1, true, 0);
+            text(xBar, y, fit(r[i], x0 + W - pad - xBar, fs - 1, false).c_str(), C_INK, fs - 1, false, 0);
+            y = (short)(y + lh);
+        }
+    }
+    if (nSig) {
+        y = (short)(y + U(6));
+        text(xName, y, "REASONS (Dealer Sig)", C_INK, fs, true, 0);
+        y = (short)(y + lh);
+        for (int i = 0; i < nSig; i++) {
+            const dl::Data::Sig& g = D.sigs[D.sigs.size() - 1 - i];
+            char tm[16]; snprintf(tm, sizeof(tm), "%02d:%02d", g.h, g.mi);
+            text(xName, y, tm, C_MUTED, fs - 1, false, 0);
+            text((short)(xName + U(48)), y, g.code.c_str(), g.side == 'B' ? C_GREEN : C_RED, fs - 1, true, 0);
+            text(xBar, y, fit(g.text, x0 + W - pad - xBar, fs - 1, false).c_str(), C_INK, fs - 1, false, 0);
+            y = (short)(y + lh);
+        }
+    }
+    if (!D.ferr.empty()) text(xName, y, fit("forced futures not available: " + D.ferr, W - 2 * pad, fs - 1, false).c_str(), C_MUTED, fs - 1, false, 0);
 }
 
 int DealerRead::draw(void)
 {
     load();
     render(cfg);
+    renderReasons(cfg);
     writeStatus(D.hasPrice ? "drawn" : "no data");
     return RTX_OK;
 }
@@ -964,6 +1085,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read: is the level holding, and are dealers reversing? The guide is below the settings.");
-    p->setVersion("1.5.0");
+    p->setVersion("2.0.0");
     return p;
 }
