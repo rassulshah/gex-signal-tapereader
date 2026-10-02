@@ -15,6 +15,8 @@
  *     CallS / PutB   customers sold calls / bought puts near price - dealers sell futures
  *  (1.1.0) plus the Read's stage reasons: Exh (push-side options ran out), Lvl (MenthorQ levels held at the extreme), IV,
  *     0D (0DTE fear leaving), PT? (profit taking - guess), CallB? / PutB? (new bets - guess); a guess has a dashed frame
+ *  (1.2.0) and the tape where it shows demand / supply from the gex level: Dem / Sup (the turn bars' volume + range vs the
+ *     same-time normal), Abs (heavy push volume absorbed), Exh from the tape (quiet bars, last push got nowhere)
  *  Every mark is >= 1% of the futures traded in its window (flow marks: >= 50 contracts and >= 20% of the options traded
  *  within 1 EM). All MODELLED from MenthorQ's open interest and scored nightly before any is trusted.
  *  The same code is used whatever the source.
@@ -36,7 +38,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.1.0";
+static const char* DS_VERSION = "1.2.0";
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -78,7 +80,7 @@ int DealerSig::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(36);
+    setParameterDialogHeight(39);
     const short SL = kParmAppendSameLine;
     MARKER mb; memset(&mb, 0, sizeof(mb)); mb.number = kMarkerArrayUp;   mb.size = 2; mb.color = S_GREEN; mb.location = kMarkerBeneathLow;
     MARKER ms; memset(&ms, 0, sizeof(ms)); ms.number = kMarkerArrayDown; ms.size = 2; ms.color = S_RED;   ms.location = kMarkerAboveHigh;
@@ -106,6 +108,9 @@ int cppExtension::setup(void)
     setLabelParameter("Exh = push-side options ran out at the extreme", 380);
     setLabelParameter("Lvl = MenthorQ levels held at the extreme; IV = IV moved", 380);
     setLabelParameter("0D = 0DTE fear (greed) left after the extreme", 380);
+    setLabelParameter("Dem / Sup = demand (supply) off the level: the turn bars'", 380);
+    setLabelParameter("  volume + range vs their same-time normal; Abs = heavy", 380);
+    setLabelParameter("  push volume absorbed (no new low / high)", 380);
     setLabelParameter("PT? / CallB? (dashed) = educated guesses: profit taking /", 380);
     setLabelParameter("  new bets, checked against the next day's open interest", 380);
     setLabelParameter("A mark = at least 1% of the futures traded (flow: 50+", 380);
@@ -226,6 +231,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: where an options-market reason for a reversal becomes known. The guide is below the settings.");
-    p->setVersion("1.1.0");
+    p->setVersion("1.2.0");
     return p;
 }
