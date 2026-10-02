@@ -15,6 +15,8 @@
  *     CallS / PutB   customers sold calls / bought puts near price - dealers sell futures
  *  (1.1.0) plus the Read's stage reasons: Exh (push-side options ran out), Lvl (MenthorQ levels held at the extreme), IV,
  *     0D (0DTE fear leaving), PT? (profit taking - guess), CallB? / PutB? (new bets - guess); a guess has a dashed frame
+ *  (1.3.0, 2026-10-02 evening) the marks are now the Turn's reasons (file 1.8): Trap, FGF, Pin, PinX, Cush, NB? join the codes;
+ *  nothing else changed - any code in the file is drawn.
  *  (1.2.0) and the tape where it shows demand / supply from the gex level: Dem / Sup (the turn bars' volume + range vs the
  *     same-time normal), Abs (heavy push volume absorbed), Exh from the tape (quiet bars, last push got nowhere)
  *  Every mark is >= 1% of the futures traded in its window (flow marks: >= 50 contracts and >= 20% of the options traded
@@ -38,7 +40,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.2.0";
+static const char* DS_VERSION = "1.3.0";
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -111,8 +113,13 @@ int cppExtension::setup(void)
     setLabelParameter("Dem / Sup = demand (supply) off the level: the turn bars'", 380);
     setLabelParameter("  volume + range vs their same-time normal; Abs = heavy", 380);
     setLabelParameter("  push volume absorbed (no new low / high)", 380);
-    setLabelParameter("PT? / CallB? (dashed) = educated guesses: profit taking /", 380);
-    setLabelParameter("  new bets, checked against the next day's open interest", 380);
+    setLabelParameter("PT? / NB? / CallB? (dashed) = educated guesses: profit", 380);
+    setLabelParameter("  taking / new bets, checked against the next day's OI", 380);
+    setLabelParameter("(1.3.0) the Turn's reasons: Trap = a failed break, the", 380);
+    setLabelParameter("  traders who broke the swing are trapped; FGF = fear /", 380);
+    setLabelParameter("  greed fading (new extreme, IV no higher); Pin = the", 380);
+    setLabelParameter("  expiring strike holding price; PinX = it expired and", 380);
+    setLabelParameter("  let price go; Cush = dealers long gamma into the level", 380);
     setLabelParameter("A mark = at least 1% of the futures traded (flow: 50+", 380);
     setLabelParameter("  contracts, 20%+ of the options near price)", 380);
     setLabelParameter("All modelled from MenthorQ open interest - LEARNING until", 380);
@@ -231,6 +238,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: where an options-market reason for a reversal becomes known. The guide is below the settings.");
-    p->setVersion("1.2.0");
+    p->setVersion("1.3.0");
     return p;
 }

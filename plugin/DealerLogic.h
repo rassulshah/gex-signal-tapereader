@@ -20,6 +20,9 @@
  *  (file 1.7 / Read 2.1 / Sig 1.1, lra/stages.py) the Read in stages - 1 APPROACH, 2 TURN STARTS, 3 TURN CONTINUES:
  *     STAGE|<now 0-3>|<L/S>|<level>|<extreme>|<extreme bar HH:MM>       STG|<n>|<title>|<sub>       SSUM|<n>|<summary>
  *     SR|<n>|<HH:MM known>|<code>|<B/S/N>|<value>|<chip:col,chip:col>|<text>   (a code ending in ? = an educated guess)
+ *  (file 1.8 / Read 3.0, 2026-10-02 evening - lra/turn.py) the Turn: one read, no stages, reasons in sentences in time order:
+ *     TURN|<L/S>|<header>|<window from HH:MM>|<window to HH:MM>
+ *     TR|<n>|<HH:MM>|<Rev Reason tag; ' ?' = a guess>|<'' / guess / lean>|<second source e.g. GLD or ''>|<sentence>
  ********************************************************************************/
 #pragma once
 #include <string>
@@ -86,6 +89,10 @@ struct Data {
     struct Stg { int n = 0; std::string title, sub, sum; };
     bool hasStage = false; int stageNow = 0; char stageSide = 'L'; std::string stageLvl, stageExt, stageExtT;
     std::vector<Stg> stgs; std::vector<SRow> srows;
+    // (file 1.8 / Read 3.0) the Turn
+    struct TRow { int n = 0; std::string t, tag, kind, src, text; };
+    bool hasTurn = false; char turnSide = 'L'; std::string turnHead, turnFrom, turnTo, terr;
+    std::vector<TRow> trows;
 };
 
 // (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
@@ -203,6 +210,11 @@ inline bool parseLine(Data& D, const std::string& line)
         g.code = t[2]; g.side = t[3] == "S" ? 'S' : 'B'; g.v = f(t[4]); g.text = t[5]; D.sigs.push_back(g); return true;
     }
     if (k == "FERR" && t.size() >= 2) { D.ferr = t[1]; return true; }
+    if (k == "TURN" && t.size() >= 3) { D.hasTurn = true; D.turnSide = t[1] == "S" ? 'S' : 'L'; D.turnHead = t[2];
+        D.turnFrom = t.size() > 3 ? t[3] : ""; D.turnTo = t.size() > 4 ? t[4] : ""; return true; }
+    if (k == "TR" && t.size() >= 7) { Data::TRow r; r.n = atoi(t[1].c_str()); r.t = t[2]; r.tag = t[3]; r.kind = t[4]; r.src = t[5]; r.text = t[6];
+        D.trows.push_back(r); return true; }
+    if (k == "TERR" && t.size() >= 2) { D.terr = t[1]; return true; }
     if (k == "STAGE" && t.size() >= 6) { D.hasStage = true; D.stageNow = atoi(t[1].c_str()); D.stageSide = t[2] == "S" ? 'S' : 'L'; D.stageLvl = t[3]; D.stageExt = t[4]; D.stageExtT = t[5]; return true; }
     if (k == "STG" && t.size() >= 4) { Data::Stg g; g.n = atoi(t[1].c_str()); g.title = t[2]; g.sub = t[3]; D.stgs.push_back(g); return true; }
     if (k == "SSUM" && t.size() >= 3) { int n = atoi(t[1].c_str()); for (size_t i = 0; i < D.stgs.size(); i++) if (D.stgs[i].n == n) D.stgs[i].sum = t[2]; return true; }
@@ -235,6 +247,33 @@ inline bool sigInBar(const Data::Sig& g, int y, int mo, int d, double so0, doubl
 }
 
 // (Sig 1.1) a code ending in '?' is an educated guess (drawn with a dashed frame)
+// (Read 3.0) word-wrap a sentence into lines no wider than maxW, measured by width(s) (the plugin passes getTextWidth)
+template <class W> inline std::vector<std::string> wrapWords(const std::string& text, float maxW, W width)
+{
+    std::vector<std::string> out; std::string line, word; std::stringstream ss(text);
+    while (ss >> word) {
+        std::string cand = line.empty() ? word : line + " " + word;
+        if (!line.empty() && width(cand) > maxW) { out.push_back(line); line = word; }
+        else line = cand;
+    }
+    if (!line.empty()) out.push_back(line);
+    return out;
+}
+// (Read 3.0) the tag's colour - the Rev Reason colours used in the mockups (r, g, b)
+inline void tagColour(const std::string& tag0, int& r, int& g, int& b)
+{
+    std::string tag = tag0; if (tag.size() > 2 && tag.substr(tag.size() - 2) == " ?") tag = tag.substr(0, tag.size() - 2);
+    r = 229; g = 231; b = 235;
+    if (tag == "Exhaustion") { r = 245; g = 158; b = 11; }
+    else if (tag == "Tape") { r = 96; g = 165; b = 250; }
+    else if (tag == "Short cover") { r = 192; g = 140; b = 255; }
+    else if (tag == "New bets" || tag == "Profit taking") { r = 74; g = 222; b = 128; }
+    else if (tag == "IV move") { r = 167; g = 139; b = 250; }
+    else if (tag == "Pin" || tag == "Pin Exp") { r = 34; g = 211; b = 238; }
+    else if (tag == "Cushion") { r = 148; g = 163; b = 184; }
+    else if (tag.find("0DTE") == 0 || tag.find("Fear") == 0) { r = 251; g = 113; b = 133; }
+}
+
 inline bool isGuess(const std::string& code) { return !code.empty() && code[code.size() - 1] == '?'; }
 
 inline Data parseText(const std::string& text)

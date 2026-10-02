@@ -31,6 +31,10 @@
  *  2.2.0 (2026-10-02): ONE compact grid replaces every box - a row per stage, a cell per reason (CODE value, best first,
  *  dashed = a guess); no level near = FORCED / GAMMA / REASONS rows. Drag the grip on its left edge to move it (kept per
  *  market in DealerRead.pos-<MKT>.txt), double-click the grip to put it back. The old boxes are no longer drawn.
+ *  3.0.0 (2026-10-02 evening, file 1.8): THE TURN - one read, no stages. A header (level, low / high, MenthorQ levels held,
+ *  gamma, fuel left), then the reasons as numbered sentences in time order, each with its Rev Reason tag (dashed = a guess,
+ *  grey = a lean), word-wrapped to the box width. The same grip / drag / double-click. No turn yet = one line saying so;
+ *  no level near = the FORCED / GAMMA / REASONS rows as in 2.2.
  *
  *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Dealer-<MKT>.csv (LRA analytics/lra/dealer_irt.py); grammar in
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
@@ -80,7 +84,7 @@ static const char* stWord(const std::string& st, bool wall)
 
 struct PIdx { int rstg, rwid, rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
-struct Settings { int rstg = 0, rwid = 5, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int rstg = 0, rwid = 55, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -129,6 +133,7 @@ public:
     void renderReasons(const Settings& S);            // (2.0.0) DEALER REASONS: forced futures by cause, gamma strength, reasons
     void renderStages(const Settings& S);             // (2.1.0) the Read in stages: approach / turn starts / turn continues
     void renderGrid(const Settings& S);               // (2.2.0) ONE compact grid: a row per stage, a cell per reason, draggable
+    void renderTurn(const Settings& S);               // (3.0.0) THE TURN: header + numbered sentences, draggable
     virtual int mouse(RTX_EVENT* e);
     bool dragging = false; short gripL = 0, gripT = 0, gripR = 0, gripB = 0, gridL = 0, gridT = 0, gridH = 0, dragDX = 0, dragDY = 0;
     int posX = -1, posB = -1; std::string posMkt;      // where he dropped it: px from the pane's left, px from its bottom (-1 = default)
@@ -151,7 +156,7 @@ int cppExtension::setup(void)
     // (1.3.2, Rassul 2026-09-30: "why cant you have the how-to below fuel as text" / "many dropdowns that shouldnt even be
     // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
-    setParameterVersion(8);   // (2.2.0) the grid: same controls, new names; the guide rewritten
+    setParameterVersion(9);   // (3.0.0) the Turn: same controls in the same places, two renamed; the guide rewritten
     setParameterDialogHeight(34);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -169,27 +174,28 @@ int cppExtension::setup(void)
     PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, 0);
     PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
     PX.view     = pc++; setListParameter("View", 0, "Standard;Summary");   // (1.6.0) Summary = the whole read as sentences
-    PX.rpos     = pc++; setListParameter("Read grid", 0, "Show;Off");                    // (2.2.0) one grid; drag its grip to move it
-    PX.rtop     = pc++; setIntegerParameter("Grid: lift from bottom (px)", 30, 0, SL);
-    PX.rstg     = pc++; setListParameter("Stages shown", 0, "All;Current only");      // (2.1.0)
-    PX.rwid     = pc++; setIntegerParameter("Cells per stage (3-10)", 5, 0, SL);
-    pc++; setLabelParameter("THE READ GRID (2.2.0) - one row per stage of the turn at", 380);
-    pc++; setLabelParameter("  the level price is working on; each cell = a reason:", 380);
-    pc++; setLabelParameter("  CODE value - green = dealers / traders BUY, red = SELL,", 380);
-    pc++; setLabelParameter("  white = context; a dashed cell = an educated guess", 380);
-    pc++; setLabelParameter("  (PT? profit taking, CallB? / PutB? new bets), checked", 380);
-    pc++; setLabelParameter("  against the next day's open interest. Best first.", 380);
-    pc++; setLabelParameter("1 APPROACH: Fuel (futures dealers stored with the push),", 380);
-    pc++; setLabelParameter("  Speed (gamma change into the level), Gamma, Zone,", 380);
-    pc++; setLabelParameter("  IV in, Flow in, Tape (volume at the level), ETF", 380);
-    pc++; setLabelParameter("2 TURN: SC short cover, Exh (options pace / tape), Dem /", 380);
-    pc++; setLabelParameter("  Sup demand / supply bar, Abs, Lvl MQ levels held, IV,", 380);
-    pc++; setLabelParameter("  PT?, 0D 0DTE fear, Ext the extreme bar, GLD / SPX / QQQ", 380);
-    pc++; setLabelParameter("3 CONTINUES: SC forced since the extreme, Fuel left,", 380);
-    pc++; setLabelParameter("  Speed fade, Dem since, Pullback, CallB?, Ahead strike", 380);
-    pc++; setLabelParameter("e.g. GC 1 Oct: TURN SC +196 | Exh +2 | Dem 0.9x v; then", 380);
-    pc++; setLabelParameter("  CONTINUES Fuel left 0 = cover done, expect it to slow", 380);
-    pc++; setLabelParameter("No level near: FORCED / GAMMA / REASONS rows instead", 380);
+    PX.rpos     = pc++; setListParameter("Turn read", 0, "Show;Off");                    // (3.0.0) the Turn box; drag its grip to move it
+    PX.rtop     = pc++; setIntegerParameter("Box: lift from bottom (px)", 30, 0, SL);
+    PX.rstg     = pc++; setListParameter("Reasons shown", 0, "All;Last 4");          // (3.0.0)
+    PX.rwid     = pc++; setIntegerParameter("Box width (% of chart 30-100)", 55, 0, SL);
+    pc++; setLabelParameter("THE TURN (3.0.0) - why price turned at the level, from", 380);
+    pc++; setLabelParameter("  the options data, in plain sentences, in the order", 380);
+    pc++; setLabelParameter("  they became known. The turn = the low (high) bar and", 380);
+    pc++; setLabelParameter("  2 bars either side; the tape is only used for demand /", 380);
+    pc++; setLabelParameter("  supply bars and failed breaks (trapped traders).", 380);
+    pc++; setLabelParameter("Each reason has its Rev Reason tag: Exhaustion, Tape,", 380);
+    pc++; setLabelParameter("  Short cover, IV move, Fear/greed fading, Pin, Pin Exp,", 380);
+    pc++; setLabelParameter("  Cushion, 0DTE fear leaving, Profit taking ?, New bets ?", 380);
+    pc++; setLabelParameter("  A dashed tag = an educated guess (checked against the", 380);
+    pc++; setLabelParameter("  next day's open interest); grey text = a lean only.", 380);
+    pc++; setLabelParameter("  GLD / SPX / QQQ / USO after a tag = from the ETF, used", 380);
+    pc++; setLabelParameter("  only when the futures options show nothing for it.", 380);
+    pc++; setLabelParameter("e.g. HG 2 Oct 10:45: 1) Tape - the breakdown under 6.5405", 380);
+    pc++; setLabelParameter("  failed, sellers trapped; 2) Short cover - dealers bought", 380);
+    pc++; setLabelParameter("  back 20 of the 44 they sold; 3) Pin - the expiring 6.55", 380);
+    pc++; setLabelParameter("  strike held price into the 12:00 expiry.", 380);
+    pc++; setLabelParameter("The header ends with fuel left = futures dealers still", 380);
+    pc++; setLabelParameter("  have to buy (sell) back - more fuel for the turn.", 380);
     pc++; setLabelParameter("MOVE IT: drag the grip on its left edge; double-click", 380);
     pc++; setLabelParameter("  the grip to put it back at the bottom left", 380);
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
@@ -214,7 +220,7 @@ void DealerRead::readSettings(Settings& S)
     S.rpos = getListIndex(PX.rpos); if (S.rpos < 0 || S.rpos > 1) S.rpos = 0;
     S.rtop = getIntegerValue(PX.rtop); if (S.rtop < 0 || S.rtop > 900) S.rtop = 30;
     S.rstg = getListIndex(PX.rstg); if (S.rstg < 0 || S.rstg > 1) S.rstg = 0;
-    S.rwid = getIntegerValue(PX.rwid); if (S.rwid < 3 || S.rwid > 10) S.rwid = 5;
+    S.rwid = getIntegerValue(PX.rwid); if (S.rwid < 30 || S.rwid > 100) S.rwid = 55;     // (3.0.0) box width, % of the chart
     S.explain = false;
 }
 
@@ -976,7 +982,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,2.2.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,3.0.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 // (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
@@ -1211,6 +1217,7 @@ int DealerRead::mouse(RTX_EVENT* e)
 void DealerRead::renderGrid(const Settings& S)
 {
     if (S.rpos == 1 || mkt.empty()) { gripR = gripL; return; }
+    if (D.hasTurn || D.hasStage) { renderTurn(S); return; }       // (3.0.0) a level is being worked: the Turn (or "no turn yet")
     loadPos();
     u = S.font / 10.0f;
     int fs = S.font - 1;
@@ -1313,6 +1320,80 @@ void DealerRead::renderGrid(const Settings& S)
     }
 }
 
+// ------------------------------------------------------------------ (3.0.0) the Turn
+// Rassul 2026-10-02: "i want sentences so its more human readable" / "i dont think we should have stages or phases, it should all
+// be part of the Turn" / "the turn = the low bar + 2 bars to the left and 2 to the right". One box: the header, then 1) 2) 3) ...
+// each = time, the Rev Reason tag (a dashed frame = a guess), the sentence word-wrapped to the box width (grey = a lean).
+void DealerRead::renderTurn(const Settings& S)
+{
+    loadPos();
+    u = S.font / 10.0f;
+    int fs = S.font - 1;
+    RCT pane; pane.getPaneRect(false);
+    short lh = U(15), pad = U(6), gw = U(9), gap = U(6);
+    int W = (int)((pane.right - pane.left) * S.rwid / 100);
+    int minW = U(360); if (W < minW) W = minW;
+    if (W > pane.right - pane.left - U(8)) W = pane.right - pane.left - U(8);
+    int inner = W - gw - 2 * pad;
+    auto wBold = [&](const std::string& q) { return (float)textW(q.c_str(), fs, true); };
+    auto wNorm = [&](const std::string& q) { return (float)textW(q.c_str(), fs, false); };
+    std::vector<std::string> head;
+    if (D.hasTurn) head = dl::wrapWords(D.turnHead, (float)inner, wBold);
+    else head.push_back(mkt + (D.stageSide == 'L' ? " - watching LONG at " : " - watching SHORT at ") + D.stageLvl + " - no turn yet");
+    if (!D.terr.empty()) head.push_back("turn read failed: " + D.terr);
+    // the reason rows: number, time, tag, then the sentence lines
+    int nW = textW("10)", fs, false) + U(4), tW = textW("00:00", fs, false) + gap, tagW = 0;
+    std::vector<size_t> idx;
+    for (size_t i = 0; i < D.trows.size(); i++) idx.push_back(i);
+    if (S.rstg == 1 && idx.size() > 4) idx.erase(idx.begin(), idx.end() - 4);
+    for (size_t k = 0; k < idx.size(); k++) {
+        const dl::Data::TRow& R = D.trows[idx[k]];
+        std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
+        int w = textW(tg.c_str(), fs - 1, true) + U(10); if (w > tagW) tagW = w;
+    }
+    int txW = inner - nW - tW - tagW - gap; if (txW < U(120)) txW = U(120);
+    std::vector<std::vector<std::string> > lines(idx.size());
+    int nLines = (int)head.size();
+    for (size_t k = 0; k < idx.size(); k++) { lines[k] = dl::wrapWords(D.trows[idx[k]].text, (float)txW, wNorm); if (lines[k].empty()) lines[k].push_back(""); nLines += (int)lines[k].size(); }
+    gridH = (short)(pad * 2 + lh * nLines + U(3) * (short)idx.size());
+    short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(pane.left + U(10));
+    short maxR = (short)(pane.right - U(4));
+    if (x0 + W > maxR) x0 = (short)(maxR - W);
+    if (x0 < pane.left) x0 = pane.left;
+    short y0 = posB >= 0 ? (short)(pane.bottom - posB - gridH) : (short)(pane.bottom - S.rtop - gridH);
+    if (y0 < pane.top) y0 = pane.top;
+    gridL = x0; gridT = y0;
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BOXBG);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, true);
+    gripL = x0; gripT = y0; gripR = (short)(x0 + gw); gripB = (short)(y0 + gridH);
+    fill((short)(gripL + 1), (short)(gripT + 1), gripR, (short)(gripB - 1), 0x001E293B);
+    for (short d = (short)(gripT + U(6)); d < gripB - U(4); d = (short)(d + U(4))) { fill((short)(gripL + U(3)), d, (short)(gripL + U(4)), (short)(d + 1), C_MUTED); fill((short)(gripL + U(6)), d, (short)(gripL + U(7)), (short)(d + 1), C_MUTED); }
+    short cx0 = (short)(x0 + gw + pad);
+    short y = (short)(y0 + pad + lh / 2);
+    for (size_t h = 0; h < head.size(); h++) { text(cx0, y, head[h].c_str(), h + 1 == head.size() && !D.terr.empty() ? C_MUTED : C_TABONB, fs, true, 0); y = (short)(y + lh); }
+    for (size_t k = 0; k < idx.size(); k++) {
+        const dl::Data::TRow& R = D.trows[idx[k]];
+        y = (short)(y + U(3));
+        char nb[8]; snprintf(nb, sizeof(nb), "%d)", R.n);
+        text((short)(cx0 + nW - U(4)), y, nb, C_MUTED, fs, false, 2);
+        text((short)(cx0 + nW), y, R.t.c_str(), C_MUTED, fs, false, 0);
+        int r, g, b; dl::tagColour(R.tag, r, g, b);
+        COLOR tc = (COLOR)((r << 16) | (g << 8) | b);
+        bool guess = R.kind == "guess" || dl::isGuess(R.tag);
+        bool lean = R.kind == "lean";
+        std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
+        short tx = (short)(cx0 + nW + tW);
+        frame(tx, (short)(y - lh / 2 + 1), (short)(tx + textW(tg.c_str(), fs - 1, true) + U(8)), (short)(y + lh / 2 - 1), lean ? C_GREY : tc, guess);
+        text((short)(tx + U(4)), y, tg.c_str(), lean ? C_GREY : tc, fs - 1, true, 0);
+        short sx = (short)(cx0 + nW + tW + tagW + gap);
+        for (size_t l = 0; l < lines[k].size(); l++) {
+            text(sx, y, lines[k][l].c_str(), lean ? C_GREY : C_INK, fs, false, 0);
+            if (l + 1 < lines[k].size()) y = (short)(y + lh);
+        }
+        y = (short)(y + lh);
+    }
+}
+
 int DealerRead::draw(void)
 {
     load();
@@ -1326,7 +1407,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerRead *p = new DealerRead();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
-    p->setDescription("LRA Dealer Read: the reversal reasons at the level, stage by stage, in one grid. Drag its grip to move it.");
-    p->setVersion("2.2.0");
+    p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
+    p->setVersion("3.0.0");
     return p;
 }

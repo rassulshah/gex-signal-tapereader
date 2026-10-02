@@ -151,6 +151,22 @@ int main()
         CHECK(G.srows[2].t.empty() && G.srows[2].val.empty() && G.srows[2].side == 'N', "an SR row with empty fields");
         CHECK(dl::isGuess("PT?") && dl::isGuess("CallB?") && !dl::isGuess("SC") && !dl::isGuess(""), "guess codes");
     }
+    {   // (file 1.8 / Read 3.0) the Turn (lra/turn.py, HG 2 Oct 10:45)
+        dl::Data T;
+        const char* rows[] = { "TURN|L|HG - THE TURN at LL 6.5325 (long) - low 6.5330 (10:45 bar) - short gamma|10:39|10:51",
+            "TR|1|10:48|Tape|||The breakdown under 6.5405 (the 10:24 low) failed - the sellers who broke it were trapped.",
+            "TR|2|11:00|New bets ?|guess||327 6.75 Oct-9 calls opened around the low.", "TR|3|11:05|Short cover||GLD|from the ETF", "TERR|ValueError: x" };
+        for (const char* r : rows) dl::parseLine(T, r);
+        CHECK(T.hasTurn && T.turnSide == 'L' && T.turnFrom == "10:39" && T.turnTo == "10:51" && T.turnHead.find("THE TURN") != std::string::npos, "TURN row");
+        CHECK(T.trows.size() == 3 && T.trows[1].tag == "New bets ?" && T.trows[1].kind == "guess" && T.trows[2].src == "GLD" && T.trows[0].kind.empty(), "TR rows");
+        CHECK(T.terr == "ValueError: x", "TERR row");
+        auto w = [](const std::string& x) { return (float)x.size(); };
+        std::vector<std::string> L = dl::wrapWords("aaa bbb ccc ddd", 7.0f, w);
+        CHECK(L.size() == 2 && L[0] == "aaa bbb" && L[1] == "ccc ddd", "word wrap");
+        CHECK(dl::wrapWords("averyveryverylongword x", 5.0f, w).size() == 2, "a word wider than the line stays whole");
+        int r, g, b; dl::tagColour("New bets ?", r, g, b); CHECK(r == 74 && g == 222, "guess tag keeps its colour");
+        dl::Data O; CHECK(!O.hasTurn && O.trows.empty(), "an older file = no turn");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }
