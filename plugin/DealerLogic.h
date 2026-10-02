@@ -17,6 +17,9 @@
  *     FWIN|<from>|<to>|<gamma>|<vanna>|<charm>|<positions>|<futures traded>          (every grid window, last 40)
  *     GSTR|<HH:MM>|<px>|<iv %>|<gamma/pt>|<speed -0.25 EM>|<speed +0.25 EM>|<zomma IV+1>|<zomma IV-1>|<color +30m>|<color +60m>
  *     SIG|<yyyy-mm-dd HH:MM:SS CT>|<code SC Van Chm PutS CallB CallS PutB>|<B = dealers buy / S = sell>|<value>|<text>
+ *  (file 1.7 / Read 2.1 / Sig 1.1, lra/stages.py) the Read in stages - 1 APPROACH, 2 TURN STARTS, 3 TURN CONTINUES:
+ *     STAGE|<now 0-3>|<L/S>|<level>|<extreme>|<extreme bar HH:MM>       STG|<n>|<title>|<sub>       SSUM|<n>|<summary>
+ *     SR|<n>|<HH:MM known>|<code>|<B/S/N>|<value>|<chip:col,chip:col>|<text>   (a code ending in ? = an educated guess)
  ********************************************************************************/
 #pragma once
 #include <string>
@@ -77,6 +80,12 @@ struct Data {
     struct Sig { int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0; std::string code, text; char side = 'B'; float v = 0; };
     std::vector<Sig> sigs;
     std::string ferr;
+    // (file 1.7) the stages
+    struct Chip { std::string name; char col = 'N'; };
+    struct SRow { int n = 0; std::string t, code, val, text; char side = 'N'; std::vector<Chip> chips; };
+    struct Stg { int n = 0; std::string title, sub, sum; };
+    bool hasStage = false; int stageNow = 0; char stageSide = 'L'; std::string stageLvl, stageExt, stageExtT;
+    std::vector<Stg> stgs; std::vector<SRow> srows;
 };
 
 // (Profile 1.3.7 / Read 1.2.5, 2026-09-30) the file's identity (modified time + size): the indicators re-read and re-parse the
@@ -194,6 +203,20 @@ inline bool parseLine(Data& D, const std::string& line)
         g.code = t[2]; g.side = t[3] == "S" ? 'S' : 'B'; g.v = f(t[4]); g.text = t[5]; D.sigs.push_back(g); return true;
     }
     if (k == "FERR" && t.size() >= 2) { D.ferr = t[1]; return true; }
+    if (k == "STAGE" && t.size() >= 6) { D.hasStage = true; D.stageNow = atoi(t[1].c_str()); D.stageSide = t[2] == "S" ? 'S' : 'L'; D.stageLvl = t[3]; D.stageExt = t[4]; D.stageExtT = t[5]; return true; }
+    if (k == "STG" && t.size() >= 4) { Data::Stg g; g.n = atoi(t[1].c_str()); g.title = t[2]; g.sub = t[3]; D.stgs.push_back(g); return true; }
+    if (k == "SSUM" && t.size() >= 3) { int n = atoi(t[1].c_str()); for (size_t i = 0; i < D.stgs.size(); i++) if (D.stgs[i].n == n) D.stgs[i].sum = t[2]; return true; }
+    if (k == "SR" && t.size() >= 8) {
+        Data::SRow r; r.n = atoi(t[1].c_str()); r.t = t[2]; r.code = t[3]; r.side = t[4].empty() ? 'N' : t[4][0]; r.val = t[5]; r.text = t[7];
+        std::vector<std::string> cs = split(t[6], ',');
+        for (size_t i = 0; i < cs.size(); i++) {
+            if (cs[i].empty()) continue;
+            Data::Chip c; size_t p = cs[i].rfind(':');
+            if (p == std::string::npos) c.name = cs[i]; else { c.name = cs[i].substr(0, p); c.col = p + 1 < cs[i].size() ? cs[i][p + 1] : 'N'; }
+            r.chips.push_back(c);
+        }
+        D.srows.push_back(r); return true;
+    }
     return false;
 }
 
@@ -210,6 +233,9 @@ inline bool sigInBar(const Data::Sig& g, int y, int mo, int d, double so0, doubl
     double so = g.h * 3600.0 + g.mi * 60.0 + g.s;
     return so >= so0 && so < so1;
 }
+
+// (Sig 1.1) a code ending in '?' is an educated guess (drawn with a dashed frame)
+inline bool isGuess(const std::string& code) { return !code.empty() && code[code.size() - 1] == '?'; }
 
 inline Data parseText(const std::string& text)
 {

@@ -13,6 +13,8 @@
  *     Chm    time decay forced dealers to trade (charm)
  *     PutS / CallB   customers sold puts / bought calls near price - dealers buy futures
  *     CallS / PutB   customers sold calls / bought puts near price - dealers sell futures
+ *  (1.1.0) plus the Read's stage reasons: Exh (push-side options ran out), Lvl (MenthorQ levels held at the extreme), IV,
+ *     0D (0DTE fear leaving), PT? (profit taking - guess), CallB? / PutB? (new bets - guess); a guess has a dashed frame
  *  Every mark is >= 1% of the futures traded in its window (flow marks: >= 50 contracts and >= 20% of the options traded
  *  within 1 EM). All MODELLED from MenthorQ's open interest and scored nightly before any is trusted.
  *  The same code is used whatever the source.
@@ -34,7 +36,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.0.0";
+static const char* DS_VERSION = "1.1.0";
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -76,7 +78,7 @@ int DealerSig::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(30);
+    setParameterDialogHeight(36);
     const short SL = kParmAppendSameLine;
     MARKER mb; memset(&mb, 0, sizeof(mb)); mb.number = kMarkerArrayUp;   mb.size = 2; mb.color = S_GREEN; mb.location = kMarkerBeneathLow;
     MARKER ms; memset(&ms, 0, sizeof(ms)); ms.number = kMarkerArrayDown; ms.size = 2; ms.color = S_RED;   ms.location = kMarkerAboveHigh;
@@ -101,6 +103,11 @@ int cppExtension::setup(void)
     setLabelParameter("PutS / CallB = customers sold puts / bought calls near", 380);
     setLabelParameter("  price: dealers buy futures", 380);
     setLabelParameter("CallS / PutB = customers sold calls / bought puts: sell", 380);
+    setLabelParameter("Exh = push-side options ran out at the extreme", 380);
+    setLabelParameter("Lvl = MenthorQ levels held at the extreme; IV = IV moved", 380);
+    setLabelParameter("0D = 0DTE fear (greed) left after the extreme", 380);
+    setLabelParameter("PT? / CallB? (dashed) = educated guesses: profit taking /", 380);
+    setLabelParameter("  new bets, checked against the next day's open interest", 380);
     setLabelParameter("A mark = at least 1% of the futures traded (flow: 50+", 380);
     setLabelParameter("  contracts, 20%+ of the options near price)", 380);
     setLabelParameter("All modelled from MenthorQ open interest - LEARNING until", 380);
@@ -202,6 +209,11 @@ int DealerSig::draw(void)
         setTextColor(buy ? S_GREEN : S_RED);
         RCT rc; rc.set((short)(p.h - w / 2 - 2), top, (short)(p.h + w / 2 + 4), (short)(top + lineH));
         rc.drawText(g.code.c_str(), true, false);
+        if (dl::isGuess(g.code)) {                 // (1.1.0) an educated guess (PT?, CallB?): a dashed frame round the code
+            setPen(buy ? S_GREEN : S_RED, 1, P_DOT);
+            PNT a; a.set(0, 0.0f); a.h = rc.left; a.v = rc.top; a.setDrawPosition();
+            a.h = rc.right; a.drawLineTo(); a.v = rc.bottom; a.drawLineTo(); a.h = rc.left; a.drawLineTo(); a.v = rc.top; a.drawLineTo();
+        }
         drawn++;
     }
     writeStatus("drawn");
@@ -214,6 +226,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: where an options-market reason for a reversal becomes known. The guide is below the settings.");
-    p->setVersion("1.0.0");
+    p->setVersion("1.1.0");
     return p;
 }

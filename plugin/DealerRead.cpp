@@ -24,6 +24,10 @@
  *  (gamma / vanna / charm / positions, each as a share of the futures traded), gamma strength with speed / zomma / color,
  *  and the reasons lsDealerSig marks on the bars. File 1.6 rows FSUM / GSTR / SIG (lra/forced.py).
  *
+ *  2.1.0 (2026-10-02): when price works a level the box is the Read in STAGES (mockup Dealer Read Stages) - 1 APPROACH,
+ *  2 TURN STARTS, 3 TURN CONTINUES, every reason with the time it became known, value, chips and the MenthorQ numbers;
+ *  settings Stages shown (All / Current only) and Reasons box width. File 1.7 rows STAGE / STG / SR / SSUM (lra/stages.py).
+ *
  *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Dealer-<MKT>.csv (LRA analytics/lra/dealer_irt.py); grammar in
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
  ********************************************************************************/
@@ -70,9 +74,9 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
-struct PIdx { int rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
+struct PIdx { int rstg, rwid, rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
-struct Settings { int rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int rstg = 0, rwid = 900, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -119,6 +123,7 @@ public:
                    const std::vector<dl::Row>& rows, bool wall, int fs);
     void writeStatus(const char* what);
     void renderReasons(const Settings& S);            // (2.0.0) DEALER REASONS: forced futures by cause, gamma strength, reasons
+    void renderStages(const Settings& S);             // (2.1.0) the Read in stages: approach / turn starts / turn continues
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -137,7 +142,7 @@ int cppExtension::setup(void)
     // (1.3.2, Rassul 2026-09-30: "why cant you have the how-to below fuel as text" / "many dropdowns that shouldnt even be
     // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
-    setParameterVersion(6);   // (2.0.0) the DEALER REASONS box: two settings added after View
+    setParameterVersion(7);   // (2.1.0) two more settings after "Reasons: down from top"
     setParameterDialogHeight(38);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -157,6 +162,8 @@ int cppExtension::setup(void)
     PX.view     = pc++; setListParameter("View", 0, "Standard;Summary");   // (1.6.0) Summary = the whole read as sentences
     PX.rpos     = pc++; setListParameter("Reasons box", 0, "Top centre;Top left;Top right;Off");   // (2.0.0)
     PX.rtop     = pc++; setIntegerParameter("Reasons: down from top (px)", 30, 0, SL);
+    PX.rstg     = pc++; setListParameter("Stages shown", 0, "All;Current only");      // (2.1.0)
+    PX.rwid     = pc++; setIntegerParameter("Reasons box width (px)", 900, 0, SL);
     pc++; setLabelParameter("HOW TO READ IT - example: ES short at LH 7,756.50 + CR 0D", 380);
     pc++; setLabelParameter("TOP box = MAGNET: where dealers pull price into expiry", 380);
     pc++; setLabelParameter("  Agrees = a 2nd target / Fights = take profits early", 380);
@@ -186,6 +193,16 @@ int cppExtension::setup(void)
     pc++; setLabelParameter("  Speed = if price moves 0.25 EM, Zomma = if IV moves 1", 380);
     pc++; setLabelParameter("  pt, Color = in 30 / 60 min. -23% = 23% less buying", 380);
     pc++; setLabelParameter("  REASONS = the Dealer Sig marks, newest first", 380);
+    pc++; setLabelParameter("STAGES (when price works a level): 1 APPROACH = what", 380);
+    pc++; setLabelParameter("  dealers will be forced to do there (zone, gamma, speed,", 380);
+    pc++; setLabelParameter("  fuel stored, IV, flow, ETF); 2 TURN STARTS = why it", 380);
+    pc++; setLabelParameter("  turned (Exh, MQ levels, SC, IV, PT? profit taking,", 380);
+    pc++; setLabelParameter("  0DTE, ETF); 3 TURN CONTINUES = forced futures since the", 380);
+    pc++; setLabelParameter("  extreme, fuel left, gamma fade, new bets, strike ahead", 380);
+    pc++; setLabelParameter("  e.g. GC 1 Oct: Fuel -576 stored, SC +196 at 10:20, fuel", 380);
+    pc++; setLabelParameter("  used up by 4,202 = expect it to slow near 4,200", 380);
+    pc++; setLabelParameter("  A code ending in ? (PT?, CallB?) = an educated guess,", 380);
+    pc++; setLabelParameter("  checked against the next day's open interest", 380);
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
@@ -207,6 +224,8 @@ void DealerRead::readSettings(Settings& S)
     S.view = getListIndex(PX.view); if (S.view < 0 || S.view > 1) S.view = 0;
     S.rpos = getListIndex(PX.rpos); if (S.rpos < 0 || S.rpos > 3) S.rpos = 0;
     S.rtop = getIntegerValue(PX.rtop); if (S.rtop < 0 || S.rtop > 900) S.rtop = 30;
+    S.rstg = getListIndex(PX.rstg); if (S.rstg < 0 || S.rstg > 1) S.rstg = 0;
+    S.rwid = getIntegerValue(PX.rwid); if (S.rwid < 400 || S.rwid > 2400) S.rwid = 900;
     S.explain = false;
 }
 
@@ -968,16 +987,102 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,2.0.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,2.1.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 // (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
 // position change is also forcing dealers to buy back futures, and also see how speed zomma and color are impacting gamma")
 // The DEALER REASONS box (mockup Dealer Read Forced Futures): FORCED FUTURES by cause since the current run started, with
 // each part's share of the futures traded; GAMMA STRENGTH and how speed / zomma / color change it; the Dealer Sig reasons.
+static COLOR chipCol(char c) { return c == 'G' ? C_GREEN : c == 'Y' ? C_YEL : c == 'R' ? C_RED : c == 'B' ? 0x0060A5FA : c == 'P' ? 0x00C08CFF : c == 'A' ? 0x00F59E0B : C_MUTED; }
+static COLOR stageCol(int n) { return n == 1 ? 0x0060A5FA : n == 2 ? 0x00F59E0B : 0x004ADE80; }
+
+// (2.1.0, Rassul 2026-10-02: "the dealer read examine options data as price approaches the gamma level, starts and continues the
+// reversal turn giving reversal reasons" + "don't cut short the reversal reasons. You can take educated guesses") - mockup
+// Dealer Read Stages. Every row: time it became known, code, value, chips, the reason with its MenthorQ numbers.
+void DealerRead::renderStages(const Settings& S)
+{
+    u = S.font / 10.0f;
+    int fs = S.font, rf = S.font - 1;
+    RCT pane; pane.getPaneRect(false);
+    short W = (short)(S.rwid * u), lh = U(15), pad = U(10);
+    short right = (short)(pane.right - profReach - U(12));
+    if (W > right - pane.left - U(8)) W = (short)(right - pane.left - U(8));
+    std::vector<int> show;
+    int now = D.stageNow < 1 ? 1 : D.stageNow;
+    for (size_t i = 0; i < D.stgs.size(); i++) if (S.rstg == 0 || D.stgs[i].n == now) show.push_back((int)i);
+    if (show.empty()) return;
+    // column widths: the widest chip set across the rows shown (capped)
+    int chipW = 0;
+    for (size_t r = 0; r < D.srows.size(); r++) {
+        bool on = false; for (size_t k = 0; k < show.size(); k++) if (D.stgs[show[k]].n == D.srows[r].n) on = true;
+        if (!on) continue;
+        int w = 0; for (size_t c = 0; c < D.srows[r].chips.size(); c++) w += textW(D.srows[r].chips[c].name.c_str(), rf - 1, false) + U(12);
+        if (w > chipW) chipW = w;
+    }
+    if (chipW > U(180)) chipW = U(180);
+    int H = pad + lh + U(4);
+    for (size_t k = 0; k < show.size(); k++) {
+        H += lh + U(6);
+        for (size_t r = 0; r < D.srows.size(); r++) if (D.srows[r].n == D.stgs[show[k]].n) H += lh;
+        if (!D.stgs[show[k]].sum.empty()) H += lh + U(4);
+    }
+    H += pad;
+    short x0 = S.rpos == 1 ? (short)(pane.left + U(10)) : S.rpos == 2 ? (short)(right - W) : (short)((pane.left + right) / 2 - W / 2);
+    if (x0 < pane.left + U(4)) x0 = (short)(pane.left + U(4));
+    short y0 = (short)(pane.top + S.rtop);
+    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BOXBG);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER, true);      // dashed = still learning
+    short y = (short)(y0 + pad + lh / 2);
+    std::string ttl = "DEALER READ  " + mkt + "  " + (D.stageSide == 'L' ? "LONG at " : "SHORT at ") + D.stageLvl;
+    text((short)(x0 + pad), y, ttl.c_str(), C_TABONB, fs, true, 0);
+    const char* nowName = now == 1 ? "1 APPROACH" : now == 2 ? "2 TURN STARTS" : "3 TURN CONTINUES";
+    std::string rt = std::string("now: ") + (D.stageNow == 0 ? "watching" : nowName) + (D.stageExt.empty() ? "" : "  extreme " + D.stageExt + " (" + D.stageExtT + " bar)");
+    text((short)(x0 + W - pad), y, rt.c_str(), stageCol(now), rf, true, 2);
+    y = (short)(y + lh + U(4));
+    short xT = (short)(x0 + pad), xC = (short)(xT + U(40)), xV = (short)(xT + U(160)), xCh = (short)(xV + U(8)), xTx = (short)(xCh + chipW + U(4));
+    for (size_t k = 0; k < show.size(); k++) {
+        const dl::Data::Stg& G = D.stgs[show[k]];
+        COLOR sc = stageCol(G.n);
+        y = (short)(y + U(6));
+        fill(x0 + U(4), (short)(y - lh / 2), (short)(x0 + U(7)), (short)(y + lh / 2), sc);
+        text(xT, y, G.title.c_str(), sc, fs, true, 0);
+        int tw = textW(G.title.c_str(), fs, true);
+        std::string sub = G.sub + (G.n == now && D.stageNow > 0 ? "   << NOW" : "");
+        text((short)(xT + tw + U(10)), y, fit(sub, x0 + W - pad - (xT + tw + U(10)), rf, false).c_str(), C_MUTED, rf, false, 0);
+        y = (short)(y + lh);
+        for (size_t r = 0; r < D.srows.size(); r++) {
+            const dl::Data::SRow& R = D.srows[r];
+            if (R.n != G.n) continue;
+            COLOR cc = R.side == 'B' ? C_GREEN : R.side == 'S' ? C_RED : C_INK;
+            text(xT, y, R.t.c_str(), C_MUTED, rf, false, 0);
+            text(xC, y, R.code.c_str(), cc, rf, true, 0);
+            if (dl::isGuess(R.code)) { int cw = textW(R.code.c_str(), rf, true); frame((short)(xC - U(2)), (short)(y - lh / 2 + U(1)), (short)(xC + cw + U(3)), (short)(y + lh / 2 - U(1)), cc, true); }
+            text(xV, y, R.val.c_str(), cc, rf, true, 2);
+            short cx = xCh;
+            for (size_t c = 0; c < R.chips.size(); c++) {
+                COLOR chc = chipCol(R.chips[c].col);
+                int w = textW(R.chips[c].name.c_str(), rf - 1, false) + U(8);
+                if (cx + w > xCh + chipW) break;
+                frame(cx, (short)(y - U(6)), (short)(cx + w), (short)(y + U(6)), chc, false);
+                text((short)(cx + U(4)), y, R.chips[c].name.c_str(), chc, rf - 1, false, 0);
+                cx = (short)(cx + w + U(4));
+            }
+            text(xTx, y, fit(R.text, x0 + W - pad - xTx, rf, false).c_str(), C_INK, rf, false, 0);
+            y = (short)(y + lh);
+        }
+        if (!G.sum.empty()) {
+            fill(xT, (short)(y - lh / 2), (short)(x0 + W - pad), (short)(y + lh / 2 + U(2)), C_DOBG);
+            text((short)(xT + U(6)), (short)(y + U(1)), fit(G.sum, W - 2 * pad - U(12), rf, true).c_str(), C_DOTXT, rf, true, 0);
+            y = (short)(y + lh + U(4));
+        }
+    }
+}
+
 void DealerRead::renderReasons(const Settings& S)
 {
     if (S.rpos == 3 || mkt.empty()) return;
+    if (D.hasStage && !D.stgs.empty()) { renderStages(S); return; }    // (2.1.0) a level is being worked: the Read in stages
     if (!D.hasFsum && !D.hasGstr && D.sigs.empty() && D.ferr.empty()) return;
     u = S.font / 10.0f;
     int fs = S.font;
@@ -1085,6 +1190,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Read: is the level holding, and are dealers reversing? The guide is below the settings.");
-    p->setVersion("2.0.0");
+    p->setVersion("2.1.0");
     return p;
 }

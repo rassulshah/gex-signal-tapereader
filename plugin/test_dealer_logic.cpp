@@ -139,6 +139,18 @@ int main()
         CHECK(dl::gChange(-40.9f, -31.6f) == "-23%" && dl::gChange(-40.9f, -50.5f) == "+23%", "gamma change in %");
         CHECK(dl::sigInBar(F.sigs[0], 2026, 10, 1, 10 * 3600 + 18 * 60, 10 * 3600 + 21 * 60) && !dl::sigInBar(F.sigs[0], 2026, 10, 1, 10 * 3600 + 21 * 60, 10 * 3600 + 24 * 60), "a reason lands in the bar that contains its time");
     }
+    {   // (file 1.7 / Read 2.1) the stages
+        dl::Data G;
+        const char* rows[] = { "STAGE|3|L|4,178.40|4,179.60|10:09", "STG|1|1 APPROACH|09:39 -> 10:09 - what dealers will be forced to do",
+            "SR|1|10:15|Fuel|S|-576|Fuel:A|Dealers SOLD 576 futures", "SSUM|1|AT THE LEVEL: short gamma",
+            "STG|2|2 TURN STARTS|extreme 4,179.60", "SR|2|10:20|PT?|B|~25|Guess:P,Small:N|Profit taking (guess)", "SR|2||GLD|N||No data:N|NO DATA" };
+        for (const char* r : rows) dl::parseLine(G, r);
+        CHECK(G.hasStage && G.stageNow == 3 && G.stageSide == 'L' && G.stageExt == "4,179.60" && G.stageExtT == "10:09", "STAGE row");
+        CHECK(G.stgs.size() == 2 && G.stgs[0].sum == "AT THE LEVEL: short gamma" && G.stgs[1].sum.empty(), "STG + SSUM");
+        CHECK(G.srows.size() == 3 && G.srows[1].code == "PT?" && G.srows[1].chips.size() == 2 && G.srows[1].chips[0].name == "Guess" && G.srows[1].chips[0].col == 'P', "SR rows + chips");
+        CHECK(G.srows[2].t.empty() && G.srows[2].val.empty() && G.srows[2].side == 'N', "an SR row with empty fields");
+        CHECK(dl::isGuess("PT?") && dl::isGuess("CallB?") && !dl::isGuess("SC") && !dl::isGuess(""), "guess codes");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }
