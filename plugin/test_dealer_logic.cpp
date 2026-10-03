@@ -167,6 +167,18 @@ int main()
         int r, g, b; dl::tagColour("New bets ?", r, g, b); CHECK(r == 74 && g == 222, "guess tag keeps its colour");
         dl::Data O; CHECK(!O.hasTurn && O.trows.empty(), "an older file = no turn");
     }
+    {   // (file 1.9 / Sig 1.4) LSIG rows and labels that never overlap
+        dl::Data L;
+        dl::parseLine(L, "SIG|2026-10-02 11:07:00|SC|B|152|Dealers started buying back");
+        dl::parseLine(L, "LSIG|2026-10-02 11:20:00|Van|B|57|IV fell");
+        CHECK(L.sigs.size() == 1 && L.lsigs.size() == 1 && L.lsigs[0].code == "Van" && L.sigs[0].v == 152, "SIG vs LSIG");
+        std::vector<dl::Box> used;
+        dl::Box a = {0, 10, 30, 22}, b = {10, 10, 40, 22}, c = {100, 10, 120, 22};
+        dl::Box ra = dl::placeFree(used, a, 12, true), rb = dl::placeFree(used, b, 12, true), rc = dl::placeFree(used, c, 12, true);
+        CHECK(ra.t == 10 && rb.t == 22 && rc.t == 10, "a touching label drops a row, a free one stays");
+        dl::Box d = {5, 10, 25, 22}; dl::Box rd = dl::placeFree(used, d, 12, false);
+        CHECK(rd.t == -2, "a sell label moves up");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

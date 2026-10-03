@@ -157,7 +157,7 @@ int cppExtension::setup(void)
     // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
     setParameterVersion(9);   // (3.0.0) the Turn: same controls in the same places, two renamed; the guide rewritten
-    setParameterDialogHeight(34);
+    setParameterDialogHeight(13);   // (3.0.1, Rassul 2026-10-02 19:12) the how-to text is gone - controls only
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
@@ -178,26 +178,6 @@ int cppExtension::setup(void)
     PX.rtop     = pc++; setIntegerParameter("Box: lift from bottom (px)", 30, 0, SL);
     PX.rstg     = pc++; setListParameter("Reasons shown", 0, "All;Last 4");          // (3.0.0)
     PX.rwid     = pc++; setIntegerParameter("Box width (% of chart 30-100)", 55, 0, SL);
-    pc++; setLabelParameter("THE TURN (3.0.0) - why price turned at the level, from", 380);
-    pc++; setLabelParameter("  the options data, in plain sentences, in the order", 380);
-    pc++; setLabelParameter("  they became known. The turn = the low (high) bar and", 380);
-    pc++; setLabelParameter("  2 bars either side; the tape is only used for demand /", 380);
-    pc++; setLabelParameter("  supply bars and failed breaks (trapped traders).", 380);
-    pc++; setLabelParameter("Each reason has its Rev Reason tag: Exhaustion, Tape,", 380);
-    pc++; setLabelParameter("  Short cover, IV move, Fear/greed fading, Pin, Pin Exp,", 380);
-    pc++; setLabelParameter("  Cushion, 0DTE fear leaving, Profit taking ?, New bets ?", 380);
-    pc++; setLabelParameter("  A dashed tag = an educated guess (checked against the", 380);
-    pc++; setLabelParameter("  next day's open interest); grey text = a lean only.", 380);
-    pc++; setLabelParameter("  GLD / SPX / QQQ / USO after a tag = from the ETF, used", 380);
-    pc++; setLabelParameter("  only when the futures options show nothing for it.", 380);
-    pc++; setLabelParameter("e.g. HG 2 Oct 10:45: 1) Tape - the breakdown under 6.5405", 380);
-    pc++; setLabelParameter("  failed, sellers trapped; 2) Short cover - dealers bought", 380);
-    pc++; setLabelParameter("  back 20 of the 44 they sold; 3) Pin - the expiring 6.55", 380);
-    pc++; setLabelParameter("  strike held price into the 12:00 expiry.", 380);
-    pc++; setLabelParameter("The header ends with fuel left = futures dealers still", 380);
-    pc++; setLabelParameter("  have to buy (sell) back - more fuel for the turn.", 380);
-    pc++; setLabelParameter("MOVE IT: drag the grip on its left edge; double-click", 380);
-    pc++; setLabelParameter("  the grip to put it back at the bottom left", 380);
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
@@ -982,7 +962,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,3.0.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,3.0.1\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 // (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
@@ -1408,6 +1388,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("3.0.0");
+    p->setVersion("3.0.1");
     return p;
 }

@@ -34,7 +34,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.0.0";   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+static const char* DP_VERSION = "2.0.1";   // 2.0.1 (2026-10-02 19:12): the how-to text in the settings is gone   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
@@ -112,7 +112,7 @@ int cppExtension::setup(void)
     // (1.3.12, Rassul 2026-09-30) only real settings have a control; the guide is plain text (setLabelParameter) below.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
     setParameterVersion(3);
-    setParameterDialogHeight(23);
+    setParameterDialogHeight(8);    // (2.0.1, Rassul 2026-10-02 19:12) the how-to text is gone - controls only
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
@@ -124,23 +124,6 @@ int cppExtension::setup(void)
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true);
     PX.banner  = pc++; setBoolParameter("Whole-book banner", false, SL);
     PX.inds    = pc++; setStringParameter("Your indicators in the bar file (names, comma)", "cob_bull,cob_bear", 160);
-    pc++; setLabelParameter("HOW TO READ THE PROFILE (2.0) - example: Gold 2 Oct 12:25", 380);
-    pc++; setLabelParameter("One bar per strike = MenthorQ's net GEX at that strike", 380);
-    pc++; setLabelParameter("= $ of delta dealers must hedge per 1-pt move there", 380);
-    pc++; setLabelParameter("RED = dealers SHORT gamma = FUEL: they sell into drops", 380);
-    pc++; setLabelParameter("  and buy into rallies - moves run THROUGH red strikes", 380);
-    pc++; setLabelParameter("GREEN = dealers LONG gamma = WALL: they lean against", 380);
-    pc++; setLabelParameter("  price - moves slow down / stall at green strikes", 380);
-    pc++; setLabelParameter("Darker part next to the scale = today's 0DTE share:", 380);
-    pc++; setLabelParameter("  it disappears at the options expiry (GC 12:30 CT)", 380);
-    pc++; setLabelParameter("Example: 4150 -3.9M (half 0DTE) = the biggest short", 380);
-    pc++; setLabelParameter("  strike under price: a drop into it speeds up", 380);
-    pc++; setLabelParameter("Example: 4225 +420K, 4195 +327K = small walls above", 380);
-    pc++; setLabelParameter("Same numbers as MenthorQ's Net GEX panel (Intra)", 380);
-    pc++; setLabelParameter("Faded bars = beyond 1.2 EM. BUY/SELL: see Dealer Read", 380);
-    pc++; setLabelParameter("Bars scale to the biggest strike on screen", 380);
-    pc++; setLabelParameter("BAR FILE: your indicators by name, e.g. cob_bull,cob_bear", 380);
-    pc++; setLabelParameter("  they go to the Reader to check its CoB / RBar triggers", 380);
     PX.keyHow = PX.keyNode = PX.keyPill = PX.whisk = PX.legend = -1;
     return RTX_OK;
 }
@@ -528,6 +511,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.0.0");
+    p->setVersion("2.0.1");
     return p;
 }

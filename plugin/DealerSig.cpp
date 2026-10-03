@@ -15,6 +15,12 @@
  *     CallS / PutB   customers sold calls / bought puts near price - dealers sell futures
  *  (1.1.0) plus the Read's stage reasons: Exh (push-side options ran out), Lvl (MenthorQ levels held at the extreme), IV,
  *     0D (0DTE fear leaving), PT? (profit taking - guess), CallB? / PutB? (new bets - guess); a guess has a dashed frame
+ *  (1.4.0, 2026-10-02 19:15, Rassul: "so many signals after the 2 bars near the low"; "near the lows it should look for
+ *  reversal up signals and when it goes to a gamma value higher, reversal down"; "get rid of the how to section"): only the
+ *  Turn's reasons, and only on the turn's bars (the low / high bar and 2 bars either side; a reason MenthorQ showed later sits
+ *  on the turn's last bar) - green under a low, red above a high; the forced ledger's SC / Van are LSIG rows, drawn only with
+ *  "Dealer ledger marks: On" (smaller, lighter); labels never overlap (stacked away from the bar); the value is on the mark;
+ *  the settings guide is gone.
  *  (1.3.0, 2026-10-02 evening) the marks are now the Turn's reasons (file 1.8): Trap, FGF, Pin, PinX, Cush, NB? join the codes;
  *  nothing else changed - any code in the file is drawn.
  *  (1.2.0) and the tape where it shows demand / supply from the gex level: Dem / Sup (the turn bars' volume + range vs the
@@ -40,13 +46,13 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.3.0";
+static const char* DS_VERSION = "1.4.0";
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
-struct SIdx { int market, font, clock, gap; };
+struct SIdx { int market, font, clock, gap, ledger; };
 static SIdx SX;
-struct SSet { int market = 0, font = 10, clock = 0, gap = 6; };
+struct SSet { int market = 0, font = 10, clock = 0, gap = 6; bool ledger = false; };
 
 class DealerSig : public cppExtension {
 public:
@@ -82,7 +88,7 @@ int DealerSig::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(39);
+    setParameterDialogHeight(6);    // (1.4.0) controls only - the how-to text is gone
     const short SL = kParmAppendSameLine;
     MARKER mb; memset(&mb, 0, sizeof(mb)); mb.number = kMarkerArrayUp;   mb.size = 2; mb.color = S_GREEN; mb.location = kMarkerBeneathLow;
     MARKER ms; memset(&ms, 0, sizeof(ms)); ms.number = kMarkerArrayDown; ms.size = 2; ms.color = S_RED;   ms.location = kMarkerAboveHigh;
@@ -92,38 +98,7 @@ int cppExtension::setup(void)
     SX.font   = getParameterCount(); setIntegerParameter("Font size (pt)", 10, 0, SL);
     SX.clock  = getParameterCount(); setIntegerParameter("Clock offset (min)", 0, 0);
     SX.gap    = getParameterCount(); setIntegerParameter("Gap from the bar (px)", 6, 0, SL);
-    setLabelParameter("HOW TO READ IT - example: GC 1 Oct, low 4,179.6 at 10:09", 380);
-    setLabelParameter("  10:18 bar: green SC under it = the 10:20 grid showed", 380);
-    setLabelParameter("  dealers buying 196 futures back (12.6% of the futures", 380);
-    setLabelParameter("  traded) after selling 331 into the drop", 380);
-    setLabelParameter("GREEN under a bar = a reason dealers BUY futures (long)", 380);
-    setLabelParameter("RED above a bar = a reason dealers SELL futures (short)", 380);
-    setLabelParameter("Each mark sits on the bar where the reason became known", 380);
-    setLabelParameter("  (when MenthorQ's grid landed), once per reason", 380);
-    setLabelParameter("SC = short cover: dealers trade back what they hedged", 380);
-    setLabelParameter("  with the push (gamma)", 380);
-    setLabelParameter("Van = IV moved past its noise and forced dealers (vanna)", 380);
-    setLabelParameter("Chm = time decay forced dealers (charm)", 380);
-    setLabelParameter("PutS / CallB = customers sold puts / bought calls near", 380);
-    setLabelParameter("  price: dealers buy futures", 380);
-    setLabelParameter("CallS / PutB = customers sold calls / bought puts: sell", 380);
-    setLabelParameter("Exh = push-side options ran out at the extreme", 380);
-    setLabelParameter("Lvl = MenthorQ levels held at the extreme; IV = IV moved", 380);
-    setLabelParameter("0D = 0DTE fear (greed) left after the extreme", 380);
-    setLabelParameter("Dem / Sup = demand (supply) off the level: the turn bars'", 380);
-    setLabelParameter("  volume + range vs their same-time normal; Abs = heavy", 380);
-    setLabelParameter("  push volume absorbed (no new low / high)", 380);
-    setLabelParameter("PT? / NB? / CallB? (dashed) = educated guesses: profit", 380);
-    setLabelParameter("  taking / new bets, checked against the next day's OI", 380);
-    setLabelParameter("(1.3.0) the Turn's reasons: Trap = a failed break, the", 380);
-    setLabelParameter("  traders who broke the swing are trapped; FGF = fear /", 380);
-    setLabelParameter("  greed fading (new extreme, IV no higher); Pin = the", 380);
-    setLabelParameter("  expiring strike holding price; PinX = it expired and", 380);
-    setLabelParameter("  let price go; Cush = dealers long gamma into the level", 380);
-    setLabelParameter("A mark = at least 1% of the futures traded (flow: 50+", 380);
-    setLabelParameter("  contracts, 20%+ of the options near price)", 380);
-    setLabelParameter("All modelled from MenthorQ open interest - LEARNING until", 380);
-    setLabelParameter("  each reason is scored. The Dealer Read explains them.", 380);
+    SX.ledger = getParameterCount(); setListParameter("Dealer ledger marks", 0, "Off;On");      // (1.4.0) the forced ledger's SC / Van
     return RTX_OK;
 }
 
@@ -133,6 +108,7 @@ void DealerSig::readSettings(SSet& S)
     S.font = getIntegerValue(SX.font); if (S.font < 7 || S.font > 24) S.font = 10;
     S.clock = getIntegerValue(SX.clock); if (S.clock < -720 || S.clock > 720) S.clock = 0;
     S.gap = getIntegerValue(SX.gap); if (S.gap < 0 || S.gap > 60) S.gap = 6;
+    S.ledger = getListIndex(SX.ledger) == 1;
 }
 
 void DealerSig::load()
@@ -179,10 +155,13 @@ void DealerSig::fillSignals(int from)
     RTARRAYI dt(barDateTime);
     if (from < 0) from = 0;
     for (int i = from; i < (int)n; i++) { o1[i] = 0; o2[i] = 0; }
-    for (size_t k = 0; k < D.sigs.size(); k++) {
-        int b = barOf(D.sigs[k], (int)n, dt);
+    std::vector<const dl::Data::Sig*> all;
+    for (size_t k = 0; k < D.sigs.size(); k++) all.push_back(&D.sigs[k]);
+    if (cfg.ledger) for (size_t k = 0; k < D.lsigs.size(); k++) all.push_back(&D.lsigs[k]);
+    for (size_t k = 0; k < all.size(); k++) {
+        int b = barOf(*all[k], (int)n, dt);
         if (b < from) continue;
-        if (D.sigs[k].side == 'B') o1[b] = kSignalTrue; else o2[b] = kSignalTrue;
+        if (all[k]->side == 'B') o1[b] = kSignalTrue; else o2[b] = kSignalTrue;
     }
 }
 
@@ -199,34 +178,47 @@ int DealerSig::draw(void)
     load();
     drawn = 0;
     long n = getBarCount();
-    if (n < 1 || D.sigs.empty()) { writeStatus(mkt.empty() ? "no market" : (D.sigs.empty() ? "no reasons yet" : "no bars")); return RTX_OK; }
+    // (1.4.0, Rassul 2026-10-02 19:09-19:11) the Turn's reasons only (SIG, timed inside the turn: the low / high bar and 2 bars
+    // either side - green under the bars at a low, red above them at a high); the forced ledger's SC / Van (LSIG) only when
+    // "Dealer ledger marks" is On, drawn smaller. Every label is placed where it touches no other one (dl::placeFree).
+    std::vector<std::pair<const dl::Data::Sig*, bool> > all;           // (mark, is ledger)
+    for (size_t k = 0; k < D.sigs.size(); k++) all.push_back(std::make_pair(&D.sigs[k], false));
+    if (cfg.ledger) for (size_t k = 0; k < D.lsigs.size(); k++) all.push_back(std::make_pair(&D.lsigs[k], true));
+    if (n < 1 || all.empty()) { writeStatus(mkt.empty() ? "no market" : (all.empty() ? "no reasons yet" : "no bars")); return RTX_OK; }
     RTARRAY hi(barHigh), lo(barLow);
     RTARRAYI dt(barDateTime);
     RCT pane; pane.getPaneRect(false);
-    int fs = cfg.font;
-    FONT f; f.id = HELVETICA; f.size = (short)fs; f.style = BOLD; setFont(f);
-    std::vector<int> stackB((size_t)n, 0), stackS((size_t)n, 0);
-    for (size_t k = 0; k < D.sigs.size(); k++) {
-        const dl::Data::Sig& g = D.sigs[k];
-        int b = barOf(g, (int)n, dt);
-        if (b < 0) continue;
-        bool buy = g.side == 'B';
-        PNT p; p.set(b, buy ? lo[b] : hi[b], kBarCenter);
-        if (p.h < pane.left || p.h > pane.right) continue;
-        int w = (int)getTextWidth(g.code.c_str(), -1);
-        int lineH = fs + 4;
-        int& st = buy ? stackB[(size_t)b] : stackS[(size_t)b];
-        short top = buy ? (short)(p.v + cfg.gap + st * lineH) : (short)(p.v - cfg.gap - (st + 1) * lineH);
-        st++;
-        setTextColor(buy ? S_GREEN : S_RED);
-        RCT rc; rc.set((short)(p.h - w / 2 - 2), top, (short)(p.h + w / 2 + 4), (short)(top + lineH));
-        rc.drawText(g.code.c_str(), true, false);
-        if (dl::isGuess(g.code)) {                 // (1.1.0) an educated guess (PT?, CallB?): a dashed frame round the code
-            setPen(buy ? S_GREEN : S_RED, 1, P_DOT);
-            PNT a; a.set(0, 0.0f); a.h = rc.left; a.v = rc.top; a.setDrawPosition();
-            a.h = rc.right; a.drawLineTo(); a.v = rc.bottom; a.drawLineTo(); a.h = rc.left; a.drawLineTo(); a.v = rc.top; a.drawLineTo();
+    std::vector<dl::Box> used;
+    for (int pass = 0; pass < 2; pass++) {                            // the Turn's reasons first: they keep the spots next to the bar
+        for (size_t k = 0; k < all.size(); k++) {
+            if ((pass == 0) == all[k].second) continue;
+            const dl::Data::Sig& g = *all[k].first;
+            bool led = all[k].second;
+            int b = barOf(g, (int)n, dt);
+            if (b < 0) continue;
+            bool buy = g.side == 'B';
+            PNT p; p.set(b, buy ? lo[b] : hi[b], kBarCenter);
+            if (p.h < pane.left || p.h > pane.right) continue;
+            int fs = led ? (cfg.font > 8 ? cfg.font - 2 : cfg.font) : cfg.font;
+            FONT f; f.id = HELVETICA; f.size = (short)fs; f.style = led ? PLAIN : BOLD; setFont(f);
+            std::string txt = g.code;
+            if (!led && std::fabs(g.v) >= 1) { char vb[24]; snprintf(vb, sizeof(vb), " %.0f", std::fabs(g.v)); txt += vb; }
+            int w = (int)getTextWidth(txt.c_str(), -1), lineH = fs + 4;
+            dl::Box x; x.l = p.h - w / 2 - 3; x.r = p.h + w / 2 + 4;
+            x.t = buy ? p.v + cfg.gap : p.v - cfg.gap - lineH; x.b = x.t + lineH;
+            x = dl::placeFree(used, x, lineH, buy);
+            COLOR c = buy ? S_GREEN : S_RED;
+            if (led) c = buy ? 0x0086EFAC : 0x00FCA5A5;                 // the ledger: lighter, smaller, not bold
+            setTextColor(c);
+            RCT rc; rc.set((short)x.l, (short)x.t, (short)x.r, (short)x.b);
+            rc.drawText(txt.c_str(), true, false);
+            if (dl::isGuess(g.code)) {                                 // an educated guess (PT?, NB?): a dashed frame round the code
+                setPen(c, 1, P_DOT);
+                PNT a; a.set(0, 0.0f); a.h = rc.left; a.v = rc.top; a.setDrawPosition();
+                a.h = rc.right; a.drawLineTo(); a.v = rc.bottom; a.drawLineTo(); a.h = rc.left; a.drawLineTo(); a.v = rc.top; a.drawLineTo();
+            }
+            drawn++;
         }
-        drawn++;
     }
     writeStatus("drawn");
     return RTX_OK;
@@ -237,7 +229,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerSig *p = new DealerSig();
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
-    p->setDescription("LRA Dealer Sig: where an options-market reason for a reversal becomes known. The guide is below the settings.");
-    p->setVersion("1.3.0");
+    p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
+    p->setVersion("1.4.0");
     return p;
 }

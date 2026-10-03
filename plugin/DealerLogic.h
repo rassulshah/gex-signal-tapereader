@@ -17,6 +17,7 @@
  *     FWIN|<from>|<to>|<gamma>|<vanna>|<charm>|<positions>|<futures traded>          (every grid window, last 40)
  *     GSTR|<HH:MM>|<px>|<iv %>|<gamma/pt>|<speed -0.25 EM>|<speed +0.25 EM>|<zomma IV+1>|<zomma IV-1>|<color +30m>|<color +60m>
  *     SIG|<yyyy-mm-dd HH:MM:SS CT>|<code SC Van Chm PutS CallB CallS PutB>|<B = dealers buy / S = sell>|<value>|<text>
+ *     (file 1.9) SIG = the Turn's reasons only, timed inside the turn; LSIG = the same fields for the forced ledger's marks
  *  (file 1.7 / Read 2.1 / Sig 1.1, lra/stages.py) the Read in stages - 1 APPROACH, 2 TURN STARTS, 3 TURN CONTINUES:
  *     STAGE|<now 0-3>|<L/S>|<level>|<extreme>|<extreme bar HH:MM>       STG|<n>|<title>|<sub>       SSUM|<n>|<summary>
  *     SR|<n>|<HH:MM known>|<code>|<B/S/N>|<value>|<chip:col,chip:col>|<text>   (a code ending in ? = an educated guess)
@@ -82,6 +83,7 @@ struct Data {
     bool hasGstr = false; GStr gstr;
     struct Sig { int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0; std::string code, text; char side = 'B'; float v = 0; };
     std::vector<Sig> sigs;
+    std::vector<Sig> lsigs;          // (file 1.9) the forced ledger's marks - Dealer Sig 1.4 draws them only when asked
     std::string ferr;
     // (file 1.7) the stages
     struct Chip { std::string name; char col = 'N'; };
@@ -204,10 +206,10 @@ inline bool parseLine(Data& D, const std::string& line)
         Data::GStr g; g.t = t[1]; g.px = t[2]; g.iv = f(t[3]); g.g = f(t[4]); g.sdn = f(t[5]); g.sup = f(t[6]); g.zp = f(t[7]); g.zm = f(t[8]);
         g.c30 = f(t[9]); g.c60 = f(t[10]); D.gstr = g; D.hasGstr = true; return true;
     }
-    if (k == "SIG" && t.size() >= 6) {
+    if ((k == "SIG" || k == "LSIG") && t.size() >= 6) {
         Data::Sig g;
         if (sscanf(t[1].c_str(), "%d-%d-%d %d:%d:%d", &g.y, &g.mo, &g.d, &g.h, &g.mi, &g.s) < 5 || t[2].empty()) return false;
-        g.code = t[2]; g.side = t[3] == "S" ? 'S' : 'B'; g.v = f(t[4]); g.text = t[5]; D.sigs.push_back(g); return true;
+        g.code = t[2]; g.side = t[3] == "S" ? 'S' : 'B'; g.v = f(t[4]); g.text = t[5]; (k == "LSIG" ? D.lsigs : D.sigs).push_back(g); return true;
     }
     if (k == "FERR" && t.size() >= 2) { D.ferr = t[1]; return true; }
     if (k == "TURN" && t.size() >= 3) { D.hasTurn = true; D.turnSide = t[1] == "S" ? 'S' : 'L'; D.turnHead = t[2];
@@ -272,6 +274,22 @@ inline void tagColour(const std::string& tag0, int& r, int& g, int& b)
     else if (tag == "Pin" || tag == "Pin Exp") { r = 34; g = 211; b = 238; }
     else if (tag == "Cushion") { r = 148; g = 163; b = 184; }
     else if (tag.find("0DTE") == 0 || tag.find("Fear") == 0) { r = 251; g = 113; b = 133; }
+}
+
+// (Sig 1.4) stack a label so it never touches one already placed: move it away from the bar (down for a buy, up for a sell)
+// a row at a time until its box is free. Boxes are {left, top, right, bottom}.
+struct Box { int l, t, r, b; };
+inline bool overlaps(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
+inline Box placeFree(std::vector<Box>& used, Box x, int step, bool down, int maxRows = 12)
+{
+    for (int k = 0; k < maxRows; k++) {
+        bool hit = false;
+        for (size_t i = 0; i < used.size(); i++) if (overlaps(used[i], x)) { hit = true; break; }
+        if (!hit) break;
+        int d = down ? step : -step; x.t += d; x.b += d;
+    }
+    used.push_back(x);
+    return x;
 }
 
 inline bool isGuess(const std::string& code) { return !code.empty() && code[code.size() - 1] == '?'; }
