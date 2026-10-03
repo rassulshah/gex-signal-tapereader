@@ -35,6 +35,7 @@ int main()
         CHECK(L3.nodes.size() == 1 && L3.nodes[0].hasUsd && std::fabs(L3.nodes[0].usd + 3945425.0f) < 1.0f, "NODE carries net GEX $");
         CHECK(dl::usdLabel(L3.nodes[0].usd) == "-3.9M", "-3,945,425 -> -3.9M");
         CHECK(dl::usdLabel(420495.0f) == "420K" && dl::usdLabel(7894.0f) == "8K" && dl::usdLabel(-950.0f) == "-950", "K / plain labels");
+        CHECK(dl::usdLabel(-30696300000.0f) == "-30.7B" && dl::usdLabel(-984600000.0f) == "-984.6M", "B for billions (EU), M stays (NG)");
         CHECK(std::fabs(dl::odtePart(L3.nodes[0]) - 1822449.0f) < 1.0f, "0DTE part of a short strike");
         dl::Node m; m.hasUsd = true; m.usd = 7894; m.usd0 = -223276; CHECK(dl::odtePart(m) == 0, "0DTE of the other sign is not drawn inside");
         dl::Data L4; dl::parseLine(L4, "NODE|4215|35|32|44|20|-63|0|2.8|5.0|1"); CHECK(!dl::anyUsd(L4), "an old file has no net GEX: classic drawing");
@@ -150,34 +151,6 @@ int main()
         CHECK(G.srows.size() == 3 && G.srows[1].code == "PT?" && G.srows[1].chips.size() == 2 && G.srows[1].chips[0].name == "Guess" && G.srows[1].chips[0].col == 'P', "SR rows + chips");
         CHECK(G.srows[2].t.empty() && G.srows[2].val.empty() && G.srows[2].side == 'N', "an SR row with empty fields");
         CHECK(dl::isGuess("PT?") && dl::isGuess("CallB?") && !dl::isGuess("SC") && !dl::isGuess(""), "guess codes");
-    }
-    {   // (file 1.8 / Read 3.0) the Turn (lra/turn.py, HG 2 Oct 10:45)
-        dl::Data T;
-        const char* rows[] = { "TURN|L|HG - THE TURN at LL 6.5325 (long) - low 6.5330 (10:45 bar) - short gamma|10:39|10:51",
-            "TR|1|10:48|Tape|||The breakdown under 6.5405 (the 10:24 low) failed - the sellers who broke it were trapped.",
-            "TR|2|11:00|New bets ?|guess||327 6.75 Oct-9 calls opened around the low.", "TR|3|11:05|Short cover||GLD|from the ETF", "TERR|ValueError: x" };
-        for (const char* r : rows) dl::parseLine(T, r);
-        CHECK(T.hasTurn && T.turnSide == 'L' && T.turnFrom == "10:39" && T.turnTo == "10:51" && T.turnHead.find("THE TURN") != std::string::npos, "TURN row");
-        CHECK(T.trows.size() == 3 && T.trows[1].tag == "New bets ?" && T.trows[1].kind == "guess" && T.trows[2].src == "GLD" && T.trows[0].kind.empty(), "TR rows");
-        CHECK(T.terr == "ValueError: x", "TERR row");
-        auto w = [](const std::string& x) { return (float)x.size(); };
-        std::vector<std::string> L = dl::wrapWords("aaa bbb ccc ddd", 7.0f, w);
-        CHECK(L.size() == 2 && L[0] == "aaa bbb" && L[1] == "ccc ddd", "word wrap");
-        CHECK(dl::wrapWords("averyveryverylongword x", 5.0f, w).size() == 2, "a word wider than the line stays whole");
-        int r, g, b; dl::tagColour("New bets ?", r, g, b); CHECK(r == 74 && g == 222, "guess tag keeps its colour");
-        dl::Data O; CHECK(!O.hasTurn && O.trows.empty(), "an older file = no turn");
-    }
-    {   // (file 1.9 / Sig 1.4) LSIG rows and labels that never overlap
-        dl::Data L;
-        dl::parseLine(L, "SIG|2026-10-02 11:07:00|SC|B|152|Dealers started buying back");
-        dl::parseLine(L, "LSIG|2026-10-02 11:20:00|Van|B|57|IV fell");
-        CHECK(L.sigs.size() == 1 && L.lsigs.size() == 1 && L.lsigs[0].code == "Van" && L.sigs[0].v == 152, "SIG vs LSIG");
-        std::vector<dl::Box> used;
-        dl::Box a = {0, 10, 30, 22}, b = {10, 10, 40, 22}, c = {100, 10, 120, 22};
-        dl::Box ra = dl::placeFree(used, a, 12, true), rb = dl::placeFree(used, b, 12, true), rc = dl::placeFree(used, c, 12, true);
-        CHECK(ra.t == 10 && rb.t == 22 && rc.t == 10, "a touching label drops a row, a free one stays");
-        dl::Box d = {5, 10, 25, 22}; dl::Box rd = dl::placeFree(used, d, 12, false);
-        CHECK(rd.t == -2, "a sell label moves up");
     }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;

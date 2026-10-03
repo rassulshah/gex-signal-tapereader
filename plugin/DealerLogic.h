@@ -356,11 +356,12 @@ inline int barLen(float v, float vmax, int width) { if (vmax <= 0) return 0; flo
 // largest |net GEX| among the strikes on screen
 inline float usdMax(const std::vector<Node>& v) { float m = 1e-6f; for (size_t i = 0; i < v.size(); i++) if (v[i].hasUsd && std::fabs(v[i].usd) > m) m = std::fabs(v[i].usd); return m; }
 inline bool anyUsd(const Data& D) { for (size_t i = 0; i < D.nodes.size(); i++) if (D.nodes[i].hasUsd) return true; return false; }
-// "-3.9M", "420K", "8K", "-950" - MenthorQ's own way of writing it
+// "-3.9M", "420K", "8K", "-950", "-30.7B" - MenthorQ's own way of writing it (2.0.2: B for billions - EU / NG per 1.00 move)
 inline std::string usdLabel(float v)
 {
     char b[32]; float a = std::fabs(v);
-    if (a >= 1e6f) snprintf(b, sizeof(b), "%s%.1fM", v < 0 ? "-" : "", a / 1e6f);
+    if (a >= 1e9f) snprintf(b, sizeof(b), "%s%.1fB", v < 0 ? "-" : "", a / 1e9f);
+    else if (a >= 1e6f) snprintf(b, sizeof(b), "%s%.1fM", v < 0 ? "-" : "", a / 1e6f);
     else if (a >= 1e3f) snprintf(b, sizeof(b), "%s%.0fK", v < 0 ? "-" : "", a / 1e3f);
     else snprintf(b, sizeof(b), "%s%.0f", v < 0 ? "-" : "", a);
     return b;
