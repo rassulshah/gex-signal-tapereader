@@ -34,7 +34,7 @@
 #include <ctime>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.1.2";
+static const char* IR_VERSION = "0.1.3";
 static const int TIMER_ID = 4711;
 
 struct RIdx { int market, fp, fpMin, fpDays, trades, dom, domSec, dbo, folder; };
@@ -205,7 +205,7 @@ void IRTReader::footprint()
         trace("footprint: bars asked from " + std::to_string((long long)secOf(start)) + (fpLast > 0 ? " (last 30 min)" : " (back-fill)"));
     }
     RTBARS& bars = *fpBars;
-    if (bars.count != fpCount) { fpCount = bars.count; fpGrew = nowT; }
+    if (bars.count != fpCount) { fpCount = bars.count; fpGrew = nowT; if (ticks <= 30) trace("footprint: " + std::to_string((long long)bars.count) + " bars so far"); }
     if (bars.count < 2) { err = bars.count ? "" : "no footprint bars from IRT yet"; return; }
     int done = 0;
     std::string rows, sessCur;
@@ -259,13 +259,13 @@ void IRTReader::footprint()
 // ---- trades: every new tick since the cursor (RTTICKS - independent of the chart's own bars)
 void IRTReader::trades()
 {
-    RTDATE start = 0;                                           // 0 = the current session (the first run back-fills it)
-    if (tc.lastSec > 0) {
-        RTDATE now = currentDate();
-        long long nowS = secOf(now);
-        long long back = nowS - tc.lastSec + 2;                 // re-read from just before the last written second
-        start = (back > 0 && back < 3 * 86400) ? (RTDATE)(now - (RTDATE)back) : 0;
-    }
+    // (0.1.3, 2 Oct 22:56 trace: the pass stopped inside RTTICKS(0) - "the whole session" after the Friday close) never ask for
+    // the whole session: the first run starts 10 minutes back, later runs just before the last written second (at most 1 h back)
+    RTDATE now = currentDate();
+    long long nowS = secOf(now);
+    long long back = 600;
+    if (tc.lastSec > 0) { back = nowS - tc.lastSec + 2; if (back < 2) back = 2; if (back > 3600) back = 3600; }
+    RTDATE start = (RTDATE)(now - (RTDATE)back);
     RTTICKS T(start);
     if (T.count <= 0) return;
     tc.rewind();
@@ -404,6 +404,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the chart market's footprint, trades and DOM for the LRA analytics. Draws nothing.");
-    p->setVersion("0.1.2");
+    p->setVersion("0.1.3");
     return p;
 }
