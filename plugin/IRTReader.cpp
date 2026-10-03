@@ -28,6 +28,7 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <set>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -35,7 +36,7 @@
 #include <ctime>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.1.4";
+static const char* IR_VERSION = "0.1.5";
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
@@ -68,6 +69,13 @@ public:
     // statistics are not there yet stops the pass and is retried on the next tick (0.1.1 wrote nothing on 2 Oct 22:24: the
     // folders were made, no rows - getBarStatistics failed on every bar of a fresh, non-persistent RTBARS)
     RTBARS* fpBars = nullptr; time_t fpMade = 0; long fpCount = -1; time_t fpGrew = 0;
+    // (0.1.5, Rassul 23:53 "an optimization problem ... identifying them for each market with high probability") a DEEP back-fill
+    // of up to 120 days, once, after the normal pass is live: more days is what makes per-market tuning trustworthy. It only
+    // fills sessions that have no footprint file yet (never touches what the normal pass wrote).
+    RTBARS* deepBars = nullptr; long long deepLast = -1; int deepDone = 0; time_t deepMade = 0; long deepCount = -1; time_t deepGrew = 0;
+    std::set<std::string> deepOwn, deepSkip;
+    int writeSlice(RTBARS& bars, long long& last, bool deep, int maxBars);
+    void deepFill();
     bool busy = false, timerFailLogged = false, calcLogged = false; int ticks = 0;
     void trace(const std::string& what);
 
@@ -96,6 +104,7 @@ int cppExtension::destroy(void)
     if (me->timerOn) { destroyTimer(timerIdFor(me)); me->timerOn = false; }
     if (me->dbo) { delete me->dbo; me->dbo = nullptr; }
     if (me->fpBars) { delete me->fpBars; me->fpBars = nullptr; }
+    if (me->deepBars) { delete me->deepBars; me->deepBars = nullptr; }
     return RTX_OK;
 }
 int cppExtension::calc(int)
@@ -190,13 +199,19 @@ void IRTReader::loadCursor()
     std::ifstream f((cfg.folder + "\\_cursor-" + mkt + ".txt").c_str());
     long long a = -1, b = -1; int c = 0, bf = 0;
     if (f >> a >> b >> c >> bf) { fpLast = a; tc.lastSec = b; tc.doneInSec = c; backfilled = bf != 0; }
+    long long dl = -1; int dd = 0;
+    if (f >> dl >> dd) {
+        deepLast = dl; deepDone = dd;
+        if (dl > 0) { time_t tt = (time_t)dl; struct tm lt = *localtime(&tt);      // the session it was in the middle of stays its own
+            deepOwn.insert(irl::sessionOf(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour)); }
+    }
 }
 
 void IRTReader::saveCursor()
 {
     _mkdir(cfg.folder.c_str());
     std::ofstream f((cfg.folder + "\\_cursor-" + mkt + ".txt").c_str(), std::ios::trunc);
-    if (f.is_open()) f << fpLast << " " << tc.lastSec << " " << tc.doneInSec << " " << (backfilled ? 1 : 0) << "\n";
+    if (f.is_open()) f << fpLast << " " << tc.lastSec << " " << tc.doneInSec << " " << (backfilled ? 1 : 0) << " " << deepLast << " " << deepDone << "\n";
 }
 
 // ---- footprint: finished N-minute bars with volume at price (RTBARS with VAP - independent of the chart's own bars)
@@ -214,19 +229,32 @@ void IRTReader::footprint()
     RTBARS& bars = *fpBars;
     if (bars.count != fpCount) { fpCount = bars.count; fpGrew = nowT; if (ticks <= 30) trace("footprint: " + std::to_string((long long)bars.count) + " bars so far"); }
     if (bars.count < 2) { err = bars.count ? "" : "no footprint bars from IRT yet"; return; }
+    writeSlice(bars, fpLast, false, 400);
+}
+
+int IRTReader::writeSlice(RTBARS& bars, long long& lastRef, bool deep, int maxBars)
+{
     int done = 0;
     std::string rows, sessCur;
     std::string barRows;
-    long long lastWritten = fpLast;
+    long long lastWritten = lastRef;
+    char fnm[32]; snprintf(fnm, sizeof(fnm), "\\fp_%dm.csv", cfg.fpMin);
     for (long i = 0; i < bars.count - 1; i++) {                 // the last bar is still forming
         RTDATE d = (RTDATE)(*bars.dt)[(int)i];
         struct tm t; long long s = secOf(d, &t);
-        if (s <= fpLast) continue;
+        if (s <= lastRef) continue;
         std::string session = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
+        if (deep) {                                              // only sessions with no file yet (or ones this pass began)
+            if (deepSkip.count(session)) { lastWritten = s; continue; }
+            if (!deepOwn.count(session)) {
+                std::ifstream ex((cfg.folder + "\\" + session + "\\" + mkt + fnm).c_str());
+                if (ex.good()) { deepSkip.insert(session); if (s > fpLast - 86400) { deepDone = 1; break; } lastWritten = s; continue; }
+                deepOwn.insert(session);
+            }
+        }
         if (!sessCur.empty() && session != sessCur) {             // one file per session
             std::string dir = dirFor(sessCur);
-            char fn[32]; snprintf(fn, sizeof(fn), "\\fp_%dm.csv", cfg.fpMin);
-            append(dir + fn, "bar|price|bought|sold|volume|trades|max_delta|min_delta", rows);
+            append(dir + fnm, "bar|price|bought|sold|volume|trades|max_delta|min_delta", rows);
             append(dir + "\\fp_bars.csv", "bar|minutes|open|high|low|close|volume|bought|sold|max_delta|min_delta|open_delta|max_price_vol", barRows);
             rows.clear(); barRows.clear();
         }
@@ -234,7 +262,7 @@ void IRTReader::footprint()
         std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
         BARSTATISTICS bs; memset(&bs, 0, sizeof(bs));
         if (bars.getBarStatistics((int)i, bs) != RTX_OK) { err = "volume at price not loaded yet from " + ts; break; }   // retried next tick
-        if (++done > 400) break;                                    // a slice per tick: the back-fill spreads over ~1-2 min
+        if (++done > maxBars) break;                             // a slice per tick
         {
             char b[300];
             snprintf(b, sizeof(b), "%s|%d|%s|%s|%s|%s|%ld|%ld|%ld|%ld|%ld|%ld|%ld\n", ts.c_str(), cfg.fpMin,
@@ -252,15 +280,34 @@ void IRTReader::footprint()
                 rows += b; fpRows++;
             }
         }
-        lastWritten = s; fpLastTxt = ts;
+        lastWritten = s; if (!deep) fpLastTxt = ts;
     }
     if (!sessCur.empty()) {
         std::string dir = dirFor(sessCur);
-        char fn[32]; snprintf(fn, sizeof(fn), "\\fp_%dm.csv", cfg.fpMin);
-        append(dir + fn, "bar|price|bought|sold|volume|trades|max_delta|min_delta", rows);
+        append(dir + fnm, "bar|price|bought|sold|volume|trades|max_delta|min_delta", rows);
         append(dir + "\\fp_bars.csv", "bar|minutes|open|high|low|close|volume|bought|sold|max_delta|min_delta|open_delta|max_price_vol", barRows);
     }
-    fpLast = lastWritten;
+    lastRef = lastWritten;
+    return done;
+}
+
+void IRTReader::deepFill()
+{
+    if (deepDone || fpLast < 0 || (long long)time(0) - fpLast > 600) return;   // after the normal pass is live
+    time_t nowT = time(0);
+    if (!deepBars || (deepCount >= 0 && nowT - deepGrew > 900 && nowT - deepMade > 900)) {
+        if (deepBars) { delete deepBars; deepBars = nullptr; }
+        RTDATE now = currentDate();
+        deepBars = new RTBARS(PD_INTRA, cfg.fpMin, true, NULL, false, (RTDATE)(now - (RTDATE)(121UL * 86400UL)), true);
+        deepMade = nowT; deepCount = -1; deepGrew = nowT;
+        trace("deep back-fill: asked for 120 days");
+    }
+    if (deepBars->count != deepCount) { deepCount = deepBars->count; deepGrew = nowT; }
+    if (deepBars->count < 2) return;
+    long f0 = fpRows;
+    writeSlice(*deepBars, deepLast, true, 400);
+    if (fpRows != f0 || deepDone) trace("deep back-fill: +" + std::to_string(fpRows - f0) + " rows" + (deepDone ? " - DONE" : ""));
+    if (deepDone) { delete deepBars; deepBars = nullptr; }
 }
 
 // ---- trades: every new tick since the cursor (RTTICKS - independent of the chart's own bars)
@@ -384,6 +431,7 @@ void IRTReader::tickAll()
     bool catching = fpLast < 0 || (long long)time(0) - fpLast > 600;     // back-filling: a slice every 2 s, then every 20 s
     bool loud = ++ticks <= 6;                                    // the first passes say each step (to find a hang / crash)
     if (cfg.fp && time(0) - fpT >= (catching ? 2 : 20)) { if (loud) trace("footprint..."); fpT = time(0); footprint(); }
+    if (cfg.fp && !catching && time(0) - fpT >= 1) deepFill();          // (0.1.5) the deep back-fill, a slice per pass
     if (cfg.trades) { if (loud) trace("trades..."); trades(); }
     if (cfg.dom) { if (loud) trace("dom..."); depth(); }
     if (cfg.dbo) { if (loud) trace("order-by-order..."); depthByOrder(); }
@@ -411,6 +459,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the chart market's footprint, trades and DOM for the LRA analytics. Draws nothing.");
-    p->setVersion("0.1.4");
+    p->setVersion("0.1.5");
     return p;
 }
