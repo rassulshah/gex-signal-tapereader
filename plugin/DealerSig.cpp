@@ -15,6 +15,8 @@
  *     CallS / PutB   customers sold calls / bought puts near price - dealers sell futures
  *  (1.1.0) plus the Read's stage reasons: Exh (push-side options ran out), Lvl (MenthorQ levels held at the extreme), IV,
  *     0D (0DTE fear leaving), PT? (profit taking - guess), CallB? / PutB? (new bets - guess); a guess has a dashed frame
+ *  (1.5.0, 2026-10-02 20:58, Rassul) the new letters (E, D/S, T, Sh, P, N, Gm, V+/V-, Pn, Px, 0D, F+/F-, G+/G-), at most the
+ *     top two on a bar (ranked by the engine), no numbers, no dashed frames - the Dealer Read explains each one.
  *  (1.4.0, 2026-10-02 19:15, Rassul: "so many signals after the 2 bars near the low"; "near the lows it should look for
  *  reversal up signals and when it goes to a gamma value higher, reversal down"; "get rid of the how to section"): only the
  *  Turn's reasons, and only on the turn's bars (the low / high bar and 2 bars either side; a reason MenthorQ showed later sits
@@ -46,7 +48,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.4.0";
+static const char* DS_VERSION = "1.5.0";
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -202,7 +204,8 @@ int DealerSig::draw(void)
             int fs = led ? (cfg.font > 8 ? cfg.font - 2 : cfg.font) : cfg.font;
             FONT f; f.id = HELVETICA; f.size = (short)fs; f.style = led ? PLAIN : BOLD; setFont(f);
             std::string txt = g.code;
-            if (!led && std::fabs(g.v) >= 1) { char vb[24]; snprintf(vb, sizeof(vb), " %.0f", std::fabs(g.v)); txt += vb; }
+            // (1.5.0, Rassul 2026-10-02 20:58 "dont put any numbers or dashed borders either .. the read can elaborate") the letter only
+            while (!txt.empty() && txt[txt.size() - 1] == '?') txt.erase(txt.size() - 1);
             int w = (int)getTextWidth(txt.c_str(), -1), lineH = fs + 4;
             dl::Box x; x.l = p.h - w / 2 - 3; x.r = p.h + w / 2 + 4;
             x.t = buy ? p.v + cfg.gap : p.v - cfg.gap - lineH; x.b = x.t + lineH;
@@ -212,11 +215,6 @@ int DealerSig::draw(void)
             setTextColor(c);
             RCT rc; rc.set((short)x.l, (short)x.t, (short)x.r, (short)x.b);
             rc.drawText(txt.c_str(), true, false);
-            if (dl::isGuess(g.code)) {                                 // an educated guess (PT?, NB?): a dashed frame round the code
-                setPen(c, 1, P_DOT);
-                PNT a; a.set(0, 0.0f); a.h = rc.left; a.v = rc.top; a.setDrawPosition();
-                a.h = rc.right; a.drawLineTo(); a.v = rc.bottom; a.drawLineTo(); a.h = rc.left; a.drawLineTo(); a.v = rc.top; a.drawLineTo();
-            }
             drawn++;
         }
     }
@@ -230,6 +228,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.4.0");
+    p->setVersion("1.5.0");
     return p;
 }
