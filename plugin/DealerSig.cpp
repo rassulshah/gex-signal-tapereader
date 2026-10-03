@@ -15,7 +15,7 @@
  *     CallS / PutB   customers sold calls / bought puts near price - dealers sell futures
  *  (1.1.0) plus the Read's stage reasons: Exh (push-side options ran out), Lvl (MenthorQ levels held at the extreme), IV,
  *     0D (0DTE fear leaving), PT? (profit taking - guess), CallB? / PutB? (new bets - guess); a guess has a dashed frame
- *  (1.5.0, 2026-10-02 20:58, Rassul) the new letters (E, D/S, T, Sh, P, N, Gm, V+/V-, Pn, Px, 0D, F+/F-, G+/G-), at most the
+ *  (1.5.0, 2026-10-02 20:58, Rassul) the new letters (Ex, D/S, Tr, Sh, Pt, Np, Gm, V+/V-, Pn, Px, 0D, F+/F-, G+/G-), at most the
  *     top two on a bar (ranked by the engine), no numbers, no dashed frames - the Dealer Read explains each one.
  *  (1.4.0, 2026-10-02 19:15, Rassul: "so many signals after the 2 bars near the low"; "near the lows it should look for
  *  reversal up signals and when it goes to a gamma value higher, reversal down"; "get rid of the how to section"): only the
