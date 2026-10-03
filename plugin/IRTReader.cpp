@@ -1,5 +1,16 @@
 /********************************************************************************
- *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.0, 2026-10-03: one reader records every market's footprint)
+ *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
+ *
+ *  0.2.1 (2026-10-03 12:10, Rassul: "my linnsoft applications keeps crashing and restarting"): 0.2.0 crashed Investor/RT about
+ *     20 s after every start - IRT died INSIDE the RTBARS request for another market's footprint (ES, then CL: 11 days of
+ *     1-min volume at price by ticker; the chart's own NQ request was fine). Now:
+ *     - only the chart's own market is recorded, unless data\irt\_other-markets.txt lists more (one market code per line);
+ *       another market starts with 30 minutes, never a 10-day back-fill, and gets no 120-day deep back-fill
+ *     - crash guard: every RTBARS request leaves data\irt\_trying-<MKT>-<fp|deep>.txt until IRT has survived it; if a
+ *       restart finds that file, the request killed IRT last time - it is blocked (_blocked-<MKT>-<kind>.txt, traced) and
+ *       never asked again until the file is deleted. One bad request can no longer put IRT in a restart loop.
+ *     - the deep back-fill is DONE only when IRT returned bars from at least 100 days back; a short answer (a weekend: 0 rows,
+ *       12:04 today) is retried every 2 h, at most 3 times per IRT run
  *
  *  THE IRT READER: records the chart market's order flow for the LRA analytics - draws nothing on the chart.
  *  (Rassul 2026-10-02 19:31-20:08: "read my footprint, dom, time and sales"; "could i just keep it on a chart without having
@@ -34,9 +45,10 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.2.0";
+static const char* IR_VERSION = "0.2.1";
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
@@ -56,6 +68,10 @@ struct FpState {
     cppExtension::RTBARS* deepBars = nullptr; time_t deepMade = 0, deepGrew = 0; long deepCount = -1;
     std::set<std::string> deepOwn, deepSkip;
     long rows = 0; std::string lastTxt, err; int caughtUp = 0;
+    bool own = false;                                    // (0.2.1) the chart's own market
+    bool fpBlocked = false, deepBlocked = false;         // (0.2.1) a request of this kind crashed IRT before
+    std::string fpTry, deepTry;                          // (0.2.1) the guard file while a request is unproven
+    time_t deepRetryAt = 0; int deepTries = 0;
 };
 static double tickOf(const std::string& m)
 {
@@ -96,6 +112,10 @@ public:
     void deepFill(FpState& M);
     std::vector<FpState> fps; bool fpsLoaded = false; std::string myId;
     void loadMarkets();
+    std::string guardPath(const std::string& m, const char* kind, const char* what);
+    bool guardBefore(FpState& M, const char* kind);
+    void guardClear(FpState& M, const char* kind);
+    std::string othersTxt;
     bool own(FpState& M);
     void footprintOf(FpState& M);
     void loadFpCursor(FpState& M);
@@ -129,7 +149,10 @@ int cppExtension::destroy(void)
     IRTReader* me = static_cast<IRTReader*>(this);
     if (me->timerOn) { destroyTimer(timerIdFor(me)); me->timerOn = false; }
     if (me->dbo) { delete me->dbo; me->dbo = nullptr; }
-    for (auto& M : me->fps) { if (M.fpBars) delete M.fpBars; if (M.deepBars) delete M.deepBars; M.fpBars = M.deepBars = nullptr; }
+    for (auto& M : me->fps) {
+        if (M.fpBars) delete M.fpBars; if (M.deepBars) delete M.deepBars; M.fpBars = M.deepBars = nullptr;
+        me->guardClear(M, "fp"); me->guardClear(M, "deep");      // (0.2.1) a normal close is not a crash
+    }
     return RTX_OK;
 }
 int cppExtension::calc(int)
@@ -247,18 +270,59 @@ void IRTReader::loadMarkets()
     std::string path = "C:\\Dev\\level-reversal-analytics\\data\\menthorq\\irt_symbols.json";
     std::ifstream f(path.c_str()); std::stringstream ss; ss << f.rdbuf(); std::string js = ss.str();
     const char* MK[7] = { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" };
+    // (0.2.1) other markets are recorded only when data\irt\_other-markets.txt names them (one code per line), never by default
+    std::string others = " ";
+    { std::ifstream om((cfg.folder + "\\_other-markets.txt").c_str()); std::string w; while (om >> w) { for (auto& c : w) c = (char)toupper((unsigned char)c); others += w + " "; } }
     for (int k = 0; k < 7; k++) {
         std::string key = std::string("\"") + MK[k] + "\"";
         size_t p0 = js.find(key); std::string sy;
         if (p0 != std::string::npos) { size_t q1 = js.find('"', js.find(':', p0) + 1); size_t q2 = js.find('"', q1 + 1);
             if (q1 != std::string::npos && q2 != std::string::npos) sy = js.substr(q1 + 1, q2 - q1 - 1); }
-        if (MK[k] == mkt) sy = sym;                               // the chart's own market: its own symbol
+        bool isOwn = (MK[k] == mkt);
+        if (isOwn) sy = sym;                                      // the chart's own market: its own symbol
+        else if (others.find(std::string(" ") + MK[k] + " ") == std::string::npos) continue;   // (0.2.1) others only when listed
         if (sy.empty()) continue;
-        FpState M; M.mkt = MK[k]; M.sym = sy; M.tick = (MK[k] == mkt && tick > 0) ? tick : tickOf(MK[k]);
+        FpState M; M.mkt = MK[k]; M.sym = sy; M.tick = (isOwn && tick > 0) ? tick : tickOf(MK[k]); M.own = isOwn;
+        // (0.2.1) a request that was still unproven when IRT last died is blocked for good (until its file is deleted)
+        const char* KIND[2] = { "fp", "deep" };
+        for (int q = 0; q < 2; q++) {
+            std::ifstream tr(guardPath(M.mkt, KIND[q], "trying").c_str());
+            if (tr.good()) {
+                tr.close(); std::remove(guardPath(M.mkt, KIND[q], "trying").c_str());
+                std::ofstream b(guardPath(M.mkt, KIND[q], "blocked").c_str(), std::ios::trunc);
+                b << "the " << KIND[q] << " request for " << M.mkt << " (" << M.sym << ") was running when Investor/RT stopped - blocked\n";
+                trace(M.mkt + " " + KIND[q] + ": IRT stopped during this request last time - BLOCKED (delete _blocked-" + M.mkt + "-" + KIND[q] + ".txt to retry)");
+            }
+            std::ifstream bl(guardPath(M.mkt, KIND[q], "blocked").c_str());
+            if (bl.good()) { if (q == 0) M.fpBlocked = true; else M.deepBlocked = true; }
+        }
         fps.push_back(M);
     }
-    std::string list; for (auto& M : fps) list += M.mkt + "=" + M.sym + " ";
-    trace("markets: " + list);
+    othersTxt = others.size() > 2 ? others.substr(1, others.size() - 2) : "off";
+    std::string list; for (auto& M : fps) list += M.mkt + "=" + M.sym + (M.fpBlocked ? "(fp blocked)" : "") + (M.deepBlocked ? "(deep blocked)" : "") + " ";
+    trace("markets: " + list + "| other markets: " + othersTxt);
+}
+
+std::string IRTReader::guardPath(const std::string& m, const char* kind, const char* what)
+{
+    return cfg.folder + "\\_" + what + "-" + m + "-" + kind + ".txt";
+}
+
+// (0.2.1) written right BEFORE an RTBARS request, removed once IRT has survived it (the next tick); found at a restart = it crashed IRT
+bool IRTReader::guardBefore(FpState& M, const char* kind)
+{
+    if ((kind[0] == 'f' && M.fpBlocked) || (kind[0] == 'd' && M.deepBlocked)) return false;
+    _mkdir(cfg.folder.c_str());
+    std::string p = guardPath(M.mkt, kind, "trying");
+    { std::ofstream f(p.c_str(), std::ios::trunc); f << M.sym << " " << (long long)time(0) << "\n"; }
+    if (kind[0] == 'f') M.fpTry = p; else M.deepTry = p;
+    return true;
+}
+
+void IRTReader::guardClear(FpState& M, const char* kind)
+{
+    std::string& p = (kind[0] == 'f') ? M.fpTry : M.deepTry;
+    if (!p.empty()) { std::remove(p.c_str()); p.clear(); }
 }
 
 bool IRTReader::own(FpState& M)
@@ -308,11 +372,15 @@ void IRTReader::saveFpCursor(FpState& M)
 void IRTReader::footprintOf(FpState& M)
 {
     time_t nowT = time(0);
+    if (M.fpBlocked) { M.err = "footprint request blocked: it crashed IRT before"; return; }
+    if (!M.fpTry.empty() && M.fpBars) guardClear(M, "fp");          // IRT survived the last request
     if (!M.fpBars || (M.fpCount >= 0 && nowT - M.fpGrew > 600 && nowT - M.fpMade > 600)) {   // remade if it stops growing for 10 min
         if (M.fpBars) { delete M.fpBars; M.fpBars = nullptr; }
         RTDATE now = currentDate();
         RTDATE start = (M.fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)((cfg.fpDays + 1) * 86400UL));
         if (M.fpLast > 0 && (long long)nowT - M.fpLast > 1800) start = (RTDATE)(now - (RTDATE)((nowT - M.fpLast) + 600));   // a gap: from it
+        if (!M.own) start = (RTDATE)(now - (RTDATE)1800UL);      // (0.2.1) another market: 30 minutes, never a long back-fill
+        if (!guardBefore(M, "fp")) return;
         M.fpBars = new RTBARS(PD_INTRA, cfg.fpMin, true, M.sym.c_str(), false, start, true);
         M.fpMade = nowT; M.fpCount = -1; M.fpGrew = nowT;
         trace(M.mkt + " footprint: bars asked" + (M.fpLast > 0 ? " (since the cursor)" : " (back-fill)"));
@@ -390,10 +458,14 @@ void IRTReader::deepFill(FpState& M)
     // (0.2.0) after the normal pass has nothing new for 3 passes in a row (0.1.5 waited for a bar under 10 min old, which never
     // comes on a weekend - the deep back-fill never started)
     if (M.deepDone || M.fpLast < 0 || M.caughtUp < 3) return;
+    if (!M.own || M.deepBlocked) return;                         // (0.2.1) deep back-fill: the chart's own market only
     time_t nowT = time(0);
+    if (!M.deepBars && M.deepRetryAt > nowT) return;            // (0.2.1) waiting to retry a short answer
+    if (!M.deepTry.empty() && M.deepBars) guardClear(M, "deep");
     if (!M.deepBars || (M.deepCount >= 0 && nowT - M.deepGrew > 900 && nowT - M.deepMade > 900)) {
         if (M.deepBars) { delete M.deepBars; M.deepBars = nullptr; }
         RTDATE now = currentDate();
+        if (!guardBefore(M, "deep")) return;
         M.deepBars = new RTBARS(PD_INTRA, cfg.fpMin, true, M.sym.c_str(), false, (RTDATE)(now - (RTDATE)(121UL * 86400UL)), true);
         M.deepMade = nowT; M.deepCount = -1; M.deepGrew = nowT;
         trace(M.mkt + " deep back-fill: asked for 120 days");
@@ -402,8 +474,19 @@ void IRTReader::deepFill(FpState& M)
     if (M.deepBars->count < 2) return;
     long f0 = M.rows;
     writeSlice(M, *M.deepBars, M.deepLast, true, 400);
+    if (M.deepDone) {                                            // (0.2.1) DONE only if IRT really gave ~120 days
+        long long oldest = secOf((RTDATE)(*M.deepBars->dt)[0]);
+        if ((long long)nowT - oldest < 100LL * 86400LL) {
+            time_t ot = (time_t)oldest; struct tm lt = *localtime(&ot); char ob[24]; strftime(ob, sizeof(ob), "%Y-%m-%d", &lt);
+            M.deepDone = 0; M.deepLast = -1; M.deepSkip.clear(); M.deepOwn.clear();
+            delete M.deepBars; M.deepBars = nullptr; guardClear(M, "deep");
+            if (++M.deepTries >= 3) { M.deepRetryAt = (time_t)0x7FFFFFFF; trace(M.mkt + " deep back-fill: IRT gave bars only from " + ob + " - stopped for this IRT run (3 tries)"); }
+            else { M.deepRetryAt = nowT + 7200; trace(M.mkt + " deep back-fill: IRT gave bars only from " + std::string(ob) + " (+" + std::to_string(M.rows - f0) + " rows) - retry in 2 h"); }
+            return;
+        }
+    }
     if (M.rows != f0 || M.deepDone) trace(M.mkt + " deep back-fill: +" + std::to_string(M.rows - f0) + " rows" + (M.deepDone ? " - DONE" : ""));
-    if (M.deepDone) { delete M.deepBars; M.deepBars = nullptr; }
+    if (M.deepDone) { delete M.deepBars; M.deepBars = nullptr; guardClear(M, "deep"); }
 }
 
 void IRTReader::writeFpStatus(FpState& M)
@@ -514,6 +597,7 @@ void IRTReader::writeStatus()
       << "\nTRADES," << (cfg.trades ? "on" : "off") << ",rows " << trRows << ",last " << trLastTxt
       << "\nDOM," << (cfg.dom ? "on" : "off") << "," << (domAvail ? "available" : "NOT available") << ",levels " << domLevels << ",snapshots " << domRows
       << "\nDBO," << (cfg.dbo ? "on" : "off") << ",events " << dboRows
+      << "\nOTHER_MARKETS," << (othersTxt.empty() ? "off" : othersTxt)
       << "\nERROR," << err << "\n";
 }
 
