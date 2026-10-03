@@ -152,6 +152,17 @@ int main()
         CHECK(G.srows[2].t.empty() && G.srows[2].val.empty() && G.srows[2].side == 'N', "an SR row with empty fields");
         CHECK(dl::isGuess("PT?") && dl::isGuess("CallB?") && !dl::isGuess("SC") && !dl::isGuess(""), "guess codes");
     }
+    {   // (Read 3.1) the Turn grouped by time, at most 4 rows
+        std::vector<dl::Data::TRow> R(8);
+        const char* ts[] = { "09:55", "10:15", "10:15", "10:15", "10:15", "10:20", "10:20", "10:20" };
+        for (int i = 0; i < 8; i++) { R[i].t = ts[i]; R[i].tag = "T"; R[i].text = "s" + std::to_string(i) + "."; }
+        std::vector<dl::TGroup> G = dl::groupTurn(R, 4);
+        CHECK(G.size() == 3 && G[0].t == "09:55" && G[1].rows.size() == 4 && G[1].text == "s1. s2. s3. s4." && G[2].t == "10:20", "turn grouped by time (8 rows -> 3)");
+        const char* t2[] = { "09:00", "09:10", "09:20", "09:30", "09:40", "09:50", "09:50", "10:00" };
+        for (int i = 0; i < 8; i++) R[i].t = t2[i];
+        G = dl::groupTurn(R, 4);
+        CHECK(G.size() == 4 && G[3].t == "09:30-10:00" && G[3].rows.size() == 5, "more than 4 times fold into the last row, its time a range");
+    }
     {   // (file 2.0) SRC row
         dl::Data Q; dl::parseLine(Q, "SRC|SPX|1.00471|T1 09:00 CT|09:55");
         CHECK(Q.srcBook == "SPX" && std::fabs(Q.srcRatio - 1.00471f) < 1e-5f && Q.srcMode == "T1 09:00 CT" && Q.srcAt == "09:55", "SRC row: the index book and its ratio");

@@ -469,4 +469,30 @@ inline Summary parseSummary(const std::string& text)
 inline int ageMin(long long epoch, long long now) { if (epoch <= 0 || now <= 0 || now < epoch - 120) return -1; return (int)((now - epoch) / 60); }
 inline std::string ageTxt(int m) { if (m < 0) return ""; char b[24]; if (m < 60) snprintf(b, sizeof(b), "%d min", m); else if (m < 48 * 60) snprintf(b, sizeof(b), "%dh", m / 60); else snprintf(b, sizeof(b), "%dd", m / 1440); return b; }
 
+// (Read 3.1, 2026-10-03 14:41, Rassul: "the Read has too many rows ... a max of 4 rows and the time isn't repeated") the Turn's
+// reasons grouped by time: one row per time with all its tags and its sentences joined; more than maxRows times -> the later ones
+// fold into the last row, its time shown as a range ("10:20-10:30")
+struct TGroup { std::string t; std::vector<size_t> rows; std::string text; };
+inline std::vector<TGroup> groupTurn(const std::vector<Data::TRow>& R, size_t maxRows)
+{
+    std::vector<TGroup> g;
+    for (size_t i = 0; i < R.size(); i++) {
+        if (g.empty() || g.back().t != R[i].t) { TGroup x; x.t = R[i].t; g.push_back(x); }
+        g.back().rows.push_back(i);
+        if (!R[i].text.empty()) g.back().text += (g.back().text.empty() ? "" : " ") + R[i].text;
+    }
+    if (maxRows >= 1 && g.size() > maxRows) {
+        TGroup& last = g[maxRows - 1];
+        std::string t1 = last.t;
+        for (size_t k = maxRows; k < g.size(); k++) {
+            for (size_t j = 0; j < g[k].rows.size(); j++) last.rows.push_back(g[k].rows[j]);
+            if (!g[k].text.empty()) last.text += (last.text.empty() ? "" : " ") + g[k].text;
+            t1 = g[k].t;
+        }
+        if (!t1.empty() && t1 != last.t) last.t = last.t + "-" + t1;
+        g.resize(maxRows);
+    }
+    return g;
+}
+
 }  // namespace dl

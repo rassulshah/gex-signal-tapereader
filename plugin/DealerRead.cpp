@@ -1319,23 +1319,30 @@ void DealerRead::renderTurn(const Settings& S)
     auto wNorm = [&](const std::string& q) { return (float)textW(q.c_str(), fs, false); };
     std::vector<std::string> head;
     if (D.hasTurn) head = dl::wrapWords(D.turnHead, (float)inner, wBold);
-    else head.push_back(mkt + (D.stageSide == 'L' ? " - watching LONG at " : " - watching SHORT at ") + D.stageLvl + " - no turn yet");
+    else head.push_back(std::string(D.stageSide == 'L' ? "watching LONG at " : "watching SHORT at ") + D.stageLvl + " - no turn yet");
     if (!D.terr.empty()) head.push_back("turn read failed: " + D.terr);
-    // the reason rows: number, time, tag, then the sentence lines
-    int nW = textW("10)", fs, false) + U(4), tW = textW("00:00", fs, false) + gap, tagW = 0;
-    std::vector<size_t> idx;
-    for (size_t i = 0; i < D.trows.size(); i++) idx.push_back(i);
-    if (S.rstg == 1 && idx.size() > 4) idx.erase(idx.begin(), idx.end() - 4);
-    for (size_t k = 0; k < idx.size(); k++) {
-        const dl::Data::TRow& R = D.trows[idx[k]];
-        std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
-        int w = textW(tg.c_str(), fs - 1, true) + U(10); if (w > tagW) tagW = w;
-    }
-    int txW = inner - nW - tW - tagW - gap; if (txW < U(120)) txW = U(120);
-    std::vector<std::vector<std::string> > lines(idx.size());
+    // (3.1.0, Rassul 2026-10-03 14:41 "a max of 4 rows and the time isn't repeated") one row per time: number, time, the tags of
+    // that time side by side, then their sentences joined and word-wrapped (later lines start under the tags)
+    std::vector<dl::TGroup> G = dl::groupTurn(D.trows, 4);
+    int nW = textW("4)", fs, false) + U(4), tW = 0;
+    for (size_t k = 0; k < G.size(); k++) { int w = textW(G[k].t.c_str(), fs, false) + gap; if (w > tW) tW = w; }
+    if (tW < textW("00:00", fs, false) + gap) tW = textW("00:00", fs, false) + gap;
+    std::vector<int> tagsW(G.size(), 0);
+    std::vector<std::vector<std::string> > lines(G.size());
     int nLines = (int)head.size();
-    for (size_t k = 0; k < idx.size(); k++) { lines[k] = dl::wrapWords(D.trows[idx[k]].text, (float)txW, wNorm); if (lines[k].empty()) lines[k].push_back(""); nLines += (int)lines[k].size(); }
-    gridH = (short)(pad * 2 + lh * nLines + U(3) * (short)idx.size());
+    for (size_t k = 0; k < G.size(); k++) {
+        for (size_t j = 0; j < G[k].rows.size(); j++) {
+            const dl::Data::TRow& R = D.trows[G[k].rows[j]];
+            std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
+            tagsW[k] += textW(tg.c_str(), fs - 1, true) + U(8) + U(3);
+        }
+        int restW = inner - nW - tW; if (restW < U(120)) restW = U(120);
+        int firstW = restW - tagsW[k] - gap; if (firstW < U(40)) firstW = U(40);
+        lines[k] = wrapWords(G[k].text, firstW, restW, fs, false, 40);
+        if (lines[k].empty()) lines[k].push_back("");
+        nLines += (int)lines[k].size();
+    }
+    gridH = (short)(pad * 2 + lh * nLines + U(3) * (short)G.size());
     short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(pane.left + U(10));
     short maxR = (short)(pane.right - U(4));
     if (x0 + W > maxR) x0 = (short)(maxR - W);
@@ -1351,23 +1358,28 @@ void DealerRead::renderTurn(const Settings& S)
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
     for (size_t h = 0; h < head.size(); h++) { text(cx0, y, head[h].c_str(), h + 1 == head.size() && !D.terr.empty() ? C_MUTED : C_TABONB, fs, true, 0); y = (short)(y + lh); }
-    for (size_t k = 0; k < idx.size(); k++) {
-        const dl::Data::TRow& R = D.trows[idx[k]];
+    for (size_t k = 0; k < G.size(); k++) {
         y = (short)(y + U(3));
-        char nb[8]; snprintf(nb, sizeof(nb), "%d)", R.n);
+        char nb[8]; snprintf(nb, sizeof(nb), "%d)", (int)k + 1);
         text((short)(cx0 + nW - U(4)), y, nb, C_MUTED, fs, false, 2);
-        text((short)(cx0 + nW), y, R.t.c_str(), C_MUTED, fs, false, 0);
-        int r, g, b; dl::tagColour(R.tag, r, g, b);
-        COLOR tc = (COLOR)((r << 16) | (g << 8) | b);
-        bool guess = R.kind == "guess" || dl::isGuess(R.tag);
-        bool lean = R.kind == "lean";
-        std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
+        text((short)(cx0 + nW), y, G[k].t.c_str(), C_MUTED, fs, false, 0);
         short tx = (short)(cx0 + nW + tW);
-        frame(tx, (short)(y - lh / 2 + 1), (short)(tx + textW(tg.c_str(), fs - 1, true) + U(8)), (short)(y + lh / 2 - 1), lean ? C_GREY : tc, guess);
-        text((short)(tx + U(4)), y, tg.c_str(), lean ? C_GREY : tc, fs - 1, true, 0);
-        short sx = (short)(cx0 + nW + tW + tagW + gap);
+        bool allLean = true;
+        for (size_t j = 0; j < G[k].rows.size(); j++) {
+            const dl::Data::TRow& R = D.trows[G[k].rows[j]];
+            int r, g, b; dl::tagColour(R.tag, r, g, b);
+            COLOR tc = (COLOR)((r << 16) | (g << 8) | b);
+            bool guess = R.kind == "guess" || dl::isGuess(R.tag);
+            bool lean = R.kind == "lean"; if (!lean) allLean = false;
+            std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
+            short w = (short)(textW(tg.c_str(), fs - 1, true) + U(8));
+            frame(tx, (short)(y - lh / 2 + 1), (short)(tx + w), (short)(y + lh / 2 - 1), lean ? C_GREY : tc, guess);
+            text((short)(tx + U(4)), y, tg.c_str(), lean ? C_GREY : tc, fs - 1, true, 0);
+            tx = (short)(tx + w + U(3));
+        }
         for (size_t l = 0; l < lines[k].size(); l++) {
-            text(sx, y, lines[k][l].c_str(), lean ? C_GREY : C_INK, fs, false, 0);
+            short sx = l == 0 ? (short)(tx + gap) : (short)(cx0 + nW + tW);
+            text(sx, y, lines[k][l].c_str(), allLean ? C_GREY : C_INK, fs, false, 0);
             if (l + 1 < lines[k].size()) y = (short)(y + lh);
         }
         y = (short)(y + lh);
@@ -1388,6 +1400,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("3.0.2");
+    p->setVersion("3.1.0");
     return p;
 }
