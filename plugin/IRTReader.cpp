@@ -34,7 +34,7 @@
 #include <ctime>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.1.1";
+static const char* IR_VERSION = "0.1.2";
 static const int TIMER_ID = 4711;
 
 struct RIdx { int market, fp, fpMin, fpDays, trades, dom, domSec, dbo, folder; };
@@ -61,6 +61,12 @@ public:
     std::string fpLastTxt, trLastTxt, cursorFor;
     time_t fpT = 0;
     DEPTH_BY_ORDER* dbo = nullptr;
+    // (0.1.2) the footprint bars are kept alive (persistent) so IRT can finish loading their volume at price; a bar whose
+    // statistics are not there yet stops the pass and is retried on the next tick (0.1.1 wrote nothing on 2 Oct 22:24: the
+    // folders were made, no rows - getBarStatistics failed on every bar of a fresh, non-persistent RTBARS)
+    RTBARS* fpBars = nullptr; time_t fpMade = 0; long fpCount = -1; time_t fpGrew = 0;
+    bool busy = false; int ticks = 0;
+    void trace(const std::string& what);
 
     bool dialogReady() { int i = getListIndex(RX.market); return i >= 0 && i <= 7; }
     void readSettings(RSet& S);
@@ -86,6 +92,7 @@ int cppExtension::destroy(void)
     IRTReader* me = static_cast<IRTReader*>(this);
     if (me->timerOn) { destroyTimer(TIMER_ID); me->timerOn = false; }
     if (me->dbo) { delete me->dbo; me->dbo = nullptr; }
+    if (me->fpBars) { delete me->fpBars; me->fpBars = nullptr; }
     return RTX_OK;
 }
 int cppExtension::calc(int)
@@ -101,16 +108,16 @@ int IRTReader::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(2);           // (0.1.1) "Footprint bar" and "Folder" removed
-    setParameterDialogHeight(5);
+    setParameterVersion(3);           // (0.1.2) "Footprint" and "Back-fill days" removed: always on, always 10 days
+    setParameterDialogHeight(4);
     const short SL = kParmAppendSameLine;
     RX.market = getParameterCount(); setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    RX.fp     = getParameterCount(); setBoolParameter("Footprint", true, SL);
+    RX.fp     = -1;                   // (0.1.2, 22:23 the box came up unticked / ??? again) the footprint is always recorded
     // (0.1.1, Rassul 21:19 "??? for footprint bar ... shouldn't that default to the bar on the chart") no setting: the footprint
     // is always recorded on 1-min bars, whatever the chart shows - 3-min (or any) bars are built from them, never the reverse
     RX.fpMin  = -1;
-    RX.fpDays = getParameterCount(); setIntegerParameter("Back-fill days", 10, 40);
-    RX.trades = getParameterCount(); setBoolParameter("Trades (time & sales)", true);
+    RX.fpDays = -1;                   // (0.1.2) always 10 days back
+    RX.trades = getParameterCount(); setBoolParameter("Trades (time & sales)", true, SL);
     RX.dom    = getParameterCount(); setBoolParameter("DOM", true, SL);
     RX.domSec = getParameterCount(); setIntegerParameter("DOM every (s)", 2, 40, SL);
     RX.dbo    = getParameterCount(); setBoolParameter("Order-by-order depth", true);
@@ -121,9 +128,9 @@ int cppExtension::setup(void)
 void IRTReader::readSettings(RSet& S)
 {
     S.market = getListIndex(RX.market); if (S.market < 0 || S.market > 7) S.market = 0;
-    S.fp = isBoxChecked(RX.fp) != 0; S.trades = isBoxChecked(RX.trades) != 0; S.dom = isBoxChecked(RX.dom) != 0; S.dbo = isBoxChecked(RX.dbo) != 0;
+    S.fp = true; S.trades = isBoxChecked(RX.trades) != 0; S.dom = isBoxChecked(RX.dom) != 0; S.dbo = isBoxChecked(RX.dbo) != 0;
     S.fpMin = 1;
-    S.fpDays = getIntegerValue(RX.fpDays); if (S.fpDays < 0 || S.fpDays > 60) S.fpDays = 10;
+    S.fpDays = 10;
     S.domSec = getIntegerValue(RX.domSec); if (S.domSec < 1 || S.domSec > 60) S.domSec = 2;
 }
 
@@ -188,11 +195,19 @@ void IRTReader::saveCursor()
 // ---- footprint: finished N-minute bars with volume at price (RTBARS with VAP - independent of the chart's own bars)
 void IRTReader::footprint()
 {
-    RTDATE now = currentDate();
-    // the first run back-fills fpDays days; after that only the last 30 minutes are asked for (RTDATE counts seconds)
-    RTDATE start = (fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)((cfg.fpDays + 1) * 86400UL));
-    RTBARS bars(PD_INTRA, cfg.fpMin, true, NULL, false, start, false);
-    if (bars.count < 2) { if (!bars.count) err = "no footprint bars from IRT (volume at price off for this symbol?)"; return; }
+    time_t nowT = time(0);
+    if (!fpBars || (fpCount >= 0 && nowT - fpGrew > 600 && nowT - fpMade > 600)) {   // made once; remade if it stops growing for 10 min
+        if (fpBars) { delete fpBars; fpBars = nullptr; }
+        RTDATE now = currentDate();
+        RTDATE start = (fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)((cfg.fpDays + 1) * 86400UL));
+        fpBars = new RTBARS(PD_INTRA, cfg.fpMin, true, NULL, false, start, true);
+        fpMade = nowT; fpCount = -1; fpGrew = nowT;
+        trace("footprint: bars asked from " + std::to_string((long long)secOf(start)) + (fpLast > 0 ? " (last 30 min)" : " (back-fill)"));
+    }
+    RTBARS& bars = *fpBars;
+    if (bars.count != fpCount) { fpCount = bars.count; fpGrew = nowT; }
+    if (bars.count < 2) { err = bars.count ? "" : "no footprint bars from IRT yet"; return; }
+    int done = 0;
     std::string rows, sessCur;
     std::string barRows;
     long long lastWritten = fpLast;
@@ -211,7 +226,9 @@ void IRTReader::footprint()
         sessCur = session;
         std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
         BARSTATISTICS bs; memset(&bs, 0, sizeof(bs));
-        if (bars.getBarStatistics((int)i, bs) == RTX_OK) {
+        if (bars.getBarStatistics((int)i, bs) != RTX_OK) { err = "volume at price not loaded yet from " + ts; break; }   // retried next tick
+        if (++done > 400) break;                                    // a slice per tick: the back-fill spreads over ~1-2 min
+        {
             char b[300];
             snprintf(b, sizeof(b), "%s|%d|%s|%s|%s|%s|%ld|%ld|%ld|%ld|%ld|%ld|%ld\n", ts.c_str(), cfg.fpMin,
                      irl::px((*bars.op)[(int)i], tick).c_str(), irl::px((*bars.hi)[(int)i], tick).c_str(), irl::px((*bars.lo)[(int)i], tick).c_str(),
@@ -337,19 +354,40 @@ void IRTReader::writeStatus()
       << "\nERROR," << err << "\n";
 }
 
+void IRTReader::trace(const std::string& what)
+{
+    const char* up = getenv("USERPROFILE"); if (!up || mkt.empty()) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\IRTReader.trace-" + mkt + ".txt";
+    { std::ifstream t(path.c_str(), std::ios::ate | std::ios::binary); if (t.good() && t.tellg() > 300000) { t.close(); std::remove(path.c_str()); } }
+    std::ofstream f(path.c_str(), std::ios::app); if (!f.is_open()) return;
+    time_t n = time(0); struct tm lt = *localtime(&n);
+    char b[16]; strftime(b, sizeof(b), "%H:%M:%S", &lt);
+    f << b << " " << what << "\n";
+}
+
 void IRTReader::tickAll()
 {
+    if (busy) return;                                            // (0.1.2) never two passes at once
+    busy = true;
     identify();
-    if (mkt.empty()) return;
-    if (cursorFor != mkt) { loadCursor(); cursorFor = mkt; }
+    if (mkt.empty()) { busy = false; return; }
+    if (cursorFor != mkt) { loadCursor(); cursorFor = mkt; trace("start " + std::string(IR_VERSION) + " " + sym + " cursor fp " + std::to_string(fpLast) + " trades " + std::to_string(tc.lastSec)); }
     err.clear();
-    if (cfg.fp && time(0) - fpT >= 20) { fpT = time(0); footprint(); }     // bars finish every minute: every 20 s is enough
-    if (cfg.trades) trades();
-    if (cfg.dom) depth();
-    if (cfg.dbo) depthByOrder();
+    long f0 = fpRows, t0 = trRows, d0 = domRows, b0 = dboRows;
+    bool catching = fpLast < 0 || (long long)time(0) - fpLast > 600;     // back-filling: a slice every 2 s, then every 20 s
+    bool loud = ++ticks <= 6;                                    // the first passes say each step (to find a hang / crash)
+    if (cfg.fp && time(0) - fpT >= (catching ? 2 : 20)) { if (loud) trace("footprint..."); fpT = time(0); footprint(); }
+    if (cfg.trades) { if (loud) trace("trades..."); trades(); }
+    if (cfg.dom) { if (loud) trace("dom..."); depth(); }
+    if (cfg.dbo) { if (loud) trace("order-by-order..."); depthByOrder(); }
+    if (loud) trace("pass done");
     backfilled = true;
     saveCursor();
     writeStatus();
+    if (fpRows != f0 || trRows != t0 || !err.empty() || (time(0) % 60) == 0)
+        trace("fp +" + std::to_string(fpRows - f0) + " (last " + fpLastTxt + ") trades +" + std::to_string(trRows - t0) + " dom +" +
+              std::to_string(domRows - d0) + " dbo +" + std::to_string(dboRows - b0) + (err.empty() ? "" : " ERR " + err));
+    busy = false;
 }
 
 int IRTReader::timer(RTX_EVENT* e)
@@ -366,6 +404,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the chart market's footprint, trades and DOM for the LRA analytics. Draws nothing.");
-    p->setVersion("0.1.1");
+    p->setVersion("0.1.2");
     return p;
 }
