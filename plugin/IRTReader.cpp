@@ -1,6 +1,14 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.2.2 (2026-10-03 12:50, Rassul: "start the other markets with the crash guard ... a few minutes after i open the application
+ *     ... when i open irt there are already downloads and initializations going on, so it needs to stabilize first"):
+ *     - other markets (data\irt\_other-markets.txt) wait 5 minutes after the reader starts, then go ONE heavy request at a
+ *       time, at least 2 minutes apart: first a 30-minute live request (proves the ticker is safe), then history in steps of
+ *       1, 3 and 10 days - each step its own guarded request (_trying-<MKT>-deep1 / deep3 / deep10), so a step that kills IRT
+ *       is blocked and the market keeps what the smaller steps fetched. No 120-day back-fill for other markets.
+ *     - every back-fill skips the OLDEST session it gets (the request starts mid-session, so that session is partial); the
+ *       next, longer request writes it whole
  *  0.2.1 (2026-10-03 12:10, Rassul: "my linnsoft applications keeps crashing and restarting"): 0.2.0 crashed Investor/RT about
  *     20 s after every start - IRT died INSIDE the RTBARS request for another market's footprint (ES, then CL: 11 days of
  *     1-min volume at price by ticker; the chart's own NQ request was fine). Now:
@@ -48,7 +56,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.2.1";
+static const char* IR_VERSION = "0.2.2";
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
@@ -72,6 +80,7 @@ struct FpState {
     bool fpBlocked = false, deepBlocked = false;         // (0.2.1) a request of this kind crashed IRT before
     std::string fpTry, deepTry;                          // (0.2.1) the guard file while a request is unproven
     time_t deepRetryAt = 0; int deepTries = 0;
+    int deepStep = 0;                                    // (0.2.2) other markets: 0 = 1 day, 1 = 3 days, 2 = 10 days, 3 = done
 };
 static double tickOf(const std::string& m)
 {
@@ -116,6 +125,8 @@ public:
     bool guardBefore(FpState& M, const char* kind);
     void guardClear(FpState& M, const char* kind);
     std::string othersTxt;
+    time_t startT = 0, nextOtherAt = 0;                    // (0.2.2) the reader start; the next heavy request allowed for other markets
+    bool blockedKind(FpState& M, const char* kind);
     bool own(FpState& M);
     void footprintOf(FpState& M);
     void loadFpCursor(FpState& M);
@@ -284,8 +295,8 @@ void IRTReader::loadMarkets()
         if (sy.empty()) continue;
         FpState M; M.mkt = MK[k]; M.sym = sy; M.tick = (isOwn && tick > 0) ? tick : tickOf(MK[k]); M.own = isOwn;
         // (0.2.1) a request that was still unproven when IRT last died is blocked for good (until its file is deleted)
-        const char* KIND[2] = { "fp", "deep" };
-        for (int q = 0; q < 2; q++) {
+        const char* KIND[5] = { "fp", "deep", "deep1", "deep3", "deep10" };
+        for (int q = 0; q < 5; q++) {
             std::ifstream tr(guardPath(M.mkt, KIND[q], "trying").c_str());
             if (tr.good()) {
                 tr.close(); std::remove(guardPath(M.mkt, KIND[q], "trying").c_str());
@@ -294,13 +305,13 @@ void IRTReader::loadMarkets()
                 trace(M.mkt + " " + KIND[q] + ": IRT stopped during this request last time - BLOCKED (delete _blocked-" + M.mkt + "-" + KIND[q] + ".txt to retry)");
             }
             std::ifstream bl(guardPath(M.mkt, KIND[q], "blocked").c_str());
-            if (bl.good()) { if (q == 0) M.fpBlocked = true; else M.deepBlocked = true; }
+            if (bl.good()) { if (q == 0) M.fpBlocked = true; else if (q == 1) M.deepBlocked = true; }
         }
         fps.push_back(M);
     }
     othersTxt = others.size() > 2 ? others.substr(1, others.size() - 2) : "off";
     std::string list; for (auto& M : fps) list += M.mkt + "=" + M.sym + (M.fpBlocked ? "(fp blocked)" : "") + (M.deepBlocked ? "(deep blocked)" : "") + " ";
-    trace("markets: " + list + "| other markets: " + othersTxt);
+    trace("markets: " + list + "| other markets: " + othersTxt + (othersTxt != "off" ? " (start 5 min after the reader, one request at a time)" : ""));
 }
 
 std::string IRTReader::guardPath(const std::string& m, const char* kind, const char* what)
@@ -309,9 +320,15 @@ std::string IRTReader::guardPath(const std::string& m, const char* kind, const c
 }
 
 // (0.2.1) written right BEFORE an RTBARS request, removed once IRT has survived it (the next tick); found at a restart = it crashed IRT
+bool IRTReader::blockedKind(FpState& M, const char* kind)
+{
+    std::ifstream b(guardPath(M.mkt, kind, "blocked").c_str());
+    return b.good();
+}
+
 bool IRTReader::guardBefore(FpState& M, const char* kind)
 {
-    if ((kind[0] == 'f' && M.fpBlocked) || (kind[0] == 'd' && M.deepBlocked)) return false;
+    if (blockedKind(M, kind)) return false;
     _mkdir(cfg.folder.c_str());
     std::string p = guardPath(M.mkt, kind, "trying");
     { std::ofstream f(p.c_str(), std::ios::trunc); f << M.sym << " " << (long long)time(0) << "\n"; }
@@ -350,7 +367,7 @@ void IRTReader::loadFpCursor(FpState& M)
     M.loaded = true;
     long long a = -1, dl = -1; int dd = 0;
     std::ifstream f((cfg.folder + "\\_fp-" + M.mkt + ".txt").c_str());
-    if (f >> a >> dl >> dd) { M.fpLast = a; M.deepLast = dl; M.deepDone = dd; }
+    if (f >> a >> dl >> dd) { M.fpLast = a; M.deepLast = dl; M.deepDone = dd; int st = 0; if (f >> st) M.deepStep = st; }
     else {                                                        // first 0.2.0 run: take over 0.1.x's cursor
         std::ifstream g((cfg.folder + "\\_cursor-" + M.mkt + ".txt").c_str());
         long long b = -1; int c = 0, bf = 0;
@@ -365,7 +382,7 @@ void IRTReader::saveFpCursor(FpState& M)
 {
     _mkdir(cfg.folder.c_str());
     std::ofstream f((cfg.folder + "\\_fp-" + M.mkt + ".txt").c_str(), std::ios::trunc);
-    if (f.is_open()) f << M.fpLast << " " << M.deepLast << " " << M.deepDone << "\n";
+    if (f.is_open()) f << M.fpLast << " " << M.deepLast << " " << M.deepDone << " " << M.deepStep << "\n";
 }
 
 // ---- footprint: finished 1-minute bars with volume at price (RTBARS with VAP, by ticker - independent of any chart)
@@ -379,7 +396,11 @@ void IRTReader::footprintOf(FpState& M)
         RTDATE now = currentDate();
         RTDATE start = (M.fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)((cfg.fpDays + 1) * 86400UL));
         if (M.fpLast > 0 && (long long)nowT - M.fpLast > 1800) start = (RTDATE)(now - (RTDATE)((nowT - M.fpLast) + 600));   // a gap: from it
-        if (!M.own) start = (RTDATE)(now - (RTDATE)1800UL);      // (0.2.1) another market: 30 minutes, never a long back-fill
+        if (!M.own) {                                            // (0.2.1) another market: 30 minutes, never a long back-fill
+            start = (RTDATE)(now - (RTDATE)1800UL);
+            if (nowT < nextOtherAt) return;                      // (0.2.2) one heavy request at a time, 2 minutes apart
+            nextOtherAt = nowT + 120;
+        }
         if (!guardBefore(M, "fp")) return;
         M.fpBars = new RTBARS(PD_INTRA, cfg.fpMin, true, M.sym.c_str(), false, start, true);
         M.fpMade = nowT; M.fpCount = -1; M.fpGrew = nowT;
@@ -401,16 +422,19 @@ int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool dee
     long long lastWritten = lastRef;
     char fnm[32]; snprintf(fnm, sizeof(fnm), "\\fp_%dm.csv", cfg.fpMin);
     const double tk = M.tick;
+    std::string oldestSess;                                      // (0.2.2) a back-fill starts mid-session: its oldest session is partial
+    if (deep && bars.count > 0) { struct tm t0; secOf((RTDATE)(*bars.dt)[0], &t0); oldestSess = irl::sessionOf(t0.tm_year + 1900, t0.tm_mon + 1, t0.tm_mday, t0.tm_hour); }
     for (long i = 0; i < bars.count - 1; i++) {                 // the last bar is still forming
         RTDATE d = (RTDATE)(*bars.dt)[(int)i];
         struct tm t; long long s = secOf(d, &t);
         if (s <= lastRef) continue;
         std::string session = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
         if (deep) {                                              // only sessions with no file yet (or ones this pass began)
+            if (session == oldestSess) { lastWritten = s; continue; }   // (0.2.2) partial - the next, longer request writes it
             if (M.deepSkip.count(session)) { lastWritten = s; continue; }
             if (!M.deepOwn.count(session)) {
                 std::ifstream ex((cfg.folder + "\\" + session + "\\" + M.mkt + fnm).c_str());
-                if (ex.good()) { M.deepSkip.insert(session); if (s > M.fpLast - 86400) { M.deepDone = 1; break; } lastWritten = s; continue; }
+                if (ex.good()) { M.deepSkip.insert(session); if (M.own && s > M.fpLast - 86400) { M.deepDone = 1; break; } lastWritten = s; continue; }   // (0.2.2) other markets: skip and go on (their newer sessions may have gaps)
                 M.deepOwn.insert(session);
             }
         }
@@ -457,22 +481,49 @@ void IRTReader::deepFill(FpState& M)
 {
     // (0.2.0) after the normal pass has nothing new for 3 passes in a row (0.1.5 waited for a bar under 10 min old, which never
     // comes on a weekend - the deep back-fill never started)
-    if (M.deepDone || M.fpLast < 0 || M.caughtUp < 3) return;
-    if (!M.own || M.deepBlocked) return;                         // (0.2.1) deep back-fill: the chart's own market only
+    if (M.deepDone) return;
     time_t nowT = time(0);
+    static const char* DK[3] = { "deep1", "deep3", "deep10" };
+    static const unsigned long DD[3] = { 1UL, 3UL, 10UL };
+    if (M.own) { if (M.deepBlocked || M.fpLast < 0 || M.caughtUp < 3) return; }
+    else {                                                       // (0.2.2) other markets: history in 1 / 3 / 10-day steps
+        if (M.deepStep >= 3) { M.deepDone = 1; return; }
+        if (!M.fpBars || !M.fpTry.empty()) return;               // only after its live request survived
+    }
     if (!M.deepBars && M.deepRetryAt > nowT) return;            // (0.2.1) waiting to retry a short answer
     if (!M.deepTry.empty() && M.deepBars) guardClear(M, "deep");
-    if (!M.deepBars || (M.deepCount >= 0 && nowT - M.deepGrew > 900 && nowT - M.deepMade > 900)) {
+    bool stale = M.own && M.deepBars && M.deepCount >= 0 && nowT - M.deepGrew > 900 && nowT - M.deepMade > 900;
+    if (!M.deepBars || stale) {
         if (M.deepBars) { delete M.deepBars; M.deepBars = nullptr; }
         RTDATE now = currentDate();
-        if (!guardBefore(M, "deep")) return;
-        M.deepBars = new RTBARS(PD_INTRA, cfg.fpMin, true, M.sym.c_str(), false, (RTDATE)(now - (RTDATE)(121UL * 86400UL)), true);
+        const char* kind = M.own ? "deep" : DK[M.deepStep];
+        unsigned long days = M.own ? 121UL : DD[M.deepStep];
+        if (!M.own) {
+            if (blockedKind(M, kind)) { M.deepStep = 3; M.deepDone = 1; trace(M.mkt + " history: the " + kind + " step crashed IRT before - stopped there"); return; }
+            if (nowT < nextOtherAt) return;                      // one heavy request at a time, 2 minutes apart
+            nextOtherAt = nowT + 120;
+        }
+        if (!guardBefore(M, kind)) return;
+        M.deepBars = new RTBARS(PD_INTRA, cfg.fpMin, true, M.sym.c_str(), false, (RTDATE)(now - (RTDATE)(days * 86400UL)), true);
         M.deepMade = nowT; M.deepCount = -1; M.deepGrew = nowT;
-        trace(M.mkt + " deep back-fill: asked for 120 days");
+        trace(M.mkt + (M.own ? " deep back-fill: asked for 120 days" : std::string(" history: asked for ") + std::to_string(days) + " day(s)"));
     }
     if (M.deepBars->count != M.deepCount) { M.deepCount = M.deepBars->count; M.deepGrew = nowT; }
     if (M.deepBars->count < 2) return;
     long f0 = M.rows;
+    if (!M.own) {                                                // (0.2.2) a history step of another market
+        M.err.clear();
+        int n = writeSlice(M, *M.deepBars, M.deepLast, true, 400);
+        if (M.rows != f0) trace(M.mkt + " history (" + DK[M.deepStep] + "): +" + std::to_string(M.rows - f0) + " rows");
+        bool fin = M.deepDone || (n == 0 && M.err.empty() && nowT - M.deepGrew > 30);
+        if (!fin) return;
+        trace(M.mkt + " history: " + DK[M.deepStep] + " step done" + (M.deepStep >= 2 ? " - 10 days in" : ""));
+        delete M.deepBars; M.deepBars = nullptr; guardClear(M, "deep");
+        M.deepStep++; M.deepDone = M.deepStep >= 3 ? 1 : 0;
+        M.deepLast = -1; M.deepSkip.clear(); M.deepOwn.clear();
+        M.deepRetryAt = nowT + 120;
+        return;
+    }
     writeSlice(M, *M.deepBars, M.deepLast, true, 400);
     if (M.deepDone) {                                            // (0.2.1) DONE only if IRT really gave ~120 days
         long long oldest = secOf((RTDATE)(*M.deepBars->dt)[0]);
@@ -623,7 +674,12 @@ void IRTReader::tickAll()
     long f0 = fpRows, t0 = trRows, d0 = domRows, b0 = dboRows;
     bool loud = ++ticks <= 6;                                    // the first passes say each step (to find a hang / crash)
     if (!fpsLoaded) loadMarkets();
+    if (!startT) startT = time(0);
+    bool othersOn = time(0) >= startT + 300;                     // (0.2.2) other markets only after IRT has settled for 5 minutes
+    static bool saidOthers = false;
+    if (othersOn && !saidOthers && othersTxt != "off") { trace("other markets start now (5 min after the reader): " + othersTxt); saidOthers = true; }
     for (auto& M : fps) {                                        // (0.2.0) every market's footprint, one writer per market
+        if (!M.own && !othersOn) continue;
         if (!own(M)) continue;
         if (!M.loaded) loadFpCursor(M);
         bool catching = M.fpLast < 0 || M.caughtUp == 0;
