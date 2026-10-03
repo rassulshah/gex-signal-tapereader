@@ -42,6 +42,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <map>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -191,6 +192,7 @@ int DealerSig::draw(void)
     RTARRAYI dt(barDateTime);
     RCT pane; pane.getPaneRect(false);
     std::vector<dl::Box> used;
+    std::map<int, int> perBar;
     for (int pass = 0; pass < 2; pass++) {                            // the Turn's reasons first: they keep the spots next to the bar
         for (size_t k = 0; k < all.size(); k++) {
             if ((pass == 0) == all[k].second) continue;
@@ -198,6 +200,7 @@ int DealerSig::draw(void)
             bool led = all[k].second;
             int b = barOf(g, (int)n, dt);
             if (b < 0) continue;
+            if (!led) { int& cnt = perBar[b]; if (cnt >= 2) continue; cnt++; }   // (1.5.0) at most two reasons on a bar (best first in the file)
             bool buy = g.side == 'B';
             PNT p; p.set(b, buy ? lo[b] : hi[b], kBarCenter);
             if (p.h < pane.left || p.h > pane.right) continue;
