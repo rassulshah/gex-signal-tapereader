@@ -35,6 +35,11 @@
 #include <cstdio>
 #include <cctype>
 
+// (2026-10-03) number boxes in the settings window: an explicit width - the default (0) drew them so narrow they showed "T"
+#ifndef NUMW
+#define NUMW 50
+#endif
+
 namespace dl {
 
 struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0, gp = -1, dp = -1, usd = 0, usd0 = 0; bool far = false, live = false, hasUsd = false; };   // live: COVER confirmed dealers trading here   // gp / dp: % of a normal 15 min of volume (-1 = none)
@@ -44,6 +49,7 @@ struct KV   { std::string k, v; char col = 'W'; };
 
 struct Data {
     std::string ver, market;
+    std::string srcBook, srcMode, srcAt; float srcRatio = 1.0f;   // (file 2.0) SRC: the book the Profile bars come from (SPX / QQQ / the market itself)
     double asofSo = -1; int y = 0, mo = 0, d = 0;
     float px = 0, em = 0; bool hasPrice = false;
     float book = 0; bool hasBook = false;
@@ -141,6 +147,7 @@ inline bool parseLine(Data& D, const std::string& line)
     const std::string& k = t[0];
     if (k == "VERSION" && t.size() >= 2) { D.ver = t[1]; return true; }
     if (k == "MARKET" && t.size() >= 2) { D.market = t[1]; return true; }
+    if (k == "SRC" && t.size() >= 2) { D.srcBook = t[1]; if (t.size() >= 3) D.srcRatio = f(t[2]); if (t.size() >= 4) D.srcMode = t[3]; if (t.size() >= 5) D.srcAt = t[4]; return true; }
     if (k == "ASOF" && t.size() >= 2) {
         D.asofSo = atof(t[1].c_str());
         if (t.size() >= 3) { int a = 0, b = 0, c = 0; if (sscanf(t[2].c_str(), "%d-%d-%d", &a, &b, &c) == 3) { D.y = a; D.mo = b; D.d = c; } }
@@ -417,5 +424,49 @@ inline const char* phaseName(int i) { static const char* P[] = { "APPROACH", "SW
 // bands (worked 1.5% vs failed 0.9%; the big 9/25 lows 3.2% / 5.2%); the nightly study will set them per market
 inline int strengthBars(float p) { if (p < 0.25f) return 0; if (p < 1.0f) return 1; if (p < 3.0f) return 2; return 3; }
 inline std::string pctTxt(float p) { if (p < 0) return ""; char b[16]; if (p < 10) snprintf(b, sizeof(b), "%.1f%%", p); else snprintf(b, sizeof(b), "%.0f%%", p); return b; }
+
+
+// (Dealer Summary 1.0, 2026-10-03) LRA-Summary-<MKT>.txt - the Reader's READ for the market (lra/read_store.py):
+//    VERSION|1.0   ASOF|<HH:MM:SS CT>|<yyyy-mm-dd>|<epoch sec>   HEAD|<headline>|<#rrggbb>   BODY|<the read>
+//    META|<key>|<level>|<mode>|<state>|<verdict>|<trusted 0/1>|<grid age min>
+struct Summary {
+    bool ok = false;
+    std::string ver, asof, day, head, body, key, level, mode, state, verdict;
+    long long epoch = 0;
+    unsigned int col = 0x00E2E8F0;          // 0x00RRGGBB, as COLOR
+    bool trusted = false;
+    int gridAge = -1;
+};
+inline unsigned int hexColour(const std::string& h, unsigned int dflt)
+{
+    if (h.size() != 7 || h[0] != '#') return dflt;
+    unsigned int v = 0;
+    for (size_t i = 1; i < 7; i++) {
+        char c = (char)std::tolower((unsigned char)h[i]); v <<= 4;
+        if (c >= '0' && c <= '9') v |= (unsigned int)(c - '0'); else if (c >= 'a' && c <= 'f') v |= (unsigned int)(c - 'a' + 10); else return dflt;
+    }
+    return v;
+}
+inline Summary parseSummary(const std::string& text)
+{
+    Summary S; std::stringstream ss(text); std::string line;
+    while (std::getline(ss, line)) {
+        if (!line.empty() && line[line.size() - 1] == '\r') line.erase(line.size() - 1);
+        std::vector<std::string> f = split(line, '|');
+        if (f.empty()) continue;
+        const std::string& k = f[0];
+        if (k == "VERSION" && f.size() > 1) S.ver = f[1];
+        else if (k == "ASOF" && f.size() > 3) { S.asof = f[1]; S.day = f[2]; S.epoch = std::atoll(f[3].c_str()); }
+        else if (k == "HEAD" && f.size() > 1) { S.head = f[1]; if (f.size() > 2) S.col = hexColour(f[2], S.col); }
+        else if (k == "BODY" && f.size() > 1) S.body = f[1];
+        else if (k == "META" && f.size() > 7) { S.key = f[1]; S.level = f[2]; S.mode = f[3]; S.state = f[4]; S.verdict = f[5];
+                                                 S.trusted = f[6] == "1"; S.gridAge = f[7].empty() ? -1 : std::atoi(f[7].c_str()); }
+    }
+    S.ok = !S.head.empty();
+    return S;
+}
+// minutes since the read was written ("12" / "2h" ...); -1 = unknown
+inline int ageMin(long long epoch, long long now) { if (epoch <= 0 || now <= 0 || now < epoch - 120) return -1; return (int)((now - epoch) / 60); }
+inline std::string ageTxt(int m) { if (m < 0) return ""; char b[24]; if (m < 60) snprintf(b, sizeof(b), "%d min", m); else if (m < 48 * 60) snprintf(b, sizeof(b), "%dh", m / 60); else snprintf(b, sizeof(b), "%dd", m / 1440); return b; }
 
 }  // namespace dl

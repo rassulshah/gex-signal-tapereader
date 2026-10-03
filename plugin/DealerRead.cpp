@@ -162,22 +162,22 @@ int cppExtension::setup(void)
     int pc = 0;
     PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     PX.corner   = pc++; setListParameter("Read position", 0, "Bottom left;Bottom right;Top left;Top right;Bottom centre;Top centre", 0, SL);
-    PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, 0);
+    PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);
     PX.trade    = pc++; setBoolParameter("TRADE line", true, SL);
     PX.todo     = pc++; setBoolParameter("WHAT TO DO box", true, SL);
     PX.layout   = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");
     PX.show     = pc++; setListParameter("Show", 2, "Read;Analyst;Both", 0, SL);
-    PX.lift     = pc++; setIntegerParameter("Read: lift from bottom (px)", 30, 0);
-    PX.moveX    = pc++; setIntegerParameter("Move right (px)", 0, 0, SL);
+    PX.lift     = pc++; setIntegerParameter("Read: lift from bottom (px)", 30, NUMW);
+    PX.moveX    = pc++; setIntegerParameter("Move right (px)", 0, NUMW, SL);
     PX.apos     = pc++; setListParameter("Analyst position", 0, "Top left;Top centre;Top right;Above the Read");
-    PX.atop     = pc++; setIntegerParameter("Analyst: down from top (px)", 30, 0, SL);
-    PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, 0);
-    PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
+    PX.atop     = pc++; setIntegerParameter("Analyst: down from top (px)", 30, NUMW, SL);
+    PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, NUMW);
+    PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
     PX.view     = pc++; setListParameter("View", 0, "Standard;Summary");   // (1.6.0) Summary = the whole read as sentences
     PX.rpos     = pc++; setListParameter("Turn read", 0, "Show;Off");                    // (3.0.0) the Turn box; drag its grip to move it
-    PX.rtop     = pc++; setIntegerParameter("Box: lift from bottom (px)", 30, 0, SL);
+    PX.rtop     = pc++; setIntegerParameter("Box: lift from bottom (px)", 30, NUMW, SL);
     PX.rstg     = pc++; setListParameter("Reasons shown", 0, "All;Last 4");          // (3.0.0)
-    PX.rwid     = pc++; setIntegerParameter("Box width (% of chart 30-100)", 55, 0, SL);
+    PX.rwid     = pc++; setIntegerParameter("Box width (% of chart 30-100)", 55, NUMW, SL);
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
@@ -1388,6 +1388,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("3.0.1");
+    p->setVersion("3.0.2");
     return p;
 }

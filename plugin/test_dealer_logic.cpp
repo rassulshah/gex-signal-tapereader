@@ -152,6 +152,18 @@ int main()
         CHECK(G.srows[2].t.empty() && G.srows[2].val.empty() && G.srows[2].side == 'N', "an SR row with empty fields");
         CHECK(dl::isGuess("PT?") && dl::isGuess("CallB?") && !dl::isGuess("SC") && !dl::isGuess(""), "guess codes");
     }
+    {   // (file 2.0) SRC row
+        dl::Data Q; dl::parseLine(Q, "SRC|SPX|1.00471|T1 09:00 CT|09:55");
+        CHECK(Q.srcBook == "SPX" && std::fabs(Q.srcRatio - 1.00471f) < 1e-5f && Q.srcMode == "T1 09:00 CT" && Q.srcAt == "09:55", "SRC row: the index book and its ratio");
+    }
+    {   // (Dealer Summary 1.0) LRA-Summary-<MKT>.txt
+        dl::Summary S = dl::parseSummary("VERSION|1.0\nASOF|14:09:52|2026-10-02|1791054592\nHEAD|HG FAILED BREAKOUT - PRIOR-DAY HIGH|#f87171\r\nBODY|HG swept PDH 6.5970.\nMETA|PDH|6.5970|now|RECLAIMED|OPPOSES|1|0\n");
+        CHECK(S.ok && S.head == "HG FAILED BREAKOUT - PRIOR-DAY HIGH" && S.col == 0x00F87171, "summary HEAD + colour");
+        CHECK(S.body == "HG swept PDH 6.5970." && S.asof == "14:09:52" && S.day == "2026-10-02" && S.epoch == 1791054592LL, "summary BODY + ASOF");
+        CHECK(S.key == "PDH" && S.state == "RECLAIMED" && S.verdict == "OPPOSES" && S.trusted && S.gridAge == 0, "summary META");
+        CHECK(!dl::parseSummary("VERSION|1.0\n").ok && dl::hexColour("#zz0000", 7) == 7 && dl::hexColour("#4ade80", 0) == 0x004ADE80, "summary empty + bad colour");
+        CHECK(dl::ageMin(1000, 1000 + 125) == 2 && dl::ageMin(0, 5) == -1 && dl::ageTxt(5) == "5 min" && dl::ageTxt(130) == "2h" && dl::ageTxt(3000) == "2d", "summary age");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

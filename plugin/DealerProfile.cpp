@@ -34,7 +34,9 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.0.2";   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
+static const char* DP_VERSION = "2.1.0";   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
+//   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
+//   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
 //   // 2.0.1 (2026-10-02 19:12): the how-to text in the settings is gone   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
@@ -84,6 +86,7 @@ public:
     void alignContract();
     void render(const Settings& S);
     void staleBadge();
+    void srcTag();
     void writeStatus(const char* what);
     short yOf(float price);
     void box(short l, short t, short r, short b, COLOR c);
@@ -117,10 +120,10 @@ int cppExtension::setup(void)
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    // (2.0.2) width argument kParmDefaultWdith: 0 made the number boxes zero-wide (they showed "T")
-    PX.width   = pc++; setIntegerParameter("Profile width px", 260, kParmDefaultWdith, SL);
-    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, kParmDefaultWdith);
-    PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, kParmDefaultWdith, SL);
+    // (2.0.3) NUMW (DealerLogic.h): the SDK default width (0) made the number boxes so narrow they showed "T"
+    PX.width   = pc++; setIntegerParameter("Profile width px", 260, NUMW, SL);
+    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, NUMW);
+    PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
     PX.labels  = pc++; setBoolParameter("Values on the bars", true);
     PX.snap    = pc++; setBoolParameter("Snapshot outline (1.x files)", true, SL);
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true);
@@ -452,12 +455,26 @@ void DealerProfile::staleBadge()
     textLJ((short)(x + 7), (short)(y + 9), b, 0x00FF9A8F, 10, true);
 }
 
+// (2.1.0, Rassul 2026-10-03: "for ES it should use SPX data ... SPX instead of ES") when the bars come from the index book
+// (SPX for ES, QQQ for NQ, 08:30-15:00 CT) a small tag over the profile says so - the bars jump in size when the book changes
+void DealerProfile::srcTag()
+{
+    if (D.srcBook.empty() || D.srcBook == mkt || D.nodes.empty()) return;
+    RCT pane; pane.getPaneRect(false);
+    std::string t = D.srcBook + " book";
+    int tw = textW(t.c_str(), 9, true);
+    short x = (short)(pane.right - tw - 12), y = (short)(pane.top + 30);
+    RCT bg; bg.set(x, y, (short)(x + tw + 10), (short)(y + 16));
+    bg.draw(1, 0x0022D3EE, 0x00062A33, DRAW_OPAQUE, PAT_SOLID);
+    textLJ((short)(x + 5), (short)(y + 8), t.c_str(), 0x0022D3EE, 9, true);
+}
+
 void DealerProfile::writeStatus(const char* what)
 {
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nSTATE," << what
+    f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nBOOK," << D.srcBook << "\nRATIO," << D.srcRatio << "\nRATIO_MODE," << D.srcMode << "\nSTATE," << what
       << "\nREACH," << (cfg.width + 70) << "\n";   // (1.4.0) px the Profile takes from the scale's edge: the Read / Analyst stay left of it
 }
 
@@ -525,6 +542,7 @@ int DealerProfile::draw(void)
     alignContract();
     render(cfg);
     staleBadge();
+    srcTag();
     exportBars();
     writeStatus(D.nodes.empty() ? "no data" : "drawn");
     return RTX_OK;
@@ -536,6 +554,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.0.2");
+    p->setVersion("2.1.0");
     return p;
 }

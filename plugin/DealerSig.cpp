@@ -98,10 +98,10 @@ int cppExtension::setup(void)
     setOutputSignalParameter("Dealer BUY reason", &mb, OUTPUT_DISABLED);
     setOutputSignalParameter("Dealer SELL reason", &ms, OUTPUT_DISABLED);
     SX.market = getParameterCount(); setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    SX.font   = getParameterCount(); setIntegerParameter("Font size (pt)", 10, 0, SL);
+    SX.font   = getParameterCount(); setIntegerParameter("Font size (pt)", 10, NUMW, SL);
     // (1.5.0, Rassul 21:19 "why do you even have that option?") no clock offset: the dealer files and his charts are both Central
     SX.clock  = -1;
-    SX.gap    = getParameterCount(); setIntegerParameter("Gap from the bar (px)", 6, 0);
+    SX.gap    = getParameterCount(); setIntegerParameter("Gap from the bar (px)", 6, NUMW);
     SX.ledger = getParameterCount(); setListParameter("Dealer ledger marks", 0, "Off;On");      // (1.4.0) the forced ledger's SC / Van
     return RTX_OK;
 }
@@ -232,6 +232,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.5.0");
+    p->setVersion("1.5.1");
     return p;
 }
