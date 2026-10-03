@@ -34,7 +34,7 @@
 #include <ctime>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.1.0";
+static const char* IR_VERSION = "0.1.1";
 static const int TIMER_ID = 4711;
 
 struct RIdx { int market, fp, fpMin, fpDays, trades, dom, domSec, dbo, folder; };
@@ -101,18 +101,20 @@ int IRTReader::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
-    setParameterDialogHeight(6);
+    setParameterVersion(2);           // (0.1.1) "Footprint bar" and "Folder" removed
+    setParameterDialogHeight(5);
     const short SL = kParmAppendSameLine;
     RX.market = getParameterCount(); setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     RX.fp     = getParameterCount(); setBoolParameter("Footprint", true, SL);
-    RX.fpMin  = getParameterCount(); setIntegerParameter("Footprint bar (min)", 1, 40);
-    RX.fpDays = getParameterCount(); setIntegerParameter("Back-fill days", 10, 40, SL);
+    // (0.1.1, Rassul 21:19 "??? for footprint bar ... shouldn't that default to the bar on the chart") no setting: the footprint
+    // is always recorded on 1-min bars, whatever the chart shows - 3-min (or any) bars are built from them, never the reverse
+    RX.fpMin  = -1;
+    RX.fpDays = getParameterCount(); setIntegerParameter("Back-fill days", 10, 40);
     RX.trades = getParameterCount(); setBoolParameter("Trades (time & sales)", true);
     RX.dom    = getParameterCount(); setBoolParameter("DOM", true, SL);
     RX.domSec = getParameterCount(); setIntegerParameter("DOM every (s)", 2, 40, SL);
     RX.dbo    = getParameterCount(); setBoolParameter("Order-by-order depth", true);
-    RX.folder = getParameterCount(); setStringParameter("Folder", "C:\\Dev\\level-reversal-analytics\\data\\irt", 220);
+    RX.folder = -1;                   // (0.1.1) always C:\Dev\level-reversal-analytics\data\irt
     return RTX_OK;
 }
 
@@ -120,11 +122,9 @@ void IRTReader::readSettings(RSet& S)
 {
     S.market = getListIndex(RX.market); if (S.market < 0 || S.market > 7) S.market = 0;
     S.fp = isBoxChecked(RX.fp) != 0; S.trades = isBoxChecked(RX.trades) != 0; S.dom = isBoxChecked(RX.dom) != 0; S.dbo = isBoxChecked(RX.dbo) != 0;
-    S.fpMin = getIntegerValue(RX.fpMin); if (S.fpMin < 1 || S.fpMin > 30) S.fpMin = 1;
+    S.fpMin = 1;
     S.fpDays = getIntegerValue(RX.fpDays); if (S.fpDays < 0 || S.fpDays > 60) S.fpDays = 10;
     S.domSec = getIntegerValue(RX.domSec); if (S.domSec < 1 || S.domSec > 60) S.domSec = 2;
-    char b[260] = {0};
-    if (getParameterText(RX.folder, b, sizeof(b) - 1) == RTX_OK && b[0] && b[0] != ' ') S.folder = b;
 }
 
 void IRTReader::identify()
@@ -366,6 +366,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the chart market's footprint, trades and DOM for the LRA analytics. Draws nothing.");
-    p->setVersion("0.1.0");
+    p->setVersion("0.1.1");
     return p;
 }

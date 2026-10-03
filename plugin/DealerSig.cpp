@@ -90,7 +90,7 @@ int DealerSig::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
+    setParameterVersion(2);           // (1.5.0) "Clock offset" removed
     setParameterDialogHeight(6);    // (1.4.0) controls only - the how-to text is gone
     const short SL = kParmAppendSameLine;
     MARKER mb; memset(&mb, 0, sizeof(mb)); mb.number = kMarkerArrayUp;   mb.size = 2; mb.color = S_GREEN; mb.location = kMarkerBeneathLow;
@@ -99,8 +99,9 @@ int cppExtension::setup(void)
     setOutputSignalParameter("Dealer SELL reason", &ms, OUTPUT_DISABLED);
     SX.market = getParameterCount(); setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     SX.font   = getParameterCount(); setIntegerParameter("Font size (pt)", 10, 0, SL);
-    SX.clock  = getParameterCount(); setIntegerParameter("Clock offset (min)", 0, 0);
-    SX.gap    = getParameterCount(); setIntegerParameter("Gap from the bar (px)", 6, 0, SL);
+    // (1.5.0, Rassul 21:19 "why do you even have that option?") no clock offset: the dealer files and his charts are both Central
+    SX.clock  = -1;
+    SX.gap    = getParameterCount(); setIntegerParameter("Gap from the bar (px)", 6, 0);
     SX.ledger = getParameterCount(); setListParameter("Dealer ledger marks", 0, "Off;On");      // (1.4.0) the forced ledger's SC / Van
     return RTX_OK;
 }
@@ -109,7 +110,7 @@ void DealerSig::readSettings(SSet& S)
 {
     S.market = getListIndex(SX.market); if (S.market < 0 || S.market > 7) S.market = 0;
     S.font = getIntegerValue(SX.font); if (S.font < 7 || S.font > 24) S.font = 10;
-    S.clock = getIntegerValue(SX.clock); if (S.clock < -720 || S.clock > 720) S.clock = 0;
+    S.clock = 0;
     S.gap = getIntegerValue(SX.gap); if (S.gap < 0 || S.gap > 60) S.gap = 6;
     S.ledger = getListIndex(SX.ledger) == 1;
 }
