@@ -26,6 +26,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <cstdint>
 #include <vector>
 #include <cmath>
 #include <cstdlib>
@@ -34,8 +35,10 @@
 #include <ctime>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.1.3";
-static const int TIMER_ID = 4711;
+static const char* IR_VERSION = "0.1.4";
+// (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
+// gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
+static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
 
 struct RIdx { int market, fp, fpMin, fpDays, trades, dom, domSec, dbo, folder; };
 static RIdx RX;
@@ -65,7 +68,7 @@ public:
     // statistics are not there yet stops the pass and is retried on the next tick (0.1.1 wrote nothing on 2 Oct 22:24: the
     // folders were made, no rows - getBarStatistics failed on every bar of a fresh, non-persistent RTBARS)
     RTBARS* fpBars = nullptr; time_t fpMade = 0; long fpCount = -1; time_t fpGrew = 0;
-    bool busy = false; int ticks = 0;
+    bool busy = false, timerFailLogged = false, calcLogged = false; int ticks = 0;
     void trace(const std::string& what);
 
     bool dialogReady() { int i = getListIndex(RX.market); return i >= 0 && i <= 7; }
@@ -90,7 +93,7 @@ int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void)
 {
     IRTReader* me = static_cast<IRTReader*>(this);
-    if (me->timerOn) { destroyTimer(TIMER_ID); me->timerOn = false; }
+    if (me->timerOn) { destroyTimer(timerIdFor(me)); me->timerOn = false; }
     if (me->dbo) { delete me->dbo; me->dbo = nullptr; }
     if (me->fpBars) { delete me->fpBars; me->fpBars = nullptr; }
     return RTX_OK;
@@ -98,7 +101,11 @@ int cppExtension::destroy(void)
 int cppExtension::calc(int)
 {
     IRTReader* me = static_cast<IRTReader*>(this);
-    if (!me->timerOn && createTimer(TIMER_ID, 1000) == RTX_OK) me->timerOn = true;   // every second, chart or no repaint
+    if (!me->timerOn) {
+        if (!me->calcLogged) { me->identify(); me->trace("loaded on " + me->sym + " (calc), asking for a timer"); me->calcLogged = true; }
+        if (createTimer(timerIdFor(me), 1000) == RTX_OK) me->timerOn = true;   // every second, chart or no repaint
+        else if (!me->timerFailLogged) { me->identify(); me->trace("timer refused (id " + std::to_string(timerIdFor(me)) + ")"); me->timerFailLogged = true; }
+    }
     return RTX_OK;
 }
 
@@ -392,7 +399,7 @@ void IRTReader::tickAll()
 
 int IRTReader::timer(RTX_EVENT* e)
 {
-    if (!e || e->v.timer.id != TIMER_ID) return RTX_FAIL;
+    if (!e || e->v.timer.id != timerIdFor(this)) return RTX_FAIL;
     tickAll();
     return RTX_OK;
 }
@@ -404,6 +411,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the chart market's footprint, trades and DOM for the LRA analytics. Draws nothing.");
-    p->setVersion("0.1.3");
+    p->setVersion("0.1.4");
     return p;
 }
