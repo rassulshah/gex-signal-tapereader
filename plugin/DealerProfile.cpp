@@ -34,7 +34,8 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.0.1";   // 2.0.1 (2026-10-02 19:12): the how-to text in the settings is gone   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
+static const char* DP_VERSION = "2.0.2";   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
+//   // 2.0.1 (2026-10-02 19:12): the how-to text in the settings is gone   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
@@ -116,9 +117,10 @@ int cppExtension::setup(void)
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    PX.width   = pc++; setIntegerParameter("Profile width px", 260, 0, SL);
-    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, 0);
-    PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, 0, SL);
+    // (2.0.2) width argument kParmDefaultWdith: 0 made the number boxes zero-wide (they showed "T")
+    PX.width   = pc++; setIntegerParameter("Profile width px", 260, kParmDefaultWdith, SL);
+    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, kParmDefaultWdith);
+    PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, kParmDefaultWdith, SL);
     PX.labels  = pc++; setBoolParameter("Values on the bars", true);
     PX.snap    = pc++; setBoolParameter("Snapshot outline (1.x files)", true, SL);
     PX.fadefar = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true);
@@ -257,22 +259,38 @@ void DealerProfile::render(const Settings& S)
         for (size_t i = 0; i < D.nodes.size(); i++) { short yy = yOf(D.nodes[i].k + off); if (yy >= pane.top && yy <= pane.bottom) vis.push_back(D.nodes[i]); }
         float umax = dl::usdMax(vis.empty() ? D.nodes : vis);
         int barH = hs - 2 * gap - 1; if (barH > 2 * nodeH + 2) barH = 2 * nodeH + 2; if (barH < 3) barH = 3;
+        if (barH > S.font + 6) barH = S.font + 6;              // (2.0.2) a bar, never a block (NG / EU zoomed in: strikes 100-300 px apart)
+        bool ctxOnly = (mkt == "CL" || mkt == "NG");             // (2.0.2) options data context only in these markets: dimmed
+        short lastLabY = -10000;
         for (size_t i = 0; i < D.nodes.size(); i++) {
             const dl::Node& N = D.nodes[i];
             if (!N.hasUsd) continue;
             short y = yOf(N.k + off);
             if (y < pane.top - hs || y > pane.bottom + hs) continue;
             float ft = (S.fadefar && N.far) ? 0.55f : 0.0f;
+            if (ctxOnly && ft < 0.35f) ft = 0.35f;
             int L = dl::barLen(N.usd, umax, W), L0 = dl::barLen(dl::odtePart(N), umax, W);
             short t = (short)(y - barH / 2), b = (short)(t + barH);
             COLOR c = fade(N.usd < 0 ? C_SELL : C_BUY, ft), c0 = fade(N.usd < 0 ? C_SELL : C_BUY, ft + (1.0f - ft) * 0.45f);
             if (L > 0) box((short)(anchor - L), t, anchor, b, c);
             if (L0 > 0) box((short)(anchor - L0), t, anchor, b, c0);          // today's 0DTE: the darker part next to the scale
-            if (S.labels && barH >= S.font - 3) {
+            // (2.0.2) a value on every visible bar (NQ's 5-pt strikes made the bars too thin and every value was skipped); when bars
+            // are closer than the text is tall, the biggest bar there keeps its value
+            if (S.labels && L >= 4 && y >= pane.top && y <= pane.bottom) {
                 std::string lab = dl::usdLabel(N.usd);
                 int tw = textW(lab.c_str(), S.font, true);
-                if (L - L0 > 0 && dl::fits(tw, L - L0)) textLJ((short)(anchor - L + 3), y, lab.c_str(), N.usd < 0 ? 0x00FFFFFF : C_DARK, S.font, true);
-                else textRJ((short)(anchor - L - 3), y, lab.c_str(), c, S.font, true);     // values on (or right at) every bar
+                bool inside = barH >= S.font - 3 && L - L0 > 0 && dl::fits(tw, L - L0);
+                bool bigger = false;                                     // a bigger bar within one text height keeps the value
+                for (size_t q = 0; q < D.nodes.size() && !bigger; q++) {
+                    if (q == i || !D.nodes[q].hasUsd) continue;
+                    short yq = yOf(D.nodes[q].k + off);
+                    if (std::abs((int)yq - (int)y) < S.font + 3 && std::fabs(D.nodes[q].usd) > std::fabs(N.usd)) bigger = true;
+                }
+                if (!bigger && std::abs((int)y - (int)lastLabY) >= S.font + 3) {
+                    if (inside) textLJ((short)(anchor - L + 3), y, lab.c_str(), N.usd < 0 ? 0x00FFFFFF : C_DARK, S.font, true);
+                    else textRJ((short)(anchor - L - 3), y, lab.c_str(), c, S.font, true);
+                    lastLabY = y;
+                }
             }
             for (size_t j = 0; j < D.tags.size(); j++) {   // KEY / TGT / MAG chips stay, left of the bar
                 const dl::Data::Tag& T = D.tags[j];
@@ -417,8 +435,15 @@ void DealerProfile::staleBadge()
     if (D.asofSo < 0) return;
     RTDATE now = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(now, &t);
     double age = dl::staleMin(D.asofSo + cfg.clock * 60.0, t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec);
+    if (D.y > 2000) {                                            // (2.0.2) by date: the time-of-day difference wrapped (Friday 16:03 read as 21h on Saturday)
+        struct tm a; memset(&a, 0, sizeof(a)); a.tm_year = D.y - 1900; a.tm_mon = D.mo - 1; a.tm_mday = D.d;
+        a.tm_hour = (int)(D.asofSo / 3600); a.tm_min = (int)((long)(D.asofSo / 60) % 60); a.tm_isdst = -1;
+        struct tm b = t; b.tm_isdst = -1;
+        double d = difftime(mktime(&b), mktime(&a)) / 60.0 - cfg.clock;
+        if (d > -600) age = d < 0 ? 0 : d;
+    }
     if (age <= 10.0) return;
-    char b[40]; if (age >= 90) sprintf_s(b, sizeof(b), "DEALER DATA STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "DEALER DATA STALE %dm", (int)(age + 0.5));
+    char b[40]; if (age >= 2880) sprintf_s(b, sizeof(b), "DEALER DATA STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) sprintf_s(b, sizeof(b), "DEALER DATA STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "DEALER DATA STALE %dm", (int)(age + 0.5));
     RCT pane; pane.getPaneRect(false);
     int tw = textW(b, 10, true);
     short x = (short)(pane.right - tw - 90), y = (short)(pane.top + 6);
@@ -511,6 +536,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.0.1");
+    p->setVersion("2.0.2");
     return p;
 }
