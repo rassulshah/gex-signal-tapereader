@@ -1,6 +1,9 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.3.2 (2026-10-04 22:12): on 0.3.0 only the NQ chart's reader ever ran - the ES chart showed "Calc'd 40 times" but its calc
+ *     never reached this code (no boot line). The Dealer Profile, which works on every chart, does its work in draw() (POST_DRAWING).
+ *     The reader now does the same: draw(), calc() and the timer all drive one pass (at most once a second); it draws nothing.
  *  0.3.1 (2026-10-04 22:08, Rassul: "keep it small"): history for a market is ONE 3-day step and nothing more (no 10 / 120-day
  *     requests - IRT keeps only ~3 weeks of 1-min volume at price anyway); after that each day builds up from live recording
  *  0.3.0 (2026-10-04 21:40, Rassul: "lets get footprint working", "keep the time and sales and dom out of it for now"):
@@ -67,7 +70,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.3.1";
+static const char* IR_VERSION = "0.3.2";
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
@@ -106,6 +109,8 @@ public:
     virtual int parmsApply(void);
     virtual int parmsUpdt(unsigned int iParmNumber);
     virtual int timer(RTX_EVENT* e);
+    virtual int draw(void);
+    void pump(const char* via);
 
     RSet cfg;
     std::string mkt, root, sym, err;
@@ -181,19 +186,29 @@ int cppExtension::destroy(void)
 }
 int cppExtension::calc(int)
 {
-    IRTReader* me = static_cast<IRTReader*>(this);
+    static_cast<IRTReader*>(this)->pump("calc");
+    return RTX_OK;
+}
+
+// (0.3.2) the one driver: whichever of draw / calc / timer comes first; a pass at most once a second
+void IRTReader::pump(const char* via)
+{
     time_t now = time(0);
-    if (!me->timerOn) {
-        if (!me->calcLogged) { me->identify(); me->boot("calc: loaded, asking for a timer"); me->trace("loaded on " + me->sym + " (calc), asking for a timer"); me->calcLogged = true; }
-        if (createTimer(timerIdFor(me), 1000) == RTX_OK) { me->timerOn = true; me->timerAt = now; me->boot("timer granted (id " + std::to_string(timerIdFor(me)) + ")"); }
-        else if (!me->timerFailLogged) { me->identify(); me->boot("timer REFUSED - running from calc"); me->trace("timer refused (id " + std::to_string(timerIdFor(me)) + ")"); me->timerFailLogged = true; }
+    if (!calcLogged) { identify(); boot(std::string(via) + ": loaded, asking for a timer"); trace("loaded on " + sym + " (" + via + "), asking for a timer"); calcLogged = true; }
+    if (!timerOn && !timerFailLogged) {
+        if (createTimer(timerIdFor(this), 1000) == RTX_OK) { timerOn = true; timerAt = now; boot("timer granted (id " + std::to_string(timerIdFor(this)) + ")"); }
+        else { identify(); boot("timer REFUSED - running from draw / calc"); trace("timer refused (id " + std::to_string(timerIdFor(this)) + ")"); timerFailLogged = true; }
     }
-    // (0.3.0) no timer tick within 10 s of asking (or none for 30 s since) = IRT is not firing it: run the pass from calc, once a second
-    bool noTimer = !me->timerOn || (me->lastTimerTick == 0 ? now - me->timerAt > 10 : now - me->lastTimerTick > 30);
-    if (noTimer && now != me->lastCalcRun) {
-        if (me->lastCalcRun == 0) me->boot("no timer tick - the pass runs from calc");
-        me->lastCalcRun = now; me->tickAll();
+    bool noTimer = !timerOn || (lastTimerTick == 0 ? now - timerAt > 10 : now - lastTimerTick > 30);
+    if (noTimer && now != lastCalcRun) {
+        if (lastCalcRun == 0) boot(std::string("no timer tick - the pass runs from ") + via);
+        lastCalcRun = now; tickAll();
     }
+}
+
+int IRTReader::draw(void)
+{
+    pump("draw");
     return RTX_OK;
 }
 
@@ -758,9 +773,9 @@ extern "C" cppExtension *CreateExtension(void)
 {
     IRTReader *p = new IRTReader();
     p->setArrayCount(1);
-    p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (0.3.2) POST_DRAWING: draw() runs on every chart, like the Dealer Profile
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.3.1");
+    p->setVersion("0.3.2");
     return p;
 }
