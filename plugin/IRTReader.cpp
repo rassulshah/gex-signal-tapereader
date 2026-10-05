@@ -1,6 +1,15 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.3.0 (2026-10-04 21:40, Rassul: "lets get footprint working", "keep the time and sales and dom out of it for now"):
+ *     - EACH CHART RECORDS ITS OWN MARKET ONLY: asking IRT for another market's footprint by ticker crashed IRT three times
+ *       (ES, CL, then NQ from the copper chart at 16:10 on 4 Oct); a chart's own market never did. _other-markets.txt is ignored.
+ *     - trades / DOM / order-by-order are OFF whatever the dialog says (footprint only for now)
+ *     - the reader no longer depends on IRT's timer alone: on 4 Oct 21:30 the ES and NQ readers were calculated (29 times) but
+ *       never wrote a line - no timer fired. If no timer tick arrives within 10 s, the pass runs from calc, once a second.
+ *     - a boot trace for every reader (IRTReader.trace-boot.txt, written even before the market is known): chart, root, timer
+ *     - the first run asks for 1 day (not 11), then history in guarded steps of 3, 10 and 120 days; a back-fill never writes
+ *       the oldest, partial session when the answer spans more than one session
  *  0.2.2 (2026-10-03 12:50, Rassul: "start the other markets with the crash guard ... a few minutes after i open the application
  *     ... when i open irt there are already downloads and initializations going on, so it needs to stabilize first"):
  *     - other markets (data\irt\_other-markets.txt) wait 5 minutes after the reader starts, then go ONE heavy request at a
@@ -56,14 +65,14 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.2.2";
+static const char* IR_VERSION = "0.3.0";
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
 
 struct RIdx { int market, fp, fpMin, fpDays, trades, dom, domSec, dbo, folder; };
 static RIdx RX;
-struct RSet { int market = 0, fpMin = 1, fpDays = 10, domSec = 2; bool fp = true, trades = true, dom = true, dbo = true; std::string folder = "C:\\Dev\\level-reversal-analytics\\data\\irt"; };
+struct RSet { int market = 0, fpMin = 1, fpDays = 10, domSec = 2; bool fp = true, trades = false, dom = false, dbo = false; std::string folder = "C:\\Dev\\level-reversal-analytics\\data\\irt"; };
 
 // (0.2.0, 3 Oct 00:05: after a restart only ONE chart's reader is ever started by IRT - the NQ chart's; the readers pasted on the
 // other charts never ran, not even calc) ONE reader records the FOOTPRINT of every market in irt_symbols.json (RTBARS takes a
@@ -134,6 +143,8 @@ public:
     void writeFpStatus(FpState& M);
     std::string dirFor2(const std::string& session, const std::string& m);
     bool busy = false, timerFailLogged = false, calcLogged = false; int ticks = 0;
+    time_t timerAt = 0, lastTimerTick = 0, lastCalcRun = 0; int boots = 0;   // (0.3.0) calc fallback when no timer tick arrives
+    void boot(const std::string& what);
     void trace(const std::string& what);
 
     bool dialogReady() { int i = getListIndex(RX.market); return i >= 0 && i <= 7; }
@@ -169,10 +180,17 @@ int cppExtension::destroy(void)
 int cppExtension::calc(int)
 {
     IRTReader* me = static_cast<IRTReader*>(this);
+    time_t now = time(0);
     if (!me->timerOn) {
-        if (!me->calcLogged) { me->identify(); me->trace("loaded on " + me->sym + " (calc), asking for a timer"); me->calcLogged = true; }
-        if (createTimer(timerIdFor(me), 1000) == RTX_OK) me->timerOn = true;   // every second, chart or no repaint
-        else if (!me->timerFailLogged) { me->identify(); me->trace("timer refused (id " + std::to_string(timerIdFor(me)) + ")"); me->timerFailLogged = true; }
+        if (!me->calcLogged) { me->identify(); me->boot("calc: loaded, asking for a timer"); me->trace("loaded on " + me->sym + " (calc), asking for a timer"); me->calcLogged = true; }
+        if (createTimer(timerIdFor(me), 1000) == RTX_OK) { me->timerOn = true; me->timerAt = now; me->boot("timer granted (id " + std::to_string(timerIdFor(me)) + ")"); }
+        else if (!me->timerFailLogged) { me->identify(); me->boot("timer REFUSED - running from calc"); me->trace("timer refused (id " + std::to_string(timerIdFor(me)) + ")"); me->timerFailLogged = true; }
+    }
+    // (0.3.0) no timer tick within 10 s of asking (or none for 30 s since) = IRT is not firing it: run the pass from calc, once a second
+    bool noTimer = !me->timerOn || (me->lastTimerTick == 0 ? now - me->timerAt > 10 : now - me->lastTimerTick > 30);
+    if (noTimer && now != me->lastCalcRun) {
+        if (me->lastCalcRun == 0) me->boot("no timer tick - the pass runs from calc");
+        me->lastCalcRun = now; me->tickAll();
     }
     return RTX_OK;
 }
@@ -203,7 +221,7 @@ int cppExtension::setup(void)
 void IRTReader::readSettings(RSet& S)
 {
     S.market = getListIndex(RX.market); if (S.market < 0 || S.market > 7) S.market = 0;
-    S.fp = true; S.trades = isBoxChecked(RX.trades) != 0; S.dom = isBoxChecked(RX.dom) != 0; S.dbo = isBoxChecked(RX.dbo) != 0;
+    S.fp = true; S.trades = false; S.dom = false; S.dbo = false;   // (0.3.0) footprint only for now (Rassul 4 Oct 21:26)
     S.fpMin = 1;
     S.fpDays = 10;
     S.domSec = getIntegerValue(RX.domSec); if (S.domSec < 1 || S.domSec > 60) S.domSec = 2;
@@ -283,7 +301,7 @@ void IRTReader::loadMarkets()
     const char* MK[7] = { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" };
     // (0.2.1) other markets are recorded only when data\irt\_other-markets.txt names them (one code per line), never by default
     std::string others = " ";
-    { std::ifstream om((cfg.folder + "\\_other-markets.txt").c_str()); std::string w; while (om >> w) { for (auto& c : w) c = (char)toupper((unsigned char)c); others += w + " "; } }
+    // (0.3.0) _other-markets.txt is ignored: another market by ticker crashed IRT (ES, CL, NQ) - each chart records its own market
     for (int k = 0; k < 7; k++) {
         std::string key = std::string("\"") + MK[k] + "\"";
         size_t p0 = js.find(key); std::string sy;
@@ -394,7 +412,7 @@ void IRTReader::footprintOf(FpState& M)
     if (!M.fpBars || (M.fpCount >= 0 && nowT - M.fpGrew > 600 && nowT - M.fpMade > 600)) {   // remade if it stops growing for 10 min
         if (M.fpBars) { delete M.fpBars; M.fpBars = nullptr; }
         RTDATE now = currentDate();
-        RTDATE start = (M.fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)((cfg.fpDays + 1) * 86400UL));
+        RTDATE start = (M.fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)86400UL);   // (0.3.0) first run: 1 day, history in steps
         if (M.fpLast > 0 && (long long)nowT - M.fpLast > 1800) start = (RTDATE)(now - (RTDATE)((nowT - M.fpLast) + 600));   // a gap: from it
         if (!M.own) {                                            // (0.2.1) another market: 30 minutes, never a long back-fill
             start = (RTDATE)(now - (RTDATE)1800UL);
@@ -423,14 +441,18 @@ int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool dee
     char fnm[32]; snprintf(fnm, sizeof(fnm), "\\fp_%dm.csv", cfg.fpMin);
     const double tk = M.tick;
     std::string oldestSess;                                      // (0.2.2) a back-fill starts mid-session: its oldest session is partial
-    if (deep && bars.count > 0) { struct tm t0; secOf((RTDATE)(*bars.dt)[0], &t0); oldestSess = irl::sessionOf(t0.tm_year + 1900, t0.tm_mon + 1, t0.tm_mday, t0.tm_hour); }
+    if ((deep || lastRef < 0) && bars.count > 1) {             // (0.3.0) also the first run; only when the answer spans 2+ sessions
+        struct tm t0, t1; secOf((RTDATE)(*bars.dt)[0], &t0); secOf((RTDATE)(*bars.dt)[(int)bars.count - 1], &t1);
+        oldestSess = irl::sessionOf(t0.tm_year + 1900, t0.tm_mon + 1, t0.tm_mday, t0.tm_hour);
+        if (oldestSess == irl::sessionOf(t1.tm_year + 1900, t1.tm_mon + 1, t1.tm_mday, t1.tm_hour)) oldestSess.clear();
+    }
     for (long i = 0; i < bars.count - 1; i++) {                 // the last bar is still forming
         RTDATE d = (RTDATE)(*bars.dt)[(int)i];
         struct tm t; long long s = secOf(d, &t);
         if (s <= lastRef) continue;
         std::string session = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
-        if (deep) {                                              // only sessions with no file yet (or ones this pass began)
-            if (session == oldestSess) { lastWritten = s; continue; }   // (0.2.2) partial - the next, longer request writes it
+        if (!oldestSess.empty() && session == oldestSess) { lastWritten = s; continue; }   // (0.2.2/0.3.0) partial - a longer request writes it
+        if (deep) {                                              // only sessions with no file yet (or ones this pass began)   // (0.2.2) partial - the next, longer request writes it
             if (M.deepSkip.count(session)) { lastWritten = s; continue; }
             if (!M.deepOwn.count(session)) {
                 std::ifstream ex((cfg.folder + "\\" + session + "\\" + M.mkt + fnm).c_str());
@@ -485,20 +507,26 @@ void IRTReader::deepFill(FpState& M)
     time_t nowT = time(0);
     static const char* DK[3] = { "deep1", "deep3", "deep10" };
     static const unsigned long DD[3] = { 1UL, 3UL, 10UL };
-    if (M.own) { if (M.deepBlocked || M.fpLast < 0 || M.caughtUp < 3) return; }
+    static const char* OK3[3] = { "deep3", "deep10", "deep" };
+    static const unsigned long OD3[3] = { 3UL, 10UL, 121UL };
+    const char* const* KS = M.own ? OK3 : DK; const unsigned long* DS = M.own ? OD3 : DD;
+    if (M.own) {                                                 // (0.3.0) the chart's own market: history in guarded steps 3 / 10 / 120 days
+        if (M.deepStep >= 3) { M.deepDone = 1; return; }
+        if (M.fpLast < 0 || M.caughtUp < 3 || !M.fpTry.empty()) return;
+    }
     else {                                                       // (0.2.2) other markets: history in 1 / 3 / 10-day steps
         if (M.deepStep >= 3) { M.deepDone = 1; return; }
         if (!M.fpBars || !M.fpTry.empty()) return;               // only after its live request survived
     }
     if (!M.deepBars && M.deepRetryAt > nowT) return;            // (0.2.1) waiting to retry a short answer
     if (!M.deepTry.empty() && M.deepBars) guardClear(M, "deep");
-    bool stale = M.own && M.deepBars && M.deepCount >= 0 && nowT - M.deepGrew > 900 && nowT - M.deepMade > 900;
+    bool stale = false && M.deepBars && M.deepCount >= 0 && nowT - M.deepGrew > 900 && nowT - M.deepMade > 900;
     if (!M.deepBars || stale) {
         if (M.deepBars) { delete M.deepBars; M.deepBars = nullptr; }
         RTDATE now = currentDate();
-        const char* kind = M.own ? "deep" : DK[M.deepStep];
-        unsigned long days = M.own ? 121UL : DD[M.deepStep];
-        if (!M.own) {
+        const char* kind = KS[M.deepStep];
+        unsigned long days = DS[M.deepStep];
+        {
             if (blockedKind(M, kind)) { M.deepStep = 3; M.deepDone = 1; trace(M.mkt + " history: the " + kind + " step crashed IRT before - stopped there"); return; }
             if (nowT < nextOtherAt) return;                      // one heavy request at a time, 2 minutes apart
             nextOtherAt = nowT + 120;
@@ -506,18 +534,18 @@ void IRTReader::deepFill(FpState& M)
         if (!guardBefore(M, kind)) return;
         M.deepBars = new RTBARS(PD_INTRA, cfg.fpMin, true, M.sym.c_str(), false, (RTDATE)(now - (RTDATE)(days * 86400UL)), true);
         M.deepMade = nowT; M.deepCount = -1; M.deepGrew = nowT;
-        trace(M.mkt + (M.own ? " deep back-fill: asked for 120 days" : std::string(" history: asked for ") + std::to_string(days) + " day(s)"));
+        trace(M.mkt + " history: asked for " + std::to_string(days) + " day(s)");
     }
     if (M.deepBars->count != M.deepCount) { M.deepCount = M.deepBars->count; M.deepGrew = nowT; }
     if (M.deepBars->count < 2) return;
     long f0 = M.rows;
-    if (!M.own) {                                                // (0.2.2) a history step of another market
+    {                                                            // (0.2.2) a history step (0.3.0: every market)
         M.err.clear();
         int n = writeSlice(M, *M.deepBars, M.deepLast, true, 400);
-        if (M.rows != f0) trace(M.mkt + " history (" + DK[M.deepStep] + "): +" + std::to_string(M.rows - f0) + " rows");
+        if (M.rows != f0) trace(M.mkt + " history (" + KS[M.deepStep] + "): +" + std::to_string(M.rows - f0) + " rows");
         bool fin = M.deepDone || (n == 0 && M.err.empty() && nowT - M.deepGrew > 30);
         if (!fin) return;
-        trace(M.mkt + " history: " + DK[M.deepStep] + " step done" + (M.deepStep >= 2 ? " - 10 days in" : ""));
+        trace(M.mkt + " history: " + KS[M.deepStep] + " step done");
         delete M.deepBars; M.deepBars = nullptr; guardClear(M, "deep");
         M.deepStep++; M.deepDone = M.deepStep >= 3 ? 1 : 0;
         M.deepLast = -1; M.deepSkip.clear(); M.deepOwn.clear();
@@ -652,6 +680,19 @@ void IRTReader::writeStatus()
       << "\nERROR," << err << "\n";
 }
 
+// (0.3.0) one file for every reader, written even before its market is known - which readers start, on which chart, with a timer or not
+void IRTReader::boot(const std::string& what)
+{
+    if (++boots > 12) return;
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\IRTReader.trace-boot.txt";
+    { std::ifstream t(path.c_str(), std::ios::ate | std::ios::binary); if (t.good() && t.tellg() > 200000) { t.close(); std::remove(path.c_str()); } }
+    std::ofstream f(path.c_str(), std::ios::app); if (!f.is_open()) return;
+    time_t n = time(0); struct tm lt = *localtime(&n); char b[24]; strftime(b, sizeof(b), "%m-%d %H:%M:%S", &lt);
+    char id[24]; snprintf(id, sizeof(id), "%llx", (unsigned long long)(uintptr_t)this);
+    f << b << " " << IR_VERSION << " reader " << id << " chart " << sym << " root " << root << " market " << (mkt.empty() ? "?" : mkt) << ": " << what << "\n";
+}
+
 void IRTReader::trace(const std::string& what)
 {
     const char* up = getenv("USERPROFILE"); if (!up || mkt.empty()) return;
@@ -705,6 +746,8 @@ void IRTReader::tickAll()
 int IRTReader::timer(RTX_EVENT* e)
 {
     if (!e || e->v.timer.id != timerIdFor(this)) return RTX_FAIL;
+    if (lastTimerTick == 0) boot("first timer tick");
+    lastTimerTick = time(0);
     tickAll();
     return RTX_OK;
 }
@@ -716,6 +759,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.2.0");
+    p->setVersion("0.3.0");
     return p;
 }
