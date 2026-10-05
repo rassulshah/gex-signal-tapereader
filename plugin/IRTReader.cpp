@@ -1,6 +1,8 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.5.1 (2026-10-05 00:08, Rassul: "rename all to FootprintReader<market> without any options to select"): the per-market
+ *     DLLs are FootprintReaderES.dll ... FootprintReaderEU.dll (FootprintReader<MKT>.cpp) and have NO settings at all
  *  0.5.0 (2026-10-05 00:05) ONE DLL PER MARKET: 0.4.0 made the requests from draw / calc and IRT hung inside the very first one
  *     (ES, 23:52 - "footprint..." and nothing after, _trying-ES-fp left behind). Requests only ever worked from the TIMER, and the
  *     timer works for one chart per DLL. So each market gets its own DLL - lsIRTReaderES, lsIRTReaderNQ, ... (IRTReader<MKT>.cpp
@@ -82,7 +84,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.5.0";
+static const char* IR_VERSION = "0.5.1";
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
 #endif
@@ -170,7 +172,7 @@ public:
     std::map<std::string, time_t> lastPass; std::set<std::string> booted;   // (0.4.0) per market (= per chart)
     void trace(const std::string& what);
 
-    bool dialogReady() { int i = getListIndex(RX.market); return i >= 0 && i <= 7; }
+    bool dialogReady() { if (RX.market < 0) return false; int i = getListIndex(RX.market); return i >= 0 && i <= 7; }
     void readSettings(RSet& S);
     void identify();
     void tickAll();
@@ -234,6 +236,11 @@ int IRTReader::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 
 int cppExtension::setup(void)
 {
+    if (IR_FIXED[0]) {                // (0.5.1) FootprintReader<MKT>: no settings - footprint only, its own market only
+        RX.market = RX.fp = RX.fpMin = RX.fpDays = RX.trades = RX.dom = RX.domSec = RX.dbo = RX.folder = -1;
+        setParameterVersion(4);
+        return RTX_OK;
+    }
     setParameterVersion(3);           // (0.1.2) "Footprint" and "Back-fill days" removed: always on, always 10 days
     setParameterDialogHeight(4);
     const short SL = kParmAppendSameLine;
@@ -794,7 +801,7 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (0.3.2) POST_DRAWING: draw() runs on every chart, like the Dealer Profile
     p->setExtendedFlags(CALL_CONTINUOUSLY);
-    p->setDescription(IR_FIXED[0] ? "LRA IRT Reader for ONE market (the name says which): records its 1-minute footprint for the LRA analytics. Put it on that market's chart only. Draws nothing." : "LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.5.0");
+    p->setDescription(IR_FIXED[0] ? "Footprint Reader for ONE market (the name says which): records its 1-minute footprint for the LRA analytics. Put it on that market's chart only. No settings. Draws nothing." : "LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
+    p->setVersion("0.5.1");
     return p;
 }
