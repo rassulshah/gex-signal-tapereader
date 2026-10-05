@@ -3,7 +3,8 @@
  *
  *  0.5.2 (2026-10-05 00:33): IRT does not grow a footprint request live - each market wrote in ~10-minute chunks (NQ stuck
  *     at 00:23 until 00:33). The request is now remade after 90 s without a new bar (it only asks from the last written bar,
- *     a few minutes of data), so the footprint is at most ~2 minutes behind
+ *     a few minutes of data), so the footprint is at most ~2 minutes behind; a chart switched to another contract month starts
+ *     over on the new contract (CL was left asking IRT for CLEZ26 after the chart moved to CLEX26)
  *  0.5.1 (2026-10-05 00:08, Rassul: "rename all to FootprintReader<market> without any options to select"): the per-market
  *     DLLs are FootprintReaderES.dll ... FootprintReaderEU.dll (FootprintReader<MKT>.cpp) and have NO settings at all
  *  0.5.0 (2026-10-05 00:05) ONE DLL PER MARKET: 0.4.0 made the requests from draw / calc and IRT hung inside the very first one
@@ -768,6 +769,12 @@ void IRTReader::tickAll()
     if (othersOn && !saidOthers && othersTxt != "off") { trace("other markets start now (5 min after the reader): " + othersTxt); saidOthers = true; }
     for (auto& M : fps) {                                        // (0.2.0) every market's footprint, one writer per market
         if (M.mkt != mkt) continue;                              // (0.4.0) only the market of the chart IRT is drawing now
+        if (!sym.empty() && M.sym != sym) {                      // (0.5.2) the chart's contract changed (CLEZ26 -> CLEX26): start over on it
+            trace(M.mkt + ": contract changed " + M.sym + " -> " + sym + " - asking again on the new contract");
+            if (M.fpBars) { delete M.fpBars; M.fpBars = nullptr; } if (M.deepBars) { delete M.deepBars; M.deepBars = nullptr; }
+            guardClear(M, "fp"); guardClear(M, "deep");
+            M.sym = sym; M.tick = tick > 0 ? tick : M.tick; M.fpCount = -1; M.deepCount = -1; M.err.clear(); M.caughtUp = 0;
+        }
         if (!own(M)) continue;
         if (!M.loaded) loadFpCursor(M);
         bool catching = M.fpLast < 0 || M.caughtUp == 0;
