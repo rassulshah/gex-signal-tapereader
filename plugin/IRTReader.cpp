@@ -1,6 +1,12 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.4.0 (2026-10-04 23:50) THE ROOT CAUSE: Investor/RT runs ONE reader object for every chart it is on (the 23:35 boot trace:
+ *     one id, 53a620, called on the ES chart, then the NQ chart, then ES again). The reader kept ONE market's state, so whichever
+ *     chart came first "owned" it and the others never recorded; IRT's timer always calls in one chart's context.
+ *     Now: the market is read from the chart that calls (draw / calc), each market keeps its own state (cursor, bars, history step),
+ *     each market gets at most one pass a second, from its own chart only (a request for a market is made only while IRT is
+ *     drawing that market's chart). No timer. New requests are spaced 60 s apart across all markets (one at a time).
  *  0.3.2 (2026-10-04 22:12): on 0.3.0 only the NQ chart's reader ever ran - the ES chart showed "Calc'd 40 times" but its calc
  *     never reached this code (no boot line). The Dealer Profile, which works on every chart, does its work in draw() (POST_DRAWING).
  *     The reader now does the same: draw(), calc() and the timer all drive one pass (at most once a second); it draws nothing.
@@ -62,6 +68,7 @@
 #include <cstdint>
 #include <vector>
 #include <set>
+#include <map>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -70,7 +77,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.3.2";
+static const char* IR_VERSION = "0.4.0";
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
@@ -152,6 +159,7 @@ public:
     bool busy = false, timerFailLogged = false, calcLogged = false; int ticks = 0;
     time_t timerAt = 0, lastTimerTick = 0, lastCalcRun = 0; int boots = 0;   // (0.3.0) calc fallback when no timer tick arrives
     void boot(const std::string& what);
+    std::map<std::string, time_t> lastPass; std::set<std::string> booted;   // (0.4.0) per market (= per chart)
     void trace(const std::string& what);
 
     bool dialogReady() { int i = getListIndex(RX.market); return i >= 0 && i <= 7; }
@@ -193,17 +201,14 @@ int cppExtension::calc(int)
 // (0.3.2) the one driver: whichever of draw / calc / timer comes first; a pass at most once a second
 void IRTReader::pump(const char* via)
 {
+    // (0.4.0) IRT calls this ONE object for every chart: identify() says which chart is calling now
+    identify();
+    if (mkt.empty()) return;
+    if (!booted.count(mkt)) { booted.insert(mkt); boots = 0; boot(std::string(via) + ": first call from this chart"); trace("loaded on " + sym + " (" + via + ") - " + IR_VERSION); }
     time_t now = time(0);
-    if (!calcLogged) { identify(); boot(std::string(via) + ": loaded, asking for a timer"); trace("loaded on " + sym + " (" + via + "), asking for a timer"); calcLogged = true; }
-    if (!timerOn && !timerFailLogged) {
-        if (createTimer(timerIdFor(this), 1000) == RTX_OK) { timerOn = true; timerAt = now; boot("timer granted (id " + std::to_string(timerIdFor(this)) + ")"); }
-        else { identify(); boot("timer REFUSED - running from draw / calc"); trace("timer refused (id " + std::to_string(timerIdFor(this)) + ")"); timerFailLogged = true; }
-    }
-    bool noTimer = !timerOn || (lastTimerTick == 0 ? now - timerAt > 10 : now - lastTimerTick > 30);
-    if (noTimer && now != lastCalcRun) {
-        if (lastCalcRun == 0) boot(std::string("no timer tick - the pass runs from ") + via);
-        lastCalcRun = now; tickAll();
-    }
+    if (lastPass[mkt] == now) return;                            // one pass a second per market
+    lastPass[mkt] = now;
+    tickAll();
 }
 
 int IRTReader::draw(void)
@@ -312,7 +317,8 @@ void IRTReader::saveCursor()
 void IRTReader::loadMarkets()
 {
     fpsLoaded = true;
-    char idb[40]; snprintf(idb, sizeof(idb), "%llx-%ld", (unsigned long long)(uintptr_t)this, (long)time(0)); myId = idb;
+    if (myId.empty()) { char idb[40]; snprintf(idb, sizeof(idb), "%llx-%ld", (unsigned long long)(uintptr_t)this, (long)time(0)); myId = idb; }
+    for (auto& X : fps) if (X.mkt == mkt) return;                 // (0.4.0) this chart's market is already known
     std::string path = "C:\\Dev\\level-reversal-analytics\\data\\menthorq\\irt_symbols.json";
     std::ifstream f(path.c_str()); std::stringstream ss; ss << f.rdbuf(); std::string js = ss.str();
     const char* MK[7] = { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" };
@@ -325,6 +331,7 @@ void IRTReader::loadMarkets()
         if (p0 != std::string::npos) { size_t q1 = js.find('"', js.find(':', p0) + 1); size_t q2 = js.find('"', q1 + 1);
             if (q1 != std::string::npos && q2 != std::string::npos) sy = js.substr(q1 + 1, q2 - q1 - 1); }
         bool isOwn = (MK[k] == mkt);
+        if (!isOwn) continue;                                     // (0.4.0) only the calling chart's market
         if (isOwn) sy = sym;                                      // the chart's own market: its own symbol
         else if (others.find(std::string(" ") + MK[k] + " ") == std::string::npos) continue;   // (0.2.1) others only when listed
         if (sy.empty()) continue;
@@ -431,6 +438,7 @@ void IRTReader::footprintOf(FpState& M)
         RTDATE now = currentDate();
         RTDATE start = (M.fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)86400UL);   // (0.3.0) first run: 1 day, history in steps
         if (M.fpLast > 0 && (long long)nowT - M.fpLast > 1800) start = (RTDATE)(now - (RTDATE)((nowT - M.fpLast) + 600));   // a gap: from it
+        if (M.own) { if (nowT < nextOtherAt) return; nextOtherAt = nowT + 60; }   // (0.4.0) one new request at a time across all charts
         if (!M.own) {                                            // (0.2.1) another market: 30 minutes, never a long back-fill
             start = (RTDATE)(now - (RTDATE)1800UL);
             if (nowT < nextOtherAt) return;                      // (0.2.2) one heavy request at a time, 2 minutes apart
@@ -727,17 +735,17 @@ void IRTReader::tickAll()
     busy = true;
     identify();
     if (mkt.empty()) { busy = false; return; }
-    if (cursorFor != mkt) { loadCursor(); cursorFor = mkt; trace("start " + std::string(IR_VERSION) + " " + sym + " cursor fp " + std::to_string(fpLast) + " trades " + std::to_string(tc.lastSec)); }
+    cursorFor = mkt;                                             // (0.4.0) no trades cursor: footprint only
     err.clear();
     long f0 = fpRows, t0 = trRows, d0 = domRows, b0 = dboRows;
     bool loud = ++ticks <= 6;                                    // the first passes say each step (to find a hang / crash)
-    if (!fpsLoaded) loadMarkets();
+    { bool have = false; for (auto& X : fps) if (X.mkt == mkt) have = true; if (!have) loadMarkets(); }   // (0.4.0) per chart
     if (!startT) startT = time(0);
     bool othersOn = time(0) >= startT + 300;                     // (0.2.2) other markets only after IRT has settled for 5 minutes
     static bool saidOthers = false;
     if (othersOn && !saidOthers && othersTxt != "off") { trace("other markets start now (5 min after the reader): " + othersTxt); saidOthers = true; }
     for (auto& M : fps) {                                        // (0.2.0) every market's footprint, one writer per market
-        if (!M.own && !othersOn) continue;
+        if (M.mkt != mkt) continue;                              // (0.4.0) only the market of the chart IRT is drawing now
         if (!own(M)) continue;
         if (!M.loaded) loadFpCursor(M);
         bool catching = M.fpLast < 0 || M.caughtUp == 0;
@@ -752,7 +760,6 @@ void IRTReader::tickAll()
     if (cfg.dbo) { if (loud) trace("order-by-order..."); depthByOrder(); }
     if (loud) trace("pass done");
     backfilled = true;
-    saveCursor();
     writeStatus();
     if (fpRows != f0 || trRows != t0 || !err.empty() || (time(0) % 60) == 0)
         trace("fp +" + std::to_string(fpRows - f0) + " (last " + fpLastTxt + ") trades +" + std::to_string(trRows - t0) + " dom +" +
@@ -776,6 +783,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (0.3.2) POST_DRAWING: draw() runs on every chart, like the Dealer Profile
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.3.2");
+    p->setVersion("0.4.0");
     return p;
 }
