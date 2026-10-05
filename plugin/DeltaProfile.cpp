@@ -15,6 +15,7 @@
  *  (analytics/lra/delta_profile.py) from the FootprintReader's 1-min footprint. Lines (| separated):
  *     ASOF|yyyy-mm-dd HH:MM:SS|from|to   LEVEL|price|support/resistance|name   BADGE|code|strength(''/+/v)   ROW|price|delta|volume
  *  Settings: Market, Width px (default 80), Gap from Dealer Profile px (negative = closer), Font size, Values on the biggest bars.
+ *  1.1.0 (18:00): Range (Last 30 min / Session / Day from 08:30), Ticks per row, Sides One / Both - as Rassul's examples.
  *  1.0.3 (17:52): red and green bars both grow toward the price chart from one base line. Place Right (by the Dealer Profile) or Left (the chart's left edge); "Gap px" from that edge.
  *  1.0.1 (17:15): the gap may be negative; the bars show whenever the footprint has data (the badge needs a level).
  *  Position: right of the candles, just left of the Dealer Profile (its status file says how wide it is: REACH).
@@ -33,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.0.3";
+static const char* DLT_VERSION = "1.1.0";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -43,14 +44,14 @@ static const COLOR C_INK   = 0x00E5E7EB;
 static const COLOR C_MUTED = 0x009CA3AF;
 static const COLOR C_DARK  = 0x000B0F19;
 
-struct DIdx { int market, width, gap, font, labels, place; };
+struct DIdx { int market, width, gap, font, labels, place, range, group, sides; };
 static DIdx DX;
-struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 1; bool labels = true; };
+struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 1, range = 0, group = 0, sides = 0; bool labels = true; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
     bool ok = false; std::string asof, from, to, side, name, code, strength; float level = 0;
-    std::vector<DRow> rows;
+    std::vector<DRow> rows, srows, drows; float tick = 0;
 };
 
 class DeltaProfile : public cppExtension {
@@ -105,7 +106,7 @@ int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg)
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
-    setParameterDialogHeight(6);
+    setParameterDialogHeight(8);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     DX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
@@ -113,7 +114,10 @@ int cppExtension::setup(void)
     DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW);
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
-    DX.place  = pc++; setListParameter("Place", 1, "Right;Left");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
+    DX.place  = pc++; setListParameter("Place", 1, "Right;Left");
+    DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Session;Day from 08:30", SL);   // (1.1.0) as the examples Rassul sent
+    DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 0, NUMW);
+    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both", SL);   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
 }
 
@@ -125,6 +129,9 @@ void DeltaProfile::readSettings(DSet& S)
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
     S.place = getListIndex(DX.place); if (S.place < 0 || S.place > 1) S.place = 1;
+    S.range = getListIndex(DX.range); if (S.range < 0 || S.range > 2) S.range = 0;
+    S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
+    S.sides = getListIndex(DX.sides); if (S.sides < 0 || S.sides > 1) S.sides = 0;
 }
 
 void DeltaProfile::load()
@@ -147,7 +154,11 @@ void DeltaProfile::load()
         if (t[0] == "ASOF" && t.size() >= 4) { D.asof = t[1]; D.from = t[2]; D.to = t[3]; }
         else if (t[0] == "LEVEL" && t.size() >= 3) { D.level = (float)atof(t[1].c_str()); D.side = t[2]; if (t.size() >= 4) D.name = t[3]; }
         else if (t[0] == "BADGE" && t.size() >= 2) { D.code = t[1]; D.strength = t.size() >= 3 ? t[2] : ""; }
-        else if (t[0] == "ROW" && t.size() >= 4) { DRow r; r.px = (float)atof(t[1].c_str()); r.d = (float)atof(t[2].c_str()); r.v = (float)atof(t[3].c_str()); D.rows.push_back(r); }
+        else if (t[0] == "TICK" && t.size() >= 2) D.tick = (float)atof(t[1].c_str());
+        else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW") && t.size() >= 4) {
+            DRow r; r.px = (float)atof(t[1].c_str()); r.d = (float)atof(t[2].c_str()); r.v = (float)atof(t[3].c_str());
+            (t[0] == "ROW" ? D.rows : t[0] == "SROW" ? D.srows : D.drows).push_back(r);
+        }
     }
     D.ok = !D.rows.empty();
     loadedStamp = st; loadedPath = path;
@@ -189,41 +200,59 @@ void DeltaProfile::render(const DSet& S)
     short base = S.place == 1 ? left : right;
     if (S.place == 1) textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
     else textRJ((short)(right - 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
-    line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
+    if (S.sides != 1) line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
     short mid = (short)(left + S.width / 2);
     if (!D.ok) return;
 
-    // rows -> pixel buckets (one bar per bucket, never thinner than 3 px)
+    // (1.1.0) Range: the last 30 min, the whole session, or the day from 08:30
+    const std::vector<DRow>& R = S.range == 1 && !D.srows.empty() ? D.srows : S.range == 2 && !D.drows.empty() ? D.drows : D.rows;
+    // rows -> buckets: N ticks per row, or (0 = auto) one bar per few pixels
     int bh = S.font - 3; if (bh < 3) bh = 3;
-    std::map<int, DRow> B;
-    for (size_t i = 0; i < D.rows.size(); i++) {
-        short y = yOf(D.rows[i].px);
-        if (y < pane.top + 16 || y > pane.bottom) continue;
-        int k = (y - pane.top) / bh;
-        DRow& r = B[k]; r.d += D.rows[i].d; r.v += D.rows[i].v; r.px = D.rows[i].px;
+    float g = (S.group > 0 && D.tick > 0) ? D.tick * S.group : 0;
+    struct BK { DRow r; short t = 0, b = 0; };
+    std::map<int, BK> B;
+    for (size_t i = 0; i < R.size(); i++) {
+        int k; short yt, yb;
+        if (g > 0) {
+            k = (int)std::floor(R[i].px / g + 1e-6);
+            yt = yOf((k + 1) * g); yb = (short)(yOf(k * g) - 1); if (yb <= yt) yb = (short)(yt + 1);
+        } else {
+            short y = yOf(R[i].px);
+            k = (y - pane.top) / bh; yt = (short)(pane.top + k * bh); yb = (short)(yt + bh - 1);
+        }
+        if (yb < pane.top + 16 || yt > pane.bottom) continue;
+        BK& x = B[k]; x.r.d += R[i].d; x.r.v += R[i].v; x.r.px = R[i].px; x.t = yt; x.b = yb;
     }
     float dmax = 1, vmax = 1;
-    for (auto& kv : B) { if (std::fabs(kv.second.d) > dmax) dmax = std::fabs(kv.second.d); if (kv.second.v > vmax) vmax = kv.second.v; }
-    int full = S.width - 2;
-    // the 3 biggest |delta| buckets keep a value
+    for (auto& kv : B) { if (std::fabs(kv.second.r.d) > dmax) dmax = std::fabs(kv.second.r.d); if (kv.second.r.v > vmax) vmax = kv.second.r.v; }
+    bool both = S.sides == 1;                                       // Both: buyers right / sellers left of a centre line
+    int full = both ? S.width / 2 - 1 : S.width - 2;
+    if (both) line(mid, (short)(pane.top + 16), mid, pane.bottom, C_AXIS, 1);
     std::vector<std::pair<float, int>> big;
-    for (auto& kv : B) big.push_back(std::make_pair(std::fabs(kv.second.d), kv.first));
+    for (auto& kv : B) big.push_back(std::make_pair(std::fabs(kv.second.r.d), kv.first));
     std::sort(big.begin(), big.end(), [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first > b.first; });
     std::map<int, bool> lab; for (size_t i = 0; i < big.size() && i < 3; i++) lab[big[i].second] = true;
     for (auto& kv : B) {
-        short t = (short)(pane.top + kv.first * bh), b = (short)(t + bh - 1);
-        int lv = (int)(kv.second.v / vmax * full);
-        short ve = (short)(base + dir * lv);
-        box(dir > 0 ? base : ve, t, dir > 0 ? ve : base, b, C_VOL);
-        int L = (int)(std::fabs(kv.second.d) / dmax * full);
-        if (L < 1 && kv.second.d != 0) L = 1;
-        short de = (short)(base + dir * L);
-        if (kv.second.d != 0) box(dir > 0 ? base : de, t, dir > 0 ? de : base, b, kv.second.d > 0 ? C_BUY : C_SELL);
-        if (S.labels && lab[kv.first] && kv.second.d != 0) {
-            char s[24]; float a = std::fabs(kv.second.d);
-            if (a >= 1000) sprintf_s(s, sizeof(s), "%s%.1fk", kv.second.d > 0 ? "+" : "-", a / 1000); else sprintf_s(s, sizeof(s), "%s%.0f", kv.second.d > 0 ? "+" : "-", a);
+        const DRow& r = kv.second.r; short t = kv.second.t, b = kv.second.b;
+        int L = (int)(std::fabs(r.d) / dmax * full); if (L < 1 && r.d != 0) L = 1;
+        int lv = (int)(r.v / vmax * (both ? S.width : full));
+        short de;
+        if (both) {
+            box((short)(mid - lv / 2), t, (short)(mid + lv / 2), b, C_VOL);
+            de = r.d > 0 ? (short)(mid + L) : (short)(mid - L);
+            if (r.d > 0) box(mid, t, de, b, C_BUY); else if (r.d < 0) box(de, t, mid, b, C_SELL);
+        } else {
+            short ve = (short)(base + dir * lv);
+            box(dir > 0 ? base : ve, t, dir > 0 ? ve : base, b, C_VOL);
+            de = (short)(base + dir * L);
+            if (r.d != 0) box(dir > 0 ? base : de, t, dir > 0 ? de : base, b, r.d > 0 ? C_BUY : C_SELL);
+        }
+        if (S.labels && lab[kv.first] && r.d != 0) {
+            char s[24]; float a = std::fabs(r.d);
+            if (a >= 1000) sprintf_s(s, sizeof(s), "%s%.1fk", r.d > 0 ? "+" : "-", a / 1000); else sprintf_s(s, sizeof(s), "%s%.0f", r.d > 0 ? "+" : "-", a);
             short yc = (short)((t + b) / 2);
-            if (dir > 0) textLJ((short)(de + 2), yc, s, C_INK, S.font - 1, false);
+            bool rightSide = both ? r.d > 0 : dir > 0;
+            if (rightSide) textLJ((short)(de + 2), yc, s, C_INK, S.font - 1, false);
             else textRJ((short)(de - 2), yc, s, C_INK, S.font - 1, false);
         }
     }
@@ -274,6 +303,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.0.3");
+    p->setVersion("1.1.0");
     return p;
 }
