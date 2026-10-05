@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.1.0";
+static const char* DLT_VERSION = "1.1.2";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -46,7 +46,7 @@ static const COLOR C_DARK  = 0x000B0F19;
 
 struct DIdx { int market, width, gap, font, labels, place, range, group, sides; };
 static DIdx DX;
-struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 1, range = 0, group = 0, sides = 0; bool labels = true; };
+struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 1, range = 0, group = 1, sides = 0; bool labels = true; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
@@ -116,7 +116,7 @@ int cppExtension::setup(void)
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
     DX.place  = pc++; setListParameter("Place", 1, "Right;Left");
     DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
-    DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 0, NUMW);
+    DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 1, NUMW);
     DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
 }
@@ -260,7 +260,7 @@ void DeltaProfile::render(const DSet& S)
     if (!D.code.empty() && D.level > 0) {
         bool up = D.side == "support";
         COLOR c = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
-        std::string t = D.code + (D.strength == "+" ? "+" : "");
+        std::string t = D.code + (D.strength == "?" ? "?" : D.strength == "+" ? "+" : "");   // (1.1.2) ? = setting up, outlined; check = confirmed, solid
         bool tick = D.strength == "v";
         int tw = textW(t.c_str(), S.font, true) + (tick ? 9 : 0);
         short y = yOf(D.level), h = (short)(S.font + 5);
@@ -303,6 +303,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.1.0");
+    p->setVersion("1.1.2");
     return p;
 }
