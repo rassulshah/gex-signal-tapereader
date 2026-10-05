@@ -22,6 +22,7 @@
  *  Parameters are read ONLY in the parms callbacks (GAMMA-PROFILE-PLUGIN.md gotcha 3); positions numbered explicitly.
  *  Never black: the chart background is black.
  ********************************************************************************/
+#include <map>
 #include "irtsdk.h"
 #include "DealerLogic.h"
 #include <fstream>
@@ -34,7 +35,8 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.1.0";   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
+static const char* DP_VERSION = "2.2.0";   // 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+//   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
 //   // 2.0.1 (2026-10-02 19:12): the how-to text in the settings is gone   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
@@ -77,7 +79,8 @@ public:
     float off;
     int lastBar;
     long long loadedStamp = -2; std::string loadedPath;   // (1.3.7) re-read the file only when it changed
-    long expN = 0; float expC = 0; time_t expT = 0;          // (1.3.7) the chart-bar export
+    struct Exp { long n = 0; float c = 0; time_t t = 0; };
+    std::map<std::string, Exp> expBy;                        // (2.2.0) the chart-bar export throttle, per market
     void exportBars();
 
     bool dialogReady();
@@ -489,8 +492,9 @@ void DealerProfile::exportBars()
     RTARRAYI dtm(barDateTime);
     float lc = c[(int)n - 1];
     time_t now = time(0);
-    if (now - expT < 15) return;
-    if (n == expN && lc == expC && now - expT < 60) return;
+    Exp& E = expBy[mkt];
+    if (now - E.t < 15) return;
+    if (n == E.n && lc == E.c && now - E.t < 60) return;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-IRT-Bars-" + mkt + ".csv";
     std::string tmp = path + ".tmp";
@@ -533,11 +537,15 @@ void DealerProfile::exportBars()
     }
     for (size_t j = 0; j < arrs.size(); j++) delete arrs[j];
     std::remove(path.c_str());
-    if (std::rename(tmp.c_str(), path.c_str()) == 0) { expN = n; expC = lc; expT = now; }
+    if (std::rename(tmp.c_str(), path.c_str()) == 0) { E.n = n; E.c = lc; E.t = now; }
 }
 
 int DealerProfile::draw(void)
 {
+    // (2.2.0, 2026-10-05) IRT runs ONE object of this DLL for every chart, so the settings read when another chart's dialog
+    // was last applied leaked here: the HG chart drew / exported as GC (LRA-IRT-Bars-GC.csv held copper bars, root CPEZ26) and
+    // the profile flipped between markets ("disappears and reappears"). Read THIS chart's settings on every draw.
+    if (dialogReady()) readSettings(cfg);
     load();
     alignContract();
     render(cfg);
@@ -554,6 +562,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.1.0");
+    p->setVersion("2.2.0");
     return p;
 }
