@@ -1,6 +1,12 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.6.0 (2026-10-05 14:45, Rassul: "I think I have more data because I have full depth so can you see if you can view full
+ *     depth"): DEPTH PROBE + RECORDING on the chart's own market. DOM on: the whole book the feed gives (md.maxLevels, up to 200
+ *     levels - was capped at 16), a snapshot whenever it changed, at most once a second -> dom.csv. Order-by-order (MBO) on for
+ *     the first 10 minutes after IRT starts (dbo.csv - shows whether the feed carries every order: NEW / MOD / DEL / FILL with
+ *     order ids, i.e. icebergs and pulled orders); after that the events are still read and counted, not written. The status
+ *     file says DOM available / levels and DBO events, so we can see what depth the feed really carries. Trades stay off.
  *  0.5.2 (2026-10-05 00:33): IRT does not grow a footprint request live - each market wrote in ~10-minute chunks (NQ stuck
  *     at 00:23 until 00:33). The request is now remade after 90 s without a new bar (it only asks from the last written bar,
  *     a few minutes of data), so the footprint is at most ~2 minutes behind; a chart switched to another contract month starts
@@ -88,7 +94,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.5.2";
+static const char* IR_VERSION = "0.6.0";
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
 #endif
@@ -265,10 +271,10 @@ int cppExtension::setup(void)
 void IRTReader::readSettings(RSet& S)
 {
     S.market = getListIndex(RX.market); if (S.market < 0 || S.market > 7) S.market = 0;
-    S.fp = true; S.trades = false; S.dom = false; S.dbo = false;   // (0.3.0) footprint only for now (Rassul 4 Oct 21:26)
+    S.fp = true; S.trades = false; S.dom = true; S.dbo = true;     // (0.6.0) depth on (Rassul 5 Oct 14:39 "full depth"); trades still off
     S.fpMin = 1;
     S.fpDays = 10;
-    S.domSec = getIntegerValue(RX.domSec); if (S.domSec < 1 || S.domSec > 60) S.domSec = 2;
+    S.domSec = 1;                                                  // (0.6.0) every second when the book changed
 }
 
 void IRTReader::identify()
@@ -670,7 +676,7 @@ void IRTReader::depth()
     MARKET_DEPTH md(NULL);
     domAvail = md.available() != 0;
     if (!domAvail) return;
-    int n = md.maxLevels; if (n > 16) n = 16; if (n < 0) n = 0;
+    int n = md.maxLevels; if (n > 200) n = 200; if (n < 0) n = 0;   // (0.6.0) the full book the feed gives
     domLevels = n;
     std::vector<double> v; v.reserve((size_t)n * 4);
     for (int k = 0; k < n; k++) { DEPTH_LEVEL& L = md[(unsigned)k]; v.push_back(L.bid); v.push_back(L.bidsize); v.push_back(L.ask); v.push_back(L.asksize); }
@@ -706,7 +712,8 @@ void IRTReader::depthByOrder()
                  irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec).c_str(),
                  o.action < 4 ? ACT[o.action] : "?", irl::px(o.price, tick).c_str(), irl::px(o.previousPrice, tick).c_str(), o.size, o.orderID,
                  o.aggressorOrderID, o.buySell == 1 ? 'B' : o.buySell == 0 ? 'S' : '?', irl::px(o.bid, tick).c_str(), irl::px(o.ask, tick).c_str());
-        rows += line; dboRows++;
+        if (time(0) < startT + 600) rows += line;                // (0.6.0) written for the first 10 min (probe), counted after
+        dboRows++;
     }
     if (!rows.empty()) append(dirFor(sess) + "\\dbo.csv", "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask", rows);
 }
@@ -723,7 +730,7 @@ void IRTReader::writeStatus()
       << "\nFOOTPRINT," << (cfg.fp ? "on" : "off") << "," << cfg.fpMin << "m,rows " << fpRows << ",last bar " << fpLastTxt << ",backfill days " << cfg.fpDays
       << "\nTRADES," << (cfg.trades ? "on" : "off") << ",rows " << trRows << ",last " << trLastTxt
       << "\nDOM," << (cfg.dom ? "on" : "off") << "," << (domAvail ? "available" : "NOT available") << ",levels " << domLevels << ",snapshots " << domRows
-      << "\nDBO," << (cfg.dbo ? "on" : "off") << ",events " << dboRows
+      << "\nDBO," << (cfg.dbo ? "on" : "off") << ",events " << dboRows << (time(0) < startT + 600 ? ",writing" : ",counting only")
       << "\nOTHER_MARKETS," << (othersTxt.empty() ? "off" : othersTxt)
       << "\nERROR," << err << "\n";
 }
