@@ -115,9 +115,9 @@ int cppExtension::setup(void)
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
     DX.place  = pc++; setListParameter("Place", 1, "Right;Left");
-    DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Session;Day from 08:30", SL);   // (1.1.0) as the examples Rassul sent
+    DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
     DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 0, NUMW);
-    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both", SL);   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
+    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
 }
 
