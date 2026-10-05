@@ -1,6 +1,9 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.5.2 (2026-10-05 00:33): IRT does not grow a footprint request live - each market wrote in ~10-minute chunks (NQ stuck
+ *     at 00:23 until 00:33). The request is now remade after 90 s without a new bar (it only asks from the last written bar,
+ *     a few minutes of data), so the footprint is at most ~2 minutes behind
  *  0.5.1 (2026-10-05 00:08, Rassul: "rename all to FootprintReader<market> without any options to select"): the per-market
  *     DLLs are FootprintReaderES.dll ... FootprintReaderEU.dll (FootprintReader<MKT>.cpp) and have NO settings at all
  *  0.5.0 (2026-10-05 00:05) ONE DLL PER MARKET: 0.4.0 made the requests from draw / calc and IRT hung inside the very first one
@@ -84,7 +87,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.5.1";
+static const char* IR_VERSION = "0.5.2";
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
 #endif
@@ -452,7 +455,7 @@ void IRTReader::footprintOf(FpState& M)
     time_t nowT = time(0);
     if (M.fpBlocked) { M.err = "footprint request blocked: it crashed IRT before"; return; }
     if (!M.fpTry.empty() && M.fpBars) guardClear(M, "fp");          // IRT survived the last request
-    if (!M.fpBars || (M.fpCount >= 0 && nowT - M.fpGrew > 600 && nowT - M.fpMade > 600)) {   // remade if it stops growing for 10 min
+    if (!M.fpBars || (M.fpCount >= 0 && nowT - M.fpGrew > 90 && nowT - M.fpMade > 90)) {   // remade if it stops growing for 10 min
         if (M.fpBars) { delete M.fpBars; M.fpBars = nullptr; }
         RTDATE now = currentDate();
         RTDATE start = (M.fpLast > 0) ? (RTDATE)(now - (RTDATE)1800UL) : (RTDATE)(now - (RTDATE)86400UL);   // (0.3.0) first run: 1 day, history in steps
@@ -802,6 +805,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (0.3.2) POST_DRAWING: draw() runs on every chart, like the Dealer Profile
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription(IR_FIXED[0] ? "Footprint Reader for ONE market (the name says which): records its 1-minute footprint for the LRA analytics. Put it on that market's chart only. No settings. Draws nothing." : "LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.5.1");
+    p->setVersion("0.5.2");
     return p;
 }
