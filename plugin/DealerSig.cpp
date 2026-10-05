@@ -49,7 +49,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.5.0";
+static const char* DS_VERSION = "1.5.2";   // 1.5.2 (2026-10-05): per-chart settings; a reason timed after the last bar is not drawn on it
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -144,6 +144,11 @@ int DealerSig::barOf(const dl::Data::Sig& g, int n, RTARRAYI& dt)
         if (i + 1 < n) {
             struct tm u; memset(&u, 0, sizeof(u)); getLocaltime((RTDATE)dt[i + 1], &u);
             if (u.tm_year == t.tm_year && u.tm_mon == t.tm_mon && u.tm_mday == t.tm_mday) so1 = u.tm_hour * 3600.0 + u.tm_min * 60.0 + u.tm_sec - cfg.clock * 60.0;
+        } else {
+            // (1.5.2, Rassul 2026-10-05 "why is it showing dm ... even when price is going down") the newest bar only holds a reason
+            // timed within 15 min of its stamp - a reason stamped later (yesterday evening's 23:33 Dm written with today's date)
+            // used to fall onto the live bar
+            so1 = so0 + 15 * 60.0;
         }
         if (dl::sigInBar(g, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, so0, so1)) return i;
         if (t.tm_year + 1900 < g.y || (t.tm_year + 1900 == g.y && (t.tm_mon + 1 < g.mo || (t.tm_mon + 1 == g.mo && t.tm_mday < g.d)))) break;
@@ -179,6 +184,9 @@ void DealerSig::writeStatus(const char* what)
 
 int DealerSig::draw(void)
 {
+    // (2026-10-05) IRT runs ONE object of this DLL for every chart: read THIS chart's settings on every draw (the HG chart's settings
+    // leaked into the GC chart - status files showed MARKET HG while drawing GC)
+    if (dialogReady()) readSettings(cfg);
     load();
     drawn = 0;
     long n = getBarCount();
@@ -232,6 +240,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.5.1");
+    p->setVersion("1.5.2");
     return p;
 }

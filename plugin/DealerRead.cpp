@@ -1388,6 +1388,9 @@ void DealerRead::renderTurn(const Settings& S)
 
 int DealerRead::draw(void)
 {
+    // (2026-10-05) IRT runs ONE object of this DLL for every chart: read THIS chart's settings on every draw (the HG chart's settings
+    // leaked into the GC chart - status files showed MARKET HG while drawing GC)
+    if (dialogReady()) readSettings(cfg);
     load();
     renderGrid(cfg);              // (2.2.0) only the grid - the old Read boxes (Magnet, Key Level, verdict, trade box) are gone
     writeStatus(D.hasPrice ? "drawn" : "no data");
@@ -1400,6 +1403,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("3.1.0");
+    p->setVersion("3.1.1");
     return p;
 }
