@@ -15,6 +15,7 @@
  *  (analytics/lra/delta_profile.py) from the FootprintReader's 1-min footprint. Lines (| separated):
  *     ASOF|yyyy-mm-dd HH:MM:SS|from|to   LEVEL|price|support/resistance|name   BADGE|code|strength(''/+/v)   ROW|price|delta|volume
  *  Settings: Market, Width px (default 80), Gap from Dealer Profile px (negative = closer), Font size, Values on the biggest bars.
+ *  1.0.3 (17:50): Place Right (by the Dealer Profile) or Left (the chart's left edge); "Gap px" from that edge.
  *  1.0.1 (17:15): the gap may be negative; the bars show whenever the footprint has data (the badge needs a level).
  *  Position: right of the candles, just left of the Dealer Profile (its status file says how wide it is: REACH).
  *  IRT runs ONE object per DLL for every chart: this chart's settings are read on every draw. Never black lines.
@@ -32,7 +33,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.0.2";
+static const char* DLT_VERSION = "1.0.3";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -42,9 +43,9 @@ static const COLOR C_INK   = 0x00E5E7EB;
 static const COLOR C_MUTED = 0x009CA3AF;
 static const COLOR C_DARK  = 0x000B0F19;
 
-struct DIdx { int market, width, gap, font, labels; };
+struct DIdx { int market, width, gap, font, labels, place; };
 static DIdx DX;
-struct DSet { int market = 0, width = 80, gap = 8, font = 9; bool labels = true; };
+struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 0; bool labels = true; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
@@ -109,9 +110,10 @@ int cppExtension::setup(void)
     int pc = 0;
     DX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     DX.width  = pc++; setIntegerParameter("Width px", 80, NUMW, SL);
-    DX.gap    = pc++; setIntegerParameter("Gap from Dealer Profile px", 8, NUMW);
+    DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW);
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
+    DX.place  = pc++; setListParameter("Place", 0, "Right;Left");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
 }
 
@@ -122,6 +124,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
+    S.place = getListIndex(DX.place); if (S.place < 0 || S.place > 1) S.place = 0;
 }
 
 void DeltaProfile::load()
@@ -173,9 +176,15 @@ void DeltaProfile::render(const DSet& S)
     RCT scale; scale.getScaleRect();
     short paneR = pane.right;
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
-    short right = (short)(paneR - 2 - dealerReach() - S.gap);      // the column's right edge: just left of the Dealer Profile
-    short left = (short)(right - S.width), mid = (short)(left + S.width / 2);
-    if (left <= pane.left + 40) return;
+    short right, left;
+    if (S.place == 1) {                                             // (1.0.3) Left: from the pane's left edge + gap
+        left = (short)(pane.left + 4 + (S.gap > 0 ? S.gap : 0)); right = (short)(left + S.width);
+        if (right >= paneR - 40) return;
+    } else {                                                        // Right: just left of the Dealer Profile
+        right = (short)(paneR - 2 - dealerReach() - S.gap); left = (short)(right - S.width);
+        if (left <= pane.left + 40) return;
+    }
+    short mid = (short)(left + S.width / 2);
     textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
     line(mid, (short)(pane.top + 16), mid, pane.bottom, C_AXIS, 1);
     if (!D.ok) return;
@@ -260,6 +269,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.0.2");
+    p->setVersion("1.0.3");
     return p;
 }
