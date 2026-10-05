@@ -15,7 +15,7 @@
  *  (analytics/lra/delta_profile.py) from the FootprintReader's 1-min footprint. Lines (| separated):
  *     ASOF|yyyy-mm-dd HH:MM:SS|from|to   LEVEL|price|support/resistance|name   BADGE|code|strength(''/+/v)   ROW|price|delta|volume
  *  Settings: Market, Width px (default 80), Gap from Dealer Profile px (negative = closer), Font size, Values on the biggest bars.
- *  1.0.3 (17:50): Place Right (by the Dealer Profile) or Left (the chart's left edge); "Gap px" from that edge.
+ *  1.0.3 (17:52): red and green bars both grow toward the price chart from one base line. Place Right (by the Dealer Profile) or Left (the chart's left edge); "Gap px" from that edge.
  *  1.0.1 (17:15): the gap may be negative; the bars show whenever the footprint has data (the badge needs a level).
  *  Position: right of the candles, just left of the Dealer Profile (its status file says how wide it is: REACH).
  *  IRT runs ONE object per DLL for every chart: this chart's settings are read on every draw. Never black lines.
@@ -45,7 +45,7 @@ static const COLOR C_DARK  = 0x000B0F19;
 
 struct DIdx { int market, width, gap, font, labels, place; };
 static DIdx DX;
-struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 0; bool labels = true; };
+struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 1; bool labels = true; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
@@ -113,7 +113,7 @@ int cppExtension::setup(void)
     DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW);
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
-    DX.place  = pc++; setListParameter("Place", 0, "Right;Left");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
+    DX.place  = pc++; setListParameter("Place", 1, "Right;Left");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
 }
 
@@ -124,7 +124,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
-    S.place = getListIndex(DX.place); if (S.place < 0 || S.place > 1) S.place = 0;
+    S.place = getListIndex(DX.place); if (S.place < 0 || S.place > 1) S.place = 1;
 }
 
 void DeltaProfile::load()
@@ -184,9 +184,13 @@ void DeltaProfile::render(const DSet& S)
         right = (short)(paneR - 2 - dealerReach() - S.gap); left = (short)(right - S.width);
         if (left <= pane.left + 40) return;
     }
+    // (1.0.3, Rassul 17:52) red and green both grow TOWARD the price chart from one base line on the far side
+    int dir = S.place == 1 ? 1 : -1;                                // Left: grow right; Right: grow left
+    short base = S.place == 1 ? left : right;
+    if (S.place == 1) textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
+    else textRJ((short)(right - 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
+    line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
     short mid = (short)(left + S.width / 2);
-    textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
-    line(mid, (short)(pane.top + 16), mid, pane.bottom, C_AXIS, 1);
     if (!D.ok) return;
 
     // rows -> pixel buckets (one bar per bucket, never thinner than 3 px)
@@ -200,7 +204,7 @@ void DeltaProfile::render(const DSet& S)
     }
     float dmax = 1, vmax = 1;
     for (auto& kv : B) { if (std::fabs(kv.second.d) > dmax) dmax = std::fabs(kv.second.d); if (kv.second.v > vmax) vmax = kv.second.v; }
-    int half = S.width / 2 - 1;
+    int full = S.width - 2;
     // the 3 biggest |delta| buckets keep a value
     std::vector<std::pair<float, int>> big;
     for (auto& kv : B) big.push_back(std::make_pair(std::fabs(kv.second.d), kv.first));
@@ -208,18 +212,19 @@ void DeltaProfile::render(const DSet& S)
     std::map<int, bool> lab; for (size_t i = 0; i < big.size() && i < 3; i++) lab[big[i].second] = true;
     for (auto& kv : B) {
         short t = (short)(pane.top + kv.first * bh), b = (short)(t + bh - 1);
-        int lv = (int)(kv.second.v / vmax * S.width);
-        box((short)(mid - lv / 2), t, (short)(mid + lv / 2), b, C_VOL);
-        int L = (int)(std::fabs(kv.second.d) / dmax * half);
+        int lv = (int)(kv.second.v / vmax * full);
+        short ve = (short)(base + dir * lv);
+        box(dir > 0 ? base : ve, t, dir > 0 ? ve : base, b, C_VOL);
+        int L = (int)(std::fabs(kv.second.d) / dmax * full);
         if (L < 1 && kv.second.d != 0) L = 1;
-        if (kv.second.d > 0) box(mid, t, (short)(mid + L), b, C_BUY);
-        else if (kv.second.d < 0) box((short)(mid - L), t, mid, b, C_SELL);
+        short de = (short)(base + dir * L);
+        if (kv.second.d != 0) box(dir > 0 ? base : de, t, dir > 0 ? de : base, b, kv.second.d > 0 ? C_BUY : C_SELL);
         if (S.labels && lab[kv.first] && kv.second.d != 0) {
             char s[24]; float a = std::fabs(kv.second.d);
             if (a >= 1000) sprintf_s(s, sizeof(s), "%s%.1fk", kv.second.d > 0 ? "+" : "-", a / 1000); else sprintf_s(s, sizeof(s), "%s%.0f", kv.second.d > 0 ? "+" : "-", a);
             short yc = (short)((t + b) / 2);
-            if (kv.second.d > 0) textLJ((short)(mid + L + 2), yc, s, C_INK, S.font - 1, false);
-            else textRJ((short)(mid - L - 2), yc, s, C_INK, S.font - 1, false);
+            if (dir > 0) textLJ((short)(de + 2), yc, s, C_INK, S.font - 1, false);
+            else textRJ((short)(de - 2), yc, s, C_INK, S.font - 1, false);
         }
     }
     // the behaviour code at the level (below a support, above a resistance)
