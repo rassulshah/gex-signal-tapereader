@@ -14,7 +14,8 @@
  *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Delta-<MKT>.csv, written with every Reader build by the LRA
  *  (analytics/lra/delta_profile.py) from the FootprintReader's 1-min footprint. Lines (| separated):
  *     ASOF|yyyy-mm-dd HH:MM:SS|from|to   LEVEL|price|support/resistance|name   BADGE|code|strength(''/+/v)   ROW|price|delta|volume
- *  Settings: Market, Width px (default 80), Gap from Dealer Profile px, Font size, Values on the biggest bars.
+ *  Settings: Market, Width px (default 80), Gap from Dealer Profile px (negative = closer), Font size, Values on the biggest bars.
+ *  1.0.1 (17:15): the gap may be negative; the bars show whenever the footprint has data (the badge needs a level).
  *  Position: right of the candles, just left of the Dealer Profile (its status file says how wide it is: REACH).
  *  IRT runs ONE object per DLL for every chart: this chart's settings are read on every draw. Never black lines.
  ********************************************************************************/
@@ -31,7 +32,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.0.0";
+static const char* DLT_VERSION = "1.0.2";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -118,7 +119,7 @@ void DeltaProfile::readSettings(DSet& S)
 {
     S.market = getListIndex(DX.market);
     S.width = getIntegerValue(DX.width); if (S.width < 30) S.width = 80; if (S.width > 600) S.width = 600;
-    S.gap = getIntegerValue(DX.gap); if (S.gap < 0) S.gap = 0; if (S.gap > 400) S.gap = 400;
+    S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
 }
@@ -258,7 +259,7 @@ extern "C" cppExtension *CreateExtension(void)
     DeltaProfile *p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Delta Profile (DLT): bought - sold per price over the last 30 min (green right = buyers, red left = sellers, faint = volume). Code at the level: Ab absorption, Ex exhaustion, Tr trapped, Acc accumulation, Dst distribution, In initiative against the trade; + likely, check = confirmed. Numbers: the Dealer Read FLOW lines.");
-    p->setVersion("1.0.0");
+    p->setDescription("LRA Delta Profile (DLT)");
+    p->setVersion("1.0.2");
     return p;
 }
