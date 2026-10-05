@@ -1,6 +1,11 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.5.0 (2026-10-05 00:05) ONE DLL PER MARKET: 0.4.0 made the requests from draw / calc and IRT hung inside the very first one
+ *     (ES, 23:52 - "footprint..." and nothing after, _trying-ES-fp left behind). Requests only ever worked from the TIMER, and the
+ *     timer works for one chart per DLL. So each market gets its own DLL - lsIRTReaderES, lsIRTReaderNQ, ... (IRTReader<MKT>.cpp
+ *     = this file with IR_FIXED set) - its own object, its own timer, its own chart: the setup that recorded NQ / GC / HG / EU.
+ *     calc / draw only start the timer; every request is made from the timer (draw runs the pass only if no timer tick comes).
  *  0.4.0 (2026-10-04 23:50) THE ROOT CAUSE: Investor/RT runs ONE reader object for every chart it is on (the 23:35 boot trace:
  *     one id, 53a620, called on the ES chart, then the NQ chart, then ES again). The reader kept ONE market's state, so whichever
  *     chart came first "owned" it and the others never recorded; IRT's timer always calls in one chart's context.
@@ -77,7 +82,10 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.4.0";
+static const char* IR_VERSION = "0.5.0";
+#ifndef IR_FIXED
+#define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
+#endif
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
@@ -201,14 +209,17 @@ int cppExtension::calc(int)
 // (0.3.2) the one driver: whichever of draw / calc / timer comes first; a pass at most once a second
 void IRTReader::pump(const char* via)
 {
-    // (0.4.0) IRT calls this ONE object for every chart: identify() says which chart is calling now
-    identify();
-    if (mkt.empty()) return;
-    if (!booted.count(mkt)) { booted.insert(mkt); boots = 0; boot(std::string(via) + ": first call from this chart"); trace("loaded on " + sym + " (" + via + ") - " + IR_VERSION); }
     time_t now = time(0);
-    if (lastPass[mkt] == now) return;                            // one pass a second per market
-    lastPass[mkt] = now;
-    tickAll();
+    if (!calcLogged) { identify(); boot(std::string(via) + ": loaded, asking for a timer"); trace("loaded on " + sym + " (" + via + ") - " + IR_VERSION); calcLogged = true; }
+    if (!timerOn && !timerFailLogged) {
+        if (createTimer(timerIdFor(this), 1000) == RTX_OK) { timerOn = true; timerAt = now; boot("timer granted (id " + std::to_string(timerIdFor(this)) + ")"); }
+        else { boot("timer REFUSED - running from draw / calc"); timerFailLogged = true; }
+    }
+    bool noTimer = !timerOn || (lastTimerTick == 0 ? now - timerAt > 20 : now - lastTimerTick > 60);
+    if (noTimer && now != lastCalcRun) {
+        if (lastCalcRun == 0) boot(std::string("no timer tick - the pass runs from ") + via);
+        lastCalcRun = now; tickAll();
+    }
 }
 
 int IRTReader::draw(void)
@@ -256,6 +267,7 @@ void IRTReader::identify()
     root = rs ? rs : "";
     const char* s = getSymbol(); sym = s ? s : "";
     mkt = dl::marketFor(cfg.market, root);
+    if (IR_FIXED[0]) { if (!mkt.empty() && mkt != IR_FIXED) { mkt.clear(); return; } mkt = IR_FIXED; }   // (0.5.0) this DLL records ONE market: on another chart it does nothing
     tick = getTickIncrement();
 }
 
@@ -782,7 +794,7 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (0.3.2) POST_DRAWING: draw() runs on every chart, like the Dealer Profile
     p->setExtendedFlags(CALL_CONTINUOUSLY);
-    p->setDescription("LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.4.0");
+    p->setDescription(IR_FIXED[0] ? "LRA IRT Reader for ONE market (the name says which): records its 1-minute footprint for the LRA analytics. Put it on that market's chart only. Draws nothing." : "LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
+    p->setVersion("0.5.0");
     return p;
 }

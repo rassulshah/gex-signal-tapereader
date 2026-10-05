@@ -38,6 +38,13 @@ call :one DealerRead   lsDealerRead   DealerLogic.h
 call :one DealerSig    lsDealerSig    DealerLogic.h
 call :one DealerSummary lsDealerSummary DealerLogic.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h
+call :one IRTReaderES lsIRTReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h
+call :one IRTReaderNQ lsIRTReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h
+call :one IRTReaderCL lsIRTReaderCL IRTReader.cpp IRTReaderLogic.h DealerLogic.h
+call :one IRTReaderGC lsIRTReaderGC IRTReader.cpp IRTReaderLogic.h DealerLogic.h
+call :one IRTReaderHG lsIRTReaderHG IRTReader.cpp IRTReaderLogic.h DealerLogic.h
+call :one IRTReaderNG lsIRTReaderNG IRTReader.cpp IRTReaderLogic.h DealerLogic.h
+call :one IRTReaderEU lsIRTReaderEU IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 
@@ -125,7 +132,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile DayModel DayStats KingTracker DealerProfile DealerRead DealerSig DealerSummary IRTReader) do (
+for %%N in (GammaProfile DayModel DayStats KingTracker DealerProfile DealerRead DealerSig DealerSummary IRTReader IRTReaderES IRTReaderNQ IRTReaderCL IRTReaderGC IRTReaderHG IRTReaderNG IRTReaderEU) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
