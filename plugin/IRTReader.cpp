@@ -1,6 +1,8 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+ *  0.3.1 (2026-10-04 22:08, Rassul: "keep it small"): history for a market is ONE 3-day step and nothing more (no 10 / 120-day
+ *     requests - IRT keeps only ~3 weeks of 1-min volume at price anyway); after that each day builds up from live recording
  *  0.3.0 (2026-10-04 21:40, Rassul: "lets get footprint working", "keep the time and sales and dom out of it for now"):
  *     - EACH CHART RECORDS ITS OWN MARKET ONLY: asking IRT for another market's footprint by ticker crashed IRT three times
  *       (ES, CL, then NQ from the copper chart at 16:10 on 4 Oct); a chart's own market never did. _other-markets.txt is ignored.
@@ -65,7 +67,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.3.0";
+static const char* IR_VERSION = "0.3.1";
 // (0.1.4, 2 Oct 23:33: only the first chart's reader ever ran - every other market wrote nothing, not even a trace) each reader
 // gets its own timer id: the same id on every chart most likely made IRT refuse the second and later timers
 static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4) % 100000); }
@@ -511,7 +513,7 @@ void IRTReader::deepFill(FpState& M)
     static const unsigned long OD3[3] = { 3UL, 10UL, 121UL };
     const char* const* KS = M.own ? OK3 : DK; const unsigned long* DS = M.own ? OD3 : DD;
     if (M.own) {                                                 // (0.3.0) the chart's own market: history in guarded steps 3 / 10 / 120 days
-        if (M.deepStep >= 3) { M.deepDone = 1; return; }
+        if (M.deepStep >= 1) { M.deepDone = 1; return; }       // (0.3.1) one 3-day step only
         if (M.fpLast < 0 || M.caughtUp < 3 || !M.fpTry.empty()) return;
     }
     else {                                                       // (0.2.2) other markets: history in 1 / 3 / 10-day steps
@@ -547,7 +549,7 @@ void IRTReader::deepFill(FpState& M)
         if (!fin) return;
         trace(M.mkt + " history: " + KS[M.deepStep] + " step done");
         delete M.deepBars; M.deepBars = nullptr; guardClear(M, "deep");
-        M.deepStep++; M.deepDone = M.deepStep >= 3 ? 1 : 0;
+        M.deepStep++; M.deepDone = M.deepStep >= (M.own ? 1 : 3) ? 1 : 0;   // (0.3.1) own market: the 3-day step only
         M.deepLast = -1; M.deepSkip.clear(); M.deepOwn.clear();
         M.deepRetryAt = nowT + 120;
         return;
@@ -759,6 +761,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.3.0");
+    p->setVersion("0.3.1");
     return p;
 }
