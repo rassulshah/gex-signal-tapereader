@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.8";
+static const char* DLT_VERSION = "1.4.0";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -53,6 +53,7 @@ struct DData {
     bool ok = false; std::string asof, from, to, side, name, code, strength; float level = 0;
     std::vector<DRow> rows, srows, drows, hrows; float tick = 0; int levelN = 0; float levelX = 0;
     struct DMark { float px = 0; std::string code, side; int n = 0; float x = 0; }; std::vector<DMark> marks;
+    struct DZone { float lo = 0, hi = 0; std::string code, side; int share = 0; }; std::vector<DZone> zones;   // (1.4.0) Dst? / Dst / Acc / T zones
 };
 
 class DeltaProfile : public cppExtension {
@@ -217,6 +218,7 @@ void DeltaProfile::load()
         else if (t[0] == "BADGE" && t.size() >= 2) { D.code = t[1]; D.strength = t.size() >= 3 ? t[2] : ""; }
         else if (t[0] == "TICK" && t.size() >= 2) D.tick = (float)atof(t[1].c_str());
         else if (t[0] == "LEVELN" && t.size() >= 2) D.levelN = atoi(t[1].c_str());
+        else if (t[0] == "ZONE" && t.size() >= 6) { DData::DZone z; z.lo = (float)atof(t[1].c_str()); z.hi = (float)atof(t[2].c_str()); z.code = t[3]; z.side = t[4]; z.share = atoi(t[5].c_str()); D.zones.push_back(z); }
         else if (t[0] == "LEVELX" && t.size() >= 2) D.levelX = (float)atof(t[1].c_str());
         else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); if (t.size() >= 6) k.x = (float)atof(t[5].c_str()); D.marks.push_back(k); }
         else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
@@ -343,12 +345,24 @@ void DeltaProfile::render(const DSet& S)
         short y = yOf(px); if (y < pane.top + 16 || y > pane.bottom) return;
         textLJ((short)(sL + 3), y, t.c_str(), col, S.font, true);
     };
+    // (1.4.0, Rassul 08:18 "build") zones: a bracket over the zone's rows in the letter column + ONE label - Dst? 70% while
+    // forming, Dst 70% once price proved it, T if it failed (they are trapped). Always shown (the zone is the read).
+    for (size_t i = 0; i < D.zones.size(); i++) {
+        const DData::DZone& z = D.zones[i];
+        short yt = yOf(z.hi + D.tick * 0.5f), yb = yOf(z.lo - D.tick * 0.5f);
+        if (yb < pane.top + 16 || yt > pane.bottom) continue;
+        COLOR col = z.side == "support" ? 0x0086EFAC : 0x00FCA5A5;
+        short bx = (short)(sR - 4);
+        line(bx, yt, bx, yb, col, 1); line((short)(bx - 3), yt, bx, yt, col, 1); line((short)(bx - 3), yb, bx, yb, col, 1);
+        std::string t = z.code; if (z.code != "T" && z.share > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d%%", z.share); t += b; }
+        textLJ((short)(sL + 3), (short)((yt + yb) / 2), t.c_str(), col, S.font, true);
+    }
     if (S.offlvl) for (size_t i = 0; i < D.marks.size(); i++) {
         const DData::DMark& k = D.marks[i];
         bool sup = k.side == "support";
         COLOR col = k.code == "E" ? 0x00FCD34D : (sup ? 0x0086EFAC : 0x00FCA5A5);     // (1.3.8, Rassul 07:30 "too dark") light amber / green / red
         std::string t = k.code;                            // (1.3.8, Rassul 07:29) "just show A 2.4x" - no contract count
-        if (k.x > 0 || k.code == "E") t += xs(k.x);
+        if ((k.x > 0 || k.code == "E") && k.code != "T") t += xs(k.x);
         drawLetter(k.px, t, col);
     }
     if (!D.code.empty() && D.level > 0) {
@@ -388,6 +402,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.8");
+    p->setVersion("1.4.0");
     return p;
 }
