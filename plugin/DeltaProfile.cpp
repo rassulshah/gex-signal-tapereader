@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.2.0";
+static const char* DLT_VERSION = "1.2.1";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -46,7 +46,7 @@ static const COLOR C_DARK  = 0x000B0F19;
 
 struct DIdx { int market, width, gap, font, labels, place, range, group, sides, offlvl; };
 static DIdx DX;
-struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 1, range = 0, group = 1, sides = 0; bool labels = true, offlvl = true; };
+struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 0, group = 1, sides = 0; bool labels = true, offlvl = true; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
@@ -100,13 +100,15 @@ int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
 
 bool DeltaProfile::dialogReady() { int i = getListIndex(DX.market); return i >= 0 && i <= 7; }
-int DeltaProfile::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DeltaProfile::parmsApply(void) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+static std::map<std::string, DSet>& perChart() { static std::map<std::string, DSet> m; return m; }   // (1.2.1) settings per chart
+static std::string rootKey(cppExtension* e) { char rb[32] = {0}; const char* rs = e->getRootSymbol(rb); return rs ? rs : ""; }
+int DeltaProfile::parmsLoad(void)  { if (dialogReady()) { readSettings(cfg); perChart()[rootKey(this)] = cfg; } return RTX_OK; }
+int DeltaProfile::parmsApply(void) { if (dialogReady()) { readSettings(cfg); perChart()[rootKey(this)] = cfg; } return RTX_OK; }
+int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); perChart()[rootKey(this)] = cfg; } return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(4);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
+    setParameterVersion(5);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
     setParameterDialogHeight(8);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -115,7 +117,7 @@ int cppExtension::setup(void)
     DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW);
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
-    DX.place  = pc++; setListParameter("Place", 0, "Left;Right");   // (1.1.4) Left first: the list default is its first entry
+    DX.place  = pc++; setListParameter("Place", 0, "Right;Left");   // (1.2.1) Right first = the default (all profiles on the right)
     DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Last 60 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
     DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 1, NUMW);
     DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");
@@ -130,7 +132,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
-    { int pi = getListIndex(DX.place); S.place = (pi == 1) ? 0 : 1; }   // (1.1.4) list Left;Right -> place 1 = Left, 0 = Right
+    { int pi = getListIndex(DX.place); S.place = (pi == 1) ? 1 : 0; }   // (1.2.1) list Right;Left -> 0 = Right, 1 = Left
     S.range = getListIndex(DX.range); if (S.range < 0 || S.range > 3) S.range = 0;
     S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
     S.sides = getListIndex(DX.sides); if (S.sides < 0 || S.sides > 1) S.sides = 0;
@@ -305,10 +307,11 @@ int DeltaProfile::draw(void)
     // (1.1.5, Rassul 20:17 "even the amount of data that is shown changes") one DLL object serves every chart: settings
     // read from one chart's dialog were used by the next chart that drew. Keep them per chart (root symbol), and reload
     // the data file whenever the market changes.
-    { char rb[32] = {0}; const char* rs = getRootSymbol(rb); std::string key = rs ? rs : "";
-      static std::map<std::string, DSet> per;
-      if (dialogReady()) { DSet s; readSettings(s); per[key] = s; }
-      cfg = per.count(key) ? per[key] : DSet(); }
+    // (1.2.1, Rassul 21:29 "keeps moving to the left") 1.2.0 fell back to the DEFAULTS (Place = Left) on every draw where
+    // the dialog was not readable; the settings read in parmsLoad / Apply never reached the per-chart store
+    { std::string key = rootKey(this);
+      if (dialogReady()) { DSet s; readSettings(s); perChart()[key] = s; }
+      if (perChart().count(key)) cfg = perChart()[key]; }
     load();
     render(cfg);
     writeStatus(D.ok ? "drawn" : "no data");
@@ -321,6 +324,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.2.0");
+    p->setVersion("1.2.1");
     return p;
 }
