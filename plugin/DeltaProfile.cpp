@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.5.2";
+static const char* DLT_VERSION = "1.5.3";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -54,7 +54,8 @@ struct DData {
     bool ok = false; std::string asof, from, to, side, name, code, strength; float level = 0;
     std::vector<DRow> rows, srows, drows, hrows; float tick = 0; int levelN = 0; float levelX = 0;
     struct DMark { float px = 0; std::string code, side; int n = 0; float x = 0; }; std::vector<DMark> marks;
-    struct DNode { char rk = 0; float px = 0, d = 0, x = 0; std::string code, side; }; std::vector<DNode> nodes;   // (1.5.0) states of the big delta nodes
+    struct DNode { char rk = 0; float px = 0, d = 0, x = 0; std::string code, side; }; std::vector<DNode> nodes;
+    std::string built; float recAge = -1;              // (1.5.3) when the Reader wrote the file + the recorder's heartbeat age then   // (1.5.0) states of the big delta nodes
     struct DZone { float lo = 0, hi = 0; std::string code, side; int share = 0; }; std::vector<DZone> zones;   // (1.4.0) Dst? / Dst / Acc / T zones
 };
 
@@ -223,6 +224,7 @@ void DeltaProfile::load()
         else if (t[0] == "LEVELN" && t.size() >= 2) D.levelN = atoi(t[1].c_str());
         else if (t[0] == "ZONE" && t.size() >= 6) { DData::DZone z; z.lo = (float)atof(t[1].c_str()); z.hi = (float)atof(t[2].c_str()); z.code = t[3]; z.side = t[4]; z.share = atoi(t[5].c_str()); D.zones.push_back(z); }
         else if (t[0] == "LEVELX" && t.size() >= 2) D.levelX = (float)atof(t[1].c_str());
+        else if (t[0] == "BUILT" && t.size() >= 3) { D.built = t[1]; D.recAge = (float)atof(t[2].c_str()); }
         else if (t[0] == "NODE" && t.size() >= 7) { DData::DNode n; n.rk = t[1].empty() ? 0 : t[1][0]; n.px = (float)atof(t[2].c_str()); n.d = (float)atof(t[3].c_str()); n.code = t[4]; n.side = t[5]; n.x = (float)atof(t[6].c_str()); D.nodes.push_back(n); }
         else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); if (t.size() >= 6) k.x = (float)atof(t[5].c_str()); D.marks.push_back(k); }
         else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
@@ -284,12 +286,17 @@ void DeltaProfile::render(const DSet& S)
     textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
     // (1.5.1, Rassul 09:34 "is there a mechanism to show whether there is missed data") the file's last footprint minute vs
     // the chart clock: > 10 min old = the recorder or the Reader stopped -> a red STALE chip under the header
-    if (D.asof.size() >= 16) {
+    // (1.5.3) stale = the Reader stopped (BUILT is old) or the recorder stopped (its heartbeat was old when the file was
+    // built) - NOT a quiet market with no trades for 10 minutes. Files without BUILT fall back to the last footprint minute.
+    {
+        const std::string& st = D.built.size() >= 16 ? D.built : D.asof;
         struct tm a; memset(&a, 0, sizeof(a));
-        if (sscanf_s(D.asof.c_str(), "%d-%d-%d %d:%d", &a.tm_year, &a.tm_mon, &a.tm_mday, &a.tm_hour, &a.tm_min) == 5) {
+        if (st.size() >= 16 && sscanf_s(st.c_str(), "%d-%d-%d %d:%d", &a.tm_year, &a.tm_mon, &a.tm_mday, &a.tm_hour, &a.tm_min) == 5) {
             a.tm_year -= 1900; a.tm_mon -= 1; a.tm_isdst = -1;
             RTDATE now = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(now, &t); t.tm_isdst = -1;
             double age = difftime(mktime(&t), mktime(&a)) / 60.0;
+            if (age < 0) age = 0;
+            if (D.built.size() >= 16 && D.recAge > 0) age += D.recAge;
             if (age > 10.0 && age < 60.0 * 24 * 30) {
                 char b[24]; if (age >= 2880) sprintf_s(b, sizeof(b), "STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) sprintf_s(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5));
                 int tw = textW(b, 8, true);
@@ -397,6 +404,9 @@ void DeltaProfile::render(const DSet& S)
                 if (!best || std::fabs(n.d) > std::fabs(best->d)) best = &n;
             }
             if (!best) continue;
+            bool inZone = false;                                  // (1.5.3) a node inside a Dst / Acc zone: the zone's label is the read
+            for (size_t z = 0; z < D.zones.size(); z++) if (best->px >= D.zones[z].lo - D.tick * 0.5f && best->px <= D.zones[z].hi + D.tick * 0.5f) inZone = true;
+            if (inZone) continue;
             COLOR col = best->side == "support" ? 0x0086EFAC : 0x00FCA5A5;
             std::string t = best->code; if (best->code != "T" && best->x > 0) t += xs(best->x);
             short y = (short)((labd[i].t + labd[i].b) / 2);
