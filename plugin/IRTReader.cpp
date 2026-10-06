@@ -95,7 +95,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.6.1";
+static const char* IR_VERSION = "0.6.2";
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
 #endif
@@ -171,6 +171,8 @@ public:
     std::string othersTxt;
     time_t startT = 0, nextOtherAt = 0;                    // (0.2.2) the reader start; the next heavy request allowed for other markets
     bool blockedKind(FpState& M, const char* kind);
+    bool fpProven(const std::string& m);                 // (0.6.2) this market's footprint has been recorded before
+    int strikes(const std::string& m, int add);          // (0.6.2) stops during a live request in a row (add 1 / read 0)
     bool own(FpState& M);
     void footprintOf(FpState& M);
     void loadFpCursor(FpState& M);
@@ -370,11 +372,23 @@ void IRTReader::loadMarkets()
         const char* KIND[5] = { "fp", "deep", "deep1", "deep3", "deep10" };
         for (int q = 0; q < 5; q++) {
             std::ifstream tr(guardPath(M.mkt, KIND[q], "trying").c_str());
+            // (0.6.2, Rassul 09:36 "i went to metals tab and saw copper, so it should be recording") closing IRT to install a
+            // build while a live footprint request is open leaves the same file as a crash - HG and CL were blocked for a day
+            // by plain closes. The live footprint (fp) of a market that has recorded before is now blocked only after 3
+            // stops in a row with no request surviving in between (a real crash repeats); history steps keep the 1-strike rule.
+            bool proven = q == 0 && fpProven(M.mkt);
             if (tr.good()) {
                 tr.close(); std::remove(guardPath(M.mkt, KIND[q], "trying").c_str());
-                std::ofstream b(guardPath(M.mkt, KIND[q], "blocked").c_str(), std::ios::trunc);
-                b << "the " << KIND[q] << " request for " << M.mkt << " (" << M.sym << ") was running when Investor/RT stopped - blocked\n";
-                trace(M.mkt + " " + KIND[q] + ": IRT stopped during this request last time - BLOCKED (delete _blocked-" + M.mkt + "-" + KIND[q] + ".txt to retry)");
+                int n = proven ? strikes(M.mkt, 1) : 3;
+                if (n >= 3) {
+                    std::ofstream b(guardPath(M.mkt, KIND[q], "blocked").c_str(), std::ios::trunc);
+                    b << "the " << KIND[q] << " request for " << M.mkt << " (" << M.sym << ") was running when Investor/RT stopped - blocked\n";
+                    trace(M.mkt + " " + KIND[q] + ": IRT stopped during this request last time - BLOCKED (delete _blocked-" + M.mkt + "-" + KIND[q] + ".txt to retry)");
+                } else trace(M.mkt + " fp: IRT stopped during the footprint request (" + std::to_string(n) + " of 3) - an install close looks the same, retrying");
+            }
+            if (proven && strikes(M.mkt, 0) < 3) {                // an older block from a plain close: lift it
+                std::ifstream ob(guardPath(M.mkt, KIND[q], "blocked").c_str());
+                if (ob.good()) { ob.close(); std::remove(guardPath(M.mkt, KIND[q], "blocked").c_str()); trace(M.mkt + " fp: lifted an old block (the market recorded before) - retrying"); }
             }
             std::ifstream bl(guardPath(M.mkt, KIND[q], "blocked").c_str());
             if (bl.good()) { if (q == 0) M.fpBlocked = true; else if (q == 1) M.deepBlocked = true; }
@@ -389,6 +403,21 @@ void IRTReader::loadMarkets()
 std::string IRTReader::guardPath(const std::string& m, const char* kind, const char* what)
 {
     return cfg.folder + "\\_" + what + "-" + m + "-" + kind + ".txt";
+}
+
+bool IRTReader::fpProven(const std::string& m)
+{
+    std::ifstream f((cfg.folder + "\\_fp-" + m + ".txt").c_str());
+    long long last = -1; if (f >> last) return last > 0;
+    return false;
+}
+
+int IRTReader::strikes(const std::string& m, int add)
+{
+    std::string p = cfg.folder + "\\_strikes-" + m + "-fp.txt";
+    int n = 0; { std::ifstream f(p.c_str()); f >> n; }
+    if (add) { n += add; std::ofstream f(p.c_str(), std::ios::trunc); f << n << "\n"; }
+    return n;
 }
 
 // (0.2.1) written right BEFORE an RTBARS request, removed once IRT has survived it (the next tick); found at a restart = it crashed IRT
@@ -462,7 +491,7 @@ void IRTReader::footprintOf(FpState& M)
 {
     time_t nowT = time(0);
     if (M.fpBlocked) { M.err = "footprint request blocked: it crashed IRT before"; return; }
-    if (!M.fpTry.empty() && M.fpBars) guardClear(M, "fp");          // IRT survived the last request
+    if (!M.fpTry.empty() && M.fpBars) { guardClear(M, "fp"); std::remove((cfg.folder + "\\_strikes-" + M.mkt + "-fp.txt").c_str()); }   // IRT survived the last request (0.6.2: strikes back to 0)
     if (!M.fpBars || (M.fpCount >= 0 && nowT - M.fpGrew > 90 && nowT - M.fpMade > 90)) {   // remade if it stops growing for 10 min
         if (M.fpBars) { delete M.fpBars; M.fpBars = nullptr; }
         RTDATE now = currentDate();

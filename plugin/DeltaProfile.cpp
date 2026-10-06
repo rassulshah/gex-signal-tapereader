@@ -33,8 +33,9 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
-static const char* DLT_VERSION = "1.5.0";
+static const char* DLT_VERSION = "1.5.1";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -281,6 +282,24 @@ void DeltaProfile::render(const DSet& S)
     short base = growLeft ? right : left;
     short sL = growLeft ? (short)(left - SEAM - VALS) : (short)(right + VALS), sR = (short)(sL + SEAM);      // the letter column, clear of the bar values
     textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
+    // (1.5.1, Rassul 09:34 "is there a mechanism to show whether there is missed data") the file's last footprint minute vs
+    // the chart clock: > 10 min old = the recorder or the Reader stopped -> a red STALE chip under the header
+    if (D.asof.size() >= 16) {
+        struct tm a; memset(&a, 0, sizeof(a));
+        if (sscanf_s(D.asof.c_str(), "%d-%d-%d %d:%d", &a.tm_year, &a.tm_mon, &a.tm_mday, &a.tm_hour, &a.tm_min) == 5) {
+            a.tm_year -= 1900; a.tm_mon -= 1; a.tm_isdst = -1;
+            RTDATE now = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(now, &t); t.tm_isdst = -1;
+            double age = difftime(mktime(&t), mktime(&a)) / 60.0;
+            if (age > 10.0 && age < 60.0 * 24 * 30) {
+                char b[24]; if (age >= 2880) sprintf_s(b, sizeof(b), "STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) sprintf_s(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5));
+                int tw = textW(b, 8, true);
+                short x = (short)(left + 1), y = (short)(pane.top + 18);
+                RCT bg; bg.set(x, y, (short)(x + tw + 6), (short)(y + 13));
+                bg.draw(1, 0x00C0392B, 0x003A1416, DRAW_OPAQUE, PAT_SOLID);
+                textLJ((short)(x + 3), (short)(y + 6), b, 0x00FF9A8F, 8, true);
+            }
+        }
+    }
     if (S.sides != 1) line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
     if (growLeft) line(sL, (short)(pane.top + 16), sL, pane.bottom, C_AXIS, 1); else line(sR, (short)(pane.top + 16), sR, pane.bottom, C_AXIS, 1);
     short mid = (short)(left + S.width / 2);
