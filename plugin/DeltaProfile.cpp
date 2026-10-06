@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.0";
+static const char* DLT_VERSION = "1.3.1";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -51,8 +51,8 @@ struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
     bool ok = false; std::string asof, from, to, side, name, code, strength; float level = 0;
-    std::vector<DRow> rows, srows, drows, hrows; float tick = 0; int levelN = 0;
-    struct DMark { float px = 0; std::string code, side; int n = 0; }; std::vector<DMark> marks;
+    std::vector<DRow> rows, srows, drows, hrows; float tick = 0; int levelN = 0; float levelX = 0;
+    struct DMark { float px = 0; std::string code, side; int n = 0; float x = 0; }; std::vector<DMark> marks;
 };
 
 class DeltaProfile : public cppExtension {
@@ -164,7 +164,8 @@ void DeltaProfile::load()
         else if (t[0] == "BADGE" && t.size() >= 2) { D.code = t[1]; D.strength = t.size() >= 3 ? t[2] : ""; }
         else if (t[0] == "TICK" && t.size() >= 2) D.tick = (float)atof(t[1].c_str());
         else if (t[0] == "LEVELN" && t.size() >= 2) D.levelN = atoi(t[1].c_str());
-        else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); D.marks.push_back(k); }
+        else if (t[0] == "LEVELX" && t.size() >= 2) D.levelX = (float)atof(t[1].c_str());
+        else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); if (t.size() >= 6) k.x = (float)atof(t[5].c_str()); D.marks.push_back(k); }
         else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
             DRow r; r.px = (float)atof(t[1].c_str()); r.d = (float)atof(t[2].c_str()); r.v = (float)atof(t[3].c_str());
             (t[0] == "ROW" ? D.rows : t[0] == "SROW" ? D.srows : t[0] == "HROW" ? D.hrows : D.drows).push_back(r);
@@ -203,7 +204,7 @@ void DeltaProfile::render(const DSet& S)
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
     // (1.2.0, Rassul 21:17 mockup v2) DLT faces RIGHT (toward the Liquidity Profile); the letter column (the seam) is on
     // its right: [DLT ->][letters] then LIQ and the Dealer Profile
-    const short SEAM = 36;
+    const short SEAM = 62;   // (1.3.1) room for "A 120 2x"
     short right, left;
     if (S.place == 1) {                                             // Left: from the pane's left edge + gap
         left = (short)(pane.left + 4 + (S.gap > 0 ? S.gap : 0)); right = (short)(left + S.width);
@@ -215,13 +216,14 @@ void DeltaProfile::render(const DSet& S)
     // (1.3.0) Face Price (default): [letters][<- DLT] bars grow LEFT toward the candles, letters on the candle side.
     //         Face Dealer Profile: [DLT ->][letters] bars grow RIGHT toward the Dealer Profile, letters after them.
     bool toPrice = S.face == 0;
-    if (toPrice) { left = (short)(left + SEAM); right = (short)(right + SEAM); }      // same block, letters first
-    int dir = toPrice ? -1 : 1;
-    short base = toPrice ? right : left;
-    short sL = toPrice ? (short)(left - SEAM) : right, sR = (short)(sL + SEAM);       // the letter column
+    bool growLeft = (S.place == 0) ? toPrice : !toPrice;          // price is LEFT of a Right column, RIGHT of a Left column
+    if (growLeft) { left = (short)(left + SEAM); right = (short)(right + SEAM); }     // same block, letters first
+    int dir = growLeft ? -1 : 1;
+    short base = growLeft ? right : left;
+    short sL = growLeft ? (short)(left - SEAM) : right, sR = (short)(sL + SEAM);      // the letter column (at the bars' tips side)
     textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
     if (S.sides != 1) line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
-    if (toPrice) line(sL, (short)(pane.top + 16), sL, pane.bottom, C_AXIS, 1); else line(sR, (short)(pane.top + 16), sR, pane.bottom, C_AXIS, 1);
+    if (growLeft) line(sL, (short)(pane.top + 16), sL, pane.bottom, C_AXIS, 1); else line(sR, (short)(pane.top + 16), sR, pane.bottom, C_AXIS, 1);
     short mid = (short)(left + S.width / 2);
     if (!D.ok) return;
 
@@ -279,6 +281,10 @@ void DeltaProfile::render(const DSet& S)
     }
     // (1.2.0) letters in the seam column, on the row they describe: the key level full colour (+ contracts: A 250),
     // pivots / big ones dimmer (A 180). '?' = setting up.
+    // (1.3.1, Rassul 22:01 "A 120 (2x)") volume vs the same minute's normal: " 2x" (one decimal under 10x)
+    auto xs = [](float x) -> std::string { if (x < 0) return ""; char b[16];
+        if (x < 0.1f) sprintf_s(b, sizeof(b), " <0.1x"); else if (x < 10) sprintf_s(b, sizeof(b), " %.1fx", x); else sprintf_s(b, sizeof(b), " %.0fx", x);
+        std::string s = b; if (s.size() > 4 && s.substr(s.size() - 3) == ".0x") s = s.substr(0, s.size() - 3) + "x"; return s; };
     auto drawLetter = [&](float px, std::string t, COLOR col) {
         short y = yOf(px); if (y < pane.top + 16 || y > pane.bottom) return;
         textLJ((short)(sL + 3), y, t.c_str(), col, S.font, true);
@@ -288,6 +294,7 @@ void DeltaProfile::render(const DSet& S)
         bool sup = k.side == "support";
         COLOR col = k.code == "E" ? 0x00A16207 : (sup ? 0x00166534 : 0x00991B1B);     // dim amber / green / red
         std::string t = k.code; if (k.n > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d", k.n); t += b; }
+        if (k.x > 0 || k.code == "E") t += xs(k.x);
         drawLetter(k.px, t, col);
     }
     if (!D.code.empty() && D.level > 0) {
@@ -296,6 +303,7 @@ void DeltaProfile::render(const DSet& S)
         std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "T" : D.code == "In" ? "I" : D.code.substr(0, 1);
         if (D.strength == "?") t += "?";
         if (D.code == "Ab" && D.levelN > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d", D.levelN); t += b; }
+        if (D.levelX > 0) t += xs(D.levelX);
         drawLetter(D.level, t, col);
     }
 }
@@ -331,6 +339,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.0");
+    p->setVersion("1.3.1");
     return p;
 }
