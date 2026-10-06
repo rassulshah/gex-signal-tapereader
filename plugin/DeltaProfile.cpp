@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.5.4";
+static const char* DLT_VERSION = "1.5.5";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -265,8 +265,9 @@ void DeltaProfile::render(const DSet& S)
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
     // (1.2.0, Rassul 21:17 mockup v2) DLT faces RIGHT (toward the Liquidity Profile); the letter column (the seam) is on
     // its right: [DLT ->][letters] then LIQ and the Dealer Profile
-    const short SEAM = 62;   // (1.3.1) room for "A 120 2x"
-    const short VALS = 34;   // (1.3.6, Rassul 23:37 "i dont want it to overlap the volume amount") room for the bar values between the letters and the bars
+    const short SEAM = 38;   // (1.3.1) room for "A 120 2x"; (1.5.5, Rassul 10:05 "taking up too much space") 62 -> 38: letters now sit
+                             // right beside their amount instead of in a fixed column
+    const short VALS = 28;   // (1.5.5) 34 -> 28   // (1.3.6, Rassul 23:37 "i dont want it to overlap the volume amount") room for the bar values between the letters and the bars
     short right, left;
     if (S.place == 1) {                                             // Left: from the pane's left edge + gap
         left = (short)(pane.left + 4 + (S.gap > 0 ? S.gap : 0)); right = (short)(left + S.width);
@@ -340,7 +341,8 @@ void DeltaProfile::render(const DSet& S)
     for (auto& kv : B) big.push_back(std::make_pair(std::fabs(kv.second.r.d), kv.first));
     std::sort(big.begin(), big.end(), [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first > b.first; });
     std::map<int, bool> lab; for (size_t i = 0; i < big.size() && i < 3; i++) lab[big[i].second] = true;
-    struct LB { short t, b; float d; }; std::vector<LB> labd;     // (1.5.0) the labelled nodes - their letters go on the same rows
+    struct LB { short t, b; float d; short edge; }; std::vector<LB> labd;
+    std::map<int, short> edgeOf;                                   // (1.5.5) per row: the outer edge of the bar tip / its amount     // (1.5.0) the labelled nodes - their letters go on the same rows
     for (auto& kv : B) {
         const DRow& r = kv.second.r; short t = kv.second.t, b = kv.second.b;
         int L = (int)(std::fabs(r.d) / dmax * full); if (L < 1 && r.d != 0) L = 1;
@@ -356,15 +358,19 @@ void DeltaProfile::render(const DSet& S)
             de = (short)(base + dir * L);
             if (r.d != 0) box(dir > 0 ? base : de, t, dir > 0 ? de : base, b, r.d > 0 ? C_BUY : C_SELL);
         }
-        if (lab[kv.first] && r.d != 0) { LB lb; lb.t = t; lb.b = b; lb.d = r.d; labd.push_back(lb); }
+        short edge = both ? (growLeft ? (short)(mid - full - 1) : (short)(mid + full + 1)) : de;
         if (S.labels && lab[kv.first] && r.d != 0) {
             char s[24]; float a = std::fabs(r.d);
             if (a >= 1000) sprintf_s(s, sizeof(s), "%s%.1fk", r.d > 0 ? "+" : "-", a / 1000); else sprintf_s(s, sizeof(s), "%s%.0f", r.d > 0 ? "+" : "-", a);
             short yc = (short)((t + b) / 2);
             bool rightSide = both ? r.d > 0 : dir > 0;
+            int tw = textW(s, S.font - 1, false);
             if (rightSide) textLJ((short)(de + 2), yc, s, C_INK, S.font - 1, false);
             else textRJ((short)(de - 2), yc, s, C_INK, S.font - 1, false);
+            if (!both) edge = rightSide ? (short)(de + 2 + tw) : (short)(de - 2 - tw);
         }
+        edgeOf[kv.first] = edge;
+        if (lab[kv.first] && r.d != 0) { LB lb; lb.t = t; lb.b = b; lb.d = r.d; lb.edge = edge; labd.push_back(lb); }
     }
     // (1.2.0) letters in the seam column, on the row they describe: the key level full colour (+ contracts: A 250),
     // pivots / big ones dimmer (A 180). '?' = setting up.
@@ -378,17 +384,25 @@ void DeltaProfile::render(const DSet& S)
     };
     // (1.4.0, Rassul 08:18 "build") zones: a bracket over the zone's rows in the letter column + ONE label - Dst? 70% while
     // forming, Dst 70% once price proved it, T if it failed (they are trapped). Always shown (the zone is the read).
+    // (1.5.5) zones: a bracket just outside the zone's bars / amounts and ONE label beside it (no fixed column)
     for (size_t i = 0; i < D.zones.size(); i++) {
         const DData::DZone& z = D.zones[i];
         short yt = yOf(z.hi + D.tick * 0.5f), yb = yOf(z.lo - D.tick * 0.5f);
         if (yb < pane.top + 16 || yt > pane.bottom) continue;
+        short ex = growLeft ? base : base;
+        bool any = false;
+        for (auto& kv : B) {
+            if (kv.second.b < yt || kv.second.t > yb) continue;
+            short e = edgeOf[kv.first];
+            if (!any) { ex = e; any = true; } else ex = growLeft ? (e < ex ? e : ex) : (e > ex ? e : ex);
+        }
         COLOR col = z.side == "support" ? 0x0086EFAC : 0x00FCA5A5;
-        // (1.5.4, Rassul 09:55 "the bracket spacing is making it difficult to read the percentage") the bracket opens on the
-        // column's LEFT edge "[" and the label starts after it - the right-edge bracket ran through "42%"
-        short bx = (short)(sL + 1);
-        line(bx, yt, bx, yb, col, 1); line(bx, yt, (short)(bx + 3), yt, col, 1); line(bx, yb, (short)(bx + 3), yb, col, 1);
         std::string t = z.code; if (z.code != "T" && z.share > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d%%", z.share); t += b; }
-        textLJ((short)(sL + 6), (short)((yt + yb) / 2), t.c_str(), col, S.font, true);
+        short bx = growLeft ? (short)(ex - 4) : (short)(ex + 4);
+        short tk = growLeft ? (short)(bx + 3) : (short)(bx - 3);
+        line(bx, yt, bx, yb, col, 1); line(bx, yt, tk, yt, col, 1); line(bx, yb, tk, yb, col, 1);
+        if (growLeft) textRJ((short)(bx - 3), (short)((yt + yb) / 2), t.c_str(), col, S.font, true);
+        else textLJ((short)(bx + 3), (short)((yt + yb) / 2), t.c_str(), col, S.font, true);
     }
     // (1.5.0, Rassul 09:16-09:18 "we are looking at the high delta nodes ... the ones that stick out and have the amounts on
     // them") ONE letter per labelled node, on its row: A? (price has not left it), A (the absorbers held it), T (they are
@@ -414,7 +428,8 @@ void DeltaProfile::render(const DSet& S)
             short y = (short)((labd[i].t + labd[i].b) / 2);
             if (y - lastY < S.font + 2) y = (short)(lastY + S.font + 2);   // two labelled rows touching: stack, never overlap
             lastY = y;
-            textLJ((short)(sL + 3), y, t.c_str(), col, S.font, true);
+            if (growLeft) textRJ((short)(labd[i].edge - 4), y, t.c_str(), col, S.font, true);    // (1.5.5) right beside its amount
+            else textLJ((short)(labd[i].edge + 4), y, t.c_str(), col, S.font, true);
         }
     }
     if (!D.code.empty() && D.level > 0) {
