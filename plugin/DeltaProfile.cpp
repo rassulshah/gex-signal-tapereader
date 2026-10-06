@@ -46,7 +46,7 @@ static const COLOR C_DARK  = 0x000B0F19;
 
 struct DIdx { int market, width, gap, font, labels, place, range, group, sides; };
 static DIdx DX;
-struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 1, range = 0, group = 1, sides = 0; bool labels = true; };
+struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 1, range = 0, group = 1, sides = 0; bool labels = true; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
@@ -110,7 +110,7 @@ int cppExtension::setup(void)
     const short SL = kParmAppendSameLine;
     int pc = 0;
     DX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    DX.width  = pc++; setIntegerParameter("Width px", 80, NUMW, SL);
+    DX.width  = pc++; setIntegerParameter("Width px", 50, NUMW, SL);   // (1.1.6, Rassul 20:29) 50 so DLT / LIQ / GEX all fit on the right
     DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW);
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
@@ -124,7 +124,7 @@ int cppExtension::setup(void)
 void DeltaProfile::readSettings(DSet& S)
 {
     S.market = getListIndex(DX.market);
-    S.width = getIntegerValue(DX.width); if (S.width < 30) S.width = 80; if (S.width > 600) S.width = 600;
+    S.width = getIntegerValue(DX.width); if (S.width < 30) S.width = 50; if (S.width > 600) S.width = 600;
     S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;

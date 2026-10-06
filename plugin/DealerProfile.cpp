@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.2.2";   // 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.2.3";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -62,7 +62,7 @@ static COLOR fade(COLOR a, float t)   // toward the dark ground
 
 struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode, keyHow, inds; };
 static PIdx PX;
-struct Settings { int market = 0, width = 80, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true;
+struct Settings { int market = 0, width = 50, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true;
                   std::string inds = "cob_bull,cob_bear"; };   // (1.5.0) his custom indicators copied into the bar file
 
 class DealerProfile : public cppExtension {
@@ -118,13 +118,13 @@ int cppExtension::setup(void)
 {
     // (1.3.12, Rassul 2026-09-30) only real settings have a control; the guide is plain text (setLabelParameter) below.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
-    setParameterVersion(4);   // (2.2.2) BUMPED: resets saved charts to the 80 px width default
+    setParameterVersion(5);   // (2.2.2) BUMPED: resets saved charts to the 80 px width default
     setParameterDialogHeight(8);    // (2.0.1, Rassul 2026-10-02 19:12) the how-to text is gone - controls only
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     // (2.0.3) NUMW (DealerLogic.h): the SDK default width (0) made the number boxes so narrow they showed "T"
-    PX.width   = pc++; setIntegerParameter("Profile width px", 80, NUMW, SL);   // (2.2.1, Rassul 17:54 "too big") default 80
+    PX.width   = pc++; setIntegerParameter("Profile width px", 50, NUMW, SL);   // (2.2.1, Rassul 17:54 "too big") default 80
     PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, NUMW);
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
     PX.labels  = pc++; setBoolParameter("Values on the bars", true);
@@ -139,7 +139,7 @@ int cppExtension::setup(void)
 void DealerProfile::readSettings(Settings& S)
 {
     S.market = getListIndex(PX.market);
-    S.width = getIntegerValue(PX.width); if (S.width < 30) S.width = 80; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
+    S.width = getIntegerValue(PX.width); if (S.width < 30) S.width = 50; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
     S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = false;
     S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = false;
     S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 9; if (S.font > 24) S.font = 24;
@@ -562,6 +562,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.2.2");
+    p->setVersion("2.2.3");
     return p;
 }
