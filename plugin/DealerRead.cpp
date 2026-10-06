@@ -1343,15 +1343,11 @@ void DealerRead::renderTurn(const Settings& S)
                 std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
                 K.tagsW[k] += textW(tg.c_str(), fs - 1, true) + U(8) + U(3);
             }
-            int restW = colW - nW - K.tW; if (restW < U(80)) restW = U(80);
-            int firstW = restW - K.tagsW[k] - gap; if (firstW < U(30)) firstW = U(30);
+            // (4.0.2, Rassul 13:46 "the text is also being cut off. use the space below the time also, i want to see the complete
+            // text") the whole text, never cut; lines after the first start under the time (the full column width)
+            int restW = colW - nW; if (restW < U(80)) restW = U(80);
+            int firstW = colW - nW - K.tW - K.tagsW[k] - gap; if (firstW < U(30)) firstW = U(30);
             std::vector<std::string> ln = wrapWords(K.G[k].text, firstW, restW, fs, false, 40);
-            if (ln.size() > 3) {                                   // at most 3 lines: cut the third and mark it
-                ln.resize(3);
-                std::string& l3 = ln[2];
-                while (!l3.empty() && textW((l3 + "..").c_str(), fs, false) > restW) { size_t sp = l3.find_last_of(' '); l3 = sp == std::string::npos ? l3.substr(0, l3.size() - 1) : l3.substr(0, sp); }
-                l3 += "..";
-            }
             if (ln.empty()) ln.push_back("");
             K.L[k] = ln;
             K.h += (int)ln.size();
@@ -1405,7 +1401,7 @@ void DealerRead::renderTurn(const Settings& S)
                 tx = (short)(tx + w + U(3));
             }
             for (size_t l = 0; l < K.L[k].size(); l++) {
-                short sx = l == 0 ? (short)(tx + gap) : (short)(lx + nW + K.tW);
+                short sx = l == 0 ? (short)(tx + gap) : (short)(lx + nW);
                 text(sx, yy, K.L[k][l].c_str(), allLean ? C_GREY : C_INK, fs, false, 0);
                 if (l + 1 < K.L[k].size()) yy = (short)(yy + lh);
             }
@@ -1431,6 +1427,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.0.1");   // (4.0.0) OPTIONS | FOOTPRINT split
+    p->setVersion("4.0.2");   // (4.0.0) OPTIONS | FOOTPRINT split
     return p;
 }
