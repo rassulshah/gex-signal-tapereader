@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.5";
+static const char* DLT_VERSION = "1.3.6";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -258,22 +258,23 @@ void DeltaProfile::render(const DSet& S)
     // (1.2.0, Rassul 21:17 mockup v2) DLT faces RIGHT (toward the Liquidity Profile); the letter column (the seam) is on
     // its right: [DLT ->][letters] then LIQ and the Dealer Profile
     const short SEAM = 62;   // (1.3.1) room for "A 120 2x"
+    const short VALS = 34;   // (1.3.6, Rassul 23:37 "i dont want it to overlap the volume amount") room for the bar values between the letters and the bars
     short right, left;
     if (S.place == 1) {                                             // Left: from the pane's left edge + gap
         left = (short)(pane.left + 4 + (S.gap > 0 ? S.gap : 0)); right = (short)(left + S.width);
         if (right + SEAM >= paneR - 40) return;
     } else {                                                        // Right: the block ends just left of the Dealer Profile
-        right = (short)(paneR - 2 - dealerReach() - S.gap - SEAM); left = (short)(right - S.width);
+        right = (short)(paneR - 2 - dealerReach() - S.gap - SEAM - VALS); left = (short)(right - S.width);
         if (left <= pane.left + 40) return;
     }
     // (1.3.0) Face Price (default): [letters][<- DLT] bars grow LEFT toward the candles, letters on the candle side.
     //         Face Dealer Profile: [DLT ->][letters] bars grow RIGHT toward the Dealer Profile, letters after them.
     bool toPrice = S.face == 0;
     bool growLeft = (S.place == 0) ? toPrice : !toPrice;          // price is LEFT of a Right column, RIGHT of a Left column
-    if (growLeft) { left = (short)(left + SEAM); right = (short)(right + SEAM); }     // same block, letters first
+    if (growLeft) { left = (short)(left + SEAM + VALS); right = (short)(right + SEAM + VALS); }     // letters, values, then bars
     int dir = growLeft ? -1 : 1;
     short base = growLeft ? right : left;
-    short sL = growLeft ? (short)(left - SEAM) : right, sR = (short)(sL + SEAM);      // the letter column (at the bars' tips side)
+    short sL = growLeft ? (short)(left - SEAM - VALS) : (short)(right + VALS), sR = (short)(sL + SEAM);      // the letter column, clear of the bar values
     textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
     if (S.sides != 1) line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
     if (growLeft) line(sL, (short)(pane.top + 16), sL, pane.bottom, C_AXIS, 1); else line(sR, (short)(pane.top + 16), sR, pane.bottom, C_AXIS, 1);
@@ -388,6 +389,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.5");
+    p->setVersion("1.3.6");
     return p;
 }
