@@ -104,7 +104,6 @@ public:
             textLJ((short)(x2 - tw + 4), y, txt.c_str(), C_DARK, fsz, true);
         }
     }
-    }
     std::string chartKey(); std::string savedKey; long long savedStamp = -2;
     void readSettings(Settings& S);
     void load();
