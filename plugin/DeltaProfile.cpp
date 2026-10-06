@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.1.4";
+static const char* DLT_VERSION = "1.1.5";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -176,7 +176,11 @@ int DeltaProfile::dealerReach()
         if (t.size() >= 2 && t[0] == "MARKET") m = t[1];
         if (t.size() >= 2 && t[0] == "REACH") reach = atoi(t[1].c_str());
     }
-    return (m == mkt && reach > 0 && reach < 1200) ? reach : 0;
+    // (1.1.5, Rassul 20:16 "it seems to shift around") the status file is shared by every chart, so it often holds ANOTHER
+    // market's reach (0 here) and the column jumped. Keep the last good reach per market instead.
+    static std::map<std::string, int> last;
+    if (m == mkt && reach > 0 && reach < 1200) last[mkt] = reach;
+    return last.count(mkt) ? last[mkt] : 150;
 }
 
 void DeltaProfile::render(const DSet& S)
@@ -303,6 +307,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.1.4");
+    p->setVersion("1.1.5");
     return p;
 }
