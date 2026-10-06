@@ -175,6 +175,32 @@ int main()
         CHECK(!dl::parseSummary("VERSION|1.0\n").ok && dl::hexColour("#zz0000", 7) == 7 && dl::hexColour("#4ade80", 0) == 0x004ADE80, "summary empty + bad colour");
         CHECK(dl::ageMin(1000, 1000 + 125) == 2 && dl::ageMin(0, 5) == -1 && dl::ageTxt(5) == "5 min" && dl::ageTxt(130) == "2h" && dl::ageTxt(3000) == "2d", "summary age");
     }
+    {   // (Read 4.1, file 2.1) the read line + the Last 90 min rows
+        dl::Data R;
+        dl::parseLine(R, "TURN|L|ES - last 90 min - DEMAND? stronger (5 vs 1) - T1 7,890|14:29|15:59");
+        dl::parseLine(R, "RD|{b:Read:} {g:buyers absorbed} the dip at {p:7,873} (+78 at {p:4,197}), then wait.");
+        dl::parseLine(R, "RMODE|L90");
+        dl::parseLine(R, "TR|1|15:00|Absorbed|||-1,019 selling absorbed.|F|D");
+        dl::parseLine(R, "TR|2|15:00|Wall ahead|||Dealers sell there.|O");
+        CHECK(R.hasTurn && R.readMode == "L90" && R.readLine.find("{p:7,873}") != std::string::npos, "RD + RMODE rows");
+        CHECK(R.trows.size() == 2 && R.trows[0].pole == 'D' && R.trows[0].sec == 'F' && R.trows[1].pole == 'N', "TR pole (old rows: N)");
+        std::vector<dl::StyPiece> P = dl::parseStyled(R.readLine);
+        CHECK(P.size() >= 10 && P[0].t == "Read:" && P[0].s == 'b' && !P[0].sp && P[1].t == "buyers" && P[1].s == 'g' && P[1].sp, "styled pieces");
+        size_t k = 0; while (k < P.size() && P[k].t != "4,197") k++;
+        CHECK(k < P.size() && P[k].s == 'p' && P[k].sp && P[k + 1].t == ")," && !P[k + 1].sp && P[k + 1].s == 'n', "a price glued inside brackets stays one word");
+        auto w = [](const std::string& t, char) { return (float)t.size(); };
+        std::vector<std::vector<dl::StyPiece> > L = dl::wrapStyled(P, 20, 30, w);
+        CHECK(L.size() >= 3, "wraps into lines");
+        bool fits = true, glued = true;
+        for (size_t i = 0; i < L.size(); i++) {
+            float x = 0; for (size_t j = 0; j < L[i].size(); j++) x += (L[i][j].sp ? 1 : 0) + (float)L[i][j].t.size();
+            if (x > (i == 0 ? 20 : 30) && L[i].size() > 1) fits = false;
+            if (!L[i].empty() && L[i][0].sp) glued = false;
+            if (!L[i].empty() && L[i][0].t == ")," ) glued = false;
+        }
+        CHECK(fits && glued, "every line fits, no line starts with a space or a glued piece");
+        CHECK(dl::parseStyled("no markup {x:y}").size() == 3 && dl::wrapStyled(dl::parseStyled(""), 10, 10, w).empty(), "plain text / empty");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

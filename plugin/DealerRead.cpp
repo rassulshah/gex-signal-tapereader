@@ -68,6 +68,8 @@ static const COLOR C_DOBRD = 0x001E3A5F;
 static const COLOR C_DOTXT = 0x00BFDBFE;
 static const COLOR C_TABON = 0x001E3A5F;
 static const COLOR C_TABONB = 0x0093C5FD;
+// (4.1.0) the read line: prices that matter light grey bold, buyers green, sellers red, labels white, the rest a shade dimmer
+static const COLOR C_RDHI = 0x00F1F5F9, C_RDBUY = 0x0086EFAC, C_RDSELL = 0x00FCA5A5, C_RDBOLD = 0x00FFFFFF, C_RDTXT = 0x00AEB8C5;
 static const COLOR C_TABOFF = 0x000B0F19;
 static const COLOR C_TABOFB = 0x00374151;
 static const COLOR C_BORDER = 0x0064748B;
@@ -1324,6 +1326,12 @@ void DealerRead::renderTurn(const Settings& S)
     if (D.hasTurn) head = dl::wrapWords(D.turnHead, (float)inner, wBold);
     else head.push_back(std::string(D.stageSide == 'L' ? "watching LONG at " : "watching SHORT at ") + D.stageLvl + " - no turn yet");
     if (!D.terr.empty()) head.push_back("turn read failed: " + D.terr);
+    // (4.1.0, Rassul 2026-10-06 16:10 "the read above, right below the header" / 16:14 "highlight anything important" / 16:16 "a
+    // lighter shade of gray instead of yellow") the READ LINE: what happened, what to wait for and the flip, prices that matter
+    // light grey bold, buyers green, sellers red, the rest a shade dimmer
+    auto wSty = [&](const std::string& q, char st) { return (float)textW(q.c_str(), fs, st == 'p' || st == 'b'); };
+    std::vector<std::vector<dl::StyPiece> > rdl;
+    if (D.hasTurn && !D.readLine.empty()) rdl = dl::wrapStyled(dl::parseStyled(D.readLine), (float)inner, (float)inner, wSty);
     // the two sides: rows by section (older files without a section: everything on the options side)
     std::vector<dl::Data::TRow> side[2];
     for (size_t i = 0; i < D.trows.size(); i++) side[D.trows[i].sec == 'F' ? 1 : 0].push_back(D.trows[i]);
@@ -1356,7 +1364,7 @@ void DealerRead::renderTurn(const Settings& S)
     }
     int bodyLines = C[0].h > C[1].h ? C[0].h : C[1].h;
     int nGroups = (int)(C[0].G.size() > C[1].G.size() ? C[0].G.size() : C[1].G.size());
-    gridH = (short)(pad * 2 + lh * ((int)head.size() + bodyLines) + U(3) * (short)nGroups + U(4));
+    gridH = (short)(pad * 2 + lh * ((int)head.size() + bodyLines + (int)rdl.size()) + U(3) * (short)nGroups + U(4) + (rdl.empty() ? 0 : U(6)));
     short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(pane.left + U(10));
     short maxR = (short)(pane.right - U(4));
     if (x0 + W > maxR) x0 = (short)(maxR - W);
@@ -1372,6 +1380,22 @@ void DealerRead::renderTurn(const Settings& S)
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
     for (size_t h = 0; h < head.size(); h++) { text(cx0, y, head[h].c_str(), h + 1 == head.size() && !D.terr.empty() ? C_MUTED : C_TABONB, fs, true, 0); y = (short)(y + lh); }
+    if (!rdl.empty()) {
+        float sw = wSty(" ", 'n');
+        for (size_t l = 0; l < rdl.size(); l++) {
+            float x = (float)cx0;
+            for (size_t k = 0; k < rdl[l].size(); k++) {
+                const dl::StyPiece& q = rdl[l][k];
+                if (q.sp) x += sw;
+                COLOR c = q.s == 'p' ? C_RDHI : q.s == 'g' ? C_RDBUY : q.s == 'r' ? C_RDSELL : q.s == 'b' ? C_RDBOLD : C_RDTXT;
+                text((short)x, y, q.t.c_str(), c, fs, q.s == 'p' || q.s == 'b', 0);
+                x += wSty(q.t, q.s);
+            }
+            y = (short)(y + lh);
+        }
+        fill(cx0, (short)(y - lh / 2 + U(2)), (short)(x0 + W - pad), (short)(y - lh / 2 + U(3)), 0x00334155);    // under the read line
+        y = (short)(y + U(6));
+    }
     short yBody = (short)(y + U(2));
     short midX = (short)(cx0 + colW + cgap / 2);
     fill(midX, (short)(yBody - lh / 2), (short)(midX + 1), (short)(y0 + gridH - pad), 0x00334155);     // the split down the middle
@@ -1392,6 +1416,7 @@ void DealerRead::renderTurn(const Settings& S)
                 const dl::Data::TRow& R = side[c][K.G[k].rows[j]];
                 int r, g, b; dl::tagColour(R.tag, r, g, b);
                 COLOR tc = (COLOR)((r << 16) | (g << 8) | b);
+                if (R.pole == 'D') tc = C_RDBUY; else if (R.pole == 'S') tc = C_RDSELL;     // (4.1.0) Last 90: green = demand, red = supply
                 bool guess = R.kind == "guess" || dl::isGuess(R.tag);
                 bool lean = R.kind == "lean"; if (!lean) allLean = false;
                 std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
@@ -1427,6 +1452,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.0.2");   // (4.0.0) OPTIONS | FOOTPRINT split
+    p->setVersion("4.1.0");   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

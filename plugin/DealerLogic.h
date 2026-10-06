@@ -98,8 +98,9 @@ struct Data {
     bool hasStage = false; int stageNow = 0; char stageSide = 'L'; std::string stageLvl, stageExt, stageExtT;
     std::vector<Stg> stgs; std::vector<SRow> srows;
     // (file 1.8 / Read 3.0) the Turn
-    struct TRow { int n = 0; std::string t, tag, kind, src, text; char sec = 'O'; };   // (Read 4.0) sec O = options, F = footprint
+    struct TRow { int n = 0; std::string t, tag, kind, src, text; char sec = 'O'; char pole = 'N'; };   // (Read 4.0) sec O = options, F = footprint; (4.1) pole D demand / S supply / N
     bool hasTurn = false; char turnSide = 'L'; std::string turnHead, turnFrom, turnTo, terr;
+    std::string readLine, readMode;      // (Read 4.1, file 2.1) RD = the read line under the header (markup {p:} {g:} {r:} {b:}); RMODE L90 = the Last 90 min read
     std::vector<TRow> trows;
 };
 
@@ -221,7 +222,10 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "FERR" && t.size() >= 2) { D.ferr = t[1]; return true; }
     if (k == "TURN" && t.size() >= 3) { D.hasTurn = true; D.turnSide = t[1] == "S" ? 'S' : 'L'; D.turnHead = t[2];
         D.turnFrom = t.size() > 3 ? t[3] : ""; D.turnTo = t.size() > 4 ? t[4] : ""; return true; }
+    if (k == "RD" && t.size() >= 2) { D.readLine = t[1]; return true; }
+    if (k == "RMODE" && t.size() >= 2) { D.readMode = t[1]; return true; }
     if (k == "TR" && t.size() >= 7) { Data::TRow r; r.n = atoi(t[1].c_str()); r.t = t[2]; r.tag = t[3]; r.kind = t[4]; r.src = t[5]; r.text = t[6]; if (t.size() >= 8 && !t[7].empty()) r.sec = t[7][0];
+        if (t.size() >= 9 && !t[8].empty()) r.pole = t[8][0];
         D.trows.push_back(r); return true; }
     if (k == "TERR" && t.size() >= 2) { D.terr = t[1]; return true; }
     if (k == "STAGE" && t.size() >= 6) { D.hasStage = true; D.stageNow = atoi(t[1].c_str()); D.stageSide = t[2] == "S" ? 'S' : 'L'; D.stageLvl = t[3]; D.stageExt = t[4]; D.stageExtT = t[5]; return true; }
@@ -267,6 +271,55 @@ template <class W> inline std::vector<std::string> wrapWords(const std::string& 
     }
     if (!line.empty()) out.push_back(line);
     return out;
+}
+// (Read 4.1, Rassul 2026-10-06 16:10-16:14) the READ LINE: text with markup - {p:7,873} a price that matters (light grey, bold),
+// {g:..} buyers / bullish (green), {r:..} sellers / bearish (red), {b:..} bold white; everything else 'n' (a shade dimmer).
+// Split into pieces; a piece carries whether a space came before it, so "(+78 at {p:4,197})," never breaks inside a word.
+struct StyPiece { std::string t; char s = 'n'; bool sp = false; };
+inline std::vector<StyPiece> parseStyled(const std::string& in)
+{
+    std::vector<StyPiece> out;
+    std::string cur; char cs = 'n'; bool pendSp = false, curSp = false;
+    auto flush = [&]() { if (!cur.empty()) { StyPiece p; p.t = cur; p.s = cs; p.sp = curSp; out.push_back(p); cur.clear(); } };
+    auto addChar = [&](char ch, char st) {
+        if (ch == ' ') { flush(); pendSp = true; return; }
+        if (cur.empty()) { cs = st; curSp = pendSp; pendSp = false; }
+        else if (st != cs) { flush(); cs = st; curSp = pendSp; pendSp = false; }
+        cur += ch;
+    };
+    size_t i = 0;
+    while (i < in.size()) {
+        if (in[i] == '{' && i + 2 < in.size() && in[i + 2] == ':' && std::string("pgrb").find(in[i + 1]) != std::string::npos) {
+            size_t e = in.find('}', i + 3);
+            if (e != std::string::npos) {
+                char st = in[i + 1];
+                for (size_t j = i + 3; j < e; j++) addChar(in[j], st);
+                i = e + 1; continue;
+            }
+        }
+        addChar(in[i], 'n'); i++;
+    }
+    flush();
+    return out;
+}
+// wrap pieces into lines no wider than firstW (the first line) / restW, never breaking between pieces glued without a space;
+// width(text, style) measures a piece, width(" ", 'n') a space
+template <class W> inline std::vector<std::vector<StyPiece> > wrapStyled(const std::vector<StyPiece>& P, float firstW, float restW, W width)
+{
+    std::vector<std::vector<StyPiece> > lines(1);
+    float x = 0, sw = (float)width(" ", 'n');
+    size_t i = 0;
+    while (i < P.size()) {
+        size_t j = i + 1; while (j < P.size() && !P[j].sp) j++;          // a unit = pieces up to the next space
+        float uw = 0; for (size_t k = i; k < j; k++) uw += (float)width(P[k].t, P[k].s);
+        float lim = lines.size() == 1 ? firstW : restW;
+        float add = (lines.back().empty() ? 0 : sw) + uw;
+        if (!lines.back().empty() && x + add > lim) { lines.push_back(std::vector<StyPiece>()); x = 0; add = uw; }
+        for (size_t k = i; k < j; k++) { StyPiece q = P[k]; if (k == i) q.sp = !lines.back().empty(); lines.back().push_back(q); }
+        x += add; i = j;
+    }
+    if (lines.size() == 1 && lines[0].empty()) lines.clear();
+    return lines;
 }
 // (Read 3.0) the tag's colour - the Rev Reason colours used in the mockups (r, g, b)
 inline void tagColour(const std::string& tag0, int& r, int& g, int& b)
