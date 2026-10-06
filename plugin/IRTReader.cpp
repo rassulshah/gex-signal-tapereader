@@ -1,6 +1,7 @@
 /********************************************************************************
  *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
  *
+*  0.6.1 (2026-10-05 20:36): depth (DOM + order-by-order) on by default - 0.6.0 never ran the probe because the dialog settings were not read.
  *  0.6.0 (2026-10-05 14:45, Rassul: "I think I have more data because I have full depth so can you see if you can view full
  *     depth"): DEPTH PROBE + RECORDING on the chart's own market. DOM on: the whole book the feed gives (md.maxLevels, up to 200
  *     levels - was capped at 16), a snapshot whenever it changed, at most once a second -> dom.csv. Order-by-order (MBO) on for
@@ -94,7 +95,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.6.0";
+static const char* IR_VERSION = "0.6.1";
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
 #endif
@@ -104,7 +105,7 @@ static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4)
 
 struct RIdx { int market, fp, fpMin, fpDays, trades, dom, domSec, dbo, folder; };
 static RIdx RX;
-struct RSet { int market = 0, fpMin = 1, fpDays = 10, domSec = 2; bool fp = true, trades = false, dom = true, dbo = true;   // (0.6.1) depth ON by default: the settings dialog is not always read, so 0.6.0 never probed (status said DOM off) std::string folder = "C:\\Dev\\level-reversal-analytics\\data\\irt"; };
+struct RSet { int market = 0, fpMin = 1, fpDays = 10, domSec = 2; bool fp = true, trades = false, dom = true, dbo = true; std::string folder = "C:\\Dev\\level-reversal-analytics\\data\\irt"; };   // (0.6.1) depth ON by default: 0.6.0 never probed (the dialog settings were not read, status said DOM off)
 
 // (0.2.0, 3 Oct 00:05: after a restart only ONE chart's reader is ever started by IRT - the NQ chart's; the readers pasted on the
 // other charts never ran, not even calc) ONE reader records the FOOTPRINT of every market in irt_symbols.json (RTBARS takes a
