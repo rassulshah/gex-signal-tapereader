@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.2.5";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.2.6";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -84,8 +84,8 @@ public:
     void exportBars();
 
     bool dialogReady();
-    void syncSettings();
-    std::string chartKey(); std::string savedKey;
+    void syncSettings(bool fromDialog = false);
+    std::string chartKey(); std::string savedKey; long long savedStamp = -2;
     void readSettings(Settings& S);
     void load();
     void alignContract();
@@ -119,16 +119,20 @@ bool DealerProfile::dialogReady() { int i = getListIndex(PX.market); return i >=
 static std::string dpSettingsPath() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.settings.txt"; }
 std::string DealerProfile::chartKey()
 {
+    // (fix 23:22) the settings window's copy of the plugin has NO bar size / chart label (its key read "EPZ26~~") while the
+    // chart's copy has them, so the two never matched. Key = the market symbol only (charts of one market share settings).
     char rb[32] = {0}; const char* rs = getRootSymbol(rb);
-    const char* pl = getPeriodicityLabel(); const char* cl = getChartLabel();
-    std::string k = std::string(rs ? rs : "") + "~" + (pl ? pl : "") + "~" + (cl ? cl : "");
+    std::string k = rs ? rs : "";
     for (size_t i = 0; i < k.size(); i++) if (k[i] == '|' || k[i] == '\n' || k[i] == '\r') k[i] = ' ';
     return k;
 }
-void DealerProfile::syncSettings()
+void DealerProfile::syncSettings(bool fromDialog)
 {
     std::string key = chartKey();
-    if (dialogReady()) {
+    // the settings window's copy has no bar size: only there are the values real (on the chart every list reads 0 and
+    // every box unchecked - which is why "Auto" passed the old test and blank values were saved)
+    const char* pl = getPeriodicityLabel(); bool inDialog = !(pl && pl[0]);
+    if (inDialog && fromDialog) {                       // saved ONLY from the settings window's callbacks
         readSettings(cfg);
         std::map<std::string, std::string> all; std::ifstream in(dpSettingsPath().c_str()); std::string ln;
         while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
@@ -140,7 +144,9 @@ void DealerProfile::syncSettings()
         if (all[key] != row) { all[key] = row; std::ofstream out(dpSettingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
         savedKey = key; return;
     }
-    if (savedKey == key) return;
+    long long st = dl::fileStamp(dpSettingsPath());
+    if (savedKey == key && st == savedStamp) return;
+    savedStamp = st;
     std::ifstream in(dpSettingsPath().c_str()); std::string ln;
     while (std::getline(in, ln)) {
         std::vector<std::string> t = dl::split(ln, '|');
@@ -152,9 +158,9 @@ void DealerProfile::syncSettings()
         }
     }
 }
-int DealerProfile::parmsLoad(void)  { syncSettings(); return RTX_OK; }
-int DealerProfile::parmsApply(void) { syncSettings(); return RTX_OK; }
-int DealerProfile::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
+int DealerProfile::parmsLoad(void)  { syncSettings(true); return RTX_OK; }
+int DealerProfile::parmsApply(void) { syncSettings(true); return RTX_OK; }
+int DealerProfile::parmsUpdt(unsigned int) { syncSettings(true); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
@@ -604,6 +610,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.2.5");
+    p->setVersion("2.2.6");
     return p;
 }

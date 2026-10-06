@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.4";
+static const char* DLT_VERSION = "1.3.5";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -67,8 +67,8 @@ public:
     long long loadedStamp = -2; std::string loadedPath;
     bool dialogReady();
     std::string rootKey();
-    void syncSettings();
-    std::string chartKey(); std::string savedKey;
+    void syncSettings(bool fromDialog = false);
+    std::string chartKey(); std::string savedKey; long long savedStamp = -2;
     void readSettings(DSet& S);
     void load();
     int dealerReach();
@@ -118,16 +118,20 @@ std::string DeltaProfile::rootKey() { char rb[32] = {0}; const char* rs = getRoo
 static std::string settingsPath() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.settings.txt"; }
 std::string DeltaProfile::chartKey()
 {
+    // (fix 23:22) the settings window's copy of the plugin has NO bar size / chart label (its key read "EPZ26~~") while the
+    // chart's copy has them, so the two never matched. Key = the market symbol only (charts of one market share settings).
     char rb[32] = {0}; const char* rs = getRootSymbol(rb);
-    const char* pl = getPeriodicityLabel(); const char* cl = getChartLabel();
-    std::string k = std::string(rs ? rs : "") + "~" + (pl ? pl : "") + "~" + (cl ? cl : "");
+    std::string k = rs ? rs : "";
     for (size_t i = 0; i < k.size(); i++) if (k[i] == '|' || k[i] == '\n' || k[i] == '\r') k[i] = ' ';
     return k;
 }
-void DeltaProfile::syncSettings()
+void DeltaProfile::syncSettings(bool fromDialog)
 {
     std::string key = chartKey();
-    if (dialogReady()) {                                   // the window is open: the values are real - read and save
+    // the settings window's copy has no bar size: only there are the values real (on the chart every list reads 0 and
+    // every box unchecked - which is why "Auto" passed the old test and blank values were saved)
+    const char* pl = getPeriodicityLabel(); bool inDialog = !(pl && pl[0]);
+    if (inDialog && fromDialog) {                       // saved ONLY from the settings window's callbacks                                   // the window is open: the values are real - read and save
         readSettings(cfg);
         std::map<std::string, std::string> all; std::ifstream in(settingsPath().c_str()); std::string ln;
         while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
@@ -138,7 +142,9 @@ void DeltaProfile::syncSettings()
         if (all[key] != row) { all[key] = row; std::ofstream out(settingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
         savedKey = key; return;
     }
-    if (savedKey == key) return;                           // already using this chart's saved copy
+    long long st = dl::fileStamp(settingsPath());
+    if (savedKey == key && st == savedStamp) return;
+    savedStamp = st;                           // already using this chart's saved copy
     std::ifstream in(settingsPath().c_str()); std::string ln;
     while (std::getline(in, ln)) {
         std::vector<std::string> t = dl::split(ln, '|');
@@ -150,9 +156,9 @@ void DeltaProfile::syncSettings()
         }
     }
 }
-int DeltaProfile::parmsLoad(void)  { syncSettings(); return RTX_OK; }
-int DeltaProfile::parmsApply(void) { syncSettings(); return RTX_OK; }
-int DeltaProfile::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
+int DeltaProfile::parmsLoad(void)  { syncSettings(true); return RTX_OK; }
+int DeltaProfile::parmsApply(void) { syncSettings(true); return RTX_OK; }
+int DeltaProfile::parmsUpdt(unsigned int) { syncSettings(true); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
@@ -382,6 +388,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.4");
+    p->setVersion("1.3.5");
     return p;
 }
