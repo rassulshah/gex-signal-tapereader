@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.8.0";
+static const char* DLT_VERSION = "1.8.1";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -518,22 +518,25 @@ void DeltaProfile::wantMinutes()
 
 int DeltaProfile::barForMinute(const std::string& tpk)
 {
+    // IRT stamps a bar by its CLOSE (the 08:36-08:39 bar is "08:39"); a minute is stamped by its end too (08:39 = 08:38-08:39).
+    // The minute's bar = the first bar whose stamp is at or after the minute's stamp.
     int y, mo, d, h, mi;
     if (tpk.size() < 16 || sscanf_s(tpk.c_str(), "%d-%d-%d %d:%d", &y, &mo, &d, &h, &mi) != 5) return -1;
-    double s = h * 3600.0 + mi * 60.0 - 60.0;                  // the minute STARTS one minute before its stamp
-    if (s < 0) return -1;
+    double e = h * 3600.0 + mi * 60.0;
     long n = getBarCount(); if (n < 1) return -1;
     RTARRAYI dt(barDateTime);
     int from = (int)n - 3000; if (from < 0) from = 0;
+    int best = -1;
     for (int i = (int)n - 1; i >= from; i--) {
         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
         int ty = t.tm_year + 1900, tm_ = t.tm_mon + 1;
-        if (ty < y || (ty == y && (tm_ < mo || (tm_ == mo && t.tm_mday < d)))) break;    // past the day
-        if (ty != y || tm_ != mo || t.tm_mday != d) continue;
+        bool before = ty < y || (ty == y && (tm_ < mo || (tm_ == mo && t.tm_mday < d)));
+        bool same = ty == y && tm_ == mo && t.tm_mday == d;
         double s0 = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-        if (s0 <= s) return i;                                 // bars are stamped at their start: the first one at or before the minute
+        if (before || (same && s0 < e)) break;                 // this bar closed before the minute: the previous candidate is it
+        best = i;
     }
-    return -1;
+    return best;
 }
 
 int DeltaProfile::draw(void)

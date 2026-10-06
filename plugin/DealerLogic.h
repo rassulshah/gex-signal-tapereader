@@ -98,7 +98,7 @@ struct Data {
     bool hasStage = false; int stageNow = 0; char stageSide = 'L'; std::string stageLvl, stageExt, stageExtT;
     std::vector<Stg> stgs; std::vector<SRow> srows;
     // (file 1.8 / Read 3.0) the Turn
-    struct TRow { int n = 0; std::string t, tag, kind, src, text; };
+    struct TRow { int n = 0; std::string t, tag, kind, src, text; char sec = 'O'; };   // (Read 4.0) sec O = options, F = footprint
     bool hasTurn = false; char turnSide = 'L'; std::string turnHead, turnFrom, turnTo, terr;
     std::vector<TRow> trows;
 };
@@ -221,7 +221,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "FERR" && t.size() >= 2) { D.ferr = t[1]; return true; }
     if (k == "TURN" && t.size() >= 3) { D.hasTurn = true; D.turnSide = t[1] == "S" ? 'S' : 'L'; D.turnHead = t[2];
         D.turnFrom = t.size() > 3 ? t[3] : ""; D.turnTo = t.size() > 4 ? t[4] : ""; return true; }
-    if (k == "TR" && t.size() >= 7) { Data::TRow r; r.n = atoi(t[1].c_str()); r.t = t[2]; r.tag = t[3]; r.kind = t[4]; r.src = t[5]; r.text = t[6];
+    if (k == "TR" && t.size() >= 7) { Data::TRow r; r.n = atoi(t[1].c_str()); r.t = t[2]; r.tag = t[3]; r.kind = t[4]; r.src = t[5]; r.text = t[6]; if (t.size() >= 8 && !t[7].empty()) r.sec = t[7][0];
         D.trows.push_back(r); return true; }
     if (k == "TERR" && t.size() >= 2) { D.terr = t[1]; return true; }
     if (k == "STAGE" && t.size() >= 6) { D.hasStage = true; D.stageNow = atoi(t[1].c_str()); D.stageSide = t[2] == "S" ? 'S' : 'L'; D.stageLvl = t[3]; D.stageExt = t[4]; D.stageExtT = t[5]; return true; }

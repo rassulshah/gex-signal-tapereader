@@ -1306,43 +1306,61 @@ void DealerRead::renderGrid(const Settings& S)
 // each = time, the Rev Reason tag (a dashed frame = a guess), the sentence word-wrapped to the box width (grey = a lean).
 void DealerRead::renderTurn(const Settings& S)
 {
+    // (4.0.0, Rassul 2026-10-06 12:44-12:50 "split the dealer read in the middle. Each gets up to 4 points with 3 lines each to make
+    // the strongest case for a reversal") one box: the header, then OPTIONS on the left and FOOTPRINT on the right. Each side up to 4
+    // numbered points (the Reader picks the strongest FOR the turn), each point at most 3 lines.
     loadPos();
     u = S.font / 10.0f;
     int fs = S.font - 1;
     RCT pane; pane.getPaneRect(false);
-    short lh = U(15), pad = U(6), gw = U(9), gap = U(6);
+    short lh = U(15), pad = U(6), gw = U(9), gap = U(6), cgap = U(10);
     int W = (int)((pane.right - pane.left) * S.rwid / 100);
-    int minW = U(360); if (W < minW) W = minW;
+    int minW = U(560); if (W < minW) W = minW;
     if (W > pane.right - pane.left - U(8)) W = pane.right - pane.left - U(8);
     int inner = W - gw - 2 * pad;
+    int colW = (inner - cgap) / 2;
     auto wBold = [&](const std::string& q) { return (float)textW(q.c_str(), fs, true); };
-    auto wNorm = [&](const std::string& q) { return (float)textW(q.c_str(), fs, false); };
     std::vector<std::string> head;
     if (D.hasTurn) head = dl::wrapWords(D.turnHead, (float)inner, wBold);
     else head.push_back(std::string(D.stageSide == 'L' ? "watching LONG at " : "watching SHORT at ") + D.stageLvl + " - no turn yet");
     if (!D.terr.empty()) head.push_back("turn read failed: " + D.terr);
-    // (3.1.0, Rassul 2026-10-03 14:41 "a max of 4 rows and the time isn't repeated") one row per time: number, time, the tags of
-    // that time side by side, then their sentences joined and word-wrapped (later lines start under the tags)
-    std::vector<dl::TGroup> G = dl::groupTurn(D.trows, 4);
-    int nW = textW("4)", fs, false) + U(4), tW = 0;
-    for (size_t k = 0; k < G.size(); k++) { int w = textW(G[k].t.c_str(), fs, false) + gap; if (w > tW) tW = w; }
-    if (tW < textW("00:00", fs, false) + gap) tW = textW("00:00", fs, false) + gap;
-    std::vector<int> tagsW(G.size(), 0);
-    std::vector<std::vector<std::string> > lines(G.size());
-    int nLines = (int)head.size();
-    for (size_t k = 0; k < G.size(); k++) {
-        for (size_t j = 0; j < G[k].rows.size(); j++) {
-            const dl::Data::TRow& R = D.trows[G[k].rows[j]];
-            std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
-            tagsW[k] += textW(tg.c_str(), fs - 1, true) + U(8) + U(3);
+    // the two sides: rows by section (older files without a section: everything on the options side)
+    std::vector<dl::Data::TRow> side[2];
+    for (size_t i = 0; i < D.trows.size(); i++) side[D.trows[i].sec == 'F' ? 1 : 0].push_back(D.trows[i]);
+    struct Col { std::vector<dl::TGroup> G; std::vector<std::vector<std::string> > L; std::vector<int> tagsW; int tW = 0, h = 0; };
+    Col C[2];
+    int nW = textW("4)", fs, false) + U(4);
+    for (int c = 0; c < 2; c++) {
+        Col& K = C[c];
+        K.G = dl::groupTurn(side[c], 4);
+        K.tW = textW("00:00", fs, false) + gap;
+        for (size_t k = 0; k < K.G.size(); k++) { int w = textW(K.G[k].t.c_str(), fs, false) + gap; if (w > K.tW) K.tW = w; }
+        K.tagsW.assign(K.G.size(), 0); K.L.assign(K.G.size(), std::vector<std::string>());
+        K.h = 1;                                                   // the section label
+        for (size_t k = 0; k < K.G.size(); k++) {
+            for (size_t j = 0; j < K.G[k].rows.size(); j++) {
+                const dl::Data::TRow& R = side[c][K.G[k].rows[j]];
+                std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
+                K.tagsW[k] += textW(tg.c_str(), fs - 1, true) + U(8) + U(3);
+            }
+            int restW = colW - nW - K.tW; if (restW < U(80)) restW = U(80);
+            int firstW = restW - K.tagsW[k] - gap; if (firstW < U(30)) firstW = U(30);
+            std::vector<std::string> ln = wrapWords(K.G[k].text, firstW, restW, fs, false, 40);
+            if (ln.size() > 3) {                                   // at most 3 lines: cut the third and mark it
+                ln.resize(3);
+                std::string& l3 = ln[2];
+                while (!l3.empty() && textW((l3 + "..").c_str(), fs, false) > restW) { size_t sp = l3.find_last_of(' '); l3 = sp == std::string::npos ? l3.substr(0, l3.size() - 1) : l3.substr(0, sp); }
+                l3 += "..";
+            }
+            if (ln.empty()) ln.push_back("");
+            K.L[k] = ln;
+            K.h += (int)ln.size();
         }
-        int restW = inner - nW - tW; if (restW < U(120)) restW = U(120);
-        int firstW = restW - tagsW[k] - gap; if (firstW < U(40)) firstW = U(40);
-        lines[k] = wrapWords(G[k].text, firstW, restW, fs, false, 40);
-        if (lines[k].empty()) lines[k].push_back("");
-        nLines += (int)lines[k].size();
+        if (K.G.empty()) K.h += 1;                                 // "-" when the side has nothing strong
     }
-    gridH = (short)(pad * 2 + lh * nLines + U(3) * (short)G.size());
+    int bodyLines = C[0].h > C[1].h ? C[0].h : C[1].h;
+    int nGroups = (int)(C[0].G.size() > C[1].G.size() ? C[0].G.size() : C[1].G.size());
+    gridH = (short)(pad * 2 + lh * ((int)head.size() + bodyLines) + U(3) * (short)nGroups + U(4));
     short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(pane.left + U(10));
     short maxR = (short)(pane.right - U(4));
     if (x0 + W > maxR) x0 = (short)(maxR - W);
@@ -1358,31 +1376,41 @@ void DealerRead::renderTurn(const Settings& S)
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
     for (size_t h = 0; h < head.size(); h++) { text(cx0, y, head[h].c_str(), h + 1 == head.size() && !D.terr.empty() ? C_MUTED : C_TABONB, fs, true, 0); y = (short)(y + lh); }
-    for (size_t k = 0; k < G.size(); k++) {
-        y = (short)(y + U(3));
-        char nb[8]; snprintf(nb, sizeof(nb), "%d)", (int)k + 1);
-        text((short)(cx0 + nW - U(4)), y, nb, C_MUTED, fs, false, 2);
-        text((short)(cx0 + nW), y, G[k].t.c_str(), C_MUTED, fs, false, 0);
-        short tx = (short)(cx0 + nW + tW);
-        bool allLean = true;
-        for (size_t j = 0; j < G[k].rows.size(); j++) {
-            const dl::Data::TRow& R = D.trows[G[k].rows[j]];
-            int r, g, b; dl::tagColour(R.tag, r, g, b);
-            COLOR tc = (COLOR)((r << 16) | (g << 8) | b);
-            bool guess = R.kind == "guess" || dl::isGuess(R.tag);
-            bool lean = R.kind == "lean"; if (!lean) allLean = false;
-            std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
-            short w = (short)(textW(tg.c_str(), fs - 1, true) + U(8));
-            frame(tx, (short)(y - lh / 2 + 1), (short)(tx + w), (short)(y + lh / 2 - 1), lean ? C_GREY : tc, guess);
-            text((short)(tx + U(4)), y, tg.c_str(), lean ? C_GREY : tc, fs - 1, true, 0);
-            tx = (short)(tx + w + U(3));
+    short yBody = (short)(y + U(2));
+    short midX = (short)(cx0 + colW + cgap / 2);
+    fill(midX, (short)(yBody - lh / 2), (short)(midX + 1), (short)(y0 + gridH - pad), 0x00334155);     // the split down the middle
+    for (int c = 0; c < 2; c++) {
+        Col& K = C[c];
+        short lx = c == 0 ? cx0 : (short)(cx0 + colW + cgap);
+        short yy = yBody;
+        text(lx, yy, c == 0 ? "OPTIONS" : "FOOTPRINT", C_MUTED, fs - 2, true, 0);
+        yy = (short)(yy + lh);
+        if (K.G.empty()) { text(lx, yy, "-", C_MUTED, fs, false, 0); continue; }
+        for (size_t k = 0; k < K.G.size(); k++) {
+            char nb[8]; snprintf(nb, sizeof(nb), "%d)", (int)k + 1);
+            text((short)(lx + nW - U(4)), yy, nb, C_MUTED, fs, false, 2);
+            text((short)(lx + nW), yy, K.G[k].t.c_str(), C_MUTED, fs, false, 0);
+            short tx = (short)(lx + nW + K.tW);
+            bool allLean = true;
+            for (size_t j = 0; j < K.G[k].rows.size(); j++) {
+                const dl::Data::TRow& R = side[c][K.G[k].rows[j]];
+                int r, g, b; dl::tagColour(R.tag, r, g, b);
+                COLOR tc = (COLOR)((r << 16) | (g << 8) | b);
+                bool guess = R.kind == "guess" || dl::isGuess(R.tag);
+                bool lean = R.kind == "lean"; if (!lean) allLean = false;
+                std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
+                short w = (short)(textW(tg.c_str(), fs - 1, true) + U(8));
+                frame(tx, (short)(yy - lh / 2 + 1), (short)(tx + w), (short)(yy + lh / 2 - 1), lean ? C_GREY : tc, guess);
+                text((short)(tx + U(4)), yy, tg.c_str(), lean ? C_GREY : tc, fs - 1, true, 0);
+                tx = (short)(tx + w + U(3));
+            }
+            for (size_t l = 0; l < K.L[k].size(); l++) {
+                short sx = l == 0 ? (short)(tx + gap) : (short)(lx + nW + K.tW);
+                text(sx, yy, K.L[k][l].c_str(), allLean ? C_GREY : C_INK, fs, false, 0);
+                if (l + 1 < K.L[k].size()) yy = (short)(yy + lh);
+            }
+            yy = (short)(yy + lh + U(3));
         }
-        for (size_t l = 0; l < lines[k].size(); l++) {
-            short sx = l == 0 ? (short)(tx + gap) : (short)(cx0 + nW + tW);
-            text(sx, y, lines[k][l].c_str(), allLean ? C_GREY : C_INK, fs, false, 0);
-            if (l + 1 < lines[k].size()) y = (short)(y + lh);
-        }
-        y = (short)(y + lh);
     }
 }
 
@@ -1403,6 +1431,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("3.1.1");
+    p->setVersion("4.0.0");   // (4.0.0) OPTIONS | FOOTPRINT split
     return p;
 }
