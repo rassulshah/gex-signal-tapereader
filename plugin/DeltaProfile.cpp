@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.1.3";
+static const char* DLT_VERSION = "1.1.4";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -105,7 +105,7 @@ int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg)
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(2);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
+    setParameterVersion(3);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
     setParameterDialogHeight(8);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -114,7 +114,7 @@ int cppExtension::setup(void)
     DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW);
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
-    DX.place  = pc++; setListParameter("Place", 1, "Right;Left");
+    DX.place  = pc++; setListParameter("Place", 0, "Left;Right");   // (1.1.4) Left first: the list default is its first entry
     DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
     DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 1, NUMW);
     DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
@@ -128,7 +128,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
-    S.place = getListIndex(DX.place); if (S.place < 0 || S.place > 1) S.place = 1;
+    { int pi = getListIndex(DX.place); S.place = (pi == 1) ? 0 : 1; }   // (1.1.4) list Left;Right -> place 1 = Left, 0 = Right
     S.range = getListIndex(DX.range); if (S.range < 0 || S.range > 2) S.range = 0;
     S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
     S.sides = getListIndex(DX.sides); if (S.sides < 0 || S.sides > 1) S.sides = 0;
@@ -303,6 +303,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.1.3");
+    p->setVersion("1.1.4");
     return p;
 }
