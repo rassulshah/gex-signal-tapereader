@@ -526,7 +526,7 @@ bool DeltaProfile::buildLive(const DSet& S)
 {
     long n = getBarCount(); if (n < 2) return false;
     RTARRAYI dt(barDateTime);
-    RTARRAY vo(barVolume);
+    RTARRAYI vo(barVolume);
     long key = n * 1000003L + (long)vo[(int)n - 1];
     if (key == liveKey && S.range == liveRange && S.mins == liveMins) return !liveRows.empty();
     RTARRAYP VP(barVolumeProfile);
