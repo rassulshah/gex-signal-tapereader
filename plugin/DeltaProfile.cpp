@@ -294,7 +294,13 @@ void DeltaProfile::writeStatus(const char* what)
 
 int DeltaProfile::draw(void)
 {
-    if (dialogReady()) readSettings(cfg);       // this chart's own settings (one object serves every chart)
+    // (1.1.5, Rassul 20:17 "even the amount of data that is shown changes") one DLL object serves every chart: settings
+    // read from one chart's dialog were used by the next chart that drew. Keep them per chart (root symbol), and reload
+    // the data file whenever the market changes.
+    { char rb[32] = {0}; const char* rs = getRootSymbol(rb); std::string key = rs ? rs : "";
+      static std::map<std::string, DSet> per;
+      if (dialogReady()) { DSet s; readSettings(s); per[key] = s; }
+      cfg = per.count(key) ? per[key] : DSet(); }
     load();
     render(cfg);
     writeStatus(D.ok ? "drawn" : "no data");
