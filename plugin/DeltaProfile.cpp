@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.8.3";
+static const char* DLT_VERSION = "1.9.0";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -73,6 +73,8 @@ public:
     DSet cfg; DData D; std::string mkt, root; int lastBar = 0;
     long long loadedStamp = -2; std::string loadedPath; std::string lastWant;   // (1.6.0)
     std::string drawnRange; int drawnRows = 0;   // (1.7.0) for the status file
+    std::vector<DRow> liveRows; long liveKey = -1; int liveRange = -1, liveMins = -1;   // (1.9.0) the live profile + its cache key
+    bool buildLive(const DSet& S);
     void wantMinutes();
     int barForMinute(const std::string& tpk);   // (1.8.0) the chart bar holding a minute (stamped at its END, "YYYY-MM-DD HH:MM")
     bool dialogReady();
@@ -342,19 +344,23 @@ void DeltaProfile::render(const DSet& S)
     if (S.sides != 1) line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
     if (growLeft) line(sL, (short)(pane.top + 16), sL, pane.bottom, C_AXIS, 1); else line(sR, (short)(pane.top + 16), sR, pane.bottom, C_AXIS, 1);
     short mid = (short)(left + S.width / 2);
-    if (!D.ok) return;
+    // (1.9.0, Rassul 14:52-14:55 "ok build it") the BARS are built LIVE from the chart's own volume at price (IRT's footprint,
+    // every tick); the file only supplies the letters / zones / rings. Falls back to the file's rows when VAP is not available.
+    bool live = buildLive(S);
+    if (!D.ok && !live) return;
 
     // (1.1.0) Range: the last 30 min, the whole session, or the day from 08:30
     // (1.7.0) Last N minutes: 30 / 60 come with every build; any other N is built once a chart asks for it (want file) -
     // until then the nearest window that exists is drawn and the status file says so
     auto mit = D.mrows.find(S.mins);
     bool haveN = mit != D.mrows.end() && !mit->second.empty();
-    const std::vector<DRow>& R =
+    const std::vector<DRow>& R = live ? liveRows :
         S.range == 1 ? (D.srows.empty() ? D.rows : D.srows) :
         S.range == 2 ? (D.drows.empty() ? D.rows : D.drows) :
         S.mins == 30 ? D.rows : S.mins == 60 ? (D.hrows.empty() ? D.rows : D.hrows) :
         haveN ? mit->second : (S.mins > 45 && !D.hrows.empty() ? D.hrows : D.rows);
     drawnRange = S.range == 1 ? "Session" : S.range == 2 ? "Day" : (S.mins == 30 || S.mins == 60 || haveN) ? "Last " + std::to_string(S.mins) + " min" : "Last " + std::to_string(S.mins) + " min (building - showing " + (S.mins > 45 ? "60" : "30") + ")";
+    if (live) drawnRange += " LIVE";
     drawnRows = (int)R.size();
     // rows -> buckets: N ticks per row, or (0 = auto) one bar per few pixels
     int bh = S.font - 3; if (bh < 3) bh = 3;
@@ -513,6 +519,50 @@ void DeltaProfile::writeStatus(const char* what)
       << "\nRANGE," << drawnRange << "\nDRAWN_ROWS," << drawnRows << "\nBADGE," << D.code << D.strength << "\nWIDTH," << cfg.width << "\nSTATE," << what << "\n";
 }
 
+// (1.9.0) the profile from the chart's own bars' volume at price: Last N minutes (bars whose close is within N minutes of the
+// newest bar's close, the forming bar included), Session (from 17:00 CT) or Day (from 08:30). Recomputed only when the newest
+// bar's volume or the bar count changed.
+bool DeltaProfile::buildLive(const DSet& S)
+{
+    long n = getBarCount(); if (n < 2) return false;
+    RTARRAYI dt(barDateTime);
+    RTARRAY vo(barVolume);
+    long key = n * 1000003L + (long)vo[(int)n - 1];
+    if (key == liveKey && S.range == liveRange && S.mins == liveMins) return !liveRows.empty();
+    RTARRAYP VP(barVolumeProfile);
+    struct tm tl; memset(&tl, 0, sizeof(tl)); getLocaltime((RTDATE)dt[(int)n - 1], &tl); tl.tm_isdst = -1;
+    time_t tLast = mktime(&tl);
+    time_t tFrom;
+    if (S.range == 0) tFrom = tLast - (time_t)S.mins * 60;
+    else {
+        struct tm a = tl; a.tm_sec = 0;
+        if (S.range == 1) { a.tm_hour = 17; a.tm_min = 0; if (tl.tm_hour < 17) a.tm_mday -= 1; }      // the session opened 17:00
+        else { a.tm_hour = 8; a.tm_min = 30; if (tl.tm_hour >= 17) a.tm_mday += 1; }                   // the day from 08:30
+        a.tm_isdst = -1; tFrom = mktime(&a);
+    }
+    std::map<long long, DRow> agg;
+    float tk = D.tick > 0 ? D.tick : 0;
+    int from = (int)n - 3000; if (from < 0) from = 0;
+    for (int i = (int)n - 1; i >= from; i--) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t); t.tm_isdst = -1;
+        if (mktime(&t) <= tFrom) break;                                  // bars are stamped at their close
+        BARSTATISTICS bs; memset(&bs, 0, sizeof(bs));
+        if (VP.getBarStatistics(i, bs) != RTX_OK) { if (i == (int)n - 1) continue; return false; }
+        int np = bs.prices > 0 ? bs.prices : 400;
+        for (int k = 0; k < np; k++) {
+            VOLPROFILE vp; memset(&vp, 0, sizeof(vp));
+            if (VP.getVolumeProfile(i, k, vp) != RTX_OK) break;
+            if (vp.totalVolume <= 0 && vp.buyVolume <= 0 && vp.sellVolume <= 0) continue;
+            long long pk = tk > 0 ? (long long)std::floor(vp.price / tk + 0.5) : (long long)std::floor(vp.price * 100000.0 + 0.5);
+            DRow& r = agg[pk]; r.px = tk > 0 ? (float)(pk * tk) : vp.price; r.d += (float)(vp.buyVolume - vp.sellVolume); r.v += (float)vp.totalVolume;
+        }
+    }
+    liveRows.clear();
+    for (auto& kv : agg) liveRows.push_back(kv.second);
+    liveKey = key; liveRange = S.range; liveMins = S.mins;
+    return !liveRows.empty();
+}
+
 // (1.6.0) Range = Minutes: tell the Reader which windows this market's charts want (lsFlexLevels\DeltaProfile.want-<MKT>.txt,
 // newest 4); it writes MROW / NODE M<minutes> lines for each on its next build (within 5 min)
 void DeltaProfile::wantMinutes()
@@ -568,7 +618,7 @@ extern "C" cppExtension *CreateExtension(void)
 {
     DeltaProfile *p = new DeltaProfile();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (1.9.0) the chart's volume at price
     p->setDescription("LRA Delta Profile (DLT)");
     p->setVersion(DLT_VERSION);   // (1.7.0) the settings window showed 1.4.0
     return p;
