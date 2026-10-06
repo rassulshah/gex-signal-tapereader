@@ -34,8 +34,9 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <chrono>
 
-static const char* DLT_VERSION = "1.9.0";
+static const char* DLT_VERSION = "1.9.1";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -59,7 +60,8 @@ struct DData {
     struct DMark { float px = 0; std::string code, side; int n = 0; float x = 0; }; std::vector<DMark> marks;
     struct DNode { std::string rk, tpk; float px = 0, d = 0, x = 0; std::string code, side; }; std::vector<DNode> nodes;
     std::string built; float recAge = -1;              // (1.5.3) when the Reader wrote the file + the recorder's heartbeat age then   // (1.5.0) states of the big delta nodes
-    struct DZone { float lo = 0, hi = 0; std::string code, side; int share = 0; }; std::vector<DZone> zones;   // (1.4.0) Dst? / Dst / Acc / T zones
+    struct DZone { float lo = 0, hi = 0; std::string code, side; int share = 0; }; std::vector<DZone> zones;
+    struct DRing { float px = 0, x = 0; std::string code, side, tpk; }; std::vector<DRing> rings;   // (1.9.1) the session's candle rings   // (1.4.0) Dst? / Dst / Acc / T zones
 };
 
 class DeltaProfile : public cppExtension {
@@ -74,6 +76,10 @@ public:
     long long loadedStamp = -2; std::string loadedPath; std::string lastWant;   // (1.6.0)
     std::string drawnRange; int drawnRows = 0;   // (1.7.0) for the status file
     std::vector<DRow> liveRows; long liveKey = -1; int liveRange = -1, liveMins = -1;   // (1.9.0) the live profile + its cache key
+    std::string liveRoot; long long liveAt = 0; bool liveOff = false;   // (1.9.1) per chart, at most once a second, off after a fault
+    std::vector<long long> barStamp; long barStampKey = -1;            // (1.9.1) bar close stamps for the candle rings
+    void trace(const char* what);
+    static int readBarVap(RTARRAYP* VP, int i, VOLPROFILE* out, int cap);
     bool buildLive(const DSet& S);
     void wantMinutes();
     int barForMinute(const std::string& tpk);   // (1.8.0) the chart bar holding a minute (stamped at its END, "YYYY-MM-DD HH:MM")
@@ -249,6 +255,7 @@ void DeltaProfile::load()
         else if (t[0] == "LEVELX" && t.size() >= 2) D.levelX = (float)atof(t[1].c_str());
         else if (t[0] == "BUILT" && t.size() >= 3) { D.built = t[1]; D.recAge = (float)atof(t[2].c_str()); }
         else if (t[0] == "NODE" && t.size() >= 7) { DData::DNode n; n.rk = t[1]; n.px = (float)atof(t[2].c_str()); n.d = (float)atof(t[3].c_str()); n.code = t[4]; n.side = t[5]; n.x = (float)atof(t[6].c_str()); if (t.size() >= 8) n.tpk = t[7]; D.nodes.push_back(n); }
+        else if (t[0] == "RING" && t.size() >= 6) { DData::DRing g; g.px = (float)atof(t[1].c_str()); g.code = t[2]; g.side = t[3]; g.x = (float)atof(t[4].c_str()); g.tpk = t[5]; D.rings.push_back(g); }
         else if (t[0] == "MROW" && t.size() >= 5) { DRow r; r.px = (float)atof(t[2].c_str()); r.d = (float)atof(t[3].c_str()); r.v = (float)atof(t[4].c_str()); D.mrows[atoi(t[1].c_str())].push_back(r); }
         else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); if (t.size() >= 6) k.x = (float)atof(t[5].c_str()); D.marks.push_back(k); }
         else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
@@ -481,7 +488,7 @@ void DeltaProfile::render(const DSet& S)
             else textLJ((short)(labd[i].edge + 4), y, t.c_str(), col, S.font, true);
             // (1.8.0, Rassul 12:11 "draws a mark to identify which candle had the absorption ... in choppy price action") a ring on
             // the candle that holds the node's hardest-hitting minute, at the node's price, in the letter's colour
-            int bb = barForMinute(best->tpk);
+            int bb = D.rings.empty() ? barForMinute(best->tpk) : -1;   // (1.9.1) RING lines draw the rings below
             if (bb >= 0) {
                 PNT pp; pp.set(bb, best->px, kBarCenter);
                 if (pp.h > pane.left && pp.h < pane.right && pp.v > pane.top + 16 && pp.v < pane.bottom) {
@@ -497,6 +504,28 @@ void DeltaProfile::render(const DSet& S)
                         rr.drawOval(DRAW_OPAQUE);
                     }
                 }
+            }
+        }
+    }
+    // (1.9.1, Rassul 16:31 "i am loosing the circles that were there before ... lets not keep a time constraint for them") the
+    // session's rings / squares from the RING lines, whatever Range / minutes this chart shows, on every candle that is on screen
+    if (S.offlvl && !D.rings.empty()) {
+        for (size_t i = 0; i < D.rings.size(); i++) {
+            const DData::DRing& g = D.rings[i];
+            bool square = !g.code.empty() && g.code[0] == 'I';
+            if (square && !S.showI) continue;
+            int bb = barForMinute(g.tpk); if (bb < 0) continue;
+            PNT pp; pp.set(bb, g.px, kBarCenter);
+            if (!(pp.h > pane.left && pp.h < pane.right && pp.v > pane.top + 16 && pp.v < pane.bottom)) continue;
+            COLOR col = g.side == "support" ? 0x0086EFAC : 0x00FCA5A5;
+            if (square) {
+                short l = (short)(pp.h - 5), r_ = (short)(pp.h + 5), t_ = (short)(pp.v - 5), b_ = (short)(pp.v + 5);
+                line(l, t_, r_, t_, col, 2); line(r_, t_, r_, b_, col, 2); line(r_, b_, l, b_, col, 2); line(l, b_, l, t_, col, 2);
+            } else {
+                setPen(col, 2, P_SOLID);
+                CBRUSH hb(col, PAT_HOLLOW); hb.set();
+                RCT rr; rr.set((short)(pp.h - 6), (short)(pp.v - 6), (short)(pp.h + 6), (short)(pp.v + 6));
+                rr.drawOval(DRAW_OPAQUE);
             }
         }
     }
@@ -522,13 +551,50 @@ void DeltaProfile::writeStatus(const char* what)
 // (1.9.0) the profile from the chart's own bars' volume at price: Last N minutes (bars whose close is within N minutes of the
 // newest bar's close, the forming bar included), Session (from 17:00 CT) or Day (from 08:30). Recomputed only when the newest
 // bar's volume or the bar count changed.
+// (1.9.1, IRT closed itself at 16:36 the first time 1.9.0 ran on every chart) reading one bar's volume at price is guarded:
+// only the price rows the bar reports are read (1.9.0 asked for 400 rows when a bar reported none - past the end of IRT's data),
+// and a fault inside IRT's volume-at-price turns the live bars OFF for this chart (the file's rows are drawn) instead of
+// taking IRT down. Plain C types only in here (structured exception handling).
+int DeltaProfile::readBarVap(RTARRAYP* VP, int i, VOLPROFILE* out, int cap)
+{
+#ifdef _MSC_VER
+    __try {
+#endif
+        BARSTATISTICS bs; memset(&bs, 0, sizeof(bs));
+        if (VP->getBarStatistics(i, bs) != RTX_OK) return -2;
+        int np = bs.prices; if (np <= 0) return 0; if (np > cap) np = cap;
+        int k = 0;
+        for (; k < np; k++) { memset(&out[k], 0, sizeof(VOLPROFILE)); if (VP->getVolumeProfile(i, k, out[k]) != RTX_OK) break; }
+        return k;
+#ifdef _MSC_VER
+    } __except (1) { return -1; }
+#endif
+}
+
+void DeltaProfile::trace(const char* what)
+{
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.trace.txt";
+    bool big = dl::fileStamp(p) > 0 && [&]() { std::ifstream f(p.c_str(), std::ios::ate | std::ios::binary); return (long long)f.tellg() > 200000; }();
+    std::ofstream f(p.c_str(), big ? std::ios::trunc : std::ios::app);
+    time_t now = time(nullptr); struct tm t; localtime_s(&t, &now);
+    char b[32]; strftime(b, sizeof(b), "%m-%d %H:%M:%S", &t);
+    f << b << " " << DLT_VERSION << " " << root << " " << what << "\n";
+}
+
+// (1.9.0) the profile from the chart's own bars' volume at price: Last N minutes (bars whose close is within N minutes of the
+// newest bar's close, the forming bar included), Session (from 17:00 CT) or Day (from 08:30). (1.9.1) Recomputed at most once
+// a second per chart (or when a bar is added / the settings change), never after a fault.
 bool DeltaProfile::buildLive(const DSet& S)
 {
+    if (liveOff) return false;
     long n = getBarCount(); if (n < 2) return false;
     RTARRAYI dt(barDateTime);
     RTARRAYI vo(barVolume);
     long key = n * 1000003L + (long)vo[(int)n - 1];
-    if (key == liveKey && S.range == liveRange && S.mins == liveMins) return !liveRows.empty();
+    long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    bool same = root == liveRoot && S.range == liveRange && S.mins == liveMins;
+    if (same && (key == liveKey || (key / 1000003L == liveKey / 1000003L && nowMs - liveAt < 1000))) return !liveRows.empty();
     RTARRAYP VP(barVolumeProfile);
     struct tm tl; memset(&tl, 0, sizeof(tl)); getLocaltime((RTDATE)dt[(int)n - 1], &tl); tl.tm_isdst = -1;
     time_t tLast = mktime(&tl);
@@ -540,18 +606,23 @@ bool DeltaProfile::buildLive(const DSet& S)
         else { a.tm_hour = 8; a.tm_min = 30; if (tl.tm_hour >= 17) a.tm_mday += 1; }                   // the day from 08:30
         a.tm_isdst = -1; tFrom = mktime(&a);
     }
+    bool first = liveKey == -1;
+    if (first) trace("live: first build");
     std::map<long long, DRow> agg;
     float tk = D.tick > 0 ? D.tick : 0;
+    static VOLPROFILE buf[4000];
     int from = (int)n - 3000; if (from < 0) from = 0;
     for (int i = (int)n - 1; i >= from; i--) {
         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t); t.tm_isdst = -1;
         if (mktime(&t) <= tFrom) break;                                  // bars are stamped at their close
-        BARSTATISTICS bs; memset(&bs, 0, sizeof(bs));
-        if (VP.getBarStatistics(i, bs) != RTX_OK) { if (i == (int)n - 1) continue; return false; }
-        int np = bs.prices > 0 ? bs.prices : 400;
+        int np = readBarVap(&VP, i, buf, 4000);
+        if (np == -1) {                                                  // a fault inside IRT: stop using live bars on this chart
+            char b[96]; sprintf_s(b, sizeof(b), "live: FAULT reading bar %d of %ld - live bars off, drawing the file", i, n); trace(b);
+            liveOff = true; liveRows.clear(); return false;
+        }
+        if (np == -2) { if (i == (int)n - 1) continue; liveRows.clear(); liveKey = key; liveAt = nowMs; liveRoot = root; liveRange = S.range; liveMins = S.mins; return false; }
         for (int k = 0; k < np; k++) {
-            VOLPROFILE vp; memset(&vp, 0, sizeof(vp));
-            if (VP.getVolumeProfile(i, k, vp) != RTX_OK) break;
+            const VOLPROFILE& vp = buf[k];
             if (vp.totalVolume <= 0 && vp.buyVolume <= 0 && vp.sellVolume <= 0) continue;
             long long pk = tk > 0 ? (long long)std::floor(vp.price / tk + 0.5) : (long long)std::floor(vp.price * 100000.0 + 0.5);
             DRow& r = agg[pk]; r.px = tk > 0 ? (float)(pk * tk) : vp.price; r.d += (float)(vp.buyVolume - vp.sellVolume); r.v += (float)vp.totalVolume;
@@ -559,7 +630,8 @@ bool DeltaProfile::buildLive(const DSet& S)
     }
     liveRows.clear();
     for (auto& kv : agg) liveRows.push_back(kv.second);
-    liveKey = key; liveRange = S.range; liveMins = S.mins;
+    liveKey = key; liveAt = nowMs; liveRoot = root; liveRange = S.range; liveMins = S.mins;
+    if (first) { char b[64]; sprintf_s(b, sizeof(b), "live: ok, %d rows", (int)liveRows.size()); trace(b); }
     return !liveRows.empty();
 }
 
@@ -581,24 +653,27 @@ void DeltaProfile::wantMinutes()
 int DeltaProfile::barForMinute(const std::string& tpk)
 {
     // IRT stamps a bar by its CLOSE (the 08:36-08:39 bar is "08:39"); a minute is stamped by its end too (08:39 = 08:38-08:39).
-    // The minute's bar = the first bar whose stamp is at or after the minute's stamp.
+    // The minute's bar = the first bar whose stamp is at or after the minute's stamp. (1.9.1) the stamps of the last 3000 bars
+    // are kept (rebuilt when a bar is added) and searched, so 40 rings cost one pass, not 40.
     int y, mo, d, h, mi;
     if (tpk.size() < 16 || sscanf_s(tpk.c_str(), "%d-%d-%d %d:%d", &y, &mo, &d, &h, &mi) != 5) return -1;
-    double e = h * 3600.0 + mi * 60.0;
     long n = getBarCount(); if (n < 1) return -1;
     RTARRAYI dt(barDateTime);
+    long key = n * 7919L + (long)(dt[(int)n - 1] % 100000);
     int from = (int)n - 3000; if (from < 0) from = 0;
-    int best = -1;
-    for (int i = (int)n - 1; i >= from; i--) {
-        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-        int ty = t.tm_year + 1900, tm_ = t.tm_mon + 1;
-        bool before = ty < y || (ty == y && (tm_ < mo || (tm_ == mo && t.tm_mday < d)));
-        bool same = ty == y && tm_ == mo && t.tm_mday == d;
-        double s0 = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-        if (before || (same && s0 < e)) break;                 // this bar closed before the minute: the previous candidate is it
-        best = i;
+    if (key != barStampKey || (int)barStamp.size() != (int)n - from) {
+        barStamp.assign((size_t)((int)n - from), 0);
+        for (int i = from; i < (int)n; i++) {
+            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+            barStamp[(size_t)(i - from)] = ((((t.tm_year + 1900LL) * 100 + t.tm_mon + 1) * 100 + t.tm_mday) * 10000LL + t.tm_hour * 100 + t.tm_min) * 100 + t.tm_sec;
+        }
+        barStampKey = key;
     }
-    return best;
+    long long e = (((((long long)y * 100 + mo) * 100 + d) * 10000LL) + h * 100 + mi) * 100;
+    auto it = std::lower_bound(barStamp.begin(), barStamp.end(), e);
+    if (it == barStamp.end()) return -1;
+    if (it == barStamp.begin() && from > 0) return -1;              // older than the bars kept
+    return from + (int)(it - barStamp.begin());
 }
 
 int DeltaProfile::draw(void)
