@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.7";
+static const char* DLT_VERSION = "1.3.8";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -346,8 +346,8 @@ void DeltaProfile::render(const DSet& S)
     if (S.offlvl) for (size_t i = 0; i < D.marks.size(); i++) {
         const DData::DMark& k = D.marks[i];
         bool sup = k.side == "support";
-        COLOR col = k.code == "E" ? 0x00A16207 : (sup ? 0x00166534 : 0x00991B1B);     // dim amber / green / red
-        std::string t = k.code; if (k.n > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d", k.n); t += b; }
+        COLOR col = k.code == "E" ? 0x00FCD34D : (sup ? 0x0086EFAC : 0x00FCA5A5);     // (1.3.8, Rassul 07:30 "too dark") light amber / green / red
+        std::string t = k.code;                            // (1.3.8, Rassul 07:29) "just show A 2.4x" - no contract count
         if (k.x > 0 || k.code == "E") t += xs(k.x);
         drawLetter(k.px, t, col);
     }
@@ -356,7 +356,6 @@ void DeltaProfile::render(const DSet& S)
         COLOR col = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
         std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "T" : D.code == "In" ? "I" : D.code.substr(0, 1);
         if (D.strength == "?") t += "?";
-        if (D.code == "Ab" && D.levelN > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d", D.levelN); t += b; }
         if (D.levelX > 0) t += xs(D.levelX);
         drawLetter(D.level, t, col);
     }
@@ -389,6 +388,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.7");
+    p->setVersion("1.3.8");
     return p;
 }
