@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.6.2";
+static const char* DLT_VERSION = "1.7.0";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -47,7 +47,9 @@ static const COLOR C_DARK  = 0x000B0F19;
 
 struct DIdx { int market, width, gap, font, labels, place, range, group, sides, offlvl, face, mins; };
 static DIdx DX;
-struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 0, group = 1, sides = 0; int face = 0; int mins = 90; bool labels = true, offlvl = true; };   // (1.6.0) mins = the Minutes range
+struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 0, group = 1, sides = 0; int face = 0; int mins = 60; bool labels = true, offlvl = true; };
+// (1.7.0, Rassul 12:00 "think about the settings and combinations so it all makes sense") range 0 = Last N minutes (N = mins),
+// 1 = Session, 2 = Day from 08:30 - Minutes is used ONLY with Last N minutes; face 0 = bars grow Left, 1 = Right
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
@@ -70,6 +72,7 @@ public:
 
     DSet cfg; DData D; std::string mkt, root; int lastBar = 0;
     long long loadedStamp = -2; std::string loadedPath; std::string lastWant;   // (1.6.0)
+    std::string drawnRange; int drawnRows = 0;   // (1.7.0) for the status file
     void wantMinutes();
     bool dialogReady();
     std::string rootKey();
@@ -142,7 +145,7 @@ void DeltaProfile::syncSettings(bool fromDialog)
         std::map<std::string, std::string> all; std::ifstream in(settingsPath().c_str()); std::string ln;
         while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
         in.close();
-        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
+        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|2", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
                                cfg.place, cfg.range, cfg.group, cfg.sides, cfg.offlvl ? 1 : 0, cfg.face, cfg.mins);
         std::string row = key + b;
         if (all[key] != row) { all[key] = row; std::ofstream out(settingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
@@ -158,7 +161,14 @@ void DeltaProfile::syncSettings(bool fromDialog)
             cfg.market = atoi(t[1].c_str()); cfg.width = atoi(t[2].c_str()); cfg.gap = atoi(t[3].c_str()); cfg.font = atoi(t[4].c_str());
             cfg.labels = t[5] == "1"; cfg.place = atoi(t[6].c_str()); cfg.range = atoi(t[7].c_str()); cfg.group = atoi(t[8].c_str());
             cfg.sides = atoi(t[9].c_str()); cfg.offlvl = t[10] == "1"; cfg.face = atoi(t[11].c_str());
-            if (t.size() >= 13) { cfg.mins = atoi(t[12].c_str()); if (cfg.mins < 5) cfg.mins = 90; }
+            cfg.mins = t.size() >= 13 ? atoi(t[12].c_str()) : 60; if (cfg.mins < 5 || cfg.mins > 1440) cfg.mins = 60;
+            if (!(t.size() >= 14 && t[13] == "2")) {          // (1.7.0) an older row: Range 30 / 60 / Session / Day / Minutes, Face Price / Dealer
+                int r = cfg.range;
+                if (r == 0) { cfg.range = 0; cfg.mins = 30; } else if (r == 1) { cfg.range = 0; cfg.mins = 60; }
+                else if (r == 2) cfg.range = 1; else if (r == 3) cfg.range = 2; else cfg.range = 0;
+                bool toPrice = cfg.face == 0; bool gl = cfg.place == 0 ? toPrice : !toPrice;
+                cfg.face = gl ? 0 : 1;
+            }
             savedKey = key; return;
         }
     }
@@ -169,24 +179,24 @@ int DeltaProfile::parmsUpdt(unsigned int) { syncSettings(true); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(8);   // (1.6.0) + Minutes (Range = Minutes)
-    // was: setParameterVersion(7);   // (1.4.1) letters default ON - resets the dialog to the defaults
-    // was: setParameterVersion(6);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
-    setParameterDialogHeight(8);
+    setParameterVersion(9);   // (1.7.0) the settings window re-laid out: Range = Last N minutes / Session / Day + Minutes, Face Left / Right
+    // was 8 (1.6.0 Minutes), 7 (1.4.1 letters on), 6 (1.1.3: new parameters without a bump crashed IRT when the dialog opened)
+    setParameterDialogHeight(9);
     const short SL = kParmAppendSameLine;
+    const short LW = 120;     // list width - every list the same, so the rows line up
     int pc = 0;
-    DX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    DX.width  = pc++; setIntegerParameter("Width px", 50, NUMW, SL);   // (1.1.6, Rassul 20:29) 50 so DLT / LIQ / GEX all fit on the right
-    DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW);
-    DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
-    DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
-    DX.place  = pc++; setListParameter("Place", 0, "Right;Left");   // (1.2.1) Right first = the default (all profiles on the right)
-    DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Last 60 min;Session;Day from 08:30;Minutes");   // (1.6.0, Rassul 10:09 "a minute field so i can enter 60 or 90") + Minutes   // (1.1.0) as the examples Rassul sent
-    DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 1, NUMW);
-    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");
-    DX.offlvl = pc++; setBoolParameter("Letters at pivots and big ones", true);   // (1.4.1, Rassul 09:04 "i need to see things we discussed and mocked up by default") ON by default
-    DX.mins   = pc++; setIntegerParameter("Minutes (Range = Minutes)", 90, NUMW);
-    DX.face   = pc++; setListParameter("Face", 0, "Price;Dealer Profile");   // (1.3.0, Rassul 21:55) default: toward price   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
+    DX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU", LW);
+    DX.range  = pc++; setListParameter("Range", 0, "Last N minutes;Session;Day from 08:30", LW);       // default Last N minutes
+    DX.mins   = pc++; setIntegerParameter("N minutes", 60, NUMW, SL);                                   // used only with Last N minutes
+    DX.place  = pc++; setListParameter("Place", 0, "Right;Left", LW);                                    // Right first = the default
+    DX.face   = pc++; setListParameter("Face", 0, "Left;Right", NUMW + 20, SL);                          // bars grow Left (toward price) by default
+    DX.group  = pc++; setIntegerParameter("Ticks per row", 1, NUMW);
+    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both", NUMW + 20, SL);
+    DX.width  = pc++; setIntegerParameter("Width px", 50, NUMW);
+    DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW, SL);
+    DX.font   = pc++; setIntegerParameter("Font pt", 9, NUMW, SL);
+    DX.labels = pc++; setBoolParameter("Amounts on the 3 biggest bars", true);
+    DX.offlvl = pc++; setBoolParameter("Letters (A?  A  I  E, zones)", true);
     return RTX_OK;
 }
 
@@ -198,7 +208,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
     { int pi = getListIndex(DX.place); if (pi == 0 || pi == 1) S.place = pi; }   // list Right;Left -> 0 = Right, 1 = Left
-    { int v = getListIndex(DX.range); if (v >= 0 && v <= 4) S.range = v; }
+    { int v = getListIndex(DX.range); if (v >= 0 && v <= 2) S.range = v; }
     S.mins = getIntegerValue(DX.mins); if (S.mins < 5) S.mins = 5; if (S.mins > 1440) S.mins = 1440;
     S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
     { int v = getListIndex(DX.sides); if (v == 0 || v == 1) S.sides = v; }
@@ -285,8 +295,7 @@ void DeltaProfile::render(const DSet& S)
     }
     // (1.3.0) Face Price (default): [letters][<- DLT] bars grow LEFT toward the candles, letters on the candle side.
     //         Face Dealer Profile: [DLT ->][letters] bars grow RIGHT toward the Dealer Profile, letters after them.
-    bool toPrice = S.face == 0;
-    bool growLeft = (S.place == 0) ? toPrice : !toPrice;          // price is LEFT of a Right column, RIGHT of a Left column
+    bool growLeft = S.face == 0;                                   // (1.7.0) Face = the direction the bars grow: Left / Right
     if (growLeft) { left = (short)(left + SEAM + VALS); right = (short)(right + SEAM + VALS); }     // letters, values, then bars
     int dir = growLeft ? -1 : 1;
     short base = growLeft ? right : left;
@@ -331,9 +340,17 @@ void DeltaProfile::render(const DSet& S)
     if (!D.ok) return;
 
     // (1.1.0) Range: the last 30 min, the whole session, or the day from 08:30
+    // (1.7.0) Last N minutes: 30 / 60 come with every build; any other N is built once a chart asks for it (want file) -
+    // until then the nearest window that exists is drawn and the status file says so
     auto mit = D.mrows.find(S.mins);
-    const std::vector<DRow>& R = S.range == 4 && mit != D.mrows.end() && !mit->second.empty() ? mit->second :
-        S.range == 1 && !D.hrows.empty() ? D.hrows : S.range == 2 && !D.srows.empty() ? D.srows : S.range == 3 && !D.drows.empty() ? D.drows : D.rows;   // (1.1.4) + Last 60 min
+    bool haveN = mit != D.mrows.end() && !mit->second.empty();
+    const std::vector<DRow>& R =
+        S.range == 1 ? (D.srows.empty() ? D.rows : D.srows) :
+        S.range == 2 ? (D.drows.empty() ? D.rows : D.drows) :
+        S.mins == 30 ? D.rows : S.mins == 60 ? (D.hrows.empty() ? D.rows : D.hrows) :
+        haveN ? mit->second : (S.mins > 45 && !D.hrows.empty() ? D.hrows : D.rows);
+    drawnRange = S.range == 1 ? "Session" : S.range == 2 ? "Day" : (S.mins == 30 || S.mins == 60 || haveN) ? "Last " + std::to_string(S.mins) + " min" : "Last " + std::to_string(S.mins) + " min (building - showing " + (S.mins > 45 ? "60" : "30") + ")";
+    drawnRows = (int)R.size();
     // rows -> buckets: N ticks per row, or (0 = auto) one bar per few pixels
     int bh = S.font - 3; if (bh < 3) bh = 3;
     float g = (S.group > 0 && D.tick > 0) ? D.tick * S.group : 0;
@@ -427,7 +444,8 @@ void DeltaProfile::render(const DSet& S)
     // them") ONE letter per labelled node, on its row: A? (price has not left it), A (the absorbers held it), T (they are
     // trapped). Colour = the side that won. The state comes from the Reader (NODE lines) for the Range this chart shows.
     if (S.offlvl) {
-        std::string rk = S.range == 4 ? "M" + std::to_string(S.mins) : S.range == 1 ? "H" : S.range == 2 ? "S" : S.range == 3 ? "D" : "R";
+        std::string rk = S.range == 1 ? "S" : S.range == 2 ? "D" : S.mins == 30 ? "R" : S.mins == 60 ? "H" :
+                         haveN ? "M" + std::to_string(S.mins) : (S.mins > 45 ? "H" : "R");
         std::sort(labd.begin(), labd.end(), [](const LB& p, const LB& q) { return p.t < q.t; });
         short lastY = -1000;
         for (size_t i = 0; i < labd.size(); i++) {
@@ -467,14 +485,14 @@ void DeltaProfile::writeStatus(const char* what)
     std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.status.txt").c_str(), std::ios::trunc);
     if (!f.is_open()) return;
     f << "VERSION," << DLT_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nROWS," << D.rows.size() << "\nASOF," << D.asof
-      << "\nBADGE," << D.code << D.strength << "\nWIDTH," << cfg.width << "\nSTATE," << what << "\n";
+      << "\nRANGE," << drawnRange << "\nDRAWN_ROWS," << drawnRows << "\nBADGE," << D.code << D.strength << "\nWIDTH," << cfg.width << "\nSTATE," << what << "\n";
 }
 
 // (1.6.0) Range = Minutes: tell the Reader which windows this market's charts want (lsFlexLevels\DeltaProfile.want-<MKT>.txt,
 // newest 4); it writes MROW / NODE M<minutes> lines for each on its next build (within 5 min)
 void DeltaProfile::wantMinutes()
 {
-    if (cfg.range != 4 || mkt.empty()) return;
+    if (cfg.range != 0 || cfg.mins == 30 || cfg.mins == 60 || mkt.empty()) return;
     std::string tag = mkt + ":" + std::to_string(cfg.mins);
     if (tag == lastWant) return;
     const char* up = getenv("USERPROFILE"); if (!up) return;
@@ -504,6 +522,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.4.0");
+    p->setVersion(DLT_VERSION);   // (1.7.0) the settings window showed 1.4.0
     return p;
 }
