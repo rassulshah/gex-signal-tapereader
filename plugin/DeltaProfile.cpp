@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.1";
+static const char* DLT_VERSION = "1.3.2";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -102,7 +102,10 @@ int cppExtension::destroy(void) { return RTX_OK; }
 
 bool DeltaProfile::dialogReady() { int i = getListIndex(DX.market); return i >= 0 && i <= 7; }
 static std::map<std::string, DSet>& perChart() { static std::map<std::string, DSet> m; return m; }   // (1.2.1) settings per chart
-std::string DeltaProfile::rootKey() { char rb[32] = {0}; const char* rs = getRootSymbol(rb); return rs ? rs : ""; }
+// (1.3.2, Rassul 22:16 "it keeps changing and losing its labels") two charts of the SAME market (the ES 3-min and 1-min)
+// shared one settings slot keyed by the root symbol, so each chart drew with the other's Range / labels. Key = this
+// indicator instance (each chart's copy has its own object) + its market.
+std::string DeltaProfile::rootKey() { char rb[32] = {0}; const char* rs = getRootSymbol(rb); char p[32]; sprintf_s(p, sizeof(p), "%p|", (void*)this); return std::string(p) + (rs ? rs : ""); }
 int DeltaProfile::parmsLoad(void)  { if (dialogReady()) { readSettings(cfg); perChart()[rootKey()] = cfg; } return RTX_OK; }
 int DeltaProfile::parmsApply(void) { if (dialogReady()) { readSettings(cfg); perChart()[rootKey()] = cfg; } return RTX_OK; }
 int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); perChart()[rootKey()] = cfg; } return RTX_OK; }
@@ -339,6 +342,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.1");
+    p->setVersion("1.3.2");
     return p;
 }
