@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.1.6";
+static const char* DLT_VERSION = "1.2.0";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -44,14 +44,15 @@ static const COLOR C_INK   = 0x00E5E7EB;
 static const COLOR C_MUTED = 0x009CA3AF;
 static const COLOR C_DARK  = 0x000B0F19;
 
-struct DIdx { int market, width, gap, font, labels, place, range, group, sides; };
+struct DIdx { int market, width, gap, font, labels, place, range, group, sides, offlvl; };
 static DIdx DX;
-struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 1, range = 0, group = 1, sides = 0; bool labels = true; };
+struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 1, range = 0, group = 1, sides = 0; bool labels = true, offlvl = true; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
     bool ok = false; std::string asof, from, to, side, name, code, strength; float level = 0;
-    std::vector<DRow> rows, srows, drows, hrows; float tick = 0;
+    std::vector<DRow> rows, srows, drows, hrows; float tick = 0; int levelN = 0;
+    struct DMark { float px = 0; std::string code, side; int n = 0; }; std::vector<DMark> marks;
 };
 
 class DeltaProfile : public cppExtension {
@@ -105,7 +106,7 @@ int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg)
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(3);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
+    setParameterVersion(4);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
     setParameterDialogHeight(8);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -117,7 +118,8 @@ int cppExtension::setup(void)
     DX.place  = pc++; setListParameter("Place", 0, "Left;Right");   // (1.1.4) Left first: the list default is its first entry
     DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Last 60 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
     DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 1, NUMW);
-    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
+    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");
+    DX.offlvl = pc++; setBoolParameter("Letters at pivots and big ones", true);   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
 }
 
@@ -132,6 +134,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.range = getListIndex(DX.range); if (S.range < 0 || S.range > 3) S.range = 0;
     S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
     S.sides = getListIndex(DX.sides); if (S.sides < 0 || S.sides > 1) S.sides = 0;
+    S.offlvl = isBoxChecked(DX.offlvl) != 0;
 }
 
 void DeltaProfile::load()
@@ -155,6 +158,8 @@ void DeltaProfile::load()
         else if (t[0] == "LEVEL" && t.size() >= 3) { D.level = (float)atof(t[1].c_str()); D.side = t[2]; if (t.size() >= 4) D.name = t[3]; }
         else if (t[0] == "BADGE" && t.size() >= 2) { D.code = t[1]; D.strength = t.size() >= 3 ? t[2] : ""; }
         else if (t[0] == "TICK" && t.size() >= 2) D.tick = (float)atof(t[1].c_str());
+        else if (t[0] == "LEVELN" && t.size() >= 2) D.levelN = atoi(t[1].c_str());
+        else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); D.marks.push_back(k); }
         else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
             DRow r; r.px = (float)atof(t[1].c_str()); r.d = (float)atof(t[2].c_str()); r.v = (float)atof(t[3].c_str());
             (t[0] == "ROW" ? D.rows : t[0] == "SROW" ? D.srows : t[0] == "HROW" ? D.hrows : D.drows).push_back(r);
@@ -191,20 +196,23 @@ void DeltaProfile::render(const DSet& S)
     RCT scale; scale.getScaleRect();
     short paneR = pane.right;
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneR = (short)(scale.left - 2);
+    // (1.2.0, Rassul 21:17 mockup v2) DLT faces RIGHT (toward the Liquidity Profile); the letter column (the seam) is on
+    // its right: [DLT ->][letters] then LIQ and the Dealer Profile
+    const short SEAM = 36;
     short right, left;
-    if (S.place == 1) {                                             // (1.0.3) Left: from the pane's left edge + gap
+    if (S.place == 1) {                                             // Left: from the pane's left edge + gap
         left = (short)(pane.left + 4 + (S.gap > 0 ? S.gap : 0)); right = (short)(left + S.width);
-        if (right >= paneR - 40) return;
-    } else {                                                        // Right: just left of the Dealer Profile
-        right = (short)(paneR - 2 - dealerReach() - S.gap); left = (short)(right - S.width);
+        if (right + SEAM >= paneR - 40) return;
+    } else {                                                        // Right: the block ends just left of the Dealer Profile
+        right = (short)(paneR - 2 - dealerReach() - S.gap - SEAM); left = (short)(right - S.width);
         if (left <= pane.left + 40) return;
     }
-    // (1.0.3, Rassul 17:52) red and green both grow TOWARD the price chart from one base line on the far side
-    int dir = S.place == 1 ? 1 : -1;                                // Left: grow right; Right: grow left
-    short base = S.place == 1 ? left : right;
-    if (S.place == 1) textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
-    else textRJ((short)(right - 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
+    int dir = 1;                                                    // bars grow right, from the left base line
+    short base = left;
+    short sL = right, sR = (short)(right + SEAM);                   // the letter column
+    textLJ((short)(left + 2), (short)(pane.top + 8), "DLT", C_MUTED, 8, true);
     if (S.sides != 1) line(base, (short)(pane.top + 16), base, pane.bottom, C_AXIS, 1);
+    line(sR, (short)(pane.top + 16), sR, pane.bottom, C_AXIS, 1);
     short mid = (short)(left + S.width / 2);
     if (!D.ok) return;
 
@@ -260,18 +268,26 @@ void DeltaProfile::render(const DSet& S)
             else textRJ((short)(de - 2), yc, s, C_INK, S.font - 1, false);
         }
     }
-    // (1.1.6, Rassul 20:21 "instead of big badges ... a letter A for absorption, E for exhaustion") one letter at the
-    // level, on the chart side of the column: A absorption, E exhaustion, T trapped, I initiative (stand aside).
-    // '?' after it = setting up (not confirmed); no '?' = confirmed. Green = long read, red = short read, amber = E.
+    // (1.2.0) letters in the seam column, on the row they describe: the key level full colour (+ contracts: A 250),
+    // pivots / big ones dimmer (A 180). '?' = setting up.
+    auto drawLetter = [&](float px, std::string t, COLOR col) {
+        short y = yOf(px); if (y < pane.top + 16 || y > pane.bottom) return;
+        textLJ((short)(sL + 3), y, t.c_str(), col, S.font, true);
+    };
+    if (S.offlvl) for (size_t i = 0; i < D.marks.size(); i++) {
+        const DData::DMark& k = D.marks[i];
+        bool sup = k.side == "support";
+        COLOR col = k.code == "E" ? 0x00A16207 : (sup ? 0x00166534 : 0x00991B1B);     // dim amber / green / red
+        std::string t = k.code; if (k.n > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d", k.n); t += b; }
+        drawLetter(k.px, t, col);
+    }
     if (!D.code.empty() && D.level > 0) {
         bool up = D.side == "support";
-        COLOR c = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
+        COLOR col = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
         std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "T" : D.code == "In" ? "I" : D.code.substr(0, 1);
         if (D.strength == "?") t += "?";
-        short y = yOf(D.level);
-        int sz = S.font + 3;
-        if (S.place == 1) textLJ((short)(right + 4), y, t.c_str(), c, sz, true);    // Left column: letter just right of it
-        else textRJ((short)(left - 4), y, t.c_str(), c, sz, true);                  // Right column: letter just left of it
+        if (D.code == "Ab" && D.levelN > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d", D.levelN); t += b; }
+        drawLetter(D.level, t, col);
     }
 }
 
@@ -305,6 +321,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.1.6");
+    p->setVersion("1.2.0");
     return p;
 }
