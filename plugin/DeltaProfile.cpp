@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.6.1";
+static const char* DLT_VERSION = "1.6.2";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -416,7 +416,7 @@ void DeltaProfile::render(const DSet& S)
             if (!any) { ex = e; any = true; } else ex = growLeft ? (e < ex ? e : ex) : (e > ex ? e : ex);
         }
         COLOR col = z.side == "support" ? 0x0086EFAC : 0x00FCA5A5;
-        std::string t = z.code; if (z.code != "T" && z.share > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d%%", z.share); t += b; }
+        std::string t = z.code; if (z.code != "T" && z.code != "A" && z.share > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d%%", z.share); t += b; }
         short bx = growLeft ? (short)(ex - 4) : (short)(ex + 4);
         short tk = growLeft ? (short)(bx + 3) : (short)(bx - 3);
         line(bx, yt, bx, yb, col, 1); line(bx, yt, tk, yt, col, 1); line(bx, yb, tk, yb, col, 1);
@@ -454,7 +454,7 @@ void DeltaProfile::render(const DSet& S)
     if (!D.code.empty() && D.level > 0) {
         bool up = D.side == "support";
         COLOR col = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
-        std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "T" : D.code == "In" ? "I" : D.code.substr(0, 1);
+        std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "A" : D.code == "In" ? "I" : D.code.substr(0, 1);
         if (D.strength == "?") t += "?";
         if (D.levelX > 0) t += xs(D.levelX);
         drawLetter(D.level, t, col);
