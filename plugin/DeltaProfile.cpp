@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.2";
+static const char* DLT_VERSION = "1.3.3";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -67,6 +67,7 @@ public:
     long long loadedStamp = -2; std::string loadedPath;
     bool dialogReady();
     std::string rootKey();
+    void syncSettings();
     void readSettings(DSet& S);
     void load();
     int dealerReach();
@@ -106,9 +107,13 @@ static std::map<std::string, DSet>& perChart() { static std::map<std::string, DS
 // shared one settings slot keyed by the root symbol, so each chart drew with the other's Range / labels. Key = this
 // indicator instance (each chart's copy has its own object) + its market.
 std::string DeltaProfile::rootKey() { char rb[32] = {0}; const char* rs = getRootSymbol(rb); char p[32]; sprintf_s(p, sizeof(p), "%p|", (void*)this); return std::string(p) + (rs ? rs : ""); }
-int DeltaProfile::parmsLoad(void)  { if (dialogReady()) { readSettings(cfg); perChart()[rootKey()] = cfg; } return RTX_OK; }
-int DeltaProfile::parmsApply(void) { if (dialogReady()) { readSettings(cfg); perChart()[rootKey()] = cfg; } return RTX_OK; }
-int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); perChart()[rootKey()] = cfg; } return RTX_OK; }
+// (1.3.3, Rassul 23:04 "as soon as i open the indicator it changes ... when i close the settings it reverts back") the
+// GammaProfile way, proven since v0.78: read THIS chart's saved values on every draw whenever they are populated (Width
+// 30..600 is the test), keep the last good ones otherwise. No shared or keyed store - each chart reads its own values.
+void DeltaProfile::syncSettings() { int w = getIntegerValue(DX.width); if (w < 30 || w > 600) return; readSettings(cfg); }
+int DeltaProfile::parmsLoad(void)  { syncSettings(); return RTX_OK; }
+int DeltaProfile::parmsApply(void) { syncSettings(); return RTX_OK; }
+int DeltaProfile::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
@@ -325,11 +330,7 @@ int DeltaProfile::draw(void)
     // (1.1.5, Rassul 20:17 "even the amount of data that is shown changes") one DLL object serves every chart: settings
     // read from one chart's dialog were used by the next chart that drew. Keep them per chart (root symbol), and reload
     // the data file whenever the market changes.
-    // (1.2.1, Rassul 21:29 "keeps moving to the left") 1.2.0 fell back to the DEFAULTS (Place = Left) on every draw where
-    // the dialog was not readable; the settings read in parmsLoad / Apply never reached the per-chart store
-    { std::string key = rootKey();
-      if (dialogReady()) { DSet s; readSettings(s); perChart()[key] = s; }
-      if (perChart().count(key)) cfg = perChart()[key]; }
+    syncSettings();
     load();
     render(cfg);
     writeStatus(D.ok ? "drawn" : "no data");
@@ -342,6 +343,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.2");
+    p->setVersion("1.3.3");
     return p;
 }
