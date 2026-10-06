@@ -51,7 +51,7 @@ struct DSet { int market = 0, width = 80, gap = 8, font = 9, place = 1, range = 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
     bool ok = false; std::string asof, from, to, side, name, code, strength; float level = 0;
-    std::vector<DRow> rows, srows, drows; float tick = 0;
+    std::vector<DRow> rows, srows, drows, hrows; float tick = 0;
 };
 
 class DeltaProfile : public cppExtension {
@@ -115,7 +115,7 @@ int cppExtension::setup(void)
     DX.font   = pc++; setIntegerParameter("Font size (pt)", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Values on the biggest bars", true);
     DX.place  = pc++; setListParameter("Place", 0, "Left;Right");   // (1.1.4) Left first: the list default is its first entry
-    DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
+    DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Last 60 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
     DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 1, NUMW);
     DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
@@ -129,7 +129,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
     { int pi = getListIndex(DX.place); S.place = (pi == 1) ? 0 : 1; }   // (1.1.4) list Left;Right -> place 1 = Left, 0 = Right
-    S.range = getListIndex(DX.range); if (S.range < 0 || S.range > 2) S.range = 0;
+    S.range = getListIndex(DX.range); if (S.range < 0 || S.range > 3) S.range = 0;
     S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
     S.sides = getListIndex(DX.sides); if (S.sides < 0 || S.sides > 1) S.sides = 0;
 }
@@ -155,9 +155,9 @@ void DeltaProfile::load()
         else if (t[0] == "LEVEL" && t.size() >= 3) { D.level = (float)atof(t[1].c_str()); D.side = t[2]; if (t.size() >= 4) D.name = t[3]; }
         else if (t[0] == "BADGE" && t.size() >= 2) { D.code = t[1]; D.strength = t.size() >= 3 ? t[2] : ""; }
         else if (t[0] == "TICK" && t.size() >= 2) D.tick = (float)atof(t[1].c_str());
-        else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW") && t.size() >= 4) {
+        else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
             DRow r; r.px = (float)atof(t[1].c_str()); r.d = (float)atof(t[2].c_str()); r.v = (float)atof(t[3].c_str());
-            (t[0] == "ROW" ? D.rows : t[0] == "SROW" ? D.srows : D.drows).push_back(r);
+            (t[0] == "ROW" ? D.rows : t[0] == "SROW" ? D.srows : t[0] == "HROW" ? D.hrows : D.drows).push_back(r);
         }
     }
     D.ok = !D.rows.empty();
@@ -205,7 +205,7 @@ void DeltaProfile::render(const DSet& S)
     if (!D.ok) return;
 
     // (1.1.0) Range: the last 30 min, the whole session, or the day from 08:30
-    const std::vector<DRow>& R = S.range == 1 && !D.srows.empty() ? D.srows : S.range == 2 && !D.drows.empty() ? D.drows : D.rows;
+    const std::vector<DRow>& R = S.range == 1 && !D.hrows.empty() ? D.hrows : S.range == 2 && !D.srows.empty() ? D.srows : S.range == 3 && !D.drows.empty() ? D.drows : D.rows;   // (1.1.4) + Last 60 min
     // rows -> buckets: N ticks per row, or (0 = auto) one bar per few pixels
     int bh = S.font - 3; if (bh < 3) bh = 3;
     float g = (S.group > 0 && D.tick > 0) ? D.tick * S.group : 0;
