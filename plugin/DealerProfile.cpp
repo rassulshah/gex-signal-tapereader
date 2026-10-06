@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.2.6";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.2.7";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -85,6 +85,26 @@ public:
 
     bool dialogReady();
     void syncSettings(bool fromDialog = false);
+    // (2.2.7, Rassul 23:33-23:34 "KEY and MAGNET cross over into the delta profile column ... keep them in the dealer profile
+    // column") the KEY / TGT / MAG chips stay, drawn INSIDE the 70 px the Profile reserves left of its bars (REACH), never past it.
+    // KEY carries the strike's 1-hour GEX change (KEY +18%).
+    void drawKeyPct(float k, float step, short anchor, short y, const Settings& S)
+    {
+        for (size_t j = 0; j < D.tags.size(); j++) {
+            const dl::Data::Tag& T = D.tags[j];
+            if (std::fabs(T.k - k) > step * 0.5f) continue;
+            int fsz = S.font - 1; if (fsz < 7) fsz = 7;
+            std::string txt = T.text;
+            int tw = textW(txt.c_str(), fsz, true) + 8;
+            while (tw > 66 && txt.size() > 3) { txt = txt.substr(0, txt.size() - 1); tw = textW(txt.c_str(), fsz, true) + 8; }   // never wider than the reserve
+            COLOR bg = T.col == 'A' ? 0x00C084FC : T.col == 'B' ? C_WALL : T.col == 'G' ? C_BUY : T.col == 'C' ? 0x0022D3EE : C_INK;
+            short ch = (short)(fsz + 5);
+            short x2 = (short)(anchor - S.width - 2);                   // right edge just left of the widest bar
+            box((short)(x2 - tw), (short)(y - ch / 2), x2, (short)(y + ch / 2), bg);
+            textLJ((short)(x2 - tw + 4), y, txt.c_str(), C_DARK, fsz, true);
+        }
+    }
+    }
     std::string chartKey(); std::string savedKey; long long savedStamp = -2;
     void readSettings(Settings& S);
     void load();
@@ -346,17 +366,7 @@ void DealerProfile::render(const Settings& S)
                     lastLabY = y;
                 }
             }
-            for (size_t j = 0; j < D.tags.size(); j++) {   // KEY / TGT / MAG chips stay, left of the bar
-                const dl::Data::Tag& T = D.tags[j];
-                if (std::fabs(T.k - N.k) > step * 0.5f) continue;
-                int fsz = S.font - 1; if (fsz < 7) fsz = 7;
-                int tw2 = textW(T.text.c_str(), fsz, true) + 8;
-                COLOR bg = T.col == 'A' ? 0x00C084FC : T.col == 'B' ? C_WALL : T.col == 'G' ? C_BUY : T.col == 'C' ? 0x0022D3EE : C_INK;
-                short ch = (short)(fsz + 5);
-                short x2 = (short)(anchor - L - 60);
-                box((short)(x2 - tw2), (short)(y - ch / 2), x2, (short)(y + ch / 2), bg);
-                textLJ((short)(x2 - tw2 + 4), y, T.text.c_str(), C_DARK, fsz, true);
-            }
+            drawKeyPct(N.k, step, anchor, y, S);   // (2.2.7) no KEY / TGT / MAG chips - only the level strike's 1-hour % change
         }
         return;
     }
@@ -396,19 +406,9 @@ void DealerProfile::render(const Settings& S)
             if (Lg > 0 && N.gp >= 0) strengthMark((short)(anchor - reachG - 4), (short)((gt + gb) / 2), N.gp, N.live, S.font, gc);
             if (Ld > 0 && N.dp >= 0) strengthMark((short)(anchor - Ld - 4), (short)((dt_ + db) / 2), N.dp, false, S.font, dc);
         }
-        // (1.4.0, Rassul 2026-09-30, mockup v26) the strikes the Analyst and the Read talk about: KEY (the level), TGT (the target
-        // wall), MAG (the 0DTE magnet) - a small chip at the left end of the strike's gamma node
-        for (size_t j = 0; j < D.tags.size(); j++) {
-            const dl::Data::Tag& T = D.tags[j];
-            if (std::fabs(T.k - N.k) > step * 0.5f) continue;
-            int fsz = S.font - 1; if (fsz < 7) fsz = 7;
-            int tw = textW(T.text.c_str(), fsz, true) + 8;
-            COLOR bg = T.col == 'A' ? 0x00C084FC : T.col == 'B' ? C_WALL : T.col == 'G' ? C_BUY : T.col == 'C' ? 0x0022D3EE : C_INK;
-            short ch = (short)(fsz + 5), cy = (short)((gt + gb) / 2);
-            short x2 = Lg >= tw + 8 ? (short)(anchor - Lg + 3 + tw) : (short)(anchor - (Lg > 0 ? Lg : 0) - 60);
-            box((short)(x2 - tw), (short)(cy - ch / 2), x2, (short)(cy + ch / 2), bg);
-            textLJ((short)(x2 - tw + 4), cy, T.text.c_str(), C_DARK, fsz, true);
-        }
+        // (2.2.7, Rassul 23:32 "why even have KEY" / 23:33 "KEY and MAGNET cross over into the delta profile column") the chips are
+        // gone; the level strike shows only its 1-hour GEX change, inside the Profile's own reach
+        drawKeyPct(N.k, step, anchor, (short)((gt + gb) / 2), S);
     }
     // whole-book banner + legend (top-left of the pane)
     short bx = (short)(pane.left + 8), by = (short)(pane.top + 6);
@@ -610,6 +610,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.2.6");
+    p->setVersion("2.2.7");
     return p;
 }
