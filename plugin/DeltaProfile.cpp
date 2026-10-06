@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.8.1";
+static const char* DLT_VERSION = "1.8.2";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -462,7 +462,7 @@ void DeltaProfile::render(const DSet& S)
             for (size_t z = 0; z < D.zones.size(); z++) if (best->px >= D.zones[z].lo - D.tick * 0.5f && best->px <= D.zones[z].hi + D.tick * 0.5f) inZone = true;
             if (inZone) continue;
             COLOR col = best->side == "support" ? 0x0086EFAC : 0x00FCA5A5;
-            std::string t = best->code; if (best->code != "T" && best->x > 0) t += xs(best->x);
+            std::string t = best->code; if (best->x > 0) t += xs(best->x);   // (1.8.2) I carries its x too
             short y = (short)((labd[i].t + labd[i].b) / 2);
             if (y - lastY < S.font + 2) y = (short)(lastY + S.font + 2);   // two labelled rows touching: stack, never overlap
             lastY = y;
@@ -474,10 +474,17 @@ void DeltaProfile::render(const DSet& S)
             if (bb >= 0) {
                 PNT pp; pp.set(bb, best->px, kBarCenter);
                 if (pp.h > pane.left && pp.h < pane.right && pp.v > pane.top + 16 && pp.v < pane.bottom) {
-                    setPen(col, 2, P_SOLID);
-                    CBRUSH hb(col, PAT_HOLLOW); hb.set();
-                    RCT rr; rr.set((short)(pp.h - 6), (short)(pp.v - 6), (short)(pp.h + 6), (short)(pp.v + 6));
-                    rr.drawOval(DRAW_OPAQUE);
+                    // (1.8.2, Rassul 14:23 "use a square for initiative") A / A? = a ring, I / I? = a square
+                    bool square = !best->code.empty() && best->code[0] == 'I';
+                    if (square) {
+                        short l = (short)(pp.h - 5), r_ = (short)(pp.h + 5), t_ = (short)(pp.v - 5), b_ = (short)(pp.v + 5);
+                        line(l, t_, r_, t_, col, 2); line(r_, t_, r_, b_, col, 2); line(r_, b_, l, b_, col, 2); line(l, b_, l, t_, col, 2);
+                    } else {
+                        setPen(col, 2, P_SOLID);
+                        CBRUSH hb(col, PAT_HOLLOW); hb.set();
+                        RCT rr; rr.set((short)(pp.h - 6), (short)(pp.v - 6), (short)(pp.h + 6), (short)(pp.v + 6));
+                        rr.drawOval(DRAW_OPAQUE);
+                    }
                 }
             }
         }
