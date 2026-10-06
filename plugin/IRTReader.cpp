@@ -104,7 +104,7 @@ static int timerIdFor(const void* me) { return 4711 + (int)(((uintptr_t)me >> 4)
 
 struct RIdx { int market, fp, fpMin, fpDays, trades, dom, domSec, dbo, folder; };
 static RIdx RX;
-struct RSet { int market = 0, fpMin = 1, fpDays = 10, domSec = 2; bool fp = true, trades = false, dom = false, dbo = false; std::string folder = "C:\\Dev\\level-reversal-analytics\\data\\irt"; };
+struct RSet { int market = 0, fpMin = 1, fpDays = 10, domSec = 2; bool fp = true, trades = false, dom = true, dbo = true;   // (0.6.1) depth ON by default: the settings dialog is not always read, so 0.6.0 never probed (status said DOM off) std::string folder = "C:\\Dev\\level-reversal-analytics\\data\\irt"; };
 
 // (0.2.0, 3 Oct 00:05: after a restart only ONE chart's reader is ever started by IRT - the NQ chart's; the readers pasted on the
 // other charts never ran, not even calc) ONE reader records the FOOTPRINT of every market in irt_symbols.json (RTBARS takes a
@@ -819,6 +819,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (0.3.2) POST_DRAWING: draw() runs on every chart, like the Dealer Profile
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription(IR_FIXED[0] ? "Footprint Reader for ONE market (the name says which): records its 1-minute footprint for the LRA analytics. Put it on that market's chart only. No settings. Draws nothing." : "LRA IRT Reader: records the footprint of every market he trades (and this chart's trades and DOM) for the LRA analytics. Draws nothing.");
-    p->setVersion("0.5.2");
+    p->setVersion("0.6.1");
     return p;
 }
