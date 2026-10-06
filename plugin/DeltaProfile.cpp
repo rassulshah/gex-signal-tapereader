@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.4.1";
+static const char* DLT_VERSION = "1.5.0";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -53,6 +53,7 @@ struct DData {
     bool ok = false; std::string asof, from, to, side, name, code, strength; float level = 0;
     std::vector<DRow> rows, srows, drows, hrows; float tick = 0; int levelN = 0; float levelX = 0;
     struct DMark { float px = 0; std::string code, side; int n = 0; float x = 0; }; std::vector<DMark> marks;
+    struct DNode { char rk = 0; float px = 0, d = 0, x = 0; std::string code, side; }; std::vector<DNode> nodes;   // (1.5.0) states of the big delta nodes
     struct DZone { float lo = 0, hi = 0; std::string code, side; int share = 0; }; std::vector<DZone> zones;   // (1.4.0) Dst? / Dst / Acc / T zones
 };
 
@@ -221,6 +222,7 @@ void DeltaProfile::load()
         else if (t[0] == "LEVELN" && t.size() >= 2) D.levelN = atoi(t[1].c_str());
         else if (t[0] == "ZONE" && t.size() >= 6) { DData::DZone z; z.lo = (float)atof(t[1].c_str()); z.hi = (float)atof(t[2].c_str()); z.code = t[3]; z.side = t[4]; z.share = atoi(t[5].c_str()); D.zones.push_back(z); }
         else if (t[0] == "LEVELX" && t.size() >= 2) D.levelX = (float)atof(t[1].c_str());
+        else if (t[0] == "NODE" && t.size() >= 8) { DData::DNode n; n.rk = t[1].empty() ? 0 : t[1][0]; n.px = (float)atof(t[2].c_str()); n.d = (float)atof(t[3].c_str()); n.code = t[4]; n.side = t[5]; n.x = (float)atof(t[6].c_str()); D.nodes.push_back(n); }
         else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); if (t.size() >= 6) k.x = (float)atof(t[5].c_str()); D.marks.push_back(k); }
         else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
             DRow r; r.px = (float)atof(t[1].c_str()); r.d = (float)atof(t[2].c_str()); r.v = (float)atof(t[3].c_str());
@@ -312,6 +314,7 @@ void DeltaProfile::render(const DSet& S)
     for (auto& kv : B) big.push_back(std::make_pair(std::fabs(kv.second.r.d), kv.first));
     std::sort(big.begin(), big.end(), [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first > b.first; });
     std::map<int, bool> lab; for (size_t i = 0; i < big.size() && i < 3; i++) lab[big[i].second] = true;
+    struct LB { short t, b; float d; }; std::vector<LB> labd;     // (1.5.0) the labelled nodes - their letters go on the same rows
     for (auto& kv : B) {
         const DRow& r = kv.second.r; short t = kv.second.t, b = kv.second.b;
         int L = (int)(std::fabs(r.d) / dmax * full); if (L < 1 && r.d != 0) L = 1;
@@ -327,6 +330,7 @@ void DeltaProfile::render(const DSet& S)
             de = (short)(base + dir * L);
             if (r.d != 0) box(dir > 0 ? base : de, t, dir > 0 ? de : base, b, r.d > 0 ? C_BUY : C_SELL);
         }
+        if (lab[kv.first] && r.d != 0) { LB lb; lb.t = t; lb.b = b; lb.d = r.d; labd.push_back(lb); }
         if (S.labels && lab[kv.first] && r.d != 0) {
             char s[24]; float a = std::fabs(r.d);
             if (a >= 1000) sprintf_s(s, sizeof(s), "%s%.1fk", r.d > 0 ? "+" : "-", a / 1000); else sprintf_s(s, sizeof(s), "%s%.0f", r.d > 0 ? "+" : "-", a);
@@ -358,13 +362,29 @@ void DeltaProfile::render(const DSet& S)
         std::string t = z.code; if (z.code != "T" && z.share > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d%%", z.share); t += b; }
         textLJ((short)(sL + 3), (short)((yt + yb) / 2), t.c_str(), col, S.font, true);
     }
-    if (S.offlvl) for (size_t i = 0; i < D.marks.size(); i++) {
-        const DData::DMark& k = D.marks[i];
-        bool sup = k.side == "support";
-        COLOR col = k.code == "E" ? 0x00FCD34D : (sup ? 0x0086EFAC : 0x00FCA5A5);     // (1.3.8, Rassul 07:30 "too dark") light amber / green / red
-        std::string t = k.code;                            // (1.3.8, Rassul 07:29) "just show A 2.4x" - no contract count
-        if ((k.x > 0 || k.code == "E") && k.code != "T") t += xs(k.x);
-        drawLetter(k.px, t, col);
+    // (1.5.0, Rassul 09:16-09:18 "we are looking at the high delta nodes ... the ones that stick out and have the amounts on
+    // them") ONE letter per labelled node, on its row: A? (price has not left it), A (the absorbers held it), T (they are
+    // trapped). Colour = the side that won. The state comes from the Reader (NODE lines) for the Range this chart shows.
+    if (S.offlvl) {
+        char rk = S.range == 1 ? 'H' : S.range == 2 ? 'S' : S.range == 3 ? 'D' : 'R';
+        std::sort(labd.begin(), labd.end(), [](const LB& p, const LB& q) { return p.t < q.t; });
+        short lastY = -1000;
+        for (size_t i = 0; i < labd.size(); i++) {
+            const DData::DNode* best = nullptr;
+            for (size_t j = 0; j < D.nodes.size(); j++) {
+                const DData::DNode& n = D.nodes[j];
+                if (n.rk != rk || (n.d < 0) != (labd[i].d < 0)) continue;
+                short yn = yOf(n.px); if (yn < labd[i].t - 1 || yn > labd[i].b + 1) continue;
+                if (!best || std::fabs(n.d) > std::fabs(best->d)) best = &n;
+            }
+            if (!best) continue;
+            COLOR col = best->side == "support" ? 0x0086EFAC : 0x00FCA5A5;
+            std::string t = best->code; if (best->code != "T" && best->x > 0) t += xs(best->x);
+            short y = (short)((labd[i].t + labd[i].b) / 2);
+            if (y - lastY < S.font + 2) y = (short)(lastY + S.font + 2);   // two labelled rows touching: stack, never overlap
+            lastY = y;
+            textLJ((short)(sL + 3), y, t.c_str(), col, S.font, true);
+        }
     }
     if (!D.code.empty() && D.level > 0) {
         bool up = D.side == "support";
