@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.1.5";
+static const char* DLT_VERSION = "1.1.6";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -260,26 +260,18 @@ void DeltaProfile::render(const DSet& S)
             else textRJ((short)(de - 2), yc, s, C_INK, S.font - 1, false);
         }
     }
-    // the behaviour code at the level (below a support, above a resistance)
+    // (1.1.6, Rassul 20:21 "instead of big badges ... a letter A for absorption, E for exhaustion") one letter at the
+    // level, on the chart side of the column: A absorption, E exhaustion, T trapped, I initiative (stand aside).
+    // '?' after it = setting up (not confirmed); no '?' = confirmed. Green = long read, red = short read, amber = E.
     if (!D.code.empty() && D.level > 0) {
         bool up = D.side == "support";
         COLOR c = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
-        std::string t = D.code + (D.strength == "?" ? "?" : D.strength == "+" ? "+" : "");   // (1.1.2) ? = setting up, outlined; check = confirmed, solid
-        bool tick = D.strength == "v";
-        int tw = textW(t.c_str(), S.font, true) + (tick ? 9 : 0);
-        short y = yOf(D.level), h = (short)(S.font + 5);
-        short top = up ? (short)(y + 3) : (short)(y - 3 - h);
-        short l = (short)(mid - tw / 2 - 4), r = (short)(mid + tw / 2 + 4);
-        RCT bg; bg.set(l, top, r, (short)(top + h));
-        bool solid = tick;                                          // confirmed = solid, else outlined
-        bg.draw(1, c, solid ? c : C_DARK, DRAW_OPAQUE, PAT_SOLID);
-        COLOR ink = solid ? C_DARK : c;
-        textLJ((short)(l + 4), (short)(top + h / 2), t.c_str(), ink, S.font, true);
-        if (tick) {                                                 // a drawn check mark (fonts may lack the glyph)
-            short cx = (short)(r - 11), cy = (short)(top + h / 2);
-            line(cx, cy, (short)(cx + 3), (short)(cy + 3), ink, 2);
-            line((short)(cx + 3), (short)(cy + 3), (short)(cx + 8), (short)(cy - 3), ink, 2);
-        }
+        std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "T" : D.code == "In" ? "I" : D.code.substr(0, 1);
+        if (D.strength == "?") t += "?";
+        short y = yOf(D.level);
+        int sz = S.font + 3;
+        if (S.place == 1) textLJ((short)(right + 4), y, t.c_str(), c, sz, true);    // Left column: letter just right of it
+        else textRJ((short)(left - 4), y, t.c_str(), c, sz, true);                  // Right column: letter just left of it
     }
 }
 
@@ -313,6 +305,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.1.5");
+    p->setVersion("1.1.6");
     return p;
 }
