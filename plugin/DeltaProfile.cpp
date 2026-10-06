@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.8.2";
+static const char* DLT_VERSION = "1.8.3";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -45,9 +45,9 @@ static const COLOR C_INK   = 0x00E5E7EB;
 static const COLOR C_MUTED = 0x009CA3AF;
 static const COLOR C_DARK  = 0x000B0F19;
 
-struct DIdx { int market, width, gap, font, labels, place, range, group, sides, offlvl, face, mins; };
+struct DIdx { int market, width, gap, font, labels, place, range, group, sides, offlvl, face, mins, showI; };
 static DIdx DX;
-struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 0, group = 1, sides = 0; int face = 0; int mins = 60; bool labels = true, offlvl = true; };
+struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 0, group = 1, sides = 0; int face = 0; int mins = 60; bool labels = true, offlvl = true, showI = false; };   // (1.8.3) showI: initiative letters off by default
 // (1.7.0, Rassul 12:00 "think about the settings and combinations so it all makes sense") range 0 = Last N minutes (N = mins),
 // 1 = Session, 2 = Day from 08:30 - Minutes is used ONLY with Last N minutes; face 0 = bars grow Left, 1 = Right
 
@@ -146,8 +146,8 @@ void DeltaProfile::syncSettings(bool fromDialog)
         std::map<std::string, std::string> all; std::ifstream in(settingsPath().c_str()); std::string ln;
         while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
         in.close();
-        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|2", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
-                               cfg.place, cfg.range, cfg.group, cfg.sides, cfg.offlvl ? 1 : 0, cfg.face, cfg.mins);
+        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|2|%d", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
+                               cfg.place, cfg.range, cfg.group, cfg.sides, cfg.offlvl ? 1 : 0, cfg.face, cfg.mins, cfg.showI ? 1 : 0);
         std::string row = key + b;
         if (all[key] != row) { all[key] = row; std::ofstream out(settingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
         savedKey = key; return;
@@ -163,6 +163,7 @@ void DeltaProfile::syncSettings(bool fromDialog)
             cfg.labels = t[5] == "1"; cfg.place = atoi(t[6].c_str()); cfg.range = atoi(t[7].c_str()); cfg.group = atoi(t[8].c_str());
             cfg.sides = atoi(t[9].c_str()); cfg.offlvl = t[10] == "1"; cfg.face = atoi(t[11].c_str());
             cfg.mins = t.size() >= 13 ? atoi(t[12].c_str()) : 60; if (cfg.mins < 5 || cfg.mins > 1440) cfg.mins = 60;
+            cfg.showI = t.size() >= 15 && t[14] == "1";
             if (!(t.size() >= 14 && t[13] == "2")) {          // (1.7.0) an older row: Range 30 / 60 / Session / Day / Minutes, Face Price / Dealer
                 int r = cfg.range;
                 if (r == 0) { cfg.range = 0; cfg.mins = 30; } else if (r == 1) { cfg.range = 0; cfg.mins = 60; }
@@ -180,9 +181,10 @@ int DeltaProfile::parmsUpdt(unsigned int) { syncSettings(true); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(9);   // (1.7.0) the settings window re-laid out: Range = Last N minutes / Session / Day + Minutes, Face Left / Right
+    setParameterVersion(10);   // (1.8.3) + "Initiative letters (I)" - off by default
+    // was: setParameterVersion(9);   // (1.7.0) the settings window re-laid out: Range = Last N minutes / Session / Day + Minutes, Face Left / Right
     // was 8 (1.6.0 Minutes), 7 (1.4.1 letters on), 6 (1.1.3: new parameters without a bump crashed IRT when the dialog opened)
-    setParameterDialogHeight(9);
+    setParameterDialogHeight(10);
     const short SL = kParmAppendSameLine;
     const short LW = 120;     // list width - every list the same, so the rows line up
     int pc = 0;
@@ -197,7 +199,8 @@ int cppExtension::setup(void)
     DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW, SL);
     DX.font   = pc++; setIntegerParameter("Font pt", 9, NUMW, SL);
     DX.labels = pc++; setBoolParameter("Amounts on the 3 biggest bars", true);
-    DX.offlvl = pc++; setBoolParameter("Letters (A?  A  I  E, zones)", true);
+    DX.offlvl = pc++; setBoolParameter("Absorption letters (A?  A, zones)", true);
+    DX.showI  = pc++; setBoolParameter("Initiative letters (I?  I)", false);   // (1.8.3, Rassul 14:28 "only show absorption by default")
     return RTX_OK;
 }
 
@@ -214,6 +217,7 @@ void DeltaProfile::readSettings(DSet& S)
     S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
     { int v = getListIndex(DX.sides); if (v == 0 || v == 1) S.sides = v; }
     S.offlvl = isBoxChecked(DX.offlvl) != 0;
+    S.showI = isBoxChecked(DX.showI) != 0;
     { int v = getListIndex(DX.face); if (v == 0 || v == 1) S.face = v; }
 }
 
@@ -458,6 +462,7 @@ void DeltaProfile::render(const DSet& S)
                 if (!best || std::fabs(n.d) > std::fabs(best->d)) best = &n;
             }
             if (!best) continue;
+            if (!S.showI && !best->code.empty() && best->code[0] == 'I') continue;   // (1.8.3) initiative only when asked for
             bool inZone = false;                                  // (1.5.3) a node inside a Dst / Acc zone: the zone's label is the read
             for (size_t z = 0; z < D.zones.size(); z++) if (best->px >= D.zones[z].lo - D.tick * 0.5f && best->px <= D.zones[z].hi + D.tick * 0.5f) inZone = true;
             if (inZone) continue;
