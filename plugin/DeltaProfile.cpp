@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.5.3";
+static const char* DLT_VERSION = "1.5.4";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -383,10 +383,12 @@ void DeltaProfile::render(const DSet& S)
         short yt = yOf(z.hi + D.tick * 0.5f), yb = yOf(z.lo - D.tick * 0.5f);
         if (yb < pane.top + 16 || yt > pane.bottom) continue;
         COLOR col = z.side == "support" ? 0x0086EFAC : 0x00FCA5A5;
-        short bx = (short)(sR - 4);
-        line(bx, yt, bx, yb, col, 1); line((short)(bx - 3), yt, bx, yt, col, 1); line((short)(bx - 3), yb, bx, yb, col, 1);
+        // (1.5.4, Rassul 09:55 "the bracket spacing is making it difficult to read the percentage") the bracket opens on the
+        // column's LEFT edge "[" and the label starts after it - the right-edge bracket ran through "42%"
+        short bx = (short)(sL + 1);
+        line(bx, yt, bx, yb, col, 1); line(bx, yt, (short)(bx + 3), yt, col, 1); line(bx, yb, (short)(bx + 3), yb, col, 1);
         std::string t = z.code; if (z.code != "T" && z.share > 0) { char b[16]; sprintf_s(b, sizeof(b), " %d%%", z.share); t += b; }
-        textLJ((short)(sL + 3), (short)((yt + yb) / 2), t.c_str(), col, S.font, true);
+        textLJ((short)(sL + 6), (short)((yt + yb) / 2), t.c_str(), col, S.font, true);
     }
     // (1.5.0, Rassul 09:16-09:18 "we are looking at the high delta nodes ... the ones that stick out and have the amounts on
     // them") ONE letter per labelled node, on its row: A? (price has not left it), A (the absorbers held it), T (they are
