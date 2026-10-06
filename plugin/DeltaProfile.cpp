@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.1.2";
+static const char* DLT_VERSION = "1.1.3";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -105,7 +105,7 @@ int DeltaProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg)
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
+    setParameterVersion(2);   // (1.1.3) BUMPED: 1.1.x added Place / Range / Ticks per row / Sides - charts saved with the 1.0 settings crashed IRT when the dialog opened (msglog 19:05); resets to the defaults
     setParameterDialogHeight(8);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -303,6 +303,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.1.2");
+    p->setVersion("1.1.3");
     return p;
 }
