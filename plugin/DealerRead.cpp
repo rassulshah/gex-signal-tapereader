@@ -1315,7 +1315,7 @@ void DealerRead::renderTurn(const Settings& S)
     RCT pane; pane.getPaneRect(false);
     short lh = U(15), pad = U(6), gw = U(9), gap = U(6), cgap = U(10);
     int W = (int)((pane.right - pane.left) * S.rwid / 100);
-    int minW = U(560); if (W < minW) W = minW;
+    int minW = U(740); if (W < minW) W = minW;            // (4.0.1, Rassul 13:44 "make the dealer read a little wider") 560 -> 740
     if (W > pane.right - pane.left - U(8)) W = pane.right - pane.left - U(8);
     int inner = W - gw - 2 * pad;
     int colW = (inner - cgap) / 2;
@@ -1431,6 +1431,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.0.0");   // (4.0.0) OPTIONS | FOOTPRINT split
+    p->setVersion("4.0.1");   // (4.0.0) OPTIONS | FOOTPRINT split
     return p;
 }
