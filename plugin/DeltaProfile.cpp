@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.3";
+static const char* DLT_VERSION = "1.3.4";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -68,6 +68,7 @@ public:
     bool dialogReady();
     std::string rootKey();
     void syncSettings();
+    std::string chartKey(); std::string savedKey;
     void readSettings(DSet& S);
     void load();
     int dealerReach();
@@ -110,7 +111,45 @@ std::string DeltaProfile::rootKey() { char rb[32] = {0}; const char* rs = getRoo
 // (1.3.3, Rassul 23:04 "as soon as i open the indicator it changes ... when i close the settings it reverts back") the
 // GammaProfile way, proven since v0.78: read THIS chart's saved values on every draw whenever they are populated (Width
 // 30..600 is the test), keep the last good ones otherwise. No shared or keyed store - each chart reads its own values.
-void DeltaProfile::syncSettings() { int w = getIntegerValue(DX.width); if (w < 30 || w > 600) return; readSettings(cfg); }
+// (1.3.4, Rassul 23:06 "clicking the indicator shows labels ... when i close the setting the labels go away") IRT only
+// fills the list / check-box values while the settings window is open (outside it lists read -1, boxes read unchecked).
+// So: while the window is open (the Market list reads 0..7) read everything and SAVE it to a small file per chart
+// (market + bar size + chart); while it is closed, use the saved copy. Each chart keeps its own settings across restarts.
+static std::string settingsPath() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.settings.txt"; }
+std::string DeltaProfile::chartKey()
+{
+    char rb[32] = {0}; const char* rs = getRootSymbol(rb);
+    const char* pl = getPeriodicityLabel(); const char* cl = getChartLabel();
+    std::string k = std::string(rs ? rs : "") + "~" + (pl ? pl : "") + "~" + (cl ? cl : "");
+    for (size_t i = 0; i < k.size(); i++) if (k[i] == '|' || k[i] == '\n' || k[i] == '\r') k[i] = ' ';
+    return k;
+}
+void DeltaProfile::syncSettings()
+{
+    std::string key = chartKey();
+    if (dialogReady()) {                                   // the window is open: the values are real - read and save
+        readSettings(cfg);
+        std::map<std::string, std::string> all; std::ifstream in(settingsPath().c_str()); std::string ln;
+        while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
+        in.close();
+        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
+                               cfg.place, cfg.range, cfg.group, cfg.sides, cfg.offlvl ? 1 : 0, cfg.face);
+        std::string row = key + b;
+        if (all[key] != row) { all[key] = row; std::ofstream out(settingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
+        savedKey = key; return;
+    }
+    if (savedKey == key) return;                           // already using this chart's saved copy
+    std::ifstream in(settingsPath().c_str()); std::string ln;
+    while (std::getline(in, ln)) {
+        std::vector<std::string> t = dl::split(ln, '|');
+        if (t.size() >= 12 && t[0] == key) {
+            cfg.market = atoi(t[1].c_str()); cfg.width = atoi(t[2].c_str()); cfg.gap = atoi(t[3].c_str()); cfg.font = atoi(t[4].c_str());
+            cfg.labels = t[5] == "1"; cfg.place = atoi(t[6].c_str()); cfg.range = atoi(t[7].c_str()); cfg.group = atoi(t[8].c_str());
+            cfg.sides = atoi(t[9].c_str()); cfg.offlvl = t[10] == "1"; cfg.face = atoi(t[11].c_str());
+            savedKey = key; return;
+        }
+    }
+}
 int DeltaProfile::parmsLoad(void)  { syncSettings(); return RTX_OK; }
 int DeltaProfile::parmsApply(void) { syncSettings(); return RTX_OK; }
 int DeltaProfile::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
@@ -137,17 +176,17 @@ int cppExtension::setup(void)
 
 void DeltaProfile::readSettings(DSet& S)
 {
-    S.market = getListIndex(DX.market);
+    { int v = getListIndex(DX.market); if (v >= 0 && v <= 7) S.market = v; }   // (1.3.3) an unreadable list (-1) keeps the last value
     S.width = getIntegerValue(DX.width); if (S.width < 30) S.width = 50; if (S.width > 600) S.width = 600;
     S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
     S.labels = isBoxChecked(DX.labels) != 0;
-    { int pi = getListIndex(DX.place); S.place = (pi == 1) ? 1 : 0; }   // (1.2.1) list Right;Left -> 0 = Right, 1 = Left
-    S.range = getListIndex(DX.range); if (S.range < 0 || S.range > 3) S.range = 0;
+    { int pi = getListIndex(DX.place); if (pi == 0 || pi == 1) S.place = pi; }   // list Right;Left -> 0 = Right, 1 = Left
+    { int v = getListIndex(DX.range); if (v >= 0 && v <= 3) S.range = v; }
     S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
-    S.sides = getListIndex(DX.sides); if (S.sides < 0 || S.sides > 1) S.sides = 0;
+    { int v = getListIndex(DX.sides); if (v == 0 || v == 1) S.sides = v; }
     S.offlvl = isBoxChecked(DX.offlvl) != 0;
-    S.face = getListIndex(DX.face); if (S.face < 0 || S.face > 1) S.face = 0;
+    { int v = getListIndex(DX.face); if (v == 0 || v == 1) S.face = v; }
 }
 
 void DeltaProfile::load()
@@ -343,6 +382,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.3");
+    p->setVersion("1.3.4");
     return p;
 }

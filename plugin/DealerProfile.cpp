@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.2.4";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.2.5";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -85,6 +85,7 @@ public:
 
     bool dialogReady();
     void syncSettings();
+    std::string chartKey(); std::string savedKey;
     void readSettings(Settings& S);
     void load();
     void alignContract();
@@ -113,7 +114,44 @@ DealerProfile::DealerProfile() : cppExtension() { off = 0.0f; lastBar = 0; }
 bool DealerProfile::dialogReady() { int i = getListIndex(PX.market); return i >= 0 && i <= 7; }
 // (2.2.4, Rassul 23:05 "the same thing is happening with the dealer profile") the GammaProfile way: read the saved values
 // whenever they are populated (Width 30..900 is the test); a list that reads -1 keeps its last value
-void DealerProfile::syncSettings() { int w = getIntegerValue(PX.width); if (w < 30 || w > 900) return; readSettings(cfg); }
+// (2.2.5, Rassul 23:06 labels vanish when the settings window closes) IRT fills list / check-box values only while the
+// window is open. Read + SAVE them per chart then; use the saved copy while it is closed (survives restarts).
+static std::string dpSettingsPath() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.settings.txt"; }
+std::string DealerProfile::chartKey()
+{
+    char rb[32] = {0}; const char* rs = getRootSymbol(rb);
+    const char* pl = getPeriodicityLabel(); const char* cl = getChartLabel();
+    std::string k = std::string(rs ? rs : "") + "~" + (pl ? pl : "") + "~" + (cl ? cl : "");
+    for (size_t i = 0; i < k.size(); i++) if (k[i] == '|' || k[i] == '\n' || k[i] == '\r') k[i] = ' ';
+    return k;
+}
+void DealerProfile::syncSettings()
+{
+    std::string key = chartKey();
+    if (dialogReady()) {
+        readSettings(cfg);
+        std::map<std::string, std::string> all; std::ifstream in(dpSettingsPath().c_str()); std::string ln;
+        while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
+        in.close();
+        std::string inds = cfg.inds; for (size_t i = 0; i < inds.size(); i++) if (inds[i] == '|') inds[i] = ',';
+        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|", cfg.market, cfg.width, cfg.font, cfg.clock, cfg.labels ? 1 : 0,
+                               cfg.snap ? 1 : 0, cfg.fadefar ? 1 : 0, cfg.banner ? 1 : 0);
+        std::string row = key + b + inds;
+        if (all[key] != row) { all[key] = row; std::ofstream out(dpSettingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
+        savedKey = key; return;
+    }
+    if (savedKey == key) return;
+    std::ifstream in(dpSettingsPath().c_str()); std::string ln;
+    while (std::getline(in, ln)) {
+        std::vector<std::string> t = dl::split(ln, '|');
+        if (t.size() >= 9 && t[0] == key) {
+            cfg.market = atoi(t[1].c_str()); cfg.width = atoi(t[2].c_str()); cfg.font = atoi(t[3].c_str()); cfg.clock = atoi(t[4].c_str());
+            cfg.labels = t[5] == "1"; cfg.snap = t[6] == "1"; cfg.fadefar = t[7] == "1"; cfg.banner = t[8] == "1";
+            if (t.size() >= 10 && !t[9].empty()) cfg.inds = t[9];
+            savedKey = key; return;
+        }
+    }
+}
 int DealerProfile::parmsLoad(void)  { syncSettings(); return RTX_OK; }
 int DealerProfile::parmsApply(void) { syncSettings(); return RTX_OK; }
 int DealerProfile::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
@@ -566,6 +604,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.2.4");
+    p->setVersion("2.2.5");
     return p;
 }
