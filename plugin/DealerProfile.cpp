@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.2.3";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.2.4";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -84,6 +84,7 @@ public:
     void exportBars();
 
     bool dialogReady();
+    void syncSettings();
     void readSettings(Settings& S);
     void load();
     void alignContract();
@@ -110,9 +111,12 @@ int cppExtension::destroy(void) { return RTX_OK; }
 DealerProfile::DealerProfile() : cppExtension() { off = 0.0f; lastBar = 0; }
 
 bool DealerProfile::dialogReady() { int i = getListIndex(PX.market); return i >= 0 && i <= 7; }
-int DealerProfile::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DealerProfile::parmsApply(void) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DealerProfile::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+// (2.2.4, Rassul 23:05 "the same thing is happening with the dealer profile") the GammaProfile way: read the saved values
+// whenever they are populated (Width 30..900 is the test); a list that reads -1 keeps its last value
+void DealerProfile::syncSettings() { int w = getIntegerValue(PX.width); if (w < 30 || w > 900) return; readSettings(cfg); }
+int DealerProfile::parmsLoad(void)  { syncSettings(); return RTX_OK; }
+int DealerProfile::parmsApply(void) { syncSettings(); return RTX_OK; }
+int DealerProfile::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
@@ -138,7 +142,7 @@ int cppExtension::setup(void)
 
 void DealerProfile::readSettings(Settings& S)
 {
-    S.market = getListIndex(PX.market);
+    { int v = getListIndex(PX.market); if (v >= 0 && v <= 7) S.market = v; }
     S.width = getIntegerValue(PX.width); if (S.width < 30) S.width = 50; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
     S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = false;
     S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = false;
@@ -545,7 +549,7 @@ int DealerProfile::draw(void)
     // (2.2.0, 2026-10-05) IRT runs ONE object of this DLL for every chart, so the settings read when another chart's dialog
     // was last applied leaked here: the HG chart drew / exported as GC (LRA-IRT-Bars-GC.csv held copper bars, root CPEZ26) and
     // the profile flipped between markets ("disappears and reappears"). Read THIS chart's settings on every draw.
-    if (dialogReady()) readSettings(cfg);
+    syncSettings();
     load();
     alignContract();
     render(cfg);
@@ -562,6 +566,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.2.3");
+    p->setVersion("2.2.4");
     return p;
 }
