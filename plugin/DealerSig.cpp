@@ -209,9 +209,13 @@ int DealerSig::draw(void)
             bool led = all[k].second;
             int b = barOf(g, (int)n, dt);
             if (b < 0) continue;
-            if (!led) { int& cnt = perBar[b]; if (cnt >= 2) continue; cnt++; }   // (1.5.0) at most two reasons on a bar (best first in the file)
             bool buy = g.side == 'B';
-            PNT p; p.set(b, buy ? lo[b] : hi[b], kBarCenter);
+            // (1.6.0, Rassul 2026-10-06 13:52 "options signals below the bar, fp signals above the bar ... add o to the signal like
+            // oSh") a code starting with 'o' (and the dealer ledger) is an OPTIONS reason: under the bar; the rest is FOOTPRINT: over
+            // the bar. The colour still says the side (green = long, red = short).
+            bool below = led || (!g.code.empty() && g.code[0] == 'o');
+            if (!led) { int& cnt = perBar[b * 2 + (below ? 1 : 0)]; if (cnt >= 2) continue; cnt++; }   // at most two per side of a bar
+            PNT p; p.set(b, below ? lo[b] : hi[b], kBarCenter);
             if (p.h < pane.left || p.h > pane.right) continue;
             int fs = led ? (cfg.font > 8 ? cfg.font - 2 : cfg.font) : cfg.font;
             FONT f; f.id = HELVETICA; f.size = (short)fs; f.style = led ? PLAIN : BOLD; setFont(f);
@@ -220,8 +224,8 @@ int DealerSig::draw(void)
             while (!txt.empty() && txt[txt.size() - 1] == '?') txt.erase(txt.size() - 1);
             int w = (int)getTextWidth(txt.c_str(), -1), lineH = fs + 4;
             dl::Box x; x.l = p.h - w / 2 - 3; x.r = p.h + w / 2 + 4;
-            x.t = buy ? p.v + cfg.gap : p.v - cfg.gap - lineH; x.b = x.t + lineH;
-            x = dl::placeFree(used, x, lineH, buy);
+            x.t = below ? p.v + cfg.gap : p.v - cfg.gap - lineH; x.b = x.t + lineH;
+            x = dl::placeFree(used, x, lineH, below);
             COLOR c = buy ? S_GREEN : S_RED;
             if (led) c = buy ? 0x0086EFAC : 0x00FCA5A5;                 // the ledger: lighter, smaller, not bold
             setTextColor(c);
