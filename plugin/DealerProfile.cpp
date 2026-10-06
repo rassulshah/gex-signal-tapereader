@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.2.7";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.2.8";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -96,10 +96,10 @@ public:
             int fsz = S.font - 1; if (fsz < 7) fsz = 7;
             std::string txt = T.text;
             int tw = textW(txt.c_str(), fsz, true) + 8;
-            while (tw > 66 && txt.size() > 3) { txt = txt.substr(0, txt.size() - 1); tw = textW(txt.c_str(), fsz, true) + 8; }   // never wider than the reserve
+            while (tw > 62 && txt.size() > 3) { txt = txt.substr(0, txt.size() - 1); tw = textW(txt.c_str(), fsz, true) + 8; }   // never wider than the reserve
             COLOR bg = T.col == 'A' ? 0x00C084FC : T.col == 'B' ? C_WALL : T.col == 'G' ? C_BUY : T.col == 'C' ? 0x0022D3EE : C_INK;
             short ch = (short)(fsz + 5);
-            short x2 = (short)(anchor - S.width - 2);                   // right edge just left of the widest bar
+            short x2 = (short)(anchor - S.width - 36);                  // (2.2.8) clear of the bar values (e.g. 5.4M) left of a full bar
             box((short)(x2 - tw), (short)(y - ch / 2), x2, (short)(y + ch / 2), bg);
             textLJ((short)(x2 - tw + 4), y, txt.c_str(), C_DARK, fsz, true);
         }
@@ -525,7 +525,7 @@ void DealerProfile::writeStatus(const char* what)
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nBOOK," << D.srcBook << "\nRATIO," << D.srcRatio << "\nRATIO_MODE," << D.srcMode << "\nSTATE," << what
-      << "\nREACH," << (cfg.width + 70) << "\n";   // (1.4.0) px the Profile takes from the scale's edge: the Read / Analyst stay left of it
+      << "\nREACH," << (cfg.width + 100) << "\n";   // (1.4.0) px the Profile takes from the scale's edge: the Read / Analyst stay left of it
 }
 
 // (1.3.7, Rassul 2026-09-30: the Read went blank overnight - MenthorQ's price freezes outside RTH) the chart's own last 200
@@ -609,6 +609,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.2.7");
+    p->setVersion("2.2.8");
     return p;
 }
