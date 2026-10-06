@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.7.0";
+static const char* DLT_VERSION = "1.8.0";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -57,7 +57,7 @@ struct DData {
     std::vector<DRow> rows, srows, drows, hrows; std::map<int, std::vector<DRow>> mrows;   // (1.6.0) MROW|minutes|px|d|v
     float tick = 0; int levelN = 0; float levelX = 0;
     struct DMark { float px = 0; std::string code, side; int n = 0; float x = 0; }; std::vector<DMark> marks;
-    struct DNode { std::string rk; float px = 0, d = 0, x = 0; std::string code, side; }; std::vector<DNode> nodes;
+    struct DNode { std::string rk, tpk; float px = 0, d = 0, x = 0; std::string code, side; }; std::vector<DNode> nodes;
     std::string built; float recAge = -1;              // (1.5.3) when the Reader wrote the file + the recorder's heartbeat age then   // (1.5.0) states of the big delta nodes
     struct DZone { float lo = 0, hi = 0; std::string code, side; int share = 0; }; std::vector<DZone> zones;   // (1.4.0) Dst? / Dst / Acc / T zones
 };
@@ -74,6 +74,7 @@ public:
     long long loadedStamp = -2; std::string loadedPath; std::string lastWant;   // (1.6.0)
     std::string drawnRange; int drawnRows = 0;   // (1.7.0) for the status file
     void wantMinutes();
+    int barForMinute(const std::string& tpk);   // (1.8.0) the chart bar holding a minute (stamped at its END, "YYYY-MM-DD HH:MM")
     bool dialogReady();
     std::string rootKey();
     void syncSettings(bool fromDialog = false);
@@ -241,7 +242,7 @@ void DeltaProfile::load()
         else if (t[0] == "ZONE" && t.size() >= 6) { DData::DZone z; z.lo = (float)atof(t[1].c_str()); z.hi = (float)atof(t[2].c_str()); z.code = t[3]; z.side = t[4]; z.share = atoi(t[5].c_str()); D.zones.push_back(z); }
         else if (t[0] == "LEVELX" && t.size() >= 2) D.levelX = (float)atof(t[1].c_str());
         else if (t[0] == "BUILT" && t.size() >= 3) { D.built = t[1]; D.recAge = (float)atof(t[2].c_str()); }
-        else if (t[0] == "NODE" && t.size() >= 7) { DData::DNode n; n.rk = t[1]; n.px = (float)atof(t[2].c_str()); n.d = (float)atof(t[3].c_str()); n.code = t[4]; n.side = t[5]; n.x = (float)atof(t[6].c_str()); D.nodes.push_back(n); }
+        else if (t[0] == "NODE" && t.size() >= 7) { DData::DNode n; n.rk = t[1]; n.px = (float)atof(t[2].c_str()); n.d = (float)atof(t[3].c_str()); n.code = t[4]; n.side = t[5]; n.x = (float)atof(t[6].c_str()); if (t.size() >= 8) n.tpk = t[7]; D.nodes.push_back(n); }
         else if (t[0] == "MROW" && t.size() >= 5) { DRow r; r.px = (float)atof(t[2].c_str()); r.d = (float)atof(t[3].c_str()); r.v = (float)atof(t[4].c_str()); D.mrows[atoi(t[1].c_str())].push_back(r); }
         else if (t[0] == "MARK" && t.size() >= 5) { DData::DMark k; k.px = (float)atof(t[1].c_str()); k.code = t[2]; k.side = t[3]; k.n = atoi(t[4].c_str()); if (t.size() >= 6) k.x = (float)atof(t[5].c_str()); D.marks.push_back(k); }
         else if ((t[0] == "ROW" || t[0] == "SROW" || t[0] == "RROW" || t[0] == "HROW") && t.size() >= 4) {
@@ -467,6 +468,18 @@ void DeltaProfile::render(const DSet& S)
             lastY = y;
             if (growLeft) textRJ((short)(labd[i].edge - 4), y, t.c_str(), col, S.font, true);    // (1.5.5) right beside its amount
             else textLJ((short)(labd[i].edge + 4), y, t.c_str(), col, S.font, true);
+            // (1.8.0, Rassul 12:11 "draws a mark to identify which candle had the absorption ... in choppy price action") a ring on
+            // the candle that holds the node's hardest-hitting minute, at the node's price, in the letter's colour
+            int bb = barForMinute(best->tpk);
+            if (bb >= 0) {
+                PNT pp; pp.set(bb, best->px, kBarCenter);
+                if (pp.h > pane.left && pp.h < pane.right && pp.v > pane.top + 16 && pp.v < pane.bottom) {
+                    setPen(col, 2, P_SOLID);
+                    CBRUSH hb(col, PAT_HOLLOW); hb.set();
+                    RCT rr; rr.set((short)(pp.h - 6), (short)(pp.v - 6), (short)(pp.h + 6), (short)(pp.v + 6));
+                    rr.drawOval(DRAW_OPAQUE);
+                }
+            }
         }
     }
     if (!D.code.empty() && D.level > 0) {
@@ -501,6 +514,26 @@ void DeltaProfile::wantMinutes()
     v.push_back(cfg.mins); while (v.size() > 4) v.erase(v.begin());
     std::ofstream f(p.c_str(), std::ios::trunc); for (size_t i = 0; i < v.size(); i++) f << v[i] << "\n";
     lastWant = tag;
+}
+
+int DeltaProfile::barForMinute(const std::string& tpk)
+{
+    int y, mo, d, h, mi;
+    if (tpk.size() < 16 || sscanf_s(tpk.c_str(), "%d-%d-%d %d:%d", &y, &mo, &d, &h, &mi) != 5) return -1;
+    double s = h * 3600.0 + mi * 60.0 - 60.0;                  // the minute STARTS one minute before its stamp
+    if (s < 0) return -1;
+    long n = getBarCount(); if (n < 1) return -1;
+    RTARRAYI dt(barDateTime);
+    int from = (int)n - 3000; if (from < 0) from = 0;
+    for (int i = (int)n - 1; i >= from; i--) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        int ty = t.tm_year + 1900, tm_ = t.tm_mon + 1;
+        if (ty < y || (ty == y && (tm_ < mo || (tm_ == mo && t.tm_mday < d)))) break;    // past the day
+        if (ty != y || tm_ != mo || t.tm_mday != d) continue;
+        double s0 = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+        if (s0 <= s) return i;                                 // bars are stamped at their start: the first one at or before the minute
+    }
+    return -1;
 }
 
 int DeltaProfile::draw(void)
