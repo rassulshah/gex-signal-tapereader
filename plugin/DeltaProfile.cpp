@@ -34,7 +34,7 @@
 #include <cstdio>
 #include <cstring>
 
-static const char* DLT_VERSION = "1.3.6";
+static const char* DLT_VERSION = "1.3.7";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -46,7 +46,7 @@ static const COLOR C_DARK  = 0x000B0F19;
 
 struct DIdx { int market, width, gap, font, labels, place, range, group, sides, offlvl, face; };
 static DIdx DX;
-struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 0, group = 1, sides = 0; int face = 0; bool labels = true, offlvl = true; };
+struct DSet { int market = 0, width = 50, gap = 8, font = 9, place = 0, range = 0, group = 1, sides = 0; int face = 0; bool labels = true, offlvl = false; };
 
 struct DRow { float px = 0, d = 0, v = 0; };
 struct DData {
@@ -175,7 +175,7 @@ int cppExtension::setup(void)
     DX.range  = pc++; setListParameter("Range", 0, "Last 30 min;Last 60 min;Session;Day from 08:30");   // (1.1.0) as the examples Rassul sent
     DX.group  = pc++; setIntegerParameter("Ticks per row (0 = auto)", 1, NUMW);
     DX.sides  = pc++; setListParameter("Sides", 0, "One;Both");
-    DX.offlvl = pc++; setBoolParameter("Letters at pivots and big ones", true);
+    DX.offlvl = pc++; setBoolParameter("Letters at pivots and big ones", false);   // (1.3.7, Rassul 07:28) off by default until the nightly scoring proves them
     DX.face   = pc++; setListParameter("Face", 0, "Price;Dealer Profile");   // (1.3.0, Rassul 21:55) default: toward price   // (1.0.3) Left = at the chart's left edge, apart from the Dealer Profile
     return RTX_OK;
 }
@@ -389,6 +389,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile (DLT)");
-    p->setVersion("1.3.6");
+    p->setVersion("1.3.7");
     return p;
 }
