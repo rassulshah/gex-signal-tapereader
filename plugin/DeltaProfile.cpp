@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DLT_VERSION = "1.6.0";
+static const char* DLT_VERSION = "1.6.1";
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -305,6 +305,16 @@ void DeltaProfile::render(const DSet& S)
             double age = difftime(mktime(&t), mktime(&a)) / 60.0;
             if (age < 0) age = 0;
             if (D.built.size() >= 16 && D.recAge > 0) age += D.recAge;
+            // (1.6.1, HG 10:29 -> 11:13: the recorder ran but its tab was not drawn, so no new bars) the last footprint minute
+            // more than 20 min behind the build is a data gap too (20, not 10: a thin market can go 10 min without a trade)
+            if (D.built.size() >= 16 && D.asof.size() >= 16) {
+                struct tm q; memset(&q, 0, sizeof(q));
+                if (sscanf_s(D.asof.c_str(), "%d-%d-%d %d:%d", &q.tm_year, &q.tm_mon, &q.tm_mday, &q.tm_hour, &q.tm_min) == 5) {
+                    q.tm_year -= 1900; q.tm_mon -= 1; q.tm_isdst = -1;
+                    double gap = difftime(mktime(&t), mktime(&q)) / 60.0;
+                    if (gap > 20.0 && gap > age) age = gap;
+                }
+            }
             if (age > 10.0 && age < 60.0 * 24 * 30) {
                 char b[24]; if (age >= 2880) sprintf_s(b, sizeof(b), "STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) sprintf_s(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5));
                 int tw = textW(b, 8, true);
