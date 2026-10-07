@@ -1,5 +1,5 @@
 /********************************************************************************
- *  lsSessionInfo - two small boxes on each market's chart, each dragged by its grip like any text box (Rassul 2026-10-06 21:28:
+ *  lsSessionInfo - three small boxes (1.1.0: + the NEWS heading on top) on each market's chart, each dragged by its grip like any text box (Rassul 2026-10-06 21:28:
  *  "I also want to know when 0dte options are expiring for each market ... on the copper chart there should be a label or text
  *  box indicating when the 0dte options expire for copper ... selectable ... so i can move it around" / "the most favorable times
  *  to trade a market ... when each market is actually moving ... so i dont get stuck in chop ... customized to each market and
@@ -49,8 +49,11 @@ public:
     std::vector<Win> W;
     long long stamp = -2; std::string path;
     // two boxes: 0 = 0DTE, 1 = RTH windows. pos = offset from the pane's left / top (-1 = default)
-    short bx[2] = {0, 0}, by[2] = {0, 0}, bw[2] = {0, 0}, bh[2] = {0, 0};
-    int posX[2] = {-1, -1}, posY[2] = {-1, -1};
+    // (1.1.0) box 2 = the NEWS heading (calendar events + breaking headlines for this market), on top by default
+    short bx[3] = {0, 0, 0}, by[3] = {0, 0, 0}, bw[3] = {0, 0, 0}, bh[3] = {0, 0, 0};
+    int posX[3] = {-1, -1, -1}, posY[3] = {-1, -1, -1};
+    struct Ev { std::string t, imp, title; bool brk; };
+    std::vector<Ev> news;
     std::string posMkt;
     int dragging = -1; short dDX = 0, dDY = 0;
 
@@ -58,7 +61,7 @@ public:
     void readS(SSet& S)
     {
         S.market = getListIndex(SP.market);
-        S.show = getListIndex(SP.show); if (S.show < 0 || S.show > 2) S.show = 0;
+        S.show = getListIndex(SP.show); if (S.show < 0 || S.show > 3) S.show = 0;
         S.font = getIntegerValue(SP.font); if (S.font < 7 || S.font > 20) S.font = 10;
         S.clock = getIntegerValue(SP.clock); if (S.clock < -720 || S.clock > 720) S.clock = 0;
     }
@@ -93,7 +96,7 @@ int cppExtension::setup(void)
     const short SL = kParmAppendSameLine;
     int pc = 0;
     SP.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    SP.show   = pc++; setListParameter("Show", 0, "Both;0DTE expiry;RTH active / chop", 0, SL);
+    SP.show   = pc++; setListParameter("Show", 0, "All;0DTE expiry;RTH active / chop;News", 0, SL);
     SP.font   = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);
     SP.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
     return RTX_OK;
@@ -119,7 +122,7 @@ void SessionInfo::load()
     std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Session-" + mkt + ".csv";
     long long st = dl::fileStamp(p);
     if (st >= 0 && st == stamp && p == path) return;              // unchanged: no disk read
-    W.clear(); exp.clear(); sample.clear();
+    W.clear(); exp.clear(); sample.clear(); news.clear();
     std::ifstream f(p.c_str()); if (!f.is_open()) { path.clear(); return; }
     std::string ln;
     while (std::getline(f, ln)) {
@@ -130,6 +133,7 @@ void SessionInfo::load()
         if (c[0] == "EXP" && c.size() >= 2) exp = c[1];
         else if (c[0] == "WIN" && c.size() >= 4) { Win w; w.tag = c[1]; w.from = c[2]; w.to = c[3]; W.push_back(w); }
         else if (c[0] == "SAMPLE" && c.size() >= 2) sample = c[1];
+        else if ((c[0] == "CAL" || c[0] == "NEWS") && c.size() >= 4) { Ev e; e.t = c[1]; e.imp = c[2]; e.title = c[3]; e.brk = c[0] == "NEWS"; news.push_back(e); }
     }
     stamp = st; path = p;
 }
@@ -137,10 +141,10 @@ void SessionInfo::load()
 void SessionInfo::loadPos()
 {
     if (posMkt == mkt) return;
-    posMkt = mkt; posX[0] = posY[0] = posX[1] = posY[1] = -1;
+    posMkt = mkt; for (int b = 0; b < 3; b++) posX[b] = posY[b] = -1;
     const char* up = getenv("USERPROFILE"); if (!up || mkt.empty()) return;
-    for (int b = 0; b < 2; b++) {
-        std::ifstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b ? "rth" : "0dte") + ".txt").c_str());
+    for (int b = 0; b < 3; b++) {
+        std::ifstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b == 2 ? "news" : b ? "rth" : "0dte") + ".txt").c_str());
         if (f.is_open()) { char c; f >> posX[b] >> c >> posY[b]; if (!f) posX[b] = posY[b] = -1; }
     }
 }
@@ -148,7 +152,7 @@ void SessionInfo::loadPos()
 void SessionInfo::savePos(int b)
 {
     const char* up = getenv("USERPROFILE"); if (!up || mkt.empty()) return;
-    std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b ? "rth" : "0dte") + ".txt").c_str(), std::ios::trunc);
+    std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b == 2 ? "news" : b ? "rth" : "0dte") + ".txt").c_str(), std::ios::trunc);
     if (f.is_open()) f << posX[b] << "," << posY[b] << "\n";
 }
 
@@ -205,6 +209,25 @@ int SessionInfo::draw(void)
     int now = nowMin();
     char s[160];
     short defX = (short)(pane.left + 8), defY = (short)(pane.top + 8);
+    if (cfg.show == 0 || cfg.show == 3) {          // (1.1.0, Rassul 23:28) the heading: upcoming calendar events + breaking news
+        std::vector<std::pair<std::string, COLOR> > L; std::vector<bool> B;
+        bool any = !news.empty();
+        L.push_back(std::make_pair(mkt + (any ? " NEWS" : " NEWS   nothing scheduled in 24h, no breaking news"), any ? C_INK : C_GREY)); B.push_back(true);
+        for (size_t i = 0; i < news.size(); i++) {
+            std::string ttl = news[i].title; if (ttl.size() > 72) ttl = ttl.substr(0, 69) + "...";
+            if (news[i].brk) {
+                L.push_back(std::make_pair("BREAKING " + news[i].t + "  " + ttl, C_AMBER)); B.push_back(true);
+            } else {
+                int e = hm(news[i].t);                      // "Thu 07:30" (another day) -> -1: still to come
+                bool past = news[i].t.size() == 5 && e >= 0 && e < now && !(now >= 17 * 60 && e < 17 * 60);
+                bool soon = news[i].t.size() == 5 && e >= now && e - now <= 30;
+                COLOR c = past ? C_GREY : soon ? C_RED : news[i].imp == "High" ? C_AMBER : C_INK;
+                L.push_back(std::make_pair(news[i].t + " CT  " + ttl + (news[i].imp == "High" ? "  (high)" : ""), c)); B.push_back(soon);
+            }
+        }
+        box(2, L, B, defX, defY);
+        defY = (short)(by[2] + bh[2] + 6);
+    } else bw[2] = 0;
     if (cfg.show == 0 || cfg.show == 1) {
         std::vector<std::pair<std::string, COLOR> > L; std::vector<bool> B;
         int e = hm(exp);
@@ -242,7 +265,7 @@ int SessionInfo::mouse(RTX_EVENT* e)
     PNT m; if (m.getMouse(e) != RTX_OK) return RTX_FAIL;
     RCT pane; pane.getPaneRect(false);
     int on = -1;
-    for (int b = 0; b < 2; b++)
+    for (int b = 0; b < 3; b++)
         if (bw[b] > 0 && m.h >= bx[b] && m.h <= bx[b] + bw[b] && m.v >= by[b] && m.v <= by[b] + bh[b]) on = b;
     if (e->type == E_MOUSE_DBL && on >= 0) {
         posX[on] = posY[on] = -1; savePos(on); dragging = -1; trackMouseDrag(false); invalidateChart(); return RTX_OK;
@@ -267,6 +290,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Click anywhere on a box and drag it.");
-    p->setVersion("1.0.2");   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
+    p->setVersion("1.1.0");   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
     return p;
 }
