@@ -219,7 +219,7 @@ void SessionInfo::box(int b, const std::vector<std::pair<std::string, COLOR> >& 
     int maxW = W_ - 2 * pad;
     short H_ = (short)(lines.size() * lh + pad);
     (void)defX; (void)defY;
-    int ax, ay; dl::anchorXY(pane.left, pane.top, dl::clearRightOf(pane.right), pane.bottom, W_, H_, dl::loadPlace("SessionInfo", mkt, 0), 8, ax, ay);
+    int ax, ay; dl::anchorXY(pane.left, (short)(pane.top + 18), dl::clearRightOf(pane.right), pane.bottom, W_, H_, dl::loadPlace("SessionInfo", mkt, 0), 8, ax, ay);   // (1.6.1) below IRT's own title line
     short x0 = (short)ax, y0 = (short)ay;
     // (1.6.0) see-through by default: IRT's translucent fill lets the candles show through
     RCT bgR; bgR.set(x0, y0, (short)(x0 + W_), (short)(y0 + H_));
@@ -333,9 +333,9 @@ int SessionInfo::draw(void)
     {
         int age = dAge.empty() ? -1 : atoi(dAge.c_str());
         bool rec = dRec.empty() || dRec == "OK";
-        if (age > 5 || !rec) {
+        if (age > 10 || !rec) {                                      // (1.6.1) the Reader rebuilds every 5 min: 6-9 is normal
             gapLine();
-            std::string t = age > 5 ? "data " + std::to_string(age) + " min old" : "";
+            std::string t = age > 10 ? "data " + std::to_string(age) + " min old" : "";
             if (!rec) t += std::string(t.empty() ? "" : " - ") + "IRT not recording " + mkt;
             add(t, rec ? C_GREY : C_AMBER, !rec);
         }
@@ -356,6 +356,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Click anywhere on a box and drag it.");
-    p->setVersion("1.6.0");   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag;   // (1.4.0) order NEWS / ACTIVE-CHOP / 0DTE, simple lines, Move right / down settings;   // (1.3.0) one panel (news + 0DTE + RTH), one drag;   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
+    p->setVersion("1.6.1");   // (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag;   // (1.4.0) order NEWS / ACTIVE-CHOP / 0DTE, simple lines, Move right / down settings;   // (1.3.0) one panel (news + 0DTE + RTH), one drag;   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
     return p;
 }

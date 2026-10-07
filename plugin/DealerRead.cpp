@@ -1381,7 +1381,7 @@ void DealerRead::renderTurn(const Settings& S)
         hd = b;
     }
     std::string tag;                                               // grey, after the header
-    if (!stale && ageMin > 5.0) tag = "data " + std::to_string((int)(ageMin + 0.5)) + " min old";
+    if (!stale && ageMin > 10.0) tag = "data " + std::to_string((int)(ageMin + 0.5)) + " min old";
     if (D.liveSrc == "MQ") tag += std::string(tag.empty() ? "" : " - ") + "price: MenthorQ";
     {
         int tagW = tag.empty() ? 0 : textW(("  " + tag).c_str(), fs - 1, false);
@@ -1552,6 +1552,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.4.0");   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.4.1");   // (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
