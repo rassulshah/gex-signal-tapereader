@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "1.9.2";   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "1.9.3";   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -150,11 +150,19 @@ void DeltaProfile::syncSettings(bool fromDialog)
     // every box unchecked - which is why "Auto" passed the old test and blank values were saved)
     const char* pl = getPeriodicityLabel(); bool inDialog = !(pl && pl[0]);
     if (inDialog && fromDialog) {                       // saved ONLY from the settings window's callbacks                                   // the window is open: the values are real - read and save
-        readSettings(cfg);
         std::map<std::string, std::string> all; std::ifstream in(settingsPath().c_str()); std::string ln;
         while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
         in.close();
-        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|2|%d", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
+        // (1.9.3, Rassul 22:33 "you made the positive and negative go in different directions" / 22:38 "the profile should be
+        // facing left and placed on the right by default") a row saved before 1.9.3 is moved ONCE to Sides One, Face Left, Place
+        // Right - in the window too, so pressing OK does not bring Both back. Later choices are kept (marker 3).
+        static bool migrating = false;
+        if (!migrating && all.count(key)) {
+            std::vector<std::string> t0 = dl::split(all[key], '|');
+            if (!(t0.size() >= 14 && t0[13] == "3")) { migrating = true; setListIndex(DX.sides, 0); setListIndex(DX.face, 0); setListIndex(DX.place, 0); migrating = false; }
+        }
+        readSettings(cfg);
+        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|3|%d", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
                                cfg.place, cfg.range, cfg.group, cfg.sides, cfg.offlvl ? 1 : 0, cfg.face, cfg.mins, cfg.showI ? 1 : 0);
         std::string row = key + b;
         if (all[key] != row) { all[key] = row; std::ofstream out(settingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
@@ -172,12 +180,16 @@ void DeltaProfile::syncSettings(bool fromDialog)
             cfg.sides = atoi(t[9].c_str()); cfg.offlvl = t[10] == "1"; cfg.face = atoi(t[11].c_str());
             cfg.mins = t.size() >= 13 ? atoi(t[12].c_str()) : 60; if (cfg.mins < 5 || cfg.mins > 1440) cfg.mins = 60;
             cfg.showI = t.size() >= 15 && t[14] == "1";
-            if (!(t.size() >= 14 && t[13] == "2")) {          // (1.7.0) an older row: Range 30 / 60 / Session / Day / Minutes, Face Price / Dealer
+            if (!(t.size() >= 14 && t[13] == "3")) {          // (1.9.3) before 1.9.3: one side, facing left (toward price), placed right
+                cfg.sides = 0; cfg.face = 0; cfg.place = 0;
+            }
+            if (!(t.size() >= 14 && (t[13] == "2" || t[13] == "3"))) {   // (1.7.0) an older row: Range 30 / 60 / Session / Day / Minutes, Face Price / Dealer
                 int r = cfg.range;
                 if (r == 0) { cfg.range = 0; cfg.mins = 30; } else if (r == 1) { cfg.range = 0; cfg.mins = 60; }
                 else if (r == 2) cfg.range = 1; else if (r == 3) cfg.range = 2; else cfg.range = 0;
                 bool toPrice = cfg.face == 0; bool gl = cfg.place == 0 ? toPrice : !toPrice;
                 cfg.face = gl ? 0 : 1;
+                cfg.sides = 0; cfg.face = 0; cfg.place = 0;      // (1.9.3) and then the new defaults
             }
             savedKey = key; return;
         }
@@ -582,7 +594,7 @@ void DeltaProfile::writeStatus(const char* what)
     std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.status.txt").c_str(), std::ios::trunc);
     if (!f.is_open()) return;
     f << "VERSION," << DLT_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nROWS," << D.rows.size() << "\nASOF," << D.asof
-      << "\nRANGE," << drawnRange << "\nDRAWN_ROWS," << drawnRows << "\nBADGE," << D.code << D.strength << "\nWIDTH," << cfg.width << "\nSTATE," << what << "\n";
+      << "\nRANGE," << drawnRange << "\nDRAWN_ROWS," << drawnRows << "\nBADGE," << D.code << D.strength << "\nWIDTH," << cfg.width << "\nSIDES," << (cfg.sides == 1 ? "Both" : "One") << "\nFACE," << (cfg.face == 0 ? "Left" : "Right") << "\nPLACE," << (cfg.place == 0 ? "Right" : "Left") << "\nSTATE," << what << "\n";
 }
 
 // (1.9.0) the profile from the chart's own bars' volume at price: Last N minutes (bars whose close is within N minutes of the
