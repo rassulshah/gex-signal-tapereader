@@ -33,7 +33,7 @@ static const COLOR C_GREEN = 0x0022C55E, C_YELLOW = 0x00FACC15;   // (1.0.2) ACT
 struct SPIdx { int market, show, font, clock; };
 static SPIdx SP;
 struct SSet { int market = 0, show = 0, font = 10, clock = 0; };
-struct Win { std::string tag, from, to; };
+struct Win { std::string tag, from, to, pct, lo, hi; };   // (1.2.0) pct = the window's median share of the RTH range, lo-hi = the middle half of days
 
 class SessionInfo : public cppExtension {
 public:
@@ -131,7 +131,11 @@ void SessionInfo::load()
         while (std::getline(ss, x, '|')) c.push_back(x);
         if (c.empty()) continue;
         if (c[0] == "EXP" && c.size() >= 2) exp = c[1];
-        else if (c[0] == "WIN" && c.size() >= 4) { Win w; w.tag = c[1]; w.from = c[2]; w.to = c[3]; W.push_back(w); }
+        else if (c[0] == "WIN" && c.size() >= 4) {
+            Win w; w.tag = c[1]; w.from = c[2]; w.to = c[3];
+            if (c.size() >= 8) { w.pct = c[5]; w.lo = c[6]; w.hi = c[7]; }
+            W.push_back(w);
+        }
         else if (c[0] == "SAMPLE" && c.size() >= 2) sample = c[1];
         else if ((c[0] == "CAL" || c[0] == "NEWS") && c.size() >= 4) { Ev e; e.t = c[1]; e.imp = c[2]; e.title = c[3]; e.brk = c[0] == "NEWS"; news.push_back(e); }
     }
@@ -251,7 +255,11 @@ int SessionInfo::draw(void)
         L.push_back(std::make_pair(std::string(s), nowTag == "ACTIVE" ? C_GREEN : nowTag == "CHOP" ? C_YELLOW : C_INK)); B.push_back(true);
         for (size_t i = 0; i < W.size(); i++) {
             bool on = now >= hm(W[i].from) && now < hm(W[i].to);
-            snprintf(s, sizeof s, "%-6s %s-%s", W[i].tag.c_str(), W[i].from.c_str(), W[i].to.c_str());
+            // (1.2.0, Rassul 23:37 "next to the active times, put the amount of RTH range that's expected for that time period")
+            if (!W[i].pct.empty())
+                snprintf(s, sizeof s, "%-6s %s-%s   %s%% of the RTH range (most days %s-%s%%)", W[i].tag.c_str(), W[i].from.c_str(), W[i].to.c_str(),
+                         W[i].pct.c_str(), W[i].lo.c_str(), W[i].hi.c_str());
+            else snprintf(s, sizeof s, "%-6s %s-%s", W[i].tag.c_str(), W[i].from.c_str(), W[i].to.c_str());
             L.push_back(std::make_pair(std::string(s), W[i].tag == "ACTIVE" ? C_GREEN : C_YELLOW)); B.push_back(on);
         }
         box(1, L, B, defX, defY);
@@ -290,6 +298,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Click anywhere on a box and drag it.");
-    p->setVersion("1.1.0");   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
+    p->setVersion("1.2.0");   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
     return p;
 }
