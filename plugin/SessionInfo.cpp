@@ -79,6 +79,11 @@ public:
     void box(int b, const std::vector<std::pair<std::string, COLOR> >& lines, const std::vector<bool>& bold, short defX, short defY);
 };
 
+int cppExtension::init(void)    { return RTX_OK; }   // required by the SDK (as every LRA plugin)
+int cppExtension::calc(int)     { return RTX_OK; }
+int cppExtension::done(void)    { return RTX_OK; }
+int cppExtension::destroy(void) { return RTX_OK; }
+
 int cppExtension::setup(void)
 {
     setParameterVersion(1);
