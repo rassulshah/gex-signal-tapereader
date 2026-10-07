@@ -23,10 +23,12 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <cctype>
 #include <ctime>
 
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_GREY = 0x0064748B, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
-static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_CYAN = 0x0022D3EE;   // 0x00RRGGBB, as DealerRead
+static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_CYAN = 0x0022D3EE;
+static const COLOR C_GREEN = 0x0022C55E, C_YELLOW = 0x00FACC15;   // (1.0.2) ACTIVE green, CHOP yellow (Rassul 23:10)   // 0x00RRGGBB, as DealerRead
 
 struct SPIdx { int market, show, font, clock; };
 static SPIdx SP;
@@ -150,8 +152,32 @@ void SessionInfo::savePos(int b)
     if (f.is_open()) f << posX[b] << "," << posY[b] << "\n";
 }
 
-void SessionInfo::box(int b, const std::vector<std::pair<std::string, COLOR> >& lines, const std::vector<bool>& bold, short defX, short defY)
+// (1.0.2) times on the 12-hour clock, as the Dealer Read (Rassul 23:06)
+static std::string to12(const char* in)
 {
+    std::string s(in ? in : ""), o; o.reserve(s.size() + 8);
+    const size_t n = s.size();
+    auto dig = [&](size_t k) { return k < n && isdigit((unsigned char)s[k]) != 0; };
+    for (size_t i = 0; i < n; i++) {
+        bool startOk = i == 0 || !(dig(i - 1) || s[i - 1] == ':' || s[i - 1] == '.' || s[i - 1] == ',');
+        size_t hl = dig(i) ? (dig(i + 1) ? 2 : 1) : 0;                       // H or HH
+        if (startOk && hl && i + hl < n && s[i + hl] == ':' && dig(i + hl + 1) && dig(i + hl + 2)
+            && !dig(i + hl + 3) && !(i + hl + 3 < n && s[i + hl + 3] == ':')) {   // H:MM / HH:MM, not H:MM:SS or 123:45
+            int h = atoi(s.substr(i, hl).c_str()), m = atoi(s.substr(i + hl + 1, 2).c_str());
+            if (h <= 23 && m <= 59) {
+                char b[16]; snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
+                o += b; i += hl + 2; continue;
+            }
+        }
+        o += s[i];
+    }
+    return o;
+}
+
+void SessionInfo::box(int b, const std::vector<std::pair<std::string, COLOR> >& lines0, const std::vector<bool>& bold, short defX, short defY)
+{
+    std::vector<std::pair<std::string, COLOR> > lines(lines0);
+    for (size_t i = 0; i < lines.size(); i++) lines[i].first = to12(lines[i].first.c_str());
     RCT pane; pane.getPaneRect(false);
     int fs = cfg.font; short lh = (short)(fs * 1.7f + 0.5f), pad = (short)(fs * 0.6f + 0.5f), grip = (short)(fs * 0.8f + 0.5f);
     int w = 0;
@@ -199,11 +225,11 @@ int SessionInfo::draw(void)
         std::string nowTag;
         for (size_t i = 0; i < W.size(); i++) if (now >= hm(W[i].from) && now < hm(W[i].to)) nowTag = W[i].tag;
         snprintf(s, sizeof s, "%s RTH  NOW  %s", mkt.c_str(), nowTag.empty() ? "normal" : nowTag == "ACTIVE" ? "ACTIVE" : "CHOP - wait");
-        L.push_back(std::make_pair(std::string(s), nowTag == "ACTIVE" ? C_CYAN : nowTag == "CHOP" ? C_AMBER : C_INK)); B.push_back(true);
+        L.push_back(std::make_pair(std::string(s), nowTag == "ACTIVE" ? C_GREEN : nowTag == "CHOP" ? C_YELLOW : C_INK)); B.push_back(true);
         for (size_t i = 0; i < W.size(); i++) {
-            bool on = now >= hm(W[i].from) && now < hm(W[i].to), past = now >= hm(W[i].to);
+            bool on = now >= hm(W[i].from) && now < hm(W[i].to);
             snprintf(s, sizeof s, "%-6s %s-%s", W[i].tag.c_str(), W[i].from.c_str(), W[i].to.c_str());
-            L.push_back(std::make_pair(std::string(s), past ? C_GREY : W[i].tag == "ACTIVE" ? C_CYAN : C_MUTED)); B.push_back(on);
+            L.push_back(std::make_pair(std::string(s), W[i].tag == "ACTIVE" ? C_GREEN : C_YELLOW)); B.push_back(on);
         }
         box(1, L, B, defX, defY);
     } else bw[1] = 0;
@@ -215,10 +241,9 @@ int SessionInfo::mouse(RTX_EVENT* e)
     if (!e) return RTX_FAIL;
     PNT m; if (m.getMouse(e) != RTX_OK) return RTX_FAIL;
     RCT pane; pane.getPaneRect(false);
-    short grip = (short)(cfg.font * 0.8f + 0.5f) + 2;
     int on = -1;
     for (int b = 0; b < 2; b++)
-        if (bw[b] > 0 && m.h >= bx[b] && m.h <= bx[b] + grip && m.v >= by[b] && m.v <= by[b] + bh[b]) on = b;
+        if (bw[b] > 0 && m.h >= bx[b] && m.h <= bx[b] + bw[b] && m.v >= by[b] && m.v <= by[b] + bh[b]) on = b;
     if (e->type == E_MOUSE_DBL && on >= 0) {
         posX[on] = posY[on] = -1; savePos(on); dragging = -1; trackMouseDrag(false); invalidateChart(); return RTX_OK;
     }
@@ -241,7 +266,7 @@ extern "C" cppExtension *CreateExtension(void)
     SessionInfo *p = new SessionInfo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
-    p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Drag a box by its grip.");
-    p->setVersion("1.0.1");   // (1.0.1) evening = the next session's expiry
+    p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Click anywhere on a box and drag it.");
+    p->setVersion("1.0.2");   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
     return p;
 }

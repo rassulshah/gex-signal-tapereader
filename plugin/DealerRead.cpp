@@ -49,6 +49,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <cctype>
 #include <ctime>
 
 static const COLOR C_BLUE  = 0x00E3C341;   // WALL = YELLOW (1.2.7, Skylit colours, Rassul 2026-09-30); the name stays
@@ -247,13 +248,39 @@ void DealerRead::frame(short l, short t, short r, short b, COLOR c, bool dashed)
     PNT p; p.set(0, 0.0f);
     p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
 }
-int DealerRead::textW(const char* s, int sz, bool bold)
+// (4.1.2, Rassul 2026-10-06 23:06 "the time is in 24-hour format. I want it in central time format, not 24-hour") every clock time
+// the Dealer Read draws (all CT already) is shown on the 12-hour clock: 22:52 -> 10:52 PM, 09:05 -> 9:05 AM. Measuring and drawing
+// both go through it, so wrapping and badge widths match what is drawn.
+static std::string to12(const char* in)
 {
+    std::string s(in ? in : ""), o; o.reserve(s.size() + 8);
+    const size_t n = s.size();
+    auto dig = [&](size_t k) { return k < n && isdigit((unsigned char)s[k]) != 0; };
+    for (size_t i = 0; i < n; i++) {
+        bool startOk = i == 0 || !(dig(i - 1) || s[i - 1] == ':' || s[i - 1] == '.' || s[i - 1] == ',');
+        size_t hl = dig(i) ? (dig(i + 1) ? 2 : 1) : 0;                       // H or HH
+        if (startOk && hl && i + hl < n && s[i + hl] == ':' && dig(i + hl + 1) && dig(i + hl + 2)
+            && !dig(i + hl + 3) && !(i + hl + 3 < n && s[i + hl + 3] == ':')) {   // H:MM / HH:MM, not H:MM:SS or 123:45
+            int h = atoi(s.substr(i, hl).c_str()), m = atoi(s.substr(i + hl + 1, 2).c_str());
+            if (h <= 23 && m <= 59) {
+                char b[16]; snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
+                o += b; i += hl + 2; continue;
+            }
+        }
+        o += s[i];
+    }
+    return o;
+}
+
+int DealerRead::textW(const char* s0, int sz, bool bold)
+{
+    std::string s_ = to12(s0); const char* s = s_.c_str();
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
     return (int)getTextWidth(s, -1);
 }
-void DealerRead::text(short x, short y, const char* s, COLOR col, int sz, bool bold, int just)
+void DealerRead::text(short x, short y, const char* s0, COLOR col, int sz, bool bold, int just)
 {
+    std::string s_ = to12(s0); const char* s = s_.c_str();
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
     setTextColor(col);
     short yy = (short)(y - (short)(sz * 0.45f + 0.5f));        // the rect draw baselines low (GammaProfile v0.73)
@@ -965,7 +992,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,4.1.1\nROOT,"   /* (4.1.0) was a stale 3.0.1 - the health check reads it */  << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,4.1.2\nROOT,"   /* (4.1.0) was a stale 3.0.1 - the health check reads it */  << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 // (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
@@ -1280,8 +1307,8 @@ void DealerRead::renderGrid(const Settings& S)
     gridL = x0; gridT = y0;
     fill(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BOXBG);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, true);
-    gripL = x0; gripT = y0; gripR = (short)(x0 + gw); gripB = (short)(y0 + gridH);
-    fill((short)(gripL + 1), (short)(gripT + 1), gripR, (short)(gripB - 1), 0x001E293B);
+    gripL = x0; gripT = y0; gripR = (short)(x0 + W); gripB = (short)(y0 + gridH);   // (4.1.2) the whole box is the handle: click anywhere on it and drag
+    fill((short)(gripL + 1), (short)(gripT + 1), (short)(x0 + gw), (short)(gripB - 1), 0x001E293B);
     for (short d = (short)(gripT + U(6)); d < gripB - U(4); d = (short)(d + U(4))) { fill((short)(gripL + U(3)), d, (short)(gripL + U(4)), (short)(d + 1), C_MUTED); fill((short)(gripL + U(6)), d, (short)(gripL + U(7)), (short)(d + 1), C_MUTED); }
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
@@ -1375,8 +1402,8 @@ void DealerRead::renderTurn(const Settings& S)
     gridL = x0; gridT = y0;
     fill(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BOXBG);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, true);
-    gripL = x0; gripT = y0; gripR = (short)(x0 + gw); gripB = (short)(y0 + gridH);
-    fill((short)(gripL + 1), (short)(gripT + 1), gripR, (short)(gripB - 1), 0x001E293B);
+    gripL = x0; gripT = y0; gripR = (short)(x0 + W); gripB = (short)(y0 + gridH);   // (4.1.2) the whole box is the handle: click anywhere on it and drag
+    fill((short)(gripL + 1), (short)(gripT + 1), (short)(x0 + gw), (short)(gripB - 1), 0x001E293B);
     for (short d = (short)(gripT + U(6)); d < gripB - U(4); d = (short)(d + U(4))) { fill((short)(gripL + U(3)), d, (short)(gripL + U(4)), (short)(d + 1), C_MUTED); fill((short)(gripL + U(6)), d, (short)(gripL + U(7)), (short)(d + 1), C_MUTED); }
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
@@ -1454,6 +1481,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.1.1");   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.1.2");   // (4.1.2) 12-hour clock, drag from anywhere on the box;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
