@@ -479,6 +479,7 @@ void DeltaProfile::render(const DSet& S)
     // (1.5.0, Rassul 09:16-09:18 "we are looking at the high delta nodes ... the ones that stick out and have the amounts on
     // them") ONE letter per labelled node, on its row: A? (price has not left it), A (the absorbers held it), T (they are
     // trapped). Colour = the side that won. The state comes from the Reader (NODE lines) for the Range this chart shows.
+    std::vector<short> letY;                                      // (1.9.2) rows that already carry a letter
     if (S.offlvl) {
         std::string rk = S.range == 1 ? "S" : S.range == 2 ? "D" : S.mins == 30 ? "R" : S.mins == 60 ? "H" :
                          haveN ? "M" + std::to_string(S.mins) : (S.mins > 45 ? "H" : "R");
@@ -501,7 +502,7 @@ void DeltaProfile::render(const DSet& S)
             std::string t = best->code; if (best->x > 0) t += xs(best->x);   // (1.8.2) I carries its x too
             short y = (short)((labd[i].t + labd[i].b) / 2);
             if (y - lastY < S.font + 2) y = (short)(lastY + S.font + 2);   // two labelled rows touching: stack, never overlap
-            lastY = y;
+            lastY = y; letY.push_back(y);
             if (growLeft) textRJ((short)(labd[i].edge - 4), y, t.c_str(), col, S.font, true);    // (1.5.5) right beside its amount
             else textLJ((short)(labd[i].edge + 4), y, t.c_str(), col, S.font, true);
             // (1.8.0, Rassul 12:11 "draws a mark to identify which candle had the absorption ... in choppy price action") a ring on
@@ -536,6 +537,24 @@ void DeltaProfile::render(const DSet& S)
             PNT pp; pp.set(bb, g.px, kBarCenter);
             if (!(pp.h > pane.left && pp.h < pane.right && pp.v > pane.top + 16 && pp.v < pane.bottom)) continue;
             COLOR col = g.side == "support" ? 0x0086EFAC : 0x00FCA5A5;
+            // (1.9.2, Rassul 22:08 / 22:16 "the circles are there" but no A on the profile - "another example of inconsistency")
+            // every ring on screen also gets its letter on the profile row at its price, unless that row already has one
+            {
+                short yr = yOf(g.px);
+                for (auto& kv : B) {
+                    if (yr < kv.second.t - 1 || yr > kv.second.b + 1) continue;
+                    short yc = (short)((kv.second.t + kv.second.b) / 2);
+                    bool taken = false; for (size_t q = 0; q < letY.size(); q++) if (std::abs(letY[q] - yc) < S.font + 2) taken = true;
+                    if (!taken) {
+                        std::string lt = g.code; if (g.x > 0) lt += xs(g.x);
+                        short ed = edgeOf.count(kv.first) ? edgeOf[kv.first] : (growLeft ? left : right);
+                        if (growLeft) textRJ((short)(ed - 4), yc, lt.c_str(), col, S.font, true);
+                        else textLJ((short)(ed + 4), yc, lt.c_str(), col, S.font, true);
+                        letY.push_back(yc);
+                    }
+                    break;
+                }
+            }
             if (square) {
                 short l = (short)(pp.h - 5), r_ = (short)(pp.h + 5), t_ = (short)(pp.v - 5), b_ = (short)(pp.v + 5);
                 line(l, t_, r_, t_, col, 2); line(r_, t_, r_, b_, col, 2); line(r_, b_, l, b_, col, 2); line(l, b_, l, t_, col, 2);
