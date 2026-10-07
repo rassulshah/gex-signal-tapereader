@@ -39,8 +39,9 @@ class SessionInfo : public cppExtension {
 public:
     SessionInfo() : cppExtension() {}
     virtual int parmsLoad(void) { if (ready()) readS(cfg); return RTX_OK; }
-    virtual int parmsApply(void) { if (ready()) readS(cfg); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { if (ready()) readS(cfg); return RTX_OK; }
+    virtual int parmsApply(void) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
+    virtual int parmsUpdt(unsigned int) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
+    void savePl() { char b[32] = {0}; const char* rs = getRootSymbol(b); dl::savePlace("SessionInfo", dl::marketFor(cfg.market, rs ? rs : ""), cfg.moveX); }
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
 
@@ -65,8 +66,7 @@ public:
         S.show = getListIndex(SP.show); if (S.show < 0 || S.show > 3) S.show = 0;
         S.font = getIntegerValue(SP.font); if (S.font < 6 || S.font > 20) S.font = 8;
         S.clock = getIntegerValue(SP.clock); if (S.clock < -720 || S.clock > 720) S.clock = 0;
-        { int v = getIntegerValue(SP.moveX); if (v >= -3000 && v <= 3000) S.moveX = v; }
-        { int v = getIntegerValue(SP.moveY); if (v >= -2000 && v <= 2000) S.moveY = v; }
+        { int v = getListIndex(SP.moveX); if (v >= 0 && v <= 8) S.moveX = v; }   // (1.5.0) moveX = the Position (0-8)
     }
     void load();
     void loadPos(); void savePos(int b);
@@ -94,7 +94,7 @@ int cppExtension::destroy(void) { return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(3);   // (1.4.0) + Move right / Move down, font 8
+    setParameterVersion(4);   // (1.5.0) the 9-spot Position replaces Move right / down
     setParameterDialogHeight(5);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -103,8 +103,9 @@ int cppExtension::setup(void)
     SP.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW);   // (1.4.0, Rassul 08:22 "make the font ... smaller like around 8pt")
     SP.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
     // (1.4.0, Rassul 2026-10-07 08:17 "make sure they have settings also like the dealer read that allow me to move them around")
-    SP.moveX  = pc++; setIntegerParameter("Move right px (minus = left)", 0, NUMW);
-    SP.moveY  = pc++; setIntegerParameter("Move down px (minus = up)", 0, NUMW, SL);
+    // (1.5.0, Rassul 2026-10-07 09:16 "top left, top center ... middle right instead of the user entering amount of placement")
+    SP.moveX  = pc++; setListParameter("Position", 0, dl::ANCHORS);
+    SP.moveY  = -1;
     return RTX_OK;
 }
 
@@ -198,13 +199,12 @@ void SessionInfo::box(int b, const std::vector<std::pair<std::string, COLOR> >& 
     int w = 0;
     for (size_t i = 0; i < lines.size(); i++) { int tw = textW(lines[i].first.c_str(), fs, bold[i]); if (tw > w) w = tw; }
     short W_ = (short)(w + 2 * pad + grip + 4), H_ = (short)(lines.size() * lh + pad);
-    short x0 = posX[b] >= 0 ? (short)(pane.left + posX[b]) : defX;
-    short y0 = posY[b] >= 0 ? (short)(pane.top + posY[b]) : defY;
-    if (x0 + W_ > pane.right) x0 = (short)(pane.right - W_); if (x0 < pane.left) x0 = pane.left;
-    if (y0 + H_ > pane.bottom) y0 = (short)(pane.bottom - H_); if (y0 < pane.top) y0 = pane.top;
+    // (1.5.0) one of 9 spots, chosen per market in the settings (default Top left), never over the profiles; no dragging
+    (void)defX; (void)defY;
+    int ax, ay; dl::anchorXY(pane.left, pane.top, dl::clearRightOf(pane.right), pane.bottom, W_, H_, dl::loadPlace("SessionInfo", mkt, 0), 8, ax, ay);
+    short x0 = (short)ax, y0 = (short)ay;
     fill(x0, y0, (short)(x0 + W_), (short)(y0 + H_), C_BOXBG);
     frame(x0, y0, (short)(x0 + W_), (short)(y0 + H_), C_BORDER);
-    fill((short)(x0 + 2), (short)(y0 + 3), (short)(x0 + grip - 1), (short)(y0 + H_ - 3), C_BORDER);   // the grip
     for (size_t i = 0; i < lines.size(); i++)
         text((short)(x0 + grip + pad), (short)(y0 + pad / 2 + lh * i + lh / 2), lines[i].first.c_str(), lines[i].second, fs, bold[i]);
     bx[b] = x0; by[b] = y0; bw[b] = W_; bh[b] = H_;
@@ -244,7 +244,10 @@ int SessionInfo::draw(void)
             }
         }
     }
+    // (1.5.0, Rassul 09:16 "there should be a blank line after the news and after the active time so they are not all clubbed together")
+    auto gapLine = [&]() { if (!L.empty() && !L.back().first.empty()) { L.push_back(std::make_pair(std::string(""), C_INK)); B.push_back(false); } };
     if ((cfg.show == 0 || cfg.show == 2) && !W.empty()) {   // ACTIVE / CHOP: "Active 8:20-9:35 AM (64% of RTH)"
+        gapLine();
         std::string nowTag;
         for (size_t i = 0; i < W.size(); i++) if (now >= hm(W[i].from) && now < hm(W[i].to)) nowTag = W[i].tag;
         L.push_back(std::make_pair(mkt + (nowTag.empty() ? " RTH now: normal" : nowTag == "ACTIVE" ? " RTH now: ACTIVE" : " RTH now: CHOP - wait"),
@@ -257,6 +260,7 @@ int SessionInfo::draw(void)
         }
     }
     if (cfg.show == 0 || cfg.show == 1) {          // 0DTE expiry, last
+        gapLine();
         int e = hm(exp);
         if (e < 0) { L.push_back(std::make_pair(mkt + " no options expiry today", C_GREY)); B.push_back(false); }
         else {
@@ -286,35 +290,15 @@ int SessionInfo::draw(void)
 
 int SessionInfo::mouse(RTX_EVENT* e)
 {
-    if (!e) return RTX_FAIL;
-    PNT m; if (m.getMouse(e) != RTX_OK) return RTX_FAIL;
-    RCT pane; pane.getPaneRect(false);
-    int on = -1;
-    for (int b = 0; b < 3; b++)
-        if (bw[b] > 0 && m.h >= bx[b] && m.h <= bx[b] + bw[b] && m.v >= by[b] && m.v <= by[b] + bh[b]) on = b;
-    if (e->type == E_MOUSE_DBL && on >= 0) {
-        posX[on] = posY[on] = -1; savePos(on); dragging = -1; trackMouseDrag(false); invalidateChart(); return RTX_OK;
-    }
-    if (e->type == E_MOUSE_CLICK && on >= 0) {
-        dragging = on; dDX = (short)(m.h - bx[on]); dDY = (short)(m.v - by[on]); trackMouseDrag(true); return RTX_OK;
-    }
-    if (e->type == E_MOUSE_MOVE && dragging >= 0) {
-        posX[dragging] = m.h - dDX - pane.left; if (posX[dragging] < 0) posX[dragging] = 0;
-        posY[dragging] = m.v - dDY - pane.top; if (posY[dragging] < 0) posY[dragging] = 0;
-        invalidateChart(); return RTX_OK;
-    }
-    if (e->type == E_MOUSE_UP && dragging >= 0) {
-        int b = dragging; dragging = -1; trackMouseDrag(false); savePos(b); invalidateChart(); return RTX_OK;
-    }
-    return RTX_FAIL;
+    (void)e; return RTX_FAIL;            // (1.5.0) placed by the Position setting - no dragging
 }
 
 extern "C" cppExtension *CreateExtension(void)
 {
     SessionInfo *p = new SessionInfo();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Click anywhere on a box and drag it.");
-    p->setVersion("1.4.0");   // (1.4.0) order NEWS / ACTIVE-CHOP / 0DTE, simple lines, Move right / down settings;   // (1.3.0) one panel (news + 0DTE + RTH), one drag;   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
+    p->setVersion("1.5.0");   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag;   // (1.4.0) order NEWS / ACTIVE-CHOP / 0DTE, simple lines, Move right / down settings;   // (1.3.0) one panel (news + 0DTE + RTH), one drag;   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
     return p;
 }

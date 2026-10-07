@@ -33,7 +33,7 @@
 #include <cctype>
 #include <ctime>
 
-static const char* TM_VERSION = "1.0.0";
+static const char* TM_VERSION = "1.1.0";   // (1.1.0) 9-spot Position, no drag
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_GREY = 0x0064748B, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
 static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_GREEN = 0x0022C55E, C_DKRED = 0x007F1D1D, C_DKGRN = 0x00166534, C_TRACK = 0x001F2937;
 
@@ -81,8 +81,9 @@ class TradeManager : public cppExtension {
 public:
     TradeManager() : cppExtension() {}
     virtual int parmsLoad(void) { if (ready()) readS(cfg); return RTX_OK; }
-    virtual int parmsApply(void) { if (ready()) readS(cfg); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { if (ready()) readS(cfg); return RTX_OK; }
+    virtual int parmsApply(void) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
+    virtual int parmsUpdt(unsigned int) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
+    void savePl() { char b[32] = {0}; const char* rs = getRootSymbol(b); dl::savePlace("TradeManager", dl::marketFor(cfg.market, rs ? rs : ""), cfg.moveX); }
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
 
@@ -106,8 +107,7 @@ public:
     {
         { int v = getListIndex(TX.market); if (v >= 0 && v <= 7) S.market = v; }
         { int v = getIntegerValue(TX.font); if (v >= 6 && v <= 20) S.font = v; }
-        { int v = getIntegerValue(TX.moveX); if (v >= -3000 && v <= 3000) S.moveX = v; }
-        { int v = getIntegerValue(TX.moveY); if (v >= -2000 && v <= 2000) S.moveY = v; }
+        { int v = getListIndex(TX.moveX); if (v >= 0 && v <= 8) S.moveX = v; }   // moveX = the Position (0-8)
     }
     bool changed(const std::string& p) { long long st = dl::fileStamp(p); bool c = stamps[p] != st; stamps[p] = st; return c; }
     void load();
@@ -135,14 +135,14 @@ int cppExtension::destroy(void) { return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
+    setParameterVersion(2);
     setParameterDialogHeight(3);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     TX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     TX.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW, SL);
-    TX.moveX  = pc++; setIntegerParameter("Move right px (minus = left)", 0, NUMW);
-    TX.moveY  = pc++; setIntegerParameter("Move down px (minus = up)", 0, NUMW, SL);
+    TX.moveX  = pc++; setListParameter("Position", 2, dl::ANCHORS);   // (1.1.0) one of 9 spots, default Top right
+    TX.moveY  = -1;
     return RTX_OK;
 }
 
@@ -302,10 +302,8 @@ int TradeManager::draw(void)
     }
     if (w < fs * 30) w = fs * 30;
     short W_ = (short)(w + 2 * pad + 6), H_ = (short)(L.size() * lh + pad);
-    short defX = (short)(pane.right - W_ - 340 + cfg.moveX), defY = (short)(pane.top + 8 + cfg.moveY);
-    short x0 = posX >= 0 ? (short)(pane.left + posX) : defX, y0 = posY >= 0 ? (short)(pane.top + posY) : defY;
-    if (x0 + W_ > pane.right) x0 = (short)(pane.right - W_); if (x0 < pane.left) x0 = pane.left;
-    if (y0 + H_ > pane.bottom) y0 = (short)(pane.bottom - H_); if (y0 < pane.top) y0 = pane.top;
+    int ax, ay; dl::anchorXY(pane.left, pane.top, dl::clearRightOf(pane.right), pane.bottom, W_, H_, dl::loadPlace("TradeManager", mkt, 2), 8, ax, ay);
+    short x0 = (short)ax, y0 = (short)ay;
     fill(x0, y0, (short)(x0 + W_), (short)(y0 + H_), C_BOXBG);
     frame(x0, y0, (short)(x0 + W_), (short)(y0 + H_), frameC);
     if (stopped) frame((short)(x0 + 1), (short)(y0 + 1), (short)(x0 + W_ - 1), (short)(y0 + H_ - 1), frameC);
@@ -331,28 +329,15 @@ int TradeManager::draw(void)
 
 int TradeManager::mouse(RTX_EVENT* e)
 {
-    if (!e) return RTX_FAIL;
-    PNT m; if (m.getMouse(e) != RTX_OK) return RTX_FAIL;
-    RCT pane; pane.getPaneRect(false);
-    bool on = bw > 0 && m.h >= bx && m.h <= bx + bw && m.v >= by && m.v <= by + bh;
-    if (e->type == E_MOUSE_DBL && on) { posX = posY = -1; savePos(); dragging = false; trackMouseDrag(false); invalidateChart(); return RTX_OK; }
-    if (e->type == E_MOUSE_CLICK && on) { dragging = true; dDX = (short)(m.h - bx); dDY = (short)(m.v - by); trackMouseDrag(true); return RTX_OK; }
-    if (e->type == E_MOUSE_MOVE && dragging) {
-        int x = m.h - dDX, y = m.v - dDY;
-        if (x + bw > pane.right) x = pane.right - bw; if (x < pane.left) x = pane.left;
-        if (y + bh > pane.bottom) y = pane.bottom - bh; if (y < pane.top) y = pane.top;
-        posX = x - pane.left; posY = y - pane.top; invalidateChart(); return RTX_OK;
-    }
-    if (e->type == E_MOUSE_UP && dragging) { dragging = false; trackMouseDrag(false); savePos(); invalidateChart(); return RTX_OK; }
-    return RTX_FAIL;
+    (void)e; return RTX_FAIL;            // (1.1.0) placed by the Position setting - no dragging
 }
 
 extern "C" cppExtension *CreateExtension(void)
 {
     TradeManager *p = new TradeManager();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
-    p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Click and drag to move.");
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
+    p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Position: choose one of 9 spots in the settings.");
     p->setVersion(TM_VERSION);
     return p;
 }

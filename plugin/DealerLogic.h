@@ -29,6 +29,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <vector>
+#include <fstream>
 #include <sstream>
 #include <cstdlib>
 #include <cmath>
@@ -546,6 +547,65 @@ inline std::vector<TGroup> groupTurn(const std::vector<Data::TRow>& R, size_t ma
         g.resize(maxRows);
     }
     return g;
+}
+
+// (2026-10-07, Rassul 09:16 "fix placement, with fixed height and width ... something simple that says top left, top center, top
+// right, bottom left, bottom center and bottom right and middle left middle center and middle right instead of the user entering
+// amount of placement") the 9 spots every LRA box uses. IRT runs ONE object per DLL for every chart, so a dragged spot leaked
+// between charts (the copper Read moved when he clicked the gold chart): the spot is now a per-chart setting, nothing is dragged.
+static const char* ANCHORS = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
+inline void anchorXY(int L, int T, int R, int B, int W, int H, int pos, int m, int& x, int& y)
+{
+    if (pos < 0 || pos > 8) pos = 0;
+    int col = pos % 3, row = pos / 3;
+    x = col == 0 ? L + m : col == 1 ? (L + R) / 2 - W / 2 : R - m - W;
+    y = row == 0 ? T + m : row == 1 ? (T + B) / 2 - H / 2 : B - m - H;
+    if (x + W > R) x = R - W; if (x < L) x = L;
+    if (y + H > B) y = B - H; if (y < T) y = T;
+}
+// the chosen spot is kept PER MARKET in <plugin>.place-<MKT>.txt, written only from the settings dialog's callbacks (the one shared
+// object reads whichever chart's dialog is open, so a draw never writes it) and read back on every draw (cached by file stamp)
+inline std::string placePath(const char* plugin, const std::string& mkt)
+{
+    const char* up = getenv("USERPROFILE");
+    return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\" + plugin + ".place-" + mkt + ".txt";
+}
+inline void savePlace(const char* plugin, const std::string& mkt, int v)
+{
+    if (mkt.empty() || v < 0 || v > 8) return;
+    std::ofstream f(placePath(plugin, mkt).c_str(), std::ios::trunc); if (f.is_open()) f << v << "\n";
+}
+inline int loadPlace(const char* plugin, const std::string& mkt, int def)
+{
+    static std::vector<std::pair<std::string, std::pair<long long, int> > > cache;
+    if (mkt.empty()) return def;
+    std::string p = placePath(plugin, mkt);
+    long long st = fileStamp(p);
+    for (size_t i = 0; i < cache.size(); i++) if (cache[i].first == p) { if (cache[i].second.first == st) return cache[i].second.second; cache.erase(cache.begin() + i); break; }
+    int v = def;
+    if (st >= 0) { std::ifstream f(p.c_str()); int x = -1; if (f >> x && x >= 0 && x <= 8) v = x; }
+    cache.push_back(std::make_pair(p, std::make_pair(st, v)));
+    return v;
+}
+// the right edge a box may reach: left of the Dealer Profile (REACH in its status file) and the Delta Profile (WIDTH, PLACE)
+// with its letters (~110 px); re-read only when a status file changes
+inline int clearRightOf(int paneRight)
+{
+    static long long s1 = -2, s2 = -2; static int reach = 150, dw = 50; static bool dLeft = false;
+    const char* up = getenv("USERPROFILE");
+    if (up) {
+        std::string a = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
+        std::string b = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.status.txt";
+        long long t1 = fileStamp(a), t2 = fileStamp(b);
+        if (t1 != s1) { s1 = t1; std::ifstream f(a.c_str()); std::string ln; while (std::getline(f, ln)) if (ln.rfind("REACH,", 0) == 0) { int r = atoi(ln.c_str() + 6); if (r >= 40 && r <= 1500) reach = r; } }
+        if (t2 != s2) { s2 = t2; std::ifstream f(b.c_str()); std::string ln;
+            while (std::getline(f, ln)) { if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+                if (ln.rfind("WIDTH,", 0) == 0) { int w = atoi(ln.c_str() + 6); if (w >= 20 && w <= 600) dw = w; }
+                if (ln.rfind("PLACE,", 0) == 0) dLeft = ln.substr(6) == "Left"; } }
+    }
+    int r = paneRight - reach - 8;
+    if (!dLeft) r -= dw + 110;
+    return r;
 }
 
 }  // namespace dl
