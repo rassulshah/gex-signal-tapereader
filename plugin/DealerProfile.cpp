@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.3.0";   // 2.3.0 (2026-10-07): the MenthorQ key-level lines (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.4.0";   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key-level lines (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -127,6 +127,10 @@ public:
     // MenthorQLevels.csv the bridge already writes: no HTTP, re-read only when the file changes. Remove lsFlexLevels from the charts.
     struct MQL { float px = 0; std::string label; COLOR col = 0; int w = 1; };
     std::map<std::string, std::vector<MQL> > mql; long long mqlStamp = -2; time_t mqlChecked = 0;
+    // (2.4.0) LRA-Touch-<MKT>.csv: TOUCH|code|price|P 1h|P by expiry|P by close|proven (lra.touch_prob, every 5 min)
+    struct TP { float px = 0; std::string p1, pe, pc; bool proven = false; };
+    std::map<std::string, std::vector<TP> > tps; std::map<std::string, long long> tpStamp; std::map<std::string, time_t> tpChecked, tpAt;
+    void loadTouch(const std::string& m);
     void loadMQLevels();
     void drawMQLevels(const Settings& S);
 };
@@ -621,6 +625,27 @@ void DealerProfile::loadMQLevels()
     mql.swap(m); mqlStamp = st;
 }
 
+void DealerProfile::loadTouch(const std::string& m)
+{
+    time_t now = time(nullptr);
+    if (now - tpChecked[m] < 5 && tpStamp.count(m)) return;
+    tpChecked[m] = now;
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Touch-" + m + ".csv";
+    long long st = dl::fileStamp(p);
+    if (tpStamp.count(m) && st == tpStamp[m]) return;
+    std::vector<TP> v;
+    std::ifstream f(p.c_str());
+    std::string ln;
+    while (f.is_open() && std::getline(f, ln)) {
+        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+        std::vector<std::string> c; std::stringstream ss(ln); std::string x;
+        while (std::getline(ss, x, '|')) c.push_back(x);
+        if (c.size() >= 7 && c[0] == "TOUCH") { TP t; t.px = (float)atof(c[2].c_str()); t.p1 = c[3]; t.pe = c[4]; t.pc = c[5]; t.proven = c[6] == "1"; v.push_back(t); }
+    }
+    tps[m].swap(v); tpStamp[m] = st; tpAt[m] = st > 0 ? (time_t)(st / 1000003LL) : 0;   // the file's modified time
+}
+
 void DealerProfile::drawMQLevels(const Settings& S)
 {
     loadMQLevels();
@@ -640,7 +665,24 @@ void DealerProfile::drawMQLevels(const Settings& S)
         PNT pp; pp.set((int)(nb - 1), q.px); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) continue;
         line(pane.left, y, pane.right, y, q.col, q.w);
-        char b[96]; snprintf(b, sizeof(b), "%.*f %s", dec, q.px, q.label.c_str());
+        char b[160]; snprintf(b, sizeof(b), "%.*f %s", dec, q.px, q.label.c_str());
+        // (2.4.0, Rassul 2026-10-07 12:57 "start showing it now on the levels") the chance price touches this level: in the next
+        // hour, by today's 0DTE expiry (when it comes before the close) and by the close; "?" until the market's numbers are proven
+        {
+            loadTouch(mkt);
+            bool fresh = tpAt[mkt] > 0 && time(nullptr) - tpAt[mkt] < 20 * 60;    // stale odds (the bridge stopped) are not shown
+            const std::vector<TP>& T = tps[mkt];
+            float tol = q.px * 2e-5f;
+            for (size_t k = 0; fresh && k < T.size(); k++) {
+                if (std::fabs(T[k].px + off - q.px) > tol && std::fabs(T[k].px - q.px) > tol) continue;
+                const char* qm = T[k].proven ? "" : "?";
+                std::string add = "  1h " + T[k].p1 + "%" + qm;
+                if (!T[k].pe.empty() && T[k].pe != T[k].pc) add += "  exp " + T[k].pe + "%" + qm;
+                if (!T[k].pc.empty()) add += "  close " + T[k].pc + "%" + qm;
+                strncat_s(b, sizeof(b), add.c_str(), _TRUNCATE);
+                break;
+            }
+        }
         int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
         short l = (short)(xMid - tw / 2), r = (short)(xMid + tw / 2), t = (short)(y - h / 2), bt = (short)(y + h / 2);
         box(l, t, r, bt, C_DARK);
@@ -672,6 +714,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.3.0");   // (2.3.0) draws the MenthorQ key levels (replaces lsFlexLevels and its 1-minute HTTP check)
+    p->setVersion("2.4.0");   // (2.4.0) touch odds on the MenthorQ levels;   // (2.3.0) draws the MenthorQ key levels (replaces lsFlexLevels and its 1-minute HTTP check)
     return p;
 }
