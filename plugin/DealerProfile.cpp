@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.2.8";   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.3.0";   // 2.3.0 (2026-10-07): the MenthorQ key-level lines (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -121,6 +121,14 @@ public:
     int  textW(const char* s, int sz, bool bold);
     void strengthMark(short rightX, short y, float pct, bool live, int font, COLOR base);
     void outline(short l, short t, short r, short b);
+    // (2.3.0, Rassul 2026-10-06 21:02 "irt ... pauses every few minutes ... i think its because of flexlevels ... replace with
+    // dealerprofile giving the levels"; 2026-10-07 the bridge log: FlexLevels' Remote File check hits the bridge every 61-86 s,
+    // HEAD then GET, up to 11 s apart - his "slightly over a minute" pause) the MenthorQ key levels drawn HERE from the local
+    // MenthorQLevels.csv the bridge already writes: no HTTP, re-read only when the file changes. Remove lsFlexLevels from the charts.
+    struct MQL { float px = 0; std::string label; COLOR col = 0; int w = 1; };
+    std::map<std::string, std::vector<MQL> > mql; long long mqlStamp = -2; time_t mqlChecked = 0;
+    void loadMQLevels();
+    void drawMQLevels(const Settings& S);
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -587,6 +595,60 @@ void DealerProfile::exportBars()
     if (std::rename(tmp.c_str(), path.c_str()) == 0) { E.n = n; E.c = lc; E.t = now; }
 }
 
+void DealerProfile::loadMQLevels()
+{
+    time_t now = time(nullptr);
+    if (now - mqlChecked < 5 && mqlStamp != -2) return;      // a stat at most every 5 s
+    mqlChecked = now;
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\MenthorQLevels.csv";
+    long long st = dl::fileStamp(p);
+    if (st == mqlStamp) return;
+    std::ifstream f(p.c_str()); if (!f.is_open()) { mqlStamp = st; return; }
+    std::map<std::string, std::vector<MQL> > m;
+    std::string ln; bool head = true;
+    while (std::getline(f, ln)) {
+        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+        if (head) { head = false; if (ln.compare(0, 6, "SYMBOL") == 0) continue; }
+        std::vector<std::string> c; std::stringstream ss(ln); std::string x;
+        while (std::getline(ss, x, ',')) c.push_back(x);
+        if (c.size() < 5 || c[0].empty()) continue;
+        MQL q; q.px = (float)atof(c[1].c_str()); q.label = c[2];
+        long v = atol(c[3].c_str()); q.col = (COLOR)(v & 0x00FFFFFF); if (q.col == 0) q.col = 0x0022D3EE;   // never black
+        q.w = atoi(c[4].c_str()); if (q.w < 1) q.w = 1; if (q.w > 3) q.w = 3;
+        if (q.px > 0) m[c[0]].push_back(q);
+    }
+    mql.swap(m); mqlStamp = st;
+}
+
+void DealerProfile::drawMQLevels(const Settings& S)
+{
+    loadMQLevels();
+    if (mql.empty() || mkt.empty()) return;
+    const std::vector<MQL>* L = nullptr;
+    auto it = mql.find(root);
+    if (it != mql.end()) L = &it->second;
+    else for (auto& kv : mql) if (dl::marketForRoot(kv.first) == mkt) { L = &kv.second; break; }   // a rolled contract: same market
+    if (!L) return;
+    RCT pane; pane.getPaneRect(false);
+    long nb = getBarCount(); if (nb < 1) return;
+    int dec = mkt == "GC" ? 1 : mkt == "HG" ? 4 : mkt == "EU" ? 5 : mkt == "NG" ? 3 : 2;
+    int fs = S.font; if (fs < 7) fs = 7;
+    short xMid = (short)(pane.left + (pane.right - pane.left) / 2);
+    for (size_t i = 0; i < L->size(); i++) {
+        const MQL& q = (*L)[i];
+        PNT pp; pp.set((int)(nb - 1), q.px); short y = pp.v;
+        if (y <= pane.top || y >= pane.bottom) continue;
+        line(pane.left, y, pane.right, y, q.col, q.w);
+        char b[96]; snprintf(b, sizeof(b), "%.*f %s", dec, q.px, q.label.c_str());
+        int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
+        short l = (short)(xMid - tw / 2), r = (short)(xMid + tw / 2), t = (short)(y - h / 2), bt = (short)(y + h / 2);
+        box(l, t, r, bt, C_DARK);
+        line(l, t, r, t, q.col, 1); line(r, t, r, bt, q.col, 1); line(r, bt, l, bt, q.col, 1); line(l, bt, l, t, q.col, 1);
+        textLJ((short)(l + 5), y, b, q.col, fs - 1, false);
+    }
+}
+
 int DealerProfile::draw(void)
 {
     // (2.2.0, 2026-10-05) IRT runs ONE object of this DLL for every chart, so the settings read when another chart's dialog
@@ -595,6 +657,7 @@ int DealerProfile::draw(void)
     syncSettings();
     load();
     alignContract();
+    drawMQLevels(cfg);                        // (2.3.0) under the profile: the key-level lines first
     render(cfg);
     staleBadge();
     srcTag();
@@ -609,6 +672,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.2.8");
+    p->setVersion("2.3.0");   // (2.3.0) draws the MenthorQ key levels (replaces lsFlexLevels and its 1-minute HTTP check)
     return p;
 }
