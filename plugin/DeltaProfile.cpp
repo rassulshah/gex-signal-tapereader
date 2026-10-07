@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "1.9.3";   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "1.9.4";   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -412,8 +412,7 @@ void DeltaProfile::render(const DSet& S)
     // initiative letters off) does not take a slot: the 3 biggest SHOWN nodes get their letters.
     const std::string rk0 = S.range == 1 ? "S" : S.range == 2 ? "D" : S.mins == 30 ? "R" : S.mins == 60 ? "H" :
                             haveN ? "M" + std::to_string(S.mins) : (S.mins > 45 ? "H" : "R");
-    auto hiddenRow = [&](int key) -> bool {
-        if (S.showI) return false;
+    auto nodeOf = [&](int key) -> const DData::DNode* {
         const auto& e = B[key]; const DData::DNode* nb = nullptr;
         for (size_t j = 0; j < D.nodes.size(); j++) {
             const DData::DNode& n = D.nodes[j];
@@ -421,10 +420,20 @@ void DeltaProfile::render(const DSet& S)
             short yn = yOf(n.px); if (yn < e.t - 1 || yn > e.b + 1) continue;
             if (!nb || std::fabs(n.d) > std::fabs(nb->d)) nb = &n;
         }
+        return nb;
+    };
+    auto hiddenRow = [&](int key) -> bool {
+        if (S.showI) return false;
+        const DData::DNode* nb = nodeOf(key);
         return nb && !nb->code.empty() && nb->code[0] == 'I';
     };
-    std::map<int, bool> lab;
+    std::map<int, bool> lab, labAmt;
     for (size_t i = 0, n = 0; i < big.size() && n < 3; i++) { if (hiddenRow(big[i].second)) continue; lab[big[i].second] = true; n++; }
+    // (1.9.4, Rassul 23:40 "a pretty big node that's sticking out that doesn't have any ratio ... it looks like it's the biggest
+    // node there") GC 23:39: 4168.5 -40 was the biggest row, an I? (sellers' initiative) node, so with the initiative letters off
+    // it got neither its amount nor its ratio while smaller rows did. Now the 3 BIGGEST rows always carry their amount, and a
+    // hidden initiative node shows its ratio in grey beside it (no letter); the letters still go to the 3 biggest shown nodes.
+    for (size_t i = 0; i < big.size() && i < 3; i++) labAmt[big[i].second] = true;
     struct LB { short t, b; float d; short edge; }; std::vector<LB> labd;
     std::map<int, short> edgeOf;                                   // (1.5.5) per row: the outer edge of the bar tip / its amount     // (1.5.0) the labelled nodes - their letters go on the same rows
     for (auto& kv : B) {
@@ -443,7 +452,7 @@ void DeltaProfile::render(const DSet& S)
             if (r.d != 0) box(dir > 0 ? base : de, t, dir > 0 ? de : base, b, r.d > 0 ? C_BUY : C_SELL);
         }
         short edge = both ? (growLeft ? (short)(mid - full - 1) : (short)(mid + full + 1)) : de;
-        if (S.labels && lab[kv.first] && r.d != 0) {
+        if (S.labels && (lab[kv.first] || labAmt[kv.first]) && r.d != 0) {
             char s[24]; float a = std::fabs(r.d);
             if (a >= 1000) sprintf_s(s, sizeof(s), "%s%.1fk", r.d > 0 ? "+" : "-", a / 1000); else sprintf_s(s, sizeof(s), "%s%.0f", r.d > 0 ? "+" : "-", a);
             short yc = (short)((t + b) / 2);
@@ -452,6 +461,16 @@ void DeltaProfile::render(const DSet& S)
             if (rightSide) textLJ((short)(de + 2), yc, s, C_INK, S.font - 1, false);
             else textRJ((short)(de - 2), yc, s, C_INK, S.font - 1, false);
             if (!both) edge = rightSide ? (short)(de + 2 + tw) : (short)(de - 2 - tw);
+            if (labAmt[kv.first] && hiddenRow(kv.first)) {             // (1.9.4) the hidden initiative node's ratio, grey, no letter
+                const DData::DNode* nb = nodeOf(kv.first);
+                if (nb && nb->x > 0) {
+                    char xb[16]; if (nb->x < 10) sprintf_s(xb, sizeof(xb), "%.1fx", nb->x); else sprintf_s(xb, sizeof(xb), "%.0fx", nb->x);
+                    std::string xs_ = xb; if (xs_.size() > 3 && xs_.substr(xs_.size() - 3) == ".0x") xs_ = xs_.substr(0, xs_.size() - 3) + "x";
+                    int xw = textW(xs_.c_str(), S.font - 1, false);
+                    if (rightSide) { textLJ((short)(edge + 4), yc, xs_.c_str(), C_MUTED, S.font - 1, false); edge = (short)(edge + 4 + xw); }
+                    else { textRJ((short)(edge - 4), yc, xs_.c_str(), C_MUTED, S.font - 1, false); edge = (short)(edge - 4 - xw); }
+                }
+            }
         }
         edgeOf[kv.first] = edge;
         if (lab[kv.first] && r.d != 0) { LB lb; lb.t = t; lb.b = b; lb.d = r.d; lb.edge = edge; labd.push_back(lb); }
