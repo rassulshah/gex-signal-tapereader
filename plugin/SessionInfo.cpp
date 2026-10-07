@@ -148,7 +148,7 @@ void SessionInfo::loadPos()
     posMkt = mkt; for (int b = 0; b < 3; b++) posX[b] = posY[b] = -1;
     const char* up = getenv("USERPROFILE"); if (!up || mkt.empty()) return;
     for (int b = 0; b < 3; b++) {
-        std::ifstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b == 2 ? "news" : b ? "rth" : "0dte") + ".txt").c_str());
+        std::ifstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b == 2 ? "news" : b ? "rth" : "panel") + ".txt").c_str());
         if (f.is_open()) { char c; f >> posX[b] >> c >> posY[b]; if (!f) posX[b] = posY[b] = -1; }
     }
 }
@@ -156,7 +156,7 @@ void SessionInfo::loadPos()
 void SessionInfo::savePos(int b)
 {
     const char* up = getenv("USERPROFILE"); if (!up || mkt.empty()) return;
-    std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b == 2 ? "news" : b ? "rth" : "0dte") + ".txt").c_str(), std::ios::trunc);
+    std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionInfo.pos-" + mkt + "-" + (b == 2 ? "news" : b ? "rth" : "panel") + ".txt").c_str(), std::ios::trunc);
     if (f.is_open()) f << posX[b] << "," << posY[b] << "\n";
 }
 
@@ -212,9 +212,12 @@ int SessionInfo::draw(void)
     RCT pane; pane.getPaneRect(false);
     int now = nowMin();
     char s[160];
-    short defX = (short)(pane.left + 8), defY = (short)(pane.top + 8);
+    // (1.3.0, Rassul 2026-10-07 08:00 "the layout is messed up ... i need to be able to select the news ... and drag them") ONE panel:
+    // NEWS, the 0DTE expiry and the RTH windows stacked in a single box, one click-and-drag moves all of it (three separate boxes
+    // landed on the chart's own title / clock labels). Default spot: the top of the price pane, a third of the way across.
+    short defX = (short)(pane.left + (pane.right - pane.left) / 3), defY = (short)(pane.top + 8);
+    std::vector<std::pair<std::string, COLOR> > L; std::vector<bool> B;
     if (cfg.show == 0 || cfg.show == 3) {          // (1.1.0, Rassul 23:28) the heading: upcoming calendar events + breaking news
-        std::vector<std::pair<std::string, COLOR> > L; std::vector<bool> B;
         bool any = !news.empty();
         L.push_back(std::make_pair(mkt + (any ? " NEWS" : " NEWS   nothing scheduled in 24h, no breaking news"), any ? C_INK : C_GREY)); B.push_back(true);
         for (size_t i = 0; i < news.size(); i++) {
@@ -229,11 +232,8 @@ int SessionInfo::draw(void)
                 L.push_back(std::make_pair(news[i].t + " CT  " + ttl + (news[i].imp == "High" ? "  (high)" : ""), c)); B.push_back(soon);
             }
         }
-        box(2, L, B, defX, defY);
-        defY = (short)(by[2] + bh[2] + 6);
-    } else bw[2] = 0;
+    }
     if (cfg.show == 0 || cfg.show == 1) {
-        std::vector<std::pair<std::string, COLOR> > L; std::vector<bool> B;
         int e = hm(exp);
         if (e < 0) { L.push_back(std::make_pair(mkt + " no options expiry today", C_GREY)); B.push_back(false); }
         else {
@@ -244,11 +244,8 @@ int SessionInfo::draw(void)
             else snprintf(s, sizeof s, "%s 0DTE expired %s CT - hedges released", mkt.c_str(), exp.c_str());
             L.push_back(std::make_pair(std::string(s), c)); B.push_back(true);
         }
-        box(0, L, B, defX, defY);
-        defY = (short)(by[0] + bh[0] + 6);
-    } else bw[0] = 0;
+    }
     if ((cfg.show == 0 || cfg.show == 2) && !W.empty()) {
-        std::vector<std::pair<std::string, COLOR> > L; std::vector<bool> B;
         std::string nowTag;
         for (size_t i = 0; i < W.size(); i++) if (now >= hm(W[i].from) && now < hm(W[i].to)) nowTag = W[i].tag;
         snprintf(s, sizeof s, "%s RTH  NOW  %s", mkt.c_str(), nowTag.empty() ? "normal" : nowTag == "ACTIVE" ? "ACTIVE" : "CHOP - wait");
@@ -262,8 +259,9 @@ int SessionInfo::draw(void)
             else snprintf(s, sizeof s, "%-6s %s-%s", W[i].tag.c_str(), W[i].from.c_str(), W[i].to.c_str());
             L.push_back(std::make_pair(std::string(s), W[i].tag == "ACTIVE" ? C_GREEN : C_YELLOW)); B.push_back(on);
         }
-        box(1, L, B, defX, defY);
-    } else bw[1] = 0;
+    }
+    bw[1] = bw[2] = 0;
+    if (!L.empty()) box(0, L, B, defX, defY); else bw[0] = 0;
     return RTX_OK;
 }
 
@@ -298,6 +296,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Click anywhere on a box and drag it.");
-    p->setVersion("1.2.0");   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
+    p->setVersion("1.3.0");   // (1.3.0) one panel (news + 0DTE + RTH), one drag;   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
     return p;
 }
