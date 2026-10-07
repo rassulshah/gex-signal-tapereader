@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "2.0.2";   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "2.1.0";   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -461,6 +461,53 @@ void DeltaProfile::render(const DSet& S)
         }
         if (M.size() > 80) M.erase(M.begin(), M.begin() + (M.size() - 80));
         D.rings = M;                                           // drawn by the ring pass below
+        // (2.1.0, Rassul 16:39 "make sure that the delta profile and signals are native so they dont rely on external files")
+        // the Acc / Dst zones, built HERE from the last 60 min of this chart's bars (lra/delta_profile.find_zones): touching rows
+        // of heavy one-sided delta (each >= 25% of the biggest), red in the top quarter of the range (Dst) or green in the
+        // bottom quarter (Acc), holding >= 40% of that side's net. Their state uses the same move / hold / candle-close rule
+        // as the nodes: held the zone's way = Dst / Acc, absorbed = A, not yet = Dst? / Acc?
+        float tkz = liveTick;                                  // the bars' price keys are in ticks only when the tick is known
+        if (tkz > 0) {
+            time_t tEnd = liveBars.back().t; std::map<long long, float> pd;
+            for (size_t b_ = 0; b_ < liveBars.size(); b_++) if (liveBars[b_].t > tEnd - 3600)
+                for (size_t k = 0; k < liveBars[b_].d.size(); k++) pd[liveBars[b_].d[k].first] += liveBars[b_].d[k].second;
+            std::vector<std::pair<float, float>> P;                // price, delta - low to high
+            for (auto& kv : pd) P.push_back(std::make_pair((float)(kv.first * tkz), kv.second));
+            std::vector<DData::DZone> Z;
+            if (P.size() >= 5) {
+                float bigD = 0, totS = 0, totB = 0;
+                for (size_t k = 0; k < P.size(); k++) { bigD = std::max(bigD, std::fabs(P[k].second)); if (P[k].second < 0) totS += P[k].second; else totB += P[k].second; }
+                float top = P.back().first, bot = P.front().first, rng = top - bot > 0 ? top - bot : tkz;
+                std::vector<std::pair<float, float>> cur;
+                auto closeZ = [&]() {
+                    if (cur.size() >= 2) {
+                        bool sell = cur[0].second < 0; float lo = cur[0].first, hi = cur.back().first, net = 0;
+                        for (size_t k = 0; k < cur.size(); k++) net += cur[k].second;
+                        float tot = sell ? totS : totB, share = tot != 0 ? net / tot : 0;
+                        bool edge = sell ? hi >= top - 0.25f * rng : lo <= bot + 0.25f * rng;
+                        if (share >= 0.40f && edge) {
+                            NState ns = classifyNative(lo, hi, net, true);
+                            std::string name = sell ? "Dst" : "Acc";
+                            DData::DZone z; z.lo = lo; z.hi = hi; z.share = (int)(share * 100 + 0.5f);
+                            z.code = !ns.ok ? name + "?" : ns.code == "A" ? "A" : ns.code == "I" ? name : name + "?";
+                            z.side = ns.ok ? ns.side : (sell ? "resistance" : "support");
+                            if (!ns.ok || ns.code == "A?" || ns.code == "I?") z.side = sell ? "resistance" : "support";
+                            Z.push_back(z);
+                        }
+                    }
+                    cur.clear();
+                };
+                for (size_t k = 0; k < P.size(); k++) {
+                    bool heavy = bigD > 0 && std::fabs(P[k].second) >= 0.25f * bigD;
+                    if (heavy && !cur.empty() && (P[k].second < 0) == (cur.back().second < 0) && P[k].first - cur.back().first <= 2 * tkz + 1e-6f) cur.push_back(P[k]);
+                    else { closeZ(); if (heavy) cur.push_back(P[k]); }
+                }
+                closeZ();
+                std::sort(Z.begin(), Z.end(), [](const DData::DZone& a_, const DData::DZone& b2) { return a_.share > b2.share; });
+                if (Z.size() > 2) Z.resize(2);
+            }
+            D.zones = Z;                                       // native - the file's ZONE lines are not used with live bars
+        }
     }
     const std::vector<DData::DNode>& NODES = nat ? natNodes : D.nodes;
     auto nodeOf = [&](int key) -> const DData::DNode* {
@@ -809,7 +856,9 @@ bool DeltaProfile::buildLive(const DSet& S)
     bool first = liveKey == -1;
     if (first) trace("live: first build");
     std::map<long long, DRow> agg;
-    float tk = D.tick > 0 ? D.tick : 0;
+    // (2.1.0) the tick size from IRT's own symbol data (the file's TICK only as a fallback)
+    float tk = getProperty(SYM_TICKINCR); if (!(tk > 0) || tk > 1000) tk = D.tick > 0 ? D.tick : 0;
+    if (D.tick > 0 && std::fabs(tk - D.tick) > D.tick * 0.01f) tk = D.tick;   // a disagreement: trust the file's (checked) tick
     std::vector<LBar> bars;
     RTARRAY ao(barOpen), ah(barHigh), al(barLow), ac(barClose);
     static VOLPROFILE buf[4000];
