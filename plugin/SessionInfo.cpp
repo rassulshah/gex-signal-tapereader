@@ -32,7 +32,7 @@ static const COLOR C_GREEN = 0x0022C55E, C_YELLOW = 0x00FACC15;   // (1.0.2) ACT
 
 struct SPIdx { int market, show, font, clock, moveX, moveY; };
 static SPIdx SP;
-struct SSet { int market = 0, show = 0, font = 10, clock = 0, moveX = 0, moveY = 0; };
+struct SSet { int market = 0, show = 0, font = 8, clock = 0, moveX = 0, moveY = 0; };
 struct Win { std::string tag, from, to, pct, lo, hi; };   // (1.2.0) pct = the window's median share of the RTH range, lo-hi = the middle half of days
 
 class SessionInfo : public cppExtension {
@@ -63,7 +63,7 @@ public:
     {
         S.market = getListIndex(SP.market);
         S.show = getListIndex(SP.show); if (S.show < 0 || S.show > 3) S.show = 0;
-        S.font = getIntegerValue(SP.font); if (S.font < 7 || S.font > 20) S.font = 10;
+        S.font = getIntegerValue(SP.font); if (S.font < 6 || S.font > 20) S.font = 8;
         S.clock = getIntegerValue(SP.clock); if (S.clock < -720 || S.clock > 720) S.clock = 0;
         { int v = getIntegerValue(SP.moveX); if (v >= -3000 && v <= 3000) S.moveX = v; }
         { int v = getIntegerValue(SP.moveY); if (v >= -2000 && v <= 2000) S.moveY = v; }
@@ -94,13 +94,13 @@ int cppExtension::destroy(void) { return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(2);   // (1.4.0) + Move right / Move down
+    setParameterVersion(3);   // (1.4.0) + Move right / Move down, font 8
     setParameterDialogHeight(5);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     SP.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     SP.show   = pc++; setListParameter("Show", 0, "All;0DTE expiry;RTH active / chop;News", 0, SL);
-    SP.font   = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);
+    SP.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW);   // (1.4.0, Rassul 08:22 "make the font ... smaller like around 8pt")
     SP.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
     // (1.4.0, Rassul 2026-10-07 08:17 "make sure they have settings also like the dealer read that allow me to move them around")
     SP.moveX  = pc++; setIntegerParameter("Move right px (minus = left)", 0, NUMW);
