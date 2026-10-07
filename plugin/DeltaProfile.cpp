@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "1.9.4";   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "2.0.0";   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -78,6 +78,12 @@ public:
     std::vector<DRow> liveRows; long liveKey = -1; int liveRange = -1, liveMins = -1;   // (1.9.0) the live profile + its cache key
     std::string liveRoot; long long liveAt = 0; bool liveOff = false;   // (1.9.1) per chart, at most once a second, off after a fault
     std::vector<long long> barStamp; long barStampKey = -1;            // (1.9.1) bar close stamps for the candle rings
+    // (2.0.0) the bars of the live window, oldest first: chart index, close time, OHLC and the delta at each price (tick key)
+    struct LBar { int i = 0; time_t t = 0; float o = 0, h = 0, l = 0, c = 0; std::vector<std::pair<long long, float>> d; };
+    std::vector<LBar> liveBars; float liveTick = 0;
+    struct NState { std::string code, side; int peak = -1; bool ok = false; };
+    NState classifyNative(float lo, float hi, float d, bool showI);
+    std::string stampOf(int bar);
     void trace(const char* what);
     static int readBarVap(RTARRAYP* VP, int i, VOLPROFILE* out, int cap);
     bool buildLive(const DSet& S);
@@ -384,7 +390,7 @@ void DeltaProfile::render(const DSet& S)
     // rows -> buckets: N ticks per row, or (0 = auto) one bar per few pixels
     int bh = S.font - 3; if (bh < 3) bh = 3;
     float g = (S.group > 0 && D.tick > 0) ? D.tick * S.group : 0;
-    struct BK { DRow r; short t = 0, b = 0; };
+    struct BK { DRow r; short t = 0, b = 0; float lo = 1e30f, hi = -1e30f; };
     std::map<int, BK> B;
     for (size_t i = 0; i < R.size(); i++) {
         int k; short yt, yb;
@@ -396,7 +402,7 @@ void DeltaProfile::render(const DSet& S)
             k = (y - pane.top) / bh; yt = (short)(pane.top + k * bh); yb = (short)(yt + bh - 1);
         }
         if (yb < pane.top + 16 || yt > pane.bottom) continue;
-        BK& x = B[k]; x.r.d += R[i].d; x.r.v += R[i].v; x.r.px = R[i].px; x.t = yt; x.b = yb;
+        BK& x = B[k]; x.r.d += R[i].d; x.r.v += R[i].v; x.r.px = R[i].px; x.t = yt; x.b = yb; if (R[i].px < x.lo) x.lo = R[i].px; if (R[i].px > x.hi) x.hi = R[i].px;
     }
     float dmax = 1, vmax = 1;
     for (auto& kv : B) { if (std::fabs(kv.second.r.d) > dmax) dmax = std::fabs(kv.second.r.d); if (kv.second.r.v > vmax) vmax = kv.second.r.v; }
@@ -405,6 +411,14 @@ void DeltaProfile::render(const DSet& S)
     if (both) line(mid, (short)(pane.top + 16), mid, pane.bottom, C_AXIS, 1);
     std::vector<std::pair<float, int>> big;
     for (auto& kv : B) big.push_back(std::make_pair(std::fabs(kv.second.r.d), kv.first));
+    // (1.9.5, Rassul 2026-10-07 11:07 "it is showing 7.4 for a node that is smaller than a larger node that has 7.1 ... you still
+    // havent fixed this") the x beside a letter came from the file's node (volume vs that minute's normal, over the node's own
+    // window), not from the bar drawn here - so a smaller bar could show a bigger x. Now every x on the profile is the DRAWN row's
+    // |delta| / the average |delta| of the drawn rows: a bigger bar always carries a bigger number.
+    float avgD = 0; int nD = 0;
+    for (auto& kv : B) if (kv.second.r.d != 0) { avgD += std::fabs(kv.second.r.d); nD++; }
+    avgD = nD ? avgD / nD : 0;
+    auto rowX = [&](float d) -> float { return avgD > 0 ? std::fabs(d) / avgD : -1.0f; };
     std::sort(big.begin(), big.end(), [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first > b.first; });
     // (1.9.2, Rassul 22:08 "why doesnt the delta profile show the A and the circles are there") the 3 labelled rows were the 3
     // biggest |delta| rows of ANY kind - with initiative letters off, an I row used a slot and showed nothing (HG 22:05: I 6.643,
@@ -412,10 +426,42 @@ void DeltaProfile::render(const DSet& S)
     // initiative letters off) does not take a slot: the 3 biggest SHOWN nodes get their letters.
     const std::string rk0 = S.range == 1 ? "S" : S.range == 2 ? "D" : S.mins == 30 ? "R" : S.mins == 60 ? "H" :
                             haveN ? "M" + std::to_string(S.mins) : (S.mins > 45 ? "H" : "R");
+    // (2.0.0) live bars: the nodes are classified HERE from the drawn buckets (the 10 biggest), not read from the file, so every
+    // letter / ring / ratio describes the bar it sits on. The file's NODE / RING lines are used only when live bars are off.
+    bool nat = live && !liveBars.empty();
+    std::vector<DData::DNode> natNodes;
+    if (nat) {
+        for (size_t i = 0; i < big.size() && i < 10; i++) {
+            const BK& e = B[big[i].second]; if (e.r.d == 0) continue;
+            NState ns = classifyNative(e.lo, e.hi, e.r.d, S.showI);
+            if (!ns.ok) continue;
+            DData::DNode n; n.rk = rk0; n.px = (e.lo + e.hi) * 0.5f; n.d = e.r.d; n.code = ns.code; n.side = ns.side;
+            n.x = rowX(e.r.d); n.tpk = ns.peak >= 0 ? stampOf(ns.peak) : "";
+            natNodes.push_back(n);
+        }
+        // the session's rings, remembered per chart (root) so a node that leaves the window keeps its ring (1.9.1 rule)
+        static std::map<std::string, std::vector<DData::DRing>> mem; static std::map<std::string, std::string> memDay;
+        std::string day = stampOf(lastBar).substr(0, 10);
+        {   // a session runs 17:00 -> 16:00: bars from 17:00 on belong to the next day's session
+            RTARRAYI dt_(barDateTime); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt_[lastBar], &t);
+            if (t.tm_hour >= 17) { t.tm_mday += 1; t.tm_isdst = -1; mktime(&t); char b[16]; sprintf_s(b, sizeof(b), "%04d-%02d-%02d", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday); day = b; }
+        }
+        std::vector<DData::DRing>& M = mem[root];
+        if (memDay[root] != day) { M.clear(); memDay[root] = day; }
+        for (size_t i = 0; i < natNodes.size(); i++) {
+            const DData::DNode& n = natNodes[i]; if (n.tpk.empty()) continue;
+            bool found = false;
+            for (size_t j = 0; j < M.size(); j++) if (M[j].tpk == n.tpk && std::fabs(M[j].px - n.px) <= (D.tick > 0 ? D.tick : 0.0001f) * 2) { M[j].code = n.code; M[j].side = n.side; M[j].px = n.px; found = true; break; }
+            if (!found) { DData::DRing g; g.px = n.px; g.code = n.code; g.side = n.side; g.tpk = n.tpk; g.x = n.x; M.push_back(g); }
+        }
+        if (M.size() > 80) M.erase(M.begin(), M.begin() + (M.size() - 80));
+        D.rings = M;                                           // drawn by the ring pass below
+    }
+    const std::vector<DData::DNode>& NODES = nat ? natNodes : D.nodes;
     auto nodeOf = [&](int key) -> const DData::DNode* {
         const auto& e = B[key]; const DData::DNode* nb = nullptr;
-        for (size_t j = 0; j < D.nodes.size(); j++) {
-            const DData::DNode& n = D.nodes[j];
+        for (size_t j = 0; j < NODES.size(); j++) {
+            const DData::DNode& n = NODES[j];
             if (n.rk != rk0 || (n.d < 0) != (e.r.d < 0)) continue;
             short yn = yOf(n.px); if (yn < e.t - 1 || yn > e.b + 1) continue;
             if (!nb || std::fabs(n.d) > std::fabs(nb->d)) nb = &n;
@@ -463,8 +509,9 @@ void DeltaProfile::render(const DSet& S)
             if (!both) edge = rightSide ? (short)(de + 2 + tw) : (short)(de - 2 - tw);
             if (labAmt[kv.first] && hiddenRow(kv.first)) {             // (1.9.4) the hidden initiative node's ratio, grey, no letter
                 const DData::DNode* nb = nodeOf(kv.first);
-                if (nb && nb->x > 0) {
-                    char xb[16]; if (nb->x < 10) sprintf_s(xb, sizeof(xb), "%.1fx", nb->x); else sprintf_s(xb, sizeof(xb), "%.0fx", nb->x);
+                float rx = rowX(r.d);
+                if (nb && rx > 0) {
+                    char xb[16]; if (rx < 10) sprintf_s(xb, sizeof(xb), "%.1fx", rx); else sprintf_s(xb, sizeof(xb), "%.0fx", rx);
                     std::string xs_ = xb; if (xs_.size() > 3 && xs_.substr(xs_.size() - 3) == ".0x") xs_ = xs_.substr(0, xs_.size() - 3) + "x";
                     int xw = textW(xs_.c_str(), S.font - 1, false);
                     if (rightSide) { textLJ((short)(edge + 4), yc, xs_.c_str(), C_MUTED, S.font - 1, false); edge = (short)(edge + 4 + xw); }
@@ -518,8 +565,8 @@ void DeltaProfile::render(const DSet& S)
         short lastY = -1000;
         for (size_t i = 0; i < labd.size(); i++) {
             const DData::DNode* best = nullptr;
-            for (size_t j = 0; j < D.nodes.size(); j++) {
-                const DData::DNode& n = D.nodes[j];
+            for (size_t j = 0; j < NODES.size(); j++) {
+                const DData::DNode& n = NODES[j];
                 if (n.rk != rk || (n.d < 0) != (labd[i].d < 0)) continue;
                 short yn = yOf(n.px); if (yn < labd[i].t - 1 || yn > labd[i].b + 1) continue;
                 if (!best || std::fabs(n.d) > std::fabs(best->d)) best = &n;
@@ -530,7 +577,7 @@ void DeltaProfile::render(const DSet& S)
             for (size_t z = 0; z < D.zones.size(); z++) if (best->px >= D.zones[z].lo - D.tick * 0.5f && best->px <= D.zones[z].hi + D.tick * 0.5f) inZone = true;
             if (inZone) continue;
             COLOR col = best->side == "support" ? 0x0086EFAC : 0x00FCA5A5;
-            std::string t = best->code; if (best->x > 0) t += xs(best->x);   // (1.8.2) I carries its x too
+            std::string t = best->code; if (rowX(labd[i].d) > 0) t += xs(rowX(labd[i].d));   // (1.9.5) the drawn row's x
             short y = (short)((labd[i].t + labd[i].b) / 2);
             if (y - lastY < S.font + 2) y = (short)(lastY + S.font + 2);   // two labelled rows touching: stack, never overlap
             lastY = y; letY.push_back(y);
@@ -577,7 +624,7 @@ void DeltaProfile::render(const DSet& S)
                     short yc = (short)((kv.second.t + kv.second.b) / 2);
                     bool taken = false; for (size_t q = 0; q < letY.size(); q++) if (std::abs(letY[q] - yc) < S.font + 2) taken = true;
                     if (!taken) {
-                        std::string lt = g.code; if (g.x > 0) lt += xs(g.x);
+                        std::string lt = g.code; if (rowX(kv.second.r.d) > 0) lt += xs(rowX(kv.second.r.d));   // (1.9.5)
                         short ed = edgeOf.count(kv.first) ? edgeOf[kv.first] : (growLeft ? left : right);
                         if (growLeft) textRJ((short)(ed - 4), yc, lt.c_str(), col, S.font, true);
                         else textLJ((short)(ed + 4), yc, lt.c_str(), col, S.font, true);
@@ -602,7 +649,17 @@ void DeltaProfile::render(const DSet& S)
         COLOR col = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
         std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "A" : D.code == "In" ? "I" : D.code.substr(0, 1);
         if (D.strength == "?") t += "?";
-        if (D.levelX > 0) t += xs(D.levelX);
+        {                                                          // (1.9.5) the key level's x = its drawn row's, like every other
+            short yl = yOf(D.level); float dl = 0; const BK* bl = nullptr;
+            for (auto& kv : B) if (yl >= kv.second.t - 1 && yl <= kv.second.b + 1 && std::fabs(kv.second.r.d) > std::fabs(dl)) { dl = kv.second.r.d; bl = &kv.second; }
+            // (2.0.0) with live bars the level's letter is the native node state of its row (A / A? / I / I?), so it matches
+            // the row's bar; the file's level read (E = exhaustion) is kept when the row has no node yet
+            if (nat && bl && dl != 0 && D.code != "Ex") {
+                NState ns = classifyNative(bl->lo, bl->hi, dl, S.showI);
+                if (ns.ok && (S.showI || ns.code[0] != 'I')) { t = ns.code; up = ns.side == "support"; col = ns.code[0] == 'I' ? (up ? C_BUY : C_SELL) : (up ? C_BUY : C_SELL); }
+            }
+            if (dl != 0 && rowX(dl) > 0) t += xs(rowX(dl)); else if (D.levelX > 0) t += xs(D.levelX);
+        }
         drawLetter(D.level, t, col);
     }
 }
@@ -614,6 +671,71 @@ void DeltaProfile::writeStatus(const char* what)
     if (!f.is_open()) return;
     f << "VERSION," << DLT_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nROWS," << D.rows.size() << "\nASOF," << D.asof
       << "\nRANGE," << drawnRange << "\nDRAWN_ROWS," << drawnRows << "\nBADGE," << D.code << D.strength << "\nWIDTH," << cfg.width << "\nSIDES," << (cfg.sides == 1 ? "Both" : "One") << "\nFACE," << (cfg.face == 0 ? "Left" : "Right") << "\nPLACE," << (cfg.place == 0 ? "Right" : "Left") << "\nSTATE," << what << "\n";
+}
+
+// (2.0.0, Rassul 2026-10-07 11:09 "are you building the signals in the delta profile natively? try to build them natively so
+// they are aligned with the delta profile") the node rule of lra/delta_profile.node_states, run on THIS chart's bars - the
+// same volume at price the bars are drawn from:
+//   the node finished forming on the last bar that traded >= 10% of its delta the same way at its prices; after it, price must
+//   move MOVE ticks past the node and then not trade back past it (+-TOL ticks) for 15 min of bars. The absorbers' way (a red
+//   node = buyers absorbing -> UP) = A, the other way = I (the aggressors won). A held move also needs a candle CLOSED past the
+//   node. Until then A? - or I? when the newest bar already traded past it the aggressors' way. peak = the bar that hit hardest.
+DeltaProfile::NState DeltaProfile::classifyNative(float lo, float hi, float d, bool showI)
+{
+    (void)showI;
+    NState st; if (liveBars.empty() || d == 0) return st;
+    const int MOVE = 4, TOL = 3, HOLD_MIN = 15;
+    float tk = liveTick > 0 ? liveTick : (D.tick > 0 ? D.tick : 0.0f);
+    auto pxOf = [&](long long pk) -> float { return liveTick > 0 ? (float)(pk * liveTick) : (float)(pk / 100000.0); };
+    bool sell = d < 0;
+    int nb = (int)liveBars.size(), t0 = -1, peak = -1; float peakD = 0;
+    for (int b = 0; b < nb; b++) {
+        float bd = 0;
+        for (size_t k = 0; k < liveBars[b].d.size(); k++) { float p_ = pxOf(liveBars[b].d[k].first); if (p_ >= lo - tk * 0.01f && p_ <= hi + tk * 0.01f) bd += liveBars[b].d[k].second; }
+        if ((bd < 0) == sell && std::fabs(bd) >= 0.1f * std::fabs(d) && bd != 0) { t0 = b; if (std::fabs(bd) > peakD) { peakD = std::fabs(bd); peak = b; } }
+    }
+    if (t0 < 0) return st;
+    st.ok = true; st.peak = liveBars[peak].i;
+    int secs = 180;                                             // the bar size, from the bars' own stamps
+    if (nb >= 2) { long long dd = (long long)(liveBars[nb - 1].t - liveBars[nb - 2].t); if (dd >= 30 && dd <= 3600) secs = (int)dd; }
+    int hold = (HOLD_MIN * 60 + secs - 1) / secs; if (hold < 1) hold = 1;
+    // 0 = not yet, 1 = absorbers' way held (A), 2 = the other way held (I)
+    auto resolve = [&](int from, int& at) -> int {
+        for (int k = from; k < nb; k++) {
+            bool upGo = liveBars[k].h >= hi + MOVE * tk, dnGo = liveBars[k].l <= lo - MOVE * tk;
+            for (int pass = 0; pass < 2; pass++) {
+                bool goUp = pass == 0; if (goUp ? !upGo : !dnGo) continue;
+                if (k + hold >= nb) return 0;                   // not long enough to know yet
+                bool held = true;
+                for (int z = k + 1; z <= k + hold; z++) { if (goUp ? liveBars[z].l < hi - TOL * tk : liveBars[z].h > lo + TOL * tk) { held = false; break; } }
+                if (held) { at = k + hold; return goUp == sell ? 1 : 2; }
+            }
+        }
+        return 0;
+    };
+    int at = -1, r = resolve(t0 + 1, at);
+    if (r == 1) { int at2 = -1; if (resolve(at + 1, at2) == 2) { r = 2; at = at2; } }   // a held node can still fail later
+    if (r != 0) {                                               // ... and a candle CLOSED on the winning side
+        bool up = (r == 1) == sell, closed = false;
+        for (int k = t0 + 1; k < nb; k++) if (up ? liveBars[k].c > hi : liveBars[k].c < lo) { closed = true; break; }
+        if (!closed) r = 0;
+    }
+    bool wonUp = sell == (r != 2);
+    st.code = r == 0 ? "A?" : r == 1 ? "A" : "I";
+    if (r == 0 && t0 + 1 < nb) {                                // leaning: the newest bar traded past it the aggressors' way
+        const LBar& lc = liveBars[nb - 1];
+        bool aggUp = !sell;
+        if (aggUp ? lc.h > hi + tk * 0.5f : lc.l < lo - tk * 0.5f) { st.code = "I?"; wonUp = aggUp; }
+    }
+    st.side = wonUp ? "support" : "resistance";
+    return st;
+}
+
+std::string DeltaProfile::stampOf(int bar)
+{
+    RTARRAYI dt(barDateTime); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[bar], &t);
+    char b[24]; sprintf_s(b, sizeof(b), "%04d-%02d-%02d %02d:%02d", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
+    return b;
 }
 
 // (1.9.0) the profile from the chart's own bars' volume at price: Last N minutes (bars whose close is within N minutes of the
@@ -678,6 +800,8 @@ bool DeltaProfile::buildLive(const DSet& S)
     if (first) trace("live: first build");
     std::map<long long, DRow> agg;
     float tk = D.tick > 0 ? D.tick : 0;
+    std::vector<LBar> bars;
+    RTARRAY ao(barOpen), ah(barHigh), al(barLow), ac(barClose);
     static VOLPROFILE buf[4000];
     int from = (int)n - 3000; if (from < 0) from = 0;
     for (int i = (int)n - 1; i >= from; i--) {
@@ -689,15 +813,19 @@ bool DeltaProfile::buildLive(const DSet& S)
             liveOff = true; liveRows.clear(); return false;
         }
         if (np == -2) { if (i == (int)n - 1) continue; liveRows.clear(); liveKey = key; liveAt = nowMs; liveRoot = root; liveRange = S.range; liveMins = S.mins; return false; }
+        LBar lb; lb.i = i; lb.t = mktime(&t); lb.o = ao[i]; lb.h = ah[i]; lb.l = al[i]; lb.c = ac[i];
         for (int k = 0; k < np; k++) {
             const VOLPROFILE& vp = buf[k];
             if (vp.totalVolume <= 0 && vp.buyVolume <= 0 && vp.sellVolume <= 0) continue;
             long long pk = tk > 0 ? (long long)std::floor(vp.price / tk + 0.5) : (long long)std::floor(vp.price * 100000.0 + 0.5);
             DRow& r = agg[pk]; r.px = tk > 0 ? (float)(pk * tk) : vp.price; r.d += (float)(vp.buyVolume - vp.sellVolume); r.v += (float)vp.totalVolume;
+            float bd = (float)(vp.buyVolume - vp.sellVolume); if (bd != 0) lb.d.push_back(std::make_pair(pk, bd));
         }
+        bars.push_back(lb);
     }
     liveRows.clear();
     for (auto& kv : agg) liveRows.push_back(kv.second);
+    std::reverse(bars.begin(), bars.end()); liveBars.swap(bars); liveTick = tk;
     liveKey = key; liveAt = nowMs; liveRoot = root; liveRange = S.range; liveMins = S.mins;
     if (first) { char b[64]; sprintf_s(b, sizeof(b), "live: ok, %d rows", (int)liveRows.size()); trace(b); }
     return !liveRows.empty();
