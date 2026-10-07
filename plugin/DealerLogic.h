@@ -52,6 +52,7 @@ struct Data {
     std::string ver, market;
     std::string srcBook, srcMode, srcAt; float srcRatio = 1.0f;   // (file 2.0) SRC: the book the Profile bars come from (SPX / QQQ / the market itself)
     double asofSo = -1; int y = 0, mo = 0, d = 0;
+    std::string liveRec, liveSrc; int turnAgeMin = -1, liveSo = -1;   // (Read 4.4.0) LIVE|<recording OK/STOPPED>|<price IRT/MenthorQ>|<turn age min>|<last turn CT>
     float px = 0, em = 0; bool hasPrice = false;
     float book = 0; bool hasBook = false;
     std::vector<Node> nodes;
@@ -155,6 +156,7 @@ inline bool parseLine(Data& D, const std::string& line)
         if (t.size() >= 3) { int a = 0, b = 0, c = 0; if (sscanf(t[2].c_str(), "%d-%d-%d", &a, &b, &c) == 3) { D.y = a; D.mo = b; D.d = c; } }
         return true;
     }
+    if (k == "LIVE" && t.size() >= 3) { D.liveRec = t[1]; D.liveSrc = t[2]; if (t.size() >= 4 && !t[3].empty()) D.turnAgeMin = atoi(t[3].c_str()); return true; }
     if (k == "PRICE" && t.size() >= 3) { D.px = f(t[1]); D.em = f(t[2]); D.hasPrice = D.px > 0 && D.em > 0; return true; }
     if (k == "BOOK" && t.size() >= 2) { D.book = f(t[1]); D.hasBook = true; return true; }
     if (k == "NODE" && t.size() >= 8) {

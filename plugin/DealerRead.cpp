@@ -87,7 +87,7 @@ static const char* stWord(const std::string& st, bool wall)
 
 struct PIdx { int rstg, rwid, rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
-struct Settings { int rstg = 0, rwid = 100, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int bg = 0; int rstg = 0, rwid = 100, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -176,7 +176,7 @@ int cppExtension::setup(void)
     // (4.3.0, Rassul 2026-10-07 09:16 "fix placement, with fixed height and width ... top left, top center, top right, bottom left
     // ... middle right instead of the user entering amount of placement") Position = one of 9 spots (default Bottom left); the box
     // has a fixed size; nothing is dragged (one shared IRT object moved the copper Read when he clicked the gold chart).
-    setParameterVersion(11);
+    setParameterVersion(12);   // (4.4.0) + Background
     setParameterDialogHeight(3);
     const short SL = kParmAppendSameLine;
     int pc = 0;
@@ -184,7 +184,9 @@ int cppExtension::setup(void)
     PX.corner   = pc++; setListParameter("Position", 6, dl::ANCHORS, 0, SL);
     PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);
     PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
-    PX.moveX = PX.rtop = PX.rwid = PX.trade = PX.todo = PX.layout = PX.show = PX.lift = PX.apos = PX.atop = PX.widthPct = PX.view = PX.rpos = PX.rstg = -1;
+    // (4.4.0, Rassul 2026-10-07 10:44 "a more transparent background so the candles are more visible in the background")
+    PX.rwid     = pc++; setListParameter("Background", 0, "See-through;Solid");
+    PX.moveX = PX.rtop = PX.trade = PX.todo = PX.layout = PX.show = PX.lift = PX.apos = PX.atop = PX.widthPct = PX.view = PX.rpos = PX.rstg = -1;
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
@@ -195,6 +197,7 @@ void DealerRead::readSettings(Settings& S)
     { int v = getListIndex(PX.corner); if (v >= 0 && v <= 8) S.corner = v; }
     { int v = getIntegerValue(PX.font); if (v >= 7 && v <= 20) S.font = v; }
     { int v = getIntegerValue(PX.clock); if (v >= -720 && v <= 720) S.clock = v; }
+    { int v = getListIndex(PX.rwid); if (v >= 0 && v <= 1) S.bg = v; }
     // (4.2.0 / 4.3.0) the retired settings keep fixed values
     S.trade = S.todo = true; S.layout = 0; S.show = 2; S.lift = 30; S.apos = 0; S.atop = 30; S.widthPct = 100; S.moveX = 0; S.rtop = 0; S.rwid = 100;
     S.view = 0; S.rpos = 0; S.rstg = 0; S.explain = false;
@@ -1339,7 +1342,13 @@ void DealerRead::renderTurn(const Settings& S)
     u = S.font / 10.0f;
     int fs = S.font - 1;
     RCT pane; pane.getPaneRect(false);
-    short lh = U(15), pad = U(6), gw = U(9), gap = U(6), cgap = U(10);
+    short lh = U(15), pad = U(6), gw = 0, gap = U(6), cgap = U(10);    // (4.4.0) no grip strip (nothing is dragged)
+    // (4.4.0, Rassul 2026-10-07 11:01 "today in the morning it had data from 4 or 5 am") how old the file is: > 5 min = a grey
+    // "data N min old" after the header; > 15 min = STALE - the header says when it last updated, the outline and text go grey
+    RTDATE nowD = currentDate(); struct tm ntm; memset(&ntm, 0, sizeof(ntm)); getLocaltime(nowD, &ntm);
+    double ageMin = D.asofSo >= 0 ? dl::staleMin(D.asofSo + S.clock * 60.0, ntm.tm_hour * 3600.0 + ntm.tm_min * 60.0 + ntm.tm_sec) : 0;
+    bool stale = ageMin > 15.0;
+    bool noFp = D.liveRec == "STOPPED";
     // (4.2.0) the width: the room between the chart's left edge and the profiles, times the Width setting (never across the Delta
     // Profile), at most 1000 px at font 10
     short clearR = clearRight(pane);
@@ -1349,9 +1358,37 @@ void DealerRead::renderTurn(const Settings& S)
     int inner = W - gw - 2 * pad;
     int colW = (inner - cgap) / 2;
     auto wBold = [&](const std::string& q) { return (float)textW(q.c_str(), fs, true); };
+    // (4.4.0, Rassul 10:44 "simplify the header line for the dealer read, its too long") ONE line: who is in control, the trade,
+    // the targets. Dropped: the market name, "last 90 min", the low / high time, short / long gamma (now on the Session Info) and
+    // the bar range - the read line below says them.
+    auto simplify = [](const std::string& h) {
+        std::vector<std::string> seg; size_t a = 0;
+        while (true) { size_t b = h.find(" - ", a); seg.push_back(h.substr(a, b == std::string::npos ? std::string::npos : b - a)); if (b == std::string::npos) break; a = b + 3; }
+        std::string o;
+        for (size_t i = 0; i < seg.size(); i++) {
+            const std::string& g = seg[i];
+            if (g.empty() || g == "short gamma" || g == "long gamma" || g == "last 90 min" || g.compare(0, 4, "low ") == 0 ||
+                g.compare(0, 5, "high ") == 0 || g.compare(0, 5, "bars ") == 0 || (g.size() <= 3 && g.size() >= 2 && isupper((unsigned char)g[0]) && isupper((unsigned char)g[1]))) continue;
+            o += (o.empty() ? "" : " - ") + g;
+        }
+        return o.empty() ? h : o;
+    };
     std::vector<std::string> head;
-    if (D.hasTurn) head = dl::wrapWords(D.turnHead, (float)inner, wBold);
-    else head.push_back(std::string(D.stageSide == 'L' ? "watching LONG at " : "watching SHORT at ") + D.stageLvl + " - no turn yet");
+    std::string hd = D.hasTurn ? simplify(to12(D.turnHead.c_str())) : std::string(D.stageSide == 'L' ? "watching LONG at " : "watching SHORT at ") + D.stageLvl + " - no turn yet";
+    if (stale) {                                                   // the time of the last update, 12-hour CT
+        int so = (int)D.asofSo; char b[48]; int h = so / 3600 % 24;
+        snprintf(b, sizeof(b), "STALE - last update %d:%02d %s", h % 12 == 0 ? 12 : h % 12, so / 60 % 60, h < 12 ? "AM" : "PM");
+        hd = b;
+    }
+    std::string tag;                                               // grey, after the header
+    if (!stale && ageMin > 5.0) tag = "data " + std::to_string((int)(ageMin + 0.5)) + " min old";
+    if (D.liveSrc == "MQ") tag += std::string(tag.empty() ? "" : " - ") + "price: MenthorQ";
+    {
+        int tagW = tag.empty() ? 0 : textW(("  " + tag).c_str(), fs - 1, false);
+        int room = inner - tagW; std::string h1 = hd;
+        if (textW(h1.c_str(), fs, true) > room) { while (!h1.empty() && textW((h1 + "...").c_str(), fs, true) > room) h1.erase(h1.size() - 1); h1 += "..."; }
+        head.push_back(h1);
+    }
     if (!D.terr.empty()) head.push_back("turn read failed: " + D.terr);
     // (4.1.0, Rassul 2026-10-06 16:10 "the read above, right below the header" / 16:14 "highlight anything important" / 16:16 "a
     // lighter shade of gray instead of yellow") the READ LINE: what happened, what to wait for and the flip, prices that matter
@@ -1359,7 +1396,7 @@ void DealerRead::renderTurn(const Settings& S)
     auto wSty = [&](const std::string& q, char st) { return (float)textW(q.c_str(), fs, st == 'p' || st == 'b'); };
     std::vector<std::vector<dl::StyPiece> > rdl;
     if (D.hasTurn && !D.readLine.empty()) rdl = dl::wrapStyled(dl::parseStyled(D.readLine), (float)inner, (float)inner, wSty);
-    if (head.size() > 2) head.resize(2);                          // (4.3.0) fixed height: header 2 lines, read line 3 lines
+    if (head.size() > 1) head.resize(1);                          // (4.4.0) fixed height: header 1 line, read line 3 lines
     if (rdl.size() > 3) rdl.resize(3);
     // the two sides: rows by section (older files without a section: everything on the options side)
     std::vector<dl::Data::TRow> side[2];
@@ -1387,9 +1424,10 @@ void DealerRead::renderTurn(const Settings& S)
             if (ln.empty()) ln.push_back("");
             // (4.1.2, Rassul 23:31 "each section can have up to four bullets and each bullet can have up to three lines ... it should
             // not be in more than three lines") a longer point keeps its first 3 lines and ends in "..." (the Reader writes them shorter)
-            if (ln.size() > 3) {
-                ln.resize(3);
-                std::string& L3 = ln[2];
+            // (4.4.0, Rassul 10:44 "make the dealer read less taller by utilizing the vertical black space") at most 2 lines a point
+            if (ln.size() > 2) {
+                ln.resize(2);
+                std::string& L3 = ln[1];
                 while (!L3.empty() && textW((L3 + "...").c_str(), fs, false) > restW) {
                     size_t sp = L3.find_last_of(' ');
                     if (sp == std::string::npos) { L3.clear(); break; }
@@ -1405,21 +1443,40 @@ void DealerRead::renderTurn(const Settings& S)
     int bodyLines = C[0].h > C[1].h ? C[0].h : C[1].h;
     int nGroups = (int)(C[0].G.size() > C[1].G.size() ? C[0].G.size() : C[1].G.size());
     // (4.3.0) one FIXED height: 2 header lines + 3 read lines + the section label + 3 points x 3 lines, whatever the content
-    if (bodyLines > 10) bodyLines = 10;
-    gridH = (short)(pad * 2 + lh * (2 + 3 + 10) + U(3) * 3 + U(4) + U(6));
+    if (bodyLines > 7) bodyLines = 7;
+    gridH = (short)(pad * 2 + lh * (1 + 3 + 7) + U(3) * 3 + U(4) + U(6));   // (4.4.0) 1 header + 3 read + label + 3 points x 2 lines
     int place = dl::loadPlace("DealerRead", mkt, 6);                // Bottom left unless he picked another spot for this market
     int ax, ay; dl::anchorXY(leftEdge, pane.top + U(16), clearR, pane.bottom, W, gridH, place, U(8), ax, ay);
     short x0 = (short)ax, y0 = (short)ay;
     lastClearR = clearR; lastLeft = pane.left; lastW = W;
     gridL = x0; gridT = y0;
-    fill(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BOXBG);
-    frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, true);
-    gripL = x0; gripT = y0; gripR = (short)(x0 + W); gripB = (short)(y0 + gridH);   // (4.1.2) the whole box is the handle: click anywhere on it and drag
-    fill((short)(gripL + 1), (short)(gripT + 1), (short)(x0 + gw), (short)(gripB - 1), 0x001E293B);
+    // (4.4.0, Rassul 10:44) see-through background; the outline says who is in control: lime = demand (bullish), red = supply
+    // (bearish), yellow = neither; grey when the data is stale or there is no live turn
+    {
+        RCT bgR; bgR.set(x0, y0, (short)(x0 + W), (short)(y0 + gridH));
+        bgR.draw(0, C_BOXBG, C_BOXBG, S.bg == 1 ? DRAW_OPAQUE : DRAW_TRANSLUCENT, PAT_SOLID);
+        std::string h0 = D.hasTurn ? hd : "";                    // the simplified header starts with the control word
+        size_t p0 = h0.find_first_not_of(" ");
+        std::string w0 = p0 == std::string::npos ? "" : h0.substr(p0, 6);
+        COLOR oc = stale || !D.hasTurn || hd.compare(0, 12, "No live turn") == 0 ? C_GREY
+                 : w0.compare(0, 6, "DEMAND") == 0 ? 0x0084CC16 : w0.compare(0, 6, "SUPPLY") == 0 ? C_RED : 0x00EAB308;
+        frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), oc, false);
+        frame((short)(x0 + 1), (short)(y0 + 1), (short)(x0 + W - 1), (short)(y0 + gridH - 1), oc, false);
+    }
+    gripL = x0; gripT = y0; gripR = (short)(x0 + W); gripB = (short)(y0 + gridH);
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
     short cxMid = (short)((cx0 + x0 + W - pad) / 2);         // (4.1.1, Rassul 23:04 "the header is justified left. Move it so it's justified center")
-    for (size_t h = 0; h < head.size(); h++) { text(cxMid, y, head[h].c_str(), h + 1 == head.size() && !D.terr.empty() ? C_MUTED : C_TABONB, fs, true, 1); y = (short)(y + lh); }
+    for (size_t h = 0; h < head.size(); h++) {
+        COLOR hc = h + 1 == head.size() && !D.terr.empty() ? C_MUTED : stale ? C_GREY : C_TABONB;
+        if (h == 0 && !tag.empty()) {                              // header + grey tag, centred together
+            int w1 = textW(head[0].c_str(), fs, true), w2 = textW(("  " + tag).c_str(), fs - 1, false);
+            short xs = (short)(cxMid - (w1 + w2) / 2);
+            text(xs, y, head[0].c_str(), hc, fs, true, 0);
+            text((short)(xs + w1), y, ("  " + tag).c_str(), C_MUTED, fs - 1, false, 0);
+        } else text(cxMid, y, head[h].c_str(), hc, fs, true, 1);
+        y = (short)(y + lh);
+    }
     if (!rdl.empty()) {
         float sw = wSty(" ", 'n');
         for (size_t l = 0; l < rdl.size(); l++) {
@@ -1443,8 +1500,11 @@ void DealerRead::renderTurn(const Settings& S)
         Col& K = C[c];
         short lx = c == 0 ? cx0 : (short)(cx0 + colW + cgap);
         short yy = yBody;
-        text(lx, yy, c == 0 ? "OPTIONS" : "FOOTPRINT", C_MUTED, fs - 2, true, 0);
+        text((short)(lx + colW / 2), yy, c == 0 ? "OPTIONS" : "FOOTPRINT", C_MUTED, fs - 2, true, 1);   // (4.4.0) centred over its section
         yy = (short)(yy + lh);
+        // (4.4.0, Rassul 11:05 "use menthorq or irts own data") the footprint is IRT's alone: while IRT is not recording this market
+        // the side says so instead of showing old points
+        if (c == 1 && noFp) { text(lx, yy, "no footprint - IRT not recording", 0x00F59E0B, fs, false, 0); continue; }
         if (K.G.empty()) { text(lx, yy, "-", C_MUTED, fs, false, 0); continue; }
         for (size_t k = 0; k < K.G.size(); k++) {
             char nb[8]; snprintf(nb, sizeof(nb), "%d)", (int)k + 1);
@@ -1467,7 +1527,7 @@ void DealerRead::renderTurn(const Settings& S)
             }
             for (size_t l = 0; l < K.L[k].size(); l++) {
                 short sx = l == 0 ? (short)(tx + gap) : (short)(lx + nW);
-                text(sx, yy, K.L[k][l].c_str(), allLean ? C_GREY : C_INK, fs, false, 0);
+                text(sx, yy, K.L[k][l].c_str(), allLean || stale ? C_GREY : C_INK, fs, false, 0);
                 if (l + 1 < K.L[k].size()) yy = (short)(yy + lh);
             }
             yy = (short)(yy + lh + U(3));
@@ -1492,6 +1552,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.3.0");   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.4.0");   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
