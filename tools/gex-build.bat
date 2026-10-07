@@ -38,6 +38,7 @@ call :one DealerRead   lsDealerRead   DealerLogic.h
 call :one DealerSig    lsDealerSig    DealerLogic.h
 call :one DealerSummary lsDealerSummary DealerLogic.h
 call :one DeltaProfile lsDeltaProfile DealerLogic.h
+call :one SessionInfo  lsSessionInfo  DealerLogic.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h
