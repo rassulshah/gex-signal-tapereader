@@ -1467,14 +1467,26 @@ void DealerRead::renderTurn(const Settings& S)
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
     short cxMid = (short)((cx0 + x0 + W - pad) / 2);         // (4.1.1, Rassul 23:04 "the header is justified left. Move it so it's justified center")
+    // (4.4.2, Rassul 16:38 "in the dealer read make supply red and demand green in the heading") the control word in its colour
+    auto headText = [&](short xs, const std::string& s, COLOR hc) {
+        size_t p0 = s.find_first_not_of(' ');
+        bool dem = !stale && p0 != std::string::npos && s.compare(p0, 6, "DEMAND") == 0;
+        bool sup = !stale && p0 != std::string::npos && s.compare(p0, 6, "SUPPLY") == 0;
+        if (!dem && !sup) { text(xs, y, s.c_str(), hc, fs, true, 0); return; }
+        size_t e = s.find(' ', p0); if (e == std::string::npos) e = s.size();
+        std::string w = s.substr(0, e), rest = s.substr(e);
+        text(xs, y, w.c_str(), dem ? C_GREEN : C_RED, fs, true, 0);
+        text((short)(xs + textW(w.c_str(), fs, true)), y, rest.c_str(), hc, fs, true, 0);
+    };
     for (size_t h = 0; h < head.size(); h++) {
         COLOR hc = h + 1 == head.size() && !D.terr.empty() ? C_MUTED : stale ? C_GREY : C_TABONB;
         if (h == 0 && !tag.empty()) {                              // header + grey tag, centred together
             int w1 = textW(head[0].c_str(), fs, true), w2 = textW(("  " + tag).c_str(), fs - 1, false);
             short xs = (short)(cxMid - (w1 + w2) / 2);
-            text(xs, y, head[0].c_str(), hc, fs, true, 0);
+            headText(xs, head[0], hc);
             text((short)(xs + w1), y, ("  " + tag).c_str(), C_MUTED, fs - 1, false, 0);
-        } else text(cxMid, y, head[h].c_str(), hc, fs, true, 1);
+        } else if (h == 0) headText((short)(cxMid - textW(head[0].c_str(), fs, true) / 2), head[0], hc);
+        else text(cxMid, y, head[h].c_str(), hc, fs, true, 1);
         y = (short)(y + lh);
     }
     if (!rdl.empty()) {
@@ -1552,6 +1564,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.4.1");   // (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.4.2");   // (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
