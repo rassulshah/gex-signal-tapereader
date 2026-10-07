@@ -87,7 +87,7 @@ static const char* stWord(const std::string& st, bool wall)
 
 struct PIdx { int rstg, rwid, rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
-struct Settings { int rstg = 0, rwid = 55, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+struct Settings { int rstg = 0, rwid = 100, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 class DealerRead : public cppExtension {
 public:
@@ -139,7 +139,10 @@ public:
     void renderTurn(const Settings& S);               // (3.0.0) THE TURN: header + numbered sentences, draggable
     virtual int mouse(RTX_EVENT* e);
     bool dragging = false; short gripL = 0, gripT = 0, gripR = 0, gripB = 0, gridL = 0, gridT = 0, gridH = 0, dragDX = 0, dragDY = 0;
-    int posX = -1, posB = -1; std::string posMkt;      // where he dropped it: px from the pane's left, px from its bottom (-1 = default)
+    int posX = -1, posB = -1; std::string posMkt;
+    // (4.2.0) the room the Read may use: everything left of the Delta Profile + Dealer Profile (their status files), its width
+    int dltW = 50; bool dltLeft = false; long long dltStamp = -2; short lastClearR = 0, lastLeft = 0; int lastW = 0;
+    short clearRight(const RCT& pane);      // where he dropped it: px from the pane's left, px from its bottom (-1 = default)
     void loadPos(); void savePos();
 };
 
@@ -159,52 +162,60 @@ int cppExtension::setup(void)
     // (1.3.2, Rassul 2026-09-30: "why cant you have the how-to below fuel as text" / "many dropdowns that shouldnt even be
     // there") only real settings have a control; the whole guide is plain text (setLabelParameter) below them.
     // IRT keeps saved values BY POSITION (the parameter version does not reset them): remove + re-add the indicator once.
-    setParameterVersion(9);   // (3.0.0) the Turn: same controls in the same places, two renamed; the guide rewritten
-    setParameterDialogHeight(13);   // (3.0.1, Rassul 2026-10-02 19:12) the how-to text is gone - controls only
+    // (4.2.0, Rassul 2026-10-07 08:14 "it should be at the bottom left of the chart ... set this as the default ... it should not
+    // cross over into the delta profile ... selectable and draggable ... a setting that allows me to enter how much i want to move it
+    // to the left or the right ... what is the analyst ... if we dont need this remove it") only the settings the Read uses now.
+    // The Analyst box (3.x) was replaced by this Read on 2026-10-06 and no longer draws: its settings, the corner / layout / view
+    // lists and the old lift / width boxes are gone. Version 10: IRT resets the saved values to these defaults once.
+    setParameterVersion(10);
+    setParameterDialogHeight(5);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    PX.corner   = pc++; setListParameter("Read position", 0, "Bottom left;Bottom right;Top left;Top right;Bottom centre;Top centre", 0, SL);
-    PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);
-    PX.trade    = pc++; setBoolParameter("TRADE line", true, SL);
-    PX.todo     = pc++; setBoolParameter("WHAT TO DO box", true, SL);
-    PX.layout   = pc++; setListParameter("Layout", 0, "Stacked;Compact;Mini;Full (wide)");
-    PX.show     = pc++; setListParameter("Show", 2, "Read;Analyst;Both", 0, SL);
-    PX.lift     = pc++; setIntegerParameter("Read: lift from bottom (px)", 30, NUMW);
-    PX.moveX    = pc++; setIntegerParameter("Move right (px)", 0, NUMW, SL);
-    PX.apos     = pc++; setListParameter("Analyst position", 0, "Top left;Top centre;Top right;Above the Read");
-    PX.atop     = pc++; setIntegerParameter("Analyst: down from top (px)", 30, NUMW, SL);
-    PX.widthPct = pc++; setIntegerParameter("Width (% 40-100)", 100, NUMW);
+    PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, NUMW, SL);
+    PX.moveX    = pc++; setIntegerParameter("Move right px (minus = left)", 0, NUMW);
+    PX.rtop     = pc++; setIntegerParameter("Lift from bottom px", 30, NUMW, SL);
+    PX.rwid     = pc++; setIntegerParameter("Width % of the room left of the profiles (40-100)", 100, NUMW);
     PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
-    PX.view     = pc++; setListParameter("View", 0, "Standard;Summary");   // (1.6.0) Summary = the whole read as sentences
-    PX.rpos     = pc++; setListParameter("Turn read", 0, "Show;Off");                    // (3.0.0) the Turn box; drag its grip to move it
-    PX.rtop     = pc++; setIntegerParameter("Box: lift from bottom (px)", 30, NUMW, SL);
-    PX.rstg     = pc++; setListParameter("Reasons shown", 0, "All;Last 4");          // (3.0.0)
-    PX.rwid     = pc++; setIntegerParameter("Box width (% of chart 30-100)", 55, NUMW, SL);
+    PX.corner = PX.trade = PX.todo = PX.layout = PX.show = PX.lift = PX.apos = PX.atop = PX.widthPct = PX.view = PX.rpos = PX.rstg = -1;
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
 }
 
 void DealerRead::readSettings(Settings& S)
 {
-    S.market = getListIndex(PX.market);
-    S.corner = getListIndex(PX.corner); if (S.corner < 0 || S.corner > 5) S.corner = 0;
-    S.moveX = getIntegerValue(PX.moveX); if (S.moveX < -3000 || S.moveX > 3000) S.moveX = 0;
-    S.widthPct = getIntegerValue(PX.widthPct); if (S.widthPct < 40 || S.widthPct > 100) S.widthPct = 100;   // a fresh dialog can read 0
-    S.show = getListIndex(PX.show); if (S.show < 0 || S.show > 2) S.show = 2;
-    S.apos = getListIndex(PX.apos); if (S.apos < 0 || S.apos > 3) S.apos = 0;
-    S.atop = getIntegerValue(PX.atop); if (S.atop < 0 || S.atop > 600) S.atop = 30;
-    S.font = getIntegerValue(PX.font); if (S.font < 7) S.font = 10;   // (1.0.1) a first dialog can show ??? / a wrong number if (S.font > 20) S.font = 20;
-    S.trade = isBoxChecked(PX.trade) != 0; S.todo = isBoxChecked(PX.todo) != 0;
-    S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
-    S.layout = getListIndex(PX.layout); if (S.layout < 0 || S.layout > 3) S.layout = 0;
-    S.lift = getIntegerValue(PX.lift); if (S.lift < 0 || S.lift > 400) S.lift = 30;
-    S.view = getListIndex(PX.view); if (S.view < 0 || S.view > 1) S.view = 0;
-    S.rpos = getListIndex(PX.rpos); if (S.rpos < 0 || S.rpos > 1) S.rpos = 0;
-    S.rtop = getIntegerValue(PX.rtop); if (S.rtop < 0 || S.rtop > 900) S.rtop = 30;
-    S.rstg = getListIndex(PX.rstg); if (S.rstg < 0 || S.rstg > 1) S.rstg = 0;
-    S.rwid = getIntegerValue(PX.rwid); if (S.rwid < 30 || S.rwid > 100) S.rwid = 55;     // (3.0.0) box width, % of the chart
-    S.explain = false;
+    { int v = getListIndex(PX.market); if (v >= 0 && v <= 7) S.market = v; }
+    { int v = getIntegerValue(PX.font); if (v >= 7 && v <= 20) S.font = v; }
+    { int v = getIntegerValue(PX.moveX); if (v >= -3000 && v <= 3000) S.moveX = v; }
+    { int v = getIntegerValue(PX.rtop); if (v >= 0 && v <= 900) S.rtop = v; }
+    { int v = getIntegerValue(PX.rwid); if (v >= 40 && v <= 100) S.rwid = v; }
+    { int v = getIntegerValue(PX.clock); if (v >= -720 && v <= 720) S.clock = v; }
+    // (4.2.0) the retired settings keep fixed values
+    S.corner = 0; S.trade = S.todo = true; S.layout = 0; S.show = 2; S.lift = 30; S.apos = 0; S.atop = 30; S.widthPct = 100;
+    S.view = 0; S.rpos = 0; S.rstg = 0; S.explain = false;
+}
+
+short DealerRead::clearRight(const RCT& pane)
+{
+    // the Delta Profile sits just left of the Dealer Profile (PLACE Right) or at the chart's left edge (PLACE Left); its letters
+    // ("A? 7.8x -39") reach ~100 px further toward the candles
+    const char* up = getenv("USERPROFILE");
+    if (up) {
+        std::string sp = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.status.txt";
+        long long st = dl::fileStamp(sp);
+        if (st >= 0 && st != dltStamp) {
+            dltStamp = st;
+            std::ifstream g(sp.c_str()); std::string ln;
+            while (std::getline(g, ln)) {
+                if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+                if (ln.rfind("WIDTH,", 0) == 0) { int w = atoi(ln.c_str() + 6); if (w >= 20 && w <= 600) dltW = w; }
+                if (ln.rfind("PLACE,", 0) == 0) dltLeft = ln.substr(6) == "Left";
+            }
+        }
+    }
+    short r = (short)(pane.right - profReach - U(8));
+    if (!dltLeft) r = (short)(r - dltW - U(110));
+    return r;
 }
 
 void DealerRead::load()
@@ -992,7 +1003,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,4.1.2\nROOT,"   /* (4.1.0) was a stale 3.0.1 - the health check reads it */  << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,4.2.0\nROOT,"   /* (4.1.0) was a stale 3.0.1 - the health check reads it */  << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 // (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
@@ -1214,8 +1225,12 @@ int DealerRead::mouse(RTX_EVENT* e)
         dragging = true; dragDX = (short)(m.h - gridL); dragDY = (short)(m.v - gridT); trackMouseDrag(true); return RTX_OK;
     }
     if (e->type == E_MOUSE_MOVE && dragging) {
-        posX = m.h - dragDX - pane.left; if (posX < 0) posX = 0;
-        posB = pane.bottom - (m.v - dragDY + gridH); if (posB < 0) posB = 0;
+        int x = m.h - dragDX;                                        // (4.2.0) clamped while dragging: it moves at once, never
+        if (lastW > 0 && x + lastW > lastClearR) x = lastClearR - lastW;   // past the profiles, never off the chart
+        if (x < pane.left) x = pane.left;
+        posX = x - pane.left;
+        int top = m.v - dragDY; if (top < pane.top) top = pane.top; if (top + gridH > pane.bottom) top = pane.bottom - gridH;
+        posB = pane.bottom - (top + gridH); if (posB < 0) posB = 0;
         invalidateChart(); return RTX_OK;
     }
     if (e->type == E_MOUSE_UP && dragging) {
@@ -1298,12 +1313,14 @@ void DealerRead::renderGrid(const Settings& S)
     if (hw > W) W = hw;
     W += gw + 2 * pad;
     gridH = (short)(pad * 2 + lh * (short)(L.size() + 1));
-    short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(pane.left + U(10));
-    short maxR = (short)(pane.right - U(4));
-    if (x0 + W > maxR) x0 = (short)(maxR - W);
+    short clearR = clearRight(pane);
+    short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(pane.left + U(10) + S.moveX);
+    if (x0 + W > clearR) x0 = (short)(clearR - W);
     if (x0 < pane.left) x0 = pane.left;
     short y0 = posB >= 0 ? (short)(pane.bottom - posB - gridH) : (short)(pane.bottom - S.rtop - gridH);
+    if (y0 + gridH > pane.bottom) y0 = (short)(pane.bottom - gridH);
     if (y0 < pane.top) y0 = pane.top;
+    lastClearR = clearR; lastLeft = pane.left; lastW = W;
     gridL = x0; gridT = y0;
     fill(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BOXBG);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, true);
@@ -1344,9 +1361,13 @@ void DealerRead::renderTurn(const Settings& S)
     int fs = S.font - 1;
     RCT pane; pane.getPaneRect(false);
     short lh = U(15), pad = U(6), gw = U(9), gap = U(6), cgap = U(10);
-    int W = (int)((pane.right - pane.left) * S.rwid / 100);
-    int minW = U(740); if (W < minW) W = minW;            // (4.0.1, Rassul 13:44 "make the dealer read a little wider") 560 -> 740
-    if (W > pane.right - pane.left - U(8)) W = pane.right - pane.left - U(8);
+    // (4.2.0) the width: the room between the chart's left edge and the profiles, times the Width setting (never across the Delta
+    // Profile), at most 1000 px at font 10
+    short clearR = clearRight(pane);
+    short leftEdge = (short)(pane.left + (dltLeft ? dltW + U(110) : 0));
+    int avail = clearR - leftEdge - U(10);
+    int W = avail * S.rwid / 100; if (W > U(1000)) W = U(1000);
+    if (W < U(420)) W = avail < U(420) ? (avail > U(200) ? avail : U(200)) : U(420);
     int inner = W - gw - 2 * pad;
     int colW = (inner - cgap) / 2;
     auto wBold = [&](const std::string& q) { return (float)textW(q.c_str(), fs, true); };
@@ -1404,12 +1425,14 @@ void DealerRead::renderTurn(const Settings& S)
     int bodyLines = C[0].h > C[1].h ? C[0].h : C[1].h;
     int nGroups = (int)(C[0].G.size() > C[1].G.size() ? C[0].G.size() : C[1].G.size());
     gridH = (short)(pad * 2 + lh * ((int)head.size() + bodyLines + (int)rdl.size()) + U(3) * (short)nGroups + U(4) + (rdl.empty() ? 0 : U(6)));
-    short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(pane.left + U(10));
-    short maxR = (short)(pane.right - U(4));
-    if (x0 + W > maxR) x0 = (short)(maxR - W);
+    // (4.2.0) default: bottom left (+ the Move right setting, minus = left); a drag keeps its spot per market; never past the profiles
+    short x0 = posX >= 0 ? (short)(pane.left + posX) : (short)(leftEdge + U(10) + S.moveX);
+    if (x0 + W > clearR) x0 = (short)(clearR - W);
     if (x0 < pane.left) x0 = pane.left;
     short y0 = posB >= 0 ? (short)(pane.bottom - posB - gridH) : (short)(pane.bottom - S.rtop - gridH);
+    if (y0 + gridH > pane.bottom) y0 = (short)(pane.bottom - gridH);
     if (y0 < pane.top) y0 = pane.top;
+    lastClearR = clearR; lastLeft = pane.left; lastW = W;
     gridL = x0; gridT = y0;
     fill(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BOXBG);
     frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, true);
@@ -1492,6 +1515,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.1.2");   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.2.0");   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
