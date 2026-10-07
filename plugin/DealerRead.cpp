@@ -1389,7 +1389,7 @@ void DealerRead::renderTurn(const Settings& S)
     int nW = textW("4)", fs, false) + U(4);
     for (int c = 0; c < 2; c++) {
         Col& K = C[c];
-        K.G = dl::groupTurn(side[c], 4);
+        K.G = dl::groupTurn(side[c], 3);           // (4.2.0, Rassul 2026-10-07 08:36 "only top 3 reasons instead of 4")
         K.tW = textW("00:00", fs, false) + gap;
         for (size_t k = 0; k < K.G.size(); k++) { int w = textW(K.G[k].t.c_str(), fs, false) + gap; if (w > K.tW) K.tW = w; }
         K.tagsW.assign(K.G.size(), 0); K.L.assign(K.G.size(), std::vector<std::string>());
