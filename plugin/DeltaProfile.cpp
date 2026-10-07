@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "1.9.1";
+static const char* DLT_VERSION = "1.9.2";   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -394,7 +394,25 @@ void DeltaProfile::render(const DSet& S)
     std::vector<std::pair<float, int>> big;
     for (auto& kv : B) big.push_back(std::make_pair(std::fabs(kv.second.r.d), kv.first));
     std::sort(big.begin(), big.end(), [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first > b.first; });
-    std::map<int, bool> lab; for (size_t i = 0; i < big.size() && i < 3; i++) lab[big[i].second] = true;
+    // (1.9.2, Rassul 22:08 "why doesnt the delta profile show the A and the circles are there") the 3 labelled rows were the 3
+    // biggest |delta| rows of ANY kind - with initiative letters off, an I row used a slot and showed nothing (HG 22:05: I 6.643,
+    // I? 6.630 took 2 of the 3, the confirmed A at 6.6285 got no letter). Now a row whose node is hidden (I / I? with the
+    // initiative letters off) does not take a slot: the 3 biggest SHOWN nodes get their letters.
+    const std::string rk0 = S.range == 1 ? "S" : S.range == 2 ? "D" : S.mins == 30 ? "R" : S.mins == 60 ? "H" :
+                            haveN ? "M" + std::to_string(S.mins) : (S.mins > 45 ? "H" : "R");
+    auto hiddenRow = [&](int key) -> bool {
+        if (S.showI) return false;
+        const auto& e = B[key]; const DData::DNode* nb = nullptr;
+        for (size_t j = 0; j < D.nodes.size(); j++) {
+            const DData::DNode& n = D.nodes[j];
+            if (n.rk != rk0 || (n.d < 0) != (e.r.d < 0)) continue;
+            short yn = yOf(n.px); if (yn < e.t - 1 || yn > e.b + 1) continue;
+            if (!nb || std::fabs(n.d) > std::fabs(nb->d)) nb = &n;
+        }
+        return nb && !nb->code.empty() && nb->code[0] == 'I';
+    };
+    std::map<int, bool> lab;
+    for (size_t i = 0, n = 0; i < big.size() && n < 3; i++) { if (hiddenRow(big[i].second)) continue; lab[big[i].second] = true; n++; }
     struct LB { short t, b; float d; short edge; }; std::vector<LB> labd;
     std::map<int, short> edgeOf;                                   // (1.5.5) per row: the outer edge of the bar tip / its amount     // (1.5.0) the labelled nodes - their letters go on the same rows
     for (auto& kv : B) {

@@ -185,6 +185,7 @@ int SessionInfo::draw(void)
         if (e < 0) { L.push_back(std::make_pair(mkt + " no options expiry today", C_GREY)); B.push_back(false); }
         else {
             int left = e - now;
+            if (now >= 17 * 60) left = e + 1440 - now;   // the evening belongs to the next session: tomorrow's expiry
             COLOR c = left <= 0 ? C_GREY : left <= 15 ? C_RED : left <= 60 ? C_AMBER : C_INK;
             if (left > 0) snprintf(s, sizeof s, "%s 0DTE expires %s CT   in %dh %02dm", mkt.c_str(), exp.c_str(), left / 60, left % 60);
             else snprintf(s, sizeof s, "%s 0DTE expired %s CT - hedges released", mkt.c_str(), exp.c_str());
@@ -241,6 +242,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Drag a box by its grip.");
-    p->setVersion("1.0.0");
+    p->setVersion("1.0.1");   // (1.0.1) evening = the next session's expiry
     return p;
 }
