@@ -1379,12 +1379,23 @@ void DealerRead::renderTurn(const Settings& S)
                 std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
                 K.tagsW[k] += textW(tg.c_str(), fs - 1, true) + U(8) + U(3);
             }
-            // (4.0.2, Rassul 13:46 "the text is also being cut off. use the space below the time also, i want to see the complete
-            // text") the whole text, never cut; lines after the first start under the time (the full column width)
+            // (4.0.2) lines after the first start under the time (the full column width); (4.1.2) at most 3 lines
             int restW = colW - nW; if (restW < U(80)) restW = U(80);
             int firstW = colW - nW - K.tW - K.tagsW[k] - gap; if (firstW < U(30)) firstW = U(30);
             std::vector<std::string> ln = wrapWords(K.G[k].text, firstW, restW, fs, false, 40);
             if (ln.empty()) ln.push_back("");
+            // (4.1.2, Rassul 23:31 "each section can have up to four bullets and each bullet can have up to three lines ... it should
+            // not be in more than three lines") a longer point keeps its first 3 lines and ends in "..." (the Reader writes them shorter)
+            if (ln.size() > 3) {
+                ln.resize(3);
+                std::string& L3 = ln[2];
+                while (!L3.empty() && textW((L3 + "...").c_str(), fs, false) > restW) {
+                    size_t sp = L3.find_last_of(' ');
+                    if (sp == std::string::npos) { L3.clear(); break; }
+                    L3.erase(sp);
+                }
+                L3 += "...";
+            }
             K.L[k] = ln;
             K.h += (int)ln.size();
         }
@@ -1481,6 +1492,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.1.2");   // (4.1.2) 12-hour clock, drag from anywhere on the box;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.1.2");   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
