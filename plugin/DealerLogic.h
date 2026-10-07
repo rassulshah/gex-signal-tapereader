@@ -610,4 +610,14 @@ inline int clearRightOf(int paneRight)
     return r;
 }
 
+// (Read 4.5.0, Rassul 2026-10-07 16:45 "let the vertical height depend on the number of points") the Dealer Read box height from
+// what it draws: header lines, read lines (+ the rule under them), the section label, the taller side's point lines and the gap
+// after each point but the last. bodyLines = the taller side's lines INCLUDING its label (an empty side = label + "-").
+inline short readBoxH(int pad, int lh, int head, int readLines, int bodyLines, int groups, int u2, int u3, int u6)
+{
+    if (bodyLines < 2) bodyLines = 2;
+    int h = 2 * pad + lh * (head + readLines + bodyLines) + (readLines > 0 ? u6 : 0) + u2 + u3 * (groups > 1 ? groups - 1 : 0) + u2;
+    return (short)h;
+}
+
 }  // namespace dl

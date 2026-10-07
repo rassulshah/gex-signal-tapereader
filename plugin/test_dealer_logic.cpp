@@ -201,6 +201,12 @@ int main()
         CHECK(fits && glued, "every line fits, no line starts with a space or a glued piece");
         CHECK(dl::parseStyled("no markup {x:y}").size() == 3 && dl::wrapStyled(dl::parseStyled(""), 10, 10, w).empty(), "plain text / empty");
     }
+    {   // (Read 4.5.0) the box height follows the content
+        short full = dl::readBoxH(6, 16, 1, 3, 7, 3, 2, 3, 6), small = dl::readBoxH(6, 16, 1, 1, 2, 0, 2, 3, 6), none = dl::readBoxH(6, 16, 1, 0, 2, 0, 2, 3, 6);
+        CHECK(full == 2 * 6 + 16 * 11 + 6 + 2 + 3 * 2 + 2, "3 read lines + 3 points x 2 lines = the old full height");
+        CHECK(small < full && none < small, "fewer points / read lines = a shorter box");
+        CHECK(dl::readBoxH(6, 16, 1, 2, 4, 2, 2, 3, 6) > dl::readBoxH(6, 16, 1, 2, 3, 2, 2, 3, 6), "one more point line = taller");
+    }
     printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

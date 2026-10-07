@@ -1442,9 +1442,15 @@ void DealerRead::renderTurn(const Settings& S)
     }
     int bodyLines = C[0].h > C[1].h ? C[0].h : C[1].h;
     int nGroups = (int)(C[0].G.size() > C[1].G.size() ? C[0].G.size() : C[1].G.size());
-    // (4.3.0) one FIXED height: 2 header lines + 3 read lines + the section label + 3 points x 3 lines, whatever the content
+    // (4.5.0, Rassul 16:45 "the dealer read is taking up a lot of space. so let the vertical height depend on the number of points
+    // instead of keeping it fixed") the box is as tall as what it shows: the header, the read lines, and the taller of the two
+    // sides (its label + each point's lines + the gap after each point). Still capped at 3 read lines and 3 points x 2 lines.
+    int hOpt = C[0].h, hFp = noFp ? 2 : C[1].h;
+    int gOpt = (int)C[0].G.size(), gFp = noFp ? 0 : (int)C[1].G.size();
+    bodyLines = hOpt > hFp ? hOpt : hFp;
     if (bodyLines > 7) bodyLines = 7;
-    gridH = (short)(pad * 2 + lh * (1 + 3 + 7) + U(3) * 3 + U(4) + U(6));   // (4.4.0) 1 header + 3 read + label + 3 points x 2 lines
+    nGroups = gOpt > gFp ? gOpt : gFp;
+    gridH = dl::readBoxH(pad, lh, (int)head.size(), (int)rdl.size(), bodyLines, nGroups, U(2), U(3), U(6));
     int place = dl::loadPlace("DealerRead", mkt, 6);                // Bottom left unless he picked another spot for this market
     int ax, ay; dl::anchorXY(leftEdge, pane.top + U(16), clearR, pane.bottom, W, gridH, place, U(8), ax, ay);
     short x0 = (short)ax, y0 = (short)ay;
@@ -1564,6 +1570,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.4.2");   // (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.5.0");   // (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
