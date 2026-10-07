@@ -242,7 +242,8 @@ void DealerRead::line(short x1, short y1, short x2, short y2, COLOR c, int w)
 }
 void DealerRead::frame(short l, short t, short r, short b, COLOR c, bool dashed)
 {
-    setPen(c, 1, dashed ? P_DOT : P_SOLID);
+    (void)dashed;                                   // (4.1.1, Rassul 2026-10-06 23:04 "I don't want dashed borders. They need to be solid lines")
+    setPen(c, 1, P_SOLID);
     PNT p; p.set(0, 0.0f);
     p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
 }
@@ -964,7 +965,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,4.1.0\nROOT,"   /* (4.1.0) was a stale 3.0.1 - the health check reads it */  << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << "VERSION,4.1.1\nROOT,"   /* (4.1.0) was a stale 3.0.1 - the health check reads it */  << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
 }
 
 // (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
@@ -1379,7 +1380,8 @@ void DealerRead::renderTurn(const Settings& S)
     for (short d = (short)(gripT + U(6)); d < gripB - U(4); d = (short)(d + U(4))) { fill((short)(gripL + U(3)), d, (short)(gripL + U(4)), (short)(d + 1), C_MUTED); fill((short)(gripL + U(6)), d, (short)(gripL + U(7)), (short)(d + 1), C_MUTED); }
     short cx0 = (short)(x0 + gw + pad);
     short y = (short)(y0 + pad + lh / 2);
-    for (size_t h = 0; h < head.size(); h++) { text(cx0, y, head[h].c_str(), h + 1 == head.size() && !D.terr.empty() ? C_MUTED : C_TABONB, fs, true, 0); y = (short)(y + lh); }
+    short cxMid = (short)((cx0 + x0 + W - pad) / 2);         // (4.1.1, Rassul 23:04 "the header is justified left. Move it so it's justified center")
+    for (size_t h = 0; h < head.size(); h++) { text(cxMid, y, head[h].c_str(), h + 1 == head.size() && !D.terr.empty() ? C_MUTED : C_TABONB, fs, true, 1); y = (short)(y + lh); }
     if (!rdl.empty()) {
         float sw = wSty(" ", 'n');
         for (size_t l = 0; l < rdl.size(); l++) {
@@ -1452,6 +1454,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.1.0");   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.1.1");   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
