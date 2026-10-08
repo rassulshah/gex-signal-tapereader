@@ -35,7 +35,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DP_VERSION = "2.4.1";   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key-level lines (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.5.0";   // 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key-level lines (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -133,6 +133,15 @@ public:
     void loadTouch(const std::string& m);
     void loadMQLevels();
     void drawMQLevels(const Settings& S);
+    // (2.5.0, Rassul 2026-10-08 07:16 "my expectation now is for the levels to [have] probabilities in their labels") LRA-Levels-<MKT>.csv
+    // (lra.level_touch, every 5 min): LEVEL|code|name|price|family|P15|P30|P45|P60|P90|Pclose|validated|label|Pexp, PICK|code|price|window|P,
+    // STATE|STALE|why. Prices are MenthorQ's (the chart draws them at price + off). Stale (> 20 min or STATE|STALE) = nothing shown.
+    struct LV { float px = 0; std::string code, show, fam, label; bool pick = false; };
+    std::map<std::string, std::vector<LV> > lvs; std::map<std::string, long long> lvStamp; std::map<std::string, time_t> lvChecked, lvAt;
+    std::map<std::string, bool> lvStale;
+    void loadLevels(const std::string& m);
+    const LV* levelAt(const std::string& m, float chartPx);
+    void drawKeyLevels(const Settings& S);
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -646,6 +655,67 @@ void DealerProfile::loadTouch(const std::string& m)
     tps[m].swap(v); tpStamp[m] = st; tpAt[m] = st > 0 ? (time_t)(st / 1000003LL) : 0;   // the file's modified time
 }
 
+void DealerProfile::loadLevels(const std::string& m)
+{
+    time_t now = time(nullptr);
+    if (now - lvChecked[m] < 5 && lvStamp.count(m)) return;
+    lvChecked[m] = now;
+    const char* up = getenv("USERPROFILE"); if (!up) return;
+    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Levels-" + m + ".csv";
+    long long st = dl::fileStamp(p);
+    if (lvStamp.count(m) && st == lvStamp[m]) return;
+    std::vector<LV> v; bool stale = false;
+    std::ifstream f(p.c_str());
+    std::string ln;
+    while (f.is_open() && std::getline(f, ln)) {
+        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+        std::vector<std::string> c = dl::split(ln, '|');
+        if (c.size() >= 2 && c[0] == "STATE" && c[1] == "STALE") stale = true;
+        if (c.size() >= 13 && c[0] == "LEVEL") { LV q; q.code = c[1]; q.show = c[2]; q.px = (float)atof(c[3].c_str()); q.fam = c[4]; q.label = c[12]; if (q.px > 0) v.push_back(q); }
+        if (c.size() >= 3 && c[0] == "PICK") { float pp = (float)atof(c[2].c_str()); for (auto& q : v) if (std::fabs(q.px - pp) <= std::fabs(pp) * 1e-6f) q.pick = true; }
+    }
+    lvs[m].swap(v); lvStamp[m] = st; lvStale[m] = stale; lvAt[m] = st > 0 ? (time_t)(st / 1000003LL) : 0;
+}
+
+const DealerProfile::LV* DealerProfile::levelAt(const std::string& m, float chartPx)
+{
+    loadLevels(m);
+    if (lvStale[m] || lvAt[m] <= 0 || time(nullptr) - lvAt[m] > 20 * 60) return nullptr;     // stale odds are never shown
+    float tol = std::fabs(chartPx) * 2e-5f;
+    for (const LV& q : lvs[m]) if (std::fabs(q.px + off - chartPx) <= tol || std::fabs(q.px - chartPx) <= tol) return &q;
+    return nullptr;
+}
+
+void DealerProfile::drawKeyLevels(const Settings& S)
+{
+    // (2.5.0) the key levels (ONH / ONL, LonHI / LonLO, PDH / PDL, PFH / PFL, PWH / PWL), the session VWAP and its 1 / 2 SD bands and the
+    // confirmed hourly swings with their touch odds "PDH 55%/70%?" (within 90 min / by the RTH close): a thin line + the label at the right,
+    // clear of the profile; amber = key level / VWAP, purple = hourly swing, white box = a pick
+    if (mkt.empty()) return;
+    loadLevels(mkt);
+    if (lvStale[mkt] || lvAt[mkt] <= 0 || time(nullptr) - lvAt[mkt] > 20 * 60) return;
+    RCT pane; pane.getPaneRect(false);
+    long nb = getBarCount(); if (nb < 1) return;
+    int dec = mkt == "GC" ? 1 : mkt == "HG" ? 4 : mkt == "EU" ? 5 : mkt == "NG" ? 3 : 2;
+    int fs = S.font; if (fs < 7) fs = 7;
+    short right = (short)(pane.right - S.width - 80);                // left of the profile and its 70 px chip column
+    for (const LV& q : lvs[mkt]) {
+        if (q.fam == "gamma") continue;                              // MenthorQ levels: drawMQLevels puts the odds on their own label
+        PNT pp; pp.set((int)(nb - 1), q.px + off); short y = pp.v;
+        if (y <= pane.top || y >= pane.bottom) continue;
+        COLOR col = q.fam.compare(0, 5, "pivot") == 0 ? (COLOR)0x00C084FC : (COLOR)0x00F59E0B;
+        line(pane.left, y, pane.right, y, col, 1);
+        // (Rassul 09:02 "PDH 55%/ 70% where 55% is within 90m and 70% is by the rth close")
+        char b[200]; snprintf(b, sizeof(b), "%s %s", q.show.c_str(), q.label.c_str());
+        int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
+        short r = right, l = (short)(r - tw), t = (short)(y - h / 2), bt = (short)(y + h / 2);
+        box(l, t, r, bt, C_DARK);
+        COLOR bc = q.pick ? (COLOR)0x00FFFFFF : col;
+        line(l, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, l, bt, bc, 1); line(l, bt, l, t, bc, 1);
+        textLJ((short)(l + 5), y, b, col, fs - 1, false);
+    }
+}
+
 void DealerProfile::drawMQLevels(const Settings& S)
 {
     loadMQLevels();
@@ -668,7 +738,9 @@ void DealerProfile::drawMQLevels(const Settings& S)
         char b[160]; snprintf(b, sizeof(b), "%.*f %s", dec, q.px, q.label.c_str());
         // (2.4.0, Rassul 2026-10-07 12:57 "start showing it now on the levels") the chance price touches this level: in the next
         // hour, by today's 0DTE expiry (when it comes before the close) and by the close; "?" until the market's numbers are proven
-        {
+        const LV* lv = levelAt(mkt, q.px);                                    // (2.5.0) the one-law odds first
+        if (lv && !lv->label.empty()) { std::string add = "  " + lv->label; strncat_s(b, sizeof(b), add.c_str(), _TRUNCATE); }
+        else {
             loadTouch(mkt);
             bool fresh = tpAt[mkt] > 0 && time(nullptr) - tpAt[mkt] < 20 * 60;    // stale odds (the bridge stopped) are not shown
             const std::vector<TP>& T = tps[mkt];
@@ -687,7 +759,8 @@ void DealerProfile::drawMQLevels(const Settings& S)
         int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
         short l = (short)(xMid - tw / 2), r = (short)(xMid + tw / 2), t = (short)(y - h / 2), bt = (short)(y + h / 2);
         box(l, t, r, bt, C_DARK);
-        line(l, t, r, t, q.col, 1); line(r, t, r, bt, q.col, 1); line(r, bt, l, bt, q.col, 1); line(l, bt, l, t, q.col, 1);
+        COLOR bc = (lv && lv->pick) ? (COLOR)0x00FFFFFF : q.col;            // (2.5.0) a pick: white box
+        line(l, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, l, bt, bc, 1); line(l, bt, l, t, bc, 1);
         textLJ((short)(l + 5), y, b, q.col, fs - 1, false);
     }
 }
@@ -701,6 +774,7 @@ int DealerProfile::draw(void)
     load();
     alignContract();
     drawMQLevels(cfg);                        // (2.3.0) under the profile: the key-level lines first
+    drawKeyLevels(cfg);                       // (2.5.0) key levels + hourly swings with their touch odds
     render(cfg);
     staleBadge();
     srcTag();
@@ -715,6 +789,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.4.1");   // (2.4.0) touch odds on the MenthorQ levels;   // (2.3.0) draws the MenthorQ key levels (replaces lsFlexLevels and its 1-minute HTTP check)
+    p->setVersion("2.5.0");   // (2.4.0) touch odds on the MenthorQ levels;   // (2.3.0) draws the MenthorQ key levels (replaces lsFlexLevels and its 1-minute HTTP check)
     return p;
 }
