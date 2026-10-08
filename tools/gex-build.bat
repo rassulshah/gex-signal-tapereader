@@ -40,6 +40,7 @@ call :one DealerSummary lsDealerSummary DealerLogic.h
 call :one DeltaProfile lsDeltaProfile DealerLogic.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h
 call :one TradeManager lsTradeManager DealerLogic.h
+call :one SessionVWAP  lsSessionVWAP  DealerLogic.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h
@@ -135,7 +136,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile DayModel DayStats KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU) do (
+for %%N in (GammaProfile DayModel DayStats KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile SessionInfo TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
