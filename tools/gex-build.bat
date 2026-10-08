@@ -49,6 +49,13 @@ call :one FootprintReaderGC lsFootprintReaderGC IRTReader.cpp IRTReaderLogic.h D
 call :one FootprintReaderHG lsFootprintReaderHG IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderNG lsFootprintReaderNG IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderEU lsFootprintReaderEU IRTReader.cpp IRTReaderLogic.h DealerLogic.h
+call :one TapeFlowES lsTapeFlowES TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
+call :one TapeFlowNQ lsTapeFlowNQ TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
+call :one TapeFlowCL lsTapeFlowCL TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
+call :one TapeFlowGC lsTapeFlowGC TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
+call :one TapeFlowHG lsTapeFlowHG TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
+call :one TapeFlowNG lsTapeFlowNG TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
+call :one TapeFlowEU lsTapeFlowEU TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 
@@ -136,7 +143,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile DayModel DayStats KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile SessionInfo TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU) do (
+for %%N in (GammaProfile DayModel DayStats KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile SessionInfo TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
