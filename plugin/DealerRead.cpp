@@ -223,7 +223,7 @@ short DealerRead::clearRight(const RCT& pane)
     }
     short r = (short)(pane.right - profReach - U(8));
     if (!dltLeft) r = (short)(r - dltW - U(110));
-    return r;
+    return (short)dl::stableMin("dr|" + std::to_string(pane.right) + "|" + std::to_string(pane.bottom), r);   // (4.5.1) no flip-flop between charts
 }
 
 void DealerRead::load()
@@ -1570,6 +1570,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.5.0");   // (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.5.1");   // (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

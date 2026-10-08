@@ -35,6 +35,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cctype>
+#include <map>
+#include <deque>
+#include <chrono>
 
 // (2026-10-03) number boxes in the settings window: an explicit width - the default (0) drew them so narrow they showed "T"
 #ifndef NUMW
@@ -591,6 +594,22 @@ inline int loadPlace(const char* plugin, const std::string& mkt, int def)
 }
 // the right edge a box may reach: left of the Dealer Profile (REACH in its status file) and the Delta Profile (WIDTH, PLACE)
 // with its letters (~110 px); re-read only when a status file changes
+// (2026-10-07 20:26, Rassul "when i put my mouse on the dealer read, it shakes for copper") the profiles' status files are ONE
+// file per indicator for every chart, so two charts with different profile widths overwrite each other and the room on the
+// right flips back and forth on every redraw (a mouse move redraws). stableMin keeps the smallest value seen for this key in
+// the last 5 s: a flip-flop gives one steady value (the safe, narrower room), a real change shows within 5 s.
+inline int stableMin(const std::string& key, int v)
+{
+    static std::map<std::string, std::deque<std::pair<long long, int> > > H;
+    long long now = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    std::deque<std::pair<long long, int> >& q = H[key];
+    q.push_back(std::make_pair(now, v));
+    while (!q.empty() && now - q.front().first > 5000) q.pop_front();
+    if (q.size() > 400) q.pop_front();
+    int m = v; for (size_t i = 0; i < q.size(); i++) if (q[i].second < m) m = q[i].second;
+    return m;
+}
+
 inline int clearRightOf(int paneRight)
 {
     static long long s1 = -2, s2 = -2; static int reach = 150, dw = 50; static bool dLeft = false;
@@ -607,7 +626,7 @@ inline int clearRightOf(int paneRight)
     }
     int r = paneRight - reach - 8;
     if (!dLeft) r -= dw + 110;
-    return r;
+    return stableMin("crs|" + std::to_string(paneRight), r);
 }
 
 // (Read 4.5.0, Rassul 2026-10-07 16:45 "let the vertical height depend on the number of points") the Dealer Read box height from
