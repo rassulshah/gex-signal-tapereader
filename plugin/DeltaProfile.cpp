@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "2.1.0";   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "2.2.0";   // (2.2.0) a ring only where the profile shows its letter now (native only);   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -660,11 +660,25 @@ void DeltaProfile::render(const DSet& S)
     }
     // (1.9.1, Rassul 16:31 "i am loosing the circles that were there before ... lets not keep a time constraint for them") the
     // session's rings / squares from the RING lines, whatever Range / minutes this chart shows, on every candle that is on screen
-    if (S.offlvl && !D.rings.empty()) {
+    // (2.2.0, Rassul 2026-10-07 20:15 "there are circle markers where there is no absorption. the signals need to be consistent
+    // with the indicator and the absorption signal in the delta profile ... all native irt") a ring is drawn ONLY for a node that
+    // carries its letter on the profile right now (same row, same letter, same side), from this chart's own bars - never from the
+    // file's RING lines, and never a remembered ring whose row lost its letter. Every circle = an A / A? you can see on the profile.
+    if (S.offlvl && nat && !D.rings.empty()) {
         for (size_t i = 0; i < D.rings.size(); i++) {
             const DData::DRing& g = D.rings[i];
             bool square = !g.code.empty() && g.code[0] == 'I';
             if (square && !S.showI) continue;
+            {
+                short yr0 = yOf(g.px); bool shown = false;
+                for (auto& kv : B) {
+                    if (yr0 < kv.second.t - 1 || yr0 > kv.second.b + 1) continue;
+                    if (!lab[kv.first] || rowX(kv.second.r.d) < MIN_X) continue;
+                    const DData::DNode* nb = nodeOf(kv.first);
+                    if (nb && nb->code == g.code && nb->side == g.side) { shown = true; break; }
+                }
+                if (!shown) continue;
+            }
             int bb = barForMinute(g.tpk); if (bb < 0) continue;
             PNT pp; pp.set(bb, g.px, kBarCenter);
             if (!(pp.h > pane.left && pp.h < pane.right && pp.v > pane.top + 16 && pp.v < pane.bottom)) continue;
