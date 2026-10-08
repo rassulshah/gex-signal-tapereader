@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "2.3.0";   // (2.3.0) the biggest node always shows its letter (I included);   // (2.2.0) a ring only where the profile shows its letter now (native only);   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "2.3.1";   // (2.3.1) the letters / x / rings no longer change when the chart is dragged: rows are grouped by PRICE and every row counts, on screen or not;   // (2.3.0) the biggest node always shows its letter (I included);   // (2.2.0) a ring only where the profile shows its letter now (native only);   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -389,20 +389,31 @@ void DeltaProfile::render(const DSet& S)
     drawnRows = (int)R.size();
     // rows -> buckets: N ticks per row, or (0 = auto) one bar per few pixels
     int bh = S.font - 3; if (bh < 3) bh = 3;
+    // (2.3.1, Rassul 23:45 "when i drag the chart up and down the delta profile absorbtion indications change") two causes, both
+    // fixed: (1) rows off the screen were dropped, so the average row (the x), the biggest rows (the letters) and the A / I read
+    // changed with what was visible - now EVERY row of the window counts, only the drawing skips rows off the screen; (2) "auto"
+    // rows were cut by PIXEL from the top of the pane, so dragging moved the cut points - now auto picks a whole number of ticks per
+    // row from the window's own price range (~60 rows), anchored to price, the same wherever the chart is scrolled.
     float g = (S.group > 0 && D.tick > 0) ? D.tick * S.group : 0;
-    struct BK { DRow r; short t = 0, b = 0; float lo = 1e30f, hi = -1e30f; };
+    if (g <= 0 && D.tick > 0 && !R.empty()) {
+        float plo = 1e30f, phi = -1e30f;
+        for (size_t i = 0; i < R.size(); i++) { if (R[i].px < plo) plo = R[i].px; if (R[i].px > phi) phi = R[i].px; }
+        int tpr = (int)std::ceil((phi - plo) / D.tick / 60.0f); if (tpr < 1) tpr = 1;
+        g = D.tick * tpr;
+    }
+    struct BK { DRow r; short t = 0, b = 0; float lo = 1e30f, hi = -1e30f; bool vis = false; };
     std::map<int, BK> B;
     for (size_t i = 0; i < R.size(); i++) {
         int k; short yt, yb;
         if (g > 0) {
             k = (int)std::floor(R[i].px / g + 1e-6);
             yt = yOf((k + 1) * g); yb = (short)(yOf(k * g) - 1); if (yb <= yt) yb = (short)(yt + 1);
-        } else {
+        } else {                                                   // no tick size known: the old pixel rows (rare)
             short y = yOf(R[i].px);
             k = (y - pane.top) / bh; yt = (short)(pane.top + k * bh); yb = (short)(yt + bh - 1);
         }
-        if (yb < pane.top + 16 || yt > pane.bottom) continue;
         BK& x = B[k]; x.r.d += R[i].d; x.r.v += R[i].v; x.r.px = R[i].px; x.t = yt; x.b = yb; if (R[i].px < x.lo) x.lo = R[i].px; if (R[i].px > x.hi) x.hi = R[i].px;
+        x.vis = !(yb < pane.top + 16 || yt > pane.bottom);
     }
     float dmax = 1, vmax = 1;
     for (auto& kv : B) { if (std::fabs(kv.second.r.d) > dmax) dmax = std::fabs(kv.second.r.d); if (kv.second.r.v > vmax) vmax = kv.second.r.v; }
@@ -542,6 +553,7 @@ void DeltaProfile::render(const DSet& S)
     struct LB { short t, b; float d; short edge; int key; }; std::vector<LB> labd;
     std::map<int, short> edgeOf;                                   // (1.5.5) per row: the outer edge of the bar tip / its amount     // (1.5.0) the labelled nodes - their letters go on the same rows
     for (auto& kv : B) {
+        if (!kv.second.vis) continue;                              // (2.3.1) counted above, not drawn: off the screen
         const DRow& r = kv.second.r; short t = kv.second.t, b = kv.second.b;
         int L = (int)(std::fabs(r.d) / dmax * full); if (L < 1 && r.d != 0) L = 1;
         int lv = (int)(r.v / vmax * (both ? S.width : full));
