@@ -41,7 +41,12 @@ public:
     virtual int parmsLoad(void) { if (ready()) readS(cfg); return RTX_OK; }
     virtual int parmsApply(void) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
-    void savePl() { char b[32] = {0}; const char* rs = getRootSymbol(b); dl::savePlace("SessionInfo", dl::marketFor(cfg.market, rs ? rs : ""), cfg.moveX); }
+    // (1.6.3, Rassul 2026-10-07 20:26 "it works only when the irt settings for the indicator are open but stops working after they are
+    // closed") IRT fills LIST values only inside the settings window (its own copy of the plugin) - outside it they read -1, so the
+    // chart never saw Background / Show. Like the Position, both are saved to a small file per market when he clicks Apply / OK and
+    // read back on every draw.
+    void savePl() { char b[32] = {0}; const char* rs = getRootSymbol(b); std::string mk = dl::marketFor(cfg.market, rs ? rs : "");
+        dl::savePlace("SessionInfo", mk, cfg.moveX); dl::savePlace("SessionInfoBg", mk, cfg.bg); dl::savePlace("SessionInfoShow", mk, cfg.show); }
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
 
@@ -246,6 +251,7 @@ int SessionInfo::draw(void)
     if (ready()) readS(cfg);
     load();
     if (mkt.empty()) return RTX_OK;
+    if (!ready()) { cfg.bg = dl::loadPlace("SessionInfoBg", mkt, cfg.bg); cfg.show = dl::loadPlace("SessionInfoShow", mkt, cfg.show); }   // (1.6.3)
     loadPos();
     RCT pane; pane.getPaneRect(false);
     int now = nowMin();
@@ -357,6 +363,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire, and the market's ACTIVE / CHOP windows in RTH. Click anywhere on a box and drag it.");
-    p->setVersion("1.6.2");   // (1.6.2) Background (Solid / See-through) is saved; (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag;   // (1.4.0) order NEWS / ACTIVE-CHOP / 0DTE, simple lines, Move right / down settings;   // (1.3.0) one panel (news + 0DTE + RTH), one drag;   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
+    p->setVersion("1.6.3");   // (1.6.3) Background / Show saved per market (IRT lists read -1 outside the settings window); (1.6.2) Background (Solid / See-through) is saved; (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag;   // (1.4.0) order NEWS / ACTIVE-CHOP / 0DTE, simple lines, Move right / down settings;   // (1.3.0) one panel (news + 0DTE + RTH), one drag;   // (1.2.0) each window's share of the RTH range;   // (1.1.0) the NEWS heading: calendar + FinancialJuice breaking news for the market;   // (1.0.2) drag from anywhere on a box; ACTIVE green, CHOP yellow, 12-hour times;   // (1.0.1) evening = the next session's expiry
     return p;
 }

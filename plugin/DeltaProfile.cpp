@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "2.2.0";   // (2.2.0) a ring only where the profile shows its letter now (native only);   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "2.3.0";   // (2.3.0) the biggest node always shows its letter (I included);   // (2.2.0) a ring only where the profile shows its letter now (native only);   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -453,7 +453,7 @@ void DeltaProfile::render(const DSet& S)
         int kept = 0;
         for (size_t i = 0; i < natNodes.size() && kept < 3; i++) {   // (2.0.1) only the (up to) 3 letters shown become rings
             const DData::DNode& n = natNodes[i]; if (n.tpk.empty()) continue;
-            if (!S.showI && !n.code.empty() && n.code[0] == 'I') continue;
+            if (!S.showI && i != 0 && !n.code.empty() && n.code[0] == 'I') continue;   // (2.3.0) the biggest node is kept even when it is I
             kept++;
             bool found = false;
             for (size_t j = 0; j < M.size(); j++) if (M[j].tpk == n.tpk && std::fabs(M[j].px - n.px) <= (D.tick > 0 ? D.tick : 0.0001f) * 2) { M[j].code = n.code; M[j].side = n.side; M[j].px = n.px; found = true; break; }
@@ -528,13 +528,18 @@ void DeltaProfile::render(const DSet& S)
     std::map<int, bool> lab, labAmt;
     // (2.0.1, Rassul 2026-10-07 11:59 "you have labeled absorption on nodes that are less than 1 when absorption requires high volume")
     // a letter needs a big row: |delta| at least MIN_X times the average row
-    for (size_t i = 0, n = 0; i < big.size() && n < 3; i++) { if (hiddenRow(big[i].second)) continue; if (rowX(B[big[i].second].r.d) < MIN_X) break; lab[big[i].second] = true; n++; }
+    // (2.3.0, Rassul 2026-10-07 22:19 "why did you not flag the big node") the BIGGEST row always carries its letter - an
+    // initiative node (I = the aggressors won: red I = sellers in control, a resistance on the retest) included, even with the
+    // initiative letters off; the other two letters still skip hidden initiative rows
+    const int bigKey = big.empty() ? -99999 : big[0].second;
+    if (!big.empty() && rowX(B[bigKey].r.d) >= MIN_X) lab[bigKey] = true;
+    for (size_t i = 0, n = lab.count(bigKey) ? 1 : 0; i < big.size() && n < 3; i++) { if (big[i].second == bigKey) continue; if (hiddenRow(big[i].second)) continue; if (rowX(B[big[i].second].r.d) < MIN_X) break; lab[big[i].second] = true; n++; }
     // (1.9.4, Rassul 23:40 "a pretty big node that's sticking out that doesn't have any ratio ... it looks like it's the biggest
     // node there") GC 23:39: 4168.5 -40 was the biggest row, an I? (sellers' initiative) node, so with the initiative letters off
     // it got neither its amount nor its ratio while smaller rows did. Now the 3 BIGGEST rows always carry their amount, and a
     // hidden initiative node shows its ratio in grey beside it (no letter); the letters still go to the 3 biggest shown nodes.
     for (size_t i = 0; i < big.size() && i < 3; i++) labAmt[big[i].second] = true;
-    struct LB { short t, b; float d; short edge; }; std::vector<LB> labd;
+    struct LB { short t, b; float d; short edge; int key; }; std::vector<LB> labd;
     std::map<int, short> edgeOf;                                   // (1.5.5) per row: the outer edge of the bar tip / its amount     // (1.5.0) the labelled nodes - their letters go on the same rows
     for (auto& kv : B) {
         const DRow& r = kv.second.r; short t = kv.second.t, b = kv.second.b;
@@ -574,7 +579,7 @@ void DeltaProfile::render(const DSet& S)
             }
         }
         edgeOf[kv.first] = edge;
-        if (lab[kv.first] && r.d != 0) { LB lb; lb.t = t; lb.b = b; lb.d = r.d; lb.edge = edge; labd.push_back(lb); }
+        if (lab[kv.first] && r.d != 0) { LB lb; lb.t = t; lb.b = b; lb.d = r.d; lb.edge = edge; lb.key = kv.first; labd.push_back(lb); }
     }
     // (1.2.0) letters in the seam column, on the row they describe: the key level full colour (+ contracts: A 250),
     // pivots / big ones dimmer (A 180). '?' = setting up.
@@ -626,7 +631,7 @@ void DeltaProfile::render(const DSet& S)
                 if (!best || std::fabs(n.d) > std::fabs(best->d)) best = &n;
             }
             if (!best) continue;
-            if (!S.showI && !best->code.empty() && best->code[0] == 'I') continue;   // (1.8.3) initiative only when asked for
+            if (!S.showI && labd[i].key != bigKey && !best->code.empty() && best->code[0] == 'I') continue;   // (1.8.3) initiative only when asked for - (2.3.0) the biggest row always
             bool inZone = false;                                  // (1.5.3) a node inside a Dst / Acc zone: the zone's label is the read
             for (size_t z = 0; z < D.zones.size(); z++) if (best->px >= D.zones[z].lo - D.tick * 0.5f && best->px <= D.zones[z].hi + D.tick * 0.5f) inZone = true;
             if (inZone) continue;
@@ -668,12 +673,12 @@ void DeltaProfile::render(const DSet& S)
         for (size_t i = 0; i < D.rings.size(); i++) {
             const DData::DRing& g = D.rings[i];
             bool square = !g.code.empty() && g.code[0] == 'I';
-            if (square && !S.showI) continue;
             {
                 short yr0 = yOf(g.px); bool shown = false;
                 for (auto& kv : B) {
                     if (yr0 < kv.second.t - 1 || yr0 > kv.second.b + 1) continue;
                     if (!lab[kv.first] || rowX(kv.second.r.d) < MIN_X) continue;
+                    if (square && !S.showI && kv.first != bigKey) continue;   // (2.3.0) an I square only for the biggest row
                     const DData::DNode* nb = nodeOf(kv.first);
                     if (nb && nb->code == g.code && nb->side == g.side) { shown = true; break; }
                 }

@@ -159,6 +159,7 @@ static void drSavePlace(cppExtension* x, const Settings& S)
 {
     char b[32] = {0}; const char* rs = x->getRootSymbol(b);
     dl::savePlace("DealerRead", dl::marketFor(S.market, rs ? rs : ""), S.corner);
+    dl::savePlace("DealerReadBg", dl::marketFor(S.market, rs ? rs : ""), S.bg);   // (4.5.2) Background kept like the Position (IRT lists read -1 outside the dialog)
 }
 int DealerRead::parmsApply(void) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
 int DealerRead::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
@@ -1460,7 +1461,8 @@ void DealerRead::renderTurn(const Settings& S)
     // (bearish), yellow = neither; grey when the data is stale or there is no live turn
     {
         RCT bgR; bgR.set(x0, y0, (short)(x0 + W), (short)(y0 + gridH));
-        bgR.draw(0, C_BOXBG, C_BOXBG, S.bg == 1 ? DRAW_OPAQUE : DRAW_TRANSLUCENT, PAT_SOLID);
+        int bgSet = dialogReady() ? S.bg : dl::loadPlace("DealerReadBg", mkt, S.bg);   // (4.5.2)
+        bgR.draw(0, C_BOXBG, C_BOXBG, bgSet == 1 ? DRAW_OPAQUE : DRAW_TRANSLUCENT, PAT_SOLID);
         std::string h0 = D.hasTurn ? hd : "";                    // the simplified header starts with the control word
         size_t p0 = h0.find_first_not_of(" ");
         std::string w0 = p0 == std::string::npos ? "" : h0.substr(p0, 6);
@@ -1570,6 +1572,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.5.1");   // (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.5.2");   // (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }
