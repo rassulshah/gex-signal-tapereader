@@ -36,7 +36,7 @@
 #include <ctime>
 #include <chrono>
 
-static const char* DLT_VERSION = "2.3.1";   // (2.3.1) the letters / x / rings no longer change when the chart is dragged: rows are grouped by PRICE and every row counts, on screen or not;   // (2.3.0) the biggest node always shows its letter (I included);   // (2.2.0) a ring only where the profile shows its letter now (native only);   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
+static const char* DLT_VERSION = "2.4.0";   // (2.4.0, Rassul 2026-10-08 09:57 "remove the options ... so it is standardized ... make sure everything is calculated natively by irt") fixed: market Auto, last 90 min, placed right, facing left, one side, auto rows; absorption AND initiative letters on the profile, a circle ONLY for absorption; no LRA-Delta file at all (bars, letters, rings, zones, tick all from this chart);   // (2.3.1) the letters / x / rings no longer change when the chart is dragged: rows are grouped by PRICE and every row counts, on screen or not;   // (2.3.0) the biggest node always shows its letter (I included);   // (2.2.0) a ring only where the profile shows its letter now (native only);   // (2.1.0) Acc / Dst zones and the tick size native too;   // (2.0.2) the key level's A / I needs a big row too;   // (2.0.1) a letter only on a BIG row: 2x+ the average row (absorption needs size);   // (2.0.0) the A / A? / I / I? letters, rings and ratios are computed IN the plugin from the bars it draws (no file);   // (1.9.5) every ratio = the drawn row's delta vs the profile's average row, so a bigger bar always shows a bigger x;   // (1.9.4) the 3 biggest rows always carry their amount; a hidden I node its grey ratio;   // (1.9.3) one side, facing left, placed right; (1.9.2)   // (1.9.2) the 3 letter slots skip hidden initiative rows
 static const COLOR C_BUY   = 0x0022C55E;
 static const COLOR C_SELL  = 0x00EF4444;
 static const COLOR C_AMBER = 0x00F59E0B;
@@ -139,6 +139,13 @@ std::string DeltaProfile::rootKey() { char rb[32] = {0}; const char* rs = getRoo
 // fills the list / check-box values while the settings window is open (outside it lists read -1, boxes read unchecked).
 // So: while the window is open (the Market list reads 0..7) read everything and SAVE it to a small file per chart
 // (market + bar size + chart); while it is closed, use the saved copy. Each chart keeps its own settings across restarts.
+// (2.4.0) the one standard read, whatever was saved before
+static void standardize(DSet& S)
+{
+    S.market = 0; S.range = 0; S.mins = 90; S.place = 0; S.face = 0; S.sides = 0; S.group = 0;
+    S.labels = true; S.offlvl = true; S.showI = true;
+}
+
 static std::string settingsPath() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.settings.txt"; }
 std::string DeltaProfile::chartKey()
 {
@@ -162,12 +169,7 @@ void DeltaProfile::syncSettings(bool fromDialog)
         // (1.9.3, Rassul 22:33 "you made the positive and negative go in different directions" / 22:38 "the profile should be
         // facing left and placed on the right by default") a row saved before 1.9.3 is moved ONCE to Sides One, Face Left, Place
         // Right - in the window too, so pressing OK does not bring Both back. Later choices are kept (marker 3).
-        static bool migrating = false;
-        if (!migrating && all.count(key)) {
-            std::vector<std::string> t0 = dl::split(all[key], '|');
-            if (!(t0.size() >= 14 && t0[13] == "3")) { migrating = true; setListIndex(DX.sides, 0); setListIndex(DX.face, 0); setListIndex(DX.place, 0); migrating = false; }
-        }
-        readSettings(cfg);
+        readSettings(cfg);                               // (2.4.0) the old list migration is gone: those lists no longer exist
         char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|3|%d", cfg.market, cfg.width, cfg.gap, cfg.font, cfg.labels ? 1 : 0,
                                cfg.place, cfg.range, cfg.group, cfg.sides, cfg.offlvl ? 1 : 0, cfg.face, cfg.mins, cfg.showI ? 1 : 0);
         std::string row = key + b;
@@ -177,6 +179,7 @@ void DeltaProfile::syncSettings(bool fromDialog)
     long long st = dl::fileStamp(settingsPath());
     if (savedKey == key && st == savedStamp) return;
     savedStamp = st;                           // already using this chart's saved copy
+    standardize(cfg);                          // (2.4.0) a chart with no saved row reads the standard way too
     std::ifstream in(settingsPath().c_str()); std::string ln;
     while (std::getline(in, ln)) {
         std::vector<std::string> t = dl::split(ln, '|');
@@ -197,6 +200,7 @@ void DeltaProfile::syncSettings(bool fromDialog)
                 cfg.face = gl ? 0 : 1;
                 cfg.sides = 0; cfg.face = 0; cfg.place = 0;      // (1.9.3) and then the new defaults
             }
+            standardize(cfg);                                  // (2.4.0) only width / gap / font come from the saved row
             savedKey = key; return;
         }
     }
@@ -207,44 +211,30 @@ int DeltaProfile::parmsUpdt(unsigned int) { syncSettings(true); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(10);   // (1.8.3) + "Initiative letters (I)" - off by default
+    setParameterVersion(11);   // (2.4.0) the read is standardized: only the layout (width / gap / font) is a setting
+    // was: setParameterVersion(10);   // (1.8.3) + "Initiative letters (I)" - off by default
     // was: setParameterVersion(9);   // (1.7.0) the settings window re-laid out: Range = Last N minutes / Session / Day + Minutes, Face Left / Right
     // was 8 (1.6.0 Minutes), 7 (1.4.1 letters on), 6 (1.1.3: new parameters without a bump crashed IRT when the dialog opened)
-    setParameterDialogHeight(10);
+    setParameterDialogHeight(3);
     const short SL = kParmAppendSameLine;
     const short LW = 120;     // list width - every list the same, so the rows line up
     int pc = 0;
-    DX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU", LW);
-    DX.range  = pc++; setListParameter("Range", 0, "Last N minutes;Session;Day from 08:30", LW);       // default Last N minutes
-    DX.mins   = pc++; setIntegerParameter("N minutes", 60, NUMW, SL);                                   // used only with Last N minutes
-    DX.place  = pc++; setListParameter("Place", 0, "Right;Left", LW);                                    // Right first = the default
-    DX.face   = pc++; setListParameter("Face", 0, "Left;Right", NUMW + 20, SL);                          // bars grow Left (toward price) by default
-    DX.group  = pc++; setIntegerParameter("Ticks per row", 1, NUMW);
-    DX.sides  = pc++; setListParameter("Sides", 0, "One;Both", NUMW + 20, SL);
+    (void)LW; (void)SL;
+    // (2.4.0) Market (Auto), Range (last 90 min), Place (right), Face (left), Ticks per row (auto), Sides (one), the amounts and the
+    // A / I letters are no longer settings - every chart reads the same way. Only the size on screen can be set.
+    DX.market = DX.range = DX.mins = DX.place = DX.face = DX.group = DX.sides = DX.labels = DX.offlvl = DX.showI = -1;
     DX.width  = pc++; setIntegerParameter("Width px", 50, NUMW);
-    DX.gap    = pc++; setIntegerParameter("Gap px", 8, NUMW, SL);
-    DX.font   = pc++; setIntegerParameter("Font pt", 9, NUMW, SL);
-    DX.labels = pc++; setBoolParameter("Amounts on the 3 biggest bars", true);
-    DX.offlvl = pc++; setBoolParameter("Absorption letters (A?  A, zones)", true);
-    DX.showI  = pc++; setBoolParameter("Initiative letters (I?  I)", false);   // (1.8.3, Rassul 14:28 "only show absorption by default")
+    DX.gap    = pc++; setIntegerParameter("Gap px", 0, NUMW, kParmAppendSameLine);
+    DX.font   = pc++; setIntegerParameter("Font pt", 9, NUMW, kParmAppendSameLine);
     return RTX_OK;
 }
 
 void DeltaProfile::readSettings(DSet& S)
 {
-    { int v = getListIndex(DX.market); if (v >= 0 && v <= 7) S.market = v; }   // (1.3.3) an unreadable list (-1) keeps the last value
     S.width = getIntegerValue(DX.width); if (S.width < 30) S.width = 50; if (S.width > 600) S.width = 600;
     S.gap = getIntegerValue(DX.gap); if (S.gap < -300) S.gap = -300; if (S.gap > 400) S.gap = 400;   // (1.0.1) negative = closer to / over the Dealer Profile
     S.font = getIntegerValue(DX.font); if (S.font < 6) S.font = 9; if (S.font > 18) S.font = 18;
-    S.labels = isBoxChecked(DX.labels) != 0;
-    { int pi = getListIndex(DX.place); if (pi == 0 || pi == 1) S.place = pi; }   // list Right;Left -> 0 = Right, 1 = Left
-    { int v = getListIndex(DX.range); if (v >= 0 && v <= 2) S.range = v; }
-    S.mins = getIntegerValue(DX.mins); if (S.mins < 5) S.mins = 5; if (S.mins > 1440) S.mins = 1440;
-    S.group = getIntegerValue(DX.group); if (S.group < 0) S.group = 0; if (S.group > 500) S.group = 500;
-    { int v = getListIndex(DX.sides); if (v == 0 || v == 1) S.sides = v; }
-    S.offlvl = isBoxChecked(DX.offlvl) != 0;
-    S.showI = isBoxChecked(DX.showI) != 0;
-    { int v = getListIndex(DX.face); if (v == 0 || v == 1) S.face = v; }
+    standardize(S);
 }
 
 void DeltaProfile::load()
@@ -372,7 +362,7 @@ void DeltaProfile::render(const DSet& S)
     // (1.9.0, Rassul 14:52-14:55 "ok build it") the BARS are built LIVE from the chart's own volume at price (IRT's footprint,
     // every tick); the file only supplies the letters / zones / rings. Falls back to the file's rows when VAP is not available.
     bool live = buildLive(S);
-    if (!D.ok && !live) return;
+    if (!live) return;                                             // (2.4.0) native only: no chart volume at price = nothing drawn
 
     // (1.1.0) Range: the last 30 min, the whole session, or the day from 08:30
     // (1.7.0) Last N minutes: 30 / 60 come with every build; any other N is built once a chart asks for it (want file) -
@@ -464,7 +454,7 @@ void DeltaProfile::render(const DSet& S)
         int kept = 0;
         for (size_t i = 0; i < natNodes.size() && kept < 3; i++) {   // (2.0.1) only the (up to) 3 letters shown become rings
             const DData::DNode& n = natNodes[i]; if (n.tpk.empty()) continue;
-            if (!S.showI && i != 0 && !n.code.empty() && n.code[0] == 'I') continue;   // (2.3.0) the biggest node is kept even when it is I
+            if (!n.code.empty() && n.code[0] == 'I') continue;   // (2.4.0) only absorption is circled; initiative shows as a letter only
             kept++;
             bool found = false;
             for (size_t j = 0; j < M.size(); j++) if (M[j].tpk == n.tpk && std::fabs(M[j].px - n.px) <= (D.tick > 0 ? D.tick : 0.0001f) * 2) { M[j].code = n.code; M[j].side = n.side; M[j].px = n.px; found = true; break; }
@@ -662,7 +652,8 @@ void DeltaProfile::render(const DSet& S)
                 if (pp.h > pane.left && pp.h < pane.right && pp.v > pane.top + 16 && pp.v < pane.bottom) {
                     // (1.8.2, Rassul 14:23 "use a square for initiative") A / A? = a ring, I / I? = a square
                     bool square = !best->code.empty() && best->code[0] == 'I';
-                    if (square) {
+                    if (square) {}                                // (2.4.0) no mark for initiative - only absorption is circled
+                    else if (false) {
                         short l = (short)(pp.h - 5), r_ = (short)(pp.h + 5), t_ = (short)(pp.v - 5), b_ = (short)(pp.v + 5);
                         line(l, t_, r_, t_, col, 2); line(r_, t_, r_, b_, col, 2); line(r_, b_, l, b_, col, 2); line(l, b_, l, t_, col, 2);
                     } else {
@@ -685,6 +676,7 @@ void DeltaProfile::render(const DSet& S)
         for (size_t i = 0; i < D.rings.size(); i++) {
             const DData::DRing& g = D.rings[i];
             bool square = !g.code.empty() && g.code[0] == 'I';
+            if (square) continue;                                  // (2.4.0) only absorption (A / A?) is circled
             {
                 short yr0 = yOf(g.px); bool shown = false;
                 for (auto& kv : B) {
@@ -729,7 +721,7 @@ void DeltaProfile::render(const DSet& S)
             }
         }
     }
-    if (!D.code.empty() && D.level > 0) {
+    if (false && !D.code.empty() && D.level > 0) {               // (2.4.0) the Reader's key-level badge came from the file: removed (native only)
         bool up = D.side == "support";
         COLOR col = D.code == "Ex" ? C_AMBER : D.code == "In" ? (up ? C_SELL : C_BUY) : (up ? C_BUY : C_SELL);
         std::string t = D.code == "Ab" ? "A" : D.code == "Ex" ? "E" : D.code == "Tr" ? "A" : D.code == "In" ? "I" : D.code.substr(0, 1);
@@ -757,7 +749,7 @@ void DeltaProfile::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.status.txt").c_str(), std::ios::trunc);
     if (!f.is_open()) return;
-    f << "VERSION," << DLT_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nROWS," << D.rows.size() << "\nASOF," << D.asof
+    f << "VERSION," << DLT_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nROWS," << liveRows.size() << "\nASOF," << D.asof
       << "\nRANGE," << drawnRange << "\nDRAWN_ROWS," << drawnRows << "\nBADGE," << D.code << D.strength << "\nWIDTH," << cfg.width << "\nSIDES," << (cfg.sides == 1 ? "Both" : "One") << "\nFACE," << (cfg.face == 0 ? "Left" : "Right") << "\nPLACE," << (cfg.place == 0 ? "Right" : "Left") << "\nSTATE," << what << "\n";
 }
 
@@ -863,6 +855,11 @@ void DeltaProfile::trace(const char* what)
 // (1.9.0) the profile from the chart's own bars' volume at price: Last N minutes (bars whose close is within N minutes of the
 // newest bar's close, the forming bar included), Session (from 17:00 CT) or Day (from 08:30). (1.9.1) Recomputed at most once
 // a second per chart (or when a bar is added / the settings change), never after a fault.
+static float marketTick(const std::string& m)
+{
+    return m == "ES" || m == "NQ" ? 0.25f : m == "CL" ? 0.01f : m == "NG" ? 0.001f : m == "GC" ? 0.1f : m == "HG" ? 0.0005f : m == "EU" ? 0.00005f : 0.0f;
+}
+
 bool DeltaProfile::buildLive(const DSet& S)
 {
     if (liveOff) return false;
@@ -888,8 +885,10 @@ bool DeltaProfile::buildLive(const DSet& S)
     if (first) trace("live: first build");
     std::map<long long, DRow> agg;
     // (2.1.0) the tick size from IRT's own symbol data (the file's TICK only as a fallback)
-    float tk = getProperty(SYM_TICKINCR); if (!(tk > 0) || tk > 1000) tk = D.tick > 0 ? D.tick : 0;
-    if (D.tick > 0 && std::fabs(tk - D.tick) > D.tick * 0.01f) tk = D.tick;   // a disagreement: trust the file's (checked) tick
+    // (2.4.0) native: the market's own tick (the table below - the exchange's, the same the file used to carry), else IRT's
+    float tk = marketTick(mkt);
+    if (!(tk > 0)) { tk = getProperty(SYM_TICKINCR); if (!(tk > 0) || tk > 1000) tk = 0; }
+    D.tick = tk;                                                         // the drawing uses D.tick for row heights / zones
     std::vector<LBar> bars;
     RTARRAY ao(barOpen), ah(barHigh), al(barLow), ac(barClose);
     static VOLPROFILE buf[4000];
@@ -968,10 +967,14 @@ int DeltaProfile::draw(void)
     // read from one chart's dialog were used by the next chart that drew. Keep them per chart (root symbol), and reload
     // the data file whenever the market changes.
     syncSettings();
-    load();
-    wantMinutes();
+    {                                                                  // (2.4.0) native only: the market from the chart, no file read
+        char buf[32] = {0}; const char* rs = getRootSymbol(buf);
+        std::string r_ = rs ? rs : "";
+        if (r_ != root) { D = DData(); liveKey = -1; }
+        root = r_; mkt = dl::marketFor(0, root);
+    }
     render(cfg);
-    writeStatus(D.ok ? "drawn" : "no data");
+    writeStatus(liveRows.empty() ? "no live volume at price" : "drawn");
     return RTX_OK;
 }
 
