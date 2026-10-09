@@ -53,7 +53,7 @@
 #include <limits>
 #include <new>
 
-static const char* SV_VERSION = "1.3.1";        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.3.2";        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
 static const COLOR C_SD1  = 0x00C0DCC0;   // +-1 SD pale green
 static const COLOR C_SD2  = 0x00F0CAA6;   // +-2 SD peach
@@ -365,8 +365,10 @@ int SessionVWAP::draw(void)
     int last = (int)n - 1;
     // (1.2.0) which session the newest bar is in decides which lines get badges
     int kind = svl::NONE;
+    int minOfDay = -1;
     {
         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dtk[last], &t);
+        minOfDay = t.tm_hour * 60 + t.tm_min;
         kind = svl::classify(svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday), t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec,
                              S->per > 0 ? S->per : 180, openMin, closeMin).kind;
     }
@@ -378,10 +380,17 @@ int SessionVWAP::draw(void)
     if (on) { v[0] = o6[last]; v[1] = o7[last]; v[2] = o8[last]; v[3] = o9[last]; v[4] = o10[last]; v[5] = o11[last]; }
     else    { v[0] = o1[last]; v[1] = o2[last]; v[2] = o3[last]; v[3] = o4[last]; v[4] = o5[last]; }
     if (!(v[0] > 0) && !(v[5] > 0)) return RTX_OK;                     // nothing drawn yet this session
+    // (1.3.2, Rassul 2026-10-09 08:38 "dont show the probabilities on the vwap until after the first 30 min. it looks too clustered")
+    // no badges in the first 30 minutes of the session that is drawing: the RTH open, or the 17:00 overnight open (bar END stamps)
+    bool early = false;
+    if (minOfDay >= 0) {
+        int since = on ? (minOfDay >= 17 * 60 ? minOfDay - 17 * 60 : -1) : minOfDay - openMin;
+        early = since >= 0 && since <= 30;
+    }
     // the touch odds: RTH only (the law is fitted on RTH bars)
     int pv[5] = { -1, -1, -1, -1, -1 };
     bool odds = false;
-    if (kind == svl::RTH && v[0] > 0) {
+    if (kind == svl::RTH && v[0] > 0 && !early) {
         const TPLaw* L = lawFor(market);
         RTDATE lastDate = (RTDATE)dtk[last];
         if (L && (S->featBars != n || S->featDate != lastDate || S->featMkt != market)) {
@@ -399,7 +408,7 @@ int SessionVWAP::draw(void)
     // (1.3.0) overnight: the odds from the chart's own last 20 closes (svl::onSigmaMin / onTouch), shown "42%?"
     bool onOdds = false;
     const otl::OT op = otl::paramsFor(market.c_str());                  // the nightly champion (OnTouchParams.h)
-    if (on && v[0] > 0 && last >= op.win) {
+    if (on && v[0] > 0 && last >= op.win && !early) {
         double clw[64]; int k = 0;
         for (int i = last - op.win; i <= last; i++) clw[k++] = (double)clN[i];
         double sg = otl::onSigmaMin(clw, k, S->per > 0 ? S->per : 180, op.win);
