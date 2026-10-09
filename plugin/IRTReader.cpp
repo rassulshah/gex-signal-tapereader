@@ -89,6 +89,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <chrono>
 #include <cstdint>
 #include <vector>
 #include <set>
@@ -101,7 +102,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.6.4";   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
+static const char* IR_VERSION = "0.6.5";   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
 #endif
@@ -221,6 +222,11 @@ public:
     void tickAll();
     void footprint();
     void trades();
+    void slow(std::chrono::steady_clock::time_point t0, const std::string& what)
+    {
+        const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+        if (ms >= 250) trace("SLOW " + what + " " + std::to_string(ms) + " ms");
+    }
     void depth();
     void depthByOrder();
     void writeStatus();
@@ -850,15 +856,21 @@ void IRTReader::tickAll()
         if (!own(M)) continue;
         if (!M.loaded) loadFpCursor(M);
         bool catching = M.fpLast < 0 || M.caughtUp == 0;
-        if (time(0) - M.fpT >= (catching ? 2 : 20)) { if (loud) trace(M.mkt + " footprint..."); M.fpT = time(0); footprintOf(M); }
+        // (0.6.5, Rassul 22:31 "a momentary pause every 1 or 2 minutes in irt, you need to diagnose") every step is timed: the
+        // bridge's freeze probe sees IRT hold its main thread 8-14 s every ~195 s while reading ~1.2 GB; a SLOW line here
+        // at the same minute names the step (or clears this plugin)
+        auto t_a = std::chrono::steady_clock::now();
+        const bool fpStep = time(0) - M.fpT >= (catching ? 2 : 20);
+        if (fpStep) { if (loud) trace(M.mkt + " footprint..."); M.fpT = time(0); footprintOf(M); }
         else deepFill(M);
+        slow(t_a, M.mkt + (fpStep ? " footprint" : " history"));
         saveFpCursor(M);
         writeFpStatus(M);
         if (M.mkt == state().mkt) { state().fpLast = M.fpLast; state().fpLastTxt = M.lastTxt; if (!M.err.empty()) state().err = M.err; }
     }
-    if (state().cfg.trades) { if (loud) trace("trades..."); trades(); }
-    if (state().cfg.dom) { if (loud) trace("dom..."); depth(); }
-    if (state().cfg.dbo) { if (loud) trace("order-by-order..."); depthByOrder(); }
+    { auto t_a = std::chrono::steady_clock::now(); if (state().cfg.trades) { if (loud) trace("trades..."); trades(); } slow(t_a, "trades"); }
+    { auto t_a = std::chrono::steady_clock::now(); if (state().cfg.dom) { if (loud) trace("dom..."); depth(); } slow(t_a, "dom"); }
+    { auto t_a = std::chrono::steady_clock::now(); if (state().cfg.dbo) { if (loud) trace("order-by-order..."); depthByOrder(); } slow(t_a, "order-by-order"); }
     if (loud) trace("pass done");
     state().backfilled = true;
     writeStatus();
