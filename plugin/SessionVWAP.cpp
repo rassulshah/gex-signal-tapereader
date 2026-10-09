@@ -20,6 +20,14 @@
  *  the nightly refinement rewrites when a market's law improves; the gex auto-build then rebuilds this plugin). No file at run time.
  *  SessionVWAP-<MKT>.odds.txt records what the badges said (the nightly check compares it with the LRA's numbers).
  *  IRT runs ONE object per DLL for every chart: the market is read from the chart's own symbol on every calc / draw.
+ *
+ *  1.2.0 (2026-10-08 22:16, Rassul: "can you automatically switch the vwap during different sessions?" -> mockup -> "build
+ *  it, make sure it uses the right day and overnight for all the markets i trade and the calculations are correct"):
+ *    overnight  17:00 -> the RTH open: the O/N VWAP + its +-1 / +-2 SD bands (own outputs) and a dim line at the prior RTH
+ *               session's final VWAP. No badges (the touch odds are fitted on RTH only).
+ *    RTH        the RTH VWAP + bands with the touch-odds badges exactly as before: just "42%" (Rassul 22:32)
+ *    closed     after the RTH close the RTH lines stay frozen, no badges, until 17:00
+ *  The sessions and the arithmetic live in SessionVWAPLogic.h (no SDK), tested against an independent pandas reference.
  ********************************************************************************/
 #include "irtsdk.h"
 // windows.h (included by some supported SDK build configurations) defines far.
@@ -29,6 +37,7 @@
 #endif
 #include "DealerLogic.h"
 #include "HostSlot.h"
+#include "SessionVWAPLogic.h"    // (1.2.0) the session rules + VWAP arithmetic, tested without the SDK
 #include "TouchParams.h"          // (1.1.0) the touch-odds law per market, written by lra.level_touch.plugin_params (nightly)
 #include <fstream>
 #include <sstream>
@@ -44,11 +53,12 @@
 #include <limits>
 #include <new>
 
-static const char* SV_VERSION = "1.1.1-audit";   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
-static const COLOR C_VWAP = 0x00E5E7EB;   // 0x00RRGGBB (as every LRA plugin): VWAP light grey
-static const COLOR C_SD1  = 0x0022D3EE;   // +-1 SD cyan
-static const COLOR C_SD2  = 0x00C084FC;   // +-2 SD violet
+static const char* SV_VERSION = "1.2.0";        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
+static const COLOR C_SD1  = 0x00C0DCC0;   // +-1 SD pale green
+static const COLOR C_SD2  = 0x00F0CAA6;   // +-2 SD peach
 static const COLOR C_DARK = 0x000B0F19;
+static const COLOR C_PRTH = 0x006B7280;   // the prior RTH VWAP overnight: dim grey
 static const char* CODES[5] = { "VWAP", "VWAP+1", "VWAP-1", "VWAP+2", "VWAP-2" };
 
 struct SVIdx { int font; };
@@ -68,6 +78,7 @@ struct SVState {
     std::string statusWhat, statusMkt;
     int statusNRth = -1;
     time_t lastOddsWrite = 0;
+    int per = 180;                      // (1.2.0) the bar size the last calc used
 };
 
 class SessionVWAP : public cppExtension {
@@ -75,11 +86,12 @@ public:
     SessionVWAP() : cppExtension() {}
     virtual int draw(void);
     void fill(int from);
-    void writeStatus(const char* what, int nRth, const std::string& market);
+    void writeStatus(const char* what, int nRth, const std::string& market, int nOn = 0);
     bool rthOf(const std::string& m, int& openMin, int& closeMin);
     SVState* state(bool create);
     HostSlot<SVState> slot_;
     void clearState();
+    void drawLines(long n);
     // Volatility is cached per chart/bar; distance updates each draw.
     bool forecast(const TPLaw& L, long n, const std::string& market, SVState& S);
     const TPLaw* lawFor(const std::string& m) { for (int i = 0; i < TP_NLAWS; i++) if (m == TP_LAWS[i].m) return &TP_LAWS[i]; return nullptr; }
@@ -92,27 +104,26 @@ int cppExtension::calc(int iStartBar) { static_cast<SessionVWAP*>(this)->fill(iS
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
-    setParameterDialogHeight(6);
-    CPEN p0(C_VWAP, 2, P_SOLID), p1(C_SD1, 1, P_SOLID), p2(C_SD2, 1, P_SOLID);
-    setOutputParameter("VWAP", DRAW_CONNECTEDLINE, &p0, C_VWAP, OUTPUT_ENABLED);
-    setOutputParameter("VWAP +1 SD", DRAW_CONNECTEDLINE, &p1, C_SD1, OUTPUT_ENABLED);
-    setOutputParameter("VWAP -1 SD", DRAW_CONNECTEDLINE, &p1, C_SD1, OUTPUT_ENABLED);
-    setOutputParameter("VWAP +2 SD", DRAW_CONNECTEDLINE, &p2, C_SD2, OUTPUT_ENABLED);
-    setOutputParameter("VWAP -2 SD", DRAW_CONNECTEDLINE, &p2, C_SD2, OUTPUT_ENABLED);
-    for (int a = 0; a < 5; a++) setArrayDrawingFlags(a, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));   // no line to 0 outside RTH
-    SV.font = getParameterCount(); setIntegerParameter("Badge font pt", 9, 60);
+    // (1.2.0, Rassul 22:36 "see how i want the vwap setting to be by default and remove the user modifying them. so they are
+    // set" + his settings 22:37) NO settings: the plugin draws its own lines in HIS colours, VWAP 2 px and bands 1 px (VWAP magenta,
+    // +-1 SD pale green, +-2 SD peach; the prior RTH VWAP dim grey) and the badges at a fixed 9 pt. The 11 outputs stay as invisible data arrays (the values,
+    // per bar, for anything that reads them). Parameter version 3 drops whatever older settings a chart had saved.
+    setParameterVersion(3);
+    setParameterDialogHeight(1);
+    static const char* SV_OUTNAMES[11] = { "VWAP", "VWAP +1 SD", "VWAP -1 SD", "VWAP +2 SD", "VWAP -2 SD",
+                                   "O/N VWAP", "O/N +1 SD", "O/N -1 SD", "O/N +2 SD", "O/N -2 SD", "pRTH VWAP" };
+    CPEN p(C_VWAP, 1, P_SOLID);
+    for (int a = 0; a < 11; a++) {
+        setOutputParameter(SV_OUTNAMES[a], DRAW_INVISIBLE, &p, C_VWAP, OUTPUT_ENABLED);
+        setArrayDrawingFlags(a, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
+    }
+    SV.font = -1;
     return RTX_OK;
 }
 
 bool SessionVWAP::rthOf(const std::string& m, int& openMin, int& closeMin)
 {
-    // the RTH of lra.markets (rth_first - 3 = the first bar's START, rth_last = the last bar's END), minutes of the day, Central
-    if (m == "ES" || m == "NQ") { openMin = 8 * 60 + 30; closeMin = 15 * 60; return true; }
-    if (m == "CL" || m == "NG") { openMin = 8 * 60;      closeMin = 13 * 60 + 30; return true; }
-    if (m == "GC" || m == "HG") { openMin = 7 * 60 + 21; closeMin = 12 * 60 + 30; return true; }
-    if (m == "EU")              { openMin = 7 * 60 + 21; closeMin = 14 * 60; return true; }
-    return false;
+    return svl::rthOf(m.c_str(), openMin, closeMin);                    // (1.2.0) one table, in SessionVWAPLogic.h
 }
 
 SVState* SessionVWAP::state(bool create)
@@ -129,13 +140,17 @@ void SessionVWAP::fill(int from)
 {
     char rb[32] = {0}; const char* rs = getRootSymbol(rb);
     const std::string market = dl::marketForRoot(rs ? rs : "");
-    state(true);
+    SVState* S = state(true);
     long n = getBarCount(); if (n < 2) { writeStatus("too few bars", 0, market); return; }
-    RTARRAY o1(fOut1), o2(fOut2), o3(fOut3), o4(fOut4), o5(fOut5);
+    RTARRAY o1(fOut1), o2(fOut2), o3(fOut3), o4(fOut4), o5(fOut5), o6(fOut6), o7(fOut7), o8(fOut8), o9(fOut9), o10(fOut10), o11(fOut11);
+    RTARRAY* O[11] = { &o1, &o2, &o3, &o4, &o5, &o6, &o7, &o8, &o9, &o10, &o11 };
     RTARRAY hi(barHigh), lo(barLow), cl(barClose);
     RTARRAYI vo(barVolume), dt(barDateTime);
     int openMin = 0, closeMin = 0;
-    if (!rthOf(market, openMin, closeMin)) { for (int i = 0; i < (int)n; i++) { o1[i] = o2[i] = o3[i] = o4[i] = o5[i] = 0; } writeStatus("unknown market", 0, market); return; }
+    if (!rthOf(market, openMin, closeMin)) {
+        for (int i = 0; i < (int)n; i++) for (int k = 0; k < 11; k++) (*O[k])[i] = 0;
+        writeStatus("unknown market", 0, market); return;
+    }
     // the bar size from the chart's own stamps (IRT stamps a bar at its CLOSE): the smallest positive gap of the last bars
     int per = 0;
     for (int i = (int)n - 1; i > 0 && i > (int)n - 40; i--) {
@@ -143,43 +158,34 @@ void SessionVWAP::fill(int from)
         if (d > 0 && (per == 0 || d < per)) per = (int)d;
     }
     if (per <= 0 || per > 3600) per = 180;
-    auto tmOf = [&](int i, struct tm& t) { memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t); };
-    auto dayKey = [](const struct tm& t) { return (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday; };
-    // recompute from the first bar of that day so the running sums start at the day's RTH open
-    int s = from < 0 ? 0 : (from >= (int)n ? (int)n - 1 : from);
-    { struct tm t0; tmOf(s, t0); int k0 = dayKey(t0); while (s > 0) { struct tm t; tmOf(s - 1, t); if (dayKey(t) != k0) break; s--; } }
-    // Weighted Welford accumulation avoids cancellation in E[tp^2] - E[tp]^2
-    // when a high-priced contract has large cumulative volume.
-    double sv = 0, vw = 0, m2 = 0; int curDay = -1, nRth = 0;
-    bool invalidOhlc = false;
-    for (int i = s; i < (int)n; i++) {
-        struct tm t; tmOf(i, t);
-        int dk = dayKey(t);
-        if (dk != curDay) { sv = vw = m2 = 0; curDay = dk; }
-        int endSec = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;       // bar close stamp
-        int startSec = endSec - per;
-        if (startSec < openMin * 60 || endSec > closeMin * 60 || t.tm_wday == 0 || t.tm_wday == 6) { o1[i] = o2[i] = o3[i] = o4[i] = o5[i] = 0; continue; }
-        nRth++;
-        if (!std::isfinite((double)hi[i]) || !std::isfinite((double)lo[i]) || !std::isfinite((double)cl[i])) {
-            o1[i] = o2[i] = o3[i] = o4[i] = o5[i] = 0; invalidOhlc = true; continue;
-        }
-        double tp = ((double)hi[i] + (double)lo[i] + (double)cl[i]) / 3.0;
-        double v = (double)vo[i];
-        if (v > 0) {
-            double newSv = sv + v;
-            double delta = tp - vw;
-            vw += delta * (v / newSv);
-            m2 += v * delta * (tp - vw);
-            sv = newSv;
-        }
-        // Before its first trade, VWAP is undefined. Afterwards a zero-volume
-        // bar carries the accumulated VWAP and bands, not its unweighted price.
-        if (!(sv > 0) || !std::isfinite(vw) || !std::isfinite(m2)) { o1[i] = o2[i] = o3[i] = o4[i] = o5[i] = 0; continue; }
-        double var = m2 / sv; if (!std::isfinite(var) || var < 0) var = 0;
-        double sd = std::sqrt(var);
-        o1[i] = (float)vw; o2[i] = (float)(vw + sd); o3[i] = (float)(vw - sd); o4[i] = (float)(vw + 2 * sd); o5[i] = (float)(vw - 2 * sd);
+    if (S) S->per = per;
+    auto barOf = [&](int i) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        svl::Bar b; b.days = svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday);
+        b.endSec = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+        b.h = hi[i]; b.l = lo[i]; b.c = cl[i]; b.v = (double)vo[i];
+        return b;
+    };
+    auto clsOf = [&](int i) { svl::Bar b = barOf(i); return svl::classify(b.days, b.endSec, per, openMin, closeMin); };
+    // recompute from the START of the session holding `from` (every running sum restarts at its own session's first bar),
+    // warmed up from the latest earlier session that had RTH bars (the overnight's prior RTH VWAP, pRTH) - up to 5 back
+    int w = from < 0 ? 0 : (from >= (int)n ? (int)n - 1 : from);
+    { long k = clsOf(w).sess; while (w > 0 && clsOf(w - 1).sess == k) w--; }
+    int s = w;
+    for (int back = 0; back < 5 && s > 0; back++) {
+        long k = clsOf(s - 1).sess; bool rth = false;
+        while (s > 0) { svl::Cls c = clsOf(s - 1); if (c.sess != k) break; if (c.kind == svl::RTH) rth = true; s--; }
+        if (rth) break;
     }
-    writeStatus(invalidOhlc ? "calc invalid OHLC" : "calc", nRth, market);
+    std::vector<svl::Bar> B; B.reserve((size_t)((int)n - s));
+    for (int i = s; i < (int)n; i++) B.push_back(barOf(i));
+    std::vector<float> out;
+    svl::Result R = svl::run(B, per, openMin, closeMin, out);
+    for (int i = w; i < (int)n; i++) for (int k = 0; k < 11; k++) (*O[k])[i] = out[(size_t)(i - s) * 11 + k];
+    svl::Bar lb = B.back();
+    int kind = svl::classify(lb.days, lb.endSec, per, openMin, closeMin).kind;
+    const char* what = R.invalid ? "calc invalid OHLC" : kind == svl::RTH ? "calc RTH" : kind == svl::ON ? "calc O/N" : kind == svl::POST ? "calc closed (RTH frozen)" : "calc no session";
+    writeStatus(what, R.nRth, market, R.nOn);
 }
 
 // ---------------------------------------------------------------- (1.1.0) the touch odds, natively
@@ -321,59 +327,105 @@ bool SessionVWAP::forecast(const TPLaw& L, long n, const std::string& market, SV
     return true;
 }
 
+// (1.2.0) the lines, drawn here in fixed colours: each series joins consecutive non-zero bars only, so the O/N, RTH and
+// prior-RTH lines never join each other and nothing is drawn where a session has no value
+void SessionVWAP::drawLines(long n)
+{
+    int a = 0, b = (int)n - 1;
+    if (getVisibleBars(&a, &b) != RTX_OK || a < 0 || b >= (int)n || a > b) { a = std::max(0, (int)n - 400); b = (int)n - 1; }
+    if (a > 0) a--;                                                       // join into the first visible bar
+    RTARRAY o1(fOut1), o2(fOut2), o3(fOut3), o4(fOut4), o5(fOut5), o6(fOut6), o7(fOut7), o8(fOut8), o9(fOut9), o10(fOut10), o11(fOut11);
+    RTARRAY* O[11] = { &o1, &o2, &o3, &o4, &o5, &o6, &o7, &o8, &o9, &o10, &o11 };
+    static const COLOR COL[11] = { C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2, C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2, C_PRTH };
+    static const short W[11] = { 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1 };   // Rassul 22:37: VWAP 2 px, bands 1 px
+    for (int k = 10; k >= 0; k--) {                                       // the dim prior-RTH line underneath
+        setPen(COL[k], W[k], P_SOLID);
+        RTARRAY& v = *O[k];
+        for (int i = a + 1; i <= b; i++) {
+            float y0 = v[i - 1], y1 = v[i];
+            if (!(y0 > 0) || !(y1 > 0) || !std::isfinite(y0) || !std::isfinite(y1)) continue;
+            PNT p0; p0.set(i - 1, y0, kBarCenter); p0.setDrawPosition();
+            PNT p1; p1.set(i, y1, kBarCenter); p1.drawLineTo();
+        }
+    }
+}
+
 int SessionVWAP::draw(void)
 {
     long n = getBarCount(); if (n < 2) return RTX_OK;
-    int fontPt = 9; { int f_ = getIntegerValue(SV.font); if (f_ >= 6 && f_ <= 18) fontPt = f_; }
+    const int fontPt = 9;                                                 // fixed (no settings)
     char rb[32] = {0}; const char* rs = getRootSymbol(rb);
     const std::string market = dl::marketForRoot(rs ? rs : "");
-    const TPLaw* L = lawFor(market);
-    if (!L) return RTX_OK;
+    int openMin = 0, closeMin = 0;
+    if (!rthOf(market, openMin, closeMin)) return RTX_OK;
+    drawLines(n);                                                         // the lines first, whatever the session
     SVState* S = state(true);
     if (!S) return RTX_OK;                                                // lines remain available if cache allocation fails
     RTARRAYI dtk(barDateTime);
-    RTDATE lastDate = (RTDATE)dtk[(int)n - 1];
-    if (S->featBars != n || S->featDate != lastDate || S->featMkt != market) {
-        S->featOk = forecast(*L, n, market, *S); S->featBars = n; S->featDate = lastDate; S->featMkt = market;
-    }
-    if (!S->featOk) return RTX_OK;                                      // outside RTH / not enough bars: lines only
-    RTARRAY o1(fOut1), o2(fOut2), o3(fOut3), o4(fOut4), o5(fOut5);
-    RTARRAY clN(barClose);
     int last = (int)n - 1;
-    float v[5] = { o1[last], o2[last], o3[last], o4[last], o5[last] };
-    if (!(v[0] > 0)) return RTX_OK;                                     // outside RTH: no lines, no badges
-    const COLOR col[5] = { C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2 };
+    // (1.2.0) which session the newest bar is in decides which lines get badges
+    int kind = svl::NONE;
+    {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dtk[last], &t);
+        kind = svl::classify(svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday), t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec,
+                             S->per > 0 ? S->per : 180, openMin, closeMin).kind;
+    }
+    if (kind == svl::NONE) return RTX_OK;
+    RTARRAY o1(fOut1), o2(fOut2), o3(fOut3), o4(fOut4), o5(fOut5), o6(fOut6), o7(fOut7), o8(fOut8), o9(fOut9), o10(fOut10), o11(fOut11);
+    RTARRAY clN(barClose);
+    const bool on = kind == svl::ON;
+    float v[6] = { 0, 0, 0, 0, 0, 0 };
+    if (on) { v[0] = o6[last]; v[1] = o7[last]; v[2] = o8[last]; v[3] = o9[last]; v[4] = o10[last]; v[5] = o11[last]; }
+    else    { v[0] = o1[last]; v[1] = o2[last]; v[2] = o3[last]; v[3] = o4[last]; v[4] = o5[last]; }
+    if (!(v[0] > 0) && !(v[5] > 0)) return RTX_OK;                     // nothing drawn yet this session
+    // the touch odds: RTH only (the law is fitted on RTH bars)
+    int pv[5] = { -1, -1, -1, -1, -1 };
+    bool odds = false;
+    if (kind == svl::RTH && v[0] > 0) {
+        const TPLaw* L = lawFor(market);
+        RTDATE lastDate = (RTDATE)dtk[last];
+        if (L && (S->featBars != n || S->featDate != lastDate || S->featMkt != market)) {
+            S->featOk = forecast(*L, n, market, *S); S->featBars = n; S->featDate = lastDate; S->featMkt = market;
+        }
+        if (L && S->featOk) {
+            for (int j = 0; j < 5; j++) {
+                if (!(v[j] > 0)) continue;
+                double pr = pTouch((double)v[j] - (double)clN[last], S->V60, S->nuEff, S->kEff);
+                if (std::isfinite(pr)) pv[j] = (int)std::floor(100.0 * std::max(0.0, std::min(1.0, pr)) + 0.5);
+            }
+            odds = true;
+        }
+    }
+    const COLOR col[6] = { C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2, C_PRTH };
+    // (1.2.0, Rassul 22:32 "the vwap should not show labels like that.. i told you how i want the labels") the badge is
+    // just the percentage, "42%" - RTH only, where the odds exist. Overnight and after the close: the lines, no badges.
+    char txt[6][16];
+    for (int j = 0; j < 6; j++) txt[j][0] = 0;
+    if (odds) for (int j = 0; j < 5; j++) if (v[j] > 0 && pv[j] >= 0) snprintf(txt[j], sizeof(txt[j]), "%d%%", pv[j]);
     RCT pane; pane.getPaneRect(false);
     FONT f; f.id = HELVETICA; f.size = (short)fontPt; f.style = BOLD; setFont(f);
-    int pv[5] = { -1, -1, -1, -1, -1 };
-    for (int j = 0; j < 5; j++) {
-        if (!(v[j] > 0)) continue;
-        double pr = pTouch((double)v[j] - (double)clN[last], S->V60, S->nuEff, S->kEff);
-        if (std::isfinite(pr)) pv[j] = (int)std::floor(100.0 * std::max(0.0, std::min(1.0, pr)) + 0.5);
-    }
     std::vector<std::pair<short, int>> ys;                              // badge y, line index - placed top to bottom without overlap
-    for (int j = 0; j < 5; j++) {
-        if (!(v[j] > 0) || pv[j] < 0) continue;
+    for (int j = 0; j < 6; j++) {
+        if (!(v[j] > 0) || !txt[j][0]) continue;
         PNT p; p.set(last, v[j], kBarCenter);
         if (p.v < pane.top + 4 || p.v > pane.bottom - 4) continue;
         ys.push_back(std::make_pair(p.v, j));
     }
     std::sort(ys.begin(), ys.end());
-    PNT px; px.set(last, v[0], kBarCenter);
+    PNT px; px.set(last, v[0] > 0 ? v[0] : v[5], kBarCenter);
     short x0 = (short)(px.h + 10);
     short h = (short)(fontPt + 6), lastY = -1000;
     for (size_t k = 0; k < ys.size(); k++) {
         int j = ys[k].second;
         short y = ys[k].first; if (y - lastY < h + 1) y = (short)(lastY + h + 1); lastY = y;
-        char b[16]; snprintf(b, sizeof(b), "%d%%", pv[j]);
-        int w = (int)getTextWidth(b, -1) + 8;
+        int w = (int)getTextWidth(txt[j], -1) + 8;
         RCT bg; bg.set(x0, (short)(y - h / 2), (short)(x0 + w), (short)(y + h / 2));
         bg.draw(1, col[j], C_DARK, DRAW_OPAQUE, PAT_SOLID);
         setTextColor(col[j]);
         RCT rc; rc.set(x0, (short)(y - h / 2), (short)(x0 + w), (short)(y + h / 2));
-        rc.drawText(b, true, false);
+        rc.drawText(txt[j], true, false);
     }
-    {   // the status file: what the badges said and why (compared with lra.level_touch's numbers in the nightly check)
+    if (odds) {   // the status file: what the badges said and why (compared with lra.level_touch's numbers in the nightly check)
         time_t now_ = time(nullptr);
         if (now_ - S->lastOddsWrite >= 30) {
             S->lastOddsWrite = now_;
@@ -391,7 +443,7 @@ int SessionVWAP::draw(void)
     return RTX_OK;
 }
 
-void SessionVWAP::writeStatus(const char* what, int nRth, const std::string& market)
+void SessionVWAP::writeStatus(const char* what, int nRth, const std::string& market, int nOn)
 {
     SVState* S = state(true);
     const char* up = getenv("USERPROFILE"); if (!up) return;
@@ -400,16 +452,16 @@ void SessionVWAP::writeStatus(const char* what, int nRth, const std::string& mar
     if (S && !changed && now_ - S->lastStatusWrite < 30) return;
     std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionVWAP.status.txt").c_str(), std::ios::trunc);
     if (!f.is_open()) return;
-    f << "VERSION," << SV_VERSION << "\nMARKET," << market << "\nRTH_BARS," << nRth << "\nSTATE," << what << "\n";
+    f << "VERSION," << SV_VERSION << "\nMARKET," << market << "\nRTH_BARS," << nRth << "\nON_BARS," << nOn << "\nSTATE," << what << "\n";
     if (S) { S->lastStatusWrite = now_; S->statusWhat = what; S->statusNRth = nRth; S->statusMkt = market; }
 }
 
 extern "C" cppExtension *CreateExtension(void)
 {
     SessionVWAP *p = new SessionVWAP();
-    p->setArrayCount(5);
+    p->setArrayCount(11);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA Session VWAP: the RTH VWAP with 1 and 2 SD bands, and the chance each is touched in the next 60 min.");
+    p->setDescription("LRA Session VWAP: switches by itself - overnight the O/N VWAP + bands and the prior RTH VWAP; in RTH the RTH VWAP + bands with the chance each is touched in the next 60 min; frozen after the close.");
     p->setVersion(SV_VERSION);
     return p;
 }

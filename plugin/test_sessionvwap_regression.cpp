@@ -24,7 +24,7 @@ static RTDATE utc(int y, int mo, int d, int h, int mi, int s = 0)
 
 static void sizeHost(mock::Host& H, int n)
 {
-    for (int a = 0; a < 8; ++a) H.f[a].assign((size_t)n, 0.0f);
+    for (int a = 0; a < 14; ++a) H.f[a].assign((size_t)n, 0.0f);
     for (int a = 0; a < 2; ++a) H.i[a].assign((size_t)n, 0UL);
 }
 

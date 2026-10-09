@@ -15,13 +15,13 @@ static const RTX_RESULT RTX_FAIL = -1;
 static const COLOR COLOR_BLACK = 0;
 
 enum PEN_STYLE { P_SOLID };
-enum DRAW_TYPE { DRAW_CONNECTEDLINE };
+enum DRAW_TYPE { DRAW_CONNECTEDLINE, DRAW_INVISIBLE };
 enum OUTPUT_FLAGS { OUTPUT_ENABLED };
 enum DRAW_FLAGS { CONNECT_CNONZERO = 1, NO_AUTOSCALE = 2 };
 enum BRUSH_STYLE { PAT_SOLID };
 enum { POST_DRAWING = 1 << 0, OVERLAY = 1 << 1, INSTRUMENT_SCALE = 1 << 2 };
 enum { DRAW_OPAQUE = 0 };
-enum fARRAY { fOut1, fOut2, fOut3, fOut4, fOut5, barHigh, barLow, barClose };
+enum fARRAY { fOut1, fOut2, fOut3, fOut4, fOut5, fOut6, fOut7, fOut8, fOut9, fOut10, fOut11, barHigh, barLow, barClose };
 enum iARRAY { barVolume, barDateTime };
 enum BAR_POSITION { kBarCenter };
 enum FONT_ID { HELVETICA };
@@ -30,7 +30,7 @@ enum FONT_STYLE { BOLD };
 namespace mock {
 struct Host {
     std::string root;
-    std::vector<float> f[8];
+    std::vector<float> f[14];
     std::vector<unsigned long> i[2];
     void* userData = NULL;
     int fontPt = 9;
@@ -68,6 +68,8 @@ class PNT {
 public:
     short v = 100, h = 400;
     RTX_RESULT set(int, float, BAR_POSITION = kBarCenter) { return RTX_OK; }
+    void setDrawPosition() {}
+    void drawLineTo() {}
 };
 class RCT {
 public:
@@ -106,6 +108,8 @@ public:
     int getIntegerValue(int) { return mock::current ? mock::current->fontPt : 9; }
     RTX_RESULT setFont(FONT&) { return RTX_OK; }
     void setTextColor(COLOR) {}
+    void setPen(COLOR, short, PEN_STYLE) {}
+    RTX_RESULT getVisibleBars(int* a, int* b) { long n = getBarCount(); *a = n > 300 ? (int)n - 300 : 0; *b = (int)n - 1; return RTX_OK; }
     int getTextWidth(const char* s, int = -1) { return (int)std::strlen(s) * 8; }
     void setArrayCount(int) {}
     void setFlags(unsigned long) {}
