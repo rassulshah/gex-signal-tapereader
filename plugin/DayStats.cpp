@@ -25,7 +25,8 @@
  *  from under the getters and silently scrambles settings — see the gamma plugin).
  ********************************************************************************/
 #include "irtsdk.h"
-#include "DayStatsLogic.h"   // (v0.8) the row grammar, the formatting and the cells, testable without IRT
+#include "DayStatsLogic.h"
+#include "HostSlot.h"   // (v0.8) the row grammar, the formatting and the cells, testable without IRT
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -35,6 +36,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <new>
 
 // ---- palette --------------------------------------------------------------
 static const COLOR C_TXT   = 0x00DFE7F0;  // actual (A) ink            near-white
@@ -43,14 +45,11 @@ static const COLOR C_HEAD  = 0x00E0A030;  // column headers            amber
 static const COLOR C_TITLE = 0x00FFFFFF;  // panel title               white
 static const COLOR C_PANEL = 0x00141A22;  // background panel fill     dark slate
 static const COLOR C_BORDER= 0x00394654;  // panel border              slate grey
-static const COLOR C_GOOD  = 0x0033B36B;  // A beats/near E where relevant (unused v0.1)
-static const COLOR C_RULE  = 0x00263039;  // faint row rule
 static const COLOR C_UPG   = 0x002EC27E;  // (v0.4) HOD / markup     green
 static const COLOR C_DNR   = 0x00F0616D;  // (v0.4) LOD / markdown   red
 
 // ---- parameter indices ----------------------------------------------------
-struct PIdx { int corner, showA, showE, showhdr, bg, font, xoff, yoff; };
-static PIdx PX;
+struct PIdx { enum { corner = 0, font, showA, showE, showhdr, bg, xoff, yoff }; };
 
 struct Settings {
     int corner;             // 0 TL, 1 TR, 2 BL, 3 BR
@@ -68,23 +67,40 @@ public:
     virtual int parmsLoad(void);
     virtual int parmsApply(void);
     virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int done(void);
+    virtual int destroy(void);
     virtual int draw(void);
 
-    StatRow A, E;
-    std::string condBasis; int condLastHr, condLast30;   // (v0.7) the CONDE row — the E clocks' stage + the 2ND ladder
-    int condP20, condP50, condP80;                       // (v0.11) the 2ND clock's percentiles (panel 16.45), minutes after the open
-    dsl::Read2 read2;                                    // (v0.12) the second extreme's read (panel 16.46)
-    dsl::Read2 read1;                                    // (v0.14) the first extreme's read (panel 16.48), same model
-    std::string weekday, daydate;
-    double asofSo;              // (v0.2) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
-    double eOpen;               // (v0.16) the expected candle's open (DAYEXP), <=0 = unknown
-    float spotPx; bool hasSpot; // (v0.3) SPOT anchor for the contract offset
-    float priceOff;            // (v0.3) chart-contract offset applied to the displayed price labels
-    // (v0.5) THE READ — the validated HLTAB classifier (AUC 0.879), center-justified on the title line.
-    // "HAS THE EXTREME PRINTED?"  readFirst = HOD|LOD, readPct = the cell %, readCall = IN|NOTIN|HOLD.
-    bool hasRead; std::string readFirst, readCall; double readPosr, readPct; long readN;
-    Settings cfg;
+private:
+    // cppExtension instances can serve more than one chart.  Every mutable value
+    // below therefore belongs to the active SDK host through getUserData(), not to
+    // this shared extension object.
+    struct State {
+        StatRow A, E;
+        std::string condBasis; int condLastHr, condLast30;
+        int condP20, condP50, condP80;
+        dsl::Read2 read2, read1;
+        std::string weekday, daydate;
+        double asofSo, eOpen;
+        float spotPx, priceOff; bool hasSpot;
+        RTDATE lastLoadDate;
+        unsigned int sameDateCacheSkips;
+        bool hasRead; std::string readFirst, readCall; double readPosr, readPct; long readN;
+        Settings cfg;
 
+        State() : condLastHr(-1), condLast30(-1), condP20(-1), condP50(-1), condP80(-1),
+                  asofSo(-1), eOpen(-1), spotPx(0.0f), priceOff(0.0f), hasSpot(false),
+                  lastLoadDate((RTDATE)~0UL), sameDateCacheSkips(0), hasRead(false),
+                  readPosr(-1), readPct(-1), readN(0)
+        {
+            cfg.corner = 0; cfg.showA = true; cfg.showE = true; cfg.showhdr = true; cfg.bg = true;
+            cfg.font = 11; cfg.xoff = 8; cfg.yoff = 8;
+        }
+    };
+
+    State& state();
+    HostSlot<State> slot_;
+    void releaseState();
     void load();
     void drawStaleBadge();     // (v0.2) red badge if the CSV has gone cold
     void applyContractOffset();// (v0.3) match the [1st]/[2nd] price labels to the chart's contract
@@ -96,7 +112,6 @@ public:
     void textLJ(short x, short y, const char* s, COLOR col, int sz, bool bold);
     void textCJ(short xc, short y, const char* s, COLOR col, int sz, bool bold);  // (v0.5) centre on xc
     short textW(const char* s, int sz, bool bold);
-    static double num(const std::string& s);   // "" -> -1
     std::string clk(double so);                 // secOfDay -> "9:12am"
     std::string dur(double m);                   // minutes -> "1h 04m" / "42m"
     std::string px1(const std::string& raw);     // "6712.50" -> "6712" (int label)
@@ -109,18 +124,21 @@ int cppExtension::calc(int)     { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
 
-// ---- constructor: safe defaults so the first draw is valid ----------------
-DayStats::DayStats() : cppExtension()
+// ---- current host state ----------------------------------------------------
+DayStats::State& DayStats::state()
 {
-    cfg.corner  = 0;     // top-left
-    cfg.showA   = true;
-    cfg.showE   = true;
-    cfg.showhdr = true;
-    cfg.bg      = true;
-    cfg.font    = 11;
-    cfg.xoff    = 8;
-    cfg.yoff    = 8;
+    State* s = slot_.get(this, true);
+    if (!s) throw std::bad_alloc();
+    return *s;
 }
+
+void DayStats::releaseState()
+{
+    slot_.release(this);
+}
+
+// ---- constructor: state is allocated for the active host on first use -----
+DayStats::DayStats() : cppExtension() {}
 
 // ---- parameter callbacks (guard on a plausible font read) -----------------
 // (v0.16) THE SAVED SETTINGS ARE READ ON EVERY DRAW, NOT ONLY IN THE DIALOG CALLBACKS. Operator, 2026-09-19: "Day Stats seems
@@ -129,10 +147,12 @@ DayStats::DayStats() : cppExtension()
 // readSettings, and `cfg` keeps the CONSTRUCTOR's defaults (Corner = Top-left) until an Apply fires parmsApply. The dialog was
 // right all along; the plugin just never read it. syncSettings() runs at the top of draw() as well, behind the same guard, so
 // the first draw after the values exist applies the saved Corner / font / insets. Eight reads per draw — nothing.
-void DayStats::syncSettings() { int p = getIntegerValue(PX.font); if (p >= 1 && p <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg); }
+void DayStats::syncSettings() { State& s = state(); int p = getIntegerValue(PIdx::font); if (p >= 1 && p <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(s.cfg); }
 int DayStats::parmsLoad(void)  { syncSettings(); return RTX_OK; }
 int DayStats::parmsApply(void) { syncSettings(); return RTX_OK; }
 int DayStats::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
+int DayStats::done(void) { releaseState(); return RTX_OK; }
+int DayStats::destroy(void) { releaseState(); return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
 int cppExtension::setup(void)
@@ -140,36 +160,33 @@ int cppExtension::setup(void)
     setParameterVersion(1);            // v0.1 first release — establishes the defaults below
     setParameterDialogHeight(12);
     const short SL = kParmAppendSameLine;
-    int pc = 0;
-    PX.corner  = pc++; setListParameter   ("Corner", 0, "Top-left;Top-right;Bottom-left;Bottom-right;Top-center;Bottom-center");   // (v0.13) centre anchors APPENDED — IRT stores the index
-    PX.font    = pc++; setIntegerParameter("Font size (pt)", 11, 0, SL);
-    PX.showA   = pc++; setBoolParameter   ("Actual row (A)", true);
-    PX.showE   = pc++; setBoolParameter   ("Expected row (E)", true, SL);
-    PX.showhdr = pc++; setBoolParameter   ("Column headers", true);
-    PX.bg      = pc++; setBoolParameter   ("Background panel", true, SL);
-    PX.xoff    = pc++; setIntegerParameter("X inset px", 8, 0);
-    PX.yoff    = pc++; setIntegerParameter("Y inset px", 8, 0, SL);
+    setListParameter   ("Corner", 0, "Top-left;Top-right;Bottom-left;Bottom-right;Top-center;Bottom-center");   // PIdx::corner = 0; centre anchors are appended for saved values
+    setIntegerParameter("Font size (pt)", 11, 0, SL); // PIdx::font = 1
+    setBoolParameter   ("Actual row (A)", true);     // PIdx::showA = 2
+    setBoolParameter   ("Expected row (E)", true, SL);// PIdx::showE = 3
+    setBoolParameter   ("Column headers", true);      // PIdx::showhdr = 4
+    setBoolParameter   ("Background panel", true, SL);// PIdx::bg = 5
+    setIntegerParameter("X inset px", 8, 0);          // PIdx::xoff = 6
+    setIntegerParameter("Y inset px", 8, 0, SL);      // PIdx::yoff = 7
     return RTX_OK;
 }
 
 void DayStats::readSettings(Settings& S)
 {
-    S.corner  = getListIndex(PX.corner);
-    S.font    = getIntegerValue(PX.font);  if (S.font < 7) S.font = 7;  if (S.font > 40) S.font = 40;
-    S.showA   = isBoxChecked(PX.showA)   != 0;
-    S.showE   = isBoxChecked(PX.showE)   != 0;
-    S.showhdr = isBoxChecked(PX.showhdr) != 0;
-    S.bg      = isBoxChecked(PX.bg)      != 0;
-    S.xoff    = getIntegerValue(PX.xoff);  if (S.xoff < 0) S.xoff = 0; if (S.xoff > 600) S.xoff = 600;
-    S.yoff    = getIntegerValue(PX.yoff);  if (S.yoff < 0) S.yoff = 0; if (S.yoff > 600) S.yoff = 600;
+    S.corner  = getListIndex(PIdx::corner);
+    S.font    = getIntegerValue(PIdx::font);  if (S.font < 7) S.font = 7;  if (S.font > 40) S.font = 40;
+    S.showA   = isBoxChecked(PIdx::showA)   != 0;
+    S.showE   = isBoxChecked(PIdx::showE)   != 0;
+    S.showhdr = isBoxChecked(PIdx::showhdr) != 0;
+    S.bg      = isBoxChecked(PIdx::bg)      != 0;
+    S.xoff    = getIntegerValue(PIdx::xoff);  if (S.xoff < 0) S.xoff = 0; if (S.xoff > 600) S.xoff = 600;
+    S.yoff    = getIntegerValue(PIdx::yoff);  if (S.yoff < 0) S.yoff = 0; if (S.yoff > 600) S.yoff = 600;
 }
 
 // ---- number/format helpers ------------------------------------------------
-double DayStats::num(const std::string& s) { if (s.empty()) return -1; return atof(s.c_str()); }
-
 std::string DayStats::clk(double so)              { return dsl::clk(so); }              // (v0.8) DayStatsLogic.h
 std::string DayStats::dur(double m)               { return dsl::dur(m); }
-std::string DayStats::px1(const std::string& raw) { return dsl::px1(raw, priceOff); }
+std::string DayStats::px1(const std::string& raw) { return dsl::px1(raw, state().priceOff); }
 
 void DayStats::textLJ(short x, short y, const char* s, COLOR col, int sz, bool bold)
 {
@@ -194,11 +211,15 @@ void DayStats::textCJ(short xc, short y, const char* s, COLOR col, int sz, bool 
 // ---- data load ------------------------------------------------------------
 void DayStats::load()
 {
-    A = StatRow(); E = StatRow(); weekday.clear(); daydate.clear(); asofSo = -1; condBasis.clear(); condLastHr = -1; condLast30 = -1; condP20 = condP50 = condP80 = -1; read2 = dsl::Read2();
-    hasSpot = false; spotPx = 0.0f; priceOff = 0.0f;
-    hasRead = false; readFirst.clear(); readCall.clear(); readPosr = -1; readPct = -1; readN = 0;
-    read1 = dsl::Read2(); read2 = dsl::Read2();   // (v0.14) a row absent from this export must not linger from the last
-    eOpen = -1;   // (v0.16)
+    State& s = state();
+    const RTDATE now = currentDate();
+    if (!dsl::cacheRefreshDue(now == s.lastLoadDate, s.sameDateCacheSkips)) return;
+    s.lastLoadDate = now;
+    s.A = StatRow(); s.E = StatRow(); s.weekday.clear(); s.daydate.clear(); s.asofSo = -1; s.condBasis.clear(); s.condLastHr = -1; s.condLast30 = -1; s.condP20 = s.condP50 = s.condP80 = -1; s.read2 = dsl::Read2();
+    s.hasSpot = false; s.spotPx = 0.0f; s.priceOff = 0.0f;
+    s.hasRead = false; s.readFirst.clear(); s.readCall.clear(); s.readPosr = -1; s.readPct = -1; s.readN = 0;
+    s.read1 = dsl::Read2(); s.read2 = dsl::Read2();   // (v0.14) a row absent from this export must not linger from the last
+    s.eOpen = -1;   // (v0.16)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
     std::ifstream f(path.c_str()); if (!f.is_open()) return;
@@ -209,36 +230,31 @@ void DayStats::load()
         std::vector<std::string> t; std::stringstream ss(line); std::string it;
         while (std::getline(ss, it, ',')) t.push_back(it);
         if (t.size() < 2) continue;
-        if ((t[0] == "DAYSA" || t[0] == "DAYSE") && t.size() >= 16) {
-            StatRow r; dsl::parseStatRow(t, r);   // (v0.8) DayStatsLogic.h
-            if (t[0] == "DAYSA") A = r; else E = r;
-        } else if (t[0] == "CONDE" && t.size() >= 6) {
+        const std::string tag = dsl::trim(t[0]);
+        if ((tag == "DAYSA" || tag == "DAYSE") && t.size() >= 16) {
+            StatRow r; if (dsl::parseStatRow(t, r)) { if (tag == "DAYSA") s.A = r; else s.E = r; }   // (v0.8) DayStatsLogic.h
+        } else if (tag == "CONDE" && t.size() >= 6) {
             // (v0.7) CONDE,<basis>,<t1>,<t2>,<lod%>,<n>[,<lastHr%>,<last30%>] — which stage drew the E clocks (panel 16.32/16.35)
-            dsl::Cond c; dsl::parseCond(t, c); condBasis = c.basis; condLastHr = c.lastHr; condLast30 = c.last30; condP20 = c.p20; condP50 = c.p50; condP80 = c.p80;   // (v0.8) DayStatsLogic.h · (v0.11) + percentiles
-        } else if (t[0] == "READ2") {
-            dsl::parseRead2(t, read2);   // (v0.12)
-        } else if (t[0] == "DAYEXP" && t.size() >= 2) {
-            eOpen = atof(t[1].c_str());   // (v0.16) DAYEXP,<open>,<eHi>,<eLo>,<eClose> — the expected candle's open, for the E row's MUD move
-        } else if (t[0] == "READ1") {
-            dsl::parseRead2(t, read1);   // (v0.14) the first extreme's read, same shape
-        } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
-            weekday = t[1];
-            if (t.size() >= 3) daydate = t[2];
-        } else if (t[0] == "ASOF" && t.size() >= 2) {
-            asofSo = atof(t[1].c_str());
-        } else if (t[0] == "SPOT" && t.size() >= 2) {
-            spotPx = (float)atof(t[1].c_str()); hasSpot = true;
-        } else if (t[0] == "READ" && t.size() >= 6) {
+            dsl::Cond c; if (dsl::parseCond(t, c)) { s.condBasis = c.basis; s.condLastHr = c.lastHr; s.condLast30 = c.last30; s.condP20 = c.p20; s.condP50 = c.p50; s.condP80 = c.p80; }   // (v0.8) DayStatsLogic.h · (v0.11) + percentiles
+        } else if (tag == "READ2") {
+            dsl::parseRead2(t, s.read2);   // (v0.12)
+        } else if (tag == "DAYEXP" && t.size() >= 2) {
+            double parsed = -1.0; if (dsl::parseFinite(t[1], parsed) && parsed > 0.0) s.eOpen = parsed;   // (v0.16) DAYEXP,<open>,<eHi>,<eLo>,<eClose> — the expected candle's open, for the E row's MUD move
+        } else if (tag == "READ1") {
+            dsl::parseRead2(t, s.read1);   // (v0.14) the first extreme's read, same shape
+        } else if (tag == "WEEKDAY" && t.size() >= 2) {
+            s.weekday = dsl::trim(t[1]);
+            if (t.size() >= 3) s.daydate = dsl::trim(t[2]);
+        } else if (tag == "ASOF" && t.size() >= 2) {
+            double parsed = -1.0; if (dsl::parseFinite(t[1], parsed) && dsl::validSod(parsed)) s.asofSo = parsed;
+        } else if (tag == "SPOT" && t.size() >= 2) {
+            double parsed = 0.0; if (dsl::parseFinite(t[1], parsed) && parsed > 0.0) { s.spotPx = (float)parsed; s.hasSpot = true; }
+        } else if (tag == "READ" && t.size() >= 6) {
             // READ,<first HOD|LOD>,<posr%>,<cellPct or blank>,<cellN>,<call IN|NOTIN|HOLD>
-            readFirst = t[1];
-            readPosr  = num(t[2]);
-            readPct   = t[3].empty() ? -1 : atof(t[3].c_str());
-            readN     = atol(t[4].c_str());
-            readCall  = t[5];
-            hasRead   = true;
+            dsl::Read r; if (dsl::parseRead(t, r)) { s.readFirst = r.side; s.readPosr = r.posr; s.readPct = r.pct; s.readN = r.n; s.readCall = r.call; s.hasRead = true; }
         }
     }
-    dsl::setMud(E, eOpen);   // (v0.16) the E row's MUD move: |the expected 2nd extreme - the expected candle's open|, ES points
+    dsl::setMud(s.E, s.eOpen);   // (v0.16) the E row's MUD move: |the expected 2nd extreme - the expected candle's open|, ES points
 }
 
 // ---- render ---------------------------------------------------------------
@@ -246,7 +262,8 @@ void DayStats::load()
 // out at fixed x offsets computed from the widest cell, so A and E line up.
 void DayStats::render(const Settings& S)
 {
-    if (!A.valid && !E.valid) return;
+    State& s = state();
+    if (!s.A.valid && !s.E.valid) return;
 
     RCT pane; pane.getPaneRect(false);
     int fs = S.font;
@@ -262,27 +279,27 @@ void DayStats::render(const Settings& S)
     std::string aCell[NCOL], eCell[NCOL];
 
     // (v0.8) the cells come from DayStatsLogic.h — the same strings the logic test pins
-    if (A.valid) { dsl::actualCells(A, priceOff, aCell); eCell[0] = ""; }
-    if (E.valid) { dsl::Cond c; c.basis = condBasis; c.lastHr = condLastHr; c.last30 = condLast30; dsl::expectedCells(E, c, eCell); }
+    if (s.A.valid) { dsl::actualCells(s.A, s.priceOff, aCell); eCell[0] = ""; }
+    if (s.E.valid) { dsl::Cond c; c.basis = s.condBasis; c.lastHr = s.condLastHr; c.last30 = s.condLast30; dsl::expectedCells(s.E, c, eCell); }
 
     // (v0.4) per-cell colour-coding for the ACTUAL row — operator spec: the LOD extreme reads red, the HOD
     // extreme green, and MUD by the day's phase (markup = the LOD was made first and price marked up → green;
     // markdown = the HOD was made first → red).
     COLOR aCol[NCOL]; for (int c = 0; c < NCOL; c++) aCol[c] = C_TXT;
-    if (A.valid) { int tone[dsl::NCOL]; dsl::actualTone(A, tone); for (int c = 0; c < NCOL; c++) aCol[c] = tone[c] > 0 ? C_UPG : (tone[c] < 0 ? C_DNR : C_TXT); }
+    if (s.A.valid) { int tone[dsl::NCOL]; dsl::actualTone(s.A, tone); for (int c = 0; c < NCOL; c++) aCol[c] = tone[c] > 0 ? C_UPG : (tone[c] < 0 ? C_DNR : C_TXT); }
 
     // column widths = max over header / A / E
     short colW[NCOL];
     for (int c = 0; c < NCOL; c++) {
         short w = textW(hdr[c], fs, true);
-        if (S.showA && A.valid) { short wa = textW(aCell[c].c_str(), fs, false); if (wa > w) w = wa; }
-        if (S.showE && E.valid) { short we = textW(eCell[c].c_str(), fs, false); if (we > w) w = we; }
+        if (S.showA && s.A.valid) { short wa = textW(aCell[c].c_str(), fs, false); if (wa > w) w = wa; }
+        if (S.showE && s.E.valid) { short we = textW(eCell[c].c_str(), fs, false); if (we > w) w = we; }
         colW[c] = w;
     }
     short colX[NCOL]; short totalW = 0;
     for (int c = 0; c < NCOL; c++) { colX[c] = totalW; totalW += colW[c] + colGap; }
 
-    int rows = (S.showhdr ? 1 : 0) + (S.showA && A.valid ? 1 : 0) + (S.showE && E.valid ? 1 : 0);
+    int rows = (S.showhdr ? 1 : 0) + (S.showA && s.A.valid ? 1 : 0) + (S.showE && s.E.valid ? 1 : 0);
     short titleH = lineH;
     short blockW = (short)(totalW + 12);
     short blockH = (short)(titleH + rows * lineH + 10);
@@ -300,12 +317,12 @@ void DayStats::render(const Settings& S)
 
     // title: DAY STATS — <Weekday> <date>
     std::string title = "DAY STATS";
-    if (!weekday.empty()) { title += " - "; title += weekday; if (!daydate.empty()) { title += " "; title += daydate; } }
+    if (!s.weekday.empty()) { title += " - "; title += s.weekday; if (!s.daydate.empty()) { title += " "; title += s.daydate; } }
     textLJ(tx, y, title.c_str(), C_TITLE, fs, true);
     // (v0.5) THE READ — center-justified on the DAY STATS title line (operator: "the prediction line like HOD IN /
     // LOD IN ... center justified in the line at the top where it says Day Stats"). This is the validated HLTAB
     // classifier: "has the standing extreme printed?"  IN = green (trust it), NOT IN = amber (the move isn't over).
-    if (hasRead && !readFirst.empty()) {
+    if (s.hasRead && !s.readFirst.empty()) {
         // (v0.12) THE SECOND HALF: the second extreme's own read (READ2, panel 16.46) — "LOD IN 80%", or "LOD IN 25% · if not,
         // ~10:09am (50%)" while it is probably still ahead; after the close, the actual 2ND from the A row. (0.11's descending
         // rungs are gone: the operator wants one rising number per extreme, not a probability that expires with the clock.)
@@ -313,15 +330,15 @@ void DayStats::render(const Settings& S)
         RTDATE nowD = currentDate(); struct tm tn; memset(&tn, 0, sizeof(tn)); getLocaltime(nowD, &tn);
         double nowSo = tn.tm_hour * 3600.0 + tn.tm_min * 60.0 + tn.tm_sec;
         bool closed = nowSo >= 54000.0 || nowSo < 30600.0;
-        std::string first = readFirst; double firstSo = -1.0;
-        if (closed && A.valid && (A.first == "HOD" || A.first == "LOD")) { first = A.first; firstSo = A.firstClk; }
+        std::string first = s.readFirst; double firstSo = -1.0;
+        if (closed && s.A.valid && (s.A.first == "HOD" || s.A.first == "LOD")) { first = s.A.first; firstSo = s.A.firstClk; }
         std::string second = (first == "HOD") ? "LOD" : (first == "LOD" ? "HOD" : "");
-        dsl::Read2 r2 = read2; if (!r2.valid && !second.empty()) r2.side = second;
-        std::string s2 = dsl::secondLine(r2, asofSo, closed, (A.valid && !r2.side.empty() && A.second == r2.side) ? A.secondClk : -1.0);
+        dsl::Read2 r2 = s.read2; if (!r2.valid && !second.empty()) r2.side = second;
+        std::string s2 = dsl::secondLine(r2, s.asofSo, closed, (s.A.valid && !r2.side.empty() && s.A.second == r2.side) ? s.A.secondClk : -1.0);
         // (v0.14) the first half from READ1 (the same model) when the panel wrote one; the HLTAB cell before 36 min
-        std::string h1 = dsl::firstHalf(read1, first, readCall, readPct, closed, firstSo, asofSo);
+        std::string h1 = dsl::firstHalf(s.read1, first, s.readCall, s.readPct, closed, firstSo, s.asofSo);
         std::string rl = h1; if (!s2.empty()) rl += "   \xB7   " + s2;
-        int tone = dsl::firstTone(read1, first, readCall, closed, firstSo);
+        int tone = dsl::firstTone(s.read1, first, s.readCall, closed, firstSo);
         COLOR rcol = tone > 0 ? C_UPG : (tone < 0 ? C_HEAD : C_TITLE);
         textCJ((short)(x0 + blockW / 2), y, rl.c_str(), rcol, fs, true);
     }
@@ -334,19 +351,19 @@ void DayStats::render(const Settings& S)
     }
     // (v0.4) EXPECTED row on TOP, then ACTUAL below (operator-directed row order)
     // E row (expected / base rate — the reference line)
-    if (S.showE && E.valid) {
+    if (S.showE && s.E.valid) {
         for (int c = 0; c < NCOL; c++) if (!eCell[c].empty()) textLJ((short)(tx + colX[c]), y, eCell[c].c_str(), C_EXP, fs, (c==0));
         y = (short)(y + lineH);
     }
     // A row (actual — colour-coded per aCol)
-    if (S.showA && A.valid) {
+    if (S.showA && s.A.valid) {
         for (int c = 0; c < NCOL; c++) if (!aCell[c].empty()) textLJ((short)(tx + colX[c]), y, aCell[c].c_str(), aCol[c], fs, (c==0));
         y = (short)(y + lineH);
     }
 }
 
 // ---- draw() ---------------------------------------------------------------
-int DayStats::draw(void) { syncSettings(); load(); applyContractOffset(); applyChartExtremes(); render(cfg); drawStaleBadge(); return RTX_OK; }
+int DayStats::draw(void) { syncSettings(); State& s = state(); load(); applyContractOffset(); applyChartExtremes(); render(s.cfg); drawStaleBadge(); return RTX_OK; }
 
 // (v0.10) THE ACTUAL ROW'S PRICES ARE THE CHART'S OWN SESSION HIGH / LOW (dsl::applyChartExtremes) — the panel's prices
 // were Skylit ES1's (September until the 15:16 roll) and the live-close bias made them drift all evening (7722 → 7708).
@@ -354,7 +371,8 @@ int DayStats::draw(void) { syncSettings(); load(); applyContractOffset(); applyC
 // no RTH bar for that day (a chart of another contract, or before the open) the panel's prices stay, with the old bias.
 void DayStats::applyChartExtremes()
 {
-    if (!A.valid) return;
+    State& s = state();
+    if (!s.A.valid) return;
     long n = getBarCount(); if (n < 2) return;
     RTARRAY op(barOpen), hi(barHigh), lo(barLow); RTARRAYI dt(barDateTime);
     int from = (int)n - 3000; if (from < 0) from = 0;
@@ -365,13 +383,13 @@ void DayStats::applyChartExtremes()
         so.push_back(t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec); oo.push_back(op[i]); hh.push_back(hi[i]); ll.push_back(lo[i]);
     }
     int wy = yy.back(), wm = mm.back(), wd = dd.back();
-    if (daydate.size() >= 10) { int y2, m2, d2; if (sscanf(daydate.c_str(), "%d-%d-%d", &y2, &m2, &d2) == 3) { wy = y2; wm = m2; wd = d2; } }
+    if (s.daydate.size() >= 10) { int y2, m2, d2; if (sscanf(s.daydate.c_str(), "%d-%d-%d", &y2, &m2, &d2) == 3) { wy = y2; wm = m2; wd = d2; } }
     // (v0.16) the session read is stamp-aware (DayModel 0.16's rule: on an end-stamped chart the 08:30 bar is the pre-open bar)
     // and carries the RTH OPEN, for the MUD move: |the chart's 2nd extreme - the chart's open|, in the chart's own points
     dsl::Ext X;
     bool endSt = dsl::endStampedSods(&so[0], (int)so.size());
     bool have = dsl::chartSession(&yy[0], &mm[0], &dd[0], &so[0], &oo[0], &hh[0], &ll[0], (int)yy.size(), wy, wm, wd, endSt, X);
-    if (have) { dsl::applyChartExtremes(A, X.hi, X.lo, true); priceOff = 0.0f; dsl::setMud(A, X.open); }   // chart facts need no bias
+    if (have) { dsl::applyChartExtremes(s.A, X.hi, X.lo, true); s.priceOff = 0.0f; dsl::setMud(s.A, X.open); }   // chart facts need no bias
 }
 
 // ---- (v0.3) contract offset for the displayed price labels ([1st]/[2nd]) — match the day candle: the
@@ -379,25 +397,27 @@ void DayStats::applyChartExtremes()
 // chart's contract. Text-only (this panel isn't price-aligned), so it just biases px1().
 void DayStats::applyContractOffset()
 {
-    priceOff = 0.0f;
-    if (!hasSpot) return;
+    State& s = state();
+    s.priceOff = 0.0f;
+    if (!s.hasSpot) return;
     long n = getBarCount(); if (n < 1) return;
     RTARRAY close(barClose);
     float chartClose = close[(int)n - 1];
-    if (!(chartClose > 0)) return;
-    float off = chartClose - spotPx;
-    if (off < -300.0f || off > 300.0f) return;   // implausible → no offset
-    priceOff = off;
+    if (!dsl::isFinite(chartClose) || !dsl::isFinite(s.spotPx) || !(chartClose > 0)) return;
+    float off = chartClose - s.spotPx;
+    if (!dsl::isFinite(off) || off < -300.0f || off > 300.0f) return;   // implausible → no offset
+    s.priceOff = off;
 }
 
 // ---- (v0.2) STALE badge — ASOF,<CT sec-of-day> vs the chart clock; > ~4 min ⇒ frozen file (overnight-safe)
 void DayStats::drawStaleBadge()
 {
-    if (asofSo < 0) return;
+    State& s = state();
+    if (!dsl::validSod(s.asofSo)) return;
     RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
     double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
-    double ageMin = (asofSo > localSo + 300.0) ? ((86400.0 - asofSo) + localSo) / 60.0 : (localSo - asofSo) / 60.0;
-    if (ageMin <= 4.0) return;
+    double ageMin = (s.asofSo > localSo + 300.0) ? ((86400.0 - s.asofSo) + localSo) / 60.0 : (localSo - s.asofSo) / 60.0;
+    if (!dsl::isFinite(ageMin) || ageMin <= 4.0) return;
     char b[40];
     if (ageMin >= 90.0) sprintf_s(b, sizeof(b), "STALE %dh", (int)(ageMin / 60.0 + 0.5));
     else                sprintf_s(b, sizeof(b), "STALE %dm", (int)(ageMin + 0.5));
@@ -419,6 +439,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI);   // text strip: no INSTRUMENT_SCALE (not price-aligned)
     p->setDescription("Day model stats strip (actual vs expected), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.16");
+    p->setVersion("0.18");
     return p;
 }

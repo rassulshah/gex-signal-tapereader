@@ -32,6 +32,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cctype>
@@ -46,6 +47,9 @@
 
 namespace dl {
 
+#ifdef far
+#undef far       // Windows headers define far; this helper's public member is Node::far.
+#endif
 struct Node { float k = 0, g = 0, lo = 0, hi = 0, snap = 0, d = 0, gp = -1, dp = -1, usd = 0, usd0 = 0; bool far = false, live = false, hasUsd = false; };   // live: COVER confirmed dealers trading here   // gp / dp: % of a normal 15 min of volume (-1 = none)
 struct Trig { std::string group, name, val, note; bool on = false; };
 struct Row  { std::string n, lab, st, why; bool hasV = false; float v = 0; };
@@ -132,13 +136,34 @@ inline std::vector<std::string> split(const std::string& line, char sep = '|')
     t.push_back(cur);
     return t;
 }
-inline float f(const std::string& s) { return (float)atof(s.c_str()); }
+// Dealer rows are external input. Reject non-finite / malformed values before
+// they reach drawing geometry (for example lround(NaN) or price conversion).
+inline bool parseFiniteFloat(const std::string& s, float& out)
+{
+    if (s.empty()) return false;
+    char* end = 0; errno = 0;
+    const float v = std::strtof(s.c_str(), &end);
+    if (end == s.c_str() || *end != '\0' || errno == ERANGE || !std::isfinite(v)) return false;
+    out = v;
+    return true;
+}
+inline bool parseFiniteDouble(const std::string& s, double& out)
+{
+    if (s.empty()) return false;
+    char* end = 0; errno = 0;
+    const double v = std::strtod(s.c_str(), &end);
+    if (end == s.c_str() || *end != '\0' || errno == ERANGE || !std::isfinite(v)) return false;
+    out = v;
+    return true;
+}
+inline float f(const std::string& s) { float v = 0.0f; (void)parseFiniteFloat(s, v); return v; }
 inline char col1(const std::string& s) { return s.empty() ? 'W' : s[0]; }
 
 inline bool parseRow(const std::vector<std::string>& t, Row& r)
 {
     if (t.size() < 6) return false;
-    r.n = t[1]; r.hasV = !(t[2] == "NA" || t[2].empty()); r.v = r.hasV ? f(t[2]) : 0.0f;
+    r.n = t[1]; r.hasV = !(t[2] == "NA" || t[2].empty()); r.v = 0.0f;
+    if (r.hasV && !parseFiniteFloat(t[2], r.v)) return false;
     if (r.v > 100) r.v = 100;
     if (r.v < -100) r.v = -100;
     r.lab = t[3]; r.st = t[4]; r.why = t[5];
@@ -155,25 +180,30 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "MARKET" && t.size() >= 2) { D.market = t[1]; return true; }
     if (k == "SRC" && t.size() >= 2) { D.srcBook = t[1]; if (t.size() >= 3) D.srcRatio = f(t[2]); if (t.size() >= 4) D.srcMode = t[3]; if (t.size() >= 5) D.srcAt = t[4]; return true; }
     if (k == "ASOF" && t.size() >= 2) {
-        D.asofSo = atof(t[1].c_str());
+        double asof = -1;
+        if (!parseFiniteDouble(t[1], asof) || asof < 0 || asof >= 86400.0) return false;
+        D.asofSo = asof;
         if (t.size() >= 3) { int a = 0, b = 0, c = 0; if (sscanf(t[2].c_str(), "%d-%d-%d", &a, &b, &c) == 3) { D.y = a; D.mo = b; D.d = c; } }
         return true;
     }
     if (k == "LIVE" && t.size() >= 3) { D.liveRec = t[1]; D.liveSrc = t[2]; if (t.size() >= 4 && !t[3].empty()) D.turnAgeMin = atoi(t[3].c_str()); return true; }
-    if (k == "PRICE" && t.size() >= 3) { D.px = f(t[1]); D.em = f(t[2]); D.hasPrice = D.px > 0 && D.em > 0; return true; }
-    if (k == "BOOK" && t.size() >= 2) { D.book = f(t[1]); D.hasBook = true; return true; }
+    if (k == "PRICE" && t.size() >= 3) { float px = 0, em = 0; if (!parseFiniteFloat(t[1], px) || !parseFiniteFloat(t[2], em)) return false; D.px = px; D.em = em; D.hasPrice = D.px > 0 && D.em > 0; return true; }
+    if (k == "BOOK" && t.size() >= 2) { float book = 0; if (!parseFiniteFloat(t[1], book)) return false; D.book = book; D.hasBook = true; return true; }
     if (k == "NODE" && t.size() >= 8) {
-        Node n; n.k = f(t[1]); n.g = f(t[2]); n.lo = f(t[3]); n.hi = f(t[4]); n.snap = f(t[5]); n.d = f(t[6]); n.far = t[7] == "1";
-        if (t.size() >= 10) { if (!t[8].empty()) n.gp = f(t[8]); if (!t[9].empty()) n.dp = f(t[9]); }   // (1.1) the strength share
+        Node n;
+        if (!parseFiniteFloat(t[1], n.k) || !parseFiniteFloat(t[2], n.g) || !parseFiniteFloat(t[3], n.lo) || !parseFiniteFloat(t[4], n.hi) || !parseFiniteFloat(t[5], n.snap) || !parseFiniteFloat(t[6], n.d)) return false;
+        n.far = t[7] == "1";
+        if (t.size() >= 10) { if (!t[8].empty() && !parseFiniteFloat(t[8], n.gp)) return false; if (!t[9].empty() && !parseFiniteFloat(t[9], n.dp)) return false; }   // (1.1) the strength share
         if (t.size() >= 11) n.live = t[10] == "1";                                                        // (1.2) the live mark
-        if (t.size() >= 13 && !t[11].empty()) { n.usd = f(t[11]); n.usd0 = f(t[12]); n.hasUsd = true; }   // (2.0) net GEX per strike
+        if (t.size() >= 13 && (!t[11].empty() || !t[12].empty())) { if (t[11].empty() || t[12].empty() || !parseFiniteFloat(t[11], n.usd) || !parseFiniteFloat(t[12], n.usd0)) return false; n.hasUsd = true; }   // (2.0) net GEX per strike
         if (n.k > 0) { D.nodes.push_back(n); return true; }
         return false;
     }
     if (k == "LEVEL") {
         if (t.size() >= 2 && t[1] == "NONE") { D.hasLevel = false; return true; }
         if (t.size() < 6) return false;
-        D.hasLevel = true; D.lvlLabel = t[1]; D.lvlPx = f(t[2]); D.phase = atoi(t[3].c_str()); D.ctx = t[4];
+        float lvlPx = 0; if (!parseFiniteFloat(t[2], lvlPx)) return false;
+        D.hasLevel = true; D.lvlLabel = t[1]; D.lvlPx = lvlPx; D.phase = atoi(t[3].c_str()); D.ctx = t[4];
         if (D.phase < 0) D.phase = 0;
         if (D.phase > 5) D.phase = 5;
         D.side = (t.size() >= 6 && !t[5].empty()) ? t[5][0] : 'R';
@@ -201,7 +231,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "CHK" && t.size() >= 5) { Data::Chk c; c.n = t[1]; c.name = t[2]; c.st = t[3]; c.val = t[4]; D.chk.push_back(c); return true; }
     if (k == "VERDICT" && t.size() >= 5) { D.vLabel = t[1]; D.vPts = atoi(t[2].c_str()); D.vOf = atoi(t[3].c_str()); D.vText = t[4]; return true; }
     if (k == "STOPTGT" && t.size() >= 3) { D.stopTxt = t[1]; D.tgtTxt = t[2]; return true; }
-    if (k == "TAG" && t.size() >= 4) { Data::Tag g; g.k = f(t[1]); g.text = t[2]; g.col = col1(t[3]); if (g.k > 0) { D.tags.push_back(g); return true; } return false; }
+    if (k == "TAG" && t.size() >= 4) { Data::Tag g; if (!parseFiniteFloat(t[1], g.k)) return false; g.text = t[2]; g.col = col1(t[3]); if (g.k > 0) { D.tags.push_back(g); return true; } return false; }
     if (k == "LEARN" && t.size() >= 2) { D.learn = t[1] == "1"; return true; }
     if (k == "VERDICT2" && t.size() >= 7) { D.hasV2 = true; D.v2Word = t[1]; D.v2Side = t[2]; D.v2Sup = atoi(t[3].c_str()); D.v2Meas = atoi(t[4].c_str()); D.v2Wait = atoi(t[5].c_str()); D.v2Opp = atoi(t[6].c_str()); return true; }
     if ((k == "VOTE" || k == "DLINE" || k == "PLAN") && t.size() >= 4) {
@@ -211,19 +241,22 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "BOOKCHK" && t.size() >= 3) { D.bookState = t[1]; D.bookPct = t[2]; return true; }
     if (k == "SUMMARY" && t.size() >= 2) { D.summary = t[1]; return true; }
     if ((k == "FSUM" && t.size() >= 12) || (k == "FWIN" && t.size() >= 8)) {
-        Data::FWin w; w.ta = t[1]; w.tb = t[2]; w.gam = f(t[3]); w.van = f(t[4]); w.cha = f(t[5]); w.pos = f(t[6]); w.fut = f(t[7]);
-        if (k == "FSUM") { w.pa = t[8]; w.pb = t[9]; w.iva = f(t[10]); w.ivb = f(t[11]); D.fsum = w; D.hasFsum = true; }
+        Data::FWin w; w.ta = t[1]; w.tb = t[2];
+        if (!parseFiniteFloat(t[3], w.gam) || !parseFiniteFloat(t[4], w.van) || !parseFiniteFloat(t[5], w.cha) || !parseFiniteFloat(t[6], w.pos) || !parseFiniteFloat(t[7], w.fut)) return false;
+        if (k == "FSUM") { if (!parseFiniteFloat(t[10], w.iva) || !parseFiniteFloat(t[11], w.ivb)) return false; w.pa = t[8]; w.pb = t[9]; D.fsum = w; D.hasFsum = true; }
         else D.fwin.push_back(w);
         return true;
     }
     if (k == "GSTR" && t.size() >= 11) {
-        Data::GStr g; g.t = t[1]; g.px = t[2]; g.iv = f(t[3]); g.g = f(t[4]); g.sdn = f(t[5]); g.sup = f(t[6]); g.zp = f(t[7]); g.zm = f(t[8]);
-        g.c30 = f(t[9]); g.c60 = f(t[10]); D.gstr = g; D.hasGstr = true; return true;
+        Data::GStr g; g.t = t[1]; g.px = t[2];
+        if (!parseFiniteFloat(t[3], g.iv) || !parseFiniteFloat(t[4], g.g) || !parseFiniteFloat(t[5], g.sdn) || !parseFiniteFloat(t[6], g.sup) || !parseFiniteFloat(t[7], g.zp) || !parseFiniteFloat(t[8], g.zm) || !parseFiniteFloat(t[9], g.c30) || !parseFiniteFloat(t[10], g.c60)) return false;
+        D.gstr = g; D.hasGstr = true; return true;
     }
     if ((k == "SIG" || k == "LSIG") && t.size() >= 6) {
         Data::Sig g;
         if (sscanf(t[1].c_str(), "%d-%d-%d %d:%d:%d", &g.y, &g.mo, &g.d, &g.h, &g.mi, &g.s) < 5 || t[2].empty()) return false;
-        g.code = t[2]; g.side = t[3] == "S" ? 'S' : 'B'; g.v = f(t[4]); g.text = t[5]; (k == "LSIG" ? D.lsigs : D.sigs).push_back(g); return true;
+        if (!parseFiniteFloat(t[4], g.v)) return false;
+        g.code = t[2]; g.side = t[3] == "S" ? 'S' : 'B'; g.text = t[5]; (k == "LSIG" ? D.lsigs : D.sigs).push_back(g); return true;
     }
     if (k == "FERR" && t.size() >= 2) { D.ferr = t[1]; return true; }
     if (k == "TURN" && t.size() >= 3) { D.hasTurn = true; D.turnSide = t[1] == "S" ? 'S' : 'L'; D.turnHead = t[2];
@@ -398,9 +431,9 @@ inline double staleMin(double asofSo, double localSo)
 inline bool offsetFor(float chartClose, float filePx, float& off)
 {
     off = 0;
-    if (!(chartClose > 0) || !(filePx > 0)) return false;
+    if (!std::isfinite(chartClose) || !std::isfinite(filePx) || !(chartClose > 0) || !(filePx > 0)) return false;
     float d = chartClose - filePx;
-    if (std::fabs(d) > 0.03f * filePx) return false;
+    if (!std::isfinite(d) || std::fabs(d) > 0.03f * filePx) return false;
     off = d; return true;
 }
 
@@ -559,14 +592,17 @@ inline std::vector<TGroup> groupTurn(const std::vector<Data::TRow>& R, size_t ma
 // amount of placement") the 9 spots every LRA box uses. IRT runs ONE object per DLL for every chart, so a dragged spot leaked
 // between charts (the copper Read moved when he clicked the gold chart): the spot is now a per-chart setting, nothing is dragged.
 static const char* ANCHORS = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
+inline const char* anchorChoices() { return ANCHORS; }
 inline void anchorXY(int L, int T, int R, int B, int W, int H, int pos, int m, int& x, int& y)
 {
     if (pos < 0 || pos > 8) pos = 0;
     int col = pos % 3, row = pos / 3;
     x = col == 0 ? L + m : col == 1 ? (L + R) / 2 - W / 2 : R - m - W;
     y = row == 0 ? T + m : row == 1 ? (T + B) / 2 - H / 2 : B - m - H;
-    if (x + W > R) x = R - W; if (x < L) x = L;
-    if (y + H > B) y = B - H; if (y < T) y = T;
+    if (x + W > R) x = R - W;
+    if (x < L) x = L;
+    if (y + H > B) y = B - H;
+    if (y < T) y = T;
 }
 // the chosen spot is kept PER MARKET in <plugin>.place-<MKT>.txt, written only from the settings dialog's callbacks (the one shared
 // object reads whichever chart's dialog is open, so a draw never writes it) and read back on every draw (cached by file stamp)

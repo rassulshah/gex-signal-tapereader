@@ -9,6 +9,7 @@
 // Both plugins failed twice on 2026-09-16 because the rule lived inside each .cpp behind the SDK. It lives here now,
 // once, on plain arrays, and plugin/test_contractoffset_logic.cpp pins every case above.
 #pragma once
+#include <cmath>
 
 namespace col {
 
@@ -27,26 +28,24 @@ inline bool dateSame  (int y1, int m1, int d1, int y2, int m2, int d2) { return 
 //   else: -1.
 inline int anchorIndex(const Bar* bars, int n, double asofSo, double scaleRefSo, int sy, int sm, int sd)
 {
-    if (n < 1) return -1;
-    if (scaleRefSo >= 0 && sy > 0) {
+    if (!bars || n < 1) return -1;
+    if (std::isfinite(scaleRefSo) && scaleRefSo >= 0 && sy > 0) {
         for (int i = n - 1; i >= 0 && i >= n - 6000; i--) {
             const Bar& b = bars[i];
             if (dateBefore(sy, sm, sd, b.y, b.m, b.d)) continue;          // after the quote's day
             if (dateBefore(b.y, b.m, b.d, sy, sm, sd)) break;             // before it: the date is not on this chart
-            if (b.sod > scaleRefSo + 1.0) continue;
-            if (b.close > 0) return i;
-            break;
+            if (!std::isfinite(b.sod) || b.sod > scaleRefSo + 1.0) continue;
+            if (std::isfinite(b.close) && b.close > 0) return i;
         }
     }
-    if (asofSo >= 0) {
+    if (std::isfinite(asofSo) && asofSo >= 0) {
         const Bar& last = bars[n - 1];
         for (int i = n - 1; i >= 0 && i >= n - 3000; i--) {
             const Bar& b = bars[i];
             bool sameDay = dateSame(b.y, b.m, b.d, last.y, last.m, last.d);
-            if (sameDay && b.sod > asofSo + 1.0) continue;
+            if (!std::isfinite(b.sod) || (sameDay && b.sod > asofSo + 1.0)) continue;
             if (b.sod < RTH_A || b.sod > RTH_B + 1.0) continue;
-            if (b.close > 0) return i;
-            break;
+            if (std::isfinite(b.close) && b.close > 0) return i;
         }
     }
     return -1;
@@ -55,9 +54,10 @@ inline int anchorIndex(const Bar* bars, int n, double asofSo, double scaleRefSo,
 // the offset itself, with the plausibility clamp both plugins apply (an NQ chart against an ES book, a bad anchor)
 inline bool offsetFor(float chartClose, float scaleRef, float& off)
 {
-    if (!(chartClose > 0) || !(scaleRef > 0)) return false;
+    off = 0.0f;
+    if (!std::isfinite(chartClose) || !std::isfinite(scaleRef) || !(chartClose > 0) || !(scaleRef > 0)) return false;
     off = chartClose - scaleRef;
-    if (off < -300.0f || off > 300.0f) return false;
+    if (!std::isfinite(off) || off < -300.0f || off > 300.0f) { off = 0.0f; return false; }
     return true;
 }
 

@@ -4,10 +4,12 @@
  *      windows : plugin\run-logic-tests.bat
  *  Pins: the bar-stamp detection (v0.16 — swept PDH 7690 vs 7687), the RTH / evening / pre-open windows under each
  *  convention, PDH/PDL/ONH/ONL from the bars, the actual day measured on the most recent RTH day (v0.15 — not the
- *  rolling evening session), the open-anchored re-alignment, the contract offset clamp, the stale age wrap.
+ *  rolling evening session), finite external numeric validation, the open-anchored re-alignment, the contract offset
+ *  clamp, the stale age wrap, a flat RTH day, and a holiday closure longer than four calendar days.
  ********************************************************************************/
 #include "DayModelLogic.h"
 #include <cstdio>
+#include <limits>
 #include <vector>
 
 static int fails = 0, passes = 0;
@@ -71,15 +73,44 @@ int main()
         CHECK(dml::dayOffset(7684.25f, true, 7615.5f) > 68.7f && dml::dayOffset(7684.25f, true, 7615.5f) < 68.8f, "the open-anchored spread: chart open 7684.25 vs the CSV's 7615.50 = +68.75 (Sep vs Dec on the 15th)");
         CHECK(dml::dayOffset(7684.25f, false, 0.0f) == 0.0f, "no CSV actual: no spread");
     }
-    // ---- 4. the contract offset (pre-open path) and the stale age
+    // ---- 4. audited measurement regressions: a flat first RTH bar and a long holiday closure
     {
+        std::vector<dml::Bar> flat;
+        add(flat, 2026, 12, 29, 8 * 3600 + 30 * 60, 100.0f, 100.0f, 100.0f, 100.0f);
+        dml::DayMeasure F = dml::measureDay(&flat[0], (int)flat.size(), false);
+        CHECK(F.ok && F.o == 100.0f && F.h == 100.0f && F.l == 100.0f && F.c == 100.0f, "a valid one-price first RTH bar is an actual candle, not a CSV-offset fallback");
+
+        std::vector<dml::Bar> holiday;
+        add(holiday, 2026, 12, 22, 8 * 3600 + 30 * 60, 200.0f, 204.0f, 198.0f, 203.0f);
+        add(holiday, 2026, 12, 29, 8 * 3600, 203.0f, 205.0f, 202.0f, 204.0f); // no new RTH yet
+        dml::DayMeasure H = dml::measureDay(&holiday[0], (int)holiday.size(), false);
+        CHECK(H.ok && H.dayNum == dml::dayNumber(2026, 12, 22) && H.h == 204.0f, "the most recent RTH survives a closure longer than four calendar days");
+
+        std::vector<dml::Bar> invalid;
+        add(invalid, 2026, 12, 29, 8 * 3600 + 30 * 60, 300.0f, 301.0f, 299.0f, 300.0f);
+        add(invalid, 2026, 12, 29, 8 * 3600 + 33 * 60, 300.0f, std::numeric_limits<float>::quiet_NaN(), 299.0f, 300.0f);
+        dml::DayMeasure I = dml::measureDay(&invalid[0], (int)invalid.size(), false);
+        CHECK(I.ok && I.h == 301.0f && I.c == 300.0f, "a non-finite chart bar is ignored instead of contaminating the actual candle");
+    }
+    // ---- 5. validated external values, the contract offset (pre-open path), and the stale age
+    {
+        float value = 0.0f;
+        CHECK(dml::parseFiniteFloat(" 7615.50 ", value) && value == 7615.5f, "a complete finite external price parses");
+        CHECK(!dml::parseFiniteFloat("", value) && !dml::parseFiniteFloat("bad", value) && !dml::parseFiniteFloat("10x", value), "empty, malformed, and partially numeric external prices are rejected");
+        CHECK(!dml::parseFiniteFloat("nan", value) && !dml::parseFiniteFloat("1e9999", value), "NaN and out-of-range external prices are rejected");
+        CHECK(dml::validOhlc(10.0f, 12.0f, 9.0f, 11.0f) && !dml::validOhlc(10.0f, 9.0f, 11.0f, 10.0f), "OHLC geometry must be finite and internally ordered");
+        CHECK(!dml::validOhlc(10.0f, std::numeric_limits<float>::infinity(), 9.0f, 10.0f), "infinite OHLC cannot enter price-to-pixel rendering");
+        CHECK(!dml::endStamped(0, 2), "a null bar pointer defaults safely to start-stamped");
         float off = 0;
         CHECK(dml::contractOffset(7684.25f, 7615.5f, off) && off > 68.7f, "offset = chart close - SPOT");
         CHECK(!dml::contractOffset(7615.5f, 7615.5f, off), "already aligned -> nothing to do");
         CHECK(!dml::contractOffset(29000.0f, 7615.5f, off), "an NQ chart -> refused");
+        CHECK(!dml::contractOffset(std::numeric_limits<float>::quiet_NaN(), 7615.5f, off), "non-finite contract inputs are refused");
+        CHECK(dml::dayOffset(std::numeric_limits<float>::quiet_NaN(), true, 7615.5f) == 0.0f, "a non-finite realignment anchor cannot propagate NaN");
         CHECK(dml::staleAge(-1, 40000) < 0, "no ASOF -> unknown");
         CHECK(dml::staleAge(35229, 35229 + 120) == 2.0, "two minutes old");
         CHECK(dml::staleAge(23 * 3600 + 50 * 60, 10 * 60) == 20.0, "the overnight wrap: 23:50 -> 00:10 = 20 min, not -1420");
+        CHECK(dml::staleAge(86400.0, 10.0) < 0 && dml::staleAge(10.0, 86400.0) < 0, "out-of-range ASOF and chart seconds-of-day are unavailable, not negative ages");
         CHECK(!dml::staleBadgeShown(4.0) && dml::staleBadgeShown(4.5), "the badge from 4 minutes (the panel writes every 3)");
     }
     printf("\n%d passed, %d failed\n", passes, fails);

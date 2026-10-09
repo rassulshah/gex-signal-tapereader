@@ -62,7 +62,7 @@
 #include <algorithm>
 #include <ctime>
 
-static const char* GP_VERSION = "0.79";   // (v0.71) ONE version string: the factory and the status file both read it
+static const char* GP_VERSION = "0.80";   // ONE version string: the factory and the status file both read it
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -356,27 +356,6 @@ int cppExtension::setup(void)
     return RTX_OK;
 }
 
-// ---- self-diagnostic: append what we actually read to a file the bridge can
-// stage, so the parameter mapping can be VERIFIED empirically, not assumed.
-// (Writes GammaProfile.debug.txt beside the CSV; harmless, deletable.)
-static void dbgDump(const char* when, const Settings& S)
-{
-    const char* up = getenv("USERPROFILE");
-    if (!up) return;
-    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.debug.txt";
-    std::ofstream f(path.c_str(), std::ios::app);
-    if (!f.is_open()) return;
-    f << "v0.64 " << when
-      << " | IDX font="   << PX.font   << " hideu=" << PX.hideu << " book=" << PX.book
-      << " rank="         << PX.rank   << " type="  << PX.type  << " filter="  << PX.filter
-      << " width="        << PX.width
-      << " | READ font="  << S.font    << " hideu=" << S.hideu  << " book=" << S.book
-      << " rank="         << (int)S.rank << " type=" << (int)S.type << " filter=" << S.filter
-      << " width="        << S.width   << " thresh=" << S.thresh << " tapecols=" << (int)S.tapecols
-      << "\n";
-    f.close();
-}
-
 // ---- read settings --------------------------------------------------------
 void GammaProfile::readSettings(Settings& S)
 {
@@ -431,23 +410,48 @@ void GammaProfile::readSettings(Settings& S)
     S.header = false; S.spot = false; S.headerpos = 0;
     S.defbands = false; S.confl = false; S.legend = false;
     S.rankmode = (S.book == 4) ? 1 : 0;          // the Atlas merge is automatic when both books draw
-    dbgDump("read", S);   // record what was actually read (diagnostic)
 }
 
 // ---- data load ------------------------------------------------------------
 // STRIKE,<es price>,<pct>,<rank>,<king 0|1>[,<type>[,<raw strike>[,<pooled rank>]]]
-static GStrike parseStrike(const std::vector<std::string>& t)
+static bool parseStrike(const std::vector<std::string>& t, GStrike& s)
 {
-    GStrike s;
-    s.price = (float)atof(t[1].c_str());
-    s.pct   = (float)atof(t[2].c_str());
-    s.rank  = atoi(t[3].c_str());
-    s.king  = (atoi(t[4].c_str()) != 0);
-    s.type  = (t.size() >= 6) ? t[5] : (s.king ? std::string("KING") : std::string());
-    s.spx   = (t.size() >= 7) ? (float)atof(t[6].c_str()) : 0.0f;   // (v0.41) raw SPXW strike, 0 if the panel predates it
-    s.mrank = (t.size() >= 8 && !t[7].empty()) ? atoi(t[7].c_str()) : 0;   // (v0.59) the pooled rank (panel 16.40); 0 = not pooled
-    s.since = (t.size() >= 9 && !t[8].empty()) ? atof(t[8].c_str()) : -1.0;  // (v0.64) first-seen CT second (panel 16.41); <0 = no band
-    return s;
+    if (t.size() < 5) return false;
+    GStrike parsed;
+    int king = 0;
+    if (!gpl::parseFiniteFloat(t[1], parsed.price) || !gpl::validProfilePrice(parsed.price) ||
+        !gpl::parseFiniteFloat(t[2], parsed.pct) || std::fabs(parsed.pct) > 100.0f ||
+        !gpl::parseInt(t[3], parsed.rank) || parsed.rank < 0 ||
+        !gpl::parseInt(t[4], king) || (king != 0 && king != 1)) return false;
+    parsed.king = king != 0;
+    parsed.type = (t.size() >= 6) ? gpl::boundedText(t[5], 32) : (parsed.king ? std::string("KING") : std::string());
+    if (t.size() >= 7 && !t[6].empty() &&
+        (!gpl::parseFiniteFloat(t[6], parsed.spx) || parsed.spx < 0.0f || parsed.spx > gpl::MAX_PROFILE_PRICE)) return false;
+    if (t.size() >= 8 && !t[7].empty() &&
+        (!gpl::parseInt(t[7], parsed.mrank) || parsed.mrank < 0)) return false;
+    if (t.size() >= 9 && !t[8].empty()) {
+        float since = 0.0f;
+        if (!gpl::parseFiniteFloat(t[8], since) || since < 0.0f || since >= 86400.0f) return false;
+        parsed.since = since;
+    }
+    s = parsed;
+    return true;
+}
+
+static bool parsePriceField(const std::vector<std::string>& t, size_t field, float& value)
+{
+    return field < t.size() && gpl::parseFiniteFloat(t[field], value) && gpl::validProfilePrice(value);
+}
+
+static void sortStrikes(std::vector<GStrike>& values)
+{
+    std::sort(values.begin(), values.end(), [](const GStrike& a, const GStrike& b) {
+        if (a.price != b.price) return a.price < b.price;
+        if (a.spx != b.spx) return a.spx < b.spx;
+        if (a.king != b.king) return a.king > b.king;
+        if (a.rank != b.rank) return a.rank < b.rank;
+        return a.type < b.type;
+    });
 }
 
 // (v0.61) Book = Both: the SPY book's STRIKE rows only — its market rows (SCALEREF, walls, REGIME, SPOT) are the SPX
@@ -463,8 +467,12 @@ void GammaProfile::loadSpy()
         if (line.empty() || line[0] == '#') continue;
         std::vector<std::string> t; std::stringstream ss(line); std::string it;
         while (std::getline(ss, it, ',')) t.push_back(it);
-        if (t.size() >= 5 && t[0] == "STRIKE") strikesSpy.push_back(parseStrike(t));
+        if (t.size() >= 5 && t[0] == "STRIKE") {
+            GStrike s;
+            if (parseStrike(t, s)) strikesSpy.push_back(s);
+        }
     }
+    sortStrikes(strikesSpy);
 }
 
 void GammaProfile::load()
@@ -493,42 +501,64 @@ void GammaProfile::load()
         while (std::getline(ss, it, ',')) t.push_back(it);
         if (t.empty()) continue;
         if (t[0] == "STRIKE" && t.size() >= 5) {
-            tmp.push_back(parseStrike(t));
-        } else if (t.size() >= 2) {
-            float v = (float)atof(t[1].c_str());
+            GStrike s;
+            if (parseStrike(t, s)) tmp.push_back(s);
+        } else if (t[0] == "BOOK" && t.size() >= 2) {
+            book = gpl::boundedText(t[1], 32);
+        } else if (t[0] == "SLOPE" && t.size() >= 2) {
+            slopeWord = gpl::boundedText(t[1], 32);
+        } else if (t[0] == "REGIME" && t.size() >= 2) {
+            // REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note...>
+            hasRegime = true;
+            rgSign = gpl::boundedText(t[1], 12);
+            rgType = (t.size() >= 3) ? gpl::boundedText(t[2], 32) : std::string();
+            rgConf = (t.size() >= 4) ? gpl::boundedText(t[3], 32) : std::string();
+            int conflict = 0;
+            rgConflict = t.size() >= 5 && gpl::parseInt(t[4], conflict) && conflict != 0;
+            float flip = 0.0f;
+            rgFlipSpx = (t.size() >= 6 && gpl::parseFiniteFloat(t[5], flip)) ? flip : 0.0f;
+            rgNote.clear();
+            for (size_t q = 6; q < t.size() && rgNote.size() < 96; ++q) {
+                if (q > 6) rgNote += ",";
+                rgNote += gpl::boundedText(t[q], 96 - rgNote.size());
+            }
+        } else if (t[0] == "KINGNOW" && t.size() >= 5 && t[1] == "ES" && t[2] == "IF") {
+            float price = 0.0f, spx = 0.0f, pct = 0.0f;
+            if (parsePriceField(t, 3, price) && gpl::parseFiniteFloat(t[4], spx) && spx >= 0.0f && spx <= gpl::MAX_PROFILE_PRICE &&
+                (t.size() < 6 || gpl::parseFiniteFloat(t[5], pct))) {
+                ifMagPx = price; ifMagSpx = spx; ifMagPct = pct; hasIfMag = true;
+            }
+        } else if (t[0] == "ASOF" && t.size() >= 2) {
+            float asof = 0.0f;
+            if (gpl::parseFiniteFloat(t[1], asof) && asof >= 0.0f && asof < 86400.0f) asofSo = asof;
+        } else {
+            float v = 0.0f;
             // (v0.42) level rows may carry: <es price>,<spx strike>,<window>,<src>. Older panels write only the price.
-            if      (t[0] == "KING")    { lvl[0]=v; has[0]=true; }
-            else if (t[0] == "CW" || t[0] == "PW" || t[0] == "FLIP") {
+            if (t[0] == "KING" && parsePriceField(t, 1, v)) { lvl[0]=v; has[0]=true; }
+            else if ((t[0] == "CW" || t[0] == "PW" || t[0] == "FLIP") && parsePriceField(t, 1, v)) {
                 int li = (t[0] == "CW") ? 1 : (t[0] == "PW" ? 2 : 3);
                 lvl[li]=v; has[li]=true;
-                if (t.size() >= 3) lvlSpx[li] = (float)atof(t[2].c_str());
-                if (t.size() >= 4) lvlWin[li] = t[3];
+                float rawStrike = 0.0f;
+                if (t.size() >= 3 && gpl::parseFiniteFloat(t[2], rawStrike) && rawStrike >= 0.0f && rawStrike <= gpl::MAX_PROFILE_PRICE) lvlSpx[li] = rawStrike;
+                if (t.size() >= 4) lvlWin[li] = gpl::boundedText(t[3], 16);
                 if (t.size() >= 6 && (t[5] == "0D" || t[5] == "WK" || t[5] == "MO")) lvlDepth[li] = t[5];   // (v0.50) depth tag
             }
-            else if (t[0] == "SLOPE" && t.size() >= 2) { slopeWord = t[1]; }   // (v0.50) the curve's slope, one word
-            else if (t[0] == "REGIME") {
-                // REGIME,<sign>,<type>,<conf>,<conflict>,<flip spx>,<note...>
-                hasRegime = true;
-                rgSign = t[1];
-                rgType = (t.size() >= 3) ? t[2] : std::string();
-                rgConf = (t.size() >= 4) ? t[3] : std::string();
-                rgConflict = (t.size() >= 5) && atoi(t[4].c_str()) != 0;
-                rgFlipSpx = (t.size() >= 6) ? (float)atof(t[5].c_str()) : 0.0f;
-                rgNote.clear(); for (size_t q = 6; q < t.size(); q++) { if (q > 6) rgNote += ","; rgNote += t[q]; }
+            else if (t[0] == "EMH" && parsePriceField(t, 1, v)) { lvl[4]=v; has[4]=true; }
+            else if (t[0] == "EML" && parsePriceField(t, 1, v)) { lvl[5]=v; has[5]=true; }
+            else if (t[0] == "SPOT" && parsePriceField(t, 1, v)) { spotPx=v; hasSpot=true; }
+            else if (t[0] == "SCALEREF" && parsePriceField(t, 1, v)) {
+                scaleRef=v; hasScaleRef=true; scaleRefSo=-1; scaleRefY=scaleRefM=scaleRefD=0;
+                float refSo = 0.0f;
+                int y = 0, m = 0, d = 0;
+                if (t.size() >= 4 && gpl::parseFiniteFloat(t[2], refSo) && refSo >= 0.0f && refSo < 86400.0f &&
+                    sscanf(t[3].c_str(), "%d-%d-%d", &y, &m, &d) == 3 && y > 0 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+                    scaleRefSo = refSo; scaleRefY = y; scaleRefM = m; scaleRefD = d;
+                }
             }
-            else if (t[0] == "EMH")     { lvl[4]=v; has[4]=true; }
-            else if (t[0] == "EML")     { lvl[5]=v; has[5]=true; }
-            else if (t[0] == "SPOT")    { spotPx=v; hasSpot=true; }
-            else if (t[0] == "SCALEREF"){ scaleRef=v; hasScaleRef=true; scaleRefSo=-1; scaleRefY=scaleRefM=scaleRefD=0;
-                if (t.size() >= 4) { scaleRefSo = atof(t[2].c_str()); sscanf(t[3].c_str(), "%d-%d-%d", &scaleRefY, &scaleRefM, &scaleRefD); } }   // (v0.49) the quote's own minute
-            else if (t[0] == "SPYKING") { spyKingPx=v; hasSpyKing=true; }
-            else if (t[0] == "BOOK" && t.size()>=2) { book=t[1]; }
-            // (v0.64) KINGNOW,ES,IF,<price>,<spx strike>,<polarity> — the InsiderFinance Magnet (the King tracker's row), for the
-            // MAG tag on the Skylit node at that exact strike and the Mag entry in the chip
-            else if (t[0] == "KINGNOW" && t.size() >= 5 && t[1] == "ES" && t[2] == "IF") { ifMagPx = (float)atof(t[3].c_str()); ifMagSpx = (float)atof(t[4].c_str()); ifMagPct = (t.size() >= 6) ? (float)atof(t[5].c_str()) : 0.0f; hasIfMag = ifMagPx > 0; }
-            else if (t[0] == "ASOF") { asofSo = v; }
+            else if (t[0] == "SPYKING" && parsePriceField(t, 1, v)) { spyKingPx=v; hasSpyKing=true; }
         }
     }
+    sortStrikes(tmp);
     strikes.swap(tmp);
 }
 
@@ -878,6 +908,16 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     float sp = hasSpot ? spotPx : ((RL.kIdx>=0) ? strikes[RL.kIdx].price : 0.0f);
     int kIdx=RL.kIdx, fIdx=RL.fIdx, cIdx=RL.cIdx;
     std::vector<int>& role = RL.role;
+    // These exact matches were previously rescanned for every strike. They do
+    // not vary within a draw, so cache them once for the node labels and lines.
+    const int cwNodeIdx = has[1] ? gpl::levelNode(gn, lvl[1], lvlSpx[1]) : -1;
+    const int pwNodeIdx = has[2] ? gpl::levelNode(gn, lvl[2], lvlSpx[2]) : -1;
+    int magNodeIdx = -1;
+    if (hasIfMag) {
+        for (size_t q = 0; q < strikes.size(); ++q) {
+            if (strikes[q].spx > 0.0f && std::fabs(strikes[q].spx - ifMagSpx) < 0.001f) { magNodeIdx = (int)q; break; }
+        }
+    }
 
     // header (positionable: 0 TL,1 TC,2 TR,3 BL,4 BC,5 BR)
     if (S.header && !railOnly) {
@@ -1049,10 +1089,10 @@ void GammaProfile::render(const Settings& S, bool railOnly)
         // rank bubble), in the wall colour, so the walls read off the histogram without a line across the chart.
         const char* wtag = 0; COLOR wcol = C_PINK;
         if (S.lvllabels && !railOnly) {
-            if (has[1] && gpl::levelNode(gn, lvl[1], lvlSpx[1]) == (int)i) wtag = "CW";
-            else if (has[2] && gpl::levelNode(gn, lvl[2], lvlSpx[2]) == (int)i) wtag = "PW";
+            if (cwNodeIdx == (int)i) wtag = "CW";
+            else if (pwNodeIdx == (int)i) wtag = "PW";
             // (v0.64) MAG — the InsiderFinance Magnet on the Skylit node at EXACTLY that strike (never the nearest: the books differ)
-            else if (hasIfMag && s.spx > 0.0f && std::fabs(s.spx - ifMagSpx) < 0.001f) { wtag = "MAG"; wcol = (ifMagPct < 0) ? S.cneg : S.cpos; }
+            else if (magNodeIdx == (int)i) { wtag = "MAG"; wcol = (ifMagPct < 0) ? S.cneg : S.cpos; }
         }
         short wtagW = 0, outerW = 0;   // (v0.51) outerW = tag + pill: what the outside % label must clear
         const char* topW = 0; COLOR topWc = wcol;   // (v0.76) drawn above the strip row instead of beside the tip
@@ -1200,7 +1240,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // tag) or the FLIP tick is drawn, the line draws WITHOUT its text — the operator saw "CALL WALL" beside the SPY strip
     // (Level labels at = Left) and "CW" on the SPX node at once: "it is on both rails".
     // (v0.74) a wall on a HIDDEN node is not tagged there (the node is not drawn), so the line keeps its label
-    int n1 = has[1] ? gpl::levelNode(gn, lvl[1], lvlSpx[1]) : -1, n2 = has[2] ? gpl::levelNode(gn, lvl[2], lvlSpx[2]) : -1;
+    int n1 = cwNodeIdx, n2 = pwNodeIdx;
     bool onNode1 = S.lvllabels && n1 >= 0 && !gpl::nodeHidden(strikes[(size_t)n1].pct, strikes[(size_t)n1].king, S.hideu);
     bool onNode2 = S.lvllabels && n2 >= 0 && !gpl::nodeHidden(strikes[(size_t)n2].pct, strikes[(size_t)n2].king, S.hideu);
     bool onNode3 = S.lvllabels && has[3];   // the FLIP tick + label
@@ -1215,8 +1255,7 @@ void GammaProfile::render(const Settings& S, bool railOnly)
     // (v0.75) the Mag line — the IF Magnet (KINGNOW,ES,IF), in its polarity colour like its MAG tag; unlabelled when the tag is on
     // its node (the tag is drawn only on a visible SPX node at EXACTLY that strike that is not already the CW / PW node)
     if (S.magline && hasIfMag) {
-        int nm = -1;
-        for (size_t q = 0; q < strikes.size(); q++) if (strikes[q].spx > 0.0f && std::fabs(strikes[q].spx - ifMagSpx) < 0.001f) { nm = (int)q; break; }
+        int nm = magNodeIdx;
         bool onNodeM = S.lvllabels && nm >= 0 && nm != n1 && nm != n2 && !gpl::nodeHidden(strikes[(size_t)nm].pct, strikes[(size_t)nm].king, S.hideu);
         drawLevel(lastBar, lvL, lvR, ifMagPx, (ifMagPct < 0) ? S.cneg : S.cpos, gpl::lineLabelWanted(S.lvllabels, onNodeM, lp) ? "MAG" : "", false, ifs, 1, lp, S);
     } }
@@ -1243,9 +1282,12 @@ short GammaProfile::barThickness(const Settings& S, const std::vector<GStrike>& 
     if (S.thick == 1) return 6; if (S.thick == 2) return 12; if (S.thick == 3) return 20;
     long n = getBarCount(); if (n < 2 || v.size() < 2) return 6;
     int lastBar = (int)n - 1;
-    PNT a; a.set(lastBar, v[0].price);
-    PNT b; b.set(lastBar, v[1].price);
-    return (short)gpl::autoBarH(std::abs((int)b.v - (int)a.v));
+    std::vector<int> rowCenters; rowCenters.reserve(v.size());
+    for (size_t i = 0; i < v.size(); ++i) {
+        PNT p; p.set(lastBar, v[i].price);
+        rowCenters.push_back((int)p.v);
+    }
+    return (short)gpl::autoBarHForRows(rowCenters);
 }
 
 // ---- draw() ---------------------------------------------------------------

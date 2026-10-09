@@ -1,5 +1,5 @@
 /********************************************************************************
- *  DealerSummary.cpp  --  Investor/RT RTX extension  lsDealerSummary  (v1.0.0, 2026-10-03)
+ *  DealerSummary.cpp  --  Investor/RT RTX extension  lsDealerSummary  (v1.0.1, 2026-10-08)
  *
  *  Rassul 2026-10-03: "the left of the irt will hold the new summary read, the bottom of the chart will hold the timeline
  *  read" / "lets create a new indicator called Dealer Summary". A vertical panel on the LEFT of the price pane with the
@@ -16,7 +16,13 @@
  *  Never black text: the chart background is black.
  ********************************************************************************/
 #include "irtsdk.h"
+// windows.h may define the legacy `far` macro before the RTX source is included.
+// DealerLogic's shared Node member is named far, so contain that SDK/Windows macro here.
+#ifdef far
+#undef far
+#endif
 #include "DealerLogic.h"
+#include "HostSlot.h"
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -26,8 +32,9 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cctype>
 
-static const char* DSUM_VERSION = "1.0.0";
+static const char* DSUM_VERSION = "1.0.1";
 static const COLOR C_BOXBG  = 0x0005070C;
 static const COLOR C_BORDER = 0x00334155;
 static const COLOR C_INK    = 0x00E5E7EB;
@@ -35,10 +42,53 @@ static const COLOR C_MUTED  = 0x0094A3B8;
 static const COLOR C_DIM    = 0x0064748B;
 static const COLOR C_OLD    = 0x00F59E0B;
 static const int OLD_MIN = 10;          // a read older than this dims (the Reader sends at least every 2 minutes)
+static const size_t MAX_SUMMARY_BYTES = 64 * 1024; // external bridge input: enough for a read, bounded on repaint
+static const size_t MAX_HEAD_DISPLAY = 512;
+static const size_t MAX_BODY_DISPLAY = 4096;
 
 struct YIdx { int market, font, width, top, bottom, moveX; };
 static YIdx YX;
 struct YSet { int market = 0, font = 10, width = 300, top = 30, bottom = 230, moveX = 0; };
+
+// getUserData()/setUserData() are scoped to the host chart.  The same DLL object can
+// service several charts, so no chart-specific settings, file cache, or read may live
+// in DealerSummary itself.
+struct DSState {
+    YSet cfg;
+    dl::Summary sm;
+    std::string mkt, root, loadedPath, loadError;
+    long long loadedStamp = -2;
+};
+
+static bool hasVisibleText(const std::string& s)
+{
+    for (size_t i = 0; i < s.size(); ++i) if (!std::isspace((unsigned char)s[i])) return true;
+    return false;
+}
+
+// Keep rendering work bounded even if a bridge file is corrupted or unexpectedly verbose.
+// The ellipsis is an explicit display truncation; the file remains the sole data source.
+static std::string displayPrefix(const std::string& s, size_t maxChars)
+{
+    if (s.size() <= maxChars) return s;
+    size_t cut = s.rfind(' ', maxChars);
+    if (cut == std::string::npos || cut < maxChars / 2) cut = maxChars;
+    return s.substr(0, cut) + " ...";
+}
+
+static bool readSummaryText(const std::string& path, std::string& text, std::string& error)
+{
+    text.clear(); error.clear();
+    std::ifstream f(path.c_str(), std::ios::in | std::ios::binary);
+    if (!f.is_open()) { error = "summary file unavailable"; return false; }
+    std::vector<char> bytes(MAX_SUMMARY_BYTES + 1);
+    f.read(&bytes[0], (std::streamsize)bytes.size());
+    std::streamsize count = f.gcount();
+    if (f.bad()) { error = "summary file read failed"; return false; }
+    if (count == (std::streamsize)bytes.size()) { error = "summary file exceeds 64 KiB"; return false; }
+    text.assign(&bytes[0], (size_t)count);
+    return true;
+}
 
 class DealerSummary : public cppExtension {
 public:
@@ -46,21 +96,20 @@ public:
     virtual int parmsLoad(void);
     virtual int parmsApply(void);
     virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int done(void);
+    virtual int destroy(void);
     virtual int draw(void);
 
-    YSet cfg;
-    dl::Summary Sm;
-    std::string mkt, root;
-    long long loadedStamp = -2; std::string loadedPath;
-
     bool dialogReady() { int i = getListIndex(YX.market); return i >= 0 && i <= 7; }
+    DSState* state(bool create);
+    HostSlot<DSState> slot_;
     void readSettings(YSet& S);
-    void load();
+    void load(DSState& S);
     void fill(short l, short t, short r, short b, COLOR c);
     void frame(short l, short t, short r, short b, COLOR c);
     int textW(const std::string& s, int sz, bool bold);
     void text(short x, short y, const std::string& s, COLOR col, int sz, bool bold);
-    void writeStatus(const char* what, int age);
+    void writeStatus(const DSState& S, const char* what, int age);
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -68,9 +117,27 @@ int cppExtension::calc(int)     { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
 
-int DealerSummary::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DealerSummary::parmsApply(void) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DealerSummary::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+DSState* DealerSummary::state(bool create)
+{
+    return slot_.get(this, create);
+}
+
+int DealerSummary::parmsLoad(void)  { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
+int DealerSummary::parmsApply(void) { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
+int DealerSummary::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
+
+int DealerSummary::done(void)
+{
+    DSState* S = state(false);
+    if (S) { S->sm = dl::Summary(); S->mkt.clear(); S->root.clear(); S->loadedPath.clear(); S->loadError.clear(); S->loadedStamp = -2; }
+    return RTX_OK;
+}
+
+int DealerSummary::destroy(void)
+{
+    slot_.release(this);
+    return RTX_OK;
+}
 
 int cppExtension::setup(void)
 {
@@ -96,22 +163,23 @@ void DealerSummary::readSettings(YSet& S)
     S.bottom = getIntegerValue(YX.bottom); if (S.bottom < 0 || S.bottom > 2000) S.bottom = 230;
 }
 
-void DealerSummary::load()
+void DealerSummary::load(DSState& S)
 {
     char buf[32] = {0};
     const char* rs = getRootSymbol(buf);
-    root = rs ? rs : "";
-    mkt = dl::marketFor(cfg.market, root);
-    if (mkt.empty()) { Sm = dl::Summary(); loadedPath.clear(); return; }
-    const char* up = getenv("USERPROFILE"); if (!up) { Sm = dl::Summary(); return; }
-    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Summary-" + mkt + ".txt";
+    S.root = rs ? rs : "";
+    S.mkt = dl::marketFor(S.cfg.market, S.root);
+    if (S.mkt.empty()) { S.sm = dl::Summary(); S.loadedPath.clear(); S.loadedStamp = -2; S.loadError = "no market"; return; }
+    const char* up = getenv("USERPROFILE");
+    if (!up) { S.sm = dl::Summary(); S.loadedPath.clear(); S.loadedStamp = -2; S.loadError = "USERPROFILE unavailable"; return; }
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Summary-" + S.mkt + ".txt";
     long long st = dl::fileStamp(path);
-    if (st >= 0 && st == loadedStamp && path == loadedPath) return;      // unchanged: keep what is parsed (no disk read)
-    Sm = dl::Summary();
-    std::ifstream f(path.c_str()); if (!f.is_open()) { loadedPath.clear(); return; }
-    std::stringstream ss; ss << f.rdbuf();
-    Sm = dl::parseSummary(ss.str());
-    loadedStamp = st; loadedPath = path;
+    if (st == S.loadedStamp && path == S.loadedPath) return;             // unchanged: no file open/read or parse
+    S.sm = dl::Summary(); S.loadError.clear(); S.loadedStamp = st; S.loadedPath = path;
+    std::string text;
+    if (!readSummaryText(path, text, S.loadError)) return;
+    S.sm = dl::parseSummary(text);
+    if (!S.sm.ok || !hasVisibleText(S.sm.head)) { S.sm = dl::Summary(); S.loadError = "summary content invalid"; }
 }
 
 void DealerSummary::fill(short l, short t, short r, short b, COLOR c) { RCT rc; rc.set(l, t, r, b); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
@@ -137,57 +205,79 @@ void DealerSummary::text(short x, short y, const std::string& s, COLOR col, int 
     rc.drawText(s.c_str(), false, false);
 }
 
-void DealerSummary::writeStatus(const char* what, int age)
+void DealerSummary::writeStatus(const DSState& S, const char* what, int age)
 {
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerSummary.status.txt";
+    std::string content = std::string("VERSION,") + DSUM_VERSION + "\nROOT," + S.root + "\nMARKET," + S.mkt +
+        "\nREAD," + (S.sm.ok ? S.sm.asof : "-") + "\nAGE_MIN," + std::to_string(age) + "\nSTATE," + what + "\n";
+    // The status file is intentionally shared for compatibility.  Suppress only an
+    // identical consecutive write, so interleaved chart states still replace it.
+    static std::string lastPath, lastContent;
+    if (path == lastPath && content == lastContent) return;
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION," << DSUM_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nREAD," << (Sm.ok ? Sm.asof : "-")
-      << "\nAGE_MIN," << age << "\nSTATE," << what << "\n";
+    f << content;
+    if (f) { lastPath = path; lastContent = content; }
 }
 
 int DealerSummary::draw(void)
 {
-    load();
-    if (!Sm.ok) { writeStatus(mkt.empty() ? "no market" : "no read yet (the Reader has not sent one)", -1); return RTX_OK; }
-    int age = dl::ageMin(Sm.epoch, (long long)time(NULL));
-    bool old = age > OLD_MIN;
+    DSState* S = state(true);
+    load(*S);
+    if (!S->sm.ok) { writeStatus(*S, S->mkt.empty() ? "no market" : (S->loadError.empty() ? "no read yet (the Reader has not sent one)" : S->loadError.c_str()), -1); return RTX_OK; }
+    int age = dl::ageMin(S->sm.epoch, (long long)time(NULL));
+    bool old = age < 0 || age > OLD_MIN; // an absent/invalid/future timestamp must never look live
     RCT pane; pane.getPaneRect(false);
-    const int fs = cfg.font, lh = fs + 5, pad = 8, acc = 4;
-    int W = cfg.width; if (W > pane.right - pane.left - 8) W = pane.right - pane.left - 8;
-    if (W < 140) { writeStatus("pane too narrow", age); return RTX_OK; }
-    short x0 = (short)(pane.left + 4 + cfg.moveX), y0 = (short)(pane.top + cfg.top);
+    const int fs = S->cfg.font, lh = fs + 5, pad = 8, acc = 4;
+    int W = S->cfg.width; if (W > pane.right - pane.left - 8) W = pane.right - pane.left - 8;
+    if (W < 140) { writeStatus(*S, "pane too narrow", age); return RTX_OK; }
+    int x0 = pane.left + 4 + S->cfg.moveX, y0 = pane.top + S->cfg.top;
     if (x0 + W > pane.right - 4) x0 = (short)(pane.right - 4 - W);
     if (x0 < pane.left) x0 = pane.left;
-    int maxB = pane.bottom - cfg.bottom; if (maxB < y0 + 3 * lh) maxB = y0 + 3 * lh;
+    int maxB = pane.bottom - S->cfg.bottom;
     if (maxB > pane.bottom - 2) maxB = pane.bottom - 2;
+    const int minBoxH = 2 * pad + 2 * lh + 4; // one headline and the time line
+    if (maxB - y0 < minBoxH) { writeStatus(*S, "pane too short", age); return RTX_OK; }
     int inner = W - acc - 2 * pad;
     auto wBold = [&](const std::string& q) { return (float)textW(q, fs, true); };
     auto wNorm = [&](const std::string& q) { return (float)textW(q, fs, false); };
-    std::vector<std::string> head = dl::wrapWords(Sm.head, (float)inner, wBold);
-    std::vector<std::string> body = dl::wrapWords(Sm.body, (float)inner, wNorm);
-    std::string when = Sm.asof.size() >= 5 ? Sm.asof.substr(0, 5) + " CT" : "";
-    if (old) when = "OLD - " + dl::ageTxt(age) + (when.empty() ? "" : " (" + when + ")");
-    // how many body lines fit between the headline and the time line
+    std::vector<std::string> head = dl::wrapWords(displayPrefix(S->sm.head, MAX_HEAD_DISPLAY), (float)inner, wBold);
+    std::vector<std::string> body = dl::wrapWords(displayPrefix(S->sm.body, MAX_BODY_DISPLAY), (float)inner, wNorm);
+    auto ellipsize = [&](std::string& line, bool bold) {
+        const std::string suffix = " ...";
+        const float w = bold ? wBold(line) : wNorm(line);
+        if (w <= inner) return;
+        while (!line.empty() && (bold ? wBold(line + suffix) : wNorm(line + suffix)) > inner) {
+            size_t sp = line.find_last_of(' '); line = sp == std::string::npos ? "" : line.substr(0, sp);
+        }
+        line += suffix;
+    };
+    for (size_t i = 0; i < head.size(); ++i) ellipsize(head[i], true);
+    for (size_t i = 0; i < body.size(); ++i) ellipsize(body[i], false);
+    const int maxHead = 1 + (maxB - y0 - minBoxH) / lh;
+    if ((int)head.size() > maxHead) {
+        head.resize((size_t)maxHead); head.back() += " ..."; ellipsize(head.back(), true);
+    }
+    std::string when = S->sm.asof.size() >= 5 ? S->sm.asof.substr(0, 5) + " CT" : "";
+    if (old) when = age < 0 ? "OLD - timestamp unavailable" : "OLD - " + dl::ageTxt(age) + (when.empty() ? "" : " (" + when + ")");
+    // Fit only complete body lines.  A shallow pane keeps the headline/time line on-screen.
     int fixedH = 2 * pad + lh * (int)head.size() + 4 + lh;
-    int fitBody = (maxB - y0 - fixedH) / lh; if (fitBody < 1) fitBody = 1;
+    int fitBody = (maxB - y0 - fixedH) / lh;
     if ((int)body.size() > fitBody) {
-        body.resize((size_t)fitBody);
-        std::string& last = body.back();
-        while (!last.empty() && wNorm(last + " ...") > inner) { size_t sp = last.find_last_of(' '); last = sp == std::string::npos ? "" : last.substr(0, sp); }
-        last += " ...";
+        if (fitBody <= 0) body.clear();
+        else { body.resize((size_t)fitBody); body.back() += " ..."; ellipsize(body.back(), false); }
     }
     int H = fixedH + lh * (int)body.size();
-    fill(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BOXBG);
-    frame(x0, y0, (short)(x0 + W), (short)(y0 + H), C_BORDER);
-    COLOR hc = old ? C_DIM : (COLOR)Sm.col;
+    fill((short)x0, (short)y0, (short)(x0 + W), (short)(y0 + H), C_BOXBG);
+    frame((short)x0, (short)y0, (short)(x0 + W), (short)(y0 + H), C_BORDER);
+    COLOR hc = old ? C_DIM : (COLOR)S->sm.col;
     fill((short)(x0 + 1), (short)(y0 + 1), (short)(x0 + 1 + acc), (short)(y0 + H), hc);
     short cx = (short)(x0 + acc + pad), y = (short)(y0 + pad + lh / 2);
     for (size_t i = 0; i < head.size(); i++) { text(cx, y, head[i], hc, fs, true); y = (short)(y + lh); }
     y = (short)(y + 4);
     for (size_t i = 0; i < body.size(); i++) { text(cx, y, body[i], old ? C_DIM : C_INK, fs, false); y = (short)(y + lh); }
     text(cx, y, when, old ? C_OLD : C_MUTED, fs > 8 ? fs - 1 : fs, false);
-    writeStatus(old ? "drawn (old read)" : "drawn", age);
+    writeStatus(*S, old ? "drawn (old read)" : "drawn", age);
     return RTX_OK;
 }
 
@@ -196,7 +286,8 @@ extern "C" cppExtension *CreateExtension(void)
     DealerSummary *p = new DealerSummary();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
+    p->setExtendedFlags(CALL_CONTINUOUSLY); // stale external reads must age even when the feed is inactive
     p->setDescription("LRA Dealer Summary: the LRA Reader's read for this market, in a panel on the left of the chart.");
-    p->setVersion("1.0.0");
+    p->setVersion(DSUM_VERSION);
     return p;
 }

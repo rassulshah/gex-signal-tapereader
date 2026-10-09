@@ -1,5 +1,5 @@
 /********************************************************************************
- *  DealerRead.cpp  --  Investor/RT RTX extension  lsDealerRead  (v1.0, 2026-09-29)
+ *  DealerRead.cpp  --  Investor/RT RTX extension  lsDealerRead  (v4.5.4, 2026-10-08)
  *
  *  THE DEALER READ: one compact strip docked in a corner of the price pane (mockup v11, ~1,470 x 176 px at font 10):
  *    left    the key level, the phase tabs APPROACH / SWEEP / RECLAIM / RETEST / TRADE, and WHAT TO DO
@@ -40,7 +40,13 @@
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
  ********************************************************************************/
 #include "irtsdk.h"
+// windows.h may expose the legacy far macro; DealerLogic's existing Node::far
+// member must remain visible in this implementation unit.
+#ifdef far
+#undef far
+#endif
 #include "DealerLogic.h"
+#include "HostSlot.h"
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -85,9 +91,83 @@ static const char* stWord(const std::string& st, bool wall)
     return "WAITING";
 }
 
+// DealerLogic clamps ordinary meter input, but atof("nan") survives its range
+// comparisons. Do not cast non-finite external-file values to drawing pixels.
+static bool drMeterValue(const dl::Row& r, float& value)
+{
+    if (!r.hasV || !std::isfinite(r.v)) return false;
+    value = r.v;
+    if (value > 100.0f) value = 100.0f;
+    if (value < -100.0f) value = -100.0f;
+    return true;
+}
+
+static bool drValidDate(int year, int month, int day)
+{
+    static const int days[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    if (year < 1970 || month < 1 || month > 12 || day < 1) return false;
+    int limit = days[month - 1];
+    if (month == 2 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) ++limit;
+    return day <= limit;
+}
+
+// Days since 1970-01-01, using the civil-calendar conversion rather than mktime
+// so stale status remains deterministic across DST transitions.
+static long long drDaysSinceEpoch(int year, int month, int day)
+{
+    year -= month <= 2;
+    const int era = (year >= 0 ? year : year - 399) / 400;
+    const unsigned yoe = (unsigned)(year - era * 400);
+    const unsigned mp = (unsigned)(month + (month > 2 ? -3 : 9));
+    const unsigned doy = (153 * mp + 2) / 5 + (unsigned)day - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (long long)era * 146097LL + (long long)doe - 719468LL;
+}
+
+// The feed supplies both ASOF seconds and a calendar date. Use both when
+// available: a file from two days ago must not look fresh merely because its
+// time-of-day is close to the current clock. Older rows without a valid date
+// retain the established time-of-day-only fallback.
+static double dealerAgeMin(double asofSo, int year, int month, int day, int clockOffsetMin, const struct tm& now)
+{
+    if (!std::isfinite(asofSo) || asofSo < 0.0 || asofSo >= 86400.0) return 0.0;
+    const double nowSo = now.tm_hour * 3600.0 + now.tm_min * 60.0 + now.tm_sec;
+    const double sourceSo = asofSo + clockOffsetMin * 60.0;
+    const int nowYear = now.tm_year + 1900, nowMonth = now.tm_mon + 1, nowDay = now.tm_mday;
+    if (!drValidDate(year, month, day) || !drValidDate(nowYear, nowMonth, nowDay)) return dl::staleMin(sourceSo, nowSo);
+    const double source = drDaysSinceEpoch(year, month, day) * 86400.0 + sourceSo;
+    const double current = drDaysSinceEpoch(nowYear, nowMonth, nowDay) * 86400.0 + nowSo;
+    return current > source ? (current - source) / 60.0 : 0.0;
+}
+
+static bool drShouldWriteStatus(const std::string& path, const std::string& payload, const std::string& lastPath,
+                                const std::string& lastPayload, std::time_t lastWrite, std::time_t now)
+{
+    if (path != lastPath || lastWrite == 0 || now == (std::time_t)-1) return true;
+    const double elapsed = std::difftime(now, lastWrite);
+    if (elapsed < 0.0 || elapsed < 1.0) return false;
+    return payload != lastPayload || elapsed >= 60.0;
+}
+
 struct PIdx { int rstg, rwid, rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
 struct Settings { int bg = 0; int rstg = 0, rwid = 100, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
+
+// Investor/RT may invoke the single DLL extension object for multiple chart
+// hosts. This record contains every mutable draw/cache/layout value; it lives
+// in the current host's SDK user-data slot, never in the shared object.
+struct DealerReadState {
+    Settings cfg;
+    dl::Data D;
+    std::string mkt, root;
+    float u = 1.0f;
+    long long loadedStamp = -2; std::string loadedPath;
+    bool inV14 = false; int profReach = 330; long long reachStamp = -2;
+    bool dragging = false; short gripL = 0, gripT = 0, gripR = 0, gripB = 0, gridL = 0, gridT = 0, gridH = 0, dragDX = 0, dragDY = 0;
+    int posX = -1, posB = -1; std::string posMkt;
+    int dltW = 50; bool dltLeft = false; long long dltStamp = -2; short lastClearR = 0, lastLeft = 0; int lastW = 0;
+    std::string lastStatusPath, lastStatusText; std::time_t lastStatusWrite = 0;
+};
 
 class DealerRead : public cppExtension {
 public:
@@ -96,16 +176,15 @@ public:
     virtual int parmsApply(void);
     virtual int parmsUpdt(unsigned int iParmNumber);
     virtual int draw(void);
+    virtual int done(void);
+    virtual int destroy(void);
 
-    Settings cfg;
-    dl::Data D;
-    std::string mkt, root;
-    float u;   // scale: font / 10
-
+    DealerReadState& state();
+    HostSlot<DealerReadState> slot_;
+    void releaseState();
     bool dialogReady();
     void readSettings(Settings& S);
     void load();
-    long long loadedStamp = -2; std::string loadedPath;   // (1.2.5) re-read the file only when it changed
     void render(const Settings& S);
     void renderFull(const Settings& S);
     void renderSmall(const Settings& S);
@@ -117,12 +196,11 @@ public:
     void mark(short x, short y, short sz, const std::string& q);   // (1.6.0) check / cross / dash / circle
     short keyBoxV2H(const Settings& S, short W);
     void keyBoxV2(const Settings& S, short x0, short y0, short W, short H, bool wallLvl, const std::string& stale);
-    bool inV14 = false; int profReach = 330; long long reachStamp = -2;   // px the Profile takes from the scale edge (its status file)
     void renderAnalyst(const Settings& S, short x0, short y0, short W, short H);
     std::vector<std::string> wrapWords(const std::string& s, int firstW, int restW, int sz, bool bold, int maxLines);
     void miniBoxes(short& x, short y, const std::vector<dl::Row>& rows, short sz);
     std::string fit(const std::string& s, int maxW, int sz, bool bold);
-    short U(float v) { return (short)(v * u + 0.5f); }
+    short U(float v);
     void fill(short l, short t, short r, short b, COLOR c);
     void frame(short l, short t, short r, short b, COLOR c, bool dashed);
     void line(short x1, short y1, short x2, short y2, COLOR c, int w);
@@ -138,10 +216,6 @@ public:
     void renderGrid(const Settings& S);               // (2.2.0) ONE compact grid: a row per stage, a cell per reason, draggable
     void renderTurn(const Settings& S);               // (3.0.0) THE TURN: header + numbered sentences, draggable
     virtual int mouse(RTX_EVENT* e);
-    bool dragging = false; short gripL = 0, gripT = 0, gripR = 0, gripB = 0, gridL = 0, gridT = 0, gridH = 0, dragDX = 0, dragDY = 0;
-    int posX = -1, posB = -1; std::string posMkt;
-    // (4.2.0) the room the Read may use: everything left of the Delta Profile + Dealer Profile (their status files), its width
-    int dltW = 50; bool dltLeft = false; long long dltStamp = -2; short lastClearR = 0, lastLeft = 0; int lastW = 0;
     short clearRight(const RCT& pane);      // where he dropped it: px from the pane's left, px from its bottom (-1 = default)
     void loadPos(); void savePos();
 };
@@ -151,7 +225,56 @@ int cppExtension::calc(int)     { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
 
-DealerRead::DealerRead() : cppExtension() { u = 1.0f; }
+DealerReadState& DealerRead::state()
+{
+    DealerReadState* p = slot_.get(this, true);
+    if (!p) throw std::bad_alloc();
+    return *p;
+}
+
+void DealerRead::releaseState()
+{
+    slot_.release(this);
+}
+
+int DealerRead::done(void)    { releaseState(); return RTX_OK; }
+int DealerRead::destroy(void) { releaseState(); return RTX_OK; }
+
+#define cfg (state().cfg)
+#define D (state().D)
+#define mkt (state().mkt)
+#define root (state().root)
+#define u (state().u)
+#define loadedStamp (state().loadedStamp)
+#define loadedPath (state().loadedPath)
+#define inV14 (state().inV14)
+#define profReach (state().profReach)
+#define reachStamp (state().reachStamp)
+#define dragging (state().dragging)
+#define gripL (state().gripL)
+#define gripT (state().gripT)
+#define gripR (state().gripR)
+#define gripB (state().gripB)
+#define gridL (state().gridL)
+#define gridT (state().gridT)
+#define gridH (state().gridH)
+#define dragDX (state().dragDX)
+#define dragDY (state().dragDY)
+#define posX (state().posX)
+#define posB (state().posB)
+#define posMkt (state().posMkt)
+#define dltW (state().dltW)
+#define dltLeft (state().dltLeft)
+#define dltStamp (state().dltStamp)
+#define lastClearR (state().lastClearR)
+#define lastLeft (state().lastLeft)
+#define lastW (state().lastW)
+#define lastStatusPath (state().lastStatusPath)
+#define lastStatusText (state().lastStatusText)
+#define lastStatusWrite (state().lastStatusWrite)
+
+DealerRead::DealerRead() : cppExtension() { }
+short DealerRead::U(float v) { return (short)(v * u + 0.5f); }
 bool DealerRead::dialogReady() { int i = getListIndex(PX.market); return i >= 0 && i <= 7; }
 int DealerRead::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
 // (4.3.0) the Position setting is saved for the dialog's market when he changes it (a draw never writes it)
@@ -283,7 +406,7 @@ static std::string to12(const char* in)
             && !dig(i + hl + 3) && !(i + hl + 3 < n && s[i + hl + 3] == ':')) {   // H:MM / HH:MM, not H:MM:SS or 123:45
             int h = atoi(s.substr(i, hl).c_str()), m = atoi(s.substr(i + hl + 1, 2).c_str());
             if (h <= 23 && m <= 59) {
-                char b[16]; snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
+                char b[32]; snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
                 o += b; i += hl + 2; continue;
             }
         }
@@ -331,14 +454,15 @@ void DealerRead::meter(short x, short y, short w, short h, const dl::Row& r)
     fill(x, (short)(y - h / 2), (short)(x + w), (short)(y + h / 2), C_TRACK);
     short mid = (short)(x + w / 2);
     int fs = (int)(9 * u + 0.5f);   // (1.2.3) 8 -> 9
-    if (!r.hasV) { text(mid, y, r.lab.c_str(), C_MUTED, fs, false, 1); return; }
-    short ln = (short)(w / 2 * std::fabs(r.v) / 100.0f);
-    COLOR c = r.v >= 0 ? C_GREEN : C_RED;
-    if (r.v >= 0) fill(mid, (short)(y - h / 2), (short)(mid + ln), (short)(y + h / 2), c);
+    float value = 0.0f;
+    if (!drMeterValue(r, value)) { text(mid, y, r.lab.c_str(), C_MUTED, fs, false, 1); return; }
+    short ln = (short)(w / 2 * std::fabs(value) / 100.0f);
+    COLOR c = value >= 0 ? C_GREEN : C_RED;
+    if (value >= 0) fill(mid, (short)(y - h / 2), (short)(mid + ln), (short)(y + h / 2), c);
     else          fill((short)(mid - ln), (short)(y - h / 2), mid, (short)(y + h / 2), c);
     line(mid, (short)(y - h / 2 - 1), mid, (short)(y + h / 2 + 1), 0x0094A3B8, 1);
     int tw = textW(r.lab.c_str(), fs, true);
-    if (r.v >= 0) {
+    if (value >= 0) {
         if (ln > tw + 6) text((short)(mid + ln - 3), y, r.lab.c_str(), 0x00052E16, fs, true, 2);
         else text((short)(mid + ln + 3), y, r.lab.c_str(), C_INK, fs, true, 0);
     } else text((short)(mid - ln - 3), y, r.lab.c_str(), C_INK, fs, true, 2);
@@ -451,7 +575,7 @@ void DealerRead::renderFull(const Settings& S)
     checklist((short)(cx + cw + gap), cy, cw, ch, D.fuelTitle.empty() ? std::string("FUEL") : D.fuelTitle, C_AMBER, D.fuelScore, D.fuelCol, D.fuel, false, fs);
     // stale
     RTDATE now = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(now, &t);
-    double age = dl::staleMin(D.asofSo + S.clock * 60.0, t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec);
+    double age = dealerAgeMin(D.asofSo, D.y, D.mo, D.d, S.clock, t);
     if (age > 10.0) {
         sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5));
         text((short)(x0 + U(376)), (short)(y0 + U(18)), b, C_RED, fs, true, 2);
@@ -670,8 +794,6 @@ void DealerRead::mark(short x, short y, short sz, const std::string& q)
     else { short h = (short)(sz / 2 - 1); frame((short)(x + 1), (short)(y - h), (short)(x + sz - 1), (short)(y + h), C_GREY, false); }
 }
 
-static std::string bookQ(const std::string& st) { return st == "MATCH" ? "ok" : st == "FLIP" ? "bad" : st == "MIXED" ? "neutral" : "wait"; }
-
 short DealerRead::keyBoxV2H(const Settings& S, short W)
 {
     if (S.view == 1) {
@@ -748,7 +870,7 @@ void DealerRead::renderV14(const Settings& S)
     short clearR = (short)(paneR - profReach - U(8));        // stay left of the Profile
     char b[120];
     RTDATE now = currentDate(); struct tm tt; memset(&tt, 0, sizeof(tt)); getLocaltime(now, &tt);
-    double age = dl::staleMin(D.asofSo + S.clock * 60.0, tt.tm_hour * 3600.0 + tt.tm_min * 60.0 + tt.tm_sec);
+    double age = dealerAgeMin(D.asofSo, D.y, D.mo, D.d, S.clock, tt);
     std::string stale;
     if (D.hasPrice && age > 10.0) { if (age >= 90) sprintf_s(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5)); stale = b; }
     // the Dealers + Magnet box (top)
@@ -832,7 +954,7 @@ void DealerRead::renderSmall(const Settings& S)
     char b[200];
     // stale (drawn at the right end of the first line)
     RTDATE now = currentDate(); struct tm tt; memset(&tt, 0, sizeof(tt)); getLocaltime(now, &tt);
-    double age = dl::staleMin(D.asofSo + S.clock * 60.0, tt.tm_hour * 3600.0 + tt.tm_min * 60.0 + tt.tm_sec);
+    double age = dealerAgeMin(D.asofSo, D.y, D.mo, D.d, S.clock, tt);
     std::string stale;
     if (D.hasPrice && age > 10.0) { if (age >= 90) sprintf_s(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "STALE %dm", (int)(age + 0.5)); stale = b; }
     if (!D.hasPrice) {
@@ -1011,8 +1133,17 @@ void DealerRead::writeStatus(const char* what)
 {
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
+    std::ostringstream text;
+    text << "VERSION,4.5.4\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    const std::string payload = text.str();
+    const std::time_t now = std::time(NULL);
+    // Different charts can share this legacy status file: cap those switches
+    // to one write per second, and retain a 60 s heartbeat for unchanged data.
+    if (!drShouldWriteStatus(path, payload, lastStatusPath, lastStatusText, lastStatusWrite, now)) return;
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION,4.3.0\nROOT,"   /* (4.1.0) was a stale 3.0.1 - the health check reads it */  << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    f << payload;
+    if (!f.good()) return;
+    lastStatusPath = path; lastStatusText = payload; lastStatusWrite = now;
 }
 
 // (2.0.0, Rassul 2026-10-02: "i need a way of seeing how vanna and charm are forcing dealers to buy back futures, clear
@@ -1347,7 +1478,7 @@ void DealerRead::renderTurn(const Settings& S)
     // (4.4.0, Rassul 2026-10-07 11:01 "today in the morning it had data from 4 or 5 am") how old the file is: > 5 min = a grey
     // "data N min old" after the header; > 15 min = STALE - the header says when it last updated, the outline and text go grey
     RTDATE nowD = currentDate(); struct tm ntm; memset(&ntm, 0, sizeof(ntm)); getLocaltime(nowD, &ntm);
-    double ageMin = D.asofSo >= 0 ? dl::staleMin(D.asofSo + S.clock * 60.0, ntm.tm_hour * 3600.0 + ntm.tm_min * 60.0 + ntm.tm_sec) : 0;
+    double ageMin = dealerAgeMin(D.asofSo, D.y, D.mo, D.d, S.clock, ntm);
     bool stale = ageMin > 15.0;
     bool noFp = D.liveRec == "STOPPED";
     // (4.2.0) the width: the room between the chart's left edge and the profiles, times the Width setting (never across the Delta
@@ -1358,7 +1489,6 @@ void DealerRead::renderTurn(const Settings& S)
     int W = U(760); if (W > avail) W = avail > U(300) ? avail : U(300);       // (4.3.0) one fixed width: it never shakes
     int inner = W - gw - 2 * pad;
     int colW = (inner - cgap) / 2;
-    auto wBold = [&](const std::string& q) { return (float)textW(q.c_str(), fs, true); };
     // (4.4.0, Rassul 10:44 "simplify the header line for the dealer read, its too long") ONE line: who is in control, the trade,
     // the targets. Dropped: the market name, "last 90 min", the low / high time, short / long gamma (now on the Session Info) and
     // the bar range - the read line below says them.
@@ -1527,7 +1657,7 @@ void DealerRead::renderTurn(const Settings& S)
         if (c == 1 && noFp) { text(lx, yy, "no footprint - IRT not recording", 0x00F59E0B, fs, false, 0); continue; }
         if (K.G.empty()) { text(lx, yy, "-", C_MUTED, fs, false, 0); continue; }
         for (size_t k = 0; k < K.G.size(); k++) {
-            char nb[8]; snprintf(nb, sizeof(nb), "%d)", (int)k + 1);
+            char nb[16]; snprintf(nb, sizeof(nb), "%d)", (int)k + 1);
             text((short)(lx + nW - U(4)), yy, nb, C_MUTED, fs, false, 2);
             text((short)(lx + nW), yy, K.G[k].t.c_str(), C_MUTED, fs, false, 0);
             short tx = (short)(lx + nW + K.tW);
@@ -1572,6 +1702,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.5.2");   // (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.5.4");   // (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

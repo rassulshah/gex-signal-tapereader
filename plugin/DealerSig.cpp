@@ -37,6 +37,9 @@
  *  (LRA analytics/lra/forced.py via dealer_irt.py, file 1.6); grammar in DealerLogic.h. Never black lines: the chart is black.
  ********************************************************************************/
 #include "irtsdk.h"
+#ifdef far
+#undef far
+#endif
 #include "DealerLogic.h"
 #include <fstream>
 #include <sstream>
@@ -49,7 +52,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.5.2";   // 1.5.2 (2026-10-05): per-chart settings; a reason timed after the last bar is not drawn on it
+static const char* DS_VERSION = "1.5.4";   // 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -69,11 +72,14 @@ public:
     dl::Data D;
     std::string mkt, root;
     long long loadedStamp = -2; std::string loadedPath;
+    std::string sourceState = "not loaded";
+    std::string statusPath, statusText;
+    bool signalsReady = false, signalsLedger = false, signalsDirty = true;
     int drawn = 0;
 
     bool dialogReady() { int i = getListIndex(SX.market); return i >= 0 && i <= 7; }
     void readSettings(SSet& S);
-    void load();
+    bool load();
     int barOf(const dl::Data::Sig& g, int n, RTARRAYI& dt);
     void fillSignals(int from);
     void writeStatus(const char* what);
@@ -115,22 +121,40 @@ void DealerSig::readSettings(SSet& S)
     S.ledger = getListIndex(SX.ledger) == 1;
 }
 
-void DealerSig::load()
+bool DealerSig::load()
 {
     char buf[32] = {0};
     const char* rs = getRootSymbol(buf);
     root = rs ? rs : "";
     mkt = dl::marketFor(cfg.market, root);
-    if (mkt.empty()) { D = dl::Data(); loadedPath.clear(); return; }
-    const char* up = getenv("USERPROFILE"); if (!up) { D = dl::Data(); return; }
+    if (mkt.empty()) {
+        bool changed = loadedStamp != -1 || !loadedPath.empty() || sourceState != "no market";
+        D = dl::Data(); loadedStamp = -1; loadedPath.clear(); sourceState = "no market";
+        if (changed) signalsDirty = true;
+        return changed;
+    }
+    const char* up = getenv("USERPROFILE");
+    if (!up) {
+        bool changed = loadedStamp != -1 || !loadedPath.empty() || sourceState != "source unavailable";
+        D = dl::Data(); loadedStamp = -1; loadedPath.clear(); sourceState = "source unavailable";
+        if (changed) signalsDirty = true;
+        return changed;
+    }
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Dealer-" + mkt + ".csv";
     long long st = dl::fileStamp(path);
-    if (st >= 0 && st == loadedStamp && path == loadedPath) return;      // unchanged: keep what is parsed
+    if (st == loadedStamp && path == loadedPath) return false;            // unchanged, including a missing/unreadable source
     D = dl::Data();
-    std::ifstream f(path.c_str()); if (!f.is_open()) { loadedPath.clear(); return; }
-    std::stringstream ss; ss << f.rdbuf();
-    D = dl::parseText(ss.str());
     loadedStamp = st; loadedPath = path;
+    signalsDirty = true;
+    std::ifstream f(path.c_str());
+    if (!f.is_open()) { sourceState = "source unavailable"; return true; }
+    std::stringstream ss; ss << f.rdbuf();
+    dl::Data parsed = dl::parseText(ss.str());
+    // The path selects the market. Refuse a wrongly published or incomplete file rather than mark its reasons on this chart.
+    if (parsed.market != mkt) { sourceState = parsed.market.empty() ? "market missing" : "market mismatch"; return true; }
+    D = parsed;
+    sourceState = "loaded";
+    return true;
 }
 
 // the bar (chart local time + clock offset) whose span holds the reason's time; -1 = not on the chart
@@ -158,11 +182,15 @@ int DealerSig::barOf(const dl::Data::Sig& g, int n, RTARRAYI& dt)
 
 void DealerSig::fillSignals(int from)
 {
-    load();
+    if (dialogReady()) readSettings(cfg);
+    bool sourceChanged = load();
+    bool ledgerChanged = !signalsReady || signalsLedger != cfg.ledger;
+    signalsReady = true; signalsLedger = cfg.ledger;
     long n = getBarCount(); if (n < 1) return;
     RTARRAYI o1(iOut1), o2(iOut2);
     RTARRAYI dt(barDateTime);
-    if (from < 0) from = 0;
+    if (from < 0 || sourceChanged || signalsDirty || ledgerChanged) from = 0;
+    if (from >= (int)n) return;
     for (int i = from; i < (int)n; i++) { o1[i] = 0; o2[i] = 0; }
     std::vector<const dl::Data::Sig*> all;
     for (size_t k = 0; k < D.sigs.size(); k++) all.push_back(&D.sigs[k]);
@@ -172,14 +200,22 @@ void DealerSig::fillSignals(int from)
         if (b < from) continue;
         if (all[k]->side == 'B') o1[b] = kSignalTrue; else o2[b] = kSignalTrue;
     }
+    signalsDirty = false;
 }
 
 void DealerSig::writeStatus(const char* what)
 {
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerSig.status.txt";
+    std::ostringstream out;
+    out << "VERSION," << DS_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nSIGS," << D.sigs.size()
+        << "\nDRAWN," << drawn << "\nSOURCE," << sourceState << "\nSTATE," << what << "\n";
+    std::string text = out.str();
+    if (path == statusPath && text == statusText) return;                 // avoid opening/truncating the shared status file on every repaint
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
-    f << "VERSION," << DS_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nSIGS," << D.sigs.size() << "\nDRAWN," << drawn << "\nSTATE," << what << "\n";
+    f << text;
+    if (!f.good()) return;
+    statusPath = path; statusText = text;
 }
 
 int DealerSig::draw(void)
@@ -196,7 +232,11 @@ int DealerSig::draw(void)
     std::vector<std::pair<const dl::Data::Sig*, bool> > all;           // (mark, is ledger)
     for (size_t k = 0; k < D.sigs.size(); k++) all.push_back(std::make_pair(&D.sigs[k], false));
     if (cfg.ledger) for (size_t k = 0; k < D.lsigs.size(); k++) all.push_back(std::make_pair(&D.lsigs[k], true));
-    if (n < 1 || all.empty()) { writeStatus(mkt.empty() ? "no market" : (all.empty() ? "no reasons yet" : "no bars")); return RTX_OK; }
+    if (n < 1 || all.empty()) {
+        std::string state = mkt.empty() ? "no market" : (sourceState != "loaded" ? sourceState : (all.empty() ? "no reasons yet" : "no bars"));
+        writeStatus(state.c_str());
+        return RTX_OK;
+    }
     RTARRAY hi(barHigh), lo(barLow);
     RTARRAYI dt(barDateTime);
     RCT pane; pane.getPaneRect(false);
@@ -215,7 +255,7 @@ int DealerSig::draw(void)
             // the bar. The colour still says the side (green = long, red = short).
             bool below = led || (!g.code.empty() && g.code[0] == 'o');
             if (!led) { int& cnt = perBar[b * 2 + (below ? 1 : 0)]; if (cnt >= 2) continue; cnt++; }   // at most two per side of a bar
-            PNT p; p.set(b, below ? lo[b] : hi[b], kBarCenter);
+            PNT p; if (p.set(b, below ? lo[b] : hi[b], kBarCenter) != RTX_OK) continue;
             if (p.h < pane.left || p.h > pane.right) continue;
             int fs = led ? (cfg.font > 8 ? cfg.font - 2 : cfg.font) : cfg.font;
             FONT f; f.id = HELVETICA; f.size = (short)fs; f.style = led ? PLAIN : BOLD; setFont(f);
@@ -244,6 +284,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.5.2");
+    p->setVersion("1.5.4");
     return p;
 }

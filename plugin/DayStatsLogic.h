@@ -4,12 +4,31 @@
 //   · the twelve A and E cells exactly as the strip prints them (the '~' on expectations, "39% last hr" on the 2ND)
 //   · the ACTUAL row's colour rules (LOD red / HOD green on 1ST and 2ND; MUD by the day's phase)
 #pragma once
+#include <cerrno>
+#include <cctype>
+#include <cmath>
+#include <climits>
 #include <string>
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 
 namespace dsl {
+
+// currentDate() can remain unchanged during replay/redraw bursts.  Cache most
+// duplicate callbacks, but force a re-read after a bounded number so a corrected
+// same-timestamp external CSV is eventually observed.
+const unsigned int kMaxSameDateCacheSkips = 31u;
+inline bool cacheRefreshDue(bool sameTimestamp, unsigned int& sameTimestampSkips)
+{
+    if (!sameTimestamp || sameTimestampSkips >= kMaxSameDateCacheSkips) {
+        sameTimestampSkips = 0;
+        return true;
+    }
+    ++sameTimestampSkips;
+    return false;
+}
 
 struct StatRow {
     bool valid;
@@ -23,66 +42,148 @@ struct StatRow {
 };
 struct Cond { std::string basis; int lastHr, last30; int p20, p50, p80; Cond() : lastHr(-1), last30(-1), p20(-1), p50(-1), p80(-1) {} };   // (0.11) + the 2ND clock's percentiles, minutes after the open
 
-inline double num(const std::string& s) { return s.empty() ? -1.0 : atof(s.c_str()); }
+inline std::string trim(const std::string& s)
+{
+    std::string::size_type first = 0, last = s.size();
+    while (first < last && std::isspace((unsigned char)s[first])) ++first;
+    while (last > first && std::isspace((unsigned char)s[last - 1])) --last;
+    return s.substr(first, last - first);
+}
+inline bool isFinite(double v) { return std::isfinite(v) != 0; }
+inline bool parseFinite(const std::string& s, double& value)
+{
+    const std::string field = trim(s); if (field.empty()) return false;
+    char* end = NULL; errno = 0; const double parsed = std::strtod(field.c_str(), &end);
+    if (end == field.c_str() || *end != '\0' || errno == ERANGE || !isFinite(parsed)) return false;
+    value = parsed; return true;
+}
+inline bool parseOptionalFinite(const std::string& s, double& value)
+{
+    const std::string field = trim(s); if (field.empty()) { value = -1.0; return true; }
+    return parseFinite(field, value);
+}
+inline bool parseBoundedInt(const std::string& s, int lo, int hi, int& value)
+{
+    double parsed = 0.0; if (!parseFinite(s, parsed) || parsed < lo || parsed > hi || std::floor(parsed) != parsed) return false;
+    value = (int)parsed; return true;
+}
+inline bool parseOptionalBoundedInt(const std::string& s, int lo, int hi, int& value)
+{
+    if (trim(s).empty()) { value = -1; return true; }
+    return parseBoundedInt(s, lo, hi, value);
+}
+inline bool parseOptionalLong(const std::string& s, long& value)
+{
+    const std::string field = trim(s); if (field.empty()) { value = 0; return true; }
+    char* end = NULL; errno = 0; const long parsed = std::strtol(field.c_str(), &end, 10);
+    if (end == field.c_str() || *end != '\0' || errno == ERANGE || parsed < 0) return false;
+    value = parsed; return true;
+}
+inline bool validSide(const std::string& side) { return side == "HOD" || side == "LOD"; }
+inline bool validSod(double sod) { return isFinite(sod) && sod >= 0.0 && sod < 86400.0; }
+inline bool validOptionalSod(double sod) { return sod < 0.0 || validSod(sod); }
+inline bool roundedInt(double v, int& value)
+{
+    if (!isFinite(v)) return false;
+    const double rounded = std::floor(v + 0.5);
+    if (rounded < (double)std::numeric_limits<int>::min() || rounded > (double)std::numeric_limits<int>::max()) return false;
+    value = (int)rounded; return true;
+}
+inline bool roundedLong(double v, long& value)
+{
+    if (!isFinite(v)) return false;
+    const double rounded = std::floor(v + 0.5);
+    if (rounded < (double)std::numeric_limits<long>::min() || rounded > (double)std::numeric_limits<long>::max()) return false;
+    value = (long)rounded; return true;
+}
+inline double num(const std::string& s) { double value = -1.0; return parseFinite(s, value) ? value : -1.0; }
 
 // DAYSA / DAYSE,<first>,<firstPx>,<firstClkSo>,<took>,<bop>,<wick>,<wendSo>,<wickPct>,<mud>,<second>,<secondPx>,<secondClkSo>,<gap>,<rngPts>,<rngUsd>[,<p25>,<p75>]
 inline bool parseStatRow(const std::vector<std::string>& t, StatRow& r)
 {
     if (t.size() < 16) return false;
-    r.first = t[1]; r.firstPx = t[2]; r.firstClk = num(t[3]); r.took = num(t[4]); r.bop = num(t[5]); r.wick = num(t[6]);
-    r.wendSo = num(t[7]); r.wickPct = num(t[8]); r.mud = num(t[9]); r.second = t[10]; r.secondPx = t[11]; r.secondClk = num(t[12]);
-    r.gap = num(t[13]); r.rngPts = t[14]; r.rngUsd = t[15]; r.rngP25 = (t.size() > 16) ? t[16] : ""; r.rngP75 = (t.size() > 17) ? t[17] : "";
-    r.valid = true; return true;
+    const std::string rowType = trim(t[0]); if (rowType != "DAYSA" && rowType != "DAYSE") return false;
+    StatRow parsed;
+    parsed.first = trim(t[1]); parsed.firstPx = trim(t[2]); parsed.second = trim(t[10]); parsed.secondPx = trim(t[11]);
+    if (!validSide(parsed.first) || !validSide(parsed.second) ||
+        !parseOptionalFinite(t[3], parsed.firstClk) || !parseOptionalFinite(t[4], parsed.took) ||
+        !parseOptionalFinite(t[5], parsed.bop) || !parseOptionalFinite(t[6], parsed.wick) ||
+        !parseOptionalFinite(t[7], parsed.wendSo) || !parseOptionalFinite(t[8], parsed.wickPct) ||
+        !parseOptionalFinite(t[9], parsed.mud) || !parseOptionalFinite(t[12], parsed.secondClk) ||
+        !parseOptionalFinite(t[13], parsed.gap) || !validOptionalSod(parsed.firstClk) ||
+        !validOptionalSod(parsed.secondClk) || !validOptionalSod(parsed.wendSo) ||
+        (parsed.took >= 0.0 && parsed.took > (double)INT_MAX - 1.0) ||
+        (parsed.bop >= 0.0 && parsed.bop > (double)INT_MAX - 1.0) ||
+        (parsed.wick >= 0.0 && parsed.wick > (double)INT_MAX - 1.0) ||
+        (parsed.mud >= 0.0 && parsed.mud > (double)INT_MAX - 1.0) ||
+        (parsed.gap >= 0.0 && parsed.gap > (double)INT_MAX - 1.0) ||
+        (parsed.wickPct >= 0.0 && parsed.wickPct > 100.0)) return false;
+    double ignored = 0.0;
+    if ((!parsed.firstPx.empty() && !parseFinite(parsed.firstPx, ignored)) ||
+        (!parsed.secondPx.empty() && !parseFinite(parsed.secondPx, ignored)) ||
+        (!trim(t[14]).empty() && !parseFinite(t[14], ignored)) ||
+        (!trim(t[15]).empty() && !parseFinite(t[15], ignored)) ||
+        (t.size() > 16 && !trim(t[16]).empty() && !parseFinite(t[16], ignored)) ||
+        (t.size() > 17 && !trim(t[17]).empty() && !parseFinite(t[17], ignored))) return false;
+    parsed.rngPts = trim(t[14]); parsed.rngUsd = trim(t[15]);
+    parsed.rngP25 = (t.size() > 16) ? trim(t[16]) : ""; parsed.rngP75 = (t.size() > 17) ? trim(t[17]) : "";
+    parsed.valid = true; r = parsed; return true;
 }
 // CONDE,<basis>,<t1>,<t2>,<lod%>,<n>[,<lastHr%>,<last30%>]
 inline bool parseCond(const std::vector<std::string>& t, Cond& c)
 {
-    if (t.size() < 6) return false;
-    c.basis = t[1]; c.lastHr = (t.size() >= 7) ? atoi(t[6].c_str()) : -1; c.last30 = (t.size() >= 8) ? atoi(t[7].c_str()) : -1;
-    c.p20 = (t.size() >= 9 && !t[8].empty()) ? atoi(t[8].c_str()) : -1; c.p50 = (t.size() >= 10 && !t[9].empty()) ? atoi(t[9].c_str()) : -1; c.p80 = (t.size() >= 11 && !t[10].empty()) ? atoi(t[10].c_str()) : -1;   // (0.11, panel 16.45)
+    c = Cond(); if (t.size() < 6) return false;
+    c.basis = trim(t[1]); if (c.basis.empty() ||
+        (t.size() >= 7 && !parseOptionalBoundedInt(t[6], 0, 100, c.lastHr)) ||
+        (t.size() >= 8 && !parseOptionalBoundedInt(t[7], 0, 100, c.last30)) ||
+        (t.size() >= 9 && !parseOptionalBoundedInt(t[8], 0, 1440, c.p20)) ||
+        (t.size() >= 10 && !parseOptionalBoundedInt(t[9], 0, 1440, c.p50)) ||
+        (t.size() >= 11 && !parseOptionalBoundedInt(t[10], 0, 1440, c.p80))) { c = Cond(); return false; }
     return true;
 }
 
 inline std::string clk(double so)
 {
-    if (so < 0) return "--";
-    int s = (int)(so + 0.5), h = s / 3600, m = (s % 3600) / 60;
+    if (!validSod(so)) return "--";
+    int s = 0; if (!roundedInt(so, s) || s >= 86400) return "--";
+    int h = s / 3600, m = (s % 3600) / 60;
     const char* ap = (h < 12) ? "am" : "pm"; int h12 = h % 12; if (h12 == 0) h12 = 12;
     char b[16]; snprintf(b, sizeof(b), "%d:%02d%s", h12, m, ap); return std::string(b);
 }
 inline std::string dur(double m)
 {
-    if (m < 0) return "--";
-    int mins = (int)(m + 0.5); char b[16];
+    int mins = 0; if (m < 0 || !roundedInt(m, mins)) return "--"; char b[16];
     if (mins >= 60) snprintf(b, sizeof(b), "%dh %02dm", mins / 60, mins % 60); else snprintf(b, sizeof(b), "%dm", mins);
     return std::string(b);
 }
 inline std::string px1(const std::string& raw, double priceOff)
 {
-    if (raw.empty()) return "--";
-    double v = atof(raw.c_str()) + priceOff; char b[16]; snprintf(b, sizeof(b), "%d", (int)(v + 0.5)); return std::string(b);
+    double rawPrice = 0.0; int rounded = 0;
+    if (!parseFinite(raw, rawPrice) || !isFinite(priceOff) || !roundedInt(rawPrice + priceOff, rounded)) return "--";
+    char b[16]; snprintf(b, sizeof(b), "%d", rounded); return std::string(b);
 }
-inline std::string pct(double v, bool tilde) { if (v < 0) return "--"; char b[16]; snprintf(b, sizeof(b), "%s%d%%", tilde ? "~" : "", (int)(v + 0.5)); return std::string(b); }
+inline std::string pct(double v, bool tilde) { int rounded = 0; if (v < 0 || v > 100.0 || !roundedInt(v, rounded)) return "--"; char b[16]; snprintf(b, sizeof(b), "%s%d%%", tilde ? "~" : "", rounded); return std::string(b); }
 
 // (0.16) money with a thousands comma ("$1,197"); MUD is the move in dollars followed by (points) — operator, 2026-09-19:
 // "the MUD field for actual and expected have time, when it should be dollars followed by (points)". ES: $50 a point.
 inline std::string usd(double v)
 {
-    if (v < 0) return "--";
-    long n = (long)(v + 0.5); std::string d = std::to_string(n), o;
+    long n = 0; if (v < 0 || !roundedLong(v, n)) return "--"; std::string d = std::to_string(n), o;
     int c = 0; for (int i = (int)d.size() - 1; i >= 0; i--) { o.insert(o.begin(), d[i]); if (++c % 3 == 0 && i > 0) o.insert(o.begin(), ','); }
     return "$" + o;
 }
 inline std::string mudCell(double pts, bool expected)
 {
-    if (pts < 0) return "--";
+    if (pts < 0 || !isFinite(pts) || !isFinite(pts * 50.0)) return "--";
     char b[24]; snprintf(b, sizeof(b), " (%.1fp)", pts);
     return (expected ? "~" : "") + usd(pts * 50.0) + b;
 }
 inline std::string rngCell(const std::string& usdRaw, const std::string& pts, bool expected)
 {
-    std::string m = usdRaw.empty() ? std::string("--") : ((expected ? "~" : "") + usd(atof(usdRaw.c_str())));
-    return m + (pts.empty() ? std::string("") : ((expected ? "  ~" : "  ") + pts + "p"));
+    double dollars = 0.0, points = 0.0;
+    std::string m = parseFinite(usdRaw, dollars) ? ((expected ? "~" : "") + usd(dollars)) : std::string("--");
+    const std::string pointsText = trim(pts);
+    return m + ((!pointsText.empty() && parseFinite(pointsText, points)) ? ((expected ? "  ~" : "  ") + pointsText + "p") : std::string(""));
 }
 // the MUD move: from the open (reclaimed at W.END) to the 2nd extreme — the leg MUDt times. A row: the chart's own RTH open and
 // its 2nd extreme (chart facts, like the prices since 0.10). E row: the expected candle's 2nd extreme against its open (DAYEXP),
@@ -90,7 +191,7 @@ inline std::string rngCell(const std::string& usdRaw, const std::string& pts, bo
 inline void setMud(StatRow& R, double open)
 {
     if (!R.valid || !(open > 0) || R.secondPx.empty()) return;
-    double sp = atof(R.secondPx.c_str()); if (!(sp > 0)) return;
+    double sp = 0.0; if (!parseFinite(R.secondPx, sp) || !(sp > 0)) return;
     R.mudPts = sp > open ? sp - open : open - sp;
 }
 
@@ -135,15 +236,16 @@ inline void actualTone(const StatRow& A, int* tone)
 // (live chart close − SPOT), which moves with every after-hours tick and jumped at the roll. The charted contract's own
 // session high / low ARE the actual HOD / LOD, so they replace the panel's prices, with no offset at all; the range
 // follows. The clocks, durations and ordering stay the panel's (they are time facts, not price facts).
-inline std::string fmtPx(double v) { char b[32]; snprintf(b, sizeof(b), "%.2f", v); return std::string(b); }
+inline std::string fmtPx(double v) { if (!isFinite(v)) return ""; char b[32]; snprintf(b, sizeof(b), "%.2f", v); return std::string(b); }
 inline void applyChartExtremes(StatRow& A, double chartHi, double chartLo, bool have)
 {
-    if (!have || !(chartHi > chartLo) || chartHi <= 0) return;
+    if (!have || !isFinite(chartHi) || !isFinite(chartLo) || !(chartHi > chartLo) || chartHi <= 0) return;
     A.firstPx  = fmtPx(A.first  == "LOD" ? chartLo : chartHi);
     A.secondPx = fmtPx(A.second == "HOD" ? chartHi : chartLo);
     double pts = chartHi - chartLo;
+    long dollars = 0; if (!isFinite(pts) || !roundedLong(pts * 50.0, dollars)) return;
     char b[32]; snprintf(b, sizeof(b), "%.1f", pts); A.rngPts = b;
-    snprintf(b, sizeof(b), "%d", (int)(pts * 50.0 + 0.5)); A.rngUsd = b;   // ES: $50 a point
+    snprintf(b, sizeof(b), "%ld", dollars); A.rngUsd = b;   // ES: $50 a point
 }
 // the session's high / low on the chart's own bars: the bars of `y-m-d` (the day the rows describe) inside RTH
 // (08:30–15:00 CT); returns false when that day has no RTH bar on the chart
@@ -154,20 +256,22 @@ struct Ext { double hi, lo; int hiSod, loSod; double open; int openSod; Ext() : 
 inline bool endStampedSods(const double* sod, int n)
 {
     int seenStart = 0, seenEnd = 0, to = n - 2000; if (to < 0) to = 0;
-    for (int i = n - 1; i >= to; i--) { if ((int)sod[i] == 17 * 3600) seenStart++; if ((int)sod[i] == 16 * 3600) seenEnd++; }
+    for (int i = n - 1; i >= to; i--) { if (!validSod(sod[i])) continue; int stamp = 0; if (!roundedInt(sod[i], stamp)) continue; if (stamp == 17 * 3600) seenStart++; if (stamp == 16 * 3600) seenEnd++; }
     return seenEnd > 0 && seenStart == 0;
 }
-inline bool inRthS(double sod, bool endSt) { const int O = 30600, S = 54000; return endSt ? (sod > O && sod <= S) : (sod >= O && sod < S); }
+inline bool inRthS(double sod, bool endSt) { const int O = 30600, S = 54000; return validSod(sod) && (endSt ? (sod > O && sod <= S) : (sod >= O && sod < S)); }
 // the chart's own session on `y-m-d`: high / low over its RTH bars, and the OPEN = the first RTH bar's open
 inline bool chartSession(const int* y, const int* m, const int* d, const double* sod, const float* op, const float* hi, const float* lo, int n,
                          int wy, int wm, int wd, bool endSt, Ext& out)
 {
     bool any = false; out = Ext();
     for (int i = 0; i < n; i++) {
-        if (y[i] != wy || m[i] != wm || d[i] != wd || !inRthS(sod[i], endSt)) continue;
-        if (!any) { out.open = op[i]; out.openSod = (int)sod[i]; }
-        if (hi[i] > out.hi) { out.hi = hi[i]; out.hiSod = (int)sod[i]; }
-        if (lo[i] < out.lo) { out.lo = lo[i]; out.loSod = (int)sod[i]; }
+        int stamp = 0;
+        if (y[i] != wy || m[i] != wm || d[i] != wd || !inRthS(sod[i], endSt) || !roundedInt(sod[i], stamp) ||
+            !isFinite(op[i]) || !isFinite(hi[i]) || !isFinite(lo[i]) || hi[i] < lo[i]) continue;
+        if (!any) { out.open = op[i]; out.openSod = stamp; }
+        if (hi[i] > out.hi) { out.hi = hi[i]; out.hiSod = stamp; }
+        if (lo[i] < out.lo) { out.lo = lo[i]; out.loSod = stamp; }
         any = true;
     }
     return any;
@@ -177,10 +281,11 @@ inline bool chartExtremes(const int* y, const int* m, const int* d, const double
 {
     bool any = false; out.hi = -1; out.lo = 1e12; out.hiSod = out.loSod = -1;
     for (int i = 0; i < n; i++) {
-        if (y[i] != wy || m[i] != wm || d[i] != wd) continue;
-        if (sod[i] < 30600 || sod[i] > 54000) continue;
-        if (hi[i] > out.hi) { out.hi = hi[i]; out.hiSod = (int)sod[i]; }
-        if (lo[i] < out.lo) { out.lo = lo[i]; out.loSod = (int)sod[i]; }
+        int stamp = 0;
+        if (y[i] != wy || m[i] != wm || d[i] != wd || !validSod(sod[i]) || !roundedInt(sod[i], stamp)) continue;
+        if (sod[i] < 30600 || sod[i] > 54000 || !isFinite(hi[i]) || !isFinite(lo[i]) || hi[i] < lo[i]) continue;
+        if (hi[i] > out.hi) { out.hi = hi[i]; out.hiSod = stamp; }
+        if (lo[i] < out.lo) { out.lo = lo[i]; out.loSod = stamp; }
         any = true;
     }
     return any;
@@ -218,20 +323,34 @@ inline std::string secondRung(const std::string& second, const Cond& C, double n
 struct Read2 { std::string side, src; int p; double d, minsLeft, age, share, arrival; long n; bool valid; Read2() : p(-1), d(0), minsLeft(-1), age(-1), share(0), arrival(-1), n(0), valid(false) {} };
 inline bool parseRead2(const std::vector<std::string>& t, Read2& r)
 {
-    if (t.size() < 7 || (t[0] != "READ2" && t[0] != "READ1")) return false;   // (v0.14) READ1 = the first extreme's read, same shape
-    r.side = t[1]; r.p = atoi(t[2].c_str()); r.d = atof(t[3].c_str()); r.minsLeft = num(t[4]); r.age = num(t[5]); r.share = atof(t[6].c_str());
-    r.arrival = (t.size() >= 8 && !t[7].empty()) ? atof(t[7].c_str()) : -1; r.n = (t.size() >= 9) ? atol(t[8].c_str()) : 0; r.src = (t.size() >= 10) ? t[9] : "";
-    r.valid = (r.side == "HOD" || r.side == "LOD") && r.p >= 0 && r.p <= 100;
-    return r.valid;
+    r = Read2(); if (t.size() < 7 || (trim(t[0]) != "READ2" && trim(t[0]) != "READ1")) return false;   // (v0.14) READ1 = the first extreme's read, same shape
+    r.side = trim(t[1]); r.src = (t.size() >= 10) ? trim(t[9]) : "";
+    if (!validSide(r.side) || !parseBoundedInt(t[2], 0, 100, r.p) || !parseFinite(t[3], r.d) ||
+        !parseOptionalFinite(t[4], r.minsLeft) || !parseOptionalFinite(t[5], r.age) || !parseFinite(t[6], r.share) ||
+        r.minsLeft < -1.0 || r.age < -1.0 || r.share < 0.0 || r.share > 1.0 ||
+        (t.size() >= 8 && !parseOptionalFinite(t[7], r.arrival)) || r.arrival < -1.0 ||
+        (t.size() >= 9 && !parseOptionalLong(t[8], r.n))) { r = Read2(); return false; }
+    r.valid = true; return true;
 }
 inline std::string secondLine(const Read2& r, double asofSo, bool closed, double actualSecondSo)
 {
-    if (closed && actualSecondSo >= 0 && !r.side.empty()) return r.side + " IN " + clk(actualSecondSo);
+    if (closed && validSod(actualSecondSo) && validSide(r.side)) return r.side + " IN " + clk(actualSecondSo);
     if (!r.valid) return "";
     char b[80]; snprintf(b, sizeof(b), "%s IN %d%%", r.side.c_str(), r.p);
     std::string s = b;
-    if (r.p < 50 && r.arrival >= 0 && asofSo >= 0) s += "  \xB7 if not, ~" + clk(asofSo + r.arrival * 60.0) + " (50%)";   // (0.15) one byte: IRT draws Latin-1, the UTF-8 dot printed as "Â·" (his 09-18 09:45 screenshot)
+    if (r.p < 50 && r.arrival >= 0 && validSod(asofSo) && isFinite(r.arrival)) s += "  \xB7 if not, ~" + clk(asofSo + r.arrival * 60.0) + " (50%)";   // (0.15) one byte: IRT draws Latin-1, the UTF-8 dot printed as "Â·" (his 09-18 09:45 screenshot)
     return s;
+}
+// READ,<first HOD|LOD>,<posr%>,<cellPct or blank>,<cellN>,<call IN|NOTIN|HOLD>
+struct Read { std::string side, call; double posr, pct; long n; bool valid; Read() : posr(-1), pct(-1), n(0), valid(false) {} };
+inline bool parseRead(const std::vector<std::string>& t, Read& r)
+{
+    r = Read(); if (t.size() < 6 || trim(t[0]) != "READ") return false;
+    r.side = trim(t[1]); r.call = trim(t[5]);
+    if (!validSide(r.side) || (r.call != "IN" && r.call != "NOTIN" && r.call != "HOLD" && !r.call.empty()) ||
+        !parseOptionalFinite(t[2], r.posr) || !parseOptionalFinite(t[3], r.pct) || !parseOptionalLong(t[4], r.n) ||
+        (r.posr >= 0.0 && r.posr > 100.0) || (r.pct >= 0.0 && r.pct > 100.0)) { r = Read(); return false; }
+    r.valid = true; return true;
 }
 // (v0.13) THE WHOLE READ LINE. The FIRST extreme always leads — operator, 2026-09-17: "if the lod occurs, it should be
 // before the HOD and vice versa" — so the left half is whichever extreme printed first (the READ row's side while the

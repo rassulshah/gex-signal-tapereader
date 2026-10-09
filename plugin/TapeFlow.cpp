@@ -1,5 +1,5 @@
 /********************************************************************************
- *  TapeFlow.cpp  --  Investor/RT RTX extension  lsTapeFlow<MKT>  (v1.0.0, 2026-10-08)
+ *  TapeFlow.cpp  --  Investor/RT RTX extension  lsTapeFlow<MKT>  (v1.0.2, 2026-10-08)
  *
  *  Rassul 2026-10-08 13:17-13:37: the TapeFlow brief; "i'll take your recommendation but i want to get it on all the markets,
  *  if signals are tentative just add ?"; "the markers should be on the indicator on a separate pane"; "keep levels out of it,
@@ -30,7 +30,6 @@
 #error "build TapeFlowES.cpp ... TapeFlowEU.cpp (each defines TF_FIXED and includes this file)"
 #endif
 #include "irtsdk.h"
-#include "DealerLogic.h"
 #include "TapeFlowLogic.h"
 #include <fstream>
 #include <sstream>
@@ -45,9 +44,11 @@
 #include <cstring>
 #include <ctime>
 #include <cstdint>
+#include <cctype>
+#include <limits>
 #include <direct.h>
 
-static const char* TF_VERSION = "1.0.0";
+static const char* TF_VERSION = "1.0.2";   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
 static const bool TF_PROVEN = false;
 static const int LATE_MARGIN = 8;            // seconds a quiet second waits for late trades before it is evaluated          // the "?" goes when the nightly scoring proves the signals
 
@@ -83,6 +84,23 @@ static int marketDecimals(const std::string& m)
 {
     return m == "ES" || m == "NQ" || m == "CL" ? 2 : m == "NG" ? 3 : m == "GC" ? 1 : m == "HG" ? 4 : m == "EU" ? 5 : 2;
 }
+// This extension only needs the root-to-market lookup, not DealerLogic's file
+// parser and rendering helpers. Keeping this small fixed-market lookup local
+// avoids a production dependency on that unrelated shared implementation.
+static std::string marketForRoot(const std::string& rootIn)
+{
+    std::string r;
+    for (size_t i = 0; i < rootIn.size(); i++) r += (char)std::toupper((unsigned char)rootIn[i]);
+    const auto has = [&](const char* key) { return r.find(key) != std::string::npos; };
+    if (has("NQ")) return "NQ";
+    if (has("GC")) return "GC";
+    if (has("CL") || r == "QM") return "CL";
+    if (has("HG") || has("CP")) return "HG";
+    if (has("NG") || r == "QG") return "NG";
+    if (has("EU") || has("6E") || has("E6")) return "EU";
+    if (has("ES") || has("EP")) return "ES";
+    return "";
+}
 
 struct TCursor {                 // trades already taken: the last second and how many of its trades
     long long lastSec = -1; int doneInSec = 0, seen = 0;
@@ -100,12 +118,35 @@ static const TStep STEPS[] = { {"10m", 600, false}, {"1h", 3600, false}, {"4h", 
                                {"3d", 3 * 86400, true}, {"6d", 6 * 86400, true}, {"11d", 11 * 86400, true} };
 static const int NSTEPS = (int)(sizeof(STEPS) / sizeof(STEPS[0]));
 
-struct TIdx { int font; };
+struct TIdx { int fontParam; };
 static TIdx TX;
+
+// The SDK can dispatch one extension object for different chart hosts.  Keep every
+// mutable value in the host's user-data slot instead of letting a chart's tape,
+// timer fallback and file bookkeeping leak into another chart.
+struct TapeFlowState {
+    std::string mkt = TF_FIXED, root, sym, chartRoot, err;
+    double tick = 0;
+    tfl::Engine eng; tfl::Store store; bool storeLoaded = false;
+    TCursor cur;
+    time_t wallAtTick = 0; long long dataAtTick = -1;
+    bool timerOn = false, timerRefused = false, busy = false;
+    time_t firstPass = 0, lastTimerTick = 0, timerAt = 0, lastStepAt = 0, lastSave = 0, lastEvWrite = 0, lastStatus = 0, lastFallback = 0;
+    int step = 0;                       // the next back-fill step
+    bool blocked[NSTEPS] = {false}; bool guardsRead = false; bool deepDone = false;
+    std::string stepNote, lastStepName;
+    long long stepTicks[NSTEPS] = {0};
+    size_t evWritten = (size_t)-1; long long evLastT = 0;
+    std::set<std::string> written; std::set<long long> keysLoaded;
+    std::map<long long, size_t> savedCount;
+    long long liveTicks = 0; int passes = 0;
+    int font = 9;
+};
 
 class TapeFlow : public cppExtension {
 public:
     TapeFlow() : cppExtension() {}
+    ~TapeFlow() { delete own_; }
     virtual int timer(RTX_EVENT* e);
     virtual int draw(void);
     virtual int parmsLoad(void)  { readSettings(); return RTX_OK; }
@@ -113,30 +154,32 @@ public:
     virtual int parmsUpdt(unsigned int) { readSettings(); return RTX_OK; }
     virtual int scale(int, int, double* dMin, double* dMax) { if (dMin) *dMin = -135; if (dMax) *dMax = 135; return RTX_OK; }
 
-    // ---- state (one market per DLL)
-    std::string mkt = TF_FIXED, root, sym, chartRoot, err;
-    double tick = 0;
-    tfl::Engine eng; tfl::Store store; bool storeLoaded = false;
-    TCursor cur;
-    time_t wallAtTick = 0; long long dataAtTick = -1;
-    bool timerOn = false, timerRefused = false, busy = false;
-    time_t firstPass = 0, lastTimerTick = 0, timerAt = 0, lastStepAt = 0, lastSave = 0, lastEvWrite = 0, lastStatus = 0;
-    int step = 0;                       // the next back-fill step
-    bool blocked[NSTEPS] = {false}; bool guardsRead = false; bool deepDone = false;
-    std::string stepNote, lastStepName;
-    long long stepTicks[NSTEPS] = {0};
-    size_t evWritten = (size_t)-1; long long evLastT = 0;
-    std::set<std::string> written; std::set<long long> keysLoaded;
-    std::string evPath(long long sid) const;
-    long long liveTicks = 0; int passes = 0;
-    int font = 9;
+    // (1.0.2) ONE state per DLL, not per host user-data slot: each lsTapeFlow<MKT> DLL serves ONE market (TF_FIXED) and its
+    // 1-s timer callback is not guaranteed to run in a chart's user-data context - a per-host slot could split the engine fed
+    // by the timer from the one the chart draws. The audit's other 1.0.1 fixes are kept.
+    mutable TapeFlowState* own_ = nullptr;
+    TapeFlowState* existingState() const { return own_; }
+    TapeFlowState& S() const
+    {
+        if (!own_) own_ = new TapeFlowState();
+        return *own_;
+    }
 
-    void readSettings() { int f = getIntegerValue(TX.font); font = (f >= 6 && f <= 16) ? f : 9; }
+    std::string evPath(long long sid) const;
+
+    void readSettings() { int f = getIntegerValue(TX.fontParam); S().font = (f >= 6 && f <= 16) ? f : 9; }
     void pump(const char* via);
     void pass(bool fromTimer);
     bool identify();
     long long localSec(RTDATE d) { struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(d, &t); return civilSec(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec); }
-    int toTicks(double p) const { return tick > 0 ? (int)std::llround(p / tick) : 0; }
+    int toTicks(double p) const
+    {
+        double tickSize = S().tick;
+        if (!(tickSize > 0) || !std::isfinite(p)) return 0;
+        double q = p / tickSize;
+        if (q < (double)std::numeric_limits<int>::min() + 0.5 || q > (double)std::numeric_limits<int>::max() - 0.5) return 0;
+        return (int)std::llround(q);
+    }
     std::string fmtPx(int ticks) const;
     std::string dir() const { const char* up = getenv("USERPROFILE"); return up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
     std::string tfDir() const { return dir() + "\\TapeFlow"; }
@@ -147,13 +190,12 @@ public:
     void loadStore();
     void saveStore();
     std::string basePath(long long sid) const;
-    std::map<long long, size_t> savedCount;
     void writeEvents(bool force);
     void writeStatus();
     std::string stateText(COLOR* col) const;
     bool offHours() const;
     // guard files
-    std::string guardPath(const char* kind, const char* name) const { return tfDir() + "\\_" + kind + "-" + mkt + "-" + name + ".txt"; }
+    std::string guardPath(const char* kind, const char* name) const { return tfDir() + "\\_" + kind + "-" + S().mkt + "-" + name + ".txt"; }
     void readGuards();
     void guardWrite(int idx);
     void guardClear(int idx);
@@ -176,15 +218,72 @@ public:
     void triangle(short x, short y, bool up, bool filled, COLOR c);
 };
 
-int cppExtension::init(void)    { return RTX_OK; }
-int cppExtension::done(void)    { return RTX_OK; }
+#define mkt (S().mkt)
+#define root (S().root)
+#define sym (S().sym)
+#define chartRoot (S().chartRoot)
+#define err (S().err)
+#define tick (S().tick)
+#define eng (S().eng)
+#define store (S().store)
+#define storeLoaded (S().storeLoaded)
+#define cur (S().cur)
+#define wallAtTick (S().wallAtTick)
+#define dataAtTick (S().dataAtTick)
+#define timerOn (S().timerOn)
+#define timerRefused (S().timerRefused)
+#define busy (S().busy)
+#define firstPass (S().firstPass)
+#define lastTimerTick (S().lastTimerTick)
+#define timerAt (S().timerAt)
+#define lastStepAt (S().lastStepAt)
+#define lastSave (S().lastSave)
+#define lastEvWrite (S().lastEvWrite)
+#define lastStatus (S().lastStatus)
+#define lastFallback (S().lastFallback)
+#define step (S().step)
+#define blocked (S().blocked)
+#define guardsRead (S().guardsRead)
+#define deepDone (S().deepDone)
+#define stepNote (S().stepNote)
+#define lastStepName (S().lastStepName)
+#define stepTicks (S().stepTicks)
+#define evWritten (S().evWritten)
+#define evLastT (S().evLastT)
+#define written (S().written)
+#define keysLoaded (S().keysLoaded)
+#define savedCount (S().savedCount)
+#define liveTicks (S().liveTicks)
+#define passes (S().passes)
+#define font (S().font)
+
+int cppExtension::init(void) { return RTX_OK; }
+int cppExtension::done(void)
+{
+    TapeFlow* me = static_cast<TapeFlow*>(this);
+    TapeFlowState* state = me->existingState();
+    if (!state) return RTX_OK;
+    auto S = [&]() -> TapeFlowState& { return *state; };
+    if (timerOn) { destroyTimer(timerIdFor(state)); timerOn = false; }
+    timerRefused = false;
+    lastTimerTick = 0;
+    if (storeLoaded) { eng.flushSession(); me->saveStore(); }
+    me->writeEvents(true);
+    for (int i = 0; i < NSTEPS; i++) me->guardClear(i);          // completion, not a crashed request
+    return RTX_OK;
+}
 int cppExtension::destroy(void)
 {
     TapeFlow* me = static_cast<TapeFlow*>(this);
-    if (me->timerOn) { destroyTimer(timerIdFor(me)); me->timerOn = false; }
-    if (me->storeLoaded) { me->eng.flushSession(); me->saveStore(); }
+    TapeFlowState* state = me->existingState();
+    if (!state) return RTX_OK;
+    auto S = [&]() -> TapeFlowState& { return *state; };
+    if (timerOn) { destroyTimer(timerIdFor(state)); timerOn = false; }
+    if (storeLoaded) { eng.flushSession(); me->saveStore(); }
     me->writeEvents(true);
     for (int i = 0; i < NSTEPS; i++) me->guardClear(i);          // a normal close is not a crash
+    delete state;
+    me->own_ = nullptr;
     return RTX_OK;
 }
 
@@ -192,7 +291,7 @@ int cppExtension::setup(void)
 {
     setParameterVersion(1);
     setParameterDialogHeight(2);
-    TX.font = getParameterCount(); setIntegerParameter("Font pt", 9, 50);
+    TX.fontParam = getParameterCount(); setIntegerParameter("Font pt", 9, 50);
     // two invisible outputs keep the pane's own scale at +-135 (the drawing does not depend on it)
     CPEN p(C_GRAY, 1, P_SOLID);
     setOutputParameter("Top", DRAW_INVISIBLE, &p, C_GRAY, OUTPUT_ENABLED);
@@ -219,19 +318,18 @@ void TapeFlow::pump(const char* via)
 {
     time_t now = time(0);
     if (!timerOn && !timerRefused) {
-        if (createTimer(timerIdFor(this), 1000) == RTX_OK) { timerOn = true; timerAt = now; trace(std::string("timer granted (") + via + ")"); }
+        if (createTimer(timerIdFor(&S()), 1000) == RTX_OK) { timerOn = true; timerAt = now; trace(std::string("timer granted (") + via + ")"); }
         else { timerRefused = true; trace("timer REFUSED - running from calc / draw"); }
     }
     // (IRTReader's thresholds) a pass from calc / draw only if the timer was refused, never ticked within 20 s of being granted,
     // or stopped for 60 s; and then only the small live read - the back-fill steps run from the timer only (or with no timer at all)
     bool noTimer = timerRefused || (timerOn && (lastTimerTick ? now - lastTimerTick > 60 : now - timerAt > 20));
-    static time_t lastFallback = 0;
     if (noTimer && now != lastFallback) { lastFallback = now; pass(timerRefused); }
 }
 
 int TapeFlow::timer(RTX_EVENT* e)
 {
-    if (!e || e->v.timer.id != timerIdFor(this)) return RTX_FAIL;
+    if (!e || e->v.timer.id != timerIdFor(&S())) return RTX_FAIL;
     lastTimerTick = time(0);
     pass(true);
     lastTimerTick = time(0);                                      // a long pass (a back-fill) is not a stopped timer
@@ -242,7 +340,7 @@ bool TapeFlow::identify()
 {
     char buf[32] = {0}; const char* rs = getRootSymbol(buf);
     root = rs ? rs : "";
-    std::string m = dl::marketForRoot(root);
+    std::string m = marketForRoot(root);
     if (m != mkt) return false;                                   // this DLL serves ONE market: elsewhere it only says so
     const char* s = getSymbol(); std::string sy = s ? s : "";
     tick = marketTick(mkt);
@@ -253,7 +351,7 @@ bool TapeFlow::identify()
             eng.flushSession(); saveStore();
             eng = tfl::Engine(); cur = TCursor(); dataAtTick = -1; step = 0; deepDone = false; evWritten = (size_t)-1;
         }
-        sym = sy; eng.sym = sym; eng.store = &store;
+        sym = sy; eng.attach(&store, sym);
     }
     return tick > 0 && !sym.empty();
 }
@@ -296,7 +394,7 @@ void TapeFlow::live()
         for (long i = 0; i < T.count; i++) {
             long long s = localSec((RTDATE)(*T.dt)[(int)i]);
             if (!cur.take(s)) continue;
-            tfl::Tick k; k.t = s; k.px = toTicks((*T.price)[(int)i]); k.q = (long)(*T.size)[(int)i];
+            tfl::Tick k; k.t = s; k.px = toTicks((*T.price)[(int)i]); k.q = (long long)(*T.size)[(int)i];
             k.bid = T.bid ? toTicks((*T.bid)[(int)i]) : 0; k.ask = T.ask ? toTicks((*T.ask)[(int)i]) : 0;
             eng.add(k); got++;
         }
@@ -320,10 +418,10 @@ void TapeFlow::runSteps()
     time_t now = time(0);
     while (step < NSTEPS && blocked[step]) { if (!STEPS[step].deep) { step++; continue; } deepDone = true; step = NSTEPS; }
     if (step >= NSTEPS) return;
-    const TStep& S = STEPS[step];
+    const TStep& spec = STEPS[step];
     if (step == 0) { rebuild(0); step = 1; lastStepAt = time(0); return; }      // the first 10 minutes at once
-    if (now - firstPass < 30 || now - lastStepAt < (S.deep ? 60 : 20)) return;  // let IRT settle; one step at a time
-    if (S.deep) {
+    if (now - firstPass < 30 || now - lastStepAt < (spec.deep ? 60 : 20)) return;  // let IRT settle; one step at a time
+    if (spec.deep) {
         if (deepDone) { step = NSTEPS; return; }
         if (tfl::priorSessions(store, eng.curSid) >= 10) { deepDone = true; step = NSTEPS; return; }
         if (!offHours()) return;                                                  // older history only outside trading hours
@@ -336,21 +434,21 @@ void TapeFlow::runSteps()
 // read trades from (now - back) to now into a fresh engine and use it (the back-fill). Same logic, same order as live.
 bool TapeFlow::rebuild(int idx)
 {
-    const TStep& S = STEPS[idx];
+    const TStep& spec = STEPS[idx];
     RTDATE now = currentDate();
     long long nowS = localSec(now);
-    long long back = S.back;
+    long long back = spec.back;
     if (back < 0) {                                               // the session: from 17:00
         long long sid = tfl::sessionOf(nowS);
         long long start = (sid - 1) * 86400 + 17LL * 3600;
         back = nowS - start + 5;
         if (back <= 4 * 3600 + 60) { stepNote = "session already covered"; return true; }
     }
-    trace(std::string("back-fill ") + S.name + "...");
+    trace(std::string("back-fill ") + spec.name + "...");
     guardWrite(idx);
     RTTICKS T((RTDATE)(now - (RTDATE)back));
     long n = T.count;
-    tfl::Engine e2; e2.store = &store; e2.sym = sym;
+    tfl::Engine e2; e2.attach(&store, sym);
     {                                                             // the request starts inside an older session: that one is partial
         long long startS = nowS - back, sidS = tfl::sessionOf(startS);
         if (sidS != tfl::sessionOf(nowS) && startS > (sidS - 1) * 86400 + 17LL * 3600 + 60) e2.noFlushSid = sidS;
@@ -361,7 +459,7 @@ bool TapeFlow::rebuild(int idx)
             long long s = localSec((RTDATE)(*T.dt)[(int)i]);
             if (!c2.take(s)) continue;
             if (first < 0) first = s;
-            tfl::Tick k; k.t = s; k.px = toTicks((*T.price)[(int)i]); k.q = (long)(*T.size)[(int)i];
+            tfl::Tick k; k.t = s; k.px = toTicks((*T.price)[(int)i]); k.q = (long long)(*T.size)[(int)i];
             k.bid = T.bid ? toTicks((*T.bid)[(int)i]) : 0; k.ask = T.ask ? toTicks((*T.ask)[(int)i]) : 0;
             if (k.bid > 0 && k.ask >= k.bid) quoted++;
             e2.add(k);
@@ -369,18 +467,18 @@ bool TapeFlow::rebuild(int idx)
     }
     guardClear(idx);
     stepTicks[idx] = e2.ticks;
-    lastStepName = S.name;
+    lastStepName = spec.name;
     char b[260];
-    snprintf(b, sizeof(b), "back-fill %s: %ld trades from IRT, %lld used, from %s, bid/ask on %.0f%% of them", S.name, n, e2.ticks,
+    snprintf(b, sizeof(b), "back-fill %s: %ld trades from IRT, %lld used, from %s, bid/ask on %.0f%% of them", spec.name, n, e2.ticks,
              first < 0 ? "-" : std::to_string(nowS - first).append(" s ago").c_str(), e2.ticks > 0 ? 100.0 * (double)quoted / (double)e2.ticks : 0.0);
     trace(b); stepNote = b;
-    if (e2.ticks <= 0) { if (S.deep) deepDone = true; return false; }
-    if (S.deep && first > 0 && nowS - first < back - 86400) deepDone = true;    // IRT keeps no older trades: stop deepening
+    if (e2.ticks <= 0) { if (spec.deep) deepDone = true; return false; }
+    if (spec.deep && first > 0 && nowS - first < back - 86400) deepDone = true;    // IRT keeps no older trades: stop deepening
     e2.flushSession();
-    eng = std::move(e2); eng.store = &store; eng.noFlushSid = LLONG_MIN;
+    eng = std::move(e2); eng.attach(&store, sym); eng.noFlushSid = LLONG_MIN;
     cur = c2; wallAtTick = time(0); dataAtTick = cur.lastSec;
     eng.advanceTo(dataAtTick - LATE_MARGIN);
-    if (S.deep) { eng.refreeze(); }                               // older sessions just arrived: freeze the baselines again (new version)
+    if (spec.deep) { eng.refreeze(); }                               // older sessions just arrived: freeze the baselines again (new version)
     saveStore(); evWritten = (size_t)-1;
     return true;
 }
@@ -447,7 +545,17 @@ void TapeFlow::saveStore()
             o << "# TapeFlow " << TF_VERSION << " baselines " << mkt << " session " << kv.first << ": W|session|contract|bin|rate20|rate5 x4|spread|Mbuy h1..8|Msell h1..8\n";
             for (auto& c : kv.second) for (auto& w : c.second) o << tfl::storeLine(kv.first, c.first, w) << "\n";
         }
-        std::remove(p.c_str()); std::rename(tmp.c_str(), p.c_str());
+        bool hadOld = false; { std::ifstream old(p.c_str()); hadOld = old.good(); }
+        std::string bak = p + ".bak";
+        std::remove(bak.c_str());
+        if (hadOld && std::rename(p.c_str(), bak.c_str()) != 0) { err = "cannot replace " + p; std::remove(tmp.c_str()); continue; }
+        if (std::rename(tmp.c_str(), p.c_str()) != 0) {
+            err = "cannot publish " + p;
+            if (hadOld) std::rename(bak.c_str(), p.c_str());
+            std::remove(tmp.c_str());
+            continue;
+        }
+        if (hadOld) std::remove(bak.c_str());
         savedCount[kv.first] = tot;
     }
     if (!store.empty()) {                                          // files older than 3 weeks are not read any more: remove them
@@ -494,7 +602,9 @@ void TapeFlow::writeEvents(bool force)
 {
     if (mkt.empty() || tfDir().empty() || eng.curSid == LLONG_MIN) return;
     if (!force && !eng.evs.empty() && eng.evs.size() == evWritten && eng.evs.back().t == evLastT) return;
-    std::map<long long, std::string> add;
+    typedef std::pair<std::string, std::string> PendingEvent;       // key, complete line
+    std::map<long long, std::vector<PendingEvent> > add;
+    std::set<std::string> pending;
     for (const tfl::Ev& v : eng.evs) {
         long long sid = tfl::sessionOf(v.t);
         if (sid < eng.curSid - 1) continue;                       // older sessions were written at the time
@@ -503,24 +613,36 @@ void TapeFlow::writeEvents(bool force)
             std::ifstream f(evPath(sid).c_str()); std::string ln;
             while (std::getline(f, ln)) if (!ln.empty() && ln[0] != 't') written.insert(evKey(ln));
         }
-        auto num = [](double x, int dp) { if (std::isnan(x)) return std::string(); char q[32]; snprintf(q, sizeof(q), "%.*f", dp, x); return std::string(q); };
+        auto num = [](double x, int dp) { if (!std::isfinite(x)) return std::string(); char q[32]; snprintf(q, sizeof(q), "%.*f", dp, x); return std::string(q); };
         char b[700];
         snprintf(b, sizeof(b), "%s|%d|%s|%d|%s|%s|%d|%.0f|%s|%s|%s|%s|%.0f|%.2f|%.1f|%s|%s|%d|%s|quote-at-trade\n",
                  stamp(v.t).c_str(), v.ep, v.kind.c_str(), v.dir, v.lo ? fmtPx(v.lo).c_str() : "", v.hi ? fmtPx(v.hi).c_str() : "",
                  v.h, v.q95, num(v.f30, 1).c_str(), num(v.f180, 1).c_str(), num(v.a, 2).c_str(), num(v.cov, 3).c_str(), v.qzone, v.conc, v.prog,
                  v.ctx.c_str(), v.why.c_str(), v.ver, TF_VERSION);
         std::string line = b, key = evKey(line);
-        if (written.count(key)) continue;
-        written.insert(key); add[sid] += line;
+        if (written.count(key) || pending.count(key)) continue;
+        pending.insert(key);
+        add[sid].push_back(PendingEvent(key, line));
     }
+    bool complete = true;
     for (auto& kv : add) {
         std::string p = evPath(kv.first);
         bool fresh = false; { std::ifstream t(p.c_str()); fresh = !t.good(); }
-        std::ofstream o(p.c_str(), std::ios::app); if (!o.is_open()) { err = "cannot write " + p; continue; }
+        std::ofstream o(p.c_str(), std::ios::app);
+        if (!o.is_open()) { err = "cannot write " + p; complete = false; continue; }
         if (fresh) o << "time|episode|kind|dir|zone_lo|zone_hi|h|q95|f30|f180|activity|cov30|q_zone|concentration|progress_ticks|context|why|baseline_ver|version|mode\n";
-        o << kv.second;
+        for (const PendingEvent& event : kv.second) o << event.second;
+        o.flush();
+        if (!o.good()) { err = "cannot write " + p; complete = false; continue; }
+        for (const PendingEvent& event : kv.second) written.insert(event.first);
     }
-    evWritten = eng.evs.size(); evLastT = eng.evs.empty() ? 0 : eng.evs.back().t;
+    if (complete) {
+        evWritten = eng.evs.size(); evLastT = eng.evs.empty() ? 0 : eng.evs.back().t;
+    } else {
+        // A failed/partial append must be re-scanned before the next retry; do not
+        // let the in-memory cursor discard an event that did not reach the file.
+        keysLoaded.clear(); written.clear(); evWritten = (size_t)-1; evLastT = 0;
+    }
 }
 
 std::string TapeFlow::stateText(COLOR* col) const
@@ -620,7 +742,7 @@ void TapeFlow::render()
     short L = pane.left, T = pane.top, R = pane.right, B = pane.bottom;
     if (R - L < 60 || B - T < 40) return;
     char rb[32] = {0}; const char* rs = getRootSymbol(rb);
-    std::string chartMkt = dl::marketForRoot(rs ? rs : "");
+    std::string chartMkt = marketForRoot(rs ? rs : "");
     int fs = font;
     if (chartMkt != mkt) {                                         // this DLL is for one market only
         std::string s = std::string("TapeFlow ") + mkt + " " + TF_VERSION + " - this one is for the " + mkt + " chart (add TapeFlow" + (chartMkt.empty() ? std::string("<market>") : chartMkt) + " here)";

@@ -19,8 +19,52 @@
 #include "ContractOffsetLogic.h"   // (v0.64) col::Bar — the band start is found on the chart's own bars
 #include <cmath>
 #include <algorithm>
+#include <cerrno>
+#include <cctype>
+#include <climits>
+#include <cstdlib>
 
 namespace gpl {
+
+// GammaProfile reads an external CSV that can be observed while its writer is
+// replacing it. Never turn an incomplete numeric token into a plausible zero,
+// NaN, or infinity on the chart scale. Leading/trailing whitespace is benign;
+// every other trailing character makes the token invalid.
+inline bool parseFiniteFloat(const std::string& text, float& value)
+{
+    const char* begin = text.c_str();
+    char* end = 0;
+    errno = 0;
+    const float parsed = std::strtof(begin, &end);
+    if (begin == end || errno == ERANGE || !std::isfinite(parsed)) return false;
+    while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
+    if (*end) return false;
+    value = parsed;
+    return true;
+}
+
+inline bool parseInt(const std::string& text, int& value)
+{
+    const char* begin = text.c_str();
+    char* end = 0;
+    errno = 0;
+    const long parsed = std::strtol(begin, &end, 10);
+    if (begin == end || errno == ERANGE || parsed < INT_MIN || parsed > INT_MAX) return false;
+    while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
+    if (*end) return false;
+    value = static_cast<int>(parsed);
+    return true;
+}
+
+// The rail formats profile prices as whole integers and maps them to a chart.
+// This bound is far above ES/SPX values while keeping those conversions safe.
+static const float MAX_PROFILE_PRICE = 1000000.0f;
+inline bool validProfilePrice(float value) { return value > 0.0f && value <= MAX_PROFILE_PRICE; }
+
+inline std::string boundedText(const std::string& text, size_t maxChars)
+{
+    return text.size() <= maxChars ? text : text.substr(0, maxChars);
+}
 
 // One STRIKE row after the contract offset has been applied (price = chart scale).
 struct Node {
@@ -226,7 +270,10 @@ struct TapeCols { int pctOff, colW; };   // pctOff: from the strip's inner-text 
 inline TapeCols tapeCols(int pad, int spaceW, int strikeW, int pctW, int nChars)
 {
     TapeCols t;
-    if (spaceW < 1) spaceW = 1; if (nChars < 0) nChars = 0; if (strikeW < 0) strikeW = 0; if (pctW < 0) pctW = 0;
+    if (spaceW < 1) spaceW = 1;
+    if (nChars < 0) nChars = 0;
+    if (strikeW < 0) strikeW = 0;
+    if (pctW < 0) pctW = 0;
     t.pctOff = strikeW + nChars * spaceW;
     t.colW   = pad + t.pctOff + pctW + pad;
     return t;
@@ -414,6 +461,19 @@ inline bool bubbleOutside(int rankpos, int barLen, int radius) { return rankpos 
 // points apart (twice SPX), so the SPY rail's bars hit the 40 px cap while 6-11 px long — semicircle blobs at the pane
 // edge (his screenshot). The SPX rail's thickness is computed once and handed to the SPY rail.
 inline int autoBarH(int spacingPx) { int h = spacingPx > 4 ? (int)(spacingPx * 0.78f) : 6; if (h < 3) h = 3; if (h > 40) h = 40; return h; }
+
+// rowCenters must be in price order. A leading sparse gap must not make every
+// subsequent closely spaced node overlap: size the bars from the nearest pair.
+inline int autoBarHForRows(const std::vector<int>& rowCenters)
+{
+    if (rowCenters.size() < 2) return 6;
+    int nearest = INT_MAX;
+    for (size_t i = 1; i < rowCenters.size(); ++i) {
+        const int gap = std::abs(rowCenters[i] - rowCenters[i - 1]);
+        if (gap < nearest) nearest = gap;
+    }
+    return nearest == INT_MAX ? 6 : autoBarH(nearest);
+}
 
 // (v0.64) NODE BANDS — the band replaces the top-node line and is BOUNDED IN TIME: from the bar the node was first seen at
 // this strike (panel 16.41's 9th STRIKE field, CT sec-of-day, today) to the current bar. Atlas draws a node's heat from the

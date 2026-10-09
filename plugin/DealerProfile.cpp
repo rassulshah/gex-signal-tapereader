@@ -22,9 +22,20 @@
  *  Parameters are read ONLY in the parms callbacks (GAMMA-PROFILE-PLUGIN.md gotcha 3); positions numbered explicitly.
  *  Never black: the chart background is black.
  ********************************************************************************/
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <map>
 #include "irtsdk.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#ifdef far
+#undef far
+#endif
 #include "DealerLogic.h"
+#include "HostSlot.h"
+#include "DealerProfileAuditLogic.h"
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -34,8 +45,9 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <new>
 
-static const char* DP_VERSION = "2.5.0";   // 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key-level lines (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.5.1";   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -65,12 +77,59 @@ static PIdx PX;
 struct Settings { int market = 0, width = 50, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true;
                   std::string inds = "cob_bull,cob_bear"; };   // (1.5.0) his custom indicators copied into the bar file
 
+static bool dpFinite(float v) { return dpaudit::finite(v); }
+static bool dpFinite(double v) { return dpaudit::finite(v); }
+
+// DealerLogic is also consumed by DealerRead, so keep this Profile-specific boundary check here
+// until the shared-header owner can make parsing validation consistent for every consumer.
+static void dpSanitizeDealerData(dl::Data& d)
+{
+    if (!dpFinite(d.asofSo)) d.asofSo = -1;
+    if (!dpFinite(d.srcRatio)) d.srcRatio = 1.0f;
+    if (!dpFinite(d.book)) { d.book = 0; d.hasBook = false; }
+    if (!dpFinite(d.px) || !dpFinite(d.em) || d.px <= 0 || d.em <= 0) d.hasPrice = false;
+    std::vector<dl::Node> clean;
+    clean.reserve(d.nodes.size());
+    for (size_t i = 0; i < d.nodes.size(); ++i) {
+        const dl::Node& n = d.nodes[i];
+        if (dpFinite(n.k) && dpFinite(n.g) && dpFinite(n.lo) && dpFinite(n.hi) && dpFinite(n.snap) && dpFinite(n.d) &&
+            dpFinite(n.gp) && dpFinite(n.dp) && dpFinite(n.usd) && dpFinite(n.usd0)) clean.push_back(n);
+    }
+    d.nodes.swap(clean);
+    std::vector<dl::Data::Tag> cleanTags;
+    cleanTags.reserve(d.tags.size());
+    for (size_t i = 0; i < d.tags.size(); ++i) if (dpFinite(d.tags[i].k)) cleanTags.push_back(d.tags[i]);
+    d.tags.swap(cleanTags);
+}
+
+// std::rename does not replace an existing target on MSVC. MoveFileEx preserves the last
+// complete bar export if a reader has the target open or replacement otherwise fails.
+static bool dpReplaceFile(const std::string& tmp, const std::string& path)
+{
+#ifdef _WIN32
+    return MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    return std::rename(tmp.c_str(), path.c_str()) == 0;
+#endif
+}
+
+static void dpNormalizeSettings(Settings& s)
+{
+    if (s.market < 0 || s.market > 7) s.market = 0;
+    if (s.width < 30 || s.width > 900) s.width = 50;
+    if (s.font < 6 || s.font > 24) s.font = 9;
+    if (s.clock < -720 || s.clock > 720) s.clock = 0;
+    if (s.inds.size() > 160) s.inds.resize(160);
+}
+
 class DealerProfile : public cppExtension {
 public:
     DealerProfile();
     virtual int parmsLoad(void);
     virtual int parmsApply(void);
     virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int done(void);
+    virtual int destroy(void);
     virtual int draw(void);
 
     Settings cfg;
@@ -142,6 +201,35 @@ public:
     void loadLevels(const std::string& m);
     const LV* levelAt(const std::string& m, float chartPx);
     void drawKeyLevels(const Settings& S);
+
+    // cppExtension can be shared by host charts. These fields are the complete mutable
+    // chart state, kept in the SDK's current-host storage rather than on the shared object.
+    struct State {
+        Settings cfg;
+        dl::Data D;
+        std::string mkt, root;
+        float off = 0.0f;
+        int lastBar = 0;
+        long long loadedStamp = -2;
+        std::string loadedPath;
+        std::map<std::string, Exp> expBy;
+        std::string savedKey;
+        long long savedStamp = -2;
+        std::map<std::string, std::vector<MQL> > mql;
+        long long mqlStamp = -2;
+        time_t mqlChecked = 0;
+        std::map<std::string, std::vector<TP> > tps;
+        std::map<std::string, long long> tpStamp;
+        std::map<std::string, time_t> tpChecked, tpAt;
+        std::map<std::string, std::vector<LV> > lvs;
+        std::map<std::string, long long> lvStamp;
+        std::map<std::string, time_t> lvChecked, lvAt;
+        std::map<std::string, bool> lvStale;
+    };
+    bool loadHostState();
+    HostSlot<State> slot_;
+    void saveHostState();
+    void clearWorkingState();
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -150,6 +238,51 @@ int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
 
 DealerProfile::DealerProfile() : cppExtension() { off = 0.0f; lastBar = 0; }
+
+void DealerProfile::clearWorkingState()
+{
+    cfg = Settings(); D = dl::Data(); mkt.clear(); root.clear(); off = 0.0f; lastBar = 0;
+    loadedStamp = -2; loadedPath.clear(); expBy.clear(); savedKey.clear(); savedStamp = -2;
+    mql.clear(); mqlStamp = -2; mqlChecked = 0; tps.clear(); tpStamp.clear(); tpChecked.clear(); tpAt.clear();
+    lvs.clear(); lvStamp.clear(); lvChecked.clear(); lvAt.clear(); lvStale.clear();
+}
+
+bool DealerProfile::loadHostState()
+{
+    State* s = slot_.get(this, true);
+    if (!s) { clearWorkingState(); return false; }
+    cfg = s->cfg; D = s->D; mkt = s->mkt; root = s->root; off = s->off; lastBar = s->lastBar;
+    loadedStamp = s->loadedStamp; loadedPath = s->loadedPath; expBy = s->expBy; savedKey = s->savedKey; savedStamp = s->savedStamp;
+    mql = s->mql; mqlStamp = s->mqlStamp; mqlChecked = s->mqlChecked; tps = s->tps; tpStamp = s->tpStamp;
+    tpChecked = s->tpChecked; tpAt = s->tpAt; lvs = s->lvs; lvStamp = s->lvStamp; lvChecked = s->lvChecked;
+    lvAt = s->lvAt; lvStale = s->lvStale;
+    return true;
+}
+
+void DealerProfile::saveHostState()
+{
+    State* s = slot_.get(this, false);
+    if (!s) return;
+    s->cfg = cfg; s->D = D; s->mkt = mkt; s->root = root; s->off = off; s->lastBar = lastBar;
+    s->loadedStamp = loadedStamp; s->loadedPath = loadedPath; s->expBy = expBy; s->savedKey = savedKey; s->savedStamp = savedStamp;
+    s->mql = mql; s->mqlStamp = mqlStamp; s->mqlChecked = mqlChecked; s->tps = tps; s->tpStamp = tpStamp;
+    s->tpChecked = tpChecked; s->tpAt = tpAt; s->lvs = lvs; s->lvStamp = lvStamp; s->lvChecked = lvChecked;
+    s->lvAt = lvAt; s->lvStale = lvStale;
+}
+
+int DealerProfile::done(void)
+{
+    slot_.release(this);
+    clearWorkingState();
+    return RTX_OK;
+}
+
+int DealerProfile::destroy(void)
+{
+    slot_.release(this);
+    clearWorkingState();
+    return RTX_OK;
+}
 
 bool DealerProfile::dialogReady() { int i = getListIndex(PX.market); return i >= 0 && i <= 7; }
 // (2.2.4, Rassul 23:05 "the same thing is happening with the dealer profile") the GammaProfile way: read the saved values
@@ -194,13 +327,14 @@ void DealerProfile::syncSettings(bool fromDialog)
             cfg.market = atoi(t[1].c_str()); cfg.width = atoi(t[2].c_str()); cfg.font = atoi(t[3].c_str()); cfg.clock = atoi(t[4].c_str());
             cfg.labels = t[5] == "1"; cfg.snap = t[6] == "1"; cfg.fadefar = t[7] == "1"; cfg.banner = t[8] == "1";
             if (t.size() >= 10 && !t[9].empty()) cfg.inds = t[9];
+            dpNormalizeSettings(cfg);
             savedKey = key; return;
         }
     }
 }
-int DealerProfile::parmsLoad(void)  { syncSettings(true); return RTX_OK; }
-int DealerProfile::parmsApply(void) { syncSettings(true); return RTX_OK; }
-int DealerProfile::parmsUpdt(unsigned int) { syncSettings(true); return RTX_OK; }
+int DealerProfile::parmsLoad(void)  { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
+int DealerProfile::parmsApply(void) { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
+int DealerProfile::parmsUpdt(unsigned int) { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
 
 int cppExtension::setup(void)
 {
@@ -234,6 +368,7 @@ void DealerProfile::readSettings(Settings& S)
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
     char ib[200]; memset(ib, 0, sizeof(ib));
     if (getParameterText(PX.inds, ib, sizeof(ib) - 1) == RTX_OK && ib[0] && ib[0] != ' ') S.inds = ib;   // blank (an older saved layout) = the default; "none" = off
+    dpNormalizeSettings(S);
 }
 
 void DealerProfile::load()
@@ -249,8 +384,11 @@ void DealerProfile::load()
     if (st >= 0 && st == loadedStamp && path == loadedPath) return;      // unchanged: keep what is parsed (no disk read)
     D = dl::Data();
     std::ifstream f(path.c_str()); if (!f.is_open()) { loadedPath.clear(); return; }
-    std::stringstream ss; ss << f.rdbuf();
-    D = dl::parseText(ss.str());
+    dl::Data parsed;
+    std::string line;
+    while (std::getline(f, line)) dl::parseLine(parsed, line);
+    dpSanitizeDealerData(parsed);
+    D = parsed;
     loadedStamp = st; loadedPath = path;
 }
 
@@ -455,7 +593,6 @@ void DealerProfile::outline(short l, short t, short r, short b)
     PNT p; p.set(0, 0.0f);
     p.h = l; p.v = t; p.setDrawPosition(); p.h = r; p.drawLineTo(); p.v = b; p.drawLineTo(); p.h = l; p.drawLineTo(); p.v = t; p.drawLineTo();
 }
-static COLOR bandCol(int b) { return b == 0 ? 0x006B7280 : b == 1 ? 0x00E5E7EB : b == 2 ? 0x00F97316 : 0x00FFFFFF; }   // (1.3.9) meaningful = ORANGE (yellow is the wall now)
 static COLOR mix(COLOR c, float a)   // the colour at alpha a over the black chart (no line is ever black)
 {
     int r = (int)(((c >> 16) & 0xFF) * a), g = (int)(((c >> 8) & 0xFF) * a), b = (int)((c & 0xFF) * a);
@@ -565,7 +702,7 @@ void DealerProfile::exportBars()
     if (n == E.n && lc == E.c && now - E.t < 60) return;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-IRT-Bars-" + mkt + ".csv";
-    std::string tmp = path + ".tmp";
+    std::string tmp = dpaudit::exportTempPath(path, reinterpret_cast<std::uintptr_t>(getUserData()));
     // (1.5.0, Rassul 2026-09-30) his own indicators (cob_bull, cob_bear ... by name, set in the settings) ride along, one
     // column each, so the Reader can check its rebuilt triggers against the chart's - the chart is the source of truth
     std::vector<std::string> names; std::vector<RTARRAY*> arrs;
@@ -604,8 +741,8 @@ void DealerProfile::exportBars()
         }
     }
     for (size_t j = 0; j < arrs.size(); j++) delete arrs[j];
-    std::remove(path.c_str());
-    if (std::rename(tmp.c_str(), path.c_str()) == 0) { E.n = n; E.c = lc; E.t = now; }
+    if (dpReplaceFile(tmp, path)) { E.n = n; E.c = lc; E.t = now; }
+    else std::remove(tmp.c_str());
 }
 
 void DealerProfile::loadMQLevels()
@@ -617,7 +754,7 @@ void DealerProfile::loadMQLevels()
     std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\MenthorQLevels.csv";
     long long st = dl::fileStamp(p);
     if (st == mqlStamp) return;
-    std::ifstream f(p.c_str()); if (!f.is_open()) { mqlStamp = st; return; }
+    std::ifstream f(p.c_str()); if (!f.is_open()) { mql.clear(); mqlStamp = st; return; }
     std::map<std::string, std::vector<MQL> > m;
     std::string ln; bool head = true;
     while (std::getline(f, ln)) {
@@ -626,10 +763,10 @@ void DealerProfile::loadMQLevels()
         std::vector<std::string> c; std::stringstream ss(ln); std::string x;
         while (std::getline(ss, x, ',')) c.push_back(x);
         if (c.size() < 5 || c[0].empty()) continue;
-        MQL q; q.px = (float)atof(c[1].c_str()); q.label = c[2];
+        MQL q; if (!dpaudit::parsePositiveFinite(c[1], q.px)) continue; q.label = c[2];
         long v = atol(c[3].c_str()); q.col = (COLOR)(v & 0x00FFFFFF); if (q.col == 0) q.col = 0x0022D3EE;   // never black
         q.w = atoi(c[4].c_str()); if (q.w < 1) q.w = 1; if (q.w > 3) q.w = 3;
-        if (q.px > 0) m[c[0]].push_back(q);
+        m[c[0]].push_back(q);
     }
     mql.swap(m); mqlStamp = st;
 }
@@ -650,7 +787,7 @@ void DealerProfile::loadTouch(const std::string& m)
         if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
         std::vector<std::string> c; std::stringstream ss(ln); std::string x;
         while (std::getline(ss, x, '|')) c.push_back(x);
-        if (c.size() >= 7 && c[0] == "TOUCH") { TP t; t.px = (float)atof(c[2].c_str()); t.p1 = c[3]; t.pe = c[4]; t.pc = c[5]; t.proven = c[6] == "1"; if (c.size() >= 8) t.txt = c[7]; v.push_back(t); }
+        if (c.size() >= 7 && c[0] == "TOUCH") { TP t; if (!dpaudit::parsePositiveFinite(c[2], t.px)) continue; t.p1 = c[3]; t.pe = c[4]; t.pc = c[5]; t.proven = c[6] == "1"; if (c.size() >= 8) t.txt = c[7]; v.push_back(t); }
     }
     tps[m].swap(v); tpStamp[m] = st; tpAt[m] = st > 0 ? (time_t)(st / 1000003LL) : 0;   // the file's modified time
 }
@@ -664,16 +801,18 @@ void DealerProfile::loadLevels(const std::string& m)
     std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Levels-" + m + ".csv";
     long long st = dl::fileStamp(p);
     if (lvStamp.count(m) && st == lvStamp[m]) return;
-    std::vector<LV> v; bool stale = false;
+    std::vector<LV> v; std::vector<float> picks; bool stale = false;
     std::ifstream f(p.c_str());
     std::string ln;
     while (f.is_open() && std::getline(f, ln)) {
         if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
         std::vector<std::string> c = dl::split(ln, '|');
         if (c.size() >= 2 && c[0] == "STATE" && c[1] == "STALE") stale = true;
-        if (c.size() >= 13 && c[0] == "LEVEL") { LV q; q.code = c[1]; q.show = c[2]; q.px = (float)atof(c[3].c_str()); q.fam = c[4]; q.label = c[12]; if (q.px > 0) v.push_back(q); }
-        if (c.size() >= 3 && c[0] == "PICK") { float pp = (float)atof(c[2].c_str()); for (auto& q : v) if (std::fabs(q.px - pp) <= std::fabs(pp) * 1e-6f) q.pick = true; }
+        if (c.size() >= 13 && c[0] == "LEVEL") { LV q; if (!dpaudit::parsePositiveFinite(c[3], q.px)) continue; q.code = c[1]; q.show = c[2]; q.fam = c[4]; q.label = c[12]; v.push_back(q); }
+        if (c.size() >= 3 && c[0] == "PICK") { float pp = 0; if (dpaudit::parsePositiveFinite(c[2], pp)) picks.push_back(pp); }
     }
+    for (size_t i = 0; i < picks.size(); ++i) for (size_t j = 0; j < v.size(); ++j)
+        if (std::fabs(v[j].px - picks[i]) <= std::fabs(picks[i]) * 1e-6f) v[j].pick = true;
     lvs[m].swap(v); lvStamp[m] = st; lvStale[m] = stale; lvAt[m] = st > 0 ? (time_t)(st / 1000003LL) : 0;
 }
 
@@ -696,7 +835,6 @@ void DealerProfile::drawKeyLevels(const Settings& S)
     if (lvStale[mkt] || lvAt[mkt] <= 0 || time(nullptr) - lvAt[mkt] > 20 * 60) return;
     RCT pane; pane.getPaneRect(false);
     long nb = getBarCount(); if (nb < 1) return;
-    int dec = mkt == "GC" ? 1 : mkt == "HG" ? 4 : mkt == "EU" ? 5 : mkt == "NG" ? 3 : 2;
     int fs = S.font; if (fs < 7) fs = 7;
     short right = (short)(pane.right - S.width - 80);                // left of the profile and its 70 px chip column
     for (const LV& q : lvs[mkt]) {
@@ -770,6 +908,7 @@ int DealerProfile::draw(void)
     // (2.2.0, 2026-10-05) IRT runs ONE object of this DLL for every chart, so the settings read when another chart's dialog
     // was last applied leaked here: the HG chart drew / exported as GC (LRA-IRT-Bars-GC.csv held copper bars, root CPEZ26) and
     // the profile flipped between markets ("disappears and reappears"). Read THIS chart's settings on every draw.
+    if (!loadHostState()) return RTX_OK;
     syncSettings();
     load();
     alignContract();
@@ -780,6 +919,7 @@ int DealerProfile::draw(void)
     srcTag();
     exportBars();
     writeStatus(D.nodes.empty() ? "no data" : "drawn");
+    saveHostState();
     return RTX_OK;
 }
 
@@ -789,6 +929,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.5.0");   // (2.4.0) touch odds on the MenthorQ levels;   // (2.3.0) draws the MenthorQ key levels (replaces lsFlexLevels and its 1-minute HTTP check)
+    p->setVersion("2.5.1");   // 2.5.1: per-host state, robust external-input handling, atomic bar export
     return p;
 }

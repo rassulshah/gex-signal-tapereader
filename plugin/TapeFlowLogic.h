@@ -1,5 +1,5 @@
 /********************************************************************************
- *  TapeFlowLogic.h  --  the testable half of lsTapeFlow<MKT> (no IRT SDK)          v1.0.0 (2026-10-08)
+ *  TapeFlowLogic.h  --  the testable half of lsTapeFlow<MKT> (no IRT SDK)          v1.0.1 (2026-10-08)
  *
  *  Rassul 2026-10-08 13:17-13:26 (TapeFlow brief): "review ... then we will build it out on irt"; "get it on all the markets,
  *  if signals are tentative just add ?"; "the markers should be on the indicator on a separate pane"; "keep levels out of it,
@@ -32,13 +32,17 @@
 #include <string>
 #include <cmath>
 #include <climits>
+#include <cstdint>
+#include <cerrno>
+#include <cstdlib>
+#include <limits>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 
 namespace tfl {
 
-#define TFL_VERSION "1.0.0"
+#define TFL_VERSION "1.0.1"
 
 struct Cfg {
     int fastW = 30, ctxW = 180, obsW = 20, part = 5;   // seconds
@@ -53,7 +57,7 @@ struct Cfg {
 
 enum { SIDE_BUY = 0, SIDE_SELL = 1, SIDE_UNK = 2 };
 
-struct Tick { long long t = 0; int px = 0; int bid = 0; int ask = 0; long q = 0; };   // bid / ask <= 0 = no quote
+struct Tick { long long t = 0; int px = 0; int bid = 0; int ask = 0; long long q = 0; };   // bid / ask <= 0 = no quote
 
 inline int sideOf(int px, int bid, int ask)
 {
@@ -68,18 +72,18 @@ inline long long sessionOf(long long t) { long long x = t - 17LL * 3600; long lo
 inline int binOf(long long t) { long long x = (t - 17LL * 3600) % 86400; if (x < 0) x += 86400; return (int)(x / 300); }
 static const int NBINS = 288;
 
-struct Row { int px; long b, s, u; };
+struct Row { int px; long long b, s, u; };
 struct Slice {
     long long t = 0;
     std::vector<Row> rows;
-    long B = 0, S = 0, U = 0;
+    long long B = 0, S = 0, U = 0;
     std::vector<int> mids;          // the midpoint path (half-ticks) through the second; [0] = the value carried in
     bool path = false;              // a valid quote known all through this second
     bool carried = false;           // a quote was known when the second began
     int spread = -1;                // ticks, the last quote of the second
     int mn() const { int m = INT_MAX; for (int v : mids) m = std::min(m, v); return m; }
     int mx() const { int m = INT_MIN; for (int v : mids) m = std::max(m, v); return m; }
-    long side(int sd) const { return sd == SIDE_BUY ? B : S; }
+    long long side(int sd) const { return sd == SIDE_BUY ? B : S; }
 };
 
 // one baseline window (stored per session)
@@ -145,7 +149,7 @@ inline void freezeBase(const Store& st, long long sid, int N, BinBase* out, int*
 
 // the volume of each price over some slices, dense from lo to hi (tick prices)
 struct Dense {
-    int lo = 0, hi = -1; std::vector<long> b, s, u;
+    int lo = 0, hi = -1; std::vector<long long> b, s, u;
     void build(const std::deque<Slice>& R, size_t from, size_t to)
     {
         lo = INT_MAX; hi = INT_MIN;
@@ -161,24 +165,24 @@ struct Dense {
     // the band [c-h, c+h] with the most known volume of `sd` among bands with >= cov known side; false = none eligible.
     // Ties (mirror-symmetric): nearest the single price with the most `sd` volume, then nearest the midpoint (half-ticks),
     // then the lower band for sellers / the higher band for buyers.
-    bool best(int sd, int h, double cov, int mid2, int* center, long* vol, double* bandCov) const
+    bool best(int sd, int h, double cov, int mid2, int* center, long long* vol, double* bandCov) const
     {
         if (hi < lo) return false;
         int n = hi - lo + 1;
-        const std::vector<long>& V = sd == SIDE_BUY ? b : s;
-        int pk = lo; long pv = -1;
-        for (int k = 0; k < n; k++) { long v = V[(size_t)k]; int px = lo + k; if (v > pv || (v == pv && (sd == SIDE_SELL ? px < pk : px > pk))) { pv = v; pk = px; } }
-        std::vector<long> pb(n + 1, 0), ps(n + 1, 0), pu(n + 1, 0);
+        const std::vector<long long>& V = sd == SIDE_BUY ? b : s;
+        int pk = lo; long long pv = -1;
+        for (int k = 0; k < n; k++) { long long v = V[(size_t)k]; int px = lo + k; if (v > pv || (v == pv && (sd == SIDE_SELL ? px < pk : px > pk))) { pv = v; pk = px; } }
+        std::vector<long long> pb(n + 1, 0), ps(n + 1, 0), pu(n + 1, 0);
         for (int k = 0; k < n; k++) { pb[k + 1] = pb[k] + b[(size_t)k]; ps[k + 1] = ps[k] + s[(size_t)k]; pu[k + 1] = pu[k] + u[(size_t)k]; }
-        bool found = false; long bestV = -1; int bestC = 0; double bestCov = 0;
+        bool found = false; long long bestV = -1; int bestC = 0; double bestCov = 0;
         for (int c = lo; c <= hi; c++) {
             int a = std::max(lo, c - h), z = std::min(hi, c + h);
             int ia = a - lo, iz = z - lo + 1;
-            long B = pb[iz] - pb[ia], S = ps[iz] - ps[ia], U = pu[iz] - pu[ia];
+            long long B = pb[iz] - pb[ia], S = ps[iz] - ps[ia], U = pu[iz] - pu[ia];
             if (B + S + U <= 0) continue;
             double cv = (double)(B + S) / (double)(B + S + U);
             if (cv < cov) continue;
-            long v = sd == SIDE_BUY ? B : S;
+            long long v = sd == SIDE_BUY ? B : S;
             bool better = !found || v > bestV;
             if (found && v == bestV) {
                 int d1 = std::abs(c - pk), d0 = std::abs(bestC - pk);
@@ -194,7 +198,7 @@ struct Dense {
         if (bandCov) *bandCov = bestCov;
         return true;
     }
-    void band(int a, int z, long* B, long* S, long* U) const
+    void band(int a, int z, long long* B, long long* S, long long* U) const
     {
         *B = *S = *U = 0;
         for (int p = std::max(a, lo); p <= std::min(z, hi); p++) { size_t k = (size_t)(p - lo); *B += b[k]; *S += s[k]; *U += u[k]; }
@@ -228,7 +232,7 @@ struct Ep {
     int arN = 0; double arQty = 0, arKnown = 0, arAll = 0;
     int ver = 0;
 };
-struct Latch { int dir = 0, lo = 0, hi = 0, h = 1; double q95 = 0; bool far = false; int quietN = 0; };
+struct Latch { int dir = 0, lo = 0, hi = 0, h = 1; double q95 = 0; bool movedAway = false; int quietN = 0; };
 struct InSetup { bool on = false; long long t0 = 0; int bound2 = 0; double med5 = 0, med20 = 0; int n = 0; double qty = 0, known = 0, all = 0; };
 
 class Engine {
@@ -247,6 +251,7 @@ public:
     bool fixedBase = false;          // tests: baselines given, not frozen from the store
 
     Engine() {}
+    void attach(Store* baselineStore, const std::string& symbol) { store = baselineStore; sym = symbol; }
 
     // ---- input
     bool add(const Tick& k)
@@ -361,29 +366,30 @@ private:
     }
 
     // sums over the last w closed seconds
-    void sums(int w, long* B, long* S, long* U) const
+    void sums(int w, long long* B, long long* S, long long* U) const
     {
         *B = *S = *U = 0; int n = (int)R.size();
         for (int i = std::max(0, n - w); i < n; i++) { *B += R[(size_t)i].B; *S += R[(size_t)i].S; *U += R[(size_t)i].U; }
     }
-    static void flow(long B, long S, long U, bool* ok, double* F, double* L, double* H, double* C)
+    static void flow(long long B, long long S, long long U, bool* ok, double* F, double* L, double* H, double* C)
     {
-        *ok = B + S > 0;
-        double T = (double)(B + S + U);
-        *F = *ok ? 100.0 * (double)(B - S) / (double)(B + S) : 0;
-        *L = T > 0 ? 100.0 * (double)(B - S - U) / T : 0; *H = T > 0 ? 100.0 * (double)(B - S + U) / T : 0;
-        *C = T > 0 ? (double)(B + S) / T : 0;
+        const double b = (double)B, s = (double)S, u = (double)U;
+        *ok = B > 0 || S > 0;
+        const double known = b + s, T = known + u;
+        *F = *ok ? 100.0 * (b - s) / known : 0;
+        *L = T > 0 ? 100.0 * (b - s - u) / T : 0; *H = T > 0 ? 100.0 * (b - s + u) / T : 0;
+        *C = T > 0 ? known / T : 0;
     }
 
     Feat features(long long t)
     {
-        Feat f; long B, S, U;
+        Feat f; long long B, S, U;
         sums(cfg.fastW, &B, &S, &U); flow(B, S, U, &f.f30ok, &f.f30, &f.l30, &f.h30, &f.c30);
         sums(cfg.ctxW, &B, &S, &U); flow(B, S, U, &f.f180ok, &f.f180, &f.l180, &f.h180, &f.c180);
         double x1, x2, x3;
         sums(cfg.obsW, &B, &S, &U); flow(B, S, U, &f.f20ok, &x1, &x2, &x3, &f.c20);
-        f.rate20 = (double)(B + S + U) / cfg.obsW;
-        sums(cfg.part, &B, &S, &U); f.rate5 = (double)(B + S + U) / cfg.part;
+        f.rate20 = ((double)B + (double)S + (double)U) / cfg.obsW;
+        sums(cfg.part, &B, &S, &U); f.rate5 = ((double)B + (double)S + (double)U) / cfg.part;
         f.bin = binOf(t); f.bbv = base[f.bin];
         f.baseOk = f.bb()->n >= cfg.minWin && f.bb()->med20 > 0;
         if (f.bb()->med20 > 0) { f.A = f.rate20 / f.bb()->med20; f.aok = true; }
@@ -437,17 +443,17 @@ private:
         size_t n = R.size(); if ((int)n < cfg.obsW) { r.why = "short history"; return r; }
         size_t w0 = n - (size_t)cfg.obsW;
         Dense D; D.build(R, w0, n);
-        long Bw, Sw, Uw; sums(cfg.obsW, &Bw, &Sw, &Uw);
+        long long Bw, Sw, Uw; sums(cfg.obsW, &Bw, &Sw, &Uw);
         r.qside = (double)(sd == SIDE_BUY ? Bw : Sw);
         if (fr) { r.lo = fr->lo; r.hi = fr->hi; r.h = fr->h; r.q95 = fr->q95; }
         else {
             r.h = f.h;
-            int c = 0; long v = 0; double cv = 0;
+            int c = 0; long long v = 0; double cv = 0;
             if (!D.best(sd, r.h, cfg.cov, f.mid2, &c, &v, &cv)) { r.why = "no band with 90% known side"; return r; }
             r.lo = c - r.h; r.hi = c + r.h;
             r.q95 = f.bb() ? (sd == SIDE_BUY ? f.bb()->qb[r.h - 1] : f.bb()->qs[r.h - 1]) : 0;
         }
-        long bB, bS, bU; D.band(r.lo, r.hi, &bB, &bS, &bU);
+        long long bB, bS, bU; D.band(r.lo, r.hi, &bB, &bS, &bU);
         r.qzone = (double)(sd == SIDE_BUY ? bB : bS); r.qopp = (double)(sd == SIDE_BUY ? bS : bB);
         r.czone = bB + bS + bU > 0 ? (double)(bB + bS) / (double)(bB + bS + bU) : 0;
         r.conc = r.qside > 0 ? r.qzone / r.qside : 0;
@@ -533,9 +539,9 @@ private:
         for (size_t i = 0; i < latches.size();) {
             Latch& L = latches[i]; bool rearm = false;
             if (s.path) {
-                int far = 2 * L.h + 1;
-                if (s.mx() >= 2 * (L.hi + far) || s.mn() <= 2 * (L.lo - far)) L.far = true;
-                else if (L.far) for (int m : s.mids) if (m >= 2 * L.lo && m <= 2 * L.hi) rearm = true;
+                int distance = 2 * L.h + 1;
+                if (s.mx() >= 2 * (L.hi + distance) || s.mn() <= 2 * (L.lo - distance)) L.movedAway = true;
+                else if (L.movedAway) for (int m : s.mids) if (m >= 2 * L.lo && m <= 2 * L.hi) rearm = true;
             }
             // quiet reset: the attempted side's band volume over 20 s below 25% of the old Q95 for 30 s
             double qz = 0; int sd = attemptedSide(L.dir);
@@ -554,15 +560,17 @@ private:
         if (x != 0 || (int)R.size() < cfg.obsW || warmN < cfg.obsW) return;
         size_t n = R.size(), w0 = n - (size_t)cfg.obsW;
         if (R[w0].t != t - cfg.obsW + 1) return;                     // not 20 contiguous seconds
-        long B = 0, S = 0, U = 0; bool path = true;
+        long long B = 0, S = 0, U = 0; bool path = true;
         for (size_t i = w0; i < n; i++) { B += R[i].B; S += R[i].S; U += R[i].U; if (!R[i].path) path = false; }
-        if (B + S + U <= 0 || !path) return;
-        if ((double)(B + S) / (double)(B + S + U) < cfg.cov) return;
-        Win w; w.bin = binOf(t); w.rate20 = (float)(B + S + U) / cfg.obsW; w.spread = (float)R.back().spread;
-        for (int p = 0; p < 4; p++) { long v = 0; for (int k = 0; k < cfg.part; k++) { const Slice& s = R[w0 + (size_t)(p * cfg.part + k)]; v += s.B + s.S + s.U; } w.r5[p] = (float)v / cfg.part; }
+        const double total = (double)B + (double)S + (double)U;
+        const double known = (double)B + (double)S;
+        if (!(total > 0) || !path) return;
+        if (known / total < cfg.cov) return;
+        Win w; w.bin = binOf(t); w.rate20 = (float)(total / cfg.obsW); w.spread = (float)R.back().spread;
+        for (int p = 0; p < 4; p++) { long long v = 0; for (int k = 0; k < cfg.part; k++) { const Slice& s = R[w0 + (size_t)(p * cfg.part + k)]; v += s.B + s.S + s.U; } w.r5[p] = (float)((double)v / cfg.part); }
         Dense D; D.build(R, w0, n);
         for (int h = 1; h <= 8; h++) {
-            int c; long v; double cv;
+            int c; long long v; double cv;
             w.Mb[h - 1] = D.best(SIDE_BUY, h, cfg.cov, INT_MIN, &c, &v, &cv) ? (float)v : 0.f;
             w.Ms[h - 1] = D.best(SIDE_SELL, h, cfg.cov, INT_MIN, &c, &v, &cv) ? (float)v : 0.f;
         }
@@ -745,16 +753,42 @@ inline std::string storeLine(long long sid, const std::string& sym, const Win& w
     for (int h = 0; h < 8; h++) k += snprintf(b + k, sizeof(b) - (size_t)k, "|%.6g", w.Ms[h]);
     return std::string(b);
 }
+inline bool parseStoreLong(const std::string& text, long long* out)
+{
+    if (!out || text.empty()) return false;
+    char* end = nullptr; errno = 0;
+    long long value = std::strtoll(text.c_str(), &end, 10);
+    if (errno == ERANGE || end == text.c_str() || *end != '\0') return false;
+    *out = value; return true;
+}
+inline bool parseStoreInt(const std::string& text, int* out)
+{
+    long long value = 0;
+    if (!out || !parseStoreLong(text, &value) || value < (long long)INT_MIN || value > (long long)INT_MAX) return false;
+    *out = (int)value; return true;
+}
+inline bool parseStoreFloat(const std::string& text, float* out)
+{
+    if (!out || text.empty()) return false;
+    char* end = nullptr; errno = 0;
+    double value = std::strtod(text.c_str(), &end);
+    if (errno == ERANGE || end == text.c_str() || *end != '\0' || !std::isfinite(value) ||
+        value < -(double)std::numeric_limits<float>::max() || value > (double)std::numeric_limits<float>::max()) return false;
+    *out = (float)value; return true;
+}
 inline bool parseStoreLine(const std::string& ln, long long* sid, std::string* sym, Win* w)
 {
-    if (ln.size() < 3 || ln[0] != 'W' || ln[1] != '|') return false;
+    if (!sid || !sym || !w || ln.size() < 3 || ln[0] != 'W' || ln[1] != '|') return false;
     std::vector<std::string> c; size_t a = 2;
     while (true) { size_t p = ln.find('|', a); c.push_back(ln.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; }
-    if (c.size() < 25) return false;
-    *sid = atoll(c[0].c_str()); *sym = c[1]; w->bin = atoi(c[2].c_str()); w->rate20 = (float)atof(c[3].c_str());
-    for (int k = 0; k < 4; k++) w->r5[k] = (float)atof(c[4 + (size_t)k].c_str());
-    w->spread = (float)atof(c[8].c_str());
-    for (int h = 0; h < 8; h++) { w->Mb[h] = (float)atof(c[9 + (size_t)h].c_str()); w->Ms[h] = (float)atof(c[17 + (size_t)h].c_str()); }
+    if (c.size() < 25 || c[1].empty() || c[1].size() > 63 || !parseStoreLong(c[0], sid) || !parseStoreInt(c[2], &w->bin) ||
+        !parseStoreFloat(c[3], &w->rate20) || w->rate20 < 0) return false;
+    *sym = c[1];
+    for (int k = 0; k < 4; k++) if (!parseStoreFloat(c[4 + (size_t)k], &w->r5[k]) || w->r5[k] < 0) return false;
+    if (!parseStoreFloat(c[8], &w->spread) || w->spread < -1) return false;
+    for (int h = 0; h < 8; h++) {
+        if (!parseStoreFloat(c[9 + (size_t)h], &w->Mb[h]) || !parseStoreFloat(c[17 + (size_t)h], &w->Ms[h]) || w->Mb[h] < 0 || w->Ms[h] < 0) return false;
+    }
     return w->bin >= 0 && w->bin < NBINS;
 }
 

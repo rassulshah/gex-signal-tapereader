@@ -18,6 +18,7 @@
 #include <cstring>
 #include <cmath>
 #include <ctime>
+#include <limits>
 
 namespace irl {
 
@@ -75,9 +76,22 @@ struct TickCursor {
 // a DOM snapshot is written only when a level changed: a cheap fingerprint of the book
 inline unsigned long long bookHash(const std::vector<double>& v)
 {
+    const long long lo = (std::numeric_limits<long long>::min)();
+    const long long hi = (std::numeric_limits<long long>::max)();
     unsigned long long h = 1469598103934665603ULL;
     for (size_t i = 0; i < v.size(); i++) {
-        long long q = (long long)std::llround(v[i] * 100000.0);
+        // Feed data can be unavailable/invalid during reconnects.  Never pass a
+        // non-finite or out-of-range value to llround/cast; encode each class
+        // distinctly so a bad snapshot is neither undefined behavior nor equal
+        // to an ordinary zero level.
+        long long q;
+        if (std::isnan(v[i])) q = lo;
+        else if (v[i] == std::numeric_limits<double>::infinity()) q = hi;
+        else if (v[i] == -std::numeric_limits<double>::infinity()) q = lo + 1;
+        else {
+            const double scaled = v[i] * 100000.0;
+            q = scaled >= (double)hi ? hi : scaled <= (double)lo ? lo : (long long)std::llround(scaled);
+        }
         for (int k = 0; k < 8; k++) { h ^= (unsigned long long)((q >> (8 * k)) & 0xFF); h *= 1099511628211ULL; }
     }
     return h;

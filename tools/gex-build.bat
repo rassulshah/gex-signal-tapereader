@@ -30,17 +30,17 @@ if not exist "%OUT%" mkdir "%OUT%"
 set VCOK=
 set ANY=
 call :one GammaProfile lsGammaProfile GammaProfileLogic.h ContractOffsetLogic.h
-call :one DayModel     lsDayModel     DayModelLogic.h
-call :one DayStats     lsDayStats     DayStatsLogic.h
+call :one DayModel     lsDayModel     DayModelLogic.h HostSlot.h
+call :one DayStats     lsDayStats     DayStatsLogic.h HostSlot.h
 call :one KingTracker  lsKingTracker  KingTrackerLogic.h ContractOffsetLogic.h
-call :one DealerProfile lsDealerProfile DealerLogic.h
-call :one DealerRead   lsDealerRead   DealerLogic.h
+call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h
+call :one DealerRead   lsDealerRead   DealerLogic.h HostSlot.h
 call :one DealerSig    lsDealerSig    DealerLogic.h
-call :one DealerSummary lsDealerSummary DealerLogic.h
-call :one DeltaProfile lsDeltaProfile DealerLogic.h
+call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h
+call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h
-call :one TradeManager lsTradeManager DealerLogic.h
-call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h
+call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h
+call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h

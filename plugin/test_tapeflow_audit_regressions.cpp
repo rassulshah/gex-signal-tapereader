@@ -1,0 +1,79 @@
+// Focused audit regressions for TapeFlowLogic.h. These use fabricated data only.
+#include "TapeFlowLogic.h"
+#include <cmath>
+#include <cstdio>
+#include <string>
+
+using namespace tfl;
+
+static int failures = 0;
+static int passes = 0;
+#define CHECK(condition, message) do { if (condition) ++passes; else { ++failures; std::printf("FAIL %s:%d %s\n", __FILE__, __LINE__, message); } } while (0)
+
+static std::string replaceField(std::string line, int field, const std::string& replacement)
+{
+    size_t begin = 2; // first field follows W|
+    for (int i = 0; i < field; ++i) {
+        begin = line.find('|', begin);
+        if (begin == std::string::npos) return line;
+        ++begin;
+    }
+    size_t end = line.find('|', begin);
+    line.replace(begin, end == std::string::npos ? std::string::npos : end - begin, replacement);
+    return line;
+}
+
+int main()
+{
+    // Regression: Windows long is 32-bit. Dense selection must not narrow a large
+    // long long quantity while selecting a price or a band.
+    {
+        Dense d;
+        d.lo = 100; d.hi = 102;
+        d.b = {7, 4294967313LL, 11};
+        d.s = {0, 0, 0};
+        d.u = {0, 0, 0};
+        int center = 0; long long volume = 0; double coverage = 0;
+        CHECK(d.best(SIDE_BUY, 0, 0.90, INT_MIN, &center, &volume, &coverage), "large known-volume band is eligible");
+        CHECK(center == 101 && volume == 4294967313LL && coverage == 1.0, "Dense::best preserves quantities above LONG_MAX on Windows");
+    }
+
+    // Regression: flow/rate accumulators must remain precise beyond signed 32-bit.
+    {
+        Engine e;
+        BinBase base;
+        base.n = 100; base.med20 = 2000000000.0f; base.med5 = 2000000000.0f; base.medSpread = 1;
+        e.setFixedBase(base);
+        const long long start = 1790000000LL - (1790000000LL % 86400) + 9 * 3600;
+        for (int second = 0; second < 250; ++second) {
+            Tick k; k.t = start + second; k.px = 1001; k.bid = 1000; k.ask = 1001; k.q = 2000000000LL;
+            e.add(k);
+        }
+        e.advanceTo(start + 249);
+        CHECK(e.last.f30ok && std::fabs(e.last.f30 - 100.0) < 1e-9, "large classified flow remains finite and directional");
+        CHECK(std::fabs(e.last.rate20 - 2000000000.0) < 0.5, "large 20-second rate does not overflow a Windows long");
+    }
+
+    // Regression: malformed persisted baseline rows cannot silently become zero,
+    // infinity, NaN, an out-of-range bin, or a negative volume.
+    {
+        Win source;
+        source.bin = 7; source.rate20 = 12.5f; source.r5[0] = 10.0f; source.r5[1] = 11.0f;
+        source.r5[2] = 12.0f; source.r5[3] = 13.0f; source.spread = 1.0f;
+        for (int h = 0; h < 8; ++h) { source.Mb[h] = (float)(h + 1); source.Ms[h] = (float)(h + 11); }
+        const std::string row = storeLine(1234, "ESZ6", source);
+        long long sid = 0; std::string symbol; Win parsed;
+        CHECK(parseStoreLine(row, &sid, &symbol, &parsed) && sid == 1234 && symbol == "ESZ6" && parsed.Ms[7] == 18.0f, "valid baseline row still round-trips");
+        CHECK(!parseStoreLine(replaceField(row, 0, "9223372036854775808"), &sid, &symbol, &parsed), "session integer overflow is rejected");
+        CHECK(!parseStoreLine(replaceField(row, 2, "2147483648"), &sid, &symbol, &parsed), "bin integer overflow is rejected");
+        CHECK(!parseStoreLine(replaceField(row, 3, "nan"), &sid, &symbol, &parsed), "NaN rate is rejected");
+        CHECK(!parseStoreLine(replaceField(row, 3, "3.5e39"), &sid, &symbol, &parsed), "out-of-range float is rejected");
+        CHECK(!parseStoreLine(replaceField(row, 4, "-1"), &sid, &symbol, &parsed), "negative rate component is rejected");
+        CHECK(!parseStoreLine(replaceField(row, 8, "-2"), &sid, &symbol, &parsed), "invalid negative spread is rejected");
+        CHECK(!parseStoreLine(replaceField(row, 9, "-1"), &sid, &symbol, &parsed), "negative baseline volume is rejected");
+        CHECK(!parseStoreLine(replaceField(row, 1, ""), &sid, &symbol, &parsed), "empty symbol is rejected");
+    }
+
+    std::printf("%d passed, %d failed\n", passes, failures);
+    return failures ? 1 : 0;
+}

@@ -174,7 +174,7 @@ void KingTracker::migrateScrambled()
 void KingTracker::unblackColours()
 {
     for (int i = 0; i < B_IF; i++) {
-        COLOR c = (COLOR)(getIntegerValue(PX.col[i]) & 0xFFFFFF);
+        COLOR c = getParameterColor(PX.col[i]) & 0xFFFFFF;
         int mx = (int)((c >> 16) & 0xFF); if ((int)((c >> 8) & 0xFF) > mx) mx = (int)((c >> 8) & 0xFF); if ((int)(c & 0xFF) > mx) mx = (int)(c & 0xFF);
         if (mx < 0x30) setParameterColor(PX.col[i], BOOK_DEF[i]);
     }
@@ -221,7 +221,7 @@ void KingTracker::readSettings(Settings& S)
     S.width  = getIntegerValue(PX.width);   if (S.width < 1) S.width = 1; if (S.width > 8) S.width = 8;
     for (int i = 0; i < NBOOK; i++) {
         S.show[i] = (PX.show[i] < 0) ? true : (isBoxChecked(PX.show[i]) != 0);   // (v0.11) the IF books have no box
-        COLOR c = (PX.col[i] < 0) ? BOOK_DEF[i] : (COLOR)(getIntegerValue(PX.col[i]) & 0xFFFFFF);   // (v0.13) the IF books have no colour row
+        COLOR c = (PX.col[i] < 0) ? BOOK_DEF[i] : (getParameterColor(PX.col[i]) & 0xFFFFFF);   // (v0.13) the IF books have no colour row
         // (v0.13) black (or near-black) is never a line colour on his black chart — the 0.12 scramble put one on NDX; it falls back to the book's default
         int mx = (int)((c >> 16) & 0xFF); if ((int)((c >> 8) & 0xFF) > mx) mx = (int)((c >> 8) & 0xFF); if ((int)(c & 0xFF) > mx) mx = (int)(c & 0xFF);
         S.col[i] = (mx < 0x30) ? BOOK_DEF[i] : c;
@@ -252,22 +252,35 @@ void KingTracker::load()
         if (t[0] == "KINGTRACK" && t.size() >= 6) {
             std::string fam, bk; Step s; if (!ktl::parseTrack(t, fam, bk, s)) continue;   // (v0.10) KingTrackerLogic.h
             for (int i = 0; i < NBOOK; i++) if (bk == BOOK_NAME[i]) { bi = i; break; }
-            if (bi < 0) continue;
+            if (bi < 0 || fam != BOOK_FAM[bi]) continue;  // reject a mismatched external family/book row
             book[bi].steps.push_back(s);
         } else if (t[0] == "KINGNOW" && t.size() >= 5) {
             std::string fam, bk; ktl::Book nb; if (!ktl::parseNow(t, fam, bk, nb)) continue;
             for (int i = 0; i < NBOOK; i++) if (bk == BOOK_NAME[i]) { bi = i; break; }
-            if (bi < 0) continue;
+            if (bi < 0 || fam != BOOK_FAM[bi]) continue;  // reject a mismatched external family/book row
             book[bi].nowPx = nb.nowPx; book[bi].nowStrike = nb.nowStrike; book[bi].nowPct = nb.nowPct; book[bi].hasNow = true;
         } else if (t[0] == "ASOF" && t.size() >= 2) {
-            asofSo = atof(t[1].c_str());
+            double so = 0.0; if (ktl::parseFiniteDouble(t[1], so) && ktl::validSecOfDay(so)) asofSo = so;
         } else if (t[0] == "SPOT" && t.size() >= 2) {
-            spotPx = (float)atof(t[1].c_str()); hasSpot = true;
+            float px = 0.0f; if (ktl::parsePositiveFloat(t[1], px)) { spotPx = px; hasSpot = true; }
         } else if (t[0] == "SCALEREF" && t.size() >= 2) {
-            scaleRef = (float)atof(t[1].c_str()); hasScaleRef = true; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
-            if (t.size() >= 4) { scaleRefSo = atof(t[2].c_str()); sscanf(t[3].c_str(), "%d-%d-%d", &scaleRefY, &scaleRefM, &scaleRefD); }   // (v0.9) the quote's own minute
+            float px = 0.0f;
+            if (!ktl::parsePositiveFloat(t[1], px)) continue;
+            scaleRef = px; hasScaleRef = true; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
+            if (t.size() >= 4) {
+                double so = 0.0; int y = 0, m = 0, d = 0;
+                if (ktl::parseFiniteDouble(t[2], so) && ktl::validSecOfDay(so) && ktl::parseYmd(t[3], y, m, d)) {
+                    scaleRefSo = so; scaleRefY = y; scaleRefM = m; scaleRefD = d;
+                }
+            }   // (v0.9) use the quote's own minute only when its clock and date are valid
         }
     }
+    if (f.bad()) {  // never render a partial read caused by an actual stream I/O failure
+        for (int i = 0; i < NBOOK; i++) { book[i].steps.clear(); book[i].hasNow = false; }
+        asofSo = -1; hasSpot = false; spotPx = 0.0f; hasScaleRef = false; scaleRef = 0.0f; scaleRefSo = -1; scaleRefY = scaleRefM = scaleRefD = 0;
+        return;
+    }
+    for (int i = 0; i < NBOOK; i++) ktl::sortSteps(book[i]);
 }
 
 // ---- family ---------------------------------------------------------------
@@ -288,17 +301,19 @@ short KingTracker::xOfBar(int bar)  { PNT p; p.set(bar, 0.0f); return p.h; }
 
 int KingTracker::barForClock(double secOfDay, int offMin)
 {
-    // build "today at secOfDay (+offset)" and map to the first bar >= that time
-    RTDATE nowd = currentDate();
+    // Build the clock on the chart's right-edge date, not wall-clock today: replay
+    // and historical charts otherwise map every old session's step to the right edge.
+    RTARRAYI dates(barDateTime);
+    RTDATE chartDate = currentDate();
+    if (lastBar >= 0 && dates.count > lastBar) chartDate = (RTDATE)dates[lastBar];
     struct tm tmv; memset(&tmv, 0, sizeof(tmv));
-    getLocaltime(nowd, &tmv);
+    getLocaltime(chartDate, &tmv);
     long tot = (long)(secOfDay + 0.5) + (long)offMin * 60;
     if (tot < 0) tot = 0; if (tot > 86399) tot = 86399;
     tmv.tm_hour = (int)(tot / 3600);
     tmv.tm_min  = (int)((tot % 3600) / 60);
     tmv.tm_sec  = (int)(tot % 60);
     RTDATE rd = makeRTDATE(&tmv);
-    RTARRAYI dates(barDateTime);
     int bar = -1;
     RTX_RESULT rr = dates.getBarNumber(rd, &bar, 0, kDATE_GE);   // first bar at/after the roll time
     if (rr != RTX_OK || bar < 0 || bar > lastBar) {
@@ -355,6 +370,7 @@ void KingTracker::render(const Settings& S)
         // the right edge (KINGNOW price if present, else the last step's price).
         // (v0.13) per-point colour: the IF Magnet takes its polarity's colour (gold + / magenta -) step by step
         std::vector<short> xs, ys; std::vector<COLOR> cs;
+        xs.reserve(T.steps.size() + 1); ys.reserve(T.steps.size() + 1); cs.reserve(T.steps.size() + 1);
         for (size_t i = 0; i < T.steps.size(); i++) {
             int bar = barForClock(T.steps[i].so, S.offset);
             xs.push_back(xOfBar(bar)); ys.push_back(yOf(T.steps[i].px));
@@ -392,7 +408,7 @@ void KingTracker::writeStatus(const Settings& S)
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\KingTracker.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     const char* famStr = (chartFamily(S) == 2) ? "NQ" : "ES";
-    f << "VERSION,0.15\n";
+    f << "VERSION,0.16\n";
     for (int b = 0; b < NBOOK; b++) f << ktl::statusLine(S.sourceIF, famStr, BOOK_NAME[b], BOOK_FAM[b], book[b], lastOffset) << "\n";
     f << "ASOF," << asofSo << "\n";
 }
@@ -405,6 +421,7 @@ int KingTracker::draw(void) { load(); applyContractOffset(); render(cfg); drawSt
 // space; a dedicated NQ spot anchor is a later refinement).
 void KingTracker::applyContractOffset()
 {
+    lastOffset = 0.0f;
     long n = getBarCount(); if (n < 1) return;
     RTARRAY close(barClose);
     // (GP 0.46 / KT 0.7) ANCHOR ON THE BAR THE CSV WAS WRITTEN AT, NOT THE LIVE CLOSE. SCALEREF is the ES1 price at the
@@ -445,7 +462,7 @@ void KingTracker::applyContractOffset()
     // strike x (nowPx / nowStrike) — the ratio the CURRENT price is in. Basis drift within a day is a
     // point or two; the roll is ~70. Only when a KINGNOW row gives the ratio; otherwise the stored prices.
     for (int b = 0; b < NBOOK; b++) ktl::rederive(book[b]);                     // (v0.10) KingTrackerLogic.h
-    float anchor = 0.0f, off = 0.0f; lastOffset = 0.0f;
+    float anchor = 0.0f, off = 0.0f;
     if (!ktl::anchorPrice(hasScaleRef, scaleRef, hasSpot, spotPx, anchor)) return;
     if (!ktl::offsetFor(chartClose, anchor, off)) return;
     lastOffset = off;   // (v0.14) reported in the status file
@@ -481,6 +498,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.15");
+    p->setVersion("0.16");
     return p;
 }

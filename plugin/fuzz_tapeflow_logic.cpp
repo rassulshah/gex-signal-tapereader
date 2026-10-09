@@ -2,6 +2,7 @@
 // build: g++ -std=c++17 -O1 -g -fsanitize=address,undefined -I. -o f fuzz_tapeflow_logic.cpp && ./f
 #include "TapeFlowLogic.h"
 #include <random>
+#include <cstdlib>
 using namespace tfl;
 static const long long T0 = 1790000000LL - (1790000000LL % 86400) + 9 * 3600;
 static std::vector<Tick> tape(unsigned seed, int secs)
@@ -34,10 +35,12 @@ static Engine run(const std::vector<Tick>& v, bool inter)
     return e;
 }
 static std::string key(const Ev& x, bool mir) { char b[160]; snprintf(b, sizeof(b), "%lld %s %d %d %d", x.t, x.kind.c_str(), mir ? -x.dir : x.dir, mir ? 4000 - x.hi : x.lo, mir ? 4000 - x.lo : x.hi); return b; }
-int main()
+int main(int argc, char** argv)
 {
+    int maxSeed = 300;
+    if (argc > 1) { long n = std::strtol(argv[1], nullptr, 10); if (n > 0 && n <= 300) maxSeed = (int)n; }
     int bad = 0, evTotal = 0; std::map<std::string, int> kinds;
-    for (unsigned seed = 1; seed <= 300; seed++) {
+    for (unsigned seed = 1; seed <= (unsigned)maxSeed; seed++) {
         std::vector<Tick> v = tape(seed, 2400);
         Engine a = run(v, false), b = run(v, true);
         Engine lv; lv.setFixedBase(base()); { size_t i = 0; for (long long t = v.front().t; t <= v.back().t; t++) { while (i < v.size() && v[i].t == t) lv.add(v[i++]); lv.advanceTo(t - 3); } lv.advanceTo(v.back().t); }
@@ -50,7 +53,9 @@ int main()
         // the two sides are evaluated bullish-first in a second, so a mirrored tape lists same-second events in the other order:
         // compare the sorted event sets (the order across seconds is still checked by the time in the key)
         std::vector<std::string> KA, KB, KC;
-        for (auto& x : a.evs) KA.push_back(key(x, false)); for (auto& x : b.evs) KB.push_back(key(x, false)); for (auto& x : c.evs) KC.push_back(key(x, true));
+        for (auto& x : a.evs) KA.push_back(key(x, false));
+        for (auto& x : b.evs) KB.push_back(key(x, false));
+        for (auto& x : c.evs) KC.push_back(key(x, true));
         bool sameAB = KA == KB;
         std::sort(KA.begin(), KA.end()); std::sort(KC.begin(), KC.end());
         bool sameAC = KA == KC;

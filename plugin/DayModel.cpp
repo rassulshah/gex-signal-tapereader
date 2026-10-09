@@ -27,13 +27,29 @@
  *  v0.15 — measureChartDay measures the RTH DAY (08:30-15:00) of the most recent
  *  RTH day, not IRT's rolling session, so the actual candle's low no longer jumps
  *  to the evening session after the close (the 7652-vs-7643.50 mismatch).
+ *  v0.20 — review correction: store every mutable chart value in current-context SDK
+ *  user data; a shared DLL object no longer lets one chart overwrite another.
  *
  *  Parameter indices are numbered EXPLICITLY (pc++), one per control, with NO
  *  setLabelParameter section headers -- a label row shifts IRT's parameter
  *  numbering out from under the value getters and silently scrambles settings.
  ********************************************************************************/
+// Avoid legacy Windows min/max/far macros colliding with this translation unit.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "irtsdk.h"
-#include "DayModelLogic.h"   // (v0.17) the decisions, testable without IRT — plugin/test_daymodel_logic.cpp
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#ifdef far
+#undef far
+#endif
+#include "DayModelLogic.h"
+#include "HostSlot.h"   // (v0.17) the decisions, testable without IRT — plugin/test_daymodel_logic.cpp
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -43,6 +59,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <new>
 
 // ---- palette --------------------------------------------------------------
 static const COLOR C_UP    = 0x0033B36B;  // up candle / swept-reclaimed   green
@@ -56,7 +73,8 @@ static const COLOR C_BORDER= 0x00394654;  // panel border                   slat
 static const COLOR C_ELINE = 0x00356E78;  // E-HOD/E-LOD reference line     dim teal
 
 static COLOR lerpColor(COLOR a, COLOR b, float t) {
-    if (t < 0) t = 0; if (t > 1) t = 1;
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
     int ar=(a>>16)&0xFF, ag=(a>>8)&0xFF, ab=a&0xFF;
     int br=(b>>16)&0xFF, bg=(b>>8)&0xFF, bb=b&0xFF;
     int r=(int)(ar+(br-ar)*t+0.5f), g=(int)(ag+(bg-ag)*t+0.5f), bl=(int)(ab+(bb-ab)*t+0.5f);
@@ -79,6 +97,38 @@ struct Settings {
 struct DayCandle { float o, h, l, c; bool valid; };
 struct SweptLvl  { float price; std::string name, time; char state; };
 
+// cppExtension can be a single DLL object serving several chart contexts.  Every
+// mutable chart value must therefore live behind getUserData()/setUserData(), not
+// in DayModel itself.  The SDK associates that pointer with the current host
+// context and calls done() when its symbol/period changes and destroy() on removal.
+struct DayModelState {
+    DayCandle expC, actC;
+    float hodV, lodV; std::string hodT, hodD, lodT, lodD; bool hasHod, hasLod;
+    std::string mudP, mudT, mudDol; bool hasMud;
+    std::string ehodT, ehodD, elodT, elodD; bool hasEHodT, hasELodT;
+    std::string emudP, emudT, emudDol; bool hasEMud;
+    std::vector<SweptLvl> swepts;
+    std::string weekday, daydate;
+    double asofSo;
+    float spotPx; bool hasSpot;
+    Settings cfg;
+    int lastBar;
+    bool endStamped;
+
+    DayModelState()
+        : hodV(0.0f), lodV(0.0f), hasHod(false), hasLod(false), hasMud(false),
+          hasEHodT(false), hasELodT(false), hasEMud(false), asofSo(-1.0),
+          spotPx(0.0f), hasSpot(false), lastBar(0), endStamped(false)
+    {
+        expC.o = expC.h = expC.l = expC.c = 0.0f; expC.valid = false;
+        actC.o = actC.h = actC.l = actC.c = 0.0f; actC.valid = false;
+        cfg.side = 0; cfg.layout = 0; cfg.width = 46; cfg.spacing = 24; cfg.gap = 12;
+        cfg.bg = false; cfg.showexp = true; cfg.showact = true; cfg.labels = false;
+        cfg.hilo = true; cfg.mud = true; cfg.swept = true; cfg.header = true; cfg.elines = false;
+        cfg.cup = C_UP; cfg.cdn = C_DN; cfg.font = 10;
+    }
+};
+
 // ---------------------------------------------------------------------------
 class DayModel : public cppExtension {
 public:
@@ -86,44 +136,33 @@ public:
     virtual int parmsLoad(void);
     virtual int parmsApply(void);
     virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int done(void);
+    virtual int destroy(void);
     virtual int draw(void);
 
-    DayCandle expC, actC;
-    // finished-candle data
-    float hodV, lodV; std::string hodT, hodD, lodT, lodD; bool hasHod, hasLod;
-    std::string mudP, mudT, mudDol; bool hasMud;
-    // expected-candle extras (time/duration/MUD from the model feed)
-    std::string ehodT, ehodD, elodT, elodD; bool hasEHodT, hasELodT;
-    std::string emudP, emudT, emudDol; bool hasEMud;
-    std::vector<SweptLvl> swepts;
-    std::string weekday, daydate;
-    double asofSo;              // (v0.8) ASOF write-time (CT sec-of-day) for the STALE badge; <0 = unknown
-    float spotPx; bool hasSpot; // (v0.9) SPOT anchor for the contract offset
-
-    Settings cfg;
-    int lastBar;
-
-    void load();
-    double staleAgeMin();      // (v0.14) minutes since ASOF write (CT), overnight-wrap aware; <0 = unknown
-    void drawStaleBadge();     // (v0.8) red badge if the CSV has gone cold
-    void applyContractOffset();// (v0.9) fallback: shift the CSV candle onto this chart (pre-open)
-    bool measureChartDay();    // (v0.10) ACTUAL candle straight from the chart's own RTH session bars
-    void computeChartLevels(); // (v0.11) PDH/PDL + overnight H/L from the chart's own bars (exact)
-    void detectBarStamp();   // (v0.16) start- vs end-stamped bars (sets g_endStamped)
-    void loadBars(std::vector<dml::Bar>& out, int maxBars);   // (v0.17) the chart's bars as plain records for DayModelLogic.h
+    DayModelState* getState(bool create);
+    HostSlot<DayModelState> slot_;
+    void clearState();
+    void load(DayModelState& state);
+    double staleAgeMin(const DayModelState& state);
+    void drawStaleBadge(const DayModelState& state);
+    void applyContractOffset(DayModelState& state, const std::vector<dml::Bar>& bars);
+    bool measureChartDay(DayModelState& state, const std::vector<dml::Bar>& bars);
+    void computeChartLevels(DayModelState& state, const std::vector<dml::Bar>& bars);
+    void detectBarStamp(DayModelState& state, const std::vector<dml::Bar>& bars);
+    void loadBars(std::vector<dml::Bar>& out, int maxBars);
     void readSettings(Settings& S);
-    void render(const Settings& S);
-    // helpers
-    short yOf(float price);
+    void render(DayModelState& state, const Settings& S);
+    short yOf(const DayModelState& state, float price);
     void vline(short x, short y1, short y2, COLOR col, PEN_STYLE ps);
     void hline(short y, short x1, short x2, COLOR col, PEN_STYLE ps);
     void rectOutline(short l, short t, short r, short b, COLOR col, PEN_STYLE ps);
     void rectFill(short l, short t, short r, short b, COLOR fill, COLOR outline);
     void textC(short cx, short y, const char* s, COLOR col, int sz, bool bold);
     void textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold);
-    void drawCandle(short cx, const DayCandle& d, bool ghost, const Settings& S);
-    void drawActExtras(short cx, const Settings& S);
-    void drawExpExtras(short cx, const Settings& S);
+    void drawCandle(const DayModelState& state, short cx, const DayCandle& d, bool ghost, const Settings& S);
+    void drawActExtras(const DayModelState& state, short cx, const Settings& S);
+    void drawExpExtras(const DayModelState& state, short cx, const Settings& S);
 };
 
 // ---- base-vtable resolvers ------------------------------------------------
@@ -132,49 +171,55 @@ int cppExtension::calc(int)     { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
 
-// ---- constructor: seed safe defaults so the first draw is valid -----------
-DayModel::DayModel() : cppExtension()
+// ---- current-context persistent state and lifecycle -----------------------
+DayModel::DayModel() : cppExtension() {}
+
+DayModelState* DayModel::getState(bool create)
 {
-    expC.valid = false; actC.valid = false; lastBar = 0;
-    hasHod = false; hasLod = false; hasMud = false;
-    hasEHodT = false; hasELodT = false; hasEMud = false;
-    cfg.side = 0;          // Left margin (per the settled §10.1 layout)
-    cfg.layout = 0;        // Pair (side by side)
-    cfg.width = 46;
-    cfg.spacing = 24;      // gap between EXP and ACT (was hardcoded 8 -- too close)
-    cfg.gap = 12;
-    cfg.bg = false;   // (v0.10) OFF by default — the big panel was tinting the chart
-    cfg.showexp = true;
-    cfg.showact = true;
-    cfg.cup = C_UP;
-    cfg.cdn = C_DN;
-    cfg.font = 10;
-    cfg.labels = false;    // the dashed one is obviously EXP -- no EXP/ACT tags by default
-    cfg.hilo = true;
-    cfg.mud = true;
-    cfg.swept = true;
-    cfg.header = true;
-    cfg.elines = false;    // E-HOD/E-LOD reference lines off by default
+    return slot_.get(this, create);
+}
+
+void DayModel::clearState()
+{
+    slot_.release(this);
+}
+
+int DayModel::done(void)
+{
+    clearState();
+    return RTX_OK;
+}
+
+int DayModel::destroy(void)
+{
+    clearState();
+    return RTX_OK;
 }
 
 // ---- parameter callbacks (dialog controls valid here; guard on a plausible
 //      font read so a nonsense value never corrupts the cached settings) -----
 int DayModel::parmsLoad(void)
 {
+    DayModelState* state = getState(true);
+    if (!state) return RTX_FAIL;
     int probe = getIntegerValue(PX.font);
-    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(state->cfg);
     return RTX_OK;
 }
 int DayModel::parmsApply(void)
 {
+    DayModelState* state = getState(true);
+    if (!state) return RTX_FAIL;
     int probe = getIntegerValue(PX.font);
-    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(state->cfg);
     return RTX_OK;
 }
 int DayModel::parmsUpdt(unsigned int)
 {
+    DayModelState* state = getState(true);
+    if (!state) return RTX_FAIL;
     int probe = getIntegerValue(PX.font);
-    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(cfg);
+    if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(state->cfg);
     return RTX_OK;
 }
 
@@ -235,11 +280,11 @@ void DayModel::readSettings(Settings& S)
 }
 
 // ---- data load ------------------------------------------------------------
-void DayModel::load()
+void DayModel::load(DayModelState& state)
 {
-    expC.valid = false; actC.valid = false;
-    hasHod = false; hasLod = false; hasMud = false; swepts.clear(); weekday.clear(); daydate.clear();
-    hasEHodT = false; hasELodT = false; hasEMud = false; asofSo = -1; hasSpot = false; spotPx = 0.0f;
+    state.expC.valid = false; state.actC.valid = false;
+    state.hasHod = false; state.hasLod = false; state.hasMud = false; state.swepts.clear(); state.weekday.clear(); state.daydate.clear();
+    state.hasEHodT = false; state.hasELodT = false; state.hasEMud = false; state.asofSo = -1; state.hasSpot = false; state.spotPx = 0.0f;
     const char* up = getenv("USERPROFILE");
     if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\GammaProfile.csv";
@@ -253,42 +298,58 @@ void DayModel::load()
         while (std::getline(ss, it, ',')) t.push_back(it);
         if (t.size() < 2) continue;
         if (t[0] == "DAYEXP" && t.size() >= 5) {
-            expC.o=(float)atof(t[1].c_str()); expC.h=(float)atof(t[2].c_str());
-            expC.l=(float)atof(t[3].c_str()); expC.c=(float)atof(t[4].c_str()); expC.valid=true;
+            float o, h, l, c;
+            if (dml::parseFiniteFloat(t[1].c_str(), o) && dml::parseFiniteFloat(t[2].c_str(), h) &&
+                dml::parseFiniteFloat(t[3].c_str(), l) && dml::parseFiniteFloat(t[4].c_str(), c) &&
+                dml::validOhlc(o, h, l, c)) {
+                state.expC.o = o; state.expC.h = h; state.expC.l = l; state.expC.c = c; state.expC.valid = true;
+            }
         } else if (t[0] == "DAYACT" && t.size() >= 5) {
-            actC.o=(float)atof(t[1].c_str()); actC.h=(float)atof(t[2].c_str());
-            actC.l=(float)atof(t[3].c_str()); actC.c=(float)atof(t[4].c_str()); actC.valid=true;
+            float o, h, l, c;
+            if (dml::parseFiniteFloat(t[1].c_str(), o) && dml::parseFiniteFloat(t[2].c_str(), h) &&
+                dml::parseFiniteFloat(t[3].c_str(), l) && dml::parseFiniteFloat(t[4].c_str(), c) &&
+                dml::validOhlc(o, h, l, c)) {
+                state.actC.o = o; state.actC.h = h; state.actC.l = l; state.actC.c = c; state.actC.valid = true;
+            }
         } else if (t[0] == "DAYHOD" && t.size() >= 4) {
-            hodV=(float)atof(t[1].c_str()); hodT=t[2]; hodD=t[3]; hasHod=true;
+            float value;
+            if (dml::parseFiniteFloat(t[1].c_str(), value)) { state.hodV = value; state.hodT = t[2]; state.hodD = t[3]; state.hasHod = true; }
         } else if (t[0] == "DAYLOD" && t.size() >= 4) {
-            lodV=(float)atof(t[1].c_str()); lodT=t[2]; lodD=t[3]; hasLod=true;
+            float value;
+            if (dml::parseFiniteFloat(t[1].c_str(), value)) { state.lodV = value; state.lodT = t[2]; state.lodD = t[3]; state.hasLod = true; }
         } else if (t[0] == "DAYMUD" && t.size() >= 4) {
-            mudP=t[1]; mudT=t[2]; mudDol=t[3]; hasMud=true;
+            state.mudP=t[1]; state.mudT=t[2]; state.mudDol=t[3]; state.hasMud=true;
         } else if (t[0] == "SWEPT" && t.size() >= 5) {
-            SweptLvl s; s.name=t[1]; s.price=(float)atof(t[2].c_str()); s.time=t[3];
-            s.state = t[4].empty() ? 'T' : t[4][0];
-            swepts.push_back(s);
+            float price;
+            if (dml::parseFiniteFloat(t[2].c_str(), price)) {
+                SweptLvl s; s.name = t[1]; s.price = price; s.time = t[3];
+                s.state = t[4].empty() ? 'T' : t[4][0];
+                if (s.state != 'R' && s.state != 'B' && s.state != 'T') s.state = 'T';
+                state.swepts.push_back(s);
+            }
         } else if (t[0] == "DAYEHOD" && t.size() >= 4) {
-            ehodT=t[2]; ehodD=t[3]; hasEHodT=true;
+            state.ehodT=t[2]; state.ehodD=t[3]; state.hasEHodT=true;
         } else if (t[0] == "DAYELOD" && t.size() >= 4) {
-            elodT=t[2]; elodD=t[3]; hasELodT=true;
+            state.elodT=t[2]; state.elodD=t[3]; state.hasELodT=true;
         } else if (t[0] == "DAYEMUD" && t.size() >= 4) {
-            emudP=t[1]; emudT=t[2]; emudDol=t[3]; hasEMud=true;
+            state.emudP=t[1]; state.emudT=t[2]; state.emudDol=t[3]; state.hasEMud=true;
         } else if (t[0] == "WEEKDAY" && t.size() >= 2) {
-            weekday = t[1];
-            if (t.size() >= 3) daydate = t[2];   // (v0.7) optional date, e.g. "11 Sep"
+            state.weekday = t[1];
+            if (t.size() >= 3) state.daydate = t[2];   // (v0.7) optional date, e.g. "11 Sep"
         } else if (t[0] == "ASOF" && t.size() >= 2) {
-            asofSo = atof(t[1].c_str());
+            double value;
+            if (dml::parseFiniteDouble(t[1].c_str(), value) && dml::validSecondsOfDay(value)) state.asofSo = value;
         } else if (t[0] == "SPOT" && t.size() >= 2) {
-            spotPx = (float)atof(t[1].c_str()); hasSpot = true;
+            float value;
+            if (dml::parseFiniteFloat(t[1].c_str(), value)) { state.spotPx = value; state.hasSpot = true; }
         }
     }
 }
 
 // ---- drawing helpers ------------------------------------------------------
-short DayModel::yOf(float price)
+short DayModel::yOf(const DayModelState& state, float price)
 {
-    PNT p; p.set(lastBar, price);
+    PNT p; p.set(state.lastBar, price);
     return p.v;
 }
 void DayModel::vline(short x, short y1, short y2, COLOR col, PEN_STYLE ps)
@@ -332,9 +393,9 @@ void DayModel::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bo
 // ---- one candle -----------------------------------------------------------
 // ghost = expected (dashed outline, no fill, chart shows through);
 // solid = actual (filled body). Split wicks: the wick never runs through the body.
-void DayModel::drawCandle(short cx, const DayCandle& d, bool ghost, const Settings& S)
+void DayModel::drawCandle(const DayModelState& state, short cx, const DayCandle& d, bool ghost, const Settings& S)
 {
-    short oY = yOf(d.o), hY = yOf(d.h), lY = yOf(d.l), cY = yOf(d.c);
+    short oY = yOf(state, d.o), hY = yOf(state, d.h), lY = yOf(state, d.l), cY = yOf(state, d.c);
     short bodyTop = oY < cY ? oY : cY;      // higher price = smaller Y
     short bodyBot = oY < cY ? cY : oY;
     short half = (short)(S.width / 2);
@@ -362,46 +423,46 @@ void DayModel::drawCandle(short cx, const DayCandle& d, bool ghost, const Settin
 }
 
 // ---- actual-candle extras: HOD/LOD tips, MUD box, swept ticks -------------
-void DayModel::drawActExtras(short cx, const Settings& S)
+void DayModel::drawActExtras(const DayModelState& state, short cx, const Settings& S)
 {
-    if (!actC.valid) return;
+    if (!state.actC.valid) return;
     short half = (short)(S.width / 2);
     short L = (short)(cx - half), R = (short)(cx + half);
     int fs = S.font - 1; if (fs < 7) fs = 7;
     short step = (short)(fs + 3);
 
     // HOD tip: value nearest the high tip, then time, then duration, stacked upward
-    if (S.hilo && hasHod) {
-        short hY = yOf(actC.h);
-        char v[24]; sprintf_s(v, sizeof(v), "HOD %d", (int)(hodV + 0.5f));
+    if (S.hilo && state.hasHod) {
+        short hY = yOf(state, state.actC.h);
+        char v[24]; sprintf_s(v, sizeof(v), "HOD %d", (int)(state.hodV + 0.5f));
         textC(cx, (short)(hY - step),     v,            C_TXT, fs, true);
-        textC(cx, (short)(hY - 2*step),   hodT.c_str(), C_TXT, fs, false);
-        textC(cx, (short)(hY - 3*step),   hodD.c_str(), C_TXT, fs, false);
+        textC(cx, (short)(hY - 2*step),   state.hodT.c_str(), C_TXT, fs, false);
+        textC(cx, (short)(hY - 3*step),   state.hodD.c_str(), C_TXT, fs, false);
     }
     // LOD tip: stacked downward below the low tip
-    if (S.hilo && hasLod) {
-        short lY = yOf(actC.l);
-        char v[24]; sprintf_s(v, sizeof(v), "LOD %d", (int)(lodV + 0.5f));
+    if (S.hilo && state.hasLod) {
+        short lY = yOf(state, state.actC.l);
+        char v[24]; sprintf_s(v, sizeof(v), "LOD %d", (int)(state.lodV + 0.5f));
         textC(cx, (short)(lY + step),     v,            C_TXT, fs, true);
-        textC(cx, (short)(lY + 2*step),   lodT.c_str(), C_TXT, fs, false);
-        textC(cx, (short)(lY + 3*step),   lodD.c_str(), C_TXT, fs, false);
+        textC(cx, (short)(lY + 2*step),   state.lodT.c_str(), C_TXT, fs, false);
+        textC(cx, (short)(lY + 3*step),   state.lodD.c_str(), C_TXT, fs, false);
     }
     // MUD box inside the body: label / points / time / dollar
     // (v0.13) operator: "MUD should be on another line above the number of points" — label and value split.
-    if (S.mud && hasMud) {
-        short oY = yOf(actC.o), cY = yOf(actC.c);
+    if (S.mud && state.hasMud) {
+        short oY = yOf(state, state.actC.o), cY = yOf(state, state.actC.c);
         short mid = (short)((oY + cY) / 2);
-        char d[24]; sprintf_s(d, sizeof(d), "$%s", mudDol.c_str());
+        char d[24]; sprintf_s(d, sizeof(d), "$%s", state.mudDol.c_str());
         textC(cx, (short)(mid - 2*step), "MUD",          C_WHT, fs, true);   // label on its own line, above the points
-        textC(cx, (short)(mid - step),   mudP.c_str(),   C_WHT, fs, true);   // the number of points
-        textC(cx, mid,                   mudT.c_str(),   C_WHT, fs, false);
+        textC(cx, (short)(mid - step),   state.mudP.c_str(),   C_WHT, fs, true);   // the number of points
+        textC(cx, mid,                   state.mudT.c_str(),   C_WHT, fs, false);
         textC(cx, (short)(mid + step),   d,              C_WHT, fs, false);
     }
     // swept levels: a dashed tick across the candle + a tag to the RIGHT
     if (S.swept) {
-        for (size_t i = 0; i < swepts.size(); i++) {
-            const SweptLvl& s = swepts[i];
-            short y = yOf(s.price);
+        for (size_t i = 0; i < state.swepts.size(); i++) {
+            const SweptLvl& s = state.swepts[i];
+            short y = yOf(state, s.price);
             COLOR sc = (s.state=='R') ? C_UP : (s.state=='B') ? C_DN : C_AMBER;
             hline(y, L, R, sc, P_DOT);
             // two lines to save horizontal space: "NAME PRICE" on top, time below
@@ -414,48 +475,48 @@ void DayModel::drawActExtras(short cx, const Settings& S)
 }
 
 // ---- expected-candle extras: E-HOD / E-LOD / E-C value tips ---------------
-void DayModel::drawExpExtras(short cx, const Settings& S)
+void DayModel::drawExpExtras(const DayModelState& state, short cx, const Settings& S)
 {
-    if (!expC.valid) return;
+    if (!state.expC.valid) return;
     int fs = S.font - 1; if (fs < 7) fs = 7;
     short step = (short)(fs + 3);
     COLOR ink = lerpColor(C_TXT, C_DARK, 0.28f);   // dimmer, matches the ghost
     char v[24];
     // E-HOD tip: value, then expected time + duration (when the model feed has them), stacked up
     if (S.hilo) {
-        short hY = yOf(expC.h);
-        sprintf_s(v, sizeof(v), "E-HOD %d", (int)(expC.h + 0.5f)); textC(cx, (short)(hY - step), v, ink, fs, false);
-        if (hasEHodT) { textC(cx, (short)(hY - 2*step), ehodT.c_str(), ink, fs, false);
-                        textC(cx, (short)(hY - 3*step), ehodD.c_str(), ink, fs, false); }
-        short lY = yOf(expC.l);
-        sprintf_s(v, sizeof(v), "E-LOD %d", (int)(expC.l + 0.5f)); textC(cx, (short)(lY + step), v, ink, fs, false);
-        if (hasELodT) { textC(cx, (short)(lY + 2*step), elodT.c_str(), ink, fs, false);
-                        textC(cx, (short)(lY + 3*step), elodD.c_str(), ink, fs, false); }
+        short hY = yOf(state, state.expC.h);
+        sprintf_s(v, sizeof(v), "E-HOD %d", (int)(state.expC.h + 0.5f)); textC(cx, (short)(hY - step), v, ink, fs, false);
+        if (state.hasEHodT) { textC(cx, (short)(hY - 2*step), state.ehodT.c_str(), ink, fs, false);
+                        textC(cx, (short)(hY - 3*step), state.ehodD.c_str(), ink, fs, false); }
+        short lY = yOf(state, state.expC.l);
+        sprintf_s(v, sizeof(v), "E-LOD %d", (int)(state.expC.l + 0.5f)); textC(cx, (short)(lY + step), v, ink, fs, false);
+        if (state.hasELodT) { textC(cx, (short)(lY + 2*step), state.elodT.c_str(), ink, fs, false);
+                        textC(cx, (short)(lY + 3*step), state.elodD.c_str(), ink, fs, false); }
     }
     // expected MUD box inside the ghost body (mirrors the actual candle, dim ink)
     // (v0.13) label above the points, same as the actual MUD box.
-    if (S.mud && hasEMud) {
-        short oY = yOf(expC.o), cY = yOf(expC.c);
+    if (S.mud && state.hasEMud) {
+        short oY = yOf(state, state.expC.o), cY = yOf(state, state.expC.c);
         short mid = (short)((oY + cY) / 2);
-        char d[24]; sprintf_s(d, sizeof(d), "$%s", emudDol.c_str());
+        char d[24]; sprintf_s(d, sizeof(d), "$%s", state.emudDol.c_str());
         textC(cx, (short)(mid - 2*step), "E-MUD",        ink, fs, true);
-        textC(cx, (short)(mid - step),   emudP.c_str(),  ink, fs, true);
-        textC(cx, mid,                   emudT.c_str(),  ink, fs, false);
+        textC(cx, (short)(mid - step),   state.emudP.c_str(),  ink, fs, true);
+        textC(cx, mid,                   state.emudT.c_str(),  ink, fs, false);
         textC(cx, (short)(mid + step),   d,              ink, fs, false);
     }
 }
 
 // ---- render ---------------------------------------------------------------
-void DayModel::render(const Settings& S)
+void DayModel::render(DayModelState& state, const Settings& S)
 {
-    if (!expC.valid && !actC.valid) return;
+    if (!state.expC.valid && !state.actC.valid) return;
     // (v0.14) STALE GUARD (see the long note below at the draw calls): a badly stale CSV means the
     // EXPECTED candle is frozen onto an old book. Decide it up-front so the panel bounds, background,
     // E-lines and the candle itself all agree — no oversized panel sized to a candle we won't draw.
-    bool expStale = (staleAgeMin() >= 15.0);
-    if (expStale && !actC.valid) { drawStaleBadge(); return; }   // nothing live to show; badge tells why
+    bool expStale = (staleAgeMin(state) >= 15.0);
+    if (expStale && !state.actC.valid) return;   // draw() renders the badge exactly once after render()
     long n = getBarCount(); if (n < 1) return;
-    lastBar = (int)n - 1;
+    state.lastBar = (int)n - 1;
 
     RCT pane; pane.getPaneRect(false);
     short paneL = pane.left, paneR = pane.right;
@@ -489,11 +550,11 @@ void DayModel::render(const Settings& S)
     short xL = (short)(xLc - half - (S.side == 1 ? 6 : annoL));   // (v0.7) cover the EXP tips on the left margin
     short xR = (short)(xRc + half + (S.swept ? 84 : 8));    // room for the (now narrower) swept tags
     float hiP = -1e9f, loP = 1e9f;
-    if (expC.valid && !expStale) { if (expC.h>hiP) hiP=expC.h; if (expC.l<loP) loP=expC.l; }   // (v0.14) skip frozen EXP
-    if (actC.valid) { if (actC.h>hiP) hiP=actC.h; if (actC.l<loP) loP=actC.l; }
+    if (state.expC.valid && !expStale) { if (state.expC.h>hiP) hiP=state.expC.h; if (state.expC.l<loP) loP=state.expC.l; }   // (v0.14) skip frozen EXP
+    if (state.actC.valid) { if (state.actC.h>hiP) hiP=state.actC.h; if (state.actC.l<loP) loP=state.actC.l; }
     short headH = (short)(S.header ? (step + 6) : 0);
-    short yT = (short)(yOf(hiP) - 3*step - 10 - headH);
-    short yB = (short)(yOf(loP) + 3*step + 10);
+    short yT = (short)(yOf(state, hiP) - 3*step - 10 - headH);
+    short yB = (short)(yOf(state, loP) + 3*step + 10);
 
     // background panel (drawn FIRST so chart bars/labels don't bleed through)
     if (S.bg) {
@@ -503,8 +564,8 @@ void DayModel::render(const Settings& S)
 
     // day-of-week header (+ date), top-centre of the panel
     if (S.header) {
-        std::string hdr = weekday.empty() ? "DAY" : weekday;
-        if (!daydate.empty()) { hdr += " "; hdr += daydate; }   // (v0.7) "Fri 11 Sep"
+        std::string hdr = state.weekday.empty() ? "DAY" : state.weekday;
+        if (!state.daydate.empty()) { hdr += " "; hdr += state.daydate; }   // (v0.7) "Fri 11 Sep"
         textC((short)((xL + xR) / 2), (short)(yT + step - 2), hdr.c_str(), C_TXT, S.font, true);
     }
 
@@ -516,28 +577,31 @@ void DayModel::render(const Settings& S)
     // THIS chart's own bars (measureChartDay), so it stays; the STALE badge still explains why EXP is gone.
 
     // optional E-HOD / E-LOD reference lines across the pane
-    if (S.elines && expC.valid && !expStale) {
-        hline(yOf(expC.h), paneL, paneR, C_ELINE, P_DASH);
-        hline(yOf(expC.l), paneL, paneR, C_ELINE, P_DASH);
+    if (S.elines && state.expC.valid && !expStale) {
+        hline(yOf(state, state.expC.h), paneL, paneR, C_ELINE, P_DASH);
+        hline(yOf(state, state.expC.l), paneL, paneR, C_ELINE, P_DASH);
     }
 
     // Expected behind, Actual on top (matters in Overlay).
-    if (S.showexp && expC.valid && !expStale) { drawCandle(expCx, expC, true,  S); drawExpExtras(expCx, S); }
-    if (S.showact && actC.valid) { drawCandle(actCx, actC, false, S); drawActExtras(actCx, S); }
+    if (S.showexp && state.expC.valid && !expStale) { drawCandle(state, expCx, state.expC, true,  S); drawExpExtras(state, expCx, S); }
+    if (S.showact && state.actC.valid) { drawCandle(state, actCx, state.actC, false, S); drawActExtras(state, actCx, S); }
 }
 
 // ---- draw() ---------------------------------------------------------------
 int DayModel::draw(void)
 {
-    load();
-    detectBarStamp();   // (v0.16) start- or end-stamped bars decide which bar opens the RTH day
-    // (v0.10) The ACTUAL candle is measured straight from THIS chart's own RTH session bars, so it IS
-    // the ES session high/low by definition — no cash→contract guesswork. If the session hasn't opened
-    // yet (no RTH bars), fall back to shifting the CSV candle onto the chart.
-    if (!measureChartDay()) applyContractOffset();
-    computeChartLevels();   // (v0.11) override PDH/PDL/ONH/ONL swept prices with exact chart values
-    render(cfg);
-    drawStaleBadge();   // (v0.8) warn if the CSV is cold, regardless of what render drew
+    DayModelState* state = getState(true);
+    if (!state) return RTX_FAIL;
+    load(*state);
+    std::vector<dml::Bar> bars;
+    loadBars(bars, 20000); // one bounded SDK-array/localtime pass per repaint
+    detectBarStamp(*state, bars);  // start- or end-stamped bars decide which bar opens the RTH day
+    // The ACTUAL candle is measured straight from THIS chart's own RTH session bars. If the session
+    // has not opened yet, fall back to shifting the CSV candle onto the current chart.
+    if (!measureChartDay(*state, bars)) applyContractOffset(*state, bars);
+    computeChartLevels(*state, bars);
+    render(*state, state->cfg);
+    drawStaleBadge(*state);
     return RTX_OK;
 }
 
@@ -550,7 +614,6 @@ int DayModel::draw(void)
 // bar stamped exactly 17:00:00 only when START-stamped, and one stamped exactly 16:00:00 only when END-stamped.
 // Any other session start/stop works the same way (the first bar is stamped at the boundary under one convention
 // and one period past it under the other). If neither boundary stamp is found, START is assumed (the old behaviour).
-static bool g_endStamped = false;
 // (v0.17) the chart's bars as plain records for DayModelLogic.h (the last `maxBars` of them)
 void DayModel::loadBars(std::vector<dml::Bar>& out, int maxBars)
 {
@@ -565,34 +628,27 @@ void DayModel::loadBars(std::vector<dml::Bar>& out, int maxBars)
         out.push_back(b);
     }
 }
-void DayModel::detectBarStamp()
+void DayModel::detectBarStamp(DayModelState& state, const std::vector<dml::Bar>& bars)
 {
-    std::vector<dml::Bar> bars; loadBars(bars, 2000);
-    g_endStamped = dml::endStamped(bars.empty() ? 0 : &bars[0], (int)bars.size());
+    state.endStamped = dml::endStamped(bars.empty() ? 0 : &bars[0], (int)bars.size());
 }
-// RTH membership under the detected convention: START-stamped = [08:30, 15:00), END-stamped = (08:30, 15:00].
-static bool inRth(int sod) { return dml::inRth(sod, g_endStamped); }
-// overnight membership (prior evening >= 17:00 through today's pre-open): START = [17:00 ..) & [.. 08:30); END = (17:00 ..] & (.. 08:30]
-static bool inEvening(int sod){ return dml::inEvening(sod, g_endStamped); }
-static bool inPreOpen(int sod){ return dml::inPreOpen(sod, g_endStamped); }
 
 // ---- (v0.11) CHART-NATIVE REFERENCE LEVELS -----------------------------------------------------------
 // PDH/PDL (prior RTH day high/low) and ONH/ONL (overnight high/low) are pure price levels IRT already
 // knows, so read them straight from the chart's own bars — exact on whatever contract is charted. We keep
 // the panel's sweep STATUS/TIME (R/B/T) by matching on the level name; only the PRICE is replaced. The
 // other swept levels (PWH/PWL/PFH/PFL) keep the panel value (open-anchored) until they're made native too.
-void DayModel::computeChartLevels()
+void DayModel::computeChartLevels(DayModelState& state, const std::vector<dml::Bar>& bars)
 {
-    if (swepts.empty()) return;
-    std::vector<dml::Bar> bars; loadBars(bars, 20000);
+    if (state.swepts.empty()) return;
     if (bars.size() < 2) return;
-    dml::Levels L = dml::chartLevels(&bars[0], (int)bars.size(), g_endStamped);   // (v0.17) DayModelLogic.h
-    for (size_t i = 0; i < swepts.size(); i++) {
-        const std::string& nm = swepts[i].name;
-        if      (L.hp && nm == "PDH") swepts[i].price = L.pdh;
-        else if (L.hp && nm == "PDL") swepts[i].price = L.pdl;
-        else if (L.ho && nm == "ONH") swepts[i].price = L.onh;
-        else if (L.ho && nm == "ONL") swepts[i].price = L.onl;
+    dml::Levels L = dml::chartLevels(&bars[0], (int)bars.size(), state.endStamped);
+    for (size_t i = 0; i < state.swepts.size(); i++) {
+        const std::string& nm = state.swepts[i].name;
+        if      (L.hp && nm == "PDH") state.swepts[i].price = L.pdh;
+        else if (L.hp && nm == "PDL") state.swepts[i].price = L.pdl;
+        else if (L.ho && nm == "ONH") state.swepts[i].price = L.onh;
+        else if (L.ho && nm == "ONL") state.swepts[i].price = L.onl;
     }
 }
 
@@ -603,36 +659,33 @@ void DayModel::computeChartLevels()
 // come from the panel in cash space) are re-anchored by the OPEN spread (dOpen − the panel's cash open),
 // a stable per-day anchor, so they read against the same chart. Returns false pre-open (no RTH bars yet),
 // so draw() can fall back to the offset path.
-bool DayModel::measureChartDay()
+bool DayModel::measureChartDay(DayModelState& state, const std::vector<dml::Bar>& bars)
 {
-    std::vector<dml::Bar> bars; loadBars(bars, 20000);
-    if (bars.size() < 2) return false;
-    dml::DayMeasure M = dml::measureDay(&bars[0], (int)bars.size(), g_endStamped);   // (v0.17) DayModelLogic.h: the most recent RTH day
+    if (bars.empty()) return false;
+    dml::DayMeasure M = dml::measureDay(&bars[0], (int)bars.size(), state.endStamped);
     if (!M.ok) return false;
-    float dayOff = dml::dayOffset(M.o, actC.valid, actC.o);   // open-anchored spread (stable across the day)
-    actC.o = M.o; actC.h = M.h; actC.l = M.l; actC.c = M.c; actC.valid = true;   // exact ES session
-    if (hasHod) hodV = M.h;
-    if (hasLod) lodV = M.l;
-    if (expC.valid) { expC.o += dayOff; expC.h += dayOff; expC.l += dayOff; expC.c += dayOff; }
-    for (size_t i = 0; i < swepts.size(); i++) swepts[i].price += dayOff;
+    float dayOff = dml::dayOffset(M.o, state.actC.valid, state.actC.o);   // open-anchored spread (stable across the day)
+    state.actC.o = M.o; state.actC.h = M.h; state.actC.l = M.l; state.actC.c = M.c; state.actC.valid = true;   // exact ES session
+    if (state.hasHod) state.hodV = M.h;
+    if (state.hasLod) state.lodV = M.l;
+    if (state.expC.valid) { state.expC.o += dayOff; state.expC.h += dayOff; state.expC.l += dayOff; state.expC.c += dayOff; }
+    for (size_t i = 0; i < state.swepts.size(); i++) state.swepts[i].price += dayOff;
     return true;
 }
 
 // ---- (v0.9) CONTRACT ALIGNMENT — the candle is priced in the panel's space (cash / SPY×10, SPOT is the
 // anchor). If this chart is a different contract (EPZ26 December, ~+70 over cash), the candle draws off
 // the bottom. Shift every price by (this chart's last close − SPOT) so the candle sits on the chart.
-void DayModel::applyContractOffset()
+void DayModel::applyContractOffset(DayModelState& state, const std::vector<dml::Bar>& bars)
 {
-    if (!hasSpot) return;
-    long n = getBarCount(); if (n < 1) return;
-    RTARRAY close(barClose);
-    float chartClose = close[(int)n - 1], off = 0.0f;
-    if (!dml::contractOffset(chartClose, spotPx, off)) return;   // (v0.17) clamp + "already aligned" in DayModelLogic.h
-    if (expC.valid) { expC.o+=off; expC.h+=off; expC.l+=off; expC.c+=off; }
-    if (actC.valid) { actC.o+=off; actC.h+=off; actC.l+=off; actC.c+=off; }
-    if (hasHod) hodV+=off;
-    if (hasLod) lodV+=off;
-    for (size_t i = 0; i < swepts.size(); i++) swepts[i].price += off;
+    if (!state.hasSpot || bars.empty()) return;
+    float chartClose = bars.back().c, off = 0.0f;
+    if (!dml::contractOffset(chartClose, state.spotPx, off)) return;   // (v0.17) clamp + "already aligned" in DayModelLogic.h
+    if (state.expC.valid) { state.expC.o+=off; state.expC.h+=off; state.expC.l+=off; state.expC.c+=off; }
+    if (state.actC.valid) { state.actC.o+=off; state.actC.h+=off; state.actC.l+=off; state.actC.c+=off; }
+    if (state.hasHod) state.hodV+=off;
+    if (state.hasLod) state.lodV+=off;
+    for (size_t i = 0; i < state.swepts.size(); i++) state.swepts[i].price += off;
 }
 
 // ---- (v0.8) STALE badge — the panel stamps ASOF,<CT sec-of-day> each export; compare to the chart
@@ -641,17 +694,17 @@ void DayModel::applyContractOffset()
 // (v0.14) ONE age computation, shared by the badge and the expected-candle guard. Returns minutes since
 // the panel's ASOF write in chart-local (CT) time, handling the overnight wrap so a file left cold
 // overnight reads hours, not a negative age. <0 when ASOF is unknown (nothing to judge).
-double DayModel::staleAgeMin()
+double DayModel::staleAgeMin(const DayModelState& state)
 {
-    if (asofSo < 0) return -1.0;
+    if (state.asofSo < 0) return -1.0;
     RTDATE now = currentDate(); struct tm tmv; memset(&tmv, 0, sizeof(tmv)); getLocaltime(now, &tmv);
     double localSo = tmv.tm_hour * 3600.0 + tmv.tm_min * 60.0 + tmv.tm_sec;
-    return dml::staleAge(asofSo, localSo);   // (v0.17) DayModelLogic.h
+    return dml::staleAge(state.asofSo, localSo);   // (v0.17) DayModelLogic.h
 }
 
-void DayModel::drawStaleBadge()
+void DayModel::drawStaleBadge(const DayModelState& state)
 {
-    double ageMin = staleAgeMin();
+    double ageMin = staleAgeMin(state);
     if (ageMin < 0) return;
     if (!dml::staleBadgeShown(ageMin)) return;
     char b[40];
@@ -675,6 +728,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("Day model candle (expected + actual), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.18");
+    p->setVersion("0.20");
     return p;
 }
