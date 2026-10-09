@@ -23,6 +23,7 @@ static const unsigned long POST_DRAWING = 1UL << 18;
 static const unsigned long OVERLAY = 1UL << 19;
 static const unsigned long NO_UI = 1UL << 12;
 static const unsigned long INSTRUMENT_SCALE = 1UL << 30;
+static const unsigned long FRONT_DRAWING = 1UL << 29;   // (RA1009) SessionInfo 1.6.7 draws on top
 
 struct FONT { short id = 0, size = 0, style = 0; };
 

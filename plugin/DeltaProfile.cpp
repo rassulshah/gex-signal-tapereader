@@ -46,7 +46,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.2";   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.3";   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -138,6 +138,13 @@ struct Latch { dp::Tick low, high; std::string code; bool support; RTDATE peakTi
 // switching contexts, a periodicity label read empty, two charts sharing one object) no longer wipes it, and the circle is
 // stored by bar TIME (re-found on every draw) so a chart reload that shifts bar numbers cannot move it.
 struct LatchBook { std::vector<Latch> v; long long session = -1; };
+// (2.5.3, RA1009 audit) the Globex session a bar END stamp belongs to, from the chart's local wall clock: a bar ending at or after
+// 17:00 belongs to the next day's session (the same >= edge 2.5.x used). Falls back to the old epoch rule if the stamp cannot be read.
+static long long civilDays(int y, unsigned m, unsigned d) {
+    y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = static_cast<unsigned>(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1; const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + static_cast<long long>(doe) - 719468;
+}
 static std::map<std::string, LatchBook>& latchBooks() { static std::map<std::string, LatchBook> m; return m; }
 struct ChartState {
     std::string identity, root, market, asof, state;
@@ -177,6 +184,7 @@ private:
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
     static int readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
     bool epoch(RTDATE value, std::int64_t& out);
+    long long localSessionKey(RTDATE value, std::int64_t fallbackEpoch);
     int yOf(int lastBar, double price);
     int textWidth(const std::string& text, int font, bool bold);
     void textRight(int right, int y, const std::string& text, COLOR color, int font, bool bold);
@@ -359,6 +367,14 @@ int DeltaProfile::readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count
     } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
 #endif
 }
+long long DeltaProfile::localSessionKey(RTDATE value, std::int64_t fallbackEpoch) {
+    struct tm t = {};
+    if (!getLocaltime(value, &t) || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1 || t.tm_mday > 31)
+        return (fallbackEpoch - 17LL * 3600 + 86400LL * 4) / 86400LL;
+    const long long days = civilDays(t.tm_year + 1900, static_cast<unsigned>(t.tm_mon + 1), static_cast<unsigned>(t.tm_mday));
+    const int sec = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+    return days + (sec >= 17 * 3600 ? 1 : 0);
+}
 bool DeltaProfile::epoch(RTDATE value, std::int64_t& out) {
     struct tm t = {};
     if (!getLocaltime(value, &t)) return false;
@@ -461,7 +477,9 @@ bool DeltaProfile::buildNative(ChartState& s) {
         // shows as an absorption candidate: its price zone and bar are frozen, and it is decided by the chart's own bars
         // (a RED close below a buying node / a GREEN close above a selling node = A; the opposite = I), whether or not it
         // is still one of the profile's top 3. A decided result never changes. Cleared at the 17:00 session change.
-        const long long sess = (bars.back().time - 17LL * 3600 + 86400LL * 4) / 86400LL;
+        // (2.5.3, RA1009 audit) the session key from the chart's LOCAL (Central) clock. bars[].time is a true UTC epoch (mktime),
+        // so "epoch - 17 h" changed day at 17:00 UTC = 12:00 CDT / 11:00 CST and wiped the record (A's and their circles) at noon.
+        const long long sess = localSessionKey(static_cast<RTDATE>(times[bars.back().index]), bars.back().time);
         LatchBook& bk = latchBooks()[s.root + "|" + std::to_string(getSecondsPerBar())];
         if (sess != bk.session) { bk.v.clear(); bk.session = sess; }
         std::vector<Latch>& latches = bk.v;
