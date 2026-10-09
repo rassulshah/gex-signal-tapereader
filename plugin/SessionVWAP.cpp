@@ -53,9 +53,12 @@
 #include <limits>
 #include <new>
 
-static const char* SV_VERSION = "1.3.2";        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.3.3";        // 1.3.3: his colours by default - VWAP magenta, +1 SD pale green, -1 SD light red, +2 SD green, -2 SD red.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
-static const COLOR C_SD1  = 0x00C0DCC0;   // +-1 SD pale green
+static const COLOR C_SD1  = 0x00C0DCC0;   // +1 SD pale green (1.3.3, Rassul 2026-10-09 13:39 his settings window colours)
+static const COLOR C_SD1L = 0x00FF8080;   // -1 SD light red
+static const COLOR C_SD2U = 0x00008000;   // +2 SD green
+static const COLOR C_SD2L = 0x00FF0000;   // -2 SD red
 static const COLOR C_SD2  = 0x00F0CAA6;   // +-2 SD peach
 static const COLOR C_DARK = 0x000B0F19;
 static const COLOR C_PRTH = 0x006B7280;   // the prior RTH VWAP overnight: dim grey
@@ -112,9 +115,10 @@ int cppExtension::setup(void)
     setParameterDialogHeight(1);
     static const char* SV_OUTNAMES[11] = { "VWAP", "VWAP +1 SD", "VWAP -1 SD", "VWAP +2 SD", "VWAP -2 SD",
                                    "O/N VWAP", "O/N +1 SD", "O/N -1 SD", "O/N +2 SD", "O/N -2 SD", "pRTH VWAP" };
-    CPEN p(C_VWAP, 1, P_SOLID);
+    static const COLOR OUTCOL[11] = { C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_PRTH };
     for (int a = 0; a < 11; a++) {
-        setOutputParameter(SV_OUTNAMES[a], DRAW_INVISIBLE, &p, C_VWAP, OUTPUT_ENABLED);
+        CPEN p(OUTCOL[a], 1, P_SOLID);
+        setOutputParameter(SV_OUTNAMES[a], DRAW_INVISIBLE, &p, OUTCOL[a], OUTPUT_ENABLED);
         setArrayDrawingFlags(a, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
     }
     SV.font = -1;
@@ -336,7 +340,7 @@ void SessionVWAP::drawLines(long n)
     if (a > 0) a--;                                                       // join into the first visible bar
     RTARRAY o1(fOut1), o2(fOut2), o3(fOut3), o4(fOut4), o5(fOut5), o6(fOut6), o7(fOut7), o8(fOut8), o9(fOut9), o10(fOut10), o11(fOut11);
     RTARRAY* O[11] = { &o1, &o2, &o3, &o4, &o5, &o6, &o7, &o8, &o9, &o10, &o11 };
-    static const COLOR COL[11] = { C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2, C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2, C_PRTH };
+    static const COLOR COL[11] = { C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_PRTH };
     static const short W[11] = { 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1 };   // Rassul 22:37: VWAP 2 px, bands 1 px
     for (int k = 10; k >= 0; k--) {                                       // the dim prior-RTH line underneath
         setPen(COL[k], W[k], P_SOLID);
@@ -421,7 +425,7 @@ int SessionVWAP::draw(void)
             onOdds = true;
         }
     }
-    const COLOR col[6] = { C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2, C_PRTH };
+    const COLOR col[6] = { C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_PRTH };
     // (1.2.0, Rassul 22:32 "the vwap should not show labels like that.. i told you how i want the labels") the badge is
     // just the percentage, "42%" - RTH only, where the odds exist. Overnight and after the close: the lines, no badges.
     char txt[6][16];
