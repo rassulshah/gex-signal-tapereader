@@ -1,5 +1,10 @@
 // Runs the REAL TapeFlow.cpp (TapeFlowES) against mockirt: back-fill + live must equal one straight engine run.
+// (2.0.0) updated for 2.0: steps are 10m + the sliced session replay (which BECOMES the live engine), no settings, the readout
+// is the header title (pane line only as fallback), the pane draws one-letter signals instead of AW / AR / IN markers.
 #include "mockirt.h"
+#include <vector>
+std::vector<float> mockOut(int k);   // (1.1.5) the mock's output arrays 1 / 2
+void mockBar(int i, float o, float h, float l, float c);   // (2.0.0) the chart OHLC
 #include "TapeFlowES.cpp"
 #undef mkt
 #undef root
@@ -74,12 +79,20 @@ static tfl::Engine pure(const std::vector<MTick>& v, long long until, tfl::Store
 }
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static const std::string LS = "/tmp/tfchk/home\\InvestorRT\\rtx\\lsFlexLevels";
+// (2.0.0) a chart bar ending at te with its OHLC from the trades IRT has
+static void addBar(long long te)
+{
+    float o = 0, h = 0, l = 0, c = 0; bool any = false;
+    for (auto& k : g_ticks) if (k.t > te - 180 && k.t <= te) { if (!any) { o = h = l = k.px; any = true; } h = std::max(h, k.px); l = std::min(l, k.px); c = k.px; }
+    if (!any) { o = h = l = c = 5000; }
+    g_bars.push_back(te); mockBar((int)g_bars.size() - 1, o, h, l, c);
+}
 static void tickPlugin(TapeFlow* tf, int secs, bool drawEach = false)
 {
     for (int i = 0; i < secs; i++) {
         g_now++;
         RTX_EVENT ev; memset(&ev, 0, sizeof(ev)); ev.v.timer.id = g_timerId; tf->timer(&ev);
-        if (g_now % 180 == 0) g_bars.push_back(g_now);
+        if (g_now % 180 == 0) addBar(g_now);
         if (drawEach || i % 30 == 0) { g_text.clear(); static_cast<cppExtension*>(tf)->calc(0); tf->draw(); }
     }
 }
@@ -99,7 +112,7 @@ int main()
 
     // ---- today: the session from 17:00 yesterday; IRT opens at 09:00 with the history already there
     g_ticks = dayTape(DAY0 - 7 * 3600, DAY0 + 12 * 3600, 7, 5000);
-    for (long long b = DAY0 - 7 * 3600 + 180; b <= DAY0 + 9 * 3600; b += 180) g_bars.push_back(b);
+    for (long long b = DAY0 - 7 * 3600 + 180; b <= DAY0 + 9 * 3600; b += 180) addBar(b);
     g_now = DAY0 + 9 * 3600;
     TapeFlow* tf = static_cast<TapeFlow*>(CreateExtension());
     tf->setup();
@@ -111,14 +124,16 @@ int main()
     tickPlugin(tf, 120);
     CHECK(g_ttMaxBack > 9 * 3600, "the session back-fill ran (from 17:00)");
     std::string tr = slurp(LS + "\\TapeFlow.trace-ES.txt");
-    CHECK(tr.find("back-fill 1h") != std::string::npos && tr.find("back-fill 4h") != std::string::npos && tr.find("back-fill session") != std::string::npos, "steps 1h, 4h, session in order");
-    CHECK(tr.find("back-fill 3d") == std::string::npos, "no deep history during trading hours");
+    CHECK(tr.find("back-fill session: ") != std::string::npos && tr.find("back-fill session done: ") != std::string::npos && tr.find("back-fill 1h") == std::string::npos, "(2.0.0) 10m, then the sliced session replay");
+    CHECK(tr.find("calibration back-fill: session") == std::string::npos, "no calibration history during trading hours");
     // live for 50 minutes, drawing as we go
     tickPlugin(tf, 3000);
     long long until = tf->S().eng.lastT;
     tfl::Store st2 = prior; tfl::Engine ref = pure(g_ticks, g_now, st2); ref.advanceTo(until);   // every trade IRT has; closed to the same second
     auto key = [](const tfl::Ev& e) { char b[120]; snprintf(b, sizeof(b), "%lld %s %d %d %d", e.t, e.kind.c_str(), e.dir, e.lo, e.hi); return std::string(b); };
-    std::vector<std::string> A, B; tf->captureCommitted(); for (auto& e : tf->S().committed) if (e.t <= until && e.kind != "BASE") A.push_back(key(e)); for (auto& e : ref.evs) if (e.t <= until) B.push_back(key(e));
+    // (2.0.0) the session replay becomes the live engine: the ENGINE's events equal the straight run's (the events file keeps
+    // the 10-minute start's records it already wrote - append-only - and is checked for duplicates below)
+    std::vector<std::string> A, B; for (auto& e : tf->S().eng.evs) if (e.t <= until && e.kind != "BASE") A.push_back(key(e)); for (auto& e : ref.evs) if (e.t <= until) B.push_back(key(e));
     int nAW = 0; for (auto& e : ref.evs) if (e.kind == "AW") nAW++;
     printf("plugin events %zu, straight run %zu (AW %d), trades %lld vs %lld\n", A.size(), B.size(), nAW, tf->S().eng.ticks, ref.ticks);
     CHECK(A == B && !A.empty(), "back-fill + live == one straight run (same events, same times, same zones)");
@@ -135,38 +150,71 @@ int main()
     CHECK(tf->S().eng.baseSessions == 5, "baselines from the 5 sessions on file");
     // the drawing
     g_text.clear(); g_lines = g_rects = 0; static_cast<cppExtension*>(tf)->calc(0); tf->draw();
-    bool head = false, aw = false; std::string state;
-    for (auto& s : g_text) { if (s.find((std::string("TapeFlow ") + TF_VERSION + " ES").c_str()) != std::string::npos) head = true; if (s.find("AW?") != std::string::npos) aw = true; }
-    CHECK(head, "readout shows the name and version"); CHECK(g_rects > 100 && g_lines > 50, "histogram bars and the 180-s line drawn");
+    bool head = false; std::string state; const std::string TV = std::string("TF ") + tfl::shortVersion(TF_VERSION) + " ES";
+    for (auto& s : g_text) { if (s.find(TV) != std::string::npos) head = true; }
+    CHECK(head, "(1.1.5) IRT never asked for the header title: the one-line pane readout shows the name and version");
+    // ---- (1.1.5) header mode: the title, the two outputs, the fitted scale, no box
+    {
+        char title[128] = {0};
+        CHECK(tf->parmsTitle(title, sizeof(title)) == RTX_OK && std::string(title).find(TV + "  ") == 0, "parmsTitle: 'TF <version> ES  <state>'");
+        printf("header title: %s\n", title);
+        g_text.clear(); g_rects = 0; static_cast<cppExtension*>(tf)->calc(0); tf->draw();
+        bool anyReadout = false; for (auto& s : g_text) if (s.find("TF ") == 0 || s.find("TapeFlow ") == 0 || s.find("READY") != std::string::npos || s.find("CALIBRATING") != std::string::npos) anyReadout = true;
+        CHECK(!anyReadout, "header live (IRT asked for the title after the state changed): no box and no readout line in the pane");
+        tf->S().lastTitleCall = 0; tf->S().titleChangedAt = (time_t)g_now - 30; g_text.clear(); tf->draw(); bool line1 = false; int lines = 0;   // (2.0.0) IRT stops re-reading the title
+        for (auto& s : g_text) if (s.find("TF ") == 0) { line1 = true; lines++; }
+        CHECK(line1 && lines == 1, "header not re-read: exactly one compact line in the pane");
+        tf->S().lastTitleCall = (long long)g_now; tf->S().titleChangedAt = (time_t)g_now;
+        std::vector<float> o1 = mockOut(0), o2 = mockOut(1);
+        const tfl::Feat& lf = tf->S().eng.last;
+        CHECK(o1.size() == g_bars.size() && o2.size() == g_bars.size(), "outputs 1 and 2 cover every bar");
+        bool sane = true; for (float v : o1) if (!(v >= -100 && v <= 100)) sane = false; for (float v : o2) if (!(v >= -100 && v <= 100)) sane = false;
+        CHECK(sane, "outputs are pressures in -100..100 (no fixed 135 anchors)");
+        printf("last bar outputs: 30s %.0f  180s %.0f   (engine now: %.1f / %.1f)\n", o1.back(), o2.back(), lf.f30, lf.f180);
+        double lo = 0, hi = 0; tf->scale((int)g_bars.size() - 160, (int)g_bars.size() - 1, &lo, &hi);
+        CHECK(hi > 0 && lo == -hi && hi >= 60 && std::fabs(hi - tfl::axisRange(tf->S().range, tf->S().paneH, tf->S().band)) < 1e-9 && std::fmod(tf->S().range, 10.0) == 0, "scale(): symmetric, >= 60, the fitted range (rounded to 10) widened for the signal bands");
+        printf("fitted range +-%.0f\n", hi);
+        extern long g_invalidates; CHECK(g_invalidates > 0, "state changes ask IRT to repaint (invalidateChart)");
+    } CHECK(g_rects > 100 && g_lines > 50, "histogram bars and the 180-s line drawn");
     printf("rects drawn %ld for the visible bars (30-s sub-bars: expect ~6 per 3-min bar)\n", g_rects);
-    int awVisible = 0; for (auto& e : tf->S().eng.evs) if (e.kind == "AW" && e.t > g_bars[g_bars.size() - 160 > 0 ? g_bars.size() - 160 : 0]) awVisible++;
-    CHECK(awVisible == 0 || aw, "AW markers carry '?'");
-    for (auto& s : g_text) if (s.find("READY") != std::string::npos || s.find("WATCH") != std::string::npos || s.find("CONFIRMED") != std::string::npos || s.find("LOW ACTIVITY") != std::string::npos || s.find("CALIBRATING") != std::string::npos) state = s;
+    {   // (2.0.0) the signals: decided on closed bars only, drawn as one letter (+ '?')
+        size_t nm = 0; long long through = LLONG_MIN;
+        if (tf->S().book) { nm = tf->S().book->book.marks.size(); through = tf->S().book->book.decidedThrough; }
+        printf("signals decided through %lld (last closed bar %lld, forming bar %lld): %zu\n", through, g_bars[g_bars.size() - 2], g_bars.back(), nm);
+        CHECK(through == g_bars[g_bars.size() - 2] || through == g_bars[g_bars.size() - 3], "(2.0.0) every closed bar decided, the forming bar never");
+        bool letters = true; for (auto& s : g_text) if (!s.empty() && s.find("TF ") != 0 && !(s.size() <= 2 && std::strchr("PEAF", s[0]) && (s.size() == 1 || s[1] == '?'))) letters = false;
+        CHECK(letters, "(2.0.0) the pane's only text: one letter (+ '?') per signal");
+    }
+    for (auto& s : g_text) if (s.find("TF ") == 0) state = s;
+    { char t2[128] = {0}; tf->parmsTitle(t2, sizeof(t2)); state = t2; }
     printf("state line: %s\n", state.c_str());
     CHECK(!state.empty(), "a state line is shown");
     // files
     std::string stat = slurp(LS + "\\TapeFlow.status-ES.txt");
     CHECK(stat.find((std::string("VERSION,") + TF_VERSION).c_str()) != std::string::npos && stat.find("SYMBOL,ESZ26") != std::string::npos, "status file");
-    std::string evf = slurp(LS + "\\TapeFlow\\ES-events-2026-10-08.csv");
+    CHECK(stat.find("STATE_CODE,") != std::string::npos && stat.find("CAL_SLOT,bin ") != std::string::npos && stat.find("QUIET,since last trade") != std::string::npos &&
+          stat.find("BACKFILL_calibration,") != std::string::npos && stat.find("TF_SIGNALS,decided through") != std::string::npos && stat.find("TF_COUNTS,P ") != std::string::npos && stat.find("SIGNALS_TODAY,AW+ ") != std::string::npos && stat.find("LATE,today ") != std::string::npos &&
+          stat.find("WARN5,") != std::string::npos && stat.find("TITLE,TF ") != std::string::npos && stat.find("\nUPDATED,") != std::string::npos, "(1.1.5) status: full diagnostic snapshot");
+    std::string evf = slurp(LS + "\\TapeFlow\\ES-events-v110-ESZ26-2026-10-08.csv");   // (1.1.5 harness) the 1.1.0 file name
     size_t lines = (size_t)std::count(evf.begin(), evf.end(), '\n');
     CHECK(lines >= 2 && evf.find("time|episode|kind") == 0, "events file for today's session");
     printf("events file lines %zu\n", lines);
     // a close: guards cleared, baselines saved with today's windows
     static_cast<cppExtension*>(tf)->destroy();
-    std::string base = slurp(LS + "\\TapeFlow\\ES-base-" + std::to_string(tfl::sessionOf(DAY0 + 9 * 3600)) + ".csv");
+    std::string base = slurp(LS + "\\TapeFlow\\ES-base-v110-" + std::to_string(tfl::sessionOf(DAY0 + 9 * 3600)) + ".csv");
     CHECK(base.find("|" + std::to_string(tfl::sessionOf(DAY0 + 9 * 3600)) + "|ESZ26|") != std::string::npos, "today's windows saved to the baseline file");
     CHECK(slurp(LS + "\\TapeFlow\\_trying-ES-session.txt").empty(), "no guard left after a normal close");
 
     // ---- REVIEW #1: an IRT restart never shrinks or duplicates the day's records
     {
-        std::string f0 = slurp(LS + "\\TapeFlow\\ES-events-2026-10-08.csv"); size_t n0 = (size_t)std::count(f0.begin(), f0.end(), '\n');
+        std::string f0 = slurp(LS + "\\TapeFlow\\ES-events-v110-ESZ26-2026-10-08.csv"); size_t n0 = (size_t)std::count(f0.begin(), f0.end(), '\n');
         g_now = DAY0 + 13 * 3600; while (g_bars.back() + 180 <= g_now) g_bars.push_back(g_bars.back() + 180);
         TapeFlow* r = static_cast<TapeFlow*>(CreateExtension()); r->setup(); static_cast<cppExtension*>(r)->calc(0);
         tickPlugin(r, 15);                                          // only the 10-minute back-fill so far
-        std::string f1 = slurp(LS + "\\TapeFlow\\ES-events-2026-10-08.csv"); size_t n1 = (size_t)std::count(f1.begin(), f1.end(), '\n');
+        std::string f1 = slurp(LS + "\\TapeFlow\\ES-events-v110-ESZ26-2026-10-08.csv"); size_t n1 = (size_t)std::count(f1.begin(), f1.end(), '\n');
         CHECK(n1 >= n0 && f1.compare(0, f0.size(), f0) == 0, "restart: the earlier records are kept untouched (append-only)");
         tickPlugin(r, 120);                                         // the session back-fill re-creates the morning's events
-        std::string f2 = slurp(LS + "\\TapeFlow\\ES-events-2026-10-08.csv");
+        std::string f2 = slurp(LS + "\\TapeFlow\\ES-events-v110-ESZ26-2026-10-08.csv");
         std::set<std::string> keys; bool dup = false; std::stringstream ss(f2); std::string ln;
         while (std::getline(ss, ln)) { if (ln.empty() || ln[0] == 't') continue; size_t p = 0; for (int k = 0; k < 4; k++) p = ln.find('|', p + 1); std::string key = ln.substr(0, p); if (!keys.insert(key).second) dup = true; }
         CHECK(!dup, "no record written twice after the back-fill re-creates them");
@@ -183,15 +231,15 @@ int main()
     }
     // ---- crash guard: a back-fill that killed IRT twice is blocked
     {
-        { std::ofstream o((LS + "\\TapeFlow\\_trying-ES-4h.txt").c_str()); o << "1\n"; }
+        { std::ofstream o((LS + "\\TapeFlow\\_trying-ES-session.txt").c_str()); o << "1\n"; }
         g_ttCalls = 0; g_ttMaxBack = 0; g_now = DAY0 + 10 * 3600 + 5;
         TapeFlow* t2 = static_cast<TapeFlow*>(CreateExtension()); t2->setup(); static_cast<cppExtension*>(t2)->calc(0);
         tickPlugin(t2, 120);
-        CHECK(!slurp(LS + "\\TapeFlow\\_blocked-ES-4h.txt").empty(), "second stop -> blocked file");
+        CHECK(!slurp(LS + "\\TapeFlow\\_blocked-ES-session.txt").empty(), "second stop -> blocked file");
         std::string tr2 = slurp(LS + "\\TapeFlow.trace-ES.txt");
-        CHECK(tr2.find("4h BLOCKED") != std::string::npos, "blocked step traced");
+        CHECK(tr2.find("session BLOCKED") != std::string::npos, "blocked step traced");
         static_cast<cppExtension*>(t2)->destroy();
-        std::remove((LS + "\\TapeFlow\\_blocked-ES-4h.txt").c_str());
+        std::remove((LS + "\\TapeFlow\\_blocked-ES-session.txt").c_str());
     }
     // ---- the wrong chart: says so, asks IRT for nothing
     {
@@ -209,7 +257,7 @@ int main()
         CHECK(t4->S().eng.ticks == 0, "nothing in the break");
         tickPlugin(t4, 1800); // 17:10
         CHECK(t4->S().eng.ticks > 0 && t4->S().eng.lastT >= DAY0 + 17 * 3600 + 500, "trades read once the market opens");
-        g_text.clear(); t4->draw(); bool ok = false; for (auto& s : g_text) if (s.find("WARMING UP") != std::string::npos || s.find("CALIBRATING") != std::string::npos || s.find("READY") != std::string::npos || s.find("LOW") != std::string::npos || s.find("WATCH") != std::string::npos || s.find("CONFIRMED") != std::string::npos) ok = true;
+        g_text.clear(); t4->draw(); bool ok = false; for (auto& s : g_text) if (s.find(TV) == 0) ok = true;
         CHECK(ok, "a state is shown after the open"); if (!ok) for (auto& s : g_text) printf("   text: %s\n", s.c_str());
         // contract roll: the chart moves to the next contract -> starts over on it
         g_sym = "ESH27"; tickPlugin(t4, 5);

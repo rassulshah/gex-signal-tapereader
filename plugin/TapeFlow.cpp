@@ -1,23 +1,34 @@
 /********************************************************************************
- *  TapeFlow.cpp  --  Investor/RT RTX extension  lsTapeFlow<MKT>  (v1.1.0, corrected 2026-10-09)
+ *  TapeFlow.cpp  --  Investor/RT RTX extension  lsTapeFlow<MKT>  (v2.0.0, 2026-10-09)
  *
- *  Rassul 2026-10-08 13:17-13:37: the TapeFlow brief; "i'll take your recommendation but i want to get it on all the markets,
- *  if signals are tentative just add ?"; "the markers should be on the indicator on a separate pane"; "keep levels out of it,
- *  similar to the delta profile"; "build for irt ... add backfill capabilities similar to other indicators and it must be
- *  native without any outside dependencies"; "make sure you test and check for errors and inconsistencies".
+ *  Rassul 2026-10-09: "implement proposed tapeflow. add an up arrow head or down arrowhead to the signal. make the whole thing look
+ *  nice and neat with clear signals. use 1 letter to identify a signal but you can keep the ? until it is confirmed. use another
+ *  color than a purple line." Earlier: "take the information that is there now and put it in that gray header so only the tape is
+ *  in the pane"; "once a signal is given it should not change"; no Calibrating / Quiet uselessness - ready at the open everywhere.
  *
- *  v1.1.0 corrections: no RTTICKS requests from draw; validated overlapping
- *  snapshot cursor; frozen live events across staged backfill; identified W2
- *  baseline windows; safe journal retry; precise quantities and cached rendering.
- *  Build one launcher per market with the actual vendor RTX SDK.
- *  One active contract per extension object is assumed. Vendor host/timer context
- *  and array/timestamp semantics still require integration testing in Investor/RT.
- *  Signals are level-free, native, tentative, and drawn in one separate pane.
- *  Test results and known limitations are documented in README.md, not assumed
- *  from inherited comments. No production SDK/DLL or trading-edge claim is made.
+ *  The pane: the 30-s pressure bars (green buyers / red sellers, grey when the tape is quiet), the 180-s line (soft slate
+ *  0xCBD5E1 - the one extra colour besides green / red / grey), a faint zero line, and the signals - ONE letter with a solid
+ *  arrowhead: bullish = green UP arrowhead at the bottom, bearish = red DOWN arrowhead at the top, '?' until confirmed.
+ *  P push, E exhaustion, A absorption, F flip (exact rules: TapeFlowLogic.h "THE SIGNALS"). At most one per bar; never two
+ *  touching (the weaker is not drawn at that zoom); decided on CLOSED bars only and kept in TapeFlow\<MKT>-signals-<session>.csv,
+ *  so they never repaint and a restart redraws exactly what was shown.
+ *  The readout is IRT's grey header (parmsTitle): "TF 2.0 ES  BUYERS 1.4x  last A 7,861.50". If IRT does not re-read the title,
+ *  the same text is one small line at the top-left of the pane (no box).
+ *  No settings. Diagnostics for Claude: TapeFlow.status-<MKT>.txt (atomic, every 5 s when changed).
+ *
+ *  Data: IRT's own trades (RTTICKS) - native, no outside dependency. Back-fill: the last 10 minutes at once (the pane is never
+ *  empty), then the whole session in 200-ms slices (the engine then equals one straight run); the calibration history (10
+ *  complete prior sessions) ONLY outside this market's RTH, one session at a time in 200-ms slices, resumed after a restart from
+ *  the baseline files on disk.
  ********************************************************************************/
 #ifndef TF_FIXED
 #error "build TapeFlowES.cpp ... TapeFlowEU.cpp (each defines TF_FIXED and includes this file)"
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifdef _WIN32
+#include <windows.h>     // MoveFileExA for the status file; BEFORE irtsdk.h (RTBOOL / BOOL order, as DealerProfile)
 #endif
 #include "irtsdk.h"
 #include "TapeFlowLogic.h"
@@ -35,6 +46,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <memory>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -46,28 +58,24 @@
 #include <limits>
 #include <direct.h>
 
-static const char* TF_VERSION = "1.1.4";   // (1.1.4) a back-fill whose history is not strictly in time order (ES: the DTN history stitched to the CQG recording) is put in time order instead of rejected - ES could never calibrate   // (1.1.3) calibrated by the first morning: the 3d / 6d / 11d back-fill also runs outside this market's RTH (was only 16:00-17:00) and, while uncalibrated, in RTH too (2 min apart); every second's pressure is kept in TapeFlow\<MKT>-sec-<session>.csv for the nightly scoring   // (1.1.2) no gap in the pane where IRT was restarted (cold 10-min catch-up filled from the longer replay)   // (1.1.1) the audited 1.1.0 + two integration fixes: compiles with the real SDK (currentDate non-const); a quiet second pauses the warm-up instead of restarting it (HG etc. could never warm up)   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
-static const bool TF_PROVEN = false;
+static const char* TF_VERSION = "2.0.0";   // (2.0.0, Rassul 2026-10-09 "implement proposed tapeflow") one-letter signals with a solid arrowhead - P push / E exhaustion / A absorption / F flip, '?' until confirmed, at most one per bar, never overlapping, decided on closed bars only and recorded in TapeFlow\<MKT>-signals-<session>.csv (no repaint, a restart redraws the same marks); the AW / AR / IN / x markers are gone from the pane (still in the events file); the 180-s line is soft slate instead of purple; no neutral band / +-35 lines / box; the readout is IRT's grey header "TF 2.0 ES  BUYERS 1.4x  last A 7,861.50" (one small pane line only if IRT does not re-read it); no settings at all; the session back-fill runs in 200-ms slices and then becomes the live engine (the same as one straight run); the calibration back-fill is one prior session at a time, 200-ms slices, outside RTH only, never copies the baseline store and resumes after a restart; only changed baseline files are rewritten; the previous session's flow and signals are shown from their files   // (1.1.5) baseline windows no longer need a trade every 5 s and quiet 20 s count; a thin 5-min slot borrows +-1 / +-2 neighbours; QUIET only after max(5 s, 3 x the slot's typical gap between trades)   // (1.1.4) a back-fill whose history is not strictly in time order is put in time order instead of rejected   // (1.1.3) every second's pressure is kept in TapeFlow\<MKT>-sec-<session>.csv for the nightly scoring   // (1.1.2) no gap in the pane where IRT was restarted   // (1.1.1) the audited 1.1.0 + integration fixes   // (1.0.3) 30-SEC pressure bars   // (1.0.2) one engine per DLL (timer-safe)
 static const int LATE_MARGIN = 8; // quiet-second allowance retained; tune only from measured CQG delivery latency
 
+// colours (IRT COLOR = 0x00RRGGBB): green bullish, red bearish, grey (quiet bars, zero line, the fallback text) and ONE more -
+// the 180-s line in soft slate (Tailwind slate-300) - light, cool and clearly not the grey of a quiet bar or the old purple
 static const COLOR C_BUY    = 0x0022C55E;
 static const COLOR C_SELL   = 0x00EF4444;
-static const COLOR C_AMBER  = 0x00F59E0B;
-static const COLOR C_PURPLE = 0x00A78BFA;
-static const COLOR C_INK    = 0x00E5E7EB;
-static const COLOR C_MUTED  = 0x009CA3AF;
-static const COLOR C_GRID   = 0x00334155;
-static const COLOR C_ZERO   = 0x00475569;
-static const COLOR C_BAND   = 0x00141A24;
-static const COLOR C_BOX    = 0x000B0E14;
 static const COLOR C_GRAY   = 0x0064748B;
+static const COLOR C_LINE   = 0x00CBD5E1;
 static const COLOR C_BG     = 0x00000000;   // the chart background the opacity blends into
+static const int FONT_PT = 9;
 
+static std::string stamp(long long t);
+static std::string memoryEventKey(const tfl::Ev& e);
 static int nextTimerId() { static std::atomic<int> next(5711); return next.fetch_add(1); }
 static int timerIdFor(const void* me);
 
 // Local civil timestamps retained for compatibility; they are NOT monotonic across DST rollback.
-// Nonmonotonic snapshots fail closed. Configure IRT/session timezone deliberately.
 static long long civilSec(int y, int mo, int d, int h, int mi, int s)
 {
     y -= mo <= 2; long long era = (y >= 0 ? y : y - 399) / 400; unsigned yoe = (unsigned)(y - era * 400);
@@ -84,9 +92,6 @@ static int marketDecimals(const std::string& m)
 {
     return m == "ES" || m == "NQ" || m == "CL" ? 2 : m == "NG" ? 3 : m == "GC" ? 1 : m == "HG" ? 4 : m == "EU" ? 5 : 2;
 }
-// This extension only needs the root-to-market lookup, not DealerLogic's file
-// parser and rendering helpers. Keeping this small fixed-market lookup local
-// avoids a production dependency on that unrelated shared implementation.
 static std::string marketForRoot(const std::string& rootIn)
 {
     std::string r;
@@ -104,16 +109,29 @@ static std::string marketForRoot(const std::string& rootIn)
 
 typedef tf_support::SnapshotCursor TCursor;
 
-struct TStep { const char* name; int back; bool deep; };
-static const TStep STEPS[] = { {"10m", 600, false}, {"1h", 3600, false}, {"4h", 4 * 3600, false}, {"session", -1, false},
-                               {"3d", 3 * 86400, true}, {"6d", 6 * 86400, true}, {"11d", 11 * 86400, true} };
+struct TStep { const char* name; int back; };
+// (2.0.0) 10 minutes at once, then the whole session (sliced). The calibration history is the separate per-session deep job.
+static const TStep STEPS[] = { {"10m", 600}, {"session", -1} };
 static const int NSTEPS = (int)(sizeof(STEPS) / sizeof(STEPS[0]));
+static const size_t COMPLETE_WINDOWS = 2400;   // a session with >= 2,400 of its ~4,140 20-s windows is complete
+static const long long SLICE_MS = 200;         // the most work one timer tick does on a back-fill
 
-struct TIdx { int fontParam; };
-static TIdx TX;
+// (2.0.0) the signal record lives OUTSIDE the per-chart state, keyed by symbol | seconds per bar | session (DeltaProfile 2.5.2):
+// a chart reload / a new extension object finds the same decided signals
+struct BookHolder { std::mutex mx; tfl::SignalBook book; bool loaded = false; std::string path; };
+static std::map<std::string, std::shared_ptr<BookHolder> >& books() { static std::map<std::string, std::shared_ptr<BookHolder> > m; return m; }
+static std::mutex& booksMx() { static std::mutex m; return m; }
 
-// State belongs to this extension object, not an undocumented chart user-data slot.
-// Do not assume the vendor creates one object per DLL or one object per chart.
+// a back-fill replay that runs in slices across timer ticks
+struct ReplayJob {
+    bool active = false;
+    long long sid = LLONG_MIN, fetchedAtS = 0, endS = LLONG_MAX;
+    std::vector<tfl::Tick> ticks; size_t pos = 0;
+    std::unique_ptr<tfl::Engine> e; tfl::Store tiny; TCursor c2;
+    long long fetchMs = 0, workMs = 0; int slices = 0; long trades = 0;
+    void clear() { active = false; ticks.clear(); ticks.shrink_to_fit(); pos = 0; e.reset(); tiny.clear(); c2.reset(); fetchMs = workMs = 0; slices = 0; trades = 0; }
+};
+
 struct TapeFlowState {
     int uniqueTimerId = nextTimerId();
     std::string mkt = TF_FIXED, root, sym, chartRoot, err;
@@ -124,14 +142,15 @@ struct TapeFlowState {
     bool timerOn = false, timerRefused = false, busy = false;
     time_t firstPass = 0, lastTimerTick = 0, timerAt = 0, lastStepAt = 0, lastSave = 0, lastEvWrite = 0, lastStatus = 0, lastFallback = 0;
     int step = 0;                       // the next back-fill step
-    bool blocked[NSTEPS] = {false}; bool guardsRead = false; bool deepDone = false;
+    bool blocked[NSTEPS] = {false}; bool guardsRead = false; bool deepBlocked = false;
     std::string stepNote, lastStepName;
     long long stepTicks[NSTEPS] = {0};
     size_t evWritten = (size_t)-1; long long evLastT = 0;
     std::set<std::string> written; std::set<long long> keysLoaded;
-    std::map<long long, std::uint64_t> savedDigest;
+    std::map<long long, std::uint64_t> savedDigest; std::set<long long> dirty;
     bool storageReady = false;
-    bool bootstrapDone = false;
+    bool bootstrapDone = false;         // the live engine has a cursor (10 minutes or more)
+    bool sessionDone = false;           // (2.0.0) the session replay became the live engine: signals may be decided
     std::vector<tfl::Ev> committed;
     std::set<std::string> committedKeys;
     size_t captureCount = 0;
@@ -142,8 +161,27 @@ struct TapeFlowState {
     size_t indexedSize = (size_t)-1;
     long long indexedFirst = LLONG_MIN, indexedLast = LLONG_MIN;
     long long liveTicks = 0; int passes = 0;
-    long long secWrittenT = LLONG_MIN; bool secInit = false;   // (1.1.3) the per-second research file
-    int font = 9;
+    long long secWrittenT = LLONG_MIN; bool secInit = false;   // the per-second research file
+    // the header title, the pane's scale, diagnostics
+    std::mutex titleMx; std::string title;
+    std::string titleSeen; time_t titleChangedAt = 0, lastInvalidate = 0; bool invalidatePending = false;
+    std::atomic<long> titleCalls{0}; std::atomic<long long> lastTitleCall{0};
+    double range = 60; int paneH = 0, band = 22;
+    std::string stepResult[NSTEPS]; long long stepMs[NSTEPS] = {0};
+    std::vector<std::string> warns;
+    std::string statusBody; time_t statusWrittenAt = 0;
+    long long lateSid = LLONG_MIN, lateBase = 0;
+    std::vector<std::pair<time_t, long long> > lateSamples;
+    // (2.0.0) jobs, bars, signals
+    ReplayJob sess, deep;
+    std::set<long long> deepEmpty, deepTried; long long deepExhaustedBelow = LLONG_MIN; bool deepProgressRead = false;
+    std::string deepNote = "not started"; int deepSessionsDone = 0; time_t deepCheckAt = 0;
+    std::map<long long, tfl::BarIn> bars;           // closed chart bars by time (captured in calc)
+    int spb = 0;
+    std::shared_ptr<BookHolder> book; long long bookSid = LLONG_MIN; std::string bookKey;
+    std::vector<tfl::Mark> prevMarks;               // the previous session's record (drawn only)
+    bool prevLoaded = false;
+    long long sigWrittenLines = 0;
 };
 static int timerIdFor(const void* me) { return static_cast<const TapeFlowState*>(me)->uniqueTimerId; }
 
@@ -153,13 +191,12 @@ public:
     ~TapeFlow() { delete own_; }
     virtual int timer(RTX_EVENT* e);
     virtual int draw(void);
-    virtual int parmsLoad(void)  { readSettings(); return RTX_OK; }
-    virtual int parmsApply(void) { readSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { readSettings(); return RTX_OK; }
-    virtual int scale(int, int, double* dMin, double* dMax) { if (dMin) *dMin = -135; if (dMax) *dMax = 135; return RTX_OK; }
+    virtual int parmsLoad(void)  { return RTX_OK; }
+    virtual int parmsApply(void) { return RTX_OK; }
+    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax);   // symmetric, fitted to the visible data
+    virtual int parmsTitle(char* pStr, int size);                               // the readout for IRT's grey header
 
-    // Per-object state. The SDK must supply a stable contract context for timer calls.
-    // Multi-host dispatch requires a vendor-supported host registry; not invented here.
     mutable TapeFlowState* own_ = nullptr;
     TapeFlowState* existingState() const { return own_; }
     TapeFlowState& S() const
@@ -169,8 +206,6 @@ public:
     }
 
     std::string evPath(long long sid) const;
-
-    void readSettings() { std::lock_guard<std::recursive_mutex> lock(S().access); int f = getIntegerValue(TX.fontParam); S().font = (f >= 6 && f <= 16) ? f : 9; }
     void pump(const char* via);
     void pass(bool fromTimer);
     bool identify();
@@ -188,24 +223,42 @@ public:
     std::string tfDir() const { const std::string base = dir(); return base.empty() ? std::string() : base + "\\TapeFlow"; }
     void trace(const std::string& s);
     void live();
-    bool snapshot(RTTICKS& data, std::vector<tf_support::TradeIdentity>& out);
+    bool snapshot(RTTICKS& data, std::vector<tf_support::TradeIdentity>& out, long long upTo = LLONG_MAX);
     void captureCommitted();
-    bool rebuild(int idx);
+    bool rebuild10m();
+    bool startSessionJob();
+    void sessionSlice();
+    void finishSessionJob();
     void runSteps();
+    void deepSlice();
+    void readDeepProgress();
+    void writeDeepProgress();
     void loadStore();
-    void saveStore();
+    void saveStore(bool all = false);
     std::string basePath(long long sid) const;
     void writeEvents(bool force);
     void writeSeconds();
     bool inOwnRth() const;
     void writeStatus();
-    std::string stateText(COLOR* col) const;
+    std::string stateText() const;
+    tfl::StateInfo stateInfo() const { return tfl::classify(S().eng, !S().sym.empty(), !S().err.empty()); }
+    void updateTitle();
+    bool headerLive() const;
+    double visibleMaxAbs(int b0, int b1);
+    double rangeFor(int b0, int b1) { return tfl::fitRange(visibleMaxAbs(b0, b1)); }
+    void warn(const std::string& s);
     bool offHours() const;
+    // signals
+    std::string sigPath(long long sid) const;
+    void decideSignals();
+    void flushSignals();
+    void loadPrevious();
+    void captureBars(int from);
     // guard files
     std::string guardPath(const char* kind, const char* name) const { return tfDir() + "\\_" + kind + "-" + S().mkt + "-" + name + ".txt"; }
     void readGuards();
-    void guardWrite(int idx);
-    void guardClear(int idx);
+    void guardWrite(const char* name);
+    void guardClear(const char* name);
     // drawing
     void render();
     int textW(const char* s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s, -1); }
@@ -215,6 +268,12 @@ public:
         short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
         RCT rc; rc.set(x, (short)(yy - sz), (short)(x + 600), (short)(yy + sz)); rc.drawText(s, false, false);
     }
+    void textC(short x, short yc, const char* s, COLOR col, int sz, bool bold, int w)   // centred on (x, yc), as SessionVWAP's badges
+    {
+        FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); setTextColor(col);
+        const short h = (short)(sz + 6);
+        RCT rc; rc.set((short)(x - w / 2 - 2), (short)(yc - h / 2), (short)(x + w / 2 + 3), (short)(yc + h / 2)); rc.drawText(s, true, false);
+    }
     void line(short x1, short y1, short x2, short y2, COLOR c, int w)
     {
         setPen(c, (short)w, P_SOLID);
@@ -222,21 +281,18 @@ public:
         PNT b; b.set(0, 0.0f); b.h = x2; b.v = y2; b.drawLineTo();
     }
     void fill(short l, short t, short r, short b, COLOR c) { if (r < l) std::swap(l, r); if (b < t) std::swap(t, b); RCT rc; rc.set(l, t, (short)(r + 1), (short)(b + 1)); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
-    void triangle(short x, short y, bool up, bool filled, COLOR c);
+    void arrowhead(short x, short tipY, bool up, COLOR c, int half, int height);
 };
 
 #define mkt (S().mkt)
 #define root (S().root)
 #define sym (S().sym)
-#define chartRoot (S().chartRoot)
 #define err (S().err)
 #define tick (S().tick)
 #define eng (S().eng)
 #define store (S().store)
 #define storeLoaded (S().storeLoaded)
 #define cur (S().cur)
-#define wallAtTick (S().wallAtTick)
-#define dataAtTick (S().dataAtTick)
 #define timerOn (S().timerOn)
 #define timerRefused (S().timerRefused)
 #define busy (S().busy)
@@ -251,10 +307,7 @@ public:
 #define step (S().step)
 #define blocked (S().blocked)
 #define guardsRead (S().guardsRead)
-#define deepDone (S().deepDone)
 #define stepNote (S().stepNote)
-#define lastStepName (S().lastStepName)
-#define stepTicks (S().stepTicks)
 #define evWritten (S().evWritten)
 #define evLastT (S().evLastT)
 #define written (S().written)
@@ -262,7 +315,6 @@ public:
 #define savedDigest (S().savedDigest)
 #define liveTicks (S().liveTicks)
 #define passes (S().passes)
-#define font (S().font)
 
 int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void)
@@ -274,9 +326,10 @@ int cppExtension::done(void)
     if (timerOn) { destroyTimer(timerIdFor(state)); timerOn = false; }
     timerRefused = false;
     lastTimerTick = 0;
-    if (storeLoaded) { eng.flushSession(); me->saveStore(); }
-    me->writeEvents(true);
-    for (int i = 0; i < NSTEPS; i++) me->guardClear(i);          // completion, not a crashed request
+    if (storeLoaded) { eng.flushSession(); S().dirty.insert(eng.curSid); me->saveStore(); }
+    me->writeEvents(true); me->flushSignals();
+    for (int i = 0; i < NSTEPS; i++) me->guardClear(STEPS[i].name);   // completion, not a crashed request
+    me->guardClear("deep");
     return RTX_OK;
 }
 int cppExtension::destroy(void)
@@ -286,9 +339,10 @@ int cppExtension::destroy(void)
     if (!state) return RTX_OK;
     auto S = [&]() -> TapeFlowState& { return *state; };
     if (timerOn) { destroyTimer(timerIdFor(state)); timerOn = false; }
-    if (storeLoaded) { eng.flushSession(); me->saveStore(); }
-    me->writeEvents(true);
-    for (int i = 0; i < NSTEPS; i++) me->guardClear(i);          // a normal close is not a crash
+    if (storeLoaded) { eng.flushSession(); S().dirty.insert(eng.curSid); me->saveStore(); }
+    me->writeEvents(true); me->flushSignals();
+    for (int i = 0; i < NSTEPS; i++) me->guardClear(STEPS[i].name);   // a normal close is not a crash
+    me->guardClear("deep");
     delete state;
     me->own_ = nullptr;
     return RTX_OK;
@@ -296,30 +350,73 @@ int cppExtension::destroy(void)
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
-    setParameterDialogHeight(2);
-    TX.fontParam = getParameterCount(); setIntegerParameter("Font pt", 9, 50);
-    // two invisible outputs keep the pane's own scale at +-135 (the drawing does not depend on it)
+    // (2.0.0) NO settings: the settings window shows nothing to change. The two outputs (30-s pressure, 180-s line, each bar's
+    // value at its close) are OUTPUT_NO_UI + DRAW_INVISIBLE: IRT never draws them and they are not in the settings window.
+    setParameterVersion(3);
+    setParameterDialogHeight(1);
     CPEN p(C_GRAY, 1, P_SOLID);
-    setOutputParameter("Top", DRAW_INVISIBLE, &p, C_GRAY, OUTPUT_ENABLED);
-    setOutputParameter("Bottom", DRAW_INVISIBLE, &p, C_GRAY, OUTPUT_ENABLED);
+    setOutputParameter("30s pressure", DRAW_INVISIBLE, &p, C_GRAY, OUTPUT_NO_UI);
+    setOutputParameter("180s line", DRAW_INVISIBLE, &p, C_GRAY, OUTPUT_NO_UI);
     return RTX_OK;
 }
 
 int cppExtension::calc(int iStartBar)
 {
     TapeFlow* me = static_cast<TapeFlow*>(this);
+    me->pump("calc");
     long n = getBarCount();
     if (n > 0) {
         RTARRAY o1(fOut1), o2(fOut2);
         int from = iStartBar > 0 ? iStartBar : 0;
-        for (long i = from; i < n; i++) { o1[(int)i] = 135.0f; o2[(int)i] = -135.0f; }
+        auto S = [&]() -> TapeFlowState& { return me->S(); };     // the state macros (eng, ...) expand to S().x
+        std::unique_lock<std::recursive_mutex> lock(S().access, std::try_to_lock);
+        const std::vector<tfl::SecRec>* H = lock.owns_lock() ? &eng.hist : nullptr;
+        RTARRAYI dt(barDateTime);
+        for (long i = from; i < n; i++) {
+            float a = 0.f, b = 0.f;
+            if (H && !H->empty()) {
+                const long long te = me->localSec((RTDATE)dt[(int)i]);
+                auto it = std::upper_bound(H->begin(), H->end(), te - 1, [](long long t, const tfl::SecRec& r) { return t < r.t; });
+                if (it != H->begin()) {
+                    --it;
+                    if (te - 1 - it->t <= 600) {
+                        if (std::isfinite(it->f30)) a = (float)std::round(it->f30);
+                        if (std::isfinite(it->f180)) b = (float)std::round(it->f180);
+                    }
+                }
+            }
+            o1[(int)i] = a; o2[(int)i] = b;
+        }
+        if (lock.owns_lock()) me->captureBars(from);
     }
-    me->pump("calc");
     return RTX_OK;
 }
 
-// Timer performs backfill. Calc may perform only a live fallback; draw never queries RTTICKS.
+// (2.0.0) the chart's CLOSED bars (never the forming last one), by bar time: open / high / low / close in ticks. Only the last few
+// are re-read each calc; a reload (iStartBar 0) or a gap re-reads up to 600.
+void TapeFlow::captureBars(int from)
+{
+    const long n = getBarCount();
+    if (n < 2 || tick <= 0) return;
+    const int spb = getSecondsPerBar();
+    if (spb <= 0) return;
+    if (spb != S().spb) { S().spb = spb; S().bars.clear(); }
+    RTARRAYI dt(barDateTime);
+    RTARRAY O(barOpen), Hh(barHigh), Lw(barLow), C(barClose);
+    int i0 = (int)std::max(0L, n - 600);
+    if (!S().bars.empty() && from > 0) i0 = std::max(i0, std::min(from, (int)n - 2) - 6);
+    for (int i = std::max(0, i0); i <= (int)n - 2; ++i) {
+        tfl::BarIn b; b.te = localSec((RTDATE)dt[i]);
+        long long prev = i > 0 ? localSec((RTDATE)dt[i - 1]) : b.te - spb;
+        b.ts = (b.te - prev > 4 * spb || b.te <= prev) ? b.te - spb : prev;
+        b.o = toTicks(O[i]); b.h = toTicks(Hh[i]); b.l = toTicks(Lw[i]); b.c = toTicks(C[i]);
+        if (b.o <= 0 || b.h <= 0 || b.l <= 0 || b.c <= 0) continue;
+        S().bars[b.te] = b;
+    }
+    while (S().bars.size() > 1500) S().bars.erase(S().bars.begin());
+}
+
+// Timer performs back-fill. Calc may perform only a live fallback; draw never queries RTTICKS.
 void TapeFlow::pump(const char* via)
 {
     std::unique_lock<std::recursive_mutex> lock(S().access,std::try_to_lock);
@@ -330,10 +427,9 @@ void TapeFlow::pump(const char* via)
         else { timerRefused = true; trace("timer refused; calc-only live fallback (no draw requests)"); }
     }
     const bool noTimer = timerRefused || (timerOn && (lastTimerTick ? now - lastTimerTick > 60 : now - timerAt > 20));
-    // draw must remain read-only: RTTICKS calls from a draw callback previously hung IRT.
     if (noTimer && std::strcmp(via, "calc") == 0 && now != lastFallback) {
         lastFallback = now;
-        pass(false); // fallback never initiates deep history requests
+        pass(false); // fallback never initiates history requests
     }
 }
 
@@ -344,7 +440,12 @@ int TapeFlow::timer(RTX_EVENT* e)
     if (!e || e->v.timer.id != timerIdFor(&S())) return RTX_FAIL;
     lastTimerTick = time(0);
     pass(true);
-    lastTimerTick = time(0);                                      // a long pass (a back-fill) is not a stopped timer
+    lastTimerTick = time(0);                                      // a long pass is not a stopped timer
+    // the header text changed: ask IRT to repaint (and re-read the titles), at most every 2 s, outside our lock
+    bool inval = false;
+    { time_t now = time(0); if (S().invalidatePending && now - S().lastInvalidate >= 2) { S().invalidatePending = false; S().lastInvalidate = now; inval = true; } }
+    lock.unlock();
+    if (inval) invalidateChart(true);
     return RTX_OK;
 }
 
@@ -353,21 +454,21 @@ bool TapeFlow::identify()
     char buf[32] = {0}; const char* rs = getRootSymbol(buf);
     root = rs ? rs : "";
     std::string m = marketForRoot(root);
-    if (m != mkt) return false;                                   // this DLL serves ONE market: elsewhere it only says so
+    if (m != mkt) return false;                                   // this DLL serves ONE market
     const char* s = getSymbol(); std::string sy = s ? s : "";
     float propertyTick = getProperty(SYM_TICKINCR);
     const double knownIncrement=marketTick(mkt);
-    // Normalize float-valued SDK metadata to exact known decimal increments.
     tick = (knownIncrement>0 && std::isfinite(propertyTick) && std::fabs(propertyTick-knownIncrement)<=knownIncrement*1e-5)
         ? knownIncrement : (std::isfinite(propertyTick) && propertyTick>0 && propertyTick<1000 ? (double)propertyTick : knownIncrement);
     if (!sy.empty() && sy != sym) {
         if (!sym.empty()) {                                        // the chart moved to another contract: start over on it
             trace("contract changed " + sym + " -> " + sy + ": starting over");
-            eng.flushSession(); saveStore();
-            captureCommitted(); writeEvents(true);
-            eng = tfl::Engine(); cur.reset(); dataAtTick = -1; step = 0; deepDone = false; evWritten = (size_t)-1;
-            S().bootstrapDone = false; S().committed.clear(); S().committedKeys.clear();
+            eng.flushSession(); S().dirty.insert(eng.curSid); saveStore();
+            captureCommitted(); writeEvents(true); flushSignals();
+            eng = tfl::Engine(); cur.reset(); S().dataAtTick = -1; step = 0; evWritten = (size_t)-1;
+            S().bootstrapDone = false; S().sessionDone = false; S().committed.clear(); S().committedKeys.clear();
             S().captureCount=0; S().captureFirst=LLONG_MIN; S().indexedSize=(size_t)-1;
+            S().sess.clear(); S().deep.clear(); S().book.reset(); S().bookSid = LLONG_MIN; S().bookKey.clear(); S().prevMarks.clear(); S().prevLoaded = false;
             keysLoaded.clear(); written.clear();
         }
         sym = sy; eng.attach(&store, sym);
@@ -399,23 +500,28 @@ void TapeFlow::pass(bool fromTimer)
     if (!guardsRead) readGuards();
     passes++;
     if (S().storageReady) err.clear();
-    // (1.1.3) every part of the pass is timed; over 250 ms = a SLOW trace line (the IRT freeze hunt, 2026-10-08)
     auto t_a = std::chrono::steady_clock::now();
     auto slowIf = [&](const char* what) {
         const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_a).count();
         if (ms >= 250) trace(std::string("SLOW ") + what + " " + std::to_string(ms) + " ms");
         t_a = std::chrono::steady_clock::now();
     };
-    if (fromTimer) { const int st = step; runSteps(); slowIf(st < NSTEPS ? (std::string("back-fill ") + STEPS[st].name).c_str() : "back-fill"); }
+    if (fromTimer) { runSteps(); slowIf("back-fill"); }
     if (step > 0 || !fromTimer) { live(); slowIf("live trades"); }
-    captureCommitted();             // then the new trades since the cursor (a market that opens later starts here)
+    captureCommitted();
+    if (fromTimer && S().sessionDone) { deepSlice(); slowIf("calibration back-fill"); }
+    if (S().sessionDone && !S().prevLoaded) { loadPrevious(); slowIf("previous session files"); }
+    decideSignals();
     time_t now = time(0);
-    if (S().storageReady && now - lastSave >= 300) { lastSave = now; eng.flushSession(); saveStore(); slowIf("baseline save"); }
+    if (S().storageReady && now - lastSave >= 300) { lastSave = now; eng.flushSession(); S().dirty.insert(eng.curSid); saveStore(); slowIf("baseline save"); }
     if (S().storageReady && now - lastEvWrite >= 5) { lastEvWrite = now; writeEvents(false); writeSeconds(); slowIf("event / second files"); }
+    flushSignals();
+    updateTitle();
     if (S().storageReady && now - lastStatus >= 5) { lastStatus = now; writeStatus(); }
     busy = false;
     } catch (const std::exception& ex) {
         err = std::string("processing failed: ") + ex.what();
+        warn(err);
         eng.gap(eng.lastT + 1, err);
         captureCommitted();
     } catch (...) {
@@ -425,17 +531,25 @@ void TapeFlow::pass(bool fromTimer)
     }
 }
 
-// ---- new trades since the cursor (at most 1 h back - RTTICKS(0) once stalled a pass in IRTReader 0.1.3)
-bool TapeFlow::snapshot(RTTICKS& data, std::vector<tf_support::TradeIdentity>& out)
+// ---- trades from an IRT tick array (upTo: keep only seconds before it; the rest is skipped cheaply)
+bool TapeFlow::snapshot(RTTICKS& data, std::vector<tf_support::TradeIdentity>& out, long long upTo)
 {
     out.clear();
     if (data.count <= 0) return true;
     if (!data.dt || !data.price || !data.size || data.count > INT_MAX) {
         err = "invalid IRT tick array"; return false;
     }
-    out.reserve(static_cast<size_t>(data.count));
+    if (upTo == LLONG_MAX) out.reserve(static_cast<size_t>(data.count));
+    double rawCut = std::numeric_limits<double>::infinity();
     for (long i=0; i<data.count; ++i) {
         const RTDATE raw = (RTDATE)(*data.dt)[(int)i];
+        long long sec = 0;
+        if (upTo != LLONG_MAX) {
+            if (!std::isfinite((double)raw)) { err = "invalid / off-grid trade record"; return false; }
+            if ((double)raw >= rawCut + 7200.0) continue;          // surely past the cut (2 h clock margin): no local-time call
+            sec = localSec(raw);
+            if (sec >= upTo) { if ((double)raw < rawCut) rawCut = (double)raw; continue; }
+        }
         const double qty = (double)(*data.size)[(int)i];
         int px=0, bid=0, ask=0;
         if (!std::isfinite((double)raw) || !std::isfinite(qty) || qty <= 0 ||
@@ -445,7 +559,7 @@ bool TapeFlow::snapshot(RTTICKS& data, std::vector<tf_support::TradeIdentity>& o
         }
         if (data.bid && (*data.bid)[(int)i] > 0 && !tf_support::nativeToTicks((*data.bid)[(int)i], tick, &bid)) bid = 0;
         if (data.ask && (*data.ask)[(int)i] > 0 && !tf_support::nativeToTicks((*data.ask)[(int)i], tick, &ask)) ask = 0;
-        out.push_back(tf_support::TradeIdentity{localSec(raw),(double)raw,px,bid,ask,(long long)qty});
+        out.push_back(tf_support::TradeIdentity{upTo != LLONG_MAX ? sec : localSec(raw),(double)raw,px,bid,ask,(long long)qty});
     }
     return true;
 }
@@ -468,8 +582,7 @@ void TapeFlow::live()
         eng.gap(std::max(nowS,eng.lastT+1), err.empty() ? "invalid snapshot" : err);
         captureCommitted();
         trace("DATA INVALID: " + err);
-        // Do not silently guess a new prefix. Explicit fresh bootstrap on the next safe timer.
-        cur.reset(); S().bootstrapDone = false; step = 0;
+        cur.reset(); S().bootstrapDone = false; S().sessionDone = false; S().sess.clear(); step = 0;   // a fresh bootstrap on the next timer
         return;
     }
     long long got=0;
@@ -477,203 +590,277 @@ void TapeFlow::live()
         const auto& r=records[i];
         tfl::Tick k; k.t=r.second; k.px=r.price; k.q=r.quantity; k.bid=r.bid; k.ask=r.ask;
         const bool accepted=eng.add(k);
-        cur.commit(r); // consumed even if late; engine invalidates affected evidence
+        cur.commit(r);
         if (accepted) ++got;
     }
     if (got) {
-        wallAtTick=time(0); S().steadyAtTick=std::chrono::steady_clock::now();
-        dataAtTick=cur.lastSec; liveTicks+=got; S().bootstrapDone=true;
+        S().wallAtTick=time(0); S().steadyAtTick=std::chrono::steady_clock::now();
+        S().dataAtTick=cur.lastSec; liveTicks+=got; S().bootstrapDone=true;
     }
-    if (dataAtTick>=0) {
+    if (S().dataAtTick>=0) {
         const long long elapsed=std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now()-S().steadyAtTick).count();
-        const long long watermark=std::min(nowS-LATE_MARGIN,dataAtTick+elapsed-LATE_MARGIN);
+        const long long watermark=std::min(nowS-LATE_MARGIN,S().dataAtTick+elapsed-LATE_MARGIN);
         eng.advanceTo(watermark);
     }
 }
 
 bool TapeFlow::offHours() const
 {
-    struct tm t; std::memset(&t,0,sizeof(t)); const_cast<TapeFlow*>(this)->getLocaltime(const_cast<TapeFlow*>(this)->currentDate(),&t);   // (1.1.0 integration) the real SDK declares currentDate() non-const
+    struct tm t; std::memset(&t,0,sizeof(t)); const_cast<TapeFlow*>(this)->getLocaltime(const_cast<TapeFlow*>(this)->currentDate(),&t);
     int m = t.tm_hour * 60 + t.tm_min;
-    // Same configured local clock as the 17:00 session policy. CME-style Central
-    // maintenance assumption; Sunday evening is LIVE, not "off hours".
     if (t.tm_wday==6) return true;
     if (t.tm_wday==0) return m<17*60;
     if (t.tm_wday==5 && m>=16*60) return true;
     return m>=16*60 && m<17*60;
 }
 
+// ---- back-fill: 10 minutes at once, then the session job (sliced) which becomes the live engine
 void TapeFlow::runSteps()
 {
     time_t now = time(0);
-    while (step < NSTEPS && blocked[step]) { if (!STEPS[step].deep) { step++; continue; } deepDone = true; step = NSTEPS; }
-    if (step >= NSTEPS) return;
-    const TStep& spec = STEPS[step];
-    if (step == 0) { rebuild(0); step = 1; lastStepAt = time(0); return; }      // the first 10 minutes at once
-    if (now - firstPass < 30 || now - lastStepAt < (spec.deep ? 60 : 20)) return;  // let IRT settle; one step at a time
-    if (spec.deep) {
-        if (deepDone) { step = NSTEPS; return; }
-        if (!S().storageReady) { stepNote="deep backfill paused: crash-guard directory unavailable"; return; }
-        const long long prior = tfl::priorSessions(store, eng.curSid);
-        if (prior >= 10) { deepDone = true; step = NSTEPS; return; }
-        // (1.1.3, Rassul 22:31 "have a working tapeflow indicator that works for all markets that i trade" by the morning) the
-        // baselines need 60 windows per 5-min bin = 4+ prior sessions. 1.1.x only deepened 16:00-17:00, so a morning restart
-        // stayed CALIBRATING all day. Now: any time outside this market's RTH, and inside RTH only while uncalibrated (< 4
-        // sessions), 2 minutes apart (each deep step holds IRT ~1-2 s on ES).
-        if (!offHours() && inOwnRth()) {
-            if (prior >= 4) return;
-            if (now - lastStepAt < 120) return;
-        }
+    if (step == 0) {
+        if (blocked[0]) { S().stepResult[0] = "blocked (IRT stopped during it twice)"; step = 1; lastStepAt = now; return; }
+        rebuild10m(); step = 1; lastStepAt = time(0); return;
     }
-    rebuild(step);
-    lastStepAt = time(0);
-    step++;
+    if (step == 1) {
+        if (S().sess.active) { sessionSlice(); return; }
+        if (blocked[1]) { S().stepResult[1] = "blocked (IRT stopped during it twice) - signals from the 10-minute start"; step = 2; S().sessionDone = S().bootstrapDone; return; }
+        if (now - firstPass < 30 || now - lastStepAt < 20) return;   // let IRT settle first
+        if (!startSessionJob()) { step = 2; S().sessionDone = S().bootstrapDone; lastStepAt = time(0); }
+    }
 }
 
-// Replay native history into scratch state; publish only calibration and unseen historical prefixes.
-bool TapeFlow::rebuild(int idx)
+bool TapeFlow::rebuild10m()
 {
-    const TStep& spec = STEPS[idx];
     RTDATE now = currentDate();
     long long nowS = localSec(now);
-    long long back = spec.back;
-    if (back < 0) {                                               // the session: from 17:00
-        long long sid = tfl::sessionOf(nowS);
-        long long start = (sid - 1) * 86400 + 17LL * 3600;
-        back = nowS - start + 5;
-        if (back <= 4 * 3600 + 60) { stepNote = "session already covered"; return true; }
-    }
-    trace(std::string("back-fill ") + spec.name + "...");
-    guardWrite(idx);
-    RTTICKS T((RTDATE)(now - (RTDATE)back));
-    long n = T.count;
-    tfl::Store scratch = store;
-    tfl::Engine e2; e2.cfg = eng.cfg; e2.attach(&scratch, sym);
-    {                                                             // the request starts inside an older session: that one is partial
-        long long startS = nowS - back, sidS = tfl::sessionOf(startS);
-        if (sidS != tfl::sessionOf(nowS) && startS > (sidS - 1) * 86400 + 17LL * 3600 + 60) e2.noFlushSid = sidS;
-    }
-    TCursor c2; long long first = -1, quoted = 0;
-    std::vector<tf_support::TradeIdentity> records;
-    std::size_t begin = 0; std::string issue;
-    std::size_t reordered = 0;
-    if (!snapshot(T,records)) { guardClear(idx); stepNote="backfill rejected: " + err; trace(stepNote); return false; }
-    reordered = tf_support::sortByTime(records);                  // (1.1.4) ES 3d / 6d / 11d were rejected for out-of-order history
-    if (!c2.plan(records,&begin,&issue)) {
-        if (!issue.empty()) err=issue;
-        guardClear(idx); stepNote="backfill rejected: " + err; trace(stepNote); return false;
-    }
-    for (const auto& r:records) {
-        if (first < 0) first=r.second;
-        tfl::Tick k; k.t=r.second; k.px=r.price; k.q=r.quantity; k.bid=r.bid; k.ask=r.ask;
-        if (k.bid > 0 && k.ask > k.bid) ++quoted;
-        e2.add(k); c2.commit(r);
-    }
-    guardClear(idx);
-    stepTicks[idx] = e2.ticks;
-    lastStepName = spec.name;
-    char b[260];
-    snprintf(b, sizeof(b), "back-fill %s: %ld trades from IRT, %lld used, from %s, bid/ask on %.0f%% of them, %zu put back in time order", spec.name, n, e2.ticks,
-             first < 0 ? "-" : std::to_string(nowS - first).append(" s ago").c_str(), e2.ticks > 0 ? 100.0 * (double)quoted / (double)e2.ticks : 0.0, reordered);
-    trace(b); stepNote = b;
-    if (e2.ticks <= 0) { if (spec.deep) deepDone = true; return false; }
-    if (spec.deep && first > 0 && nowS - first < back - 86400) deepDone = true;    // IRT keeps no older trades: stop deepening
+    trace("back-fill 10m...");
+    guardWrite("10m");
+    RTTICKS T((RTDATE)(now - (RTDATE)600));
+    tfl::Engine e2; e2.cfg = eng.cfg; e2.attach(&store, sym);
+    TCursor c2; std::vector<tf_support::TradeIdentity> records; std::string issue; size_t begin = 0;
+    if (!snapshot(T, records)) { guardClear("10m"); S().stepResult[0] = "rejected: " + err; warn(S().stepResult[0]); return false; }
+    tf_support::sortByTime(records);
+    if (!c2.plan(records, &begin, &issue)) { guardClear("10m"); if (!issue.empty()) err = issue; S().stepResult[0] = "rejected: " + err; warn(S().stepResult[0]); return false; }
+    for (const auto& r : records) { tfl::Tick k; k.t=r.second; k.px=r.price; k.q=r.quantity; k.bid=r.bid; k.ask=r.ask; e2.add(k); c2.commit(r); }
+    guardClear("10m");
+    char b[160]; snprintf(b, sizeof(b), "back-fill 10m: %ld trades from IRT, %lld used", (long)T.count, e2.ticks); trace(b); stepNote = b;
+    S().stepResult[0] = std::string("done: ") + std::to_string(e2.ticks) + " trades";
+    if (e2.ticks <= 0) return false;
     e2.advanceTo(nowS - LATE_MARGIN);
-    e2.flushSession();
-    // Publish imported calibration, not recomputed live episodes/history.
-    store = std::move(scratch);
-    if (!S().bootstrapDone) {
-        captureCommitted();
-        const long long protectedThrough = S().committed.empty() ? LLONG_MIN : S().committed.back().t;
-        e2.evs.erase(std::remove_if(e2.evs.begin(),e2.evs.end(),[&](const tfl::Ev& event) {
-            return event.t <= protectedThrough;
-        }),e2.evs.end());
-        eng = std::move(e2); eng.attach(&store, sym); eng.noFlushSid = LLONG_MIN;
-        S().captureCount=0; S().captureFirst=LLONG_MIN; S().indexedSize=(size_t)-1;
-        // Restore committed records at/after the recovery cut; calibration is never a rewrite.
-        captureCommitted();
-        cur = c2; wallAtTick = time(0); S().steadyAtTick = std::chrono::steady_clock::now(); dataAtTick = cur.lastSec;
-        S().bootstrapDone = true;
-    } else {
-        // Extend only previously unseen historical data; preserve live samples/events.
-        const long long firstLive = eng.hist.empty() ? eng.lastT : eng.hist.front().t;
-        const auto prefixEnd = std::lower_bound(e2.hist.begin(),e2.hist.end(),firstLive,
-            [](const tfl::SecRec& rec,long long time) { return rec.t < time; });
-        eng.hist.insert(eng.hist.begin(),e2.hist.begin(),prefixEnd);
-        // (1.1.2) the first catch-up (10 min) started cold, so its first 30-180 s have no 30-s / 180-s values: the pane showed a
-        // gap where IRT was restarted. Fill ONLY those missing display values from this longer replay (same seconds, same
-        // trades); signals, episodes and committed events are untouched.
-        {
-            size_t j = (size_t)(prefixEnd - e2.hist.begin());
-            for (size_t i = (size_t)(prefixEnd - e2.hist.begin()); i < eng.hist.size() && j < e2.hist.size(); ++i) {
-                tfl::SecRec& h = eng.hist[i];
-                while (j < e2.hist.size() && e2.hist[j].t < h.t) ++j;
-                if (j >= e2.hist.size() || e2.hist[j].t != h.t) continue;
-                const bool any = std::isnan(h.f30) || std::isnan(h.f180);
-                if (std::isnan(h.f30)) h.f30 = e2.hist[j].f30;
-                if (std::isnan(h.f180)) h.f180 = e2.hist[j].f180;
-                if (!any) break;                                   // past the cold start: nothing more to fill
-            }
-            S().indexedSize = (size_t)-1;                          // rebuild the drawing index
-        }
-        for (const auto& event:e2.evs) if (event.t < firstLive) {
-            const std::string key=std::to_string(event.t)+"|"+std::to_string(event.ep)+"|"+event.kind+"|"+std::to_string(event.dir);
-            if (S().committedKeys.insert(key).second) S().committed.push_back(event);
-        }
-        std::stable_sort(S().committed.begin(),S().committed.end(),[](const tfl::Ev& a,const tfl::Ev& b){ return a.t<b.t; });
-    }
-    if (spec.deep && S().bootstrapDone) {
-        // Future candidates can use newly imported prior-only calibration. Existing
-        // episodes keep their own frozen thresholds/version; historical samples are untouched.
-        eng.refreeze();
-        tfl::Ev calibration; calibration.t=eng.lastT; calibration.knownAt=eng.lastT+1;
-        calibration.kind="BASE"; calibration.ep=eng.ver; calibration.ver=eng.ver;
-        calibration.why="prior-only calibration refreshed; no live replay";
-        eng.evs.push_back(calibration); captureCommitted();
-    }
-    saveStore(); evWritten = (size_t)-1;
+    eng = std::move(e2); eng.attach(&store, sym);
+    S().captureCount=0; S().captureFirst=LLONG_MIN; S().indexedSize=(size_t)-1;
+    captureCommitted();
+    cur = c2; S().wallAtTick = time(0); S().steadyAtTick = std::chrono::steady_clock::now(); S().dataAtTick = cur.lastSec;
+    S().bootstrapDone = true;
     return true;
 }
 
-// ---- guards
+// the whole session from 17:00 in ONE request (as 1.1.x did), copied compactly, then replayed in 200-ms slices
+bool TapeFlow::startSessionJob()
+{
+    RTDATE now = currentDate();
+    long long nowS = localSec(now);
+    long long sid = tfl::sessionOf(nowS);
+    long long start = (sid - 1) * 86400 + 17LL * 3600;
+    long long back = nowS - start + 5;
+    trace("back-fill session...");
+    const auto t0 = std::chrono::steady_clock::now();
+    guardWrite("session");
+    RTTICKS T((RTDATE)(now - (RTDATE)back));
+    std::vector<tf_support::TradeIdentity> records; std::string issue; size_t begin = 0;
+    ReplayJob& J = S().sess; J.clear();
+    if (!snapshot(T, records)) { guardClear("session"); S().stepResult[1] = "rejected: " + err; warn(S().stepResult[1]); return false; }
+    const size_t moved = tf_support::sortByTime(records);
+    if (!J.c2.plan(records, &begin, &issue)) { guardClear("session"); if (!issue.empty()) err = issue; S().stepResult[1] = "rejected: " + err; warn(S().stepResult[1]); return false; }
+    J.ticks.reserve(records.size());
+    for (const auto& r : records) { tfl::Tick k; k.t=r.second; k.px=r.price; k.q=r.quantity; k.bid=r.bid; k.ask=r.ask; J.ticks.push_back(k); J.c2.commit(r); }
+    guardClear("session");
+    records.clear(); records.shrink_to_fit();
+    J.fetchMs = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    J.active = true; J.sid = sid; J.fetchedAtS = nowS; J.pos = 0;
+    J.e.reset(new tfl::Engine()); J.e->cfg = eng.cfg; J.e->attach(&store, sym);   // windows go straight to the store (merged, first wins)
+    char b[200]; snprintf(b, sizeof(b), "back-fill session: %ld trades from IRT (%zu put back in time order), fetched in %lld ms - replaying in %lld-ms slices", (long)T.count, moved, J.fetchMs, SLICE_MS);
+    trace(b); stepNote = b; S().stepResult[1] = "replaying";
+    if (J.fetchMs >= 250) trace("SLOW session fetch " + std::to_string(J.fetchMs) + " ms");
+    return true;
+}
+void TapeFlow::sessionSlice()
+{
+    ReplayJob& J = S().sess;
+    const auto t0 = std::chrono::steady_clock::now();
+    size_t n = 0;
+    while (J.pos < J.ticks.size()) {
+        J.e->add(J.ticks[J.pos++]); J.trades++;
+        if ((++n & 1023) == 0 && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() >= SLICE_MS) break;
+    }
+    J.slices++; J.workMs += (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    if (J.pos >= J.ticks.size()) finishSessionJob();
+}
+void TapeFlow::finishSessionJob()
+{
+    ReplayJob& J = S().sess;
+    J.e->advanceTo(J.fetchedAtS - LATE_MARGIN);
+    J.e->flushSession();
+    // the replay becomes the live engine: events already shown / written keep their place; the replay's own events start after them
+    captureCommitted();
+    // (the replay keeps ALL its events - the signals read them - but those at or before the last event already written are
+    // marked as captured, so the events file stays append-only and never gets a second version of the same minutes)
+    const long long protectedThrough = S().committed.empty() ? LLONG_MIN : S().committed.back().t;
+    const long long startOf10m = eng.hist.empty() ? LLONG_MAX : eng.hist.front().t;   // what the 10-minute start already covered
+    for (const tfl::Ev& ev : J.e->evs) if (ev.t >= startOf10m && ev.t <= protectedThrough) S().committedKeys.insert(memoryEventKey(ev));
+    const long long ticksBefore = eng.ticks;
+    eng = std::move(*J.e); eng.attach(&store, sym); eng.noFlushSid = LLONG_MIN;
+    S().captureCount=0; S().captureFirst=LLONG_MIN; S().indexedSize=(size_t)-1;
+    captureCommitted();
+    cur = J.c2; S().wallAtTick = time(0); S().steadyAtTick = std::chrono::steady_clock::now(); S().dataAtTick = cur.lastSec;
+    S().bootstrapDone = true; S().sessionDone = true;
+    char b[220]; snprintf(b, sizeof(b), "done: %ld trades replayed in %d slices (%lld ms work, fetch %lld ms); the replay is now the live engine (the 10-minute start had %lld)",
+                          J.trades, J.slices, J.workMs, J.fetchMs, ticksBefore);
+    S().stepResult[1] = b; trace(std::string("back-fill session ") + b);
+    J.clear(); step = 2; lastStepAt = time(0);
+    S().dirty.insert(eng.curSid); saveStore();
+    evWritten = (size_t)-1;
+}
+
+// ---- (2.0.0) the calibration history: ONE prior session per job, newest missing first, outside this market's RTH only, in
+// 200-ms slices; the job's windows go into a one-session store merged into the baselines when done (the store is never copied).
+// Progress = the baseline files themselves (complete sessions are skipped after a restart) + TapeFlow\_deep-<MKT>.txt (sessions
+// IRT had no trades for, and where IRT's history ends).
+void TapeFlow::readDeepProgress()
+{
+    S().deepProgressRead = true;
+    std::ifstream f((tfDir() + "\\_deep-" + mkt + ".txt").c_str()); std::string ln;
+    while (std::getline(f, ln)) {
+        long long v = 0;
+        if (ln.compare(0, 6, "empty,") == 0 && tfl::parseStoreLong(ln.substr(6), &v)) S().deepEmpty.insert(v);
+        else if (ln.compare(0, 6, "tried,") == 0 && tfl::parseStoreLong(ln.substr(6), &v)) S().deepTried.insert(v);
+        else if (ln.compare(0, 15, "exhaustedBelow,") == 0 && tfl::parseStoreLong(ln.substr(15), &v)) S().deepExhaustedBelow = v;
+    }
+}
+void TapeFlow::writeDeepProgress()
+{
+    if (!S().storageReady) return;
+    std::ofstream o((tfDir() + "\\_deep-" + mkt + ".txt").c_str(), std::ios::trunc);
+    o << "# TapeFlow " << TF_VERSION << " calibration back-fill progress (delete to retry everything)\n";
+    for (long long s : S().deepEmpty) o << "empty," << s << "\n";
+    for (long long s : S().deepTried) o << "tried," << s << "\n";
+    if (S().deepExhaustedBelow != LLONG_MIN) o << "exhaustedBelow," << S().deepExhaustedBelow << "\n";
+}
+void TapeFlow::deepSlice()
+{
+    if (!S().storageReady || S().deepBlocked) return;
+    if (!S().deepProgressRead) readDeepProgress();
+    ReplayJob& J = S().deep;
+    if (inOwnRth() && !offHours()) { S().deepNote = J.active ? "paused for RTH" : "waiting for the end of RTH"; return; }
+    if (J.active) {
+        const auto t0 = std::chrono::steady_clock::now(); size_t n = 0;
+        while (J.pos < J.ticks.size()) {
+            J.e->add(J.ticks[J.pos++]); J.trades++;
+            if ((++n & 1023) == 0 && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() >= SLICE_MS) break;
+        }
+        J.slices++; J.workMs += (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+        if (J.pos < J.ticks.size()) { S().deepNote = "session " + std::to_string(J.sid) + ": " + std::to_string(J.pos) + " of " + std::to_string(J.ticks.size()) + " trades"; return; }
+        J.e->advanceTo(J.endS - 1); J.e->flushSession();
+        size_t got = 0; { auto it = J.tiny.find(J.sid); if (it != J.tiny.end()) for (auto& c : it->second) got += c.second.size(); }
+        tfl::mergeStore(store, J.tiny);                               // ONE session merged
+        S().dirty.insert(J.sid); saveStore();
+        eng.refreeze();
+        S().deepSessionsDone++;
+        char b[200]; snprintf(b, sizeof(b), "calibration back-fill: session %lld measured (%zu windows, %ld trades, fetch %lld ms + %lld ms in %d slices)", J.sid, got, J.trades, J.fetchMs, J.workMs, J.slices);
+        trace(b); S().deepNote = b;
+        if (got == 0) S().deepEmpty.insert(J.sid);
+        S().deepTried.insert(J.sid);                                  // measured once: never fetched again (even if IRT had only part of it)
+        writeDeepProgress();
+        J.clear(); lastStepAt = time(0);
+        return;
+    }
+    if (time(0) - lastStepAt < 5) return;                           // a breath between sessions
+    if (time(0) < S().deepCheckAt) return;                          // nothing to do: look again in a minute (cheap timer ticks)
+    const long long sidNow = eng.curSid;
+    if (sidNow == LLONG_MIN) return;
+    const int complete = tfl::completeSessions(store, sidNow, COMPLETE_WINDOWS);
+    if (complete >= eng.cfg.sessionsBack) { S().deepNote = std::to_string(complete) + " complete prior sessions on file - nothing to do"; S().deepCheckAt = time(0) + 60; return; }
+    long long target = LLONG_MIN;
+    for (long long s = sidNow - 1; s >= sidNow - 21; --s) {
+        if (!tfl::tradingWeekday(s) || S().deepEmpty.count(s) || S().deepTried.count(s) || tfl::completeSession(store, s, COMPLETE_WINDOWS)) continue;
+        if (S().deepExhaustedBelow != LLONG_MIN && s < S().deepExhaustedBelow) break;
+        target = s; break;
+    }
+    if (target == LLONG_MIN) { S().deepNote = std::to_string(complete) + " complete prior sessions on file - IRT has no more history to measure"; S().deepCheckAt = time(0) + 60; return; }
+    RTDATE now = currentDate(); const long long nowS = localSec(now);
+    const long long startS = (target - 1) * 86400 + 17LL * 3600, endS = target * 86400 + 17LL * 3600;
+    trace("calibration back-fill: session " + std::to_string(target) + " (" + stamp(startS) + ")...");
+    const auto t0 = std::chrono::steady_clock::now();
+    guardWrite("deep");
+    std::vector<tf_support::TradeIdentity> records;
+    long count = 0;
+    {
+        RTTICKS T((RTDATE)(now - (RTDATE)(nowS - startS)));
+        count = T.count;
+        if (!snapshot(T, records, endS)) { guardClear("deep"); warn("calibration back-fill rejected: " + err); err.clear(); S().deepEmpty.insert(target); writeDeepProgress(); return; }
+    }
+    guardClear("deep");
+    J.clear();
+    J.fetchMs = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    if (J.fetchMs >= 250) trace("SLOW calibration fetch " + std::to_string(J.fetchMs) + " ms");
+    tf_support::sortByTime(records);
+    for (const auto& r : records) if (tfl::sessionOf(r.second) == target) { tfl::Tick k; k.t=r.second; k.px=r.price; k.q=r.quantity; k.bid=r.bid; k.ask=r.ask; J.ticks.push_back(k); }
+    records.clear(); records.shrink_to_fit();
+    if (J.ticks.empty()) {
+        // no trade in that session: a holiday - or IRT's history begins later. Two empty weekday sessions in a row = the end.
+        S().deepEmpty.insert(target);
+        if (count <= 0 || S().deepEmpty.count(target + 1) || (!tfl::tradingWeekday(target + 1) && S().deepEmpty.count(target + 3))) S().deepExhaustedBelow = target;
+        trace("calibration back-fill: no trades in session " + std::to_string(target) + (S().deepExhaustedBelow == target ? " - IRT's history ends here" : " (holiday?)"));
+        writeDeepProgress(); lastStepAt = time(0); J.clear();
+        return;
+    }
+    J.active = true; J.sid = target; J.endS = endS; J.pos = 0;
+    J.e.reset(new tfl::Engine()); J.e->cfg = eng.cfg; J.e->attach(&J.tiny, sym);
+    S().deepNote = "session " + std::to_string(target) + ": " + std::to_string(J.ticks.size()) + " trades fetched";
+}
+
+// ---- guards (a request that IRT did not survive twice is blocked)
 void TapeFlow::readGuards()
 {
     guardsRead = true;
     if (!S().storageReady) return;
-    for (int i = 0; i < NSTEPS; i++) {
-        { std::ifstream b(guardPath("blocked", STEPS[i].name).c_str()); if (b.good()) { blocked[i] = true; continue; } }
-        std::ifstream g(guardPath("trying", STEPS[i].name).c_str());
+    const char* names[] = { "10m", "session", "deep" };
+    for (int i = 0; i < 3; i++) {
+        bool* flag = i < NSTEPS ? &blocked[i] : &S().deepBlocked;
+        { std::ifstream b(guardPath("blocked", names[i]).c_str()); if (b.good()) { *flag = true; continue; } }
+        std::ifstream g(guardPath("trying", names[i]).c_str());
         if (!g.good()) continue;
         int strikes = 0; g >> strikes; g.close();
         strikes++;
-        if (strikes >= 2) {                                       // twice in a row IRT did not survive this request
-            blocked[i] = true;
-            std::ofstream o(guardPath("blocked", STEPS[i].name).c_str(), std::ios::trunc); o << "IRT stopped during this back-fill request twice - blocked. Delete this file to allow it again.\n";
-            std::remove(guardPath("trying", STEPS[i].name).c_str());
-            trace(std::string("back-fill ") + STEPS[i].name + " BLOCKED (IRT stopped during it twice)");
+        if (strikes >= 2) {
+            *flag = true;
+            std::ofstream o(guardPath("blocked", names[i]).c_str(), std::ios::trunc); o << "IRT stopped during this back-fill request twice - blocked. Delete this file to allow it again.\n";
+            std::remove(guardPath("trying", names[i]).c_str());
+            trace(std::string("back-fill ") + names[i] + " BLOCKED (IRT stopped during it twice)");
         } else {
-            std::ofstream o(guardPath("trying", STEPS[i].name).c_str(), std::ios::trunc); o << strikes << "\n";   // kept: a second stop blocks it
-            trace(std::string("back-fill ") + STEPS[i].name + ": IRT stopped during it last time (or was closed) - one more try");
+            std::ofstream o(guardPath("trying", names[i]).c_str(), std::ios::trunc); o << strikes << "\n";
+            trace(std::string("back-fill ") + names[i] + ": IRT stopped during it last time (or was closed) - one more try");
         }
     }
 }
-void TapeFlow::guardWrite(int idx)
+void TapeFlow::guardWrite(const char* name)
 {
-    if (!S().storageReady || idx<0 || idx>=NSTEPS) return;
-    std::string p = guardPath("trying", STEPS[idx].name);
+    if (!S().storageReady) return;
+    std::string p = guardPath("trying", name);
     int strikes = 0; { std::ifstream g(p.c_str()); if (g.good()) g >> strikes; }
     std::ofstream o(p.c_str(), std::ios::trunc); o << strikes << "\n";
 }
-void TapeFlow::guardClear(int idx) { if (S().storageReady && idx>=0 && idx<NSTEPS) std::remove(guardPath("trying", STEPS[idx].name).c_str()); }
+void TapeFlow::guardClear(const char* name) { if (S().storageReady) std::remove(guardPath("trying", name).c_str()); }
 
-// ---- the baseline store (this plugin's own files: one per session, so only today's file is ever rewritten)
+// ---- the baseline store (one file per session; only CHANGED sessions are rewritten)
 std::string TapeFlow::basePath(long long sid) const { return tfDir() + "\\" + mkt + "-base-v110-" + std::to_string(sid) + ".csv"; }
 void TapeFlow::loadStore()
 {
     storeLoaded = true;
     long long now = localSec(currentDate()), sid0 = tfl::sessionOf(now);
     long rows = 0;
-    for (long long sid = sid0; sid >= sid0 - 21; sid--) {      // three weeks of sessions (weekends have no file)
+    for (long long sid = sid0; sid >= sid0 - 21; sid--) {
         std::ifstream f(basePath(sid).c_str());
         if (!f.is_open()) { f.clear(); f.open((basePath(sid)+".bak").c_str()); }
         if (!f.is_open()) continue;
@@ -683,16 +870,17 @@ void TapeFlow::loadStore()
             if (!tfl::parseStoreLine(ln, &s, &sy, &w) || s != sid) continue;
             store[sid][sy].push_back(w); n++;
         }
-        rows += n; // content digest is established on the first verified save
+        rows += n;
     }
     trace("baseline files: " + std::to_string(store.size()) + " sessions, " + std::to_string(rows) + " windows");
     if (eng.curSid != LLONG_MIN) eng.refreeze();
 }
-void TapeFlow::saveStore()
+void TapeFlow::saveStore(bool all)
 {
     if (!storeLoaded || !S().storageReady || tfDir().empty()) return;
-    while (store.size() > 14) store.erase(store.begin()); // bounded RAM; existing disk files untouched
+    while (store.size() > 16) { S().dirty.erase(store.begin()->first); store.erase(store.begin()); }   // bounded RAM; disk files untouched
     for (const auto& kv:store) {
+        if (!all && !S().dirty.count(kv.first)) continue;
         std::ostringstream payload;
         payload << "# TapeFlow " << TF_VERSION << " baseline " << mkt << " session " << kv.first << "\n";
         for (const auto& c:kv.second) for (const auto& w:c.second)
@@ -700,14 +888,13 @@ void TapeFlow::saveStore()
         const std::string bytes=payload.str();
         const std::uint64_t digest=tf_support::fingerprint(bytes);
         const auto prior=savedDigest.find(kv.first);
-        if (prior!=savedDigest.end() && prior->second==digest) continue;
+        if (prior!=savedDigest.end() && prior->second==digest) { S().dirty.erase(kv.first); continue; }
         const std::string path=basePath(kv.first), tmp=path+".tmp", bak=path+".bak";
         { std::ofstream out(tmp.c_str(),std::ios::binary|std::ios::trunc);
           if (!out) { err="cannot write "+tmp; continue; }
           out.write(bytes.data(),static_cast<std::streamsize>(bytes.size())); out.flush();
           if (!out.good()) { err="cannot flush "+tmp; continue; } }
         bool hadOld=false; { std::ifstream old(path.c_str()); hadOld=old.good(); }
-        // Never delete a backup until its original has been established intact.
         if (hadOld) {
             std::remove(bak.c_str());
             if (std::rename(path.c_str(),bak.c_str())!=0) { err="cannot stage "+path; continue; }
@@ -718,7 +905,7 @@ void TapeFlow::saveStore()
             continue;
         }
         if (hadOld) std::remove(bak.c_str());
-        savedDigest[kv.first]=digest;
+        savedDigest[kv.first]=digest; S().dirty.erase(kv.first);
     }
 }
 
@@ -733,7 +920,6 @@ std::string TapeFlow::fmtPx(int t) const
 static std::string stamp(long long t)
 {
     long long d = t >= 0 ? t / 86400 : -((-t + 86399) / 86400); long long r = t - d * 86400;
-    // civil from days
     long long z = d + 719468; long long era = (z >= 0 ? z : z - 146096) / 146097; unsigned doe = (unsigned)(z - era * 146097);
     unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; long long y = (long long)yoe + era * 400;
     unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100); unsigned mp = (5 * doy + 2) / 153; unsigned dd = doy - (153 * mp + 2) / 5 + 1;
@@ -743,13 +929,12 @@ static std::string stamp(long long t)
 }
 static std::string clock12(long long t)
 {
-    long long r = ((t % 86400) + 86400) % 86400; int h = (int)(r / 3600), m = (int)(r / 60 % 60), s = (int)(r % 60);
-    char b[24]; snprintf(b, sizeof(b), "%d:%02d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, s, h < 12 ? "AM" : "PM");
+    long long r = ((t % 86400) + 86400) % 86400; int h = (int)(r / 3600), m = (int)(r / 60 % 60);
+    char b[24]; snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
     return b;
 }
 
-// every committed event, APPEND-ONLY (brief section 14): a record once written is never rewritten or removed. Episode ids come
-// from the creation second, so a back-fill's events match the ones already written and are not written twice.
+// every committed engine event, APPEND-ONLY (the nightly scoring reads it)
 std::string TapeFlow::evPath(long long sid) const {
     std::string contract=sym;
     for (char& ch:contract) if (!std::isalnum((unsigned char)ch) && ch!='-' && ch!='_') ch='_';
@@ -771,7 +956,6 @@ void TapeFlow::captureCommitted()
     }
     S().captureCount=eng.evs.size(); S().captureFirst=first;
     if (added) std::stable_sort(S().committed.begin(),S().committed.end(),[](const tfl::Ev& a,const tfl::Ev& b){ return a.t<b.t; });
-    // Disk journal retains history. Bound only the in-memory drawing cache.
     if (!S().committed.empty() && S().committed.size()>20000) {
         const long long cutoff=eng.lastT-eng.cfg.keepSec;
         const auto end=std::lower_bound(S().committed.begin(),S().committed.end(),cutoff,
@@ -780,7 +964,7 @@ void TapeFlow::captureCommitted()
         S().committed.erase(S().committed.begin(),end);
     }
 }
-// (1.1.3) this market's RTH (Central, lra.markets), for the back-fill rule only
+// this market's RTH (Central, lra.markets) and the 15 min before the open: the calibration back-fill never runs inside it
 bool TapeFlow::inOwnRth() const
 {
     struct tm t; std::memset(&t,0,sizeof(t)); const_cast<TapeFlow*>(this)->getLocaltime(const_cast<TapeFlow*>(this)->currentDate(),&t);
@@ -790,18 +974,17 @@ bool TapeFlow::inOwnRth() const
     if (k == "CL" || k == "NG") { a = 480; b = 810; }
     else if (k == "GC" || k == "HG") { a = 440; b = 750; }
     else if (k == "EU") { a = 440; b = 840; }
-    return m >= a - 15 && m < b;                                    // and the 15 min before the open
+    return m >= a - 15 && m < b;
 }
 
-// (1.1.3) every closed second's pressure (the pane's own numbers) -> TapeFlow\<MKT>-sec-<session>.csv, appended, for the
-// nightly scoring and the per-market tuning ("eventually i want this indicator optimized over time")
+// every closed second's pressure -> TapeFlow\<MKT>-sec-<session>.csv (appended; unchanged format - the nightly scoring reads it)
 void TapeFlow::writeSeconds()
 {
     if (!S().storageReady || mkt.empty() || tfDir().empty() || eng.hist.empty()) return;
     const long long sidNow = eng.curSid;
     if (sidNow == LLONG_MIN) return;
     auto pathOf = [&](long long sid) { return tfDir() + "\\" + mkt + "-sec-" + std::to_string(sid) + ".csv"; };
-    if (!S().secInit) {                                              // after a restart: continue after the file's last second
+    if (!S().secInit) {
         S().secInit = true;
         std::ifstream f(pathOf(sidNow).c_str(), std::ios::binary);
         if (f.good()) {
@@ -809,15 +992,17 @@ void TapeFlow::writeSeconds()
             f.seekg(sz > 4096 ? sz - 4096 : 0); std::string ln, lastLn;
             while (std::getline(f, ln)) if (!ln.empty() && ln[0] >= '0' && ln[0] <= '9') lastLn = ln;
             size_t bar = lastLn.find('|');
-            if (bar != std::string::npos) { long long t = std::atoll(lastLn.c_str()); if (t > 0) S().secWrittenT = t; }
+            if (bar != std::string::npos) { long long t = std::atoll(lastLn.c_str()); if (t > 0) S().secWrittenT = std::max(S().secWrittenT, t); }
         }
     }
-    const long long upTo = eng.lastT - 1;                            // closed seconds only
+    const long long upTo = eng.lastT - 1;
     std::map<long long, std::string> add;
     auto num = [](float x, int dp) { if (!std::isfinite(x)) return std::string(); char q[24]; snprintf(q, sizeof(q), "%.*f", dp, (double)x); return std::string(q); };
     long long last = S().secWrittenT;
-    for (const tfl::SecRec& r : eng.hist) {
-        if (r.t <= S().secWrittenT || r.t > upTo) continue;
+    auto it = std::upper_bound(eng.hist.begin(), eng.hist.end(), S().secWrittenT, [](long long t, const tfl::SecRec& r) { return t < r.t; });
+    for (; it != eng.hist.end(); ++it) {
+        const tfl::SecRec& r = *it;
+        if (r.t > upTo) break;
         const long long sid = tfl::sessionOf(r.t);
         if (sid < sidNow - 1) continue;
         std::string& o = add[sid];
@@ -830,7 +1015,7 @@ void TapeFlow::writeSeconds()
         const std::string p = pathOf(kv.first);
         bool fresh; { std::ifstream t(p.c_str(), std::ios::binary | std::ios::ate); fresh = !t.good() || t.tellg() == std::streampos(0); }
         std::ofstream o(p.c_str(), std::ios::app | std::ios::binary);
-        if (!o.is_open()) return;                                    // retried next time; nothing marked written
+        if (!o.is_open()) return;
         if (fresh) o << "t|time|f30|f180|activity|cov30|buy|sell|unknown|flags\n";
         o << kv.second; o.flush();
         if (!o.good()) return;
@@ -844,13 +1029,13 @@ void TapeFlow::writeEvents(bool force)
     captureCommitted();
     const auto& events=S().committed;
     if (!force && !events.empty() && events.size()==evWritten && events.back().t==evLastT) return;
-    typedef std::pair<std::string, std::string> PendingEvent;       // key, complete line
+    typedef std::pair<std::string, std::string> PendingEvent;
     std::map<long long, std::vector<PendingEvent> > add;
     std::set<std::string> pending;
     for (const tfl::Ev& v : events) {
         long long sid = tfl::sessionOf(v.knownAt);
-        if (sid < eng.curSid - 1) continue;                       // older sessions were written at the time
-        if (!keysLoaded.count(sid)) {                             // the keys already in that session's file
+        if (sid < eng.curSid - 1) continue;
+        if (!keysLoaded.count(sid)) {
             keysLoaded.insert(sid);
             std::ifstream f(evPath(sid).c_str()); std::string ln;
             while (std::getline(f, ln)) {
@@ -879,7 +1064,7 @@ void TapeFlow::writeEvents(bool force)
           if (!fresh) { t.seekg(-1,std::ios::end); char last='\0'; t.get(last); incompleteTail=last!='\n'; } }
         std::ofstream o(p.c_str(), std::ios::app);
         if (!o.is_open()) { err = "cannot write " + p; complete = false; continue; }
-        if (incompleteTail) o << '\n'; // preserve bad tail but separate a complete retry
+        if (incompleteTail) o << '\n';
         if (fresh) o << "time|episode|kind|dir|zone_lo|zone_hi|h|q95|f30|f180|activity|cov30|q_zone|concentration|progress_ticks|context|why|baseline_ver|version|mode\n";
         for (const PendingEvent& event : kv.second) o << event.second;
         o.flush();
@@ -889,64 +1074,256 @@ void TapeFlow::writeEvents(bool force)
     if (complete) {
         evWritten = events.size(); evLastT = events.empty() ? 0 : events.back().t;
     } else {
-        // A failed/partial append must be re-scanned before the next retry; do not
-        // let the in-memory cursor discard an event that did not reach the file.
         keysLoaded.clear(); written.clear(); evWritten = (size_t)-1; evLastT = 0;
     }
 }
 
-std::string TapeFlow::stateText(COLOR* col) const
+// ---- (2.0.0) the signals: decided on closed chart bars once the session replay is the live engine
+std::string TapeFlow::sigPath(long long sid) const
 {
-    *col = C_INK;
-    if (sym.empty()) { *col = C_MUTED; return "waiting for the chart"; }
-    if (eng.ticks <= 0) { *col = C_MUTED; return "WAITING FOR TRADES"; }
-    const tfl::Feat& f = eng.last;
-    if (!err.empty()) { *col=C_MUTED; return "DATA / STORAGE ISSUE: "+err; }
-    // (1.1.3) overnight a quiet market has no trade (so no quote snapshot) for a few seconds: that is QUIET, not bad data
-    if (!f.quoteOk && f.warm && !f.classRecent) { *col=C_MUTED; return "QUIET - no trades in the last few seconds"; }
-    if (!f.quoteOk && f.warm) { *col=C_MUTED; return "DATA INVALID - quote-at-trade snapshot unavailable"; }
-    if (f.warm && f.c30 < eng.cfg.cov) { *col=C_MUTED; return "LOW SIDE COVERAGE - signals unavailable"; }
-    if (!f.spreadOk) { *col=C_MUTED; return "WIDE SPREAD - signals unavailable"; }
-    if (!f.classRecent && f.warm) { *col=C_MUTED; return "NO RECENT CLASSIFIED EXECUTION"; }
-    int d = 0; const tfl::Ep* e = nullptr;
-    if (eng.watching(&d, &e) && e) {
-        *col = C_AMBER;
-        long left = (long)(e->fireT + eng.cfg.watchTTL - eng.lastT); if (left < 0) left = 0;
-        return std::string("WATCH ") + (d > 0 ? "bullish - sellers stalled at " : "bearish - buyers stalled at ") + fmtPx(e->lo) + "-" + fmtPx(e->hi) +
-               " (" + std::to_string(left) + " s left)";
-    }
-    for (auto it = eng.evs.rbegin(); it != eng.evs.rend(); ++it) {
-        if (eng.lastT - it->t > 60) break;
-        if (it->kind == "AR" || it->kind == "IN") {
-            *col = it->dir > 0 ? C_BUY : C_SELL;
-            return std::string("RESPONSE / INITIATIVE ") + (it->dir > 0 ? "bullish " : "bearish ") + (it->kind == "AR" ? "response" : "initiative") + (TF_PROVEN ? "" : "?") + " at " + clock12(it->knownAt);
+    std::string p = tfDir() + "\\" + mkt + "-signals-" + std::to_string(sid);
+    if (S().spb > 0 && S().spb != 180) p += "-" + std::to_string(S().spb) + "s";
+    return p + ".csv";
+}
+static std::string slurpFile(const std::string& p) { std::ifstream f(p.c_str(), std::ios::binary); std::ostringstream s; s << f.rdbuf(); return s.str(); }
+void TapeFlow::decideSignals()
+{
+    if (!S().sessionDone || S().spb <= 0 || eng.curSid == LLONG_MIN || S().bars.empty()) return;
+    const long long sid = eng.curSid;
+    const std::string key = sym + "|" + std::to_string(S().spb) + "|" + std::to_string(sid);   // symbol | seconds per bar | session
+    if (!S().book || S().bookKey != key) {
+        if (S().book && S().bookSid != LLONG_MIN && S().bookSid < sid) {           // the session rolled: today's marks become "previous"
+            std::lock_guard<std::mutex> g(S().book->mx); S().prevMarks = S().book->book.marks;
+        } else if (S().book && S().bookSid == sid) S().prevLoaded = false;        // another bar size: reload the previous session's record for it
+        std::shared_ptr<BookHolder> h;
+        { std::lock_guard<std::mutex> g(booksMx()); auto& m = books(); auto it = m.find(key); if (it == m.end()) { h = std::make_shared<BookHolder>(); m[key] = h; } else h = it->second;
+          for (auto it2 = m.begin(); it2 != m.end();) { if (it2->second != h && it2->second.use_count() == 1 && it2->first.find(sym + "|") == 0 && it2->first != key) it2 = m.erase(it2); else ++it2; } }
+        S().book = h; S().bookSid = sid; S().bookKey = key;
+        std::lock_guard<std::mutex> g(h->mx);
+        if (!h->loaded) {
+            h->loaded = true; h->path = sigPath(sid); h->book.version = TF_VERSION;
+            if (S().storageReady) h->book.loadText(slurpFile(h->path));       // a restart: exactly what was decided before
+            trace("signal record " + h->path + ": " + std::to_string(h->book.marks.size()) + " signals, decided through " +
+                  (h->book.decidedThrough == LLONG_MIN ? std::string("-") : stamp(h->book.decidedThrough)));
         }
     }
-    if (!f.warm) { *col = C_MUTED; return "WARMING UP " + std::to_string(eng.warmN) + "/" + std::to_string(eng.cfg.warm) + " s"; }
-    if (f.f180ok && f.c180 < 0.5) { *col = C_MUTED; char b[64]; snprintf(b, sizeof(b), "SIDE DATA REQUIRED (sides known %.0f%%)", f.c180 * 100); return b; }
-    if (!f.baseOk) {
-        *col = C_MUTED;
-        int n = f.bb()->n;
-        return "CALIBRATING - " + std::to_string(n) + " of 60 windows for this 5-min slot (" + std::to_string(eng.baseSessions) + " sessions on file)";
+    BookHolder& H = *S().book;
+    std::lock_guard<std::mutex> g(H.mx);
+    const long long nowS = localSec(currentDate());
+    const long long sessStart = (sid - 1) * 86400 + 17LL * 3600;
+    for (auto it = S().bars.upper_bound(std::max(H.book.lastFed, sessStart)); it != S().bars.end(); ++it) {
+        const tfl::BarIn& b = it->second;
+        if (b.ts < sessStart) continue;
+        // the engine has not closed this bar's seconds yet - unless the tape stopped before the bar ended (no trade since; the
+        // bar is long over): then it is decided with what there is
+        if (b.te - 1 > eng.lastT && !(eng.lastTrade() < b.te && nowS - LATE_MARGIN - 60 > b.te)) break;
+        H.book.feed(b, tfl::barFlow(eng.hist, eng.evs, b.ts, b.te, H.book.cfg));
     }
-    if (!f.quoteOk) { *col = C_MUTED; return "DATA INVALID - no current quote"; }
-    if (f.aok && f.A < 0.5) { *col = C_MUTED; return "LOW ACTIVITY"; }
+}
+void TapeFlow::flushSignals()
+{
+    if (!S().book) return;
+    BookHolder& H = *S().book;
+    std::lock_guard<std::mutex> g(H.mx);
+    if (H.book.journal.empty()) return;
+    if (!S().storageReady || H.path.empty()) { H.book.journal.clear(); return; }
+    bool fresh; { std::ifstream t(H.path.c_str(), std::ios::binary | std::ios::ate); fresh = !t.good() || t.tellg() == std::streampos(0); }
+    std::ofstream o(H.path.c_str(), std::ios::app | std::ios::binary);
+    if (!o.is_open()) return;                                          // kept in memory, retried next pass
+    if (fresh) o << tfl::SignalBook::header() << "\n";
+    for (const std::string& l : H.book.journal) o << l << "\n";
+    o.flush();
+    if (!o.good()) return;
+    S().sigWrittenLines += (long long)H.book.journal.size();
+    H.book.journal.clear();
+}
+// the previous session: its per-second file (display only, in front of today's) and its signal record (drawn only)
+void TapeFlow::loadPrevious()
+{
+    S().prevLoaded = true;
+    if (!S().storageReady || eng.curSid == LLONG_MIN) return;
+    const long long prev = eng.curSid - 1;
+    long long psid = prev;
+    for (; psid >= eng.curSid - 4; --psid) { std::ifstream t((tfDir() + "\\" + mkt + "-sec-" + std::to_string(psid) + ".csv").c_str()); if (t.good()) break; }
+    if (psid < eng.curSid - 4) return;
+    std::vector<tfl::SecRec> v;
+    {
+        std::ifstream f((tfDir() + "\\" + mkt + "-sec-" + std::to_string(psid) + ".csv").c_str()); std::string ln;
+        const long long firstNow = eng.hist.empty() ? LLONG_MAX : eng.hist.front().t;
+        auto fnum = [](const std::string& s) -> float { if (s.empty()) return NAN; char* e = nullptr; float x = std::strtof(s.c_str(), &e); return e && *e == '\0' && std::isfinite(x) ? x : NAN; };
+        while (std::getline(f, ln)) {
+            if (ln.empty() || !(ln[0] >= '0' && ln[0] <= '9')) continue;
+            std::vector<std::string> c; size_t a = 0;
+            while (true) { size_t p = ln.find('|', a); c.push_back(ln.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; }
+            if (c.size() < 10) continue;
+            tfl::SecRec r; if (!tfl::parseStoreLong(c[0], &r.t)) continue;
+            if (r.t >= firstNow || (!v.empty() && r.t <= v.back().t)) continue;
+            r.f30 = fnum(c[2]); r.f180 = fnum(c[3]); r.a = fnum(c[4]); r.c30 = fnum(c[5]);
+            long long x = 0; r.b = tfl::parseStoreLong(c[6], &x) && x >= 0 ? x : 0; r.s = tfl::parseStoreLong(c[7], &x) && x >= 0 ? x : 0; r.u = tfl::parseStoreLong(c[8], &x) && x >= 0 ? x : 0;
+            int fl = 0; r.flags = (unsigned char)(tfl::parseStoreInt(c[9], &fl) ? fl : 0);
+            v.push_back(r);
+        }
+    }
+    if (!v.empty()) {
+        S().secWrittenT = std::max(S().secWrittenT, v.back().t);     // never written again
+        eng.hist.insert(eng.hist.begin(), v.begin(), v.end());
+        S().indexedSize = (size_t)-1;
+    }
+    tfl::SignalBook pb; pb.loadText(slurpFile(sigPath(psid)));
+    S().prevMarks = pb.marks;
+    trace("previous session " + std::to_string(psid) + ": " + std::to_string(v.size()) + " seconds and " + std::to_string(pb.marks.size()) + " signals from its files");
+}
+
+// ---- the state, the header, the status file
+std::string TapeFlow::stateText() const
+{
+    const tfl::StateInfo st = stateInfo();
+    const std::string& c = st.code;
+    char b[200];
+    if (c == "WAIT") return "waiting for the chart";
+    if (c == "NOTRADES") return "WAITING FOR TRADES";
+    if (c == "ERROR") return "DATA / STORAGE ISSUE: " + err;
+    if (c == "QUIET") { snprintf(b, sizeof(b), "QUIET - no trade for %lld s (more than %d s, 3 x this time of day's usual gap)", st.sinceTrade, st.quietAfter); return b; }
+    if (c == "NOQUOTE") return "DATA INVALID - quote-at-trade snapshot unavailable";
+    if (c == "LOWSIDES") { snprintf(b, sizeof(b), "LOW SIDE COVERAGE - signals unavailable (sides known %.0f%%)", std::isfinite(st.sides) ? st.sides * 100 : 0.0); return b; }
+    if (c == "WIDESPREAD") return "WIDE SPREAD - signals unavailable";
+    if (c == "NOSIDES") return "NO RECENT CLASSIFIED EXECUTION";
+    if (c == "WATCH") return std::string("READY - absorption watch ") + (st.dir > 0 ? "(sellers stalled at " : "(buyers stalled at ") + fmtPx(st.zoneLo) + "-" + fmtPx(st.zoneHi) + ")";
+    if (c == "SIGNAL") return std::string("READY - engine ") + (st.kind == "AR" ? "response " : "initiative ") + (st.dir > 0 ? "bullish" : "bearish");
+    if (c == "WARM") return "WARMING UP " + std::to_string(st.n) + "/" + std::to_string(st.need) + " s";
+    if (c == "CAL") {
+        snprintf(b, sizeof(b), "CALIBRATING - %d of %d windows for this 5-min slot%s (%d sessions on file)", st.n, st.need,
+                 st.k ? (" incl. +-" + std::to_string(st.k) + " slots").c_str() : "", eng.baseSessions);
+        return b;
+    }
+    if (c == "LOWACT") return "LOW ACTIVITY";
     return "READY";
+}
+
+void TapeFlow::updateTitle()
+{
+    const tfl::StateInfo st = stateInfo();
+    const tfl::Feat& f = eng.last;
+    tfl::Mark last; bool haveLast = false;
+    if (S().book) { std::lock_guard<std::mutex> g(S().book->mx); const tfl::Mark* m = S().book->book.lastConfirmed(); if (m) { last = *m; haveLast = true; } }
+    const std::string t = tfl::titleLine(TF_VERSION, mkt, st, f.f180ok, f.f180, haveLast ? &last : nullptr, haveLast ? fmtPx(last.px) : std::string());
+    { std::lock_guard<std::mutex> g(S().titleMx); S().title = t; }
+    if (t != S().titleSeen) { S().titleSeen = t; S().titleChangedAt = time(0); S().invalidatePending = true; }
+}
+// IRT shows the title in the grey header only if it re-reads it after it changed; otherwise the pane shows it (one small line)
+bool TapeFlow::headerLive() const
+{
+    if (S().titleCalls.load() <= 0) return false;
+    const long long asked = S().lastTitleCall.load();
+    return asked >= (long long)S().titleChangedAt || time(0) - S().titleChangedAt < 6;
+}
+int TapeFlow::parmsTitle(char* pStr, int size)
+{
+    if (!pStr || size <= 1) return RTX_FAIL;
+    std::string t;
+    { std::lock_guard<std::mutex> g(S().titleMx); t = S().title; }
+    if (t.empty()) t = std::string("TF ") + tfl::shortVersion(TF_VERSION) + " " + mkt;
+    S().titleCalls.fetch_add(1); S().lastTitleCall = (long long)time(0);
+    snprintf(pStr, (size_t)size, "%s", t.c_str());
+    return RTX_OK;
 }
 
 void TapeFlow::writeStatus()
 {
     if (dir().empty()) return;
-    std::ofstream f((dir() + "\\TapeFlow.status-" + mkt + ".txt").c_str(), std::ios::trunc); if (!f.is_open()) return;
-    COLOR c; const tfl::Feat& x = eng.last;
+    const tfl::Feat& x = eng.last;
+    const tfl::StateInfo st = stateInfo();
     long long prior = tfl::priorSessions(store, eng.curSid);
+    const int complete = tfl::completeSessions(store, eng.curSid, COMPLETE_WINDOWS);
+    const time_t now = time(0);
+    auto num = [](double v, int dp) { if (!std::isfinite(v)) return std::string("nan"); char q[32]; snprintf(q, sizeof(q), "%.*f", dp, v); return std::string(q); };
+    if (eng.curSid != S().lateSid) { S().lateSid = eng.curSid; S().lateBase = eng.late; }
+    if (eng.late < S().lateBase) S().lateBase = eng.late;
+    S().lateSamples.push_back(std::make_pair(now, eng.late));
+    while (S().lateSamples.size() > 1 && now - S().lateSamples[1].first >= 300) S().lateSamples.erase(S().lateSamples.begin());
+    const long long late5 = std::max(0LL, eng.late - S().lateSamples.front().second);
+    int aw[2] = {0, 0}, ar[2] = {0, 0}, in[2] = {0, 0};
+    for (const tfl::Ev& v : S().committed) {
+        if (tfl::sessionOf(v.knownAt) != eng.curSid) continue;
+        const int d = v.dir > 0 ? 0 : 1;
+        if (v.kind == "AW") aw[d]++; else if (v.kind == "AR") ar[d]++; else if (v.kind == "IN" || v.kind == "INSUP") in[d]++;
+    }
+    const int bin = x.bin;
+    const int binMin = (17 * 60 + bin * 5) % 1440;
+    char slot[40]; snprintf(slot, sizeof(slot), "%02d:%02d-%02d:%02d", binMin / 60, binMin % 60, ((binMin + 5) % 1440) / 60, (binMin + 5) % 60);
+    std::string title; { std::lock_guard<std::mutex> g(S().titleMx); title = S().title; }
+    std::ostringstream f; f.imbue(std::locale::classic());
+    // the 1.1.4 keys first, unchanged (LRA / ChartView readers)
     f << "VERSION," << TF_VERSION << "\nMARKET," << mkt << "\nCHART," << root << "\nSYMBOL," << sym << "\nTICK," << tick
       << "\nTIMER," << (timerOn ? "on" : timerRefused ? "REFUSED (calc-only fallback; backfill paused)" : "starting")
       << "\nDATA,trades " << eng.ticks << ",live " << liveTicks << ",late " << eng.late << ",last " << (eng.lastT ? stamp(eng.lastT) : "-")
       << "\nBACKFILL,next step " << (step < NSTEPS ? STEPS[step].name : "done") << "," << stepNote
       << "\nCALIBRATION,prior sessions on file " << prior << ",slot windows " << x.bb()->n << ",baseline version " << eng.ver
       << "\nNOW,f30 " << (x.f30ok ? x.f30 : NAN) << ",f180 " << (x.f180ok ? x.f180 : NAN) << ",activity " << (x.aok ? x.A : NAN) << ",sides " << x.c30
-      << "\nSTATE," << stateText(&c) << "\nWHY_NO_SIGNAL," << eng.lastWhy << "\nEVENTS," << eng.evs.size() << "\nERROR," << err << "\n";
+      << "\nSTATE," << stateText() << "\nWHY_NO_SIGNAL," << eng.lastWhy << "\nEVENTS," << eng.evs.size() << "\nERROR," << err;
+    f << "\nSTATE_CODE," << st.code
+      << "\nTITLE," << title
+      << "\nHEADER,parmsTitle calls " << S().titleCalls.load() << ",last asked " << (S().lastTitleCall.load() ? std::to_string((long long)now - S().lastTitleCall.load()) + " s ago" : std::string("never"))
+      << ",title changed " << (S().titleChangedAt ? std::to_string((long long)(now - S().titleChangedAt)) + " s ago" : std::string("-"))
+      << ",header live " << (headerLive() ? "yes" : "no") << ",pane line " << (!headerLive() ? "shown" : "hidden")
+      << "\nCAL_SLOT,bin " << bin << " (" << slot << "),windows " << x.bb()->n << ",need " << eng.cfg.minWin << ",own " << x.bb()->own << ",pooled k " << x.bb()->k
+      << ",calibrated " << (x.baseOk ? "yes" : "no") << ",med20 " << num(x.bb()->med20, 3) << ",med5 " << num(x.bb()->med5, 3) << ",med spread " << num(x.bb()->medSpread, 1)
+      << "\nCAL_SESSIONS,used " << eng.baseSessions << ",dropped thin " << eng.baseDropped << ",on file " << prior << ",complete " << complete
+      << " (>= " << COMPLETE_WINDOWS << " windows),target " << eng.cfg.sessionsBack;
+    for (int i = 0; i < NSTEPS; i++)
+        f << "\nBACKFILL_" << STEPS[i].name << "," << (S().stepResult[i].empty() ? (i < step ? std::string("done") : std::string("pending")) : S().stepResult[i])
+          << (blocked[i] ? ",BLOCKED" : "");
+    if (S().sess.active) f << ",replaying " << S().sess.pos << " of " << S().sess.ticks.size() << " trades";
+    f << "\nBACKFILL_calibration," << S().deepNote << ",sessions measured this run " << S().deepSessionsDone << ",no-trade sessions " << S().deepEmpty.size()
+      << ",history ends " << (S().deepExhaustedBelow == LLONG_MIN ? std::string("-") : std::to_string(S().deepExhaustedBelow)) << (S().deepBlocked ? ",BLOCKED" : "");
+    f << "\nQUIET,since last trade " << (st.sinceTrade < 0 ? std::string("-") : std::to_string(st.sinceTrade) + " s")
+      << ",typical gap " << num(x.gapTypical, 1) << " s (" << (x.gapFromBase ? "this slot" : "live") << "),quiet after " << (int)x.quoteAgeEff << " s"
+      << ",quote " << (x.quoteOk ? "current" : x.quoteResumed ? "resumed" : "not current") << ",hard stop " << eng.cfg.maxQuietGap << " s"
+      << "\nFLOW,f30 " << (x.f30ok ? num(x.f30, 1) : std::string("-")) << ",f180 " << (x.f180ok ? num(x.f180, 1) : std::string("-"))
+      << ",activity " << (x.aok ? num(x.A, 2) : std::string("-")) << ",sides 30s " << num(x.c30 * 100, 0) << "%,sides 180s " << num(x.c180 * 100, 0) << "%"
+      << ",rate20 " << num(x.rate20, 2) << ",warm " << eng.warmN << "/" << eng.cfg.warm << ",range +-" << num(S().range, 0)
+      << "\nSIGNALS_TODAY,AW+ " << aw[0] << ",AW- " << aw[1] << ",AR+ " << ar[0] << ",AR- " << ar[1] << ",IN+ " << in[0] << ",IN- " << in[1]
+      << "\nLATE,today " << (eng.late - S().lateBase) << ",last 5 min " << late5 << ",total " << eng.late;
+    // (2.0.0) the pane's signals today, newest first (letter, side, state, bar time, price, why)
+    {
+        std::vector<tfl::Mark> ms; long long through = LLONG_MIN; std::string path;
+        if (S().book) { std::lock_guard<std::mutex> g(S().book->mx); ms = S().book->book.marks; through = S().book->book.decidedThrough; path = S().book->path; }
+        int cnt[4][3] = {{0}}; const char* K = "PEAF";
+        for (const tfl::Mark& m : ms) { const char* p = std::strchr(K, m.kind); if (p) cnt[p - K][m.state]++; }
+        f << "\nTF_SIGNALS,decided through " << (through == LLONG_MIN ? std::string("-") : stamp(through)) << ",bars on chart " << S().bars.size() << ",record " << path
+          << ",lines written " << S().sigWrittenLines << (S().sessionDone ? "" : ",WAITING for the session replay");
+        f << "\nTF_COUNTS";
+        for (int k = 0; k < 4; ++k) f << "," << K[k] << " " << cnt[k][tfl::MK_CONFIRMED] << " confirmed / " << cnt[k][tfl::MK_PENDING] << " open? / " << cnt[k][tfl::MK_EXPIRED] << " never confirmed";
+        int shown = 0;
+        for (auto it = ms.rbegin(); it != ms.rend() && shown < 12; ++it, ++shown)
+            f << "\nTF_SIG" << (shown + 1) << "," << it->kind << (it->question() ? "?" : "") << "," << (it->dir > 0 ? "bullish" : "bearish") << ","
+              << (it->state == tfl::MK_CONFIRMED ? "confirmed" : it->state == tfl::MK_EXPIRED ? "never confirmed" : "open") << "," << clock12(it->barT) << ","
+              << fmtPx(it->px) << "," << tf_support::safeField(it->why);
+    }
+    for (size_t i = 0; i < 5; i++) f << "\nWARN" << (i + 1) << "," << (i < S().warns.size() ? S().warns[S().warns.size() - 1 - i] : std::string());
+    const std::string body = f.str();
+    if (body == S().statusBody && now - S().statusWrittenAt < 60) return;
+    const std::string all = body + "\nUPDATED," + stamp(localSec(currentDate())) + "\n";
+    const std::string path = dir() + "\\TapeFlow.status-" + mkt + ".txt", tmp = path + ".tmp";
+    {
+        std::ofstream o(tmp.c_str(), std::ios::binary | std::ios::trunc); if (!o.is_open()) return;
+        o.write(all.data(), (std::streamsize)all.size()); o.flush();
+        if (!o.good()) { o.close(); std::remove(tmp.c_str()); return; }
+    }
+#ifdef _WIN32
+    if (!MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) { std::remove(tmp.c_str()); return; }
+#else
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) { std::remove(tmp.c_str()); return; }
+#endif
+    S().statusBody = body; S().statusWrittenAt = now;
+}
+
+void TapeFlow::warn(const std::string& s)
+{
+    time_t n = time(0); struct tm lt; localtime_s(&lt, &n);
+    char b[24]; strftime(b, sizeof(b), "%m-%d %H:%M:%S", &lt);
+    S().warns.push_back(std::string(b) + " " + tf_support::safeField(s));
+    if (S().warns.size() > 5) S().warns.erase(S().warns.begin());
 }
 
 void TapeFlow::trace(const std::string& s)
@@ -958,6 +1335,8 @@ void TapeFlow::trace(const std::string& s)
     time_t n = time(0); struct tm lt; localtime_s(&lt, &n);
     char b[24]; strftime(b, sizeof(b), "%m-%d %H:%M:%S", &lt);
     f << b << " " << TF_VERSION << " " << s << "\n";
+    if (s.find("DATA INVALID") != std::string::npos || s.find("SLOW") == 0 || s.find("BLOCKED") != std::string::npos ||
+        s.find("refused") != std::string::npos || s.find("contract changed") == 0 || s.find("one more try") != std::string::npos) warn(s);
 }
 
 // ---------------------------------------------------------------- drawing
@@ -971,18 +1350,13 @@ static COLOR blend(COLOR c, COLOR bg, double a)
     return (COLOR)((r << 16) | (g << 8) | b);
 }
 
-void TapeFlow::triangle(short x, short y, bool up, bool filled, COLOR c)
+// a small SOLID arrowhead (filled triangle, no outline): tip at (x, tipY), pointing up or down
+void TapeFlow::arrowhead(short x, short tipY, bool up, COLOR c, int half, int height)
 {
-    const int H = 6;                                           // half size
-    if (filled) {
-        for (int k = 0; k <= 2 * H; k++) {                     // scan lines from the tip
-            int w = (k * H) / (2 * H);
-            short yy = (short)(up ? y - H + k : y + H - k);
-            line((short)(x - w), yy, (short)(x + w), yy, c, 1);
-        }
-    } else {
-        short ty = (short)(up ? y - H : y + H), by = (short)(up ? y + H : y - H);
-        line(x, ty, (short)(x + H), by, c, 2); line((short)(x + H), by, (short)(x - H), by, c, 2); line((short)(x - H), by, x, ty, c, 2);
+    for (int k = 0; k < height; k++) {
+        const int w = (k * half + height / 2) / std::max(1, height - 1);
+        const short yy = (short)(up ? tipY + k : tipY - k);
+        line((short)(x - w), yy, (short)(x + w + 1), yy, c, 1);
     }
 }
 
@@ -993,96 +1367,143 @@ int TapeFlow::draw(void)
     return RTX_OK;
 }
 
+// the biggest |value| the pane shows for bars b0..b1: the 30-s sub-bars (same buckets as render) and the 180-s line
+double TapeFlow::visibleMaxAbs(int b0, int b1)
+{
+    const std::vector<tfl::SecRec>& H = eng.hist;
+    long n = getBarCount();
+    if (H.empty() || n <= 0) return 0;
+    if (b1 >= n) b1 = (int)n - 1;
+    if (b0 < 0) b0 = 0;
+    if (b1 < b0) return 0;
+    const long long firstTime = H.front().t, lastTime = H.back().t;
+    if (S().indexedSize != H.size() || S().indexedFirst != firstTime || S().indexedLast != lastTime) {
+        S().renderIndex.build(H, tfl::SR_SIDES);
+        S().indexedSize = H.size(); S().indexedFirst = firstTime; S().indexedLast = lastTime;
+    }
+    const auto& index = S().renderIndex;
+    int spb = getSecondsPerBar(); if (spb <= 0) return 0;
+    int ppb = getPixelsPerBar(); if (ppb < 1) ppb = 1;
+    RTARRAYI dt(barDateTime);
+    double m = 0;
+    for (int i = b0; i <= b1; i++) {
+        long long te = localSec((RTDATE)dt[i]);
+        long long ts = i > 0 ? localSec((RTDATE)dt[i - 1]) : te - spb;
+        if (te - ts > 4 * spb || te <= ts) ts = te - spb;
+        int span = std::max(1, (int)(ppb * 0.9));
+        int slots = (int)((te - ts + 29) / 30); slots = std::max(1, std::min(slots, std::max(1, span / 2)));
+        for (int sl = 0; sl < slots; sl++) {
+            long long a0 = ts + (te - ts) * sl / slots, a1 = ts + (te - ts) * (sl + 1) / slots;
+            const size_t j0 = index.start(a0), j1 = index.start(a1);
+            const long double sb = index.buys[j1] - index.buys[j0], ss = index.sells[j1] - index.sells[j0];
+            if (sb + ss > 0) m = std::max(m, std::fabs((double)(100 * (sb - ss) / (sb + ss))));
+        }
+        const size_t k = index.start(te);
+        if (k > 0 && H[k - 1].t >= ts && std::isfinite(H[k - 1].f180)) m = std::max(m, std::fabs((double)H[k - 1].f180));
+    }
+    return m;
+}
+
+int TapeFlow::scale(int iStartBar, int iEndBar, double* dMin, double* dMax)
+{
+    double r = S().range;
+    std::unique_lock<std::recursive_mutex> lock(S().access, std::try_to_lock);
+    if (lock.owns_lock()) { r = rangeFor(iStartBar, iEndBar); S().range = r; }
+    if (!(r > 0) || !std::isfinite(r)) r = 60;
+    r = tfl::axisRange(r, S().paneH, S().band);                       // IRT's axis = the drawing's inner area
+    if (dMin) *dMin = -r;
+    if (dMax) *dMax = r;
+    return RTX_OK;
+}
+
 void TapeFlow::render()
 {
     std::unique_lock<std::recursive_mutex> lock(S().access,std::try_to_lock);
     if (!lock.owns_lock()) return;
     RCT pane; pane.getPaneRect(false);
     short L = pane.left, T = pane.top, R = pane.right, B = pane.bottom;
-    if (R - L < 60 || B - T < 40) return;
+    if (R - L < 60 || B - T < 30) return;
     char rb[32] = {0}; const char* rs = getRootSymbol(rb);
     std::string chartMkt = marketForRoot(rs ? rs : "");
-    int fs = font;
+    const int fs = FONT_PT;
     const char* activeSymbol = getSymbol();
-    if (activeSymbol && !sym.empty() && sym != activeSymbol) {
-        textLJ((short)(L+8),(short)(T+12),"Wrong contract context: one active contract per extension object",C_MUTED,fs,false);
-        return;
-    }
-    if (chartMkt != mkt) {                                         // this DLL is for one market only
+    if (activeSymbol && !sym.empty() && sym != activeSymbol) { textLJ((short)(L+8),(short)(T+12),"TapeFlow: one contract per indicator - add it again on this chart",C_GRAY,fs,false); return; }
+    if (chartMkt != mkt) {
         std::string s = std::string("TapeFlow ") + mkt + " " + TF_VERSION + " - this one is for the " + mkt + " chart (add TapeFlow" + (chartMkt.empty() ? std::string("<market>") : chartMkt) + " here)";
-        textLJ((short)(L + 8), (short)(T + 12), s.c_str(), C_MUTED, fs, false);
+        textLJ((short)(L + 8), (short)(T + 12), s.c_str(), C_GRAY, fs, false);
         return;
     }
-    double span = 270.0, h = (double)(B - T);
-    auto Y = [&](double v) { return (short)(T + (135.0 - v) / span * h + 0.5); };
-    // guides: the neutral band +-15, the +-35 lines, zero
-    fill(L, Y(15), R, Y(-15), C_BAND);
-    line(L, Y(35), R, Y(35), C_GRID, 1); line(L, Y(-35), R, Y(-35), C_GRID, 1);
-    line(L, Y(0), R, Y(0), C_ZERO, 1);
+    // layout: [the header row: IRT's grey title - or our fallback line] [bearish band] [bars + line] [bullish band]. The header row is
+    // always kept free so a signal never sits under IRT's title text.
+    const int paneH = B - T;
+    const bool tinyPane = paneH < 90;   // (not "small": MSVC's windows.h #defines small)
+    const int band = tinyPane ? 12 : 22;                                  // small panes: arrowheads only, no letters
+    const bool fallback = !headerLive();
+    const int headRow = fs + 6;
+    const int top = T + headRow;
+    S().paneH = paneH; S().band = band + headRow / 2;
+    const short yTopBand = (short)(top), yInnerTop = (short)(top + band), yInnerBot = (short)(B - band);
     long n = getBarCount();
     int b0 = 0, b1 = (int)n - 1;
     if (getVisibleBars(&b0, &b1) != RTX_OK) { b0 = std::max(0, (int)n - 200); b1 = (int)n - 1; }
     if (b1 >= n) b1 = (int)n - 1;
     if (b0 < 0) b0 = 0;
+    const double rng = rangeFor(b0, b1); S().range = rng;
+    const double mid = (yInnerTop + yInnerBot) / 2.0, half = std::max(4.0, (yInnerBot - yInnerTop) / 2.0);
+    auto Y = [&](double v) { return (short)(mid - v / rng * half + 0.5); };
+    line(L, Y(0), R, Y(0), blend(C_GRAY, C_BG, 0.55), 1);           // the faint zero line
     const std::vector<tfl::SecRec>& H = eng.hist;
     const long long firstTime=H.empty()?LLONG_MIN:H.front().t, lastTime=H.empty()?LLONG_MIN:H.back().t;
     if (S().indexedSize!=H.size() || S().indexedFirst!=firstTime || S().indexedLast!=lastTime) {
-        S().renderIndex.build(H,tfl::SR_SIDES);   // (1.1.1) colour = the sides are known; signal quality is not a drawing gate
+        S().renderIndex.build(H,tfl::SR_SIDES);
         S().indexedSize=H.size(); S().indexedFirst=firstTime; S().indexedLast=lastTime;
     }
     const auto& index=S().renderIndex;
-    const auto& displayEvents=S().committed;
-    if (n > 0 && b1 >= b0 && !H.empty()) {
+    std::vector<std::pair<tfl::Mark, short> > marks;                 // the visible signals and their x
+    if (n > 0 && b1 >= b0) {
         RTARRAYI dt(barDateTime);
         int ppb = getPixelsPerBar(); if (ppb < 1) ppb = 1;
-        // (1.0.3) bar width: the 30-s sub-bars split 90% of the candle spacing
         int spb = getSecondsPerBar();
-        if (spb<=0) {
-            textLJ((short)(L+8),(short)(T+12),"TapeFlow requires a time-based chart; use your 3-minute chart",C_MUTED,fs,false);
-            return;
-        }
+        if (spb<=0) { textLJ((short)(L+8),(short)(T+12),"TapeFlow needs a time-based chart (your 3-minute chart)",C_GRAY,fs,false); return; }
+        // the signals by bar time (today's book + the previous session's record)
+        std::map<long long, tfl::Mark> byT;
+        for (const tfl::Mark& m : S().prevMarks) byT[m.barT] = m;
+        if (S().book) { std::lock_guard<std::mutex> g(S().book->mx); for (const tfl::Mark& m : S().book->book.marks) byT[m.barT] = m; }
         auto idxAtOrBefore = [&](long long t) -> long {
-            long lo = 0, hi = (long)H.size();                      // first rec with t > T, minus one
+            long lo = 0, hi = (long)H.size();
             while (lo < hi) { long m = (lo + hi) / 2; if (H[(size_t)m].t <= t) lo = m + 1; else hi = m; }
             return lo - 1;
         };
         short px180 = -1, py180 = -1;
-        std::vector<std::pair<int, const tfl::Ev*>> marks;
         for (int i = b0; i <= b1; i++) {
-            long long te = localSec((RTDATE)dt[i]);               // bars are stamped at their close
+            long long te = localSec((RTDATE)dt[i]);
             long long ts = i > 0 ? localSec((RTDATE)dt[i - 1]) : te - spb;
-            if (te - ts > 4 * spb || te <= ts) ts = te - spb;      // the first bar after a break
+            if (te - ts > 4 * spb || te <= ts) ts = te - spb;
             PNT p; p.set(i, 0.0f, kBarCenter); short x = p.h;
-            long k = idxAtOrBefore(te-1); // SecRec.t labels [t,t+1), not the boundary's next second
-            if (k < 0 || H[(size_t)k].t < ts) { px180 = -1; continue; }   // no flow data for this bar
+            { auto mk = byT.find(te); if (mk != byT.end()) marks.push_back(std::make_pair(mk->second, x)); }
+            if (H.empty()) continue;
+            long k = idxAtOrBefore(te-1);
+            if (k < 0 || H[(size_t)k].t < ts) { px180 = -1; continue; }
             const tfl::SecRec& q = H[(size_t)k];
-            // (1.0.3) no grey whisker: not in the design, and it read as extra bars
-            {   // (1.0.3, Rassul 20:46 "see if you made mistakes" - the design is 30-SEC pressure bars) one thin bar per 30 s inside
-                // each chart bar (6 per 3-min candle): bought - sold over bought + sold in that 30 s, as in the original design and
-                // the mockup. (1.0.0-1.0.2 drew ONE bar per candle = only the last 30 s, so the colour flipped candle to candle.)
-                // Brightness = how busy those 30 s were vs normal for this time of day; grey = quiet tape (signals off).
+            {   // 30-s pressure bars: 6 per 3-min candle at normal zoom; at low zoom fewer, wider buckets (never overlapping)
                 int span = std::max(1, (int)(ppb * 0.9));
                 int slots=(int)((te-ts+29)/30);
                 slots=std::max(1,std::min(slots,std::max(1,span/2)));
-                // At sufficient zoom, six 30s buckets per 3min candle. At low zoom,
-                // aggregate ALL time into fewer buckets, rather than overlap/omit bars.
                 double sw = (double)span / slots;
                 short xl = (short)(x - span / 2);
                 for (int sl = 0; sl < slots; sl++) {
                     long long a0=ts+(te-ts)*sl/slots, a1=ts+(te-ts)*(sl+1)/slots;
-                    const size_t j0=index.start(a0), j1=index.start(a1); // [a0,a1)
+                    const size_t j0=index.start(a0), j1=index.start(a1);
                     const long double sb=index.buys[j1]-index.buys[j0], ss=index.sells[j1]-index.sells[j0];
                     const size_t nall=j1-j0, nq=index.quality[j1]-index.quality[j0];
                     const size_t na=index.activityCount[j1]-index.activityCount[j0];
                     const long double sa=index.activity[j1]-index.activity[j0];
                     if (!(sb+ss>0)) continue;
                     const double fb=(double)(100*(sb-ss)/(sb+ss));
-                    // (1.1.1) coloured when most of the bucket's seconds have known sides and the tape is not quiet (< 0.5x normal);
-                    // 1.1.0 greyed a bucket if ANY second lacked full signal quality (which also needs the baseline), so the
-                    // whole pane was grey while calibrating and patchy in thin markets.
+                    // coloured when most seconds have known sides and the tape is not quiet (< 0.5x normal); brightness = how busy
                     const bool quiet = na > 0 && (double)(sa / na) < 0.5;
                     const bool good = nall > 0 && nq * 2 >= nall && !quiet;
-                    double al = na ? std::max(0.20, std::min(0.85, 0.20 + 0.30 * (double)(sa / na))) : 0.45;
+                    double al = na ? std::max(0.30, std::min(0.90, 0.30 + 0.30 * (double)(sa / na))) : 0.50;
                     COLOR c = good ? blend(fb >= 0 ? C_BUY : C_SELL, C_BG, al) : blend(C_GRAY, C_BG, 0.6);
                     short x1 = (short)(xl + (int)(sl * sw)), x2 = (short)(xl + (int)((sl + 1) * sw) - (sw >= 3 ? 1 : 0));
                     const long long completedThrough=std::min(a1,H.back().t+1);
@@ -1097,70 +1518,40 @@ void TapeFlow::render()
                 short y = Y(q.f180);
                 const double position=std::max(0.0,std::min(1.0,(double)(q.t+1-ts)/(double)(te-ts)));
                 const short sampleX=(short)(x+(position-0.5)*ppb*0.9);
-                if (px180 >= 0) line(px180, py180, sampleX, y, C_PURPLE, 2);
+                if (px180 >= 0) line(px180, py180, sampleX, y, C_LINE, 2);
                 px180 = sampleX; py180 = y;
             } else px180 = -1;
-            {                                                          // events are in time order: find this bar's by search
-                auto it = std::upper_bound(displayEvents.begin(), displayEvents.end(), ts, [](long long t, const tfl::Ev& e) { return t < e.knownAt; });
-                for (; it != displayEvents.end() && it->knownAt <= te; ++it) marks.push_back(std::make_pair(i, &*it));
+        }
+        // the signals: one letter + a solid arrowhead, bearish in the top band (letter on top, arrowhead pointing down at the tape),
+        // bullish in the bottom band (arrowhead pointing up, letter under it). Never two touching: the stronger one wins the spot.
+        std::vector<tfl::Slot> slots(marks.size());
+        std::vector<std::string> labels(marks.size());
+        for (size_t i = 0; i < marks.size(); ++i) {
+            const tfl::Mark& m = marks[i].first;
+            labels[i] = std::string(1, m.kind) + (m.question() ? "?" : "");
+            const int tw = tinyPane ? 0 : textW(labels[i].c_str(), fs, true);
+            slots[i].x = marks[i].second; slots[i].w = std::max(11, tw) + 2; slots[i].band = m.dir > 0 ? 1 : -1;
+            slots[i].rank = tfl::markRank(m); slots[i].t = m.barT;
+        }
+        tfl::layoutMarks(slots);
+        for (size_t i = 0; i < marks.size(); ++i) {
+            if (!slots[i].show) continue;
+            const tfl::Mark& m = marks[i].first; const short x = marks[i].second;
+            const COLOR c = m.dir > 0 ? C_BUY : C_SELL;
+            if (m.dir < 0) {                                               // top band: letter, then the arrowhead below it
+                if (!tinyPane) { textC(x, (short)(yTopBand + fs / 2 + 3), labels[i].c_str(), c, fs, true, slots[i].w); arrowhead(x, (short)(yInnerTop - 1), false, c, 5, 6); }
+                else arrowhead(x, (short)(yInnerTop - 2), false, c, 4, 6);
+            } else {                                                       // bottom band: the arrowhead, the letter under it
+                if (!tinyPane) { arrowhead(x, (short)(yInnerBot + 1), true, c, 5, 6); textC(x, (short)(B - fs / 2 - 3), labels[i].c_str(), c, fs, true, slots[i].w); }
+                else arrowhead(x, (short)(yInnerBot + 2), true, c, 4, 6);
             }
         }
-        // markers: bullish lane +115, bearish -115, stacked toward the middle when a bar has several
-        std::map<std::pair<int, int>, int> stack;
-        for (auto& m : marks) {
-            const tfl::Ev& v = *m.second;
-            bool sig = v.kind == "AW" || v.kind == "AR" || v.kind == "IN";
-            bool x_ = v.kind == "FAIL" || v.kind == "INVP" || v.kind == "DINV" || v.kind == "EXP";
-            if (!sig && !x_) continue;
-            int lane = v.dir > 0 ? 1 : -1;
-            int k = stack[std::make_pair(m.first, lane)]++;
-            if (k > 3) continue;                                   // the 5th and later are counted below (+n)
-            PNT p; p.set(m.first, 0.0f, kBarCenter); short x = p.h;
-            const long long end=localSec((RTDATE)dt[m.first]);
-            const long long start=end-spb;
-            const double fraction=std::max(0.0,std::min(1.0,(double)(v.knownAt-start)/(double)spb));
-            x=(short)(x+(fraction-0.5)*ppb*0.9);
-            short y = (short)(Y(lane * 115.0) + (lane > 0 ? k * 15 : -k * 15));   // stacked toward the middle
-            const char* q = TF_PROVEN ? "" : "?";
-            if (x_) { textLJ((short)(x - 3), y, "x", C_MUTED, fs + 1, true); continue; }
-            COLOR c = v.kind == "AW" ? C_AMBER : (v.dir > 0 ? C_BUY : C_SELL);
-            triangle(x, y, v.dir > 0, v.kind != "AW", c);
-            std::string lab = (v.kind == "AW" ? "AW" : v.kind == "AR" ? "AR" : "IN") + std::string(q);
-            if (ppb >= 4) textLJ((short)(x + 9), y, lab.c_str(), c, std::max(7, fs - 1), true);
-        }
-        for (auto& kv : stack) if (kv.second > 4) {                // more than 4 in one bar and lane: say how many more
-            PNT p; p.set(kv.first.first, 0.0f, kBarCenter);
-            int lane = kv.first.second; short y = (short)(Y(lane * 115.0) + (lane > 0 ? 4 * 15 : -4 * 15));
-            std::string more = "+" + std::to_string(kv.second - 4);
-            textLJ((short)(p.h - 6), y, more.c_str(), C_MUTED, std::max(7, fs - 1), true);
-        }
     }
-    // the readout: version, the live numbers, the state
-    {
-        const tfl::Feat& f = eng.last;
-        COLOR sc; std::string st = stateText(&sc);
-        char a30[16], a180[16], act[16], sides[16];
-        if (f.f30ok) snprintf(a30, sizeof(a30), "%+.0f", f.f30); else snprintf(a30, sizeof(a30), "-");
-        if (f.f180ok) snprintf(a180, sizeof(a180), "%+.0f", f.f180); else snprintf(a180, sizeof(a180), "-");
-        if (f.aok) snprintf(act, sizeof(act), "%.1fx", f.A); else snprintf(act, sizeof(act), "-");
-        if (f.f30ok || f.c30 > 0) snprintf(sides, sizeof(sides), "%.0f%%", f.c30 * 100); else snprintf(sides, sizeof(sides), "-");
-        std::string head = std::string("TapeFlow ") + TF_VERSION + " " + mkt;
-        int w1 = textW(head.c_str(), fs, true) + 14;
-        std::string p1 = "30s ", p2 = "   180s ", p3 = std::string("   activity ") + act + "   sides " + sides;
-        int wt = w1 + textW(p1.c_str(), fs, false) + textW(a30, fs, true) + textW(p2.c_str(), fs, false) + textW(a180, fs, true) + textW(p3.c_str(), fs, false);
-        int ws = textW(st.c_str(), fs, true);
-        short bwid = (short)(std::max(wt, ws) + 16), bh = (short)(2 * fs + 20);
-        short x0 = (short)(L + 6), y0 = (short)(T + 4);
-        if (x0 + bwid > R - 4) bwid = (short)(R - 4 - x0);
-        RCT bx; bx.set(x0, y0, (short)(x0 + bwid), (short)(y0 + bh)); bx.draw(1, C_GRID, C_BOX, DRAW_OPAQUE, PAT_SOLID);
-        short x = (short)(x0 + 8), yA = (short)(y0 + fs + 6), yB = (short)(y0 + 2 * fs + 14);
-        textLJ(x, yA, head.c_str(), C_INK, fs, true); x = (short)(x + w1);
-        textLJ(x, yA, p1.c_str(), C_INK, fs, false); x = (short)(x + textW(p1.c_str(), fs, false));
-        textLJ(x, yA, a30, f.f30ok ? (f.f30 >= 0 ? C_BUY : C_SELL) : C_MUTED, fs, true); x = (short)(x + textW(a30, fs, true));
-        textLJ(x, yA, p2.c_str(), C_INK, fs, false); x = (short)(x + textW(p2.c_str(), fs, false));
-        textLJ(x, yA, a180, f.f180ok ? (f.f180 >= 0 ? C_BUY : C_SELL) : C_MUTED, fs, true); x = (short)(x + textW(a180, fs, true));
-        textLJ(x, yA, p3.c_str(), C_INK, fs, false);
-        textLJ((short)(x0 + 8), yB, st.c_str(), sc, fs, true);
+    // the fallback: IRT did not re-read the header title -> the same text, one small grey line at the top-left (no box)
+    if (fallback) {
+        std::string t; { std::lock_guard<std::mutex> g(S().titleMx); t = S().title; }
+        if (t.empty()) t = std::string("TF ") + tfl::shortVersion(TF_VERSION) + " " + mkt;
+        textLJ((short)(L + 6), (short)(T + fs + 3), t.c_str(), C_GRAY, fs, false);
     }
 }
 
@@ -1170,8 +1561,9 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | NO_UI);                             // its own pane (no OVERLAY), draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);
-    std::string d = std::string("LRA TapeFlow ") + TF_FIXED + ": who is hitting the tape (30 s bars, 180 s line), absorption watches (AW), "
-                    "responses (AR) and initiative (IN), all from IRT's own trades. Put it on the " + TF_FIXED + " chart only. '?' = not proven yet.";
+    std::string d = std::string("LRA TapeFlow ") + TF_FIXED + " " + TF_VERSION + ": who is hitting the tape - 30-s pressure bars and the 180-s line - with "
+                    "one-letter signals: P push, E exhaustion, A absorption, F flip (green = bullish, red = bearish, '?' until confirmed). "
+                    "Signals are decided on closed bars only and never change. Put it on the " + TF_FIXED + " chart only.";
     static std::string desc; desc = d;
     p->setDescription(desc.c_str());
     p->setVersion(TF_VERSION);

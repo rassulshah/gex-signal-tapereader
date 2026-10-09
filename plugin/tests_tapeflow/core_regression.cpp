@@ -177,7 +177,7 @@ static void sessionsAndInvariance() {
     a.advanceTo(6000);for(int t=5260;t<=6000;++t)b.advanceTo(t);CHECK(a.hist.size()==b.hist.size()&&a.evs.size()==b.evs.size()&&a.warmN==0&&b.warmN==0);
     CHECK(a.add(tick(6001))&&b.add(tick(6001)));a.advanceTo(6001);b.advanceTo(6001);CHECK(!a.last.quoteOk&&!b.last.quoteOk&&a.lastClass==b.lastClass);
     Engine halted;halted.setFixedBase(baseline());feed(halted,17*3600-10,2);halted.advanceTo(17*3600+100000000LL);CHECK(!halted.open&&halted.stopped&&halted.hist.size()<=10);CHECK(halted.add(tick(17*3600+100000001LL)));halted.advanceTo(17*3600+100000001LL);CHECK(!halted.last.quoteOk&&halted.warmN==0);
-    Store windows;Engine w;w.attach(&windows,"ES");long long start=17*3600+86400*20;feed(w,start,61);w.flushSession();CHECK(windows[sessionOf(start)]["ES"].size()==2); // first window lacks carried first-second quote
+    Store windows;Engine w;w.attach(&windows,"ES");long long start=17*3600+86400*20;feed(w,start,61);w.flushSession();CHECK(windows[sessionOf(start)]["ES"].size()==3); // (1.1.5) the first window counts too: no continuous-quote-path requirement for baseline windows
     for(const Win& v:windows[sessionOf(start)]["ES"])CHECK(identified(v));
 }
 
