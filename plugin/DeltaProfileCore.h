@@ -31,7 +31,8 @@ struct State {
     std::string code;
     bool support;
     int peakBar;
-    State() : support(false), peakBar(-1) {}
+    int decidedBar;   // (2.5.0) the bar whose close decided it (-1 = undecided)
+    State() : support(false), peakBar(-1), decidedBar(-1) {}
     bool valid() const { return !code.empty(); }
 };
 struct Bucket {
@@ -107,51 +108,18 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     out.peakBar = bars[static_cast<std::size_t>(peak)].index;
     const double lo = static_cast<double>(low) * tick, hi = static_cast<double>(high) * tick;
     const double eps = tick * 1e-6;
-    const std::int64_t holdSeconds = 15 * 60;
-    struct Pending {
-        int start;
-        bool hasClose, emitted;
-        Pending() : start(-1), hasClose(false), emitted(false) {}
-        void reset() { start = -1; hasClose = false; emitted = false; }
-    } up, down;
-    int winner = 0; // +1 upward, -1 downward, 0 unresolved/invalidated
+    // (2.5.0, Rassul 2026-10-09 13:48 "lets simplify the rules to a close below the bearish accumulation and vice versa for
+    // bullish") the FIRST closed bar after the node formed that closes beyond it decides, and the decision is final:
+    //   close below the node -> price went down from it;  close above -> price went up from it.
+    // A heavy-BUYING node that sees a close below = A (buyers absorbed, bearish); a close above = I (buyers won).
+    // A heavy-SELLING node: close above = A (sellers absorbed, bullish); close below = I (sellers won).
+    // A forming (unclosed) bar never decides.
+    int winner = 0; // +1 upward, -1 downward, 0 undecided
     for (std::size_t i = static_cast<std::size_t>(formed + 1); i < bars.size(); ++i) {
         const Bar& b = bars[i];
-        const bool upBreach = b.low < hi - 3 * tick - eps;
-        const bool downBreach = b.high > lo + 3 * tick + eps;
-        // (2.4.2) A confirmed result is STICKY, as in lra.delta_profile (the nightly studies' reference): a later
-        // retest that trades back into the node does not undo it; only a move the OTHER way that itself holds 15 min
-        // (with a close past the node) flips it (A -> I "a held node can still fail later").
-        // A forming candle may invalidate a hold, but never establish one.
-        if (up.start >= 0 && upBreach) up.reset();
-        if (down.start >= 0 && downBreach) down.reset();
         if (!b.closed) continue;
-        const bool upGo = b.high >= hi + 4 * tick - eps;
-        const bool downGo = b.low <= lo - 4 * tick + eps;
-        const bool ambiguous = upGo && downGo; // OHLC cannot establish intrabar ordering
-        if (!ambiguous) {
-            if (up.start < 0 && upGo) up.start = static_cast<int>(i);
-            if (down.start < 0 && downGo) down.start = static_cast<int>(i);
-        }
-        bool upConfirmed = false, downConfirmed = false;
-        if (up.start >= 0) {
-            up.hasClose = up.hasClose || b.close > hi + eps;
-            if (!up.emitted && up.hasClose && b.time - bars[static_cast<std::size_t>(up.start)].time >= holdSeconds) {
-                upConfirmed = true; up.emitted = true;
-            }
-        }
-        if (down.start >= 0) {
-            down.hasClose = down.hasClose || b.close < lo - eps;
-            if (!down.emitted && down.hasClose && b.time - bars[static_cast<std::size_t>(down.start)].time >= holdSeconds) {
-                downConfirmed = true; down.emitted = true;
-            }
-        }
-        // (2.4.2) I is final, as in the reference: only A can still fail later (A -> I), never I -> A.
-        const int initiativeWay = sell ? -1 : 1;
-        if (winner == initiativeWay) continue;
-        if (upConfirmed && downConfirmed) winner = 0;
-        else if (upConfirmed) winner = 1;
-        else if (downConfirmed) winner = -1;
+        if (b.close < lo - eps) { winner = -1; out.decidedBar = b.index; break; }
+        if (b.close > hi + eps) { winner = 1; out.decidedBar = b.index; break; }
     }
     if (winner != 0) {
         out.code = ((winner == 1) == sell) ? "A" : "I";

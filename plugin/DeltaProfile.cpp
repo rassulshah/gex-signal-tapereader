@@ -46,7 +46,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.4.3";   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.0";   // (2.5.0) confirmation = the first 3-min close beyond the node (no 15-min hold); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -129,6 +129,11 @@ static double marketTick(const std::string& m) {
     return m == "ES" || m == "NQ" ? 0.25 : m == "CL" ? 0.01 : m == "NG" ? 0.001 : m == "GC" ? 0.1 :
            m == "HG" ? 0.0005 : m == "EU" ? 0.00005 : 0.0;
 }
+// (2.5.0, Rassul 2026-10-09 13:44 "why does the code change signals and take away the circle once the rules have been
+// satisfied") a decided signal is written to this session's record and never undone by the sliding 90-min profile:
+// later builds that see the same price zone undecided show the recorded result, and an absorption's circle stays
+// drawn even when the node drops out of the profile. Cleared at the 17:00 session change.
+struct Latch { dp::Tick low, high; std::string code; bool support; int peakBar; double price; };
 struct ChartState {
     std::string identity, root, market, asof, state;
     Layout layout;
@@ -140,6 +145,7 @@ struct ChartState {
     long long settingsStamp;
     int dealerReach, drawnRows, missingVap, vapMismatch;
     bool dirty, faulted, ready, shortHistory, coarseBoundary;
+    std::vector<Latch> latches; long long latchSession = -1;
     ChartState() : barCount(0), latestStamp(0), firstStamp(0), tick(0), builtAt(-1),
         statusAt(-1), dealerAt(-1), settingsAt(-1), touchedAt(-1), settingsStamp(-2),
         dealerReach(0), drawnRows(0), missingVap(0), vapMismatch(0), dirty(true), faulted(false), ready(false), shortHistory(false), coarseBoundary(false) {}
@@ -448,6 +454,33 @@ bool DeltaProfile::buildNative(ChartState& s) {
     s.coarseBoundary = coarseBar;
     dp::Snapshot candidate = dp::build(bars, tick, !s.shortHistory && !coarseBar);
     if (candidate.buckets.empty()) { s.ready = false; s.state = "no native volume at price"; return false; }
+    {   // (2.5.0) the session record: lock decided signals, restore them where the sliding profile shows them undecided
+        const long long sess = (bars.back().time - 17LL * 3600 + 86400LL * 4) / 86400LL;
+        if (sess != s.latchSession) { s.latches.clear(); s.latchSession = sess; }
+        auto decided = [](const std::string& c) { return !c.empty() && c.back() != '?'; };
+        auto lockOrRestore = [&](dp::Tick lo, dp::Tick hi, std::string& code, bool& support, int peakBar, double price) {
+            Latch* hit = NULL;
+            // the same zone = overlapping prices AND the same aggressor (heavy buying vs heavy selling)
+            auto sellNode = [](const std::string& c, bool sup) { return c[0] == 'A' && c.compare(0, 3, "Acc") != 0 ? sup : c[0] == 'I' ? !sup : c.compare(0, 3, "Dst") == 0; };
+            const bool mySell = !code.empty() && sellNode(code, support);
+            for (std::size_t k = 0; k < s.latches.size(); ++k)
+                if (s.latches[k].low <= hi && lo <= s.latches[k].high && sellNode(s.latches[k].code, s.latches[k].support) == mySell) { hit = &s.latches[k]; break; }
+            if (hit) { code = hit->code; support = hit->support; return; }          // recorded: never undone
+            if (decided(code) && s.latches.size() < 200) {
+                Latch L; L.low = lo; L.high = hi; L.code = code; L.support = support; L.peakBar = peakBar; L.price = price;
+                s.latches.push_back(L);
+            }
+        };
+        const dp::Tick tpr = candidate.ticksPerRow;
+        for (std::size_t k = 0; k < candidate.nodes.size(); ++k) {
+            dp::Node& n = candidate.nodes[k];
+            lockOrRestore(n.bucket * tpr, n.bucket * tpr + tpr - 1, n.state.code, n.state.support, n.state.peakBar, n.price);
+        }
+        for (std::size_t k = 0; k < candidate.zones.size(); ++k) {
+            dp::Zone& z = candidate.zones[k];
+            lockOrRestore(z.low, z.high, z.code, z.support, z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * tick);
+        }
+    }
     s.snapshot = std::move(candidate); s.ready = true;
     s.state = s.shortHistory ? "short chart history: provisional signals" : coarseBar ?
         "boundary bar crosses window: provisional signals" : "ready";
@@ -569,12 +602,13 @@ bool DeltaProfile::render(ChartState& s) {
     // Native key/bucket lookup only. Pixel Y NEVER assigns a node to a bucket.
     std::sort(nodes.begin(), nodes.end(), [](const VisibleNode& a, const VisibleNode& b) { return a.y < b.y; });
     std::vector<int> used;
+    std::vector<int> ringed;   // (2.5.0) bars already circled this pass
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const VisibleNode& v = nodes[i]; const dp::Node& n = *v.node;
         // (2.4.3, Rassul 2026-10-09 08:24 "are you making sure that you draw circles wherever there is absorption on the irt chart")
         // the circle goes on the bar where the absorption happened for EVERY absorbing node, even when its letter does not fit
         if ((n.state.code == "A" || n.state.code == "A?") && n.state.peakBar >= 0 && n.state.peakBar < s.barCount)
-            ringAt(n.state.peakBar, n.price, n.state.support ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
+            ringed.push_back(n.state.peakBar), ringAt(n.state.peakBar, n.price, n.state.support ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
         const bool absorbing = n.state.code == "A" || n.state.code == "A?";
         std::string label = n.state.code + " " + ratio(n.ratio);
         int width = textWidth(label, s.layout.font, true);
@@ -592,7 +626,7 @@ bool DeltaProfile::render(ChartState& s) {
     for (std::size_t i = 0; i < profile.zones.size(); ++i) {
         const dp::Zone& z = profile.zones[i];
         if ((z.code == "A" || z.code == "A?") && z.peakBar >= 0 && z.peakBar < s.barCount)       // (2.4.3) zone absorption gets its circle too
-            ringAt(z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * profile.tick, z.support ? C_SUPPORT : C_RESISTANCE,
+            ringed.push_back(z.peakBar), ringAt(z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * profile.tick, z.support ? C_SUPPORT : C_RESISTANCE,
                    pane.left, paneRight, top, bottom);
         int yt = yOf(lastBar, (static_cast<double>(z.high) + 0.5) * profile.tick);
         int yb = yOf(lastBar, (static_cast<double>(z.low) - 0.5) * profile.tick);
@@ -626,6 +660,14 @@ bool DeltaProfile::render(ChartState& s) {
         stroke(e - 4, yb, e - 1, yb, color, 1);
         textRight(e - 7, y, label, color, s.layout.font, true); used.push_back(y);
     }
+    // (2.5.0) a recorded absorption keeps its circle for the session, even after its node left the sliding profile
+    for (std::size_t k = 0; k < s.latches.size(); ++k) {
+        const Latch& L = s.latches[k];
+        if (L.code != "A" || L.peakBar < 0 || L.peakBar >= s.barCount) continue;
+        if (std::find(ringed.begin(), ringed.end(), L.peakBar) != ringed.end()) continue;
+        ringed.push_back(L.peakBar);
+        ringAt(L.peakBar, L.price, L.support ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
+    }
     return true;
 }
 void DeltaProfile::status(ChartState& s) {
@@ -640,6 +682,8 @@ void DeltaProfile::status(ChartState& s) {
         << "\nBADGE,\nWIDTH," << s.layout.width << "\nSIDES,One\nFACE,Left\nPLACE,Right\nSTATE," << safeField(s.state)
         << "\nTICK," << std::setprecision(12) << s.tick << "\nMISSING_VAP_BARS," << s.missingVap
         << "\nVAP_MISMATCH," << s.vapMismatch << '\n';
+    for (std::size_t k = 0; k < s.latches.size(); ++k)   // (2.5.0) the session record: what was decided, where (for ChartView and the nightly scoring)
+        out << "SIGNAL," << s.latches[k].code << "," << (s.latches[k].support ? "support" : "resistance") << "," << s.latches[k].low * s.tick << "," << s.latches[k].high * s.tick << ",bar " << s.latches[k].peakBar << '\n';
     atomicWrite(directory + "DeltaProfile.status.txt", out.str());
 }
 int DeltaProfile::draw() {

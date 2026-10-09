@@ -29,54 +29,33 @@ int main() {
     test("buy absorption is mirrored downward", [] { State s = classify(held(false,false),100,100,100,1); check(s.code == "A" && !s.support,"wrong mirrored A"); });
     test("sell initiative confirmed downward", [] { State s = classify(held(true,false),100,100,-100,1); check(s.code == "I" && !s.support,"wrong I"); });
     test("buy initiative confirmed upward", [] { State s = classify(held(false,true),100,100,100,1); check(s.code == "I" && s.support,"wrong mirrored I"); });
-    test("899 seconds cannot confirm", [] { check(classify(held(true,true,899),100,100,-100,1).code == "A?","early confirm"); });
-    test("forming candle cannot complete a hold", [] { check(classify(held(true,true,900,false),100,100,-100,1).code == "A?","forming confirm"); });
-    test("elapsed time not final two-bar frequency", [] {
-        std::vector<Bar> b = held(true,true,60);
-        b.push_back(candle(3,180,100,105,104)); b.push_back(candle(4,480,100,105,104));
-        check(classify(b,100,100,-100,1).code == "A?","guessed frequency confirmed too soon");
+    // (2.5.0) the FIRST closed bar beyond the node decides - no 15-minute hold - and the decision is final
+    test("(2.5.0) one closed bar beyond the node confirms at once", [] {
+        std::vector<Bar> b = held(true,true,60); b.resize(2);
+        State s = classify(b,100,100,-100,1); check(s.code == "A" && s.support && s.decidedBar == 1,"close above did not confirm sell absorption");
     });
-    test("held move needs close after candidate begins", [] {
-        std::vector<Bar> b = held(true,true);
-        b[1].close = 100; b[2].close = 100;
-        check(classify(b,100,100,-100,1).code == "A?","no winning close");
+    test("(2.5.0) bearish: a close below a heavy-BUYING node = A (buyers absorbed)", [] {
+        std::vector<Bar> b; Bar seed = candle(0,0,99,101,100); seed.rows.push_back(Row(100,100,100)); b.push_back(seed);
+        b.push_back(candle(1,180,98,101,99));
+        State s = classify(b,100,100,100,1); check(s.code == "A" && !s.support,"close below buying node not bearish A");
     });
-    test("hold tolerance breached resets timer", [] {
-        std::vector<Bar> b = held(true,true);
-        b.insert(b.begin()+2,candle(2,600,96,101,100)); b[3].index = 3;
-        check(classify(b,100,100,-100,1).code == "A?","breached hold counted");
+    test("(2.5.0) a forming bar beyond the node does not decide", [] {
+        std::vector<Bar> b = held(true,true,60); b.resize(2); b[1].closed = false;
+        check(classify(b,100,100,-100,1).code == "A?","forming bar decided");
     });
-    test("exact three-tick tolerance remains held", [] {
-        std::vector<Bar> b = held(true,true); b[2].low = 97;
-        check(classify(b,100,100,-100,1).code == "A","tolerance boundary rejected");
+    test("(2.5.0) a close back inside / at the node edge does not decide", [] {
+        std::vector<Bar> b = held(true,true,60); b.resize(2); b[1].close = 100;
+        check(classify(b,100,100,-100,1).code == "A?","close at node decided");
     });
-    test("(2.4.2) a later retest INTO the node keeps a confirmed A (lra.delta_profile reference)", [] {
-        std::vector<Bar> b = held(true,true); b.push_back(candle(3,1020,96,101,99));
-        check(classify(b,100,100,-100,1).code == "A","retest undid A");
+    test("(2.5.0) the decision is final: a later close on the other side does not change it", [] {
+        std::vector<Bar> b = held(true,true,60); b.resize(2);
+        b.push_back(candle(2,360,95,101,96)); b.push_back(candle(3,540,94,99,95));
+        check(classify(b,100,100,-100,1).code == "A","later opposite close changed a decided A");
     });
-    test("(2.4.2) a forming bar retest keeps a confirmed A", [] {
-        std::vector<Bar> b = held(true,true); b.push_back(candle(3,1020,96,101,99,false));
-        check(classify(b,100,100,-100,1).code == "A","forming retest undid A");
-    });
-    test("(2.4.2) a confirmed I stays I when price later holds back through the node (reference: only A can fail)", [] {
-        std::vector<Bar> b = held(true,false);                       // sell node, price held DOWN = I
-        b.push_back(candle(3,1020,100,106,105)); b.push_back(candle(4,1980,101,106,105)); b.push_back(candle(5,2100,101,106,105));
-        check(classify(b,100,100,-100,1).code == "I","I flipped to A");
-    });
-    test("(2.4.2) an unheld break below does not flip A to I", [] {
-        std::vector<Bar> b = held(true,true); b.push_back(candle(3,1020,90,101,94)); b.push_back(candle(4,1080,95,103,102));
-        check(classify(b,100,100,-100,1).code == "A","unheld break flipped");
-    });
-    test("later held opposite move supersedes absorption", [] {
-        std::vector<Bar> b = held(true,true);
-        b.push_back(candle(3,1020,95,101,96)); b.push_back(candle(4,1920,95,101,96));
-        check(classify(b,100,100,-100,1).code == "I","later I not resolved");
-    });
-    test("ambiguous two-sided OHLC move is not arbitrarily upward", [] {
-        std::vector<Bar> b = held(true,true); b[1].low=95; b[1].high=105;
-        b[2]=candle(2,960,98,102,101);
-        const std::string code = classify(b,100,100,-100,1).code;
-        check(code != "A" && code != "I","OHLC ordered without evidence");
+    test("(2.5.0) the first decisive close wins over later ones (I stays I)", [] {
+        std::vector<Bar> b = held(true,false,60); b.resize(2);   // sell node, closes below = I
+        b.push_back(candle(2,360,100,106,105));
+        check(classify(b,100,100,-100,1).code == "I","I flipped");
     });
     test("formation restarts at last material contribution", [] {
         std::vector<Bar> b = held(true,true); b[2].rows.push_back(Row(100,-20,20));
@@ -133,7 +112,7 @@ int main() {
     test("zone classification excludes older 90-minute contributor", [] {
         Bar old=candle(0,0,90,130,100); old.rows={Row(100,200,200),Row(101,200,200)};
         Bar recent=candle(1,2000,90,130,100); recent.rows={Row(100,50,50),Row(101,50,50),Row(110,1,1),Row(120,-1,1),Row(130,-1,1)};
-        Bar last=candle(2,4000,100,110,105);
+        Bar last=candle(2,4000,100,110,100);   // (2.5.0) closes inside the zone: undecided
         Snapshot s=build(std::vector<Bar>{old,recent,last},1);
         check(!s.zones.empty() && s.zones[0].code=="Acc?","older bar polluted zone state");
     });

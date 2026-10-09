@@ -130,6 +130,21 @@ int main(){
         std::vector<dp::Node> before=state(h).snapshot.nodes;int calls=h.rowCalls;h.paneBottom+=70;h.draws.clear();p.draw();
         check(h.rowCalls==calls && state(h).snapshot.nodes[0].bucket==before[0].bucket && state(h).snapshot.nodes[0].state.code==before[0].state.code,"scroll changed signal");cleanup(p,h);
     });
+    test("2.5.0: a decided absorption keeps its circle after its node leaves the sliding 90-min profile",[]{
+        mock::Host h=history(110,60);
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}
+        h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        mock::current=&h;DeltaProfile p;p.draw();
+        check(!state(h).latches.empty() && state(h).latches[0].code=="A","decided A not recorded");
+        mock::Bar last=h.bars.back();
+        for(int i=0;i<60;++i){mock::Bar b=last;b.time=last.time+static_cast<unsigned long>((i+1)*60);h.bars.push_back(b);}
+        h.draws.clear();p.draw();
+        bool nodeGone=true;for(const dp::Node& n:state(h).snapshot.nodes) if(n.state.peakBar==40) nodeGone=false;
+        int rings=0;for(const mock::Draw& d:h.draws) if(d.type=="ring") ++rings;
+        check(nodeGone,"fixture: node still in window");
+        check(rings>=1,"circle vanished with the node (repaint)");cleanup(p,h);
+    });
     test("initiative letter never receives a circle",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(80,1,0,1),mock::Price(81,1,0,1),mock::Price(82,1,0,1),mock::Price(83,1,0,1),mock::Price(84,1,0,1)};b.volume=5;b.low=79;b.high=100;b.open=96;b.close=96;}
