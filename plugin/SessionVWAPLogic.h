@@ -16,6 +16,7 @@
 // pRTH = the final RTH VWAP of the latest earlier session that had one, drawn on overnight bars only.
 #pragma once
 #include <cmath>
+#include "OnTouchLogic.h"
 #include <vector>
 
 namespace svl {
@@ -130,5 +131,8 @@ inline Result run(const std::vector<Bar>& B, int per, int openMin, int closeMin,
     }
     return R;
 }
+
+using otl::onSigmaMin;
+using otl::onTouch;
 
 } // namespace svl

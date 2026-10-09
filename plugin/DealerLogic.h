@@ -27,6 +27,7 @@
  ********************************************************************************/
 #pragma once
 #include <string>
+#include <cstring>
 #include <sys/stat.h>
 #include <vector>
 #include <fstream>
@@ -426,6 +427,28 @@ inline double staleMin(double asofSo, double localSo)
     if (asofSo < 0) return 0;
     double d = localSo - asofSo; if (d < -600) d += 86400; if (d < 0) d = 0;
     return d / 60.0;
+}
+
+// (2026-10-08 22:25) Is the chart on the contract MenthorQ's strikes are priced on (the file's SYMBOL)? His charts use both
+// dated symbols (EPZ26, CLEX26, CPEZ26) and continuous ones (NQ, QGC = the front contract, no month code). The same symbol, or
+// a continuous chart of the same market, is the same contract: strikes are drawn exactly. Only two DIFFERENT dated contracts
+// (e.g. EPH27 during the roll while the file is on EPZ26) are a real spread to shift by.
+inline bool hasMonthCode(const std::string& s)
+{
+    size_t n = s.size();
+    if (n < 3) return false;
+    char m = (char)toupper((unsigned char)s[n - 3]);
+    return std::strchr("FGHJKMNQUVXZ", m) != nullptr && isdigit((unsigned char)s[n - 2]) && isdigit((unsigned char)s[n - 1]);
+}
+inline bool sameContract(const std::string& chartRoot, const std::string& fileSym)
+{
+    if (chartRoot.empty() || fileSym.empty()) return false;
+    std::string a, b;
+    for (char ch : chartRoot) a += (char)toupper((unsigned char)ch);
+    for (char ch : fileSym) b += (char)toupper((unsigned char)ch);
+    if (a == b) return true;
+    if (marketForRoot(a).empty() || marketForRoot(a) != marketForRoot(b)) return false;
+    return !hasMonthCode(a);                                  // a continuous chart is the front contract
 }
 
 // Contract offset: the chart may be another contract than MenthorQ's front future. Offset = the chart's close at the

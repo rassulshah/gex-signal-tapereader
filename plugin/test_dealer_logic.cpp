@@ -74,6 +74,12 @@ int main()
     CHECK(dl::offsetFor(7822.5f, 7820.25f, off, 63.6f) && off == 0, "ES +2.25 snapshot noise: no shift");
     CHECK(dl::offsetFor(7880.0f, 7820.25f, off, 63.6f) && std::fabs(off - 59.75f) < 0.01f, "a roll-sized gap (ES ~60) is still a contract spread");
     { dl::Data Dz; CHECK(dl::parseLine(Dz, "SYMBOL|ENQZ26") && Dz.chartSym == "ENQZ26", "SYMBOL names the contract the levels are priced on"); }
+    // (22:25) his real chart roots: NQ continuous "NQ", gold "QGC" - the front contract, so strikes are drawn exactly
+    CHECK(dl::sameContract("EPZ26", "EPZ26") && dl::sameContract("NQ", "ENQZ26") && dl::sameContract("QGC", "GCEZ26"), "same symbol or a continuous chart of the market = same contract");
+    CHECK(dl::sameContract("CPEZ26", "CPEZ26") && dl::sameContract("CLEX26", "CLEX26") && dl::sameContract("NGEX26", "NGEX26") && dl::sameContract("EU6Z26", "EU6Z26"), "CL / HG / NG / EU dated charts match irt_symbols.json");
+    CHECK(!dl::sameContract("EPH27", "EPZ26") && !dl::sameContract("ENQH27", "ENQZ26"), "another dated month is a real spread (shifted)");
+    CHECK(!dl::sameContract("NQ", "EPZ26") && !dl::sameContract("", "EPZ26") && !dl::sameContract("NQ", ""), "another market / missing symbol is never 'same'");
+    CHECK(dl::hasMonthCode("EPZ26") && dl::hasMonthCode("CLEX26") && !dl::hasMonthCode("NQ") && !dl::hasMonthCode("QGC"), "month code detection");
     // scale and fit
     float gm = 0, dm = 0; dl::scales(D, gm, dm);
     CHECK(gm >= 44.0f && dm >= 63.0f, "the scale covers the 4215 whisker and its delta");

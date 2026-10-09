@@ -53,7 +53,7 @@
 #include <limits>
 #include <new>
 
-static const char* SV_VERSION = "1.2.0";        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.3.0";        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
 static const COLOR C_SD1  = 0x00C0DCC0;   // +-1 SD pale green
 static const COLOR C_SD2  = 0x00F0CAA6;   // +-2 SD peach
@@ -396,12 +396,28 @@ int SessionVWAP::draw(void)
             odds = true;
         }
     }
+    // (1.3.0) overnight: the odds from the chart's own last 20 closes (svl::onSigmaMin / onTouch), shown "42%?"
+    bool onOdds = false;
+    if (on && v[0] > 0 && last >= 20) {
+        double cl20[21]; int k = 0;
+        for (int i = last - 20; i <= last; i++) cl20[k++] = (double)clN[i];
+        double sg = svl::onSigmaMin(cl20, k, S->per > 0 ? S->per : 180);
+        if (sg > 0) {
+            for (int j = 0; j < 5; j++) {
+                if (!(v[j] > 0)) continue;
+                double pr = svl::onTouch((double)v[j] - (double)clN[last], sg);
+                if (pr >= 0) pv[j] = (int)std::floor(100.0 * pr + 0.5);
+            }
+            onOdds = true;
+        }
+    }
     const COLOR col[6] = { C_VWAP, C_SD1, C_SD1, C_SD2, C_SD2, C_PRTH };
     // (1.2.0, Rassul 22:32 "the vwap should not show labels like that.. i told you how i want the labels") the badge is
     // just the percentage, "42%" - RTH only, where the odds exist. Overnight and after the close: the lines, no badges.
     char txt[6][16];
     for (int j = 0; j < 6; j++) txt[j][0] = 0;
     if (odds) for (int j = 0; j < 5; j++) if (v[j] > 0 && pv[j] >= 0) snprintf(txt[j], sizeof(txt[j]), "%d%%", pv[j]);
+    if (onOdds) for (int j = 0; j < 5; j++) if (v[j] > 0 && pv[j] >= 0) snprintf(txt[j], sizeof(txt[j]), "%d%%?", pv[j]);
     RCT pane; pane.getPaneRect(false);
     FONT f; f.id = HELVETICA; f.size = (short)fontPt; f.style = BOLD; setFont(f);
     std::vector<std::pair<short, int>> ys;                              // badge y, line index - placed top to bottom without overlap

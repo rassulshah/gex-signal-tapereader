@@ -1,6 +1,7 @@
 // lsSessionVWAP 1.2.0 session rules (SessionVWAPLogic.h) - the day and the overnight for every market he trades.
 #include "SessionVWAPLogic.h"
 #include <cstdio>
+#include <cmath>
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) passes++; else { fails++; printf("FAIL %s (line %d)\n", m, __LINE__); } } while (0)
 int main()
@@ -52,6 +53,16 @@ int main()
     CHECK(out[4 * 11 + 5] == 200.0f, "zero-volume bar carries the O/N VWAP");
     CHECK(out[5 * 11 + 5] == 203.0f && out[5 * 11 + 10] == 101.0f, "O/N VWAP across midnight = 203");
     CHECK(out[6 * 11 + 0] == 300.0f && out[6 * 11 + 5] == 0.0f && out[6 * 11 + 10] == 0.0f, "RTH restarts at the open; O/N and pRTH lines end");
+    // (1.3.0) overnight odds = lra.on_vwap_study p_touch (V = sigma^2 x 60)
+    CHECK(std::fabs(onTouch(5, 0.6) - 0.26289409668390906) < 1e-9, "onTouch(5, 0.6) matches the study");
+    CHECK(std::fabs(onTouch(-12, 0.6) - 0.026167324043041607) < 1e-9, "onTouch(-12, 0.6) matches the study");
+    CHECK(std::fabs(onTouch(0.5, 0.2) - 0.7178343256057438) < 1e-9, "onTouch(0.5, 0.2) matches the study");
+    CHECK(std::fabs(onTouch(30, 1.5) - 0.0261673240430416) < 1e-9, "onTouch(30, 1.5) matches the study");
+    { double c[21]; for (int i = 0; i < 21; i++) c[i] = 100 + ((i % 2) ? 0.5 : -0.5);
+      CHECK(std::fabs(onSigmaMin(c, 21, 180) - 1.0 / std::sqrt(3.0)) < 1e-9, "sigma per minute from 20 three-minute closes");
+      CHECK(onSigmaMin(c, 10, 180) == 0.0, "too few closes: no odds");
+      c[20] = NAN; CHECK(onSigmaMin(c, 21, 180) == 0.0, "a bad close: no odds"); }
+    CHECK(onTouch(0.0, 0.0) == 1.0 && onTouch(1.0, 0.0) == 0.0 && onTouch(NAN, 1.0) < 0, "edge cases");
     printf("%d passed, %d failed\n", passes, fails);
     return fails;
 }
