@@ -56,6 +56,7 @@ call :one TapeFlowGC lsTapeFlowGC TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
 call :one TapeFlowHG lsTapeFlowHG TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
 call :one TapeFlowNG lsTapeFlowNG TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
 call :one TapeFlowEU lsTapeFlowEU TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
+call :one ChartView    lsChartView    ChartViewLogic.h HostSlot.h DealerLogic.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 

@@ -49,7 +49,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.7.0";   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.7.1";   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -869,6 +869,29 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
     return K.v;
 }
 
+// (2.7.1, Rassul 2026-10-09 09:12) key-level colours from his SessionPrices settings: Prev Full = teal, Prev Day = orange,
+// Prev Week = blue, Overnight = grey; London keeps amber, the hourly swings purple. A merged label takes its first name's colour.
+static COLOR klColor(const std::string& name, bool pivotOnly)
+{
+    if (pivotOnly) return (COLOR)0x00C084FC;
+    std::string f = name.substr(0, name.find('/'));
+    if (f == "PFH" || f == "PFL") return (COLOR)0x00008A8A;
+    if (f == "PDH" || f == "PDL") return (COLOR)0x00FFA500;
+    if (f == "PWH" || f == "PWL") return (COLOR)0x000000FF;
+    if (f == "ONH" || f == "ONL") return (COLOR)0x00808080;
+    return (COLOR)0x00F59E0B;
+}
+// "33%/50%?" -> "33%  /  50%?" (two spaces each side of the slash between the odds; names are not touched)
+static std::string spacedOdds(const std::string& o)
+{
+    std::string r; r.reserve(o.size() + 8);
+    for (size_t i = 0; i < o.size(); i++) {
+        if (o[i] == '/' && r.find_last_not_of(' ') != std::string::npos && r[r.find_last_not_of(' ')] == '%') { while (!r.empty() && r.back() == ' ') r.pop_back(); r += "  /  "; while (i + 1 < o.size() && o[i + 1] == ' ') i++; }
+        else r += o[i];
+    }
+    return r;
+}
+
 void DealerProfile::drawKeyLevels(const Settings& S)
 {
     // (2.7.0, Rassul 2026-10-09 08:40 "it would probably be better if the dealer profile did all the levels and their probabilities")
@@ -898,7 +921,7 @@ void DealerProfile::drawKeyLevels(const Settings& S)
     for (const klv::Merged& q : L) {
         PNT pp; pp.set((int)(nb - 1), (float)q.price); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) continue;
-        COLOR col = q.pivotOnly ? (COLOR)0x00C084FC : (COLOR)0x00F59E0B;
+        COLOR col = klColor(q.name, q.pivotOnly);                      // (2.7.1) his SessionPrices colours
         line(pane.left, y, pane.right, y, col, 1);
         std::string odds; bool pick = false;
         const LV* lv = levelAt(mkt, (float)q.price);                // the LRA's champion odds (fresh file only)
@@ -907,13 +930,15 @@ void DealerProfile::drawKeyLevels(const Settings& S)
             double pr = otl::onTouch(q.price - lastC, onSig, 60, op.nu, op.k);
             if (pr >= 0) { char a[24]; snprintf(a, sizeof(a), op.ready ? "1h %d%%" : "1h %d%%?", (int)std::floor(100.0 * pr + 0.5)); odds = a; }
         }
-        char b[200]; snprintf(b, sizeof(b), "%s%s%s", q.name.c_str(), odds.empty() ? "" : " ", odds.c_str());
-        int tw = textW(b, fs - 1, false) + 10; short hh = (short)(fs + 6);
+        odds = spacedOdds(odds);                                      // (2.7.1) "33%  /  50%"
+        char b[200]; snprintf(b, sizeof(b), "%s%s%s", q.name.c_str(), odds.empty() ? "" : "  ", odds.c_str());
+        const int kf = fs + 1;                                         // (2.7.1) slightly bigger font
+        int tw = textW(b, kf, false) + 10; short hh = (short)(kf + 6);
         short r = right, lft = (short)(r - tw), t = (short)(y - hh / 2), bt = (short)(y + hh / 2);
         box(lft, t, r, bt, C_DARK);
         COLOR bc = pick ? (COLOR)0x00FFFFFF : col;
         line(lft, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, lft, bt, bc, 1); line(lft, bt, lft, t, bc, 1);
-        textLJ((short)(lft + 5), y, b, col, fs - 1, false);
+        textLJ((short)(lft + 5), y, b, col, kf, false);
     }
 }
 
@@ -954,7 +979,7 @@ void DealerProfile::drawMQLevels(const Settings& S)
         // (2.4.0, Rassul 2026-10-07 12:57 "start showing it now on the levels") the chance price touches this level: in the next
         // hour, by today's 0DTE expiry (when it comes before the close) and by the close; "?" until the market's numbers are proven
         const LV* lv = levelAt(mkt, q.px);                                    // (2.5.0) the one-law odds first
-        if (lv && !lv->label.empty()) { std::string add = "  " + lv->label; strncat_s(b, sizeof(b), add.c_str(), _TRUNCATE); }
+        if (lv && !lv->label.empty()) { std::string add = "  " + spacedOdds(lv->label); strncat_s(b, sizeof(b), add.c_str(), _TRUNCATE); }
         else {
             loadTouch(mkt);
             bool fresh = tpAt[mkt] > 0 && time(nullptr) - tpAt[mkt] < 20 * 60;    // stale odds (the bridge stopped) are not shown
