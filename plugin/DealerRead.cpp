@@ -1526,7 +1526,7 @@ void DealerRead::renderTurn(const Settings& S)
     // light grey bold, buyers green, sellers red, the rest a shade dimmer
     auto wSty = [&](const std::string& q, char st) { return (float)textW(q.c_str(), fs, st == 'p' || st == 'b'); };
     std::vector<std::vector<dl::StyPiece> > rdl;
-    if (D.hasTurn && !D.readLine.empty()) rdl = dl::wrapStyled(dl::parseStyled(D.readLine), (float)inner, (float)inner, wSty);
+    (void)wSty;   // (4.5.7, Rassul 2026-10-09 11:39 "i dont need the read text") the read line is no longer drawn
     if (head.size() > 1) head.resize(1);                          // (4.4.0) fixed height: header 1 line, read line 3 lines
     if (rdl.size() > 3) rdl.resize(3);
     // the two sides: rows by section (older files without a section: everything on the options side)
@@ -1650,7 +1650,7 @@ void DealerRead::renderTurn(const Settings& S)
         Col& K = C[c];
         short lx = c == 0 ? cx0 : (short)(cx0 + colW + cgap);
         short yy = yBody;
-        text((short)(lx + colW / 2), yy, c == 0 ? "OPTIONS" : "FOOTPRINT", C_MUTED, fs - 2, true, 1);   // (4.4.0) centred over its section
+        text((short)(lx + colW / 2), yy, c == 0 ? "OPTIONS" : "FUTURES", C_MUTED, fs - 2, true, 1);   // (4.4.0) centred over its section
         yy = (short)(yy + lh);
         // (4.4.0, Rassul 11:05 "use menthorq or irts own data") the footprint is IRT's alone: while IRT is not recording this market
         // the side says so instead of showing old points
@@ -1702,6 +1702,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (4.5.6) FRONT_DRAWING: the box is drawn after every other indicator, so no line shows through it;   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.5.6");   // (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.5.7");   // (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

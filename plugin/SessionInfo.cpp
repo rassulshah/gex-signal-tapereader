@@ -383,8 +383,8 @@ extern "C" cppExtension *CreateExtension(void)
 {
     SessionInfo *p = new SessionInfo();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (1.6.7) drawn after every other indicator
     p->setDescription("LRA Session Info: when today's 0DTE options expire and the market's ACTIVE / CHOP windows in RTH. Use Settings > Position to place the panel.");
-    p->setVersion("1.6.6");   // (1.6.6) solid background always; (1.6.5) overflow-safe numeric fields from the external session file; (1.6.4) Market selection restored per native chart; validated, bounded session-file reads; unavailable source status; (1.6.3) Background / Show saved per market (IRT lists read -1 outside the settings window); (1.6.2) Background (Solid / See-through) is saved; (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag
+    p->setVersion("1.6.7");   // (1.6.7) drawn on top of the other indicators; (1.6.6) solid background always; (1.6.5) overflow-safe numeric fields from the external session file; (1.6.4) Market selection restored per native chart; validated, bounded session-file reads; unavailable source status; (1.6.3) Background / Show saved per market (IRT lists read -1 outside the settings window); (1.6.2) Background (Solid / See-through) is saved; (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag
     return p;
 }
