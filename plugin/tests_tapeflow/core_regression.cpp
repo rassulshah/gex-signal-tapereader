@@ -90,7 +90,7 @@ static void configAndInput() {
     Engine exact; CHECK(exact.add(tick(1000,102,100,102,16777217LL))); CHECK(exact.add(tick(1000,100,100,102,16777219LL))); CHECK(exact.add(tick(1000,101,100,102,16777221LL))); exact.advanceTo(1000);
     CHECK(exact.hist.back().b==16777217LL&&exact.hist.back().s==16777219LL&&exact.hist.back().u==16777221LL);
     Engine lateEngine;lateEngine.setFixedBase(baseline());feed(lateEngine,1500,5);lateEngine.ep[0].state=2;lateEngine.ep[0].dir=1;lateEngine.ep[0].fireT=1504;
-    CHECK(!lateEngine.add(tick(1504)));CHECK(lateEngine.warmN==0&&lateEngine.R.empty()&&!lateEngine.open&&lateEngine.lastClass==LLONG_MIN);CHECK(lateEngine.evs.back().kind=="DINV"&&lateEngine.evs.back().t==1504);
+    CHECK(!lateEngine.add(tick(1504)));CHECK(!lateEngine.R.empty()&&lateEngine.late==1);   // (1.1.2) a late trade is counted and left out; history and warm-up are keptCHECK(lateEngine.evs.back().kind=="DINV"&&lateEngine.evs.back().t==1504);
     Engine overflow; CHECK(overflow.add(tick(1000,100,100,102,LLONG_MAX))); CHECK(!overflow.add(tick(1000,100,100,102,1))); CHECK(overflow.R.empty()&&!overflow.open);
 }
 static void quotesWarmGap() {

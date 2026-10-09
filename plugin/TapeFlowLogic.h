@@ -50,7 +50,7 @@
 
 namespace tfl {
 
-#define TFL_VERSION "1.1.1"
+#define TFL_VERSION "1.1.2"
 
 struct Cfg {
     int fastW = 30, ctxW = 180, obsW = 20, part = 5;   // seconds
@@ -410,9 +410,12 @@ private:
 
     void lateNote(long long t)
     {
-        (void)t;
-        // Never continue on a prefix known to be incomplete; committed records are not rewritten.
-        gap(haveLastT ? lastT : cur.t, "late trade data");
+        // (1.1.2) a trade stamped in a second that is already closed (IRT delivers a few a minute, slightly out of order) is
+        // COUNTED and left out, and any open episode whose look-back includes that second is invalidated (DINV) - as in 1.0.x.
+        // 1.1.0 treated each one as a data hole: on the live ES feed (14 late trades in 6 minutes) that cleared the 180-s
+        // history and restarted the warm-up every minute or two, so the 180-s line vanished and no signal could ever fire.
+        // Committed records are still never rewritten.
+        for (int d = 0; d < 2; d++) if (ep[d].state && t >= ep[d].t0 - (cfg.ctxW + cfg.obsW)) terminal(ep[d], haveLastT ? lastT : cur.t, "DINV", "late trade data");
     }
     void startAt(long long t)
     {
