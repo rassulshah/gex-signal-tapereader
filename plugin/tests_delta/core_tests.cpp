@@ -22,6 +22,7 @@ static std::vector<Bar> held(bool sell, bool up, std::int64_t elapsed = 900, boo
     seed.rows.push_back(Row(100, sell ? -100 : 100, 100)); b.push_back(seed);
     b.push_back(candle(1, 60, up ? 100 : 95, up ? 105 : 100, up ? 104 : 96));
     b.push_back(candle(2, 60 + elapsed, up ? 100 : 95, up ? 105 : 100, up ? 104 : 96, lastClosed));
+    b[1].open = b[2].open = 100;   // (2.5.0) green bars going up, red bars going down
     return b;
 }
 int main() {
@@ -36,8 +37,19 @@ int main() {
     });
     test("(2.5.0) bearish: a close below a heavy-BUYING node = A (buyers absorbed)", [] {
         std::vector<Bar> b; Bar seed = candle(0,0,99,101,100); seed.rows.push_back(Row(100,100,100)); b.push_back(seed);
-        b.push_back(candle(1,180,98,101,99));
+        b.push_back(candle(1,180,98,101,99)); b[1].open = 100.5;   // a red bar closing below
         State s = classify(b,100,100,100,1); check(s.code == "A" && !s.support,"close below buying node not bearish A");
+    });
+    test("(2.5.0) a GREEN bar closing below a buying node does not confirm (needs a red bar)", [] {
+        std::vector<Bar> b; Bar seed = candle(0,0,99,101,100); seed.rows.push_back(Row(100,100,100)); b.push_back(seed);
+        b.push_back(candle(1,180,97,99.5,99)); b[1].open = 97.5;   // closes below the node but up on the bar
+        check(classify(b,100,100,100,1).code == "A?","green bar confirmed a bearish absorption");
+        b.push_back(candle(2,360,97,99,98)); b[2].open = 99;         // the next RED bar closing below does
+        check(classify(b,100,100,100,1).code == "A","red bar below did not confirm");
+    });
+    test("(2.5.0) a doji (open == close) beyond the node does not decide", [] {
+        std::vector<Bar> b = held(true,true,60); b.resize(2); b[1].open = b[1].close;
+        check(classify(b,100,100,-100,1).code == "A?","doji decided");
     });
     test("(2.5.0) a forming bar beyond the node does not decide", [] {
         std::vector<Bar> b = held(true,true,60); b.resize(2); b[1].closed = false;
@@ -49,12 +61,12 @@ int main() {
     });
     test("(2.5.0) the decision is final: a later close on the other side does not change it", [] {
         std::vector<Bar> b = held(true,true,60); b.resize(2);
-        b.push_back(candle(2,360,95,101,96)); b.push_back(candle(3,540,94,99,95));
+        b.push_back(candle(2,360,95,101,96)); b.push_back(candle(3,540,94,99,95)); b[2].open = 100; b[3].open = 98;
         check(classify(b,100,100,-100,1).code == "A","later opposite close changed a decided A");
     });
     test("(2.5.0) the first decisive close wins over later ones (I stays I)", [] {
         std::vector<Bar> b = held(true,false,60); b.resize(2);   // sell node, closes below = I
-        b.push_back(candle(2,360,100,106,105));
+        b.push_back(candle(2,360,100,106,105)); b[2].open = 101;
         check(classify(b,100,100,-100,1).code == "I","I flipped");
     });
     test("formation restarts at last material contribution", [] {

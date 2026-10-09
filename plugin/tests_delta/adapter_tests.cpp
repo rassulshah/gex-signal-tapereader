@@ -121,7 +121,7 @@ int main(){
     });
     test("absorption circle uses exact displayed node bar",[]{
         mock::Host h=history(110,60);
-        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
         h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
         mock::current=&h;DeltaProfile p;p.draw();int rings=0;bool letter=false;
@@ -132,7 +132,7 @@ int main(){
     });
     test("2.5.0: a decided absorption keeps its circle after its node leaves the sliding 90-min profile",[]{
         mock::Host h=history(110,60);
-        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
         h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
         mock::current=&h;DeltaProfile p;p.draw();
@@ -147,7 +147,7 @@ int main(){
     });
     test("initiative letter never receives a circle",[]{
         mock::Host h=history(110,60);
-        for(auto& b:h.bars){b.rows={mock::Price(80,1,0,1),mock::Price(81,1,0,1),mock::Price(82,1,0,1),mock::Price(83,1,0,1),mock::Price(84,1,0,1)};b.volume=5;b.low=79;b.high=100;b.open=96;b.close=96;}
+        for(auto& b:h.bars){b.rows={mock::Price(80,1,0,1),mock::Price(81,1,0,1),mock::Price(82,1,0,1),mock::Price(83,1,0,1),mock::Price(84,1,0,1)};b.volume=5;b.low=79;b.high=100;b.open=97;b.close=96;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;h.bars[40].open=100;h.bars[40].close=100;h.bars[40].high=101;
         mock::current=&h;DeltaProfile p;p.draw();bool letter=false;
         for(const mock::Draw& d:h.draws){check(d.type!="ring","initiative circle");if(d.type=="text" && d.text.find("I ")==0)letter=true;}
@@ -155,7 +155,7 @@ int main(){
     });
     test("2.4.3: every absorption circle has its letter, even when the full label does not fit",[]{
         mock::Host h=history(110,60);
-        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
         h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
         mock::current=&h;DeltaProfile p;p.draw();

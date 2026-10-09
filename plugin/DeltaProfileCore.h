@@ -110,7 +110,7 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     const double eps = tick * 1e-6;
     // (2.5.0, Rassul 2026-10-09 13:48 "lets simplify the rules to a close below the bearish accumulation and vice versa for
     // bullish") the FIRST closed bar after the node formed that closes beyond it decides, and the decision is final:
-    //   close below the node -> price went down from it;  close above -> price went up from it.
+    //   a RED bar closing below the node -> price went down from it;  a GREEN bar closing above -> price went up from it.
     // A heavy-BUYING node that sees a close below = A (buyers absorbed, bearish); a close above = I (buyers won).
     // A heavy-SELLING node: close above = A (sellers absorbed, bullish); close below = I (sellers won).
     // A forming (unclosed) bar never decides.
@@ -118,8 +118,10 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     for (std::size_t i = static_cast<std::size_t>(formed + 1); i < bars.size(); ++i) {
         const Bar& b = bars[i];
         if (!b.closed) continue;
-        if (b.close < lo - eps) { winner = -1; out.decidedBar = b.index; break; }
-        if (b.close > hi + eps) { winner = 1; out.decidedBar = b.index; break; }
+        // (2.5.0, Rassul 13:55 "a red bar close below for bearish absorption and a green bar above for a bullish absorption")
+        // the deciding bar must close beyond the node in its own colour: red (close < open) below, green (close > open) above
+        if (b.close < lo - eps && b.close < b.open) { winner = -1; out.decidedBar = b.index; break; }
+        if (b.close > hi + eps && b.close > b.open) { winner = 1; out.decidedBar = b.index; break; }
     }
     if (winner != 0) {
         out.code = ((winner == 1) == sell) ? "A" : "I";
