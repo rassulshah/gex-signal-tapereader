@@ -49,13 +49,13 @@ call :one FootprintReaderGC lsFootprintReaderGC IRTReader.cpp IRTReaderLogic.h D
 call :one FootprintReaderHG lsFootprintReaderHG IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderNG lsFootprintReaderNG IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderEU lsFootprintReaderEU IRTReader.cpp IRTReaderLogic.h DealerLogic.h
-call :one TapeFlowES lsTapeFlowES TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
-call :one TapeFlowNQ lsTapeFlowNQ TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
-call :one TapeFlowCL lsTapeFlowCL TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
-call :one TapeFlowGC lsTapeFlowGC TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
-call :one TapeFlowHG lsTapeFlowHG TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
-call :one TapeFlowNG lsTapeFlowNG TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
-call :one TapeFlowEU lsTapeFlowEU TapeFlow.cpp TapeFlowLogic.h DealerLogic.h
+call :one TapeFlowES lsTapeFlowES TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
+call :one TapeFlowNQ lsTapeFlowNQ TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
+call :one TapeFlowCL lsTapeFlowCL TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
+call :one TapeFlowGC lsTapeFlowGC TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
+call :one TapeFlowHG lsTapeFlowHG TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
+call :one TapeFlowNG lsTapeFlowNG TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
+call :one TapeFlowEU lsTapeFlowEU TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 

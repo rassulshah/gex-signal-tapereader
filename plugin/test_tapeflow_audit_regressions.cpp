@@ -28,14 +28,12 @@ int main()
     // Regression: Windows long is 32-bit. Dense selection must not narrow a large
     // long long quantity while selecting a price or a band.
     {
-        Dense d;
-        d.lo = 100; d.hi = 102;
-        d.b = {7, 4294967313LL, 11};
-        d.s = {0, 0, 0};
-        d.u = {0, 0, 0};
+        // (1.1.x) Dense keeps cached prefix sums, so it is filled through build() from 1-s slices
+        std::deque<Slice> R(1); R[0].rows = {Row{100, 7, 0, 0}, Row{101, 4294967313LL, 0, 0}, Row{102, 11, 0, 0}};
+        Dense d; d.build(R, 0, 1);
         int center = 0; long long volume = 0; double coverage = 0;
-        CHECK(d.best(SIDE_BUY, 0, 0.90, INT_MIN, &center, &volume, &coverage), "large known-volume band is eligible");
-        CHECK(center == 101 && volume == 4294967313LL && coverage == 1.0, "Dense::best preserves quantities above LONG_MAX on Windows");
+        CHECK(d.best(SIDE_BUY, 1, 0.90, INT_MIN, &center, &volume, &coverage), "large known-volume band is eligible");   // (1.1.x) half-width 1..8 only
+        CHECK(center == 101 && volume == 4294967331LL && coverage == 1.0, "Dense::best preserves quantities above LONG_MAX on Windows");
     }
 
     // Regression: flow/rate accumulators must remain precise beyond signed 32-bit.

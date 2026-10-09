@@ -212,22 +212,8 @@ int main()
       CHECK(count(e, "AW") == 0 && count(e, "CAND") == 0 && !e.hist.empty() && !std::isnan(e.hist.back().f30), "CALIBRATING: pressure shown, no signals"); }
 
     // baselines from the store: windows -> nearest-rank Q95, medians, prior sessions only, each session's FRONT contract
-    { Store st; long long sid = 100;
-      auto mkw = [](int k, float scale) { Win w; w.bin = 3; w.rate20 = (float)(k + 1) * scale; for (int j = 0; j < 4; j++) w.r5[j] = 2; w.spread = 1; for (int h = 0; h < 8; h++) { w.Mb[h] = (float)(k + 1) * 10; w.Ms[h] = (float)(k + 1); } return w; };
-      for (int s = 0; s < 5; s++) for (int k = 0; k < 20; k++) st[sid - 1 - s]["ESZ6"].push_back(mkw(k, 1));
-      for (int k = 0; k < 20; k++) st[sid - 1]["ESH7"].push_back(mkw(0, 0.05f));   // the back month on roll day: thin, never the front
-      for (int k = 0; k < 20; k++) st[sid - 7]["ESU6"].push_back(mkw(0, 0.01f));   // a holiday-thin session: left out (< 30% of typical)
-      st[sid]["ESZ6"].push_back(Win());                                             // the current session: never used
-      BinBase bb[NBINS]; int used = 0; freezeBase(st, sid, 10, bb, &used);
-      CHECK(used == 5 && bb[3].n == 100, "baseline: the 5 prior sessions' front contract, thin sessions left out");
-      CHECK(bb[3].qs[0] == 19 && bb[3].qb[0] == 190, "Q95 nearest rank (100 windows -> 95th = 19)");
-      CHECK(bb[3].med20 == 10.5f && bb[3].med5 == 2 && bb[3].medSpread == 1, "medians");
-      CHECK(bb[4].n == 0, "empty bin stays empty");
-      CHECK(priorSessions(st, sid) == 6, "prior sessions counted (any contract)"); }
-    // after a roll: the new front's own sessions win as soon as it is the busier contract that day
-    { Store st; for (int k = 0; k < 10; k++) { Win w; w.bin = 1; w.rate20 = 10; st[50]["OLD"].push_back(w); Win v; v.bin = 1; v.rate20 = 30; for (int h = 0; h < 8; h++) v.Ms[h] = 99; st[50]["NEW"].push_back(v); }
-      BinBase bb[NBINS]; int used = 0; freezeBase(st, 51, 10, bb, &used);
-      CHECK(used == 1 && bb[1].med20 == 30 && bb[1].qs[0] == 99, "roll day: the busier contract is that session's front"); }
+    // (1.1.x) the hand-made baseline-window blocks moved to tests_tapeflow/core_regression.cpp: windows now carry their own
+    // 20-s timestamp identity (session, contract, endT), which those fabricated windows did not have.
 
     // the engine builds windows itself and the next session's baselines come from them (end to end)
     { Store st; Engine e; e.store = &st; e.sym = "X";

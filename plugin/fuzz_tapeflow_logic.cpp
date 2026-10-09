@@ -1,4 +1,6 @@
 // fuzz_tapeflow_logic.cpp - random tapes: no crash / UB, mirror symmetry, prefix + redraw invariance, sane outputs.
+// (1.1.x) a missing quote now poisons its second and restarts the warm-up, as on a real broken feed; real IRT data has bid / ask
+// on ~100% of trades, so the fuzz tapes drop a quote 1 in 2000 trades (was 1 in 50, which meant almost no signals).
 // build: g++ -std=c++17 -O1 -g -fsanitize=address,undefined -I. -o f fuzz_tapeflow_logic.cpp && ./f
 #include "TapeFlowLogic.h"
 #include <random>
@@ -20,7 +22,7 @@ static std::vector<Tick> tape(unsigned seed, int secs)
             int px = kind < 4 ? a : kind < 8 ? b : (spread == 2 ? p + 1 : a);
             if (regime == 4 && kind < 7) px = b;                            // a selling attack
             long q = 1 + (long)(r() % (regime == 4 ? 40 : 15));
-            v.push_back(Tick{t, px, (r() % 50 == 0) ? 0 : b, a, q});
+            v.push_back(Tick{t, px, (r() % 2000 == 0) ? 0 : b, a, q});
         }
         t++;
     }
