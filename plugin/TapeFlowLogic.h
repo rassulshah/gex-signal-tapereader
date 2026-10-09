@@ -1,5 +1,7 @@
 /********************************************************************************
- *  TapeFlowLogic.h  --  the testable half of lsTapeFlow<MKT> (no IRT SDK)          v2.0.0 (2026-10-09)
+ *  TapeFlowLogic.h  --  the testable half of lsTapeFlow<MKT> (no IRT SDK)          v2.0.2 (2026-10-09)
+ *  (2.0.2) + the tape export (TapeWriter): per second x price buy / sell / unknown + 3-min OHLCV of each back-filled session.
+ *  (2.0.1) only A (absorption) is drawn - "A? 3.1x" / "A 3.1x"; P / E / F logged only; F relative to the slot's normal 180-s swing.
  *  (2.0.0) + the SIGNALS (P push / E exhaustion / A absorption / F flip) decided on closed bars only - see "THE SIGNALS" below.
  *
  *  Rassul 2026-10-08 13:17-13:26 (TapeFlow brief): "review ... then we will build it out on irt"; "get it on all the markets,
@@ -60,7 +62,7 @@
 
 namespace tfl {
 
-#define TFL_VERSION "2.0.0"
+#define TFL_VERSION "2.0.2"
 
 struct Cfg {
     int fastW = 30, ctxW = 180, obsW = 20, part = 5;   // seconds
@@ -125,7 +127,8 @@ struct Slice {
 };
 
 // one baseline window (stored per session)
-struct Win { long long endT = LLONG_MIN; int bin = 0; float rate20 = 0, r5[4] = {0, 0, 0, 0}, spread = -1; float Mb[8] = {0}, Ms[8] = {0}; float act = -1; };   // act (1.1.5): seconds of the 20 with a trade (-1 = not recorded)
+struct Win { long long endT = LLONG_MIN; int bin = 0; float rate20 = 0, r5[4] = {0, 0, 0, 0}, spread = -1; float Mb[8] = {0}, Ms[8] = {0}; float act = -1;
+             float b20 = -1, s20 = -1; };   // act (1.1.5): seconds of the 20 with a trade; b20 / s20 (2.0.1): aggressive buy / sell volume in the 20 s (-1 = not recorded)
 typedef std::map<std::string, std::vector<Win>> SessWins;      // contract -> windows (a roll day can hold two)
 typedef std::map<long long, SessWins> Store;                    // session -> contracts -> windows
 inline double avgRate(const std::vector<Win>& v) { double a = 0; for (const Win& w : v) a += w.rate20; return v.empty() ? 0 : a / (double)v.size(); }
@@ -144,7 +147,11 @@ inline void mergeWindows(std::vector<Win>& dst, const std::vector<Win>& src)
         if (!identified(w)) continue;
         auto ins = seen.insert(std::make_pair(w.endT, merged.size()));
         if (ins.second) merged.push_back(w);
-        else if (merged[ins.first->second].act < 0 && w.act >= 0) merged[ins.first->second].act = w.act;   // (1.1.5) enrich only
+        else {
+            Win& m = merged[ins.first->second];                                                      // enrich only
+            if (m.act < 0 && w.act >= 0) m.act = w.act;
+            if (m.b20 < 0 && w.b20 >= 0) { m.b20 = w.b20; m.s20 = w.s20; }
+        }
     }
     std::sort(merged.begin(), merged.end(), [](const Win& a, const Win& b) { return a.endT < b.endT; });
     dst.swap(merged);
@@ -172,6 +179,8 @@ inline const std::vector<Win>* frontOf(const SessWins& session)
 }
 
 struct BinBase { int n = 0; float qb[8] = {0}, qs[8] = {0}; float med20 = 0, med5 = 0, medSpread = -1;
+                 float mb50[8] = {0}, ms50[8] = {0};   // (2.0.1) the slot's NORMAL (median) biggest same-side volume in a 2h+1-tick band per 20 s
+                 float swing180 = -1;                  // (2.0.1) the slot's normal |180-s pressure| (median), -1 = not measured yet
                  int own = 0, k = 0; float gap = -1; };   // (1.1.5) own = the slot's own windows, k = slots borrowed each side, gap = typical s between trades
 
 inline float nearestRank(std::vector<float>& v, double p)
@@ -209,6 +218,8 @@ inline void binStats(const std::vector<const Win*>& v, BinBase& o)
     for (int h = 0; h < 8; ++h) {
         a.clear(); for (auto w : v) a.push_back(w->Mb[h]); o.qb[h] = nearestRank(a, 0.95);
         a.clear(); for (auto w : v) a.push_back(w->Ms[h]); o.qs[h] = nearestRank(a, 0.95);
+        a.clear(); for (auto w : v) a.push_back(w->Mb[h]); o.mb50[h] = nearestRank(a, 0.50);
+        a.clear(); for (auto w : v) a.push_back(w->Ms[h]); o.ms50[h] = nearestRank(a, 0.50);
     }
     a.clear(); for (auto w : v) a.push_back(w->rate20); o.med20 = typicalRate(a);
     a.clear(); for (auto w : v) for (int k = 0; k < 4; ++k) a.push_back(w->r5[k]); o.med5 = typicalRate(a);
@@ -247,10 +258,17 @@ inline void freezeBase(const Store& st, long long sid, int N, BinBase* out, int*
     for (const auto& wins : candidates) rates.push_back((float)avgRate(wins));
     float typical = median(rates);
     std::vector<std::vector<const Win*>> by(NBINS);
+    std::vector<std::vector<float>> sw(NBINS);       // (2.0.1) |180-s pressure| at each window end with 9 contiguous measured windows
     int used = 0, dropped = 0;
     for (const auto& wins : candidates) {
         if (avgRate(wins) < 0.3 * typical) { ++dropped; continue; }
         for (const Win& w : wins) by[(size_t)w.bin].push_back(&w);
+        for (size_t i = 8; i < wins.size(); ++i) {
+            if (wins[i].endT - wins[i - 8].endT != 160) continue;
+            double B = 0, S = 0; bool ok = true;
+            for (size_t k = i - 8; k <= i; ++k) { if (wins[k].b20 < 0) { ok = false; break; } B += wins[k].b20; S += wins[k].s20; }
+            if (ok && B + S > 0) sw[(size_t)wins[i].bin].push_back((float)std::fabs(100.0 * (B - S) / (B + S)));
+        }
         if (++used >= N) break;
     }
     if (usedSessions) *usedSessions = used;
@@ -267,6 +285,11 @@ inline void freezeBase(const Store& st, long long sid, int N, BinBase* out, int*
         }
         if (o.k && (int)pooled.size() == o.own) o.k = 0;   // the neighbours had nothing: not pooled
         binStats(pooled, o);
+        {   // (2.0.1) the slot's normal 180-s swing, pooled like the windows (>= 20 values, else unknown)
+            std::vector<float> s1(sw[(size_t)b]);
+            for (int k = 1; k <= o.k; ++k) { if (b - k >= 0) s1.insert(s1.end(), sw[(size_t)(b - k)].begin(), sw[(size_t)(b - k)].end()); if (b + k < NBINS) s1.insert(s1.end(), sw[(size_t)(b + k)].begin(), sw[(size_t)(b + k)].end()); }
+            o.swing180 = s1.size() >= 20 ? median(s1) : -1.f;
+        }
         o.own = (int)by[(size_t)b].size();
     }
 }
@@ -349,6 +372,8 @@ struct Ev {
     long long t = 0, knownAt = 0; int ep = 0; std::string kind; int dir = 0;    // dir +1 bullish, -1 bearish
     int lo = 0, hi = 0, h = 0; double q95 = 0, f30 = NAN, f180 = NAN, a = NAN, cov = NAN, qzone = 0, conc = 0, prog = 0;
     std::string ctx, why; int ver = 0;
+    double norm = 0;                 // (2.0.1, AW) the slot's normal biggest same-side band volume per 20 s (BinBase.mb50 / ms50)
+    int held = 0;                    // (2.0.1, AW) the most ticks the AGGRESSOR traded past the zone's aggressor-side edge while hitting it
 };
 
 struct SecRec { long long t = 0; float f30 = NAN, f180 = NAN, a = NAN, c30 = NAN, l30 = NAN, h30 = NAN; long long b = 0, s = 0, u = 0; unsigned char flags = 0; };   // exact executed quantities (unknown included), not float histogram rounding
@@ -373,6 +398,7 @@ struct Ep {
     double f30aw = 0, covAW = 0; bool faded = false;
     int arN = 0; double arQty = 0, arKnown = 0, arAll = 0;
     int ver = 0;
+    double norm = 0;                 // (2.0.1) frozen with the episode: the slot's normal band volume for the attempted side
 };
 struct Latch { int dir = 0, lo = 0, hi = 0, h = 1; double q95 = 0; bool movedAway = false; int quietN = 0; };
 struct InSetup { bool on = false; long long t0 = 0; int bound2 = 0; double med5 = 0, med20 = 0, medSpread = -1; int baseN = 0; int n = 0; double qty = 0, known = 0, all = 0; };
@@ -729,7 +755,7 @@ private:
     {
         Ev v; v.t = t; v.ep = e.id; v.kind = kind; v.dir = e.dir; v.lo = e.lo; v.hi = e.hi; v.h = e.h; v.q95 = e.q95;
         v.f30 = last.f30ok ? last.f30 : NAN; v.f180 = last.f180ok ? last.f180 : NAN; v.a = last.aok ? last.A : NAN; v.cov = last.c30;
-        v.why = why; v.ver = e.ver;
+        v.why = why; v.ver = e.ver; v.norm = e.norm;
         return v;
     }
     void terminal(Ep& e, long long t, const char* kind, const std::string& why)
@@ -795,6 +821,7 @@ private:
         const double known = (double)B + (double)S;
         if (total > 0 && known / total < cfg.cov) return;
         Win w; w.endT = t; w.bin = binOf(t); w.rate20 = (float)(total / cfg.obsW); w.spread = (float)(R.back().path ? R.back().spread : -1); w.act = (float)act;
+        w.b20 = (float)B; w.s20 = (float)S;
         for (int p = 0; p < 4; p++) { long long v = 0; for (int k = 0; k < cfg.part; k++) { const Slice& s = R[w0 + (size_t)(p * cfg.part + k)]; v += s.B + s.S + s.U; } w.r5[p] = (float)((double)v / cfg.part); }
         if (total > 0) {
             Dense D; D.build(R, w0, n);
@@ -947,7 +974,14 @@ private:
             if (e.holdN >= cfg.holdS && e.holdFresh) {
                 e.state = 2; e.fireT = t; e.f30aw = f.f30ok ? f.f30 : 0; e.covAW = r.czone;
                 Ev v = mk(e, t, "AW", r.qopp >= 0.5 * r.qzone ? "absorption watch (two-way)" : "absorption watch");
-                v.qzone = r.qzone; v.conc = r.conc; v.prog = r.prog; push(v);
+                v.qzone = r.qzone; v.conc = r.conc; v.prog = r.prog;
+                {   // (2.0.1) HELD: over the 20-s observation + the hold, the farthest an aggressor trade went past the zone edge
+                    const int sd = attemptedSide(e.dir); int past = 0; const size_t n = R.size();
+                    for (size_t k = n > (size_t)(cfg.obsW + cfg.holdS) ? n - (size_t)(cfg.obsW + cfg.holdS) : 0; k < n; ++k)
+                        for (const Row& x : R[k].rows) if ((sd == SIDE_BUY ? x.b : x.s) > 0) past = std::max(past, sd == SIDE_BUY ? x.px - e.hi : e.lo - x.px);
+                    v.held = past;
+                }
+                push(v);
             }
         }
         for (int d = 0; d < 2; d++) {
@@ -972,6 +1006,7 @@ private:
                 Ep& e = ep[d]; e = Ep();
                 e.id = epId(t, d == 0 ? 1 : -1, false); e.dir = d == 0 ? 1 : -1; e.state = 1; e.lo = rw[d].lo; e.hi = rw[d].hi; e.h = rw[d].h; e.q95 = rw[d].q95;
                 e.med20 = f.bb()->med20; e.med5 = f.bb()->med5; e.medSpread = f.bb()->medSpread; e.baseN = f.bb()->n; e.entry2 = rw[d].entry2; e.ext2 = rw[d].ext2; e.t0 = t; e.ver = ver;
+                e.norm = e.h >= 1 && e.h <= 8 ? (attemptedSide(e.dir) == SIDE_BUY ? f.bb()->mb50[e.h - 1] : f.bb()->ms50[e.h - 1]) : 0;
                 for (size_t k = R.size(); k-- > 0;) {                     // a breach already under way keeps its age
                     const Slice& q = R[k];
                     bool beyond = q.path && (e.dir > 0 ? q.mx() <= 2 * (e.lo - 1) : q.mn() >= 2 * (e.hi + 1));
@@ -1087,7 +1122,10 @@ inline std::string storeLine(long long sid, const std::string& sym, const Win& w
     os << '|' << w.spread;
     for (int h = 0; h < 8; ++h) os << '|' << w.Mb[h];
     for (int h = 0; h < 8; ++h) os << '|' << w.Ms[h];
-    if (w.endT != LLONG_MIN && w.act >= 0) os << '|' << w.act;          // (1.1.5) appended: readers that index fields 0-26 are unaffected
+    if (w.endT != LLONG_MIN && w.act >= 0) {                            // (1.1.5) appended: readers that index fields 0-26 are unaffected
+        os << '|' << w.act;
+        if (w.b20 >= 0 && w.s20 >= 0) os << '|' << w.b20 << '|' << w.s20;   // (2.0.1) appended after act
+    }
     return os.str();
 }
 inline bool parseStoreLong(const std::string& text, long long* out)
@@ -1121,7 +1159,8 @@ inline bool parseStoreLine(const std::string& ln, long long* sid, std::string* s
     if (!modern && ln.compare(0, 2, "W|") != 0) return false;
     std::vector<std::string> c; size_t a = modern ? 3 : 2;
     while (true) { size_t p = ln.find('|', a); c.push_back(ln.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; }
-    const bool withAct = modern && c.size() == 27U;                       // (1.1.5) W2 + traded seconds
+    const bool withBS = modern && c.size() == 29U;                        // (2.0.1) + aggressive buy / sell
+    const bool withAct = modern && (c.size() == 27U || withBS);           // (1.1.5) W2 + traded seconds
     if (c.size() != (modern ? 26U : 25U) && !withAct) return false;
     if (c[1].empty() || c[1].find_first_of("\r\n") != std::string::npos) return false;
     long long session; Win result;
@@ -1138,6 +1177,7 @@ inline bool parseStoreLine(const std::string& ln, long long* sid, std::string* s
         if (!parseStoreFloat(c[9 + (size_t)h], &result.Mb[h]) || !parseStoreFloat(c[17 + (size_t)h], &result.Ms[h]) || result.Mb[h] < 0 || result.Ms[h] < 0) return false;
     }
     if (withAct && (!parseStoreFloat(c[25], &result.act) || result.act < 0 || result.act > 20)) return false;
+    if (withBS && (!parseStoreFloat(c[26], &result.b20) || !parseStoreFloat(c[27], &result.s20) || result.b20 < 0 || result.s20 < 0)) return false;
     if (modern && (!identified(result) || sessionOf(result.endT) != session || (result.endT + 1 - 17LL * 3600) % 20 != 0)) return false;
     *sid = session; *sym = c[1]; *w = result; return true; // transactional parse
 }
@@ -1179,63 +1219,74 @@ inline int priorSessions(const Store& st, long long sid)
 
 
 // =====================================================================================================================
-//  (2.0.0) THE SIGNALS - P (push), E (exhaustion), A (absorption), F (flip). Rassul 2026-10-09: "implement proposed tapeflow.
-//  add an up arrow head or down arrowhead to the signal ... use 1 letter to identify a signal but you can keep the ? until it is
-//  confirmed"; "once a signal is given it should not change".
+//  (2.0.1) THE SIGNALS. Rassul 2026-10-09 16:17: TapeFlow shows ONLY absorption on the chart - "A? 3.1x" while pending,
+//  "A 3.1x" once confirmed. P (push), E (exhaustion) and F (flip) are still decided and LOGGED (signals file + status) for the
+//  nightly scoring, never drawn. (2.0.0, earlier the same day: one letter per signal, '?' until confirmed, never repaint.)
 //
 //  Decided ONLY on CLOSED chart bars (never the forming bar), in bar-time order, from: the bar's open / high / low / close (the
-//  chart's own candle), the closed seconds of that bar (SecRec: 30-s and 180-s pressure, activity vs this time of day, aggressive
-//  buy / sell volume) and the engine's AW / IN events in it. At most ONE new signal per bar; priority F > A > E > P.
-//  dir +1 = bullish (green, UP arrowhead, bottom of the pane), -1 = bearish (red, DOWN arrowhead, top of the pane).
+//  chart's own candle), the closed seconds of that bar (SecRec: 30-s / 180-s pressure, activity vs this time of day, aggressive buy /
+//  sell volume) and the engine's AW / IN events in it. dir +1 = bullish, -1 = bearish.
 //
-//  P  PUSH        one side hits the tape hard and price goes with it. Bar i, side d:
-//                   [>= 20 s of the bar with d x 30-s pressure >= 35 (2:1 aggressive), activity >= 1.5x this 5-min slot's normal
-//                    and >= 90% of the volume with a known side]  OR  [the engine's initiative IN d fired in the bar]
-//                   AND the bar closes in that direction (green for buyers, red for sellers) AND beyond the previous bar's close
-//                   AND no P the same way in the 3 bars before (one mark per push, not one per bar of a trend).
-//                 Decided at the close -> drawn as P (no '?').
-//  E  EXHAUSTION  a push runs out at a new 60-minute extreme. Push side p (+1 buyers):
-//                   the bars just before (>= 2 in a row) had p-side aggressive volume > the other side (the run);
-//                   the run made the 60-min extreme (its high >= every high of the 20 bars before this one);
-//                   this bar's p-side aggressive volume < 50% of the run's average AND it does not extend the run's extreme.
-//                 -> E? (dir -p) on this bar, anchored at the run's extreme. Confirmed (E) by a LATER bar closing against the push
-//                   (a red bar after a buy push, a green bar after a sell push). Ends unconfirmed if a bar CLOSES beyond the anchor
-//                   or after 5 bars.
-//  A  ABSORPTION  the engine's absorption watch (AW: heavy aggressive volume >= its 95th pct in a 2h+1-tick band with no price
-//                   progress) fired in the bar -> A? at the zone. dir +1 = sellers absorbed, -1 = buyers absorbed. Confirmed (A) by a
-//                   bar (this one or later) closing AWAY against the aggressor: buyers absorbed -> a RED bar closing below the zone;
-//                   sellers absorbed -> a GREEN bar closing above it (the Delta Profile 2.5.2 rule). Ends unconfirmed when a bar
-//                   closes beyond the zone on the aggressor's side, or after 10 bars.
-//  F  FLIP        control switches sides within 4 bars (12 min) after an A / A? / E / E? of direction d: the 180-s pressure was
-//                   clearly against d (d x F180 <= -20) at some second since that signal's bar began, is clearly with d at this
-//                   bar's close (d x F180 >= +20) and this bar closes in direction d. Decided at the close -> F. One F per origin.
-//
-//  NO REPAINT: a decided bar is never decided again (SignalBook.decidedThrough, persisted); a confirmed signal never changes; a '?'
-//  only ever loses its '?' (confirmation) - one that never confirms stays drawn exactly as it was (state X in the record), never
-//  removed. Every decision is a journal line (TapeFlow\<MKT>-signals-<session>.csv): a restart loads the file and redraws exactly
-//  what was shown; bars already decided only rebuild the look-back (feed() with b.te <= decidedThrough decides nothing).
+//  A  ABSORPTION (DRAWN)  the engine's absorption watch (AW: the aggressor's volume in a 2h+1-tick band over 20 s >= that slot's
+//                   95th percentile, concentrated, sustained, fresh, with no price progress) fired in the bar -> A? at the zone.
+//                   dir +1 = sellers absorbed (bullish), -1 = buyers absorbed (bearish). Several AWs in one bar: the biggest multiple.
+//                   MULTIPLE  = qzone / norm: qzone = the aggressor's contracts executed INSIDE the zone in the AW's 20 s; norm = this
+//                     market's NORMAL for the 5-min time-of-day slot = the median, over the slot's baseline windows (pooled like the
+//                     calibration), of the biggest same-side volume in any band of the same width (2h+1 ticks) in a 20-s window.
+//                     "3.1x" = 3.1 times the usual biggest one-sided hit at one price band for this time of day.
+//                   ABSORBED  = qzone signed by the aggressor: + = buyers hit the zone (and were absorbed), - = sellers.
+//                   HELD Nt   = while the zone was being hit (the AW's 20-s observation + its 3-s hold), the farthest an AGGRESSOR trade
+//                     went past the zone's aggressor-side edge (above the top for buyers absorbed, below the bottom for sellers
+//                     absorbed), in ticks; 0 = the aggressors never traded past it. Frozen with the A.
+//                   Confirmed (A) by a bar (this one or later) closing AWAY against the aggressor: buyers absorbed -> a RED bar
+//                   closing below the zone; sellers absorbed -> a GREEN bar closing above it (the Delta Profile 2.5.2 rule). Ends
+//                   unconfirmed (stays drawn as A?) when a bar closes beyond the zone on the aggressor's side, or after 10 bars.
+//  P  PUSH (logged)  >= 20 s of the bar with d x 30-s pressure >= 35, activity >= 1.5x the slot's normal and >= 90% known side - or
+//                   the engine's initiative IN d - AND the bar closes in that direction beyond the previous close AND no P the same
+//                   way in the 3 bars before. Decided at the close.
+//  E  EXHAUSTION (logged)  >= 2 bars in a row with the push side's aggressive volume larger, the run made the 60-min extreme, this
+//                   bar's push-side volume < 50% of the run's average and no new extreme -> E? (dir -p) anchored at the extreme;
+//                   confirmed by a LATER bar closing against the push; ends unconfirmed on a close beyond the anchor or after 5 bars.
+//  F  FLIP (logged)  within 4 bars after an A / E of direction d (confirmed or not): d x F180 <= -K at some second since that signal's
+//                   bar began, d x F180 >= +K at this bar's close, and this bar closes in direction d. K = this slot's NORMAL 180-s
+//                   swing (BinBase.swing180 = the median |180-s pressure| in the slot's baseline windows; until those are measured,
+//                   the median |180-s pressure| of the last 60 min), never below 10. One F per origin.
+//  ONE PER BAR: at most one A per bar (drawn); at most one of F > E > P per bar (logged; it may share a bar with an A).
+//  NO REPAINT: a decided bar is never decided again (decidedThrough, persisted); a confirmed signal never changes; a '?' only ever
+//  loses its '?'. Every decision is a record line in TapeFlow\<MKT>-signals-<session>.csv; a restart redraws exactly what was shown.
 // =====================================================================================================================
 struct SigCfg {
     double pushF = 35, pushAct = 1.5, sidesMin = 0.9; int pushSecs = 20, pushCool = 3;
     int runMin = 2; double collapse = 0.5; int extremeBars = 20;
-    double flipF = 20; int flipBars = 4;
+    double flipMin = 10; int flipBars = 4;
     int aExpire = 10, eExpire = 5;
     int minFlowSecs = 60;
 };
 struct BarIn { long long te = 0, ts = 0; int o = 0, h = 0, l = 0, c = 0; };   // ticks; te = the chart's bar stamp (its close)
 struct BarFlow {                                       // the bar's tape over its closed seconds [ts, te)
     int secs = 0; long long buy = 0, sell = 0;
-    int pushUp = 0, pushDn = 0;                        // seconds of the bar meeting the P pressure test
+    int pushUp = 0, pushDn = 0;
     bool f180ok = false; double f180end = 0, f180lo = 0, f180hi = 0;
-    int inUp = 0, inDn = 0;                            // engine initiative events
-    int awDir = 0, awLo = 0, awHi = 0;                 // the LAST engine absorption watch (AW) in the bar
+    int inUp = 0, inDn = 0;
+    int awDir = 0, awLo = 0, awHi = 0, awHeld = 0; double awQ = 0, awMult = 0;   // the bar's biggest absorption watch (AW)
+    double flipK = 20;                                 // F's threshold for this bar (the slot's normal 180-s swing, >= 10)
     long long side(int d) const { return d > 0 ? buy : sell; }
 };
-// the bar's tape from the per-second records (sorted by t) and the engine's events (sorted by t)
+inline double absorbMultiple(double qzone, double norm) { return norm > 0 && qzone > 0 ? qzone / norm : 0; }
+// the median |180-s pressure| of the closed seconds in [te - 3600, te): the fallback "normal swing" until the slot's is measured
 template <class Recs>
-inline BarFlow barFlow(const Recs& H, const std::vector<Ev>& evs, long long ts, long long te, const SigCfg& c)
+inline double recentSwing(const Recs& H, long long te)
+{
+    std::vector<float> v;
+    auto it = std::lower_bound(H.begin(), H.end(), te - 3600, [](const SecRec& r, long long t) { return r.t < t; });
+    for (; it != H.end() && it->t < te; ++it) if (std::isfinite(it->f180)) v.push_back(std::fabs(it->f180));
+    return v.size() >= 300 ? (double)median(v) : -1;
+}
+template <class Recs>
+inline BarFlow barFlow(const Recs& H, const std::vector<Ev>& evs, long long ts, long long te, const SigCfg& c, double swing = -1)
 {
     BarFlow f;
+    f.flipK = std::max(c.flipMin, swing > 0 ? swing : 20.0);
     auto it = std::lower_bound(H.begin(), H.end(), ts, [](const SecRec& r, long long t) { return r.t < t; });
     bool first = true;
     for (; it != H.end() && it->t < te; ++it) {
@@ -1255,87 +1306,93 @@ inline BarFlow barFlow(const Recs& H, const std::vector<Ev>& evs, long long ts, 
     auto e = std::lower_bound(evs.begin(), evs.end(), ts, [](const Ev& v, long long t) { return v.t < t; });
     for (; e != evs.end() && e->t < te; ++e) {
         if (e->kind == "IN") { if (e->dir > 0) f.inUp++; else f.inDn++; }
-        else if (e->kind == "AW") { f.awDir = e->dir > 0 ? 1 : -1; f.awLo = e->lo; f.awHi = e->hi; }
+        else if (e->kind == "AW") {
+            const double m = absorbMultiple(e->qzone, e->norm);
+            if (!f.awDir || m > f.awMult) { f.awDir = e->dir > 0 ? 1 : -1; f.awLo = e->lo; f.awHi = e->hi; f.awQ = e->qzone; f.awMult = m; f.awHeld = std::max(0, e->held); }
+        }
     }
     return f;
 }
 
 enum { MK_PENDING = 0, MK_CONFIRMED = 1, MK_EXPIRED = 2 };
 struct Mark {
-    long long barT = 0;                                // the bar it is drawn on (chart bar time = its close)
-    char kind = 0;                                     // 'P' 'E' 'A' 'F'
+    long long barT = 0;                                // the bar it belongs to (chart bar time = its close)
+    char kind = 0;                                     // 'A' (drawn) / 'P' 'E' 'F' (logged only)
     int dir = 0, state = MK_PENDING;
-    int px = 0, lo = 0, hi = 0;                        // ticks: the signal's price (P / F close, E anchor, A zone middle), A zone
-    long long confT = 0;                               // the bar that confirmed it
-    long long ref = 0;                                 // F: the bar time of the A / E it flips from
-    bool flipped = false;                              // A / E: an F already used it (not persisted - derived from F rows)
+    int px = 0, lo = 0, hi = 0;                        // ticks: the signal's price (A zone middle, E anchor, P / F close), A zone
+    long long confT = 0, ref = 0;                      // the bar that decided it; F: the bar of the A / E it flips from
+    double mult = 0; long long absorbed = 0; int held = 0;   // A: multiple, signed contracts absorbed (+ buyers / - sellers), ticks held
+    bool flipped = false;
     std::string why;
-    bool question() const { return state != MK_CONFIRMED; }   // '?' until confirmed (also when it never was)
+    bool question() const { return state != MK_CONFIRMED; }
+    bool drawn() const { return kind == 'A'; }
 };
 inline int kindRank(char k) { return k == 'F' ? 4 : k == 'A' ? 3 : k == 'E' ? 2 : k == 'P' ? 1 : 0; }
 
 class SignalBook {
 public:
     SigCfg cfg;
-    std::vector<Mark> marks;                           // in bar-time order
-    long long decidedThrough = LLONG_MIN;              // every bar with te <= this is decided (persisted)
+    std::vector<Mark> marks;                           // in bar-time order (an A and a logged signal may share a bar)
+    long long decidedThrough = LLONG_MIN;
     long long lastFed = LLONG_MIN;
-    std::vector<std::string> journal;                  // record lines not yet written to the file
-    std::string version = "2.0.0";
+    std::vector<std::string> journal;
+    std::string version = "2.0.1";
 
-    // one CLOSED bar, in time order. A bar at or before decidedThrough only extends the look-back (a restart).
     void feed(const BarIn& b, const BarFlow& f)
     {
-        if (b.te <= lastFed) return;                   // each bar once
+        if (b.te <= lastFed) return;
         lastFed = b.te;
         if (b.te <= decidedThrough) { remember(b, f); return; }
-        // 1. what this bar does to the open '?' signals (decided forward only)
         for (Mark& m : marks) {
             if (m.state != MK_PENDING || m.barT > b.te) continue;
-            const int age = barsSince(m.barT);          // bars after the signal's bar, before this one
+            const int age = barsSince(m.barT);
             if (m.kind == 'A') {
                 const bool conf = m.dir < 0 ? (b.c < b.o && b.c < m.lo) : (b.c > b.o && b.c > m.hi);
                 const bool fail = m.dir < 0 ? b.c > m.hi : b.c < m.lo;
-                if (conf) settle(m, MK_CONFIRMED, b.te, "a bar closed away from the zone");
-                else if (fail) settle(m, MK_EXPIRED, b.te, "a bar closed through the zone");
-                else if (age + 1 >= cfg.aExpire) settle(m, MK_EXPIRED, b.te, "no confirmation in 10 bars");
+                if (conf) settle(m, MK_CONFIRMED, b.te);
+                else if (fail) settle(m, MK_EXPIRED, b.te);
+                else if (age + 1 >= cfg.aExpire) settle(m, MK_EXPIRED, b.te);
             } else if (m.kind == 'E' && b.te > m.barT) {
-                const int p = -m.dir;                   // the push that ran out
+                const int p = -m.dir;
                 const bool fail = p > 0 ? b.c > m.px : b.c < m.px;
                 const bool conf = m.dir * (b.c - b.o) > 0;
-                if (fail) settle(m, MK_EXPIRED, b.te, "a bar closed beyond the extreme");
-                else if (conf) settle(m, MK_CONFIRMED, b.te, "a bar closed against the push");
-                else if (age + 1 >= cfg.eExpire) settle(m, MK_EXPIRED, b.te, "no confirmation in 5 bars");
+                if (fail) settle(m, MK_EXPIRED, b.te);
+                else if (conf) settle(m, MK_CONFIRMED, b.te);
+                else if (age + 1 >= cfg.eExpire) settle(m, MK_EXPIRED, b.te);
             }
         }
-        // 2. this bar's candidates; the strongest one is the bar's ONE signal
-        Mark best; best.kind = 0;
-        auto offer = [&](const Mark& m) { if (!best.kind || kindRank(m.kind) > kindRank(best.kind)) best = m; };
         const bool flow = f.secs >= cfg.minFlowSecs;
         const BarIn* prev = recent.empty() ? nullptr : &recent.back().first;
-        // F
+        // A (drawn): one per bar
+        if (f.awDir) {
+            Mark m; m.barT = b.te; m.kind = 'A'; m.dir = f.awDir; m.lo = f.awLo; m.hi = f.awHi; m.px = (f.awLo + f.awHi) / 2;
+            m.mult = f.awMult; m.absorbed = (long long)std::llround(f.awQ) * (f.awDir > 0 ? -1 : 1);
+            m.held = f.awHeld;
+            m.why = f.awDir > 0 ? "sellers absorbed" : "buyers absorbed";
+            marks.push_back(m); log(marks.back());
+            Mark& a = marks.back();
+            const bool conf = a.dir < 0 ? (b.c < b.o && b.c < a.lo) : (b.c > b.o && b.c > a.hi);
+            if (conf) settle(a, MK_CONFIRMED, b.te);
+        }
+        // the logged signals: the strongest of F > E > P
+        Mark best; best.kind = 0;
+        auto offer = [&](const Mark& m) { if (!best.kind || kindRank(m.kind) > kindRank(best.kind)) best = m; };
         for (int d = -1; d <= 1 && flow; d += 2) {
-            if (!(d * (b.c - b.o) > 0) || !f.f180ok || d * f.f180end < cfg.flipF) continue;
+            const double K = f.flipK;
+            if (!(d * (b.c - b.o) > 0) || !f.f180ok || d * f.f180end < K) continue;
             for (auto it = marks.rbegin(); it != marks.rend(); ++it) {
                 Mark& o = *it;
                 if (o.dir != d || (o.kind != 'A' && o.kind != 'E') || o.flipped || o.barT >= b.te) continue;
                 const int age = barsSince(o.barT);
                 if (age < 0 || age + 1 > cfg.flipBars) continue;
-                double worst = d > 0 ? f.f180lo : -f.f180hi; bool any = f.f180ok;   // d x F180 at its lowest since the origin bar began
-                for (const auto& rb : recent) if (rb.first.te >= o.barT && rb.second.f180ok) { worst = std::min(worst, d > 0 ? rb.second.f180lo : -rb.second.f180hi); any = true; }
-                if (!any || worst > -cfg.flipF) continue;
+                double worst = d > 0 ? f.f180lo : -f.f180hi;
+                for (const auto& rb : recent) if (rb.first.te >= o.barT && rb.second.f180ok) worst = std::min(worst, d > 0 ? rb.second.f180lo : -rb.second.f180hi);
+                if (worst > -K) continue;
                 Mark m; m.barT = b.te; m.kind = 'F'; m.dir = d; m.state = MK_CONFIRMED; m.confT = b.te; m.px = b.c; m.ref = o.barT;
-                char w[96]; snprintf(w, sizeof(w), "180-s pressure %+.0f -> %+.0f after %c", d > 0 ? worst : -worst, f.f180end, o.kind); m.why = w;
+                char w[120]; snprintf(w, sizeof(w), "180-s pressure %+.0f -> %+.0f (slot swing %.0f) after %c", d > 0 ? worst : -worst, f.f180end, K, o.kind); m.why = w;
                 offer(m); break;
             }
         }
-        // A
-        if (f.awDir) {
-            Mark m; m.barT = b.te; m.kind = 'A'; m.dir = f.awDir; m.lo = f.awLo; m.hi = f.awHi; m.px = (f.awLo + f.awHi) / 2;
-            m.why = f.awDir > 0 ? "sellers absorbed" : "buyers absorbed";
-            offer(m);
-        }
-        // E
         for (int p = -1; p <= 1 && flow; p += 2) {
             int n = 0; double vol = 0; int ext = p > 0 ? INT_MIN : INT_MAX;
             for (auto it = recent.rbegin(); it != recent.rend(); ++it) {
@@ -1346,22 +1403,21 @@ public:
             if (n < cfg.runMin) continue;
             int lookExt = p > 0 ? INT_MIN : INT_MAX, k = 0;
             for (auto it = recent.rbegin(); it != recent.rend() && k < cfg.extremeBars; ++it, ++k) lookExt = p > 0 ? std::max(lookExt, it->first.h) : std::min(lookExt, it->first.l);
-            if (p > 0 ? ext < lookExt : ext > lookExt) continue;                 // the run did not make the 60-min extreme
+            if (p > 0 ? ext < lookExt : ext > lookExt) continue;
             const double avg = vol / n;
-            if (!((double)f.side(p) < cfg.collapse * avg)) continue;            // aggression did not collapse
-            if (p > 0 ? b.h > ext : b.l < ext) continue;                         // price extended
+            if (!((double)f.side(p) < cfg.collapse * avg)) continue;
+            if (p > 0 ? b.h > ext : b.l < ext) continue;
             bool dup = false;
-            for (const Mark& o : marks) if (o.kind == 'E' && o.dir == -p && o.px == ext && o.state != MK_EXPIRED) dup = true;   // once per run extreme
+            for (const Mark& o : marks) if (o.kind == 'E' && o.dir == -p && o.px == ext && o.state != MK_EXPIRED) dup = true;
             if (dup) continue;
             Mark m; m.barT = b.te; m.kind = 'E'; m.dir = -p; m.px = ext;
             char w[96]; snprintf(w, sizeof(w), "%s volume %.0f%% of the run's average at the 60-min %s", p > 0 ? "buy" : "sell", 100.0 * (double)f.side(p) / std::max(1.0, avg), p > 0 ? "high" : "low");
             m.why = w; offer(m);
         }
-        // P
         for (int d = -1; d <= 1 && flow && prev; d += 2) {
             const bool hit = (d > 0 ? f.pushUp : f.pushDn) >= cfg.pushSecs || (d > 0 ? f.inUp : f.inDn) > 0;
             if (!hit || !(d * (b.c - b.o) > 0) || !(d * (b.c - prev->c) > 0)) continue;
-            bool recentP = false;                                                // a push already marked in the last pushCool bars
+            bool recentP = false;
             for (auto it = marks.rbegin(); it != marks.rend(); ++it) { const int age = barsSince(it->barT); if (age >= cfg.pushCool) break; if (it->kind == 'P' && it->dir == d) { recentP = true; break; } }
             if (recentP) continue;
             Mark m; m.barT = b.te; m.kind = 'P'; m.dir = d; m.state = MK_CONFIRMED; m.confT = b.te; m.px = b.c;
@@ -1370,23 +1426,16 @@ public:
         }
         if (best.kind) {
             if (best.kind == 'F') for (Mark& o : marks) if (o.barT == best.ref && o.dir == best.dir && (o.kind == 'A' || o.kind == 'E')) o.flipped = true;
-            marks.push_back(best);
-            log(marks.back());
-            Mark& m = marks.back();
-            if (m.kind == 'A') {                                                   // the absorption bar itself may already close away
-                const bool conf = m.dir < 0 ? (b.c < b.o && b.c < m.lo) : (b.c > b.o && b.c > m.hi);
-                if (conf) settle(m, MK_CONFIRMED, b.te, "its own bar closed away from the zone");
-            }
+            marks.push_back(best); log(marks.back());
         }
         decidedThrough = b.te;
         char d[64]; snprintf(d, sizeof(d), "%lld|D", b.te); journal.push_back(std::string(d) + "|0|-|0|0|0|0|0||" + version);
         remember(b, f);
     }
-    // the last signal of a kind set that is confirmed (for the header): nullptr = none
-    const Mark* lastConfirmed() const { for (auto it = marks.rbegin(); it != marks.rend(); ++it) if (it->state == MK_CONFIRMED) return &*it; return nullptr; }
-    const Mark* at(long long barT) const { for (const Mark& m : marks) if (m.barT == barT) return &m; return nullptr; }
+    const Mark* lastConfirmed(char kind = 'A') const { for (auto it = marks.rbegin(); it != marks.rend(); ++it) if (it->state == MK_CONFIRMED && it->kind == kind) return &*it; return nullptr; }
+    const Mark* drawnAt(long long barT) const { for (const Mark& m : marks) if (m.barT == barT && m.drawn()) return &m; return nullptr; }
 
-    // ---- the record: t|kind|dir|state|px|lo|hi|confT|ref|why|version   (state ? C X; kind D = decided-through marker)
+    // ---- the record: t|kind|dir|state|px|lo|hi|confT|ref|why|version (2.0.0 columns, unchanged) + |mult|absorbed|held (2.0.1)
     static std::string line(const Mark& m, const std::string& ver)
     {
         std::ostringstream o; o.imbue(std::locale::classic());
@@ -1394,9 +1443,9 @@ public:
           << m.px << '|' << m.lo << '|' << m.hi << '|' << m.confT << '|' << m.ref << '|';
         for (char ch : m.why) o << (ch == '|' || ch == '\r' || ch == '\n' ? ' ' : ch);
         o << '|' << ver;
+        char x[64]; snprintf(x, sizeof(x), "|%.2f|%lld|%d", m.mult, m.absorbed, m.held); o << x;
         return o.str();
     }
-    // a record line -> the book (later lines of the same signal update its state forward only; a confirmed one never goes back)
     bool load(const std::string& ln)
     {
         std::vector<std::string> c; size_t a = 0;
@@ -1410,58 +1459,72 @@ public:
             !parseStoreInt(c[4], &px) || !parseStoreInt(c[5], &lo) || !parseStoreInt(c[6], &hi) || !parseStoreLong(c[7], &ct) || !parseStoreLong(c[8], &rf)) return false;
         const int st = c[3] == "C" ? MK_CONFIRMED : c[3] == "X" ? MK_EXPIRED : c[3] == "?" ? MK_PENDING : -1;
         if (st < 0) return false;
+        double mult = 0; long long ab = 0; int held = 0; bool extra = false;
+        if (c.size() >= 14) {
+            float fm = 0; extra = parseStoreFloat(c[11], &fm) && parseStoreLong(c[12], &ab) && parseStoreInt(c[13], &held) && fm >= 0;
+            if (extra) mult = fm; else { ab = 0; held = 0; }
+        }
         for (Mark& m : marks) if (m.barT == t && m.kind == k && m.dir == dir) {
             if (m.state == MK_PENDING && st != MK_PENDING) { m.state = st; m.confT = ct; }
             return true;
         }
         Mark m; m.barT = t; m.kind = k; m.dir = dir; m.state = st; m.px = px; m.lo = lo; m.hi = hi; m.confT = ct; m.ref = rf; m.why = c[9];
+        m.mult = mult; m.absorbed = ab; m.held = held;
         auto pos = std::upper_bound(marks.begin(), marks.end(), t, [](long long x, const Mark& y) { return x < y.barT; });
         marks.insert(pos, m);
-        if (k == 'F') for (Mark& o : marks) if (o.barT == rf && o.dir == dir && (o.kind == 'A' || o.kind == 'E')) o.flipped = true;
         return true;
     }
     void loadText(const std::string& text) { std::istringstream s(text); std::string ln; while (std::getline(s, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); load(ln); } relinkFlips(); }
     void relinkFlips() { for (const Mark& f : marks) if (f.kind == 'F') for (Mark& o : marks) if (o.barT == f.ref && o.dir == f.dir && (o.kind == 'A' || o.kind == 'E')) o.flipped = true; }
-    static const char* header() { return "t|kind|dir|state|price_ticks|zone_lo|zone_hi|confirmed_bar|ref_bar|why|version"; }
+    static const char* header() { return "t|kind|dir|state|price_ticks|zone_lo|zone_hi|confirmed_bar|ref_bar|why|version|multiple|absorbed|held_ticks"; }
 
 private:
-    std::deque<std::pair<BarIn, BarFlow> > recent;     // the look-back (last 30 closed bars)
+    std::deque<std::pair<BarIn, BarFlow> > recent;
     void remember(const BarIn& b, const BarFlow& f) { recent.push_back(std::make_pair(b, f)); while (recent.size() > 30) recent.pop_front(); }
     int barsSince(long long t) const { int n = 0; for (auto it = recent.rbegin(); it != recent.rend() && it->first.te > t; ++it) n++; return recent.empty() || recent.front().first.te > t ? 99 : n; }
-    void settle(Mark& m, int st, long long when, const char* why) { m.state = st; m.confT = when; (void)why; log(m); }
+    void settle(Mark& m, int st, long long when) { m.state = st; m.confT = when; log(m); }
     void log(const Mark& m) { journal.push_back(line(m, version)); }
 };
 
-// ---- the header line (IRT's grey title): "TF 2.0 ES  BUYERS 1.4x  last A 7,861.50"
+// ---- the header line: "TF 2.0.1 ES  BUYERS 1.6x  last: A 3.1x 7,861.50  -840 absorbed  held 4t"
 inline std::string shortVersion(const std::string& v) { return v.size() > 2 && v.compare(v.size() - 2, 2, ".0") == 0 && std::count(v.begin(), v.end(), '.') == 2 ? v.substr(0, v.size() - 2) : v; }
 inline const char* sideWord(bool ok, double f180) { return !ok ? "BALANCED" : f180 >= 15 ? "BUYERS" : f180 <= -15 ? "SELLERS" : "BALANCED"; }
-// state code -> the header's middle word(s); READY-like codes show who is in control and how busy vs normal
+inline std::string multText(double m) { char b[24]; snprintf(b, sizeof(b), "%.1fx", m); return b; }
+inline std::string markLabel(const Mark& m) { return std::string(1, m.kind) + (m.question() ? "? " : " ") + multText(m.mult); }   // "A? 3.1x" / "A 3.1x"
+inline std::string lastText(const Mark& a, const std::string& px)
+{
+    char b[96]; snprintf(b, sizeof(b), "  %+lld absorbed  held %dt", a.absorbed, a.held);
+    return "last: A " + multText(a.mult) + " " + px + b;
+}
+// parts: [0] "TF 2.0.1 ES  ", [1] the state word(s), [2] "  " + activity, [3] the last A text (empty = none)
+inline std::vector<std::string> titleParts(const std::string& version, const std::string& market, const StateInfo& s, bool f180ok, double f180,
+                                           const Mark* last, const std::string& lastPx)
+{
+    std::vector<std::string> p(4); char b[64];
+    p[0] = "TF " + shortVersion(version) + " " + market + "  ";
+    const bool live = s.code == "READY" || s.code == "LOWACT" || s.code == "WATCH" || s.code == "SIGNAL";
+    if (live) { p[1] = sideWord(f180ok, f180); if (std::isfinite(s.act)) { snprintf(b, sizeof(b), " %.1fx", s.act); p[2] = b; } }
+    else if (s.code == "CAL") { snprintf(b, sizeof(b), "CAL %d/%d", s.n, s.need); p[1] = b; }
+    else if (s.code == "WARM") { snprintf(b, sizeof(b), "WARM %d/%d", s.n, s.need); p[1] = b; }
+    else if (s.code == "QUIET") p[1] = "QUIET";
+    else if (s.code == "NOQUOTE") p[1] = "NO QUOTE";
+    else if (s.code == "LOWSIDES") p[1] = "LOW SIDES";
+    else if (s.code == "WIDESPREAD") p[1] = "WIDE SPREAD";
+    else if (s.code == "NOSIDES") p[1] = "NO SIDES";
+    else if (s.code == "NOTRADES") p[1] = "NO TRADES";
+    else if (s.code == "ERROR") p[1] = "DATA ISSUE";
+    else p[1] = "WAIT";
+    if (last) p[3] = "  " + lastText(*last, lastPx);
+    return p;
+}
 inline std::string titleLine(const std::string& version, const std::string& market, const StateInfo& s, bool f180ok, double f180,
                              const Mark* last, const std::string& lastPx)
 {
-    std::string w; char b[64];
-    const bool live = s.code == "READY" || s.code == "LOWACT" || s.code == "WATCH" || s.code == "SIGNAL";
-    if (live) {
-        w = sideWord(f180ok, f180);
-        if (std::isfinite(s.act)) { snprintf(b, sizeof(b), " %.1fx", s.act); w += b; }
-    }
-    else if (s.code == "CAL") { snprintf(b, sizeof(b), "CAL %d/%d", s.n, s.need); w = b; }
-    else if (s.code == "WARM") { snprintf(b, sizeof(b), "WARM %d/%d", s.n, s.need); w = b; }
-    else if (s.code == "QUIET") w = "QUIET";
-    else if (s.code == "NOQUOTE") w = "NO QUOTE";
-    else if (s.code == "LOWSIDES") w = "LOW SIDES";
-    else if (s.code == "WIDESPREAD") w = "WIDE SPREAD";
-    else if (s.code == "NOSIDES") w = "NO SIDES";
-    else if (s.code == "NOTRADES") w = "NO TRADES";
-    else if (s.code == "ERROR") w = "DATA ISSUE";
-    else w = "WAIT";
-    std::string t = "TF " + shortVersion(version) + " " + market + "  " + w;
-    if (last) t += std::string("  last ") + last->kind + " " + lastPx;
-    return t;
+    std::vector<std::string> p = titleParts(version, market, s, f180ok, f180, last, lastPx);
+    return p[0] + p[1] + p[2] + p[3];
 }
 
-// ---- the pane's layout: marks in two bands, never overlapping. Each candidate has its x and width; stronger (confirmed, then
-// F > A > E > P, then later) are placed first, a weaker one that would touch a placed one in the same band is skipped.
+// ---- the pane's layout: A marks in two bands, never overlapping; the bigger multiple keeps a contested spot
 struct Slot { int x = 0, w = 0, band = 0, rank = 0; long long t = 0; bool show = false; };
 inline void layoutMarks(std::vector<Slot>& v, int gap = 2)
 {
@@ -1477,8 +1540,51 @@ inline void layoutMarks(std::vector<Slot>& v, int gap = 2)
         placed[band].push_back(std::make_pair(l, r)); s.show = true;
     }
 }
-inline int markRank(const Mark& m) { return kindRank(m.kind) + (m.state == MK_CONFIRMED ? 10 : 0); }
-// the axis range IRT should show so that its scale matches the drawing's inner area (pane minus the two signal bands)
+inline int markRank(const Mark& m) { return (int)std::llround(std::min(m.mult, 1.0e6) * 1000.0); }   // the bigger multiple wins
 inline double axisRange(double r, int paneH, int band) { if (paneH <= 2 * band + 10) return r; return r * (paneH / 2.0) / (paneH / 2.0 - band); }
+
+
+
+// ---- (2.0.2) THE TAPE EXPORT: every trade of a back-filled session, aggregated per second x price, plus the session's 3-min
+// OHLCV bars, streamed as text (the caller appends each slice's text to <MKT>-tape-<session>.csv.part / -bars3-; renamed at the end).
+//   tape  line: t|px_ticks|buy|sell|unknown|trades      (t = local wall-clock second, as the -sec- files; one line per price traded)
+//   bars3 line: te|o|h|l|c|volume|buy|sell|trades         (ticks; te = the bar's END on the 3-min clock grid = how IRT stamps bars)
+// Side = the quote at the trade (sideOf): at / above the ask = buy, at / below the bid = sell, otherwise / no quote = unknown.
+struct TapeWriter {
+    std::string tape, bars;                              // text produced since the last take()
+    long long lines = 0, barCount = 0, trades = 0;
+    void add(const Tick& k)
+    {
+        if (k.q <= 0) return;
+        if (k.t != sec) { flushSecond(); sec = k.t; }
+        Agg& a = row[k.px]; const int sd = sideOf(k.px, k.bid, k.ask);
+        (sd == SIDE_BUY ? a.b : sd == SIDE_SELL ? a.s : a.u) += k.q; a.n++;
+        const long long te = (k.t >= 0 ? k.t / 180 : -((-k.t + 179) / 180)) * 180 + 180;
+        if (te != bte) { flushBar(); bte = te; bo = bh = bl = k.px; bv = bb = bs = bn = 0; }
+        bh = std::max(bh, k.px); bl = std::min(bl, k.px); bc = k.px; bv += k.q; bn++;
+        if (sd == SIDE_BUY) bb += k.q; else if (sd == SIDE_SELL) bs += k.q;
+        trades++;
+    }
+    void finish() { flushSecond(); flushBar(); }
+    static const char* tapeHeader() { return "t|px_ticks|buy|sell|unknown|trades"; }
+    static const char* barsHeader() { return "te|o|h|l|c|volume|buy|sell|trades"; }
+private:
+    struct Agg { long long b = 0, s = 0, u = 0, n = 0; };
+    long long sec = LLONG_MIN; std::map<int, Agg> row;
+    long long bte = LLONG_MIN; int bo = 0, bh = 0, bl = 0, bc = 0; long long bv = 0, bb = 0, bs = 0, bn = 0;
+    void flushSecond()
+    {
+        if (sec == LLONG_MIN) return;
+        char x[128];
+        for (auto& kv : row) { snprintf(x, sizeof(x), "%lld|%d|%lld|%lld|%lld|%lld\n", sec, kv.first, kv.second.b, kv.second.s, kv.second.u, kv.second.n); tape += x; lines++; }
+        row.clear(); sec = LLONG_MIN;
+    }
+    void flushBar()
+    {
+        if (bte == LLONG_MIN) return;
+        char x[160]; snprintf(x, sizeof(x), "%lld|%d|%d|%d|%d|%lld|%lld|%lld|%lld\n", bte, bo, bh, bl, bc, bv, bb, bs, bn); bars += x; barCount++;
+        bte = LLONG_MIN;
+    }
+};
 
 } // namespace tfl

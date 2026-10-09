@@ -5,6 +5,7 @@
 #include <vector>
 std::vector<float> mockOut(int k);   // (1.1.5) the mock's output arrays 1 / 2
 void mockBar(int i, float o, float h, float l, float c);   // (2.0.0) the chart OHLC
+#define TF_TESTING_MODE 0   // (2.0.2) these suites check the drawing: build with test mode OFF
 #include "TapeFlowES.cpp"
 #undef mkt
 #undef root
@@ -77,6 +78,9 @@ static tfl::Engine pure(const std::vector<MTick>& v, long long until, tfl::Store
     for (auto& k : v) if (k.t <= until) { tfl::Tick t; t.t = k.t; t.px = (int)llround(k.px / 0.25); t.bid = (int)llround(k.bid / 0.25); t.ask = (int)llround(k.ask / 0.25); t.q = k.q; e.add(t); }
     return e;
 }
+// (2.0.1) an absorption label: "A 3.1x" / "A? 3.1x"
+static bool aLabel(const std::string& s) { size_t i = 1; if (s.empty() || s[0] != 'A') return false; if (i < s.size() && s[i] == '?') i++; if (i >= s.size() || s[i] != ' ') return false; i++;
+    size_t d = i; while (i < s.size() && (isdigit((unsigned char)s[i]) || s[i] == '.')) i++; return i > d && i + 1 == s.size() && s[i] == 'x'; }
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static const std::string LS = "/tmp/tfchk/home\\InvestorRT\\rtx\\lsFlexLevels";
 // (2.0.0) a chart bar ending at te with its OHLC from the trades IRT has
@@ -167,11 +171,24 @@ int main()
         tf->S().lastTitleCall = (long long)g_now; tf->S().titleChangedAt = (time_t)g_now;
         std::vector<float> o1 = mockOut(0), o2 = mockOut(1);
         const tfl::Feat& lf = tf->S().eng.last;
-        CHECK(o1.size() == g_bars.size() && o2.size() == g_bars.size(), "outputs 1 and 2 cover every bar");
-        bool sane = true; for (float v : o1) if (!(v >= -100 && v <= 100)) sane = false; for (float v : o2) if (!(v >= -100 && v <= 100)) sane = false;
+        CHECK(o1.size() == g_bars.size() && o2.empty(), "(2.0.2) one output (30-s pressure) covering every bar; no 180-s output");
+        if (o2.empty()) o2.assign(1, 0.f);
+        bool sane = true; for (float v : o1) if (!(v >= -100 && v <= 100)) sane = false;
         CHECK(sane, "outputs are pressures in -100..100 (no fixed 135 anchors)");
         printf("last bar outputs: 30s %.0f  180s %.0f   (engine now: %.1f / %.1f)\n", o1.back(), o2.back(), lf.f30, lf.f180);
         double lo = 0, hi = 0; tf->scale((int)g_bars.size() - 160, (int)g_bars.size() - 1, &lo, &hi);
+        {   // (2.0.2) "get rid of the white line": no 180-s line, and the scale fits the bars only
+            g_lineColors.clear(); g_text.clear(); tf->draw();
+            CHECK(g_lineColors.count(0x00CBD5E1UL) == 0, "(2.0.2) the 180-s line is not drawn");
+            bool onlyKnown = true; for (auto& kv : g_lineColors) if (kv.first != 0x0022C55EUL && kv.first != 0x00EF4444UL && kv.first != 0x00373F4CUL) onlyKnown = false;
+            for (auto& kv : g_lineColors) printf("   lines in colour %06lX: %ld\n", kv.first, kv.second);
+            CHECK(onlyKnown, "(2.0.2) the only lines: the faint zero line and the arrowheads (green / red)");
+            const int nb = (int)g_bars.size(); double barsMax = 0;
+            { tfl::SecRec dummy; (void)dummy; }
+            const double fitted = tfl::fitRange(tf->visibleMaxAbs(nb - 160, nb - 1));
+            double lo2 = 0, hi2 = 0; tf->scale(nb - 160, nb - 1, &lo2, &hi2); (void)barsMax;
+            CHECK(std::fabs(tf->S().range - fitted) < 1e-9, "(2.0.2) the scale fits the 30-s bars only");
+        }
         CHECK(hi > 0 && lo == -hi && hi >= 60 && std::fabs(hi - tfl::axisRange(tf->S().range, tf->S().paneH, tf->S().band)) < 1e-9 && std::fmod(tf->S().range, 10.0) == 0, "scale(): symmetric, >= 60, the fitted range (rounded to 10) widened for the signal bands");
         printf("fitted range +-%.0f\n", hi);
         extern long g_invalidates; CHECK(g_invalidates > 0, "state changes ask IRT to repaint (invalidateChart)");
@@ -182,8 +199,10 @@ int main()
         if (tf->S().book) { nm = tf->S().book->book.marks.size(); through = tf->S().book->book.decidedThrough; }
         printf("signals decided through %lld (last closed bar %lld, forming bar %lld): %zu\n", through, g_bars[g_bars.size() - 2], g_bars.back(), nm);
         CHECK(through == g_bars[g_bars.size() - 2] || through == g_bars[g_bars.size() - 3], "(2.0.0) every closed bar decided, the forming bar never");
-        bool letters = true; for (auto& s : g_text) if (!s.empty() && s.find("TF ") != 0 && !(s.size() <= 2 && std::strchr("PEAF", s[0]) && (s.size() == 1 || s[1] == '?'))) letters = false;
-        CHECK(letters, "(2.0.0) the pane's only text: one letter (+ '?') per signal");
+        bool letters = true; const std::vector<std::string> tp = tf->S().titleParts;   // the fallback header line's parts are allowed
+        for (auto& s : g_text) if (!s.empty() && !aLabel(s) && std::find(tp.begin(), tp.end(), s) == tp.end()) letters = false;
+        if (!letters) for (auto& s : g_text) printf("   text: [%s]\n", s.c_str());
+        CHECK(letters, "(2.0.1) the pane's only text: absorption labels 'A 3.1x' / 'A? 3.1x'");
     }
     for (auto& s : g_text) if (s.find("TF ") == 0) state = s;
     { char t2[128] = {0}; tf->parmsTitle(t2, sizeof(t2)); state = t2; }

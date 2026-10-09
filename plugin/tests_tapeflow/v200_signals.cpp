@@ -1,4 +1,5 @@
-// TapeFlow 2.0.0 regressions (fabricated data): the four signals' confirm rules (incl. the colour of the confirming bar), one signal
+// TapeFlow 2.0.0 / 2.0.1 regressions (2.0.1: only A is drawn - with its multiple; P / E / F logged; F relative to the slot's swing)
+// Earlier: (fabricated data): the four signals' confirm rules (incl. the colour of the confirming bar), one signal
 // per bar and its priority, no decision twice / out of order, confirmed signals never change, the session record round-trip
 // (write -> restart -> identical marks, pending ones still confirm), the no-overlap layout, slot pooling, the adaptive QUIET,
 // the scale fit and the header title.
@@ -29,8 +30,8 @@ struct Day {
             r.f30 = (float)f30; r.f180 = (float)f180; r.a = (float)act; r.c30 = 1.0f; r.flags = SR_SIDES | SR_WARM | SR_BASE; H.push_back(r);
         }
     }
-    void ev(const char* kind, int dir, int lo, int hi, int secIntoLastBar = 100)
-    { Ev e; e.t = bars.back().ts + secIntoLastBar; e.knownAt = e.t + 1; e.kind = kind; e.dir = dir; e.lo = lo; e.hi = hi; evs.push_back(e); }
+    void ev(const char* kind, int dir, int lo, int hi, int secIntoLastBar = 100, double qzone = 620, double norm = 200, int held = 0)
+    { Ev e; e.held = held; e.t = bars.back().ts + secIntoLastBar; e.knownAt = e.t + 1; e.kind = kind; e.dir = dir; e.lo = lo; e.hi = hi; e.qzone = qzone; e.norm = norm; evs.push_back(e); }
     void feedAll(SignalBook& bk, size_t from = 0) const { for (size_t i = from; i < bars.size(); ++i) bk.feed(bars[i], barFlow(H, evs, bars[i].ts, bars[i].te, bk.cfg)); }
     void feed(SignalBook& bk, size_t i) const { bk.feed(bars[i], barFlow(H, evs, bars[i].ts, bars[i].te, bk.cfg)); }
 };
@@ -141,12 +142,59 @@ int main()
         p.bar(998, 1001, 997, 1000, 500, 450, 10, -5);
         p.bar(1000, 1006, 999, 1005, 900, 300, 50, 30, 2.0); p.ev("AW", 1, 1000, 1001);  // flip + a new AW + a push on ONE bar
         SignalBook b4; p.feedAll(b4);
-        int onBar = 0; char k = 0; for (auto& m : b4.marks) if (m.barT == p.bars[3].te) { onBar++; k = m.kind; }
-        CHECK(onBar == 1 && k == 'F', "priority: F beats A and P on the same bar; one signal per bar");
+        int drawnOn = 0, loggedOn = 0; char k = 0; for (auto& m : b4.marks) if (m.barT == p.bars[3].te) { if (m.drawn()) drawnOn++; else { loggedOn++; k = m.kind; } }
+        CHECK(drawnOn == 1 && loggedOn == 1 && k == 'F', "(2.0.1) one bar: its A is drawn, and of the logged ones F beats P");
         Day q; q.bar(1000, 1004, 998, 1002, 500, 500); q.bar(1002, 1010, 1001, 1009, 900, 300, 50, 20, 2.0); q.ev("AW", -1, 1008, 1009);
-        SignalBook b5; q.feedAll(b5); CHECK(b5.marks.size() == 1 && b5.marks[0].kind == 'A', "priority: A beats P");
-        std::set<long long> seen; bool one = true; for (auto& m : b4.marks) if (!seen.insert(m.barT).second) one = false;
-        CHECK(one, "never two signals on one bar");
+        SignalBook b5; q.feedAll(b5); CHECK(b5.marks.size() == 2 && b5.drawnAt(q.bars[1].te) && b5.drawnAt(q.bars[1].te)->kind == 'A' && find(b5, 'P'), "(2.0.1) an A and a logged P share a bar; only the A is drawn");
+        std::map<long long, int> nd, nl; bool one = true; for (auto& m : b4.marks) { if (m.drawn() ? ++nd[m.barT] > 1 : ++nl[m.barT] > 1) one = false; }
+        CHECK(one, "never two drawn marks (or two logged signals) on one bar");
+        // (2.0.1) F's threshold is the slot's normal 180-s swing: the same -35 -> +30 move is a flip in a slot that usually swings 25,
+        // not in one that usually swings 40
+        auto flipDay = [](Day& x) { x.bar(1000, 1004, 998, 1002, 500, 500, 0, -10); x.bar(1002, 1003, 996, 998, 300, 900, -40, -35); x.ev("AW", 1, 996, 998);
+                                    x.bar(998, 1001, 997, 1000, 500, 450, 10, -5); x.bar(1000, 1004, 999, 1003, 800, 300, 40, 30); };
+        auto feedSwing = [](const Day& x, SignalBook& bk, double sw) { for (auto& b : x.bars) bk.feed(b, barFlow(x.H, x.evs, b.ts, b.te, bk.cfg, sw)); };
+        Day s1; flipDay(s1); SignalBook k1; feedSwing(s1, k1, 25); CHECK(find(k1, 'F'), "F: |180-s| beyond the slot's swing of 25 = a flip");
+        Day s2; flipDay(s2); SignalBook k2; feedSwing(s2, k2, 40); CHECK(!find(k2, 'F'), "F: not beyond a slot swing of 40 = no flip");
+        Day s3; flipDay(s3); SignalBook k3; feedSwing(s3, k3, 3); CHECK(find(k3, 'F') && std::fabs(barFlow(s3.H, s3.evs, s3.bars[3].ts, s3.bars[3].te, k3.cfg, 3).flipK - 10) < 1e-9, "F: the threshold never goes below 10");
+    }
+    // ---------------- (2.0.1) the A's multiple, contracts absorbed, ticks held; the label
+    {
+        Day d; d.bar(1000, 1004, 998, 1002, 500, 500); d.bar(1002, 1007, 1000, 1003, 900, 300);
+        d.ev("AW", -1, 1004, 1006, 40, 840, 300, 3); d.ev("AW", -1, 1003, 1005, 120, 450, 300, 1);          // two watches: the bigger multiple wins
+        d.bar(1003, 1009, 1001, 1002, 400, 400);                                                     // pokes 3 ticks above the zone, closes red but inside / below? (1002 < 1004)
+        SignalBook b; d.feedAll(b);
+        const Mark* a = b.drawnAt(d.bars[1].te);
+        CHECK(a && std::fabs(a->mult - 2.8) < 1e-9 && a->absorbed == 840 && a->lo == 1004, "A: multiple = zone contracts / the slot's normal (840 / 300 = 2.8x); +840 = buyers absorbed");
+        CHECK(a && a->state == MK_CONFIRMED && a->held == 3, "A: held = the AW's farthest aggressor trade past the zone edge (3 ticks), frozen with the A");
+        CHECK(a && markLabel(*a) == "A 2.8x", "label: 'A 2.8x' once confirmed");
+        Mark p = *a; p.state = MK_PENDING; CHECK(markLabel(p) == "A? 2.8x", "label: 'A? 2.8x' while pending");
+        Day u; u.bar(1000, 1004, 998, 1002, 500, 500); u.bar(1002, 1003, 996, 998, 300, 900); u.ev("AW", 1, 996, 998, 100, 500, 400);
+        SignalBook b2; u.feedAll(b2); CHECK(b2.marks.size() == 1 && b2.marks[0].absorbed == -500 && std::fabs(b2.marks[0].mult - 1.25) < 1e-9, "A: sellers absorbed -> negative contracts");
+        // the record: 2.0.0 lines (11 columns) still load; 2.0.1 lines carry the three new columns
+        SignalBook old; CHECK(old.load("1000|A|-1|C|5|4|6|1180|0|buyers absorbed|2.0.0") && old.marks[0].mult == 0 && old.marks[0].state == MK_CONFIRMED, "record: a 2.0.0 line (11 columns) still loads");
+        const std::string l = SignalBook::line(*a, "2.0.1");
+        CHECK(std::count(l.begin(), l.end(), '|') == 13 && l.compare(l.size() - 11, 11, "|2.80|840|3") == 0, "record: ...|version|multiple|absorbed|held_ticks");
+        SignalBook nb; nb.load(l); CHECK(nb.marks.size() == 1 && std::fabs(nb.marks[0].mult - 2.8) < 1e-6 && nb.marks[0].absorbed == 840 && nb.marks[0].held == 3, "record: the new columns round-trip");
+        CHECK(std::string(SignalBook::header()).find("|version|multiple|absorbed|held_ticks") != std::string::npos, "record header: the 2.0.0 columns first, then the new ones");
+    }
+    // ---------------- (2.0.1) baseline windows keep aggressive buy / sell -> the slot's normal 180-s swing and band volume
+    {
+        Win w; w.endT = (20000 - 1) * 86400LL + 17 * 3600 + 19; w.bin = 0; w.rate20 = 3; w.act = 7; w.b20 = 40; w.s20 = 20; w.Mb[0] = 12; w.Ms[7] = 9;
+        long long sidX; std::string sy; Win r;
+        const std::string ln = storeLine(20000, "X", w);
+        CHECK(parseStoreLine(ln, &sidX, &sy, &r) && r.b20 == 40 && r.s20 == 20 && r.act == 7, "store: W2 + act + buy / sell round-trips");
+        { std::vector<std::string> c; size_t a0 = 0; while (true) { size_t q = ln.find('|', a0); c.push_back(ln.substr(a0, q == std::string::npos ? q : q - a0)); if (q == std::string::npos) break; a0 = q + 1; }
+          CHECK(c.size() == 30 && c[0] == "W2" && c[3] == std::to_string(w.endT) && c[26] == "9", "store: the LRA reader's fields (epoch c[3], ms8 c[26]) are where they were"); }
+        Store st; const long long sid = 20000;
+        for (int s = 1; s <= 3; ++s) for (int i = 0; i < 15 * 6; ++i) {          // 30 minutes per session from 17:00: 60% buyers
+            Win x; x.endT = (sid - s - 1) * 86400LL + 17 * 3600 + i * 20 + 19; x.bin = binOf(x.endT); x.rate20 = 5; x.act = 10; x.b20 = 60; x.s20 = 40;
+            x.Mb[1] = (float)(10 + i % 7); st[sid - s]["X"].push_back(x);
+        }
+        BinBase out[NBINS]; int used = 0; freezeBase(st, sid, 10, out, &used, "X", true, 60, 2);
+        CHECK(std::fabs(out[3].swing180 - 20.0f) < 1e-4, "slot swing: median |180-s pressure| from 9 contiguous windows (60 / 40 -> 20)");
+        CHECK(out[3].mb50[1] >= 10 && out[3].mb50[1] <= 16 && out[3].mb50[1] < out[3].qb[1], "slot normal band volume (median) is below its 95th percentile");
+        Win y = w; y.b20 = -1; y.s20 = -1; Store s2; s2[sid - 1]["X"].push_back(y); BinBase o2[NBINS]; freezeBase(s2, sid, 10, o2, &used, "X", true, 60, 2);
+        CHECK(o2[0].swing180 < 0, "slot swing unknown until windows with buy / sell are measured (then the last 60 min is used)");
     }
     // ---------------- decided once, in order; confirmed signals never change
     {
@@ -217,10 +265,9 @@ int main()
         }
         CHECK(ok, "layout: no two drawn signals touch in the same band (200 random layouts)");
         CHECK(strong, "layout: a signal is only left out for an equal or stronger one in its spot");
-        std::vector<Slot> two(2); two[0].x = 100; two[0].w = 12; two[0].band = 1; two[0].rank = markRank(Mark{}) + 1; two[1] = two[0]; two[1].x = 104; two[1].rank = 13;
-        layoutMarks(two); CHECK(!two[0].show && two[1].show, "layout: the confirmed (stronger) one wins a shared spot");
-        Mark c; c.kind = 'P'; c.state = MK_CONFIRMED; Mark q; q.kind = 'F'; q.state = MK_PENDING;
-        CHECK(markRank(c) > markRank(q), "layout rank: confirmed beats '?'");
+        Mark big; big.kind = 'A'; big.mult = 3.1; big.state = MK_PENDING; Mark small_; small_.kind = 'A'; small_.mult = 1.4; small_.state = MK_CONFIRMED;
+        std::vector<Slot> two(2); two[0].x = 100; two[0].w = 40; two[0].band = 1; two[0].rank = markRank(small_); two[1] = two[0]; two[1].x = 110; two[1].rank = markRank(big);
+        layoutMarks(two); CHECK(!two[0].show && two[1].show, "(2.0.1) layout: the bigger multiple keeps a contested spot");
     }
     // ---------------- slot pooling, adaptive QUIET
     {
@@ -248,8 +295,13 @@ int main()
         CHECK(fitRange(0) == 60 && fitRange(52) == 60 && fitRange(70) == 90 && fitRange(100) == 120 && fitRange(NAN) == 60, "scale: max(60, 1.15 x max |value|) rounded up to 10");
         CHECK(std::fabs(axisRange(60, 300, 22) - 60 * 150.0 / 128.0) < 1e-9 && axisRange(60, 40, 22) == 60, "axis range covers the signal bands (tiny pane: unchanged)");
         StateInfo s; s.code = "READY"; s.act = 1.43;
-        Mark a; a.kind = 'A'; a.px = 31446; a.state = MK_CONFIRMED;
-        CHECK(titleLine("2.0.0", "ES", s, true, 25, &a, "7,861.50") == "TF 2.0 ES  BUYERS 1.4x  last A 7,861.50", "title: READY + buyers + last confirmed signal");
+        Mark a; a.kind = 'A'; a.px = 31446; a.state = MK_CONFIRMED; a.mult = 3.14; a.absorbed = -840; a.held = 4; a.dir = 1;
+        s.act = 1.62;
+        CHECK(titleLine("2.0.1", "ES", s, true, 25, &a, "7,861.50") == "TF 2.0.1 ES  BUYERS 1.6x  last: A 3.1x 7,861.50  -840 absorbed  held 4t", "(2.0.1) title: READY + buyers + the last confirmed A");
+        std::vector<std::string> tp = titleParts("2.0.1", "ES", s, true, 25, &a, "7,861.50");
+        CHECK(tp.size() == 4 && tp[1] == "BUYERS" && tp[3].find("last: A 3.1x") != std::string::npos, "title parts for the coloured pane fallback (word, last A)");
+        a.absorbed = 1200; a.held = 0; CHECK(titleLine("2.0.1", "ES", s, true, -25, &a, "7,861.50") == "TF 2.0.1 ES  SELLERS 1.6x  last: A 3.1x 7,861.50  +1200 absorbed  held 0t", "title: buyers absorbed = + contracts");
+        s.act = 1.43;
         CHECK(titleLine("2.0.0", "NQ", s, true, -20, nullptr, "") == "TF 2.0 NQ  SELLERS 1.4x", "title: sellers, no signal yet");
         CHECK(titleLine("2.0.0", "NQ", s, true, 10, nullptr, "") == "TF 2.0 NQ  BALANCED 1.4x", "title: balanced inside +-15");
         StateInfo c; c.code = "CAL"; c.n = 51; c.need = 60;

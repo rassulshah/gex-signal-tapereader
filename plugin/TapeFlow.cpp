@@ -1,12 +1,15 @@
 /********************************************************************************
  *  TapeFlow.cpp  --  Investor/RT RTX extension  lsTapeFlow<MKT>  (v2.0.0, 2026-10-09)
  *
+ *  (2.0.1) Rassul 16:17: the chart shows ONLY absorption: "A? 3.1x" while pending, "A 3.1x" once confirmed (green, bottom, up
+ *  arrowhead = sellers absorbed; red, top, down arrowhead = buyers absorbed). P / E / F are decided and logged, never drawn.
  *  Rassul 2026-10-09: "implement proposed tapeflow. add an up arrow head or down arrowhead to the signal. make the whole thing look
  *  nice and neat with clear signals. use 1 letter to identify a signal but you can keep the ? until it is confirmed. use another
  *  color than a purple line." Earlier: "take the information that is there now and put it in that gray header so only the tape is
  *  in the pane"; "once a signal is given it should not change"; no Calibrating / Quiet uselessness - ready at the open everywhere.
  *
- *  The pane: the 30-s pressure bars (green buyers / red sellers, grey when the tape is quiet), the 180-s line (soft slate
+ *  (2.0.2) the 180-s line is no longer drawn ("get rid of the white line"); test mode draws nothing until the absorption test passes.
+ *  The pane: the 30-s pressure bars (green buyers / red sellers, grey when the tape is quiet), (2.0.0-2.0.1: the 180-s line, soft slate
  *  0xCBD5E1 - the one extra colour besides green / red / grey), a faint zero line, and the signals - ONE letter with a solid
  *  arrowhead: bullish = green UP arrowhead at the bottom, bearish = red DOWN arrowhead at the top, '?' until confirmed.
  *  P push, E exhaustion, A absorption, F flip (exact rules: TapeFlowLogic.h "THE SIGNALS"). At most one per bar; never two
@@ -58,17 +61,21 @@
 #include <limits>
 #include <direct.h>
 
-static const char* TF_VERSION = "2.0.0";   // (2.0.0, Rassul 2026-10-09 "implement proposed tapeflow") one-letter signals with a solid arrowhead - P push / E exhaustion / A absorption / F flip, '?' until confirmed, at most one per bar, never overlapping, decided on closed bars only and recorded in TapeFlow\<MKT>-signals-<session>.csv (no repaint, a restart redraws the same marks); the AW / AR / IN / x markers are gone from the pane (still in the events file); the 180-s line is soft slate instead of purple; no neutral band / +-35 lines / box; the readout is IRT's grey header "TF 2.0 ES  BUYERS 1.4x  last A 7,861.50" (one small pane line only if IRT does not re-read it); no settings at all; the session back-fill runs in 200-ms slices and then becomes the live engine (the same as one straight run); the calibration back-fill is one prior session at a time, 200-ms slices, outside RTH only, never copies the baseline store and resumes after a restart; only changed baseline files are rewritten; the previous session's flow and signals are shown from their files   // (1.1.5) baseline windows no longer need a trade every 5 s and quiet 20 s count; a thin 5-min slot borrows +-1 / +-2 neighbours; QUIET only after max(5 s, 3 x the slot's typical gap between trades)   // (1.1.4) a back-fill whose history is not strictly in time order is put in time order instead of rejected   // (1.1.3) every second's pressure is kept in TapeFlow\<MKT>-sec-<session>.csv for the nightly scoring   // (1.1.2) no gap in the pane where IRT was restarted   // (1.1.1) the audited 1.1.0 + integration fixes   // (1.0.3) 30-SEC pressure bars   // (1.0.2) one engine per DLL (timer-safe)
+static const char* TF_VERSION = "2.0.2";   // (2.0.2, Rassul "test it on all the markets before i use it") TEST MODE: the pane draws nothing; the 180-s line is removed from the pane and its output removed (Rassul 16:39 "get rid of the white line" - still computed for the logic, status and records); the pane scale fits the bars only; and the header says "TESTING - not for trading yet" (signals still decided and recorded); the outside-RTH back-fill also exports each of the last 10 sessions' tape (TapeFlow\<MKT>-tape-<session>.csv: second x price buy / sell / unknown / trades) and 3-min OHLCV (<MKT>-bars3-<session>.csv) for the absorption study   // (2.0.1, Rassul 16:17 "show only absorption") the pane draws ONLY absorption - "A? 3.1x" pending, "A 3.1x" confirmed (multiple = the aggressor's contracts in the zone over the AW's 20 s / the slot's normal biggest one-sided band volume per 20 s); P / E / F still decided and logged (signals file + status), never drawn; F's threshold = the slot's normal 180-s swing (>= 10) instead of a fixed 20; the header ends "last: A 3.1x 7,861.50  -840 absorbed  held 4t"; the fallback pane line colours BUYERS / SELLERS and the A; the signals file gains multiple / absorbed / held_ticks columns (the first 11 unchanged); baseline windows also keep their aggressive buy / sell (the slot swing)   // (2.0.0, Rassul 2026-10-09 "implement proposed tapeflow") one-letter signals with a solid arrowhead - P push / E exhaustion / A absorption / F flip, '?' until confirmed, at most one per bar, never overlapping, decided on closed bars only and recorded in TapeFlow\<MKT>-signals-<session>.csv (no repaint, a restart redraws the same marks); the AW / AR / IN / x markers are gone from the pane (still in the events file); the 180-s line is soft slate instead of purple; no neutral band / +-35 lines / box; the readout is IRT's grey header "TF 2.0 ES  BUYERS 1.4x  last A 7,861.50" (one small pane line only if IRT does not re-read it); no settings at all; the session back-fill runs in 200-ms slices and then becomes the live engine (the same as one straight run); the calibration back-fill is one prior session at a time, 200-ms slices, outside RTH only, never copies the baseline store and resumes after a restart; only changed baseline files are rewritten; the previous session's flow and signals are shown from their files   // (1.1.5) baseline windows no longer need a trade every 5 s and quiet 20 s count; a thin 5-min slot borrows +-1 / +-2 neighbours; QUIET only after max(5 s, 3 x the slot's typical gap between trades)   // (1.1.4) a back-fill whose history is not strictly in time order is put in time order instead of rejected   // (1.1.3) every second's pressure is kept in TapeFlow\<MKT>-sec-<session>.csv for the nightly scoring   // (1.1.2) no gap in the pane where IRT was restarted   // (1.1.1) the audited 1.1.0 + integration fixes   // (1.0.3) 30-SEC pressure bars   // (1.0.2) one engine per DLL (timer-safe)
 static const int LATE_MARGIN = 8; // quiet-second allowance retained; tune only from measured CQG delivery latency
 
 // colours (IRT COLOR = 0x00RRGGBB): green bullish, red bearish, grey (quiet bars, zero line, the fallback text) and ONE more -
-// the 180-s line in soft slate (Tailwind slate-300) - light, cool and clearly not the grey of a quiet bar or the old purple
+// (2.0.2) no 4th colour any more: the 180-s line (slate) is gone
 static const COLOR C_BUY    = 0x0022C55E;
 static const COLOR C_SELL   = 0x00EF4444;
 static const COLOR C_GRAY   = 0x0064748B;
-static const COLOR C_LINE   = 0x00CBD5E1;
 static const COLOR C_BG     = 0x00000000;   // the chart background the opacity blends into
 static const int FONT_PT = 9;
+#ifndef TF_TESTING_MODE
+#define TF_TESTING_MODE 1          // (2.0.2) 1 = test mode: nothing drawn, header "TESTING - not for trading yet"; signals still recorded
+#endif
+static const bool TF_TESTING = TF_TESTING_MODE != 0;
+static const int TAPE_SESSIONS = 10;   // (2.0.2) the tape export covers the last 10 trading sessions
 
 static std::string stamp(long long t);
 static std::string memoryEventKey(const tfl::Ev& e);
@@ -129,7 +136,8 @@ struct ReplayJob {
     std::vector<tfl::Tick> ticks; size_t pos = 0;
     std::unique_ptr<tfl::Engine> e; tfl::Store tiny; TCursor c2;
     long long fetchMs = 0, workMs = 0; int slices = 0; long trades = 0;
-    void clear() { active = false; ticks.clear(); ticks.shrink_to_fit(); pos = 0; e.reset(); tiny.clear(); c2.reset(); fetchMs = workMs = 0; slices = 0; trades = 0; }
+    std::unique_ptr<tfl::TapeWriter> tape; std::string tapePath, barsPath;   // (2.0.2) the tape export of this session (null = not needed)
+    void clear() { active = false; ticks.clear(); ticks.shrink_to_fit(); pos = 0; e.reset(); tiny.clear(); c2.reset(); fetchMs = workMs = 0; slices = 0; trades = 0; tape.reset(); tapePath.clear(); barsPath.clear(); }
 };
 
 struct TapeFlowState {
@@ -163,7 +171,7 @@ struct TapeFlowState {
     long long liveTicks = 0; int passes = 0;
     long long secWrittenT = LLONG_MIN; bool secInit = false;   // the per-second research file
     // the header title, the pane's scale, diagnostics
-    std::mutex titleMx; std::string title;
+    std::mutex titleMx; std::string title; std::vector<std::string> titleParts; int titleLastDir = 0;
     std::string titleSeen; time_t titleChangedAt = 0, lastInvalidate = 0; bool invalidatePending = false;
     std::atomic<long> titleCalls{0}; std::atomic<long long> lastTitleCall{0};
     double range = 60; int paneH = 0, band = 22;
@@ -176,6 +184,7 @@ struct TapeFlowState {
     ReplayJob sess, deep;
     std::set<long long> deepEmpty, deepTried; long long deepExhaustedBelow = LLONG_MIN; bool deepProgressRead = false;
     std::string deepNote = "not started"; int deepSessionsDone = 0; time_t deepCheckAt = 0;
+    int tapeFiles = 0; long long tapeBytes = 0; std::string tapeLast, tapeNote = "none yet";   // (2.0.2) the tape export
     std::map<long long, tfl::BarIn> bars;           // closed chart bars by time (captured in calc)
     int spb = 0;
     std::shared_ptr<BookHolder> book; long long bookSid = LLONG_MIN; std::string bookKey;
@@ -233,6 +242,9 @@ public:
     void deepSlice();
     void readDeepProgress();
     void writeDeepProgress();
+    std::string tapePathOf(long long sid, const char* kind) const { return tfDir() + "\\" + S().mkt + "-" + kind + "-" + std::to_string(sid) + ".csv"; }
+    bool tapeOnFile(long long sid) const { std::ifstream t(tapePathOf(sid, "tape").c_str()); return t.good(); }
+    bool appendText(const std::string& path, const std::string& text);
     void loadStore();
     void saveStore(bool all = false);
     std::string basePath(long long sid) const;
@@ -350,13 +362,12 @@ int cppExtension::destroy(void)
 
 int cppExtension::setup(void)
 {
-    // (2.0.0) NO settings: the settings window shows nothing to change. The two outputs (30-s pressure, 180-s line, each bar's
+    // (2.0.0) NO settings: the settings window shows nothing to change. (2.0.2) ONE output (30-s pressure, each bar's
     // value at its close) are OUTPUT_NO_UI + DRAW_INVISIBLE: IRT never draws them and they are not in the settings window.
-    setParameterVersion(3);
+    setParameterVersion(4);            // (2.0.2) bumped: one output instead of two
     setParameterDialogHeight(1);
     CPEN p(C_GRAY, 1, P_SOLID);
     setOutputParameter("30s pressure", DRAW_INVISIBLE, &p, C_GRAY, OUTPUT_NO_UI);
-    setOutputParameter("180s line", DRAW_INVISIBLE, &p, C_GRAY, OUTPUT_NO_UI);
     return RTX_OK;
 }
 
@@ -366,14 +377,14 @@ int cppExtension::calc(int iStartBar)
     me->pump("calc");
     long n = getBarCount();
     if (n > 0) {
-        RTARRAY o1(fOut1), o2(fOut2);
+        RTARRAY o1(fOut1);                                         // (2.0.2) one output: the 30-s pressure (the 180-s line is gone)
         int from = iStartBar > 0 ? iStartBar : 0;
         auto S = [&]() -> TapeFlowState& { return me->S(); };     // the state macros (eng, ...) expand to S().x
         std::unique_lock<std::recursive_mutex> lock(S().access, std::try_to_lock);
         const std::vector<tfl::SecRec>* H = lock.owns_lock() ? &eng.hist : nullptr;
         RTARRAYI dt(barDateTime);
         for (long i = from; i < n; i++) {
-            float a = 0.f, b = 0.f;
+            float a = 0.f;
             if (H && !H->empty()) {
                 const long long te = me->localSec((RTDATE)dt[(int)i]);
                 auto it = std::upper_bound(H->begin(), H->end(), te - 1, [](long long t, const tfl::SecRec& r) { return t < r.t; });
@@ -381,11 +392,10 @@ int cppExtension::calc(int iStartBar)
                     --it;
                     if (te - 1 - it->t <= 600) {
                         if (std::isfinite(it->f30)) a = (float)std::round(it->f30);
-                        if (std::isfinite(it->f180)) b = (float)std::round(it->f180);
                     }
                 }
             }
-            o1[(int)i] = a; o2[(int)i] = b;
+            o1[(int)i] = a;
         }
         if (lock.owns_lock()) me->captureBars(from);
     }
@@ -747,6 +757,12 @@ void TapeFlow::writeDeepProgress()
     for (long long s : S().deepTried) o << "tried," << s << "\n";
     if (S().deepExhaustedBelow != LLONG_MIN) o << "exhaustedBelow," << S().deepExhaustedBelow << "\n";
 }
+bool TapeFlow::appendText(const std::string& path, const std::string& text)
+{
+    if (text.empty()) return true;
+    std::ofstream o(path.c_str(), std::ios::app | std::ios::binary); if (!o.is_open()) return false;
+    o.write(text.data(), (std::streamsize)text.size()); o.flush(); return o.good();
+}
 void TapeFlow::deepSlice()
 {
     if (!S().storageReady || S().deepBlocked) return;
@@ -756,8 +772,15 @@ void TapeFlow::deepSlice()
     if (J.active) {
         const auto t0 = std::chrono::steady_clock::now(); size_t n = 0;
         while (J.pos < J.ticks.size()) {
+            if (J.tape) J.tape->add(J.ticks[J.pos]);
             J.e->add(J.ticks[J.pos++]); J.trades++;
             if ((++n & 1023) == 0 && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() >= SLICE_MS) break;
+        }
+        if (J.tape) {                                                 // (2.0.2) this slice's tape lines -> the .part files
+            if (J.pos >= J.ticks.size()) J.tape->finish();
+            const bool ok = appendText(J.tapePath + ".part", J.tape->tape) && appendText(J.barsPath + ".part", J.tape->bars);
+            J.tape->tape.clear(); J.tape->bars.clear();
+            if (!ok) { warn("tape export: cannot write " + J.tapePath + ".part"); J.tape.reset(); }
         }
         J.slices++; J.workMs += (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         if (J.pos < J.ticks.size()) { S().deepNote = "session " + std::to_string(J.sid) + ": " + std::to_string(J.pos) + " of " + std::to_string(J.ticks.size()) + " trades"; return; }
@@ -769,6 +792,14 @@ void TapeFlow::deepSlice()
         S().deepSessionsDone++;
         char b[200]; snprintf(b, sizeof(b), "calibration back-fill: session %lld measured (%zu windows, %ld trades, fetch %lld ms + %lld ms in %d slices)", J.sid, got, J.trades, J.fetchMs, J.workMs, J.slices);
         trace(b); S().deepNote = b;
+        if (J.tape) {                                                 // (2.0.2) complete: publish the session's tape and bars
+            std::remove(J.tapePath.c_str()); std::remove(J.barsPath.c_str());
+            const bool ok = std::rename((J.tapePath + ".part").c_str(), J.tapePath.c_str()) == 0 && std::rename((J.barsPath + ".part").c_str(), J.barsPath.c_str()) == 0;
+            long long bytes = 0; { std::ifstream a(J.tapePath.c_str(), std::ios::binary | std::ios::ate); if (a.good()) bytes += (long long)a.tellg(); std::ifstream c(J.barsPath.c_str(), std::ios::binary | std::ios::ate); if (c.good()) bytes += (long long)c.tellg(); }
+            if (ok) { S().tapeFiles++; S().tapeBytes += bytes; S().tapeLast = J.tapePath; }
+            char tb[200]; snprintf(tb, sizeof(tb), "session %lld: %lld lines, %lld bars, %.1f MB%s", J.sid, J.tape->lines, J.tape->barCount, bytes / 1048576.0, ok ? "" : " - RENAME FAILED");
+            S().tapeNote = tb; trace(std::string("tape export ") + tb);
+        }
         if (got == 0) S().deepEmpty.insert(J.sid);
         S().deepTried.insert(J.sid);                                  // measured once: never fetched again (even if IRT had only part of it)
         writeDeepProgress();
@@ -780,13 +811,20 @@ void TapeFlow::deepSlice()
     const long long sidNow = eng.curSid;
     if (sidNow == LLONG_MIN) return;
     const int complete = tfl::completeSessions(store, sidNow, COMPLETE_WINDOWS);
-    if (complete >= eng.cfg.sessionsBack) { S().deepNote = std::to_string(complete) + " complete prior sessions on file - nothing to do"; S().deepCheckAt = time(0) + 60; return; }
-    long long target = LLONG_MIN;
+    // a session needs a job when it is not yet calibrated (complete) or (2.0.2) when it is one of the last 10 trading sessions and
+    // its tape is not on file
+    long long target = LLONG_MIN; bool wantTape = false; int weekdays = 0;
     for (long long s = sidNow - 1; s >= sidNow - 21; --s) {
-        if (!tfl::tradingWeekday(s) || S().deepEmpty.count(s) || S().deepTried.count(s) || tfl::completeSession(store, s, COMPLETE_WINDOWS)) continue;
+        if (!tfl::tradingWeekday(s)) continue;
+        ++weekdays;
         if (S().deepExhaustedBelow != LLONG_MIN && s < S().deepExhaustedBelow) break;
-        target = s; break;
+        if (S().deepEmpty.count(s)) continue;
+        const bool needTape = weekdays <= TAPE_SESSIONS && !tapeOnFile(s);
+        const bool needCal = complete < eng.cfg.sessionsBack && !S().deepTried.count(s) && !tfl::completeSession(store, s, COMPLETE_WINDOWS);
+        if (!needTape && !needCal) continue;
+        target = s; wantTape = needTape; break;
     }
+    if (target == LLONG_MIN && complete >= eng.cfg.sessionsBack) { S().deepNote = std::to_string(complete) + " complete prior sessions on file, tape on file - nothing to do"; S().deepCheckAt = time(0) + 60; return; }
     if (target == LLONG_MIN) { S().deepNote = std::to_string(complete) + " complete prior sessions on file - IRT has no more history to measure"; S().deepCheckAt = time(0) + 60; return; }
     RTDATE now = currentDate(); const long long nowS = localSec(now);
     const long long startS = (target - 1) * 86400 + 17LL * 3600, endS = target * 86400 + 17LL * 3600;
@@ -817,6 +855,13 @@ void TapeFlow::deepSlice()
     }
     J.active = true; J.sid = target; J.endS = endS; J.pos = 0;
     J.e.reset(new tfl::Engine()); J.e->cfg = eng.cfg; J.e->attach(&J.tiny, sym);
+    if (wantTape) {                                                   // (2.0.2) a fresh .part (a crashed earlier attempt is redone)
+        J.tapePath = tapePathOf(target, "tape"); J.barsPath = tapePathOf(target, "bars3");
+        std::remove((J.tapePath + ".part").c_str()); std::remove((J.barsPath + ".part").c_str());
+        char hd[200]; snprintf(hd, sizeof(hd), "# TapeFlow %s tape %s %s session %lld tick %.10g\n", TF_VERSION, mkt.c_str(), sym.c_str(), target, tick);
+        if (appendText(J.tapePath + ".part", std::string(hd) + tfl::TapeWriter::tapeHeader() + "\n") &&
+            appendText(J.barsPath + ".part", std::string(hd) + tfl::TapeWriter::barsHeader() + "\n")) J.tape.reset(new tfl::TapeWriter());
+    }
     S().deepNote = "session " + std::to_string(target) + ": " + std::to_string(J.ticks.size()) + " trades fetched";
 }
 
@@ -1117,7 +1162,9 @@ void TapeFlow::decideSignals()
         // the engine has not closed this bar's seconds yet - unless the tape stopped before the bar ended (no trade since; the
         // bar is long over): then it is decided with what there is
         if (b.te - 1 > eng.lastT && !(eng.lastTrade() < b.te && nowS - LATE_MARGIN - 60 > b.te)) break;
-        H.book.feed(b, tfl::barFlow(eng.hist, eng.evs, b.ts, b.te, H.book.cfg));
+        const tfl::BinBase& bb = eng.base[tfl::binOf(b.ts)];               // F's threshold: this slot's normal 180-s swing
+        const double swing = bb.swing180 > 0 ? (double)bb.swing180 : tfl::recentSwing(eng.hist, b.te);
+        H.book.feed(b, tfl::barFlow(eng.hist, eng.evs, b.ts, b.te, H.book.cfg, swing));
     }
 }
 void TapeFlow::flushSignals()
@@ -1205,9 +1252,12 @@ void TapeFlow::updateTitle()
     const tfl::StateInfo st = stateInfo();
     const tfl::Feat& f = eng.last;
     tfl::Mark last; bool haveLast = false;
-    if (S().book) { std::lock_guard<std::mutex> g(S().book->mx); const tfl::Mark* m = S().book->book.lastConfirmed(); if (m) { last = *m; haveLast = true; } }
-    const std::string t = tfl::titleLine(TF_VERSION, mkt, st, f.f180ok, f.f180, haveLast ? &last : nullptr, haveLast ? fmtPx(last.px) : std::string());
-    { std::lock_guard<std::mutex> g(S().titleMx); S().title = t; }
+    if (S().book) { std::lock_guard<std::mutex> g(S().book->mx); const tfl::Mark* m = S().book->book.lastConfirmed('A'); if (m) { last = *m; haveLast = true; } }
+    const std::vector<std::string> parts = tfl::titleParts(TF_VERSION, mkt, st, f.f180ok, f.f180, haveLast ? &last : nullptr, haveLast ? fmtPx(last.px) : std::string());
+    std::vector<std::string> shown = parts;
+    if (TF_TESTING) { shown.assign(4, std::string()); shown[0] = parts[0]; shown[1] = "TESTING - not for trading yet"; }   // (2.0.2)
+    const std::string t = shown[0] + shown[1] + shown[2] + shown[3];
+    { std::lock_guard<std::mutex> g(S().titleMx); S().title = t; S().titleParts = shown; S().titleLastDir = haveLast && !TF_TESTING ? last.dir : 0; }
     if (t != S().titleSeen) { S().titleSeen = t; S().titleChangedAt = time(0); S().invalidatePending = true; }
 }
 // IRT shows the title in the grey header only if it re-reads it after it changed; otherwise the pane shows it (one small line)
@@ -1276,6 +1326,9 @@ void TapeFlow::writeStatus()
     if (S().sess.active) f << ",replaying " << S().sess.pos << " of " << S().sess.ticks.size() << " trades";
     f << "\nBACKFILL_calibration," << S().deepNote << ",sessions measured this run " << S().deepSessionsDone << ",no-trade sessions " << S().deepEmpty.size()
       << ",history ends " << (S().deepExhaustedBelow == LLONG_MIN ? std::string("-") : std::to_string(S().deepExhaustedBelow)) << (S().deepBlocked ? ",BLOCKED" : "");
+    f << "\nTAPE_EXPORT,last " << S().tapeNote << ",files this run " << S().tapeFiles << ",size this run " << num(S().tapeBytes / 1048576.0, 1) << " MB"
+      << (S().deep.tape ? ",writing session " + std::to_string(S().deep.sid) : std::string()) << ",target last " << TAPE_SESSIONS << " sessions (outside RTH only)"
+      << "\nTEST_MODE," << (TF_TESTING ? "on - the pane draws nothing; signals recorded only" : "off");
     f << "\nQUIET,since last trade " << (st.sinceTrade < 0 ? std::string("-") : std::to_string(st.sinceTrade) + " s")
       << ",typical gap " << num(x.gapTypical, 1) << " s (" << (x.gapFromBase ? "this slot" : "live") << "),quiet after " << (int)x.quoteAgeEff << " s"
       << ",quote " << (x.quoteOk ? "current" : x.quoteResumed ? "resumed" : "not current") << ",hard stop " << eng.cfg.maxQuietGap << " s"
@@ -1296,9 +1349,11 @@ void TapeFlow::writeStatus()
         for (int k = 0; k < 4; ++k) f << "," << K[k] << " " << cnt[k][tfl::MK_CONFIRMED] << " confirmed / " << cnt[k][tfl::MK_PENDING] << " open? / " << cnt[k][tfl::MK_EXPIRED] << " never confirmed";
         int shown = 0;
         for (auto it = ms.rbegin(); it != ms.rend() && shown < 12; ++it, ++shown)
-            f << "\nTF_SIG" << (shown + 1) << "," << it->kind << (it->question() ? "?" : "") << "," << (it->dir > 0 ? "bullish" : "bearish") << ","
-              << (it->state == tfl::MK_CONFIRMED ? "confirmed" : it->state == tfl::MK_EXPIRED ? "never confirmed" : "open") << "," << clock12(it->barT) << ","
-              << fmtPx(it->px) << "," << tf_support::safeField(it->why);
+            f << "\nTF_SIG" << (shown + 1) << "," << (it->drawn() ? tfl::markLabel(*it) : std::string(1, it->kind) + (it->question() ? "?" : "") + " (logged only)") << ","
+              << (it->dir > 0 ? "bullish" : "bearish") << "," << (it->state == tfl::MK_CONFIRMED ? "confirmed" : it->state == tfl::MK_EXPIRED ? "never confirmed" : "open") << ","
+              << clock12(it->barT) << "," << fmtPx(it->px)
+              << (it->drawn() ? std::string(",zone ") + fmtPx(it->lo) + "-" + fmtPx(it->hi) + ",absorbed " + std::to_string(it->absorbed) + ",held " + std::to_string(it->held) + "t" : std::string())
+              << "," << tf_support::safeField(it->why);
     }
     for (size_t i = 0; i < 5; i++) f << "\nWARN" << (i + 1) << "," << (i < S().warns.size() ? S().warns[S().warns.size() - 1 - i] : std::string());
     const std::string body = f.str();
@@ -1367,7 +1422,7 @@ int TapeFlow::draw(void)
     return RTX_OK;
 }
 
-// the biggest |value| the pane shows for bars b0..b1: the 30-s sub-bars (same buckets as render) and the 180-s line
+// the biggest |value| the pane shows for bars b0..b1: the 30-s sub-bars (same buckets as render) - (2.0.2) bars only
 double TapeFlow::visibleMaxAbs(int b0, int b1)
 {
     const std::vector<tfl::SecRec>& H = eng.hist;
@@ -1398,8 +1453,6 @@ double TapeFlow::visibleMaxAbs(int b0, int b1)
             const long double sb = index.buys[j1] - index.buys[j0], ss = index.sells[j1] - index.sells[j0];
             if (sb + ss > 0) m = std::max(m, std::fabs((double)(100 * (sb - ss) / (sb + ss))));
         }
-        const size_t k = index.start(te);
-        if (k > 0 && H[k - 1].t >= ts && std::isfinite(H[k - 1].f180)) m = std::max(m, std::fabs((double)H[k - 1].f180));
     }
     return m;
 }
@@ -1449,6 +1502,10 @@ void TapeFlow::render()
     if (b1 >= n) b1 = (int)n - 1;
     if (b0 < 0) b0 = 0;
     const double rng = rangeFor(b0, b1); S().range = rng;
+    if (TF_TESTING) {                                                 // (2.0.2) test mode: nothing on the pane (only the header text)
+        if (fallback) { std::string t; { std::lock_guard<std::mutex> g(S().titleMx); t = S().title; } textLJ((short)(L + 6), (short)(T + fs + 3), t.c_str(), C_GRAY, fs, false); }
+        return;
+    }
     const double mid = (yInnerTop + yInnerBot) / 2.0, half = std::max(4.0, (yInnerBot - yInnerTop) / 2.0);
     auto Y = [&](double v) { return (short)(mid - v / rng * half + 0.5); };
     line(L, Y(0), R, Y(0), blend(C_GRAY, C_BG, 0.55), 1);           // the faint zero line
@@ -1467,14 +1524,13 @@ void TapeFlow::render()
         if (spb<=0) { textLJ((short)(L+8),(short)(T+12),"TapeFlow needs a time-based chart (your 3-minute chart)",C_GRAY,fs,false); return; }
         // the signals by bar time (today's book + the previous session's record)
         std::map<long long, tfl::Mark> byT;
-        for (const tfl::Mark& m : S().prevMarks) byT[m.barT] = m;
-        if (S().book) { std::lock_guard<std::mutex> g(S().book->mx); for (const tfl::Mark& m : S().book->book.marks) byT[m.barT] = m; }
+        for (const tfl::Mark& m : S().prevMarks) if (m.drawn()) byT[m.barT] = m;                    // (2.0.1) absorption only
+        if (S().book) { std::lock_guard<std::mutex> g(S().book->mx); for (const tfl::Mark& m : S().book->book.marks) if (m.drawn()) byT[m.barT] = m; }
         auto idxAtOrBefore = [&](long long t) -> long {
             long lo = 0, hi = (long)H.size();
             while (lo < hi) { long m = (lo + hi) / 2; if (H[(size_t)m].t <= t) lo = m + 1; else hi = m; }
             return lo - 1;
         };
-        short px180 = -1, py180 = -1;
         for (int i = b0; i <= b1; i++) {
             long long te = localSec((RTDATE)dt[i]);
             long long ts = i > 0 ? localSec((RTDATE)dt[i - 1]) : te - spb;
@@ -1483,8 +1539,7 @@ void TapeFlow::render()
             { auto mk = byT.find(te); if (mk != byT.end()) marks.push_back(std::make_pair(mk->second, x)); }
             if (H.empty()) continue;
             long k = idxAtOrBefore(te-1);
-            if (k < 0 || H[(size_t)k].t < ts) { px180 = -1; continue; }
-            const tfl::SecRec& q = H[(size_t)k];
+            if (k < 0 || H[(size_t)k].t < ts) continue;                    // no flow data for this bar
             {   // 30-s pressure bars: 6 per 3-min candle at normal zoom; at low zoom fewer, wider buckets (never overlapping)
                 int span = std::max(1, (int)(ppb * 0.9));
                 int slots=(int)((te-ts+29)/30);
@@ -1514,23 +1569,17 @@ void TapeFlow::render()
                     fill(x1, std::min(y0, y1), x2, std::max(y0, y1), c);
                 }
             }
-            if (!std::isnan(q.f180)) {
-                short y = Y(q.f180);
-                const double position=std::max(0.0,std::min(1.0,(double)(q.t+1-ts)/(double)(te-ts)));
-                const short sampleX=(short)(x+(position-0.5)*ppb*0.9);
-                if (px180 >= 0) line(px180, py180, sampleX, y, C_LINE, 2);
-                px180 = sampleX; py180 = y;
-            } else px180 = -1;
+            // (2.0.2, Rassul 16:39 "get rid of the white line") the 180-s line is no longer drawn (still computed: logic, status, records)
         }
-        // the signals: one letter + a solid arrowhead, bearish in the top band (letter on top, arrowhead pointing down at the tape),
-        // bullish in the bottom band (arrowhead pointing up, letter under it). Never two touching: the stronger one wins the spot.
+        // the absorption marks: "A? 3.1x" / "A 3.1x" + a solid arrowhead, bearish in the top band (text on top, arrowhead pointing down
+        // at the tape), bullish in the bottom band (arrowhead pointing up, text under it). Never two touching: the bigger multiple wins.
         std::vector<tfl::Slot> slots(marks.size());
         std::vector<std::string> labels(marks.size());
         for (size_t i = 0; i < marks.size(); ++i) {
             const tfl::Mark& m = marks[i].first;
-            labels[i] = std::string(1, m.kind) + (m.question() ? "?" : "");
+            labels[i] = tfl::markLabel(m);                                // "A? 3.1x" / "A 3.1x"
             const int tw = tinyPane ? 0 : textW(labels[i].c_str(), fs, true);
-            slots[i].x = marks[i].second; slots[i].w = std::max(11, tw) + 2; slots[i].band = m.dir > 0 ? 1 : -1;
+            slots[i].x = marks[i].second; slots[i].w = std::max(11, tw) + 4; slots[i].band = m.dir > 0 ? 1 : -1;
             slots[i].rank = tfl::markRank(m); slots[i].t = m.barT;
         }
         tfl::layoutMarks(slots);
@@ -1548,22 +1597,31 @@ void TapeFlow::render()
         }
     }
     // the fallback: IRT did not re-read the header title -> the same text, one small grey line at the top-left (no box)
-    if (fallback) {
-        std::string t; { std::lock_guard<std::mutex> g(S().titleMx); t = S().title; }
-        if (t.empty()) t = std::string("TF ") + tfl::shortVersion(TF_VERSION) + " " + mkt;
-        textLJ((short)(L + 6), (short)(T + fs + 3), t.c_str(), C_GRAY, fs, false);
+    if (fallback) {                                                       // grey text; BUYERS green, SELLERS red, the last A in its colour
+        std::vector<std::string> p; int ld = 0;
+        { std::lock_guard<std::mutex> g(S().titleMx); p = S().titleParts; ld = S().titleLastDir; }
+        if (p.size() != 4) { p.assign(4, std::string()); p[0] = std::string("TF ") + tfl::shortVersion(TF_VERSION) + " " + mkt; }
+        const COLOR cw = p[1] == "BUYERS" ? C_BUY : p[1] == "SELLERS" ? C_SELL : C_GRAY;
+        const COLOR cols[4] = { C_GRAY, cw, C_GRAY, ld > 0 ? C_BUY : ld < 0 ? C_SELL : C_GRAY };
+        short x = (short)(L + 6);
+        for (int k = 0; k < 4; ++k) {
+            if (p[k].empty()) continue;
+            const bool bold = (k == 1 && cw != C_GRAY) || k == 3;
+            textLJ(x, (short)(T + fs + 3), p[k].c_str(), cols[k], fs, bold);
+            x = (short)(x + textW(p[k].c_str(), fs, bold));
+        }
     }
 }
 
 extern "C" cppExtension *CreateExtension(void)
 {
     TapeFlow *p = new TapeFlow();
-    p->setArrayCount(2);
+    p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                             // its own pane (no OVERLAY), draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);
-    std::string d = std::string("LRA TapeFlow ") + TF_FIXED + " " + TF_VERSION + ": who is hitting the tape - 30-s pressure bars and the 180-s line - with "
-                    "one-letter signals: P push, E exhaustion, A absorption, F flip (green = bullish, red = bearish, '?' until confirmed). "
-                    "Signals are decided on closed bars only and never change. Put it on the " + TF_FIXED + " chart only.";
+    std::string d = std::string("LRA TapeFlow ") + TF_FIXED + " " + TF_VERSION + ": who is hitting the tape - 30-s pressure bars - and "
+                    "absorption: A 3.1x = aggressive volume at one zone 3.1 times this time of day's normal, absorbed (green = sellers absorbed, "
+                    "red = buyers absorbed, '?' until a bar closes away). Decided on closed bars only, never changes. Put it on the " + TF_FIXED + " chart only.";
     static std::string desc; desc = d;
     p->setDescription(desc.c_str());
     p->setVersion(TF_VERSION);

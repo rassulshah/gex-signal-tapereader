@@ -10,7 +10,8 @@ cppExtension::cppExtension() {}
 cppExtension::~cppExtension() {}
 cppExtension::CPEN::CPEN(COLOR c, short w, PEN_STYLE s) : color(c), style(s), width(w) {}
 cppExtension::FONT::FONT(FONT_ID i, short s, FONT_STYLE st) : id(i), size(s), style(st) {}
-void cppExtension::PNT::drawLineTo() { g_lines++; }
+std::map<unsigned long, long> g_lineColors; static unsigned long g_pen = 0;   // (2.0.2) lines drawn per pen colour
+void cppExtension::PNT::drawLineTo() { g_lines++; g_lineColors[g_pen]++; }
 RTX_RESULT cppExtension::PNT::set(int bar, float, BAR_POSITION) { h = (short)(40 + bar * 6); v = 0; return RTX_OK; }
 void cppExtension::PNT::setDrawPosition() {}
 void cppExtension::RCT::draw(short, COLOR, COLOR, DRAWTYPE, BRUSH_STYLE) { g_rects++; }
@@ -65,7 +66,7 @@ RTX_RESULT cppExtension::setIntegerParameter(const char*, int, short, short) { r
 RTX_RESULT cppExtension::setOutputParameter(const char*, int, CPEN*, COLOR, unsigned long) { return RTX_OK; }
 void cppExtension::setParameterDialogHeight(int, int) {}
 RTX_RESULT cppExtension::setParameterVersion(unsigned) { return RTX_OK; }
-void cppExtension::setPen(COLOR, short, PEN_STYLE) {}
+void cppExtension::setPen(COLOR c, short, PEN_STYLE) { g_pen = (unsigned long)c; }
 void cppExtension::setTextColor(COLOR) {}
 void cppExtension::setVersion(const char*) {}
 // (1.1.5) added for TapeFlow 1.1.5

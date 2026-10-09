@@ -14,3 +14,4 @@ extern std::string g_root, g_sym;
 extern std::vector<std::string> g_text;                  // text drawn this frame
 extern long g_lines, g_rects, g_ttCalls; extern long long g_ttLastStart, g_ttMaxBack;
 extern bool g_timerOk; extern int g_timerId;
+extern std::map<unsigned long, long> g_lineColors;                  // (2.0.2) lines drawn per pen colour

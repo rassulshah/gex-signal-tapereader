@@ -9,6 +9,7 @@
 #include <vector>
 std::vector<float> mockOut(int k);
 void mockBar(int i, float o, float h, float l, float c);
+#define TF_TESTING_MODE 0   // (2.0.2) these suites check the drawing: build with test mode OFF
 #include "TapeFlowES.cpp"
 #undef mkt
 #undef root
@@ -68,6 +69,9 @@ static std::vector<MTick> dayTape(long long from, long long to, unsigned seed, f
     }
     return v;
 }
+// (2.0.1) an absorption label: "A 3.1x" / "A? 3.1x"
+static bool aLabel(const std::string& s) { size_t i = 1; if (s.empty() || s[0] != 'A') return false; if (i < s.size() && s[i] == '?') i++; if (i >= s.size() || s[i] != ' ') return false; i++;
+    size_t d = i; while (i < s.size() && (isdigit((unsigned char)s[i]) || s[i] == '.')) i++; return i > d && i + 1 == s.size() && s[i] == 'x'; }
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static const std::string LS = "/tmp/tfv200/home\\InvestorRT\\rtx\\lsFlexLevels";
 static std::vector<tfl::BarIn> chart;                    // what the mock chart shows (OHLC in ticks)
@@ -91,6 +95,8 @@ static void tickPlugin(TapeFlow* tf, int secs)
         if (i % 60 == 0) { g_text.clear(); tf->draw(); }
     }
 }
+// (2.0.1) F's threshold exactly as the plugin picks it
+static double swingAt(const tfl::Engine& e, const tfl::BarIn& b) { const tfl::BinBase& bb = e.base[tfl::binOf(b.ts)]; return bb.swing180 > 0 ? (double)bb.swing180 : tfl::recentSwing(e.hist, b.te); }
 static std::vector<tfl::Mark> marksOf(TapeFlow* tf) { std::vector<tfl::Mark> m; if (tf->S().book) { std::lock_guard<std::mutex> g(tf->S().book->mx); m = tf->S().book->book.marks; } return m; }
 static std::string key(const tfl::Mark& m) { char b[96]; snprintf(b, sizeof(b), "%lld %c %d %d", m.barT, m.kind, m.dir, m.px); return b; }
 
@@ -121,7 +127,7 @@ int main()
     ref.advanceTo(tf->S().eng.lastT);
     tfl::SignalBook straight;
     const long long through1 = tf->S().book ? tf->S().book->book.decidedThrough : LLONG_MIN;
-    for (auto& b : chart) if (b.ts >= (sid - 1) * 86400 + 17LL * 3600 && b.te <= through1) straight.feed(b, tfl::barFlow(ref.hist, ref.evs, b.ts, b.te, straight.cfg));
+    for (auto& b : chart) if (b.ts >= (sid - 1) * 86400 + 17LL * 3600 && b.te <= through1) straight.feed(b, tfl::barFlow(ref.hist, ref.evs, b.ts, b.te, straight.cfg, swingAt(ref, b)));
     std::vector<tfl::Mark> m1 = marksOf(tf);
     bool same = m1.size() == straight.marks.size();
     for (size_t i = 0; same && i < m1.size(); ++i) if (key(m1[i]) != key(straight.marks[i]) || m1[i].state != straight.marks[i].state) same = false;
@@ -131,10 +137,17 @@ int main()
     CHECK(through1 == g_bars[g_bars.size() - 2] || through1 == g_bars[g_bars.size() - 3], "every closed bar decided, the forming bar never");
     CHECK(through1 < g_bars.back(), "the forming bar is never decided");
     // the pane: only letters (+ '?'), none touching (layout checked through what was drawn)
-    { g_text.clear(); tf->draw(); bool ok = true; size_t letters = 0;
-      for (auto& s : g_text) { if (s.find("TF ") == 0) continue; if (!(s.size() <= 2 && std::strchr("PEAF", s[0]) && (s.size() == 1 || s[1] == '?'))) ok = false; else letters++; }
-      printf("drawn letters %zu\n", letters);
-      CHECK(ok && letters > 0, "the pane's only text: one letter (+ '?') per drawn signal"); }
+    { char tt[160] = {0}; tf->parmsTitle(tt, sizeof(tt)); printf("title: %s\n", tt);         // IRT reads the header: no fallback line
+      CHECK(std::string(tt).find(std::string("TF ") + tfl::shortVersion(TF_VERSION) + " ES  ") == 0, "header title");
+      g_text.clear(); tf->draw(); bool ok = true; size_t letters = 0, nA = 0; std::string ex;
+      for (auto& s : g_text) { if (!aLabel(s)) ok = false; else { letters++; if (ex.empty()) ex = s; } }
+      for (auto& m : m1) if (m.drawn()) nA++;
+      printf("drawn labels %zu (e.g. '%s') of %zu A in the record\n", letters, ex.c_str(), nA);
+      CHECK(ok && letters > 0 && letters <= nA, "(2.0.1) the pane draws only absorption ('A 3.1x' / 'A? 3.1x'), never P / E / F"); }
+    { bool logged = false; for (auto& m : m1) if (!m.drawn()) logged = true; CHECK(logged, "(2.0.1) P / E / F are still decided and logged"); }
+    { bool sane = true; int withMult = 0, maxHeld = 0; for (auto& m : m1) if (m.drawn()) { if (!(m.mult >= 0 && m.mult < 1000) || m.held < 0 || m.held > 50 || (m.absorbed > 0) != (m.dir < 0)) sane = false; if (m.mult > 0) withMult++; maxHeld = std::max(maxHeld, m.held); }
+      printf("A multiples on %d marks, largest held %dt\n", withMult, maxHeld);
+      CHECK(sane && withMult > 0, "(2.0.1) every A carries a multiple (vs the slot's normal), signed contracts absorbed and ticks held from the real engine"); }
     // a chart reload: a NEW extension object in the same IRT -> the same record object, nothing written twice
     tickPlugin(tf, 1); static_cast<cppExtension*>(tf)->destroy();
     const std::string fileA = slurp(recPath);
@@ -162,14 +175,14 @@ int main()
         if (a.state == tfl::MK_EXPIRED && b.state != tfl::MK_EXPIRED) exact = false; } if (!f) exact = false; }
     printf("after the restart: %zu signals (%zu from before the restart, all matched: %s)\n", m3.size(), matched, exact ? "yes" : "no");
     CHECK(exact && !before.empty() && matched == before.size(), "IRT restart: the record redraws exactly the same signals (a '?' may only confirm)");
-    bool ordered = true; for (size_t i = 1; i < m3.size(); ++i) if (m3[i].barT <= m3[i - 1].barT) ordered = false;
-    CHECK(ordered, "still one signal per bar after the restart");
+    std::map<long long, int> nd, nl; bool ordered = true; for (auto& m : m3) if (m.drawn() ? ++nd[m.barT] > 1 : ++nl[m.barT] > 1) ordered = false;
+    CHECK(ordered, "still at most one drawn A and one logged signal per bar after the restart");
     // the restarted plugin vs a straight pass over the whole morning: the bars decided AFTER the restart match it too
     tfl::Store st3 = prior; tfl::Engine ref3; ref3.store = &st3; ref3.sym = "ESZ26";
     for (auto& k : g_ticks) if (k.t <= g_now) { tfl::Tick t; t.t = k.t; t.px = (int)llround(k.px / 0.25); t.bid = (int)llround(k.bid / 0.25); t.ask = (int)llround(k.ask / 0.25); t.q = k.q; ref3.add(t); }
     ref3.advanceTo(t3->S().eng.lastT);
     tfl::SignalBook straight3; const long long through3 = t3->S().book->book.decidedThrough;
-    for (auto& b : chart) if (b.ts >= (sid - 1) * 86400 + 17LL * 3600 && b.te <= through3) straight3.feed(b, tfl::barFlow(ref3.hist, ref3.evs, b.ts, b.te, straight3.cfg));
+    for (auto& b : chart) if (b.ts >= (sid - 1) * 86400 + 17LL * 3600 && b.te <= through3) straight3.feed(b, tfl::barFlow(ref3.hist, ref3.evs, b.ts, b.te, straight3.cfg, swingAt(ref3, b)));
     bool same3 = m3.size() == straight3.marks.size();
     for (size_t i = 0; same3 && i < m3.size(); ++i) if (key(m3[i]) != key(straight3.marks[i]) || m3[i].state != straight3.marks[i].state) same3 = false;
     CHECK(same3, "restart in the middle of the day: the signals equal one straight pass over the whole morning");
