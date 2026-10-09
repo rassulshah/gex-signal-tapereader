@@ -37,6 +37,7 @@
 #include "HostSlot.h"
 #include "DealerProfileAuditLogic.h"
 #include "OnTouchLogic.h"   // (2.6.0) the overnight touch odds, natively
+#include "KeyLevelsLogic.h" // (2.7.0) the key levels, natively from the chart's bars
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -48,7 +49,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.6.2";   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.7.0";   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -202,6 +203,10 @@ public:
     void loadLevels(const std::string& m);
     const LV* levelAt(const std::string& m, float chartPx);
     void drawKeyLevels(const Settings& S);
+    // (2.7.0) the native key levels, cached per market: recomputed when the chart gets a new bar (at most every 10 s)
+    struct KLC { long n = -1; long long lastT = 0; time_t at = 0; std::vector<klv::Merged> v; };
+    std::map<std::string, KLC> klc;
+    const std::vector<klv::Merged>& nativeLevels(const std::string& m);
 
     // cppExtension can be shared by host charts. These fields are the complete mutable
     // chart state, kept in the SDK's current-host storage rather than on the shared object.
@@ -832,39 +837,83 @@ const DealerProfile::LV* DealerProfile::levelAt(const std::string& m, float char
     return nullptr;
 }
 
+static double tickOfMkt(const std::string& m)
+{
+    return m == "CL" ? 0.01 : m == "NG" ? 0.001 : m == "GC" ? 0.1 : m == "HG" ? 0.0005 : m == "EU" ? 0.00005 : 0.25;
+}
+
+const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m)
+{
+    KLC& K = klc[m];
+    long n = getBarCount();
+    if (n < 2) { K.v.clear(); return K.v; }
+    RTARRAY h(barHigh), l(barLow), c(barClose); RTARRAYI dt(barDateTime);
+    long long lastT = (long long)dt[(int)n - 1];
+    time_t now = time(nullptr);
+    if (n == K.n && lastT == K.lastT && now - K.at < 60) return K.v;
+    if (now - K.at < 10 && K.n >= 0) return K.v;
+    int per = 0;
+    for (long i = n - 1; i > 0 && i > n - 40; i--) { long long d = (long long)dt[(int)i] - (long long)dt[(int)i - 1]; if (d > 0 && (per == 0 || d < per)) per = (int)d; }
+    if (per <= 0 || per > 3600) per = 180;
+    long from = n - (long)(15LL * 86400 / per); if (from < 0) from = 0;     // two weeks and a bit: enough for the prior week
+    std::vector<klv::Bar> B; B.reserve((size_t)(n - from));
+    for (long i = from; i < n; i++) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[(int)i], &t);
+        B.push_back(klv::Bar{ svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday), t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec, h[(int)i], l[(int)i], c[(int)i] });
+    }
+    int o = 0, cl = 0;
+    if (!svl::rthOf(m.c_str(), o, cl)) { K.v.clear(); return K.v; }
+    double tk = tickOfMkt(m);
+    K.v = klv::merge(klv::compute(B, per, o, cl, tk), tk);
+    K.n = n; K.lastT = lastT; K.at = now;
+    return K.v;
+}
+
 void DealerProfile::drawKeyLevels(const Settings& S)
 {
-    // (2.5.0) the key levels (ONH / ONL, LonHI / LonLO, PDH / PDL, PFH / PFL, PWH / PWL), the session VWAP and its 1 / 2 SD bands and the
-    // confirmed hourly swings with their touch odds "PDH 55%/70%?" (within 90 min / by the RTH close): a thin line + the label at the right,
-    // clear of the profile; amber = key level / VWAP, purple = hourly swing, white box = a pick
+    // (2.7.0, Rassul 2026-10-09 08:40 "it would probably be better if the dealer profile did all the levels and their probabilities")
+    // the key levels (PFH / PFL, PDH / PDL, PWH / PWL, ONH / ONL, LonHI / LonLO) and the latest standing hourly swings (HrHI / HrLO)
+    // are computed HERE from the chart's own bars (KeyLevelsLogic.h - lra.key_levels' definitions): a thin line + the label at the
+    // right, amber = key level, purple = hourly swing, white box = a pick. The odds: the LRA's champion law while its file is fresh
+    // ("42%/60%" = within 90 min / by the RTH close), otherwise the native 60-min odds ("1h 45%?"). The VWAP is never drawn here.
     if (mkt.empty()) return;
-    loadLevels(mkt);
-    if (lvStale[mkt] || lvAt[mkt] <= 0 || time(nullptr) - lvAt[mkt] > 20 * 60) return;
+    const std::vector<klv::Merged>& L = nativeLevels(mkt);
+    if (L.empty()) return;
     RCT pane; pane.getPaneRect(false);
     long nb = getBarCount(); if (nb < 1) return;
     int fs = S.font; if (fs < 7) fs = 7;
     short right = (short)(pane.right - S.width - 80);                // left of the profile and its 70 px chip column
-    for (const LV& q : lvs[mkt]) {
-        if (q.fam == "gamma") continue;                              // MenthorQ levels: drawMQLevels puts the odds on their own label
-        // (2.6.2, Rassul 2026-10-09 08:13 "you implemented vwap lines, when i told you i dont want vwap lines") the VWAP and its
-        // bands belong to lsSessionVWAP only (its own lines + "42%" badges) - never drawn here
-        if (q.fam == "vwap") continue;
-        std::string shown;                                           // a merged label ("ONL/LonLO/VWAP-1") keeps only its non-VWAP names
-        { size_t a0 = 0; while (a0 <= q.show.size()) { size_t b0 = q.show.find('/', a0); std::string part = q.show.substr(a0, b0 == std::string::npos ? std::string::npos : b0 - a0);
-            if (!part.empty() && part.compare(0, 4, "VWAP") != 0) shown += (shown.empty() ? "" : "/") + part; if (b0 == std::string::npos) break; a0 = b0 + 1; } }
-        if (shown.empty()) continue;
-        PNT pp; pp.set((int)(nb - 1), q.px + off); short y = pp.v;
+    const otl::OT op = otl::paramsFor(mkt.c_str());
+    double onSig = 0, lastC = 0;
+    {
+        RTARRAY cl(barClose); RTARRAYI dt(barDateTime);
+        if (nb > op.win + 1) {
+            double cw[64]; int k = 0;
+            for (long i = nb - op.win - 1; i < nb; i++) cw[k++] = (double)cl[(int)i];
+            long long per = (long long)dt[(int)nb - 1] - (long long)dt[(int)nb - 2];
+            if (per <= 0 || per > 3600) per = 180;
+            onSig = otl::onSigmaMin(cw, k, (int)per, op.win); lastC = (double)cl[(int)nb - 1];
+        }
+    }
+    for (const klv::Merged& q : L) {
+        PNT pp; pp.set((int)(nb - 1), (float)q.price); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) continue;
-        COLOR col = q.fam.compare(0, 5, "pivot") == 0 ? (COLOR)0x00C084FC : (COLOR)0x00F59E0B;
+        COLOR col = q.pivotOnly ? (COLOR)0x00C084FC : (COLOR)0x00F59E0B;
         line(pane.left, y, pane.right, y, col, 1);
-        // (Rassul 09:02 "PDH 55%/ 70% where 55% is within 90m and 70% is by the rth close")
-        char b[200]; snprintf(b, sizeof(b), "%s %s", shown.c_str(), q.label.c_str());
-        int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
-        short r = right, l = (short)(r - tw), t = (short)(y - h / 2), bt = (short)(y + h / 2);
-        box(l, t, r, bt, C_DARK);
-        COLOR bc = q.pick ? (COLOR)0x00FFFFFF : col;
-        line(l, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, l, bt, bc, 1); line(l, bt, l, t, bc, 1);
-        textLJ((short)(l + 5), y, b, col, fs - 1, false);
+        std::string odds; bool pick = false;
+        const LV* lv = levelAt(mkt, (float)q.price);                // the LRA's champion odds (fresh file only)
+        if (lv && !lv->label.empty()) { odds = lv->label; pick = lv->pick; }
+        else if (onSig > 0 && lastC > 0) {
+            double pr = otl::onTouch(q.price - lastC, onSig, 60, op.nu, op.k);
+            if (pr >= 0) { char a[24]; snprintf(a, sizeof(a), op.ready ? "1h %d%%" : "1h %d%%?", (int)std::floor(100.0 * pr + 0.5)); odds = a; }
+        }
+        char b[200]; snprintf(b, sizeof(b), "%s%s%s", q.name.c_str(), odds.empty() ? "" : " ", odds.c_str());
+        int tw = textW(b, fs - 1, false) + 10; short hh = (short)(fs + 6);
+        short r = right, lft = (short)(r - tw), t = (short)(y - hh / 2), bt = (short)(y + hh / 2);
+        box(lft, t, r, bt, C_DARK);
+        COLOR bc = pick ? (COLOR)0x00FFFFFF : col;
+        line(lft, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, lft, bt, bc, 1); line(lft, bt, lft, t, bc, 1);
+        textLJ((short)(lft + 5), y, b, col, fs - 1, false);
     }
 }
 
