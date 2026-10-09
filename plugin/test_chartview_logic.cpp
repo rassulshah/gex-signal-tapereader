@@ -235,6 +235,14 @@ int main()
         cvl::Snap e; check(validJson(cvl::document(cvl::body(e), "x", 0, cvl::FIRST)), "an empty snapshot is valid JSON");
     }
 
+    {   // (1.1.0) the camera's PNG encoder: signature, IHDR size, IEND, and a > 64 KB image (several stored blocks)
+        std::vector<unsigned char> px(300 * 250 * 3, 7);
+        std::string png = cvl::pngEncode(px.data(), 300, 250);
+        check(png.size() > 64 * 1024 && png.compare(0, 8, std::string("\x89PNG\r\n\x1a\n", 8)) == 0, "png signature + size");
+        check((unsigned char)png[16] == 0 && (unsigned char)png[18] == 1 && (unsigned char)png[19] == 44 && (unsigned char)png[22] == 0 && (unsigned char)png[23] == 250, "png IHDR 300 x 250");
+        check(png.compare(png.size() - 8, 4, "IEND") == 0, "png ends with IEND");
+        check(cvl::pngEncode(nullptr, 3, 3).empty() && cvl::pngEncode(px.data(), 0, 3).empty(), "png refuses bad input");
+    }
     std::printf("RESULT %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

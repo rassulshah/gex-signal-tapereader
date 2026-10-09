@@ -341,5 +341,47 @@ inline std::string document(const std::string& bodyText, const std::string& writ
          + ",\"why\":" + jstr(whyName(why)) + "," + bodyText + "}\n";
 }
 
+
+// (1.1.0) a dependency-free PNG encoder for the chart camera: RGB rows, filter 0, zlib "stored" blocks (no compression - a
+// 1000 x 450 chart is ~1.4 MB, fine for a file read once). Pure C++, tested on Linux (test_chartview_logic.cpp).
+inline unsigned long pngCrc(const unsigned char* p, size_t n, unsigned long c = 0xffffffffUL)
+{
+    static unsigned long T[256]; static bool init = false;
+    if (!init) { for (unsigned long i = 0; i < 256; i++) { unsigned long k = i; for (int j = 0; j < 8; j++) k = (k & 1) ? 0xedb88320UL ^ (k >> 1) : k >> 1; T[i] = k; } init = true; }
+    for (size_t i = 0; i < n; i++) c = T[(c ^ p[i]) & 0xff] ^ (c >> 8);
+    return c;
+}
+inline void pngPut32(std::string& o, unsigned long v) { o += (char)((v >> 24) & 255); o += (char)((v >> 16) & 255); o += (char)((v >> 8) & 255); o += (char)(v & 255); }
+inline void pngChunk(std::string& o, const char* type, const std::string& data)
+{
+    pngPut32(o, (unsigned long)data.size());
+    std::string td = std::string(type, 4) + data;
+    o += td;
+    pngPut32(o, pngCrc((const unsigned char*)td.data(), td.size()) ^ 0xffffffffUL);
+}
+// rgb = w * h * 3 bytes, top row first; returns the PNG file bytes ("" for bad sizes)
+inline std::string pngEncode(const unsigned char* rgb, int w, int h)
+{
+    if (!rgb || w <= 0 || h <= 0 || w > 20000 || h > 20000) return std::string();
+    std::string raw; raw.reserve((size_t)h * ((size_t)w * 3 + 1));
+    for (int y = 0; y < h; y++) { raw += (char)0; raw.append((const char*)rgb + (size_t)y * w * 3, (size_t)w * 3); }
+    std::string z; z += (char)0x78; z += (char)0x01;
+    unsigned long a = 1, b = 0;
+    for (size_t i = 0; i < raw.size(); i++) { a = (a + (unsigned char)raw[i]) % 65521UL; b = (b + a) % 65521UL; }
+    size_t pos = 0;
+    do {
+        size_t n = raw.size() - pos; if (n > 65535) n = 65535;
+        bool last = pos + n >= raw.size();
+        z += (char)(last ? 1 : 0);
+        z += (char)(n & 255); z += (char)((n >> 8) & 255); z += (char)(~n & 255); z += (char)((~n >> 8) & 255);
+        z.append(raw, pos, n); pos += n;
+    } while (pos < raw.size());
+    pngPut32(z, (b << 16) | a);
+    std::string o("\x89PNG\r\n\x1a\n", 8);
+    std::string ih; pngPut32(ih, (unsigned long)w); pngPut32(ih, (unsigned long)h); ih += (char)8; ih += (char)2; ih += (char)0; ih += (char)0; ih += (char)0;
+    pngChunk(o, "IHDR", ih); pngChunk(o, "IDAT", z); pngChunk(o, "IEND", std::string());
+    return o;
+}
+
 } // namespace cvl
 #endif

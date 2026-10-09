@@ -8,25 +8,22 @@
 //   * The window is found by its title (the chart's symbol + periodicity label, e.g. "GCEZ26" + "3 Minutes*").
 //   * Minimised windows are skipped (Windows cannot paint them).
 //   * Every Win32 / GDI+ call is checked; failures return an error text, never throw. The caller wraps this in try/catch.
-// The PNG is written to <path>.tmp then renamed over <path>.
+// The PNG is written to <path>.tmp then renamed over <path>. No GDI+ (its headers do not build next to the IRT SDK): pixels
+// come from GetDIBits and are encoded by cvl::pngEncode.
 #pragma once
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-#include <objidl.h>
-#include <algorithm>
-// NOMINMAX is defined by the plugins: GDI+ headers need min / max, so give them the std ones
-namespace Gdiplus { using std::min; using std::max; }
-#include <gdiplus.h>
 #include <string>
+#include <cstring>
 #include <vector>
+#include <cstdio>
+#include "ChartViewLogic.h"          // cvl::pngEncode (no GDI+: its headers clash with the SDK build)
 #ifdef _MSC_VER
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
-#pragma comment(lib, "gdiplus.lib")
-#pragma comment(lib, "ole32.lib")
 #endif
 
 namespace cvcam {
@@ -66,26 +63,11 @@ inline HWND findChart(const std::string& sym, const std::string& perLabel, int* 
     return f.best;
 }
 
-inline bool pngClsid(CLSID* out)
-{
-    // the GDI+ PNG encoder {557CF406-1A04-11D3-9A73-0000F81EF32E}
-    static const CLSID png = { 0x557cf406, 0x1a04, 0x11d3, { 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e } };
-    *out = png; return true;
-}
-
-inline ULONG_PTR gdipToken()
-{
-    static ULONG_PTR tok = 0; static bool tried = false;
-    if (!tried) { tried = true; Gdiplus::GdiplusStartupInput in; if (Gdiplus::GdiplusStartup(&tok, &in, NULL) != Gdiplus::Ok) tok = 0; }
-    return tok;
-}
-
 // paint the window into a bitmap and save it as PNG; returns "" on success or the reason it failed
 inline std::string capture(HWND h, const std::string& path, int* wOut, int* hOut)
 {
     if (!h || !IsWindow(h)) return "no window";
     if (IsIconic(h)) return "window minimised";
-    if (!gdipToken()) return "GDI+ unavailable";
     RECT r; if (!GetWindowRect(h, &r)) return "no window size";
     int w = r.right - r.left, ht = r.bottom - r.top;
     if (w <= 0 || ht <= 0 || w > 10000 || ht > 10000) return "bad window size";
@@ -101,16 +83,25 @@ inline std::string capture(HWND h, const std::string& path, int* wOut, int* hOut
     std::string err;
     if (!ok) err = "PrintWindow failed";
     else {
-        Gdiplus::Bitmap* b = Gdiplus::Bitmap::FromHBITMAP(bmp, NULL);
-        if (!b || b->GetLastStatus() != Gdiplus::Ok) err = "bitmap convert failed";
+        BITMAPINFO bi; memset(&bi, 0, sizeof(bi));
+        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER); bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -ht;   // top-down
+        bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
+        std::vector<unsigned char> px((size_t)w * (size_t)ht * 4);
+        if (GetDIBits(mem, bmp, 0, (UINT)ht, px.data(), &bi, DIB_RGB_COLORS) != ht) err = "pixel read failed";
         else {
-            CLSID id; pngClsid(&id);
-            std::string tmp = path + ".tmp";
-            std::wstring wt(tmp.begin(), tmp.end());       // paths are plain ASCII (USERPROFILE\InvestorRT\...)
-            if (b->Save(wt.c_str(), &id, NULL) != Gdiplus::Ok) err = "PNG save failed";
-            else if (!MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) { DeleteFileA(tmp.c_str()); err = "rename failed"; }
+            std::vector<unsigned char> rgb((size_t)w * (size_t)ht * 3);
+            for (size_t i = 0, n = (size_t)w * (size_t)ht; i < n; i++) { rgb[i * 3] = px[i * 4 + 2]; rgb[i * 3 + 1] = px[i * 4 + 1]; rgb[i * 3 + 2] = px[i * 4]; }
+            const std::string png = cvl::pngEncode(rgb.data(), w, ht);
+            const std::string tmp = path + ".tmp";
+            FILE* f = png.empty() ? NULL : fopen(tmp.c_str(), "wb");
+            if (!f) err = png.empty() ? "PNG encode failed" : "cannot write file";
+            else {
+                bool wr = fwrite(png.data(), 1, png.size(), f) == png.size();
+                if (fclose(f) != 0) wr = false;
+                if (!wr) { DeleteFileA(tmp.c_str()); err = "write failed"; }
+                else if (!MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) { DeleteFileA(tmp.c_str()); err = "rename failed"; }
+            }
         }
-        delete b;
     }
     DeleteObject(bmp); DeleteDC(mem);
     if (wOut) *wOut = w;
