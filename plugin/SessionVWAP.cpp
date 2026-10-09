@@ -53,11 +53,11 @@
 #include <limits>
 #include <new>
 
-static const char* SV_VERSION = "1.3.3";        // 1.3.3: his colours by default - VWAP magenta, +1 SD pale green, -1 SD light red, +2 SD green, -2 SD red.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.3.3";        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
-static const COLOR C_SD1  = 0x00C0DCC0;   // +1 SD pale green (1.3.3, Rassul 2026-10-09 13:39 his settings window colours)
-static const COLOR C_SD1L = 0x00FF8080;   // -1 SD light red
-static const COLOR C_SD2U = 0x00008000;   // +2 SD green
+static const COLOR C_SD1  = 0x00008000;   // +1 SD green (1.3.3, Rassul 2026-10-09 13:41 his settings window colours)
+static const COLOR C_SD1L = 0x00FFFF00;   // -1 SD yellow
+static const COLOR C_SD2U = 0x0000FF00;   // +2 SD lime
 static const COLOR C_SD2L = 0x00FF0000;   // -2 SD red
 static const COLOR C_SD2  = 0x00F0CAA6;   // +-2 SD peach
 static const COLOR C_DARK = 0x000B0F19;
@@ -111,16 +111,10 @@ int cppExtension::setup(void)
     // set" + his settings 22:37) NO settings: the plugin draws its own lines in HIS colours, VWAP 2 px and bands 1 px (VWAP magenta,
     // +-1 SD pale green, +-2 SD peach; the prior RTH VWAP dim grey) and the badges at a fixed 9 pt. The 11 outputs stay as invisible data arrays (the values,
     // per bar, for anything that reads them). Parameter version 3 drops whatever older settings a chart had saved.
-    setParameterVersion(3);
+    setParameterVersion(4);   // (1.3.3) output rows removed
     setParameterDialogHeight(1);
-    static const char* SV_OUTNAMES[11] = { "VWAP", "VWAP +1 SD", "VWAP -1 SD", "VWAP +2 SD", "VWAP -2 SD",
-                                   "O/N VWAP", "O/N +1 SD", "O/N -1 SD", "O/N +2 SD", "O/N -2 SD", "pRTH VWAP" };
-    static const COLOR OUTCOL[11] = { C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_PRTH };
-    for (int a = 0; a < 11; a++) {
-        CPEN p(OUTCOL[a], 1, P_SOLID);
-        setOutputParameter(SV_OUTNAMES[a], DRAW_INVISIBLE, &p, OUTCOL[a], OUTPUT_ENABLED);
-        setArrayDrawingFlags(a, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
-    }
+    // (1.3.3, Rassul 13:41 "take away the options") no rows in the settings window: the 11 value arrays still exist
+    // (setArrayCount) for anything that reads them; the plugin draws the lines itself in his colours, VWAP 2 px, bands 1 px.
     SV.font = -1;
     return RTX_OK;
 }
