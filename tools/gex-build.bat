@@ -33,14 +33,14 @@ call :one GammaProfile lsGammaProfile GammaProfileLogic.h ContractOffsetLogic.h
 call :one DayModel     lsDayModel     DayModelLogic.h HostSlot.h
 call :one DayStats     lsDayStats     DayStatsLogic.h HostSlot.h
 call :one KingTracker  lsKingTracker  KingTrackerLogic.h ContractOffsetLogic.h
-call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h
+call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h
 call :one DealerRead   lsDealerRead   DealerLogic.h HostSlot.h
 call :one DealerSig    lsDealerSig    DealerLogic.h
 call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h
 call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h
-call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h
+call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h
@@ -66,7 +66,7 @@ set DLL=%~2.dll
 set SRCHASH=
 call :hashof "%PLUG%\%NAME%.cpp"
 set SRCHASH=!H!
-for %%X in (%3 %4 %5 %6) do (
+for %%X in (%3 %4 %5 %6 %7 %8) do (
   if exist "%PLUG%\%%X" ( call :hashof "%PLUG%\%%X" & set SRCHASH=!SRCHASH!-!H! )
 )
 set BUILT=

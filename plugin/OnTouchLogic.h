@@ -4,6 +4,8 @@
 // tests walk-forward every night. Shown with "?" until proven.
 #pragma once
 #include <cmath>
+#include <cstring>
+#include "OnTouchParams.h"   // the nightly champion per market (lra.on_vwap_study 1.1.0 self-improvement) - compiled in
 
 namespace otl {
 
@@ -12,19 +14,34 @@ namespace otl {
 // chart (realised), the next 60 minutes at that pace (flat clock: the time-of-day curve added only 0.01 of skill), the same
 // fat-tailed first-passage law as the RTH badges (15-node Gauss-Hermite, nu 0.35). Shown with "?" until the study calls the
 // market "ready" (every well-filled 10% bin within 5 points on 20+ unseen sessions; ES was within 3 points on 2026-10-09).
-inline double onSigmaMin(const double* closes, int n, int perSec)
+struct OT { int win = 20; double nu = 0.35, k = 1.0; bool ready = false; };
+inline OT paramsFor(const char* m)
 {
-    if (n < 16 || perSec <= 0) return 0.0;
-    int a = n - 20 < 1 ? 1 : n - 20, k = 0; double s2 = 0;
+    OT o;
+    for (int i = 0; m && i < OT_N; i++) if (std::strcmp(OT_PARAMS[i].m, m) == 0) {
+        if (OT_PARAMS[i].win >= 5 && OT_PARAMS[i].win <= 60) o.win = OT_PARAMS[i].win;
+        if (OT_PARAMS[i].nu > 0 && OT_PARAMS[i].nu < 1.5) o.nu = OT_PARAMS[i].nu;
+        if (OT_PARAMS[i].k > 0.3 && OT_PARAMS[i].k < 3) o.k = OT_PARAMS[i].k;
+        o.ready = OT_PARAMS[i].ready != 0;
+    }
+    return o;
+}
+// sigma per minute from the last `win` close-to-close changes (closes[0..n-1], newest last)
+inline double onSigmaMin(const double* closes, int n, int perSec, int win = 20)
+{
+    if (win < 5) win = 5;
+    int need = win * 3 / 4 < 8 ? 8 : win * 3 / 4;
+    if (n < need + 1 || perSec <= 0) return 0.0;
+    int a = n - win < 1 ? 1 : n - win, k = 0; double s2 = 0;
     for (int i = a; i < n; i++) {
         double d = closes[i] - closes[i - 1];
         if (!std::isfinite(d)) return 0.0;
         s2 += d * d; k++;
     }
-    if (k < 15) return 0.0;
+    if (k < need) return 0.0;
     return std::sqrt(s2 / k / (perSec / 60.0));
 }
-inline double onTouch(double dist, double sigMin, int horizonMin = 60, double nu = 0.35)
+inline double onTouch(double dist, double sigMin, int horizonMin = 60, double nu = 0.35, double kk = 1.0)
 {
     static const double Z[15] = { -6.363947888829839, -5.190093591304781, -4.1962077112690155, -3.2890824243987664, -2.432436827009758,
         -1.6067100690287297, -0.799129068324548, 0.0, 0.799129068324548, 1.6067100690287297, 2.432436827009758, 3.2890824243987664,
@@ -35,7 +52,7 @@ inline double onTouch(double dist, double sigMin, int horizonMin = 60, double nu
     if (!std::isfinite(dist) || !std::isfinite(sigMin)) return -1.0;
     double V = sigMin * sigMin * horizonMin;
     if (!(V > 0)) return std::fabs(dist) < 1e-12 ? 1.0 : 0.0;
-    double r = std::sqrt(V), s = 0;
+    double r = std::sqrt(V) * (kk > 0 ? kk : 1.0), s = 0;
     for (int i = 0; i < 15; i++) s += W[i] * std::erfc(std::fabs(dist) / (std::sqrt(2.0) * r * std::exp(nu * Z[i] - 0.5 * nu * nu)));
     return s < 0 ? 0 : s > 1 ? 1 : s;
 }

@@ -61,7 +61,10 @@ int main()
     { double c[21]; for (int i = 0; i < 21; i++) c[i] = 100 + ((i % 2) ? 0.5 : -0.5);
       CHECK(std::fabs(onSigmaMin(c, 21, 180) - 1.0 / std::sqrt(3.0)) < 1e-9, "sigma per minute from 20 three-minute closes");
       CHECK(onSigmaMin(c, 10, 180) == 0.0, "too few closes: no odds");
+      CHECK(std::fabs(onSigmaMin(c, 21, 180, 10) - 1.0 / std::sqrt(3.0)) < 1e-9, "a 10-close window");
       c[20] = NAN; CHECK(onSigmaMin(c, 21, 180) == 0.0, "a bad close: no odds"); }
+    CHECK(std::fabs(otl::onTouch(5, 0.6, 60, 0.2, 1.15) - 0.33938415986530873) < 1e-9, "champion nu / k match the study");
+    { otl::OT q = otl::paramsFor("NQ"); CHECK(q.win >= 5 && q.nu > 0 && q.k > 0, "NQ params read"); otl::OT z = otl::paramsFor("XX"); CHECK(z.win == 20 && z.nu == 0.35 && z.k == 1.0 && !z.ready, "unknown market: shipped defaults"); }
     CHECK(onTouch(0.0, 0.0) == 1.0 && onTouch(1.0, 0.0) == 0.0 && onTouch(NAN, 1.0) < 0, "edge cases");
     printf("%d passed, %d failed\n", passes, fails);
     return fails;
