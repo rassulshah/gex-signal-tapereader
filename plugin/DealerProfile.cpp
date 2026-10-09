@@ -26,10 +26,10 @@
 #define NOMINMAX
 #endif
 #include <map>
-#include "irtsdk.h"
 #ifdef _WIN32
-#include <windows.h>
+#include <windows.h>     // BEFORE irtsdk.h: the SDK's RTBOOL clashes with minwindef.h's BOOL the other way round (MSVC C2371)
 #endif
+#include "irtsdk.h"
 #ifdef far
 #undef far
 #endif
