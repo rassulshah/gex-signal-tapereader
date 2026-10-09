@@ -145,6 +145,15 @@ int main(){
         check(nodeGone,"fixture: node still in window");
         check(rings>=1,"circle vanished with the node (repaint)");cleanup(p,h);
     });
+    test("2.5.0: accumulation / distribution zones are not drawn (absorption only)",[]{
+        mock::Host h=history(110,60);
+        for(auto& b:h.bars){b.rows={mock::Price(100,30,0,30),mock::Price(101,30,0,30),mock::Price(110,1,0,1),mock::Price(115,0,1,1),mock::Price(120,0,1,1)};b.volume=63;b.low=100;b.high=120;b.open=105;b.close=105;}
+        mock::current=&h;DeltaProfile p;p.draw();
+        bool zone=false;for(const dp::Zone& z:state(h).snapshot.zones) if(z.code.rfind("Acc",0)==0||z.code.rfind("Dst",0)==0) zone=true;
+        bool drawn=false;for(const mock::Draw& d:h.draws) if(d.type=="text" && (d.text.rfind("Acc",0)==0||d.text.rfind("Dst",0)==0)) drawn=true;
+        check(zone,"fixture: no Acc/Dst zone formed");
+        check(!drawn,"Acc/Dst label drawn");cleanup(p,h);
+    });
     test("initiative letter never receives a circle",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(80,1,0,1),mock::Price(81,1,0,1),mock::Price(82,1,0,1),mock::Price(83,1,0,1),mock::Price(84,1,0,1)};b.volume=5;b.low=79;b.high=100;b.open=97;b.close=96;}

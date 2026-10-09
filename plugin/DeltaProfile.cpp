@@ -46,7 +46,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.0";   // (2.5.0) confirmation = the first 3-min close beyond the node (no 15-min hold); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.0";   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -628,6 +628,7 @@ bool DeltaProfile::render(ChartState& s) {
         if ((z.code == "A" || z.code == "A?") && z.peakBar >= 0 && z.peakBar < s.barCount)       // (2.4.3) zone absorption gets its circle too
             ringed.push_back(z.peakBar), ringAt(z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * profile.tick, z.support ? C_SUPPORT : C_RESISTANCE,
                    pane.left, paneRight, top, bottom);
+        if (z.code != "A" && z.code != "A?") continue;   // (2.5.0, Rassul 13:59 "remove the accumulation and distribution ... only keep absorption")
         int yt = yOf(lastBar, (static_cast<double>(z.high) + 0.5) * profile.tick);
         int yb = yOf(lastBar, (static_cast<double>(z.low) - 0.5) * profile.tick);
         if (yb <= top || yt >= bottom) continue;
