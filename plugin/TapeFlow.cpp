@@ -46,7 +46,7 @@
 #include <limits>
 #include <direct.h>
 
-static const char* TF_VERSION = "1.1.2";   // (1.1.2) no gap in the pane where IRT was restarted (cold 10-min catch-up filled from the longer replay)   // (1.1.1) the audited 1.1.0 + two integration fixes: compiles with the real SDK (currentDate non-const); a quiet second pauses the warm-up instead of restarting it (HG etc. could never warm up)   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
+static const char* TF_VERSION = "1.1.3";   // (1.1.3) calibrated by the first morning: the 3d / 6d / 11d back-fill also runs outside this market's RTH (was only 16:00-17:00) and, while uncalibrated, in RTH too (2 min apart); every second's pressure is kept in TapeFlow\<MKT>-sec-<session>.csv for the nightly scoring   // (1.1.2) no gap in the pane where IRT was restarted (cold 10-min catch-up filled from the longer replay)   // (1.1.1) the audited 1.1.0 + two integration fixes: compiles with the real SDK (currentDate non-const); a quiet second pauses the warm-up instead of restarting it (HG etc. could never warm up)   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
 static const bool TF_PROVEN = false;
 static const int LATE_MARGIN = 8; // quiet-second allowance retained; tune only from measured CQG delivery latency
 
@@ -142,6 +142,7 @@ struct TapeFlowState {
     size_t indexedSize = (size_t)-1;
     long long indexedFirst = LLONG_MIN, indexedLast = LLONG_MIN;
     long long liveTicks = 0; int passes = 0;
+    long long secWrittenT = LLONG_MIN; bool secInit = false;   // (1.1.3) the per-second research file
     int font = 9;
 };
 static int timerIdFor(const void* me) { return static_cast<const TapeFlowState*>(me)->uniqueTimerId; }
@@ -195,6 +196,8 @@ public:
     void saveStore();
     std::string basePath(long long sid) const;
     void writeEvents(bool force);
+    void writeSeconds();
+    bool inOwnRth() const;
     void writeStatus();
     std::string stateText(COLOR* col) const;
     bool offHours() const;
@@ -401,7 +404,7 @@ void TapeFlow::pass(bool fromTimer)
     captureCommitted();             // then the new trades since the cursor (a market that opens later starts here)
     time_t now = time(0);
     if (S().storageReady && now - lastSave >= 300) { lastSave = now; eng.flushSession(); saveStore(); }
-    if (S().storageReady && now - lastEvWrite >= 5) { lastEvWrite = now; writeEvents(false); }
+    if (S().storageReady && now - lastEvWrite >= 5) { lastEvWrite = now; writeEvents(false); writeSeconds(); }
     if (S().storageReady && now - lastStatus >= 5) { lastStatus = now; writeStatus(); }
     busy = false;
     } catch (const std::exception& ex) {
@@ -504,8 +507,16 @@ void TapeFlow::runSteps()
     if (spec.deep) {
         if (deepDone) { step = NSTEPS; return; }
         if (!S().storageReady) { stepNote="deep backfill paused: crash-guard directory unavailable"; return; }
-        if (tfl::priorSessions(store, eng.curSid) >= 10) { deepDone = true; step = NSTEPS; return; }
-        if (!offHours()) return;                                                  // older history only outside trading hours
+        const long long prior = tfl::priorSessions(store, eng.curSid);
+        if (prior >= 10) { deepDone = true; step = NSTEPS; return; }
+        // (1.1.3, Rassul 22:31 "have a working tapeflow indicator that works for all markets that i trade" by the morning) the
+        // baselines need 60 windows per 5-min bin = 4+ prior sessions. 1.1.x only deepened 16:00-17:00, so a morning restart
+        // stayed CALIBRATING all day. Now: any time outside this market's RTH, and inside RTH only while uncalibrated (< 4
+        // sessions), 2 minutes apart (each deep step holds IRT ~1-2 s on ES).
+        if (!offHours() && inOwnRth()) {
+            if (prior >= 4) return;
+            if (now - lastStepAt < 120) return;
+        }
     }
     rebuild(step);
     lastStepAt = time(0);
@@ -759,6 +770,64 @@ void TapeFlow::captureCommitted()
         S().committed.erase(S().committed.begin(),end);
     }
 }
+// (1.1.3) this market's RTH (Central, lra.markets), for the back-fill rule only
+bool TapeFlow::inOwnRth() const
+{
+    struct tm t; std::memset(&t,0,sizeof(t)); const_cast<TapeFlow*>(this)->getLocaltime(const_cast<TapeFlow*>(this)->currentDate(),&t);
+    if (t.tm_wday == 0 || t.tm_wday == 6) return false;
+    const int m = t.tm_hour * 60 + t.tm_min; const std::string k = mkt;
+    int a = 510, b = 900;                                            // ES / NQ
+    if (k == "CL" || k == "NG") { a = 480; b = 810; }
+    else if (k == "GC" || k == "HG") { a = 440; b = 750; }
+    else if (k == "EU") { a = 440; b = 840; }
+    return m >= a - 15 && m < b;                                    // and the 15 min before the open
+}
+
+// (1.1.3) every closed second's pressure (the pane's own numbers) -> TapeFlow\<MKT>-sec-<session>.csv, appended, for the
+// nightly scoring and the per-market tuning ("eventually i want this indicator optimized over time")
+void TapeFlow::writeSeconds()
+{
+    if (!S().storageReady || mkt.empty() || tfDir().empty() || eng.hist.empty()) return;
+    const long long sidNow = eng.curSid;
+    if (sidNow == LLONG_MIN) return;
+    auto pathOf = [&](long long sid) { return tfDir() + "\\" + mkt + "-sec-" + std::to_string(sid) + ".csv"; };
+    if (!S().secInit) {                                              // after a restart: continue after the file's last second
+        S().secInit = true;
+        std::ifstream f(pathOf(sidNow).c_str(), std::ios::binary);
+        if (f.good()) {
+            f.seekg(0, std::ios::end); long long sz = (long long)f.tellg();
+            f.seekg(sz > 4096 ? sz - 4096 : 0); std::string ln, lastLn;
+            while (std::getline(f, ln)) if (!ln.empty() && ln[0] >= '0' && ln[0] <= '9') lastLn = ln;
+            size_t bar = lastLn.find('|');
+            if (bar != std::string::npos) { long long t = std::atoll(lastLn.c_str()); if (t > 0) S().secWrittenT = t; }
+        }
+    }
+    const long long upTo = eng.lastT - 1;                            // closed seconds only
+    std::map<long long, std::string> add;
+    auto num = [](float x, int dp) { if (!std::isfinite(x)) return std::string(); char q[24]; snprintf(q, sizeof(q), "%.*f", dp, (double)x); return std::string(q); };
+    long long last = S().secWrittenT;
+    for (const tfl::SecRec& r : eng.hist) {
+        if (r.t <= S().secWrittenT || r.t > upTo) continue;
+        const long long sid = tfl::sessionOf(r.t);
+        if (sid < sidNow - 1) continue;
+        std::string& o = add[sid];
+        o += std::to_string(r.t); o += '|'; o += stamp(r.t); o += '|';
+        o += num(r.f30, 2); o += '|'; o += num(r.f180, 2); o += '|'; o += num(r.a, 3); o += '|'; o += num(r.c30, 3); o += '|';
+        o += std::to_string(r.b); o += '|'; o += std::to_string(r.s); o += '|'; o += std::to_string(r.u); o += '|'; o += std::to_string((int)r.flags); o += '\n';
+        if (r.t > last) last = r.t;
+    }
+    for (auto& kv : add) {
+        const std::string p = pathOf(kv.first);
+        bool fresh; { std::ifstream t(p.c_str(), std::ios::binary | std::ios::ate); fresh = !t.good() || t.tellg() == std::streampos(0); }
+        std::ofstream o(p.c_str(), std::ios::app | std::ios::binary);
+        if (!o.is_open()) return;                                    // retried next time; nothing marked written
+        if (fresh) o << "t|time|f30|f180|activity|cov30|buy|sell|unknown|flags\n";
+        o << kv.second; o.flush();
+        if (!o.good()) return;
+    }
+    S().secWrittenT = last;
+}
+
 void TapeFlow::writeEvents(bool force)
 {
     if (!S().storageReady || mkt.empty() || tfDir().empty() || eng.curSid == LLONG_MIN) return;
