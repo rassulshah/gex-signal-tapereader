@@ -138,5 +138,17 @@ int main(){
         for(const mock::Draw& d:h.draws){check(d.type!="ring","initiative circle");if(d.type=="text" && d.text.find("I ")==0)letter=true;}
         check(letter,"initiative letter absent");cleanup(p,h);
     });
+    test("2.4.3: every absorption circle has its letter, even when the full label does not fit",[]{
+        mock::Host h=history(110,60);
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}
+        h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        mock::current=&h;DeltaProfile p;p.draw();
+        int ringsWide=0,lettersWide=0;for(const mock::Draw& d:h.draws){if(d.type=="ring")++ringsWide;if(d.type=="text" && d.text.rfind("A",0)==0 && (d.text.size()<=2 || d.text[1]==' ' || d.text[1]=='?'))++lettersWide;}
+        check(ringsWide==1 && lettersWide==1,"wide pane: one circle, one letter");
+        state(h).layout.width=600;h.draws.clear();p.draw();                 // a very wide profile leaves almost no room for labels
+        int rings=0,letters=0;for(const mock::Draw& d:h.draws){if(d.type=="ring")++rings;if(d.type=="text" && d.text.rfind("A",0)==0 && (d.text.size()<=2 || d.text[1]==' ' || d.text[1]=='?'))++letters;}
+        check(rings==letters,"circles and letters must match one to one");cleanup(p,h);
+    });
     std::cout<<"RESULT "<<passed<<" tests passed\n";
 }

@@ -40,7 +40,7 @@ struct Bucket {
     Bucket() : key(0), low(0), high(0), delta(0), volume(0), ratio(0) {}
 };
 struct Node { Tick bucket; double price, ratio; State state; };
-struct Zone { Tick low, high; std::string code; bool support; int share; };
+struct Zone { Tick low, high; std::string code; bool support; int share; int peakBar = -1; };   // (2.4.3) peakBar: where the zone's absorption happened, for its circle
 struct Snapshot {
     double tick, meanAbsDelta, maxAbsDelta, maxVolume;
     Tick ticksPerRow;
@@ -255,6 +255,7 @@ inline Snapshot build(const std::vector<Bar>& bars, double tick, bool allowConfi
                 const std::string name = sell ? "Dst" : "Acc";
                 Zone z; z.low = run.front().first; z.high = run.back().first;
                 z.share = static_cast<int>(std::floor(share * 100 + 0.5));
+                z.peakBar = state.peakBar;
                 z.code = state.code == "A" ? "A" : state.code == "I" ? name : name + "?";
                 z.support = (state.code == "A" || state.code == "I") ? state.support : !sell;
                 if (!allowConfirmation && z.code.back() != '?') z.code += "?";

@@ -46,7 +46,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.4.2";   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.4.3";   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -172,6 +172,7 @@ private:
     void textRight(int right, int y, const std::string& text, COLOR color, int font, bool bold);
     void textLeft(int left, int y, const std::string& text, COLOR color, int font, bool bold);
     void stroke(int x1, int y1, int x2, int y2, COLOR color, int width);
+    void ringAt(int bar, double price, COLOR color, int left, int right, int top, int bottom);
     void box(int left, int top, int right, int bottom, COLOR color);
 };
 
@@ -483,6 +484,14 @@ void DeltaProfile::stroke(int x1, int y1, int x2, int y2, COLOR color, int width
     PNT a; a.set(0, 0.0f); a.h = coordinate(x1); a.v = coordinate(y1); a.setDrawPosition();
     PNT b; b.set(0, 0.0f); b.h = coordinate(x2); b.v = coordinate(y2); b.drawLineTo();
 }
+// (2.4.3) the absorption circle: on the bar where the node's delta peaked, at the node's price
+void DeltaProfile::ringAt(int bar, double price, COLOR color, int left, int right, int top, int bottom) {
+    PNT point; point.set(bar, static_cast<float>(price), kBarCenter);
+    if (point.h - 6 < left || point.h + 6 > right || point.v - 6 < top || point.v + 6 > bottom) return;
+    setPen(color, 2, P_SOLID); CBRUSH brush(color, PAT_HOLLOW); brush.set();
+    RCT ring; ring.set(coordinate(point.h - 6), coordinate(point.v - 6), coordinate(point.h + 6), coordinate(point.v + 6));
+    ring.drawOval(DRAW_OPAQUE);
+}
 void DeltaProfile::box(int left, int top, int right, int bottom, COLOR color) {
     if (right <= left || bottom <= top) return;
     RCT rect; rect.set(coordinate(left), coordinate(top), coordinate(right), coordinate(bottom));
@@ -562,30 +571,29 @@ bool DeltaProfile::render(ChartState& s) {
     std::vector<int> used;
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const VisibleNode& v = nodes[i]; const dp::Node& n = *v.node;
-        const std::string label = n.state.code + " " + ratio(n.ratio);
-        const int width = textWidth(label, s.layout.font, true);
+        // (2.4.3, Rassul 2026-10-09 08:24 "are you making sure that you draw circles wherever there is absorption on the irt chart")
+        // the circle goes on the bar where the absorption happened for EVERY absorbing node, even when its letter does not fit
+        if ((n.state.code == "A" || n.state.code == "A?") && n.state.peakBar >= 0 && n.state.peakBar < s.barCount)
+            ringAt(n.state.peakBar, n.price, n.state.support ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
+        const bool absorbing = n.state.code == "A" || n.state.code == "A?";
+        std::string label = n.state.code + " " + ratio(n.ratio);
+        int width = textWidth(label, s.layout.font, true);
+        if (v.edge - 4 - width < pane.left + 2 && absorbing) { label = n.state.code; width = textWidth(label, s.layout.font, true); }   // (2.4.3) the letter always shows with its circle
         if (v.edge - 4 - width < pane.left + 2) continue;
         int y = v.y;
         if (!used.empty() && y - used.back() < s.layout.font + 2) y = used.back() + s.layout.font + 2;
-        if (y + s.layout.font / 2 >= bottom || y - s.layout.font / 2 <= top) continue;
+        if (y + s.layout.font / 2 >= bottom || y - s.layout.font / 2 <= top) { if (!absorbing) continue; y = std::max(top + s.layout.font / 2 + 1, std::min(bottom - s.layout.font / 2 - 1, v.y)); }
         const COLOR color = n.state.support ? C_SUPPORT : C_RESISTANCE;
         textRight(v.edge - 4, y, label, color, s.layout.font, true); used.push_back(y);
         if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1); // visible association when labels stack
-        // A circle is emitted ONLY after THIS exact node's letter is drawn.
-        // Direct chart bar index, full native identity; no minute truncation,
-        // global per-root ring memory, stale event, or ring-injected extra label.
-        if (n.state.code != "A" && n.state.code != "A?") continue;
-        if (n.state.peakBar < 0 || n.state.peakBar >= s.barCount) continue;
-        PNT point; point.set(n.state.peakBar, static_cast<float>(n.price), kBarCenter);
-        if (point.h - 6 < pane.left || point.h + 6 > paneRight || point.v - 6 < top || point.v + 6 > bottom) continue;
-        setPen(color, 2, P_SOLID); CBRUSH brush(color, PAT_HOLLOW); brush.set();
-        RCT ring; ring.set(coordinate(point.h - 6), coordinate(point.v - 6), coordinate(point.h + 6), coordinate(point.v + 6));
-        ring.drawOval(DRAW_OPAQUE);
     }
     // Zones supplement, rather than suppress, node letters. Avoid both overlap
     // and invisible bucket defaults by considering ONLY rendered bucket edges.
     for (std::size_t i = 0; i < profile.zones.size(); ++i) {
         const dp::Zone& z = profile.zones[i];
+        if ((z.code == "A" || z.code == "A?") && z.peakBar >= 0 && z.peakBar < s.barCount)       // (2.4.3) zone absorption gets its circle too
+            ringAt(z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * profile.tick, z.support ? C_SUPPORT : C_RESISTANCE,
+                   pane.left, paneRight, top, bottom);
         int yt = yOf(lastBar, (static_cast<double>(z.high) + 0.5) * profile.tick);
         int yb = yOf(lastBar, (static_cast<double>(z.low) - 0.5) * profile.tick);
         if (yb <= top || yt >= bottom) continue;
@@ -601,9 +609,17 @@ bool DeltaProfile::render(ChartState& s) {
         std::ostringstream out; out << z.code;
         if (z.code != "A" && z.code != "A?") out << ' ' << z.share << '%';
         const std::string label = out.str(); const int width = textWidth(label, s.layout.font, true);
-        const int y = (yt + yb) / 2;
+        int y = (yt + yb) / 2;
         bool collision = false;
         for (std::size_t j = 0; j < used.size(); ++j) if (std::abs(y - used[j]) < s.layout.font + 2) collision = true;
+        if (collision && (z.code == "A" || z.code == "A?")) {          // (2.4.3) an absorption zone always keeps its letter (it has a circle): move it clear
+            for (int tries = 0; tries < 6 && collision; ++tries) {
+                y += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (s.layout.font + 2);
+                collision = false;
+                for (std::size_t j = 0; j < used.size(); ++j) if (std::abs(y - used[j]) < s.layout.font + 2) collision = true;
+            }
+            collision = false;
+        }
         if (collision || e - 7 - width < pane.left + 2) continue;
         const COLOR color = z.support ? C_SUPPORT : C_RESISTANCE;
         stroke(e - 4, yt, e - 4, yb, color, 1); stroke(e - 4, yt, e - 1, yt, color, 1);
