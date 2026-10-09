@@ -167,6 +167,27 @@ int main(){
         int rings=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"){++rings;check(d.x==450,"circle moved to another bar");}
         check(rings>=1,"reset wiped the decided A's circle");cleanup(p,h);
     });
+    test("2.5.2: a node pushed out of the top 3 keeps its signal, is still decided by a green close, and keeps letter + circle",[]{
+        mock::Host h=history(110,60);
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}  // dojis: undecided
+        h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        mock::current=&h;DeltaProfile p;p.draw();
+        check(!latchBooks().empty() && latchBooks().begin()->second.v.size()==1 && latchBooks().begin()->second.v[0].code=="A?","candidate not tracked");
+        // three much bigger nodes appear: the 100 node leaves the top 3
+        mock::Bar big=h.bars.back();big.time+=60;big.rows={mock::Price(110,90000,0,90000),mock::Price(113,0,80000,80000),mock::Price(116,70000,0,70000)};big.volume=240000;big.open=104;big.close=104;h.bars.push_back(big);
+        h.draws.clear();p.draw();
+        bool inTop=false;for(const dp::Node& n:state(h).snapshot.nodes) if(n.price<101) inTop=true;
+        check(!inTop,"fixture: node still in the top 3");
+        // a green bar closes above the node, then one more bar so it is closed
+        mock::Bar g=h.bars.back();g.time+=60;g.rows={mock::Price(120,1,0,1)};g.volume=1;g.open=103;g.close=106;h.bars.push_back(g);
+        mock::Bar f=g;f.time+=60;h.bars.push_back(f);
+        h.draws.clear();p.draw();
+        check(latchBooks().begin()->second.v[0].code=="A" && latchBooks().begin()->second.v[0].support,"green close above did not decide the tracked node");
+        int rings=0;bool letter=false;
+        for(const mock::Draw& d:h.draws){if(d.type=="ring"&&d.x==450)++rings;if(d.type=="text"&&d.text=="A")letter=true;}
+        check(rings==1,"tracked A lost its circle");check(letter,"tracked A lost its letter");cleanup(p,h);
+    });
     test("initiative letter never receives a circle",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(80,1,0,1),mock::Price(81,1,0,1),mock::Price(82,1,0,1),mock::Price(83,1,0,1),mock::Price(84,1,0,1)};b.volume=5;b.low=79;b.high=100;b.open=97;b.close=96;}
