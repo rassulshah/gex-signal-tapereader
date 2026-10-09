@@ -251,7 +251,7 @@ void SessionInfo::box(const std::vector<std::pair<std::string, COLOR> >& lines0,
     short x0 = (short)ax, y0 = (short)ay;
     // (1.6.0) see-through by default: IRT's translucent fill lets the candles show through
     RCT bgR; bgR.set(x0, y0, (short)(x0 + W_), (short)(y0 + H_));
-    bgR.draw(1, C_BORDER, C_BOXBG, cfg.bg == 1 ? DRAW_OPAQUE : DRAW_TRANSLUCENT, PAT_SOLID);
+    bgR.draw(1, C_BORDER, C_BOXBG, DRAW_OPAQUE, PAT_SOLID);   // (1.6.6, Rassul 2026-10-09 11:22) always a solid background
     for (size_t i = 0; i < lines.size(); i++) {
         short yc = (short)(y0 + pad / 2 + lh * i + lh / 2);
         if (!lines[i].first.empty() && lines[i].first[0] == '\x01') {          // the expected-move bar: "\x01<pct>"
@@ -385,6 +385,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Session Info: when today's 0DTE options expire and the market's ACTIVE / CHOP windows in RTH. Use Settings > Position to place the panel.");
-    p->setVersion("1.6.5");   // (1.6.5) overflow-safe numeric fields from the external session file; (1.6.4) Market selection restored per native chart; validated, bounded session-file reads; unavailable source status; (1.6.3) Background / Show saved per market (IRT lists read -1 outside the settings window); (1.6.2) Background (Solid / See-through) is saved; (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag
+    p->setVersion("1.6.6");   // (1.6.6) solid background always; (1.6.5) overflow-safe numeric fields from the external session file; (1.6.4) Market selection restored per native chart; validated, bounded session-file reads; unavailable source status; (1.6.3) Background / Show saved per market (IRT lists read -1 outside the settings window); (1.6.2) Background (Solid / See-through) is saved; (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag
     return p;
 }

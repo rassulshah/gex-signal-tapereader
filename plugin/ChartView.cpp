@@ -44,7 +44,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define CV_VERSION "1.0.0"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
+#define CV_VERSION "1.0.1"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
 
 struct CVIdx { int enabled, bars, extra; };
 static CVIdx CX = { -1, -1, -1 };
@@ -62,6 +62,7 @@ struct ChartSub {
 struct CVState {
     std::map<std::string, ChartSub> subs;
     bool busy = false;
+    bool timerOn = false, timerTried = false, logged = false;   // (1.0.1) own 2-s clock: charts on hidden tabs keep updating
 };
 
 // DLL-wide caches (IRT calls extensions on its UI thread): the watch-list file and the copied files, re-read only on change
@@ -84,6 +85,26 @@ static std::string flexDir()
     const char* up = std::getenv("USERPROFILE");
     if (!up || !up[0]) return std::string();
     return std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels";
+}
+static int cvTimerId(const void* me) { return 7311 + (int)(((uintptr_t)me >> 4) % 100000); }
+// (1.0.1) a short trace so a chart that never writes can be diagnosed: lsFlexLevels\ChartView.trace.txt (capped at 64 KB)
+static void cvTrace(const std::string& line)
+{
+    try {
+        const std::string d = flexDir(); if (d.empty()) return;
+        const std::string p = d + "\\ChartView.trace.txt";
+        FILE* f = std::fopen(p.c_str(), "ab"); if (!f) return;
+        long sz = 0; if (std::fseek(f, 0, SEEK_END) == 0) sz = std::ftell(f);
+        if (sz > 65536) { std::fclose(f); f = std::fopen(p.c_str(), "wb"); if (!f) return; }
+        time_t t = time(nullptr); char ts[32] = {0}; struct tm lt;
+#ifdef _WIN32
+        localtime_s(&lt, &t);
+#else
+        localtime_r(&t, &lt);
+#endif
+        strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &lt);
+        std::fprintf(f, "%s  %s\r\n", ts, line.c_str()); std::fclose(f);
+    } catch (...) {}
 }
 static bool statFile(const std::string& p, long long& mtime, unsigned long long& size)
 {
@@ -171,11 +192,12 @@ class ChartView : public cppExtension {
 public:
     ChartView() : cppExtension() {}
     virtual int draw(void);
+    virtual int timer(RTX_EVENT* e);
     virtual int parmsLoad(void)  { return RTX_OK; }
     virtual int parmsApply(void) { return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { return RTX_OK; }
     void pump();
-    void release() { slot_.release(this); }
+    void release() { CVState* S = slot_.get(this, false); if (S && S->timerOn) { destroyTimer(cvTimerId(S)); S->timerOn = false; } slot_.release(this); }
 private:
     HostSlot<CVState> slot_;
     bool readSeries(const std::string& label, long n, long from, cvl::Series& out);
@@ -188,15 +210,19 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<ChartView*>(this)->release(); return RTX_OK; }   // symbol / period change: start clean
 int cppExtension::destroy(void) { static_cast<ChartView*>(this)->release(); return RTX_OK; }
 int cppExtension::calc(int)     { static_cast<ChartView*>(this)->pump(); return RTX_OK; }
-int ChartView::draw(void)       { pump(); return RTX_OK; }    // draws nothing: draw() only gives a second chance to run
+int ChartView::draw(void)       { pump(); return RTX_OK; }
+int ChartView::timer(RTX_EVENT* e)
+{
+    CVState* S = slot_.get(this, false);
+    if (!S || !e || e->v.timer.id != cvTimerId(S)) return RTX_FAIL;
+    pump(); return RTX_OK;
+}    // draws nothing: draw() only gives a second chance to run
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(1);
+    setParameterVersion(2);   // (1.0.1) Enabled and Bars removed
     setParameterDialogHeight(3);
     int pc = 0;
-    CX.enabled = pc++; setBoolParameter("Enabled", true);
-    CX.bars    = pc++; setIntegerParameter("Bars", cvl::DEFAULT_BARS, NUMW);
     CX.extra   = pc++; setStringParameter("Extra labels", "", 240);
     return RTX_OK;
 }
@@ -301,7 +327,11 @@ void ChartView::pump()
     S->busy = true;
     struct Unbusy { CVState* s; ~Unbusy() { s->busy = false; } } unbusy = { S };
     try {
-        if (CX.enabled >= 0 && !isBoxChecked(CX.enabled)) return;
+        if (!S->timerTried) {                                       // (1.0.1) ask once for the 2-s clock
+            S->timerTried = true;
+            S->timerOn = createTimer(cvTimerId(S), 2000) == RTX_OK;
+            cvTrace(std::string("loaded ") + CV_VERSION + (S->timerOn ? " - timer granted" : " - timer REFUSED, runs from calc/draw"));
+        }
         const long n = getBarCount();
         if (n < 2) return;
         RTARRAYI dt(barDateTime);
@@ -328,8 +358,7 @@ void ChartView::pump()
         cvl::Snap s;
         s.market = mkt; s.symbol = sym; s.root = root; s.chart = chart; s.chartBars = n;
         { const char* pl = getPeriodicityLabel(); s.periodicity = pl ? pl : ""; }
-        int N = getIntegerValue(CX.bars);
-        if (N <= 0) N = cvl::DEFAULT_BARS;
+        int N = cvl::DEFAULT_BARS;                                  // (1.0.1) fixed: no Bars setting
         if (N < cvl::MIN_BARS) N = cvl::MIN_BARS;
         if (N > cvl::MAX_BARS) N = cvl::MAX_BARS;
         s.barsWanted = N;
@@ -368,7 +397,7 @@ void ChartView::pump()
         const std::string doc = cvl::document(b, cvl::iso(lc, cvl::utcOffsetMin(lc, civilOf(ut))), (long long)now, why);
         const std::string outDir = dir + "\\ChartView";
         makeDir(outDir);
-        if (atomicWrite(outDir + "\\" + cvl::fileStem(mkt, s.period) + ".json", doc)) { C.lastHash = hsh; C.everWritten = true; C.writes++; }
+        if (atomicWrite(outDir + "\\" + cvl::fileStem(mkt, s.period) + ".json", doc)) { if (!C.everWritten) cvTrace("first snapshot " + cvl::fileStem(mkt, s.period) + " (" + key + ")"); C.lastHash = hsh; C.everWritten = true; C.writes++; } else if (C.writes == 0) cvTrace("write FAILED " + cvl::fileStem(mkt, s.period) + " (" + key + ")");
     } catch (...) {
         // never let a file / string failure reach IRT; the next new bar or 10 s tries again
     }
@@ -380,6 +409,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | CALC_LAST);
     p->setDescription("LRA ChartView: writes this chart's bars and indicator values to lsFlexLevels\\ChartView for Claude. Draws nothing.");
-    p->setVersion("1.0.0");   // CV_VERSION
+    p->setVersion("1.0.1");   // CV_VERSION
     return p;
 }
