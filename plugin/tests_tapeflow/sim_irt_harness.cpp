@@ -127,6 +127,11 @@ int main()
     bool histSame = tf->S().eng.hist.size() > 0;
     { size_t j = 0; for (auto& h : tf->S().eng.hist) { while (j < ref.hist.size() && ref.hist[j].t < h.t) j++; if (j < ref.hist.size() && ref.hist[j].t == h.t) { if (!(std::isnan(h.f30) && std::isnan(ref.hist[j].f30)) && h.f30 != ref.hist[j].f30) histSame = false; } } }
     CHECK(histSame, "the drawn 30-s flow equals the straight run second by second");
+    { long nanP = 0, nanR = 0; long long lo = tf->S().eng.hist.empty() ? 0 : tf->S().eng.hist.front().t;
+      for (auto& h : tf->S().eng.hist) if (std::isnan(h.f180)) nanP++;
+      for (auto& h : ref.hist) if (h.t >= lo && h.t <= until && std::isnan(h.f180)) nanR++;
+      printf("seconds without a 180-s value: plugin %ld, straight run %ld\n", nanP, nanR);
+      CHECK(nanP <= nanR + 5, "no extra gap in the 180-s line where the plugin started"); }
     CHECK(tf->S().eng.baseSessions == 5, "baselines from the 5 sessions on file");
     // the drawing
     g_text.clear(); g_lines = g_rects = 0; static_cast<cppExtension*>(tf)->calc(0); tf->draw();

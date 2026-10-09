@@ -46,7 +46,7 @@
 #include <limits>
 #include <direct.h>
 
-static const char* TF_VERSION = "1.1.1";   // (1.1.1) the audited 1.1.0 + two integration fixes: compiles with the real SDK (currentDate non-const); a quiet second pauses the warm-up instead of restarting it (HG etc. could never warm up)   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
+static const char* TF_VERSION = "1.1.2";   // (1.1.2) no gap in the pane where IRT was restarted (cold 10-min catch-up filled from the longer replay)   // (1.1.1) the audited 1.1.0 + two integration fixes: compiles with the real SDK (currentDate non-const); a quiet second pauses the warm-up instead of restarting it (HG etc. could never warm up)   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
 static const bool TF_PROVEN = false;
 static const int LATE_MARGIN = 8; // quiet-second allowance retained; tune only from measured CQG delivery latency
 
@@ -579,6 +579,22 @@ bool TapeFlow::rebuild(int idx)
         const auto prefixEnd = std::lower_bound(e2.hist.begin(),e2.hist.end(),firstLive,
             [](const tfl::SecRec& rec,long long time) { return rec.t < time; });
         eng.hist.insert(eng.hist.begin(),e2.hist.begin(),prefixEnd);
+        // (1.1.2) the first catch-up (10 min) started cold, so its first 30-180 s have no 30-s / 180-s values: the pane showed a
+        // gap where IRT was restarted. Fill ONLY those missing display values from this longer replay (same seconds, same
+        // trades); signals, episodes and committed events are untouched.
+        {
+            size_t j = (size_t)(prefixEnd - e2.hist.begin());
+            for (size_t i = (size_t)(prefixEnd - e2.hist.begin()); i < eng.hist.size() && j < e2.hist.size(); ++i) {
+                tfl::SecRec& h = eng.hist[i];
+                while (j < e2.hist.size() && e2.hist[j].t < h.t) ++j;
+                if (j >= e2.hist.size() || e2.hist[j].t != h.t) continue;
+                const bool any = std::isnan(h.f30) || std::isnan(h.f180);
+                if (std::isnan(h.f30)) h.f30 = e2.hist[j].f30;
+                if (std::isnan(h.f180)) h.f180 = e2.hist[j].f180;
+                if (!any) break;                                   // past the cold start: nothing more to fill
+            }
+            S().indexedSize = (size_t)-1;                          // rebuild the drawing index
+        }
         for (const auto& event:e2.evs) if (event.t < firstLive) {
             const std::string key=std::to_string(event.t)+"|"+std::to_string(event.ep)+"|"+event.kind+"|"+std::to_string(event.dir);
             if (S().committedKeys.insert(key).second) S().committed.push_back(event);
