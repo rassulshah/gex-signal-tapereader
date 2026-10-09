@@ -399,12 +399,19 @@ void TapeFlow::pass(bool fromTimer)
     if (!guardsRead) readGuards();
     passes++;
     if (S().storageReady) err.clear();
-    if (fromTimer) runSteps();        // the back-fill (one guarded step at a time) - from the timer only
-    if (step > 0 || !fromTimer) live();
+    // (1.1.3) every part of the pass is timed; over 250 ms = a SLOW trace line (the IRT freeze hunt, 2026-10-08)
+    auto t_a = std::chrono::steady_clock::now();
+    auto slowIf = [&](const char* what) {
+        const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t_a).count();
+        if (ms >= 250) trace(std::string("SLOW ") + what + " " + std::to_string(ms) + " ms");
+        t_a = std::chrono::steady_clock::now();
+    };
+    if (fromTimer) { const int st = step; runSteps(); slowIf(st < NSTEPS ? (std::string("back-fill ") + STEPS[st].name).c_str() : "back-fill"); }
+    if (step > 0 || !fromTimer) { live(); slowIf("live trades"); }
     captureCommitted();             // then the new trades since the cursor (a market that opens later starts here)
     time_t now = time(0);
-    if (S().storageReady && now - lastSave >= 300) { lastSave = now; eng.flushSession(); saveStore(); }
-    if (S().storageReady && now - lastEvWrite >= 5) { lastEvWrite = now; writeEvents(false); writeSeconds(); }
+    if (S().storageReady && now - lastSave >= 300) { lastSave = now; eng.flushSession(); saveStore(); slowIf("baseline save"); }
+    if (S().storageReady && now - lastEvWrite >= 5) { lastEvWrite = now; writeEvents(false); writeSeconds(); slowIf("event / second files"); }
     if (S().storageReady && now - lastStatus >= 5) { lastStatus = now; writeStatus(); }
     busy = false;
     } catch (const std::exception& ex) {
@@ -892,6 +899,8 @@ std::string TapeFlow::stateText(COLOR* col) const
     if (eng.ticks <= 0) { *col = C_MUTED; return "WAITING FOR TRADES"; }
     const tfl::Feat& f = eng.last;
     if (!err.empty()) { *col=C_MUTED; return "DATA / STORAGE ISSUE: "+err; }
+    // (1.1.3) overnight a quiet market has no trade (so no quote snapshot) for a few seconds: that is QUIET, not bad data
+    if (!f.quoteOk && f.warm && !f.classRecent) { *col=C_MUTED; return "QUIET - no trades in the last few seconds"; }
     if (!f.quoteOk && f.warm) { *col=C_MUTED; return "DATA INVALID - quote-at-trade snapshot unavailable"; }
     if (f.warm && f.c30 < eng.cfg.cov) { *col=C_MUTED; return "LOW SIDE COVERAGE - signals unavailable"; }
     if (!f.spreadOk) { *col=C_MUTED; return "WIDE SPREAD - signals unavailable"; }
