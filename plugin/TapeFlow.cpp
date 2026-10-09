@@ -1,5 +1,5 @@
 /********************************************************************************
- *  TapeFlow.cpp  --  Investor/RT RTX extension  lsTapeFlow<MKT>  (v1.0.2, 2026-10-08)
+ *  TapeFlow.cpp  --  Investor/RT RTX extension  lsTapeFlow<MKT>  (v1.0.3, 2026-10-08)
  *
  *  Rassul 2026-10-08 13:17-13:37: the TapeFlow brief; "i'll take your recommendation but i want to get it on all the markets,
  *  if signals are tentative just add ?"; "the markers should be on the indicator on a separate pane"; "keep levels out of it,
@@ -48,7 +48,7 @@
 #include <limits>
 #include <direct.h>
 
-static const char* TF_VERSION = "1.0.2";   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
+static const char* TF_VERSION = "1.0.3";   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
 static const bool TF_PROVEN = false;
 static const int LATE_MARGIN = 8;            // seconds a quiet second waits for late trades before it is evaluated          // the "?" goes when the nightly scoring proves the signals
 
@@ -764,7 +764,7 @@ void TapeFlow::render()
     if (n > 0 && b1 >= b0 && !H.empty()) {
         RTARRAYI dt(barDateTime);
         int ppb = getPixelsPerBar(); if (ppb < 1) ppb = 1;
-        short bw = (short)std::max(1, (int)(ppb * 0.7));
+        // (1.0.3) bar width: the 30-s sub-bars split 90% of the candle spacing
         int spb = getSecondsPerBar(); if (spb <= 0) spb = 180;
         auto idxAtOrBefore = [&](long long t) -> long {
             long lo = 0, hi = (long)H.size();                      // first rec with t > T, minus one
@@ -781,16 +781,34 @@ void TapeFlow::render()
             long k = idxAtOrBefore(te);
             if (k < 0 || H[(size_t)k].t <= ts) { px180 = -1; continue; }   // no flow data for this bar
             const tfl::SecRec& q = H[(size_t)k];
-            // faint whisker: the 30-s flow's range inside the bar
-            float mn = 1e9f, mx = -1e9f;
-            for (long j = k; j >= 0 && H[(size_t)j].t > ts; j--) { float v = H[(size_t)j].f30; if (!std::isnan(v)) { mn = std::min(mn, v); mx = std::max(mx, v); } }
-            if (mx >= mn) line(x, Y(mx), x, Y(mn), blend(C_MUTED, C_BG, 0.35), 1);
-            if (!std::isnan(q.f30)) {
-                bool good = (q.flags & tfl::SR_QUALITY) != 0;
-                double a = std::isnan(q.a) ? 0.45 : std::max(0.20, std::min(0.85, 0.20 + 0.30 * q.a));
-                COLOR c = good ? blend(q.f30 >= 0 ? C_BUY : C_SELL, C_BG, a) : blend(C_GRAY, C_BG, 0.6);
-                short y0 = Y(0), y1 = Y(q.f30);
-                fill((short)(x - bw / 2), std::min(y0, y1), (short)(x - bw / 2 + bw - 1), std::max(y0, y1), c);
+            // (1.0.3) no grey whisker: not in the design, and it read as extra bars
+            {   // (1.0.3, Rassul 20:46 "see if you made mistakes" - the design is 30-SEC pressure bars) one thin bar per 30 s inside
+                // each chart bar (6 per 3-min candle): bought - sold over bought + sold in that 30 s, as in the original design and
+                // the mockup. (1.0.0-1.0.2 drew ONE bar per candle = only the last 30 s, so the colour flipped candle to candle.)
+                // Brightness = how busy those 30 s were vs normal for this time of day; grey = quiet tape (signals off).
+                int slots = (int)((te - ts + 29) / 30); if (slots < 1) slots = 1; if (slots > 12) slots = 12;
+                int span = std::max(1, (int)(ppb * 0.9));
+                double sw = (double)span / slots;
+                short xl = (short)(x - span / 2);
+                for (int sl = 0; sl < slots; sl++) {
+                    long long a0 = ts + 30LL * sl, a1 = std::min(te, ts + 30LL * (sl + 1));
+                    double sb = 0, ss = 0, sa = 0; int na = 0, nq = 0, nall = 0;
+                    for (long j = idxAtOrBefore(a1); j >= 0 && H[(size_t)j].t > a0; j--) {
+                        const tfl::SecRec& r = H[(size_t)j];
+                        sb += r.b; ss += r.s; nall++;
+                        if (!std::isnan(r.a)) { sa += r.a; na++; }
+                        if (r.flags & tfl::SR_QUALITY) nq++;
+                    }
+                    if (!(sb + ss > 0)) continue;
+                    double fb = 100.0 * (sb - ss) / (sb + ss);
+                    bool good = nq * 2 >= nall;
+                    double al = na ? std::max(0.20, std::min(0.85, 0.20 + 0.30 * (sa / na))) : 0.45;
+                    COLOR c = good ? blend(fb >= 0 ? C_BUY : C_SELL, C_BG, al) : blend(C_GRAY, C_BG, 0.6);
+                    short x1 = (short)(xl + (int)(sl * sw)), x2 = (short)(xl + (int)((sl + 1) * sw) - (sw >= 3 ? 1 : 0));
+                    if (x2 < x1) x2 = x1;
+                    short y0 = Y(0), y1 = Y(fb);
+                    fill(x1, std::min(y0, y1), x2, std::max(y0, y1), c);
+                }
             }
             if (!std::isnan(q.f180)) {
                 short y = Y(q.f180);

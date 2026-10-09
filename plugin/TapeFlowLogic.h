@@ -211,7 +211,7 @@ struct Ev {
     std::string ctx, why; int ver = 0;
 };
 
-struct SecRec { long long t = 0; float f30 = NAN, f180 = NAN, a = NAN, c30 = NAN, l30 = NAN, h30 = NAN; unsigned char flags = 0; };
+struct SecRec { long long t = 0; float f30 = NAN, f180 = NAN, a = NAN, c30 = NAN, l30 = NAN, h30 = NAN; float b = 0, s = 0; unsigned char flags = 0; };   // (1.0.2) b / s: this second's bought / sold volume (the bar histogram)
 enum { SR_QUALITY = 1, SR_WARM = 2, SR_BASE = 4, SR_LOWACT = 8, SR_SIDES = 16 };
 
 struct Feat {
@@ -732,7 +732,7 @@ private:
         }
         lastWhy = gates ? (tried[0] ? rw[0].why : std::string()) : gw;
         // the per-second record
-        SecRec q; q.t = t;
+        SecRec q; q.t = t; q.b = (float)R.back().B; q.s = (float)R.back().S;
         if (f.f30ok) q.f30 = (float)f.f30;
         if (f.f180ok) q.f180 = (float)f.f180;
         if (f.aok) q.a = (float)f.A;
