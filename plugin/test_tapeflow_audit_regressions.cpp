@@ -1,4 +1,5 @@
 // Focused audit regressions for TapeFlowLogic.h. These use fabricated data only.
+#include "TapeFlowSupport.h"
 #include "TapeFlowLogic.h"
 #include <cmath>
 #include <cstdio>
@@ -70,6 +71,21 @@ int main()
         CHECK(!parseStoreLine(replaceField(row, 8, "-2"), &sid, &symbol, &parsed), "invalid negative spread is rejected");
         CHECK(!parseStoreLine(replaceField(row, 9, "-1"), &sid, &symbol, &parsed), "negative baseline volume is rejected");
         CHECK(!parseStoreLine(replaceField(row, 1, ""), &sid, &symbol, &parsed), "empty symbol is rejected");
+    }
+
+    {   // (1.1.4) a back-fill out of time order is put in order (not rejected), the live cursor still refuses it
+        using tf_support::TradeIdentity;
+        std::vector<TradeIdentity> v = { {100, 100.0, 4, 3, 4, 1}, {102, 102.0, 5, 4, 5, 2}, {101, 101.5, 4, 3, 4, 3}, {101, 101.2, 4, 3, 4, 4}, {103, 103.0, 6, 5, 6, 5} };
+        tf_support::SnapshotCursor live; std::size_t b0 = 0; std::string e0;
+        CHECK(!live.plan(v, &b0, &e0), "the live cursor still rejects an out-of-order snapshot");
+        std::size_t moved = tf_support::sortByTime(v);
+        CHECK(moved == 2, "two records were out of order");
+        CHECK(v[1].quantity == 4 && v[2].quantity == 3 && v[3].quantity == 2, "sorted by second, then raw time, stable");
+        tf_support::SnapshotCursor c; std::size_t b = 9; std::string e;
+        CHECK(c.plan(v, &b, &e) && b == 0, "a sorted back-fill plans from the start");
+        long long q = 0; for (const auto& r : v) q += r.quantity;
+        CHECK(q == 15, "no trade lost or duplicated by the sort");
+        std::vector<TradeIdentity> w = v; CHECK(tf_support::sortByTime(w) == 0, "an ordered snapshot is left as it is");
     }
 
     std::printf("%d passed, %d failed\n", passes, failures);

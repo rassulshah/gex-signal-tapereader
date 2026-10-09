@@ -46,7 +46,7 @@
 #include <limits>
 #include <direct.h>
 
-static const char* TF_VERSION = "1.1.3";   // (1.1.3) calibrated by the first morning: the 3d / 6d / 11d back-fill also runs outside this market's RTH (was only 16:00-17:00) and, while uncalibrated, in RTH too (2 min apart); every second's pressure is kept in TapeFlow\<MKT>-sec-<session>.csv for the nightly scoring   // (1.1.2) no gap in the pane where IRT was restarted (cold 10-min catch-up filled from the longer replay)   // (1.1.1) the audited 1.1.0 + two integration fixes: compiles with the real SDK (currentDate non-const); a quiet second pauses the warm-up instead of restarting it (HG etc. could never warm up)   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
+static const char* TF_VERSION = "1.1.4";   // (1.1.4) a back-fill whose history is not strictly in time order (ES: the DTN history stitched to the CQG recording) is put in time order instead of rejected - ES could never calibrate   // (1.1.3) calibrated by the first morning: the 3d / 6d / 11d back-fill also runs outside this market's RTH (was only 16:00-17:00) and, while uncalibrated, in RTH too (2 min apart); every second's pressure is kept in TapeFlow\<MKT>-sec-<session>.csv for the nightly scoring   // (1.1.2) no gap in the pane where IRT was restarted (cold 10-min catch-up filled from the longer replay)   // (1.1.1) the audited 1.1.0 + two integration fixes: compiles with the real SDK (currentDate non-const); a quiet second pauses the warm-up instead of restarting it (HG etc. could never warm up)   // (1.0.3) the histogram is 30-SEC pressure bars (6 per 3-min candle) as designed, not one last-30-s snapshot per candle   // (1.0.2) audit 1.0.1 fixes, but one engine per DLL (timer-safe)
 static const bool TF_PROVEN = false;
 static const int LATE_MARGIN = 8; // quiet-second allowance retained; tune only from measured CQG delivery latency
 
@@ -556,7 +556,10 @@ bool TapeFlow::rebuild(int idx)
     TCursor c2; long long first = -1, quoted = 0;
     std::vector<tf_support::TradeIdentity> records;
     std::size_t begin = 0; std::string issue;
-    if (!snapshot(T,records) || !c2.plan(records,&begin,&issue)) {
+    std::size_t reordered = 0;
+    if (!snapshot(T,records)) { guardClear(idx); stepNote="backfill rejected: " + err; trace(stepNote); return false; }
+    reordered = tf_support::sortByTime(records);                  // (1.1.4) ES 3d / 6d / 11d were rejected for out-of-order history
+    if (!c2.plan(records,&begin,&issue)) {
         if (!issue.empty()) err=issue;
         guardClear(idx); stepNote="backfill rejected: " + err; trace(stepNote); return false;
     }
@@ -570,8 +573,8 @@ bool TapeFlow::rebuild(int idx)
     stepTicks[idx] = e2.ticks;
     lastStepName = spec.name;
     char b[260];
-    snprintf(b, sizeof(b), "back-fill %s: %ld trades from IRT, %lld used, from %s, bid/ask on %.0f%% of them", spec.name, n, e2.ticks,
-             first < 0 ? "-" : std::to_string(nowS - first).append(" s ago").c_str(), e2.ticks > 0 ? 100.0 * (double)quoted / (double)e2.ticks : 0.0);
+    snprintf(b, sizeof(b), "back-fill %s: %ld trades from IRT, %lld used, from %s, bid/ask on %.0f%% of them, %zu put back in time order", spec.name, n, e2.ticks,
+             first < 0 ? "-" : std::to_string(nowS - first).append(" s ago").c_str(), e2.ticks > 0 ? 100.0 * (double)quoted / (double)e2.ticks : 0.0, reordered);
     trace(b); stepNote = b;
     if (e2.ticks <= 0) { if (spec.deep) deepDone = true; return false; }
     if (spec.deep && first > 0 && nowS - first < back - 86400) deepDone = true;    // IRT keeps no older trades: stop deepening

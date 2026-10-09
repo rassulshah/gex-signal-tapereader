@@ -74,6 +74,17 @@ struct SnapshotCursor {
     }
 };
 
+// (1.1.4) a multi-day back-fill from IRT can come back not strictly in time order (the DTN history and the CQG live recording
+// are stitched per day / per request). A fresh back-fill replay may safely be put in time order first; returns how many were moved.
+// The LIVE cursor never sorts (it must prove continuity), only a back-fill does.
+inline std::size_t sortByTime(std::vector<TradeIdentity>& v) {
+    std::size_t inv = 0;
+    for (std::size_t i = 1; i < v.size(); ++i) if (v[i].second < v[i-1].second || (v[i].second == v[i-1].second && v[i].rawTime < v[i-1].rawTime)) ++inv;
+    if (inv) std::stable_sort(v.begin(), v.end(), [](const TradeIdentity& a, const TradeIdentity& b) {
+        return a.second != b.second ? a.second < b.second : a.rawTime < b.rawTime; });
+    return inv;
+}
+
 inline std::string eventKey(const std::string& line) {
     // First four pipe-separated fields: time | episode | kind | direction.
     // Include the remaining payload in caller-side validation, not in identity.
