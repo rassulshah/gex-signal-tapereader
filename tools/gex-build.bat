@@ -40,7 +40,7 @@ call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h
 call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h
-call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h
+call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h
@@ -66,7 +66,7 @@ set DLL=%~2.dll
 set SRCHASH=
 call :hashof "%PLUG%\%NAME%.cpp"
 set SRCHASH=!H!
-for %%X in (%3 %4 %5) do (
+for %%X in (%3 %4 %5 %6) do (
   if exist "%PLUG%\%%X" ( call :hashof "%PLUG%\%%X" & set SRCHASH=!SRCHASH!-!H! )
 )
 set BUILT=
