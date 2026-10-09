@@ -17,7 +17,7 @@ static mock::Host history(int count=92,int seconds=60){
     return h;
 }
 static ChartState& state(mock::Host& h){return *static_cast<ChartState*>(h.data);}
-static void cleanup(DeltaProfile& p,mock::Host& h){mock::current=&h;p.destroy();check(h.data==NULL,"user data not freed");}
+static void cleanup(DeltaProfile& p,mock::Host& h){mock::current=&h;p.destroy();check(h.data==NULL,"user data not freed");latchBooks().clear();}
 int main(){
     setenv("TZ","UTC",1);tzset();
     test("rolling 90-min window is half-open at cutoff",[]{
@@ -136,7 +136,7 @@ int main(){
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
         h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
         mock::current=&h;DeltaProfile p;p.draw();
-        check(!state(h).latches.empty() && state(h).latches[0].code=="A","decided A not recorded");
+        check(!latchBooks().empty() && !latchBooks().begin()->second.v.empty() && latchBooks().begin()->second.v[0].code=="A","decided A not recorded");
         mock::Bar last=h.bars.back();
         for(int i=0;i<60;++i){mock::Bar b=last;b.time=last.time+static_cast<unsigned long>((i+1)*60);h.bars.push_back(b);}
         h.draws.clear();p.draw();
@@ -153,6 +153,19 @@ int main(){
         bool drawn=false;for(const mock::Draw& d:h.draws) if(d.type=="text" && (d.text.rfind("Acc",0)==0||d.text.rfind("Dst",0)==0)) drawn=true;
         check(zone,"fixture: no Acc/Dst zone formed");
         check(!drawn,"Acc/Dst label drawn");cleanup(p,h);
+    });
+    test("2.5.1: a chart-state reset (done / identity change) does not wipe a decided A or its circle",[]{
+        mock::Host h=history(110,60);
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
+        h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        mock::current=&h;DeltaProfile p;p.draw();
+        p.done();                                                   // IRT resets the host context
+        mock::Bar last=h.bars.back();
+        for(int i=0;i<60;++i){mock::Bar b=last;b.time=last.time+static_cast<unsigned long>((i+1)*60);h.bars.push_back(b);}
+        h.draws.clear();p.draw();
+        int rings=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"){++rings;check(d.x==450,"circle moved to another bar");}
+        check(rings>=1,"reset wiped the decided A's circle");cleanup(p,h);
     });
     test("initiative letter never receives a circle",[]{
         mock::Host h=history(110,60);
