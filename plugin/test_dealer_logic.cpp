@@ -70,6 +70,10 @@ int main()
     float off = 0;
     CHECK(dl::offsetFor(4201.0f, 4192.5f, off) && std::fabs(off - 8.5f) < 0.01f, "contract offset = chart close at the file's minute - PRICE");
     CHECK(!dl::offsetFor(7600.0f, 4192.5f, off) && off == 0, "a wrong market (ES chart, GC file) is refused");
+    CHECK(dl::offsetFor(4199.8f, 4195.4f, off, 53.18f) && off == 0, "(2026-10-08) GC +4.4 snapshot noise on the same contract: no shift (< 1/4 EM)");
+    CHECK(dl::offsetFor(7822.5f, 7820.25f, off, 63.6f) && off == 0, "ES +2.25 snapshot noise: no shift");
+    CHECK(dl::offsetFor(7880.0f, 7820.25f, off, 63.6f) && std::fabs(off - 59.75f) < 0.01f, "a roll-sized gap (ES ~60) is still a contract spread");
+    { dl::Data Dz; CHECK(dl::parseLine(Dz, "SYMBOL|ENQZ26") && Dz.chartSym == "ENQZ26", "SYMBOL names the contract the levels are priced on"); }
     // scale and fit
     float gm = 0, dm = 0; dl::scales(D, gm, dm);
     CHECK(gm >= 44.0f && dm >= 63.0f, "the scale covers the 4215 whisker and its delta");

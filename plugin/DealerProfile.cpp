@@ -47,7 +47,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.5.1";   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.5.2";   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -410,7 +410,13 @@ void DealerProfile::alignContract()
             if (sameDay && so <= want) { c = close[i]; break; }
         }
     }
-    float o = 0; if (dl::offsetFor(c, D.px, o)) off = o;
+    // (2.5.2, Rassul 22:15 "irt gamma levels are not placed at the right price level") MenthorQ's strikes are prices on the
+    // contract named in the file (SYMBOL, the bridge's irt_symbols.json): on THAT contract they are drawn exactly at the strike.
+    // Only a chart on another contract (e.g. the next month during a roll) is shifted by the measured spread. A file without
+    // SYMBOL uses the size rule in dl::offsetFor (a gap under a quarter of the expected move is snapshot noise, not a contract).
+    if (!D.chartSym.empty() && D.chartSym == root) return;                                   // same contract: off = 0
+    float o = 0;
+    if (dl::offsetFor(c, D.px, o, D.chartSym.empty() ? D.em : 0.0f)) off = o;
 }
 
 short DealerProfile::yOf(float price) { PNT p; p.set(lastBar, price); return p.v; }

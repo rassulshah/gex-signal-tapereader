@@ -57,6 +57,7 @@ struct KV   { std::string k, v; char col = 'W'; };
 
 struct Data {
     std::string ver, market;
+    std::string chartSym;   // (2026-10-08) SYMBOL|<IRT chart contract the MenthorQ levels are priced on, e.g. ENQZ26>
     std::string srcBook, srcMode, srcAt; float srcRatio = 1.0f;   // (file 2.0) SRC: the book the Profile bars come from (SPX / QQQ / the market itself)
     double asofSo = -1; int y = 0, mo = 0, d = 0;
     std::string liveRec, liveSrc; int turnAgeMin = -1, liveSo = -1;   // (Read 4.4.0) LIVE|<recording OK/STOPPED>|<price IRT/MenthorQ>|<turn age min>|<last turn CT>
@@ -178,6 +179,7 @@ inline bool parseLine(Data& D, const std::string& line)
     const std::string& k = t[0];
     if (k == "VERSION" && t.size() >= 2) { D.ver = t[1]; return true; }
     if (k == "MARKET" && t.size() >= 2) { D.market = t[1]; return true; }
+    if (k == "SYMBOL" && t.size() >= 2) { D.chartSym = t[1]; return true; }
     if (k == "SRC" && t.size() >= 2) { D.srcBook = t[1]; if (t.size() >= 3) D.srcRatio = f(t[2]); if (t.size() >= 4) D.srcMode = t[3]; if (t.size() >= 5) D.srcAt = t[4]; return true; }
     if (k == "ASOF" && t.size() >= 2) {
         double asof = -1;
@@ -428,12 +430,18 @@ inline double staleMin(double asofSo, double localSo)
 
 // Contract offset: the chart may be another contract than MenthorQ's front future. Offset = the chart's close at the
 // file's minute - the file's PRICE, refused when more than 3% (a wrong market).
-inline bool offsetFor(float chartClose, float filePx, float& off)
+inline bool offsetFor(float chartClose, float filePx, float& off, float em = 0.0f)
 {
     off = 0;
     if (!std::isfinite(chartClose) || !std::isfinite(filePx) || !(chartClose > 0) || !(filePx > 0)) return false;
     float d = chartClose - filePx;
     if (!std::isfinite(d) || std::fabs(d) > 0.03f * filePx) return false;
+    // (2026-10-08, Rassul "irt gamma levels are not placed at the right price level") MenthorQ's strikes ARE prices on the
+    // same front contract the chart shows, so they belong exactly at the strike. A small difference between MenthorQ's
+    // snapshot price and the chart's close is timing / quote noise (GC ran +4 to +6 all day, ES +2.25), not a different
+    // contract - shifting by it moved every node off its strike. Only a gap of a quarter of the day's expected move or
+    // more (a roll: ES ~60, NQ ~250, GC ~30, CL ~0.3-0.5) is a real contract spread.
+    if (std::isfinite(em) && em > 0 && std::fabs(d) < 0.25f * em) return true;   // same contract: off stays 0
     off = d; return true;
 }
 
