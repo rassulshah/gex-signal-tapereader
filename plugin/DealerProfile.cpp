@@ -848,13 +848,17 @@ void DealerProfile::drawKeyLevels(const Settings& S)
         if (q.fam == "gamma") continue;                              // MenthorQ levels: drawMQLevels puts the odds on their own label
         // (2.6.2, Rassul 2026-10-09 08:13 "you implemented vwap lines, when i told you i dont want vwap lines") the VWAP and its
         // bands belong to lsSessionVWAP only (its own lines + "42%" badges) - never drawn here
-        if (q.fam == "vwap" || q.code.compare(0, 4, "VWAP") == 0 || q.show.find("VWAP") != std::string::npos) continue;
+        if (q.fam == "vwap") continue;
+        std::string shown;                                           // a merged label ("ONL/LonLO/VWAP-1") keeps only its non-VWAP names
+        { size_t a0 = 0; while (a0 <= q.show.size()) { size_t b0 = q.show.find('/', a0); std::string part = q.show.substr(a0, b0 == std::string::npos ? std::string::npos : b0 - a0);
+            if (!part.empty() && part.compare(0, 4, "VWAP") != 0) shown += (shown.empty() ? "" : "/") + part; if (b0 == std::string::npos) break; a0 = b0 + 1; } }
+        if (shown.empty()) continue;
         PNT pp; pp.set((int)(nb - 1), q.px + off); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) continue;
         COLOR col = q.fam.compare(0, 5, "pivot") == 0 ? (COLOR)0x00C084FC : (COLOR)0x00F59E0B;
         line(pane.left, y, pane.right, y, col, 1);
         // (Rassul 09:02 "PDH 55%/ 70% where 55% is within 90m and 70% is by the rth close")
-        char b[200]; snprintf(b, sizeof(b), "%s %s", q.show.c_str(), q.label.c_str());
+        char b[200]; snprintf(b, sizeof(b), "%s %s", shown.c_str(), q.label.c_str());
         int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
         short r = right, l = (short)(r - tw), t = (short)(y - h / 2), bt = (short)(y + h / 2);
         box(l, t, r, bt, C_DARK);
