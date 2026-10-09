@@ -221,7 +221,7 @@ int main()
         std::string b = cvl::body(s);
         std::string d = cvl::document(b, "2026-10-09T10:15:03-05:00", 1791558903, cvl::NEWBAR);
         check(validJson(d), "the snapshot is valid JSON (UTF-8 safe)");
-        check(d.find("\"version\":\"1.0.1\"") != std::string::npos, "version in header");
+        check(d.find("\"version\":\"1.1.0\"") != std::string::npos, "version in header");
         check(d.find("\"why\":\"new bar\"") != std::string::npos, "why in header");
         check(d.find("\"arrays\":{\"0\":[12,null],\"1\":[0.5,0.25]}") != std::string::npos, "series arrays keyed by array number, NaN = null");
         check(d.find("\"missing\":[\"lsTapeFlowES\"]") != std::string::npos, "missing listed");

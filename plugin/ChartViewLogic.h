@@ -18,7 +18,7 @@
 
 namespace cvl {
 
-static const char* const CV_VERSION_STR = "1.0.1";
+static const char* const CV_VERSION_STR = "1.1.0";
 static const int   MAX_LABELS      = 40;       // labels read per chart (file + extra)
 static const int   MAX_ARRAYS      = 16;       // arrays read per label (0..15, stop at the first that fails)
 static const int   MIN_BARS        = 20;

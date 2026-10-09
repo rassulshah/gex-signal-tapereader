@@ -27,6 +27,7 @@
 #undef far
 #endif
 #include "ChartViewLogic.h"
+#include "ChartViewCamera.h"           // (1.1.0) the IRT-only chart camera
 #include "HostSlot.h"
 #include <chrono>
 #include <fstream>
@@ -44,7 +45,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define CV_VERSION "1.0.1"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
+#define CV_VERSION "1.1.0"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
 
 struct CVIdx { int enabled, bars, extra; };
 static CVIdx CX = { -1, -1, -1 };
@@ -58,6 +59,8 @@ struct ChartSub {
     long long wantSeen = -1;          // the want file's stamp this chart last answered (or ignored)
     long long wantCheckMs = -1;       // the want file is looked at most once a second per chart
     long writes = 0;
+    long long snapSeen = -1;          // (1.1.0) the picture-request file's stamp this chart last answered
+    long long snapCheckMs = -1;
 };
 struct CVState {
     std::map<std::string, ChartSub> subs;
@@ -204,6 +207,7 @@ private:
     void readWatch(const std::string& dir, std::vector<std::string>& labels, cvl::Snap& s);
     void readFiles(const std::string& dir, cvl::Snap& s);
     bool wantNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, long long nowMs);
+    bool snapNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, long long nowMs);
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -320,6 +324,25 @@ bool ChartView::wantNow(const std::string& dir, ChartSub& C, const std::string& 
     return cvl::wantMatches(t, mkt, period);
 }
 
+// (1.1.0) a picture request: lsFlexLevels\ChartView.snap.txt holding "GC", "GC_180" or "*" (same matching as the want file).
+// Looked at once a second per chart, answered once per change; a request already on file when the chart loads is ignored
+// unless it is less than 30 s old.
+bool ChartView::snapNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, long long nowMs)
+{
+    if (C.snapCheckMs >= 0 && nowMs - C.snapCheckMs < 1000 && nowMs >= C.snapCheckMs) return false;
+    C.snapCheckMs = nowMs;
+    const std::string p = dir + "\\ChartView.snap.txt";
+    long long mt = -1; unsigned long long sz = 0;
+    if (!statFile(p, mt, sz)) return false;
+    const long long stamp = mt * 1000003LL + (long long)sz;
+    if (stamp == C.snapSeen) return false;
+    const bool first = C.snapSeen == -1;
+    C.snapSeen = stamp;
+    if (first && (long long)time(nullptr) - mt > 30) return false;
+    std::string t; if (sz > 4096 || !readRange(p, 0, (size_t)sz, t)) t.clear();
+    return cvl::wantMatches(t, mkt, period);
+}
+
 void ChartView::pump()
 {
     CVState* S = slot_.get(this, true);
@@ -349,7 +372,26 @@ void ChartView::pump()
         const std::string dir = flexDir();
         if (dir.empty()) return;
         const std::string mkt = cvl::marketOf(root, sym);
-        const bool want = wantNow(dir, C, mkt, spb > 0 ? spb : 0, nowMs);
+        bool want = wantNow(dir, C, mkt, spb > 0 ? spb : 0, nowMs);
+#ifdef _WIN32
+        if (snapNow(dir, C, mkt, spb > 0 ? spb : 0, nowMs)) {     // (1.1.0) the camera: this chart only, on request only
+            want = true;                                           // a fresh data snapshot goes with the picture
+            const char* pl = getPeriodicityLabel();
+            const std::string per = pl ? pl : "";
+            const std::string stem = cvl::fileStem(mkt, spb > 0 ? spb : 0);
+            const std::string imgDir = dir + "\\ChartView\\img";
+            makeDir(dir + "\\ChartView"); makeDir(imgDir);
+            int seen = 0, w = 0, h = 0;
+            const ULONGLONG t0 = GetTickCount64();
+            std::string err;
+            try {
+                HWND hw = cvcam::findChart(sym, per, &seen);
+                err = hw ? cvcam::capture(hw, imgDir + "\\" + stem + ".png", &w, &h) : "chart window not found (" + std::to_string(seen) + " IRT windows looked at)";
+            } catch (...) { err = "capture threw"; }
+            const ULONGLONG ms = GetTickCount64() - t0;
+            cvTrace("picture " + stem + " (" + sym + " " + per + "): " + (err.empty() ? std::to_string(w) + "x" + std::to_string(h) + " saved" : "FAILED - " + err) + ", " + std::to_string((unsigned long long)ms) + " ms");
+        }
+#endif
         const int why = cvl::due(C.sched, n, lastT, nowMs, want);
         if (why == cvl::NONE) return;
         cvl::built(C.sched, n, lastT, nowMs);                     // a failed build waits for the next new bar / 10 s, never loops
@@ -409,6 +451,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | CALC_LAST);
     p->setDescription("LRA ChartView: writes this chart's bars and indicator values to lsFlexLevels\\ChartView for Claude. Draws nothing.");
-    p->setVersion("1.0.1");   // CV_VERSION
+    p->setVersion("1.1.0");   // CV_VERSION
     return p;
 }
