@@ -3,8 +3,9 @@ REM ===========================================================================
 REM  run-logic-tests.bat  --  Gate B (logic) regression for ALL the RTX plugins.
 REM  Compiles each plugin\test_*_logic.cpp against its *Logic.h with the same MSVC the DLLs
 REM  use (no IRT SDK needed) and runs it. Exit code = total failures.
-REM      run-logic-tests.bat            all six suites
-REM      run-logic-tests.bat gamma      one: gamma | contractoffset | daymodel | daystats | kingtracker | dealer
+REM      run-logic-tests.bat            all four suites
+REM      run-logic-tests.bat gamma      one: gamma | contractoffset | kingtracker | dealer
+REM  (MT100 2026-10-09) daymodel / daystats retired: their tests live in plugin\retired\ with the sources
 REM  The cloud runs the identical files with g++ on every build (tools/regress.py).
 REM ===========================================================================
 title RTX plugin logic tests
@@ -21,8 +22,6 @@ cd /d "%PLUGDIR%"
 set TOTAL=0
 call :one gamma          test_gammaprofile_logic
 call :one contractoffset test_contractoffset_logic
-call :one daymodel       test_daymodel_logic
-call :one daystats       test_daystats_logic
 call :one kingtracker    test_kingtracker_logic
 call :one dealer         test_dealer_logic
 echo.

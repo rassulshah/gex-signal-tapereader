@@ -62,7 +62,16 @@ INDICATORS = {
         live=[('testing/king-tracker/fixtures/synth-1033', [])],
         cpp='KingTracker.cpp'),
 }
-ORDER = ['gamma', 'daymodel', 'daystats', 'kingtracker']
+# (MT100 2026-10-09) lsDayModel / lsDayStats are RETIRED (superseded by lsHodLod + SessionInfo and the HOD / LOD studies); their
+# sources and C++ tests are kept in plugin/retired/. The panel's day-row suites (Gate A) still guard live userscript code, so they
+# run on as 'panelday'. Asking for daymodel / daystats by name prints a note and skips them.
+RETIRED = {'daymodel': '2026-10-09', 'daystats': '2026-10-09'}
+INDICATORS['panelday'] = dict(
+    title='panel day rows (fed lsDayModel / lsDayStats; still shipped in the userscript)',
+    sources=['current/gex-signal-tapereader.user.js (gpDayModel, hodlodCondE, the DAY* rows, AU.day)', 'tools/day-derive.js'],
+    gateA=['test_daymodel_em.js', 'test_day_export.js', 'test_daystats_cond.js', 'test_hodlod.js'],
+    gateB=[], live=[], cpp=None)
+ORDER = ['gamma', 'panelday', 'kingtracker']
 
 def version_of(path, key):
     try:
@@ -78,8 +87,8 @@ def versions():
         'panel': version_of('current/gex-signal-tapereader.user.js', r'@version\s+(\S+)'),
         'companion': version_of('current/gex-if-levels.user.js', r'@version\s+(\S+)'),
         'gamma': version_of('plugin/GammaProfile.cpp', r'setVersion\("([^"]+)"'),
-        'daymodel': version_of('plugin/DayModel.cpp', r'setVersion\("([^"]+)"'),
-        'daystats': version_of('plugin/DayStats.cpp', r'setVersion\("([^"]+)"'),
+        'daymodel': version_of('plugin/retired/DayModel.cpp' if os.path.exists(os.path.join(ROOT, 'plugin', 'retired', 'DayModel.cpp')) else 'plugin/DayModel.cpp', r'setVersion\("([^"]+)"'),
+        'daystats': version_of('plugin/retired/DayStats.cpp' if os.path.exists(os.path.join(ROOT, 'plugin', 'retired', 'DayStats.cpp')) else 'plugin/DayStats.cpp', r'setVersion\("([^"]+)"'),
         'kingtracker': version_of('plugin/KingTracker.cpp', r'setVersion\("([^"]+)"'),
     }
 
@@ -172,6 +181,13 @@ def main():
     bad = [w for w in which if w not in INDICATORS]
     if bad:
         print('unknown indicator(s): %s   (choose from: all %s)' % (' '.join(bad), ' '.join(ORDER))); return 2
+    gone = [w for w in which if w in RETIRED]
+    if gone:
+        print('retired (MT100): %s - superseded by lsHodLod + the HOD / LOD studies; sources and C++ tests in plugin/retired/. '
+              'The panel day-row suites run as: panelday' % ', '.join('%s (%s)' % (w, RETIRED[w]) for w in gone))
+        which = [w for w in which if w not in RETIRED]
+        if not which:
+            return 0
 
     # Gate A reads v10.js — ALWAYS regenerated from current/ (a stale-but-green v10.js is the dangerous state; tools/run-tests.sh)
     shutil.copyfile(os.path.join(ROOT, 'current', 'gex-signal-tapereader.user.js'), os.path.join(ROOT, 'v10.js'))
@@ -194,7 +210,7 @@ def main():
             rows.append((w, done_B[fn]))
         for stem, extra in I.get('live', []):
             rows.append((w, live_test(w, stem, extra)))
-        if a.syntax:
+        if a.syntax and I.get('cpp'):
             rows.append((w, syntax_check(I['cpp'])))
 
     # ---- the table

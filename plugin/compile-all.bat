@@ -1,10 +1,11 @@
 @echo off
 REM ===========================================================================
-REM  compile-all.bat  --  DOUBLE-CLICK THIS to rebuild ALL FOUR plugins in one go
-REM  (lsGammaProfile, lsDayModel, lsDayStats, lsKingTracker). Close Investor/RT first.
+REM  compile-all.bat  --  DOUBLE-CLICK THIS to rebuild the original plugins in one go
+REM  (lsGammaProfile, lsKingTracker). Close Investor/RT first.
+REM  (MT100 2026-10-09) lsDayModel / lsDayStats retired - sources in plugin\retired\, not built.
 REM  The hands-free alternative is setup-gex-build.bat at the repo root (run once).
 REM ===========================================================================
-title Build all four RTX plugins
+title Build the original RTX plugins
 set "PLUGDIR=C:\Dev\gex-signal-tapereader\plugin"
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" set "VSWHERE=%ProgramFiles%\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -15,8 +16,6 @@ if not defined VSINST goto :novs
 call "%VSINST%\VC\Auxiliary\Build\vcvars64.bat" >nul
 cd /d "%PLUGDIR%"
 call build-gammaprofile.bat
-call build-daymodel.bat
-call build-daystats.bat
 call build-kingtracker.bat
 goto :end
 :novs
