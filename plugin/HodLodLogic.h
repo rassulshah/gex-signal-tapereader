@@ -154,8 +154,68 @@ static const unsigned LV_COL[4] = { 0x00008A8A, 0x00FFA500, 0x00808080, 0x00F59E
 
 struct Lvl { bool ok = false; int n = 0; long long hi = 0, lo = 0; void add(long long h, long long l) { if (!n) { hi = h; lo = l; } else { if (h > hi) hi = h; if (l < lo) lo = l; } n++; } };
 
-struct Ext { bool set = false; long long px = 0, seq = -1, endAbs = 0; int lvl = -1; };
+struct Ext { bool set = false; long long px = 0, seq = -1, endAbs = 0; int lvl = -1; long long lvlPx = 0; };   // lvlPx = the swept level's price (ticks)
 struct Mark { long long seq = -1, endAbs = 0; };
+
+// ---- (HL104) MenthorQ levels: his selected set, short codes only, in priority order (CR/PS, then GW, HVL, G1, G2)
+// Source: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\MenthorQLevels.csv - the file the MenthorQ bridge writes and lsDealerProfile
+// already reads (same columns: SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,...; the colour is the one IRT draws the level in). It is the
+// ONE external input of lsHodLod; missing / oversized / stale / garbage -> the key levels only, never guessed.
+static const char* const MQ_CODES[6] = { "CR", "PS", "GW", "HVL", "G1", "G2" };
+static const size_t MQ_MAX_BYTES = 64 * 1024, MQ_MAX_LINE = 512, MQ_MAX_LEVELS = 32;
+struct MqLevel { int code = -1; long long px = 0; unsigned col = 0; };
+struct MqSnap { long long atAbs = 0; std::vector<MqLevel> lv; };   // atAbs = the file's write time (local CT wall-clock seconds)
+inline bool strictDouble(const std::string& t, double& v) { if (t.empty() || t.size() > 40) return false; char* e = nullptr; v = std::strtod(t.c_str(), &e); return e && *e == 0 && std::isfinite(v); }
+inline bool strictLong(const std::string& t, long long& v) { if (t.empty() || t.size() > 20) return false; char* e = nullptr; v = std::strtoll(t.c_str(), &e, 10); return e && *e == 0; }
+// a level price for its label: "7,838.25", "7,850" (all-zero decimals dropped - "keep it simple ... very clean")
+inline std::string lvlPxTxt(double v, int dec)
+{
+    std::string t = pxTxt(v, dec); size_t d = t.find('.');
+    if (d != std::string::npos && t.find_first_not_of('0', d + 1) == std::string::npos) t.erase(d);
+    return t;
+}
+// the chart's market's levels; a symbol equal to the chart root wins, else the first symbol of the same market (a rolled contract)
+inline bool parseMq(const std::string& text, const std::string& mkt, const std::string& root, double tick, std::vector<MqLevel>& out, std::string& why)
+{
+    out.clear();
+    if (text.size() > MQ_MAX_BYTES) { why = "MenthorQLevels.csv over 64 KiB: ignored"; return false; }
+    if (mkt.empty() || !(tick > 0)) { why = "no market / tick"; return false; }
+    std::string R; for (size_t i = 0; i < root.size(); i++) R += (char)toupper((unsigned char)root[i]);
+    std::vector<MqLevel> exact, same; std::string sameSym;
+    size_t a = 0; int bad = 0;
+    while (a < text.size()) {
+        size_t b = text.find('\n', a); if (b == std::string::npos) b = text.size();
+        std::string ln = text.substr(a, b - a); a = b + 1;
+        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+        if (ln.empty() || ln.size() > MQ_MAX_LINE || ln.compare(0, 6, "SYMBOL") == 0) { if (ln.size() > MQ_MAX_LINE) bad++; continue; }
+        std::vector<std::string> c; size_t p = 0;
+        while (c.size() < 6) { size_t q = ln.find(',', p); c.push_back(ln.substr(p, q == std::string::npos ? std::string::npos : q - p)); if (q == std::string::npos) break; p = q + 1; }
+        if (c.size() < 5 || c[0].empty()) { bad++; continue; }
+        std::string sym; for (size_t i = 0; i < c[0].size(); i++) sym += (char)toupper((unsigned char)c[0][i]);
+        if (marketForRoot(sym) != mkt) continue;
+        double px; long long tk, colv = 0;
+        if (!strictDouble(c[1], px) || !(px > 0) || !toTicks(px, tick, tk)) { bad++; continue; }
+        unsigned col = (strictLong(c[3], colv) && colv > 0 && colv <= 0xFFFFFF) ? (unsigned)colv : 0x0022D3EEu;   // as lsDealerProfile: never black
+        // "CR 0D / GW 0D" = two levels at one price: one entry each (never shown combined)
+        std::string lab = c[2]; size_t s0 = 0;
+        while (s0 <= lab.size()) {
+            size_t s1 = lab.find('/', s0); std::string tok = lab.substr(s0, s1 == std::string::npos ? std::string::npos : s1 - s0);
+            size_t i0 = tok.find_first_not_of(' '); std::string w = i0 == std::string::npos ? "" : tok.substr(i0);
+            size_t sp = w.find(' '); if (sp != std::string::npos) w = w.substr(0, sp);
+            for (int k = 0; k < 6; k++) if (w == MQ_CODES[k]) {
+                MqLevel L; L.code = k; L.px = tk; L.col = col;
+                if (sym == R) { if (exact.size() < MQ_MAX_LEVELS) exact.push_back(L); }
+                else if (sameSym.empty() || sameSym == sym) { sameSym = sym; if (same.size() < MQ_MAX_LEVELS) same.push_back(L); }
+            }
+            if (s1 == std::string::npos) break;
+            s0 = s1 + 1;
+        }
+    }
+    out = !exact.empty() ? exact : same;
+    if (out.empty()) { why = bad ? "MenthorQLevels.csv: no valid " + mkt + " levels (" + std::to_string(bad) + " bad lines)" : "MenthorQLevels.csv: no " + mkt + " levels"; return false; }
+    if (bad) why = std::to_string(bad) + " bad lines ignored";
+    return true;
+}
 
 struct Rth {
     bool any = false, complete = false;
@@ -224,7 +284,8 @@ public:
     }
 
     // the most significant level the extreme traded through (see the header comment), -1 = none
-    int swept(bool low, long long px, long long barStartAbs) const
+    int swept(bool low, long long px, long long barStartAbs) const { long long lp = 0; return swept(low, px, barStartAbs, lp); }
+    int swept(bool low, long long px, long long barStartAbs, long long& lvlPx) const
     {
         const Lvl* L[4] = { &pf, &pd, &curOn, &curLon };
         for (int i = 0; i < 4; i++) {
@@ -232,8 +293,8 @@ public:
             if (!v.ok || v.n <= 0) continue;
             if (i == LV_ON && !(firstAbsStart <= onA(curSid))) continue;
             if (i == LV_LON && !(firstAbsStart <= lonA(curSid) && lonB(curSid) <= barStartAbs)) continue;
-            if (low) { if (px < v.lo && cur.open >= v.lo) return i; }
-            else     { if (px > v.hi && cur.open <= v.hi) return i; }
+            if (low) { if (px < v.lo && cur.open >= v.lo) { lvlPx = v.lo; return i; } }
+            else     { if (px > v.hi && cur.open <= v.hi) { lvlPx = v.hi; return i; } }
         }
         return -1;
     }
@@ -307,14 +368,14 @@ public:
         }
         if ((!R.lod.set || l < R.lod.px) && (!R.hod.set || h > R.hod.px)) R.bothRed = c < o;
         if (!R.lod.set || l < R.lod.px) {
-            R.lod.set = true; R.lod.px = l; R.lod.seq = seq; R.lod.endAbs = absEnd; R.lod.lvl = swept(true, l, absStart);
+            R.lod.set = true; R.lod.px = l; R.lod.seq = seq; R.lod.endAbs = absEnd; R.lod.lvl = swept(true, l, absStart, R.lod.lvlPx);
             R.lodRecl = Mark(); R.lodStrict = c > R.open ? seq : -1;
         } else {
             if (R.lodRecl.seq < 0 && c >= R.open) { R.lodRecl.seq = seq; R.lodRecl.endAbs = absEnd; }
             if (R.lodStrict < 0 && c > R.open) R.lodStrict = seq;
         }
         if (!R.hod.set || h > R.hod.px) {
-            R.hod.set = true; R.hod.px = h; R.hod.seq = seq; R.hod.endAbs = absEnd; R.hod.lvl = swept(false, h, absStart);
+            R.hod.set = true; R.hod.px = h; R.hod.seq = seq; R.hod.endAbs = absEnd; R.hod.lvl = swept(false, h, absStart, R.hod.lvlPx);
             R.hodRecl = Mark(); R.hodStrict = c < R.open ? seq : -1;
         } else {
             if (R.hodRecl.seq < 0 && c <= R.open) { R.hodRecl.seq = seq; R.hodRecl.endAbs = absEnd; }
@@ -614,6 +675,11 @@ struct View {
     double sizeUsd = 0, rangeUsd = 0;
     int usedPct = -1;
     int hodLvl = -1, lodLvl = -1;
+    long long hodLvlPx = 0, lodLvlPx = 0;          // the swept levels' prices (ticks)
+    struct LvlLbl { std::string txt; long long px = 0; unsigned col = 0; bool fin = false; };
+    std::vector<LvlLbl> lvlLbls;                   // (HL104) "LonLO 7,838.25", "CR 7,850" ...: right of the candle, each at its own price
+    std::string sweptLod, sweptHod, mqWhy;         //         every level each extreme swept (shown + the rest), for the status file
+    bool hodFinal = false, lodFinal = false;       //         coloured once that extreme is final (called IN / the close), else grey
     // the model row in use
     bool modelUp = true, modelByShare = false; int sharePct = 0;
     double eLod = NAN, eHod = NAN;         // E-LOD / E-HOD prices (SessionInfo ticks)
@@ -715,7 +781,7 @@ struct ReadRow { std::string session; int barEnd = 0; ReadIn in; ReadOut out; st
 
 // every drawn value. `rd` = the read at the latest closed bar; `rows` = the session's per-bar reads (once the 2nd extreme printed, the
 // last 2nd-extreme call shown before it is frozen into the E cell and the header, so the A tag is judged against what was shown)
-inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<ReadRow>* rows = nullptr)
+inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<ReadRow>* rows = nullptr, const std::vector<MqSnap>* mq = nullptr)
 {
     View v; const Mkt& K = MKTS[T.C.mkt]; v.market = K.code; v.headLeft = K.code;
     const double tick = T.C.tick; const int dec = K.dec; const double tv = tick * K.pv;
@@ -725,7 +791,8 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     long long day = R->sid * 86400;
     v.open = R->open; v.close = R->lastClose; v.hod = R->hod.px; v.lod = R->lod.px;
     v.hodMod = (int)((R->hod.endAbs - day) / 60); v.lodMod = (int)((R->lod.endAbs - day) / 60); v.lastMod = (int)((R->lastEndAbs - day) / 60);
-    v.hodLvl = R->hod.lvl; v.lodLvl = R->lod.lvl;
+    v.hodLvl = R->hod.lvl; v.lodLvl = R->lod.lvl; v.hodLvlPx = R->hod.lvlPx; v.lodLvlPx = R->lod.lvlPx;
+
     v.headLeft = std::string(K.code) + "  " + clk(v.lastMod);
     v.side = R->lod.seq < R->hod.seq ? 1 : (R->hod.seq < R->lod.seq ? 2 : 0);
     v.rangeT = R->hod.px - R->lod.px; v.rangeUsd = (double)v.rangeT * tv;
@@ -752,6 +819,41 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         }
     }
     v.secondFinal = v.complete; v.firstFinal = v.complete || v.firstCalledIn;
+    v.lodFinal = v.complete || (v.side == 1 && v.firstFinal); v.hodFinal = v.complete || (v.side == 2 && v.firstFinal);
+    {   // (HL104) the levels each extreme swept: the key level (PF / PD / ON / Lon), then his MenthorQ levels in priority order, each
+        // its own label at its own price; at most 3 per extreme drawn, all of them in the status file. MenthorQ: the file's version
+        // that stood at the extreme's bar (the latest snapshot written at or before it, else the session's first one); a snapshot
+        // written before this session (17:00 the day before) is stale and not used.
+        long long sesA = (R->sid - 1) * 86400 + 17 * 3600;
+        for (int low = 1; low >= 0; low--) {
+            const Ext& E = low ? R->lod : R->hod; if (!E.set) continue;
+            bool fin = low ? v.lodFinal : v.hodFinal;
+            std::vector<View::LvlLbl> got; std::string all;
+            int kl = low ? v.lodLvl : v.hodLvl; long long kpx = low ? v.lodLvlPx : v.hodLvlPx;
+            if (kl >= 0) { View::LvlLbl a; a.txt = std::string(low ? LV_LOW[kl] : LV_HIGH[kl]) + " " + lvlPxTxt((double)kpx * tick, dec); a.px = kpx; a.col = LV_COL[kl]; a.fin = fin; got.push_back(a); }
+            if (mq && !v.prior) {
+                const MqSnap* sn = nullptr;
+                const MqSnap* first = nullptr;
+                for (size_t i = 0; i < mq->size(); i++) {
+                    const MqSnap& q = (*mq)[i]; if (q.atAbs < sesA) continue;
+                    if (!first || q.atAbs < first->atAbs) first = &q;
+                    if (q.atAbs <= E.endAbs && (!sn || q.atAbs >= sn->atAbs)) sn = &q;
+                }
+                if (!sn) sn = first;
+                if (!sn) v.mqWhy = "MenthorQ levels: none for this session (missing or stale file)";
+                else for (int code = 0; code < 6; code++) for (size_t i = 0; i < sn->lv.size(); i++) {
+                    const MqLevel& q = sn->lv[i]; if (q.code != code) continue;
+                    bool sw = low ? (E.px < q.px && R->open >= q.px) : (E.px > q.px && R->open <= q.px);
+                    if (!sw) continue;
+                    View::LvlLbl a; a.txt = std::string(MQ_CODES[code]) + " " + lvlPxTxt((double)q.px * tick, dec); a.px = q.px; a.col = q.col; a.fin = fin;
+                    bool dup = false; for (size_t j = 0; j < got.size(); j++) if (got[j].txt == a.txt) dup = true;
+                    if (!dup) got.push_back(a);
+                }
+            }
+            for (size_t i = 0; i < got.size(); i++) { all += (all.empty() ? "" : ";") + got[i].txt; if (i < 3) v.lvlLbls.push_back(got[i]); }
+            (low ? v.sweptLod : v.sweptHod) = all;
+        }
+    }
     // the model row: hle 2.0 (the studies' conditional model, current session) where its `sources` bits say v2; the v1 model
     // candles (HodLodExpected.h) for what hle does not model (reclaim, wick) and as hle's own fallback. Times are minutes since
     // THIS market's open (hle's convention; v1 used one 08:30 window for every market).
@@ -769,14 +871,14 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     // ---- the candle labels (mockup v5)
     auto nameLine = [&](bool isHod, int lvl) {
         Line L; L.push_back(Seg{ isHod ? "HOD" : "LOD", isHod ? C_GREEN : C_RED });
-        if (lvl >= 0) L.push_back(Seg{ std::string(" \xB7 ") + (isHod ? LV_HIGH[lvl] : LV_LOW[lvl]), LV_COL[lvl] });
+        (void)lvl;   // (HL104) the swept level's name now sits right of the candle at its price, not in this label
         return L;
     };
     auto one = [](const std::string& s, unsigned c) { Line L; L.push_back(Seg{ s, c }); return L; };
     // (HL101) a running extreme (not final yet): "high 11:21 \xB7 PDH" all grey, no side colour
     auto runLine = [&](bool isHod, int mod, int lvl) {
         Line L; std::string t = std::string(isHod ? "high " : "low ") + clkPm(mod);
-        if (lvl >= 0) t += std::string(" \xB7 ") + (isHod ? LV_HIGH[lvl] : LV_LOW[lvl]);
+        (void)lvl;
         L.push_back(Seg{ t, C_GREY }); return L;
     };
     std::vector<Line> hodG, lodG;
@@ -1104,12 +1206,28 @@ inline void measureBlock(Block& B, const Measure& M)
 }
 static const int CANDLE_FS = 9, CANDLE_BODY_W = 78;
 // the candle's column (left edge of the pane): wide enough for the body and every label
-inline int candleColW(const View& v, const Measure& M)
+static const int LVL_FS = 7;    // (HL104) the swept-level label right of the candle
+// the candle's own width (body + its labels, centred); the candle sits at colL + base / 2
+inline int candleBaseW(const View& v, const Measure& M)
 {
     Block top{ v.top, CANDLE_FS }, bot{ v.bottom, CANDLE_FS }, mid{ v.bodyMid, CANDLE_FS }, rec{ v.bodyRecl, CANDLE_FS - 1 };
     measureBlock(top, M); measureBlock(bot, M); measureBlock(mid, M); measureBlock(rec, M);
     return (std::max)(CANDLE_BODY_W, (std::max)(top.w, bot.w)) + 8 > (std::max)(mid.w, rec.w) + 18
          ? (std::max)(CANDLE_BODY_W, (std::max)(top.w, bot.w)) + 8 : (std::max)(mid.w, rec.w) + 18;
+}
+inline int candleBodyW(const View& v, const Measure& M)
+{
+    Block mid{ v.bodyMid, CANDLE_FS }, rec{ v.bodyRecl, CANDLE_FS - 1 }; measureBlock(mid, M); measureBlock(rec, M);
+    return (std::max)(CANDLE_BODY_W, (std::max)(mid.w, rec.w) + 10);
+}
+// the candle's reserved column (left edge of the pane): the candle, its labels and, right of the body, the swept-level labels
+inline int candleColW(const View& v, const Measure& M)
+{
+    int base = candleBaseW(v, M), lw = 0;
+    for (size_t i = 0; i < v.lvlLbls.size(); i++) lw = (std::max)(lw, M(v.lvlLbls[i].txt, LVL_FS, false));
+    if (lw == 0) return base;
+    int need = base / 2 + candleBodyW(v, M) / 2 + 5 + lw + 6;   // body right edge + gap + text + clearance
+    return (std::max)(base, need);
 }
 
 // PIECE 1: the session candle at real prices on the left edge. yOf maps a price (ticks) to a pane y. The table sits to the right
@@ -1125,7 +1243,7 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
     Block top{ v.top, fs }, bot{ v.bottom, fs }, mid{ v.bodyMid, fs }, rec{ v.bodyRecl, fs - 1 };
     measure(top); measure(bot); measure(mid); measure(rec);
     int colL = pane.l + 8, colW = candleColW(v, M);
-    int cx = colL + colW / 2;
+    int cx = colL + candleBaseW(v, M) / 2;           // (HL104) the candle keeps its place; the column grows to the right for the level labels
     auto clampY = [&](int y) { return y < aT ? aT : (y > aB ? aB : y); };
     int yH0 = yOf(v.hod), yL0 = yOf(v.lod), yO = clampY(yOf(v.open)), yC = clampY(yOf(v.close));
     int yH = clampY(yH0), yL = clampY(yL0);
@@ -1176,6 +1294,46 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
             }
         }
         if (!placed) { mid.lines.clear(); rec.lines.clear(); }
+    }
+    // (HL104, Rassul "just put them next to the candle on the right of the candle") the swept level's name and price, e.g.
+    // "LonLO 7,838.25", in a small font right of the body, vertically at the level's price (clamped to the candle area), in the
+    // level's SessionPrices colour (grey while that extreme is only "so far"); nudged up / down so it never overlaps a candle
+    // label or the other level label; always inside the reserved column (never over the price bars)
+    {
+        std::vector<Box> taken;
+        Block* lb[4] = { &top, &mid, &rec, &bot };
+        for (int i = 0; i < 4; i++) if (!lb[i]->lines.empty()) taken.push_back(Box{ lb[i]->at.l - 2, lb[i]->at.t, lb[i]->at.r + 2, lb[i]->at.b });
+        const int lh = lineH(LVL_FS), xL = br + 5, xMax = colL + colW;
+        // placed from the highest price down, each searching downward first: a stack of close levels keeps price order
+        // (the higher price on top), each as near its own price as the candle labels allow
+        std::vector<size_t> ord(v.lvlLbls.size()); for (size_t i = 0; i < ord.size(); i++) ord[i] = i;
+        std::stable_sort(ord.begin(), ord.end(), [&](size_t x, size_t y) { return v.lvlLbls[x].px > v.lvlLbls[y].px; });
+        for (size_t oi = 0; oi < ord.size(); oi++) {
+            size_t k = ord[oi];
+            const View::LvlLbl& q = v.lvlLbls[k];
+            int w = M(q.txt, LVL_FS, false);
+            if (xL + w > xMax) continue;                                  // cannot happen (the column is sized for it); never spill
+            int yc = yOf(q.px); if (yc < aT + lh / 2) yc = aT + lh / 2; if (yc > aB - lh / 2) yc = aB - lh / 2;
+            Box best = { 0, 0, 0, 0 }; bool found = false;
+            // first straight down, within 3 lines (keeps a stack of close levels in price order), then the nearest spot either way
+            for (int pass = 0; pass < 2 && !found; pass++)
+            for (int d = 0; d <= (pass == 0 ? 3 * lh : aB - aT) && !found; d += 2) {
+                for (int sgn = 0; sgn < 2 && !found; sgn++) {
+                    if ((d == 0 || pass == 0) && sgn == 1) continue;
+                    int t = yc - lh / 2 + (sgn == 0 ? d : -d);
+                    if (t < aT || t + lh > aB) continue;
+                    Box b = { xL - 2, t - 1, xL + w + 2, t + lh + 1 }; bool ok = true;      // the drawn box + 1 px clearance
+                    for (size_t j = 0; j < taken.size() && ok; j++) if (overlap(b, taken[j])) ok = false;
+                    if (ok) { best = Box{ xL, t, xL + w, t + lh }; found = true; }
+                }
+            }
+            if (!found) continue;
+            unsigned col = q.fin ? q.col : C_GREY;
+            addFill(L, best.l - 1, best.t, best.r + 1, best.b, C_PANEL, R_LABEL);
+            addText(L, best.l, best.t, best.b, q.txt, col, LVL_FS, false, w, R_LABEL, 50 + (int)k);
+            L.blocks.push_back(Box{ best.l - 1, best.t, best.r + 1, best.b });
+            taken.push_back(Box{ best.l - 1, best.t, best.r + 1, best.b });
+        }
     }
     Block* all[4] = { &top, &mid, &rec, &bot };
     int bi = 0;
@@ -1232,6 +1390,8 @@ inline std::string statusText(const View& v, const Layout& L, const Tracker& T, 
         kv("HOD", pxTxt((double)v.hod * t, dec) + "," + hhmm(v.hodMod) + "," + (v.hodLvl >= 0 ? LV_HIGH[v.hodLvl] : ""));
         kv("LOD", pxTxt((double)v.lod * t, dec) + "," + hhmm(v.lodMod) + "," + (v.lodLvl >= 0 ? LV_LOW[v.lodLvl] : ""));
         kv("FIRST", v.side == 1 ? "LOD" : v.side == 2 ? "HOD" : "not clear");
+        kv("SWEPT_LOD", v.sweptLod); kv("SWEPT_HOD", v.sweptHod);     // (HL104) every swept level (the first 3 per extreme are drawn)
+        if (!v.mqWhy.empty()) kv("MQ_LEVELS", v.mqWhy);
         kv("TOOK_MIN", std::to_string(v.took)); kv("SIZE", trimNum((double)v.sizeT * t, dec) + "," + usd(v.sizeUsd));
         kv("RECLAIM", v.reclaimed ? hhmm(v.reclMod) : "none"); kv("REC_TOOK_MIN", std::to_string(v.recTook));
         kv("SECOND", v.secondFinal ? "final" : (v.secondPrinted ? "running" : "pending")); kv("GAP_MIN", std::to_string(v.gap));

@@ -24,6 +24,8 @@
 #endif
 #include "HostSlot.h"
 #include "HodLodLogic.h"
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <string>
 #include <vector>
 #include <cstdio>
@@ -46,6 +48,8 @@ struct HLState {
     time_t lastStatusWrite = 0; std::string lastStatus;
     bool faulted = false;
     long long recomputes = 0, statusWrites = 0;   // test counters (checklist #31 / #32)
+    // (HL104) MenthorQ level snapshots of MenthorQLevels.csv (the one external input): one per distinct content, <= 32, newest last
+    std::vector<hl::MqSnap> mq; long long mqStamp = -2; time_t mqChecked = 0; std::string mqWhy; long long mqLoads = 0;
     ~HLState() { delete T; }
 };
 
@@ -57,6 +61,7 @@ public:
     HLState* state(bool create) { return slot_.get(this, create); }
     void clearState() { slot_.release(this); }
     void refresh(HLState& S);
+    bool loadMq(HLState& S);
     void recompute(HLState& S, long n);
     void writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows);
     void writeStatus(HLState& S, const hl::Layout* L);
@@ -118,10 +123,12 @@ void HodLod::refresh(HLState& S)
     if (root != S.root) {
         delete S.T; S.T = nullptr;
         S.root = root; S.mkt = hl::marketForRoot(root); S.mi = hl::mktIndex(S.mkt);
+        S.mq.clear(); S.mqStamp = -2; S.mqChecked = 0; S.mqWhy.clear();
         S.nBars = -1; S.have = false; S.faulted = false; S.mine = hl::LogState(); S.scorer = hl::LogState(); S.firstPass = true;
         S.state = S.mi < 0 ? "unknown market (root " + root + ")" : "starting";
     }
     if (S.mi < 0 || S.faulted) return;
+    if (loadMq(S)) S.nBars = -1;            // (HL104) new MenthorQ levels: rebuild once
     long n = getBarCount();
     if (n < 3) { S.state = "too few bars"; S.have = false; return; }
     RTARRAYI dt(barDateTime);
@@ -134,6 +141,53 @@ void HodLod::refresh(HLState& S)
     try { recompute(S, n); }
     catch (const std::exception& e) { S.faulted = true; S.have = false; S.state = std::string("fault: ") + e.what() + " (cleared on symbol change)"; }
     catch (...) { S.faulted = true; S.have = false; S.state = "fault (cleared on symbol change)"; }
+}
+
+// (HL104) MenthorQLevels.csv (lsFlexLevels, written by the MenthorQ bridge, read by lsDealerProfile too): stat at most every 5 s,
+// read only when the stamp changes, at most 64 KiB, strict parse; a changed level set becomes a new snapshot stamped with the file's
+// write time (local CT). Missing / oversized / garbage -> no new snapshot (a stale one from an earlier session is never used).
+static long long hlLocalAbs(time_t t)
+{
+    struct tm lt; memset(&lt, 0, sizeof lt);
+#ifdef _WIN32
+    if (localtime_s(&lt, &t) != 0) return 0;
+#else
+    if (!localtime_r(&t, &lt)) return 0;
+#endif
+    return hl::daysFromCivil(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday) * 86400 + lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec;
+}
+bool HodLod::loadMq(HLState& S)
+{
+    time_t now = time(nullptr);
+    if (S.mqStamp != -2 && now - S.mqChecked < 5) return false;
+    S.mqChecked = now;
+    std::string p = flexPath("MenthorQLevels.csv");
+    if (p.empty()) { S.mqWhy = "MenthorQ levels: no profile folder"; return false; }
+#ifdef _WIN32
+    struct _stat64 st; bool ok = _stat64(p.c_str(), &st) == 0;
+#else
+    struct stat st; bool ok = stat(p.c_str(), &st) == 0;
+#endif
+    long long stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
+    if (stamp == S.mqStamp) return false;
+    S.mqStamp = stamp;
+    if (!ok) { S.mqWhy = "MenthorQLevels.csv missing: key levels only"; return true; }
+    if ((long long)st.st_size > (long long)hl::MQ_MAX_BYTES) { S.mqWhy = "MenthorQLevels.csv over 64 KiB: ignored"; return true; }
+    std::string text;
+    {   std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.mqWhy = "MenthorQLevels.csv unreadable"; return true; }
+        text.resize(hl::MQ_MAX_BYTES + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
+    S.mqLoads++;
+    std::vector<hl::MqLevel> lv; std::string why;
+    double tick = (double)getProperty(SYM_TICKINCR); tick = std::round(tick * 1e9) / 1e9;
+    if (!hl::parseMq(text, S.mkt, S.root, tick, lv, why)) { S.mqWhy = why + ": key levels only"; return true; }
+    S.mqWhy = why;
+    bool same = !S.mq.empty() && S.mq.back().lv.size() == lv.size();
+    for (size_t i = 0; same && i < lv.size(); i++) same = lv[i].code == S.mq.back().lv[i].code && lv[i].px == S.mq.back().lv[i].px && lv[i].col == S.mq.back().lv[i].col;
+    if (same) return false;
+    hl::MqSnap sn; sn.atAbs = hlLocalAbs((time_t)st.st_mtime); sn.lv = lv;
+    S.mq.push_back(sn);
+    if (S.mq.size() > 32) S.mq.erase(S.mq.begin());
+    return true;
 }
 
 void HodLod::recompute(HLState& S, long n)
@@ -170,7 +224,9 @@ void HodLod::recompute(HLState& S, long n)
     std::vector<hl::ReadRow> rows;
     hl::Tracker T = hl::runBars(c, B, B.size(), &rows);
     hl::ReadOut rd = rows.empty() ? hl::ReadOut() : rows.back().out;
-    S.view = hl::buildView(T, rd, &rows); S.rd = rd; S.per = per; S.tick = tick; S.have = S.view.has || !S.view.header.empty();
+    S.view = hl::buildView(T, rd, &rows, &S.mq);
+    if (!S.mqWhy.empty()) S.view.mqWhy = S.mqWhy + (S.view.mqWhy.empty() ? "" : "; " + S.view.mqWhy);
+    S.rd = rd; S.per = per; S.tick = tick; S.have = S.view.has || !S.view.header.empty();
     delete S.T; S.T = new hl::Tracker(T);
     S.state = S.view.has ? (S.view.prior ? "prior session shown" : (S.view.complete ? "RTH complete" : "RTH live")) : "waiting for the RTH open";
     if (start > 0 && lastClosed - start >= 40000) S.state += " (history capped at 40,000 bars)";
