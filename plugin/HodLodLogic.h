@@ -154,7 +154,7 @@ static const unsigned LV_COL[4] = { 0x00008A8A, 0x00FFA500, 0x00808080, 0x00F59E
 
 struct Lvl { bool ok = false; int n = 0; long long hi = 0, lo = 0; void add(long long h, long long l) { if (!n) { hi = h; lo = l; } else { if (h > hi) hi = h; if (l < lo) lo = l; } n++; } };
 
-struct Ext { bool set = false; long long px = 0, seq = -1, endAbs = 0; int lvl = -1; };
+struct Ext { bool set = false; long long px = 0, seq = -1, endAbs = 0; int lvl = -1; long long lvlPx = 0; };   // lvlPx = the swept level's price (ticks)
 struct Mark { long long seq = -1, endAbs = 0; };
 
 struct Rth {
@@ -224,7 +224,8 @@ public:
     }
 
     // the most significant level the extreme traded through (see the header comment), -1 = none
-    int swept(bool low, long long px, long long barStartAbs) const
+    int swept(bool low, long long px, long long barStartAbs) const { long long lp = 0; return swept(low, px, barStartAbs, lp); }
+    int swept(bool low, long long px, long long barStartAbs, long long& lvlPx) const
     {
         const Lvl* L[4] = { &pf, &pd, &curOn, &curLon };
         for (int i = 0; i < 4; i++) {
@@ -232,8 +233,8 @@ public:
             if (!v.ok || v.n <= 0) continue;
             if (i == LV_ON && !(firstAbsStart <= onA(curSid))) continue;
             if (i == LV_LON && !(firstAbsStart <= lonA(curSid) && lonB(curSid) <= barStartAbs)) continue;
-            if (low) { if (px < v.lo && cur.open >= v.lo) return i; }
-            else     { if (px > v.hi && cur.open <= v.hi) return i; }
+            if (low) { if (px < v.lo && cur.open >= v.lo) { lvlPx = v.lo; return i; } }
+            else     { if (px > v.hi && cur.open <= v.hi) { lvlPx = v.hi; return i; } }
         }
         return -1;
     }
@@ -307,14 +308,14 @@ public:
         }
         if ((!R.lod.set || l < R.lod.px) && (!R.hod.set || h > R.hod.px)) R.bothRed = c < o;
         if (!R.lod.set || l < R.lod.px) {
-            R.lod.set = true; R.lod.px = l; R.lod.seq = seq; R.lod.endAbs = absEnd; R.lod.lvl = swept(true, l, absStart);
+            R.lod.set = true; R.lod.px = l; R.lod.seq = seq; R.lod.endAbs = absEnd; R.lod.lvl = swept(true, l, absStart, R.lod.lvlPx);
             R.lodRecl = Mark(); R.lodStrict = c > R.open ? seq : -1;
         } else {
             if (R.lodRecl.seq < 0 && c >= R.open) { R.lodRecl.seq = seq; R.lodRecl.endAbs = absEnd; }
             if (R.lodStrict < 0 && c > R.open) R.lodStrict = seq;
         }
         if (!R.hod.set || h > R.hod.px) {
-            R.hod.set = true; R.hod.px = h; R.hod.seq = seq; R.hod.endAbs = absEnd; R.hod.lvl = swept(false, h, absStart);
+            R.hod.set = true; R.hod.px = h; R.hod.seq = seq; R.hod.endAbs = absEnd; R.hod.lvl = swept(false, h, absStart, R.hod.lvlPx);
             R.hodRecl = Mark(); R.hodStrict = c < R.open ? seq : -1;
         } else {
             if (R.hodRecl.seq < 0 && c <= R.open) { R.hodRecl.seq = seq; R.hodRecl.endAbs = absEnd; }
@@ -614,6 +615,8 @@ struct View {
     double sizeUsd = 0, rangeUsd = 0;
     int usedPct = -1;
     int hodLvl = -1, lodLvl = -1;
+    long long hodLvlPx = 0, lodLvlPx = 0;          // (HL103) the swept levels' prices (ticks) - the line drawn on the candle column
+    bool hodFinal = false, lodFinal = false;       //         coloured once that extreme is final (called IN / the close), else grey
     // the model row in use
     bool modelUp = true, modelByShare = false; int sharePct = 0;
     double eLod = NAN, eHod = NAN;         // E-LOD / E-HOD prices (SessionInfo ticks)
@@ -725,7 +728,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     long long day = R->sid * 86400;
     v.open = R->open; v.close = R->lastClose; v.hod = R->hod.px; v.lod = R->lod.px;
     v.hodMod = (int)((R->hod.endAbs - day) / 60); v.lodMod = (int)((R->lod.endAbs - day) / 60); v.lastMod = (int)((R->lastEndAbs - day) / 60);
-    v.hodLvl = R->hod.lvl; v.lodLvl = R->lod.lvl;
+    v.hodLvl = R->hod.lvl; v.lodLvl = R->lod.lvl; v.hodLvlPx = R->hod.lvlPx; v.lodLvlPx = R->lod.lvlPx;
     v.headLeft = std::string(K.code) + "  " + clk(v.lastMod);
     v.side = R->lod.seq < R->hod.seq ? 1 : (R->hod.seq < R->lod.seq ? 2 : 0);
     v.rangeT = R->hod.px - R->lod.px; v.rangeUsd = (double)v.rangeT * tv;
@@ -752,6 +755,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         }
     }
     v.secondFinal = v.complete; v.firstFinal = v.complete || v.firstCalledIn;
+    v.lodFinal = v.complete || (v.side == 1 && v.firstFinal); v.hodFinal = v.complete || (v.side == 2 && v.firstFinal);
     // the model row: hle 2.0 (the studies' conditional model, current session) where its `sources` bits say v2; the v1 model
     // candles (HodLodExpected.h) for what hle does not model (reclaim, wick) and as hle's own fallback. Times are minutes since
     // THIS market's open (hle's convention; v1 used one 08:30 window for every market).
@@ -1176,6 +1180,42 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
             }
         }
         if (!placed) { mid.lines.clear(); rec.lines.clear(); }
+    }
+    // (HL103, Rassul "draw a line for the key level that was swept") a 1 px line at the swept level's PRICE across the column, in the
+    // level's SessionPrices colour (grey while that extreme is only "so far"), its name at the left end in a small font, moved up or
+    // down so it never overlaps a candle label; drawn only when the price is inside the candle area (never clamped to a wrong price)
+    {
+        struct SL { bool on; long long px; int lvl; bool low, fin; } sl[2] = { { v.lodLvl >= 0, v.lodLvlPx, v.lodLvl, true, v.lodFinal },
+                                                                              { v.hodLvl >= 0, v.hodLvlPx, v.hodLvl, false, v.hodFinal } };
+        std::vector<Box> taken;
+        Block* lb[4] = { &top, &mid, &rec, &bot };
+        for (int i = 0; i < 4; i++) if (!lb[i]->lines.empty()) taken.push_back(Box{ lb[i]->at.l - 2, lb[i]->at.t, lb[i]->at.r + 2, lb[i]->at.b });
+        const int lfs = 7, lh = lineH(lfs), xL = colL, xR = colL + colW;
+        for (int k = 0; k < 2; k++) {
+            if (!sl[k].on) continue;
+            int y = yOf(sl[k].px);
+            if (y < aT || y > aB) continue;
+            unsigned col = sl[k].fin ? LV_COL[sl[k].lvl] : C_GREY;
+            std::string name = sl[k].low ? LV_LOW[sl[k].lvl] : LV_HIGH[sl[k].lvl];
+            addLine(L, xL, y, xR, y, col, 1, R_CANDLE);
+            int w = M(name, lfs, false);
+            // the name: just above the line, else just below, else the nearest free spot up / down inside the area
+            Box best = { 0, 0, 0, 0 }; bool found = false;
+            for (int d = 0; d <= aB - aT && !found; d += 2) {
+                for (int sgn = 0; sgn < 2 && !found; sgn++) {
+                    int t = sgn == 0 ? y - 1 - lh - d : y + 2 + d;
+                    if (t < aT || t + lh > aB) continue;
+                    Box b = { xL - 2, t - 1, xL + w + 2, t + lh + 1 }; bool ok = true;     // the drawn box + 1 px clearance
+                    for (size_t j = 0; j < taken.size() && ok; j++) if (overlap(b, taken[j])) ok = false;
+                    if (ok) { best = Box{ xL, t, xL + w, t + lh }; found = true; }
+                }
+            }
+            if (!found) continue;                     // the line alone (the name is in the candle label)
+            addFill(L, best.l - 1, best.t, best.r + 1, best.b, C_PANEL, R_LABEL);
+            addText(L, best.l, best.t, best.b, name, col, lfs, false, w, R_LABEL, 50 + k);
+            L.blocks.push_back(Box{ best.l - 1, best.t, best.r + 1, best.b });
+            taken.push_back(Box{ best.l - 1, best.t, best.r + 1, best.b });
+        }
     }
     Block* all[4] = { &top, &mid, &rec, &bot };
     int bi = 0;
