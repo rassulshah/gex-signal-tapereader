@@ -51,6 +51,12 @@ std::vector<float> mockOut(int k);   // (1.1.5) the mock's output arrays 1 / 2
 #include <iostream>
 static int fails = 0, npass_ = 0;
 #define CHECK(c, m) do { if (c) npass_++; else { fails++; printf("FAIL %d: %s\n", __LINE__, m); } } while (0)
+
+// (2.0.4) every TapeFlow object the test creates is destroyed and deleted at the end (IRT owns them in real life), so LeakSanitizer
+// sees only what the PLUGIN would leak
+static std::vector<TapeFlow*> g_ownedTF;
+static TapeFlow* own(TapeFlow* p) { g_ownedTF.push_back(p); return p; }
+static void freeAll() { for (TapeFlow* p : g_ownedTF) { static_cast<cppExtension*>(p)->destroy(); delete p; } g_ownedTF.clear(); { std::lock_guard<std::mutex> g(booksMx()); books().clear(); } }
 static const long long DAY0 = 1791417600LL;               // 2026-10-08 00:00 (a Thursday), "local"
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static const std::string LS = "/tmp/tfbf115/home\\InvestorRT\\rtx\\lsFlexLevels";
@@ -78,6 +84,8 @@ static std::vector<MTick> thinTape(long long from, long long to)
     }
     return v;
 }
+// (2.0.4) a calibration REQUEST line ("calibration back-fill: session N (date)..."), not the "measured" line of a pane back-fill
+static bool calStart(const std::string& t) { std::stringstream s(t); std::string ln; while (std::getline(s, ln)) if (ln.find("calibration back-fill: session") != std::string::npos && ln.find("measured") == std::string::npos && ln.find("...") != std::string::npos) return true; return false; }
 int main()
 {
     setenv("USERPROFILE", "/tmp/tfbf115/home", 1); setenv("TZ", "UTC", 1); tzset();
@@ -85,7 +93,7 @@ int main()
     g_now = DAY0 + 18 * 3600 + 1800;                         // Thursday 18:30 - outside ES RTH, the Friday session is under way
     g_ticks = thinTape(DAY0 - 26 * 86400, g_now + 4 * 3600);
     for (long long b = g_now - 3 * 3600; b <= g_now; b += 180) g_bars.push_back(b - b % 180);
-    TapeFlow* tf = static_cast<TapeFlow*>(CreateExtension());
+    TapeFlow* tf = own(static_cast<TapeFlow*>(CreateExtension()));
     tf->setup(); static_cast<cppExtension*>(tf)->calc(0);
     tickPlugin(tf, 6 * 60);                                   // 6 minutes: 10m, session, then one prior session at a time
     const std::string tr = slurp(LS + "\\TapeFlow.trace-ES.txt");
@@ -103,16 +111,18 @@ int main()
     { size_t a = stat.find("BACKFILL_calibration,"); if (a != std::string::npos) printf("  %s\n", stat.substr(a, stat.find('\n', a) - a).c_str()); }
     // a restart: the files are complete, so nothing is fetched again
     static_cast<cppExtension*>(tf)->destroy();
-    g_ttMaxBack = 0;
-    TapeFlow* r = static_cast<TapeFlow*>(CreateExtension()); r->setup(); static_cast<cppExtension*>(r)->calc(0);
+    g_ttMaxBack = 0; const size_t trBefore = slurp(LS + "\\TapeFlow.trace-ES.txt").size();
+    TapeFlow* r = own(static_cast<TapeFlow*>(CreateExtension())); r->setup(); static_cast<cppExtension*>(r)->calc(0);
     tickPlugin(r, 3 * 60);
-    CHECK(g_ttMaxBack < 86400 && r->S().deepNote.find("nothing to do") != std::string::npos, "after a restart with 10 complete sessions on file: no calibration request at all");
+    {   // (2.0.4) the only history request after a restart: the last traded session for the pane (its tape comes from IRT, never a file)
+        const std::string t1 = slurp(LS + "\\TapeFlow.trace-ES.txt").substr(trBefore); size_t panes = 0, a = 0; while ((a = t1.find("pane back-fill (", a)) != std::string::npos) { panes++; a++; }
+        CHECK(!calStart(t1) && panes == 1 && r->S().deepNote.find("nothing to do") != std::string::npos, "after a restart with 10 complete sessions on file: no calibration request at all (one pane back-fill of the last session)"); }
     static_cast<cppExtension*>(r)->destroy();
     // inside RTH, with sessions missing: the calibration back-fill waits (only the 10m / session reads happen)
     for (long long s2 = sid - 6; s2 >= sid - 21; --s2) std::remove((LS + "\\TapeFlow\\ES-base-v110-" + std::to_string(s2) + ".csv").c_str());
     std::remove((LS + "\\TapeFlow\\_deep-ES.txt").c_str());
     g_now = DAY0 + 86400 + 10 * 3600; g_ttMaxBack = 0;                       // Friday 10:00 CT
-    TapeFlow* q = static_cast<TapeFlow*>(CreateExtension()); q->setup(); static_cast<cppExtension*>(q)->calc(0);
+    TapeFlow* q = own(static_cast<TapeFlow*>(CreateExtension())); q->setup(); static_cast<cppExtension*>(q)->calc(0);
     tickPlugin(q, 3 * 60);
     printf("RTH: complete %d, longest request %lld s, note: %s\n", tfl::completeSessions(q->S().store, tfl::sessionOf(g_now), COMPLETE_WINDOWS), g_ttMaxBack, q->S().deepNote.c_str());
     CHECK(g_ttMaxBack < 86400 && q->S().deepNote.find("RTH") != std::string::npos, "inside RTH: no calibration request (it waits for the end of RTH)");
@@ -123,18 +133,19 @@ int main()
     // IRT's history ends 4 sessions back: recorded once, never asked again after a restart
     system("rm -f /tmp/tfbf115/home\\\\*");
     g_now = DAY0 + 18 * 3600 + 1800; g_ticks = thinTape(DAY0 - 5 * 86400, g_now + 4 * 3600);
-    TapeFlow* h = static_cast<TapeFlow*>(CreateExtension()); h->setup(); static_cast<cppExtension*>(h)->calc(0);
+    TapeFlow* h = own(static_cast<TapeFlow*>(CreateExtension())); h->setup(); static_cast<cppExtension*>(h)->calc(0);
     tickPlugin(h, 6 * 60);
     std::string prog = slurp(LS + "\\TapeFlow\\_deep-ES.txt");
     printf("history-end progress file:\n%s", prog.c_str());
     CHECK(prog.find("exhaustedBelow,") != std::string::npos, "where IRT's history ends is recorded");
     static_cast<cppExtension*>(h)->destroy();
     const std::string tr0 = slurp(LS + "\\TapeFlow.trace-ES.txt");
-    TapeFlow* h2 = static_cast<TapeFlow*>(CreateExtension()); h2->setup(); static_cast<cppExtension*>(h2)->calc(0);
+    TapeFlow* h2 = own(static_cast<TapeFlow*>(CreateExtension())); h2->setup(); static_cast<cppExtension*>(h2)->calc(0);
     tickPlugin(h2, 3 * 60);
     const std::string tr1 = slurp(LS + "\\TapeFlow.trace-ES.txt").substr(tr0.size());
-    CHECK(tr1.find("calibration back-fill: session") == std::string::npos, "after a restart: no request for sessions IRT does not have");
+    CHECK(!calStart(tr1), "after a restart: no calibration request for sessions IRT does not have (only the pane's last traded session)");
     static_cast<cppExtension*>(h2)->destroy();
+    freeAll();
     printf("%d passed, %d failed\n", npass_, fails);
     return fails ? 1 : 0;
 }

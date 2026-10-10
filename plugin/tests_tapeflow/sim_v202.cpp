@@ -59,6 +59,12 @@ void mockBar(int i, float o, float h, float l, float c);   // (1.1.5) the mock's
 #include <sstream>
 static int fails = 0, npass_ = 0;
 #define CHECK(c, m) do { if (c) npass_++; else { fails++; printf("FAIL %d: %s\n", __LINE__, m); } } while (0)
+
+// (2.0.4) every TapeFlow object the test creates is destroyed and deleted at the end (IRT owns them in real life), so LeakSanitizer
+// sees only what the PLUGIN would leak
+static std::vector<TapeFlow*> g_ownedTF;
+static TapeFlow* own(TapeFlow* p) { g_ownedTF.push_back(p); return p; }
+static void freeAll() { for (TapeFlow* p : g_ownedTF) { static_cast<cppExtension*>(p)->destroy(); delete p; } g_ownedTF.clear(); { std::lock_guard<std::mutex> g(booksMx()); books().clear(); } }
 static const long long DAY0 = 1791417600LL;               // 2026-10-08 00:00 (a Thursday), "local"
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static const std::string LS = "/tmp/tfv202/home\\InvestorRT\\rtx\\lsFlexLevels";
@@ -103,7 +109,7 @@ int main()
     g_now = DAY0 + 18 * 3600 + 1800;                         // Thursday 18:30 - outside ES RTH
     g_ticks = tape(DAY0 - 20 * 86400, g_now + 4 * 3600);
     for (long long b = g_now - 3 * 3600; b <= g_now; b += 180) addBar(b - b % 180);
-    TapeFlow* tf = static_cast<TapeFlow*>(CreateExtension()); tf->setup(); static_cast<cppExtension*>(tf)->calc(0);
+    TapeFlow* tf = own(static_cast<TapeFlow*>(CreateExtension())); tf->setup(); static_cast<cppExtension*>(tf)->calc(0);
     tickPlugin(tf, 8 * 60);
     const long long sid = tfl::sessionOf(g_now);
     // ---- test mode: nothing drawn; the header says so
@@ -161,7 +167,7 @@ int main()
     const std::string full = slurp(f1);
     std::rename(f1.c_str(), (f1 + ".part").c_str()); { std::ofstream o((f1 + ".part").c_str(), std::ios::app); o << "999|garbage\n"; }
     g_ttMaxBack = 0; g_ttCalls = 0;
-    TapeFlow* r = static_cast<TapeFlow*>(CreateExtension()); r->setup(); static_cast<cppExtension*>(r)->calc(0);
+    TapeFlow* r = own(static_cast<TapeFlow*>(CreateExtension())); r->setup(); static_cast<cppExtension*>(r)->calc(0);
     tickPlugin(r, 3 * 60);
     CHECK(slurp(f1) == full, "resume: the interrupted session is exported again in full (the stale .part is discarded)");
     std::ifstream part((f1 + ".part").c_str());
@@ -172,11 +178,12 @@ int main()
     std::remove(f1.c_str());
     g_now = DAY0 + 86400 + 10 * 3600; g_ttMaxBack = 0;                       // Friday 10:00 CT
     for (long long b = g_bars.back() + 180; b <= g_now; b += 180) addBar(b);
-    TapeFlow* q = static_cast<TapeFlow*>(CreateExtension()); q->setup(); static_cast<cppExtension*>(q)->calc(0);
+    TapeFlow* q = own(static_cast<TapeFlow*>(CreateExtension())); q->setup(); static_cast<cppExtension*>(q)->calc(0);
     tickPlugin(q, 3 * 60);
     std::ifstream again(f1.c_str());
     CHECK(!again.good() && g_ttMaxBack < 86400, "inside RTH: no tape export (it waits for the end of RTH)");
     static_cast<cppExtension*>(q)->destroy();
+    freeAll();
     printf("%d passed, %d failed\n", npass_, fails);
     return fails ? 1 : 0;
 }

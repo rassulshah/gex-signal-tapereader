@@ -347,11 +347,11 @@ int main()
         SignalBook b4; b4.cfg.absorbMethod = 1; for (auto& b : bars) b4.feed(b, none);
         BarFlow l = none; nodeFill(l, &low, top, 1); b4.feed(top, l);
         CHECK(!b4.drawnAt(top.te), "NODE: buying in the bottom of the bar is not absorption at a top");
-        SignalBook b5; b5.cfg.absorbMethod = 1;
+        SignalBook b5; b5.cfg.absorbMethod = 1; b5.cfg.nodeLocation = true;   // (2.0.4) the location rule is a study variant now (the zigzag pivot is the default)
         for (auto& b : bars) { BarIn x = b; x.h = T(7880); b5.feed(x, none); }                   // the hour's high was higher
         BarFlow k = none; nodeFill(k, &rows, top, 1); b5.feed(top, k);
         CHECK(!b5.drawnAt(top.te), "NODE location: not the 60-min high and no key level -> no A");
-        SignalBook b6; b6.cfg.absorbMethod = 1;
+        SignalBook b6; b6.cfg.absorbMethod = 1; b6.cfg.nodeLocation = true;
         for (auto& b : bars) { BarIn x = b; x.h = T(7880); b6.feed(x, none); }
         BarFlow k2 = none; nodeFill(k2, &rows, top, 1); k2.keyLevels.push_back(T(7871)); k2.keyTol = 2; b6.feed(top, k2);
         CHECK(b6.drawnAt(top.te) && b6.drawnAt(top.te)->dir == -1, "NODE location: within 2 ticks of a key level (7871) -> A");
@@ -429,6 +429,23 @@ int main()
         SignalBook rt; rt.loadText(std::string(SignalBook::header()) + "\n" + SignalBook::line(m, "2.0.3") + "\n");
         CHECK(B == 60 * big && S == 60 * (big + 1) && row && row->at(100).first == 2 * big && rt.marks.size() == 1 && rt.marks[0].minuteVol == 60 * big + 7,
               "(#2 / #26) volumes above 2^31 summed exactly (long long), the record keeps every contract");
+    }
+    // ---------------- (2.0.4) a REAL 2.0.0 record (20-s method, no multiple): the plugin's book (nodeOnly) keeps no A from it
+    {
+        std::ifstream f("/mnt/user-data/uploads/lsFlexLevels/TapeFlow/ES-signals-20735.csv", std::ios::binary);
+        if (!f.good()) printf("(real 2.0.0 record) SKIPPED - file not here\n");
+        else {
+            std::stringstream ss; ss << f.rdbuf(); const std::string text = ss.str();
+            long aLines = 0; { std::stringstream q(text); std::string ln; while (std::getline(q, ln)) if (ln.find("|A|") != std::string::npos) aLines++; }
+            SignalBook node; node.nodeOnly = true; node.loadText(text); SignalBook all; all.loadText(text);
+            int nA = 0, allA = 0; for (auto& m : node.marks) if (m.drawn()) nA++; for (auto& m : all.marks) if (m.drawn()) allA++;
+            printf("real 2.0.0 record: %ld A lines; node-only book draws %d A (skipped %ld); a legacy book would hold %d\n", aLines, nA, node.skippedOld, allA);
+            CHECK(nA == 0 && node.skippedOld == aLines && allA > 0, "(2.0.4) old 2.0.0 A records are never drawn by the plugin (skipped and counted)");
+            Mark m; m.barT = 1000; m.kind = 'A'; m.dir = -1; m.px = 5; m.lo = 5; m.hi = 5; m.mult = 2.0; m.why = "buyers absorbed (bar node)";
+            SignalBook mixed; mixed.nodeOnly = true; mixed.loadText(text + SignalBook::line(m, "2.0.4") + "\n");
+            int mA = 0; for (auto& x : mixed.marks) if (x.drawn()) mA++;
+            CHECK(mA == 1, "(2.0.4) a node A appended after old lines is drawn (only it)");
+        }
     }
     // ---------------- (2.0.3) SANITY (b): the per-minute sums equal the per-second file's totals for a full session
     {

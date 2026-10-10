@@ -53,6 +53,12 @@ void mockBar(int i, float o, float h, float l, float c);
 #include <chrono>
 static int fails = 0, npass_ = 0;
 #define CHECK(c, m) do { if (c) npass_++; else { fails++; printf("FAIL %d: %s\n", __LINE__, m); } } while (0)
+
+// (2.0.4) every TapeFlow object the test creates is destroyed and deleted at the end (IRT owns them in real life), so LeakSanitizer
+// sees only what the PLUGIN would leak
+static std::vector<TapeFlow*> g_ownedTF;
+static TapeFlow* own(TapeFlow* p) { g_ownedTF.push_back(p); return p; }
+static void freeAll() { for (TapeFlow* p : g_ownedTF) { static_cast<cppExtension*>(p)->destroy(); delete p; } g_ownedTF.clear(); { std::lock_guard<std::mutex> g(booksMx()); books().clear(); } }
 static const long long DAY0 = 1791417600LL;               // 2026-10-08 00:00 "local"
 static std::vector<MTick> dayTape(long long from, long long to, unsigned seed, float px0)
 {
@@ -196,7 +202,7 @@ int main()
     for (long long b = DAY0 - 7 * 3600 + 3600; b <= DAY0 + 9 * 3600; b += 3600) addBar(C60, b);
     mockSelectChart(C3.id); mockSetSpb(180); mockSelectChart(C60.id); mockSetSpb(3600);
     g_now = DAY0 + 9 * 3600;
-    TapeFlow* tf = static_cast<TapeFlow*>(CreateExtension()); tf->setup();
+    TapeFlow* tf = own(static_cast<TapeFlow*>(CreateExtension())); tf->setup();
     mockSelectChart(C3.id); static_cast<cppExtension*>(tf)->calc(0); tid3 = g_timerId;
     for (int i = 0; i < 45 * 60; i++) second(tf, true, false, false);        // 09:00 -> 09:45, the 3-min chart alone
     const long long sid = tfl::sessionOf(g_now);
@@ -205,7 +211,7 @@ int main()
     CHECK(tf->S().sessionDone, "the session replay is the live engine");
     // ---- (3) the header
     { char tt[200] = {0}; tf->parmsTitle(tt, sizeof(tt)); printf("header: %s\n", tt);
-      CHECK(std::string(tt).find("TF 2.0.3 ES  TESTING") == 0, "header 'TF 2.0.3 ES  TESTING ...'"); }
+      CHECK(std::string(tt).find(std::string("TF ") + tfl::shortVersion(TF_VERSION) + " ES  TESTING") == 0, "header 'TF 2.0.x ES  TESTING ...'"); }
     // ---- (1) minute windows vs the trades and the chart bar volume, every closed bar of the session so far
     {
         int bars = 0, minuteBad = 0, barBad = 0; long long totB = 0, totS = 0, totU = 0, totV = 0; const auto& H = tf->S().eng.hist;
@@ -344,6 +350,7 @@ int main()
         g_sym = "ESZ26";
         static_cast<cppExtension*>(tf)->destroy();
     }
+    freeAll();
     printf("%d passed, %d failed\n", npass_, fails);
     return fails ? 1 : 0;
 }

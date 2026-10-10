@@ -28,3 +28,7 @@ void mockSelectChart(int id); int mockCurrentChart(); void mockSetSpb(int spb);
 extern std::vector<std::pair<std::string, short> > g_textAt;   // (2.0.3) drawn text and its rectangle's left x
 extern int g_paneH;   // (2.0.3) pane height
 extern float g_tickIncr;   // (2.0.3) the chart's SYM_TICKINCR
+struct MText { std::string s; short l, t, r, b; unsigned long color; };
+extern std::vector<MText> g_textRects;   // (2.0.4) drawn text with its rectangle
+extern float g_yOrigin, g_yPxPerPt;      // (2.0.4) overlay price -> y
+extern bool g_ticksThrow;   // (2.0.4) RTTICKS throws (fault injection)

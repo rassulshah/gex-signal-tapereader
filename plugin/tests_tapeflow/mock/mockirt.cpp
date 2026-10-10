@@ -2,6 +2,8 @@
 #include "mockirt.h"
 #include "irtsdk.h"
 #include <cstring>
+#include <stdexcept>
+#include <algorithm>
 long long g_now = 0; std::vector<MTick> g_ticks; std::vector<long long> g_bars; std::string g_root = "ES", g_sym = "ESZ26";
 std::vector<std::string> g_text; long g_lines = 0, g_rects = 0, g_ttCalls = 0; long long g_ttLastStart = 0, g_ttMaxBack = 0; bool g_timerOk = true;
 static std::map<int, std::map<int, std::vector<float>>> g_fAll; static int g_curChart = 0;   // (2.0.3) per chart
@@ -16,12 +18,16 @@ std::vector<MSeg> g_segs; long g_dashLines = 0; static int g_style = 0; static s
 void cppExtension::PNT::drawLineTo() { g_lines++; g_lineColors[g_pen]++; g_segs.push_back(MSeg{g_px, g_py, h, v, g_pen, g_style}); if (g_style == (int)P_DASH) g_dashLines++; g_px = h; g_py = v; }
 std::vector<std::pair<int, float> > g_pntSets;   // (2.0.3) every PNT::set(bar, price) with a price (the Marks dash)
 int g_ppb = 6;   // (2.0.3) pixels per bar (zoom)
-RTX_RESULT cppExtension::PNT::set(int bar, float price, BAR_POSITION) { h = (short)(40 + bar * g_ppb); v = 0; if (price != 0.0f) g_pntSets.push_back(std::make_pair(bar, price)); return RTX_OK; }
+float g_yOrigin = 5000.0f, g_yPxPerPt = 10.0f;   // (2.0.4) price -> y for overlays: y = 500 - (price - origin) * px/pt
+RTX_RESULT cppExtension::PNT::set(int bar, float price, BAR_POSITION) { h = (short)(40 + bar * g_ppb); v = 0; if (price != 0.0f) { g_pntSets.push_back(std::make_pair(bar, price)); const double y = 500.0 - ((double)price - g_yOrigin) * g_yPxPerPt; v = (short)std::max(-30000.0, std::min(30000.0, y)); } return RTX_OK; }
 void cppExtension::PNT::setDrawPosition() { g_px = h; g_py = v; }
 std::vector<MRect> g_rectList;   // (2.0.3) the drawn rectangles
 void cppExtension::RCT::draw(short, COLOR, COLOR f, DRAWTYPE, BRUSH_STYLE) { g_rects++; g_rectList.push_back(MRect{left, top, right, bottom, (unsigned long)f}); }
 std::vector<std::pair<std::string, short> > g_textAt;   // (2.0.3) text with its left x
-void cppExtension::RCT::drawText(const char* s, RTBOOL, RTBOOL) { g_text.push_back(s ? s : ""); g_textAt.push_back(std::make_pair(std::string(s ? s : ""), left)); }
+static unsigned long g_textColor = 0;
+bool g_ticksThrow = false;
+std::vector<MText> g_textRects;   // (2.0.4) text with its full rectangle
+void cppExtension::RCT::drawText(const char* s, RTBOOL, RTBOOL) { g_text.push_back(s ? s : ""); g_textAt.push_back(std::make_pair(std::string(s ? s : ""), left)); g_textRects.push_back(MText{s ? s : "", left, top, right, bottom, g_textColor}); }
 int g_paneH = 300;   // (2.0.3) the pane height (small-pane tests)
 void cppExtension::RCT::getPaneRect(RTBOOL) { left = 0; top = 0; right = 1200; bottom = (short)g_paneH; }
 void cppExtension::RCT::set(short l, short t, short r, short b) { left = l; top = t; right = r; bottom = b; }
@@ -42,7 +48,9 @@ unsigned long& cppExtension::RTARRAYI::operator[](int i)
 cppExtension::RTARRAYI::~RTARRAYI() { if (pArray) delete (std::vector<unsigned long>*)pArray; }
 cppExtension::RTTICKS::RTTICKS(RTDATE start)
 {
-    g_ttCalls++; g_ttLastStart = (long long)start; if (g_now - (long long)start > g_ttMaxBack) g_ttMaxBack = g_now - (long long)start;
+    g_ttCalls++; g_ttLastStart = (long long)start;
+    if (g_now - (long long)start > g_ttMaxBack) g_ttMaxBack = g_now - (long long)start;
+    if (g_ticksThrow) throw std::runtime_error("mock: IRT tick request failed");   // (2.0.4) fault injection (quarantine test)
     auto* d = new std::vector<unsigned long>(); auto* p = new std::vector<float>(); auto* b = new std::vector<float>(); auto* a = new std::vector<float>(); auto* s = new std::vector<unsigned long>();
     for (auto& k : g_ticks) if (k.t >= (long long)start && k.t <= g_now) { d->push_back((unsigned long)k.t); p->push_back(k.px); b->push_back(k.bid); a->push_back(k.ask); s->push_back((unsigned long)k.q); }
     dt = new RTARRAYI(fEmptyArray == 0 ? (iARRAY)0 : (iARRAY)0); dt->pArray = (ARRAYI*)d;
@@ -80,7 +88,7 @@ RTX_RESULT cppExtension::setOutputParameter(const char*, int, CPEN*, COLOR, unsi
 void cppExtension::setParameterDialogHeight(int, int) {}
 RTX_RESULT cppExtension::setParameterVersion(unsigned) { return RTX_OK; }
 void cppExtension::setPen(COLOR c, short, PEN_STYLE s) { g_pen = (unsigned long)c; g_style = (int)s; }
-void cppExtension::setTextColor(COLOR) {}
+void cppExtension::setTextColor(COLOR c) { g_textColor = (unsigned long)c; }
 void cppExtension::setVersion(const char*) {}
 // (1.1.5) added for TapeFlow 1.1.5
 long g_invalidates = 0;

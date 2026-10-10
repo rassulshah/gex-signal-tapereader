@@ -53,6 +53,12 @@ void mockBar(int i, float o, float h, float l, float c);   // (2.0.0) the chart 
 #include <iostream>
 static int fails = 0, npass_ = 0;
 #define CHECK(c, m) do { if (c) npass_++; else { fails++; printf("FAIL %d: %s\n", __LINE__, m); } } while (0)
+
+// (2.0.4) every TapeFlow object the test creates is destroyed and deleted at the end (IRT owns them in real life), so LeakSanitizer
+// sees only what the PLUGIN would leak
+static std::vector<TapeFlow*> g_ownedTF;
+static TapeFlow* own(TapeFlow* p) { g_ownedTF.push_back(p); return p; }
+static void freeAll() { for (TapeFlow* p : g_ownedTF) { static_cast<cppExtension*>(p)->destroy(); delete p; } g_ownedTF.clear(); { std::lock_guard<std::mutex> g(booksMx()); books().clear(); } }
 static const long long DAY0 = 1791417600LL;               // 2026-10-08 00:00 (a Thursday), "local"
 static std::vector<MTick> dayTape(long long from, long long to, unsigned seed, float px0)
 {
@@ -119,7 +125,7 @@ int main()
     g_ticks = dayTape(DAY0 - 7 * 3600, DAY0 + 12 * 3600, 7, 5000);
     for (long long b = DAY0 - 7 * 3600 + 180; b <= DAY0 + 9 * 3600; b += 180) addBar(b);
     g_now = DAY0 + 9 * 3600;
-    TapeFlow* tf = static_cast<TapeFlow*>(CreateExtension());
+    TapeFlow* tf = own(static_cast<TapeFlow*>(CreateExtension()));
     tf->setup();
     static_cast<cppExtension*>(tf)->calc(0); tf->draw();
     CHECK(g_ttCalls == 0, "calc / draw never ask IRT for data (only the timer does)");
@@ -212,7 +218,7 @@ int main()
     // files
     std::string stat = slurp(LS + "\\TapeFlow.status-ES.txt");
     CHECK(stat.find((std::string("VERSION,") + TF_VERSION).c_str()) != std::string::npos && stat.find("SYMBOL,ESZ26") != std::string::npos, "status file");
-    CHECK(stat.find("STATE_CODE,") != std::string::npos && stat.find("CAL_SLOT,bin ") != std::string::npos && stat.find("QUIET,since last trade") != std::string::npos &&
+    CHECK(stat.find("STATE_CODE,") != std::string::npos && stat.find("CAL_SLOT,bin ") != std::string::npos && stat.find("QUIET,last trade") != std::string::npos &&
           stat.find("BACKFILL_calibration,") != std::string::npos && stat.find("TF_SIGNALS,decided through") != std::string::npos && stat.find("TF_COUNTS,P ") != std::string::npos && stat.find("SIGNALS_TODAY,AW+ ") != std::string::npos && stat.find("LATE,today ") != std::string::npos &&
           stat.find("WARN5,") != std::string::npos && stat.find("TITLE,TF ") != std::string::npos && stat.find("\nUPDATED,") != std::string::npos, "(1.1.5) status: full diagnostic snapshot");
     std::string evf = slurp(LS + "\\TapeFlow\\ES-events-v110-ESZ26-2026-10-08.csv");   // (1.1.5 harness) the 1.1.0 file name
@@ -229,7 +235,7 @@ int main()
     {
         std::string f0 = slurp(LS + "\\TapeFlow\\ES-events-v110-ESZ26-2026-10-08.csv"); size_t n0 = (size_t)std::count(f0.begin(), f0.end(), '\n');
         g_now = DAY0 + 13 * 3600; while (g_bars.back() + 180 <= g_now) g_bars.push_back(g_bars.back() + 180);
-        TapeFlow* r = static_cast<TapeFlow*>(CreateExtension()); r->setup(); static_cast<cppExtension*>(r)->calc(0);
+        TapeFlow* r = own(static_cast<TapeFlow*>(CreateExtension())); r->setup(); static_cast<cppExtension*>(r)->calc(0);
         tickPlugin(r, 15);                                          // only the 10-minute back-fill so far
         std::string f1 = slurp(LS + "\\TapeFlow\\ES-events-v110-ESZ26-2026-10-08.csv"); size_t n1 = (size_t)std::count(f1.begin(), f1.end(), '\n');
         CHECK(n1 >= n0 && f1.compare(0, f0.size(), f0) == 0, "restart: the earlier records are kept untouched (append-only)");
@@ -244,7 +250,7 @@ int main()
     // ---- REVIEW #3: a stalled timer never brings the back-fill into calc / draw
     {
         g_ttCalls = 0; g_ttMaxBack = 0; g_now = DAY0 + 14 * 3600;
-        TapeFlow* s3 = static_cast<TapeFlow*>(CreateExtension()); s3->setup();
+        TapeFlow* s3 = own(static_cast<TapeFlow*>(CreateExtension())); s3->setup();
         for (int i = 0; i < 90; i++) { g_now++; g_text.clear(); static_cast<cppExtension*>(s3)->calc(0); s3->draw(); }   // no timer ticks at all
         CHECK(g_ttMaxBack <= 600, "no timer: calc / draw only ever read the last minutes, never a back-fill");
         static_cast<cppExtension*>(s3)->destroy();
@@ -253,7 +259,7 @@ int main()
     {
         { std::ofstream o((LS + "\\TapeFlow\\_trying-ES-session.txt").c_str()); o << "1\n"; }
         g_ttCalls = 0; g_ttMaxBack = 0; g_now = DAY0 + 10 * 3600 + 5;
-        TapeFlow* t2 = static_cast<TapeFlow*>(CreateExtension()); t2->setup(); static_cast<cppExtension*>(t2)->calc(0);
+        TapeFlow* t2 = own(static_cast<TapeFlow*>(CreateExtension())); t2->setup(); static_cast<cppExtension*>(t2)->calc(0);
         tickPlugin(t2, 120);
         CHECK(!slurp(LS + "\\TapeFlow\\_blocked-ES-session.txt").empty(), "second stop -> blocked file");
         std::string tr2 = slurp(LS + "\\TapeFlow.trace-ES.txt");
@@ -263,7 +269,7 @@ int main()
     }
     // ---- the wrong chart: says so, asks IRT for nothing
     {
-        g_root = "NQ"; g_ttCalls = 0; TapeFlow* t3 = static_cast<TapeFlow*>(CreateExtension()); t3->setup();
+        g_root = "NQ"; g_ttCalls = 0; TapeFlow* t3 = own(static_cast<TapeFlow*>(CreateExtension())); t3->setup();
         g_text.clear(); static_cast<cppExtension*>(t3)->calc(0); t3->draw(); tickPlugin(t3, 40);
         bool said = false; for (auto& s : g_text) if (s.find("this one is for the ES chart") != std::string::npos && s.find("TapeFlowNQ") != std::string::npos) said = true;
         CHECK(said && g_ttCalls == 0, "on the NQ chart: a note, no requests");
@@ -272,7 +278,7 @@ int main()
     // ---- the market opens after IRT: no trades at load, reading starts when they come
     {
         g_ticks = dayTape(DAY0 + 17 * 3600, DAY0 + 19 * 3600, 9, 5000); g_now = DAY0 + 16 * 3600 + 1800;   // 16:30, the break
-        TapeFlow* t4 = static_cast<TapeFlow*>(CreateExtension()); t4->setup(); static_cast<cppExtension*>(t4)->calc(0);
+        TapeFlow* t4 = own(static_cast<TapeFlow*>(CreateExtension())); t4->setup(); static_cast<cppExtension*>(t4)->calc(0);
         tickPlugin(t4, 600);  // 16:40
         CHECK(t4->S().eng.ticks == 0, "nothing in the break");
         tickPlugin(t4, 1800); // 17:10
@@ -285,6 +291,7 @@ int main()
         CHECK(tr4.find("contract changed ESZ26 -> ESH27") != std::string::npos && t4->S().sym == "ESH27", "contract change starts over");
         g_sym = "ESZ26";
     }
+    freeAll();
     printf("%d passed, %d failed\n", npass_, fails);
     return fails ? 1 : 0;
 }

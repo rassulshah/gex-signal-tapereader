@@ -52,6 +52,12 @@ void mockBar(int i, float o, float h, float l, float c);
 #include <iostream>
 static int fails = 0, npass_ = 0;
 #define CHECK(c, m) do { if (c) npass_++; else { fails++; printf("FAIL %d: %s\n", __LINE__, m); } } while (0)
+
+// (2.0.4) every TapeFlow object the test creates is destroyed and deleted at the end (IRT owns them in real life), so LeakSanitizer
+// sees only what the PLUGIN would leak
+static std::vector<TapeFlow*> g_ownedTF;
+static TapeFlow* own(TapeFlow* p) { g_ownedTF.push_back(p); return p; }
+static void freeAll() { for (TapeFlow* p : g_ownedTF) { static_cast<cppExtension*>(p)->destroy(); delete p; } g_ownedTF.clear(); { std::lock_guard<std::mutex> g(booksMx()); books().clear(); } }
 static const long long DAY0 = 1791417600LL;               // 2026-10-08 00:00 (a Thursday), "local"
 static std::vector<MTick> dayTape(long long from, long long to, unsigned seed, float px0)
 {
@@ -121,7 +127,7 @@ int main()
     g_ticks = dayTape(DAY0 - 7 * 3600, DAY0 + 12 * 3600, 11, 5000);
     for (long long b = DAY0 - 7 * 3600 + 180; b <= DAY0 + 9 * 3600; b += 180) addBar(b);
     g_now = DAY0 + 9 * 3600;
-    TapeFlow* tf = static_cast<TapeFlow*>(CreateExtension()); tf->setup(); static_cast<cppExtension*>(tf)->calc(0);
+    TapeFlow* tf = own(static_cast<TapeFlow*>(CreateExtension())); tf->setup(); static_cast<cppExtension*>(tf)->calc(0);
     tickPlugin(tf, 40 * 60);                                         // 09:00 -> 09:40
     const long long sid = tfl::sessionOf(g_now);
     const std::string recPath = LS + "\\TapeFlow\\ES-signals-" + std::to_string(sid) + ".csv";
@@ -157,7 +163,7 @@ int main()
     // a chart reload: a NEW extension object in the same IRT -> the same record object, nothing written twice
     tickPlugin(tf, 1); static_cast<cppExtension*>(tf)->destroy();
     const std::string fileA = slurp(recPath);
-    TapeFlow* t2 = static_cast<TapeFlow*>(CreateExtension()); t2->setup(); static_cast<cppExtension*>(t2)->calc(0);
+    TapeFlow* t2 = own(static_cast<TapeFlow*>(CreateExtension())); t2->setup(); static_cast<cppExtension*>(t2)->calc(0);
     tickPlugin(t2, 3 * 60);
     std::vector<tfl::Mark> m2 = marksOf(t2);
     bool kept = true; for (auto& a : m1) { bool f = false; for (auto& b : m2) if (key(a) == key(b)) { f = true; if (a.state == tfl::MK_CONFIRMED && b.state != tfl::MK_CONFIRMED) kept = false; } if (!f) kept = false; }
@@ -170,7 +176,7 @@ int main()
     // an IRT RESTART: the process is gone (the in-memory records too); 40 minutes later IRT starts again
     { std::lock_guard<std::mutex> g(booksMx()); books().clear(); }
     g_now += 40 * 60; while (g_bars.back() + 180 <= g_now) addBar(g_bars.back() + 180);
-    TapeFlow* t3 = static_cast<TapeFlow*>(CreateExtension()); t3->setup(); static_cast<cppExtension*>(t3)->calc(0);
+    TapeFlow* t3 = own(static_cast<TapeFlow*>(CreateExtension())); t3->setup(); static_cast<cppExtension*>(t3)->calc(0);
     tickPlugin(t3, 10);                                               // the 10-minute start only: signals wait for the session replay
     CHECK(!t3->S().sessionDone && marksOf(t3).empty(), "after a restart nothing is decided before the session replay is the live engine");
     tickPlugin(t3, 4 * 60);
@@ -198,6 +204,7 @@ int main()
     { size_t a = stat.find("TF_COUNTS"); if (a != std::string::npos) printf("  %s\n", stat.substr(a, stat.find('\n', a) - a).c_str()); }
     // the previous session: its record is drawn after the 17:00 roll
     static_cast<cppExtension*>(t3)->destroy();
+    freeAll();
     printf("%d passed, %d failed\n", npass_, fails);
     return fails ? 1 : 0;
 }

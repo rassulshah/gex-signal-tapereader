@@ -2,8 +2,11 @@
  *  TapeFlowMarks.cpp  --  Investor/RT RTX extension  lsTapeFlowMarks  (v1.0.0, 2026-10-09)
  *
  *  Rassul approved the TapeFlow 2.0.3 mockup: "do a sanity check and test then implement .. i want to see how it looks on a chart".
- *  The PRICE CHART half of TapeFlow's absorption signal: a short horizontal DASH at the node price across the candle that formed
- *  it, with a small "A? 3.6x" / "A 3.6x" label to its right - red = bearish (buyers absorbed), green = bullish (sellers absorbed).
+ *  The PRICE CHART half of TapeFlow's absorption signal. (1.1.0, Rassul: "just put A on top of the candle that was absorbed. The
+ *  ratio I will know from the indicator below, otherwise it will be too cluttered on the price chart.") ONE letter just above the
+ *  high of the candle where the absorption formed: "A?" until confirmed, then "A" in place - red = bearish (buyers absorbed),
+ *  green = bullish (sellers absorbed). The multiple stays in the TapeFlow pane and header. Only bar-node A records are drawn; old
+ *  2.0.0 / 2.0.1 lines (20-s method, no multiple) are skipped and counted in TapeFlowMarks.status-<MKT>.txt.
  *
  *  ONE DLL for every market: the chart's symbol is mapped to the market the same way TapeFlow / ChartView do (EP -> ES, ENQ -> NQ,
  *  CLE -> CL, GCE -> GC, CPE -> HG, NGE -> NG, EU6 -> EU, micros included). It only READS what TapeFlow<MKT> decided:
@@ -37,11 +40,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* TFM_VERSION = "1.0.0";
+static const char* TFM_VERSION = "1.1.0";   // (1.1.0, TF 2.0.4) the letter "A?" / "A" just above the absorbed candle's high (no dash, no multiple); old non-node records skipped and counted; a status file written only on change
 static const COLOR C_BUY  = 0x0022C55E;
 static const COLOR C_SELL = 0x00EF4444;
 static const COLOR C_GRAY = 0x0064748B;
 static const int FONT_PT = 9;
+static const int LETTER_GAP = 4;   // px between the candle's high and the letter
+static const int LETTER_H = 14;    // the letter's box height
 
 // the market of a chart symbol (the same table as TapeFlow / ChartView; root first, then the full symbol)
 static std::string marketOfOne(const std::string& in)
@@ -58,10 +63,6 @@ static std::string marketOfOne(const std::string& in)
     return "";
 }
 static std::string marketOf(const std::string& root, const std::string& sym) { std::string m = marketOfOne(root); return m.empty() ? marketOfOne(sym) : m; }
-static double tickOf(const std::string& m)
-{
-    return m == "ES" || m == "NQ" ? 0.25 : m == "CL" ? 0.01 : m == "NG" ? 0.001 : m == "GC" ? 0.1 : m == "HG" ? 0.0005 : m == "EU" ? 0.00005 : 0.0;
-}
 static long long civil(int y, int mo, int d, int h, int mi, int s)
 {
     y -= mo <= 2; long long era = (y >= 0 ? y : y - 399) / 400; unsigned yoe = (unsigned)(y - era * 400);
@@ -84,14 +85,14 @@ struct MarksState {
     int spb = 0;
     long long sid = LLONG_MIN;
     std::string idMkt; int idSpb = 0; bool identified = false;   // what this chart IS (from its own calc / draw)
-    struct File { std::string path; long long mtime = -1, size = -1; std::vector<tfl::Mark> marks; };
+    struct File { std::string path; long long mtime = -1, size = -1; std::vector<tfl::Mark> marks; long skipped = 0; };
     File cur, prev;
     std::map<long long, tfl::Mark> byT;          // bar end -> the drawn A (absorption only)
     bool timerOn = false, timerRefused = false; int timerId = 0;
     time_t lastCheck = 0;
-    long reads = 0, skipped = 0, stats = 0;
-    double tick = 0;
-    std::mutex mx;                                // the timer (re-read) and draw never touch byT at the same time
+    long reads = 0, skipped = 0, stats = 0, statusWrites = 0;
+    std::mutex mx;
+    std::string statusBody;                       // (2.0.4) the status file is rewritten only when this changes                                // the timer (re-read) and draw never touch byT at the same time
 };
 static int nextTimerId() { static std::atomic<int> next(8711); return next.fetch_add(1); }
 static const long long MAX_FILE_BYTES = 4LL * 1024 * 1024;   // (audit #33) a signals file is ~30 KB a session; anything bigger is not read
@@ -116,12 +117,13 @@ public:
         return p + ".csv";
     }
     void identify(MarksState& s);                // the chart's market / bar size / tick - ONLY in the chart's own calls (calc / draw)
-    bool refresh(MarksState& s);                 // true = something changed (redraw); uses what identify() stored, never the call context
-    void textLJ(short x, short y, const char* str, COLOR col, int sz, bool bold)
+    bool refresh(MarksState& s);
+    void writeStatus(MarksState& s);                 // true = something changed (redraw); uses what identify() stored, never the call context
+    // the letter centred on x with its BOTTOM at yBottom (so it never touches the candle's high below it)
+    void textC(short x, short yBottom, const char* str, COLOR col)
     {
-        FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); setTextColor(col);
-        short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
-        RCT rc; rc.set(x, (short)(yy - sz), (short)(x + 300), (short)(yy + sz)); rc.drawText(str, false, false);
+        FONT f; f.id = HELVETICA; f.size = (short)FONT_PT; f.style = BOLD; setFont(f); setTextColor(col);
+        RCT rc; rc.set((short)(x - 12), (short)(yBottom - LETTER_H), (short)(x + 12), yBottom); rc.drawText(str, true, false);
     }
 };
 
@@ -171,10 +173,6 @@ void TapeFlowMarks::identify(MarksState& s)
     s.root = rs ? rs : ""; s.sym = sy ? sy : "";
     s.idMkt = marketOf(s.root, s.sym);
     s.idSpb = getSecondsPerBar();
-    {   // (audit #24) the chart's own tick (SYM_TICKINCR), finite and positive; the market table only as the fallback
-        const float pt = getProperty(SYM_TICKINCR); const double known = tickOf(s.idMkt);
-        s.tick = (std::isfinite(pt) && pt > 0 && pt < 1000) ? ((known > 0 && std::fabs(pt - known) <= known * 1e-5) ? known : (double)pt) : known;
-    }
     s.identified = true;
 }
 // the session; re-read a signals file only when its size or time changed
@@ -192,7 +190,7 @@ bool TapeFlowMarks::refresh(MarksState& s)
         if (path == f.path && mt == f.mtime && sz == f.size) return;           // unchanged: nothing read
         if (sz > MAX_FILE_BYTES) { s.skipped++; f.path = path; f.mtime = mt; f.size = sz; if (!f.marks.empty()) { f.marks.clear(); changed = true; } return; }
         std::ifstream in(path.c_str(), std::ios::binary); std::ostringstream o; o << in.rdbuf();
-        tfl::SignalBook bk; bk.loadText(o.str());                               // a half-written last line is simply not a record
+        tfl::SignalBook bk; bk.nodeOnly = true; bk.loadText(o.str()); f.skipped = bk.skippedOld;   // (2.0.4) bar-node A only; old 20-s lines counted, never drawn                               // a half-written last line is simply not a record
         f.path = path; f.mtime = mt; f.size = sz; f.marks = bk.marks; s.reads++; changed = true;
     };
     load(s.cur, pathOf(s, s.sid));
@@ -201,10 +199,33 @@ bool TapeFlowMarks::refresh(MarksState& s)
     load(s.prev, pp);
     if (changed) {
         s.byT.clear();
+        writeStatus(s);
         for (const tfl::Mark& k : s.prev.marks) if (k.drawn()) s.byT[k.barT] = k;
         for (const tfl::Mark& k : s.cur.marks) if (k.drawn()) s.byT[k.barT] = k;
     }
     return changed;
+}
+
+// (2.0.4, audit #31) a small status file, written atomically and ONLY when its content changes (a file was re-read)
+void TapeFlowMarks::writeStatus(MarksState& s)
+{
+    const std::string d = tfDir(); if (d.empty() || s.mkt.empty()) return;
+    const size_t drawn = s.byT.size();
+    std::ostringstream o;
+    o << "VERSION," << TFM_VERSION << "\nMARKET," << s.mkt << "\nBAR_SECONDS," << s.spb << "\nSESSION," << s.sid
+      << "\nRECORD," << s.cur.path << "," << s.cur.marks.size() << " signals\nPREVIOUS," << s.prev.path << "," << s.prev.marks.size() << " signals"
+      << "\nDRAWN_A," << drawn << "\nOLD_RECORDS_SKIPPED," << (s.cur.skipped + s.prev.skipped) << " non-node A lines (2.0.0 / 2.0.1, no multiple) - never drawn"
+      << "\nOVERSIZED_FILES_SKIPPED," << s.skipped << "\nREADS," << s.reads << "\n";
+    const std::string body = o.str();
+    if (body == s.statusBody) return;
+    const std::string path = d.substr(0, d.size() - 9) + "\\TapeFlowMarks.status-" + s.mkt + (s.spb > 0 && s.spb != 180 ? "-" + std::to_string(s.spb) + "s" : std::string()) + ".txt", tmp = path + ".tmp";
+    { std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc); if (!f.is_open()) return; f << body; f.flush(); if (!f.good()) { f.close(); std::remove(tmp.c_str()); return; } }
+#if defined(_WIN32)
+    if (!MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) { std::remove(tmp.c_str()); return; }
+#else
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) { std::remove(tmp.c_str()); return; }
+#endif
+    s.statusBody = body; s.statusWrites++;
 }
 
 int TapeFlowMarks::timer(RTX_EVENT* e)
@@ -230,7 +251,6 @@ int TapeFlowMarks::draw(void)
         if (s->sid == LLONG_MIN || s->mkt != s->idMkt || s->spb != s->idSpb) { s->lastCheck = time(0); refresh(*s); }   // first draw / the chart switched symbol or bar size: at once
         else if (!s->timerOn && time(0) - s->lastCheck >= 2) { s->lastCheck = time(0); refresh(*s); }                    // no timer: the same 2-s rhythm
         if (s->byT.empty()) return RTX_OK;
-        const double tick = s->tick; if (!(tick > 0) || !std::isfinite(tick)) return RTX_OK;   // (only for records written before 2.0.3 carried their tick)
         const long n = getBarCount(); if (n <= 0) return RTX_OK;
         int b0 = 0, b1 = (int)n - 1;
         if (getVisibleBars(&b0, &b1) != RTX_OK) { b0 = std::max(0, (int)n - 200); b1 = (int)n - 1; }
@@ -239,27 +259,20 @@ int TapeFlowMarks::draw(void)
         RTARRAYI dt(barDateTime);
         int ppb = getPixelsPerBar(); if (ppb < 1) ppb = 1;
         const long long firstT = s->byT.begin()->first, lastT = s->byT.rbegin()->first;
+        RTARRAY hiA(barHigh);
         for (int i = b0; i <= b1; ++i) {
             const long long te = localSec((RTDATE)dt[i]);
             if (te < firstT || te > lastT) continue;
             auto it = s->byT.find(te); if (it == s->byT.end()) continue;
             const tfl::Mark& m = it->second;
-            const float price = (float)(m.px * (m.tickSize > 0 ? m.tickSize : tick));   // the record's own tick (the deciding chart's); else this chart's
-            PNT p; p.set(i, price, kBarCenter);
-            const short half = (short)std::max(3, std::max(1, (int)(ppb * 0.9)) / 2);   // the candle's x-range: the same 90% span as TapeFlow's minute bars
+            const float hi = hiA[i];
+            if (!std::isfinite(hi) || !(hi > 0)) continue;
+            // (2.0.4, Rassul: "just put A on top of the candle that was absorbed") the letter only - "A?" pending, "A" confirmed - just
+            // ABOVE the candle's high (footprint signals go above the bar), red bearish / green bullish; the multiple stays in TapeFlow
+            PNT p; p.set(i, hi, kBarCenter);
             const COLOR c = m.dir > 0 ? C_BUY : C_SELL;
-            setPen(c, 3, P_SOLID);                                              // the dash across the candle that formed it
-            const int span = std::max(1, (int)(ppb * 0.9));
-            PNT a; a.set(0, 0.0f); a.h = (short)(p.h - span / 2); a.v = p.v; a.setDrawPosition();
-            PNT b; b.set(0, 0.0f); b.h = (short)(p.h - span / 2 + span - 1); b.v = p.v; b.drawLineTo();
-            const short lx = (short)(p.h + half + 4);
-            {   // a thin leader from the candle to the label: the mark stays visible when the node sits on a same-coloured body
-                setPen(c, 1, P_SOLID);
-                PNT a2; a2.set(0, 0.0f); a2.h = (short)(b.h + 1); a2.v = p.v; a2.setDrawPosition();
-                PNT b2; b2.set(0, 0.0f); b2.h = (short)(lx - 2); b2.v = p.v; if (b2.h > a2.h) b2.drawLineTo();
-            }
-            const std::string label = tfl::markLabel(m);                       // "A? 3.6x" / "A 3.6x"
-            textLJ(lx, (short)(p.v + FONT_PT / 2), label.c_str(), c, FONT_PT, true);
+            const char* label = m.question() ? "A?" : "A";
+            textC(p.h, (short)(p.v - LETTER_GAP), label, c);
         }
     } catch (...) {}
     return RTX_OK;
@@ -270,8 +283,8 @@ extern "C" cppExtension *CreateExtension(void)
     TapeFlowMarks *p = new TapeFlowMarks();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA TapeFlow Marks: TapeFlow's absorption on the price chart - a dash at the node price across the candle that formed it, "
-                      "'A? 3.6x' until a bar closes away, then 'A 3.6x' (red = buyers absorbed, green = sellers absorbed). Reads what TapeFlow<market> decided.");
+    p->setDescription("LRA TapeFlow Marks: TapeFlow's absorption on the price chart - the letter A just above the candle that was absorbed, "
+                      "'A?' until a later bar confirms it, then 'A' (red = buyers absorbed, green = sellers absorbed). The ratio is in the TapeFlow pane. Reads what TapeFlow<market> decided.");
     p->setVersion(TFM_VERSION);
     return p;
 }

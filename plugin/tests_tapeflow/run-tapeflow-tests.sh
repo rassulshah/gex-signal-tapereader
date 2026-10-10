@@ -11,5 +11,6 @@ one core_regression tests_tapeflow/core_regression.cpp
 one support_regression tests_tapeflow/support_regression.cpp
 [ -f tests_tapeflow/v115_regression.cpp ] && one v115_regression tests_tapeflow/v115_regression.cpp
 [ -f tests_tapeflow/v200_signals.cpp ] && one v200_signals tests_tapeflow/v200_signals.cpp
-for h in sim_irt_harness sim_backfill_v115 sim_v200 sim_v202 sim_v202node sim_v203 sim_v203r sim_marks; do [ -f tests_tapeflow/$h.cpp ] && one $h -I$M -I$P -I$SDK -include $M/shim.h tests_tapeflow/$h.cpp $M/mockirt.cpp; done
+[ -f tests_tapeflow/v204_rules.cpp ] && one v204_rules tests_tapeflow/v204_rules.cpp
+for h in sim_irt_harness sim_backfill_v115 sim_v200 sim_v202 sim_v202node sim_v203 sim_v203r sim_v204w sim_marks; do [ -f tests_tapeflow/$h.cpp ] && one $h -I$M -I$P -I$SDK -include $M/shim.h tests_tapeflow/$h.cpp $M/mockirt.cpp; done
 echo "SUITES FAILED: $tot"; exit $tot

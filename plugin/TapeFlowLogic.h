@@ -62,7 +62,7 @@
 
 namespace tfl {
 
-#define TFL_VERSION "2.0.3"
+#define TFL_VERSION "2.0.4"
 
 struct Cfg {
     int fastW = 30, ctxW = 180, obsW = 20, part = 5;   // seconds
@@ -543,6 +543,11 @@ private:
         cur = Slice(); cur.t = t; open = true; stopped = false; cur.carried = haveMid && (t - quoteT) <= quoteAgeAt(t);
         if (cur.carried) { cur.mids.push_back(mid2); cur.spread = spreadNow; }
     }
+public:
+    // (2.0.4) the clock entered a session that has no trade yet (weekend / holiday / before the first trade): the engine's session
+    // (baselines, the calibration and the records) follows the clock instead of staying unset or on the last traded session
+    void enterSession(long long sid) { if (sid != curSid && (curSid == LLONG_MIN || sid > curSid)) newSession(sid); }
+private:
     void newSession(long long sid)
     {
         flushSession();
@@ -1274,9 +1279,38 @@ struct SigCfg {
     int minFlowSecs = 60;
     // (2.0.2) which absorption the A comes from: 0 = the 20-s watch (TF20), 1 = the bar node (NODE, Delta-Profile-like, bar close)
     int absorbMethod = 0;
-    double nodeMult = 2.0, nodeTop = 0.25; bool nodeLocation = true;
+    double nodeMult = 2.0, nodeTop = 0.25; bool nodeLocation = false;   // (2.0.4) the 60-min-extreme / key-level location is now a study variant: the zigzag pivot rule is the location (Rassul's 10:36 swing low is not a 60-min low)
+    // (2.0.4, Rassul) the absorption bar must CLOSE beyond the node (bullish above its high, bearish below its low), else it is
+    // rejected ("close not beyond node"); and the absorption bar or its confirmation bar must be the 1-bar ZigZag pivot (low for
+    // bullish, high for bearish), else the A? is never confirmed ("not at pivot"). Both on by default; off = the 2.0.3 rules.
+    bool nodeCloseBeyond = true, pivotRule = true; int pivotMaxWait = 20;
 };
 struct BarIn { long long te = 0, ts = 0; int o = 0, h = 0, l = 0, c = 0; };   // ticks; te = the chart's bar stamp (its close)
+// (2.0.4) Rassul's 1-bar ZigZag (his CoB convention), NATIVE: in a down leg the lowest low (strictly lower; the earliest wins a tie)
+// is the extreme; a later bar whose HIGH is above the PREVIOUS bar's high - and which did not itself make a new low - confirms that
+// extreme as a pivot LOW and starts an up leg at itself (mirror for highs). Matches his IRT zigzag's zzPrice pivots on 100% of
+// 52,953 ES / 54,271 NQ / 38,943 CL / 55,068 GC / 53,978 HG / 50,443 NG / 52,270 EU pivots (CL: 1 miss) - see the report.
+// Causal: a pivot is known only at the close of the bar that confirms it (confT).
+struct ZigZag {
+    struct Piv { long long t; int side; int px; long long confT; };    // side +1 = high, -1 = low
+    int dir = 0; long long extT = 0; int extPx = 0; int prevH = 0, prevL = 0; bool have = false;
+    std::deque<Piv> piv;
+    void add(const BarIn& b)
+    {
+        if (!have) { have = true; prevH = b.h; prevL = b.l; return; }
+        if (dir == 0) { if (b.h > prevH) { dir = 1; extT = b.te; extPx = b.h; } else if (b.l < prevL) { dir = -1; extT = b.te; extPx = b.l; } }
+        else if (dir == 1) {
+            const bool nx = b.h > extPx; if (nx) { extT = b.te; extPx = b.h; }
+            if (b.l < prevL && !nx) { piv.push_back(Piv{extT, 1, extPx, b.te}); dir = -1; extT = b.te; extPx = b.l; }
+        } else {
+            const bool nx = b.l < extPx; if (nx) { extT = b.te; extPx = b.l; }
+            if (b.h > prevH && !nx) { piv.push_back(Piv{extT, -1, extPx, b.te}); dir = 1; extT = b.te; extPx = b.h; }
+        }
+        while (piv.size() > 200) piv.pop_front();
+        prevH = b.h; prevL = b.l;
+    }
+    const Piv* pivotAt(long long t, int side) const { for (auto it = piv.rbegin(); it != piv.rend(); ++it) { if (it->t == t && it->side == side) return &*it; if (it->t < t) break; } return nullptr; }
+};
 struct BarFlow {                                       // the bar's tape over its closed seconds [ts, te)
     int secs = 0; long long buy = 0, sell = 0;
     int pushUp = 0, pushDn = 0;
@@ -1285,7 +1319,7 @@ struct BarFlow {                                       // the bar's tape over it
     int awDir = 0, awLo = 0, awHi = 0, awHeld = 0; double awQ = 0, awMult = 0;   // the bar's biggest absorption watch (AW)
     double flipK = 20;                                 // F's threshold for this bar (the slot's normal 180-s swing, >= 10)
     // (2.0.2) NODE: the bar's biggest one-sided price row (filled by nodeFill) and the key levels for the location rule
-    int ndDir = 0, ndLo = 0, ndHi = 0; double ndVol = 0, ndMult = 0, ndPos = 1; bool ndCloseOk = false;
+    int ndDir = 0, ndLo = 0, ndHi = 0; double ndVol = 0, ndMult = 0, ndPos = 1; bool ndCloseOk = false, ndCloseBeyond = false;
     std::vector<int> keyLevels; int keyTol = 2;
     int ndMinute = -1; double ndMinVol = 0, minNorm = -1;   // (2.0.3) the node's minute in the bar, that minute's aggressor contracts, the normal minute
     long long side(int d) const { return d > 0 ? buy : sell; }
@@ -1357,16 +1391,22 @@ public:
     long long lastFed = LLONG_MIN;
     std::vector<std::string> journal;
     std::string version = "2.0.1";
+    bool nodeOnly = false;                             // (2.0.4) the plugin and lsTapeFlowMarks load bar-node A only
+    long skippedOld = 0;
+    ZigZag zz;                                         // (2.0.4) the 1-bar zigzag over every bar fed
+    std::map<std::string, long> rejected;              // (2.0.4) node absorptions not drawn, by reason                               // (2.0.4) A lines not from the bar node (2.0.0 / 2.0.1 20-s method, no multiple): never drawn
     double tickSize = 0;                               // (2.0.3) the tick size of the chart deciding (written with every signal)
 
     void feed(const BarIn& b, const BarFlow& f)
     {
         if (b.te <= lastFed) return;
         lastFed = b.te;
+        zz.add(b);                                                       // (2.0.4) the zigzag sees every bar, decided before or not (restart = straight run)
         if (b.te <= decidedThrough) { remember(b, f); return; }
         for (Mark& m : marks) {
             if (m.state != MK_PENDING || m.barT > b.te) continue;
             const int age = barsSince(m.barT);
+            if (m.kind == 'A' && cfg.absorbMethod == 1 && cfg.pivotRule) { pivotStep(m, b, age); continue; }
             if (m.kind == 'A') {
                 const bool conf = m.dir < 0 ? (b.c < b.o && b.c < m.lo) : (b.c > b.o && b.c > m.hi);
                 const bool fail = m.dir < 0 ? b.c > m.hi : b.c < m.lo;
@@ -1386,7 +1426,12 @@ public:
         const BarIn* prev = recent.empty() ? nullptr : &recent.back().first;
         // A (drawn): one per bar - (2.0.2) from the bar node when absorbMethod = 1
         if (cfg.absorbMethod == 1) {
-            if (f.ndDir && f.ndMult >= cfg.nodeMult && f.ndPos <= cfg.nodeTop && f.ndCloseOk && (!cfg.nodeLocation || nodeLocated(b, f))) {
+            const bool closeOk = cfg.nodeCloseBeyond ? f.ndCloseBeyond : f.ndCloseOk;
+            if (f.ndDir && f.ndMult >= cfg.nodeMult && f.ndPos <= cfg.nodeTop && !closeOk && (!cfg.nodeLocation || nodeLocated(b, f))) {
+                char r[160]; snprintf(r, sizeof(r), "%lld|R|%d|X|%d|%d|%d|%lld|0|%s close not beyond node|%s", b.te, f.ndDir, (f.ndLo + f.ndHi) / 2, f.ndLo, f.ndHi, b.te, f.ndDir > 0 ? "sellers" : "buyers", version.c_str());
+                journal.push_back(r); rejected["close not beyond node"]++;     // (2.0.4) logged, never drawn
+            }
+            if (f.ndDir && f.ndMult >= cfg.nodeMult && f.ndPos <= cfg.nodeTop && closeOk && (!cfg.nodeLocation || nodeLocated(b, f))) {
                 Mark m; m.barT = b.te; m.kind = 'A'; m.dir = f.ndDir; m.lo = f.ndLo; m.hi = f.ndHi; m.px = (f.ndLo + f.ndHi) / 2;
                 m.mult = f.ndMult; m.absorbed = (long long)std::llround(f.ndVol) * (f.ndDir > 0 ? -1 : 1);
                 if (f.ndMinute >= 0) {                                         // (2.0.3) the multiple = the node's minute vs a normal minute
@@ -1491,6 +1536,7 @@ public:
         long long t = 0, ct = 0, rf = 0; int dir = 0, px = 0, lo = 0, hi = 0;
         if (!parseStoreLong(c[0], &t) || c[1].size() != 1) return false;
         if (c[1] == "D") { decidedThrough = std::max(decidedThrough, t); return true; }
+        if (c[1] == "R") { rejected[c[9].find("not beyond") != std::string::npos ? "close not beyond node" : "other"]++; return true; }   // (2.0.4) a logged rejection
         const char k = c[1][0];
         if (!kindRank(k) || !parseStoreInt(c[2], &dir) || (dir != 1 && dir != -1) || c[3].size() != 1 ||
             !parseStoreInt(c[4], &px) || !parseStoreInt(c[5], &lo) || !parseStoreInt(c[6], &hi) || !parseStoreLong(c[7], &ct) || !parseStoreLong(c[8], &rf)) return false;
@@ -1501,6 +1547,7 @@ public:
             float fm = 0; extra = parseStoreFloat(c[11], &fm) && parseStoreLong(c[12], &ab) && parseStoreInt(c[13], &held) && fm >= 0;
             if (extra) mult = fm; else { ab = 0; held = 0; }
         }
+        if (nodeOnly && k == 'A' && (c[9].find("bar node") == std::string::npos || !(mult > 0))) { skippedOld++; return false; }   // (2.0.4) only bar-node A with a multiple
         for (Mark& m : marks) if (m.barT == t && m.kind == k && m.dir == dir) {
             if (m.state == MK_PENDING && st != MK_PENDING) { m.state = st; m.confT = ct; }
             return true;
@@ -1523,6 +1570,33 @@ public:
 
 private:
     std::deque<std::pair<BarIn, BarFlow> > recent;
+    // (2.0.4) a pending node A under the pivot rule: the confirmation bar = the first later bar closing beyond the node in the A's
+    // direction (green above / red below, as before); confirmed once the zigzag has made the absorption bar or the confirmation bar
+    // the pivot (decision = max(confirmation close, pivot confirmed)); expired (stays "A?") when it closed back through the node
+    // first, when no confirmation came within aExpire bars, or when the pivot is another bar ("not at pivot").
+    void pivotStep(Mark& m, const BarIn& b, int age)
+    {
+        const BarIn* cb = nullptr; bool failed = false;
+        auto look = [&](const BarIn& x) {
+            if (cb || failed || x.te <= m.barT) return;
+            const bool conf = m.dir < 0 ? (x.c < x.o && x.c < m.lo) : (x.c > x.o && x.c > m.hi);
+            const bool fail = m.dir < 0 ? x.c > m.hi : x.c < m.lo;
+            if (conf) cb = &x; else if (fail) failed = true;
+        };
+        for (const auto& x : recent) look(x.first);
+        look(b);
+        if (!cb) {
+            if (failed) { m.why += " - closed back through the node"; settle(m, MK_EXPIRED, b.te); }
+            else if (age + 1 >= cfg.aExpire) { m.why += " - no confirmation"; settle(m, MK_EXPIRED, b.te); }
+            return;
+        }
+        const int side = m.dir > 0 ? -1 : 1;
+        if (zz.pivotAt(m.barT, side) || zz.pivotAt(cb->te, side)) { settle(m, MK_CONFIRMED, b.te); return; }
+        const bool stillPossible = zz.dir == (m.dir > 0 ? -1 : 1) && (zz.extT == m.barT || zz.extT == cb->te);
+        if (stillPossible && age + 1 < cfg.aExpire + cfg.pivotMaxWait) return;          // the zigzag has not turned yet: wait
+        m.why += " - not at pivot"; rejected["not at pivot"]++;
+        settle(m, MK_EXPIRED, b.te);
+    }
     void remember(const BarIn& b, const BarFlow& f) { recent.push_back(std::make_pair(b, f)); while (recent.size() > 30) recent.pop_front(); }
     int barsSince(long long t) const { int n = 0; for (auto it = recent.rbegin(); it != recent.rend() && it->first.te > t; ++it) n++; return recent.empty() || recent.front().first.te > t ? 99 : n; }
     // (2.0.2) NODE location: this bar's high (bearish) / low (bullish) is the 60-min extreme, or within keyTol ticks of a key level
@@ -1749,6 +1823,7 @@ inline void nodeFill(BarFlow& f, const std::map<int, std::pair<long long, long l
     // (a row of N ticks spans [lo, hi + 1 tick): its distance from the extreme is measured from that edge)
     f.ndPos = std::max(0.0, f.ndDir < 0 ? (double)(b.h - f.ndHi - 1) / range : (double)(f.ndLo - 1 - b.l) / range);
     f.ndCloseOk = f.ndDir < 0 ? (b.c <= f.ndLo || b.c < b.l + range / 2.0) : (b.c >= f.ndHi || b.c > b.l + range / 2.0);
+    f.ndCloseBeyond = f.ndDir < 0 ? b.c < f.ndLo : b.c > f.ndHi;          // (2.0.4) strictly beyond the absorbed level (at / inside = no)
 }
 
 } // namespace tfl
