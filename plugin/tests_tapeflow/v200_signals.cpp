@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <iostream>
 #include <random>
+#include <fstream>
 #include "../TapeFlowLogic.h"
 
 using namespace tfl;
@@ -173,7 +174,7 @@ int main()
         // the record: 2.0.0 lines (11 columns) still load; 2.0.1 lines carry the three new columns
         SignalBook old; CHECK(old.load("1000|A|-1|C|5|4|6|1180|0|buyers absorbed|2.0.0") && old.marks[0].mult == 0 && old.marks[0].state == MK_CONFIRMED, "record: a 2.0.0 line (11 columns) still loads");
         const std::string l = SignalBook::line(*a, "2.0.1");
-        CHECK(std::count(l.begin(), l.end(), '|') == 13 && l.compare(l.size() - 11, 11, "|2.80|840|3") == 0, "record: ...|version|multiple|absorbed|held_ticks");
+        CHECK(std::count(l.begin(), l.end(), '|') == 16 && l.find("|2.0.1|2.80|840|3|0|0|0.0") != std::string::npos, "record: ...|version|multiple|absorbed|held_ticks|minute_t|minute_vol|normal_minute");
         SignalBook nb; nb.load(l); CHECK(nb.marks.size() == 1 && std::fabs(nb.marks[0].mult - 2.8) < 1e-6 && nb.marks[0].absorbed == 840 && nb.marks[0].held == 3, "record: the new columns round-trip");
         CHECK(std::string(SignalBook::header()).find("|version|multiple|absorbed|held_ticks") != std::string::npos, "record header: the 2.0.0 columns first, then the new ones");
     }
@@ -310,6 +311,153 @@ int main()
         CHECK(titleLine("2.0.1", "HG", q, false, 0, nullptr, "") == "TF 2.0.1 HG  QUIET", "title: quiet; a patch version is shown in full");
         StateInfo w; w.code = "WATCH"; w.act = 0.8;
         CHECK(titleLine("2.0.0", "CL", w, false, 0, nullptr, "") == "TF 2.0 CL  BALANCED 0.8x", "title: an engine watch is just READY in the header");
+    }
+    // ---------------- (2.0.2) the bar node (absorbMethod = 1)
+    {
+        // ES 2026-10-09 13:54: O 7869 H 7870.5 L 7864.75 C 7865, buyers hit 7869 hard (Delta Profile: +539 at 7869, 5.6x);
+        // 13:57 closes red at 7864.25 -> a bearish A? at 7869 on the 13:54 bar, confirmed by 13:57
+        auto T = [](double p) { return (int)std::llround(p / 0.25); };
+        SignalBook bk; bk.cfg.absorbMethod = 1;
+        std::vector<BarIn> bars; long long te = T0;
+        for (int i = 0; i < 20; ++i) { BarIn b; b.ts = te; b.te = te + 180; b.o = T(7860); b.h = T(7862 + 0.25 * (i % 3)); b.l = T(7858); b.c = T(7861); bars.push_back(b); te += 180; }
+        BarIn top; top.ts = te; top.te = te + 180; top.o = T(7869); top.h = T(7870.5); top.l = T(7864.75); top.c = T(7865); te += 180;
+        BarIn nxt; nxt.ts = te; nxt.te = te + 180; nxt.o = T(7865); nxt.h = T(7866); nxt.l = T(7863.75); nxt.c = T(7864.25);
+        std::map<int, std::pair<long long, long long>> rows;
+        rows[T(7870.5)] = {40, 20}; rows[T(7870.25)] = {60, 40}; rows[T(7870)] = {90, 70}; rows[T(7869.75)] = {110, 60}; rows[T(7869.5)] = {120, 80};
+        rows[T(7869.25)] = {150, 90}; rows[T(7869)] = {539, 120}; rows[T(7868.75)] = {80, 90}; rows[T(7868)] = {40, 60}; rows[T(7867)] = {30, 70};
+        rows[T(7866)] = {30, 90}; rows[T(7865)] = {20, 110}; rows[T(7864.75)] = {10, 60};
+        BarFlow none; none.secs = 180;
+        for (auto& b : bars) bk.feed(b, none);
+        BarFlow f = none; nodeFill(f, &rows, top, 1); bk.feed(top, f);
+        const Mark* a = bk.drawnAt(top.te);
+        CHECK(a && a->dir == -1 && a->lo == T(7869) && a->state == MK_PENDING && a->absorbed == 539, "NODE: ES 13:54 - bearish A? at 7869 (buyers absorbed, 539 contracts)");
+        CHECK(a && a->mult > 3 && markLabel(*a).compare(0, 3, "A? ") == 0, "NODE: the multiple = node / the bar's average row");
+        bk.feed(nxt, none);
+        CHECK(a && bk.drawnAt(top.te)->state == MK_CONFIRMED && bk.drawnAt(top.te)->confT == nxt.te, "NODE: confirmed by 13:57 (red close 7864.25 below the node)");
+        // the 20-s method on the same bar would have said bullish: here the bar node decides, the AW is ignored
+        SignalBook b2; b2.cfg.absorbMethod = 1; for (auto& b : bars) b2.feed(b, none);
+        BarFlow g = f; g.awDir = 1; g.awLo = T(7866); g.awHi = T(7867); g.awMult = 8.4; b2.feed(top, g);
+        CHECK(b2.drawnAt(top.te) && b2.drawnAt(top.te)->dir == -1, "NODE switch: the 20-s watch does not draw an A");
+        // rules: node near the bar's LOW with buying = not absorption at a top; the bar closing at its high = no A; not at the
+        // 60-min high and no key level = no A; a key level within tolerance = A
+        SignalBook b3; b3.cfg.absorbMethod = 1; for (auto& b : bars) b3.feed(b, none);
+        BarIn hiClose = top; hiClose.c = T(7870.25); BarFlow h = none; nodeFill(h, &rows, hiClose, 1); b3.feed(hiClose, h);
+        CHECK(!b3.drawnAt(hiClose.te), "NODE: a bar closing at its high (buyers not absorbed) gives no A");
+        std::map<int, std::pair<long long, long long>> low = rows; low[T(7869)] = {120, 120}; low[T(7865)] = {539, 110};
+        SignalBook b4; b4.cfg.absorbMethod = 1; for (auto& b : bars) b4.feed(b, none);
+        BarFlow l = none; nodeFill(l, &low, top, 1); b4.feed(top, l);
+        CHECK(!b4.drawnAt(top.te), "NODE: buying in the bottom of the bar is not absorption at a top");
+        SignalBook b5; b5.cfg.absorbMethod = 1;
+        for (auto& b : bars) { BarIn x = b; x.h = T(7880); b5.feed(x, none); }                   // the hour's high was higher
+        BarFlow k = none; nodeFill(k, &rows, top, 1); b5.feed(top, k);
+        CHECK(!b5.drawnAt(top.te), "NODE location: not the 60-min high and no key level -> no A");
+        SignalBook b6; b6.cfg.absorbMethod = 1;
+        for (auto& b : bars) { BarIn x = b; x.h = T(7880); b6.feed(x, none); }
+        BarFlow k2 = none; nodeFill(k2, &rows, top, 1); k2.keyLevels.push_back(T(7871)); k2.keyTol = 2; b6.feed(top, k2);
+        CHECK(b6.drawnAt(top.te) && b6.drawnAt(top.te)->dir == -1, "NODE location: within 2 ticks of a key level (7871) -> A");
+        SignalBook b7; b7.cfg.absorbMethod = 1; b7.cfg.nodeMult = 9; for (auto& b : bars) b7.feed(b, none);
+        BarFlow m9 = none; nodeFill(m9, &rows, top, 1); b7.feed(top, m9);
+        CHECK(!b7.drawnAt(top.te), "NODE: below the minimum multiple -> no A");
+        // rows of N ticks (NQ / CL scale)
+        BarFlow n2 = none; nodeFill(n2, &rows, top, 4);
+        CHECK(n2.ndHi - n2.ndLo == 3 && n2.ndLo <= T(7869) && n2.ndHi >= T(7869), "NODE: rows of N ticks group the prices");
+        BarRows br; br.spb = 180; Tick x; x.t = T0 + 5; x.px = 100; x.bid = 99; x.ask = 100; x.q = 7; br.add(x); x.t = T0 + 179; x.px = 99; x.bid = 99; x.ask = 100; x.q = 3; br.add(x);
+        x.t = T0 + 180; br.add(x);
+        CHECK(br.at(T0 + 180) && br.at(T0 + 180)->at(100).first == 7 && br.at(T0 + 180)->at(99).second == 3 && br.at(T0 + 360), "BarRows: trades by bar end (the chart grid) and price, buy / sell");
+    }
+    // ---------------- (2.0.3) SANITY (a): ES 13:54 with the minute tape - arrow over 13:51-13:52, 2,934 bought = 3.6x a normal minute (812)
+    {
+        auto T = [](double p) { return (int)std::llround(p / 0.25); };
+        const long long ts = T0 + 21 * 180;                              // the "13:54" bar: [13:51, 13:54)
+        BarRows br; br.spb = 180;
+        std::vector<SecRec> H;
+        for (long long t = ts - 21 * 180; t < ts + 360; ++t) { SecRec r; r.t = t; r.b = 5; r.s = 5; H.push_back(r); }
+        // minute 0 (13:51-13:52): buyers lift 7869 hard; 2,934 bought in that minute in all
+        for (auto& r : H) if (r.t >= ts && r.t < ts + 60) { r.b = 2934 / 60 + (r.t - ts < 2934 % 60 ? 1 : 0); r.s = 15; }
+        for (auto& r : H) if (r.t >= ts + 60 && r.t < ts + 180) { r.b = 12; r.s = 25; }
+        auto addT = [&](long long t, double px, int side, long long q) { Tick k; k.t = t; k.px = T(px); k.q = q; if (side > 0) { k.bid = k.px - 1; k.ask = k.px; } else { k.bid = k.px; k.ask = k.px + 1; } br.add(k); };
+        addT(ts + 10, 7869, 1, 500); addT(ts + 40, 7869.25, 1, 140); addT(ts + 70, 7869, 1, 39); addT(ts + 100, 7866, -1, 300); addT(ts + 150, 7865, -1, 200);
+        addT(ts + 20, 7870.5, 1, 40); addT(ts + 30, 7868, -1, 90); addT(ts + 120, 7864.75, -1, 60);
+        BarIn top; top.ts = ts; top.te = ts + 180; top.o = T(7869); top.h = T(7870.5); top.l = T(7864.75); top.c = T(7865);
+        BarIn nxt; nxt.ts = ts + 180; nxt.te = ts + 360; nxt.o = T(7865); nxt.h = T(7866); nxt.l = T(7863.75); nxt.c = T(7864.25);
+        SignalBook bk; bk.cfg.absorbMethod = 1; BarFlow none; none.secs = 180;
+        for (int i = 0; i < 20; ++i) { BarIn b; b.ts = ts - (21 - i) * 180; b.te = b.ts + 180; b.o = T(7860); b.h = T(7862); b.l = T(7858); b.c = T(7861); bk.feed(b, none); }
+        { BarIn b; b.ts = ts - 180; b.te = ts; b.o = T(7861); b.h = T(7869); b.l = T(7860.5); b.c = T(7869); bk.feed(b, none); }
+        BarFlow f = none; nodeFill(f, br.at(top.te), top, 1); nodeMinuteFill(f, br, top, H, 812);
+        bk.feed(top, f);
+        const Mark* a = bk.drawnAt(top.te);
+        printf("ES 13:54 sanity: dir %d node %.2f-%.2f pos %.2f minute %d (%lld bought) norm %.0f -> %s\n", a ? a->dir : 0, f.ndLo * 0.25, f.ndHi * 0.25, f.ndPos, f.ndMinute, a ? a->minuteVol : 0, f.minNorm, a ? markLabel(*a).c_str() : "-");
+        CHECK(a && a->dir == -1 && a->lo == T(7869) && f.ndPos <= 0.25 && a->state == MK_PENDING, "(a) ES 13:54: bearish A? at the node 7869, inside the top 25% of the bar");
+        CHECK(a && a->minuteT == ts && f.ndMinute == 0, "(a) the arrow belongs over minute 13:51-13:52 (where the node's buying traded)");
+        CHECK(a && a->minuteVol == 2934 && std::fabs(a->mult - 2934.0 / 812.0) < 1e-9 && markLabel(*a) == "A? 3.6x", "(a) multiple = 2,934 bought / 812 normal minute = 3.6x");
+        bk.feed(nxt, none);
+        CHECK(bk.drawnAt(top.te)->state == MK_CONFIRMED && bk.drawnAt(top.te)->confT == nxt.te && markLabel(*bk.drawnAt(top.te)) == "A 3.6x", "(a) confirmed at the 13:57 close (7864.25, red, below the node) -> 'A 3.6x'");
+        StateInfo st; st.code = "READY"; st.act = 1.2;
+        std::vector<std::string> tp = titleParts("2.0.3", "ES", st, true, 0, bk.drawnAt(top.te), "7,869.00"); tp[1] = "TESTING"; tp[2].clear();
+        const std::string title = tp[0] + tp[1] + tp[2] + tp[3];
+        printf("header: %s\n", title.c_str());
+        CHECK(title == "TF 2.0.3 ES  TESTING  last: A 3.6x 7,869.00  2,934 bought into the high = 3.6x a normal minute", "(a) the 2.0.3 header text");
+        SignalBook rt; rt.loadText(std::string(SignalBook::header()) + "\n" + SignalBook::line(*bk.drawnAt(top.te), "2.0.3") + "\n");
+        CHECK(rt.marks.size() == 1 && rt.marks[0].minuteT == ts && rt.marks[0].minuteVol == 2934 && std::fabs(rt.marks[0].norm - 812) < 0.05, "record: the node minute, its volume and the normal minute round-trip");
+        Mark sm = *bk.drawnAt(top.te); sm.dir = 1; sm.minuteVol = 1500; sm.mult = 1500.0 / 812;
+        CHECK(lastText(sm, "7,800.00").find("1,500 sold into the low = 1.8x a normal minute") != std::string::npos, "header: bullish = 'sold into the low'");
+    }
+    // ---------------- (2.0.3) SANITY (c): the minute bars sit inside their candle and never touch the next one, at every zoom
+    {
+        bool inside = true, apart = true, ordered = true; int collapsed = 0;
+        for (int ppb = 1; ppb <= 120; ++ppb) for (int x = 0; x < 3; ++x) {
+            const int cx = 500 + x;
+            int a1[6], a2[6], b1[6], b2[6]; const int n = minuteSlots(cx, ppb, 3, a1, a2); const int m = minuteSlots(cx + ppb, ppb, 3, b1, b2);
+            if (n == 1) collapsed++;
+            for (int k = 0; k < n; ++k) { if (a1[k] < cx - ppb / 2.0 - 0.01 || a2[k] >= cx + ppb / 2.0) inside = false; if (k && a1[k] <= a2[k - 1] + 1) ordered = false; if (n > 1 && a2[k] - a1[k] < 1) ordered = false; if (a2[k] < a1[k]) ordered = false; }
+            if (a2[n - 1] >= b1[0]) apart = false; (void)m;
+        }
+        CHECK(inside, "(c) every minute bar is inside its candle's width (ppb 1..120)");
+        CHECK(apart, "(c) the last minute bar never reaches the next candle's first (ppb 1..120)");
+        CHECK(ordered, "(c) the three minute bars never overlap each other, a 1-px gap between them, each >= 2 px wide");
+        int s1[6], s2[6]; CHECK(minuteSlots(100, 12, 3, s1, s2) == 3 && minuteSlots(100, 9, 3, s1, s2) == 1, "(c) three bars from 10 px per candle, one (the minutes summed) below");
+        printf("minute slots: one summed bar at %d of 360 zoom cases (ppb < 10)\n", collapsed);
+    }
+    // ---------------- (2.0.3, audit #2 / #26) volumes above 2^31: per-minute sums, the node minute and the record keep every contract
+    {
+        const long long big = 3000000001LL;                              // > 2^31
+        std::vector<SecRec> H; for (long long t = 0; t < 120; ++t) { SecRec r; r.t = 1000 + t; r.b = big; r.s = big + 1; H.push_back(r); }
+        long long B = 0, S = 0; sideSums(H, 1000, 1060, &B, &S);
+        BarRows br; br.spb = 180; Tick k; k.t = 1000; k.px = 100; k.bid = 99; k.ask = 100; k.q = big; br.add(k); br.add(k);
+        const auto* row = br.at(1080);
+        Mark m; m.barT = 1080; m.kind = 'A'; m.dir = -1; m.px = 100; m.lo = 100; m.hi = 100; m.minuteT = 900; m.minuteVol = 60 * big + 7; m.norm = 1e9f; m.mult = 2.5;
+        SignalBook rt; rt.loadText(std::string(SignalBook::header()) + "\n" + SignalBook::line(m, "2.0.3") + "\n");
+        CHECK(B == 60 * big && S == 60 * (big + 1) && row && row->at(100).first == 2 * big && rt.marks.size() == 1 && rt.marks[0].minuteVol == 60 * big + 7,
+              "(#2 / #26) volumes above 2^31 summed exactly (long long), the record keeps every contract");
+    }
+    // ---------------- (2.0.3) SANITY (b): the per-minute sums equal the per-second file's totals for a full session
+    {
+        const char* fn = getenv("TF_SEC_FILE");
+        std::ifstream f(fn ? fn : "/mnt/user-data/uploads/lsFlexLevels/TapeFlow/ES-sec-20735.csv");
+        if (!f.good()) printf("(b) SKIPPED - no per-second file here (set TF_SEC_FILE)\n");
+        else {
+            std::vector<SecRec> H; long long tb = 0, tsl = 0; std::string ln;
+            while (std::getline(f, ln)) { if (ln.empty() || !isdigit((unsigned char)ln[0])) continue;
+                std::vector<std::string> c; size_t a0 = 0; while (true) { size_t q = ln.find('|', a0); c.push_back(ln.substr(a0, q == std::string::npos ? q : q - a0)); if (q == std::string::npos) break; a0 = q + 1; }
+                if (c.size() < 10) continue; SecRec r; r.t = atoll(c[0].c_str()); r.b = atoll(c[6].c_str()); r.s = atoll(c[7].c_str());
+                if (!H.empty() && r.t <= H.back().t) continue; H.push_back(r); tb += r.b; tsl += r.s; }
+            long long mb = 0, ms = 0; size_t minutes = 0; bool same = true;
+            for (long long a = (H.front().t / 60) * 60; a <= H.back().t; a += 60) {
+                long long B, S; sideSums(H, a, a + 60, &B, &S); mb += B; ms += S; minutes++;
+                long long b2 = 0, s2 = 0; for (const SecRec& r : H) if (r.t >= a && r.t < a + 60) { b2 += r.b; s2 += r.s; } if (b2 != B || s2 != S) same = false;
+                if (minutes > 30 && !same) break;
+            }
+            printf("(b) %zu seconds, %zu minutes: bought %lld / %lld, sold %lld / %lld\n", H.size(), minutes, mb, tb, ms, tsl);
+            CHECK(mb == tb && ms == tsl && same, "(b) the 1-minute bars' contracts add up to the per-second file's buy / sell totals");
+        }
+    }
+    {   // (2.0.3, audit #4 / #22) a half-written last line (the writer was mid-append) is not a record; a complete one is
+        Mark m; m.barT = 1000; m.kind = 'A'; m.dir = -1; m.px = 5; m.lo = 5; m.hi = 5; m.mult = 3.6;
+        const std::string full = SignalBook::line(m, "2.0.3");
+        SignalBook a1; a1.loadText(std::string(SignalBook::header()) + "\n" + full.substr(0, full.size() - 6));
+        SignalBook a2; a2.loadText(std::string(SignalBook::header()) + "\n" + full + "\n" + full.substr(0, 20));
+        SignalBook a3; a3.loadText(std::string("garbage\n1e99|A|-1|C|5|5|5|0|0|x|v\n9223372036854775808|A|-1|C|5|5|5|0|0|x|v\n1000|A|-1|C|nan|5|5|0|0|x|v\n"));
+        CHECK(a1.marks.empty() && a2.marks.size() == 1 && std::fabs(a2.marks[0].mult - 3.6) < 1e-5 && a3.marks.empty(), "record: partial last line ignored; malformed / out-of-range / non-finite lines rejected");
     }
     printf("v200 signals: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;

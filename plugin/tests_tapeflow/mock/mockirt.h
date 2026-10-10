@@ -15,3 +15,16 @@ extern std::vector<std::string> g_text;                  // text drawn this fram
 extern long g_lines, g_rects, g_ttCalls; extern long long g_ttLastStart, g_ttMaxBack;
 extern bool g_timerOk; extern int g_timerId;
 extern std::map<unsigned long, long> g_lineColors;                  // (2.0.2) lines drawn per pen colour
+extern std::vector<std::pair<int, float> > g_pntSets;              // (2.0.3) PNT::set calls with a price
+extern int g_ppb;                                                  // (2.0.3) pixels per bar (zoom)
+struct MRect { short l, t, r, b; unsigned long fill; };
+extern std::vector<MRect> g_rectList;                              // (2.0.3) drawn rectangles
+// (2.0.3) line segments (from the last setDrawPosition to drawLineTo) with their pen; dashed lines counted
+struct MSeg { short x1, y1, x2, y2; unsigned long color; int style; };
+extern std::vector<MSeg> g_segs; extern long g_dashLines;
+// (2.0.3) several charts: each has its own bars, OHLC arrays, seconds per bar and user-data slot. mockSelectChart(id) switches
+// the "current chart" (what IRT's calls answer for); chart 0 is the default every older suite uses.
+void mockSelectChart(int id); int mockCurrentChart(); void mockSetSpb(int spb);
+extern std::vector<std::pair<std::string, short> > g_textAt;   // (2.0.3) drawn text and its rectangle's left x
+extern int g_paneH;   // (2.0.3) pane height
+extern float g_tickIncr;   // (2.0.3) the chart's SYM_TICKINCR

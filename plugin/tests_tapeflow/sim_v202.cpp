@@ -9,6 +9,7 @@
 #include <vector>
 std::vector<float> mockOut(int k);
 void mockBar(int i, float o, float h, float l, float c);   // (1.1.5) the mock's output arrays 1 / 2
+#define TF_TESTING_MODE 1   // (2.0.3) the default build now draws; this suite checks the test mode
 #include "TapeFlowES.cpp"
 #undef mkt
 #undef root
@@ -107,7 +108,7 @@ int main()
     const long long sid = tfl::sessionOf(g_now);
     // ---- test mode: nothing drawn; the header says so
     { g_text.clear(); tf->draw(); char t[160] = {0}; tf->parmsTitle(t, sizeof(t));
-      CHECK(std::string(t) == "TF 2.0.2 ES  TESTING - not for trading yet", "test mode: the header title");
+      CHECK(std::string(t) == std::string("TF ") + tfl::shortVersion(TF_VERSION) + " ES  TESTING - not for trading yet", "test mode: the header title");
       bool onlyTitle = true; for (auto& s : g_text) if (s != t) onlyTitle = false;
       g_lines = g_rects = 0; tf->S().lastTitleCall = (long long)g_now; tf->S().titleChangedAt = (time_t)g_now; g_text.clear(); tf->draw();
       CHECK(onlyTitle && g_text.empty() && g_lines == 0 && g_rects == 0, "test mode: the pane draws nothing (the title only as the fallback line)");
@@ -142,7 +143,7 @@ int main()
             long long v[9]; if (sscanf(ln.c_str(), "%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8]) != 9) { barsOk = false; continue; }
             auto it = wb.find(v[0]); if (it == wb.end()) { barsOk = false; continue; } for (int k = 0; k < 9; ++k) if (it->second[k] != v[k]) barsOk = false; gb++; }
         if (gb != wb.size()) barsOk = false;
-        if (tp.compare(0, 18, "# TapeFlow 2.0.2 t") != 0 || tp.find("\nt|px_ticks|buy|sell|unknown|trades\n") == std::string::npos) equal = false;
+        if (tp.compare(0, 11 + strlen(TF_VERSION) + 2, std::string("# TapeFlow ") + TF_VERSION + " t") != 0 || tp.find("\nt|px_ticks|buy|sell|unknown|trades\n") == std::string::npos) equal = false;
     }
     printf("tape files %d (of the last 10 trading sessions), %.1f MB\n", files, bytes / 1048576.0);
     CHECK(files == 10, "tape export: the last 10 trading sessions (weekends skipped)");

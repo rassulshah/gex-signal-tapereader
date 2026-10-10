@@ -6,6 +6,7 @@
 std::vector<float> mockOut(int k);   // (1.1.5) the mock's output arrays 1 / 2
 void mockBar(int i, float o, float h, float l, float c);   // (2.0.0) the chart OHLC
 #define TF_TESTING_MODE 0   // (2.0.2) these suites check the drawing: build with test mode OFF
+#define TF_ABSORB_METHOD 0  // (2.0.3) this suite covers the 20-second method (sim_v203 covers the bar node + the minute tape)
 #include "TapeFlowES.cpp"
 #undef mkt
 #undef root
@@ -180,14 +181,14 @@ int main()
         {   // (2.0.2) "get rid of the white line": no 180-s line, and the scale fits the bars only
             g_lineColors.clear(); g_text.clear(); tf->draw();
             CHECK(g_lineColors.count(0x00CBD5E1UL) == 0, "(2.0.2) the 180-s line is not drawn");
-            bool onlyKnown = true; for (auto& kv : g_lineColors) if (kv.first != 0x0022C55EUL && kv.first != 0x00EF4444UL && kv.first != 0x00373F4CUL) onlyKnown = false;
+            bool onlyKnown = true; for (auto& kv : g_lineColors) if (kv.first != 0x0022C55EUL && kv.first != 0x00EF4444UL && kv.first != 0x00373F4CUL && kv.first != 0x00505C6FUL) onlyKnown = false;
             for (auto& kv : g_lineColors) printf("   lines in colour %06lX: %ld\n", kv.first, kv.second);
-            CHECK(onlyKnown, "(2.0.2) the only lines: the faint zero line and the arrowheads (green / red)");
+            CHECK(onlyKnown, "(2.0.2) the only lines: the faint zero line, the (2.0.3) dashed normal-minute line and the arrowheads (green / red)");
             const int nb = (int)g_bars.size(); double barsMax = 0;
             { tfl::SecRec dummy; (void)dummy; }
-            const double fitted = tfl::fitRange(tf->visibleMaxAbs(nb - 160, nb - 1));
+            const double fitted = tfl::fitContracts(tf->visibleMaxAbs(nb - 160, nb - 1), tf->normalMinute());
             double lo2 = 0, hi2 = 0; tf->scale(nb - 160, nb - 1, &lo2, &hi2); (void)barsMax;
-            CHECK(std::fabs(tf->S().range - fitted) < 1e-9, "(2.0.2) the scale fits the 30-s bars only");
+            CHECK(std::fabs(tf->S().range - fitted) < 1e-9, "(2.0.3) the scale fits the minute bars (contracts) and the normal minute");
         }
         CHECK(hi > 0 && lo == -hi && hi >= 60 && std::fabs(hi - tfl::axisRange(tf->S().range, tf->S().paneH, tf->S().band)) < 1e-9 && std::fmod(tf->S().range, 10.0) == 0, "scale(): symmetric, >= 60, the fitted range (rounded to 10) widened for the signal bands");
         printf("fitted range +-%.0f\n", hi);

@@ -62,7 +62,7 @@
 
 namespace tfl {
 
-#define TFL_VERSION "2.0.2"
+#define TFL_VERSION "2.0.3"
 
 struct Cfg {
     int fastW = 30, ctxW = 180, obsW = 20, part = 5;   // seconds
@@ -181,6 +181,7 @@ inline const std::vector<Win>* frontOf(const SessWins& session)
 struct BinBase { int n = 0; float qb[8] = {0}, qs[8] = {0}; float med20 = 0, med5 = 0, medSpread = -1;
                  float mb50[8] = {0}, ms50[8] = {0};   // (2.0.1) the slot's NORMAL (median) biggest same-side volume in a 2h+1-tick band per 20 s
                  float swing180 = -1;                  // (2.0.1) the slot's normal |180-s pressure| (median), -1 = not measured yet
+                 float minNorm = -1;                   // (2.0.3) the slot's NORMAL MINUTE: median one-side (max(buy, sell)) aggressive volume per minute
                  int own = 0, k = 0; float gap = -1; };   // (1.1.5) own = the slot's own windows, k = slots borrowed each side, gap = typical s between trades
 
 inline float nearestRank(std::vector<float>& v, double p)
@@ -259,6 +260,7 @@ inline void freezeBase(const Store& st, long long sid, int N, BinBase* out, int*
     float typical = median(rates);
     std::vector<std::vector<const Win*>> by(NBINS);
     std::vector<std::vector<float>> sw(NBINS);       // (2.0.1) |180-s pressure| at each window end with 9 contiguous measured windows
+    std::vector<std::vector<float>> mn(NBINS);       // (2.0.3) one-side minute volume: 3 contiguous windows ending on a minute
     int used = 0, dropped = 0;
     for (const auto& wins : candidates) {
         if (avgRate(wins) < 0.3 * typical) { ++dropped; continue; }
@@ -268,6 +270,12 @@ inline void freezeBase(const Store& st, long long sid, int N, BinBase* out, int*
             double B = 0, S = 0; bool ok = true;
             for (size_t k = i - 8; k <= i; ++k) { if (wins[k].b20 < 0) { ok = false; break; } B += wins[k].b20; S += wins[k].s20; }
             if (ok && B + S > 0) sw[(size_t)wins[i].bin].push_back((float)std::fabs(100.0 * (B - S) / (B + S)));
+        }
+        for (size_t i = 2; i < wins.size(); ++i) {                  // (2.0.3) the minute [m:00, m+1:00) = the windows ending :19 :39 :59
+            if ((wins[i].endT + 1) % 60 != 0 || wins[i].endT - wins[i - 2].endT != 40) continue;
+            double B = 0, S = 0; bool ok = true;
+            for (size_t k = i - 2; k <= i; ++k) { if (wins[k].b20 < 0) { ok = false; break; } B += wins[k].b20; S += wins[k].s20; }
+            if (ok && B + S > 0) mn[(size_t)wins[i].bin].push_back((float)std::max(B, S));
         }
         if (++used >= N) break;
     }
@@ -289,6 +297,9 @@ inline void freezeBase(const Store& st, long long sid, int N, BinBase* out, int*
             std::vector<float> s1(sw[(size_t)b]);
             for (int k = 1; k <= o.k; ++k) { if (b - k >= 0) s1.insert(s1.end(), sw[(size_t)(b - k)].begin(), sw[(size_t)(b - k)].end()); if (b + k < NBINS) s1.insert(s1.end(), sw[(size_t)(b + k)].begin(), sw[(size_t)(b + k)].end()); }
             o.swing180 = s1.size() >= 20 ? median(s1) : -1.f;
+            std::vector<float> m1(mn[(size_t)b]);                       // (2.0.3) the normal minute: this slot, +-1 / +-2 only if < 10 minutes
+            for (int k = 1; k <= 2 && m1.size() < 10; ++k) { if (b - k >= 0) m1.insert(m1.end(), mn[(size_t)(b - k)].begin(), mn[(size_t)(b - k)].end()); if (b + k < NBINS) m1.insert(m1.end(), mn[(size_t)(b + k)].begin(), mn[(size_t)(b + k)].end()); }
+            o.minNorm = m1.size() >= 10 ? median(m1) : -1.f;
         }
         o.own = (int)by[(size_t)b].size();
     }
@@ -1261,6 +1272,9 @@ struct SigCfg {
     double flipMin = 10; int flipBars = 4;
     int aExpire = 10, eExpire = 5;
     int minFlowSecs = 60;
+    // (2.0.2) which absorption the A comes from: 0 = the 20-s watch (TF20), 1 = the bar node (NODE, Delta-Profile-like, bar close)
+    int absorbMethod = 0;
+    double nodeMult = 2.0, nodeTop = 0.25; bool nodeLocation = true;
 };
 struct BarIn { long long te = 0, ts = 0; int o = 0, h = 0, l = 0, c = 0; };   // ticks; te = the chart's bar stamp (its close)
 struct BarFlow {                                       // the bar's tape over its closed seconds [ts, te)
@@ -1270,6 +1284,10 @@ struct BarFlow {                                       // the bar's tape over it
     int inUp = 0, inDn = 0;
     int awDir = 0, awLo = 0, awHi = 0, awHeld = 0; double awQ = 0, awMult = 0;   // the bar's biggest absorption watch (AW)
     double flipK = 20;                                 // F's threshold for this bar (the slot's normal 180-s swing, >= 10)
+    // (2.0.2) NODE: the bar's biggest one-sided price row (filled by nodeFill) and the key levels for the location rule
+    int ndDir = 0, ndLo = 0, ndHi = 0; double ndVol = 0, ndMult = 0, ndPos = 1; bool ndCloseOk = false;
+    std::vector<int> keyLevels; int keyTol = 2;
+    int ndMinute = -1; double ndMinVol = 0, minNorm = -1;   // (2.0.3) the node's minute in the bar, that minute's aggressor contracts, the normal minute
     long long side(int d) const { return d > 0 ? buy : sell; }
 };
 inline double absorbMultiple(double qzone, double norm) { return norm > 0 && qzone > 0 ? qzone / norm : 0; }
@@ -1322,6 +1340,8 @@ struct Mark {
     int px = 0, lo = 0, hi = 0;                        // ticks: the signal's price (A zone middle, E anchor, P / F close), A zone
     long long confT = 0, ref = 0;                      // the bar that decided it; F: the bar of the A / E it flips from
     double mult = 0; long long absorbed = 0; int held = 0;   // A: multiple, signed contracts absorbed (+ buyers / - sellers), ticks held
+    long long minuteT = 0; long long minuteVol = 0; double norm = 0;   // (2.0.3, bar node) the node's minute (start), its aggressor contracts, the normal minute
+    double tickSize = 0;                               // (2.0.3) the tick size the prices are in (the deciding chart's), 0 = not recorded
     bool flipped = false;
     std::string why;
     bool question() const { return state != MK_CONFIRMED; }
@@ -1337,6 +1357,7 @@ public:
     long long lastFed = LLONG_MIN;
     std::vector<std::string> journal;
     std::string version = "2.0.1";
+    double tickSize = 0;                               // (2.0.3) the tick size of the chart deciding (written with every signal)
 
     void feed(const BarIn& b, const BarFlow& f)
     {
@@ -1363,8 +1384,22 @@ public:
         }
         const bool flow = f.secs >= cfg.minFlowSecs;
         const BarIn* prev = recent.empty() ? nullptr : &recent.back().first;
-        // A (drawn): one per bar
-        if (f.awDir) {
+        // A (drawn): one per bar - (2.0.2) from the bar node when absorbMethod = 1
+        if (cfg.absorbMethod == 1) {
+            if (f.ndDir && f.ndMult >= cfg.nodeMult && f.ndPos <= cfg.nodeTop && f.ndCloseOk && (!cfg.nodeLocation || nodeLocated(b, f))) {
+                Mark m; m.barT = b.te; m.kind = 'A'; m.dir = f.ndDir; m.lo = f.ndLo; m.hi = f.ndHi; m.px = (f.ndLo + f.ndHi) / 2;
+                m.mult = f.ndMult; m.absorbed = (long long)std::llround(f.ndVol) * (f.ndDir > 0 ? -1 : 1);
+                if (f.ndMinute >= 0) {                                         // (2.0.3) the multiple = the node's minute vs a normal minute
+                    m.minuteT = b.ts + 60LL * f.ndMinute; m.minuteVol = (long long)std::llround(f.ndMinVol); m.norm = f.minNorm > 0 ? f.minNorm : 0;
+                    if (m.norm > 0) m.mult = f.ndMinVol / m.norm;
+                    m.absorbed = m.minuteVol * (f.ndDir > 0 ? -1 : 1);
+                }
+                m.held = std::max(0, f.ndDir < 0 ? b.h - f.ndHi : f.ndLo - b.l);   // how far the bar traded past the node
+                m.why = f.ndDir > 0 ? "sellers absorbed (bar node)" : "buyers absorbed (bar node)";
+                marks.push_back(m); log(marks.back());                         // confirmed only by a LATER bar
+            }
+        }
+        else if (f.awDir) {
             Mark m; m.barT = b.te; m.kind = 'A'; m.dir = f.awDir; m.lo = f.awLo; m.hi = f.awHi; m.px = (f.awLo + f.awHi) / 2;
             m.mult = f.awMult; m.absorbed = (long long)std::llround(f.awQ) * (f.awDir > 0 ? -1 : 1);
             m.held = f.awHeld;
@@ -1444,6 +1479,8 @@ public:
         for (char ch : m.why) o << (ch == '|' || ch == '\r' || ch == '\n' ? ' ' : ch);
         o << '|' << ver;
         char x[64]; snprintf(x, sizeof(x), "|%.2f|%lld|%d", m.mult, m.absorbed, m.held); o << x;
+        char y[80]; snprintf(y, sizeof(y), "|%lld|%lld|%.1f", m.minuteT, m.minuteVol, m.norm); o << y;   // (2.0.3)
+        if (m.tickSize > 0 && std::isfinite(m.tickSize)) { char z[40]; snprintf(z, sizeof(z), "|%.10g", m.tickSize); o << z; }   // (2.0.3) column 18: the tick size
         return o.str();
     }
     bool load(const std::string& ln)
@@ -1470,20 +1507,36 @@ public:
         }
         Mark m; m.barT = t; m.kind = k; m.dir = dir; m.state = st; m.px = px; m.lo = lo; m.hi = hi; m.confT = ct; m.ref = rf; m.why = c[9];
         m.mult = mult; m.absorbed = ab; m.held = held;
+        if (c.size() >= 17) { long long mt = 0, mv = 0; float nm = 0;                      // (2.0.3) the node's minute
+            if (parseStoreLong(c[14], &mt) && parseStoreLong(c[15], &mv) && parseStoreFloat(c[16], &nm) && nm >= 0) { m.minuteT = mt; m.minuteVol = mv; m.norm = nm; } }
+        if (c.size() >= 18) { char* e = nullptr; errno = 0; const double tk = std::strtod(c[17].c_str(), &e);   // (2.0.3) strict: the whole token, finite, positive
+            if (errno == 0 && e != c[17].c_str() && *e == '\0' && std::isfinite(tk) && tk > 0 && tk < 1000) m.tickSize = tk; }
         auto pos = std::upper_bound(marks.begin(), marks.end(), t, [](long long x, const Mark& y) { return x < y.barT; });
         marks.insert(pos, m);
         return true;
     }
-    void loadText(const std::string& text) { std::istringstream s(text); std::string ln; while (std::getline(s, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); load(ln); } relinkFlips(); }
+    // a file being appended can end in a half-written line: only lines that END with a newline are records (audit #4 / #22)
+    void loadText(const std::string& text) { const size_t end = text.rfind('\n'); if (end == std::string::npos) { relinkFlips(); return; }
+        std::istringstream s(text.substr(0, end + 1)); std::string ln; while (std::getline(s, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); load(ln); } relinkFlips(); }
     void relinkFlips() { for (const Mark& f : marks) if (f.kind == 'F') for (Mark& o : marks) if (o.barT == f.ref && o.dir == f.dir && (o.kind == 'A' || o.kind == 'E')) o.flipped = true; }
-    static const char* header() { return "t|kind|dir|state|price_ticks|zone_lo|zone_hi|confirmed_bar|ref_bar|why|version|multiple|absorbed|held_ticks"; }
+    static const char* header() { return "t|kind|dir|state|price_ticks|zone_lo|zone_hi|confirmed_bar|ref_bar|why|version|multiple|absorbed|held_ticks|minute_t|minute_vol|normal_minute|tick"; }
 
 private:
     std::deque<std::pair<BarIn, BarFlow> > recent;
     void remember(const BarIn& b, const BarFlow& f) { recent.push_back(std::make_pair(b, f)); while (recent.size() > 30) recent.pop_front(); }
     int barsSince(long long t) const { int n = 0; for (auto it = recent.rbegin(); it != recent.rend() && it->first.te > t; ++it) n++; return recent.empty() || recent.front().first.te > t ? 99 : n; }
+    // (2.0.2) NODE location: this bar's high (bearish) / low (bullish) is the 60-min extreme, or within keyTol ticks of a key level
+    bool nodeLocated(const BarIn& b, const BarFlow& f) const
+    {
+        int hi = INT_MIN, lo = INT_MAX, k = 0;
+        for (auto it = recent.rbegin(); it != recent.rend() && k < 19; ++it, ++k) { hi = std::max(hi, it->first.h); lo = std::min(lo, it->first.l); }
+        const int ext = f.ndDir < 0 ? b.h : b.l;
+        if (f.ndDir < 0 ? b.h >= hi : b.l <= lo) return true;
+        for (int lv : f.keyLevels) if (std::abs(ext - lv) <= f.keyTol) return true;
+        return false;
+    }
     void settle(Mark& m, int st, long long when) { m.state = st; m.confT = when; log(m); }
-    void log(const Mark& m) { journal.push_back(line(m, version)); }
+    void log(Mark& m) { if (!(m.tickSize > 0) && tickSize > 0) m.tickSize = tickSize; journal.push_back(line(m, version)); }
 };
 
 // ---- the header line: "TF 2.0.1 ES  BUYERS 1.6x  last: A 3.1x 7,861.50  -840 absorbed  held 4t"
@@ -1491,8 +1544,16 @@ inline std::string shortVersion(const std::string& v) { return v.size() > 2 && v
 inline const char* sideWord(bool ok, double f180) { return !ok ? "BALANCED" : f180 >= 15 ? "BUYERS" : f180 <= -15 ? "SELLERS" : "BALANCED"; }
 inline std::string multText(double m) { char b[24]; snprintf(b, sizeof(b), "%.1fx", m); return b; }
 inline std::string markLabel(const Mark& m) { return std::string(1, m.kind) + (m.question() ? "? " : " ") + multText(m.mult); }   // "A? 3.1x" / "A 3.1x"
+inline std::string withCommas(long long v)
+{
+    std::string s = std::to_string(v < 0 ? -v : v);
+    for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ",");
+    return (v < 0 ? "-" : "") + s;
+}
 inline std::string lastText(const Mark& a, const std::string& px)
 {
+    if (a.minuteT > 0 && a.norm > 0)                                        // (2.0.3) the bar node: "2,934 bought into the high = 3.6x a normal minute"
+        return "last: A " + multText(a.mult) + " " + px + "  " + withCommas(a.minuteVol) + (a.dir < 0 ? " bought into the high" : " sold into the low") + " = " + multText(a.mult) + " a normal minute";
     char b[96]; snprintf(b, sizeof(b), "  %+lld absorbed  held %dt", a.absorbed, a.held);
     return "last: A " + multText(a.mult) + " " + px + b;
 }
@@ -1541,6 +1602,15 @@ inline void layoutMarks(std::vector<Slot>& v, int gap = 2)
     }
 }
 inline int markRank(const Mark& m) { return (int)std::llround(std::min(m.mult, 1.0e6) * 1000.0); }   // the bigger multiple wins
+// (2.0.3) the tape pane's range in CONTRACTS: max(1.15 x the biggest one-side minute shown, 1.3 x the normal minute, 10), rounded up to
+// a round number (1 / 2 / 2.5 / 5 x 10^k) - so the bars fit and the normal-minute line is always inside
+inline double fitContracts(double maxSide, double norm)
+{
+    double v = std::max(10.0, std::max(std::isfinite(maxSide) ? 1.15 * maxSide : 0.0, std::isfinite(norm) && norm > 0 ? 1.3 * norm : 0.0));
+    const double p = std::pow(10.0, std::floor(std::log10(v)));
+    for (double m : {1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0}) if (m * p >= v - 1e-9) return m * p;   // fine steps: the tallest bar fills >= 70% of the pane
+    return 10 * p;
+}
 inline double axisRange(double r, int paneH, int band) { if (paneH <= 2 * band + 10) return r; return r * (paneH / 2.0) / (paneH / 2.0 - band); }
 
 
@@ -1586,5 +1656,99 @@ private:
         bte = LLONG_MIN;
     }
 };
+
+
+// ---- (2.0.2) the bar node (NODE): every trade by bar (the chart's bar grid) and price, buy / sell; decided at the bar's close
+struct BarRows {
+    int spb = 180;
+    std::map<long long, std::map<int, std::pair<long long, long long> > > m;   // bar end -> price -> (buy, sell)
+    // (2.0.3) the same by MINUTE of the bar: bar end -> price -> [minute] (buy, sell); minute 0 = [bar start, bar start + 60 s)
+    std::map<long long, std::map<int, std::vector<std::pair<long long, long long> > > > mm;
+    int minutes() const { return std::max(1, std::min(60, spb / 60)); }
+    void add(const Tick& k)
+    {
+        if (k.q <= 0 || spb <= 0) return;
+        const int sd = sideOf(k.px, k.bid, k.ask); if (sd == SIDE_UNK) return;
+        const long long te = (k.t >= 0 ? k.t / spb : -((-k.t + spb - 1) / spb)) * spb + spb;
+        auto& r = m[te][k.px]; (sd == SIDE_BUY ? r.first : r.second) += k.q;
+        auto& v = mm[te][k.px]; if (v.empty()) v.resize((size_t)minutes());
+        const int mi = std::max(0, std::min(minutes() - 1, (int)((k.t - (te - spb)) / 60)));
+        (sd == SIDE_BUY ? v[(size_t)mi].first : v[(size_t)mi].second) += k.q;
+        while (m.size() > 1200) m.erase(m.begin());
+        while (mm.size() > 1200) mm.erase(mm.begin());
+    }
+    const std::map<int, std::pair<long long, long long> >* at(long long te) const { auto it = m.find(te); return it == m.end() ? nullptr : &it->second; }
+    // the minute of the bar in which the most AGGRESSOR volume (side +1 buy / -1 sell) traded inside [lo, hi] (-1 = none)
+    int nodeMinute(long long te, int lo, int hi, int side) const
+    {
+        auto it = mm.find(te); if (it == mm.end()) return -1;
+        std::vector<long long> sum((size_t)minutes(), 0);
+        for (auto r = it->second.lower_bound(lo); r != it->second.end() && r->first <= hi; ++r)
+            for (size_t k = 0; k < r->second.size() && k < sum.size(); ++k) sum[k] += side > 0 ? r->second[k].first : r->second[k].second;
+        int best = -1; long long bv = 0; for (size_t k = 0; k < sum.size(); ++k) if (sum[k] > bv) { bv = sum[k]; best = (int)k; }
+        return best;
+    }
+};
+// (2.0.3) the aggressive buy / sell contracts over closed seconds [a0, a1) (the 1-minute tape bars and the A's minute volume)
+template <class Recs>
+inline void sideSums(const Recs& H, long long a0, long long a1, long long* B, long long* S)
+{
+    *B = *S = 0;
+    for (auto it = std::lower_bound(H.begin(), H.end(), a0, [](const SecRec& r, long long t) { return r.t < t; }); it != H.end() && it->t < a1; ++it) { *B += it->b; *S += it->s; }
+}
+// (2.0.3) the normal minute fallback: the median one-side minute volume of the last 60 minutes before t (minutes with trades)
+template <class Recs>
+inline double recentMinuteNorm(const Recs& H, long long t)
+{
+    std::vector<float> v; const long long m0 = (t / 60) * 60;
+    for (long long a = m0 - 3600; a < m0; a += 60) { long long B, S; sideSums(H, a, a + 60, &B, &S); if (B + S > 0) v.push_back((float)std::max(B, S)); }
+    return v.size() >= 10 ? (double)median(v) : -1;
+}
+// (2.0.3) where the three 1-minute bars of a candle go: inside 90% of the candle spacing, never past the next candle; below 6 px
+// per candle the candle gets ONE bar (the minutes summed) - returns how many slots and their [x1, x2] pixel columns
+inline int minuteSlots(int x, int ppb, int n, int* x1, int* x2)
+{
+    ppb = std::max(1, ppb); n = std::max(1, n);
+    const int span = std::max(1, (int)(ppb * 0.9));
+    if (span < 3 * n) n = 1;                                                 // each minute >= 2 px + a 1-px gap, else one bar per candle
+    const int xl = x - span / 2;
+    for (int k = 0; k < n; ++k) {
+        const int a = xl + (span * k) / n, b = xl + (span * (k + 1)) / n - 1 - (n > 1 ? 1 : 0);
+        x1[k] = a; x2[k] = std::max(a, b);
+    }
+    return n;
+}
+// node = the row (rows of nodeN ticks) with the biggest one-sided aggressive volume; multiple = that / the bar's average row;
+// bearish when it is BUYING in the top nodeTop of the bar's range and the bar did not close at its high (close <= node low or in
+// the lower half); bullish mirror. ndPos = the node's distance from the bar's extreme as a fraction of the range (0 = at it).
+template <class Recs>
+inline void nodeMinuteFill(BarFlow& f, const BarRows& rows, const BarIn& b, const Recs& H, double minNorm)
+{
+    f.ndMinute = -1; f.ndMinVol = 0; f.minNorm = minNorm;
+    if (!f.ndDir) return;
+    const int side = f.ndDir < 0 ? 1 : -1;                                   // bearish = buyers were the aggressors
+    f.ndMinute = rows.nodeMinute(b.te, f.ndLo, f.ndHi, side);
+    if (f.ndMinute < 0) return;
+    long long B, S; sideSums(H, b.ts + 60LL * f.ndMinute, b.ts + 60LL * (f.ndMinute + 1), &B, &S);
+    f.ndMinVol = (double)(side > 0 ? B : S);
+}
+inline void nodeFill(BarFlow& f, const std::map<int, std::pair<long long, long long> >* rows, const BarIn& b, int nodeN)
+{
+    f.ndDir = 0; if (!rows || rows->empty()) return;
+    nodeN = std::max(1, nodeN);
+    std::map<int, std::pair<long long, long long> > g;
+    for (auto& kv : *rows) { const int key = kv.first >= 0 ? kv.first / nodeN : -((-kv.first + nodeN - 1) / nodeN); auto& r = g[key]; r.first += kv.second.first; r.second += kv.second.second; }
+    long long tot = 0, best = -1; int row = 0, side = 0;
+    for (auto& kv : g) { tot += kv.second.first + kv.second.second; const long long v = std::max(kv.second.first, kv.second.second);
+        if (v > best) { best = v; row = kv.first; side = kv.second.first >= kv.second.second ? 1 : -1; } }
+    if (best <= 0) return;
+    const double avg = (double)tot / (double)g.size();
+    f.ndLo = row * nodeN; f.ndHi = f.ndLo + nodeN - 1; f.ndVol = (double)best; f.ndMult = avg > 0 ? best / avg : 0;
+    f.ndDir = side > 0 ? -1 : 1;
+    const int range = std::max(1, b.h - b.l);
+    // (a row of N ticks spans [lo, hi + 1 tick): its distance from the extreme is measured from that edge)
+    f.ndPos = std::max(0.0, f.ndDir < 0 ? (double)(b.h - f.ndHi - 1) / range : (double)(f.ndLo - 1 - b.l) / range);
+    f.ndCloseOk = f.ndDir < 0 ? (b.c <= f.ndLo || b.c < b.l + range / 2.0) : (b.c >= f.ndHi || b.c > b.l + range / 2.0);
+}
 
 } // namespace tfl
