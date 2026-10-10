@@ -1,17 +1,17 @@
 /********************************************************************************
- *  lsSessionInfo - one configurable session-information panel on each market's chart (Rassul 2026-10-06 21:28:
- *  "I also want to know when 0dte options are expiring for each market ... on the copper chart there should be a label or text
- *  box indicating when the 0dte options expire for copper ... selectable ... so i can move it around" / "the most favorable times
- *  to trade a market ... when each market is actually moving ... so i dont get stuck in chop ... customized to each market and
- *  displayed on its chart, for the rth session"; 21:47 "best time to trade is just when the markets are volatile ... for the rth").
+ *  lsSessionInfo - one session-information panel on each market's chart (Rassul 2026-10-06 21:28:
+ *  "I also want to know when 0dte options are expiring for each market ... selectable ... so i can move it around" / "the most
+ *  favorable times to trade a market ... customized to each market and displayed on its chart, for the rth session").
  *
- *    0DTE box     "HG 0DTE expires 12:00 CT  in 1h 25m"   - amber in the last 60 min, red in the last 15, grey once expired
- *                  ("expired 12:00 - hedges released")
- *    RTH box      "ACTIVE 08:10-09:25" / "CHOP 10:40-12:00" (the market's own RTH volatility study, lra/session_info.py:
- *                  15-min high-low range vs its RTH median, 17 months of 3-min bars) + "NOW  ACTIVE" / "NOW  CHOP - wait"
- *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Session-<MKT>.csv (written by the bridge every few minutes).
- *  Position is selected in Settings and kept per market. IRT runs ONE object for every chart, so unavailable list selections are
- *  restored from per-market settings rather than reused from the last chart drawn.
+ *  1.7.0 (2026-10-09, mockup v5 approved: "check everything then build it") the WIDE layout: four sections side by side, a
+ *  header + 3 lines each, at the top centre (shifted left so it ends well before the latest bars):
+ *    NEWS | GAMMA / Exp <time> (<countdown>) | <MKT> RTH now: <state> + Active / Chop windows | EXPECTED MOVE
+ *  The expected-move slider is coloured red -> grey -> green with a white spot marker and "spot X - N% up the range", plus small
+ *  green (E-HOD) and red (E-LOD) ticks where the HOD / LOD model candle (HodLodExpected.h) expects today's HOD / LOD, computed
+ *  natively from the chart's own bars (an arrow at the end when outside the range). Every 1.6.7 content element is kept; only the
+ *  layout changes. The dead Background setting is gone (audit #41). Layout + content: SessionInfoLayout.h (tested, previewed).
+ *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Session-<MKT>.csv (written by the bridge; format unchanged).
+ *  State: per chart in the host's user-data slot (HostSlot.h): the parsed file, its stamp and the bar cache.
  ********************************************************************************/
 #include "irtsdk.h"
 // windows.h can define far as a legacy keyword macro; DealerLogic's shared Node::far field must remain its declared identifier.
@@ -19,6 +19,9 @@
 #undef far
 #endif
 #include "DealerLogic.h"
+#include "HostSlot.h"
+#include "HodLodLogic.h"
+#include "SessionInfoLayout.h"
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -29,19 +32,81 @@
 #include <cctype>
 #include <climits>
 #include <ctime>
+#include <map>
+#include <deque>
+#include <chrono>
 
-static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_GREY = 0x0064748B, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
-static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444;
-static const COLOR C_GREEN = 0x0022C55E, C_YELLOW = 0x00FACC15;   // (1.0.2) ACTIVE green, CHOP yellow (Rassul 23:10)   // 0x00RRGGBB, as DealerRead
+using sil::hm; using sil::parseInt; using sil::inWindow; using sil::to12;
+using sil::MAX_SESSION_LINE; using sil::MAX_SESSION_WINDOWS; using sil::MAX_SESSION_NEWS;
+typedef sil::Win Win;
 
-struct SPIdx { int market, show, font, clock, moveX, bg; };
-static SPIdx SP;
-struct SSet { int market = 0, show = 0, font = 8, clock = 0, moveX = 0, bg = 0; };   // (1.6.0) bg 0 = see-through, 1 = solid
-struct Win { std::string tag, pct; int fromMin = -1, toMin = -1; };   // (1.2.0) pct = the window's median share of the RTH range
+struct SPIdx { int market = 0, show = 1, font = 2, clock = 3, moveX = 4; };   // parameter indices (HL101: a member, no static state)
+struct SSet { int market = 0, show = 0, font = 8, clock = 0, moveX = 1; };
+
+// (HL101, Rassul "no leaks or errors": no static / mutable shared state) the per-object copies of dl::loadPlace / dl::clearRightOf /
+// dl::stableMin - the same rules, but their caches live in the extension object (freed with it), bounded, never function statics
+struct SIFiles {
+    std::vector<std::pair<std::string, std::pair<long long, int> > > place;      // path -> (stamp, value); <= 64 entries
+    long long s1 = -2, s2 = -2; int reach = 150, dw = 50; bool dLeft = false;     // the profiles' status files, by stamp
+    std::map<int, std::deque<std::pair<long long, int> > > hist;                  // paneRight -> the last 5 s of values; <= 16 keys
+    int loadPlace(const char* plugin, const std::string& mkt, int def)
+    {
+        if (mkt.empty()) return def;
+        std::string p = dl::placePath(plugin, mkt);
+        long long st = dl::fileStamp(p);
+        for (size_t i = 0; i < place.size(); i++) if (place[i].first == p) { if (place[i].second.first == st) return place[i].second.second; place.erase(place.begin() + (long)i); break; }
+        int v = def;
+        if (st >= 0) { std::ifstream f(p.c_str()); int x = -1; if (f >> x && x >= 0 && x <= 8) v = x; }   // RAII: closed at scope end
+        if (place.size() >= 64) place.erase(place.begin());
+        place.push_back(std::make_pair(p, std::make_pair(st, v)));
+        return v;
+    }
+    int stableMin(int key, int v)
+    {
+        long long now = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        if (hist.size() > 16 && !hist.count(key)) hist.clear();
+        std::deque<std::pair<long long, int> >& q = hist[key];
+        q.push_back(std::make_pair(now, v));
+        while (!q.empty() && now - q.front().first > 5000) q.pop_front();
+        if (q.size() > 400) q.pop_front();
+        int m = v; for (size_t i = 0; i < q.size(); i++) if (q[i].second < m) m = q[i].second;
+        return m;
+    }
+    int clearRightOf(int paneRight)
+    {
+        const char* up = getenv("USERPROFILE");
+        if (up) {
+            std::string a = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
+            std::string b = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DeltaProfile.status.txt";
+            long long t1 = dl::fileStamp(a), t2 = dl::fileStamp(b);
+            if (t1 != s1) { s1 = t1; std::ifstream f(a.c_str()); std::string ln; int n = 0;
+                while (n++ < 200 && std::getline(f, ln)) if (ln.rfind("REACH,", 0) == 0) { int r = atoi(ln.c_str() + 6); if (r >= 40 && r <= 1500) reach = r; } }
+            if (t2 != s2) { s2 = t2; std::ifstream f(b.c_str()); std::string ln; int n = 0;
+                while (n++ < 200 && std::getline(f, ln)) { if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+                    if (ln.rfind("WIDTH,", 0) == 0) { int w = atoi(ln.c_str() + 6); if (w >= 20 && w <= 600) dw = w; }
+                    if (ln.rfind("PLACE,", 0) == 0) dLeft = ln.substr(6) == "Left"; } }
+        }
+        int r = paneRight - reach - 8;
+        if (!dLeft) r -= dw + 110;
+        return stableMin(paneRight, r);
+    }
+};
+
+// one chart's state (checklist #1): the session file snapshot and the HOD/LOD bar cache
+struct SIState {
+    std::string mkt, root, path;
+    long long stamp = -2;
+    bool sourceAvailable = false;
+    sil::Data D;
+    long nBars = -1; RTDATE lastStamp = 0; float lastTick = 0;
+    bool haveE = false; double eLod = NAN, eHod = NAN;
+    long long loads = 0, barCalcs = 0;      // test counters (#31 / #32)
+};
 
 class SessionInfo : public cppExtension {
 public:
     SessionInfo() : cppExtension() {}
+    SPIdx SP;   // set in setup(); one per extension object
     virtual int parmsLoad(void) { if (ready()) readS(cfg); return RTX_OK; }
     virtual int parmsApply(void) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
@@ -50,332 +115,190 @@ public:
     void savePl() { char b[32] = {0}; const char* rs = getRootSymbol(b); std::string r = rs ? rs : "";
         std::string chartMk = dl::marketForRoot(r), mk = dl::marketFor(cfg.market, r);
         dl::savePlace("SessionInfoMarket", chartMk, cfg.market);
-        dl::savePlace("SessionInfo", mk, cfg.moveX); dl::savePlace("SessionInfoBg", mk, cfg.bg); dl::savePlace("SessionInfoShow", mk, cfg.show); }
+        dl::savePlace("SessionInfoWide", mk, cfg.moveX); dl::savePlace("SessionInfoShow", mk, cfg.show); }
     virtual int draw(void);
 
-    SSet cfg;
-    std::string mkt, root, exp;
-    std::vector<Win> W;
-    long long stamp = -2; std::string path;
-    struct Ev { std::string t, imp, title, cd; bool brk; };   // (1.6.0) cd = "in 2h 05m" on the next high-impact item
-    std::vector<Ev> news;
-    std::string gam, hvl, gw0, gw0d, emLo, emHi, emPx, emPct, emUsed, dAge, dRec;   // (1.6.0) GAM / GW0 / EMR / DAGE rows
-    bool sourceAvailable = false;
+    SSet cfg;                                   // scratch: re-read from the settings (or the per-market files) on every draw
+    HostSlot<SIState> slot_;
+    SIFiles files_;                             // (HL101) the place / layout-room caches, per object (no function statics)
+    SIState* st(bool create) { return slot_.get(this, create); }
+    void clearState() { slot_.release(this); }
 
     bool ready() { int i = getListIndex(SP.market); return i >= 0 && i <= 7; }
     void readS(SSet& S)
     {
         S.market = getListIndex(SP.market); if (S.market < 0 || S.market > 7) S.market = 0;
         S.show = getListIndex(SP.show); if (S.show < 0 || S.show > 4) S.show = 0;
-        S.bg = getListIndex(SP.bg); if (S.bg < 0 || S.bg > 1) S.bg = 0;
         S.font = getIntegerValue(SP.font); if (S.font < 6 || S.font > 20) S.font = 8;
         S.clock = getIntegerValue(SP.clock); if (S.clock < -720 || S.clock > 720) S.clock = 0;
-        { int v = getListIndex(SP.moveX); if (v >= 0 && v <= 8) S.moveX = v; }   // (1.5.0) moveX = the Position (0-8)
+        { int v = getListIndex(SP.moveX); if (v >= 0 && v <= 8) S.moveX = v; }
     }
-    void load();
-    void clearData();
-    int nowMin();
-    void fill(short l, short t, short r, short b, COLOR c) { RCT rc; rc.set(l, t, r, b); rc.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID); }
-    int textW(const char* s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s, -1); }
-    void text(short x, short y, const char* s, COLOR col, int sz, bool bold)
+    void load(SIState& S);
+    void barsE(SIState& S);
+    int nowMin(int& dow);
+    int textW(const std::string& s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s.c_str(), -1); }
+    void text(int x, int yc, const std::string& s, COLOR col, int sz, bool bold)
     {
         FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); setTextColor(col);
-        short yy = (short)(y - (short)(sz * 0.45f + 0.5f)); int w = (int)getTextWidth(s, -1);
-        RCT rc; rc.set(x, (short)(yy - sz), (short)(x + w + 4), (short)(yy + sz)); rc.drawText(s, false, false);
+        short yy = (short)(yc - (short)(sz * 0.45f + 0.5f)); int w = (int)getTextWidth(s.c_str(), -1);
+        RCT rc; rc.set((short)x, (short)(yy - sz), (short)(x + w + 4), (short)(yy + sz)); rc.drawText(s.c_str(), false, false);
     }
-    void box(const std::vector<std::pair<std::string, COLOR> >& lines, const std::vector<bool>& bold);
-    std::string fit(const std::string& s, int w, int fs, bool bold)   // (1.6.0) cut to the box width with "..."
+    void line(int x1, int y1, int x2, int y2, COLOR c, int w)
     {
-        if (textW(s.c_str(), fs, bold) <= w) return s;
-        size_t lo = 0, hi = s.size();
-        while (lo < hi) {
-            size_t mid = lo + (hi - lo + 1) / 2;
-            if (textW((s.substr(0, mid) + "...").c_str(), fs, bold) <= w) lo = mid; else hi = mid - 1;
-        }
-        std::string t = s.substr(0, lo);
-        while (!t.empty() && t[t.size() - 1] == ' ') t.erase(t.size() - 1);
-        return t + "...";
+        setPen(c, (short)w, P_SOLID);
+        PNT a; a.set(0, 0.0f); a.h = (short)x1; a.v = (short)y1; a.setDrawPosition();
+        PNT b; b.set(0, 0.0f); b.h = (short)x2; b.v = (short)y2; b.drawLineTo();
     }
+    void execute(const hl::Layout& L);
+    std::string fit(const std::string& s, int w, int fs, bool bold)   // binary search, "..." (the regression test checks the call count)
+    { hl::Measure M = [&](const std::string& t, int f, bool b) { return textW(t, f, b); }; return sil::fit(s, w, fs, bold, M); }
 };
 
 int cppExtension::init(void)    { return RTX_OK; }   // required by the SDK (as every LRA plugin)
 int cppExtension::calc(int)     { return RTX_OK; }
-int cppExtension::done(void)    { return RTX_OK; }
-int cppExtension::destroy(void) { return RTX_OK; }
+int cppExtension::done(void)    { static_cast<SessionInfo*>(this)->clearState(); return RTX_OK; }
+int cppExtension::destroy(void) { static_cast<SessionInfo*>(this)->clearState(); return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(6);   // (1.6.2) BUMPED: the Background setting (added in 1.6.0) was not saved - IRT kept version 5's
-    // parameter list, so Solid worked only while the settings window was open (Rassul 2026-10-07 20:26)   // (1.5.0) the 9-spot Position replaces Move right / down; (1.6.0) Background
-    setParameterDialogHeight(5);
-    const short SL = kParmAppendSameLine;
+    SPIdx& SP = static_cast<SessionInfo*>(this)->SP;   // the parameter indices live in the object (no static state)
+    setParameterVersion(7);   // (1.7.0) BUMPED: the Background setting is removed; Position defaults to Top centre
+    setParameterDialogHeight(4);
+    const short SLN = kParmAppendSameLine;
     int pc = 0;
     SP.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    SP.show   = pc++; setListParameter("Show", 0, "All;0DTE + gamma;RTH active / chop;News;Expected move", 0, SL);
-    SP.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW);   // (1.4.0, Rassul 08:22 "make the font ... smaller like around 8pt")
-    SP.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
-    // (1.4.0, Rassul 2026-10-07 08:17 "make sure they have settings also like the dealer read that allow me to move them around")
-    // (1.5.0, Rassul 2026-10-07 09:16 "top left, top center ... middle right instead of the user entering amount of placement")
-    SP.moveX  = pc++; setListParameter("Position", 0, dl::ANCHORS);
-    // (1.6.0, Rassul 2026-10-07 10:44 "a more transparent background so the candles are more visible")
-    SP.bg     = pc++; setListParameter("Background", 0, "See-through;Solid", 0, SL);
+    SP.show   = pc++; setListParameter("Show", 0, "All;0DTE + gamma;RTH active / chop;News;Expected move", 0, SLN);
+    SP.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW);
+    SP.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SLN);
+    SP.moveX  = pc++; setListParameter("Position", 1, dl::ANCHORS);   // (1.7.0) default Top centre
     return RTX_OK;
 }
 
-static const size_t MAX_SESSION_LINE = 4096, MAX_SESSION_WINDOWS = 64, MAX_SESSION_NEWS = 64;
-
-static int hm(const std::string& s)
+int SessionInfo::nowMin(int& dow)
 {
-    if (s.size() != 5 || s[2] != ':' || !isdigit((unsigned char)s[0]) || !isdigit((unsigned char)s[1])
-        || !isdigit((unsigned char)s[3]) || !isdigit((unsigned char)s[4])) return -1;
-    int h = (s[0] - '0') * 10 + s[1] - '0', m = (s[3] - '0') * 10 + s[4] - '0';
-    return h < 24 && m < 60 ? h * 60 + m : -1;
-}
-
-// Session files are external input.  Unlike atoi(), this refuses a value that does not fit int.
-static bool parseInt(const std::string& s, int& out)
-{
-    if (s.empty()) return false;
-    size_t i = 0; bool negative = false;
-    if (s[i] == '+' || s[i] == '-') { negative = s[i] == '-'; ++i; }
-    if (i == s.size()) return false;
-    const unsigned int limit = negative ? (unsigned int)INT_MAX + 1U : (unsigned int)INT_MAX;
-    unsigned int n = 0;
-    for (; i < s.size(); ++i) {
-        if (!isdigit((unsigned char)s[i])) return false;
-        unsigned int digit = (unsigned int)(s[i] - '0');
-        if (n > (limit - digit) / 10U) return false;
-        n = n * 10U + digit;
-    }
-    if (negative) out = n == (unsigned int)INT_MAX + 1U ? INT_MIN : -(int)n;
-    else out = (int)n;
-    return true;
-}
-
-static bool inWindow(int now, int from, int to)
-{
-    if (now < 0 || from < 0 || to < 0 || from == to) return false;
-    return from < to ? now >= from && now < to : now >= from || now < to;
-}
-
-int SessionInfo::nowMin()
-{
-    time_t t = time(0); struct tm lt; localtime_s(&lt, &t);
+    time_t t = time(0); struct tm lt; memset(&lt, 0, sizeof(lt));
+#ifdef _WIN32
+    localtime_s(&lt, &t);
+#else
+    localtime_r(&t, &lt);
+#endif
     int m = lt.tm_hour * 60 + lt.tm_min + cfg.clock;
+    dow = lt.tm_wday;
+    if (m >= 1440) dow = (dow + 1) % 7; else if (m < 0) dow = (dow + 6) % 7;
     return (m % 1440 + 1440) % 1440;
 }
 
-void SessionInfo::clearData()
-{
-    W.clear(); exp.clear(); news.clear();
-    gam.clear(); hvl.clear(); gw0.clear(); gw0d.clear(); emLo.clear(); emHi.clear(); emPx.clear(); emPct.clear(); emUsed.clear(); dAge.clear(); dRec.clear();
-}
-
-void SessionInfo::load()
+void SessionInfo::load(SIState& S)
 {
     char buf[32] = {0};
     const char* rs = getRootSymbol(buf);
-    root = rs ? rs : "";
-    mkt = dl::marketFor(cfg.market, root);
-    if (mkt.empty()) { clearData(); sourceAvailable = false; stamp = -2; path.clear(); return; }
+    S.root = rs ? rs : "";
+    std::string mk = dl::marketFor(cfg.market, S.root);
+    if (mk != S.mkt) { S.mkt = mk; S.nBars = -1; S.haveE = false; }          // a symbol / market change resets the bar cache
+    if (S.mkt.empty()) { S.D.clear(); S.sourceAvailable = false; S.stamp = -2; S.path.clear(); return; }
     const char* up = getenv("USERPROFILE");
-    if (!up) { clearData(); sourceAvailable = false; stamp = -2; path.clear(); return; }
-    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Session-" + mkt + ".csv";
-    long long st = dl::fileStamp(p);
-    if (st == stamp && p == path) return;                         // unchanged (including a known missing file): no file open or parse
-    clearData(); sourceAvailable = false; stamp = st; path = p;
-    if (st < 0) return;
-    std::ifstream f(p.c_str()); if (!f.is_open()) return;
-    std::string ln;
-    while (std::getline(f, ln)) {
-        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
-        if (ln.size() > MAX_SESSION_LINE) continue;
-        std::vector<std::string> c; std::stringstream ss(ln); std::string x;
-        while (std::getline(ss, x, '|')) c.push_back(x);
-        if (c.empty()) continue;
-        if (c[0] == "EXP" && c.size() >= 2 && hm(c[1]) >= 0) exp = c[1];
-        else if (c[0] == "WIN" && c.size() >= 4) {
-            int from = hm(c[2]), to = hm(c[3]);
-            if (W.size() < MAX_SESSION_WINDOWS && (c[1] == "ACTIVE" || c[1] == "CHOP") && from >= 0 && to >= 0 && from != to) {
-                Win w; w.tag = c[1]; w.fromMin = from; w.toMin = to;
-                if (c.size() >= 6) w.pct = c[5];
-                W.push_back(w);
-            }
-        }
-        else if ((c[0] == "CAL" || c[0] == "NEWS") && c.size() >= 4 && news.size() < MAX_SESSION_NEWS) { Ev e; e.t = c[1]; e.imp = c[2]; e.title = c[3]; e.brk = c[0] == "NEWS"; if (c.size() >= 5) e.cd = c[4]; news.push_back(e); }
-        else if (c[0] == "GAM" && c.size() >= 3) { gam = c[1]; hvl = c[2]; }
-        else if (c[0] == "GW0" && c.size() >= 2) { gw0 = c[1]; gw0d = c.size() >= 3 ? c[2] : ""; }
-        else if (c[0] == "EMR" && c.size() >= 6) { emLo = c[1]; emHi = c[2]; emPx = c[3]; emPct = c[4]; emUsed = c.size() >= 6 ? c[5] : ""; }
-        else if (c[0] == "DAGE" && c.size() >= 3) { dAge = c[1]; dRec = c[2]; }
-    }
-    if (f.bad() || dl::fileStamp(p) != st) {
-        clearData(); sourceAvailable = false; stamp = -2; path.clear();  // never render a partial or failed external snapshot
+    if (!up) { S.D.clear(); S.sourceAvailable = false; S.stamp = -2; S.path.clear(); return; }
+    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Session-" + S.mkt + ".csv";
+    long long fst = dl::fileStamp(p);
+    if (fst == S.stamp && p == S.path) return;                       // unchanged (including a known missing file): no open or parse (#31)
+    S.D.clear(); S.sourceAvailable = false; S.stamp = fst; S.path = p;
+    if (fst < 0) return;
+    std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) return;
+    std::string text; text.resize(sil::MAX_SESSION_BYTES + 1);
+    f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount());
+    S.loads++;
+    bool ok = !f.bad() && sil::parseSession(text, S.D);
+    if (!ok || dl::fileStamp(p) != fst) {
+        S.D.clear(); S.sourceAvailable = false; S.stamp = -2; S.path.clear();  // never render a partial, oversized or failed snapshot
         return;
     }
-    sourceAvailable = true;
+    S.sourceAvailable = true;
 }
 
-// (1.0.2) times on the 12-hour clock, as the Dealer Read (Rassul 23:06)
-static std::string to12(const char* in)
+// (1.7.0) E-LOD / E-HOD from today's RTH open and the HOD/LOD model (the same logic and header as lsHodLod), from the chart's
+// closed bars; recomputed only when the bars change (#32)
+void SessionInfo::barsE(SIState& S)
 {
-    std::string s(in ? in : ""), o; o.reserve(s.size() + 8);
-    const size_t n = s.size();
-    auto dig = [&](size_t k) { return k < n && isdigit((unsigned char)s[k]) != 0; };
-    for (size_t i = 0; i < n; i++) {
-        bool startOk = i == 0 || !(dig(i - 1) || s[i - 1] == ':' || s[i - 1] == '.' || s[i - 1] == ',');
-        size_t hl = dig(i) ? (dig(i + 1) ? 2 : 1) : 0;                       // H or HH
-        if (startOk && hl && i + hl < n && s[i + hl] == ':' && dig(i + hl + 1) && dig(i + hl + 2)
-            && !dig(i + hl + 3) && !(i + hl + 3 < n && s[i + hl + 3] == ':')) {   // H:MM / HH:MM, not H:MM:SS or 123:45
-            int h = atoi(s.substr(i, hl).c_str()), m = atoi(s.substr(i + hl + 1, 2).c_str());
-            if (h <= 23 && m <= 59) {
-                char b[32]; snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
-                o += b; i += hl + 2; continue;
-            }
-        }
-        o += s[i];
-    }
-    return o;
+    int mi = hl::mktIndex(dl::marketForRoot(S.root));
+    if (mi < 0 || hl::mktIndex(S.mkt) != mi) { S.haveE = false; return; }     // a Market override for another market: no ticks
+    long n = getBarCount();
+    if (n < 3) { S.haveE = false; return; }
+    RTARRAYI dt(barDateTime);
+    if ((long)dt.count < n) { S.haveE = false; return; }
+    float tk = getProperty(SYM_TICKINCR);
+    RTDATE last = (RTDATE)dt[(int)n - 1];
+    if (n == S.nBars && last == S.lastStamp && tk == S.lastTick) return;
+    S.nBars = n; S.lastStamp = last; S.lastTick = tk; S.haveE = false; S.barCalcs++;
+    double tick = (double)tk;
+    if (!std::isfinite(tick) || !(tick > 0) || tick >= 1000) return;
+    tick = std::round(tick * 1e9) / 1e9;
+    RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
+    if ((long)op.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) return;
+    auto absOf = [&](int i) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        return hl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday) * 86400 + t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+    };
+    long long per = 0, prev = absOf((int)n - 1);
+    for (int i = (int)n - 2; i >= 0 && i >= (int)n - 41; i--) { long long a = absOf(i), d = prev - a; if (d > 0 && (per == 0 || d < per)) per = d; prev = a; }
+    if (per <= 0 || per > 900) return;
+    const int lastClosed = (int)n - 2;
+    long long cutoff = absOf(lastClosed) - 2LL * 86400;                    // today's session only needs the last day
+    int start = lastClosed;
+    while (start > 0 && lastClosed - start < 4000) { if (absOf(start - 1) < cutoff) break; start--; }
+    std::vector<hl::Bar> B; B.reserve((size_t)(lastClosed - start + 1));
+    for (int i = start; i <= lastClosed; i++) { hl::Bar b; b.absEnd = absOf(i); b.o = op[i]; b.h = hi[i]; b.l = lo[i]; b.c = cl[i]; B.push_back(b); }
+    hl::Cfg c; c.mkt = mi; c.per = per; c.tick = tick; c.readOpen = hl::readOpenFor(mi); c.readN = hl::readNFor(mi);
+    hl::Tracker T = hl::runBars(c, B, B.size(), nullptr);
+    if (!T.cur.any) return;                                                // before today's open: no ticks
+    hl::View v = hl::buildView(T, hl::ReadOut());
+    if (std::isfinite(v.eLod) && std::isfinite(v.eHod)) { S.haveE = true; S.eLod = v.eLod; S.eHod = v.eHod; }
 }
 
-void SessionInfo::box(const std::vector<std::pair<std::string, COLOR> >& lines0, const std::vector<bool>& bold)
+void SessionInfo::execute(const hl::Layout& L)
 {
-    std::vector<std::pair<std::string, COLOR> > lines(lines0);
-    RCT pane; pane.getPaneRect(false);
-    int fs = cfg.font; short lh = (short)(fs * 1.7f + 0.5f), pad = (short)(fs * 0.6f + 0.5f);
-    // (1.6.0, Rassul 2026-10-07 10:44-10:47 "the session indicator is too wide because of the news ... capping it" -> 250 px at
-    // 8 pt in the mockup) a FIXED width, scaled with the font; a longer line ends in "..." instead of widening the box
-    short W_ = (short)(250.0f * fs / 8.0f + 0.5f);
-    int maxW = W_ - 2 * pad;
-    short H_ = (short)(lines.size() * lh + pad);
-    int ax, ay; dl::anchorXY(pane.left, (short)(pane.top + 18), dl::clearRightOf(pane.right), pane.bottom, W_, H_, dl::loadPlace("SessionInfo", mkt, 0), 8, ax, ay);   // (1.6.1) below IRT's own title line
-    short x0 = (short)ax, y0 = (short)ay;
-    // (1.6.0) see-through by default: IRT's translucent fill lets the candles show through
-    RCT bgR; bgR.set(x0, y0, (short)(x0 + W_), (short)(y0 + H_));
-    bgR.draw(1, C_BORDER, C_BOXBG, DRAW_OPAQUE, PAT_SOLID);   // (1.6.6, Rassul 2026-10-09 11:22) always a solid background
-    for (size_t i = 0; i < lines.size(); i++) {
-        short yc = (short)(y0 + pad / 2 + lh * i + lh / 2);
-        if (!lines[i].first.empty() && lines[i].first[0] == '\x01') {          // the expected-move bar: "\x01<pct>"
-            int pct = 0; parseInt(lines[i].first.substr(1), pct); if (pct < 0) pct = 0; if (pct > 100) pct = 100;
-            short bl = (short)(x0 + pad), br = (short)(x0 + W_ - pad), bt = (short)(yc - fs / 2 + 1), bb = (short)(yc + fs / 2 - 1);
-            fill(bl, bt, br, bb, 0x001F2937);
-            short mx = (short)(bl + (br - bl) * pct / 100);
-            fill(bl, bt, mx, bb, C_BORDER);
-            fill((short)(mx - 1), (short)(bt - 3), (short)(mx + 2), (short)(bb + 3), C_INK);
-            continue;
+    for (size_t i = 0; i < L.items.size(); i++) {
+        const hl::Item& it = L.items[i];
+        switch (it.k) {
+            case hl::K_FILL: { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw(0, (COLOR)it.c1, (COLOR)it.c1, DRAW_OPAQUE, PAT_SOLID); break; }
+            case hl::K_RECT: { RCT rc; rc.set((short)it.l, (short)it.t, (short)it.r, (short)it.b); rc.draw((short)it.w, (COLOR)it.c1, (COLOR)it.c2, DRAW_OPAQUE, PAT_SOLID); break; }
+            case hl::K_LINE: line(it.l, it.t, it.r, it.b, (COLOR)it.c1, it.w); break;
+            case hl::K_TEXT: text(it.l, (it.t + it.b) / 2, it.s, (COLOR)it.c1, it.fs, it.bold); break;
+            default: break;
         }
-        text((short)(x0 + pad), yc, fit(lines[i].first, maxW, fs, bold[i]).c_str(), lines[i].second, fs, bold[i]);
     }
 }
 
 int SessionInfo::draw(void)
 {
+    SIState* S = st(true);
+    if (!S) return RTX_OK;
     bool settingsReady = ready();
     if (settingsReady) readS(cfg);
     else {
         cfg = SSet();
         char b[32] = {0}; const char* rs = getRootSymbol(b); std::string chartMk = dl::marketForRoot(rs ? rs : "");
-        cfg.market = dl::loadPlace("SessionInfoMarket", chartMk, 0);
+        cfg.market = files_.loadPlace("SessionInfoMarket", chartMk, 0);
         if (cfg.market < 0 || cfg.market > 7) cfg.market = 0;
         cfg.font = getIntegerValue(SP.font); if (cfg.font < 6 || cfg.font > 20) cfg.font = 8;
         cfg.clock = getIntegerValue(SP.clock); if (cfg.clock < -720 || cfg.clock > 720) cfg.clock = 0;
     }
-    load();
-    if (mkt.empty()) return RTX_OK;
-    if (!settingsReady) { cfg.bg = dl::loadPlace("SessionInfoBg", mkt, cfg.bg); cfg.show = dl::loadPlace("SessionInfoShow", mkt, cfg.show); }
-    int now = nowMin();
-    char s[200];
-    auto t12 = [](int m, bool suffix) { char b[16]; int h = (m / 60) % 24; snprintf(b, sizeof b, suffix ? "%d:%02d %s" : "%d:%02d", h % 12 == 0 ? 12 : h % 12, m % 60, h < 12 ? "AM" : "PM"); return std::string(b); };
-    auto range12 = [&](int a, int b) { bool same = (a / 60 < 12) == (b / 60 < 12); return same ? t12(a, false) + "-" + t12(b, true) : t12(a, true) + "-" + t12(b, true); };
-    std::vector<std::pair<std::string, COLOR> > L; std::vector<bool> B;
-    auto add = [&](const std::string& t, COLOR c, bool b) { L.push_back(std::make_pair(t, c)); B.push_back(b); };
-    auto gapLine = [&]() { if (!L.empty() && !L.back().first.empty()) add("", C_INK, false); };
-    bool all = cfg.show == 0;
-    // (1.6.0, Rassul 10:44-10:58) order: NEWS / gamma + 0DTE + pin / ACTIVE-CHOP / expected move, a blank line between them
-    if (sourceAvailable && (all || cfg.show == 3)) {
-        bool any = !news.empty();
-        add(mkt + (any ? " NEWS" : " NEWS - none in 24h"), any ? C_INK : C_GREY, true);
-        for (size_t i = 0; i < news.size(); i++) {
-            if (news[i].brk) {                          // (1.6.0 "you do not need to add breaking") time + headline, amber
-                add(to12((news[i].t + "  " + news[i].title).c_str()), C_AMBER, true);
-            } else {
-                int e = hm(news[i].t);
-                bool past = news[i].t.size() == 5 && e >= 0 && e < now && !(now >= 17 * 60 && e < 17 * 60);
-                bool soon = news[i].t.size() == 5 && e >= now && e - now <= 30;
-                COLOR c = past ? C_GREY : soon ? C_RED : news[i].imp == "High" ? C_AMBER : C_INK;
-                std::string ln = news[i].t + "  " + news[i].title;
-                if (!news[i].cd.empty() && !past) ln += " - " + news[i].cd;      // (1.6.0) the next high item counts down
-                add(to12(ln.c_str()), c, soon || !news[i].cd.empty());
-            }
-        }
-    }
-    if (sourceAvailable && (all || cfg.show == 1)) {
-        gapLine();
-        // (1.6.0, Rassul 10:44 "before the 0 dte line indicate if the market regime is positive or negative gamma"; 10:48-10:59
-        // "levels can break" on one line, the HVL on its own line under it)
-        if (!gam.empty()) {
-            bool neg = gam == "NEG";
-            add(neg ? "Gamma NEGATIVE - levels can break" : "Gamma POSITIVE - levels tend to hold", neg ? C_AMBER : C_INK, true);
-            if (!hvl.empty()) add(std::string(neg ? "Turns positive above HVL " : "Turns negative below HVL ") + hvl, C_MUTED, false);
-        }
-        int e = hm(exp);
-        if (e < 0) add(mkt + " no options expiry today", C_GREY, false);
-        else {
-            int left = e - now;
-            if (now >= 17 * 60) left = e + 1440 - now;
-            COLOR c = left <= 0 ? C_GREY : left <= 15 ? C_RED : left <= 60 ? C_AMBER : C_INK;
-            if (left > 0) snprintf(s, sizeof s, "%s 0DTE expires %s (in %dh %02dm)", mkt.c_str(), t12(e, true).c_str(), left / 60, left % 60);
-            else snprintf(s, sizeof s, "%s 0DTE expired %s", mkt.c_str(), t12(e, true).c_str());
-            add(s, c, true);
-            // (1.6.0, Rassul 10:51 "a strike with a lot of gamma ... which is one of the menthor q levels") the pin = MenthorQ's 0DTE
-            // Gamma Wall (GW0), and how far price is from it
-            if (left > 0) {
-                if (!gw0.empty()) {
-                    std::string ln = "Pin GW0 " + gw0;
-                    if (!gw0d.empty()) {
-                        bool above = gw0d[0] != '-';
-                        std::string pts = gw0d; if (!pts.empty() && (pts[0] == '+' || pts[0] == '-')) pts = pts.substr(1);
-                        ln += " - " + pts + (above ? " pts above" : " pts below");
-                    }
-                    add(ln, C_INK, false);
-                } else add("No pin today", C_MUTED, false);
-            }
-        }
-    }
-    if (sourceAvailable && (all || cfg.show == 2) && !W.empty()) {
-        gapLine();
-        std::string nowTag;
-        for (size_t i = 0; i < W.size(); i++) if (inWindow(now, W[i].fromMin, W[i].toMin)) nowTag = W[i].tag;
-        add(mkt + (nowTag.empty() ? " RTH now: normal" : nowTag == "ACTIVE" ? " RTH now: ACTIVE" : " RTH now: CHOP - wait"),
-            nowTag == "ACTIVE" ? C_GREEN : nowTag == "CHOP" ? C_YELLOW : C_INK, true);
-        for (size_t i = 0; i < W.size(); i++) {
-            bool on = inWindow(now, W[i].fromMin, W[i].toMin);
-            std::string ln = std::string(W[i].tag == "ACTIVE" ? "Active " : "Chop ") + range12(W[i].fromMin, W[i].toMin);
-            if (!W[i].pct.empty()) ln += " (" + W[i].pct + "% of RTH)";
-            add(ln, W[i].tag == "ACTIVE" ? C_GREEN : C_YELLOW, on);
-        }
-    }
-    // (1.6.0, Rassul 10:55 "menthor q has a expected move range and where spot is within it") MenthorQ's 1D Min - 1D Max, a bar with
-    // where price sits, and how much of it the session has used
-    if (sourceAvailable && (all || cfg.show == 4) && !emLo.empty()) {
-        gapLine();
-        add("Expected move " + emLo + " - " + emHi, C_INK, true);
-        add("\x01" + emPct, C_INK, false);
-        add("Spot " + emPx + " - " + emPct + "% up the range", C_INK, false);
-        if (!emUsed.empty()) add("Day range used: " + emUsed + "% of the move", C_MUTED, false);
-    }
-    // (1.6.0, Rassul 11:01 "it had data from 4 or 5 am") stale data says so, in grey; IRT not recording this market, in amber
-    if (sourceAvailable) {
-        int age = -1; if (!dAge.empty()) parseInt(dAge, age);
-        bool rec = dRec.empty() || dRec == "OK";
-        if (age > 10 || !rec) {                                      // (1.6.1) the Reader rebuilds every 5 min: 6-9 is normal
-            gapLine();
-            std::string t = age > 10 ? "data " + std::to_string(age) + " min old" : "";
-            if (!rec) t += std::string(t.empty() ? "" : " - ") + "IRT not recording " + mkt;
-            add(t, rec ? C_GREY : C_AMBER, !rec);
-        }
-    }
-    if (!sourceAvailable) add(mkt + " session data unavailable", C_GREY, true);
-    if (!L.empty()) box(L, B);
+    load(*S);
+    if (S->mkt.empty()) return RTX_OK;
+    if (!settingsReady) cfg.show = files_.loadPlace("SessionInfoShow", S->mkt, cfg.show);
+    int pos = files_.loadPlace("SessionInfoWide", S->mkt, 1);                 // (1.7.0) new key: the wide panel starts at Top centre
+    if (cfg.show == 0 || cfg.show == 4) barsE(*S);
+    sil::Inputs I; I.mkt = S->mkt; I.D = S->D; I.sourceAvailable = S->sourceAvailable; I.show = cfg.show; I.fs = cfg.font;
+    I.now = nowMin(I.dow); I.haveE = S->haveE; I.eLod = S->eLod; I.eHod = S->eHod;
+    sil::Slider SL;
+    std::vector<sil::Section> sec = sil::build(I, SL);
+    RCT pane; pane.getPaneRect(false);
+    // (1.7.0) the region: below IRT's title line, left of the profiles, and ending well before the latest bars (15% of the pane)
+    int right = (std::min)(files_.clearRightOf(pane.right), (int)pane.right - (int)((pane.right - pane.left) * 0.15));
+    hl::Box region = { pane.left, pane.top + 18, right, pane.bottom };
+    if (region.r - region.l < 120) region.r = pane.right;
+    hl::Measure M = [&](const std::string& s, int fs, bool bold) { return textW(s, fs, bold); };
+    hl::Layout L = sil::layout(sec, SL, region, pos, cfg.font, M);
+    execute(L);
     return RTX_OK;
 }
 
@@ -383,8 +306,9 @@ extern "C" cppExtension *CreateExtension(void)
 {
     SessionInfo *p = new SessionInfo();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (1.6.7) drawn after every other indicator
-    p->setDescription("LRA Session Info: when today's 0DTE options expire and the market's ACTIVE / CHOP windows in RTH. Use Settings > Position to place the panel.");
-    p->setVersion("1.6.7");   // (1.6.7) drawn on top of the other indicators; (1.6.6) solid background always; (1.6.5) overflow-safe numeric fields from the external session file; (1.6.4) Market selection restored per native chart; validated, bounded session-file reads; unavailable source status; (1.6.3) Background / Show saved per market (IRT lists read -1 outside the settings window); (1.6.2) Background (Solid / See-through) is saved; (1.6.1) below the chart title, data age from 10 min;   // (1.6.0) fixed 250 px width (scaled with the font), see-through, gamma / HVL, GW0 pin, expected move, news countdown, stale line;   // (1.5.0) 9-spot Position (default Top left), blank line between sections, no drag
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // drawn after every other indicator
+    p->setExtendedFlags(CALL_CONTINUOUSLY);   // (1.7.0, audit #36) the 0DTE countdown and news colours keep moving while the feed is idle
+    p->setDescription("LRA Session Info: news, gamma regime and today's 0DTE expiry, the RTH active / chop windows and the expected move (with the HOD / LOD model's ticks), side by side. Use Settings > Position to place the panel.");
+    p->setVersion("1.7.0");   // (1.7.0) wide 4-section layout at top centre, coloured expected-move slider with E-HOD / E-LOD ticks, Background setting removed, per-chart state; (1.6.7) drawn on top of the other indicators; (1.6.6) solid background always; (1.6.5) overflow-safe numeric fields; (1.6.4) Market selection restored per native chart; (1.6.3) Show saved per market; (1.6.1) below the chart title, data age from 10 min; (1.6.0) gamma / HVL, GW0 pin, expected move, news countdown, stale line; (1.5.0) 9-spot Position
     return p;
 }
