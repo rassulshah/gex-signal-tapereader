@@ -28,6 +28,13 @@
  *    RTH        the RTH VWAP + bands with the touch-odds badges exactly as before: just "42%" (Rassul 22:32)
  *    closed     after the RTH close the RTH lines stay frozen, no badges, until 17:00
  *  The sessions and the arithmetic live in SessionVWAPLogic.h (no SDK), tested against an independent pandas reference.
+ *
+ *  1.4.0 (VW100, 2026-10-10 - the VWAP odds study on 17 months, all 7 markets, RTH + overnight): the law's chance is passed through
+ *  a CALIBRATION LAYER (VwapOddsLogic.h, coefficients compiled in from VwapOddsParams.h, written by lra.vwap_odds only when its
+ *  nightly judge adopts a fit that beat the plain law on unseen months): per line, + vwapTrend of the same session (VwapTrendLogic.h,
+ *  closed bars only: the line on the trend's side or against it, via the 2SD touch or the majority), + time of day. The "?" now
+ *  follows ONE rule for RTH and overnight: it stays until the market / session is proven out of sample (VO_CAL proven flag) - the
+ *  RTH badges used to show no "?" at all although no RTH law was validated.
  ********************************************************************************/
 #include "irtsdk.h"
 // windows.h (included by some supported SDK build configurations) defines far.
@@ -39,6 +46,8 @@
 #include "HostSlot.h"
 #include "SessionVWAPLogic.h"    // (1.2.0) the session rules + VWAP arithmetic, tested without the SDK
 #include "TouchParams.h"          // (1.1.0) the touch-odds law per market, written by lra.level_touch.plugin_params (nightly)
+#include "VwapTrendLogic.h"       // (1.4.0) vwapTrend, natively from the chart's bars (closed bars only)
+#include "VwapOddsLogic.h"        // (1.4.0) the calibration layer + the proven flag per market / session (VwapOddsParams.h, nightly)
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -53,7 +62,7 @@
 #include <limits>
 #include <new>
 
-static const char* SV_VERSION = "1.3.4";        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.4.0";        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
 static const COLOR C_SD1  = 0x00008000;   // +1 SD green (1.3.3, Rassul 2026-10-09 13:41 his settings window colours)
 static const COLOR C_SD1L = 0x00FF8080;   // -1 SD light red (1.3.4, Rassul 14:40 "replace the yellow with a lighter version of red")
@@ -82,6 +91,12 @@ struct SVState {
     int statusNRth = -1;
     time_t lastOddsWrite = 0;
     int per = 180;                      // (1.2.0) the bar size the last calc used
+    // (1.4.0) vwapTrend cache: recomputed only when the last closed bar, its stamp, the market or the session kind changes
+    int trIdx = -1;
+    RTDATE trDate = 0;
+    std::string trMkt;
+    int trKind = 0;
+    vtl::Trend tr;
 };
 
 class SessionVWAP : public cppExtension {
@@ -97,6 +112,12 @@ public:
     void drawLines(long n);
     // Volatility is cached per chart/bar; distance updates each draw.
     bool forecast(const TPLaw& L, long n, const std::string& market, SVState& S);
+    // (1.4.0) the badge numbers of bar `last` (kind = its session), vwapTrend from bars up to `lastClosed`; returns 2 RTH odds,
+    // 1 overnight odds, 0 none. Shared by draw() and the tests (the oracle replays history with lastClosed = last).
+    int badgeOdds(int last, int lastClosed, const std::string& market, int kind, int endMin, const float* v, double px,
+                  int pv[5], bool& proven, SVState& S);
+    vtl::Trend trendFor(int lastClosed, const std::string& market, int kind, SVState& S);
+    svl::Bar barAt(int i);
     const TPLaw* lawFor(const std::string& m) { for (int i = 0; i < TP_NLAWS; i++) if (m == TP_LAWS[i].m) return &TP_LAWS[i]; return nullptr; }
 };
 
@@ -393,47 +414,17 @@ int SessionVWAP::draw(void)
         int since = on ? (minOfDay >= 17 * 60 ? minOfDay - 17 * 60 : -1) : minOfDay - openMin;
         early = since >= 0 && since <= 30;
     }
-    // the touch odds: RTH only (the law is fitted on RTH bars)
+    // (1.4.0) the odds: the law (RTH: TouchParams.h; overnight: OnTouchParams.h) through the calibration layer, with vwapTrend
+    // from the CLOSED bars (the newest bar is still forming); "?" until the market / session is proven out of sample
     int pv[5] = { -1, -1, -1, -1, -1 };
-    bool odds = false;
-    if (kind == svl::RTH && v[0] > 0 && !early) {
-        const TPLaw* L = lawFor(market);
-        RTDATE lastDate = (RTDATE)dtk[last];
-        if (L && (S->featBars != n || S->featDate != lastDate || S->featMkt != market)) {
-            S->featOk = forecast(*L, n, market, *S); S->featBars = n; S->featDate = lastDate; S->featMkt = market;
-        }
-        if (L && S->featOk) {
-            for (int j = 0; j < 5; j++) {
-                if (!(v[j] > 0)) continue;
-                double pr = pTouch((double)v[j] - (double)clN[last], S->V60, S->nuEff, S->kEff);
-                if (std::isfinite(pr)) pv[j] = (int)std::floor(100.0 * std::max(0.0, std::min(1.0, pr)) + 0.5);
-            }
-            odds = true;
-        }
-    }
-    // (1.3.0) overnight: the odds from the chart's own last 20 closes (svl::onSigmaMin / onTouch), shown "42%?"
-    bool onOdds = false;
-    const otl::OT op = otl::paramsFor(market.c_str());                  // the nightly champion (OnTouchParams.h)
-    if (on && v[0] > 0 && last >= op.win && !early) {
-        double clw[64]; int k = 0;
-        for (int i = last - op.win; i <= last; i++) clw[k++] = (double)clN[i];
-        double sg = otl::onSigmaMin(clw, k, S->per > 0 ? S->per : 180, op.win);
-        if (sg > 0) {
-            for (int j = 0; j < 5; j++) {
-                if (!(v[j] > 0)) continue;
-                double pr = otl::onTouch((double)v[j] - (double)clN[last], sg, 60, op.nu, op.k);
-                if (pr >= 0) pv[j] = (int)std::floor(100.0 * pr + 0.5);
-            }
-            onOdds = true;
-        }
-    }
+    bool proven = false;
+    int shown = early ? 0 : badgeOdds(last, last - 1, market, kind, minOfDay, v, (double)clN[last], pv, proven, *S);
+    const bool odds = shown == 2;
     const COLOR col[6] = { C_VWAP, C_SD1, C_SD1L, C_SD2U, C_SD2L, C_PRTH };
-    // (1.2.0, Rassul 22:32 "the vwap should not show labels like that.. i told you how i want the labels") the badge is
-    // just the percentage, "42%" - RTH only, where the odds exist. Overnight and after the close: the lines, no badges.
+    // (1.2.0, Rassul 22:32) the badge is just the percentage, "42%" - with "?" while not proven (1.4.0: RTH and overnight alike)
     char txt[6][16];
     for (int j = 0; j < 6; j++) txt[j][0] = 0;
-    if (odds) for (int j = 0; j < 5; j++) if (v[j] > 0 && pv[j] >= 0) snprintf(txt[j], sizeof(txt[j]), "%d%%", pv[j]);
-    if (onOdds) for (int j = 0; j < 5; j++) if (v[j] > 0 && pv[j] >= 0) snprintf(txt[j], sizeof(txt[j]), op.ready ? "%d%%" : "%d%%?", pv[j]);
+    if (shown) for (int j = 0; j < 5; j++) if (v[j] > 0 && pv[j] >= 0) snprintf(txt[j], sizeof(txt[j]), proven ? "%d%%" : "%d%%?", pv[j]);
     RCT pane; pane.getPaneRect(false);
     FONT f; f.id = HELVETICA; f.size = (short)fontPt; f.style = BOLD; setFont(f);
     std::vector<std::pair<short, int>> ys;                              // badge y, line index - placed top to bottom without overlap
@@ -457,7 +448,7 @@ int SessionVWAP::draw(void)
         RCT rc; rc.set(x0, (short)(y - h / 2), (short)(x0 + w), (short)(y + h / 2));
         rc.drawText(txt[j], true, false);
     }
-    if (odds) {   // the status file: what the badges said and why (compared with lra.level_touch's numbers in the nightly check)
+    if (odds) {   // the status file (RTH, as before): what the badges said and why (compared with lra.level_touch's numbers in the nightly check)
         time_t now_ = time(nullptr);
         if (now_ - S->lastOddsWrite >= 30) {
             S->lastOddsWrite = now_;
@@ -465,7 +456,8 @@ int SessionVWAP::draw(void)
             if (up) {
                 std::ofstream f2((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionVWAP-" + market + ".odds.txt").c_str(), std::ios::trunc);
                 if (f2.is_open()) {
-                    f2 << "VERSION|" << SV_VERSION << "\nLAW|" << TP_SOURCE << "\nPX|" << clN[last] << "\nSIGMA_MIN|" << S->sigMin << "\nV60|" << S->V60
+                    f2 << "VERSION|" << SV_VERSION << "\nLAW|" << TP_SOURCE << "\nCAL|" << VO_SOURCE << "|" << (proven ? "proven" : "?")
+                       << "\nTREND|" << vtl::label(S->tr) << "|" << vtl::viaLabel(S->tr) << "\nPX|" << clN[last] << "\nSIGMA_MIN|" << S->sigMin << "\nV60|" << S->V60
                        << "\nK|" << S->kEff << "\nNU|" << S->nuEff << "\nLEFT|" << S->leftMin << "\nMODEL|" << S->featNote << "\n";
                     for (int j = 0; j < 5; j++) f2 << "LINE|" << CODES[j] << "|" << v[j] << "|" << pv[j] << "\n";
                 }
@@ -473,6 +465,88 @@ int SessionVWAP::draw(void)
         }
     }
     return RTX_OK;
+}
+
+svl::Bar SessionVWAP::barAt(int i)
+{
+    RTARRAY hi(barHigh), lo(barLow), cl(barClose); RTARRAYI vo(barVolume), dt(barDateTime);
+    struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+    svl::Bar b; b.days = svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday);
+    b.endSec = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+    b.h = hi[i]; b.l = lo[i]; b.c = cl[i]; b.v = (double)vo[i];
+    return b;
+}
+
+// (1.4.0) vwapTrend of the session holding bar `lastClosed`, for the session kind `kind`, from its own bars (VwapTrendLogic.h);
+// at most one session of bars is read (capped at 2,000) and the result is cached until the last closed bar changes
+vtl::Trend SessionVWAP::trendFor(int lastClosed, const std::string& market, int kind, SVState& S)
+{
+    vtl::Trend none;
+    long n = getBarCount();
+    if (lastClosed < 0 || lastClosed >= (int)n) return none;
+    RTARRAYI dt(barDateTime);
+    RTDATE d0 = (RTDATE)dt[lastClosed];
+    if (S.trIdx == lastClosed && S.trDate == d0 && S.trMkt == market && S.trKind == kind) return S.tr;
+    int openMin = 0, closeMin = 0;
+    if (!rthOf(market, openMin, closeMin)) return none;
+    const int per = S.per > 0 ? S.per : 180;
+    svl::Bar lb = barAt(lastClosed);
+    long sess = svl::classify(lb.days, lb.endSec, per, openMin, closeMin).sess;
+    int s = lastClosed;
+    while (s > 0 && lastClosed - s < 2000) {
+        svl::Bar b = barAt(s - 1);
+        svl::Cls c = svl::classify(b.days, b.endSec, per, openMin, closeMin);
+        if (c.sess != sess || c.kind == svl::NONE) break;
+        s--;
+    }
+    std::vector<svl::Bar> B; B.reserve((size_t)(lastClosed - s + 1));
+    for (int i = s; i <= lastClosed; i++) B.push_back(barAt(i));
+    S.tr = vtl::fromChart(B, (int)B.size(), per, openMin, closeMin, kind);
+    S.trIdx = lastClosed; S.trDate = d0; S.trMkt = market; S.trKind = kind;
+    return S.tr;
+}
+
+int SessionVWAP::badgeOdds(int last, int lastClosed, const std::string& market, int kind, int endMin, const float* v, double px,
+                           int pv[5], bool& proven, SVState& S)
+{
+    for (int j = 0; j < 5; j++) pv[j] = -1;
+    proven = false;
+    long n = getBarCount();
+    if (last < 0 || last >= (int)n || !(v[0] > 0) || !std::isfinite(px)) return 0;
+    int openMin = 0, closeMin = 0;
+    if (!rthOf(market, openMin, closeMin)) return 0;
+    double pr[5] = { -1, -1, -1, -1, -1 };
+    RTARRAY clN(barClose); RTARRAYI dtk(barDateTime);
+    if (kind == svl::RTH) {
+        const TPLaw* L = lawFor(market);
+        if (!L) return 0;
+        RTDATE lastDate = (RTDATE)dtk[last];
+        if (S.featBars != last + 1 || S.featDate != lastDate || S.featMkt != market) {
+            S.featOk = forecast(*L, last + 1, market, S); S.featBars = last + 1; S.featDate = lastDate; S.featMkt = market;
+        }
+        if (!S.featOk) return 0;
+        for (int j = 0; j < 5; j++) if (v[j] > 0) pr[j] = pTouch((double)v[j] - px, S.V60, S.nuEff, S.kEff);
+    } else if (kind == svl::ON) {
+        const otl::OT op = otl::paramsFor(market.c_str());                // the overnight champion (OnTouchParams.h)
+        if (last < op.win) return 0;
+        double clw[64]; int k = 0;
+        for (int i = last - op.win; i <= last && k < 64; i++) clw[k++] = (double)clN[i];
+        double sg = otl::onSigmaMin(clw, k, S.per > 0 ? S.per : 180, op.win);
+        if (!(sg > 0)) return 0;
+        for (int j = 0; j < 5; j++) if (v[j] > 0) pr[j] = otl::onTouch((double)v[j] - px, sg, 60, op.nu, op.k);
+    } else return 0;
+    const VOCal* cal = vol::find(market.c_str(), kind);
+    vtl::Trend tr = trendFor(lastClosed, market, kind, S);
+    const int tod = vol::todIndex(kind, endMin, openMin, closeMin);
+    const double sd = (double)v[1] - (double)v[0];
+    for (int j = 0; j < 5; j++) {
+        if (!(v[j] > 0) || !std::isfinite(pr[j]) || pr[j] < 0) continue;
+        double dist = (double)v[j] - px;
+        double q = vol::calibrate(cal, j, pr[j], dist, tr.state, tr.via, tod, sd > 0 ? std::fabs(dist) / sd : std::numeric_limits<double>::quiet_NaN());
+        if (std::isfinite(q)) { double qc = q < 0 ? 0.0 : (q > 1 ? 1.0 : q); pv[j] = (int)std::floor(100.0 * qc + 0.5); }
+    }
+    proven = vol::proven(cal);
+    return kind == svl::RTH ? 2 : 1;
 }
 
 void SessionVWAP::writeStatus(const char* what, int nRth, const std::string& market, int nOn)
@@ -493,7 +567,7 @@ extern "C" cppExtension *CreateExtension(void)
     SessionVWAP *p = new SessionVWAP();
     p->setArrayCount(11);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA Session VWAP: switches by itself - overnight the O/N VWAP + bands and the prior RTH VWAP; in RTH the RTH VWAP + bands with the chance each is touched in the next 60 min; frozen after the close.");
+    p->setDescription("LRA Session VWAP: switches by itself - overnight the O/N VWAP + bands and the prior RTH VWAP; in RTH the RTH VWAP + bands; each line's badge is the chance it is touched in the next 60 min (calibrated on 17 months, with the session's VWAP trend; \"?\" until the market is proven); frozen after the close.");
     p->setVersion(SV_VERSION);
     return p;
 }

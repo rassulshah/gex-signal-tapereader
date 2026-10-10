@@ -25,6 +25,7 @@
 #include "HostSlot.h"
 #include "HodLodLogic.h"
 #include <sys/stat.h>
+#include <fstream>
 #include <sys/types.h>
 #include <string>
 #include <vector>
@@ -57,6 +58,18 @@ class HodLod : public cppExtension {
 public:
     HodLod() : cppExtension() {}
     virtual int draw(void);
+    // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
+    // Bottom centre. IRT can return -1 for a LIST parameter outside its settings copy, so the choice is also kept per market in
+    // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
+    virtual int parmsLoad(void) { return RTX_OK; }
+    virtual int parmsApply(void) { savePos(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int) { savePos(); return RTX_OK; }
+    int posParam = 0;
+    struct PosCache { std::string path; long long stamp = -2; int v = hl::POS_DEFAULT; };
+    std::vector<PosCache> posCache;                      // per object (no static state), <= 8 markets
+    void savePos();
+    int position(const std::string& mkt);
+    int priceEdge();
     HostSlot<HLState> slot_;
     HLState* state(bool create) { return slot_.get(this, create); }
     void clearState() { slot_.release(this); }
@@ -95,9 +108,11 @@ int cppExtension::calc(int)
 
 int cppExtension::setup(void)
 {
-    // (Rassul 2026-10-09) no settings at all: one invisible value array, hidden from the settings window
-    setParameterVersion(1);
+    // (HL105) the only setting: Position (9 spots, default Bottom centre); the value array stays hidden from the settings window
+    setParameterVersion(2);
     setParameterDialogHeight(1);
+    static_cast<HodLod*>(this)->posParam = 0;
+    setListParameter("Position", (short)hl::POS_DEFAULT, hl::POS_CHOICES);
     CPEN p(HL_GREY, 1, P_SOLID);
     setOutputParameter("HOD/LOD", DRAW_INVISIBLE, &p, HL_GREY, OUTPUT_NO_UI);
     setArrayDrawingFlags(0, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
@@ -274,7 +289,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
 {
     if (S.mi < 0) return;
     std::string text;
-    if (S.T && L) text = hl::statusText(S.view, *L, *S.T, S.rd, (int)S.per, S.state);
+    if (S.T && L) text = hl::statusText(S.view, *L, *S.T, S.rd, (int)S.per, S.state) + "CHART," + S.root + "," + std::to_string(S.per) + "\n";   // (HL105) chart identity for SessionInfo
     else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\n";
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
@@ -304,6 +319,51 @@ void HodLod::execute(const hl::Layout& L)
     }
 }
 
+static long long hlFileStamp(const std::string& p)
+{
+#ifdef _WIN32
+    struct _stat64 st; if (_stat64(p.c_str(), &st) != 0) return -1;
+#else
+    struct stat st; if (stat(p.c_str(), &st) != 0) return -1;
+#endif
+    return (long long)st.st_mtime * 1000003LL + (long long)st.st_size;
+}
+void HodLod::savePos()
+{
+    int v = getListIndex(posParam);
+    if (v < 0 || v > 8) return;                                        // not this dialog's value: never overwrite a saved choice
+    char rb[32] = { 0 }; const char* rs = getRootSymbol(rb); std::string mkt = hl::marketForRoot(rs ? rs : "");
+    if (mkt.empty()) return;
+    std::string p = flexPath("HodLod.place-" + mkt + ".txt"); if (p.empty()) return;
+    hl::FileOps F; hl::writeAtomic(F, p, std::to_string(v) + "\n");
+}
+int HodLod::position(const std::string& mkt)
+{
+    int v = getListIndex(posParam);
+    if (v >= 0 && v <= 8) return v;                                    // the settings copy is this chart's
+    std::string p = flexPath("HodLod.place-" + mkt + ".txt");
+    if (mkt.empty() || p.empty()) return hl::POS_DEFAULT;
+    long long st = hlFileStamp(p);
+    for (size_t i = 0; i < posCache.size(); i++) if (posCache[i].path == p) { if (posCache[i].stamp == st) return posCache[i].v; posCache.erase(posCache.begin() + (long)i); break; }
+    PosCache c; c.path = p; c.stamp = st; c.v = hl::POS_DEFAULT;
+    if (st >= 0) {
+        std::ifstream f(p.c_str()); std::string ln;
+        if (std::getline(f, ln)) { if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+            if (ln.size() == 1 && ln[0] >= '0' && ln[0] <= '8') c.v = ln[0] - '0'; }      // strict: one digit 0-8, else the default
+    }
+    if (posCache.size() >= 8) posCache.erase(posCache.begin());
+    posCache.push_back(c);
+    return c.v;
+}
+// the last price bar's right edge (x): where the usable area ends (never beyond the last bar); -1 = unknown
+int HodLod::priceEdge()
+{
+    long n = getBarCount(); if (n < 2) return -1;
+    RTARRAY cl(barClose); if ((long)cl.count < n) return -1;
+    PNT p; if (p.set((int)(n - 1), cl[(int)(n - 1)], kBarRight) != RTX_OK) return -1;
+    return p.h > 0 ? (int)p.h : -1;
+}
+
 int HodLod::draw(void)
 {
     HLState* S = state(true);
@@ -321,7 +381,7 @@ int HodLod::draw(void)
     const double tick = S->tick;
     auto yOf = [&](long long ticks) { return (int)getVerticalDrawPosition((float)((double)ticks * tick)); };
     hl::Measure M = [&](const std::string& s, int fs, bool bold) { return textW(s, fs, bold); };
-    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M);
+    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, priceEdge(), position(S->mkt));
     execute(L);
     writeStatus(*S, &L);
     return RTX_OK;
@@ -332,7 +392,7 @@ extern "C" cppExtension *CreateExtension(void)
     HodLod *p = new HodLod();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA HOD / LOD: the RTH session as one candle at real prices on the left (HOD / LOD, the level each swept, took, size, reclaim, wick, gap, range) and a table comparing it with the research model candle, with the live read on top.");
+    p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the live read (LOD / HOD IN) and the 2nd-extreme call, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
     p->setVersion("1.0.0");
     return p;
 }

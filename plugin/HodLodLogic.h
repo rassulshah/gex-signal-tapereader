@@ -19,6 +19,11 @@
 //                ended before the extreme's bar began; otherwise nothing is named (never guessed).
 #ifndef HODLOD_LOGIC_H
 #define HODLOD_LOGIC_H
+// (HL105, Rassul "let's get rid of the candle for now. I may ask for it back later") the session-candle column, OFF. All its code
+// and tests stay; set this to 1 to bring it back (the test build compiles both ways).
+#ifndef HODLOD_SHOW_CANDLE
+#define HODLOD_SHOW_CANDLE 0
+#endif
 
 #include <string>
 #include <vector>
@@ -655,9 +660,12 @@ static const unsigned C_PANEL = 0x000F1520, C_BORDER = 0x00374151;
 struct Seg { std::string s; unsigned col; };
 typedef std::vector<Seg> Line;
 // a table cell: up to three differently coloured parts, "8:51" + " LOD" + "  in" (s2 after one space, s3 after two)
-struct Cell { std::string s; unsigned col = 0x009CA3AF; bool bold = false; std::string s2; unsigned col2 = 0; std::string s3; unsigned col3 = 0; };
+struct LvSeg { std::string s; unsigned col; };
+struct Cell { std::string s; unsigned col = 0x009CA3AF; bool bold = false; std::string s2; unsigned col2 = 0; std::string s3; unsigned col3 = 0;
+              std::vector<LvSeg> lv; };   // (HL105) the swept levels' short codes after the side word: "LonLO \xB7 CR"
 inline Cell mkCell(const std::string& s, unsigned c, bool b = false) { Cell x; x.s = s; x.col = c; x.bold = b; return x; }
-inline std::string cellTxt(const Cell& c) { std::string t = c.s; if (!c.s2.empty()) t += " " + c.s2; if (!c.s3.empty()) t += "  " + c.s3; return t; }
+inline std::string cellLv(const Cell& c) { std::string t; for (size_t i = 0; i < c.lv.size(); i++) t += (i ? " \xB7 " : " ") + c.lv[i].s; return t; }
+inline std::string cellTxt(const Cell& c) { std::string t = c.s; if (!c.s2.empty()) t += " " + c.s2; t += cellLv(c); if (!c.s3.empty()) t += "  " + c.s3; return t; }
 
 struct View {
     bool has = false, prior = false;
@@ -678,7 +686,8 @@ struct View {
     long long hodLvlPx = 0, lodLvlPx = 0;          // the swept levels' prices (ticks)
     struct LvlLbl { std::string txt; long long px = 0; unsigned col = 0; bool fin = false; };
     std::vector<LvlLbl> lvlLbls;                   // (HL104) "LonLO 7,838.25", "CR 7,850" ...: right of the candle, each at its own price
-    std::string sweptLod, sweptHod, mqWhy;         //         every level each extreme swept (shown + the rest), for the status file
+    std::string sweptLod, sweptHod, mqWhy;
+    std::vector<LvSeg> lodCodes, hodCodes;         // (HL105) the swept-level codes shown in the A row (candle off)         //         every level each extreme swept (shown + the rest), for the status file
     bool hodFinal = false, lodFinal = false;       //         coloured once that extreme is final (called IN / the close), else grey
     // the model row in use
     bool modelUp = true, modelByShare = false; int sharePct = 0;
@@ -698,7 +707,7 @@ struct View {
     bool haveHle = false; hle::Expect ex; std::string hleWhy;    // the v2 expected model at the last closed bar (current session)
     int callT = -1, callSrc = 0; double callP = NAN; bool callIn = false;     // the 2nd-extreme call in the E cell / header
     double callShow = NAN; bool callQ = false, callLate = false, callDim = false;
-    std::string headMain, headTail; unsigned headTailCol = C_SLATE;   // (HL101) the header in two colours: the read + the 2nd call
+    std::string headMain, headTail, headTailShort, headLeftTxt; unsigned headTailCol = C_SLATE;   // (HL101) the header in two colours: the read + the 2nd call
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
 enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_ROOM, K_RANGE, K_CLOSE, K_DIR1, K_DIR2, NALL };
@@ -851,6 +860,8 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 }
             }
             for (size_t i = 0; i < got.size(); i++) { all += (all.empty() ? "" : ";") + got[i].txt; if (i < 3) v.lvlLbls.push_back(got[i]); }
+            std::vector<LvSeg>& cs = low ? v.lodCodes : v.hodCodes;               // (HL105) at most 2 short codes for the table's A row
+            for (size_t i = 0; i < got.size() && i < 2; i++) { LvSeg g; g.s = got[i].txt.substr(0, got[i].txt.find(' ')); g.col = got[i].fin ? got[i].col : C_GREY; cs.push_back(g); }
             (low ? v.sweptLod : v.sweptHod) = all;
         }
     }
@@ -1064,21 +1075,50 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         }
         v.A[K_RANGE] = mkCell(rangeTxt + (v.usedPct >= 0 ? "  " + std::to_string(v.usedPct) + "%" : ""), v.secondFinal ? C_SLATE : C_GREY);
     }
+    // (HL105) candle off: the swept levels move into the A row, after the side word ("7:57 LOD LonLO \xB7 CR  in")
+    if (!HODLOD_SHOW_CANDLE && v.side != 0) {
+        bool lf = v.side == 1;
+        v.A[K_1ST].lv = lf ? v.lodCodes : v.hodCodes;
+        if (v.secondPrinted || v.secondFinal) v.A[K_2ND].lv = lf ? v.hodCodes : v.lodCodes;
+    }
     // (coordinator 20:30) the 1st -> 2nd gap has no skill: no table column, only "typical gap" on the candle while the 2nd is not final
     if (v.side != 0 && !v.secondFinal && !v.bodyMid.empty() && v.E[K_GAP].s.size() > 1 && v.E[K_GAP].s[0] == '~') {
         Line L; L.push_back(Seg{ "typical gap " + v.E[K_GAP].s.substr(1), C_GREY }); v.bodyMid[0] = L;
     }
-    // ---- header
-    if (v.prior) {
-        int y, m, d; civilFromDays(R->sid, y, m, d); char b[64]; snprintf(b, sizeof b, "prior RTH %d/%02d", m, d);
-        v.header = std::string(b) + "   \xB7   next open " + clkAmPm(K.open); v.headerCol = C_GREY;
-        v.headMain = v.header; v.headerCol = C_GREY;
-    } else {
-        std::string m, t; bool dim = false; readParts(rh, T.C.readOpen, T.C.readN, m, t, dim);
-        v.headMain = (v.complete ? "RTH complete   \xB7   at the close: " : "") + m; v.headTail = t;
-        v.headerCol = (v.complete || rd.state != 1) ? C_GREY : C_SLATE;
-        v.headTailCol = (dim || v.complete) ? (dim ? C_DIM : C_GREY) : v.headerCol;
-        v.header = v.headMain + v.headTail;
+    // ---- header (HL105, Rassul "too much in the header"): "<MKT> RTH <open>-<close>   <the read>", e.g. "ES RTH 8:30-3:00   LOD IN 92%".
+    //      No clock, no 2nd-extreme call (that stays in the 2nd Time cell), no "RTH complete / at the close".
+    {
+        auto h12 = [](int m) { char b[12]; int h = (m / 60) % 12; snprintf(b, sizeof b, "%d:%02d", h == 0 ? 12 : h, m % 60); return std::string(b); };
+        std::string rth = std::string(K.code) + " RTH " + h12(K.open) + "-" + h12(K.close) + "   ";
+        // (HL105, mockup 9) left-justified "ES RTH 8:30-3:00   Range 62%" | a thin separator | right-justified "LOD IN 99%   HOD after ..."
+        std::string rthT = rth.substr(0, rth.size() - 3);
+        if (v.prior) {
+            int y, m, d; civilFromDays(R->sid, y, m, d); char b[64]; snprintf(b, sizeof b, "prior RTH %d/%02d", m, d);
+            v.headLeftTxt = rthT; v.headMain = b; v.headerCol = C_GREY;
+        } else {
+            std::string mn, tl; bool dim = false; readParts(rh, T.C.readOpen, T.C.readN, mn, tl, dim);
+            // (HL105, mockup 6) the day's range used so far (today's RTH range / the expected full range, hle native)
+            v.headLeftTxt = rthT + (v.usedPct >= 0 ? "   Range " + std::to_string(v.usedPct) + "%" : std::string());
+            v.headMain = mn;
+            v.headerCol = (v.complete || rd.state != 1) ? C_GREY : C_SLATE;
+        }
+        // (HL105, Rassul) + the 2nd-extreme call, the same source / rules as the 2nd Time cell: "   HOD after 9:30 76%" (stage 3),
+        // "   HOD: close 14% \xB7 else 11:30-2:30" before it; "2nd" while the 1st is not IN; grey when not qualified / in test
+        v.headTail.clear(); v.headTailShort.clear();
+        if (!v.prior && !(v.complete && rh.callSrc == 0)) {
+            std::string who = rh.callIn ? (rh.side == 0 ? "HOD" : "LOD") : "2nd";
+            if (rh.callSrc == 3 && rh.callT >= 0 && std::isfinite(rh.callShow)) {
+                std::string p = std::to_string((int)std::llround(rh.callShow * 100)) + "%";
+                v.headTail = "   " + who + " after " + clk(rh.callT) + " " + p; v.headTailShort = "   " + who + " >" + clk(rh.callT) + " " + p;
+            } else if (rh.callSrc == 3 && rh.callLate) { v.headTail = v.headTailShort = "   " + who + " late-day"; }
+            else if (rh.callSrc == 2 && std::isfinite(rh.pClose)) {
+                std::string c = who + ": close " + std::to_string((int)std::llround(rh.pClose * 100)) + "%";
+                v.headTailShort = "   " + c;
+                v.headTail = v.headTailShort + (rh.elseFrom >= 0 && rh.elseTo > rh.elseFrom ? " \xB7 else " + clk(rh.elseFrom) + "-" + clk(rh.elseTo) : "");
+            }
+            v.headTailCol = rh.callDim || v.complete ? (rh.callDim ? C_DIM : C_GREY) : v.headerCol;
+        }
+        v.header = v.headLeftTxt + "   " + v.headMain + v.headTail;
     }
     return v;
 }
@@ -1108,7 +1148,7 @@ inline Tracker runBars(const Cfg& c, const std::vector<Bar>& bars, size_t nClose
 
 // ------------------------------------------------------------------------------------------------ the draw list
 enum { K_FILL = 0, K_RECT = 1, K_LINE = 2, K_TEXT = 3 };
-enum { R_TABLE = 1, R_CANDLE = 2, R_LABEL = 3, R_NOTE = 4 };
+enum { R_TABLE = 1, R_CANDLE = 2, R_LABEL = 3, R_NOTE = 4, R_PANEL = 5 };
 struct Item { int k = 0, l = 0, t = 0, r = 0, b = 0; unsigned c1 = 0, c2 = 0; std::string s; int fs = 9; bool bold = false; int w = 1; int role = 0; int block = -1; bool body = false; };   // body = a label drawn inside the candle body
 struct Box { int l, t, r, b; };
 inline bool overlap(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
@@ -1119,6 +1159,7 @@ struct Layout {
     std::vector<Box> blocks;     // every text block (labels + table) - the overlap tests use these
     Box table = { 0, 0, 0, 0 }, area = { 0, 0, 0, 0 };
     bool tableOk = false, candleOk = false; std::string note;
+    int colRight = 0;            // (HL105) the reserved candle column's right edge (px); written to the status file for SessionInfo
 };
 
 inline int lineH(int fs) { return (int)(fs * 1.7f + 0.5f); }   // as SessionInfo (a 9 pt font is 12 px at 96 dpi)
@@ -1130,56 +1171,97 @@ inline void addLine(Layout& L, int x1, int y1, int x2, int y2, unsigned col, int
 
 // PIECE 2: the table, bottom-left of the pane
 // PIECE 2 (mockup v9): the table at the bottom, centred-left: its left edge `left` is clear of the session candle's column
-inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M)
+// (HL105, mockup 13 + Rassul "a setting where to put them") the 9 spots, as SessionInfo: Top / Middle / Bottom x Left / Centre / Right
+static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
+static const int POS_DEFAULT = 7;   // Bottom centre
+inline Box placeIn(const Box& area, int W, int H, int pos)
 {
+    if (pos < 0 || pos > 8) pos = POS_DEFAULT;
+    int c = pos % 3, r = pos / 3;
+    int x = c == 0 ? area.l : c == 1 ? (area.l + area.r) / 2 - W / 2 : area.r - W;
+    int y = r == 0 ? area.t : r == 1 ? (area.t + area.b) / 2 - H / 2 : area.b - H;
+    x = (std::max)(area.l, (std::min)(x, area.r - W)); y = (std::max)(area.t, (std::min)(y, area.b - H));
+    return Box{ x, y, x + W, y + H };
+}
+// (HL105, mockups 10 / 13) the table: a header of two equal cells split by a thin separator ("ES RTH 8:30-3:00   Range 62%" centred
+// left | "LOD IN 99%   HOD after 9:30 76%" centred right); the body = the E / A letters, then three EQUAL columns (1st Time |
+// Reclaim | 2nd Time) with the heading, the E value and the A segments centred in each. Placed by `pos` inside `area` (the usable
+// area: the pane's left edge to the last price bar's right edge); never wider than it (a smaller font, then the short header).
+inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT)
+{
+    if (freeR < 0) freeR = pane.r;
     const int pad = 6;
-    for (int fs = 9; fs >= 7; fs--) {
-        int hfs = fs + 1, rowH = fs * 2, headH = hfs * 2 + 2;
-        int w[NALL];
-        for (int j = 0; j < NSHOWN; j++) {
-            int c = SHOWN[j];
-            int m = (std::max)(M(COLS[c], fs, false), (std::max)(M(cellTxt(v.E[c]), fs, v.E[c].bold), M(cellTxt(v.A[c]), fs, v.A[c].bold)));
-            w[c] = m + (c == K_LABEL ? 12 : 24);
-        }
-        int W = 12; for (int j = 0; j < NSHOWN; j++) W += w[SHOWN[j]];
-        int mw = M(v.headLeft, fs, false);
-        int hw = (v.headTail.empty() ? M(v.header, hfs, true) : M(v.headMain, hfs, true) + M(v.headTail, hfs, true)) + 2 * (mw + 24); if (hw > W) W = hw;
-        int H = headH + 3 * rowH + 4;
-        if (left + W > pane.r - pad) continue;
+    Box area = { left, pane.t, (std::min)(freeR, (int)pane.r), pane.b - 1 };
+    // three tries: 9 pt equal columns, 8 pt equal columns, 8 pt columns sized to their content (the HG close: the 2nd call
+    // "close push 10% . else 8:45-10:00" made three equal columns 640 px wide - past the last bar on a 1012 px chart)
+    for (int attempt = 0; attempt < 3; attempt++) {
+        const int fs = attempt == 0 ? 9 : 8; const bool natural = attempt == 2;
+        int hfs = fs, rowH = lineH(fs) - 2, headH = rowH + 2;
+        auto cellW = [&](const Cell& C) {
+            int w = M(C.s, fs, C.bold);
+            if (!C.s2.empty()) w += M(" " + C.s2, fs, C.bold);
+            for (size_t q = 0; q < C.lv.size(); q++) w += M((q ? " \xB7 " : " ") + C.lv[q].s, fs, C.bold);
+            if (!C.s3.empty()) w += M("  " + C.s3, fs, C.bold);
+            return w;
+        };
+        int lw = (std::max)(cellW(v.E[K_LABEL]), cellW(v.A[K_LABEL])) + 8;
+        int cw = 0, sumNat = 0; std::vector<int> nat;
+        for (int j = 0; j < NSHOWN; j++) { int c = SHOWN[j]; if (c == K_LABEL) continue;
+            int w = (std::max)(M(COLS[c], fs, false), (std::max)(cellW(v.E[c]), cellW(v.A[c]))) + 14; nat.push_back(w); sumNat += w; cw = (std::max)(cw, w); }
+        int ncol = NSHOWN - 1;
+        const int colsW = natural ? sumNat : ncol * cw;
+        std::string tail = v.headTail;
+        auto halfW = [&](const std::string& tl) { return (std::max)(M(v.headLeftTxt, hfs, true), M(v.headMain, hfs, true) + M(tl, hfs, true)) + 16; };
+        int W = (std::max)(lw + colsW + 4, 2 * halfW(tail));
+        if (W > area.r - area.l && !v.headTailShort.empty()) { tail = v.headTailShort; W = (std::max)(lw + colsW + 4, 2 * halfW(tail)); }
+        int H = headH + 3 * rowH + 2;
+        if (W > area.r - area.l && attempt < 2) continue;              // a smaller font, then content-sized columns, before spilling
+        if (area.l + W > pane.r - pad) continue;                      // cannot fit even past the last bar: smaller font / the note
         if (H + 40 > pane.b - pane.t) break;
-        Box T = { left, pane.b - pad - H, left + W, pane.b - pad };
+        if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);   // the content cannot shrink further: the least spill
+        std::vector<int> cwv((size_t)ncol, (W - 4 - lw) / ncol);      // equal: the three columns share the width equally
+        if (natural) { int extra = (W - 4 - lw - sumNat) / ncol; for (int k = 0; k < ncol; k++) cwv[(size_t)k] = nat[(size_t)k] + extra; }
+        Box T = placeIn(area, W, H, pos);
         L.table = T; L.tableOk = true;
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
-        addText(L, T.l + 10, T.t, T.t + headH, v.headLeft, C_GREY, fs, false, mw, R_TABLE, -1);         // "ES  10:00", left
-        if (v.headTail.empty()) {
-            int hw2 = M(v.header, hfs, true);
-            addText(L, (T.l + T.r) / 2 - hw2 / 2, T.t, T.t + headH, v.header, v.headerCol, hfs, true, hw2, R_TABLE, -1);
-        } else {     // (HL101) the read + the 2nd call in its own colour (grey when not qualified / in test)
-            int w1 = M(v.headMain, hfs, true), w2 = M(v.headTail, hfs, true), x0 = (T.l + T.r) / 2 - (w1 + w2) / 2;
-            addText(L, x0, T.t, T.t + headH, v.headMain, v.headerCol, hfs, true, w1, R_TABLE, -1);
-            addText(L, x0 + w1, T.t, T.t + headH, v.headTail, v.headTailCol, hfs, true, w2, R_TABLE, -1);
+        {   // the header: two equal cells, a thin separator in the middle, each part centred in its cell
+            int mid = (T.l + T.r) / 2;
+            int wl = M(v.headLeftTxt, hfs, true), w1 = M(v.headMain, hfs, true), w2 = M(tail, hfs, true);
+            addText(L, (T.l + mid) / 2 - wl / 2, T.t + 1, T.t + headH, v.headLeftTxt, v.headerCol, hfs, true, wl, R_TABLE, -1);
+            addLine(L, mid, T.t + 3, mid, T.t + headH - 3, C_BORDER, 1, R_TABLE);
+            int xr = (mid + T.r) / 2 - (w1 + w2) / 2;
+            addText(L, xr, T.t + 1, T.t + headH, v.headMain, v.headerCol, hfs, true, w1, R_TABLE, -1);
+            if (!tail.empty()) addText(L, xr + w1, T.t + 1, T.t + headH, tail, v.headTailCol, hfs, true, w2, R_TABLE, -1);
         }
         addLine(L, T.l, T.t + headH, T.r, T.t + headH, C_BORDER, 1, R_TABLE);
-        int y = T.t + headH + 2;
+        int y = T.t + headH + 1;
         const Cell* rows[2] = { v.E, v.A };
         for (int r = -1; r < 2; r++) {
-            int x = T.l + 8;
             if (r == 1) addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE);
+            int x = T.l + 4 + lw, ci = 0;
             for (int j = 0; j < NSHOWN; j++) {
                 int c = SHOWN[j];
-                if (r < 0) { std::string h = COLS[c]; if (!h.empty()) addText(L, x, y, y + rowH, h, C_GREY, fs, false, M(h, fs, false), R_TABLE, -1); x += w[c]; continue; }
+                if (c != K_LABEL) cw = cwv[(size_t)ci++];
+                if (c == K_LABEL) {
+                    if (r >= 0) { const Cell& C = rows[r][c]; addText(L, T.l + 5, y, y + rowH, C.s, C.col, fs, C.bold, M(C.s, fs, C.bold), R_TABLE, -1); }
+                    continue;
+                }
+                if (r < 0) { std::string h = COLS[c]; int hw = M(h, fs, false); addText(L, x + cw / 2 - hw / 2, y, y + rowH, h, C_GREY, fs, false, hw, R_TABLE, -1); x += cw; continue; }
                 const Cell& C = rows[r][c];
-                // up to three parts in their own colours: "8:51" " LOD" "  in"
-                std::string part[3] = { C.s, C.s2.empty() ? "" : " " + C.s2, C.s3.empty() ? "" : "  " + C.s3 };
-                unsigned pc[3] = { C.col, C.col2, C.col3 };
-                int xx = x;
-                for (int k = 0; k < 3; k++) {
+                // the segments, centred as one: "7:57" " LOD" " LonLO" "  in"
+                std::vector<std::string> part; std::vector<unsigned> pc;
+                part.push_back(C.s); pc.push_back(C.col);
+                part.push_back(C.s2.empty() ? "" : " " + C.s2); pc.push_back(C.col2);
+                for (size_t q = 0; q < C.lv.size(); q++) { part.push_back((q ? " \xB7 " : " ") + C.lv[q].s); pc.push_back(C.lv[q].col); }
+                part.push_back(C.s3.empty() ? "" : "  " + C.s3); pc.push_back(C.col3);
+                int tw = cellW(C), xx = x + cw / 2 - tw / 2;
+                for (size_t k = 0; k < part.size(); k++) {
                     if (part[k].empty()) continue;
                     int pw = M(part[k], fs, C.bold);
                     addText(L, xx, y, y + rowH, part[k], pc[k], fs, C.bold, pw, R_TABLE, -1);
                     xx += pw;
                 }
-                x += w[c];
+                x += cw;
             }
             y += rowH;
         }
@@ -1207,27 +1289,25 @@ inline void measureBlock(Block& B, const Measure& M)
 static const int CANDLE_FS = 9, CANDLE_BODY_W = 78;
 // the candle's column (left edge of the pane): wide enough for the body and every label
 static const int LVL_FS = 7;    // (HL104) the swept-level label right of the candle
-// the candle's own width (body + its labels, centred); the candle sits at colL + base / 2
-inline int candleBaseW(const View& v, const Measure& M)
-{
-    Block top{ v.top, CANDLE_FS }, bot{ v.bottom, CANDLE_FS }, mid{ v.bodyMid, CANDLE_FS }, rec{ v.bodyRecl, CANDLE_FS - 1 };
-    measureBlock(top, M); measureBlock(bot, M); measureBlock(mid, M); measureBlock(rec, M);
-    return (std::max)(CANDLE_BODY_W, (std::max)(top.w, bot.w)) + 8 > (std::max)(mid.w, rec.w) + 18
-         ? (std::max)(CANDLE_BODY_W, (std::max)(top.w, bot.w)) + 8 : (std::max)(mid.w, rec.w) + 18;
-}
+// (HL105, Rassul "cut off extra space used by the candle") the column is exactly its content + 4 px padding each side:
+// the candle body (with its in-body labels), the centred HOD / LOD groups and, right of the body, the swept-level labels
 inline int candleBodyW(const View& v, const Measure& M)
 {
     Block mid{ v.bodyMid, CANDLE_FS }, rec{ v.bodyRecl, CANDLE_FS - 1 }; measureBlock(mid, M); measureBlock(rec, M);
     return (std::max)(CANDLE_BODY_W, (std::max)(mid.w, rec.w) + 10);
 }
-// the candle's reserved column (left edge of the pane): the candle, its labels and, right of the body, the swept-level labels
+inline int candleHalfW(const View& v, const Measure& M)      // half the widest centred item (+2 for the label fills)
+{
+    Block top{ v.top, CANDLE_FS }, bot{ v.bottom, CANDLE_FS }; measureBlock(top, M); measureBlock(bot, M);
+    return ((std::max)((std::max)(top.w, bot.w) + 4, candleBodyW(v, M)) + 1) / 2;
+}
+inline int candleBaseW(const View& v, const Measure& M) { return 2 * candleHalfW(v, M) + 8; }
 inline int candleColW(const View& v, const Measure& M)
 {
-    int base = candleBaseW(v, M), lw = 0;
+    int half = candleHalfW(v, M), lw = 0;
     for (size_t i = 0; i < v.lvlLbls.size(); i++) lw = (std::max)(lw, M(v.lvlLbls[i].txt, LVL_FS, false));
-    if (lw == 0) return base;
-    int need = base / 2 + candleBodyW(v, M) / 2 + 5 + lw + 6;   // body right edge + gap + text + clearance
-    return (std::max)(base, need);
+    int right = 4 + half + (lw > 0 ? (std::max)(half, candleBodyW(v, M) / 2 + 5 + lw + 2) : half) + 4;   // from the column's left edge
+    return right;
 }
 
 // PIECE 1: the session candle at real prices on the left edge. yOf maps a price (ticks) to a pane y. The table sits to the right
@@ -1243,7 +1323,10 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
     Block top{ v.top, fs }, bot{ v.bottom, fs }, mid{ v.bodyMid, fs }, rec{ v.bodyRecl, fs - 1 };
     measure(top); measure(bot); measure(mid); measure(rec);
     int colL = pane.l + 8, colW = candleColW(v, M);
-    int cx = colL + candleBaseW(v, M) / 2;           // (HL104) the candle keeps its place; the column grows to the right for the level labels
+    // (HL105, Rassul "give the candle a solid background") an opaque panel with the table's 1 px border behind the whole column:
+    // the candle, its labels and the swept-level labels; the chart's bars never show through
+    addRect(L, colL, pane.t, colL + colW, pane.b - 1, C_BORDER, C_PANEL, 1, R_PANEL);   // full pane height; the boxes share its right border
+    int cx = colL + 4 + candleHalfW(v, M);           // (HL105) 4 px padding, then the candle; the level labels to the right of the body
     auto clampY = [&](int y) { return y < aT ? aT : (y > aB ? aB : y); };
     int yH0 = yOf(v.hod), yL0 = yOf(v.lod), yO = clampY(yOf(v.open)), yC = clampY(yOf(v.close));
     int yH = clampY(yH0), yL = clampY(yL0);
@@ -1359,13 +1442,18 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
     L.candleOk = true;
 }
 
-inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M)
+inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int priceEdge = -1, int pos = POS_DEFAULT)
 {
     Layout L;
     if (pane.r - pane.l < 120 || pane.b - pane.t < 60) { L.note = "pane too small"; return L; }
-    int colR = v.has ? pane.l + 8 + candleColW(v, M) : pane.l;
-    layoutTable(L, v, pane, colR + 24, M);          // (v9) centred-left, never touching the candle's column
-    layoutCandle(L, v, pane, yOf, M);
+    int colR = v.has && HODLOD_SHOW_CANDLE ? pane.l + 8 + candleColW(v, M) : pane.l + 2;
+    L.colRight = v.has && HODLOD_SHOW_CANDLE ? colR : 0;   // the column panel's right border x (0 = no column: the candle is off)
+    // (HL105) bottom centre of the free area right of the candle column (6 px clear of its panel) and 15% before the latest bars
+    // the free area ends at the price edge (the last bar's right edge, where the profiles begin) when the chart gives it
+    int freeR = priceEdge > 0 ? priceEdge : pane.r - (int)((pane.r - pane.l) * 0.15);
+    if (freeR <= colR + 100) freeR = pane.r - (int)((pane.r - pane.l) * 0.15);
+    layoutTable(L, v, pane, colR, M, freeR, pos);   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
+    if (HODLOD_SHOW_CANDLE) layoutCandle(L, v, pane, yOf, M);
     return L;
 }
 
@@ -1451,6 +1539,8 @@ inline std::string statusText(const View& v, const Layout& L, const Tracker& T, 
         kv("LABEL", b + it.s);
     }
     kv("NOTE", L.note);
+    kv("RESERVED_RIGHT_X", std::to_string(L.colRight > 0 ? L.colRight : 0));
+    if (L.tableOk) kv("TABLE_BOX", std::to_string(L.table.l) + "," + std::to_string(L.table.t) + "," + std::to_string(L.table.r) + "," + std::to_string(L.table.b));   // SessionInfo stacks clear of it   // (HL105) the candle column's right edge (pane x): SessionInfo centres its box right of it
     return o;
 }
 

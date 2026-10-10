@@ -3,6 +3,9 @@
  *  "I also want to know when 0dte options are expiring for each market ... selectable ... so i can move it around" / "the most
  *  favorable times to trade a market ... customized to each market and displayed on its chart, for the rth session").
  *
+ *  1.7.1 (2026-10-12, Rassul / mockups 1-13): ONE short cell flush top-left - "Regime: Positive" over "Expiry 12:30 PM
+ *         (in 13h 45m) . pin 4,200 (GW 0DTE)"; ends before the last price bar and the profiles; never a mid-word cut. The news,
+ *         the RTH windows, the expected move and its slider are removed (the range used moved to lsHodLod's header).
  *  1.7.0 (2026-10-09, mockup v5 approved: "check everything then build it") the WIDE layout: four sections side by side, a
  *  header + 3 lines each, at the top centre (shifted left so it ends well before the latest bars):
  *    NEWS | GAMMA / Exp <time> (<countdown>) | <MKT> RTH now: <state> + Active / Chop windows | EXPECTED MOVE
@@ -36,12 +39,13 @@
 #include <deque>
 #include <chrono>
 
-using sil::hm; using sil::parseInt; using sil::inWindow; using sil::to12;
-using sil::MAX_SESSION_LINE; using sil::MAX_SESSION_WINDOWS; using sil::MAX_SESSION_NEWS;
-typedef sil::Win Win;
+using sil::hm; using sil::parseInt;
 
-struct SPIdx { int market = 0, show = 1, font = 2, clock = 3, moveX = 4; };   // parameter indices (HL101: a member, no static state)
-struct SSet { int market = 0, show = 0, font = 8, clock = 0, moveX = 1; };
+// (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default Top left.
+// The market is the chart's own; the font is 8 pt (his other boxes).
+struct SPIdx { int moveX = 0; };   // parameter index (HL101: a member, no static state)
+struct SSet { int moveX = 0; };
+static const int SI_FONT = 8, SI_POS_DEFAULT = 0;
 
 // (HL101, Rassul "no leaks or errors": no static / mutable shared state) the per-object copies of dl::loadPlace / dl::clearRightOf /
 // dl::stableMin - the same rules, but their caches live in the extension object (freed with it), bounded, never function statics
@@ -56,7 +60,9 @@ struct SIFiles {
         long long st = dl::fileStamp(p);
         for (size_t i = 0; i < place.size(); i++) if (place[i].first == p) { if (place[i].second.first == st) return place[i].second.second; place.erase(place.begin() + (long)i); break; }
         int v = def;
-        if (st >= 0) { std::ifstream f(p.c_str()); int x = -1; if (f >> x && x >= 0 && x <= 8) v = x; }   // RAII: closed at scope end
+        if (st >= 0) { std::ifstream f(p.c_str()); std::string ln;                                          // RAII: closed at scope end
+            if (std::getline(f, ln)) { if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+                if (ln.size() == 1 && ln[0] >= '0' && ln[0] <= '8') v = ln[0] - '0'; } }                    // (HL105) strict: one digit 0-8, else the default (#29)
         if (place.size() >= 64) place.erase(place.begin());
         place.push_back(std::make_pair(p, std::make_pair(st, v)));
         return v;
@@ -98,9 +104,9 @@ struct SIState {
     long long stamp = -2;
     bool sourceAvailable = false;
     sil::Data D;
-    long nBars = -1; RTDATE lastStamp = 0; float lastTick = 0;
-    bool haveE = false; double eLod = NAN, eHod = NAN;
-    long long loads = 0, barCalcs = 0;      // test counters (#31 / #32)
+    std::string hlPath, hlRoot; long long hlStamp = -2; int hlX = 0;   // (1.7.1) lsHodLod's reserved column (its status file)
+    hl::Box hlBox = { 0, 0, 0, 0 }; bool hlBoxOk = false, hlBoxRead = false;                  // (HL105) lsHodLod's table box (fresh, this chart)
+    long long loads = 0;                    // test counter (#31)
 };
 
 class SessionInfo : public cppExtension {
@@ -110,12 +116,10 @@ public:
     virtual int parmsLoad(void) { if (ready()) readS(cfg); return RTX_OK; }
     virtual int parmsApply(void) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { if (ready()) { readS(cfg); savePl(); } return RTX_OK; }
-    // IRT can return -1 for LIST parameters outside its settings copy. Persist all list selections that control this shared
-    // extension, including Market, by the chart's native market so a stale selection cannot leak into another chart.
-    void savePl() { char b[32] = {0}; const char* rs = getRootSymbol(b); std::string r = rs ? rs : "";
-        std::string chartMk = dl::marketForRoot(r), mk = dl::marketFor(cfg.market, r);
-        dl::savePlace("SessionInfoMarket", chartMk, cfg.market);
-        dl::savePlace("SessionInfoWide", mk, cfg.moveX); dl::savePlace("SessionInfoShow", mk, cfg.show); }
+    // IRT can return -1 for LIST parameters outside its settings copy: the Position is persisted per market (from the settings
+    // dialog's callbacks only - loading never saves, #29) and read back on every draw
+    void savePl() { char b[32] = {0}; const char* rs = getRootSymbol(b); std::string mk = dl::marketForRoot(rs ? rs : "");
+        dl::savePlace("SessionInfoPos171", mk, cfg.moveX); }
     virtual int draw(void);
 
     SSet cfg;                                   // scratch: re-read from the settings (or the per-market files) on every draw
@@ -124,17 +128,11 @@ public:
     SIState* st(bool create) { return slot_.get(this, create); }
     void clearState() { slot_.release(this); }
 
-    bool ready() { int i = getListIndex(SP.market); return i >= 0 && i <= 7; }
-    void readS(SSet& S)
-    {
-        S.market = getListIndex(SP.market); if (S.market < 0 || S.market > 7) S.market = 0;
-        S.show = getListIndex(SP.show); if (S.show < 0 || S.show > 4) S.show = 0;
-        S.font = getIntegerValue(SP.font); if (S.font < 6 || S.font > 20) S.font = 8;
-        S.clock = getIntegerValue(SP.clock); if (S.clock < -720 || S.clock > 720) S.clock = 0;
-        { int v = getListIndex(SP.moveX); if (v >= 0 && v <= 8) S.moveX = v; }
-    }
+    bool ready() { int i = getListIndex(SP.moveX); return i >= 0 && i <= 8; }
+    void readS(SSet& S) { int v = getListIndex(SP.moveX); S.moveX = v >= 0 && v <= 8 ? v : SI_POS_DEFAULT; }   // clamped (#29)
     void load(SIState& S);
-    void barsE(SIState& S);
+    int priceEdge();
+    int reservedLeft(SIState& S);
     int nowMin(int& dow);
     int textW(const std::string& s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s.c_str(), -1); }
     void text(int x, int yc, const std::string& s, COLOR col, int sz, bool bold)
@@ -162,15 +160,10 @@ int cppExtension::destroy(void) { static_cast<SessionInfo*>(this)->clearState();
 int cppExtension::setup(void)
 {
     SPIdx& SP = static_cast<SessionInfo*>(this)->SP;   // the parameter indices live in the object (no static state)
-    setParameterVersion(7);   // (1.7.0) BUMPED: the Background setting is removed; Position defaults to Top centre
-    setParameterDialogHeight(4);
-    const short SLN = kParmAppendSameLine;
+    setParameterVersion(9);   // (1.7.1) BUMPED: the only setting is Position (9 spots), default Top left
+    setParameterDialogHeight(1);
     int pc = 0;
-    SP.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    SP.show   = pc++; setListParameter("Show", 0, "All;0DTE + gamma;RTH active / chop;News;Expected move", 0, SLN);
-    SP.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW);
-    SP.clock  = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SLN);
-    SP.moveX  = pc++; setListParameter("Position", 1, dl::ANCHORS);   // (1.7.0) default Top centre
+    SP.moveX = pc++; setListParameter("Position", SI_POS_DEFAULT, dl::ANCHORS);
     return RTX_OK;
 }
 
@@ -182,7 +175,7 @@ int SessionInfo::nowMin(int& dow)
 #else
     localtime_r(&t, &lt);
 #endif
-    int m = lt.tm_hour * 60 + lt.tm_min + cfg.clock;
+    int m = lt.tm_hour * 60 + lt.tm_min;
     dow = lt.tm_wday;
     if (m >= 1440) dow = (dow + 1) % 7; else if (m < 0) dow = (dow + 6) % 7;
     return (m % 1440 + 1440) % 1440;
@@ -193,8 +186,8 @@ void SessionInfo::load(SIState& S)
     char buf[32] = {0};
     const char* rs = getRootSymbol(buf);
     S.root = rs ? rs : "";
-    std::string mk = dl::marketFor(cfg.market, S.root);
-    if (mk != S.mkt) { S.mkt = mk; S.nBars = -1; S.haveE = false; }          // a symbol / market change resets the bar cache
+    std::string mk = dl::marketForRoot(S.root);                                 // (HL105) the chart's own market
+    if (mk != S.mkt) { S.mkt = mk; S.hlStamp = -2; }                          // a symbol / market change resets the caches
     if (S.mkt.empty()) { S.D.clear(); S.sourceAvailable = false; S.stamp = -2; S.path.clear(); return; }
     const char* up = getenv("USERPROFILE");
     if (!up) { S.D.clear(); S.sourceAvailable = false; S.stamp = -2; S.path.clear(); return; }
@@ -215,43 +208,52 @@ void SessionInfo::load(SIState& S)
     S.sourceAvailable = true;
 }
 
-// (1.7.0) E-LOD / E-HOD from today's RTH open and the HOD/LOD model (the same logic and header as lsHodLod), from the chart's
-// closed bars; recomputed only when the bars change (#32)
-void SessionInfo::barsE(SIState& S)
+// (1.7.1) the price edge: the last bar's right edge (x), where the bar area ends and the profiles begin; -1 = unknown
+int SessionInfo::priceEdge()
 {
-    int mi = hl::mktIndex(dl::marketForRoot(S.root));
-    if (mi < 0 || hl::mktIndex(S.mkt) != mi) { S.haveE = false; return; }     // a Market override for another market: no ticks
-    long n = getBarCount();
-    if (n < 3) { S.haveE = false; return; }
-    RTARRAYI dt(barDateTime);
-    if ((long)dt.count < n) { S.haveE = false; return; }
-    float tk = getProperty(SYM_TICKINCR);
-    RTDATE last = (RTDATE)dt[(int)n - 1];
-    if (n == S.nBars && last == S.lastStamp && tk == S.lastTick) return;
-    S.nBars = n; S.lastStamp = last; S.lastTick = tk; S.haveE = false; S.barCalcs++;
-    double tick = (double)tk;
-    if (!std::isfinite(tick) || !(tick > 0) || tick >= 1000) return;
-    tick = std::round(tick * 1e9) / 1e9;
-    RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
-    if ((long)op.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) return;
-    auto absOf = [&](int i) {
-        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-        return hl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday) * 86400 + t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
-    };
-    long long per = 0, prev = absOf((int)n - 1);
-    for (int i = (int)n - 2; i >= 0 && i >= (int)n - 41; i--) { long long a = absOf(i), d = prev - a; if (d > 0 && (per == 0 || d < per)) per = d; prev = a; }
-    if (per <= 0 || per > 900) return;
-    const int lastClosed = (int)n - 2;
-    long long cutoff = absOf(lastClosed) - 2LL * 86400;                    // today's session only needs the last day
-    int start = lastClosed;
-    while (start > 0 && lastClosed - start < 4000) { if (absOf(start - 1) < cutoff) break; start--; }
-    std::vector<hl::Bar> B; B.reserve((size_t)(lastClosed - start + 1));
-    for (int i = start; i <= lastClosed; i++) { hl::Bar b; b.absEnd = absOf(i); b.o = op[i]; b.h = hi[i]; b.l = lo[i]; b.c = cl[i]; B.push_back(b); }
-    hl::Cfg c; c.mkt = mi; c.per = per; c.tick = tick; c.readOpen = hl::readOpenFor(mi); c.readN = hl::readNFor(mi);
-    hl::Tracker T = hl::runBars(c, B, B.size(), nullptr);
-    if (!T.cur.any) return;                                                // before today's open: no ticks
-    hl::View v = hl::buildView(T, hl::ReadOut());
-    if (std::isfinite(v.eLod) && std::isfinite(v.eHod)) { S.haveE = true; S.eLod = v.eLod; S.eHod = v.eHod; }
+    long n = getBarCount(); if (n < 2) return -1;
+    RTARRAY cl(barClose); if ((long)cl.count < n) return -1;
+    PNT p; if (p.set((int)(n - 1), cl[(int)(n - 1)], kBarRight) != RTX_OK) return -1;
+    return p.h > 0 ? (int)p.h : -1;
+}
+// (1.7.1) lsHodLod's reserved candle column: RESERVED_RIGHT_X in its status file HodLod.status-<MKT>-<secs>.txt (with CHART,<root>,
+// <secs>). Fresh (written in the last 90 s) and this chart's root -> that x; stale or another chart -> 200 px if it reserved one,
+// else 0; absent -> 0. Read only when the file's stamp changes (#31), at most 4 KiB, strict ints.
+int SessionInfo::reservedLeft(SIState& S)
+{
+    long n = getBarCount(); if (n < 3) return 0;
+    RTARRAYI dt(barDateTime); if ((long)dt.count < n) return 0;
+    long long per = 0; for (long i = n - 1; i > 0 && i > n - 12; i--) { long long d = (long long)dt[(int)i] - (long long)dt[(int)(i - 1)]; if (d > 0 && (per == 0 || d < per)) per = d; }
+    if (per <= 0 || per > 3600) return 0;
+    const char* up = getenv("USERPROFILE"); if (!up) return 0;
+#ifdef _WIN32
+    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\HodLod.status-" + S.mkt + "-" + std::to_string(per) + ".txt";
+#else
+    std::string p = std::string(up) + "/HodLod.status-" + S.mkt + "-" + std::to_string(per) + ".txt";   // as lsHodLod's mock path
+#endif
+    long long st = dl::fileStamp(p);
+    S.hlBoxOk = false;
+    if (st < 0) { S.hlStamp = st; S.hlX = 0; S.hlRoot.clear(); return 0; }
+    if (st != S.hlStamp || p != S.hlPath) {
+        S.hlStamp = st; S.hlPath = p; S.hlX = 0; S.hlRoot.clear(); S.hlBoxRead = false;
+        std::ifstream f(p.c_str(), std::ios::binary); std::string ln; int lines = 0;
+        while (f.is_open() && lines++ < 400 && std::getline(f, ln)) {
+            if (ln.size() > 512) continue;
+            if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+            int v = 0;
+            if (ln.compare(0, 17, "RESERVED_RIGHT_X,") == 0 && sil::parseInt(ln.substr(17), v) && v >= 0 && v <= 4000) S.hlX = v;
+            if (ln.compare(0, 6, "CHART,") == 0) { size_t c = ln.find(',', 6); S.hlRoot = ln.substr(6, c == std::string::npos ? std::string::npos : c - 6); }
+            if (ln.compare(0, 10, "TABLE_BOX,") == 0) {                // l,t,r,b (pane x / y), strict ints
+                int v4[4]; size_t p0 = 10; bool okb = true;
+                for (int k = 0; k < 4 && okb; k++) { size_t q = ln.find(',', p0); okb = sil::parseInt(ln.substr(p0, q == std::string::npos ? std::string::npos : q - p0), v4[k]) && v4[k] >= -10000 && v4[k] <= 10000; p0 = q == std::string::npos ? ln.size() : q + 1; }
+                if (okb && v4[2] > v4[0] && v4[3] > v4[1]) { S.hlBox = hl::Box{ v4[0], v4[1], v4[2], v4[3] }; S.hlBoxRead = true; }
+            }
+        }
+    }
+    long long mt = st / 1000003LL;                                     // dl::fileStamp = mtime * 1000003 + size
+    bool fresh = (long long)time(nullptr) - mt <= 90;
+    if (fresh && S.hlRoot == S.root) { S.hlBoxOk = S.hlBoxRead; return S.hlX; }
+    return S.hlX > 0 ? 200 : 0;
 }
 
 void SessionInfo::execute(const hl::Layout& L)
@@ -272,32 +274,36 @@ int SessionInfo::draw(void)
 {
     SIState* S = st(true);
     if (!S) return RTX_OK;
-    bool settingsReady = ready();
-    if (settingsReady) readS(cfg);
-    else {
-        cfg = SSet();
-        char b[32] = {0}; const char* rs = getRootSymbol(b); std::string chartMk = dl::marketForRoot(rs ? rs : "");
-        cfg.market = files_.loadPlace("SessionInfoMarket", chartMk, 0);
-        if (cfg.market < 0 || cfg.market > 7) cfg.market = 0;
-        cfg.font = getIntegerValue(SP.font); if (cfg.font < 6 || cfg.font > 20) cfg.font = 8;
-        cfg.clock = getIntegerValue(SP.clock); if (cfg.clock < -720 || cfg.clock > 720) cfg.clock = 0;
-    }
     load(*S);
     if (S->mkt.empty()) return RTX_OK;
-    if (!settingsReady) cfg.show = files_.loadPlace("SessionInfoShow", S->mkt, cfg.show);
-    int pos = files_.loadPlace("SessionInfoWide", S->mkt, 1);                 // (1.7.0) new key: the wide panel starts at Top centre
-    if (cfg.show == 0 || cfg.show == 4) barsE(*S);
-    sil::Inputs I; I.mkt = S->mkt; I.D = S->D; I.sourceAvailable = S->sourceAvailable; I.show = cfg.show; I.fs = cfg.font;
-    I.now = nowMin(I.dow); I.haveE = S->haveE; I.eLod = S->eLod; I.eHod = S->eHod;
+    if (ready()) readS(cfg); else cfg.moveX = files_.loadPlace("SessionInfoPos171", S->mkt, SI_POS_DEFAULT);
+    int pos = cfg.moveX >= 0 && cfg.moveX <= 8 ? cfg.moveX : SI_POS_DEFAULT;
+    sil::Inputs I; I.mkt = S->mkt; I.D = S->D; I.sourceAvailable = S->sourceAvailable; I.show = 0; I.fs = SI_FONT;
+    I.now = nowMin(I.dow);
     sil::Slider SL;
     std::vector<sil::Section> sec = sil::build(I, SL);
     RCT pane; pane.getPaneRect(false);
-    // (1.7.0) the region: below IRT's title line, left of the profiles, and ending well before the latest bars (15% of the pane)
-    int right = (std::min)(files_.clearRightOf(pane.right), (int)pane.right - (int)((pane.right - pane.left) * 0.15));
-    hl::Box region = { pane.left, pane.top + 18, right, pane.bottom };
+    // (HL105) the usable area: [the pane's left edge (2 px in; right of lsHodLod's candle column when it draws one), the LAST price
+    // bar's right edge] x [the pane's top, its bottom]; never beyond the last bar, never into the profiles' room
+    int right = files_.clearRightOf(pane.right);
+    int edge = priceEdge(); if (edge > pane.left + 120 && edge < right) right = edge;
+    if (edge <= pane.left + 120) right = (std::min)(right, (int)pane.right - (int)((pane.right - pane.left) * 0.15));   // no bar x: the old rule
+    int left = (std::max)((int)pane.left + 2, reservedLeft(*S));
+    hl::Box region = { left, pane.top, right, pane.bottom };
     if (region.r - region.l < 120) region.r = pane.right;
     hl::Measure M = [&](const std::string& s, int fs, bool bold) { return textW(s, fs, bold); };
-    hl::Layout L = sil::layout(sec, SL, region, pos, cfg.font, M);
+    hl::Layout L = sil::layout(sec, SL, region, pos, SI_FONT, M);
+    // two boxes in the same spot: stack this one next to lsHodLod's table (its TABLE_BOX in its status file)
+    if (L.tableOk && S->hlBoxOk && hl::overlap(L.table, S->hlBox)) {
+        bool above = (L.table.t + L.table.b) / 2 <= (S->hlBox.t + S->hlBox.b) / 2;          // the nearer side first, then the other
+        for (int k = 0; k < 2; k++, above = !above) {
+            hl::Box r2 = region;
+            if (above) r2.b = S->hlBox.t - 2; else r2.t = S->hlBox.b + 2;
+            if (r2.b - r2.t <= 30) continue;
+            hl::Layout L2 = sil::layout(sec, SL, r2, pos, SI_FONT, M);
+            if (L2.tableOk && !hl::overlap(L2.table, S->hlBox)) { L = L2; break; }
+        }
+    }
     execute(L);
     return RTX_OK;
 }
@@ -308,7 +314,7 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // drawn after every other indicator
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // (1.7.0, audit #36) the 0DTE countdown and news colours keep moving while the feed is idle
-    p->setDescription("LRA Session Info: news, gamma regime and today's 0DTE expiry, the RTH active / chop windows and the expected move (with the HOD / LOD model's ticks), side by side. Use Settings > Position to place the panel.");
-    p->setVersion("1.7.0");   // (1.7.0) wide 4-section layout at top centre, coloured expected-move slider with E-HOD / E-LOD ticks, Background setting removed, per-chart state; (1.6.7) drawn on top of the other indicators; (1.6.6) solid background always; (1.6.5) overflow-safe numeric fields; (1.6.4) Market selection restored per native chart; (1.6.3) Show saved per market; (1.6.1) below the chart title, data age from 10 min; (1.6.0) gamma / HVL, GW0 pin, expected move, news countdown, stale line; (1.5.0) 9-spot Position
+    p->setDescription("LRA Session Info: one short box, flush top-left: the gamma regime, today's 0DTE expiry countdown and the pin (GW 0DTE). Use Settings > Position to place the panel.");
+    p->setVersion("1.7.1");   // (1.7.1) one cell (Regime / Expiry . pin), flush top-left, ends before the last price bar and the profiles, words never cut; the news, the RTH windows, the expected move and its slider removed (Rassul 2026-10-12); (1.7.0) wide 4-section layout, Background setting removed, per-chart state; (1.6.7) drawn on top of the other indicators; (1.6.6) solid background always; (1.6.5) overflow-safe numeric fields; (1.6.4) Market selection restored per native chart; (1.6.3) Show saved per market; (1.6.1) below the chart title, data age from 10 min; (1.6.0) gamma / HVL, GW0 pin, expected move, news countdown, stale line; (1.5.0) 9-spot Position
     return p;
 }

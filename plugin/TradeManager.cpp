@@ -16,9 +16,28 @@
  *        TRADES, INROW, ROOM, RISK, POS|<mkt>|long/short|size|price|upl, ALERT|level|time|text
  *    LRA-Dealer-<MKT>.csv   PRICE, TURN (side + header: DEMAND / SUPPLY n of m, the level, T1), RDX (extreme, level), RD (trigger)
  *    LRA-Session-<MKT>.csv  WIN (ACTIVE / CHOP), CAL (calendar events)
- *  Click anywhere on the box and drag it; double-click = back to the settings spot. Settings: Market, Font, Move right / down.
+ *  PLACE (1.2.0, 2026-10-10): click on the box and drag it anywhere in the price area; release = it stays there. The spot is
+ *  remembered PER CHART (market + bar size: the ES 3-min and the ES 60-min chart each keep their own) in
+ *  lsFlexLevels\TradeManager.drag-<MKT>_<sec>.txt. Double-click the box = back to the Position setting. Choosing a Position
+ *  in the settings later also moves it back to that spot. The box is always kept inside the price area left of the last bar
+ *  when it fits there, and never over the Dealer / Delta profiles.
+ *  Why a file and not the chart's own settings: IRT gives the plugin mouse events but no way to write a chart setting from a
+ *  mouse event (list settings even read back as -1 outside the settings window), so the dragged spot lives beside the Position
+ *  files the other LRA boxes already use. Settings: Market, Font size, Position (9 spots).
  *  Never places, changes or cancels an order - it only reads files and draws.
  ********************************************************************************/
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>                   // GetAsyncKeyState: is the left button still held during a drag
+#ifdef _MSC_VER
+#pragma comment(lib, "user32.lib")     // gex-build links only the SDK lib; GetAsyncKeyState / GetSystemMetrics live in user32
+#endif
+#endif
 #include "irtsdk.h"
 // windows.h may define the obsolete `far` macro, which conflicts with DealerLogic's Node::far member.
 #ifdef far
@@ -26,6 +45,9 @@
 #endif
 #include "DealerLogic.h"
 #include "HostSlot.h"
+#include "TradeGuardLayout.h"
+#include <chrono>
+#include <deque>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -41,13 +63,18 @@
 #include <climits>
 #include <new>
 
-static const char* TM_VERSION = "1.1.2";   // (1.1.2) per-chart state, validated bridge inputs, bounded sizing
+static const char* const TM_VERSION = "1.2.0";   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
+                                                  // (1.1.2) per-chart state, validated bridge inputs, bounded sizing
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
 static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_GREEN = 0x0022C55E, C_DKRED = 0x007F1D1D, C_DKGRN = 0x00166534, C_TRACK = 0x001F2937;
 
-struct TIdx { int market, font, moveX, moveY; };
-static TIdx TX;
-struct TSet { int market = 0, font = 8, moveX = 0, moveY = 0; };
+struct TIdx { int market = 0, font = 1, place = 2; };            // parameter indices: a member of the object, no static (#1)
+struct TSet { int market = 0, font = 8, place = 2; };          // place = the Position (0-8), default Top right
+
+#ifdef TM_TEST_HOOKS
+extern bool tmTestButtonHeld;                                   // the mock decides whether the left button is still down
+extern int (*tmTestRename)(const char* from, const char* to);   // the mock makes a rename fail
+#endif
 
 // futures $ per 1.0 price move: the micro (what he trades) and its size cap (plan.json max_size)
 static double microPV(const std::string& m) { return m == "ES" ? 5 : m == "NQ" ? 2 : m == "CL" ? 100 : m == "NG" ? 1000 : m == "GC" ? 10 : m == "HG" ? 2500 : m == "EU" ? 12500 : 0; }
@@ -112,11 +139,65 @@ static bool parseInt(const std::string& s, int& out)
     out = (int)v; return true;
 }
 static std::vector<std::string> splitBar(const std::string& ln) { std::vector<std::string> c; std::stringstream ss(ln); std::string x; while (std::getline(ss, x, '|')) c.push_back(x); return c; }
+// (1.2.0, checklist #33) bounded: at most 64 KiB and 400 lines of 1 KiB from any bridge file
 static std::vector<std::string> readLines(const std::string& p)
 {
-    std::vector<std::string> L; std::ifstream f(p.c_str()); std::string ln;
-    while (std::getline(f, ln)) { if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1); L.push_back(ln); }
+    std::vector<std::string> L; std::ifstream f(p.c_str(), std::ios::binary); std::string ln; size_t bytes = 0;
+    while (L.size() < 400 && bytes < 65536 && std::getline(f, ln)) {
+        bytes += ln.size() + 1;
+        if (ln.size() > 1024) ln.resize(1024);
+        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+        L.push_back(ln);
+    }
     return L;
+}
+static bool readSmall(const std::string& p, std::string& out, size_t cap = 4096)
+{
+    out.clear(); std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) return false;
+    out.resize(cap + 1); f.read(&out[0], (std::streamsize)out.size()); out.resize((size_t)f.gcount());
+    return out.size() <= cap;
+}
+static bool moveOver(const std::string& from, const std::string& to)
+{
+#ifdef TM_TEST_HOOKS
+    if (tmTestRename) return tmTestRename(from.c_str(), to.c_str()) == 0;
+#endif
+#if defined(_WIN32)
+    return MoveFileExA(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    return std::rename(from.c_str(), to.c_str()) == 0;
+#endif
+}
+// (checklist #5) write <path>.tmp, the old file to <path>.bak, rename into place; the .bak goes back if the rename fails
+static bool publishFile(const std::string& path, const std::string& contents)
+{
+    const std::string tmp = path + ".tmp", bak = path + ".bak";
+    {
+        std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc);
+        if (!f) return false;
+        f.write(contents.data(), (std::streamsize)contents.size()); f.flush();
+        if (!f) { f.close(); std::remove(tmp.c_str()); return false; }
+    }
+    const bool hadOld = dl::fileStamp(path) >= 0;
+    if (hadOld && !moveOver(path, bak)) { std::remove(tmp.c_str()); return false; }
+    if (!moveOver(tmp, path)) { if (hadOld) moveOver(bak, path); std::remove(tmp.c_str()); return false; }
+    return true;
+}
+static std::string flexDir()
+{
+    const char* up = getenv("USERPROFILE");
+    return up && up[0] ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\" : std::string();
+}
+static bool leftButtonHeld()
+{
+#ifdef TM_TEST_HOOKS
+    return tmTestButtonHeld;
+#elif defined(_WIN32)
+    const int vk = GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON;   // the primary button, even when swapped
+    return (GetAsyncKeyState(vk) & 0x8000) != 0;
+#else
+    return true;
+#endif
 }
 static int hmMin(const std::string& raw)
 {
@@ -134,6 +215,22 @@ static std::string t12(int m)
 
 struct TMWin { std::string tag; int a = -1, b = -1; };
 struct TMCal { int m = -1; std::string imp, title; };
+// (1.2.0) where one chart's box is, keyed by chart (<MKT>_<seconds per bar>) inside the chart's state. With IRT's per-chart
+// user-data slot there is one entry; if a host ever kept no slot (HostSlot's shared fallback) two charts still never share a
+// drag (checklist #1 / the 2026-10-07 copper-moved-with-gold bug).
+struct TMPlace {
+    std::string key;                                   // <MKT>_<seconds per bar>: the drag file's name
+    long long placeStamp = -2; int place = 2;          // the Position file (per market, written by the settings window)
+    long long dragStamp = -2; tgl::Saved saved;        // the dragged spot (per chart)
+    long long profStamp1 = -2, profStamp2 = -2; tgl::Profiles prof;
+    std::deque<std::pair<long long, int> > profHist;   // the profiles' left edge over the last 5 s (their status files are shared)
+    int profPaneR = -1;                                // ... for this pane width (a resize starts a new history)
+    tgl::Drag drag;
+    tgl::Box box, area;                                // where the box was drawn last, and the room (area) it had
+    bool drawn = false; int placeUsed = 2;             // the Position the box was placed from on the last draw
+    long long fileReads = 0, saves = 0;                // test counters (#31 / #29)
+};
+
 struct TMState {
     TSet cfg;
     std::string mkt, root, lastMkt;
@@ -143,17 +240,32 @@ struct TMState {
     bool haveTurn = false, atLevel = false; char side = 0; std::string head, levelTxt, ctl; double ext = 0, lvl = 0, t1 = 0, px = 0;
     std::vector<TMWin> W; std::vector<TMCal> C;
     std::map<std::string, long long> stamps;
+    std::map<std::string, TMPlace> places;             // (1.2.0) per chart key, bounded
+    long long saves = 0;                               // test counter (#29): Position files written
 };
 
 class TradeManager : public cppExtension {
 public:
     TradeManager() : cppExtension() {}
-    virtual int parmsLoad(void) { TSet cfg; if (ready()) readS(cfg); return RTX_OK; }
-    virtual int parmsApply(void) { TSet cfg; if (ready()) { readS(cfg); savePl(cfg); } return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { TSet cfg; if (ready()) { readS(cfg); savePl(cfg); } return RTX_OK; }
+    TIdx TX;                                           // set in setup(); one per extension object
+    virtual int parmsLoad(void) { return RTX_OK; }     // (#29) loading never saves and never changes anything
+    virtual int parmsApply(void) { if (ready()) { TSet cfg; readS(cfg); savePl(cfg); } return RTX_OK; }
+    virtual int parmsUpdt(unsigned int) { if (ready()) { TSet cfg; readS(cfg); savePl(cfg); } return RTX_OK; }
     virtual int done(void);
     virtual int destroy(void);
-    void savePl(const TSet& cfg) { char b[32] = {0}; const char* rs = getRootSymbol(b); dl::savePlace("TradeManager", dl::marketFor(cfg.market, rs ? rs : ""), cfg.moveX); }
+    // the Position is kept per market in TradeManager.place-<MKT>.txt (IRT reads list settings back as -1 outside the settings
+    // window). Written only when it CHANGED, from the settings window's callbacks, safely; a new Position beats a dragged spot.
+    void savePl(const TSet& cfg)
+    {
+        char b[32] = {0}; const char* rs = getRootSymbol(b);
+        const std::string mk = dl::marketFor(cfg.market, rs ? rs : "");
+        if (mk.empty() || cfg.place < 0 || cfg.place > 8) return;
+        const std::string p = dl::placePath("TradeManager", mk);
+        std::string cur; long long now = -1;
+        if (readSmall(p, cur, 64)) { long long v = 0; std::string t = cur; while (!t.empty() && (t.back() == '\n' || t.back() == '\r' || t.back() == ' ')) t.pop_back(); if (tgl::parseIntStrict(t, 0, 8, v)) now = v; }
+        if (now == cfg.place) return;
+        if (publishFile(p, std::to_string(cfg.place) + "\n")) { TMState* s = slot_.get(this, false); if (s) s->saves++; }
+    }
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
 
@@ -162,11 +274,25 @@ public:
     {
         { int v = getListIndex(TX.market); if (v >= 0 && v <= 7) S.market = v; }
         { int v = getIntegerValue(TX.font); if (v >= 6 && v <= 20) S.font = v; }
-        { int v = getListIndex(TX.moveX); if (v >= 0 && v <= 8) S.moveX = v; }   // moveX = the Position (0-8)
+        { int v = getListIndex(TX.place); if (v >= 0 && v <= 8) S.place = v; }
     }
     HostSlot<TMState> slot_;
     TMState* state() { return slot_.get(this, true); }
+    TMState* testState() { return slot_.get(this, false); }
     void releaseState() { slot_.release(this); }
+    void loadPlacement(TMPlace& s, const std::string& mkt);
+    int profilesLeftEdge(TMPlace& s, int paneRight);
+    void commitDrag(TMPlace& s);
+    void resetDrag(TMPlace& s);
+    TMPlace* placeFor(TMState& st, const std::string& key, bool create)
+    {
+        if (key.empty()) return nullptr;
+        std::map<std::string, TMPlace>::iterator it = st.places.find(key);
+        if (it != st.places.end()) return &it->second;
+        if (!create) return nullptr;
+        if (st.places.size() >= 32) st.places.clear();
+        TMPlace& p = st.places[key]; p.key = key; return &p;
+    }
     bool changed(TMState& s, const std::string& p) { long long st = dl::fileStamp(p); bool c = s.stamps[p] != st; s.stamps[p] = st; return c; }
     void load(TMState& s);
     int nowMin() { time_t t = time(0); struct tm lt; localtime_s(&lt, &t); return lt.tm_hour * 60 + lt.tm_min; }
@@ -192,14 +318,14 @@ int cppExtension::destroy(void) { return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(2);
+    TIdx& TX = static_cast<TradeManager*>(this)->TX;   // the parameter indices live in the object (no static state)
+    setParameterVersion(2);                            // unchanged: the same three settings in the same order, saved values kept
     setParameterDialogHeight(3);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     TX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     TX.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW, SL);
-    TX.moveX  = pc++; setListParameter("Position", 2, dl::ANCHORS);   // (1.1.0) one of 9 spots, default Top right
-    TX.moveY  = -1;
+    TX.place  = pc++; setListParameter("Position", 2, dl::ANCHORS);   // one of 9 spots, default Top right; drag overrides per chart
     return RTX_OK;
 }
 
@@ -379,7 +505,34 @@ int TradeManager::draw(void)
     }
     if (w < fs * 30) w = fs * 30;
     short W_ = (short)(w + 2 * pad + 6), H_ = (short)(L.size() * lh + pad);
-    int ax, ay; dl::anchorXY(pane.left, pane.top, dl::clearRightOf(pane.right), pane.bottom, W_, H_, dl::loadPlace("TradeManager", mkt, 2), 8, ax, ay);
+    // (1.2.0) the room: below the title, left of the profiles (never over them), and left of where price ends when it fits
+    TMPlace* PP = placeFor(S, tgl::chartKey(mkt, getSecondsPerBar()), true);
+    if (!PP) return RTX_OK;
+    TMPlace& P = *PP;
+    loadPlacement(P, mkt);
+    const int place = ready() ? cfg.place : P.place;           // the settings window open = its live choice
+    int lastBarRight = -1;
+    {
+        long n = getBarCount();
+        RTARRAY cl(barClose);
+        if (n > 0 && (long)cl.count >= n) {
+            PNT p; if (p.set((int)n - 1, cl[(int)n - 1], kBarRight) == RTX_OK && p.h > pane.left) lastBarRight = p.h;
+        }
+    }
+    tgl::Box rm = tgl::room(pane.left, pane.top, pane.right, pane.bottom, profilesLeftEdge(P, pane.right), lastBarRight, W_);
+    if (!tgl::fits(rm, W_, H_)) {                              // (#35) say so instead of drawing over the profiles
+        P.drawn = false; P.drag = tgl::Drag();
+        const char* msg = "Topstep Guard: no room left of the profiles - widen the chart";
+        if (pane.right - pane.left > textW(msg, fs, false) + 20 && pane.bottom - pane.top > lh + 24)
+            text((short)(pane.left + 8), (short)(pane.top + tgl::TITLE_H + lh / 2 + 2), msg, C_AMBER, fs, false);
+        return RTX_OK;
+    }
+    int ax = 0, ay = 0;
+    if (P.drag.down) { ax = P.drag.x; ay = P.drag.y; tgl::clampXY(rm, W_, H_, ax, ay); }
+    else if (tgl::savedApplies(P.saved, place, P.dragStamp / 1000003LL, P.placeStamp < 0 ? -1 : P.placeStamp / 1000003LL))
+        tgl::fromFrac(rm, W_, H_, P.saved.fx, P.saved.fy, ax, ay);
+    else tgl::anchor(rm, W_, H_, place, ax, ay);
+    P.box.l = ax; P.box.t = ay; P.box.r = ax + W_; P.box.b = ay + H_; P.area = rm; P.drawn = true; P.placeUsed = place;
     short x0 = (short)ax, y0 = (short)ay;
     fill(x0, y0, (short)(x0 + W_), (short)(y0 + H_), C_BOXBG);
     frame(x0, y0, (short)(x0 + W_), (short)(y0 + H_), frameC);
@@ -403,17 +556,106 @@ int TradeManager::draw(void)
     return RTX_OK;
 }
 
+// the Position (per market) and the dragged spot (per chart), re-read only when their files change (#31)
+void TradeManager::loadPlacement(TMPlace& s, const std::string& mkt)
+{
+    const std::string pp = dl::placePath("TradeManager", mkt);
+    const long long ps = dl::fileStamp(pp);
+    if (ps != s.placeStamp) {
+        s.placeStamp = ps; s.place = 2; s.fileReads++;
+        std::string t; long long v = 0;
+        if (ps >= 0 && readSmall(pp, t, 64)) { while (!t.empty() && (t.back() == '\n' || t.back() == '\r' || t.back() == ' ')) t.pop_back(); if (tgl::parseIntStrict(t, 0, 8, v)) s.place = (int)v; }
+    }
+    const std::string dir = flexDir();
+    if (dir.empty() || s.key.empty()) { s.saved = tgl::Saved(); return; }
+    const std::string dp = dir + "TradeManager.drag-" + s.key + ".txt";
+    const long long ds = dl::fileStamp(dp);
+    if (ds != s.dragStamp) {
+        s.dragStamp = ds; s.saved = tgl::Saved(); s.fileReads++;
+        std::string t; if (ds >= 0 && readSmall(dp, t, 256)) s.saved = tgl::parseSaved(t);
+    }
+}
+// where the profiles start, from their status files (strictly parsed, re-read on change). Those files are ONE per indicator
+// for every chart, so two charts can flip them: the smallest value seen in the last 5 s keeps the box still (as every LRA box)
+int TradeManager::profilesLeftEdge(TMPlace& s, int paneRight)
+{
+    const std::string dir = flexDir();
+    if (!dir.empty()) {
+        const std::string a = dir + "DealerProfile.status.txt", b = dir + "DeltaProfile.status.txt";
+        long long t1 = dl::fileStamp(a), t2 = dl::fileStamp(b);
+        if (t1 != s.profStamp1 || t2 != s.profStamp2) {
+            s.profStamp1 = t1; s.profStamp2 = t2; s.fileReads++;
+            std::string da, db; readSmall(a, da, 16384); readSmall(b, db, 16384);
+            tgl::Profiles P; tgl::parseProfileStatus(da, db, P); s.prof = P;
+        }
+    }
+    const int v = tgl::profilesLeft(paneRight, s.prof);
+    if (paneRight != s.profPaneR) { s.profHist.clear(); s.profPaneR = paneRight; }
+    const long long now = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    s.profHist.push_back(std::make_pair(now, v));
+    while (!s.profHist.empty() && now - s.profHist.front().first > 5000) s.profHist.pop_front();
+    while (s.profHist.size() > 400) s.profHist.pop_front();
+    int m = v; for (size_t i = 0; i < s.profHist.size(); i++) if (s.profHist[i].second < m) m = s.profHist[i].second;
+    return m;
+}
+// a finished drag: the spot as fractions of the room, for THIS chart only (market + bar size), written safely (#5)
+void TradeManager::commitDrag(TMPlace& s)
+{
+    const std::string dir = flexDir();
+    if (dir.empty() || s.key.empty()) return;
+    double fx = 0, fy = 0;
+    tgl::toFrac(s.area, s.box.w(), s.box.h(), s.drag.x, s.drag.y, fx, fy);
+    const std::string text = tgl::formatSaved(s.placeUsed, fx, fy);
+    if (publishFile(dir + "TradeManager.drag-" + s.key + ".txt", text)) {
+        s.saved = tgl::parseSaved(text); s.saves++;
+        s.dragStamp = dl::fileStamp(dir + "TradeManager.drag-" + s.key + ".txt");
+    }
+}
+// double-click: back to the Position setting (the chart's drag file is removed)
+void TradeManager::resetDrag(TMPlace& s)
+{
+    const std::string dir = flexDir();
+    s.saved = tgl::Saved(); s.drag = tgl::Drag();
+    if (!dir.empty() && !s.key.empty()) { std::remove((dir + "TradeManager.drag-" + s.key + ".txt").c_str()); s.dragStamp = -1; }
+}
+
+// (1.2.0) click on the box and drag it; release = it stays (saved for this chart); double-click = back to the Position.
+// Only this chart's state is touched: the state comes from this chart's user-data slot (the 2026-10-07 bug - one shared object
+// moved the copper box when the gold chart was clicked - cannot recur: nothing about the drag lives in the DLL object).
 int TradeManager::mouse(RTX_EVENT* e)
 {
-    (void)e; return RTX_FAIL;            // (1.1.0) placed by the Position setting - no dragging
+    if (!e) return RTX_FAIL;
+    TMState* st = slot_.get(this, false);
+    if (!st) return RTX_FAIL;
+    char rb[32] = {0}; const char* rs = getRootSymbol(rb);
+    TMPlace* s = placeFor(*st, tgl::chartKey(dl::marketFor(st->cfg.market, rs ? rs : ""), getSecondsPerBar()), false);
+    if (!s || !s->drawn) return RTX_FAIL;
+    int ev = -1;
+    switch (e->type) {
+        case E_MOUSE_CLICK: ev = tgl::M_DOWN; break;
+        case E_MOUSE_MOVE:  ev = tgl::M_MOVE; break;
+        case E_MOUSE_UP:    ev = tgl::M_UP; break;
+        case E_MOUSE_DBL:   ev = tgl::M_DBL; break;
+        default: return RTX_FAIL;
+    }
+    int h = 0, v = 0; bool havePos = false;
+    { PNT p; p.h = 0; p.v = 0; if (p.getMouse(e) == RTX_OK) { h = p.h; v = p.v; havePos = true; } }
+    if (!havePos && (ev == tgl::M_MOVE || ev == tgl::M_UP)) { h = e->v.mouse.h; v = e->v.mouse.v; havePos = true; }
+    const bool held = ev == tgl::M_MOVE ? leftButtonHeld() : true;
+    tgl::MouseOut o = tgl::onMouse(s->drag, ev, h, v, havePos, held, s->box, s->area);
+    if (o.hover) setCursor(CURSOR_HAND);
+    if (o.commit) commitDrag(*s);
+    if (o.reset) resetDrag(*s);
+    if (o.redraw) invalidateChart();
+    return o.handled ? RTX_OK : RTX_FAIL;
 }
 
 extern "C" cppExtension *CreateExtension(void)
 {
     TradeManager *p = new TradeManager();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Position: choose one of 9 spots in the settings.");
-    p->setVersion(TM_VERSION);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // TRACK_MOUSE: drag without selecting it first
+    p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Drag the box to move it (kept per chart); double-click it to go back to the Position setting.");
+    p->setVersion("1.2.0");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
     return p;
 }

@@ -1,9 +1,10 @@
-// test_chartview_logic.cpp -- unit tests for ChartViewLogic.h (no SDK).
-//   g++ -std=c++17 -Wall -Wextra -I. test_chartview_logic.cpp -o test_chartview_logic && ./test_chartview_logic
+// test_chartview_logic.cpp -- unit tests for ChartViewLogic.h 1.2.0 (no SDK).
+//   g++ -std=c++17 -Wall -Wextra -I. test_chartview_logic.cpp -o test_chartview_logic   then   CV_FIXTURES=tests_cv110/fixtures ./test_chartview_logic
 #include "ChartViewLogic.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <vector>
@@ -98,26 +99,122 @@ int main()
         check(cvl::parseLabelFile("").empty(), "empty file = no labels");
         check(cvl::parseLabelFile("no newline at end").size() == 1, "last line without newline");
     }
-    {
-        std::vector<std::string> e = cvl::parseExtra(" lsSessionVWAP , lsTapeFlowES;; none ,");
-        check(e.size() == 2 && e[0] == "lsSessionVWAP" && e[1] == "lsTapeFlowES", "extra labels: comma / semicolon, 'none' and blanks dropped");
-        check(cvl::parseExtra("none").empty(), "'none' = no extra");
-        std::vector<std::string> m = cvl::mergeLabels({ "A", "B" }, { "B", "C" });
-        check(m.size() == 3 && m[2] == "C", "merge keeps order, no duplicates");
-        std::vector<std::string> lv = cvl::labelVariants("CI[EntryLevel]");
-        check(lv.size() == 2 && lv[1] == "EntryLevel", "CI[x] also tried as x");
-        check(cvl::labelVariants("BV_Since").size() == 1, "plain label: one variant");
-        eq(cvl::customName("CI[CobLTFEntry]"), "CobLTFEntry", "custom-indicator name");
-        eq(cvl::customName("updn[Distance_Ratio_updn]"), "", "no custom try for non-CI labels");
+    {   // (1.2.0) labels: legend form, cleaning, lookup names, custom names, SDK fixed fields
+        std::vector<std::string> lv = cvl::lookupNames("CI[EntryLevel]");
+        check(lv.size() == 2 && lv[0] == "CI[EntryLevel]" && lv[1] == "EntryLevel", "CI[x]: as written, then x (not 'CI')");
+        lv = cvl::lookupNames("updn[Distance_Ratio_updn]");
+        check(lv.size() == 3 && lv[1] == "Distance_Ratio_updn" && lv[2] == "updn", "updn[y]: as written, y, then updn");
+        check(cvl::lookupNames("BV_Since").size() == 1, "plain label: one name");
+        eq(cvl::customName("CI[CobLTFEntry]"), "CobLTFEntry", "custom name of CI[x]");
+        eq(cvl::customName("updn[Distance_Ratio_updn]"), "Distance_Ratio_updn", "custom name of updn[y] = y");
+        eq(cvl::customName("cob_bull"), "cob_bull", "a plain name is also tried as a custom indicator (as DealerProfile does)");
+        eq(cvl::customName("a[b"), "", "unbalanced brackets: no custom try");
+        eq(cvl::cleanLabel("  updn[Distance_Ratio_updn]=0.37 "), "updn[Distance_Ratio_updn]", "legend '=value' tail dropped");
+        eq(cvl::cleanLabel("\"CI[EntryLevel]\""), "CI[EntryLevel]", "quotes dropped");
+        eq(cvl::cleanLabel("CI[Entry\x01Level]"), "CI[EntryLevel]", "control bytes dropped");
+        eq(cvl::cleanLabel("CI[Entry\xE2\x80\xA6]"), "CI[Entry???]", "non-ASCII shown as ?, never garbage");
+        eq(cvl::cleanLabel("a   b"), "a b", "blanks collapsed");
+        check(cvl::cleanLabel(std::string(500, 'x')).size() == cvl::LABEL_MAX, "label length capped");
+        cvl::LabelParts lp = cvl::splitLabel("CI[A[1]]");
+        check(lp.bracket && lp.prefix == "CI" && lp.inner == "A[1]", "inner name may hold brackets");
+        check(!cvl::splitLabel("plain").bracket && !cvl::splitLabel("x[]").bracket && !cvl::splitLabel("x[y]z").bracket, "not a legend form");
+        char f16[16]; std::memcpy(f16, "Distance_Ratio_u", 16); bool cut = false;
+        eq(cvl::fixedField(f16, 16, &cut), "Distance_Ratio_u", "16-byte field read to its end, not past it"); check(cut, "and flagged as cut");
+        char f8[8] = { 'a', 'b', 0, 'z', 'z', 'z', 'z', 'z' }; eq(cvl::fixedField(f8, 8, &cut), "ab", "stops at NUL"); check(!cut, "not cut");
+        char fx[4] = { 'a', (char)0xC3, 0x07, 0 }; eq(cvl::fixedField(fx, 4), "a??", "non-printable shown as ?");
+        std::string u16le = "\xFF\xFE"; for (char c : std::string("CI[A]\r\nB\r\n")) { u16le += c; u16le += '\0'; }
+        std::vector<std::string> u = cvl::parseLabelFile(u16le);
+        check(u.size() == 2 && u[0] == "CI[A]" && u[1] == "B", "UTF-16 LE labels file (Notepad 'Unicode')");
+        std::string u16be = "\xFE\xFF"; for (char c : std::string("Q\n")) { u16be += '\0'; u16be += c; }
+        u = cvl::parseLabelFile(u16be); check(u.size() == 1 && u[0] == "Q", "UTF-16 BE labels file");
+        std::string nobom; for (char c : std::string("CI[Z]\n")) { nobom += c; nobom += '\0'; }
+        u = cvl::parseLabelFile(nobom); check(u.size() == 1 && u[0] == "CI[Z]", "UTF-16 without a BOM");
+        u = cvl::parseLabelFile("updn[Distance_Ratio_updn]=0\nupdn[Distance_Ratio_updn]\n");
+        check(u.size() == 1, "a legend copy and the clean label are the same label");
     }
 
-    // ---- want file
+    // ---- want / picture requests
     check(cvl::wantMatches("", "ES", 180), "blank want = every chart");
     check(cvl::wantMatches("*", "NQ", 3600), "* = every chart");
     check(cvl::wantMatches("es", "ES", 180), "market token, case-insensitive");
     check(cvl::wantMatches("NQ, ES_180", "ES", 180), "exact chart token");
     check(!cvl::wantMatches("ES_3600", "ES", 180), "other period does not answer");
     check(!cvl::wantMatches("# just a comment\nCL", "ES", 180), "other market does not answer");
+    {
+        cvl::Request r = cvl::parseRequest("ES_180 1791603738\r\n");
+        check(r.epoch == 1791603738 && r.toks.size() == 1 && r.toks[0] == "ES_180", "'ES_180 <epoch>': token + epoch");
+        check(cvl::requestMatches(r, "ES", 180) && !cvl::requestMatches(r, "ES", 3600) && !cvl::requestMatches(r, "NQ", 180), "ES_180 only");
+        r = cvl::parseRequest("* 1791603738"); check(cvl::requestMatches(r, "GC", 3600), "'* <epoch>' = every chart (the epoch is not a market)");
+        check(cvl::requestFresh(r, 1791603738 + 60, 0, true), "a 60-s-old request is fresh");
+        check(!cvl::requestFresh(r, 1791603738 + 600, 0, false), "a 10-min-old request is stale");
+        check(!cvl::requestFresh(r, 1791603738 - 600, 0, false), "a request 10 min in the future is refused");
+        cvl::Request n = cvl::parseRequest("GC");
+        check(cvl::requestFresh(n, 1000, 990, true) && !cvl::requestFresh(n, 1000, 900, true) && cvl::requestFresh(n, 1000, 900, false), "no epoch: only a leftover file at load is ignored");
+        check(cvl::parseRequest("12345678").epoch == -1 && cvl::parseRequest("99999999999999").epoch == -1, "8 or 14 digits are not an epoch");
+    }
+
+    // ---- (1.2.0) which window is this chart
+    {
+        const std::string es3 = "ES LTF: EPZ26 (3m*), EPZ26 (1m) 3 Minutes*, Full Session 17:00-16:00";
+        const std::string es60 = "ES HTF: EPZ26 (60m*) 60 Minutes*, Full Session 17:00-16:00";
+        const std::string cl3 = "CL LTF: CLEX26 (3m*) Crude Light (Globex): November 2026 3 Minutes*, Full Session 17:00-16:00";
+        const std::string esH = "ES HTF: EPZ26 (1h*) 1 Hour*, Full Session";
+        check(cvl::titleScore(es3, "EPZ26", 180, "") == 8, "ES 3-min title: phrase + code = 8");
+        check(cvl::titleScore(es3, "EPZ26", 3600, "") == 0, "ES 3-min title is NOT the 60-min chart");
+        check(cvl::titleScore(es3, "EPZ26", 60, "") == 0, "the overlay's '(1m)' does not make it a 1-min chart");
+        check(cvl::titleScore(es60, "EPZ26", 3600, "") == 8, "ES 60-min title");
+        check(cvl::titleScore(es60, "EPZ26", 180, "") == 0, "ES 60-min title is not the 3-min chart");
+        check(cvl::titleScore(esH, "EPZ26", 3600, "") == 8, "'1 Hour' / '(1h*)' = 3600");
+        check(cvl::titleScore(cl3, "CLEX26", 180, "3 Minutes*") == 10, "periodicity label adds 2 when IRT gives it");
+        check(cvl::titleScore(cl3, "EPZ26", 180, "") == -1, "other symbol = -1");
+        check(cvl::titleScore("X: EPZ26 (13m*) 13 Minutes*", "EPZ26", 180, "") == 0, "13 Minutes is not 3 Minutes");
+        check(cvl::titleScore("X: EPZ26 (30s*) 30 Seconds*", "EPZ26", 30, "") == 8, "seconds charts");
+        check(cvl::titleScore("X: EPZ26 (1d*) Daily", "EPZ26", 86400, "") == 8, "daily charts");
+        std::vector<cvl::WinCand> c(4);
+        c[0].title = "Investor/RT"; c[0].area = 9000000;
+        c[1].title = es3; c[1].area = 1100 * 1049; c[1].w = 1100; c[1].h = 1049;
+        c[2].title = es60; c[2].area = 1300 * 1100; c[2].w = 1300; c[2].h = 1100;
+        c[3].title = "EPZ26 Quote"; c[3].area = 60000;
+        cvl::Pick p = cvl::pickChart(c, "EPZ26", 180, "", 0, 0);
+        check(p.index == 1 && p.matches == 1, "ES_180 picks the 3-min window though the 60-min one is bigger (the 1.1.0 bug)");
+        p = cvl::pickChart(c, "EPZ26", 3600, "", 0, 0); check(p.index == 2, "ES_3600 picks the 60-min window");
+        c[1].iconic = true; p = cvl::pickChart(c, "EPZ26", 180, "", 0, 0);
+        check(p.index == -1 && p.symbolOnly >= 1 && p.why.find("none shows its bar size") != std::string::npos, "minimised chart + symbol-only windows: none taken, reason given");
+        c[1].iconic = false; c.push_back(c[1]); c.back().area = 5; c.back().w = 900; c.back().h = 700;
+        p = cvl::pickChart(c, "EPZ26", 180, "", 900, 700); check(p.index == 4, "two equal titles: the one nearest the pane size");
+        p = cvl::pickChart(c, "EPZ26", 180, "", 0, 0); check(p.index == 1, "two equal titles, no size: the larger");
+        check(cvl::pickChart(c, "", 180, "", 0, 0).index == -1, "no symbol: nothing");
+        check(cvl::periodPhrases(0).empty() && cvl::periodCodes(-1).empty(), "unknown bar size: no phrases");
+    }
+
+    // ---- (1.2.0) blank pictures: his real ES_180 (black price pane) vs good CL / GC / HG pictures, at half size
+    {
+        auto ppm = [](const std::string& p, int& w, int& h) {
+            std::vector<unsigned char> px; FILE* f = std::fopen(p.c_str(), "rb"); w = h = 0; if (!f) return px;
+            int mx = 0; if (std::fscanf(f, "P6 %d %d %d", &w, &h, &mx) == 3 && w > 0 && h > 0 && mx == 255) { std::fgetc(f); px.resize((size_t)w * h * 3); if (std::fread(px.data(), 1, px.size(), f) != px.size()) px.clear(); }
+            std::fclose(f); return px;
+        };
+        const char* dirEnv = std::getenv("CV_FIXTURES"); std::string dir = dirEnv ? dirEnv : "tests_cv110/fixtures";
+        int w = 0, h = 0;
+        std::vector<unsigned char> es = ppm(dir + "/blank_ES_180_2026-10-09.ppm", w, h);
+        check(!es.empty(), "fixture ES_180 loaded");
+        if (!es.empty()) { cvl::Blank b = cvl::blankCheck(es.data(), w, h); check(b.blank && b.frac > 0.99, "his blank ES_180 picture is detected (" + std::to_string(b.frac) + ")"); }
+        const char* good[3] = { "/good_CL_180_2026-10-09.ppm", "/good_GC_180_2026-10-09.ppm", "/good_HG_3600_2026-10-09.ppm" };
+        for (int k = 0; k < 3; k++) {
+            std::vector<unsigned char> g = ppm(dir + good[k], w, h);
+            check(!g.empty(), std::string("fixture ") + good[k]);
+            if (!g.empty()) { cvl::Blank b = cvl::blankCheck(g.data(), w, h); check(!b.blank && b.frac < 0.9, std::string("good picture not blank ") + good[k] + " (" + std::to_string(b.frac) + ")"); }
+        }
+        std::vector<unsigned char> zero(400 * 300 * 3, 0);
+        check(cvl::blankCheck(zero.data(), 400, 300).blank, "an all-black bitmap (PrintWindow painted nothing) is blank");
+        check(cvl::blankCheck(nullptr, 400, 300).blank && cvl::blankCheck(zero.data(), 10, 10).blank, "no / tiny bitmap = blank");
+        check(cvl::afterCapture(true, false, 0) == cvl::SAVE && cvl::afterCapture(true, true, 0) == cvl::RETRY && cvl::afterCapture(true, true, 1) == cvl::RETRY
+              && cvl::afterCapture(true, true, 2) == cvl::GIVE_UP && cvl::afterCapture(false, false, 2) == cvl::GIVE_UP, "save / retry / give up after 3 tries");
+        check(cvl::printFlags(0) == 2 && cvl::printFlags(1) == 2 && cvl::printFlags(2) == 0, "PW_RENDERFULLCONTENT, again, then classic");
+        cvl::SnapStatus st; st.result = "OK"; st.window = "ES LTF"; st.attempts = 1; st.blankFrac = 0.75;
+        std::string t = cvl::snapStatusText(st);
+        check(t.find("VERSION|1.2.0\nRESULT|OK\n") == 0 && t.find("BLANK_FRAC|0.7500") != std::string::npos, "status text");
+    }
 
     // ---- scheduling
     {
@@ -158,6 +255,8 @@ int main()
     eq(cvl::num(std::numeric_limits<double>::infinity()), "null", "inf = null");
     eq(cvl::num(12345678.0), "12345678", "8 digits whole");
     eq(cvl::num(-3.5), "-3.5", "negative");
+    eq(cvl::num(3000000123.0), "3000000123", "volume above 2^31 exact (#2)");
+    eq(cvl::num(123456789012.0), "123456789012", "large whole number exact");
     check(cvl::fnv1a("abc") != cvl::fnv1a("abd"), "hash differs on change");
     check(cvl::fnv1a("abc") == cvl::fnv1a(std::string("abc")), "hash stable");
 
@@ -211,17 +310,18 @@ int main()
         s.chartBars = 1200; s.barsWanted = 2;
         s.t = { "2026-10-09 10:12:00", "2026-10-09 10:15:00" }; s.o = { 6700, 6701.25 }; s.h = { 6702, 6703 }; s.l = { 6699.5, 6700 };
         s.c = { 6701.25, 6702.75 }; s.v = { 12000, 8000 };
-        cvl::Series x; x.label = "CI[Biggest_Wave_Price_Since_Bars1]"; x.name = "Biggest Wave"; x.textLabel = "BW"; x.via = "chart";
+        cvl::Series x; x.label = "CI[Biggest_Wave_Price_Since_Bars1]"; x.foundAs = "Biggest_Wave_Price_Since_Bars1"; x.sdkName = "Biggest Wave"; x.sdkTextLabel = "BW"; x.via = "chart";
         x.arrayNo = { 0, 1 }; x.values = { { 12, std::numeric_limits<double>::quiet_NaN() }, { 0.5, 0.25 } };
         s.series.push_back(x);
         s.missing = { "lsTapeFlowES" };
         cvl::FileBlob f; f.name = "DealerProfile.status.txt"; f.bytes = 40; f.mtime = "2026-10-09 10:14:59"; f.text = "VERSION,2.5.1\nSTATE,drawn \x97 ok\n";
         s.files.push_back(f); s.filesSkipped = { "LRA-Touch-ES.csv (read failed)" };
-        s.watchFile = "C:\\Users\\r\\InvestorRT\\rtx\\lsFlexLevels\\ChartView.labels.txt"; s.watchFromFile = 6; s.watchExtra = 1;
+        s.watchFile = "C:\\Users\\r\\InvestorRT\\rtx\\lsFlexLevels\\ChartView.labels.txt"; s.watchFromFile = 6;
         std::string b = cvl::body(s);
         std::string d = cvl::document(b, "2026-10-09T10:15:03-05:00", 1791558903, cvl::NEWBAR);
         check(validJson(d), "the snapshot is valid JSON (UTF-8 safe)");
-        check(d.find("\"version\":\"1.1.0\"") != std::string::npos, "version in header");
+        check(d.find("\"version\":\"1.2.0\"") != std::string::npos, "version in header");
+        check(d.find("\"legend_prefix\":\"CI\",\"legend_name\":\"Biggest_Wave_Price_Since_Bars1\"") != std::string::npos, "legend parts in the export");
         check(d.find("\"why\":\"new bar\"") != std::string::npos, "why in header");
         check(d.find("\"arrays\":{\"0\":[12,null],\"1\":[0.5,0.25]}") != std::string::npos, "series arrays keyed by array number, NaN = null");
         check(d.find("\"missing\":[\"lsTapeFlowES\"]") != std::string::npos, "missing listed");
