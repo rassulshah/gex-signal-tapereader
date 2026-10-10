@@ -156,6 +156,23 @@ int main()
         printf("restart Saturday 08:42: Friday back on the pane: %s (%s); record unchanged: %s\n", tf->S().dispDone ? "yes" : "NO", tf->S().dispNote.c_str(), rec2 == rec1 ? "yes" : "NO");
         CHECK(tf->S().dispDone && tf->S().dispSid == sidFri && rec2 == rec1 && tf->S().prevMarks.size() > 0, "(2) a restart redraws Friday and never re-decides or duplicates its A's (no repaint)");
     }
+    // ---- (2.0.5) a past session back-filled by an OLDER version is decided again ONCE (old record kept as .v<old>); then never again
+    {
+        std::string old = slurp(recPath); size_t a = 0;
+        const std::string cur = std::string("|") + TF_VERSION, prev = "|2.0.4";
+        while ((a = old.find(cur, a)) != std::string::npos) { old.replace(a, cur.size(), prev); a += prev.size(); }
+        a = old.find(std::string("# node back-fill ") + TF_VERSION); if (a != std::string::npos) old.replace(a + 17, std::strlen(TF_VERSION), "2.0.4");
+        { std::ofstream o(recPath.c_str(), std::ios::binary | std::ios::trunc); o << old; }
+        static_cast<cppExtension*>(tf)->destroy(); delete tf; { std::lock_guard<std::mutex> g(booksMx()); books().clear(); }
+        tf = start(); for (int i = 0; i < 20 * 60 && !tf->S().dispDone; ++i) secondOf(tf); for (int i = 0; i < 60; ++i) secondOf(tf);
+        const std::string kept = slurp(recPath + ".v2.0.4"), redone = slurp(recPath);
+        const bool ok1 = kept == old && redone.find(std::string("# node back-fill ") + TF_VERSION) != std::string::npos && redone.find("|2.0.4") == std::string::npos;
+        static_cast<cppExtension*>(tf)->destroy(); delete tf; { std::lock_guard<std::mutex> g(booksMx()); books().clear(); }
+        tf = start(); for (int i = 0; i < 20 * 60 && !tf->S().dispDone; ++i) secondOf(tf); for (int i = 0; i < 60; ++i) secondOf(tf);
+        const bool ok2 = slurp(recPath) == redone;
+        printf("(2.0.5) an older version's back-fill: kept as .v2.0.4 %s, decided again by %s %s; the next restart leaves it unchanged: %s\n", kept == old ? "yes" : "NO", TF_VERSION, ok1 ? "yes" : "NO", ok2 ? "yes" : "NO");
+        CHECK(ok1 && ok2, "(2.0.5) a past session back-filled by an older version is decided again once (old record kept), then never again");
+    }
     // ---- (audit #31) the status file is rewritten only on change (weekend: nothing changes -> the 60-s heartbeat only)
     {
         std::set<std::string> ups; for (int i = 0; i < 300; ++i) { secondOf(tf); const std::string s = slurp(LS + "\\TapeFlow.status-ES.txt"); size_t a = s.find("UPDATED,"); if (a != std::string::npos) ups.insert(s.substr(a)); }

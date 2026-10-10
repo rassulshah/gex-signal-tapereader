@@ -62,7 +62,7 @@
 
 namespace tfl {
 
-#define TFL_VERSION "2.0.4"
+#define TFL_VERSION "2.0.5"
 
 struct Cfg {
     int fastW = 30, ctxW = 180, obsW = 20, part = 5;   // seconds
@@ -1284,6 +1284,7 @@ struct SigCfg {
     // rejected ("close not beyond node"); and the absorption bar or its confirmation bar must be the 1-bar ZigZag pivot (low for
     // bullish, high for bearish), else the A? is never confirmed ("not at pivot"). Both on by default; off = the 2.0.3 rules.
     bool nodeCloseBeyond = true, pivotRule = true; int pivotMaxWait = 20;
+    double minEffort = 1.5;   // (2.0.5) PROVISIONAL effort floor (TF_MIN_EFFORT): no A? when that minute < 1.5x a normal minute ("weak effort"); the weekend study sets the real one
 };
 struct BarIn { long long te = 0, ts = 0; int o = 0, h = 0, l = 0, c = 0; };   // ticks; te = the chart's bar stamp (its close)
 // (2.0.4) Rassul's 1-bar ZigZag (his CoB convention), NATIVE: in a down leg the lowest low (strictly lower; the earliest wins a tie)
@@ -1439,9 +1440,14 @@ public:
                     if (m.norm > 0) m.mult = f.ndMinVol / m.norm;
                     m.absorbed = m.minuteVol * (f.ndDir > 0 ? -1 : 1);
                 }
-                m.held = std::max(0, f.ndDir < 0 ? b.h - f.ndHi : f.ndLo - b.l);   // how far the bar traded past the node
-                m.why = f.ndDir > 0 ? "sellers absorbed (bar node)" : "buyers absorbed (bar node)";
-                marks.push_back(m); log(marks.back());                         // confirmed only by a LATER bar
+                if (m.mult < cfg.minEffort) {                                   // (2.0.5) provisional effort floor: logged, never drawn
+                    char r[200]; snprintf(r, sizeof(r), "%lld|R|%d|X|%d|%d|%d|%lld|0|%s weak effort %.2fx|%s", b.te, m.dir, m.px, m.lo, m.hi, b.te, m.dir > 0 ? "sellers" : "buyers", m.mult, version.c_str());
+                    journal.push_back(r); rejected["weak effort"]++;
+                } else {
+                    m.held = std::max(0, f.ndDir < 0 ? b.h - f.ndHi : f.ndLo - b.l);   // how far the bar traded past the node
+                    m.why = f.ndDir > 0 ? "sellers absorbed (bar node)" : "buyers absorbed (bar node)";
+                    marks.push_back(m); log(marks.back());                     // confirmed only by a LATER bar
+                }
             }
         }
         else if (f.awDir) {
@@ -1536,7 +1542,7 @@ public:
         long long t = 0, ct = 0, rf = 0; int dir = 0, px = 0, lo = 0, hi = 0;
         if (!parseStoreLong(c[0], &t) || c[1].size() != 1) return false;
         if (c[1] == "D") { decidedThrough = std::max(decidedThrough, t); return true; }
-        if (c[1] == "R") { rejected[c[9].find("not beyond") != std::string::npos ? "close not beyond node" : "other"]++; return true; }   // (2.0.4) a logged rejection
+        if (c[1] == "R") { rejected[c[9].find("not beyond") != std::string::npos ? "close not beyond node" : c[9].find("weak effort") != std::string::npos ? "weak effort" : "other"]++; return true; }   // (2.0.4) a logged rejection
         const char k = c[1][0];
         if (!kindRank(k) || !parseStoreInt(c[2], &dir) || (dir != 1 && dir != -1) || c[3].size() != 1 ||
             !parseStoreInt(c[4], &px) || !parseStoreInt(c[5], &lo) || !parseStoreInt(c[6], &hi) || !parseStoreLong(c[7], &ct) || !parseStoreLong(c[8], &rf)) return false;
@@ -1616,7 +1622,8 @@ private:
 // ---- the header line: "TF 2.0.1 ES  BUYERS 1.6x  last: A 3.1x 7,861.50  -840 absorbed  held 4t"
 inline std::string shortVersion(const std::string& v) { return v.size() > 2 && v.compare(v.size() - 2, 2, ".0") == 0 && std::count(v.begin(), v.end(), '.') == 2 ? v.substr(0, v.size() - 2) : v; }
 inline const char* sideWord(bool ok, double f180) { return !ok ? "BALANCED" : f180 >= 15 ? "BUYERS" : f180 <= -15 ? "SELLERS" : "BALANCED"; }
-inline std::string multText(double m) { char b[24]; snprintf(b, sizeof(b), "%.1fx", m); return b; }
+static const double MULT_DISPLAY_CAP = 10.0;          // (2.0.5) multiples at or above this read "10x+" (the exact value stays in the record)
+inline std::string multText(double m) { if (m >= MULT_DISPLAY_CAP) return "10x+"; char b[24]; snprintf(b, sizeof(b), "%.1fx", m); return b; }
 inline std::string markLabel(const Mark& m) { return std::string(1, m.kind) + (m.question() ? "? " : " ") + multText(m.mult); }   // "A? 3.1x" / "A 3.1x"
 inline std::string withCommas(long long v)
 {
@@ -1777,6 +1784,30 @@ inline double recentMinuteNorm(const Recs& H, long long t)
     std::vector<float> v; const long long m0 = (t / 60) * 60;
     for (long long a = m0 - 3600; a < m0; a += 60) { long long B, S; sideSums(H, a, a + 60, &B, &S); if (B + S > 0) v.push_back((float)std::max(B, S)); }
     return v.size() >= 10 ? (double)median(v) : -1;
+}
+// (2.0.5) the session's median one-side minute volume over its traded minutes in [from, to) (-1 below 10 traded minutes) - causal
+template <class Recs>
+inline double sessionMinuteMedian(const Recs& H, long long from, long long to)
+{
+    std::vector<float> v; long long cur = LLONG_MIN, B = 0, S = 0;
+    auto flush = [&]() { if (cur != LLONG_MIN && B + S > 0) v.push_back((float)std::max(B, S)); };
+    for (auto it = std::lower_bound(H.begin(), H.end(), from, [](const SecRec& r, long long t) { return r.t < t; }); it != H.end() && it->t < to; ++it) {
+        const long long m = it->t - ((it->t % 60) + 60) % 60;
+        if (m != cur) { flush(); cur = m; B = S = 0; }
+        B += it->b; S += it->s;
+    }
+    flush();
+    return v.size() >= 10 ? (double)median(v) : -1;
+}
+// (2.0.5) the ROBUST normal minute (Rassul's HG camera: "A 24.2x" from a 5-contract fallback normal in a quiet hour): this time of
+// day's slot normal from the baselines, else the last 60 minutes' median - FLOORED at the session's median one-side minute so far
+template <class Recs>
+inline double robustMinuteNorm(const Recs& H, long long sessStart, long long t, double slotNorm)
+{
+    const double base = slotNorm > 0 ? slotNorm : recentMinuteNorm(H, t);
+    const double sm = sessionMinuteMedian(H, sessStart, (t / 60) * 60);
+    const double n = std::max(base, sm);
+    return n > 0 ? n : -1;
 }
 // (2.0.3) where the three 1-minute bars of a candle go: inside 90% of the candle spacing, never past the next candle; below 6 px
 // per candle the candle gets ONE bar (the minutes summed) - returns how many slots and their [x1, x2] pixel columns

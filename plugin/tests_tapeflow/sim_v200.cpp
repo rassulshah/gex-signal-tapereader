@@ -77,7 +77,8 @@ static std::vector<MTick> dayTape(long long from, long long to, unsigned seed, f
     return v;
 }
 // (2.0.1) an absorption label: "A 3.1x" / "A? 3.1x"
-static bool aLabel(const std::string& s) { size_t i = 1; if (s.empty() || s[0] != 'A') return false; if (i < s.size() && s[i] == '?') i++; if (i >= s.size() || s[i] != ' ') return false; i++;
+static bool aLabel(const std::string& s) { if (s == "A 10x+" || s == "A? 10x+") return true;   // (2.0.5) the display cap
+    size_t i = 1; if (s.empty() || s[0] != 'A') return false; if (i < s.size() && s[i] == '?') i++; if (i >= s.size() || s[i] != ' ') return false; i++;
     size_t d = i; while (i < s.size() && (isdigit((unsigned char)s[i]) || s[i] == '.')) i++; return i > d && i + 1 == s.size() && s[i] == 'x'; }
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static const std::string LS = "/tmp/tfv200/home\\InvestorRT\\rtx\\lsFlexLevels";
