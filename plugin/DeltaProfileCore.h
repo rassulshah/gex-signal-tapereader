@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.4.2 -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.5.4 -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -41,7 +41,8 @@ struct Bucket {
     Bucket() : key(0), low(0), high(0), delta(0), volume(0), ratio(0) {}
 };
 struct Node { Tick bucket; double price, ratio; State state; };
-struct Zone { Tick low, high; std::string code; bool support; int share; int peakBar = -1; };   // (2.4.3) peakBar: where the zone's absorption happened, for its circle
+struct Zone { Tick low, high; std::string code; bool support; int share; int peakBar = -1;   // (2.4.3) peakBar: where the zone's absorption happened, for its circle
+              double net = 0; int decidedBar = -1; };                                    // (2.5.4) for the signal record only: the zone's net delta and the bar whose close decided it
 struct Snapshot {
     double tick, meanAbsDelta, maxAbsDelta, maxVolume;
     Tick ticksPerRow;
@@ -226,6 +227,7 @@ inline Snapshot build(const std::vector<Bar>& bars, double tick, bool allowConfi
                 Zone z; z.low = run.front().first; z.high = run.back().first;
                 z.share = static_cast<int>(std::floor(share * 100 + 0.5));
                 z.peakBar = state.peakBar;
+                z.net = net; z.decidedBar = state.decidedBar;   // (2.5.4) recorded, never drawn
                 z.code = state.code == "A" ? "A" : state.code == "I" ? name : name + "?";
                 z.support = (state.code == "A" || state.code == "I") ? state.support : !sell;
                 if (!allowConfirmation && z.code.back() != '?') z.code += "?";
