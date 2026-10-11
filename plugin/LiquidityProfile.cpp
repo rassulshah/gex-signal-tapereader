@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.4.0, 2026-10-11; 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.4.1, 2026-10-11; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -60,7 +60,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.4.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.4.1"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -361,13 +361,23 @@ void LiquidityProfile::readTrades(LQState& S, long long t, long count) {
     if (close.count >= count) S.e.onLastPrice(close[(int)count - 1]);
 }
 
+// (0.4.1) the buyers' / sellers' volume of closed bars from IRT's own bar statistics - the 'prior bars' pace' for LoF / HiB (history
+// bars are seeded at load so the pace exists from the first live bar; live bars are overwritten with the full bar's numbers)
+static void seedPace(LQState& S, cppExtension::RTARRAYP& vap, int from, int to) {
+    for (int b = std::max(0, from); b <= to && b < (int)vap.count; ++b) {
+        cppExtension::BARSTATISTICS st; const int n = vapStats(&vap, b, &st);
+        if (n < 0 || st.buyVolume < 0 || st.sellVolume < 0) continue;
+        lqp::Engine::BarPace& p = S.e.pace[b]; p.buy = (double)st.buyVolume; p.sell = (double)st.sellVolume;
+    }
+}
 // a bar is closed once a later bar exists (checklist #27); each closed bar is decided once, in order
 void LiquidityProfile::closedBars(LQState& S, long count) {
-    if (S.barCount == 0) { S.barCount = count; S.e.curBar = (int)count - 2; S.e.formBar = (int)count - 1; return; }   // history before load: never decided
+    if (S.barCount == 0) { S.barCount = count; S.e.curBar = (int)count - 2; S.e.formBar = (int)count - 1; RTARRAYP vap(barVolumeProfile); seedPace(S, vap, (int)count - 1 - S.e.P.paceBars, (int)count - 2); return; }   // history before load: never decided
     if (count <= S.barCount) { if (count < S.barCount) S.barCount = count; return; }
     RTARRAYI times(barDateTime); RTARRAY close(barClose), high(barHigh), low(barLow);
     if (times.count < count || close.count < count) return;
     loadDelta(S);
+    RTARRAYP vap(barVolumeProfile);
     // ATR of the chart's closed bars (20), scaled to a 3-min bar when the chart is not 3-min
     double sum = 0; int m = 0;
     for (int i = (int)count - 2; i >= 0 && m < 20; --i, ++m) sum += (double)high[i] - (double)low[i];
@@ -375,7 +385,7 @@ void LiquidityProfile::closedBars(LQState& S, long count) {
     for (long i = S.barCount - 1; i < count - 1; ++i) {
         const long long bt = (long long)times[(int)i];
         const long long endMs = ctSec((RTDATE)times[(int)i]) * 1000LL;   // IRT stamps the bar END (checklist #12)
-        if (endMs > 0) S.e.onBarClose((int)i, bt, endMs, (double)close[(int)i], S.dpBid, S.dpAsk);
+        if (endMs > 0) { S.e.onBarClose((int)i, bt, endMs, (double)close[(int)i], S.dpBid, S.dpAsk); seedPace(S, vap, (int)i, (int)i); }
     }
     S.barCount = count;
     persist(S);
@@ -403,10 +413,11 @@ void LiquidityProfile::loadNorms(LQState& S) {
             if (c[1] == "pull_share" && x >= 0.2 && x <= 0.95) { p.pullShare = x; info += " pull_share " + c[2] + " " + src; }
             else if (c[1] == "exhaust" && x >= 0.1 && x <= 0.9) { p.exhaust = x; info += " exhaust " + c[2] + " " + src; }
             else if (c[1] == "eaten_break" && x >= 0.25 && x <= 5) { p.eatenBreak = x; info += " eaten_break " + c[2] + " " + src; }
+            else if (c[1] == "pace_min" && x >= 1.2 && x <= 6) { p.paceMin = x; info += " pace_min " + c[2] + " " + src; }
         }
     }
     S.e.norms.median.swap(med); S.e.norms.loaded = true; S.e.P.k = p.k; S.e.P.hwMin = p.hwMin; S.e.P.hwMax = p.hwMax;
-    S.e.P.pullShare = p.pullShare; S.e.P.exhaust = p.exhaust; S.e.P.eatenBreak = p.eatenBreak;
+    S.e.P.pullShare = p.pullShare; S.e.P.exhaust = p.exhaust; S.e.P.eatenBreak = p.eatenBreak; S.e.P.paceMin = p.paceMin;
     S.params = info.empty() ? "built-in defaults" : info.substr(1);
     S.confirmed.swap(conf);
 }
@@ -746,7 +757,12 @@ void LiquidityProfile::renderFlow(LQState& S) {
         int y = top ? t0 : b0;
         for (size_t k = 0; k < it->second.size(); ++k) {
             const lqp::Mark& m = *it->second[k];
-            const std::string t = m.code + (S.confirmed.count(m.code) ? "" : "?");
+            // the number: Exh 0.3x (weakness), Pull 72%, LoF / HiB / RpB / RpO 2.4x (x the prior bars' pace); "?" until confirmed - Exh also
+            // needs its number at or below the level the data confirmed for this market
+            char num[24] = "";
+            if (m.value >= 0) { if (m.code == "Pull") std::snprintf(num, sizeof(num), " %.0f%%", m.value * 100.0); else std::snprintf(num, sizeof(num), " %.1fx", m.value); }
+            const bool conf = S.confirmed.count(m.code) && (m.code != "Exh" || (m.value >= 0 && m.value <= S.e.P.exhaust));
+            const std::string t = m.code + (conf ? "" : "?") + num;
             setTextColor(lqp::Engine::bullish(m) ? C_BUY : C_SELL);
             const int w = getTextWidth(t.c_str(), -1);
             RCT r; r.set(coord(x - w / 2 - 1), coord(y - 1), coord(x + w / 2 + 1), coord(y + S.font + 3)); r.drawText(t.c_str(), true, false);
@@ -768,6 +784,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.4.0");   // LQ_VERSION
+    p->setVersion("0.4.1");   // LQ_VERSION
     return p;
 }

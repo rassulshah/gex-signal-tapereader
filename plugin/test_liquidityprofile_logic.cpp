@@ -77,6 +77,10 @@ static void test_zone_found_and_durable() {
     CHECK(e.zones.size() <= 6, "at most top 3 per side");
 }
 
+static void pace(Engine& e, int upTo, double buy, double sell, double book) {   // (0.4.1) the prior bars' normal pace
+    for (int b = upTo - 20; b < upTo; ++b) { Engine::BarPace& p = e.pace[b]; p.buy = buy; p.sell = sell; p.book[0] = p.book[1] = book; p.bookOk = true; }
+}
+static const Mark* get(const Engine& e, const char* code) { for (auto& m : e.marks) if (m.code == code) return &m; return nullptr; }
 static bool has(const Engine& e, const char* code) { for (auto& m : e.marks) if (m.code == code) return true; return false; }
 
 // (0.4.0) no chart marks: a break / hold ends the attempt and is LOGGED for the study; the six pane signals are the only marks
@@ -129,13 +133,14 @@ static void test_exhaustion_is_Exh_on_the_aggression_pane() {
     CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("|hold Exh") != std::string::npos, "the hold is logged with Exh");
 }
 
-static void test_market_threshold_changes_Exh() {
-    Engine e = zoneSetup(); e.P.exhaust = 0.2;              // (0.3.1) this market's data-chosen threshold
+static void test_Exh_prints_under_half_with_its_number() {
+    Engine e = zoneSetup(); e.P.exhaust = 0.2;              // the market's confirmed level only decides the "?" (drawn by the host)
     e.onTrade(41000, 69.97, 0, 30); e.onTrade(60000, 69.96, 0, 30);
     e.onTrade(200000, 69.96, 0, 20);                        // 2nd half 20 / 1st 60 = 0.33: dried up at 0.5, not at 0.2
     std::vector<std::pair<Tick, Tick>> none;
     e.onBarClose(2, 2000, 240000, 70.00, none, none);
-    CHECK(!has(e, "Exh"), "with exhaust 0.2 a 0.33 pace is not exhaustion");
+    const Mark* m = get(e, "Exh");
+    CHECK(m && m->value > 0.3 && m->value < 0.35, "a 0.33 pace is under 0.5: Exh prints with its number (0.33x)");
 }
 
 static void test_hold_with_delta_absorption_is_logged() {
@@ -186,6 +191,17 @@ static void test_norms_fallback() {
     CHECK(n.at(17) > 0, "session median once 30+ samples");
 }
 
+static void test_LoF_needs_double_the_pace() {
+    Engine e = zoneSetup(); pace(e, 10, 30, 30, 10);
+    std::vector<std::pair<Tick, Tick>> none;
+    e.formBar = 10; e.curBar = 9;
+    e.onTrade(41000, 69.97, 0, 20);
+    e.onBarClose(10, 1000, 180000, 69.96, none, none);
+    e.formBar = 11;
+    e.onTrade(200000, 69.96, 40, 0);              // buyers pass the sellers, but 40 / 30 = 1.3x: not double
+    e.onBarClose(11, 2000, 360000, 69.96, none, none);
+    CHECK(!has(e, "LoF"), "a cross at 1.3x the normal pace does not print (2.0x or more)");
+}
 static void test_pull_not_replaced_reads_PULL() {
     Engine e = zoneSetup();
     e.onTrade(41000, 69.97, 0, 5);
@@ -212,7 +228,7 @@ static void test_eaten_not_replaced_reads_depleting() {
     CHECK(r.active && r.depleting && !r.pulling, "eaten 1x+ and not replaced = DEPLETING?");
 }
 static void test_story_defense_then_offense() {
-    Engine e = zoneSetup();
+    Engine e = zoneSetup(); pace(e, 10, 30, 30, 10);        // normal: 30 lots a side per bar
     std::vector<std::pair<Tick, Tick>> none;
     e.formBar = 10; e.curBar = 9;
     e.onTrade(41000, 69.97, 0, 40);               // bar 10: sellers attack the zone
@@ -221,7 +237,8 @@ static void test_story_defense_then_offense() {
     e.formBar = 11;
     e.onTrade(200000, 69.96, 90, 3);              // bar 11: buyers' total since arrival passes the sellers' (0.3.0: the cumulative cross), sellers' pace collapsed
     e.onBarClose(11, 2000, 360000, 69.96, none, none);
-    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11 && has(e, "LoF"), "defense first (sellers led since arrival), then the buyers' total crosses above in bar 11 = LoF");
+    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11 && has(e, "LoF"), "defense first (sellers led since arrival), then the buyers' total crosses above in bar 11 at 3.0x their normal pace = LoF");
+    CHECK(get(e, "LoF") && get(e, "LoF")->value > 2.9 && get(e, "LoF")->value < 3.3, "LoF carries its number: 90 lots vs about 30 normal = about 3.1x");
     CHECK(!e.attempts.empty() && e.attempts[0].barE >= 10 && e.attempts[0].barE <= 11, "the sellers' pace halved by bar 11 = E");
     CHECK(!e.attempts.empty() && e.attempts[0].flowBars[10].attack == 70 && e.attempts[0].flowBars[11].defend == 90, "per-bar attack / defend kept for the panes");
     e.formBar = 12;
@@ -229,7 +246,7 @@ static void test_story_defense_then_offense() {
     CHECK(!e.attemptLog.empty() && e.attemptLog.back().find("|E>O") != std::string::npos, "the story is logged with its order (E, then O)");
 }
 static void test_double_crossover() {
-    Engine e = zoneSetup();
+    Engine e = zoneSetup(); pace(e, 10, 30, 30, 10);
     std::vector<std::pair<Tick, Tick>> none;
     e.formBar = 10; e.curBar = 9;
     e.onTrade(41000, 69.97, 0, 40);
@@ -273,7 +290,7 @@ int main() {
     test_pull_not_replaced_reads_PULL(); test_eaten_and_replaced_reads_holding(); test_eaten_not_replaced_reads_depleting();
     test_pull_vs_execution(); test_window_edge_is_not_a_pull(); test_refill_is_counted(); test_bad_books_refused();
     test_zone_found_and_durable(); test_eaten_break_is_logged_not_marked(); test_pulled_while_attacked_is_Pull_on_the_defense_pane();
-    test_pulled_without_attack_is_not_Pull(); test_exhaustion_is_Exh_on_the_aggression_pane(); test_market_threshold_changes_Exh();
+    test_pulled_without_attack_is_not_Pull(); test_exhaustion_is_Exh_on_the_aggression_pane(); test_Exh_prints_under_half_with_its_number(); test_LoF_needs_double_the_pace();
     test_hold_with_delta_absorption_is_logged(); test_signal_never_repeats_or_changes(); test_record_round_trip(); test_half_width_rule(); test_norms_fallback();
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
