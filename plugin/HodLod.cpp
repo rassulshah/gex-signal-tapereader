@@ -49,6 +49,7 @@ struct HLState {
     time_t lastStatusWrite = 0; std::string lastStatus;
     bool faulted = false;
     long long recomputes = 0, statusWrites = 0;   // test counters (checklist #31 / #32)
+    int projIdx = -1;                  // (1.1.0) the chart bar index of the 1st extreme (the projection line's x), -1 = none
     // (HL104) MenthorQ level snapshots of MenthorQLevels.csv (the one external input): one per distinct content, <= 32, newest last
     std::vector<hl::MqSnap> mq; long long mqStamp = -2; time_t mqChecked = 0; std::string mqWhy; long long mqLoads = 0;
     ~HLState() { delete T; }
@@ -240,6 +241,8 @@ void HodLod::recompute(HLState& S, long n)
     hl::Tracker T = hl::runBars(c, B, B.size(), &rows);
     hl::ReadOut rd = rows.empty() ? hl::ReadOut() : rows.back().out;
     S.view = hl::buildView(T, rd, &rows, &S.mq);
+    S.projIdx = -1;                           // (1.1.0) the 1st extreme's bar on this chart, matched by its END stamp
+    if (S.view.projOk) for (size_t j = B.size(); j-- > 0;) if (B[j].absEnd == S.view.projFromEnd) { S.projIdx = start + (int)j; break; }
     if (!S.mqWhy.empty()) S.view.mqWhy = S.mqWhy + (S.view.mqWhy.empty() ? "" : "; " + S.view.mqWhy);
     S.rd = rd; S.per = per; S.tick = tick; S.have = S.view.has || !S.view.header.empty();
     delete S.T; S.T = new hl::Tracker(T);
@@ -382,7 +385,11 @@ int HodLod::draw(void)
     const double tick = S->tick;
     auto yOf = [&](long long ticks) { return (int)getVerticalDrawPosition((float)((double)ticks * tick)); };
     hl::Measure M = [&](const std::string& s, int fs, bool bold) { return textW(s, fs, bold); };
-    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, priceEdge(), position(S->mkt));
+    int projX = -1;                           // (1.1.0) the projection line's x: the 1st extreme's bar centre
+    if (S->view.projOk && S->projIdx >= 0 && S->projIdx < (int)getBarCount()) {
+        PNT p; if (p.set(S->projIdx, (float)((double)S->view.projFrom * tick), kBarCenter) == RTX_OK && p.h > 0) projX = (int)p.h;
+    }
+    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, priceEdge(), position(S->mkt), projX);
     execute(L);
     writeStatus(*S, &L);
     return RTX_OK;
@@ -393,7 +400,7 @@ extern "C" cppExtension *CreateExtension(void)
     HodLod *p = new HodLod();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the live read (LOD / HOD IN) and the 2nd-extreme call, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
-    p->setVersion("1.0.1");
+    p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the projected opposite extreme (a line + flag from the 1st extreme, the target after Range), the live read (LOD / HOD IN) and the 2nd-extreme call, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
+    p->setVersion("1.1.0");
     return p;
 }

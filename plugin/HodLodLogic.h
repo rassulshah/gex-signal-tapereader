@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.0.1";
+static const char* const HL_VERSION = "1.1.0";
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -708,6 +708,10 @@ struct View {
     int callT = -1, callSrc = 0; double callP = NAN; bool callIn = false;     // the 2nd-extreme call in the E cell / header
     double callShow = NAN; bool callQ = false, callLate = false, callDim = false;
     std::string headMain, headTail, headTailShort, headLeftTxt; unsigned headTailCol = C_SLATE;   // (HL101) the header in two colours: the read + the 2nd call
+    // (1.1.0, Rassul 2026-10-11 16:54) the PROJECTED opposite extreme: the 1st extreme + / - the expected full RTH range (hle median,
+    // never below the range so far). Study lra.ext_yardstick: the expected range beat ATR (and ATR + range used) in 6 of 7 markets
+    // on unseen days (crude a tie). Drawn as a vertical line from the 1st extreme with a flag + "Proj HOD 7,870.00"; in the header.
+    bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt;
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
 enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_ROOM, K_RANGE, K_CLOSE, K_DIR1, K_DIR2, NALL };
@@ -878,6 +882,13 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     double eT2 = v.haveHle ? v.ex.t2 : (Mo ? Mo->openToSecond : NAN); (void)eT2;   // used only without the read model
     double eSize = NAN;                                   // set with the E row (hle wick, else the median)
     double eRange = v.haveHle ? v.ex.range : (Mo ? Mo->rangePts : NAN);
+    if (!v.prior && v.haveHle && F && std::isfinite(v.ex.range) && v.ex.range > 0) {
+        long long rt = (long long)std::llround(v.ex.range / tick);
+        if (rt < v.rangeT) rt = v.rangeT;                                    // never inside the range already printed
+        v.projOk = true; v.projUp = v.side == 1; v.projFrom = F->px; v.projFromEnd = F->endAbs;
+        v.projTo = v.projUp ? F->px + rt : F->px - rt;
+        v.projTxt = std::string(v.projUp ? "Proj HOD " : "Proj LOD ") + pxTxt((double)v.projTo * tick, dec);
+    }
     if (std::isfinite(eRange) && eRange > 0) v.usedPct = (int)std::llround(100.0 * (double)v.rangeT * tick / eRange);
     // ---- the candle labels (mockup v5)
     auto nameLine = [&](bool isHod, int lvl) {
@@ -1098,7 +1109,8 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         } else {
             std::string mn, tl; bool dim = false; readParts(rh, T.C.readOpen, T.C.readN, mn, tl, dim);
             // (HL105, mockup 6) the day's range used so far (today's RTH range / the expected full range, hle native)
-            v.headLeftTxt = rthT + (v.usedPct >= 0 ? "   Range " + std::to_string(v.usedPct) + "%" : std::string());
+            v.headLeftTxt = rthT + (v.usedPct >= 0 ? "   Range " + std::to_string(v.usedPct) + "%" : std::string())
+                          + (v.projOk ? "   " + v.projTxt : std::string());   // (1.1.0) the target after Range
             v.headMain = mn;
             v.headerCol = (v.complete || rd.state != 1) ? C_GREY : C_SLATE;
         }
@@ -1158,7 +1170,7 @@ struct Layout {
     std::vector<Item> items;
     std::vector<Box> blocks;     // every text block (labels + table) - the overlap tests use these
     Box table = { 0, 0, 0, 0 }, area = { 0, 0, 0, 0 };
-    bool tableOk = false, candleOk = false; std::string note;
+    bool tableOk = false, candleOk = false, projOk = false; std::string note;
     int colRight = 0;            // (HL105) the reserved candle column's right edge (px); written to the status file for SessionInfo
 };
 
@@ -1442,7 +1454,40 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
     L.candleOk = true;
 }
 
-inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int priceEdge = -1, int pos = POS_DEFAULT)
+// (1.1.0) the projection: a vertical line at the 1st extreme's bar from its price to the projected opposite extreme, a solid flag at
+// the far end and the target text ("Proj HOD 7,870.00") right of the flag. Green up (LOD first), red down. x = the bar's centre
+// (-1 = not on the chart: nothing drawn). Clipped to the pane; never drawn over the table.
+static const int PROJ_FLAG_W = 16, PROJ_FLAG_H = 12, PROJ_FS = 9;
+inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int x)
+{
+    if (!v.projOk || x < pane.l || x > pane.r - 4) return;
+    int y0 = yOf(v.projFrom), y1 = yOf(v.projTo);
+    if (y0 == y1) return;
+    auto clampY = [&](int y) { return (std::max)((int)pane.t, (std::min)(y, (int)pane.b)); };
+    const unsigned col = v.projUp ? C_GREEN : C_RED;
+    int a = clampY(y0), b = clampY(y1);
+    if (L.tableOk && x >= L.table.l && x <= L.table.r) {                  // stop at the table's edge
+        if (v.projUp) a = (std::min)(a, (int)L.table.t - 1); else b = (std::min)(b, (int)L.table.t - 1);
+    }
+    if (a == b) return;
+    addLine(L, x, a, x, b, col, 2, R_LABEL);
+    if (b != clampY(y1) || y1 < pane.t || y1 > pane.b) return;            // the target is off the pane: the line only
+    // the flag: a solid triangle pointing right, its top edge at the target (up) or its bottom edge at the target (down)
+    int ft = v.projUp ? y1 : y1 - PROJ_FLAG_H;
+    for (int r = 0; r <= PROJ_FLAG_H; r++) {
+        int half = PROJ_FLAG_H / 2, d = r <= half ? r : PROJ_FLAG_H - r;
+        int len = (int)std::lround((double)PROJ_FLAG_W * d / (double)(half > 0 ? half : 1));
+        if (len > 0) addLine(L, x, ft + r, x + len, ft + r, col, 1, R_LABEL);
+    }
+    int w = M(v.projTxt, PROJ_FS, true), tx = x + PROJ_FLAG_W + 6;
+    if (tx + w > pane.r - 2) tx = (std::max)((int)pane.l + 2, x - 6 - w);   // no room on the right: the text goes left of the line
+    int lh = lineH(PROJ_FS);
+    addText(L, tx, ft + PROJ_FLAG_H / 2 - lh / 2, ft + PROJ_FLAG_H / 2 + lh / 2, v.projTxt, col, PROJ_FS, true, w, R_LABEL, -1);
+    L.blocks.push_back(Box{ tx, ft + PROJ_FLAG_H / 2 - lh / 2, tx + w, ft + PROJ_FLAG_H / 2 + lh / 2 });
+    L.projOk = true;
+}
+
+inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int priceEdge = -1, int pos = POS_DEFAULT, int projX = -1)
 {
     Layout L;
     if (pane.r - pane.l < 120 || pane.b - pane.t < 60) { L.note = "pane too small"; return L; }
@@ -1454,6 +1499,7 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
     if (freeR <= colR + 100) freeR = pane.r - (int)((pane.r - pane.l) * 0.15);
     layoutTable(L, v, pane, colR, M, freeR, pos);   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
     if (HODLOD_SHOW_CANDLE) layoutCandle(L, v, pane, yOf, M);
+    layoutProj(L, v, pane, yOf, M, projX);   // (1.1.0)
     return L;
 }
 
@@ -1519,6 +1565,7 @@ inline std::string statusText(const View& v, const Layout& L, const Tracker& T, 
 #endif
       snprintf(b, sizeof b, "%.2f floor (Rassul), model threshold %.2f", AFTER_THR, mt); kv("AFTER_THR", b); }
     kv("HLE", std::string(hle::kVersion) + (v.haveHle ? ",valid" : ",not used: " + v.hleWhy));
+    kv("PROJ", v.projOk ? (std::string(v.projUp ? "HOD," : "LOD,") + pxTxt((double)v.projTo * t, dec) + ",from," + pxTxt((double)v.projFrom * t, dec) + (L.projOk ? ",drawn" : ",not drawn")) : std::string("none"));   // (1.1.0)
     if (v.haveHle) {
         const hle::Expect& e = v.ex; char b[400];
         snprintf(b, sizeof b, "sources=%d stage=%d range=%.6g lo=%.6g hi=%.6g pRange1Atr=%.4f roomLeft=%.6g pMore025=%.4f pUp=%.4f closeSide=%d closeLoc=%.4f t1=%.2f t2=%.2f wick=%.6g pGapFill=%.4f",
