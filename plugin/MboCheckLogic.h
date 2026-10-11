@@ -10,7 +10,7 @@
 
 namespace mbo {
 
-static const char* const VERSION = "1.0.0";     // keep equal to MC_VERSION / setVersion in MboCheck.cpp
+static const char* const VERSION = "1.1.0";     // keep equal to MC_VERSION / setVersion in MboCheck.cpp
 static const int SLICE_MAX = 5000;               // at most this many getNext() events per call (never blocks IRT)
 static const long long SLICE_BUDGET_MS = 8;      // and at most ~8 ms per call, checked every 512 events
 static const long long WAIT_MS = 60000;          // "waiting" for the first 60 s
