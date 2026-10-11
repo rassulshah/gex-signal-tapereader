@@ -81,16 +81,24 @@ int main() {
     bool header = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LIQ TESTING") header = true;
     CHECK(header, "header says TESTING");
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.7.0") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.8.0") != std::string::npos, "status file written");
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     const size_t nMarks = S->e.marks.size();
+    {   // (0.8.0) the s letter on the price chart (the process in every market: drawn at the standard Counter line with no data line)
+        lqp::Mark m; m.code = "s"; m.value = 2.0; m.side = lqp::ASK; m.barTime = (long long)h.bars[h.bars.size() - 3].time; m.reasons = "Buyers stepped in: 2.0x normal, out-traded sellers";
+        lqp::Mark lo = m; lo.value = 1.0; lo.barTime = (long long)h.bars[h.bars.size() - 4].time;
+        S->e.marks.push_back(m); S->e.marks.push_back(lo); h.draws.clear(); p->draw();
+        int ns = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "s") ++ns;
+        CHECK(ns == 1, "(0.8.0) s drawn at or over the Counter line (2.0x), not under it (1.0x)");
+        S->e.marks.pop_back(); S->e.marks.pop_back();
+    }
     p->destroy(); CHECK(h.data == nullptr, "destroy frees the slot");
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());
     h.draws.clear(); h.now = t0 + 200; q->calc(0); q->draw();
     LQState* R = static_cast<LQState*>(h.data);
     CHECK(R && R->e.marks.size() == nMarks, "(0.7.0) after a restart the record is read back (no repaint)");
     bool letters = false; for (auto& d : h.draws) if (d.type == "text" && (d.text == "e" || d.text == "p" || d.text == "t" || d.text == "e?" || d.text == "p?")) letters = true;
-    CHECK(!letters, "no letters drawn where nothing is confirmed for the market");
+    CHECK(!letters, "no letters for a touch where no e / p / t step happened (an eaten break)");
     CHECK(R->e.trades == 0, "a restart does not replay old volume as trades");
     // no depth from the feed: says so, draws no book, no crash
     h.depthOn = false; h.draws.clear(); LiquidityProfile* z = static_cast<LiquidityProfile*>(CreateExtension()); z->destroy();

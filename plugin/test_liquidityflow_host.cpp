@@ -60,9 +60,9 @@ int main() {
     { mock::Bar n; n.time = h.bars.back().time + 180; n.open = n.high = n.low = n.close = 80.00f; n.rows.push_back(mock::Price(80.00f, 0, 0, 0)); h.bars.push_back(n); }
     h.now = T + 361; p->calc(0);
     h.draws.clear(); p->draw();
-    bool head = false, lines = false; int nl = 0; for (auto& d : h.draws) { if (d.type == "text" && d.text.find("AGGRESSION") == 0) head = true; if (d.type == "line") ++nl; }
+    bool head = false, lines = false; int nl = 0; for (auto& d : h.draws) { if (d.type == "text" && d.text.find("AGGRESSIVE") == 0) head = true; if (d.type == "line") ++nl; }
     lines = nl >= 8;
-    CHECK(head, "the pane is labelled AGGRESSION / DEFENSE");
+    CHECK(head, "(0.8.0) the panes are labelled AGGRESSIVE / PASSIVE");
     CHECK(lines, "buyers / sellers aggression and both net resting lines are drawn");
     const lqp::Attempt* a = !S->e.finished.empty() ? &S->e.finished.back() : (!S->e.attempts.empty() ? &S->e.attempts.back() : nullptr);
     CHECK(a && a->flowBars.size() >= 2, "the touch has per-bar flow");
@@ -71,16 +71,20 @@ int main() {
     for (auto& d : h.draws) if (d.type == "text") {
         if (d.text.find("Exh ") == 0 && d.text.find("x") != std::string::npos) exh = true;
         if (d.text.find("LoF") == 0 || d.text.find("HiB") == 0 || d.text.find("RpB") == 0 || d.text.find("RpO") == 0 || d.text.find("Stop") == 0) removed = true;
-        if (d.text.find('?') != std::string::npos && d.text.find("AGGRESSION") != 0 && d.text.find("DEFENSE") != 0) qm = true;
+        if (d.text.find('?') != std::string::npos && d.text.find("AGGRESSIVE") != 0 && d.text.find("PASSIVE") != 0) qm = true;
     }
     CHECK(exh, "Exh drawn with its number (confirmed for this market)");
     // (0.6.0) the statistics column: drawn for the lines that came from the data, in process order; Pulled's line is a default -> not drawn
-    std::vector<std::string> labels; for (auto& d : h.draws) if (d.type == "text" && (d.text == "Attack: " || d.text == "Eaten: " || d.text == "Exh: " || d.text == "Pulled: " || d.text == "Rebuilt: ")) labels.push_back(d.text);
-    CHECK(labels.size() >= 3 && labels[0] == "Attack: " && labels[1] == "Eaten: " && labels[2] == "Exh: ", "Aggression statistics in process order: Attack, Eaten, Exh");
-    bool pulledShown = false, pct = false; for (auto& l : labels) if (l == "Pulled: ") pulledShown = true;
-    CHECK(!pulledShown, "a statistic whose line is not from the data is not drawn");
+    // (0.8.0) the process in every market: AGGRESSIVE Attack / Exh / Counter, PASSIVE Absorbed / Pulled / Rebuilt, each with its line
+    // (the market's data line, or the standard line until the study sets one - Pulled here is a default line and is still drawn)
+    std::vector<std::string> labels; for (auto& d : h.draws) if (d.type == "text" && (d.text == "Attack: " || d.text == "Exh: " || d.text == "Counter: " || d.text == "Absorbed: " || d.text == "Pulled: " || d.text == "Rebuilt: ")) labels.push_back(d.text);
+    CHECK(labels.size() == 6 && labels[0] == "Attack: " && labels[1] == "Exh: " && labels[2] == "Counter: " && labels[3] == "Absorbed: " && labels[4] == "Pulled: " && labels[5] == "Rebuilt: ",
+          "(0.8.0) the process in order: Attack, Exh, Counter | Absorbed, Pulled, Rebuilt");
+    bool pct = false, pullLine = false;
     for (auto& d : h.draws) if (d.type == "text" && d.text == " (12%)") pct = true;
-    CHECK(pct, "Eaten's line shows as a % of everything there");
+    for (auto& d : h.draws) if (d.type == "text" && d.text == " (0.7x)") pullLine = true;
+    CHECK(pct, "Absorbed's line shows as a % of everything resting");
+    CHECK(pullLine, "(0.8.0) a step whose line is not from the data yet is drawn at the standard line");
     CHECK(!removed, "(0.5.0) LoF / HiB / RpB / RpO / Stop are never drawn");
     CHECK(!qm, "(0.5.0) nothing is drawn with a '?'");
     const std::string rec = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\CL-180-panes-" + std::to_string(S->session) + ".csv";
@@ -99,8 +103,8 @@ int main() {
     }
     LiquidityProfile* r = static_cast<LiquidityProfile*>(CreateExtension());
     h.draws.clear(); h.now = T + 420; r->calc(0); r->draw();
-    bool any = false; for (auto& d : h.draws) if (d.type == "text" && (d.text.find("Exh") == 0 || d.text.find("Pull") == 0)) any = true;
-    CHECK(!any, "(0.5.0) an unconfirmed signal is not drawn (no '?')");
+    bool any = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Exh 0") == 0) any = true;
+    CHECK(any, "(0.8.0) the process is drawn in every market: Exh still drawn at the standard line when the study has not set one");
     r->destroy();
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

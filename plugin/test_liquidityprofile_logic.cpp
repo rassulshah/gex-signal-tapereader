@@ -403,7 +403,56 @@ static void test_warnings_priority() {
     g.onTrade(41000, 69.97, 0, 60);
     CHECK(!g.warning(43000, v, 0.01), "no confirmed lines: no warning (never a guess)");
 }
+
+// (0.8.0) s = COUNTER: after e, the defenders out-trade the attackers near the zone at the Counter line x their normal pace per tick
+static Engine counterSetup() {
+    Engine e = zoneSetup(); e.P.exhaust = 0.3; e.P.counterX = 1.25; e.L.counter = 1.25;
+    for (int b = 0; b < 20; ++b) e.setBar(b, 100, 100, 10, 7005, 6996);   // buyers' normal: 100 a bar over 10 ticks = 10 per tick
+    e.formBar = 20; e.curBar = 19;
+    e.onTrade(41000, 69.97, 0, 30); e.onTrade(60000, 69.96, 0, 30);         // sellers attack the 69.93-69.97 bids, then stop
+    return e;
+}
+static void test_counter_s_after_e() {
+    Engine e = counterSetup(); std::vector<std::pair<Tick, Tick>> none;
+    e.setBar(20, 50, 100, 5, 6997, 6993); e.onBarClose(20, 2000, 240000, 69.96, none, none);   // e (nothing in the 2nd half)
+    CHECK(has(e, "Exh") && !has(e, "s"), "e first, no s while the sellers still out-trade the buyers");
+    e.setBar(21, 400, 100, 10, 7005, 6996); e.onBarClose(21, 3000, 420000, 70.02, none, none);  // buyers 400 vs 100 over 10 ticks = 4.0x
+    const Mark* m = get(e, "s");
+    CHECK(m && m->barTime == 3000 && std::fabs(m->value - 4.0) < 1e-9, "s on the bar the buyers stepped in, with its pace (4.0x)");
+    CHECK(m && m->reasons == "Buyers stepped in: 4.0x normal, out-traded sellers" && Engine::bullish(*m), "its reason in plain words, green at a support");
+    Mark r; CHECK(m && Engine::parse(Engine::line(*m, 0.01), r, 0.01) && r.code == "s" && r.reasons == m->reasons, "s is recorded and read back (no repaint)");
+    Warn w;
+    CHECK(e.warning(421000, w, 0.01) && w.name == "BUYERS STEPPING IN" && w.favour == 1 && w.detail == "sellers exhausted (0.0x); buyers now lifting offers 4.0x normal",
+          "BUYERS STEPPING IN while the touch was just decided as held");
+    CHECK(!e.warning(420000 + 3 * 180000, w, 0.01), "the STEPPING IN warning ends 2 bars later");
+    Stats st; CHECK(e.latest(421000, st) && std::fabs(st.counter - 4.0) < 1e-9, "the Counter readout is the buyers' pace on the latest bar");
+}
+static void test_counter_s_on_the_bars_after_the_hold() {
+    Engine e = counterSetup(); std::vector<std::pair<Tick, Tick>> none;
+    e.setBar(20, 50, 100, 5, 6997, 6993); e.onBarClose(20, 2000, 240000, 70.02, none, none);   // e, and the close back above: held
+    CHECK(has(e, "Exh") && e.finished.size() == 1 && e.finished[0].end.compare(0, 4, "hold") == 0, "e and the touch decided as held on the same bar");
+    e.setBar(21, 90, 60, 6, 7003, 6998); e.onBarClose(21, 3000, 420000, 70.02, none, none);    // buyers 90 vs 60 over 6 ticks = 1.5x, near the zone
+    const Mark* m = get(e, "s");
+    CHECK(m && m->barTime == 3000 && std::fabs(m->value - 1.5) < 1e-9, "s on a bar after the hold (the buyers stepping in after the close back out)");
+}
+static void test_counter_needs_e_near_and_the_line() {
+    std::vector<std::pair<Tick, Tick>> none;
+    { Engine e = counterSetup();
+      e.onTrade(200000, 69.96, 0, 40);                                      // sellers keep going: no e
+      e.setBar(20, 400, 100, 10, 7005, 6996); e.onBarClose(20, 2000, 240000, 69.96, none, none);
+      CHECK(!has(e, "Exh") && !has(e, "s"), "no s before e (stepping in only counts after the attackers ran out)"); }
+    { Engine e = counterSetup();
+      e.setBar(20, 50, 100, 5, 6997, 6993); e.onBarClose(20, 2000, 240000, 69.96, none, none);
+      e.setBar(21, 400, 100, 10, 7030, 7020); e.onBarClose(21, 3000, 420000, 69.96, none, none);   // the bar traded 23+ ticks above the zone
+      CHECK(!has(e, "s"), "no s on a bar away from the zone"); }
+    { Engine e = counterSetup();
+      e.setBar(20, 50, 100, 5, 6997, 6993); e.onBarClose(20, 2000, 240000, 69.96, none, none);
+      e.setBar(21, 110, 100, 10, 7005, 6996); e.onBarClose(21, 3000, 420000, 69.96, none, none);   // out-traded, but 1.1x < 1.25x
+      Stats st; e.latest(421000, st);
+      CHECK(!has(e, "s") && std::fabs(st.counter - 1.1) < 1e-9, "no s under the line, but the Counter readout still shows 1.1x"); }
+}
 int main() {
+    test_counter_s_after_e(); test_counter_s_on_the_bars_after_the_hold(); test_counter_needs_e_near_and_the_line();
     test_e_watch_then_e(); test_p_watch_then_p(); test_trapped_t(); test_reason_uses_only_confirmed_lines(); test_warnings_priority();
     test_old_orders(); test_stats_in_process_order(); test_eaten_counts_new_arrivals(); test_pulled_and_rebuilt();
     test_other_side_band_is_tracked();
