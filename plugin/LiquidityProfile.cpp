@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.2.0, 2026-10-11; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.3.0, 2026-10-11; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -59,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.2.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.3.0"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -684,45 +684,54 @@ void LiquidityProfile::renderFlow(LQState& S) {
     if (count < 2 || pane.bottom - pane.top < 60 || pane.right - pane.left < 80) return;   // #35
     const int lastBar = (int)count - 1;
     const int mid = (pane.top + pane.bottom) / 2;
-    const int t0 = pane.top + 14, t1 = mid - 3, b0 = mid + 14, b1 = pane.bottom - 3;
+    const int t0 = pane.top + 14, t1 = mid - 3, b0 = mid + 14, b1 = pane.bottom - 3, zeroY = (b0 + b1) / 2;
     FONT f; f.id = HELVETICA; f.size = coord(std::max(7, S.font - 1)); f.style = BOLD; setFont(f); setTextColor(C_GREY);
-    { RCT r; r.set(coord(pane.left + 4), coord(pane.top + 1), coord(pane.left + 400), coord(pane.top + 13)); r.drawText("AGGRESSION  attackers / defenders", false, false); }
-    { RCT r; r.set(coord(pane.left + 4), coord(mid + 1), coord(pane.left + 400), coord(mid + 13)); r.drawText("DEFENSE  replenished / pulled", false, false); }
+    // (0.3.0, Rassul 2026-10-10) green = buyers and red = sellers in BOTH halves, at support and resistance alike
+    { RCT r; r.set(coord(pane.left + 4), coord(pane.top + 1), coord(pane.left + 400), coord(pane.top + 13)); r.drawText("AGGRESSION  buyers lifting / sellers hitting", false, false); }
+    { RCT r; r.set(coord(pane.left + 4), coord(mid + 1), coord(pane.left + 400), coord(mid + 13)); r.drawText("DEFENSE  resting bids / offers: up = adding, down = pulling", false, false); }
     setPen(C_AXIS, 1, P_SOLID);
     { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(mid); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(mid); b.drawLineTo(); }
-    if (!S.e.haveBook) { setTextColor(C_SELL); RCT r; r.set(coord(pane.left + 260), coord(pane.top + 1), coord(pane.left + 500), coord(pane.top + 13)); r.drawText(S.mdBlocked ? "blocked" : "no depth", false, false); }
+    { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(zeroY); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(zeroY); b.drawLineTo(); }
+    if (!S.e.haveBook) { setTextColor(C_SELL); RCT r; r.set(coord(pane.left + 330), coord(pane.top + 1), coord(pane.left + 560), coord(pane.top + 13)); r.drawText(S.mdBlocked ? "blocked" : "no depth", false, false); }
     // the attempts to draw: the finished ones and the live one, only bars on screen
     std::vector<const lqp::Attempt*> as;
     for (size_t i = 0; i < S.e.finished.size(); ++i) as.push_back(&S.e.finished[i]);
     for (size_t i = 0; i < S.e.attempts.size(); ++i) as.push_back(&S.e.attempts[i]);
-    double maxA = 1, maxD = 1;
     auto xOf = [&](int bar) { PNT p; p.set(bar, 0.0f, kBarCenter); return (int)p.h; };
-    for (size_t k = 0; k < as.size(); ++k)
-        for (std::map<int, lqp::Attempt::BarFlow>::const_iterator it = as[k]->flowBars.begin(); it != as[k]->flowBars.end(); ++it) {
-            if (it->first < 0 || it->first > lastBar) continue;
-            const int x = xOf(it->first); if (x < pane.left || x > pane.right) continue;
-            maxA = std::max(maxA, std::max(it->second.attack, it->second.defend)); maxD = std::max(maxD, std::max(it->second.rep, it->second.pul));
+    // per attempt: cumulative buyers / sellers aggression and the two net resting lines, one point per bar (values carried forward)
+    struct Pt { int x; double buy, sell, bNet, sNet; };
+    std::vector<std::vector<Pt>> series(as.size());
+    double maxA = 1, maxD = 1;
+    for (size_t k = 0; k < as.size(); ++k) {
+        const lqp::Attempt& a = *as[k];
+        if (a.flowBars.empty()) continue;
+        const bool sup = a.side == lqp::BID;
+        double ca = 0, cd = 0, dn = 0, on = 0;
+        for (int b = a.barA; b <= lastBar && b <= a.barA + 40; ++b) {
+            std::map<int, lqp::Attempt::BarFlow>::const_iterator it = a.flowBars.find(b);
+            if (a.done && it == a.flowBars.end() && b > a.flowBars.rbegin()->first) break;
+            if (it != a.flowBars.end()) { ca += it->second.attack; cd += it->second.defend; if (it->second.book) { dn = it->second.defNet; on = it->second.oppNet; } }
+            const int x = xOf(b); if (x < pane.left || x > pane.right) continue;
+            Pt p; p.x = x;
+            p.buy = sup ? cd : ca; p.sell = sup ? ca : cd;               // support: sellers attack, buyers defend; resistance: the reverse
+            p.bNet = sup ? dn : on; p.sNet = sup ? on : dn;              // buyers' bids / sellers' offers
+            series[k].push_back(p);
+            maxA = std::max(maxA, std::max(p.buy, p.sell)); maxD = std::max(maxD, std::max(std::fabs(p.bNet), std::fabs(p.sNet)));
         }
+    }
     auto yA = [&](double v) { return t1 - (int)((t1 - t0) * std::min(1.0, v / maxA)); };
-    auto yD = [&](double v) { return b1 - (int)((b1 - b0) * std::min(1.0, v / maxD)); };
+    auto yD = [&](double v) { return zeroY - (int)((zeroY - b0) * std::max(-1.0, std::min(1.0, v / maxD))); };
     std::vector<int> used;                                               // one story letter per bar per half (#14)
     for (size_t k = 0; k < as.size(); ++k) {
         const lqp::Attempt& a = *as[k];
         const bool sup = a.side == lqp::BID;
-        std::vector<std::pair<int, int>> att, def, rep, pul;
-        double lastRep = 0, lastPul = 0;
-        for (int b = a.barA; b <= lastBar && b <= a.barA + 40; ++b) {
-            std::map<int, lqp::Attempt::BarFlow>::const_iterator it = a.flowBars.find(b);
-            if (a.done && it == a.flowBars.end() && b > a.flowBars.rbegin()->first) break;
-            const lqp::Attempt::BarFlow fb = it == a.flowBars.end() ? lqp::Attempt::BarFlow() : it->second;
-            const int x = xOf(b); if (x < pane.left || x > pane.right) continue;
-            if (fb.rep > 0 || fb.pul > 0 || it != a.flowBars.end()) { lastRep = std::max(lastRep, fb.rep); lastPul = std::max(lastPul, fb.pul); }
-            att.push_back(std::make_pair(x, yA(fb.attack))); def.push_back(std::make_pair(x, yA(fb.defend)));
-            rep.push_back(std::make_pair(x, yD(lastRep))); pul.push_back(std::make_pair(x, yD(lastPul)));
+        std::vector<std::pair<int, int>> buy, sell, bN, sN;
+        for (size_t i = 0; i < series[k].size(); ++i) {
+            const Pt& p = series[k][i];
+            buy.push_back(std::make_pair(p.x, yA(p.buy))); sell.push_back(std::make_pair(p.x, yA(p.sell)));
+            bN.push_back(std::make_pair(p.x, yD(p.bNet))); sN.push_back(std::make_pair(p.x, yD(p.sNet)));
         }
-        // colours by meaning: sellers red / buyers green; new bids or pulled offers green, pulled bids or new offers red
-        flowLine(att, sup ? C_SELL : C_BUY); flowLine(def, sup ? C_BUY : C_SELL);
-        flowLine(pul, sup ? C_SELL : C_BUY); flowLine(rep, sup ? C_BUY : C_SELL);
+        flowLine(sell, C_SELL); flowLine(buy, C_BUY); flowLine(sN, C_SELL); flowLine(bN, C_BUY);
         struct L { int bar; const char* t; bool top; COLOR c; };
         const COLOR good = sup ? C_BUY : C_SELL, bad = sup ? C_SELL : C_BUY;
         const L ls[5] = { { a.barE, "E?", true, good }, { a.barO, "O?", true, good }, { a.barP, "P?", false, bad }, { a.barR, "R?", false, good }, { a.barX, "X?", true, good } };
@@ -752,12 +761,12 @@ extern "C" cppExtension* CreateExtension(void) {
 #ifdef LQ_FLOW
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);                    // its own pane (no OVERLAY), draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);
-    p->setDescription("LRA Liquidity Flow: the absorption story at the zone price is in - AGGRESSION (sellers red / buyers green trading into the zone) and DEFENSE (replenished vs pulled since arrival); E? O? P? R? and X? (the double crossover). TESTING.");
+    p->setDescription("LRA Liquidity Flow: the absorption story at the zone price is in - AGGRESSION (buyers green / sellers red trading into the zone, since arrival) and DEFENSE (buyers' resting bids green / sellers' resting offers red, net added since arrival: up = adding, down = pulling); E? O? P? R? and X? (the double crossover). TESTING.");
 #else
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal, and the zone reads that support absorption (eaten / stayed / refill / E). TESTING.");
 #endif
-    p->setVersion("0.2.0");   // LQ_VERSION
+    p->setVersion("0.3.0");   // LQ_VERSION
     return p;
 }

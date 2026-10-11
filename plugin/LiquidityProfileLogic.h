@@ -42,7 +42,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.2.0";
+static const char* const VERSION = "0.3.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -107,12 +107,18 @@ struct Attempt {
     // (0.2.0) the absorption STORY per bar, for the aggression / defense panes (lsLiquidityFlow) and the nightly study:
     // attack / defend = aggressive contracts in the zone that bar (attackers vs the defending side turning aggressive);
     // rep / pul = replenished (added + refill) and pulled since arrival, cumulative, as of that bar
-    struct BarFlow { double attack = 0, defend = 0, rep = 0, pul = 0; };
+    // (0.3.0, Rassul 2026-10-10 23:11 "buyers are always green and sellers are always red ... buyers are stronger in aggression and
+    // defense") defNet / oppNet = NET resting size since arrival (added + refilled - pulled; fills excluded) of the DEFENDING side in the
+    // zone and of the OTHER side in the band of the same width just beyond it (offers above a bid zone, bids below an offer zone).
+    // Net is churn-proof: an order placed and cancelled nets to zero. Pane: buyers' bids green, sellers' offers red, up = adding,
+    // down = pulling.
+    struct BarFlow { double attack = 0, defend = 0, rep = 0, pul = 0, defNet = 0, oppNet = 0; bool book = false; };
+    double defNet = 0, oppNet = 0; Tick oppLo = 0, oppHi = 0;
     std::map<int, BarFlow> flowBars;
     int barE = -1, barO = -1, barP = -1;         // first bar the attackers' pace halved (E), the defenders went on offense (O), the zone was pulled (P)
-    int barR = -1, barX = -1;                    // replenished crossed above pulled (R); both crosses done = the double crossover (X)
-    bool defendedFirst = false;                  // a bar where the attackers out-traded the defenders came before the offense
-    bool pulledFirst = false;                    // a bar where pulled (since arrival) was at or above replenished came before R
+    int barR = -1, barX = -1;                    // (0.3.0) the defenders' net resting size crossed above the other side's (R); O and R both done = X
+    bool defendedFirst = false;                  // (0.3.0) the attackers' volume since arrival led the defenders' before O
+    bool pulledFirst = false;                    // (0.3.0) the other side's net resting size was at or above the defenders' before R
 };
 
 struct Mark {
@@ -363,7 +369,7 @@ public:
     static double round2(double v) { return std::floor(v * 100 + 0.5) / 100; }
 
     // the attempt log line (every attempt, drawn or not) for the nightly scoring
-    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end|e_bar|o_bar|p_bar|story"; }
+    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end|e_bar|o_bar|p_bar|story|r_bar|x_bar|def_net_x|opp_net_x"; }
     std::string attemptLine(const Attempt& a, Ms tEnd) const {
         std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
         const double sh = a.shown > 0 ? a.shown : 1;
@@ -385,7 +391,8 @@ public:
         std::sort(seq.begin(), seq.end());
         std::string st; for (size_t i = 0; i < seq.size(); ++i) { if (i) st += '>'; st += seq[i].second; }
         o << '|' << (a.barE >= 0 ? a.barE - a.barA : -1) << '|' << (a.barO >= 0 ? a.barO - a.barA : -1) << '|' << (a.barP >= 0 ? a.barP - a.barA : -1) << '|' << (st.empty() ? "-" : st)
-          << '|' << (a.barR >= 0 ? a.barR - a.barA : -1) << '|' << (a.barX >= 0 ? a.barX - a.barA : -1);
+          << '|' << (a.barR >= 0 ? a.barR - a.barA : -1) << '|' << (a.barX >= 0 ? a.barX - a.barA : -1)
+          << '|' << round2(a.defNet / sh) << '|' << round2(a.oppNet / sh);
         return o.str();
     }
     std::vector<std::string> attemptLog;          // lines waiting to be appended by the host
@@ -397,16 +404,14 @@ public:
         if (a.barE < 0) { const double ex = exhaustRatio(a.attacks, a.tA, barEnd); if (ex >= 0 && ex < P.exhaust && firstHalf(a, barEnd) >= P.minAttack) a.barE = bar; }
         const double taken = a.attackVol + a.pulled, replaced = a.added + a.refill, rx = taken > 0 ? replaced / taken : -1;
         if (a.barP < 0 && a.shown > 0 && a.pulled / a.shown >= 0.5 && rx >= 0 && rx < 0.5) a.barP = bar;
-        std::map<int, Attempt::BarFlow>::const_iterator f = a.flowBars.find(bar);
-        if (f != a.flowBars.end()) {
-            if (f->second.attack > f->second.defend) a.defendedFirst = true;
-            else if (a.barO < 0 && a.defendedFirst && f->second.defend > f->second.attack && f->second.defend > 0) a.barO = bar;
-        }
-        // (Rassul 2026-10-10 22:00 "a cross of replenished over pulled ... would mirror aggression giving a double crossover pattern")
-        // R = replenished (since arrival) rises above pulled after pulled had led; X = both crosses (O and R) done, at the later one's bar
-        const double rep = a.added + a.refill, pul = a.pulled;
-        if (pul > 0 && pul >= rep) a.pulledFirst = true;
-        else if (a.barR < 0 && a.pulledFirst && rep > pul) a.barR = bar;
+        // (0.3.0) O = the defenders' aggressive volume since arrival crosses above the attackers' (the green / red cross in AGGRESSION),
+        // after the attackers had led - defense first, then offense (Rassul 2026-10-10)
+        if (a.attackVol > a.counterVol) a.defendedFirst = true;
+        else if (a.barO < 0 && a.defendedFirst && a.counterVol > a.attackVol) a.barO = bar;
+        // (0.3.0) R = the defenders' NET resting size since arrival crosses above the other side's (the cross in DEFENSE), after the
+        // other side had led or the defenders had pulled; X = both crosses (O and R) done, at the later one's bar (the double crossover)
+        if (a.oppNet >= a.defNet && (a.oppNet != 0 || a.defNet != 0)) a.pulledFirst = true;
+        else if (a.barR < 0 && a.pulledFirst && a.defNet > a.oppNet) a.barR = bar;
         if (a.barX < 0 && a.barO >= 0 && a.barR >= 0) a.barX = bar;
     }
     static double resilience(const Attempt& a) {
@@ -423,9 +428,14 @@ private:
     }
     void applyFlow(const FlowEvt& e) {
         for (size_t i = 0; i < attempts.size(); ++i) {
-            Attempt& a = attempts[i]; if (a.done || a.side != e.side || e.px < a.lo || e.px > a.hi || e.t < a.tA) continue;
-            a.pulled += e.pulled; a.added += e.added; a.refill += e.refill;
-            Attempt::BarFlow& f = a.flowBars[formBar]; f.rep = a.added + a.refill; f.pul = a.pulled;
+            Attempt& a = attempts[i]; if (a.done || e.t < a.tA) continue;
+            const double net = e.added + e.refill - e.pulled;
+            if (a.side == e.side && e.px >= a.lo && e.px <= a.hi) {
+                a.pulled += e.pulled; a.added += e.added; a.refill += e.refill; a.defNet += net;
+            } else if (a.side != e.side && e.px >= a.oppLo && e.px <= a.oppHi) {
+                a.oppNet += net;
+            } else continue;
+            Attempt::BarFlow& f = a.flowBars[formBar]; f.rep = a.added + a.refill; f.pul = a.pulled; f.defNet = a.defNet; f.oppNet = a.oppNet; f.book = true;
         }
     }
     void track(Ms t, int side, Tick center, double size) {
@@ -455,6 +465,8 @@ private:
             if (shown < P.minShown) continue;
             Attempt a; a.zoneId = z.id; a.side = z.side; a.lo = z.lo; a.hi = z.hi; a.tA = t; a.barA = formBar > 0 ? formBar : curBar;
             a.shown = shown; a.startSize = a.minSize = a.curSize = shown;
+            const Tick w = z.hi - z.lo + 1;                               // (0.3.0) the other side's band: same width, just beyond the zone
+            if (a.side == BID) { a.oppLo = z.hi + 1; a.oppHi = z.hi + w; } else { a.oppLo = z.lo - w; a.oppHi = z.lo - 1; }
             const double first = a.side == BID ? sell : buy;          // the trade that arrived counts as the first attack
             if (first > 0) { a.attackVol = first; a.attacks.push_back(std::make_pair(t, first)); }
             a.flowBars[a.barA].attack += first > 0 ? first : 0;

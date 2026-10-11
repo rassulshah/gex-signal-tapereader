@@ -41,18 +41,18 @@ int main() {
     h.now = t0 + 181; p->calc(0);
     mock::Bar& nb = h.bars.back();
     setDepth(h, 79.96, 12, 79.95, 300); h.now = t0 + 200; p->calc(0);
-    nb.rows[0] = mock::Price(79.96f, 60, 4, 64); h.now = t0 + 260; p->calc(0);
+    nb.rows[0] = mock::Price(79.96f, 90, 4, 94); h.now = t0 + 260; p->calc(0);
     { mock::Bar n; n.time = t0 + 540; n.open = n.high = n.low = n.close = 80.00f; n.rows.push_back(mock::Price(80.00f, 0, 0, 0)); h.bars.push_back(n); }
     h.now = t0 + 361; p->calc(0);
     h.draws.clear(); p->draw();
     bool head = false, lines = false; int nl = 0; for (auto& d : h.draws) { if (d.type == "text" && d.text.find("AGGRESSION") == 0) head = true; if (d.type == "line") ++nl; }
     lines = nl >= 8;
     CHECK(head, "the pane is labelled AGGRESSION / DEFENSE");
-    CHECK(lines, "attack / defend / replenished / pulled lines are drawn");
+    CHECK(lines, "buyers / sellers aggression and both net resting lines are drawn");
     const lqp::Attempt* a = !S->e.finished.empty() ? &S->e.finished.back() : (!S->e.attempts.empty() ? &S->e.attempts.back() : nullptr);
     CHECK(a && a->flowBars.size() >= 2, "the touch has per-bar flow");
     CHECK(a && a->barO >= 0, "defenders took over the trading (O)");
-    CHECK(a && a->barR >= 0 && a->barX >= 0, "replenished crossed above pulled (R) and both crosses = X");
+    CHECK(a && a->barR >= 0 && a->barX >= 0, "the bids' net crossed above the offers' (R) and both crosses = X");
     bool xs = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "X?") xs = true;
     CHECK(xs, "X? is drawn in the pane");
     std::string attempts = flex_attempts(tmp);

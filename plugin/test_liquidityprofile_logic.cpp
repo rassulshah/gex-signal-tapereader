@@ -221,11 +221,11 @@ static void test_story_defense_then_offense() {
     e.onTrade(60000, 69.96, 5, 30);
     e.onBarClose(10, 1000, 180000, 69.96, none, none);
     e.formBar = 11;
-    e.onTrade(200000, 69.96, 45, 3);              // bar 11: buyers out-trade the sellers in the zone, sellers' pace collapsed
+    e.onTrade(200000, 69.96, 90, 3);              // bar 11: buyers' total since arrival passes the sellers' (0.3.0: the cumulative cross), sellers' pace collapsed
     e.onBarClose(11, 2000, 360000, 69.96, none, none);
-    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11, "defense first (sellers led bar 10), then offense in bar 11 = O");
+    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11, "defense first (sellers led since arrival), then the buyers' total crosses above in bar 11 = O");
     CHECK(!e.attempts.empty() && e.attempts[0].barE >= 10 && e.attempts[0].barE <= 11, "the sellers' pace halved by bar 11 = E");
-    CHECK(!e.attempts.empty() && e.attempts[0].flowBars[10].attack == 70 && e.attempts[0].flowBars[11].defend == 45, "per-bar attack / defend kept for the panes");
+    CHECK(!e.attempts.empty() && e.attempts[0].flowBars[10].attack == 70 && e.attempts[0].flowBars[11].defend == 90, "per-bar attack / defend kept for the panes");
     e.formBar = 12;
     e.onBarClose(12, 3000, 540000, 70.00, none, none);  // closes back out: decided
     CHECK(!e.attemptLog.empty() && e.attemptLog.back().find("|E>O") != std::string::npos, "the story is logged with its order (E, then O)");
@@ -240,15 +240,35 @@ static void test_double_crossover() {
     e.onBarClose(10, 1000, 180000, 69.96, none, none);
     CHECK(!e.attempts.empty() && e.attempts[0].pulledFirst && e.attempts[0].defendedFirst, "both lines start on the losing side");
     e.formBar = 11;
-    book(e, 190000, 70.00, 12, {{6995, 300}});    // bar 11: 180 new size comes in - replenished passes pulled
-    e.onTrade(200000, 69.96, 60, 4);              // and buyers out-trade sellers
+    book(e, 190000, 70.00, 12, {{6995, 300}});    // bar 11: 180 new size comes in - the bids' net passes the offers' (0.3.0)
+    e.onTrade(200000, 69.96, 80, 4);              // and the buyers' total passes the sellers'
     e.onBarClose(11, 2000, 360000, 69.96, none, none);
     CHECK(!e.attempts.empty() && e.attempts[0].barR == 11 && e.attempts[0].barO == 11 && e.attempts[0].barX == 11, "both crosses in bar 11 = the double crossover X");
     e.formBar = 12;
     e.onBarClose(12, 3000, 540000, 70.00, none, none);
     CHECK(e.marks.size() == 1 && e.marks[0].code == "L?" && e.marks[0].reasons.find('X') != std::string::npos, "a hold after the double crossover prints L? with X");
 }
+static void test_other_side_band_is_tracked() {
+    // (0.3.0) the sellers' offers in the band just above a bid zone are tracked as their own net line; offers further up are not
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 40);
+    CHECK(!e.attempts.empty(), "attempt started");
+    if (e.attempts.empty()) return;
+    const Attempt& a0 = e.attempts[0];
+    CHECK(a0.oppLo == a0.hi + 1 && a0.oppHi == a0.hi + (a0.hi - a0.lo + 1), "the offers' band = same width, just above the zone");
+    const double before = e.attempts[0].oppNet;
+    std::vector<std::pair<double, double>> bids, asks;
+    for (int i = 0; i < 12; ++i) bids.push_back(std::make_pair(70.00 - i * 0.01, i == 5 ? 200.0 : 10.0));
+    for (int i = 0; i < 12; ++i) {
+        const double px = 70.01 + i * 0.01; const Tick t = toTick(px, 0.01);
+        double sz = 10; if (t >= a0.oppLo && t <= a0.oppHi) sz = 2.0; if (t > a0.oppHi) sz = 50;   // offers in the band pulled, far offers added
+        asks.push_back(std::make_pair(px, sz));
+    }
+    e.onBook(50000, bids, asks);
+    CHECK(e.attempts[0].oppNet == before - 16, "8 offers pulled at each of the band's 2 prices = the sellers' line goes down 16; offers further up are not counted");
+}
 int main() {
+    test_other_side_band_is_tracked();
     test_double_crossover();
     test_story_defense_then_offense();
     test_hold_while_pulling_gives_no_L(); test_thin_break_draws_nothing();
