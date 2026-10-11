@@ -77,7 +77,10 @@ static void test_zone_found_and_durable() {
     CHECK(e.zones.size() <= 6, "at most top 3 per side");
 }
 
-static void test_attempt_eaten_then_break_gives_LX() {
+static bool has(const Engine& e, const char* code) { for (auto& m : e.marks) if (m.code == code) return true; return false; }
+
+// (0.4.0) no chart marks: a break / hold ends the attempt and is LOGGED for the study; the six pane signals are the only marks
+static void test_eaten_break_is_logged_not_marked() {
     Engine e = zoneSetup();
     e.onTrade(41000, 69.97, 0, 5);         // arrival from above into [69.93, 69.97]
     CHECK(e.attempts.size() == 1, "arrival starts an attempt");
@@ -87,69 +90,81 @@ static void test_attempt_eaten_then_break_gives_LX() {
     e.onTrade(70000, 69.92, 0, 10);        // and through the far edge
     std::vector<std::pair<Tick, Tick>> none;
     e.onBarClose(1, 1000, 180000, 69.91, none, none);   // closes below 69.93
-    CHECK(e.marks.size() == 1 && e.marks[0].code == "LX", "eaten 1x+ and a close through = LX");
-    CHECK(e.marks.size() == 1 && e.marks[0].eaten >= 1.0, "LX carries the eaten multiple");
+    CHECK(!has(e, "LX") && !has(e, "L?"), "no LX / L? any more");
     CHECK(e.attempts.empty(), "the attempt is closed");
-    CHECK(e.attemptLog.size() == 1, "every attempt is logged");
+    CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("|break eaten") != std::string::npos, "logged as an eaten break for the study");
 }
 
-static void test_break_without_eating_is_logged_not_drawn() {
+static void test_pulled_while_attacked_is_Pull_on_the_defense_pane() {
     Engine e = zoneSetup();
-    e.onTrade(41000, 69.97, 0, 2);
-    book(e, 42000, 70.00, 12);             // the 200 lots pulled
+    e.onTrade(41000, 69.97, 0, 2);         // sellers attack (2 vs 0)...
+    book(e, 42000, 70.00, 12);             // ...while the 200 lots are pulled
     std::vector<std::pair<Tick, Tick>> none;
     e.onBarClose(1, 1000, 180000, 69.90, none, none);
-    CHECK(e.marks.size() == 1 && e.marks[0].code == "LX" && e.marks[0].reasons == "P", "a break after the size was pulled and not replaced = LX P");
-    CHECK(!e.attemptLog.empty() && e.attemptLog[0].find("LX P") != std::string::npos, "it is logged with its reason");
+    CHECK(has(e, "Pull"), "defenders pulled while the attackers lead = Pull");
+    bool red = false; for (auto& m : e.marks) if (m.code == "Pull") red = !Engine::bullish(m);
+    CHECK(!Engine::topPane("Pull") && red, "Pull is a defense-pane signal, red at a support");
+    CHECK(!e.attemptLog.empty() && e.attemptLog[0].find("|break pulled") != std::string::npos, "the break is logged with its reason");
     CHECK(!e.finished.empty() && e.finished.back().pulled >= 150, "the pull is measured");
 }
 
-static void test_hold_with_exhaustion_gives_L_E() {
+static void test_pulled_without_attack_is_not_Pull() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 2);         // arrival
+    e.onTrade(45000, 69.96, 10, 0);        // then buyers out-trade the sellers in the zone
+    book(e, 42000, 70.00, 12);             // the size is pulled, but nobody is attacking it
+    std::vector<std::pair<Tick, Tick>> none;
+    e.onBarClose(1, 1000, 180000, 69.96, none, none);
+    CHECK(!has(e, "Pull"), "pulling needs the attackers ahead (Rassul's pulling + aggression)");
+}
+
+static void test_exhaustion_is_Exh_on_the_aggression_pane() {
     Engine e = zoneSetup();
     e.onTrade(41000, 69.97, 0, 30);        // heavy selling in the first half...
     e.onTrade(60000, 69.96, 0, 30);
-    e.onTrade(200000, 69.96, 0, 5);        // ...little in the second half
+    e.onTrade(200000, 69.96, 0, 1);        // ...almost none in the second half
     std::vector<std::pair<Tick, Tick>> none;
-    e.onBarClose(1, 1000, 100000, 69.98, none, none);     // closes back out but before 3 min: not decided
-    CHECK(e.marks.empty(), "no decision before arrival + 3 min");
     e.onBarClose(2, 2000, 240000, 70.00, none, none);     // 3 min+ after arrival, close above the zone
-    CHECK(e.marks.size() == 1 && e.marks[0].code == "L?" && e.marks[0].reasons == "E", "hold + exhaustion = L? E");
+    CHECK(has(e, "Exh") && Engine::topPane("Exh") && Engine::bullish(e.marks[0]), "sellers exhausted at a support = Exh, green, aggression pane");
+    CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("|hold Exh") != std::string::npos, "the hold is logged with Exh");
 }
 
-static void test_hold_with_delta_absorption_gives_L_A() {
+static void test_market_threshold_changes_Exh() {
+    Engine e = zoneSetup(); e.P.exhaust = 0.2;              // (0.3.1) this market's data-chosen threshold
+    e.onTrade(41000, 69.97, 0, 30); e.onTrade(60000, 69.96, 0, 30);
+    e.onTrade(200000, 69.96, 0, 20);                        // 2nd half 20 / 1st 60 = 0.33: dried up at 0.5, not at 0.2
+    std::vector<std::pair<Tick, Tick>> none;
+    e.onBarClose(2, 2000, 240000, 70.00, none, none);
+    CHECK(!has(e, "Exh"), "with exhaust 0.2 a 0.33 pace is not exhaustion");
+}
+
+static void test_hold_with_delta_absorption_is_logged() {
     Engine e = zoneSetup();
     e.onTrade(41000, 69.97, 0, 10);
     e.onTrade(150000, 69.96, 0, 10);       // steady selling: no exhaustion
     std::vector<std::pair<Tick, Tick>> dpBid = {{6994, 6996}}, none;
     e.onBarClose(2, 2000, 240000, 70.00, dpBid, none);
-    CHECK(e.marks.size() == 1 && e.marks[0].reasons == "A", "hold + Delta Profile A in the zone = L? A");
+    CHECK(e.marks.empty(), "nothing drawn on the chart");
+    CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("|hold A|") != std::string::npos, "the Delta Profile A is logged for the study");
 }
 
-static void test_hold_without_reason_is_logged_only() {
-    Engine e = zoneSetup();
-    e.onTrade(41000, 69.97, 0, 10);
-    e.onTrade(150000, 69.96, 0, 10);
-    std::vector<std::pair<Tick, Tick>> none;
-    e.onBarClose(2, 2000, 240000, 70.00, none, none);
-    CHECK(e.marks.empty(), "a hold with no supporting read draws nothing");
-    CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("no supporting read") != std::string::npos, "but it is logged");
-}
-
-static void test_one_mark_per_bar_and_no_repaint() {
+static void test_signal_never_repeats_or_changes() {
     Engine e = zoneSetup();
     e.onTrade(41000, 69.97, 0, 30); e.onTrade(200000, 69.96, 0, 1);
     std::vector<std::pair<Tick, Tick>> none;
-    e.onBarClose(2, 2000, 240000, 70.00, none, none);
+    e.onBarClose(1, 1000, 230000, 69.96, none, none);
     const size_t n = e.marks.size();
-    e.onBarClose(3, 3000, 420000, 69.80, none, none);     // later bars cannot change the decided mark
-    CHECK(n == 1 && e.marks.size() == n && e.marks[0].code == "L?", "a decided mark never changes");
+    e.onBarClose(2, 2000, 400000, 69.96, none, none);     // later bars cannot add the same signal again
+    CHECK(n == 1 && e.marks.size() == 1 && e.marks[0].code == "Exh" && e.marks[0].barTime == 1000, "a decided signal never changes or repeats");
 }
 
 static void test_record_round_trip() {
-    Mark m; m.code = "L?"; m.reasons = "E A"; m.side = BID; m.barTime = 1791700000; m.lo = 6993; m.hi = 6997; m.shown = 210; m.eaten = 0.43;
+    Mark m; m.code = "Exh"; m.reasons = ""; m.side = BID; m.barTime = 1791700000; m.lo = 6993; m.hi = 6997; m.shown = 210; m.eaten = 0.43;
     m.stayed = 0.82; m.exhaust = 0.31; m.resil = 0.9; m.tA = 41000; m.tDecided = 240000;
     Mark r; CHECK(Engine::parse(Engine::line(m, 0.01), r, 0.01), "the record line parses");
-    CHECK(r.code == "L?" && r.reasons == "E A" && r.lo == 6993 && r.hi == 6997 && r.barTime == 1791700000, "fields survive a restart");
+    CHECK(r.code == "Exh" && r.lo == 6993 && r.hi == 6997 && r.barTime == 1791700000, "fields survive a restart");
+    for (const char* c : {"Pull", "LoF", "HiB", "RpB", "RpO"}) { Mark q = m; q.code = c; Mark z; CHECK(Engine::parse(Engine::line(q, 0.01), z, 0.01) && z.code == c, "every pane code round-trips"); }
+    Mark old = m; old.code = "L?"; Mark z; CHECK(!Engine::parse(Engine::line(old, 0.01), z, 0.01), "a retired code (L? / LX) is not drawn again");
     Mark bad; CHECK(!Engine::parse("x|y", bad, 0.01), "a torn line is rejected");
     std::string l = Engine::line(m, 0.01); l.replace(l.find("|0.43|"), 6, "|nan|");
     CHECK(!Engine::parse(l, bad, 0.01), "a non-finite number is rejected");
@@ -196,23 +211,6 @@ static void test_eaten_not_replaced_reads_depleting() {
     Readout r = e.readout(43000);
     CHECK(r.active && r.depleting && !r.pulling, "eaten 1x+ and not replaced = DEPLETING?");
 }
-static void test_hold_while_pulling_gives_no_L() {
-    Engine e = zoneSetup();
-    e.onTrade(41000, 69.97, 0, 30); e.onTrade(60000, 69.96, 0, 30);
-    book(e, 61000, 70.00, 12, {{6995, 40}});      // 160 of the 200 pulled, nothing replaced
-    e.onTrade(200000, 69.96, 0, 5);               // sellers exhausted ...
-    std::vector<std::pair<Tick, Tick>> none;
-    e.onBarClose(2, 2000, 240000, 70.00, none, none);   // ... and it closes back out
-    CHECK(e.marks.empty(), "no L? while the zone is being pulled, even with exhaustion");
-    CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("held while pulling") != std::string::npos, "logged as a hold while pulling");
-}
-static void test_thin_break_draws_nothing() {
-    Engine e = zoneSetup();
-    e.onTrade(41000, 69.97, 0, 2);
-    std::vector<std::pair<Tick, Tick>> none;
-    e.onBarClose(1, 1000, 180000, 69.90, none, none);
-    CHECK(e.marks.empty(), "a break with no eating and no pulling draws nothing");
-}
 static void test_story_defense_then_offense() {
     Engine e = zoneSetup();
     std::vector<std::pair<Tick, Tick>> none;
@@ -223,7 +221,7 @@ static void test_story_defense_then_offense() {
     e.formBar = 11;
     e.onTrade(200000, 69.96, 90, 3);              // bar 11: buyers' total since arrival passes the sellers' (0.3.0: the cumulative cross), sellers' pace collapsed
     e.onBarClose(11, 2000, 360000, 69.96, none, none);
-    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11, "defense first (sellers led since arrival), then the buyers' total crosses above in bar 11 = O");
+    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11 && has(e, "LoF"), "defense first (sellers led since arrival), then the buyers' total crosses above in bar 11 = LoF");
     CHECK(!e.attempts.empty() && e.attempts[0].barE >= 10 && e.attempts[0].barE <= 11, "the sellers' pace halved by bar 11 = E");
     CHECK(!e.attempts.empty() && e.attempts[0].flowBars[10].attack == 70 && e.attempts[0].flowBars[11].defend == 90, "per-bar attack / defend kept for the panes");
     e.formBar = 12;
@@ -243,10 +241,11 @@ static void test_double_crossover() {
     book(e, 190000, 70.00, 12, {{6995, 300}});    // bar 11: 180 new size comes in - the bids' net passes the offers' (0.3.0)
     e.onTrade(200000, 69.96, 80, 4);              // and the buyers' total passes the sellers'
     e.onBarClose(11, 2000, 360000, 69.96, none, none);
-    CHECK(!e.attempts.empty() && e.attempts[0].barR == 11 && e.attempts[0].barO == 11 && e.attempts[0].barX == 11, "both crosses in bar 11 = the double crossover X");
+    CHECK(!e.attempts.empty() && e.attempts[0].barR == 11 && e.attempts[0].barO == 11 && has(e, "LoF") && has(e, "RpB"), "both crosses in bar 11 = LoF (aggression) and RpB (defense)");
+    CHECK(e.attempts.empty() || e.attempts[0].barX < 0, "no X any more");
     e.formBar = 12;
     e.onBarClose(12, 3000, 540000, 70.00, none, none);
-    CHECK(e.marks.size() == 1 && e.marks[0].code == "L?" && e.marks[0].reasons.find('X') != std::string::npos, "a hold after the double crossover prints L? with X");
+    CHECK(!has(e, "L?") && !has(e, "X"), "no L? / X on the chart after the crosses");
 }
 static void test_other_side_band_is_tracked() {
     // (0.3.0) the sellers' offers in the band just above a bid zone are tracked as their own net line; offers further up are not
@@ -271,12 +270,11 @@ int main() {
     test_other_side_band_is_tracked();
     test_double_crossover();
     test_story_defense_then_offense();
-    test_hold_while_pulling_gives_no_L(); test_thin_break_draws_nothing();
     test_pull_not_replaced_reads_PULL(); test_eaten_and_replaced_reads_holding(); test_eaten_not_replaced_reads_depleting();
     test_pull_vs_execution(); test_window_edge_is_not_a_pull(); test_refill_is_counted(); test_bad_books_refused();
-    test_zone_found_and_durable(); test_attempt_eaten_then_break_gives_LX(); test_break_without_eating_is_logged_not_drawn();
-    test_hold_with_exhaustion_gives_L_E(); test_hold_with_delta_absorption_gives_L_A(); test_hold_without_reason_is_logged_only();
-    test_one_mark_per_bar_and_no_repaint(); test_record_round_trip(); test_half_width_rule(); test_norms_fallback();
+    test_zone_found_and_durable(); test_eaten_break_is_logged_not_marked(); test_pulled_while_attacked_is_Pull_on_the_defense_pane();
+    test_pulled_without_attack_is_not_Pull(); test_exhaustion_is_Exh_on_the_aggression_pane(); test_market_threshold_changes_Exh();
+    test_hold_with_delta_absorption_is_logged(); test_signal_never_repeats_or_changes(); test_record_round_trip(); test_half_width_rule(); test_norms_fallback();
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

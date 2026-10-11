@@ -60,7 +60,7 @@ int main() {
     setDepth(h, 79.97, 12, 79.95, 200);
     h.now = t0 + 46; usleep(300000); p->calc(0);
     CHECK(S->e.attempts.size() == 1, "arrival into the zone starts an attempt");
-    fb.rows.push_back(mock::Price(79.95f, 0, 450, 450));   // 1.5x+ the shown size (this market's eaten_break from the norms file) fb.low = 79.95f; fb.close = 79.95f;
+    fb.rows.push_back(mock::Price(79.95f, 0, 450, 450)); fb.low = 79.95f; fb.close = 79.95f;   // 1.5x+ the shown size (this market's eaten_break)
     setDepth(h, 79.95, 12, 79.95, 0);
     h.now = t0 + 60; usleep(300000); p->calc(0);
     fb.rows.push_back(mock::Price(79.92f, 0, 20, 20)); fb.low = 79.89f; fb.close = 79.89f;
@@ -70,27 +70,22 @@ int main() {
     // the bar closes (a new bar appears) below the zone
     { mock::Bar n; n.time = t0 + 360; n.open = n.high = n.low = n.close = 79.91f; n.rows.push_back(mock::Price(79.91f, 0, 0, 0)); h.bars.push_back(n); }
     h.now = t0 + 181; usleep(300000); p->calc(0);
-    CHECK(S->e.marks.size() == 1 && S->e.marks[0].code == "LX", "eaten 1x+ and the close through = LX on the closed bar");
-    CHECK(S->marksWritten == 1, "the mark is written to the session record");
-    const std::string rec = flex + "\\LiquidityProfile\\CL-180-signals-" + std::to_string(S->session) + ".csv";
-    CHECK(readAll(rec).find("|LX|") != std::string::npos, "record file holds the LX line");
+    // (0.4.0) the price chart draws no signals: the break is LOGGED for the nightly study, nothing is recorded or drawn as a mark
+    CHECK(S->e.marks.empty() && S->marksWritten == 0, "no marks kept by the chart build");
     const std::string att = flex + "\\LiquidityProfile\\CL-180-attempts-" + std::to_string(S->session) + ".csv";
-    CHECK(readAll(att).find("LX") != std::string::npos, "the attempt is logged for the nightly scoring");
+    CHECK(readAll(att).find("|break eaten") != std::string::npos, "the attempt is logged as an eaten break for the nightly scoring");
     p->draw();
-    bool drawn = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LX") drawn = true;
-    CHECK(drawn, "LX is drawn");
+    bool drawn = false; for (auto& d : h.draws) if (d.type == "text" && (d.text == "LX" || d.text.find("L?") == 0 || d.text.find("Exh") == 0)) drawn = true;
+    CHECK(!drawn, "no signal text on the price chart");
     bool header = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LIQ TESTING") header = true;
     CHECK(header, "header says TESTING");
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.3.1") != std::string::npos, "status file written");
-    // restart: a new object and an empty slot redraw exactly the recorded mark
+    CHECK(readAll(st).find("VERSION,0.4.0") != std::string::npos, "status file written");
     p->destroy(); CHECK(h.data == nullptr, "destroy frees the slot");
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());
     h.draws.clear(); h.now = t0 + 200; q->calc(0); q->draw();
     LQState* R = static_cast<LQState*>(h.data);
-    CHECK(R && R->e.marks.size() == 1 && R->e.marks[0].code == "LX", "after a restart the record is re-read");
-    drawn = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LX") drawn = true;
-    CHECK(drawn, "and the same LX is drawn again (no repaint)");
+    CHECK(R && R->e.marks.empty(), "after a restart there is still nothing to draw on the chart");
     CHECK(R->e.trades == 0, "a restart does not replay old volume as trades");
     // no depth from the feed: says so, draws no book, no crash
     h.depthOn = false; h.draws.clear(); LiquidityProfile* z = static_cast<LiquidityProfile*>(CreateExtension()); z->destroy();

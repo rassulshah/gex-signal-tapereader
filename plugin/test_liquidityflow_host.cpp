@@ -26,6 +26,10 @@ static std::string readAll(const std::string& p) { std::ifstream f(p.c_str()); s
 
 int main() {
     char tmpl[] = "/tmp/lqfXXXXXX"; const char* tmp = mkdtemp(tmpl); setenv("USERPROFILE", tmp, 1);
+    {   // (0.4.0) the study confirmed LoF for this market (drawn without "?"); RpB is still testing
+        std::ofstream nf((std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-LiqNorms-CL.csv").c_str());
+        nf << "MARKET,CL\r\nZONE,0.25,4,8\r\nSIGNAL,LoF,confirmed\r\nSIGNAL,RpB,testing\r\nSIGNAL,X,confirmed\r\n";
+    }
     mock::Host h; mock::current = &h; h.tick = 0.01f; h.seconds = 180; h.symbol = "CLEX26"; h.root = "CLEX26";
     const unsigned long day = (unsigned long)(civilDays(2026, 10, 12) * 86400LL); unsigned long t0 = day + 9 * 3600;
     for (int i = 0; i < 25; ++i) { mock::Bar b; b.time = t0 - (24 - i) * 180; b.open = 80.05f; b.high = 80.12f; b.low = 79.98f; b.close = 80.03f; b.rows.push_back(mock::Price(80.03f, 50, 40, 90)); h.bars.push_back(b); }
@@ -51,12 +55,22 @@ int main() {
     CHECK(lines, "buyers / sellers aggression and both net resting lines are drawn");
     const lqp::Attempt* a = !S->e.finished.empty() ? &S->e.finished.back() : (!S->e.attempts.empty() ? &S->e.attempts.back() : nullptr);
     CHECK(a && a->flowBars.size() >= 2, "the touch has per-bar flow");
-    CHECK(a && a->barO >= 0, "defenders took over the trading (O)");
-    CHECK(a && a->barR >= 0 && a->barX >= 0, "the bids' net crossed above the offers' (R) and both crosses = X");
-    bool xs = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "X?") xs = true;
-    CHECK(xs, "X? is drawn in the pane");
+    CHECK(a && a->barO >= 0 && a->barR >= 0, "buyers took over the trading and the bids' net crossed above the offers'");
+    bool lof = false, rpb = false, old = false;
+    for (auto& d : h.draws) if (d.type == "text") { if (d.text == "LoF") lof = true; if (d.text == "RpB?") rpb = true; if (d.text == "X?" || d.text == "E?" || d.text == "O?" || d.text == "R?") old = true; }
+    CHECK(lof, "LoF drawn without '?' (confirmed for this market)");
+    CHECK(rpb, "RpB? drawn with '?' (still testing)");
+    CHECK(!old, "the retired letters (E? O? R? X?) are gone");
+    const std::string rec = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\CL-180-panes-" + std::to_string(S->session) + ".csv";
+    CHECK(readAll(rec).find("|LoF|") != std::string::npos && readAll(rec).find("|RpB|") != std::string::npos, "the pane signals are recorded for the session");
     std::string attempts = flex_attempts(tmp);
-    CHECK(attempts.empty(), "the pane build writes no records (the profile owns them)");
+    CHECK(attempts.empty(), "the pane build writes no attempt log (the profile owns it)");
+    p->destroy();
+    LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());
+    h.draws.clear(); h.now = t0 + 400; q->calc(0); q->draw();
+    bool again = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LoF") again = true;
+    CHECK(again, "after a restart the same signals are drawn again (no repaint)");
+    p = q;
     p->destroy();
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
