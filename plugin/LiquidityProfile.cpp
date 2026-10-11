@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.8.0, 2026-10-11; 0.8.0: the absorption PROCESS in every market (Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets - absorb, exhaust, counter or absorb, pull, break"): every step drawn everywhere at the market's data line where the nightly study set one, the standard line until then; s = Counter (the defenders out-traded the attackers after e, at the Counter line x their normal pace) on the price chart with its reason on the panes and the BUYERS / SELLERS STEPPING IN warning; panes AGGRESSIVE (Attack, Exh, Counter) / PASSIVE (Absorbed = the % of everything resting that took fills, Pulled, Rebuilt); 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.8.1, 2026-10-11; 0.8.1: never over the Delta Profile or its labels (the column moves 64 px further left, past the Delta Profile's "A 4.4x +62" labels) - the Dealer Profile reach is kept PER MARKET (its status file is shared by every chart: the last chart to write it wins) and starts at the Dealer Profile default (150 px) until this market's own reach is seen (Rassul 17:56 "the liquidity profile is overlapping the delta profile"); 0.8.0: the absorption PROCESS in every market (Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets - absorb, exhaust, counter or absorb, pull, break"): every step drawn everywhere at the market's data line where the nightly study set one, the standard line until then; s = Counter (the defenders out-traded the attackers after e, at the Counter line x their normal pace) on the price chart with its reason on the panes and the BUYERS / SELLERS STEPPING IN warning; panes AGGRESSIVE (Attack, Exh, Counter) / PASSIVE (Absorbed = the % of everything resting that took fills, Pulled, Rebuilt); 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -60,7 +60,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.8.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.8.1"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -180,7 +180,8 @@ struct LQState {
     bool depthAvail = false; int depthMax = 0, depthLevels = 0; long long depthReads = 0;
     long long session = -1; size_t marksWritten = 0; long long recWrites = 0, recFails = 0;
     long long normsStamp = -2, layoutStamp = -2, dealerStamp = -2;
-    int dpWidth = 50, dpGap = 0, dealerReach = 0, width = 70, font = 9;
+    int dpWidth = 50, dpGap = 0, dealerReach = 150, width = 70, font = 9;   // (0.8.1) 150 = the Dealer Profile default reach until this market's is seen
+    std::string reachMkt;                                                       // (0.8.1) the market whose saved reach was read
     std::vector<std::pair<lqp::Tick, lqp::Tick>> dpBid, dpAsk; long long dpStamp = -2;
     double atr = 0; int slot = -1;
     // (0.6.0) the per-market lines of the pane statistics (PARAM lines); a statistic is drawn only when its line came from the data
@@ -469,6 +470,11 @@ void LiquidityProfile::loadNorms(LQState& S) {
 // where the column goes: just left of the Delta Profile (its width / gap for this root) and the Dealer Profile (its reach)
 void LiquidityProfile::loadLayout(LQState& S) {
     const std::string f = flexDir(); if (f.empty()) return;
+    if (S.reachMkt != S.market) {                                               // (0.8.1) this market's last known Dealer Profile reach
+        S.reachMkt = S.market; S.dealerReach = 150;
+        std::ifstream in((f + "\\LiquidityProfile.reach-" + S.market + ".txt").c_str()); long long r = 0; std::string ln;
+        if (std::getline(in, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); if (parseLL(ln, 0, 1199, r) && r > 0) S.dealerReach = (int)r; }
+    }
     long long st = -1;
     if (statFile(f + "\\DeltaProfile.settings.txt", &st) && st != S.layoutStamp) {
         S.layoutStamp = st;
@@ -488,7 +494,10 @@ void LiquidityProfile::loadLayout(LQState& S) {
             if (c.size() >= 2 && c[0] == "MARKET") mkt = c[1];
             else if (c.size() >= 2 && c[0] == "REACH") parseLL(c[1], 0, 1199, reach);
         }
-        if (mkt == S.market && reach > 0) S.dealerReach = (int)reach;
+        if (mkt == S.market && reach > 0 && (int)reach != S.dealerReach) {      // (0.8.1) this market's own reach: use it and keep it
+            S.dealerReach = (int)reach;
+            publishFile(f + "\\LiquidityProfile.reach-" + S.market + ".txt", std::to_string(reach) + "\n");   // checklist #5
+        }
     }
 }
 
@@ -653,7 +662,10 @@ void LiquidityProfile::render(LQState& S) {
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
     int paneRight = pane.right;
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneRight = scale.left - 2;
-    const int base = paneRight - 2 - S.dealerReach - S.dpGap - S.dpWidth - 6;     // just left of the Delta Profile
+    // (0.8.1) just left of the Delta Profile AND its labels: the Delta Profile writes "A 4.4x +62" right-aligned at each bar's left
+    // tip, so its text runs up to ~60 px left of its column - the Liquidity column starts past that (DP_LABEL_ROOM)
+    static const int DP_LABEL_ROOM = 64;
+    const int base = paneRight - 2 - S.dealerReach - S.dpGap - S.dpWidth - 6 - DP_LABEL_ROOM;
     const int left = base - S.width;
     const int top = pane.top + 16, bottom = pane.bottom;
     const long count = getBarCount();
@@ -990,6 +1002,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.8.0");   // LQ_VERSION
+    p->setVersion("0.8.1");   // LQ_VERSION
     return p;
 }

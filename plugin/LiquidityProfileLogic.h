@@ -41,7 +41,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.8.0";
+static const char* const VERSION = "0.8.1";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
