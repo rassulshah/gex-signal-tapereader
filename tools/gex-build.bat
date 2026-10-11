@@ -61,6 +61,8 @@ call :one TapeFlowEU lsTapeFlowEU TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
 call :one TapeFlowMarks lsTapeFlowMarks TapeFlowLogic.h HostSlot.h
 call :one ChartView    lsChartView    ChartViewLogic.h HostSlot.h DealerLogic.h ChartViewCamera.h
 call :one MboCheck     lsMboCheck     MboCheckLogic.h HostSlot.h
+REM (LQ010 2026-10-11) the Liquidity Profile - native depth + VAP, TESTING
+call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 
@@ -148,7 +150,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
