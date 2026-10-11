@@ -62,7 +62,8 @@
 #include <limits>
 #include <new>
 
-static const char* SV_VERSION = "1.4.0";        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const bool SV_SHOW_BADGES = false;   // (1.4.1) Rassul 18:07: VWAP odds off the chart for now
+static const char* SV_VERSION = "1.4.1";        // 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
 static const COLOR C_SD1  = 0x00008000;   // +1 SD green (1.3.3, Rassul 2026-10-09 13:41 his settings window colours)
 static const COLOR C_SD1L = 0x00FF8080;   // -1 SD light red (1.3.4, Rassul 14:40 "replace the yellow with a lighter version of red")
@@ -438,7 +439,7 @@ int SessionVWAP::draw(void)
     PNT px; px.set(last, v[0] > 0 ? v[0] : v[5], kBarCenter);
     short x0 = (short)(px.h + 10);
     short h = (short)(fontPt + 6), lastY = -1000;
-    for (size_t k = 0; k < ys.size(); k++) {
+    for (size_t k = 0; k < ys.size() && SV_SHOW_BADGES; k++) {   // (1.4.1) not drawn; the odds below are still logged
         int j = ys[k].second;
         short y = ys[k].first; if (y - lastY < h + 1) y = (short)(lastY + h + 1); lastY = y;
         int w = (int)getTextWidth(txt[j], -1) + 8;

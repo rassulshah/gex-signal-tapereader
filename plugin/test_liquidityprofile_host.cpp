@@ -80,15 +80,16 @@ int main() {
     CHECK(!drawn, "no signal text on the price chart");
     bool header = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LIQ TESTING") header = true;
     CHECK(header, "header says TESTING");
-    {   // (0.8.1) never over the Delta Profile or its labels: everything this column draws stays left of
-        // pane right (scale left 1980 - 2) - 2 - Dealer reach (150 default, no status file here) - gap 0 - Delta width 50 - 6 - 64 label room
-        const int base = 1978 - 2 - 150 - 0 - 50 - 6 - 64; int over = 0, maxX = -1;
-        for (auto& d : h.draws) if ((d.type == "box" || d.type == "text") && d.x > base + 1 && d.text != "LIQ TESTING") { over++; maxX = std::max(maxX, d.x); }
-        if (over) std::printf("  %d items past x %d (max %d)\n", over, base, maxX);
-        CHECK(over == 0, "(0.8.1) the column stays left of the Delta Profile's labels");
+    {   // (0.9.0) the column is on the LEFT edge (facing price): no box or text of the column right of the old column's place,
+        // and the zone bars start at the pane's left edge
+        int minBox = 1 << 30, over = 0;
+        for (auto& d : h.draws) { if (d.type == "box") minBox = std::min(minBox, d.x); if ((d.type == "box" || d.type == "text") && d.x > 1700 && d.text != "LIQ TESTING") over++; }
+        if (over) std::printf("  %d items right of x 1700\n", over);
+        CHECK(over == 0, "(0.9.0) nothing of the column on the right (the Delta / Dealer Profiles' side)");
+        CHECK(minBox <= 2, "(0.9.0) the bars start at the pane's left edge");
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.8.1") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.9.0") != std::string::npos, "status file written");
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     const size_t nMarks = S->e.marks.size();
     {   // (0.8.0) the s letter on the price chart (the process in every market: drawn at the standard Counter line with no data line)
