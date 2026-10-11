@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.1.2, 2026-10-11; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.1.3, 2026-10-11; 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -59,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.1.2"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.1.3"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -635,7 +635,7 @@ void LiquidityProfile::render(LQState& S) {
             const lqp::Mark& m = S.e.marks[i];
             const int bar = barOfTime(m.barTime, count); if (bar < 0 || high.count < count) continue;
             const bool bullish = (m.code == "L?" && m.side == lqp::BID) || (m.code == "LX" && m.side == lqp::ASK);
-            const std::string text = m.code == "L?" ? m.code + " " + m.reasons : m.code;
+            const std::string text = m.reasons.empty() ? m.code : m.code + " " + m.reasons;
             FONT g; g.id = HELVETICA; g.size = coord(S.font); g.style = BOLD; setFont(g); setTextColor(bullish ? C_BUY : C_SELL);
             const int w = getTextWidth(text.c_str(), -1);
             PNT p; p.set(bar, bullish ? (float)low[bar] : (float)high[bar], kBarCenter);
@@ -652,6 +652,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal, and the zone reads that support absorption (eaten / stayed / E). TESTING.");
-    p->setVersion("0.1.2");   // LQ_VERSION
+    p->setVersion("0.1.3");   // LQ_VERSION
     return p;
 }

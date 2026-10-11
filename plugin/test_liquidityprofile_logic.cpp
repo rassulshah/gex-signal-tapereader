@@ -99,8 +99,8 @@ static void test_break_without_eating_is_logged_not_drawn() {
     book(e, 42000, 70.00, 12);             // the 200 lots pulled
     std::vector<std::pair<Tick, Tick>> none;
     e.onBarClose(1, 1000, 180000, 69.90, none, none);
-    CHECK(e.marks.empty(), "a break on pulled (not eaten) size draws nothing");
-    CHECK(!e.attemptLog.empty() && e.attemptLog[0].find("not eaten") != std::string::npos, "it is logged");
+    CHECK(e.marks.size() == 1 && e.marks[0].code == "LX" && e.marks[0].reasons == "P", "a break after the size was pulled and not replaced = LX P");
+    CHECK(!e.attemptLog.empty() && e.attemptLog[0].find("LX P") != std::string::npos, "it is logged with its reason");
     CHECK(!e.finished.empty() && e.finished.back().pulled >= 150, "the pull is measured");
 }
 
@@ -196,7 +196,25 @@ static void test_eaten_not_replaced_reads_depleting() {
     Readout r = e.readout(43000);
     CHECK(r.active && r.depleting && !r.pulling, "eaten 1x+ and not replaced = DEPLETING?");
 }
+static void test_hold_while_pulling_gives_no_L() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 30); e.onTrade(60000, 69.96, 0, 30);
+    book(e, 61000, 70.00, 12, {{6995, 40}});      // 160 of the 200 pulled, nothing replaced
+    e.onTrade(200000, 69.96, 0, 5);               // sellers exhausted ...
+    std::vector<std::pair<Tick, Tick>> none;
+    e.onBarClose(2, 2000, 240000, 70.00, none, none);   // ... and it closes back out
+    CHECK(e.marks.empty(), "no L? while the zone is being pulled, even with exhaustion");
+    CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("held while pulling") != std::string::npos, "logged as a hold while pulling");
+}
+static void test_thin_break_draws_nothing() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 2);
+    std::vector<std::pair<Tick, Tick>> none;
+    e.onBarClose(1, 1000, 180000, 69.90, none, none);
+    CHECK(e.marks.empty(), "a break with no eating and no pulling draws nothing");
+}
 int main() {
+    test_hold_while_pulling_gives_no_L(); test_thin_break_draws_nothing();
     test_pull_not_replaced_reads_PULL(); test_eaten_and_replaced_reads_holding(); test_eaten_not_replaced_reads_depleting();
     test_pull_vs_execution(); test_window_edge_is_not_a_pull(); test_refill_is_counted(); test_bad_books_refused();
     test_zone_found_and_durable(); test_attempt_eaten_then_break_gives_LX(); test_break_without_eating_is_logged_not_drawn();

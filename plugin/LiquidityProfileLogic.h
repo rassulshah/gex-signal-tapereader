@@ -21,7 +21,8 @@
 //              stayed = 1 - pulled / shown, E = exhaustion (attackers' 2nd-half volume < 0.5 x their 1st half since arrival),
 //              resilience = how much of what the zone lost was rebuilt.
 //   6. MARKS   decided on CLOSED bars only and never changed afterwards (no repaint):
-//              LX  a bar closes through the zone's far edge after it was eaten 1x+ (the break read)
+//              LX  a bar closes through the zone's far edge after it was eaten 1x+ (the break read); LX P = after the defenders
+//                  pulled and nobody replaced them (0.1.3). L? never prints while the zone is being pulled / depleted (logged instead).
 //              L?  a bar closes back out of the zone on the defended side at least decisionMs after arrival, never broken, with
 //                  a supporting reason: E (exhaustion) and / or A (a Delta Profile absorption in the zone since arrival)
 //              Everything else (a hold with no reason, a break without eating, an expiry) is logged, never drawn.
@@ -41,7 +42,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.1.2";
+static const char* const VERSION = "0.1.3";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -267,9 +268,16 @@ public:
             const bool broke = a.side == BID ? c < a.lo : c > a.hi;
             const bool out = a.side == BID ? c > a.hi : c < a.lo;
             const double eaten = a.shown > 0 ? a.attackVol / a.shown : 0;
+            // (0.1.3, Rassul 2026-10-10 "pulling was a major factor to why the absorption failed") the defenders leaving without being
+            // replaced: PULLING = half+ of the shown size pulled and less than half of what was taken replaced; DEPLETING = eaten 1x+, not replaced
+            const double taken = a.attackVol + a.pulled, replaced = a.added + a.refill;
+            const double refillX = taken > 0 ? replaced / taken : -1;
+            const bool pulling = a.shown > 0 && a.pulled / a.shown >= 0.5 && refillX >= 0 && refillX < 0.5;
+            const bool depleting = !pulling && eaten >= P.eatenBreak && refillX >= 0 && refillX < 0.5;
             if (broke) {
-                if (eaten >= P.eatenBreak && !marked) { push("LX", "", a, barTime, barEnd); marked = true; a.end = "LX"; }
-                else a.end = eaten >= P.eatenBreak ? "LX (bar already marked)" : "break, not eaten (pulled / thin)";
+                // LX = eaten 1x+ then a close through; "LX P" = the defenders pulled and nobody replaced them, then a close through
+                if ((eaten >= P.eatenBreak || pulling) && !marked) { push("LX", pulling ? "P" : "", a, barTime, barEnd); marked = true; a.end = pulling ? "LX P" : "LX"; }
+                else a.end = (eaten >= P.eatenBreak || pulling) ? "LX (bar already marked)" : "break, not eaten or pulled (thin)";
                 close_(a);
                 continue;
             }
@@ -279,10 +287,12 @@ public:
                 bool A = false;
                 const std::vector<std::pair<Tick, Tick>>& dp = a.side == BID ? deltaAbsorbBid : deltaAbsorbAsk;
                 for (size_t k = 0; k < dp.size(); ++k) if (dp[k].first <= a.hi && dp[k].second >= a.lo) A = true;
-                if ((E || A) && !marked) {
+                if (pulling || depleting) a.end = pulling ? "held while pulling (no L?)" : "held while depleting (no L?)";
+                else if ((E || A) && !marked) {
                     std::string r = E && A ? "E A" : E ? "E" : "A";
                     push("L?", r, a, barTime, barEnd); marked = true; a.end = "L? " + r;
                 } else a.end = (E || A) ? "hold (bar already marked)" : "hold, no supporting read";
+                if ((pulling || depleting) && (E || A)) a.end += std::string(" - had ") + (E && A ? "E A" : E ? "E" : "A");
                 close_(a);
                 continue;
             }
