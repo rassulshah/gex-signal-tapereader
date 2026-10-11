@@ -102,7 +102,8 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.6.5";   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
+static const char* IR_VERSION = "0.7.0";   // (0.7.0, Rassul 2026-10-11 "make sure you update [the MBO data] once rithmic is working so every night it gets updated so we are saving data") order-by-order depth is RECORDED ALL SESSION (was: the first 10 min only), one file per hour (dbo_HH.csv) so no file grows past an hour of events; up to 100,000 events read per step (was 20,000); lra.mbo_live archives and checks each day every night
+//   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
 #endif
@@ -772,22 +773,29 @@ void IRTReader::depth()
 void IRTReader::depthByOrder()
 {
     if (!state().dbo) state().dbo = new DEPTH_BY_ORDER(NULL);
-    std::string rows, sess;
+    // (0.7.0) every event is written, all session, one file per hour of the event's own time (<session>\<MKT>\dbo_HH.csv)
+    std::string rows, sess, hour;
     char line[260];
     int guard = 0;
-    while (guard++ < 20000 && state().dbo->getNext() == RTX_OK) {
+    auto flush = [&]() {
+        if (!rows.empty() && !sess.empty()) append(dirFor(sess) + "\\dbo_" + hour + ".csv", "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask", rows);
+        rows.clear();
+    };
+    while (guard++ < 100000 && state().dbo->getNext() == RTX_OK) {
         const DEPTH_ORDER& o = state().dbo->dbo;
         struct tm t; secOf(o.timestamp, &t);
-        if (sess.empty()) sess = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
+        const std::string s = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
+        char hh[4]; snprintf(hh, sizeof(hh), "%02d", t.tm_hour);
+        if (s != sess || hour != hh) { flush(); sess = s; hour = hh; }
         static const char* ACT[4] = { "NEW", "MOD", "DEL", "FILL" };
         snprintf(line, sizeof(line), "%s|%s|%s|%s|%lu|%d|%d|%c|%s|%s\n",
                  irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec).c_str(),
                  o.action < 4 ? ACT[o.action] : "?", irl::px(o.price, state().tick).c_str(), irl::px(o.previousPrice, state().tick).c_str(), o.size, o.orderID,
                  o.aggressorOrderID, o.buySell == 1 ? 'B' : o.buySell == 0 ? 'S' : '?', irl::px(o.bid, state().tick).c_str(), irl::px(o.ask, state().tick).c_str());
-        if (time(0) < state().startT + 600) rows += line;                // (0.6.0) written for the first 10 min (probe), counted after
+        rows += line;
         state().dboRows++;
     }
-    if (!rows.empty()) append(dirFor(sess) + "\\dbo.csv", "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask", rows);
+    flush();
 }
 
 void IRTReader::writeStatus()
@@ -802,7 +810,7 @@ void IRTReader::writeStatus()
       << "\nFOOTPRINT," << (state().cfg.fp ? "on" : "off") << "," << state().cfg.fpMin << "m,rows " << state().fpRows << ",last bar " << state().fpLastTxt << ",backfill days " << state().cfg.fpDays
       << "\nTRADES," << (state().cfg.trades ? "on" : "off") << ",rows " << state().trRows << ",last " << state().trLastTxt
       << "\nDOM," << (state().cfg.dom ? "on" : "off") << "," << (state().domAvail ? "available" : "NOT available") << ",levels " << state().domLevels << ",snapshots " << state().domRows
-      << "\nDBO," << (state().cfg.dbo ? "on" : "off") << ",events " << state().dboRows << (time(0) < state().startT + 600 ? ",writing" : ",counting only")
+      << "\nDBO," << (state().cfg.dbo ? "on" : "off") << ",events " << state().dboRows << (state().cfg.dbo ? ",writing all session" : "")
       << "\nOTHER_MARKETS," << (state().othersTxt.empty() ? "off" : state().othersTxt)
       << "\nERROR," << state().err << "\n";
 }
