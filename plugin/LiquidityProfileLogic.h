@@ -20,13 +20,11 @@
 //              shown = the zone's size at the last book before arrival; then eaten = attackers' volume in the zone / shown,
 //              stayed = 1 - pulled / shown, E = exhaustion (attackers' 2nd-half volume < 0.5 x their 1st half since arrival),
 //              resilience = how much of what the zone lost was rebuilt.
-//   6. MARKS   decided on CLOSED bars only and never changed afterwards (no repaint):
-//              LX  a bar closes through the zone's far edge after it was eaten 1x+ (the break read); LX P = after the defenders
-//                  pulled and nobody replaced them (0.1.3). L? never prints while the zone is being pulled / depleted (logged instead).
-//              L?  a bar closes back out of the zone on the defended side at least decisionMs after arrival, never broken, with
-//                  a supporting reason: E (exhaustion) and / or A (a Delta Profile absorption in the zone since arrival)
-//              Everything else (a hold with no reason, a break without eating, an expiry) is logged, never drawn.
-//   Every number is LEARNING (shown with '?') until the nightly study proves it on new days (the improvement loop).
+//   6. MARKS   (0.5.0) two pane signals, decided on CLOSED bars only and never changed afterwards (no repaint):
+//              Exh  (aggression pane) the attackers' 2nd-half / 1st-half volume since arrival under 0.5, drawn with that number
+//              Pull (defense pane) the defenders pulled this market's share of the shown size, not replaced, while attacked
+//              Each is drawn only in markets where the nightly study confirmed it (SIGNAL lines); unconfirmed = not drawn.
+//              Holds / breaks / expiries and the O / R crosses are logged for the study, never drawn.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -42,7 +40,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.4.1";
+static const char* const VERSION = "0.5.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -59,12 +57,11 @@ struct Params {
     double eatenBreak = 1.0;                    // LX: eaten >= 1x the size shown (Q02 / Q17)
     double exhaust = 0.5;                       // E: attackers' 2nd-half volume < 0.5 x the 1st half (Q22)
     double exhShow = 0.5;                       // (0.4.1, Rassul 2026-10-10 23:44 "i want to see weakness, especially under .5") Exh prints under this
-    double paceMin = 2.0;                       // (0.4.1, Rassul 23:43 "i like to see 2.0 or more") LoF / HiB / RpB / RpO print at this x of the
-                                                // prior bars' pace or more (per market from the data when confirmed - PARAM pace_min)
-    int paceBars = 20, paceMinBars = 5;         // the pace = the average of the prior 20 closed bars (needs 5+)
     double pullShare = 0.5;                     // (0.3.1) PULL? / P / LX P: share of the shown size pulled. eatenBreak, exhaust and pullShare are
                                                 // set PER MARKET from the data (LRA-LiqNorms-<MKT>.csv PARAM lines, lra.liq_params: chosen on the
                                                 // build days, kept only if the later validate days agree; else these defaults)
+    Ms oldMs = 600000;                          // (0.5.0, Rassul 2026-10-11 "just add the old order mark") OLD = resting 10 min+
+    double oldShow = 0.5;                       // a zone is marked old when half+ of its size is old (study old_share >= 0.5, Q-old)
     double minShown = 1.0;                      // an attempt needs some size shown at arrival
     double minAttack = 1.0;                     // E needs attackers in the first half
 };
@@ -111,6 +108,7 @@ struct Attempt {
     std::vector<std::pair<Ms, double>> attacks;  // (time, attacker contracts) inside the zone since arrival
     bool breachTrade = false;                    // an attacker trade beyond the far edge
     bool done = false; std::string end; Ms tEnd = 0;
+    double oldShare = -1;                        // (0.5.0) the zone's old-order share at arrival (-1 = not known), logged for the study
     // (0.2.0) the absorption STORY per bar, for the aggression / defense panes (lsLiquidityFlow) and the nightly study:
     // attack / defend = aggressive contracts in the zone that bar (attackers vs the defending side turning aggressive);
     // rep / pul = replenished (added + refill) and pulled since arrival, cumulative, as of that bar
@@ -129,11 +127,11 @@ struct Attempt {
 };
 
 struct Mark {
-    std::string code;      // (0.4.0) Exh / Pull / LoF / HiB / RpB / RpO
+    std::string code;      // (0.5.0) Exh / Pull only (Rassul 2026-10-11 "remove whatever doesn't work and keep what works")
     std::string reasons;   // unused since 0.4.0 (kept in the record format)
     int side = BID; long long barTime = 0;       // the closed bar's time (host clock, matched on redraw)
     Tick lo = 0, hi = 0; double eaten = 0, stayed = 0, exhaust = -1, resil = -1, shown = 0; Ms tA = 0, tDecided = 0;
-    double value = -1;     // (0.4.1) the number drawn with the code: Exh = 2nd / 1st half pace, Pull = share pulled, LoF / HiB / RpB / RpO = x the prior bars' pace
+    double value = -1;     // (0.4.1) the number drawn with the code: Exh = 2nd / 1st half pace, Pull = share pulled
 };
 
 struct Readout {         // the live read of the zone price is in (or the last one), for the column label
@@ -162,19 +160,36 @@ public:
     std::vector<Attempt> attempts; std::vector<Attempt> finished;
     std::vector<Mark> marks;
     Tick lastPx = 0; bool havePx = false; int hw = 4;
-    // (0.4.1) the pace of the prior bars: per closed bar, buyers' and sellers' volume (all prices) and, per side, the average |net| change
-    // of resting size per price level in the depth window (added + refilled - pulled over the bar: churn nets out)
-    struct BarPace { double buy = 0, sell = 0, book[2] = {0, 0}; bool bookOk = false; };
-    std::map<int, BarPace> pace;                                    // closed bars (last paceBars + a few kept)
-    std::map<int, std::pair<double, double>> barVol;                // forming bars: (buy, sell)
-    std::map<int, std::map<Tick, double>> barNet[2];               // forming bars: side -> price -> net change
-    double paceAvg(int bar, int what) const {                       // what: 0 buy, 1 sell, 2 bid book, 3 ask book
-        double s = 0; int n = 0;
-        for (std::map<int, BarPace>::const_iterator i = pace.lower_bound(bar - P.paceBars); i != pace.end() && i->first < bar; ++i) {
-            if (what >= 2 && !i->second.bookOk) continue;
-            s += what == 0 ? i->second.buy : what == 1 ? i->second.sell : i->second.book[what - 2]; ++n;
+    // (0.5.0) OLD ORDERS. The chart's depth is the total size per price, not single orders, so an order's age cannot be read. The
+    // estimate: the size at a price that never dropped below during the last oldMs (10 min) while that price stayed inside the depth
+    // window = the size resting 10 min+ (orders join the back of the queue, so a level that never dipped kept its oldest size). A price
+    // that left the window, or a gap in the depth feed, restarts its clock (age unknown = not old: conservative).
+    struct Age { Ms since = 0; std::deque<std::pair<Ms, double>> q; };   // q: sliding minimum of the size over the last oldMs
+    std::map<Tick, Age> age[2];
+    void ageUpdate(int s, Tick px, Ms t, double size) {
+        std::map<Tick, Age>::iterator it = age[s].find(px);
+        if (it == age[s].end()) { it = age[s].insert(std::make_pair(px, Age())).first; it->second.since = t; }
+        std::deque<std::pair<Ms, double>>& q = it->second.q;
+        while (!q.empty() && q.back().second >= size) q.pop_back();
+        q.push_back(std::make_pair(t, size));
+        while (q.size() > 1 && q[1].first <= t - P.oldMs) q.pop_front();
+        if (q.size() > 5000) q.pop_front();                               // bounded (checklist #33)
+    }
+    // the old size at a price now (-1 = unknown: not seen continuously for oldMs)
+    double oldAt(int s, Tick px, Ms now) const {
+        std::map<Tick, Age>::const_iterator it = age[s].find(px);
+        if (it == age[s].end() || it->second.q.empty() || now - it->second.since < P.oldMs) return -1;
+        return std::min(it->second.q.front().second, get(book[s], px));
+    }
+    // the share of a zone's size that is old; -1 when the age of less than half of its size is known
+    double zoneOld(int side, Tick lo, Tick hi, Ms now) const {
+        double total = 0, known = 0, old = 0;
+        for (std::map<Tick, double>::const_iterator i = book[side].lower_bound(lo); i != book[side].end() && i->first <= hi; ++i) {
+            total += i->second; const double o = oldAt(side, i->first, now);
+            if (o >= 0) { known += i->second; old += o; }
         }
-        return n >= P.paceMinBars && s > 0 ? s / n : -1;
+        if (total <= 0 || known < 0.5 * total) return -1;
+        return old / total;
     }
     long long books = 0, trades = 0, badBooks = 0;
     std::string why;                             // last reason a book or trade was refused
@@ -188,7 +203,6 @@ public:
         if (buy > 0) pendingExec[ASK][px] += buy;
         if (sell > 0) pendingExec[BID][px] += sell;
         TradeEvt e; e.t = t; e.px = px; e.buy = buy; e.sell = sell; tape.push_back(e); trades++;
-        { std::pair<double, double>& bv = barVol[formBar]; bv.first += buy; bv.second += sell; }
         for (size_t i = 0; i < attempts.size(); ++i) {
             Attempt& a = attempts[i]; if (a.done) continue;
             const double attack = a.side == BID ? sell : buy;            // support is attacked by sellers, resistance by buyers
@@ -228,11 +242,16 @@ public:
                     e.refill = std::max(0.0, ex - old);
                     if (inWin) { e.pulled = std::max(0.0, rest - now); e.added = std::max(0.0, now - rest); }
                     if (e.executed > 0 || e.pulled > 0 || e.added > 0 || e.refill > 0) { flow.push_back(e); applyFlow(e); }
-                    if (inWin && (e.added > 0 || e.pulled > 0 || e.refill > 0)) barNet[s][formBar][px] += e.added + e.refill - e.pulled;
                 }
             }
         }
         for (int s = 0; s < 2; ++s) { book[s].swap(nb[s]); pendingExec[s].clear(); win[s][0] = nw[s][0]; win[s][1] = nw[s][1]; }
+        // (0.5.0) the ages: a feed gap of a minute+ restarts every clock; prices that left the window restart theirs
+        if (haveBook && t - bookT > 60000) { age[0].clear(); age[1].clear(); }
+        for (int s = 0; s < 2; ++s) {
+            for (std::map<Tick, Age>::iterator i = age[s].begin(); i != age[s].end();) { if (i->first < win[s][0] || i->first > win[s][1]) i = age[s].erase(i); else ++i; }
+            if (win[s][1] - win[s][0] <= 400) for (Tick px = win[s][0]; px <= win[s][1]; ++px) ageUpdate(s, px, t, get(book[s], px));
+        }
         haveBook = true; bookT = t; books++;
         for (size_t i = 0; i < attempts.size(); ++i) if (!attempts[i].done) {
             Attempt& a = attempts[i]; a.curSize = band(a.side, a.lo, a.hi); a.minSize = std::min(a.minSize, a.curSize);
@@ -314,7 +333,7 @@ public:
             const bool pulling = a.shown > 0 && a.pulled / a.shown >= P.pullShare && refillX >= 0 && refillX < 0.5;
             const bool depleting = !pulling && eaten >= P.eatenBreak && refillX >= 0 && refillX < 0.5;
             // (0.4.0, Rassul 2026-10-10 23:35 "get rid of X and L and LX") the outcome ends the attempt and is LOGGED for the nightly study;
-            // nothing is drawn on the price chart. The pane signals (Exh / Pull / LoF / HiB / RpB / RpO) come from story().
+            // nothing is drawn on the price chart. The pane signals (Exh / Pull) come from story().
             if (broke) {
                 a.end = std::string("break") + (pulling ? " pulled" : "") + (eaten >= P.eatenBreak ? " eaten" : "") + (depleting ? " depleting" : "");
                 close_(a);
@@ -332,28 +351,7 @@ public:
             if (bar - a.barA >= P.maxBars) { a.end = "expired"; close_(a); }
         }
         attempts.erase(std::remove_if(attempts.begin(), attempts.end(), [](const Attempt& a) { return a.done; }), attempts.end());
-        closePace(bar);                                  // after the story read this bar's zone flow
         curBar = bar;
-    }
-    void closePace(int bar) {
-        BarPace& b = pace[bar];
-        std::map<int, std::pair<double, double>>::iterator v = barVol.find(bar);
-        if (v != barVol.end()) { b.buy = v->second.first; b.sell = v->second.second; }
-        for (int s = 0; s < 2; ++s) {
-            const Tick lv = win[s][1] - win[s][0] + 1;
-            std::map<int, std::map<Tick, double>>::iterator n = barNet[s].find(bar);
-            double a = 0; if (n != barNet[s].end()) for (std::map<Tick, double>::const_iterator k = n->second.begin(); k != n->second.end(); ++k) a += std::fabs(k->second);
-            if (haveBook && lv > 0) { b.book[s] = a / (double)lv; b.bookOk = true; }
-        }
-        barVol.erase(barVol.begin(), barVol.upper_bound(bar));
-        for (int s = 0; s < 2; ++s) { std::map<int, std::map<Tick, double>>::iterator u = barNet[s].upper_bound(bar); barNet[s].erase(barNet[s].begin(), u); }
-        while (!pace.empty() && pace.begin()->first < bar - P.paceBars - 5) pace.erase(pace.begin());
-    }
-    // the defenders' net added resting size per price level in the zone during this bar
-    double zoneNetPerLevel(const Attempt& a, int bar) const {
-        std::map<int, std::map<Tick, double>>::const_iterator n = barNet[a.side].find(bar);
-        double z = 0; if (n != barNet[a.side].end()) for (std::map<Tick, double>::const_iterator k = n->second.lower_bound(a.lo); k != n->second.end() && k->first <= a.hi; ++k) z += k->second;
-        return z / (double)(a.hi - a.lo + 1);
     }
     int curBar = 0;
     int formBar = 0;                             // the bar in progress (set by the host before trades / books)
@@ -404,11 +402,11 @@ public:
         m.value = -1; double v = 0; if (f.size() >= 15 && num(f[14], v)) m.value = v;
         return m.hi >= m.lo;
     }
-    static bool paneCode(const std::string& c) { return c == "Exh" || c == "Pull" || c == "LoF" || c == "HiB" || c == "RpB" || c == "RpO"; }
+    static bool paneCode(const std::string& c) { return c == "Exh" || c == "Pull"; }   // (0.5.0) older records with LoF / HiB / RpB / RpO are skipped
     static double round2(double v) { return std::floor(v * 100 + 0.5) / 100; }
 
     // the attempt log line (every attempt, drawn or not) for the nightly scoring
-    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end|e_bar|o_bar|p_bar|story|r_bar|x_bar|def_net_x|opp_net_x"; }
+    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end|e_bar|o_bar|p_bar|story|r_bar|x_bar|def_net_x|opp_net_x|old_x"; }
     std::string attemptLine(const Attempt& a, Ms tEnd) const {
         std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
         const double sh = a.shown > 0 ? a.shown : 1;
@@ -431,7 +429,7 @@ public:
         std::string st; for (size_t i = 0; i < seq.size(); ++i) { if (i) st += '>'; st += seq[i].second; }
         o << '|' << (a.barE >= 0 ? a.barE - a.barA : -1) << '|' << (a.barO >= 0 ? a.barO - a.barA : -1) << '|' << (a.barP >= 0 ? a.barP - a.barA : -1) << '|' << (st.empty() ? "-" : st)
           << '|' << (a.barR >= 0 ? a.barR - a.barA : -1) << '|' << (a.barX >= 0 ? a.barX - a.barA : -1)
-          << '|' << round2(a.defNet / sh) << '|' << round2(a.oppNet / sh);
+          << '|' << round2(a.defNet / sh) << '|' << round2(a.oppNet / sh) << '|' << round2(a.oldShare);
         return o.str();
     }
     std::vector<std::string> attemptLog;          // lines waiting to be appended by the host
@@ -441,42 +439,28 @@ public:
     // first, then offense - Rassul 2026-10-10 "buyers playing defense first and then offense")
     // (0.4.0, agreed with Rassul 2026-10-10 23:31-23:35, one signal per idea, each ONLY on its pane, decided once at a bar close):
     //   AGGRESSION  Exh  the attackers' pace dried up (2nd-half / 1st-half volume < this market's 'exhaust')
-    //               LoF  buyers lifting offers took over (support: the buyers' volume since arrival crosses above the sellers')
-    //               HiB  sellers hitting bids took over (resistance: the mirror)
     //   DEFENSE     Pull the defenders pulled (this market's 'pull_share' of the shown size, not replaced) WHILE the attackers lead
-    //               RpB  buyers replenishing bids: their net resting size crosses above the sellers' offers beyond the zone (support)
-    //               RpO  sellers replenishing offers: the mirror at resistance
-    // Each is a Mark (record line, re-read after a restart: never repaints). '?' is drawn until the nightly study confirms it for the market.
+    // (0.5.0, Rassul 2026-10-11 07:4x "remove whatever doesn't work and keep what works", "remove stop") LoF / HiB / RpB / RpO removed:
+    // the data did not confirm them (LoF pace 2x+ in 0-4% of touches and heavy defender volume held LESS; RpB only in 2 of 7 markets,
+    // backwards in ES / CL). The O / R crosses are still LOGGED in the attempt line for the study, never drawn.
+    // Each mark is a record line, re-read after a restart: never repaints. The host draws a code only where the market's nightly study
+    // confirmed it (SIGNAL lines); nothing unconfirmed is drawn.
     void story(Attempt& a, int bar, Ms barEnd, long long barTime) {
-        const bool sup = a.side == BID;
         // Exh: the attackers' 2nd-half / 1st-half volume since arrival, printed under exhShow (0.5) with that number (weakness)
         if (a.barE < 0) { const double ex = exhaustRatio(a.attacks, a.tA, barEnd); if (ex >= 0 && ex < P.exhShow && firstHalf(a, barEnd) >= P.minAttack) { a.barE = bar; push("Exh", a, barTime, barEnd, ex); } }
         // Pull: the share of the shown size pulled (this market's pull_share, not replaced) while the attackers lead
         const double taken = a.attackVol + a.pulled, replaced = a.added + a.refill, rx = taken > 0 ? replaced / taken : -1;
         if (a.barP < 0 && a.shown > 0 && a.pulled / a.shown >= P.pullShare && rx >= 0 && rx < 0.5 && a.attackVol > a.counterVol) { a.barP = bar; push("Pull", a, barTime, barEnd, a.pulled / a.shown); }
-        // LoF / HiB: the defenders' total since arrival is above the attackers' (after the attackers led) AND their volume this bar is
-        // paceMin x or more of their side's normal volume per bar (the prior bars' pace)
+        // the O / R crosses (logged only): the defenders' total since arrival crosses above the attackers' after they led; the defenders'
+        // net resting size crosses above the other side's after it led
         if (a.attackVol > a.counterVol) a.defendedFirst = true;
-        else if (a.barO < 0 && a.defendedFirst && a.counterVol > a.attackVol) {
-            std::map<int, Attempt::BarFlow>::const_iterator f = a.flowBars.find(bar);
-            const double avg = paceAvg(bar, sup ? 0 : 1), now = f == a.flowBars.end() ? 0 : f->second.defend;
-            const double x = avg > 0 ? now / avg : -1;
-            if (x >= P.paceMin) { a.barO = bar; push(sup ? "LoF" : "HiB", a, barTime, barEnd, x); }
-        }
-        // RpB / RpO: the defenders' net resting size is above the other side's (after it led) AND their net added per price level in the
-        // zone this bar is paceMin x or more of their side's normal |net change| per level per bar
+        else if (a.barO < 0 && a.defendedFirst && a.counterVol > a.attackVol) a.barO = bar;
         if (a.oppNet >= a.defNet && (a.oppNet != 0 || a.defNet != 0)) a.pulledFirst = true;
-        else if (a.barR < 0 && a.pulledFirst && a.defNet > a.oppNet) {
-            const double avg = paceAvg(bar, sup ? 2 : 3), now = zoneNetPerLevel(a, bar);
-            const double x = avg > 0 ? now / avg : -1;
-            if (x >= P.paceMin) { a.barR = bar; push(sup ? "RpB" : "RpO", a, barTime, barEnd, x); }
-        }
+        else if (a.barR < 0 && a.pulledFirst && a.defNet > a.oppNet) a.barR = bar;
     }
-    static bool topPane(const std::string& c) { return c == "Exh" || c == "LoF" || c == "HiB"; }
+    static bool topPane(const std::string& c) { return c == "Exh"; }
     // green = buyers win / bullish, red = sellers win / bearish (Rassul: buyers always green, sellers always red)
     static bool bullish(const Mark& m) {
-        if (m.code == "LoF" || m.code == "RpB") return true;
-        if (m.code == "HiB" || m.code == "RpO") return false;
         if (m.code == "Exh") return m.side == BID;          // sellers exhausted at a support
         return m.side == ASK;                                // Pull: buyers pulling at a support is bearish, sellers pulling at a resistance bullish
     }
@@ -531,6 +515,7 @@ private:
             if (shown < P.minShown) continue;
             Attempt a; a.zoneId = z.id; a.side = z.side; a.lo = z.lo; a.hi = z.hi; a.tA = t; a.barA = formBar > 0 ? formBar : curBar;
             a.shown = shown; a.startSize = a.minSize = a.curSize = shown;
+            a.oldShare = zoneOld(z.side, z.lo, z.hi, t);
             const Tick w = z.hi - z.lo + 1;                               // (0.3.0) the other side's band: same width, just beyond the zone
             if (a.side == BID) { a.oppLo = z.hi + 1; a.oppHi = z.hi + w; } else { a.oppLo = z.lo - w; a.oppHi = z.lo - 1; }
             const double first = a.side == BID ? sell : buy;          // the trade that arrived counts as the first attack

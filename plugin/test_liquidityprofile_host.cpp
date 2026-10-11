@@ -80,7 +80,7 @@ int main() {
     bool header = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LIQ TESTING") header = true;
     CHECK(header, "header says TESTING");
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.4.1") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.5.0") != std::string::npos, "status file written");
     p->destroy(); CHECK(h.data == nullptr, "destroy frees the slot");
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());
     h.draws.clear(); h.now = t0 + 200; q->calc(0); q->draw();
@@ -96,6 +96,31 @@ int main() {
     CHECK(noDepth, "no depth from this feed is shown as LIQ no depth");
     w->destroy();
     CHECK(h.depthObjects == 0, "every depth object is released (unsubscribed)");
+    {   // (0.5.0) old orders: a zone that rests 10 min+ untouched is outlined with "old 100%" where the market's study confirmed it
+        { std::ofstream nf((flex + "\\LRA-LiqNorms-CL.csv").c_str()); nf << "MARKET,CL\r\nZONE,0.25,4,8\r\nSIGNAL,Old,confirmed\r\n"; }
+        mock::Host h2; mock::current = &h2; h2.tick = 0.01f; h2.seconds = 180; h2.symbol = "CLEX26"; h2.root = "CLEX26";
+        for (int i = 0; i < 25; ++i) { mock::Bar b; b.time = t0 - (24 - i) * 180; b.open = 80.05f; b.high = 80.12f; b.low = 79.98f; b.close = 80.03f; b.rows.push_back(mock::Price(80.03f, 50, 40, 90)); h2.bars.push_back(b); }
+        { mock::Bar f; f.time = t0 + 180; f.open = f.high = f.low = f.close = 80.03f; f.rows.push_back(mock::Price(80.03f, 0, 0, 0)); h2.bars.push_back(f); }
+        setDepth(h2, 80.00, 12, 79.95, 200);
+        LiquidityProfile* o = static_cast<LiquidityProfile*>(CreateExtension());
+        h2.now = t0 + 300; o->calc(0); o->draw();
+        bool early = false; for (auto& d : h2.draws) if (d.type == "text" && d.text.find("old ") == 0) early = true;
+        CHECK(!early, "(0.5.0) no old mark before the zone has rested 10 min");
+        for (unsigned long s2 = 0; s2 <= 640; s2 += 5) { h2.now = t0 + 300 + s2; o->calc(0); }
+        LQState* O = static_cast<LQState*>(h2.data);
+        CHECK(O && O->confirmed.count("Old"), "SIGNAL,Old,confirmed is read");
+        h2.draws.clear(); o->draw();
+        bool old = false; for (auto& d : h2.draws) if (d.type == "text" && d.text.find("old 100%") == 0) old = true;
+        CHECK(old, "(0.5.0) the zone resting 10 min+ is marked old 100%");
+        o->destroy();
+        { std::ofstream nf((flex + "\\LRA-LiqNorms-CL.csv").c_str()); nf << "MARKET,CL\r\nZONE,0.25,4,8\r\nSIGNAL,Old,testing\r\n"; }
+        LiquidityProfile* o2 = static_cast<LiquidityProfile*>(CreateExtension());
+        for (unsigned long s2 = 0; s2 <= 640; s2 += 5) { h2.now = t0 + 1000 + s2; o2->calc(0); }
+        h2.draws.clear(); o2->draw();
+        bool old2 = false; for (auto& d : h2.draws) if (d.type == "text" && d.text.find("old ") == 0) old2 = true;
+        CHECK(!old2, "(0.5.0) not drawn where the market's study has not confirmed old orders");
+        o2->destroy();
+    }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

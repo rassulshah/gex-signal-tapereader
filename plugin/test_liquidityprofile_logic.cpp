@@ -77,9 +77,6 @@ static void test_zone_found_and_durable() {
     CHECK(e.zones.size() <= 6, "at most top 3 per side");
 }
 
-static void pace(Engine& e, int upTo, double buy, double sell, double book) {   // (0.4.1) the prior bars' normal pace
-    for (int b = upTo - 20; b < upTo; ++b) { Engine::BarPace& p = e.pace[b]; p.buy = buy; p.sell = sell; p.book[0] = p.book[1] = book; p.bookOk = true; }
-}
 static const Mark* get(const Engine& e, const char* code) { for (auto& m : e.marks) if (m.code == code) return &m; return nullptr; }
 static bool has(const Engine& e, const char* code) { for (auto& m : e.marks) if (m.code == code) return true; return false; }
 
@@ -134,7 +131,7 @@ static void test_exhaustion_is_Exh_on_the_aggression_pane() {
 }
 
 static void test_Exh_prints_under_half_with_its_number() {
-    Engine e = zoneSetup(); e.P.exhaust = 0.2;              // the market's confirmed level only decides the "?" (drawn by the host)
+    Engine e = zoneSetup(); e.P.exhaust = 0.2;              // the market's confirmed level only decides whether the host draws it
     e.onTrade(41000, 69.97, 0, 30); e.onTrade(60000, 69.96, 0, 30);
     e.onTrade(200000, 69.96, 0, 20);                        // 2nd half 20 / 1st 60 = 0.33: dried up at 0.5, not at 0.2
     std::vector<std::pair<Tick, Tick>> none;
@@ -168,7 +165,8 @@ static void test_record_round_trip() {
     m.stayed = 0.82; m.exhaust = 0.31; m.resil = 0.9; m.tA = 41000; m.tDecided = 240000;
     Mark r; CHECK(Engine::parse(Engine::line(m, 0.01), r, 0.01), "the record line parses");
     CHECK(r.code == "Exh" && r.lo == 6993 && r.hi == 6997 && r.barTime == 1791700000, "fields survive a restart");
-    for (const char* c : {"Pull", "LoF", "HiB", "RpB", "RpO"}) { Mark q = m; q.code = c; Mark z; CHECK(Engine::parse(Engine::line(q, 0.01), z, 0.01) && z.code == c, "every pane code round-trips"); }
+    { Mark q = m; q.code = "Pull"; Mark z; CHECK(Engine::parse(Engine::line(q, 0.01), z, 0.01) && z.code == "Pull", "Pull round-trips"); }
+    for (const char* c : {"LoF", "HiB", "RpB", "RpO"}) { Mark q = m; q.code = c; Mark z; CHECK(!Engine::parse(Engine::line(q, 0.01), z, 0.01), "(0.5.0) a removed code in an old record is not drawn again"); }
     Mark old = m; old.code = "L?"; Mark z; CHECK(!Engine::parse(Engine::line(old, 0.01), z, 0.01), "a retired code (L? / LX) is not drawn again");
     Mark bad; CHECK(!Engine::parse("x|y", bad, 0.01), "a torn line is rejected");
     std::string l = Engine::line(m, 0.01); l.replace(l.find("|0.43|"), 6, "|nan|");
@@ -191,16 +189,11 @@ static void test_norms_fallback() {
     CHECK(n.at(17) > 0, "session median once 30+ samples");
 }
 
-static void test_LoF_needs_double_the_pace() {
-    Engine e = zoneSetup(); pace(e, 10, 30, 30, 10);
-    std::vector<std::pair<Tick, Tick>> none;
-    e.formBar = 10; e.curBar = 9;
-    e.onTrade(41000, 69.97, 0, 20);
-    e.onBarClose(10, 1000, 180000, 69.96, none, none);
-    e.formBar = 11;
-    e.onTrade(200000, 69.96, 40, 0);              // buyers pass the sellers, but 40 / 30 = 1.3x: not double
-    e.onBarClose(11, 2000, 360000, 69.96, none, none);
-    CHECK(!has(e, "LoF"), "a cross at 1.3x the normal pace does not print (2.0x or more)");
+static void test_only_Exh_and_Pull_are_signals() {
+    // (0.5.0, Rassul 2026-10-11 "remove whatever doesn't work and keep what works") only the confirmed ideas are pane signals
+    CHECK(Engine::paneCode("Exh") && Engine::paneCode("Pull"), "Exh and Pull are signals");
+    CHECK(!Engine::paneCode("LoF") && !Engine::paneCode("HiB") && !Engine::paneCode("RpB") && !Engine::paneCode("RpO") && !Engine::paneCode("Stop"), "LoF / HiB / RpB / RpO / Stop are not");
+    CHECK(Engine::topPane("Exh") && !Engine::topPane("Pull"), "Exh on the aggression pane, Pull on the defense pane");
 }
 static void test_pull_not_replaced_reads_PULL() {
     Engine e = zoneSetup();
@@ -228,7 +221,7 @@ static void test_eaten_not_replaced_reads_depleting() {
     CHECK(r.active && r.depleting && !r.pulling, "eaten 1x+ and not replaced = DEPLETING?");
 }
 static void test_story_defense_then_offense() {
-    Engine e = zoneSetup(); pace(e, 10, 30, 30, 10);        // normal: 30 lots a side per bar
+    Engine e = zoneSetup();
     std::vector<std::pair<Tick, Tick>> none;
     e.formBar = 10; e.curBar = 9;
     e.onTrade(41000, 69.97, 0, 40);               // bar 10: sellers attack the zone
@@ -237,8 +230,8 @@ static void test_story_defense_then_offense() {
     e.formBar = 11;
     e.onTrade(200000, 69.96, 90, 3);              // bar 11: buyers' total since arrival passes the sellers' (0.3.0: the cumulative cross), sellers' pace collapsed
     e.onBarClose(11, 2000, 360000, 69.96, none, none);
-    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11 && has(e, "LoF"), "defense first (sellers led since arrival), then the buyers' total crosses above in bar 11 at 3.0x their normal pace = LoF");
-    CHECK(get(e, "LoF") && get(e, "LoF")->value > 2.9 && get(e, "LoF")->value < 3.3, "LoF carries its number: 90 lots vs about 30 normal = about 3.1x");
+    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11, "defense first (sellers led since arrival), then the buyers' total crosses above in bar 11 = O (logged)");
+    CHECK(!has(e, "LoF") && !has(e, "HiB"), "(0.5.0) the cross is logged for the study, never drawn");
     CHECK(!e.attempts.empty() && e.attempts[0].barE >= 10 && e.attempts[0].barE <= 11, "the sellers' pace halved by bar 11 = E");
     CHECK(!e.attempts.empty() && e.attempts[0].flowBars[10].attack == 70 && e.attempts[0].flowBars[11].defend == 90, "per-bar attack / defend kept for the panes");
     e.formBar = 12;
@@ -246,7 +239,7 @@ static void test_story_defense_then_offense() {
     CHECK(!e.attemptLog.empty() && e.attemptLog.back().find("|E>O") != std::string::npos, "the story is logged with its order (E, then O)");
 }
 static void test_double_crossover() {
-    Engine e = zoneSetup(); pace(e, 10, 30, 30, 10);
+    Engine e = zoneSetup();
     std::vector<std::pair<Tick, Tick>> none;
     e.formBar = 10; e.curBar = 9;
     e.onTrade(41000, 69.97, 0, 40);
@@ -258,7 +251,7 @@ static void test_double_crossover() {
     book(e, 190000, 70.00, 12, {{6995, 300}});    // bar 11: 180 new size comes in - the bids' net passes the offers' (0.3.0)
     e.onTrade(200000, 69.96, 80, 4);              // and the buyers' total passes the sellers'
     e.onBarClose(11, 2000, 360000, 69.96, none, none);
-    CHECK(!e.attempts.empty() && e.attempts[0].barR == 11 && e.attempts[0].barO == 11 && has(e, "LoF") && has(e, "RpB"), "both crosses in bar 11 = LoF (aggression) and RpB (defense)");
+    CHECK(!e.attempts.empty() && e.attempts[0].barR == 11 && e.attempts[0].barO == 11 && !has(e, "LoF") && !has(e, "RpB"), "both crosses in bar 11 are logged (O, R), nothing drawn (0.5.0)");
     CHECK(e.attempts.empty() || e.attempts[0].barX < 0, "no X any more");
     e.formBar = 12;
     e.onBarClose(12, 3000, 540000, 70.00, none, none);
@@ -283,14 +276,42 @@ static void test_other_side_band_is_tracked() {
     e.onBook(50000, bids, asks);
     CHECK(e.attempts[0].oppNet == before - 16, "8 offers pulled at each of the band's 2 prices = the sellers' line goes down 16; offers further up are not counted");
 }
+// (0.5.0) old orders: the size at a price that never dipped during the last 10 min while the price stayed in the depth window
+static Engine aged(std::map<long long, double> at300 = {}, Ms upTo = 610000) {
+    Engine e = fresh();
+    for (Ms t = 0; t <= upTo; t += 5000) book(e, t, 70.00, 12, t == 300000 && !at300.empty() ? at300 : std::map<long long, double>{{6995, 200}});
+    return e;
+}
+static void test_old_orders() {
+    { Engine e = aged(); CHECK(std::fabs(e.zoneOld(BID, 6993, 6997, 610000) - 1.0) < 1e-9, "a zone untouched for 10 min+ is all old"); }
+    { Engine e = aged({}, 300000); CHECK(e.zoneOld(BID, 6993, 6997, 300000) < 0, "seen for only 5 min: age not known yet (no mark)"); }
+    { Engine e = aged(); book(e, 615000, 70.00, 12, {{6995, 400}});
+      const double o = e.zoneOld(BID, 6993, 6997, 615000);
+      CHECK(o > 0.55 && o < 0.56, "200 new lots join: old = 250 / 450 = 0.56"); }
+    { Engine e = aged({{6995, 40}});
+      const double o = e.zoneOld(BID, 6993, 6997, 610000);
+      CHECK(o > 0.35 && o < 0.37, "the level dipped to 50 at 5 min: only 50 of its 210 can be old (90 / 250 = 0.36)"); }
+    { Engine e = aged(); book(e, 612000, 69.90, 12); book(e, 614000, 70.00, 12, {{6995, 200}});
+      CHECK(e.zoneOld(BID, 6993, 6997, 614000) < 0, "the zone left the depth window: its clock restarts"); }
+    { Engine e = aged(); book(e, 700000, 70.00, 12, {{6995, 200}});
+      CHECK(e.zoneOld(BID, 6993, 6997, 700000) < 0, "a feed gap of a minute+ restarts every clock"); }
+    { Engine e = fresh();
+      for (Ms t = 0; t <= 620000; t += 5000) { book(e, t, 70.00, 12, {{6995, 200}}); e.onLastPrice(70.01); e.updateZones(t, 0.20, 16); }
+      e.onTrade(621000, 69.97, 0, 5);
+      CHECK(!e.attempts.empty() && e.attempts[0].oldShare > 0.9, "the zone's old share at arrival is kept on the attempt");
+      std::vector<std::pair<Tick, Tick>> none; e.onBarClose(1, 1000, 640000, 69.90, none, none);
+      CHECK(!e.attemptLog.empty() && e.attemptLog[0].substr(e.attemptLog[0].rfind('|')) == "|1", "and logged (old_x) for the study");
+      CHECK(Engine::attemptHeader().substr(Engine::attemptHeader().rfind('|')) == "|old_x", "the log header names it"); }
+}
 int main() {
+    test_old_orders();
     test_other_side_band_is_tracked();
     test_double_crossover();
     test_story_defense_then_offense();
     test_pull_not_replaced_reads_PULL(); test_eaten_and_replaced_reads_holding(); test_eaten_not_replaced_reads_depleting();
     test_pull_vs_execution(); test_window_edge_is_not_a_pull(); test_refill_is_counted(); test_bad_books_refused();
     test_zone_found_and_durable(); test_eaten_break_is_logged_not_marked(); test_pulled_while_attacked_is_Pull_on_the_defense_pane();
-    test_pulled_without_attack_is_not_Pull(); test_exhaustion_is_Exh_on_the_aggression_pane(); test_Exh_prints_under_half_with_its_number(); test_LoF_needs_double_the_pace();
+    test_pulled_without_attack_is_not_Pull(); test_exhaustion_is_Exh_on_the_aggression_pane(); test_Exh_prints_under_half_with_its_number(); test_only_Exh_and_Pull_are_signals();
     test_hold_with_delta_absorption_is_logged(); test_signal_never_repeats_or_changes(); test_record_round_trip(); test_half_width_rule(); test_norms_fallback();
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
