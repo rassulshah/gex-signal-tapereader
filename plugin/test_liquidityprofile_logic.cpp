@@ -136,8 +136,8 @@ static void test_Exh_prints_under_half_with_its_number() {
     e.onTrade(200000, 69.96, 0, 20);                        // 2nd half 20 / 1st 60 = 0.33: dried up at 0.5, not at 0.2
     std::vector<std::pair<Tick, Tick>> none;
     e.onBarClose(2, 2000, 240000, 70.00, none, none);
-    const Mark* m = get(e, "Exh");
-    CHECK(m && m->value > 0.3 && m->value < 0.35, "a 0.33 pace is under 0.5: Exh prints with its number (0.33x)");
+    const Mark* m = get(e, "ew");
+    CHECK(!has(e, "Exh") && m && m->value > 0.3 && m->value < 0.35, "(0.7.0) 0.33 is not under this market's 0.2 line: no e yet, e? (the watch: under twice the line) with its number");
 }
 
 static void test_hold_with_delta_absorption_is_logged() {
@@ -146,7 +146,7 @@ static void test_hold_with_delta_absorption_is_logged() {
     e.onTrade(150000, 69.96, 0, 10);       // steady selling: no exhaustion
     std::vector<std::pair<Tick, Tick>> dpBid = {{6994, 6996}}, none;
     e.onBarClose(2, 2000, 240000, 70.00, dpBid, none);
-    CHECK(e.marks.empty(), "nothing drawn on the chart");
+    CHECK(e.marks.size() == 1 && e.marks[0].code == "Held" && e.marks[0].reasons.find("Absorbed: sellers hit the bid") == 0, "(0.7.0) only the plain-words reason is recorded for the hold");
     CHECK(e.attemptLog.size() == 1 && e.attemptLog[0].find("|hold A|") != std::string::npos, "the Delta Profile A is logged for the study");
 }
 
@@ -338,7 +338,73 @@ static void test_pulled_and_rebuilt() {
     Stats b; e.latest(45000, b);
     CHECK(b.rebuilt > 1.0, "Rebuilt > 1x = more came back than was lost");
 }
+// (0.7.0) e? -> e, p? -> p, t, the reasons and the warnings
+static void test_e_watch_then_e() {
+    Engine e = zoneSetup(); e.P.exhaust = 0.3;
+    e.onTrade(41000, 69.97, 0, 30); e.onTrade(60000, 69.96, 0, 30);
+    e.onTrade(170000, 69.96, 0, 30);                         // bar 2 close at 240 s: 2nd half 30 / 1st 60 = 0.5 -> under 0.6 (twice 0.3): e?
+    std::vector<std::pair<Tick, Tick>> none;
+    e.onBarClose(2, 2000, 240000, 69.96, none, none);
+    CHECK(has(e, "ew") && !has(e, "Exh"), "e? first: slowing toward the line");
+    e.onBarClose(3, 3000, 600000, 69.96, none, none);         // by 600 s the 2nd half (300-600 s) has nothing: 0x -> under 0.3: e
+    CHECK(has(e, "Exh") && get(e, "Exh")->barTime == 3000, "then e on the bar it crossed the line (the e? record stays: both are history)");
+}
+static void test_p_watch_then_p() {
+    Engine e = zoneSetup(); e.P.pullShare = 0.6;
+    e.onTrade(41000, 69.97, 0, 5);                            // sellers lead
+    book(e, 42000, 70.00, 12, {{6995, 120}});                 // 80 of ~250 pulled = 0.32 -> over half of 0.6: p?
+    std::vector<std::pair<Tick, Tick>> none;
+    e.onBarClose(1, 1000, 120000, 69.96, none, none);
+    CHECK(has(e, "pw") && !has(e, "Pull"), "p? at half-way to the line");
+    book(e, 130000, 70.00, 12, {{6995, 0}});                  // the rest pulled: past the line
+    e.onBarClose(2, 2000, 180000, 69.96, none, none);
+    CHECK(has(e, "Pull"), "then p");
+}
+static void test_trapped_t() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 5);
+    e.onTrade(50000, 69.90, 0, 20);                           // sellers trade BELOW the zone's far edge (69.93)
+    std::vector<std::pair<Tick, Tick>> none;
+    e.onBarClose(1, 1000, 120000, 69.95, none, none);         // back inside: not yet
+    CHECK(!has(e, "t"), "no t while price is still in or below the zone");
+    e.onBarClose(2, 2000, 240000, 70.00, none, none);         // a close back above the zone after the push below
+    CHECK(has(e, "t") && get(e, "t")->barTime == 2000 && Engine::bullish(*get(e, "t")), "t on the close back above, green at a support");
+}
+static void test_reason_uses_only_confirmed_lines() {
+    Engine e = zoneSetup();
+    for (int b = 0; b < 20; ++b) e.setBar(b, 100, 100, 10);
+    e.formBar = 20; e.curBar = 19;
+    e.onTrade(41000, 69.97, 0, 60); e.onTrade(60000, 69.96, 0, 60);   // 120 into 5 ticks = 24 per tick vs 10 = 2.4x
+    e.onTrade(200000, 69.96, 0, 3);
+    std::vector<std::pair<Tick, Tick>> none;
+    e.L.attack = 2.0; e.L.exh = 0.5;                          // only Attack and Exh confirmed for this market
+    e.onBarClose(20, 2000, 240000, 70.00, none, none);
+    const Mark* m = get(e, "Held");
+    CHECK(m && m->reasons.find("Absorbed: sellers hit the bid 2.5x normal, then exhausted (") == 0, "the reason in plain words with the confirmed numbers");
+    CHECK(m && m->reasons.find("refilled") == std::string::npos && m->reasons.find("; buyers held") != std::string::npos, "Rebuilt not confirmed -> not used");
+    Engine f = zoneSetup(); f.onTrade(41000, 69.97, 0, 60); f.onTrade(60000, 69.96, 0, 60);
+    f.onBarClose(2, 2000, 240000, 70.00, none, none);
+    const Mark* n = get(f, "Held");
+    CHECK(n && n->reasons.find("x normal") == std::string::npos, "no confirmed lines -> no numbers in the sentence");
+    CHECK(Engine::line(*m, 0.01).find("Absorbed") != std::string::npos, "the reason is recorded (no repaint after a restart)");
+    Mark r; CHECK(Engine::parse(Engine::line(*m, 0.01), r, 0.01) && r.reasons == m->reasons && r.code == "Held", "and read back");
+}
+static void test_warnings_priority() {
+    Engine e = zoneSetup();
+    for (int b = 0; b < 20; ++b) e.setBar(b, 100, 100, 10);
+    e.formBar = 20; e.L.attack = 2.0; e.L.exh = 0.3; e.L.pulled = 0.6; e.L.eaten = 0.9;
+    e.onTrade(41000, 69.97, 0, 60); e.onTrade(42000, 69.96, 0, 60);   // heavy (2.4x), not slowing yet
+    Warn w;
+    CHECK(e.warning(43000, w, 0.01) && w.name == "BUYERS HOLDING" && w.favour == 0, "heavy, not slowing, no pulling: BUYERS HOLDING (grey)");
+    book(e, 44000, 70.00, 12, {{6995, 30}});                  // the bids pulled past the line while sellers lead
+    CHECK(e.warning(45000, w, 0.01) && w.name == "BREAKDOWN RISK" && w.favour == -1 && w.detail.find("buyers pulling their bids") != std::string::npos,
+          "heavy + pulling + no exhaustion: BREAKDOWN RISK (red)");
+    Engine g = zoneSetup(); Warn v;
+    g.onTrade(41000, 69.97, 0, 60);
+    CHECK(!g.warning(43000, v, 0.01), "no confirmed lines: no warning (never a guess)");
+}
 int main() {
+    test_e_watch_then_e(); test_p_watch_then_p(); test_trapped_t(); test_reason_uses_only_confirmed_lines(); test_warnings_priority();
     test_old_orders(); test_stats_in_process_order(); test_eaten_counts_new_arrivals(); test_pulled_and_rebuilt();
     test_other_side_band_is_tracked();
     test_double_crossover();

@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.6.0, 2026-10-11; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.7.0, 2026-10-11; 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -60,7 +60,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.6.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.7.0"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -186,6 +186,7 @@ struct LQState {
     // (0.6.0) the per-market lines of the pane statistics (PARAM lines); a statistic is drawn only when its line came from the data
     struct Line { double v = -1; bool data = false; };
     Line lAttack, lEaten, lExh, lPulled, lRebuilt;
+    int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
     std::string state = "starting", lastStatusText;
     ~LQState() { delete md; }
 };
@@ -194,6 +195,7 @@ class LiquidityProfile : public cppExtension {
 public:
     LiquidityProfile() : cppExtension() {}
     virtual int draw(void);
+    virtual int mouse(RTX_EVENT* e);
     virtual int parmsApply(void) { LQState* S = slot_.get(this, false); if (S) { S->width = clampWidth(getIntegerValue(WIDTH_INDEX)); S->font = clampFont(getIntegerValue(FONT_INDEX)); } return RTX_OK; }
     void pump();
     void release() { slot_.release(this); }
@@ -216,6 +218,8 @@ private:
     void status(LQState& S, long long now);
     void render(LQState& S);
     void renderFlow(LQState& S);
+    void renderLetters(LQState& S);                // (0.7.0) e? e p? p t on the price chart
+    void renderWarning(LQState& S);                // (0.7.0) the warning, top left of the price chart
     int barOfTime(long long barTime, long count);
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\LiquidityProfile"; }
     std::string stem(LQState& S) { return S.market + "-" + std::to_string(S.spb); }
@@ -233,13 +237,31 @@ int cppExtension::setup(void) {
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<LiquidityProfile*>(this)->pump(); return RTX_OK; }
+// (0.5.0 / 0.7.0) a recorded mark is drawn only when the market's study confirmed it: e (Exh) at or under this market's line, p (Pull) at
+// or over it, a watch (e? p?) only while its signal is confirmed and only until that same touch printed the full signal (then the e / p
+// stands for it, like A? -> A), t only where TRAPPED is confirmed; the reasons (Held / Broke) whenever they have words
+static bool sameTouch(const lqp::Mark& a, const lqp::Mark& b) { return a.tA == b.tA && a.side == b.side && a.lo == b.lo; }
+static bool shown(const LQState& S, const lqp::Mark& m) {
+    if (m.code == "Held" || m.code == "Broke") return !m.reasons.empty();
+    if (m.code == "t") return S.confirmed.count("Trapped") > 0;
+    if (m.code == "ew" || m.code == "pw") {
+        const char* full = m.code == "ew" ? "Exh" : "Pull";
+        if (!S.confirmed.count(full)) return false;
+        for (size_t i = 0; i < S.e.marks.size(); ++i) if (S.e.marks[i].code == full && sameTouch(S.e.marks[i], m)) return false;
+        return true;
+    }
+    if (!S.confirmed.count(m.code) || m.value < 0) return false;
+    if (m.code == "Exh") return m.value <= S.e.P.exhaust + 1e-9;
+    if (m.code == "Pull") return m.value + 1e-9 >= S.e.P.pullShare;
+    return false;
+}
 int LiquidityProfile::draw(void) {
     pump();
     LQState* S = slot_.get(this, false);
 #ifdef LQ_FLOW
     if (S && !S->faulted) { try { renderFlow(*S); } catch (...) { S->state = "draw error"; } }
 #else
-    if (S && !S->faulted) { try { render(*S); } catch (...) { S->state = "draw error"; } }
+    if (S && !S->faulted) { try { renderLetters(*S); renderWarning(*S); render(*S); } catch (...) { S->state = "draw error"; } }
 #endif
     return RTX_OK;
 }
@@ -413,7 +435,7 @@ void LiquidityProfile::loadNorms(LQState& S) {
         else if (c.size() >= 3 && c[0] == "SLOT" && parseLL(c[1], 0, 47, a) && parseD(c[2], x) && x > 0) med[(int)a] = x;
         // (0.3.1, Rassul 2026-10-10 "data driven ... optimized for each market") PARAM,<name>,<value>,<data|default>,... - each value is
         // range-checked; a bad or missing line keeps the built-in default
-        else if (c.size() >= 3 && c[0] == "SIGNAL" && (lqp::Engine::paneCode(c[1]) || c[1] == "Old")) { if (c[2] == "confirmed") conf.insert(c[1]); }
+        else if (c.size() >= 3 && c[0] == "SIGNAL" && (lqp::Engine::paneCode(c[1]) || c[1] == "Old" || c[1] == "Trapped")) { if (c[2] == "confirmed") conf.insert(c[1]); }
         else if (c.size() >= 4 && c[0] == "PARAM" && parseD(c[2], x)) {
             const std::string src = c[3] == "data" ? "data" : "default";
             const bool d = src == "data";
@@ -430,6 +452,9 @@ void LiquidityProfile::loadNorms(LQState& S) {
     S.params = info.empty() ? "built-in defaults" : info.substr(1);
     S.confirmed.swap(conf);
     S.lAttack = la; S.lEaten = le; S.lExh = lx; S.lPulled = lp; S.lRebuilt = lr;
+    // (0.7.0) the engine's reasons and warnings use only the lines that came from the data
+    S.e.L.attack = la.data ? la.v : -1; S.e.L.eaten = le.data ? le.v : -1; S.e.L.exh = lx.data ? lx.v : -1;
+    S.e.L.pulled = lp.data ? lp.v : -1; S.e.L.rebuilt = lr.data ? lr.v : -1; S.e.L.trapped = S.confirmed.count("Trapped") > 0;
 }
 
 // where the column goes: just left of the Delta Profile (its width / gap for this root) and the Dealer Profile (its reach)
@@ -486,14 +511,21 @@ void LiquidityProfile::session(LQState& S, long long t) {
     if (key == S.session) return;
     S.session = key; S.e.marks.clear(); S.marksWritten = 0;
     const std::string d = dir(); if (d.empty()) return;
-#ifndef LQ_FLOW
-    return;                                                              // (0.4.0) the price chart draws no signals: nothing to re-read
+    // (0.7.0, Rassul 2026-10-11 "do you store the reason so i can see the reason when i go back on the chart") every recorded mark and
+    // reason of THIS session and the 9 before it is read back, so scrolling back through earlier days shows what was drawn then (#11).
+    // The price chart (e? e p? p t) keeps its own record (-chart-), the panes theirs (-panes-: Exh / Pull / the reasons).
+#ifdef LQ_FLOW
+    const char* kind = "-panes-";
+#else
+    const char* kind = "-chart-";
 #endif
-    std::ifstream in((d + "\\" + stem(S) + "-panes-" + std::to_string(key) + ".csv").c_str());
-    std::string line; int n = 0;
-    while (std::getline(in, line) && ++n < 5000) {                        // a restart redraws exactly what was shown (#11)
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        lqp::Mark m; if (lqp::Engine::parse(line, m, S.e.P.tick)) S.e.marks.push_back(m);
+    for (long long k = key - 9; k <= key; ++k) {
+        std::ifstream in((d + "\\" + stem(S) + kind + std::to_string(k) + ".csv").c_str());
+        std::string line; int n = 0;
+        while (std::getline(in, line) && ++n < 5000) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            lqp::Mark m; if (lqp::Engine::parse(line, m, S.e.P.tick)) S.e.marks.push_back(m);
+        }
     }
     S.marksWritten = S.e.marks.size();
 }
@@ -512,7 +544,13 @@ void LiquidityProfile::persist(LQState& S) {
         else S.recFails++;                                               // kept and retried at the next bar close (#6)
     }
 #else
-    S.e.marks.clear(); S.marksWritten = 0;                               // the chart build keeps no signals
+    // (0.7.0) the price chart records its letters (e? e p? p t) - re-read after a restart, never repainted
+    if (S.marksWritten < S.e.marks.size()) {
+        std::vector<std::string> lines;
+        for (size_t i = S.marksWritten; i < S.e.marks.size(); ++i) lines.push_back(lqp::Engine::line(S.e.marks[i], S.e.P.tick));
+        if (appendLines(d + "\\" + stem(S) + "-chart-" + std::to_string(S.session) + ".csv", lqp::Engine::header(), lines)) { S.marksWritten = S.e.marks.size(); S.recWrites++; }
+        else S.recFails++;
+    }
     if (!S.e.attemptLog.empty()) {
         if (appendLines(d + "\\" + stem(S) + "-attempts-" + std::to_string(S.session) + ".csv", lqp::Engine::attemptHeader(), S.e.attemptLog)) S.e.attemptLog.clear();
         else S.recFails++;
@@ -702,13 +740,59 @@ void LiquidityProfile::render(LQState& S) {
 // BOTTOM    DEFENSE: since price reached the zone, size REPLENISHED vs size PULLED (lots, cumulative); green / red by what it means
 //           (new bids / pulled offers are bullish). Replenished crossing above pulled = R. Both crosses = X (the double crossover).
 // Signals (0.5.0): Exh (top half) and Pull (bottom half), drawn only where confirmed for the market. O / R crosses are logged only.
-// (0.5.0) a recorded mark is drawn only when the market's study confirmed its code; Exh also needs its number at or below the level the
-// data confirmed for this market, Pull its share at or above this market's pull_share
-static bool shown(const LQState& S, const lqp::Mark& m) {
-    if (!S.confirmed.count(m.code) || m.value < 0) return false;
-    if (m.code == "Exh") return m.value <= S.e.P.exhaust + 1e-9;
-    if (m.code == "Pull") return m.value + 1e-9 >= S.e.P.pullShare;
-    return false;
+// (0.7.0, Rassul 2026-10-11) the order-book letters on the price chart, on the ZONE side of the bar they were decided on (below the bar
+// at a support, above it at a resistance), clear of the Delta Profile's A circle; at most two a bar: t > p > e > p? > e?
+void LiquidityProfile::renderLetters(LQState& S) {
+    const long count = getBarCount(); if (count < 2) return;
+    RCT pane; pane.getPaneRect(false);
+    RTARRAY high(barHigh), low(barLow);
+    if (high.count < count || low.count < count) return;
+    struct L { int bar; int rank; std::string txt; COLOR c; bool below; };
+    std::vector<L> v;
+    for (size_t i = 0; i < S.e.marks.size(); ++i) {
+        const lqp::Mark& m = S.e.marks[i];
+        const char* t = m.code == "t" ? "t" : m.code == "Pull" ? "p" : m.code == "Exh" ? "e" : m.code == "pw" ? "p?" : m.code == "ew" ? "e?" : nullptr;
+        if (!t || !shown(S, m)) continue;
+        const int bar = barOfTime(m.barTime, count); if (bar < 0) continue;
+        const int rank = m.code == "t" ? 0 : m.code == "Pull" ? 1 : m.code == "Exh" ? 2 : m.code == "pw" ? 3 : 4;
+        L l; l.bar = bar; l.rank = rank; l.txt = t; l.c = lqp::Engine::bullish(m) ? C_BUY : C_SELL; l.below = m.side == lqp::BID; v.push_back(l);
+    }
+    std::sort(v.begin(), v.end(), [](const L& a, const L& b) { return a.bar != b.bar ? a.bar < b.bar : a.rank < b.rank; });
+    FONT f; f.id = HELVETICA; f.size = coord(S.font + 1); f.style = BOLD; setFont(f);
+    int prevBar = -1, n = 0;
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (v[i].bar != prevBar) { prevBar = v[i].bar; n = 0; }
+        if (n >= 2) continue;                                            // at most two letters a bar
+        PNT p; p.set(v[i].bar, (float)(v[i].below ? low[v[i].bar] : high[v[i].bar]), kBarCenter);
+        const int x = p.h; if (x < pane.left + 4 || x > pane.right - 4) { ++n; continue; }
+        const int gap = 2 * (S.font + 4);                                // room for the Delta Profile's A circle next to the bar
+        const int y = v[i].below ? p.v + gap + n * (S.font + 4) : p.v - gap - (n + 1) * (S.font + 4);
+        if (y < pane.top || y + S.font > pane.bottom) { ++n; continue; }
+        setTextColor(v[i].c); const int w = getTextWidth(v[i].txt.c_str(), -1);
+        RCT r; r.set(coord(x - w / 2 - 1), coord(y), coord(x + w / 2 + 2), coord(y + S.font + 4)); r.drawText(v[i].txt.c_str(), true, false);
+        ++n;
+    }
+}
+// (0.7.0) the warning for the zone price is in now: name in its colour (green = good for buyers, red = good for sellers, grey = not
+// decided) with a border, the plain words after it; top left of the price area, never past the last bar
+void LiquidityProfile::renderWarning(LQState& S) {
+    lqp::Warn w; if (!S.e.warning(S.e.bookT, w, S.e.P.tick)) return;
+    const long count = getBarCount(); if (count < 2) return;
+    RCT pane; pane.getPaneRect(false);
+    PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int right = std::min((int)pl.h, (int)pane.right) - 4;
+    const int x0 = pane.left + 6, y0 = pane.top + 4;
+    if (right - x0 < 120) return;
+    const COLOR c = w.favour > 0 ? C_BUY : w.favour < 0 ? C_SELL : C_GREY;
+    FONT f; f.id = HELVETICA; f.size = coord(S.font + 2); f.style = BOLD; setFont(f);
+    const int nw = getTextWidth(w.name.c_str(), -1);
+    setPen(c, 1, P_SOLID); CBRUSH hb(c, PAT_HOLLOW); hb.set();
+    RCT b; b.set(coord(x0), coord(y0), coord(x0 + nw + 8), coord(y0 + S.font + 9)); b.draw(1, c, c, DRAW_OPAQUE, PAT_HOLLOW);
+    setTextColor(c); RCT t; t.set(coord(x0 + 4), coord(y0 + 2), coord(x0 + nw + 6), coord(y0 + S.font + 8)); t.drawText(w.name.c_str(), false, false);
+    FONT g; g.id = HELVETICA; g.size = coord(S.font + 1); g.style = PLAIN; setFont(g);
+    std::string d = w.detail; const int room = right - (x0 + nw + 16);
+    while (!d.empty() && getTextWidth(d.c_str(), -1) > room) d.resize(d.size() > 4 ? d.size() - 4 : 0);   // never past the last bar
+    if (!d.empty() && d != w.detail) d += "...";
+    setTextColor(C_GREY); RCT r; r.set(coord(x0 + nw + 14), coord(y0 + 2), coord(right), coord(y0 + S.font + 8)); r.drawText(d.c_str(), false, false);
 }
 void LiquidityProfile::renderFlow(LQState& S) {
     auto flowLine = [this](const std::vector<std::pair<int, int>>& pts, COLOR c) {
@@ -726,8 +810,8 @@ void LiquidityProfile::renderFlow(LQState& S) {
     const int t0 = pane.top + 14, t1 = mid - 3, b0 = mid + 14, b1 = pane.bottom - 3, zeroY = (b0 + b1) / 2;
     FONT f; f.id = HELVETICA; f.size = coord(std::max(7, S.font - 1)); f.style = BOLD; setFont(f); setTextColor(C_GREY);
     // (0.3.0, Rassul 2026-10-10) green = buyers and red = sellers in BOTH halves, at support and resistance alike
-    { RCT r; r.set(coord(pane.left + 4), coord(pane.top + 1), coord(pane.left + 400), coord(pane.top + 13)); r.drawText("AGGRESSION  buyers lifting / sellers hitting", false, false); }
-    { RCT r; r.set(coord(pane.left + 4), coord(mid + 1), coord(pane.left + 400), coord(mid + 13)); r.drawText("DEFENSE  resting bids / offers: up = adding, down = pulling", false, false); }
+    { RCT r; r.set(coord(pane.left + 4), coord(pane.top + 1), coord(pane.left + 400), coord(pane.top + 13)); r.drawText("AGGRESSION", false, false); }
+    { RCT r; r.set(coord(pane.left + 4), coord(mid + 1), coord(pane.left + 400), coord(mid + 13)); r.drawText("DEFENSE", false, false); }
     setPen(C_AXIS, 1, P_SOLID);
     { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(mid); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(mid); b.drawLineTo(); }
     { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(zeroY); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(zeroY); b.drawLineTo(); }
@@ -778,8 +862,23 @@ void LiquidityProfile::renderFlow(LQState& S) {
     // when this market's line came from the nightly data; now is in the defenders' colour on the safe side of the line, the attackers'
     // colour past it. Eaten is a % of everything that was there; the rest are x ratios.
     {
-        lqp::Stats st;
-        if (S.e.latest(S.e.bookT, st)) {
+        lqp::Stats st; bool have = S.e.latest(S.e.bookT, st); std::string asOf;
+        // (0.7.0, Rassul 2026-10-11 "when i use my mouse and go to different places on the chart where there was absorption ...") the
+        // mouse over a past bar of a touch shows that touch's statistics AS OF that bar (kept for this session)
+        if (S.hoverBar >= 0) {
+            const lqp::Attempt* hit = nullptr;
+            for (size_t i = 0; i < S.e.finished.size() && !hit; ++i) if (S.e.finished[i].barStats.count(S.hoverBar)) hit = &S.e.finished[i];
+            for (size_t i = 0; i < S.e.attempts.size() && !hit; ++i) if (S.e.attempts[i].barStats.count(S.hoverBar)) hit = &S.e.attempts[i];
+            if (hit) {
+                st = hit->barStats.find(S.hoverBar)->second; have = true;
+                RTARRAYI tm(barDateTime);
+                if (tm.count > S.hoverBar) { struct tm t; std::memset(&t, 0, sizeof(t));
+                    if (getLocaltime((RTDATE)tm[S.hoverBar], &t)) { char b[32]; const int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
+                        std::snprintf(b, sizeof(b), "at %d:%02d %s", h12, t.tm_min, t.tm_hour < 12 ? "AM" : "PM"); asOf = b; } }
+            }
+        }
+        if (!asOf.empty()) { setTextColor(C_GREY); RCT r; r.set(coord(pane.left + 120), coord(pane.top + 1), coord(pane.left + 260), coord(pane.top + 13)); r.drawText(asOf.c_str(), false, false); }
+        if (have) {
             const COLOR def = st.side == lqp::BID ? C_BUY : C_SELL, att = st.side == lqp::BID ? C_SELL : C_BUY;
             struct It { const char* name; double now; LQState::Line line; bool pct, higherSafe; };
             const It agg[3] = { {"Attack", st.attack, S.lAttack, false, false}, {"Eaten", st.eaten, S.lEaten, true, false}, {"Exh", st.exh, S.lExh, false, false} };
@@ -812,7 +911,7 @@ void LiquidityProfile::renderFlow(LQState& S) {
     std::map<int, std::vector<const lqp::Mark*>> at;                     // key = bar * 2 + half
     for (size_t i = 0; i < S.e.marks.size(); ++i) {
         const lqp::Mark& m = S.e.marks[i];
-        if (!shown(S, m)) continue;
+        if (!shown(S, m) || (m.code != "Exh" && m.code != "Pull")) continue;     // (0.7.0) e? p? t are price-chart letters; reasons below
         const int bar = barOfTime(m.barTime, count); if (bar < 0 || bar > lastBar) continue;
         std::vector<const lqp::Mark*>& v = at[bar * 2 + (lqp::Engine::topPane(m.code) ? 0 : 1)];
         bool dup = false; for (size_t k = 0; k < v.size(); ++k) if (v[k]->code == m.code) dup = true;
@@ -835,14 +934,43 @@ void LiquidityProfile::renderFlow(LQState& S) {
             y += S.font + 4;
         }
     }
+    // (0.7.0, Rassul 2026-10-11) the reason in plain words at the bar each touch was decided (Absorbed / Broke), from the record: scroll
+    // back and every past one is still there; a thin line marks the bar; split into two lines at "; " when it does not fit
+    for (size_t i = 0; i < S.e.marks.size(); ++i) {
+        const lqp::Mark& m = S.e.marks[i];
+        if ((m.code != "Held" && m.code != "Broke") || !shown(S, m)) continue;
+        const int bar = barOfTime(m.barTime, count); if (bar < 0 || bar > lastBar) continue;
+        const int x = xOf(bar); if (x < pane.left + 10 || x > pane.right - 40) continue;
+        const COLOR c = lqp::Engine::bullish(m) ? C_BUY : C_SELL;
+        setPen(c, 1, P_SOLID);
+        { PNT a; a.set(0, 0.0f); a.h = coord(x); a.v = coord(pane.top + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(x); b.v = coord(pane.bottom - 2); b.drawLineTo(); }
+        std::vector<std::string> lines; const int room = pane.right - 4 - (x + 4);
+        if (getTextWidth(m.reasons.c_str(), -1) <= room) lines.push_back(m.reasons);
+        else { const size_t k = m.reasons.find("; "); if (k == std::string::npos) lines.push_back(m.reasons); else { lines.push_back(m.reasons.substr(0, k + 1)); lines.push_back("  " + m.reasons.substr(k + 2)); } }
+        setTextColor(c);
+        int y = pane.top + 1;
+        for (size_t k = 0; k < lines.size(); ++k) { RCT r; r.set(coord(x + 4), coord(y), coord(pane.right - 4), coord(y + S.font + 3)); r.drawText(lines[k].c_str(), false, false); y += S.font + 4; }
+    }
     (void)used;
+}
+
+// (0.7.0) the mouse over a bar (the Flow pane follows it to show that bar's statistics of a past touch)
+int LiquidityProfile::mouse(RTX_EVENT* e) {
+#ifdef LQ_FLOW
+    if (!e) return RTX_FAIL;
+    LQState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
+    if (e->type == E_MOUSE_MOVE || e->type == E_MOUSE_HOVER) { const long b = e->v.mouse.bar; S->hoverBar = (b >= 0 && b < getBarCount() - 1) ? (int)b : -1; }
+    return RTX_FAIL;                                                     // never swallow the event: the chart keeps its own mouse behaviour
+#else
+    (void)e; return RTX_FAIL;
+#endif
 }
 
 extern "C" cppExtension* CreateExtension(void) {
     LiquidityProfile* p = new LiquidityProfile();
     p->setArrayCount(1);
 #ifdef LQ_FLOW
-    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);                    // its own pane (no OVERLAY), draws itself
+    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);                    // its own pane (no OVERLAY), draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA Liquidity Flow: the absorption story at the zone price is in. AGGRESSION: buyers (green) and sellers (red) trading into the zone since arrival - signal Exh 0.3x (the attackers' pace dried up). DEFENSE: buyers' resting bids (green) and sellers' resting offers (red), net added since arrival, up = adding, down = pulling - signal Pull 72% (defenders pulling while attacked). Each signal is drawn only in markets where the nightly study confirmed it, at that market's own threshold.");
 #else
@@ -850,6 +978,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.6.0");   // LQ_VERSION
+    p->setVersion("0.7.0");   // LQ_VERSION
     return p;
 }

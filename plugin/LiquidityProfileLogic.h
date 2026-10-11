@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstdio>
 #include <locale>
 #include <deque>
 #include <limits>
@@ -40,7 +41,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.6.0";
+static const char* const VERSION = "0.7.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -102,6 +103,8 @@ struct Zone {
 struct FlowEvt { Ms t; int side; Tick px; double executed, pulled, added, refill; };
 struct TradeEvt { Ms t; Tick px; double buy, sell; };
 
+struct Stats { double attack = -1, eaten = -1, exh = -1, pulled = -1, rebuilt = -1; int side = 0; bool active = false; };
+
 struct Attempt {
     long long zoneId = 0; int side = BID; Tick lo = 0, hi = 0; Ms tA = 0; int barA = 0;
     double shown = 0, attackVol = 0, counterVol = 0, pulled = 0, added = 0, refill = 0, minSize = 0, startSize = 0, curSize = 0;
@@ -120,6 +123,8 @@ struct Attempt {
     struct BarFlow { double attack = 0, defend = 0, rep = 0, pul = 0, defNet = 0, oppNet = 0; bool book = false; };
     double defNet = 0, oppNet = 0; Tick oppLo = 0, oppHi = 0;
     std::map<int, BarFlow> flowBars;
+    std::map<int, Stats> barStats;               // (0.7.0) the pane statistics as of each closed bar (the mouse-over read of a past touch)
+    int barEW = -1, barPW = -1, barT = -1;        // (0.7.0) e? / p? watches and t (trapped) - first bar each printed
     int barE = -1, barO = -1, barP = -1;         // first bar the attackers' pace halved (E), the defenders went on offense (O), the zone was pulled (P)
     int barR = -1, barX = -1;                    // (0.3.0) the defenders' net resting size crossed above the other side's (R); O and R both done = X
     bool defendedFirst = false;                  // (0.3.0) the attackers' volume since arrival led the defenders' before O
@@ -143,7 +148,11 @@ struct Mark {
 //               rebuilt what came back / what the zone lost (resilience; -1 = it never lost size)
 // Every number is measured exactly as the nightly study measures it (lra.mbo_study att_tick_x, eaten_total, exhaust_ratio, pull_snap,
 // resilience), so the per-market lines it chooses apply to what is drawn.
-struct Stats { double attack = -1, eaten = -1, exh = -1, pulled = -1, rebuilt = -1; int side = 0; bool active = false; };
+
+// (0.7.0) the per-market lines the host loaded from the nightly study; -1 = not confirmed for this market (that number is never used)
+struct Lines { double attack = -1, eaten = -1, exh = -1, pulled = -1, rebuilt = -1; bool trapped = false; };
+// (0.7.0, Rassul 2026-10-11) the warning on the price chart: one at a time, the strongest that applies, in plain words
+struct Warn { std::string name, detail; int favour = 0; };   // favour: +1 buyers (green), -1 sellers (red), 0 not decided (grey)
 
 struct Readout {         // the live read of the zone price is in (or the last one), for the column label
     bool active = false; int side = BID; Tick lo = 0, hi = 0; double eaten = 0, stayed = 1, exhaust = -1; bool exhausted = false;
@@ -226,7 +235,7 @@ public:
         const double tot = a.shown + a.added + a.refill;
         if (tot > 0) r.eaten = std::min(1.0, a.attackVol / tot);
         const Ms t1 = a.done ? (a.tEnd > a.tA ? a.tEnd : a.tA) : now;
-        r.exh = exhaustRatio(a.attacks, a.tA, t1);
+        r.exh = t1 - a.tA >= 60000 ? exhaustRatio(a.attacks, a.tA, t1) : -1;   // (0.7.0) halves of under 30 s say nothing: no Exh read before 1 min
         if (a.shown > 0) r.pulled = a.pulled / a.shown;
         r.rebuilt = resilience(a);
         return r;
@@ -371,6 +380,7 @@ public:
             if (bar < a.barA) continue;
             a.tEnd = barEnd;
             story(a, bar, barEnd, barTime);
+            a.barStats[bar] = stats(a, barEnd);
             const bool broke = a.side == BID ? c < a.lo : c > a.hi;
             const bool out = a.side == BID ? c > a.hi : c < a.lo;
             const double eaten = a.shown > 0 ? a.attackVol / a.shown : 0;
@@ -382,7 +392,11 @@ public:
             const bool depleting = !pulling && eaten >= P.eatenBreak && refillX >= 0 && refillX < 0.5;
             // (0.4.0, Rassul 2026-10-10 23:35 "get rid of X and L and LX") the outcome ends the attempt and is LOGGED for the nightly study;
             // nothing is drawn on the price chart. The pane signals (Exh / Pull) come from story().
+            // (0.7.0) t = TRAPPED: the attackers traded beyond the zone's far edge, then a bar closes back beyond the zone on the defended
+            // side (a green close above a support after the push below) - they broke it, got nothing, now they are stuck
+            if (a.barT < 0 && a.breachTrade && (a.side == BID ? c > a.hi : c < a.lo)) { a.barT = bar; push("t", a, barTime, barEnd, -1); }
             if (broke) {
+                pushReason(a, false, barTime, barEnd);
                 a.end = std::string("break") + (pulling ? " pulled" : "") + (eaten >= P.eatenBreak ? " eaten" : "") + (depleting ? " depleting" : "");
                 close_(a);
                 continue;
@@ -391,6 +405,7 @@ public:
                 bool A = false;
                 const std::vector<std::pair<Tick, Tick>>& dp = a.side == BID ? deltaAbsorbBid : deltaAbsorbAsk;
                 for (size_t k = 0; k < dp.size(); ++k) if (dp[k].first <= a.hi && dp[k].second >= a.lo) A = true;
+                pushReason(a, true, barTime, barEnd);
                 a.end = std::string("hold") + (pulling ? " pulled" : "") + (depleting ? " depleting" : "") + (a.barE >= 0 ? " Exh" : "") + (A ? " A" : "")
                       + (a.barO >= 0 ? " offense" : "") + (a.barR >= 0 ? " replenished" : "");
                 close_(a);
@@ -450,7 +465,7 @@ public:
         m.value = -1; double v = 0; if (f.size() >= 15 && num(f[14], v)) m.value = v;
         return m.hi >= m.lo;
     }
-    static bool paneCode(const std::string& c) { return c == "Exh" || c == "Pull"; }   // (0.5.0) older records with LoF / HiB / RpB / RpO are skipped
+    static bool paneCode(const std::string& c) { return c == "Exh" || c == "Pull" || c == "ew" || c == "pw" || c == "t" || c == "Held" || c == "Broke"; }   // (0.5.0) older records with LoF / HiB / RpB / RpO are skipped
     static double round2(double v) { return std::floor(v * 100 + 0.5) / 100; }
 
     // the attempt log line (every attempt, drawn or not) for the nightly scoring
@@ -494,11 +509,22 @@ public:
     // Each mark is a record line, re-read after a restart: never repaints. The host draws a code only where the market's nightly study
     // confirmed it (SIGNAL lines); nothing unconfirmed is drawn.
     void story(Attempt& a, int bar, Ms barEnd, long long barTime) {
-        // Exh: the attackers' 2nd-half / 1st-half volume since arrival, printed under exhShow (0.5) with that number (weakness)
-        if (a.barE < 0) { const double ex = exhaustRatio(a.attacks, a.tA, barEnd); if (ex >= 0 && ex < P.exhShow && firstHalf(a, barEnd) >= P.minAttack) { a.barE = bar; push("Exh", a, barTime, barEnd, ex); } }
-        // Pull: the share of the shown size pulled (this market's pull_share, not replaced) while the attackers lead
-        const double taken = a.attackVol + a.pulled, replaced = a.added + a.refill, rx = taken > 0 ? replaced / taken : -1;
-        if (a.barP < 0 && a.shown > 0 && a.pulled / a.shown >= P.pullShare && rx >= 0 && rx < 0.5 && a.attackVol > a.counterVol) { a.barP = bar; push("Pull", a, barTime, barEnd, a.pulled / a.shown); }
+        // (0.7.0) e = Exh: the attackers' 2nd-half / 1st-half volume since arrival under THIS MARKET's line (P.exhaust, from the data);
+        //        e? = the watch: under twice the line (at most 0.9x) - the attack is slowing toward it. e? first, e when the line is crossed.
+        // e is decided from the study's decision point on (arrival + 3 min: the window lra.mbo_study measures exhaust_ratio over), e? from
+        // 1 min - a few quiet seconds right after arrival are not exhaustion
+        if (a.barE < 0 && firstHalf(a, barEnd) >= P.minAttack && barEnd - a.tA >= 60000) {
+            const double ex = exhaustRatio(a.attacks, a.tA, barEnd);
+            if (ex >= 0 && ex < P.exhaust && barEnd - a.tA >= P.decisionMs) { a.barE = bar; push("Exh", a, barTime, barEnd, ex); }
+            else if (a.barEW < 0 && ex >= 0 && ex < std::min(0.9, 2 * P.exhaust)) { a.barEW = bar; push("ew", a, barTime, barEnd, ex); }
+        }
+        // (0.7.0) p = Pull: the share of the shown size pulled reaches THIS MARKET's line while the attackers lead (the indicator's own
+        //        snapshot measure, lra.mbo_study pull_snap); p? = the watch: half-way to the line (first look: hold odds already drop there)
+        if (a.barP < 0 && a.shown > 0 && a.attackVol > a.counterVol) {
+            const double pr = a.pulled / a.shown;
+            if (pr >= P.pullShare) { a.barP = bar; push("Pull", a, barTime, barEnd, pr); }
+            else if (a.barPW < 0 && pr >= 0.5 * P.pullShare) { a.barPW = bar; push("pw", a, barTime, barEnd, pr); }
+        }
         // the O / R crosses (logged only): the defenders' total since arrival crosses above the attackers' after they led; the defenders'
         // net resting size crosses above the other side's after it led
         if (a.attackVol > a.counterVol) a.defendedFirst = true;
@@ -506,11 +532,79 @@ public:
         if (a.oppNet >= a.defNet && (a.oppNet != 0 || a.defNet != 0)) a.pulledFirst = true;
         else if (a.barR < 0 && a.pulledFirst && a.defNet > a.oppNet) a.barR = bar;
     }
-    static bool topPane(const std::string& c) { return c == "Exh"; }
+    static bool topPane(const std::string& c) { return c == "Exh" || c == "ew" || c == "Held" || c == "Broke"; }
     // green = buyers win / bullish, red = sellers win / bearish (Rassul: buyers always green, sellers always red)
     static bool bullish(const Mark& m) {
-        if (m.code == "Exh") return m.side == BID;          // sellers exhausted at a support
+        if (m.code == "Exh" || m.code == "ew" || m.code == "t" || m.code == "Held") return m.side == BID;   // good for the defenders
+        if (m.code == "Broke") return m.side == ASK;
         return m.side == ASK;                                // Pull: buyers pulling at a support is bearish, sellers pulling at a resistance bullish
+    }
+    Lines L;                                       // (0.7.0) set by the host from the norms file
+    static std::string fx(double v) { char b[16]; std::snprintf(b, sizeof(b), v >= 10 ? "%.0fx" : "%.1fx", v); return b; }
+    static std::string pc(double v) { char b[16]; std::snprintf(b, sizeof(b), "%.0f%%", v * 100.0); return b; }
+    // (0.7.0) the reason in plain words when an attempt is decided (held = absorbed, broke), built ONLY from numbers whose line is confirmed
+    // for this market (Rassul's wording: "sellers hit the bid 2.4x normal, then exhausted (0.3x); buyers held and refilled their bids (1.2x)")
+    std::string reason(const Attempt& a, bool held, Ms tEnd) const {
+        const Stats st = stats(a, tEnd); const bool sup = a.side == BID;
+        const std::string att = sup ? "sellers" : "buyers", dfn = sup ? "buyers" : "sellers", hit = sup ? "hit the bid" : "lifted the offer", ord = sup ? "bids" : "offers";
+        std::string first = att + " " + hit;
+        if (L.attack > 0 && st.attack >= 0) first += " " + fx(st.attack) + " normal";
+        const bool exh = L.exh > 0 && st.exh >= 0 && st.exh < L.exh;
+        if (L.exh > 0 && st.exh >= 0) first += exh ? ", then exhausted (" + fx(st.exh) + ")" : (held ? ", kept going (" + fx(st.exh) + ")" : " and never slowed");
+        std::string second;
+        const bool pulled = L.pulled > 0 && st.pulled >= L.pulled;
+        if (pulled) second = dfn + " pulled " + pc(std::min(st.pulled, 9.99)) + " of their " + ord + (held ? "" : " instead of defending");
+        else if (L.rebuilt > 0 && st.rebuilt >= L.rebuilt) second = dfn + " held and refilled their " + ord + " (" + fx(st.rebuilt) + ")";
+        else if (!held && L.eaten > 0 && st.eaten >= L.eaten) second = att + " ate " + pc(st.eaten) + " of everything there";
+        else second = held ? dfn + " held" : dfn + " did not refill";
+        return std::string(held ? "Absorbed: " : "Broke: ") + first + "; " + second;
+    }
+    void pushReason(const Attempt& a, bool held, long long barTime, Ms barEnd) {
+        Mark m; m.code = held ? "Held" : "Broke"; m.reasons = reason(a, held, barEnd); m.value = -1; m.side = a.side; m.barTime = barTime;
+        m.lo = a.lo; m.hi = a.hi; m.shown = a.shown; m.tA = a.tA; m.tDecided = barEnd; marks.push_back(m);
+    }
+    // (0.7.0) the warning for the zone price is in now: the strongest that applies (risk first, the good ones only when nothing worse
+    // applies); every condition uses only lines confirmed for this market; nothing when no attempt is live or nothing applies
+    bool warning(Ms now, Warn& w, double tick) const {
+        const Attempt* a = nullptr;
+        for (size_t i = 0; i < attempts.size(); ++i) if (!attempts[i].done && (!a || attempts[i].tA > a->tA)) a = &attempts[i];
+        if (!a) return false;
+        const Stats st = stats(*a, now); const bool sup = a->side == BID; const int good = sup ? +1 : -1, bad = -good;
+        const std::string att = sup ? "sellers" : "buyers", dfn = sup ? "buyers" : "sellers", hitting = sup ? "hitting the bid" : "lifting the offer",
+            ord = sup ? "bids" : "offers", Att = sup ? "SELLERS" : "BUYERS", Dfn = sup ? "BUYERS" : "SELLERS", Ord = sup ? "BIDS" : "OFFERS";
+        const bool okA = L.attack > 0 && st.attack >= 0, okX = L.exh > 0 && st.exh >= 0, okP = L.pulled > 0 && st.pulled >= 0, okE = L.eaten > 0 && st.eaten >= 0;
+        const bool heavy = okA && st.attack >= L.attack, light = okA && st.attack < L.attack;
+        const bool exh = okX && st.exh < L.exh, slowing = okX && !exh && st.exh < std::min(0.9, 2 * L.exh);
+        const bool lead = a->attackVol > a->counterVol;
+        const bool pull = okP && lead && st.pulled >= L.pulled, pullW = okP && lead && !pull && st.pulled >= 0.5 * L.pulled;
+        const bool thin = okE && st.eaten >= L.eaten;
+        const bool trapped = L.trapped && a->barT >= 0;
+        auto A = [&]() { return okA ? " " + fx(st.attack) + " normal" : std::string(); };
+        char px[32]; std::snprintf(px, sizeof(px), "%.*f", tick >= 1 ? 0 : (int)std::ceil(-std::log10(tick) - 1e-9), (double)(sup ? a->hi : a->lo) * tick);
+        w = Warn();
+        if (heavy && pull && !exh) { w.name = sup ? "BREAKDOWN RISK" : "BREAKOUT RISK"; w.favour = bad;
+            w.detail = att + " " + hitting + A() + ", not slowing; " + dfn + " pulling their " + ord + " (" + pc(st.pulled) + ")"; }
+        else if (exh && pull) { w.name = "ABSORPTION WEAKENING"; w.favour = bad;
+            w.detail = att + " exhausted (" + fx(st.exh) + "), but " + dfn + " are pulling their " + ord + " (" + pc(st.pulled) + ")"; }
+        else if (pull) { w.name = Dfn + " PULLING"; w.favour = bad;
+            w.detail = dfn + " pulling their " + ord + " (" + pc(st.pulled) + ") while " + att + " keep " + hitting; }
+        else if (thin && !exh) { w.name = Ord + " THINNING"; w.favour = bad;
+            w.detail = att + " have eaten " + pc(st.eaten) + " of everything at " + px + " (line " + pc(L.eaten) + ")"; }
+        else if (pullW) { w.name = "PULLING WATCH"; w.favour = bad;
+            w.detail = dfn + " have pulled " + pc(st.pulled) + " of their " + ord + " while " + att + " keep " + hitting + " (Pull line " + pc(L.pulled) + ")"; }
+        else if (heavy && slowing) { w.name = "EXHAUSTION WATCH"; w.favour = 0;
+            w.detail = att + " " + hitting + A() + " and starting to slow (" + fx(st.exh) + ")"; }
+        else if (heavy && !exh) { w.name = Dfn + " HOLDING"; w.favour = 0;
+            w.detail = att + " " + hitting + A() + ", not slowing; " + dfn + " holding - wait"; }
+        else if (trapped) { w.name = "TRAPPED " + Att; w.favour = good;
+            w.detail = att + " pushed past " + std::string(px) + " and failed; price back " + (sup ? "above" : "below") + " the zone"; }
+        else if (exh && light) { w.name = Att + " GIVING UP"; w.favour = good;
+            w.detail = att + " tested the " + (sup ? "bid" : "offer") + " lightly (" + fx(st.attack) + " normal) and exhausted (" + fx(st.exh) + ")"; }
+        else if (exh) { w.name = "ABSORPTION OCCURRING"; w.favour = good;
+            w.detail = att + " exhausted (" + fx(st.exh) + "); " + dfn + " holding" +
+                       (L.rebuilt > 0 && st.rebuilt >= L.rebuilt ? " and refilling their " + ord + " (" + fx(st.rebuilt) + ")" : std::string()); }
+        else return false;
+        return true;
     }
     static double resilience(const Attempt& a) {
         if (a.startSize - a.minSize <= 0) return -1;
