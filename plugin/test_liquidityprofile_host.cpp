@@ -74,7 +74,7 @@ int main() {
     bool header = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LIQ TESTING") header = true;
     CHECK(header, "header says TESTING");
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.1.0") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.1.1") != std::string::npos, "status file written");
     // restart: a new object and an empty slot redraw exactly the recorded mark
     p->destroy(); CHECK(h.data == nullptr, "destroy frees the slot");
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());

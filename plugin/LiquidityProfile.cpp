@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.1.0, 2026-10-11)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.1.1, 2026-10-11; 0.1.1: the status text is built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -59,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.1.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.1.1"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -173,7 +173,7 @@ struct LQState {
     int vapBar = -1; RTDATE vapStamp = 0; std::map<lqp::Tick, std::pair<long long, long long>> vapRows;
     long barCount = 0;
     long long ctOffset = 0; bool haveOffset = false;
-    long long lastDepth = -1, lastZones = -1, lastStatus = -1, lastNorms = -1, lastLayout = -1;
+    long long lastBuild = -1, lastDepth = -1, lastZones = -1, lastStatus = -1, lastNorms = -1, lastLayout = -1;
     bool depthAvail = false; int depthMax = 0, depthLevels = 0; long long depthReads = 0;
     long long session = -1; size_t marksWritten = 0; long long recWrites = 0, recFails = 0;
     long long normsStamp = -2, layoutStamp = -2, dealerStamp = -2;
@@ -469,6 +469,8 @@ void LiquidityProfile::persist(LQState& S) {
 }
 
 void LiquidityProfile::status(LQState& S, long long now) {
+    if (S.lastBuild >= 0 && now - S.lastBuild < 1000 && now >= S.lastBuild) return;   // #32: built at most once a second
+    S.lastBuild = now;
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << LQ_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nTICK," << S.tick
       << "\nDEPTH," << (S.mdBlocked ? "blocked" : S.mdDead ? "fault" : !S.md ? "not opened" : S.depthAvail ? "available" : "not available")
@@ -642,6 +644,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal, and the zone reads that support absorption (eaten / stayed / E). TESTING.");
-    p->setVersion("0.1.0");   // LQ_VERSION
+    p->setVersion("0.1.1");   // LQ_VERSION
     return p;
 }
