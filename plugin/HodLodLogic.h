@@ -711,6 +711,7 @@ struct View {
     // (1.1.0, Rassul 2026-10-11 16:54) the PROJECTED opposite extreme: the 1st extreme + / - the expected full RTH range (hle median,
     // never below the range so far). Study lra.ext_yardstick: the expected range beat ATR (and ATR + range used) in 6 of 7 markets
     // on unseen days (crude a tie). Drawn as a vertical line from the 1st extreme with a flag + "Proj HOD 7,870.00"; in the header.
+    static const int PROJ_WAIT_MIN = 30;   // minutes after the RTH open before the projection shows
     bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt;
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
@@ -882,7 +883,8 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     double eT2 = v.haveHle ? v.ex.t2 : (Mo ? Mo->openToSecond : NAN); (void)eT2;   // used only without the read model
     double eSize = NAN;                                   // set with the E row (hle wick, else the median)
     double eRange = v.haveHle ? v.ex.range : (Mo ? Mo->rangePts : NAN);
-    if (!v.prior && v.haveHle && F && std::isfinite(v.ex.range) && v.ex.range > 0) {
+    // (Rassul 17:18 "wait at least 30 min before drawing the projection"): from 30 minutes after this market's RTH open
+    if (!v.prior && v.haveHle && F && std::isfinite(v.ex.range) && v.ex.range > 0 && v.lastMod - K.open >= View::PROJ_WAIT_MIN) {
         long long rt = (long long)std::llround(v.ex.range / tick);
         if (rt < v.rangeT) rt = v.rangeT;                                    // never inside the range already printed
         v.projOk = true; v.projUp = v.side == 1; v.projFrom = F->px; v.projFromEnd = F->endAbs;
@@ -1457,7 +1459,7 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
 // (1.1.0) the projection: a vertical line at the 1st extreme's bar from its price to the projected opposite extreme, a solid flag at
 // the far end and the target text ("Proj HOD 7,870.00") right of the flag. Green up (LOD first), red down. x = the bar's centre
 // (-1 = not on the chart: nothing drawn). Clipped to the pane; never drawn over the table.
-static const int PROJ_FLAG_W = 16, PROJ_FLAG_H = 12, PROJ_FS = 9;
+static const int PROJ_FLAG_W = 16, PROJ_FLAG_H = 12, PROJ_FS = 9, PROJ_GAP = 8;
 inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int x)
 {
     if (!v.projOk || x < pane.l || x > pane.r - 4) return;
@@ -1481,6 +1483,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     }
     int w = M(v.projTxt, PROJ_FS, true), tx = x + PROJ_FLAG_W + 6;
     if (tx + w > pane.r - 2) tx = (std::max)((int)pane.l + 2, x - 6 - w);   // no room on the right: the text goes left of the line
+    if (L.tableOk && ft + PROJ_FLAG_H >= L.table.t && tx + w > L.table.l) tx = (std::max)((int)pane.l + 2, x - 6 - w);   // never over the table
     int lh = lineH(PROJ_FS);
     addText(L, tx, ft + PROJ_FLAG_H / 2 - lh / 2, ft + PROJ_FLAG_H / 2 + lh / 2, v.projTxt, col, PROJ_FS, true, w, R_LABEL, -1);
     L.blocks.push_back(Box{ tx, ft + PROJ_FLAG_H / 2 - lh / 2, tx + w, ft + PROJ_FLAG_H / 2 + lh / 2 });
@@ -1499,7 +1502,10 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
     if (freeR <= colR + 100) freeR = pane.r - (int)((pane.r - pane.l) * 0.15);
     layoutTable(L, v, pane, colR, M, freeR, pos);   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
     if (HODLOD_SHOW_CANDLE) layoutCandle(L, v, pane, yOf, M);
-    layoutProj(L, v, pane, yOf, M, projX);   // (1.1.0)
+    // (1.1.0, Rassul 17:17 "attach the target line ... next to the table on the left side") the line stands just left of the table,
+    // at real prices (the 1st extreme -> the target); the bar's x only when the table is not drawn
+    if (L.tableOk && L.table.l - PROJ_GAP > pane.l + 2) projX = L.table.l - PROJ_GAP;
+    layoutProj(L, v, pane, yOf, M, projX);
     return L;
 }
 
