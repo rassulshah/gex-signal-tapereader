@@ -29,7 +29,8 @@ int main() {
     const std::string normsPath = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-LiqNorms-CL.csv";
     {   // (0.5.0) the study confirmed Exh for this market; Pull is not confirmed here; old codes in the file are ignored
         std::ofstream nf(normsPath.c_str());
-        nf << "MARKET,CL\r\nZONE,0.25,4,8\r\nSIGNAL,Exh,confirmed\r\nSIGNAL,Pull,testing\r\nSIGNAL,LoF,confirmed\r\nPARAM,exhaust,0.5,data\r\n";
+        nf << "MARKET,CL\r\nZONE,0.25,4,8\r\nSIGNAL,Exh,confirmed\r\nSIGNAL,Pull,testing\r\nSIGNAL,LoF,confirmed\r\nPARAM,exhaust,0.5,data\r\n"
+           << "PARAM,attack_x,2.0,data,1,1,0,0,w\r\nPARAM,eaten_total,0.12,data,1,1,0,0,w\r\nPARAM,pull_share,0.7,default,1,1,0,0,w\r\nPARAM,rebuilt,1.0,data,1,1,0,0,w\r\n";
     }
     mock::Host h; mock::current = &h; h.tick = 0.01f; h.seconds = 180; h.symbol = "CLEX26"; h.root = "CLEX26";
     const unsigned long day = (unsigned long)(civilDays(2026, 10, 12) * 86400LL); unsigned long t0 = day + 9 * 3600;
@@ -73,6 +74,13 @@ int main() {
         if (d.text.find('?') != std::string::npos && d.text.find("AGGRESSION") != 0 && d.text.find("DEFENSE") != 0) qm = true;
     }
     CHECK(exh, "Exh drawn with its number (confirmed for this market)");
+    // (0.6.0) the statistics column: drawn for the lines that came from the data, in process order; Pulled's line is a default -> not drawn
+    std::vector<std::string> labels; for (auto& d : h.draws) if (d.type == "text" && (d.text == "Attack: " || d.text == "Eaten: " || d.text == "Exh: " || d.text == "Pulled: " || d.text == "Rebuilt: ")) labels.push_back(d.text);
+    CHECK(labels.size() >= 3 && labels[0] == "Attack: " && labels[1] == "Eaten: " && labels[2] == "Exh: ", "Aggression statistics in process order: Attack, Eaten, Exh");
+    bool pulledShown = false, pct = false; for (auto& l : labels) if (l == "Pulled: ") pulledShown = true;
+    CHECK(!pulledShown, "a statistic whose line is not from the data is not drawn");
+    for (auto& d : h.draws) if (d.type == "text" && d.text == " (12%)") pct = true;
+    CHECK(pct, "Eaten's line shows as a % of everything there");
     CHECK(!removed, "(0.5.0) LoF / HiB / RpB / RpO / Stop are never drawn");
     CHECK(!qm, "(0.5.0) nothing is drawn with a '?'");
     const std::string rec = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\CL-180-panes-" + std::to_string(S->session) + ".csv";

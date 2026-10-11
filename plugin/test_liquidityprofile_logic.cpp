@@ -303,8 +303,43 @@ static void test_old_orders() {
       CHECK(!e.attemptLog.empty() && e.attemptLog[0].substr(e.attemptLog[0].rfind('|')) == "|1", "and logged (old_x) for the study");
       CHECK(Engine::attemptHeader().substr(Engine::attemptHeader().rfind('|')) == "|old_x", "the log header names it"); }
 }
+// (0.6.0) the pane statistics, measured as the nightly study measures them
+static void test_stats_in_process_order() {
+    Engine e = zoneSetup();                                   // a 200-lot bid zone [69.93, 69.97] (5 ticks)
+    for (int b = 0; b < 20; ++b) e.setBar(b, 100, 100, 10);   // normal: sellers 100 lots per bar over 10 ticks = 10 per tick per bar
+    e.formBar = 20; e.curBar = 19;
+    e.onTrade(41000, 69.97, 0, 50);                           // arrival in bar 20: sellers 50 + 70 = 120 into the 5-tick zone = 24 per tick
+    e.onTrade(42000, 69.95, 0, 70);
+    Stats st; CHECK(e.latest(43000, st) && st.side == BID, "the live attempt's statistics");
+    CHECK(st.attack > 2.39 && st.attack < 2.41, "Attack = 24 per tick / 10 normal = 2.4x");
+    CHECK(st.eaten > 0 && st.eaten <= 1, "Eaten is a share of everything there (0..1)");
+    Engine f = zoneSetup(); for (int b = 0; b < 10; ++b) f.setBar(b, 100, 100, 10);
+    f.formBar = 20; f.onTrade(41000, 69.97, 0, 50);
+    Stats s2; f.latest(43000, s2); CHECK(s2.attack < 0, "under 15 known bars: no Attack (never a guess)");
+}
+static void test_eaten_counts_new_arrivals() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 5);
+    const double shown = e.attempts[0].shown;                 // ~250
+    e.onTrade(41500, 69.95, 0, 100);                          // 100 eaten at 69.95 ...
+    book(e, 42000, 70.00, 12, {{6995, 390}});                 // ... and 300 new lots arrived there (200 - 100 + 300 = 400 showing)
+    Stats st; e.latest(43000, st);
+    const double tot = shown + e.attempts[0].added + e.attempts[0].refill;
+    CHECK(e.attempts[0].added >= 290 && std::fabs(st.eaten - 105.0 / tot) < 1e-9, "Eaten = attackers / (shown + new + refills): new arrivals keep it low");
+    CHECK(st.eaten < 0.2, "eaten a lot but the zone stays: a small share of everything there");
+}
+static void test_pulled_and_rebuilt() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 5);
+    book(e, 42000, 70.00, 12, {{6995, 60}});                  // 140 of the 200 pulled
+    Stats a; e.latest(43000, a);
+    CHECK(a.pulled > 0.5 && a.rebuilt == 0, "Pulled = pulled / shown; the zone lost size and nothing came back = Rebuilt 0");
+    book(e, 44000, 70.00, 12, {{6995, 260}});                 // all of it back and more
+    Stats b; e.latest(45000, b);
+    CHECK(b.rebuilt > 1.0, "Rebuilt > 1x = more came back than was lost");
+}
 int main() {
-    test_old_orders();
+    test_old_orders(); test_stats_in_process_order(); test_eaten_counts_new_arrivals(); test_pulled_and_rebuilt();
     test_other_side_band_is_tracked();
     test_double_crossover();
     test_story_defense_then_offense();

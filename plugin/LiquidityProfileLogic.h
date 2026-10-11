@@ -40,7 +40,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.5.0";
+static const char* const VERSION = "0.6.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -134,6 +134,17 @@ struct Mark {
     double value = -1;     // (0.4.1) the number drawn with the code: Exh = 2nd / 1st half pace, Pull = share pulled
 };
 
+// (0.6.0, Rassul 2026-10-11) the pane statistics, in the order the process happens (Metric: now (threshold) on the panes):
+//   AGGRESSION  attack  the attackers' biggest chart bar inside the zone since arrival, per tick of zone width, vs their average volume per
+//                       bar per tick that bar traded over the 20 bars before the arrival bar (1.0x = normal, 2.4x = 2.4 times normal)
+//               eaten   the attackers' volume / EVERYTHING that was there to trade against (size at arrival + new size + refills): 0..1
+//               exh     the attackers' 2nd-half / 1st-half volume since arrival (the Exh signal's number)
+//   DEFENSE     pulled  size pulled (not traded) / size shown at arrival
+//               rebuilt what came back / what the zone lost (resilience; -1 = it never lost size)
+// Every number is measured exactly as the nightly study measures it (lra.mbo_study att_tick_x, eaten_total, exhaust_ratio, pull_snap,
+// resilience), so the per-market lines it chooses apply to what is drawn.
+struct Stats { double attack = -1, eaten = -1, exh = -1, pulled = -1, rebuilt = -1; int side = 0; bool active = false; };
+
 struct Readout {         // the live read of the zone price is in (or the last one), for the column label
     bool active = false; int side = BID; Tick lo = 0, hi = 0; double eaten = 0, stayed = 1, exhaust = -1; bool exhausted = false;
     double pulled = 0, refill = -1;      // pulled share of what was shown; refill = new size that came in / what was taken (eaten + pulled)
@@ -190,6 +201,43 @@ public:
         }
         if (total <= 0 || known < 0.5 * total) return -1;
         return old / total;
+    }
+    // (0.6.0) the chart's closed bars: buyers' / sellers' volume and the ticks each bar traded - the Attack readout's normal
+    struct BarNorm { double buy = 0, sell = 0; int ticks = 1; };
+    std::map<int, BarNorm> barNorm;
+    void setBar(int bar, double buy, double sell, int ticks) {
+        if (bar < 0 || !(buy >= 0) || !(sell >= 0) || !finite(buy) || !finite(sell)) return;
+        BarNorm& b = barNorm[bar]; b.buy = buy; b.sell = sell; b.ticks = std::max(1, ticks);
+        while (barNorm.size() > 64) barNorm.erase(barNorm.begin());
+    }
+    // the attackers' (sellers at a support, buyers at a resistance) average volume per bar per tick traded over the 20 bars before 'bar';
+    // -1 until 15 of those bars are known
+    double attackNormal(int side, int bar) const {
+        double s = 0; int n = 0;
+        for (std::map<int, BarNorm>::const_iterator i = barNorm.lower_bound(bar - 20); i != barNorm.end() && i->first < bar; ++i) {
+            s += (side == BID ? i->second.sell : i->second.buy) / (double)i->second.ticks; ++n;
+        }
+        return n >= 15 && s > 0 ? s / n : -1;
+    }
+    Stats stats(const Attempt& a, Ms now) const {
+        Stats r; r.side = a.side; r.active = !a.done;
+        const double w = (double)(a.hi - a.lo + 1), nrm = attackNormal(a.side, a.barA);
+        if (nrm > 0) { double mx = 0; for (std::map<int, Attempt::BarFlow>::const_iterator i = a.flowBars.begin(); i != a.flowBars.end(); ++i) mx = std::max(mx, i->second.attack); r.attack = mx / w / nrm; }
+        const double tot = a.shown + a.added + a.refill;
+        if (tot > 0) r.eaten = std::min(1.0, a.attackVol / tot);
+        const Ms t1 = a.done ? (a.tEnd > a.tA ? a.tEnd : a.tA) : now;
+        r.exh = exhaustRatio(a.attacks, a.tA, t1);
+        if (a.shown > 0) r.pulled = a.pulled / a.shown;
+        r.rebuilt = resilience(a);
+        return r;
+    }
+    // the statistics of the zone price is in now (or the last one)
+    bool latest(Ms now, Stats& out) const {
+        const Attempt* best = nullptr;
+        for (size_t i = 0; i < attempts.size(); ++i) if (!attempts[i].done && (!best || attempts[i].tA > best->tA)) best = &attempts[i];
+        if (!best && !finished.empty()) best = &finished.back();
+        if (!best) return false;
+        out = stats(*best, now); return true;
     }
     long long books = 0, trades = 0, badBooks = 0;
     std::string why;                             // last reason a book or trade was refused
