@@ -42,7 +42,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.1.3";
+static const char* const VERSION = "0.2.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -104,6 +104,15 @@ struct Attempt {
     std::vector<std::pair<Ms, double>> attacks;  // (time, attacker contracts) inside the zone since arrival
     bool breachTrade = false;                    // an attacker trade beyond the far edge
     bool done = false; std::string end; Ms tEnd = 0;
+    // (0.2.0) the absorption STORY per bar, for the aggression / defense panes (lsLiquidityFlow) and the nightly study:
+    // attack / defend = aggressive contracts in the zone that bar (attackers vs the defending side turning aggressive);
+    // rep / pul = replenished (added + refill) and pulled since arrival, cumulative, as of that bar
+    struct BarFlow { double attack = 0, defend = 0, rep = 0, pul = 0; };
+    std::map<int, BarFlow> flowBars;
+    int barE = -1, barO = -1, barP = -1;         // first bar the attackers' pace halved (E), the defenders went on offense (O), the zone was pulled (P)
+    int barR = -1, barX = -1;                    // replenished crossed above pulled (R); both crosses done = the double crossover (X)
+    bool defendedFirst = false;                  // a bar where the attackers out-traded the defenders came before the offense
+    bool pulledFirst = false;                    // a bar where pulled (since arrival) was at or above replenished came before R
 };
 
 struct Mark {
@@ -154,10 +163,10 @@ public:
         for (size_t i = 0; i < attempts.size(); ++i) {
             Attempt& a = attempts[i]; if (a.done) continue;
             const double attack = a.side == BID ? sell : buy;            // support is attacked by sellers, resistance by buyers
-            if (attack > 0 && px >= a.lo && px <= a.hi) { a.attackVol += attack; a.attacks.push_back(std::make_pair(t, attack)); }
+            if (attack > 0 && px >= a.lo && px <= a.hi) { a.attackVol += attack; a.attacks.push_back(std::make_pair(t, attack)); a.flowBars[formBar].attack += attack; }
             if (attack > 0 && (a.side == BID ? px < a.lo : px > a.hi)) a.breachTrade = true;
             const double counter = a.side == BID ? buy : sell;           // the defending side turning aggressive (pushback)
-            if (counter > 0 && px >= a.lo && px <= a.hi) a.counterVol += counter;
+            if (counter > 0 && px >= a.lo && px <= a.hi) { a.counterVol += counter; a.flowBars[formBar].defend += counter; }
         }
         startAttempts(t, px, buy, sell);
         lastPx = px; havePx = true;
@@ -265,6 +274,7 @@ public:
             Attempt& a = attempts[i]; if (a.done) continue;
             if (bar < a.barA) continue;
             a.tEnd = barEnd;
+            story(a, bar, barEnd);
             const bool broke = a.side == BID ? c < a.lo : c > a.hi;
             const bool out = a.side == BID ? c > a.hi : c < a.lo;
             const double eaten = a.shown > 0 ? a.attackVol / a.shown : 0;
@@ -287,12 +297,13 @@ public:
                 bool A = false;
                 const std::vector<std::pair<Tick, Tick>>& dp = a.side == BID ? deltaAbsorbBid : deltaAbsorbAsk;
                 for (size_t k = 0; k < dp.size(); ++k) if (dp[k].first <= a.hi && dp[k].second >= a.lo) A = true;
+                const bool X = a.barX >= 0;              // (0.2.0) the double crossover: defenders took over the trading AND the replenishment
                 if (pulling || depleting) a.end = pulling ? "held while pulling (no L?)" : "held while depleting (no L?)";
-                else if ((E || A) && !marked) {
-                    std::string r = E && A ? "E A" : E ? "E" : "A";
+                else if ((E || A || X) && !marked) {
+                    std::string r; if (E) r += "E"; if (A) r += r.empty() ? "A" : " A"; if (X) r += r.empty() ? "X" : " X";
                     push("L?", r, a, barTime, barEnd); marked = true; a.end = "L? " + r;
-                } else a.end = (E || A) ? "hold (bar already marked)" : "hold, no supporting read";
-                if ((pulling || depleting) && (E || A)) a.end += std::string(" - had ") + (E && A ? "E A" : E ? "E" : "A");
+                } else a.end = (E || A || X) ? "hold (bar already marked)" : "hold, no supporting read";
+                if ((pulling || depleting) && (E || A || X)) a.end += std::string(" - had") + (E ? " E" : "") + (A ? " A" : "") + (X ? " X" : "");
                 close_(a);
                 continue;
             }
@@ -302,6 +313,7 @@ public:
         curBar = bar;
     }
     int curBar = 0;
+    int formBar = 0;                             // the bar in progress (set by the host before trades / books)
 
     Readout readout(Ms now) const {
         Readout r;
@@ -351,7 +363,7 @@ public:
     static double round2(double v) { return std::floor(v * 100 + 0.5) / 100; }
 
     // the attempt log line (every attempt, drawn or not) for the nightly scoring
-    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end"; }
+    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end|e_bar|o_bar|p_bar|story"; }
     std::string attemptLine(const Attempt& a, Ms tEnd) const {
         std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
         const double sh = a.shown > 0 ? a.shown : 1;
@@ -364,10 +376,39 @@ public:
         const double secs = std::max(1.0, (double)(tEnd - a.tA) / 1000.0), tot = a.attackVol + a.counterVol;
         o << '|' << round2(tot > 0 ? a.counterVol / tot : -1) << '|' << round2(a.counterVol / secs) << '|' << round2(a.pulled / secs) << '|'
           << (a.counterVol > a.pulled ? 1 : 0) << '|' << tEnd;
+        // (0.2.0) the story: bars after arrival when E / O / P first showed (-1 = never) and their order, e.g. "E>O" = exhaustion, then offense
+        std::vector<std::pair<int, char>> seq;
+        if (a.barE >= 0) seq.push_back(std::make_pair(a.barE, 'E'));
+        if (a.barO >= 0) seq.push_back(std::make_pair(a.barO, 'O'));
+        if (a.barP >= 0) seq.push_back(std::make_pair(a.barP, 'P'));
+        if (a.barR >= 0) seq.push_back(std::make_pair(a.barR, 'R'));
+        std::sort(seq.begin(), seq.end());
+        std::string st; for (size_t i = 0; i < seq.size(); ++i) { if (i) st += '>'; st += seq[i].second; }
+        o << '|' << (a.barE >= 0 ? a.barE - a.barA : -1) << '|' << (a.barO >= 0 ? a.barO - a.barA : -1) << '|' << (a.barP >= 0 ? a.barP - a.barA : -1) << '|' << (st.empty() ? "-" : st)
+          << '|' << (a.barR >= 0 ? a.barR - a.barA : -1) << '|' << (a.barX >= 0 ? a.barX - a.barA : -1);
         return o.str();
     }
     std::vector<std::string> attemptLog;          // lines waiting to be appended by the host
 
+    // (0.2.0) the story marks, each decided once at a bar close: E = the attackers' 2nd-half pace < 0.5 x the 1st half; P = half+ of the
+    // shown size pulled and not replaced; O = the defenders out-traded the attackers in a bar after the attackers had led one (defense
+    // first, then offense - Rassul 2026-10-10 "buyers playing defense first and then offense")
+    void story(Attempt& a, int bar, Ms barEnd) {
+        if (a.barE < 0) { const double ex = exhaustRatio(a.attacks, a.tA, barEnd); if (ex >= 0 && ex < P.exhaust && firstHalf(a, barEnd) >= P.minAttack) a.barE = bar; }
+        const double taken = a.attackVol + a.pulled, replaced = a.added + a.refill, rx = taken > 0 ? replaced / taken : -1;
+        if (a.barP < 0 && a.shown > 0 && a.pulled / a.shown >= 0.5 && rx >= 0 && rx < 0.5) a.barP = bar;
+        std::map<int, Attempt::BarFlow>::const_iterator f = a.flowBars.find(bar);
+        if (f != a.flowBars.end()) {
+            if (f->second.attack > f->second.defend) a.defendedFirst = true;
+            else if (a.barO < 0 && a.defendedFirst && f->second.defend > f->second.attack && f->second.defend > 0) a.barO = bar;
+        }
+        // (Rassul 2026-10-10 22:00 "a cross of replenished over pulled ... would mirror aggression giving a double crossover pattern")
+        // R = replenished (since arrival) rises above pulled after pulled had led; X = both crosses (O and R) done, at the later one's bar
+        const double rep = a.added + a.refill, pul = a.pulled;
+        if (pul > 0 && pul >= rep) a.pulledFirst = true;
+        else if (a.barR < 0 && a.pulledFirst && rep > pul) a.barR = bar;
+        if (a.barX < 0 && a.barO >= 0 && a.barR >= 0) a.barX = bar;
+    }
     static double resilience(const Attempt& a) {
         if (a.startSize - a.minSize <= 0) return -1;
         return std::max(0.0, (a.curSize - a.minSize) / (a.startSize - a.minSize));
@@ -384,6 +425,7 @@ private:
         for (size_t i = 0; i < attempts.size(); ++i) {
             Attempt& a = attempts[i]; if (a.done || a.side != e.side || e.px < a.lo || e.px > a.hi || e.t < a.tA) continue;
             a.pulled += e.pulled; a.added += e.added; a.refill += e.refill;
+            Attempt::BarFlow& f = a.flowBars[formBar]; f.rep = a.added + a.refill; f.pul = a.pulled;
         }
     }
     void track(Ms t, int side, Tick center, double size) {
@@ -411,10 +453,11 @@ private:
             Zone& z = *best;
             const double shown = band(z.side, z.lo, z.hi);
             if (shown < P.minShown) continue;
-            Attempt a; a.zoneId = z.id; a.side = z.side; a.lo = z.lo; a.hi = z.hi; a.tA = t; a.barA = curBar;
+            Attempt a; a.zoneId = z.id; a.side = z.side; a.lo = z.lo; a.hi = z.hi; a.tA = t; a.barA = formBar > 0 ? formBar : curBar;
             a.shown = shown; a.startSize = a.minSize = a.curSize = shown;
             const double first = a.side == BID ? sell : buy;          // the trade that arrived counts as the first attack
             if (first > 0) { a.attackVol = first; a.attacks.push_back(std::make_pair(t, first)); }
+            a.flowBars[a.barA].attack += first > 0 ? first : 0;
             attempts.push_back(a); z.inAttempt = true;
         }
     }

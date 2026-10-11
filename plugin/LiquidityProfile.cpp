@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.1.3, 2026-10-11; 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.2.0, 2026-10-11; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -59,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.1.3"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.2.0"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -209,6 +209,7 @@ private:
     void persist(LQState& S);
     void status(LQState& S, long long now);
     void render(LQState& S);
+    void renderFlow(LQState& S);
     int barOfTime(long long barTime, long count);
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\LiquidityProfile"; }
     std::string stem(LQState& S) { return S.market + "-" + std::to_string(S.spb); }
@@ -229,7 +230,11 @@ int cppExtension::calc(int) { static_cast<LiquidityProfile*>(this)->pump(); retu
 int LiquidityProfile::draw(void) {
     pump();
     LQState* S = slot_.get(this, false);
+#ifdef LQ_FLOW
+    if (S && !S->faulted) { try { renderFlow(*S); } catch (...) { S->state = "draw error"; } }
+#else
     if (S && !S->faulted) { try { render(*S); } catch (...) { S->state = "draw error"; } }
+#endif
     return RTX_OK;
 }
 
@@ -344,6 +349,7 @@ void LiquidityProfile::readTrades(LQState& S, long long t, long count) {
             std::pair<long long, long long>& seen = S.vapRows[px];
             const long long db = (long long)v.buyVolume - seen.first, ds = (long long)v.sellVolume - seen.second;
             seen.first = (long long)v.buyVolume; seen.second = (long long)v.sellVolume;
+            S.e.formBar = bar;                                           // (0.2.0) the story's per-bar flow goes to the bar it traded in
             if (!prime && (db > 0 || ds > 0)) S.e.onTrade(t, (double)px * S.tick, (double)std::max(0LL, db), (double)std::max(0LL, ds));
         }
         S.primed = true;
@@ -354,7 +360,7 @@ void LiquidityProfile::readTrades(LQState& S, long long t, long count) {
 
 // a bar is closed once a later bar exists (checklist #27); each closed bar is decided once, in order
 void LiquidityProfile::closedBars(LQState& S, long count) {
-    if (S.barCount == 0) { S.barCount = count; return; }                // history before load: never decided (no attempts on it)
+    if (S.barCount == 0) { S.barCount = count; S.e.curBar = (int)count - 2; S.e.formBar = (int)count - 1; return; }   // history before load: never decided
     if (count <= S.barCount) { if (count < S.barCount) S.barCount = count; return; }
     RTARRAYI times(barDateTime); RTARRAY close(barClose), high(barHigh), low(barLow);
     if (times.count < count || close.count < count) return;
@@ -454,6 +460,9 @@ void LiquidityProfile::session(LQState& S, long long t) {
 }
 
 void LiquidityProfile::persist(LQState& S) {
+#ifdef LQ_FLOW
+    S.e.attemptLog.clear(); return;                                      // the panes draw; lsLiquidityProfile keeps the records
+#endif
     const std::string d = dir(); if (d.empty() || S.session < 0) return;
     makeDir(flexDir()); makeDir(d);
     if (S.marksWritten < S.e.marks.size()) {
@@ -487,7 +496,12 @@ void LiquidityProfile::status(LQState& S, long long now) {
     const std::string text = o.str();
     if (text == S.lastStatusText && S.lastStatus >= 0 && now - S.lastStatus < STATUS_EVERY_MS) return;   // #31: on change or every 30 s
     const std::string f = flexDir(); if (f.empty()) return;
-    if (publishFile(f + "\\LiquidityProfile.status-" + stem(S) + ".txt", text)) { S.lastStatusText = text; S.lastStatus = now; }
+#ifdef LQ_FLOW
+    const char* kind = "LiquidityFlow";
+#else
+    const char* kind = "LiquidityProfile";
+#endif
+    if (publishFile(f + "\\" + kind + ".status-" + stem(S) + ".txt", text)) { S.lastStatusText = text; S.lastStatus = now; }
 }
 
 void LiquidityProfile::pump() {
@@ -508,6 +522,7 @@ void LiquidityProfile::pump() {
         if (S.lastDepth < 0 || t - S.lastDepth >= DEPTH_EVERY_MS || t < S.lastDepth) {
             S.lastDepth = t;
             readTrades(S, t, count);                                    // trades first: they explain the book change
+            S.e.formBar = (int)count - 1;                               // book flow belongs to the bar in progress
             readDepth(S, t);
         }
         closedBars(S, count);
@@ -646,12 +661,103 @@ void LiquidityProfile::render(LQState& S) {
     }
 }
 
+
+// ---- (0.2.0) lsLiquidityFlow: the absorption story in its own pane, for the zone touches since load (Rassul 2026-10-10:
+// "the concept of aggression and defense ... the best way to show how and why absorption is occurring or failing"; the replenished-
+// over-pulled cross "would mirror aggression giving a double crossover pattern that would be very easy to spot").
+// TOP half  AGGRESSION: contracts per bar traded INTO the zone - sellers (red) / buyers (green); attackers are sellers at a support,
+//           buyers at a resistance. The defenders' line crossing above the attackers' = O (defense first, then offense).
+// BOTTOM    DEFENSE: since price reached the zone, size REPLENISHED vs size PULLED (lots, cumulative); green / red by what it means
+//           (new bids / pulled offers are bullish). Replenished crossing above pulled = R. Both crosses = X (the double crossover).
+// Story letters (each decided once, at a bar close, "?" while TESTING): E? the attackers' pace halved, O? offense, P? pulled, R? replenished
+// crossed above pulled, X? both crosses.
+void LiquidityProfile::renderFlow(LQState& S) {
+    auto flowLine = [this](const std::vector<std::pair<int, int>>& pts, COLOR c) {
+        if (pts.empty()) return;
+        setPen(c, 2, P_SOLID);
+        PNT a; a.set(0, 0.0f); a.h = coord(pts[0].first); a.v = coord(pts[0].second); a.setDrawPosition();
+        if (pts.size() == 1) { PNT b; b.set(0, 0.0f); b.h = coord(pts[0].first + 2); b.v = coord(pts[0].second); b.drawLineTo(); return; }
+        for (size_t i = 1; i < pts.size(); ++i) { PNT b; b.set(0, 0.0f); b.h = coord(pts[i].first); b.v = coord(pts[i].second); b.drawLineTo(); }
+    };
+    RCT pane; pane.getPaneRect(false);
+    const long count = getBarCount();
+    if (count < 2 || pane.bottom - pane.top < 60 || pane.right - pane.left < 80) return;   // #35
+    const int lastBar = (int)count - 1;
+    const int mid = (pane.top + pane.bottom) / 2;
+    const int t0 = pane.top + 14, t1 = mid - 3, b0 = mid + 14, b1 = pane.bottom - 3;
+    FONT f; f.id = HELVETICA; f.size = coord(std::max(7, S.font - 1)); f.style = BOLD; setFont(f); setTextColor(C_GREY);
+    { RCT r; r.set(coord(pane.left + 4), coord(pane.top + 1), coord(pane.left + 400), coord(pane.top + 13)); r.drawText("AGGRESSION  attackers / defenders", false, false); }
+    { RCT r; r.set(coord(pane.left + 4), coord(mid + 1), coord(pane.left + 400), coord(mid + 13)); r.drawText("DEFENSE  replenished / pulled", false, false); }
+    setPen(C_AXIS, 1, P_SOLID);
+    { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(mid); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(mid); b.drawLineTo(); }
+    if (!S.e.haveBook) { setTextColor(C_SELL); RCT r; r.set(coord(pane.left + 260), coord(pane.top + 1), coord(pane.left + 500), coord(pane.top + 13)); r.drawText(S.mdBlocked ? "blocked" : "no depth", false, false); }
+    // the attempts to draw: the finished ones and the live one, only bars on screen
+    std::vector<const lqp::Attempt*> as;
+    for (size_t i = 0; i < S.e.finished.size(); ++i) as.push_back(&S.e.finished[i]);
+    for (size_t i = 0; i < S.e.attempts.size(); ++i) as.push_back(&S.e.attempts[i]);
+    double maxA = 1, maxD = 1;
+    auto xOf = [&](int bar) { PNT p; p.set(bar, 0.0f, kBarCenter); return (int)p.h; };
+    for (size_t k = 0; k < as.size(); ++k)
+        for (std::map<int, lqp::Attempt::BarFlow>::const_iterator it = as[k]->flowBars.begin(); it != as[k]->flowBars.end(); ++it) {
+            if (it->first < 0 || it->first > lastBar) continue;
+            const int x = xOf(it->first); if (x < pane.left || x > pane.right) continue;
+            maxA = std::max(maxA, std::max(it->second.attack, it->second.defend)); maxD = std::max(maxD, std::max(it->second.rep, it->second.pul));
+        }
+    auto yA = [&](double v) { return t1 - (int)((t1 - t0) * std::min(1.0, v / maxA)); };
+    auto yD = [&](double v) { return b1 - (int)((b1 - b0) * std::min(1.0, v / maxD)); };
+    std::vector<int> used;                                               // one story letter per bar per half (#14)
+    for (size_t k = 0; k < as.size(); ++k) {
+        const lqp::Attempt& a = *as[k];
+        const bool sup = a.side == lqp::BID;
+        std::vector<std::pair<int, int>> att, def, rep, pul;
+        double lastRep = 0, lastPul = 0;
+        for (int b = a.barA; b <= lastBar && b <= a.barA + 40; ++b) {
+            std::map<int, lqp::Attempt::BarFlow>::const_iterator it = a.flowBars.find(b);
+            if (a.done && it == a.flowBars.end() && b > a.flowBars.rbegin()->first) break;
+            const lqp::Attempt::BarFlow fb = it == a.flowBars.end() ? lqp::Attempt::BarFlow() : it->second;
+            const int x = xOf(b); if (x < pane.left || x > pane.right) continue;
+            if (fb.rep > 0 || fb.pul > 0 || it != a.flowBars.end()) { lastRep = std::max(lastRep, fb.rep); lastPul = std::max(lastPul, fb.pul); }
+            att.push_back(std::make_pair(x, yA(fb.attack))); def.push_back(std::make_pair(x, yA(fb.defend)));
+            rep.push_back(std::make_pair(x, yD(lastRep))); pul.push_back(std::make_pair(x, yD(lastPul)));
+        }
+        // colours by meaning: sellers red / buyers green; new bids or pulled offers green, pulled bids or new offers red
+        flowLine(att, sup ? C_SELL : C_BUY); flowLine(def, sup ? C_BUY : C_SELL);
+        flowLine(pul, sup ? C_SELL : C_BUY); flowLine(rep, sup ? C_BUY : C_SELL);
+        struct L { int bar; const char* t; bool top; COLOR c; };
+        const COLOR good = sup ? C_BUY : C_SELL, bad = sup ? C_SELL : C_BUY;
+        const L ls[5] = { { a.barE, "E?", true, good }, { a.barO, "O?", true, good }, { a.barP, "P?", false, bad }, { a.barR, "R?", false, good }, { a.barX, "X?", true, good } };
+        FONT g; g.id = HELVETICA; g.size = coord(S.font); g.style = BOLD; setFont(g);
+        for (int i = 0; i < 5; ++i) {
+            if (ls[i].bar < 0 || ls[i].bar > lastBar) continue;
+            const int x = xOf(ls[i].bar); if (x < pane.left + 10 || x > pane.right - 10) continue;
+            const int key = ls[i].bar * 2 + (ls[i].top ? 0 : 1);
+            if (std::find(used.begin(), used.end(), key) != used.end() && i != 4) continue;   // X wins its bar
+            used.push_back(key);
+            const int y = ls[i].top ? t0 : b0;
+            setTextColor(ls[i].c);
+            const int w = getTextWidth(ls[i].t, -1);
+            RCT r; r.set(coord(x - w / 2 - 1), coord(y - 1), coord(x + w / 2 + 1), coord(y + S.font + 3)); r.drawText(ls[i].t, true, false);
+            if (i == 4) {                                                // the double crossover: a thin line through both halves at that bar
+                setPen(good, 1, P_DASH);
+                PNT p0; p0.set(0, 0.0f); p0.h = coord(x); p0.v = coord(t0 + S.font + 4); p0.setDrawPosition();
+                PNT p1; p1.set(0, 0.0f); p1.h = coord(x); p1.v = coord(b1); p1.drawLineTo();
+            }
+        }
+    }
+}
+
 extern "C" cppExtension* CreateExtension(void) {
     LiquidityProfile* p = new LiquidityProfile();
     p->setArrayCount(1);
+#ifdef LQ_FLOW
+    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);                    // its own pane (no OVERLAY), draws itself
+    p->setExtendedFlags(CALL_CONTINUOUSLY);
+    p->setDescription("LRA Liquidity Flow: the absorption story at the zone price is in - AGGRESSION (sellers red / buyers green trading into the zone) and DEFENSE (replenished vs pulled since arrival); E? O? P? R? and X? (the double crossover). TESTING.");
+#else
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
-    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal, and the zone reads that support absorption (eaten / stayed / E). TESTING.");
-    p->setVersion("0.1.3");   // LQ_VERSION
+    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal, and the zone reads that support absorption (eaten / stayed / refill / E). TESTING.");
+#endif
+    p->setVersion("0.2.0");   // LQ_VERSION
     return p;
 }

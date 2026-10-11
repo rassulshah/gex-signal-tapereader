@@ -213,7 +213,44 @@ static void test_thin_break_draws_nothing() {
     e.onBarClose(1, 1000, 180000, 69.90, none, none);
     CHECK(e.marks.empty(), "a break with no eating and no pulling draws nothing");
 }
+static void test_story_defense_then_offense() {
+    Engine e = zoneSetup();
+    std::vector<std::pair<Tick, Tick>> none;
+    e.formBar = 10; e.curBar = 9;
+    e.onTrade(41000, 69.97, 0, 40);               // bar 10: sellers attack the zone
+    e.onTrade(60000, 69.96, 5, 30);
+    e.onBarClose(10, 1000, 180000, 69.96, none, none);
+    e.formBar = 11;
+    e.onTrade(200000, 69.96, 45, 3);              // bar 11: buyers out-trade the sellers in the zone, sellers' pace collapsed
+    e.onBarClose(11, 2000, 360000, 69.96, none, none);
+    CHECK(!e.attempts.empty() && e.attempts[0].barO == 11, "defense first (sellers led bar 10), then offense in bar 11 = O");
+    CHECK(!e.attempts.empty() && e.attempts[0].barE >= 10 && e.attempts[0].barE <= 11, "the sellers' pace halved by bar 11 = E");
+    CHECK(!e.attempts.empty() && e.attempts[0].flowBars[10].attack == 70 && e.attempts[0].flowBars[11].defend == 45, "per-bar attack / defend kept for the panes");
+    e.formBar = 12;
+    e.onBarClose(12, 3000, 540000, 70.00, none, none);  // closes back out: decided
+    CHECK(!e.attemptLog.empty() && e.attemptLog.back().find("|E>O") != std::string::npos, "the story is logged with its order (E, then O)");
+}
+static void test_double_crossover() {
+    Engine e = zoneSetup();
+    std::vector<std::pair<Tick, Tick>> none;
+    e.formBar = 10; e.curBar = 9;
+    e.onTrade(41000, 69.97, 0, 40);
+    book(e, 42000, 70.00, 12, {{6995, 120}});     // bar 10: 80 pulled, nothing new - pulled leads
+    e.onTrade(60000, 69.96, 2, 30);               // sellers lead the trading
+    e.onBarClose(10, 1000, 180000, 69.96, none, none);
+    CHECK(!e.attempts.empty() && e.attempts[0].pulledFirst && e.attempts[0].defendedFirst, "both lines start on the losing side");
+    e.formBar = 11;
+    book(e, 190000, 70.00, 12, {{6995, 300}});    // bar 11: 180 new size comes in - replenished passes pulled
+    e.onTrade(200000, 69.96, 60, 4);              // and buyers out-trade sellers
+    e.onBarClose(11, 2000, 360000, 69.96, none, none);
+    CHECK(!e.attempts.empty() && e.attempts[0].barR == 11 && e.attempts[0].barO == 11 && e.attempts[0].barX == 11, "both crosses in bar 11 = the double crossover X");
+    e.formBar = 12;
+    e.onBarClose(12, 3000, 540000, 70.00, none, none);
+    CHECK(e.marks.size() == 1 && e.marks[0].code == "L?" && e.marks[0].reasons.find('X') != std::string::npos, "a hold after the double crossover prints L? with X");
+}
 int main() {
+    test_double_crossover();
+    test_story_defense_then_offense();
     test_hold_while_pulling_gives_no_L(); test_thin_break_draws_nothing();
     test_pull_not_replaced_reads_PULL(); test_eaten_and_replaced_reads_holding(); test_eaten_not_replaced_reads_depleting();
     test_pull_vs_execution(); test_window_edge_is_not_a_pull(); test_refill_is_counted(); test_bad_books_refused();
