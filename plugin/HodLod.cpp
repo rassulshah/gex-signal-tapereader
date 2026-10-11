@@ -109,7 +109,7 @@ int cppExtension::calc(int)
 int cppExtension::setup(void)
 {
     // (HL105) the only setting: Position (9 spots, default Bottom centre); the value array stays hidden from the settings window
-    setParameterVersion(2);
+    setParameterVersion(3);   // (1.0.1) 3: IRT resets a stale saved Position (Top left) to the default
     setParameterDialogHeight(1);
     static_cast<HodLod*>(this)->posParam = 0;
     setListParameter("Position", (short)hl::POS_DEFAULT, hl::POS_CHOICES);
@@ -339,8 +339,9 @@ void HodLod::savePos()
 }
 int HodLod::position(const std::string& mkt)
 {
-    int v = getListIndex(posParam);
-    if (v >= 0 && v <= 8) return v;                                    // the settings copy is this chart's
+    // (1.0.1, Rassul 2026-10-11 "its default is bottom center. it is moving to upper left") the per-market place file is the ONLY
+    // source while drawing: IRT hands a freshly added copy a stale list index (0 = Top left) that the file never had. The file is
+    // written only when he presses OK / Apply in Settings; no file = Bottom centre.
     std::string p = flexPath("HodLod.place-" + mkt + ".txt");
     if (mkt.empty() || p.empty()) return hl::POS_DEFAULT;
     long long st = hlFileStamp(p);
@@ -393,6 +394,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the live read (LOD / HOD IN) and the 2nd-extreme call, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
-    p->setVersion("1.0.0");
+    p->setVersion("1.0.1");
     return p;
 }
