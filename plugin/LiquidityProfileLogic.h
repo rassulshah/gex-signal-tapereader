@@ -41,7 +41,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.1.1";
+static const char* const VERSION = "0.1.2";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -114,6 +114,8 @@ struct Mark {
 
 struct Readout {         // the live read of the zone price is in (or the last one), for the column label
     bool active = false; int side = BID; Tick lo = 0, hi = 0; double eaten = 0, stayed = 1, exhaust = -1; bool exhausted = false;
+    double pulled = 0, refill = -1;      // pulled share of what was shown; refill = new size that came in / what was taken (eaten + pulled)
+    bool pulling = false, depleting = false;   // PULL?: half+ of the shown size left without trading and was not replaced; DEPLETING?: eaten 1x+, not replaced
 };
 
 inline double exhaustRatio(const std::vector<std::pair<Ms, double>>& a, Ms t0, Ms t1) {
@@ -303,6 +305,11 @@ public:
         const Ms t1 = best->done ? (best->attacks.empty() ? best->tA : best->attacks.back().first) : now;
         r.exhaust = exhaustRatio(best->attacks, best->tA, t1);
         r.exhausted = r.exhaust >= 0 && r.exhaust < P.exhaust;
+        r.pulled = best->shown > 0 ? best->pulled / best->shown : 0;
+        const double taken = best->attackVol + best->pulled, replaced = best->added + best->refill;
+        r.refill = taken > 0 ? replaced / taken : -1;
+        r.pulling = r.pulled >= 0.5 && r.refill >= 0 && r.refill < 0.5;
+        r.depleting = !r.pulling && r.eaten >= P.eatenBreak && r.refill >= 0 && r.refill < 0.5;
         return r;
     }
 

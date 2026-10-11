@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.1.1, 2026-10-11; 0.1.1: the status text is built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.1.2, 2026-10-11; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -59,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.1.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.1.2"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -586,7 +586,8 @@ void LiquidityProfile::render(LQState& S) {
         if (yb <= top || yt >= bottom) continue;
         yt = std::max(top, yt); yb = std::min(bottom, yb);
         const COLOR c = z.side == lqp::BID ? C_BUY : C_SELL;
-        const bool solid = z.durable(nowT, S.e.P.persistMs);
+        const bool weak = rd.active && rd.side == z.side && rd.lo <= z.hi && rd.hi >= z.lo && (rd.pulling || rd.depleting);
+        const bool solid = z.durable(nowT, S.e.P.persistMs) && !weak;   // (0.1.2) hollow = new / flickering, or being pulled / not replaced
         const int len = std::max(8, (int)(maxZone > 0 ? z.size / maxZone * full : full));
         RCT r; r.set(coord(base - len), coord(yt), coord(base), coord(yb));
         if (solid) r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
@@ -614,8 +615,15 @@ void LiquidityProfile::render(LQState& S) {
         }
         // the live read of the zone price is in (or just left): eaten / stayed / E
         if (rd.active && rd.side == z.side && rd.lo <= z.hi && rd.hi >= z.lo) {
-            char b[96]; std::snprintf(b, sizeof(b), "eaten %.1fx  stayed %.0f%%%s", rd.eaten, rd.stayed * 100.0, rd.exhausted ? "  E" : "");
-            FONT h; h.id = HELVETICA; h.size = coord(std::max(7, S.font - 1)); h.style = PLAIN; setFont(h); setTextColor(c);
+            // (0.1.2, Rassul 2026-10-10 "how would you indicate that the zone is failing because orders are being pulled instead of
+            // replenished") HOLDING: "eaten 0.8x  stayed 85%  refill 0.9x"; PULL?: "PULL?  pulled 55%  refill 0.1x"; DEPLETING?: "eaten 1.3x
+            // refill 0.2x"; E appended when the attackers' pace halved. The zone bar turns hollow while it is being pulled / depleted.
+            char b[112]; char rf[24] = "";
+            if (rd.refill >= 0) std::snprintf(rf, sizeof(rf), "  refill %.1fx", rd.refill);
+            if (rd.pulling) std::snprintf(b, sizeof(b), "PULL?  pulled %.0f%%%s%s", rd.pulled * 100.0, rf, rd.exhausted ? "  E" : "");
+            else if (rd.depleting) std::snprintf(b, sizeof(b), "eaten %.1fx%s%s", rd.eaten, rf, rd.exhausted ? "  E" : "");
+            else std::snprintf(b, sizeof(b), "eaten %.1fx  stayed %.0f%%%s%s", rd.eaten, rd.stayed * 100.0, rf, rd.exhausted ? "  E" : "");
+            FONT h; h.id = HELVETICA; h.size = coord(std::max(7, S.font - 1)); h.style = (rd.pulling || rd.depleting) ? BOLD : PLAIN; setFont(h); setTextColor(c);
             const int w = getTextWidth(b, -1);
             RCT tr; tr.set(coord(left - w - 6), coord(yb + 1), coord(left - 4), coord(yb + S.font + 4)); tr.drawText(b, false, true);
         }
@@ -644,6 +652,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal, and the zone reads that support absorption (eaten / stayed / E). TESTING.");
-    p->setVersion("0.1.1");   // LQ_VERSION
+    p->setVersion("0.1.2");   // LQ_VERSION
     return p;
 }

@@ -171,7 +171,33 @@ static void test_norms_fallback() {
     CHECK(n.at(17) > 0, "session median once 30+ samples");
 }
 
+static void test_pull_not_replaced_reads_PULL() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 5);
+    book(e, 42000, 70.00, 12, {{6995, 60}});      // 140 of the 200 left without trading, nothing new came
+    Readout r = e.readout(43000);
+    CHECK(r.active && r.pulling && !r.depleting, "half+ of the shown size pulled and not replaced = PULL?");
+    CHECK(r.refill >= 0 && r.refill < 0.5, "refill is low");
+}
+static void test_eaten_and_replaced_reads_holding() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 5);
+    e.onTrade(41500, 69.95, 0, 150);              // 150 eaten at 69.95 ...
+    book(e, 42000, 70.00, 12, {{6995, 200}});     // ... and the 200 are back: replaced
+    Readout r = e.readout(43000);
+    CHECK(r.active && !r.pulling && !r.depleting, "eaten but replaced is not a warning");
+    CHECK(r.refill >= 0.9, "refill near 1x");
+}
+static void test_eaten_not_replaced_reads_depleting() {
+    Engine e = zoneSetup();
+    e.onTrade(41000, 69.97, 0, 5);
+    e.onTrade(41500, 69.95, 0, 260);              // more than the shown size (250) eaten ...
+    book(e, 42000, 70.00, 12, {{6995, -10}});     // ... and nothing left there
+    Readout r = e.readout(43000);
+    CHECK(r.active && r.depleting && !r.pulling, "eaten 1x+ and not replaced = DEPLETING?");
+}
 int main() {
+    test_pull_not_replaced_reads_PULL(); test_eaten_and_replaced_reads_holding(); test_eaten_not_replaced_reads_depleting();
     test_pull_vs_execution(); test_window_edge_is_not_a_pull(); test_refill_is_counted(); test_bad_books_refused();
     test_zone_found_and_durable(); test_attempt_eaten_then_break_gives_LX(); test_break_without_eating_is_logged_not_drawn();
     test_hold_with_exhaustion_gives_L_E(); test_hold_with_delta_absorption_gives_L_A(); test_hold_without_reason_is_logged_only();
