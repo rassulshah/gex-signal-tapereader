@@ -42,7 +42,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.3.0";
+static const char* const VERSION = "0.3.1";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -58,6 +58,9 @@ struct Params {
     int maxBars = 20;                           // an attempt lives 20 bars after arrival
     double eatenBreak = 1.0;                    // LX: eaten >= 1x the size shown (Q02 / Q17)
     double exhaust = 0.5;                       // E: attackers' 2nd-half volume < 0.5 x the 1st half (Q22)
+    double pullShare = 0.5;                     // (0.3.1) PULL? / P / LX P: share of the shown size pulled. eatenBreak, exhaust and pullShare are
+                                                // set PER MARKET from the data (LRA-LiqNorms-<MKT>.csv PARAM lines, lra.liq_params: chosen on the
+                                                // build days, kept only if the later validate days agree; else these defaults)
     double minShown = 1.0;                      // an attempt needs some size shown at arrival
     double minAttack = 1.0;                     // E needs attackers in the first half
 };
@@ -288,7 +291,7 @@ public:
             // replaced: PULLING = half+ of the shown size pulled and less than half of what was taken replaced; DEPLETING = eaten 1x+, not replaced
             const double taken = a.attackVol + a.pulled, replaced = a.added + a.refill;
             const double refillX = taken > 0 ? replaced / taken : -1;
-            const bool pulling = a.shown > 0 && a.pulled / a.shown >= 0.5 && refillX >= 0 && refillX < 0.5;
+            const bool pulling = a.shown > 0 && a.pulled / a.shown >= P.pullShare && refillX >= 0 && refillX < 0.5;
             const bool depleting = !pulling && eaten >= P.eatenBreak && refillX >= 0 && refillX < 0.5;
             if (broke) {
                 // LX = eaten 1x+ then a close through; "LX P" = the defenders pulled and nobody replaced them, then a close through
@@ -336,7 +339,7 @@ public:
         r.pulled = best->shown > 0 ? best->pulled / best->shown : 0;
         const double taken = best->attackVol + best->pulled, replaced = best->added + best->refill;
         r.refill = taken > 0 ? replaced / taken : -1;
-        r.pulling = r.pulled >= 0.5 && r.refill >= 0 && r.refill < 0.5;
+        r.pulling = r.pulled >= P.pullShare && r.refill >= 0 && r.refill < 0.5;
         r.depleting = !r.pulling && r.eaten >= P.eatenBreak && r.refill >= 0 && r.refill < 0.5;
         return r;
     }
@@ -403,7 +406,7 @@ public:
     void story(Attempt& a, int bar, Ms barEnd) {
         if (a.barE < 0) { const double ex = exhaustRatio(a.attacks, a.tA, barEnd); if (ex >= 0 && ex < P.exhaust && firstHalf(a, barEnd) >= P.minAttack) a.barE = bar; }
         const double taken = a.attackVol + a.pulled, replaced = a.added + a.refill, rx = taken > 0 ? replaced / taken : -1;
-        if (a.barP < 0 && a.shown > 0 && a.pulled / a.shown >= 0.5 && rx >= 0 && rx < 0.5) a.barP = bar;
+        if (a.barP < 0 && a.shown > 0 && a.pulled / a.shown >= P.pullShare && rx >= 0 && rx < 0.5) a.barP = bar;
         // (0.3.0) O = the defenders' aggressive volume since arrival crosses above the attackers' (the green / red cross in AGGRESSION),
         // after the attackers had led - defense first, then offense (Rassul 2026-10-10)
         if (a.attackVol > a.counterVol) a.defendedFirst = true;

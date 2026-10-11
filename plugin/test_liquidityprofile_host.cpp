@@ -26,6 +26,11 @@ int main() {
     char tmpl[] = "/tmp/lqpXXXXXX"; const char* tmp = mkdtemp(tmpl);
     setenv("USERPROFILE", tmp, 1);
     const std::string flex = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels";
+    {   // (0.3.1) the per-market thresholds the data chose, in the norms file (bad lines keep the defaults)
+        std::ofstream nf((flex + "\\LRA-LiqNorms-CL.csv").c_str());
+        nf << "VERSION,test\r\nMARKET,CL\r\nZONE,0.25,4,8\r\nPARAMS_VERSION,t\r\nPARAM,pull_share,0.7,data,10,5,0.1,0.1,why\r\n"
+           << "PARAM,eaten_break,1.5,data,1,1,0.1,0.1,why\r\nPARAM,exhaust,7,data,1,1,0,0,out of range\r\n";
+    }
     mock::Host h; mock::current = &h;
     h.tick = 0.01f; h.seconds = 180; h.symbol = "CLEX26"; h.root = "CLEX26";
     const unsigned long day = (unsigned long)(civilDays(2026, 10, 12) * 86400LL);   // Monday, CT clock as epoch
@@ -43,6 +48,9 @@ int main() {
     CHECK(S != nullptr, "per-chart state lives in the host slot");
     if (S) std::printf("state=%s reads=%lld books=%lld bad=%lld why=%s md=%p avail=%d tick=%f\n", S->state.c_str(), S->depthReads, S->e.books, S->e.badBooks, S->e.why.c_str(), (void*)S->md, (int)S->depthAvail, S->tick);
     CHECK(S && S->e.haveBook && S->e.books > 3, "depth snapshots accepted");
+    CHECK(S && S->e.P.pullShare == 0.7 && S->e.P.eatenBreak == 1.5, "the market's data-chosen thresholds are used");
+    CHECK(S && S->e.P.exhaust == 0.5, "an out-of-range value keeps the default");
+    CHECK(S && S->params.find("pull_share 0.7 data") != std::string::npos, "the status says where each threshold came from");
     bool zone = false; for (auto& z : S->e.zones) { std::printf("zone %d c=%lld [%lld,%lld] %.0f\n", z.side, z.center, z.lo, z.hi, z.size); if (z.side == lqp::BID && z.lo <= 7995 && z.hi >= 7995 && z.size >= 200) zone = true; }
     CHECK(zone, "the 200-lot bid at 79.95 is a zone");
     CHECK(S->e.trades == 0, "volume already on the bar at load is history, not new trades");
@@ -52,7 +60,7 @@ int main() {
     setDepth(h, 79.97, 12, 79.95, 200);
     h.now = t0 + 46; usleep(300000); p->calc(0);
     CHECK(S->e.attempts.size() == 1, "arrival into the zone starts an attempt");
-    fb.rows.push_back(mock::Price(79.95f, 0, 300, 300)); fb.low = 79.95f; fb.close = 79.95f;
+    fb.rows.push_back(mock::Price(79.95f, 0, 450, 450));   // 1.5x+ the shown size (this market's eaten_break from the norms file) fb.low = 79.95f; fb.close = 79.95f;
     setDepth(h, 79.95, 12, 79.95, 0);
     h.now = t0 + 60; usleep(300000); p->calc(0);
     fb.rows.push_back(mock::Price(79.92f, 0, 20, 20)); fb.low = 79.89f; fb.close = 79.89f;
@@ -74,7 +82,7 @@ int main() {
     bool header = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "LIQ TESTING") header = true;
     CHECK(header, "header says TESTING");
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.3.0") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.3.1") != std::string::npos, "status file written");
     // restart: a new object and an empty slot redraw exactly the recorded mark
     p->destroy(); CHECK(h.data == nullptr, "destroy frees the slot");
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());

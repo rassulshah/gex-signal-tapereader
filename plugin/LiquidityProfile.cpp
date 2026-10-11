@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.3.0, 2026-10-11; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.3.1, 2026-10-11; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -59,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.3.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.3.1"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -169,6 +169,7 @@ struct LQState {
     cppExtension::MARKET_DEPTH* md = nullptr;
     bool mdDead = false, mdBlocked = false, busy = false, faulted = false, primed = false;
     std::string identity, root, market, symbol; int spb = 0; double tick = 0;
+    std::string params = "built-in defaults";   // (0.3.1) the per-market thresholds in use and where each came from (data / default)
     // VAP of the bar being read: tick -> (buy, sell) already counted
     int vapBar = -1; RTDATE vapStamp = 0; std::map<lqp::Tick, std::pair<long long, long long>> vapRows;
     long barCount = 0;
@@ -263,7 +264,7 @@ void LiquidityProfile::identify(LQState& S) {
     if (id != S.identity || tick != S.tick) {
         const int w = S.width, f = S.font;
         LQState fresh; S.e = fresh.e; delete S.md; S.md = nullptr; S.mdDead = S.mdBlocked = false; S.barCount = 0; S.vapRows.clear(); S.vapBar = -1; S.primed = false; S.session = -1; S.marksWritten = 0;
-        S.normsStamp = S.layoutStamp = S.dealerStamp = S.dpStamp = -2; S.width = w; S.font = f;
+        S.normsStamp = S.layoutStamp = S.dealerStamp = S.dpStamp = -2; S.width = w; S.font = f; S.params = "built-in defaults";
         S.identity = id; S.root = root; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
         S.e.P.tick = tick > 0 ? tick : 0.01; zoneRule(S.market, S.e.P);
     }
@@ -385,15 +386,25 @@ void LiquidityProfile::loadNorms(LQState& S) {
     if (stamp == S.normsStamp) return;
     S.normsStamp = stamp;
     std::ifstream in(path.c_str()); std::string line; int lines = 0;
-    std::map<int, double> med; lqp::Params p = S.e.P;
+    std::map<int, double> med; lqp::Params p = S.e.P; std::string info;
     while (std::getline(in, line) && ++lines < 2000) {                  // checklist #33: bounded input
         if (!line.empty() && line.back() == '\r') line.pop_back();
         const std::vector<std::string> c = split(line, ',');
         long long a = 0, b = 0; double x = 0;
         if (c.size() >= 4 && c[0] == "ZONE" && parseD(c[1], x) && parseLL(c[2], 1, 200, a) && parseLL(c[3], 1, 200, b) && x > 0 && a <= b) { p.k = x; p.hwMin = (int)a; p.hwMax = (int)b; }
         else if (c.size() >= 3 && c[0] == "SLOT" && parseLL(c[1], 0, 47, a) && parseD(c[2], x) && x > 0) med[(int)a] = x;
+        // (0.3.1, Rassul 2026-10-10 "data driven ... optimized for each market") PARAM,<name>,<value>,<data|default>,... - each value is
+        // range-checked; a bad or missing line keeps the built-in default
+        else if (c.size() >= 4 && c[0] == "PARAM" && parseD(c[2], x)) {
+            const std::string src = c[3] == "data" ? "data" : "default";
+            if (c[1] == "pull_share" && x >= 0.2 && x <= 0.95) { p.pullShare = x; info += " pull_share " + c[2] + " " + src; }
+            else if (c[1] == "exhaust" && x >= 0.1 && x <= 0.9) { p.exhaust = x; info += " exhaust " + c[2] + " " + src; }
+            else if (c[1] == "eaten_break" && x >= 0.25 && x <= 5) { p.eatenBreak = x; info += " eaten_break " + c[2] + " " + src; }
+        }
     }
     S.e.norms.median.swap(med); S.e.norms.loaded = true; S.e.P.k = p.k; S.e.P.hwMin = p.hwMin; S.e.P.hwMax = p.hwMax;
+    S.e.P.pullShare = p.pullShare; S.e.P.exhaust = p.exhaust; S.e.P.eatenBreak = p.eatenBreak;
+    S.params = info.empty() ? "built-in defaults" : info.substr(1);
 }
 
 // where the column goes: just left of the Delta Profile (its width / gap for this root) and the Dealer Profile (its reach)
@@ -484,7 +495,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
     o << "VERSION," << LQ_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nTICK," << S.tick
       << "\nDEPTH," << (S.mdBlocked ? "blocked" : S.mdDead ? "fault" : !S.md ? "not opened" : S.depthAvail ? "available" : "not available")
       << ",max " << S.depthMax << ",levels " << S.depthLevels << ",reads " << S.depthReads << ",books " << S.e.books << ",bad " << S.e.badBooks << "," << S.e.why
-      << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",norms " << (S.e.norms.loaded ? "file" : "session")
+      << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",norms " << (S.e.norms.loaded ? "file" : "session") << "\nPARAMS," << S.params
       << "\nZONES," << S.e.zones.size() << "\nATTEMPTS," << S.e.attempts.size() << "\nMARKS," << S.e.marks.size() << ",written " << S.marksWritten
       << ",writes " << S.recWrites << ",fails " << S.recFails << "\nDELTA_A," << S.dpBid.size() << "," << S.dpAsk.size()
       << "\nSESSION," << S.session << "\nSTATE," << S.state << "\n";
@@ -767,6 +778,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal, and the zone reads that support absorption (eaten / stayed / refill / E). TESTING.");
 #endif
-    p->setVersion("0.3.0");   // LQ_VERSION
+    p->setVersion("0.3.1");   // LQ_VERSION
     return p;
 }
