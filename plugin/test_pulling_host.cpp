@@ -40,12 +40,12 @@ int main() {
     bool head = false, sellers = false, label = false, feed = false; int lines = 0;
     for (auto& d : h.draws) {
         if (d.type == "text" && d.text == "PULLING   ") head = true;
-        if (d.type == "text" && d.text == "3.0x" && d.color == C_SELL) { if (d.y < 30) sellers = true; else label = true; }
+        if (d.type == "text" && d.text == "3.0x" && d.color == C_BUY) { if (d.y < 30) sellers = true; else label = true; }
         if (d.type == "text" && d.text.find("MBO") == 0) feed = true;
         if (d.type == "line") ++lines;
     }
     CHECK(head && sellers, "header: PULLING ... Sellers pulled: 3.0x");
-    CHECK(label, "the 3.0x is written over the sellers' dot (at or over the line)");
+    CHECK(label, "the 3.0x is written over the sellers' dot in GREEN (sellers stepping away = bullish)");
     CHECK(feed, "the order feed's completeness is shown (MBO ...)");
     CHECK(lines >= 10, "the two lines are drawn");
     bool mbo100 = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "MBO 100%") mbo100 = true;
@@ -56,7 +56,7 @@ int main() {
     CHECK(r.find("bar_time|bids_pulled") == 0 && std::count(r.begin(), r.end(), '\n') >= 22, "each closed bar is recorded");
     usleep(1100000); p->calc(0);
     std::string st = readAll(flex + "\\Pulling.status-ES-180.txt");
-    CHECK(st.find("VERSION,0.1.0") != std::string::npos && st.find("STATE,ready") != std::string::npos, "status file: version and ready");
+    CHECK(st.find("VERSION,0.1.1") != std::string::npos && st.find("STATE,ready") != std::string::npos, "status file: version and ready");
     p->destroy(); CHECK(h.dboObjects == 0 && h.data == nullptr, "destroy unsubscribes and frees the slot");
     Pulling* q = static_cast<Pulling*>(CreateExtension());
     h.now = t0 + 22 * 180 + 30; q->calc(0);

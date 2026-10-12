@@ -1,12 +1,12 @@
 /********************************************************************************
- *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.1.0, 2026-10-11)
+ *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.1.1, 2026-10-11)
  *
  *  PULLING: who pulled their resting orders near price, bar by bar, from the market-by-order feed (Rithmic DBO through IRT's
  *  DEPTH_BY_ORDER). Rassul 2026-10-11 20:50-20:57: "a simple two line approach that is looking at pulling of orders by buyers and
  *  sellers ... it would show why price went up or down and who pulled orders", "call it pulling", "it should use mbo data".
  *  Its own pane, two lines (mockup option A + the B cross, 20:50):
- *    green = BUYERS pulled (bids cancelled near price)  -> price drops when buyers step away
- *    red   = SELLERS pulled (offers cancelled near price) -> price lifts when sellers step away
+ *    red   = BUYERS pulled (bids cancelled near price)   -> bearish: price drops when buyers step away   (0.1.1: coloured by meaning)
+ *    green = SELLERS pulled (offers cancelled near price) -> bullish: price lifts when sellers step away
  *  each as x the normal pulling per side over the 20 bars before (one shared scale), a dot per bar, the value written over a dot at or
  *  over the line (1.5x until the nightly study sets the market's own), and a yellow X where the side that pulled more over the last 10
  *  bars changed. Header: "PULLING  Buyers pulled: 0.8x (1.5x)  Sellers pulled: 2.0x (1.5x)" for the bar in progress, and on the right
@@ -52,7 +52,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define PL_VERSION "0.1.0"          // keep equal to pl::VERSION and the setVersion literal below
+#define PL_VERSION "0.1.1"          // keep equal to pl::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_X = 0x003CC8FA;
 static const int SLICE_MAX = 20000;            // events per call at most (never blocks IRT)
@@ -389,8 +389,8 @@ void Pulling::render(PLState& S) {
     // header: the bar in progress, Metric: now (line); the order feed's completeness on the right
     {
         int x = txt(pane.left + 4, pane.top + 1, "PULLING   ", C_GREY);
-        x = txt(x, pane.top + 1, "Buyers pulled: ", C_GREY); x = txt(x, pane.top + 1, xs(S.e.x(lastBar, pl::BID)), C_BUY); x = txt(x, pane.top + 1, " (" + xs(line) + ")   ", C_GREY);
-        x = txt(x, pane.top + 1, "Sellers pulled: ", C_GREY); x = txt(x, pane.top + 1, xs(S.e.x(lastBar, pl::OFFER)), C_SELL); txt(x, pane.top + 1, " (" + xs(line) + ")", C_GREY);
+        x = txt(x, pane.top + 1, "Buyers pulled: ", C_GREY); x = txt(x, pane.top + 1, xs(S.e.x(lastBar, pl::BID)), C_SELL); x = txt(x, pane.top + 1, " (" + xs(line) + ")   ", C_GREY);
+        x = txt(x, pane.top + 1, "Sellers pulled: ", C_GREY); x = txt(x, pane.top + 1, xs(S.e.x(lastBar, pl::OFFER)), C_BUY); txt(x, pane.top + 1, " (" + xs(line) + ")", C_GREY);
         std::string feed; COLOR fc = C_GREY;
         if (S.lastEventMs < 0) { feed = S.state == "ready" ? "MBO" : S.state; fc = S.state.find("waiting") == 0 ? C_GREY : C_SELL; }
         else {
@@ -419,9 +419,11 @@ void Pulling::render(PLState& S) {
     setPen(C_AXIS, 1, P_SOLID);
     { const int y = yOf(line); PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(y); b.drawLineTo();
       txt(pane.right - 34, y - 13, xs(line), C_GREY); }
-    // the two lines, a dot per bar, the value over a dot at or over the line; sellers (red) first so buyers (green) stay readable on top
+    // the two lines, a dot per bar, the value over a dot at or over the line. (0.1.1, Rassul 21:11 "if buyers pulled it should be red, if
+    // sellers pulled it should be green") coloured by what it means for price: buyers pulling bids = bearish RED, sellers pulling
+    // offers = bullish GREEN
     for (int s = 0; s < 2; ++s) {
-        const int side = s == 0 ? pl::OFFER : pl::BID; const COLOR c = side == pl::BID ? C_BUY : C_SELL;
+        const int side = s == 0 ? pl::OFFER : pl::BID; const COLOR c = side == pl::BID ? C_SELL : C_BUY;
         setPen(c, 2, P_SOLID); bool started = false;
         for (size_t k = 0; k < vis.size(); ++k) {
             const double v = S.e.x(vis[k], side); if (v < 0) { started = false; continue; }
@@ -450,7 +452,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                   // its own pane, draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Pulling: who pulled their resting orders near price, per bar, from the order-by-order (MBO) feed. Green = buyers pulled bids (price drops when buyers step away), red = sellers pulled offers (price lifts when sellers step away), each x the normal pulling of the 20 bars before; the value shows at or over the line; a yellow X = the side pulling more over the last 10 bars changed. Fills never count as pulls. MBO % (top right) = how much of the bar volume the order feed showed.");
-    p->setVersion("0.1.0");   // PL_VERSION
+    p->setDescription("LRA Pulling: who pulled their resting orders near price, per bar, from the order-by-order (MBO) feed. Red = buyers pulled bids (bearish: price drops when buyers step away), green = sellers pulled offers (bullish: price lifts when sellers step away), each x the normal pulling of the 20 bars before; the value shows at or over the line; a yellow X = the side pulling more over the last 10 bars changed. Fills never count as pulls. MBO % (top right) = how much of the bar volume the order feed showed.");
+    p->setVersion("0.1.1");   // PL_VERSION
     return p;
 }
