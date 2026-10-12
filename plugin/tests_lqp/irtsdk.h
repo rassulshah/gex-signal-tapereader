@@ -11,7 +11,7 @@
 #define DIR_SEPARATOR_CHR '/'
 typedef unsigned long RTDATE;
 typedef unsigned long COLOR;
-enum { RTX_OK=0, RTX_FAIL=-1, POST_DRAWING=1, OVERLAY=2, NO_UI=4, INSTRUMENT_SCALE=8, VAP_REQUIRED=16, kParmAppendSameLine=1, SYM_TICKINCR=171, CALL_CONTINUOUSLY=1 };
+enum { RTX_OK=0, RTX_FAIL=-1, POST_DRAWING=1, OVERLAY=2, NO_UI=4, INSTRUMENT_SCALE=8, VAP_REQUIRED=16, TRACK_MOUSE=(1<<27), kParmAppendSameLine=1, SYM_TICKINCR=171, CALL_CONTINUOUSLY=1 };
 typedef struct DEPTH_LEVEL { float bid, ask; unsigned short bidsize, asksize; } DEPTH_LEVEL;
 enum iARRAY { barDateTime,barVolume };
 enum fARRAY { barOpen,barHigh,barLow,barClose };
@@ -30,20 +30,22 @@ struct Host {
     std::vector<Bar> bars; void* data; bool noSlot; float tick; int seconds;
     std::string symbol,root,period,chart,directory;
     int parms[3]; int rowCalls,statsCalls; std::vector<Draw> draws;
-    int paneTop,paneBottom,paneLeft,paneRight,scaleLeft;
+    float priceBase = 80; int paneTop,paneBottom,paneLeft,paneRight,scaleLeft;
     COLOR ink;
     Host():data(NULL),noSlot(false),tick(1),seconds(60),symbol("ESZ26"),root("ES"),period("1 min"),chart("test"),rowCalls(0),statsCalls(0),paneTop(0),paneBottom(1000),paneLeft(0),paneRight(2000),scaleLeft(1980),ink(0){parms[0]=50;parms[1]=0;parms[2]=9;}
 };
 extern Host* current;
 }
+enum { E_MOUSE_UP = 7, E_MOUSE_MOVE, E_MOUSE_DBL, E_MOUSE_SCROLL, E_MOUSE_HOVER = 113 };
+typedef struct RTX_EVENT { int type; union { struct { short v, h, shift, control; long bar; float price; } mouse; } v; } RTX_EVENT;
 class cppExtension {
 public:
-    enum { HELVETICA=1,BOLD=1,PLAIN=0,P_SOLID=0,P_DASH=2,PAT_SOLID=0,PAT_HOLLOW=1,DRAW_OPAQUE=0,kBarCenter=0 };
+    enum { HELVETICA=1,BOLD=1,PLAIN=0,P_SOLID=0,P_DASH=2,PAT_SOLID=0,PAT_HOLLOW=1,DRAW_OPAQUE=0,kBarCenter=0,kBarRight=1 };
     struct MARKET_DEPTH { int maxLevels; MARKET_DEPTH(const char*):maxLevels(static_cast<int>(mock::current->depth.size())){++mock::current->depthObjects;} ~MARKET_DEPTH(){--mock::current->depthObjects;} int available(){maxLevels=static_cast<int>(mock::current->depth.size());return mock::current->depthOn?1:0;} DEPTH_LEVEL& operator[](unsigned n){return mock::current->depth.at(n);} };
     struct FONT { int id,size,style; };
     struct PNT {
         short h,v;
-        void set(int bar,float price,int=0) { h=static_cast<short>(50+bar*10); v=static_cast<short>(mock::current->paneBottom-(price-80)*20); }
+        int set(int bar,float price,int=0) { h=static_cast<short>(50+bar*10); v=static_cast<short>(mock::current->paneBottom-(price-mock::current->priceBase)*20); return 0; }
         void setDrawPosition(){} void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); }
     };
     struct RCT {
@@ -85,7 +87,7 @@ public:
         }
     };
     virtual int init(); virtual int setup(); virtual int calc(int); virtual int done(); virtual int destroy();
-    virtual int draw(){return RTX_FAIL;} virtual int parmsLoad(){return RTX_FAIL;} virtual int parmsApply(){return RTX_FAIL;} virtual int parmsUpdt(unsigned int){return RTX_FAIL;}
+    virtual int draw(){return RTX_FAIL;} virtual int mouse(RTX_EVENT*){return RTX_FAIL;} virtual int parmsLoad(){return RTX_FAIL;} virtual int parmsApply(){return RTX_FAIL;} virtual int parmsUpdt(unsigned int){return RTX_FAIL;}
     void* getUserData(){return mock::current->data;} void setUserData(void* p){if(!mock::current->noSlot)mock::current->data=p;}
     long getBarCount(){return static_cast<long>(mock::current->bars.size());}
     const char* getRootSymbol(char* b=NULL,const char* =NULL){if(b){std::strcpy(b,mock::current->root.c_str());return b;}return mock::current->root.c_str();} const char* getSymbol(){return mock::current->symbol.c_str();}

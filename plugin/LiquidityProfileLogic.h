@@ -41,7 +41,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.9.0";
+static const char* const VERSION = "0.10.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -70,6 +70,15 @@ struct Params {
     Ms barMs = 180000;                          // the chart's bar length (the STEPPING IN warning stays 2 bars after an s)
     double minShown = 1.0;                      // an attempt needs some size shown at arrival
     double minAttack = 1.0;                     // E needs attackers in the first half
+    // (0.10.0, Rassul 2026-10-11 18:21-18:51 rules review + research "Liquidity display for absorption trading"): a zone is DRAWN only
+    // when it stands out from the book BEHIND it (further from price): the 8 same-width bands beyond it, at least 6 of them inside the
+    // visible book. Shown at >= showX x their median AND the biggest of them (rank 1); kept while >= keepX (hysteresis), removed after
+    // graceMs below. A key / gamma level is liquidity-CONFIRMED when a shown zone >= confirmX sits on it. (Study: < 1x held 23%,
+    // 1.5-3x 34-37%; 2x shows 12% of zones; level confirmation knee at 2.5x: 54% vs 44%, confluence 71% vs 51%.)
+    bool requireShown = false;                  // the plugin sets true: only drawn zones are touchable (tests keep the 0.9 behaviour)
+    double showX = 2.0, keepX = 1.7, confirmX = 2.5;
+    int behindBands = 8, behindMin = 6;
+    Tick reachTicks = 0;                        // > 0: the reach in ticks set by the plugin (1/2 expected range ...), else reachAtr x ATR
 };
 
 inline Tick toTick(double price, double tick) { return (Tick)std::llround(price / tick); }
@@ -102,6 +111,10 @@ struct Zone {
     long long id = 0; int side = BID; Tick center = 0, lo = 0, hi = 0; int hw = 0;
     double size = 0, peak = 0; Ms born = 0, seen = 0;
     bool inAttempt = false;
+    // (0.10.0) prominence vs the book behind it, the real edges of its resting size, and the drawn state (hysteresis)
+    double bx = -1; int rank = 0, behindN = 0; bool behindOk = false;
+    Tick edgeLo = 0, edgeHi = 0;
+    bool shown = false; Ms belowSince = -1;
     bool durable(Ms now, Ms persist) const { return now - born >= persist; }
 };
 
@@ -337,7 +350,8 @@ public:
     void updateZones(Ms t, double atrPrice, int slot) {
         if (!haveBook) return;
         setAtr(atrPrice);
-        const Tick reach = (Tick)std::llround(std::max(10.0 * hw, P.reachAtr * (atrPrice > 0 ? atrPrice : 15 * P.tick) / P.tick));
+        const Tick reach = P.reachTicks > 0 ? std::max((Tick)(10 * hw), P.reachTicks)
+                                            : (Tick)std::llround(std::max(10.0 * hw, P.reachAtr * (atrPrice > 0 ? atrPrice : 15 * P.tick) / P.tick));
         const Tick ref = havePx ? lastPx : (book[BID].rbegin()->first + book[ASK].begin()->first) / 2;
         for (int s = 0; s < 2; ++s) {
             std::vector<std::pair<double, Tick>> cand;
@@ -377,10 +391,61 @@ public:
         for (size_t i = 0; i < zones.size();) {
             if (!zones[i].inAttempt && t - zones[i].seen > P.graceMs) zones.erase(zones.begin() + i); else ++i;
         }
+        for (size_t i = 0; i < zones.size(); ++i) { prominence(zones[i]); showState(zones[i], t); }
         normal = norms.at(slot);
     }
     double normal = 0;
     double xNormal(double size) const { return normal > 0 ? size / normal : -1; }
+
+    // (0.10.0) the zone vs the same side's book BEHIND it: behindBands bands of the zone's width beyond it (lower bids under a
+    // support, higher offers over a resistance); a band counts only if it lies inside the visible book. bx = size / their median,
+    // rank = 1 + bands bigger than the zone. Also the real edges: the first / last price inside the band that holds size.
+    void prominence(Zone& z) const {
+        z.bx = -1; z.rank = 0; z.behindN = 0; z.behindOk = false; z.edgeLo = z.lo; z.edgeHi = z.hi;
+        const std::map<Tick, double>& b = book[z.side];
+        if (b.empty()) return;
+        const Tick w = z.hi - z.lo + 1, minPx = b.begin()->first, maxPx = b.rbegin()->first;
+        std::vector<double> sz;
+        for (int k = 1; k <= P.behindBands; ++k) {
+            const Tick a = z.side == BID ? z.lo - k * w : z.hi + (k - 1) * w + 1, e = a + w - 1;
+            if (a < minPx || e > maxPx) continue;                     // outside the visible book: not counted
+            sz.push_back(band(z.side, a, e));
+        }
+        z.behindN = (int)sz.size(); z.behindOk = z.behindN >= P.behindMin;
+        double zs = band(z.side, z.lo, z.hi);
+        if (!sz.empty()) {
+            std::vector<double> s2 = sz; std::sort(s2.begin(), s2.end());
+            const size_t n = s2.size(); const double med = n % 2 ? s2[n / 2] : 0.5 * (s2[n / 2 - 1] + s2[n / 2]);
+            z.bx = zs / std::max(med, 1.0);
+            z.rank = 1; for (size_t i = 0; i < sz.size(); ++i) if (sz[i] > zs) z.rank++;
+        }
+        bool first = true;
+        for (std::map<Tick, double>::const_iterator i = b.lower_bound(z.lo); i != b.end() && i->first <= z.hi; ++i)
+            if (i->second > 0) { if (first) { z.edgeLo = i->first; first = false; } z.edgeHi = i->first; }
+    }
+    // shown: appears once durable (rested persistMs at this band), rank 1 and >= showX; stays while >= keepX; goes after graceMs below
+    void showState(Zone& z, Ms t) const {
+        const bool strong = z.behindOk && z.bx >= P.keepX;
+        if (!z.shown) {
+            if (z.behindOk && z.rank == 1 && z.bx >= P.showX && z.durable(t, P.persistMs)) { z.shown = true; z.belowSince = -1; }
+            return;
+        }
+        if (strong) { z.belowSince = -1; return; }
+        if (z.belowSince < 0) z.belowSince = t;
+        if (t - z.belowSince > P.graceMs) { z.shown = false; z.belowSince = -1; }
+    }
+    // a key / gamma level at levelTick is liquidity-confirmed by a shown zone >= confirmX on the right side whose band holds it
+    const Zone* confirming(Tick levelTick, Tick px) const {
+        const Zone* best = nullptr;
+        for (size_t i = 0; i < zones.size(); ++i) {
+            const Zone& z = zones[i];
+            if (!z.shown || z.bx < P.confirmX) continue;
+            if (levelTick < z.lo || levelTick > z.hi) continue;
+            if (z.side == BID ? z.lo > px : z.hi < px) continue;       // a support below price, a resistance above
+            if (!best || z.bx > best->bx) best = &z;
+        }
+        return best;
+    }
 
     // ---- a closed bar: decide every attempt (marks are final once written)
     void onBarClose(int bar, long long barTime, Ms barEnd, double close, const std::vector<std::pair<Tick, Tick>>& deltaAbsorbBid,
@@ -701,6 +766,7 @@ private:
             for (size_t i = 0; i < zones.size(); ++i) {
                 Zone& z = zones[i];
                 if (z.side != side || !z.durable(t, P.persistMs) || t - z.seen > P.graceMs) continue;
+                if (P.requireShown && !z.shown) continue;                // (0.10.0) only a drawn zone starts an absorption read
                 if (px < z.lo || px > z.hi) continue;
                 if (z.inAttempt) { best = nullptr; break; }               // already being defended: nothing new
                 const bool fromOutside = z.side == BID ? lastPx > z.hi : lastPx < z.lo;

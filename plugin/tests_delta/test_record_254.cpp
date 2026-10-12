@@ -157,7 +157,7 @@ int main()
             check(F[5] == "100" && F[6] == "100.25" && F[7] == "0.25" && F[18] == "400" && F[19] == "401", "F: the node's frozen row 100-100.25 (ticks 400-401) at tick 0.25 (" + F[5] + "/" + F[6] + "/" + F[7] + ")");
             check(F[8] == "-3000000000", "F: net delta above 2^31 exact (" + F[8] + ")");
             check(std::atof(F[9].c_str()) >= 2.0, "F: multiple vs the average row >= 2");
-            check(F[11] == "2.5.4" && F[13] == "ES" && F[14] == "0" && F[15] == std::to_string(t0 + 40 * 60) && F[20] == "sell" && F[21] == "node", "F: version, root, id, absorption bar, node side");
+            check(F[11] == "2.5.5" && F[13] == "ES" && F[14] == "0" && F[15] == std::to_string(t0 + 40 * 60) && F[20] == "sell" && F[21] == "node", "F: version, root, id, absorption bar, node side");
             check(D[2] == "A" && D[3] == "support" && D[4] == "bullish", "D: green close above a selling node = A, bullish");
             check(D[10] == std::to_string(t0 + 110 * 60), "D: decided by the green bar's end (" + D[10] + ")");
             check(D[1] == std::to_string(t0 + 111 * 60) && D[0] == F[0], "D: t_decided = the chart's last bar end when decided; t_first kept");

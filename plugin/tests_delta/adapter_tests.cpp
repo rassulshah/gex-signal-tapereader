@@ -167,7 +167,7 @@ int main(){
         int rings=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"){++rings;check(d.x==450,"circle moved to another bar");}
         check(rings>=1,"reset wiped the decided A's circle");cleanup(p,h);
     });
-    test("2.5.2: a node pushed out of the top 3 keeps its signal, is still decided by a green close, and keeps letter + circle",[]{
+    test("2.5.2/2.5.5: a node pushed out of the top 3 keeps its signal, is decided by a green close, keeps its circle, no bare letter",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}  // dojis: undecided
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
@@ -186,7 +186,7 @@ int main(){
         check(latchBooks().begin()->second.v[0].code=="A" && latchBooks().begin()->second.v[0].support,"green close above did not decide the tracked node");
         int rings=0;bool letter=false;
         for(const mock::Draw& d:h.draws){if(d.type=="ring"&&d.x==450)++rings;if(d.type=="text"&&d.text=="A")letter=true;}
-        check(rings==1,"tracked A lost its circle");check(letter,"tracked A lost its letter");cleanup(p,h);
+        check(rings==1,"tracked A lost its circle");check(!letter,"2.5.5: an off-profile A draws no bare letter");cleanup(p,h);
     });
     test("initiative letter never receives a circle",[]{
         mock::Host h=history(110,60);

@@ -36,7 +36,7 @@ int main() {
     const unsigned long day = (unsigned long)(civilDays(2026, 10, 12) * 86400LL); unsigned long t0 = day + 9 * 3600;
     for (int i = 0; i < 25; ++i) { mock::Bar b; b.time = t0 - (24 - i) * 180; b.open = 80.05f; b.high = 80.12f; b.low = 79.98f; b.close = 80.03f; b.rows.push_back(mock::Price(80.03f, 20, 20, 40)); h.bars.push_back(b); }   // normal pace: 20 a side per bar
     { mock::Bar f; f.time = t0 + 180; f.open = f.high = f.low = f.close = 80.03f; f.rows.push_back(mock::Price(80.03f, 0, 0, 0)); h.bars.push_back(f); }
-    setDepth(h, 80.00, 12, 79.95, 200);
+    setDepth(h, 80.00, 80, 79.95, 200);
     LiquidityProfile* p = static_cast<LiquidityProfile*>(CreateExtension());
     for (int s = 0; s < 45; ++s) { h.now = t0 + s; p->calc(0); }
     LQState* S = static_cast<LQState*>(h.data);
@@ -44,18 +44,18 @@ int main() {
     unsigned long T = t0;
     for (int k = 0; k < 6; ++k) {
         h.bars.back().rows.push_back(mock::Price(80.03f, 5, 5, 10));
-        for (int s = 0; s < 180; s += 20) { setDepth(h, 80.00, 12, 79.95, 200 + ((s / 20 + k) % 2) * 6); h.now = T + 45 + s; p->calc(0); }
+        for (int s = 0; s < 180; s += 20) { setDepth(h, 80.00, 80, 79.95, 200 + ((s / 20 + k) % 2) * 6); h.now = T + 45 + s; p->calc(0); }
         mock::Bar n; n.time = h.bars.back().time + 180; n.open = n.high = n.low = n.close = 80.03f; n.rows.push_back(mock::Price(80.03f, 0, 0, 0)); h.bars.push_back(n);
         T += 180; h.now = T + 41; p->calc(0);
     }
-    setDepth(h, 80.00, 12, 79.95, 200); h.now = T + 44; p->calc(0);
+    setDepth(h, 80.00, 80, 79.95, 200); h.now = T + 44; p->calc(0);
     mock::Bar& fb = h.bars.back();
-    fb.rows.push_back(mock::Price(79.97f, 0, 40, 40)); setDepth(h, 79.97, 12, 79.95, 120); h.now = T + 50; p->calc(0);
+    fb.rows.push_back(mock::Price(79.97f, 0, 40, 40)); setDepth(h, 79.97, 80, 79.95, 120); h.now = T + 50; p->calc(0);
     fb.rows.push_back(mock::Price(79.96f, 3, 30, 33)); h.now = T + 90; p->calc(0);
     { mock::Bar n; n.time = h.bars.back().time + 180; n.open = n.high = n.low = n.close = 79.96f; n.rows.push_back(mock::Price(79.96f, 0, 0, 0)); h.bars.push_back(n); }
     h.now = T + 181; p->calc(0);
     mock::Bar& nb = h.bars.back();
-    setDepth(h, 79.96, 12, 79.95, 300); h.now = T + 200; p->calc(0);
+    setDepth(h, 79.96, 80, 79.95, 300); h.now = T + 200; p->calc(0);
     nb.rows[0] = mock::Price(79.96f, 90, 4, 94); h.now = T + 260; p->calc(0);
     { mock::Bar n; n.time = h.bars.back().time + 180; n.open = n.high = n.low = n.close = 80.00f; n.rows.push_back(mock::Price(80.00f, 0, 0, 0)); h.bars.push_back(n); }
     h.now = T + 361; p->calc(0);

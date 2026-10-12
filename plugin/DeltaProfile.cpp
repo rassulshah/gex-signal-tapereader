@@ -1,5 +1,5 @@
 /********************************************************************************
- * DeltaProfile.cpp -- lsDeltaProfile 2.5.4
+ * DeltaProfile.cpp -- lsDeltaProfile 2.5.5
  * Native chart VAP; rolling (latest bar close - 90 min, latest bar close].
  * Right placement, left-facing one-sided bars, automatic price-anchored rows.
  * Only Width / Gap / Font are configurable. Delta = ask/buy minus bid/sell.
@@ -52,7 +52,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.4";   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.5";   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile (circles stay, record unchanged)   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -954,23 +954,8 @@ bool DeltaProfile::render(ChartState& s) {
             ringed.push_back(at);
             ringAt(at, L.price, L.support ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
         }
-        // (2.5.2) a tracked signal that is no longer one of the profile's top 3 keeps its letter, just left of the profile
-        std::vector<int> offUsed;
-        for (std::size_t k = 0; k < latches.size(); ++k) {
-            const Latch& L = latches[k];
-            bool onNode = false;
-            for (std::size_t j = 0; j < profile.nodes.size(); ++j) {
-                const dp::Tick nl = profile.nodes[j].bucket * profile.ticksPerRow, nh = nl + profile.ticksPerRow - 1;
-                if (L.low <= nh && nl <= L.high) { onNode = true; break; }
-            }
-            if (onNode) continue;
-            const int y = yOf(lastBar, L.price);
-            if (y <= top + s.layout.font / 2 || y >= bottom - s.layout.font / 2) continue;
-            bool clash = false; for (std::size_t j = 0; j < offUsed.size(); ++j) if (std::abs(offUsed[j] - y) < s.layout.font + 2) clash = true;
-            if (clash) continue;
-            textRight(left - 4, y, L.code, L.support ? C_SUPPORT : C_RESISTANCE, s.layout.font, true);
-            offUsed.push_back(y);
-        }
+        // (2.5.5, Rassul 2026-10-11 18:58 "remove") no letter column for signals that left the profile: tonight it stacked every
+        // A / I since 17:00 as bare letters left of the profile. Their circles on the bars stay; the record keeps every signal.
     }
     return true;
 }

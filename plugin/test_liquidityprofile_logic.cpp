@@ -451,7 +451,45 @@ static void test_counter_needs_e_near_and_the_line() {
       Stats st; e.latest(421000, st);
       CHECK(!has(e, "s") && std::fabs(st.counter - 1.1) < 1e-9, "no s under the line, but the Counter readout still shows 1.1x"); }
 }
+
+// (0.10.0) a zone is drawn only when it stands out from the book BEHIND it; hysteresis; a level is confirmed at 2.5x+
+static void test_prominence_show_and_confirm() {
+    Engine e = fresh(); e.P.requireShown = true;
+    // 60 levels each side, base 10 per level; one 200-lot bid at 69.95 (tick 6995): band 5 ticks = 250 vs 50 behind -> 5x
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 200}}); e.updateZones(s * 1000, 0.08, 0); }
+    const Zone* z = nullptr; for (auto& q : e.zones) if (q.side == BID && q.center == 6995) z = &q;
+    CHECK(z && z->behindOk && z->rank == 1 && z->bx > 4.9 && z->bx < 5.1, "bx = band / median of the 8 bands behind (250 / 50 = 5x)");
+    CHECK(z && z->shown, "a 5x rank-1 durable zone is shown");
+    CHECK(z && z->edgeLo == z->lo && z->edgeHi == z->hi, "real edges: size at every price of the band -> the band edges");
+    CHECK(e.confirming(6995, 7000) == z, "a level inside a shown 2.5x+ support below price is confirmed");
+    CHECK(e.confirming(6995, 6990) == nullptr, "a support above price never confirms");
+    CHECK(e.confirming(6980, 7000) == nullptr, "a level outside the band is not confirmed");
+    // the plain book (no stand-out) is never shown: every other bid zone is 1x
+    int shownPlain = 0; for (auto& q : e.zones) if (q.shown && q.center != 6995) shownPlain++;
+    CHECK(shownPlain == 0, "uniform book: no zone shown (big bands everywhere are not walls)");
+    // hysteresis: drop to 1.8x (band 90 vs 50) -> stays; drop to 1.4x for > 10 s -> removed
+    const long long zid = z ? z->id : -1;
+    for (int s = 41; s <= 60; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 40}}); e.updateZones(s * 1000, 0.08, 0); }
+    z = nullptr; for (auto& q : e.zones) if (q.id == zid) z = &q;   // the same zone (its centre may drift a tick)
+    CHECK(z && z->shown && z->bx > 1.7 && z->bx < 1.9, "1.8x after showing: kept (hysteresis at 1.7x)");
+    for (int s = 61; s <= 80; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 20}}); e.updateZones(s * 1000, 0.08, 0); }
+    z = nullptr; for (auto& q : e.zones) if (q.id == zid) z = &q;
+    CHECK(!z || !z->shown, "below 1.7x for over 10 s: removed");
+}
+
+static void test_new_wall_waits_and_edge_of_book() {
+    Engine e = fresh(); e.P.requireShown = true;
+    for (int s = 0; s <= 20; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 200}}); e.updateZones(s * 1000, 0.08, 0); }
+    const Zone* z = nullptr; for (auto& q : e.zones) if (q.side == BID && q.center == 6995) z = &q;
+    CHECK(z && !z->shown, "a wall younger than 30 s is not drawn yet");
+    Engine f = fresh(); f.P.requireShown = true;          // a wall near the far edge of a 12-level book: too few bands behind
+    for (int s = 0; s <= 40; ++s) { book(f, s * 1000, 70.00, 12, {{6991, 200}}); f.updateZones(s * 1000, 0.08, 0); }
+    const Zone* g = nullptr; for (auto& q : f.zones) if (q.side == BID && q.center == 6991) g = &q;
+    CHECK(!g || (!g->behindOk && !g->shown), "fewer than 6 bands behind inside the book: never drawn");
+}
+
 int main() {
+    test_prominence_show_and_confirm(); test_new_wall_waits_and_edge_of_book();
     test_counter_s_after_e(); test_counter_s_on_the_bars_after_the_hold(); test_counter_needs_e_near_and_the_line();
     test_e_watch_then_e(); test_p_watch_then_p(); test_trapped_t(); test_reason_uses_only_confirmed_lines(); test_warnings_priority();
     test_old_orders(); test_stats_in_process_order(); test_eaten_counts_new_arrivals(); test_pulled_and_rebuilt();
