@@ -107,7 +107,7 @@ int main() {
         CHECK(minBox <= 2, "(0.9.0) the bars start at the pane's left edge");
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.11.1") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.11.2") != std::string::npos, "status file written");
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     {   // (0.10.0) the reach, the prominence, the LQ confirmation (CL logs it), no boxes across the chart, the bx label
         const std::string t = readAll(st);
@@ -130,6 +130,8 @@ int main() {
     LQState* R = static_cast<LQState*>(h.data);
     CHECK(R && R->e.marks.size() == nMarks, "(0.7.0) after a restart the record is read back (no repaint)");
     bool letters = false; for (auto& d : h.draws) if (d.type == "text" && (d.text == "e" || d.text == "p" || d.text == "t" || d.text == "e?" || d.text == "p?")) letters = true;
+    bool watches = false; for (auto& d : h.draws) if (d.type == "text" && (d.text == "e?" || d.text == "p?")) watches = true;
+    CHECK(!watches, "0.11.2: the e? / p? watches are recorded, never drawn");
     CHECK(!letters, "no letters for a touch where no e / p / t step happened (an eaten break)");
     CHECK(R->e.trades == 0, "a restart does not replay old volume as trades");
     // no depth from the feed: says so, draws no book, no crash
