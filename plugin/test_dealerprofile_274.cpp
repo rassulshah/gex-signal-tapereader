@@ -84,6 +84,12 @@ int main()
         std::vector<dpaudit::LblBox> B = { dpaudit::LblBox{ 160, 90, 170, 130, true } };
         CHECK(!dpaudit::spotFree(150, 100, 100, 116, B, 110, 900), "a price bar grew into it: it moves (once, then stays)");
     }
+    {   // (2.8.5) 13:27 ES: ONL 7857.75 sat inside the 954 zone (7855.75-7857.75) but the badge showed the 854 zone (7858-7860, 1.9x)
+        std::vector<dpaudit::LiqZ> Z; std::string why;
+        dpaudit::parseLiqZones("LIQZ,1,1000,0.25\nZ,R,7858,7860,1.9,854\nZ,R,7855.75,7857.75,1.8,954\n", 1000, Z, why);
+        const dpaudit::LiqZ* onl = dpaudit::liqAt(Z, 7857.75, false); const dpaudit::LiqZ* lon = dpaudit::liqAt(Z, 7860.0, false);
+        CHECK(onl && onl->n == 954 && lon && lon->n == 854, "ONL -> the 954 zone holding it, LonLO -> the 854 zone (as the Liquidity column names them)");
+    }
     std::printf("%d passed, %d failed\n", p, f);
     return f != 0;
 }

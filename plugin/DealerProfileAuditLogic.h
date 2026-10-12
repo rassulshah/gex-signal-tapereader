@@ -156,11 +156,15 @@ inline bool parseLiqZones(const std::string& text, long long nowUnix, std::vecto
 // the strongest zone that covers the level; null when none reaches the line (2.0x, or 1.7x when this level showed one last time)
 inline const LiqZ* liqAt(const std::vector<LiqZ>& Z, double px, bool wasShown)
 {
-    const LiqZ* best = nullptr;
+    // (2.8.5, Rassul 13:27 "they dont match the current liquidity") the zone that HOLDS the level's price, else the nearest within
+    // half a band (inside first, then the nearer centre) - the Liquidity Profile 0.13.1 names a level on that same one zone
+    const LiqZ* best = nullptr; double bestD = 0;
     for (size_t i = 0; i < Z.size(); i++) {
         const double w = Z[i].hi - Z[i].lo, pad = w / 2;
         if (px < Z[i].lo - pad - 1e-9 || px > Z[i].hi + pad + 1e-9) continue;
-        if (!best || Z[i].bx > best->bx) best = &Z[i];
+        const double out = px < Z[i].lo ? Z[i].lo - px : px > Z[i].hi ? px - Z[i].hi : 0.0;
+        const double d = out * 1000.0 + std::fabs(2 * px - Z[i].lo - Z[i].hi);
+        if (!best || d < bestD - 1e-12) { best = &Z[i]; bestD = d; }
     }
     if (!best || best->bx < (wasShown ? LIQ_KEEP_X : LIQ_SHOW_X)) return nullptr;
     return best;

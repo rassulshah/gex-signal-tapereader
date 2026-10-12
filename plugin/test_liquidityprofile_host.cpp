@@ -135,9 +135,21 @@ int main() {
             if (sz == 844 && k.top) a844 = true; if (sz == 1223 && k.top && k.names == "G2") b1223 = true; if (sz == 669 && !k.top && k.names == "HVL") h669 = true;
             if (sz == 928) no928 = false; if (sz == 712) no712 = false; }
         CHECK(a844 && b1223 && h669 && no928 && no712 && pk.size() == 3, "(0.13.0) 844 offers + 1223 bids (on G2) solid, 669 on HVL outlined, 928 / 712 hidden");
+        {   // (0.13.1) two offer zones touching ONL / LonLO (13:27 screenshot): each level on ONE zone - the one holding its price
+            LQState Q; Q.e.P.tick = 0.25;
+            auto zq = [&](long long id, int side, lqp::Tick lo, lqp::Tick hi, double size, double bx) { lqp::Zone z; z.id = id; z.side = side; z.lo = lo; z.hi = hi;
+                z.edgeLo = lo; z.edgeHi = hi; z.size = size; z.bx = bx; z.shown = true; Q.e.zones.push_back(z); };
+            zq(1, lqp::ASK, 31432, 31440, 854, 1.9);   // 7858-7860
+            zq(2, lqp::ASK, 31423, 31431, 954, 1.8);   // 7855.75-7857.75
+            LQState::Lvl onl; onl.code = "ONL"; onl.px = 31431; LQState::Lvl lon; lon.code = "LonLO"; lon.px = 31440;
+            Q.levels.push_back(onl); Q.levels.push_back(lon);
+            std::string n854, n954; for (auto& k : lqPicks(Q)) { if (Q.e.zones[k.idx].size == 854) n854 = k.names; if (Q.e.zones[k.idx].size == 954) n954 = k.names; }
+            std::printf("  854: %s | 954: %s\n", n854.c_str(), n954.c_str());
+            CHECK(n854 == "LonLO" && n954 == "ONL", "(0.13.1) LonLO on the 854 zone, ONL on the 954 zone - one zone per level");
+        }
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.13.0") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.13.0, one version everywhere)");
+    CHECK(readAll(st).find("VERSION,0.13.1") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.13.1, one version everywhere)");
     {   // (0.12.0) the level-liquidity file for the Dealer Profile badges: header + every zone of 1.5x or more, side and prominence
         const std::string lz = readAll(flex + "\\LRA-LiqZones-CL.csv"), t = readAll(st);
         CHECK(lz.compare(0, 7, "LIQZ,1,") == 0, ("(0.12.0) LRA-LiqZones-CL.csv written with its header: " + lz.substr(0, 40)).c_str());
