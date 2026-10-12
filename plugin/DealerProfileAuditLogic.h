@@ -92,6 +92,19 @@ inline short placeLabel(short want, short w, short t, short b, const std::vector
     return placeLabelPass(want, w, t, b, taken, minL, maxR, false, ok);
 }
 
+// (2.8.1, Rassul 11:18 "the levels move like the LonLO moves left then back to center then left again") a badge keeps the x it
+// was drawn at while that spot stays free (inside the bounds, clear of every other badge and price bar); it only moves when
+// something now covers it - and then stays at its new spot (never "back to the centre" on its own)
+inline bool spotFree(short l, short w, short t, short b, const std::vector<LblBox>& taken, short minL, short maxR)
+{
+    if (l < minL || l + w > maxR) return false;
+    for (size_t i = 0; i < taken.size(); ++i) {
+        if (b <= taken[i].t || t >= taken[i].b) continue;
+        if (!(l + w + 3 <= taken[i].l || l >= taken[i].r + 3)) return false;
+    }
+    return true;
+}
+
 // ---- (2.7.4) price text: the same decimals for the MenthorQ and the key-level badges ------------------------------------
 inline int priceDecimals(const std::string& m) { return m == "GC" ? 1 : m == "HG" ? 4 : m == "EU" ? 5 : m == "NG" ? 3 : 2; }
 inline std::string priceText(const std::string& m, double px)

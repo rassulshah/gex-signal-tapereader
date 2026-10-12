@@ -75,6 +75,15 @@ int main()
         CHECK(!dpaudit::parseKeyLevels("junk\nL|PDH|1|0\n", 50000, r), "no header -> nothing");
         CHECK(dpaudit::barSeconds({ 0, 3600, 7200, 10800 }) == 3600 && dpaudit::barSeconds({ 0, 180, 360, 3600 }) == 180 && dpaudit::barSeconds({ 5 }) == 0, "bar size from the stamps (hourly 3600 > 900: levels only; 3-min 180: full profile)");
     }
+    {   // (2.8.1) sticky badges: the old spot is kept while free, given up only when something covers it
+        std::vector<dpaudit::LblBox> T = { dpaudit::LblBox{ 300, 100, 400, 116 } };
+        CHECK(dpaudit::spotFree(150, 100, 100, 116, T, 110, 900), "old spot left of another badge, 3 px clear: kept");
+        CHECK(!dpaudit::spotFree(250, 100, 100, 116, T, 110, 900), "a badge now on the old spot: it moves");
+        CHECK(dpaudit::spotFree(250, 100, 120, 136, T, 110, 900), "another row: kept");
+        CHECK(!dpaudit::spotFree(100, 100, 100, 116, {}, 110, 900) && !dpaudit::spotFree(850, 100, 100, 116, {}, 110, 900), "out of bounds (the profiles / the Liquidity column): moves");
+        std::vector<dpaudit::LblBox> B = { dpaudit::LblBox{ 160, 90, 170, 130, true } };
+        CHECK(!dpaudit::spotFree(150, 100, 100, 116, B, 110, 900), "a price bar grew into it: it moves (once, then stays)");
+    }
     std::printf("%d passed, %d failed\n", p, f);
     return f != 0;
 }
