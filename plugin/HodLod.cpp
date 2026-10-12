@@ -50,7 +50,7 @@ struct HLState {
     bool faulted = false;
     long long recomputes = 0, statusWrites = 0;   // test counters (checklist #31 / #32)
     int projIdx = -1;                  // (1.1.0) the chart bar index of the 1st extreme (the projection line's x), -1 = none
-    std::string projLogged;            // (1.1.5) the last projection line written to HodLod.proj-<MKT>.csv (session|side|target)
+    std::string projLogged, projSession;   // (1.1.6) the targets already in HodLod.proj-<MKT>.csv for projSession (\n-separated keys)
     // (HL104) MenthorQ level snapshots of MenthorQLevels.csv (the one external input): one per distinct content, <= 32, newest last
     std::vector<hl::MqSnap> mq; long long mqStamp = -2; time_t mqChecked = 0; std::string mqWhy; long long mqLoads = 0;
     ~HLState() { delete T; }
@@ -240,9 +240,10 @@ void HodLod::recompute(HLState& S, long n)
     }
     hl::Cfg c; c.mkt = S.mi; c.per = per; c.tick = tick; c.readOpen = hl::readOpenFor(S.mi); c.readN = hl::readNFor(S.mi);
     std::vector<hl::ReadRow> rows;
-    hl::Tracker T = hl::runBars(c, B, B.size(), &rows);
+    hl::ProjLock lock;   // (1.1.6) the target stays where it was set until the 1st extreme is taken out
+    hl::Tracker T = hl::runBars(c, B, B.size(), &rows, &lock);
     hl::ReadOut rd = rows.empty() ? hl::ReadOut() : rows.back().out;
-    S.view = hl::buildView(T, rd, &rows, &S.mq);
+    S.view = hl::buildView(T, rd, &rows, &S.mq, &lock);
     S.projIdx = -1;                           // (1.1.0) the 1st extreme's bar on this chart, matched by its END stamp
     if (S.view.projOk) for (size_t j = B.size(); j-- > 0;) if (B[j].absEnd == S.view.projFromEnd) { S.projIdx = start + (int)j; break; }
     if (!S.mqWhy.empty()) S.view.mqWhy = S.mqWhy + (S.view.mqWhy.empty() ? "" : "; " + S.view.mqWhy);
@@ -265,24 +266,27 @@ void HodLod::writeProj(HLState& S)
     if (S.per != 180 || S.mi < 0 || v.prior || !v.projOk || !(S.tick > 0)) return;
     const int dec = hl::MKTS[S.mi].dec;
     std::string tgt = hl::trimNum((double)v.projTo * S.tick, dec);
-    std::string key = v.session + "|" + (v.projUp ? "HOD" : "LOD") + "|" + tgt;
-    if (key == S.projLogged) return;
+    // (1.1.6) one line per locked target: session | side | from | target; every key already in the file for this session is
+    // skipped, so a restart (or a replay of the day) never writes a line twice
+    std::string key = "\n" + v.session + "|" + (v.projUp ? "HOD" : "LOD") + "|" + std::to_string(v.projFrom) + "|" + tgt + "\n";
     std::string p = flexPath("HodLod.proj-" + S.mkt + ".csv"); if (p.empty()) return;
-    if (S.projLogged.empty()) {   // after a restart: the last line already logged for this session (no duplicate lines)
-        std::ifstream f(p.c_str()); std::string ln, lastKey;
+    if (S.projSession != v.session) {
+        S.projSession = v.session; S.projLogged = "\n";
+        std::ifstream f(p.c_str()); std::string ln;
         while (std::getline(f, ln)) if (ln.compare(0, v.session.size() + 1, v.session + ",") == 0) {
             std::vector<std::string> c; size_t a = 0, b; while ((b = ln.find(',', a)) != std::string::npos) { c.push_back(ln.substr(a, b - a)); a = b + 1; } c.push_back(ln.substr(a));
-            if (c.size() >= 5) lastKey = c[0] + "|" + c[2] + "|" + c[4];
+            double fr = 0; if (c.size() >= 5 && std::sscanf(c[3].c_str(), "%lf", &fr) == 1)
+                S.projLogged += c[0] + "|" + c[2] + "|" + std::to_string((long long)std::llround(fr / S.tick)) + "|" + c[4] + "\n";
         }
-        S.projLogged = lastKey.empty() ? "-" : lastKey;
-        if (key == S.projLogged) return;
     }
+    if (S.projLogged.find(key) != std::string::npos) return;
     hl::FileOps F;
     if (!F.exists(p)) F.write(p, "session,bar_end,side,from,target,exp_range,range_so_far,stage,model,version\n", true);
     char re[32]; snprintf(re, sizeof re, "%.6g", v.projRange);
-    std::string ln = v.session + "," + hl::hhmm(v.lastMod) + "," + (v.projUp ? "HOD" : "LOD") + "," + hl::trimNum((double)v.projFrom * S.tick, dec) + "," + tgt + "," + re + "," +
+    int at = v.projLockMod >= 0 ? v.projLockMod : v.lastMod;   // the bar the target was set on
+    std::string ln = v.session + "," + hl::hhmm(at) + "," + (v.projUp ? "HOD" : "LOD") + "," + hl::trimNum((double)v.projFrom * S.tick, dec) + "," + tgt + "," + re + "," +
         hl::trimNum((double)v.rangeT * S.tick, dec) + "," + std::to_string(v.projStage) + "," + (v.projV2 ? "v2" : "v1") + "," + hl::HL_VERSION + "\n";
-    if (F.write(p, ln, true)) S.projLogged = key;
+    if (F.write(p, ln, true)) S.projLogged += key.substr(1);
 }
 
 void HodLod::writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows)
@@ -433,6 +437,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the projected opposite extreme (a line + flag from the 1st extreme, the target after Range), the live read (LOD / HOD IN) and the 2nd-extreme call, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
-    p->setVersion("1.1.5");
+    p->setVersion("1.1.6");
     return p;
 }

@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.5";
+static const char* const HL_VERSION = "1.1.6";
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -715,6 +715,7 @@ struct View {
     static const int PROJ_WAIT_MIN = 30;   // minutes after the RTH open before the projection shows
     bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt;
     double projRange = NAN; int projStage = -1; bool projV2 = false;   // (1.1.5) for the projection log (HodLod.proj-<MKT>.csv)
+    int projLockMod = -1;   // (1.1.6) the minute of day the shown target was set (locked)
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
 enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_ROOM, K_RANGE, K_CLOSE, K_DIR1, K_DIR2, NALL };
@@ -800,7 +801,13 @@ struct ReadRow { std::string session; int barEnd = 0; ReadIn in; ReadOut out; st
 
 // every drawn value. `rd` = the read at the latest closed bar; `rows` = the session's per-bar reads (once the 2nd extreme printed, the
 // last 2nd-extreme call shown before it is frozen into the E cell and the header, so the A tag is judged against what was shown)
-inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<ReadRow>* rows = nullptr, const std::vector<MqSnap>* mq = nullptr)
+// (1.1.6, Rassul 2026-10-12 16:15 "it shouldn't update after the 1st extremity occurs. it should only update if the 1st extremity
+// is determined to be incorrect"): the projection is LOCKED to the first extreme it was set from - computed once, at the later of
+// (30 min after the open, the bar the current 1st extreme became the 1st extreme), and changed only when price takes that extreme
+// out (a new HOD past a HOD-first, a new LOD past a LOD-first, which also flips the side). Built from the closed bars up to the
+// lock bar only, so a restart gives the same target (no repaint).
+struct ProjLock { bool on = false; bool up = true; long long from = 0, to = 0; double range = NAN; int stage = -1; bool v2 = false; int lockMod = -1; };
+inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<ReadRow>* rows = nullptr, const std::vector<MqSnap>* mq = nullptr, const ProjLock* pl = nullptr)
 {
     View v; const Mkt& K = MKTS[T.C.mkt]; v.market = K.code; v.headLeft = K.code;
     const double tick = T.C.tick; const int dec = K.dec; const double tv = tick * K.pv;
@@ -910,6 +917,10 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         v.projOk = true; v.projUp = v.side == 1; v.projFrom = F->px; v.projFromEnd = F->endAbs;
         v.projRange = projRange; v.projStage = projStage; v.projV2 = projV2;
         v.projTo = v.projUp ? F->px + rt : F->px - rt;
+        if (pl && pl->on && pl->up == v.projUp && pl->from == F->px) {      // (1.1.6) the locked target for this 1st extreme
+            v.projTo = pl->to; v.projRange = pl->range; v.projStage = pl->stage; v.projV2 = pl->v2; v.projLockMod = pl->lockMod;
+            eRange = pl->range;                                              // Range % against the target shown
+        }
         v.projTxt = std::string(v.projUp ? "Proj HOD " : "Proj LOD ") + pxTxt((double)v.projTo * tick, dec);
     }
     if (std::isfinite(eRange) && eRange > 0) v.usedPct = (int)std::llround(100.0 * (double)v.rangeT * tick / eRange);
@@ -1186,12 +1197,32 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
 // ------------------------------------------------------------------------------------------------ run over a chart
 // Feed the closed bars [from, to) of a chart and collect one read row per closed RTH bar of the LATEST session.
 
-inline Tracker runBars(const Cfg& c, const std::vector<Bar>& bars, size_t nClosed, std::vector<ReadRow>* rows)
+// (1.1.6) lockOut: the locked projection of the latest session (see ProjLock) - set at the later of the bar the current 1st
+// extreme became the 1st extreme and the first bar 30 min after the open, from the tracker as it stood at that bar
+inline Tracker runBars(const Cfg& c, const std::vector<Bar>& bars, size_t nClosed, std::vector<ReadRow>* rows, ProjLock* lockOut = nullptr)
 {
     Tracker T(c);
     int nk = readNormKind(c.mkt), sk = readSplitKind(c.mkt);
+    long long lkSid = -1; int lkSide = -1; long long lkPx = 0; bool lkPending = false;
+    if (lockOut) *lockOut = ProjLock();
+    const long long lastDay = (nClosed && nClosed <= bars.size()) ? floorDiv(bars[nClosed - 1].absEnd, 86400) : LLONG_MIN;   // locks only for the latest day
     for (size_t i = 0; i < nClosed && i < bars.size(); i++) {
         if (!T.push(bars[i])) continue;
+        if (lockOut && T.cur.any && T.cur.lastSeq == T.seq && T.cur.sid >= lastDay) {
+            const Rth& R = T.cur; int sd = R.lod.seq < R.hod.seq ? 1 : (R.hod.seq < R.lod.seq ? 2 : 0);
+            long long px = sd == 1 ? R.lod.px : sd == 2 ? R.hod.px : 0;
+            if (R.sid != lkSid) { lkSid = R.sid; lkSide = -1; *lockOut = ProjLock(); }
+            if (sd != lkSide || px != lkPx) { lkSide = sd; lkPx = px; lkPending = sd != 0; *lockOut = ProjLock(); }
+            long long mso = (R.lastEndAbs - T.rthA(R.sid)) / 60;
+            if (lkPending && mso >= View::PROJ_WAIT_MIN) {
+                View pv = buildView(T, ReadOut(), nullptr, nullptr, nullptr);
+                if (pv.projOk && pv.projFrom == px && pv.projUp == (sd == 1)) {
+                    lockOut->on = true; lockOut->up = pv.projUp; lockOut->from = pv.projFrom; lockOut->to = pv.projTo; lockOut->range = pv.projRange;
+                    lockOut->stage = pv.projStage; lockOut->v2 = pv.projV2; lockOut->lockMod = (int)((R.lastEndAbs - R.sid * 86400) / 60);
+                    lkPending = false;
+                }
+            }
+        }
         if (!rows) continue;
         if (T.cur.any && T.cur.lastSeq == T.seq) {
             if (!rows->empty() && rows->front().session != dateTxt(T.cur.sid)) rows->clear();   // only the latest session
