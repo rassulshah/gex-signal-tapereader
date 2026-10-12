@@ -52,7 +52,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.7";   // (2.5.7) the 2026-10-12 audit fixed: F1 node edges in whole ticks (core + frozen scan), F2 only a complete build decides, F3 latch book / record per full contract (ESZ6, not ES), F4 a tracked candidate decided only by its own frozen first close, F5 in-memory keys re-keyed on a tick change, F6 an old session's unwritten lines kept and retried at 17:00; status written only when changed or every 30 s   // (2.5.6) circles drawn ONLY from the session record (frozen bar / price / colour) - the live node's moving peak bar no longer draws one, so no circle jumps or blinks   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.8";   // (2.5.8) the hourly profile's labels on the 3-min profile: the 3 strongest nodes, one label each "I 4.1x  -861", never overlapping (Rassul 12:50)   // (2.5.7) the 2026-10-12 audit fixed: F1 node edges in whole ticks (core + frozen scan), F2 only a complete build decides, F3 latch book / record per full contract (ESZ6, not ES), F4 a tracked candidate decided only by its own frozen first close, F5 in-memory keys re-keyed on a tick change, F6 an old session's unwritten lines kept and retried at 17:00; status written only when changed or every 30 s   // (2.5.6) circles drawn ONLY from the session record (frozen bar / price / colour) - the live node's moving peak bar no longer draws one, so no circle jumps or blinks   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -889,8 +889,10 @@ bool DeltaProfile::render(ChartState& s) {
         int e = base - dl;
         const dp::Node* node = NULL;
         for (std::size_t j = 0; j < profile.nodes.size(); ++j) if (profile.nodes[j].bucket == b.key) node = &profile.nodes[j];
-        bool showAmount = node != NULL;
-        for (std::size_t j = 0; j < ranked.size() && j < 3; ++j) if (ranked[j] == i) showAmount = true;
+        // (2.5.8, Rassul 12:50 "I like the [labels] on the hourly profile ... fix for the delta profile on the 3 min charts") the
+        // amount is no longer a separate text per row (on 3-min rows 1-2 px tall they piled up): it rides in the node's one label below
+        const bool showAmount = false;
+        (void)ranked;
         if (showAmount && b.delta != 0) {
             const std::string label = amount(b.delta);
             const int width = textWidth(label, s.layout.font - 1, false);
@@ -903,27 +905,36 @@ bool DeltaProfile::render(ChartState& s) {
         if (node) { VisibleNode v; v.node = node; v.y = (yt + yb) / 2; v.edge = e; nodes.push_back(v); }
     }
     // Native key/bucket lookup only. Pixel Y NEVER assigns a node to a bucket.
-    std::sort(nodes.begin(), nodes.end(), [](const VisibleNode& a, const VisibleNode& b) { return a.y < b.y; });
+    // (2.5.8) the hourly profile's labels: the 3 strongest nodes only, each ONE label "I 4.1x  -861" (letter, strength, net delta)
+    // at its row; a label that would touch another steps up / down with a tick to its row, else it is not drawn (never overlapping)
+    std::sort(nodes.begin(), nodes.end(), [](const VisibleNode& a, const VisibleNode& b) {
+        return a.node->ratio != b.node->ratio ? a.node->ratio > b.node->ratio : a.y < b.y; });
+    if (nodes.size() > 3) nodes.resize(3);
     std::vector<int> used;
     std::vector<int> ringed;   // (2.5.0) bars already circled this pass
+    struct LBox { int l, t, r, b; };
+    std::vector<LBox> placed;
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const VisibleNode& v = nodes[i]; const dp::Node& n = *v.node;
-        // (2.4.3, Rassul 2026-10-09 08:24 "are you making sure that you draw circles wherever there is absorption on the irt chart")
-        // the circle goes on the bar where the absorption happened for EVERY absorbing node, even when its letter does not fit
-        // (2.5.6, Rassul 2026-10-11 21:42 "i still see the circle toggling on and off"): no circle from the LIVE node - its peak bar moves
-        // as the 90-min profile slides, so its circle jumped and blinked. Every circle now comes only from the session record below
-        // (frozen bar, price and colour from the moment the candidate first appeared).
-        const bool absorbing = n.state.code == "A" || n.state.code == "A?";
-        std::string label = n.state.code + " " + ratio(n.ratio);
+        double net = 0; for (std::size_t j = 0; j < profile.buckets.size(); ++j) if (profile.buckets[j].key == n.bucket) net = profile.buckets[j].delta;
+        std::string label = n.state.code + " " + ratio(n.ratio) + (net != 0 ? "  " + amount(net) : std::string());
         int width = textWidth(label, s.layout.font, true);
-        if (v.edge - 4 - width < pane.left + 2 && absorbing) { label = n.state.code; width = textWidth(label, s.layout.font, true); }   // (2.4.3) the letter always shows with its circle
+        if (v.edge - 4 - width < pane.left + 2) { label = n.state.code + " " + ratio(n.ratio); width = textWidth(label, s.layout.font, true); }
         if (v.edge - 4 - width < pane.left + 2) continue;
-        int y = v.y;
-        if (!used.empty() && y - used.back() < s.layout.font + 2) y = used.back() + s.layout.font + 2;
-        if (y + s.layout.font / 2 >= bottom || y - s.layout.font / 2 <= top) { if (!absorbing) continue; y = std::max(top + s.layout.font / 2 + 1, std::min(bottom - s.layout.font / 2 - 1, v.y)); }
+        const int h = s.layout.font + 3, r = v.edge - 4, l = r - width;
+        int y = v.y; bool ok = false;
+        for (int k = 0; k <= 6 && !ok; k++) {
+            const int yy = v.y + ((k + 1) / 2) * h * (k % 2 ? -1 : 1);
+            if (yy - h / 2 <= top || yy + h / 2 >= bottom) continue;
+            bool clash = false;
+            for (const LBox& q : placed) if (l < q.r + 2 && q.l < r + 2 && yy - h / 2 < q.b && q.t < yy + h / 2) clash = true;
+            if (!clash) { y = yy; ok = true; }
+        }
+        if (!ok) continue;
         const COLOR color = n.state.support ? C_SUPPORT : C_RESISTANCE;
-        textRight(v.edge - 4, y, label, color, s.layout.font, true); used.push_back(y);
-        if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1); // visible association when labels stack
+        textRight(r, y, label, color, s.layout.font, true); used.push_back(y);
+        placed.push_back(LBox{ l, y - h / 2, r, y + h / 2 });
+        if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1); // visible association when a label stepped
     }
     // Zones supplement, rather than suppress, node letters. Avoid both overlap
     // and invisible bucket defaults by considering ONLY rendered bucket edges.
