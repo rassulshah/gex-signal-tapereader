@@ -55,7 +55,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.8.0";   // 2.8.0: every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.8.0";   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -914,7 +914,16 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
     if (now - K.at < 10 && K.n >= 0) return K.v;
     int per = 0;
     for (long i = n - 1; i > 0 && i > n - 40; i--) { long long d = (long long)dt[(int)i] - (long long)dt[(int)i - 1]; if (d > 0 && (per == 0 || d < per)) per = (int)d; }
-    if (per <= 0 || per > 3600) per = 180;
+    if (per <= 0 || per > 86400) per = 180;
+    if (per > 900) {   // (2.8.0) an hourly (15-min+) chart: the levels a 3-min chart of this market computed - never its own coarse bars
+        K.v.clear(); K.n = n; K.lastT = lastT; K.at = now;
+        const char* up = getenv("USERPROFILE"); if (!up) return K.v;
+        std::ifstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-KeyLevels-" + m + ".csv").c_str(), std::ios::binary);
+        std::string text; if (f.is_open()) { text.resize(65536); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
+        std::vector<dpaudit::KeyLv> kv;
+        if (dpaudit::parseKeyLevels(text, (long long)now, kv)) for (size_t i = 0; i < kv.size(); i++) K.v.push_back(klv::Merged{ kv[i].name, kv[i].price, kv[i].pivot });
+        return K.v;
+    }
     long from = n - (long)(15LL * 86400 / per); if (from < 0) from = 0;     // two weeks and a bit: enough for the prior week
     std::vector<klv::Bar> B; B.reserve((size_t)(n - from));
     for (long i = from; i < n; i++) {
@@ -926,6 +935,16 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
     double tk = tickOfMkt(m);
     K.v = klv::merge(klv::compute(B, per, o, cl, tk), tk);
     K.n = n; K.lastT = lastT; K.at = now;
+    {   // (2.8.0) share them with this market's hourly charts (written at each recompute: every new bar, at most every 10 s)
+        std::vector<dpaudit::KeyLv> kv; for (size_t i = 0; i < K.v.size(); i++) kv.push_back(dpaudit::KeyLv{ K.v[i].name, K.v[i].price, K.v[i].pivotOnly });
+        const char* up = getenv("USERPROFILE");
+        if (up && !kv.empty()) {
+            const std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-KeyLevels-" + m + ".csv";
+            const std::string tmp = dpaudit::exportTempPath(path, reinterpret_cast<std::uintptr_t>(getUserData()));
+            bool ok = false; { std::ofstream f(tmp.c_str(), std::ios::trunc | std::ios::binary); if (f.is_open()) { f << dpaudit::keyLevelsText(kv, (long long)now); ok = (bool)f; } }
+            if (!ok || !dpReplaceFile(tmp, path)) std::remove(tmp.c_str());
+        }
+    }
     return K.v;
 }
 
@@ -1152,10 +1171,18 @@ int DealerProfile::draw(void)
     drawMQLevels(cfg);                        // (2.3.0) under the profile: the key-level lines first
     drawKeyLevels(cfg);                       // (2.5.0) key levels + hourly swings with their touch odds
     flushLabels(cfg);                         // (2.7.4) the badges, over every line
-    render(cfg);
-    staleBadge();
-    srcTag();
-    exportBars();
+    // (2.8.0, Rassul 10:29 "add just the levels to the hourly chart") a chart of 15-min+ bars: the levels only - no profile, no
+    // stale banner, and never the bar export (the Reader's LRA-IRT-Bars file is the 3-min chart's)
+    bool levelsOnly = false;
+    {   long nb = getBarCount(); RTARRAYI dt(barDateTime); std::vector<long long> st;
+        for (long i = nb - 41 < 0 ? 0 : nb - 41; i < nb && i < (long)dt.count; i++) st.push_back((long long)dt[(int)i]);
+        levelsOnly = dpaudit::barSeconds(st) > 900; }
+    if (!levelsOnly) {
+        render(cfg);
+        staleBadge();
+        srcTag();
+        exportBars();
+    }
     writeStatus(D.nodes.empty() ? "no data" : "drawn");
     saveHostState();
     return RTX_OK;

@@ -156,6 +156,43 @@ inline std::string liqTag(const LiqZ& z)
     char b[64]; std::snprintf(b, sizeof(b), "  Liq %lld (%.1fx)", z.n, z.bx); return b;
 }
 
+// ---- (2.8.0, Rassul 10:29 "add just the levels to the hourly chart ... use our levels instead") the key levels a 3-min chart
+// computed, shared with charts of 15-min+ bars (whose bars cannot split 8:30 from 8:00): LRA-KeyLevels-<MKT>.csv =
+// "KEYLV,1,<unix>" then "L|<name>|<price>|<pivot 0/1>". A reader takes it while it is under 18 h old (written every new bar).
+struct KeyLv { std::string name; double price = 0; bool pivot = false; };
+inline std::string keyLevelsText(const std::vector<KeyLv>& v, long long nowUnix)
+{
+    std::string o = "KEYLV,1," + std::to_string(nowUnix) + "\n"; char b[160];
+    for (size_t i = 0; i < v.size(); i++) { std::snprintf(b, sizeof(b), "L|%s|%.6f|%d\n", v[i].name.c_str(), v[i].price, v[i].pivot ? 1 : 0); o += b; }
+    return o;
+}
+inline bool parseKeyLevels(const std::string& text, long long nowUnix, std::vector<KeyLv>& out)
+{
+    out.clear(); std::stringstream ss(text); std::string ln; bool head = false;
+    while (std::getline(ss, ln)) {
+        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+        if (!head) {
+            if (ln.compare(0, 8, "KEYLV,1,") != 0) return false;
+            char* e = nullptr; long long at = std::strtoll(ln.c_str() + 8, &e, 10);
+            if (!e || *e || at <= 0 || nowUnix - at > 18 * 3600 || at - nowUnix > 600) return false;
+            head = true; continue;
+        }
+        std::vector<std::string> c; std::stringstream ls(ln); std::string x; while (std::getline(ls, x, '|')) c.push_back(x);
+        if (c.size() < 4 || c[0] != "L" || c[1].empty() || c[1].size() > 40) continue;
+        char* e = nullptr; KeyLv k; k.name = c[1]; k.price = std::strtod(c[2].c_str(), &e);
+        if (!e || *e || !std::isfinite(k.price) || k.price <= 0) continue;
+        k.pivot = c[3] == "1"; out.push_back(k);
+    }
+    return head;
+}
+// the chart's bar size: the smallest positive gap between the last 40 stamps (0 = unknown)
+inline int barSeconds(const std::vector<long long>& stamps)
+{
+    int per = 0;
+    for (size_t i = stamps.size(); i-- > 1 && stamps.size() - i < 40;) { long long d = stamps[i] - stamps[i - 1]; if (d > 0 && (per == 0 || d < per)) per = (int)d; }
+    return per;
+}
+
 // ---- (2.7.4) MenthorQ level colour: green = support (PS), red = resistance (CR), yellow = HVL, cyan = the other gamma levels
 // 'G' green, 'R' red, 'Y' yellow, 'C' cyan - decided by the FIRST name of the label ("CR 0D / GW 0D" -> CR -> red)
 inline char mqKind(const std::string& label)

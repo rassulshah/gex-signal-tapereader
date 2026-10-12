@@ -67,6 +67,14 @@ int main()
         std::vector<dpaudit::LiqZ> Z2; dpaudit::parseLiqZones("LIQZ,1,1000,0.25\nZ,S,7847.5,7850,1.8,700\n", 1000, Z2, why);
         CHECK(dpaudit::liqAt(Z2, 7850, false) == nullptr && dpaudit::liqAt(Z2, 7850, true) != nullptr, "1.8x: not shown fresh, kept once shown (no blinking)");
     }
+    {   // (2.8.0) hourly charts take the 3-min chart's key levels
+        std::vector<dpaudit::KeyLv> v = { { "PDH", 7870.5, false }, { "ONL/LonLO", 7857.75, false }, { "HrHI", 7880.25, true } };
+        std::vector<dpaudit::KeyLv> r;
+        CHECK(dpaudit::parseKeyLevels(dpaudit::keyLevelsText(v, 50000), 50100, r) && r.size() == 3 && r[1].name == "ONL/LonLO" && r[1].price == 7857.75 && r[2].pivot, "round trip: names, prices, pivots");
+        CHECK(!dpaudit::parseKeyLevels(dpaudit::keyLevelsText(v, 50000), 50000 + 19 * 3600, r) && r.empty(), "a file 19 h old (yesterday's) is not used");
+        CHECK(!dpaudit::parseKeyLevels("junk\nL|PDH|1|0\n", 50000, r), "no header -> nothing");
+        CHECK(dpaudit::barSeconds({ 0, 3600, 7200, 10800 }) == 3600 && dpaudit::barSeconds({ 0, 180, 360, 3600 }) == 180 && dpaudit::barSeconds({ 5 }) == 0, "bar size from the stamps (hourly 3600 > 900: levels only; 3-min 180: full profile)");
+    }
     std::printf("%d passed, %d failed\n", p, f);
     return f != 0;
 }
