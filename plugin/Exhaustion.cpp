@@ -1,5 +1,5 @@
 /********************************************************************************
- *  Exhaustion.cpp  --  Investor/RT RTX extension  lsExhaustion  (0.1.0, 2026-10-11)
+ *  Exhaustion.cpp  --  Investor/RT RTX extension  lsExhaustion  (0.2.0, 2026-10-11; 0.2.0: overnight E only at the study's own overnight line T_overnight when both halves agree, else none - Rassul 22:05 "customize the thresholds for time of day .. overnight vs rth")
  *
  *  EXHAUSTION: is the side pushing price running out? Rassul 2026-10-11 21:17-21:28 (option A, "build exhaustion indicator").
  *  Its own pane, two lines coloured by what they mean for price:
@@ -46,7 +46,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.1.0"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.2.0"          // keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -147,7 +147,8 @@ static bool rthOf(const std::string& m, int& o, int& c) {
 }
 
 struct EXState {
-    ex::Params P; std::string params = "study 2026-10-11", proven = "testing";   // proven: the nightly STATUS line (confirmed / testing)
+    ex::Params P; std::string params = "study 2026-10-11", proven = "testing";
+    double tOvernight = 0;                                  // (0.2.0) the overnight line (0 = no E overnight) - only when the study agrees on one   // proven: the nightly STATUS line (confirmed / testing)
     bool busy = false, faulted = false;
     std::string identity, market, symbol, state = "starting", lastStatusText;
     int spb = 0; double tick = 0; int rthO = -1, rthC = -1;
@@ -246,16 +247,23 @@ void Exhaustion::calcBars(EXState& S, long count) {
     const long from = S.count == 0 ? first : std::max((long)first, S.count - 1);
     for (long i = from; i < count - 1; ++i) {
         const int k = (int)(i - first);
-        if (!S.out.eTop[k] && !S.out.eBot[k]) continue;
         const long long bt = (long long)times[(int)i];
         if (S.marks.count(bt)) continue;
         struct tm t; std::memset(&t, 0, sizeof(t));
         if (!getLocaltime((RTDATE)times[(int)i], &t)) continue;
         const int endMin = t.tm_hour * 60 + t.tm_min, startMin = endMin - std::max(1, S.spb / 60);
-        if (S.rthO >= 0 && (startMin < S.rthO || endMin > S.rthC)) continue;   // RTH only (IRT stamps the bar END)
-        const int side = S.out.eTop[k] ? -1 : 1; const double val = side < 0 ? S.out.fb[k] : S.out.fs[k];
+        const bool rth = S.rthO < 0 || (startMin >= S.rthO && endMin <= S.rthC);   // IRT stamps the bar END
+        int side = 0; double val = 0;
+        if (rth) {                                                       // RTH: the market's line (eTop / eBot)
+            if (S.out.eTop[k]) { side = -1; val = S.out.fb[k]; } else if (S.out.eBot[k]) { side = 1; val = S.out.fs[k]; }
+        } else if (S.tOvernight > 0 && k > 0) {                          // (0.2.0) overnight: only at the study's overnight line
+            const double T = S.tOvernight;
+            if (S.out.newH[k] && S.out.fb[k] >= T && !(S.out.newH[k - 1] && S.out.fb[k - 1] >= T)) { side = -1; val = S.out.fb[k]; }
+            else if (S.out.newL[k] && S.out.fs[k] >= T && !(S.out.newL[k - 1] && S.out.fs[k - 1] >= T)) { side = 1; val = S.out.fs[k]; }
+        }
+        if (!side) continue;
         S.marks[bt] = side; S.markVal[bt] = val;
-        char line[160]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|N%d S%d T%.2f", bt, side < 0 ? "top" : "bottom", val, (double)hi[(int)i], (double)lo[(int)i], S.P.N, S.P.S, S.P.T);
+        char line[160]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|N%d S%d T%.2f%s", bt, side < 0 ? "top" : "bottom", val, (double)hi[(int)i], (double)lo[(int)i], S.P.N, S.P.S, rth ? S.P.T : S.tOvernight, rth ? "" : " overnight");
         S.pending.push_back(line);
     }
     S.count = count;
@@ -281,7 +289,7 @@ void Exhaustion::load(EXState& S) {
 void Exhaustion::norms(EXState& S) {
     const std::string f = flexDir(); if (f.empty()) return;
     std::ifstream in((f + "\\LRA-ExhNorms-" + S.market + ".csv").c_str()); if (!in) return;
-    std::string line, used; int n = 0; ex::Params p = S.P;
+    std::string line, used; int n = 0; ex::Params p = S.P; double on = 0;
     while (std::getline(in, line) && ++n < 200) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         const std::vector<std::string> c = split(line, ','); double v = 0;
@@ -290,7 +298,9 @@ void Exhaustion::norms(EXState& S) {
         if (c[1] == "N" && v >= 2 && v <= 60) { p.N = (int)v; used += " N " + c[2]; }
         else if (c[1] == "S" && v >= 1 && v <= 5) { p.S = (int)v; used += " S " + c[2]; }
         else if (c[1] == "T" && v >= 1.1 && v <= 10) { p.T = v; used += " T " + c[2]; }
+        else if (c[1] == "T_overnight" && v >= 1.1 && v <= 10) { on = v; used += " T_overnight " + c[2]; }
     }
+    if (on != S.tOvernight) { S.tOvernight = on; S.count = 0; }
     if (!used.empty() && (p.N != S.P.N || p.S != S.P.S || p.T != S.P.T)) { S.P = p; S.count = 0; }
     if (!used.empty()) S.params = "data:" + used;
 }
@@ -299,7 +309,7 @@ void Exhaustion::status(EXState& S, long long now) {
     S.lastStatusMs = now;
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << EX_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
-      << "\nPARAMS,N " << S.P.N << ",S " << S.P.S << ",T " << S.P.T << "," << S.params << "\nRTH," << S.rthO << "," << S.rthC
+      << "\nPARAMS,N " << S.P.N << ",S " << S.P.S << ",T " << S.P.T << "," << S.params << "\nRTH," << S.rthO << "," << S.rthC << "\nOVERNIGHT_LINE," << S.tOvernight
       << "\nPROVEN," << S.proven << "\nNOW,buyers_fading " << S.liveB << ",sellers_fading " << S.liveS << "\nMARKS," << S.marks.size() << ",fails " << S.recFails << "\n";
     const std::string text = o.str(); if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
@@ -379,6 +389,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.1.0");   // EX_VERSION
+    p->setVersion("0.2.0");   // EX_VERSION
     return p;
 }

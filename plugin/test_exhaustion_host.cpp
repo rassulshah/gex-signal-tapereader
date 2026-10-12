@@ -48,5 +48,13 @@ int main() {
     Exhaustion* z = static_cast<Exhaustion*>(CreateExtension()); z->calc(0);
     CHECK(z->testState()->marks.empty() && z->testState()->liveB >= 1.0, "outside RTH the lines are drawn but no E prints");
     z->destroy();
+    {   // (0.2.0) an overnight line from the study: E overnight at the first bar at or over it (4.0x here: 2000/450 = 4.4 at bar 33)
+        const std::string fx = std::string(tmp) + "x\\InvestorRT\\rtx\\lsFlexLevels";
+        std::ofstream nf((fx + "\\LRA-ExhNorms-ES.csv").c_str()); nf << "PARAM,N,5\r\nPARAM,S,2\r\nPARAM,T,3.0\r\nPARAM,T_overnight,4.0\r\nSTATUS,testing,x\r\n"; nf.close();
+        h.data = nullptr; Exhaustion* w = static_cast<Exhaustion*>(CreateExtension()); w->calc(0);
+        EXState* W = w->testState();
+        CHECK(W->tOvernight == 4.0 && W->marks.size() == 1 && W->marks.count((long long)h.bars[33].time), "overnight E at the overnight line (4.0x), not at the RTH line");
+        w->destroy();
+    }
     std::printf("%d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }
