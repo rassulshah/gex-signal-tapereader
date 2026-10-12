@@ -107,7 +107,7 @@ int main() {
         CHECK(minBox <= 2, "(0.9.0) the bars start at the pane's left edge");
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.11.2") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.11.3") != std::string::npos, "status file written");
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     {   // (0.10.0) the reach, the prominence, the LQ confirmation (CL logs it), no boxes across the chart, the bx label
         const std::string t = readAll(st);
@@ -121,7 +121,11 @@ int main() {
         lqp::Mark lo = m; lo.value = 1.0; lo.barTime = (long long)h.bars[h.bars.size() - 4].time;
         S->e.marks.push_back(m); S->e.marks.push_back(lo); h.draws.clear(); p->draw();
         int ns = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "s") ++ns;
-        CHECK(ns == 1, "(0.8.0) s drawn at or over the Counter line (2.0x), not under it (1.0x)");
+        CHECK(ns == 0, "0.11.3: no s on the price chart (recorded only)");
+        { lqp::Mark pm; pm.code = "Pull"; pm.value = 0.95; pm.side = lqp::BID; pm.barTime = (long long)h.bars[h.bars.size() - 3].time; lqp::Mark em = pm; em.code = "Exh"; em.value = 0.1; lqp::Mark tm = pm; tm.code = "t";
+          S->e.marks.push_back(pm); S->e.marks.push_back(em); S->e.marks.push_back(tm); h.draws.clear(); p->draw();
+          int nl = 0; for (auto& d : h.draws) if (d.type == "text" && (d.text == "p" || d.text == "e" || d.text == "t" || d.text == "s")) ++nl;
+          CHECK(nl == 0, "0.11.3: p / e / t at the line are recorded, never drawn on the price chart"); S->e.marks.pop_back(); S->e.marks.pop_back(); S->e.marks.pop_back(); }
         S->e.marks.pop_back(); S->e.marks.pop_back();
     }
     p->destroy(); CHECK(h.data == nullptr, "destroy frees the slot");
@@ -131,7 +135,7 @@ int main() {
     CHECK(R && R->e.marks.size() == nMarks, "(0.7.0) after a restart the record is read back (no repaint)");
     bool letters = false; for (auto& d : h.draws) if (d.type == "text" && (d.text == "e" || d.text == "p" || d.text == "t" || d.text == "e?" || d.text == "p?")) letters = true;
     bool watches = false; for (auto& d : h.draws) if (d.type == "text" && (d.text == "e?" || d.text == "p?")) watches = true;
-    CHECK(!watches, "0.11.2: the e? / p? watches are recorded, never drawn");
+    CHECK(!watches, "the e? / p? watches are recorded, never drawn");
     CHECK(!letters, "no letters for a touch where no e / p / t step happened (an eaten break)");
     CHECK(R->e.trades == 0, "a restart does not replay old volume as trades");
     // no depth from the feed: says so, draws no book, no crash
