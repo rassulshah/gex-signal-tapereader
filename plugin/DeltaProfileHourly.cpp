@@ -1,5 +1,6 @@
 /********************************************************************************
- * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.0.2 (DLT-H), 2026-10-12: the profile at the price scale (no Dealer Profile
+ * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.0.3 (DLT-H), 2026-10-12: A / A? circles are placed before I circles (an A is never the
+ *   one skipped for a nearby I). 1.0.2: the profile at the price scale (no Dealer Profile
  *   reserve on the hourly chart); every absorption candidate gets its circle (several per candle at different prices). 1.0.1: minutes older than the asked window are skipped and old
  *   minutes without volume at price are not waited on (NQ showed NO 1M: IRT returned 6 weeks of minutes). 1.0.0 2026-10-09, task #302
  * The Delta Profile for the HOURLY chart. A separate plugin: its own files, header guard, namespace, class, DLL and
@@ -900,6 +901,10 @@ bool DeltaProfileHourly::render(HostState& h) {
     }
     std::sort(marks.begin(), marks.end(), [](const std::pair<int, const dph::Latch*>& a, const std::pair<int, const dph::Latch*>& b) {
         const dph::Latch& x = *a.second; const dph::Latch& y = *b.second;
+        // (1.0.3, Rassul 12:59 "is there a circle associated with the A") absorption first: an A / A? circle is never the one
+        // skipped for an I (initiative) circle that sits too close to it on the same candle
+        const bool ax = x.code != "I", ay = y.code != "I";
+        if (ax != ay) return ax;
         if (std::fabs(x.net) != std::fabs(y.net)) return std::fabs(x.net) > std::fabs(y.net);
         if (dph::decidedCode(x.code) != dph::decidedCode(y.code)) return dph::decidedCode(x.code);
         return x.id < y.id;
@@ -962,6 +967,6 @@ extern "C" cppExtension* CreateExtension() {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile Hourly - DLT-H");
-    p->setVersion("1.0.2");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
+    p->setVersion("1.0.3");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
     return p;
 }
