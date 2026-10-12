@@ -41,7 +41,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.10.0";
+static const char* const VERSION = "0.11.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -125,6 +125,7 @@ struct Stats { double attack = -1, eaten = -1, exh = -1, pulled = -1, rebuilt = 
 
 struct Attempt {
     long long zoneId = 0; int side = BID; Tick lo = 0, hi = 0; Ms tA = 0; int barA = 0;
+    bool fromDelta = false; Tick dpLo = 0, dpHi = 0;   // (0.11.0) started by a Delta Profile A / A? (not a shown zone) - its price
     double shown = 0, attackVol = 0, counterVol = 0, pulled = 0, added = 0, refill = 0, minSize = 0, startSize = 0, curSize = 0;
     std::vector<std::pair<Ms, double>> attacks;  // (time, attacker contracts) inside the zone since arrival
     bool breachTrade = false;                    // an attacker trade beyond the far edge
@@ -238,7 +239,7 @@ public:
         if (bar < 0 || !(buy >= 0) || !(sell >= 0) || !finite(buy) || !finite(sell)) return;
         BarNorm& b = barNorm[bar]; b.buy = buy; b.sell = sell; b.ticks = std::max(1, ticks);
         b.range = hi > 0 && lo > 0 && hi >= lo; b.hi = hi; b.lo = lo;
-        while (barNorm.size() > 64) barNorm.erase(barNorm.begin());
+        while (barNorm.size() > 400) barNorm.erase(barNorm.begin());   // (0.11.0) the always-on Aggressive half: a screen of bars
     }
     // the attackers' (sellers at a support, buyers at a resistance) average volume per bar per tick traded over the 20 bars before 'bar';
     // -1 until 15 of those bars are known
@@ -248,6 +249,30 @@ public:
             s += (side == BID ? i->second.sell : i->second.buy) / (double)i->second.ticks; ++n;
         }
         return n >= 15 && s > 0 ? s / n : -1;
+    }
+    // (0.11.0) the always-on Aggressive half: a bar's buyers' (side ASK) / sellers' (side BID) volume x their average over the 20 bars
+    // before it (-1 until 15 are known)
+    double paceX(int bar, bool buyers) const {
+        std::map<int, BarNorm>::const_iterator me = barNorm.find(bar); if (me == barNorm.end()) return -1;
+        double s = 0; int n = 0;
+        for (std::map<int, BarNorm>::const_iterator i = barNorm.lower_bound(bar - 20); i != barNorm.end() && i->first < bar; ++i) { s += buyers ? i->second.buy : i->second.sell; ++n; }
+        if (n < 15 || s <= 0) return -1;
+        return (buyers ? me->second.buy : me->second.sell) / (s / n);
+    }
+    // (0.11.0) the always-on Passive half: resting bids below / offers above price within the reach, per closed bar (the book at its close)
+    std::map<int, std::pair<double, double>> nearBook;
+    std::pair<double, double> nearNow() const {
+        std::pair<double, double> r(0, 0); if (!havePx || !haveBook) return r;
+        const Tick reach = P.reachTicks > 0 ? P.reachTicks : (Tick)std::max(10, 6 * hw);
+        for (std::map<Tick, double>::const_iterator i = book[BID].lower_bound(lastPx - reach); i != book[BID].end() && i->first <= lastPx; ++i) r.first += i->second;
+        for (std::map<Tick, double>::const_iterator i = book[ASK].lower_bound(lastPx); i != book[ASK].end() && i->first <= lastPx + reach; ++i) r.second += i->second;
+        return r;
+    }
+    // (0.11.0) Delta Profile absorption (A / A?) price bands of the last hour: an attempt also starts at one of them (not only at a shown zone)
+    std::vector<std::pair<Tick, Tick>> dpZone[2];
+    const std::pair<Tick, Tick>* dpAt(int side, Tick lo, Tick hi) const {
+        for (size_t i = 0; i < dpZone[side].size(); ++i) if (dpZone[side][i].first <= hi && lo <= dpZone[side][i].second) return &dpZone[side][i];
+        return nullptr;
     }
     // (0.8.0) the DEFENDERS' (buyers at a support, sellers at a resistance) average volume per bar per tick over the 20 bars before 'bar'
     double defNormal(int side, int bar) const { return attackNormal(side == BID ? ASK : BID, bar); }
@@ -451,6 +476,7 @@ public:
     void onBarClose(int bar, long long barTime, Ms barEnd, double close, const std::vector<std::pair<Tick, Tick>>& deltaAbsorbBid,
                     const std::vector<std::pair<Tick, Tick>>& deltaAbsorbAsk) {
         const Tick c = toTick(close, P.tick);
+        if (haveBook && havePx) { nearBook[bar] = nearNow(); while (nearBook.size() > 400) nearBook.erase(nearBook.begin()); }   // (0.11.0)
         // (0.8.0) s after a touch already decided as held (the defenders often step in on the bars after the close back out): finished
         // attempts first, so one closed on THIS bar is not read twice
         for (size_t i = 0; i < finished.size(); ++i) {
@@ -766,7 +792,7 @@ private:
             for (size_t i = 0; i < zones.size(); ++i) {
                 Zone& z = zones[i];
                 if (z.side != side || !z.durable(t, P.persistMs) || t - z.seen > P.graceMs) continue;
-                if (P.requireShown && !z.shown) continue;                // (0.10.0) only a drawn zone starts an absorption read
+                if (P.requireShown && !z.shown && !dpAt(side, z.lo, z.hi)) continue;   // (0.10.0) a drawn zone, (0.11.0) or a Delta Profile A on it
                 if (px < z.lo || px > z.hi) continue;
                 if (z.inAttempt) { best = nullptr; break; }               // already being defended: nothing new
                 const bool fromOutside = z.side == BID ? lastPx > z.hi : lastPx < z.lo;
@@ -778,6 +804,7 @@ private:
             const double shown = band(z.side, z.lo, z.hi);
             if (shown < P.minShown) continue;
             Attempt a; a.zoneId = z.id; a.side = z.side; a.lo = z.lo; a.hi = z.hi; a.tA = t; a.barA = formBar > 0 ? formBar : curBar;
+            if (const std::pair<Tick, Tick>* d = dpAt(z.side, z.lo, z.hi)) { a.fromDelta = !z.shown; a.dpLo = d->first; a.dpHi = d->second; }
             a.shown = shown; a.startSize = a.minSize = a.curSize = shown;
             a.oldShare = zoneOld(z.side, z.lo, z.hi, t);
             const Tick w = z.hi - z.lo + 1;                               // (0.3.0) the other side's band: same width, just beyond the zone

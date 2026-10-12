@@ -40,6 +40,16 @@ int main() {
     LiquidityProfile* p = static_cast<LiquidityProfile*>(CreateExtension());
     for (int s = 0; s < 45; ++s) { h.now = t0 + s; p->calc(0); }
     LQState* S = static_cast<LQState*>(h.data);
+    {   // (0.11.0) always on: before any touch the pane already draws the bars, both headers and what it is watching
+        h.draws.clear(); p->draw();
+        bool buyers = false, watching = false, bidsNear = false; int boxes = 0;
+        for (auto& d : h.draws) { if (d.type == "text" && d.text == "Buyers: ") buyers = true; if (d.type == "text" && d.text.find("Watching:") == 0) watching = true;
+            if (d.type == "text" && d.text == "Bids near price: ") bidsNear = true; if (d.type == "box") ++boxes; }
+        CHECK(buyers, "(0.11.0) the Aggressive header reads Buyers: now (line) with no touch");
+        CHECK(bidsNear, "(0.11.0) the Passive header reads the resting bids / offers near price");
+        CHECK(watching, "(0.11.0) idle, the readout says what it is watching");
+        CHECK(boxes >= 4, "(0.11.0) the buyers / sellers bars are drawn with no touch");
+    }
     // six quiet live bars first
     unsigned long T = t0;
     for (int k = 0; k < 6; ++k) {
@@ -63,6 +73,13 @@ int main() {
     bool head = false, lines = false; int nl = 0; for (auto& d : h.draws) { if (d.type == "text" && d.text.find("AGGRESSIVE") == 0) head = true; if (d.type == "line") ++nl; }
     lines = nl >= 8;
     CHECK(head, "(0.8.0) the panes are labelled AGGRESSIVE / PASSIVE");
+    {   // (0.11.0) the touch = a yellow window with its price, and the readout names it
+        bool win = false, rd = false;
+        for (auto& d : h.draws) { if (d.type == "text" && d.color == 0x003CC8FA && d.text.find("79.9") == 0) win = true;
+            if (d.type == "text" && (d.text.find("ABSORPTION  ") == 0 || d.text.find("LAST  ") == 0)) rd = true; }
+        CHECK(win, "(0.11.0) the absorption window carries its price in yellow");
+        CHECK(rd, "(0.11.0) the readout is headed with the absorption it reads");
+    }
     CHECK(lines, "buyers / sellers aggression and both net resting lines are drawn");
     const lqp::Attempt* a = !S->e.finished.empty() ? &S->e.finished.back() : (!S->e.attempts.empty() ? &S->e.attempts.back() : nullptr);
     CHECK(a && a->flowBars.size() >= 2, "the touch has per-bar flow");

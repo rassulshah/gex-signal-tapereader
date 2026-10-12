@@ -488,7 +488,32 @@ static void test_new_wall_waits_and_edge_of_book() {
     CHECK(!g || (!g->behindOk && !g->shown), "fewer than 6 bands behind inside the book: never drawn");
 }
 
+// (0.11.0) an absorption read also starts at a Delta Profile A on a zone too small to be drawn; the always-on pace and near book
+static void test_delta_A_starts_a_read_and_always_on_numbers() {
+    Engine e = fresh(); e.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 8}}); e.updateZones(s * 1000, 0.08, 0); }   // a plain 18-lot level
+    const Zone* z = nullptr; for (auto& q : e.zones) if (q.side == BID && q.lo <= 6995 && q.hi >= 6995) z = &q;
+    CHECK(z && !z->shown, "fixture: the band at 69.95 is not 2x the book behind (not drawn)");
+    e.onTrade(41000, 70.03, 3, 0); e.onTrade(41500, 69.95, 0, 4);
+    CHECK(e.attempts.empty(), "no Delta Profile A: no read at an undrawn band");
+    Engine f = fresh(); f.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(f, s * 1000, 70.00, 60, {{6995, 8}}); f.updateZones(s * 1000, 0.08, 0); }
+    f.dpZone[BID].push_back(std::make_pair((Tick)6995, (Tick)6995));         // the Delta Profile's A (support) at 69.95
+    f.onTrade(41000, 70.03, 3, 0); f.onTrade(41500, 69.95, 0, 4);
+    CHECK(f.attempts.size() == 1 && f.attempts[0].fromDelta && f.attempts[0].dpLo == 6995, "a Delta Profile A starts the read, marked as from the Delta Profile");
+    for (int b = 0; b < 20; ++b) f.setBar(b, 100, 50, 5);
+    f.setBar(20, 250, 25, 5);
+    CHECK(std::fabs(f.paceX(20, true) - 2.5) < 1e-9 && std::fabs(f.paceX(20, false) - 0.5) < 1e-9, "buyers 2.5x / sellers 0.5x their 20-bar average");
+    CHECK(f.paceX(10, true) < 0, "under 15 bars before it: no number");
+    const std::pair<double, double> nb = f.nearNow();
+    CHECK(nb.first > 0 && nb.second > 0, "resting bids below / offers above price are summed");
+    std::vector<std::pair<Tick, Tick>> none;
+    f.onBarClose(21, 1000, 180000, 69.96, none, none);
+    CHECK(f.nearBook.count(21) == 1, "each closed bar keeps the near-price book");
+}
+
 int main() {
+    test_delta_A_starts_a_read_and_always_on_numbers();
     test_prominence_show_and_confirm(); test_new_wall_waits_and_edge_of_book();
     test_counter_s_after_e(); test_counter_s_on_the_bars_after_the_hold(); test_counter_needs_e_near_and_the_line();
     test_e_watch_then_e(); test_p_watch_then_p(); test_trapped_t(); test_reason_uses_only_confirmed_lines(); test_warnings_priority();
