@@ -707,7 +707,8 @@ struct View {
     bool haveHle = false; hle::Expect ex; std::string hleWhy;    // the v2 expected model at the last closed bar (current session)
     int callT = -1, callSrc = 0; double callP = NAN; bool callIn = false;     // the 2nd-extreme call in the E cell / header
     double callShow = NAN; bool callQ = false, callLate = false, callDim = false;
-    std::string headMain, headTail, headTailShort, headLeftTxt; unsigned headTailCol = C_SLATE;   // (HL101) the header in two colours: the read + the 2nd call
+    std::string headMain, headTail, headTailShort, headLeftTxt; unsigned headTailCol = C_SLATE;
+    std::vector<Seg> headLeftSegs;   // (1.1.2, Rassul 10-12 "add colour") the left half in parts: "ES RTH 8:30-3:00" | "Range 70%" | "Proj LOD ..."   // (HL101) the header in two colours: the read + the 2nd call
     // (1.1.0, Rassul 2026-10-11 16:54) the PROJECTED opposite extreme: the 1st extreme + / - the expected full RTH range (hle median,
     // never below the range so far). Study lra.ext_yardstick: the expected range beat ATR (and ATR + range used) in 6 of 7 markets
     // on unseen days (crude a tie). Drawn as a vertical line from the 1st extreme with a flag + "Proj HOD 7,870.00"; in the header.
@@ -725,6 +726,7 @@ static const int NSHOWN = (int)(sizeof(SHOWN) / sizeof(SHOWN[0]));
 static const bool READ_IN_TEST = false;   // (coordinator 2026-10-09 20:30) the IN read is LIVE: "LOD IN 87%" (pInShow)
 static_assert(sizeof(((View*)0)->E) / sizeof(Cell) == NALL, "View cells must match the keys");
 static const unsigned C_AMBER = 0x00F59E0B;     // only for an early / late tag
+static const unsigned C_BLUE = 0x0060A5FA;      // (1.1.2) the range used while the day still has room (below the expected band)
 static const unsigned C_DIM = 0x006B7280;       // (HL101) a call that is not qualified (or in test): shown, with its honest %, dimmer
 static const int WIN_HALF = 30;                 // the E 1st-time window: the model's first-extreme time +- 30 min
 
@@ -765,7 +767,8 @@ inline void readParts(const ReadOut& r, int readOpen, int readN, std::string& ma
     std::string c = callTxt(r);
     tail.clear(); tailDim = r.callDim;
     if (!c.empty()) {
-        std::string who = r.callIn ? std::string("expect ") + (r.side == 0 ? "HOD" : "LOD") : std::string("2nd");
+        const bool named = r.state == 1 && !r.fomcPause && r.pIn > 0.30;   // (1.1.2) as the header: the opposite side once the 1st is named
+        std::string who = r.callIn ? std::string("expect ") + (r.side == 0 ? "HOD" : "LOD") : (named ? std::string(r.side == 0 ? "HOD" : "LOD") : std::string("2nd"));
         tail = std::string("   \xB7   ") + who + (r.callSrc == 2 ? ": " : " ") + c;
     }
     if (r.state == 0) { main = "read: building"; return; }
@@ -1108,6 +1111,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         if (v.prior) {
             int y, m, d; civilFromDays(R->sid, y, m, d); char b[64]; snprintf(b, sizeof b, "prior RTH %d/%02d", m, d);
             v.headLeftTxt = rthT; v.headMain = b; v.headerCol = C_GREY;
+            v.headLeftSegs.push_back(Seg{ rthT, C_GREY });
         } else {
             std::string mn, tl; bool dim = false; readParts(rh, T.C.readOpen, T.C.readN, mn, tl, dim);
             // (HL105, mockup 6) the day's range used so far (today's RTH range / the expected full range, hle native)
@@ -1115,12 +1119,29 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                           + (v.projOk ? "   " + v.projTxt : std::string());   // (1.1.0) the target after Range
             v.headMain = mn;
             v.headerCol = (v.complete || rd.state != 1) ? C_GREY : C_SLATE;
+            // (1.1.2, Rassul 10-12 "colour both", "colour the range") the read in its side's colour: the LOD named (LOD IN ..) = green,
+            // the HOD named = red; NOT IN / building / FOMC pause stay neutral. Range used: blue while below the expected band's low
+            // end (25% of days finish there or lower: the day still has room), amber from there on (the range is typically done).
+            const bool named = rd.state == 1 && !rd.fomcPause && rd.pIn > 0.30 && !v.complete;
+            if (named) v.headerCol = rd.side == 0 ? C_GREEN : C_RED;
+            const unsigned base = v.complete ? C_GREY : C_SLATE;
+            v.headLeftSegs.push_back(Seg{ rthT, base });
+            if (v.usedPct >= 0) {
+                double loPct = (v.haveHle && std::isfinite(v.ex.rangeLo) && std::isfinite(v.ex.range) && v.ex.range > 0) ? 100.0 * v.ex.rangeLo / v.ex.range : 80.0;
+                if (loPct > 80.0) loPct = 80.0;   // late in the day the band closes on the range so far: 80% is amber regardless
+                unsigned rc = v.complete ? C_GREY : ((double)v.usedPct >= loPct ? C_AMBER : C_BLUE);
+                v.headLeftSegs.push_back(Seg{ "   Range " + std::to_string(v.usedPct) + "%", rc });
+            }
+            if (v.projOk) v.headLeftSegs.push_back(Seg{ "   " + v.projTxt, v.projUp ? C_GREEN : C_RED });
         }
         // (HL105, Rassul) + the 2nd-extreme call, the same source / rules as the 2nd Time cell: "   HOD after 9:30 76%" (stage 3),
         // "   HOD: close 14% \xB7 else 11:30-2:30" before it; "2nd" while the 1st is not IN; grey when not qualified / in test
         v.headTail.clear(); v.headTailShort.clear();
         if (!v.prior && !(v.complete && rh.callSrc == 0)) {
-            std::string who = rh.callIn ? (rh.side == 0 ? "HOD" : "LOD") : "2nd";
+            // (1.1.2, Rassul 10-12 "once it says LOD in, instead of 2nd say HOD"): the read names the 1st extreme (IN, or IN ..%?) ->
+            // the 2nd is the opposite side, in its colour (HOD green after the LOD, LOD red after the HOD); "2nd" only when it names none
+            const bool namedT = rd.state == 1 && !rd.fomcPause && rd.pIn > 0.30;
+            std::string who = (rh.callIn || namedT) ? (rh.side == 0 ? "HOD" : "LOD") : "2nd";
             if (rh.callSrc == 3 && rh.callT >= 0 && std::isfinite(rh.callShow)) {
                 std::string p = std::to_string((int)std::llround(rh.callShow * 100)) + "%";
                 v.headTail = "   " + who + " after " + clk(rh.callT) + " " + p; v.headTailShort = "   " + who + " >" + clk(rh.callT) + " " + p;
@@ -1130,9 +1151,15 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 v.headTailShort = "   " + c;
                 v.headTail = v.headTailShort + (rh.elseFrom >= 0 && rh.elseTo > rh.elseFrom ? " \xB7 else " + clk(rh.elseFrom) + "-" + clk(rh.elseTo) : "");
             }
-            v.headTailCol = rh.callDim || v.complete ? (rh.callDim ? C_DIM : C_GREY) : v.headerCol;
+            v.headTailCol = v.complete ? C_GREY : ((rh.callIn || namedT) ? (rh.side == 0 ? C_GREEN : C_RED) : (rh.callDim ? C_DIM : v.headerCol));
         }
         v.header = v.headLeftTxt + "   " + v.headMain + v.headTail;
+        // (1.1.2, Rassul 10-12 "add colour") the A row follows the header: once the read names the 1st extreme, the 1st and 2nd
+        // Time cells take that side's colour (LOD named = green, HOD named = red); the Range cell keeps its rule (grey until the 2nd prints)
+        if (!v.prior && !v.complete && rd.state == 1 && !rd.fomcPause && rd.pIn > 0.30) {
+            const unsigned sc = rd.side == 0 ? C_GREEN : C_RED;
+            for (int k : { (int)K_1ST, (int)K_2ND }) if (!v.A[k].s.empty()) { v.A[k].col = sc; if (!v.A[k].s2.empty()) v.A[k].col2 = sc; }
+        }
     }
     return v;
 }
@@ -1208,8 +1235,9 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
     Box area = { left, pane.t, (std::min)(freeR, (int)pane.r), pane.b - 1 };
     // three tries: 9 pt equal columns, 8 pt equal columns, 8 pt columns sized to their content (the HG close: the 2nd call
     // "close push 10% . else 8:45-10:00" made three equal columns 640 px wide - past the last bar on a 1012 px chart)
-    for (int attempt = 0; attempt < 3; attempt++) {
-        const int fs = attempt == 0 ? 9 : 8; const bool natural = attempt == 2;
+    // (1.1.2, Rassul 10-12 "bigger font, better readability") 11 pt first; every chart tries the same sizes in the same order
+    for (int attempt = 0; attempt < 4; attempt++) {
+        const int fs = attempt == 0 ? 11 : (attempt == 3 ? 9 : 10); const bool natural = attempt >= 2;
         int hfs = fs, rowH = lineH(fs) - 2, headH = rowH + 2;
         auto cellW = [&](const Cell& C) {
             int w = M(C.s, fs, C.bold);
@@ -1229,7 +1257,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         int W = (std::max)(lw + colsW + 4, 2 * halfW(tail));
         if (W > area.r - area.l && !v.headTailShort.empty()) { tail = v.headTailShort; W = (std::max)(lw + colsW + 4, 2 * halfW(tail)); }
         int H = headH + 3 * rowH + 2;
-        if (W > area.r - area.l && attempt < 2) continue;              // a smaller font, then content-sized columns, before spilling
+        if (W > area.r - area.l && attempt < 3) continue;              // a smaller font, then content-sized columns, before spilling
         if (area.l + W > pane.r - pad) continue;                      // cannot fit even past the last bar: smaller font / the note
         if (H + 40 > pane.b - pane.t) break;
         if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);   // the content cannot shrink further: the least spill
@@ -1241,7 +1269,13 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         {   // the header: two equal cells, a thin separator in the middle, each part centred in its cell
             int mid = (T.l + T.r) / 2;
             int wl = M(v.headLeftTxt, hfs, true), w1 = M(v.headMain, hfs, true), w2 = M(tail, hfs, true);
-            addText(L, (T.l + mid) / 2 - wl / 2, T.t + 1, T.t + headH, v.headLeftTxt, v.headerCol, hfs, true, wl, R_TABLE, -1);
+            if (v.headLeftSegs.empty()) addText(L, (T.l + mid) / 2 - wl / 2, T.t + 1, T.t + headH, v.headLeftTxt, v.headerCol, hfs, true, wl, R_TABLE, -1);
+            else {   // (1.1.2) the parts in their colours, centred as one
+                int sw = 0; for (size_t q = 0; q < v.headLeftSegs.size(); q++) sw += M(v.headLeftSegs[q].s, hfs, true);
+                int xx = (T.l + mid) / 2 - sw / 2;
+                for (size_t q = 0; q < v.headLeftSegs.size(); q++) { int w = M(v.headLeftSegs[q].s, hfs, true);
+                    addText(L, xx, T.t + 1, T.t + headH, v.headLeftSegs[q].s, v.headLeftSegs[q].col, hfs, true, w, R_TABLE, -1); xx += w; }
+            }
             addLine(L, mid, T.t + 3, mid, T.t + headH - 3, C_BORDER, 1, R_TABLE);
             int xr = (mid + T.r) / 2 - (w1 + w2) / 2;
             addText(L, xr, T.t + 1, T.t + headH, v.headMain, v.headerCol, hfs, true, w1, R_TABLE, -1);
@@ -1463,7 +1497,7 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
 // The target is always shown: when it is past the pane's edge the line runs to the edge and the flag + text sit there with
 // "(below)" / "(above)"; when the line would cross the table it stops at the table's edge and the flag sits there. Text never
 // overlaps the table or another label (right of the flag, else left of the line, else nudged off the table).
-static const int PROJ_FLAG_W = 16, PROJ_FLAG_H = 12, PROJ_FS = 9, PROJ_GAP = 8;
+static const int PROJ_FLAG_W = 16, PROJ_FLAG_H = 12, PROJ_FS = 11, PROJ_GAP = 8;
 inline bool boxHit(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int x)
 {
