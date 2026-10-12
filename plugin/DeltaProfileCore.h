@@ -107,8 +107,9 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     }
     if (formed < 0 || peak < 0) return out;
     out.peakBar = bars[static_cast<std::size_t>(peak)].index;
-    const double lo = static_cast<double>(low) * tick, hi = static_cast<double>(high) * tick;
-    const double eps = tick * 1e-6;
+    // (2.5.7, audit F1) beyond the node is decided in WHOLE TICKS (IRT prices and tick are float: a close ON the node's edge could
+    // read a hair beyond it in double); a price's own tick key against the node's keys [low, high]
+    auto key = [tick](double price) -> Tick { const double q = price / tick; return finite(q) && std::fabs(q) < 9.0e15 ? static_cast<Tick>(std::llround(q)) : 0; };
     // (2.5.0, Rassul 2026-10-09 13:48 "lets simplify the rules to a close below the bearish accumulation and vice versa for
     // bullish") the FIRST closed bar after the node formed that closes beyond it decides, and the decision is final:
     //   a RED bar closing below the node -> price went down from it;  a GREEN bar closing above -> price went up from it.
@@ -121,8 +122,10 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
         if (!b.closed) continue;
         // (2.5.0, Rassul 13:55 "a red bar close below for bearish absorption and a green bar above for a bullish absorption")
         // the deciding bar must close beyond the node in its own colour: red (close < open) below, green (close > open) above
-        if (b.close < lo - eps && b.close < b.open) { winner = -1; out.decidedBar = b.index; break; }
-        if (b.close > hi + eps && b.close > b.open) { winner = 1; out.decidedBar = b.index; break; }
+        if (!finite(b.close) || !finite(b.open)) continue;
+        const Tick ck = key(b.close);
+        if (ck < low && b.close < b.open) { winner = -1; out.decidedBar = b.index; break; }
+        if (ck > high && b.close > b.open) { winner = 1; out.decidedBar = b.index; break; }
     }
     if (winner != 0) {
         out.code = ((winner == 1) == sell) ? "A" : "I";
@@ -130,7 +133,7 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     } else {
         out.code = "A?"; out.support = sell;
         const Bar& last = bars.back();
-        const bool initiative = sell ? last.low < lo - 0.5 * tick - eps : last.high > hi + 0.5 * tick + eps;
+        const bool initiative = sell ? (finite(last.low) && key(last.low) < low) : (finite(last.high) && key(last.high) > high);   // a full tick beyond
         if (static_cast<std::size_t>(formed + 1) < bars.size() && initiative) {
             out.code = "I?"; out.support = !sell;
         }

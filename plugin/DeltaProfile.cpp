@@ -52,7 +52,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.6";   // (2.5.6) circles drawn ONLY from the session record (frozen bar / price / colour) - the live node's moving peak bar no longer draws one, so no circle jumps or blinks   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.7";   // (2.5.7) the 2026-10-12 audit fixed: F1 node edges in whole ticks (core + frozen scan), F2 only a complete build decides, F3 latch book / record per full contract (ESZ6, not ES), F4 a tracked candidate decided only by its own frozen first close, F5 in-memory keys re-keyed on a tick change, F6 an old session's unwritten lines kept and retried at 17:00; status written only when changed or every 30 s   // (2.5.6) circles drawn ONLY from the session record (frozen bar / price / colour) - the live node's moving peak bar no longer draws one, so no circle jumps or blinks   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -145,7 +145,7 @@ struct Latch {
     // (2.5.4) the record only - never read by the drawing: id (creation order), CT-clock bar ends (epoch-as-UTC, TapeFlow's
     // convention), the node's net delta and multiple, where it came from, and whether its decided line is already queued
     long long id, tFirst, tDecided, decidedBy, peakT; double net, mult; bool zone, logged;
-    Latch() : low(0), high(0), support(false), candSupport(false), peakTime(0), price(0), sell(false), id(-1), tFirst(0), tDecided(0), decidedBy(0),
+    Latch() : low(0), high(0), support(false), peakTime(0), price(0), sell(false), candSupport(false), id(-1), tFirst(0), tDecided(0), decidedBy(0),
         peakT(0), net(0), mult(0), zone(false), logged(false) {}
 };
 // (2.5.1) the record lives OUTSIDE the per-chart state, keyed by symbol and bar size: a chart-state reset (IRT's host
@@ -155,6 +155,9 @@ struct LatchBook {
     std::vector<Latch> v; long long session = -1;
     // (2.5.4) the session's record file: lines waiting to be appended (kept until a flushed, good write), next id, diagnostics
     std::vector<std::string> journal; std::string path, note; long long nextId = 0, written = 0, loaded = 0, rejected = 0;
+    // (2.5.7, audit F6) an old session's lines that could not be written at the 17:00 change: kept and retried, never dropped
+    std::vector<std::pair<std::string, std::vector<std::string> > > carry;
+    double tick = 0;                        // (2.5.7, audit F5) the tick the in-memory keys were made with
 };
 // ---- (2.5.4) the session signal record. One pipe-separated line per event, append-only, never rewritten:
 //   F = the candidate first appeared (code "A?"), D = it was decided (A / I / Acc / Dst). A line is complete only when it ends
@@ -243,7 +246,8 @@ static bool parseRecordLine(const std::string& line, double chartTick, RecordEve
 }
 // The session record text -> this root's latches in creation order. Only lines ending in a newline count; a duplicated line
 // (a retried append) is ignored; the FIRST decided line of an id wins (a decided signal never changes).
-static void seedFromText(const std::string& text, const std::string& root, double chartTick, LatchBook& bk) {
+// (2.5.7, audit F3) lines name the full contract; a line naming only the root (written by 2.5.6 and earlier) is taken as this contract's
+static void seedFromText(const std::string& text, const std::string& root, const std::string& legacyRoot, double chartTick, LatchBook& bk) {
     const std::size_t end = text.rfind('\n');
     if (end == std::string::npos) return;
     std::map<long long, Latch> byId;
@@ -253,7 +257,7 @@ static void seedFromText(const std::string& text, const std::string& root, doubl
         if (line.empty() || line[0] == '#' || line.compare(0, 8, "t_first|") == 0) continue;
         RecordEvent r;
         if (!parseRecordLine(line, chartTick, r)) { ++bk.rejected; continue; }
-        if (r.root != root) continue;
+        if (r.root != root && r.root != legacyRoot) continue;
         std::map<long long, Latch>::iterator at = byId.find(r.latch.id);
         if (r.event == 'F') {
             if (at != byId.end() || byId.size() >= REC_MAX_LATCHES) continue;
@@ -315,9 +319,11 @@ static long long civilDays(int y, unsigned m, unsigned d) {
     const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1; const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     return era * 146097 + static_cast<long long>(doe) - 719468;
 }
+static void seedFromText(const std::string& text, const std::string& root, double chartTick, LatchBook& bk) { seedFromText(text, root, root, chartTick, bk); }
 static std::map<std::string, LatchBook>& latchBooks() { static std::map<std::string, LatchBook> m; return m; }
 struct ChartState {
     std::string identity, root, market, asof, state;
+    std::string book;                       // (2.5.7, audit F3) the latch book / record identity: the FULL contract (ESZ6), not the root
     Layout layout;
     dp::Snapshot snapshot;
     int barCount;
@@ -401,6 +407,7 @@ ChartState& DeltaProfile::chartState() {
     const std::string id = safeField(symbolText + "|" + periodText);
     if (p->identity != id || p->root != root) {
         *p = ChartState(); p->identity = id; p->root = root; p->market = marketName(root);
+        p->book = symbolText.empty() ? root : safeField(symbolText);
     }
     return *p;
 }
@@ -664,9 +671,11 @@ bool DeltaProfile::buildNative(ChartState& s) {
         // so "epoch - 17 h" changed day at 17:00 UTC = 12:00 CDT / 11:00 CST and wiped the record (A's and their circles) at noon.
         const long long sess = localSessionKey(static_cast<RTDATE>(times[bars.back().index]), bars.back().time);
         const int spb = getSecondsPerBar();
-        LatchBook& bk = latchBooks()[s.root + "|" + std::to_string(spb)];
+        LatchBook& bk = latchBooks()[s.book + "|" + std::to_string(spb)];
         if (sess != bk.session) {
-            if (!bk.journal.empty() && !bk.path.empty()) appendRecord(bk.path, bk.journal);   // (2.5.4) last try for the old session's lines
+            if (!bk.journal.empty() && !bk.path.empty() && !appendRecord(bk.path, bk.journal)) {   // (2.5.4) last try for the old session's lines
+                if (bk.carry.size() < 8) bk.carry.push_back(std::make_pair(bk.path, bk.journal));     // (2.5.7, F6) kept, retried below
+            }
             bk.v.clear(); bk.session = sess;
             bk.journal.clear(); bk.path.clear(); bk.note.clear(); bk.nextId = 0; bk.written = bk.loaded = bk.rejected = 0;
             // (2.5.4) after an IRT restart (or the first chart of the day) the session's record seeds the book: what was shown stays
@@ -674,10 +683,20 @@ bool DeltaProfile::buildNative(ChartState& s) {
             if (!folder.empty() && !s.root.empty()) {
                 bk.path = folder + recordName(s.market, spb, sess);
                 std::string text; bool tooLarge = false;
-                if (readWholeFile(bk.path, text, tooLarge)) seedFromText(text, s.root, tick, bk);
+                if (readWholeFile(bk.path, text, tooLarge)) seedFromText(text, s.book, s.root, tick, bk);
                 else if (tooLarge) { bk.note = "record too large - not read, not appended"; bk.path.clear(); }
             }
         }
+        for (std::size_t c = 0; c < bk.carry.size();) {                                       // (2.5.7, F6) old-session lines still owed
+            if (appendRecord(bk.carry[c].first, bk.carry[c].second)) bk.carry.erase(bk.carry.begin() + static_cast<long>(c)); else ++c;
+        }
+        if (bk.tick > 0 && std::fabs(bk.tick - tick) > 1e-9 * std::max(bk.tick, tick)) {           // (2.5.7, F5) the tick changed: re-key by price
+            for (std::size_t k = 0; k < bk.v.size(); ++k) {
+                try { const dp::Tick lo = dp::priceKey(static_cast<double>(bk.v[k].low) * bk.tick, tick), hi = dp::priceKey(static_cast<double>(bk.v[k].high) * bk.tick, tick);
+                      bk.v[k].low = std::min(lo, hi); bk.v[k].high = std::max(lo, hi); } catch (...) {}
+            }
+        }
+        bk.tick = tick;
         std::vector<Latch>& latches = bk.v;
         const long long nowT = localSec(static_cast<RTDATE>(times[static_cast<int>(count) - 1]));   // the chart's last bar end
         auto barEnd = [&](int index) -> long long { return index >= 0 && index < static_cast<int>(count) ? localSec(static_cast<RTDATE>(times[index])) : 0; };
@@ -689,7 +708,8 @@ bool DeltaProfile::buildNative(ChartState& s) {
             const bool mySell = sellNode(code, support);
             for (std::size_t k = 0; k < latches.size(); ++k)
                 if (latches[k].low <= hi && lo <= latches[k].high && latches[k].sell == mySell) {      // already tracked
-                    if (!decided(latches[k].code) && decided(code) && allowedNow) { latches[k].code = code; latches[k].support = support; latches[k].decidedBy = barEnd(decidedBar); }
+                    // (2.5.7, audit F4) an already-tracked candidate is NOT decided by the refreshed node's result (a later contribution
+                    // can move that node's first close); only the frozen scan below decides it, from its own peak bar
                     code = latches[k].code; support = latches[k].support; return;
                 }
             if (code[0] != 'A' || code.compare(0, 3, "Acc") == 0 || latches.size() >= REC_MAX_LATCHES || peakBar < 0 || peakBar >= static_cast<int>(count)) return;   // only absorption candidates start a record
@@ -698,7 +718,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             L.id = bk.nextId++; L.tFirst = nowT; L.peakT = barEnd(peakBar); L.net = net; L.mult = mult; L.zone = zone;   // (2.5.4)
             if (decided(L.code)) L.decidedBy = barEnd(decidedBar);
             latches.push_back(L);
-            bk.journal.push_back(recordLine(L, 'F', tick, s.root));                                 // (2.5.4) first seen
+            bk.journal.push_back(recordLine(L, 'F', tick, s.book));                                 // (2.5.4) first seen
         };
         const dp::Tick tpr = candidate.ticksPerRow;
         for (std::size_t k = 0; k < candidate.nodes.size(); ++k) {
@@ -713,19 +733,22 @@ bool DeltaProfile::buildNative(ChartState& s) {
             track(z.low, z.high, z.code, z.support, z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * tick, z.decidedBar, z.net, mult, true);
         }
         // decide the undecided ones from the chart's CLOSED bars after their absorption bar (the last bar is still forming)
-        const double eps = tick * 1e-6;
-        for (std::size_t k = 0; k < latches.size(); ++k) {
+        // (2.5.7, audit F2) only a complete build (no missing VAP / short history) decides - the same gate as a fresh node; a pending
+        // candidate is decided on the next complete build from the same first qualifying close, so nothing is lost or reordered
+        for (std::size_t k = 0; allowedNow && k < latches.size(); ++k) {
             Latch& L = latches[k];
             if (decided(L.code)) continue;
             int lo = 0, hi = static_cast<int>(count) - 1, at = -1;
             while (lo <= hi) { const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
                 if (t == L.peakTime) { at = mid; break; } if (t < L.peakTime) lo = mid + 1; else hi = mid - 1; }
             if (at < 0) continue;
-            const double zl = static_cast<double>(L.low) * tick, zh = static_cast<double>(L.high) * tick;
             for (int i = at + 1; i < static_cast<int>(count) - 1; ++i) {
                 const double o = open[i], c = close[i];
                 if (!dp::finite(o) || !dp::finite(c)) continue;
-                const bool redBelow = c < zl - eps && c < o, greenAbove = c > zh + eps && c > o;
+                // (2.5.7, audit F1) beyond the node is decided in WHOLE TICKS: IRT prices and tick are float, so a close ON the node's edge
+                // could read a hair beyond it in double; the close's own tick key against the node's keys cannot
+                dp::Tick ck; try { ck = dp::priceKey(c, tick); } catch (...) { continue; }
+                const bool redBelow = ck < L.low && c < o, greenAbove = ck > L.high && c > o;
                 if (!redBelow && !greenAbove) continue;
                 // a selling node: green above = sellers absorbed (A, support); red below = sellers won (I, resistance)
                 // a buying node:  red below = buyers absorbed (A, resistance); green above = buyers won (I, support)
@@ -740,7 +763,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             Latch& L = latches[k];
             if (!decided(L.code) || L.logged) continue;
             L.tDecided = nowT; L.logged = true;
-            bk.journal.push_back(recordLine(L, 'D', tick, s.root));
+            bk.journal.push_back(recordLine(L, 'D', tick, s.book));
         }
         if (!bk.journal.empty()) {
             if (bk.path.empty()) bk.journal.clear();                                                 // no storage: nothing to keep
@@ -942,7 +965,7 @@ bool DeltaProfile::render(ChartState& s) {
     }
     // (2.5.0) a recorded absorption keeps its circle for the session, even after its node left the sliding profile
     {
-        const std::vector<Latch>& latches = latchBooks()[s.root + "|" + std::to_string(getSecondsPerBar())].v;
+        const std::vector<Latch>& latches = latchBooks()[s.book + "|" + std::to_string(getSecondsPerBar())].v;
         RTARRAYI times(barDateTime);
         for (std::size_t k = 0; k < latches.size(); ++k) {
             const Latch& L = latches[k];
@@ -963,8 +986,7 @@ bool DeltaProfile::render(ChartState& s) {
 }
 void DeltaProfile::status(ChartState& s) {
     const std::int64_t now = steadyMs();
-    if (s.statusAt >= 0 && now - s.statusAt < 1000) return;
-    s.statusAt = now;
+    if (s.statusAt >= 0 && now - s.statusAt < 1000) return;      // at most once a second; written only when it changed or 30 s passed
     const std::string directory = storageDirectory(); if (directory.empty()) return;
     std::ostringstream out;
     out << "VERSION," << DLT_VERSION << "\nROOT," << s.root << "\nMARKET," << s.market
@@ -974,14 +996,17 @@ void DeltaProfile::status(ChartState& s) {
         << "\nTICK," << std::setprecision(12) << s.tick << "\nMISSING_VAP_BARS," << s.missingVap
         << "\nVAP_MISMATCH," << s.vapMismatch << '\n';
     {   // (2.5.0) the session record: what was decided, where (for ChartView and the nightly scoring)
-        const LatchBook& bk = latchBooks()[s.root + "|" + std::to_string(getSecondsPerBar())];
+        const LatchBook& bk = latchBooks()[s.book + "|" + std::to_string(getSecondsPerBar())];
         const std::vector<Latch>& latches = bk.v;
         out << "RECORD," << safeField(bk.path) << ",session " << bk.session << ",loaded " << bk.loaded << ",written " << bk.written
             << ",pending " << bk.journal.size() << ",rejected " << bk.rejected << ',' << safeField(bk.note) << '\n';   // (2.5.4)
         for (std::size_t k = 0; k < latches.size(); ++k)
             out << "SIGNAL," << latches[k].code << "," << (latches[k].support ? "support" : "resistance") << "," << latches[k].low * s.tick << "," << latches[k].high * s.tick << ",t " << latches[k].peakTime << '\n';
     }
-    atomicWrite(directory + "DeltaProfile.status.txt", out.str());
+    static std::string lastText; static std::int64_t lastWrite = -1;                       // (2.5.7, audit) no identical rewrites
+    s.statusAt = now;
+    if (out.str() == lastText && lastWrite >= 0 && now - lastWrite < 30000) return;
+    atomicWrite(directory + "DeltaProfile.status.txt", out.str()); lastText = out.str(); lastWrite = now;
 }
 int DeltaProfile::draw() {
     ChartState* current = NULL;

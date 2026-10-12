@@ -157,7 +157,7 @@ int main()
             check(F[5] == "100" && F[6] == "100.25" && F[7] == "0.25" && F[18] == "400" && F[19] == "401", "F: the node's frozen row 100-100.25 (ticks 400-401) at tick 0.25 (" + F[5] + "/" + F[6] + "/" + F[7] + ")");
             check(F[8] == "-3000000000", "F: net delta above 2^31 exact (" + F[8] + ")");
             check(std::atof(F[9].c_str()) >= 2.0, "F: multiple vs the average row >= 2");
-            check(F[11] == "2.5.6" && F[13] == "ES" && F[14] == "0" && F[15] == std::to_string(t0 + 40 * 60) && F[20] == "sell" && F[21] == "node", "F: version, root, id, absorption bar, node side");
+            check(F[11] == "2.5.7" && F[13] == "ESZ26" && F[14] == "0" && F[15] == std::to_string(t0 + 40 * 60) && F[20] == "sell" && F[21] == "node", "F: version, root, id, absorption bar, node side");
             check(D[2] == "A" && D[3] == "support" && D[4] == "bullish", "D: green close above a selling node = A, bullish");
             check(D[10] == std::to_string(t0 + 110 * 60), "D: decided by the green bar's end (" + D[10] + ")");
             check(D[1] == std::to_string(t0 + 111 * 60) && D[0] == F[0], "D: t_decided = the chart's last bar end when decided; t_first kept");
@@ -240,21 +240,21 @@ int main()
             b.bars.assign(b60.begin(), b60.begin() + static_cast<long>(std::min<std::size_t>(n, b60.size()))); mock::current = &b; p.draw();
         }
         const std::string f3 = slurp(dir + "ES-180-signals-" + std::to_string(session) + ".csv");
-        const long long s60 = latchBooks()["ES|3600"].session;
+        const long long s60 = latchBooks()["ESZ26|3600"].session;
         const std::string f60 = slurp(dir + "ES-3600-signals-" + std::to_string(s60) + ".csv");
         check(lines(f3, "F") > 0 && lines(f60, "F") > 0, "both charts record (" + std::to_string(lines(f3, "F")) + " / " + std::to_string(lines(f60, "F")) + " candidates)");
         bool clean3 = true, clean60 = true; std::istringstream i3(f3), i60(f60); std::string l;
         while (std::getline(i3, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 180) != 0) clean3 = false; }
         while (std::getline(i60, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 3600) != 0) clean60 = false; }
         check(clean3 && clean60, "each file holds only its own chart's bars");
-        const std::vector<Latch> keep3 = latchBooks()["ES|180"].v, keep60 = latchBooks()["ES|3600"].v;
+        const std::vector<Latch> keep3 = latchBooks()["ES|180"].v, keep60 = latchBooks()["ESZ26|3600"].v;
         a.draws.clear(); b.draws.clear(); state(a).builtAt -= 1001; state(b).builtAt -= 1001;
         mock::current = &a; p.draw(); mock::current = &b; p.draw();
         const Frame fa = frame(a), fb = frame(b);
         mock::current = &a; p.destroy(); mock::current = &b; p.destroy(); latchBooks().clear();   // IRT restart
         a.draws.clear(); b.draws.clear();
         DeltaProfile q; mock::current = &a; q.draw(); mock::current = &b; q.draw();
-        check(latchBooks()["ES|180"].v.size() == keep3.size() && latchBooks()["ES|3600"].v.size() == keep60.size(), "after a restart each chart's book is seeded from its own file");
+        check(latchBooks()["ES|180"].v.size() == keep3.size() && latchBooks()["ESZ26|3600"].v.size() == keep60.size(), "after a restart each chart's book is seeded from its own file");
         check(frame(a).draws == fa.draws && frame(b).draws == fb.draws, "after a restart both charts draw exactly what they drew before");
         mock::current = &a; q.destroy(); mock::current = &b; q.destroy(); latchBooks().clear();
     }
