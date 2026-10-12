@@ -1255,10 +1255,12 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         int ncol = NSHOWN - 1;
         const int colsW = natural ? sumNat : ncol * cw;
         std::string tail = v.headTail;
-        auto halfW = [&](const std::string& tl) { return (std::max)(M(v.headLeftTxt, hfs, true), M(v.headMain, hfs, true) + M(tl, hfs, true)) + 16; };
-        int W = (std::max)(lw + colsW + 4, 2 * halfW(tail));
-        if (W > area.r - area.l && !v.headTailShort.empty()) { tail = v.headTailShort; W = (std::max)(lw + colsW + 4, 2 * halfW(tail)); }
-        int H = headH + 3 * rowH + 2;
+        // (1.1.2, Rassul 11:20 "compact it ... the ES RTH to Proj LOD can be put in a new line below") a two-line header, each line
+        // the table's full width: "ES RTH 8:30-3:00   Range 52%   Proj LOD 7,834.75" over "HOD IN 70%?   LOD at close 15% ..."
+        auto headW = [&](const std::string& tl) { return (std::max)(M(v.headLeftTxt, hfs, true), M(v.headMain, hfs, true) + M(tl, hfs, true)) + 16; };
+        int W = (std::max)(lw + colsW + 4, headW(tail));
+        if (W > area.r - area.l && !v.headTailShort.empty()) { tail = v.headTailShort; W = (std::max)(lw + colsW + 4, headW(tail)); }
+        int H = 2 * headH + 3 * rowH + 2;
         if (W > area.r - area.l && attempt < 3) continue;              // a smaller font, then content-sized columns, before spilling
         if (area.l + W > pane.r - pad) continue;                      // cannot fit even past the last bar: smaller font / the note
         if (H + 40 > pane.b - pane.t) break;
@@ -1268,23 +1270,22 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         Box T = placeIn(area, W, H, pos);
         L.table = T; L.tableOk = true;
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
-        {   // the header: two equal cells, a thin separator in the middle, each part centred in its cell
-            int mid = (T.l + T.r) / 2;
+        {   // (1.1.2) the header on two lines, each centred on the table: line 1 the session / range / target, line 2 the read
             int wl = M(v.headLeftTxt, hfs, true), w1 = M(v.headMain, hfs, true), w2 = M(tail, hfs, true);
-            if (v.headLeftSegs.empty()) addText(L, (T.l + mid) / 2 - wl / 2, T.t + 1, T.t + headH, v.headLeftTxt, v.headerCol, hfs, true, wl, R_TABLE, -1);
-            else {   // (1.1.2) the parts in their colours, centred as one
+            const int cx = (T.l + T.r) / 2;
+            if (v.headLeftSegs.empty()) addText(L, cx - wl / 2, T.t + 1, T.t + headH, v.headLeftTxt, v.headerCol, hfs, true, wl, R_TABLE, -1);
+            else {   // the parts in their colours, centred as one
                 int sw = 0; for (size_t q = 0; q < v.headLeftSegs.size(); q++) sw += M(v.headLeftSegs[q].s, hfs, true);
-                int xx = (T.l + mid) / 2 - sw / 2;
+                int xx = cx - sw / 2;
                 for (size_t q = 0; q < v.headLeftSegs.size(); q++) { int w = M(v.headLeftSegs[q].s, hfs, true);
                     addText(L, xx, T.t + 1, T.t + headH, v.headLeftSegs[q].s, v.headLeftSegs[q].col, hfs, true, w, R_TABLE, -1); xx += w; }
             }
-            addLine(L, mid, T.t + 3, mid, T.t + headH - 3, C_BORDER, 1, R_TABLE);
-            int xr = (mid + T.r) / 2 - (w1 + w2) / 2;
-            addText(L, xr, T.t + 1, T.t + headH, v.headMain, v.headerCol, hfs, true, w1, R_TABLE, -1);
-            if (!tail.empty()) addText(L, xr + w1, T.t + 1, T.t + headH, tail, v.headTailCol, hfs, true, w2, R_TABLE, -1);
+            int xr = cx - (w1 + w2) / 2;
+            addText(L, xr, T.t + headH, T.t + 2 * headH - 1, v.headMain, v.headerCol, hfs, true, w1, R_TABLE, -1);
+            if (!tail.empty()) addText(L, xr + w1, T.t + headH, T.t + 2 * headH - 1, tail, v.headTailCol, hfs, true, w2, R_TABLE, -1);
         }
-        addLine(L, T.l, T.t + headH, T.r, T.t + headH, C_BORDER, 1, R_TABLE);
-        int y = T.t + headH + 1;
+        addLine(L, T.l, T.t + 2 * headH, T.r, T.t + 2 * headH, C_BORDER, 1, R_TABLE);
+        int y = T.t + 2 * headH + 1;
         const Cell* rows[2] = { v.E, v.A };
         for (int r = -1; r < 2; r++) {
             if (r == 1) addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE);
@@ -1566,7 +1567,10 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
 {
     Layout L;
     if (pane.r - pane.l < 120 || pane.b - pane.t < 60) { L.note = "pane too small"; return L; }
-    int colR = v.has && HODLOD_SHOW_CANDLE ? pane.l + 8 + candleColW(v, M) : pane.l + 2;
+    // (1.1.2, Rassul 11:20 "make the hod lod not overlap with the liquidity profile") the Liquidity Profile's column on the left
+    // edge (bars + "5.1x", 110 px - the Dealer Profile badges keep off it the same way) is never under the table
+    const int LQ_COL = 110;
+    int colR = v.has && HODLOD_SHOW_CANDLE ? pane.l + 8 + candleColW(v, M) : (pane.r - pane.l >= 600 ? pane.l + LQ_COL : pane.l + 2);
     L.colRight = v.has && HODLOD_SHOW_CANDLE ? colR : 0;   // the column panel's right border x (0 = no column: the candle is off)
     // (HL105) bottom centre of the free area right of the candle column (6 px clear of its panel) and 15% before the latest bars
     // the free area ends at the price edge (the last bar's right edge, where the profiles begin) when the chart gives it
