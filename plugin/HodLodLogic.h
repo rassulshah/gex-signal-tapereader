@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.3";
+static const char* const HL_VERSION = "1.1.4";
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -879,17 +879,30 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     // THIS market's open (hle's convention; v1 used one 08:30 window for every market).
     const hlx::Model* Mo = modelFor(T.C.mkt, v.side, v.modelUp, v.modelByShare, v.sharePct);
     v.ex.valid = false; v.ex.sources = 0;
+    double projRange = NAN;   // (1.1.4) the range the projection and Range % use
     if (!v.prior) {
         hle::State hs = hleState(T, *R, v.hleWhy);
         v.ex = hle::expect(hs); v.haveHle = v.ex.valid;
+        projRange = v.ex.range;
+        // (1.1.4, Rassul 2026-10-12 "really good ... except cl"): where the v2 range model has no fit for this 30-min stage (CL at
+        // 120 and 300 min), hle falls back to the v1 mean range (CL 2.843 = a target 1.8 pts away that jumped at 10:00 and 13:00).
+        // Use the latest earlier stage that has a v2 fit instead (same inputs, never below the range so far; no repaint - each
+        // bar uses only the closed bars up to it)
+        if (v.haveHle && !(v.ex.sources & hle::SRC_RANGE)) {
+            for (int back = 30; back < hs.mso; back += 30) {
+                hle::State h2 = hs; h2.mso = hs.mso - back;
+                hle::Expect e2 = hle::expect(h2);
+                if (e2.valid && (e2.sources & hle::SRC_RANGE)) { projRange = std::max(e2.range, (double)v.rangeT * tick); v.hleWhy += "range: stage " + std::to_string(v.ex.stage) + " has no v2 fit, used stage " + std::to_string(e2.stage) + "; "; break; }
+            }
+        }
         if (!v.haveHle && v.hleWhy.empty()) v.hleWhy = "hle not valid for this state; ";
     } else v.hleWhy = "prior session: v1 model; ";
     double eT2 = v.haveHle ? v.ex.t2 : (Mo ? Mo->openToSecond : NAN); (void)eT2;   // used only without the read model
     double eSize = NAN;                                   // set with the E row (hle wick, else the median)
-    double eRange = v.haveHle ? v.ex.range : (Mo ? Mo->rangePts : NAN);
+    double eRange = v.haveHle ? projRange : (Mo ? Mo->rangePts : NAN);
     // (Rassul 17:18 "wait at least 30 min before drawing the projection"): from 30 minutes after this market's RTH open
-    if (!v.prior && v.haveHle && F && std::isfinite(v.ex.range) && v.ex.range > 0 && v.lastMod - K.open >= View::PROJ_WAIT_MIN) {
-        long long rt = (long long)std::llround(v.ex.range / tick);
+    if (!v.prior && v.haveHle && F && std::isfinite(projRange) && projRange > 0 && v.lastMod - K.open >= View::PROJ_WAIT_MIN) {
+        long long rt = (long long)std::llround(projRange / tick);
         if (rt < v.rangeT) rt = v.rangeT;                                    // never inside the range already printed
         v.projOk = true; v.projUp = v.side == 1; v.projFrom = F->px; v.projFromEnd = F->endAbs;
         v.projTo = v.projUp ? F->px + rt : F->px - rt;
