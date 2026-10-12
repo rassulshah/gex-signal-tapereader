@@ -52,7 +52,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.5";   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile (circles stay, record unchanged)   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.5";   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -141,10 +141,11 @@ static double marketTick(const std::string& m) {
 // drawn even when the node drops out of the profile. Cleared at the 17:00 session change.
 struct Latch {
     dp::Tick low, high; std::string code; bool support; RTDATE peakTime; double price; bool sell;
+    bool candSupport;   // (2.5.5) the side it was first circled as (A?): the circle keeps this colour for the session, whatever it is decided as
     // (2.5.4) the record only - never read by the drawing: id (creation order), CT-clock bar ends (epoch-as-UTC, TapeFlow's
     // convention), the node's net delta and multiple, where it came from, and whether its decided line is already queued
     long long id, tFirst, tDecided, decidedBy, peakT; double net, mult; bool zone, logged;
-    Latch() : low(0), high(0), support(false), peakTime(0), price(0), sell(false), id(-1), tFirst(0), tDecided(0), decidedBy(0),
+    Latch() : low(0), high(0), support(false), candSupport(false), peakTime(0), price(0), sell(false), id(-1), tFirst(0), tDecided(0), decidedBy(0),
         peakT(0), net(0), mult(0), zone(false), logged(false) {}
 };
 // (2.5.1) the record lives OUTSIDE the per-chart state, keyed by symbol and bar size: a chart-state reset (IRT's host
@@ -256,7 +257,7 @@ static void seedFromText(const std::string& text, const std::string& root, doubl
         std::map<long long, Latch>::iterator at = byId.find(r.latch.id);
         if (r.event == 'F') {
             if (at != byId.end() || byId.size() >= REC_MAX_LATCHES) continue;
-            r.latch.tDecided = 0; r.latch.decidedBy = 0; r.latch.logged = false; byId[r.latch.id] = r.latch; ++bk.loaded;
+            r.latch.tDecided = 0; r.latch.decidedBy = 0; r.latch.logged = false; r.latch.candSupport = r.latch.support; byId[r.latch.id] = r.latch; ++bk.loaded;
         } else {
             if (at == byId.end()) { ++bk.rejected; continue; }
             Latch& L = at->second;
@@ -692,7 +693,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
                     code = latches[k].code; support = latches[k].support; return;
                 }
             if (code[0] != 'A' || code.compare(0, 3, "Acc") == 0 || latches.size() >= REC_MAX_LATCHES || peakBar < 0 || peakBar >= static_cast<int>(count)) return;   // only absorption candidates start a record
-            Latch L; L.low = lo; L.high = hi; L.code = allowedNow ? code : (decided(code) ? code + "?" : code); L.support = support;
+            Latch L; L.low = lo; L.high = hi; L.code = allowedNow ? code : (decided(code) ? code + "?" : code); L.support = support; L.candSupport = support;
             L.peakTime = static_cast<RTDATE>(times[peakBar]); L.price = price; L.sell = mySell;
             L.id = bk.nextId++; L.tFirst = nowT; L.peakT = barEnd(peakBar); L.net = net; L.mult = mult; L.zone = zone;   // (2.5.4)
             if (decided(L.code)) L.decidedBy = barEnd(decidedBar);
@@ -946,13 +947,15 @@ bool DeltaProfile::render(ChartState& s) {
         RTARRAYI times(barDateTime);
         for (std::size_t k = 0; k < latches.size(); ++k) {
             const Latch& L = latches[k];
-            if ((L.code != "A" && L.code != "A?") || L.peakTime == 0 || times.count < s.barCount || s.barCount < 1) continue;
+            // (2.5.5, Rassul 2026-10-11 19:10 "you keep removing the circles"): EVERY candidate keeps its circle for the session, in the
+            // colour it was first drawn in - also one later decided I (buyers / sellers won). A circle never disappears or changes.
+            if (L.peakTime == 0 || times.count < s.barCount || s.barCount < 1) continue;
             int lo = 0, hi = s.barCount - 1, at = -1;                   // the bar with this time (times ascend)
             while (lo <= hi) { const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
                 if (t == L.peakTime) { at = mid; break; } if (t < L.peakTime) lo = mid + 1; else hi = mid - 1; }
             if (at < 0 || std::find(ringed.begin(), ringed.end(), at) != ringed.end()) continue;
             ringed.push_back(at);
-            ringAt(at, L.price, L.support ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
+            ringAt(at, L.price, L.candSupport ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
         }
         // (2.5.5, Rassul 2026-10-11 18:58 "remove") no letter column for signals that left the profile: tonight it stacked every
         // A / I since 17:00 as bare letters left of the profile. Their circles on the bars stay; the record keeps every signal.

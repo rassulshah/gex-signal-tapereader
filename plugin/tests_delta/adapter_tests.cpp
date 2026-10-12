@@ -188,6 +188,23 @@ int main(){
         for(const mock::Draw& d:h.draws){if(d.type=="ring"&&d.x==450)++rings;if(d.type=="text"&&d.text=="A")letter=true;}
         check(rings==1,"tracked A lost its circle");check(!letter,"2.5.5: an off-profile A draws no bare letter");cleanup(p,h);
     });
+    test("2.5.5: a circled candidate later decided I keeps its circle on the same bar (never removed)",[]{
+        mock::Host h=history(110,60);
+        for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}
+        h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        mock::current=&h;DeltaProfile p;p.draw();
+        int before=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"&&d.x==450)++before;
+        check(before==1,"fixture: the candidate is circled");
+        mock::Bar r=h.bars.back();r.time+=60;r.rows={mock::Price(97,1,0,1)};r.volume=1;r.open=99;r.low=95;r.high=99.5;r.close=96;h.bars.push_back(r);   // red close below: sellers won
+        mock::Bar f=r;f.time+=60;h.bars.push_back(f);
+        h.draws.clear();p.draw();
+        check(latchBooks().begin()->second.v[0].code=="I","fixture: red close below did not decide I");
+        int after=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"&&d.x==450)++after;
+        check(after==1,"the circle was removed when the candidate turned into I");
+        check(latchBooks().begin()->second.v[0].candSupport,"the circle's colour changed with the decision");
+        cleanup(p,h);
+    });
     test("initiative letter never receives a circle",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(80,1,0,1),mock::Price(81,1,0,1),mock::Price(82,1,0,1),mock::Price(83,1,0,1),mock::Price(84,1,0,1)};b.volume=5;b.low=79;b.high=100;b.open=97;b.close=96;}
