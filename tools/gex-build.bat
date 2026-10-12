@@ -71,6 +71,8 @@ REM (2026-10-11) lsExhaustion - the pusher fading at a new extreme, per-market s
 call :one Exhaustion lsExhaustion ExhaustionLogic.h HostSlot.h
 REM (2026-10-12) lsExhaustionV2 - pullback watch E? / trend response R? / EXIT? warnings (outside review), calibration from lra.exh2_nightly
 call :one ExhaustionV2 lsExhaustionV2 ExhaustionV2Logic.h HostSlot.h
+REM (2026-10-12) lsCVD - CVD line + delta-pct bars + Div / Abs / Exh / BR marks on the CVD line (outside package CVD Signals v0.1, reviewed), TESTING
+call :one CVD lsCVD CvdEngine.h CvdFeed.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 
@@ -158,7 +160,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"

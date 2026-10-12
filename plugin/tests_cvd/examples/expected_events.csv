@@ -1,0 +1,3 @@
+event_id,seq,timestamp,anchor,type,direction,state,label,warning_seq,source_seq,cvd,level_id,level,trigger,invalidation,plot,reason
+DEMO_RTH:21:Abs:bull:SUP1,21,2026-01-05T09:51:00-05:00,DEMO_RTH,Abs,bull,pending,Abs?,21,21,-320,SUP1,99.75,100.5,99.25,1,candidate
+DEMO_RTH:21:Abs:bull:SUP1,24,2026-01-05T09:54:00-05:00,DEMO_RTH,Abs,bull,confirmed,Abs,21,21,-280,SUP1,99.75,100.5,99.25,1,price_and_flow
