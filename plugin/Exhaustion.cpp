@@ -820,6 +820,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion V2 (research only): red buyer-fade is an uptrend exit warning; green seller-fade is a pullback setup only after a causal confirmation. Completed 180-second VAP bars only; calibration is exact-contract and prior-session-only.");
-    p->setVersion(EX2_VERSION);
+    p->setVersion("2.0.1");   // keep equal to EX2_VERSION (the build log reads this literal)
     return p;
 }
