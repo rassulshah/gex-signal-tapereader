@@ -41,7 +41,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.11.0";
+static const char* const VERSION = "0.11.1";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -239,7 +239,7 @@ public:
         if (bar < 0 || !(buy >= 0) || !(sell >= 0) || !finite(buy) || !finite(sell)) return;
         BarNorm& b = barNorm[bar]; b.buy = buy; b.sell = sell; b.ticks = std::max(1, ticks);
         b.range = hi > 0 && lo > 0 && hi >= lo; b.hi = hi; b.lo = lo;
-        while (barNorm.size() > 400) barNorm.erase(barNorm.begin());   // (0.11.0) the always-on Aggressive half: a screen of bars
+        while (barNorm.size() > 1200) barNorm.erase(barNorm.begin());   // (0.11.0) the always-on Aggressive half: a screen of bars
     }
     // the attackers' (sellers at a support, buyers at a resistance) average volume per bar per tick traded over the 20 bars before 'bar';
     // -1 until 15 of those bars are known
@@ -476,7 +476,7 @@ public:
     void onBarClose(int bar, long long barTime, Ms barEnd, double close, const std::vector<std::pair<Tick, Tick>>& deltaAbsorbBid,
                     const std::vector<std::pair<Tick, Tick>>& deltaAbsorbAsk) {
         const Tick c = toTick(close, P.tick);
-        if (haveBook && havePx) { nearBook[bar] = nearNow(); while (nearBook.size() > 400) nearBook.erase(nearBook.begin()); }   // (0.11.0)
+        if (haveBook && havePx) { nearBook[bar] = nearNow(); while (nearBook.size() > 1200) nearBook.erase(nearBook.begin()); }   // (0.11.0)
         // (0.8.0) s after a touch already decided as held (the defenders often step in on the bars after the close back out): finished
         // attempts first, so one closed on THIS bar is not read twice
         for (size_t i = 0; i < finished.size(); ++i) {

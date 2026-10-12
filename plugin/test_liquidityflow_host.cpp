@@ -113,6 +113,15 @@ int main() {
     h.draws.clear(); h.now = T + 400; q->calc(0); q->draw();
     bool again = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Exh ") == 0) again = true;
     CHECK(again, "after a restart the same signals are drawn again (no repaint)");
+    {   // (0.11.1) backfill: the pane's own record (book near price per bar + the absorption window) is re-read after a restart
+        const std::string fr = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\CL-180-flow-" + std::to_string(S->session) + ".csv";
+        const std::string t = readAll(fr);
+        CHECK(t.find("\nB|") != std::string::npos && t.find("\nW|") != std::string::npos, "(0.11.1) each bar's book and the window are recorded");
+        LQState* Q = static_cast<LQState*>(h.data);
+        CHECK(Q && Q->bookHist.size() >= 3 && Q->winHist.size() >= 1, "(0.11.1) a restart reads the record back");
+        bool win = false; for (auto& d : h.draws) if (d.type == "text" && d.color == 0x003CC8FA && d.text.find("79.9") == 0) win = true;
+        CHECK(win, "(0.11.1) the absorption window is redrawn after the restart");
+    }
     q->destroy();
     {   // the same session, but this market's study no longer confirms Exh: it is not drawn at all
         std::ofstream nf(normsPath.c_str());

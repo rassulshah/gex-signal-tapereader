@@ -107,7 +107,7 @@ int main() {
         CHECK(minBox <= 2, "(0.9.0) the bars start at the pane's left edge");
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.11.0") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.11.1") != std::string::npos, "status file written");
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     {   // (0.10.0) the reach, the prominence, the LQ confirmation (CL logs it), no boxes across the chart, the bx label
         const std::string t = readAll(st);
