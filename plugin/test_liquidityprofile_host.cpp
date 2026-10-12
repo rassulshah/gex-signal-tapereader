@@ -116,17 +116,37 @@ int main() {
         CHECK(over == 0, "(0.9.0) nothing of the column on the right (the Delta / Dealer Profiles' side)");
         CHECK(minBox <= 2, "(0.9.0) the bars start at the pane's left edge");
     }
+    {   // (0.13.0) the picks: the strongest (most contracts) shown zone each side + every shown zone on a level, named
+        LQState P; P.e.P.tick = 0.25;
+        auto zone = [&](long long id, int side, lqp::Tick lo, lqp::Tick hi, double size, double bx) { lqp::Zone z; z.id = id; z.side = side; z.lo = lo; z.hi = hi;
+            z.edgeLo = lo; z.edgeHi = hi; z.size = size; z.bx = bx; z.shown = true; P.e.zones.push_back(z); };
+        zone(1, lqp::ASK, 31450, 31460, 844, 2.2);     // 7862.5-7865
+        zone(2, lqp::BID, 31400, 31410, 1223, 2.1);    // 7850-7852.5
+        zone(3, lqp::BID, 31386, 31394, 928, 2.1);
+        zone(4, lqp::BID, 31374, 31382, 712, 2.1);
+        zone(5, lqp::BID, 31356, 31364, 669, 2.2);     // 7839-7841
+        LQState::Lvl g2; g2.code = "G2"; g2.px = 31400; LQState::Lvl hvl; hvl.code = "HVL"; hvl.px = 31360;
+        P.mqLevels.push_back(g2); P.mqLevels.push_back(hvl);
+        const std::vector<LqPick> pk = lqPicks(P);
+        std::string got; for (auto& k : pk) got += std::to_string(P.e.zones[k.idx].size) .substr(0, 4) + (k.top ? "T" : "L") + k.names + " ";
+        std::printf("  picks: %s\n", got.c_str());
+        bool a844 = false, b1223 = false, h669 = false, no928 = true, no712 = true;
+        for (auto& k : pk) { const double sz = P.e.zones[k.idx].size;
+            if (sz == 844 && k.top) a844 = true; if (sz == 1223 && k.top && k.names == "G2") b1223 = true; if (sz == 669 && !k.top && k.names == "HVL") h669 = true;
+            if (sz == 928) no928 = false; if (sz == 712) no712 = false; }
+        CHECK(a844 && b1223 && h669 && no928 && no712 && pk.size() == 3, "(0.13.0) 844 offers + 1223 bids (on G2) solid, 669 on HVL outlined, 928 / 712 hidden");
+    }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.12.0") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.12.0, one version everywhere)");
+    CHECK(readAll(st).find("VERSION,0.13.0") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.13.0, one version everywhere)");
     {   // (0.12.0) the level-liquidity file for the Dealer Profile badges: header + every zone of 1.5x or more, side and prominence
         const std::string lz = readAll(flex + "\\LRA-LiqZones-CL.csv"), t = readAll(st);
         CHECK(lz.compare(0, 7, "LIQZ,1,") == 0, ("(0.12.0) LRA-LiqZones-CL.csv written with its header: " + lz.substr(0, 40)).c_str());
-        int want = 0, got = 0; size_t q = 0;
-        while ((q = t.find("\nZONE,bx ", q)) != std::string::npos) { q += 9; if (std::atof(t.c_str() + q) >= 1.0) want++; }
-        for (size_t k = 0; (k = lz.find("\nZ,", k)) != std::string::npos; k += 3) got++;
-        { size_t zp = t.find("\nZONES,"); std::printf("  status %s\n", zp == std::string::npos ? "no ZONES" : t.substr(zp + 1, 12).c_str()); }
-        std::printf("  liq zones: %d in the file, %d of 1.5x+ in the status\n", got, want);
-        CHECK(got == want && got > 0 && lz.find(",S,") != std::string::npos, "(0.12.0) every 1.0x+ zone of the status is in the file (with its contracts), nothing else");
+        // (0.13.0) the file holds only the picked zones: at most one solid (strongest) per side + zones on a level; all are shown zones
+        int got = 0, shownN = 0; size_t q = 0;
+        while ((q = t.find(",shown,", q)) != std::string::npos) { q += 7; shownN++; }
+        int sup = 0, res = 0; for (size_t k = 0; (k = lz.find("\nZ,", k)) != std::string::npos; k += 3) { got++; if (lz[k + 3] == 'S') sup++; else res++; }
+        std::printf("  liq zones: %d in the file (%d bid, %d offer), %d shown in the status\n", got, sup, res, shownN);
+        CHECK(got <= shownN, "(0.13.0) the file: the picked zones only (strongest each side + on a level)");
     }
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     {   // (0.10.0) the reach, the prominence, the LQ confirmation (CL logs it), no boxes across the chart, the bx label

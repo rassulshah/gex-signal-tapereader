@@ -190,6 +190,19 @@ int main()
         check(own && X.pend.size() == 1, "Rithmic ESH7: the EPH27 levels at their strikes");
         X.done();
     }
+    {   // ---- 5. (2.8.x) Liq tags end to end: the Liquidity Profile's file -> the key-level and MenthorQ badges
+        { std::ofstream f(fl("LRA-LiqZones-ES.csv").c_str(), std::ios::binary);
+          f << "LIQZ,1," << (long long)time(nullptr) << ",0.25\r\nZ,R,6659,6661.5,2.6,977\r\nZ,S,6638.75,6641.25,2.2,812\r\n"; }
+        DealerProfile X; Chart a; a.root = "ES"; a.sym = "EPZ26"; build(a, 6650.0f); CUR = &a;
+        VE = (int)a.dt.size() - 1; VS = VE - 199;
+        X.loadHostState(); X.mkt = "ES"; X.root = "EPZ26"; X.pend.clear();
+        X.drawKeyLevels(X.cfg);
+        bool tag = false; for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s;
+            if (getenv("DBG")) std::printf("liq pend %s\n", all.c_str());
+            if (all.rfind("6660.00 PFH/PDH", 0) == 0 && all.find("Liq 977 (2.6x)") != std::string::npos) tag = true; }
+        check(tag, "(2.8.0) key level on an offer zone: \"... Liq 977 (2.6x)\"");
+        X.done();
+    }
     {   // ---- 4. settings: a chart without a saved row does not re-read the settings file on every repaint
         std::ofstream f(fl("DealerProfile.settings.txt").c_str()); f << "EPZ26~3 Minutes*~|0|50|9|0|0|0|0|0|cob_bull,cob_bear\n"; f.close();
         DealerProfile X; Chart a; a.root = "ES"; a.sym = "EPZ26"; build(a, 6650.0f); CUR = &a;

@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.12.0, 2026-10-12: writes LRA-LiqZones-<MKT>.csv - the resting-liquidity zones near price - for the Dealer Profile's level badges ("Liq 2.6x"); 0.11.4, 2026-10-12: review fixes - no repaint when a market's line changes, the closing bar's last trades counted before it is decided, absorption windows recorded past the 50th touch, per-market state reset on a symbol change, stale Delta A zones dropped after an hour, no zone / LQ flicker, labels never overlap, fonts 10 pt+; 0.11.3, 2026-10-12 08:58: NO letters on the price chart at all - p / e / s / t are decided and recorded for the study, never drawn (Rassul "there are all these signals like P on the es chart .. i had asked you to remove them"); 0.11.2, 2026-10-12: the e? / p? watch letters are no longer drawn on the price chart - recorded only (Rassul 06:07); 0.11.1, 2026-10-11; 0.11.1: the Flow pane backfills - buyers / sellers from every loaded bar (up to 1,000), and its own record of each bar's near-price book and each absorption window (<MKT>-<spb>-flow-<session>.csv) re-read on load for this session and the two before (Rassul 20:36 "liquidity flow"); 0.11.0: the Flow pane is ALWAYS ON - buyers / sellers of every bar as x their 20-bar average and the resting bids / offers near price at each bar close; an absorption read also starts at a Delta Profile A / A? (not only a shown zone), drawn as a yellow window with its price, the steps and a readout on the right, idle = what it watches (Rassul 19:48-19:49, mockup LiquidityFlow_always_on); 0.10.0: only zones that stand out are drawn - 2x+ the 8 same-width bands behind them and the biggest of them, kept down to 1.7x, after resting 30 s at the same band; reach = 1/2 the expected RTH range (lsHodLod), else 1/2 the 14-session average RTH range, else 6x the 3-min range; the label = that prominence; no boxes across the chart (Rassul 18:53 "remove the boxes too"); LQ = a key level or a CR / PS / HVL level with a 2.5x+ zone on it (ES, GC, HG, NG; logged elsewhere) - research "Liquidity display for absorption trading" + the rules review 18:21-18:51; 0.9.0: the column on the LEFT edge of the price pane, bars facing price, the x-normal label on the price side of each bar, each zone a thin box across the chart to the last bar (mockup v4, Rassul 18:07-18:14); 0.8.1: never over the Delta Profile or its labels (the column moves 64 px further left, past the Delta Profile's "A 4.4x +62" labels) - the Dealer Profile reach is kept PER MARKET (its status file is shared by every chart: the last chart to write it wins) and starts at the Dealer Profile default (150 px) until this market's own reach is seen (Rassul 17:56 "the liquidity profile is overlapping the delta profile"); 0.8.0: the absorption PROCESS in every market (Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets - absorb, exhaust, counter or absorb, pull, break"): every step drawn everywhere at the market's data line where the nightly study set one, the standard line until then; s = Counter (the defenders out-traded the attackers after e, at the Counter line x their normal pace) on the price chart with its reason on the panes and the BUYERS / SELLERS STEPPING IN warning; panes AGGRESSIVE (Attack, Exh, Counter) / PASSIVE (Absorbed = the % of everything resting that took fills, Pulled, Rebuilt); 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.13.0, 2026-10-12: only the strongest zone each side (solid) + zones on a key / gamma level (outlined, named) are drawn and published - the rest logged; 0.12.0, 2026-10-12: writes LRA-LiqZones-<MKT>.csv - the resting-liquidity zones near price - for the Dealer Profile's level badges ("Liq 2.6x"); 0.11.4, 2026-10-12: review fixes - no repaint when a market's line changes, the closing bar's last trades counted before it is decided, absorption windows recorded past the 50th touch, per-market state reset on a symbol change, stale Delta A zones dropped after an hour, no zone / LQ flicker, labels never overlap, fonts 10 pt+; 0.11.3, 2026-10-12 08:58: NO letters on the price chart at all - p / e / s / t are decided and recorded for the study, never drawn (Rassul "there are all these signals like P on the es chart .. i had asked you to remove them"); 0.11.2, 2026-10-12: the e? / p? watch letters are no longer drawn on the price chart - recorded only (Rassul 06:07); 0.11.1, 2026-10-11; 0.11.1: the Flow pane backfills - buyers / sellers from every loaded bar (up to 1,000), and its own record of each bar's near-price book and each absorption window (<MKT>-<spb>-flow-<session>.csv) re-read on load for this session and the two before (Rassul 20:36 "liquidity flow"); 0.11.0: the Flow pane is ALWAYS ON - buyers / sellers of every bar as x their 20-bar average and the resting bids / offers near price at each bar close; an absorption read also starts at a Delta Profile A / A? (not only a shown zone), drawn as a yellow window with its price, the steps and a readout on the right, idle = what it watches (Rassul 19:48-19:49, mockup LiquidityFlow_always_on); 0.10.0: only zones that stand out are drawn - 2x+ the 8 same-width bands behind them and the biggest of them, kept down to 1.7x, after resting 30 s at the same band; reach = 1/2 the expected RTH range (lsHodLod), else 1/2 the 14-session average RTH range, else 6x the 3-min range; the label = that prominence; no boxes across the chart (Rassul 18:53 "remove the boxes too"); LQ = a key level or a CR / PS / HVL level with a 2.5x+ zone on it (ES, GC, HG, NG; logged elsewhere) - research "Liquidity display for absorption trading" + the rules review 18:21-18:51; 0.9.0: the column on the LEFT edge of the price pane, bars facing price, the x-normal label on the price side of each bar, each zone a thin box across the chart to the last bar (mockup v4, Rassul 18:07-18:14); 0.8.1: never over the Delta Profile or its labels (the column moves 64 px further left, past the Delta Profile's "A 4.4x +62" labels) - the Dealer Profile reach is kept PER MARKET (its status file is shared by every chart: the last chart to write it wins) and starts at the Dealer Profile default (150 px) until this market's own reach is seen (Rassul 17:56 "the liquidity profile is overlapping the delta profile"); 0.8.0: the absorption PROCESS in every market (Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets - absorb, exhaust, counter or absorb, pull, break"): every step drawn everywhere at the market's data line where the nightly study set one, the standard line until then; s = Counter (the defenders out-traded the attackers after e, at the Counter line x their normal pace) on the price chart with its reason on the panes and the BUYERS / SELLERS STEPPING IN warning; panes AGGRESSIVE (Attack, Exh, Counter) / PASSIVE (Absorbed = the % of everything resting that took fills, Pulled, Rebuilt); 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -61,7 +61,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.12.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.13.0"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -626,6 +626,18 @@ void LiquidityProfile::loadLevels(LQState& S, long count) {
             LQState::Lvl v; v.code = c; v.px = lqp::toTick(L[i].price, S.tick); S.levels.push_back(v);
         }
     }
+    // (0.13.0, Rassul 12:02 "include the pocs, like the prior day and prior week pocs, i want to see how much liquidity there is
+    // around those levels") his own IRT custom indicators, read by name (the values his DPoc / WPoc lines show): a zone on one is
+    // picked and named like any key level. Missing on this chart -> not used (nothing guessed).
+    {   static const char* const POC[2][2] = { { "ProfPrevDay", "DPoc" }, { "ProfPrevWeekly", "WPoc" } };
+        for (int k = 0; k < 2; ++k) {
+            RTARRAY a(fEmptyArray); char nm[40]; std::snprintf(nm, sizeof(nm), "%s", POC[k][0]);
+            if (a.getCustomIndicator(nm, 1, true) != RTX_OK || a.count < 1) continue;
+            const float v = a[(int)a.count - 1];
+            if (!std::isfinite(v) || v <= 0) continue;
+            LQState::Lvl p; p.code = POC[k][1]; p.px = lqp::toTick((double)v, S.tick); S.levels.push_back(p);
+        }
+    }
     // the average RTH range of the last 14 COMPLETE sessions (the current one excluded)
     std::map<long, std::pair<double, double>> rth;
     for (size_t i = 0; i < B.size(); ++i) {
@@ -827,6 +839,33 @@ void LiquidityProfile::status(LQState& S, long long now) {
     if (publishFile(f + "\\" + kind + ".status-" + stem(S) + ".txt", text)) { S.lastStatusText = text; S.lastStatus = now; }
 }
 
+// (0.13.0, Rassul 2026-10-12 11:59 "it shows so much liquidity, its difficult to know which one is important" -> mockup
+// liquidity-clarity, "ok") of the shown zones only these are drawn / published: the biggest resting size on each side (bids below,
+// offers above) and every zone sitting ON a key / gamma level (the level +/- half the zone's band) - named with the level.
+struct LqPick { size_t idx; bool top; std::string names; };
+static std::vector<LqPick> lqPicks(const LQState& S)
+{
+    std::vector<LqPick> out;
+    const std::vector<size_t> order = S.e.drawOrder();
+    long bestB = -1, bestA = -1;
+    for (size_t k = 0; k < order.size(); ++k) {
+        const lqp::Zone& z = S.e.zones[order[k]];
+        long& b = z.side == lqp::BID ? bestB : bestA;
+        if (b < 0 || z.size > S.e.zones[(size_t)b].size) b = (long)order[k];
+    }
+    std::vector<LQState::Lvl> all = S.levels; all.insert(all.end(), S.mqLevels.begin(), S.mqLevels.end());
+    for (size_t k = 0; k < order.size(); ++k) {
+        const size_t i = order[k]; const lqp::Zone& z = S.e.zones[i];
+        const lqp::Tick pad = (z.hi - z.lo) / 2;
+        std::string names;
+        for (size_t j = 0; j < all.size(); ++j)
+            if (all[j].px >= z.lo - pad && all[j].px <= z.hi + pad && names.find(all[j].code) == std::string::npos) names += (names.empty() ? "" : "/") + all[j].code;
+        const bool top = (long)i == bestB || (long)i == bestA;
+        if (top || !names.empty()) out.push_back(LqPick{ i, top, names });
+    }
+    return out;
+}
+
 // (0.12.0, Rassul 2026-10-12 "modify the level badges to indicate if there is liquidity at those levels ... even if you have CR or
 // other gamma levels indicate Liq") the resting-liquidity zones near price, for the Dealer Profile's level badges:
 // LRA-LiqZones-<MKT>.csv = "LIQZ,1,<unix seconds>,<tick>" then "Z,<S|R>,<lo>,<hi>,<bx>,<contracts>" (S = bids / support,
@@ -836,9 +875,10 @@ void LiquidityProfile::writeLiqZones(LQState& S) {
 #ifndef LQ_FLOW
     if (S.market.empty() || !(S.e.P.tick > 0)) return;
     std::ostringstream b; b.imbue(std::locale::classic()); b.precision(10);
-    for (size_t i = 0; i < S.e.zones.size(); ++i) {
-        const lqp::Zone& z = S.e.zones[i];
-        if (!(z.bx >= 1.0)) continue;
+    const std::vector<LqPick> picks = lqPicks(S);                      // (0.13.0) the same zones the column draws
+    for (size_t pi = 0; pi < picks.size(); ++pi) {
+        const lqp::Zone& z = S.e.zones[picks[pi].idx];
+        if (!(z.bx > 0)) continue;
         b << "Z," << (z.side == lqp::BID ? "S" : "R") << "," << (double)z.lo * S.e.P.tick << "," << (double)z.hi * S.e.P.tick << "," << z.bx << "," << (long long)std::llround((double)z.size) << "\n";
     }
     const std::string body = b.str();
@@ -952,16 +992,17 @@ void LiquidityProfile::render(LQState& S) {
     const long long nowT = S.haveOffset ? steadyMs() + S.ctOffset : 0;
     const lqp::Readout rd = S.e.readout(nowT);
     // (0.11.4) strongest first; a zone overlapping a stronger one is not drawn; a label goes only where no other label is (y spans)
-    const std::vector<size_t> order = S.e.drawOrder();
+    const std::vector<LqPick> picks = lqPicks(S);                      // (0.13.0) the strongest each side + the zones on a level
     lqp::Lanes labels(1);
-    for (size_t oi = 0; oi < order.size(); ++oi) {
-        const lqp::Zone& z = S.e.zones[order[oi]];                       // (0.10.0) only zones that stand out from the book behind them
+    for (size_t oi = 0; oi < picks.size(); ++oi) {
+        const lqp::Zone& z = S.e.zones[picks[oi].idx];                   // (0.10.0) only zones that stand out from the book behind them
+        const bool topPick = picks[oi].top;
         int yt = yOf(((double)z.edgeHi + 0.5) * tick), yb = yOf(((double)z.edgeLo - 0.5) * tick);   // the real edges of the size
         if (yb <= yt) yb = yt + 2;
         if (yb <= top || yt >= bottom) continue;
         yt = std::max(top, yt); yb = std::min(bottom, yb);
         const COLOR c = z.side == lqp::BID ? C_BUY : C_SELL;
-        const bool solid = z.durable(nowT, S.e.P.persistMs);           // (0.4.0) hollow = new / flickering only
+        const bool solid = topPick;                                    // (0.13.0) solid = the strongest on its side; outlined = on a level
         const int len = std::max(8, (int)(maxZone > 0 ? z.size / maxZone * full : full));
         RCT r; r.set(coord(left), coord(yt), coord(left + len), coord(yb));
         if (solid) r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
@@ -969,7 +1010,7 @@ void LiquidityProfile::render(LQState& S) {
         const int ym = (yt + yb) / 2;
         FONT g; g.id = HELVETICA; g.size = coord(S.font); g.style = BOLD; setFont(g);
         const std::string lt = lots(z.size); const int lw = getTextWidth(lt.c_str(), -1);
-        if (lw + 4 < len && yb - yt >= rowH - 4) { setTextColor(solid ? C_INK : c); RCT tr; tr.set(coord(left), coord(ym - S.font), coord(left + len), coord(ym + S.font)); tr.drawText(lt.c_str(), true, false); }
+        if (solid && lw + 4 < len && yb - yt >= rowH - 4) { setTextColor(C_INK); RCT tr; tr.set(coord(left), coord(ym - S.font), coord(left + len), coord(ym + S.font)); tr.drawText(lt.c_str(), true, false); }
         if (S.confirmed.count("Old")) {                                 // (0.5.0) old orders: a 2-px outline and "old 64%" under the bar
             const double os = S.e.zoneOld(z.side, z.lo, z.hi, S.e.bookT);
             if (os >= S.e.P.oldShow) {
@@ -985,12 +1026,15 @@ void LiquidityProfile::render(LQState& S) {
         int xl = left + len + 4;
         const int ly0 = ym - rowH / 2, ly1 = ly0 + rowH;
         if (labels.place(ly0, ly1, 1) < 0) continue;                   // (0.11.4) another zone's label is there: the bar only
-        if (z.bx > 0) { const std::string xs = mult(z.bx); const int xw = getTextWidth(xs.c_str(), -1); setTextColor(c);
+        if (!solid) { const int lw2 = getTextWidth(lt.c_str(), -1); setTextColor(C_GREY);      // (0.13.0) outlined: the lots beside it
+            RCT tr; tr.set(coord(xl), coord(ly0), coord(xl + lw2 + 2), coord(ly1)); tr.drawText(lt.c_str(), false, false); xl += lw2 + 6; }
+        if (z.bx > 0) { const std::string xs = mult(z.bx); const int xw = getTextWidth(xs.c_str(), -1); setTextColor(solid ? c : C_GREY);
             RCT xr; xr.set(coord(xl), coord(ly0), coord(xl + xw + 2), coord(ly1)); xr.drawText(xs.c_str(), false, false);
             xl += xw + 6; }
         std::map<long long, std::string>::const_iterator lq = S.lqMark.find(z.id);
-        if (lq != S.lqMark.end() && xl < lastX) { const int qw = getTextWidth(lq->second.c_str(), -1); setTextColor(c);
-            RCT qr; qr.set(coord(xl), coord(ly0), coord(xl + qw + 2), coord(ly1)); qr.drawText(lq->second.c_str(), false, false); }
+        const std::string nm = lq != S.lqMark.end() ? lq->second : picks[oi].names;   // "LQ PDL" (confirmed) or the level's name
+        if (!nm.empty() && xl < lastX) { const int qw = getTextWidth(nm.c_str(), -1); setTextColor(solid ? c : C_GREY);
+            RCT qr; qr.set(coord(xl), coord(ly0), coord(xl + qw + 2), coord(ly1)); qr.drawText(nm.c_str(), false, false); }
     }
     (void)rd;   // (0.4.0) no read text and no marks on the price chart (Rassul 2026-10-10: signals only on the panes)
 }
@@ -1320,6 +1364,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.12.0");   // LQ_VERSION
+    p->setVersion("0.13.0");   // LQ_VERSION
     return p;
 }

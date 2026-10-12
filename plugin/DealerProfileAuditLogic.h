@@ -127,7 +127,8 @@ inline Badge badge(const std::string& m, double px, const std::string& name, con
 // Profile's own line - kept down to 1.7x once shown so it does not blink; green = resting bids (S), red = resting offers (R).
 // The file is ignored when it is more than 20 s old (the Liquidity Profile is not running / no depth): no tags then.
 struct LiqZ { bool bid = true; double lo = 0, hi = 0, bx = 0; long long n = 0; };
-static const double LIQ_SHOW_X = 2.0, LIQ_KEEP_X = 1.7; static const long long LIQ_STALE_S = 20;
+// (2.8.3) the Liquidity Profile 0.13+ publishes only the zones it draws (shown at 2.0x, kept to 1.7x): every one of them is tagged
+static const double LIQ_SHOW_X = 1.7, LIQ_KEEP_X = 1.7; static const long long LIQ_STALE_S = 20;
 inline bool parseLiqZones(const std::string& text, long long nowUnix, std::vector<LiqZ>& out, std::string& why)
 {
     out.clear();

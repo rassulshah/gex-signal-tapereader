@@ -63,9 +63,9 @@ int main()
         CHECK(dpaudit::liqAt(Z, 7851.25, false) != nullptr && dpaudit::liqAt(Z, 7851.50, false) == nullptr, "covers the zone +/- half its width (1.25), not beyond");
         const dpaudit::LiqZ* onl = dpaudit::liqAt(Z, 7857.75, false);
         CHECK(onl && !onl->bid && onl->n == 1152, "ONL 7,857.75 inside the offer zone: red, 1152");
-        CHECK(dpaudit::liqAt(Z, 7866.00, false) == nullptr && dpaudit::liqAt(Z, 7866.00, true) == nullptr, "1.67x: no tag (below 2.0x, and below the 1.7x keep line)");
+        CHECK(dpaudit::liqAt(Z, 7866.00, false) == nullptr && dpaudit::liqAt(Z, 7866.00, true) == nullptr, "1.67x: no tag (below the 1.7x line)");
         std::vector<dpaudit::LiqZ> Z2; dpaudit::parseLiqZones("LIQZ,1,1000,0.25\nZ,S,7847.5,7850,1.8,700\n", 1000, Z2, why);
-        CHECK(dpaudit::liqAt(Z2, 7850, false) == nullptr && dpaudit::liqAt(Z2, 7850, true) != nullptr, "1.8x: not shown fresh, kept once shown (no blinking)");
+        CHECK(dpaudit::liqAt(Z2, 7850, false) != nullptr, "(2.8.3) 1.8x: a zone the Liquidity Profile still draws (kept to 1.7x) is tagged - badge and column agree");
     }
     {   // (2.8.0) hourly charts take the 3-min chart's key levels
         std::vector<dpaudit::KeyLv> v = { { "PDH", 7870.5, false }, { "ONL/LonLO", 7857.75, false }, { "HrHI", 7880.25, true } };
