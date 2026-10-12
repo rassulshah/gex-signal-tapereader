@@ -1,5 +1,5 @@
 /********************************************************************************
- *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.1.1, 2026-10-11)
+ *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.2.0, 2026-10-11)
  *
  *  PULLING: who pulled their resting orders near price, bar by bar, from the market-by-order feed (Rithmic DBO through IRT's
  *  DEPTH_BY_ORDER). Rassul 2026-10-11 20:50-20:57: "a simple two line approach that is looking at pulling of orders by buyers and
@@ -14,6 +14,8 @@
  *  What counts as a pull (PullingLogic.h, checked on his own recordings): a cancel (DEL that did not follow a fill emptying it), a
  *  smaller size at the same price, or an order moved AWAY from the market - only bids within `near` ticks under the best bid and
  *  offers within `near` ticks over the best offer. A fill is never a pull.
+ *  (0.2.0) MBO RECORDER: every order-by-order event it drains, raw, to C:\Dev\level-reversal-analytics\data\irt\<session>\<MKT>\mbo_HH.csv
+ *  (the IRT Reader's dbo format), archived nightly by lra.mbo_live - the reader's own recording stopped after a minute or two on ES / NQ.
  *  Record: lsFlexLevels\Pulling\<MKT>-<sec/bar>-<session>.csv (one line per closed bar), re-read on load for this session and the two
  *  before, so a restart or a scroll back shows what was drawn (the order feed has no history before IRT started).
  *  No settings. Per-market near / line from lsFlexLevels\LRA-PullNorms-<MKT>.csv (PARAM,near,8 / PARAM,line,1.5) when the study
@@ -52,7 +54,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define PL_VERSION "0.1.1"          // keep equal to pl::VERSION and the setVersion literal below
+#define PL_VERSION "0.2.0"          // keep equal to pl::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_X = 0x003CC8FA;
 static const int SLICE_MAX = 20000;            // events per call at most (never blocks IRT)
@@ -150,7 +152,7 @@ struct PLState {
     int spb = 0; double tick = 0;
     long count = 0;                               // bars known at the last pump
     long long session = -1, openedMs = -1, lastEventMs = -1, lastDepthMs = -1, lastStatusMs = -1, lastNormsMs = -1;
-    long long slices = 0, capped = 0, recFails = 0;
+    long long slices = 0, capped = 0, recFails = 0, mboRows = 0, mboFails = 0;   // (0.2.0) the raw order-by-order recorder
     std::map<long long, pl::Bar> hist;            // the record: bar time -> what was counted (this session and the two before)
     std::map<long long, double> vol;              // bar time -> the chart's volume of that bar (the coverage check)
     std::vector<std::string> pending;             // closed bars not yet written
@@ -173,6 +175,7 @@ private:
     void identify(PLState& S);
     void open(PLState& S);
     void drain(PLState& S, long long now);
+    void record(PLState& S, const std::map<std::string, std::string>& byFile);
     void readBest(PLState& S, long long now);
     void bars(PLState& S, long count);
     void load(PLState& S);
@@ -246,11 +249,30 @@ void Pulling::readBest(PLState& S, long long now) {
 void Pulling::drain(PLState& S, long long now) {
     if (!S.dbo || S.dboDead || S.tick <= 0) return;
     const long long t0 = steadyMs(); int n = 0;
+    std::map<std::string, std::string> rec;                              // (0.2.0) file -> this slice's raw lines (one append per file)
     try {
         while (true) {
             if (n >= SLICE_MAX || ((n & 511) == 511 && steadyMs() - t0 > SLICE_BUDGET_MS)) { S.capped++; break; }
             if (S.dbo->getNext() != RTX_OK) break;
             const DEPTH_ORDER& o = S.dbo->dbo;
+            {   // (0.2.0, Rassul 21:43 "i think there is edge in mbo data and i would like to identify and use it") every event, raw, in
+                // the IRT Reader's dbo format, to data\irt\<session>\<MKT>\mbo_HH.csv - lra.mbo_live archives it nightly
+                struct tm t; std::memset(&t, 0, sizeof(t));
+                if (getLocaltime(o.timestamp, &t)) {
+                    static const char* ACT[4] = { "NEW", "MOD", "DEL", "FILL" };
+                    long long dd = civilDays(t.tm_year + 1900, (unsigned)(t.tm_mon + 1), (unsigned)t.tm_mday) + (t.tm_hour >= 17 ? 1 : 0);
+                    for (int k = 0; k < 3 && ((dd + 4) % 7 + 7) % 7 % 6 == 0; ++k) dd++;         // Saturday / Sunday -> Monday (the reader's naming)
+                    const long long z = dd + 719468, era = (z >= 0 ? z : z - 146096) / 146097; const unsigned doe = (unsigned)(z - era * 146097);
+                    const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+                    const unsigned mp = (5 * doy + 2) / 153, day = doy - (153 * mp + 2) / 5 + 1, mon = mp < 10 ? mp + 3 : mp - 9; const long long yr = (long long)yoe + era * 400 + (mon <= 2);
+                    char path[300], line[220];
+                    std::snprintf(path, sizeof(path), "C:\\Dev\\level-reversal-analytics\\data\\irt\\%04lld-%02u-%02u\\%s\\mbo_%02d.csv", yr, mon, day, S.market.c_str(), t.tm_hour);
+                    std::snprintf(line, sizeof(line), "%04d-%02d-%02d %02d:%02d:%02d|%s|%.10g|%.10g|%lu|%d|%d|%c|%.10g|%.10g\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
+                                  o.action < 4 ? ACT[o.action] : "?", (double)o.price, (double)o.previousPrice, (unsigned long)o.size, o.orderID, o.aggressorOrderID,
+                                  o.buySell == 1 ? 'B' : o.buySell == 0 ? 'S' : '?', (double)o.bid, (double)o.ask);
+                    rec[path] += line;
+                }
+            }
             if (o.action > 3 || o.buySell > 1 || !pl::finite(o.price) || o.price <= 0) { n++; continue; }
             pl::Ev x; x.action = o.action; x.side = o.buySell == 1 ? pl::BID : pl::OFFER;
             x.px = pl::toTick(o.price, S.tick); x.prev = pl::finite(o.previousPrice) && o.previousPrice > 0 ? pl::toTick(o.previousPrice, S.tick) : 0;
@@ -260,6 +282,28 @@ void Pulling::drain(PLState& S, long long now) {
         }
     } catch (...) { S.dboDead = true; S.state = "order feed read fault"; }
     if (n > 0) { S.lastEventMs = now; S.slices++; }
+    if (!rec.empty()) record(S, rec);
+}
+
+// (0.2.0) one append per hour file per slice; the folder is made on the first write of a session / market; a failed write is counted,
+// its lines dropped (never retried in a loop - the feed keeps coming)
+void Pulling::record(PLState& S, const std::map<std::string, std::string>& byFile) {
+#if defined(_WIN32)
+    for (std::map<std::string, std::string>::const_iterator i = byFile.begin(); i != byFile.end(); ++i) {
+        const std::string& p = i->first; const size_t a = p.rfind('\\'); if (a == std::string::npos) continue;
+        const std::string md = p.substr(0, a), sd = md.substr(0, md.rfind('\\'));
+        CreateDirectoryA(sd.c_str(), NULL); CreateDirectoryA(md.c_str(), NULL);
+        const bool fresh = !statFile(p);
+        std::ofstream f(p.c_str(), std::ios::binary | std::ios::app);
+        if (!f) { S.mboFails++; continue; }
+        if (fresh) f << "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask\n";
+        f << i->second; f.flush();
+        if (!f) { S.mboFails++; continue; }
+        S.mboRows += (long long)std::count(i->second.begin(), i->second.end(), '\n');
+    }
+#else
+    for (std::map<std::string, std::string>::const_iterator i = byFile.begin(); i != byFile.end(); ++i) S.mboRows += (long long)std::count(i->second.begin(), i->second.end(), '\n');
+#endif
 }
 
 // a new bar: the one before it closed - its counts go to the record (once), with the chart's volume for the coverage check
@@ -342,7 +386,7 @@ void Pulling::status(PLState& S, long long now) {
       << "\nBEST," << (S.e.haveBest ? (double)S.e.bestBid * S.tick : 0) << "," << (S.e.haveBest ? (double)S.e.bestAsk * S.tick : 0)
       << "\nPARAMS,near " << S.e.P.near << ",line " << S.e.P.line << "," << S.params
       << "\nNOW,bids_pulled_x " << S.e.x(b, pl::BID) << ",offers_pulled_x " << S.e.x(b, pl::OFFER) << ",leader " << S.e.leader(b)
-      << "\nRECORD,bars " << S.hist.size() << ",fails " << S.recFails << "\n";
+      << "\nRECORD,bars " << S.hist.size() << ",fails " << S.recFails << "\nMBO_RECORDER,rows " << S.mboRows << ",fails " << S.mboFails << ",data\\irt\\<session>\\" << S.market << "\\mbo_HH.csv\n";
     const std::string text = o.str();
     if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
@@ -453,6 +497,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI);                                   // its own pane, draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
     p->setDescription("LRA Pulling: who pulled their resting orders near price, per bar, from the order-by-order (MBO) feed. Red = buyers pulled bids (bearish: price drops when buyers step away), green = sellers pulled offers (bullish: price lifts when sellers step away), each x the normal pulling of the 20 bars before; the value shows at or over the line; a yellow X = the side pulling more over the last 10 bars changed. Fills never count as pulls. MBO % (top right) = how much of the bar volume the order feed showed.");
-    p->setVersion("0.1.1");   // PL_VERSION
+    p->setVersion("0.2.0");   // PL_VERSION
     return p;
 }

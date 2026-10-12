@@ -56,7 +56,8 @@ int main() {
     CHECK(r.find("bar_time|bids_pulled") == 0 && std::count(r.begin(), r.end(), '\n') >= 22, "each closed bar is recorded");
     usleep(1100000); p->calc(0);
     std::string st = readAll(flex + "\\Pulling.status-ES-180.txt");
-    CHECK(st.find("VERSION,0.1.1") != std::string::npos && st.find("STATE,ready") != std::string::npos, "status file: version and ready");
+    CHECK(S->mboRows >= 23 * 8, "(0.2.0) every drained event goes to the recorder");
+    CHECK(st.find("VERSION,0.2.0") != std::string::npos && st.find("STATE,ready") != std::string::npos, "status file: version and ready");
     p->destroy(); CHECK(h.dboObjects == 0 && h.data == nullptr, "destroy unsubscribes and frees the slot");
     Pulling* q = static_cast<Pulling*>(CreateExtension());
     h.now = t0 + 22 * 180 + 30; q->calc(0);

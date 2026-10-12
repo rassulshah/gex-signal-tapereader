@@ -24,7 +24,7 @@
 
 namespace pl {
 
-static const char* const VERSION = "0.1.1";      // keep equal to PL_VERSION / setVersion in Pulling.cpp
+static const char* const VERSION = "0.2.0";      // keep equal to PL_VERSION / setVersion in Pulling.cpp
 typedef long long Tick;
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Side { OFFER = 0, BID = 1 };                  // the SDK's buySell: 0 sell (an offer), 1 buy (a bid)
