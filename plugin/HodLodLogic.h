@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.6";
+static const char* const HL_VERSION = "1.1.7";
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -1022,7 +1022,8 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
 #if HL_HAVE_READ
             int c = (int)std::llround(s1.centre), hw = (int)std::llround(s1.half);
             v.win1a = s1.from; v.win1b = s1.to; v.src1st = "hlr::stage1";
-            v.E[K_1ST].s = clk(c) + " \xB1" + std::to_string(hw) + "m";
+            (void)c; (void)hw;   // (1.1.7, Rassul 18:25 "ranges instead of +-"): "8:21 - 9:21", not "8:51 \xB1" "30m"
+            v.E[K_1ST].s = clk(s1.from) + " - " + clk(s1.to);
             if (std::isfinite(s1.show)) v.E[K_1ST].s += "  " + std::to_string((int)std::llround(s1.show * 100)) + "%";   // the delivered share
             v.E[K_TOOK].s = "~" + durT(c - op);
             if (md && fin(md->recTook)) v.E[K_RECTOOK].s = "~" + durT(std::llround(md->recTook));
@@ -1031,7 +1032,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         } else if (md && fin(md->t1)) {
             int t1 = op + (int)std::llround(md->t1);
             v.win1a = t1 - WIN_HALF; v.win1b = t1 + WIN_HALF;
-            v.E[K_1ST].s = clk(t1) + " \xB1" + std::to_string(WIN_HALF) + "m";
+            v.E[K_1ST].s = clk(t1 - WIN_HALF) + " - " + clk(t1 + WIN_HALF);   // (1.1.7) a range, not +-
             v.E[K_TOOK].s = "~" + durT(std::llround(md->t1));
             if (fin(md->recTook)) v.E[K_RECTOOK].s = "~" + durT(std::llround(md->recTook));
         }
