@@ -1,4 +1,4 @@
-// test_cvd_host.cpp -- lsCVD 1.0.0 on the mock host (BUILD-LESSONS proofs). From tests/:  g++ -std=c++17 -Wall -Wextra -Imock -I../plugin test_cvd_host.cpp -o th && ./th
+// test_cvd_host.cpp -- lsCVD 1.1.0 on the mock host (BUILD-LESSONS proofs). From tests/:  g++ -std=c++17 -Wall -Wextra -Imock -I../plugin test_cvd_host.cpp -o th && ./th
 #include "CVD.cpp"
 #include <cstdio>
 #include <random>
@@ -122,7 +122,47 @@ int main() {
         c.h.paneBottom = 40; c.draw(); CHECK(c.h.draws.empty(), "pane too short: nothing drawn"); }
     // 12. status file written once, keyed by market and bar size
     {   std::ifstream in((std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\CVD.status-ES-180.txt").c_str()); std::string l; std::getline(in, l);
-        CHECK(l == "VERSION,1.0.0", "status file"); }
+        CHECK(l == "VERSION,1.1.0", "status file"); }
+    // 13. (1.1.0) the chart shows only shown marks: confirmed, at PDH/PDL/PFH/PFL, stop within 4.0x the bar range; no '?' and no 'x'
+    {   Chart c; c.h.bars = all; c.h.barPx = 1; c.h.firstBar = 0; c.run(); c.draw();
+        int labels = 0; bool warn = false;
+        for (const mock::Draw& d : c.h.draws) if (d.type == "text" && (d.text == "Div" || d.text == "Exh" || d.text == "BR" || d.text == "Abs" || d.text.find('?') != std::string::npos || d.text.find(" x") != std::string::npos)) {
+            ++labels; if (d.text.find('?') != std::string::npos || d.text.find(" x") != std::string::npos || d.text == "Abs") warn = true; }
+        int shown = 0; bool rule = true, abs = false;
+        for (const cvdf::Mark& m : c.st()->feed.marks) {
+            if (m.e.type == cvd::Type::Abs) abs = true;
+            if (!m.shown) continue;
+            ++shown;
+            if (m.e.state != cvd::State::Confirmed || !cvdf::shownLevel(m.e.level_id) || !(m.risk <= 4.0 + 1e-9)) rule = false;
+        }
+        std::printf("  shown %d of %zu marks, labels drawn %d\n", shown, c.st()->feed.marks.size(), labels);
+        CHECK(!warn, "no warnings / expired / Abs on the chart"); CHECK(labels <= shown, "only shown marks are drawn"); CHECK(rule, "every shown mark meets the rule");
+        CHECK(!abs, "Abs is off"); CHECK(c.st()->feed.shownCount == shown, "shown count"); }
+    CHECK(cvdf::shownLevel("PFL/PDL@31263|S") && cvdf::shownLevel("ONH/PDH@1|R") && !cvdf::shownLevel("ONH/LonHI@31415|R") && !cvdf::shownLevel("CR@100|S"), "level rule");
+    // 14. nightly range rows apply from their own session on: a future row changes nothing already drawn, a past row does
+    {   Chart base; base.h.bars = all; base.run(); const std::string before = sig(*base.st());
+        const std::string flex = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-CVD-ranges.csv";
+        { std::ofstream o(flex.c_str()); o << "ES,2030-01-01,40\nGC,2020-01-01,99\nbad line\n"; }
+        Chart fut; fut.h.bars = all; fut.run();
+        CHECK(sig(*fut.st()) == before && fut.st()->feed.rangeTicks == 15, "a row for a future session changes nothing");
+        { std::ofstream o(flex.c_str()); o << "ES,2020-01-01,30\n"; }
+        Chart past; past.h.bars = all; past.run();
+        CHECK(past.st()->feed.rangeTicks == 30 && past.st()->feed.cfg.stall_range_ticks == 16, "a row in force rescales (8 x 30/15)");
+        std::remove(flex.c_str()); }
+    // 15. the nightly verdict: proven drops 'testing'; retired hides every mark and says so
+    {   const std::string vf = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-CVD-verdict.csv";
+        auto drawn = [&](const char* v, bool& testingTag, bool& offTag, int& labels) {
+            { std::ofstream o(vf.c_str()); o << v; }
+            Chart c; c.h.bars = all; c.h.barPx = 1; c.h.firstBar = 0; c.run(); c.draw(); testingTag = offTag = false; labels = 0;
+            for (const mock::Draw& d : c.h.draws) if (d.type == "text") { if (d.text == "testing") testingTag = true; if (d.text.find("marks off") == 0) offTag = true;
+                if (d.text == "Div" || d.text == "Exh" || d.text == "BR") ++labels; }
+        };
+        bool t = false, off = false; int n = 0, n0 = 0;
+        drawn("VERDICT,testing\n", t, off, n0); CHECK(t && !off && n0 > 0, "testing: tag and marks");
+        drawn("VERDICT,proven\n", t, off, n); CHECK(!t && !off && n == n0, "proven: no tag, same marks");
+        drawn("VERDICT,retired\n", t, off, n); CHECK(!t && off && n == 0, "retired: no marks, says so");
+        drawn("VERDICT,garbage\n", t, off, n); CHECK(t && n == n0, "unknown verdict = testing");
+        std::remove(vf.c_str()); }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

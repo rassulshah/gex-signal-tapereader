@@ -2,6 +2,7 @@
 import sys, pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 fr, barsf, outp, t0, t1, title = sys.argv[1:7]
+LV = [(x.split(':')[0], float(x.split(':')[1])) for x in (sys.argv[7].split(',') if len(sys.argv) > 7 else [])]
 F = pd.read_csv(fr, keep_default_na=False)
 B = pd.concat([pd.read_csv(x) for x in barsf.split('+')]); B['end'] = pd.to_datetime(B.t_ct) + pd.Timedelta(minutes=3)
 B = B[B.end <= t1].tail(200).reset_index(drop=True)   # the plugin's view: the last 200 chart bars
@@ -21,6 +22,9 @@ for i, r in B.iterrows():
     x = x0 + i * bp; c = (52, 211, 153) if r.c >= r.o else (248, 113, 113)
     d.line([x, y(r.h), x, y(r.l)], fill=c); d.rectangle([x - 2, y(max(r.o, r.c)), x + 2, y(min(r.o, r.c)) + 1], fill=c)
 d.text((6, TOP + 4), 'price (IRT price pane, for context)', fill=(120, 130, 150), font=f)
+for name, p in LV:
+    if lo <= p <= hi:
+        d.line([0, y(p), W, y(p)], fill=(234, 140, 50), width=1); d.text((W - 90, y(p) - 12), f'{name} {p:g}', fill=(234, 140, 50), font=f)
 # the CVD pane exactly as the plugin drew it
 oy = TOP + CH + 10
 d.rectangle([0, oy, W, oy + PH], fill=(17, 24, 39))

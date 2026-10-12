@@ -1,12 +1,15 @@
 /*******************************************************************************
- * lsCVD 1.0.0 -- one pane: CVD line + delta % histogram, with Div / Abs / Exh / BR marks on the CVD line (Rassul 2026-10-12
+ * lsCVD 1.1.0 -- one pane: CVD line + delta % histogram, with Div / Exh / BR marks on the CVD line (Rassul 2026-10-12
  * "implement new cvd delta indicator", from the outside package CVD Signals v0.1 + its approved mockup).
  *
  *   CvdEngine.h  the reviewed signal core (whole-tick compares, stable IDs)       CvdFeed.h  sessions, volume, levels, per-market scale
  *   Closed bars only; each bar is fed to the engine exactly once and nothing already drawn ever changes (BUILD-LESSONS #11, #27, #28).
  *   Green = bullish setup (drawn below the line), red = bearish (above). 'Div?' outlined = warning, 'Div' filled = price + flow
  *   confirmed, grey 'Div x' = expired / invalidated. All four reads are TESTING (study 2026-10-12: confirmed +0.04R, n 213).
- *   Writes: lsFlexLevels\CVD.status-<MKT>-<spb>.txt and lsFlexLevels\CVD\LRA-CVD-events-<MKT>-<contract>-<session>.csv (the study log).
+ *   Writes: lsFlexLevels\CVD.status-<MKT>-<spb>.txt and lsFlexLevels\CVD\LRA-CVD2-events-<MKT>-<spb>-<contract>-<session>.csv (the study log).
+ *   1.1.0 (2026-10-12 'i want it simplified and improved'): the chart shows only CONFIRMED marks at prior-day / prior-session levels
+ *   with a stop within 4.0x the median bar range (CvdFeed.h 'Shown': held on unseen days, +0.26R on 99 vs -0.07R for the rest).
+ *   No '?' warnings and no grey x on the chart - every read is still logged. Abs off. Reads lsFlexLevels\LRA-CVD-ranges.csv (nightly).
  ******************************************************************************/
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -47,7 +50,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CVD_VERSION "1.0.0"
+#define CVD_VERSION "1.1.0"
 
 static const COLOR C_BULL = 0x0034D399;       // green  (bullish setup)
 static const COLOR C_BEAR = 0x00F87171;       // red    (bearish setup)
@@ -56,7 +59,6 @@ static const COLOR C_LINE = 0x0060A5FA;       // CVD line, neutral blue
 static const COLOR C_HBULL = 0x00205C49;      // delta % bars, muted
 static const COLOR C_HBEAR = 0x005E2B35;
 static const COLOR C_AXIS = 0x00334155;
-static const COLOR C_PANEL = 0x00111827;      // inside of an outlined (warning) label
 static const COLOR C_DARK = 0x000B1220;       // text on a filled (confirmed) label
 static const long PASS_BARS = 3000;           // work cap per calc pass (BUILD-LESSONS #40)
 static std::mutex g_fileMutex;
@@ -155,7 +157,8 @@ struct RuntimeState {
     long long failRaw = 0, failSinceMs = 0;
     long long mqStamp = -2; long newestSess = -1;
     std::set<std::string> journalKnown, journalLoaded; long long journalFailures = 0;
-    std::vector<std::pair<long long, cvd::Event> > journalRetry;
+    std::vector<cvdf::Mark> journalRetry;
+    long long rangeStamp = -2, verdictStamp = -2; std::string verdict = "testing";   // lra.cvd_nightly: testing / proven / retired
     long long lastStatusMs = -1; std::string lastStatusText;
 };
 
@@ -175,6 +178,8 @@ private:
     bool civil(RTDATE raw, long& days, int& endSec);
     bool readFlow(RTARRAYP& vap, int bar, double& buy, double& sell);
     void loadMq(RuntimeState& s);
+    void loadRanges(RuntimeState& s);
+    void loadVerdict(RuntimeState& s);
     void calcBars(RuntimeState& s, long count);
     void journal(RuntimeState& s);
     void writeStatus(RuntimeState& s);
@@ -212,7 +217,7 @@ void CVD::identify(RuntimeState& s) {
     if (s.identified && id == s.identity) return;
     // a new symbol / timeframe / reload: start over from the chart's own history
     s.identified = true; s.identity = id; s.fault = false; s.feed = cvdf::Feed(); s.nextIndex = -1; s.lastRaw = 0; s.failRaw = 0;
-    s.mqStamp = -2; s.newestSess = -1; s.journalKnown.clear(); s.journalLoaded.clear(); s.journalRetry.clear(); s.lastStatusText.clear();
+    s.mqStamp = -2; s.rangeStamp = -2; s.verdictStamp = -2; s.verdict = "testing"; s.newestSess = -1; s.journalKnown.clear(); s.journalLoaded.clear(); s.journalRetry.clear(); s.lastStatusText.clear();
     s.market = marketOf(root); s.contract = contract; s.spb = spb; s.tick = tick;
     if (s.market.empty()) { s.fault = true; s.state = "UNKNOWN MARKET " + root; return; }
     if (!(std::isfinite(tick) && tick > 0)) { s.fault = true; s.state = "NO TICK SIZE"; return; }
@@ -257,6 +262,42 @@ void CVD::loadMq(RuntimeState& s) {
     }
 }
 
+// the nightly per-market bar range (lra.cvd_nightly): rows "MKT,YYYY-MM-DD,ticks" - the session date a row first applies to.
+// Only future sessions get a new row, so a reload never changes a session already drawn. Read only when the file changes.
+void CVD::loadRanges(RuntimeState& s) {
+    const std::string f = flexDir(); if (f.empty()) return;
+    const std::string p = f + "\\LRA-CVD-ranges.csv"; long long st = -1;
+    if (!statFile(p, &st)) { if (s.rangeStamp != -1) { s.rangeStamp = -1; s.feed.rangeRows.clear(); } return; }
+    if (st == s.rangeStamp) return;
+    s.rangeStamp = st; s.feed.rangeRows.clear();
+    std::ifstream in(p.c_str()); std::string line; int n = 0;
+    while (std::getline(in, line) && ++n < 5000) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const std::vector<std::string> c = split(line, ',');
+        if (c.size() != 3 || trim(c[0]) != s.market) continue;
+        int y = 0, m = 0, d = 0; char extra = 0; double ticks = 0;
+        if (std::sscanf(trim(c[1]).c_str(), "%d-%d-%d%c", &y, &m, &d, &extra) != 3 || m < 1 || m > 12 || d < 1 || d > 31) continue;
+        if (!parseD(c[2], ticks) || ticks < 1 || ticks > 5000) continue;
+        s.feed.rangeRows.push_back(std::make_pair(svl::daysFromCivil(y, m, d), ticks));
+    }
+    std::sort(s.feed.rangeRows.begin(), s.feed.rangeRows.end());
+}
+
+// the nightly verdict on the shown reads (lra.cvd_nightly): "VERDICT,testing|proven|retired". Anything else = testing.
+void CVD::loadVerdict(RuntimeState& s) {
+    const std::string f = flexDir(); if (f.empty()) return;
+    const std::string p = f + "\\LRA-CVD-verdict.csv"; long long st = -1;
+    if (!statFile(p, &st)) { s.verdictStamp = -1; s.verdict = "testing"; return; }
+    if (st == s.verdictStamp) return;
+    s.verdictStamp = st; s.verdict = "testing";
+    std::ifstream in(p.c_str()); std::string line;
+    if (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const std::vector<std::string> c = split(line, ',');
+        if (c.size() == 2 && trim(c[0]) == "VERDICT" && (trim(c[1]) == "proven" || trim(c[1]) == "retired")) s.verdict = trim(c[1]);
+    }
+}
+
 void CVD::calcBars(RuntimeState& s, long count) {
     if (count < 3) return;
     RTARRAYI times(barDateTime), vol(barVolume); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose); RTARRAYP vap(barVolumeProfile);
@@ -264,6 +305,8 @@ void CVD::calcBars(RuntimeState& s, long count) {
     const long lastClosed = count - 2;                        // the last array bar is forming: never read
     { long d = 0; int e = 0; if (civil((RTDATE)times[(int)lastClosed], d, e)) s.newestSess = svl::classify(d, e, s.spb, s.feed.openMin, s.feed.closeMin).sess; }
     loadMq(s);
+    loadRanges(s);
+    loadVerdict(s);
     if (s.nextIndex < 0) {                                    // start ~8 days back: 5 prior sessions for the range + the prior session's levels
         const long long newest = (long long)times[(int)lastClosed];
         long first = lastClosed;
@@ -294,7 +337,7 @@ void CVD::calcBars(RuntimeState& s, long count) {
             }
         } else { x.buy = buy; x.sell = sell; }
         const std::vector<cvd::Event> ev = s.feed.push(x);
-        for (size_t k = 0; k < ev.size(); ++k) s.journalRetry.push_back(std::make_pair(x.raw, ev[k]));
+        for (size_t k = 0; k < ev.size(); ++k) s.journalRetry.push_back(s.feed.marks[s.feed.marks.size() - ev.size() + k]);
         s.lastRaw = (long long)raw; s.nextIndex = i + 1; s.failRaw = 0;
         s.state = s.feed.state;
     }
@@ -308,19 +351,19 @@ void CVD::journal(RuntimeState& s) {
     if (s.journalRetry.empty()) return;
     const std::string f = flexDir(); if (f.empty()) { s.journalRetry.clear(); return; }
     const std::string dir = f + "\\CVD"; makeDir(f); makeDir(dir);
-    const char* header = "schema,version,market,contract,session,bar_time_ct,event_id,type,direction,state,label,reason,warning_seq,source_seq,level_id,level,trigger,invalidation,cvd,range_ticks";
+    const char* header = "schema,version,market,contract,session,bar_time_ct,event_id,type,direction,state,label,reason,warning_seq,source_seq,level_id,level,trigger,invalidation,cvd,range_ticks,risk,shown";
     std::lock_guard<std::mutex> g(g_fileMutex);
-    std::vector<std::pair<long long, cvd::Event> > keep;
+    std::vector<cvdf::Mark> keep;
     for (size_t i = 0; i < s.journalRetry.size(); ++i) {
-        const cvd::Event& e = s.journalRetry[i].second;
-        const std::string path = dir + "\\LRA-CVD-events-" + s.market + "-" + safeFilePart(s.contract) + "-" + e.anchor + ".csv";
+        const cvd::Event& e = s.journalRetry[i].e;
+        const std::string path = dir + "\\LRA-CVD2-events-" + s.market + "-" + std::to_string(s.spb) + "-" + safeFilePart(s.contract) + "-" + e.anchor + ".csv";
         if (!s.journalLoaded.count(path)) {
             s.journalLoaded.insert(path);
             std::ifstream prior(path.c_str()); std::string row; std::getline(prior, row);
             while (std::getline(prior, row)) {
                 if (prior.eof()) break;                                   // a last line without its newline was never committed
                 const std::vector<std::string> c = split(row, ',');
-                if (c.size() == 20) s.journalKnown.insert(c[6] + "|" + c[9] + "|" + c[5]);
+                if (c.size() == 22) s.journalKnown.insert(c[6] + "|" + c[9] + "|" + c[5]);
             }
         }
         const std::string& barTime = e.timestamp;
@@ -331,10 +374,10 @@ void CVD::journal(RuntimeState& s) {
         if (!out) { ++s.journalFailures; if (keep.size() < 2000) keep.push_back(s.journalRetry[i]); continue; }
         if (fresh) out << header << '\n';
         std::ostringstream row; row.imbue(std::locale::classic()); row << std::setprecision(12);
-        row << "CVD1," << CVD_VERSION << ',' << s.market << ',' << s.contract << ',' << e.anchor << ',' << barTime << ',' << e.id << ','
+        row << "CVD2," << CVD_VERSION << ',' << s.market << ',' << s.contract << ',' << e.anchor << ',' << barTime << ',' << e.id << ','
             << cvd::name(e.type) << ',' << (e.direction == cvd::Direction::Bull ? "bull" : "bear") << ',' << cvd::name(e.state) << ','
             << e.label << ',' << e.reason << ',' << e.warning_seq << ',' << e.source_seq << ',' << e.level_id << ',' << e.level << ','
-            << e.trigger << ',' << e.invalidation << ',' << e.cvd << ',' << s.feed.rangeTicks;
+            << e.trigger << ',' << e.invalidation << ',' << e.cvd << ',' << s.feed.rangeTicks << ',' << s.journalRetry[i].risk << ',' << (s.journalRetry[i].shown ? 1 : 0);
         out << row.str() << '\n'; out.flush();
         if (out) s.journalKnown.insert(k2); else { ++s.journalFailures; if (keep.size() < 2000) keep.push_back(s.journalRetry[i]); }
     }
@@ -352,7 +395,7 @@ void CVD::writeStatus(RuntimeState& s) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << CVD_VERSION << "\nMARKET," << s.market << "\nSYMBOL," << s.contract << "\nSPB," << s.spb << "\nSTATE," << s.state
       << "\nRANGE_TICKS," << s.feed.rangeTicks << "\nCVD," << cvdNow << "\nDELTA_PCT," << pctNow << "\nLEVELS," << s.feed.levels().size() / 2
-      << "\nMQ_LEVELS," << s.feed.mq.size() << "\nMARKS," << s.feed.marks.size() << "\nBAD_BARS," << s.feed.badBars << "\nOVER_TOTAL," << s.feed.overTotal
+      << "\nMQ_LEVELS," << s.feed.mq.size() << "\nMARKS," << s.feed.marks.size() << "\nSHOWN," << s.feed.shownCount << "\nVERDICT," << s.verdict << "\nBAD_BARS," << s.feed.badBars << "\nOVER_TOTAL," << s.feed.overTotal
       << "\nJOURNAL_FAILURES," << s.journalFailures << "\n";
     const std::string text = o.str(); if (text == s.lastStatusText) return;
     const std::string path = f + "\\CVD.status-" + s.market + "-" + std::to_string(s.spb) + ".txt", tmp = path + ".tmp";
@@ -377,10 +420,10 @@ void CVD::render(const RuntimeState& s) {
     double cvdNow = NAN, pctNow = NAN;
     for (std::map<long long, cvdf::Out>::const_reverse_iterator it = s.feed.out.rbegin(); it != s.feed.out.rend(); ++it) if (it->second.counted) { cvdNow = it->second.cvd; pctNow = it->second.pct; break; }
     {
-        long x = text(pane.left + 4, pane.top + 1, "CVD   ", C_GREY);
-        x = text(x, pane.top + 1, "CVD: ", C_GREY); x = text(x, pane.top + 1, withSign(cvdNow) + "   ", !std::isfinite(cvdNow) ? C_GREY : cvdNow >= 0 ? C_BULL : C_BEAR);
+        long x = text(pane.left + 4, pane.top + 1, "CVD: ", C_GREY); x = text(x, pane.top + 1, withSign(cvdNow) + "   ", !std::isfinite(cvdNow) ? C_GREY : cvdNow >= 0 ? C_BULL : C_BEAR);
         x = text(x, pane.top + 1, "Delta: ", C_GREY); text(x, pane.top + 1, withSign(pctNow) + "%", !std::isfinite(pctNow) ? C_GREY : pctNow >= 0 ? C_BULL : C_BEAR);
-        const std::string tag = "testing"; text(pane.right - getTextWidth(tag.c_str(), -1) - 8, pane.top + 1, tag, C_GREY);
+        const std::string tag = s.verdict == "proven" ? "" : s.verdict == "retired" ? "marks off - stopped working" : "testing";
+        if (!tag.empty()) text(pane.right - getTextWidth(tag.c_str(), -1) - 8, pane.top + 1, tag, C_GREY);
     }
     if (s.state.compare(0, 5, "READY") != 0) text(pane.left + 4, pane.top + 14, s.state, C_GREY);   // only when something is not right
     if (count < 2) return;
@@ -432,15 +475,14 @@ void CVD::render(const RuntimeState& s) {
     struct Box { long l, t, r, b; }; std::vector<Box> placed;
     for (size_t m = 0; m < s.feed.marks.size(); ++m) {
         const cvdf::Mark& mk = s.feed.marks[m];
-        if (!mk.e.plot) continue;
+        if (!mk.shown || s.verdict == "retired") continue;        // 1.1.0: only the confirmed reads that held up; none once retired
         std::map<long long, int>::const_iterator b = barOf.find(mk.raw); if (b == barOf.end()) continue;
         const cvdf::Out* o = outOf(b->second); if (!o || !std::isfinite(o->cvd)) continue;
         const bool bull = mk.e.direction == cvd::Direction::Bull;
-        const bool pending = mk.e.state == cvd::State::Pending, confirmed = mk.e.state == cvd::State::Confirmed;
-        const COLOR col = pending || confirmed ? (bull ? C_BULL : C_BEAR) : C_GREY;
-        const std::string label = cvd::name(mk.e.type) + (pending ? "?" : confirmed ? "" : " x");
+        const COLOR col = bull ? C_BULL : C_BEAR;
+        const std::string label = cvd::name(mk.e.type);
         const long x = xOf(b->second), y = yC(o->cvd), w = getTextWidth(label.c_str(), -1) + 8, x0 = x - w / 2;
-        RCT dot; dot.set(coord(x - 3), coord(y - 3), coord(x + 4), coord(y + 4)); dot.draw(1, col, confirmed ? col : C_PANEL, DRAW_OPAQUE, PAT_SOLID);
+        RCT dot; dot.set(coord(x - 3), coord(y - 3), coord(x + 4), coord(y + 4)); dot.draw(1, col, col, DRAW_OPAQUE, PAT_SOLID);
         long boxTop = LONG_MIN;
         for (int lane = 0; lane < 4 && boxTop == LONG_MIN; ++lane) {
             const long t = bull ? y + 10 + lane * 16 : y - 24 - lane * 16;
@@ -455,8 +497,8 @@ void CVD::render(const RuntimeState& s) {
         setPen(col, 1, P_SOLID);
         { PNT a; a.set(0, 0.0f); a.h = coord(x); a.v = coord(bull ? y + 4 : y - 4); a.setDrawPosition(); PNT c; c.set(0, 0.0f); c.h = coord(x); c.v = coord(bull ? boxTop : boxTop + 14); c.drawLineTo(); }
         RCT box; box.set(coord(x0), coord(boxTop), coord(x0 + w), coord(boxTop + 14));
-        box.draw(1, col, confirmed ? col : C_PANEL, DRAW_OPAQUE, PAT_SOLID);
-        text(x0 + 4, boxTop + 1, label, confirmed ? C_DARK : col);
+        box.draw(1, col, col, DRAW_OPAQUE, PAT_SOLID);
+        text(x0 + 4, boxTop + 1, label, C_DARK);
     }
 }
 
@@ -477,7 +519,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CVD* p = new CVD();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
-    p->setDescription("LRA CVD (testing): cumulative delta from each Globex session, delta % bars, and Div / Abs / Exh / BR marks on the CVD line at his key levels and MenthorQ CR / PS / HVL. Green = bullish below the line, red = bearish above; '?' outlined = warning, filled = price-and-flow confirmed, grey x = expired. Closed bars only; nothing drawn ever changes.");
-    p->setVersion("1.0.0");   // keep equal to CVD_VERSION (the build log reads this literal)
+    p->setDescription("LRA CVD (testing): blue line = cumulative delta (ask-traded minus bid-traded volume) since the 5:00 PM session start; bars = each bar's delta as a % of its volume. Marks sit on the CVD line where a reversal or breakout was confirmed by price and flow at a prior-day or prior-session high / low (PDH PDL PFH PFL): Div = price made a new high / low but CVD did not; Exh = the pushing side faded at the new extreme; BR = broke the level, retested it and held. Green below the line = bullish, red above = bearish. Only setups with a stop within 4x the normal bar range are shown. Closed bars only; nothing drawn ever changes.");
+    p->setVersion("1.1.0");   // keep equal to CVD_VERSION (the build log reads this literal)
     return p;
 }

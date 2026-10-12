@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
     cvdf::Feed f; if (!f.init(mkt, tick, 180)) { std::cerr << "bad market\n"; return 2; }
     std::ofstream bars((outp + "_bars.csv").c_str()), evs((outp + "_events.csv").c_str());
     bars << "raw,session,o,h,l,c,buy,sell,total,cvd,pct,tainted,range_ticks\n";
-    evs << "raw,id,type,dir,state,label,reason,seq,warning_seq,level_id,level,trigger,invalidation,cvd,range_ticks,tol,inv_ticks\n";
+    evs << "raw,id,type,dir,state,label,reason,seq,warning_seq,level_id,level,trigger,invalidation,cvd,range_ticks,tol,inv_ticks,risk,shown\n";
     std::map<long long, cvdf::In> rows;
     for (int a = 4; a < argc; ++a) {
         std::ifstream in(argv[a]); std::string line; std::getline(in, line);
@@ -33,11 +33,13 @@ int main(int argc, char** argv) {
         const cvdf::Out& o = f.out[x.raw];
         bars << x.raw << ',' << f.sess << ',' << x.o << ',' << x.h << ',' << x.l << ',' << x.c << ',' << x.buy << ',' << x.sell << ',' << x.total << ','
              << o.cvd << ',' << o.pct << ',' << o.tainted << ',' << f.rangeTicks << '\n';
-        for (const cvd::Event& e : ev)
+        for (size_t k = 0; k < ev.size(); ++k) {
+            const cvdf::Mark& mk = f.marks[f.marks.size() - ev.size() + k]; const cvd::Event& e = mk.e;
             evs << x.raw << ',' << e.id << ',' << cvd::name(e.type) << ',' << (e.direction == cvd::Direction::Bull ? "bull" : "bear") << ','
                 << cvd::name(e.state) << ',' << e.label << ',' << e.reason << ',' << e.seq << ',' << e.warning_seq << ',' << e.level_id << ','
                 << std::setprecision(10) << e.level << ',' << e.trigger << ',' << e.invalidation << ',' << e.cvd << ',' << f.rangeTicks << ','
-                << f.cfg.level_tolerance_ticks << ',' << f.cfg.invalidate_ticks << '\n';
+                << f.cfg.level_tolerance_ticks << ',' << f.cfg.invalidate_ticks << ',' << mk.risk << ',' << (mk.shown ? 1 : 0) << '\n';
+        }
     }
     std::cerr << mkt << " bars " << rows.size() << " marks " << f.marks.size() << " bad " << f.badBars << " over " << f.overTotal << "\n";
     return 0;
