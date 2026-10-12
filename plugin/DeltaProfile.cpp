@@ -1,5 +1,5 @@
 /********************************************************************************
- * DeltaProfile.cpp -- lsDeltaProfile 2.5.5
+ * DeltaProfile.cpp -- lsDeltaProfile 2.5.6
  * Native chart VAP; rolling (latest bar close - 90 min, latest bar close].
  * Right placement, left-facing one-sided bars, automatic price-anchored rows.
  * Only Width / Gap / Font are configurable. Delta = ask/buy minus bid/sell.
@@ -52,7 +52,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.5";   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.5.6";   // (2.5.6) circles drawn ONLY from the session record (frozen bar / price / colour) - the live node's moving peak bar no longer draws one, so no circle jumps or blinks   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -887,8 +887,9 @@ bool DeltaProfile::render(ChartState& s) {
         const VisibleNode& v = nodes[i]; const dp::Node& n = *v.node;
         // (2.4.3, Rassul 2026-10-09 08:24 "are you making sure that you draw circles wherever there is absorption on the irt chart")
         // the circle goes on the bar where the absorption happened for EVERY absorbing node, even when its letter does not fit
-        if ((n.state.code == "A" || n.state.code == "A?") && n.state.peakBar >= 0 && n.state.peakBar < s.barCount)
-            ringed.push_back(n.state.peakBar), ringAt(n.state.peakBar, n.price, n.state.support ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
+        // (2.5.6, Rassul 2026-10-11 21:42 "i still see the circle toggling on and off"): no circle from the LIVE node - its peak bar moves
+        // as the 90-min profile slides, so its circle jumped and blinked. Every circle now comes only from the session record below
+        // (frozen bar, price and colour from the moment the candidate first appeared).
         const bool absorbing = n.state.code == "A" || n.state.code == "A?";
         std::string label = n.state.code + " " + ratio(n.ratio);
         int width = textWidth(label, s.layout.font, true);
@@ -905,9 +906,7 @@ bool DeltaProfile::render(ChartState& s) {
     // and invisible bucket defaults by considering ONLY rendered bucket edges.
     for (std::size_t i = 0; i < profile.zones.size(); ++i) {
         const dp::Zone& z = profile.zones[i];
-        if ((z.code == "A" || z.code == "A?") && z.peakBar >= 0 && z.peakBar < s.barCount)       // (2.4.3) zone absorption gets its circle too
-            ringed.push_back(z.peakBar), ringAt(z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * profile.tick, z.support ? C_SUPPORT : C_RESISTANCE,
-                   pane.left, paneRight, top, bottom);
+        // (2.5.6) zone circles also come only from the session record (frozen)
         if (z.code != "A" && z.code != "A?") continue;   // (2.5.0, Rassul 13:59 "remove the accumulation and distribution ... only keep absorption")
         int yt = yOf(lastBar, (static_cast<double>(z.high) + 0.5) * profile.tick);
         int yb = yOf(lastBar, (static_cast<double>(z.low) - 0.5) * profile.tick);
