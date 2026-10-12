@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.4";
+static const char* const HL_VERSION = "1.1.5";
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -714,6 +714,7 @@ struct View {
     // on unseen days (crude a tie). Drawn as a vertical line from the 1st extreme with a flag + "Proj HOD 7,870.00"; in the header.
     static const int PROJ_WAIT_MIN = 30;   // minutes after the RTH open before the projection shows
     bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt;
+    double projRange = NAN; int projStage = -1; bool projV2 = false;   // (1.1.5) for the projection log (HodLod.proj-<MKT>.csv)
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
 enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_ROOM, K_RANGE, K_CLOSE, K_DIR1, K_DIR2, NALL };
@@ -880,10 +881,12 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     const hlx::Model* Mo = modelFor(T.C.mkt, v.side, v.modelUp, v.modelByShare, v.sharePct);
     v.ex.valid = false; v.ex.sources = 0;
     double projRange = NAN;   // (1.1.4) the range the projection and Range % use
+    int projStage = -1; bool projV2 = false;
     if (!v.prior) {
         hle::State hs = hleState(T, *R, v.hleWhy);
         v.ex = hle::expect(hs); v.haveHle = v.ex.valid;
         projRange = v.ex.range;
+        projStage = v.ex.stage; projV2 = (v.ex.sources & hle::SRC_RANGE) != 0;
         // (1.1.4, Rassul 2026-10-12 "really good ... except cl"): where the v2 range model has no fit for this 30-min stage (CL at
         // 120 and 300 min), hle falls back to the v1 mean range (CL 2.843 = a target 1.8 pts away that jumped at 10:00 and 13:00).
         // Use the latest earlier stage that has a v2 fit instead (same inputs, never below the range so far; no repaint - each
@@ -892,7 +895,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
             for (int back = 30; back < hs.mso; back += 30) {
                 hle::State h2 = hs; h2.mso = hs.mso - back;
                 hle::Expect e2 = hle::expect(h2);
-                if (e2.valid && (e2.sources & hle::SRC_RANGE)) { projRange = std::max(e2.range, (double)v.rangeT * tick); v.hleWhy += "range: stage " + std::to_string(v.ex.stage) + " has no v2 fit, used stage " + std::to_string(e2.stage) + "; "; break; }
+                if (e2.valid && (e2.sources & hle::SRC_RANGE)) { projRange = std::max(e2.range, (double)v.rangeT * tick); projStage = e2.stage; projV2 = true; v.hleWhy += "range: stage " + std::to_string(v.ex.stage) + " has no v2 fit, used stage " + std::to_string(e2.stage) + "; "; break; }
             }
         }
         if (!v.haveHle && v.hleWhy.empty()) v.hleWhy = "hle not valid for this state; ";
@@ -905,6 +908,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         long long rt = (long long)std::llround(projRange / tick);
         if (rt < v.rangeT) rt = v.rangeT;                                    // never inside the range already printed
         v.projOk = true; v.projUp = v.side == 1; v.projFrom = F->px; v.projFromEnd = F->endAbs;
+        v.projRange = projRange; v.projStage = projStage; v.projV2 = projV2;
         v.projTo = v.projUp ? F->px + rt : F->px - rt;
         v.projTxt = std::string(v.projUp ? "Proj HOD " : "Proj LOD ") + pxTxt((double)v.projTo * tick, dec);
     }

@@ -50,6 +50,7 @@ struct HLState {
     bool faulted = false;
     long long recomputes = 0, statusWrites = 0;   // test counters (checklist #31 / #32)
     int projIdx = -1;                  // (1.1.0) the chart bar index of the 1st extreme (the projection line's x), -1 = none
+    std::string projLogged;            // (1.1.5) the last projection line written to HodLod.proj-<MKT>.csv (session|side|target)
     // (HL104) MenthorQ level snapshots of MenthorQLevels.csv (the one external input): one per distinct content, <= 32, newest last
     std::vector<hl::MqSnap> mq; long long mqStamp = -2; time_t mqChecked = 0; std::string mqWhy; long long mqLoads = 0;
     ~HLState() { delete T; }
@@ -78,6 +79,7 @@ public:
     bool loadMq(HLState& S);
     void recompute(HLState& S, long n);
     void writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows);
+    void writeProj(HLState& S);
     void writeStatus(HLState& S, const hl::Layout* L);
     std::string flexPath(const std::string& name);
     int textW(const std::string& s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s.c_str(), -1); }
@@ -249,10 +251,40 @@ void HodLod::recompute(HLState& S, long n)
     S.state = S.view.has ? (S.view.prior ? "prior session shown" : (S.view.complete ? "RTH complete" : "RTH live")) : "waiting for the RTH open";
     if (start > 0 && lastClosed - start >= 40000) S.state += " (history capped at 40,000 bars)";
     writeFiles(S, rows);
+    writeProj(S);
     S.firstPass = false;
 }
 
 // the read log (every closed RTH bar's read, live or replayed after a restart) + the OUTCOME line; marks only after a good write (#6)
+// (1.1.5, Rassul 2026-10-12 "add updated ... time ... error ... you should also be tracking it for improvement purposes"): one line per
+// change of the projected target (side or price) on the live session, 3-min charts only - what the chart showed and when. The
+// nightly loop scores each target against the day's final HOD / LOD (error, updates, side flips) to refine the range model.
+void HodLod::writeProj(HLState& S)
+{
+    const hl::View& v = S.view;
+    if (S.per != 180 || S.mi < 0 || v.prior || !v.projOk || !(S.tick > 0)) return;
+    const int dec = hl::MKTS[S.mi].dec;
+    std::string tgt = hl::trimNum((double)v.projTo * S.tick, dec);
+    std::string key = v.session + "|" + (v.projUp ? "HOD" : "LOD") + "|" + tgt;
+    if (key == S.projLogged) return;
+    std::string p = flexPath("HodLod.proj-" + S.mkt + ".csv"); if (p.empty()) return;
+    if (S.projLogged.empty()) {   // after a restart: the last line already logged for this session (no duplicate lines)
+        std::ifstream f(p.c_str()); std::string ln, lastKey;
+        while (std::getline(f, ln)) if (ln.compare(0, v.session.size() + 1, v.session + ",") == 0) {
+            std::vector<std::string> c; size_t a = 0, b; while ((b = ln.find(',', a)) != std::string::npos) { c.push_back(ln.substr(a, b - a)); a = b + 1; } c.push_back(ln.substr(a));
+            if (c.size() >= 5) lastKey = c[0] + "|" + c[2] + "|" + c[4];
+        }
+        S.projLogged = lastKey.empty() ? "-" : lastKey;
+        if (key == S.projLogged) return;
+    }
+    hl::FileOps F;
+    if (!F.exists(p)) F.write(p, "session,bar_end,side,from,target,exp_range,range_so_far,stage,model,version\n", true);
+    char re[32]; snprintf(re, sizeof re, "%.6g", v.projRange);
+    std::string ln = v.session + "," + hl::hhmm(v.lastMod) + "," + (v.projUp ? "HOD" : "LOD") + "," + hl::trimNum((double)v.projFrom * S.tick, dec) + "," + tgt + "," + re + "," +
+        hl::trimNum((double)v.rangeT * S.tick, dec) + "," + std::to_string(v.projStage) + "," + (v.projV2 ? "v2" : "v1") + "," + hl::HL_VERSION + "\n";
+    if (F.write(p, ln, true)) S.projLogged = key;
+}
+
 void HodLod::writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows)
 {
     if (rows.empty() && !(S.view.complete && !S.view.prior)) return;
@@ -401,6 +433,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the projected opposite extreme (a line + flag from the 1st extreme, the target after Range), the live read (LOD / HOD IN) and the 2nd-extreme call, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
-    p->setVersion("1.1.4");
+    p->setVersion("1.1.5");
     return p;
 }
