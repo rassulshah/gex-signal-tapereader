@@ -1,5 +1,6 @@
 /********************************************************************************
- * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.0.1 (DLT-H), 2026-10-12: minutes older than the asked window are skipped and old
+ * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.0.2 (DLT-H), 2026-10-12: the profile at the price scale (no Dealer Profile
+ *   reserve on the hourly chart); every absorption candidate gets its circle (several per candle at different prices). 1.0.1: minutes older than the asked window are skipped and old
  *   minutes without volume at price are not waited on (NQ showed NO 1M: IRT returned 6 weeks of minutes). 1.0.0 2026-10-09, task #302
  * The Delta Profile for the HOURLY chart. A separate plugin: its own files, header guard, namespace, class, DLL and
  * record folder, so it can never collide with the intraday lsDeltaProfile (DeltaProfile.cpp / DeltaProfileCore.h 2.5.4,
@@ -776,7 +777,10 @@ bool DeltaProfileHourly::render(HostState& h) {
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
     int paneRight = pane.right;
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneRight = scale.left - 2;
-    const int base = paneRight - 2 - dealerWidth(h) - L_GAP;
+    // (1.0.2, Rassul 11:13 "the delta profile needs to be moved more to the right") the Dealer Profile draws no profile on an
+    // hourly chart (2.8.0: levels only on 15-min+ bars), so nothing is reserved for it: the profile sits at the price scale.
+    // (Its shared status file used to hand this chart the 3-min chart's 150 px reach and push the profile over the candles.)
+    const int base = paneRight - 2 - L_GAP;
     const int left = base - L_WIDTH;
     const int top = pane.top + 16, bottom = pane.bottom;
     if (left <= pane.left + 40 || base >= paneRight || bottom - top < 40) { h.state = "pane too small: not drawn"; return false; }   // #35
@@ -882,21 +886,25 @@ bool DeltaProfileHourly::render(HostState& h) {
     int v0 = 0, v1 = lastBar;
     if (getVisibleBars(&v0, &v1) != RTX_OK || v0 < 0 || v1 < v0) { v0 = 0; v1 = lastBar; }
     v1 = std::min(v1, lastBar);
-    std::map<int, const dph::Latch*> perBar;
+    // (1.0.2, Rassul 11:13 "the circles are not being displayed at the bottom where the delta profile has 14.4 and other
+    // values") every candidate gets its circle - several on one candle when they sit at different prices - biggest |net| first;
+    // one that would overlap a circle / label already drawn is skipped (never overlapping)
+    std::vector<std::pair<int, const dph::Latch*> > marks;
     for (const dph::Latch& L : e.latches) {
         if (L.code != "A" && L.code != "A?" && L.code != "I") continue;
         const std::vector<long long>::const_iterator at = std::lower_bound(h.ends.begin(), h.ends.end(), L.peakEnd);
         if (at == h.ends.end() || *at != L.peakEnd) continue;
         const int bar = static_cast<int>(at - h.ends.begin());
         if (bar < v0 || bar > v1) continue;
-        const dph::Latch*& best = perBar[bar];
-        if (!best) { best = &L; continue; }
-        ++h.suppressed;
-        const bool better = std::fabs(L.net) != std::fabs(best->net) ? std::fabs(L.net) > std::fabs(best->net) :
-            dph::decidedCode(L.code) != dph::decidedCode(best->code) ? dph::decidedCode(L.code) : L.id < best->id;
-        if (better) best = &L;
+        marks.push_back(std::make_pair(bar, &L));
     }
-    for (const std::pair<const int, const dph::Latch*>& m : perBar) {
+    std::sort(marks.begin(), marks.end(), [](const std::pair<int, const dph::Latch*>& a, const std::pair<int, const dph::Latch*>& b) {
+        const dph::Latch& x = *a.second; const dph::Latch& y = *b.second;
+        if (std::fabs(x.net) != std::fabs(y.net)) return std::fabs(x.net) > std::fabs(y.net);
+        if (dph::decidedCode(x.code) != dph::decidedCode(y.code)) return dph::decidedCode(x.code);
+        return x.id < y.id;
+    });
+    for (const std::pair<int, const dph::Latch*>& m : marks) {
         const int bar = m.first; const dph::Latch& L = *m.second;
         PNT c; c.set(bar, static_cast<float>(L.price), kBarCenter);
         PNT n; n.set(bar > 0 ? bar - 1 : bar + 1, static_cast<float>(L.price), kBarCenter);
@@ -954,6 +962,6 @@ extern "C" cppExtension* CreateExtension() {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile Hourly - DLT-H");
-    p->setVersion("1.0.1");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
+    p->setVersion("1.0.2");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
     return p;
 }
