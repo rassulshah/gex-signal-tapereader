@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.2";
+static const char* const HL_VERSION = "1.1.3";
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -1507,7 +1507,9 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     if (!v.projOk || x < pane.l + 2 || x > pane.r - 4) return;
     int y0 = yOf(v.projFrom), y1 = yOf(v.projTo);
     if (y0 == y1) return;
-    const int top = pane.t + 1, bot = pane.b - 1;
+    // (1.1.3, 13:51 CL check: "Proj HOD 96.18 (above)" sat on the Regime box in the pane's top-left corner) a target above the
+    // pane stops 42 px below its top, clear of the header boxes other indicators keep there
+    const int top = pane.t + 42, bot = pane.b - 1;
     auto clampY = [&](int y) { return (std::max)(top, (std::min)(y, bot)); };
     const unsigned col = v.projUp ? C_GREEN : C_RED;
     int a = clampY(y0), e = clampY(y1);
