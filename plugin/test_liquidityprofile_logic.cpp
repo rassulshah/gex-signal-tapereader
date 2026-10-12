@@ -512,7 +512,59 @@ static void test_delta_A_starts_a_read_and_always_on_numbers() {
     CHECK(f.nearBook.count(21) == 1, "each closed bar keeps the near-price book");
 }
 
+// ---- (0.11.4) review fixes
+// the engine keeps the last 50 finished attempts; finTotal keeps counting so the Flow pane can record every one (before: none after the 50th)
+static void test_finished_total_counts_past_50() {
+    Engine e = fresh(); std::vector<std::pair<Tick, Tick>> none;
+    for (int i = 0; i < 60; ++i) { Attempt a; a.side = BID; a.lo = 6990; a.hi = 6994; a.barA = i; a.tA = i * 1000; e.attempts.push_back(a); e.onBarClose(i + 25, 1000 + i, 10000000 + i, 70.00, none, none); }
+    CHECK(e.finished.size() == 50 && e.finTotal == 60, "(0.11.4) 60 finished: the list keeps 50, the total says 60");
+    CHECK(e.finished.back().barA == 59 && e.finished.front().barA == 10, "(0.11.4) finished[0] is number finTotal - size");
+}
+// a shown zone near the edge of the visible book keeps being judged on the bands that are visible (no 10 s hide / come-back flicker)
+static void test_shown_zone_at_book_edge_does_not_flicker() {
+    Engine e = fresh(); e.P.graceMs = 10000;
+    Zone z; z.shown = true; z.bx = 3.1; z.behindN = 5; z.behindOk = false; z.rank = 1; z.born = 0;
+    for (Ms t = 0; t <= 30000; t += 1000) e.showState(z, t);
+    CHECK(z.shown, "(0.11.4) 5 bands behind (book window moved) but still 3.1x them: stays shown");
+    Zone n = z; n.behindN = 0; n.bx = -1;
+    for (Ms t = 0; t <= 30000; t += 1000) e.showState(n, t);
+    CHECK(n.shown, "(0.11.4) no band behind it visible: no evidence, it stays as it is");
+    Zone w = z; w.bx = 1.2;
+    for (Ms t = 0; t <= 30000; t += 1000) e.showState(w, t);
+    CHECK(!w.shown, "a shown zone that really weakened (1.2x the bands behind) is still removed after the grace");
+    Zone f; f.shown = false; f.bx = 3.0; f.behindN = 5; f.behindOk = false; f.rank = 1; f.born = 0;
+    e.showState(f, 60000);
+    CHECK(!f.shown, "a zone is still only SHOWN with the full 6 bands behind it");
+}
+// LQ keeps its zone down to 2.1x (hysteresis) - it does not blink while the zone hovers around 2.5x
+static void test_lq_confirm_hysteresis() {
+    Engine e = fresh();
+    Zone z; z.id = 7; z.side = BID; z.lo = 6990; z.hi = 7000; z.shown = true; z.bx = 2.3; e.zones.push_back(z);
+    CHECK(e.confirming(6995, 7010) == nullptr, "a new LQ needs 2.5x");
+    CHECK(e.confirming(6995, 7010, 7) == &e.zones[0], "(0.11.4) the zone that already confirmed it keeps it at 2.3x");
+    e.zones[0].bx = 2.0;
+    CHECK(e.confirming(6995, 7010, 7) == nullptr, "(0.11.4) ... down to 2.1x only");
+    e.zones[0].bx = 2.6;
+    CHECK(e.confirming(6995, 7010) == &e.zones[0], "2.5x+ confirms as before");
+}
+// two shown zones whose real edges overlap: only the stronger is drawn; labels never share a row span
+static void test_draw_order_and_label_lanes() {
+    Engine e = fresh();
+    Zone a; a.id = 1; a.side = BID; a.shown = true; a.bx = 2.2; a.edgeLo = 6990; a.edgeHi = 6998;
+    Zone b = a; b.id = 2; b.bx = 3.0; b.edgeLo = 6995; b.edgeHi = 7003;
+    Zone c = a; c.id = 3; c.bx = 2.5; c.edgeLo = 6970; c.edgeHi = 6978;
+    Zone d = a; d.id = 4; d.shown = false; d.bx = 9; d.edgeLo = 6960; d.edgeHi = 6965;
+    e.zones = {a, b, c, d};
+    const std::vector<size_t> o = e.drawOrder();
+    CHECK(o.size() == 2 && e.zones[o[0]].id == 2 && e.zones[o[1]].id == 3, "(0.11.4) strongest first; the overlapping weaker zone and hidden zones are not drawn");
+    CHECK(decimals((double)0.01f) == 2 && decimals((double)0.25f) == 2 && decimals((double)0.0005f) == 4 && decimals((double)0.00005f) == 5 && decimals(1.0) == 0 && decimals((double)0.001f) == 3,
+          "(0.11.4) price decimals from IRT's float tick: CL 2, ES 2, HG 4, 6E 5, NG 3");
+    Lanes L(2);
+    CHECK(L.place(100, 160) == 0 && L.place(150, 200) == 1 && L.place(155, 165) == -1 && L.place(170, 220) == 0, "(0.11.4) a label goes to the first free row, none when all rows are taken");
+}
+
 int main() {
+    test_finished_total_counts_past_50(); test_shown_zone_at_book_edge_does_not_flicker(); test_lq_confirm_hysteresis(); test_draw_order_and_label_lanes();
     test_delta_A_starts_a_read_and_always_on_numbers();
     test_prominence_show_and_confirm(); test_new_wall_waits_and_edge_of_book();
     test_counter_s_after_e(); test_counter_s_on_the_bars_after_the_hold(); test_counter_needs_e_near_and_the_line();

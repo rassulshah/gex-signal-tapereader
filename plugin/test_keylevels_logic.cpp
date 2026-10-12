@@ -37,6 +37,28 @@ int main()
     CHECK(compute({}, 180, 510, 900, 0.25).empty(), "no bars: no levels");
     auto M = merge({{"PDH", 110, false}, {"PFH", 110, false}, {"HrHI", 110, true}, {"PDL", 90, false}}, 0.25);
     CHECK(M.size() == 2 && M[1].name == "PDH/PFH/HrHI" && !M[1].pivotOnly, "same tick merged, key names first, pivots last");
+    // (2.7.4) a chart whose history starts part-way through a session: no level from the partial session / week
+    {
+        std::vector<Bar> P(B.begin() + 200, B.end());            // starts Wed ~03:00: Wed's session is only partly loaded
+        auto L3 = compute(P, 180, 510, 900, 0.25);
+        bool pf = false, pd = false; for (auto& x : L3) { if (x.code == "PFH" || x.code == "PFL") pf = true; if (x.code == "PDH") pd = true; }
+        CHECK(!pf && !pd, "(2.7.4) prior session only partly loaded: no PFH / PFL / PDH (they would be wrong)");
+        CHECK(find("PFH") == 110, "(2.7.4) loaded from the 17:00 open: PFH still drawn");
+        // a full previous week (Mon 5 .. Fri 9 Oct sessions) and then Mon 12 Oct: PWH / PWL; cut its Monday: none
+        std::vector<Bar> W;
+        long mon = svl::daysFromCivil(2026, 10, 5);
+        for (int d = 0; d < 5; d++) { auto v = day(mon + d, 100, 110 + d, 90 - d, 105, 95); W.insert(W.end(), v.begin(), v.end()); }
+        auto v = day(mon + 7, 100, 101, 99, 105, 95, 10 * 60); W.insert(W.end(), v.begin(), v.end());
+        auto LW = compute(W, 180, 510, 900, 0.25);
+        double pwh = -1; for (auto& x : LW) if (x.code == "PWH") pwh = x.price;
+        CHECK(pwh == 114, "(2.7.4) whole previous week loaded: PWH = the week's high");
+        std::vector<Bar> W2(W.begin() + 100, W.end());           // the week's Monday session only partly loaded
+        bool pw = false; for (auto& x : compute(W2, 180, 510, 900, 0.25)) if (x.code == "PWH") pw = true;
+        CHECK(!pw, "(2.7.4) previous week only partly loaded: no PWH");
+        std::vector<Bar> O(T.begin() + 150, T.end());            // today's session from ~00:30: ON partial, London (02:00-07:30) whole
+        bool onh = false, lon = false; for (auto& x : compute(O, 180, 510, 900, 0.25)) { if (x.code == "ONH") onh = true; if (x.code == "LonHI") lon = true; }
+        CHECK(!onh && lon, "(2.7.4) loaded from 00:30: no ONH (partial overnight), LonHI kept (London fully loaded)");
+    }
     printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

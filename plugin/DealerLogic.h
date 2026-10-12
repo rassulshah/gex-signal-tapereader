@@ -433,13 +433,23 @@ inline double staleMin(double asofSo, double localSo)
 // dated symbols (EPZ26, CLEX26, CPEZ26) and continuous ones (NQ, QGC = the front contract, no month code). The same symbol, or
 // a continuous chart of the same market, is the same contract: strikes are drawn exactly. Only two DIFFERENT dated contracts
 // (e.g. EPH27 during the roll while the file is on EPZ26) are a real spread to shift by.
-inline bool hasMonthCode(const std::string& s)
+// (DealerProfile 2.7.4) a dated symbol's month letter and year: CQG "EPZ26" (2-digit year) or Rithmic "ESZ6" (1-digit year).
+// Before 2.7.4 only the 2-digit form counted, so a Rithmic chart (ESH7) read as "continuous" and was never shifted in a roll.
+inline bool monthYear(const std::string& s, char& mon, int& year)
 {
     size_t n = s.size();
-    if (n < 3) return false;
-    char m = (char)toupper((unsigned char)s[n - 3]);
-    return std::strchr("FGHJKMNQUVXZ", m) != nullptr && isdigit((unsigned char)s[n - 2]) && isdigit((unsigned char)s[n - 1]);
+    auto isM = [](char c) { return std::strchr("FGHJKMNQUVXZ", (char)toupper((unsigned char)c)) != nullptr && c != 0; };
+    if (n >= 4 && isM(s[n - 3]) && isdigit((unsigned char)s[n - 2]) && isdigit((unsigned char)s[n - 1])) {
+        mon = (char)toupper((unsigned char)s[n - 3]); year = 2000 + (s[n - 2] - '0') * 10 + (s[n - 1] - '0'); return true;
+    }
+    // the 1-digit form only when what is before the month is itself a market root ("ESZ6", "6EZ6"), so the euro ROOT "EU6"
+    // (E + U + 6) is never read as a September contract
+    if (n >= 3 && isM(s[n - 2]) && isdigit((unsigned char)s[n - 1]) && !marketForRoot(s.substr(0, n - 2)).empty()) {
+        mon = (char)toupper((unsigned char)s[n - 2]); year = 2020 + (s[n - 1] - '0'); return true;
+    }
+    return false;
 }
+inline bool hasMonthCode(const std::string& s) { char m = 0; int y = 0; return monthYear(s, m, y); }
 inline bool sameContract(const std::string& chartRoot, const std::string& fileSym)
 {
     if (chartRoot.empty() || fileSym.empty()) return false;
@@ -448,7 +458,10 @@ inline bool sameContract(const std::string& chartRoot, const std::string& fileSy
     for (char ch : fileSym) b += (char)toupper((unsigned char)ch);
     if (a == b) return true;
     if (marketForRoot(a).empty() || marketForRoot(a) != marketForRoot(b)) return false;
-    return !hasMonthCode(a);                                  // a continuous chart is the front contract
+    char ma = 0, mb = 0; int ya = 0, yb = 0;
+    if (!monthYear(a, ma, ya)) return true;                   // a continuous chart is the front contract
+    if (!monthYear(b, mb, yb)) return false;
+    return ma == mb && (ya % 10) == (yb % 10);                // (2.7.4) ESZ6 (Rithmic) == EPZ26 (CQG): same month, same year
 }
 
 // Contract offset: the chart may be another contract than MenthorQ's front future. Offset = the chart's close at the

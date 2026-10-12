@@ -31,12 +31,16 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
     struct S { Agg full, rth, on, lon; };
     std::map<long, S> by;                                         // session (civil days) -> aggregates
     std::vector<long> sessOf(B.size(), 0); std::vector<int> kindOf(B.size(), svl::NONE);
+    // (2.7.4) the chart's history may start part-way through a session: a level built from a session (or week) that is only
+    // partly loaded would be drawn as if it were the real one. firstSess / firstStart = the first loaded bar's session and start.
+    bool haveFirst = false; long firstSess = 0; int firstStart = 0;
     for (size_t i = 0; i < B.size(); i++) {
         const Bar& b = B[i];
         if (!std::isfinite(b.h) || !std::isfinite(b.l) || b.h < b.l) continue;
         svl::Cls c = svl::classify(b.days, b.endSec, perSec, openMin, closeMin);
         sessOf[i] = c.sess; kindOf[i] = c.kind;
         if (c.kind == svl::NONE) continue;
+        if (!haveFirst) { haveFirst = true; firstSess = c.sess; firstStart = c.startSec; }
         S& s = by[c.sess];
         s.full.add(b.h, b.l);
         if (c.kind == svl::RTH) s.rth.add(b.h, b.l);
@@ -51,10 +55,13 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
     long cur = sessOf[last];
     if (kindOf[last] == svl::NONE || !by.count(cur)) return out;
     const int lastEndMin = B[last].endSec / 60;
+    // a session is complete when it is after the first loaded one, or the first one starts at the 17:00 Globex open (15 min grace)
+    const bool firstFromOpen = firstStart >= 17 * 3600 && firstStart <= 17 * 3600 + 15 * 60;
+    auto complete = [&](long s) { return s > firstSess || (s == firstSess && firstFromOpen); };
     auto push = [&](const char* code, double p, bool piv) { if (std::isfinite(p) && p > -1e299 && p < 1e299) out.push_back(Level{code, std::round(p / tick) * tick, piv}); };
     // prior session (the latest earlier one with bars)
     auto it = by.find(cur);
-    if (it != by.begin()) {
+    if (it != by.begin() && complete(std::prev(it)->first)) {
         auto p = std::prev(it);
         if (p->second.full.ok()) { push("PFH", p->second.full.h, false); push("PFL", p->second.full.l, false); }
         if (p->second.rth.ok()) { push("PDH", p->second.rth.h, false); push("PDL", p->second.rth.l, false); }
@@ -64,14 +71,16 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
         int wd = svl::weekdayOf(cur);                            // 0 = Sunday
         long monday = cur - ((wd + 6) % 7);
         Agg wk;
+        if (complete(monday - 7))                                // the whole previous week is loaded (from its Monday session)
         for (auto& kv : by) if (kv.first >= monday - 7 && kv.first <= monday - 3 && kv.second.full.ok()) { wk.add(kv.second.full.h, kv.second.full.l); }
         if (wk.ok()) { push("PWH", wk.h, false); push("PWL", wk.l, false); }
     }
     const S& cs = it->second;
     bool rthStarted = kindOf[last] == svl::RTH || kindOf[last] == svl::POST;
-    if (rthStarted && cs.on.ok()) { push("ONH", cs.on.h, false); push("ONL", cs.on.l, false); }
+    if (rthStarted && cs.on.ok() && complete(cur)) { push("ONH", cs.on.h, false); push("ONL", cs.on.l, false); }
     bool lonDone = rthStarted || (B[last].endSec < 17 * 3600 && lastEndMin > 7 * 60 + 30);
-    if (lonDone && cs.lon.ok()) { push("LonHI", cs.lon.h, false); push("LonLO", cs.lon.l, false); }
+    const bool lonComplete = complete(cur) || (firstSess == cur && firstStart < 2 * 3600);   // loaded from before 02:00
+    if (lonDone && cs.lon.ok() && lonComplete) { push("LonHI", cs.lon.h, false); push("LonLO", cs.lon.l, false); }
     // hourly swings: clock-hour bars from bar START times, the last 3 sessions
     struct H { long key; double h, l; int n; };
     std::vector<H> hrs;

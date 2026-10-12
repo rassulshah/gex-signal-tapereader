@@ -2,6 +2,8 @@
 #define LS_LIQUIDITY_PROFILE_LOGIC_H
 // LiquidityProfileLogic.h  (lsLiquidityProfile 0.1.0, 2026-10-11) -- the SDK-free engine of the Liquidity Profile. Tested by
 // test_liquidityprofile_logic.cpp (g++ / MSVC, no Investor/RT needed).
+// (0.11.4, 2026-10-12 review) finTotal (windows past the 50th touch), no zone flicker at the book's edge, LQ hysteresis 2.5x / 2.1x,
+// drawOrder (overlapping zones) and Lanes (labels never overlap), price decimals from IRT's float tick.
 //
 // WHAT IT DOES (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can trade monday"):
 //   1. BOOK    the resting size per price on each side, from the chart's own depth (MARKET_DEPTH snapshots; native, no outside
@@ -41,7 +43,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.11.3";
+static const char* const VERSION = "0.11.4";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -77,11 +79,18 @@ struct Params {
     // 1.5-3x 34-37%; 2x shows 12% of zones; level confirmation knee at 2.5x: 54% vs 44%, confluence 71% vs 51%.)
     bool requireShown = false;                  // the plugin sets true: only drawn zones are touchable (tests keep the 0.9 behaviour)
     double showX = 2.0, keepX = 1.7, confirmX = 2.5;
+    double confirmKeepX = 2.1;                  // (0.11.4) an LQ already on a zone stays while that zone is shown at 2.1x+ (no flicker at 2.5x)
     int behindBands = 8, behindMin = 6;
     Tick reachTicks = 0;                        // > 0: the reach in ticks set by the plugin (1/2 expected range ...), else reachAtr x ATR
 };
 
 inline Tick toTick(double price, double tick) { return (Tick)std::llround(price / tick); }
+// (0.11.4) the decimals a price needs at this tick, tolerant of IRT's float tick (0.01f = 0.0099999998: 6 decimals / 3 decimals before)
+inline int decimals(double tick) {
+    if (!(tick > 0)) return 2;
+    double k = tick; for (int d = 0; d <= 6; ++d, k *= 10) if (std::fabs(k - (double)std::llround(k)) < 1e-6) return d;
+    return 6;
+}
 inline bool finite(double v) { return v == v && v < std::numeric_limits<double>::infinity() && v > -std::numeric_limits<double>::infinity(); }
 
 inline int halfWidth(const Params& p, double atrPrice) {
@@ -188,6 +197,21 @@ inline double exhaustRatio(const std::vector<std::pair<Ms, double>>& a, Ms t0, M
     return v1 > 0 ? v2 / v1 : -1;
 }
 
+// (0.11.4) labels never overlap: a text row remembers the x spans already used; a label goes in the first row where it fits
+struct Lanes {
+    std::vector<std::vector<std::pair<int, int>>> rows;
+    explicit Lanes(int n = 1) : rows((size_t)std::max(1, n)) {}
+    bool fits(int row, int x0, int x1, int gap = 4) const {
+        if (row < 0 || row >= (int)rows.size()) return false;
+        for (size_t i = 0; i < rows[(size_t)row].size(); ++i) if (x0 < rows[(size_t)row][i].second + gap && rows[(size_t)row][i].first < x1 + gap) return false;
+        return true;
+    }
+    int place(int x0, int x1, int gap = 4) {      // the row used, -1 = no room (the label is not drawn)
+        for (int r = 0; r < (int)rows.size(); ++r) if (fits(r, x0, x1, gap)) { rows[(size_t)r].push_back(std::make_pair(x0, x1)); return r; }
+        return -1;
+    }
+};
+
 class Engine {
 public:
     Params P;
@@ -199,6 +223,7 @@ public:
     std::deque<FlowEvt> flow; std::deque<TradeEvt> tape;
     std::vector<Zone> zones; long long nextZone = 1;
     std::vector<Attempt> attempts; std::vector<Attempt> finished;
+    long long finTotal = 0;                      // (0.11.4) attempts finished since load; 'finished' keeps the last 50 (finished[0] is number finTotal - size)
     std::vector<Mark> marks;
     Tick lastPx = 0; bool havePx = false; int hw = 4;
     // (0.5.0) OLD ORDERS. The chart's depth is the total size per price, not single orders, so an order's age cannot be read. The
@@ -449,27 +474,45 @@ public:
             if (i->second > 0) { if (first) { z.edgeLo = i->first; first = false; } z.edgeHi = i->first; }
     }
     // shown: appears once durable (rested persistMs at this band), rank 1 and >= showX; stays while >= keepX; goes after graceMs below
+    // (0.11.4) a shown zone near the edge of the visible book (fewer than behindMin bands behind it, because price moved and the
+    // depth window moved with it) is judged on the bands that ARE visible; with none visible there is no evidence and it stays as it
+    // is - before, it was hidden 10 s later and came back when price returned (flicker at the far end of the reach)
     void showState(Zone& z, Ms t) const {
-        const bool strong = z.behindOk && z.bx >= P.keepX;
         if (!z.shown) {
             if (z.behindOk && z.rank == 1 && z.bx >= P.showX && z.durable(t, P.persistMs)) { z.shown = true; z.belowSince = -1; }
             return;
         }
-        if (strong) { z.belowSince = -1; return; }
+        const bool strong = z.behindN > 0 && z.bx >= P.keepX;
+        if (strong || z.behindN == 0) { z.belowSince = -1; return; }
         if (z.belowSince < 0) z.belowSince = t;
         if (t - z.belowSince > P.graceMs) { z.shown = false; z.belowSince = -1; }
     }
     // a key / gamma level at levelTick is liquidity-confirmed by a shown zone >= confirmX on the right side whose band holds it
-    const Zone* confirming(Tick levelTick, Tick px) const {
+    // (0.11.4) keepId = the zone that confirmed this level last time: it keeps the LQ down to confirmKeepX (hysteresis, as the zones
+    // themselves: shown at 2x, kept to 1.7x) so the label does not blink on and off while the zone's size hovers around 2.5x
+    const Zone* confirming(Tick levelTick, Tick px, long long keepId = 0) const {
         const Zone* best = nullptr;
         for (size_t i = 0; i < zones.size(); ++i) {
             const Zone& z = zones[i];
-            if (!z.shown || z.bx < P.confirmX) continue;
+            if (!z.shown || z.bx < (z.id == keepId && keepId > 0 ? P.confirmKeepX : P.confirmX)) continue;
             if (levelTick < z.lo || levelTick > z.hi) continue;
             if (z.side == BID ? z.lo > px : z.hi < px) continue;       // a support below price, a resistance above
             if (!best || z.bx > best->bx) best = &z;
         }
         return best;
+    }
+    // (0.11.4) the shown zones to draw, strongest first; a shown zone whose real edges overlap a stronger one already listed is left
+    // out (two tracked zones a little more than a half-width apart can both be shown for a few seconds: their bars and labels overlapped)
+    std::vector<size_t> drawOrder() const {
+        std::vector<size_t> idx, out;
+        for (size_t i = 0; i < zones.size(); ++i) if (zones[i].shown) idx.push_back(i);
+        std::stable_sort(idx.begin(), idx.end(), [this](size_t a, size_t b) { return zones[a].bx > zones[b].bx; });
+        for (size_t k = 0; k < idx.size(); ++k) {
+            const Zone& z = zones[idx[k]]; bool clash = false;
+            for (size_t j = 0; j < out.size() && !clash; ++j) { const Zone& o = zones[out[j]]; clash = z.edgeLo <= o.edgeHi && o.edgeLo <= z.edgeHi; }
+            if (!clash) out.push_back(idx[k]);
+        }
+        return out;
     }
 
     // ---- a closed bar: decide every attempt (marks are final once written)
@@ -726,7 +769,7 @@ public:
         const bool thin = okE && st.eaten >= L.eaten;
         const bool trapped = L.trapped && a->barT >= 0;
         auto A = [&]() { return okA ? " " + fx(st.attack) + " normal" : std::string(); };
-        char px[32]; std::snprintf(px, sizeof(px), "%.*f", tick >= 1 ? 0 : (int)std::ceil(-std::log10(tick) - 1e-9), (double)(sup ? a->hi : a->lo) * tick);
+        char px[32]; std::snprintf(px, sizeof(px), "%.*f", decimals(tick), (double)(sup ? a->hi : a->lo) * tick);
         w = Warn();
         if (heavy && pull && !exh) { w.name = sup ? "BREAKDOWN RISK" : "BREAKOUT RISK"; w.favour = bad;
             w.detail = att + " " + hitting + A() + ", not slowing; " + dfn + " pulling their " + ord + " (" + pc(st.pulled) + ")"; }
@@ -822,7 +865,7 @@ private:
         marks.push_back(m);
     }
     void close_(Attempt& a) {
-        a.done = true;
+        a.done = true; ++finTotal;
         attemptLog.push_back(attemptLine(a, a.tEnd > a.tA ? a.tEnd : (a.attacks.empty() ? a.tA : a.attacks.back().first)));
         for (size_t i = 0; i < zones.size(); ++i) if (zones[i].id == a.zoneId) zones[i].inAttempt = false;
         finished.push_back(a); if (finished.size() > 50) finished.erase(finished.begin());

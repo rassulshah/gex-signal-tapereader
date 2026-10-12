@@ -85,9 +85,19 @@ int main() {
     setDepth(h, 79.91, 80);
     h.now = t0 + 90; usleep(300000); p->calc(0);
     CHECK(S->e.attempts.size() == 1 && S->e.attempts[0].attackVol >= 300, "attackers' volume counted from the VAP increase");
+    // (0.11.4) a read 1 s before the close, then the last second's sells (not read yet) and the close: they must reach the attempt
+    // BEFORE it is decided, stamped no later than the bar's end (before: the depth step's gate kept them for the next read)
+    h.now = t0 + 179; usleep(1100000); p->calc(0);
+    const double volBefore = S->e.attempts.empty() ? -1 : S->e.attempts[0].attackVol;
+    fb.rows.push_back(mock::Price(79.96f, 0, 7, 7));
     // the bar closes (a new bar appears) below the zone
     { mock::Bar n; n.time = t0 + 360; n.open = n.high = n.low = n.close = 79.91f; n.rows.push_back(mock::Price(79.91f, 0, 0, 0)); h.bars.push_back(n); }
     h.now = t0 + 181; usleep(300000); p->calc(0);
+    {   const lqp::Attempt* fa = S->e.finished.empty() ? nullptr : &S->e.finished.back();
+        CHECK(volBefore > 0 && fa && std::fabs(fa->attackVol - (volBefore + 7)) < 1e-9, "(0.11.4) the closing bar's last trades are counted before the bar is decided");
+        CHECK(fa && !fa->attacks.empty() && fa->attacks.back().first <= (long long)(t0 + 180) * 1000LL, "(0.11.4) ... stamped at the bar's end, inside its window");
+        CHECK(LiquidityProfile::clampFont(9) == 10 && LiquidityProfile::clampFont(0) == 11 && LiquidityProfile::clampFont(12) == 12, "(0.11.4) fonts are 10 pt at least, 11 by default");
+    }
     // (0.4.0) the price chart draws no signals: the break is LOGGED for the nightly study, nothing is recorded or drawn as a mark
     bool brk = false; for (auto& m : S->e.marks) if (m.code == "Broke" && m.reasons.find("Broke: sellers hit the bid") == 0) brk = true;
     CHECK(brk && S->marksWritten == S->e.marks.size(), "(0.7.0) the chart build records the touch's reason and its letters");
@@ -107,7 +117,7 @@ int main() {
         CHECK(minBox <= 2, "(0.9.0) the bars start at the pane's left edge");
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.11.3") != std::string::npos, "status file written");
+    CHECK(readAll(st).find("VERSION,0.11.4") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.11.4, one version everywhere)");
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     {   // (0.10.0) the reach, the prominence, the LQ confirmation (CL logs it), no boxes across the chart, the bx label
         const std::string t = readAll(st);
@@ -171,6 +181,27 @@ int main() {
         bool old2 = false; for (auto& d : h2.draws) if (d.type == "text" && d.text.find("old ") == 0) old2 = true;
         CHECK(!old2, "(0.5.0) not drawn where the market's study has not confirmed old orders");
         o2->destroy();
+    }
+    {   // (0.11.4) a symbol change on the same chart: the new market's RTH hours, MenthorQ levels and Delta A zones, nothing of the old one
+        mock::Host h3; mock::current = &h3; h3.tick = 0.01f; h3.seconds = 180; h3.symbol = "CLEX26"; h3.root = "CLEX26";
+        for (int i = 0; i < 40; ++i) { mock::Bar b; b.time = t0 - (39 - i) * 180; b.open = 80.05f; b.high = 80.12f; b.low = 79.98f; b.close = 80.03f; b.rows.push_back(mock::Price(80.03f, 50, 40, 90)); h3.bars.push_back(b); }
+        { mock::Bar f; f.time = t0 + 180; f.open = f.high = f.low = f.close = 80.03f; f.rows.push_back(mock::Price(80.03f, 0, 0, 0)); h3.bars.push_back(f); }
+        setDepth(h3, 80.00, 80);
+        LiquidityProfile* c = static_cast<LiquidityProfile*>(CreateExtension());
+        h3.now = t0 + 10; c->calc(0);
+        LQState* C = static_cast<LQState*>(h3.data);
+        CHECK(C && C->rthOpen == 8 * 60 && C->mqLevels.size() == 1 && C->mqLevels[0].code == "PS 0D", "fixture: CL hours and CL's PS level");
+        h3.symbol = "ESZ26"; h3.root = "ES"; h3.tick = 0.25f; usleep(1100000); h3.now = t0 + 12; c->calc(0);
+        CHECK(C && C->market == "ES" && C->rthOpen == 8 * 60 + 30, "(0.11.4) after a symbol change the new market's RTH hours are used");
+        CHECK(C && C->mqLevels.size() == 1 && C->mqLevels[0].code == "CR 0D" && C->mqLevels[0].px == 28000, "(0.11.4) ... and its own MenthorQ levels (not the old market's)");
+        // (0.11.4) a Delta Profile A older than an hour is dropped even when the Delta Profile writes nothing new
+        const std::string dpf = flex + "\\DeltaProfile\\ES-180-signals-" + std::to_string(C->session) + ".csv";
+        { std::ofstream d(dpf.c_str()); d << (long long)(t0 - 1800) << "|x|A|support|x|6999.00|7000.00|x\r\n"; }
+        usleep(1100000); h3.now = t0 + 14; c->calc(0);
+        CHECK(C->dpBid.size() == 1 && C->e.dpZone[lqp::BID].size() == 1, "fixture: an A 30 min old is used");
+        usleep(1100000); h3.now = t0 + 14 + 3600; c->calc(0);
+        CHECK(C->dpBid.empty() && C->e.dpZone[lqp::BID].empty(), "(0.11.4) 90 min old, file unchanged: dropped (the last hour only)");
+        c->destroy();
     }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

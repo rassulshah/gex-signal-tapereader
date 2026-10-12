@@ -654,7 +654,7 @@ inline ReadOut evalRead(const ReadIn& in)
 }
 
 // ------------------------------------------------------------------------------------------------ the view (every value drawn)
-static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREY = 0x009CA3AF, C_SLATE = 0x00E5E7EB;
+static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREY = 0x00B8BEC8, C_SLATE = 0x00E5E7EB;   // (1.1.2) grey lifted for reading
 static const unsigned C_PANEL = 0x000F1520, C_BORDER = 0x00374151;
 
 struct Seg { std::string s; unsigned col; };
@@ -749,8 +749,9 @@ inline const hlx::Model* modelFor(int mkt, int side, bool& up, bool& byShare, in
 inline std::string callTxt(const ReadOut& r)
 {
     if (r.callSrc == 2 && std::isfinite(r.pClose)) {
-        std::string t = "close push " + std::to_string((int)std::llround(r.pClose * 100)) + "%";
-        if (r.elseFrom >= 0 && r.elseTo > r.elseFrom) t += " \xB7 else " + clk(r.elseFrom) + "-" + clk(r.elseTo);
+        // (1.1.2, Rassul 10-12 "why does it say close 6%" -> "more readable"): "at close 6% \xB7 likely 12:15-2:30"
+        std::string t = "at close " + std::to_string((int)std::llround(r.pClose * 100)) + "%";
+        if (r.elseFrom >= 0 && r.elseTo > r.elseFrom) t += " \xB7 likely " + clk(r.elseFrom) + "-" + clk(r.elseTo);
         return t;
     }
     if (r.callSrc != 3) return "";
@@ -969,7 +970,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     // ---- the table (mockup v10): E row (the model) above A row (actual)
     //   1st Time | 1st Dir | Took | Size | Reclaim | Wick | 2nd Time | 2nd Dir | Gap | Range
     for (int i = 0; i < NALL; i++) { v.E[i] = mkCell("", C_GREY); v.A[i] = mkCell("", C_SLATE); }
-    v.E[K_LABEL].s = "E"; v.A[K_LABEL] = mkCell("A", C_SLATE, true);
+    v.E[K_LABEL].s = "Expected"; v.A[K_LABEL] = mkCell("Actual", C_SLATE, true);   // (1.1.2, Rassul "more readable") words, not E / A
     {
         // TYPICAL values: the studies' medians by first side once it is known (HodLodMedians.h); internally consistent (v12)
         const int op = K.open;
@@ -1008,7 +1009,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         }
         // the side word: a lean only when the stage says one side prints first on >= 55% of days, else "either"
         // (coordinator 20:30) no market has a validated side lean: always "either" (s1pLod stays in the status file)
-        v.E[K_1ST].s3 = "either"; v.E[K_1ST].col3 = C_GREY;
+        v.E[K_1ST].s3.clear();   // (1.1.2) no "either": a side word only when there is one
         v.E[K_DIR1].s = v.E[K_1ST].s3;
         // ---- Reclaim (v15): a window anchored on the 1st extreme, "<1st> - <1st + W>  P%"; before it prints "<=Wm after 1st  P%"
         if (rh.s2 && firstMod >= 0) {                      // hlr::stage2 (once the 1st is IN): the window by the 1st's time and depth
@@ -1036,8 +1037,9 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
 #else
         v.src2nd = "static (hle t2 / v1)";
 #endif
-        if (rh.callIn) { v.E[K_2ND].s3 = rh.side == 0 ? "HOD" : "LOD"; v.E[K_2ND].col3 = sideCol(rh.side == 0); }
-        else { v.E[K_2ND].s3 = "either"; v.E[K_2ND].col3 = C_GREY; }
+        // (1.1.2) the 2nd's side once the read names the 1st (IN, or IN ..%?) - as the header, in the named side's colour; no "either"
+        if (rh.callIn || (rh.state == 1 && !rh.fomcPause && rh.pIn > 0.30)) { v.E[K_2ND].s3 = rh.side == 0 ? "HOD" : "LOD"; v.E[K_2ND].col3 = rh.side == 0 ? C_GREEN : C_RED; }
+        else v.E[K_2ND].s3.clear();
         v.E[K_DIR2] = rh.callIn ? mkCell(rh.side == 0 ? "HOD" : "LOD", sideCol(rh.side == 0)) : mkCell("either", C_GREY);
         // ---- Gap (status / optional column): the median 1st -> 2nd time by the 1st extreme's 30-min bucket once known
         v.gapBucket = -2; v.E[K_GAP].s = "-";
@@ -1065,7 +1067,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
             if (v.firstFinal) {
                 v.A[K_1ST] = mkCell(clk(firstMod), C_SLATE); v.A[K_1ST].s2 = lodFirst ? "LOD" : "HOD"; v.A[K_1ST].col2 = sideCol(!lodFirst);
                 tag(v.A[K_1ST], firstMod, v.win1a, v.win1b);
-            } else v.A[K_1ST] = mkCell(std::string(lodFirst ? "low" : "high") + " so far " + clk(firstMod), C_GREY);   // (HL101) not called IN yet
+            } else v.A[K_1ST] = mkCell(std::string(lodFirst ? "LOD" : "HOD") + " so far " + clk(firstMod), C_GREY);   // (1.1.2) named   // (HL101) not called IN yet
             v.A[K_DIR1] = mkCell(lodFirst ? "LOD" : "HOD", sideCol(!lodFirst));
             v.A[K_TOOK].s = durT(v.took);
             v.A[K_SIZE].s = ptsTxt(v.sizeT, tick, dec);
@@ -1081,7 +1083,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 v.A[K_GAP].s = durT(v.gap);
             } else if (v.secondPrinted) {                       // (HL101) a running high / low: no in / early / late, no side colour
                 int m2 = lodFirst ? v.hodMod : v.lodMod;
-                v.A[K_2ND] = mkCell(std::string(lodFirst ? "high" : "low") + " so far " + clk(m2), C_GREY);
+                v.A[K_2ND] = mkCell(std::string(lodFirst ? "HOD" : "LOD") + " so far " + clk(m2), C_GREY);   // (1.1.2) named
                 v.A[K_DIR2] = mkCell("", C_GREY);
                 v.A[K_GAP] = mkCell(durT(v.gap) + "...", C_GREY);
             } else {
@@ -1147,9 +1149,9 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 v.headTail = "   " + who + " after " + clk(rh.callT) + " " + p; v.headTailShort = "   " + who + " >" + clk(rh.callT) + " " + p;
             } else if (rh.callSrc == 3 && rh.callLate) { v.headTail = v.headTailShort = "   " + who + " late-day"; }
             else if (rh.callSrc == 2 && std::isfinite(rh.pClose)) {
-                std::string c = who + ": close " + std::to_string((int)std::llround(rh.pClose * 100)) + "%";
+                std::string c = who + " at close " + std::to_string((int)std::llround(rh.pClose * 100)) + "%";
                 v.headTailShort = "   " + c;
-                v.headTail = v.headTailShort + (rh.elseFrom >= 0 && rh.elseTo > rh.elseFrom ? " \xB7 else " + clk(rh.elseFrom) + "-" + clk(rh.elseTo) : "");
+                v.headTail = v.headTailShort + (rh.elseFrom >= 0 && rh.elseTo > rh.elseFrom ? " \xB7 likely " + clk(rh.elseFrom) + "-" + clk(rh.elseTo) : "");
             }
             v.headTailCol = v.complete ? C_GREY : ((rh.callIn || namedT) ? (rh.side == 0 ? C_GREEN : C_RED) : (rh.callDim ? C_DIM : v.headerCol));
         }

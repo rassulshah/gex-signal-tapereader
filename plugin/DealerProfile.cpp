@@ -1,6 +1,12 @@
 /********************************************************************************
  *  DealerProfile.cpp  --  Investor/RT RTX extension  lsDealerProfile  (v1.0, 2026-09-29)
  *
+ *  2.7.4 (2026-10-12, review): every level badge reads "<price> <NAME>  <odds>" (key levels now carry their price, like the
+ *     MenthorQ badges), 10 pt with the name in bold; MenthorQ levels green = PS (support), red = CR (resistance), yellow = HVL,
+ *     cyan = other gamma levels; badges never cover a price bar, another badge or a level line, nor the Liquidity / Delta /
+ *     Dealer Profile columns. Fixes: key levels from a partly loaded session / week are not drawn; a rolled or Rithmic-named
+ *     chart (ESH7, ESZ6) gets the right MenthorQ contract and offset; the status file and the settings file are no longer
+ *     written / re-read on every repaint; the MinGW / GNU syntax check compiles (snprintf).
  *  2.0.0 (2026-10-02): THE DEALER PROFILE = one bar per strike of MenthorQ's net GEX (dealer delta change in $ per 1-pt
  *     move): red = dealers SHORT gamma (fuel: they chase price), green = LONG (wall: they lean against it), the darker part
  *     = today's 0DTE (gone at expiry), the value ("-3.9M") on the bar. Same numbers as MenthorQ's Net GEX panel. The running
@@ -49,7 +55,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.7.3";   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.7.4";   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -76,7 +82,7 @@ static COLOR fade(COLOR a, float t)   // toward the dark ground
 
 struct PIdx { int market, width, labels, banner, legend, snap, whisk, fadefar, font, clock, keyPill, keyNode, keyHow, inds; };
 static PIdx PX;
-struct Settings { int market = 0, width = 50, font = 9, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true;
+struct Settings { int market = 0, width = 50, font = 10, clock = 0; bool labels = true, banner = false, legend = true, snap = true, whisk = true, fadefar = true;
                   std::string inds = "cob_bull,cob_bear"; };   // (1.5.0) his custom indicators copied into the bar file
 
 static bool dpFinite(float v) { return dpaudit::finite(v); }
@@ -119,12 +125,12 @@ static void dpNormalizeSettings(Settings& s)
 {
     if (s.market < 0 || s.market > 7) s.market = 0;
     if (s.width < 30 || s.width > 900) s.width = 50;
-    if (s.font < 6 || s.font > 24) s.font = 9;
+    if (s.font < 6 || s.font > 24) s.font = 10;
     if (s.clock < -720 || s.clock > 720) s.clock = 0;
     if (s.inds.size() > 160) s.inds.resize(160);
 }
 
-struct LblBox { short l, t, r, b; };   // (2.7.3) a drawn label box
+using dpaudit::LblBox;                 // (2.7.3) a drawn label box (2.7.4: DealerProfileAuditLogic.h, tested)
 class DealerProfile : public cppExtension {
 public:
     DealerProfile();
@@ -136,7 +142,13 @@ public:
     virtual int draw(void);
 
     Settings cfg;
-    std::vector<LblBox> lblTaken;      // (2.7.3) label boxes drawn this pass (MenthorQ first, then key levels)
+    // (2.7.4) this draw's level badges: every level LINE is drawn first, then the badges (MenthorQ first, then key levels), so no
+    // line crosses a badge; each badge keeps clear of the price bars, the other badges and the profile columns
+    struct LSeg { std::string s; bool bold; COLOR c; };
+    struct PendLbl { short y; COLOR border; std::vector<LSeg> seg; };
+    std::vector<PendLbl> pend;
+    void flushLabels(const Settings& S);
+    short rightEdge(const RCT& pane);
     dl::Data D;
     std::string mkt, root;
     float off;
@@ -321,7 +333,7 @@ void DealerProfile::syncSettings(bool fromDialog)
         while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
         in.close();
         std::string inds = cfg.inds; for (size_t i = 0; i < inds.size(); i++) if (inds[i] == '|') inds[i] = ',';
-        char b[200]; sprintf_s(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|", cfg.market, cfg.width, cfg.font, cfg.clock, cfg.labels ? 1 : 0,
+        char b[200]; snprintf(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|", cfg.market, cfg.width, cfg.font, cfg.clock, cfg.labels ? 1 : 0,
                                cfg.snap ? 1 : 0, cfg.fadefar ? 1 : 0, cfg.banner ? 1 : 0);
         std::string row = key + b + inds;
         if (all[key] != row) { all[key] = row; std::ofstream out(dpSettingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
@@ -341,6 +353,7 @@ void DealerProfile::syncSettings(bool fromDialog)
             savedKey = key; return;
         }
     }
+    savedKey = key;   // (2.7.4) no row for this chart: defaults, and the file is not re-read on every repaint until it changes
 }
 int DealerProfile::parmsLoad(void)  { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
 int DealerProfile::parmsApply(void) { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
@@ -357,7 +370,7 @@ int cppExtension::setup(void)
     PX.market  = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     // (2.0.3) NUMW (DealerLogic.h): the SDK default width (0) made the number boxes so narrow they showed "T"
     PX.width   = pc++; setIntegerParameter("Profile width px", 50, NUMW, SL);   // (2.2.1, Rassul 17:54 "too big") default 80
-    PX.font    = pc++; setIntegerParameter("Font size (pt)", 9, NUMW);
+    PX.font    = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);   // (2.7.4) 10 pt default (Rassul: fonts too small)
     PX.clock   = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
     PX.labels  = pc++; setBoolParameter("Values on the bars", true);
     PX.snap    = pc++; setBoolParameter("Snapshot outline (1.x files)", true, SL);
@@ -374,7 +387,7 @@ void DealerProfile::readSettings(Settings& S)
     S.width = getIntegerValue(PX.width); if (S.width < 30) S.width = 50; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
     S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = false;
     S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = false;
-    S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 9; if (S.font > 24) S.font = 24;
+    S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 10; if (S.font > 24) S.font = 24;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
     char ib[200]; memset(ib, 0, sizeof(ib));
     if (getParameterText(PX.inds, ib, sizeof(ib) - 1) == RTX_OK && ib[0] && ib[0] != ' ') S.inds = ib;   // blank (an older saved layout) = the default; "none" = off
@@ -478,7 +491,7 @@ void DealerProfile::render(const Settings& S)
     int W = S.width;
 
     if (!D.hasPrice || D.nodes.empty()) {
-        char b[96]; sprintf_s(b, sizeof(b), "Dealer Profile: no data for %s (root %s)", mkt.empty() ? "?" : mkt.c_str(), root.c_str());
+        char b[96]; snprintf(b, sizeof(b), "Dealer Profile: no data for %s (root %s)", mkt.empty() ? "?" : mkt.c_str(), root.c_str());
         textLJ((short)(pane.left + 8), (short)(pane.top + 14), b, C_MUTED, S.font, false);
         return;
     }
@@ -670,7 +683,7 @@ void DealerProfile::staleBadge()
         if (d > -600) age = d < 0 ? 0 : d;
     }
     if (age <= 10.0) return;
-    char b[40]; if (age >= 2880) sprintf_s(b, sizeof(b), "DEALER DATA STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) sprintf_s(b, sizeof(b), "DEALER DATA STALE %dh", (int)(age / 60 + 0.5)); else sprintf_s(b, sizeof(b), "DEALER DATA STALE %dm", (int)(age + 0.5));
+    char b[40]; if (age >= 2880) snprintf(b, sizeof(b), "DEALER DATA STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) snprintf(b, sizeof(b), "DEALER DATA STALE %dh", (int)(age / 60 + 0.5)); else snprintf(b, sizeof(b), "DEALER DATA STALE %dm", (int)(age + 0.5));
     RCT pane; pane.getPaneRect(false);
     int tw = textW(b, 10, true);
     short x = (short)(pane.right - tw - 90), y = (short)(pane.top + 6);
@@ -697,9 +710,17 @@ void DealerProfile::writeStatus(const char* what)
 {
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
-    std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
+    std::ostringstream f;
     f << "VERSION," << DP_VERSION << "\nROOT," << root << "\nMARKET," << mkt << "\nNODES," << D.nodes.size() << "\nOFFSET," << off << "\nBOOK," << D.srcBook << "\nRATIO," << D.srcRatio << "\nRATIO_MODE," << D.srcMode << "\nSTATE," << what
       << "\nREACH," << (cfg.width + 100) << "\n";   // (1.4.0) px the Profile takes from the scale's edge: the Read / Analyst stay left of it
+    // (2.7.4) one status file for the DLL: written when its content changes (or once a minute), not on every repaint
+    static dpaudit::WriteGate gate;
+    const std::string body = f.str();
+    if (!gate.due(body, time(nullptr))) return;
+    std::ofstream out(path.c_str(), std::ios::trunc);
+    if (!out.is_open()) { gate.last.clear(); return; }
+    out << body;
+    if (!out) gate.last.clear();
 }
 
 // (1.3.7, Rassul 2026-09-30: the Read went blank overnight - MenthorQ's price freezes outside RTH) the chart's own last 200
@@ -741,16 +762,16 @@ void DealerProfile::exportBars()
     {
         std::ofstream f(tmp.c_str(), std::ios::trunc); if (!f.is_open()) { for (size_t j = 0; j < arrs.size(); j++) delete arrs[j]; return; }
         char b[200];
-        sprintf_s(b, sizeof(b), "IRTBARS|2|%s|%s|%.6f|%ld|%s\n", mkt.c_str(), root.c_str(), (double)off, (long)now, nl.c_str()); f << b;
+        snprintf(b, sizeof(b), "IRTBARS|2|%s|%s|%.6f|%ld|%s\n", mkt.c_str(), root.c_str(), (double)off, (long)now, nl.c_str()); f << b;
         int from = (int)n - 200; if (from < 0) from = 0;
         for (int i = from; i < (int)n; i++) {
             struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dtm[i], &t);
-            sprintf_s(b, sizeof(b), "%04d-%02d-%02d %02d:%02d:%02d|%.6f|%.6f|%.6f|%.6f|%.0f\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+            snprintf(b, sizeof(b), "%04d-%02d-%02d %02d:%02d:%02d|%.6f|%.6f|%.6f|%.6f|%.0f\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                       t.tm_hour, t.tm_min, t.tm_sec, (double)o[i], (double)h[i], (double)l[i], (double)c[i], (double)v[i]);
             std::string row(b); if (!row.empty() && row.back() == '\n') row.pop_back();
             for (size_t j = 0; j < arrs.size(); j++) {
                 long k = (long)i - ((long)n - arrs[j]->count);           // the indicator's array ends on the chart's last bar
-                char vb[32]; if (k >= 0 && k < arrs[j]->count) sprintf_s(vb, sizeof(vb), "|%.4f", (double)(*arrs[j])[(int)k]); else sprintf_s(vb, sizeof(vb), "|");
+                char vb[32]; if (k >= 0 && k < arrs[j]->count) snprintf(vb, sizeof(vb), "|%.4f", (double)(*arrs[j])[(int)k]); else snprintf(vb, sizeof(vb), "|");
                 row += vb;
             }
             f << row << "\n";
@@ -897,27 +918,7 @@ static std::string spacedOdds(const std::string& o)
 }
 
 // (2.7.3, Rassul 2026-10-11 19:41 "the levels labels are over the delta profile.. fix this .. for all markets . maybe you can put
-// the levels in the center") a label box is placed at the centre of the chart; one that would touch a label already drawn on its
-// row moves right of it (then left of it when that runs past maxR), never past maxR (left of the profiles) or before minL.
-static short placeLabel(short want, short w, short t, short b, const std::vector<LblBox>& taken, short minL, short maxR)
-{
-    auto clash = [&](short l, size_t* who) {
-        for (size_t i = 0; i < taken.size(); ++i) {
-            const LblBox& x = taken[i];
-            if (b <= x.t || t >= x.b) continue;                    // another row
-            if (l + w + 3 <= x.l || l >= x.r + 3) continue;        // clear of it (3 px gap)
-            if (who) *who = i; return true;
-        }
-        return false;
-    };
-    short l = want; size_t who = 0;
-    for (int k = 0; k < 8 && clash(l, &who); ++k) l = (short)(taken[who].r + 6);   // step right past each box on the row
-    if (l + w <= maxR && !clash(l, nullptr)) return l;
-    l = want;
-    for (int k = 0; k < 8 && clash(l, &who); ++k) l = (short)(taken[who].l - 6 - w); // else step left
-    if (l < minL) l = minL;
-    return l;
-}
+// the levels in the center") labels centred; 2.7.4: dpaudit::placeLabel also keeps them off the price bars (DealerProfileAuditLogic.h).
 
 void DealerProfile::drawKeyLevels(const Settings& S)
 {
@@ -926,14 +927,12 @@ void DealerProfile::drawKeyLevels(const Settings& S)
     // are computed HERE from the chart's own bars (KeyLevelsLogic.h - lra.key_levels' definitions): a thin line + the label at the
     // right, amber = key level, purple = hourly swing, white box = a pick. The odds: the LRA's champion law while its file is fresh
     // ("42%/60%" = within 90 min / by the RTH close), otherwise the native 60-min odds ("1h 45%?"). The VWAP is never drawn here.
+    (void)S;
     if (mkt.empty()) return;
     const std::vector<klv::Merged>& L = nativeLevels(mkt);
     if (L.empty()) return;
     RCT pane; pane.getPaneRect(false);
     long nb = getBarCount(); if (nb < 1) return;
-    int fs = S.font; if (fs < 7) fs = 7;
-    const short maxR = (short)(pane.right - S.width - 80 - 140);      // (2.7.3) never into the Delta / Dealer Profile columns
-    short xMid = (short)(pane.left + (pane.right - pane.left) / 2);   // (2.7.3) centred, like the MenthorQ level labels
     const otl::OT op = otl::paramsFor(mkt.c_str());
     double onSig = 0, lastC = 0;
     {
@@ -959,16 +958,13 @@ void DealerProfile::drawKeyLevels(const Settings& S)
             if (pr >= 0) { char a[24]; snprintf(a, sizeof(a), op.ready ? "1h %d%%" : "1h %d%%?", (int)std::floor(100.0 * pr + 0.5)); odds = a; }
         }
         odds = spacedOdds(odds);                                      // (2.7.1) "33%  /  50%"
-        char b[200]; snprintf(b, sizeof(b), "%s%s%s", q.name.c_str(), odds.empty() ? "" : "  ", odds.c_str());
-        const int kf = fs + 1;                                         // (2.7.1) slightly bigger font
-        int tw = textW(b, kf, false) + 10; short hh = (short)(kf + 6);
-        short t = (short)(y - hh / 2), bt = (short)(y + hh / 2);
-        short lft = placeLabel((short)(xMid - tw / 2), (short)tw, t, bt, lblTaken, (short)(pane.left + 2), maxR), r = (short)(lft + tw);
-        lblTaken.push_back(LblBox{ lft, t, r, bt });
-        box(lft, t, r, bt, C_DARK);
-        COLOR bc = pick ? (COLOR)0x00FFFFFF : col;
-        line(lft, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, lft, bt, bc, 1); line(lft, bt, lft, t, bc, 1);
-        textLJ((short)(lft + 5), y, b, col, kf, false);
+        // (2.7.4, Rassul 2026-10-12: the key-level badges had no price) "<price> <NAME>  <odds>", as the MenthorQ badges
+        PendLbl P; P.y = y; P.border = pick ? (COLOR)0x00FFFFFF : col;
+        const dpaudit::Badge B = dpaudit::badge(mkt, q.price, q.name, odds);
+        P.seg.push_back(LSeg{ B.price, false, C_INK });
+        P.seg.push_back(LSeg{ B.name, true, (COLOR)dpaudit::liftForText(col) });   // his SessionPrices colour (lifted when too dark to read)
+        if (!B.odds.empty()) P.seg.push_back(LSeg{ B.odds, false, C_INK });
+        pend.push_back(P);
     }
 }
 
@@ -976,16 +972,18 @@ void DealerProfile::drawMQLevels(const Settings& S)
 {
     loadMQLevels();
     if (mql.empty() || mkt.empty()) return;
-    const std::vector<MQL>* L = nullptr;
-    auto it = mql.find(root);
-    if (it != mql.end()) L = &it->second;
-    else for (auto& kv : mql) if (dl::marketForRoot(kv.first) == mkt) { L = &kv.second; break; }   // a rolled contract: same market
-    if (!L) return;
+    (void)S;
+    // (2.7.4) the chart's MenthorQ contract: its own symbol, the same contract under another feed's name (ESZ6 = EPZ26), or -
+    // on a roll / continuous chart - the dealer file's contract, else the nearest expiry (never the back month by alphabet).
+    // Levels of ANOTHER contract than the chart's are drawn at strike + the contract offset (before: at the raw strike).
+    std::vector<std::string> keys; for (auto& kv : mql) keys.push_back(kv.first);
+    bool shift = false;
+    const std::string sym = dpaudit::pickMQSymbol(keys, root, mkt, D.chartSym, shift);
+    if (sym.empty()) return;
+    const std::vector<MQL>* L = &mql[sym];
+    const float sh = shift ? off : 0.0f;
     RCT pane; pane.getPaneRect(false);
     long nb = getBarCount(); if (nb < 1) return;
-    int dec = mkt == "GC" ? 1 : mkt == "HG" ? 4 : mkt == "EU" ? 5 : mkt == "NG" ? 3 : 2;
-    int fs = S.font; if (fs < 7) fs = 7;
-    short xMid = (short)(pane.left + (pane.right - pane.left) / 2);
     // (2.6.0, Rassul 2026-10-09 07:22 "i also dont see the percentages on the levels like CR") outside RTH the LRA odds file is not
     // written (its law is fitted on RTH), so the chart computes the next-60-min touch odds itself: sigma from the last 20 closes
     double onSig = 0, lastC = 0;
@@ -994,52 +992,112 @@ void DealerProfile::drawMQLevels(const Settings& S)
         RTARRAY cl(barClose); RTARRAYI dt(barDateTime);
         if (nb > op.win + 1) {
             double cw[64]; int k = 0;
-            for (long i = nb - op.win - 1; i < nb; i++) cw[k++] = (double)cl[i];
-            long long per = (long long)dt[nb - 1] - (long long)dt[nb - 2];
+            for (long i = nb - op.win - 1; i < nb; i++) cw[k++] = (double)cl[(int)i];
+            long long per = (long long)dt[(int)nb - 1] - (long long)dt[(int)nb - 2];
             if (per <= 0 || per > 3600) per = 180;
-            onSig = otl::onSigmaMin(cw, k, (int)per, op.win); lastC = (double)cl[nb - 1];
+            onSig = otl::onSigmaMin(cw, k, (int)per, op.win); lastC = (double)cl[(int)nb - 1];
         }
     }
     for (size_t i = 0; i < L->size(); i++) {
         const MQL& q = (*L)[i];
-        PNT pp; pp.set((int)(nb - 1), q.px); short y = pp.v;
+        const float cp = q.px + sh;                                           // where it is on THIS chart
+        PNT pp; pp.set((int)(nb - 1), cp); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) continue;
-        line(pane.left, y, pane.right, y, q.col, q.w);
-        char b[160]; snprintf(b, sizeof(b), "%.*f %s", dec, q.px, q.label.c_str());
+        // (2.7.4) green = support (PS), red = resistance (CR), yellow = HVL, cyan = the other gamma levels
+        const char kind = dpaudit::mqKind(q.label);
+        const COLOR col = kind == 'G' ? C_BUY : kind == 'R' ? C_SELL : kind == 'Y' ? (COLOR)0x00FACC15 : (COLOR)0x0022D3EE;
+        line(pane.left, y, pane.right, y, col, q.w);
+        std::string odds;
         // (2.4.0, Rassul 2026-10-07 12:57 "start showing it now on the levels") the chance price touches this level: in the next
         // hour, by today's 0DTE expiry (when it comes before the close) and by the close; "?" until the market's numbers are proven
-        const LV* lv = levelAt(mkt, q.px);                                    // (2.5.0) the one-law odds first
-        if (lv && !lv->label.empty()) { std::string add = "  " + spacedOdds(lv->label); strncat_s(b, sizeof(b), add.c_str(), _TRUNCATE); }
+        const LV* lv = levelAt(mkt, cp);                                      // (2.5.0) the one-law odds first
+        if (lv && !lv->label.empty()) odds = spacedOdds(lv->label);
         else {
             loadTouch(mkt);
             bool fresh = tpAt[mkt] > 0 && time(nullptr) - tpAt[mkt] < 20 * 60;    // stale odds (the bridge stopped) are not shown
             const std::vector<TP>& T = tps[mkt];
-            float tol = q.px * 2e-5f;
+            float tol = cp * 2e-5f;
             for (size_t k = 0; fresh && k < T.size(); k++) {
-                if (std::fabs(T[k].px + off - q.px) > tol && std::fabs(T[k].px - q.px) > tol) continue;
+                if (std::fabs(T[k].px + off - cp) > tol && std::fabs(T[k].px - cp) > tol) continue;
                 const char* qm = T[k].proven ? "" : "?";
-                if (!T[k].txt.empty()) { std::string add = "  " + T[k].txt; strncat_s(b, sizeof(b), add.c_str(), _TRUNCATE); break; }   // (2.4.1)
-                std::string add = "  1h " + T[k].p1 + "%" + qm;
-                if (!T[k].pe.empty() && T[k].pe != T[k].pc) add += "  exp " + T[k].pe + "%" + qm;
-                if (!T[k].pc.empty()) add += "  close " + T[k].pc + "%" + qm;
-                strncat_s(b, sizeof(b), add.c_str(), _TRUNCATE);
-                fresh = false; break;
+                if (!T[k].txt.empty()) { odds = T[k].txt; break; }                                  // (2.4.1)
+                odds = "1h " + T[k].p1 + "%" + qm;
+                if (!T[k].pe.empty() && T[k].pe != T[k].pc) odds += "  exp " + T[k].pe + "%" + qm;
+                if (!T[k].pc.empty()) odds += "  close " + T[k].pc + "%" + qm;
+                break;
             }
             // nothing fresh from the LRA (overnight): the native 60-min odds, "?" until lra.on_vwap_study proves them
-            bool had = strstr(b, "%") != nullptr;
-            if (!had && onSig > 0 && lastC > 0) {
-                double pr = otl::onTouch((double)q.px - lastC, onSig, 60, op.nu, op.k);
-                if (pr >= 0) { char a[24]; snprintf(a, sizeof(a), op.ready ? "  1h %d%%" : "  1h %d%%?", (int)std::floor(100.0 * pr + 0.5)); strncat_s(b, sizeof(b), a, _TRUNCATE); }
+            if (odds.find('%') == std::string::npos && onSig > 0 && lastC > 0) {
+                double pr = otl::onTouch((double)cp - lastC, onSig, 60, op.nu, op.k);
+                if (pr >= 0) { char a[24]; snprintf(a, sizeof(a), op.ready ? "1h %d%%" : "1h %d%%?", (int)std::floor(100.0 * pr + 0.5)); odds = a; }
             }
         }
-        int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
-        short l = (short)(xMid - tw / 2), r = (short)(xMid + tw / 2), t = (short)(y - h / 2), bt = (short)(y + h / 2);
-        lblTaken.push_back(LblBox{ l, t, r, bt });                         // (2.7.3) the key-level labels keep clear of it
-        box(l, t, r, bt, C_DARK);
-        COLOR bc = (lv && lv->pick) ? (COLOR)0x00FFFFFF : q.col;            // (2.5.0) a pick: white box
-        line(l, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, l, bt, bc, 1); line(l, bt, l, t, bc, 1);
-        textLJ((short)(l + 5), y, b, q.col, fs - 1, false);
+        PendLbl P; P.y = y; P.border = (lv && lv->pick) ? (COLOR)0x00FFFFFF : col;   // (2.5.0) a pick: white box
+        const dpaudit::Badge B = dpaudit::badge(mkt, q.px, dpaudit::stripMQ(q.label), odds);   // the strike, as MenthorQ writes it
+        P.seg.push_back(LSeg{ B.price, false, C_INK });
+        P.seg.push_back(LSeg{ B.name, true, col });
+        if (!B.odds.empty()) P.seg.push_back(LSeg{ B.odds, false, C_INK });
+        pend.push_back(P);
     }
+}
+
+short DealerProfile::rightEdge(const RCT& pane)
+{
+    RCT scale; scale.getScaleRect();
+    short r = pane.right;
+    if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) r = (short)(scale.left - 2);
+    return r;
+}
+
+// (2.7.4) the badges: 10 pt (or the Font setting + 1), the level name bold, centred on the chart when that spot is free, else
+// beside the nearest box on its row - never over a price bar, another badge, the Liquidity Profile (left) or the profiles (right)
+void DealerProfile::flushLabels(const Settings& S)
+{
+    if (pend.empty()) return;
+    long nb = getBarCount(); if (nb < 1) { pend.clear(); return; }
+    RCT pane; pane.getPaneRect(false);
+    const short paneR = rightEdge(pane);
+    short maxR = (short)(paneR - S.width - 80 - 140);                     // (2.7.3) never into the Delta / Dealer Profile columns
+    { int c = dl::clearRightOf(paneR); if (c < maxR) maxR = (short)c; }   // (2.7.4) the Delta Profile's real width / side when known
+    short minL = (short)(pane.left + 110);                                // (2.7.4) right of the Liquidity Profile column (70 px + "5.1x")
+    if (maxR - minL < 160) minL = (short)(pane.left + 2);                 // a narrow chart: use what there is
+    const short xMid = (short)(pane.left + (pane.right - pane.left) / 2); // (2.7.3) centred
+    std::vector<LblBox> taken;
+    {   // every visible price bar's high-low range is a box the badges keep off
+        int vs = 0, ve = (int)nb - 1;
+        if (getVisibleBars(&vs, &ve) != RTX_OK || vs < 0 || ve >= (int)nb || vs > ve) { vs = (int)nb - 600; ve = (int)nb - 1; }
+        if (vs < 0) vs = 0;
+        if (ve - vs > 3000) vs = ve - 3000;
+        RTARRAY hi(barHigh), lo(barLow);
+        int hw = 2;
+        if (ve > vs) { PNT a; a.set(ve, 0.0f, kBarCenter); PNT b; b.set(ve - 1, 0.0f, kBarCenter); hw = std::abs((int)a.h - (int)b.h) / 2; }
+        hw = hw < 1 ? 1 : hw > 12 ? 12 : hw;
+        for (int i = vs; i <= ve; i++) {
+            const float h = hi[i], l = lo[i];
+            if (!dpFinite(h) || !dpFinite(l)) continue;
+            PNT ph; ph.set(i, h, kBarCenter); PNT pl; pl.set(i, l, kBarCenter);
+            if (ph.h < pane.left || ph.h > paneR) continue;
+            taken.push_back(LblBox{ (short)(ph.h - hw), (short)(ph.v - 1), (short)(ph.h + hw), (short)(pl.v + 1), true });
+        }
+    }
+    const int kf = S.font + 1 < 10 ? 10 : S.font + 1;
+    const short hh = (short)(kf + 6);
+    for (size_t i = 0; i < pend.size(); i++) {
+        const PendLbl& P = pend[i];
+        int tw = 10;
+        for (size_t k = 0; k < P.seg.size(); k++) tw += textW(P.seg[k].s.c_str(), kf, P.seg[k].bold);
+        const short t = (short)(P.y - hh / 2), bt = (short)(t + hh);
+        const short l = dpaudit::placeLabel((short)(xMid - tw / 2), (short)tw, t, bt, taken, minL, maxR), r = (short)(l + tw);
+        taken.push_back(LblBox{ l, t, r, bt });
+        box(l, t, r, bt, C_DARK);
+        line(l, t, r, t, P.border, 1); line(r, t, r, bt, P.border, 1); line(r, bt, l, bt, P.border, 1); line(l, bt, l, t, P.border, 1);   // solid
+        short x = (short)(l + 5);
+        for (size_t k = 0; k < P.seg.size(); k++) {
+            textLJ(x, P.y, P.seg[k].s.c_str(), P.seg[k].c, kf, P.seg[k].bold);
+            x = (short)(x + textW(P.seg[k].s.c_str(), kf, P.seg[k].bold));
+        }
+    }
+    pend.clear();
 }
 
 int DealerProfile::draw(void)
@@ -1051,9 +1109,10 @@ int DealerProfile::draw(void)
     syncSettings();
     load();
     alignContract();
-    lblTaken.clear();                         // (2.7.3) this draw's label boxes
+    pend.clear();                             // (2.7.4) this draw's badges
     drawMQLevels(cfg);                        // (2.3.0) under the profile: the key-level lines first
     drawKeyLevels(cfg);                       // (2.5.0) key levels + hourly swings with their touch odds
+    flushLabels(cfg);                         // (2.7.4) the badges, over every line
     render(cfg);
     staleBadge();
     srcTag();
@@ -1069,6 +1128,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion(DP_VERSION);   // 2.5.1: per-host state, robust external-input handling, atomic bar export
+    p->setVersion(DP_VERSION);   // 2.7.4 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
     return p;
 }
