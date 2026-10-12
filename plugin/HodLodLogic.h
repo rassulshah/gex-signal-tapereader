@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.0";
+static const char* const HL_VERSION = "1.1.2";
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -1456,37 +1456,64 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
     L.candleOk = true;
 }
 
-// (1.1.0) the projection: a vertical line at the 1st extreme's bar from its price to the projected opposite extreme, a solid flag at
-// the far end and the target text ("Proj HOD 7,870.00") right of the flag. Green up (LOD first), red down. x = the bar's centre
-// (-1 = not on the chart: nothing drawn). Clipped to the pane; never drawn over the table.
+// (1.1.2, Rassul 10-12 "locked to the high of the HOD / the low of the LOD", "Follow the live extreme") the projection: a vertical
+// line ON the live extreme's candle (Proj LOD from the running HOD's bar, Proj HOD from the running LOD's bar - it moves when a new
+// extreme prints) from that price to the projected opposite extreme, a solid flag at the target and the target text beside it.
+// Green up, red down. x = that bar's centre (-1 = the bar is off the chart: then just left of the table, as 1.1.0).
+// The target is always shown: when it is past the pane's edge the line runs to the edge and the flag + text sit there with
+// "(below)" / "(above)"; when the line would cross the table it stops at the table's edge and the flag sits there. Text never
+// overlaps the table or another label (right of the flag, else left of the line, else nudged off the table).
 static const int PROJ_FLAG_W = 16, PROJ_FLAG_H = 12, PROJ_FS = 9, PROJ_GAP = 8;
+inline bool boxHit(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int x)
 {
-    if (!v.projOk || x < pane.l || x > pane.r - 4) return;
+    if (!v.projOk || x < pane.l + 2 || x > pane.r - 4) return;
     int y0 = yOf(v.projFrom), y1 = yOf(v.projTo);
     if (y0 == y1) return;
-    auto clampY = [&](int y) { return (std::max)((int)pane.t, (std::min)(y, (int)pane.b)); };
+    const int top = pane.t + 1, bot = pane.b - 1;
+    auto clampY = [&](int y) { return (std::max)(top, (std::min)(y, bot)); };
     const unsigned col = v.projUp ? C_GREEN : C_RED;
-    int a = clampY(y0), b = clampY(y1);
-    if (L.tableOk && x >= L.table.l && x <= L.table.r) {                  // stop at the table's edge
-        if (v.projUp) a = (std::min)(a, (int)L.table.t - 1); else b = (std::min)(b, (int)L.table.t - 1);
+    int a = clampY(y0), e = clampY(y1);
+    bool off = y1 < top || y1 > bot;
+    if (L.tableOk && x >= L.table.l - 2 && x <= L.table.r + 2) {            // never across the table: stop at its edge
+        if (!v.projUp && a < L.table.t && e >= L.table.t) { e = L.table.t - 2; off = true; }
+        if (v.projUp && a > L.table.b && e <= L.table.b) { e = L.table.b + 2; off = true; }
     }
-    if (a == b) return;
-    addLine(L, x, a, x, b, col, 2, R_LABEL);
-    if (b != clampY(y1) || y1 < pane.t || y1 > pane.b) return;            // the target is off the pane: the line only
-    // the flag: a solid triangle pointing right, its top edge at the target (up) or its bottom edge at the target (down)
-    int ft = v.projUp ? y1 : y1 - PROJ_FLAG_H;
+    if (v.projUp ? e >= a : e <= a) return;                                 // nothing left to draw (the extreme is past the edge)
+    addLine(L, x, a, x, e, col, 2, R_LABEL);
+    // the flag: a solid triangle pointing right; its top edge at the target (up) or its bottom edge at the target (down)
+    int ft = v.projUp ? e : e - PROJ_FLAG_H;
     for (int r = 0; r <= PROJ_FLAG_H; r++) {
         int half = PROJ_FLAG_H / 2, d = r <= half ? r : PROJ_FLAG_H - r;
         int len = (int)std::lround((double)PROJ_FLAG_W * d / (double)(half > 0 ? half : 1));
         if (len > 0) addLine(L, x, ft + r, x + len, ft + r, col, 1, R_LABEL);
     }
-    int w = M(v.projTxt, PROJ_FS, true), tx = x + PROJ_FLAG_W + 6;
-    if (tx + w > pane.r - 2) tx = (std::max)((int)pane.l + 2, x - 6 - w);   // no room on the right: the text goes left of the line
-    if (L.tableOk && ft + PROJ_FLAG_H >= L.table.t && tx + w > L.table.l) tx = (std::max)((int)pane.l + 2, x - 6 - w);   // never over the table
-    int lh = lineH(PROJ_FS);
-    addText(L, tx, ft + PROJ_FLAG_H / 2 - lh / 2, ft + PROJ_FLAG_H / 2 + lh / 2, v.projTxt, col, PROJ_FS, true, w, R_LABEL, -1);
-    L.blocks.push_back(Box{ tx, ft + PROJ_FLAG_H / 2 - lh / 2, tx + w, ft + PROJ_FLAG_H / 2 + lh / 2 });
+    std::string txt = v.projTxt + (off ? (v.projUp ? " (above)" : " (below)") : "");
+    int w = M(txt, PROJ_FS, true), lh = lineH(PROJ_FS);
+    int ty = ft + PROJ_FLAG_H / 2 - lh / 2;
+    ty = (std::max)(top, (std::min)(ty, bot - lh));
+    auto clear = [&](int tx, int yy) {
+        if (tx < pane.l + 2 || tx + w > pane.r - 2) return false;
+        Box bx = { tx, yy, tx + w, yy + lh };
+        for (size_t k = 0; k < L.blocks.size(); k++) if (boxHit(bx, L.blocks[k])) return false;
+        return !(L.tableOk && boxHit(bx, L.table));
+    };
+    int tx = x + PROJ_FLAG_W + 6;
+    if (!clear(tx, ty)) {
+        int left = x - 6 - w;
+        if (clear(left, ty)) tx = left;
+        else {                                                              // both sides blocked: step away from the table / labels
+            bool done = false;
+            for (int step = 1; step <= 6 && !done; step++) {
+                int yy = v.projUp ? ty + step * lh : ty - step * lh;
+                if (yy < top || yy + lh > bot) break;
+                if (clear(tx, yy)) { ty = yy; done = true; } else if (clear(left, yy)) { tx = left; ty = yy; done = true; }
+            }
+            if (!done && tx + w > pane.r - 2) tx = (std::max)((int)pane.l + 2, left);
+        }
+    }
+    addText(L, tx, ty, ty + lh, txt, col, PROJ_FS, true, w, R_LABEL, -1);
+    L.blocks.push_back(Box{ tx, ty, tx + w, ty + lh });
     L.projOk = true;
 }
 
@@ -1502,9 +1529,8 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
     if (freeR <= colR + 100) freeR = pane.r - (int)((pane.r - pane.l) * 0.15);
     layoutTable(L, v, pane, colR, M, freeR, pos);   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
     if (HODLOD_SHOW_CANDLE) layoutCandle(L, v, pane, yOf, M);
-    // (1.1.0, Rassul 17:17 "attach the target line ... next to the table on the left side") the line stands just left of the table,
-    // at real prices (the 1st extreme -> the target); the bar's x only when the table is not drawn
-    if (L.tableOk && L.table.l - PROJ_GAP > pane.l + 2) projX = L.table.l - PROJ_GAP;
+    // (1.1.2) the line stands on the live extreme's candle; only when that bar is off the chart, just left of the table (1.1.0)
+    if ((projX < pane.l + 2 || projX > pane.r - 4) && L.tableOk && L.table.l - PROJ_GAP > pane.l + 2) projX = L.table.l - PROJ_GAP;
     layoutProj(L, v, pane, yOf, M, projX);
     return L;
 }
