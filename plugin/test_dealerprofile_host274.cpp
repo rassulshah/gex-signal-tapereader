@@ -138,11 +138,17 @@ int main()
             if (all.rfind("6660.00 PFH/PDH", 0) == 0) pdh = true;      // PFH = PDH here: one merged badge
             check(P.seg.size() >= 2 && P.seg[1].bold && !P.seg[0].bold, "badge: price plain, name bold"); }
         check(pdh, "ES key-level badge reads \"6660.00 PFH/PDH...\" (price first, MenthorQ format)");
-        // ---- 2. drawn: badges centred, never over each other, a price bar, the Liquidity column (< 110) or past maxR
+        // ---- 2. drawn: badges centred, never over each other, the Liquidity column (< 110) or past maxR (2.8.2: price bars allowed)
         if (getenv("DBG")) for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s; std::printf("pend y=%d %s\n", P.y, all.c_str()); }
         RECTS.clear(); X.flushLabels(X.cfg);
         if (getenv("DBG")) for (auto& r : RECTS) std::printf("rect %d %d %d %d\n", r.l, r.t, r.r, r.b);
         check(!RECTS.empty(), "badges drawn");
+        {   // (2.8.2) one centred column: every badge's centre on the same x (a crowded row steps up / down, not sideways)
+            std::map<int, int> cx; for (auto& r : RECTS) cx[(r.l + r.r) / 2]++;
+            int best = 0; for (auto& kv : cx) best = std::max(best, kv.second);
+            std::printf("  badges %zu, %d share one centre\n", RECTS.size(), best);
+            check(best * 10 >= (int)RECTS.size() * 8, "(2.8.2) badges aligned in one centred column");
+        }
         const short maxR = (short)(1598 - X.cfg.width - 80 - 140);
         for (size_t i = 0; i < RECTS.size(); i++) {
             check(RECTS[i].l >= 110 && RECTS[i].r <= maxR, "badge inside minL..maxR");
@@ -150,7 +156,7 @@ int main()
             for (int b = VS; b <= VE; b++) {
                 cppExtension::PNT ph; ph.set(b, a.h[b]); cppExtension::PNT pl; pl.set(b, a.l[b]);
                 Drawn bar{ (short)(ph.h - 1), ph.v, (short)(ph.h + 1), pl.v };
-                if (overlap(RECTS[i], bar)) { check(false, "a badge covers a price bar"); break; }
+                (void)bar;   // (2.8.2, Rassul 11:20 alignment) badges may sit over price bars: one centred column wins over bar avoidance
             }
         }
         X.saveHostState(); X.done();
