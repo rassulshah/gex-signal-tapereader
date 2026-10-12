@@ -1,5 +1,6 @@
 /********************************************************************************
- * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.0.0 (DLT-H), 2026-10-09, task #302
+ * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.0.1 (DLT-H), 2026-10-12: minutes older than the asked window are skipped and old
+ *   minutes without volume at price are not waited on (NQ showed NO 1M: IRT returned 6 weeks of minutes). 1.0.0 2026-10-09, task #302
  * The Delta Profile for the HOURLY chart. A separate plugin: its own files, header guard, namespace, class, DLL and
  * record folder, so it can never collide with the intraday lsDeltaProfile (DeltaProfile.cpp / DeltaProfileCore.h 2.5.4,
  * which this file does not include or touch).
@@ -591,6 +592,9 @@ void DeltaProfileHourly::ingest(Feed& f, std::int64_t deadline) {
         const long long te = localSec(raw);
         if (te <= 0) { ++f.mismatched; f.reqNext = i + 1; continue; }
         if (te <= f.eng->lastAdded) { f.reqNext = i + 1; continue; }                 // already held (an overlapping request)
+        // (1.0.1, NQ 60m 2026-10-12 "NO 1M": IRT returned 40,851 minutes back to Aug 31 for a 2-day request, and every old minute
+        // without volume at price waited 30 s - weeks to reach today) minutes before the window that was asked for are skipped
+        if (f.eng->coverageFrom != LLONG_MIN && te <= f.eng->coverageFrom) { f.reqNext = i + 1; continue; }
         // its host bar: the first chart bar ending at or after it; a minute the chart has no bar for yet waits
         const std::vector<long long>& E = f.hostEnds;
         const std::vector<long long>::const_iterator at = std::lower_bound(E.begin(), E.end(), te);
@@ -609,7 +613,7 @@ void DeltaProfileHourly::ingest(Feed& f, std::int64_t deadline) {
             // IRT has no volume at price for it yet: retry for 30 s, then take it as missing (counted, provisional window)
             const time_t now = wallNow();
             if (f.failTe != te) { f.failTe = te; f.failSince = now; }
-            if (now - f.failSince < 30) break;
+            if (now - f.failSince < 30 && te > localSec(currentDate()) - 600) break;   // (1.0.1) only a fresh minute is worth waiting for
             m.missing = true; ++f.missingAccepted;
         } else {
             m.o = (*b.op)[static_cast<int>(i)]; m.h = (*b.hi)[static_cast<int>(i)]; m.l = (*b.lo)[static_cast<int>(i)]; m.c = (*b.cl)[static_cast<int>(i)];
@@ -950,6 +954,6 @@ extern "C" cppExtension* CreateExtension() {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile Hourly - DLT-H");
-    p->setVersion("1.0.0");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
+    p->setVersion("1.0.1");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
     return p;
 }
