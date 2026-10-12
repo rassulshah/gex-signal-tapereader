@@ -49,7 +49,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.7.2";   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.7.3";   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -124,6 +124,7 @@ static void dpNormalizeSettings(Settings& s)
     if (s.inds.size() > 160) s.inds.resize(160);
 }
 
+struct LblBox { short l, t, r, b; };   // (2.7.3) a drawn label box
 class DealerProfile : public cppExtension {
 public:
     DealerProfile();
@@ -135,6 +136,7 @@ public:
     virtual int draw(void);
 
     Settings cfg;
+    std::vector<LblBox> lblTaken;      // (2.7.3) label boxes drawn this pass (MenthorQ first, then key levels)
     dl::Data D;
     std::string mkt, root;
     float off;
@@ -894,6 +896,29 @@ static std::string spacedOdds(const std::string& o)
     return r;
 }
 
+// (2.7.3, Rassul 2026-10-11 19:41 "the levels labels are over the delta profile.. fix this .. for all markets . maybe you can put
+// the levels in the center") a label box is placed at the centre of the chart; one that would touch a label already drawn on its
+// row moves right of it (then left of it when that runs past maxR), never past maxR (left of the profiles) or before minL.
+static short placeLabel(short want, short w, short t, short b, const std::vector<LblBox>& taken, short minL, short maxR)
+{
+    auto clash = [&](short l, size_t* who) {
+        for (size_t i = 0; i < taken.size(); ++i) {
+            const LblBox& x = taken[i];
+            if (b <= x.t || t >= x.b) continue;                    // another row
+            if (l + w + 3 <= x.l || l >= x.r + 3) continue;        // clear of it (3 px gap)
+            if (who) *who = i; return true;
+        }
+        return false;
+    };
+    short l = want; size_t who = 0;
+    for (int k = 0; k < 8 && clash(l, &who); ++k) l = (short)(taken[who].r + 6);   // step right past each box on the row
+    if (l + w <= maxR && !clash(l, nullptr)) return l;
+    l = want;
+    for (int k = 0; k < 8 && clash(l, &who); ++k) l = (short)(taken[who].l - 6 - w); // else step left
+    if (l < minL) l = minL;
+    return l;
+}
+
 void DealerProfile::drawKeyLevels(const Settings& S)
 {
     // (2.7.0, Rassul 2026-10-09 08:40 "it would probably be better if the dealer profile did all the levels and their probabilities")
@@ -907,7 +932,8 @@ void DealerProfile::drawKeyLevels(const Settings& S)
     RCT pane; pane.getPaneRect(false);
     long nb = getBarCount(); if (nb < 1) return;
     int fs = S.font; if (fs < 7) fs = 7;
-    short right = (short)(pane.right - S.width - 80);                // left of the profile and its 70 px chip column
+    const short maxR = (short)(pane.right - S.width - 80 - 140);      // (2.7.3) never into the Delta / Dealer Profile columns
+    short xMid = (short)(pane.left + (pane.right - pane.left) / 2);   // (2.7.3) centred, like the MenthorQ level labels
     const otl::OT op = otl::paramsFor(mkt.c_str());
     double onSig = 0, lastC = 0;
     {
@@ -936,7 +962,9 @@ void DealerProfile::drawKeyLevels(const Settings& S)
         char b[200]; snprintf(b, sizeof(b), "%s%s%s", q.name.c_str(), odds.empty() ? "" : "  ", odds.c_str());
         const int kf = fs + 1;                                         // (2.7.1) slightly bigger font
         int tw = textW(b, kf, false) + 10; short hh = (short)(kf + 6);
-        short r = right, lft = (short)(r - tw), t = (short)(y - hh / 2), bt = (short)(y + hh / 2);
+        short t = (short)(y - hh / 2), bt = (short)(y + hh / 2);
+        short lft = placeLabel((short)(xMid - tw / 2), (short)tw, t, bt, lblTaken, (short)(pane.left + 2), maxR), r = (short)(lft + tw);
+        lblTaken.push_back(LblBox{ lft, t, r, bt });
         box(lft, t, r, bt, C_DARK);
         COLOR bc = pick ? (COLOR)0x00FFFFFF : col;
         line(lft, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, lft, bt, bc, 1); line(lft, bt, lft, t, bc, 1);
@@ -1006,6 +1034,7 @@ void DealerProfile::drawMQLevels(const Settings& S)
         }
         int tw = textW(b, fs - 1, false) + 10; short h = (short)(fs + 6);
         short l = (short)(xMid - tw / 2), r = (short)(xMid + tw / 2), t = (short)(y - h / 2), bt = (short)(y + h / 2);
+        lblTaken.push_back(LblBox{ l, t, r, bt });                         // (2.7.3) the key-level labels keep clear of it
         box(l, t, r, bt, C_DARK);
         COLOR bc = (lv && lv->pick) ? (COLOR)0x00FFFFFF : q.col;            // (2.5.0) a pick: white box
         line(l, t, r, t, bc, 1); line(r, t, r, bt, bc, 1); line(r, bt, l, bt, bc, 1); line(l, bt, l, t, bc, 1);
@@ -1022,6 +1051,7 @@ int DealerProfile::draw(void)
     syncSettings();
     load();
     alignContract();
+    lblTaken.clear();                         // (2.7.3) this draw's label boxes
     drawMQLevels(cfg);                        // (2.3.0) under the profile: the key-level lines first
     drawKeyLevels(cfg);                       // (2.5.0) key levels + hourly swings with their touch odds
     render(cfg);
