@@ -117,7 +117,17 @@ int main() {
         CHECK(minBox <= 2, "(0.9.0) the bars start at the pane's left edge");
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.11.4") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.11.4, one version everywhere)");
+    CHECK(readAll(st).find("VERSION,0.12.0") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.12.0, one version everywhere)");
+    {   // (0.12.0) the level-liquidity file for the Dealer Profile badges: header + every zone of 1.5x or more, side and prominence
+        const std::string lz = readAll(flex + "\\LRA-LiqZones-CL.csv"), t = readAll(st);
+        CHECK(lz.compare(0, 7, "LIQZ,1,") == 0, ("(0.12.0) LRA-LiqZones-CL.csv written with its header: " + lz.substr(0, 40)).c_str());
+        int want = 0, got = 0; size_t q = 0;
+        while ((q = t.find("\nZONE,bx ", q)) != std::string::npos) { q += 9; if (std::atof(t.c_str() + q) >= 1.0) want++; }
+        for (size_t k = 0; (k = lz.find("\nZ,", k)) != std::string::npos; k += 3) got++;
+        { size_t zp = t.find("\nZONES,"); std::printf("  status %s\n", zp == std::string::npos ? "no ZONES" : t.substr(zp + 1, 12).c_str()); }
+        std::printf("  liq zones: %d in the file, %d of 1.5x+ in the status\n", got, want);
+        CHECK(got == want && got > 0 && lz.find(",S,") != std::string::npos, "(0.12.0) every 1.0x+ zone of the status is in the file (with its contracts), nothing else");
+    }
     CHECK(readAll(st).find("\nSTATS,") != std::string::npos && readAll(st).find("bars_known") != std::string::npos, "(0.6.0) the status carries the pane statistics and their lines");
     {   // (0.10.0) the reach, the prominence, the LQ confirmation (CL logs it), no boxes across the chart, the bx label
         const std::string t = readAll(st);

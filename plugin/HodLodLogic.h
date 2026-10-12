@@ -1517,6 +1517,15 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     }
     if (v.projUp ? e >= a : e <= a) return;                                 // nothing left to draw (the extreme is past the edge)
     addLine(L, x, a, x, e, col, 2, R_LABEL);
+    // (1.1.2, Rassul 10:25 "a dashed line across" at the projected level) when the target is on the pane: 6 px dashes, 4 px gaps,
+    // across the pane in the projection's colour; never through the table
+    if (y1 >= top && y1 <= bot) {
+        for (int dx = pane.l + 2; dx < pane.r - 2; dx += 10) {
+            int ex = (std::min)(dx + 6, (int)pane.r - 2);
+            if (L.tableOk && y1 >= L.table.t - 1 && y1 <= L.table.b + 1 && ex >= L.table.l && dx <= L.table.r) continue;
+            addLine(L, dx, y1, ex, y1, col, 1, R_LABEL);
+        }
+    }
     // the flag: a solid triangle pointing right; its top edge at the target (up) or its bottom edge at the target (down)
     int ft = v.projUp ? e : e - PROJ_FLAG_H;
     for (int r = 0; r <= PROJ_FLAG_H; r++) {

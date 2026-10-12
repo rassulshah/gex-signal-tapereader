@@ -51,6 +51,22 @@ int main()
     dpaudit::WriteGate g;
     CHECK(g.due("A", 1000) && !g.due("A", 1001) && !g.due("A", 1059) && g.due("A", 1060) && g.due("B", 1061), "write on change or once a minute only");
 
+    {   // (2.8.0) liquidity on the level badges
+        std::vector<dpaudit::LiqZ> Z; std::string why;
+        const std::string txt = "LIQZ,1,1000,0.25\nZ,S,7847.5,7850,2.59151,977\nZ,R,7857.25,7859.75,2.44,1152\nZ,S,7865.5,7868,1.67,628\nZ,R,bad,1,2,3\n";
+        CHECK(dpaudit::parseLiqZones(txt, 1005, Z, why) && Z.size() == 3, "3 good zones parsed, the bad row skipped");
+        CHECK(!dpaudit::parseLiqZones(txt, 1021, Z, why) && why == "stale" && Z.empty(), "a file 21 s old is ignored (the Liquidity Profile stopped)");
+        CHECK(!dpaudit::parseLiqZones("garbage", 1000, Z, why), "no header -> nothing");
+        dpaudit::parseLiqZones(txt, 1000, Z, why);
+        const dpaudit::LiqZ* cr = dpaudit::liqAt(Z, 7850.00, false);
+        CHECK(cr && cr->bid && cr->n == 977 && dpaudit::liqTag(*cr) == "  Liq 977 (2.6x)", "CR 7,850 on the 7,847.50-7,850 bid zone: Liq 977 (2.6x)");
+        CHECK(dpaudit::liqAt(Z, 7851.25, false) != nullptr && dpaudit::liqAt(Z, 7851.50, false) == nullptr, "covers the zone +/- half its width (1.25), not beyond");
+        const dpaudit::LiqZ* onl = dpaudit::liqAt(Z, 7857.75, false);
+        CHECK(onl && !onl->bid && onl->n == 1152, "ONL 7,857.75 inside the offer zone: red, 1152");
+        CHECK(dpaudit::liqAt(Z, 7866.00, false) == nullptr && dpaudit::liqAt(Z, 7866.00, true) == nullptr, "1.67x: no tag (below 2.0x, and below the 1.7x keep line)");
+        std::vector<dpaudit::LiqZ> Z2; dpaudit::parseLiqZones("LIQZ,1,1000,0.25\nZ,S,7847.5,7850,1.8,700\n", 1000, Z2, why);
+        CHECK(dpaudit::liqAt(Z2, 7850, false) == nullptr && dpaudit::liqAt(Z2, 7850, true) != nullptr, "1.8x: not shown fresh, kept once shown (no blinking)");
+    }
     std::printf("%d passed, %d failed\n", p, f);
     return f != 0;
 }

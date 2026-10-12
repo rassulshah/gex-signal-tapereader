@@ -5,6 +5,7 @@
  * export temporary naming are used only by DealerProfile.
  ********************************************************************************/
 #pragma once
+#include <sstream>
 
 #include <cerrno>
 #include <cctype>
@@ -104,6 +105,55 @@ struct Badge { std::string price, name, odds; std::string all() const { return p
 inline Badge badge(const std::string& m, double px, const std::string& name, const std::string& odds)
 {
     Badge b; b.price = priceText(m, px) + " "; b.name = name; b.odds = odds.empty() ? "" : "  " + odds; return b;
+}
+
+// ---- (2.8.0, Rassul 2026-10-12 10:16 "modify the level badges to indicate if there is liquidity at those levels within a zone",
+// 10:19 "even if you have CR or other gamma levels indicate Liq", 10:23 "also add the number of contracts")
+// LRA-LiqZones-<MKT>.csv (lsLiquidityProfile 0.12.0+): "LIQZ,1,<unix>,<tick>" then "Z,<S|R>,<lo>,<hi>,<bx>,<contracts>".
+// A level gets "Liq 977 (2.6x)" when a zone covers it (the zone +/- half its width) at 2.0x+ the book around it - the Liquidity
+// Profile's own line - kept down to 1.7x once shown so it does not blink; green = resting bids (S), red = resting offers (R).
+// The file is ignored when it is more than 20 s old (the Liquidity Profile is not running / no depth): no tags then.
+struct LiqZ { bool bid = true; double lo = 0, hi = 0, bx = 0; long long n = 0; };
+static const double LIQ_SHOW_X = 2.0, LIQ_KEEP_X = 1.7; static const long long LIQ_STALE_S = 20;
+inline bool parseLiqZones(const std::string& text, long long nowUnix, std::vector<LiqZ>& out, std::string& why)
+{
+    out.clear();
+    std::stringstream ss(text); std::string ln; bool head = false;
+    while (std::getline(ss, ln)) {
+        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+        std::vector<std::string> c; std::stringstream ls(ln); std::string x;
+        while (std::getline(ls, x, ',')) c.push_back(x);
+        if (!head) {
+            if (c.size() < 4 || c[0] != "LIQZ" || c[1] != "1") { why = "no LIQZ header"; return false; }
+            char* e = nullptr; long long at = std::strtoll(c[2].c_str(), &e, 10);
+            if (!e || *e || at <= 0) { why = "bad stamp"; return false; }
+            if (nowUnix - at > LIQ_STALE_S || at - nowUnix > LIQ_STALE_S) { why = "stale"; return false; }
+            head = true; continue;
+        }
+        if (c.size() < 6 || c[0] != "Z" || (c[1] != "S" && c[1] != "R")) continue;
+        LiqZ z; z.bid = c[1] == "S"; char* e1 = nullptr; char* e2 = nullptr; char* e3 = nullptr; char* e4 = nullptr;
+        z.lo = std::strtod(c[2].c_str(), &e1); z.hi = std::strtod(c[3].c_str(), &e2); z.bx = std::strtod(c[4].c_str(), &e3); z.n = std::strtoll(c[5].c_str(), &e4, 10);
+        if (*e1 || *e2 || *e3 || *e4 || !std::isfinite(z.lo) || !std::isfinite(z.hi) || !std::isfinite(z.bx) || z.hi < z.lo || z.lo <= 0 || z.bx <= 0 || z.n < 0) continue;
+        out.push_back(z);
+    }
+    if (!head) { why = "empty"; return false; }
+    why.clear(); return true;
+}
+// the strongest zone that covers the level; null when none reaches the line (2.0x, or 1.7x when this level showed one last time)
+inline const LiqZ* liqAt(const std::vector<LiqZ>& Z, double px, bool wasShown)
+{
+    const LiqZ* best = nullptr;
+    for (size_t i = 0; i < Z.size(); i++) {
+        const double w = Z[i].hi - Z[i].lo, pad = w / 2;
+        if (px < Z[i].lo - pad - 1e-9 || px > Z[i].hi + pad + 1e-9) continue;
+        if (!best || Z[i].bx > best->bx) best = &Z[i];
+    }
+    if (!best || best->bx < (wasShown ? LIQ_KEEP_X : LIQ_SHOW_X)) return nullptr;
+    return best;
+}
+inline std::string liqTag(const LiqZ& z)
+{
+    char b[64]; std::snprintf(b, sizeof(b), "  Liq %lld (%.1fx)", z.n, z.bx); return b;
 }
 
 // ---- (2.7.4) MenthorQ level colour: green = support (PS), red = resistance (CR), yellow = HVL, cyan = the other gamma levels

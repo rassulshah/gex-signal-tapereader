@@ -55,7 +55,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.7.4";   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.8.0";   // 2.8.0: every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -206,6 +206,11 @@ public:
     struct TP { float px = 0; std::string p1, pe, pc, txt; bool proven = false; };
     std::map<std::string, std::vector<TP> > tps; std::map<std::string, long long> tpStamp; std::map<std::string, time_t> tpChecked, tpAt;
     void loadTouch(const std::string& m);
+    // (2.8.0) the Liquidity Profile's zones near price (LRA-LiqZones-<MKT>.csv) -> "Liq 977 (2.6x)" on every level badge
+    std::vector<dpaudit::LiqZ> liqZ; long long liqStamp = -2; time_t liqChecked = 0; std::string liqWhy;
+    std::map<long long, bool> liqShown;            // level (in 1/10000s of a point) -> it showed a tag last draw (hysteresis)
+    void loadLiq(const std::string& m);
+    void addLiq(PendLbl& P, double chartPx);
     void loadMQLevels();
     void drawMQLevels(const Settings& S);
     // (2.5.0, Rassul 2026-10-08 07:16 "my expectation now is for the levels to [have] probabilities in their labels") LRA-Levels-<MKT>.csv
@@ -247,6 +252,7 @@ public:
         std::map<std::string, time_t> lvChecked, lvAt;
         std::map<std::string, bool> lvStale;
         std::map<std::string, KLC> klc;   // (2.7.2, RA1009 regression audit) the native key-level cache is THIS chart's (was on the shared DLL object)
+        std::vector<dpaudit::LiqZ> liqZ; long long liqStamp = -2; time_t liqChecked = 0; std::map<long long, bool> liqShown;   // (2.8.0)
     };
     bool loadHostState();
     HostSlot<State> slot_;
@@ -267,6 +273,7 @@ void DealerProfile::clearWorkingState()
     loadedStamp = -2; loadedPath.clear(); expBy.clear(); savedKey.clear(); savedStamp = -2;
     mql.clear(); mqlStamp = -2; mqlChecked = 0; tps.clear(); tpStamp.clear(); tpChecked.clear(); tpAt.clear();
     lvs.clear(); lvStamp.clear(); lvChecked.clear(); lvAt.clear(); lvStale.clear(); klc.clear();
+    liqZ.clear(); liqStamp = -2; liqChecked = 0; liqShown.clear();
 }
 
 bool DealerProfile::loadHostState()
@@ -278,6 +285,7 @@ bool DealerProfile::loadHostState()
     mql = s->mql; mqlStamp = s->mqlStamp; mqlChecked = s->mqlChecked; tps = s->tps; tpStamp = s->tpStamp;
     tpChecked = s->tpChecked; tpAt = s->tpAt; lvs = s->lvs; lvStamp = s->lvStamp; lvChecked = s->lvChecked;
     lvAt = s->lvAt; lvStale = s->lvStale; klc = s->klc;
+    liqZ = s->liqZ; liqStamp = s->liqStamp; liqChecked = s->liqChecked; liqShown = s->liqShown;
     return true;
 }
 
@@ -290,6 +298,7 @@ void DealerProfile::saveHostState()
     s->mql = mql; s->mqlStamp = mqlStamp; s->mqlChecked = mqlChecked; s->tps = tps; s->tpStamp = tpStamp;
     s->tpChecked = tpChecked; s->tpAt = tpAt; s->lvs = lvs; s->lvStamp = lvStamp; s->lvChecked = lvChecked;
     s->lvAt = lvAt; s->lvStale = lvStale; s->klc = klc;
+    s->liqZ = liqZ; s->liqStamp = liqStamp; s->liqChecked = liqChecked; s->liqShown = liqShown;
 }
 
 int DealerProfile::done(void)
@@ -682,7 +691,9 @@ void DealerProfile::staleBadge()
         double d = difftime(mktime(&b), mktime(&a)) / 60.0 - cfg.clock;
         if (d > -600) age = d < 0 ? 0 : d;
     }
-    if (age <= 10.0) return;
+    // (2.8.0, Rassul 10:24 "i see this alot. dealer data stale. why?") the bridge's options snapshot refreshes every ~10-15 min,
+    // so a 10-min line fired on every normal cycle; warn only when a refresh was really missed
+    if (age <= 25.0) return;
     char b[40]; if (age >= 2880) snprintf(b, sizeof(b), "DEALER DATA STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) snprintf(b, sizeof(b), "DEALER DATA STALE %dh", (int)(age / 60 + 0.5)); else snprintf(b, sizeof(b), "DEALER DATA STALE %dm", (int)(age + 0.5));
     RCT pane; pane.getPaneRect(false);
     int tw = textW(b, 10, true);
@@ -829,6 +840,30 @@ void DealerProfile::loadTouch(const std::string& m)
     tps[m].swap(v); tpStamp[m] = st; tpAt[m] = st > 0 ? (time_t)(st / 1000003LL) : 0;   // the file's modified time
 }
 
+// (2.8.0) re-read at most every second, only when the file changed; parsed (and judged fresh: <= 20 s) every time it is read.
+// The freshness is re-checked at each draw from the file's own stamp, so a Liquidity Profile that stops drops the tags in 20 s.
+void DealerProfile::loadLiq(const std::string& m)
+{
+    time_t now = time(nullptr);
+    if (now == liqChecked && liqStamp != -2) return;
+    liqChecked = now;
+    const char* up = getenv("USERPROFILE"); if (!up) { liqZ.clear(); return; }
+    std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-LiqZones-" + m + ".csv";
+    long long st = dl::fileStamp(p);
+    std::string text;
+    {   std::ifstream f(p.c_str(), std::ios::binary); if (f.is_open()) { text.resize(65536); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); } }
+    liqStamp = st;
+    if (!dpaudit::parseLiqZones(text, (long long)now, liqZ, liqWhy)) liqZ.clear();
+}
+void DealerProfile::addLiq(PendLbl& P, double chartPx)
+{
+    const long long key = (long long)std::llround(chartPx * 10000.0);
+    const dpaudit::LiqZ* z = dpaudit::liqAt(liqZ, chartPx, liqShown[key]);
+    liqShown[key] = z != nullptr;
+    if (!z) return;
+    P.seg.push_back(LSeg{ dpaudit::liqTag(*z), true, z->bid ? C_BUY : C_SELL });   // green = resting bids, red = resting offers
+}
+
 void DealerProfile::loadLevels(const std::string& m)
 {
     time_t now = time(nullptr);
@@ -922,6 +957,7 @@ static std::string spacedOdds(const std::string& o)
 
 void DealerProfile::drawKeyLevels(const Settings& S)
 {
+    if (!mkt.empty()) loadLiq(mkt);                                   // (2.8.0) the liquidity on each level
     // (2.7.0, Rassul 2026-10-09 08:40 "it would probably be better if the dealer profile did all the levels and their probabilities")
     // the key levels (PFH / PFL, PDH / PDL, PWH / PWL, ONH / ONL, LonHI / LonLO) and the latest standing hourly swings (HrHI / HrLO)
     // are computed HERE from the chart's own bars (KeyLevelsLogic.h - lra.key_levels' definitions): a thin line + the label at the
@@ -964,6 +1000,7 @@ void DealerProfile::drawKeyLevels(const Settings& S)
         P.seg.push_back(LSeg{ B.price, false, C_INK });
         P.seg.push_back(LSeg{ B.name, true, (COLOR)dpaudit::liftForText(col) });   // his SessionPrices colour (lifted when too dark to read)
         if (!B.odds.empty()) P.seg.push_back(LSeg{ B.odds, false, C_INK });
+        addLiq(P, q.price);                                           // (2.8.0) "Liq 977 (2.6x)" when liquidity rests on the level
         pend.push_back(P);
     }
 }
@@ -972,6 +1009,7 @@ void DealerProfile::drawMQLevels(const Settings& S)
 {
     loadMQLevels();
     if (mql.empty() || mkt.empty()) return;
+    loadLiq(mkt);                                                     // (2.8.0)
     (void)S;
     // (2.7.4) the chart's MenthorQ contract: its own symbol, the same contract under another feed's name (ESZ6 = EPZ26), or -
     // on a roll / continuous chart - the dealer file's contract, else the nearest expiry (never the back month by alphabet).
@@ -1037,6 +1075,7 @@ void DealerProfile::drawMQLevels(const Settings& S)
         P.seg.push_back(LSeg{ B.price, false, C_INK });
         P.seg.push_back(LSeg{ B.name, true, col });
         if (!B.odds.empty()) P.seg.push_back(LSeg{ B.odds, false, C_INK });
+        addLiq(P, (double)cp);                                        // (2.8.0, Rassul "even if you have CR or other gamma levels indicate Liq")
         pend.push_back(P);
     }
 }
@@ -1128,6 +1167,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion(DP_VERSION);   // 2.7.4 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
+    p->setVersion(DP_VERSION);   // 2.8.0 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
     return p;
 }
