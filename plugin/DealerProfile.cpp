@@ -55,7 +55,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.8.5";   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.8.6";   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -212,6 +212,7 @@ public:
     struct LiqMem { dpaudit::LiqZ z; time_t seen = 0; };
     std::map<long long, LiqMem> liqMem;            // (2.8.1) the last tag per level, held 30 s through a dip / a refresh gap
     time_t liqGoodAt = 0;                          // (2.8.1) the last good read of the zones file
+    int liqColRight = 0;                           // (2.8.6) the Liquidity Profile column's width on this market's chart (px)
     std::map<std::string, short> lblX;             // (2.8.1) each badge's x last draw (sticky placement)
     void loadLiq(const std::string& m);
     void addLiq(PendLbl& P, double chartPx);
@@ -257,7 +258,7 @@ public:
         std::map<std::string, bool> lvStale;
         std::map<std::string, KLC> klc;   // (2.7.2, RA1009 regression audit) the native key-level cache is THIS chart's (was on the shared DLL object)
         std::vector<dpaudit::LiqZ> liqZ; long long liqStamp = -2; time_t liqChecked = 0; std::map<long long, bool> liqShown;   // (2.8.0)
-        std::map<long long, LiqMem> liqMem; time_t liqGoodAt = 0; std::map<std::string, short> lblX;                           // (2.8.1)
+        std::map<long long, LiqMem> liqMem; time_t liqGoodAt = 0; std::map<std::string, short> lblX; int liqColRight = 0;     // (2.8.1)
     };
     bool loadHostState();
     HostSlot<State> slot_;
@@ -278,7 +279,7 @@ void DealerProfile::clearWorkingState()
     loadedStamp = -2; loadedPath.clear(); expBy.clear(); savedKey.clear(); savedStamp = -2;
     mql.clear(); mqlStamp = -2; mqlChecked = 0; tps.clear(); tpStamp.clear(); tpChecked.clear(); tpAt.clear();
     lvs.clear(); lvStamp.clear(); lvChecked.clear(); lvAt.clear(); lvStale.clear(); klc.clear();
-    liqZ.clear(); liqStamp = -2; liqChecked = 0; liqShown.clear(); liqMem.clear(); liqGoodAt = 0; lblX.clear();
+    liqZ.clear(); liqStamp = -2; liqChecked = 0; liqShown.clear(); liqMem.clear(); liqGoodAt = 0; lblX.clear(); liqColRight = 0;
 }
 
 bool DealerProfile::loadHostState()
@@ -291,7 +292,7 @@ bool DealerProfile::loadHostState()
     tpChecked = s->tpChecked; tpAt = s->tpAt; lvs = s->lvs; lvStamp = s->lvStamp; lvChecked = s->lvChecked;
     lvAt = s->lvAt; lvStale = s->lvStale; klc = s->klc;
     liqZ = s->liqZ; liqStamp = s->liqStamp; liqChecked = s->liqChecked; liqShown = s->liqShown;
-    liqMem = s->liqMem; liqGoodAt = s->liqGoodAt; lblX = s->lblX;
+    liqMem = s->liqMem; liqGoodAt = s->liqGoodAt; lblX = s->lblX; liqColRight = s->liqColRight;
     return true;
 }
 
@@ -305,7 +306,7 @@ void DealerProfile::saveHostState()
     s->tpChecked = tpChecked; s->tpAt = tpAt; s->lvs = lvs; s->lvStamp = lvStamp; s->lvChecked = lvChecked;
     s->lvAt = lvAt; s->lvStale = lvStale; s->klc = klc;
     s->liqZ = liqZ; s->liqStamp = liqStamp; s->liqChecked = liqChecked; s->liqShown = liqShown;
-    s->liqMem = liqMem; s->liqGoodAt = liqGoodAt; s->lblX = lblX;
+    s->liqMem = liqMem; s->liqGoodAt = liqGoodAt; s->lblX = lblX; s->liqColRight = liqColRight;
 }
 
 int DealerProfile::done(void)
@@ -861,7 +862,8 @@ void DealerProfile::loadLiq(const std::string& m)
     {   std::ifstream f(p.c_str(), std::ios::binary); if (f.is_open()) { text.resize(65536); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); } }
     liqStamp = st;
     std::vector<dpaudit::LiqZ> z;
-    if (dpaudit::parseLiqZones(text, (long long)now, z, liqWhy)) { liqZ.swap(z); liqGoodAt = now; }
+    int cr = 0;
+    if (dpaudit::parseLiqZones(text, (long long)now, z, liqWhy, &cr)) { liqZ.swap(z); liqGoodAt = now; liqColRight = cr; }
     else if (liqWhy == "stale" || now - liqGoodAt > dpaudit::LIQ_STALE_S) liqZ.clear();   // (2.8.1) a read caught mid-replace keeps the last zones
 }
 void DealerProfile::addLiq(PendLbl& P, double chartPx)
@@ -1137,8 +1139,11 @@ void DealerProfile::flushLabels(const Settings& S)
     const short paneR = rightEdge(pane);
     short maxR = (short)(paneR - S.width - 80 - 140);                     // (2.7.3) never into the Delta / Dealer Profile columns
     { int c = dl::clearRightOf(paneR); if (c < maxR) maxR = (short)c; }   // (2.7.4) the Delta Profile's real width / side when known
-    short minL = (short)(pane.left + 110);                                // (2.7.4) right of the Liquidity Profile column (70 px + "5.1x")
-    if (maxR - minL < 160) minL = (short)(pane.left + 2);                 // a narrow chart: use what there is
+    // (2.8.6, 13:46 check: a narrow ES chart put "LonLO" on top of the column's "832 1.9x LonLO/ONL") never left of the Liquidity
+    // Profile column - its real width when it publishes it (fresh), else 110 px; a narrow chart gives up room on the right instead
+    const int lqW = (liqColRight > 0 && time(nullptr) - liqGoodAt <= dpaudit::LIQ_STALE_S) ? liqColRight + 8 : 110;
+    short minL = (short)(pane.left + (lqW > 110 ? lqW : 110));
+    if (maxR - minL < 200) maxR = (short)std::min<int>(paneR - 4, minL + 200);
     // (2.8.4, Rassul 12:57 "put them between center and left justified for improved visibility") the badge column is centred
     // half-way between the left edge of the free area (right of the Liquidity column) and the chart's centre
     const short xMid = (short)((minL + (pane.left + (pane.right - pane.left) / 2)) / 2);
@@ -1236,6 +1241,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion(DP_VERSION);   // 2.8.5 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
+    p->setVersion(DP_VERSION);   // 2.8.6 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
     return p;
 }

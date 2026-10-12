@@ -90,6 +90,11 @@ int main()
         const dpaudit::LiqZ* onl = dpaudit::liqAt(Z, 7857.75, false); const dpaudit::LiqZ* lon = dpaudit::liqAt(Z, 7860.0, false);
         CHECK(onl && onl->n == 954 && lon && lon->n == 854, "ONL -> the 954 zone holding it, LonLO -> the 854 zone (as the Liquidity column names them)");
     }
+    {   // (2.8.6) the Liquidity column's published width rides in the header
+        std::vector<dpaudit::LiqZ> Z; std::string why; int cr = -1;
+        CHECK(dpaudit::parseLiqZones("LIQZ,1,1000,0.25,188\nZ,S,1,2,2.0,10\n", 1000, Z, why, &cr) && cr == 188, "width 188 px read from the header");
+        CHECK(dpaudit::parseLiqZones("LIQZ,1,1000,0.25\nZ,S,1,2,2.0,10\n", 1000, Z, why, &cr) && cr == 0, "an old header (no width): 0 -> the 110 px default");
+    }
     std::printf("%d passed, %d failed\n", p, f);
     return f != 0;
 }

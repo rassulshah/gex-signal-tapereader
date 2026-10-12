@@ -149,7 +149,7 @@ int main() {
         }
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.13.1") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.13.1, one version everywhere)");
+    CHECK(readAll(st).find("VERSION,0.13.2") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.13.2, one version everywhere)");
     {   // (0.12.0) the level-liquidity file for the Dealer Profile badges: header + every zone of 1.5x or more, side and prominence
         const std::string lz = readAll(flex + "\\LRA-LiqZones-CL.csv"), t = readAll(st);
         CHECK(lz.compare(0, 7, "LIQZ,1,") == 0, ("(0.12.0) LRA-LiqZones-CL.csv written with its header: " + lz.substr(0, 40)).c_str());

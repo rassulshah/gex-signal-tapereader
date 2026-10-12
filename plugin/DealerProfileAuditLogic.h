@@ -129,9 +129,9 @@ inline Badge badge(const std::string& m, double px, const std::string& name, con
 struct LiqZ { bool bid = true; double lo = 0, hi = 0, bx = 0; long long n = 0; };
 // (2.8.3) the Liquidity Profile 0.13+ publishes only the zones it draws (shown at 2.0x, kept to 1.7x): every one of them is tagged
 static const double LIQ_SHOW_X = 1.7, LIQ_KEEP_X = 1.7; static const long long LIQ_STALE_S = 20;
-inline bool parseLiqZones(const std::string& text, long long nowUnix, std::vector<LiqZ>& out, std::string& why)
+inline bool parseLiqZones(const std::string& text, long long nowUnix, std::vector<LiqZ>& out, std::string& why, int* colRight = nullptr)
 {
-    out.clear();
+    out.clear(); if (colRight) *colRight = 0;
     std::stringstream ss(text); std::string ln; bool head = false;
     while (std::getline(ss, ln)) {
         if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
@@ -142,6 +142,7 @@ inline bool parseLiqZones(const std::string& text, long long nowUnix, std::vecto
             char* e = nullptr; long long at = std::strtoll(c[2].c_str(), &e, 10);
             if (!e || *e || at <= 0) { why = "bad stamp"; return false; }
             if (nowUnix - at > LIQ_STALE_S || at - nowUnix > LIQ_STALE_S) { why = "stale"; return false; }
+            if (colRight && c.size() >= 5) { char* e5 = nullptr; long v = std::strtol(c[4].c_str(), &e5, 10); if (e5 && !*e5 && v > 0 && v < 1200) *colRight = (int)v; }   // (2.8.6)
             head = true; continue;
         }
         if (c.size() < 6 || c[0] != "Z" || (c[1] != "S" && c[1] != "R")) continue;
