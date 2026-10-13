@@ -41,6 +41,8 @@ call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h
 call :one DeltaProfileHourly lsDeltaProfileHourly DeltaProfileHourlyCore.h DeltaProfileHourlyEngine.h DeltaProfileHourlyParams.h HostSlot.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h SessionInfoLayout.h HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h
 call :one HodLod       lsHodLod       HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h
+REM (CR204 2026-10-12) lsFirstExtreme: the First Final Extreme v2 model, shadow mode
+call :one FirstExtreme lsFirstExtreme FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp HostSlot.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h TradeGuardLayout.h
 call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h
@@ -160,7 +162,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
