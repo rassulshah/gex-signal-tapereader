@@ -40,8 +40,8 @@ call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h
 call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h
 call :one DeltaProfileHourly lsDeltaProfileHourly DeltaProfileHourlyCore.h DeltaProfileHourlyEngine.h DeltaProfileHourlyParams.h HostSlot.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h SessionInfoLayout.h HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h
-call :one HodLod       lsHodLod       HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h
-REM (CR204 2026-10-12) lsFirstExtreme: the First Final Extreme v2 model, shadow mode
+call :one HodLod       lsHodLod       HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h HodLodFx.h FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp
+REM (CR204 2026-10-12) lsFirstExtreme: the First Final Extreme v2 model, shadow mode - (CR210) RETIRED stub 2.0.0: the model runs inside lsHodLod 2.0.0
 call :one FirstExtreme lsFirstExtreme FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp HostSlot.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h TradeGuardLayout.h
 call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h

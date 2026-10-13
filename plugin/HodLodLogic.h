@@ -53,7 +53,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.9";
+static const char* const HL_VERSION = "2.0.0";
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -711,6 +711,7 @@ struct View {
     int callT = -1, callSrc = 0; double callP = NAN; bool callIn = false;     // the 2nd-extreme call in the E cell / header
     double callShow = NAN; bool callQ = false, callLate = false, callDim = false;
     std::string headMain, headTail, headTailShort, headLeftTxt; unsigned headTailCol = C_SLATE;
+    std::vector<Seg> fxSegs;         // (2.0.0, Rassul 2026-10-12 21:47 "combine the hod lod indicator and the first extreme") the 1st Extreme line (3rd header line); empty = none
     std::vector<Seg> headLeftSegs;   // (1.1.2, Rassul 10-12 "add colour") the left half in parts: "ES RTH 8:30-3:00" | "Range 70%" | "Proj LOD ..."   // (HL101) the header in two colours: the read + the 2nd call
     // (1.1.0, Rassul 2026-10-11 16:54) the PROJECTED opposite extreme: the 1st extreme + / - the expected full RTH range (hle median,
     // never below the range so far). Study lra.ext_yardstick: the expected range beat ATR (and ATR + range used) in 6 of 7 markets
@@ -1340,10 +1341,12 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         std::string tail = v.headTail;
         // (1.1.2, Rassul 11:20 "compact it ... the ES RTH to Proj LOD can be put in a new line below") a two-line header, each line
         // the table's full width: "ES RTH 8:30-3:00   Range 52%   Proj LOD 7,834.75" over "HOD IN 70%?   LOD at close 15% ..."
-        auto headW = [&](const std::string& tl) { return (std::max)(M(v.headLeftTxt, hfs, true), M(v.headMain, hfs, true) + M(tl, hfs, true)) + 16; };
+        int fxW = 0; for (size_t q = 0; q < v.fxSegs.size(); q++) fxW += M(v.fxSegs[q].s, hfs, true);
+        const int nHead = v.fxSegs.empty() ? 2 : 3;   // (2.0.0) + the 1st Extreme line
+        auto headW = [&](const std::string& tl) { return (std::max)((std::max)(M(v.headLeftTxt, hfs, true), M(v.headMain, hfs, true) + M(tl, hfs, true)), fxW) + 16; };
         int W = (std::max)(lw + colsW + 4, headW(tail));
         if (W > area.r - area.l && !v.headTailShort.empty()) { tail = v.headTailShort; W = (std::max)(lw + colsW + 4, headW(tail)); }
-        int H = 2 * headH + 3 * rowH + 2;
+        int H = nHead * headH + 3 * rowH + 2;
         if (W > area.r - area.l && attempt < 3) continue;              // a smaller font, then content-sized columns, before spilling
         if (area.l + W > pane.r - pad) continue;                      // cannot fit even past the last bar: smaller font / the note
         if (H + 40 > pane.b - pane.t) break;
@@ -1366,9 +1369,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             int xr = cx - (w1 + w2) / 2;
             addText(L, xr, T.t + headH, T.t + 2 * headH - 1, v.headMain, v.headerCol, hfs, true, w1, R_TABLE, -1);
             if (!tail.empty()) addText(L, xr + w1, T.t + headH, T.t + 2 * headH - 1, tail, v.headTailCol, hfs, true, w2, R_TABLE, -1);
+            if (nHead == 3) {   // (2.0.0) line 3: the 1st Extreme model ("1st extreme  LOD? 74%  7,826.75 . formed 8:51 . called 9:42")
+                int xx = cx - fxW / 2;
+                for (size_t q = 0; q < v.fxSegs.size(); q++) { int w = M(v.fxSegs[q].s, hfs, true);
+                    addText(L, xx, T.t + 2 * headH, T.t + 3 * headH - 1, v.fxSegs[q].s, v.fxSegs[q].col, hfs, true, w, R_TABLE, -1); xx += w; }
+            }
         }
-        addLine(L, T.l, T.t + 2 * headH, T.r, T.t + 2 * headH, C_BORDER, 1, R_TABLE);
-        int y = T.t + 2 * headH + 1;
+        addLine(L, T.l, T.t + nHead * headH, T.r, T.t + nHead * headH, C_BORDER, 1, R_TABLE);
+        int y = T.t + nHead * headH + 1;
         const Cell* rows[2] = { v.E, v.A };
         for (int r = -1; r < 2; r++) {
             if (r == 1) addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE);

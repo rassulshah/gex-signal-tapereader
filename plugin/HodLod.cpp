@@ -1,5 +1,6 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.0.0 (2026-10-12 night): the 1st Extreme model (was lsFirstExtreme) merged in: a 3rd table line + the LOD? / HOD? marker, same shadow logs
  *
  *  THE SESSION'S HOD / LOD, on every market's chart (Rassul 2026-10-09, mockup v5 approved: "check everything then build it").
  *    PIECE 1  the session candle on the LEFT edge of the price pane, at real prices: body RTH open -> last close, wicks to the HOD
@@ -24,6 +25,7 @@
 #endif
 #include "HostSlot.h"
 #include "HodLodLogic.h"
+#include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include <sys/stat.h>
 #include <fstream>
 #include <sys/types.h>
@@ -50,6 +52,9 @@ struct HLState {
     bool faulted = false;
     long long recomputes = 0, statusWrites = 0;   // test counters (checklist #31 / #32)
     int projIdx = -1;                  // (1.1.0) the chart bar index of the 1st extreme (the projection line's x), -1 = none
+    // (2.0.0) the 1st Extreme model (fx2), 3-min charts only: its view, the chart index of the called candle, its shadow logs
+    fx2::View fxView; bool fxHave = false; std::string fxState = "not run"; int fxIdx = -1;
+    long long fxLogDay = -1, fxCallDay = -1; int fxLogElapsed = -1; time_t fxStatusWrite = 0; std::string fxLastStatus;
     std::string fcSession;                 // (1.1.8) the session whose first IN call is already in HodLod.firstcall-<MKT>.csv
     std::string projLogged, projSession;   // (1.1.6) the targets already in HodLod.proj-<MKT>.csv for projSession (\n-separated keys)
     // (HL104) MenthorQ level snapshots of MenthorQLevels.csv (the one external input): one per distinct content, <= 32, newest last
@@ -83,6 +88,9 @@ public:
     void writeProj(HLState& S);
     void writeFirstCall(HLState& S, const std::vector<hl::ReadRow>& rows);
     void writeStatus(HLState& S, const hl::Layout* L);
+    void computeFx(HLState& S, long n, long long per);
+    void writeFxLogs(HLState& S);
+    void writeFxStatus(HLState& S);
     std::string flexPath(const std::string& name);
     int textW(const std::string& s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s.c_str(), -1); }
     void text(int x, int yc, const std::string& s, COLOR col, int sz, bool bold)
@@ -246,6 +254,8 @@ void HodLod::recompute(HLState& S, long n)
     hl::Tracker T = hl::runBars(c, B, B.size(), &rows, &lock);
     hl::ReadOut rd = rows.empty() ? hl::ReadOut() : rows.back().out;
     S.view = hl::buildView(T, rd, &rows, &S.mq, &lock);
+    computeFx(S, n, per);                     // (2.0.0) the 1st Extreme model on the same chart (this recompute's bar size)
+    S.view.fxSegs = hlfx::headerLine(S.fxView, S.fxHave);
     S.projIdx = -1;                           // (1.1.0) the 1st extreme's bar on this chart, matched by its END stamp
     if (S.view.projOk) for (size_t j = B.size(); j-- > 0;) if (B[j].absEnd == S.view.projFromEnd) { S.projIdx = start + (int)j; break; }
     if (!S.mqWhy.empty()) S.view.mqWhy = S.mqWhy + (S.view.mqWhy.empty() ? "" : "; " + S.view.mqWhy);
@@ -345,6 +355,98 @@ void HodLod::writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows)
 
 // the status file: every value drawn, keyed by market AND seconds per bar (#9); written on change, at most every 2 s, and
 // every 30 s regardless; atomic (#5)
+
+// ------------------------------------------------------------------------------------------------ (2.0.0) the 1st Extreme model
+static double fxRound(double v) { return std::round(v * 1e7) / 1e7; }   // the chart's float prices back to their decimal values
+static std::string fxDayTxt(long long day)
+{
+    int y, m, d; hl::civilFromDays(day, y, m, d); char b[16]; snprintf(b, sizeof b, "%04d-%02d-%02d", y, m, d); return b;
+}
+// what lsFirstExtreme 1.0.1 did: 3-min charts, the closed bars back to 45 calendar days (14 complete sessions + the overnight),
+// prices on the instrument's ticks (1.0.1 rounded to 1e-7 only), strictly increasing stamps; fx2::buildView for the last closed bar's day; the shadow logs once per bar
+void HodLod::computeFx(HLState& S, long n, long long per)
+{
+    S.fxHave = false; S.fxIdx = -1;
+    const int m = hlfx::fxMarket(S.mkt);
+    if (m < 0) { S.fxState = "market not in the 1st Extreme model"; return; }
+    if (per != 180) { S.fxState = "3-minute charts only (the model's bars)"; return; }
+    RTARRAYI dt(barDateTime), vol(barVolume); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
+    if ((long)dt.count < n || (long)op.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) { S.fxState = "price arrays unavailable"; return; }
+    if ((long)vol.count < n) { S.fxState = "volume unavailable (the model needs volume)"; return; }
+    auto absOf = [&](int i) {
+        struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        return fx2::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday) * 86400 + t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+    };
+    const int lastClosed = (int)n - 2;
+    if (lastClosed < 1) { S.fxState = "too few bars"; return; }
+    // (2.0.0) prices back to the instrument's own ticks: the chart's float 4135.6 is 4135.60009765625 and a 1e-7 rounding keeps that
+    // error (GC / HG / NG / 6E), which moved two NG calls in the parity replay; the model was fitted on tick prices
+    const double tk = fx2::MKTS[m].tick;
+    auto onTick = [&](double v) { return fxRound(std::round(v / tk) * tk); };
+    long long cutoff = absOf(lastClosed) - 45LL * 86400;
+    int start = lastClosed; while (start > 0 && lastClosed - start < 60000) { if (absOf(start - 1) < cutoff) break; start--; }
+    std::vector<fx2::Bar> B; B.reserve((size_t)(lastClosed - start + 1));
+    std::vector<long long> ends; ends.reserve((size_t)(lastClosed - start + 1));
+    for (int i = start; i <= lastClosed; i++) {
+        fx2::Bar b; b.tEnd = absOf(i); b.o = onTick(op[i]); b.h = onTick(hi[i]); b.l = onTick(lo[i]); b.c = onTick(cl[i]); b.v = (double)vol[i];
+        if (!B.empty() && b.tEnd <= B.back().tEnd) { ends.push_back(0); continue; }
+        B.push_back(b); ends.push_back(b.tEnd);
+    }
+    if (B.empty()) { S.fxState = "no closed bars"; return; }
+    long long day = fx2::floorDiv(B.back().tEnd, 86400);
+    S.fxView = fx2::buildView(m, B, day);
+    S.fxHave = true;
+    S.fxState = S.fxView.state == fx2::ST_UNAVAILABLE ? S.fxView.why : "ok";
+    if (S.fxView.called) for (size_t j = ends.size(); j-- > 0;) if (ends[j] == S.fxView.formedEnd) { S.fxIdx = start + (int)j; break; }
+    writeFxLogs(S);
+}
+static bool fxAppend(const std::string& p, const std::string& header, const std::string& text)
+{
+    bool fresh = false; { std::ifstream t(p.c_str()); fresh = !t.good(); }
+    std::ofstream f(p.c_str(), std::ios::out | std::ios::app | std::ios::binary);
+    if (!f.is_open()) return false;
+    if (fresh) f << header;
+    f << text; f.flush(); return f.good();
+}
+// the shadow logs the nightly scorer reads (same files and lines as lsFirstExtreme): each assessed bar once, the call once per day;
+// primed from the file after a restart so the day's lines already there are never repeated
+void HodLod::writeFxLogs(HLState& S)
+{
+    const fx2::View& V = S.fxView;
+    if (V.decisions.empty() || V.day < 0) return;
+    std::string dayTxt = fxDayTxt(V.day);
+    std::string pd = flexPath("FirstExtreme.decisions-" + S.mkt + ".csv"), pc = flexPath("FirstExtreme.calls-" + S.mkt + ".csv");
+    if (pd.empty()) return;
+    if (S.fxLogDay != V.day) {
+        S.fxLogDay = V.day; S.fxLogElapsed = -1; S.fxCallDay = -1;
+        std::ifstream f(pd.c_str()); std::string ln;
+        while (std::getline(f, ln)) if (ln.compare(0, 10, dayTxt) == 0 && ln.size() > 11) { int e = atoi(ln.c_str() + 11); if (e > S.fxLogElapsed) S.fxLogElapsed = e; }
+        std::ifstream g(pc.c_str()); while (std::getline(g, ln)) if (ln.compare(0, 10, dayTxt) == 0) S.fxCallDay = V.day;
+    }
+    std::string add; int maxE = S.fxLogElapsed;
+    for (const auto& D : V.decisions) if (D.elapsed > S.fxLogElapsed) { add += fx2::decisionLine(V, D, dayTxt); maxE = (std::max)(maxE, D.elapsed); }
+    if (!add.empty() && fxAppend(pd, fx2::DECISION_HEADER, add)) S.fxLogElapsed = maxE;
+    if (V.called && S.fxCallDay != V.day && fxAppend(pc, fx2::CALL_HEADER, fx2::callLine(V, dayTxt))) S.fxCallDay = V.day;
+}
+void HodLod::writeFxStatus(HLState& S)
+{
+    if (S.mi < 0) return;
+    std::string t = std::string("VERSION,") + fx2::FX_VERSION + " (inside lsHodLod " + hl::HL_VERSION + ")\nMODEL," + fx2::FX_MODEL + "\nMARKET," + S.mkt + "\nSTATE," + S.fxState + "\n";
+    if (S.fxHave) {
+        const fx2::View& V = S.fxView; char b[512];
+        snprintf(b, sizeof b, "VIEW,state=%d,elapsed=%d,p_low=%.4f,p_high=%.4f,p_in=%.4f,low=%.10g,high=%.10g,called=%d,side=%d,price=%.10g,prob=%.4f,formed=%d,declared=%d,failed=%d,failed_at=%d,verdict=%d\n",
+                 (int)V.state, V.elapsed, V.pLow, V.pHigh, V.pIn, V.lo, V.hi, (int)V.called, V.side, V.price, V.prob, V.formed, V.declared, (int)V.failed, V.failedAt, V.verdictKnown ? V.verdict : 9);
+        t += b;
+        std::string line; for (const auto& g : S.view.fxSegs) line += g.s; t += "LINE," + line + "\n";
+    }
+    time_t now = time(nullptr);
+    if (t == S.fxLastStatus && now - S.fxStatusWrite < 30) return;
+    if (now - S.fxStatusWrite < 2) return;
+    std::string p = flexPath("FirstExtreme.status-" + S.mkt + ".txt"); if (p.empty()) return;
+    hl::FileOps F;
+    if (hl::writeAtomic(F, p, t)) { S.fxLastStatus = t; S.fxStatusWrite = now; }
+}
+
 void HodLod::writeStatus(HLState& S, const hl::Layout* L)
 {
     if (S.mi < 0) return;
@@ -437,6 +539,7 @@ int HodLod::draw(void)
         std::string s = "HOD/LOD: " + S->state;
         if (pb.r - pb.l > 200 && pb.b - pb.t > 40) text(pb.l + 8, pb.b - 14, s, HL_GREY, 8, false);
         writeStatus(*S, nullptr);
+        writeFxStatus(*S);
         return RTX_OK;
     }
     const double tick = S->tick;
@@ -447,8 +550,15 @@ int HodLod::draw(void)
         PNT p; if (p.set(S->projIdx, (float)((double)S->view.projFrom * tick), kBarCenter) == RTX_OK && p.h > 0) projX = (int)p.h;
     }
     hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, priceEdge(), position(S->mkt), projX);
+    if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
+        PNT p; int mx = -1;
+        if (p.set(S->fxIdx, (float)S->fxView.price, kBarCenter) == RTX_OK && p.h > 0) mx = (int)p.h;
+        std::function<int(double)> yPx = [&](double v) { return (int)getVerticalDrawPosition((float)v); };
+        hlfx::marker(L, S->fxView, pb, mx, yPx, M);
+    }
     execute(L);
     writeStatus(*S, &L);
+    writeFxStatus(*S);
     return RTX_OK;
 }
 
@@ -457,7 +567,7 @@ extern "C" cppExtension *CreateExtension(void)
     HodLod *p = new HodLod();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the projected opposite extreme (a line + flag from the 1st extreme, the target after Range), the live read (LOD / HOD IN) and the 2nd-extreme call, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
-    p->setVersion("1.1.7");
+    p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the projected opposite extreme (a line + flag from the 1st extreme, the target after Range), the live read (LOD / HOD IN) and the 2nd-extreme call, the 1st Extreme model (shadow: WATCH, one immutable LOD? / HOD? call with the time it was made, FAILED if the level breaks, RIGHT / WRONG after the close; 3-min charts, needs 14 sessions of 3-min history) with its marker on the called candle, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
+    p->setVersion("2.0.0");
     return p;
 }

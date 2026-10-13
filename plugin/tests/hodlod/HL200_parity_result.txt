@@ -1,0 +1,5 @@
+  NG 2026-07-03: call on a short session (not in the research universe): 96,2,3.343,69,0.706624
+  parity: 244 / 244 ledger calls matched, 0 extra calls, 339 sessions replayed
+21 passed, 0 failed
+
+[exited with code 0]
