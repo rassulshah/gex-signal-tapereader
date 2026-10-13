@@ -1,5 +1,5 @@
 /********************************************************************************
- *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09)
+ *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger)
  *
  *  THE SESSION'S HOD / LOD, on every market's chart (Rassul 2026-10-09, mockup v5 approved: "check everything then build it").
  *    PIECE 1  the session candle on the LEFT edge of the price pane, at real prices: body RTH open -> last close, wicks to the HOD
@@ -50,6 +50,7 @@ struct HLState {
     bool faulted = false;
     long long recomputes = 0, statusWrites = 0;   // test counters (checklist #31 / #32)
     int projIdx = -1;                  // (1.1.0) the chart bar index of the 1st extreme (the projection line's x), -1 = none
+    std::string fcSession;                 // (1.1.8) the session whose first IN call is already in HodLod.firstcall-<MKT>.csv
     std::string projLogged, projSession;   // (1.1.6) the targets already in HodLod.proj-<MKT>.csv for projSession (\n-separated keys)
     // (HL104) MenthorQ level snapshots of MenthorQLevels.csv (the one external input): one per distinct content, <= 32, newest last
     std::vector<hl::MqSnap> mq; long long mqStamp = -2; time_t mqChecked = 0; std::string mqWhy; long long mqLoads = 0;
@@ -80,6 +81,7 @@ public:
     void recompute(HLState& S, long n);
     void writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows);
     void writeProj(HLState& S);
+    void writeFirstCall(HLState& S, const std::vector<hl::ReadRow>& rows);
     void writeStatus(HLState& S, const hl::Layout* L);
     std::string flexPath(const std::string& name);
     int textW(const std::string& s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s.c_str(), -1); }
@@ -253,6 +255,7 @@ void HodLod::recompute(HLState& S, long n)
     if (start > 0 && lastClosed - start >= 40000) S.state += " (history capped at 40,000 bars)";
     writeFiles(S, rows);
     writeProj(S);
+    writeFirstCall(S, rows);
     S.firstPass = false;
 }
 
@@ -287,6 +290,24 @@ void HodLod::writeProj(HLState& S)
     std::string ln = v.session + "," + hl::hhmm(at) + "," + (v.projUp ? "HOD" : "LOD") + "," + hl::trimNum((double)v.projFrom * S.tick, dec) + "," + tgt + "," + re + "," +
         hl::trimNum((double)v.rangeT * S.tick, dec) + "," + std::to_string(v.projStage) + "," + (v.projV2 ? "v2" : "v1") + "," + hl::HL_VERSION + "\n";
     if (F.write(p, ln, true)) S.projLogged += key.substr(1);
+}
+
+// (1.1.8) the day's FIRST IN call, once per session (3-min charts): immutable - a session already in the file is never written again,
+// so a restart, a replay or a later stronger call cannot change it. The nightly scores it against the day's exact first extreme and
+// counts the sessions with no call (coverage).
+void HodLod::writeFirstCall(HLState& S, const std::vector<hl::ReadRow>& rows)
+{
+    if (S.per != 180 || S.mi < 0 || rows.empty() || !(S.tick > 0)) return;
+    if (S.fcSession == rows[0].session) return;          // this session's call is already on file
+    hl::FirstCall f = hl::firstCall(rows);
+    if (!f.ok) return;
+    std::string p = flexPath("HodLod.firstcall-" + S.mkt + ".csv"); if (p.empty()) return;
+    hl::FileOps F;
+    if (F.exists(p)) {
+        std::ifstream in(p.c_str()); std::string ln;
+        while (std::getline(in, ln)) if (ln.compare(0, f.session.size() + 1, f.session + ",") == 0) { S.fcSession = f.session; return; }
+    } else if (!F.write(p, std::string(hl::FIRSTCALL_HEADER) + "\n", true)) return;
+    if (F.write(p, hl::firstCallLine(f, S.tick, hl::MKTS[S.mi].dec), true)) S.fcSession = f.session;
 }
 
 void HodLod::writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows)

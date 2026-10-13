@@ -53,7 +53,10 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.7";
+static const char* const HL_VERSION = "1.1.8";
+#ifndef HL_SHOW_CALLED
+#define HL_SHOW_CALLED 0   // (mockup) "called h:mm" after the IN read + "Range used" - off until Rassul agrees
+#endif
 
 // ------------------------------------------------------------------------------------------------ markets
 // open / close = RTH minute of day CT, as the read model (hlr::kOpen / kClose) and the studies (hle::kOpen): every market's
@@ -797,7 +800,29 @@ inline std::string readLine(const ReadOut& r, int readOpen, int readN)
 }
 
 // build every drawn value from the tracker. `rd` = the read at the latest closed bar (only used for the live session).
-struct ReadRow { std::string session; int barEnd = 0; ReadIn in; ReadOut out; std::string shown; char firstSide = '?'; long long firstPx = 0; };
+struct ReadRow { std::string session; int barEnd = 0; ReadIn in; ReadOut out; std::string shown; char firstSide = '?'; long long firstPx = 0;
+                 long long readPx = 0; bool sameBar = false; };   // (1.1.8) the read side's extreme price; HOD and LOD printed on the same bar
+
+// (1.1.8, review 2026-10-12 "one immutable first call per market/session ... show formation and declaration times distinctly"):
+// the day's FIRST IN call - the first closed RTH bar whose read is IN (pIn >= IN_THR, no FOMC pause). Never revised: a later,
+// stronger call on the other side does not replace it, and a failed call stays recorded. formed = the bar the called extreme
+// printed on (END, minute of day); declared = the bar the call was made on. Same-bar HOD / LOD order is unresolved from OHLC
+// and is flagged, not guessed.
+struct FirstCall { bool ok = false; std::string session; int side = 0; long long px = 0; int formed = -1, declared = -1;
+                   double pIn = NAN, pShow = NAN; bool sameBar = false; std::string readVer; };
+inline FirstCall firstCall(const std::vector<ReadRow>& rows)
+{
+    FirstCall f;
+    for (size_t i = 0; i < rows.size(); i++) {
+        const ReadRow& r = rows[i];
+        if (r.out.state != 1 || !r.out.callIn || r.readPx == 0 || r.in.t1Mod < 0) continue;
+        f.ok = true; f.session = r.session; f.side = r.in.side; f.px = r.readPx; f.formed = r.in.t1Mod; f.declared = r.barEnd;
+        f.pIn = r.out.pIn; f.pShow = r.out.pInShow; f.sameBar = r.sameBar; f.readVer = r.out.ver;
+        return f;
+    }
+    return f;
+}
+static const char* const FIRSTCALL_HEADER = "session,side,price,formed,declared,lag_min,p_in,p_shown,threshold,same_bar,read_model,version";
 
 // every drawn value. `rd` = the read at the latest closed bar; `rows` = the session's per-bar reads (once the 2nd extreme printed, the
 // last 2nd-extreme call shown before it is frozen into the E cell and the header, so the A tag is judged against what was shown)
@@ -1146,9 +1171,17 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         } else {
             std::string mn, tl; bool dim = false; readParts(rh, T.C.readOpen, T.C.readN, mn, tl, dim);
             // (HL105, mockup 6) the day's range used so far (today's RTH range / the expected full range, hle native)
-            v.headLeftTxt = rthT + (v.usedPct >= 0 ? "   Range " + std::to_string(v.usedPct) + "%" : std::string())
+            v.headLeftTxt = rthT + (v.usedPct >= 0 ? std::string(HL_SHOW_CALLED ? "   Range used " : "   Range ") + std::to_string(v.usedPct) + "%" : std::string())
                           + (v.projOk ? "   " + v.projTxt : std::string());   // (1.1.0) the target after Range
             v.headMain = mn;
+#if HL_SHOW_CALLED
+            // (mockup 1.1.9, review "show formation and declaration times distinctly"): the bar the day's first IN call was made on,
+            // next to the read - the 1st extreme's own time (formed) stays in the 1st Time cell and on the projection's start candle
+            if (rows && rd.state == 1 && rd.callIn) {
+                FirstCall fc = firstCall(*rows);
+                if (fc.ok && fc.side == rd.side) v.headMain += " \xB7 called " + clk(fc.declared);
+            }
+#endif
             v.headerCol = (v.complete || rd.state != 1) ? C_GREY : C_SLATE;
             // (1.1.2, Rassul 10-12 "colour both", "colour the range") the read in its side's colour: the LOD named (LOD IN ..) = green,
             // the HOD named = red; NOT IN / building / FOMC pause stay neutral. Range used: blue while below the expected band's low
@@ -1161,7 +1194,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 double loPct = (v.haveHle && std::isfinite(v.ex.rangeLo) && std::isfinite(v.ex.range) && v.ex.range > 0) ? 100.0 * v.ex.rangeLo / v.ex.range : 80.0;
                 if (loPct > 80.0) loPct = 80.0;   // late in the day the band closes on the range so far: 80% is amber regardless
                 unsigned rc = v.complete ? C_GREY : ((double)v.usedPct >= loPct ? C_AMBER : C_BLUE);
-                v.headLeftSegs.push_back(Seg{ "   Range " + std::to_string(v.usedPct) + "%", rc });
+                v.headLeftSegs.push_back(Seg{ std::string(HL_SHOW_CALLED ? "   Range used " : "   Range ") + std::to_string(v.usedPct) + "%", rc });
             }
             if (v.projOk) v.headLeftSegs.push_back(Seg{ "   " + v.projTxt, v.projUp ? C_GREEN : C_RED });
         }
@@ -1232,6 +1265,7 @@ inline Tracker runBars(const Cfg& c, const std::vector<Bar>& bars, size_t nClose
             r.shown = readLine(r.out, c.readOpen, c.readN);
             const Rth& R = T.cur; int s = R.lod.seq < R.hod.seq ? 1 : (R.hod.seq < R.lod.seq ? 2 : 0);
             r.firstSide = s == 1 ? 'L' : s == 2 ? 'H' : '?'; r.firstPx = s == 1 ? R.lod.px : s == 2 ? R.hod.px : 0;
+            r.readPx = r.in.ok || r.in.t1Mod >= 0 ? (r.in.side == 0 ? R.lod.px : R.hod.px) : 0; r.sameBar = R.lod.seq == R.hod.seq;
             rows->push_back(r);
         }
     }
@@ -1638,6 +1672,13 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
 
 // ------------------------------------------------------------------------------------------------ status + logs
 inline std::string fmtP(double p) { if (!std::isfinite(p)) return ""; char b[32]; snprintf(b, sizeof b, "%.6f", p); return b; }
+// (1.1.8) one HodLod.firstcall-<MKT>.csv line (FIRSTCALL_HEADER); times 24-hour CT
+inline std::string firstCallLine(const FirstCall& f, double tick, int dec)
+{
+    char th[16]; snprintf(th, sizeof th, "%.2f", IN_THR);
+    return f.session + "," + (f.side == 0 ? "LOD" : "HOD") + "," + trimNum((double)f.px * tick, dec) + "," + hhmm(f.formed) + "," + hhmm(f.declared) + "," +
+        std::to_string(f.declared - f.formed) + "," + fmtP(f.pIn) + "," + fmtP(f.pShow) + "," + th + "," + (f.sameBar ? "1" : "0") + "," + f.readVer + "," + HL_VERSION + "\n";
+}
 
 inline std::string statusText(const View& v, const Layout& L, const Tracker& T, const ReadOut& rd, int per, const std::string& state)
 {
