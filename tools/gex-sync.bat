@@ -93,7 +93,8 @@ if defined INBOX (
 
 REM ---- commit whatever is new (the sync's own log and lock are never committed) ----
 cd /d "%REPO%"
-"!GIT!" add -A -- . ":(exclude)tools/gex-sync.log" ":(exclude)tools/gex-sync.lock" ":(exclude)tools/gex-pull.log" >> "%LOGF%" 2>&1
+REM (2026-10-13) the sync log / lock are in .gitignore: naming them in an exclude pathspec made git add fail ("paths are ignored") on every tick since 03:42
+"!GIT!" add -A -- . ":(exclude)tools/gex-pull.log" >> "%LOGF%" 2>&1
 if errorlevel 1 (
   echo %DATE% %TIME% GIT ADD FAILED >> "%LOGF%"
   set RC=1
