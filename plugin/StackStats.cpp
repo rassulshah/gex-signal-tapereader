@@ -1,5 +1,7 @@
 /********************************************************************************
- *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.0.0  (2026-10-13)
+ *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.0.1  (2026-10-13)
+ *  1.0.1 (2026-10-13, Rassul 1:30 PM CT): the refill / iceberg letter is I (was R); R is reserved for a future stop-run signal.
+ *        (1:43 PM) no white outline on the bars or the letter boxes (same-colour pen); hovered candle not outlined.
  *
  *  WHO IS ARRIVING. Rassul 2026-10-13: "add a stacking indicator" / "keep seperate" (its own pane, its own DLL) / "include L for Bid
  *  Ask Stacks and Pull" / "why dont you just use a dash in the bar" / "i want to identify spikes". Approved mockups:
@@ -10,7 +12,7 @@
  *  REFILLS (after a FILL at a price, a NEW / size increase on the same side at the same price within refillWindowMs): a WHITE
  *  horizontal DASH inside that side's bar at the height of min(refills, bar) - only when the refills are notable (>= 2.0x their
  *  average as of the candle). Spikes as lsBidAskStats 1.2.0 (bright #00FF00 / #FF3B3B; normal #1F9D55 / #962D2D).
- *  Letters (white box, black letter, bottom of the side's bar, priority R then L, at most 2): R = notable refills + iceberg confirmed
+ *  Letters (white box, black letter, bottom of the side's bar, priority I then L, at most 2): I = notable refills + iceberg confirmed
  *  (more traded at a refill price than was ever displayed there); L = one order added with size >= largeLotResting.
  *  ONE message line centred at the top for the candle under the mouse (else the last closed candle), coloured by implication:
  *      "10:21  Buyers adding + reloading bids at LonLO (refills 5.2x, iceberg) - real support"      (green = bullish)
@@ -40,7 +42,7 @@
 #include "OrderFlowFeed.h"
 #include "StackStatsLogic.h"
 
-#define SS_VERSION "1.0.0"          // keep equal to st::VERSION and the setVersion literal below
+#define SS_VERSION "1.0.1"          // keep equal to st::VERSION and the setVersion literal below
 
 class StackStats : public off::MboPane<st::Logic> {
 public:
@@ -68,7 +70,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA StackStats: who is ARRIVING. Per candle, how many orders were ADDED near price (market-by-order feed). Green = bids added (buyers building support), red = offers added (sellers building a wall). White dash in a bar = notable refills (new orders right after a fill at the same price - reloading). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. R = refills with an iceberg confirmed, L = one large order added. Spike labels: the ratio over the number of orders. Top: a plain-English message (green = bullish, red = bearish) and the info box with every value, for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.0.0");   // SS_VERSION
+    p->setDescription("LRA StackStats: who is ARRIVING. Per candle, how many orders were ADDED near price (market-by-order feed). Green = bids added (buyers building support), red = offers added (sellers building a wall). White dash in a bar = notable refills (new orders right after a fill at the same price - reloading). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. I = iceberg: refills with an iceberg confirmed (more traded at a refill price than was ever shown there), L = one large order added. Spike labels: the ratio over the number of orders. Top: a plain-English message (green = bullish, red = bearish) and the info box with every value, for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
+    p->setVersion("1.0.1");   // SS_VERSION
     return p;
 }

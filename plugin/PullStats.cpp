@@ -1,5 +1,6 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.0.0  (2026-10-13)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.0.1  (2026-10-13)
+ *  1.0.1 (2026-10-13, Rassul 1:43 PM CT): no white outline on the bars or the letter boxes (same-colour pen); hovered candle not outlined.
  *
  *  WHO IS LEAVING. Rassul 2026-10-13: "i also want to know if there is the way to use the mbo data which tells you the number of
  *  bids and ask pulled like a histogram" / "keep seperate" (its own pane) / "include L for Bid Ask Stacks and Pull" /
@@ -42,7 +43,7 @@
 #include "OrderFlowFeed.h"
 #include "PullStatsLogic.h"
 
-#define PS_VERSION "1.0.0"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.0.1"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -71,6 +72,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA PullStats: who is LEAVING. Per candle, how many resting orders were PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio over the number of orders. Top: a plain-English message (green = bullish, red = bearish) and the info box with every value, for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.0.0");   // PS_VERSION
+    p->setVersion("1.0.1");   // PS_VERSION
     return p;
 }

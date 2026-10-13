@@ -1,4 +1,4 @@
-// TapeReaderText.h -- lsTapeReader 1.0.0 (2026-10-13): EVERY word the Tape Reader box writes, in ONE table, so the phrasing can be
+// TapeReaderText.h -- lsTapeReader 1.0.1 (2026-10-13; one change from 1.0.0: the refill letter R -> I): EVERY word the Tape Reader box writes, in ONE table, so the phrasing can be
 // swapped without touching the logic (coordinator 11:58: "keep the text templates in ONE table-driven place").
 // Phrasing follows "Tape Reader Language Guide (MBO, 3-min, reversals at key levels)", research_notes/TapeReader language/
 // LANGUAGE-GUIDE.md, compiled 2026-10-13 (the version used for 1.0.0):
@@ -9,7 +9,7 @@
 //   * a sweep names its outcome (no follow-through = trapped, accepted = initiative); intent is never asserted;
 //   * icebergs as numbers; no hype words; reads in the first / last 5 min of RTH or on a roll are flagged "Low trust".
 // Letters: S = SWEEP (one aggressor order through >= N price levels), L = LARGE single order (aggressive in BidAskStats, pulled in
-// PullStats, added in StackStats), R = REFILL / ICEBERG (StackStats). Abbreviations: lvls, LQ, +GEX / -GEX, dlrs, Inval, Tgt, LOD/HOD,
+// PullStats, added in StackStats), I = REFILL / ICEBERG (StackStats; R until 1.0.0, now R = stop run). Abbreviations: lvls, LQ, +GEX / -GEX, dlrs, Inval, Tgt, LOD/HOD,
 // proj, A / AE? / Ex?. Ratios as 4.4x. Placeholders are {name}; an unknown placeholder is left empty.
 #ifndef LS_TAPEREADER_TEXT_H
 #define LS_TAPEREADER_TEXT_H
@@ -57,8 +57,8 @@ static const Tpl TABLE[] = {
     { "pull.away.tail",  " - backing off" },
     // StackStats: stacking is untested intent, refills / icebergs are numbers
     { "stack.add",       "{Book} stacking {x}{lot}{at} - untested" },
-    { "stack.refill",    "{Book} reloading (R {rx}){at}{ice}" },
-    { "stack.both",      "{Book} stacking {x}{lot} + reloading (R {rx}){at}{ice}" },
+    { "stack.refill",    "{Book} reloading (I {rx}){at}{ice}" },
+    { "stack.both",      "{Book} stacking {x}{lot} + reloading (I {rx}){at}{ice}" },
     { "ice",             ", iceberg" },
     { "ice.n",           ", iceberg {shown} shown / {traded} traded" },
     // Delta Profile (A / AE? / Ex?): absorption and exhaustion as facts that need confirmation

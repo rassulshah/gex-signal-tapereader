@@ -1,11 +1,15 @@
 /********************************************************************************
- * DeltaProfile.cpp -- lsDeltaProfile 2.6.2 peak-bar absorption rule (on the 2.6.1 synchronization repair)
+ * DeltaProfile.cpp -- lsDeltaProfile 2.7.1 (2026-10-13: no "[offscreen]" A labels) + 2.7.0 thin-extreme exhaustion mark "Ex?" (on the 2.6.3 contract-qualified record and the
+ *                     2.6.2 peak-bar absorption rule)
  * Native chart VAP; rolling (latest bar close - 90 min, latest bar close].
  * Right placement, left-facing one-sided bars, automatic price-anchored rows.
  * Only Width / Gap / Font are configurable. Delta = ask/buy minus bid/sell.
  * A = confirmed absorption heuristic; I = initiative; ? = pending. Rings ONLY for confirmed A.
- * Every absorption candidate is recorded (2.5.4) to lsFlexLevels\DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv when
+ * Every absorption candidate is recorded (2.5.4; 2.6.3 file name) to lsFlexLevels\DeltaProfile\<MKT>-<contract>-<sec/bar>-signals-<session>.csv when
  * it first appears and when it is decided; only final A bubbles survive through the session and restart.
+ * (2.7.0) Ex? = a thin extreme (new high / low at a key or gamma level, thin delta at the extreme, fading aggression), printed
+ *         once at the first bar closing back; logged as E lines in the same record; shown only as the nightly
+ *         LRA-DeltaEx-<MKT>.csv allows (missing file = log only).
  * This revision deliberately requires Investor/RT replay acceptance before use.
  ********************************************************************************/
 #include <string>
@@ -52,7 +56,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.6.2"; // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.7.1"; // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -152,8 +156,23 @@ struct Latch {
 // (2.5.1) the record lives OUTSIDE the per-chart state, keyed by symbol and bar size: a chart-state reset (IRT's host
 // switching contexts, a periodicity label read empty, two charts sharing one object) no longer wipes it, and the circle is
 // stored by bar TIME (re-found on every draw) so a chart reload that shifts bar numbers cannot move it.
+// (2.7.0) one thin-extreme exhaustion candidate. Frozen when first logged (C); decided once (P printed / X cancelled or expired).
+// Keyed by side + the extreme bar's raw stamp; never re-decided, never moved (the mark sits on the extreme bar's stamp).
+struct ExMark {
+    long long id = -1; bool top = true; RTDATE extRaw = 0; long long extT = 0;
+    char status = 'C'; RTDATE decRaw = 0; long long decT = 0; std::string reason;
+    double extreme = 0, levelPx = 0, thin = 0, fade = -1, ctxPx = 0; long long levelTicks = -1, ctxT = 0;
+    std::string level, mark = "none", params; char ctx = 'N'; bool thinOk = false, fadeOk = false, live = false; int W = 3;
+    std::string drawn = "logged";   // render disposition (status only)
+};
+// (2.7.0) AE: one decision per confirmed A id - Y found / N not found / U not measurable; label frozen at decision
+struct AeRec { char result = 'U'; long long decT = 0; RTDATE decRaw = 0, peakRaw = 0; double lo = 0, hi = 0, early = 0, late = 0, fade = -1;
+               int bars = 0; double fadeX = 0.5; bool sellNode = false; std::string label = "A", params; };
 struct LatchBook {
     std::vector<Latch> v; long long session = -1;
+    std::map<long long, AeRec> ae;   // (2.7.0) A id -> its attacker-exhaustion decision (once)
+    std::map<long long, RTDATE> aeThrough;   // (2.7.0) A id -> last bar checked (memory only)
+    std::vector<ExMark> ex; long long exNext = 0, exLoaded = 0, exRejected = 0; RTDATE exThrough = 0; std::string exNote;   // (2.7.0)
     // (2.5.4) the session's record file: lines waiting to be appended (kept until a flushed, good write), next id, diagnostics
     std::vector<std::string> journal; std::string path, note; long long nextId = 0, written = 0, loaded = 0, rejected = 0;
     // (2.5.7, audit F6) an old session's lines that could not be written at the 17:00 change: kept and retried, never dropped
@@ -170,11 +189,22 @@ static const std::size_t REC_MAX_LATCHES = 5000; // exact event identity can adm
 static const char* recordHeader() {
     return "t_first|t_decided|code|side|bias|zone_lo|zone_hi|tick|net_delta|multiple|decided_by_t|version|event|root|id|peak_t|peak_raw|price|lo_ticks|hi_ticks|node_side|source|formed_t|formed_raw";
 }
-static std::string recordName(const std::string& market, int secondsPerBar, long long session) {
-    return market + "-" + std::to_string(secondsPerBar) + "-signals-" + std::to_string(session) + ".csv";
+// (2.6.3, audit F3 persistence part) the full contract as a file-name token: ASCII letters, digits, '_', '-' and '.' are kept,
+// anything else (spaces, path separators, Windows-reserved characters, non-ASCII bytes) becomes '_'. Locale-independent; capped
+// at 64 characters; an empty symbol is "unknown-contract".
+static std::string contractToken(const std::string& symbol) {
+    std::string out;
+    for (std::size_t i = 0; i < symbol.size() && out.size() < 64; ++i) {
+        const unsigned char c = static_cast<unsigned char>(symbol[i]);
+        const bool keep = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.';
+        out += keep ? static_cast<char>(c) : '_';
+    }
+    return out.empty() ? "unknown-contract" : out;
 }
-static std::string syncRecordName(const std::string& market, int secondsPerBar, long long session) {
-    return market + "-" + std::to_string(secondsPerBar) + "-sync260-signals-" + std::to_string(session) + ".csv";
+// (2.6.3) <MKT>-<contract>-<spb>-signals-<session>.csv, e.g. ES-ESZ26-60-signals-20735.csv. The 2.5.x <MKT>-<spb>-signals-* and
+// 2.6.0-2.6.2 <MKT>-<spb>-sync260-signals-* files carry no contract in their name; they stay on disk untouched and are not read.
+static std::string contractRecordName(const std::string& market, const std::string& contract, int secondsPerBar, long long session) {
+    return market + "-" + contractToken(contract) + "-" + std::to_string(secondsPerBar) + "-signals-" + std::to_string(session) + ".csv";
 }
 static bool confirmedAbsorption(const Latch& L) { return L.code == "A" && L.decidedBy > 0; }
 static const Latch* eventById(const LatchBook& bk, long long id) {
@@ -261,6 +291,113 @@ static bool parseRecordLine(const std::string& line, double chartTick, RecordEve
     }
     return true;
 }
+// ---- (2.7.0) the exhaustion record: E lines in the SAME contract-named session file as the F / D lines (never rewritten).
+//   E|status|version|root|id|side|ext_t|ext_raw|dec_t|dec_raw|extreme|tick|level|level_px|level_ticks|thin|fade|thin_ok|fade_ok|
+//     ctx|ctx_px|ctx_t|mark|mode|reason|params                                              (26 fields; NOTES.md is the contract)
+//   status C = a candidate first logged at its extreme bar's close; P = printed (the first bar closing back); X = cancelled /
+//   expired. A C line is written once per candidate, then exactly one P or X line. 2.6.3 and earlier skip these lines.
+static const int EX_FIELDS = 26;
+static const std::size_t EX_MAX_MARKS = 5000;
+static std::string exNum(double v) { char b[64]; std::snprintf(b, sizeof(b), "%.10g", v); return b; }
+static std::string exRatio(double x) {   // 0.42 -> "0.42x", 0.003 -> "<0.01x"
+    if (!(x >= 0)) return "n/a";
+    if (x < 0.005) return "<0.01x";
+    char b[32]; std::snprintf(b, sizeof(b), "%.2fx", x); return b;
+}
+static std::string exLine(const ExMark& m, char status, double tick, const std::string& root) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    const bool decision = status != 'C';
+    o << "E|" << status << '|' << DLT_VERSION << '|' << root << '|' << m.id << '|' << (m.top ? "top" : "bottom") << '|'
+      << m.extT << '|' << static_cast<unsigned long long>(m.extRaw) << '|'
+      << (decision ? m.decT : m.extT) << '|' << static_cast<unsigned long long>(decision ? m.decRaw : m.extRaw) << '|'
+      << exNum(m.extreme) << '|' << exNum(tick) << '|' << safeField(m.level) << '|' << exNum(m.levelPx) << '|' << m.levelTicks << '|'
+      << exNum(m.thin) << '|' << exNum(m.fade) << '|' << (m.thinOk ? 1 : 0) << '|' << (m.fadeOk ? 1 : 0) << '|'
+      << (m.ctx == 'A' ? "A" : m.ctx == 'T' ? "T" : "none") << '|' << exNum(m.ctxPx) << '|' << m.ctxT << '|'
+      << m.mark << '|' << (m.live ? "live" : "backfill") << '|' << (decision ? safeField(m.reason) : std::string()) << '|' << safeField(m.params);
+    return o.str();
+}
+static int paramW(const std::string& params) {
+    const std::size_t at = params.find("W=");
+    int w = 3; if (at == std::string::npos) return w;
+    std::size_t end = params.find(';', at); if (end == std::string::npos) end = params.size();
+    if (!integer(params.substr(at + 2, end - at - 2), w) || w < 1 || w > 20) w = 3;
+    return w;
+}
+struct ExEvent { char status; ExMark m; std::string root; };
+static bool parseExLine(const std::string& line, ExEvent& r) {
+    const std::vector<std::string> c = fields(line);
+    if (static_cast<int>(c.size()) != EX_FIELDS || c[0] != "E" || c[1].size() != 1) return false;
+    r.status = c[1][0]; r.root = c[3];
+    if ((r.status != 'C' && r.status != 'P' && r.status != 'X') || r.root.empty() || (c[5] != "top" && c[5] != "bottom")) return false;
+    const long long T_MAX = 32503680000LL;
+    const unsigned long long rawMax = static_cast<unsigned long long>(std::numeric_limits<RTDATE>::max());
+    const long long rawLimit = rawMax > static_cast<unsigned long long>(LLONG_MAX) ? LLONG_MAX : static_cast<long long>(rawMax);
+    long long id, et, er, dt, dr, lt, ct, tOk, fOk;
+    double ext, tk, lp, thin, fade, cp;
+    if (!parseWhole(c[4], 0, 1000000, id) || !parseWhole(c[6], 0, T_MAX, et) || !parseWhole(c[7], 1, rawLimit, er) ||
+        !parseWhole(c[8], 0, T_MAX, dt) || !parseWhole(c[9], 1, rawLimit, dr) || !parseWhole(c[14], -1, 1000000000LL, lt) ||
+        !parseWhole(c[17], 0, 1, tOk) || !parseWhole(c[18], 0, 1, fOk) || !parseWhole(c[21], 0, T_MAX, ct)) return false;
+    if (!parseReal(c[10], ext) || !parseReal(c[11], tk) || !parseReal(c[13], lp) || !parseReal(c[15], thin) || !parseReal(c[16], fade) ||
+        !parseReal(c[20], cp) || tk <= 0 || ext <= 0 || thin < 0) return false;
+    if (c[19] != "A" && c[19] != "T" && c[19] != "none") return false;
+    if (c[22] != "none" && c[22] != "Ex?" && c[22] != "Ex") return false;
+    if (c[23] != "live" && c[23] != "backfill") return false;
+    if (r.status == 'C' ? (dt != et || dr != er) : dr < er) return false;
+    ExMark& m = r.m;
+    m.id = id; m.top = c[5] == "top"; m.extT = et; m.extRaw = static_cast<RTDATE>(er); m.decT = dt; m.decRaw = static_cast<RTDATE>(dr);
+    m.extreme = ext; m.level = c[12]; m.levelPx = lp; m.levelTicks = lt; m.thin = thin; m.fade = fade; m.thinOk = tOk == 1; m.fadeOk = fOk == 1;
+    m.ctx = c[19] == "A" ? 'A' : c[19] == "T" ? 'T' : 'N'; m.ctxPx = cp; m.ctxT = ct; m.mark = c[22]; m.live = c[23] == "live";
+    m.reason = c[24]; m.params = c[25]; m.W = paramW(m.params); m.status = r.status;
+    return true;
+}
+// ---- (2.7.0) the AE record: one line per confirmed A, in the same session file (17 fields; NOTES.md is the contract)
+//   AE|result|version|root|a_id|dec_t|dec_raw|peak_raw|node_lo|node_hi|attackers|bars|early|late|fade|fadeX|label|params
+//   result Y = attackers faded inside the node (decided at dec_t, the re-test bar's close), N = no fade within aeMaxBars bars of the
+//   A's peak bar, U = not measurable (the A's bars not on hand); label = what the A's profile label shows from then on (A / AE? /
+//   AE) - frozen at the decision.
+static const int AE_FIELDS = 18;
+static std::string aeLine(long long id, const AeRec& a, const std::string& root) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    o << "AE|" << a.result << '|' << DLT_VERSION << '|' << root << '|' << id << '|' << a.decT << '|' << static_cast<unsigned long long>(a.decRaw) << '|'
+      << static_cast<unsigned long long>(a.peakRaw) << '|'
+      << exNum(a.lo) << '|' << exNum(a.hi) << '|' << (a.sellNode ? "sellers" : "buyers") << '|' << a.bars << '|' << exNum(a.early) << '|'
+      << exNum(a.late) << '|' << exNum(a.fade) << '|' << exNum(a.fadeX) << '|' << a.label << '|' << safeField(a.params);
+    return o.str();
+}
+static void seedAeLine(const std::string& line, const std::string& root, LatchBook& bk) {
+    const std::vector<std::string> c = fields(line);
+    if (static_cast<int>(c.size()) != AE_FIELDS || c[0] != "AE" || c[1].size() != 1 || (c[1] != "Y" && c[1] != "N" && c[1] != "U")) { ++bk.exRejected; return; }
+    if (c[3] != root) return;
+    const long long T_MAX = 32503680000LL;
+    const unsigned long long rawMax = static_cast<unsigned long long>(std::numeric_limits<RTDATE>::max());
+    const long long rawLimit = rawMax > static_cast<unsigned long long>(LLONG_MAX) ? LLONG_MAX : static_cast<long long>(rawMax);
+    long long id, dt, dr, pr, bars; double lo, hi, early, late, fade, fx;
+    if (!parseWhole(c[4], 0, 1000000, id) || !parseWhole(c[5], 0, T_MAX, dt) || !parseWhole(c[6], 0, rawLimit, dr) || !parseWhole(c[7], 0, rawLimit, pr) ||
+        !parseWhole(c[11], 0, 100000, bars) || !parseReal(c[8], lo) || !parseReal(c[9], hi) || !parseReal(c[12], early) || !parseReal(c[13], late) ||
+        !parseReal(c[14], fade) || !parseReal(c[15], fx) || (c[10] != "buyers" && c[10] != "sellers") ||
+        (c[16] != "A" && c[16] != "AE?" && c[16] != "AE") || (c[16] != "A" && c[1] != "Y")) { ++bk.exRejected; return; }
+    if (bk.ae.count(id)) return;                                                        // the first decision wins
+    AeRec a; a.result = c[1][0]; a.decT = dt; a.decRaw = static_cast<RTDATE>(dr); a.peakRaw = static_cast<RTDATE>(pr); a.lo = lo; a.hi = hi;
+    a.sellNode = c[10] == "sellers"; a.bars = static_cast<int>(bars); a.fadeX = fx; a.early = early; a.late = late; a.fade = fade; a.label = c[16]; a.params = c[17];
+    bk.ae[id] = a;
+}
+// one E line into the book: C creates (first wins), P / X decides a known pending candidate once (identity must match)
+static void seedExLine(const std::string& line, const std::string& root, LatchBook& bk) {
+    ExEvent r;
+    if (!parseExLine(line, r)) { ++bk.exRejected; return; }
+    if (r.root != root) return;
+    ExMark* at = NULL;
+    for (ExMark& m : bk.ex) if (m.id == r.m.id) { at = &m; break; }
+    if (r.status == 'C') {
+        if (at || bk.ex.size() >= EX_MAX_MARKS) return;
+        for (const ExMark& m : bk.ex) if (m.top == r.m.top && m.extRaw == r.m.extRaw) { ++bk.exRejected; return; }
+        r.m.status = 'C'; r.m.reason.clear(); bk.ex.push_back(r.m); bk.exNext = std::max(bk.exNext, r.m.id + 1); ++bk.exLoaded;
+        return;
+    }
+    if (!at || at->top != r.m.top || at->extRaw != r.m.extRaw) { ++bk.exRejected; return; }
+    if (at->status != 'C') return;                                                  // the first decision wins
+    at->status = r.status; at->decRaw = r.m.decRaw; at->decT = r.m.decT; at->reason = r.m.reason;
+}
 // The session record text -> this root's latches in creation order. Only lines ending in a newline count; a duplicated line
 // (a retried append) is ignored; the FIRST decided line of an id wins (a decided signal never changes).
 // (2.5.7, audit F3) lines name the full contract; a line naming only the root (written by 2.5.6 and earlier) is taken as this contract's
@@ -277,6 +414,8 @@ static void seedFromText(const std::string& text, const std::string& root, const
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == '#' || line.compare(0, 8, "t_first|") == 0) continue;
+        if (line.compare(0, 2, "E|") == 0) { seedExLine(line, root, bk); continue; }
+        if (line.compare(0, 3, "AE|") == 0) { seedAeLine(line, root, bk); continue; }   // (2.7.0) attacker exhaustion inside an A   // (2.7.0) exhaustion lines: their own book
         RecordEvent r;
         if (!parseRecordLine(line, chartTick, r)) { ++bk.rejected; continue; }
         if (r.root != root && r.root != legacyRoot) continue;
@@ -344,6 +483,192 @@ static long long civilDays(int y, unsigned m, unsigned d) {
     return era * 146097 + static_cast<long long>(doe) - 719468;
 }
 static void seedFromText(const std::string& text, const std::string& root, double chartTick, LatchBook& bk) { seedFromText(text, root, root, chartTick, bk); }
+// ---- (2.7.0) bounded, torn-safe reads of the nightly / LRA files (the DealerProfileAuditLogic readBoundedLines pattern): whole
+// lines only, capped bytes / lines / line length; the file's stamp must be the same before and after the read, else the last good
+// snapshot is kept and the read is retried later.
+static bool readBoundedLines(const std::string& path, std::vector<std::string>& lines, std::size_t maxBytes, std::size_t maxLines, std::size_t maxLine) {
+    lines.clear();
+    std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
+    if (!in.is_open()) return false;
+    std::string line; char ch = 0; std::size_t bytes = 0;
+    while (in.get(ch)) {
+        if (++bytes > maxBytes) { lines.clear(); return false; }
+        if (ch == '\n') {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (lines.size() >= maxLines) { lines.clear(); return false; }
+            lines.push_back(line); line.clear();
+        } else { if (line.size() >= maxLine) { lines.clear(); return false; } line += ch; }
+    }
+    if (in.bad()) { lines.clear(); return false; }
+    if (!line.empty()) { if (lines.size() >= maxLines) { lines.clear(); return false; } lines.push_back(line); }
+    return true;
+}
+static long long fileMtime(const std::string& path) {
+#if defined(_WIN32)
+    struct _stat64 st; if (_stat64(path.c_str(), &st) != 0) return -1;
+#else
+    struct stat st; if (stat(path.c_str(), &st) != 0) return -1;
+#endif
+    return static_cast<long long>(st.st_mtime);
+}
+// ---- (2.7.0) LRA-DeltaEx-<MKT>.csv, written nightly by the LRA study (NOTES.md is the contract). Comma-separated:
+//   VERSION,1   MARKET,<MKT>   PARAM,<name>,<value> (N L T thinX fadeX M trapX K B W requireLevel)   SHOW,<none|ctx|all>,<?|proven>
+// A missing file or ANY malformed / out-of-range line = the defaults and SHOW none (computed and logged, nothing drawn).
+struct ExConfig { dp::exh::Params p; std::string src = "missing"; long long stamp = -2; std::int64_t at = -1; };
+static bool parseExParams(const std::vector<std::string>& lines, const std::string& market, dp::exh::Params& out, std::string& why) {
+    dp::exh::Params p; bool version = false, mkt = false;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const std::string& ln = lines[i];
+        if (ln.empty() || ln[0] == '#') continue;
+        const std::vector<std::string> c = split(ln, ',');
+        if (!version) { if (c.size() == 2 && c[0] == "VERSION" && c[1] == "1") { version = true; continue; } why = "first line is not VERSION,1"; return false; }
+        if (c.size() < 2) { why = "line " + std::to_string(i + 1) + " malformed"; return false; }
+        if (c[0] == "MARKET") { if (c.size() != 2 || c[1] != market) { why = "MARKET is not " + market; return false; } mkt = true; continue; }
+        if (c[0] == "SHOW") {
+            if (c.size() != 3 || (c[1] != "none" && c[1] != "ctx" && c[1] != "all") || (c[2] != "?" && c[2] != "proven")) { why = "SHOW malformed"; return false; }
+            p.show = c[1] == "none" ? 0 : c[1] == "ctx" ? 1 : 2; p.proven = c[2] == "proven"; continue;
+        }
+        if (c[0] == "SHOW_AE") {
+            if (c.size() != 2 || (c[1] != "none" && c[1] != "?" && c[1] != "proven")) { why = "SHOW_AE malformed"; return false; }
+            p.showAe = c[1] == "none" ? 0 : c[1] == "?" ? 1 : 2; continue;
+        }
+        if (c[0] != "PARAM") continue;                                              // unknown keys: forward compatible, ignored
+        if (c.size() != 3) { why = "PARAM line " + std::to_string(i + 1) + " malformed"; return false; }
+        const std::string& n = c[1]; const std::string& v = c[2];
+        auto whole = [&](int lo, int hi, int& dst) { long long x; if (!parseWhole(v, lo, hi, x)) return false; dst = static_cast<int>(x); return true; };
+        auto real = [&](double lo, double hi, double& dst) { double x; if (!parseReal(v, x) || x < lo || x > hi) return false; dst = x; return true; };
+        bool ok = true;
+        if (n == "N") ok = whole(2, 100, p.N);
+        else if (n == "L") ok = whole(0, 200, p.L);
+        else if (n == "T") ok = whole(1, 10, p.T);
+        else if (n == "M") ok = whole(3, 200, p.M);
+        else if (n == "B") ok = whole(1, 20, p.B);
+        else if (n == "W") ok = whole(1, 20, p.W);
+        else if (n == "K") { if (v == "auto") p.K = -1; else ok = whole(0, 400, p.K); }
+        else if (n == "thinX") ok = real(0.0, 10.0, p.thinX);
+        else if (n == "fadeX") ok = real(0.0, 10.0, p.fadeX);
+        else if (n == "trapX") ok = real(0.1, 50.0, p.trapX);
+        else if (n == "aeFadeX") ok = real(0.0, 10.0, p.aeFadeX);
+        else if (n == "aeMinBars") ok = whole(2, 50, p.aeMinBars);
+        else if (n == "aeMaxBars") ok = whole(1, 200, p.aeMaxBars);
+        else if (n == "requireLevel") { int b = 0; ok = whole(0, 1, b); p.requireLevel = b == 1; }
+        if (!ok) { why = "PARAM " + n + " invalid"; return false; }
+    }
+    if (!version) { why = "empty"; return false; }
+    if (!mkt) { why = "no MARKET line"; return false; }
+    out = p; return true;
+}
+static std::map<std::string, ExConfig>& exConfigs() { static std::map<std::string, ExConfig> m; return m; }
+static const ExConfig& exConfig(const std::string& directory, const std::string& market) {
+    ExConfig& C = exConfigs()[market];
+    const std::int64_t now = steadyMs();
+    if (C.at >= 0 && now - C.at < 5000) return C;
+    C.at = now;
+    if (directory.empty() || market.empty()) { C.p = dp::exh::Params(); C.src = "missing"; C.stamp = -1; return C; }
+    const std::string path = directory + "LRA-DeltaEx-" + market + ".csv";
+    const long long st = fileStamp(path);
+    if (st == C.stamp) return C;
+    if (st < 0) { C.p = dp::exh::Params(); C.src = "missing"; C.stamp = st; return C; }
+    std::vector<std::string> lines;
+    const bool read = readBoundedLines(path, lines, 64 * 1024, 512, 512);
+    if (fileStamp(path) != st) return C;                                            // being replaced: keep the last good, retry
+    C.stamp = st;
+    dp::exh::Params p; std::string why = read ? "" : "too large or unreadable";
+    if (read && parseExParams(lines, market, p, why)) { C.p = p; C.src = "file"; }
+    else { C.p = dp::exh::Params(); C.src = "garbled: " + why; }
+    return C;
+}
+static std::string exParamText(const ExConfig& C) {
+    const dp::exh::Params& p = C.p; std::ostringstream o; o.imbue(std::locale::classic());
+    o << "N=" << p.N << ";L=" << p.L << ";T=" << p.T << ";thinX=" << exNum(p.thinX) << ";fadeX=" << exNum(p.fadeX) << ";M=" << p.M
+      << ";trapX=" << exNum(p.trapX) << ";K=" << (p.K < 0 ? std::string("auto") : std::to_string(p.K)) << ";B=" << p.B << ";W=" << p.W
+      << ";req=" << (p.requireLevel ? 1 : 0) << ";show=" << (p.show == 0 ? "none" : p.show == 1 ? "ctx" : "all") << ";tag=" << (p.proven ? "proven" : "?")
+      << ";src=" << (C.src == "file" ? "file" : C.src == "missing" ? "default" : "garbled");
+    return o.str();
+}
+static std::string aeParamText(const ExConfig& C) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    o << "aeFadeX=" << exNum(C.p.aeFadeX) << ";aeMinBars=" << C.p.aeMinBars << ";aeMaxBars=" << C.p.aeMaxBars << ";show_ae=" << (C.p.showAe == 0 ? "none" : C.p.showAe == 1 ? "?" : "proven")
+      << ";src=" << (C.src == "file" ? "file" : C.src == "missing" ? "default" : "garbled");
+    return o.str();
+}
+// ---- (2.7.0) the levels the extreme is measured against, read as the other LRA plugins read them:
+//   LRA-KeyLevels-<MKT>.csv (lsDealerProfile 2.8.0+, the chart's own key levels): "KEYLV,1,<unix>" then L|<name>|<price>|<pivot>;
+//     older than 18 h = not used.
+//   LRA-Dealer-<MKT>.csv (LRA Reader, every 5 min): LEVEL|<label>|<px>|... and the 3 largest-|gamma| NODE|<strike>|<gamma>|...
+//   LRA-Levels-<MKT>.csv (lra.level_touch): LEVEL|<code>|<name>|<price>|... (STATE|STALE = not used).
+//   The two MenthorQ files are used only when their mtime is within 18 h and the Dealer file's SYMBOL is the chart's contract
+//   (same dated contract, or a continuous chart / no SYMBOL); in a roll they are skipped (no offset is guessed here).
+struct ExLevelSource { std::vector<dp::exh::Level> v; long long stamp = -2, at = 0; std::string sym; bool stale = false; };
+struct ExLevelCache { ExLevelSource key, dealer, mq; std::int64_t checked = -1; };
+static std::map<std::string, ExLevelCache>& exLevelCaches() { static std::map<std::string, ExLevelCache> m; return m; }
+static bool monthYearOf(const std::string& s, char& mon, int& year) {
+    const std::size_t n = s.size();
+    auto isM = [](char c) { return c != 0 && std::strchr("FGHJKMNQUVXZ", c) != NULL; };
+    auto dig = [](char c) { return c >= '0' && c <= '9'; };
+    if (n >= 4 && isM(s[n - 3]) && dig(s[n - 2]) && dig(s[n - 1])) { mon = s[n - 3]; year = (s[n - 1] - '0'); return true; }
+    if (n >= 4 && isM(s[n - 2]) && dig(s[n - 1]) && !dig(s[n - 3])) { mon = s[n - 2]; year = s[n - 1] - '0'; return true; }
+    return false;
+}
+static bool sameContractLite(const std::string& chart, const std::string& file) {
+    if (chart.empty() || file.empty()) return true;
+    std::string a, b;
+    for (char ch : chart) a += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    for (char ch : file) b += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    if (a == b) return true;
+    char ma = 0, mb = 0; int ya = 0, yb = 0;
+    if (!monthYearOf(a, ma, ya) || !monthYearOf(b, mb, yb)) return true;          // a continuous chart is the front contract
+    return ma == mb && ya == yb;                                                   // ESZ6 (Rithmic) == EPZ26 (CQG)
+}
+static void exLoadSource(const std::string& path, ExLevelSource& S, int kind) {
+    const long long st = fileStamp(path);
+    if (st == S.stamp) return;
+    if (st < 0) { S = ExLevelSource(); S.stamp = st; return; }
+    std::vector<std::string> lines;
+    if (!readBoundedLines(path, lines, 256 * 1024, 4096, 4096) || fileStamp(path) != st) return;   // keep the last good snapshot
+    ExLevelSource n; n.stamp = st; n.at = fileMtime(path);
+    std::vector<std::pair<double, dp::exh::Level> > nodes;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const std::string& ln = lines[i];
+        if (kind == 0) {
+            if (i == 0) { long long t = 0; if (ln.compare(0, 8, "KEYLV,1,") != 0 || !parseWhole(ln.substr(8), 1, 32503680000LL, t)) return; n.at = t; continue; }
+            const std::vector<std::string> c = fields(ln); double px;
+            if (c.size() >= 4 && c[0] == "L" && !c[1].empty() && c[1].size() <= 40 && parseReal(c[2], px) && px > 0) n.v.push_back(dp::exh::Level{ c[1], px });
+            continue;
+        }
+        const std::vector<std::string> c = fields(ln); double px, g;
+        if (c.size() >= 2 && c[0] == "SYMBOL") n.sym = c[1];
+        if (c.size() >= 2 && c[0] == "STATE" && c[1] == "STALE") n.stale = true;
+        if (kind == 1 && c.size() >= 3 && c[0] == "LEVEL" && c[1] != "NONE" && parseReal(c[2], px) && px > 0) n.v.push_back(dp::exh::Level{ c[1].substr(0, 40), px });
+        if (kind == 1 && c.size() >= 8 && c[0] == "NODE" && parseReal(c[1], px) && px > 0 && parseReal(c[2], g)) nodes.push_back(std::make_pair(std::fabs(g), dp::exh::Level{ "G " + c[1].substr(0, 20), px }));
+        if (kind == 2 && c.size() >= 4 && c[0] == "LEVEL" && !c[1].empty() && parseReal(c[3], px) && px > 0) n.v.push_back(dp::exh::Level{ c[1].substr(0, 40), px });
+    }
+    std::stable_sort(nodes.begin(), nodes.end(), [](const std::pair<double, dp::exh::Level>& a, const std::pair<double, dp::exh::Level>& b) { return a.first > b.first; });
+    for (std::size_t i = 0; i < nodes.size() && i < 3; ++i) if (nodes[i].first > 0) n.v.push_back(nodes[i].second);
+    S = n;
+}
+static std::vector<dp::exh::Level> exLevels(const std::string& directory, const std::string& market, const std::string& contract, std::string& note) {
+    std::vector<dp::exh::Level> out; note.clear();
+    if (directory.empty() || market.empty()) { note = "no level folder"; return out; }
+    ExLevelCache& C = exLevelCaches()[market];
+    const std::int64_t now = steadyMs();
+    if (C.checked < 0 || now - C.checked >= 5000) {
+        C.checked = now;
+        exLoadSource(directory + "LRA-KeyLevels-" + market + ".csv", C.key, 0);
+        exLoadSource(directory + "LRA-Dealer-" + market + ".csv", C.dealer, 1);
+        exLoadSource(directory + "LRA-Levels-" + market + ".csv", C.mq, 2);
+    }
+    const long long wall = static_cast<long long>(std::time(NULL)), FRESH = 18 * 3600;
+    auto fresh = [&](const ExLevelSource& S) { return S.stamp >= 0 && S.at > 0 && wall - S.at <= FRESH && S.at - wall <= 600; };
+    int used = 0;
+    if (fresh(C.key)) { out.insert(out.end(), C.key.v.begin(), C.key.v.end()); ++used; }
+    const bool contractOk = sameContractLite(contract, C.dealer.sym);
+    if (!contractOk) note = "MenthorQ levels skipped (file is " + C.dealer.sym + ")";
+    if (contractOk && fresh(C.dealer)) { out.insert(out.end(), C.dealer.v.begin(), C.dealer.v.end()); ++used; }
+    if (contractOk && fresh(C.mq) && !C.mq.stale) { out.insert(out.end(), C.mq.v.begin(), C.mq.v.end()); ++used; }
+    if (note.empty()) note = std::to_string(out.size()) + " levels from " + std::to_string(used) + " files";
+    return out;
+}
 static std::map<std::string, LatchBook>& latchBooks() { static std::map<std::string, LatchBook> m; return m; }
 struct ChartState {
     std::string identity, root, market, asof, state;
@@ -360,6 +685,8 @@ struct ChartState {
     int absorptionEvents, bubblesDrawn, bubblesOffscreen, bubblesSuppressed, activeAbsorptions, pairedAbsorptions;
     std::map<long long, std::string> bubbleState; // event ID -> drawn/shared/offscreen/suppressed
     std::map<long long, std::string> profileState; // actual emitted profile disposition, not just calculation
+    std::string exParams, exSource = "missing", exLevelNote; std::size_t exLevelCount = 0;   // (2.7.0) exhaustion gate / levels
+    int exDrawn = 0, exSuppressed = 0, exOffscreen = 0; std::map<long long, std::string> exState;
     ChartState() : barCount(0), latestStamp(0), firstStamp(0), tick(0), builtAt(-1),
         statusAt(-1), dealerAt(-1), settingsAt(-1), touchedAt(-1), settingsStamp(-2),
         dealerReach(0), drawnRows(0), missingVap(0), vapMismatch(0), dirty(true), faulted(false), ready(false), shortHistory(false), coarseBoundary(false),
@@ -385,6 +712,8 @@ private:
     bool buildNative(ChartState& s);
     bool render(ChartState& s);
     void status(ChartState& s);
+    void exhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick);   // (2.7.0)
+    void absorbExhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick);   // (2.7.0) AE
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
     static int readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
     bool epoch(RTDATE value, std::int64_t& out);
@@ -713,29 +1042,16 @@ bool DeltaProfile::buildNative(ChartState& s) {
             }
             bk.v.clear(); bk.session = sess;
             bk.journal.clear(); bk.path.clear(); bk.note.clear(); bk.nextId = 0; bk.written = bk.loaded = bk.rejected = 0;
+            bk.ae.clear(); bk.aeThrough.clear(); bk.ex.clear(); bk.exNext = bk.exLoaded = bk.exRejected = 0; bk.exThrough = 0; bk.exNote.clear();   // (2.7.0)
             // (2.5.4) after an IRT restart (or the first chart of the day) the session's record seeds the book: what was shown stays
             const std::string folder = recordDirectory();
             if (!folder.empty() && !s.root.empty()) {
-                bk.path = folder + syncRecordName(s.market, spb, sess);
+                bk.path = folder + contractRecordName(s.market, s.book, spb, sess);                  // (2.6.3) this contract's own file
                 std::string text; bool tooLarge = false;
                 if (readWholeFile(bk.path, text, tooLarge)) seedFromText(text, s.book, "", tick, bk);
                 else if (tooLarge) { bk.note = "record too large - not read, not appended"; bk.path.clear(); }
-                else {
-                    // One-time import: retain old files unchanged, rewrite validated events to a new schema/path.
-                    const std::string legacyPath = folder + recordName(s.market, spb, sess);
-                    if (readWholeFile(legacyPath, text, tooLarge)) {
-                        seedFromText(text, s.book, s.root, tick, bk);
-                        for (Latch& L : bk.v) {
-                            if (!L.logged && L.formedTime == 0) {
-                                // Old schema cannot identify formation. Resume pending only from current knowledge.
-                                L.formedTime = latest; L.formedT = localSec(latest);
-                            }
-                            bk.journal.push_back(recordLine(L, 'F', tick, s.book));
-                            if (L.logged) bk.journal.push_back(recordLine(L, 'D', tick, s.book));
-                        }
-                        bk.note = "legacy imported; pending formation resumed now; old files preserved";
-                    }
-                }
+                // (2.6.3) no import from root-only files: they cannot tell one expiry from the next, so a new contract-qualified
+                // file always starts empty (the audit's compatibility boundary)
             }
         }
         if (!bk.carry.empty()) makeDirectory(recordDirectory());                                // (2.6.1) the folder may have been removed
@@ -847,6 +1163,10 @@ bool DeltaProfile::buildNative(ChartState& s) {
             L.tDecided = nowT; L.logged = true;
             bk.journal.push_back(recordLine(L, 'D', tick, s.book));
         }
+        // (2.7.0) the thin-extreme exhaustion candidates: decided on closed bars after this build's A decisions, logged as E lines
+        // in the same record (flushed just below), the same complete-build gate as A
+        if (allowedNow) { try { absorbExhaust(s, bk, bars, tick); } catch (...) { bk.exNote = "AE step failed - retried on the next build"; } }
+        if (allowedNow) { try { exhaust(s, bk, bars, tick); } catch (...) { bk.exNote = "exhaustion step failed - retried on the next bar"; } }
         if (!bk.journal.empty()) {
             if (bk.path.empty()) bk.journal.clear();                                                 // no storage: nothing to keep
             else {
@@ -874,6 +1194,204 @@ bool DeltaProfile::buildNative(ChartState& s) {
         char b[32]; std::strftime(b, sizeof(b), "%Y-%m-%d %H:%M:%S", &t); s.asof = b;
     }
     return true;
+}
+// (2.7.0, scope update 10:33) AE: each CONFIRMED A is watched bar by bar (each closed bar once) for up to aeMaxBars bars after its
+// peak bar: at the close of a bar that re-trades the node, the attackers' delta into it is compared later half vs earlier half on
+// the closed bars up to that bar (decision-time data only). The first fade decides Y; none within aeMaxBars decides N. The result
+// and the label it gives the A (A / AE? / AE) are frozen in one AE line and never change.
+void DeltaProfile::absorbExhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick) {
+    const long count = getBarCount();
+    RTARRAYI times(barDateTime);
+    if (count < 2 || times.count < count || window.empty()) return;
+    const int lastClosed = static_cast<int>(count) - 2;
+    const std::string directory = storageDirectory();
+    const ExConfig& cfg = exConfig(directory, s.market);
+    auto findBar = [&](RTDATE when) -> int {
+        int lo = 0, hi = static_cast<int>(count) - 1;
+        while (lo <= hi) {
+            const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
+            if (t == when) return mid;
+            if (t < when) lo = mid + 1; else hi = mid - 1;
+        }
+        return -1;
+    };
+    std::int64_t end;
+    if (!epoch(static_cast<RTDATE>(times[static_cast<int>(count) - 1]), end)) return;
+    const std::int64_t windowCut = end - 90 * 60;                                       // the window holds every bar after this
+    for (const Latch& L : bk.v) {
+        if (!confirmedAbsorption(L) || bk.ae.count(L.id)) continue;
+        const int pk = findBar(L.peakTime);
+        if (pk >= lastClosed + 1) continue;                                             // its peak bar still forming
+        AeRec a; a.peakRaw = L.peakTime; a.lo = static_cast<double>(L.low) * tick; a.hi = static_cast<double>(L.high) * tick;
+        a.sellNode = L.sell; a.fadeX = cfg.p.aeFadeX; a.params = aeParamText(cfg);
+        bool decided = false;
+        if (pk < 0) { a.result = 'U'; a.decRaw = static_cast<RTDATE>(times[lastClosed]); decided = true; }   // its peak bar left the chart
+        else {
+            RTDATE& through = bk.aeThrough[L.id];
+            for (int d = pk + 1; d <= lastClosed && !decided; ++d) {
+                const RTDATE raw = static_cast<RTDATE>(times[d]);
+                if (raw <= through) continue;
+                through = raw;
+                if (d - pk > cfg.p.aeMaxBars) { a.result = 'N'; a.decRaw = raw; decided = true; break; }   // always bar pk + aeMaxBars + 1
+                const dp::Bar* bd = NULL;
+                for (const dp::Bar& b : window) if (b.index == d) { bd = &b; break; }
+                // the hour before d must be wholly inside the window; a bar evaluated live had it, so skipping here after a
+                // restart cannot hide a fade the live pass would have found
+                if (!bd || (window.front().index != 0 && bd->time - 3600 < windowCut)) continue;
+                dp::exh::AeResult r;
+                if (!dp::exh::attackerFade(window, d, bd->time - 3600, L.low, L.high, L.sell, cfg.p.aeFadeX, cfg.p.aeMinBars, r) || !r.found) continue;
+                a.bars = r.bars; a.early = r.early; a.late = r.late; a.fade = r.fade; a.result = 'Y'; a.decRaw = raw; decided = true;
+            }
+        }
+        if (!decided) continue;
+        a.decT = localSec(a.decRaw);
+        a.label = a.result == 'Y' && cfg.p.showAe > 0 ? (cfg.p.showAe == 2 ? "AE" : "AE?") : "A";
+        bk.ae[L.id] = a; bk.aeThrough.erase(L.id); bk.journal.push_back(aeLine(L.id, a, s.book));
+    }
+}
+static std::string aeLabel(const LatchBook& bk, long long id) {
+    const std::map<long long, AeRec>::const_iterator at = bk.ae.find(id);
+    return at == bk.ae.end() ? std::string("A") : at->second.label;
+}
+static std::string aeWords(const AeRec& a) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    const char* who = a.sellNode ? "sellers" : "buyers";
+    if (a.result == 'U') o << "not measured (the A's bars are no longer on hand)";
+    else if (a.result == 'N' && a.fade < 0) o << who << " never re-tested the node enough to measure a fade; stays A";
+    else o << who << " pressing into the node: later bars " << exRatio(a.fade) << " the earlier bars (" << a.bars << " bars)"
+           << (a.result == 'Y' ? "; they ran out inside the absorption" : "; not fading") << "; label " << a.label;
+    return o.str();
+}
+// (2.7.0) the thin-extreme exhaustion step. Every closed bar is evaluated ONCE per session book (exThrough), on both sides; a
+// candidate is frozen when first logged (C line) and decided once by later CLOSED bars (P / X line). Nothing here is ever undone.
+void DeltaProfile::exhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick) {
+    const long count = getBarCount();
+    if (count < 3 || window.empty()) return;
+    const int lastClosed = static_cast<int>(count) - 2;
+    RTARRAYI times(barDateTime);
+    RTARRAY open(barOpen), high(barHigh), low(barLow), close(barClose);
+    if (times.count < count || open.count < count || high.count < count || low.count < count || close.count < count) return;
+    const std::string directory = storageDirectory();
+    const ExConfig& cfg = exConfig(directory, s.market);
+    s.exParams = exParamText(cfg); s.exSource = cfg.src;
+    auto findBar = [&](RTDATE when) -> int {
+        int lo = 0, hi = static_cast<int>(count) - 1;
+        while (lo <= hi) {
+            const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
+            if (t == when) return mid;
+            if (t < when) lo = mid + 1; else hi = mid - 1;
+        }
+        return -1;
+    };
+    const RTDATE lastT = static_cast<RTDATE>(times[lastClosed]);
+    if (lastT > bk.exThrough) {
+        std::string note;
+        const std::vector<dp::exh::Level> levels = exLevels(directory, s.market, s.book, note);
+        s.exLevelNote = note; s.exLevelCount = levels.size();
+        if (!(cfg.p.requireLevel && levels.empty())) {                                 // no level at all: nothing can qualify
+            const int spb = std::max(1, getSecondsPerBar());
+            const int H = std::max(std::max(cfg.p.N, cfg.p.M), 3) + 3;
+            std::int64_t end;
+            if (!epoch(static_cast<RTDATE>(times[static_cast<int>(count) - 1]), end)) return;
+            // older bars than the 90-min window: enough for the move (M bars) and a full 90-min profile behind the extreme
+            const std::int64_t exCut = end - 5400 - std::max<std::int64_t>(5400, static_cast<std::int64_t>(H) * spb);
+            RTARRAYP vap(barVolumeProfile);
+            std::vector<dp::Bar> bars; std::vector<VOLPROFILE> rows; std::size_t examined = 0;
+            std::int64_t nextTime = window.front().time;
+            for (int i = window.front().index - 1; i >= 0 && bars.size() < 600 && vap.count >= count; --i) {
+                std::int64_t stamp;
+                if (!epoch(static_cast<RTDATE>(times[i]), stamp)) break;
+                if (stamp > nextTime) stamp = nextTime;
+                if (stamp <= exCut) break;
+                nextTime = stamp;
+                BARSTATISTICS stats;
+                const int prices = readStatistics(&vap, i, &stats);
+                if (prices == -1) return;                                               // VAP fault: retried on the next build
+                if (prices < 0) continue;                                               // a gap: candidates spanning it are not evaluated
+                examined += static_cast<std::size_t>(prices);
+                if (examined > 2000000) break;
+                rows.resize(static_cast<std::size_t>(prices));
+                const int read = readPrices(&vap, i, rows.empty() ? NULL : &rows[0], prices);
+                if (read == -1) return;
+                if (read < 0) continue;
+                dp::Bar b; b.index = i; b.time = stamp; b.closed = true;
+                b.open = open[i]; b.high = high[i]; b.low = low[i]; b.close = close[i];
+                bool bad = false;
+                for (std::size_t k = 0; k < rows.size(); ++k) {
+                    const VOLPROFILE& v = rows[k];
+                    if (!dp::finite(v.price) || v.buyVolume < 0 || v.sellVolume < 0 || v.totalVolume < 0) continue;
+                    const double buy = static_cast<double>(v.buyVolume), sell = static_cast<double>(v.sellVolume);
+                    const double vol = std::max(static_cast<double>(v.totalVolume), buy + sell);
+                    if (vol == 0) continue;
+                    try { b.rows.push_back(dp::Row(dp::priceKey(v.price, tick), buy - sell, vol)); } catch (...) { bad = true; break; }
+                }
+                if (bad) continue;
+                try { dp::normalize(b); } catch (...) { continue; }
+                bars.push_back(std::move(b));
+            }
+            std::reverse(bars.begin(), bars.end());
+            bars.insert(bars.end(), window.begin(), window.end());
+            std::vector<std::pair<long long, dp::exh::AEvent> > as;                     // confirmed A's: (decided-by bar end, event)
+            for (const Latch& L : bk.v) {
+                if (!confirmedAbsorption(L)) continue;
+                const int pk = findBar(L.peakTime);
+                if (pk >= 0) as.push_back(std::make_pair(L.decidedBy, dp::exh::AEvent{ pk, L.price, !L.support }));
+            }
+            for (std::size_t p = 0; p < bars.size(); ++p) {
+                const dp::Bar& b = bars[p];
+                if (!b.closed || b.index > lastClosed) continue;
+                const RTDATE raw = static_cast<RTDATE>(times[b.index]);
+                if (raw <= bk.exThrough) continue;
+                const long long bEnd = localSec(raw);
+                std::vector<dp::exh::AEvent> known;                                     // decided at or before the extreme's close
+                for (std::size_t k = 0; k < as.size(); ++k) if (as[k].first > 0 && as[k].first <= bEnd) known.push_back(as[k].second);
+                for (int side = 0; side < 2; ++side) {
+                    const bool top = side == 0;
+                    bool seen = false;
+                    for (const ExMark& m : bk.ex) if (m.top == top && m.extRaw == raw) { seen = true; break; }
+                    if (seen || bk.ex.size() >= EX_MAX_MARKS) continue;
+                    dp::exh::Candidate c; bool ok = false;
+                    try { ok = dp::exh::evaluate(bars, p, top, cfg.p, levels, known, tick, c); } catch (...) { ok = false; }
+                    if (!ok) continue;
+                    ExMark m; m.id = bk.exNext++; m.top = top; m.extRaw = raw; m.extT = bEnd; m.decRaw = raw; m.decT = bEnd;
+                    m.extreme = c.extreme > 0 ? c.extreme : (top ? b.high : b.low);
+                    m.level = c.level; m.levelPx = c.levelPx; m.levelTicks = c.levelTicks; m.thin = c.thin; m.fade = c.fade;
+                    m.thinOk = c.thinOk; m.fadeOk = c.fadeOk; m.ctx = c.ctx; m.ctxPx = c.ctxPx;
+                    m.ctxT = c.ctxIndex >= 0 && c.ctxIndex < static_cast<int>(count) ? localSec(static_cast<RTDATE>(times[c.ctxIndex])) : 0;
+                    m.live = b.index == lastClosed; m.W = cfg.p.W; m.params = exParamText(cfg);
+                    const bool gate = cfg.p.show == 2 || (cfg.p.show == 1 && c.ctx != 'N');
+                    m.mark = c.qualifies() && gate ? (cfg.p.proven ? "Ex" : "Ex?") : "none";
+                    bk.ex.push_back(m); bk.journal.push_back(exLine(m, 'C', tick, s.book));
+                }
+            }
+        }
+        bk.exThrough = lastT;
+    }
+    for (ExMark& m : bk.ex) {                                                           // decide pending candidates, once
+        if (m.status != 'C') continue;
+        const int e = findBar(m.extRaw);
+        if (e < 0) continue;
+        int at = -1;
+        const int r = dp::exh::resolve(open, high, low, close, lastClosed, e, m.top, m.W, at);
+        if (r == 0 || at < 0 || at >= static_cast<int>(count)) continue;
+        m.status = r == 1 ? 'P' : 'X'; m.decRaw = static_cast<RTDATE>(times[at]); m.decT = localSec(m.decRaw);
+        m.reason = r == 1 ? (m.top ? "red close" : "green close") : r == 2 ? (m.top ? "cancelled: higher high first" : "cancelled: lower low first") :
+            "expired: no close back within W bars";
+        bk.journal.push_back(exLine(m, m.status, tick, s.book));
+    }
+}
+// (2.7.0) the mark's detail in plain words (status file EXH lines - the plugin has no hover)
+static std::string exWords(const ExMark& m) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    o << (m.mark == "none" ? std::string("Ex (not shown)") : m.mark) << " thin " << (m.top ? "top " : "bottom ") << exRatio(m.thin)
+      << " delta; aggression " << exRatio(m.fade);
+    if (m.ctx == 'A') o << "; after A at " << exNum(m.ctxPx);
+    else if (m.ctx == 'T') o << "; after trapped " << (m.top ? "buyers" : "sellers") << " at " << exNum(m.ctxPx);
+    else o << "; no earlier absorption or trapped delta";
+    if (m.levelTicks >= 0) o << "; at " << m.level << ' ' << exNum(m.levelPx) << " (" << m.levelTicks << " ticks)";
+    o << (m.status == 'C' ? "; waiting for a close back" : m.status == 'P' ? "; printed on the " + m.reason : "; " + m.reason);
+    if (!(m.thinOk && m.fadeOk)) o << "; did not qualify (" << (m.thinOk ? "" : "not thin") << (!m.thinOk && !m.fadeOk ? " and " : "") << (m.fadeOk ? "" : "aggression not fading") << ')';
+    return o.str();
 }
 static short coordinate(int v) { return static_cast<short>(std::max<int>(SHRT_MIN, std::min<int>(SHRT_MAX, v))); }
 int DeltaProfile::yOf(int lastBar, double price) {
@@ -990,11 +1508,12 @@ bool DeltaProfile::render(ChartState& s) {
     auto bubbleDisposition = [&](long long id) -> std::string {
         const auto it=s.bubbleState.find(id);return it==s.bubbleState.end()?"missing":it->second;
     };
-    // Labels may identify an offscreen peak explicitly, but cannot display an unpaired on-screen A.
+    // A label only for an A whose circle is on screen. (2.7.1, 2026-10-13) an offscreen peak (scrolled back / off the pane) is NOT
+    // labelled any more - its "[offscreen]" label landed on circles and swing labels; the event stays in the record and the status.
     auto permitAbsorptionLabel = [&](long long id) -> bool {
         const std::string q=bubbleDisposition(id);
-        if(q=="drawn"||q=="shared"||q=="offscreen")return true;
-        s.profileState[id]="suppressed:no bubble";return false;
+        if(q=="drawn"||q=="shared")return true;
+        s.profileState[id]=q=="offscreen"?"suppressed:offscreen":"suppressed:no bubble";return false;
     };
     std::vector<std::size_t> ranked;
     for (std::size_t i = 0; i < profile.buckets.size(); ++i) ranked.push_back(i);
@@ -1054,10 +1573,11 @@ bool DeltaProfile::render(ChartState& s) {
         if(isA){++s.activeAbsorptions;if(!event||!confirmedAbsorption(*event)||!permitAbsorptionLabel(event->id))continue;}
         const double shownRatio=isA?event->mult:n.ratio;
         if(isA)net=event->net;
-        const std::string badge=isA&&bubbleDisposition(event->id)=="offscreen"?" [offscreen]":"";
-        std::string label = n.state.code + " " + ratio(shownRatio) + (net != 0 ? "  " + amount(net) : std::string()) + badge;
+        const std::string badge;   // (2.7.1) no "[offscreen]" labels: permitAbsorptionLabel() refuses an offscreen A
+        const std::string code = isA ? aeLabel(book, event->id) : n.state.code;      // (2.7.0) A, or AE? / AE once its attackers faded
+        std::string label = code + " " + ratio(shownRatio) + (net != 0 ? "  " + amount(net) : std::string()) + badge;
         int width = textWidth(label, s.layout.font, true);
-        if (v.edge - 4 - width < pane.left + 2) { label = n.state.code + " " + ratio(shownRatio) + badge; width = textWidth(label, s.layout.font, true); }
+        if (v.edge - 4 - width < pane.left + 2) { label = code + " " + ratio(shownRatio) + badge; width = textWidth(label, s.layout.font, true); }
         if (v.edge - 4 - width < pane.left + 2) continue;
         const int h = s.layout.font + 3, r = v.edge - 4, l = r - width;
         const int anchorY=isA?yOf(lastBar,event->price):v.y;
@@ -1073,7 +1593,7 @@ bool DeltaProfile::render(ChartState& s) {
         if (!ok) continue;
         const COLOR color = n.state.support ? C_SUPPORT : C_RESISTANCE;
         textRight(r, y, label, color, s.layout.font, true); used.push_back(y);
-        if(event){s.profileState[event->id]="shown:"+n.state.code; if(isA&&(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared"))++s.pairedAbsorptions;}
+        if(event){s.profileState[event->id]="shown:"+code; if(isA&&(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared"))++s.pairedAbsorptions;}
         placed.push_back(LBox{ l, y - h / 2, r, y + h / 2 });
         if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1); // visible association when a label stepped
     }
@@ -1098,8 +1618,8 @@ bool DeltaProfile::render(ChartState& s) {
             if (at != edge.end()) { e = any ? std::min(e, at->second) : at->second; any = true; }
         }
         if (!any) continue;
-        const std::string badge=bubbleDisposition(event->id)=="offscreen"?" [offscreen]":"";
-        const std::string label="A "+ratio(event->mult)+"  "+amount(event->net)+badge;
+        const std::string badge;   // (2.7.1) no "[offscreen]" labels
+        const std::string label=aeLabel(book,event->id)+" "+ratio(event->mult)+"  "+amount(event->net)+badge;   // (2.7.0) A / AE? / AE
         const int width=textWidth(label,s.layout.font,true), height=s.layout.font+3;
         if(e-7-width<pane.left+2)continue;
         const int anchorY=yOf(lastBar,event->price);
@@ -1117,9 +1637,49 @@ bool DeltaProfile::render(ChartState& s) {
         stroke(e-4,yt,e-4,yb,color,1);stroke(e-4,yt,e-1,yt,color,1);stroke(e-4,yb,e-1,yb,color,1);
         textRight(e-7,y,label,color,s.layout.font,true);used.push_back(y);
         placed.push_back(LBox{e-7-width,y-height/2,e-7,y+height/2});
-        s.profileState[event->id]="shown:A";
+        s.profileState[event->id]="shown:"+aeLabel(book,event->id);
         if(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared")++s.pairedAbsorptions;
         if(y!=anchorY)stroke(e-5,anchorY,e-5,y,color,1);
+    }
+    // (2.7.0, Rassul 2026-10-13 "this looks good, lets implement this") the printed Ex? / Ex marks: text only (red above a top,
+    // green below a bottom), on the extreme bar's frozen stamp at its frozen price; never over an A circle, a profile label or
+    // another mark - stepped away from the bar (up for a top, down for a bottom), else not drawn this repaint (counted).
+    s.exDrawn = s.exSuppressed = s.exOffscreen = 0; s.exState.clear();
+    {
+        std::vector<LBox> exPlaced;
+        std::vector<const ExMark*> marks;
+        for (const ExMark& m : book.ex) if (m.status == 'P' && m.mark != "none") marks.push_back(&m);
+        std::sort(marks.begin(), marks.end(), [](const ExMark* a, const ExMark* b) { return a->id < b->id; });
+        for (const ExMark* item : marks) {
+            const ExMark& m = *item;
+            int lo = 0, hi = s.barCount - 1, at = -1;
+            if (bubbleTimes.count >= s.barCount && m.extRaw != 0) {
+                while (lo <= hi) {
+                    const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(bubbleTimes[mid]);
+                    if (t == m.extRaw) { at = mid; break; }
+                    if (t < m.extRaw) lo = mid + 1; else hi = mid - 1;
+                }
+            }
+            if (at < 0) { s.exState[m.id] = "offscreen"; ++s.exOffscreen; continue; }
+            PNT point; point.set(at, static_cast<float>(m.extreme), kBarCenter);
+            const int font = s.layout.font, w = textWidth(m.mark, font, true), hh = font + 3;
+            const int l = point.h - w / 2, r = l + w;
+            if (l < pane.left || r > left - 8) { s.exState[m.id] = "offscreen"; ++s.exOffscreen; continue; }
+            int y = 0; bool ok = false;
+            for (int k = 0; k < 6 && !ok; ++k) {
+                const int yy = m.top ? point.v - hh / 2 - 3 - k * hh : point.v + hh / 2 + 3 + k * hh;
+                if (yy - hh / 2 <= top || yy + hh / 2 >= bottom) continue;
+                const LBox bx{ l - 1, yy - hh / 2, r + 1, yy + hh / 2 };
+                bool clash = false;
+                for (const LBox& q : placed) if (overlap(bx, q)) clash = true;
+                for (const Bubble& q : bubbles) if (overlap(bx, q.box)) clash = true;
+                for (const LBox& q : exPlaced) if (overlap(bx, q)) clash = true;
+                if (!clash) { y = yy; ok = true; exPlaced.push_back(bx); }
+            }
+            if (!ok) { s.exState[m.id] = "suppressed"; ++s.exSuppressed; continue; }
+            textRight(r, y, m.mark, m.top ? C_SELL : C_BUY, font, true);
+            s.exState[m.id] = "drawn"; ++s.exDrawn;
+        }
     }
     // Historical confirmed absorption uses the SAME immutable events as the current profile.
     // I, A?, I?, Acc and Dst are never absorption bubbles. No one-bubble-per-bar filter.
@@ -1165,6 +1725,22 @@ void DeltaProfile::status(ChartState& s) {
         for(const dp::Node& n:s.snapshot.nodes){
             double d=0;for(const dp::Bucket& b:s.snapshot.buckets)if(b.key==n.bucket){d=b.delta;break;}
             out << "LIVE_NODE," << n.state.eventId << ',' << n.state.code << ',' << n.price << ',' << n.ratio << ',' << d << '\n';
+        }
+        {   // (2.7.0) the exhaustion gate, levels and candidates; the detail in plain words (no hover in this plugin)
+            out << "EXH_PARAMS," << safeField(s.exSource) << ',' << safeField(s.exParams) << '\n';
+            out << "EXH_LEVELS," << s.exLevelCount << ',' << safeField(s.exLevelNote) << '\n';
+            std::size_t printed = 0, pending = 0;
+            for (const ExMark& m : bk.ex) { if (m.status == 'P') ++printed; if (m.status == 'C') ++pending; }
+            out << "EXH_RECORD,loaded " << bk.exLoaded << ",rejected " << bk.exRejected << ",candidates " << bk.ex.size() << ",printed " << printed
+                << ",pending " << pending << ",drawn " << s.exDrawn << ",suppressed " << s.exSuppressed << ",offscreen " << s.exOffscreen << ',' << safeField(bk.exNote) << '\n';
+            for (std::map<long long, AeRec>::const_iterator a = bk.ae.begin(); a != bk.ae.end(); ++a)
+                out << "AE," << a->first << ',' << a->second.result << ',' << a->second.label << ',' << safeField(aeWords(a->second)) << '\n';
+            const std::size_t from = bk.ex.size() > 20 ? bk.ex.size() - 20 : 0;
+            for (std::size_t k = from; k < bk.ex.size(); ++k) {
+                const ExMark& m = bk.ex[k]; const auto d = s.exState.find(m.id);
+                out << "EXH," << m.id << ',' << m.status << ',' << (m.top ? "top" : "bottom") << ',' << exNum(m.extreme) << ',' << m.mark << ','
+                    << (d == s.exState.end() ? (m.status == 'P' && m.mark != "none" ? "pending draw" : "logged") : d->second) << ',' << safeField(exWords(m)) << '\n';
+            }
         }
         for (std::size_t k = 0; k < latches.size(); ++k)
             out << "SIGNAL," << latches[k].code << "," << (latches[k].support ? "support" : "resistance") << "," << latches[k].low * s.tick << "," << latches[k].high * s.tick << ",t " << latches[k].peakTime << '\n';

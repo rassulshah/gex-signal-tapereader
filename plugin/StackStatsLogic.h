@@ -1,6 +1,8 @@
 #ifndef LS_STACKSTATS_LOGIC_H
 #define LS_STACKSTATS_LOGIC_H
-// StackStatsLogic.h (1.0.0, 2026-10-13) -- SDK-free rules of lsStackStats: who is ARRIVING. Unit-tested on Linux.
+// StackStatsLogic.h (1.0.1, 2026-10-13) -- SDK-free rules of lsStackStats: who is ARRIVING. Unit-tested on Linux.
+// 1.0.1 (2026-10-13, Rassul 1:30 PM CT): the refill / iceberg letter is I (was R). R is reserved for a future stop-run signal
+//   (studied first; nothing draws R). Records written by 1.0.0 with R reload as I (OrderFlowFeed.h parseRow).
 // Rassul 2026-10-13: "add a stacking indicator" / "keep seperate" / "include L for Bid Ask Stacks and Pull" / "why dont you just use a
 // dash in the bar". Approved: final-signals-mockup.png, stackstats-dash-crop.png. The order engine is OrderFlowFeed.h.
 //   Bars   = the number of ORDERS added near price (NEW; a MOD to a bigger size counts in contracts only): left green = bids added,
@@ -8,7 +10,7 @@
 //   Dash   = REFILLS (a NEW / size increase on the same side at the same price within refillWindowMs after a FILL there): a WHITE
 //            horizontal dash inside that side's bar at the height of min(refills, bar) - ONLY when the refills are notable
 //            (>= refillNotableX = 2.0 x their average as of the candle). No separate refill bar.
-//   Letters (priority R, L; at most 2): R = notable refills AND, at one of those refill prices, more traded than was ever displayed
+//   Letters (priority I, L; at most 2): I = notable refills AND, at one of those refill prices, more traded than was ever displayed
 //            there (iceberg confirmed); L = one order added with size >= largeLotResting.
 //   Message: bids added / refilled = bullish green "Buyers adding + reloading bids at LonLO (refills 5.2x, iceberg) - real support";
 //            offers added = bearish red "Sellers adding offers (3.8x) - wall building above"; " - mostly one order, may be bait"
@@ -19,7 +21,7 @@
 
 namespace st {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 using off::BID; using off::ASK;
 
 inline bool notable(const off::PaneBar& b, int s, const off::Params& P) {
@@ -27,7 +29,7 @@ inline bool notable(const off::PaneBar& b, int s, const off::Params& P) {
 }
 inline std::string letters(const off::PaneBar& b, int s, const off::Params& P) {
     std::string o;
-    if (notable(b, s, P) && b.r.ice[s] > 0) o += "R";
+    if (notable(b, s, P) && b.r.ice[s] > 0) o += "I";   // I = iceberg / refill (1.0.1; was R)
     if (b.r.thrRest > 0 && b.r.addMax[s] >= b.r.thrRest) o += "L";
     return o;
 }

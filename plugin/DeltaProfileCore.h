@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.6.2 (absorption = the peak bar's own close) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -263,5 +263,202 @@ inline Snapshot build(const std::vector<Bar>& bars, double tick, bool allowConfi
     if (s.zones.size() > 2) s.zones.resize(2);
     return s;
 }
+
+// ---- (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped
+// detla" / "this looks good, lets implement this") the THIN EXTREME exhaustion candidate "Ex?". SDK-independent: closed bars,
+// decision-time data only (every input is at or before the extreme bar; the print is decided by later CLOSED bars only).
+namespace exh {
+struct Params {
+    int N = 10;            // new high / low of the prior N bars
+    int L = 4;             // within L ticks of a key / gamma level
+    int T = 2;             // top (bottom) T profile rows of the extreme are measured for thinness
+    double thinX = 0.35;   // thin: mean |delta| of those rows < thinX x the profile's median |delta| per row
+    double fadeX = 0.5;    // fading: aggressor delta of the last 2 bars < fadeX x the 2 bars before
+    int M = 40;            // the move starts at the last opposite swing within M bars
+    double trapX = 2.0;    // trapped node: >= trapX x the median per-bar node |delta|
+    int K = -1;            // ... and price advanced no more than K ticks past it (-1 = auto: 2 profile rows)
+    int B = 3;             //     for the next B bars
+    int W = 3;             // print on the first bar closing back within W bars
+    bool requireLevel = true;
+    int show = 0;          // 0 none (log only), 1 ctx (only with A / T context), 2 all
+    bool proven = false;   // false "Ex?", true "Ex"
+    double aeFadeX = 0.5;  // (AE) later-half attacker delta < aeFadeX x the earlier half
+    int aeMinBars = 3;     // (AE) at least this many bars traded in the node
+    int aeMaxBars = 20;    // (AE) watched for this many bars after the A's peak bar, then decided N
+    int showAe = 0;        // (AE) 0 none (log only, label stays A), 1 "AE?", 2 "AE"
+};
+struct Level { std::string name; double price; };
+struct AEvent { int peakIndex; double price; bool bearish; };   // a confirmed A (chart bar index of its peak bar), decided by the extreme
+struct Candidate {
+    bool top = true; double extreme = 0;
+    std::string level; double levelPx = 0; long long levelTicks = -1;
+    double thin = 0, fade = -1; bool thinOk = false, fadeOk = false;
+    char ctx = 'N'; double ctxPx = 0; int ctxIndex = -1;
+    Tick ticksPerRow = 1;
+    bool qualifies() const { return thinOk && fadeOk; }
+};
+inline Tick keyOf(double price, double tick) { return priceKey(price, tick); }
+inline double barDelta(const Bar& b) { double d = 0; for (std::size_t i = 0; i < b.rows.size(); ++i) d += b.rows[i].delta; return d; }
+inline double median(std::vector<double> v) {
+    if (v.empty()) return 0;
+    std::sort(v.begin(), v.end());
+    const std::size_t n = v.size();
+    return n % 2 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
+}
+// Evaluate bars[p] (must be CLOSED) as a thin extreme on one side. false = not a candidate (no new extreme, no level in reach,
+// not enough contiguous history, no profile). true = a candidate; out.qualifies() says whether thin AND fading both hold.
+inline bool evaluate(const std::vector<Bar>& bars, std::size_t p, bool top, const Params& P,
+                     const std::vector<Level>& levels, const std::vector<AEvent>& absorptions, double tick, Candidate& out) {
+    out = Candidate(); out.top = top;
+    if (p >= bars.size() || !finite(tick) || tick <= 0 || P.N < 1 || P.M < 1 || P.T < 1 || P.B < 1) return false;
+    const Bar& e = bars[p];
+    if (!e.closed) return false;
+    const std::size_t H = static_cast<std::size_t>(std::max(std::max(P.N, P.M), 3));
+    if (p < H) return false;
+    for (std::size_t i = p - H; i < p; ++i)                       // contiguous chart bars only (a VAP gap = not evaluated)
+        if (bars[i + 1].index != bars[i].index + 1 || !bars[i].closed) return false;
+    const double ext = top ? e.high : e.low;
+    if (!finite(ext)) return false;
+    out.extreme = ext;
+    for (std::size_t i = p - static_cast<std::size_t>(P.N); i < p; ++i)
+        if (top ? !(e.high > bars[i].high) : !(e.low < bars[i].low)) return false;
+    const Tick ek = keyOf(ext, tick);
+    long long best = -1;
+    for (std::size_t i = 0; i < levels.size(); ++i) {
+        if (!finite(levels[i].price) || levels[i].price <= 0) continue;
+        Tick lk; try { lk = keyOf(levels[i].price, tick); } catch (...) { continue; }
+        const long long d = static_cast<long long>(lk > ek ? lk - ek : ek - lk);
+        if (d <= P.L && (best < 0 || d < best)) { best = d; out.level = levels[i].name; out.levelPx = levels[i].price; }
+    }
+    out.levelTicks = best;
+    if (best < 0) { if (P.requireLevel) return false; out.level = "none"; out.levelPx = 0; }
+    // the profile AS OF the extreme's close: bars in (extreme time - 90 min, extreme time]; its whole span must be on hand
+    const std::int64_t cutoff = e.time - 5400;
+    bool covered = bars.front().index == 0;
+    std::size_t first = p;
+    for (std::size_t i = p + 1; i-- > 0;) { if (bars[i].time <= cutoff) { covered = true; break; } first = i; }
+    if (!covered) return false;
+    std::map<Tick, double> profile;
+    for (std::size_t i = first; i <= p; ++i) for (std::size_t j = 0; j < bars[i].rows.size(); ++j) profile[bars[i].rows[j].key] += bars[i].rows[j].delta;
+    if (profile.empty()) return false;
+    const Tick span = profile.rbegin()->first - profile.begin()->first;
+    const Tick tpr = std::max<Tick>(1, span / 60 + (span % 60 != 0));          // the same row size rule as build()
+    out.ticksPerRow = tpr;
+    std::map<Tick, double> band;
+    for (std::map<Tick, double>::const_iterator i = profile.begin(); i != profile.end(); ++i) band[floorDiv(i->first, tpr)] += i->second;
+    std::vector<double> mags;
+    for (std::map<Tick, double>::const_iterator i = band.begin(); i != band.end(); ++i) if (i->second != 0) mags.push_back(std::fabs(i->second));
+    const double med = median(mags);
+    if (!(med > 0)) return false;
+    const Tick eb = floorDiv(ek, tpr);
+    double sum = 0;
+    for (int r = 0; r < P.T; ++r) {
+        const Tick k = top ? eb - r : eb + r;
+        const std::map<Tick, double>::const_iterator at = band.find(k);
+        if (at != band.end()) sum += std::fabs(at->second);
+    }
+    out.thin = sum / static_cast<double>(P.T) / med;
+    out.thinOk = out.thin < P.thinX;
+    const auto aggressor = [top](const Bar& b) { const double d = barDelta(b); return top ? std::max(0.0, d) : std::max(0.0, -d); };
+    const double now2 = aggressor(bars[p]) + aggressor(bars[p - 1]), before2 = aggressor(bars[p - 2]) + aggressor(bars[p - 3]);
+    out.fade = before2 > 0 ? now2 / before2 : -1;
+    out.fadeOk = before2 > 0 && out.fade < P.fadeX;
+    // the move: from the last opposite swing (the most recent lowest low for a top) within M bars
+    std::size_t s = p - 1;
+    for (std::size_t i = p - static_cast<std::size_t>(P.M); i < p; ++i)
+        if (top ? bars[i].low <= bars[s].low : bars[i].high >= bars[s].high) s = i;
+    // (a) a confirmed A of the opposite side's defence inside the move, beyond-the-extreme side excluded
+    for (std::size_t i = 0; i < absorptions.size(); ++i) {
+        const AEvent& a = absorptions[i];
+        if (a.bearish != top || a.peakIndex < bars[s].index || a.peakIndex >= e.index || !finite(a.price)) continue;
+        if (top ? !(a.price < ext) : !(a.price > ext)) continue;
+        if (out.ctx != 'A' || a.peakIndex > out.ctxIndex) { out.ctx = 'A'; out.ctxPx = a.price; out.ctxIndex = a.peakIndex; }
+    }
+    if (out.ctx == 'A') return true;
+    // (b) a trapped-delta node: a big node on the move's side that price could not advance past (K ticks) for the next B bars
+    std::vector<double> nodes;
+    auto nodeOf = [tpr](const Bar& b, bool wantBuy, double& mag, Tick& at) {
+        std::map<Tick, double> bb;
+        for (std::size_t j = 0; j < b.rows.size(); ++j) bb[floorDiv(b.rows[j].key, tpr)] += b.rows[j].delta;
+        mag = 0; at = 0; double any = 0;
+        for (std::map<Tick, double>::const_iterator i = bb.begin(); i != bb.end(); ++i) {
+            any = std::max(any, std::fabs(i->second));
+            const double side = wantBuy ? i->second : -i->second;
+            if (side > mag) { mag = side; at = i->first; }
+        }
+        return any;
+    };
+    for (std::size_t i = first; i <= p; ++i) { double m; Tick a; const double any = nodeOf(bars[i], top, m, a); if (any > 0) nodes.push_back(any); }
+    const double nodeMed = median(nodes);
+    const Tick K = P.K >= 0 ? static_cast<Tick>(P.K) : 2 * tpr;
+    if (nodeMed > 0) {
+        for (std::size_t j = p; j-- > s;) {
+            if (j + static_cast<std::size_t>(P.B) >= p) continue;                     // its B bars must all close before the extreme
+            double m; Tick b;
+            nodeOf(bars[j], top, m, b);
+            if (!(m >= P.trapX * nodeMed) || m <= 0) continue;
+            const Tick edgeKey = top ? (b + 1) * tpr - 1 : b * tpr;                   // the node's far edge in ticks
+            bool trapped = true;
+            for (std::size_t k = j + 1; k <= j + static_cast<std::size_t>(P.B) && trapped; ++k) {
+                Tick hk; try { hk = keyOf(top ? bars[k].high : bars[k].low, tick); } catch (...) { trapped = false; break; }
+                if (top ? hk - edgeKey > K : edgeKey - hk > K) trapped = false;
+            }
+            if (!trapped) continue;
+            out.ctx = 'T'; out.ctxPx = (static_cast<double>(b * tpr) + static_cast<double>(b * tpr + tpr - 1)) * 0.5 * tick; out.ctxIndex = bars[j].index;
+            break;                                                                    // the latest trapped node in the move
+        }
+    }
+    return true;
+}
+// After the extreme at chart bar e: 0 = pending, 1 = printed at `at` (first bar closing back: red for a top, green for a bottom),
+// 2 = cancelled at `at` (a later bar went beyond the extreme first), 3 = expired at `at` (no close back within W bars).
+// o/h/l/c are chart arrays; lastClosed = the last CLOSED chart bar index. Only closed bars decide.
+template <class A>
+inline int resolve(A& o, A& h, A& l, A& c, int lastClosed, int e, bool top, int W, int& at) {
+    at = -1;
+    if (e < 0 || W < 1) return 0;
+    const double ext = top ? static_cast<double>(h[e]) : static_cast<double>(l[e]);
+    for (int f = e + 1; f <= e + W && f <= lastClosed; ++f) {
+        const double hi = static_cast<double>(h[f]), lo = static_cast<double>(l[f]), op = static_cast<double>(o[f]), cl = static_cast<double>(c[f]);
+        if (!finite(hi) || !finite(lo) || !finite(op) || !finite(cl)) { at = f; return 3; }
+        if (top ? hi > ext : lo < ext) { at = f; return 2; }
+        if (top ? cl < op : cl > op) { at = f; return 1; }
+    }
+    if (lastClosed >= e + W) { at = e + W; return 3; }
+    return 0;
+}
+// ---- (2.7.0, scope update Rassul 2026-10-13 10:33 "too many signals .. focus on the absorbtion + exhaustion") AE: after a CONFIRMED A,
+// did the attackers exhaust INSIDE the node? At the close of a bar d that traded in the node's price range (a bar AFTER the A's
+// peak bar - the peak bar holds the node's biggest attack by construction, so a fade can only show on a later re-test), take
+// every closed bar up to and including d that traded in the node: the attackers' delta into it (buyers' +delta for a buying
+// node, sellers' -delta for a selling node; a bar's net in the range, never below 0), split into an earlier and a later half
+// (the middle bar of an odd count left out): fade = later / earlier. AE when earlier > 0 and fade < fadeX. Only bars in the hour
+// before d (time > since) count, so the same bar decides the same way live and after a restart.
+// false = not decidable at d (d not on hand / open / did not trade in the node / fewer than minBars bars).
+struct AeResult { int bars = 0; double early = 0, late = 0, fade = -1; bool found = false; };
+inline bool attackerFade(const std::vector<Bar>& bars, int upTo, std::int64_t since, Tick low, Tick high, bool sellNode, double fadeX, int minBars, AeResult& out) {
+    out = AeResult();
+    bool lastTraded = false, have = false;
+    std::vector<double> att;
+    for (std::size_t i = 0; i < bars.size(); ++i) {
+        const Bar& b = bars[i];
+        if (b.index > upTo) break;
+        if (b.time <= since) continue;                                                // only the last hour before the decision bar
+        bool traded = false; double d = 0;
+        for (std::size_t j = 0; j < b.rows.size(); ++j)
+            if (b.rows[j].key >= low && b.rows[j].key <= high && b.rows[j].volume > 0) { traded = true; d += b.rows[j].delta; }
+        if (b.index == upTo) { if (!b.closed) return false; have = true; lastTraded = traded; }
+        if (traded) att.push_back(std::max(0.0, sellNode ? -d : d));
+    }
+    if (!have || !lastTraded) return false;
+    out.bars = static_cast<int>(att.size());
+    if (out.bars < std::max(2, minBars)) return false;
+    const std::size_t half = att.size() / 2;
+    for (std::size_t i = 0; i < half; ++i) { out.early += att[i]; out.late += att[att.size() - 1 - i]; }
+    out.fade = out.early > 0 ? out.late / out.early : -1;
+    out.found = out.early > 0 && out.fade < fadeX;
+    return true;
+}
+} // namespace exh
 } // namespace delta_profile
 #endif

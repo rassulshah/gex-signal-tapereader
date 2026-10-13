@@ -1,4 +1,4 @@
-// TapeReaderLogic.h -- lsTapeReader 1.0.0 (2026-10-13), SDK-free: every input parser, the four voters, the bias, the three lines,
+// TapeReaderLogic.h -- lsTapeReader 1.0.1 (2026-10-13; 1.0.0 + GAMMA feed fixes), SDK-free: every input parser, the four voters, the bias, the three lines,
 // line 1, the box layout and the per-candle log line. Unit-tested on Linux (tests/test_tr_logic.cpp); TapeReader.cpp only feeds it
 // the chart's bars and the files and executes the draw list.
 //
@@ -9,12 +9,12 @@
 // INPUTS (all lsFlexLevels\, each optional; a missing / stale / garbled input is left out of the read and listed in the status file):
 //   Delta Profile 2.7.0  DeltaProfile\<MKT>-<contract>-<spb>-signals-<session days>.csv   D lines (A), AE lines (AE? / AE), E lines (Ex?)
 //   BidAskStats 1.3.0 / PullStats 1.0.0 / StackStats 1.0.0  <Name>\<MKT>-<CONTRACT>-<spb>-<YYYYMMDD>.csv   (OrderFlowFeed.h session
-//                        record: header-driven, letters S / L / R, spikes, implication, level, message)
+//                        record: header-driven, letters S / L / I (legacy R = I), spikes, implication, level, message)
 //   Liquidity Profile 0.14.0  LRA-LiqZones-<MKT>.csv (Z lines) + LiquidityProfile.status-<MKT>-<spb>.txt (ZONE near / far, CONFIRM = LQ)
 //   LRA-KeyLevels-<MKT>.csv, LRA-Levels-<MKT>.csv, LRA-Touch-<MKT>.csv, LRA-Dealer-<MKT>.csv (DealerLogic.h parse, sameContract)
 //   HodLod.status-<MKT>-<spb>.txt  FIRST / READ_VALUES (P in) / RANGE (used %) / PROJ
 //   Trend: computed natively from the chart's bars with VwapTrendLogic.h (the same rule lsSessionVWAP publishes).
-//   LRA-Turns-<MKT>.csv (NEW, nightly) turn / swing odds; LRA-TapeReader-<MKT>.csv (NEW, nightly) voter weights. Formats: NOTES.md.
+//   LRA-Turns-<MKT>.csv (nightly, file VERSION 2 since 1.0.1) turn / swing odds; LRA-TapeReader-<MKT>.csv (NEW, nightly) voter weights. Formats: NOTES.md.
 #ifndef LS_TAPEREADER_LOGIC_H
 #define LS_TAPEREADER_LOGIC_H
 #include "TapeReaderText.h"
@@ -39,7 +39,7 @@
 
 namespace tr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
 enum { V_FLOW = 0, V_LEVEL = 1, V_GAMMA = 2, V_TREND = 3, NVOTE = 4 };
 static const char* const VOTE_NAME[NVOTE] = { "FLOW", "LEVEL", "GAMMA", "TREND" };
@@ -118,6 +118,9 @@ inline std::string fileKey(const std::string& s) {
 inline long long fileSig(const std::string& path, long long* mtime = nullptr, long long* size = nullptr) {
     unsigned long long t = 0, frac = 0, sz = 0; long long sec = 0;
 #if defined(_WIN32) && defined(_WINDOWS_)
+#if defined(_MSC_VER)
+#pragma comment(lib, "kernel32.lib")   // (1.0.1 link fix) GetFileAttributesExA
+#endif
     WIN32_FILE_ATTRIBUTE_DATA a;
     if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &a) || (a.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) return -1;
     t = ((unsigned long long)a.ftLastWriteTime.dwHighDateTime << 32) | a.ftLastWriteTime.dwLowDateTime;
@@ -181,6 +184,78 @@ inline double atrOf(const std::vector<Bar>& B, int k, int n = 20) {
 // ---- levels (key + MenthorQ + touch odds + gamma nodes) ----------------------------------------------------------------------
 struct Level { std::string name, kind; double px = 0; std::string odds; bool q = true; };   // odds "34" (percent), q = not proven
 struct GNode { double px = 0, g = 0; };
+// (1.0.1, DEX audit 2026-10-13) the GAMMA voter's feed. LRA-Dealer NODE rows carry the synthetic gamma column g and MenthorQ's own
+// net GEX $ (usd). In ES / NQ cash hours dealer_irt writes the SPX / QQQ index book with g = 0 on every row and only usd filled, so a
+// g-only read was blind. Rule: g when any row has g != 0, else usd (same sign: + = long gamma); neither -> GAMMA abstains ("?").
+// Freshness is the DATA's own time (ASOF, or the index book's SRC time when older), not the file's save time: older than 15 min in
+// RTH (weekdays) -> GAMMA abstains, "stale 18h"; outside RTH the old 18 h allowance stays.
+enum { GF_OK = 0, GF_NONE = 1, GF_STALE = 2 };
+struct DealerNodeIn { double px = 0, g = 0, usd = 0; bool hasUsd = false; };
+struct GammaFeed { int state = GF_OK; bool fromUsd = false; long long ageS = -1; std::vector<GNode> nodes; };
+static const long long GAMMA_RTH_MAX_S = 15 * 60, GAMMA_OFF_MAX_S = 18 * 3600;
+// the data's CT time (civil-day seconds, the bars' clock) from ASOF|<sec of day>|<yyyy-mm-dd> and SRC|..|..|..|<HH:MM>; -1 = unknown
+// (1.0.1, MQG100) BOOKASOF|<CT sec-of-day>|<yyyy-mm-dd> = when the strike grid behind the file was taken (ASOF is the BUILD time:
+// the bridge rebuilds every few minutes from whatever grid it has). "BOOKASOF||" = no grid at all.
+// Returns the CT time, BOOK_NONE when the row is there but empty / garbled, BOOK_ABSENT when the file has no such row (older writer).
+static const long long BOOK_ABSENT = -2, BOOK_NONE = -1;
+inline long long parseBookAsof(const std::vector<std::string>& L) {
+    long long r = BOOK_ABSENT;
+    for (size_t i = 0; i < L.size(); ++i) {
+        if (L[i].compare(0, 9, "BOOKASOF|") != 0) continue;
+        const std::vector<std::string> c = split(L[i], '|');
+        long long so = -1; int y = 0, mo = 0, d = 0; char tail = 0;
+        if (c.size() >= 3 && parseWhole(c[1], 0, 86399, so) && std::sscanf(c[2].c_str(), "%d-%d-%d%c", &y, &mo, &d, &tail) == 3 &&
+            y >= 2000 && y <= 2200 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) r = civilDays(y, (unsigned)mo, (unsigned)d) * 86400LL + so;
+        else r = BOOK_NONE;
+    }
+    return r;
+}
+// bookCt: BOOKASOF (see above). Present -> the data time is the book's time (and the index book's SRC time when older); present but
+// empty -> unknown (-1, GAMMA abstains); absent -> ASOF as before.
+inline long long dealerDataCt(int y, int mo, int d, double asofSo, const std::string& srcAt, long long bookCt = BOOK_ABSENT) {
+    if (bookCt == BOOK_NONE) return -1;
+    if (asofSo < 0 || asofSo >= 86400 || y < 2000 || y > 2200 || mo < 1 || mo > 12 || d < 1 || d > 31) return bookCt >= 0 ? bookCt : -1;
+    const long long day = civilDays(y, (unsigned)mo, (unsigned)d) * 86400LL;
+    long long t = bookCt >= 0 ? bookCt : day + (long long)asofSo;
+    int hh = -1, mm = -1; char tail = 0;
+    if (srcAt.size() >= 4 && srcAt.size() <= 5 && std::sscanf(srcAt.c_str(), "%d:%d%c", &hh, &mm, &tail) == 2 && hh >= 0 && hh < 24 && mm >= 0 && mm < 60) {
+        long long s = day + hh * 3600LL + mm * 60LL;
+        if (s > day + (long long)asofSo + 600) s -= 86400;   // the book's time is just before midnight of the previous day
+        if (s < t) t = s;                     // the older of the two is when the gamma values were taken
+    }
+    return t;
+}
+inline bool weekdayCt(long long ct) { const long long days = (ct >= 0 ? ct : ct - 86399) / 86400; const long long w = ((days % 7) + 7 + 4) % 7; return w >= 1 && w <= 5; }   // 1970-01-01 was a Thursday
+// how old the gamma data may be at nowCt: 15 min inside RTH on a weekday, else 18 h
+inline long long gammaMaxAgeS(long long nowCt, int rthOpenMin, int rthCloseMin) {
+    const long long sod = ((nowCt % 86400) + 86400) % 86400;
+    const bool rth = rthOpenMin >= 0 && rthCloseMin > rthOpenMin && weekdayCt(nowCt) && sod >= rthOpenMin * 60LL && sod < rthCloseMin * 60LL;
+    return rth ? GAMMA_RTH_MAX_S : GAMMA_OFF_MAX_S;
+}
+inline std::string ageText(long long s) {
+    if (s < 0) return "?";
+    if (s < 3600) return std::to_string(std::max(1LL, s / 60)) + "m";
+    if (s < 48 * 3600) return std::to_string(s / 3600) + "h";
+    return std::to_string(s / 86400) + "d";
+}
+// dataCt < 0 = no data time in the file -> abstain; a data time more than 10 min ahead of the clock -> abstain
+inline GammaFeed gammaFeed(bool have, const std::vector<DealerNodeIn>& rows, long long dataCt, long long nowCt, int rthOpenMin, int rthCloseMin) {
+    GammaFeed F;
+    if (!have || dataCt < 0 || nowCt <= 0 || dataCt - nowCt > 600) { F.state = GF_NONE; return F; }
+    F.ageS = std::max(0LL, nowCt - dataCt);
+    if (F.ageS > gammaMaxAgeS(nowCt, rthOpenMin, rthCloseMin)) { F.state = GF_STALE; return F; }
+    bool anyG = false, anyUsd = false;
+    for (const DealerNodeIn& r : rows) { if (r.px > 0 && finite(r.g) && r.g != 0) anyG = true; if (r.px > 0 && r.hasUsd && finite(r.usd) && r.usd != 0) anyUsd = true; }
+    if (!anyG && !anyUsd) { F.state = GF_NONE; return F; }
+    F.fromUsd = !anyG;
+    for (const DealerNodeIn& r : rows) {
+        if (r.px <= 0) continue;
+        const double v = anyG ? r.g : (r.hasUsd ? r.usd : 0.0);
+        if (!finite(v)) continue;
+        GNode n; n.px = r.px; n.g = v; F.nodes.push_back(n);
+    }
+    return F;
+}
 struct Touch { std::string code; double px = 0; std::string p1; bool proven = false; };
 // LRA-KeyLevels-<MKT>.csv: "KEYLV,1,<unix>" then L|name|price|pivot. false = garbled
 inline bool parseKeyLevels(const std::vector<std::string>& L, long long& at, std::vector<Level>& out) {
@@ -296,7 +371,7 @@ inline void parseOf(const std::vector<std::string>& L, OfSnap& S) {
         for (size_t k = 0; k < head.size() && ok; ++k) {
             const std::string& h = head[k]; const std::string& f = c[k]; long long v;
             if (h == "bar_time") { ok = parseWhole(f, 1, 9000000000000LL, v); r.t = (unsigned long long)v; }
-            else if (h == "letters_left" || h == "letters_right") { const int s = h == "letters_left" ? 0 : 1; ok = f.size() <= 3; for (char ch : f) if (ch != 'S' && ch != 'L' && ch != 'R') ok = false; r.let[s] = f; }
+            else if (h == "letters_left" || h == "letters_right") { const int s = h == "letters_left" ? 0 : 1; ok = f.size() <= 3; std::string o; for (char ch : f) { if (ch == 'R') ch = 'I'; if (ch != 'S' && ch != 'L' && ch != 'I') ok = false; o += ch; } r.let[s] = o; }   // (1.0.1) refill / iceberg = I; legacy R (old logs) = I
             else if (h == "spike_left" || h == "spike_right") { ok = f == "0" || f == "1"; r.spike[h == "spike_left" ? 0 : 1] = f == "1"; }
             else if (h == "implication") { if (f == "bull") r.impl = BULL; else if (f == "bear") r.impl = BEAR; else if (f == "neutral") r.impl = NEUTRAL; else ok = false; }
             else if (h == "level") { ok = f.size() <= 40; r.level = f; }
@@ -355,7 +430,8 @@ inline void parseLiqStatus(const std::vector<std::string>& L, LiqSnap& S) {
 }
 
 // ---- HOD / LOD (lsHodLod 2.0.x status) -----------------------------------------------------------------------------------------
-struct HodLodSnap { bool ok = false; std::string first; double pIn = -1; int usedPct = -1; bool projOk = false, projUp = false; double projPx = 0; bool news = false; };
+struct HodLodSnap { bool ok = false; std::string first; double pIn = -1; int usedPct = -1; bool projOk = false, projUp = false; double projPx = 0; bool news = false;
+                   double erPts = -1, rangePts = -1; };   // (1.0.1) erPts = the live expected RTH range (HLE_VALUES range=), rangePts = printed
 inline void parseHodLod(const std::vector<std::string>& L, HodLodSnap& H) {
     H = HodLodSnap();
     for (size_t i = 0; i < L.size(); ++i) {
@@ -363,7 +439,10 @@ inline void parseHodLod(const std::vector<std::string>& L, HodLodSnap& H) {
         if (c.empty()) continue;
         if (c[0] == "FIRST" && c.size() >= 2) { H.first = c[1] == "LOD" || c[1] == "HOD" ? c[1] : std::string(); H.ok = true; }
         else if (c[0] == "READ_VALUES" && c.size() >= 2) { double p; if (parseReal(c[1], p) && p >= 0 && p <= 1) H.pIn = p; }
-        else if (c[0] == "RANGE" && c.size() >= 2) { const std::string& u = c.back(); long long p; if (u.size() >= 2 && u.back() == '%' && parseWhole(u.substr(0, u.size() - 1), 0, 1000, p)) H.usedPct = (int)p; }
+        else if (c[0] == "HLE_VALUES") {   // "sources=63 stage=270 range=2.26059 lo=..." (space separated inside the field)
+            for (size_t k = 1; k < c.size(); ++k) { std::istringstream ss(c[k]); std::string w;
+                while (ss >> w) if (w.compare(0, 6, "range=") == 0) { double r; if (parseReal(w.substr(6), r) && r > 0) H.erPts = r; } } }
+        else if (c[0] == "RANGE" && c.size() >= 2) { { double r; if (parseReal(c[1], r) && r >= 0) H.rangePts = r; } const std::string& u = c.back(); long long p; if (u.size() >= 2 && u.back() == '%' && parseWhole(u.substr(0, u.size() - 1), 0, 1000, p)) H.usedPct = (int)p; }
         else if (c[0] == "PROJ" && c.size() >= 3 && (c[1] == "HOD" || c[1] == "LOD")) { double p; if (parseReal(c[2], p) && p > 0) { H.projOk = true; H.projUp = c[1] == "HOD"; H.projPx = p; } }
         else if (c[0] == "EVENTS") { for (size_t k = 1; k < c.size(); ++k) if (c[k] == "news=1" || c[k] == "fomc=1") H.news = true; }
     }
@@ -407,28 +486,65 @@ inline Params parseParams(bool exists, const std::vector<std::string>& L, const 
     if (!sawMarket) return bad("no MARKET");
     Q.src = "file"; return Q;
 }
-// LRA-Turns-<MKT>.csv: TURN,<level_type>,<context>,<up|down>,<p_turn>,<p_swing>,<q50>,<q75>,<n_turn>,<n_noturn>,<proven|?|learning>
-struct TurnRow { std::string type, ctx, dir, status; double pTurn = -1, pSwing = -1, q50 = -1, q75 = -1; long long nTurn = 0, nNo = 0; };
-struct TurnsSnap { bool ok = false; int swingTicks = 20; long long asof = 0; std::vector<TurnRow> rows; std::string why; };
+// LRA-Turns-<MKT>.csv, file VERSION 2 (lra.turns, data/turns/README.md; 1.0.1 replaces the old-draft VERSION,1 TURN parser):
+//   VERSION,2   MARKET,<mkt>   ASOF,<YYYY-MM-DD HH:MM>   SWING,<def>,<swing frac>,<turn frac>   UNIT,xER   ER_TICKS,<ticks>,<date>
+//   X,<xER>,<ticks at ER_TICKS>   COLS,<names...>   ROW,<values in COLS order>  ('#' = comment, empty field = no value)
+// ROW buckets: kind base / level / level_tod / level_sig; level LonHI .. PFL, MQ:<code>, none, all; context all / open60 / to11 /
+// after11 / sweep rb abs mq dpA ex ...; side long (a low that may turn up) / short. Fields are read by their COLS name, so added
+// columns never break it. q25..q90 are swing quantiles in xER (share of the day's expected RTH range); *_t = ticks at ER_TICKS.
+struct TurnRow {
+    std::string kind, level, ctx, dir, status;                    // dir: long -> "up", short -> "down"
+    long long n = 0; double pTurn = -1, pSwing = -1, pSwingX = -1, q50 = -1, q50t = -1;
+};
+struct TurnsSnap { bool ok = false; double xXer = -1, xTicks = -1, erTicks = -1; std::string asof, swingDef; std::vector<TurnRow> rows; std::string why; };
+static const size_t TURNS_MAX_ROWS = 5000, TURNS_MAX_LINE = 2000;
 inline TurnsSnap parseTurns(bool exists, const std::vector<std::string>& L, const std::string& market) {
     TurnsSnap T; if (!exists) { T.why = "missing"; return T; }
-    bool v = false, m = false;
+    auto bad = [&](const std::string& why) { TurnsSnap B; B.why = "garbled: " + why; return B; };
+    bool v = false, m = false, unit = false, x = false; std::vector<std::string> cols; int iKind = -1, iLvl = -1, iCtx = -1, iSide = -1, iN = -1, iPt = -1, iPs = -1, iPx = -1, iQ = -1, iQt = -1, iSt = -1;
+    // an empty field = no value (-1); anything else must be a finite number in [lo, hi]
+    auto num = [](const std::string& t, double lo, double hi, double& out) { out = -1; if (t.empty()) return true; double d; if (!parseReal(t, d) || d < lo || d > hi) return false; out = d; return true; };
     for (size_t i = 0; i < L.size(); ++i) {
-        std::string ln = trim(L[i]); if (ln.empty() || ln[0] == '#') continue;
+        if (L[i].size() > TURNS_MAX_LINE) return bad("line " + std::to_string(i + 1) + " too long");
+        const std::string ln = trim(L[i]); if (ln.empty() || ln[0] == '#') continue;
         const std::vector<std::string> c = split(ln, ',');
-        if (!v) { if (c.size() != 2 || c[0] != "VERSION" || c[1] != "1") { T.why = "garbled: VERSION,1 must be first"; return T; } v = true; continue; }
-        if (c[0] == "MARKET") { if (c.size() != 2 || c[1] != market) { T.why = "garbled: wrong MARKET"; return T; } m = true; continue; }
-        if (c[0] == "ASOF") { if (c.size() != 2 || !parseWhole(c[1], 1, 32503680000LL, T.asof)) { T.why = "garbled: ASOF"; return T; } continue; }
-        if (c[0] == "SWING_TICKS") { long long x; if (c.size() != 2 || !parseWhole(c[1], 1, 10000, x)) { T.why = "garbled: SWING_TICKS"; return T; } T.swingTicks = (int)x; continue; }
-        if (c[0] == "TURN") {
-            TurnRow r;
-            if (c.size() != 11 || (c[3] != "up" && c[3] != "down") || !parseReal(c[4], r.pTurn) || !parseReal(c[5], r.pSwing) || !parseReal(c[6], r.q50) || !parseReal(c[7], r.q75) ||
-                !parseWhole(c[8], 0, 100000000, r.nTurn) || !parseWhole(c[9], 0, 100000000, r.nNo) || r.pTurn < 0 || r.pTurn > 1 || r.pSwing < 0 || r.pSwing > 1 ||
-                (c[10] != "proven" && c[10] != "?" && c[10] != "learning")) { T.why = "garbled: TURN line " + std::to_string(i + 1); return T; }
-            r.type = c[1]; r.ctx = c[2]; r.dir = c[3]; r.status = c[10]; T.rows.push_back(r); continue;
+        if (!v) { if (c.size() != 2 || c[0] != "VERSION" || c[1] != "2") return bad("VERSION,2 must be first"); v = true; continue; }
+        if (c[0] == "MARKET") { if (c.size() != 2 || c[1] != market) return bad("wrong MARKET"); m = true; continue; }
+        if (c[0] == "ASOF") { if (c.size() != 2 || c[1].size() > 32) return bad("ASOF"); T.asof = c[1]; continue; }
+        if (c[0] == "SWING") { if (c.size() >= 2) T.swingDef = c[1]; continue; }
+        if (c[0] == "UNIT") { if (c.size() != 2 || c[1] != "xER") return bad("UNIT must be xER"); unit = true; continue; }
+        if (c[0] == "ER_TICKS") { double d; if (c.size() < 2 || !num(c[1], 0.001, 1e7, d)) return bad("ER_TICKS"); T.erTicks = d; continue; }
+        if (c[0] == "X") { double a, b; if (c.size() < 3 || c[1].empty() || !num(c[1], 0.001, 5, a) || !num(c[2], 0, 1e7, b)) return bad("X"); T.xXer = a; T.xTicks = b; x = true; continue; }
+        if (c[0] == "COLS") {
+            cols.assign(c.begin() + 1, c.end());
+            for (size_t k = 0; k < cols.size(); ++k) { const std::string& h = cols[k]; const int j = (int)k + 1;
+                if (h == "kind") iKind = j; else if (h == "level") iLvl = j; else if (h == "context") iCtx = j; else if (h == "side") iSide = j; else if (h == "n") iN = j;
+                else if (h == "p_turn") iPt = j; else if (h == "p_swing") iPs = j; else if (h == "p_swing_x") iPx = j; else if (h == "q50") iQ = j; else if (h == "q50_t") iQt = j; else if (h == "status") iSt = j; }
+            if (iKind < 0 || iLvl < 0 || iCtx < 0 || iSide < 0 || iN < 0 || iPt < 0 || iPx < 0 || iSt < 0) return bad("COLS lacks kind / level / context / side / n / p_turn / p_swing_x / status");
+            continue;
         }
+        if (c[0] == "ROW") {
+            if (cols.empty()) return bad("ROW before COLS");
+            if (c.size() != cols.size() + 1) return bad("ROW line " + std::to_string(i + 1) + " has " + std::to_string(c.size() - 1) + " fields, COLS " + std::to_string(cols.size()));
+            if (T.rows.size() >= TURNS_MAX_ROWS) return bad("too many rows");
+            TurnRow r; r.kind = c[(size_t)iKind]; r.level = c[(size_t)iLvl]; r.ctx = c[(size_t)iCtx]; r.status = c[(size_t)iSt];
+            const std::string& sd = c[(size_t)iSide];
+            if (sd != "long" && sd != "short") return bad("ROW line " + std::to_string(i + 1) + " side");
+            r.dir = sd == "long" ? "up" : "down";
+            if (r.status != "learning" && r.status != "?" && r.status != "proven") return bad("ROW line " + std::to_string(i + 1) + " status");
+            if (r.kind.empty() || r.level.empty() || r.ctx.empty() || r.kind.size() > 40 || r.level.size() > 40 || r.ctx.size() > 40) return bad("ROW line " + std::to_string(i + 1) + " bucket");
+            double nn;
+            if (!num(c[(size_t)iN], 0, 1e9, nn) || !num(c[(size_t)iPt], 0, 1, r.pTurn) || !num(c[(size_t)iPx], 0, 1, r.pSwingX) ||
+                (iPs >= 0 && !num(c[(size_t)iPs], 0, 1, r.pSwing)) || (iQ >= 0 && !num(c[(size_t)iQ], 0, 100, r.q50)) || (iQt >= 0 && !num(c[(size_t)iQt], 0, 1e7, r.q50t)))
+                return bad("ROW line " + std::to_string(i + 1) + " value");
+            r.n = nn < 0 ? 0 : (long long)nn;
+            T.rows.push_back(r); continue;
+        }
+        // unknown lines: forward compatible
     }
-    if (!v || !m) { T.why = "garbled: no VERSION / MARKET"; return T; }
+    if (!v || !m) return bad("no VERSION / MARKET");
+    if (!unit) return bad("no UNIT,xER");
+    if (!x) return bad("no X");
     T.ok = true; T.why = "file, " + std::to_string(T.rows.size()) + " rows"; return T;
 }
 // the level-type bucket of a level name (the study's buckets)
@@ -444,15 +560,52 @@ inline std::string levelType(const std::string& name, const std::string& kind) {
     if (has("CR") || has("PS") || has("HVL") || has("GW") || has("G") || kind == "gamma") return "gamma";
     return "other";
 }
-// the most specific row for (type, ctx, dir); nullptr = none
-inline const TurnRow* findTurn(const TurnsSnap& T, const std::string& type, const std::string& ctx, const std::string& dir) {
-    if (!T.ok) return nullptr;
-    const std::string tt[4] = { type, type, "any", "any" }, cc[4] = { ctx, "any", ctx, "any" };
-    for (int k = 0; k < 4; ++k) for (const TurnRow& r : T.rows) if (r.type == tt[k] && r.ctx == cc[k] && r.dir == dir) return &r;
-    return nullptr;
+// the Reader's level -> the ledger's level name: key levels by name (LonHI LonLO ONH ONL PDH PDL PFH PFL), gamma levels as MQ:<code>;
+// a level the ledger does not bucket (PWH, HrLO ...) -> "" (the base row only)
+inline std::string turnLevel(const std::string& name, const std::string& kind) {
+    static const char* const KEY[] = { "LonHI", "LonLO", "ONH", "ONL", "PDH", "PDL", "PFH", "PFL" };
+    for (const char* k : KEY) if (name == k) return name;
+    if (levelType(name, kind) == "gamma" && !name.empty()) return "MQ:" + name;
+    return std::string();
 }
-// display state of a row: 0 learning (no number), 1 '?', 2 proven
-inline int oddsState(const TurnRow* r) { if (!r || r->status == "learning" || r->nTurn < 20 || r->nNo < 20) return 0; return r->status == "proven" ? 2 : 1; }
+// the Reader's footprint context -> the ledger's level_sig context (README: A -> dpA, Ex -> ex; AE has no bucket yet)
+inline std::string turnCtx(const std::string& ctx) { return ctx == "A" ? "dpA" : ctx == "Ex" ? "ex" : std::string(); }
+// time-of-day bucket of a candle end (CT sec): open60 = the first 60 min of RTH, to11 = until 11:00, after11; "" outside RTH
+inline std::string turnTod(long long t, int rthOpenMin, int rthCloseMin) {
+    if (rthOpenMin < 0 || rthCloseMin <= rthOpenMin) return std::string();
+    const long long sod = ((t % 86400) + 86400) % 86400;
+    if (sod <= rthOpenMin * 60LL || sod > rthCloseMin * 60LL) return std::string();
+    if (sod <= (rthOpenMin + 60) * 60LL) return "open60";
+    return sod <= 11 * 3600LL ? "to11" : "after11";
+}
+// the most specific bucket that exists decides (its status may be learning): level_sig (level + footprint context) -> level_tod
+// (level + time of day) -> level (all) -> base. nullptr = none
+inline const TurnRow* findTurn(const TurnsSnap& T, const std::string& level, const std::string& ctx, const std::string& dir, const std::string& tod) {
+    if (!T.ok) return nullptr;
+    auto get = [&](const char* kind, const std::string& lv, const std::string& cx) -> const TurnRow* {
+        if (lv.empty() || cx.empty()) return nullptr;
+        for (const TurnRow& r : T.rows) if (r.kind == kind && r.level == lv && r.ctx == cx && r.dir == dir) return &r;
+        return nullptr; };
+    const TurnRow* r = get("level_sig", level, turnCtx(ctx));
+    if (!r) r = get("level_tod", level, tod);
+    if (!r) r = get("level", level, "all");
+    if (!r) r = get("base", "all", "all");
+    return r;
+}
+// display state of a row: 0 learning (no number), 1 '?', 2 proven. Needs n >= 20, a status past learning and both odds.
+inline int oddsState(const TurnRow* r) { if (!r || r->status == "learning" || r->n < 20 || r->pTurn < 0 || r->pSwingX < 0) return 0; return r->status == "proven" ? 2 : 1; }
+// "Swing X+ ticks": X (xER, the X line) x the live expected range in ticks; else X's ticks at ER_TICKS. -1 = unknown
+inline long long swingXTicks(const TurnsSnap& T, double liveErTicks) {
+    if (T.xXer > 0 && liveErTicks > 0) return (long long)std::floor(T.xXer * liveErTicks + 0.5);
+    if (T.xTicks > 0) return (long long)std::floor(T.xTicks + 0.5);
+    return -1;
+}
+// the row's median swing in ticks: q50 (xER) x the live expected range; else q50_t. -1 = unknown
+inline long long swingMedTicks(const TurnRow& r, double liveErTicks) {
+    if (r.q50 >= 0 && liveErTicks > 0) return (long long)std::floor(r.q50 * liveErTicks + 0.5);
+    if (r.q50t >= 0) return (long long)std::floor(r.q50t + 0.5);
+    return -1;
+}
 inline std::string pct(double p) { return std::to_string((int)std::floor(p * 100 + 0.5)) + "%"; }
 
 // ---- the read -----------------------------------------------------------------------------------------------------------------
@@ -465,6 +618,7 @@ struct Inputs {
     std::vector<Level> levels;                                    // merged key + MenthorQ (with odds)
     std::vector<Level> mqRaw;                                     // MenthorQ levels as published (gamma names: PS / CR / HVL)
     std::vector<GNode> gnodes;                                    // Dealer NODE strikes (same contract only)
+    int gammaState = GF_OK; long long gammaAgeS = -1;             // (1.0.1) GF_NONE -> GAMMA abstains "?", GF_STALE -> "stale <age>"
     const HodLodSnap* hl = nullptr;
     const TurnsSnap* turns = nullptr;
     int trend = 0; bool trendReady = false;                       // vtl::level (-2..+2)
@@ -481,6 +635,7 @@ struct Read {
     std::string buyers, sellers, levels; int buyImpl = NEUTRAL, sellImpl = NEUTRAL;
     std::string why[NVOTE];                                       // one word per voter (status / log)
     bool intrabar = false; int intraUpdates = 0; std::string inputs;
+    std::string turnRow;                                          // (1.0.1) the LRA-Turns bucket used + its median swing (status only)
 };
 
 struct LevelPlay { bool on = false; bool support = true; bool held = true; bool swept = false; Level lv; double ext = 0; };
@@ -588,7 +743,7 @@ inline Read compute(const Inputs& I) {
         } else {                        // stacking: bids added = buyers (bull), offers added = sellers (bear)
             const int side = r->impl == BULL ? 0 : 1; const std::string sfx = side == 0 ? "_b" : "_a";
             const double x = ratioAfter(r->nums, side == 0 ? "BidStack " : "AskStack "), rx = ratioAfter(r->nums, side == 0 ? "BidRefill " : "AskRefill ");
-            const bool Rl = r->let[side].find('R') != std::string::npos || rx >= 2.0, Ad = x >= 2.0 || r->spike[side];
+            const bool Rl = r->let[side].find('I') != std::string::npos || rx >= 2.0, Ad = x >= 2.0 || r->spike[side];
             const long long big = r->let[side].find('L') != std::string::npos ? num(*r, "add_max" + sfx) : 0, ice = num(*r, "iceberg" + sfx);
             const long long iceShown = num(*r, "ice_shown" + sfx), iceTraded = num(*r, "ice_traded" + sfx);   // OrderFlowFeed 38-number record
             trt::Args a = { {"book", side == 0 ? "bids" : "offers"}, {"x", x >= 0 ? ratio(x) : std::string("high")}, {"rx", rx >= 0 ? ratio(rx) : std::to_string(num(*r, "refill_n" + sfx))},
@@ -610,8 +765,11 @@ inline Read compute(const Inputs& I) {
     {
         double gmax = 0; for (const GNode& g : I.gnodes) gmax = std::max(gmax, std::fabs(g.g));
         double bd = 2 * band + 1e-9;
-        for (const GNode& g : I.gnodes) { if (gmax <= 0 || std::fabs(g.g) < 0.25 * gmax) continue; const double d = std::fabs(g.px - c); if (d <= bd) { bd = d; G = &g; } }
-        if (G) {
+        if (I.gammaState != GF_OK) bd = -1;                          // (1.0.1) abstain: no node is read
+        for (const GNode& g : I.gnodes) { if (bd < 0 || gmax <= 0 || std::fabs(g.g) < 0.25 * gmax) continue; const double d = std::fabs(g.px - c); if (d <= bd) { bd = d; G = &g; } }
+        if (I.gammaState == GF_STALE) R.why[V_GAMMA] = "stale " + ageText(I.gammaAgeS);
+        else if (I.gammaState == GF_NONE) R.why[V_GAMMA] = "? no gamma data";
+        else if (G) {
             for (const Level& v : I.mqRaw) if (std::fabs(v.px - G->px) <= tick * 0.5 && levelType(v.name, v.kind) == "gamma") { gName = shortName(v.name); break; }
             if (gName.empty()) for (const Level& v : I.levels) if (std::fabs(v.px - G->px) <= tick * 0.5 && levelType(v.name, v.kind) == "gamma") { gName = v.name; break; }
             if (gName.empty()) gName = "G";
@@ -635,14 +793,20 @@ inline Read compute(const Inputs& I) {
     if (LP.on && LP.held) {
         const std::string dir = LP.support ? "up" : "down";
         const std::string ctx = AE ? "AE" : A ? "A" : EX ? "Ex" : "none";
-        const TurnRow* tr0 = I.turns ? findTurn(*I.turns, levelType(LP.lv.name, LP.lv.kind), ctx, dir) : nullptr;
-        const int st = oddsState(tr0);
+        const TurnRow* tr0 = I.turns ? findTurn(*I.turns, turnLevel(LP.lv.name, LP.lv.kind), ctx, dir, turnTod(bk.t, I.rthOpen, I.rthClose)) : nullptr;
+        int st = oddsState(tr0);
+        // the live expected range in ticks (lsHodLod's HLE, never below the range already printed, as the ledger's exp_range)
+        const double erT = I.hl && I.hl->erPts > 0 ? std::max(I.hl->erPts, I.hl->rangePts) / tick : -1;
+        const long long xT = I.turns ? swingXTicks(*I.turns, erT) : -1;
+        if (xT <= 0) st = 0;
+        if (tr0) R.turnRow = tr0->kind + "/" + tr0->level + "/" + tr0->ctx + "/" + tr0->dir + " n " + std::to_string(tr0->n) + " " + tr0->status +
+                             ", median swing " + std::to_string(swingMedTicks(*tr0, erT)) + " ticks, ER " + (erT > 0 ? std::to_string((long long)std::floor(erT + 0.5)) + " live" : "file");
         R.centreDir = LP.support ? 1 : -1;
         if (st == 0) centre.push_back(trt::text("turn.learning"));
         else {
             const std::string q = st == 1 ? "?" : "";
             centre.push_back(trt::fill("turn", { {"dir", dir}, {"lvl", LP.lv.name}, {"p", pct(tr0->pTurn) + q} }));
-            R.swing = trt::fill("swing", { {"x", std::to_string(I.turns->swingTicks)}, {"p", pct(tr0->pSwing) + q} });
+            R.swing = trt::fill("swing", { {"x", std::to_string(xT)}, {"p", pct(tr0->pSwingX) + q} });   // P(swing >= X) at X
             centre.push_back(R.swing);
         }
         R.turn = centre[0];

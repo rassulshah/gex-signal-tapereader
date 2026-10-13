@@ -1,5 +1,5 @@
 /********************************************************************************
- *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.0.0  (2026-10-13)
+ *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.0.1  (2026-10-13)
  *
  *  Rassul 2026-10-13: "add a reader box. call it tape reader ... give your read on what buyers and sellers are doing by reading the
  *  indicators as well as other things like levels, gamma, liquidity" / "split it up by buyers and sellers" / "the turn up swing and
@@ -16,12 +16,19 @@
  *  Every other indicator keeps its own local read; this box reads their files (TapeReaderLogic.h lists them) and writes one read.
  *  Four voters (FLOW, LEVEL, GAMMA, TREND), each bullish / bearish / neutral at the candle; per-market weights from the nightly
  *  LRA-TapeReader-<MKT>.csv (equal by default); the count shown is the simple agree count. Turn / swing odds from the nightly
- *  LRA-Turns-<MKT>.csv ("Turn odds learning" until a row has n >= 20 each side; '?' until proven).
+ *  LRA-Turns-<MKT>.csv, file VERSION 2 ("Turn odds learning" until the bucket has n >= 20 and is past learning; '?' until proven).
  *  TIMING: recomputed at each candle close (finalised when the panes' rows for that candle have landed, at most 5 s later) and
- *  intrabar only when a new A / AE (Delta Profile) or S / R (order-flow panes) appears at a level - no other intrabar change.
+ *  intrabar only when a new A / AE (Delta Profile) or S / I (order-flow panes) appears at a level - no other intrabar change.
  *  HOVER (TRACK_MOUSE): the read logged for the candle under the mouse; otherwise the live read. Never looks ahead.
  *  LOG: every finalised candle's read once to lsFlexLevels\TapeReader\<MKT>-<CONTRACT>-<spb>-<YYYYMMDD>.csv (the nightly scores it);
  *  status lsFlexLevels\TapeReader.status-<MKT>.txt (version, inputs found / stale, last read), atomic tmp -> bak -> rename.
+ *  1.0.1 (2026-10-13, DEX audit, bug fixes only, no look change): GAMMA reads MenthorQ net GEX $ when the Dealer file's gamma column
+ *  is 0 on every row (the SPX / QQQ index book in ES / NQ cash hours), else abstains ("?"); the Dealer file is judged by its DATA
+ *  time - BOOKASOF (the grid's own time) when present, else ASOF; the SRC book time when older - at most 15 min old in RTH (18 h
+ *  outside), else GAMMA abstains ("stale 18h" in the log / status). LINK FIX: #pragma comment(lib) user32 (GetCursorPos /
+ *  WindowFromPoint) + kernel32 - his gex-build links only the SDK lib, BidAskStats 1.3.0 failed LNK2019 on the same two calls.
+ *  LRA-Turns file VERSION 2 (COLS / ROW by name, UNIT xER, long/short, level names, p_swing_x, X x the live expected range).
+ *  Refill / iceberg letter is I (was R; R is now stop run): old logs' R is read as I; the box says "reloading (I 5.2x)".
  ********************************************************************************/
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -53,7 +60,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.0.0"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.0.1"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -74,6 +81,13 @@ static int renameFile(const char* a, const char* b) { if (tr_test_fail_rename > 
 static long long steadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static long long wallNow() { return (long long)std::time(nullptr); }
 #if defined(_WIN32)
+// (1.0.1 link fix, 2026-10-13) his gex-build links no default Win32 libs beyond the CRT: BidAskStats 1.3.0 failed LNK2019 on exactly
+// these two. Every Win32 API this file calls, by import lib: user32 = GetCursorPos / WindowFromPoint; kernel32 = CreateDirectoryA (makeDir) /
+// GetFileAttributesExA (TapeReaderLogic fileSig). No gdi32: all drawing goes through the IRT SDK.
+#if defined(_MSC_VER)                     // cl (his gex-build); MinGW / clang-gnu ignore #pragma comment
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "kernel32.lib")
+#endif
 static void* cursorWindow() { POINT p; if (!GetCursorPos(&p)) return NULL; return (void*)WindowFromPoint(p); }
 #else
 static void* cursorWindow() { return NULL; }
@@ -125,7 +139,7 @@ struct TRState {
     // inputs
     Src sDp, sOf[tr::NSRC], sLiqZ, sLiqSt, sKey, sMq, sTouch, sDealer, sHl, sTurns, sParams, sDealerSt, sDeltaSt;
     tr::DeltaSnap dp; tr::OfSnap of[tr::NSRC]; tr::LiqSnap liq; std::vector<tr::Level> key, mq; std::vector<tr::Touch> touch;
-    long long keyAt = 0; bool mqStale = false; std::string mqSym; dl::Data dealer; tr::HodLodSnap hl; tr::TurnsSnap turns; tr::Params P;
+    long long keyAt = 0; bool mqStale = false; std::string mqSym; dl::Data dealer; long long dealerBook = tr::BOOK_ABSENT; tr::HodLodSnap hl; tr::TurnsSnap turns; tr::Params P;
     int profReach = 150, dltW = 50; bool dltLeft = false;
     // reads
     tr::Read live; bool haveLive = false; unsigned long long finalRaw = 0, pendingRaw = 0; long long pendingSince = -1; bool firstFinal = true;
@@ -169,6 +183,13 @@ public:
     bool mouseLeft(TRState& S);
     int textW(const std::string& s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s.c_str(), -1); }
     void execute(const tr::Layout& L);
+    long long nowCtSec() {   // (1.0.1) the wall clock on the bars' CT clock
+#if defined(TR_TEST_CLOCK)
+        return ctOf((unsigned long long)tr_test_unix);
+#else
+        return ctOf((unsigned long long)currentDate());
+#endif
+    }
     long long ctOf(unsigned long long raw) {
         struct tm t; std::memset(&t, 0, sizeof(t));
         if (!getLocaltime((RTDATE)raw, &t) || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1 || t.tm_mday > 31) return 0;
@@ -302,8 +323,8 @@ void TapeReader::loadInputs(TRState& S, long long nowMs)
         else if (S.sTouch.res != tr::RD_TORN) S.touch.clear();
     }
     if (check(S.sDealer, nowMs, CHECK_SLOW_MS)) {
-        if (readInto(S.sDealer, 512 * 1024, false, false, L)) { dl::Data D; for (size_t i = 0; i < L.size(); ++i) dl::parseLine(D, L[i]); S.dealer = D; S.sDealer.good = true; S.sDealer.note = std::to_string(D.nodes.size()) + " nodes" + (D.chartSym.empty() ? "" : ", SYMBOL " + D.chartSym); }
-        else if (S.sDealer.res != tr::RD_TORN) S.dealer = dl::Data();
+        if (readInto(S.sDealer, 512 * 1024, false, false, L)) { dl::Data D; for (size_t i = 0; i < L.size(); ++i) dl::parseLine(D, L[i]); S.dealer = D; S.dealerBook = tr::parseBookAsof(L); S.sDealer.good = true; S.sDealer.note = std::to_string(D.nodes.size()) + " nodes" + (D.chartSym.empty() ? "" : ", SYMBOL " + D.chartSym); }
+        else if (S.sDealer.res != tr::RD_TORN) { S.dealer = dl::Data(); S.dealerBook = tr::BOOK_ABSENT; }
     }
     if (check(S.sHl, nowMs, CHECK_SLOW_MS)) {
         if (readInto(S.sHl, 256 * 1024, false, false, L)) { tr::parseHodLod(L, S.hl); S.sHl.good = S.hl.ok; S.sHl.note = S.hl.ok ? "FIRST " + (S.hl.first.empty() ? std::string("not clear") : S.hl.first) : "no FIRST line"; }
@@ -348,8 +369,15 @@ tr::Inputs TapeReader::inputsFor(TRState& S, int k, std::vector<tr::Bar>& work)
     const bool liqFresh = S.sLiqZ.good && S.liq.at > 0 && now - S.liq.at <= 60 && S.liq.at - now <= 60 && (S.liq.sym.empty() || dl::sameContract(S.symbol, S.liq.sym));
     if (liqFresh) I.liq = &S.liq;
     note("liq", liqFresh, S.sLiqZ, S.sLiqZ.good ? "stale" : "missing");
+    // RTH (CT minutes) first: the GAMMA freshness rule needs it
+    int openMin = 0, closeMin = 0;
+    const bool haveRth = svl::rthOf(S.mkt.c_str(), openMin, closeMin);
+    // (1.0.1) the Dealer file is judged by its DATA time (ASOF / the index book's SRC time), not its save time
+    long long nowCt = nowCtSec();
+    if (nowCt <= 0 && !S.bars.empty()) nowCt = S.bars.back().t;
+    const long long dataCt = S.sDealer.good ? tr::dealerDataCt(S.dealer.y, S.dealer.mo, S.dealer.d, S.dealer.asofSo, S.dealer.srcAt, S.dealerBook) : -1;
+    const bool dealerFresh = S.sDealer.good && dataCt >= 0 && nowCt > 0 && nowCt - dataCt <= tr::GAMMA_OFF_MAX_S;
     // levels: key (<= 18 h), MenthorQ (<= 18 h, same contract as the Dealer file), touch odds
-    const bool dealerFresh = S.sDealer.good && now - S.sDealer.mtime <= 18 * 3600;
     const bool contractOk = S.dealer.chartSym.empty() || dl::sameContract(S.symbol, S.dealer.chartSym);
     I.roll = dealerFresh && !contractOk;
     const bool keyFresh = S.sKey.good && now - S.keyAt <= 18 * 3600 && S.keyAt - now <= 600;
@@ -359,8 +387,15 @@ tr::Inputs TapeReader::inputsFor(TRState& S, int k, std::vector<tr::Bar>& work)
     I.levels = tr::mergeLevels(keyFresh ? S.key : std::vector<tr::Level>(), mqFresh ? S.mq : std::vector<tr::Level>(), touchFresh ? S.touch : std::vector<tr::Touch>(), S.tick);
     note("keylv", keyFresh, S.sKey, S.sKey.good ? "stale" : "missing"); note("mqlv", mqFresh, S.sMq, !contractOk ? "other contract" : S.sMq.good ? "stale" : "missing");
     note("touch", touchFresh, S.sTouch, S.sTouch.good ? "stale" : "missing");
-    if (dealerFresh && contractOk) for (const dl::Node& n : S.dealer.nodes) { tr::GNode g; g.px = n.k; g.g = n.g; I.gnodes.push_back(g); }
-    note("dealer", dealerFresh && contractOk, S.sDealer, !contractOk ? "other contract" : S.sDealer.good ? "stale" : "missing");
+    {   // GAMMA feed: g, else MenthorQ net GEX $ (index book in cash hours), else abstain; stale data abstains
+        std::vector<tr::DealerNodeIn> rows;
+        for (const dl::Node& n : S.dealer.nodes) { tr::DealerNodeIn r; r.px = n.k; r.g = n.g; r.usd = n.usd; r.hasUsd = n.hasUsd; rows.push_back(r); }
+        const tr::GammaFeed GF = tr::gammaFeed(S.sDealer.good && contractOk, rows, dataCt, nowCt, haveRth ? openMin : -1, haveRth ? closeMin : -1);
+        I.gammaState = GF.state; I.gammaAgeS = GF.ageS; I.gnodes = GF.nodes;
+        const std::string why = !S.sDealer.good ? "missing" : !contractOk ? "other contract" : dataCt < 0 ? (S.dealerBook == tr::BOOK_NONE ? "no book time" : "no data time") :
+                                GF.state == tr::GF_STALE ? "stale data " + tr::ageText(GF.ageS) : GF.state == tr::GF_NONE ? "no gamma" : "";
+        in += std::string(in.empty() ? "" : ";") + "dealer:" + (GF.state == tr::GF_OK ? std::to_string(GF.ageS) + "s" + (GF.fromUsd ? " gex$" : "") : why);
+    }
     const bool hlFresh = S.sHl.good && now - S.sHl.mtime <= 120;
     if (hlFresh) I.hl = &S.hl;
     note("hodlod", hlFresh, S.sHl, S.sHl.good ? "stale" : "missing");
@@ -368,8 +403,7 @@ tr::Inputs TapeReader::inputsFor(TRState& S, int k, std::vector<tr::Bar>& work)
     if (turnsFresh) I.turns = &S.turns;
     note("turns", turnsFresh, S.sTurns, S.turns.ok ? "stale" : "learning");
     // trend: native (VwapTrendLogic.h, the rule lsSessionVWAP publishes), from the bars up to k
-    int openMin = 0, closeMin = 0;
-    if (svl::rthOf(S.mkt.c_str(), openMin, closeMin)) {
+    if (haveRth) {
         I.rthOpen = openMin; I.rthClose = closeMin;
         std::vector<svl::Bar> vb; vb.reserve(work.size());
         for (const tr::Bar& b : work) { svl::Bar x; x.days = (long)(b.t >= 0 ? b.t / 86400 : -1); x.endSec = (int)(b.t % 86400); x.h = (float)b.h; x.l = (float)b.l; x.c = (float)b.c; x.v = b.v; vb.push_back(x); }
@@ -456,7 +490,7 @@ void TapeReader::intrabar(TRState& S, long n)
     for (int s = 0; s < tr::NSRC; ++s) {
         std::map<unsigned long long, tr::OfRow>::const_iterator it = S.of[s].rows.find(fb.raw);
         if (it == S.of[s].rows.end() || it->second.level.empty()) continue;
-        for (int side = 0; side < 2; ++side) for (char ch : it->second.let[side]) if (ch == 'S' || ch == 'R') {
+        for (int side = 0; side < 2; ++side) for (char ch : it->second.let[side]) if (ch == 'S' || ch == 'I') {   // (1.0.1) I = refill / iceberg (parse maps legacy R to I)
             const std::string key = std::string(tr::SRC_NAME[s]) + std::to_string(fb.raw) + "|" + std::to_string(side) + ch;
             if (!S.seen.count(key)) fresh.push_back(key);
         }
@@ -628,6 +662,7 @@ void TapeReader::writeStatus(TRState& S)
     if (S.haveLive) {
         const tr::Read& R = S.live;
         o += "LAST_READ," + R.ct + "," + R.biasText + ",flow " + std::to_string(R.votes[0]) + " (" + R.why[0] + "),level " + std::to_string(R.votes[1]) + " (" + R.why[1] + "),gamma " + std::to_string(R.votes[2]) + " (" + R.why[2] + "),trend " + std::to_string(R.votes[3]) + " (" + R.why[3] + ")" + (R.intrabar ? ",intrabar" : "") + "\n";
+        if (!R.turnRow.empty()) o += "TURN_ROW," + R.turnRow + "\n";
         o += "LINE1," + R.turn + "\nBUYERS," + R.buyers + "\nSELLERS," + R.sellers + "\nLEVELS," + R.levels + "\nINPUTS_USED," + R.inputs + "\n";
     }
     o += "LOG," + S.logPath + ",writes " + std::to_string(S.logWrites) + ",fails " + std::to_string(S.logFails) + ",queued " + std::to_string(S.logQueue.size()) + ",loaded " + std::to_string(S.logLoaded) + ",rejected " + std::to_string(S.logRejected) + "\n";
@@ -647,6 +682,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did (green = bullish, red = bearish, grey = quiet); and the LEVELS context (liquidity, gamma, HOD / LOD, what is against the read, invalidation and targets). Mouse over a candle shows the read logged for it. Use Settings > Position to place it.");
-    p->setVersion("1.0.0");
+    p->setVersion("1.0.1");
     return p;
 }

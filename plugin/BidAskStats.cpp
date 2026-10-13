@@ -1,5 +1,7 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.3.0 (2026-10-13)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.3.1 (2026-10-13)
+ *  1.3.1 (2026-10-13, Rassul 1:43 PM CT): no white outline on the histogram bars or the letter boxes - every bar / letter box
+ *        is filled with a same-colour pen (OrderFlowFeed.h 1.0.1 fillFlat); the hovered candle is no longer outlined.
  *
  *  1.3.0 (2026-10-13): WHO IS ATTACKING. Approved mockups final-signals-mockup.png / three-panes-messages-mockup.png.
  *   - ONE plain-English MESSAGE LINE centred at the top of the pane for the candle under the mouse (TRACK_MOUSE, as 1.1.0) else the
@@ -78,7 +80,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.3.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.3.1"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -762,6 +764,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. Spike labels: the ratio over the quantity. Top: a plain-English message (green = bullish, red = bearish) and the info box with every value, for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.3.0");   // BAS_VERSION
+    p->setVersion("1.3.1");   // BAS_VERSION
     return p;
 }

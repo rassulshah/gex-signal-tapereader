@@ -1,7 +1,13 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.0.0, 2026-10-13) -- the ONE shared order-flow header of lsBidAskStats 1.3.0, lsPullStats 1.0.0 and
-// lsStackStats 1.0.0. Rassul 2026-10-13: "i want to identify spikes" / "number of bids and ask pulled like a histogram" /
+// OrderFlowFeed.h (1.0.1, 2026-10-13) -- the ONE shared order-flow header of lsBidAskStats 1.3.1, lsPullStats 1.0.1 and
+// lsStackStats 1.0.1.
+// 1.0.1 (2026-10-13, Rassul 1:43 PM CT): no WHITE OUTLINE on the histogram bars or the letter boxes in any pane. Every bar,
+//   letter box and refill dash is drawn by fillFlat(): the pen is set to the fill colour first (IRT draws a rectangle's border
+//   with the pen in effect), border = fill. The hovered candle is no longer outlined white (the info box shows which candle).
+//   The info box keeps its grey solid border (it is a box, not a bar).
+// 1.0.1 (2026-10-13, Rassul 1:30 PM CT): StackStats' refill / iceberg letter is I (was R; R is reserved for a future stop-run
+//   signal). The session record reader accepts S, L, I and the legacy R, and reads R back as I. Column names unchanged. Rassul 2026-10-13: "i want to identify spikes" / "number of bids and ask pulled like a histogram" /
 // "add a stacking indicator" / "keep seperate" / "include L for Bid Ask Stacks and Pull" / "why dont you just use a dash in the bar".
 //
 // PART 1 (SDK-free, unit-tested on Linux): the order-by-order (DBO / MBO) engine - every NEW / MOD / DEL / FILL classified into
@@ -56,7 +62,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // 1.0.1 (2026-10-13): StackStats letter I (was R)
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -855,7 +861,7 @@ inline bool parseRow(const std::string& ln, size_t nNums, Row& out) {
     r.ct = c[1]; r.dbo = c[2] == "1" ? 1 : 0;
     for (size_t i = 0; i < nNums; ++i) { if (!allDigits(c[3 + i], 15)) return false; r.nums.push_back(std::strtoll(c[3 + i].c_str(), nullptr, 10)); }
     size_t k = 3 + nNums;
-    for (int s = 0; s < 2; ++s) { const std::string& L = c[k++]; if (L.size() > 2) return false; for (char ch : L) if (ch != 'S' && ch != 'L' && ch != 'R') return false; r.let[s] = L; }
+    for (int s = 0; s < 2; ++s) { const std::string& L = c[k++]; if (L.size() > 2) return false; std::string o; for (char ch : L) { if (ch == 'R') ch = 'I'; if (ch != 'S' && ch != 'L' && ch != 'I') return false; o += ch; } r.let[s] = o; }   // 1.0.1: legacy R = I
     for (int s = 0; s < 2; ++s) { const std::string& f = c[k++]; if (f != "0" && f != "1") return false; r.spike[s] = f == "1"; }
     for (int s = 0; s < 2; ++s) { const std::string& f = c[k++]; if (f == "-") r.dash[s] = -1; else if (allDigits(f, 12)) r.dash[s] = std::strtoll(f.c_str(), nullptr, 10); else return false; }
     const std::string& im = c[k++];
@@ -1020,6 +1026,13 @@ inline COLOR implColor(int impl) { return impl == BULL ? C_GREEN_SPIKE : impl ==
 inline void fillRect(int l, int t, int r, int b, COLOR border, COLOR fill, int w = 0) {
     cppExtension::RCT rc; rc.set(coord(l), coord(t), coord(r), coord(b)); rc.draw((short)w, border, fill, cppExtension::DRAW_OPAQUE, PAT_SOLID);
 }
+// 1.0.1 (Rassul 1:43 PM: the white outline on the bars and the letter boxes): a filled rectangle with NO visible border - the pen
+// in effect is set to the fill colour first (IRT draws a rectangle's perimeter with the pen in effect, which another draw may
+// have left white), and the border colour is the fill colour too. Bars, letter boxes and the refill dash all use this.
+inline void fillFlat(cppExtension* x, int l, int t, int r, int b, COLOR fill) {
+    x->setPen(fill, 1, P_SOLID);
+    fillRect(l, t, r, b, fill, fill, 0);
+}
 struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {false, false}; std::string let[2]; long long dash[2] = {-1, -1}; bool ratioOk[2] = {false, false}; double ratio[2] = {0, 0}; };
 struct PaneGeo { int left = 0, top = 0, right = 0, bottom = 0, yBase = 0, px = 1, reserve = 0, edge = 0; };
 // the pane geometry: bars from yBase = bottom - 1 up px pixels; the text area ends at the last bar (never the empty space right
@@ -1037,7 +1050,8 @@ inline PaneGeo paneGeo(cppExtension* x, int pos) {
     g.edge = edge;
     return g;
 }
-// the candles: two bars each (left / right), spike colours, the hovered candle outlined white, white refill dashes, letters
+// the candles: two bars each (left / right), spike colours, white refill dashes, letters - all with no outline (1.0.1: the hovered
+// candle is no longer outlined white; the info box and the message line show which candle is read)
 inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, int hov, const COLOR normal[2], const COLOR spike[2],
                      const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid = std::vector<LBox>()) {
     if (top <= 0) return;
@@ -1047,15 +1061,15 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         const BarLook b = look(i); if (!b.ok) continue;
         const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
         const Pair p = pairIn(xc, slot);
-        const short ow = i == hov ? 1 : 0;
+        (void)hov;                                                          // 1.0.1: no hover outline
         int h[2] = {0, 0};
         for (int s = 0; s < 2; ++s) {
             h[s] = barHeight(b.v[s], top, g.px);
             const COLOR c = b.spike[s] ? spike[s] : normal[s];
-            if (h[s] > 0) fillRect(p.l[s], g.yBase - h[s], p.r[s], g.yBase, ow ? C_WHITE : c, c, ow);
+            if (h[s] > 0) fillFlat(x, p.l[s], g.yBase - h[s], p.r[s], g.yBase, c);
             if (b.dash[s] >= 0 && h[s] > 0) {                               // the refill dash: inside the bar at min(refills, bar)
                 int dh = barHeight(b.dash[s] < b.v[s] ? b.dash[s] : b.v[s], top, g.px); if (dh < 2) dh = 2; if (dh > h[s]) dh = h[s];
-                fillRect(p.l[s], g.yBase - dh, p.r[s], g.yBase - dh + 2, C_WHITE, C_WHITE);
+                fillFlat(x, p.l[s], g.yBase - dh, p.r[s], g.yBase - dh + 2, C_WHITE);
             }
         }
         if (!b.let[0].empty() || !b.let[1].empty()) lets.push_back(std::make_pair(i, b));
@@ -1070,7 +1084,7 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
             const std::vector<LBox> bx = letterBoxes(sl, sr, (p.l[0] + p.r[0]) / 2, (p.l[1] + p.r[1]) / 2, g.yBase - 1, g.top + g.reserve, lets[k].second.let[0], lets[k].second.let[1], bw, bh);
             for (size_t j = 0; j < bx.size(); ++j) {
                 allLets.push_back(bx[j]);
-                fillRect(bx[j].l, bx[j].t, bx[j].r, bx[j].b, C_WHITE, C_WHITE);
+                fillFlat(x, bx[j].l, bx[j].t, bx[j].r, bx[j].b, C_WHITE);
                 x->setTextColor(C_BLACKC);
                 const char t[2] = { bx[j].c, 0 };
                 cppExtension::RCT r; r.set(coord(bx[j].l), coord(bx[j].t), coord(bx[j].r + 1), coord(bx[j].b + 1)); r.drawText(t, true, false);
@@ -1117,7 +1131,7 @@ inline Box infoRect(cppExtension* x, const PaneGeo& g, int pos, const Info& I) {
 }
 inline void drawInfo(cppExtension* x, const Box& b, const Info& I, const COLOR col[2]) {
     cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 9; f.style = cppExtension::BOLD; x->setFont(f);
-    fillRect(b.l, b.t, b.r, b.b, C_BOX_BORDER, C_BLACKC, 1);
+    x->setPen(C_BOX_BORDER, 1, P_SOLID); fillRect(b.l, b.t, b.r, b.b, C_BOX_BORDER, C_BLACKC, 1);   // the info box: grey solid border (kept)
     const int pad = 5, lh = 13;
     int lw = 0; for (size_t k = 0; k < I.rows.size(); ++k) lw = std::max(lw, (int)x->getTextWidth(I.rows[k].label.c_str(), -1));
     const int W = b.r - b.l, vw = I.twoCol ? (W - 2 * pad - lw - 20) / 2 : W - 2 * pad - lw - 12;

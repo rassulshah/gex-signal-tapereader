@@ -25,7 +25,7 @@
 
 namespace bas {
 
-static const char* const VERSION = "1.3.0";
+static const char* const VERSION = "1.3.1";   // 1.3.1 (2026-10-13): no white outline (drawing only)
 static const int COUNT_CAP = 999, RATIO_MIN_PRIOR = 5, RATIO_DEFAULT = 20, RATIO_LO = 5, RATIO_HI = 200;
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 static const int POS_DEFAULT = 0;   // Top left: the info box (12:05 the box stays; the message line is always top centre)

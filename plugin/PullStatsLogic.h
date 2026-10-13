@@ -18,7 +18,7 @@
 
 namespace ps {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // 1.0.1 (2026-10-13): no white outline (drawing only)
 using off::BID; using off::ASK;
 
 inline std::string letters(const off::Rec& r, int s) { return r.thrRest > 0 && r.pullMax[s] >= r.thrRest ? "L" : ""; }
