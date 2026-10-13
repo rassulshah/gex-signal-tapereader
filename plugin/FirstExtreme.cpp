@@ -1,5 +1,5 @@
 /********************************************************************************
- *  FirstExtreme.cpp  --  Investor/RT RTX extension  lsFirstExtreme  (1.0.0, 2026-10-12)  SHADOW MODE
+ *  FirstExtreme.cpp  --  Investor/RT RTX extension  lsFirstExtreme  (1.0.0, 2026-10-12; 1.0.1: warm-up shows "N of 14 sessions")  SHADOW MODE
  *
  *  THE FIRST FINAL EXTREME (Rassul 2026-10-12 18:51 "see review and build the indicator/signals"): the reviewed v2 research model
  *  (first_extreme_upgrade/, locked primary), native. Every closed 3-min RTH bar from 9 min after the open: the probability that the
@@ -306,6 +306,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA 1st Extreme (SHADOW MODE): the probability that today's running LOD / HOD is the session's first final extreme, every 3-min bar from 9 min after the open, and one immutable LOD? / HOD? call when a side reaches 70% before the market's deadline (labelled with the time it was called; a later break marks it FAILED). Reviewed v2 research model: 75% right on 73% of days in its Jul-Sep test, 63% in the later Sep-Oct check - not yet proven. 3-min charts only. Use Settings > Position to place the panel.");
-    p->setVersion("1.0.0");
+    p->setVersion("1.0.1");
     return p;
 }

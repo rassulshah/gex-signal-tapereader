@@ -56,7 +56,9 @@ inline View buildView(int m, const std::vector<Bar>& bars, long long day)
     V.nBars = (int)s.c.size(); V.complete = V.nBars == (MKTS[m].close - V.proxy) / 3;
     if (!std::isfinite(s.scale)) {
         int have = 0; for (size_t k = 0; k < B.complete.size(); k++) if (B.complete[k].day < day) have++;
-        V.why = "warming up: needs 14 complete sessions in a row on the chart"; return V;
+        // (1.0.1, Rassul 21:09 "it says its warming up") say how far along it is and what is missing
+        V.why = "warming up: " + std::to_string(have) + " of 14 sessions" + (B.skipped ? ", " + std::to_string(B.skipped) + " incomplete" : std::string());
+        return V;
     }
     if (s.scale <= MKTS[m].tick) { V.why = "scale too small"; return V; }
     V.decisions = runSession(m, s);

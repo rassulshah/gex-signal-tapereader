@@ -21,7 +21,7 @@
 
 namespace fx2 {
 
-static const char* const FX_VERSION = "1.0.0";
+static const char* const FX_VERSION = "1.0.1";
 static const char* const FX_MODEL = "first_final_extreme_v2_research (locked primary: logistic + calibration, t0.70 p1 free)";
 
 struct MarketCfg { const char* code; int open, close; double tick; int deadline; };
@@ -80,6 +80,7 @@ struct Session {
 struct Built {
     std::vector<Session> complete;   // every complete session (each with its own context)
     bool haveToday = false; Session today; std::string todayWhy;
+    int skipped = 0;                 // (1.0.1) earlier sessions left out: missing / off-grid bars
 };
 
 inline bool barsOk(const std::vector<const Bar*>& f)
@@ -153,6 +154,7 @@ inline Built buildSessions(int m, const std::vector<Bar>& bars, long long today 
         bool ok = grid && barsOk(f);
         if (!ok) {
             if (isToday) { B.todayWhy = "today's bars are not a clean 3-min grid from the open"; }
+            else B.skipped++;
             continue;
         }
         if (previous && d - previous->day > 7) { history.clear(); previous = nullptr; }
