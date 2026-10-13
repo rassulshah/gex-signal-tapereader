@@ -1,4 +1,4 @@
-// DP254_test_record.cpp -- lsDeltaProfile 2.5.4: the per-session signal record (DeltaProfile\<MKT>-<spb>-signals-<session>.csv).
+// DP254_test_record.cpp -- lsDeltaProfile 2.5.4: the per-session signal record (DeltaProfile\<MKT>-<spb>-sync260-signals-<session>.csv).
 // Uses the existing Delta adapter mock (tests_delta/irtsdk.h: getLocaltime returns the stamp's wall-clock fields, so a stamp IS
 // the Central clock as epoch seconds - exactly the record's time convention).
 // Build (Linux, from tests_delta):  g++ -std=c++17 -g -fsanitize=address,undefined -I. test_record_254.cpp -o t && ./t
@@ -25,12 +25,12 @@ static std::string home(const std::string& name) {
 }
 static int lines(const std::string& text, const char* event) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[12] == event) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event) ++n; }
     return n;
 }
 static int linesWithCode(const std::string& text, const char* event, const char* code) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[12] == event && c[2] == code) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event && c[2] == code) ++n; }
     return n;
 }
 // A whole session's bars with absorption at several places: a random walk with heavy one-sided prints at swing points.
@@ -94,9 +94,9 @@ int main()
             o << "# TapeFlow test tape ES ESZ26 session " << session << " tick 1\nte|o|h|l|c|volume|buy|sell|trades\n";
             for (const mock::Bar& b : bars) o << b.time << '|' << b.open << '|' << b.high << '|' << b.low << '|' << b.close << '|' << b.volume << "|0|0|0\n";
         }
-        const std::string fileA = slurp(dirA + "ES-60-signals-" + std::to_string(session) + ".csv");
+        const std::string fileA = slurp(dirA + "ES-60-sync260-signals-" + std::to_string(session) + ".csv");
         const std::string dirB = home("restart"); const std::vector<Frame> b = replay(bars, 60, "ES", 100, true);
-        const std::string fileB = slurp(dirB + "ES-60-signals-" + std::to_string(session) + ".csv");
+        const std::string fileB = slurp(dirB + "ES-60-sync260-signals-" + std::to_string(session) + ".csv");
         const int F = lines(fileA, "F"), D = lines(fileA, "D"), DA = linesWithCode(fileA, "D", "A"), DI = linesWithCode(fileA, "D", "I");
         std::cout << "replay: " << a.size() << " bars, " << F << " first-seen, " << D << " decided (" << DA << " A, " << DI << " I), file " << fileA.size() << " bytes\n";
         check(F >= 8 && DA >= 3 && DI >= 1, "fixture: enough candidates, A's and I's to mean something");
@@ -106,7 +106,7 @@ int main()
         check(a.size() == b.size() && differ == 0 && rings > 0, "restart after every bar draws the same signals in every frame");
         // every candidate has exactly one F line and at most one D line; a D line never repeats or changes
         std::map<long long, int> f, d; std::istringstream in(fileA); std::string l;
-        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() != 22 || c[0] == "t_first") continue; long long id = std::atoll(c[14].c_str()); (c[12] == "F" ? f : d)[id]++; }
+        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() != REC_FIELDS || c[0] == "t_first") continue; long long id = std::atoll(c[14].c_str()); (c[12] == "F" ? f : d)[id]++; }
         bool once = true; for (auto& x : f) if (x.second != 1) once = false; for (auto& x : d) if (x.second != 1 || !f.count(x.first)) once = false;
         check(once, "one F per candidate, at most one D, never a D without its F");
     }
@@ -119,7 +119,7 @@ int main()
         const std::string dirB = home("restart17"); const std::vector<Frame> b = replay(bars, 60, "ES", 100, true);
         bool same = true; int n = 0;
         for (long long sid = session; sid <= session + 1; ++sid) {
-            const std::string fa = slurp(dirA + "ES-60-signals-" + std::to_string(sid) + ".csv"), fb = slurp(dirB + "ES-60-signals-" + std::to_string(sid) + ".csv");
+            const std::string fa = slurp(dirA + "ES-60-sync260-signals-" + std::to_string(sid) + ".csv"), fb = slurp(dirB + "ES-60-sync260-signals-" + std::to_string(sid) + ".csv");
             if (fa != fb || fa.empty()) same = false;
             n += lines(fa, "F");
         }
@@ -140,7 +140,7 @@ int main()
         h.bars[40].rows.push_back(mock::Price(100, 0, 3000000000L, 3000000000L)); h.bars[40].volume += 3000000000UL;
         h.bars[40].low = 99; h.bars[40].high = 125; h.bars[40].close = 100; h.bars[40].open = 100;
         mock::current = &h; DeltaProfile p; p.draw();                       // undecided: dojis after the node
-        const std::string path = dir + "ES-60-signals-" + std::to_string(session) + ".csv";
+        const std::string path = dir + "ES-60-sync260-signals-" + std::to_string(session) + ".csv";
         check(exists(dir), "the DeltaProfile folder is created when missing");
         std::string text = slurp(path);
         check(lines(text, "F") == 1 && lines(text, "D") == 0, "a new candidate writes one F line and no D line");
@@ -149,7 +149,7 @@ int main()
         mock::current = &h; p.draw();
         text = slurp(path);
         std::istringstream in(text); std::string l; std::vector<std::string> F, D;
-        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[12] == "F") F = c; if (c.size() == 22 && c[12] == "D") D = c; }
+        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == "F") F = c; if (c.size() == REC_FIELDS && c[12] == "D") D = c; }
         check(!F.empty() && !D.empty(), "F and D lines present");
         if (!F.empty() && !D.empty()) {
             check(F[0] == std::to_string(t0 + 109 * 60), "t_first = the chart's last bar end on the Central clock (" + F[0] + ")");
@@ -157,7 +157,7 @@ int main()
             check(F[5] == "100" && F[6] == "100.25" && F[7] == "0.25" && F[18] == "400" && F[19] == "401", "F: the node's frozen row 100-100.25 (ticks 400-401) at tick 0.25 (" + F[5] + "/" + F[6] + "/" + F[7] + ")");
             check(F[8] == "-3000000000", "F: net delta above 2^31 exact (" + F[8] + ")");
             check(std::atof(F[9].c_str()) >= 2.0, "F: multiple vs the average row >= 2");
-            check(F[11] == "2.5.7" && F[13] == "ESZ26" && F[14] == "0" && F[15] == std::to_string(t0 + 40 * 60) && F[20] == "sell" && F[21] == "node", "F: version, root, id, absorption bar, node side");
+            check(F[11] == DLT_VERSION && F[13] == "ESZ26" && F[14] == "0" && F[15] == std::to_string(t0 + 40 * 60) && F[20] == "sell" && F[21] == "node", "F: version, root, id, absorption bar, node side");
             check(D[2] == "A" && D[3] == "support" && D[4] == "bullish", "D: green close above a selling node = A, bullish");
             check(D[10] == std::to_string(t0 + 110 * 60), "D: decided by the green bar's end (" + D[10] + ")");
             check(D[1] == std::to_string(t0 + 111 * 60) && D[0] == F[0], "D: t_decided = the chart's last bar end when decided; t_first kept");
@@ -172,7 +172,7 @@ int main()
     // 3) a torn (half-written) last line: ignored on read, ended before the next append; junk lines rejected, never fatal
     {
         const std::string dir = home("partial"); mkdir(dir.c_str(), 0700);
-        const std::string path = dir + "ES-60-signals-" + std::to_string(session) + ".csv";
+        const std::string path = dir + "ES-60-sync260-signals-" + std::to_string(session) + ".csv";
         Latch L; L.low = 400; L.high = 400; L.code = "A?"; L.support = true; L.peakTime = static_cast<RTDATE>(day + 9 * 3600); L.price = 100;
         L.sell = true; L.id = 0; L.tFirst = day + 9 * 3600 + 60; L.peakT = day + 9 * 3600; L.net = -500; L.mult = 3;
         const std::string good = recordLine(L, 'F', 0.25, "ES");
@@ -213,7 +213,7 @@ int main()
     // 4) a failing write: lines are kept and land once, in order, when the file can be written again (checklist #6)
     {
         const std::string dir = home("failwrite"); mkdir(dir.c_str(), 0700);
-        const std::string path = dir + "ES-60-signals-" + std::to_string(session) + ".csv";
+        const std::string path = dir + "ES-60-sync260-signals-" + std::to_string(session) + ".csv";
         if (symlink("/nonexistent-dp254/x.csv", path.c_str()) != 0) check(false, "fixture: symlink");   // a dangling link: every append fails
         const std::vector<mock::Bar> bars = sessionBars(day + 8 * 3600, 200, 60, 11);
         mock::Host h; h.seconds = 60; h.root = "ES"; h.bars.assign(bars.begin(), bars.begin() + 100);
@@ -226,7 +226,7 @@ int main()
         const std::string got = slurp(path);
         mock::current = &h; p.destroy(); latchBooks().clear();
         const std::string ref = home("failwrite-ref"); const std::vector<Frame> unused = replay(bars, 60, "ES", 100, false); (void)unused;
-        check(!got.empty() && got == slurp(ref + "ES-60-signals-" + std::to_string(session) + ".csv"), "after the failure clears, the file equals an undisturbed run (no loss, no duplicate)");
+        check(!got.empty() && got == slurp(ref + "ES-60-sync260-signals-" + std::to_string(session) + ".csv"), "after the failure clears, the file equals an undisturbed run (no loss, no duplicate)");
     }
 
     // 5) two charts on one DLL - ES 3-min and ES 60-min - never mix (checklist #1 / #9), and both survive a restart
@@ -239,13 +239,13 @@ int main()
             a.bars.assign(b3.begin(), b3.begin() + static_cast<long>(n)); mock::current = &a; p.draw();
             b.bars.assign(b60.begin(), b60.begin() + static_cast<long>(std::min<std::size_t>(n, b60.size()))); mock::current = &b; p.draw();
         }
-        const std::string f3 = slurp(dir + "ES-180-signals-" + std::to_string(session) + ".csv");
+        const std::string f3 = slurp(dir + "ES-180-sync260-signals-" + std::to_string(session) + ".csv");
         const long long s60 = latchBooks()["ESZ26|3600"].session;
-        const std::string f60 = slurp(dir + "ES-3600-signals-" + std::to_string(s60) + ".csv");
-        check(lines(f3, "F") > 0 && lines(f60, "F") > 0, "both charts record (" + std::to_string(lines(f3, "F")) + " / " + std::to_string(lines(f60, "F")) + " candidates)");
+        const std::string f60 = slurp(dir + "ES-3600-sync260-signals-" + std::to_string(s60) + ".csv");
+        check(lines(f3, "F") > 0 && lines(f60, "F") == 0, "3min records; coarse 60min crossing the 90min boundary cannot admit events");
         bool clean3 = true, clean60 = true; std::istringstream i3(f3), i60(f60); std::string l;
-        while (std::getline(i3, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 180) != 0) clean3 = false; }
-        while (std::getline(i60, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 3600) != 0) clean60 = false; }
+        while (std::getline(i3, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 180) != 0) clean3 = false; }
+        while (std::getline(i60, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 3600) != 0) clean60 = false; }
         check(clean3 && clean60, "each file holds only its own chart's bars");
         const std::vector<Latch> keep3 = latchBooks()["ES|180"].v, keep60 = latchBooks()["ESZ26|3600"].v;
         a.draws.clear(); b.draws.clear(); state(a).builtAt -= 1001; state(b).builtAt -= 1001;
@@ -266,7 +266,7 @@ int main()
         const std::string dir = home("session");
         const std::vector<mock::Bar> bars = sessionBars(day + 14 * 3600, 200, 60, 5);   // 14:00 .. 17:19 CT
         mock::Host h; h.seconds = 60; h.root = "ES"; DeltaProfile p; std::string oldAt1700;
-        const std::string oldPath = dir + "ES-60-signals-" + std::to_string(session) + ".csv", newPath = dir + "ES-60-signals-" + std::to_string(session + 1) + ".csv";
+        const std::string oldPath = dir + "ES-60-sync260-signals-" + std::to_string(session) + ".csv", newPath = dir + "ES-60-sync260-signals-" + std::to_string(session + 1) + ".csv";
         for (std::size_t n = 100; n <= bars.size(); ++n) {
             h.bars.assign(bars.begin(), bars.begin() + static_cast<long>(n)); mock::current = &h; p.draw();
             if (h.bars.back().time == day + 17 * 3600 - 60) oldAt1700 = slurp(oldPath);   // the 16:59 bar is the last of the old session
@@ -274,7 +274,7 @@ int main()
         check(!oldAt1700.empty() && slurp(oldPath) == oldAt1700, "the old session's file is not touched after 17:00 CT");
         check(latchBooks().begin()->second.session == session + 1, "the book is on the new session after 17:00 CT");
         std::istringstream in(slurp(newPath)); std::string l; bool onlyNew = true;
-        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == 22 && c[0] != "t_first" && std::atoll(c[0].c_str()) < static_cast<long long>(day + 17 * 3600)) onlyNew = false; }
+        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[0] != "t_first" && std::atoll(c[0].c_str()) < static_cast<long long>(day + 17 * 3600)) onlyNew = false; }
         check(onlyNew, "the new session's file holds only lines first seen after 17:00 CT");
         const std::size_t kept = latchBooks().begin()->second.v.size();
         mock::current = &h; p.destroy(); latchBooks().clear();
@@ -292,11 +292,11 @@ int main()
     // 7) market mapping in the file name, like the other plugins (CPE -> HG, EU6 -> EU, MES -> ES)
     {
         check(marketName("CPE") == "HG" && marketName("EU6") == "EU" && marketName("MES") == "ES", "market aliases");
-        check(recordName(marketName("CPE"), 180, 20735) == "HG-180-signals-20735.csv", "record name: <MKT>-<spb>-signals-<session>.csv");
+        check(syncRecordName(marketName("CPE"), 180, 20735) == "HG-180-sync260-signals-20735.csv", "record name: <MKT>-<spb>-sync260-signals-<session>.csv");
         const std::string dir = home("mapping");
         const std::vector<mock::Bar> bars = sessionBars(day + 8 * 3600, 160, 60, 7);
         mock::Host h; h.seconds = 60; h.root = "CPE"; h.tick = 1; h.bars = bars; DeltaProfile p; mock::current = &h; p.draw();
-        check(exists(dir + "HG-60-signals-" + std::to_string(session) + ".csv"), "a CPE chart writes HG-60-signals-<session>.csv");
+        check(exists(dir + "HG-60-sync260-signals-" + std::to_string(session) + ".csv"), "a CPE chart writes HG-60-sync260-signals-<session>.csv");
         mock::current = &h; p.destroy(); latchBooks().clear();
     }
     // 8) no storage (no USERPROFILE): nothing written, nothing kept in memory, drawing unchanged

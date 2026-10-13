@@ -29,8 +29,9 @@ struct Host {
     std::string symbol,root,period,chart,directory;
     int parms[3]; int rowCalls,statsCalls; std::vector<Draw> draws;
     int paneTop,paneBottom,paneLeft,paneRight,scaleLeft;
-    COLOR ink;
-    Host():data(NULL),noSlot(false),tick(1),seconds(60),symbol("ESZ26"),root("ES"),period("1 min"),chart("test"),rowCalls(0),statsCalls(0),paneTop(0),paneBottom(1000),paneLeft(0),paneRight(2000),scaleLeft(1980),ink(0){parms[0]=50;parms[1]=0;parms[2]=9;}
+    COLOR ink, penInk;
+    double priceOrigin=80, priceScale=20; int barOffset=0;
+    Host():data(NULL),noSlot(false),tick(1),seconds(60),symbol("ESZ26"),root("ES"),period("1 min"),chart("test"),rowCalls(0),statsCalls(0),paneTop(0),paneBottom(1000),paneLeft(0),paneRight(2000),scaleLeft(1980),ink(0),penInk(0){parms[0]=50;parms[1]=0;parms[2]=9;}
 };
 extern Host* current;
 }
@@ -40,7 +41,7 @@ public:
     struct FONT { int id,size,style; };
     struct PNT {
         short h,v;
-        void set(int bar,float price,int=0) { h=static_cast<short>(50+bar*10); v=static_cast<short>(mock::current->paneBottom-(price-80)*20); }
+        void set(int bar,float price,int=0) { h=static_cast<short>(50+(bar-mock::current->barOffset)*10); v=static_cast<short>(mock::current->paneBottom-(price-mock::current->priceOrigin)*mock::current->priceScale); }
         void setDrawPosition(){} void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); }
     };
     struct RCT {
@@ -50,7 +51,7 @@ public:
         void getScaleRect(){set(mock::current->scaleLeft,0,mock::current->paneRight,mock::current->paneBottom);}
         void draw(int,COLOR,COLOR,int,int){ mock::current->draws.push_back(mock::Draw("box",left,top)); }
         void drawText(const char* t,bool,bool rightAligned){ mock::current->draws.push_back(mock::Draw("text",rightAligned?right:left,(top+bottom)/2,t,mock::current->ink)); }
-        void drawOval(int){ mock::current->draws.push_back(mock::Draw("ring",(left+right)/2,(top+bottom)/2)); }
+        void drawOval(int){ mock::current->draws.push_back(mock::Draw("ring",(left+right)/2,(top+bottom)/2,"",mock::current->penInk)); }
     };
     struct CBRUSH { CBRUSH(COLOR,int){} void set(){} };
     struct VOLPROFILE { float price; long buyVolume,sellVolume,totalVolume,tickCount,maxDelta,minDelta; };
@@ -94,6 +95,6 @@ public:
     int getIntegerValue(int i){return mock::current->parms[i];} void setIntegerValue(int i,int v){mock::current->parms[i]=v;}
     void setFont(FONT){} void setTextColor(COLOR c){mock::current->ink=c;}
     int getTextWidth(const char* t,int){return static_cast<int>(std::strlen(t))*6;}
-    void setPen(COLOR,int,int){} void setArrayCount(int){} void setFlags(unsigned long){} void setDescription(const char*){} void setVersion(const char*){}
+    void setPen(COLOR c,int,int){mock::current->penInk=c;} void setArrayCount(int){} void setFlags(unsigned long){} void setDescription(const char*){} void setVersion(const char*){}
 };
 #endif

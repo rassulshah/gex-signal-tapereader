@@ -32,7 +32,9 @@ struct State {
     bool support;
     int peakBar;
     int decidedBar;   // (2.5.0) the bar whose close decided it (-1 = undecided)
-    State() : support(false), peakBar(-1), decidedBar(-1) {}
+    int formedBar;    // last contributing formation bar; never substitute the peak for this
+    long long eventId; // adapter-owned identity shared by profile label and historical bubble
+    State() : support(false), peakBar(-1), decidedBar(-1), formedBar(-1), eventId(-1) {}
     bool valid() const { return !code.empty(); }
 };
 struct Bucket {
@@ -42,7 +44,7 @@ struct Bucket {
 };
 struct Node { Tick bucket; double price, ratio; State state; };
 struct Zone { Tick low, high; std::string code; bool support; int share; int peakBar = -1;   // (2.4.3) peakBar: where the zone's absorption happened, for its circle
-              double net = 0; int decidedBar = -1; };                                    // (2.5.4) for the signal record only: the zone's net delta and the bar whose close decided it
+              double net = 0; int decidedBar = -1; int formedBar = -1; long long eventId = -1; };
 struct Snapshot {
     double tick, meanAbsDelta, maxAbsDelta, maxVolume;
     Tick ticksPerRow;
@@ -107,6 +109,7 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     }
     if (formed < 0 || peak < 0) return out;
     out.peakBar = bars[static_cast<std::size_t>(peak)].index;
+    out.formedBar = bars[static_cast<std::size_t>(formed)].index;
     // (2.5.7, audit F1) beyond the node is decided in WHOLE TICKS (IRT prices and tick are float: a close ON the node's edge could
     // read a hair beyond it in double); a price's own tick key against the node's keys [low, high]
     auto key = [tick](double price) -> Tick { const double q = price / tick; return finite(q) && std::fabs(q) < 9.0e15 ? static_cast<Tick>(std::llround(q)) : 0; };
@@ -231,6 +234,7 @@ inline Snapshot build(const std::vector<Bar>& bars, double tick, bool allowConfi
                 z.share = static_cast<int>(std::floor(share * 100 + 0.5));
                 z.peakBar = state.peakBar;
                 z.net = net; z.decidedBar = state.decidedBar;   // (2.5.4) recorded, never drawn
+                z.formedBar = state.formedBar;
                 z.code = state.code == "A" ? "A" : state.code == "I" ? name : name + "?";
                 z.support = (state.code == "A" || state.code == "I") ? state.support : !sell;
                 if (!allowConfirmation && z.code.back() != '?') z.code += "?";

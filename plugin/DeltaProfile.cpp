@@ -1,11 +1,11 @@
 /********************************************************************************
- * DeltaProfile.cpp -- lsDeltaProfile 2.5.6
+ * DeltaProfile.cpp -- lsDeltaProfile 2.6.0 synchronization repair
  * Native chart VAP; rolling (latest bar close - 90 min, latest bar close].
  * Right placement, left-facing one-sided bars, automatic price-anchored rows.
  * Only Width / Gap / Font are configurable. Delta = ask/buy minus bid/sell.
- * A/A? = absorption heuristic; I/I? = initiative heuristic; rings only for A/A?.
+ * A = confirmed absorption heuristic; I = initiative; ? = pending. Rings ONLY for confirmed A.
  * Every absorption candidate is recorded (2.5.4) to lsFlexLevels\DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv when
- * it first appears and when it is decided; the record is re-read after an IRT restart, so circles and letters survive it.
+ * it first appears and when it is decided; only final A bubbles survive through the session and restart.
  * This revision deliberately requires Investor/RT replay acceptance before use.
  ********************************************************************************/
 #include <string>
@@ -52,7 +52,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.5.8";   // (2.5.8) the hourly profile's labels on the 3-min profile: the 3 strongest nodes, one label each "I 4.1x  -861", never overlapping (Rassul 12:50)   // (2.5.7) the 2026-10-12 audit fixed: F1 node edges in whole ticks (core + frozen scan), F2 only a complete build decides, F3 latch book / record per full contract (ESZ6, not ES), F4 a tracked candidate decided only by its own frozen first close, F5 in-memory keys re-keyed on a tick change, F6 an old session's unwritten lines kept and retried at 17:00; status written only when changed or every 30 s   // (2.5.6) circles drawn ONLY from the session record (frozen bar / price / colour) - the live node's moving peak bar no longer draws one, so no circle jumps or blinks   // (2.5.5) off-profile signals no longer drawn as a column of bare A / I letters left of the profile; EVERY circled candidate keeps its circle for the session in the colour first drawn, also when decided I (Rassul 19:10 "you keep removing the circles")   // (2.5.4) every absorption candidate is written to a per-session record file (DeltaProfile\<MKT>-<sec/bar>-signals-<session>.csv) when it first appears (?) and when it is decided (A / I), append-only; after an IRT restart the session record is re-read so circles and letters survive it; nothing is drawn differently   // (2.5.3) the session record clears at 17:00 Central, not at 17:00 UTC (= noon CT) - RA1009 audit   // (2.5.2) every absorption candidate is tracked from its first appearance with a frozen zone and decided by the chart's own closed bars - top-3 changes no longer change a signal; off-profile signals keep their letter   // (2.5.1) the session record survives chart-state resets and is matched by bar time - a decided A and its circle can no longer vanish   // (2.5.0) confirmation = the first red (below) / green (above) 3-min close beyond the node (no 15-min hold); Acc / Dst zones no longer drawn (absorption only); a confirmed signal and its circle are LOCKED for the session (no repainting)   // (2.4.3) a circle on the bar of EVERY absorption (A / A?) - nodes whose letter does not fit and absorption zones too   // (2.4.2) 2.4.1-review (external audit) + live-safety fixes: USERPROFILE paths, host-state fallback, tolerant VAP reads, sticky A, 2-tick zones
+static const char* const DLT_VERSION = "2.6.0"; // shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -141,12 +141,13 @@ static double marketTick(const std::string& m) {
 // drawn even when the node drops out of the profile. Cleared at the 17:00 session change.
 struct Latch {
     dp::Tick low, high; std::string code; bool support; RTDATE peakTime; double price; bool sell;
-    bool candSupport;   // (2.5.5) the side it was first circled as (A?): the circle keeps this colour for the session, whatever it is decided as
+    bool candSupport;   // legacy record metadata only; bubble colour always uses final confirmed-A support
+    RTDATE formedTime; long long formedT; // frozen last formation bar, distinct from biggest-contribution peak
     // (2.5.4) the record only - never read by the drawing: id (creation order), CT-clock bar ends (epoch-as-UTC, TapeFlow's
     // convention), the node's net delta and multiple, where it came from, and whether its decided line is already queued
     long long id, tFirst, tDecided, decidedBy, peakT; double net, mult; bool zone, logged;
     Latch() : low(0), high(0), support(false), peakTime(0), price(0), sell(false), candSupport(false), id(-1), tFirst(0), tDecided(0), decidedBy(0),
-        peakT(0), net(0), mult(0), zone(false), logged(false) {}
+        peakT(0), net(0), mult(0), zone(false), logged(false) { formedTime = 0; formedT = 0; }
 };
 // (2.5.1) the record lives OUTSIDE the per-chart state, keyed by symbol and bar size: a chart-state reset (IRT's host
 // switching contexts, a periodicity label read empty, two charts sharing one object) no longer wipes it, and the circle is
@@ -163,14 +164,25 @@ struct LatchBook {
 //   F = the candidate first appeared (code "A?"), D = it was decided (A / I / Acc / Dst). A line is complete only when it ends
 //   in a newline; a torn last line is ended before the next append and ignored when read. Several roots of one market (ES and
 //   MES) may share a file: every line names its root and its id within that root's book.
-static const int REC_FIELDS = 22;
-static const std::size_t REC_MAX_BYTES = 4u * 1024u * 1024u;
-static const std::size_t REC_MAX_LATCHES = 200;
+static const int REC_FIELDS = 24; // legacy 22-column records accepted; new fields formed_t and formed_raw
+static const std::size_t REC_MAX_BYTES = 16u * 1024u * 1024u;
+static const std::size_t REC_MAX_LATCHES = 5000; // exact event identity can admit repeated distinct episodes at the same price
 static const char* recordHeader() {
-    return "t_first|t_decided|code|side|bias|zone_lo|zone_hi|tick|net_delta|multiple|decided_by_t|version|event|root|id|peak_t|peak_raw|price|lo_ticks|hi_ticks|node_side|source";
+    return "t_first|t_decided|code|side|bias|zone_lo|zone_hi|tick|net_delta|multiple|decided_by_t|version|event|root|id|peak_t|peak_raw|price|lo_ticks|hi_ticks|node_side|source|formed_t|formed_raw";
 }
 static std::string recordName(const std::string& market, int secondsPerBar, long long session) {
     return market + "-" + std::to_string(secondsPerBar) + "-signals-" + std::to_string(session) + ".csv";
+}
+static std::string syncRecordName(const std::string& market, int secondsPerBar, long long session) {
+    return market + "-" + std::to_string(secondsPerBar) + "-sync260-signals-" + std::to_string(session) + ".csv";
+}
+static bool confirmedAbsorption(const Latch& L) { return L.code == "A" && L.decidedBy > 0; }
+static const Latch* eventById(const LatchBook& bk, long long id) {
+    for (const Latch& L : bk.v) if (L.id == id) return &L;
+    return NULL;
+}
+static bool sameEvent(const Latch& L, dp::Tick low, dp::Tick high, bool sell, bool zone, RTDATE peak) {
+    return L.low == low && L.high == high && L.sell == sell && L.zone == zone && L.peakTime == peak;
 }
 static std::string num(double v, const char* format) { char b[64]; std::snprintf(b, sizeof(b), format, v); return b; }
 static std::string recordLine(const Latch& L, char event, double tick, const std::string& root) {
@@ -180,11 +192,11 @@ static std::string recordLine(const Latch& L, char event, double tick, const std
     std::ostringstream o; o.imbue(std::locale::classic());
     o << (L.tFirst > 0 ? L.tFirst : 0) << '|' << (decidedLine ? L.tDecided : 0) << '|' << code << '|'
       << (L.support ? "support" : "resistance") << '|' << (L.support ? "bullish" : "bearish") << '|'
-      << num(static_cast<double>(L.low) * tick, "%.10g") << '|' << num(static_cast<double>(L.high) * tick, "%.10g") << '|'
-      << num(tick, "%.10g") << '|' << num(L.net, "%.0f") << '|' << num(L.mult, "%.2f") << '|' << (decidedLine ? L.decidedBy : 0) << '|'
+      << num(static_cast<double>(L.low) * tick, "%.17g") << '|' << num(static_cast<double>(L.high) * tick, "%.17g") << '|'
+      << num(tick, "%.17g") << '|' << num(L.net, "%.17g") << '|' << num(L.mult, "%.17g") << '|' << (decidedLine ? L.decidedBy : 0) << '|'
       << DLT_VERSION << '|' << event << '|' << root << '|' << L.id << '|' << L.peakT << '|'
-      << static_cast<unsigned long long>(L.peakTime) << '|' << num(L.price, "%.10g") << '|' << L.low << '|' << L.high << '|'
-      << (L.sell ? "sell" : "buy") << '|' << (L.zone ? "zone" : "node");
+      << static_cast<unsigned long long>(L.peakTime) << '|' << num(L.price, "%.17g") << '|' << L.low << '|' << L.high << '|'
+      << (L.sell ? "sell" : "buy") << '|' << (L.zone ? "zone" : "node") << '|' << L.formedT << '|' << static_cast<unsigned long long>(L.formedTime);
     return o.str();
 }
 // strict full-token parsing (checklist #4): no leading blanks, no trailing junk, in range, finite
@@ -214,7 +226,7 @@ static std::vector<std::string> fields(const std::string& line) {
 struct RecordEvent { char event; Latch latch; std::string root; };
 static bool parseRecordLine(const std::string& line, double chartTick, RecordEvent& r) {
     const std::vector<std::string> c = fields(line);
-    if (static_cast<int>(c.size()) != REC_FIELDS || c[12].size() != 1 || (c[12][0] != 'F' && c[12][0] != 'D')) return false;
+    if ((static_cast<int>(c.size()) != REC_FIELDS && c.size() != 22) || c[12].size() != 1 || (c[12][0] != 'F' && c[12][0] != 'D')) return false;
     Latch& L = r.latch; r.event = c[12][0]; r.root = c[13];
     if (r.root.empty()) return false;
     long long tf, td, by, id, pt, praw, lo, hi;
@@ -230,7 +242,7 @@ static bool parseRecordLine(const std::string& line, double chartTick, RecordEve
     if (!parseReal(c[5], zl) || !parseReal(c[6], zh) || !parseReal(c[7], tk) || !parseReal(c[8], net) || !parseReal(c[9], mult) ||
         !parseReal(c[17], price) || tk <= 0 || tk >= 1000 || mult < 0 || zl > zh) return false;
     const std::string& code = c[2];
-    if (r.event == 'F' ? code != "A?" : (code != "A" && code != "I" && code != "Acc" && code != "Dst")) return false;
+    if (r.event == 'F' ? (code != "A?" && code != "I?" && code != "Acc?" && code != "Dst?") : (code != "A" && code != "I" && code != "Acc" && code != "Dst")) return false;
     if (r.event == 'D' ? (td == 0 || by == 0) : (td != 0 || by != 0)) return false;
     const bool support = c[3] == "support";
     if ((!support && c[3] != "resistance") || c[4] != (support ? "bullish" : "bearish")) return false;
@@ -238,6 +250,11 @@ static bool parseRecordLine(const std::string& line, double chartTick, RecordEve
     L.code = code; L.support = support; L.tFirst = tf; L.tDecided = td; L.decidedBy = by; L.id = id; L.peakT = pt;
     L.peakTime = static_cast<RTDATE>(praw); L.price = price; L.net = net; L.mult = mult; L.sell = c[20] == "sell"; L.zone = c[21] == "zone";
     L.low = lo; L.high = hi;
+    if (c.size() == REC_FIELDS) {
+        long long ft, fr;
+        if (!parseWhole(c[22], 0, T_MAX, ft) || !parseWhole(c[23], 0, rawLimit, fr)) return false;
+        L.formedT = ft; L.formedTime = static_cast<RTDATE>(fr);
+    }
     if (std::fabs(tk - chartTick) > 1e-9 * std::max(tk, chartTick)) {      // written on another tick size: the prices decide the zone
         try { L.low = dp::priceKey(zl, chartTick); L.high = dp::priceKey(zh, chartTick); } catch (...) { return false; }
         if (L.low > L.high) return false;
@@ -251,6 +268,11 @@ static void seedFromText(const std::string& text, const std::string& root, const
     const std::size_t end = text.rfind('\n');
     if (end == std::string::npos) return;
     std::map<long long, Latch> byId;
+    bool hasExactRoot=false;
+    if(root!=legacyRoot){
+        std::istringstream scan(text.substr(0,end+1));std::string row;
+        while(std::getline(scan,row)){RecordEvent r;if(parseRecordLine(row,chartTick,r)&&r.root==root){hasExactRoot=true;break;}}
+    }
     std::istringstream in(text.substr(0, end + 1)); std::string line;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
@@ -258,6 +280,7 @@ static void seedFromText(const std::string& text, const std::string& root, const
         RecordEvent r;
         if (!parseRecordLine(line, chartTick, r)) { ++bk.rejected; continue; }
         if (r.root != root && r.root != legacyRoot) continue;
+        if(hasExactRoot && r.root!=root)continue; // root-only fallback must not collide with this contract's event IDs
         std::map<long long, Latch>::iterator at = byId.find(r.latch.id);
         if (r.event == 'F') {
             if (at != byId.end() || byId.size() >= REC_MAX_LATCHES) continue;
@@ -266,7 +289,8 @@ static void seedFromText(const std::string& text, const std::string& root, const
             if (at == byId.end()) { ++bk.rejected; continue; }
             Latch& L = at->second;
             if (L.logged) continue;
-            if (L.low != r.latch.low || L.high != r.latch.high || L.sell != r.latch.sell || L.peakTime != r.latch.peakTime) { ++bk.rejected; continue; }
+            if (L.low != r.latch.low || L.high != r.latch.high || L.sell != r.latch.sell || L.zone != r.latch.zone || L.peakTime != r.latch.peakTime ||
+                L.price != r.latch.price || L.formedTime != r.latch.formedTime || L.formedT != r.latch.formedT || L.tFirst != r.latch.tFirst) { ++bk.rejected; continue; }
             L.code = r.latch.code; L.support = r.latch.support; L.tDecided = r.latch.tDecided; L.decidedBy = r.latch.decidedBy; L.logged = true;
         }
     }
@@ -333,9 +357,13 @@ struct ChartState {
     long long settingsStamp;
     int dealerReach, drawnRows, missingVap, vapMismatch;
     bool dirty, faulted, ready, shortHistory, coarseBoundary;
+    int absorptionEvents, bubblesDrawn, bubblesOffscreen, bubblesSuppressed, activeAbsorptions, pairedAbsorptions;
+    std::map<long long, std::string> bubbleState; // event ID -> drawn/shared/offscreen/suppressed
+    std::map<long long, std::string> profileState; // actual emitted profile disposition, not just calculation
     ChartState() : barCount(0), latestStamp(0), firstStamp(0), tick(0), builtAt(-1),
         statusAt(-1), dealerAt(-1), settingsAt(-1), touchedAt(-1), settingsStamp(-2),
-        dealerReach(0), drawnRows(0), missingVap(0), vapMismatch(0), dirty(true), faulted(false), ready(false), shortHistory(false), coarseBoundary(false) {}
+        dealerReach(0), drawnRows(0), missingVap(0), vapMismatch(0), dirty(true), faulted(false), ready(false), shortHistory(false), coarseBoundary(false),
+        absorptionEvents(0), bubblesDrawn(0), bubblesOffscreen(0), bubblesSuppressed(0), activeAbsorptions(0), pairedAbsorptions(0) {}
 };
 class DeltaProfile : public cppExtension {
 public:
@@ -681,10 +709,26 @@ bool DeltaProfile::buildNative(ChartState& s) {
             // (2.5.4) after an IRT restart (or the first chart of the day) the session's record seeds the book: what was shown stays
             const std::string folder = recordDirectory();
             if (!folder.empty() && !s.root.empty()) {
-                bk.path = folder + recordName(s.market, spb, sess);
+                bk.path = folder + syncRecordName(s.market, spb, sess);
                 std::string text; bool tooLarge = false;
-                if (readWholeFile(bk.path, text, tooLarge)) seedFromText(text, s.book, s.root, tick, bk);
+                if (readWholeFile(bk.path, text, tooLarge)) seedFromText(text, s.book, "", tick, bk);
                 else if (tooLarge) { bk.note = "record too large - not read, not appended"; bk.path.clear(); }
+                else {
+                    // One-time import: retain old files unchanged, rewrite validated events to a new schema/path.
+                    const std::string legacyPath = folder + recordName(s.market, spb, sess);
+                    if (readWholeFile(legacyPath, text, tooLarge)) {
+                        seedFromText(text, s.book, s.root, tick, bk);
+                        for (Latch& L : bk.v) {
+                            if (!L.logged && L.formedTime == 0) {
+                                // Old schema cannot identify formation. Resume pending only from current knowledge.
+                                L.formedTime = latest; L.formedT = localSec(latest);
+                            }
+                            bk.journal.push_back(recordLine(L, 'F', tick, s.book));
+                            if (L.logged) bk.journal.push_back(recordLine(L, 'D', tick, s.book));
+                        }
+                        bk.note = "legacy imported; pending formation resumed now; old files preserved";
+                    }
+                }
             }
         }
         for (std::size_t c = 0; c < bk.carry.size();) {                                       // (2.5.7, F6) old-session lines still owed
@@ -703,36 +747,40 @@ bool DeltaProfile::buildNative(ChartState& s) {
         auto decided = [](const std::string& c) { return !c.empty() && c.back() != '?'; };
         auto sellNode = [](const std::string& c, bool sup) { return c[0] == 'A' && c.compare(0, 3, "Acc") != 0 ? sup : c[0] == 'I' ? !sup : c.compare(0, 3, "Dst") == 0; };
         const bool allowedNow = !s.shortHistory && !coarseBar;
-        auto track = [&](dp::Tick lo, dp::Tick hi, std::string& code, bool& support, int peakBar, double price, int decidedBar, double net, double mult, bool zone) {
-            if (code.empty()) return;
+        auto track = [&](dp::Tick lo, dp::Tick hi, std::string& code, bool& support, int& peakBar, double& price,
+                         int& decidedBar, int formedBar, double net, double mult, bool zone, long long& eventId) {
+            if (!allowedNow || code.empty() || peakBar < 0 || peakBar >= static_cast<int>(count)) return;
             const bool mySell = sellNode(code, support);
-            for (std::size_t k = 0; k < latches.size(); ++k)
-                if (latches[k].low <= hi && lo <= latches[k].high && latches[k].sell == mySell) {      // already tracked
-                    // (2.5.7, audit F4) an already-tracked candidate is NOT decided by the refreshed node's result (a later contribution
-                    // can move that node's first close); only the frozen scan below decides it, from its own peak bar
-                    code = latches[k].code; support = latches[k].support; return;
-                }
-            if (code[0] != 'A' || code.compare(0, 3, "Acc") == 0 || latches.size() >= REC_MAX_LATCHES || peakBar < 0 || peakBar >= static_cast<int>(count)) return;   // only absorption candidates start a record
-            Latch L; L.low = lo; L.high = hi; L.code = allowedNow ? code : (decided(code) ? code + "?" : code); L.support = support; L.candSupport = support;
-            L.peakTime = static_cast<RTDATE>(times[peakBar]); L.price = price; L.sell = mySell;
-            L.id = bk.nextId++; L.tFirst = nowT; L.peakT = barEnd(peakBar); L.net = net; L.mult = mult; L.zone = zone;   // (2.5.4)
+            const RTDATE peak = static_cast<RTDATE>(times[peakBar]);
+            for (const Latch& L : latches) {
+                if (!sameEvent(L, lo, hi, mySell, zone, peak)) continue;
+                code = L.code; support = L.support; price = L.price; eventId = L.id;
+                return;
+            }
+            if (latches.size() >= REC_MAX_LATCHES || formedBar < 0 || formedBar >= static_cast<int>(count)) {
+                if (code == "A") code = "A?"; // never publish unrecorded confirmed A
+                return;
+            }
+            Latch L; L.low = lo; L.high = hi; L.code = allowedNow ? code : (decided(code) ? code + "?" : code);
+            L.support = support; L.candSupport = support; L.peakTime = peak; L.price = price; L.sell = mySell;
+            L.formedTime = static_cast<RTDATE>(times[formedBar]); L.formedT = barEnd(formedBar);
+            L.id = bk.nextId++; L.tFirst = nowT; L.peakT = barEnd(peakBar); L.net = net; L.mult = mult; L.zone = zone;
             if (decided(L.code)) L.decidedBy = barEnd(decidedBar);
-            latches.push_back(L);
-            bk.journal.push_back(recordLine(L, 'F', tick, s.book));                                 // (2.5.4) first seen
+            eventId = L.id; latches.push_back(L); bk.journal.push_back(recordLine(L, 'F', tick, s.book));
         };
         const dp::Tick tpr = candidate.ticksPerRow;
-        for (std::size_t k = 0; k < candidate.nodes.size(); ++k) {
-            dp::Node& n = candidate.nodes[k];
+        for (dp::Node& n : candidate.nodes) {
             double net = 0;
-            for (std::size_t j = 0; j < candidate.buckets.size(); ++j) if (candidate.buckets[j].key == n.bucket) { net = candidate.buckets[j].delta; break; }
-            track(n.bucket * tpr, n.bucket * tpr + tpr - 1, n.state.code, n.state.support, n.state.peakBar, n.price, n.state.decidedBar, net, n.ratio, false);
+            for (const dp::Bucket& b : candidate.buckets) if (b.key == n.bucket) { net = b.delta; break; }
+            track(n.bucket*tpr, n.bucket*tpr+tpr-1, n.state.code, n.state.support, n.state.peakBar, n.price,
+                  n.state.decidedBar, n.state.formedBar, net, n.ratio, false, n.state.eventId);
         }
-        for (std::size_t k = 0; k < candidate.zones.size(); ++k) {
-            dp::Zone& z = candidate.zones[k];
-            const double mult = candidate.meanAbsDelta > 0 ? std::fabs(z.net) / candidate.meanAbsDelta : 0;   // vs the average row
-            track(z.low, z.high, z.code, z.support, z.peakBar, (static_cast<double>(z.low) + static_cast<double>(z.high)) * 0.5 * tick, z.decidedBar, z.net, mult, true);
+        for (dp::Zone& z : candidate.zones) {
+            double price = (static_cast<double>(z.low)+static_cast<double>(z.high))*.5*tick;
+            const double mult = candidate.meanAbsDelta > 0 ? std::fabs(z.net)/candidate.meanAbsDelta : 0;
+            track(z.low,z.high,z.code,z.support,z.peakBar,price,z.decidedBar,z.formedBar,z.net,mult,true,z.eventId);
         }
-        // decide the undecided ones from the chart's CLOSED bars after their absorption bar (the last bar is still forming)
+        // Decide pending events from CLOSED bars after frozen formation, not after the earlier delta peak.
         // (2.5.7, audit F2) only a complete build (no missing VAP / short history) decides - the same gate as a fresh node; a pending
         // candidate is decided on the next complete build from the same first qualifying close, so nothing is lost or reordered
         for (std::size_t k = 0; allowedNow && k < latches.size(); ++k) {
@@ -740,7 +788,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             if (decided(L.code)) continue;
             int lo = 0, hi = static_cast<int>(count) - 1, at = -1;
             while (lo <= hi) { const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
-                if (t == L.peakTime) { at = mid; break; } if (t < L.peakTime) lo = mid + 1; else hi = mid - 1; }
+                if (t == L.formedTime) { at = mid; break; } if (t < L.formedTime) lo = mid + 1; else hi = mid - 1; }
             if (at < 0) continue;
             for (int i = at + 1; i < static_cast<int>(count) - 1; ++i) {
                 const double o = open[i], c = close[i];
@@ -773,17 +821,17 @@ bool DeltaProfile::buildNative(ChartState& s) {
                 else bk.note = "record write failed - kept, retried on the next change";
             }
         }
-        // show the recorded result on any current node that is the same zone
-        for (std::size_t k = 0; k < candidate.nodes.size(); ++k) {
-            dp::Node& n = candidate.nodes[k];
-            for (std::size_t j = 0; j < latches.size(); ++j) {
-                const dp::Tick lo = n.bucket * tpr, hi = n.bucket * tpr + tpr - 1;
-                if (latches[j].low <= hi && lo <= latches[j].high && !n.state.code.empty() && latches[j].sell == sellNode(n.state.code, n.state.support)) {
-                    n.state.code = latches[j].code; n.state.support = latches[j].support; break;
-                }
-            }
+        // Join by EVENT ID, never by spatial overlap with an unrelated historic episode.
+        for (dp::Node& n : candidate.nodes) {
+            const Latch* L = eventById(bk, n.state.eventId);
+            if (L) { n.state.code = L->code; n.state.support = L->support; n.price = L->price; }
+        }
+        for (dp::Zone& z : candidate.zones) {
+            const Latch* L = eventById(bk, z.eventId);
+            if (L) { z.code = L->code; z.support = L->support; }
         }
     }
+    if (s.shortHistory || coarseBar) { candidate.nodes.clear(); candidate.zones.clear(); }
     s.snapshot = std::move(candidate); s.ready = true;
     s.state = s.shortHistory ? "short chart history: provisional signals" : coarseBar ?
         "boundary bar crosses window: provisional signals" : "ready";
@@ -856,12 +904,64 @@ bool DeltaProfile::render(ChartState& s) {
         s.state = "not drawn: insufficient pane room or overlapping gap"; return false;
     }
     textLeft(left + 2, pane.top + 8, "DLT", C_MUTED, 8, true);
-    if (!s.ready) { textRight(base - 2, top + 12, "NO VAP", C_SELL, 8, true); return false; }
+    if (!s.ready) textRight(base - 2, top + 12, "NO VAP", C_SELL, 8, true);
     if (s.shortHistory || s.state.find("provisional") != std::string::npos)
         textRight(base - 2, top + 12, "PARTIAL", C_MUTED, 8, true);
     stroke(base, top, base, bottom, C_AXIS, 1);
-    const dp::Snapshot& profile = s.snapshot;
+    const dp::Snapshot unavailable;
+    const dp::Snapshot& profile = s.ready ? s.snapshot : unavailable;
     const int lastBar = s.barCount - 1, full = s.layout.width - 2;
+    const LatchBook& book = latchBooks()[s.book + "|" + std::to_string(getSecondsPerBar())];
+    struct LBox { int l, t, r, b; };
+    auto overlap = [](const LBox& a, const LBox& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; };
+    struct Bubble { LBox box; int bar; double price; bool support; long long id; int offset; };
+    std::vector<Bubble> bubbles;
+    s.bubbleState.clear(); s.profileState.clear();
+    s.absorptionEvents = s.bubblesDrawn = s.bubblesOffscreen = s.bubblesSuppressed = s.activeAbsorptions = s.pairedAbsorptions = 0;
+    RTARRAYI bubbleTimes(barDateTime);
+    // Immutable event order: a newly qualifying mark never evicts a previously retained bubble.
+    std::vector<const Latch*> confirmed;
+    for (const Latch& L : book.v) if (confirmedAbsorption(L)) confirmed.push_back(&L);
+    std::sort(confirmed.begin(),confirmed.end(),[](const Latch* a,const Latch* b){
+        return a->tDecided!=b->tDecided?a->tDecided<b->tDecided:a->id<b->id;
+    });
+    for (const Latch* item : confirmed) {
+        const Latch& L=*item;
+        ++s.absorptionEvents;
+        int lo=0, hi=s.barCount-1, at=-1;
+        if (bubbleTimes.count >= s.barCount && L.peakTime != 0) {
+            while (lo<=hi) { const int mid=(lo+hi)/2; const RTDATE t=static_cast<RTDATE>(bubbleTimes[mid]);
+                if(t==L.peakTime){at=mid;break;} if(t<L.peakTime)lo=mid+1;else hi=mid-1; }
+        }
+        if(at<0){s.bubbleState[L.id]="offscreen";++s.bubblesOffscreen;continue;}
+        PNT point; point.set(at,static_cast<float>(L.price),kBarCenter);
+        const LBox anchorBox{point.h-6,point.v-6,point.h+7,point.v+7};
+        if(anchorBox.l<pane.left || anchorBox.r>left-8 || anchorBox.t<top || anchorBox.b>bottom){
+            s.bubbleState[L.id]="offscreen";++s.bubblesOffscreen;continue;
+        }
+        const Bubble* shared=NULL;
+        for(const Bubble& b:bubbles)if(b.support==L.support&&b.bar==at&&std::fabs(b.price-L.price)<=s.tick*.000001){shared=&b;break;}
+        if(shared){s.bubbleState[L.id]="shared";continue;}
+        bool found=false;LBox selected=anchorBox;int offset=0;
+        for(int attempt=0;attempt<13&&!found;++attempt){
+            const int dx=((attempt+1)/2)*14*(attempt%2?-1:1);
+            LBox box{anchorBox.l+dx,anchorBox.t,anchorBox.r+dx,anchorBox.b};
+            if(box.l<pane.left||box.r>left-8)continue;
+            bool clash=false;for(const Bubble& b:bubbles)if(overlap(box,b.box)){clash=true;break;}
+            if(!clash){selected=box;offset=dx;found=true;}
+        }
+        if(!found){s.bubbleState[L.id]="suppressed";++s.bubblesSuppressed;continue;}
+        bubbles.push_back(Bubble{selected,at,L.price,L.support,L.id,offset});s.bubbleState[L.id]="drawn";
+    }
+    auto bubbleDisposition = [&](long long id) -> std::string {
+        const auto it=s.bubbleState.find(id);return it==s.bubbleState.end()?"missing":it->second;
+    };
+    // Labels may identify an offscreen peak explicitly, but cannot display an unpaired on-screen A.
+    auto permitAbsorptionLabel = [&](long long id) -> bool {
+        const std::string q=bubbleDisposition(id);
+        if(q=="drawn"||q=="shared"||q=="offscreen")return true;
+        s.profileState[id]="suppressed:no bubble";return false;
+    };
     std::vector<std::size_t> ranked;
     for (std::size_t i = 0; i < profile.buckets.size(); ++i) ranked.push_back(i);
     std::sort(ranked.begin(), ranked.end(), [&profile](std::size_t a, std::size_t b) {
@@ -911,28 +1011,35 @@ bool DeltaProfile::render(ChartState& s) {
         return a.node->ratio != b.node->ratio ? a.node->ratio > b.node->ratio : a.y < b.y; });
     if (nodes.size() > 3) nodes.resize(3);
     std::vector<int> used;
-    std::vector<int> ringed;   // (2.5.0) bars already circled this pass
-    struct LBox { int l, t, r, b; };
     std::vector<LBox> placed;
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const VisibleNode& v = nodes[i]; const dp::Node& n = *v.node;
         double net = 0; for (std::size_t j = 0; j < profile.buckets.size(); ++j) if (profile.buckets[j].key == n.bucket) net = profile.buckets[j].delta;
-        std::string label = n.state.code + " " + ratio(n.ratio) + (net != 0 ? "  " + amount(net) : std::string());
+        const Latch* event=eventById(book,n.state.eventId);
+        const bool isA=n.state.code=="A";
+        if(isA){++s.activeAbsorptions;if(!event||!confirmedAbsorption(*event)||!permitAbsorptionLabel(event->id))continue;}
+        const double shownRatio=isA?event->mult:n.ratio;
+        if(isA)net=event->net;
+        const std::string badge=isA&&bubbleDisposition(event->id)=="offscreen"?" [offscreen]":"";
+        std::string label = n.state.code + " " + ratio(shownRatio) + (net != 0 ? "  " + amount(net) : std::string()) + badge;
         int width = textWidth(label, s.layout.font, true);
-        if (v.edge - 4 - width < pane.left + 2) { label = n.state.code + " " + ratio(n.ratio); width = textWidth(label, s.layout.font, true); }
+        if (v.edge - 4 - width < pane.left + 2) { label = n.state.code + " " + ratio(shownRatio) + badge; width = textWidth(label, s.layout.font, true); }
         if (v.edge - 4 - width < pane.left + 2) continue;
         const int h = s.layout.font + 3, r = v.edge - 4, l = r - width;
-        int y = v.y; bool ok = false;
+        const int anchorY=isA?yOf(lastBar,event->price):v.y;
+        int y = anchorY; bool ok = false;
         for (int k = 0; k <= 6 && !ok; k++) {
-            const int yy = v.y + ((k + 1) / 2) * h * (k % 2 ? -1 : 1);
+            const int yy = anchorY + ((k + 1) / 2) * h * (k % 2 ? -1 : 1);
             if (yy - h / 2 <= top || yy + h / 2 >= bottom) continue;
             bool clash = false;
             for (const LBox& q : placed) if (l < q.r + 2 && q.l < r + 2 && yy - h / 2 < q.b && q.t < yy + h / 2) clash = true;
+            for (const Bubble& b : bubbles) if (overlap(LBox{l,yy-h/2,r,yy+h/2},b.box)) clash=true;
             if (!clash) { y = yy; ok = true; }
         }
         if (!ok) continue;
         const COLOR color = n.state.support ? C_SUPPORT : C_RESISTANCE;
         textRight(r, y, label, color, s.layout.font, true); used.push_back(y);
+        if(event){s.profileState[event->id]="shown:"+n.state.code; if(isA&&(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared"))++s.pairedAbsorptions;}
         placed.push_back(LBox{ l, y - h / 2, r, y + h / 2 });
         if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1); // visible association when a label stepped
     }
@@ -941,7 +1048,10 @@ bool DeltaProfile::render(ChartState& s) {
     for (std::size_t i = 0; i < profile.zones.size(); ++i) {
         const dp::Zone& z = profile.zones[i];
         // (2.5.6) zone circles also come only from the session record (frozen)
-        if (z.code != "A" && z.code != "A?") continue;   // (2.5.0, Rassul 13:59 "remove the accumulation and distribution ... only keep absorption")
+        if (z.code != "A") continue;
+        ++s.activeAbsorptions;
+        const Latch* event=eventById(book,z.eventId);
+        if(!event||!confirmedAbsorption(*event)||!permitAbsorptionLabel(event->id))continue;
         int yt = yOf(lastBar, (static_cast<double>(z.high) + 0.5) * profile.tick);
         int yb = yOf(lastBar, (static_cast<double>(z.low) - 0.5) * profile.tick);
         if (yb <= top || yt >= bottom) continue;
@@ -954,44 +1064,41 @@ bool DeltaProfile::render(ChartState& s) {
             if (at != edge.end()) { e = any ? std::min(e, at->second) : at->second; any = true; }
         }
         if (!any) continue;
-        std::ostringstream out; out << z.code;
-        if (z.code != "A" && z.code != "A?") out << ' ' << z.share << '%';
-        const std::string label = out.str(); const int width = textWidth(label, s.layout.font, true);
-        int y = (yt + yb) / 2;
-        bool collision = false;
-        for (std::size_t j = 0; j < used.size(); ++j) if (std::abs(y - used[j]) < s.layout.font + 2) collision = true;
-        if (collision && (z.code == "A" || z.code == "A?")) {          // (2.4.3) an absorption zone always keeps its letter (it has a circle): move it clear
-            for (int tries = 0; tries < 6 && collision; ++tries) {
-                y += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (s.layout.font + 2);
-                collision = false;
-                for (std::size_t j = 0; j < used.size(); ++j) if (std::abs(y - used[j]) < s.layout.font + 2) collision = true;
-            }
-            collision = false;
+        const std::string badge=bubbleDisposition(event->id)=="offscreen"?" [offscreen]":"";
+        const std::string label="A "+ratio(event->mult)+"  "+amount(event->net)+badge;
+        const int width=textWidth(label,s.layout.font,true), height=s.layout.font+3;
+        if(e-7-width<pane.left+2)continue;
+        const int anchorY=yOf(lastBar,event->price);
+        int y=anchorY;bool ok=false;
+        for(int k=0;k<=6&&!ok;++k){
+            const int yy=anchorY+((k+1)/2)*height*(k%2?-1:1);
+            if(yy-height/2<=top||yy+height/2>=bottom)continue;
+            LBox box{e-7-width,yy-height/2,e-7,yy+height/2};bool clash=false;
+            for(const LBox& q:placed)if(overlap(box,q))clash=true;
+            for(const Bubble& q:bubbles)if(overlap(box,q.box))clash=true;
+            if(!clash){y=yy;ok=true;}
         }
-        if (collision || e - 7 - width < pane.left + 2) continue;
-        const COLOR color = z.support ? C_SUPPORT : C_RESISTANCE;
-        stroke(e - 4, yt, e - 4, yb, color, 1); stroke(e - 4, yt, e - 1, yt, color, 1);
-        stroke(e - 4, yb, e - 1, yb, color, 1);
-        textRight(e - 7, y, label, color, s.layout.font, true); used.push_back(y);
+        if(!ok){s.profileState[event->id]="suppressed:label collision";continue;}
+        const COLOR color=event->support?C_SUPPORT:C_RESISTANCE;
+        stroke(e-4,yt,e-4,yb,color,1);stroke(e-4,yt,e-1,yt,color,1);stroke(e-4,yb,e-1,yb,color,1);
+        textRight(e-7,y,label,color,s.layout.font,true);used.push_back(y);
+        placed.push_back(LBox{e-7-width,y-height/2,e-7,y+height/2});
+        s.profileState[event->id]="shown:A";
+        if(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared")++s.pairedAbsorptions;
+        if(y!=anchorY)stroke(e-5,anchorY,e-5,y,color,1);
     }
-    // (2.5.0) a recorded absorption keeps its circle for the session, even after its node left the sliding profile
-    {
-        const std::vector<Latch>& latches = latchBooks()[s.book + "|" + std::to_string(getSecondsPerBar())].v;
-        RTARRAYI times(barDateTime);
-        for (std::size_t k = 0; k < latches.size(); ++k) {
-            const Latch& L = latches[k];
-            // (2.5.5, Rassul 2026-10-11 19:10 "you keep removing the circles"): EVERY candidate keeps its circle for the session, in the
-            // colour it was first drawn in - also one later decided I (buyers / sellers won). A circle never disappears or changes.
-            if (L.peakTime == 0 || times.count < s.barCount || s.barCount < 1) continue;
-            int lo = 0, hi = s.barCount - 1, at = -1;                   // the bar with this time (times ascend)
-            while (lo <= hi) { const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
-                if (t == L.peakTime) { at = mid; break; } if (t < L.peakTime) lo = mid + 1; else hi = mid - 1; }
-            if (at < 0 || std::find(ringed.begin(), ringed.end(), at) != ringed.end()) continue;
-            ringed.push_back(at);
-            ringAt(at, L.price, L.candSupport ? C_SUPPORT : C_RESISTANCE, pane.left, paneRight, top, bottom);
+    // Historical confirmed absorption uses the SAME immutable events as the current profile.
+    // I, A?, I?, Acc and Dst are never absorption bubbles. No one-bubble-per-bar filter.
+    for(const Bubble& b:bubbles){
+        const COLOR color=b.support?C_SUPPORT:C_RESISTANCE;
+        if(b.offset==0)ringAt(b.bar,b.price,color,pane.left,left-8,top,bottom);
+        else {
+            PNT anchor;anchor.set(b.bar,static_cast<float>(b.price),kBarCenter);
+            stroke(anchor.h,anchor.v,anchor.h+b.offset,anchor.v,color,1);
+            setPen(color,2,P_SOLID);CBRUSH brush(color,PAT_HOLLOW);brush.set();
+            RCT r;r.set(coordinate(b.box.l),coordinate(b.box.t),coordinate(b.box.r-1),coordinate(b.box.b-1));r.drawOval(DRAW_OPAQUE);
         }
-        // (2.5.5, Rassul 2026-10-11 18:58 "remove") no letter column for signals that left the profile: tonight it stacked every
-        // A / I since 17:00 as bare letters left of the profile. Their circles on the bars stay; the record keeps every signal.
+        ++s.bubblesDrawn;
     }
     return true;
 }
@@ -1011,6 +1118,20 @@ void DeltaProfile::status(ChartState& s) {
         const std::vector<Latch>& latches = bk.v;
         out << "RECORD," << safeField(bk.path) << ",session " << bk.session << ",loaded " << bk.loaded << ",written " << bk.written
             << ",pending " << bk.journal.size() << ",rejected " << bk.rejected << ',' << safeField(bk.note) << '\n';   // (2.5.4)
+        out << "BUBBLE_POLICY,confirmed A only; historical peak annotations\nABSORPTION_EVENTS," << s.absorptionEvents
+            << "\nBUBBLES_DRAWN," << s.bubblesDrawn << "\nBUBBLES_OFFSCREEN," << s.bubblesOffscreen
+            << "\nBUBBLES_SUPPRESSED," << s.bubblesSuppressed << "\nACTIVE_ABSORPTIONS," << s.activeAbsorptions
+            << "\nPAIRED_ABSORPTIONS," << s.pairedAbsorptions << '\n';
+        for(const Latch& L:latches){
+            const auto b=s.bubbleState.find(L.id), q=s.profileState.find(L.id);
+            out << "EVENT_SYNC," << L.id << ',' << L.code << ',' << (L.support?"support":"resistance")
+                << ',' << L.price << ',' << L.mult << ',' << L.net << ',' << L.peakT << ',' << L.tFirst << ',' << L.tDecided
+                << ',' << (b==s.bubbleState.end()?"none":b->second) << ',' << (q==s.profileState.end()?"not shown":q->second) << '\n';
+        }
+        for(const dp::Node& n:s.snapshot.nodes){
+            double d=0;for(const dp::Bucket& b:s.snapshot.buckets)if(b.key==n.bucket){d=b.delta;break;}
+            out << "LIVE_NODE," << n.state.eventId << ',' << n.state.code << ',' << n.price << ',' << n.ratio << ',' << d << '\n';
+        }
         for (std::size_t k = 0; k < latches.size(); ++k)
             out << "SIGNAL," << latches[k].code << "," << (latches[k].support ? "support" : "resistance") << "," << latches[k].low * s.tick << "," << latches[k].high * s.tick << ",t " << latches[k].peakTime << '\n';
     }
