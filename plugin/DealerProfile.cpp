@@ -55,7 +55,7 @@
 #include <ctime>
 #include <new>
 
-static const char* DP_VERSION = "2.8.6";   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.8.7";   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -128,6 +128,21 @@ static void dpNormalizeSettings(Settings& s)
     if (s.font < 6 || s.font > 24) s.font = 10;
     if (s.clock < -720 || s.clock > 720) s.clock = 0;
     if (s.inds.size() > 160) s.inds.resize(160);
+}
+
+// Unknown future rows remain forward-compatible, but a malformed row in the
+// declared Dealer grammar rejects the whole changed snapshot rather than
+// replacing the prior complete display with a torn prefix.
+static bool dpKnownDealerRow(const std::string& line)
+{
+    size_t p = line.find('|'); std::string k = line.substr(0, p);
+    return k == "VERSION" || k == "MARKET" || k == "SYMBOL" || k == "SRC" || k == "ASOF" || k == "LIVE" || k == "PRICE" || k == "BOOK" ||
+           k == "NODE" || k == "LEVEL" || k == "WALLHDR" || k == "FUELHDR" || k == "NAMES" || k == "NOWALL" || k == "XROW" || k == "ANOW" ||
+           k == "ABIAS" || k == "ASCN" || k == "WALLROW" || k == "FUELROW" || k == "TRADE" || k == "FLAG" || k == "DO" || k == "TRIG" ||
+           k == "BOOKLINE" || k == "NEXT" || k == "ADEAL" || k == "AMAG" || k == "KEYLVL" || k == "CHK" || k == "VERDICT" || k == "STOPTGT" ||
+           k == "TAG" || k == "LEARN" || k == "VERDICT2" || k == "VOTE" || k == "DLINE" || k == "PLAN" || k == "BOOKCHK" || k == "SUMMARY" ||
+           k == "FSUM" || k == "FWIN" || k == "GSTR" || k == "SIG" || k == "LSIG" || k == "FERR" || k == "TURN" || k == "RD" || k == "RMODE" ||
+           k == "TR" || k == "TERR" || k == "STAGE" || k == "STG" || k == "SSUM" || k == "SR";
 }
 
 using dpaudit::LblBox;                 // (2.7.3) a drawn label box (2.7.4: DealerProfileAuditLogic.h, tested)
@@ -226,6 +241,7 @@ public:
     std::map<std::string, bool> lvStale;
     void loadLevels(const std::string& m);
     const LV* levelAt(const std::string& m, float chartPx);
+    double chartTick(const std::string& m);
     void drawKeyLevels(const Settings& S);
     // (2.7.0) the native key levels, cached per market: recomputed when the chart gets a new bar (at most every 10 s)
     // (2.7.2) the cache is per chart: copied in/out of the host State like every other cache (loadHostState / saveHostState)
@@ -346,31 +362,47 @@ void DealerProfile::syncSettings(bool fromDialog)
     const char* pl = getPeriodicityLabel(); bool inDialog = !(pl && pl[0]);
     if (inDialog && fromDialog) {                       // saved ONLY from the settings window's callbacks
         readSettings(cfg);
-        std::map<std::string, std::string> all; std::ifstream in(dpSettingsPath().c_str()); std::string ln;
-        while (std::getline(in, ln)) { size_t p = ln.find('|'); if (p != std::string::npos) all[ln.substr(0, p)] = ln; }
-        in.close();
+        const std::string path = dpSettingsPath();
+        std::map<std::string, std::string> all; std::vector<std::string> lines;
+        const dpaudit::BoundedRead rr = dpaudit::readBoundedLines(path, lines);
+        if (rr != dpaudit::READ_OK && rr != dpaudit::READ_OPEN_FAILED) return; // never truncate an unreadable existing settings file
+        for (size_t i = 0; i < lines.size(); ++i) { size_t p = lines[i].find('|'); if (p != std::string::npos) all[lines[i].substr(0, p)] = lines[i]; }
         std::string inds = cfg.inds; for (size_t i = 0; i < inds.size(); i++) if (inds[i] == '|') inds[i] = ',';
         char b[200]; snprintf(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|", cfg.market, cfg.width, cfg.font, cfg.clock, cfg.labels ? 1 : 0,
                                cfg.snap ? 1 : 0, cfg.fadefar ? 1 : 0, cfg.banner ? 1 : 0);
         std::string row = key + b + inds;
-        if (all[key] != row) { all[key] = row; std::ofstream out(dpSettingsPath().c_str(), std::ios::trunc); for (auto& kv : all) out << kv.second << "\n"; }
-        savedKey = key; return;
+        if (all[key] == row) { savedKey = key; savedStamp = dl::fileStamp(path); return; }
+        all[key] = row;
+        State* state = slot_.get(this, false);
+        const std::uintptr_t id = state ? reinterpret_cast<std::uintptr_t>(state) : reinterpret_cast<std::uintptr_t>(this);
+        const std::string tmp = dpaudit::exportTempPath(path, id);
+        bool wrote = false;
+        {
+            std::ofstream out(tmp.c_str(), std::ios::trunc);
+            if (out.is_open()) { for (std::map<std::string, std::string>::const_iterator it = all.begin(); it != all.end(); ++it) out << it->second << "\n"; out.flush(); wrote = out.good(); }
+        }
+        if (wrote && dpReplaceFile(tmp, path)) { savedKey = key; savedStamp = dl::fileStamp(path); }
+        else std::remove(tmp.c_str());
+        return;
     }
-    long long st = dl::fileStamp(dpSettingsPath());
+    const std::string path = dpSettingsPath(); long long st = dl::fileStamp(path);
     if (savedKey == key && st == savedStamp) return;
-    savedStamp = st;
-    std::ifstream in(dpSettingsPath().c_str()); std::string ln;
-    while (std::getline(in, ln)) {
-        std::vector<std::string> t = dl::split(ln, '|');
+    if (st < 0) { savedStamp = st; savedKey = key; return; }
+    std::vector<std::string> lines;
+    if (dpaudit::readBoundedLines(path, lines) != dpaudit::READ_OK || dl::fileStamp(path) != st) return;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        std::vector<std::string> t = dl::split(lines[i], '|');
         if (t.size() >= 9 && t[0] == key) {
-            cfg.market = atoi(t[1].c_str()); cfg.width = atoi(t[2].c_str()); cfg.font = atoi(t[3].c_str()); cfg.clock = atoi(t[4].c_str());
+            int market = 0, width = 0, font = 0, clock = 0;
+            if (!dpaudit::parseInt(t[1], market) || !dpaudit::parseInt(t[2], width) || !dpaudit::parseInt(t[3], font) || !dpaudit::parseInt(t[4], clock)) continue;
+            cfg.market = market; cfg.width = width; cfg.font = font; cfg.clock = clock;
             cfg.labels = t[5] == "1"; cfg.snap = t[6] == "1"; cfg.fadefar = t[7] == "1"; cfg.banner = t[8] == "1";
             if (t.size() >= 10 && !t[9].empty()) cfg.inds = t[9];
             dpNormalizeSettings(cfg);
-            savedKey = key; return;
+            savedKey = key; savedStamp = st; return;
         }
     }
-    savedKey = key;   // (2.7.4) no row for this chart: defaults, and the file is not re-read on every repaint until it changes
+    savedKey = key; savedStamp = st;   // (2.7.4) no row for this chart: defaults, and the file is not re-read on every repaint until it changes
 }
 int DealerProfile::parmsLoad(void)  { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
 int DealerProfile::parmsApply(void) { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
@@ -421,12 +453,13 @@ void DealerProfile::load()
     const char* up = getenv("USERPROFILE"); if (!up) { D = dl::Data(); return; }
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Dealer-" + mkt + ".csv";
     long long st = dl::fileStamp(path);
-    if (st >= 0 && st == loadedStamp && path == loadedPath) return;      // unchanged: keep what is parsed (no disk read)
-    D = dl::Data();
-    std::ifstream f(path.c_str()); if (!f.is_open()) { loadedPath.clear(); return; }
+    if (st == loadedStamp && path == loadedPath) return;                   // unchanged, including a known-missing file: no repeat disk open
+    if (st < 0) { D = dl::Data(); loadedStamp = st; loadedPath = path; return; } // cache a missing file rather than stat/opening each repaint
+    std::vector<std::string> lines;
+    if (dpaudit::readBoundedLines(path, lines) != dpaudit::READ_OK || dl::fileStamp(path) != st) return;
     dl::Data parsed;
-    std::string line;
-    while (std::getline(f, line)) dl::parseLine(parsed, line);
+    for (size_t i = 0; i < lines.size(); ++i) if (!dl::parseLine(parsed, lines[i]) && dpKnownDealerRow(lines[i])) return;   // (2.8.7) every row parsed; a malformed known row rejects the snapshot
+    if (parsed.ver.empty()) return;                              // declared file grammar starts with VERSION; do not install a torn prefix
     dpSanitizeDealerData(parsed);
     D = parsed;
     loadedStamp = st; loadedPath = path;
@@ -736,10 +769,16 @@ void DealerProfile::writeStatus(const char* what)
     static dpaudit::WriteGate gate;
     const std::string body = f.str();
     if (!gate.due(body, time(nullptr))) return;
-    std::ofstream out(path.c_str(), std::ios::trunc);
-    if (!out.is_open()) { gate.last.clear(); return; }
-    out << body;
-    if (!out) gate.last.clear();
+    // (2.8.7, audit DP-004) written to a unique temp file, checked, then replaced: a reader never sees a half-written status
+    State* state = slot_.get(this, false);
+    const std::uintptr_t id = state ? reinterpret_cast<std::uintptr_t>(state) : reinterpret_cast<std::uintptr_t>(this);
+    const std::string tmp = dpaudit::exportTempPath(path, id);
+    bool wrote = false;
+    {
+        std::ofstream out(tmp.c_str(), std::ios::trunc);
+        if (out.is_open()) { out << body; out.flush(); wrote = out.good(); }
+    }
+    if (!(wrote && dpReplaceFile(tmp, path))) { std::remove(tmp.c_str()); gate.last.clear(); }
 }
 
 // (1.3.7, Rassul 2026-09-30: the Read went blank overnight - MenthorQ's price freezes outside RTH) the chart's own last 200
@@ -758,7 +797,9 @@ void DealerProfile::exportBars()
     if (n == E.n && lc == E.c && now - E.t < 60) return;
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-IRT-Bars-" + mkt + ".csv";
-    std::string tmp = dpaudit::exportTempPath(path, reinterpret_cast<std::uintptr_t>(getUserData()));
+    State* state = slot_.get(this, false);
+    const std::uintptr_t id = state ? reinterpret_cast<std::uintptr_t>(state) : reinterpret_cast<std::uintptr_t>(this);
+    std::string tmp = dpaudit::exportTempPath(path, id);
     // (1.5.0, Rassul 2026-09-30) his own indicators (cob_bull, cob_bear ... by name, set in the settings) ride along, one
     // column each, so the Reader can check its rebuilt triggers against the chart's - the chart is the source of truth
     std::vector<std::string> names; std::vector<RTARRAY*> arrs;
@@ -778,8 +819,10 @@ void DealerProfile::exportBars()
         }
     }
     std::string nl; for (size_t j = 0; j < names.size(); j++) nl += (j ? "," : "") + names[j];
+    bool wrote = false;
     {
-        std::ofstream f(tmp.c_str(), std::ios::trunc); if (!f.is_open()) { for (size_t j = 0; j < arrs.size(); j++) delete arrs[j]; return; }
+        std::ofstream f(tmp.c_str(), std::ios::trunc);
+        if (!f.is_open()) { for (size_t j = 0; j < arrs.size(); j++) delete arrs[j]; return; }
         char b[200];
         snprintf(b, sizeof(b), "IRTBARS|2|%s|%s|%.6f|%ld|%s\n", mkt.c_str(), root.c_str(), (double)off, (long)now, nl.c_str()); f << b;
         int from = (int)n - 200; if (from < 0) from = 0;
@@ -795,9 +838,10 @@ void DealerProfile::exportBars()
             }
             f << row << "\n";
         }
+        f.flush(); wrote = f.good();
     }
     for (size_t j = 0; j < arrs.size(); j++) delete arrs[j];
-    if (dpReplaceFile(tmp, path)) { E.n = n; E.c = lc; E.t = now; }
+    if (wrote && dpReplaceFile(tmp, path)) { E.n = n; E.c = lc; E.t = now; }
     else std::remove(tmp.c_str());
 }
 
@@ -810,18 +854,21 @@ void DealerProfile::loadMQLevels()
     std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\MenthorQLevels.csv";
     long long st = dl::fileStamp(p);
     if (st == mqlStamp) return;
-    std::ifstream f(p.c_str()); if (!f.is_open()) { mql.clear(); mqlStamp = st; return; }
+    if (st < 0) { mql.clear(); mqlStamp = st; return; }
+    std::vector<std::string> lines;
+    if (dpaudit::readBoundedLines(p, lines) != dpaudit::READ_OK || dl::fileStamp(p) != st) return;
     std::map<std::string, std::vector<MQL> > m;
-    std::string ln; bool head = true;
-    while (std::getline(f, ln)) {
-        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+    bool head = true;
+    for (size_t row = 0; row < lines.size(); ++row) {
+        const std::string& ln = lines[row];
         if (head) { head = false; if (ln.compare(0, 6, "SYMBOL") == 0) continue; }
         std::vector<std::string> c; std::stringstream ss(ln); std::string x;
         while (std::getline(ss, x, ',')) c.push_back(x);
         if (c.size() < 5 || c[0].empty()) continue;
         MQL q; if (!dpaudit::parsePositiveFinite(c[1], q.px)) continue; q.label = c[2];
-        long v = atol(c[3].c_str()); q.col = (COLOR)(v & 0x00FFFFFF); if (q.col == 0) q.col = 0x0022D3EE;   // never black
-        q.w = atoi(c[4].c_str()); if (q.w < 1) q.w = 1; if (q.w > 3) q.w = 3;
+        int v = 0, w = 0; if (!dpaudit::parseInt(c[3], v) || !dpaudit::parseInt(c[4], w)) continue;
+        q.col = (COLOR)(v & 0x00FFFFFF); if (q.col == 0) q.col = 0x0022D3EE;   // never black
+        q.w = w; if (q.w < 1) q.w = 1; if (q.w > 3) q.w = 3;
         m[c[0]].push_back(q);
     }
     mql.swap(m); mqlStamp = st;
@@ -836,11 +883,12 @@ void DealerProfile::loadTouch(const std::string& m)
     std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Touch-" + m + ".csv";
     long long st = dl::fileStamp(p);
     if (tpStamp.count(m) && st == tpStamp[m]) return;
+    if (st < 0) { tps[m].clear(); tpStamp[m] = st; tpAt[m] = 0; return; }
+    std::vector<std::string> lines;
+    if (dpaudit::readBoundedLines(p, lines) != dpaudit::READ_OK || dl::fileStamp(p) != st) return;
     std::vector<TP> v;
-    std::ifstream f(p.c_str());
-    std::string ln;
-    while (f.is_open() && std::getline(f, ln)) {
-        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+    for (size_t row = 0; row < lines.size(); ++row) {
+        const std::string& ln = lines[row];
         std::vector<std::string> c; std::stringstream ss(ln); std::string x;
         while (std::getline(ss, x, '|')) c.push_back(x);
         if (c.size() >= 7 && c[0] == "TOUCH") { TP t; if (!dpaudit::parsePositiveFinite(c[2], t.px)) continue; t.p1 = c[3]; t.pe = c[4]; t.pc = c[5]; t.proven = c[6] == "1"; if (c.size() >= 8) t.txt = c[7]; v.push_back(t); }
@@ -893,18 +941,20 @@ void DealerProfile::loadLevels(const std::string& m)
     std::string p = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Levels-" + m + ".csv";
     long long st = dl::fileStamp(p);
     if (lvStamp.count(m) && st == lvStamp[m]) return;
+    if (st < 0) { lvs[m].clear(); lvStamp[m] = st; lvStale[m] = false; lvAt[m] = 0; return; }
+    std::vector<std::string> lines;
+    if (dpaudit::readBoundedLines(p, lines) != dpaudit::READ_OK || dl::fileStamp(p) != st) return;
     std::vector<LV> v; std::vector<float> picks; bool stale = false;
-    std::ifstream f(p.c_str());
-    std::string ln;
-    while (f.is_open() && std::getline(f, ln)) {
-        if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
+    for (size_t row = 0; row < lines.size(); ++row) {
+        const std::string& ln = lines[row];
         std::vector<std::string> c = dl::split(ln, '|');
         if (c.size() >= 2 && c[0] == "STATE" && c[1] == "STALE") stale = true;
         if (c.size() >= 13 && c[0] == "LEVEL") { LV q; if (!dpaudit::parsePositiveFinite(c[3], q.px)) continue; q.code = c[1]; q.show = c[2]; q.fam = c[4]; q.label = c[12]; v.push_back(q); }
         if (c.size() >= 3 && c[0] == "PICK") { float pp = 0; if (dpaudit::parsePositiveFinite(c[2], pp)) picks.push_back(pp); }
     }
+    const double tick = chartTick(m);
     for (size_t i = 0; i < picks.size(); ++i) for (size_t j = 0; j < v.size(); ++j)
-        if (std::fabs(v[j].px - picks[i]) <= std::fabs(picks[i]) * 1e-6f) v[j].pick = true;
+        if (dpaudit::sameTick(v[j].px, picks[i], tick)) v[j].pick = true;
     lvs[m].swap(v); lvStamp[m] = st; lvStale[m] = stale; lvAt[m] = st > 0 ? (time_t)(st / 1000003LL) : 0;
 }
 
@@ -912,14 +962,20 @@ const DealerProfile::LV* DealerProfile::levelAt(const std::string& m, float char
 {
     loadLevels(m);
     if (lvStale[m] || lvAt[m] <= 0 || time(nullptr) - lvAt[m] > 20 * 60) return nullptr;     // stale odds are never shown
-    float tol = std::fabs(chartPx) * 2e-5f;
-    for (const LV& q : lvs[m]) if (std::fabs(q.px + off - chartPx) <= tol || std::fabs(q.px - chartPx) <= tol) return &q;
+    const double tick = chartTick(m);
+    for (const LV& q : lvs[m]) if (dpaudit::sameTick(q.px + off, chartPx, tick) || dpaudit::sameTick(q.px, chartPx, tick)) return &q;
     return nullptr;
 }
 
 static double tickOfMkt(const std::string& m)
 {
     return m == "CL" ? 0.01 : m == "NG" ? 0.001 : m == "GC" ? 0.1 : m == "HG" ? 0.0005 : m == "EU" ? 0.00005 : 0.25;
+}
+
+double DealerProfile::chartTick(const std::string& m)
+{
+    const double tick = getTickIncrement();                    // verified in supplied IRT SDK; do not infer from decimal formatting
+    return dpaudit::finite(tick) && tick > 0.0 ? tick : tickOfMkt(m);
 }
 
 const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m)
@@ -952,7 +1008,7 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
     }
     int o = 0, cl = 0;
     if (!svl::rthOf(m.c_str(), o, cl)) { K.v.clear(); return K.v; }
-    double tk = tickOfMkt(m);
+    double tk = chartTick(m);
     K.v = klv::merge(klv::compute(B, per, o, cl, tk), tk);
     K.n = n; K.lastT = lastT; K.at = now;
     {   // (2.8.0) share them with this market's hourly charts (written at each recompute: every new bar, at most every 10 s)
@@ -1094,9 +1150,9 @@ void DealerProfile::drawMQLevels(const Settings& S)
             loadTouch(mkt);
             bool fresh = tpAt[mkt] > 0 && time(nullptr) - tpAt[mkt] < 20 * 60;    // stale odds (the bridge stopped) are not shown
             const std::vector<TP>& T = tps[mkt];
-            float tol = cp * 2e-5f;
+            const double tick = chartTick(mkt);   // (2.8.7, audit DP-002) the tick grid, not a relative tolerance
             for (size_t k = 0; fresh && k < T.size(); k++) {
-                if (std::fabs(T[k].px + off - cp) > tol && std::fabs(T[k].px - cp) > tol) continue;
+                if (!dpaudit::sameTick(T[k].px + off, cp, tick) && !dpaudit::sameTick(T[k].px, cp, tick)) continue;
                 const char* qm = T[k].proven ? "" : "?";
                 if (!T[k].txt.empty()) { odds = T[k].txt; break; }                                  // (2.4.1)
                 odds = "1h " + T[k].p1 + "%" + qm;
@@ -1241,6 +1297,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion(DP_VERSION);   // 2.8.6 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
+    p->setVersion(DP_VERSION);   // 2.8.7 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
     return p;
 }

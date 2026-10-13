@@ -75,6 +75,15 @@ REM (2026-10-12) lsExhaustionV2 - pullback watch E? / trend response R? / EXIT? 
 call :one ExhaustionV2 lsExhaustionV2 ExhaustionV2Logic.h HostSlot.h
 REM (2026-10-12) lsCVD - CVD line + delta-pct bars + Div / Abs / Exh / BR marks on the CVD line (outside package CVD Signals v0.1, reviewed), TESTING
 call :one CVD lsCVD CvdEngine.h CvdFeed.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
+REM (2026-10-13) lsBidAskStats - biggest bid (red) / biggest ask (green) per candle, BBid / BAsk / BidRatio / AskRatio box
+REM (2026-10-13) lsBidAskStats 1.3.0 - who is attacking: S / L letters from the order feed, message line + info box, spike labels (shared OrderFlowFeed.h)
+call :one BidAskStats lsBidAskStats BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h
+REM (2026-10-13) lsPullStats 1.0.0 - who is leaving: resting orders pulled near price per candle (MBO), L, message line + info box (Rassul "number of bids and ask pulled like a histogram")
+call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h
+REM (2026-10-13) lsStackStats 1.0.0 - who is arriving: orders added near price per candle (MBO), refill dash, R / L, message line + info box (Rassul "add a stacking indicator", "keep seperate")
+call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h
+REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
+call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 
@@ -162,7 +171,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats PullStats StackStats TapeReader) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"

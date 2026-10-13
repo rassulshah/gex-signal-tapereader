@@ -1,16 +1,17 @@
 #ifndef LS_MBO_CHECK_LOGIC_H
 #define LS_MBO_CHECK_LOGIC_H
-// MboCheckLogic.h (1.0.0, 2026-10-10) -- the SDK-free half of lsMboCheck: counting the order-by-order (DBO / MBO) events,
+// MboCheckLogic.h (1.1.1, 2026-10-12) -- the SDK-free half of lsMboCheck: counting the order-by-order (DBO / MBO) events,
 // the verdict (YES / NO / subscribed but silent / waiting), the one chart line and the status file text.
-// Tested on Linux by tests_mc100/test_mbocheck_logic.cpp; the plugin (MboCheck.cpp) only feeds it what the SDK hands over.
+// Tested on Linux by tests/test_mbocheck_logic.cpp; the plugin (MboCheck.cpp) only feeds it what the SDK hands over.
 #include <string>
 #include <vector>
 #include <cstdio>
 #include <cstring>
+#include <cstdint>
 
 namespace mbo {
 
-static const char* const VERSION = "1.1.0";     // keep equal to MC_VERSION / setVersion in MboCheck.cpp
+static const char* const VERSION = "1.1.1";     // keep equal to MC_VERSION / setVersion in MboCheck.cpp
 static const int SLICE_MAX = 5000;               // at most this many getNext() events per call (never blocks IRT)
 static const long long SLICE_BUDGET_MS = 8;      // and at most ~8 ms per call, checked every 512 events
 static const long long WAIT_MS = 60000;          // "waiting" for the first 60 s
@@ -79,6 +80,8 @@ struct Probe {
     long long calls = 0, capHits = 0, longestBacklog = 0, faults = 0;
     int backlogRun = 0;                 // consecutive calls that hit the slice cap
     bool blocked = false;               // a crash guard file says IRT died while opening DBO last time
+    long long recorderLines = 0;        // raw DBO lines durably appended after flush
+    long long recorderFailures = 0;     // append/header/flush failures; lines are deliberately not retried
 };
 
 // one call's worth of events has been read: n events, cap = the slice cap or the time budget ended the call
@@ -113,7 +116,10 @@ inline int colourOf(Verdict v) { return v == V_WAITING ? 0 : (v == V_YES || v ==
 
 inline std::string commas(long long n)
 {
-    char b[32]; std::snprintf(b, sizeof(b), "%lld", n < 0 ? -n : n);
+    // Negating LLONG_MIN is undefined. Convert through unsigned arithmetic so even a hostile/corrupt diagnostic value
+    // can be rendered safely; all normal counters remain non-negative long long values.
+    const unsigned long long magnitude = n < 0 ? 0ULL - (unsigned long long)n : (unsigned long long)n;
+    char b[32]; std::snprintf(b, sizeof(b), "%llu", magnitude);
     std::string d(b), o;
     for (size_t i = 0; i < d.size(); i++) { if (i && (d.size() - i) % 3 == 0) o += ','; o += d[i]; }
     return (n < 0 ? "-" : "") + o;
@@ -209,7 +215,48 @@ inline std::string cleanField(const char* p, size_t n)
     return s;
 }
 
-struct Ident { std::string market, symbol; int spb = 0; };
+// Symbol + native periodicity details form the persistence identity.  Market alone is not a contract identity:
+// ESZ and ESH can be open at once, while non-time charts all report seconds-per-bar == -1.
+struct Ident {
+    std::string market, symbol;
+    int spb = 0;
+    int periodicity = 0;
+    int interval = 0;
+};
+
+inline std::string safeFilePart(const std::string& in)
+{
+    std::string out;
+    for (size_t i = 0; i < in.size(); ++i) {
+        const unsigned char c = (unsigned char)in[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_') out += (char)c;
+        else out += '_';
+    }
+    if (out.empty()) out = "UNKNOWN";
+    if (out.size() > 32) out.resize(32);
+    return out;
+}
+inline unsigned long long fnv1a64(const std::string& in)
+{
+    unsigned long long h = 1469598103934665603ULL;
+    for (size_t i = 0; i < in.size(); ++i) { h ^= (unsigned char)in[i]; h *= 1099511628211ULL; }
+    return h;
+}
+inline std::string hex64(unsigned long long value)
+{
+    char out[17]; std::snprintf(out, sizeof(out), "%016llx", value);
+    return std::string(out);
+}
+// Readable pieces are deliberately bounded, while the FNV suffix protects the full unmodified identity from sanitisation
+// and truncation collisions. This is a filename only; status records retain the original cleaned symbol.
+inline std::string fileStem(const Ident& id)
+{
+    const int seconds = id.spb > 0 ? id.spb : 0;
+    const std::string full = id.market + "\n" + id.symbol + "\n" + std::to_string(id.periodicity) + "\n"
+                           + std::to_string(id.interval) + "\n" + std::to_string(seconds);
+    return safeFilePart(id.market) + "-" + safeFilePart(id.symbol) + "-p" + std::to_string(id.periodicity)
+        + "-i" + std::to_string(id.interval) + "-s" + std::to_string(seconds) + "-" + hex64(fnv1a64(full));
+}
 
 // the status file (CSV-ish, one fact per line). No user name, login, account or path is ever written.
 inline std::string statusText(const Probe& p, const Ident& id, long long nowMs, const std::string& checkedWhen, const std::string& line)
@@ -218,6 +265,7 @@ inline std::string statusText(const Probe& p, const Ident& id, long long nowMs, 
     std::string o;
     o += std::string("VERSION,") + VERSION + "\n";
     o += "MARKET," + id.market + "\nSYMBOL," + id.symbol + "\nSECONDS_PER_BAR," + std::to_string(id.spb) + "\n";
+    o += "PERIODICITY_CODE," + std::to_string(id.periodicity) + "\nINTRADAY_INTERVAL," + std::to_string(id.interval) + "\n";
     o += "CHECKED," + checkedWhen + " CT\n";
     o += std::string("VERDICT,") + verdictName(v) + "\n";
     o += "LINE," + line + "\n";
@@ -235,6 +283,7 @@ inline std::string statusText(const Probe& p, const Ident& id, long long nowMs, 
          + commas(p.bestBidSize) + ",best_ask " + px(p.bestAsk) + " x " + commas(p.bestAskSize) + "\n";
     o += "READS,calls " + commas(p.calls) + ",slice_cap_hits " + commas(p.capHits) + ",longest_backlog_calls " + commas(p.longestBacklog)
          + ",faults " + commas(p.faults) + ",slice_max " + std::to_string(SLICE_MAX) + "\n";
+    o += "RECORDER,durable_lines " + commas(p.recorderLines) + ",append_failures " + commas(p.recorderFailures) + "\n";
     o += "SAMPLE_COLUMNS,n,time,action,side,price,previous_price,size,order_id,aggressor_order_id,bid,ask,bid_size,ask_size\n";
     for (size_t i = 0; i < p.samples.size(); i++) {
         const Sample& e = p.samples[i];
@@ -264,7 +313,5 @@ inline std::string marketOf(const std::string& rootIn, const std::string& symIn)
     if (r.size() > 12) r.resize(12);
     return r.empty() ? std::string("UNKNOWN") : r;
 }
-inline std::string fileStem(const std::string& mkt, int spb) { return mkt + "-" + std::to_string(spb > 0 ? spb : 0); }
-
 } // namespace mbo
 #endif

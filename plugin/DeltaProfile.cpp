@@ -1,5 +1,5 @@
 /********************************************************************************
- * DeltaProfile.cpp -- lsDeltaProfile 2.6.0 synchronization repair
+ * DeltaProfile.cpp -- lsDeltaProfile 2.6.2 peak-bar absorption rule (on the 2.6.1 synchronization repair)
  * Native chart VAP; rolling (latest bar close - 90 min, latest bar close].
  * Right placement, left-facing one-sided bars, automatic price-anchored rows.
  * Only Width / Gap / Font are configurable. Delta = ask/buy minus bid/sell.
@@ -52,7 +52,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.6.0"; // shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.6.2"; // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -701,8 +701,15 @@ bool DeltaProfile::buildNative(ChartState& s) {
         const int spb = getSecondsPerBar();
         LatchBook& bk = latchBooks()[s.book + "|" + std::to_string(spb)];
         if (sess != bk.session) {
-            if (!bk.journal.empty() && !bk.path.empty() && !appendRecord(bk.path, bk.journal)) {   // (2.5.4) last try for the old session's lines
-                if (bk.carry.size() < 8) bk.carry.push_back(std::make_pair(bk.path, bk.journal));     // (2.5.7, F6) kept, retried below
+            if (!bk.journal.empty() && !bk.path.empty()) {                                          // (2.5.4) last try for the old session's lines
+                makeDirectory(recordDirectory());
+                if (!appendRecord(bk.path, bk.journal)) {                                           // (2.5.7, F6) kept, retried below
+                    // (2.6.1, audit F6) never dropped: lines owed to the same file are merged into one entry (no count cap)
+                    std::size_t c = 0;
+                    while (c < bk.carry.size() && bk.carry[c].first != bk.path) ++c;
+                    if (c < bk.carry.size()) bk.carry[c].second.insert(bk.carry[c].second.end(), bk.journal.begin(), bk.journal.end());
+                    else bk.carry.push_back(std::make_pair(bk.path, bk.journal));
+                }
             }
             bk.v.clear(); bk.session = sess;
             bk.journal.clear(); bk.path.clear(); bk.note.clear(); bk.nextId = 0; bk.written = bk.loaded = bk.rejected = 0;
@@ -731,14 +738,25 @@ bool DeltaProfile::buildNative(ChartState& s) {
                 }
             }
         }
+        if (!bk.carry.empty()) makeDirectory(recordDirectory());                                // (2.6.1) the folder may have been removed
         for (std::size_t c = 0; c < bk.carry.size();) {                                       // (2.5.7, F6) old-session lines still owed
+            if (bk.carry[c].first.empty() || bk.carry[c].second.empty()) { bk.carry.erase(bk.carry.begin() + static_cast<long>(c)); continue; }
             if (appendRecord(bk.carry[c].first, bk.carry[c].second)) bk.carry.erase(bk.carry.begin() + static_cast<long>(c)); else ++c;
         }
+        if (!bk.carry.empty()) {                                                                // (2.6.1) visible in the status note only
+            std::size_t owed = 0; for (std::size_t c = 0; c < bk.carry.size(); ++c) owed += bk.carry[c].second.size();
+            bk.note = "record write failed - " + std::to_string(owed) + " old-session lines retained for retry";
+        }
         if (bk.tick > 0 && std::fabs(bk.tick - tick) > 1e-9 * std::max(bk.tick, tick)) {           // (2.5.7, F5) the tick changed: re-key by price
-            for (std::size_t k = 0; k < bk.v.size(); ++k) {
+            std::size_t dropped = 0;
+            for (std::size_t k = 0; k < bk.v.size();) {
+                bool ok = true;
                 try { const dp::Tick lo = dp::priceKey(static_cast<double>(bk.v[k].low) * bk.tick, tick), hi = dp::priceKey(static_cast<double>(bk.v[k].high) * bk.tick, tick);
-                      bk.v[k].low = std::min(lo, hi); bk.v[k].high = std::max(lo, hi); } catch (...) {}
+                      bk.v[k].low = std::min(lo, hi); bk.v[k].high = std::max(lo, hi); } catch (...) { ok = false; }
+                // (2.6.1, audit F5) a latch that cannot be re-keyed keeps old-grid keys - never compare it on the new grid
+                if (ok) ++k; else { bk.v.erase(bk.v.begin() + static_cast<long>(k)); ++dropped; }
             }
+            if (dropped) bk.note = "tick changed: " + std::to_string(dropped) + " latches could not be re-keyed and were dropped";
         }
         bk.tick = tick;
         std::vector<Latch>& latches = bk.v;
@@ -780,29 +798,45 @@ bool DeltaProfile::buildNative(ChartState& s) {
             const double mult = candidate.meanAbsDelta > 0 ? std::fabs(z.net)/candidate.meanAbsDelta : 0;
             track(z.low,z.high,z.code,z.support,z.peakBar,price,z.decidedBar,z.formedBar,z.net,mult,true,z.eventId);
         }
-        // Decide pending events from CLOSED bars after frozen formation, not after the earlier delta peak.
-        // (2.5.7, audit F2) only a complete build (no missing VAP / short history) decides - the same gate as a fresh node; a pending
-        // candidate is decided on the next complete build from the same first qualifying close, so nothing is lost or reordered
+        // (2.6.2, Rassul 2026-10-13 05:16 "the same bar has to have a green close above the absorption") a pending event is decided
+        // by its OWN PEAK BAR (frozen peakTime, the bar its circle sits on) once that bar has CLOSED - never by the forming last bar:
+        //   selling node: peak bar GREEN (close > open) closing ABOVE the node = A (sellers absorbed, support);
+        //   buying node:  peak bar RED   (close < open) closing BELOW the node = A (buyers absorbed, resistance);
+        //   anything else (inside, wrong side, wrong colour, doji) = never A. Such a node can still become I on the FIRST closed bar
+        //   after its frozen formation that closes through it the other way in its own colour (selling: red below; buying: green
+        //   above); until then it shows I?. A later bar can never make a node A. A decision found when the event first appears (its
+        //   peak bar closed before the node formed) is stamped t_decided = that build's time - never back-dated.
+        // (2.5.7, audit F2) only a complete build (no missing VAP / short history) decides - the same gate as a fresh node
+        auto findBar = [&](RTDATE when) -> int {
+            int lo = 0, hi = static_cast<int>(count) - 1;
+            while (lo <= hi) {
+                const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
+                if (t == when) return mid;
+                if (t < when) lo = mid + 1; else hi = mid - 1;
+            }
+            return -1;
+        };
         for (std::size_t k = 0; allowedNow && k < latches.size(); ++k) {
             Latch& L = latches[k];
             if (decided(L.code)) continue;
-            int lo = 0, hi = static_cast<int>(count) - 1, at = -1;
-            while (lo <= hi) { const int mid = (lo + hi) / 2; const RTDATE t = static_cast<RTDATE>(times[mid]);
-                if (t == L.formedTime) { at = mid; break; } if (t < L.formedTime) lo = mid + 1; else hi = mid - 1; }
+            const int pk = findBar(L.peakTime);
+            if (pk < 0 || pk >= static_cast<int>(count) - 1) continue;                            // peak bar still forming / not on chart
+            const double po = open[pk], pc = close[pk];
+            if (!dp::finite(po) || !dp::finite(pc)) continue;
+            // (2.5.7, audit F1) beyond the node is decided in WHOLE TICKS: the close's own tick key against the node's keys
+            dp::Tick pck; try { pck = dp::priceKey(pc, tick); } catch (...) { continue; }
+            const bool confirmed = L.sell ? (pc > po && pck > L.high) : (pc < po && pck < L.low);
+            if (confirmed) { L.code = "A"; L.support = L.sell; L.decidedBy = barEnd(pk); continue; }
+            L.code = "I?"; L.support = !L.sell;                                                   // absorption ruled out
+            const int at = findBar(L.formedTime);
             if (at < 0) continue;
             for (int i = at + 1; i < static_cast<int>(count) - 1; ++i) {
                 const double o = open[i], c = close[i];
                 if (!dp::finite(o) || !dp::finite(c)) continue;
-                // (2.5.7, audit F1) beyond the node is decided in WHOLE TICKS: IRT prices and tick are float, so a close ON the node's edge
-                // could read a hair beyond it in double; the close's own tick key against the node's keys cannot
                 dp::Tick ck; try { ck = dp::priceKey(c, tick); } catch (...) { continue; }
-                const bool redBelow = ck < L.low && c < o, greenAbove = ck > L.high && c > o;
-                if (!redBelow && !greenAbove) continue;
-                // a selling node: green above = sellers absorbed (A, support); red below = sellers won (I, resistance)
-                // a buying node:  red below = buyers absorbed (A, resistance); green above = buyers won (I, support)
-                if (L.sell) { L.code = greenAbove ? "A" : "I"; L.support = greenAbove; }
-                else        { L.code = redBelow ? "A" : "I"; L.support = !redBelow; }
-                L.decidedBy = barEnd(i);                                                          // (2.5.4)
+                const bool through = L.sell ? (ck < L.low && c < o) : (ck > L.high && c > o);
+                if (!through) continue;
+                L.code = "I"; L.support = !L.sell; L.decidedBy = barEnd(i);                       // (2.5.4)
                 break;
             }
         }
@@ -817,7 +851,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             if (bk.path.empty()) bk.journal.clear();                                                 // no storage: nothing to keep
             else {
                 makeDirectory(recordDirectory());
-                if (appendRecord(bk.path, bk.journal)) { bk.written += static_cast<long long>(bk.journal.size()); bk.journal.clear(); bk.note.clear(); }
+                if (appendRecord(bk.path, bk.journal)) { bk.written += static_cast<long long>(bk.journal.size()); bk.journal.clear(); if (bk.carry.empty()) bk.note.clear(); }
                 else bk.note = "record write failed - kept, retried on the next change";
             }
         }

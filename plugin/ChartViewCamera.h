@@ -1,10 +1,11 @@
-// ChartViewCamera.h - lsChartView 1.2.0 (2026-10-10): a picture of THIS IRT chart, on request only.
+// ChartViewCamera.h - lsChartView 1.2.1 (2026-10-12): a picture of THIS IRT chart, on request only.
 // (Rassul 2026-10-09 12:02 "can you ensure that the camera is for irt only" / 12:04 "keep it within irt" / 12:05 "if i say get a
 // pic of gold you should be able to do it")
 // Rules:
 //   * IRT only: the only windows ever looked at belong to this process (investorRT.exe) - GetCurrentProcessId(). No screen or
 //     desktop capture: the chart window is asked to paint itself into a private bitmap (PrintWindow), so a window from another
 //     program on top of it is never in the picture (no BitBlt from the screen, ever).
+//   * (1.2.1) names include the exact chart contract, and tied window titles use the pane geometry captured during draw.
 //   * (1.2.0) WHICH window: every visible IRT window is listed and cvl::pickChart chooses the one whose title shows the symbol
 //     AND this chart's bar size ("3 Minutes" / "(3m*)"). A window that shows only the symbol is never taken. 1.1.0 matched the
 //     symbol alone whenever IRT returned an empty periodicity label (most calls), so ES_180 and ES_3600 got the same picture.
@@ -24,6 +25,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <io.h>
 #include <string>
 #include <cstring>
 #include <vector>
@@ -75,7 +77,7 @@ inline std::string grab(HWND h, unsigned pwFlags, std::vector<unsigned char>& rg
     if (IsIconic(h)) return "window minimised";
     RECT r; if (!GetWindowRect(h, &r)) return "no window size";
     int w = r.right - r.left, ht = r.bottom - r.top;
-    if (w <= 0 || ht <= 0 || w > 10000 || ht > 10000) return "bad window size";
+    if (!cvl::imageSizeAllowed(w, ht)) return "bad or over-cap window size";
     if (wOut) *wOut = w;
     if (hOut) *hOut = ht;
     HDC screen = GetDC(NULL); if (!screen) return "no DC";
@@ -118,6 +120,7 @@ inline std::string publish(const std::string& path, const std::string& bytes)
     if (!f) return "cannot write file";
     bool wr = fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
     if (fflush(f) != 0) wr = false;
+    if (wr && _commit(_fileno(f)) != 0) wr = false;
     if (fclose(f) != 0) wr = false;
     if (!wr) { DeleteFileA(tmp.c_str()); return "write failed"; }
     bool hadOld = GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES;

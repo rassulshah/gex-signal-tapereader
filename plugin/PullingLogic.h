@@ -1,6 +1,6 @@
 #ifndef LS_PULLING_LOGIC_H
 #define LS_PULLING_LOGIC_H
-// PullingLogic.h (0.1.0, 2026-10-11) -- the SDK-free half of lsPulling: WHO PULLED their resting orders near price, per bar, from
+// PullingLogic.h (0.2.1, 2026-10-12) -- the SDK-free half of lsPulling: WHO PULLED their resting orders near price, per bar, from
 // the market-by-order feed (Rithmic DBO through IRT's DEPTH_BY_ORDER). Rassul 2026-10-11 20:50-20:57: "a simple two line approach that
 // is looking at pulling of orders by buyers and sellers ... it would show why price went up or down and who pulled orders", "call it
 // pulling", "it should use mbo data"; design A (per bar, x normal) + the B cross (the 10-bar leader changed), mockup 20:50.
@@ -21,16 +21,25 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <climits>
 
 namespace pl {
 
-static const char* const VERSION = "0.2.0";      // keep equal to PL_VERSION / setVersion in Pulling.cpp
+static const char* const VERSION = "0.2.1";      // keep equal to PL_VERSION / setVersion in Pulling.cpp
 typedef long long Tick;
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Side { OFFER = 0, BID = 1 };                  // the SDK's buySell: 0 sell (an offer), 1 buy (a bid)
 
 inline bool finite(double v) { return v == v && v < 1e300 && v > -1e300; }
-inline Tick toTick(double price, double tick) { return (Tick)std::llround(price / tick); }
+inline bool toTick(double price, double tick, Tick& out) {
+    if (!finite(price) || !finite(tick) || tick <= 0) return false;
+    const double q = price / tick;
+    // std::llround is only defined for a representable integral result.  Do not
+    // turn a malformed native float into a wrapped order-book price.
+    if (!finite(q) || q < (double)LLONG_MIN + 0.5 || q > (double)LLONG_MAX - 0.5) return false;
+    out = (Tick)std::llround(q);
+    return true;
+}
 
 struct Ev { int action = NEW; int side = BID; Tick px = 0, prev = 0; double size = 0; long long id = 0; Tick bid = 0, ask = 0; };
 struct Bar { double pull[2] = {0, 0}, stack[2] = {0, 0}, filled = 0; long long events = 0; };
@@ -53,9 +62,21 @@ public:
     Tick bestBid = 0, bestAsk = 0; bool haveBest = false;
     std::map<int, Bar> bars;                           // chart bar index -> what happened in it
     int cur = -1;                                      // the bar events go to (the forming bar)
-    long long events = 0, unknown = 0;                 // events read; DEL / MOD / FILL for an order never seen
+    long long events = 0, unknown = 0, suppressed = 0, bookResets = 0; // unknown native events; post-reset unknowns are not pulls
+    bool countUnseenDeletes = true;                    // true only at initial subscription, before a known book was discarded
     void setBest(Tick b, Tick a) { if (b > 0 && a > 0 && a > b) { bestBid = b; bestAsk = a; haveBest = true; } }
-    void setBar(int bar) { if (bar >= 0) { cur = bar; if (bars.size() > 1500) bars.erase(bars.begin()); } }
+    void setBar(int bar) {
+        if (bar < 0) return;
+        cur = bar;
+        bars[bar];                                     // zero-event bars are part of a per-bar normal, not absent observations
+        while (bars.size() > 1500) bars.erase(bars.begin());
+    }
+    // The supplied SDK has no sequence number or snapshot/reset callback.  Once
+    // a known book is lost, an unseen DEL/MOD could be a reset artifact, so only
+    // subsequently observed NEW orders may contribute until the next instance.
+    void invalidateBook() {
+        book.clear(); haveBest = false; countUnseenDeletes = false; ++bookResets;
+    }
     bool near(int side, Tick px) const {
         if (!haveBest) return false;
         return side == BID ? (px <= bestBid && px >= bestBid - P.near) : (px >= bestAsk && px <= bestAsk + P.near);
@@ -69,6 +90,10 @@ public:
         std::unordered_map<long long, Ord>::iterator it = book.find(e.id);
         switch (e.action) {
         case NEW: {
+            if (it != book.end()) {                    // duplicate/replayed ADD: refresh identity, do not double stack it
+                it->second.side = s; it->second.px = e.px; it->second.size = e.size; it->second.filledLast = false;
+                break;
+            }
             Ord o; o.side = s; o.px = e.px; o.size = e.size; book[e.id] = o;
             if (near(s, e.px)) b.stack[s] += e.size;
             break; }
@@ -77,13 +102,25 @@ public:
             if (it != book.end()) { it->second.size = std::max(0.0, it->second.size - e.size); it->second.filledLast = true; } else unknown++;
             break; }
         case DEL: {
-            if (it == book.end()) { unknown++; if (near(s, e.px)) b.pull[s] += e.size; break; }   // resting before load: its own size
+            if (it == book.end()) {
+                unknown++;
+                if (countUnseenDeletes && near(s, e.px)) b.pull[s] += e.size; // resting before the initial subscription
+                else if (!countUnseenDeletes) suppressed++;
+                break;
+            }
             const Ord o = it->second; book.erase(it);
             if (o.filledLast && o.size <= 0) break;                        // all filled: the trade took it, nobody pulled
             if (near(o.side, o.px)) b.pull[o.side] += o.size;              // cancelled (or the rest after a partial fill)
             break; }
         case MOD: {
-            if (it == book.end()) { unknown++; Ord o; o.side = s; o.px = e.px; o.size = e.size; book[e.id] = o; break; }
+            if (it == book.end()) {
+                unknown++;
+                // An unseen MOD after a reset does not establish a reliable
+                // resting order; a later DEL must not become a synthetic pull.
+                if (countUnseenDeletes) { Ord o; o.side = s; o.px = e.px; o.size = e.size; book[e.id] = o; }
+                else suppressed++;
+                break;
+            }
             Ord& o = it->second;
             if (e.px != o.px) {
                 const bool away = o.side == BID ? e.px < o.px : e.px > o.px;
@@ -98,7 +135,7 @@ public:
             break; }
         default: break;
         }
-        if (book.size() > 400000) book.clear();                            // bounded memory; unknowns are counted from then on
+        if (book.size() > 400000) invalidateBook();                         // bounded memory without converting later unknown DELs into pulls
     }
     // the average pulled per side per bar over the normBars before `bar` (both sides), -1 until minNorm bars are known
     double normal(int bar) const {

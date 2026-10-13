@@ -474,7 +474,12 @@ static void test_prominence_show_and_confirm() {
     CHECK(z && z->shown && z->bx > 1.7 && z->bx < 1.9, "1.8x after showing: kept (hysteresis at 1.7x)");
     for (int s = 61; s <= 80; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 20}}); e.updateZones(s * 1000, 0.08, 0); }
     z = nullptr; for (auto& q : e.zones) if (q.id == zid) z = &q;
-    CHECK(!z || !z->shown, "below 1.7x for over 10 s: removed");
+    // (0.14.0) this zone sits 3 ticks under price (near band 8 ticks): it is a NEAR zone, kept down to 1.2x - the far 1.7x keep is
+    // tested on a far zone in test_near_rule_far_unchanged
+    CHECK(z && z->near && z->shown, "(0.14.0) 1.4x near price for over 10 s: kept (near keep 1.2x)");
+    for (int s = 81; s <= 100; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 5}}); e.updateZones(s * 1000, 0.08, 0); }
+    z = nullptr; for (auto& q : e.zones) if (q.id == zid) z = &q;
+    CHECK(!z || !z->shown, "(0.14.0) below the near keep (1.1x) for over 10 s: removed");
 }
 
 static void test_new_wall_waits_and_edge_of_book() {
@@ -563,7 +568,193 @@ static void test_draw_order_and_label_lanes() {
     CHECK(L.place(100, 160) == 0 && L.place(150, 200) == 1 && L.place(155, 165) == -1 && L.place(170, 220) == 0, "(0.11.4) a label goes to the first free row, none when all rows are taken");
 }
 
+// ---- (0.14.0) NEAR-price rule (Rassul 2026-10-13 "i want to see liquidity when it is close so i can see if there is any absorbtion going on")
+static const Zone* zoneHolding(const Engine& e, int side, Tick px) { for (auto& q : e.zones) if (q.side == side && q.lo <= px && q.hi >= px) return &q; return nullptr; }
+// near band: tick 0.01, hw 2, ATR 0.08 -> max(8, 4*2) = 8 ticks; zone 69.93-69.97 under 70.00 = 3 ticks away -> near
+static void test_near_rule_rank2_shows() {
+    Engine e = fresh(); e.P.requireShown = true;
+    // a 1.6x band at 69.95 (80 vs 50) with a bigger band (150) at 69.85 behind it: rank 2
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }
+    CHECK(e.nearTicks == 8, "(0.14.0) near band = max(round(1.0 x ATR3 / tick), 4 x hw) = 8 ticks");
+    const Zone* z = zoneHolding(e, BID, 6995);
+    std::printf("  near zone: bx %.2f rank %d near %d shown %d behind %d\n", z ? z->bx : -1, z ? z->rank : -1, z ? (int)z->near : -1, z ? (int)z->shown : -1, z ? z->behindN : -1);
+    CHECK(z && z->near && z->rank == 2 && z->bx >= 1.55 && z->bx < 1.7, "(0.14.0) fixture: near zone at 1.6x, rank 2");
+    CHECK(z && z->shown, "(0.14.0) a NEAR zone at 1.6x rank 2 is shown (no rank-1 rule near price)");
+    Engine y = fresh(); y.P.requireShown = true;          // the same zone, 20 s old: not durable yet
+    for (int s = 0; s <= 20; ++s) { book(y, s * 1000, 70.00, 60, {{6995, 30}, {6985, 100}}); y.updateZones(s * 1000, 0.08, 0); }
+    const Zone* yz = zoneHolding(y, BID, 6995);
+    CHECK(yz && yz->near && !yz->shown, "(0.14.0) a near zone still needs to rest 30 s");
+    Engine w = fresh(); w.P.requireShown = true;          // 1.4x near: under the 1.5x near line
+    for (int s = 0; s <= 40; ++s) { book(w, s * 1000, 70.00, 60, {{6995, 20}, {6985, 100}}); w.updateZones(s * 1000, 0.08, 0); }
+    const Zone* wz = zoneHolding(w, BID, 6995);
+    CHECK(wz && wz->near && !wz->shown, "(0.14.0) a near zone at 1.4x is not shown (line 1.5x)");
+    // mirrored: a 1.6x offer band 3 ticks above price, rank 2
+    Engine o = fresh(); o.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(o, s * 1000, 70.00, 60, {}, {{7006, 30}, {7016, 100}}); o.updateZones(s * 1000, 0.08, 0); }
+    const Zone* oz = zoneHolding(o, ASK, 7006);
+    CHECK(oz && oz->near && oz->rank == 2 && oz->shown, "(0.14.0) a near OFFER zone at 1.6x rank 2 is shown");
+}
+static void test_near_rule_far_unchanged() {
+    // the same 1.6x rank-2 zone 38+ ticks under price: far -> not shown
+    Engine e = fresh(); e.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 120, {{6960, 30}, {6950, 100}}); e.updateZones(s * 1000, 0.08, 0); }
+    const Zone* z = zoneHolding(e, BID, 6960);
+    std::printf("  far zone: bx %.2f rank %d near %d shown %d\n", z ? z->bx : -1, z ? z->rank : -1, z ? (int)z->near : -1, z ? (int)z->shown : -1);
+    CHECK(z && !z->near && z->rank == 2 && z->bx >= 1.55 && !z->shown, "(0.14.0) the same 1.6x rank-2 zone FAR from price is not shown");
+    // far 2.0x rank 1: shown (unchanged); far 1.9x rank 1: not shown
+    Engine f = fresh(); f.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(f, s * 1000, 70.00, 120, {{6960, 50}}); f.updateZones(s * 1000, 0.08, 0); }
+    const Zone* fz = zoneHolding(f, BID, 6960);
+    CHECK(fz && !fz->near && fz->rank == 1 && fz->bx >= 2.0 && fz->shown, "(0.14.0) far 2.0x rank 1: shown as before");
+    const long long fid = fz ? fz->id : -1;
+    for (int s = 41; s <= 60; ++s) { book(f, s * 1000, 70.00, 120, {{6960, 40}}); f.updateZones(s * 1000, 0.08, 0); }   // 1.8x
+    fz = nullptr; for (auto& q : f.zones) if (q.id == fid) fz = &q;
+    CHECK(fz && fz->shown, "(0.14.0) far 1.8x: kept (far keep 1.7x unchanged)");
+    for (int s = 61; s <= 80; ++s) { book(f, s * 1000, 70.00, 120, {{6960, 20}}); f.updateZones(s * 1000, 0.08, 0); }   // 1.4x
+    fz = nullptr; for (auto& q : f.zones) if (q.id == fid) fz = &q;
+    CHECK(!fz || !fz->shown, "(0.14.0) far 1.4x for over 10 s: removed (a far zone does not get the near keep)");
+    Engine g = fresh(); g.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(g, s * 1000, 70.00, 120, {{6960, 45}}); g.updateZones(s * 1000, 0.08, 0); }
+    const Zone* gz = zoneHolding(g, BID, 6960);
+    CHECK(gz && !gz->near && gz->bx < 2.0 && gz->bx >= 1.8 && !gz->shown, "(0.14.0) far 1.9x rank 1: not shown (2.0x line unchanged)");
+}
+static void test_near_keep_and_grace() {
+    Engine e = fresh(); e.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }
+    const Zone* z = zoneHolding(e, BID, 6995); const long long id = z ? z->id : -1;
+    CHECK(z && z->shown, "(0.14.0) fixture: near zone shown at 1.6x");
+    auto get1 = [&]() -> const Zone* { for (auto& q : e.zones) if (q.id == id) return &q; return nullptr; };
+    for (int s = 41; s <= 70; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 15}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }   // 1.3x for 30 s
+    z = get1();
+    CHECK(z && z->shown && z->bx > 1.25 && z->bx < 1.35, "(0.14.0) near zone at 1.3x for 30 s: stays (near keep 1.2x)");
+    for (int s = 71; s <= 78; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 5}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }    // 1.1x for 7 s
+    z = get1();
+    CHECK(z && z->shown, "(0.14.0) near zone at 1.1x: still drawn inside the 10 s grace");
+    for (int s = 79; s <= 90; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 5}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }    // past 10 s
+    z = get1();
+    CHECK(!z || !z->shown, "(0.14.0) near zone at 1.1x for over 10 s: dropped");
+}
+static void test_near_never_under_1x() {
+    // the floor holds even if the near lines were mis-set under 1x
+    Engine e = fresh(); e.P.nearShowX = 0.8; e.P.nearKeepX = 0.7;
+    Zone z; z.id = 1; z.side = BID; z.near = true; z.behindOk = true; z.behindN = 8; z.rank = 1; z.bx = 0.9; z.born = 0;
+    e.showState(z, 60000);
+    CHECK(!z.shown, "(0.14.0) 0.9x never shows (floor 1.0x), even near and rank 1");
+    z.bx = 1.0; e.showState(z, 60000);
+    CHECK(z.shown, "(0.14.0) ... 1.0x passes the floor when the near line is under it (fixture check)");
+    z.bx = 0.9; e.showState(z, 61000);
+    CHECK(!z.shown, "(0.14.0) a shown zone measured under 1.0x is hidden at once (no grace)");
+    Engine d = fresh();      // default lines: a near zone at 0.9x through a full engine run
+    for (int s = 0; s <= 40; ++s) { book(d, s * 1000, 70.00, 60, {{6995, -5}}); d.updateZones(s * 1000, 0.08, 0); }
+    int under = 0; for (auto& q : d.zones) if (q.shown && q.bx < 1.0) under++;
+    CHECK(under == 0, "(0.14.0) no zone under 1.0x is shown in an engine run");
+}
+static void test_near_hysteresis_no_flicker() {
+    Engine e = fresh(); e.P.requireShown = true;
+    e.onLastPrice(70.00);
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }
+    const Zone* z = zoneHolding(e, BID, 6995); const long long id = z ? z->id : -1;
+    CHECK(z && z->near && z->shown, "(0.14.0) fixture: near zone shown");
+    const Tick hi = z ? z->hi : 0;
+    auto get1 = [&]() -> const Zone* { for (auto& q : e.zones) if (q.id == id) return &q; return nullptr; };
+    // price oscillates so the distance runs between nearTicks + 1 and 1.5 x nearTicks (9..12 ticks): stays near, stays shown
+    int nearToggles = 0, shownToggles = 0; bool lastNear = true, lastShown = true;
+    for (int s = 41; s <= 120; ++s) {
+        const Tick d = 9 + (s % 4);                                           // 9, 10, 11, 12
+        e.onLastPrice((double)(hi + d) * 0.01);
+        book(e, s * 1000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0);
+        const Zone* q = get1(); if (!q) { nearToggles = 99; break; }
+        if (q->near != lastNear) { ++nearToggles; lastNear = q->near; }
+        if (q->shown != lastShown) { ++shownToggles; lastShown = q->shown; }
+    }
+    CHECK(nearToggles == 0 && shownToggles == 0, "(0.14.0) price oscillating 9-12 ticks away (between 1x and 1.5x the near band): no near / shown toggling");
+    e.onLastPrice((double)(hi + 13) * 0.01); book(e, 121000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(121000, 0.08, 0);
+    z = get1();
+    CHECK(z && !z->near, "(0.14.0) past 1.5x the near band (13 ticks): far");
+    int back = 0;
+    for (int s = 122; s <= 160; ++s) {
+        e.onLastPrice((double)(hi + 9 + (s % 4)) * 0.01);
+        book(e, s * 1000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0);
+        const Zone* q = get1(); if (q && q->near) back++;
+    }
+    CHECK(back == 0, "(0.14.0) once far, 9-12 ticks away does not make it near again (needs <= 8)");
+    z = get1();
+    CHECK(!z || !z->shown, "(0.14.0) far at rank 2 / 1.6x: hidden after the grace (far rule)");
+    e.onLastPrice((double)(hi + 8) * 0.01); book(e, 161000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(161000, 0.08, 0);
+    z = get1();
+    CHECK(z && z->near && z->shown, "(0.14.0) back within the near band: near and shown again at once (durable already)");
+}
+static void test_near_candidate_always_tracked() {
+    // three bigger far bands fill the top 3; the 1.6x band near price is still tracked and shown
+    auto run = [](int nearPerSide) {
+        Engine e = fresh(); e.P.requireShown = true; if (nearPerSide >= 0) e.P.nearPerSide = nearPerSide;   // -1 = the default
+        for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 120, {{6995, 30}, {6975, 100}, {6965, 100}, {6955, 100}}); e.updateZones(s * 1000, 0.08, 0); }
+        return e;
+    };
+    Engine e = run(-1), c = run(0);
+    const Zone* z = zoneHolding(e, BID, 6995);
+    std::printf("  near candidate: tracked %d bx %.2f rank %d shown %d | control tracked %d\n", z ? 1 : 0, z ? z->bx : -1, z ? z->rank : -1, z ? (int)z->shown : -1, zoneHolding(c, BID, 6995) ? 1 : 0);
+    CHECK(!zoneHolding(c, BID, 6995), "(0.14.0) control: without the near rule the near band is not in the top 3 by size");
+    CHECK(z && z->near && z->shown, "(0.14.0) the strongest near candidate is always tracked (and shown at 1.6x)");
+    int bids = 0; for (auto& q : e.zones) if (q.side == BID) bids++;
+    CHECK(bids <= e.P.topN + e.P.nearPerSide, "(0.14.0) at most topN + 2 zones tracked per side");
+}
+static void test_draw_order_dense_near_zones() {
+    // three near bands 5 ticks apart + far bands: every shown zone drawn, none overlapping
+    Engine e = fresh(); e.P.requireShown = true;
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 120, {{6996, 30}, {6991, 30}, {7006, 30}, {7011, 30}, {6975, 100}, {6965, 100}, {7030, 100}}, {}); e.updateZones(s * 1000, 0.08, 0); }
+    for (int s = 41; s <= 80; ++s) { book(e, s * 1000, 70.00, 120, {{6996, 30}, {6991, 30}, {6975, 100}, {6965, 100}}, {{7006, 30}, {7011, 30}, {7030, 100}}); e.updateZones(s * 1000, 0.08, 0); }
+    const std::vector<size_t> o = e.drawOrder();
+    int clash = 0, shownN = 0, nearShown = 0;
+    for (auto& q : e.zones) if (q.shown) { shownN++; if (q.near) nearShown++; }
+    for (size_t i = 0; i < o.size(); ++i) for (size_t j = i + 1; j < o.size(); ++j) {
+        const Zone& a = e.zones[o[i]]; const Zone& b = e.zones[o[j]];
+        if (a.edgeLo <= b.edgeHi && b.edgeLo <= a.edgeHi) clash++;
+    }
+    for (size_t i = 1; i < o.size(); ++i) if (e.zones[o[i]].bx > e.zones[o[i - 1]].bx) clash += 100;
+    std::printf("  dense: %d shown (%d near), %d drawn\n", shownN, nearShown, (int)o.size());
+    CHECK(nearShown >= 2 && clash == 0, "(0.14.0) dense near zones: drawn strongest first, no two drawn zones overlap");
+    // forced overlap of shown near zones: the weaker is left out
+    Engine f = fresh();
+    Zone a; a.id = 1; a.side = BID; a.shown = true; a.near = true; a.bx = 1.6; a.edgeLo = 6990; a.edgeHi = 6994;
+    Zone b = a; b.id = 2; b.bx = 1.5; b.edgeLo = 6993; b.edgeHi = 6997;
+    Zone c = a; c.id = 3; c.bx = 1.8; c.edgeLo = 6980; c.edgeHi = 6984;
+    f.zones = {a, b, c};
+    const std::vector<size_t> fo = f.drawOrder();
+    CHECK(fo.size() == 2 && f.zones[fo[0]].id == 3 && f.zones[fo[1]].id == 1, "(0.14.0) overlapping near zones: the weaker one is not drawn");
+}
+
+// (0.14.0, coordinator review) a shown zone in an absorption attempt is never hidden mid-touch; after the attempt the normal rules apply
+static void test_near_zone_kept_during_attempt() {
+    Engine e = fresh(); e.P.requireShown = true;
+    e.onLastPrice(70.00);
+    for (int s = 0; s <= 40; ++s) { book(e, s * 1000, 70.00, 60, {{6995, 30}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }
+    const Zone* z = zoneHolding(e, BID, 6995); const long long id = z ? z->id : -1;
+    CHECK(z && z->near && z->shown, "(0.14.0) fixture: near zone shown at 1.6x");
+    auto get1 = [&]() -> const Zone* { for (auto& q : e.zones) if (q.id == id) return &q; return nullptr; };
+    e.onTrade(41000, 70.00, 2, 0); e.onTrade(41500, 69.95, 0, 6);          // sellers hit the zone from above: an attempt starts
+    z = get1();
+    CHECK(z && z->inAttempt && e.attempts.size() == 1, "(0.14.0) fixture: the zone is in an absorption attempt");
+    for (int s = 42; s <= 70; ++s) { book(e, s * 1000, 69.95, 60, {{6995, -20}, {6985, 100}}); e.updateZones(s * 1000, 0.08, 0); }   // eaten to 0.6x for 28 s
+    z = get1();
+    std::printf("  in attempt: bx %.2f shown %d\n", z ? z->bx : -1, z ? (int)z->shown : -1);
+    CHECK(z && z->bx < 0.65 && z->shown, "(0.14.0) a shown near zone eaten to 0.6x during its attempt stays shown (no floor, no grace mid-touch)");
+    { std::vector<std::pair<Tick, Tick>> none; e.onBarClose(1, 1000, 71000, 69.80, none, none); }   // a bar closes through the zone: the attempt ends (break)
+    book(e, 71000, 69.95, 60, {{6995, -20}, {6985, 100}}); e.updateZones(71000, 0.08, 0);
+    z = get1();
+    bool open = false; for (auto& a : e.attempts) if (!a.done && a.zoneId == id) open = true;
+    CHECK(!open, "(0.14.0) fixture: the attempt has ended");
+    CHECK(z && !z->inAttempt && !z->shown, "(0.14.0) after the attempt ends below 1.0x it is hidden at once");
+    // the floor still stops a zone APPEARING under 1.0x, even in an attempt
+    Engine f = fresh(); f.P.nearShowX = 0.8;
+    Zone q; q.id = 1; q.side = BID; q.near = true; q.behindOk = true; q.behindN = 8; q.rank = 1; q.bx = 0.9; q.inAttempt = true;
+    f.showState(q, 60000);
+    CHECK(!q.shown, "(0.14.0) a zone in an attempt still cannot APPEAR under 1.0x");
+}
+
 int main() {
+    test_near_rule_rank2_shows(); test_near_rule_far_unchanged(); test_near_keep_and_grace(); test_near_never_under_1x();
+    test_near_hysteresis_no_flicker(); test_near_candidate_always_tracked(); test_draw_order_dense_near_zones(); test_near_zone_kept_during_attempt();
     test_finished_total_counts_past_50(); test_shown_zone_at_book_edge_does_not_flicker(); test_lq_confirm_hysteresis(); test_draw_order_and_label_lanes();
     test_delta_A_starts_a_read_and_always_on_numbers();
     test_prominence_show_and_confirm(); test_new_wall_waits_and_edge_of_book();

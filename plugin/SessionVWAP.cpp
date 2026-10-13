@@ -36,6 +36,12 @@
  *  follows ONE rule for RTH and overnight: it stays until the market / session is proven out of sample (VO_CAL proven flag) - the
  *  RTH badges used to show no "?" at all although no RTH law was validated.
  ********************************************************************************/
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>     // BEFORE irtsdk.h (MSVC C2371 RTBOOL clash otherwise); NOMINMAX keeps std::max usable
+#endif
 #include "irtsdk.h"
 // windows.h (included by some supported SDK build configurations) defines far.
 // DealerLogic uses far as a data member, so remove only that obsolete macro here.
@@ -61,9 +67,10 @@
 #include <ctime>
 #include <limits>
 #include <new>
+#include <atomic>
 
 static const bool SV_SHOW_BADGES = false;   // (1.4.1) Rassul 18:07: VWAP odds off the chart for now
-static const char* SV_VERSION = "1.4.1";        // 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.4.2";        // 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 static const COLOR C_VWAP = 0x00FF80FF;   // 0x00RRGGBB: (1.2.0) Rassul's own settings 22:37 - VWAP magenta
 static const COLOR C_SD1  = 0x00008000;   // +1 SD green (1.3.3, Rassul 2026-10-09 13:41 his settings window colours)
 static const COLOR C_SD1L = 0x00FF8080;   // -1 SD light red (1.3.4, Rassul 14:40 "replace the yellow with a lighter version of red")
@@ -74,8 +81,55 @@ static const COLOR C_DARK = 0x000B0F19;
 static const COLOR C_PRTH = 0x006B7280;   // the prior RTH VWAP overnight: dim grey
 static const char* CODES[5] = { "VWAP", "VWAP+1", "VWAP-1", "VWAP+2", "VWAP-2" };
 
-struct SVIdx { int font; };
-static SVIdx SV;
+// Status and odds are consumed asynchronously.  Keep different contracts and
+// periods separate, and publish a complete replacement rather than exposing a
+// partially written truncation to a reader.
+static std::atomic<unsigned long> SV_FILE_SEQ(0);
+
+static std::string svFilePart(const char* s, const char* fallback)
+{
+    std::string r;
+    if (s) for (const char* p = s; *p && r.size() < 48; ++p) {
+        const char c = *p;
+        const bool safe = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                          (c >= '0' && c <= '9') || c == '_' || c == '-';
+        r += safe ? c : '_';
+    }
+    return r.empty() ? std::string(fallback) : r;
+}
+
+static std::string svRecordPath(cppExtension* x, const char* profile, const std::string& market, int per, const char* type)
+{
+    const char* symbol = x ? x->getSymbol() : nullptr;
+    const int secs = per > 0 && per <= 3600 ? per : 180;
+    return std::string(profile) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionVWAP-" + svFilePart(market.c_str(), "unknown") +
+           "-" + svFilePart(symbol, "unknown") + "-" + std::to_string(secs) + "s." + type;
+}
+
+static bool svPublishText(const std::string& path, const std::string& text)
+{
+    const std::string tmp = path + ".tmp." + std::to_string((unsigned long long)time(nullptr)) + "." +
+                            std::to_string(SV_FILE_SEQ.fetch_add(1, std::memory_order_relaxed));
+    {
+        std::ofstream f(tmp.c_str(), std::ios::out | std::ios::trunc | std::ios::binary);
+        if (!f.is_open()) return false;
+        f.write(text.data(), (std::streamsize)text.size());
+        f.flush();
+        if (!f.good()) { f.close(); std::remove(tmp.c_str()); return false; }
+    }
+#if defined(_WIN32)
+    if (!::MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        std::remove(tmp.c_str());
+        return false;
+    }
+#else
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) {
+        std::remove(tmp.c_str());
+        return false;
+    }
+#endif
+    return true;
+}
 
 // The SDK can route one extension object through more than one chart. Keep
 // mutable cache and I/O throttling in the current host's UserData slot.
@@ -92,11 +146,12 @@ struct SVState {
     int statusNRth = -1;
     time_t lastOddsWrite = 0;
     int per = 180;                      // (1.2.0) the bar size the last calc used
-    // (1.4.0) vwapTrend cache: recomputed only when the last closed bar, its stamp, the market or the session kind changes
+    // (1.4.0) vwapTrend cache: recomputed when the last closed bar, stamp, market, session kind, or chart bar period changes
     int trIdx = -1;
     RTDATE trDate = 0;
     std::string trMkt;
     int trKind = 0;
+    int trPer = 0;
     vtl::Trend tr;
 };
 
@@ -145,7 +200,6 @@ int cppExtension::setup(void)
         setOutputParameter(NAMES[a], DRAW_INVISIBLE, &p, C_VWAP, OUTPUT_NO_UI);
         setArrayDrawingFlags(a, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
     }
-    SV.font = -1;
     return RTX_OK;
 }
 
@@ -449,19 +503,17 @@ int SessionVWAP::draw(void)
         RCT rc; rc.set(x0, (short)(y - h / 2), (short)(x0 + w), (short)(y + h / 2));
         rc.drawText(txt[j], true, false);
     }
-    if (odds) {   // the status file (RTH, as before): what the badges said and why (compared with lra.level_touch's numbers in the nightly check)
+    if (odds) {   // the odds record: what the badges said and why (compared with lra.level_touch's numbers in the nightly check)
         time_t now_ = time(nullptr);
         if (now_ - S->lastOddsWrite >= 30) {
-            S->lastOddsWrite = now_;
             const char* up = getenv("USERPROFILE");
             if (up) {
-                std::ofstream f2((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionVWAP-" + market + ".odds.txt").c_str(), std::ios::trunc);
-                if (f2.is_open()) {
-                    f2 << "VERSION|" << SV_VERSION << "\nLAW|" << TP_SOURCE << "\nCAL|" << VO_SOURCE << "|" << (proven ? "proven" : "?")
-                       << "\nTREND|" << vtl::label(S->tr) << "|" << vtl::viaLabel(S->tr) << "\nPX|" << clN[last] << "\nSIGMA_MIN|" << S->sigMin << "\nV60|" << S->V60
-                       << "\nK|" << S->kEff << "\nNU|" << S->nuEff << "\nLEFT|" << S->leftMin << "\nMODEL|" << S->featNote << "\n";
-                    for (int j = 0; j < 5; j++) f2 << "LINE|" << CODES[j] << "|" << v[j] << "|" << pv[j] << "\n";
-                }
+                std::ostringstream text;
+                text << "VERSION|" << SV_VERSION << "\nLAW|" << TP_SOURCE << "\nCAL|" << VO_SOURCE << "|" << (proven ? "proven" : "?")
+                     << "\nTREND|" << vtl::label(S->tr) << "|" << vtl::viaLabel(S->tr) << "\nPX|" << clN[last] << "\nSIGMA_MIN|" << S->sigMin << "\nV60|" << S->V60
+                     << "\nK|" << S->kEff << "\nNU|" << S->nuEff << "\nLEFT|" << S->leftMin << "\nMODEL|" << S->featNote << "\n";
+                for (int j = 0; j < 5; j++) text << "LINE|" << CODES[j] << "|" << v[j] << "|" << pv[j] << "\n";
+                if (svPublishText(svRecordPath(this, up, market, S->per, "odds.txt"), text.str())) S->lastOddsWrite = now_;
             }
         }
     }
@@ -487,7 +539,7 @@ vtl::Trend SessionVWAP::trendFor(int lastClosed, const std::string& market, int 
     if (lastClosed < 0 || lastClosed >= (int)n) return none;
     RTARRAYI dt(barDateTime);
     RTDATE d0 = (RTDATE)dt[lastClosed];
-    if (S.trIdx == lastClosed && S.trDate == d0 && S.trMkt == market && S.trKind == kind) return S.tr;
+    if (S.trIdx == lastClosed && S.trDate == d0 && S.trMkt == market && S.trKind == kind && S.trPer == S.per) return S.tr;
     int openMin = 0, closeMin = 0;
     if (!rthOf(market, openMin, closeMin)) return none;
     const int per = S.per > 0 ? S.per : 180;
@@ -503,7 +555,7 @@ vtl::Trend SessionVWAP::trendFor(int lastClosed, const std::string& market, int 
     std::vector<svl::Bar> B; B.reserve((size_t)(lastClosed - s + 1));
     for (int i = s; i <= lastClosed; i++) B.push_back(barAt(i));
     S.tr = vtl::fromChart(B, (int)B.size(), per, openMin, closeMin, kind);
-    S.trIdx = lastClosed; S.trDate = d0; S.trMkt = market; S.trKind = kind;
+    S.trIdx = lastClosed; S.trDate = d0; S.trMkt = market; S.trKind = kind; S.trPer = S.per;
     return S.tr;
 }
 
@@ -557,9 +609,9 @@ void SessionVWAP::writeStatus(const char* what, int nRth, const std::string& mar
     time_t now_ = time(nullptr);
     bool changed = !S || S->statusWhat != what || S->statusNRth != nRth || S->statusMkt != market;
     if (S && !changed && now_ - S->lastStatusWrite < 30) return;
-    std::ofstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\SessionVWAP.status.txt").c_str(), std::ios::trunc);
-    if (!f.is_open()) return;
-    f << "VERSION," << SV_VERSION << "\nMARKET," << market << "\nRTH_BARS," << nRth << "\nON_BARS," << nOn << "\nSTATE," << what << "\n";
+    std::ostringstream text;
+    text << "VERSION," << SV_VERSION << "\nMARKET," << market << "\nRTH_BARS," << nRth << "\nON_BARS," << nOn << "\nSTATE," << what << "\n";
+    if (!svPublishText(svRecordPath(this, up, market, S ? S->per : 180, "status.txt"), text.str())) return;
     if (S) { S->lastStatusWrite = now_; S->statusWhat = what; S->statusNRth = nRth; S->statusMkt = market; }
 }
 

@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.5.4 -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.6.2 (absorption = the peak bar's own close) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -113,28 +113,35 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     // (2.5.7, audit F1) beyond the node is decided in WHOLE TICKS (IRT prices and tick are float: a close ON the node's edge could
     // read a hair beyond it in double); a price's own tick key against the node's keys [low, high]
     auto key = [tick](double price) -> Tick { const double q = price / tick; return finite(q) && std::fabs(q) < 9.0e15 ? static_cast<Tick>(std::llround(q)) : 0; };
-    // (2.5.0, Rassul 2026-10-09 13:48 "lets simplify the rules to a close below the bearish accumulation and vice versa for
-    // bullish") the FIRST closed bar after the node formed that closes beyond it decides, and the decision is final:
-    //   a RED bar closing below the node -> price went down from it;  a GREEN bar closing above -> price went up from it.
-    // A heavy-BUYING node that sees a close below = A (buyers absorbed, bearish); a close above = I (buyers won).
-    // A heavy-SELLING node: close above = A (sellers absorbed, bullish); close below = I (sellers won).
-    // A forming (unclosed) bar never decides.
-    int winner = 0; // +1 upward, -1 downward, 0 undecided
-    for (std::size_t i = static_cast<std::size_t>(formed + 1); i < bars.size(); ++i) {
-        const Bar& b = bars[i];
-        if (!b.closed) continue;
-        // (2.5.0, Rassul 13:55 "a red bar close below for bearish absorption and a green bar above for a bullish absorption")
-        // the deciding bar must close beyond the node in its own colour: red (close < open) below, green (close > open) above
-        if (!finite(b.close) || !finite(b.open)) continue;
-        const Tick ck = key(b.close);
-        if (ck < low && b.close < b.open) { winner = -1; out.decidedBar = b.index; break; }
-        if (ck > high && b.close > b.open) { winner = 1; out.decidedBar = b.index; break; }
+    // (2.6.2, Rassul 2026-10-13 05:16 "the same bar has to have a green close above the absorption") absorption is decided by
+    // the node's OWN PEAK BAR (the bar holding the largest share of its delta - the bar its circle is drawn on), once that bar
+    // has CLOSED (a forming bar never decides):
+    //   a SELLING node is A (support, bullish)     only if its peak bar closes GREEN (close > open) ABOVE the node (tick key > high);
+    //   a BUYING  node is A (resistance, bearish)  only if its peak bar closes RED   (close < open) BELOW the node (tick key < low).
+    // A doji (close == open) is neither colour -> not A. A later bar can never make a node A.
+    // A node whose peak bar did not confirm is not absorption: it can still become I (initiative) when the FIRST closed bar after
+    // the node formed closes through it the other way in its own colour (selling node: red close below = sellers won;
+    // buying node: green close above = buyers won); a close beyond the absorption side no longer decides anything.
+    // While the peak bar is still forming: A? (or I? when price already trades a full tick through the other way, as before).
+    // After the peak bar failed and before any I close: I? (no circle; the label no longer promises absorption).
+    const Bar& pb = bars[static_cast<std::size_t>(peak)];
+    const bool peakKnown = pb.closed && finite(pb.open) && finite(pb.close);
+    if (peakKnown) {
+        const Tick pk = key(pb.close);
+        const bool confirmed = sell ? (pb.close > pb.open && pk > high) : (pb.close < pb.open && pk < low);
+        if (confirmed) { out.code = "A"; out.support = sell; out.decidedBar = pb.index; return out; }
+        for (std::size_t i = static_cast<std::size_t>(formed + 1); i < bars.size(); ++i) {
+            const Bar& b = bars[i];
+            if (!b.closed || !finite(b.close) || !finite(b.open)) continue;
+            const Tick ck = key(b.close);
+            if (sell && ck < low && b.close < b.open) { out.code = "I"; out.support = false; out.decidedBar = b.index; return out; }
+            if (!sell && ck > high && b.close > b.open) { out.code = "I"; out.support = true; out.decidedBar = b.index; return out; }
+        }
+        out.code = "I?"; out.support = !sell;
+        return out;
     }
-    if (winner != 0) {
-        out.code = ((winner == 1) == sell) ? "A" : "I";
-        out.support = winner == 1;
-    } else {
-        out.code = "A?"; out.support = sell;
+    out.code = "A?"; out.support = sell;
+    {
         const Bar& last = bars.back();
         const bool initiative = sell ? (finite(last.low) && key(last.low) < low) : (finite(last.high) && key(last.high) > high);   // a full tick beyond
         if (static_cast<std::size_t>(formed + 1) < bars.size() && initiative) {

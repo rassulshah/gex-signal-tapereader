@@ -1,14 +1,14 @@
 /********************************************************************************
- *  MboCheck.cpp  --  Investor/RT RTX extension  lsMboCheck  (1.0.0, 2026-10-10)
+ *  MboCheck.cpp  --  Investor/RT RTX extension  lsMboCheck  (1.1.1, 2026-10-12)
  *
  *  MBO CHECK: does this chart's data feed deliver market-by-order data (DBO / MBO: every order's NEW / MOD / DEL / FILL with
  *  its order id) to plugins through the SDK's DEPTH_BY_ORDER class, and how much full market depth (MARKET_DEPTH) does it give?
  *  Put it on any chart. No settings at all. It draws ONE small line at the top of the price pane, centred over the bars:
- *      MBO: YES 1,240 ev/min (N 410 M 22 D 380 F 428) | depth 10 lvls | last 9:41:05 AM | v1.0.0     green
- *      MBO: NO (not subscribed) | depth 10 lvls | 9:41 AM | v1.0.0                                   red
+ *      MBO: YES 1,240 ev/min (N 410 M 22 D 380 F 428) | depth 10 lvls | last 9:41:05 AM | v1.1.1     green
+ *      MBO: NO (not subscribed) | depth 10 lvls | 9:41 AM | v1.1.1                                   red
  *      MBO: subscribed but no events | ...                                                            red
  *      MBO: waiting 42s | ...                                                                         grey (first 60 s)
- *  and writes %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\MboCheck\<MKT>-<seconds per bar>.txt (tmp -> .bak -> rename), only when
+ *  and writes %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\MboCheck\<contract-period-identity>.txt (tmp -> .bak -> rename), only when
  *  the verdict / flag / depth changes or every 30 s: counts per action and side (last 60 s and since load), the last event's
  *  time, bDboSubscribed, the depth levels, and the first 20 raw events. Nothing about the user, login or account is written.
  *
@@ -31,10 +31,10 @@
  *      return; a backlog is carried to the next call and counted in the status file. CALL_CONTINUOUSLY keeps calc / draw
  *      coming while the feed is idle, so "waiting" turns into the verdict without forcing any repaint.
  *    - Opened from calc / draw only (the chart's own context). 1st try: the chart's symbol spelled out; if after 60 s there
- *      is no event, one 2nd try with NULL. A crash guard file (MboCheck\_opening-<MKT>-<sec>.txt) marks each open; if IRT
+ *      is no event, one 2nd try with NULL. A crash guard file (MboCheck\_opening-<contract-period-identity>.txt) marks each open; if IRT
  *      dies inside it, the next start shows "not checked" instead of opening it again (delete the file to try again).
- *  (1.1.0, LQ010 2026-10-11, the MBO RECORDER) every DBO event this chart receives is also appended, raw and unchanged, to
- *  lsFlexLevels\MboCheck\raw\<MKT>-<sec/bar>-<session>.csv (session = the 17:00 CT trading day, yyyymmdd):
+ *  (1.1.1, LQ010 2026-10-12, the MBO RECORDER) every DBO event this chart receives is also appended, raw and unchanged, to
+ *  lsFlexLevels\MboCheck\raw\<contract-period-identity>-<session>.csv (session = the 17:00 CT trading day, yyyymmdd):
  *      seq|ct_time|steady_ms|action|side|price|prev_price|size|order_id|aggressor_id|bid|ask|bid_size|ask_size
  *  one append per drained slice (never per event), after the slice; a failed append is counted and the slice's lines are
  *  dropped (never retried in a loop). Nothing is interpreted: the nightly check compares these records with Databento's MBO of
@@ -71,7 +71,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define MC_VERSION "1.1.0"          // keep equal to mbo::VERSION and the setVersion literal below
+#define MC_VERSION "1.1.1"          // keep equal to mbo::VERSION and the setVersion literal below
 
 enum { CTX_CALC = 0, CTX_DRAW = 1, CTX_TIMER = 2 };
 
@@ -91,7 +91,7 @@ struct MCState {
     mbo::Ident id;
     std::string line; int colour = 0;
     long long writes = 0;              // test counter (#31)
-    long long recSeq = 0, recLines = 0, recFails = 0; std::string recPath;   // (1.1.0) the raw recorder
+    long long recSeq = 0;              // raw recorder sequence, per chart state
     ~MCState() { delete dbo; delete md; }
 };
 
@@ -211,7 +211,7 @@ void MboCheck::open(MCState& S, const std::string& sym)
 {
     mbo::Probe& p = S.p;
     const std::string dir = flexDir();
-    const std::string guard = dir.empty() ? std::string() : dir + "\\MboCheck\\_opening-" + mbo::fileStem(S.id.market, S.id.spb) + ".txt";
+    const std::string guard = dir.empty() ? std::string() : dir + "\\MboCheck\\_opening-" + mbo::fileStem(S.id) + ".txt";
     if (p.attempt == 0 && !guard.empty() && statFile(guard)) { p.blocked = true; p.attempt = 1; return; }
     if (!guard.empty()) { makeDir(dir + "\\MboCheck"); std::ofstream g(guard.c_str(), std::ios::trunc); g << "opening DEPTH_BY_ORDER try " << (p.attempt + 1) << "\n"; }
     try {
@@ -281,7 +281,7 @@ void MboCheck::drain(MCState& S, int ctx, long long nowMs)
     if (!rec.empty()) record(S, rec, lastStamp);
 }
 
-// (1.1.0) append one slice of raw DBO lines to this market's session file; header on a new file; failures counted, never looped
+// (1.1.1) append one slice of raw DBO lines to this contract-period session file; header on a new file; failures counted, never looped
 void MboCheck::record(MCState& S, const std::string& lines, RTDATE stamp)
 {
     const std::string dir = flexDir(); if (dir.empty() || S.id.market.empty()) return;
@@ -299,14 +299,14 @@ void MboCheck::record(MCState& S, const std::string& lines, RTDATE stamp)
 #endif
     char sess[16]; std::snprintf(sess, sizeof(sess), "%04d%02d%02d", sd.tm_year + 1900, sd.tm_mon + 1, sd.tm_mday);
     makeDir(dir + "\\MboCheck"); makeDir(dir + "\\MboCheck\\raw");
-    const std::string path = dir + "\\MboCheck\\raw\\" + mbo::fileStem(S.id.market, S.id.spb) + "-" + sess + ".csv";
+    const std::string path = dir + "\\MboCheck\\raw\\" + mbo::fileStem(S.id) + "-" + sess + ".csv";
     const bool fresh = !statFile(path);
     std::ofstream f(path.c_str(), std::ios::binary | std::ios::app);
-    if (!f) { S.recFails++; return; }
+    if (!f) { S.p.recorderFailures++; return; }
     if (fresh) f << "seq|ct_time|steady_ms|action|side|price|prev_price|size|order_id|aggressor_id|bid|ask|bid_size|ask_size\n";
     f.write(lines.data(), (std::streamsize)lines.size()); f.flush();
-    if (!f) { S.recFails++; return; }
-    S.recPath = path; S.recLines += (long long)std::count(lines.begin(), lines.end(), '\n');
+    if (!f) { S.p.recorderFailures++; return; }
+    S.p.recorderLines += (long long)std::count(lines.begin(), lines.end(), '\n');
 }
 
 // once a second, from the chart's own calls only (the SDK's available() always asks about "this chart")
@@ -347,7 +347,7 @@ void MboCheck::status(MCState& S, long long nowMs)
     }
     const std::string doc = mbo::statusText(S.p, S.id, nowMs, when, S.line);
     S.lastWriteMs = nowMs;                                           // a failed write waits for the next 30 s / change, never loops
-    if (publishFile(dir + "\\MboCheck\\" + mbo::fileStem(S.id.market, S.id.spb) + ".txt", doc)) { S.lastKey = key; S.writes++; }
+    if (publishFile(dir + "\\MboCheck\\" + mbo::fileStem(S.id) + ".txt", doc)) { S.lastKey = key; S.writes++; }
 }
 
 void MboCheck::pump(int ctx)
@@ -370,6 +370,8 @@ void MboCheck::pump(int ctx)
             S->id.symbol = mbo::cleanField(sym.c_str(), sym.size());
             S->id.market = mbo::marketOf(rs ? rs : "", sym);
             S->id.spb = getSecondsPerBar();
+            S->id.periodicity = (int)getPeriodicity();
+            S->id.interval = getIntradayInterval();
             if (p.attempt == 0) open(*S, S->id.symbol);
             else if (p.attempt == 1 && !p.blocked && p.events == 0 && !S->dboDead && p.windowMs >= 0 && nowMs - p.windowMs >= mbo::WAIT_MS)
                 open(*S, S->id.symbol);                             // 2nd try: NULL
@@ -423,6 +425,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the verdict must appear (and age) while the feed is idle, without forcing repaints
     p->setDescription("LRA MboCheck: shows whether this chart's feed delivers market-by-order (MBO / DBO) events and full depth. One line on the chart; no settings.");
-    p->setVersion("1.1.0");   // MC_VERSION
+    p->setVersion("1.1.1");   // MC_VERSION
     return p;
 }

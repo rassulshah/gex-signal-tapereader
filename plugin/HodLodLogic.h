@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <climits>
+#include <limits>
 #include <algorithm>
 #include <functional>
 #include <fstream>
@@ -53,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.0.0";
+static const char* const HL_VERSION = "2.0.4";
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -127,7 +128,15 @@ inline bool toTicks(double px, double tick, long long& out)
     if (!std::isfinite(px) || !std::isfinite(tick) || !(tick > 0)) return false;
     double q = px / tick;
     if (!std::isfinite(q) || std::fabs(q) > 1e15) return false;
-    out = (long long)std::llround(q); return true;
+    const long long rounded = (long long)std::llround(q);
+    const double canonical = (double)rounded * tick;
+    // Prices arrive from the IRT SDK as float, so compare against the canonical tick with
+    // a bounded float-representation allowance, not an arbitrary price epsilon.  This
+    // rejects a genuinely off-grid OHLC value instead of silently moving it to a tick.
+    const double scale = (std::max)(tick, (std::max)(std::fabs(px), std::fabs(canonical)));
+    const double nativeFloatAllowance = 2.0 * (double)std::numeric_limits<float>::epsilon() * scale;
+    if (std::fabs(px - canonical) > nativeFloatAllowance) return false;
+    out = rounded; return true;
 }
 inline std::string trimNum(double v, int dec)
 {
@@ -309,14 +318,20 @@ public:
 
     void rollover(long long sid)
     {
-        if (cur.any) {
+        // A session that has not reached its RTH close is only a partial observation. It must not
+        // become the prior session, PD/PF source, previous close/range, or an ATR sample: doing so
+        // lets a chart opened late manufacture a completed day and contaminate the next day's model.
+        const bool rthComplete = cur.any && cur.complete;
+        if (rthComplete) {
             prevRanges.push_back(cur.hod.px - cur.lod.px);
             if (prevRanges.size() > 64) prevRanges.erase(prevRanges.begin());
             havePrevClose = true; prevClose = cur.lastClose; prevRange = cur.hod.px - cur.lod.px;
             pd = Lvl(); pd.n = 1; pd.hi = cur.hod.px; pd.lo = cur.lod.px; pd.ok = firstAbsStart <= rthA(curSid);
             last = cur;
+        } else {
+            pd = Lvl();
         }
-        pf = curFull; pf.ok = curFull.n > 0 && firstAbsStart <= onA(curSid);
+        pf = curFull; pf.ok = rthComplete && curFull.n > 0 && firstAbsStart <= onA(curSid);
         curFull = Lvl(); curOn = Lvl(); curLon = Lvl(); curOnMid = Lvl(); cur = Rth();
         curSid = sid;
     }
@@ -689,6 +704,8 @@ struct View {
     long long hodLvlPx = 0, lodLvlPx = 0;          // the swept levels' prices (ticks)
     struct LvlLbl { std::string txt; long long px = 0; unsigned col = 0; bool fin = false; };
     std::vector<LvlLbl> lvlLbls;                   // (HL104) "LonLO 7,838.25", "CR 7,850" ...: right of the candle, each at its own price
+    std::vector<long long> levelTicks;             // (2.0.4) every key level + the latest MenthorQ levels (ticks): the rows the Dealer Profile
+                                                   //         level badges ("94.00 G1  33%  /  50%") sit on - the projection callout keeps off them
     std::string sweptLod, sweptHod, mqWhy;
     std::vector<LvSeg> lodCodes, hodCodes;         // (HL105) the swept-level codes shown in the A row (candle off)         //         every level each extreme swept (shown + the rest), for the status file
     bool hodFinal = false, lodFinal = false;       //         coloured once that extreme is final (called IN / the close), else grey
@@ -711,6 +728,7 @@ struct View {
     int callT = -1, callSrc = 0; double callP = NAN; bool callIn = false;     // the 2nd-extreme call in the E cell / header
     double callShow = NAN; bool callQ = false, callLate = false, callDim = false;
     std::string headMain, headTail, headTailShort, headLeftTxt; unsigned headTailCol = C_SLATE;
+    std::vector<Seg> sessSegs;       // (2.0.2, Rassul 05:52 "keep the RTH header but add the Regime and Options Expiry here") after "ES RTH 8:30-3:00"
     std::vector<Seg> fxSegs;         // (2.0.0, Rassul 2026-10-12 21:47 "combine the hod lod indicator and the first extreme") the 1st Extreme line (3rd header line); empty = none
     std::vector<Seg> headLeftSegs;   // (1.1.2, Rassul 10-12 "add colour") the left half in parts: "ES RTH 8:30-3:00" | "Range 70%" | "Proj LOD ..."   // (HL101) the header in two colours: the read + the 2nd call
     // (1.1.0, Rassul 2026-10-11 16:54) the PROJECTED opposite extreme: the 1st extreme + / - the expected full RTH range (hle median,
@@ -726,7 +744,7 @@ enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_RO
 static const int NCOL = NALL;
 static const char* const COLS[NALL] = { "", "1st Time", "Reclaim", "2nd Time", "Gap", "Took", "Size", "Rec. Took", "Room", "Range", "Close", "1st Dir", "2nd Dir" };
 // the table's columns (Rassul 2026-10-09 v15: 1st Time | Reclaim | 2nd Time). Adding Gap back is this one line: { ..., K_2ND, K_GAP }
-static const int SHOWN[] = { K_LABEL, K_1ST, K_RECL, K_2ND };
+static const int SHOWN[] = { K_LABEL, K_1ST, K_2ND };   // (2.0.2, Rassul 2026-10-13 05:31 "get rid of the middle reclaim column")
 static const int NSHOWN = (int)(sizeof(SHOWN) / sizeof(SHOWN[0]));
 // (v12) the first-extreme read is shown as a call only while the read model is in test: "LOD IN (model in test)"; its P is logged
 static const bool READ_IN_TEST = false;   // (coordinator 2026-10-09 20:30) the IN read is LIVE: "LOD IN 87%" (pInShow)
@@ -844,6 +862,16 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
     v.open = R->open; v.close = R->lastClose; v.hod = R->hod.px; v.lod = R->lod.px;
     v.hodMod = (int)((R->hod.endAbs - day) / 60); v.lodMod = (int)((R->lod.endAbs - day) / 60); v.lastMod = (int)((R->lastEndAbs - day) / 60);
     v.hodLvl = R->hod.lvl; v.lodLvl = R->lod.lvl; v.hodLvlPx = R->hod.lvlPx; v.lodLvlPx = R->lod.lvlPx;
+    {   // (2.0.4, 2026-10-13 Rassul screenshot: the callout's price "94.00" sat on the G1 badge) the level rows the badges sit on
+        const Lvl* KL[4] = { &T.pf, &T.pd, &T.curOn, &T.curLon };
+        for (int i = 0; i < 4; i++) if (KL[i]->ok && KL[i]->n > 0) { v.levelTicks.push_back(KL[i]->hi); v.levelTicks.push_back(KL[i]->lo); }
+        if (mq) {
+            const long long sesA0 = (R->sid - 1) * 86400 + 17 * 3600;
+            const MqSnap* sn = nullptr;
+            for (size_t i = 0; i < mq->size(); i++) { const MqSnap& q = (*mq)[i]; if (q.atAbs >= sesA0 && q.atAbs <= R->lastEndAbs && (!sn || q.atAbs >= sn->atAbs)) sn = &q; }
+            if (sn) for (size_t i = 0; i < sn->lv.size(); i++) v.levelTicks.push_back(sn->lv[i].px);
+        }
+    }
 
     v.headLeft = std::string(K.code) + "  " + clk(v.lastMod);
     v.side = R->lod.seq < R->hod.seq ? 1 : (R->hod.seq < R->lod.seq ? 2 : 0);
@@ -986,11 +1014,11 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
             v.bodyMid.push_back(one(durC(v.gap), C_SLATE));
         } else if (v.secondPrinted) {             // a new opposite extreme after the reclaim: the running high / low so far
             SG.push_back(runLine(lodFirst, sMod, sLvl));
-            v.bodyMid.push_back(one("pending", C_SLATE));
+            v.bodyMid.push_back(one("Pending", C_SLATE));
         } else {
             SG.push_back(nameLine(lodFirst, -1));  // the second extreme is the HOD when the LOD came first; a pending one names no level
-            SG.push_back(one("pending", sc));
-            v.bodyMid.push_back(one("pending", C_SLATE));
+            SG.push_back(one("Pending", sc));
+            v.bodyMid.push_back(one("Pending", C_SLATE));
         }
         v.bodyMid.push_back(one(rangeTxt, C_SLATE)); v.bodyMid.push_back(one(rangeUsdTxt, C_SLATE));
         if (v.reclaimed) { v.bodyRecl.push_back(one(clk(v.reclMod), C_SLATE)); v.bodyRecl.push_back(one(durC(v.recTook), C_SLATE)); }
@@ -1129,7 +1157,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
             if (v.reclaimed) {
                 v.A[K_RECL] = mkCell(clk(v.reclMod), C_SLATE); v.A[K_RECTOOK].s = durT(v.recTook);
                 if (v.recTo >= 0) tag(v.A[K_RECL], v.reclMod, v.recFrom, v.recTo);
-            } else v.A[K_RECL] = mkCell(v.complete ? "none" : "pending", C_SLATE);
+            } else v.A[K_RECL] = mkCell(v.complete ? "none" : "Pending", C_SLATE);
             if (v.secondFinal) {                                // against the "after T" call: in = printed after T, early = before
                 int m2 = lodFirst ? v.hodMod : v.lodMod;
                 v.A[K_2ND] = mkCell(clk(m2), C_SLATE); v.A[K_2ND].s2 = lodFirst ? "HOD" : "LOD"; v.A[K_2ND].col2 = sideCol(lodFirst);
@@ -1142,7 +1170,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 v.A[K_DIR2] = mkCell("", C_GREY);
                 v.A[K_GAP] = mkCell(durT(v.gap) + "...", C_GREY);
             } else {
-                v.A[K_2ND] = mkCell("pending", C_SLATE);
+                v.A[K_2ND] = mkCell("Pending", C_SLATE);   // (05:59 "put pending like Pending")
                 v.A[K_GAP] = mkCell(durT(v.lastMod - firstMod) + "...", C_GREY);   // running time since the 1st extreme
             }
         }
@@ -1310,101 +1338,170 @@ inline Box placeIn(const Box& area, int W, int H, int pos)
     x = (std::max)(area.l, (std::min)(x, area.r - W)); y = (std::max)(area.t, (std::min)(y, area.b - H));
     return Box{ x, y, x + W, y + H };
 }
-// (HL105, mockups 10 / 13) the table: a header of two equal cells split by a thin separator ("ES RTH 8:30-3:00   Range 62%" centred
-// left | "LOD IN 99%   HOD after 9:30 76%" centred right); the body = the E / A letters, then three EQUAL columns (1st Time |
-// Reclaim | 2nd Time) with the heading, the E value and the A segments centred in each. Placed by `pos` inside `area` (the usable
-// area: the pane's left edge to the last price bar's right edge); never wider than it (a smaller font, then the short header).
+// (2.0.2, Rassul 2026-10-13 05:31-05:44, mockups a-h) the table, top to bottom:
+//   the session title ("ES RTH 8:30-3:00")                                          | "move ES RTH value to session box at the top"
+//   1st Time | 2nd Time headings
+//   Estimate  8:33 - 9:21 (65%)      HOD after 11:30 (63%)   (blue, bold, larger)    | "call the row Estimate", "expected values blue, bigger"
+//   Actual    LOD IN 8:39 (71%)      HOD so far 10:27 ONH                            | "LOD IN 10:42 71%", probabilities in (), no "late" tag
+//   Range used 70%   Proj HOD 7,913.50                                               | "followed by the range and projection values"
+//   1st extreme  LOD? (73%)  7,860.25 . formed 8:39 . called 10:03   (only while the call is live)
+// Reclaim column gone; every line larger with more spacing ("make fonts bigger for all lines ... some spacing so the whole thing looks nice").
+inline std::string hlParenPct(const std::string& in)
+{   // "65%" -> "(65%)", "73%?" -> "(73%?)"; a double space before it becomes one
+    std::string o; size_t i = 0;
+    while (i < in.size()) {
+        if (isdigit((unsigned char)in[i]) && (i == 0 || !isdigit((unsigned char)in[i - 1])) && in[i - (i ? 1 : 0)] != '(') {
+            size_t j = i; while (j < in.size() && isdigit((unsigned char)in[j])) j++;
+            if (j < in.size() && in[j] == '%') {
+                size_t k = j + 1; if (k < in.size() && in[k] == '?') k++;
+                while (!o.empty() && o.size() >= 2 && o[o.size() - 1] == ' ' && o[o.size() - 2] == ' ') o.erase(o.size() - 1);
+                o += "(" + in.substr(i, k - i) + ")"; i = k; continue;
+            }
+            o += in.substr(i, j - i); i = j; continue;
+        }
+        o += in[i++];
+    }
+    return o;
+}
+inline std::string hlShortRegime(std::string r)
+{   // (05:57 "shorten Regime to Reg: ... shorten Negative to Neg") "Regime: Negative" -> "Reg: Neg", "Regime: Positive" -> "Reg: Pos"
+    // (06:05 "spell out regime in the box") "Regime" stays spelled out; only the value is short
+    size_t k;
+    if ((k = r.find("Negative")) != std::string::npos) r.replace(k, 8, "Neg");
+    if ((k = r.find("Positive")) != std::string::npos) r.replace(k, 8, "Pos");
+    return r;
+}
+inline void hlParenCell(Cell& c) { c.s = hlParenPct(c.s); c.s2 = hlParenPct(c.s2); c.s3 = hlParenPct(c.s3); }
+
 inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT)
 {
     if (freeR < 0) freeR = pane.r;
     const int pad = 6;
     Box area = { left, pane.t, (std::min)(freeR, (int)pane.r), pane.b - 1 };
-    // three tries: 9 pt equal columns, 8 pt equal columns, 8 pt columns sized to their content (the HG close: the 2nd call
-    // "close push 10% . else 8:45-10:00" made three equal columns 640 px wide - past the last bar on a 1012 px chart)
-    // (1.1.2, Rassul 10-12 "bigger font, better readability") 11 pt first; every chart tries the same sizes in the same order
+    auto trimL = [](std::string t) { size_t k = t.find_first_not_of(' '); return k == std::string::npos ? std::string() : t.substr(k); };
+    // ---- the content (independent of the font size)
+    std::string title; unsigned titleCol = v.headerCol;
+    std::vector<Seg> info;                                   // Range used / Proj (or "prior RTH 10/12")
+    if (!v.headLeftSegs.empty()) {
+        title = trimL(v.headLeftSegs[0].s); titleCol = v.headLeftSegs[0].col;
+        for (size_t q = 1; q < v.headLeftSegs.size(); q++) info.push_back(Seg{ trimL(v.headLeftSegs[q].s), v.headLeftSegs[q].col });
+    } else title = trimL(v.headLeftTxt);
+    if (v.prior && !v.headMain.empty()) info.push_back(Seg{ v.headMain, C_GREY });
+    // (05:55 "i also dont want the line ... 1st extreme LOD? (73%) ...") the 1st Extreme model still runs, logs and draws its candle
+    // marker; its table line is not shown
+    std::vector<Seg> fx;
+    Cell eRow[NALL], aRow[NALL];
+    for (int c = 0; c < NALL; c++) { eRow[c] = v.E[c]; aRow[c] = v.A[c]; }
+    eRow[K_LABEL].s = "Expected";   // (05:50 "keep the Expected wording")
+    const std::string tail = trimL(v.headTail);
+    if (!tail.empty()) eRow[K_2ND] = mkCell(tail, C_BLUE, true);   // the 2nd-extreme call is the Estimate's 2nd Time
+    for (int c = 1; c < NALL; c++) { Cell& e = eRow[c]; e.col = e.col2 = e.col3 = C_BLUE; e.bold = true; for (size_t q = 0; q < e.lv.size(); q++) e.lv[q].col = C_BLUE; }
+    {   // Actual 1st Time = "LOD IN 8:39 (71%)" once the read names the side and the 1st extreme has printed
+        const std::string hm = trimL(v.headMain);
+        size_t inPos = hm.find(" IN "), pct = hm.find('%');
+        const Cell& a1 = v.A[K_1ST];
+        if (!v.prior && inPos != std::string::npos && pct != std::string::npos && pct > inPos && !a1.s.empty() && !a1.s2.empty()) {
+            Cell c = a1; size_t e = pct + 1; if (e < hm.size() && hm[e] == '?') e++;
+            c.s = hm.substr(0, inPos) + " IN"; c.s2 = a1.s + " " + hm.substr(inPos + 4, e - inPos - 4); c.col2 = a1.col; c.bold = true; c.s3.clear();
+            aRow[K_1ST] = c;
+        }
+    }
+    for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); }
+    // ---- sizes: (2.0.3, Rassul 10:38 "reduce the size of this by 33%. too big") 9 / 9 / 8 / 8 pt instead of 13 / 12 / 11 / 10, and the
+    // padding scaled by 2/3 (equal columns first, then content-sized)
     for (int attempt = 0; attempt < 4; attempt++) {
-        const int fs = attempt == 0 ? 11 : (attempt == 3 ? 9 : 10); const bool natural = attempt >= 2;
-        int hfs = fs, rowH = lineH(fs) - 2, headH = rowH + 2;
-        auto cellW = [&](const Cell& C) {
-            int w = M(C.s, fs, C.bold);
-            if (!C.s2.empty()) w += M(" " + C.s2, fs, C.bold);
-            for (size_t q = 0; q < C.lv.size(); q++) w += M((q ? " \xB7 " : " ") + C.lv[q].s, fs, C.bold);
-            if (!C.s3.empty()) w += M("  " + C.s3, fs, C.bold);
+        const int fs = 9 - attempt / 2, efs = fs + 1; const bool natural = attempt % 2 == 1;
+        const int rowH = lineH(fs) + 1, rowHE = lineH(efs) + 1, titleH = lineH(fs + 1) + 3, gap = 3;
+        auto cellWf = [&](const Cell& C, int f) {
+            int w = M(C.s, f, C.bold);
+            if (!C.s2.empty()) w += M(" " + C.s2, f, C.bold);
+            for (size_t q = 0; q < C.lv.size(); q++) w += M((q ? " \xB7 " : " ") + C.lv[q].s, f, C.bold);
+            if (!C.s3.empty()) w += M("  " + C.s3, f, C.bold);
             return w;
         };
-        int lw = (std::max)(cellW(v.E[K_LABEL]), cellW(v.A[K_LABEL])) + 8;
-        int cw = 0, sumNat = 0; std::vector<int> nat;
+        auto segW = [&](const std::vector<Seg>& S, int f, int sep) { int w = 0; for (size_t q = 0; q < S.size(); q++) w += M(S[q].s, f, true) + (q ? sep : 0); return w; };
+        const int sepInfo = M("     ", fs, true);
+        int regW = 0; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) regW = M(hlShortRegime(v.sessSegs[q].s), fs + 1, true);
+        int lw = (std::max)((std::max)((std::max)(M(eRow[K_LABEL].s, fs, true), M(aRow[K_LABEL].s, fs, true)), info.empty() ? 0 : M("Estimate", fs, true)), regW) + 12;
+        std::vector<int> nat; int cw = 0, sumNat = 0;
         for (int j = 0; j < NSHOWN; j++) { int c = SHOWN[j]; if (c == K_LABEL) continue;
-            int w = (std::max)(M(COLS[c], fs, false), (std::max)(cellW(v.E[c]), cellW(v.A[c]))) + 14; nat.push_back(w); sumNat += w; cw = (std::max)(cw, w); }
-        int ncol = NSHOWN - 1;
-        const int colsW = natural ? sumNat : ncol * cw;
-        std::string tail = v.headTail;
-        // (1.1.2, Rassul 11:20 "compact it ... the ES RTH to Proj LOD can be put in a new line below") a two-line header, each line
-        // the table's full width: "ES RTH 8:30-3:00   Range 52%   Proj LOD 7,834.75" over "HOD IN 70%?   LOD at close 15% ..."
-        int fxW = 0; for (size_t q = 0; q < v.fxSegs.size(); q++) fxW += M(v.fxSegs[q].s, hfs, true);
-        const int nHead = v.fxSegs.empty() ? 2 : 3;   // (2.0.0) + the 1st Extreme line
-        auto headW = [&](const std::string& tl) { return (std::max)((std::max)(M(v.headLeftTxt, hfs, true), M(v.headMain, hfs, true) + M(tl, hfs, true)), fxW) + 16; };
-        int W = (std::max)(lw + colsW + 4, headW(tail));
-        if (W > area.r - area.l && !v.headTailShort.empty()) { tail = v.headTailShort; W = (std::max)(lw + colsW + 4, headW(tail)); }
-        int H = nHead * headH + 3 * rowH + 2;
-        if (W > area.r - area.l && attempt < 3) continue;              // a smaller font, then content-sized columns, before spilling
-        if (area.l + W > pane.r - pad) continue;                      // cannot fit even past the last bar: smaller font / the note
+            int w = (std::max)(M(COLS[c], fs, false), (std::max)(cellWf(eRow[c], efs), cellWf(aRow[c], fs))) + 24;
+            if (j == 1) w = (std::max)(w, M(title, fs + 1, true) + 16);                                   // the RTH title over 1st Time
+            if (j == 2) { std::string t2; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) t2 += (t2.empty() ? "" : "  ") + v.sessSegs[q].s;
+                          w = (std::max)(w, M(t2, fs + 1, true) + 16); }                                 // the expiry over 2nd Time
+            nat.push_back(w); sumNat += w; cw = (std::max)(cw, w); }
+        const int ncol = NSHOWN - 1, colsW = natural ? sumNat : ncol * cw;
+        int W = (std::max)(lw + colsW + 12, (std::max)(info.empty() ? 0 : lw + segW(info, fs, sepInfo) + 12, segW(fx, fs, 0)) + 32);
+        const int H = titleH + 1 + rowH + rowHE + rowH + gap + 1 + (info.empty() ? 0 : rowH) + (fx.empty() ? 0 : rowH) + gap + 2;
+        if (W > area.r - area.l && attempt < 3) continue;
+        if (area.l + W > pane.r - pad) continue;
         if (H + 40 > pane.b - pane.t) break;
-        if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);   // the content cannot shrink further: the least spill
-        std::vector<int> cwv((size_t)ncol, (W - 4 - lw) / ncol);      // equal: the three columns share the width equally
-        if (natural) { int extra = (W - 4 - lw - sumNat) / ncol; for (int k = 0; k < ncol; k++) cwv[(size_t)k] = nat[(size_t)k] + extra; }
+        if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);
+        std::vector<int> cwv((size_t)ncol, (W - 12 - lw) / ncol);
+        if (natural) { int extra = (W - 12 - lw - sumNat) / ncol; for (int k = 0; k < ncol; k++) cwv[(size_t)k] = nat[(size_t)k] + extra; }
         Box T = placeIn(area, W, H, pos);
         L.table = T; L.tableOk = true;
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
-        {   // (1.1.2) the header on two lines, each centred on the table: line 1 the session / range / target, line 2 the read
-            int wl = M(v.headLeftTxt, hfs, true), w1 = M(v.headMain, hfs, true), w2 = M(tail, hfs, true);
-            const int cx = (T.l + T.r) / 2;
-            if (v.headLeftSegs.empty()) addText(L, cx - wl / 2, T.t + 1, T.t + headH, v.headLeftTxt, v.headerCol, hfs, true, wl, R_TABLE, -1);
-            else {   // the parts in their colours, centred as one
-                int sw = 0; for (size_t q = 0; q < v.headLeftSegs.size(); q++) sw += M(v.headLeftSegs[q].s, hfs, true);
-                int xx = cx - sw / 2;
-                for (size_t q = 0; q < v.headLeftSegs.size(); q++) { int w = M(v.headLeftSegs[q].s, hfs, true);
-                    addText(L, xx, T.t + 1, T.t + headH, v.headLeftSegs[q].s, v.headLeftSegs[q].col, hfs, true, w, R_TABLE, -1); xx += w; }
-            }
-            int xr = cx - (w1 + w2) / 2;
-            addText(L, xr, T.t + headH, T.t + 2 * headH - 1, v.headMain, v.headerCol, hfs, true, w1, R_TABLE, -1);
-            if (!tail.empty()) addText(L, xr + w1, T.t + headH, T.t + 2 * headH - 1, tail, v.headTailCol, hfs, true, w2, R_TABLE, -1);
-            if (nHead == 3) {   // (2.0.0) line 3: the 1st Extreme model ("1st extreme  LOD? 74%  7,826.75 . formed 8:51 . called 9:42")
-                int xx = cx - fxW / 2;
-                for (size_t q = 0; q < v.fxSegs.size(); q++) { int w = M(v.fxSegs[q].s, hfs, true);
-                    addText(L, xx, T.t + 2 * headH, T.t + 3 * headH - 1, v.fxSegs[q].s, v.fxSegs[q].col, hfs, true, w, R_TABLE, -1); xx += w; }
-            }
+        const int cx = (T.l + T.r) / 2;
+        int y = T.t + 2;
+        {   // (05:52 "keep the RTH header but add the Regime and Options Expiry"; 05:56 "move the regime to the left of rth"; 05:57 "shorten
+            // Regime to Reg: ... Negative to Neg ... i want all the columns aligned"): the header is a grid row too -
+            // "Reg: Neg" in the label column, "ES RTH 8:30-3:00" centred over 1st Time, "Expiry 1:30 PM (in 8h 27m)" over 2nd Time
+            Seg reg{ "", C_GREY }; std::vector<Seg> rest;
+            for (size_t q = 0; q < v.sessSegs.size(); q++) { if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) reg = Seg{ hlShortRegime(v.sessSegs[q].s), v.sessSegs[q].col }; else rest.push_back(v.sessSegs[q]); }
+            if (!reg.s.empty()) addText(L, T.l + 8, y, y + titleH - 2, reg.s, reg.col, fs + 1, true, M(reg.s, fs + 1, true), R_TABLE, -1);
+            int xl = T.l + 6 + lw;
+            int w0 = M(title, fs + 1, true); addText(L, xl + cwv[0] / 2 - w0 / 2, y, y + titleH - 2, title, titleCol, fs + 1, true, w0, R_TABLE, -1);
+            if (!rest.empty() && ncol > 1) { int x2 = xl + cwv[0]; std::string t2; unsigned c2 = rest[0].col;
+                for (size_t q = 0; q < rest.size(); q++) t2 += (q ? "  " : "") + rest[q].s;
+                int w2 = M(t2, fs + 1, true); addText(L, x2 + cwv[1] / 2 - w2 / 2, y, y + titleH - 2, t2, c2, fs + 1, true, w2, R_TABLE, -1); }
         }
-        addLine(L, T.l, T.t + nHead * headH, T.r, T.t + nHead * headH, C_BORDER, 1, R_TABLE);
-        int y = T.t + nHead * headH + 1;
-        const Cell* rows[2] = { v.E, v.A };
+        y += titleH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        const Cell* rows[2] = { eRow, aRow };
         for (int r = -1; r < 2; r++) {
-            if (r == 1) addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE);
-            int x = T.l + 4 + lw, ci = 0;
+            const int rf = r == 0 ? efs : fs, rh = r < 0 ? rowH : (r == 0 ? rowHE : rowH);
+            int x = T.l + 6 + lw, ci = 0;
             for (int j = 0; j < NSHOWN; j++) {
-                int c = SHOWN[j];
-                if (c != K_LABEL) cw = cwv[(size_t)ci++];
+                int c = SHOWN[j]; int cwc = 0;
+                if (c != K_LABEL) cwc = cwv[(size_t)ci++];
                 if (c == K_LABEL) {
-                    if (r >= 0) { const Cell& C = rows[r][c]; addText(L, T.l + 5, y, y + rowH, C.s, C.col, fs, C.bold, M(C.s, fs, C.bold), R_TABLE, -1); }
+                    if (r >= 0) { const Cell& C = rows[r][c]; addText(L, T.l + 8, y, y + rh, C.s, r == 0 ? C_GREY : C.col, fs, true, M(C.s, fs, true), R_TABLE, -1); }
                     continue;
                 }
-                if (r < 0) { std::string h = COLS[c]; int hw = M(h, fs, false); addText(L, x + cw / 2 - hw / 2, y, y + rowH, h, C_GREY, fs, false, hw, R_TABLE, -1); x += cw; continue; }
+                if (r < 0) { std::string h = COLS[c]; int hw = M(h, fs, false); addText(L, x + cwc / 2 - hw / 2, y, y + rh, h, C_GREY, fs, false, hw, R_TABLE, -1); x += cwc; continue; }
                 const Cell& C = rows[r][c];
-                // the segments, centred as one: "7:57" " LOD" " LonLO" "  in"
                 std::vector<std::string> part; std::vector<unsigned> pc;
                 part.push_back(C.s); pc.push_back(C.col);
-                part.push_back(C.s2.empty() ? "" : " " + C.s2); pc.push_back(C.col2);
+                part.push_back(C.s2.empty() ? "" : " " + C.s2); pc.push_back(C.col2 ? C.col2 : C.col);
                 for (size_t q = 0; q < C.lv.size(); q++) { part.push_back((q ? " \xB7 " : " ") + C.lv[q].s); pc.push_back(C.lv[q].col); }
-                part.push_back(C.s3.empty() ? "" : "  " + C.s3); pc.push_back(C.col3);
-                int tw = cellW(C), xx = x + cw / 2 - tw / 2;
+                part.push_back(C.s3.empty() ? "" : "  " + C.s3); pc.push_back(C.col3 ? C.col3 : C.col);
+                int tw = cellWf(C, rf), xx = x + cwc / 2 - tw / 2;
                 for (size_t k = 0; k < part.size(); k++) {
                     if (part[k].empty()) continue;
-                    int pw = M(part[k], fs, C.bold);
-                    addText(L, xx, y, y + rowH, part[k], pc[k], fs, C.bold, pw, R_TABLE, -1);
+                    int pw = M(part[k], rf, C.bold);
+                    addText(L, xx, y, y + rh, part[k], pc[k], rf, C.bold, pw, R_TABLE, -1);
                     xx += pw;
                 }
-                x += cw;
+                x += cwc;
             }
+            y += rh;
+        }
+        y += gap; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        if (!info.empty()) {   // (05:50 "add Estimate"; 05:55 "align estimate so it is aligned with the other values above it"): the label
+            // like Expected / Actual, then Range used centred under 1st Time and the projection under 2nd Time (one value per column)
+            addText(L, T.l + 8, y, y + rowH, "Estimate", C_GREY, fs, true, M("Estimate", fs, true), R_TABLE, -1);
+            int x0 = T.l + 6 + lw;
+            for (size_t q = 0; q < info.size(); q++) {
+                const int ci = (std::min)((int)q, ncol - 1);
+                int xl = x0; for (int k = 0; k < ci; k++) xl += cwv[(size_t)k];
+                int w = M(info[q].s, fs, true);
+                addText(L, xl + cwv[(size_t)ci] / 2 - w / 2, y, y + rowH, info[q].s, info[q].col, fs, true, w, R_TABLE, -1);
+            }
+            y += rowH;
+        }
+        if (!fx.empty()) {
+            int xx = cx - segW(fx, fs, 0) / 2;
+            for (size_t q = 0; q < fx.size(); q++) { int w = M(fx[q].s, fs, true); addText(L, xx, y, y + rowH, fx[q].s, fx[q].col, fs, true, w, R_TABLE, -1); xx += w; }
             y += rowH;
         }
         L.blocks.push_back(T);
@@ -1592,6 +1689,13 @@ inline void layoutCandle(Layout& L, const View& v, const Box& pane, const std::f
 // "(below)" / "(above)"; when the line would cross the table it stops at the table's edge and the flag sits there. Text never
 // overlaps the table or another label (right of the flag, else left of the line, else nudged off the table).
 static const int PROJ_FLAG_W = 16, PROJ_FLAG_H = 12, PROJ_FS = 11, PROJ_GAP = 8;
+// (2.0.4, 2026-10-13 Rassul screenshot: "HOD after 10:45 . 94.34" sat on the left-edge key-level label "/PDH") the callout never goes
+// into the LEFT LEVEL-LABEL BAND - the Liquidity Profile column with its level names ("832 1.9x LonLO/ONL") on the pane's left edge:
+// 110 px (the column, as layoutAll's LQ_COL) or 15% of the pane, whichever is wider. HOD / LOD does not know the other plugins'
+// label positions, so it keeps out of the band; the line and flag still stand on the extreme's bar.
+static const int PROJ_LVL_BAND_MIN = 110;
+static const int PROJ_LVL_ROW_HALF = 9;   // (2.0.4) half a Dealer Profile badge (10 pt + 6 px = 16 px) + 1 px
+inline int projLevelBandR(const Box& pane) { return pane.l + (std::max)(PROJ_LVL_BAND_MIN, (int)((pane.r - pane.l) * 15 / 100)); }
 inline bool boxHit(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int x)
 {
@@ -1606,6 +1710,9 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     if (L.tableOk && x >= L.table.l - 2 && x <= L.table.r + 2) {            // never across the table: stop at its edge
         if (!v.projUp && a < L.table.t && e >= L.table.t) { e = L.table.t - 2; off = true; }
         if (v.projUp && a > L.table.b && e <= L.table.b) { e = L.table.b + 2; off = true; }
+        // (2.0.2, the taller table) the extreme itself behind the table: the line starts at the table's edge, never through it
+        if (v.projUp && a >= L.table.t - 2 && a <= L.table.b + 2 && e < L.table.t) a = L.table.t - 3;
+        if (!v.projUp && a >= L.table.t - 2 && a <= L.table.b + 2 && e > L.table.b) a = L.table.b + 3;
     }
     if (v.projUp ? e >= a : e <= a) return;                                 // nothing left to draw (the extreme is past the edge)
     addLine(L, x, a, x, e, col, 2, R_LABEL);
@@ -1628,12 +1735,71 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     // (1.1.3, 13:58 NG check: the "(above)" text at the pane edge landed on level badges / header boxes) a target off the pane
     // gets the line and the flag only - its price is in the table header ("Proj HOD 3.205"), in the same colour
     if (off) { L.projOk = true; return; }
-    std::string txt = v.projTxt;
+    // (2.0.4) a text box [yy, yy + hh] that would sit on a level's row (its line +/- PROJ_LVL_ROW_HALF px: the Dealer Profile badge)
+    auto onLevelRow = [&](int yy, int hh) {
+        for (size_t i = 0; i < v.levelTicks.size(); i++) {
+            const int ly = yOf(v.levelTicks[i]);
+            if (ly + PROJ_LVL_ROW_HALF > yy && ly - PROJ_LVL_ROW_HALF < yy + hh) return true;
+        }
+        return false;
+    };
+    // (2.0.2, Rassul 05:59 "the callout at the top should be center justified HOD with the time and price below it"): two lines centred
+    // on the projection line - "HOD" over "after 11:30 . 7,857.00" (the time = the expected 2nd-extreme call, when there is one)
+    {
+        const std::string l1 = v.projUp ? "HOD" : "LOD";
+        const size_t sp = v.projTxt.rfind(' ');
+        const std::string price = sp == std::string::npos ? v.projTxt : v.projTxt.substr(sp + 1);
+        const std::string l2 = (v.callT >= 0 ? "after " + clk(v.callT) + " \xB7 " : std::string()) + price;
+        const int lh = lineH(PROJ_FS), w1 = M(l1, PROJ_FS, true), w2 = M(l2, PROJ_FS, true), bw = (std::max)(w1, w2);
+        // (06:05 "the arrowhead should be connected with the label on top of it"): the callout sits directly on the flag - above it for a
+        // HOD target (beyond the line's end), below it for a LOD target; when the pane edge leaves no room there, it sits against the
+        // flag's right side, centred on it. Never across the line.
+        const int bandR = projLevelBandR(pane);                                // (2.0.4) keep out of the level-label band
+        auto clearB = [&](int xx, int yy, int ww, int hh) {
+            if (xx < bandR || xx + ww > pane.r - 2 || yy < top || yy + hh > bot) return false;
+            if (onLevelRow(yy, hh)) return false;                              // (2.0.4) never on a level badge's row
+            Box b = { xx, yy, xx + ww, yy + hh };
+            for (size_t k = 0; k < L.blocks.size(); k++) if (boxHit(b, L.blocks[k])) return false;
+            return !(L.tableOk && boxHit(b, L.table));
+        };
+        auto put = [&](int bx, int by) {
+            addRect(L, bx - 2, by, bx + bw + 2, by + 2 * lh, C_PANEL, C_PANEL, 1, R_LABEL);   // the dashed target line passes behind it
+            addText(L, bx + bw / 2 - w1 / 2, by, by + lh, l1, col, PROJ_FS, true, w1, R_LABEL, -1);
+            addText(L, bx + bw / 2 - w2 / 2, by + lh, by + 2 * lh, l2, col, PROJ_FS, true, w2, R_LABEL, -1);
+            L.blocks.push_back(Box{ bx, by, bx + bw, by + 2 * lh });
+            L.projOk = true;
+        };
+        const int fTop = ft, fBot = ft + PROJ_FLAG_H;
+        int bx = x - bw / 2 + PROJ_FLAG_W / 2;                                // centred on the flag
+        bx = (std::max)((int)pane.l + 2, (std::min)(bx, (int)pane.r - 2 - bw));
+        int by = v.projUp ? fTop - 2 * lh : fBot;                              // touching the flag
+        if (clearB(bx, by, bw, 2 * lh)) { put(bx, by); return; }
+        int sx = x + PROJ_FLAG_W + 2, sy = (fTop + fBot) / 2 - lh;             // against the flag's right side
+        sy = (std::max)(top, (std::min)(sy, bot - 2 * lh));                    // at a pane edge: as close to the flag as fits
+        if (clearB(sx, sy, bw, 2 * lh)) { put(sx, sy); return; }
+        int lx = x - 2 - bw;                                                   // against the line's left side
+        if (clearB(lx, sy, bw, 2 * lh)) { put(lx, sy); return; }
+        // (2.0.4) a level badge on the callout's row: the centred callout stepped further from the flag (beyond the line's end), half
+        // a line at a time, up to 3 lines
+        for (int k = 1; k <= 6; k++) {
+            const int yy = v.projUp ? by - k * lh / 2 : by + k * lh / 2;
+            if (clearB(bx, yy, bw, 2 * lh)) { put(bx, yy); return; }
+        }
+        // (2.0.4) the flag is in (or next to) the level-label band: the callout just right of the band, on the flag's row, then the
+        // rows beside it - never over a level label
+        for (int step = 0; step <= 4; step++) {
+            const int yy = sy + ((step + 1) / 2) * (2 * lh + 2) * (step % 2 ? -1 : 1);
+            if (clearB(bandR + 2, yy, bw, 2 * lh)) { put(bandR + 2, yy); return; }
+        }
+    }
+    std::string txt = v.projTxt;   // no room for the centred callout: the one-line text beside the flag (1.1.x placement)
     int w = M(txt, PROJ_FS, true), lh = lineH(PROJ_FS);
     int ty = ft + PROJ_FLAG_H / 2 - lh / 2;
     ty = (std::max)(top, (std::min)(ty, bot - lh));
+    const int bandR1 = projLevelBandR(pane);                                // (2.0.4) the one-line text keeps out of the band too
     auto clear = [&](int tx, int yy) {
-        if (tx < pane.l + 2 || tx + w > pane.r - 2) return false;
+        if (tx < bandR1 || tx + w > pane.r - 2) return false;
+        if (onLevelRow(yy, lh)) return false;                               // (2.0.4) never on a level badge's row
         Box bx = { tx, yy, tx + w, yy + lh };
         for (size_t k = 0; k < L.blocks.size(); k++) if (boxHit(bx, L.blocks[k])) return false;
         return !(L.tableOk && boxHit(bx, L.table));
@@ -1649,7 +1815,14 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
                 if (yy < top || yy + lh > bot) break;
                 if (clear(tx, yy)) { ty = yy; done = true; } else if (clear(left, yy)) { tx = left; ty = yy; done = true; }
             }
-            if (!done && tx + w > pane.r - 2) tx = (std::max)((int)pane.l + 2, left);
+            for (int step = 0; step <= 6 && !done; step++) {                 // (2.0.4) just right of the level-label band
+                int yy = ty + ((step + 1) / 2) * lh * (step % 2 ? -1 : 1);
+                if (yy < top || yy + lh > bot) continue;
+                if (clear(bandR1 + 2, yy)) { tx = bandR1 + 2; ty = yy; done = true; }
+            }
+            // (2.0.4) no clear spot anywhere: the line + flag only - the target's price is in the table header ("Proj HOD 94.34"), as
+            // for a target off the pane; never a text over a level label, a level badge or the table
+            if (!done) { L.projOk = true; return; }
         }
     }
     addText(L, tx, ty, ty + lh, txt, col, PROJ_FS, true, w, R_LABEL, -1);

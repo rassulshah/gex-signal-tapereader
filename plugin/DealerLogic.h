@@ -40,6 +40,7 @@
 #include <map>
 #include <deque>
 #include <chrono>
+#include <climits>
 
 // (2026-10-03) number boxes in the settings window: an explicit width - the default (0) drew them so narrow they showed "T"
 #ifndef NUMW
@@ -127,6 +128,34 @@ inline long long fileStamp(const std::string& path)
     return (long long)st.st_mtime * 1000003LL + (long long)st.st_size;
 }
 
+// Session files and status files can be atomically replaced with the same byte
+// count inside one second.  The legacy fileStamp() deliberately keeps its
+// long-standing second-plus-size representation for existing consumers; this
+// precise companion is for readers that must distinguish those publications.
+// The encoded value is non-negative for a real file and also retains the
+// seconds component for freshness checks through fileStampSeconds().
+static const long long FILE_STAMP_PRECISE_STRIDE = 1000000003LL;
+inline long long fileStampPrecise(const std::string& path)
+{
+    long long sec = 0, nsec = 0;
+#ifdef _WIN32
+    // (2026-10-13) no <windows.h> here: it clashes with irtsdk.h (RTBOOL) and its min/max macros break std::max in other headers.
+    // _stat64 gives whole seconds only on this path; the size-free precise stamp then degrades to second resolution.
+    struct _stat64 st; if (_stat64(path.c_str(), &st) != 0) return -1;
+    sec = (long long)st.st_mtime; nsec = 0;
+#else
+    struct stat st; if (stat(path.c_str(), &st) != 0) return -1;
+    sec = (long long)st.st_mtim.tv_sec;
+    nsec = (long long)st.st_mtim.tv_nsec;
+#endif
+    if (sec < 0 || nsec < 0 || nsec >= 1000000000LL || sec > (LLONG_MAX - nsec) / FILE_STAMP_PRECISE_STRIDE) return -1;
+    return sec * FILE_STAMP_PRECISE_STRIDE + nsec;
+}
+inline long long fileStampSeconds(long long stamp)
+{
+    return stamp < 0 ? -1 : stamp / FILE_STAMP_PRECISE_STRIDE;
+}
+
 inline std::vector<std::string> split(const std::string& line, char sep = '|')
 {
     std::vector<std::string> t; std::string cur;
@@ -158,6 +187,15 @@ inline bool parseFiniteDouble(const std::string& s, double& out)
     out = v;
     return true;
 }
+inline bool parseInt(const std::string& s, int& out)
+{
+    if (s.empty()) return false;
+    char* end = 0; errno = 0;
+    const long v = std::strtol(s.c_str(), &end, 10);
+    if (end == s.c_str() || *end != '\0' || errno == ERANGE || v < INT_MIN || v > INT_MAX) return false;
+    out = (int)v;
+    return true;
+}
 inline float f(const std::string& s) { float v = 0.0f; (void)parseFiniteFloat(s, v); return v; }
 inline char col1(const std::string& s) { return s.empty() ? 'W' : s[0]; }
 
@@ -181,7 +219,7 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "VERSION" && t.size() >= 2) { D.ver = t[1]; return true; }
     if (k == "MARKET" && t.size() >= 2) { D.market = t[1]; return true; }
     if (k == "SYMBOL" && t.size() >= 2) { D.chartSym = t[1]; return true; }
-    if (k == "SRC" && t.size() >= 2) { D.srcBook = t[1]; if (t.size() >= 3) D.srcRatio = f(t[2]); if (t.size() >= 4) D.srcMode = t[3]; if (t.size() >= 5) D.srcAt = t[4]; return true; }
+    if (k == "SRC" && t.size() >= 2) { float ratio = D.srcRatio; if (t.size() >= 3 && !t[2].empty() && !parseFiniteFloat(t[2], ratio)) return false; D.srcBook = t[1]; D.srcRatio = ratio; if (t.size() >= 4) D.srcMode = t[3]; if (t.size() >= 5) D.srcAt = t[4]; return true; }
     if (k == "ASOF" && t.size() >= 2) {
         double asof = -1;
         if (!parseFiniteDouble(t[1], asof) || asof < 0 || asof >= 86400.0) return false;
@@ -189,7 +227,7 @@ inline bool parseLine(Data& D, const std::string& line)
         if (t.size() >= 3) { int a = 0, b = 0, c = 0; if (sscanf(t[2].c_str(), "%d-%d-%d", &a, &b, &c) == 3) { D.y = a; D.mo = b; D.d = c; } }
         return true;
     }
-    if (k == "LIVE" && t.size() >= 3) { D.liveRec = t[1]; D.liveSrc = t[2]; if (t.size() >= 4 && !t[3].empty()) D.turnAgeMin = atoi(t[3].c_str()); return true; }
+    if (k == "LIVE" && t.size() >= 3) { D.liveRec = t[1]; D.liveSrc = t[2]; if (t.size() >= 4 && !t[3].empty()) { int age = 0; if (!parseInt(t[3], age)) return false; D.turnAgeMin = age; } return true; }
     if (k == "PRICE" && t.size() >= 3) { float px = 0, em = 0; if (!parseFiniteFloat(t[1], px) || !parseFiniteFloat(t[2], em)) return false; D.px = px; D.em = em; D.hasPrice = D.px > 0 && D.em > 0; return true; }
     if (k == "BOOK" && t.size() >= 2) { float book = 0; if (!parseFiniteFloat(t[1], book)) return false; D.book = book; D.hasBook = true; return true; }
     if (k == "NODE" && t.size() >= 8) {
@@ -206,7 +244,8 @@ inline bool parseLine(Data& D, const std::string& line)
         if (t.size() >= 2 && t[1] == "NONE") { D.hasLevel = false; return true; }
         if (t.size() < 6) return false;
         float lvlPx = 0; if (!parseFiniteFloat(t[2], lvlPx)) return false;
-        D.hasLevel = true; D.lvlLabel = t[1]; D.lvlPx = lvlPx; D.phase = atoi(t[3].c_str()); D.ctx = t[4];
+        int phase = 0; if (!parseInt(t[3], phase)) return false;
+        D.hasLevel = true; D.lvlLabel = t[1]; D.lvlPx = lvlPx; D.phase = phase; D.ctx = t[4];
         if (D.phase < 0) D.phase = 0;
         if (D.phase > 5) D.phase = 5;
         D.side = (t.size() >= 6 && !t[5].empty()) ? t[5][0] : 'R';
@@ -232,11 +271,11 @@ inline bool parseLine(Data& D, const std::string& line)
     if (k == "AMAG" && t.size() >= 2) { D.aMag = t[1]; return true; }
     if (k == "KEYLVL" && t.size() >= 2) { D.keyLvl = t[1]; return true; }
     if (k == "CHK" && t.size() >= 5) { Data::Chk c; c.n = t[1]; c.name = t[2]; c.st = t[3]; c.val = t[4]; D.chk.push_back(c); return true; }
-    if (k == "VERDICT" && t.size() >= 5) { D.vLabel = t[1]; D.vPts = atoi(t[2].c_str()); D.vOf = atoi(t[3].c_str()); D.vText = t[4]; return true; }
+    if (k == "VERDICT" && t.size() >= 5) { int pts = 0, of = 0; if (!parseInt(t[2], pts) || !parseInt(t[3], of)) return false; D.vLabel = t[1]; D.vPts = pts; D.vOf = of; D.vText = t[4]; return true; }
     if (k == "STOPTGT" && t.size() >= 3) { D.stopTxt = t[1]; D.tgtTxt = t[2]; return true; }
     if (k == "TAG" && t.size() >= 4) { Data::Tag g; if (!parseFiniteFloat(t[1], g.k)) return false; g.text = t[2]; g.col = col1(t[3]); if (g.k > 0) { D.tags.push_back(g); return true; } return false; }
     if (k == "LEARN" && t.size() >= 2) { D.learn = t[1] == "1"; return true; }
-    if (k == "VERDICT2" && t.size() >= 7) { D.hasV2 = true; D.v2Word = t[1]; D.v2Side = t[2]; D.v2Sup = atoi(t[3].c_str()); D.v2Meas = atoi(t[4].c_str()); D.v2Wait = atoi(t[5].c_str()); D.v2Opp = atoi(t[6].c_str()); return true; }
+    if (k == "VERDICT2" && t.size() >= 7) { int sup = 0, meas = 0, wait = 0, opp = 0; if (!parseInt(t[3], sup) || !parseInt(t[4], meas) || !parseInt(t[5], wait) || !parseInt(t[6], opp)) return false; D.hasV2 = true; D.v2Word = t[1]; D.v2Side = t[2]; D.v2Sup = sup; D.v2Meas = meas; D.v2Wait = wait; D.v2Opp = opp; return true; }
     if ((k == "VOTE" || k == "DLINE" || k == "PLAN") && t.size() >= 4) {
         Data::Vote v; v.n = t[1]; v.q = t[2]; v.v = t[3];
         (k == "VOTE" ? D.votes : k == "DLINE" ? D.dlines : D.plan).push_back(v); return true;
@@ -266,13 +305,13 @@ inline bool parseLine(Data& D, const std::string& line)
         D.turnFrom = t.size() > 3 ? t[3] : ""; D.turnTo = t.size() > 4 ? t[4] : ""; return true; }
     if (k == "RD" && t.size() >= 2) { D.readLine = t[1]; return true; }
     if (k == "RMODE" && t.size() >= 2) { D.readMode = t[1]; return true; }
-    if (k == "TR" && t.size() >= 7) { Data::TRow r; r.n = atoi(t[1].c_str()); r.t = t[2]; r.tag = t[3]; r.kind = t[4]; r.src = t[5]; r.text = t[6]; if (t.size() >= 8 && !t[7].empty()) r.sec = t[7][0];
+    if (k == "TR" && t.size() >= 7) { Data::TRow r; if (!parseInt(t[1], r.n)) return false; r.t = t[2]; r.tag = t[3]; r.kind = t[4]; r.src = t[5]; r.text = t[6]; if (t.size() >= 8 && !t[7].empty()) r.sec = t[7][0];
         if (t.size() >= 9 && !t[8].empty()) r.pole = t[8][0];
         D.trows.push_back(r); return true; }
     if (k == "TERR" && t.size() >= 2) { D.terr = t[1]; return true; }
-    if (k == "STAGE" && t.size() >= 6) { D.hasStage = true; D.stageNow = atoi(t[1].c_str()); D.stageSide = t[2] == "S" ? 'S' : 'L'; D.stageLvl = t[3]; D.stageExt = t[4]; D.stageExtT = t[5]; return true; }
-    if (k == "STG" && t.size() >= 4) { Data::Stg g; g.n = atoi(t[1].c_str()); g.title = t[2]; g.sub = t[3]; D.stgs.push_back(g); return true; }
-    if (k == "SSUM" && t.size() >= 3) { int n = atoi(t[1].c_str()); for (size_t i = 0; i < D.stgs.size(); i++) if (D.stgs[i].n == n) D.stgs[i].sum = t[2]; return true; }
+    if (k == "STAGE" && t.size() >= 6) { int stageNow = 0; if (!parseInt(t[1], stageNow)) return false; D.hasStage = true; D.stageNow = stageNow; D.stageSide = t[2] == "S" ? 'S' : 'L'; D.stageLvl = t[3]; D.stageExt = t[4]; D.stageExtT = t[5]; return true; }
+    if (k == "STG" && t.size() >= 4) { Data::Stg g; if (!parseInt(t[1], g.n)) return false; g.title = t[2]; g.sub = t[3]; D.stgs.push_back(g); return true; }
+    if (k == "SSUM" && t.size() >= 3) { int n = 0; if (!parseInt(t[1], n)) return false; for (size_t i = 0; i < D.stgs.size(); i++) if (D.stgs[i].n == n) D.stgs[i].sum = t[2]; return true; }
     if (k == "SR" && t.size() >= 8) {
         Data::SRow r; r.n = atoi(t[1].c_str()); r.t = t[2]; r.code = t[3]; r.side = t[4].empty() ? 'N' : t[4][0]; r.val = t[5]; r.text = t[7];
         std::vector<std::string> cs = split(t[6], ',');
@@ -492,7 +531,7 @@ inline void scales(const Data& D, float& gmax, float& dmax)
         if (std::fabs(n.d) > dmax) dmax = std::fabs(n.d);
     }
 }
-inline int barLen(float v, float vmax, int width) { if (vmax <= 0) return 0; float r = std::fabs(v) / vmax; if (r > 1) r = 1; return (int)(r * width + 0.5f); }
+inline int barLen(float v, float vmax, int width) { if (vmax <= 0) return 0; float r = std::fabs(v) / vmax; if (r > 1) r = 1; return (int)(r * (float)width + 0.5f); }
 
 // (Profile 2.0, Rassul 2026-10-02: "there is no way it is supposed to look like this") the profile = one bar per strike of
 // MenthorQ's net GEX ($ of dealer delta change per 1-pt move): red = dealers short gamma, green = long; the scale is the

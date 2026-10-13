@@ -1,6 +1,6 @@
 #ifndef LS_EXHAUSTION_LOGIC_H
 #define LS_EXHAUSTION_LOGIC_H
-// ExhaustionLogic.h (0.1.0, 2026-10-11) -- the SDK-free half of lsExhaustion. Rassul 2026-10-11 21:17-21:28: "model the exhaustion
+// ExhaustionLogic.h (0.2.2, 2026-10-13) -- the SDK-free half of lsExhaustion. 0.2.2 (audit port): incomplete/non-finite inputs are rejected before a crossing (never an E); 0.1.0 2026-10-11. Rassul 2026-10-11 21:17-21:28: "model the exhaustion
 // indicator also with two lines", option A chosen ("lets go with A"), "stick with an exhaustion indicator ... customized for each market
 // to catch tops and bottoms (pivot highs and lows)", "build exhaustion indicator".
 // At a new N-bar HIGH: BUYERS FADING = the buyers' peak pace (aggressive volume, S-bar average) since the lowest low of the last 20 bars /
@@ -13,7 +13,7 @@
 
 namespace ex {
 
-static const char* const VERSION = "0.2.1";       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
+static const char* const VERSION = "0.2.2";       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
 static const int LOOK = 20;
 
 struct Params { int N = 10; int S = 1; double T = 2.0; };
@@ -35,7 +35,9 @@ struct Out { std::vector<double> fb, fs; std::vector<char> newH, newL, eTop, eBo
 inline Out compute(const std::vector<double>& h, const std::vector<double>& l, const std::vector<double>& buy, const std::vector<double>& sell, const Params& P) {
     const int n = (int)h.size(); Out o;
     o.fb.assign(n, 1.0); o.fs.assign(n, 1.0); o.newH.assign(n, 0); o.newL.assign(n, 0); o.eTop.assign(n, 0); o.eBot.assign(n, 0);
-    if (n == 0 || (int)l.size() != n || (int)buy.size() != n || (int)sell.size() != n) return o;
+    if (n == 0 || (int)l.size() != n || (int)buy.size() != n || (int)sell.size() != n || !std::isfinite(P.T)) return o;
+    // (0.2.2) admission is all-or-nothing: an unavailable/corrupt value is never turned into a zero pace and a false E
+    for (int i = 0; i < n; ++i) if (!std::isfinite(h[i]) || !std::isfinite(l[i]) || !std::isfinite(buy[i]) || !std::isfinite(sell[i]) || h[i] < l[i] || buy[i] < 0 || sell[i] < 0) return o;
     const int S = std::max(1, P.S), N = std::max(1, P.N);
     std::vector<double> bp(n), sp(n);
     for (int i = 0; i < n; ++i) { double a = 0, b = 0; int k = 0; for (int j = std::max(0, i - S + 1); j <= i; ++j) { a += buy[j]; b += sell[j]; ++k; } bp[i] = a / k; sp[i] = b / k; }

@@ -19,6 +19,7 @@
 #include <cmath>
 #include <ctime>
 #include <limits>
+#include <fstream>
 
 namespace irl {
 
@@ -40,6 +41,28 @@ inline char aggressor(double price, double bid, double ask)
 {
     if (ask > 0 && price >= ask - 1e-9) return 'B';
     if (bid > 0 && price <= bid + 1e-9) return 'S';
+    return 'M';
+}
+
+// Market-data prices originate as floats.  Compare them on the instrument's
+// native tick grid rather than with an arbitrary absolute epsilon, which is
+// too small for some float magnitudes and too large for some small ticks.
+inline bool toTicks(double price, double tick, long long& out)
+{
+    if (!std::isfinite(price) || !std::isfinite(tick) || tick <= 0.0) return false;
+    const double q = price / tick;
+    const double lo = (double)(std::numeric_limits<long long>::min)();
+    const double hi = (double)(std::numeric_limits<long long>::max)();
+    if (q < lo || q > hi) return false;
+    out = (long long)std::llround(q);
+    return true;
+}
+
+inline char aggressor(double price, double bid, double ask, double tick)
+{
+    long long p = 0, q = 0;
+    if (ask > 0.0 && toTicks(price, tick, p) && toTicks(ask, tick, q) && p >= q) return 'B';
+    if (bid > 0.0 && toTicks(price, tick, p) && toTicks(bid, tick, q) && p <= q) return 'S';
     return 'M';
 }
 
@@ -95,6 +118,46 @@ inline unsigned long long bookHash(const std::vector<double>& v)
         for (int k = 0; k < 8; k++) { h ^= (unsigned long long)((q >> (8 * k)) & 0xFF); h *= 1099511628211ULL; }
     }
     return h;
+}
+
+// Publish a complete replacement without exposing a truncated cursor/status
+// file.  std::rename does not replace an existing target on Windows, so retain
+// the previous good file as .bak until the new file is in place.
+inline bool atomicWriteText(const std::string& path, const std::string& text)
+{
+    const std::string tmp = path + ".tmp";
+    const std::string bak = path + ".bak";
+    {
+        std::ifstream target(path.c_str(), std::ios::binary);
+        if (!target.good()) {
+            std::ifstream backup(bak.c_str(), std::ios::binary);
+            if (backup.good()) {
+                backup.close();
+                (void)std::rename(bak.c_str(), path.c_str());
+            }
+        }
+    }
+    {
+        std::ofstream out(tmp.c_str(), std::ios::out | std::ios::trunc | std::ios::binary);
+        if (!out.is_open()) return false;
+        out << text;
+        out.flush();
+        if (!out.good()) { out.close(); std::remove(tmp.c_str()); return false; }
+    }
+    std::ifstream existing(path.c_str(), std::ios::binary);
+    const bool hadExisting = existing.good();
+    existing.close();
+    if (hadExisting) {
+        std::remove(bak.c_str());
+        if (std::rename(path.c_str(), bak.c_str()) != 0) { std::remove(tmp.c_str()); return false; }
+    }
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) {
+        if (hadExisting) (void)std::rename(bak.c_str(), path.c_str());
+        std::remove(tmp.c_str());
+        return false;
+    }
+    if (hadExisting) std::remove(bak.c_str());
+    return true;
 }
 
 }  // namespace irl

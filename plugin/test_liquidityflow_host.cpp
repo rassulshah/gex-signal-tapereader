@@ -21,7 +21,7 @@ static void setDepth(mock::Host& h, double bestBid, int levels, double extraPx =
         h.depth.push_back(L);
     }
 }
-static std::string flex_attempts(const char* tmp) { std::ifstream f((std::string(tmp) + "\\\\InvestorRT\\\\rtx\\\\lsFlexLevels\\\\LiquidityProfile\\\\CL-180-attempts-" + std::to_string(0) + ".csv").c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
+static std::string flex_attempts(const std::string& path) { std::ifstream f(path.c_str()); std::stringstream ss; ss << f.rdbuf(); return ss.str(); }
 static std::string readAll(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 
 int main() {
@@ -124,9 +124,9 @@ int main() {
         CHECK(clash == 0, "(0.11.4) steps, window prices and reasons never cover another text");
     }
     CHECK(!qm, "(0.5.0) nothing is drawn with a '?'");
-    const std::string rec = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\CL-180-panes-" + std::to_string(S->session) + ".csv";
+    const std::string rec = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\" + (S->market + "-" + fileToken(S->symbol) + "-" + std::to_string(S->spb)) + "-panes-" + std::to_string(S->session) + ".csv";
     CHECK(readAll(rec).find("|Exh|") != std::string::npos && readAll(rec).find("|LoF|") == std::string::npos, "Exh is recorded for the session, no removed codes");
-    std::string attempts = flex_attempts(tmp);
+    std::string attempts = flex_attempts(std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\" + (S->market + "-" + fileToken(S->symbol) + "-" + std::to_string(S->spb)) + "-attempts-" + std::to_string(S->session) + ".csv");
     CHECK(attempts.empty(), "the pane build writes no attempt log (the profile owns it)");
     p->destroy();
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());
@@ -134,7 +134,7 @@ int main() {
     bool again = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Exh ") == 0) again = true;
     CHECK(again, "after a restart the same signals are drawn again (no repaint)");
     {   // (0.11.1) backfill: the pane's own record (book near price per bar + the absorption window) is re-read after a restart
-        const std::string fr = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\CL-180-flow-" + std::to_string(S->session) + ".csv";
+        const std::string fr = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\" + (S->market + "-" + fileToken(S->symbol) + "-" + std::to_string(S->spb)) + "-flow-" + std::to_string(S->session) + ".csv";
         const std::string t = readAll(fr);
         CHECK(t.find("\nB|") != std::string::npos && t.find("\nW|") != std::string::npos, "(0.11.1) each bar's book and the window are recorded");
         LQState* Q = static_cast<LQState*>(h.data);

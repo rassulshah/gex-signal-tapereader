@@ -101,7 +101,7 @@ int main() {
     // (0.4.0) the price chart draws no signals: the break is LOGGED for the nightly study, nothing is recorded or drawn as a mark
     bool brk = false; for (auto& m : S->e.marks) if (m.code == "Broke" && m.reasons.find("Broke: sellers hit the bid") == 0) brk = true;
     CHECK(brk && S->marksWritten == S->e.marks.size(), "(0.7.0) the chart build records the touch's reason and its letters");
-    const std::string att = flex + "\\LiquidityProfile\\CL-180-attempts-" + std::to_string(S->session) + ".csv";
+    const std::string att = flex + "\\LiquidityProfile\\" + (S->market + "-" + fileToken(S->symbol) + "-" + std::to_string(S->spb)) + "-attempts-" + std::to_string(S->session) + ".csv";
     CHECK(readAll(att).find("|break eaten") != std::string::npos, "the attempt is logged as an eaten break for the nightly scoring");
     p->draw();
     bool drawn = false; for (auto& d : h.draws) if (d.type == "text" && (d.text == "LX" || d.text.find("L?") == 0 || d.text.find("Exh") == 0)) drawn = true;
@@ -147,9 +147,33 @@ int main() {
             std::printf("  854: %s | 954: %s\n", n854.c_str(), n954.c_str());
             CHECK(n854 == "LonLO" && n954 == "ONL", "(0.13.1) LonLO on the 854 zone, ONL on the 954 zone - one zone per level");
         }
+        {   // (0.14.0) a shown NEAR zone is picked (drawn solid) even when it is neither the strongest on its side nor on a level
+            LQState N; N.e.P.tick = 0.25;
+            auto zn = [&](long long id, int side, lqp::Tick lo, lqp::Tick hi, double size, double bx, bool nr, bool sh) { lqp::Zone z; z.id = id; z.side = side; z.lo = lo; z.hi = hi;
+                z.edgeLo = lo; z.edgeHi = hi; z.size = size; z.bx = bx; z.shown = sh; z.near = nr; N.e.zones.push_back(z); };
+            zn(1, lqp::BID, 31300, 31310, 1500, 2.4, false, true);   // the strongest bids, far
+            zn(2, lqp::BID, 31380, 31388, 420, 1.6, true, true);     // a near 1.6x zone
+            zn(3, lqp::BID, 31340, 31348, 380, 1.3, false, false);   // far, hidden
+            zn(4, lqp::BID, 31386, 31392, 300, 1.5, true, true);     // near but overlapping zone 2 (weaker): not drawn
+            const std::vector<LqPick> pk = lqPicks(N);
+            bool z1 = false, z2 = false, other = false; for (auto& k : pk) { const long long id = N.e.zones[k.idx].id;
+                if (id == 1 && k.top) z1 = true; else if (id == 2 && k.top) z2 = true; else other = true; }
+            CHECK(z1 && z2 && !other && pk.size() == 2, "(0.14.0) picks: strongest far bids + the near 1.6x zone (solid); hidden / overlapping zones left out");
+        }
     }
     const std::string st = flex + "\\LiquidityProfile.status-CL-180.txt";
-    CHECK(readAll(st).find("VERSION,0.13.2") != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (0.13.2, one version everywhere)");
+    {   // (0.14.0) the status file: the NEAR line and near / far on every ZONE line
+        const std::string t = readAll(st);
+        const size_t nl = t.find("\nNEAR,ticks ");
+        CHECK(nl != std::string::npos && t.find(",show 1.5x,keep 1.2x\n", nl) != std::string::npos, ("(0.14.0) status NEAR line: " + (nl == std::string::npos ? std::string("missing") : t.substr(nl + 1, t.find('\n', nl + 1) - nl - 1))).c_str());
+        int zl = 0, tagged = 0; size_t q = 0;
+        while ((q = t.find("\nZONE,", q)) != std::string::npos) { const size_t e2 = t.find('\n', q + 1); const std::string ln = t.substr(q + 1, e2 - q - 1); zl++;
+            if (ln.size() > 5 && (ln.compare(ln.size() - 5, 5, ",near") == 0 || ln.compare(ln.size() - 4, 4, ",far") == 0)) tagged++; q = e2; }
+        std::printf("  status ZONE lines: %d, tagged near/far: %d\n", zl, tagged);
+        CHECK(zl == tagged, "(0.14.0) every ZONE line ends with ,near or ,far");
+        CHECK(std::string(LQ_VERSION) == "0.14.1" && std::string(lqp::VERSION) == "0.14.1", "(0.14.1) version 0.14.1");
+    }
+    CHECK(readAll(st).find(std::string("VERSION,") + LQ_VERSION) != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (one version everywhere)");
     {   // (0.12.0) the level-liquidity file for the Dealer Profile badges: header + every zone of 1.5x or more, side and prominence
         const std::string lz = readAll(flex + "\\LRA-LiqZones-CL.csv"), t = readAll(st);
         CHECK(lz.compare(0, 7, "LIQZ,1,") == 0, ("(0.12.0) LRA-LiqZones-CL.csv written with its header: " + lz.substr(0, 40)).c_str());
@@ -179,6 +203,21 @@ int main() {
           int nl = 0; for (auto& d : h.draws) if (d.type == "text" && (d.text == "p" || d.text == "e" || d.text == "t" || d.text == "s")) ++nl;
           CHECK(nl == 0, "0.11.3: p / e / t at the line are recorded, never drawn on the price chart"); S->e.marks.pop_back(); S->e.marks.pop_back(); S->e.marks.pop_back(); }
         S->e.marks.pop_back(); S->e.marks.pop_back();
+    }
+    {   // (0.14.1, 2026-10-13 Rassul screenshot) the warning ("... sellers exhausted (0.2x) but buyers are pulling their bids") was drawn at
+        // the pane top over the chart's title text: it now starts below the title row, and nothing of the column starts above it
+        const double oldCounter = S->e.L.counter; S->e.L.counter = 1.5;
+        lqp::Attempt fa; fa.side = lqp::BID; fa.done = true; fa.barS = 1; fa.tS = S->e.bookT; fa.sX = 2.0; fa.exE = 0.2;
+        S->e.finished.push_back(fa);
+        h.draws.clear(); p->draw();
+        int wy = -1, minY = 1 << 30;
+        for (auto& d : h.draws) if (d.type == "text") { minY = std::min(minY, d.y); if (d.text == "BUYERS STEPPING IN") wy = d.y; }
+        CHECK(wy >= 0, "(0.14.1) fixture: the BUYERS STEPPING IN warning is drawn");
+        CHECK(wy > h.paneTop + LQ_TITLE_ROW_PX, "(0.14.1) the warning sits below the chart title row");
+        CHECK(minY > h.paneTop + LQ_TITLE_ROW_PX, "(0.14.1) no text of the price-chart column starts inside the title row");
+        bool hdrBelow = true; for (auto& d : h.draws) if (d.type == "text" && d.text.find("LIQ") == 0 && d.y <= wy) hdrBelow = false;
+        CHECK(hdrBelow, "(0.14.1) the column header stays under the warning");
+        S->e.finished.pop_back(); S->e.L.counter = oldCounter;
     }
     p->destroy(); CHECK(h.data == nullptr, "destroy frees the slot");
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());

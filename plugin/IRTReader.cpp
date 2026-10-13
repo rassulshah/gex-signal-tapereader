@@ -102,7 +102,7 @@
 #include <cctype>
 #include <direct.h>
 
-static const char* IR_VERSION = "0.7.0";   // (0.7.0, Rassul 2026-10-11 "make sure you update [the MBO data] once rithmic is working so every night it gets updated so we are saving data") order-by-order depth is RECORDED ALL SESSION (was: the first 10 min only), one file per hour (dbo_HH.csv) so no file grows past an hour of events; up to 100,000 events read per step (was 20,000); lra.mbo_live archives and checks each day every night
+static const char* IR_VERSION = "0.7.1";   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
 //   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
@@ -146,6 +146,7 @@ struct ReaderState {
     irl::TickCursor tc;
     unsigned long long domHash = 0; time_t domT = 0;
     bool domAvail = false; int domLevels = 0;
+    bool dboSupported = true;
     long fpRows = 0, trRows = 0, domRows = 0, dboRows = 0;
     std::string fpLastTxt, trLastTxt, cursorFor;
     time_t fpT = 0;
@@ -161,8 +162,13 @@ struct ReaderState {
 };
 static double tickOf(const std::string& m)
 {
-    if (m == "ES" || m == "NQ") return 0.25; if (m == "GC") return 0.1; if (m == "CL") return 0.01; if (m == "HG") return 0.0005;
-    if (m == "NG") return 0.001; if (m == "EU") return 0.00005; return 0.01;
+    if (m == "ES" || m == "NQ") return 0.25;
+    if (m == "GC") return 0.1;
+    if (m == "CL") return 0.01;
+    if (m == "HG") return 0.0005;
+    if (m == "NG") return 0.001;
+    if (m == "EU") return 0.00005;
+    return 0.01;
 }
 
 class IRTReader : public cppExtension {
@@ -183,7 +189,10 @@ public:
     ReaderState* userState() { return own_; }
     ReaderState& state() {
         if (activeState) return *activeState;
-        if (!own_) own_ = new ReaderState();
+        if (!own_) {
+            own_ = new ReaderState();
+            if (own_ && IR_FIXED[0]) { own_->cfg.fp = true; own_->cfg.trades = false; own_->cfg.dom = false; own_->cfg.dbo = false; }
+        }
         return *own_;
     }
     void releaseState();
@@ -211,7 +220,7 @@ public:
     bool own(FpState& M);
     void footprintOf(FpState& M);
     void loadFpCursor(FpState& M);
-    void saveFpCursor(FpState& M);
+    bool saveFpCursor(FpState& M);
     void writeFpStatus(FpState& M);
     std::string dirFor2(const std::string& session, const std::string& m);
     void boot(const std::string& what);
@@ -383,6 +392,7 @@ bool IRTReader::append(const std::string& path, const char* header, const std::s
     if (!f.is_open()) { state().err = "cannot write " + path; return false; }
     if (fresh) f << header << "\n";
     f << rows;
+    f.flush();
     if (!f.good()) { state().err = "cannot finish writing " + path; return false; }
     return true;
 }
@@ -522,11 +532,13 @@ void IRTReader::loadFpCursor(FpState& M)
     trace(M.mkt + ": cursor fp " + std::to_string(M.fpLast) + " deep " + std::to_string(M.deepLast) + (M.deepDone ? " (deep done)" : ""));
 }
 
-void IRTReader::saveFpCursor(FpState& M)
+bool IRTReader::saveFpCursor(FpState& M)
 {
     _mkdir(state().cfg.folder.c_str());
-    std::ofstream f((state().cfg.folder + "\\_fp-" + M.mkt + ".txt").c_str(), std::ios::trunc);
-    if (f.is_open()) f << M.fpLast << " " << M.deepLast << " " << M.deepDone << " " << M.deepStep << "\n";
+    const std::string path = state().cfg.folder + "\\_fp-" + M.mkt + ".txt";
+    const std::string text = std::to_string(M.fpLast) + " " + std::to_string(M.deepLast) + " " + std::to_string(M.deepDone) + " " + std::to_string(M.deepStep) + "\n";
+    if (!irl::atomicWriteText(path, text)) { M.err = "cannot atomically save footprint cursor"; return false; }
+    return true;
 }
 
 // ---- footprint: finished 1-minute bars with volume at price (RTBARS with VAP, by ticker - independent of any chart)
@@ -565,8 +577,31 @@ int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool dee
     std::string rows, sessCur;
     std::string barRows;
     long long lastWritten = lastRef;
+    long long batchLast = lastRef;
+    long batchRows = 0;
+    std::string batchLastTxt;
     char fnm[32]; snprintf(fnm, sizeof(fnm), "\\fp_%dm.csv", state().cfg.fpMin);
     const double tk = M.tick;
+    const int kMaxVapProfilesPerSlice = 10000;
+    int profilesRead = 0;
+    if (!std::isfinite(tk) || tk <= 0.0) { M.err = "invalid footprint tick size"; return 0; }
+    auto flush = [&]() -> bool {
+        if (sessCur.empty()) return true;
+        std::string dir = dirFor2(sessCur, M.mkt);
+        if (!append(dir + fnm, "bar|price|bought|sold|volume|trades|max_delta|min_delta", rows)) { M.err = state().err; return false; }
+        if (!append(dir + "\\fp_bars.csv", "bar|minutes|open|high|low|close|volume|bought|sold|max_delta|min_delta|open_delta|max_price_vol", barRows)) { M.err = state().err; return false; }
+        M.rows += batchRows;
+        state().fpRows += batchRows;
+        lastWritten = batchLast;
+        if (!deep && !batchLastTxt.empty()) M.lastTxt = batchLastTxt;
+        rows.clear(); barRows.clear(); batchRows = 0; batchLastTxt.clear();
+        return true;
+    };
+    auto advanceSkipped = [&](long long s) -> bool {
+        if (!flush()) return false;
+        lastWritten = s;
+        return true;
+    };
     std::string oldestSess;                                      // (0.2.2) a back-fill starts mid-session: its oldest session is partial
     if ((deep || lastRef < 0) && bars.count > 1) {             // (0.3.0) also the first run; only when the answer spans 2+ sessions
         struct tm t0, t1; secOf((RTDATE)(*bars.dt)[0], &t0); secOf((RTDATE)(*bars.dt)[(int)bars.count - 1], &t1);
@@ -578,50 +613,48 @@ int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool dee
         struct tm t; long long s = secOf(d, &t);
         if (s <= lastRef) continue;
         std::string session = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
-        if (!oldestSess.empty() && session == oldestSess) { lastWritten = s; continue; }   // (0.2.2/0.3.0) partial - a longer request writes it
+        if (!oldestSess.empty() && session == oldestSess) { if (!advanceSkipped(s)) break; continue; }   // (0.2.2/0.3.0) partial - a longer request writes it
         if (deep) {                                              // only sessions with no file yet (or ones this pass began)   // (0.2.2) partial - the next, longer request writes it
-            if (M.deepSkip.count(session)) { lastWritten = s; continue; }
+            if (M.deepSkip.count(session)) { if (!advanceSkipped(s)) break; continue; }
             if (!M.deepOwn.count(session)) {
                 std::ifstream ex((state().cfg.folder + "\\" + session + "\\" + M.mkt + fnm).c_str());
-                if (ex.good()) { M.deepSkip.insert(session); if (M.own && s > M.fpLast - 86400) { M.deepDone = 1; break; } lastWritten = s; continue; }   // (0.2.2) other markets: skip and go on (their newer sessions may have gaps)
+                if (ex.good()) { M.deepSkip.insert(session); if (M.own && s > M.fpLast - 86400) { if (advanceSkipped(s)) M.deepDone = 1; break; } if (!advanceSkipped(s)) break; continue; }   // (0.2.2) other markets: skip and go on (their newer sessions may have gaps)
                 M.deepOwn.insert(session);
             }
         }
         if (!sessCur.empty() && session != sessCur) {             // one file per session
-            std::string dir = dirFor2(sessCur, M.mkt);
-            append(dir + fnm, "bar|price|bought|sold|volume|trades|max_delta|min_delta", rows);
-            append(dir + "\\fp_bars.csv", "bar|minutes|open|high|low|close|volume|bought|sold|max_delta|min_delta|open_delta|max_price_vol", barRows);
-            rows.clear(); barRows.clear();
+            if (!flush()) break;
         }
         sessCur = session;
         std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
         BARSTATISTICS bs; memset(&bs, 0, sizeof(bs));
         if (bars.getBarStatistics((int)i, bs) != RTX_OK) { M.err = "volume at price not loaded yet from " + ts; break; }   // retried next tick
-        if (++done > maxBars) break;                             // a slice per tick
-        {
+        if (done >= maxBars) break;                              // a bounded slice per tick
+        if (bs.prices < 0 || bs.prices > kMaxVapProfilesPerSlice - profilesRead) { M.err = "volume-at-price slice limit reached at " + ts; break; }
+        const double op = (*bars.op)[(int)i], hi = (*bars.hi)[(int)i], lo = (*bars.lo)[(int)i], cl = (*bars.cl)[(int)i];
+        if (!std::isfinite(op) || !std::isfinite(hi) || !std::isfinite(lo) || !std::isfinite(cl)) { M.err = "invalid bar price from " + ts; break; }
+        std::string oneRows;
+        long oneRowsCount = 0;
+        bool complete = true;
+        for (int k = 0; k < bs.prices; k++) {
+            VOLPROFILE vp; memset(&vp, 0, sizeof(vp));
+            if (bars.getVolumeProfile((int)i, k, vp) != RTX_OK) { M.err = "volume at price not loaded yet from " + ts; complete = false; break; }
+            if (!std::isfinite(vp.price)) { M.err = "invalid volume-at-price price from " + ts; complete = false; break; }
+            if (vp.totalVolume <= 0 && vp.buyVolume <= 0 && vp.sellVolume <= 0) continue;
             char b[300];
-            snprintf(b, sizeof(b), "%s|%d|%s|%s|%s|%s|%lu|%ld|%ld|%ld|%ld|%ld|%ld\n", ts.c_str(), state().cfg.fpMin,
-                     irl::px((*bars.op)[(int)i], tk).c_str(), irl::px((*bars.hi)[(int)i], tk).c_str(), irl::px((*bars.lo)[(int)i], tk).c_str(),
-                     irl::px((*bars.cl)[(int)i], tk).c_str(), (*bars.vo)[(int)i], bs.buyVolume, bs.sellVolume, bs.maxDelta, bs.minDelta,
-                     bs.openDelta, bs.maxPriceVol);
-            barRows += b;
-            int np = bs.prices > 0 ? bs.prices : 400;
-            for (int k = 0; k < np; k++) {
-                VOLPROFILE vp; memset(&vp, 0, sizeof(vp));
-                if (bars.getVolumeProfile((int)i, k, vp) != RTX_OK) break;
-                if (vp.totalVolume <= 0 && vp.buyVolume <= 0 && vp.sellVolume <= 0) continue;
-                snprintf(b, sizeof(b), "%s|%s|%ld|%ld|%ld|%ld|%ld|%ld\n", ts.c_str(), irl::px(vp.price, tk).c_str(), vp.buyVolume, vp.sellVolume,
-                         vp.totalVolume, vp.tickCount, vp.maxDelta, vp.minDelta);
-                rows += b; M.rows++; state().fpRows++;
-            }
+            snprintf(b, sizeof(b), "%s|%s|%ld|%ld|%ld|%ld|%ld|%ld\n", ts.c_str(), irl::px(vp.price, tk).c_str(), vp.buyVolume, vp.sellVolume,
+                     vp.totalVolume, vp.tickCount, vp.maxDelta, vp.minDelta);
+            oneRows += b; ++oneRowsCount;
         }
-        lastWritten = s; if (!deep) M.lastTxt = ts;
+        if (!complete) break;
+        char b[300];
+        snprintf(b, sizeof(b), "%s|%d|%s|%s|%s|%s|%lu|%ld|%ld|%ld|%ld|%ld|%ld\n", ts.c_str(), state().cfg.fpMin,
+                 irl::px(op, tk).c_str(), irl::px(hi, tk).c_str(), irl::px(lo, tk).c_str(), irl::px(cl, tk).c_str(), (*bars.vo)[(int)i],
+                 bs.buyVolume, bs.sellVolume, bs.maxDelta, bs.minDelta, bs.openDelta, bs.maxPriceVol);
+        rows += oneRows; barRows += b; batchRows += oneRowsCount;
+        batchLast = s; batchLastTxt = ts; profilesRead += bs.prices; ++done;
     }
-    if (!sessCur.empty()) {
-        std::string dir = dirFor2(sessCur, M.mkt);
-        append(dir + fnm, "bar|price|bought|sold|volume|trades|max_delta|min_delta", rows);
-        append(dir + "\\fp_bars.csv", "bar|minutes|open|high|low|close|volume|bought|sold|max_delta|min_delta|open_delta|max_price_vol", barRows);
-    }
+    (void)flush();
     lastRef = lastWritten;
     return done;
 }
@@ -720,24 +753,38 @@ void IRTReader::trades()
     RTDATE start = (RTDATE)(now - (RTDATE)back);
     RTTICKS T(start);
     if (T.count <= 0) return;
-    state().tc.rewind();
+    irl::TickCursor pending = state().tc;
+    pending.rewind();
+    irl::TickCursor committed = state().tc;
     std::string rows, sessCur;
+    long pendingRows = 0;
+    std::string pendingLastTxt;
+    auto flush = [&]() -> bool {
+        if (rows.empty()) return true;
+        if (!append(dirFor(sessCur) + "\\trades.csv", "time|price|size|bid|ask|side", rows)) return false;
+        state().tc = committed;
+        state().trRows += pendingRows;
+        state().trLastTxt = pendingLastTxt;
+        rows.clear(); pendingRows = 0; pendingLastTxt.clear();
+        return true;
+    };
     for (long i = 0; i < T.count; i++) {
         RTDATE d = (RTDATE)(*T.dt)[(int)i];
         struct tm t; long long s = secOf(d, &t);
-        if (!state().tc.take(s)) continue;
         std::string session = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
-        if (!sessCur.empty() && session != sessCur) { append(dirFor(sessCur) + "\\trades.csv", "time|price|size|bid|ask|side", rows); rows.clear(); }
+        if (!sessCur.empty() && session != sessCur && !flush()) return;
         sessCur = session;
+        if (!pending.take(s)) continue;
         double p = (*T.price)[(int)i], b = (*T.bid)[(int)i], a = (*T.ask)[(int)i];
+        if (!std::isfinite(p) || !std::isfinite(b) || !std::isfinite(a)) { state().err = "invalid trade quote"; return; }
         unsigned long sz = (*T.size)[(int)i];
         std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
         char line[200];
         snprintf(line, sizeof(line), "%s|%s|%lu|%s|%s|%c\n", ts.c_str(), irl::px(p, state().tick).c_str(), sz, irl::px(b, state().tick).c_str(),
-                 irl::px(a, state().tick).c_str(), irl::aggressor(p, b, a));
-        rows += line; state().trRows++; state().trLastTxt = ts;
+                 irl::px(a, state().tick).c_str(), irl::aggressor(p, b, a, state().tick));
+        rows += line; ++pendingRows; pendingLastTxt = ts; committed = pending;
     }
-    if (!sessCur.empty()) append(dirFor(sessCur) + "\\trades.csv", "time|price|size|bid|ask|side", rows);
+    (void)flush();
 }
 
 // ---- DOM: the top levels whenever the book changed, at most every domSec seconds
@@ -752,10 +799,13 @@ void IRTReader::depth()
     int n = md.maxLevels; if (n > 200) n = 200; if (n < 0) n = 0;   // (0.6.0) the full book the feed gives
     state().domLevels = n;
     std::vector<double> v; v.reserve((size_t)n * 4);
-    for (int k = 0; k < n; k++) { DEPTH_LEVEL& L = md[(unsigned)k]; v.push_back(L.bid); v.push_back(L.bidsize); v.push_back(L.ask); v.push_back(L.asksize); }
+    for (int k = 0; k < n; k++) {
+        DEPTH_LEVEL& L = md[(unsigned)k];
+        if (!std::isfinite(L.bid) || !std::isfinite(L.ask)) { state().err = "invalid DOM price"; return; }
+        v.push_back(L.bid); v.push_back(L.bidsize); v.push_back(L.ask); v.push_back(L.asksize);
+    }
     unsigned long long h = irl::bookHash(v);
     if (h == state().domHash) return;
-    state().domHash = h;
     RTDATE d = currentDate(); struct tm t; secOf(d, &t);
     std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
     std::string rows;
@@ -766,36 +816,50 @@ void IRTReader::depth()
                  irl::px(v[(size_t)k * 4 + 2], state().tick).c_str(), v[(size_t)k * 4 + 3]);
         rows += line;
     }
-    if (!rows.empty()) { append(dirFor(irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour)) + "\\dom.csv", "time|level|bid|bid_size|ask|ask_size", rows); state().domRows++; }
+    if (!rows.empty()) {
+        if (!append(dirFor(irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour)) + "\\dom.csv", "time|level|bid|bid_size|ask|ask_size", rows)) return;
+        state().domRows++;
+    }
+    state().domHash = h;
 }
 
 // ---- order-by-order depth (MBO): every event the feed sends
 void IRTReader::depthByOrder()
 {
+    if (getDataSource() == DS_CQG) { state().dboSupported = false; return; } // CQG Continuum does not supply the SDK's native MBO stream.
+    state().dboSupported = true;
     if (!state().dbo) state().dbo = new DEPTH_BY_ORDER(NULL);
-    // (0.7.0) every event is written, all session, one file per hour of the event's own time (<session>\<MKT>\dbo_HH.csv)
+    // Every event is written, all session, one file per hour of the event's own time (<session>\<MKT>\dbo_HH.csv).
+    // DEPTH_BY_ORDER retains its iterator, so the next timer pass resumes after this bounded batch.
     std::string rows, sess, hour;
+    long pendingRows = 0;
     char line[260];
     int guard = 0;
-    auto flush = [&]() {
-        if (!rows.empty() && !sess.empty()) append(dirFor(sess) + "\\dbo_" + hour + ".csv", "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask", rows);
-        rows.clear();
+    const int kMaxDboEventsPerPass = 5000;
+    auto flush = [&]() -> bool {
+        if (rows.empty() || sess.empty()) return true;
+        if (!append(dirFor(sess) + "\\dbo_" + hour + ".csv", "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask", rows)) return false;
+        state().dboRows += pendingRows;
+        rows.clear(); pendingRows = 0;
+        return true;
     };
-    while (guard++ < 100000 && state().dbo->getNext() == RTX_OK) {
+    while (guard++ < kMaxDboEventsPerPass && state().dbo->getNext() == RTX_OK) {
         const DEPTH_ORDER& o = state().dbo->dbo;
         struct tm t; secOf(o.timestamp, &t);
         const std::string s = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
         char hh[4]; snprintf(hh, sizeof(hh), "%02d", t.tm_hour);
-        if (s != sess || hour != hh) { flush(); sess = s; hour = hh; }
+        if ((s != sess || hour != hh) && !flush()) return;
+        if (s != sess || hour != hh) { sess = s; hour = hh; }
+        if (!std::isfinite(o.price) || !std::isfinite(o.previousPrice) || !std::isfinite(o.bid) || !std::isfinite(o.ask)) { state().err = "invalid DBO price"; continue; }
         static const char* ACT[4] = { "NEW", "MOD", "DEL", "FILL" };
         snprintf(line, sizeof(line), "%s|%s|%s|%s|%lu|%d|%d|%c|%s|%s\n",
                  irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec).c_str(),
                  o.action < 4 ? ACT[o.action] : "?", irl::px(o.price, state().tick).c_str(), irl::px(o.previousPrice, state().tick).c_str(), o.size, o.orderID,
                  o.aggressorOrderID, o.buySell == 1 ? 'B' : o.buySell == 0 ? 'S' : '?', irl::px(o.bid, state().tick).c_str(), irl::px(o.ask, state().tick).c_str());
         rows += line;
-        state().dboRows++;
+        ++pendingRows;
     }
-    flush();
+    (void)flush();
 }
 
 void IRTReader::writeStatus()
@@ -810,7 +874,7 @@ void IRTReader::writeStatus()
       << "\nFOOTPRINT," << (state().cfg.fp ? "on" : "off") << "," << state().cfg.fpMin << "m,rows " << state().fpRows << ",last bar " << state().fpLastTxt << ",backfill days " << state().cfg.fpDays
       << "\nTRADES," << (state().cfg.trades ? "on" : "off") << ",rows " << state().trRows << ",last " << state().trLastTxt
       << "\nDOM," << (state().cfg.dom ? "on" : "off") << "," << (state().domAvail ? "available" : "NOT available") << ",levels " << state().domLevels << ",snapshots " << state().domRows
-      << "\nDBO," << (state().cfg.dbo ? "on" : "off") << ",events " << state().dboRows << (state().cfg.dbo ? ",writing all session" : "")
+      << "\nDBO," << (state().cfg.dbo ? (state().dboSupported ? "on" : "unsupported on CQG") : "off") << ",events " << state().dboRows << (state().cfg.dbo && state().dboSupported ? ",writing all session" : "")
       << "\nOTHER_MARKETS," << (state().othersTxt.empty() ? "off" : state().othersTxt)
       << "\nERROR," << state().err << "\n";
 }

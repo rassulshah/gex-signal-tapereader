@@ -9,10 +9,14 @@
 
 #include <cerrno>
 #include <cctype>
+#include <climits>
 #include <cmath>
+#include <ctime>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <ctime>
@@ -22,6 +26,74 @@ namespace dpaudit {
 
 inline bool finite(float v) { return std::isfinite((double)v) != 0; }
 inline bool finite(double v) { return std::isfinite(v) != 0; }
+
+inline bool parseInt(const std::string& text, int& out)
+{
+    const char* first = text.c_str();
+    while (*first && std::isspace((unsigned char)*first)) ++first;
+    if (!*first) return false;
+    errno = 0;
+    char* end = 0;
+    const long value = std::strtol(first, &end, 10);
+    if (end == first || errno == ERANGE || value < INT_MIN || value > INT_MAX) return false;
+    while (*end && std::isspace((unsigned char)*end)) ++end;
+    if (*end) return false;
+    out = (int)value;
+    return true;
+}
+
+// Price equality from independently written CSV files must use the instrument's
+// native tick grid. A relative epsilon can merge distinct high-price NQ levels.
+inline bool sameTick(float a, float b, double tick)
+{
+    if (!finite(a) || !finite(b) || !finite(tick) || !(tick > 0.0)) return false;
+    const double ta = (double)a / tick, tb = (double)b / tick;
+    if (!finite(ta) || !finite(tb) || std::fabs(ta) > (double)LLONG_MAX - 0.5 || std::fabs(tb) > (double)LLONG_MAX - 0.5) return false;
+    return std::llround(ta) == std::llround(tb);
+}
+
+enum BoundedRead { READ_OK, READ_OPEN_FAILED, READ_TOO_LARGE, READ_IO_ERROR };
+
+// Read complete lines without allocating in proportion to an untrusted file.
+// Callers retain their previously parsed snapshot unless this returns READ_OK.
+inline BoundedRead readBoundedLines(const std::string& path, std::vector<std::string>& lines,
+                                    size_t maxBytes = 256 * 1024, size_t maxLines = 4096, size_t maxLineBytes = 4096)
+{
+    lines.clear();
+    if (maxBytes == 0 || maxLines == 0 || maxLineBytes == 0) return READ_TOO_LARGE;
+    std::ifstream in(path.c_str(), std::ios::in | std::ios::binary);
+    if (!in.is_open()) return READ_OPEN_FAILED;
+    std::string line;
+    char ch = 0;
+    size_t bytes = 0;
+    while (in.get(ch)) {
+        if (bytes >= maxBytes) { lines.clear(); return READ_TOO_LARGE; }
+        ++bytes;
+        if (ch == '\n') {
+            if (!line.empty() && line[line.size() - 1] == '\r') line.erase(line.size() - 1);
+            if (lines.size() >= maxLines) { lines.clear(); return READ_TOO_LARGE; }
+            lines.push_back(line);
+            line.clear();
+        } else {
+            if (line.size() >= maxLineBytes) { lines.clear(); return READ_TOO_LARGE; }
+            line += ch;
+        }
+    }
+    if (in.bad()) { lines.clear(); return READ_IO_ERROR; }
+    if (!line.empty()) {
+        if (lines.size() >= maxLines) { lines.clear(); return READ_TOO_LARGE; }
+        lines.push_back(line);
+    }
+    return READ_OK;
+}
+
+// Status publication is a cache: write when content changes, at startup, or
+// after a bounded heartbeat interval; a clock rollback also forces a refresh.
+inline bool publicationDue(const std::string& next, const std::string& previous,
+                           std::time_t now, std::time_t last, std::time_t interval = 30)
+{
+    return next != previous || last <= 0 || now < last || now - last >= interval;
+}
 
 // CSV fields may have surrounding whitespace, but no partial, non-finite,
 // underflowed/overflowed, zero, or negative price is meaningful to drawing.

@@ -52,6 +52,7 @@ char* cppExtension::getSymbol(void) { return (char*)CUR->sym.c_str(); }
 int cppExtension::getSecondsPerBar(void) { return CUR->spb; }
 struct tm* cppExtension::getLocaltime(RTDATE d, struct tm* p) { time_t t = (time_t)d; gmtime_r(&t, p); return p; }
 void* cppExtension::getUserData(void) { return CUR->user; }
+double cppExtension::getTickIncrement(const char*) { return 0.25; }   // (2.8.7) DealerProfile matches levels on the SDK tick grid
 void cppExtension::setUserData(void* p) { if (CUR->keepsSlot) CUR->user = p; }
 cppExtension::RTARRAY::RTARRAY(fARRAY f) : tempFloat(0), bFreeTempArray(0), pArray(&tempArray), fArray(f), count(0)
 {
@@ -127,9 +128,9 @@ int main()
 #endif
         CUR = &a; X.destroy();
     }
-    {   // a host that keeps no user-data slot: HostSlot's one shared state (the pre-audit behaviour) - no crash, no leak
+    {   // a host that keeps no user-data slot: the audited HostSlot fails closed (2.8.7) - no shared state, no crash, no leak
         DealerProfile X; Chart a; a.root = "ES"; a.sym = "EPZ26"; a.keepsSlot = false; build(a, 6700.0f);
-        CUR = &a; check(levelsOf(X) == 6710.0, "no-slot host: levels computed");
+        CUR = &a; (void)levelsOf(X); check(a.user == nullptr, "no-slot host: fails closed (no shared state), no crash");
     }
     std::printf("RESULT %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

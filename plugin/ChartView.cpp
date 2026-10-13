@@ -1,5 +1,5 @@
 /********************************************************************************
- *  ChartView.cpp  --  Investor/RT RTX extension  lsChartView  (1.2.0, 2026-10-10)
+ *  ChartView.cpp  --  Investor/RT RTX extension  lsChartView  (1.2.1, 2026-10-12)
  *
  *  CHART VIEW: lets Claude "see" inside an IRT chart. Put ONE on each chart (his 3-min LTF and 60-min charts for ES, NQ, CL,
  *  GC, HG, NG, 6E). It draws nothing and requests no data: it only reads what the chart already has. No settings (task #300:
@@ -20,6 +20,8 @@
  *  plugin's 2-s timer only, never inside the chart's paint; a blank price pane is retried (up to 3 tries) and never replaces
  *  the last good picture. Logic without the SDK: ChartViewLogic.h (tested).
  *
+ *  1.2.1  contract and known session are in each output/image name; request files are bounded and must be completely read; camera ties use
+ *         the current pane's geometry; publication flushes its temporary file before the atomic rename.
  *  1.2.0  window = market + bar size (no more same picture for 180 and 3600); capture outside the paint + blank retry;
  *         labels looked up by their legend name (CI[x] -> x, updn[y] -> y / updn), custom indicators calculated on a new
  *         bar, a "lookup" reason per missing label; no settings at all; per-chart caches (no DLL-wide state); .bak publish.
@@ -53,8 +55,13 @@
 #include <new>
 #include <sys/types.h>
 #include <sys/stat.h>
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
-#define CV_VERSION "1.2.0"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
+#define CV_VERSION "1.2.1"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
 
 enum { CTX_CALC = 0, CTX_DRAW = 1, CTX_TIMER = 2 };
 
@@ -66,17 +73,20 @@ struct SnapJob {
     long long startMs = 0;
     std::string request;
 };
-// one chart's schedule. IRT may run ONE object of this DLL for every chart (and HostSlot falls back to one shared state when
-// the host keeps no user-data slot), so each chart is keyed by symbol | seconds per bar | chart label inside the state.
+// one chart's schedule. IRT may run ONE object of this DLL for every chart; a host
+// without persistent per-chart userdata now fails closed, so no state can cross charts.
 struct ChartSub {
     cvl::Sched sched;
     unsigned long long lastHash = 0;
     bool everWritten = false;
-    long long wantSeen = -1;          // the want file's stamp this chart last answered (or ignored)
+    bool wantSeen = false;            // bounded request identity, including content for same-second same-size rewrites
+    long long wantMtime = -1; unsigned long long wantSize = 0; std::string wantText;
     long long wantCheckMs = -1;       // the want file is looked at most once a second per chart
     long writes = 0;
-    long long snapSeen = -1;          // the picture-request file's stamp this chart last answered
+    bool snapSeen = false;
+    long long snapMtime = -1; unsigned long long snapSize = 0; std::string snapText;
     long long snapCheckMs = -1;
+    int paneW = 0, paneH = 0;         // refreshed only in draw(), where getPaneRect is supported by the real SDK
     SnapJob job;
     std::map<std::string, std::pair<long long, cvl::Series> > seriesCache;   // label -> (last bar stamp, last good read)
 };
@@ -167,14 +177,16 @@ static bool readRange(const std::string& p, size_t from, size_t len, std::string
 {
     out.clear();
     if (len == 0) return true;
+    if (len > cvl::FILE_CAP || from > (size_t)std::numeric_limits<std::streamoff>::max()) return false;
     std::ifstream f(p.c_str(), std::ios::binary);
     if (!f.is_open()) return false;
     f.seekg((std::streamoff)from, std::ios::beg);
     if (!f) return false;
     out.resize(len);
     f.read(&out[0], (std::streamsize)len);
-    out.resize((size_t)f.gcount());
-    return true;
+    const std::streamsize got = f.gcount();
+    out.resize(got > 0 ? (size_t)got : 0);
+    return cvl::completeRead(len, out.size());
 }
 static void makeDir(const std::string& p)
 {
@@ -196,16 +208,22 @@ static bool moveOver(const std::string& from, const std::string& to)
     return std::rename(from.c_str(), to.c_str()) == 0;
 #endif
 }
-// (1.2.0, checklist #5) write <path>.tmp, move the old file to <path>.bak, rename into place; on failure the .bak goes back.
+// (1.2.1, checklist #5) write <path>.tmp, flush it to durable storage, move the old file to <path>.bak, rename into place; on failure the .bak goes back.
 // A reader never sees a partial file and the last good copy is never lost.
 static bool publishFile(const std::string& path, const std::string& contents)
 {
     const std::string tmp = path + ".tmp", bak = path + ".bak";
     {
-        std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc);
+        FILE* f = std::fopen(tmp.c_str(), "wb");
         if (!f) return false;
-        f.write(contents.data(), (std::streamsize)contents.size()); f.flush();
-        if (!f) { f.close(); std::remove(tmp.c_str()); return false; }
+        bool ok = std::fwrite(contents.data(), 1, contents.size(), f) == contents.size() && std::fflush(f) == 0;
+#if defined(_WIN32)
+        if (ok) ok = _commit(_fileno(f)) == 0;
+#else
+        if (ok) ok = fsync(fileno(f)) == 0;
+#endif
+        if (std::fclose(f) != 0) ok = false;
+        if (!ok) { std::remove(tmp.c_str()); return false; }
     }
     const bool hadOld = fileExists(path);
     if (hadOld && !moveOver(path, bak)) { std::remove(tmp.c_str()); return false; }
@@ -226,33 +244,33 @@ static std::string mtimeText(long long mt)
 // ---- the camera, behind one seam so the Linux mock can drive it (CV_TEST_CAMERA)
 struct CamShot { std::string err, title; std::vector<unsigned char> rgb; int w = 0, h = 0, score = 0, matches = 0; };
 #if defined(CV_TEST_CAMERA)
-CamShot cvTestShot(const std::string& sym, int spb, const std::string& per, unsigned pwFlags);
-void cvTestRepaint(const std::string& sym, int spb);
-static CamShot camShot(const std::string& sym, int spb, const std::string& per, unsigned f) { return cvTestShot(sym, spb, per, f); }
-static void camRepaint(const std::string& sym, int spb, const std::string&) { cvTestRepaint(sym, spb); }
+CamShot cvTestShot(const std::string& sym, int spb, const std::string& per, int paneW, int paneH, unsigned pwFlags);
+void cvTestRepaint(const std::string& sym, int spb, int paneW, int paneH);
+static CamShot camShot(const std::string& sym, int spb, const std::string& per, int paneW, int paneH, unsigned f) { return cvTestShot(sym, spb, per, paneW, paneH, f); }
+static void camRepaint(const std::string& sym, int spb, const std::string&, int paneW, int paneH) { cvTestRepaint(sym, spb, paneW, paneH); }
 #elif defined(_WIN32)
-static CamShot camShot(const std::string& sym, int spb, const std::string& per, unsigned pwFlags)
+static CamShot camShot(const std::string& sym, int spb, const std::string& per, int paneW, int paneH, unsigned pwFlags)
 {
     CamShot s;
     std::vector<cvl::WinCand> c; std::vector<HWND> hw;
     cvcam::listWindows(c, hw);
-    cvl::Pick p = cvl::pickChart(c, sym, spb, per, 0, 0);
+    cvl::Pick p = cvl::pickChart(c, sym, spb, per, paneW, paneH);
     s.matches = p.matches;
     if (p.index < 0) { s.err = "chart window not found: " + p.why + " (" + std::to_string(p.seen) + " IRT windows looked at)"; return s; }
     s.title = c[(size_t)p.index].title; s.score = p.score;
     s.err = cvcam::grab(hw[(size_t)p.index], pwFlags, s.rgb, &s.w, &s.h);
     return s;
 }
-static void camRepaint(const std::string& sym, int spb, const std::string& per)
+static void camRepaint(const std::string& sym, int spb, const std::string& per, int paneW, int paneH)
 {
     std::vector<cvl::WinCand> c; std::vector<HWND> hw;
     cvcam::listWindows(c, hw);
-    cvl::Pick p = cvl::pickChart(c, sym, spb, per, 0, 0);
+    cvl::Pick p = cvl::pickChart(c, sym, spb, per, paneW, paneH);
     if (p.index >= 0) cvcam::askRepaint(hw[(size_t)p.index]);
 }
 #else
-static CamShot camShot(const std::string&, int, const std::string&, unsigned) { CamShot s; s.err = "the camera runs on Windows only"; return s; }
-static void camRepaint(const std::string&, int, const std::string&) {}
+static CamShot camShot(const std::string&, int, const std::string&, int, int, unsigned) { CamShot s; s.err = "the camera runs on Windows only"; return s; }
+static void camRepaint(const std::string&, int, const std::string&, int, int) {}
 #endif
 
 class ChartView : public cppExtension {
@@ -271,9 +289,9 @@ private:
     bool readSeries(const std::string& label, long n, long from, bool mayCalc, cvl::Series& out, std::string& diag);
     void readWatch(CVState& S, const std::string& dir, std::vector<std::string>& labels, cvl::Snap& s);
     void readFiles(CVState& S, const std::string& dir, cvl::Snap& s);
-    bool wantNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, long long nowMs);
-    bool snapNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, long long nowMs, std::string& text);
-    void runSnap(const std::string& dir, ChartSub& C, const std::string& mkt, int spb, const std::string& sym, long long nowMs);
+    bool wantNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, const std::string& sym, const std::string& chart, long long nowMs);
+    bool snapNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, const std::string& sym, const std::string& chart, long long nowMs, std::string& text);
+    void runSnap(const std::string& dir, ChartSub& C, const std::string& mkt, int spb, const std::string& sym, const std::string& chart, long long nowMs);
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -360,7 +378,7 @@ void ChartView::readFiles(CVState& S, const std::string& dir, cvl::Snap& s)
 {
     struct tm lt; memset(&lt, 0, sizeof(lt)); localOf((time_t)epochNow(), lt);
     const long long today = cvl::daysFromCivil(lt.tm_year + 1900, (unsigned)(lt.tm_mon + 1), (unsigned)lt.tm_mday);
-    std::vector<cvl::Src> src = cvl::sourcesFor(s.market, s.symbol, today);
+    std::vector<cvl::Src> src = cvl::sourcesFor(s.market, s.symbol, s.period, today);
     size_t total = 0;
     if (S.files.size() > 160) S.files.clear();                     // bounded: a few dozen paths per market in practice
     for (size_t k = 0; k < src.size(); k++) {
@@ -383,52 +401,64 @@ void ChartView::readFiles(CVState& S, const std::string& dir, cvl::Snap& s)
     }
 }
 
-// ChartView.want.txt: answered once per change of the file (it is never deleted here - every matching chart answers it)
-bool ChartView::wantNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, long long nowMs)
+// ChartView.want.txt: answered once per content change (it is never deleted here - every matching chart answers it).
+// Content is retained with mtime/size because NTFS _stat64 timestamps are second-granular: an atomic same-size rewrite in
+// the same second must not leave a chart displaying the prior request.
+bool ChartView::wantNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, const std::string& sym, const std::string& chart, long long nowMs)
 {
     if (C.wantCheckMs >= 0 && nowMs - C.wantCheckMs < 1000 && nowMs >= C.wantCheckMs) return false;
     C.wantCheckMs = nowMs;
     const std::string p = dir + "\\ChartView.want.txt";
     long long mt = -1; unsigned long long sz = 0;
     if (!statFile(p, mt, sz)) return false;
-    const long long stamp = mt * 1000003LL + (long long)sz;
-    if (stamp == C.wantSeen) return false;
-    C.wantSeen = stamp;
-    std::string t; if (sz > 4096 || !readRange(p, 0, (size_t)sz, t)) t.clear();
-    return cvl::wantMatches(t, mkt, period);
+    if (sz > cvl::REQUEST_CAP) {
+        const bool changed = !C.wantSeen || C.wantMtime != mt || C.wantSize != sz || !C.wantText.empty();
+        C.wantSeen = true; C.wantMtime = mt; C.wantSize = sz; C.wantText.clear();
+        if (changed) cvTrace("ignored oversized ChartView.want.txt");
+        return false;
+    }
+    std::string t; if (!readRange(p, 0, (size_t)sz, t)) return false;
+    if (C.wantSeen && C.wantMtime == mt && C.wantSize == sz && C.wantText == t) return false;
+    C.wantSeen = true; C.wantMtime = mt; C.wantSize = sz; C.wantText = t;
+    return cvl::wantMatches(t, mkt, period, sym, chart);
 }
 
 // a picture request: lsFlexLevels\ChartView.snap.txt holding "GC", "GC_180", "ES_180 1791603738" or "*". Looked at once a
 // second per chart, answered once per change; too old = ignored (its epoch > 120 s off, or no epoch and > 30 s old at load).
-bool ChartView::snapNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, long long nowMs, std::string& text)
+bool ChartView::snapNow(const std::string& dir, ChartSub& C, const std::string& mkt, int period, const std::string& sym, const std::string& chart, long long nowMs, std::string& text)
 {
     if (C.snapCheckMs >= 0 && nowMs - C.snapCheckMs < 1000 && nowMs >= C.snapCheckMs) return false;
     C.snapCheckMs = nowMs;
     const std::string p = dir + "\\ChartView.snap.txt";
     long long mt = -1; unsigned long long sz = 0;
     if (!statFile(p, mt, sz)) return false;
-    const long long stamp = mt * 1000003LL + (long long)sz;
-    if (stamp == C.snapSeen) return false;
-    const bool first = C.snapSeen == -1;
-    C.snapSeen = stamp;
-    std::string t; if (sz > 4096 || !readRange(p, 0, (size_t)sz, t)) t.clear();
+    if (sz > cvl::REQUEST_CAP) {
+        const bool changed = !C.snapSeen || C.snapMtime != mt || C.snapSize != sz || !C.snapText.empty();
+        C.snapSeen = true; C.snapMtime = mt; C.snapSize = sz; C.snapText.clear();
+        if (changed) cvTrace("ignored oversized ChartView.snap.txt");
+        return false;
+    }
+    std::string t; if (!readRange(p, 0, (size_t)sz, t)) return false;
+    if (C.snapSeen && C.snapMtime == mt && C.snapSize == sz && C.snapText == t) return false;
+    const bool first = !C.snapSeen;
+    C.snapSeen = true; C.snapMtime = mt; C.snapSize = sz; C.snapText = t;
     cvl::Request r = cvl::parseRequest(t);
     if (!cvl::requestFresh(r, epochNow(), mt, first)) return false;
     text = cvl::trim(t);
-    return cvl::requestMatches(r, mkt, period);
+    return cvl::requestMatches(r, mkt, period, sym, chart);
 }
 
 // one attempt at the picture (from the timer). Blank -> a repaint is queued and the next attempt waits for a later tick.
-void ChartView::runSnap(const std::string& dir, ChartSub& C, const std::string& mkt, int spb, const std::string& sym, long long nowMs)
+void ChartView::runSnap(const std::string& dir, ChartSub& C, const std::string& mkt, int spb, const std::string& sym, const std::string& chart, long long nowMs)
 {
     SnapJob& J = C.job;
     const char* pl = getPeriodicityLabel();
     const std::string per = pl ? pl : "";
-    const std::string stem = cvl::fileStem(mkt, spb);
+    const std::string stem = cvl::chartStem(mkt, spb, sym, chart);
     const std::string imgDir = dir + "\\ChartView\\img";
     makeDir(dir + "\\ChartView"); makeDir(imgDir);
     CamShot shot;
-    try { shot = camShot(sym, spb, per, cvl::printFlags(J.attempt)); } catch (...) { shot = CamShot(); shot.err = "capture threw"; }
+    try { shot = camShot(sym, spb, per, C.paneW, C.paneH, cvl::printFlags(J.attempt)); } catch (...) { shot = CamShot(); shot.err = "capture threw"; }
     cvl::Blank bl; if (shot.err.empty()) bl = cvl::blankCheck(shot.rgb.data(), shot.w, shot.h);
     const int next = cvl::afterCapture(shot.err.empty(), bl.blank, J.attempt);
     cvl::SnapStatus st; st.request = J.request; st.window = shot.title; st.score = shot.score; st.matches = shot.matches;
@@ -436,7 +466,7 @@ void ChartView::runSnap(const std::string& dir, ChartSub& C, const std::string& 
     st.ms = nowMs - J.startMs;
     if (next == cvl::RETRY) {
         J.attempt++; J.nextMs = nowMs + cvl::SNAP_RETRY_MS;
-        if (shot.err.empty()) camRepaint(sym, spb, per);
+        if (shot.err.empty()) camRepaint(sym, spb, per, C.paneW, C.paneH);
         cvTrace("picture " + stem + " try " + std::to_string(J.attempt) + ": " + (shot.err.empty() ? "blank price pane (" + std::to_string(bl.frac) + "), retrying" : shot.err + ", retrying"));
         return;
     }
@@ -482,19 +512,24 @@ void ChartView::pump(int ctx)
         const std::string key = sym + "|" + std::to_string(spb) + "|" + chart;
         if (S->subs.size() > 64 && !S->subs.count(key)) S->subs.clear();
         ChartSub& C = S->subs[key];
+        if (ctx == CTX_DRAW) {                                      // real SDK: pane geometry is available only in drawing calls
+            RCT pane; pane.getPaneRect(true);
+            const int w = (int)pane.getWidth(), h = (int)pane.getHeight();
+            if (w > 0 && h > 0) { C.paneW = w; C.paneH = h; }
+        }
         const long long nowMs = steadyMs();
         const std::string dir = flexDir();
         if (dir.empty()) return;
         const std::string mkt = cvl::marketOf(root, sym);
         const int per = spb > 0 ? spb : 0;
-        bool want = wantNow(dir, C, mkt, per, nowMs);
+        bool want = wantNow(dir, C, mkt, per, sym, chart, nowMs);
         std::string req;
-        if (snapNow(dir, C, mkt, per, nowMs, req)) {               // noticed here, taken below only outside the chart's paint
+        if (snapNow(dir, C, mkt, per, sym, chart, nowMs, req)) {   // noticed here, taken below only outside the chart's paint
             C.job = SnapJob(); C.job.pending = true; C.job.nextMs = nowMs; C.job.startMs = nowMs; C.job.request = req;
             want = true;                                           // a fresh data snapshot goes with the picture
         }
         if (C.job.pending && nowMs >= C.job.nextMs && (ctx == CTX_TIMER || (ctx == CTX_CALC && !S->timerOn)))
-            runSnap(dir, C, mkt, per, sym, nowMs);
+            runSnap(dir, C, mkt, per, sym, chart, nowMs);
 
         const int why = cvl::due(C.sched, n, lastT, nowMs, want);
         if (why == cvl::NONE) return;
@@ -546,7 +581,7 @@ void ChartView::pump(int ctx)
         const std::string doc = cvl::document(b, cvl::iso(lc, cvl::utcOffsetMin(lc, civilOf(ut))), (long long)now, why);
         const std::string outDir = dir + "\\ChartView";
         makeDir(outDir);
-        const std::string stem = cvl::fileStem(mkt, s.period);
+        const std::string stem = cvl::chartStem(mkt, s.period, sym, chart);
         if (publishFile(outDir + "\\" + stem + ".json", doc)) {
             if (!C.everWritten) cvTrace("first snapshot " + stem + " (" + key + ")");
             C.lastHash = hsh; C.everWritten = true; C.writes++;
@@ -562,6 +597,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | CALC_LAST);
     p->setDescription("LRA ChartView: writes this chart's bars and indicator values to lsFlexLevels\\ChartView for Claude, and takes a picture of this chart on request. Draws nothing; no settings.");
-    p->setVersion("1.2.0");   // CV_VERSION
+    p->setVersion("1.2.1");   // CV_VERSION
     return p;
 }

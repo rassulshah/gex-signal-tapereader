@@ -28,6 +28,7 @@
 //              Each is drawn only in markets where the nightly study confirmed it (SIGNAL lines); unconfirmed = not drawn.
 //              Holds / breaks / expiries and the O / R crosses are logged for the study, never drawn.
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -43,7 +44,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.13.2";
+static const char* const VERSION = "0.14.1";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -81,10 +82,18 @@ struct Params {
     double showX = 2.0, keepX = 1.7, confirmX = 2.5;
     double confirmKeepX = 2.1;                  // (0.11.4) an LQ already on a zone stays while that zone is shown at 2.1x+ (no flicker at 2.5x)
     int behindBands = 8, behindMin = 6;
+    // (0.14.0, Rassul 2026-10-13 "i want to see liquidity when it is close so i can see if there is any absorbtion going on")
+    // NEAR rule: a zone within nearAtr x the 3-min range of price (at least 4 half-widths) is shown at nearShowX (1.5x) WITHOUT the
+    // rank-1 requirement (still behindOk + durable 30 s), kept while >= nearKeepX (1.2x), same 10 s grace. It becomes near at
+    // distance <= nearTicks and stops being near only past nearExit x nearTicks (no flicker at the boundary). Far zones unchanged
+    // (2.0x, rank 1, kept to 1.7x). Never shown under minShowX (1.0x). Research basis: zones of 1.5-2.0x held 34% vs 35% at 2-3x,
+    // under 1x 23% - the 1.5x near line loses almost nothing in holding odds and shows the liquidity price is about to test.
+    double nearAtr = 1.0, nearShowX = 1.5, nearKeepX = 1.2, nearExit = 1.5;
+    double minShowX = 1.0;
+    int nearPerSide = 2;                        // the strongest near candidates per side always tracked (even outside topN)
     Tick reachTicks = 0;                        // > 0: the reach in ticks set by the plugin (1/2 expected range ...), else reachAtr x ATR
 };
 
-inline Tick toTick(double price, double tick) { return (Tick)std::llround(price / tick); }
 // (0.11.4) the decimals a price needs at this tick, tolerant of IRT's float tick (0.01f = 0.0099999998: 6 decimals / 3 decimals before)
 inline int decimals(double tick) {
     if (!(tick > 0)) return 2;
@@ -93,10 +102,26 @@ inline int decimals(double tick) {
 }
 inline bool finite(double v) { return v == v && v < std::numeric_limits<double>::infinity() && v > -std::numeric_limits<double>::infinity(); }
 
+// Tick keys are the native comparison grid.  Never cast an unbounded double to
+// int64: llround/casting outside its representable domain is undefined.
+inline bool tryToTick(double price, double tick, Tick& out) {
+    if (!finite(price) || !finite(tick) || tick <= 0) return false;
+    const double q = price / tick;
+    const double lim = static_cast<double>(std::numeric_limits<Tick>::max());
+    if (!finite(q) || q <= -lim || q >= lim) return false;
+    const double r = std::round(q);
+    if (!finite(r) || r <= -lim || r >= lim) return false;
+    out = static_cast<Tick>(r);
+    return true;
+}
+inline Tick toTick(double price, double tick) { Tick out = 0; return tryToTick(price, tick, out) ? out : 0; }
+
 inline int halfWidth(const Params& p, double atrPrice) {
     double a = atrPrice > 0 && finite(atrPrice) ? atrPrice : 15 * p.tick;
-    int hw = (int)std::llround(p.k * a / p.tick);
-    return std::max(p.hwMin, std::min(p.hwMax, hw));
+    const double raw = p.k * a / p.tick;
+    if (!finite(raw) || raw >= p.hwMax) return p.hwMax;
+    if (raw <= p.hwMin) return p.hwMin;
+    return std::max(p.hwMin, std::min(p.hwMax, (int)std::llround(raw)));
 }
 
 // ---- normal band size per 30-min Central slot (slot = minute of day / 30), from the nightly file; else the session's median
@@ -124,6 +149,7 @@ struct Zone {
     double bx = -1; int rank = 0, behindN = 0; bool behindOk = false;
     Tick edgeLo = 0, edgeHi = 0;
     bool shown = false; Ms belowSince = -1;
+    bool near = false;                          // (0.14.0) within the near band of price (hysteresis: in at nearTicks, out past 1.5x)
     bool durable(Ms now, Ms persist) const { return now - born >= persist; }
 };
 
@@ -330,7 +356,7 @@ public:
     // ---- trades: aggressive volume at a price since the last read (buy lifts the offer, sell hits the bid)
     void onTrade(Ms t, double price, double buy, double sell) {
         if (!finite(price) || price <= 0 || !(buy >= 0) || !(sell >= 0) || buy + sell <= 0) return;
-        const Tick px = toTick(price, P.tick);
+        Tick px = 0; if (!tryToTick(price, P.tick, px)) { why = "invalid trade price"; return; }
         if (buy > 0) pendingExec[ASK][px] += buy;
         if (sell > 0) pendingExec[BID][px] += sell;
         TradeEvt e; e.t = t; e.px = px; e.buy = buy; e.sell = sell; tape.push_back(e); trades++;
@@ -346,13 +372,19 @@ public:
         lastPx = px; havePx = true;
         trim(t);
     }
-    void onLastPrice(double price) { if (finite(price) && price > 0) { lastPx = toTick(price, P.tick); havePx = true; } }
+    void onLastPrice(double price) { Tick px = 0; if (finite(price) && price > 0 && tryToTick(price, P.tick, px)) { lastPx = px; havePx = true; } }
 
     // ---- a depth snapshot: (price, size) per level; zero / bad levels are skipped
     bool onBook(Ms t, const std::vector<std::pair<double, double>>& bids, const std::vector<std::pair<double, double>>& asks) {
         std::map<Tick, double> nb[2];
-        for (size_t i = 0; i < bids.size(); ++i) if (finite(bids[i].first) && bids[i].first > 0 && finite(bids[i].second) && bids[i].second > 0) nb[BID][toTick(bids[i].first, P.tick)] += bids[i].second;
-        for (size_t i = 0; i < asks.size(); ++i) if (finite(asks[i].first) && asks[i].first > 0 && finite(asks[i].second) && asks[i].second > 0) nb[ASK][toTick(asks[i].first, P.tick)] += asks[i].second;
+        for (size_t i = 0; i < bids.size(); ++i) {
+            Tick px = 0;
+            if (finite(bids[i].first) && bids[i].first > 0 && finite(bids[i].second) && bids[i].second > 0 && tryToTick(bids[i].first, P.tick, px)) nb[BID][px] += bids[i].second;
+        }
+        for (size_t i = 0; i < asks.size(); ++i) {
+            Tick px = 0;
+            if (finite(asks[i].first) && asks[i].first > 0 && finite(asks[i].second) && asks[i].second > 0 && tryToTick(asks[i].first, P.tick, px)) nb[ASK][px] += asks[i].second;
+        }
         if (nb[BID].empty() || nb[ASK].empty()) { why = "one-sided book"; badBooks++; return false; }
         if (nb[BID].rbegin()->first >= nb[ASK].begin()->first) { why = "crossed book"; badBooks++; return false; }
         Tick nw[2][2] = {{nb[BID].begin()->first, nb[BID].rbegin()->first}, {nb[ASK].begin()->first, nb[ASK].rbegin()->first}};
@@ -403,6 +435,7 @@ public:
         const Tick reach = P.reachTicks > 0 ? std::max((Tick)(10 * hw), P.reachTicks)
                                             : (Tick)std::llround(std::max(10.0 * hw, P.reachAtr * (atrPrice > 0 ? atrPrice : 15 * P.tick) / P.tick));
         const Tick ref = havePx ? lastPx : (book[BID].rbegin()->first + book[ASK].begin()->first) / 2;
+        nearTicks = nearBand(atrPrice);
         for (int s = 0; s < 2; ++s) {
             std::vector<std::pair<double, Tick>> cand;
             const std::map<Tick, double>& b = book[s];
@@ -425,6 +458,17 @@ public:
                 bool clash = false; for (size_t j = 0; j < pick.size(); ++j) if (std::llabs(pick[j].second - cand[i].second) <= 2 * hw) clash = true;
                 if (!clash && cand[i].first > 0) pick.push_back(cand[i]);
             }
+            // (0.14.0) the strongest near candidates (up to nearPerSide, not clashing with each other or a pick) are always tracked,
+            // even when bigger bands further away fill the topN - else a near zone could never be shown
+            int nearN = 0;
+            for (size_t i = 0; i < cand.size() && nearN < P.nearPerSide; ++i) {
+                if (!(cand[i].first > 0)) break;
+                const Tick d = s == BID ? ref - (cand[i].second + hw) : (cand[i].second - hw) - ref;
+                if (std::max((Tick)0, d) > nearTicks) continue;
+                bool clash = false; for (size_t j = 0; j < pick.size(); ++j) if (std::llabs(pick[j].second - cand[i].second) <= 2 * hw) clash = true;
+                if (clash) { bool inTop = false; for (size_t j = 0; j < pick.size(); ++j) if (pick[j].second == cand[i].second) inTop = true; if (inTop) ++nearN; continue; }
+                pick.push_back(cand[i]); ++nearN;
+            }
             std::vector<Tick> placed;
             for (size_t i = 0; i < pick.size(); ++i) {
                 // the zone's centre = the size-weighted middle of its band (a flat run of equal band sums otherwise picks its edge);
@@ -441,10 +485,26 @@ public:
         for (size_t i = 0; i < zones.size();) {
             if (!zones[i].inAttempt && t - zones[i].seen > P.graceMs) zones.erase(zones.begin() + i); else ++i;
         }
-        for (size_t i = 0; i < zones.size(); ++i) { prominence(zones[i]); showState(zones[i], t); }
+        for (size_t i = 0; i < zones.size(); ++i) { nearState(zones[i], ref); prominence(zones[i]); showState(zones[i], t); }
         normal = norms.at(slot);
     }
     double normal = 0;
+    Tick nearTicks = 0;                          // (0.14.0) the near band in ticks, set by updateZones
+    // (0.14.0) near band = max(round(nearAtr x the 3-min range / tick), 4 half-widths)
+    Tick nearBand(double atrPrice) const {
+        const double a = atrPrice > 0 && finite(atrPrice) ? atrPrice : 15 * P.tick;
+        const double raw = P.nearAtr * a / P.tick;
+        const Tick n = finite(raw) && raw < 1e9 ? (Tick)std::llround(raw) : (Tick)1000000000;
+        return std::max(n, (Tick)(4 * hw));
+    }
+    // (0.14.0) distance of a zone from price, floored at 0: a support ref - hi, a resistance lo - ref
+    static Tick zoneDist(const Zone& z, Tick ref) { const Tick d = z.side == BID ? ref - z.hi : z.lo - ref; return d > 0 ? d : 0; }
+    // near with hysteresis: in at <= nearTicks, out only past nearExit x nearTicks
+    void nearState(Zone& z, Tick ref) const {
+        const Tick d = zoneDist(z, ref);
+        if (!z.near) { if (d <= nearTicks) z.near = true; }
+        else if ((double)d > P.nearExit * (double)nearTicks) z.near = false;
+    }
     double xNormal(double size) const { return normal > 0 ? size / normal : -1; }
 
     // (0.10.0) the zone vs the same side's book BEHIND it: behindBands bands of the zone's width beyond it (lower bids under a
@@ -477,12 +537,19 @@ public:
     // (0.11.4) a shown zone near the edge of the visible book (fewer than behindMin bands behind it, because price moved and the
     // depth window moved with it) is judged on the bands that ARE visible; with none visible there is no evidence and it stays as it
     // is - before, it was hidden 10 s later and came back when price returned (flicker at the far end of the reach)
+    // (0.14.0) a NEAR zone: shown at nearShowX without rank 1, kept to nearKeepX; never APPEARS under minShowX (1.0x) - a shown zone
+    // measured under it is hidden at once (no grace) unless it is in an absorption attempt (kept until the attempt ends)
     void showState(Zone& z, Ms t) const {
+        const double showAt = std::max(P.minShowX, z.near ? P.nearShowX : P.showX), keepAt = std::max(P.minShowX, z.near ? P.nearKeepX : P.keepX);
         if (!z.shown) {
-            if (z.behindOk && z.rank == 1 && z.bx >= P.showX && z.durable(t, P.persistMs)) { z.shown = true; z.belowSince = -1; }
+            if (z.behindOk && (z.near || z.rank == 1) && z.bx >= showAt && z.durable(t, P.persistMs)) { z.shown = true; z.belowSince = -1; }
             return;
         }
-        const bool strong = z.behindN > 0 && z.bx >= P.keepX;
+        // (0.14.0, coordinator review) a shown zone being touched (in an absorption attempt) stays shown until the attempt ends, whatever
+        // its size - that is when he wants to see it absorbed; the 1.0x floor, the keep lines and the grace apply again once it ends
+        if (z.inAttempt) { z.belowSince = -1; return; }
+        if (z.behindN > 0 && z.bx < P.minShowX) { z.shown = false; z.belowSince = -1; return; }
+        const bool strong = z.behindN > 0 && z.bx >= keepAt;
         if (strong || z.behindN == 0) { z.belowSince = -1; return; }
         if (z.belowSince < 0) z.belowSince = t;
         if (t - z.belowSince > P.graceMs) { z.shown = false; z.belowSince = -1; }
@@ -518,7 +585,7 @@ public:
     // ---- a closed bar: decide every attempt (marks are final once written)
     void onBarClose(int bar, long long barTime, Ms barEnd, double close, const std::vector<std::pair<Tick, Tick>>& deltaAbsorbBid,
                     const std::vector<std::pair<Tick, Tick>>& deltaAbsorbAsk) {
-        const Tick c = toTick(close, P.tick);
+        Tick c = 0; if (!tryToTick(close, P.tick, c)) return;
         if (haveBook && havePx) { nearBook[bar] = nearNow(); while (nearBook.size() > 1200) nearBook.erase(nearBook.begin()); }   // (0.11.0)
         // (0.8.0) s after a touch already decided as held (the defenders often step in on the bars after the close back out): finished
         // attempts first, so one closed on THIS bar is not read twice
@@ -605,18 +672,26 @@ public:
     }
     static bool num(const std::string& t, double& v) {                 // strict full-token parse (checklist #4)
         if (t.empty() || t.size() > 40) return false;
-        char* e = nullptr; v = std::strtod(t.c_str(), &e); return e == t.c_str() + t.size() && finite(v);
+        errno = 0; char* e = nullptr; v = std::strtod(t.c_str(), &e); return !errno && e == t.c_str() + t.size() && finite(v);
+    }
+    static bool integer(const std::string& t, long long lo, long long hi, long long& v) {
+        if (t.empty() || t.size() > 24) return false;
+        errno = 0; char* e = nullptr; const long long x = std::strtoll(t.c_str(), &e, 10);
+        if (errno || e != t.c_str() + t.size() || x < lo || x > hi) return false;
+        v = x; return true;
     }
     static bool parse(const std::string& s, Mark& m, double tick) {
         std::vector<std::string> f; size_t a = 0;
         for (size_t i = 0; i <= s.size(); ++i) if (i == s.size() || s[i] == '|') { f.push_back(s.substr(a, i - a)); a = i + 1; }
         if (f.size() < 14 || !paneCode(f[1]) || !(tick > 0)) return false;
-        double bt, lo, hi, ta, td;
-        if (!num(f[0], bt) || bt <= 0 || !num(f[4], lo) || !num(f[5], hi) || !num(f[6], m.shown) || !num(f[7], m.eaten) || !num(f[8], m.stayed)
-            || !num(f[9], m.exhaust) || !num(f[10], m.resil) || !num(f[11], ta) || !num(f[12], td)) return false;
+        long long bt = 0, ta = 0, td = 0; double lo = 0, hi = 0;
+        if (!integer(f[0], 1, std::numeric_limits<long long>::max(), bt) || !num(f[4], lo) || !num(f[5], hi) || !num(f[6], m.shown) || !num(f[7], m.eaten) || !num(f[8], m.stayed)
+            || !num(f[9], m.exhaust) || !num(f[10], m.resil) || !integer(f[11], 0, std::numeric_limits<long long>::max(), ta) || !integer(f[12], 0, std::numeric_limits<long long>::max(), td)) return false;
         if (f[3] != "support" && f[3] != "resistance") return false;
-        m.barTime = (long long)bt; m.code = f[1]; m.reasons = f[2]; m.side = f[3] == "support" ? BID : ASK;
-        m.lo = toTick(lo, tick); m.hi = toTick(hi, tick); m.tA = (Ms)ta; m.tDecided = (Ms)td;
+        Tick loTick = 0, hiTick = 0;
+        if (!tryToTick(lo, tick, loTick) || !tryToTick(hi, tick, hiTick)) return false;
+        m.barTime = bt; m.code = f[1]; m.reasons = f[2]; m.side = f[3] == "support" ? BID : ASK;
+        m.lo = loTick; m.hi = hiTick; m.tA = (Ms)ta; m.tDecided = (Ms)td;
         m.value = -1; double v = 0; if (f.size() >= 15 && num(f[14], v)) m.value = v;
         return m.hi >= m.lo;
     }

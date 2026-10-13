@@ -1,7 +1,7 @@
 #ifndef LS_CHARTVIEW_LOGIC_H
 #define LS_CHARTVIEW_LOGIC_H
 /********************************************************************************
- *  ChartViewLogic.h  --  the SDK-free half of lsChartView (1.2.0, 2026-10-10)
+ *  ChartViewLogic.h  --  the SDK-free half of lsChartView (1.2.1, 2026-10-12)
  *
  *  Everything ChartView decides without Investor/RT: which market a chart is, the watch-list file, when a snapshot is due,
  *  whether it changed, JSON text (escaping, numbers), size caps for the copied status files, the snapshot JSON itself, and
@@ -9,6 +9,9 @@
  *  a watch-list label is looked up.
  *  Tested by test_chartview_logic.cpp (g++ / MinGW, no SDK) and test_chartview_mock.cpp (the real ChartView.cpp on a mock host).
  *
+ *  1.2.1 (2026-10-12)
+ *   - contract-qualified export/request identities; bounded invalid request input never means "all";
+ *   - exact chart-symbol window matching, bounded image geometry, and complete-range-read admission.
  *  1.2.0 (2026-10-10)
  *   - Window choice: the chart's title must show its bar size ("3 Minutes" / "(3m*)" right after the symbol); a window that
  *     only shows the symbol is never taken. Before, an empty periodicity label made every ES window match and the biggest won,
@@ -31,18 +34,21 @@
 
 namespace cvl {
 
-static const char* const CV_VERSION_STR = "1.2.0";
+static const char* const CV_VERSION_STR = "1.2.1";
 static const int   MAX_LABELS      = 40;       // labels read per chart
 static const int   MAX_ARRAYS      = 16;       // arrays read per label (0..15, stop at the first that fails)
 static const int   FIXED_BARS      = 300;      // (task #300) always the last 300 bars - no setting
 static const long long THROTTLE_MS = 10000;    // the forming bar: at most one snapshot every 10 s
 static const size_t FILE_CAP       = 64 * 1024;    // each copied status / marks file
 static const size_t FILES_TOTAL_CAP = 768 * 1024;  // all copied files together
+static const size_t REQUEST_CAP    = 4 * 1024;     // want / picture requests: bounded control input
 static const size_t LABEL_MAX      = 120;      // one cleaned label
 static const int   SNAP_MAX_TRIES  = 3;        // a blank picture is retried twice
 static const long long SNAP_RETRY_MS = 1500;   // ... on a later timer tick, never in the same call
 static const long long SNAP_STALE_S = 120;     // a request whose epoch is older than this is ignored
 static const double BLANK_FRAC     = 0.975;    // price-pane area this uniform = blank (good charts measured 0.72 - 0.83)
+static const int   IMAGE_MAX_DIM   = 10000;    // Win32 bitmap dimensions accepted by the camera
+static const size_t IMAGE_MAX_PIXELS = 20u * 1000u * 1000u; // prevents multi-hundred-MiB capture/PNG allocations
 
 // ---------------------------------------------------------------- market
 inline std::string upper(const std::string& s) { std::string r; for (char c : s) r += (char)std::toupper((unsigned char)c); return r; }
@@ -69,6 +75,31 @@ inline int periodOf(int sdkSeconds, const std::vector<long long>& stamps)
 }
 
 inline std::string fileStem(const std::string& mkt, int period) { return mkt + "_" + std::to_string(period > 0 ? period : 0); }
+// TapeFlow names contract-specific files by this same rule.  ChartView uses it too so
+// two dated contracts of one market/period cannot publish over each other's snapshots.
+inline std::string contractTag(const std::string& sym) { std::string c = sym; for (char& ch : c) if (!std::isalnum((unsigned char)ch) && ch != '-' && ch != '_') ch = '_'; return c; }
+// A session qualifier is taken from the IRT chart label.  Full-session labels normally
+// include the hours; RTH is explicit.  An unrecognised/blank label contributes no tag
+// for compatibility, but a known RTH/full-session pair cannot overwrite one another.
+inline std::string sessionTag(const std::string& chart)
+{
+    const std::string u = upper(chart);
+    size_t a = u.find("FULL SESSION");
+    if (a == std::string::npos) {
+        if (u.find("RTH") != std::string::npos || u.find("REGULAR SESSION") != std::string::npos) return "RTH";
+    }
+    if (a == std::string::npos) return std::string();
+    size_t e = u.find(',', a); if (e == std::string::npos) e = u.size();
+    std::string tag;
+    for (size_t i = a; i < e && tag.size() < 30; i++) if (std::isalnum((unsigned char)u[i])) tag += u[i];
+    return tag;
+}
+inline std::string chartStem(const std::string& mkt, int period, const std::string& sym, const std::string& chart = std::string())
+{
+    const std::string tag = contractTag(sym);
+    const std::string session = sessionTag(chart);
+    return (tag.empty() ? fileStem(mkt, period) : fileStem(mkt, period) + "_" + tag) + (session.empty() ? "" : "_" + session);
+}
 
 // ---------------------------------------------------------------- labels
 inline std::string trim(const std::string& s)
@@ -186,12 +217,12 @@ inline std::string fixedField(const char* p, size_t cap, bool* cut = nullptr)
 // ---------------------------------------------------------------- want / picture requests
 // ChartView.want.txt and ChartView.snap.txt: blank (or "*" / "ALL") = every chart answers; otherwise one token per line /
 // comma / blank: "ES" (every ES chart), "ES_180" (that chart only). A bare number of 9+ digits is the request's epoch.
-struct Request { std::vector<std::string> toks; long long epoch = -1; };
+struct Request { std::vector<std::string> toks; long long epoch = -1; bool valid = true; };
 inline Request parseRequest(const std::string& text)
 {
     Request r;
+    if (text.size() > REQUEST_CAP) { r.valid = false; return r; }
     std::string t = decodeText(text);
-    if (t.size() > 4096) t.resize(4096);
     for (char& c : t) if (c == ',' || c == ';' || c == ' ' || c == '\t' || c == '\r') c = '\n';
     size_t p = 0;
     while (p <= t.size() && r.toks.size() < 64) {
@@ -204,20 +235,24 @@ inline Request parseRequest(const std::string& text)
     }
     return r;
 }
-inline bool requestMatches(const Request& r, const std::string& mkt, int period)
+inline bool requestMatches(const Request& r, const std::string& mkt, int period, const std::string& symbol = std::string(), const std::string& chart = std::string())
 {
+    if (!r.valid) return false;
     if (r.toks.empty()) return true;
     std::string M = upper(mkt), MP = upper(fileStem(mkt, period));
-    for (const auto& x : r.toks) if (x == "*" || x == "ALL" || x == M || x == MP) return true;
+    std::string MC = symbol.empty() ? std::string() : upper(chartStem(mkt, period, symbol));
+    std::string MS = symbol.empty() ? std::string() : upper(chartStem(mkt, period, symbol, chart));
+    for (const auto& x : r.toks) if (x == "*" || x == "ALL" || x == M || x == MP || (!MC.empty() && x == MC) || (!MS.empty() && x == MS)) return true;
     return false;
 }
-inline bool wantMatches(const std::string& text, const std::string& mkt, int period) { return requestMatches(parseRequest(text), mkt, period); }
+inline bool wantMatches(const std::string& text, const std::string& mkt, int period, const std::string& symbol = std::string(), const std::string& chart = std::string()) { return requestMatches(parseRequest(text), mkt, period, symbol, chart); }
 // a request is answered when its file changed; it is too old when its own epoch is > 120 s away from now, or (no epoch) when
 // the chart only just loaded and the file is > 30 s old (a leftover from an earlier session)
 inline bool requestFresh(const Request& r, long long nowEpoch, long long fileMtime, bool firstLook)
 {
+    if (!r.valid) return false;
     if (r.epoch > 0) return nowEpoch - r.epoch <= SNAP_STALE_S && r.epoch - nowEpoch <= SNAP_STALE_S;
-    return !firstLook || nowEpoch - fileMtime <= 30;
+    return !firstLook || (nowEpoch >= fileMtime && nowEpoch - fileMtime <= 30);
 }
 
 // ---------------------------------------------------------------- which IRT window is this chart (1.2.0)
@@ -265,12 +300,41 @@ inline bool hasPhrase(const std::string& title, const std::string& ph)
     }
     return false;
 }
+// A chart symbol is an identifier, not an arbitrary substring (ES must not match MES).
+inline size_t exactSymbolPos(const std::string& title, const std::string& sym)
+{
+    size_t at = title.find(sym);
+    while (at != std::string::npos) {
+        const size_t end = at + sym.size();
+        if ((at == 0 || !std::isalnum((unsigned char)title[at - 1])) && (end == title.size() || !std::isalnum((unsigned char)title[end]))) return at;
+        at = title.find(sym, at + 1);
+    }
+    return std::string::npos;
+}
+// IRT's own first contract periodicity code occurs before overlay contracts.  Do
+// not let a requested overlay symbol select a different chart window.
+inline bool periodCodeBefore(const std::string& title, size_t before)
+{
+    for (size_t p = 0; p < before; p++) {
+        if (title[p] != '(' || p + 2 >= before) continue;
+        size_t q = p + 1;
+        while (q < before && std::isdigit((unsigned char)title[q])) q++;
+        if (q == p + 1 && q < before && (title[q] == 'd' || title[q] == 'D')) q++;
+        if (q == p + 1 || q >= before) continue;
+        const char unit = (char)std::tolower((unsigned char)title[q]);
+        if (unit != 's' && unit != 'm' && unit != 'h' && unit != 'd') continue;
+        q++;
+        if (q < before && (title[q] == '*' || title[q] == ')' || title[q] == ' ')) return true;
+    }
+    return false;
+}
 // > 0 = this window shows this chart (higher = surer); 0 = has the symbol but NOT this bar size; -1 = not this symbol at all
 inline int titleScore(const std::string& title, const std::string& sym, int spb, const std::string& perLabel)
 {
     if (sym.empty()) return -1;
-    size_t at = title.find(sym);
+    size_t at = exactSymbolPos(title, sym);
     if (at == std::string::npos) return -1;
+    if (periodCodeBefore(title, at)) return -1;
     int score = 0;
     std::vector<std::string> ph = periodPhrases(spb);
     for (const auto& p : ph) if (hasPhrase(title, p)) { score += 4; break; }
@@ -321,6 +385,10 @@ inline Pick pickChart(const std::vector<WinCand>& c, const std::string& sym, int
 // The price pane sits in the upper half of every IRT chart picture. Measured on his pictures (2026-10-09): a good chart's
 // rows 6% - 55% are at most 83% one colour; the blank ES picture was 100%. Colours are compared on 5 bits per channel.
 struct Blank { double frac = 1.0; bool blank = true; };
+inline bool imageSizeAllowed(int w, int h)
+{
+    return w > 0 && h > 0 && w <= IMAGE_MAX_DIM && h <= IMAGE_MAX_DIM && (size_t)w <= IMAGE_MAX_PIXELS / (size_t)h;
+}
 inline Blank blankCheck(const unsigned char* rgb, int w, int h)
 {
     Blank b;
@@ -459,18 +527,34 @@ inline std::string dateOfDays(long long days) { int y, m, d; civilFromDays(days,
 // ---------------------------------------------------------------- the status / marks files our plugins write
 enum Cut { HEAD = 0, TAIL = 1, HEADTAIL = 2 };
 struct Src { std::string rel; int cut; };
-// TapeFlow names its events file by contract (non-alphanumerics -> '_') - same rule as TapeFlow::evPath
-inline std::string contractTag(const std::string& sym) { std::string c = sym; for (char& ch : c) if (!std::isalnum((unsigned char)ch) && ch != '-' && ch != '_') ch = '_'; return c; }
 // Every file (relative to lsFlexLevels) worth copying for market M. Plugin status files first, then the data files the
 // plugins DRAW from (levels, signals, summary), then TapeFlow's committed events (its on-chart marks) for the nearby
-// session dates (TapeFlow's session date = the calendar day after 17:00 CT).
-inline std::vector<Src> sourcesFor(const std::string& M, const std::string& sym, long long todayDays)
+// session dates (TapeFlow's session date = the calendar day after 17:00 CT).  SessionVWAP and Exhaustion deliberately
+// publish contract-qualified status files; do not fall back to their retired shared names, which could show another expiry.
+inline std::vector<Src> sourcesFor(const std::string& M, const std::string& sym, int period, long long todayDays)
 {
     std::vector<Src> v;
     auto add = [&](const std::string& r, int c) { v.push_back(Src{ r, c }); };
+    auto filePart = [](const std::string& in, const char* fallback, size_t cap, bool upperCase) {
+        std::string out;
+        for (size_t i = 0; i < in.size() && out.size() < cap; ++i) {
+            unsigned char c = (unsigned char)in[i];
+            char q = (std::isalnum(c) || c == '_' || c == '-') ? (char)c : '_';
+            out += upperCase ? (char)std::toupper((unsigned char)q) : q;
+        }
+        return out.empty() ? std::string(fallback) : out;
+    };
+    const int producerPeriod = period > 0 && period <= 3600 ? period : 180;
+    const std::string svMarket = filePart(M, "unknown", 48, false);
+    const std::string svSymbol = filePart(sym, "unknown", 48, false);
+    const std::string exMarket = filePart(M, "UNKNOWN", 24, true);
+    const std::string exSymbol = filePart(sym, "UNKNOWN", 24, true);
     add("DealerProfile.status.txt", HEAD); add("DealerRead.status.txt", HEAD); add("DealerSig.status.txt", HEAD);
-    add("DealerSummary.status.txt", HEAD); add("DeltaProfile.status.txt", HEAD); add("SessionVWAP.status.txt", HEAD);
-    add("SessionVWAP-" + M + ".odds.txt", HEAD); add("TapeFlow.status-" + M + ".txt", HEAD); add("IRTReader.status-" + M + ".txt", HEAD);
+    add("DealerSummary.status.txt", HEAD); add("DeltaProfile.status.txt", HEAD);
+    add("SessionVWAP-" + svMarket + "-" + svSymbol + "-" + std::to_string(producerPeriod) + "s.status.txt", HEAD);
+    add("SessionVWAP-" + svMarket + "-" + svSymbol + "-" + std::to_string(producerPeriod) + "s.odds.txt", HEAD);
+    add("Exhaustion.status-" + exMarket + "-" + exSymbol + "-" + std::to_string(producerPeriod) + ".txt", HEAD);
+    add("TapeFlow.status-" + M + ".txt", HEAD); add("IRTReader.status-" + M + ".txt", HEAD);
     add("KingTracker.status.txt", HEAD);
     static const char* const BK[5] = { "Auto", "SPX", "SPY", "IF", "Both" };
     for (int b = 0; b < 5; b++) { add(std::string("GammaProfile.status-") + BK[b] + "-Left.txt", HEAD); add(std::string("GammaProfile.status-") + BK[b] + "-Right.txt", HEAD); }
@@ -482,6 +566,9 @@ inline std::vector<Src> sourcesFor(const std::string& M, const std::string& sym,
 }
 // Which byte ranges to read from a file of `size` bytes so at most `cap` are kept: [0, headLen) and [tailFrom, size)
 struct Plan { size_t headLen = 0; size_t tailFrom = 0; bool truncated = false; };
+// A short read can be a writer's partially-published/torn file.  Callers must
+// reject it rather than present a prefix as a complete snapshot.
+inline bool completeRead(size_t expected, size_t actual) { return expected == actual; }
 inline Plan planRead(size_t size, int cut, size_t cap = FILE_CAP)
 {
     Plan p;
@@ -606,7 +693,7 @@ inline void pngChunk(std::string& o, const char* type, const std::string& data)
 // rgb = w * h * 3 bytes, top row first; returns the PNG file bytes ("" for bad sizes)
 inline std::string pngEncode(const unsigned char* rgb, int w, int h)
 {
-    if (!rgb || w <= 0 || h <= 0 || w > 20000 || h > 20000) return std::string();
+    if (!rgb || !imageSizeAllowed(w, h)) return std::string();
     std::string raw; raw.reserve((size_t)h * ((size_t)w * 3 + 1));
     for (int y = 0; y < h; y++) { raw += (char)0; raw.append((const char*)rgb + (size_t)y * w * 3, (size_t)w * 3); }
     std::string z; z += (char)0x78; z += (char)0x01;

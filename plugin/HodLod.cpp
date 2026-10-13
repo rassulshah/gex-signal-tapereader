@@ -1,5 +1,12 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.0.4 (2026-10-13): the projection callout ("HOD after 10:45 . 94.34") keeps out of the left level-label band (the Liquidity
+ *         column's level names, e.g. "/PDH") - max(110 px, 15% of the pane); it moves right of the band, never over a level label.
+ *  2.0.3 (2026-10-13 10:38): the table 33% smaller ("reduce the size of this by 33%. too big"): 9 pt instead of 13, padding x 2/3.
+ *  2.0.2 (2026-10-13): Rassul's table redesign (mockups a-u): Regime / RTH / Expiry header aligned to the columns, Reclaim column gone,
+ *         Expected (blue) / Actual ("LOD IN 8:39 (71%)") / Estimate rows, odds in (), bigger fonts, no 1st-extreme line, projection label on
+ *         its arrowhead; Session Info retired (its Regime + Expiry are read here from LRA-Session-<MKT>.csv)
+ *  2.0.1 (2026-10-13): audit fixes - RTH-completion and tick-admission checks (external audit 2026-10-12, HodLod 1.1.1)
  *  2.0.0 (2026-10-12 night): the 1st Extreme model (was lsFirstExtreme) merged in: a 3rd table line + the LOD? / HOD? marker, same shadow logs
  *
  *  THE SESSION'S HOD / LOD, on every market's chart (Rassul 2026-10-09, mockup v5 approved: "check everything then build it").
@@ -59,6 +66,9 @@ struct HLState {
     std::string projLogged, projSession;   // (1.1.6) the targets already in HodLod.proj-<MKT>.csv for projSession (\n-separated keys)
     // (HL104) MenthorQ level snapshots of MenthorQLevels.csv (the one external input): one per distinct content, <= 32, newest last
     std::vector<hl::MqSnap> mq; long long mqStamp = -2; time_t mqChecked = 0; std::string mqWhy; long long mqLoads = 0;
+    // (2.0.2, Rassul 05:52 / 06:08: Session Info retired, its Regime + options Expiry move into the table's header) the bridge's
+    // LRA-Session-<MKT>.csv: GAM|POS|NEG ... and EXP|hh:mm ... (bounded read, re-read only when the file changes, at most every 5 s)
+    long long sessStamp = -2; time_t sessChecked = 0; std::string sessGam, sessExp; int sessAge = -1; bool sessRec = true;
     ~HLState() { delete T; }
 };
 
@@ -83,6 +93,7 @@ public:
     void clearState() { slot_.release(this); }
     void refresh(HLState& S);
     bool loadMq(HLState& S);
+    void loadSession(HLState& S);
     void recompute(HLState& S, long n);
     void writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows);
     void writeProj(HLState& S);
@@ -216,6 +227,59 @@ bool HodLod::loadMq(HLState& S)
     S.mq.push_back(sn);
     if (S.mq.size() > 32) S.mq.erase(S.mq.begin());
     return true;
+}
+
+void HodLod::loadSession(HLState& S)
+{
+    time_t now = time(nullptr);
+    if (S.sessStamp != -2 && now - S.sessChecked < 5) return;
+    S.sessChecked = now;
+    std::string p = flexPath("LRA-Session-" + S.mkt + ".csv");
+    if (p.empty()) { S.sessGam.clear(); S.sessExp.clear(); S.sessStamp = -1; return; }
+#ifdef _WIN32
+    struct _stat64 st; bool ok = _stat64(p.c_str(), &st) == 0;
+#else
+    struct stat st; bool ok = stat(p.c_str(), &st) == 0;
+#endif
+    long long stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
+    if (stamp == S.sessStamp) return;
+    S.sessStamp = stamp; S.sessGam.clear(); S.sessExp.clear(); S.sessAge = -1; S.sessRec = true;
+    if (!ok || (long long)st.st_size > 64 * 1024) return;
+    std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.sessStamp = -2; return; }
+    std::string line; int nl = 0;
+    while (nl++ < 400 && std::getline(f, line)) {
+        if (line.size() > 512) continue;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        std::vector<std::string> c; size_t a = 0;
+        for (;;) { size_t b = line.find('|', a); c.push_back(line.substr(a, b == std::string::npos ? std::string::npos : b - a)); if (b == std::string::npos) break; a = b + 1; }
+        if (c.size() >= 2 && c[0] == "GAM" && (c[1] == "POS" || c[1] == "NEG")) S.sessGam = c[1];
+        else if (c.size() >= 2 && c[0] == "EXP" && c[1].size() == 5 && c[1][2] == ':') S.sessExp = c[1];
+        else if (c.size() >= 3 && c[0] == "DAGE") { char* e = nullptr; long v = strtol(c[1].c_str(), &e, 10); if (e && *e == 0) S.sessAge = (int)v; S.sessRec = c[2].empty() || c[2] == "OK"; }
+    }
+}
+
+// (2.0.2) the header's Regime / Expiry segments, rebuilt every draw so the countdown stays current (CT clock of this PC)
+static void hlSessSegs(HLState& S)
+{
+    S.view.sessSegs.clear();
+    if (!S.sessGam.empty()) {
+        const bool neg = S.sessGam == "NEG";
+        S.view.sessSegs.push_back(hl::Seg{ neg ? "Regime: Negative" : "Regime: Positive", neg ? hl::C_RED : hl::C_GREEN });
+    }
+    if (S.sessExp.size() == 5) {
+        int e = atoi(S.sessExp.substr(0, 2).c_str()) * 60 + atoi(S.sessExp.substr(3, 2).c_str());
+        time_t t = time(nullptr); struct tm lt;
+#ifdef _WIN32
+        localtime_s(&lt, &t);
+#else
+        localtime_r(&t, &lt);
+#endif
+        int now = lt.tm_hour * 60 + lt.tm_min, left = e - now; if (now >= 17 * 60) left = e + 1440 - now;
+        char b[64]; int h12 = (e / 60) % 12 == 0 ? 12 : (e / 60) % 12;
+        if (left > 0) snprintf(b, sizeof b, "Expiry %d:%02d %s (in %dh %02dm)", h12, e % 60, e >= 720 ? "PM" : "AM", left / 60, left % 60);
+        else snprintf(b, sizeof b, "Expiry %d:%02d %s (expired)", h12, e % 60, e >= 720 ? "PM" : "AM");
+        S.view.sessSegs.push_back(hl::Seg{ b, left > 0 && left <= 60 ? hl::C_AMBER : hl::C_GREY });
+    }
 }
 
 void HodLod::recompute(HLState& S, long n)
@@ -549,6 +613,7 @@ int HodLod::draw(void)
     if (S->view.projOk && S->projIdx >= 0 && S->projIdx < (int)getBarCount()) {
         PNT p; if (p.set(S->projIdx, (float)((double)S->view.projFrom * tick), kBarCenter) == RTX_OK && p.h > 0) projX = (int)p.h;
     }
+    loadSession(*S); hlSessSegs(*S);         // (2.0.2) Regime / Expiry in the header (Session Info retired)
     hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, priceEdge(), position(S->mkt), projX);
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
@@ -567,7 +632,7 @@ extern "C" cppExtension *CreateExtension(void)
     HodLod *p = new HodLod();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA HOD / LOD: one compact table - the RTH hours, the day's range used, the projected opposite extreme (a line + flag from the 1st extreme, the target after Range), the live read (LOD / HOD IN) and the 2nd-extreme call, the 1st Extreme model (shadow: WATCH, one immutable LOD? / HOD? call with the time it was made, FAILED if the level breaks, RIGHT / WRONG after the close; 3-min charts, needs 14 sessions of 3-min history) with its marker on the called candle, then the expected vs actual 1st Time / Reclaim / 2nd Time with the level each extreme swept. Use Settings > Position to place it.");
-    p->setVersion("2.0.0");
+    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
+    p->setVersion("2.0.4");
     return p;
 }

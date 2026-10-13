@@ -1,5 +1,5 @@
 /********************************************************************************
- *  TapeFlowMarks.cpp  --  Investor/RT RTX extension  lsTapeFlowMarks  (v1.0.0, 2026-10-09)
+ *  TapeFlowMarks.cpp  --  Investor/RT RTX extension  lsTapeFlowMarks  (v1.1.1, 2026-10-12)
  *
  *  Rassul approved the TapeFlow 2.0.3 mockup: "do a sanity check and test then implement .. i want to see how it looks on a chart".
  *  The PRICE CHART half of TapeFlow's absorption signal. (1.1.0, Rassul: "just put A on top of the candle that was absorbed. The
@@ -37,10 +37,11 @@
 #include <cstring>
 #include <ctime>
 #include <cctype>
+#include <climits>
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* TFM_VERSION = "1.1.0";   // (1.1.0, TF 2.0.4) the letter "A?" / "A" just above the absorbed candle's high (no dash, no multiple); old non-node records skipped and counted; a status file written only on change
+static const char* TFM_VERSION = "1.1.1";   // (1.1.1) current cache is published before status; same-size atomic rewrites use native-resolution write times; a transient bad file never erases a drawn mark
 static const COLOR C_BUY  = 0x0022C55E;
 static const COLOR C_SELL = 0x00EF4444;
 static const COLOR C_GRAY = 0x0064748B;
@@ -73,11 +74,26 @@ static long long civil(int y, int mo, int d, int h, int mi, int s)
 static bool statFile(const std::string& p, long long& mtime, long long& size)
 {
 #if defined(_WIN32)
-    struct _stat64 st; if (_stat64(p.c_str(), &st) != 0) return false;
+    // _stat64::st_mtime is only whole seconds. A producer can atomically replace
+    // A? with A at the same byte length during one timer interval, so retain the
+    // FILETIME precision rather than treating the replacement as unchanged.
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    if (!GetFileAttributesExA(p.c_str(), GetFileExInfoStandard, &a)) return false;
+    ULARGE_INTEGER ft, sz; ft.LowPart = a.ftLastWriteTime.dwLowDateTime; ft.HighPart = a.ftLastWriteTime.dwHighDateTime;
+    sz.LowPart = a.nFileSizeLow; sz.HighPart = a.nFileSizeHigh;
+    if (ft.QuadPart > (unsigned long long)LLONG_MAX || sz.QuadPart > (unsigned long long)LLONG_MAX) return false;
+    mtime = (long long)ft.QuadPart; size = (long long)sz.QuadPart;
 #else
     struct stat st; if (stat(p.c_str(), &st) != 0) return false;
+    // POSIX stat exposes nanoseconds. The supported filesystem timestamps are
+    // well inside this range; keep the overflow guard for malformed test data.
+    const long long sec = (long long)st.st_mtim.tv_sec, ns = (long long)st.st_mtim.tv_nsec;
+    if (sec > 0 && sec > (LLONG_MAX - ns) / 1000000000LL) return false;
+    if (sec < 0 && sec < (LLONG_MIN + ns) / 1000000000LL) return false;
+    mtime = sec * 1000000000LL + ns;
+    size = (long long)st.st_size;
 #endif
-    mtime = (long long)st.st_mtime; size = (long long)st.st_size; return true;
+    return size >= 0;
 }
 
 struct MarksState {
@@ -184,14 +200,34 @@ bool TapeFlowMarks::refresh(MarksState& s)
     bool changed = false;
     if (m != s.mkt || spb != s.spb || sid != s.sid) { s.mkt = m; s.spb = spb; s.sid = sid; s.cur = MarksState::File(); s.prev = MarksState::File(); changed = true; }
     if (s.mkt.empty() || tfDir().empty()) { if (!s.byT.empty()) { s.byT.clear(); changed = true; } return changed; }
+    auto mergeMarks = [](std::vector<tfl::Mark>& saved, const std::vector<tfl::Mark>& fresh) {
+        bool different = false;
+        for (const tfl::Mark& n : fresh) {
+            std::vector<tfl::Mark>::iterator old = saved.end();
+            for (std::vector<tfl::Mark>::iterator it = saved.begin(); it != saved.end(); ++it)
+                if (it->barT == n.barT && it->kind == n.kind && it->dir == n.dir) { old = it; break; }
+            if (old == saved.end()) { saved.push_back(n); different = true; continue; }
+            // Signal files are append-only. Never let a torn/older replacement
+            // downgrade a confirmed A or remove an A already shown on the chart.
+            if (old->state != tfl::MK_CONFIRMED && n.state == tfl::MK_CONFIRMED) { *old = n; different = true; }
+        }
+        return different;
+    };
     auto load = [&](MarksState::File& f, const std::string& path) {
         long long mt = -1, sz = -1; s.stats++;
-        if (!statFile(path, mt, sz)) { if (!f.marks.empty() || f.path != path) { f = MarksState::File(); f.path = path; changed = true; } return; }
+        // A missing file after a good read (or a replacement raced after stat)
+        // is not a command to erase durable A marks. Leave the last good cache
+        // intact and retry the stat/open on the next bounded timer pass.
+        if (!statFile(path, mt, sz)) { f.path = path; f.mtime = f.size = -1; return; }
         if (path == f.path && mt == f.mtime && sz == f.size) return;           // unchanged: nothing read
-        if (sz > MAX_FILE_BYTES) { s.skipped++; f.path = path; f.mtime = mt; f.size = sz; if (!f.marks.empty()) { f.marks.clear(); changed = true; } return; }
-        std::ifstream in(path.c_str(), std::ios::binary); std::ostringstream o; o << in.rdbuf();
-        tfl::SignalBook bk; bk.nodeOnly = true; bk.loadText(o.str()); f.skipped = bk.skippedOld;   // (2.0.4) bar-node A only; old 20-s lines counted, never drawn                               // a half-written last line is simply not a record
-        f.path = path; f.mtime = mt; f.size = sz; f.marks = bk.marks; s.reads++; changed = true;
+        if (sz > MAX_FILE_BYTES) { s.skipped++; f.path = path; f.mtime = mt; f.size = sz; changed = true; return; }
+        std::ifstream in(path.c_str(), std::ios::binary);
+        if (!in.is_open()) return;
+        std::ostringstream o; o << in.rdbuf();
+        if (!in.good() && !in.eof()) return;
+        tfl::SignalBook bk; bk.nodeOnly = true; bk.loadText(o.str());
+        f.path = path; f.mtime = mt; f.size = sz; f.skipped = bk.skippedOld;
+        mergeMarks(f.marks, bk.marks); s.reads++; changed = true;              // (2.0.4) bar-node A only; old 20-s lines counted, never drawn; a half-written last line is simply not a record
     };
     load(s.cur, pathOf(s, s.sid));
     long long ps = s.sid - 1; std::string pp;
@@ -199,9 +235,9 @@ bool TapeFlowMarks::refresh(MarksState& s)
     load(s.prev, pp);
     if (changed) {
         s.byT.clear();
-        writeStatus(s);
         for (const tfl::Mark& k : s.prev.marks) if (k.drawn()) s.byT[k.barT] = k;
         for (const tfl::Mark& k : s.cur.marks) if (k.drawn()) s.byT[k.barT] = k;
+        writeStatus(s);                                                       // status must describe the newly published cache, not the cache just cleared above
     }
     return changed;
 }

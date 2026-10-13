@@ -1,5 +1,5 @@
 /********************************************************************************
- *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.2.0, 2026-10-11)
+ *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.2.1, 2026-10-12)
  *
  *  PULLING: who pulled their resting orders near price, bar by bar, from the market-by-order feed (Rithmic DBO through IRT's
  *  DEPTH_BY_ORDER). Rassul 2026-10-11 20:50-20:57: "a simple two line approach that is looking at pulling of orders by buyers and
@@ -40,12 +40,14 @@
 #include <cerrno>
 #include <chrono>
 #include <climits>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <new>
 #include <sstream>
@@ -54,7 +56,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define PL_VERSION "0.2.0"          // keep equal to pl::VERSION and the setVersion literal below
+#define PL_VERSION "0.2.1"          // keep equal to pl::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_X = 0x003CC8FA;
 static const int SLICE_MAX = 20000;            // events per call at most (never blocks IRT)
@@ -100,13 +102,31 @@ static bool publishFile(const std::string& path, const std::string& contents) {
     if (!moveOver(tmp, path)) { if (hadOld) moveOver(bak, path); std::remove(tmp.c_str()); return false; }
     return true;
 }
+static bool readFileBounded(const std::string& path, std::string& out, size_t cap) {
+    std::ifstream f(path.c_str(), std::ios::binary); if (!f) return false;
+    f.seekg(0, std::ios::end); const std::streamoff n = f.tellg();
+    if (n < 0 || (unsigned long long)n > (unsigned long long)cap) return false;
+    f.seekg(0, std::ios::beg); out.assign((size_t)n, '\0');
+    return !n || (f.read(&out[0], n) && (size_t)f.gcount() == (size_t)n);
+}
 static bool appendLines(const std::string& path, const std::string& header, const std::vector<std::string>& lines) {
+    // A closed-bar publication is small and infrequent.  Rebuild a bounded file
+    // through publishFile so a reader sees either its old complete contents or
+    // the new complete contents, never a partially appended final record.
+    static const size_t RECORD_CAP = 4u * 1024u * 1024u;
     if (lines.empty()) return true;
-    const bool fresh = !statFile(path);
-    std::ofstream f(path.c_str(), std::ios::binary | std::ios::app); if (!f) return false;
-    if (fresh) f << header << "\n";
-    for (size_t i = 0; i < lines.size(); ++i) f << lines[i] << "\n";
-    f.flush(); return (bool)f;
+    std::string contents;
+    if (statFile(path)) {
+        if (!readFileBounded(path, contents, RECORD_CAP)) return false;
+    } else {
+        if (header.size() + 1 > RECORD_CAP) return false;
+        contents = header + "\n";
+    }
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].size() > 512 || contents.size() > RECORD_CAP - lines[i].size() - 1) return false;
+        contents += lines[i]; contents += "\n";
+    }
+    return publishFile(path, contents);
 }
 static std::vector<std::string> split(const std::string& s, char c) {
     std::vector<std::string> f; size_t a = 0;
@@ -137,6 +157,14 @@ static std::string marketName(std::string r) {
     if (has("ES") || has("EP")) return "ES";
     return r.substr(0, 8);
 }
+static std::string filePart(const std::string& text) {
+    std::string out;
+    for (size_t i = 0; i < text.size() && out.size() < 24; ++i) {
+        const unsigned char c = (unsigned char)text[i];
+        out += (std::isalnum(c) || c == '_' || c == '-') ? (char)c : '_';
+    }
+    return out.empty() ? "UNKNOWN" : out;
+}
 static long long civilDays(int y, unsigned m, unsigned d) {
     y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
     const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1; const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
@@ -147,7 +175,7 @@ struct PLState {
     pl::Engine e;
     cppExtension::DEPTH_BY_ORDER* dbo = nullptr;
     cppExtension::MARKET_DEPTH* md = nullptr;
-    bool busy = false, dboDead = false, mdDead = false, blocked = false, faulted = false;
+    bool busy = false, dboDead = false, mdDead = false, blocked = false, faulted = false, depthWasAvailable = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, params = "standard";
     int spb = 0; double tick = 0;
     long count = 0;                               // bars known at the last pump
@@ -155,6 +183,8 @@ struct PLState {
     long long slices = 0, capped = 0, recFails = 0, mboRows = 0, mboFails = 0;   // (0.2.0) the raw order-by-order recorder
     std::map<long long, pl::Bar> hist;            // the record: bar time -> what was counted (this session and the two before)
     std::map<long long, double> vol;              // bar time -> the chart's volume of that bar (the coverage check)
+    std::map<long long, int> barEnds;             // chart bar end time -> index; native event timestamps route to their bar
+    long long chartLastEnd = 0;
     std::vector<std::string> pending;             // closed bars not yet written
     ~PLState() { delete dbo; delete md; }
 };
@@ -177,13 +207,15 @@ private:
     void drain(PLState& S, long long now);
     void record(PLState& S, const std::map<std::string, std::string>& byFile);
     void readBest(PLState& S, long long now);
-    void bars(PLState& S, long count);
+    void bars(PLState& S, long count, bool finalize);
+    int eventBar(const PLState& S, RTDATE stamp) const;
     void load(PLState& S);
     void norms(PLState& S);
     void status(PLState& S, long long now);
     void render(PLState& S);
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\Pulling"; }
-    std::string stem(PLState& S) { return S.market + "-" + std::to_string(S.spb); }
+    // Market alone is not a contract identity: ESZ and ESH must not share a record/status file.
+    std::string stem(PLState& S) { return S.market + "-" + filePart(S.symbol) + "-" + std::to_string(S.spb); }
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -211,12 +243,12 @@ void Pulling::identify(PLState& S) {
     const int spb = getSecondsPerBar();
     double tick = (double)getProperty(SYM_TICKINCR);
     if (!pl::finite(tick) || tick <= 0 || tick >= 1000) tick = 0;
-    const std::string id = sym + "|" + std::to_string(spb);
+    const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity && tick == S.tick) return;
     delete S.dbo; S.dbo = nullptr; delete S.md; S.md = nullptr;              // a new symbol / bar size: start clean
-    S.e = pl::Engine(); S.dboDead = S.mdDead = S.blocked = false; S.hist.clear(); S.vol.clear(); S.pending.clear();
+    S.e = pl::Engine(); S.dboDead = S.mdDead = S.blocked = S.depthWasAvailable = false; S.hist.clear(); S.vol.clear(); S.barEnds.clear(); S.pending.clear();
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
-    S.count = 0; S.session = -1; S.openedMs = S.lastEventMs = S.lastNormsMs = -1;
+    S.count = 0; S.chartLastEnd = 0; S.session = -1; S.openedMs = S.lastEventMs = S.lastDepthMs = S.lastNormsMs = S.lastStatusMs = -1; S.lastStatusText.clear();
     pl::defaults(S.market, S.e.P); S.params = "standard";
 }
 
@@ -240,10 +272,19 @@ void Pulling::readBest(PLState& S, long long now) {
     if (S.lastDepthMs >= 0 && now - S.lastDepthMs < 250 && now >= S.lastDepthMs) return;
     S.lastDepthMs = now;
     try {
-        if (!S.md->available() || S.md->maxLevels < 1) return;
+        if (!S.md->available() || S.md->maxLevels < 1) {
+            // DEPTH_BY_ORDER exposes neither a snapshot marker nor a sequence or
+            // reconnect callback in the supplied real SDK.  A depth outage is
+            // the observable reset boundary: discard identities so stale/replayed
+            // DELs cannot turn into pulling after a reconnect.
+            if (S.depthWasAvailable) { S.e.invalidateBook(); S.depthWasAvailable = false; }
+            return;
+        }
+        S.depthWasAvailable = true;
         const DEPTH_LEVEL L = (*S.md)[0u];
-        if (pl::finite(L.bid) && pl::finite(L.ask) && L.bid > 0 && L.ask > L.bid) S.e.setBest(pl::toTick(L.bid, S.tick), pl::toTick(L.ask, S.tick));
-    } catch (...) { S.mdDead = true; }
+        pl::Tick bid = 0, ask = 0;
+        if (pl::toTick(L.bid, S.tick, bid) && pl::toTick(L.ask, S.tick, ask) && bid > 0 && ask > bid) S.e.setBest(bid, ask);
+    } catch (...) { if (S.depthWasAvailable) S.e.invalidateBook(); S.depthWasAvailable = false; S.mdDead = true; }
 }
 
 void Pulling::drain(PLState& S, long long now) {
@@ -275,10 +316,21 @@ void Pulling::drain(PLState& S, long long now) {
             }
             if (o.action > 3 || o.buySell > 1 || !pl::finite(o.price) || o.price <= 0) { n++; continue; }
             pl::Ev x; x.action = o.action; x.side = o.buySell == 1 ? pl::BID : pl::OFFER;
-            x.px = pl::toTick(o.price, S.tick); x.prev = pl::finite(o.previousPrice) && o.previousPrice > 0 ? pl::toTick(o.previousPrice, S.tick) : 0;
+            if (!pl::toTick(o.price, S.tick, x.px)) { n++; continue; }
+            if (pl::finite(o.previousPrice) && o.previousPrice > 0) pl::toTick(o.previousPrice, S.tick, x.prev);
             x.size = (double)o.size; x.id = (long long)o.orderID;
-            if (pl::finite(o.bid) && pl::finite(o.ask) && o.bid > 0 && o.ask > o.bid) { x.bid = pl::toTick(o.bid, S.tick); x.ask = pl::toTick(o.ask, S.tick); }
+            if (pl::finite(o.bid) && pl::finite(o.ask) && o.bid > 0 && o.ask > o.bid) {
+                pl::Tick bid = 0, ask = 0;
+                if (pl::toTick(o.bid, S.tick, bid) && pl::toTick(o.ask, S.tick, ask) && ask > bid) { x.bid = bid; x.ask = ask; }
+            }
+            const int originalBar = S.e.cur;
+            const int target = o.timestamp ? eventBar(S, o.timestamp) : originalBar;
+            // Only the prior forming bar and newer bars are still pending durable
+            // closure.  Do not make old queued data repaint a closed record.
+            if (target < 0 || (S.count > 0 && target < (int)S.count - 1)) { n++; continue; }
+            if (target != originalBar) S.e.setBar(target);
             S.e.onEvent(x); n++;
+            if (target != originalBar) S.e.setBar(originalBar);
         }
     } catch (...) { S.dboDead = true; S.state = "order feed read fault"; }
     if (n > 0) { S.lastEventMs = now; S.slices++; }
@@ -306,18 +358,45 @@ void Pulling::record(PLState& S, const std::map<std::string, std::string>& byFil
 #endif
 }
 
-// a new bar: the one before it closed - its counts go to the record (once), with the chart's volume for the coverage check
-void Pulling::bars(PLState& S, long count) {
+// Prepare the forming bar before draining, then finalize only after draining.
+// IRT bar timestamps are bar ends, so an event exactly at an end belongs to the
+// next bar (upper_bound), while an event one second before it belongs to the bar
+// that is about to close.
+int Pulling::eventBar(const PLState& S, RTDATE stamp) const {
+    const std::map<long long, int>::const_iterator i = S.barEnds.upper_bound((long long)stamp);
+    if (i == S.barEnds.end() || S.spb <= 0 || i->first - (long long)stamp > S.spb) return -1;
+    return i->second;
+}
+
+// A new bar closes the former forming bar.  The two-phase call lets queued MBO
+// messages for that former bar reach its record before the record is published.
+void Pulling::bars(PLState& S, long count, bool finalize) {
     if (count < 1) return;
     RTARRAYI times(barDateTime), vols(barVolume);
     if (times.count < count) return;
-    if (S.count == 0) {                                                  // first pass: the record onto the chart's bars
-        for (long i = std::max(0L, count - 1500); i < count - 1; ++i) {
-            std::map<long long, pl::Bar>::const_iterator h = S.hist.find((long long)times[(int)i]);
-            if (h != S.hist.end() && !S.e.bars.count((int)i)) S.e.bars[(int)i] = h->second;
-            if (vols.count >= count) S.vol[(long long)times[(int)i]] = (double)vols[(int)i];
+    if (!finalize) {
+        bool rebuild = S.count == 0;
+        if (!rebuild && (count < S.count || S.chartLastEnd != (long long)times[(int)S.count - 1])) {
+            // The chart was rebuilt/rebased without a symbol change.  Indices are
+            // no longer identities; restore persisted values by bar end instead.
+            S.e.bars.clear(); S.barEnds.clear(); S.count = 0; rebuild = true;
         }
-    } else if (count > S.count) {
+        const long first = rebuild ? std::max(0L, count - 1500) : std::max(0L, S.count - 1);
+        for (long i = first; i < count; ++i) {
+            const long long bt = (long long)times[(int)i];
+            S.barEnds[bt] = (int)i;
+            if (rebuild && i < count - 1) {
+                std::map<long long, pl::Bar>::const_iterator h = S.hist.find(bt);
+                if (h != S.hist.end()) S.e.bars[(int)i] = h->second;
+            }
+            if (vols.count >= count && i < count - 1) S.vol[bt] = (double)vols[(int)i];
+        }
+        while (S.barEnds.size() > 1500) S.barEnds.erase(S.barEnds.begin());
+        S.chartLastEnd = (long long)times[(int)count - 1];
+        S.e.setBar((int)count - 1);
+        return;
+    }
+    if (S.count > 0 && count > S.count) {
         for (long i = S.count - 1; i < count - 1; ++i) {
             if (i < 0) continue;
             const long long bt = (long long)times[(int)i];
@@ -383,6 +462,7 @@ void Pulling::status(PLState& S, long long now) {
     o << "VERSION," << PL_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nTICK," << S.tick
       << "\nSTATE," << S.state << "\nFEED," << (S.blocked ? "blocked" : S.dboDead ? "fault" : !S.dbo ? "not opened" : S.lastEventMs < 0 ? "no events yet" : "events")
       << ",events " << S.e.events << ",unknown " << S.e.unknown << ",slices " << S.slices << ",capped " << S.capped << ",book " << S.e.book.size()
+      << "\nBOOK,resets " << S.e.bookResets << ",suppressed_unknown " << S.e.suppressed << ",unseen_delete_counting " << (S.e.countUnseenDeletes ? "initial-only" : "off-after-reset")
       << "\nBEST," << (S.e.haveBest ? (double)S.e.bestBid * S.tick : 0) << "," << (S.e.haveBest ? (double)S.e.bestAsk * S.tick : 0)
       << "\nPARAMS,near " << S.e.P.near << ",line " << S.e.P.line << "," << S.params
       << "\nNOW,bids_pulled_x " << S.e.x(b, pl::BID) << ",offers_pulled_x " << S.e.x(b, pl::OFFER) << ",leader " << S.e.leader(b)
@@ -406,14 +486,18 @@ void Pulling::pump() {
         const long long ct = ctSec(currentDate());
         if (ct > 0) {
             const long long key = (ct - 17LL * 3600) / 86400LL + 1;      // 17:00 CT starts the next day's session
-            if (key != S.session) { S.session = key; load(S); S.count = 0; }
+            if (key != S.session) {
+                S.session = key; load(S); S.count = 0; S.chartLastEnd = 0;
+                S.e.bars.clear(); S.barEnds.clear();
+            }
         }
         if (S.lastNormsMs < 0 || now - S.lastNormsMs >= 60000) { S.lastNormsMs = now; norms(S); }
         open(S);
         const long count = getBarCount();
-        bars(S, count);                                                  // the forming bar first: events go to it
+        bars(S, count, false);                                           // index/forming bar before draining native events
         readBest(S, now);
         drain(S, now);
+        bars(S, count, true);                                            // only now close/persist the former forming bar
         S.state = S.blocked ? S.state : S.dboDead ? "order feed fault" : !S.dbo ? "order feed not opened"
                 : S.lastEventMs < 0 ? (now - S.openedMs < 60000 ? "waiting for the order feed" : "no order feed (MBO) on this chart") : "ready";
         status(S, now);
@@ -496,7 +580,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                   // its own pane, draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Pulling: who pulled their resting orders near price, per bar, from the order-by-order (MBO) feed. Red = buyers pulled bids (bearish: price drops when buyers step away), green = sellers pulled offers (bullish: price lifts when sellers step away), each x the normal pulling of the 20 bars before; the value shows at or over the line; a yellow X = the side pulling more over the last 10 bars changed. Fills never count as pulls. MBO % (top right) = how much of the bar volume the order feed showed.");
-    p->setVersion("0.2.0");   // PL_VERSION
+    p->setDescription("LRA Pulling: who pulled their resting orders near price, per bar, from the order-by-order (MBO) feed. Red = buyers pulled bids (bearish: price drops when buyers step away), green = sellers pulling offers (bullish: price lifts when sellers step away), each x the normal pulling of the 20 bars before; the value shows at or over the line; a yellow X = the side pulling more over the last 10 bars changed. Fills never count as pulls. MBO % (top right) = how much of the bar volume the order feed showed.");
+    p->setVersion(PL_VERSION);
     return p;
 }

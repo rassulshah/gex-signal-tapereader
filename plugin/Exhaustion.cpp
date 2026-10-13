@@ -1,5 +1,5 @@
 /********************************************************************************
- *  Exhaustion.cpp  --  Investor/RT RTX extension  lsExhaustion  (0.2.1, 2026-10-12: the reversal read kept as Rassul uses it - "it is showing good reversals" in crude - with the bar in progress no longer read; the pullback read is the separate lsExhaustionV2. 0.2.0, 2026-10-11; 0.2.0: overnight E only at the study's own overnight line T_overnight when both halves agree, else none - Rassul 22:05 "customize the thresholds for time of day .. overnight vs rth")
+ *  Exhaustion.cpp  --  Investor/RT RTX extension  lsExhaustion  (0.2.2, 2026-10-13: engineering fixes ported from the 0.3.1 audit - a failed VAP read rejects the snapshot instead of reading as zero volume, prices on the chart tick grid, RTH edge in exact seconds, records published atomically per contract (marks shown only once recorded), status file replaced atomically, bounded norms / record parsing; signal, thresholds and norms unchanged. 0.2.1, 2026-10-12: the reversal read kept as Rassul uses it - "it is showing good reversals" in crude - with the bar in progress no longer read; the pullback read is the separate lsExhaustionV2. 0.2.0, 2026-10-11; 0.2.0: overnight E only at the study's own overnight line T_overnight when both halves agree, else none - Rassul 22:05 "customize the thresholds for time of day .. overnight vs rth")
  *
  *  EXHAUSTION: is the side pushing price running out? Rassul 2026-10-11 21:17-21:28 (option A, "build exhaustion indicator").
  *  Its own pane, two lines coloured by what they mean for price:
@@ -10,7 +10,7 @@
  *  Header: "EXHAUSTION  Buyers fading: 1.0x (3.0x)  Sellers fading: 1.0x (3.0x)" for the last CLOSED bar (0.2.1).
  *  Per market N / S / T (new-extreme bars, pace bars, line) from lra.exh_study (ExhaustionLogic.h defaults; LRA-ExhNorms-<MKT>.csv
  *  PARAM,N / S / T when the nightly study writes it). Native: the chart's own bars and volume at price (buyers = volume at the ask).
- *  Record: lsFlexLevels\Exhaustion\<MKT>-<sec/bar>-<session>.csv (each E: bar time, side, fade, high / low). No settings.
+ *  Record: lsFlexLevels\Exhaustion\<MKT>-<CONTRACT>-<sec/bar>-<session>.csv (0.2.2: contract-qualified) (each E: bar time, side, fade, high / low). No settings.
  ********************************************************************************/
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -29,6 +29,7 @@
 #include "HostSlot.h"
 #include <algorithm>
 #include <cerrno>
+#include <cctype>
 #include <chrono>
 #include <climits>
 #include <cmath>
@@ -46,12 +47,21 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.2.1"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.2.2"          // keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
 static inline bool finiteD(double v) { return v == v && v < 1e300 && v > -1e300; }
 namespace pl { inline bool finite(double v) { return finiteD(v); } }
+// (0.2.2) IRT prices arrive as float while a chart defines its own native tick.  Round once to that grid rather
+// than comparing nearby binary float representations.
+static bool tickPrice(double price, double tick, double& out) {
+    if (!finiteD(price) || !finiteD(tick) || tick <= 0) return false;
+    const double q = price / tick;
+    if (!finiteD(q) || q > (double)LLONG_MAX - 1 || q < (double)LLONG_MIN + 1) return false;
+    const double n = q >= 0 ? std::floor(q + .5) : std::ceil(q - .5);
+    out = n * tick; return finiteD(out);
+}
 static long long steadyMs() {
     return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
@@ -84,21 +94,13 @@ static bool moveOver(const std::string& from, const std::string& to) {
 #endif
 }
 static bool publishFile(const std::string& path, const std::string& contents) {
-    const std::string tmp = path + ".tmp", bak = path + ".bak";
+    const std::string tmp = path + ".tmp";
     { std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc); if (!f) return false;
       f.write(contents.data(), (std::streamsize)contents.size()); f.flush(); if (!f) { f.close(); std::remove(tmp.c_str()); return false; } }
-    const bool hadOld = statFile(path);
-    if (hadOld && !moveOver(path, bak)) { std::remove(tmp.c_str()); return false; }
-    if (!moveOver(tmp, path)) { if (hadOld) moveOver(bak, path); std::remove(tmp.c_str()); return false; }
+    // (0.2.2) rename/MoveFileEx(REPLACE_EXISTING) publishes the complete temporary file in one replacement;
+    // moving the old file away first left an observable no-file interval for readers.
+    if (!moveOver(tmp, path)) { std::remove(tmp.c_str()); return false; }
     return true;
-}
-static bool appendLines(const std::string& path, const std::string& header, const std::vector<std::string>& lines) {
-    if (lines.empty()) return true;
-    const bool fresh = !statFile(path);
-    std::ofstream f(path.c_str(), std::ios::binary | std::ios::app); if (!f) return false;
-    if (fresh) f << header << "\n";
-    for (size_t i = 0; i < lines.size(); ++i) f << lines[i] << "\n";
-    f.flush(); return (bool)f;
 }
 static std::vector<std::string> split(const std::string& s, char c) {
     std::vector<std::string> f; size_t a = 0;
@@ -116,6 +118,54 @@ static bool parseLL(const std::string& t, long long& out) {
     errno = 0; char* e = nullptr; const long long v = std::strtoll(t.c_str(), &e, 10);
     if (errno || e != t.c_str() + t.size()) return false;
     out = v; return true;
+}
+// (0.2.2) records: whole-file atomic publication (replaces the append, which could tear), bounded parsing
+static const char* const RECORD_HEADER = "bar_time|side|fade|high|low|params";
+static const size_t RECORD_FILE_MAX = 512 * 1024, RECORD_LINE_MAX = 512, RECORD_LINES_MAX = 5000;
+struct DiskRecord { long long bar; int side; double val; std::string line; };
+struct PendingRecord { long long session, bar; int side; double val; std::string line; };
+
+static bool parseRecord(const std::string& line, DiskRecord& out) {
+    if (line.empty() || line.size() > RECORD_LINE_MAX) return false;
+    const std::vector<std::string> c = split(line, '|'); long long bt = 0; double v = 0, hi = 0, lo = 0;
+    if (c.size() != 6 || !parseLL(c[0], bt) || bt <= 0 || (c[1] != "top" && c[1] != "bottom") || !parseD(c[2], v)
+        || !parseD(c[3], hi) || !parseD(c[4], lo)) return false;
+    out.bar = bt; out.side = c[1] == "top" ? -1 : 1; out.val = v; out.line = line; return true;
+}
+// A malformed/torn data line is ignored, but a bad header, I/O error, or excessive file is never rewritten.
+static bool readRecords(const std::string& path, std::vector<DiskRecord>& out) {
+    out.clear(); if (!statFile(path)) return true;
+    std::ifstream in(path.c_str(), std::ios::binary); if (!in) return false;
+    in.seekg(0, std::ios::end); const std::streamoff size = in.tellg();
+    if (size < 0 || size > (std::streamoff)RECORD_FILE_MAX) return false;
+    in.seekg(0, std::ios::beg); std::string line;
+    if (!std::getline(in, line)) return false;
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line != RECORD_HEADER) return false;
+    size_t n = 0;
+    while (std::getline(in, line)) {
+        if (++n > RECORD_LINES_MAX) return false;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        DiskRecord r; if (parseRecord(line, r)) out.push_back(r);
+    }
+    return !in.bad();
+}
+static bool publishRecords(const std::string& path, const std::vector<const PendingRecord*>& add) {
+    std::vector<DiskRecord> old; if (!readRecords(path, old)) return false;
+    std::set<std::pair<long long, int> > seen; std::ostringstream text; text.imbue(std::locale::classic()); text << RECORD_HEADER << "\n";
+    for (size_t i = 0; i < old.size(); ++i) if (seen.insert(std::make_pair(old[i].bar, old[i].side)).second) text << old[i].line << "\n";
+    for (size_t i = 0; i < add.size(); ++i) if (seen.insert(std::make_pair(add[i]->bar, add[i]->side)).second) text << add[i]->line << "\n";
+    if (text.tellp() < 0 || text.tellp() > (std::streampos)RECORD_FILE_MAX) return false;
+    return publishFile(path, text.str());
+}
+static bool wholeNumber(double v) { return std::floor(v) == v; }
+static std::string fileKey(const std::string& s) {
+    std::string out; out.reserve(std::min((size_t)24, s.size()));
+    for (size_t i = 0; i < s.size() && out.size() < 24; ++i) {
+        const unsigned char c = (unsigned char)s[i];
+        out.push_back((std::isalnum(c) || c == '-' || c == '_') ? (char)std::toupper(c) : '_');
+    }
+    return out.empty() ? "UNKNOWN" : out;
 }
 static std::string marketName(std::string r) {
     for (size_t i = 0; i < r.size(); ++i) r[i] = (char)std::toupper((unsigned char)r[i]);
@@ -152,11 +202,11 @@ struct EXState {
     bool busy = false, faulted = false;
     std::string identity, market, symbol, state = "starting", lastStatusText;
     int spb = 0; double tick = 0; int rthO = -1, rthC = -1;
-    long count = 0; long long session = -1, lastNormsMs = -1, lastStatusMs = -1;
+    long count = 0; long long session = -1, lastNormsMs = -1, lastStatusMs = -1, lastRecordAttemptMs = -1;
     std::map<long long, std::pair<double, double>> vol;     // bar time -> (buyers, sellers) of CLOSED bars (read once)
     std::map<long long, int> marks;                         // bar time -> +1 bottom E / -1 top E (recorded, never repainted)
     std::map<long long, double> markVal;
-    std::vector<std::string> pending; long long recFails = 0;
+    std::vector<PendingRecord> pending; long long recFails = 0;
     ex::Out out; int outFirst = 0; double liveB = 1, liveS = 1;
 };
 
@@ -176,12 +226,13 @@ private:
     void identify(EXState& S);
     bool barVol(EXState& S, RTARRAYP& vap, int bar, std::pair<double, double>& out);
     void calcBars(EXState& S, long count);
+    bool flushRecords(EXState& S);
     void load(EXState& S);
     void norms(EXState& S);
     void status(EXState& S, long long now);
     void render(EXState& S);
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\Exhaustion"; }
-    std::string stem(EXState& S) { return S.market + "-" + std::to_string(S.spb); }
+    std::string stem(EXState& S) { return S.market + "-" + fileKey(S.symbol) + "-" + std::to_string(S.spb); }   // (0.2.2) contract-qualified
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -206,11 +257,11 @@ void Exhaustion::identify(EXState& S) {
     const std::string root = rs ? rs : "", sym = sy ? sy : "";
     const int spb = getSecondsPerBar();
     double tick = (double)getProperty(SYM_TICKINCR); if (!finiteD(tick) || tick <= 0 || tick >= 1000) tick = 0;
-    const std::string id = sym + "|" + std::to_string(spb);
+    const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity && tick == S.tick) return;
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
     S.P = ex::defaults(S.market); S.params = "study 2026-10-11"; S.vol.clear(); S.marks.clear(); S.markVal.clear(); S.pending.clear();
-    S.count = 0; S.session = -1; S.lastNormsMs = -1; S.rthO = S.rthC = -1; rthOf(S.market, S.rthO, S.rthC);
+    S.count = 0; S.session = -1; S.lastNormsMs = -1; S.lastRecordAttemptMs = -1; S.rthO = S.rthC = -1; rthOf(S.market, S.rthO, S.rthC);
 }
 // the buyers / sellers of one bar from its volume at price (guarded like lsLiquidityProfile: a failed read is "not known")
 bool Exhaustion::barVol(EXState& S, RTARRAYP& vap, int bar, std::pair<double, double>& out) {
@@ -227,7 +278,8 @@ bool Exhaustion::barVol(EXState& S, RTARRAYP& vap, int bar, std::pair<double, do
     out = std::make_pair((double)st.buyVolume, (double)st.sellVolume); return true;
 }
 void Exhaustion::calcBars(EXState& S, long count) {
-    if (count < 3) return;
+    if (count < 3 || S.tick <= 0) return;
+    if (count == S.count && !S.out.fb.empty()) { flushRecords(S); return; } // (0.2.2) draw() pumps too: keep the closed-bar snapshot, no VAP re-read
     RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow); RTARRAYP vap(barVolumeProfile);
     if (times.count < count || hi.count < count || lo.count < count || vap.count < count) return;
     const int first = (int)std::max(0L, count - BARS_MAX);
@@ -236,11 +288,14 @@ void Exhaustion::calcBars(EXState& S, long count) {
     // then changed (Rassul 2026-10-11 22:26). Everything else is exactly 0.2.0.
     for (int i = first; i < count - 1; ++i) {
         const long long bt = (long long)times[i];
+        double hh = 0, ll = 0;                                          // (0.2.2) on the chart's tick grid; a bad bar rejects the snapshot
+        if (bt <= 0 || !tickPrice((double)hi[i], S.tick, hh) || !tickPrice((double)lo[i], S.tick, ll) || hh < ll) return;
         std::pair<double, double> v(0, 0);
         std::map<long long, std::pair<double, double>>::const_iterator c = S.vol.find(bt);
         if (c != S.vol.end()) v = c->second;
         else if (barVol(S, vap, i, v)) S.vol[bt] = v;
-        h.push_back(hi[i]); l.push_back(lo[i]); b.push_back(v.first); s.push_back(v.second);
+        else return;                                                    // (0.2.2) never turn an unavailable VAP bar into zero-volume exhaustion evidence
+        h.push_back(hh); l.push_back(ll); b.push_back(v.first); s.push_back(v.second);
     }
     S.out = ex::compute(h, l, b, s, S.P); S.outFirst = first;
     if (S.out.fb.empty()) return;
@@ -251,11 +306,12 @@ void Exhaustion::calcBars(EXState& S, long count) {
     for (long i = from; i < count - 1; ++i) {
         const int k = (int)(i - first);
         const long long bt = (long long)times[(int)i];
-        if (S.marks.count(bt)) continue;
+        bool queued = false; for (size_t p = 0; p < S.pending.size(); ++p) if (S.pending[p].bar == bt) { queued = true; break; }
+        if (S.marks.count(bt) || queued) continue;
         struct tm t; std::memset(&t, 0, sizeof(t));
         if (!getLocaltime((RTDATE)times[(int)i], &t)) continue;
-        const int endMin = t.tm_hour * 60 + t.tm_min, startMin = endMin - std::max(1, S.spb / 60);
-        const bool rth = S.rthO < 0 || (startMin >= S.rthO && endMin <= S.rthC);   // IRT stamps the bar END
+        const int endSec = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec, startSec = endSec - std::max(1, S.spb);   // (0.2.2) exact seconds
+        const bool rth = S.rthO < 0 || (startSec >= S.rthO * 60 && endSec <= S.rthC * 60);   // IRT stamps the bar END
         int side = 0; double val = 0;
         if (rth) {                                                       // RTH: the market's line (eTop / eBot)
             if (S.out.eTop[k]) { side = -1; val = S.out.fb[k]; } else if (S.out.eBot[k]) { side = 1; val = S.out.fs[k]; }
@@ -265,41 +321,64 @@ void Exhaustion::calcBars(EXState& S, long count) {
             else if (S.out.newL[k] && S.out.fs[k] >= T && !(S.out.newL[k - 1] && S.out.fs[k - 1] >= T)) { side = 1; val = S.out.fs[k]; }
         }
         if (!side) continue;
-        S.marks[bt] = side; S.markVal[bt] = val;
+        // (0.2.2) queued once, shown as an E only after its record is published (atomically, in the bar's own session file)
+        const long long cs = ctSec((RTDATE)times[(int)i]);
+        const long long barSession = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1;
+        if (barSession < 0 || S.pending.size() >= RECORD_LINES_MAX) { ++S.recFails; continue; }
         char line[160]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|N%d S%d T%.2f%s", bt, side < 0 ? "top" : "bottom", val, (double)hi[(int)i], (double)lo[(int)i], S.P.N, S.P.S, rth ? S.P.T : S.tOvernight, rth ? "" : " overnight");
-        S.pending.push_back(line);
+        PendingRecord rec; rec.session = barSession; rec.bar = bt; rec.side = side; rec.val = val; rec.line = line; S.pending.push_back(rec);
     }
     S.count = count;
-    if (!S.pending.empty() && S.session >= 0) {
-        const std::string d = dir(); makeDir(flexDir()); makeDir(d);
-        if (!d.empty() && appendLines(d + "\\" + stem(S) + "-" + std::to_string(S.session) + ".csv", "bar_time|side|fade|high|low|params", S.pending)) S.pending.clear();
-        else S.recFails++;
-    }
+    flushRecords(S);
     while (S.vol.size() > 3000) S.vol.erase(S.vol.begin());
+}
+bool Exhaustion::flushRecords(EXState& S) {
+    if (S.pending.empty()) return true;
+    const long long now = steadyMs();
+    if (S.lastRecordAttemptMs >= 0 && now >= S.lastRecordAttemptMs && now - S.lastRecordAttemptMs < 1000) return false;
+    S.lastRecordAttemptMs = now;
+    const std::string d = dir();
+    if (d.empty()) { ++S.recFails; return false; }
+    makeDir(flexDir()); makeDir(d);
+    std::map<long long, std::vector<size_t> > groups;
+    for (size_t i = 0; i < S.pending.size(); ++i) groups[S.pending[i].session].push_back(i);
+    std::vector<char> committed(S.pending.size(), 0);
+    for (std::map<long long, std::vector<size_t> >::const_iterator g = groups.begin(); g != groups.end(); ++g) {
+        std::vector<const PendingRecord*> add; add.reserve(g->second.size());
+        for (size_t j = 0; j < g->second.size(); ++j) add.push_back(&S.pending[g->second[j]]);
+        if (!publishRecords(d + "\\" + stem(S) + "-" + std::to_string(g->first) + ".csv", add)) { ++S.recFails; continue; }
+        for (size_t j = 0; j < g->second.size(); ++j) {
+            const size_t k = g->second[j]; S.marks[S.pending[k].bar] = S.pending[k].side; S.markVal[S.pending[k].bar] = S.pending[k].val; committed[k] = 1;
+        }
+    }
+    std::vector<PendingRecord> retry; retry.reserve(S.pending.size());
+    for (size_t i = 0; i < S.pending.size(); ++i) if (!committed[i]) retry.push_back(S.pending[i]);
+    S.pending.swap(retry);
+    return S.pending.empty();
 }
 void Exhaustion::load(EXState& S) {
     const std::string d = dir(); if (d.empty()) return;
     for (long long k = S.session - 9; k <= S.session; ++k) {
-        std::ifstream in((d + "\\" + stem(S) + "-" + std::to_string(k) + ".csv").c_str()); std::string line; int n = 0;
-        while (std::getline(in, line) && ++n < 5000) {
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            const std::vector<std::string> c = split(line, '|'); long long bt = 0; double v = 0;
-            if (c.size() < 3 || !parseLL(c[0], bt) || bt <= 0 || (c[1] != "top" && c[1] != "bottom") || !parseD(c[2], v)) continue;
-            S.marks[bt] = c[1] == "top" ? -1 : 1; S.markVal[bt] = v;
-        }
+        std::vector<DiskRecord> records;                                // (0.2.2) bounded, header-checked
+        if (!readRecords(d + "\\" + stem(S) + "-" + std::to_string(k) + ".csv", records)) { ++S.recFails; continue; }
+        for (size_t i = 0; i < records.size(); ++i) { S.marks[records[i].bar] = records[i].side; S.markVal[records[i].bar] = records[i].val; }
     }
 }
 void Exhaustion::norms(EXState& S) {
     const std::string f = flexDir(); if (f.empty()) return;
-    std::ifstream in((f + "\\LRA-ExhNorms-" + S.market + ".csv").c_str()); if (!in) return;
+    std::ifstream in((f + "\\LRA-ExhNorms-" + S.market + ".csv").c_str(), std::ios::binary); if (!in) return;
+    in.seekg(0, std::ios::end); const std::streamoff size = in.tellg();   // (0.2.2) bounded read
+    if (size < 0 || size > 64 * 1024) return;
+    in.seekg(0, std::ios::beg);
     std::string line, used; int n = 0; ex::Params p = S.P; double on = 0;
     while (std::getline(in, line) && ++n < 200) {
+        if (line.size() > 256) return;
         if (!line.empty() && line.back() == '\r') line.pop_back();
         const std::vector<std::string> c = split(line, ','); double v = 0;
         if (c.size() >= 2 && c[0] == "STATUS") { S.proven = c[1] == "confirmed" ? "confirmed" : "testing"; continue; }
         if (c.size() < 3 || c[0] != "PARAM" || !parseD(c[2], v)) continue;
-        if (c[1] == "N" && v >= 2 && v <= 60) { p.N = (int)v; used += " N " + c[2]; }
-        else if (c[1] == "S" && v >= 1 && v <= 5) { p.S = (int)v; used += " S " + c[2]; }
+        if (c[1] == "N" && wholeNumber(v) && v >= 2 && v <= 60) { p.N = (int)v; used += " N " + c[2]; }
+        else if (c[1] == "S" && wholeNumber(v) && v >= 1 && v <= 5) { p.S = (int)v; used += " S " + c[2]; }
         else if (c[1] == "T" && v >= 1.1 && v <= 10) { p.T = v; used += " T " + c[2]; }
         else if (c[1] == "T_overnight" && v >= 1.1 && v <= 10) { on = v; used += " T_overnight " + c[2]; }
     }
@@ -392,6 +471,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.2.1");   // EX_VERSION
+    p->setVersion("0.2.2");   // EX_VERSION
     return p;
 }
