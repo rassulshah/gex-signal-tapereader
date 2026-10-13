@@ -53,9 +53,9 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "1.1.8";
+static const char* const HL_VERSION = "1.1.9";
 #ifndef HL_SHOW_CALLED
-#define HL_SHOW_CALLED 0   // (mockup) "called h:mm" after the IN read + "Range used" - off until Rassul agrees
+#define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
 
 // ------------------------------------------------------------------------------------------------ markets
@@ -1175,7 +1175,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                           + (v.projOk ? "   " + v.projTxt : std::string());   // (1.1.0) the target after Range
             v.headMain = mn;
 #if HL_SHOW_CALLED
-            // (mockup 1.1.9, review "show formation and declaration times distinctly"): the bar the day's first IN call was made on,
+            // (1.1.9, approved mockup; review "show formation and declaration times distinctly"): the bar the day's first IN call was made on,
             // next to the read - the 1st extreme's own time (formed) stays in the 1st Time cell and on the projection's start candle
             if (rows && rd.state == 1 && rd.callIn) {
                 FirstCall fc = firstCall(*rows);
