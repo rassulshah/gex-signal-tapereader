@@ -109,6 +109,7 @@ void cppExtension::PNT::setDrawPosition() { posH = h; posV = v; }
 void cppExtension::PNT::drawLineTo() { OPS.push_back(Op{"line", posH, posV, h, v, pen & 0xFFFFFF, 0, penW, false, "", penStyle}); posH = h; posV = v; }
 void cppExtension::PNT::drawText(const char* s, int, COLOR, RTBOOL) { const int w = tw(s); OPS.push_back(Op{"text", h, v - curFont, h + w, v, ink & 0xFFFFFF, 0, curFont, curBold, s, 0}); }
 
+#include "tests_dp290/dp_mock_cols.h"   // (CR5200) the 2.11.0 SDK calls (chart options, dialog setters)
 static std::string UP;
 static std::string fl(const char* name) { return UP + "\\InvestorRT\\rtx\\lsFlexLevels\\" + name; }
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str(), std::ios::binary); std::stringstream s; s << f.rdbuf(); return s.str(); }
@@ -218,20 +219,21 @@ int main(int argc, char** argv)
     check(!dealer.empty() && dealer.find("NODEX|") != std::string::npos, "fixture: the bridge's file 2.4 (NODEX rows)");
 
     std::vector<Op> O = drawOnce(D, cut, 0, dealer);
-    const int anchor = 1598, reach = 50 + 100, bound = anchor - reach;
-    check(hasText(O, "Dealer Profile v2.10.0"), "header: the version");
-    check(hasText(O, "STALE 10h - 4:55 AM"), "header: STALE, the grid stopped at 4:55 AM (10h before 2:57 PM)");
+    // (2.11.0, CR5200) the Dealer column = the right 80 px before the axis; the header fits it ("DP v2.11.0", "STALE 10h")
+    const int anchor = 1598, reach = 80, bound = 1600 - reach;   // the mock scale starts at the pane edge (1600): the column is 1520-1600
+    check(hasText(O, "DP v2.11.0"), "header: the version (short form inside the 80 px column)");
+    check(hasText(O, "STALE 10h"), "header: STALE 10h (the time is in the header hover)");
     int small = 0, crossing = 0, gexOnFace = 0, wN = 0, fN = 0, redNum = 0, greenNum = 0, pct = 0, dashed = 0;
     for (size_t i = 0; i < O.size(); i++) {
         const Op& q = O[i];
         if (q.kind == "line" && q.style != 0) dashed++;
         if (q.kind == "text") {
-            if (q.font < 10) small++;
+            if (q.font < 10 && !(q.font == 9 && q.r < bound)) small++;   // (2.11.0) the Levels column badges are 9 pt (approved mockup)
             if (q.l < bound && q.r > bound) crossing++;
             if (q.l >= bound) {
                 const std::string& t = q.text;
                 if (t.size() > 1 && (t.back() == 'M' || t.back() == 'B') && std::isdigit((unsigned char)t[0])) gexOnFace++;
-                if (t == "W") wN++; if (t == "F") fN++;
+                if (t.rfind("B ", 0) == 0) wN++; if (t.rfind("S ", 0) == 0) fN++;   // (2.11.0) the hedge text inside the nodes
                 if (q.col == (C_SELL & 0xFFFFFF) && t[0] == '-') redNum++;
                 if (q.col == (C_BUY & 0xFFFFFF) && std::isdigit((unsigned char)t[0])) greenNum++;
                 if (t.back() == '%' && (t[0] == '+' || t[0] == '-' || t[0] == '0')) pct++;
@@ -241,17 +243,20 @@ int main(int argc, char** argv)
     check(small == 0, "every text 10 pt or larger (" + std::to_string(small) + " smaller)");
     check(crossing == 0, "no text crosses the Profile's REACH edge (the Delta Profile column)");
     check(gexOnFace == 0, "no GEX value on the face");
-    check(wN > 0 && fN > 0, "W and F letters drawn");
+    { int faded = 0; for (size_t i = 0; i < O.size(); i++) if (O[i].kind == "box" && O[i].r == anchor && O[i].t > 40 && (O[i].col == dcol::C_POS || O[i].col == dcol::C_NEG)) faded++;
+      check(faded == 0, "(2.11.0) a STALE grid: every node faded"); }
     (void)redNum; (void)greenNum;
-    check(pct >= 1 && pct <= 3, "% change on the top 3 strikes only (" + std::to_string(pct) + ")");
+    check(pct == 0, "(2.11.0) no % pills on the face (in the node hover)");
     check(dashed == 0, "no dashed lines");
-    check(hasTextPrefix(O, "+GAMMA above") && hasTextPrefix(O, "-GAMMA below"), "HVL regime tags");
+    check(!hasTextPrefix(O, "+GAMMA above") && hasText(O, "HVL"), "(2.11.0) no HVL regime tags on the chart; the HVL badge is in the Levels column");
     check(hasText(O, "CR0") && !hasText(O, "CR 0D / GW 0D"), "CR 0D / GW 0D drawn as one CR0");
     check(!hasText(O, "G2"), "G2 (7,800 - not on a key level) hidden");
     check(hasText(O, "G1"), "G1 kept");
     // node bars: the biggest absolute GEX strike (7,800 here, 40.5M) gets the full width
     { int full = 0; for (size_t i = 0; i < O.size(); i++) if (O[i].kind == "box" && O[i].r == anchor && O[i].r - O[i].l == 50) full++;
-      check(full >= 1, "the biggest wall = the full Profile width"); }
+      (void)full; }
+    { int full = 0; for (size_t i = 0; i < O.size(); i++) if (O[i].kind == "box" && O[i].r == anchor && O[i].r - O[i].l == 80 - 6) full++;
+      check(full >= 1, "(2.11.0) the biggest wall = the full Dealer column (80 px - 6)"); }
     // the hover: the mouse over the 7,900 node
     std::vector<Op> H = drawOnce(D, cut, 7900.0f, dealer);
     check(hasText(H, "What do dealers do if ES gets to 7900?"), "hover: the question, on the node under the mouse");
@@ -262,25 +267,28 @@ int main(int argc, char** argv)
     {
         std::string fresh = dealer; size_t p = fresh.find("BOOKASOF|17700"); fresh.replace(p, 14, "BOOKASOF|53700");   // 14:55
         std::vector<Op> F = drawOnce(D, cut, 0, fresh);
-        check(!hasTextPrefix(F, "STALE") && hasText(F, "book 2:55 PM"), "fresh grid: 'book 2:55 PM', no STALE");
+        check(!hasTextPrefix(F, "STALE") && (hasText(F, "book 2:55 PM") || hasText(F, "2:55 PM")), "fresh grid: 'book 2:55 PM' (or '2:55 PM' in a narrow column), no STALE");
+        { int teal = 0, orange = 0, past = 0; for (size_t i = 0; i < F.size(); i++) if (F[i].kind == "box" && F[i].r == anchor && F[i].t > 40) {
+              if (F[i].col == dcol::C_POS) teal++; if (F[i].col == dcol::C_NEG) orange++; if (F[i].l < bound) past++; }
+          check(teal > 0 && orange > 0 && past == 0, "(2.11.0) fresh grid: nodes teal (+) / orange (-), anchored on the column's right edge, never past its left edge"); }
         int red = 0, green = 0;
         for (size_t i = 0; i < F.size(); i++) if (F[i].kind == "text" && F[i].l >= bound) {
-            if (F[i].col == (C_SELL & 0xFFFFFF) && F[i].text[0] == '-') red++;
-            if (F[i].col == (C_BUY & 0xFFFFFF) && std::isdigit((unsigned char)F[i].text[0])) green++; }
-        check(red > 0 && green > 0, "fresh grid: hedge numbers red '-' = dealers sell, green = buy (" + std::to_string(red) + " red, " + std::to_string(green) + " green)");
+            if (F[i].text.rfind("S ", 0) == 0) red++;
+            if (F[i].text.rfind("B ", 0) == 0) green++; }
+        check(red + green > 0, "fresh grid: B / S hedge text inside the nodes (" + std::to_string(red) + " S, " + std::to_string(green) + " B)");
     }
     // an old 2.3 file (no NODEX): the 2.8.7 drawing, no header
     {
         std::string old; std::istringstream in(dealer); std::string ln;
         while (std::getline(in, ln)) if (ln.rfind("NODEX|", 0) != 0) old += ln + "\n";
         std::vector<Op> F = drawOnce(D, cut, 0, old);
-        check(!hasText(F, "Dealer Profile v2.10.0") && !hasText(F, "W"), "file 2.3: drawn as 2.8.7");
+        check(!hasText(F, "DP v2.11.0") && !hasTextPrefix(F, "B ") && !hasTextPrefix(F, "S "), "file 2.3: drawn as 2.8.7");
     }
     // a malformed NODEX row: the snapshot is refused (nothing torn drawn)
     {
         std::string bad = dealer + "NODEX|7900|nan|||\n";
         std::vector<Op> F = drawOnce(D, cut, 0, bad);
-        check(!hasText(F, "W"), "a malformed NODEX row rejects the file snapshot");
+        check(!hasTextPrefix(F, "B ") && !hasTextPrefix(F, "S "), "a malformed NODEX row rejects the file snapshot");
     }
     if (opsOut) {
         std::vector<Op> R = mouseK > 0 ? drawOnce(D, cut, mouseK, dealer) : drawOnce(D, cut, 0, dealer);

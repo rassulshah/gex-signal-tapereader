@@ -1,4 +1,16 @@
 /********************************************************************************
+ *  0.16.0 (2026-10-14, CR5200, Rassul approved 11:00 CT - mockup-columns.png; 11:02 the node text; 11:39 the level badges):
+ *    - the column stays on the LEFT edge in its own SOLID dark column (Width 20-200 px, default 60; "Solid background" checkbox)
+ *      from under the top banner to the bottom; its bars grow right toward price; candles pass behind it
+ *    - each node's size INSIDE the node in white ("103"), hidden when the node is too short or narrow for it; the ratio stays
+ *      OUTSIDE on the price side as before ("2.5x", only where it was shown); no other labels added
+ *    - the column's width is on the ColumnBoard (ColumnBoard.h) and the zone hover stops at the right-side columns (Levels / Delta /
+ *      Dealer) instead of the old Dealer reach / Delta settings guess
+ *    - LRA-LiqLevels-<MKT>.csv for the Dealer Profile's level badges: every price within reach that holds size, its contracts in this
+ *      plugin's own band and its prominence (lqp::Engine::levelLiq), plus the market's LQ lines (2.5x / 2.1x) - written about once a
+ *      second while the book is live (the badge shows "HL 900" at 2.5x+)
+ *    - a size file holding the OLD default width 70 (no 5th field) is read as the new default 60 once; OK writes "w,f,dx,dy,bg"
+ ********************************************************************************
  *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.15.1a, 2026-10-14, CR5000 - the live 0.15.1 WITHOUT the 0.15.2 hover-wording change (not approved yet) + the CR4800 one-banner hand-off (Rassul 07:13 variant B): while a Tape Reader 1.1.3+ banner is on the same chart (BannerBoard.h) the warning (e.g. ABSORPTION WEAKENING ...) is NOT drawn here - it is handed to the Tape Reader as line 2 of its banner, and the LIQ label goes under that banner; with no Tape Reader the warning is drawn exactly as before. Also: the Tape Reader hand-off decided by a heartbeat (BannerBoard 1.0.1 bb::Beat: present while its stamp moves / under 5 s old / for 3 draws - no flicker on an idle chart's first repaint), the warning entry cleared when this indicator is removed, and the LIQ label gets Offset X / Y (px, -600..600, per market in LiquidityProfile.size-<MKT>.txt "w,f,dx,dy"; the dialog is filled from the file and a control he did not touch keeps the file's value; setParameterVersion 2: IRT resets the saved rows once, the file keeps Width / Font); 0.15.0, 2026-10-13: the HOVER of each NEAR zone, built around support / resistance (Rassul approved the v2 mockup 6:44 PM CT) - mouse over a near zone's bar / label in the column: "Resistance [at <LEVEL>] 7,864.00 - 7,866.00 � 366 lots (1.5x)" (green support / red resistance), "Orders 96 � avg 3.8 lots � Top order 12%" (white), "Mostly one order - may not reload ?" at a 70%+ top order (white, replaces 'may be bait'), "As price came: up 20% - building" / "down 35% - leaving" / "unchanged" (lots now vs when price first came within reach, +/-10%, baseline once per approach; coloured by what it means for price), "Hit 140 lots � rebuilt 90% - absorbing" only while price is in the zone (green support / red resistance); from the chart's order-by-order feed (OrderFlowFeed.h off::Conn / off::Engine reused, one DEPTH_BY_ORDER per chart behind a crash guard); nothing new on the chart face; the box never covers the column or the Delta Profile; each decision's makeup + 'as price came' recorded (<MKT>-<sym>-<spb>-makeup-<session>.csv); 0.14.1, 2026-10-13: the warning (e.g. ABSORPTION WEAKENING ...) starts BELOW the chart's title row (LQ_TITLE_ROW_PX) - it was drawn at the pane top, over the IRT title text (Rassul screenshot); the column header moves down with it; 0.14.0, 2026-10-13: NEAR-price rule - zones within 1x the 3-min range of price shown at 1.5x the book behind them without the rank-1 rule, kept to 1.2x; far zones unchanged at 2.0x / rank 1 / 1.7x; never under 1.0x (Rassul "i want to see liquidity when it is close so i can see if there is any absorbtion going on"); 0.13.3, 2026-10-13: audit defect fixes - a bar re-drawn at the same index is a new baseline (no replayed volume), records keyed by the full contract, input files size-bounded, prices checked before the tick grid; 0.13.2, 2026-10-12: the column's width published so the Dealer Profile badges never sit on its labels; 0.13.1, 2026-10-12: each level named on ONE zone (the one holding it, else the nearest) - as the Dealer Profile badge; 0.13.0, 2026-10-12: only the strongest zone each side (solid) + zones on a key / gamma level (outlined, named) are drawn and published - the rest logged; 0.12.0, 2026-10-12: writes LRA-LiqZones-<MKT>.csv - the resting-liquidity zones near price - for the Dealer Profile's level badges ("Liq 2.6x"); 0.11.4, 2026-10-12: review fixes - no repaint when a market's line changes, the closing bar's last trades counted before it is decided, absorption windows recorded past the 50th touch, per-market state reset on a symbol change, stale Delta A zones dropped after an hour, no zone / LQ flicker, labels never overlap, fonts 10 pt+; 0.11.3, 2026-10-12 08:58: NO letters on the price chart at all - p / e / s / t are decided and recorded for the study, never drawn (Rassul "there are all these signals like P on the es chart .. i had asked you to remove them"); 0.11.2, 2026-10-12: the e? / p? watch letters are no longer drawn on the price chart - recorded only (Rassul 06:07); 0.11.1, 2026-10-11; 0.11.1: the Flow pane backfills - buyers / sellers from every loaded bar (up to 1,000), and its own record of each bar's near-price book and each absorption window (<MKT>-<spb>-flow-<session>.csv) re-read on load for this session and the two before (Rassul 20:36 "liquidity flow"); 0.11.0: the Flow pane is ALWAYS ON - buyers / sellers of every bar as x their 20-bar average and the resting bids / offers near price at each bar close; an absorption read also starts at a Delta Profile A / A? (not only a shown zone), drawn as a yellow window with its price, the steps and a readout on the right, idle = what it watches (Rassul 19:48-19:49, mockup LiquidityFlow_always_on); 0.10.0: only zones that stand out are drawn - 2x+ the 8 same-width bands behind them and the biggest of them, kept down to 1.7x, after resting 30 s at the same band; reach = 1/2 the expected RTH range (lsHodLod), else 1/2 the 14-session average RTH range, else 6x the 3-min range; the label = that prominence; no boxes across the chart (Rassul 18:53 "remove the boxes too"); LQ = a key level or a CR / PS / HVL level with a 2.5x+ zone on it (ES, GC, HG, NG; logged elsewhere) - research "Liquidity display for absorption trading" + the rules review 18:21-18:51; 0.9.0: the column on the LEFT edge of the price pane, bars facing price, the x-normal label on the price side of each bar, each zone a thin box across the chart to the last bar (mockup v4, Rassul 18:07-18:14); 0.8.1: never over the Delta Profile or its labels (the column moves 64 px further left, past the Delta Profile's "A 4.4x +62" labels) - the Dealer Profile reach is kept PER MARKET (its status file is shared by every chart: the last chart to write it wins) and starts at the Dealer Profile default (150 px) until this market's own reach is seen (Rassul 17:56 "the liquidity profile is overlapping the delta profile"); 0.8.0: the absorption PROCESS in every market (Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets - absorb, exhaust, counter or absorb, pull, break"): every step drawn everywhere at the market's data line where the nightly study set one, the standard line until then; s = Counter (the defenders out-traded the attackers after e, at the Counter line x their normal pace) on the price chart with its reason on the panes and the BUYERS / SELLERS STEPPING IN warning; panes AGGRESSIVE (Attack, Exh, Counter) / PASSIVE (Absorbed = the % of everything resting that took fills, Pulled, Rebuilt); 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
@@ -43,6 +55,7 @@
 #include "HostSlot.h"
 #include "BannerBoard.h"           // (0.15.3) the one top banner: the warning handed to the Tape Reader
 #include "BoxPlace.h"              // (CR5000) the LIQ label Offset X / Y: validation + clamping (shared, as is)
+#include "ColumnBoard.h"           // (0.16.0) the right-side columns (Levels / Delta / Dealer) and this column's width on the board
 #ifndef LQ_FLOW
 // (0.15.0) the order-by-order feed and its order book: the shared order-flow header, reused as is (lsBidAskStats / PullStats /
 // StackStats). After irtsdk.h and after the near / far #undefs above (off::Engine has a member named 'near').
@@ -73,7 +86,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.15.1a"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.16.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -82,11 +95,12 @@
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
 static const COLOR C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_INK = 0x000B0F17;
+static const COLOR C_WHITE = 0x00FFFFFF, C_COLBG = 0x0020242C;     // (0.16.0) the lots inside a node; the column's solid background
 #ifdef LQ_FLOW
-static const int WIDTH_INDEX = -1, FONT_INDEX = 0, OFFX_INDEX = -1, OFFY_INDEX = -1;     // (0.15.1) the Flow pane has no Width row
+static const int WIDTH_INDEX = -1, FONT_INDEX = 0, OFFX_INDEX = -1, OFFY_INDEX = -1, BG_INDEX = -1;     // (0.15.1) the Flow pane has no Width row
 static const char* const LQ_SIZE_NAME = "LiquidityFlow";
 #else
-static const int WIDTH_INDEX = 0, FONT_INDEX = 1, OFFX_INDEX = 2, OFFY_INDEX = 3;   // (CR5000) the LIQ label Offset X / Y
+static const int WIDTH_INDEX = 0, FONT_INDEX = 1, OFFX_INDEX = 2, OFFY_INDEX = 3, BG_INDEX = 4;   // (CR5000) the LIQ label Offset X / Y; (0.16.0) Solid background
 static const char* const LQ_SIZE_NAME = "LiquidityProfile";
 #endif
 static const long long DEPTH_EVERY_MS = 1000, ZONES_EVERY_MS = 500, STATUS_EVERY_MS = 30000;
@@ -258,7 +272,9 @@ struct LQState {
     bool depthAvail = false; int depthMax = 0, depthLevels = 0; long long depthReads = 0;
     long long session = -1; size_t marksWritten = 0; long long recWrites = 0, recFails = 0;
     long long normsStamp = -2, layoutStamp = -2, dealerStamp = -2;
-    int dpWidth = 50, dpGap = 0, dealerReach = 150, width = 70, font = 11;
+    int dpWidth = 50, dpGap = 0, dealerReach = 150, width = 60, font = 11; bool bg = true;   // (0.16.0) default 60 px, solid background
+    cb::Peers peers; bool colPublished = false; int colPriceRight = -1;                    // (0.16.0) the right-side columns on this chart
+    std::string lvlBody; long long lvlAt = -1, lvlWrites = 0; int lvlRows = 0;             // (0.16.0) LRA-LiqLevels-<MKT>.csv
     long long sizeStamp = -2, sizeCheckMs = -1; std::string sizeMkt;     // (0.15.1) <name>.size-<MKT>.txt   // (0.8.1) 150 = the Dealer Profile default reach until this market's is seen
     std::string reachMkt;                                                       // (0.8.1) the market whose saved reach was read
     std::vector<std::pair<lqp::Tick, lqp::Tick>> dpBid, dpAsk; long long dpStamp = -2; std::string dpPath;
@@ -318,9 +334,10 @@ public:
     void unpublish() {                                                  // (CR5000) removed: the Tape Reader drops line 2 at once
 #ifndef LQ_FLOW
         LQState* S = slot_.get(this, false); if (S && S->published) { bb::clearWarn(S->symbol, S->spb, S->chartKey); S->published = false; }
+        if (S && S->colPublished) { cb::clear(cb::LIQ, S->symbol, S->spb, S->chartKey); S->colPublished = false; }
 #endif
     }
-    static int clampWidth(int w) { return w < 40 ? 70 : std::min(w, 300); }
+    static int clampWidth(int w) { return w < cb::range(cb::LIQ).lo ? cb::range(cb::LIQ).def : std::min(w, cb::range(cb::LIQ).hi); }   // (0.16.0) 20-200, default 60
     static int clampFont(int f) { return f < 6 ? 11 : std::min(std::max(f, 10), 16); }   // (0.11.4) 10 pt at least (Rassul: fonts too small)
 private:
     HostSlot<LQState> slot_;
@@ -341,6 +358,7 @@ private:
     void persist(LQState& S);
     void status(LQState& S, long long now);
     void writeLiqZones(LQState& S);    // (0.12.0) the zones for the Dealer Profile's level badges
+    void writeLiqLevels(LQState& S);   // (0.16.0) every price's liquidity for the level badges
 #ifndef LQ_FLOW
     void orders(LQState& S, long long st);          // (0.15.0) the order-by-order feed -> order book, hits / rebuilds, makeup
     void renderHover(LQState& S, int left, int top, int bottom, int paneRight);   // (0.15.0) the hovered near zone's box
@@ -365,18 +383,21 @@ int cppExtension::setup(void) {
     setParameterDialogHeight(1);
     setIntegerParameter("Font pt", 11, 50);
 #else
-    setParameterVersion(2);                       // (CR5000) + the LIQ label Offset X / Y rows (IRT resets the saved rows once; the size file keeps them)
-    setParameterDialogHeight(2);
-    setIntegerParameter("Width px", 70, 50);
+    setParameterVersion(3);                       // (0.16.0) + Solid background, Width 20-200 (IRT resets the saved rows once; the size file keeps them)
+    setParameterDialogHeight(3);
+    setIntegerParameter("Width px (20-200)", 60, 50);
     setIntegerParameter("Font pt", 11, 50, kParmAppendSameLine);
     setIntegerParameter("Label offset X", 0, 50);
     setIntegerParameter("Label offset Y", 0, 50, kParmAppendSameLine);
+    setBoolParameter("Solid background", true);
 #endif
     return RTX_OK;
 }
 // (0.15.1) the window's Width / Font -> lsFlexLevels\<name>.size-<MKT>.txt ("70,11"), for every chart of the market and after a restart
 // (CR5000) the size file: "w,f" (0.15.1) or "w,f,dx,dy" (the profile's LIQ label offset). false = missing / garbled (why says which)
-struct LqSize { int w = 70, f = 11, dx = 0, dy = 0; bool ok = false; std::string why; };
+// (0.16.0) "w,f,dx,dy,bg" (bg = Solid background 1 / 0); a file without the 5th field holding the OLD default width 70 is read as
+// the new default 60 (migrated once - the next OK writes the 5-field row); widths are clamped into 20-200
+struct LqSize { int w = 60, f = 11, dx = 0, dy = 0; bool bg = true, ok = false, migrated = false; std::string why; };
 static LqSize readSize(const std::string& p) {
     LqSize z; std::ifstream in; std::string ln;
     long long st = -1; if (!statFile(p, &st) || st < 0) { z.why = "no size file"; return z; }
@@ -384,9 +405,11 @@ static LqSize readSize(const std::string& p) {
     if (!ln.empty() && ln.back() == '\r') ln.pop_back();
     const std::vector<std::string> f = bp::fields(ln);
     long long w = 0, ft = 0; int dx = 0, dy = 0;
-    if ((f.size() != 2 && f.size() != 4) || !parseLL(f[0], 40, 300, w) || !parseLL(f[1], 6, 16, ft)) { z.why = "size file garbled: '" + ln.substr(0, 40) + "' - last good kept"; return z; }
-    if (f.size() == 4 && (!bp::intTok(f[2], dx) || !bp::intTok(f[3], dy) || !bp::offOk(dx) || !bp::offOk(dy))) { z.why = "bad label offset '" + f[2] + "," + f[3] + "' - 0,0"; dx = dy = 0; }
-    z.w = (int)w; z.f = (int)ft; z.dx = dx; z.dy = dy; z.ok = true; return z;
+    if ((f.size() != 2 && f.size() != 4 && f.size() != 5) || !parseLL(f[0], 20, 300, w) || !parseLL(f[1], 6, 16, ft)) { z.why = "size file garbled: '" + ln.substr(0, 40) + "' - last good kept"; return z; }
+    if (f.size() >= 4 && (!bp::intTok(f[2], dx) || !bp::intTok(f[3], dy) || !bp::offOk(dx) || !bp::offOk(dy))) { z.why = "bad label offset '" + f[2] + "," + f[3] + "' - 0,0"; dx = dy = 0; }
+    if (f.size() == 5) { if (f[4] == "0") z.bg = false; else if (f[4] != "1") { z.why = "size file garbled: bad background flag '" + f[4].substr(0, 8) + "' - last good kept"; return z; } }
+    else if (w == 70) { w = cb::range(cb::LIQ).def; z.migrated = true; }      // (0.16.0) the old default 70 -> the new default 60
+    z.w = (int)std::min<long long>(w, cb::range(cb::LIQ).hi); z.f = (int)ft; z.dx = dx; z.dy = dy; z.ok = true; return z;
 }
 static bool lqInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the settings window's copy has no bar size
 static std::string lqSizePath(cppExtension* x) {
@@ -400,9 +423,9 @@ int LiquidityProfile::parmsLoad(void) {
     if (!lqInDialog(this)) return RTX_OK;
     const std::string p = lqSizePath(this); if (p.empty()) return RTX_OK;
     const LqSize z = readSize(p);
-    if (z.ok) { setIntegerValue(WIDTH_INDEX, z.w); setIntegerValue(FONT_INDEX, z.f); setIntegerValue(OFFX_INDEX, z.dx); setIntegerValue(OFFY_INDEX, z.dy); }
-    else { setIntegerValue(OFFX_INDEX, 0); setIntegerValue(OFFY_INDEX, 0); }
-    std::vector<long long> v; v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX));
+    if (z.ok) { setIntegerValue(WIDTH_INDEX, z.w); setIntegerValue(FONT_INDEX, z.f); setIntegerValue(OFFX_INDEX, z.dx); setIntegerValue(OFFY_INDEX, z.dy); checkBox(BG_INDEX, z.bg); }
+    else { setIntegerValue(WIDTH_INDEX, cb::range(cb::LIQ).def); setIntegerValue(OFFX_INDEX, 0); setIntegerValue(OFFY_INDEX, 0); checkBox(BG_INDEX, true); }
+    std::vector<long long> v; v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX)); v.push_back(isBoxChecked(BG_INDEX) ? 1 : 0);
     snap_.take(v);
 #endif
     return RTX_OK;
@@ -411,34 +434,37 @@ int LiquidityProfile::parmsLoad(void) {
 // (CR5000) + the LIQ label Offset X / Y ("70,11,dx,dy"); a control he did not touch since the dialog opened keeps the file's value
 void LiquidityProfile::saveSize() {
     int w = WIDTH_INDEX >= 0 ? clampWidth(getIntegerValue(WIDTH_INDEX)) : 70, f = clampFont(getIntegerValue(FONT_INDEX));
+    bool bg = true;
     const std::string p = lqSizePath(this), dirp = flexDir();
     LQState* S = slot_.get(this, false);
     int dx = 0, dy = 0;
 #ifndef LQ_FLOW
     const LqSize z = p.empty() ? LqSize() : readSize(p);
     if (snap_.have) {
-        const long long now[4] = { getIntegerValue(WIDTH_INDEX), getIntegerValue(FONT_INDEX), getIntegerValue(OFFX_INDEX), getIntegerValue(OFFY_INDEX) };
-        const long long fv[4] = { z.w, z.f, z.dx, z.dy };
-        long long v[4]; for (size_t k = 0; k < 4; ++k) v[k] = snap_.pick(k, now[k], fv[k]);
+        const long long now[5] = { getIntegerValue(WIDTH_INDEX), getIntegerValue(FONT_INDEX), getIntegerValue(OFFX_INDEX), getIntegerValue(OFFY_INDEX), isBoxChecked(BG_INDEX) ? 1 : 0 };
+        const long long fv[5] = { z.w, z.f, z.dx, z.dy, z.bg ? 1 : 0 };
+        long long v[5]; for (size_t k = 0; k < 5; ++k) v[k] = snap_.pick(k, now[k], fv[k]);
+        bg = v[4] != 0;
         w = clampWidth((int)std::max(-100000LL, std::min(100000LL, v[0]))); f = clampFont((int)std::max(-100000LL, std::min(100000LL, v[1])));
         dx = v[2] >= bp::OFF_MIN && v[2] <= bp::OFF_MAX ? (int)v[2] : z.dx; dy = v[3] >= bp::OFF_MIN && v[3] <= bp::OFF_MAX ? (int)v[3] : z.dy;   // garbage never reaches the file
     } else {
         const long long ox = getIntegerValue(OFFX_INDEX), oy = getIntegerValue(OFFY_INDEX);
         dx = ox >= bp::OFF_MIN && ox <= bp::OFF_MAX ? (int)ox : z.dx; dy = oy >= bp::OFF_MIN && oy <= bp::OFF_MAX ? (int)oy : z.dy;
+        bg = isBoxChecked(BG_INDEX) != 0;
     }
 #endif
-    if (S) { S->width = w; S->font = f; S->labDx = dx; S->labDy = dy; }
+    if (S) { S->width = w; S->font = f; S->labDx = dx; S->labDy = dy; S->bg = bg; }
     if (p.empty()) return;
     makeDir(dirp);
 #ifdef LQ_FLOW
     const std::string body = std::to_string(w) + "," + std::to_string(f) + "\n";
 #else
-    const std::string body = std::to_string(w) + "," + std::to_string(f) + "," + std::to_string(dx) + "," + std::to_string(dy) + "\n";
+    const std::string body = std::to_string(w) + "," + std::to_string(f) + "," + std::to_string(dx) + "," + std::to_string(dy) + "," + (bg ? "1" : "0") + "\n";
 #endif
     if (publishFile(p, body)) {
         if (S) { S->sizeStamp = -2; S->sizeCheckMs = -1; }
 #ifndef LQ_FLOW
-        std::vector<long long> v; v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX));
+        std::vector<long long> v; v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX)); v.push_back(isBoxChecked(BG_INDEX) ? 1 : 0);
         snap_.take(v);
 #endif
     }
@@ -457,7 +483,8 @@ void LiquidityProfile::loadSize(LQState& S) {
     const LqSize z = readSize(p);
     S.sizeWhy = z.why;
     if (!z.ok) return;                                                    // garbled: keep (reason on the status file)
-    S.width = clampWidth(z.w); S.font = clampFont(z.f); S.labDx = z.dx; S.labDy = z.dy;
+    if (z.migrated && S.sizeWhy.empty()) S.sizeWhy = "old default width 70 read as 60 (0.16.0)";
+    S.width = clampWidth(z.w); S.font = clampFont(z.f); S.labDx = z.dx; S.labDy = z.dy; S.bg = z.bg;
 }
 int cppExtension::calc(int) { static_cast<LiquidityProfile*>(this)->pump(); return RTX_OK; }
 // (0.8.0, Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets") every step of the
@@ -518,9 +545,13 @@ void LiquidityProfile::identify(LQState& S) {
     else tick = std::round(tick * 1e8) / 1e8;                             // (0.11.4) IRT's tick is a float (0.01f = 0.0099999998): snap it
     const std::string id = sym + "|" + std::to_string(spb);
     if (id != S.identity || tick != S.tick) {
-        const int w = S.width, f = S.font;
+        const int w = S.width, f = S.font; const bool bg = S.bg;
+#ifndef LQ_FLOW
+        if (S.colPublished) { cb::clear(cb::LIQ, S.symbol, S.spb, S.chartKey); S.colPublished = false; }   // (0.16.0) the old chart's entry
+#endif
+        S.peers = cb::Peers(); S.colPriceRight = -1; S.lvlBody.clear(); S.lvlAt = -1;
         LQState fresh; S.e = fresh.e; delete S.md; S.md = nullptr; S.mdDead = S.mdBlocked = false; S.barCount = 0; S.vapRows.clear(); S.vapBar = -1; S.vapStamp = 0; S.primed = false; S.session = -1; S.marksWritten = 0;
-        S.normsStamp = S.layoutStamp = S.dealerStamp = S.dpStamp = -2; S.width = w; S.font = f; S.params = "built-in defaults"; S.confirmed.clear();
+        S.normsStamp = S.layoutStamp = S.dealerStamp = S.dpStamp = -2; S.width = w; S.font = f; S.bg = bg; S.params = "built-in defaults"; S.confirmed.clear();
         // (0.11.4) everything that belongs to the old market / chart: its RTH hours, key and MenthorQ levels (the MenthorQ file is only
         // re-read when it changes, so the old market's CR / PS stayed), reach, LQ, Delta A zones and the Flow record
         S.levels.clear(); S.levelsAt = -1; S.mqLevels.clear(); S.mqStamp = -2; S.avgRth = 0; S.avgRthN = 0; S.rthOpen = S.rthClose = -1;
@@ -1026,6 +1057,8 @@ void LiquidityProfile::status(LQState& S, long long now) {
     o << "VERSION," << LQ_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nTICK," << S.tick
       << "\nDEPTH," << (S.mdBlocked ? "blocked" : S.mdDead ? "fault" : !S.md ? "not opened" : S.depthAvail ? "available" : "not available")
       << ",max " << S.depthMax << ",levels " << S.depthLevels << ",reads " << S.depthReads << ",books " << S.e.books << ",bad " << S.e.badBooks << "," << S.e.why
+      << "\nCOLUMN,width " << S.width << ",background " << (S.bg ? "on" : "off") << ",right columns end price at " << S.colPriceRight
+      << "\nLIQ_LEVELS,rows " << S.lvlRows << ",writes " << S.lvlWrites
       << "\nBANNER," << (S.trBanner ? "Tape Reader banner on this chart: the warning is shown there" : "no Tape Reader banner: the warning is drawn here") << ",handed " << S.handed << ",label offset " << S.labDx << "," << S.labDy << (S.sizeWhy.empty() ? std::string() : "," + S.sizeWhy)
       << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",norms " << (S.e.norms.loaded ? "file" : "session") << "\nPARAMS," << S.params
       << "\nZONES," << S.e.zones.size() << "\nATTEMPTS," << S.e.attempts.size() << "\nMARKS," << S.e.marks.size() << ",written " << S.marksWritten
@@ -1144,6 +1177,40 @@ void LiquidityProfile::writeLiqZones(LQState& S) {
 #endif
 }
 
+// (0.16.0, Rassul 11:39 CT - level badges with liquidity, design B) LRA-LiqLevels-<MKT>.csv for the Dealer Profile's Levels column:
+// "LIQL,1,<unix>,<tick>,<confirmX>,<confirmKeepX>,<hw>" then "L,<tick index>,<S|R>,<contracts>,<bx>" for every price within the
+// reach (both sides, capped at 600 ticks a side) that holds size - S = bids below price, R = offers above; bx = the band x the book
+// behind it (-1 = nothing behind to compare). Computed at most once a second; rewritten when it changed, else every 5 s (the reader
+// treats a file over 20 s old as no data).
+void LiquidityProfile::writeLiqLevels(LQState& S) {
+#ifndef LQ_FLOW
+    if (S.market.empty() || !(S.e.P.tick > 0) || !S.e.havePx) return;
+    const long long st = steadyMs();
+    if (S.lvlAt >= 0 && st >= S.lvlAt && st - S.lvlAt < 1000) return;
+    const lqp::Tick hw = (lqp::Tick)std::max(1, S.e.hw);
+    lqp::Tick reach = S.e.P.reachTicks > 0 ? std::max((lqp::Tick)(10 * hw), S.e.P.reachTicks) : (lqp::Tick)(10 * hw);
+    if (reach > 600) reach = 600;
+    std::ostringstream b; b.imbue(std::locale::classic());
+    int rows = 0;
+    for (lqp::Tick px = S.e.lastPx - reach; px <= S.e.lastPx + reach; ++px) {
+        double lots = 0, bx = -1; int side = lqp::BID;
+        if (!S.e.levelLiq(px, lots, bx, side)) continue;
+        const long long n = (long long)std::llround(lots); if (n < 1) continue;
+        char row[96]; std::snprintf(row, sizeof(row), "L,%lld,%s,%lld,%.3f\n", (long long)px, side == lqp::BID ? "S" : "R", n, bx > 0 ? bx : -1.0);
+        b << row; ++rows;
+    }
+    const std::string body = b.str();
+    if (body == S.lvlBody && S.lvlAt >= 0 && st - S.lvlAt < 5000) return;
+    S.lvlAt = st;
+    const std::string f = flexDir(); if (f.empty()) return;
+    std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
+    o << "LIQL,1," << (long long)time(nullptr) << "," << S.e.P.tick << "," << S.e.P.confirmX << "," << S.e.P.confirmKeepX << "," << (long long)hw << "\n" << body;
+    if (publishFile(f + "\\LRA-LiqLevels-" + S.market + ".csv", o.str())) { S.lvlBody = body; S.lvlRows = rows; ++S.lvlWrites; }
+#else
+    (void)S;
+#endif
+}
+
 #ifndef LQ_FLOW
 // (0.15.0) the chart's order-by-order feed, opened once the depth works (the lsMboCheck / OrderFlowFeed pattern: one DEPTH_BY_ORDER per
 // chart kept alive, opened from calc / draw only behind a crash-guard file, drained <= 5,000 events / ~8 ms per call). Each event
@@ -1214,7 +1281,7 @@ void LiquidityProfile::pump() {
         }
         S.state = S.mdBlocked ? S.state : !S.md ? "depth not opened" : !S.depthAvail ? "no depth from this feed" : !S.e.haveBook ? "waiting for depth" : "ready";
         status(S, st);
-        if (S.e.haveBook && S.depthAvail) writeLiqZones(S);           // (0.12.0) only from a live book
+        if (S.e.haveBook && S.depthAvail) { writeLiqZones(S); writeLiqLevels(S); }   // (0.12.0 / 0.16.0) only from a live book
     } catch (...) {
         S.state = "calculation error";                                  // never let an exception reach IRT
     }
@@ -1252,6 +1319,23 @@ void LiquidityProfile::render(LQState& S) {
     int lastX = paneRight;                                                          // the last bar's right edge: boxes stop there
     { PNT pe; if (pe.set(lastBar, 0.0f, kBarRight) == RTX_OK && pe.h > left) lastX = std::min((int)pe.h, paneRight); }
     FONT f; f.id = HELVETICA; f.size = coord(S.font); f.style = BOLD; setFont(f);
+#ifndef LQ_FLOW
+    {   // (0.16.0) the column's width on the board for this chart; the right-side columns (Levels / Delta / Dealer) this chart has
+        const char* cl = getChartLabel(); const std::string chart = cl ? std::string(cl) : std::string(); const long long now = steadyMs();
+        S.chartKey = chart;
+        cb::publish(cb::LIQ, S.symbol, S.spb, chart, now, S.width); S.colPublished = !S.symbol.empty();
+        S.peers.step(S.symbol, S.spb, chart, now, 1u << cb::LIQ);
+        cb::In in; in.paneL = pane.left; in.paneT = pane.top; in.paneB = pane.bottom; in.axisR = paneRight;
+        in.levels = S.peers.on[cb::LEVELS]; in.levelsW = S.peers.w[cb::LEVELS]; in.delta = S.peers.on[cb::DELTA]; in.deltaW = S.peers.w[cb::DELTA];
+        in.dealer = S.peers.on[cb::DEALER]; in.dealerW = S.peers.w[cb::DEALER];
+        const cb::Layout L = cb::layout(in);
+        S.colPriceRight = L.margin > 0 ? L.priceRight : -1;
+    }
+    // (0.16.0, Rassul 11:00 CT) the column's own SOLID dark background (Solid background): from under the banner / header to the
+    // bottom, the full Width - drawn first, so the bars and the header sit on it and the candles pass behind it
+    if (S.bg) { RCT bgr; bgr.set(coord(pane.left), coord(std::max((int)pane.top, hdrTop - 2)), coord(pane.left + S.width), coord(bottom));
+                bgr.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
+#endif
     // header: what the column is and whether it has data (no other text on the chart)
     {
         const bool ok = S.e.haveBook && S.depthAvail;
@@ -1317,7 +1401,8 @@ void LiquidityProfile::render(LQState& S) {
         const int ym = (yt + yb) / 2;
         FONT g; g.id = HELVETICA; g.size = coord(S.font); g.style = BOLD; setFont(g);
         const std::string lt = lots(z.size); const int lw = getTextWidth(lt.c_str(), -1);
-        if (solid && lw + 4 < len && yb - yt >= rowH - 4) { setTextColor(C_INK); RCT tr; tr.set(coord(left), coord(ym - S.font), coord(left + len), coord(ym + S.font)); tr.drawText(lt.c_str(), true, false); }
+        // (0.16.0, Rassul 11:02 CT) the size INSIDE every node in white ("103"), only when the node is long and tall enough for it
+        if (lw + 4 < len && yb - yt >= rowH - 4) { setTextColor(C_WHITE); RCT tr; tr.set(coord(left), coord(ym - S.font), coord(left + len), coord(ym + S.font)); tr.drawText(lt.c_str(), true, false); }
         if (S.confirmed.count("Old")) {                                 // (0.5.0) old orders: a 2-px outline and "old 64%" under the bar
             const double os = S.e.zoneOld(z.side, z.lo, z.hi, S.e.bookT);
             if (os >= S.e.P.oldShow) {
@@ -1333,8 +1418,7 @@ void LiquidityProfile::render(LQState& S) {
         int xl = left + len + 4;
         const int ly0 = ym - rowH / 2, ly1 = ly0 + rowH;
         if (labels.place(ly0, ly1, 1) < 0) continue;                   // (0.11.4) another zone's label is there: the bar only
-        if (!solid) { const int lw2 = getTextWidth(lt.c_str(), -1); setTextColor(C_GREY);      // (0.13.0) outlined: the lots beside it
-            RCT tr; tr.set(coord(xl), coord(ly0), coord(xl + lw2 + 2), coord(ly1)); tr.drawText(lt.c_str(), false, false); xl += lw2 + 6; }
+        // (0.16.0) an outlined node's lots are no longer printed beside it: inside it (above), or not at all when it does not fit
         if (z.bx > 0) { const std::string xs = mult(z.bx); const int xw = getTextWidth(xs.c_str(), -1); setTextColor(solid ? c : C_GREY);
             RCT xr; xr.set(coord(xl), coord(ly0), coord(xl + xw + 2), coord(ly1)); xr.drawText(xs.c_str(), false, false);
             colR = std::max(colR, xl + xw + 2 - left);
@@ -1377,7 +1461,8 @@ void LiquidityProfile::renderHover(LQState& S, int left, int top, int bottom, in
     const int rowH = rowPx(S.font), pad = 6;
     int w = 0; for (size_t i = 0; i < rows.size(); ++i) w = std::max(w, (int)getTextWidth(rows[i].text.c_str(), -1));
     const int W = w + 2 * pad + 4, H = rowH * (int)rows.size() + 2 * pad - 2;
-    const int dpLimit = paneRight - 2 - S.dealerReach - S.dpGap - S.dpWidth - 64;   // the Delta Profile's labels start there
+    // (0.16.0) never into the right-side columns: up to the gap before the Levels column (ColumnBoard layout), else the axis
+    const int dpLimit = S.colPriceRight > 0 ? S.colPriceRight - 4 : paneRight - 4;
     const int x0 = lqp::hoverX(left + S.colRight, W, dpLimit);
     if (x0 < 0) { S.hovState = "no room"; return; }                   // never over the column or the Delta Profile
     PNT pm; pm.set(S.hovLastBar >= 0 ? S.hovLastBar : 0, (float)(((double)zp->edgeLo + (double)zp->edgeHi) / 2.0 * S.e.P.tick));

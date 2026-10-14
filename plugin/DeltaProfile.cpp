@@ -1,4 +1,13 @@
 /********************************************************************************
+ * 2.8.0 (2026-10-14, CR5200, Rassul approved 11:00 CT - mockup-columns.png): the Delta Profile is the MIDDLE right-side column,
+ *       between the Levels column and the Dealer Profile (ColumnBoard.h): its box is fixed from the axis (the Dealer column's width
+ *       from the board, 0 when no Dealer Profile is on the chart), Width 40-250 px (default 80), every bar anchored on the column's
+ *       right edge growing left toward price, and NOTHING drawn past its left edge (the node labels shorten "A 2.1x -861" ->
+ *       "A 2.1x" -> "A", else are not drawn). Each row's delta value next to its bar on the price side ("+137" / "-162", green /
+ *       red, "Show delta text"), only where it fits and does not overlap another (biggest first). The A circles / Ex marks stay
+ *       left of the gap before the Levels column. With no Dealer Profile on the chart this plugin sets the chart's right margin
+ *       (gap + Delta); with one, the Dealer Profile does. Settings (controls only, per market): Width px, Font pt, Show delta text
+ *       (the old Gap row is gone - the columns abut; parameter version 12). Title "DLT v2.8.0".
  * DeltaProfile.cpp -- lsDeltaProfile 2.7.1 (2026-10-13: no "[offscreen]" A labels) + 2.7.0 thin-extreme exhaustion mark "Ex?" (on the 2.6.3 contract-qualified record and the
  *                     2.6.2 peak-bar absorption rule)
  * Native chart VAP; rolling (latest bar close - 90 min, latest bar close].
@@ -39,6 +48,7 @@
 #include "irtsdk.h"
 #endif
 #include "DeltaProfileCore.h"
+#include "ColumnBoard.h"     // (2.8.0) the right-side columns, the board and the right margin (shared with Dealer / Liquidity)
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -56,19 +66,19 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.7.1"; // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.8.0"; // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
 static const COLOR C_SUPPORT = 0x0086EFAC, C_RESISTANCE = 0x00FCA5A5;
-static const int WIDTH_INDEX = 0, GAP_INDEX = 1, FONT_INDEX = 2;
+static const int WIDTH_INDEX = 0, FONT_INDEX = 1, TEXT_INDEX = 2;   // (2.8.0) the Gap row is gone; Show delta text
 struct Layout {
-    int width, gap, font;
-    Layout() : width(50), gap(0), font(9) {}
+    int width, gap, font; bool text;
+    Layout() : width(80), gap(0), font(9), text(true) {}
 };
 static void validateLayout(Layout& s) {
-    s.width = s.width < 30 ? 50 : std::min(s.width, 600);
-    s.gap = std::max(-300, std::min(s.gap, 400));
+    s.width = cb::cleanWidth(cb::DELTA, s.width);        // (2.8.0) 40-250, else the default 80
+    s.gap = 0;                                           // (2.8.0) the columns abut (ColumnBoard.h); an old file's gap is ignored
     s.font = s.font < 6 ? 9 : std::min(s.font, 18);
 }
 static std::int64_t steadyMs() {
@@ -687,6 +697,10 @@ struct ChartState {
     std::map<long long, std::string> profileState; // actual emitted profile disposition, not just calculation
     std::string exParams, exSource = "missing", exLevelNote; std::size_t exLevelCount = 0;   // (2.7.0) exhaustion gate / levels
     int exDrawn = 0, exSuppressed = 0, exOffscreen = 0; std::map<long long, std::string> exState;
+    // (2.8.0) the right-side columns of this chart
+    cb::Peers peers; cb::Layout lay; cb::UnitProbe probe; cb::MarginCtl mctl; std::string chartKey, colSym; long colSpb = 0; bool colPublished = false;
+    long long firstDrawMs = -1, dealerSeenMs = -1; int needPx = 0, ppb = 0, marginRead = -1, marginAsked = -1, setOk = 0, setFail = 0, gapSeen = -1;
+    bool marginOwner = false; int textsDrawn = 0, labelsShort = 0;
     ChartState() : barCount(0), latestStamp(0), firstStamp(0), tick(0), builtAt(-1),
         statusAt(-1), dealerAt(-1), settingsAt(-1), touchedAt(-1), settingsStamp(-2),
         dealerReach(0), drawnRows(0), missingVap(0), vapMismatch(0), dirty(true), faulted(false), ready(false), shortHistory(false), coarseBoundary(false),
@@ -697,6 +711,7 @@ public:
     ~DeltaProfile() { delete fallback_; }
     int draw() override;
     int calc(int) override;
+    int preCalc() override;
     int done() override;
     int destroy() override;
     int parmsLoad() override;
@@ -709,6 +724,8 @@ private:
     std::string rootSymbol();
     void syncLayout(ChartState& s, bool apply);
     int dealerWidth(ChartState& s);
+    void applyMargin(ChartState& s);   // (2.8.0)
+    void columns(ChartState& s, const RCT& pane, int axisR);   // (2.8.0) this draw's layout + the board
     bool buildNative(ChartState& s);
     bool render(ChartState& s);
     void status(ChartState& s);
@@ -734,11 +751,11 @@ int cppExtension::calc(int) { return RTX_OK; }
 int cppExtension::done() { return RTX_OK; }
 int cppExtension::destroy() { return RTX_OK; }
 int cppExtension::setup() {
-    setParameterVersion(11); // exactly the 2.4.0 three-parameter layout
-    setParameterDialogHeight(3);
-    setIntegerParameter("Width px", 50, 50);
-    setIntegerParameter("Gap px", 0, 50, kParmAppendSameLine);
+    setParameterVersion(12); // (2.8.0) Width / Font / Show delta text (the Gap row is gone): IRT resets the saved rows once, the file keeps them
+    setParameterDialogHeight(2);
+    setIntegerParameter("Width px (40-250)", 80, 50);
     setIntegerParameter("Font pt", 9, 50, kParmAppendSameLine);
+    setBoolParameter("Show delta text", true);
     return RTX_OK;
 }
 std::string DeltaProfile::rootSymbol() {
@@ -770,16 +787,40 @@ ChartState& DeltaProfile::chartState() {
 }
 int DeltaProfile::calc(int) {
     ChartState* p = static_cast<ChartState*>(getUserData());
-    if (p) p->dirty = true; // historical corrections/backfills invalidate the snapshot
+    if (p) { p->dirty = true; applyMargin(*p); } // historical corrections/backfills invalidate the snapshot; (2.8.0) the margin when it owns it
     return RTX_OK;
+}
+int DeltaProfile::preCalc() {
+    ChartState* p = static_cast<ChartState*>(getUserData());
+    if (p) applyMargin(*p);
+    return RTX_OK;
+}
+// (2.8.0) the chart's right margin, ONLY while no Dealer Profile is on this chart (it owns the margin when it is): gap + this column,
+// in IRT's unit; not before 5 s of drawing without a Dealer Profile beat (the two never fight at load), grows at once / shrinks after 60 s
+void DeltaProfile::applyMargin(ChartState& s) {
+    s.marginOwner = false;
+    if (s.firstDrawMs < 0 || s.needPx <= 0 || s.peers.on[cb::DEALER]) return;
+    const std::int64_t now = steadyMs();
+    const std::int64_t since = s.dealerSeenMs >= 0 ? std::max(s.dealerSeenMs, s.firstDrawMs) : s.firstDrawMs;
+    if (now - since < 5000) return;
+    s.marginOwner = true;
+    int ppb = 0;
+    if (getChartOption(OPT_PIXELS_PER_BAR, &ppb) != RTX_OK || ppb <= 0) ppb = s.ppb;
+    if (s.probe.units == cb::BARS && ppb <= 0) return;
+    int cur = -1; if (getChartOption(OPT_RIGHT_MARGIN, &cur) != RTX_OK) cur = s.marginRead;
+    const int v = s.mctl.want(s.needPx, ppb, s.probe.units, cur, (long long)now);
+    if (v < 0) return;
+    s.marginAsked = v;
+    if (setChartOption(OPT_RIGHT_MARGIN, v) == RTX_OK) ++s.setOk; else ++s.setFail;
 }
 int DeltaProfile::done() {
     ChartState* p = static_cast<ChartState*>(getUserData());
-    if (p) *p = ChartState(); // symbol/periodicity changes safely release fault state
+    if (p) { if (p->colPublished) cb::clear(cb::DELTA, p->colSym, p->colSpb, p->chartKey); *p = ChartState(); } // symbol/periodicity changes safely release fault state
     return RTX_OK;
 }
 int DeltaProfile::destroy() {
     ChartState* p = static_cast<ChartState*>(getUserData());
+    if (p && p->colPublished) cb::clear(cb::DELTA, p->colSym, p->colSpb, p->chartKey);
     if (p && p != fallback_) { delete p; setUserData(NULL); }
     return RTX_OK;
 }
@@ -801,10 +842,11 @@ void DeltaProfile::syncLayout(ChartState& s, bool apply) {
     const std::string path = directory + "DeltaProfile.settings.txt";
     if (apply) {
         Layout desired; desired.width = getIntegerValue(WIDTH_INDEX);
-        desired.gap = getIntegerValue(GAP_INDEX); desired.font = getIntegerValue(FONT_INDEX);
+        desired.font = getIntegerValue(FONT_INDEX); desired.text = isBoxChecked(TEXT_INDEX) != 0;
+        if (!cb::widthOk(cb::DELTA, desired.width)) desired.width = s.layout.width;   // garbage keeps the file's width
         validateLayout(desired); s.layout = desired;
-        setIntegerValue(WIDTH_INDEX, desired.width); setIntegerValue(GAP_INDEX, desired.gap);
-        setIntegerValue(FONT_INDEX, desired.font);
+        setIntegerValue(WIDTH_INDEX, desired.width);
+        setIntegerValue(FONT_INDEX, desired.font); checkBox(TEXT_INDEX, desired.text);
         if (directory.empty() || s.root.empty()) return;
         // Preserve the legacy per-root layout file and its field positions. All
         // nonlayout options remain standardized; no retired list APIs are called.
@@ -816,7 +858,7 @@ void DeltaProfile::syncLayout(ChartState& s, bool apply) {
         }
         std::ostringstream row;
         row << s.root << "|0|" << desired.width << '|' << desired.gap << '|' << desired.font
-            << "|1|0|0|0|0|1|0|90|3|1";
+            << "|1|0|0|0|0|1|0|90|3|1|" << (desired.text ? 1 : 0) << "|c28";   // (2.8.0) + Show delta text, the 2.8.0 marker
         records[s.root] = row.str();
         std::ostringstream out;
         for (std::map<std::string, std::string>::const_iterator i = records.begin(); i != records.end(); ++i)
@@ -838,6 +880,10 @@ void DeltaProfile::syncLayout(ChartState& s, bool apply) {
         if (tokens.size() < 5 || tokens[0] != s.root) continue;
         Layout next;
         if (integer(tokens[2], next.width) && integer(tokens[3], next.gap) && integer(tokens[4], next.font)) {
+            const bool v28 = tokens.size() >= 17 && tokens[16] == "c28";
+            if (!v28 && next.width == 50) next.width = cb::range(cb::DELTA).def;   // (2.8.0) the old default 50 -> the new default 80, once
+            if (!v28 && next.width > 0 && !cb::widthOk(cb::DELTA, next.width)) next.width = std::max(cb::range(cb::DELTA).lo, std::min(cb::range(cb::DELTA).hi, next.width));
+            next.text = v28 ? tokens[15] != "0" : true;
             validateLayout(next); s.layout = next;
         }
         break;
@@ -847,8 +893,8 @@ int DeltaProfile::parmsLoad() {
     try {
         ChartState& s = chartState(); syncLayout(s, false);
         // Populate the dialog. Merely opening preferences NEVER saves a row.
-        setIntegerValue(WIDTH_INDEX, s.layout.width); setIntegerValue(GAP_INDEX, s.layout.gap);
-        setIntegerValue(FONT_INDEX, s.layout.font); return RTX_OK;
+        setIntegerValue(WIDTH_INDEX, s.layout.width);
+        setIntegerValue(FONT_INDEX, s.layout.font); checkBox(TEXT_INDEX, s.layout.text); return RTX_OK;
     } catch (...) { return RTX_FAIL; }
 }
 int DeltaProfile::parmsApply() {
@@ -856,24 +902,31 @@ int DeltaProfile::parmsApply() {
     catch (...) { return RTX_FAIL; }
 }
 int DeltaProfile::parmsUpdt(unsigned int) { return RTX_OK; } // wait for Apply/OK
-int DeltaProfile::dealerWidth(ChartState& s) {
+int DeltaProfile::dealerWidth(ChartState& s) { return s.lay.w[cb::DEALER]; }   // (2.8.0) the Dealer column from the board (not its status file)
+// (2.8.0) this draw's columns: the Dealer Profile's Levels + Dealer widths from the board (with its heartbeat), this column's own
+// Width, the layout (ColumnBoard.h, the same the Dealer Profile computes), what the margin must be, the unit check
+void DeltaProfile::columns(ChartState& s, const RCT& pane, int axisR) {
     const std::int64_t now = steadyMs();
-    if (s.dealerAt >= 0 && now - s.dealerAt < 1000) return s.dealerReach;
-    s.dealerAt = now;
-    const std::string directory = storageDirectory(); if (directory.empty()) return s.dealerReach;
-    std::ifstream in((directory + "DealerProfile.status.txt").c_str());
-    std::string line, market; int reach = 0;
-    while (std::getline(in, line)) {
-        const std::vector<std::string> tokens = split(line, ',');
-        if (tokens.size() < 2) continue;
-        if (tokens[0] == "MARKET") market = tokens[1];
-        else if (tokens[0] == "REACH") integer(tokens[1], reach);
+    if (s.firstDrawMs < 0) s.firstDrawMs = now;
+    const char* sy = getSymbol(); s.colSym = sy ? sy : ""; s.colSpb = getSecondsPerBar();
+    const char* cl = getChartLabel(); s.chartKey = cl ? cl : "";
+    s.peers.step(s.colSym, s.colSpb, s.chartKey, (long long)now, 1u << cb::DELTA);
+    if (s.peers.on[cb::DEALER]) s.dealerSeenMs = now;
+    cb::In in; in.paneL = pane.left; in.paneT = pane.top; in.paneB = pane.bottom; in.axisR = axisR;
+    in.delta = true; in.deltaW = s.layout.width;
+    in.dealer = s.peers.on[cb::DEALER]; in.dealerW = s.peers.w[cb::DEALER];
+    in.levels = s.peers.on[cb::LEVELS]; in.levelsW = s.peers.w[cb::LEVELS];
+    s.lay = cb::layout(in);
+    cb::publish(cb::DELTA, s.colSym, s.colSpb, s.chartKey, (long long)now, s.layout.width); s.colPublished = !s.colSym.empty();
+    s.needPx = s.lay.ok ? s.lay.margin : 0;
+    int ppb = 0, cur = -1;
+    if (getChartOption(OPT_PIXELS_PER_BAR, &ppb) == RTX_OK && ppb > 0) s.ppb = ppb;
+    if (getChartOption(OPT_RIGHT_MARGIN, &cur) == RTX_OK) s.marginRead = cur;
+    int vs = 0, ve = -1;
+    if (s.barCount > 1 && getVisibleBars(&vs, &ve) == RTX_OK && ve == s.barCount - 1) {
+        PNT pe; pe.set(s.barCount - 1, 0.0f, kBarRight); s.gapSeen = axisR - pe.h;
+        s.probe.observe(s.marginRead, s.ppb, s.gapSeen);
     }
-    // Shared legacy status has no chart ID. Never adopt another market's value;
-    // retaining this chart's last good reach avoids jitter, but cannot disambiguate
-    // two same-market Dealer Profiles with different widths (documented limit).
-    if (market == s.market && reach > 0 && reach < 1200) s.dealerReach = reach;
-    return s.dealerReach;
 }
 int DeltaProfile::readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats) {
     // Only trivial values live in these MSVC SEH helpers (/EHsc compatible).
@@ -1449,20 +1502,42 @@ bool DeltaProfile::render(ChartState& s) {
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
     int paneRight = pane.right;
     if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneRight = scale.left - 2;
-    const int base = paneRight - 2 - dealerWidth(s) - s.layout.gap;
-    const int left = base - s.layout.width;
+    // (2.8.0) the middle right-side column (ColumnBoard.h): [delta.l, delta.r], left of the Dealer column, right of the Levels column
+    columns(s, pane, paneRight);
+    const int colW = s.lay.w[cb::DELTA];
+    const int base = s.lay.delta.r - 1;                 // every bar anchored here, growing left
+    const int left = s.lay.delta.l + 1;                 // nothing is drawn left of this
+    const int priceLimit = s.lay.priceRight;            // A circles / Ex marks stay left of the gap before the Levels column
     const int top = pane.top + 16, bottom = pane.bottom;
-    if (left <= pane.left + 40 || base >= paneRight || bottom <= top) {
-        s.state = "not drawn: insufficient pane room or overlapping gap"; return false;
+    if (!s.lay.ok || colW <= 0 || priceLimit <= pane.left + 40 || base >= paneRight || bottom <= top) {
+        s.state = "not drawn: insufficient pane room"; return false;
     }
-    textLeft(left + 2, pane.top + 8, "DLT", C_MUTED, 8, true);
+    {   const std::string title = std::string("DLT v") + DLT_VERSION;   // (2.8.0) the version next to the title
+        textLeft(left + 1, pane.top + 8, textWidth(title, 8, true) <= colW - 4 ? title : std::string("DLT"), C_MUTED, 8, true); }
     if (!s.ready) textRight(base - 2, top + 12, "NO VAP", C_SELL, 8, true);
     if (s.shortHistory || s.state.find("provisional") != std::string::npos)
         textRight(base - 2, top + 12, "PARTIAL", C_MUTED, 8, true);
     stroke(base, top, base, bottom, C_AXIS, 1);
     const dp::Snapshot unavailable;
     const dp::Snapshot& profile = s.ready ? s.snapshot : unavailable;
-    const int lastBar = s.barCount - 1, full = s.layout.width - 2;
+    const int lastBar = s.barCount - 1;
+    // (2.8.0) the room for the text on the price side of the bars (delta values, node labels): the widest visible row value, at most
+    // half the column; the bars use the rest
+    int reserve = 0;
+    if (s.layout.text && s.ready) {
+        for (std::size_t i = 0; i < s.snapshot.buckets.size(); ++i) if (s.snapshot.buckets[i].delta != 0)
+            reserve = std::max(reserve, textWidth(amount(s.snapshot.buckets[i].delta), s.layout.font, true) + 4);
+        reserve = std::min(reserve, (colW - 2) / 2);
+    }
+    if (s.ready) {   // the node labels' short form ("AE? 2.1x") keeps its room too, up to 3/5 of the column
+        int lab = 0;
+        for (std::size_t i = 0; i < s.snapshot.nodes.size(); ++i) {
+            const dp::Node& n = s.snapshot.nodes[i];
+            lab = std::max(lab, textWidth((n.state.code == "A" ? std::string("AE?") : n.state.code) + " " + ratio(n.ratio), s.layout.font, true) + 6);
+        }
+        reserve = std::max(reserve, std::min(lab, colW * 3 / 5));
+    }
+    const int full = std::max(4, colW - 3 - reserve);
     const LatchBook& book = latchBooks()[s.book + "|" + std::to_string(getSecondsPerBar())];
     struct LBox { int l, t, r, b; };
     auto overlap = [](const LBox& a, const LBox& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; };
@@ -1488,7 +1563,7 @@ bool DeltaProfile::render(ChartState& s) {
         if(at<0){s.bubbleState[L.id]="offscreen";++s.bubblesOffscreen;continue;}
         PNT point; point.set(at,static_cast<float>(L.price),kBarCenter);
         const LBox anchorBox{point.h-6,point.v-6,point.h+7,point.v+7};
-        if(anchorBox.l<pane.left || anchorBox.r>left-8 || anchorBox.t<top || anchorBox.b>bottom){
+        if(anchorBox.l<pane.left || anchorBox.r>priceLimit || anchorBox.t<top || anchorBox.b>bottom){
             s.bubbleState[L.id]="offscreen";++s.bubblesOffscreen;continue;
         }
         const Bubble* shared=NULL;
@@ -1498,7 +1573,7 @@ bool DeltaProfile::render(ChartState& s) {
         for(int attempt=0;attempt<13&&!found;++attempt){
             const int dx=((attempt+1)/2)*14*(attempt%2?-1:1);
             LBox box{anchorBox.l+dx,anchorBox.t,anchorBox.r+dx,anchorBox.b};
-            if(box.l<pane.left||box.r>left-8)continue;
+            if(box.l<pane.left||box.r>priceLimit)continue;
             bool clash=false;for(const Bubble& b:bubbles)if(overlap(box,b.box)){clash=true;break;}
             if(!clash){selected=box;offset=dx;found=true;}
         }
@@ -1522,6 +1597,8 @@ bool DeltaProfile::render(ChartState& s) {
         return x != y ? x > y : profile.buckets[a].key < profile.buckets[b].key;
     });
     std::map<dp::Tick, int> edge;
+    struct RowText { double delta; int y, edge, h; };   // (2.8.0) each drawn row's value, placed after the node labels
+    std::vector<RowText> rowTexts;
     struct VisibleNode { const dp::Node* node; int y, edge; };
     std::vector<VisibleNode> nodes;
     s.drawnRows = 0;
@@ -1555,6 +1632,7 @@ bool DeltaProfile::render(ChartState& s) {
             }
         }
         edge[b.key] = e;
+        if (s.layout.text && b.delta != 0) rowTexts.push_back(RowText{ b.delta, (yt + yb) / 2, e, yb - yt });
         if (node) { VisibleNode v; v.node = node; v.y = (yt + yb) / 2; v.edge = e; nodes.push_back(v); }
     }
     // Native key/bucket lookup only. Pixel Y NEVER assigns a node to a bucket.
@@ -1577,8 +1655,10 @@ bool DeltaProfile::render(ChartState& s) {
         const std::string code = isA ? aeLabel(book, event->id) : n.state.code;      // (2.7.0) A, or AE? / AE once its attackers faded
         std::string label = code + " " + ratio(shownRatio) + (net != 0 ? "  " + amount(net) : std::string()) + badge;
         int width = textWidth(label, s.layout.font, true);
-        if (v.edge - 4 - width < pane.left + 2) { label = code + " " + ratio(shownRatio) + badge; width = textWidth(label, s.layout.font, true); }
-        if (v.edge - 4 - width < pane.left + 2) continue;
+        // (2.8.0) never past the column's left edge: "A 2.1x -861" -> "A 2.1x" -> "A", else not drawn
+        if (v.edge - 4 - width < left) { label = code + " " + ratio(shownRatio) + badge; width = textWidth(label, s.layout.font, true); ++s.labelsShort; }
+        if (v.edge - 4 - width < left) { label = code; width = textWidth(label, s.layout.font, true); }
+        if (v.edge - 4 - width < left) continue;
         const int h = s.layout.font + 3, r = v.edge - 4, l = r - width;
         const int anchorY=isA?yOf(lastBar,event->price):v.y;
         int y = anchorY; bool ok = false;
@@ -1619,9 +1699,11 @@ bool DeltaProfile::render(ChartState& s) {
         }
         if (!any) continue;
         const std::string badge;   // (2.7.1) no "[offscreen]" labels
-        const std::string label=aeLabel(book,event->id)+" "+ratio(event->mult)+"  "+amount(event->net)+badge;   // (2.7.0) A / AE? / AE
+        std::string label=aeLabel(book,event->id)+" "+ratio(event->mult)+"  "+amount(event->net)+badge;   // (2.7.0) A / AE? / AE
+        if(e-7-textWidth(label,s.layout.font,true)<left)label=aeLabel(book,event->id)+" "+ratio(event->mult);   // (2.8.0) inside the column
+        if(e-7-textWidth(label,s.layout.font,true)<left)label=aeLabel(book,event->id);
         const int width=textWidth(label,s.layout.font,true), height=s.layout.font+3;
-        if(e-7-width<pane.left+2)continue;
+        if(e-7-width<left)continue;
         const int anchorY=yOf(lastBar,event->price);
         int y=anchorY;bool ok=false;
         for(int k=0;k<=6&&!ok;++k){
@@ -1640,6 +1722,23 @@ bool DeltaProfile::render(ChartState& s) {
         s.profileState[event->id]="shown:"+aeLabel(book,event->id);
         if(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared")++s.pairedAbsorptions;
         if(y!=anchorY)stroke(e-5,anchorY,e-5,y,color,1);
+    }
+    // (2.8.0, Rassul approved 11:00 CT) each row's delta next to its bar on the price side, "+137" green / "-162" red, inside the column;
+    // biggest first, never over a node label or another value (a row with no room shows its bar only)
+    s.textsDrawn = 0;
+    if (s.layout.text) {
+        std::stable_sort(rowTexts.begin(), rowTexts.end(), [](const RowText& a, const RowText& b) { return std::fabs(a.delta) > std::fabs(b.delta); });
+        const int h = s.layout.font + 3;
+        for (const RowText& t : rowTexts) {
+            const std::string label = amount(t.delta);
+            const int w = textWidth(label, s.layout.font, true), r = t.edge - 2, l = r - w;
+            if (l < left || t.y - h / 2 <= top || t.y + h / 2 >= bottom) continue;
+            const LBox bx{ l, t.y - h / 2, r, t.y + h / 2 };
+            bool clash = false; for (const LBox& q : placed) if (overlap(bx, q)) { clash = true; break; }
+            if (clash) continue;
+            textRight(r, t.y, label, t.delta > 0 ? C_BUY : C_SELL, s.layout.font, true);
+            placed.push_back(bx); ++s.textsDrawn;
+        }
     }
     // (2.7.0, Rassul 2026-10-13 "this looks good, lets implement this") the printed Ex? / Ex marks: text only (red above a top,
     // green below a bottom), on the extreme bar's frozen stamp at its frozen price; never over an A circle, a profile label or
@@ -1664,7 +1763,7 @@ bool DeltaProfile::render(ChartState& s) {
             PNT point; point.set(at, static_cast<float>(m.extreme), kBarCenter);
             const int font = s.layout.font, w = textWidth(m.mark, font, true), hh = font + 3;
             const int l = point.h - w / 2, r = l + w;
-            if (l < pane.left || r > left - 8) { s.exState[m.id] = "offscreen"; ++s.exOffscreen; continue; }
+            if (l < pane.left || r > priceLimit) { s.exState[m.id] = "offscreen"; ++s.exOffscreen; continue; }
             int y = 0; bool ok = false;
             for (int k = 0; k < 6 && !ok; ++k) {
                 const int yy = m.top ? point.v - hh / 2 - 3 - k * hh : point.v + hh / 2 + 3 + k * hh;
@@ -1685,7 +1784,7 @@ bool DeltaProfile::render(ChartState& s) {
     // I, A?, I?, Acc and Dst are never absorption bubbles. No one-bubble-per-bar filter.
     for(const Bubble& b:bubbles){
         const COLOR color=b.support?C_SUPPORT:C_RESISTANCE;
-        if(b.offset==0)ringAt(b.bar,b.price,color,pane.left,left-8,top,bottom);
+        if(b.offset==0)ringAt(b.bar,b.price,color,pane.left,priceLimit,top,bottom);
         else {
             PNT anchor;anchor.set(b.bar,static_cast<float>(b.price),kBarCenter);
             stroke(anchor.h,anchor.v,anchor.h+b.offset,anchor.v,color,1);
@@ -1705,6 +1804,12 @@ void DeltaProfile::status(ChartState& s) {
         << "\nCHART," << s.identity << "\nROWS," << (s.ready ? s.snapshot.buckets.size() : 0)
         << "\nASOF," << s.asof << "\nRANGE,Last 90 min LIVE (chart-bar close window)\nDRAWN_ROWS," << s.drawnRows
         << "\nBADGE,\nWIDTH," << s.layout.width << "\nSIDES,One\nFACE,Left\nPLACE,Right\nSTATE," << safeField(s.state)
+        << "\nCOLUMN," << s.lay.delta.l << "-" << s.lay.delta.r << ",price right " << s.lay.priceRight << ",dealer " << (s.peers.on[cb::DEALER] ? "on" : "off")
+        << ",levels " << (s.peers.on[cb::LEVELS] ? "on" : "off") << (s.lay.squeezed ? ",squeezed" : "") << (cb::columnsClean(s.lay) ? ",clean" : ",OVERLAP")
+        << ",delta text " << (s.layout.text ? "on" : "off") << " drawn " << s.textsDrawn << ",labels shortened " << s.labelsShort
+        << "\nMARGIN," << (s.marginOwner ? "owner (no Dealer Profile)" : "Dealer Profile owns it") << ",need " << s.needPx << " px,units "
+        << (s.probe.units == cb::PIXELS ? "pixels" : "bars") << ",ppb " << s.ppb << ",read " << s.marginRead << ",asked " << s.marginAsked
+        << ",set ok " << s.setOk << ",set fail " << s.setFail << ",gap " << s.gapSeen
         << "\nTICK," << std::setprecision(12) << s.tick << "\nMISSING_VAP_BARS," << s.missingVap
         << "\nVAP_MISMATCH," << s.vapMismatch << '\n';
     {   // (2.5.0) the session record: what was decided, where (for ChartView and the nightly scoring)
@@ -1776,6 +1881,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion(DLT_VERSION);
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.8.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }

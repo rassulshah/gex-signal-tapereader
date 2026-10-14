@@ -105,6 +105,7 @@ void cppExtension::PNT::drawLineTo() {}
 
 static int passes = 0, fails = 0;
 static void check(bool ok, const char* m) { if (ok) ++passes; else { ++fails; std::printf("FAIL %s\n", m); } }
+#include "tests_dp290/dp_mock_cols.h"   // (CR5200) the 2.11.0 SDK calls (chart options, dialog setters)
 static std::string UP;
 static std::string fl(const char* name) { return UP + "\\InvestorRT\\rtx\\lsFlexLevels\\" + name; }
 
@@ -141,24 +142,16 @@ int main()
         check(pdh, "ES key-level badge reads \"6660.00 PFH . PDH...\" (2.10.0: middle dot on the badge)");
         // ---- 2. drawn: badges centred, never over each other, the Liquidity column (< 110) or past maxR (2.8.2: price bars allowed)
         if (getenv("DBG")) for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s; std::printf("pend y=%d %s\n", P.y, all.c_str()); }
+        // (2.11.0, CR5200) the compact badges sit in the LEVELS column right of the last bar (ColumnBoard layout), never overlapping
+        { cppExtension::RCT pane; pane.getPaneRect(false); X.columns(pane, X.rightEdge(pane), true); }
         RECTS.clear(); X.flushLabels(X.cfg);
         if (getenv("DBG")) for (auto& r : RECTS) std::printf("rect %d %d %d %d\n", r.l, r.t, r.r, r.b);
         check(!RECTS.empty(), "badges drawn");
-        {   // (2.8.2) one centred column: every badge's centre on the same x (a crowded row steps up / down, not sideways)
-            std::map<int, int> cx; for (auto& r : RECTS) cx[(r.l + r.r) / 2]++;
-            int best = 0; for (auto& kv : cx) best = std::max(best, kv.second);
-            std::printf("  badges %zu, %d share one centre\n", RECTS.size(), best);
-            check(best * 10 >= (int)RECTS.size() * 8, "(2.8.2) badges aligned in one centred column");
-        }
-        const short maxR = (short)(1598 - X.cfg.width - 80 - 140);
+        const bp::Box col = X.cs.lay.levels;
+        std::printf("  badges %zu in the Levels column %d-%d\n", RECTS.size(), col.l, col.r);
         for (size_t i = 0; i < RECTS.size(); i++) {
-            check(RECTS[i].l >= 110 && RECTS[i].r <= maxR, "badge inside minL..maxR");
+            check(RECTS[i].l >= col.l && RECTS[i].r <= col.r, "badge inside the Levels column");
             for (size_t j = i + 1; j < RECTS.size(); j++) check(!overlap(RECTS[i], RECTS[j]), "badges never overlap each other");
-            for (int b = VS; b <= VE; b++) {
-                cppExtension::PNT ph; ph.set(b, a.h[b]); cppExtension::PNT pl; pl.set(b, a.l[b]);
-                Drawn bar{ (short)(ph.h - 1), ph.v, (short)(ph.h + 1), pl.v };
-                (void)bar;   // (2.8.2, Rassul 11:20 alignment) badges may sit over price bars: one centred column wins over bar avoidance
-            }
         }
         X.saveHostState(); X.done();
     }
@@ -191,17 +184,17 @@ int main()
         check(own && X.pend.size() == 1, "Rithmic ESH7: the EPH27 levels at their strikes");
         X.done();
     }
-    {   // ---- 5. (2.8.x) Liq tags end to end: the Liquidity Profile's file -> the key-level and MenthorQ badges
-        { std::ofstream f(fl("LRA-LiqZones-ES.csv").c_str(), std::ios::binary);
-          f << "LIQZ,1," << (long long)time(nullptr) << ",0.25\r\nZ,R,6659,6661.5,2.6,977\r\nZ,S,6638.75,6641.25,2.2,812\r\n"; }
+    {   // ---- 5. (2.11.0, Rassul 11:39 CT) liquidity end to end: the Liquidity Profile's LRA-LiqLevels file -> the badge's block + hover
+        { std::ofstream f(fl("LRA-LiqLevels-ES.csv").c_str(), std::ios::binary);
+          f << "LIQL,1," << (long long)time(nullptr) << ",0.25,2.5,2.1,4\r\nL,26640,R,977,2.6\r\nL,26560,S,812,1.4\r\n"; }   // 6660.00 offers 2.6x; 6640 bids 1.4x
         DealerProfile X; Chart a; a.root = "ES"; a.sym = "EPZ26"; build(a, 6650.0f); CUR = &a;
         VE = (int)a.dt.size() - 1; VS = VE - 199;
         X.loadHostState(); X.mkt = "ES"; X.root = "EPZ26"; X.pend.clear();
         X.drawKeyLevels(X.cfg);
         bool tag = false; for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s;
-            if (getenv("DBG")) std::printf("liq pend %s\n", all.c_str());
-            if (all.rfind("6660.00 PFH \xB7 PDH", 0) == 0 && all.find("Liq 977 (2.6x)") != std::string::npos) tag = true; }
-        check(tag, "(2.8.0) key level on an offer zone: \"... Liq 977 (2.6x)\"");
+            if (getenv("DBG")) std::printf("liq pend %s lots %lld hl %d\n", all.c_str(), P.lots, (int)P.hl);
+            if (all.rfind("6660.00 PFH \xB7 PDH", 0) == 0 && P.haveLiq && P.lots == 977 && P.hl && !P.bid && P.liq.find("977 contracts resting offers (2.6x") == 0) tag = true; }
+        check(tag, "(2.11.0) key level on 977 resting offers at 2.6x: HL block, red side, hover text");
         X.done();
     }
     {   // ---- 4. settings: a chart without a saved row does not re-read the settings file on every repaint

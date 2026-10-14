@@ -4,11 +4,11 @@
 #include <thread>
 #include <sys/stat.h>
 namespace mock { Host* current=NULL; }
-static int passed=0;
+static int passed=0,failedCount=0;
 static void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 static void test(const char* name,const std::function<void()>& fn){
     try{fn();++passed;std::cout<<"PASS "<<name<<'\n';}
-    catch(const std::exception& e){std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';std::exit(1);}
+    catch(const std::exception& e){std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';++failedCount;latchBooks().clear();}
 }
 static mock::Host history(int count=92,int seconds=60){
     mock::Host h;h.seconds=seconds;
@@ -113,17 +113,19 @@ int main(){
         std::string file=h.directory+"/InvestorRT/rtx/lsFlexLevels/DeltaProfile.settings.txt";
         const std::string line="ES|0|88|7|12|1|0|0|0|0|1|0|90|3|1\n";{std::ofstream out(file);out<<line;}
         mock::current=&h;DeltaProfile p;p.parmsLoad();std::ifstream in(file);std::ostringstream text;text<<in.rdbuf();
-        check(text.str()==line && h.parms[0]==88 && h.parms[1]==7 && h.parms[2]==12,"opening rewrote layout");cleanup(p,h);unsetenv("USERPROFILE");
+        // (2.8.0) the dialog rows are Width / Font / Show delta text: a 2.7 row (width 88, gap 7, font 12) fills 88 / 12 / checked
+        check(text.str()==line && h.parms[0]==88 && h.parms[1]==12 && h.checks[2],"opening rewrote layout");cleanup(p,h);unsetenv("USERPROFILE");
     });
     test("malformed layout clamps without chart overflow",[]{
-        mock::Host h=history();mock::current=&h;DeltaProfile p;p.draw();h.parms[0]=INT_MAX;h.parms[1]=INT_MIN;h.parms[2]=INT_MAX;p.parmsApply();
-        check(state(h).layout.width==600 && state(h).layout.gap==-300 && state(h).layout.font==18,"layout unclamped");cleanup(p,h);
+        mock::Host h=history();mock::current=&h;DeltaProfile p;p.draw();h.parms[0]=INT_MAX;h.parms[1]=INT_MAX;p.parmsApply();
+        // (2.8.0) a width outside 40-250 keeps the last good width (80 default); the gap is gone (0); the font clamps to 18
+        check(state(h).layout.width==80 && state(h).layout.gap==0 && state(h).layout.font==18,"layout unclamped");cleanup(p,h);
     });
     test("absorption circle uses exact displayed node bar",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
-        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=101;h.bars[40].open=99;   /* (2.6.2) the peak bar itself closes green above the selling node */
         mock::current=&h;DeltaProfile p;p.draw();int rings=0;bool letter=false;
         for(const mock::Draw& d:h.draws){if(d.type=="ring"){++rings;check(d.x==450,"wrong peak candle");}if(d.type=="text" && d.text.find("A ")==0)letter=true;}
         check(rings==1 && letter,"circle/letter mismatch");
@@ -134,7 +136,7 @@ int main(){
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
-        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=101;h.bars[40].open=99;   /* (2.6.2) the peak bar itself closes green above the selling node */
         mock::current=&h;DeltaProfile p;p.draw();
         check(!latchBooks().empty() && !latchBooks().begin()->second.v.empty() && latchBooks().begin()->second.v[0].code=="A","decided A not recorded");
         mock::Bar last=h.bars.back();
@@ -158,7 +160,7 @@ int main(){
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
-        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=101;h.bars[40].open=99;   /* (2.6.2) the peak bar itself closes green above the selling node */
         mock::current=&h;DeltaProfile p;p.draw();
         p.done();                                                   // IRT resets the host context
         mock::Bar last=h.bars.back();
@@ -167,11 +169,11 @@ int main(){
         int rings=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"){++rings;check(d.x==450,"circle moved to another bar");}
         check(rings>=1,"reset wiped the decided A's circle");cleanup(p,h);
     });
-    test("2.5.2/2.5.5: a node pushed out of the top 3 keeps its signal, is decided by a green close, keeps its circle, no bare letter",[]{
+    test("2.5.2/2.5.5: a node pushed out of the top 3 keeps its signal, (2.6.2: is decided by its own peak bar closing green above), keeps its circle, no bare letter",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}  // dojis: undecided
-        h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
-        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        h.bars[109].rows.push_back(mock::Price(100,0,10000,10000));h.bars[109].volume+=10000;
+        h.bars[109].low=99;h.bars[109].high=125;h.bars[109].close=101;h.bars[109].open=99;   /* (2.6.2) the peak bar is the FORMING last bar: pending A? until it closes green above */
         mock::current=&h;DeltaProfile p;p.draw();
         check(!latchBooks().empty() && latchBooks().begin()->second.v.size()==1 && latchBooks().begin()->second.v[0].code=="A?","candidate not tracked");
         // three much bigger nodes appear: the 100 node leaves the top 3
@@ -185,22 +187,22 @@ int main(){
         h.draws.clear();p.draw();
         check(latchBooks().begin()->second.v[0].code=="A" && latchBooks().begin()->second.v[0].support,"green close above did not decide the tracked node");
         int rings=0;bool letter=false;
-        for(const mock::Draw& d:h.draws){if(d.type=="ring"&&d.x==450)++rings;if(d.type=="text"&&d.text=="A")letter=true;}
+        for(const mock::Draw& d:h.draws){if(d.type=="ring"&&d.x==(109*10+50))++rings;if(d.type=="text"&&d.text=="A")letter=true;}
         check(rings==1,"tracked A lost its circle");check(!letter,"2.5.5: an off-profile A draws no bare letter");cleanup(p,h);
     });
     test("2.6.0: pending candidate and final I never draw an absorption circle",[]{
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=104;b.close=104;}
-        h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
-        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        h.bars[109].rows.push_back(mock::Price(100,0,10000,10000));h.bars[109].volume+=10000;
+        h.bars[109].low=99;h.bars[109].high=125;h.bars[109].close=100;h.bars[109].open=100;   /* (2.6.2) the peak bar is the FORMING last bar (pending A?), then closes as a doji = not A */
         mock::current=&h;DeltaProfile p;p.draw();
-        int before=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"&&d.x==450)++before;
+        int before=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"&&d.x==(109*10+50))++before;
         check(before==0,"pending candidate must not draw confirmed absorption");
         mock::Bar r=h.bars.back();r.time+=60;r.rows={mock::Price(97,1,0,1)};r.volume=1;r.open=99;r.low=95;r.high=99.5;r.close=96;h.bars.push_back(r);   // red close below: sellers won
         mock::Bar f=r;f.time+=60;h.bars.push_back(f);
         h.draws.clear();p.draw();
         check(latchBooks().begin()->second.v[0].code=="I","fixture: red close below did not decide I");
-        int after=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"&&d.x==450)++after;
+        int after=0;for(const mock::Draw& d:h.draws) if(d.type=="ring"&&d.x==(109*10+50))++after;
         check(after==0,"final I must never have an absorption circle");
         check(latchBooks().begin()->second.v[0].candSupport,"legacy candidate metadata remains independent of final decision");
         cleanup(p,h);
@@ -217,7 +219,7 @@ int main(){
         mock::Host h=history(110,60);
         for(auto& b:h.bars){b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;b.low=100;b.high=125;b.open=103;b.close=104;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;
-        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=100;h.bars[40].open=100;
+        h.bars[40].low=99;h.bars[40].high=125;h.bars[40].close=101;h.bars[40].open=99;   /* (2.6.2) the peak bar itself closes green above the selling node */
         mock::current=&h;DeltaProfile p;p.draw();
         int ringsWide=0,lettersWide=0;for(const mock::Draw& d:h.draws){if(d.type=="ring")++ringsWide;if(d.type=="text" && d.text.rfind("A",0)==0 && (d.text.size()<=2 || d.text[1]==' ' || d.text[1]=='?'))++lettersWide;}
         check(ringsWide==1 && lettersWide==1,"wide pane: one circle, one letter");
@@ -225,5 +227,5 @@ int main(){
         int rings=0,letters=0;for(const mock::Draw& d:h.draws){if(d.type=="ring")++rings;if(d.type=="text" && d.text.rfind("A",0)==0 && (d.text.size()<=2 || d.text[1]==' ' || d.text[1]=='?'))++letters;}
         check(rings==1 && letters==1,"single visible current absorption remains paired");cleanup(p,h);
     });
-    std::cout<<"RESULT "<<passed<<" tests passed\n";
+    std::cout<<"RESULT "<<passed<<" tests passed, "<<failedCount<<" failed\n";if(failedCount)return 1;
 }

@@ -33,11 +33,12 @@ call :one GammaProfile lsGammaProfile GammaProfileLogic.h ContractOffsetLogic.h
 REM (MT100 2026-10-09) lsDayModel + lsDayStats RETIRED - superseded by lsHodLod (+ SessionInfo) and the HOD / LOD studies.
 REM   Their sources are kept in plugin\retired\ (see plugin\retired\RETIRE-NOTES.md); they are no longer built or installed.
 call :one KingTracker  lsKingTracker  KingTrackerLogic.h ContractOffsetLogic.h
-call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h
+REM (2026-10-14 CR5200) the right-side columns: ColumnBoard.h shared by DealerProfile 2.11.0 / DeltaProfile 2.8.0 / LiquidityProfile + Flow 0.16.0
+call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h ColumnBoard.h DealerColumnsLogic.h BoxPlace.h BannerBoard.h
 call :one DealerRead   lsDealerRead   DealerLogic.h HostSlot.h BoxPlace.h
 call :one DealerSig    lsDealerSig    DealerLogic.h
 call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h
-call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h
+call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h ColumnBoard.h BoxPlace.h BannerBoard.h
 call :one DeltaProfileHourly lsDeltaProfileHourly DeltaProfileHourlyCore.h DeltaProfileHourlyEngine.h DeltaProfileHourlyParams.h HostSlot.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h SessionInfoLayout.h HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h
 call :one HodLod       lsHodLod       HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h HodLodFx.h FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp BoxPlace.h
@@ -65,9 +66,9 @@ call :one ChartView    lsChartView    ChartViewLogic.h HostSlot.h DealerLogic.h 
 call :one MboCheck     lsMboCheck     MboCheckLogic.h HostSlot.h
 REM (LQ010 2026-10-11) the Liquidity Profile - native depth + VAP, TESTING
 REM (LQ150 2026-10-13) 0.15.0 includes the order-by-order feed: rebuild when OrderFlowFeed.h / OptionsFlow.h / NearLevels.h change
-call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h BannerBoard.h BoxPlace.h
+call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h BannerBoard.h BoxPlace.h ColumnBoard.h
 REM (LQ020 2026-10-11) the aggression / defense panes - the same source built as its own pane
-call :one LiquidityFlow lsLiquidityFlow LiquidityProfile.cpp LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h BannerBoard.h BoxPlace.h
+call :one LiquidityFlow lsLiquidityFlow LiquidityProfile.cpp LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h BannerBoard.h BoxPlace.h ColumnBoard.h
 REM (2026-10-11) lsPulling - who pulled their orders near price, from the order-by-order (MBO) feed
 call :one Pulling lsPulling PullingLogic.h HostSlot.h
 REM (2026-10-11) lsExhaustion - the pusher fading at a new extreme, per-market settings from lra.exh_study

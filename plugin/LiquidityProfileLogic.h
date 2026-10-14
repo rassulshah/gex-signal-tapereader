@@ -61,7 +61,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.15.1a";   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
+static const char* const VERSION = "0.16.0";   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -570,6 +570,17 @@ public:
         return true;
     }
 
+    // (0.16.0, CR5200 / Rassul 11:39 CT) the liquidity at ANY price, for the Dealer Profile's level badges: the contracts in the zone-wide
+    // band around it (2*hw+1 ticks, the band the zones use) on the side price would hit - bids below the last price, offers above - and
+    // its prominence vs the 8 same-width bands behind it (prominence(), the rule the zones are drawn by; -1 = nothing behind to compare)
+    bool levelLiq(Tick px, double& lots, double& bx, int& side) const {
+        lots = 0; bx = -1; side = BID;
+        if (!haveBook || !havePx || px == lastPx) return false;
+        Zone z; z.side = px < lastPx ? BID : ASK; z.lo = px - hw; z.hi = px + hw;
+        lots = band(z.side, z.lo, z.hi);
+        if (!(lots > 0)) return false;
+        prominence(z); bx = z.behindN > 0 ? z.bx : -1; side = z.side; return true;
+    }
     double band(int side, Tick lo, Tick hi) const {
         double s = 0; for (std::map<Tick, double>::const_iterator i = book[side].lower_bound(lo); i != book[side].end() && i->first <= hi; ++i) s += i->second;
         return s;

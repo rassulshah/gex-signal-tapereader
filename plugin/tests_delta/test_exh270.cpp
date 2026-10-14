@@ -105,7 +105,7 @@ static Box ringBox(const mock::Draw& d) { return Box{ d.x - 6, d.y - 6, d.x + 7,
 int main()
 {
     setenv("TZ", "UTC", 1); tzset();
-    check(std::string(DLT_VERSION) == "2.7.1", "version string is 2.7.1");
+    check(std::string(DLT_VERSION) == "2.8.0", "version string is 2.8.0");
     // 1) a thin top after an A prints Ex? at the FIRST red close, and never moves or disappears after later bars
     mock::Draw firstMark("none", 0, 0);
     {
@@ -122,7 +122,7 @@ int main()
             check(c[1] == "C" && c[5] == "top" && c[10] == "112" && c[12] == "PDH" && c[14] == "1", "C line: top at 112.00, PDH 1 tick away");
             check(c[17] == "1" && c[18] == "1" && std::atof(c[15].c_str()) < 0.35 && std::atof(c[16].c_str()) < 0.5, "thin and fading (thin " + c[15] + ", fade " + c[16] + ")");
             check(c[19] == "A" && c[20] == "108" && c[22] == "Ex?" && c[23] == "live", "context = the A at 108, mark Ex?, live");
-            check(c[2] == "2.7.1" && c[25].find("show=ctx") != std::string::npos && c[25].find("src=file") != std::string::npos, "version + params recorded");
+            check(c[2] == "2.8.0" && c[25].find("show=ctx") != std::string::npos && c[25].find("src=file") != std::string::npos, "version + params recorded");
         }
         check(texts(h, "Ex").empty(), "nothing drawn before the close back");
         draw(p, h, 118, all);                                           // bar 116 closed red: the print
