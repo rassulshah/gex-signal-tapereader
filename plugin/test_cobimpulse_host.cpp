@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
         const cimp::Rec& a = S->recs.at(std::make_pair((long long)F.bars[(size_t)i839].time, 1));
         CHECK(a.v() && !a.r() && a.abs && a.vT == (long long)F.bars[(size_t)i833].time && a.vn >= 35, "08:39 = V on 08:33 with Abs on the pivot");
         const cimp::Rec& b = S->recs.at(std::make_pair((long long)F.bars[(size_t)i854].time, 1));
-        CHECK(!b.v() && !b.r(), "08:54 plain");
+        CHECK(!b.v() && !b.r() && b.c() && !b.abs, "08:54 = C (08:33 climax), no Abs on its pivot -> hidden in the default mode");
         H.draws.clear(); p->draw();
         CHECK(texts(H, "Cob+V?").size() == 1 && texts(H, "Cob").size() == 2, "labels: one Cob+V?, one plain Cob");
         CHECK(hollowBoxes(H) == 1, "one 1 px white box (the 08:33 impulse bar)");
@@ -117,10 +117,10 @@ int main(int argc, char** argv) {
         CHECK(logged, "V logged even when hidden");
         spit(flex() + "\\LRA-CobImpulse-NQ.csv", "VERSION,1\nMARKET,NQ\nMODE,always\n");
         p->testState()->paramsCheckMs = -1; H.draws.clear(); p->draw();
-        CHECK(texts(H, "Cob+V?").size() == 1 && hollowBoxes(H) == 1, "MODE always: shown without Abs");
+        CHECK(texts(H, "Cob+V?").size() == 1 && texts(H, "Cob+C?").size() == 1 && hollowBoxes(H) == 2, "MODE always: Cob+V? and Cob+C? shown (each boxes the 08:33 bar)");
         spit(flex() + "\\LRA-CobImpulse-NQ.csv", "VERSION,1\nMARKET,NQ\nMODE,always\nPROVEN,1\nPLAIN,0\n");
         p->testState()->paramsCheckMs = -1; p->testState()->paramsStamp = -3; H.draws.clear(); p->draw();
-        CHECK(texts(H, "Cob+V").size() == 1 && texts(H, "Cob+V?").empty() && texts(H, "Cob").size() == 1, "PROVEN drops the ?, PLAIN 0 hides the plain Cob");
+        CHECK(texts(H, "Cob+V").size() == 1 && texts(H, "Cob+V?").empty() && texts(H, "Cob+C").size() == 1 && texts(H, "Cob").size() == 2, "PROVEN drops the ?");
         spit(flex() + "\\LRA-CobImpulse-NQ.csv", "VERSION,1\nMARKET,NQ\nMODE,off\n");
         p->testState()->paramsCheckMs = -1; p->testState()->paramsStamp = -3; H.draws.clear(); p->draw();
         CHECK(texts(H, "Cob+").empty() && hollowBoxes(H) == 0, "MODE off: no tag, no box");
@@ -128,8 +128,22 @@ int main(int argc, char** argv) {
         p->testState()->paramsCheckMs = -1; p->testState()->paramsStamp = -3; H.draws.clear(); p->draw();
         CHECK(texts(H, "Cob+").empty() && p->testState()->paramsWhy.find("defaults") != std::string::npos, "wrong-market file -> defaults (abs), reason in the status");
         std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.1.0") != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
+        CHECK(st.find("VERSION,0.2.0") != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
         p->destroy(); delete p; std::remove((flex() + "\\LRA-CobImpulse-NQ.csv").c_str());
+    }
+    // 3b) a 0.1.0 record file (11 fields) is read, kept and rewritten in the 0.2.0 layout
+    {
+        wipe(); mock::Host H; mock::current = &H; CobImpulse* p = static_cast<CobImpulse*>(CreateExtension()); p->setup();
+        setBars(H, F, (size_t)i839 + 1, i839, i854, i833, true); p->calc(0);      // decides nothing yet (forming) but identifies
+        const long long sess = (epochOf("2026-10-14 08:39:00") - 17LL * 3600) / 86400LL + 1;
+        const std::string path = flex() + "\\CobImpulse\\NQ-NQZ6-180-" + std::to_string(sess) + ".csv";
+        spit(path, std::string(cimp::REC_HEADER_010) + "\n" + std::to_string(F.bars[(size_t)i833].time) + "|bull|1|2|0|0|0.00|0|0|0.00|0\n");
+        p->testState()->session = -1;                                              // reload on the next pump
+        setBars(H, F, F.bars.size(), i839, i854, i833, true); p->calc(0);
+        const std::string t = slurp(path);
+        CHECK(t.rfind(cimp::REC_HEADER, 0) == 0 && t.find(std::to_string(F.bars[(size_t)i833].time) + "|bull|1|2|0|0|0.00|0|0|0.00|0|0|0|0.00|0") != std::string::npos
+              && t.find(std::to_string(F.bars[(size_t)i839].time) + "|bull|") != std::string::npos, "0.1.0 record kept in the new layout, new CoBs added");
+        p->destroy(); delete p;
     }
     // 4) his RTL not readable -> nothing decided, retried; forming-bar flag never decided
     {

@@ -1,5 +1,8 @@
 /********************************************************************************
- *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.1.0, 2026-10-14)
+ *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.2.0, 2026-10-14)
+ *  0.2.0 (Rassul 13:31 CT): "+C" climax at the origin - bull: a RED biggest-volume (35+ bars) bar from the pivot-low bar -2 .. +2, then a
+ *        close above its high by the CoB bar (bear mirror); tags in order R, V, C ("Cob+RVC?"); C fields added to the record (a 0.1.0
+ *        record file is read and rewritten in the new layout, its CoBs keep their 0.1.0 tags).
  *
  *  COB IMPULSE: did the CoB leg start with force? Rassul 2026-10-14 12:07 CT (approved; mockup cob/mockup-cob-impulse.png):
  *  "tag CoB signals that have an IMPULSE at their origin". Put ONE on the price pane of each 3-min LTF chart (ES NQ CL GC HG NG 6E).
@@ -56,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.1.0"          // keep equal to cimp::VERSION and the setVersion literal below
+#define CI_VERSION "0.2.0"          // keep equal to cimp::VERSION and the setVersion literal below
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
 static const COLOR C_BOX = 0x00FFFFFF, C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
@@ -141,7 +144,7 @@ static long long civilDays(int y, unsigned m, unsigned d) {
     return era * 146097 + (long long)doe - 719468;
 }
 
-static const char* const REC_FILE_HEADER = "trig_time|side|pivot_time|leg_end_time|r_time|r_n|r_x|v_time|v_n|v_x|abs";
+static const char* const REC_FILE_HEADER = cimp::REC_HEADER;
 static const size_t REC_FILE_MAX = 512 * 1024, REC_LINES_MAX = 5000;
 
 struct HoverT { std::string key; int l = 0, t = 0, r = 0, b = 0; cimp::Rec rec; };
@@ -298,13 +301,13 @@ bool CobImpulse::flush(CIState& S) {
         std::string old; long long st = -1; std::vector<std::string> keep; std::set<std::pair<long long, int>> seen;
         if (statFile(path, st)) {
             if (!readSmall(path, REC_FILE_MAX, old)) { ++S.recFails; continue; }   // never rewrite a file we could not read
-            std::istringstream in(old); std::string line; bool head = true;
+            std::istringstream in(old); std::string line; bool head = true, badHead = false;
             while (std::getline(in, line)) {
                 if (!line.empty() && line.back() == '\r') line.pop_back();
-                if (head) { head = false; if (line != REC_FILE_HEADER) { keep.clear(); break; } continue; }
-                cimp::Rec r; if (cimp::parseRec(line, r) && seen.insert(std::make_pair(r.trig, r.side)).second) keep.push_back(line);
+                if (head) { head = false; if (line != REC_FILE_HEADER && line != cimp::REC_HEADER_010) { badHead = true; break; } continue; }
+                cimp::Rec r; if (cimp::parseRec(line, r) && seen.insert(std::make_pair(r.trig, r.side)).second) keep.push_back(cimp::recLine(r));
             }
-            if ((head && !old.empty()) || (keep.empty() && !old.empty() && old.compare(0, std::strlen(REC_FILE_HEADER), REC_FILE_HEADER) != 0)) { ++S.recFails; continue; }
+            if (badHead || (head && !old.empty())) { ++S.recFails; continue; }   // never rewrite a file we do not understand
         }
         std::string text = std::string(REC_FILE_HEADER) + "\n";
         for (const auto& k : keep) text += k + "\n";
@@ -327,7 +330,7 @@ void CobImpulse::load(CIState& S) {
         std::istringstream in(text); std::string line; bool head = true; size_t n = 0;
         while (std::getline(in, line) && ++n <= REC_LINES_MAX) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            if (head) { head = false; if (line != REC_FILE_HEADER) break; continue; }
+            if (head) { head = false; if (line != REC_FILE_HEADER && line != cimp::REC_HEADER_010) break; continue; }
             cimp::Rec r; if (cimp::parseRec(line, r)) S.recs.insert(std::make_pair(std::make_pair(r.trig, r.side), r));
         }
     }
@@ -336,7 +339,7 @@ void CobImpulse::status(CIState& S, long long now) {
     if (S.lastStatusMs >= 0 && now >= S.lastStatusMs && now - S.lastStatusMs < 1000) return;
     S.lastStatusMs = now;
     int tagged = 0, shownN = 0;
-    for (const auto& kv : S.recs) { if (kv.second.r() || kv.second.v()) { ++tagged; if (cimp::shown(true, kv.second.abs, S.P.mode)) ++shownN; } }
+    for (const auto& kv : S.recs) { if (kv.second.r() || kv.second.v() || kv.second.c()) { ++tagged; if (cimp::shown(true, kv.second.abs, S.P.mode)) ++shownN; } }
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << CI_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nFLAGS," << S.flags << "\nPARAMS,mode " << cimp::modeName(S.P.mode) << ",proven " << (S.P.proven ? 1 : 0) << ",plain " << (S.P.plain ? 1 : 0)
@@ -385,12 +388,12 @@ void CobImpulse::render(CIState& S) {
     FONT f; f.id = HELVETICA; f.size = 10; f.style = BOLD; setFont(f);
     for (const auto& kv : S.recs) {
         const cimp::Rec& r = kv.second;
-        const bool tag = cimp::shown(r.r() || r.v(), r.abs, S.P.mode);
+        const bool tag = cimp::shown(r.r() || r.v() || r.c(), r.abs, S.P.mode);
         if (!tag && !S.P.plain) continue;
         const int ti = indexOf(times, count, r.trig); if (ti < 0) continue;
         int ai = r.legEnd > 0 ? indexOf(times, count, r.legEnd) : -1; if (ai < 0) ai = ti > 0 ? ti - 1 : ti;
         PNT x0; x0.set(ai, 0.0f, kBarCenter); if (x0.h < pane.left - 40 || x0.h > pane.right + 40) continue;
-        const std::string text = cimp::label(r.r(), r.v(), r.abs, S.P);
+        const std::string text = cimp::label(r.r(), r.v(), r.abs, S.P, r.c());
         const float ext = r.side > 0 ? hi[ai] : lo[ai];
         PNT pe; pe.set(ai, ext, kBarCenter);
         const int w = getTextWidth(text.c_str(), -1) + 4, h = 14;
@@ -401,9 +404,9 @@ void CobImpulse::render(CIState& S) {
         S.targets.push_back(H);
         if (!tag) continue;
         // the thin white box around the impulse bar(s)
-        const long long bars[2] = { r.rT, r.vT };
-        for (int k = 0; k < 2; ++k) {
-            if (bars[k] <= 0 || (k == 1 && bars[1] == bars[0])) continue;
+        const long long bars[3] = { r.rT, r.vT, r.cT };
+        for (int k = 0; k < 3; ++k) {
+            if (bars[k] <= 0 || (k >= 1 && bars[k] == bars[0]) || (k == 2 && bars[2] == bars[1])) continue;
             const int bi = indexOf(times, count, bars[k]); if (bi < 0) continue;
             PNT a; a.set(bi, hi[bi], kBarLeft); PNT b; b.set(bi, lo[bi], kBarRight);
             const int l = std::min(a.h, b.h) - 2, rr = std::max(a.h, b.h) + 2, t = std::min(a.v, b.v) - 2, bt = std::max(a.v, b.v) + 2;
@@ -419,6 +422,7 @@ void CobImpulse::render(CIState& S) {
     if (!T) return;
     cimp::HoverIn in; in.side = T->rec.side; in.r = T->rec.r(); in.v = T->rec.v(); in.abs = T->rec.abs;
     in.rn = T->rec.rn; in.vn = T->rec.vn; in.rx = T->rec.rx; in.vx = T->rec.vx; in.rTime = clockOf(T->rec.rT); in.vTime = clockOf(T->rec.vT);
+    in.c = T->rec.c(); in.cn = T->rec.cn; in.cx = T->rec.cx; in.cTime = clockOf(T->rec.cT); in.cConfTime = clockOf(T->rec.cConf);
     std::vector<std::string> L = cimp::hover(in, S.P);
     L.insert(L.begin() + 1, std::string("CoB ") + (T->rec.side > 0 ? "long" : "short") + " at " + clockOf(T->rec.trig) + " (leg from the " + clockOf(T->rec.pivot) + " bar).");
     FONT hf; hf.id = HELVETICA; hf.size = 10; hf.style = PLAIN; setFont(hf);
@@ -450,7 +454,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobImpulse* p = new CobImpulse();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | CALC_LAST);   // CALC_LAST: it reads his RTL results
-    p->setDescription("LRA Cob Impulse v0.1.0: did the CoB leg start with force? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+R?, Cob+V? or Cob+RV?: R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars. A thin white box marks the impulse bar; hover the label or box for the time, bars and ratio. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs (only with Abs on the pivot, default) / always; PROVEN 1 drops the ?. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.1.0");   // CI_VERSION
+    p->setDescription("LRA Cob Impulse v0.2.0: did the CoB leg start with force? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob or Cob+ R / V / C (e.g. Cob+RV?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). A thin white box marks the impulse bar; hover the label or box for the time, bars and ratio. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs (only with Abs on the pivot, default) / always; PROVEN 1 drops the ?. Decided at the CoB's close, recorded, never repainted.");
+    p->setVersion("0.2.0");   // CI_VERSION
     return p;
 }

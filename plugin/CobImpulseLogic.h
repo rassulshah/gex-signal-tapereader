@@ -1,6 +1,6 @@
 #ifndef LS_COBIMPULSE_LOGIC_H
 #define LS_COBIMPULSE_LOGIC_H
-// CobImpulseLogic.h (0.1.0, 2026-10-14) -- SDK-free logic of lsCobImpulse (CobImpulse.cpp), unit-tested on Linux.
+// CobImpulseLogic.h (0.2.0, 2026-10-14; 0.2.0 adds +C) -- SDK-free logic of lsCobImpulse (CobImpulse.cpp), unit-tested on Linux.
 //
 // Rassul 2026-10-14 12:07 CT (approved, mockup cob/mockup-cob-impulse.png): "tag CoB signals that have an IMPULSE at their origin".
 //   Bull CoB (his cob_bull_3m_1b): a bar from the CoB leg's pivot-LOW bar up to 2 bars after it whose LOW is below the HIGH of the
@@ -13,6 +13,10 @@
 //   + impulse, LEARNING): a per-market display setting "Impulse tag" Off / Only with Abs on pivot / Always (default Only with Abs on
 //   pivot). The tag is ALWAYS computed and logged; the mode only decides whether it is shown.
 //
+// 0.2.0 (Rassul 13:31 CT) "+C" = a CLIMAX at the origin: bull - a RED bar (close < open) from the pivot-low bar -2 .. +2 that is the
+//   biggest VOLUME in >= 35 bars (a selling climax), and afterwards, by the CoB bar, a bar that CLOSES ABOVE that climax bar's HIGH;
+//   bear = a GREEN biggest-volume bar near the pivot high, then a close below its LOW. Tags in fixed order R, V, C ("Cob+RVC?").
+//   Logged separately (the earlier screen found "climax into the extreme" weaker than "thrust with the reversal").
 // Decision time only: everything here reads bars 0 .. trig (the CoB bar, closed); bars after it are never read.
 // "Biggest in N bars" = the platform's own "since" convention (BGB_Since / BV_Since): N = bars back to the last STRICTLY bigger bar
 //   (a tie is not bigger, so a tie keeps the count going); no bigger bar in the history = the bars available (i + 1); capped at 100.
@@ -29,7 +33,7 @@
 
 namespace cimp {
 
-static const char* const VERSION = "0.1.0";
+static const char* const VERSION = "0.2.0";
 enum { MODE_OFF = 0, MODE_ABS = 1, MODE_ALWAYS = 2 };
 
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; };   // t = the chart's bar stamp (bar END, IRT)
@@ -102,8 +106,9 @@ struct Tag {
     int side = 0, trig = -1, pivot = -1, legEnd = -1;
     bool abs = false;            // Abs (his Abs_Bull / Abs_Bear) on the pivot bar
     Impulse r, v;                // range / volume thrust (bar -1 = none)
+    Impulse c; int cConf = -1;   // (0.2.0) climax bar and the bar whose close confirmed it
     std::string why;             // why no tag ("no pivot", "no thrust", ...)
-    bool any() const { return r.bar >= 0 || v.bar >= 0; }
+    bool any() const { return r.bar >= 0 || v.bar >= 0 || c.bar >= 0; }
 };
 
 // the tag of a CoB on bar trig (closed). absOnPivot = his Abs flag on the pivot bar, read at the CoB's close.
@@ -124,20 +129,36 @@ inline Tag evaluate(const std::vector<Bar>& B, int trig, int side, const Params&
         const int nv = volSince(B, k, P.cap);
         if (nv >= P.minBars && nv > T.v.n) { T.v.bar = k; T.v.n = nv; }
     }
+    // (0.2.0) +C: an opposite-colour biggest-volume bar from pivot-2 .. pivot+2, then a close beyond it by the CoB bar
+    for (int k = std::max(0, p - 2); k <= std::min(trig, p + 2); ++k) {
+        if (!barOk(B[k]) || !fin(B[k].o) || !fin(B[k].c)) continue;
+        const bool against = T.side > 0 ? B[k].c < B[k].o : B[k].c > B[k].o;
+        if (!against) continue;
+        const int nv = volSince(B, k, P.cap);
+        if (nv < P.minBars || nv <= T.c.n) continue;
+        int conf = -1;
+        for (int m = k + 1; m <= trig; ++m) {
+            if (!fin(B[m].c)) continue;
+            if (T.side > 0 ? B[m].c > B[k].h : B[m].c < B[k].l) { conf = m; break; }
+        }
+        if (conf < 0) continue;
+        T.c.bar = k; T.c.n = nv; T.cConf = conf;
+    }
+    if (T.c.bar >= 0) T.c.x = ratioToAvg(B, T.c.bar, P.avgBars, [](const Bar& b) { return b.v; }, volOk);
     if (T.r.bar >= 0) T.r.x = ratioToAvg(B, T.r.bar, P.avgBars, [](const Bar& b) { return b.h - b.l; }, barOk);
     if (T.v.bar >= 0) T.v.x = ratioToAvg(B, T.v.bar, P.avgBars, [](const Bar& b) { return b.v; }, volOk);
     if (!T.any()) T.why = "no thrust";
     return T;
 }
 
-inline std::string code(bool r, bool v) { return r && v ? "RV" : r ? "R" : v ? "V" : ""; }
+inline std::string code(bool r, bool v, bool c = false) { return std::string(r ? "R" : "") + (v ? "V" : "") + (c ? "C" : ""); }
 // is the tag shown in this mode?
 inline bool shown(bool any, bool abs, int mode) { return any && (mode == MODE_ALWAYS || (mode == MODE_ABS && abs)); }
-// the chart / Reader label: "Cob", "Cob+R?", "Cob+V?", "Cob+RV?" ("?" dropped when proven)
-inline std::string label(bool r, bool v, bool abs, const Params& P)
+// the chart / Reader label: "Cob", "Cob+R?", "Cob+V?", "Cob+C?", "Cob+RV?", "Cob+RVC?" ... ("?" dropped when proven)
+inline std::string label(bool r, bool v, bool abs, const Params& P, bool c = false)
 {
-    if (!shown(r || v, abs, P.mode)) return "Cob";
-    return "Cob+" + code(r, v) + (P.proven ? "" : "?");
+    if (!shown(r || v || c, abs, P.mode)) return "Cob";
+    return "Cob+" + code(r, v, c) + (P.proven ? "" : "?");
 }
 
 // 12-hour Central clock from hour / minute ("8:36 AM")
@@ -149,15 +170,15 @@ inline std::string clock12(int hh, int mm)
 inline std::string ratio(double x) { char b[16]; std::snprintf(b, sizeof(b), "%.1fx", x); return b; }
 
 // the hover (question / how / why / use / example), one line per row; times already as 12-hour CT text
-struct HoverIn { bool r = false, v = false, abs = false; int rn = 0, vn = 0; double rx = 0, vx = 0; std::string rTime, vTime; int side = 1; };
+struct HoverIn { bool r = false, v = false, abs = false, c = false; int rn = 0, vn = 0, cn = 0; double rx = 0, vx = 0, cx = 0; std::string rTime, vTime, cTime, cConfTime; int side = 1; };
 inline std::vector<std::string> hover(const HoverIn& h, const Params& P)
 {
     std::vector<std::string> L;
     const bool bull = h.side > 0;
-    const std::string lab = label(h.r, h.v, h.abs, P);
-    if (!(h.r || h.v)) {
+    const std::string lab = label(h.r, h.v, h.abs, P, h.c);
+    if (!(h.r || h.v || h.c)) {
         L.push_back("Cob - no impulse at its start");
-        L.push_back("Did the CoB leg start with force? No bar near its " + std::string(bull ? "low" : "high") + " was the biggest in 35+ bars.");
+        L.push_back("Did the CoB leg start with force? No bar near its " + std::string(bull ? "low" : "high") + " was the biggest in 35+ bars, and no climax there.");
         return L;
     }
     L.push_back(lab + (shown(true, h.abs, P.mode) ? "" : "  (tag hidden by the Impulse tag setting)") + " - did the CoB leg start with force?");
@@ -165,6 +186,9 @@ inline std::vector<std::string> hover(const HoverIn& h, const Params& P)
                          + (h.rx > 0 ? ", " + ratio(h.rx) + " the average" : "") + ".");
     if (h.v) L.push_back("Volume: the " + h.vTime + " bar was the biggest volume in " + std::to_string(h.vn) + (h.vn >= P.cap ? "+" : "") + " bars"
                          + (h.vx > 0 ? ", " + ratio(h.vx) + " the average" : "") + ".");
+    if (h.c) L.push_back(std::string("Climax: the ") + h.cTime + (bull ? " red" : " green") + " bar was the biggest volume in " + std::to_string(h.cn) + (h.cn >= P.cap ? "+" : "")
+                         + " bars" + (h.cx > 0 ? " (" + ratio(h.cx) + ")" : "") + " - the last " + (bull ? "sellers" : "buyers") + " - and the " + h.cConfTime
+                         + " bar closed " + (bull ? "above its high" : "below its low") + ".");
     L.push_back(std::string("Abs on the pivot: ") + (h.abs ? "yes" : "no") + ".  Why it matters: a thrust right at the " + (bull ? "low" : "high")
                 + " shows " + (bull ? "buyers" : "sellers") + " stepping in hard where the leg began.");
     L.push_back(std::string(P.proven ? "Proven for this market." : "? = still testing: the study has not yet shown it adds edge over a plain Cob.")
@@ -228,18 +252,22 @@ inline Params parseFile(const std::string& text, const std::string& market, std:
 }
 
 // ---- the record (one line per decided CoB; never rewritten)
-//   trig_time|side|pivot_time|r_time|r_n|r_x|v_time|v_n|v_x|abs
+//   trig_time|side|pivot_time|leg_end_time|r_time|r_n|r_x|v_time|v_n|v_x|abs|c_time|c_n|c_x|c_conf_time   (0.2.0 adds the 4 C fields;
+//   a 0.1.0 line - 11 fields - still parses, with no C)
 struct Rec {
-    long long trig = 0; int side = 0; long long pivot = 0, legEnd = 0, rT = 0, vT = 0; int rn = 0, vn = 0; double rx = 0, vx = 0; bool abs = false;
+    long long trig = 0; int side = 0; long long pivot = 0, legEnd = 0, rT = 0, vT = 0, cT = 0, cConf = 0; int rn = 0, vn = 0, cn = 0;
+    double rx = 0, vx = 0, cx = 0; bool abs = false;
     bool r() const { return rT > 0; }
     bool v() const { return vT > 0; }
+    bool c() const { return cT > 0; }
 };
-static const char* const REC_HEADER = "trig_time|side|pivot_time|leg_end_time|r_time|r_n|r_x|v_time|v_n|v_x|abs";
+static const char* const REC_HEADER = "trig_time|side|pivot_time|leg_end_time|r_time|r_n|r_x|v_time|v_n|v_x|abs|c_time|c_n|c_x|c_conf_time";
+static const char* const REC_HEADER_010 = "trig_time|side|pivot_time|leg_end_time|r_time|r_n|r_x|v_time|v_n|v_x|abs";
 inline std::string recLine(const Rec& r)
 {
-    char b[256];
-    std::snprintf(b, sizeof(b), "%lld|%s|%lld|%lld|%lld|%d|%.2f|%lld|%d|%.2f|%d", r.trig, r.side > 0 ? "bull" : "bear", r.pivot, r.legEnd,
-                  r.rT, r.rn, r.rx, r.vT, r.vn, r.vx, r.abs ? 1 : 0);
+    char b[320];
+    std::snprintf(b, sizeof(b), "%lld|%s|%lld|%lld|%lld|%d|%.2f|%lld|%d|%.2f|%d|%lld|%d|%.2f|%lld", r.trig, r.side > 0 ? "bull" : "bear", r.pivot, r.legEnd,
+                  r.rT, r.rn, r.rx, r.vT, r.vn, r.vx, r.abs ? 1 : 0, r.cT, r.cn, r.cx, r.cConf);
     return b;
 }
 inline bool parseLL(const std::string& s, long long& out)
@@ -258,10 +286,10 @@ inline bool parseD(const std::string& s, double& out)
 }
 inline bool parseRec(const std::string& line, Rec& out)
 {
-    if (line.empty() || line.size() > 300) return false;
+    if (line.empty() || line.size() > 400) return false;
     std::vector<std::string> f; size_t a = 0;
     for (size_t i = 0; i <= line.size(); ++i) if (i == line.size() || line[i] == '|') { f.push_back(line.substr(a, i - a)); a = i + 1; }
-    if (f.size() != 11) return false;
+    if (f.size() != 11 && f.size() != 15) return false;
     Rec r; long long n = 0;
     if (!parseLL(f[0], r.trig) || r.trig <= 0) return false;
     if (f[1] == "bull") r.side = 1; else if (f[1] == "bear") r.side = -1; else return false;
@@ -274,6 +302,12 @@ inline bool parseRec(const std::string& line, Rec& out)
     if (!parseD(f[9], r.vx)) return false;
     if (f[10] != "0" && f[10] != "1") return false;
     r.abs = f[10] == "1";
+    if (f.size() == 15) {
+        if (!parseLL(f[11], r.cT)) return false;
+        if (!parseLL(f[12], n) || n > 1000) return false;
+        r.cn = (int)n;
+        if (!parseD(f[13], r.cx) || !parseLL(f[14], r.cConf)) return false;
+    }
     out = r; return true;
 }
 inline Rec toRec(const Tag& T, const std::vector<Bar>& B)
@@ -283,6 +317,7 @@ inline Rec toRec(const Tag& T, const std::vector<Bar>& B)
     if (T.legEnd >= 0) r.legEnd = B[T.legEnd].t;
     if (T.r.bar >= 0) { r.rT = B[T.r.bar].t; r.rn = T.r.n; r.rx = T.r.x; }
     if (T.v.bar >= 0) { r.vT = B[T.v.bar].t; r.vn = T.v.n; r.vx = T.v.x; }
+    if (T.c.bar >= 0) { r.cT = B[T.c.bar].t; r.cn = T.c.n; r.cx = T.c.x; if (T.cConf >= 0) r.cConf = B[T.cConf].t; }
     return r;
 }
 

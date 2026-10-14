@@ -126,6 +126,38 @@ int main(int argc, char** argv)
         CHECK(T0.r.bar == T1.r.bar && T0.r.n == T1.r.n && T0.v.bar == T1.v.bar && T0.pivot == T1.pivot && T0.r.x == T1.r.x, "extra later bars change nothing");
         CHECK(cimp::recLine(cimp::toRec(T0, B)) == cimp::recLine(cimp::toRec(T1, C)), "the record is byte-identical");
     }
+    {   // (0.2.0) +C climax at the origin
+        auto B = base(); B[54].v = 500;                                // bar 54 (pivot - 1) is red (o = high, c = low): a selling climax
+        auto T = ev(B);
+        CHECK(T.c.bar == 54 && T.cConf == 57 && T.v.bar < 0 && T.r.bar < 0, "C: red climax on pivot-1, confirmed by the 57 close above its high");
+        CHECK(cimp::label(false, false, true, P, true) == "Cob+C?", "label Cob+C?");
+        B[54].o = B[54].l; B[54].c = B[54].h;                          // green: not a selling climax
+        CHECK(ev(B).c.bar < 0, "a green bar is no bull climax");
+        auto C = base(); C[52].v = 500;                                 // pivot - 3: outside
+        CHECK(ev(C).c.bar < 0, "pivot - 3 is outside the climax window");
+        auto D = base(); D[54].v = 500; D[56].c = 95; D[57].c = 95.2; D[58].c = 95.2; D[59].c = 95.5;   // never closes ABOVE 95.5
+        CHECK(ev(D).c.bar < 0, "no close above the climax high by the CoB bar: no C");
+        D[59].c = 95.75; CHECK(ev(D).c.bar == 54 && ev(D).cConf == 59, "a close above it on the CoB bar itself counts");
+        auto E = base(); E[55].o = 94; E[55].c = 92.5; E[55].v = 500;   // the pivot bar red + biggest volume -> V and C
+        T = ev(E);
+        CHECK(T.v.bar == 55 && T.c.bar == 55 && T.cConf == 56, "VC on the pivot bar");
+        CHECK(cimp::label(T.r.bar >= 0, T.v.bar >= 0, true, P, T.c.bar >= 0) == "Cob+VC?", "label Cob+VC?");
+        CHECK(cimp::code(true, false, true) == "RC" && cimp::code(true, true, true) == "RVC", "fixed order R, V, C");
+        auto F = base(); F[57].o = 96; F[57].c = 94.5; F[57].v = 500;  // climax at pivot + 2; 58 closes 97 > 96
+        T = ev(F); CHECK(T.c.bar == 57 && T.cConf == 58, "C at pivot + 2 confirmed after it");
+        F[58].c = 95.5; F[59].c = 95.9;                                 // no close above 96 by bar 59
+        CHECK(ev(F).c.bar < 0, "climax at pivot + 2 not confirmed yet");
+        auto G = F; for (int k = 0; k < 10; ++k) { Bar b; b.t = 1060 + k; b.h = 120; b.l = 90; b.o = 90; b.c = 119; b.v = 100; G.push_back(b); }
+        CHECK(cimp::evaluate(G, 59, 1, P, false).c.bar < 0, "a later confirmation (after the CoB bar) never adds C");
+        auto M = mirror(base()); M[54].v = 500;                         // bear mirror: a GREEN climax near the pivot high
+        T = ev(M, -1); CHECK(T.c.bar == 54 && T.cConf == 57, "bear C: green climax, then a close below its low");
+        cimp::Rec r; r.trig = 9; r.side = 1; r.cT = 5; r.cn = 77; r.cx = 3.2; r.cConf = 7; cimp::Rec q;
+        CHECK(cimp::parseRec(cimp::recLine(r), q) && q.c() && q.cn == 77 && q.cConf == 7, "record with C round trip");
+        CHECK(cimp::parseRec("1|bull|2|3|4|5|1.00|0|0|0.00|1", q) && !q.c() && q.abs, "a 0.1.0 record (11 fields) still parses");
+        cimp::HoverIn h; h.c = true; h.cn = 77; h.cx = 3.2; h.cTime = "8:30 AM"; h.cConfTime = "8:39 AM"; h.abs = true;
+        auto L = cimp::hover(h, P); bool ok = false; for (auto& x : L) if (x.find("8:30 AM red bar was the biggest volume in 77 bars") != std::string::npos && x.find("8:39 AM bar closed above its high") != std::string::npos) ok = true;
+        CHECK(ok && L[0].rfind("Cob+C?", 0) == 0, "hover explains the climax");
+    }
     {   // modes and labels
         cimp::Params M;
         M.mode = cimp::MODE_ABS;    CHECK(cimp::label(true, false, false, M) == "Cob" && cimp::label(true, false, true, M) == "Cob+R?", "Abs mode");
@@ -198,8 +230,10 @@ int main(int argc, char** argv)
         CHECK(A.pivot == i833 && A.r.bar < 0 && A.v.bar == i833 && A.v.n >= 35, "NQ 08:39 = Cob+V? (volume 08:33; the 08:36 range 82.25 is only the biggest in 21 bars - the 07:33 news bar was 232.5)");
         CHECK(cimp::rangeSince(B, i836, 100) == 21, "08:36 range: biggest in 21 bars");
         auto C = cimp::evaluate(B, i854, 1, P, false);
-        std::printf("NQ 08:54 CoB: pivot %s, tag %s\n", C.pivot >= 0 ? T[C.pivot].c_str() : "-", cimp::code(C.r.bar >= 0, C.v.bar >= 0).c_str());
-        CHECK(C.pivot == i839p && !C.any(), "NQ 08:54 = plain Cob (pivot 08:39, no thrust)");
+        std::printf("NQ 08:54 CoB: pivot %s, tag %s\n", C.pivot >= 0 ? T[C.pivot].c_str() : "-", cimp::code(C.r.bar >= 0, C.v.bar >= 0, C.c.bar >= 0).c_str());
+        CHECK(C.pivot == i839p && C.r.bar < 0 && C.v.bar < 0 && C.c.bar == i833 && C.c.n >= 35 && T[C.cConf] == "2026-10-14 08:42:00",
+              "NQ 08:54 = Cob+C? (no thrust; the red 08:33 volume climax, closed above at 08:42)");
+        CHECK(A.c.bar < 0, "NQ 08:39: the 08:33 climax was not yet closed above by 08:39 - no C");
     } else std::printf("(no NQ fixture %s - skipped)\n", fx);
     std::printf("%d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
