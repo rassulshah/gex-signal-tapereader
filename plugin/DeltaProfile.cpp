@@ -66,7 +66,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.8.0"; // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.8.1"; // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? on the chart (still recorded) - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -1303,8 +1303,8 @@ void DeltaProfile::absorbExhaust(ChartState& s, LatchBook& bk, const std::vector
     }
 }
 static std::string aeLabel(const LatchBook& bk, long long id) {
-    const std::map<long long, AeRec>::const_iterator at = bk.ae.find(id);
-    return at == bk.ae.end() ? std::string("A") : at->second.label;
+    // (2.8.1, Rassul 18:32 "no AE") every drawn label says A; the AE result is still measured, recorded (AE| lines) and in the status
+    (void)bk; (void)id; return std::string("A");
 }
 static std::string aeWords(const AeRec& a) {
     std::ostringstream o; o.imbue(std::locale::classic());
@@ -1597,7 +1597,7 @@ bool DeltaProfile::render(ChartState& s) {
         return x != y ? x > y : profile.buckets[a].key < profile.buckets[b].key;
     });
     std::map<dp::Tick, int> edge;
-    struct RowText { double delta; int y, edge, h; };   // (2.8.0) each drawn row's value, placed after the node labels
+    struct RowText { double delta; int y, edge, h; const dp::Node* node; };   // (2.8.1) + the node   // (2.8.0) each drawn row's value, placed after the node labels
     std::vector<RowText> rowTexts;
     struct VisibleNode { const dp::Node* node; int y, edge; };
     std::vector<VisibleNode> nodes;
@@ -1632,7 +1632,8 @@ bool DeltaProfile::render(ChartState& s) {
             }
         }
         edge[b.key] = e;
-        if (s.layout.text && b.delta != 0) rowTexts.push_back(RowText{ b.delta, (yt + yb) / 2, e, yb - yt });
+        // (2.8.1, Rassul 18:30 "it has values for every node instead of the nodes that matter") the delta text only on node rows
+        if (s.layout.text && b.delta != 0 && node) rowTexts.push_back(RowText{ b.delta, (yt + yb) / 2, e, yb - yt, node });
         if (node) { VisibleNode v; v.node = node; v.y = (yt + yb) / 2; v.edge = e; nodes.push_back(v); }
     }
     // Native key/bucket lookup only. Pixel Y NEVER assigns a node to a bucket.
@@ -1640,6 +1641,9 @@ bool DeltaProfile::render(ChartState& s) {
     // at its row; a label that would touch another steps up / down with a tick to its row, else it is not drawn (never overlapping)
     std::sort(nodes.begin(), nodes.end(), [](const VisibleNode& a, const VisibleNode& b) {
         return a.node->ratio != b.node->ratio ? a.node->ratio > b.node->ratio : a.y < b.y; });
+    // (2.8.1, Rassul 18:31 "remove the I ... only focused on identifying absorption and consistent with the bubbles") only A nodes
+    // are labelled (and get their delta text); I / I? / A? nodes keep their bar only
+    nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [](const VisibleNode& v) { return v.node->state.code != "A"; }), nodes.end());
     if (nodes.size() > 3) nodes.resize(3);
     std::vector<int> used;
     std::vector<LBox> placed;
@@ -1730,6 +1734,8 @@ bool DeltaProfile::render(ChartState& s) {
         std::stable_sort(rowTexts.begin(), rowTexts.end(), [](const RowText& a, const RowText& b) { return std::fabs(a.delta) > std::fabs(b.delta); });
         const int h = s.layout.font + 3;
         for (const RowText& t : rowTexts) {
+            bool isTop = false; for (const VisibleNode& v : nodes) if (v.node == t.node) { isTop = true; break; }   // (2.8.1) the 3 strongest nodes only
+            if (!isTop) continue;
             const std::string label = amount(t.delta);
             const int w = textWidth(label, s.layout.font, true), r = t.edge - 2, l = r - w;
             if (l < left || t.y - h / 2 <= top || t.y + h / 2 >= bottom) continue;
