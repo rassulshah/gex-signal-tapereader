@@ -1,5 +1,14 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.1.0 (2026-10-14 evening; Rassul 16:01-16:04 CT "a line in the HOD/LOD indicator box that identifies the key GEX levels where a
+ *         reaction can occur so it is front and center - this will be where I look for trades"; "must be able to identify strikes like
+ *         7750 ... see growth in the absolute gex, regardless of whether it is an identified gamma level"): a GEX row under the header -
+ *         at most 3 strikes from lsFlexLevels\LRA-GexNodes-<MKT>.csv (the bridge's lra.gex_nodes, every MenthorQ grid that arrives):
+ *         the top 3 abs GEX within 1 expected move or GROWING (up arrow: rank <= 5, share +30% vs its neighbours since the open / last
+ *         hour), nearest the price first, one per zone, MenthorQ name in blue. Mouse over the row (TRACK_MOUSE) = the detail (rank,
+ *         share, growth as ratios, WALL / FUEL = model, zone mates, what it answers / how to use it / an example). Stale > 20 min in
+ *         MenthorQ hours = dimmed + "STALE 25m"; no file = no row. Read every 5 s by stamp, 64 KiB cap, strict parse (HodLodGex.h).
+ *         Replay ES 10-14: 7750 G8 is on the line from the 12:46 PM grid (rank 3) through the test of the zone.
  *  2.0.6 (2026-10-14, CR4800; Rassul 07:13 "HOD/LOD table: move it DOWN, default Bottom centre", 07:07 Offset X / Y on every box, 07:18
  *         "test them thoroughly ... dont shake ... dont have garbage values"): default Position Bottom centre (7); a place file holding the
  *         2.0.5 default 1 becomes 7 ONCE per market (HodLod.migrate-206.txt), any other choice is kept. WHY THE TABLE WAS MISSING ON ES /
@@ -52,6 +61,7 @@
 #include "HostSlot.h"
 #include "BoxPlace.h"                // (2.0.6) Offset X / Y rules, hysteresis, the dialog snapshot
 #include "HodLodLogic.h"
+#include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
@@ -93,6 +103,10 @@ struct HLState {
     // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
     // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
     time_t avoidChecked = 0; bool trBoxOk = false; hl::Box trBox = { 0, 0, 0, 0 }; int trPos = 0; bool trSeen = false; bool dpBanner = false;
+    // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv (re-read only when its stamp changes, at most every 5 s) and the row's hover
+    long long gexStamp = -2; time_t gexChecked = 0; hlg::File gex; std::string gexWhy; long long gexLoads = 0;
+    bool inGex = false; bool lastGexOk = false, lastHoverOk = false; hl::Box lastGexRow = { 0, 0, 0, 0 }, lastGexHover = { 0, 0, 0, 0 };
+    int gexCurX = -100000, gexCurY = -100000; long long gexHovers = 0;
     bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
     ~HLState() { delete T; }
 };
@@ -101,6 +115,8 @@ class HodLod : public cppExtension {
 public:
     HodLod() : cppExtension() {}
     virtual int draw(void);
+    virtual int mouse(RTX_EVENT* e);                                 // (2.1.0) the GEX row's hover
+    void loadGex(HLState& S);
     // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
     // Bottom centre. IRT can return -1 for a LIST parameter outside its settings copy, so the choice is also kept per market in
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
@@ -310,6 +326,43 @@ bool HodLod::loadMq(HLState& S)
     S.mq.push_back(sn);
     if (S.mq.size() > 32) S.mq.erase(S.mq.begin());
     return true;
+}
+
+// (2.1.0) the screen cursor (Win32 GetCursorPos, user32 - pragma below); the hover closes when the cursor has moved away from where
+// the last mouse event over this pane put it (IRT sends mouse events only for the pane under the mouse)
+#if defined(_WIN32) && !defined(HL_TEST_CURSOR)
+#if defined(_MSC_VER)
+#pragma comment(lib, "user32.lib")
+#endif
+static bool hlCursor(int& x, int& y) { POINT p; if (!GetCursorPos(&p)) return false; x = (int)p.x; y = (int)p.y; return true; }
+#else
+static int hl_test_cx = 0, hl_test_cy = 0;
+static bool hlCursor(int& x, int& y) { x = hl_test_cx; y = hl_test_cy; return true; }
+#endif
+void HodLod::loadGex(HLState& S)
+{
+    time_t now = time(nullptr);
+    if (S.gexStamp != -2 && now - S.gexChecked < 5) return;
+    S.gexChecked = now;
+    std::string p = flexPath("LRA-GexNodes-" + S.mkt + ".csv");
+    if (p.empty()) { S.gex = hlg::File(); S.gexWhy = "no profile folder"; S.gexStamp = -1; return; }
+#ifdef _WIN32
+    struct _stat64 st; bool ok = _stat64(p.c_str(), &st) == 0;
+#else
+    struct stat st; bool ok = stat(p.c_str(), &st) == 0;
+#endif
+    long long stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
+    if (stamp == S.gexStamp) return;
+    S.gexStamp = stamp;
+    if (!ok) { S.gex = hlg::File(); S.gexWhy = "LRA-GexNodes-" + S.mkt + ".csv missing: no GEX line"; return; }
+    if ((long long)st.st_size > (long long)hlg::MAX_BYTES) { S.gex = hlg::File(); S.gexWhy = "over 64 KiB: ignored"; return; }
+    std::string text;
+    {   std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.gexStamp = -2; S.gexWhy = "unreadable (kept the last copy)"; return; }
+        text.resize(hlg::MAX_BYTES + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
+    hlg::File F = hlg::parse(text, S.mkt);
+    S.gexLoads++;
+    if (!F.ok) { S.gexWhy = "garbled (" + F.why + "): kept the last good copy"; S.gexStamp = -2; return; }   // a torn write: re-read next time
+    S.gex = F; S.gexWhy = F.why;
 }
 
 void HodLod::loadSession(HLState& S)
@@ -850,6 +903,17 @@ int HodLod::draw(void)
     }
     loadSession(*S); hlSessSegs(*S);         // (2.0.2) Regime / Expiry in the header (Session Info retired)
     loadAvoid(*S);                           // (2.0.5) the Dealer Profile header / banner and the Tape Reader box
+    loadGex(*S);                             // (2.1.0) the GEX line, nearest the chart's last price first
+    {   long n = getBarCount(); double px = NAN;
+        if (n > 0) { RTARRAY cl(barClose); if ((long)cl.count >= n) px = (double)cl[(int)(n - 1)]; }
+        time_t t = time(nullptr); struct tm lt; memset(&lt, 0, sizeof lt);
+#ifdef _WIN32
+        localtime_s(&lt, &t);
+#else
+        localtime_r(&t, &lt);
+#endif
+        hlg::toView(S->view, S->gex, px, (long long)t, lt.tm_wday, lt.tm_hour * 60 + lt.tm_min);
+    }
     const int pe = priceEdge();
     const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
     const Place PL = position(S->mkt);
@@ -867,7 +931,8 @@ int HodLod::draw(void)
             if (got.l < pb.l || got.t < pb.t || got.l + tw > pb.r || got.t + th > pb.b) { S->hyst.reset(); got = S->hyst.step(want); }   // never kept outside the pane
             const int dx = got.l - L.table.l, dy = got.t - L.table.t;
             if (dx || dy) { for (size_t i = 0; i < L.items.size(); ++i) if (L.items[i].role == hl::R_TABLE || L.items[i].role == hl::R_NOTE) { L.items[i].l += dx; L.items[i].r += dx; L.items[i].t += dy; L.items[i].b += dy; }
-                            L.table.l += dx; L.table.r += dx; L.table.t += dy; L.table.b += dy; }
+                            L.table.l += dx; L.table.r += dx; L.table.t += dy; L.table.b += dy;
+                            if (L.gexOk) { L.gexRow.l += dx; L.gexRow.r += dx; L.gexRow.t += dy; L.gexRow.b += dy; } }
         }
     }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
@@ -878,19 +943,41 @@ int HodLod::draw(void)
         hlfx::marker(L, S->fxView, pb, mx, yPx, M);
         hl::tagElem(L, m0, hl::E_MARK);
     }
+    {   // (2.1.0) the GEX row's hover: open while the mouse is on the row (or its detail); closed once the cursor left this pane
+        if (S->inGex) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->gexCurX) > 8 || std::abs(cy - S->gexCurY) > 8)) S->inGex = false; }
+        if (S->inGex && L.gexOk) hl::layoutGexHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
+    }
     hl::applyOpts(L, O);                      // (2.0.5) the Settings checkboxes and colours
+    S->lastGexOk = L.gexOk && L.tableOk; S->lastGexRow = L.gexRow; S->lastHoverOk = L.gexHoverOk && L.tableOk; S->lastGexHover = L.gexHover;
+    if (!S->lastGexOk) S->inGex = false;
+    S->placeLine += hlg::statusLine(S->gex, S->view, S->gexWhy) + "GEX_BOX," + (S->lastGexOk ? std::to_string(L.gexRow.l) + "," + std::to_string(L.gexRow.t) + "," + std::to_string(L.gexRow.r) + "," + std::to_string(L.gexRow.b) : std::string("none"))
+                  + ",hover " + (S->lastHoverOk ? std::to_string(L.gexHover.l) + "," + std::to_string(L.gexHover.t) + "," + std::to_string(L.gexHover.r) + "," + std::to_string(L.gexHover.b) : std::string("off")) + ",hovers " + std::to_string(S->gexHovers) + "\n";
     execute(L);
     writeStatus(*S, &L);
     writeFxStatus(*S);
     return RTX_OK;
 }
 
+// (2.1.0) over the GEX row (or its open detail, 6 px dead band so the edge never flickers): the detail shows. Never swallows the event.
+int HodLod::mouse(RTX_EVENT* e)
+{
+    if (!e) return RTX_FAIL;
+    HLState* S = state(false); if (!S) return RTX_FAIL;
+    if (e->type != E_MOUSE_MOVE && e->type != E_MOUSE_HOVER) return RTX_FAIL;
+    const int mh = e->v.mouse.h, mv = e->v.mouse.v, g = S->inGex ? 6 : 0;
+    auto inB = [&](const hl::Box& b) { return mh >= b.l - g && mh <= b.r + g && mv >= b.t - g && mv <= b.b + g; };
+    const bool in = S->lastGexOk && (inB(S->lastGexRow) || (S->inGex && S->lastHoverOk && inB(S->lastGexHover)));
+    if (in) hlCursor(S->gexCurX, S->gexCurY);
+    if (in != S->inGex) { S->inGex = in; if (in) ++S->gexHovers; invalidateChart(false); }
+    return RTX_FAIL;
+}
+
 extern "C" cppExtension *CreateExtension(void)
 {
     HodLod *p = new HodLod();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
-    p->setVersion("2.0.6");
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
+    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
+    p->setVersion("2.1.0");
     return p;
 }

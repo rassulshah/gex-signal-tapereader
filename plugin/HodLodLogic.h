@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.0.6";
+static const char* const HL_VERSION = "2.1.0";   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -742,6 +742,11 @@ struct View {
     bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt;
     double projRange = NAN; int projStage = -1; bool projV2 = false;   // (1.1.5) for the projection log (HodLod.proj-<MKT>.csv)
     int projLockMod = -1;   // (1.1.6) the minute of day the shown target was set (locked)
+    // (2.1.0, Rassul 2026-10-14 16:01 "a line in the HOD/LOD indicator box that identifies the key GEX levels where a reaction can
+    // occur so it is front and center") the GEX line under the header: at most 3 strikes from LRA-GexNodes-<MKT>.csv (HodLodGex.h),
+    // nearest the price first; grow = the up arrow; gexStale = "STALE 25m" (the strikes dimmed); gexHover = the detail on mouse-over
+    struct GexItem { std::string strike, name; bool grow = false, other = false; };   // (2.1.0 rule 2.0) strike = the location's range, name = W / F / M, other = the other side
+    std::vector<GexItem> gexItems; std::string gexStale; std::vector<Seg> gexHover;
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
 enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_ROOM, K_RANGE, K_CLOSE, K_DIR1, K_DIR2, NALL };
@@ -1323,6 +1328,8 @@ struct Layout {
     int colRight = 0;            // (HL105) the reserved candle column's right edge (px); written to the status file for SessionInfo
     // (2.0.5) other indicators' boxes the table and the projection label keep clear of, and what the placement did
     std::vector<Box> avoid; Box tableWant = { 0, 0, 0, 0 }; bool tableMoved = false, tableClear = true; bool trendCompact = false;
+    Box gexRow = { 0, 0, 0, 0 }; bool gexOk = false;          // (2.1.0) the GEX line's row (the mouse-over target)
+    Box gexHover = { 0, 0, 0, 0 }; bool gexHoverOk = false;   // (2.1.0) its detail box (drawn only while the mouse is on the row)
 };
 
 inline int lineH(int fs) { return (int)(fs * 1.7f + 0.5f); }   // as SessionInfo (a 9 pt font is 12 px at 96 dpi)
@@ -1449,6 +1456,40 @@ inline std::vector<Seg> regimeParts(const View& v, bool compact = false)
 }
 inline std::string regimeText(const View& v, bool compact = false) { std::string s; std::vector<Seg> p = regimeParts(v, compact); for (size_t i = 0; i < p.size(); i++) s += p[i].s; return s; }
 
+// (2.1.0) the GEX line: "7750 G8 ^  .  7775 G7  .  7800 G1" (+ "  STALE 25m"); the up arrow is drawn with lines (no glyph: IRT draws
+// text in the chart's code page). Strike white, MenthorQ name blue, separators grey; stale = strikes / names dimmed.
+inline int gexArrowW(int fs) { return (int)(fs * 0.8f + 0.5f) + 4; }
+inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
+{
+    if (v.gexItems.empty()) return 0;
+    int w = 0; const int sep = M("  \xB7  ", fs, true), sepO = M("   |   ", fs, true);
+    for (size_t i = 0; i < v.gexItems.size(); i++) {
+        const View::GexItem& g = v.gexItems[i];
+        w += (i ? (g.other && !v.gexItems[i - 1].other ? sepO : sep) : 0) + M(g.strike, fs, true) + (g.name.empty() ? 0 : M(" " + g.name, fs, true)) + (g.grow ? gexArrowW(fs) : 0);
+    }
+    if (!v.gexStale.empty()) w += M("   " + v.gexStale, sfs, false);
+    return w;
+}
+inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const Measure& M, int fs, int sfs)
+{
+    const bool st = !v.gexStale.empty();
+    const unsigned cs = st ? C_DIM : C_SLATE, cn = st ? C_DIM : C_BLUE;
+    const std::string sepT = "  \xB7  ";
+    for (size_t i = 0; i < v.gexItems.size(); i++) {
+        const View::GexItem& g = v.gexItems[i];
+        if (i) { const bool o = g.other && !v.gexItems[i - 1].other; const std::string st = o ? "   |   " : sepT; const int sw = M(st, fs, true);
+                 addText(L, x, t, b, st, C_GREY, fs, true, sw, R_TABLE, -1); x += sw; }   // '|' = the other side of price starts
+        int w = M(g.strike, fs, true); addText(L, x, t, b, g.strike, cs, fs, true, w, R_TABLE, -1); x += w;
+        if (!g.name.empty()) { w = M(" " + g.name, fs, true); addText(L, x, t, b, " " + g.name, cn, fs, true, w, R_TABLE, -1); x += w; }
+        if (g.grow) {   // an up arrow: shaft + head, centred in the row
+            const int aw = gexArrowW(fs), ax = x + aw / 2 + 1, h = (int)(fs * 0.95f + 0.5f), yc = (t + b) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
+            addLine(L, ax, y0, ax, y1, cs, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, cs, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, cs, 2, R_TABLE);
+            x += aw;
+        }
+    }
+    if (st) { const std::string s = "   " + v.gexStale; addText(L, x, t, b, s, C_GREY, sfs, false, M(s, sfs, false), R_TABLE, -1); }
+}
+
 inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT, int dx = 0, int dy = 0)
 {
     if (freeR < 0) freeR = pane.r;
@@ -1514,7 +1555,9 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             nat.push_back(w); sumNat += w; cw = (std::max)(cw, w); }
         const int ncol = NSHOWN - 1, colsW = natural ? sumNat : ncol * cw;
         int W = (std::max)(lw + colsW + 12, (std::max)(info.empty() ? 0 : lw + segW(info, fs, sepInfo) + 12, segW(fx, fs, 0)) + 32);
-        const int H = titleH + 1 + rowH + rowHE + rowH + gap + 1 + (info.empty() ? 0 : rowH) + (fx.empty() ? 0 : rowH) + gap + 2;
+        const int gexW = gexLineW(v, M, efs, fs);                  // (2.1.0) the GEX line, in the 10 pt row font (front and centre)
+        if (gexW > 0) W = (std::max)(W, lw + gexW + 24);
+        const int H = titleH + 1 + (gexW > 0 ? rowHE + 1 : 0) + rowH + rowHE + rowH + gap + 1 + (info.empty() ? 0 : rowH) + (fx.empty() ? 0 : rowH) + gap + 2;
         if (W > area.r - area.l && attempt < (v.trendReady ? 5 : 3)) continue;
         if (area.l + W > pane.r - pad) continue;
         if (H + 40 > pane.b - pane.t) break;
@@ -1543,6 +1586,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 int w2 = M(t2, fs + 1, true); addText(L, x2 + cwv[1] / 2 - w2 / 2, y, y + titleH - 2, t2, c2, fs + 1, true, w2, R_TABLE, -1); }
         }
         y += titleH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        if (gexW > 0) {   // (2.1.0) "GEX  7750 G8 ^ . 7775 G7 . 7800 G1" right under the header, centred over the columns
+            addText(L, T.l + 8, y, y + rowHE, "GEX ?", C_GREY, fs, true, M("GEX ?", fs, true), R_TABLE, -1);   // (audit) model context, '?' until proven
+            const int x0 = T.l + 6 + lw; int cols = 0; for (int k = 0; k < ncol; k++) cols += cwv[(size_t)k];
+            const int gx = (std::max)(x0, x0 + cols / 2 - gexW / 2);
+            layoutGexItems(L, v, gx, y, y + rowHE, M, efs, fs);
+            L.gexRow = Box{ T.l, y, T.r, y + rowHE }; L.gexOk = true;
+            y += rowHE; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        }
         const Cell* rows[2] = { eRow, aRow };
         for (int r = -1; r < 2; r++) {
             const int rf = r == 0 ? efs : fs, rh = r < 0 ? rowH : (r == 0 ? rowHE : rowH);
@@ -1601,6 +1652,57 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
     addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_NOTE);
     addText(L, T.l + 4, T.t, T.b, s, C_GREY, fs, false, w, R_NOTE, -1);
     L.blocks.push_back(T);
+}
+
+// (2.1.0) the GEX line's detail, drawn only while the mouse is on the row: above the table when there is room (the table sits at the
+// bottom by default), else below it; inside the pane and left of the last bar; lines word-wrapped to the room (10 pt, his hover size)
+inline std::vector<std::string> wrapText(const std::string& s, int maxW, const Measure& M, int fs, bool bold)
+{
+    std::vector<std::string> out; std::string cur; size_t a = 0;
+    while (a <= s.size()) {
+        size_t b = s.find(' ', a); std::string w = s.substr(a, b == std::string::npos ? std::string::npos : b - a);
+        std::string t = cur.empty() ? w : cur + " " + w;
+        if (!cur.empty() && M(t, fs, bold) > maxW) { out.push_back(cur); cur = w; } else cur = t;
+        if (b == std::string::npos) break;
+        a = b + 1;
+    }
+    if (!cur.empty()) out.push_back(cur);
+    return out;
+}
+inline void layoutGexHover(Layout& L, const View& v, const Box& pane, int freeR, const Measure& M)
+{
+    L.gexHoverOk = false;
+    if (!L.gexOk || v.gexHover.empty()) return;
+    const int fs = 10, lh = lineH(fs), pad = 8, ind = 12;
+    if (freeR <= pane.l + 200) freeR = pane.r;
+    const int maxW = (std::min)(760, freeR - pane.l - 2 * pad - 8);
+    if (maxW < 220) return;
+    struct WL { std::string s; unsigned col; bool bold; int x; };
+    std::vector<WL> lines; int W = 0, gaps = 0; const int GAP = 5;
+    for (size_t i = 0; i < v.gexHover.size(); i++) {
+        const Seg& g = v.gexHover[i]; const bool bold = g.col == C_SLATE || i == 0;
+        if (g.s.empty()) { lines.push_back(WL{ "", g.col, false, 0 }); gaps++; continue; }   // a spacer
+        std::vector<std::string> w = wrapText(g.s, maxW - ind, M, fs, bold);
+        for (size_t k = 0; k < w.size(); k++) { lines.push_back(WL{ w[k], g.col, bold, k ? ind : 0 }); W = (std::max)(W, M(w[k], fs, bold) + (k ? ind : 0)); }
+    }
+    const int top = pane.t + (pane.b - pane.t >= 200 ? TITLE_ROW_PX : 0);
+    auto height = [&]() { return ((int)lines.size() - gaps) * lh + gaps * GAP + 2 * pad; };
+    while (!lines.empty() && height() > pane.b - 1 - top) { if (lines.back().s.empty()) gaps--; lines.pop_back(); }   // a short pane: the guide lines go first
+    while (!lines.empty() && lines.back().s.empty()) { gaps--; lines.pop_back(); }
+    if (lines.size() < 2) return;
+    W += 2 * pad; const int H = height();
+    int x = (std::max)(pane.l + 2, (std::min)(L.table.l, freeR - W - 2));
+    int y; const int sideY = (std::max)(top, (std::min)(L.table.b - H, pane.b - 1 - H));
+    if (L.table.t - 4 - H >= top) y = L.table.t - 4 - H;                 // above the table (the default Bottom centre)
+    else if (L.table.b + 4 + H <= pane.b - 1) y = L.table.b + 4;          // below it (a table at the top)
+    else if (H <= pane.b - 1 - top && L.table.r + 4 + W <= freeR) { x = L.table.r + 4; y = sideY; }        // right of it
+    else if (H <= pane.b - 1 - top && L.table.l - 4 - W >= pane.l + 2) { x = L.table.l - 4 - W; y = sideY; }   // left of it
+    else y = (std::max)(top, pane.b - 1 - H);                             // no room anywhere: over the chart (and the table), inside
+    Box B = { x, y, x + W, y + H };
+    addRect(L, B.l, B.t, B.r, B.b, C_BORDER, C_PANEL, 1, R_TABLE);
+    int yy = B.t + pad;
+    for (const WL& l : lines) { if (l.s.empty()) { yy += GAP; continue; } addText(L, B.l + pad + l.x, yy, yy + lh, l.s, l.col, fs, l.bold, M(l.s, fs, l.bold), R_TABLE, -1); yy += lh; }
+    L.gexHover = B; L.gexHoverOk = true; L.blocks.push_back(B);
 }
 
 struct Block { std::vector<Line> lines; int fs; int w = 0, h = 0; Box at = { 0, 0, 0, 0 }; bool side = false; };
