@@ -44,6 +44,7 @@ int main()
 
     DealerSig d;
     CHECK(d.setup() == RTX_OK, "setup accepts the preserved parameter schema");
+    CHECK(mockrt::bools[(size_t)SX.ledger] == 0 && SX.ledger == SX.gap + 1, "(1.5.5) Dealer ledger marks is a check box, off by default, in the same row");
 
     CHECK(d.load() && d.sourceState == "source unavailable", "a missing external CSV is reported as unavailable");
     CHECK(!d.load(), "an unchanged unavailable external CSV is cached instead of reopened");
@@ -56,11 +57,11 @@ int main()
     d.fillSignals(2);
     CHECK(mockrt::out1[0] == 0 && mockrt::out2[0] == 0, "a changed source fully clears removed historical signals despite incremental calc");
 
-    mockrt::lists[(size_t)SX.ledger] = 1;
+    mockrt::bools[(size_t)SX.ledger] = 1;
     writeExternalCsv("VERSION|1.9\nMARKET|GC\nLSIG|2026-10-01 10:00:30|SC|B|1|ledger buy\n");
     d.fillSignals(2);
     CHECK(mockrt::out1[0] == kSignalTrue, "enabling ledger includes its external LSIG output");
-    mockrt::lists[(size_t)SX.ledger] = 0;
+    mockrt::bools[(size_t)SX.ledger] = 0;
     d.fillSignals(2);
     CHECK(mockrt::out1[0] == 0, "disabling ledger fully clears its prior historical output");
 

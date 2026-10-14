@@ -27,8 +27,20 @@ enum BAR_POSITION { kBarCenter };
 enum FONT_ID { HELVETICA };
 enum FONT_STYLE { BOLD };
 
+static const short kParmAppendSameLine = 1;
 namespace mock {
+// (1.4.3 settings) the parameters the plugin declared (one DLL object: declared once) and each chart's values.
+// IRT fills list / check-box / colour values only while the settings window is open: outside it a list reads -1, a box
+// unchecked and a colour black (what our plugins found on his IRT) - `dialog` switches between the two.
+struct Param { int type = 0; bool b = false; COLOR c = 0; int list = 0, listCount = 0; std::string name; };   // type 1 bool, 2 colour, 3 list
+inline std::vector<Param> declared;                    // C++17 inline: one list for every test TU
+struct Line { COLOR c; short w; int b0 = 0, b1 = 0; float p0 = 0, p1 = 0; };   // pen + (bar, price) ends, for the render check
 struct Host {
+    bool dialog = false;
+    std::vector<Param> val;                                   // this chart's saved values (empty = the declared defaults)
+    std::vector<Line> lines;                                  // every drawLineTo, with the pen in force
+    COLOR pen = 0; short penW = 1;
+    int curBar = 0; float curPx = 0;                          // the draw position (setDrawPosition)
     std::string root;
     std::vector<float> f[14];
     std::vector<unsigned long> i[2];
@@ -36,6 +48,11 @@ struct Host {
     int fontPt = 9;
 };
 extern Host* current;
+inline Param* param(int i) {
+    if (!current || i < 0 || i >= (int)declared.size()) return NULL;
+    if (current->val.size() != declared.size()) current->val = declared;
+    return &current->val[(size_t)i];
+}
 inline std::vector<float>& floats(fARRAY a) { return current->f[(int)a]; }
 inline std::vector<unsigned long>& ints(iARRAY a) { return current->i[(int)a]; }
 }
@@ -67,9 +84,10 @@ public:
 class PNT {
 public:
     short v = 100, h = 400;
-    RTX_RESULT set(int, float, BAR_POSITION = kBarCenter) { return RTX_OK; }
-    void setDrawPosition() {}
-    void drawLineTo() {}
+    int bar = 0; float px = 0;
+    RTX_RESULT set(int b, float p, BAR_POSITION = kBarCenter) { bar = b; px = p; return RTX_OK; }
+    void setDrawPosition() { if (mock::current) { mock::current->curBar = bar; mock::current->curPx = px; } }
+    void drawLineTo() { if (mock::current) { mock::Line l; l.c = mock::current->pen; l.w = mock::current->penW; l.b0 = mock::current->curBar; l.p0 = mock::current->curPx; l.b1 = bar; l.p1 = px; mock::current->lines.push_back(l); mock::current->curBar = bar; mock::current->curPx = px; } }
 };
 class RCT {
 public:
@@ -96,6 +114,7 @@ public:
         if (out) { std::snprintf(out, 32, "%s", mock::current->root.c_str()); return out; }
         return const_cast<char*>(mock::current->root.c_str());
     }
+    const char* getSymbol(void) { return mock::current ? mock::current->root.c_str() : NULL; }   // (1.4.2 svRecordPath)
     struct tm* getLocaltime(RTDATE d, struct tm* out) { time_t t = (time_t)d; return gmtime_r(&t, out); }
     void* getUserData(void) { return mock::current ? mock::current->userData : NULL; }
     void setUserData(void* p) { if (mock::current) mock::current->userData = p; }
@@ -103,12 +122,22 @@ public:
     void setParameterDialogHeight(int) {}
     RTX_RESULT setOutputParameter(const char*, int, CPEN*, COLOR, unsigned long = 0) { return RTX_OK; }
     void setArrayDrawingFlags(int, DRAW_FLAGS) {}
-    int getParameterCount(void) { return 5; }
+    int getParameterCount(void) { return (int)mock::declared.size(); }
+    static int countChoices(const char* c) { int n = 1; for (; c && *c; ++c) if (*c == ';') ++n; return n; }
+    RTX_RESULT setBoolParameter(const char* n, RTBOOL b, short = 0) { mock::Param p; p.type = 1; p.b = b != 0; p.name = n; mock::declared.push_back(p); return RTX_OK; }
+    RTX_RESULT setColorParameter(const char* n, COLOR c, short = 0, short = 0) { mock::Param p; p.type = 2; p.c = c; p.name = n; mock::declared.push_back(p); return RTX_OK; }
+    RTX_RESULT setListParameter(const char* n, short d, const char* ch, short = 0, short = 0) { mock::Param p; p.type = 3; p.list = d; p.listCount = countChoices(ch); p.name = n; mock::declared.push_back(p); return RTX_OK; }
+    RTBOOL isBoxChecked(int i) { mock::Param* p = mock::param(i); return (p && p->type == 1 && mock::current->dialog && p->b) ? 1 : 0; }
+    COLOR getParameterColor(int i) { mock::Param* p = mock::param(i); return (p && p->type == 2 && mock::current->dialog) ? p->c : 0; }
+    int getListIndex(int i) { mock::Param* p = mock::param(i); return (p && p->type == 3 && mock::current->dialog) ? p->list : -1; }
+    RTX_RESULT checkBox(int i, RTBOOL b) { mock::Param* p = mock::param(i); if (!p || p->type != 1) return RTX_FAIL; p->b = b != 0; return RTX_OK; }
+    RTX_RESULT setParameterColor(int i, COLOR c) { mock::Param* p = mock::param(i); if (!p || p->type != 2) return RTX_FAIL; p->c = c; return RTX_OK; }
+    RTX_RESULT setListIndex(int i, int v = -1) { mock::Param* p = mock::param(i); if (!p || p->type != 3 || v >= p->listCount) return RTX_FAIL; p->list = v; return RTX_OK; }
     RTX_RESULT setIntegerParameter(const char*, int, short = 0, short = 0) { return RTX_OK; }
     int getIntegerValue(int) { return mock::current ? mock::current->fontPt : 9; }
     RTX_RESULT setFont(FONT&) { return RTX_OK; }
     void setTextColor(COLOR) {}
-    void setPen(COLOR, short, PEN_STYLE) {}
+    void setPen(COLOR c, short w, PEN_STYLE) { if (mock::current) { mock::current->pen = c; mock::current->penW = w; } }
     RTX_RESULT getVisibleBars(int* a, int* b) { long n = getBarCount(); *a = n > 300 ? (int)n - 300 : 0; *b = (int)n - 1; return RTX_OK; }
     int getTextWidth(const char* s, int = -1) { return (int)std::strlen(s) * 8; }
     void setArrayCount(int) {}

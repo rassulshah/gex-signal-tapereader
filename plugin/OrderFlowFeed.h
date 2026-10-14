@@ -1,7 +1,10 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.2.1, 2026-10-13) -- the ONE shared order-flow header of lsBidAskStats 1.5.0, lsPullStats 1.1.0 and
+// OrderFlowFeed.h (1.2.2, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.0, lsPullStats 1.1.0 and
 // lsStackStats 1.1.1.
+// 1.2.2 (2026-10-14, settings audit + Rassul's approved "Record order feed" for PullStats): MboPane gets four virtual hooks with
+//   empty defaults (recorderPane / onRaw / afterPump / statusExtra) and PaneSettings an optional 7th field `record` (written only by
+//   a recorder pane; a 6-field file reads record = 1). lsBidAskStats / lsStackStats / lsTapeReader behave exactly as before.
 // 1.2.1 (2026-10-13 9:12 PM CT, live ES "Rebuilt 200% ?" on both sides): REBUILT credits an add at a hit price only up to the lots
 //   hit there and not yet restored (Ice.rebuilt), so it can never exceed the hit size; rebuiltPctOf caps at 100% (was 200%). Nothing
 //   else changes (the record format, pull / add / refill counts and every other number are identical).
@@ -72,6 +75,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -82,7 +86,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.2.1";   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.2.2";   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1564,21 +1568,26 @@ struct HoverTrack {
 // MboPane<L>: the whole host of lsPullStats / lsStackStats (L = ps::Logic / st::Logic). Own pane, two bars per candle from the
 // order feed near price, letters, spike labels, the info box + message line, the session record, the per-market params file.
 // =====================================================================================================================
-struct PaneSettings { int ratioBars = RATIO_DEFAULT, pos = POS_DEFAULT, nearTicks = 0; SpikeCfg spike; };
+struct PaneSettings { int ratioBars = RATIO_DEFAULT, pos = POS_DEFAULT, nearTicks = 0; SpikeCfg spike; int record = -1; };   // (1.2.2) record: -1 = not a recorder pane (6 fields), 0 / 1 = the "Record order feed" box
 inline bool parsePaneSettings(const std::string& line, PaneSettings& out) {
     if (line.empty() || line.size() > 40) return false;
     std::vector<std::string> f; size_t a = 0;
     for (;;) { const size_t c = line.find(',', a); f.push_back(line.substr(a, c == std::string::npos ? std::string::npos : c - a)); if (c == std::string::npos) break; a = c + 1; }
-    if (f.size() != 6) return false;
+    if (f.size() != 6 && f.size() != 7) return false;                   // (1.2.2) 7th = Record order feed (PullStats)
     for (size_t k = 0; k < f.size(); ++k) if (!allDigits(f[k], 5)) return false;
+    if (f.size() == 7 && f[6] != "0" && f[6] != "1") return false;
     PaneSettings s; s.ratioBars = std::atoi(f[0].c_str()); s.pos = std::atoi(f[1].c_str());
     s.spike.avgT = std::atoi(f[2].c_str()); s.spike.jumpT = std::atoi(f[3].c_str()); s.spike.lookback = std::atoi(f[4].c_str()); s.nearTicks = std::atoi(f[5].c_str());
     if (s.ratioBars < RATIO_LO || s.ratioBars > RATIO_HI || s.pos < 0 || s.pos > 8 || s.spike.avgT > 100 || s.spike.jumpT > 100 || s.spike.lookback > SPIKE_LOOKBACK_MAX || s.nearTicks > nl::NEAR_MAX) return false;
+    if (f.size() == 7) s.record = f[6] == "1" ? 1 : 0;
     out = s; return true;
 }
 inline std::string paneSettingsLine(const PaneSettings& s) {
-    return std::to_string(s.ratioBars) + "," + std::to_string(s.pos) + "," + std::to_string(s.spike.avgT) + "," + std::to_string(s.spike.jumpT) + "," + std::to_string(s.spike.lookback) + "," + std::to_string(s.nearTicks);
+    return std::to_string(s.ratioBars) + "," + std::to_string(s.pos) + "," + std::to_string(s.spike.avgT) + "," + std::to_string(s.spike.jumpT) + "," + std::to_string(s.spike.lookback) + "," + std::to_string(s.nearTicks)
+         + (s.record >= 0 ? std::string(",") + (s.record ? "1" : "0") : std::string());
 }
+// (1.2.2) a pane's extra per-chart state (PullStats' order-feed recorder); deleted with the pane's state
+struct PaneExt { virtual ~PaneExt() {} };
 inline int tenthsOf(float v) { if (!(v >= 0) || v > 10.04f) return -1; return (int)(v * 10.0f + .5f); }
 
 template <class L> struct PaneState {
@@ -1599,14 +1608,20 @@ template <class L> struct PaneState {
     HoverTrack hov; long long axisTop = 0; int paneH = 0;
     long long statusMs = -1, changed = 0;
     OptCache opt; ResetWatch rw;                     // (1.2.0) the options file (blue line), PullStats' reset watch
+    std::unique_ptr<PaneExt> ext;                    // (1.2.2) PullStats' order-feed recorder (null in the other panes)
 };
 
 template <class L> class MboPane : public cppExtension {
 public:
     typedef PaneState<L> S_;
     MboPane() : cppExtension() {}
+    // (1.2.2) hooks for a pane that does more with the raw feed (PullStats' "Record order feed"); the defaults do nothing
+    virtual bool recorderPane() const { return false; }
+    virtual void onRaw(S_&, const DEPTH_ORDER&) {}
+    virtual void afterPump(S_&, long long, bool) {}
+    virtual void statusExtra(S_&, std::ostream&) {}
     virtual int draw(void) {
-        pump();
+        pump(true);                                                        // (1.2.2) from the draw: a recorder buffers, never writes
         S_* S = slot_.get(this, false);
         if (S) { S->hov.left(); followBoard(*S); }                        // (1.2.1) the candle under the mouse ANYWHERE on this chart
         if (S) { try { render(*S); } catch (...) { S->state = "draw error"; } }
@@ -1682,7 +1697,7 @@ public:
     }
     void release() { slot_.release(this); }
     S_* testState() { return slot_.get(this, false); }
-    void pump() {
+    void pump(bool fromDraw = false) {
         S_* P = slot_.get(this, true);
         if (!P || P->busy) return;
         S_& S = *P; S.busy = true;
@@ -1704,12 +1719,13 @@ public:
                 S.feed.open(S.symbol, dir().empty() ? std::string() : dir() + "\\_opening-" + stem(S) + ".txt", now, st);
                 if (!st.empty()) S.state = st;
                 const double tick = S.tick;
-                S.feed.drain(now, steadyMs, [&](const DEPTH_ORDER& o) { route(S, evOf(o, tick, now)); });
+                S.feed.drain(now, steadyMs, [&](const DEPTH_ORDER& o) { onRaw(S, o); route(S, evOf(o, tick, now)); });
                 if (S.feed.lastEventMs >= 0 && S.firstBarKey < 0) S.firstBarKey = S.formingKey;
                 decide(S, now);
                 const std::string fs = S.feed.stateText(now);
                 if (!fs.empty()) S.state = fs;
             }
+            try { afterPump(S, now, fromDraw); } catch (...) {}            // (1.2.2) e.g. the recorder's once-a-second flush
             status(S, now);
         } catch (...) { S.state = "calculation error"; }
     }
@@ -1784,6 +1800,7 @@ private:
         PaneSettings s;
         s.ratioBars = getIntegerValue(0); s.pos = getListIndex(1);
         s.spike.avgT = tenthsOf(getFloatValue(2)); s.spike.jumpT = tenthsOf(getFloatValue(3)); s.spike.lookback = getIntegerValue(4); s.nearTicks = getIntegerValue(5);
+        if (recorderPane()) s.record = this->isBoxChecked(6) ? 1 : 0;           // (1.2.2) PullStats: Record order feed
         PaneSettings chk;
         if (s.spike.avgT < 0 || s.spike.jumpT < 0 || s.spike.lookback < 0 || s.nearTicks < 0 || !parsePaneSettings(paneSettingsLine(s), chk)) return;   // never overwrite with garbage
         char b[32]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const char* sy = getSymbol();
@@ -1933,6 +1950,7 @@ private:
         typename std::map<long long, PaneBar>::const_iterator it = S.ser.bars.find(S.lastClosedKey);
         o << "\nLAST_CLOSED_BAR," << S.lastClosedKey << "," << stamp(S.lastClosedKey);
         if (it != S.ser.bars.end()) o << "\nMESSAGE," << implText(it->second.msg.impl) << "," << it->second.msg.line1 << "\nNUMBERS," << it->second.msg.line2 << "\nLETTERS," << it->second.let[0] << "," << it->second.let[1];
+        statusExtra(S, o);                                                 // (1.2.2)
         o << "\n";
         const std::string text = o.str(); if (text == S.lastStatusText) return;
         const std::string d = dir(); if (d.empty()) return;

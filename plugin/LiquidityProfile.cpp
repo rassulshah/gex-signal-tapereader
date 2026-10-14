@@ -71,12 +71,22 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.15.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.15.1"          // keep equal to lqp::VERSION and the setVersion literal below
+// (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
+// lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
+// Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
+// draws no profile bars, so its window has only Font pt (its Width row did nothing).
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
 static const COLOR C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_INK = 0x000B0F17;
+#ifdef LQ_FLOW
+static const int WIDTH_INDEX = -1, FONT_INDEX = 0;     // (0.15.1) the Flow pane has no Width row
+static const char* const LQ_SIZE_NAME = "LiquidityFlow";
+#else
 static const int WIDTH_INDEX = 0, FONT_INDEX = 1;
+static const char* const LQ_SIZE_NAME = "LiquidityProfile";
+#endif
 static const long long DEPTH_EVERY_MS = 1000, ZONES_EVERY_MS = 500, STATUS_EVERY_MS = 30000;
 static const int DEPTH_READ_MAX = 200, VAP_ROWS_MAX = 5000;
 
@@ -243,7 +253,8 @@ struct LQState {
     bool depthAvail = false; int depthMax = 0, depthLevels = 0; long long depthReads = 0;
     long long session = -1; size_t marksWritten = 0; long long recWrites = 0, recFails = 0;
     long long normsStamp = -2, layoutStamp = -2, dealerStamp = -2;
-    int dpWidth = 50, dpGap = 0, dealerReach = 150, width = 70, font = 11;   // (0.8.1) 150 = the Dealer Profile default reach until this market's is seen
+    int dpWidth = 50, dpGap = 0, dealerReach = 150, width = 70, font = 11;
+    long long sizeStamp = -2, sizeCheckMs = -1; std::string sizeMkt;     // (0.15.1) <name>.size-<MKT>.txt   // (0.8.1) 150 = the Dealer Profile default reach until this market's is seen
     std::string reachMkt;                                                       // (0.8.1) the market whose saved reach was read
     std::vector<std::pair<lqp::Tick, lqp::Tick>> dpBid, dpAsk; long long dpStamp = -2; std::string dpPath;
     double atr = 0; int slot = -1;
@@ -292,7 +303,9 @@ public:
     LiquidityProfile() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsApply(void) { LQState* S = slot_.get(this, false); if (S) { S->width = clampWidth(getIntegerValue(WIDTH_INDEX)); S->font = clampFont(getIntegerValue(FONT_INDEX)); } return RTX_OK; }
+    virtual int parmsApply(void) { saveSize(); return RTX_OK; }         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
+    void saveSize();
+    void loadSize(LQState& S);
     void pump();
     void release() { slot_.release(this); }
     static int clampWidth(int w) { return w < 40 ? 70 : std::min(w, 300); }
@@ -335,11 +348,47 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }   // symbol / period change: start clean
 int cppExtension::destroy(void) { static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
+#ifdef LQ_FLOW
+    setParameterVersion(2);                       // (0.15.1) Flow: Font pt only (its Width row did nothing; IRT resets the saved values once)
+    setParameterDialogHeight(1);
+    setIntegerParameter("Font pt", 11, 50);
+#else
     setParameterVersion(1);
     setParameterDialogHeight(1);
     setIntegerParameter("Width px", 70, 50);
     setIntegerParameter("Font pt", 11, 50, kParmAppendSameLine);
+#endif
     return RTX_OK;
+}
+// (0.15.1) the window's Width / Font -> lsFlexLevels\<name>.size-<MKT>.txt ("70,11"), for every chart of the market and after a restart
+void LiquidityProfile::saveSize() {
+    const int w = WIDTH_INDEX >= 0 ? clampWidth(getIntegerValue(WIDTH_INDEX)) : 70, f = clampFont(getIntegerValue(FONT_INDEX));
+    char rb[32]; std::memset(rb, 0, sizeof(rb)); const char* rs = getRootSymbol(rb); const char* sy = getSymbol();
+    const std::string root = rs ? rs : "", mkt = marketName(root.empty() ? (sy ? sy : "") : root), dirp = flexDir();
+    LQState* S = slot_.get(this, false);
+    if (S) { S->width = w; S->font = f; }
+    if (mkt.empty() || dirp.empty()) return;
+    makeDir(dirp);
+    if (publishFile(dirp + "\\" + LQ_SIZE_NAME + ".size-" + mkt + ".txt", std::to_string(w) + "," + std::to_string(f) + "\n") && S) { S->sizeStamp = -2; S->sizeCheckMs = -1; }
+}
+void LiquidityProfile::loadSize(LQState& S) {
+    const long long now = steadyMs();
+    if (S.sizeMkt == S.market && S.sizeCheckMs >= 0 && now >= S.sizeCheckMs && now - S.sizeCheckMs < 1000) return;
+    S.sizeCheckMs = now;
+    const std::string dirp = flexDir();
+    if (dirp.empty() || S.market.empty()) return;
+    const std::string p = dirp + "\\" + LQ_SIZE_NAME + ".size-" + S.market + ".txt";
+    long long st = -1; if (!statFile(p, &st)) st = -1;
+    if (S.sizeMkt == S.market && st == S.sizeStamp) return;
+    S.sizeMkt = S.market; S.sizeStamp = st;
+    if (st < 0) return;                                                     // no file: the window's / default size stays
+    std::ifstream in; std::string ln;
+    if (!openBoundedInput(p, in) || !readBoundedLine(in, ln)) return;
+    if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+    const size_t c = ln.find(',');
+    long long w = 0, f = 0;
+    if (c == std::string::npos || !parseLL(ln.substr(0, c), 40, 300, w) || !parseLL(ln.substr(c + 1), 6, 16, f)) return;   // garbled: keep
+    S.width = clampWidth((int)w); S.font = clampFont((int)f);
 }
 int cppExtension::calc(int) { static_cast<LiquidityProfile*>(this)->pump(); return RTX_OK; }
 // (0.8.0, Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets") every step of the
@@ -367,6 +416,7 @@ static void standardLines(LQState& S) {
 int LiquidityProfile::draw(void) {
     pump();
     LQState* S = slot_.get(this, false);
+    if (S && !S->faulted) { try { loadSize(*S); } catch (...) {} }          // (0.15.1) this market's Width / Font
 #ifdef LQ_FLOW
     if (S && !S->faulted) { try { renderFlow(*S); } catch (...) { S->state = "draw error"; } }
 #else
@@ -1618,6 +1668,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: support / resistance and the level it holds, its orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share rebuilt. The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.15.0");   // LQ_VERSION
+    p->setVersion("0.15.1");   // LQ_VERSION
     return p;
 }

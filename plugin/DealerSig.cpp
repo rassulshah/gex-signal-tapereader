@@ -52,7 +52,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.5.4";   // 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
+static const char* DS_VERSION = "1.5.5";   // 1.5.5 settings audit (2026-10-13): "Dealer ledger marks" is a check box (was an Off / On list). 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -96,7 +96,7 @@ int DealerSig::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); r
 
 int cppExtension::setup(void)
 {
-    setParameterVersion(2);           // (1.5.0) "Clock offset" removed
+    setParameterVersion(3);           // (1.5.5) ledger row Off/On list -> check box (same row; IRT resets the saved values once). (1.5.0) "Clock offset" removed
     setParameterDialogHeight(6);    // (1.4.0) controls only - the how-to text is gone
     const short SL = kParmAppendSameLine;
     MARKER mb; memset(&mb, 0, sizeof(mb)); mb.number = kMarkerArrayUp;   mb.size = 2; mb.color = S_GREEN; mb.location = kMarkerBeneathLow;
@@ -108,7 +108,7 @@ int cppExtension::setup(void)
     // (1.5.0, Rassul 21:19 "why do you even have that option?") no clock offset: the dealer files and his charts are both Central
     SX.clock  = -1;
     SX.gap    = getParameterCount(); setIntegerParameter("Gap from the bar (px)", 6, NUMW);
-    SX.ledger = getParameterCount(); setListParameter("Dealer ledger marks", 0, "Off;On");      // (1.4.0) the forced ledger's SC / Van
+    SX.ledger = getParameterCount(); setBoolParameter("Dealer ledger marks", false);         // (1.4.0) the forced ledger's SC / Van; (1.5.5) a check box, not an Off / On list
     return RTX_OK;
 }
 
@@ -118,7 +118,7 @@ void DealerSig::readSettings(SSet& S)
     S.font = getIntegerValue(SX.font); if (S.font < 7 || S.font > 24) S.font = 10;
     S.clock = 0;
     S.gap = getIntegerValue(SX.gap); if (S.gap < 0 || S.gap > 60) S.gap = 6;
-    S.ledger = getListIndex(SX.ledger) == 1;
+    S.ledger = isBoxChecked(SX.ledger) != 0;                       // (1.5.5)
 }
 
 bool DealerSig::load()
@@ -284,6 +284,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.5.4");
+    p->setVersion("1.5.5");
     return p;
 }

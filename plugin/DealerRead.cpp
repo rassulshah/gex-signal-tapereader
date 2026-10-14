@@ -281,8 +281,25 @@ int DealerRead::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return 
 static void drSavePlace(cppExtension* x, const Settings& S)
 {
     char b[32] = {0}; const char* rs = x->getRootSymbol(b);
-    dl::savePlace("DealerRead", dl::marketFor(S.market, rs ? rs : ""), S.corner);
-    dl::savePlace("DealerReadBg", dl::marketFor(S.market, rs ? rs : ""), S.bg);   // (4.5.2) Background kept like the Position (IRT lists read -1 outside the dialog)
+    const std::string m = dl::marketFor(S.market, rs ? rs : "");
+    dl::savePlace("DealerRead", m, S.corner);
+    // (4.5.8 settings audit) the Font size is kept per market the same way (on the chart IRT does not hand the dialog's values to
+    // the draw, so the font went back to 10 pt); the Background row is gone (4.5.5 made the box always solid - the row did nothing)
+    if (!m.empty() && S.font >= 7 && S.font <= 20) { std::ofstream f(dl::placePath("DealerReadFont", m).c_str(), std::ios::trunc); if (f.is_open()) f << S.font << "\n"; }
+}
+// (4.5.8) the market's saved Font size (7-20), cached by file stamp; def when there is none
+static int drLoadFont(const std::string& m, int def)
+{
+    static std::vector<std::pair<std::string, std::pair<long long, int> > > cache;
+    if (m.empty()) return def;
+    const std::string p = dl::placePath("DealerReadFont", m);
+    const long long st = dl::fileStamp(p);
+    for (size_t i = 0; i < cache.size(); i++) if (cache[i].first == p) { if (cache[i].second.first == st) return cache[i].second.second < 0 ? def : cache[i].second.second; cache.erase(cache.begin() + (long)i); break; }
+    int v = -1;
+    if (st >= 0) { std::ifstream f(p.c_str()); int x = -1; if (f >> x && x >= 7 && x <= 20) v = x; }
+    if (cache.size() >= 16) cache.erase(cache.begin());
+    cache.push_back(std::make_pair(p, std::make_pair(st, v)));
+    return v < 0 ? def : v;
 }
 int DealerRead::parmsApply(void) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
 int DealerRead::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
@@ -300,16 +317,16 @@ int cppExtension::setup(void)
     // (4.3.0, Rassul 2026-10-07 09:16 "fix placement, with fixed height and width ... top left, top center, top right, bottom left
     // ... middle right instead of the user entering amount of placement") Position = one of 9 spots (default Bottom left); the box
     // has a fixed size; nothing is dragged (one shared IRT object moved the copper Read when he clicked the gold chart).
-    setParameterVersion(12);   // (4.4.0) + Background
+    setParameterVersion(13);   // (4.5.8) Clock offset + Background removed (the last two rows: the rows above keep their places). (4.4.0) + Background
     setParameterDialogHeight(3);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     PX.corner   = pc++; setListParameter("Position", 6, dl::ANCHORS, 0, SL);
     PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);
-    PX.clock    = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW, SL);
-    // (4.4.0, Rassul 2026-10-07 10:44 "a more transparent background so the candles are more visible in the background")
-    PX.rwid     = pc++; setListParameter("Background", 0, "See-through;Solid");
+    // (4.5.8 settings audit) "Clock offset (min)" removed - the dealer files and his charts are both Central (as Dealer Sig 1.5.0,
+    // Rassul 2026-10-05 21:19 "why do you even have that option?"); "Background" removed - 4.5.5 made the box always solid
+    PX.clock = PX.rwid = -1;
     PX.moveX = PX.rtop = PX.trade = PX.todo = PX.layout = PX.show = PX.lift = PX.apos = PX.atop = PX.widthPct = PX.view = PX.rpos = PX.rstg = -1;
     PX.keyHow = PX.keyTrig = PX.keyLvl = PX.keyFuel = PX.explain = -1;
     return RTX_OK;
@@ -320,8 +337,7 @@ void DealerRead::readSettings(Settings& S)
     { int v = getListIndex(PX.market); if (v >= 0 && v <= 7) S.market = v; }
     { int v = getListIndex(PX.corner); if (v >= 0 && v <= 8) S.corner = v; }
     { int v = getIntegerValue(PX.font); if (v >= 7 && v <= 20) S.font = v; }
-    { int v = getIntegerValue(PX.clock); if (v >= -720 && v <= 720) S.clock = v; }
-    { int v = getListIndex(PX.rwid); if (v >= 0 && v <= 1) S.bg = v; }
+    S.clock = 0; S.bg = 1;                                               // (4.5.8) no rows: Central clock, solid box
     // (4.2.0 / 4.3.0) the retired settings keep fixed values
     S.trade = S.todo = true; S.layout = 0; S.show = 2; S.lift = 30; S.apos = 0; S.atop = 30; S.widthPct = 100; S.moveX = 0; S.rtop = 0; S.rwid = 100;
     S.view = 0; S.rpos = 0; S.rstg = 0; S.explain = false;
@@ -1134,7 +1150,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ostringstream text;
-    text << "VERSION,4.5.4\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    text << "VERSION,4.5.8\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
     const std::string payload = text.str();
     const std::time_t now = std::time(NULL);
     // Different charts can share this legacy status file: cap those switches
@@ -1591,8 +1607,7 @@ void DealerRead::renderTurn(const Settings& S)
     // (bearish), yellow = neither; grey when the data is stale or there is no live turn
     {
         RCT bgR; bgR.set(x0, y0, (short)(x0 + W), (short)(y0 + gridH));
-        int bgSet = dialogReady() ? S.bg : dl::loadPlace("DealerReadBg", mkt, S.bg);   // (4.5.2)
-        (void)bgSet; bgR.draw(0, C_BOXBG, C_BOXBG, DRAW_OPAQUE, PAT_SOLID);   // (4.5.5, Rassul 2026-10-09 11:22) always a solid background
+        bgR.draw(0, C_BOXBG, C_BOXBG, DRAW_OPAQUE, PAT_SOLID);   // (4.5.5, Rassul 2026-10-09 11:22) always a solid background
         std::string h0 = D.hasTurn ? hd : "";                    // the simplified header starts with the control word
         size_t p0 = h0.find_first_not_of(" ");
         std::string w0 = p0 == std::string::npos ? "" : h0.substr(p0, 6);
@@ -1691,6 +1706,7 @@ int DealerRead::draw(void)
     // leaked into the GC chart - status files showed MARKET HG while drawing GC)
     if (dialogReady()) readSettings(cfg);
     load();
+    cfg.font = drLoadFont(mkt, cfg.font);  // (4.5.8) the market's saved Font size (the window's choice), after a restart too
     renderGrid(cfg);              // (2.2.0) only the grid - the old Read boxes (Magnet, Key Level, verdict, trade box) are gone
     writeStatus(D.hasPrice ? "drawn" : "no data");
     return RTX_OK;
@@ -1701,7 +1717,7 @@ extern "C" cppExtension *CreateExtension(void)
     DealerRead *p = new DealerRead();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (4.5.6) FRONT_DRAWING: the box is drawn after every other indicator, so no line shows through it;   // (2.2.0) TRACK_MOUSE: drag the grid
-    p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences. Drag its grip to move it.");
-    p->setVersion("4.5.7");   // (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences.");
+    p->setVersion("4.5.8");   // (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

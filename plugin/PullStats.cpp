@@ -1,5 +1,10 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.1.0  (2026-10-13)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.2.0  (2026-10-14)
+ *  1.2.0 (2026-10-14, "Record order feed", approved by Rassul 2026-10-13; settings audit): a check box (default ON) that appends every
+ *        order-by-order event this pane drains to C:\Dev\level-reversal-analytics\data\irt\<session>\<MKT>\mbo_HH.csv in lra.mbo_live's
+ *        format (time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask; session = the 17:00 CT day, HH = the CT hour).
+ *        Buffered, written once a second from the calc pass, one writer per market, stops when another program writes the same file
+ *        (lsPulling), paused under 2 GB free - MboRecord.h. Status: MBO_RECORD line. Unticked = nothing is written.
  *  1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
  *        bars = LOTS pulled near price (were orders); PACE (pulled lots / s vs the same-time norm); 3-row spike labels (ratio / pace /
  *        lots); the SPEC message grammar ("Buyers pulled 64 bids totaling 410 lots (3.1x) fast (p 2.6x) - support leaving at PDL.",
@@ -48,19 +53,44 @@
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
 #include "PullStatsLogic.h"
+#include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.1.1"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.2.0"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
     PullStats() : off::MboPane<ps::Logic>() {}
+    // (1.2.0) Record order feed: the recorder lives in this chart's pane state (deleted with it - the destructor writes what is left)
+    virtual bool recorderPane() const { return true; }
+    mrec::Recorder* rec(S_& S) {
+        if (!S.ext) S.ext.reset(new (std::nothrow) RecExt());
+        RecExt* r = static_cast<RecExt*>(S.ext.get());
+        if (!r) return nullptr;
+        r->r.setOn(S.set.record != 0);                                     // -1 (an older 6-field settings file) = the default: on
+        if (!S.market.empty()) r->r.setMarket(S.market);
+        return &r->r;
+    }
+    virtual void onRaw(S_& S, const DEPTH_ORDER& o) {
+        mrec::Recorder* r = rec(S); if (!r || !r->on) return;
+        struct tm t; std::memset(&t, 0, sizeof(t));
+        if (!o.timestamp || !getLocaltime(o.timestamp, &t)) { ++r->dropped; return; }
+        mrec::Ev e; e.y = t.tm_year + 1900; e.mo = t.tm_mon + 1; e.d = t.tm_mday; e.h = t.tm_hour; e.mi = t.tm_min; e.s = t.tm_sec;
+        e.action = o.action; e.price = (double)o.price; e.prev = (double)o.previousPrice; e.size = (unsigned long)o.size;
+        e.oid = (long long)o.orderID; e.aid = (long long)o.aggressorOrderID; e.side = o.buySell == 1 ? 1 : o.buySell == 0 ? 0 : -1;
+        e.bid = (double)o.bid; e.ask = (double)o.ask;
+        r->add(e);
+    }
+    virtual void afterPump(S_& S, long long now, bool fromDraw) { mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); }
+    virtual void statusExtra(S_& S, std::ostream& o) { mrec::Recorder* r = rec(S); if (r) r->status(o); else o << "\nMBO_RECORD,unavailable (out of memory)"; }
+private:
+    struct RecExt : off::PaneExt { mrec::Recorder r; };
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<PullStats*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<PullStats*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
-    setParameterVersion(1);
+    setParameterVersion(1);                                            // (1.2.0) a row APPENDED (saved rows keep their places)
     setParameterDialogHeight(3);
     setIntegerParameter("Ratio bars", off::RATIO_DEFAULT, 50);
     setListParameter("Position", (short)off::POS_DEFAULT, off::POS_CHOICES, 110, kParmAppendSameLine);
@@ -68,6 +98,7 @@ int cppExtension::setup(void) {
     setFloatParameter("Spike vs prior biggest", 1.5f, 50, kParmAppendSameLine);
     setIntegerParameter("Spike lookback", 10, 50, kParmAppendSameLine);
     setIntegerParameter("Near ticks (0 = auto)", 0, 50);
+    setBoolParameter("Record order feed", true, kParmAppendSameLine);  // (1.2.0) parameter 6: data\irt\<session>\<MKT>\mbo_HH.csv
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<PullStats*>(this)->calcHook(); return RTX_OK; }
@@ -77,7 +108,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, before price, traded first, pace, crowd = orders, avg size, top order share) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.1.1");   // PS_VERSION
+    p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, before price, traded first, pace, crowd = orders, avg size, top order share) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
+    p->setVersion("1.2.0");   // PS_VERSION
     return p;
 }

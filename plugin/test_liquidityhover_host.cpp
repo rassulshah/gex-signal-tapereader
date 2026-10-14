@@ -183,7 +183,7 @@ int main() {
     }
     std::printf("  makeup record:\n%s", rec.c_str());
     CHECK(rec.find(lqp::Engine::makeupHeader()) == 0, "the makeup record starts with the v2 header");
-    CHECK(rec.find("|support|") != std::string::npos && rec.find("|building|0.15.0") != std::string::npos, "the decided attempt's line: 'as price came' = building at arrival");
+    CHECK(rec.find("|support|") != std::string::npos && rec.find("|building|0.15.1") != std::string::npos, "the decided attempt's line: 'as price came' = building at arrival");
     CHECK(rec.find("|150|60|40|") != std::string::npos, "hit / rebuilt / rebuilt % as of the decision (100 + the 50 filled later)");
     CHECK(rec.find("|410|500|22|building|") != std::string::npos, "came_base 410, came_arrival 500, +22%, building");
     // ---- no repaint: the record line does not change after the decision
@@ -193,7 +193,7 @@ int main() {
     // every text the plugin drew in this run is 10 pt+
     int small = 0; for (auto& d : h.draws) if (d.type == "text" && d.fsize > 0 && d.fsize < 10) small++;
     CHECK(small == 0, "all text 10 pt or larger");
-    CHECK(std::string(LQ_VERSION) == "0.15.0" && std::string(lqp::VERSION) == "0.15.0", "version 0.15.0");
+    CHECK(std::string(LQ_VERSION) == "0.15.1" && std::string(lqp::VERSION) == "0.15.1", "version 0.15.0");
     p->destroy(); p->~LiquidityProfile(); ::operator delete(p);       // as the host frees it (no leak under ASan)
     std::printf("hover host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
