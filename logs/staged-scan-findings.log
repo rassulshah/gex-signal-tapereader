@@ -1,20 +1,3 @@
-findings=0 allowed=0 staged_files=18 bytes=467450
+findings=0 allowed=0 staged_files=1 bytes=787
 largest staged blobs (bytes, path):
-SIZE	117475	plugin/DealerRead.cpp
-SIZE	94080	plugin/TapeReaderLogic.h
-SIZE	62560	plugin/TapeReader.cpp
-SIZE	50812	plugin/CobImpulseLogic.h
-SIZE	37883	plugin/CobImpulse.cpp
-SIZE	18219	plugin/DealerSig.cpp
-SIZE	17286	plugin/test_cobimpulse_gamma_host.cpp
-SIZE	14442	plugin/test_cobimpulse_host.cpp
-SIZE	13635	tools/gex-build.bat
-SIZE	9519	plugin/TapeReaderText.h
-SIZE	5938	plugin/test_dealersig_regression.cpp
-SIZE	5572	plugin/test_dealersig_mock/irtsdk.h
-SIZE	4982	plugin/DealerReadGates.h
-SIZE	4935	plugin/ClaimGates.h
-SIZE	4456	plugin/test_dealerread_470.cpp
-SIZE	3313	plugin/test_dealerread_460.cpp
-SIZE	2219	plugin/test_cobimpulse_031.cpp
-SIZE	124	logs/staged-scan-findings.log
+SIZE	787	logs/staged-scan-findings.log
