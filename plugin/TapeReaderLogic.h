@@ -23,6 +23,8 @@
 #ifndef LS_TAPEREADER_LOGIC_H
 #define LS_TAPEREADER_LOGIC_H
 #include "TapeReaderText.h"
+#include "BoxPlace.h"
+#include "BannerBoard.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -46,7 +48,7 @@
 
 namespace tr {
 
-static const char* const VERSION = "1.1.2";   // 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
+static const char* const VERSION = "1.1.3";   // 1.1.3 (2026-10-14 CR4800, Rassul 07:13 variant B): the ONE banner top left (bias / turn / swing / next + the Liquidity warning, 11 pt, solid background), the BUYERS / SELLERS / OPTIONS detail on its hover, Position Top left + Offset X / Y; 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
 // (6:40 PM) StackStats' one-order clause = st::ONE_ORDER_TAIL (StackStatsLogic.h); test_tr_ofcompat.cpp checks the two are equal
 static const char* const STACK_ONE_ORDER = "may not reload ?";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
@@ -975,11 +977,9 @@ typedef std::function<int(const std::string&, int, bool)> Measure;
 struct Layout { std::vector<Item> items; Box box; bool ok = false; std::string note; int fs = 9, lines = 0, spot = -1; };   // spot: (1.1.1) the 9-spot place used
 static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_QUIET = 0x00D8DDE3, C_INK = 0x00D8DDE3, C_HEAD = 0x00F3F4F6, C_BG = 0x000F1520, C_BORDER = 0x00C8CDD3;
 static const unsigned C_BLUE = 0x0058A6FF;   // (1.1.0) OPTIONS (the same blue as the panes' options line)
-static const int POS_DEFAULT = 7;     // (1.1.0, SPEC) Bottom centre (1.0.x: Bottom left)
+static const int POS_DEFAULT = 0;     // (1.1.3, Rassul 07:13 variant B) Top left - the banner (1.1.0-1.1.2: Bottom centre box; 1.0.x: Bottom left)
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 static const char* const ELLIPSIS = "\x85";   // "…" in the Windows ANSI code page the chart draws with
-// the reference text that fixes the box's text width (the approved mockup's longest line, ~100 characters)
-static const char* const REF_TEXT = "Bid LQ 2.6x, +GEX PS 92.90 (dlrs buy dips). Against: trend down, LOD in 87%. Inval < 92.86. Tgt 93.20 PWH (34%), 93.95.";
 inline unsigned implCol(int i) { return i > 0 ? C_GREEN : i < 0 ? C_RED : C_QUIET; }
 inline Box placeIn(const Box& area, int W, int H, int pos, int m = 4) {
     if (pos < 0 || pos > 8) pos = POS_DEFAULT;
@@ -1004,99 +1004,126 @@ inline std::string fitEllipsis(const std::string& s, int w, int fs, bool bold, c
     while (a < b) { const size_t mid = a + (b - a + 1) / 2; if (M(s.substr(0, mid) + ELLIPSIS, fs, bold) <= w) a = mid; else b = mid - 1; }
     return s.substr(0, a) + ELLIPSIS;
 }
-// up to two lines at word boundaries; the second cut with "…" when two are not enough
-inline std::vector<std::string> wrap2(const std::string& s, int w, int fs, const Measure& M) {
-    std::vector<std::string> out;
-    if (M(s, fs, false) <= w) { out.push_back(s); return out; }
-    size_t best = 0;
-    for (size_t i = 1; i < s.size(); ++i) if (s[i] == ' ' && s[i - 1] != ' ' && M(s.substr(0, i), fs, false) <= w) best = i;
-    if (best == 0) { out.push_back(fitEllipsis(s, w, fs, false, M)); return out; }
-    out.push_back(s.substr(0, best));
-    size_t r = best; while (r < s.size() && s[r] == ' ') ++r;
-    out.push_back(fitEllipsis(s.substr(r), w, fs, false, M));
+// up to maxLines lines at word boundaries; the last cut with "..." only when they are not enough (1.1.3: BUYERS / SELLERS up to 3)
+inline std::vector<std::string> wrapN(const std::string& s, int w, int fs, int maxLines, const Measure& M) {
+    std::vector<std::string> out; std::string rest = s;
+    while (!rest.empty() && (int)out.size() < maxLines) {
+        if (M(rest, fs, false) <= w) { out.push_back(rest); return out; }
+        if ((int)out.size() == maxLines - 1) { out.push_back(fitEllipsis(rest, w, fs, false, M)); return out; }
+        size_t best = 0;
+        for (size_t i = 1; i < rest.size(); ++i) if (rest[i] == ' ' && rest[i - 1] != ' ' && M(rest.substr(0, i), fs, false) <= w) best = i;
+        if (best == 0) { out.push_back(fitEllipsis(rest, w, fs, false, M)); return out; }
+        out.push_back(rest.substr(0, best));
+        size_t r = best; while (r < rest.size() && rest[r] == ' ') ++r;
+        rest = rest.substr(r);
+    }
     return out;
 }
-// the box: header (centred), line 1 (bias left, the stats centred in the box), BUYERS / SELLERS (1-2 lines each) / OPTIONS (1.1.0, blue) (the second
-// line indented under the text). Fixed width (REF_TEXT at the font); height follows the content; placed by Position inside region
-// (the space up to the last bar, clear of the profiles).
-// (1.1.1, Rassul 13 Oct "fonts are too small"): header / line 1 at 12 pt, the sections at 11 pt (were 9 / 8). The width is the reference
-// line at that size, or the region's width when that is narrower (lines wrap instead of the font shrinking), never under MIN_TEXT
-// characters; only then a smaller size. PLACEMENT: the Position spot first; when the box there would cover the HOD / LOD table
-// (hard) or the price candles (soft), the nearest other spot that covers neither, then one that is clear of the HOD / LOD table,
-// else the Position spot.
-static const int HEAD_PT = 12, BODY_PT = 11, MIN_PT = 9;
-static const char* const MIN_TEXT = "Bid LQ 2.6x, +GEX PS 92.90 (dlrs buy dips). Against: trend down, LOD";
-inline int spotDistance(int a, int b) { return std::abs(a / 3 - b / 3) * 3 + std::abs(a % 3 - b % 3); }
-inline Box placeAvoiding(const Box& region, int W, int H, int pos, const std::vector<Box>& hard, const std::vector<Box>& soft, int* used = nullptr) {
-    int order[9]; for (int k = 0; k < 9; ++k) order[k] = k;
-    if (pos < 0 || pos > 8) pos = POS_DEFAULT;
-    std::stable_sort(order, order + 9, [&](int a, int b) { return spotDistance(a, pos) < spotDistance(b, pos); });
-    auto clear = [&](const Box& b, const std::vector<Box>& v) { for (const Box& o : v) if (overlap(b, o)) return false; return true; };
-    for (int tier = 0; tier < 2; ++tier)
-        for (int k = 0; k < 9; ++k) {
-            const Box b = placeIn(region, W, H, order[k]);
-            if (clear(b, hard) && (tier == 1 || clear(b, soft))) { if (used) *used = order[k]; return b; }
-        }
-    if (used) *used = pos;
-    return placeIn(region, W, H, pos);
-}
-inline Layout layout(const Read& R, const std::string& header, const Box& region, int pos, const Measure& M,
-                     const std::vector<Box>& hard = std::vector<Box>(), const std::vector<Box>& soft = std::vector<Box>()) {
-    Layout L;
-    const int availW = region.r - region.l, availH = region.b - region.t;
-    for (int fs = HEAD_PT; fs >= MIN_PT; --fs) {
-        const int fsS = fs - (HEAD_PT - BODY_PT), pad = 6, lh = (int)(fs * 1.75f + 0.5f), lhS = (int)(fsS * 1.7f + 0.5f), gap = 4;
-        const int labW = std::max(M(trt::text("label.sellers"), fsS, true), std::max(M(trt::text("label.buyers"), fsS, true), M(trt::text("label.options"), fsS, true))) + 14;
-        const int minW = std::max(pad * 2 + labW + M(MIN_TEXT, fsS, false), M(header, fs, true) + 2 * pad);
-        if (minW > availW) continue;
-        const int W = std::min(availW, std::max(pad * 2 + labW + M(REF_TEXT, fsS, false), M(header, fs, true) + 2 * pad));
-        const int textW = W - pad * 2 - labW;
-        // content lines
-        // (1.1.0) BUYERS, SELLERS (1-2 lines each, wrapped), OPTIONS (blue, its 2 lines as they are, each cut to fit; none = one grey line)
-        const std::string side[3] = { R.buyers, R.sellers, std::string() };
-        std::vector<std::string> wr[3]; int nl = 0;
-        for (int i = 0; i < 2; ++i) { const std::string& s = side[i].empty() ? std::string(trt::text("quiet")) : side[i]; wr[i] = wrap2(s, textW, fsS, M); nl += (int)wr[i].size(); }
-        const bool optAny = !R.opt[0].empty() || !R.opt[1].empty();
-        if (optAny) { for (int j = 0; j < 2; ++j) if (!R.opt[j].empty()) wr[2].push_back(fitEllipsis(R.opt[j], textW, fsS, false, M)); }
-        else wr[2].push_back(trt::text("options.none"));
-        nl += (int)wr[2].size();
-        const int H = pad + lh + lh + gap + nl * lhS + pad;
-        if (H > availH) { L.note = trt::text("note.short"); continue; }
-        L.note.clear();
-        int used = pos; const Box b = placeAvoiding(region, W, H, pos, hard, soft, &used);
-        L.box = b; L.ok = true; L.fs = fs; L.lines = 2 + nl; L.spot = used;
-        Item bg; bg.k = K_RECT; bg.l = b.l; bg.t = b.t; bg.r = b.r; bg.b = b.b; bg.c1 = C_BORDER; bg.c2 = C_BG; L.items.push_back(bg);
-        auto text = [&](int x, int t, int bt, const std::string& s, unsigned col, int f, bool bold) {
-            if (s.empty()) return;
-            Item it; it.k = K_TEXT; it.l = x; it.t = t; it.r = x + M(s, f, bold); it.b = bt; it.c1 = col; it.s = s; it.fs = f; it.bold = bold; L.items.push_back(it); };
-        int y = b.t + pad;
-        { const std::string h = fitEllipsis(header, W - 2 * pad, fs, true, M); text(b.l + (W - M(h, fs, true)) / 2, y, y + lh, h, C_HEAD, fs, true); }
-        y += lh;
-        // line 1: the bias left, the stats centred in the box (moved right / cut only if they would touch the bias)
-        const unsigned bc = R.bias == BULL ? C_GREEN : R.bias == BEAR ? C_RED : C_QUIET;
-        const int bw = M(R.biasText, fs, true);
-        text(b.l + pad, y, y + lh, R.biasText, bc, fs, true);
-        if (!R.turn.empty()) {
-            const int minX = b.l + pad + bw + 16, maxR = b.r - pad;
-            std::string cs = R.turn; int cw = M(cs, fs, true);
-            int x = b.l + (W - cw) / 2;
-            if (x < minX) x = minX;
-            if (x + cw > maxR) { cs = fitEllipsis(cs, maxR - x, fs, true, M); cw = M(cs, fs, true); }
-            const bool learning = R.turn == trt::text("turn.learning");
-            text(x, y, y + lh, cs, learning ? C_QUIET : R.centreDir > 0 ? C_GREEN : R.centreDir < 0 ? C_RED : C_QUIET, fs, true);
-        }
-        y += lh + gap;
-        const char* lab[3] = { trt::text("label.buyers"), trt::text("label.sellers"), trt::text("label.options") };
-        const unsigned lc[3] = { implCol(side[0].empty() || side[0] == trt::text("quiet") ? 0 : R.buyImpl), implCol(side[1].empty() || side[1] == trt::text("quiet") ? 0 : R.sellImpl), C_BLUE };
-        for (int i = 0; i < 3; ++i) {
-            text(b.l + pad, y, y + lhS, lab[i], lc[i], fsS, true);
-            const unsigned ink = i < 2 ? C_INK : optAny ? C_BLUE : C_QUIET;
-            for (size_t j = 0; j < wr[i].size(); ++j) { text(b.l + pad + labW, y, y + lhS, wr[i][j], ink, fsS, false); y += lhS; }
-        }
-        return L;
+inline std::vector<std::string> wrap2(const std::string& s, int w, int fs, const Measure& M) { return wrapN(s, w, fs, 2, M); }
+
+// ================================================================================================================================
+// (1.1.3) THE BANNER (Rassul 2026-10-14 07:12 "you already have messaging at the top"; 07:13 variant B "one banner"; 07:17 solid dark
+// background): top left, below the chart's title row, 11 pt (10% under 1.1.2's 12 pt line 1):
+//   line 1   Tape Reader v1.1.3  .  7:09 AM   BULLISH 2 of 4  .  Turn up at PFH 83%  .  Swing 52+ ticks 34%  .  Next: 7874.25 ONH
+//   line 2   [ABSORPTION WEAKENING] buyers exhausted (0.4x), but sellers are pulling their offers (92%)   (the Liquidity warning, as it
+//            colours it today: the name in its outlined tag, green / red / grey; the detail grey) - only while there is one
+// Hover over the banner: the BUYERS / SELLERS / OPTIONS detail (10 pt, was 11) in a box right under it. Solid dark fill + 1 px solid
+// border (Settings > Banner background, default on). The width never shakes: it grows at once and shrinks only after the shorter
+// text held for 60 s (bp::StableW, kept by the host); the height is 1 or 2 lines (the warning there or not).
+// ================================================================================================================================
+static const int BAN_PT = 11, DET_PT = 10, BAN_PAD = 5, BAN_LH = 19, DET_LH = 17, DET_W = 470, TITLE_ROW = 22;
+// (1.1.3) the hover dead band: the detail opens only with the mouse inside the banner and closes only HOVER_BAND px outside it / its detail
+static const int HOVER_BAND = 6;
+inline bool inBox(const Box& b, int x, int y, int grow = 0) { return x >= b.l - grow && x <= b.r + grow && y >= b.t - grow && y <= b.b + grow; }
+static const unsigned C_TAG_GREY = 0x009CA3AF, C_DETAIL = 0x00BEC2C8;
+struct Seg { std::string s; unsigned col = C_HEAD; bool bold = true; };
+// line 1 as coloured parts: the header (version + time) white, the bias in its colour, the turn / swing / next in the turn's colour
+inline std::vector<Seg> line1Segs(const Read& R, const std::string& header) {
+    std::vector<Seg> v; Seg h; h.s = header; h.col = C_HEAD; v.push_back(h);
+    Seg b; b.s = "   " + R.biasText; b.col = R.bias == BULL ? C_GREEN : R.bias == BEAR ? C_RED : C_QUIET; v.push_back(b);
+    if (!R.turn.empty()) {
+        const std::string sep = trt::text("centre.sep"); std::string t = R.turn, o;
+        for (;;) { const size_t k = t.find(sep); o += "  \xB7  " + t.substr(0, k); if (k == std::string::npos) break; t = t.substr(k + sep.size()); }
+        Seg c; c.s = o; c.col = R.turn == trt::text("turn.learning") ? C_QUIET : R.centreDir > 0 ? C_GREEN : R.centreDir < 0 ? C_RED : C_QUIET; v.push_back(c);
     }
-    if (L.note.empty()) L.note = trt::text("note.narrow");
-    return L;
+    return v;
+}
+inline unsigned warnCol(int favour) { return favour > 0 ? C_GREEN : favour < 0 ? C_RED : C_TAG_GREY; }
+// the width the banner's text needs (the host keeps a stable width from it)
+inline int bannerNeed(const Read& R, const std::string& header, const bb::Warn& W, const Measure& M) {
+    int w1 = 0; for (const Seg& g : line1Segs(R, header)) w1 += M(g.s, BAN_PT, g.bold);
+    int w2 = 0; if (W.on) w2 = M(W.name, BAN_PT, true) + 8 + 10 + M(W.detail, BAN_PT, false);
+    return 2 * BAN_PAD + 10 + std::max(w1, w2);                          // + a margin: IRT's font may run a few px wider than the measure
+}
+inline int bannerH(bool warn) { return BAN_PAD + BAN_LH * (warn ? 2 : 1) + BAN_PAD - 2; }
+struct Banner { Layout L; Box box, detail; bool detailOn = false; };
+// area = the pane up to the last bar, below the title row; W = the stable width (>= the need, the host's StableW); pl = Position + Offset
+inline Banner layoutBanner(const Read& R, const std::string& header, const bb::Warn& W, const Box& area, const bp::Place& pl, int stableW,
+                           bool bg, bool hover, const Measure& M, const std::vector<Box>& hard = std::vector<Box>(), bp::Hyst* hyst = nullptr) {
+    Banner B; Layout& L = B.L;
+    const int aw = area.r - area.l, ah = area.b - area.t;
+    const int H = bannerH(W.on);
+    if (aw < 160 || ah < H + 4) { L.note = trt::text(aw < 160 ? "note.narrow" : "note.short"); return B; }
+    const int Wd = std::min(aw, std::max(stableW, bannerNeed(R, header, W, M)));
+    const bp::Box A = bp::mk(area.l, area.t, area.r, area.b);
+    bp::Box b = bp::placeBox(A, Wd, H, pl);
+    // the HOD / LOD table (hard): just below it, else just above it - never over it (after the offset); the hysteresis keeps it still
+    for (const Box& o : hard) { const bp::Box ob = bp::mk(o.l, o.t, o.r, o.b); if (bp::overlap(b, ob)) {
+        bp::Box below = bp::clampIn(bp::mk(b.l, ob.b + 4, b.r, ob.b + 4 + H), A), above = bp::clampIn(bp::mk(b.l, ob.t - 4 - H, b.r, ob.t - 4), A);
+        b = !bp::overlap(below, ob) ? below : !bp::overlap(above, ob) ? above : b; } }
+    // (1.1.3 fix) the hysteresis holds the spot's ANCHOR point only (left / centre / right edge x, top / middle / bottom edge y, by the
+    // Position), never the whole box: the box is rebuilt from the anchor with the CURRENT width / height, so a 1 -> 2 line change or a
+    // wider text shows on the same draw (it waited 2 draws when the whole box went through Hyst), and grows away from the anchor
+    if (hyst) {
+        const int col = pl.pos % 3, row = pl.pos / 3;
+        auto anchorOf = [&](const bp::Box& x) { const int ax = col == 0 ? x.l : col == 2 ? x.r : (x.l + x.r) / 2, ay = row == 0 ? x.t : row == 2 ? x.b : (x.t + x.b) / 2; return bp::mk(ax, ay, ax + 1, ay + 1); };
+        auto fromAnchor = [&](const bp::Box& a) { const int l = col == 0 ? a.l : col == 2 ? a.l - Wd : a.l - Wd / 2, t = row == 0 ? a.t : row == 2 ? a.t - H : a.t - H / 2; return bp::clampIn(bp::mk(l, t, l + Wd, t + H), A); };
+        bool curBlocked = false;
+        if (hyst->have) { const bp::Box cb = fromAnchor(hyst->cur); for (const Box& o : hard) if (bp::overlap(cb, bp::mk(o.l, o.t, o.r, o.b))) curBlocked = true; }
+        b = fromAnchor(hyst->step(anchorOf(b), curBlocked));
+    }
+    B.box.l = b.l; B.box.t = b.t; B.box.r = b.r; B.box.b = b.b; L.box = B.box; L.ok = true; L.fs = BAN_PT; L.lines = W.on ? 2 : 1; L.spot = pl.pos;
+    if (bg) { Item r; r.k = K_RECT; r.l = b.l; r.t = b.t; r.r = b.r; r.b = b.b; r.c1 = C_BORDER; r.c2 = C_BG; L.items.push_back(r); }
+    auto text = [&](int x, int t, int bt, const std::string& str, unsigned col, int f, bool bold) {
+        if (str.empty()) return;
+        Item it; it.k = K_TEXT; it.l = x; it.t = t; it.r = x + M(str, f, bold); it.b = bt; it.c1 = col; it.s = str; it.fs = f; it.bold = bold; L.items.push_back(it); };
+    // line 1: the parts left to right, the last cut with "..." only if the pane is narrower than the text
+    int x = b.l + BAN_PAD + 2; const int maxR = b.r - BAN_PAD; int y = b.t + BAN_PAD - 1;
+    for (const Seg& g : line1Segs(R, header)) {
+        if (x >= maxR) break;
+        std::string t = g.s; if (x + M(t, BAN_PT, g.bold) > maxR) t = fitEllipsis(t, maxR - x, BAN_PT, g.bold, M);
+        text(x, y, y + BAN_LH, t, g.col, BAN_PT, g.bold); x += M(t, BAN_PT, g.bold);
+    }
+    if (W.on) {                                                            // line 2: the Liquidity warning, coloured as today
+        y += BAN_LH; x = b.l + BAN_PAD + 2;
+        const int nw = M(W.name, BAN_PT, true);
+        Item tag; tag.k = K_RECT; tag.l = x - 2; tag.t = y + 1; tag.r = x + nw + 4; tag.b = y + BAN_LH - 2; tag.c1 = warnCol(W.favour); tag.c2 = 0xFFFFFFFFu; L.items.push_back(tag);   // c2 = hollow: the outline only
+        text(x + 1, y, y + BAN_LH, W.name, warnCol(W.favour), BAN_PT, true);
+        const int dx0 = x + nw + 14; if (dx0 < maxR) text(dx0, y, y + BAN_LH, fitEllipsis(W.detail, maxR - dx0, BAN_PT, false, M), C_DETAIL, BAN_PT, false);
+    }
+    if (!hover) return B;
+    // the hover: BUYERS / SELLERS (up to 3 lines each) / OPTIONS (blue, 2 lines) right under the banner, 10 pt
+    const int labW = std::max(M(trt::text("label.sellers"), DET_PT, true), std::max(M(trt::text("label.buyers"), DET_PT, true), M(trt::text("label.options"), DET_PT, true))) + 12;
+    const int DW = std::min(aw, std::max(DET_W, b.r - b.l)), tw = DW - 2 * BAN_PAD - labW;
+    const std::string side[2] = { R.buyers.empty() ? std::string(trt::text("quiet")) : R.buyers, R.sellers.empty() ? std::string(trt::text("quiet")) : R.sellers };
+    std::vector<std::string> wr[3];
+    for (int i = 0; i < 2; ++i) wr[i] = wrapN(side[i], tw, DET_PT, 3, M);
+    const bool optAny = !R.opt[0].empty() || !R.opt[1].empty();
+    if (optAny) { for (int j = 0; j < 2; ++j) if (!R.opt[j].empty()) wr[2].push_back(fitEllipsis(R.opt[j], tw, DET_PT, false, M)); } else wr[2].push_back(trt::text("options.none"));
+    const int nl = (int)(wr[0].size() + wr[1].size() + wr[2].size()), DH = BAN_PAD + nl * DET_LH + BAN_PAD - 2;
+    bp::Box d = bp::clampIn(bp::mk(b.l, b.b + 2, b.l + DW, b.b + 2 + DH), A);
+    if (d.t < b.b && b.t - 2 - DH >= A.t) d = bp::mk(b.l, b.t - 2 - DH, b.l + DW, b.t - 2);          // no room under it: above it
+    B.detail.l = d.l; B.detail.t = d.t; B.detail.r = d.r; B.detail.b = d.b; B.detailOn = true;
+    { Item r; r.k = K_RECT; r.l = d.l; r.t = d.t; r.r = d.r; r.b = d.b; r.c1 = C_BORDER; r.c2 = C_BG; L.items.push_back(r); }
+    const char* lab[3] = { trt::text("label.buyers"), trt::text("label.sellers"), trt::text("label.options") };
+    const unsigned lc[3] = { implCol(side[0] == trt::text("quiet") ? 0 : R.buyImpl), implCol(side[1] == trt::text("quiet") ? 0 : R.sellImpl), C_BLUE };
+    int yy = d.t + BAN_PAD - 1;
+    for (int i = 0; i < 3; ++i) {
+        text(d.l + BAN_PAD, yy, yy + DET_LH, lab[i], lc[i], DET_PT, true);
+        const unsigned ink = i < 2 ? C_INK : optAny ? C_BLUE : C_QUIET;
+        for (size_t j = 0; j < wr[i].size(); ++j) { text(d.l + BAN_PAD + labW, yy, yy + DET_LH, wr[i][j], ink, DET_PT, false); yy += DET_LH; }
+    }
+    return B;
 }
 
 } // namespace tr

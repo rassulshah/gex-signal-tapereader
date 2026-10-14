@@ -61,7 +61,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.15.1";   // (0.15.1) Width / Font kept per market
+static const char* const VERSION = "0.15.1a";   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)

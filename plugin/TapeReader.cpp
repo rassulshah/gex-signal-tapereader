@@ -1,5 +1,20 @@
 /********************************************************************************
- *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.1.0  (2026-10-13)
+ *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.1.3  (2026-10-14)
+ *  1.1.3 (2026-10-14, CR4800; Rassul 07:12 "you already have messaging at the top", 07:13 decision "variant B, the one banner at the
+ *        top", 07:17 solid dark background, 07:18 "test them thoroughly ... dont shake ... dont have garbage values"): NO big box. A
+ *        compact 1-2 line BANNER at the top left, below the title row, 11 pt (10% under 1.1.2): line 1 = the version and the candle's
+ *        time, the bias, the turn / swing odds and the next level; line 2 = the Liquidity Profile's warning (handed over through
+ *        BannerBoard.h - the Liquidity Profile 0.15.3 stops drawing its own while this banner is on the chart). Hover over the banner =
+ *        the BUYERS / SELLERS / OPTIONS detail (10 pt) right under it; the candle it reads stays while the mouse is on it. Settings:
+ *        Position (default Top left), Offset X / Y (px, -600..600), Banner background (solid fill + 1 px border, default on) - kept per
+ *        market in TapeReader.place-<MKT>.txt "pos,dx,dy,bg" (the dialog is filled from it when it opens; a control he did not touch
+ *        keeps the file's value - the 07:07 "Top left" in the dialog was IRT's stale list value, the chart drew the file / default).
+ *        Width stable (grows at once, shrinks after 60 s), hysteresis against the HOD / LOD table, never past the last bar.
+ *        (CR5000 test pass) the hysteresis holds only the spot's anchor point, so a 1 -> 2 line change / a wider text shows on the same
+ *        draw (no 1-draw lag); the hover has a 6 px dead band (opens inside only, closes 6 px outside the banner / its detail); the
+ *        banner suite (jitter 1,000 draws, hover, board heartbeat, dialog -> file -> restart round trip, fuzz, two charts) passes.
+ *        Settings that reset: setParameterVersion 2 -> IRT resets the saved Position row once; the chart never reads it (the place
+ *        file TapeReader.place-<MKT>.txt is the only source, an old "7" file still means Bottom centre).
  *  1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md): default Position BOTTOM CENTRE;
  *        sections header / bias line / BUYERS (2 lines) / SELLERS (2 lines) / OPTIONS (2 lines, blue) - the LEVELS section is removed
  *        (levels are named inside BUYERS / SELLERS; the LEVELS text is still logged for the nightly). BUYERS / SELLERS use the panes'
@@ -69,7 +84,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.1.2"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.1.3"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -161,6 +176,9 @@ struct TRState {
     // status / place
     std::string lastStatus; long long lastStatusMs = -1, statusWrites = 0; long long placeSig = -2, placeChecked = -1; int pos = tr::POS_DEFAULT;
     std::string layoutNote; tr::Box lastBox; tr::Box lastRegion; bool lastOk = false; int lastLines = 0, lastSpot = -1, lastAvoid = 0;   // (1.1.1) the spot used; tables * 1000 + candles avoided
+    // (1.1.3) the banner: Position + Offset X / Y + background (place file), the stable width, the hysteresis, the hover, the board
+    bp::Place place; bool bg = true; std::string placeWhy; bp::StableW banW; bp::Hyst hyst; bool inBanner = false; long long bannerHovers = 0;
+    std::string chartKey; bb::Warn warn; bool warnSeen = false; bb::Beat lqBeat; tr::Box lastDetail; bool lastDetailOn = false;
 };
 
 class TapeReader : public cppExtension {
@@ -168,9 +186,10 @@ public:
     TapeReader() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsLoad(void) { return RTX_OK; }
+    virtual int parmsLoad(void);                                       // (1.1.3) fills the dialog from the place file (never saves)
     virtual int parmsApply(void) { savePos(); return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { savePos(); return RTX_OK; }
+    bp::DlgSnap snap_;                                                 // (1.1.3) the dialog as it opened
     HostSlot<TRState> slot_;
     TRState* state(bool create) { return slot_.get(this, create); }
     void clearState() { slot_.release(this); }
@@ -212,14 +231,21 @@ public:
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
-int cppExtension::done(void)    { static_cast<TapeReader*>(this)->clearState(); return RTX_OK; }
-int cppExtension::destroy(void) { static_cast<TapeReader*>(this)->clearState(); return RTX_OK; }
+// (1.1.3) removed from the chart: its banner entry goes, so the Liquidity Profile draws its own warning again
+static void trClearBoard(TapeReader* x) { TRState* S = x->testState(); if (S && !S->symbol.empty()) bb::clearBanner(S->symbol, S->spb, S->chartKey); }
+int cppExtension::done(void)    { trClearBoard(static_cast<TapeReader*>(this)); static_cast<TapeReader*>(this)->clearState(); return RTX_OK; }
+int cppExtension::destroy(void) { trClearBoard(static_cast<TapeReader*>(this)); static_cast<TapeReader*>(this)->clearState(); return RTX_OK; }
 int cppExtension::setup(void)
 {
-    // controls only (Rassul 2026-10-02: settings windows show controls only): Position, 9 spots, default Bottom centre (1.1.0)
-    setParameterVersion(1);
-    setParameterDialogHeight(1);
+    // controls only (Rassul 2026-10-02: settings windows show controls only). (1.1.3) Position (9 spots, default Top left), Offset X /
+    // Y (px, -600..600), Banner background; version 2 = IRT resets the saved rows once (the chart reads the place file, the dialog is
+    // filled from it when it opens)
+    setParameterVersion(2);
+    setParameterDialogHeight(2);
     setListParameter("Position", (short)tr::POS_DEFAULT, tr::POS_CHOICES);
+    setIntegerParameter("Offset X", 0, 50, kParmAppendSameLine);
+    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);
+    setBoolParameter("Banner background", true);
     CPEN p(0x009CA3AF, 1, P_SOLID);
     setOutputParameter("Tape Reader", DRAW_INVISIBLE, &p, 0x009CA3AF, OUTPUT_NO_UI);
     setArrayDrawingFlags(0, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
@@ -581,29 +607,59 @@ void TapeReader::pump()
     } catch (...) { S.faulted = true; S.state = "calculation error (cleared on symbol change)"; }
 }
 
+// (1.1.3) the place file "pos,dx,dy,bg" (1.1.0-1.1.2 files: "pos" only = no offset, background on); malformed = the defaults + why
+struct TrPlace { bp::Place pl; bool bg = true; std::string why; };
+static TrPlace trReadPlace(const std::string& p) {
+    TrPlace T; T.pl.pos = tr::POS_DEFAULT;
+    std::string text; long long s2;
+    if (tr::readBounded(p, 64, text, s2) != tr::RD_OK) { T.why = "no place file: defaults"; return T; }
+    const std::vector<std::string> L = tr::lines(text, false); std::vector<std::string> rest;
+    if (L.empty() || !bp::parse(L[0], tr::POS_DEFAULT, T.pl, &T.why, &rest)) { if (T.why.empty()) T.why = "empty"; T.why = "place file ignored (" + T.why + "): defaults"; T.pl = bp::Place(); T.pl.pos = tr::POS_DEFAULT; return T; }
+    if (!rest.empty()) { if (rest[0] == "0") T.bg = false; else if (rest[0] != "1") T.why = "bad background field - on"; }
+    return T;
+}
+static std::string trMarket(cppExtension* x) { char rb[32]; std::memset(rb, 0, sizeof(rb)); const char* rs = x->getRootSymbol(rb); return dl::marketFor(0, rs ? rs : ""); }
+static bool trInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the settings window's copy has no bar size
+static std::vector<long long> trDialog(cppExtension* x) { std::vector<long long> v; v.push_back(x->getListIndex(0)); v.push_back(x->getIntegerValue(1)); v.push_back(x->getIntegerValue(2)); v.push_back(x->isBoxChecked(3) ? 1 : 0); return v; }
+int TapeReader::parmsLoad(void)
+{
+    if (!trInDialog(this)) return RTX_OK;
+    const std::string mkt = trMarket(this), F = flexDir(); if (mkt.empty() || F.empty()) return RTX_OK;
+    const TrPlace T = trReadPlace(F + "TapeReader.place-" + mkt + ".txt");
+    setListIndex(0, T.pl.pos); setIntegerValue(1, T.pl.dx); setIntegerValue(2, T.pl.dy); checkBox(3, T.bg);
+    snap_.take(trDialog(this));
+    return RTX_OK;
+}
 void TapeReader::savePos()
 {
-    const int v = getListIndex(0);
-    if (v < 0 || v > 8) return;                                         // not this dialog's value: never overwrite a saved choice
-    char rb[32]; std::memset(rb, 0, sizeof(rb)); const char* rs = getRootSymbol(rb);
-    const std::string mkt = dl::marketFor(0, rs ? rs : ""); if (mkt.empty()) return;
+    if (!trInDialog(this)) return;                                      // (1.1.3) only the settings window's values are real
+    const std::string mkt = trMarket(this); if (mkt.empty()) return;
     const std::string F = flexDir(); if (F.empty()) return;
-    writeAtomic(F + "TapeReader.place-" + mkt + ".txt", std::to_string(v) + "\n");
+    const std::string path = F + "TapeReader.place-" + mkt + ".txt";
+    const TrPlace T = trReadPlace(path);
+    const std::vector<long long> now = trDialog(this);
+    const long long fv[4] = { T.pl.pos, T.pl.dx, T.pl.dy, T.bg ? 1 : 0 };
+    long long v[4]; for (size_t k = 0; k < 4; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
+    bp::Place pl; pl.pos = bp::posOk((int)v[0]) && v[0] == (int)v[0] ? (int)v[0] : T.pl.pos;   // garbage never reaches the file
+    pl.dx = bp::offOk((int)v[1]) && v[1] == (int)v[1] ? (int)v[1] : T.pl.dx; pl.dy = bp::offOk((int)v[2]) && v[2] == (int)v[2] ? (int)v[2] : T.pl.dy;
+    writeAtomic(path, bp::format(pl) + "," + (v[3] ? "1" : "0") + "\n");
+    snap_.take(now);
     TRState* S = testState(); if (S) { S->placeSig = -2; S->placeChecked = -1; }
 }
-// the per-market place file is the only source while drawing (as lsHodLod 1.0.1): no file = Bottom centre (1.1.0)
+// the per-market place file is the only source while drawing (IRT hands the chart copy list 0): no file = Top left (1.1.3)
 int TapeReader::position(TRState& S)
 {
     const long long now = steadyMs();
     if (S.placeChecked >= 0 && now >= S.placeChecked && now - S.placeChecked < 1000) return S.pos;
     S.placeChecked = now;
-    const std::string F = flexDir(); if (F.empty()) return S.pos = tr::POS_DEFAULT;
+    const std::string F = flexDir(); if (F.empty()) { S.place = bp::Place(); S.place.pos = tr::POS_DEFAULT; S.bg = true; return S.pos = tr::POS_DEFAULT; }
     const std::string p = F + "TapeReader.place-" + S.mkt + ".txt";
     const long long sig = tr::fileSig(p);
     if (sig == S.placeSig) return S.pos;
-    S.placeSig = sig; S.pos = tr::POS_DEFAULT;
-    std::string text; long long s2;
-    if (tr::readBounded(p, 64, text, s2) == tr::RD_OK) { const std::vector<std::string> L = tr::lines(text, false); if (!L.empty() && L[0].size() == 1 && L[0][0] >= '0' && L[0][0] <= '8') S.pos = L[0][0] - '0'; }
+    S.placeSig = sig;
+    const TrPlace T = trReadPlace(p);
+    if (T.pl.pos != S.place.pos || T.pl.dx != S.place.dx || T.pl.dy != S.place.dy) { S.hyst.reset(); S.inBanner = false; }   // moved: start clean
+    S.place = T.pl; S.bg = T.bg; S.placeWhy = T.why; S.pos = T.pl.pos;
     return S.pos;
 }
 // the last price bar's right edge (x): the usable area ends there (never beyond price); -1 = unknown
@@ -643,6 +699,15 @@ int TapeReader::mouse(RTX_EVENT* e)
         S->hoverWnds.push_back(w);
         if (S->hoverWnds.size() > MAX_HOVER_WNDS) S->hoverWnds.erase(S->hoverWnds.begin());
     }
+    {   // (1.1.3) over the banner (or its open detail): the detail shows, the candle it reads stays
+        const tr::Box& bx = S->lastBox; const tr::Box& dt = S->lastDetail; const int mh = e->v.mouse.h, mv = e->v.mouse.v;
+        // a dead band (tr::HOVER_BAND px): it opens only inside the banner, and closes only once the mouse is that far outside the
+        // banner / its detail - no flicker on the edge or on the 2 px gap between them
+        const int g = S->inBanner ? tr::HOVER_BAND : 0;
+        const bool in = S->lastOk && (tr::inBox(bx, mh, mv, g) || (S->inBanner && S->lastDetailOn && tr::inBox(dt, mh, mv, g)));
+        if (in != S->inBanner) { S->inBanner = in; if (in) ++S->bannerHovers; ++S->redraws; invalidateChart(false); }
+        if (in) return RTX_FAIL;
+    }
     const long cnt = getBarCount(); const long b = e->v.mouse.bar;
     const int h = b >= 0 && b < cnt - 1 ? (int)b : -1;                   // a closed bar; the forming bar / past the last = live
     publishBoard(*S, b);                                                 // (1.1.1) the order-flow panes follow this candle
@@ -675,17 +740,21 @@ void TapeReader::publishBoard(TRState& S, long bar)
 }
 bool TapeReader::mouseLeft(TRState& S)
 {
-    if (S.hover < 0 || S.hoverWnds.empty()) return false;
+    if ((S.hover < 0 && !S.inBanner) || S.hoverWnds.empty()) return false;
     void* w = cursorWindow(); if (!w) return false;
     if (std::find(S.hoverWnds.begin(), S.hoverWnds.end(), w) != S.hoverWnds.end()) return false;
-    S.hover = -1; return true;
+    S.hover = -1; S.inBanner = false; return true;                       // (1.1.3) off the chart: no banner hover either
 }
 
 void TapeReader::execute(const tr::Layout& L)
 {
     for (size_t i = 0; i < L.items.size(); ++i) {
         const tr::Item& it = L.items[i];
-        if (it.k == tr::K_RECT) { RCT rc; rc.set(coord(it.l), coord(it.t), coord(it.r), coord(it.b)); rc.draw(1, (COLOR)it.c1, (COLOR)it.c2, DRAW_OPAQUE, PAT_SOLID); }
+        if (it.k == tr::K_RECT && it.c2 == 0xFFFFFFFFu) {                // (1.1.3) hollow (the warning tag): four solid lines, no fill
+            setPen((COLOR)it.c1, 1, P_SOLID);
+            PNT a; a.h = coord(it.l); a.v = coord(it.t); a.setDrawPosition(); a.h = coord(it.r); a.drawLineTo(); a.v = coord(it.b); a.drawLineTo(); a.h = coord(it.l); a.drawLineTo(); a.v = coord(it.t); a.drawLineTo();
+        }
+        else if (it.k == tr::K_RECT) { setPen((COLOR)it.c1, 1, P_SOLID); RCT rc; rc.set(coord(it.l), coord(it.t), coord(it.r), coord(it.b)); rc.draw(1, (COLOR)it.c1, (COLOR)it.c2, DRAW_OPAQUE, PAT_SOLID); }
         else if (it.k == tr::K_TEXT) {
             FONT f; f.id = HELVETICA; f.size = (short)it.fs; f.style = it.bold ? BOLD : PLAIN; setFont(f); setTextColor((COLOR)it.c1);
             const int yc = (it.t + it.b) / 2; const short yy = (short)(yc - (short)(it.fs * 0.45f + 0.5f));
@@ -724,16 +793,35 @@ int TapeReader::draw(void)
             RTARRAYI dt(barDateTime);
             if ((long)dt.count > S->hover) { std::map<unsigned long long, tr::Read>::const_iterator it = S->logged.find((unsigned long long)dt[S->hover]); if (it != S->logged.end()) R = &it->second; }
         }
-        const std::string header = trt::fill("header", { {"ver", TR_VERSION}, {"mkt", S->mkt}, {"time", R->ct} });   // (1.1.1) the full real version
-        // (1.1.1) never over the HOD / LOD table (its own status file, when fresh) and, where a spot is free, not over the price candles
-        std::vector<tr::Box> hard, soft;
+        // (1.1.3) the banner: "Tape Reader v1.1.3  .  7:09 AM" (the market is the chart's own) + the read; line 2 the Liquidity warning
+        const std::string header = std::string("Tape Reader v") + TR_VERSION + "  \xB7  " + R->ct;
+        { const char* cl = getChartLabel(); S->chartKey = cl ? std::string(cl) : std::string(); }
+        const long long nowMs = steadyMs();
+        {   // (CR5000) the Liquidity Profile's heartbeat (BannerBoard 1.0.1): present while its stamp moves, or under 5 s old, or for 3 of
+            // my draws without a new stamp - an idle chart's first repaint never drops line 2 for a frame
+            bb::Warn w; long long ms = -1; const bool have = bb::peekWarn(S->symbol, S->spb, S->chartKey, w, ms);
+            S->warnSeen = S->lqBeat.step(have, ms, nowMs); S->warn = S->warnSeen ? w : bb::Warn();
+        }
+        // the area: the pane from its left edge (where the Liquidity warning sits today) to the last bar, below the IRT title row
+        tr::Box area; area.l = pane.left + 4; area.t = pane.top + tr::TITLE_ROW; area.r = right; area.b = pane.bottom - 2;
+        // never over the HOD / LOD table (its own status file, when fresh)
+        std::vector<tr::Box> hard;
         if (S->hl.boxOk && S->sHl.good && wallNow() - S->sHl.mtime <= 120) { tr::Box hb; hb.l = S->hl.box[0] - 4; hb.t = S->hl.box[1] - 4; hb.r = S->hl.box[2] + 4; hb.b = S->hl.box[3] + 4; hard.push_back(hb); }
-        candleBoxes(region, soft);
-        const tr::Layout L = tr::layout(*R, header, region, position(*S), M, hard, soft);
-        S->lastOk = L.ok; S->lastBox = L.box; S->layoutNote = L.note; S->lastLines = L.lines; S->lastSpot = L.spot; S->lastAvoid = (int)hard.size() * 1000 + (int)soft.size();
-        if (L.ok) execute(L);
+        position(*S);
+        const int need = tr::bannerNeed(*R, header, S->warn, M);
+        const int stableW = S->banW.step(need, nowMs);
+        const tr::Banner Bn = tr::layoutBanner(*R, header, S->warn, area, S->place, stableW, S->bg, S->inBanner, M, hard, &S->hyst);
+        S->lastOk = Bn.L.ok; S->lastBox = Bn.box; S->layoutNote = Bn.L.ok ? std::string("banner") : Bn.L.note; S->lastLines = Bn.L.lines; S->lastSpot = S->place.pos; S->lastAvoid = (int)hard.size() * 1000;
+        S->lastDetail = Bn.detail; S->lastDetailOn = Bn.detailOn;
+        if (Bn.L.ok) {
+            execute(Bn.L);
+            // the reserved rectangle for the Liquidity Profile (its column header goes under it): the banner's 2-line height, so the
+            // header never jumps when the warning comes and goes
+            bb::Rect rr; rr.l = Bn.box.l; rr.t = Bn.box.t; rr.r = Bn.box.r; rr.b = Bn.box.t + tr::bannerH(true);
+            bb::publishBanner(S->symbol, S->spb, S->chartKey, nowMs, rr);
+        }
         else if (region.r - region.l > 160 && region.b - region.t > 20) { FONT f; f.id = HELVETICA; f.size = 8; f.style = PLAIN; setFont(f); setTextColor(tr::C_QUIET);
-            RCT rc; rc.set(coord(region.l + 4), coord(region.b - 18), coord(region.l + 4 + textW(L.note, 8, false) + 4), coord(region.b - 4)); rc.drawText(L.note.c_str(), false, false); }
+            RCT rc; rc.set(coord(region.l + 4), coord(region.b - 18), coord(region.l + 4 + textW(Bn.L.note, 8, false) + 4), coord(region.b - 4)); rc.drawText(Bn.L.note.c_str(), false, false); }
     } catch (...) { S->state = "draw error"; }
     writeStatus(*S);
     return RTX_OK;
@@ -762,6 +850,9 @@ void TapeReader::writeStatus(TRState& S)
     o += "LOG," + S.logPath + ",writes " + std::to_string(S.logWrites) + ",fails " + std::to_string(S.logFails) + ",queued " + std::to_string(S.logQueue.size()) + ",loaded " + std::to_string(S.logLoaded) + ",rejected " + std::to_string(S.logRejected) + "\n";
     o += "LAYOUT," + std::string(S.lastOk ? "drawn" : "not drawn") + "," + S.layoutNote + ",box " + std::to_string(S.lastBox.l) + " " + std::to_string(S.lastBox.t) + " " + std::to_string(S.lastBox.r) + " " + std::to_string(S.lastBox.b) +
          ",region " + std::to_string(S.lastRegion.l) + " " + std::to_string(S.lastRegion.r) + ",lines " + std::to_string(S.lastLines) + ",spot " + std::to_string(S.lastSpot) + ",avoid tables " + std::to_string(S.lastAvoid / 1000) + " candles " + std::to_string(S.lastAvoid % 1000) + "\n";
+    o += "BANNER,pos " + std::to_string(S.place.pos) + ",dx " + std::to_string(S.place.dx) + ",dy " + std::to_string(S.place.dy) + ",background " + (S.bg ? "on" : "off") + ",width " + std::to_string(S.banW.w)
+         + ",warning " + (S.warnSeen ? (S.warn.on ? S.warn.name : std::string("none")) : std::string("no Liquidity Profile on this chart")) + ",hover " + (S.inBanner ? "on" : "off") + ",hovers " + std::to_string(S.bannerHovers) + ",moves " + std::to_string(S.hyst.moves)
+         + (S.placeWhy.empty() ? "" : "," + S.placeWhy) + "\n";
     o += "COUNTS,recomputes " + std::to_string(S.recomputes) + ",redraws " + std::to_string(S.redraws) + ",hover " + std::to_string(S.hover) + "\n";
     const long long now = steadyMs();
     const bool changed = o != S.lastStatus;
@@ -775,7 +866,7 @@ extern "C" cppExtension *CreateExtension(void)
     TapeReader *p = new TapeReader();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
-    p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. Use Settings > Position to place it (default Bottom centre).");
-    p->setVersion("1.1.2");   // TR_VERSION
+    p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
+    p->setVersion("1.1.3");   // TR_VERSION
     return p;
 }
