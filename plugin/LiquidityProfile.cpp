@@ -1841,6 +1841,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: support / resistance and the level it holds, its orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share rebuilt. The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.15.1a");   // LQ_VERSION
+    p->setVersion("0.16.0");   // LQ_VERSION
     return p;
 }
