@@ -49,7 +49,7 @@
 
 namespace tr {
 
-static const char* const VERSION = "1.1.4";   // 1.1.4 (2026-10-14, Rassul 15:07 CT approval, peer review E "Delta Profile A ... INVALID"): the A (absorption) is no longer a FLOW vote or a BUYERS / SELLERS message (ClaimGates.h LRA_SHOW_ABSORPTION_REASON, default hidden; the A circle stays on the chart); the LEVELS line shows the gamma node without the "(dlrs buy dips / sell rips / chase)" cause (LRA_SHOW_HVL_CUSHION).   // 1.1.3 (2026-10-14 CR4800, Rassul 07:13 variant B): the ONE banner top left (bias / turn / swing / next + the Liquidity warning, 11 pt, solid background), the BUYERS / SELLERS / OPTIONS detail on its hover, Position Top left + Offset X / Y; 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 3): line 1 shows no BULLISH / BEARISH n of 4 bias (ClaimGates.h LRA_SHOW_TAPE_BIAS) and no turn / swing % - "Turn odds learning" (LRA_SHOW_TURN_ODDS); Tgt without %; Pull lines without "support / resistance leaving"; "Added at PDL: 42 bids, 150 lots (4.4x) fast, 90% re-added after hits"; "reloading? (I 2.1x)", "iceberg?"; "(Ex?)" without "exhausted"; "Bids 2.6x normal at PDL ?"; "+GEX PDL 6,020 (model, 7m old) ?"; the OPTIONS lines keep their ? (ODEX too) and say the grid age. Logged reads unchanged except the reworded phrases.  // 1.1.4 (2026-10-14, Rassul 15:07 CT approval, peer review E "Delta Profile A ... INVALID"): the A (absorption) is no longer a FLOW vote or a BUYERS / SELLERS message (ClaimGates.h LRA_SHOW_ABSORPTION_REASON, default hidden; the A circle stays on the chart); the LEVELS line shows the gamma node without the "(dlrs buy dips / sell rips / chase)" cause (LRA_SHOW_HVL_CUSHION).   // 1.1.3 (2026-10-14 CR4800, Rassul 07:13 variant B): the ONE banner top left (bias / turn / swing / next + the Liquidity warning, 11 pt, solid background), the BUYERS / SELLERS / OPTIONS detail on its hover, Position Top left + Offset X / Y; 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
 // (6:40 PM) StackStats' one-order clause = st::ONE_ORDER_TAIL (StackStatsLogic.h); test_tr_ofcompat.cpp checks the two are equal
 static const char* const STACK_ONE_ORDER = "may not reload ?";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
@@ -648,6 +648,7 @@ struct Inputs {
     std::string inputs;                                           // "name:age_s;..." for the log
     const ofo::Snap* opt = nullptr;                               // (1.1.0) the options grid that had ARRIVED by the candle and is fresh (else none)
     int optGates[ofo::NGATE] = { 1, 1, 1, 1, 1, 1, 1 };                 // (1.1.0) the gates of LRA-OrderFlow-<MKT>.csv (on / ? / off)
+    long long optAgeS = -1;                                       // (1.2.0) how old the options grid is at the candle's end (s); -1 unknown
 };
 struct Fact { int actor = 0; int impl = NEUTRAL; std::string text; int order = 0; long long t = 0; };   // actor 0 buyers, 1 sellers
 struct Read {
@@ -731,7 +732,7 @@ inline Read compute(const Inputs& I) {
     if (EX) {
         const int s = EX->top ? BEAR : BULL; flow += s; flowWhy += EX->top ? "Ex-" : "Ex+";
         Fact f; f.actor = EX->top ? 0 : 1; f.impl = s; f.order = ord++; f.t = EX->decT;
-        f.text = trt::fill("delta.ex", { {"px", pxText(EX->extreme, tick)}, {"flow", trt::text(EX->top ? "flow.buying" : "flow.selling")}, {"mark", EX->mark} });
+        f.text = trt::fill("delta.ex", { {"px", pxText(EX->extreme, tick)}, {"flow", trt::text(EX->top ? "flow.buying" : "flow.selling")}, {"mark", cgate::markQ(EX->mark)} });   // (1.2.0) always "Ex?"
         facts.push_back(f);
     }
     const int a0 = std::max(0, k - I.P.flowBars + 1);
@@ -783,7 +784,7 @@ inline Read compute(const Inputs& I) {
             const std::string rxT = rx >= 0 ? ratio(rx) : std::to_string(num(*r, "refill_n" + sfx));
             if (refillOnly) t += trt::fill("stack.refillonly", { {"book", side == 0 ? "bids" : "offers"}, {"rx", rxT} }) + (ice > 0 ? trt::text("ice") : "");
             else {
-                t += trt::fill("stack", { {"n", std::to_string(n)}, {"book", side == 0 ? (n == 1 ? "bid" : "bids") : (n == 1 ? "offer" : "offers")}, {"lots", std::to_string(lots)},
+                t += trt::fill(lvl.empty() ? "stack" : "stack.atlvl", { {"n", std::to_string(n)}, {"book", side == 0 ? (n == 1 ? "bid" : "bids") : (n == 1 ? "offer" : "offers")}, {"lots", std::to_string(lots)},
                                           {"x", x >= 0 ? ratio(x) : std::string("high")}, {"pace", paceOf(side)} });
                 if (r->msg.find(" - rebuilt ") != std::string::npos && hit > 0) { long long p = (reb * 100 + hit / 2) / hit; if (p > 200) p = 200; t += trt::fill("stack.rebuilt", { {"p", std::to_string(p)} }); }
                 if (Rl) t += trt::fill("stack.refill", { {"rx", rxT} }) + (ice > 0 ? trt::text("ice") : "");
@@ -870,7 +871,13 @@ inline Read compute(const Inputs& I) {
         (who == 0 ? R.buyImpl : R.sellImpl) = imp > 0 ? BULL : imp < 0 ? BEAR : NEUTRAL;
     }
     // ---------------- (1.1.0) OPTIONS: the grid that had ARRIVED by the candle's end and is fresh (the host filters), blue ----------------
-    if (I.opt) { R.opt[0] = ofo::trLine1(*I.opt, I.optGates); R.opt[1] = ofo::trLine2(*I.opt, I.optGates, I.mkt, dir3); }
+    if (I.opt) {
+        // (1.2.0, audit list: the OPTIONS line is a vendor model, delayed about 6 to 8 min - context, not a signal) every part keeps its
+        // "?" here even where the nightly switched a gate on (GC / 6E ODEX gets its ? back); the first line says the grid's age
+        int og[ofo::NGATE]; for (int g = 0; g < ofo::NGATE; ++g) og[g] = I.optGates[g] == ofo::GATE_ON ? ofo::GATE_Q : I.optGates[g];
+        R.opt[0] = ofo::trLine1(*I.opt, og); R.opt[1] = ofo::trLine2(*I.opt, og, I.mkt, dir3);
+        if (!R.opt[0].empty() && I.optAgeS >= 0) R.opt[0] += trt::fill("opt.age", { {"m", std::to_string((I.optAgeS + 30) / 60)} });
+    }
     // ---------------- LEVELS (1.1.0: computed and logged for the nightly, no longer drawn - levels are named inside BUYERS / SELLERS) ----------------
     std::vector<std::string> parts;
     {   // low trust: first / last 5 min of RTH, roll
@@ -895,7 +902,8 @@ inline Read compute(const Inputs& I) {
     }
     std::string gexText;
     if (G && cgate::kShowHvlCushion) gexText = trt::fill(G->g > 0 ? (G->px <= c + tick * 0.5 ? "gex.pos.below" : "gex.pos.above") : "gex.neg", { {"lvl", gName}, {"px", pxText(G->px, tick)} });
-    else if (G) gexText = trt::fill("gex.plain", { {"sign", G->g > 0 ? "+" : "-"}, {"lvl", gName}, {"px", pxText(G->px, tick)} });   // (1.1.4) no "dlrs buy dips / chase" cause
+    else if (G) gexText = trt::fill("gex.plain", { {"sign", G->g > 0 ? "+" : "-"}, {"lvl", gName}, {"px", pxText(G->px, tick)},
+                                                    {"age", I.gammaAgeS >= 0 ? trt::fill("gex.age", { {"m", std::to_string((I.gammaAgeS + 30) / 60)} }) : std::string(trt::text("gex.model"))} });   // (1.1.4) no "dlrs buy dips / chase" cause; (1.2.0) "(model, 7m old) ?"
     std::vector<std::string> against;
     const int b = R.bias;
     if (G && (b == NEUTRAL || R.votes[V_GAMMA] != -b)) pro.push_back(gexText);
@@ -921,7 +929,7 @@ inline Read compute(const Inputs& I) {
         inv += b == BULL ? -tick : tick;
         parts.push_back(trt::fill(b == BULL ? "inval.below" : "inval.above", { {"px", pxText(inv, tick)} }));
         std::string tg;
-        if (nx) tg = trt::fill("tgt", { {"px", pxText(nx->px, tick)}, {"lvl", nx->name}, {"odds", nx->odds.empty() ? std::string() : trt::fill("tgt.odds", { {"p", nx->odds}, {"q", nx->q ? "?" : ""} })} });
+        if (nx) tg = trt::fill("tgt", { {"px", pxText(nx->px, tick)}, {"lvl", nx->name}, {"odds", nx->odds.empty() || !cgate::kShowTurnOdds ? std::string() : trt::fill("tgt.odds", { {"p", nx->odds}, {"q", nx->q ? "?" : ""} })} });   // (1.2.0) no % (LRA_SHOW_TURN_ODDS)
         if (I.hl && I.hl->projOk && (I.hl->projUp ? 1 : -1) == b && (I.hl->projPx - c) * b >= 2 * tick && (!nx || (I.hl->projPx - nx->px) * b > tick * 0.5)) {
             const std::string pj = trt::fill("tgt.proj", { {"side", I.hl->projUp ? "HOD" : "LOD"}, {"px", pxText(I.hl->projPx, tick)} });
             tg = tg.empty() ? "Tgt " + pj : tg + ", " + pj;
@@ -1041,13 +1049,39 @@ inline bool inBox(const Box& b, int x, int y, int grow = 0) { return x >= b.l - 
 static const unsigned C_TAG_GREY = 0x009CA3AF, C_DETAIL = 0x00BEC2C8;
 struct Seg { std::string s; unsigned col = C_HEAD; bool bold = true; };
 // line 1 as coloured parts: the header (version + time) white, the bias in its colour, the turn / swing / next in the turn's colour
+// (1.2.0, 2026-10-14 18:25 CT audit display list) what line 1 SHOWS of the centre (the log keeps the full read): with the turn-odds gate
+// closed (LRA_SHOW_TURN_ODDS 0) a "Turn up at PDL 62%" part reads "Turn odds learning" and the "Swing 40+ ticks 55%" part is not shown;
+// "Next: 6,030 PDH" stays. Works on a live read and on one reloaded from the log (it reads the stored text).
+inline std::string shownCentre(const std::string& turn) {
+    if (cgate::kShowTurnOdds || turn.empty()) return turn;
+    const std::string sep = trt::text("centre.sep"), learn = trt::text("turn.learning");
+    std::vector<std::string> parts; std::string t = turn;
+    for (;;) { const size_t k = t.find(sep); parts.push_back(t.substr(0, k)); if (k == std::string::npos) break; t = t.substr(k + sep.size()); }
+    std::string o; bool learned = false;
+    for (const std::string& p : parts) {
+        std::string q = p;
+        if (q.compare(0, 5, "Turn ") == 0) { if (learned) continue; q = learn; learned = true; }
+        else if (q.compare(0, 6, "Swing ") == 0) continue;
+        o += (o.empty() ? "" : sep) + q;
+    }
+    return o;
+}
+// (1.2.0) the bias word ("BULLISH 2 of 4" / "MIXED") is not shown while LRA_SHOW_TAPE_BIAS is 0 (computed and logged as before)
+inline bool showBias() { return cgate::kShowTapeBias; }
 inline std::vector<Seg> line1Segs(const Read& R, const std::string& header) {
     std::vector<Seg> v; Seg h; h.s = header; h.col = C_HEAD; v.push_back(h);
-    Seg b; b.s = "   " + R.biasText; b.col = R.bias == BULL ? C_GREEN : R.bias == BEAR ? C_RED : C_QUIET; v.push_back(b);
-    if (!R.turn.empty()) {
-        const std::string sep = trt::text("centre.sep"); std::string t = R.turn, o;
+    if (showBias()) { Seg b; b.s = "   " + R.biasText; b.col = R.bias == BULL ? C_GREEN : R.bias == BEAR ? C_RED : C_QUIET; v.push_back(b); }
+    const std::string shown = shownCentre(R.turn);
+    if (!shown.empty()) {
+        const std::string sep = trt::text("centre.sep"); std::string t = shown, o;
         for (;;) { const size_t k = t.find(sep); o += "  \xB7  " + t.substr(0, k); if (k == std::string::npos) break; t = t.substr(k + sep.size()); }
-        Seg c; c.s = o; c.col = R.turn == trt::text("turn.learning") ? C_QUIET : R.centreDir > 0 ? C_GREEN : R.centreDir < 0 ? C_RED : C_QUIET; v.push_back(c);
+        if (!showBias() && o.compare(0, 5, "  \xB7  ") == 0) o = "   " + o.substr(5);   // no bias before it: no leading dot
+        const unsigned dc = R.centreDir > 0 ? C_GREEN : R.centreDir < 0 ? C_RED : C_QUIET;
+        const std::string learn = trt::text("turn.learning"); const size_t lp = o.find(learn);
+        if (lp != std::string::npos && lp < 6) {   // (1.2.0) "Turn odds learning" neutral, the rest ("Next: ...") in the direction's colour
+            Seg c; c.s = o.substr(0, lp + learn.size()); c.col = C_QUIET; v.push_back(c);
+            if (lp + learn.size() < o.size()) { Seg d; d.s = o.substr(lp + learn.size()); d.col = dc; v.push_back(d); }
+        } else { Seg c; c.s = o; c.col = shown == learn ? C_QUIET : dc; v.push_back(c); }
     }
     return v;
 }

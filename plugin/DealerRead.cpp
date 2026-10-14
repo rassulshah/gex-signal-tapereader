@@ -1,5 +1,10 @@
 /********************************************************************************
- *  DealerRead.cpp  --  Investor/RT RTX extension  lsDealerRead  (v4.6.0, 2026-10-14)
+ *  DealerRead.cpp  --  Investor/RT RTX extension  lsDealerRead  (v4.7.0, 2026-10-14)
+ *  4.7.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, APPROVAL-LIST-2026-10-14.md section 2): the header's
+ *        DEMAND / SUPPLY control word and its "n of m" tally HIDDEN (ClaimGates.h LRA_SHOW_CONTROL_WORD; the outline is the header blue,
+ *        not green / red); the Magnet / Pinned / Analyst text HIDDEN (LRA_SHOW_ANALYST); FUTURES chips marked ? ("Dem?") and each point ends
+ *        " - context"; no-level REASONS codes: options codes and Abs gated, footprint codes "?"; every chip / box border solid. The header
+ *        facts, "data N min old" / STALE and "no footprint - IRT not recording" are unchanged (KEEP).
  *  4.6.0 (2026-10-14, Rassul 15:07 CT approved the peer-review hide list): ClaimGates.h - the VERDICT (Strength), the OPTIONS column
  *        causes, the forced-futures numbers and a footprint absorption cause are not drawn until the external audit (drGate).
  *
@@ -1187,7 +1192,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ostringstream text;
-    text << "VERSION,4.6.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    text << "VERSION,4.7.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
     const std::string payload = text.str();
     const std::time_t now = std::time(NULL);
     // Different charts can share this legacy status file: cap those switches
@@ -1492,7 +1497,7 @@ void DealerRead::renderGrid(const Settings& S)
     lastClearR = clearR; lastLeft = pane.left; lastW = W;
     gridL = x0; gridT = y0;
     fill(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BOXBG);
-    frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, true);
+    frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), C_BORDER, false);   // (4.7.0) solid border
     gripL = x0; gripT = y0; gripR = (short)(x0 + W); gripB = (short)(y0 + gridH);   // (4.1.2) the whole box is the handle: click anywhere on it and drag
     fill((short)(gripL + 1), (short)(gripT + 1), (short)(x0 + gw), (short)(gripB - 1), 0x001E293B);
     for (short d = (short)(gripT + U(6)); d < gripB - U(4); d = (short)(d + U(4))) { fill((short)(gripL + U(3)), d, (short)(gripL + U(4)), (short)(d + 1), C_MUTED); fill((short)(gripL + U(6)), d, (short)(gripL + U(7)), (short)(d + 1), C_MUTED); }
@@ -1507,7 +1512,7 @@ void DealerRead::renderGrid(const Settings& S)
         short cx = (short)(cx0 + labW);
         for (size_t c = 0; c < ln.cells.size(); c++) {
             const Cell& C = ln.cells[c];
-            frame(cx, (short)(y - lh / 2 + 1), (short)(cx + cw[i][c]), (short)(y + lh / 2 - 1), C.guess ? C.col : C_TRACK, C.guess);
+            frame(cx, (short)(y - lh / 2 + 1), (short)(cx + cw[i][c]), (short)(y + lh / 2 - 1), C.guess ? C.col : C_TRACK, false);   // (4.7.0) solid
             text((short)(cx + U(5)), y, C.code.c_str(), C.col, fs, true, 0);
             text((short)(cx + U(5) + textW(C.code.c_str(), fs, true) + U(4)), y, C.val.c_str(), C_INK, fs, false, 0);
             cx = (short)(cx + cw[i][c] + cgap);
@@ -1606,6 +1611,7 @@ void DealerRead::renderTurn(const Settings& S)
             // (4.0.2) lines after the first start under the time (the full column width); (4.1.2) at most 3 lines
             int restW = colW - nW; if (restW < U(80)) restW = U(80);
             int firstW = colW - nW - K.tW - K.tagsW[k] - gap; if (firstW < U(30)) firstW = U(30);
+            if (c == 1) K.G[k].text = drg::contextText(K.G[k].text);   // (4.7.0) a footprint point is context, not the cause
             std::vector<std::string> ln = wrapWords(K.G[k].text, firstW, restW, fs, false, 40);
             if (ln.empty()) ln.push_back("");
             // (4.1.2, Rassul 23:31 "each section can have up to four bullets and each bullet can have up to three lines ... it should
@@ -1620,6 +1626,7 @@ void DealerRead::renderTurn(const Settings& S)
                     L3.erase(sp);
                 }
                 L3 += "...";
+                drg::keepTail(ln, K.G[k].text, restW, [&](const std::string& q) { return textW(q.c_str(), fs, false); });   // (4.7.0) "... - context" survives the cut
             }
             K.L[k] = ln;
             K.h += (int)ln.size();
@@ -1651,7 +1658,10 @@ void DealerRead::renderTurn(const Settings& S)
         std::string h0 = D.hasTurn ? hd : "";                    // the simplified header starts with the control word
         size_t p0 = h0.find_first_not_of(" ");
         std::string w0 = p0 == std::string::npos ? "" : h0.substr(p0, 6);
+        // (4.7.0, audit list: the DEMAND / SUPPLY control word is hidden) the outline no longer says who is in control: the header's blue
+        // while live, grey when stale / no live turn (LRA_SHOW_CONTROL_WORD=1 restores the green / red / yellow outline)
         COLOR oc = stale || !D.hasTurn || hd.compare(0, 12, "No live turn") == 0 ? C_GREY
+                 : !cgate::kShowControlWord ? C_TABONB
                  : w0.compare(0, 6, "DEMAND") == 0 ? 0x0084CC16 : w0.compare(0, 6, "SUPPLY") == 0 ? C_RED : 0x00EAB308;
         frame(x0, y0, (short)(x0 + W), (short)(y0 + gridH), oc, false);
         frame((short)(x0 + 1), (short)(y0 + 1), (short)(x0 + W - 1), (short)(y0 + gridH - 1), oc, false);
@@ -1719,14 +1729,16 @@ void DealerRead::renderTurn(const Settings& S)
             bool allLean = true;
             for (size_t j = 0; j < K.G[k].rows.size(); j++) {
                 const dl::Data::TRow& R = side[c][K.G[k].rows[j]];
-                int r, g, b; dl::tagColour(R.tag, r, g, b);
+                std::string baseTag = R.tag; while (!baseTag.empty() && baseTag[baseTag.size() - 1] == '?') baseTag.erase(baseTag.size() - 1);   // (4.7.0) "Dem?" keeps Dem's colour
+                int r, g, b; dl::tagColour(baseTag, r, g, b);
                 COLOR tc = (COLOR)((r << 16) | (g << 8) | b);
                 if (R.pole == 'D') tc = C_RDBUY; else if (R.pole == 'S') tc = C_RDSELL;     // (4.1.0) Last 90: green = demand, red = supply
                 bool guess = R.kind == "guess" || dl::isGuess(R.tag);
                 bool lean = R.kind == "lean"; if (!lean) allLean = false;
                 std::string tg = R.tag + (R.src.empty() ? "" : " " + R.src);
                 short w = (short)(textW(tg.c_str(), fs - 1, true) + U(8));
-                frame(tx, (short)(yy - lh / 2 + 1), (short)(tx + w), (short)(yy + lh / 2 - 1), lean ? C_GREY : tc, guess);
+                (void)guess;   // (4.7.0) solid frames only (his rule: no dashed borders) - the "?" in the chip says unproven
+                frame(tx, (short)(yy - lh / 2 + 1), (short)(tx + w), (short)(yy + lh / 2 - 1), lean ? C_GREY : tc, false);
                 text((short)(tx + U(4)), yy, tg.c_str(), lean ? C_GREY : tc, fs - 1, true, 0);
                 tx = (short)(tx + w + U(3));
             }
@@ -1758,6 +1770,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (4.5.6) FRONT_DRAWING: the box is drawn after every other indicator, so no line shows through it;   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences.");
-    p->setVersion("4.6.0");   // (4.6.0, 2026-10-14 15:07 CT approval) claim gates (ClaimGates.h): no VERDICT / Strength, no OPTIONS-column causes, no forced-futures numbers, no footprint absorption cause - hidden until the external audit; (4.5.9, 2026-10-14 CR4800) Offset X / Y on the 9-spot Position (clamped, per market, the dialog filled from the file); (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.7.0");   // (4.7.0, 2026-10-14 18:25 CT audit display list) control word + Analyst hidden, FUTURES chips "?" + " - context", solid frames; (4.6.0, 2026-10-14 15:07 CT approval) claim gates (ClaimGates.h): no VERDICT / Strength, no OPTIONS-column causes, no forced-futures numbers, no footprint absorption cause - hidden until the external audit; (4.5.9, 2026-10-14 CR4800) Offset X / Y on the 9-spot Position (clamped, per market, the dialog filled from the file); (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

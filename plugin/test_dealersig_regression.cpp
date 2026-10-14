@@ -49,7 +49,7 @@ int main()
     CHECK(d.load() && d.sourceState == "source unavailable", "a missing external CSV is reported as unavailable");
     CHECK(!d.load(), "an unchanged unavailable external CSV is cached instead of reopened");
 
-    writeExternalCsv("VERSION|1.9\nMARKET|GC\nSIG|2026-10-01 10:00:30|oB|B|1|initial buy\n");
+    writeExternalCsv("VERSION|1.9\nMARKET|GC\nSIG|2026-10-01 10:00:30|Dm|B|1|initial buy\n");
     d.fillSignals(0);
     CHECK(mockrt::out1[0] == kSignalTrue && mockrt::out2[0] == 0, "a valid external GC SIG sets the matching buy output");
 
@@ -60,7 +60,11 @@ int main()
     mockrt::bools[(size_t)SX.ledger] = 1;
     writeExternalCsv("VERSION|1.9\nMARKET|GC\nLSIG|2026-10-01 10:00:30|SC|B|1|ledger buy\n");
     d.fillSignals(2);
-    CHECK(mockrt::out1[0] == kSignalTrue, "enabling ledger includes its external LSIG output");
+#if LRA_SHOW_OPTIONS_CAUSES
+    CHECK(mockrt::out1[0] == kSignalTrue, "enabling ledger includes its external LSIG output (options gate restored)");
+#else
+    CHECK(mockrt::out1[0] == 0, "(1.7.0) the dealer ledger (options reasons) stays off while the options_causes gate is closed, even when ticked");
+#endif
     mockrt::bools[(size_t)SX.ledger] = 0;
     d.fillSignals(2);
     CHECK(mockrt::out1[0] == 0, "disabling ledger fully clears its prior historical output");
@@ -75,7 +79,7 @@ int main()
     d.fillSignals(2);
     CHECK(d.sourceState == "market mismatch" && mockrt::out1[0] == 0 && d.D.sigs.empty(), "a filename/content market mismatch is refused and clears stale output");
 
-    writeExternalCsv("VERSION|1.9\nMARKET|GC\nSIG|2026-10-01 10:00:30|oB|B|1|draw pending source\n");
+    writeExternalCsv("VERSION|1.9\nMARKET|GC\nSIG|2026-10-01 10:00:30|Dm|B|1|draw pending source\n");
     d.fillSignals(0);
     CHECK(mockrt::out1[0] == kSignalTrue, "restoring a matching source restores the buy output");
     writeExternalCsv("VERSION|1.9\nMARKET|GC\n# draw detects a changed empty source first\n");
@@ -83,10 +87,30 @@ int main()
     d.fillSignals(2);
     CHECK(mockrt::out1[0] == 0, "a draw-side reload retains pending full signal invalidation for the next calc");
 
-    writeExternalCsv("VERSION|1.9\nMARKET|GC\nSIG|2026-10-01 10:00:30|oB|B|1|draw point\n");
+    writeExternalCsv("VERSION|1.9\nMARKET|GC\nSIG|2026-10-01 10:00:30|Dm|B|1|draw point\n");
     mockrt::pntResult = RTX_FAIL; mockrt::drawTextCalls = 0;
     d.draw();
     CHECK(mockrt::pntCalls > 0 && mockrt::drawTextCalls == 0, "a failed SDK PNT::set is not dereferenced or drawn");
+
+    // ---- (1.7.0, 2026-10-14 18:25 CT audit display list, section 10) before -> after on the bar
+    mockrt::pntResult = RTX_OK;
+    writeExternalCsv("VERSION|1.9\nMARKET|GC\nSIG|2026-10-01 10:00:30|Dem|B|1|demand\nSIG|2026-10-01 10:00:30|Tr?|B|1|trapped\n"
+                     "SIG|2026-10-01 10:01:30|Sup|S|1|supply\nSIG|2026-10-01 10:01:30|oSh|B|1|short cover\nSIG|2026-10-01 10:02:30|Van|B|1|vanna\n"
+                     "SIG|2026-10-01 10:02:30|Abs|B|1|absorbed\nSIG|2026-10-01 10:02:30|Chm|S|1|charm\n");
+    mockrt::drawnTexts.clear();
+    d.draw();
+    auto drew = [&](const char* t) { for (size_t i = 0; i < mockrt::drawnTexts.size(); i++) if (mockrt::drawnTexts[i] == t) return true; return false; };
+#if !LRA_SHOW_OPTIONS_CAUSES && !LRA_SHOW_ABSORPTION_REASON
+    CHECK(drew("Dem?") && !drew("Dem"), "Dem -> Dem? (footprint fact, MARK ?)");
+    CHECK(drew("Tr?") && !drew("Tr"), "Tr? stays Tr? (one ?, the 1.5.0 strip then the 1.7.0 mark)");
+    CHECK(drew("Sup?") && !drew("Sup"), "Sup -> Sup?");
+    CHECK(!drew("oSh") && !drew("Sh") && !drew("Van") && !drew("Chm"), "options codes HIDDEN (options_causes gate)");
+    CHECK(!drew("Abs") && !drew("Abs?"), "Abs HIDDEN (absorption_reason gate)");
+    CHECK(mockrt::drawnTexts.size() == 3, "only the three footprint marks are drawn");
+    d.fillSignals(0);
+    CHECK(mockrt::out1[0] == kSignalTrue && mockrt::out2[1] == kSignalTrue && mockrt::out1[2] == 0 && mockrt::out2[2] == 0, "signal outputs follow the same gates (bar 2: only options / Abs -> no output)");
+    CHECK(dsText(dl::Data::Sig(), false).empty(), "an empty code draws nothing");
+#endif
 
     std::printf("\n%d passed, %d failed\n", passes, fails);
     return fails;

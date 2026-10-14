@@ -1,4 +1,4 @@
-// TapeReaderText.h -- lsTapeReader 1.1.0 (2026-10-13; 1.1.0: BUYERS / SELLERS in the panes' SPEC language - lots, ratio, pace; OPTIONS replaces LEVELS;
+// TapeReaderText.h -- lsTapeReader 1.2.0 (2026-10-14 18:25 CT audit display list: no intent words - "support leaving", "Defending", "exhausted" gone; refill / iceberg / LQ / GEX marked ?); 1.1.0 (2026-10-13; 1.1.0: BUYERS / SELLERS in the panes' SPEC language - lots, ratio, pace; OPTIONS replaces LEVELS;
 // 1.0.1: the refill letter R -> I): EVERY word the Tape Reader box writes, in ONE table, so the phrasing can be
 // swapped without touching the logic (coordinator 11:58: "keep the text templates in ONE table-driven place").
 // Phrasing follows "Tape Reader Language Guide (MBO, 3-min, reversals at key levels)", research_notes/TapeReader language/
@@ -61,35 +61,39 @@ static const Tpl TABLE[] = {
     // PullStats (book = intent): resting sellers are passive - "resistance leaving", never "attackers"
     //   SELLERS "Pulled 38 offers, 95 lots (3.6x) fast - resistance leaving"
     { "pull",            "Pulled {n} {book}, {lots} lots ({x}){pace}{at}" },
-    { "pull.bids.tail",  " - support leaving" },
-    { "pull.offers.tail"," - resistance leaving" },
+    { "pull.bids.tail",  "" },                    // (1.2.0, audit list: a cancel is not intent) was " - support leaving"
+    { "pull.offers.tail","" },                    // (1.2.0) was " - resistance leaving"
     // StackStats: BUYERS "Defending PDL: 42 bids, 150 lots (4.4x) added fast, 90% rebuilt"; refills / icebergs as numbers
-    { "stack.defend",    "Defending {lvl}: " },
+    { "stack.defend",    "Added at {lvl}: " },    // (1.2.0, audit list: "Defending" claims intent) was "Defending {lvl}: "
     { "stack",           "{n} {book}, {lots} lots ({x}) added{pace}" },
-    { "stack.rebuilt",   ", {p}% rebuilt" },
-    { "stack.refill",    ", reloading (I {rx})" },
-    { "stack.refillonly","reloading {book} (I {rx})" },
+    { "stack.atlvl",     "{n} {book}, {lots} lots ({x}){pace}" },   // (1.2.0) after "Added at PDL: " - no second "added"
+    { "stack.rebuilt",   ", {p}% re-added after hits" },            // (1.2.0) was ", {p}% rebuilt"
+    { "stack.refill",    ", reloading? (I {rx})" },                 // (1.2.0, audit: a refill is inferred) was ", reloading (I {rx})"
+    { "stack.refillonly","reloading? {book} (I {rx})" },
     { "stack.bait",      ", one order - may not reload ?" },
-    { "ice",             ", iceberg" },
+    { "ice",             ", iceberg?" },          // (1.2.0) hidden size is not observed
     // Delta Profile (A / AE? / Ex?): absorption and exhaustion as facts that need confirmation
     { "delta.a",         "Absorbing at {lvl}{px} (A {x}x{ae})" },
     { "delta.ae.tag",    ", {ae}" },
     { "delta.ae.att",    "Faded into {lvl}{px} ({ae}) - no new size" },
-    { "delta.ex",        "Last push to {px} on thin {flow} ({mark}) - exhausted" },
+    { "delta.ex",        "Last push to {px} on thin {flow} ({mark})" },   // (1.2.0) " - exhausted" dropped: it turned a ? read into a fact
     { "flow.selling",    "selling" },
     { "flow.buying",     "buying" },
     // confirmation (the bias side), mixed
     { "need.bull",       "Needs a higher low / lift the offer (S)" },
     { "need.bear",       "Needs a lower high / hit the bid (S)" },
     // LEVELS line
-    { "liq",             "{side} LQ {bx}x{on}" },
-    { "liq.on",          " on {lvl}" },
-    { "liq.bid",         "Bid" },
-    { "liq.offer",       "Offer" },
+    { "liq",             "{side} {bx}x normal{on} ?" },   // (1.2.0, audit: the 2.5x line is not proven as support) was "{side} LQ {bx}x{on}"
+    { "liq.on",          " at {lvl}" },
+    { "liq.bid",         "Bids" },
+    { "liq.offer",       "Offers" },
     { "gex.pos.below",   "+GEX {lvl} {px} (dlrs buy dips)" },
     { "gex.pos.above",   "+GEX {lvl} {px} (dlrs sell rips)" },
     { "gex.neg",         "-GEX {lvl} {px} (dlrs chase)" },
-    { "gex.plain",       "{sign}GEX {lvl} {px}" },              // (1.1.4) the node only - the "(dlrs ...)" cause text is gated (ClaimGates.h)
+    { "gex.plain",       "{sign}GEX {lvl} {px}{age} ?" },       // (1.2.0, audit: vendor model, 6-8 min delayed - context) + "(model, 7m old) ?"
+    { "gex.age",         " (model, {m}m old)" },
+    { "gex.model",       " (model)" },
+    { "opt.age",         " (model, {m}m old)" },               // (1.2.0) after the first OPTIONS line              // (1.1.4) the node only - the "(dlrs ...)" cause text is gated (ClaimGates.h)
     { "hl.in",           "{side} IN {p}%" },
     { "against",         "Against: {list}" },
     { "inval.below",     "Inval < {px}" },

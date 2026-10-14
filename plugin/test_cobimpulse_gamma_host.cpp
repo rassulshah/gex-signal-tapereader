@@ -122,14 +122,14 @@ int main(int argc, char** argv) {
         CHECK(texts(H, "Cob+V+PS0?").size() == 1 && texts(H, "Cob+PS0?").size() == 1, "labels Cob+V+PS0? and Cob+PS0?");
         // hover over the 08:39 label: the impulse rows + the gamma rows (dealer line says model; no HVL regime text - claim gate)
         CHECK(hoverOver(p, H, "Cob+V+PS0?"), "hover the 08:39 label");
-        CHECK(anyText(H, "Cob+V+PS0? - did the CoB leg start with force, and is a gamma level behind it?"), "hover headline");
-        CHECK(anyText(H, "biggest volume in 100+ bars") && anyText(H, "Gamma: origin in PS0 30,500 zone (the leg started inside it; zone +-0.06 ADR = +-18.7"), "hover: V row + gamma origin row");
+        CHECK(anyText(H, "Cob+V+PS0? - did the CoB leg start with force, and is a MenthorQ level near its start?") && !anyText(H, "behind it") && !anyText(H, "driving"), "hover headline");
+        CHECK(anyText(H, "biggest volume in 100+ bars") && anyText(H, "MenthorQ level near the CoB start: PS0 30,500 (model, data ") && anyText(H, "min old).") && anyText(H, "Zone: the leg started inside +-0.06 ADR (+-18.7"), "(0.3.1) hover: V row + 'MenthorQ level near the CoB start: PS0 30,500 (model, data N min old).' (was 'Gamma: origin in PS0 30,500 zone')");
         CHECK(anyText(H, "Dealer hedge (model): short gamma at 30,500 - dealers sold into the low and buy as price rises = WITH the CoB."), "hover: dealer hedge (model)");
-        CHECK(!anyText(H, "Regime (model)") && anyText(H, "? = still testing: CoBs with a gamma driver have NOT made more R"), "no regime text (hvl_cushion gate), ? line");
+        CHECK(!anyText(H, "Regime (model)") && anyText(H, "? = still testing: CoBs that start at a MenthorQ level have NOT made more R"), "no regime text (hvl_cushion gate), ? line");
         hb::fakeCursor() = 0;
         p->testState()->lastStatusMs = -1; p->calc(0);                     // the status file is written at most once a second
         const std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.3.0") != std::string::npos && st.find("BOOK,GammaProfile-MQ-NQ.csv,ok,asof ") != std::string::npos && st.find(",gamma 2,") != std::string::npos
+        CHECK(st.find("VERSION,0.3.1") != std::string::npos && st.find("BOOK,GammaProfile-MQ-NQ.csv,ok,asof ") != std::string::npos && st.find(",gamma 2,") != std::string::npos
               && st.find("gamma 1,gamma_w 6,gamma_em 100") != std::string::npos && st.find("tick 0.25") != std::string::npos, "status: version, book ok, 2 gamma tags, settings");
         p->destroy(); delete p;
         files1 = recFiles();
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
         CHECK(rec(p, F, i839).gCode == "PS0" && recFiles() == files1, "a later book never changes a decided CoB");
         // the hover after the restart (record + sidecar) = the hover at the decision
         CHECK(hoverOver(p, H, "Cob+V+PS0?"), "hover after the restart");
-        CHECK(anyText(H, "zone +-0.06 ADR = +-18.7") && anyText(H, "Dealer hedge (model): short gamma at 30,500"), "hover rebuilt from the files after a restart");
+        CHECK(anyText(H, "+-0.06 ADR (+-18.7") && anyText(H, "MenthorQ level near the CoB start: PS0 30,500 (model, data ") && anyText(H, "Dealer hedge (model): short gamma at 30,500"), "hover rebuilt from the files after a restart");
         hb::fakeCursor() = 0; p->destroy(); delete p;
     }
     // 3) a GM node ahead (rank 1 at 30,650, unvisited at 08:39, nearer than 2R) -> 08:39 Cob+V+GM? with the caution line;

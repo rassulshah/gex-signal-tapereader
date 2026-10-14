@@ -33,7 +33,7 @@ int main()
     bool opt = false, ab = false; for (size_t i = 0; i < D.trows.size(); i++) { if (D.trows[i].sec != 'F') opt = true; if (D.trows[i].tag == "Absorbed") ab = true; }
     CHECK(!opt, "hidden: no OPTIONS-column cause");
     CHECK(!ab, "hidden: no footprint 'Absorbed' cause");
-    CHECK(D.trows.size() == 2 && D.trows[0].tag == "Delta" && D.trows[1].tag == "Demand", "the other footprint points are unchanged");
+    CHECK(D.trows.size() == 2 && D.trows[0].tag == "Delta?" && D.trows[1].tag == "Demand?", "the other footprint points stay (4.7.0: marked ?)");
     dl::Data E = dl::parseText("VERSION|2.4\nMARKET|ES\nTR|1|10:03|Short cover|||dealers bought 300 back\n");
     drg::apply(E);
     CHECK(E.trows.empty(), "an older file (rows with no section = options side): hidden too");

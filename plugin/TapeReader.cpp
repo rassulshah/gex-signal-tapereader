@@ -1,5 +1,11 @@
 /********************************************************************************
- *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.1.4  (2026-10-14)
+ *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.2.0  (2026-10-14)
+ *  1.2.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, APPROVAL-LIST-2026-10-14.md section 3): line 1 no
+ *        longer shows the BULLISH / BEARISH n of 4 bias (ClaimGates.h LRA_SHOW_TAPE_BIAS) or any turn / swing % ("Turn odds learning",
+ *        LRA_SHOW_TURN_ODDS) - both still computed and logged; "Next: 6,030 PDH" stays. The hover: Pull lines end at the numbers (no
+ *        "support / resistance leaving"), "Added at PDL: 42 bids, 150 lots (4.4x) fast, 90% re-added after hits", "reloading? (I 2.1x)",
+ *        "iceberg?", "Last push to 6,005 on thin selling (Ex?)" (no "exhausted"), the OPTIONS lines keep every "?" (ODEX too) and end
+ *        "(model, 7m old)". Logged LEVELS: "Bids 2.6x normal at PDL ?", "+GEX PDL 6,020 (model, 7m old) ?", "Tgt 6,030 PDH" (no %).
  *  1.1.4 (2026-10-14, Rassul 15:07 CT approval of the peer-review hide list): the Delta Profile A (absorption) is no longer a FLOW
  *        vote or a BUYERS / SELLERS message (ClaimGates.h, LRA_SHOW_ABSORPTION_REASON default 0 = hidden until the external audit;
  *        restore = /D LRA_SHOW_ABSORPTION_REASON=1 and rebuild). The A circle on the chart is lsDeltaProfile's and stays.
@@ -87,7 +93,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.1.4"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.2.0"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -481,7 +487,7 @@ tr::Inputs TapeReader::inputsFor(TRState& S, int k, std::vector<tr::Bar>& work)
         const ofo::Snap* os = S.optHist.latest((long long)S.bars[(size_t)k].raw);
         const long long ref = nowCt > 0 ? now - (nowCt - S.bars[(size_t)k].t) : now;
         const bool fresh = os && ofo::fresh(*os, ref);
-        if (fresh) I.opt = os;
+        if (fresh) { I.opt = os; I.optAgeS = std::max(0LL, ref - os->asof); }   // (1.2.0) the grid's age for "(model, 7m old)"
         for (int g = 0; g < ofo::NGATE; ++g) I.optGates[g] = S.gates[g];
         in += std::string(";options:") + (fresh ? std::to_string(std::max(0LL, ref - os->asof)) + "s" : os ? std::string("stale") : S.sOpt.good ? std::string("not arrived") : std::string("missing"));
     }
@@ -870,6 +876,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
-    p->setVersion("1.1.4");   // TR_VERSION
+    p->setVersion("1.2.0");   // TR_VERSION
     return p;
 }

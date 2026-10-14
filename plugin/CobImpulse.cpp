@@ -1,5 +1,8 @@
 /********************************************************************************
- *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.3.0, 2026-10-14)
+ *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.3.1, 2026-10-14)
+ *  0.3.1 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 1): the gamma hover reads "MenthorQ level near
+ *        the CoB start: CR 6,020 (model, data 7 min old)." - no "driving" / "behind". RB / CoB marks (his locked trade), the Cob+R? / V? /
+ *        C? tags, the gamma part of the tag and the white impulse box are unchanged.
  *  0.3.0 (Rassul 15:47 / 15:51 CT "identify if a gamma level is driving the CoB", approved format Cob+<R/V/C>+<gamma name>?, e.g.
  *        Cob+R+CR?, Cob+RC+PS?, Cob+V+HVL?, Cob+CR?, Cob+GM?): the GAMMA PART of the tag (CobImpulseLogic.h 0.3.0 = lra.cob_gamma.drivers).
  *        At the CoB close it reads lsFlexLevels\GammaProfile-MQ-<MKT>.csv (no G when missing / another session / newer than the CoB /
@@ -67,7 +70,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.3.0"          // keep equal to cimp::VERSION and the setVersion literal below
+#define CI_VERSION "0.3.1"          // keep equal to cimp::VERSION and the setVersion literal below
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
 static const COLOR C_BOX = 0x00FFFFFF, C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
@@ -541,6 +544,13 @@ void CobImpulse::render(CIState& S) {
     in.c = T->rec.c(); in.cn = T->rec.cn; in.cx = T->rec.cx; in.cTime = clockOf(T->rec.cT); in.cConfTime = clockOf(T->rec.cConf);
     { const auto it = S.ctx.find(std::make_pair(T->rec.trig, T->rec.side)); in.g = cimp::fromRec(T->rec, it != S.ctx.end() ? &it->second : nullptr); }
     in.tick = S.tick; in.showRegime = cgate::kShowHvlCushion;       // (0.3.0) the gamma lines; the HVL regime text follows the claim gate
+    if (in.g.asof > 0) {                                              // (0.3.1) the book's age at the CoB close, "data N min old" (CT seconds both)
+        struct tm m; std::memset(&m, 0, sizeof(m));
+        if (T->rec.trig > 0 && getLocaltime((RTDATE)T->rec.trig, &m)) {
+            const long long tct = cimp::civil(m.tm_year + 1900, (unsigned)(m.tm_mon + 1), (unsigned)m.tm_mday) * 86400LL + m.tm_hour * 3600 + m.tm_min * 60 + m.tm_sec;
+            if (tct >= in.g.asof && tct - in.g.asof < 86400) in.bookAgeS = tct - in.g.asof;
+        }
+    }
     std::vector<std::string> L = cimp::hover(in, S.P);
     L.insert(L.begin() + 1, std::string("CoB ") + (T->rec.side > 0 ? "long" : "short") + " at " + clockOf(T->rec.trig) + " (leg from the " + clockOf(T->rec.pivot) + " bar).");
     FONT hf; hf.id = HELVETICA; hf.size = 10; hf.style = PLAIN; setFont(hf);
@@ -572,7 +582,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobImpulse* p = new CobImpulse();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | CALC_LAST);   // CALC_LAST: it reads his RTL results
-    p->setDescription("LRA Cob Impulse v0.3.0: did the CoB leg start with force, and is a gamma level behind it? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.3.0");   // CI_VERSION
+    p->setDescription("LRA Cob Impulse v0.3.1: did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
+    p->setVersion("0.3.1");   // CI_VERSION
     return p;
 }

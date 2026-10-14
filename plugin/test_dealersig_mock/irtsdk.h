@@ -21,17 +21,18 @@ struct MARKER { int number; int size; COLOR color; int location; };
 namespace mockrt {
 static std::vector<unsigned long> out1, out2, dates;
 static std::vector<float> highs, lows;
-static std::vector<int> lists(16, 0), integers(16, 10);
+static std::vector<int> lists(16, 0), integers(16, 10), bools(16, 0);   // (1.5.5) + check boxes
 static std::string root = "GCE";
 static int parameterCount = 0;
 static int pntResult = RTX_OK, pntCalls = 0, drawTextCalls = 0;
+static std::vector<std::string> drawnTexts;   // (DealerSig 1.7.0 tests) every text drawn
 
 inline void reset()
 {
     out1.assign(3, 0); out2.assign(3, 0); dates.assign(3, 0);
     highs.assign(3, 100.0f); lows.assign(3, 99.0f);
-    lists.assign(16, 0); integers.assign(16, 10);
-    root = "GCE"; parameterCount = 0; pntResult = RTX_OK; pntCalls = 0; drawTextCalls = 0;
+    lists.assign(16, 0); integers.assign(16, 10); bools.assign(16, 0);
+    root = "GCE"; parameterCount = 0; pntResult = RTX_OK; pntCalls = 0; drawTextCalls = 0; drawnTexts.clear();
 }
 inline std::vector<unsigned long>& ints(fARRAY a)
 {
@@ -86,7 +87,7 @@ public:
         short top = 0, left = 0, bottom = 500, right = 500;
         void getPaneRect(bool) { top = 0; left = 0; bottom = 500; right = 500; }
         void set(short l, short t, short r, short b) { left = l; top = t; right = r; bottom = b; }
-        void drawText(const char*, bool, bool) { ++mockrt::drawTextCalls; }
+        void drawText(const char* t, bool, bool) { ++mockrt::drawTextCalls; mockrt::drawnTexts.push_back(t ? t : ""); }
     };
 
     cppExtension() {}
@@ -111,6 +112,8 @@ public:
     int setOutputSignalParameter(const char*, MARKER*, unsigned long = 0) { return RTX_OK; }
     int setListParameter(const char*, short d, const char*, short = 0, short = 0) { mockrt::lists[(size_t)mockrt::parameterCount] = d; ++mockrt::parameterCount; return RTX_OK; }
     int setIntegerParameter(const char*, int d, short = 0, short = 0) { mockrt::integers[(size_t)mockrt::parameterCount] = d; ++mockrt::parameterCount; return RTX_OK; }
+    int setBoolParameter(const char*, unsigned short d, short = 0) { mockrt::bools[(size_t)mockrt::parameterCount] = d ? 1 : 0; ++mockrt::parameterCount; return RTX_OK; }
+    unsigned short isBoxChecked(int i) { return (unsigned short)(i >= 0 && i < (int)mockrt::bools.size() ? mockrt::bools[(size_t)i] : 0); }
     int getListIndex(int i) { return i >= 0 && i < (int)mockrt::lists.size() ? mockrt::lists[(size_t)i] : -1; }
     int getIntegerValue(int i) { return i >= 0 && i < (int)mockrt::integers.size() ? mockrt::integers[(size_t)i] : 0; }
     char* getRootSymbol(char* out = 0) {

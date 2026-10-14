@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
         p->testState()->paramsCheckMs = -1; p->testState()->paramsStamp = -3; H.draws.clear(); p->draw();
         CHECK(texts(H, "Cob+").empty() && p->testState()->paramsWhy.find("defaults") != std::string::npos, "wrong-market file -> defaults (abs), reason in the status");
         std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.3.0") != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
+        CHECK(st.find("VERSION,0.3.1") != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
         p->destroy(); delete p; std::remove((flex() + "\\LRA-CobImpulse-NQ.csv").c_str());
     }
     // 3b) a 0.1.0 record file (11 fields) is read, kept and rewritten in the 0.2.0 layout

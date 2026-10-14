@@ -43,7 +43,7 @@
 
 namespace cimp {
 
-static const char* const VERSION = "0.3.0";
+static const char* const VERSION = "0.3.1";   // 0.3.1 (2026-10-14 18:25 CT audit display list): the gamma hover says which MenthorQ level is NEAR the CoB start, "(model, data N min old)", never "driving" / "behind"; the CoB / RB marks and the tags are unchanged
 enum { MODE_OFF = 0, MODE_ABS = 1, MODE_ALWAYS = 2 };
 
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; };   // t = the chart's bar stamp (bar END, IRT)
@@ -442,7 +442,7 @@ inline std::string whyText(const std::string& w)
 }
 // the gamma hover lines (one per row; every dealer line says "model"). showRegime = the hvl_cushion claim gate (ClaimGates.h, default
 // hidden): the HVL regime cause text is left out until the external audit.
-inline std::vector<std::string> gammaLines(const GTag& g, bool bull, double tick, bool showRegime)
+inline std::vector<std::string> gammaLines(const GTag& g, bool bull, double tick, bool showRegime, long long ageS = -1)
 {
     std::vector<std::string> L;
     if (!g.computed) return L;
@@ -457,7 +457,12 @@ inline std::vector<std::string> gammaLines(const GTag& g, bool bull, double tick
     }
     const std::string px = fmtPx(g.px, tick);
     char zb[16]; std::snprintf(zb, sizeof(zb), "%.2f", g.gw / 100.0);
-    if (g.kind == "origin") L.push_back("Gamma: origin in " + g.code + " " + px + " zone (the leg started inside it; zone +-" + zb + " ADR = +-" + fmtPx(g.w, tick) + " pts).");
+    // (0.3.1, 2026-10-14 18:25 CT audit display list) it says which MenthorQ level is NEAR the CoB start - not that it drove the move
+    const std::string age = ageS < 0 ? std::string("model") : "model, data " + std::to_string((ageS + 30) / 60) + " min old";
+    if (g.kind == "origin") {
+        L.push_back("MenthorQ level near the CoB start: " + g.code + " " + px + " (" + age + ").");
+        L.push_back("Zone: the leg started inside +-" + std::string(zb) + " ADR (+-" + fmtPx(g.w, tick) + " pts) of it.");
+    }
     else if (g.kind == "cross") L.push_back("Gamma: the leg crossed HVL " + px + " (the gamma flip) on its way to the CoB close.");
     else L.push_back("Gamma: " + g.code + " " + px + " ahead, " + fmt1(g.tEm) + " EM away, not traded into this session.");
     if ((g.kind == "origin" && (g.code == "HVL" || g.code == "HVL0")) || g.kind == "cross")
@@ -475,7 +480,7 @@ inline std::vector<std::string> gammaLines(const GTag& g, bool bull, double tick
     if (showRegime && !regime.empty()) L.push_back(regime);
     if (g.hasT && g.tR > 0 && g.tR < 2)
         L.push_back("Ahead: " + g.tName + " " + fmtPx(g.tPx, tick) + " is " + fmt1(g.tR) + "R away, before 2R - big nodes before 2R stalled CoBs (-0.15R vs +0.18R, n 33, LEARNING).");
-    L.push_back("? = still testing: CoBs with a gamma driver have NOT made more R than plain CoBs so far (94 CoBs, 34 days).");
+    L.push_back("? = still testing: CoBs that start at a MenthorQ level have NOT made more R than plain CoBs so far (94 CoBs, 34 days).");
     L.push_back("Example: Cob+CR? = the CoB started at Call Resistance; Cob+GM? = it started at a high gamma node (top-3 abs GEX).");
     return L;
 }
@@ -521,12 +526,13 @@ inline std::string ratio(double x) { char b[16]; std::snprintf(b, sizeof(b), "%.
 struct HoverIn {
     bool r = false, v = false, abs = false, c = false; int rn = 0, vn = 0, cn = 0; double rx = 0, vx = 0, cx = 0; std::string rTime, vTime, cTime, cConfTime; int side = 1;
     GTag g; double tick = 0; bool showRegime = false;    // (0.3.0) the gamma part (g.computed false = a pre-0.3.0 record)
+    long long bookAgeS = -1;                             // (0.3.1) how old the MenthorQ book was at the CoB close (s); -1 unknown
 };
 inline std::vector<std::string> hover(const HoverIn& h, const Params& P)
 {
     std::vector<std::string> L;
     const bool bull = h.side > 0, imp = h.r || h.v || h.c, gh = !h.g.code.empty();
-    const std::vector<std::string> G = gammaLines(h.g, bull, h.tick, h.showRegime);
+    const std::vector<std::string> G = gammaLines(h.g, bull, h.tick, h.showRegime, h.bookAgeS);
     const std::string lab = label(h.r, h.v, h.abs, P, h.c, h.g.code);
     if (!imp && !gh) {
         L.push_back("Cob - no impulse at its start");
@@ -537,7 +543,7 @@ inline std::vector<std::string> hover(const HoverIn& h, const Params& P)
     std::string head = lab;
     if (imp && !shown(true, h.abs, P.mode)) head += "  (tag hidden by the Impulse tag setting)";
     if (gh && !P.gamma) head += "  (gamma part hidden by the GAMMA setting)";
-    head += imp && gh ? " - did the CoB leg start with force, and is a gamma level behind it?" : imp ? " - did the CoB leg start with force?" : " - is a gamma level behind this CoB?";
+    head += imp && gh ? " - did the CoB leg start with force, and is a MenthorQ level near its start?" : imp ? " - did the CoB leg start with force?" : " - is a MenthorQ level near this CoB's start?";   // (0.3.1) not "behind" / "driving"
     L.push_back(head);
     if (imp) {
         if (h.r) L.push_back("Range: the " + h.rTime + " bar was the biggest range in " + std::to_string(h.rn) + (h.rn >= P.cap ? "+" : "") + " bars"

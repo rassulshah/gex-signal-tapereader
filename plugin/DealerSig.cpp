@@ -1,5 +1,10 @@
 /********************************************************************************
- *  DealerSig.cpp  --  Investor/RT RTX extension  lsDealerSig  (v1.0.0, 2026-10-02)
+ *  DealerSig.cpp  --  Investor/RT RTX extension  lsDealerSig  (v1.0.0, 2026-10-02; v1.7.0, 2026-10-14)
+ *  1.7.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, APPROVAL-LIST-2026-10-14.md section 10): the footprint
+ *        codes that stay are marked "?" on the bar ("Dem?" / "Sup?" / "Tr?" - footprint facts, not proven as the turn's cause); the
+ *        options codes (oSh, Van, Chm, PutS, CallB, V+/V-, F+/F-, Pn, 0D, G+/G-, Cush ...) and the dealer ledger marks follow the
+ *        ClaimGates.h options_causes gate and Abs the absorption_reason gate here too (the bridge already drops them) - on the chart AND
+ *        in the two signal outputs. Nothing else changed.
  *
  *  THE DEALER SIG: marks on the price bars where an options-market reason for a reversal becomes known (layout A, Rassul
  *  2026-10-02: one mark per reason, on the bar where it becomes known). Works with lsDealerRead - the Read's DEALER REASONS
@@ -41,6 +46,7 @@
 #undef far
 #endif
 #include "DealerLogic.h"
+#include "ClaimGates.h"          // (1.7.0) the claim gates: options codes / ledger (options_causes), Abs (absorption_reason)
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -52,11 +58,28 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.5.5";   // 1.5.5 settings audit (2026-10-13): "Dealer ledger marks" is a check box (was an Off / On list). 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
+static const char* DS_VERSION = "1.7.0";   // 1.7.0 (2026-10-14 18:25 CT audit display list): footprint codes "?", options codes / ledger / Abs follow the claim gates.  1.5.5 settings audit (2026-10-13): "Dealer ledger marks" is a check box (was an Off / On list). 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
 struct SIdx { int market, font, clock, gap, ledger; };
+// (1.7.0) is a reason shown (drawn and in the signal outputs)? the claim gates: an options code or a dealer-ledger mark only with
+// LRA_SHOW_OPTIONS_CAUSES, an absorption code only with LRA_SHOW_ABSORPTION_REASON
+static bool dsVisible(const dl::Data::Sig& g, bool ledger)
+{
+    if (!cgate::kShowOptionsCauses && (ledger || cgate::isOptionsCode(g.code))) return false;
+    std::string c = g.code; while (!c.empty() && c[c.size() - 1] == '?') c.erase(c.size() - 1);
+    if (!cgate::kShowAbsorptionReason && cgate::isAbsorptionTag(c)) return false;
+    return true;
+}
+// (1.7.0) the text on the bar: the letters (1.5.0: no numbers, no dashed frames); a footprint code ends in "?" (audit: MARK ?)
+static std::string dsText(const dl::Data::Sig& g, bool ledger)
+{
+    std::string t = g.code; while (!t.empty() && t[t.size() - 1] == '?') t.erase(t.size() - 1);
+    if (t.empty()) return t;
+    if (!ledger && !cgate::isOptionsCode(t)) t += "?";
+    return t;
+}
 static SIdx SX;
 struct SSet { int market = 0, font = 10, clock = 0, gap = 6; bool ledger = false; };
 
@@ -193,8 +216,8 @@ void DealerSig::fillSignals(int from)
     if (from >= (int)n) return;
     for (int i = from; i < (int)n; i++) { o1[i] = 0; o2[i] = 0; }
     std::vector<const dl::Data::Sig*> all;
-    for (size_t k = 0; k < D.sigs.size(); k++) all.push_back(&D.sigs[k]);
-    if (cfg.ledger) for (size_t k = 0; k < D.lsigs.size(); k++) all.push_back(&D.lsigs[k]);
+    for (size_t k = 0; k < D.sigs.size(); k++) if (dsVisible(D.sigs[k], false)) all.push_back(&D.sigs[k]);            // (1.7.0) the gates
+    if (cfg.ledger) for (size_t k = 0; k < D.lsigs.size(); k++) if (dsVisible(D.lsigs[k], true)) all.push_back(&D.lsigs[k]);
     for (size_t k = 0; k < all.size(); k++) {
         int b = barOf(*all[k], (int)n, dt);
         if (b < from) continue;
@@ -230,8 +253,8 @@ int DealerSig::draw(void)
     // either side - green under the bars at a low, red above them at a high); the forced ledger's SC / Van (LSIG) only when
     // "Dealer ledger marks" is On, drawn smaller. Every label is placed where it touches no other one (dl::placeFree).
     std::vector<std::pair<const dl::Data::Sig*, bool> > all;           // (mark, is ledger)
-    for (size_t k = 0; k < D.sigs.size(); k++) all.push_back(std::make_pair(&D.sigs[k], false));
-    if (cfg.ledger) for (size_t k = 0; k < D.lsigs.size(); k++) all.push_back(std::make_pair(&D.lsigs[k], true));
+    for (size_t k = 0; k < D.sigs.size(); k++) if (dsVisible(D.sigs[k], false)) all.push_back(std::make_pair(&D.sigs[k], false));   // (1.7.0) the gates
+    if (cfg.ledger) for (size_t k = 0; k < D.lsigs.size(); k++) if (dsVisible(D.lsigs[k], true)) all.push_back(std::make_pair(&D.lsigs[k], true));
     if (n < 1 || all.empty()) {
         std::string state = mkt.empty() ? "no market" : (sourceState != "loaded" ? sourceState : (all.empty() ? "no reasons yet" : "no bars"));
         writeStatus(state.c_str());
@@ -259,9 +282,9 @@ int DealerSig::draw(void)
             if (p.h < pane.left || p.h > pane.right) continue;
             int fs = led ? (cfg.font > 8 ? cfg.font - 2 : cfg.font) : cfg.font;
             FONT f; f.id = HELVETICA; f.size = (short)fs; f.style = led ? PLAIN : BOLD; setFont(f);
-            std::string txt = g.code;
-            // (1.5.0, Rassul 2026-10-02 20:58 "dont put any numbers or dashed borders either .. the read can elaborate") the letter only
-            while (!txt.empty() && txt[txt.size() - 1] == '?') txt.erase(txt.size() - 1);
+            // (1.5.0, Rassul 2026-10-02 20:58 "dont put any numbers or dashed borders either .. the read can elaborate") the letter only;
+            // (1.7.0) a footprint code with its "?" ("Dem?")
+            std::string txt = dsText(g, led);
             int w = (int)getTextWidth(txt.c_str(), -1), lineH = fs + 4;
             dl::Box x; x.l = p.h - w / 2 - 3; x.r = p.h + w / 2 + 4;
             x.t = below ? p.v + cfg.gap : p.v - cfg.gap - lineH; x.b = x.t + lineH;
@@ -284,6 +307,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.5.5");
+    p->setVersion("1.7.0");
     return p;
 }
