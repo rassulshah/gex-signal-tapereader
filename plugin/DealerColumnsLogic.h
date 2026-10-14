@@ -33,7 +33,25 @@ inline std::string nodeText(bool hasD, double d)
     return std::string(d > 0 ? "B " : "S ") + n;
 }
 // the text goes inside the node only when it fits: 3 px each side, and the node at least the text's height
-inline bool nodeTextFits(int textW, int nodeLen, int nodeH, int fontPt) { return textW > 0 && textW + 6 <= nodeLen && nodeH >= fontPt + 1; }
+// (14:37 CT review) the text's real height is pt x 4/3 px (96 dpi): the node must hold it + 1 px each side, else it is hidden
+inline int textPx(int fontPt) { return (fontPt * 4 + 2) / 3; }
+inline bool nodeTextFits(int textW, int nodeLen, int nodeH, int fontPt) { return textW > 0 && textW + 6 <= nodeLen && nodeH >= textPx(fontPt) + 2; }
+// (14:37 CT, Rassul "F everywhere, makes no sense") a strike under 3% of the biggest wall on screen is not drawn at all (no slivers)
+static const double NODE_MIN_SHARE = 0.03;
+inline bool nodeShown(double absG, double absMax) { return absMax > 0 && absG > 0 && absG >= NODE_MIN_SHARE * absMax; }
+// (14:37 CT) the hourly swings HrHI / HrLO were removed in 2.10.0: a merged name from an older shared file drops them ("PDH/HrHI" -> "PDH",
+// "HrHI" -> "" = not drawn)
+inline std::string dropHourly(const std::string& name)
+{
+    std::string out, part; size_t a = 0;
+    while (a <= name.size()) {
+        size_t b = name.find('/', a); if (b == std::string::npos) b = name.size();
+        part = name.substr(a, b - a);
+        if (part != "HrHI" && part != "HrLO" && !part.empty()) out += (out.empty() ? "" : "/") + part;
+        a = b + 1;
+    }
+    return out;
+}
 
 // the node's hover: dpaudit::nodeHover (tested since 2.9.0) re-worded for the 2.11.0 face (teal + / orange - and B / S in the node)
 inline dpaudit::Hover nodeHover(const std::string& mkt, const dpaudit::NodeX& x, double net, double absMax, double pxNow, bool textShown)

@@ -147,7 +147,10 @@ static void dealerTexts()
 {
     check(dcol::nodeText(true, 1234) == "B 1.2K" && dcol::nodeText(true, -980) == "S 980" && dcol::nodeText(true, -12755) == "S 12.8K", "node text: B / S + contracts");
     check(dcol::nodeText(false, 500).empty() && dcol::nodeText(true, 0.2).empty() && dcol::nodeText(true, std::nan("")).empty() && dcol::nodeText(true, 1.0 / 0.0).empty(), "node text: none when missing / zero / NaN / inf (no garbage)");
-    check(dcol::nodeTextFits(40, 46, 12, 10) && !dcol::nodeTextFits(40, 45, 12, 10) && !dcol::nodeTextFits(40, 80, 10, 10) && !dcol::nodeTextFits(0, 80, 20, 10), "node text fits only inside (3 px each side, tall enough)");
+    check(dcol::textPx(10) == 14 && dcol::textPx(9) == 12, "text height = pt x 4/3 px");
+    check(dcol::nodeTextFits(40, 46, 16, 10) && !dcol::nodeTextFits(40, 45, 16, 10) && !dcol::nodeTextFits(40, 80, 15, 10) && !dcol::nodeTextFits(0, 80, 20, 10), "node text fits only inside (3 px each side, the text height + 1 px above and below)");
+    check(dcol::nodeShown(3e6, 100e6) && !dcol::nodeShown(2.9e6, 100e6) && !dcol::nodeShown(0, 100e6) && !dcol::nodeShown(5, 0), "a strike under 3% of the biggest wall is not drawn (no slivers)");
+    check(dcol::dropHourly("PDH/HrHI") == "PDH" && dcol::dropHourly("HrHI").empty() && dcol::dropHourly("HrLO/PFL/PDL") == "PFL/PDL" && dcol::dropHourly("ONH/AsiaHI") == "ONH/AsiaHI", "HrHI / HrLO never shown (removed in 2.10.0)");
     check(dcol::compactName("CR 0D / GW 0D STALE 24m") == "CR0/GW0" && dcol::compactName("CR0 STALE 24m") == "CR0" && dcol::compactName("HVL 0D") == "HVL" && dcol::compactName("1D Max") == "1DMax" && dcol::compactName("PS 0D") == "PS0", "compact badge names");
     check(dcol::staleSuffix("CR0 STALE 24m") == "STALE 24m" && dcol::staleSuffix("CR0").empty(), "STALE goes to the hover");
     dpaudit::Hover h = dcol::levelHover("ES", "LonLO", "7866.25", "33%  /  50%", "900 contracts resting bids (2.7x the book behind)", false, false);

@@ -18,6 +18,10 @@
  *     white outline, and the level line is drawn 3 px across the chart. Native: lsLiquidityProfile 0.16.0 writes the per-price
  *     numbers to lsFlexLevels\LRA-LiqLevels-<MKT>.csv; no file / older than 20 s = name-only badges (never 0). Levels column default
  *     78 px (30-150); "Liquidity in badge" checkbox.
+ *     (14:37 CT review, Rassul "F everywhere, makes no sense") no W / F letters anywhere (the colour says it: teal = wall / long gamma,
+ *     orange = fuel / short gamma; the hover explains W / F); strikes under 3% of the biggest wall on screen are not drawn; node and
+ *     badge text sized to the real text height (pt x 4/3) with padding - hidden / shortened rather than clipped; HrHI / HrLO never shown
+ *     (an older shared key-level file can still carry them).
  *  2.9.0 (2026-10-13, Rassul approved 18:05 - dealer-profile-mockup.png): each node's LENGTH = MenthorQ's ABSOLUTE GEX at the
  *     strike (the wall's size), its colour + a "W" / "F" letter by the NET sign (cyan W = wall, net long gamma: holds / pins; lime
  *     F = fuel, net short gamma: accelerant); big absolute with near-zero net = a thin muted node. The 3 biggest strikes carry
@@ -213,7 +217,7 @@ public:
         cb::Peers peers; cb::UnitProbe probe; cb::MarginCtl mctl; cb::Layout lay;
         std::string sym, chart; long spb = 0; bool published = false;
         int needPx = 0, ppb = 0, marginRead = -1, marginAsked = -1, setOk = 0, setFail = 0, gapSeen = -1;
-        int badgesShown = 0, badgesDropped = 0, nodeTexts = 0, nodeTextsHidden = 0;
+        int badgesShown = 0, badgesDropped = 0, nodeTexts = 0, nodeTextsHidden = 0, nodesTiny = 0;
         long long firstMs = -1;
         dcol::LiqLevels liqL; long long liqLStamp = -2, liqLChecked = -1; std::string liqLWhy;   // (11:39 CT) the per-level liquidity file
         std::map<std::string, dcol::HLState> hl; int hlOn = 0, liqBlocks = 0;                   // HL hysteresis per level
@@ -891,7 +895,7 @@ void DealerProfile::renderNodeX(const Settings& S, const RCT& pane, short anchor
     const float stF = stale ? 0.40f : 0.0f;                          // (2.9.0) a stale grid: every node fades
     float step = 0; for (size_t q = 1; q < nx.size(); q++) { float d = nx[q].k - nx[q - 1].k; if (d > 0 && (step == 0 || d < step)) step = d; }
     if (step <= 0) step = D.em * 0.1f;
-    cs.nodeTexts = cs.nodeTextsHidden = 0;
+    cs.nodeTexts = cs.nodeTextsHidden = cs.nodesTiny = 0;
     for (size_t i = 0; i < nx.size(); i++) {
         const dpaudit::NodeX& X = nx[i];
         const long long key = std::llround((double)X.k * 10000.0);
@@ -904,6 +908,7 @@ void DealerProfile::renderNodeX(const Settings& S, const RCT& pane, short anchor
         if (muted) ft = ft + (1.0f - ft) * 0.45f;
         ft = stF + (1.0f - stF) * ft;
         const COLOR base = net >= 0 ? (COLOR)dcol::C_POS : (COLOR)dcol::C_NEG;
+        if (!dcol::nodeShown(X.absG, amax)) { ++cs.nodesTiny; continue; }   // (14:37 CT) under 3% of the biggest: nothing (no slivers, no text)
         int L = dl::barLen((float)X.absG, (float)amax, W);
         if (L > W) L = W;
         const int bh = muted ? std::max(3, barH / 2) : barH;
@@ -1136,7 +1141,7 @@ void DealerProfile::writeStatus(const char* what)
       << "MARGIN,need " << cs.needPx << " px,units " << (cs.probe.units == cb::PIXELS ? "pixels" : "bars") << ",ppb " << cs.ppb << ",read " << cs.marginRead
       << ",asked " << cs.marginAsked << ",set ok " << cs.setOk << ",set fail " << cs.setFail << ",gap " << cs.gapSeen << "\n"
       << "BADGES,shown " << cs.badgesShown << ",dropped " << cs.badgesDropped << ",liquidity blocks " << cs.liqBlocks << ",HL " << cs.hlOn
-      << ",liquidity file " << (cs.liqLWhy.empty() ? std::string("ok") : cs.liqLWhy) << ",HL line " << cs.liqL.onX << "x / " << cs.liqL.offX << "x" << "\nNODE_TEXT,shown " << cs.nodeTexts << ",hidden " << cs.nodeTextsHidden << "\n";
+      << ",liquidity file " << (cs.liqLWhy.empty() ? std::string("ok") : cs.liqLWhy) << ",HL line " << cs.liqL.onX << "x / " << cs.liqL.offX << "x" << "\nNODE_TEXT,shown " << cs.nodeTexts << ",hidden " << cs.nodeTextsHidden << ",tiny nodes not drawn " << cs.nodesTiny << "\n";
     // (2.7.4) one status file for the DLL: written when its content changes (or once a minute), not on every repaint
     static dpaudit::WriteGate gate;
     const std::string body = f.str();
@@ -1411,7 +1416,10 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
         std::ifstream f((std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-KeyLevels-" + m + ".csv").c_str(), std::ios::binary);
         std::string text; if (f.is_open()) { text.resize(65536); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
         std::vector<dpaudit::KeyLv> kv;
-        if (dpaudit::parseKeyLevels(text, (long long)now, kv)) for (size_t i = 0; i < kv.size(); i++) K.v.push_back(klv::Merged{ kv[i].name, kv[i].price, kv[i].pivot });
+        if (dpaudit::parseKeyLevels(text, (long long)now, kv)) for (size_t i = 0; i < kv.size(); i++) {
+            const std::string nm = dcol::dropHourly(kv[i].name);         // (2.11.0) an older file may still carry HrHI / HrLO
+            if (!nm.empty()) K.v.push_back(klv::Merged{ nm, kv[i].price, kv[i].pivot });
+        }
         return K.v;
     }
     long from = n - (long)(15LL * 86400 / per); if (from < 0) from = 0;     // two weeks and a bit: enough for the prior week
@@ -1425,6 +1433,7 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
     double tk = chartTick(m);
     int a0 = 18 * 60, a1 = 2 * 60; klv::asiaWindow(m.c_str(), a0, a1);              // (2.10.0)
     K.v = klv::merge(klv::compute(B, per, o, cl, tk, a0, a1), tk, klv::mergeTicksFor(m));
+    {   std::vector<klv::Merged> keep; for (size_t i = 0; i < K.v.size(); ++i) { klv::Merged q = K.v[i]; q.name = dcol::dropHourly(q.name); if (!q.name.empty()) keep.push_back(q); } K.v.swap(keep); }
     K.n = n; K.lastT = lastT; K.at = now;
     {   // (2.8.0) share them with this market's hourly charts (written at each recompute: every new bar, at most every 10 s)
         std::vector<dpaudit::KeyLv> kv; for (size_t i = 0; i < K.v.size(); i++) kv.push_back(dpaudit::KeyLv{ K.v[i].name, K.v[i].price, K.v[i].pivotOnly });
@@ -1494,7 +1503,9 @@ void DealerProfile::drawKeyLevels(const Settings& S)
         }
     }
     if (lastC <= 0) { RTARRAY cl(barClose); const double c0 = (double)cl[(int)nb - 1]; if (dpFinite(c0) && c0 > 0) lastC = c0; }   // (2.11.0) above / below price for the hover
-    for (const klv::Merged& q : L) {
+    for (const klv::Merged& q0 : L) {
+        klv::Merged q = q0; q.name = dcol::dropHourly(q0.name);       // (2.11.0) never an hourly swing (removed in 2.10.0)
+        if (q.name.empty()) continue;
         PNT pp; pp.set((int)(nb - 1), (float)q.price); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) continue;
         COLOR col = klColor(q.name, q.pivotOnly);                      // (2.7.1) his SessionPrices colours
@@ -1633,7 +1644,9 @@ void DealerProfile::flushLabels(const Settings& S)
     if (col.w() <= 0 || !cs.lay.ok) { cs.badgesDropped = (int)pend.size(); pend.clear(); return; }
     RCT pane; pane.getPaneRect(false);
     const int kf = S.badgeFont;
-    const int bh = kf + 8, room = col.w() - 3 - 4;   // (11:39) 2 px taller: the HL block's 2 px outline never touches its text   // the name block: 2 px from the column's left edge, 2 px text pad each side, 1 px right
+    // (14:37 CT review) the badge is the text's real height (pt x 4/3) + 3 px above and below (the HL block's 2 px outline never touches
+    // its text); the name block: 2 px from the column's left edge, 3 px text pad each side, 1 px right
+    const int bh = dcol::textPx(kf) + 6, room = col.w() - 3 - 6;
     long nb = getBarCount();
     int focusY = (pane.top + pane.bottom) / 2;
     if (nb > 0) { RTARRAY cl(barClose); const float c0 = cl[(int)nb - 1]; if (dpFinite(c0)) { PNT p; p.set((int)nb - 1, c0); focusY = p.v; } }
@@ -1666,18 +1679,21 @@ void DealerProfile::flushLabels(const Settings& S)
         // smaller (8 pt floor); an HL block without the "HL " word (its colour + outline still say HL); else the name alone (never cut)
         const int avail = col.w() - 3;
         int bf = kf;
+        std::string nm = names[j];
         std::string lt = P.haveLiq ? dcol::liqBlockText(P.lots, P.hl) : std::string();
-        const int lp = P.hl ? 6 : 4;                                   // the HL block's 2 px outline sits inside its padding
-        int nw = textW(names[j].c_str(), bf, true) + 4, lw = lt.empty() ? 0 : textW(lt.c_str(), bf, true) + lp;
-        if (lw > 0 && nw + lw > avail && kf > 8) { bf = kf - 1; nw = textW(names[j].c_str(), bf, true) + 4; lw = textW(lt.c_str(), bf, true) + lp; }
-        if (lw > 0 && nw + lw > avail && P.hl) { lt = dcol::lotsK(P.lots); lw = textW(lt.c_str(), bf, true) + lp; }
-        if (lw > 0 && nw + lw > avail) { lw = 0; bf = kf; nw = textW(names[j].c_str(), bf, true) + 4; }
+        const int lp = P.hl ? 10 : 6;                                  // pads: 3 px each side; the HL block + its 2 px outline
+        auto widths = [&](int& nw, int& lw) { nw = textW(nm.c_str(), bf, true) + 6; lw = lt.empty() ? 0 : textW(lt.c_str(), bf, true) + lp; };
+        int nw = 0, lw = 0; widths(nw, lw);
+        if (lw > 0 && nw + lw > avail && kf > 8) { bf = kf - 1; widths(nw, lw); }                                  // 1 pt smaller
+        if (lw > 0 && nw + lw > avail) { const size_t cut = nm.find('/'); if (cut != std::string::npos) { nm = nm.substr(0, cut) + "+"; widths(nw, lw); } }   // "PFL+" for a merged name
+        if (lw > 0 && nw + lw > avail && P.hl) { lt = dcol::lotsK(P.lots); widths(nw, lw); }                      // the HL block without "HL "
+        if (lw > 0 && nw + lw > avail) { lw = 0; bf = kf; nm = names[j]; widths(nw, lw); lw = 0; }               // the name alone
         const short l = (short)(col.l + 2), mid = (short)(l + nw), r = (short)(mid + lw);
         const COLOR fill = fade(P.col, dim);
         box(l, (short)t, mid, (short)b, fill);
         if (P.pick) { line(l, (short)t, mid, (short)t, 0x00FFFFFF, 1); line(mid, (short)t, mid, (short)b, 0x00FFFFFF, 1); line(mid, (short)b, l, (short)b, 0x00FFFFFF, 1); line(l, (short)b, l, (short)t, 0x00FFFFFF, 1); }
         const bool dark = (0.299 * ((fill >> 16) & 0xFF) + 0.587 * ((fill >> 8) & 0xFF) + 0.114 * (fill & 0xFF)) >= 150.0;
-        textLJ((short)(l + 2), (short)yc, names[j].c_str(), dark ? C_DARK : (COLOR)0x00FFFFFF, bf, true);
+        textLJ((short)(l + 3), (short)yc, nm.c_str(), dark ? C_DARK : (COLOR)0x00FFFFFF, bf, true);
         if (lw > 0) {
             ++cs.liqBlocks;
             if (P.hl) {
@@ -1685,10 +1701,10 @@ void DealerProfile::flushLabels(const Settings& S)
                 box(mid, (short)t, r, (short)b, P.bid ? C_BUY : C_SELL);
                 setPen(0x00FFFFFF, 2, P_SOLID);   // the 2 px white outline, inside the block
                 PNT q; q.set(0, 0.0f); q.h = (short)(mid + 1); q.v = (short)(t + 1); q.setDrawPosition(); q.h = (short)(r - 1); q.drawLineTo(); q.v = (short)(b - 1); q.drawLineTo(); q.h = (short)(mid + 1); q.drawLineTo(); q.v = (short)(t + 1); q.drawLineTo();
-                textLJ((short)(mid + 3), (short)yc, lt.c_str(), 0x00FFFFFF, bf, true);
+                textLJ((short)(mid + 5), (short)yc, lt.c_str(), 0x00FFFFFF, bf, true);
             } else {
                 box(mid, (short)t, r, (short)b, (COLOR)0x00282828);
-                textLJ((short)(mid + 2), (short)yc, lt.c_str(), C_MUTED, bf, false);
+                textLJ((short)(mid + 3), (short)yc, lt.c_str(), C_MUTED, bf, false);
             }
         }
         ++cs.badgesShown;

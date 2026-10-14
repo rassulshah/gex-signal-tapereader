@@ -253,6 +253,23 @@ int main(int argc, char** argv)
         int bs = 0, bad = 0; for (auto& q : O) if (q.kind == "text" && (q.text.rfind("B ", 0) == 0 || q.text.rfind("S ", 0) == 0)) { ++bs; if (!inBox(q, c.lay.dealer) || q.col != (C_DARK & 0xFFFFFF)) ++bad; }
         check(bs > 0 && bad == 0, "B / S hedge text inside the nodes (dark ink), " + std::to_string(bs) + " shown");
         check(hasText(O, "CR0") && hasText(O, "HVL") && hasText(O, "PS0"), "compact MenthorQ badges CR0 / HVL / PS0");
+        // (14:37 CT review) no W / F letters anywhere; no hourly swing names; every node text inside a node that is tall and long enough;
+        // every badge text inside its block with its padding
+        int wf = 0, hr = 0; for (auto& q : O) if (q.kind == "text") { if (q.text == "W" || q.text == "F") ++wf; if (q.text.find("HrHI") != std::string::npos || q.text.find("HrLO") != std::string::npos) ++hr; }
+        check(wf == 0 && hr == 0, "no W / F letters and no HrHI / HrLO on the chart (" + std::to_string(wf) + " / " + std::to_string(hr) + ")");
+        int badNode = 0, nodeTxt = 0;
+        for (size_t i = 0; i < O.size(); ++i) if (O[i].kind == "text" && (O[i].text.rfind("B ", 0) == 0 || O[i].text.rfind("S ", 0) == 0)) {
+            ++nodeTxt; const int yc = O[i].t + (O[i].b - O[i].t) / 2 + (int)std::lround(O[i].font * 0.45);   // the y the plugin asked for
+            bool in = false; for (size_t j = 0; j < i; ++j) if (O[j].kind == "box" && O[j].r == 1598 && O[j].l <= O[i].l - 3 && O[j].r >= O[i].r + 3 && O[j].t <= yc - dcol::textPx(O[i].font) / 2 && O[j].b >= yc + dcol::textPx(O[i].font) / 2) in = true;
+            if (!in) ++badNode; }
+        check(nodeTxt > 0 && badNode == 0, "node text inside its node: 3 px each side, the full text height (" + std::to_string(badNode) + " of " + std::to_string(nodeTxt) + " not)");
+        int badBadge = 0, badgeTxt = 0;
+        for (size_t i = 0; i < O.size(); ++i) if (O[i].kind == "text" && O[i].l >= c.lay.levels.l && O[i].r <= c.lay.levels.r + 40 && O[i].font <= 9) {
+            ++badgeTxt; const int yc = O[i].t + (O[i].b - O[i].t) / 2 + (int)std::lround(O[i].font * 0.45);
+            bool in = false; for (size_t j = 0; j < i; ++j) if (O[j].kind == "box" && O[j].l <= O[i].l - 2 && O[j].r >= O[i].r + 2 && O[j].r <= c.lay.levels.r && O[j].t <= yc - dcol::textPx(O[i].font) / 2 - 2 && O[j].b >= yc + dcol::textPx(O[i].font) / 2 + 2) in = true;
+            if (!in) ++badBadge; }
+        check(badgeTxt > 3 && badBadge == 0, "badge text inside its block with padding, vertically centred (" + std::to_string(badBadge) + " of " + std::to_string(badgeTxt) + " not)");
+        { const std::string st0 = slurp(fl("DealerProfile.status.txt")); check(st0.find("tiny nodes not drawn ") != std::string::npos && st0.find("tiny nodes not drawn 0") == std::string::npos, "strikes under 3% of the biggest wall: not drawn (counted)"); }
         int wide = 0; for (auto& q : O) if (q.kind == "text" && (q.text.find('%') != std::string::npos || q.text.find("STALE 24m") != std::string::npos || q.text.find("7925.00") != std::string::npos || q.text.find("Liq ") != std::string::npos)) ++wide;
         check(wide == 0, "no wide level labels on the chart (price / odds / STALE / Liq are in the hovers)");
         int cnt = 0; check(badgeOverlaps(O, c.lay.levels, &cnt) == 0 && cnt > 3, "badges inside the Levels column, none overlapping (" + std::to_string(cnt) + ")");
@@ -362,7 +379,7 @@ int main(int argc, char** argv)
                 for (size_t j = i; j-- > 0;) if (V[j].kind == "box" && V[j].l <= V[i].l && V[j].r >= V[i].r && V[j].t <= V[i].b && V[j].b >= V[i].t) { fill = V[j].col; return true; } } return false; };
         unsigned long f1 = 0, f2 = 0, f3 = 0;
         check(boxAt(O, "HL 900", f1) && f1 == (C_SELL & 0xFFFFFF), "CR0 above price: 'HL 900' on RED (resting offers)");
-        check(boxAt(O, "HL 1.2K", f2) && f2 == (C_BUY & 0xFFFFFF), "HVL below price: 'HL 1.2K' on GREEN (resting bids)");
+        check((boxAt(O, "HL 1.2K", f2) || boxAt(O, "1.2K", f2)) && f2 == (C_BUY & 0xFFFFFF), "HVL below price: the HL block on GREEN (resting bids; 'HL 1.2K', or '1.2K' when 'HL' does not fit 78 px)");
         check(boxAt(O, "310", f3) && f3 == 0x282828, "PS0 normal liquidity: '310' grey on dark grey (40,40,40)");
         int outl = 0; for (auto& q : O) if (q.kind == "line" && q.col == 0xFFFFFF && q.font == 2 && q.l >= c.lay.levels.l) ++outl;
         check(outl >= 8, "HL blocks: a 2 px white outline (" + std::to_string(outl) + " segments)");
