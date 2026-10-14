@@ -77,13 +77,14 @@ REM (2026-10-12) lsCVD - CVD line + delta-pct bars + Div / Abs / Exh / BR marks 
 call :one CVD lsCVD CvdEngine.h CvdFeed.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
 REM (2026-10-13) lsBidAskStats - biggest bid (red) / biggest ask (green) per candle, BBid / BAsk / BidRatio / AskRatio box
 REM (2026-10-13) lsBidAskStats 1.3.0 - who is attacking: S / L letters from the order feed, message line + info box, spike labels (shared OrderFlowFeed.h)
-call :one BidAskStats lsBidAskStats BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h
+REM (2026-10-13 of140) BidAskStats 1.5.0 / PullStats 1.1.0 / StackStats 1.1.0 also hash OptionsFlow.h (BidAskStats StopRun.h); TapeReader 1.1.0 hashes OptionsFlow.h
+call :one BidAskStats lsBidAskStats BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h StopRun.h OptionsFlow.h
 REM (2026-10-13) lsPullStats 1.0.0 - who is leaving: resting orders pulled near price per candle (MBO), L, message line + info box (Rassul "number of bids and ask pulled like a histogram")
-call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h
+call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h
 REM (2026-10-13) lsStackStats 1.0.0 - who is arriving: orders added near price per candle (MBO), refill dash, R / L, message line + info box (Rassul "add a stacking indicator", "keep seperate")
-call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h
+call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
-call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h
+call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 

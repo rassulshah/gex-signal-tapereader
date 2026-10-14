@@ -1,5 +1,10 @@
 /********************************************************************************
- *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.0.1  (2026-10-13)
+ *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.1.0  (2026-10-13)
+ *  1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
+ *        bars = LOTS added near price (were orders); PACE (added lots / s vs the same-time norm); 3-row spike labels; the SPEC message
+ *        grammar ("Buyers added 42 bids totaling 150 lots (4.4x) fast (p 3.4x) - rebuilt 90% after hits - defending PDL." ...);
+ *        REBUILT % (lots re-added at a price after it was hit / lots hit, lra passive_aggr's restore); hover rows Added / Pace /
+ *        Orders / Top order / Rebuilt / Refills (I); the blue oStack line (LRA-Options-<MKT>.csv) when fresh. Rules: StackStatsLogic.h.
  *  1.0.1 (2026-10-13, Rassul 1:30 PM CT): the refill / iceberg letter is I (was R); R is reserved for a future stop-run signal.
  *        (1:43 PM) no white outline on the bars or the letter boxes (same-colour pen); hovered candle not outlined.
  *
@@ -42,7 +47,7 @@
 #include "OrderFlowFeed.h"
 #include "StackStatsLogic.h"
 
-#define SS_VERSION "1.0.1"          // keep equal to st::VERSION and the setVersion literal below
+#define SS_VERSION "1.1.0"          // keep equal to st::VERSION and the setVersion literal below
 
 class StackStats : public off::MboPane<st::Logic> {
 public:
@@ -70,7 +75,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA StackStats: who is ARRIVING. Per candle, how many orders were ADDED near price (market-by-order feed). Green = bids added (buyers building support), red = offers added (sellers building a wall). White dash in a bar = notable refills (new orders right after a fill at the same price - reloading). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. I = iceberg: refills with an iceberg confirmed (more traded at a refill price than was ever shown there), L = one large order added. Spike labels: the ratio over the number of orders. Top: a plain-English message (green = bullish, red = bearish) and the info box with every value, for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.0.1");   // SS_VERSION
+    p->setDescription("LRA StackStats: who is ARRIVING. Per candle, the LOTS of orders ADDED near price (market-by-order feed). Green = bids added, red = offers added. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. White dash = notable refills (re-added at a price right after it traded). I = refills + an iceberg confirmed, L = one large order added. Spike labels: the ratio, the pace (p = added lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = one order is most of it, may not reload ?), a blue options line when fresh (oStack), and the info box (Bids | Offers: added lots, pace, orders, top order, rebuilt %, refills) for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
+    p->setVersion("1.1.0");   // SS_VERSION
     return p;
 }

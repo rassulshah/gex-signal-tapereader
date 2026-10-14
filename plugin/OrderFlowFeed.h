@@ -1,7 +1,22 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.0.1, 2026-10-13) -- the ONE shared order-flow header of lsBidAskStats 1.3.1, lsPullStats 1.0.1 and
-// lsStackStats 1.0.1.
+// OrderFlowFeed.h (1.2.0, 2026-10-13) -- the ONE shared order-flow header of lsBidAskStats 1.5.0, lsPullStats 1.1.0 and
+// lsStackStats 1.1.0.
+// 1.2.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
+//   - Pull / Stack bars in LOTS (contracts pulled / added near price; were order counts). Spike labels: 3 rows - size ratio "3.4x" /
+//     pace "p 2.3x" / lots "240".
+//   - PACE = lots per second in the candle vs that market's same-time-of-day norm (PACE_NORM rows of LRA-OrderFlow-<MKT>.csv, 30-min
+//     CT buckets, written nightly by lra.orderflow_params; no row = the rolling norm of the last <= 60 closed candles of the prior
+//     4 h, needs 5). "fast (p 2.6x)" >= paceFastX (2.0), "slowly (p 0.7x)" <= paceSlowX (0.7) on a spike; '?' until PACE_SHOW,on.
+//   - Engine: per side the pulled order's "traded first" (the biggest pulled order had a fill before it was pulled), the hit size
+//     (fills) and the size REBUILT at a hit price after the hit (lra passive_aggr's restore, "rebuilt %"), aggressor orders / lots,
+//     and per-second add samples for PullStats' later "reset" message (bids back within N s of a pull: posted when known).
+//   - The session record gains 15 numbers at the END (older 38-number records still load, the new ones read 0).
+//   - The blue options stat line (OptionsFlow.h, LRA-Options-<MKT>.csv) under each message line; gates PACE_SHOW / OHIT_SHOW /
+//     OPULL_SHOW / OSTACK_SHOW / REBUILT_SHOW (on / ? / off).
+// 1.1.0 (2026-10-13, Rassul 1:36 PM: stop run R in BidAskStats): BarLook.mark[side] draws a coloured mark ("R" / "R?") in a white
+//   box with no border at the BOTTOM of that side's bar, the side's top letter above it (still at most 2 per side); the session
+//   record keeps extra lines (SessionFile.extra, e.g. "SR|...") after the candle rows. PullStats / StackStats draw exactly as 1.0.1.
 // 1.0.1 (2026-10-13, Rassul 1:43 PM CT): no WHITE OUTLINE on the histogram bars or the letter boxes in any pane. Every bar,
 //   letter box and refill dash is drawn by fillFlat(): the pen is set to the fill colour first (IRT draws a rectangle's border
 //   with the pen in effect), border = fill. The hovered candle is no longer outlined white (the info box shows which candle).
@@ -41,6 +56,7 @@
 //   candle (aggressor orders / resting orders near price), never under largeLotMin (20) lots. No look-ahead.
 //   NEAR = |price - the last trade price| <= the Liquidity Profile 0.14.0 near band (NearLevels.h).
 #include "NearLevels.h"
+#include "OptionsFlow.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -62,7 +78,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.0.1";   // 1.0.1 (2026-10-13): StackStats letter I (was R)
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -96,8 +112,12 @@ struct Params {
     long long refillWindowMs = 1000, refillNotableT = 20;                 // tenths: 20 = 2.0x
     long long spikeAvgT = 20, spikeJumpT = 15, spikeLookback = 10;        // tenths / tenths / bars
     long long closeTicks = 2, baitPct = 70;
+    long long paceFastT = 20, paceSlowT = 7;                              // (1.2.0) tenths: pace >= 2.0x = "fast", <= 0.7x = "slowly"
+    long long rebuiltPct = 90, resetWindowSec = 60, resetPct = 80;        // (1.2.0) "rebuilt N% after hits" from 90%; reset: 80% back within 60 s
     std::set<std::string> fromFile;                                       // the names the file set (valid)
     bool file(const char* n) const { return fromFile.count(n) > 0; }
+    int gate[ofo::NGATE] = { ofo::GATE_Q, ofo::GATE_Q, ofo::GATE_Q, ofo::GATE_Q, ofo::GATE_Q, ofo::GATE_Q, ofo::GATE_Q };   // (1.2.0) PACE_SHOW ... OHVL_SHOW (all ? by default)
+    std::map<int, double> norm[3];                                        // (1.2.0) PACE_NORM: metric (0 AGGR, 1 PULL, 2 ADD) -> 30-min bucket -> lots/s
 };
 struct ParamDef { const char* name; bool tenths; long long lo, hi; long long Params::* slot; };
 static const ParamDef PARAM_DEFS[] = {
@@ -113,7 +133,16 @@ static const ParamDef PARAM_DEFS[] = {
     { "spikeLookback", false, 0, 50, &Params::spikeLookback },
     { "closeTicks", false, 0, 20, &Params::closeTicks },
     { "baitPct", false, 50, 100, &Params::baitPct },
+    { "paceFastX", true, 10, 100, &Params::paceFastT },
+    { "paceSlowX", true, 1, 10, &Params::paceSlowT },
+    { "rebuiltPct", false, 10, 200, &Params::rebuiltPct },
+    { "resetWindowSec", false, 5, 600, &Params::resetWindowSec },
+    { "resetPct", false, 10, 200, &Params::resetPct },
 };
+// (1.2.0) PACE_NORM,<AGGR|PULL|ADD>,<HHMM bucket start, a multiple of 30 min>,<lots per second per side>
+static const char* const PACE_METRIC[3] = { "AGGR", "PULL", "ADD" };
+enum { PM_AGGR = 0, PM_PULL = 1, PM_ADD = 2 };
+inline int bucketOf(int minuteOfDay) { if (minuteOfDay < 0 || minuteOfDay >= 1440) return -1; return (minuteOfDay / 30) * 30; }
 static const size_t PARAM_COUNT = sizeof(PARAM_DEFS) / sizeof(PARAM_DEFS[0]);
 inline std::string tenthsText(long long t) { char b[32]; std::snprintf(b, sizeof(b), "%lld.%lldx", t / 10, t % 10); return b; }
 struct ParamLoad { Params p; std::vector<std::string> notes; std::string source = "defaults"; };
@@ -145,6 +174,22 @@ inline ParamLoad parseParams(bool fileFound, bool readOk, const std::vector<std:
             haveMkt = true; continue;
         }
         if (c[0] == "ASOF" || c[0] == "SOURCE") continue;                  // informational
+        {   // (1.2.0) the show gates: <KEY>,<on|?|off>
+            int g = 0; while (g < ofo::NGATE && c[0] != ofo::GATE_KEY[g]) ++g;
+            if (g < ofo::NGATE) {
+                if (c.size() == 2 && (c[1] == "on" || c[1] == "?" || c[1] == "off")) p.gate[g] = c[1] == "on" ? ofo::GATE_ON : c[1] == "off" ? ofo::GATE_OFF : ofo::GATE_Q;
+                else notes.push_back(std::string(ofo::GATE_KEY[g]) + ": bad value (on, ?, off) - ?");
+                continue;
+            }
+        }
+        if (c[0] == "PACE_NORM") {                                         // (1.2.0) per-market same-time-of-day pace norms
+            int m = 0; while (m < 3 && (c.size() < 2 || c[1] != PACE_METRIC[m])) ++m;
+            long long hhmm = -1; double v = 0;
+            if (c.size() != 4 || m >= 3 || c[2].size() != 4 || !nl::parseWhole(c[2], 0, 2359, hhmm) || hhmm % 100 >= 60 || ((hhmm / 100) * 60 + hhmm % 100) % 30 != 0
+                || !nl::parseReal(c[3], v) || !(v > 0) || v > 1e6) { notes.push_back("line " + std::to_string(i + 1) + ": bad PACE_NORM (ignored)"); continue; }
+            if (p.norm[m].size() < 48) p.norm[m][(int)((hhmm / 100) * 60 + hhmm % 100)] = v;
+            continue;
+        }
         if (c[0] != "PARAM") { notes.push_back("line " + std::to_string(i + 1) + ": unknown key " + c[0].substr(0, 20) + " (ignored)"); continue; }
         if (c.size() != 3) { notes.push_back("line " + std::to_string(i + 1) + ": PARAM needs name,value (ignored)"); continue; }
         size_t k = 0; while (k < PARAM_COUNT && c[1] != PARAM_DEFS[k].name) ++k;
@@ -172,6 +217,11 @@ inline std::string paramsText(const Params& p) {
         const ParamDef& d = PARAM_DEFS[k]; const long long v = p.*(d.slot);
         if (k) o += ";";
         o += std::string(d.name) + "=" + (d.tenths ? tenthsText(v) : std::to_string(v)) + (p.file(d.name) ? "(file)" : "(default)");
+    }
+    for (int g = 0; g < ofo::NGATE; ++g) o += std::string(";") + ofo::GATE_KEY[g] + "=" + ofo::gateText(p.gate[g]);   // (1.2.0)
+    for (int m = 0; m < 3; ++m) {
+        o += std::string(";PACE_NORM_") + PACE_METRIC[m] + "=" + std::to_string(p.norm[m].size());
+        for (std::map<int, double>::const_iterator it = p.norm[m].begin(); it != p.norm[m].end(); ++it) { char b[48]; std::snprintf(b, sizeof(b), ",%d:%.4g", it->first, it->second); o += b; }
     }
     return o;
 }
@@ -254,6 +304,9 @@ struct Acc {
     long long pullN[2] = {0, 0}, pullC[2] = {0, 0}, pullMax[2] = {0, 0}, pullClose[2] = {0, 0};
     long long addN[2] = {0, 0}, addC[2] = {0, 0}, addMax[2] = {0, 0};
     long long refN[2] = {0, 0}, refC[2] = {0, 0};
+    int pullMaxTraded[2] = {0, 0};                       // (1.2.0) the biggest pulled order had traded (a fill) before it was pulled
+    long long hitC[2] = {0, 0}, rebuildC[2] = {0, 0};    // (1.2.0) lots filled (hit) / lots re-added at a price after a hit there this candle
+    std::vector<std::pair<long long, long long> > addT[2];   // (1.2.0) (event stamp s, cumulative lots added near price) - the reset clock
     std::unordered_map<long long, long long> addBy[2];  // order id -> contracts added in this candle (concentration)
     bool orderCap = false, aggrCap = false;
     std::map<Tick, Ice> ice[2];
@@ -270,16 +323,25 @@ struct Rec {
     long long refN[2] = {0, 0}, refC[2] = {0, 0}, ice[2] = {0, 0}, iceShown[2] = {0, 0}, iceTraded[2] = {0, 0};   // the biggest iceberg price: shown / traded
     long long sweepLv[2] = {0, 0}, sweepSize[2] = {0, 0}, aggrMax[2] = {0, 0}, sweepIsMax[2] = {0, 0};   // [side of the RESTING orders hit]
     long long thrAggr = 0, thrRest = 0;                  // the large thresholds in force for this candle
+    // (1.2.0) appended at the END of the record (a 38-number record from 1.0 / 1.1 reloads with these 0)
+    long long pullTraded[2] = {0, 0}, hitC[2] = {0, 0}, rebuildC[2] = {0, 0}, aggrN[2] = {0, 0}, aggrC[2] = {0, 0};   // aggr*: [side of the RESTING orders hit]
+    long long pace100[2] = {0, 0};                       // pace x 100 vs the norm (0 = n/a), decided once at the close
+    long long paceNote[2] = {0, 0};                      // 0 = not notable, 1 = fast, 2 = slowly
+    long long paceGate = 1;                              // the PACE_SHOW gate in force (0 off, 1 ?, 2 on)
 };
-static const int REC_NUMS = 38;
+static const int REC_NUMS_V1 = 38, REC_NEW = 15, REC_NUMS = REC_NUMS_V1 + REC_NEW;
 static const char* const REC_COLS = "partial|events|pull_n_b|pull_n_a|pull_cts_b|pull_cts_a|pull_max_b|pull_max_a|pull_close_b|pull_close_a|"
     "add_n_b|add_n_a|add_cts_b|add_cts_a|add_top_b|add_top_a|add_max_b|add_max_a|refill_n_b|refill_n_a|refill_cts_b|refill_cts_a|iceberg_b|iceberg_a|"
-    "sweep_lv_b|sweep_lv_a|sweep_size_b|sweep_size_a|aggr_max_b|aggr_max_a|sweep_is_max_b|sweep_is_max_a|ice_shown_b|ice_shown_a|ice_traded_b|ice_traded_a|thr_aggr|thr_rest";
+    "sweep_lv_b|sweep_lv_a|sweep_size_b|sweep_size_a|aggr_max_b|aggr_max_a|sweep_is_max_b|sweep_is_max_a|ice_shown_b|ice_shown_a|ice_traded_b|ice_traded_a|thr_aggr|thr_rest|"
+    "pull_traded_b|pull_traded_a|hit_cts_b|hit_cts_a|rebuilt_cts_b|rebuilt_cts_a|aggr_n_b|aggr_n_a|aggr_cts_b|aggr_cts_a|pace_x100_b|pace_x100_a|pace_note_b|pace_note_a|pace_gate";
 inline void recNums(const Rec& r, std::vector<long long>& v) {
     v.push_back(r.partial ? 1 : 0); v.push_back(r.events);
     const long long* pairs[17] = { r.pullN, r.pullC, r.pullMax, r.pullClose, r.addN, r.addC, r.addTop, r.addMax, r.refN, r.refC, r.ice, r.sweepLv, r.sweepSize, r.aggrMax, r.sweepIsMax, r.iceShown, r.iceTraded };
     for (int k = 0; k < 17; ++k) { v.push_back(pairs[k][0]); v.push_back(pairs[k][1]); }
     v.push_back(r.thrAggr); v.push_back(r.thrRest);
+    const long long* more[7] = { r.pullTraded, r.hitC, r.rebuildC, r.aggrN, r.aggrC, r.pace100, r.paceNote };
+    for (int k = 0; k < 7; ++k) { v.push_back(more[k][0]); v.push_back(more[k][1]); }
+    v.push_back(r.paceGate);
 }
 inline bool recFrom(const std::vector<long long>& v, size_t at, Rec& out) {
     if (v.size() < at + REC_NUMS || v[at] > 1) return false;
@@ -287,13 +349,17 @@ inline bool recFrom(const std::vector<long long>& v, size_t at, Rec& out) {
     long long* pairs[17] = { r.pullN, r.pullC, r.pullMax, r.pullClose, r.addN, r.addC, r.addTop, r.addMax, r.refN, r.refC, r.ice, r.sweepLv, r.sweepSize, r.aggrMax, r.sweepIsMax, r.iceShown, r.iceTraded };
     for (int k = 0; k < 17; ++k) { pairs[k][0] = v[at + 2 + 2 * k]; pairs[k][1] = v[at + 3 + 2 * k]; }
     r.thrAggr = v[at + 36]; r.thrRest = v[at + 37];
-    for (int s = 0; s < 2; ++s) if (r.addTop[s] > r.addC[s] || r.sweepIsMax[s] > 1 || (r.ice[s] > 0 && r.iceTraded[s] <= r.iceShown[s])) return false;
+    long long* more[7] = { r.pullTraded, r.hitC, r.rebuildC, r.aggrN, r.aggrC, r.pace100, r.paceNote };
+    for (int k = 0; k < 7; ++k) { more[k][0] = v[at + 38 + 2 * k]; more[k][1] = v[at + 39 + 2 * k]; }
+    r.paceGate = v[at + 52];
+    for (int s = 0; s < 2; ++s) if (r.addTop[s] > r.addC[s] || r.sweepIsMax[s] > 1 || (r.ice[s] > 0 && r.iceTraded[s] <= r.iceShown[s]) || r.pullTraded[s] > 1 || r.paceNote[s] > 2) return false;
+    if (r.paceGate > 2) return false;
     out = r; return true;
 }
 
 class Engine {
 public:
-    struct Ord { int side = BID; Tick px = 0; long long size = 0; bool filledLast = false; bool known = true; };
+    struct Ord { int side = BID; Tick px = 0; long long size = 0; bool filledLast = false; bool known = true; bool traded = false; };   // traded: (1.2.0) any fill
     Tick near = 0;                                     // the near band in ticks (0 = nothing is near)
     Tick ref = 0; bool haveRef = false; long long lastFillMs = -1;
     long long refillMs = 1000; Tick closeTicks = 2;
@@ -339,21 +405,31 @@ public:
         }
         return true;
     }
-    void pull(Acc& a, int s, Tick px, long long c, bool wholeOrder) {
+    void pull(Acc& a, int s, Tick px, long long c, bool wholeOrder, bool traded = false) {
         if (wholeOrder) {
             a.pullN[s]++;
-            if (c > a.pullMax[s]) a.pullMax[s] = c;
+            if (c > a.pullMax[s]) { a.pullMax[s] = c; a.pullMaxTraded[s] = traded ? 1 : 0; }
             if (haveRef && std::llabs(px - ref) <= closeTicks) a.pullClose[s]++;   // pulled just before price got there
         }
         if (c > 0) a.pullC[s] += c;
     }
-    void add(Acc& a, int s, long long id, long long c, bool wholeOrder) {
+    void add(Acc& a, int s, long long id, long long c, bool wholeOrder, Tick px = 0, long long stamp = 0) {
         if (wholeOrder) {
             a.addN[s]++;
             if (c > a.addMax[s]) a.addMax[s] = c;
             if (c > 0 && a.restSizes.size() < REST_SIZES_CAP) a.restSizes.push_back(c);
         }
-        if (c > 0) { a.addC[s] += c; bump(a.addBy[s], id, c, a); }
+        if (c > 0) {
+            a.addC[s] += c; bump(a.addBy[s], id, c, a);
+            if (px > 0) {                                                  // (1.2.0) rebuilt: added back at a price hit earlier this candle
+                std::map<Tick, Ice>::const_iterator h = a.ice[s].find(px);
+                if (h != a.ice[s].end() && h->second.traded > 0) a.rebuildC[s] += c;
+            }
+            std::vector<std::pair<long long, long long> >& T = a.addT[s];   // (1.2.0) the reset clock: one sample per stamp second
+            if (!T.empty() && T.back().first == stamp) T.back().second = a.addC[s];
+            else if (T.size() < 4000) T.push_back(std::make_pair(stamp, a.addC[s]));
+            else T.back().second = a.addC[s];
+        }
     }
     void refill(Acc& a, int s, Tick px, long long c) { a.refN[s]++; a.refC[s] += c; if (a.refPx[s].size() < ICE_CAP) a.refPx[s].insert(px); }
     void aggressor(Acc& a, int restingSide, const Ev& e) {
@@ -382,14 +458,14 @@ public:
             if (it != book.end()) {                                        // a duplicate / replayed NEW: refresh, never counted twice
                 Ord& o = it->second; dupNew++;
                 if (o.known) restAdd(o.side, o.px, -o.size);
-                o.side = s; o.px = e.px; o.size = e.size; o.filledLast = false; o.known = true;
+                o.side = s; o.px = e.px; o.size = e.size; o.filledLast = false; o.known = true; o.traded = false;
                 restAdd(s, e.px, e.size); shown(a, s, e.px);
                 break;
             }
             Ord o; o.side = s; o.px = e.px; o.size = e.size; book[e.id] = o;
             restAdd(s, e.px, e.size); shown(a, s, e.px);
             if (isNear(e.px)) {
-                add(a, s, e.id, e.size, true);
+                add(a, s, e.id, e.size, true, e.px, e.stamp);
                 if (refillHit(s, e.px, e)) refill(a, s, e.px, e.size);
             }
             break; }
@@ -401,15 +477,16 @@ public:
                 else if (a.ice[s].size() < ICE_CAP) ic = &a.ice[s][e.px];
             }
             if (ic) { const long long r = restAt(s, e.px); if (r > ic->shown) ic->shown = r; ic->traded += e.size; }
+            if (e.size > 0) a.hitC[s] += e.size;                           // (1.2.0) the hit size (rebuilt % = re-added / hit)
             if (it != book.end() && it->second.known) {
                 Ord& o = it->second;
                 const long long take = e.size < o.size ? e.size : o.size;
-                restAdd(o.side, o.px, -take); o.size -= take; o.filledLast = true;
+                restAdd(o.side, o.px, -take); o.size -= take; o.filledLast = true; o.traded = true;
             } else {
                 unknownFill++;
                 if (ic) ic->unknown = true;
-                if (it == book.end()) { Ord o; o.side = s; o.px = e.px; o.size = 0; o.filledLast = true; o.known = false; book[e.id] = o; }
-                else it->second.filledLast = true;
+                if (it == book.end()) { Ord o; o.side = s; o.px = e.px; o.size = 0; o.filledLast = true; o.known = false; o.traded = true; book[e.id] = o; }
+                else { it->second.filledLast = true; it->second.traded = true; }
             }
             aggressor(a, s, e);
             ref = e.px; haveRef = true; lastFillMs = e.arrMs;              // a fill's price = the last trade
@@ -429,7 +506,7 @@ public:
             const Ord o = it->second; book.erase(it);
             if (o.known) restAdd(o.side, o.px, -o.size);
             if (o.filledLast || !o.known) break;                           // just filled: the trade took it, not a pull
-            if (isNear(o.px)) pull(a, o.side, o.px, o.size > 0 ? o.size : e.size, true);
+            if (isNear(o.px)) pull(a, o.side, o.px, o.size > 0 ? o.size : e.size, true, o.traded);
             break; }
         case MOD: {
             if (it == book.end() || !it->second.known) {                   // first sight: its state from now on, nothing counted
@@ -440,14 +517,14 @@ public:
             }
             Ord& o = it->second;
             if (e.px != o.px) {                                            // moved: a pull at the old price + an add at the new
-                if (isNear(o.px)) pull(a, o.side, o.px, o.size, true);
-                if (isNear(e.px)) add(a, o.side, e.id, e.size, true);
+                if (isNear(o.px)) pull(a, o.side, o.px, o.size, true, o.traded);
+                if (isNear(e.px)) add(a, o.side, e.id, e.size, true, e.px, e.stamp);
                 restAdd(o.side, o.px, -o.size); restAdd(o.side, e.px, e.size); shown(a, o.side, e.px);
             } else {
                 const long long d = e.size - o.size;
                 if (d < 0 && !o.filledLast && isNear(o.px)) pull(a, o.side, o.px, -d, false);
                 if (d > 0 && isNear(o.px)) {
-                    add(a, o.side, e.id, d, false);
+                    add(a, o.side, e.id, d, false, o.px, e.stamp);
                     if (refillHit(o.side, o.px, e)) refill(a, o.side, o.px, d);
                 }
                 restAdd(o.side, o.px, d); if (d > 0) shown(a, o.side, o.px);
@@ -480,6 +557,7 @@ public:
             long long top = 0; for (std::unordered_map<long long, long long>::const_iterator i = a.addBy[s].begin(); i != a.addBy[s].end(); ++i) if (i->second > top) top = i->second;
             r.addTop[s] = top > r.addC[s] ? r.addC[s] : top;
             r.refN[s] = a.refN[s]; r.refC[s] = a.refC[s];
+            r.pullTraded[s] = a.pullMaxTraded[s]; r.hitC[s] = a.hitC[s]; r.rebuildC[s] = a.rebuildC[s];   // (1.2.0)
             for (std::set<Tick>::const_iterator p = a.refPx[s].begin(); p != a.refPx[s].end(); ++p) {
                 std::map<Tick, Ice>::const_iterator i = a.ice[s].find(*p);
                 if (i != a.ice[s].end() && !i->second.unknown && i->second.shown > 0 && i->second.traded > i->second.shown) {
@@ -493,6 +571,7 @@ public:
             const Aggr& g = i->second; if (g.side != BID && g.side != ASK) continue;
             const int s = g.side; const long long lv = g.nPx + (g.more ? 1 : 0);
             if (g.size > r.aggrMax[s]) r.aggrMax[s] = g.size;
+            r.aggrN[s]++; r.aggrC[s] += g.size;                            // (1.2.0) aggressor orders / their lots on this side
             if (lv > bestLv[s] || (lv == bestLv[s] && g.size > bestSz[s])) { bestLv[s] = lv; bestSz[s] = g.size; }
         }
         for (int s = 0; s < 2; ++s) { r.sweepLv[s] = bestLv[s]; r.sweepSize[s] = bestSz[s]; r.sweepIsMax[s] = bestSz[s] > 0 && bestSz[s] >= r.aggrMax[s] ? 1 : 0; }
@@ -567,6 +646,63 @@ inline std::string ratioText(double r) { return nl::ratioText(r); }
 inline std::string ratioOr(bool ok, double r) { return ok ? nl::ratioText(r) : std::string("n/a"); }
 
 // =====================================================================================================================
+// (1.2.0) PACE (SPEC "PACE = lots per second in the candle vs that market's same-time-of-day norm"): BidAskStats = aggressive lots / s,
+// PullStats = pulled lots / s, StackStats = added lots / s, per side. The norm (lots / s per side) is the nightly PACE_NORM row of the
+// candle's 30-min CT bucket; without one, the rolling norm = the mean per-side rate of up to 60 earlier closed candles of the last
+// 4 h (needs 5). Decided once at the close (stored in the record); notable: >= paceFastX = "fast", <= paceSlowX on a spike = "slowly".
+// =====================================================================================================================
+static const int PACE_ROLL_MIN = 5, PACE_ROLL_MAX = 60; static const long long PACE_ROLL_SPAN_S = 4 * 3600;
+struct Pace { bool ok = false; double x = 0, norm = 0; bool fromFile = false; int note = 0; };
+inline double fileNorm(const Params& P, int metric, int minuteOfDay) {
+    const int b = bucketOf(minuteOfDay); if (b < 0 || metric < 0 || metric > 2) return -1;
+    std::map<int, double>::const_iterator it = P.norm[metric].find(b);
+    return it == P.norm[metric].end() ? -1 : it->second;
+}
+// prior = earlier candles' per-side rates (lots / s, the two sides averaged), newest last
+inline double rollingNorm(const std::vector<double>& prior) {
+    if (prior.size() < (size_t)PACE_ROLL_MIN) return -1;
+    const size_t n = prior.size() < (size_t)PACE_ROLL_MAX ? prior.size() : (size_t)PACE_ROLL_MAX;
+    double s = 0; for (size_t i = prior.size() - n; i < prior.size(); ++i) s += prior[i];
+    const double m = s / (double)n; return m > 0 ? m : -1;
+}
+inline Pace paceOf(double rate, double fileN, double rollN, const Params& P, bool spike) {
+    Pace p; const double n = fileN > 0 ? fileN : rollN;
+    if (!(n > 0) || !finite(rate) || rate < 0) return p;
+    p.ok = true; p.norm = n; p.fromFile = fileN > 0; p.x = rate / n;
+    if (p.x * 10.0 >= (double)P.paceFastT - 1e-9) p.note = 1;
+    else if (spike && p.x * 10.0 <= (double)P.paceSlowT + 1e-9) p.note = 2;
+    return p;
+}
+inline long long pace100(const Pace& p) { if (!p.ok) return 0; const long long v = (long long)std::llround(p.x * 100.0); return v < 1 ? 1 : v > 999900 ? 999900 : v; }
+inline std::string paceX(long long p100) { return nl::ratioText((double)p100 / 100.0); }
+// the message words: " fast (p 2.6x)" / " slowly (p 0.7x)"; gate ? -> " fast (p 2.6x ?)"; gate off / not notable -> ""
+inline std::string paceWords(long long note, long long p100, long long gate) {
+    if (p100 <= 0 || gate == ofo::GATE_OFF || (note != 1 && note != 2)) return std::string();
+    return std::string(note == 1 ? " fast (p " : " slowly (p ") + paceX(p100) + (gate == ofo::GATE_ON ? ")" : " ?)");
+}
+// the hover: "2.3x (2.0x)" (+ " ?" until PACE_SHOW,on; " off" when the gate is off)
+inline std::string paceHover(long long p100, long long fastT, long long gate) {
+    if (p100 <= 0) return "n/a";
+    return paceX(p100) + " (" + tenthsText(fastT) + ")" + (gate == ofo::GATE_ON ? "" : gate == ofo::GATE_OFF ? " off" : " ?");
+}
+inline std::string paceLabel(long long p100) { return p100 > 0 ? "p " + paceX(p100) : std::string(); }
+// "42 \xB7 avg 3.6" (orders, the middle dot of the chart's ANSI code page) / "n/a"
+inline std::string ordersText(long long n, long long lots) {
+    if (n <= 0) return lots > 0 ? std::string("0") : std::string("-");
+    const long long t = (lots * 20 + n) / (2 * n);                       // tenths, rounded half up (137 / 20 = 6.85 -> 6.9)
+    char b[96]; std::snprintf(b, sizeof(b), "%lld \xB7 avg %lld.%lld", n, t / 10, t % 10); return b;
+}
+inline std::string pctOf(long long part, long long whole) {
+    if (whole <= 0 || part <= 0) return "-";
+    long long p = (part * 100 + whole / 2) / whole; if (p > 999) p = 999; return std::to_string(p) + "%";
+}
+// rebuilt %: the size added back at a price after a hit there / the size hit, capped at 200% (lra passive_aggr's restore)
+inline long long rebuiltPctOf(long long rebuilt, long long hit) {
+    if (hit <= 0) return -1;
+    long long p = (rebuilt * 100 + hit / 2) / hit; return p > 200 ? 200 : p;
+}
+
+// =====================================================================================================================
 // THE MBO PANES' SERIES (PullStats / StackStats): one bar = a Rec + its display, decided once at the close
 // =====================================================================================================================
 struct PaneBar {
@@ -575,7 +711,37 @@ struct PaneBar {
     std::string let[2];                                  // letters on [left = BID side, right = ASK side], max 2 each
     bool spike[2] = {false, false}; long long dash[2] = {-1, -1};
     nl::Msg msg; std::string level;
+    int msgSide = -1, kind = 0;                          // (1.2.0) the side the message is about (-1 none); PullStats kind 1 = a retreat, 2 = bait gone
 };
+// (1.2.0) RESET (PullStats, SPEC "a LATER message, posted only when known - never back-dated"): after a notable pull of candle K on one
+// side (P lots), that side adding back resetPct (80%) of P near price within resetWindowSec (60 s) of K's end ->
+// "11:06 Bids back within 40 s of the 11:05 pull - reset, not a retreat at PDL." on the candle in which it completed, at its close.
+struct ResetWatch { bool on = false; int side = 0; long long pullEnd = 0, target = 0, cum = 0, resets = 0; std::string pullCt, level; };
+inline void resetStart(ResetWatch& w, int side, long long pullEnd, long long pulledLots, const Params& P, const std::string& ct, const std::string& level) {
+    w.on = pulledLots > 0; w.side = side; w.pullEnd = pullEnd; w.cum = 0; w.pullCt = ct; w.level = level;
+    w.target = (pulledLots * P.resetPct + 99) / 100; if (w.target < 1) w.target = 1;
+}
+// one later candle, in order: its add samples on the watched side ((stamp s, cumulative lots in this candle), oldest first) and its end.
+// Returns the seconds from the pull candle's end to the moment the target was reached (>= 1) when it completed in this candle, else -1.
+// The watch closes on a reset or once the window has passed. A sample without a stamp counts at the candle's end.
+inline long long resetStep(ResetWatch& w, const std::vector<std::pair<long long, long long> >& samples, long long candleEnd, const Params& P) {
+    if (!w.on || candleEnd <= w.pullEnd) return -1;
+    const long long deadline = w.pullEnd + P.resetWindowSec;
+    long long prev = 0;
+    for (size_t i = 0; i < samples.size(); ++i) {
+        long long st = samples[i].first; const long long inc = samples[i].second - prev; prev = samples[i].second;
+        if (st <= 0 || st > candleEnd) st = candleEnd;
+        if (st < w.pullEnd) st = w.pullEnd;
+        if (st > deadline) break;
+        w.cum += inc > 0 ? inc : 0;
+        if (w.cum >= w.target) { w.on = false; w.resets++; const long long sec = st - w.pullEnd; return sec < 1 ? 1 : sec; }
+    }
+    if (candleEnd >= deadline) w.on = false;
+    return -1;
+}
+inline std::string resetMessage(int side, long long sec, const std::string& pullCt, const std::string& level) {
+    return std::string(side == BID ? "Bids" : "Offers") + " back within " + std::to_string(sec) + " s of the " + pullCt + " pull - reset, not a retreat" + (level.empty() ? std::string() : " at " + level) + ".";
+}
 template <class L> struct PaneSeries {
     int ratioBars = RATIO_DEFAULT; SpikeCfg spike;
     std::map<long long, PaneBar> bars;
@@ -608,14 +774,37 @@ template <class L> struct PaneSeries {
         }
     }
     void trim(size_t keep) { while (bars.size() > keep) bars.erase(bars.begin()); }
+    // (1.2.0) the rolling pace norm's inputs: earlier closed candles' per-side rates (lots / s, both sides averaged) within span s, newest last
+    std::vector<double> priorRates(long long t, long long span, int spb) const {
+        std::vector<double> out; if (spb <= 0) return out;
+        typename std::map<long long, PaneBar>::const_iterator it = bars.lower_bound(t);
+        while (it != bars.begin() && out.size() < (size_t)PACE_ROLL_MAX) {
+            --it;
+            if (t - it->first > span) break;
+            if (it->second.ok && !it->second.r.partial) out.push_back(((double)L::value(it->second.r, 0, BID) + (double)L::value(it->second.r, 0, ASK)) / 2.0 / (double)spb);
+        }
+        std::reverse(out.begin(), out.end());
+        return out;
+    }
 };
+
+// (1.2.0) a closed pane candle's pace, decided once at its close (stored in its record numbers): lots / s per side vs the norm
+template <class L> void panePace(PaneBar& b, const PaneSeries<L>& ser, long long t, int spb, int minuteOfDay, const Params& P) {
+    b.r.paceGate = P.gate[ofo::G_PACE];
+    if (!b.ok || spb <= 0) return;
+    const double rn = rollingNorm(ser.priorRates(t, PACE_ROLL_SPAN_S, spb)), fn = fileNorm(P, L::paceMetric(), minuteOfDay);
+    for (int s = 0; s < 2; ++s) {
+        const Pace p = paceOf((double)L::value(b.r, 0, s) / (double)spb, fn, rn, P, b.m[0].spike[s]);
+        b.r.pace100[s] = pace100(p); b.r.paceNote[s] = p.note;
+    }
+}
 
 // =====================================================================================================================
 // LAYOUT (pixels): 9-spot placement, the two bars of a candle, bar height, the value axis, letters, hover, clocks
 // =====================================================================================================================
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 static const int POS_DEFAULT = 0;                  // the INFO BOX: Top left (12:05, as lsBidAskStats 1.2.0); the message line is always top centre
-static const int TEXT_RESERVE = 18;                // px kept free at the top for the one message line
+static const int TEXT_RESERVE = 32;                // px kept free at the top for the message line + (1.2.0) the blue options line
 struct Box { int l, t, r, b; };
 inline Box placeIn(const Box& area, int W, int H, int pos) {
     if (pos < 0 || pos > 8) pos = POS_DEFAULT;
@@ -647,7 +836,7 @@ inline int barHeight(long long v, long long top, int px) {
 // (12:03 / 12:10) HEADROOM for the spike labels and the message line: the tallest bar tops out at <= 1/1.45 (~69%) of the drawing
 // height AND leaves LABEL_ROOM px (two label lines) plus the text reserve above it. The axis (scale()) uses the same px, so every
 // bar top still sits at its value on the axis.
-static const int LABEL_LH = 10, LABEL_ROOM = 2 * LABEL_LH + 2;
+static const int LABEL_LH = 10, LABEL_ROWS = 3, LABEL_ROOM = LABEL_ROWS * LABEL_LH + 2;   // (1.2.0) 3 rows: ratio / pace / lots
 inline int drawPx(int paneH, int reserve) {
     const int avail = paneH - 6; if (avail <= 1) return 1;
     int p = (int)((double)avail / 1.45);
@@ -692,12 +881,13 @@ inline bool overlaps(const LBox& a, const LBox& b) { return !(a.r < b.l || b.r <
 // lines in the spike colour - the ratio on top, the quantity just above the bar top ("4.1x" over "240"). Always ABOVE the bar (12:10:
 // no inside-the-bar fallback). A label that would touch another label or a letter box is staggered one label height up (at most 3
 // steps); one that would cross yTop (the message lines / pane top) is not drawn - labels never overlap anything.
-struct SpikeIn { int cx = 0, barTop = 0, side = 0; std::string q, x; };
-struct SLabel { int l, t, r, b, side; std::string q, x; };
+struct SpikeIn { int cx = 0, barTop = 0, side = 0; std::string q, x, p; };      // (1.2.0) p = pace "p 2.3x" ("" = none)
+struct SLabel { int l, t, r, b, side; std::string q, x, p; };
 template <class W> std::vector<SLabel> spikeLabels(const std::vector<SpikeIn>& in, int yTop, const std::vector<LBox>& letters, W width) {
     std::vector<SLabel> out;
     for (size_t i = 0; i < in.size(); ++i) {
-        const int w = std::max(width(in[i].q), width(in[i].x)) + 2, h = 2 * LABEL_LH;
+        const int rows = in[i].p.empty() ? 2 : 3;
+        const int w = std::max(std::max(width(in[i].q), width(in[i].x)), width(in[i].p)) + 2, h = rows * LABEL_LH;
         for (int step = 0; step < 4; ++step) {
             const int b = in[i].barTop - 2 - step * (h + 2), t = b - h + 1;
             if (t < yTop) break;
@@ -706,7 +896,7 @@ template <class W> std::vector<SLabel> spikeLabels(const std::vector<SpikeIn>& i
             for (size_t k = 0; k < out.size() && !hit; ++k) { const LBox o = { out[k].l, out[k].t, out[k].r, out[k].b, 0, 0 }; hit = overlaps(me, o); }
             for (size_t k = 0; k < letters.size() && !hit; ++k) hit = overlaps(me, letters[k]);
             if (hit) continue;
-            out.push_back(SLabel{ me.l, me.t, me.r, me.b, in[i].side, in[i].q, in[i].x });
+            out.push_back(SLabel{ me.l, me.t, me.r, me.b, in[i].side, in[i].q, in[i].x, in[i].p });
             break;
         }
     }
@@ -719,8 +909,37 @@ inline std::string clock12(int hour, int minute) {
     char b[16]; std::snprintf(b, sizeof(b), "%d:%02d %s", hour % 12 == 0 ? 12 : hour % 12, minute, hour < 12 ? "AM" : "PM"); return b;
 }
 using nl::clockShort; using nl::fitText; using nl::Msg; using nl::NEUTRAL; using nl::BULL; using nl::BEAR;
-// the first top line: "10:24  <message>"
-inline std::string line1Of(const std::string& ct, const std::string& msg) { return ct.empty() ? msg : ct + "  " + msg; }
+// (of140 6:18 PM render check) a message too wide for the pane loses its least important words FIRST, never its verdict (the tail
+// "- price held: buyers absorbing" / "- support leaving at PDL"): 1) the large-order clause (", plus one 120-lot order", " with one
+// 120-lot order", ", one 120-lot order" - the hover's Large row has it), 2) the pace words (" fast (p 2.3x)" - the hover's Pace row),
+// 3) "levels" -> "lvls", " totaling " -> ", ", only then the end is cut (fitText). Returns the variants in that order (the first = as is).
+inline void eraseFrom(std::string& s, const std::string& start, const std::string& end) {   // erase start..end (end kept out) once
+    const size_t a = s.find(start); if (a == std::string::npos) return;
+    const size_t b = s.find(end, a + start.size()); if (b == std::string::npos) return;
+    s.erase(a, b - a);
+}
+inline std::vector<std::string> compactVariants(const std::string& l1) {
+    std::vector<std::string> v(1, l1); std::string t = l1;
+    for (const char* k : { ", plus one ", " with one ", ", one " }) {
+        const size_t a = t.find(k); if (a == std::string::npos) continue;
+        const size_t b = t.find("-lot order", a); if (b == std::string::npos || t.find_first_of(",-", a + std::strlen(k)) < b) continue;
+        t.erase(a, b + 10 - a); break;
+    }
+    if (t != v.back()) v.push_back(t);
+    for (const char* k : { " fast (p ", " slowly (p " }) { const size_t a = t.find(k); if (a == std::string::npos) continue; const size_t b = t.find(')', a); if (b != std::string::npos) t.erase(a, b + 1 - a); }
+    if (t != v.back()) v.push_back(t);
+    for (;;) { const size_t a = t.find(" levels"); if (a == std::string::npos) break; t.replace(a, 7, " lvls"); }
+    { const size_t a = t.find(" totaling "); if (a != std::string::npos) t.replace(a, 10, ", "); }
+    if (t != v.back()) v.push_back(t);
+    return v;
+}
+inline std::string fitMessage(const std::string& l1, int width, const std::function<int(const std::string&)>& w) {
+    const std::vector<std::string> v = compactVariants(l1);
+    for (const std::string& t : v) if (w(t) <= width) return t;
+    return fitText(v.back(), width, w);
+}
+// the first top line: "10:24 <message>"
+inline std::string line1Of(const std::string& ct, const std::string& msg) { return ct.empty() ? msg : ct + " " + msg; }   // (1.2.0) SPEC: one space
 // (12:05) the info box's content (drawn by drawInfo): label | left value | right value; side -1 = white
 struct InfoRow { std::string label, v[2]; int side[2] = {0, 1}; };          // side -1 = white
 struct Info { std::string head; bool twoCol = true; std::string colHead[2]; std::vector<InfoRow> rows; std::string tmpl = "9999 (99.9x)"; };
@@ -850,17 +1069,20 @@ inline std::string rowLine(const Row& r) {
     return o;
 }
 inline bool allDigits(const std::string& f, size_t maxLen) { if (f.empty() || f.size() > maxLen) return false; for (char c : f) if (c < '0' || c > '9') return false; return true; }
-// strict: exactly 3 + nNums + 10 fields, each checked; anything else = not a record
+// strict: exactly 3 + nNums + 10 fields, each checked; anything else = not a record. (1.2.0) a record written by 1.0 / 1.1 has
+// REC_NEW fewer numbers: it is read with those (the last ones) as 0.
 inline bool parseRow(const std::string& ln, size_t nNums, Row& out) {
     if (ln.empty() || ln.size() > 4096) return false;
     const std::vector<std::string> c = nl::fields(ln);
-    if (c.size() != 13 + nNums) return false;
+    size_t have = nNums;
+    if (c.size() != 13 + nNums) { if (nNums >= (size_t)REC_NEW && c.size() == 13 + nNums - REC_NEW) have = nNums - REC_NEW; else return false; }
     Row r;
     if (!allDigits(c[0], 13) || c[1].size() > 12 || (c[2] != "0" && c[2] != "1")) return false;
     r.t = std::strtoll(c[0].c_str(), nullptr, 10); if (r.t <= 0) return false;
     r.ct = c[1]; r.dbo = c[2] == "1" ? 1 : 0;
-    for (size_t i = 0; i < nNums; ++i) { if (!allDigits(c[3 + i], 15)) return false; r.nums.push_back(std::strtoll(c[3 + i].c_str(), nullptr, 10)); }
-    size_t k = 3 + nNums;
+    for (size_t i = 0; i < have; ++i) { if (!allDigits(c[3 + i], 15)) return false; r.nums.push_back(std::strtoll(c[3 + i].c_str(), nullptr, 10)); }
+    while (r.nums.size() < nNums) r.nums.push_back(0);                     // (1.2.0) legacy record: the new numbers read 0
+    size_t k = 3 + have;
     for (int s = 0; s < 2; ++s) { const std::string& L = c[k++]; if (L.size() > 2) return false; std::string o; for (char ch : L) { if (ch == 'R') ch = 'I'; if (ch != 'S' && ch != 'L' && ch != 'I') return false; o += ch; } r.let[s] = o; }   // 1.0.1: legacy R = I
     for (int s = 0; s < 2; ++s) { const std::string& f = c[k++]; if (f != "0" && f != "1") return false; r.spike[s] = f == "1"; }
     for (int s = 0; s < 2; ++s) { const std::string& f = c[k++]; if (f == "-") r.dash[s] = -1; else if (allDigits(f, 12)) r.dash[s] = std::strtoll(f.c_str(), nullptr, 10); else return false; }
@@ -876,8 +1098,15 @@ struct SessionFile {
     std::map<long long, Row> rows;
     bool dirty = false; long long writes = 0, fails = 0, loaded = 0, rejected = 0;
     std::string sizesText; bool sizesDirty = false;
+    // 1.1.0: extra event lines kept after the candle rows (prefix extraTag, e.g. "SR|"), bounded; extraHead is written once above them
+    std::string extraTag, extraHead; std::vector<std::string> extra;
+    bool putExtra(const std::string& ln) {
+        if (extraTag.empty() || ln.compare(0, extraTag.size(), extraTag) != 0 || ln.size() > 1024 || extra.size() >= 2000) return false;
+        if (std::find(extra.begin(), extra.end(), ln) != extra.end()) return false;
+        extra.push_back(ln); dirty = true; return true;
+    }
     void open(const std::string& sess, const std::string& p, const std::string& sp, const std::string& header, size_t n) {
-        session = sess; path = p; sizesPath = sp; head = header; nNums = n; rows.clear(); dirty = false; sizesText.clear(); sizesDirty = false;
+        session = sess; path = p; sizesPath = sp; head = header; nNums = n; rows.clear(); dirty = false; sizesText.clear(); sizesDirty = false; extra.clear();
     }
     // this session's rows (bounded: 6 MB, 6,000 lines of <= 4 KB), every line validated; false = no file / unreadable
     bool load() {
@@ -886,6 +1115,7 @@ struct SessionFile {
         if (!nl::readBoundedLines(path, lines, (size_t)SESSION_MAX_BYTES, SESSION_MAX_LINES, 4096)) return false;
         for (size_t i = 0; i < lines.size(); ++i) {
             if (lines[i].empty() || lines[i][0] == '#' || lines[i].compare(0, 9, "bar_time|") == 0) continue;
+            if (!extraTag.empty() && lines[i].compare(0, extraTag.size(), extraTag) == 0) { if (extra.size() < 2000 && lines[i].size() <= 1024) extra.push_back(lines[i]); continue; }
             Row r; if (parseRow(lines[i], nNums, r)) { rows[r.t] = r; loaded++; } else rejected++;
         }
         return true;
@@ -908,6 +1138,7 @@ struct SessionFile {
         if (dirty) {
             std::string o = head;
             for (std::map<long long, Row>::const_iterator it = rows.begin(); it != rows.end(); ++it) o += rowLine(it->second) + "\n";
+            if (!extra.empty()) { if (!extraHead.empty()) o += extraHead + "\n"; for (size_t i = 0; i < extra.size(); ++i) o += extra[i] + "\n"; }
             if (publishFile(path, o)) { writes++; dirty = false; } else fails++;
         }
         if (sizesDirty && !sizesPath.empty()) { if (publishFile(sizesPath, sizesText)) sizesDirty = false; else fails++; }
@@ -921,6 +1152,28 @@ struct Rolling {
     void add(long long ms, long long k = 1) { if (ms < 0) return; const long long s = ms / 1000; const int i = (int)(s % 60); if (sec[i] != s) { sec[i] = s; n[i] = 0; } n[i] += k; }
     long long perMin(long long nowMs) const { const long long s = nowMs / 1000; long long t = 0; for (int i = 0; i < 60; ++i) if (sec[i] >= 0 && s >= sec[i] && s - sec[i] < 60) t += n[i]; return t; }
 };
+
+// (1.2.0) the options file of a market, re-read at most every 5 s when its stamp changes; each new grid joins the history on the bar
+// it ARRIVED on = the bar during which the file was written (its modification time, mapped to a bar end by the host's barOf; a time
+// past the forming bar = the forming bar), so a candle's line never changes later, and a restart shows the same lines
+struct OptCache { long long sig = -2, checked = -1, readMs = -1; ofo::Snap last; ofo::History hist; std::string why = "no file"; long long reads = 0; };
+inline bool refreshOptions(OptCache& C, const std::string& dir, const std::string& market, long long nowMs, const std::function<long long(long long)>& barOf) {
+    if (C.checked >= 0 && nowMs >= C.checked && nowMs - C.checked < 5000) return false;
+    C.checked = nowMs;
+    const std::string p = dir.empty() || market.empty() ? std::string() : dir + "\\LRA-Options-" + market + ".csv";
+    const long long sig = p.empty() ? -1 : nl::fileSig(p);
+    if (sig == C.sig && (sig < 0 || (C.readMs >= 0 && nowMs >= C.readMs && nowMs - C.readMs < 60000))) return false;   // a same-second, same-size rewrite: re-read once a minute
+    C.sig = sig;
+    if (sig < 0) { C.last = ofo::Snap(); C.why = "no file"; return true; }
+    C.readMs = nowMs;
+    std::vector<std::string> lines;
+    if (!nl::readBoundedLines(p, lines, 16 * 1024, 200, 300)) { C.last = ofo::Snap(); C.why = "unreadable or too big"; return true; }
+    C.reads++;
+    C.last = ofo::parse(lines, market);
+    C.why = C.last.ok ? std::string("ok") : (C.last.notes.empty() ? std::string("garbled") : C.last.notes[0]);
+    C.hist.add(C.last, barOf(nl::fileMtime(p)));
+    return true;
+}
 
 static const int SLICE_MAX = 5000;                 // events per call at most
 static const long long SLICE_BUDGET_MS = 8;        // and about this many ms
@@ -1033,7 +1286,9 @@ inline void fillFlat(cppExtension* x, int l, int t, int r, int b, COLOR fill) {
     x->setPen(fill, 1, P_SOLID);
     fillRect(l, t, r, b, fill, fill, 0);
 }
-struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {false, false}; std::string let[2]; long long dash[2] = {-1, -1}; bool ratioOk[2] = {false, false}; double ratio[2] = {0, 0}; };
+struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {false, false}; std::string let[2]; long long dash[2] = {-1, -1}; bool ratioOk[2] = {false, false}; double ratio[2] = {0, 0};
+                 std::string mark[2]; COLOR markCol[2] = {0, 0};      // 1.1.0: the stop-run mark ("R" / "R?") per side, its colour
+                 long long p100[2] = {0, 0}; };                        // 1.2.0: the pace (x100, 0 = none) for the spike label's middle row
 struct PaneGeo { int left = 0, top = 0, right = 0, bottom = 0, yBase = 0, px = 1, reserve = 0, edge = 0; };
 // the pane geometry: bars from yBase = bottom - 1 up px pixels; the text area ends at the last bar (never the empty space right
 // of price) and never over the price axis
@@ -1072,7 +1327,7 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
                 fillFlat(x, p.l[s], g.yBase - dh, p.r[s], g.yBase - dh + 2, C_WHITE);
             }
         }
-        if (!b.let[0].empty() || !b.let[1].empty()) lets.push_back(std::make_pair(i, b));
+        if (!b.let[0].empty() || !b.let[1].empty() || !b.mark[0].empty() || !b.mark[1].empty()) lets.push_back(std::make_pair(i, b));
     }
     x->setFont(lf);
     std::vector<LBox> allLets(avoid);                 // the info box / message line: spike labels never go over them
@@ -1081,13 +1336,33 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         for (size_t k = 0; k < lets.size(); ++k) {
             const int xc = xOf(lets[k].first); const Pair p = pairIn(xc, slot);
             const int sl = xc - slot / 2, sr = sl + (slot > 2 ? slot - 1 : 1);
-            const std::vector<LBox> bx = letterBoxes(sl, sr, (p.l[0] + p.r[0]) / 2, (p.l[1] + p.r[1]) / 2, g.yBase - 1, g.top + g.reserve, lets[k].second.let[0], lets[k].second.let[1], bw, bh);
+            const BarLook& lb = lets[k].second;
+            std::string ls[2];
+            for (int s = 0; s < 2; ++s) ls[s] = lb.mark[s].empty() ? lb.let[s] : lb.let[s].substr(0, 1) + "R";   // 1.1.0: the mark lowest
+            std::vector<LBox> bx = letterBoxes(sl, sr, (p.l[0] + p.r[0]) / 2, (p.l[1] + p.r[1]) / 2, g.yBase - 1, g.top + g.reserve, ls[0], ls[1], bw, bh);
             for (size_t j = 0; j < bx.size(); ++j) {
+                const int sd = bx[j].side == 1 ? 1 : 0;
+                const bool isMark = bx[j].c == 'R' && !lb.mark[sd].empty();
+                std::string txt(1, bx[j].c);
+                if (isMark) {                                                   // "R?" may need a wider box: centred, else slid inside the slot
+                    txt = lb.mark[sd];
+                    const int need = (int)x->getTextWidth(txt.c_str(), -1) + 3;
+                    if (need > bx[j].r - bx[j].l + 1) {
+                        bool placed = false; const int cx = (bx[j].l + bx[j].r) / 2;
+                        const int tries[3] = { cx - need / 2, sl, sr - need + 1 };
+                        for (int q = 0; q < 3 && !placed; ++q) {
+                            LBox w = bx[j]; w.l = tries[q]; w.r = w.l + need - 1;
+                            if (w.l < sl || w.r > sr) continue;
+                            bool hit = false; for (size_t o = 0; o < bx.size() && !hit; ++o) if (o != j) hit = overlaps(w, bx[o]);
+                            if (!hit) { bx[j] = w; placed = true; }
+                        }
+                        if (!placed) txt = "R";                                 // zoomed far out: "R" (the hover box / message still say "?")
+                    }
+                }
                 allLets.push_back(bx[j]);
                 fillFlat(x, bx[j].l, bx[j].t, bx[j].r, bx[j].b, C_WHITE);
-                x->setTextColor(C_BLACKC);
-                const char t[2] = { bx[j].c, 0 };
-                cppExtension::RCT r; r.set(coord(bx[j].l), coord(bx[j].t), coord(bx[j].r + 1), coord(bx[j].b + 1)); r.drawText(t, true, false);
+                x->setTextColor(isMark ? lb.markCol[sd] : C_BLACKC);
+                cppExtension::RCT r; r.set(coord(bx[j].l), coord(bx[j].t), coord(bx[j].r + 1), coord(bx[j].b + 1)); r.drawText(txt.c_str(), true, false);
             }
         }
     }
@@ -1099,7 +1374,7 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         const Pair p = pairIn(xc, slot);
         for (int s = 0; s < 2; ++s) if (b.spike[s]) {
             SpikeIn si; si.cx = (p.l[s] + p.r[s]) / 2; si.barTop = g.yBase - barHeight(b.v[s], top, g.px); si.side = s;
-            si.q = std::to_string(b.v[s]); si.x = b.ratioOk[s] ? ratioText(b.ratio[s]) : std::string();
+            si.q = std::to_string(b.v[s]); si.x = b.ratioOk[s] ? ratioText(b.ratio[s]) : std::string(); si.p = paceLabel(b.p100[s]);
             sp.push_back(si);
         }
     }
@@ -1110,7 +1385,8 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         x->setTextColor(spike[L[k].side]);
         auto put = [&](const std::string& t, int y) { if (t.empty()) return; const int w = x->getTextWidth(t.c_str(), -1), cx = (L[k].l + L[k].r) / 2;
             cppExtension::RCT r; r.set(coord(cx - w / 2), coord(y), coord(cx - w / 2 + w + 2), coord(y + LABEL_LH)); r.drawText(t.c_str(), false, false); };
-        put(L[k].x, L[k].t); put(L[k].q, L[k].t + LABEL_LH);
+        const bool hp = !L[k].p.empty();                                  // (1.2.0) ratio / pace / lots
+        put(L[k].x, L[k].t); if (hp) put(L[k].p, L[k].t + LABEL_LH); put(L[k].q, L[k].t + (hp ? 2 : 1) * LABEL_LH);
     }
 }
 // ---- (12:05) THE INFO BOX - Rassul "all values go in the info box, which I should be able to see as I move my mouse over different
@@ -1165,10 +1441,29 @@ inline LBox drawMessage(cppExtension* x, const PaneGeo& g, const Box* box, const
     LBox none = { 0, 0, -1, -1, 0, 0 };
     if (R - L < 20 || l1.empty()) return none;
     cppExtension::FONT f1; f1.id = cppExtension::HELVETICA; f1.size = 10; f1.style = cppExtension::BOLD; x->setFont(f1);
-    const std::string t = fitText(l1, R - L, [&](const std::string& u) { return (int)x->getTextWidth(u.c_str(), -1); });
+    const std::string t = fitMessage(l1, R - L, [&](const std::string& u) { return (int)x->getTextWidth(u.c_str(), -1); });
     if (t.empty()) return none;
     const int w = x->getTextWidth(t.c_str(), -1), xx = (L + R) / 2 - w / 2;
     x->setTextColor(implColor(impl));
+    cppExtension::RCT r; r.set(coord(xx), coord(y), coord(xx + w + 2), coord(y + h)); r.drawText(t.c_str(), false, false);
+    LBox out = { xx, y, xx + w + 2, y + h, 0, 0 }; return out;
+}
+// (1.2.0) the BLUE options stat line under the message line (SPEC: only when the data is present and fresh), centred like the message
+// in the free width beside the info box, never past the last bar; "" draws nothing
+static const COLOR C_OPT_BLUE = 0x0058A6FF;
+inline LBox drawSubLine(cppExtension* x, const PaneGeo& g, const Box* box, const std::string& t0) {
+    int L = g.left + 3, R = g.edge - 3; const int y = g.top + 2 + 15, h = 13;
+    if (box && box->t < y + h && box->b > y) {
+        const int leftW = box->l - 4 - L, rightW = R - (box->r + 4);
+        if (rightW >= leftW) L = box->r + 4; else R = box->l - 4;
+    }
+    LBox none = { 0, 0, -1, -1, 0, 0 };
+    if (R - L < 20 || t0.empty() || g.reserve < 30) return none;
+    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 9; f.style = cppExtension::PLAIN; x->setFont(f);
+    const std::string t = fitText(t0, R - L, [&](const std::string& u) { return (int)x->getTextWidth(u.c_str(), -1); });
+    if (t.empty()) return none;
+    const int w = x->getTextWidth(t.c_str(), -1), xx = (L + R) / 2 - w / 2;
+    x->setTextColor(C_OPT_BLUE);
     cppExtension::RCT r; r.set(coord(xx), coord(y), coord(xx + w + 2), coord(y + h)); r.drawText(t.c_str(), false, false);
     LBox out = { xx, y, xx + w + 2, y + h, 0, 0 }; return out;
 }
@@ -1244,6 +1539,7 @@ template <class L> struct PaneState {
     ParamCache params; PaneSettings set; SpikeCfg dlgSpike; long long settingsCheckMs = -1, settingsStamp = -2;
     HoverTrack hov; long long axisTop = 0; int paneH = 0;
     long long statusMs = -1, changed = 0;
+    OptCache opt; ResetWatch rw;                     // (1.2.0) the options file (blue line), PullStats' reset watch
 };
 
 template <class L> class MboPane : public cppExtension {
@@ -1309,6 +1605,7 @@ public:
             settings(S, now);
             if (refreshParams(S.params, flexDir(), S.market, now)) applyParams(S);
             const long count = getBarCount();
+            if (S.formingKey > 0) refreshOptions(S.opt, flexDir(), S.market, now, [&](long long mt) { return arrivalBar(S, mt); });   // (1.2.0)
             if (S.tick <= 0) S.state = "native tick size unavailable";
             else if (count < 2) S.state = "waiting for bars";
             else {
@@ -1334,6 +1631,19 @@ private:
     std::string stem(const S_& S) { return S.market + "-" + fileKey(S.symbol) + "-" + std::to_string(S.spb); }
     std::string placePath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() || mkt.empty() ? std::string() : f + "\\" + L::name() + ".place-" + mkt + ".txt"; }
     std::string ctOf(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return std::string(); return clockShort(x.tm_hour, x.tm_min); }
+    // (1.2.0) the CT minute of the day of a bar stamp (-1 = unreadable) and its unix time (from the wall clock and the chart's own clock,
+    // so no time-zone assumption): unix(t) = now - (chart clock now - chart clock t)
+    int minuteOf(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return -1; return x.tm_hour * 60 + x.tm_min; }
+    long long clockSec(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return LLONG_MIN; return civilDays(x.tm_year + 1900, (unsigned)x.tm_mon + 1, (unsigned)x.tm_mday) * 86400 + x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec; }
+    long long unixOf(long long t) { const long long a = clockSec((long long)currentDate()), b = clockSec(t); if (a == LLONG_MIN || b == LLONG_MIN) return 0; return (long long)std::time(NULL) - (a - b); }
+    // (1.2.0) the bar a file written at unix time mt arrived on: the first bar whose end is at / after it (else the forming bar)
+    long long arrivalBar(S_& S, long long mt) {
+        const long long a = clockSec((long long)currentDate()); if (a == LLONG_MIN || mt <= 0) return S.formingKey;
+        const long long target = a - ((long long)std::time(NULL) - mt);  // mt on the chart's clock
+        long long best = S.formingKey;
+        for (std::map<long long, int>::const_reverse_iterator it = S.barEnds.rbegin(); it != S.barEnds.rend(); ++it) { const long long c = clockSec(it->first); if (c == LLONG_MIN || c < target) break; best = it->first; }
+        return best;
+    }
     std::string sessionKey(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return std::string(); return sessionOf(x.tm_year + 1900, x.tm_mon + 1, x.tm_mday, x.tm_hour); }
     std::string stamp(long long t) {
         struct tm x; std::memset(&x, 0, sizeof(x));
@@ -1352,7 +1662,7 @@ private:
         S.e = Engine(); S.accs.clear(); S.closedAt.clear(); S.ser.bars.clear(); S.barEnds.clear();
         S.formingKey = 0; S.firstBarKey = -1; S.lastClosedKey = 0; S.atr = 0; S.atrCount = -1; S.loaded = false; S.curSession.clear(); S.file = SessionFile();
         S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
-        S.zone = nl::zoneFor(S.market); S.params = ParamCache();
+        S.zone = nl::zoneFor(S.market); S.params = ParamCache(); S.opt = OptCache(); S.rw = ResetWatch();
         S.settingsStamp = -2; S.settingsCheckMs = -1; S.hov.hover.set(-1); S.hov.wnds.clear(); S.lastStatusText.clear();
     }
     void applyParams(S_& S) {
@@ -1464,7 +1774,14 @@ private:
                 const Params& P = S.params.load.p;
                 PaneBar nb = S.ser.make(key, S.e.close(it->second, key == S.firstBarKey, P));
                 nb.level = levelAt(S, key);                                 // decided once, at the close
+                panePace(nb, S.ser, key, S.spb, minuteOf(key), P);          // (1.2.0) pace vs the norm, decided once
                 L::decide(nb, P, false);
+                if (L::resets()) {                                          // (1.2.0) the later "reset" message, on the candle it completed in
+                    const int ws = S.rw.side;
+                    const long long sec = resetStep(S.rw, it->second.addT[ws == ASK ? ASK : BID], key, P);
+                    if (sec >= 0 && nb.ok && nb.msgSide < 0) { nb.msg.line1 = resetMessage(ws, sec, S.rw.pullCt, S.rw.level); nb.msg.impl = NEUTRAL; nb.kind = 3; }
+                    if (nb.ok && nb.kind == 1 && nb.msgSide >= 0) resetStart(S.rw, nb.msgSide, key, nb.r.pullC[nb.msgSide], P, ctOf(key), nb.level);
+                }
                 S.ser.bars[key] = nb; S.finalized++; any = true;
                 if (nb.ok && sessionKey(key) == S.curSession) S.file.put(rowOf(key, nb));
             }
@@ -1522,7 +1839,9 @@ private:
         o << "\nLARGE_NOW,aggressor " << largeThreshold(e.aggrDist, S.params.load.p.largeLotAggr, S.params.load.p.largeLotPct, S.params.load.p.largeLotMin) << " (" << e.aggrDist.total << " orders)"
           << ",resting " << largeThreshold(e.restDist, S.params.load.p.largeLotResting, S.params.load.p.largeLotPct, S.params.load.p.largeLotMin) << " (" << e.restDist.total << " orders)"
           << "\nSESSION," << S.curSession << "\nSESSION_FILE,rows " << S.file.rows.size() << ",loaded " << S.file.loaded << ",rejected " << S.file.rejected << ",writes " << S.file.writes << ",fails " << S.file.fails
-          << "\nBARS_DECIDED," << S.finalized << "\nLEVELS," << S.levels.size() << "," << S.lv.note;
+          << "\nBARS_DECIDED," << S.finalized << "\nLEVELS," << S.levels.size() << "," << S.lv.note
+          << "\nOPTIONS," << S.opt.why << ",asof " << S.opt.last.asof << ",reads " << S.opt.reads << ",arrived " << S.opt.hist.v.size()
+          << "\nRESET_WATCH," << (S.rw.on ? "on" : "off") << ",side " << (S.rw.side == ASK ? "offers" : "bids") << ",target " << S.rw.target << ",back " << S.rw.cum << ",resets " << S.rw.resets;
         typename std::map<long long, PaneBar>::const_iterator it = S.ser.bars.find(S.lastClosedKey);
         o << "\nLAST_CLOSED_BAR," << S.lastClosedKey << "," << stamp(S.lastClosedKey);
         if (it != S.ser.bars.end()) o << "\nMESSAGE," << implText(it->second.msg.impl) << "," << it->second.msg.line1 << "\nNUMBERS," << it->second.msg.line2 << "\nLETTERS," << it->second.let[0] << "," << it->second.let[1];
@@ -1563,14 +1882,14 @@ private:
         const long long mt = (long long)times[mb];
         typename std::map<long long, PaneBar>::const_iterator mi = S.ser.bars.find(mt);
         const PaneBar* mbar = mi != S.ser.bars.end() && mi->second.ok ? &mi->second : nullptr;
-        Info info = L::info(mbar);
+        Info info = L::info(mbar, S.params.load.p);
         { struct tm x; std::memset(&x, 0, sizeof(x)); info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? clock12(x.tm_hour, x.tm_min) : std::string("n/a")); }
         const Box ib = infoRect(this, g, S.set.pos, info);
         std::vector<LBox> avoid(1, LBox{ ib.l, ib.t, ib.r, ib.b, 0, 0 });
         drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
             BarLook k; const PaneBar* b = barOf(i); if (!b) return k;
             k.ok = true;
-            for (int s = 0; s < 2; ++s) { k.v[s] = L::value(b->r, 0, s); k.spike[s] = b->spike[s]; k.dash[s] = b->dash[s]; k.ratioOk[s] = b->m[0].ratioOk[s]; k.ratio[s] = b->m[0].ratio[s]; if (i != last) k.let[s] = b->let[s]; }
+            for (int s = 0; s < 2; ++s) { k.v[s] = L::value(b->r, 0, s); k.spike[s] = b->spike[s]; k.dash[s] = b->dash[s]; k.ratioOk[s] = b->m[0].ratioOk[s]; k.ratio[s] = b->m[0].ratio[s]; k.p100[s] = b->r.pace100[s]; if (i != last) k.let[s] = b->let[s]; }
             return k;
         }, avoid);
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
@@ -1583,6 +1902,10 @@ private:
             if (S.state != "ready") m.line1 += " - " + S.state;
         }
         drawMessage(this, g, &ib, line1Of(ctOf(mt), m.line1), m.impl);
+        // (1.2.0) the blue options line: the snapshot that had ARRIVED by the candle read (hovered: fresh at its end; live: now)
+        const ofo::Snap* os = S.opt.hist.latest(hov >= 0 ? mt : S.formingKey);
+        const long long ref = hov >= 0 ? unixOf(mt) : (long long)std::time(NULL);
+        if (os && ofo::fresh(*os, ref)) drawSubLine(this, g, &ib, L::optLine(*os, S.params.load.p.gate[L::optGate()], S.market));
     }
 };
 

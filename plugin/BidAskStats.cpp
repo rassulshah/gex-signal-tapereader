@@ -1,5 +1,22 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.3.1 (2026-10-13)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.5.0 (2026-10-13)
+ *  1.5.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
+ *        bars unchanged (lots: the biggest bid / ask at one price). PACE = aggressive lots / s per side (the candle's VAP volume at the
+ *        bid / at the ask / seconds per bar) vs the market's same-time-of-day norm (LRA-OrderFlow-<MKT>.csv PACE_NORM,AGGR, else the
+ *        rolling norm), decided once at the close and recorded. Spike labels in 3 rows: "3.4x" / "p 2.3x" / "240". The SPEC message:
+ *        "10:24 Sellers hit the bid with a 240-lot (3.4x) fast (p 2.3x), swept 3 levels into PDL - price held: buyers absorbing."
+ *        (pace named only when notable: >= 2.0x "fast", <= 0.7x "slowly" on a spike; "?" until PACE_SHOW,on). Hover box in two
+ *        columns Sellers | Buyers: Lots (ratio), Pace x (thr), Orders N · avg X lots, Top order NN%, Sweep, Large, StopRun, Burst.
+ *        The blue oHit line under the message (LRA-Options-<MKT>.csv, OptionsFlow.h; only when present and fresh; "?" until OHIT_SHOW,on).
+ *        Letters unchanged (S, L, R? stop run - 1.4.0). No outlines; sellers red, buyers green.
+ *  1.4.0 (2026-10-13, Rassul 1:30 / 1:36 PM): STOP RUN (R). A bar breaks one of his key levels (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/
+ *        LonLO from LRA-KeyLevels-<MKT>.csv; highs approached from below, lows from above) with an S sweep or a spike on the break
+ *        side in that bar, then price CLOSES back inside within N bars (LRA-StopRun-<MKT>.csv N, default 2). When the reclaim bar
+ *        closes, a mark goes at the bottom of the break bar's attacking-side bar: failed upside break = red R (buyers trapped),
+ *        failed downside break = green R (sellers trapped); "R?" until the file says SHOW,on (SHOW,off = logged, not drawn).
+ *        White box, no border (as the S / L letters). Hover: StopRun (side + level + ticks beyond) and Burst (ratio / kind + bars to
+ *        get back inside); message "Stop run above PDH - buyers trapped (...)". Every event -> an SR| line in the session record.
+ *        Decided once, never repainted; only bars that closed while the indicator ran are judged. Rules: StopRun.h.
  *  1.3.1 (2026-10-13, Rassul 1:43 PM CT): no white outline on the histogram bars or the letter boxes - every bar / letter box
  *        is filled with a same-colour pen (OrderFlowFeed.h 1.0.1 fillFlat); the hovered candle is no longer outlined.
  *
@@ -62,6 +79,8 @@
 #include "HostSlot.h"
 #define OFF_SDK 1
 #include "BidAskStatsLogic.h"
+#include "StopRun.h"
+#include "OptionsFlow.h"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -80,7 +99,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.3.1"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.5.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -90,6 +109,7 @@ static const size_t KEEP_BARS = 5000;
 static const int RATIO_PARM = 0, POS_PARM = 1, SPIKE_AVG_PARM = 2, SPIKE_JUMP_PARM = 3, SPIKE_LB_PARM = 4;
 static const COLOR C_ASK_BAR = 0x001F9D55, C_BID_BAR = 0x00962D2D;     // normal histogram bars: darker green / red
 static const COLOR C_ASK_SPIKE = 0x0000FF00, C_BID_SPIKE = 0x00FF3B3B; // spikes: bright green (buyers) / bright red (sellers)
+static const COLOR C_SR_GREEN = 0x00168A42, C_SR_RED = 0x00E0242A;     // (1.4.0) the R mark's letter on its white box (readable on white)
 static const size_t MAX_HOVER_WNDS = 8;
 static const int BAS_NUMS = 4 + off::REC_NUMS;                         // session record: bid|ask|bbid|bask + the order-feed numbers
 
@@ -146,7 +166,7 @@ static bas::SpikeCfg effSpike(const bas::SpikeCfg& d, const off::Params& P) {
 struct BasFin {
     bool dbo = false, fromFile = false;      // dbo: the order feed was live for it (letters possible)
     off::Rec r; std::string let[2]; std::string level; int held[2] = {1, 1};
-    nl::Msg msg;
+    nl::Msg msg; bas::PaceIn pc;                 // (1.5.0) the pace decided at the close (also in r.pace100 / paceNote / paceGate)
 };
 
 struct BASState {
@@ -176,6 +196,12 @@ struct BASState {
     off::SessionFile file; std::string curSession; bool loaded = false;
     nl::Cache lv; std::vector<nl::Level> levels;
     off::ParamCache params;
+    // (1.4.0) the stop run: the detector (closed bars in order), its params file, the events by break bar
+    sr::Detector det; sr::ParamCache srp; long long srFrom = -1, srCursor = 0;
+    std::map<long long, std::vector<sr::Event> > srEv;   // break bar time -> events (at most one per direction)
+    std::map<long long, long long> srReclaim;            // reclaim bar time -> break bar time (for its message / box)
+    long long srEvents = 0, srLoaded = 0;
+    off::OptCache opt;                                   // (1.5.0) LRA-Options-<MKT>.csv: the blue oHit line
 };
 
 class BidAskStats : public cppExtension {
@@ -209,6 +235,13 @@ private:
     BasFin provisional(BASState& S, long long t);
     std::string levelAt(BASState& S, long long t);
     void heldOf(BASState& S, long long t, int out[2]);
+    void stopRuns(BASState& S);
+    bas::PaceIn paceAt(BASState& S, long long t, const bas::Stat& st);
+    int minuteOf(long long t);
+    long long clockSec(long long t);
+    long long unixOf(long long t);
+    void addEvent(BASState& S, const sr::Event& e, bool fromFile);
+    const sr::Event* eventAt(BASState& S, long long t);
     void status(BASState& S, long long now);
     void render(BASState& S);
     std::string stamp(long long t);
@@ -260,9 +293,11 @@ void BidAskStats::identify(BASState& S) {
     S.ser.bars.clear(); S.naTries.clear(); S.count = 0; S.lastStamp = 0; S.backlog = true; S.lastClosedTime = 0;
     S.liveTime = 0; S.live = bas::BarMax(); S.liveReadMs = -1; S.faulted = false; S.settingsStamp = -2; S.settingsCheckMs = -1;
     S.hover.set(-1); S.hoverWnds.clear();
+    S.det = sr::Detector(); S.srFrom = -1; S.srCursor = 0; S.srEv.clear(); S.srReclaim.clear(); S.srp = sr::ParamCache();
     S.feed.reset(); S.e = off::Engine(); S.scratch = off::Acc(); S.zone = nl::zoneFor(S.market); S.atr = 0; S.atrCount = -1;
     S.accs.clear(); S.closedAt.clear(); S.barEnds.clear(); S.formingKey = 0; S.firstBarKey = -1; S.finFrom = 0; S.fin.clear();
     S.file = off::SessionFile(); S.curSession.clear(); S.loaded = false; S.params = off::ParamCache(); S.lastStatusText.clear();
+    S.opt = off::OptCache();
 }
 // the mouse over a bar: the info box and the message line follow it. Never swallows the event (the chart keeps its own mouse behaviour).
 int BidAskStats::mouse(RTX_EVENT* e) {
@@ -459,6 +494,27 @@ std::string BidAskStats::stamp(long long t) {
     return b;
 }
 std::string BidAskStats::ctOf(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return std::string(); return off::clockShort(x.tm_hour, x.tm_min); }
+// (1.5.0) the CT minute of the day of a bar stamp; its unix time from the wall clock and the chart's clock (no time-zone assumption)
+int BidAskStats::minuteOf(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return -1; return x.tm_hour * 60 + x.tm_min; }
+long long BidAskStats::clockSec(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return LLONG_MIN; return off::civilDays(x.tm_year + 1900, (unsigned)x.tm_mon + 1, (unsigned)x.tm_mday) * 86400 + x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec; }
+long long BidAskStats::unixOf(long long t) { const long long a = clockSec((long long)currentDate()), b = clockSec(t); if (a == LLONG_MIN || b == LLONG_MIN) return 0; return (long long)std::time(NULL) - (a - b); }
+// (1.5.0) a closed candle's PACE per side: its aggressive lots / s (VAP volume at the bid / at the ask over the bar's seconds) vs the
+// PACE_NORM,AGGR row of its 30-min bucket, else the rolling norm of the prior <= 60 candles of the last 4 h (needs 5)
+bas::PaceIn BidAskStats::paceAt(BASState& S, long long t, const bas::Stat& st) {
+    bas::PaceIn pc; const off::Params& P = S.params.load.p; pc.gate = P.gate[ofo::G_PACE];
+    if (!st.m.ok || S.spb <= 0) return pc;
+    std::vector<double> prior;
+    std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.lower_bound(t);
+    while (it != S.ser.bars.begin() && prior.size() < (size_t)off::PACE_ROLL_MAX) {
+        --it; if (t - it->first > off::PACE_ROLL_SPAN_S) break;
+        if (it->second.m.ok) prior.push_back(((double)it->second.m.totBid + (double)it->second.m.totAsk) / 2.0 / (double)S.spb);
+    }
+    std::reverse(prior.begin(), prior.end());
+    const double rn = off::rollingNorm(prior), fn = off::fileNorm(P, off::PM_AGGR, minuteOf(t));
+    const long long tot[2] = { st.m.totBid, st.m.totAsk }; const bool spk[2] = { st.bidSpike, st.askSpike };
+    for (int k = 0; k < 2; ++k) { const off::Pace p = off::paceOf((double)tot[k] / (double)S.spb, fn, rn, P, spk[k]); pc.p100[k] = off::pace100(p); pc.note[k] = p.note; }
+    return pc;
+}
 std::string BidAskStats::sessionStr(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return std::string(); return off::sessionOf(x.tm_year + 1900, x.tm_mon + 1, x.tm_mday, x.tm_hour); }
 // the trading session of a bar stamp: the local (Central) civil day, a bar at / after 17:00 counted in the next day; -1 = unreadable
 long long BidAskStats::sessionKey(long long t) {
@@ -487,7 +543,7 @@ void BidAskStats::orderBars(BASState& S, long count, long long now) {
     if (off::toTick((double)close[(int)count - 1], S.tick, px)) S.e.fallbackRef(px, now);
     const std::string ss = sessionStr(S.formingKey);
     if (!ss.empty() && ss != S.curSession) {
-        if (!S.curSession.empty()) { S.file.save(); S.e.newSession(); }
+        if (!S.curSession.empty()) { S.file.save(); S.e.newSession(); S.det = sr::Detector(); S.srFrom = -1; }
         S.curSession = ss; S.loaded = false;
     }
 }
@@ -514,8 +570,10 @@ void BidAskStats::loadSession(BASState& S) {
                 std::string("# BidAskStats ") + BAS_VERSION + " " + S.market + " " + S.symbol + " " + std::to_string(S.spb)
                     + "\nbar_time|ct_time|dbo|bid|ask|bbid|bask|" + off::REC_COLS + "|letters_left|letters_right|spike_left|spike_right|dash_left|dash_right|implication|level|message|numbers\n",
                 (size_t)BAS_NUMS);
+    S.file.extraTag = "SR|"; S.file.extraHead = sr::SR_HEAD;     // (1.4.0) stop-run events kept after the candle rows
     S.file.load();
     S.file.loadSizes(S.e.aggrDist, S.e.restDist);
+    for (size_t i = 0; i < S.file.extra.size(); ++i) { sr::Event e; if (sr::parseEvent(S.file.extra[i], e)) { addEvent(S, e, true); S.srLoaded++; } }
     S.finFrom = 0;
 }
 std::string BidAskStats::levelAt(BASState& S, long long t) {
@@ -557,6 +615,7 @@ void BidAskStats::finalize(BASState& S, long long now) {
         off::Rec rr;
         if (fr != S.file.rows.end() && off::recFrom(fr->second.nums, 4, rr)) {          // decided before a restart: exactly as then
             F.fromFile = true; F.dbo = fr->second.dbo != 0; F.r = rr; F.level = fr->second.level;
+            for (int k = 0; k < 2; ++k) { F.pc.p100[k] = rr.pace100[k]; F.pc.note[k] = rr.paceNote[k]; } F.pc.gate = rr.paceGate;   // (1.5.0) as decided then
             for (int s = 0; s < 2; ++s) F.let[s] = fr->second.let[s];
             F.msg.impl = fr->second.impl; F.msg.line1 = fr->second.line1; F.msg.line2 = fr->second.line2;
             if (it->second.m.ok) { it->second.bidSpike = fr->second.spike[0] != 0; it->second.askSpike = fr->second.spike[1] != 0; }   // the colour as drawn then
@@ -577,7 +636,9 @@ void BidAskStats::finalize(BASState& S, long long now) {
             }
             if (cur) F.level = levelAt(S, t);
             heldOf(S, t, F.held);
-            F.msg = bas::message(it->second, F.dbo ? &F.r : nullptr, F.let, F.level, F.held);
+            F.pc = paceAt(S, t, it->second);                                // (1.5.0) decided once, recorded
+            for (int k = 0; k < 2; ++k) { F.r.pace100[k] = F.pc.p100[k]; F.r.paceNote[k] = F.pc.note[k]; } F.r.paceGate = F.pc.gate;
+            F.msg = bas::message(it->second, F.dbo ? &F.r : nullptr, F.let, F.level, F.held, F.pc);
             if (cur && it->second.m.ok) {
                 off::Row row; row.t = t; row.ct = ctOf(t); row.dbo = F.dbo ? 1 : 0;
                 row.nums.push_back(it->second.m.bid); row.nums.push_back(it->second.m.ask); row.nums.push_back(it->second.bBid); row.nums.push_back(it->second.bAsk);
@@ -595,12 +656,55 @@ void BidAskStats::finalize(BASState& S, long long now) {
     while (S.fin.size() > KEEP_BARS) S.fin.erase(S.fin.begin());
     for (std::map<long long, off::Acc>::iterator a = S.accs.begin(); a != S.accs.end() && S.accs.size() > 16;) S.accs.erase(a++);
 }
+// (1.4.0) THE STOP RUN: every decided candle that closed while the indicator ran, strictly in time order, once (StopRun.h)
+void BidAskStats::addEvent(BASState& S, const sr::Event& e, bool fromFile) {
+    std::vector<sr::Event>& v = S.srEv[e.breakT];
+    for (size_t i = 0; i < v.size(); ++i) if (v[i].dir == e.dir) return;                 // decided once: the first one stays
+    v.push_back(e); S.srReclaim[e.reclaimT] = e.breakT;
+    if (!fromFile) { S.srEvents++; S.file.putExtra(sr::eventLine(e, ctOf(e.breakT))); }
+    while (S.srEv.size() > KEEP_BARS) S.srEv.erase(S.srEv.begin());
+    while (S.srReclaim.size() > KEEP_BARS) S.srReclaim.erase(S.srReclaim.begin());
+}
+const sr::Event* BidAskStats::eventAt(BASState& S, long long t) {
+    std::map<long long, std::vector<sr::Event> >::const_iterator it = S.srEv.find(t);
+    if (it == S.srEv.end()) { std::map<long long, long long>::const_iterator r = S.srReclaim.find(t); if (r != S.srReclaim.end()) it = S.srEv.find(r->second); }
+    if (it == S.srEv.end()) return nullptr;
+    const sr::Event* best = nullptr;                                                    // a shown one first (both directions: the first)
+    for (size_t i = 0; i < it->second.size(); ++i) if (it->second[i].show != sr::SHOW_OFF && (it->second[i].breakT == t || it->second[i].reclaimT == t)) { best = &it->second[i]; break; }
+    return best;
+}
+void BidAskStats::stopRuns(BASState& S) {
+    if (S.srFrom <= 0 || S.tick <= 0) return;
+    RTARRAY high(barHigh), low(barLow), close(barClose);
+    const std::vector<sr::KeyLevel> lv = sr::keyLevels(S.lv, (long long)std::time(NULL));
+    bool any = false;
+    for (std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.upper_bound(std::max(S.srCursor, S.srFrom - 1)); it != S.ser.bars.end(); ++it) {
+        const long long t = it->first;
+        if (S.formingKey > 0 && t >= S.formingKey) break;
+        std::map<long long, BasFin>::const_iterator f = S.fin.find(t);
+        if (f == S.fin.end()) break;                                                    // in order: wait for the first undecided candle
+        S.srCursor = t;
+        if (sessionStr(t) != S.curSession) continue;
+        std::map<long long, int>::const_iterator bi = S.barEnds.find(t);
+        if (bi == S.barEnds.end()) continue;
+        const int k = bi->second;
+        if (k < 1 || high.count <= k || low.count <= k || close.count <= k) continue;
+        sr::Bar b; b.t = t; b.h = (double)high[k]; b.l = (double)low[k]; b.c = (double)close[k];
+        const bas::Stat& st = it->second;
+        b.spike[0] = st.m.ok && st.bidSpike; b.spike[1] = st.m.ok && st.askSpike;
+        b.ratioOk[0] = st.bidRatioOk; b.ratio[0] = st.bidRatio; b.ratioOk[1] = st.askRatioOk; b.ratio[1] = st.askRatio;
+        for (int s = 0; s < 2; ++s) b.sweep[s] = f->second.dbo && f->second.let[s].find('S') != std::string::npos;
+        const std::vector<sr::Event> ev = S.det.onClose(b, true, (double)close[k - 1], lv, S.tick, S.srp.p);
+        for (size_t i = 0; i < ev.size(); ++i) { addEvent(S, ev[i], false); any = true; }
+    }
+    if (any) { S.file.save(); invalidateChart(false); }
+}
 // a settings change re-decides the messages of every decided candle (letters and levels kept)
 void BidAskStats::reMessage(BASState& S) {
     for (std::map<long long, BasFin>::iterator it = S.fin.begin(); it != S.fin.end(); ++it) {
         std::map<long long, bas::Stat>::const_iterator st = S.ser.bars.find(it->first);
         if (st == S.ser.bars.end()) continue;
-        it->second.msg = bas::message(st->second, it->second.dbo ? &it->second.r : nullptr, it->second.let, it->second.level, it->second.held);
+        it->second.msg = bas::message(st->second, it->second.dbo ? &it->second.r : nullptr, it->second.let, it->second.level, it->second.held, it->second.pc);
     }
 }
 void BidAskStats::status(BASState& S, long long now) {
@@ -643,8 +747,17 @@ void BidAskStats::status(BASState& S, long long now) {
       << "\nMBO_READS,slices " << c.slices << ",cap_hits " << c.capHits << ",longest_backlog " << c.longestBacklog << ",faults " << c.faults
       << "\nMBO_DROPPED,late " << S.lateDropped << ",no_bar " << S.noBar << ",decided_with_backlog " << S.decidedLate << ",book " << e.book.size() << ",book_resets " << e.bookResets
       << "\nNEAR_TICKS," << e.near << "\nLEVELS," << S.levels.size() << "," << S.lv.note
+      << "\nSTOPRUN,file " << S.srp.p.source << (S.srp.p.note.empty() ? std::string() : " (" + S.srp.p.note + ")") << ",N " << S.srp.p.n << ",SHOW " << sr::showText(S.srp.p.show)
+      << ",key_levels " << sr::keyLevels(S.lv, (long long)std::time(NULL)).size() << ",judged_from " << S.srFrom << ",watching " << S.det.pending.size()
+      << ",breaks " << S.det.breaks << ",no_burst " << S.det.noBurst << ",held " << S.det.held << ",events " << S.srEvents << ",reloaded " << S.srLoaded
+      << "\nOPTIONS," << S.opt.why << ",asof " << S.opt.last.asof << ",reads " << S.opt.reads << ",arrived " << S.opt.hist.v.size()
       << "\nPARAMS_SOURCE," << S.params.load.source << "\nPARAMS," << off::paramsText(S.params.load.p);
     for (size_t i = 0; i < S.params.load.notes.size() && i < 20; ++i) o << "\nPARAMS_NOTE," << S.params.load.notes[i];
+    {   // (1.5.0) the last closed candle's pace
+        std::map<long long, BasFin>::const_iterator f = S.fin.find(S.lastClosedTime);
+        if (f != S.fin.end()) o << "\nPACE,bid " << off::paceHover(f->second.pc.p100[0], S.params.load.p.paceFastT, f->second.pc.gate) << ",ask " << off::paceHover(f->second.pc.p100[1], S.params.load.p.paceFastT, f->second.pc.gate)
+                                << ",norm " << (off::fileNorm(S.params.load.p, off::PM_AGGR, minuteOf(S.lastClosedTime)) > 0 ? "file" : "rolling");
+    }
     o << "\nLARGE_AGGRESSOR_NOW," << off::largeThreshold(e.aggrDist, S.params.load.p.largeLotAggr, S.params.load.p.largeLotPct, S.params.load.p.largeLotMin) << " (" << e.aggrDist.total << " orders)"
       << "\nSESSION," << S.curSession << "\nSESSION_FILE,rows " << S.file.rows.size() << ",loaded " << S.file.loaded << ",rejected " << S.file.rejected << ",writes " << S.file.writes << ",fails " << S.file.fails << "\n";
     const std::string text = o.str(); if (text == S.lastStatusText) return;
@@ -667,6 +780,11 @@ void BidAskStats::pump() {
             S.ser.spike = effSpike(S.dlgSpike, S.params.load.p);
         }
         const long count = getBarCount();
+        if (S.formingKey > 0) off::refreshOptions(S.opt, flexDir(), S.market, now, [&](long long mt) {   // (1.5.0) arrival = the bar the file was written in
+            const long long a = clockSec((long long)currentDate()); if (a == LLONG_MIN || mt <= 0) return S.formingKey;
+            const long long target = a - ((long long)std::time(NULL) - mt); long long best = S.formingKey;
+            for (std::map<long long, int>::const_reverse_iterator it = S.barEnds.rbegin(); it != S.barEnds.rend(); ++it) { const long long c = clockSec(it->first); if (c == LLONG_MIN || c < target) break; best = it->first; }
+            return best; });
         if (S.tick <= 0) S.state = "native tick size unavailable";
         else if (!S.faulted) {
             S.state = count < 2 ? "waiting for bars" : "ready";
@@ -683,7 +801,12 @@ void BidAskStats::pump() {
             }
             closedBars(S, count, now);
             formingBar(S, count, now);
-            if (count >= 2 && !S.faulted && !S.backlog) finalize(S, now);
+            if (count >= 2 && !S.faulted && !S.backlog) {
+                sr::refresh(S.srp, flexDir().empty() || S.market.empty() ? std::string() : flexDir() + "\\LRA-StopRun-" + S.market + ".csv", now);
+                if (S.srFrom < 0 && S.formingKey > 0) S.srFrom = S.formingKey;   // (1.4.0) bars closing from now on are judged
+                finalize(S, now);
+                stopRuns(S);
+            }
         }
         status(S, now);
     } catch (...) { S.state = "calculation error"; }
@@ -729,13 +852,26 @@ void BidAskStats::render(BASState& S) {
     const bas::Stat* bst = NULL;
     if (hov >= 0) { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(mt); if (it != S.ser.bars.end()) bst = &it->second; }
     else { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(S.lastClosedTime); if (it != S.ser.bars.end() && S.lastClosedTime == mt) bst = &it->second; }
-    off::Info info; info.twoCol = false; info.tmpl = "99 lvls sellers";
+    // (1.5.0) two columns: Sellers (bids hit, red) | Buyers (offers lifted, green)
+    off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = "9999 (99.9x) ?";
     {
         struct tm x; std::memset(&x, 0, sizeof(x));
         info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? bas::clock12(x.tm_hour, x.tm_min) : std::string("n/a"));
-        const std::string none[2];
-        const std::vector<bas::Line> L = bas::infoLines(bst, f != S.fin.end() ? &f->second.r : nullptr, f != S.fin.end() ? f->second.let : none, f != S.fin.end() && f->second.dbo);
-        for (size_t k = 0; k < L.size(); ++k) { off::InfoRow r; r.label = L[k].label; r.v[0] = L[k].value; r.side[0] = L[k].side < 0 ? 0 : L[k].side > 0 ? 1 : -1; info.rows.push_back(r); }
+        const std::string none[2]; const bas::PaceIn nopc;
+        const std::vector<bas::Row2> L = bas::infoRows(bst, f != S.fin.end() ? &f->second.r : nullptr, f != S.fin.end() ? f->second.let : none, f != S.fin.end() && f->second.dbo,
+                                                       f != S.fin.end() ? f->second.pc : nopc, S.params.load.p.paceFastT);
+        for (size_t k = 0; k < L.size(); ++k) { off::InfoRow r; r.label = L[k].label; r.v[0] = L[k].v[0]; r.v[1] = L[k].v[1]; info.rows.push_back(r); }
+        // (1.4.0) StopRun: "above PDH 6t" (red = buyers trapped, in the Buyers column) / "below LonLO 4t" (green, Sellers column); Burst
+        const sr::Event* e = eventAt(S, mt);
+        off::InfoRow a; a.label = "StopRun"; off::InfoRow b; b.label = "Burst";
+        a.v[0] = a.v[1] = "-"; b.v[0] = b.v[1] = "-"; a.side[0] = a.side[1] = b.side[0] = b.side[1] = -1;
+        if (e) {
+            const int c = e->dir > 0 ? 1 : 0;                              // the trapped side's column (buyers trapped above a high)
+            a.v[c] = std::string(e->dir > 0 ? "above " : "below ") + e->level + " " + std::to_string(e->ticks) + "t" + (e->show == sr::SHOW_ON ? "" : "?");
+            b.v[c] = (e->ratioOk ? nl::ratioText(e->ratio) : std::string(e->sweep ? "sweep" : "spike")) + ", " + (e->bars <= 0 ? std::string("same bar") : "in " + sr::barsText(e->bars));
+            a.side[c] = b.side[c] = e->dir > 0 ? 0 : 1;                    // colour by implication: trapped buyers = red, trapped sellers = green
+        }
+        info.rows.push_back(a); info.rows.push_back(b);
     }
     const off::Box ib = off::infoRect(this, g, S.pos, info);
     const std::vector<off::LBox> avoid(1, off::LBox{ ib.l, ib.t, ib.r, ib.b, 0, 0 });
@@ -745,7 +881,14 @@ void BidAskStats::render(BASState& S) {
         const bas::Stat* sp = statOfBar(i);
         k.ok = true; k.v[0] = m->bid; k.v[1] = m->ask; k.spike[0] = sp && sp->bidSpike; k.spike[1] = sp && sp->askSpike;
         if (sp) { k.ratioOk[0] = sp->bidRatioOk; k.ratio[0] = sp->bidRatio; k.ratioOk[1] = sp->askRatioOk; k.ratio[1] = sp->askRatio; }   // (12:03) spike labels
-        if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; } }
+        if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; k.p100[0] = ff->second.pc.p100[0]; k.p100[1] = ff->second.pc.p100[1]; } }
+        if (i != last) {                                                   // (1.4.0) the stop-run mark on the break bar's attacking side
+            std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find((long long)times[i]);
+            if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size(); ++q) {
+                const sr::Event& e = se->second[q]; if (e.show == sr::SHOW_OFF) continue;
+                k.mark[e.side()] = sr::markText(e); k.markCol[e.side()] = e.dir > 0 ? C_SR_RED : C_SR_GREEN;
+            }
+        }
         return k;
     }, avoid);
     const COLOR vcol[2] = { C_BID, C_ASK };                                // values: sellers (bid side) red, buyers (ask side) green, labels white
@@ -754,8 +897,13 @@ void BidAskStats::render(BASState& S) {
     if (f != S.fin.end()) m = f->second.msg;
     else if (S.ser.bars.count(mt)) m = provisional(S, mt).msg;
     else m.line1 = "No volume data for this candle";
+    { const sr::Event* e = eventAt(S, mt); if (e) { m.line1 = sr::message(*e); m.impl = e->dir > 0 ? nl::BEAR : nl::BULL; } }   // (1.4.0)
     if (S.faulted || S.tick <= 0 || S.state == "loading bars") m.line1 = S.state;
     off::drawMessage(this, g, &ib, off::line1Of(S.faulted || S.tick <= 0 || S.state == "loading bars" ? std::string() : ctOf(mt), m.line1), m.impl);
+    // (1.5.0) the blue oHit line: the snapshot that had ARRIVED by the candle read (hovered: fresh at its end; live: now)
+    const ofo::Snap* os = S.opt.hist.latest(hov >= 0 ? mt : (long long)times[last]);
+    const long long ref = hov >= 0 ? unixOf(mt) : (long long)std::time(NULL);
+    if (os && ofo::fresh(*os, ref) && !S.faulted) off::drawSubLine(this, g, &ib, ofo::hitLine(*os, S.params.load.p.gate[ofo::G_OHIT], S.market, S.params.load.p.gate[ofo::G_ODEX]));
 }
 
 extern "C" cppExtension* CreateExtension(void) {
@@ -763,7 +911,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
-    p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. Spike labels: the ratio over the quantity. Top: a plain-English message (green = bullish, red = bearish) and the info box with every value, for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.3.1");   // BAS_VERSION
+    p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, orders, top order, sweep, large, stop run) for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
+    p->setVersion("1.5.0");   // BAS_VERSION
     return p;
 }

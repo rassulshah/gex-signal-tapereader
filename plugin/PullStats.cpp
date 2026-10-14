@@ -1,5 +1,11 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.0.1  (2026-10-13)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.1.0  (2026-10-13)
+ *  1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
+ *        bars = LOTS pulled near price (were orders); PACE (pulled lots / s vs the same-time norm); 3-row spike labels (ratio / pace /
+ *        lots); the SPEC message grammar ("Buyers pulled 64 bids totaling 410 lots (3.1x) fast (p 2.6x) - support leaving at PDL.",
+ *        "resistance leaving" for offers, "bait gone" white, and the LATER "Bids back within 40 s of the 11:05 pull - reset, not a
+ *        retreat at PDL." posted only when known); hover rows Pulled / Pace / Orders / Top order / Traded first / Before price; the
+ *        blue oPull line (LRA-Options-<MKT>.csv) when fresh. Rules: PullStatsLogic.h, OrderFlowFeed.h 1.2.0.
  *  1.0.1 (2026-10-13, Rassul 1:43 PM CT): no white outline on the bars or the letter boxes (same-colour pen); hovered candle not outlined.
  *
  *  WHO IS LEAVING. Rassul 2026-10-13: "i also want to know if there is the way to use the mbo data which tells you the number of
@@ -43,7 +49,7 @@
 #include "OrderFlowFeed.h"
 #include "PullStatsLogic.h"
 
-#define PS_VERSION "1.0.1"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.1.0"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -71,7 +77,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA PullStats: who is LEAVING. Per candle, how many resting orders were PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio over the number of orders. Top: a plain-English message (green = bullish, red = bearish) and the info box with every value, for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.0.1");   // PS_VERSION
+    p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, pace, orders, top order, traded first, before price) for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
+    p->setVersion("1.1.0");   // PS_VERSION
     return p;
 }

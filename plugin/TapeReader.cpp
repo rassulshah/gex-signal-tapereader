@@ -1,5 +1,13 @@
 /********************************************************************************
- *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.0.1  (2026-10-13)
+ *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.1.0  (2026-10-13)
+ *  1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md): default Position BOTTOM CENTRE;
+ *        sections header / bias line / BUYERS (2 lines) / SELLERS (2 lines) / OPTIONS (2 lines, blue) - the LEVELS section is removed
+ *        (levels are named inside BUYERS / SELLERS; the LEVELS text is still logged for the nightly). BUYERS / SELLERS use the panes'
+ *        grammar (lots, ratio, pace): "Defending PDL: 42 bids, 150 lots (4.4x) added fast, 90% rebuilt", "Swept 3 lvls into PDL with a
+ *        240-lot (3.4x), no follow-through", "Pulled 38 offers, 95 lots (3.6x) fast - resistance leaving". OPTIONS reads
+ *        LRA-Options-<MKT>.csv (written by the LRA bridge after every MenthorQ snapshot) and the gates of LRA-OrderFlow-<MKT>.csv:
+ *        each grid is used from the candle it ARRIVED on (never earlier) and only while <= 20 min old. Header shows v1.1.
+ *        Keeps every 1.0.1 fix (GAMMA fallback / freshness, BOOKASOF, LRA-Turns v2, letter I, the user32 / kernel32 pragmas).
  *
  *  Rassul 2026-10-13: "add a reader box. call it tape reader ... give your read on what buyers and sellers are doing by reading the
  *  indicators as well as other things like levels, gamma, liquidity" / "split it up by buyers and sellers" / "the turn up swing and
@@ -60,7 +68,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.0.1"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.1.0"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -138,6 +146,7 @@ struct TRState {
     std::vector<tr::Bar> bars; long nBars = -1; unsigned long long lastRaw = 0, firstRaw = 0;
     // inputs
     Src sDp, sOf[tr::NSRC], sLiqZ, sLiqSt, sKey, sMq, sTouch, sDealer, sHl, sTurns, sParams, sDealerSt, sDeltaSt;
+    Src sOpt, sOfParams; ofo::History optHist; ofo::Snap optLast; std::string optWhy = "not read"; int gates[ofo::NGATE] = { 1, 1, 1, 1, 1, 1, 1 };   // (1.1.0) OPTIONS
     tr::DeltaSnap dp; tr::OfSnap of[tr::NSRC]; tr::LiqSnap liq; std::vector<tr::Level> key, mq; std::vector<tr::Touch> touch;
     long long keyAt = 0; bool mqStale = false; std::string mqSym; dl::Data dealer; long long dealerBook = tr::BOOK_ABSENT; tr::HodLodSnap hl; tr::TurnsSnap turns; tr::Params P;
     int profReach = 150, dltW = 50; bool dltLeft = false;
@@ -202,7 +211,7 @@ int cppExtension::done(void)    { static_cast<TapeReader*>(this)->clearState(); 
 int cppExtension::destroy(void) { static_cast<TapeReader*>(this)->clearState(); return RTX_OK; }
 int cppExtension::setup(void)
 {
-    // controls only (Rassul 2026-10-02: settings windows show controls only): Position, 9 spots, default Bottom left
+    // controls only (Rassul 2026-10-02: settings windows show controls only): Position, 9 spots, default Bottom centre (1.1.0)
     setParameterVersion(1);
     setParameterDialogHeight(1);
     setListParameter("Position", (short)tr::POS_DEFAULT, tr::POS_CHOICES);
@@ -286,6 +295,7 @@ void TapeReader::loadInputs(TRState& S, long long nowMs)
     S.sDealer.path = F + "LRA-Dealer-" + M + ".csv"; S.sHl.path = F + "HodLod.status-" + M + "-" + spb + ".txt";
     S.sTurns.path = F + "LRA-Turns-" + M + ".csv"; S.sParams.path = F + "LRA-TapeReader-" + M + ".csv";
     S.sDealerSt.path = F + "DealerProfile.status.txt"; S.sDeltaSt.path = F + "DeltaProfile.status.txt";
+    S.sOpt.path = F + "LRA-Options-" + M + ".csv"; S.sOfParams.path = F + "LRA-OrderFlow-" + M + ".csv";   // (1.1.0)
     std::string text; long long sig;
     auto readInto = [&](Src& s, size_t maxB, bool tail, bool complete, std::vector<std::string>& L) -> bool {
         const int r = tr::readBounded(s.path, maxB, text, sig, tail);
@@ -337,6 +347,24 @@ void TapeReader::loadInputs(TRState& S, long long nowMs)
     if (check(S.sParams, nowMs, 10000)) {
         const bool ok = readInto(S.sParams, 64 * 1024, false, false, L);
         if (ok || S.sParams.res == tr::RD_MISSING) { S.P = tr::parseParams(ok, ok ? L : std::vector<std::string>(), S.mkt); S.sParams.good = S.P.src == "file"; S.sParams.note = S.P.src + (S.P.why.empty() ? "" : ": " + S.P.why); }
+    }
+    // (1.1.0) OPTIONS: the bridge's file after each MenthorQ snapshot; a new grid joins the history on the bar it ARRIVED on
+    if (check(S.sOpt, nowMs, CHECK_SLOW_MS)) {
+        if (readInto(S.sOpt, 16 * 1024, false, false, L)) {
+            S.optLast = ofo::parse(L, S.mkt); S.sOpt.good = S.optLast.ok;
+            S.optWhy = S.optLast.ok ? "ok" : (S.optLast.notes.empty() ? std::string("garbled") : S.optLast.notes[0]);
+            if (S.optLast.ok && !S.bars.empty()) {                       // arrived on the bar during which the file was written (its mtime)
+                long long nowCt = nowCtSec(); if (nowCt <= 0) nowCt = S.bars.back().t;
+                const long long target = nowCt - (wallNow() - S.sOpt.mtime); unsigned long long raw = S.bars.back().raw;
+                for (size_t i = S.bars.size(); i-- > 0;) { if (S.bars[i].t < target) break; raw = S.bars[i].raw; }
+                S.optHist.add(S.optLast, (long long)raw);
+            }
+            S.sOpt.note = S.optWhy + (S.optLast.ok ? ", grid " + std::to_string(S.optLast.asof) : std::string());
+        } else if (S.sOpt.res != tr::RD_TORN) { S.optLast = ofo::Snap(); S.optWhy = S.sOpt.note; }
+    }
+    if (check(S.sOfParams, nowMs, 10000)) {
+        if (readInto(S.sOfParams, 64 * 1024, false, false, L)) { ofo::parseGates(L, S.gates); S.sOfParams.good = true; S.sOfParams.note = "gates read"; }
+        else if (S.sOfParams.res == tr::RD_MISSING) { for (int g = 0; g < ofo::NGATE; ++g) S.gates[g] = ofo::GATE_Q; }
     }
     // the profiles' widths (the box never reaches them)
     if (check(S.sDealerSt, nowMs, CHECK_SLOW_MS) && readInto(S.sDealerSt, 256 * 1024, false, false, L)) {
@@ -411,6 +439,14 @@ tr::Inputs TapeReader::inputsFor(TRState& S, int k, std::vector<tr::Bar>& work)
         I.trend = vtl::level(T); I.trendReady = T.ready;
     }
     note("trend", I.trendReady, Src(), "not ready");
+    {   // (1.1.0) the options grid that had ARRIVED by candle k, fresh at its end (unix = the wall clock minus the chart-clock gap)
+        const ofo::Snap* os = S.optHist.latest((long long)S.bars[(size_t)k].raw);
+        const long long ref = nowCt > 0 ? now - (nowCt - S.bars[(size_t)k].t) : now;
+        const bool fresh = os && ofo::fresh(*os, ref);
+        if (fresh) I.opt = os;
+        for (int g = 0; g < ofo::NGATE; ++g) I.optGates[g] = S.gates[g];
+        in += std::string(";options:") + (fresh ? std::to_string(std::max(0LL, ref - os->asof)) + "s" : os ? std::string("stale") : S.sOpt.good ? std::string("not arrived") : std::string("missing"));
+    }
     I.inputs = in;
     return I;
 }
@@ -546,7 +582,7 @@ void TapeReader::savePos()
     writeAtomic(F + "TapeReader.place-" + mkt + ".txt", std::to_string(v) + "\n");
     TRState* S = testState(); if (S) { S->placeSig = -2; S->placeChecked = -1; }
 }
-// the per-market place file is the only source while drawing (as lsHodLod 1.0.1): no file = Bottom left
+// the per-market place file is the only source while drawing (as lsHodLod 1.0.1): no file = Bottom centre (1.1.0)
 int TapeReader::position(TRState& S)
 {
     const long long now = steadyMs();
@@ -638,7 +674,7 @@ int TapeReader::draw(void)
             RTARRAYI dt(barDateTime);
             if ((long)dt.count > S->hover) { std::map<unsigned long long, tr::Read>::const_iterator it = S->logged.find((unsigned long long)dt[S->hover]); if (it != S->logged.end()) R = &it->second; }
         }
-        const std::string header = trt::fill("header", { {"ver", "1.0"}, {"mkt", S->mkt}, {"time", R->ct} });
+        const std::string header = trt::fill("header", { {"ver", "1.1"}, {"mkt", S->mkt}, {"time", R->ct} });   // (1.1.0) the real version
         const tr::Layout L = tr::layout(*R, header, region, position(*S), M);
         S->lastOk = L.ok; S->lastBox = L.box; S->layoutNote = L.note; S->lastLines = L.lines;
         if (L.ok) execute(L);
@@ -657,13 +693,17 @@ void TapeReader::writeStatus(TRState& S)
     in("DeltaProfile", S.sDp); for (int k = 0; k < tr::NSRC; ++k) in(tr::SRC_NAME[k], S.sOf[k]);
     in("LiqZones", S.sLiqZ); in("LiquidityStatus", S.sLiqSt); in("KeyLevels", S.sKey); in("Levels", S.sMq); in("Touch", S.sTouch);
     in("Dealer", S.sDealer); in("HodLod", S.sHl); in("Turns", S.sTurns); in("Params", S.sParams);
+    in("Options", S.sOpt); in("OrderFlowGates", S.sOfParams);   // (1.1.0)
+    o += "OPTIONS," + S.optWhy + ",grids " + std::to_string(S.optHist.v.size()) + ",gates";
+    for (int g = 0; g < ofo::NGATE; ++g) o += std::string(" ") + ofo::GATE_KEY[g] + "=" + ofo::gateText(S.gates[g]);
+    o += "\n";
     o += "PARAMS," + S.P.src + (S.P.why.empty() ? "" : " (" + S.P.why + ")") + ",weights " + std::to_string(S.P.w[0]).substr(0, 4) + "/" + std::to_string(S.P.w[1]).substr(0, 4) + "/" + std::to_string(S.P.w[2]).substr(0, 4) + "/" + std::to_string(S.P.w[3]).substr(0, 4) + "\n";
     o += "TURNS," + S.turns.why + "\n";
     if (S.haveLive) {
         const tr::Read& R = S.live;
         o += "LAST_READ," + R.ct + "," + R.biasText + ",flow " + std::to_string(R.votes[0]) + " (" + R.why[0] + "),level " + std::to_string(R.votes[1]) + " (" + R.why[1] + "),gamma " + std::to_string(R.votes[2]) + " (" + R.why[2] + "),trend " + std::to_string(R.votes[3]) + " (" + R.why[3] + ")" + (R.intrabar ? ",intrabar" : "") + "\n";
         if (!R.turnRow.empty()) o += "TURN_ROW," + R.turnRow + "\n";
-        o += "LINE1," + R.turn + "\nBUYERS," + R.buyers + "\nSELLERS," + R.sellers + "\nLEVELS," + R.levels + "\nINPUTS_USED," + R.inputs + "\n";
+        o += "LINE1," + R.turn + "\nBUYERS," + R.buyers + "\nSELLERS," + R.sellers + "\nOPTIONS_1," + R.opt[0] + "\nOPTIONS_2," + R.opt[1] + "\nLEVELS (logged, not drawn)," + R.levels + "\nINPUTS_USED," + R.inputs + "\n";
     }
     o += "LOG," + S.logPath + ",writes " + std::to_string(S.logWrites) + ",fails " + std::to_string(S.logFails) + ",queued " + std::to_string(S.logQueue.size()) + ",loaded " + std::to_string(S.logLoaded) + ",rejected " + std::to_string(S.logRejected) + "\n";
     o += "LAYOUT," + std::string(S.lastOk ? "drawn" : "not drawn") + "," + S.layoutNote + ",box " + std::to_string(S.lastBox.l) + " " + std::to_string(S.lastBox.t) + " " + std::to_string(S.lastBox.r) + " " + std::to_string(S.lastBox.b) +
@@ -681,7 +721,7 @@ extern "C" cppExtension *CreateExtension(void)
     TapeReader *p = new TapeReader();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
-    p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did (green = bullish, red = bearish, grey = quiet); and the LEVELS context (liquidity, gamma, HOD / LOD, what is against the read, invalidation and targets). Mouse over a candle shows the read logged for it. Use Settings > Position to place it.");
-    p->setVersion("1.0.1");
+    p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. Use Settings > Position to place it (default Bottom centre).");
+    p->setVersion("1.1.0");   // TR_VERSION
     return p;
 }

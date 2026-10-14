@@ -1,6 +1,10 @@
 #ifndef LS_BIDASKSTATS_LOGIC_H
 #define LS_BIDASKSTATS_LOGIC_H
-// BidAskStatsLogic.h (1.3.0, 2026-10-13; 1.2.0 / 1.1.0 / 1.0.0 2026-10-13) -- SDK-free logic of lsBidAskStats. Pure functions, unit-tested
+// BidAskStatsLogic.h (1.5.0, 2026-10-13; 1.4.0 / 1.3.0 / 1.2.0 / 1.1.0 / 1.0.0 2026-10-13) -- SDK-free logic of lsBidAskStats.
+// (1.5.0, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md) bars unchanged (the biggest bid / ask at one price,
+// in lots); PACE = aggressive lots / s per side (VAP totals) vs the same-time norm; the SPEC message grammar
+//   "Sellers hit the bid with a 240-lot (3.4x) fast (p 2.3x), swept 3 levels into PDL - price held: buyers absorbing."
+// and the hover rows Sellers | Buyers: Lots (ratio), Pace x (thr), Orders N · avg X lots, Top order NN%, Sweep, Large, StopRun, Burst. Pure functions, unit-tested
 // on Linux. (1.3.0) WHO IS ATTACKING: a message line + the info box (12:05) + spike labels (12:03); S / L letters from the order feed
 // (OrderFlowFeed.h, shared with lsPullStats / lsStackStats). Rassul 2026-10-13: "i want to identify spikes", "include L for Bid Ask
 // Stacks and Pull"; approved final-signals-mockup.png / three-panes-messages-mockup.png. See the 1.3.0 section at the end.
@@ -25,7 +29,7 @@
 
 namespace bas {
 
-static const char* const VERSION = "1.3.1";   // 1.3.1 (2026-10-13): no white outline (drawing only)
+static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
 static const int COUNT_CAP = 999, RATIO_MIN_PRIOR = 5, RATIO_DEFAULT = 20, RATIO_LO = 5, RATIO_HI = 200;
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 static const int POS_DEFAULT = 0;   // Top left: the info box (12:05 the box stays; the message line is always top centre)
@@ -66,6 +70,7 @@ struct Row { double price; long long bid, ask; };
 struct BarMax {
     bool ok = false;                 // false = n/a (failed / missing / malformed VAP)
     long long bid = 0, ask = 0;      // biggest bid / ask volume at one price
+    long long totBid = 0, totAsk = 0;   // (1.5.0) the bar's whole volume at the bid / at the ask (the PACE: aggressive lots / s)
     double bidPx = 0, askPx = 0;     // the price where it traded (on the tick grid)
 };
 
@@ -89,6 +94,7 @@ inline BarMax maxOf(const std::vector<Row>& rows, double tick) {
         long long k = 0;
         if (rows[i].bid < 0 || rows[i].ask < 0 || !tickKey(rows[i].price, tick, k)) return m;
         std::pair<long long, long long>& v = at[k]; v.first += rows[i].bid; v.second += rows[i].ask;
+        m.totBid += rows[i].bid; m.totAsk += rows[i].ask;
     }
     bool haveB = false, haveA = false; long long kb = 0, ka = 0;
     for (std::map<long long, std::pair<long long, long long> >::const_iterator it = at.begin(); it != at.end(); ++it) {
@@ -332,8 +338,11 @@ inline std::string sideNums(const Stat& s, const off::Rec* r, const std::string&
     if (r && let.find('L') != std::string::npos) o += "  Large " + std::to_string(r->aggrMax[side]);
     return o;
 }
+// (1.5.0) the candle's pace per side (side 0 = bids hit, 1 = offers lifted): x100 (0 = n/a), note (1 fast, 2 slowly), the gate in force
+struct PaceIn { long long p100[2] = {0, 0}, note[2] = {0, 0}, gate = 1; };
 // the message line (line1) and the record's numbers line (line2) of one closed candle. r = its order-feed numbers (nullptr = the feed was not live for it: no letters)
-inline nl::Msg message(const Stat& s, const off::Rec* r, const std::string let[2], const std::string& level, const int heldOf[2]) {
+// (1.5.0, SPEC exact) "Sellers hit the bid with a 240-lot (3.4x) fast (p 2.3x), swept 3 levels into PDL - price held: buyers absorbing."
+inline nl::Msg message(const Stat& s, const off::Rec* r, const std::string let[2], const std::string& level, const int heldOf[2], const PaceIn& pc = PaceIn()) {
     nl::Msg m;
     if (!s.m.ok) { m.line1 = "No volume data for this candle"; return m; }
     double sc[2] = {0, 0};
@@ -345,17 +354,19 @@ inline nl::Msg message(const Stat& s, const off::Rec* r, const std::string let[2
     }
     const int first = side >= 0 ? side : (s.m.ask > s.m.bid ? 1 : 0);
     m.line2 = sideNums(s, r, let[first], first, true) + "   |   " + sideNums(s, r, let[1 - first], 1 - first, false);
+    for (int k = 0; k < 2; ++k) if (pc.p100[k] > 0) m.line2 += std::string(k == 0 ? "  BidPace " : "  AskPace ") + off::paceX(pc.p100[k]);
     if (side < 0) { m.line1 = sc[0] > 0 ? "Both sides attacking evenly (" + nl::ratioText(sc[0]) + ")" : "Normal activity - no spike"; return m; }
     const bool b = side == 0, S = r && let[side].find('S') != std::string::npos, L = r && let[side].find('L') != std::string::npos;
-    const std::string who = b ? "Sellers" : "Buyers", rt = nl::ratioText(b ? s.bidRatio : s.askRatio);
-    std::string t;
-    if (S && L && r->sweepIsMax[side]) t = who + " swept " + std::to_string(r->sweepLv[side]) + " levels with one " + std::to_string(r->aggrMax[side]) + "-lot";
-    else if (S && L) t = who + " swept " + std::to_string(r->sweepLv[side]) + " levels, plus one " + std::to_string(r->aggrMax[side]) + "-lot";
-    else if (S) t = who + " swept " + std::to_string(r->sweepLv[side]) + " levels in one order";
-    else t = who + (b ? " hit the bid " : " lifted the offer ") + rt + " normal" + (L ? " with one " + std::to_string(r->aggrMax[side]) + "-lot" : std::string());
+    const std::string rt = nl::ratioText(b ? s.bidRatio : s.askRatio);
+    std::string t = std::string(b ? "Sellers hit the bid" : "Buyers lifted the offer") + " with a " + std::to_string(b ? s.m.bid : s.m.ask) + "-lot (" + rt + ")"
+                  + off::paceWords(pc.note[side], pc.p100[side], pc.gate);
+    if (S && L && r->sweepIsMax[side]) t += ", swept " + std::to_string(r->sweepLv[side]) + " levels with one " + std::to_string(r->aggrMax[side]) + "-lot order";
+    else if (S && L) t += ", swept " + std::to_string(r->sweepLv[side]) + " levels, plus one " + std::to_string(r->aggrMax[side]) + "-lot order";
+    else if (S) t += ", swept " + std::to_string(r->sweepLv[side]) + " levels";
+    else if (L) t += ", one " + std::to_string(r->aggrMax[side]) + "-lot order";
     if (!level.empty()) t += " into " + level;
-    if (heldOf[side]) { t += b ? " - price held: buyers absorbing" : " - price held: sellers absorbing"; m.impl = b ? nl::BULL : nl::BEAR; }
-    else { t += " - price giving way"; m.impl = b ? nl::BEAR : nl::BULL; }
+    if (heldOf[side]) { t += b ? " - price held: buyers absorbing." : " - price held: sellers absorbing."; m.impl = b ? nl::BULL : nl::BEAR; }
+    else { t += " - price giving way."; m.impl = b ? nl::BEAR : nl::BULL; }
     m.line1 = t;
     return m;
 }
@@ -372,6 +383,25 @@ inline std::vector<Line> infoLines(const Stat* s, const off::Rec* r, const std::
     const char* who[2] = { " sellers", " buyers" };
     v.push_back(Line{ "Sweep", !dbo || !r ? std::string("n/a") : sw < 0 ? std::string("none") : std::to_string(r->sweepLv[sw]) + " lvls" + who[sw], sw < 0 ? 0 : (sw == 0 ? -1 : 1) });
     v.push_back(Line{ "Large", !dbo || !r ? std::string("n/a") : lg < 0 ? std::string("none") : std::to_string(r->aggrMax[lg]) + who[lg], lg < 0 ? 0 : (lg == 0 ? -1 : 1) });
+    return v;
+}
+
+// (1.5.0) the hover box, two columns: Sellers (bids hit, red) | Buyers (offers lifted, green). dbo = the order feed was live for it.
+//   Lots "240 (3.4x)", Pace "2.3x (2.0x) ?", Orders "42 · avg 3.6", Top order "12%", Sweep "3 lvls" / "-", Large "120" / "-"
+struct Row2 { std::string label, v[2]; };
+inline std::vector<Row2> infoRows(const Stat* s, const off::Rec* r, const std::string let[2], bool dbo, const PaceIn& pc, long long paceFastT) {
+    std::vector<Row2> v; const bool ok = s && s->m.ok;
+    Row2 a; a.label = "Lots"; Row2 p; p.label = "Pace"; Row2 o; o.label = "Orders"; Row2 t; t.label = "Top order"; Row2 w; w.label = "Sweep"; Row2 l; l.label = "Large";
+    for (int k = 0; k < 2; ++k) {
+        a.v[k] = ok ? std::to_string(k == 0 ? s->m.bid : s->m.ask) + " (" + fmtRatio(k == 0 ? s->bidRatioOk : s->askRatioOk, k == 0 ? s->bidRatio : s->askRatio) + ")" : std::string("n/a");
+        p.v[k] = ok ? off::paceHover(pc.p100[k], paceFastT, pc.gate) : std::string("n/a");
+        const bool live = dbo && r;
+        o.v[k] = live ? off::ordersText(r->aggrN[k], r->aggrC[k]) : std::string("n/a");
+        t.v[k] = live ? off::pctOf(r->aggrMax[k], r->aggrC[k]) : std::string("n/a");
+        w.v[k] = !live ? std::string("n/a") : let[k].find('S') != std::string::npos ? std::to_string(r->sweepLv[k]) + " lvls" : std::string("-");
+        l.v[k] = !live ? std::string("n/a") : let[k].find('L') != std::string::npos ? std::to_string(r->aggrMax[k]) : std::string("-");
+    }
+    v.push_back(a); v.push_back(p); v.push_back(o); v.push_back(t); v.push_back(w); v.push_back(l);
     return v;
 }
 

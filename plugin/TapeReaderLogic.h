@@ -1,4 +1,9 @@
 // TapeReaderLogic.h -- lsTapeReader 1.0.1 (2026-10-13; 1.0.0 + GAMMA feed fixes), SDK-free: every input parser, the four voters, the bias, the three lines,
+// 1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
+//   LEVELS section REMOVED from the box (still computed and logged; levels are named inside BUYERS / SELLERS); OPTIONS section added
+//   (2 lines, blue, OptionsFlow.h: "Put buyers fading (IV dn); PS 5790 wall +40% ?" / "Dealers buy 1.2K ES into the bounce (oHit 2.4x ?)",
+//   from LRA-Options-<MKT>.csv as it had ARRIVED by the candle and fresh <= 20 min, '?' until the LRA-OrderFlow gates say on);
+//   BUYERS / SELLERS in the panes' SPEC language (lots, ratio, pace); default Position Bottom centre; the log gains an options field.
 // line 1, the box layout and the per-candle log line. Unit-tested on Linux (tests/test_tr_logic.cpp); TapeReader.cpp only feeds it
 // the chart's bars and the files and executes the draw list.
 //
@@ -37,9 +42,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "OptionsFlow.h"
+
 namespace tr {
 
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
+// (6:40 PM) StackStats' one-order clause = st::ONE_ORDER_TAIL (StackStatsLogic.h); test_tr_ofcompat.cpp checks the two are equal
+static const char* const STACK_ONE_ORDER = "may not reload ?";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
 enum { V_FLOW = 0, V_LEVEL = 1, V_GAMMA = 2, V_TREND = 3, NVOTE = 4 };
 static const char* const VOTE_NAME[NVOTE] = { "FLOW", "LEVEL", "GAMMA", "TREND" };
@@ -626,6 +635,8 @@ struct Inputs {
     int rthOpen = -1, rthClose = -1;                              // minutes of the day (CT)
     bool roll = false;
     std::string inputs;                                           // "name:age_s;..." for the log
+    const ofo::Snap* opt = nullptr;                               // (1.1.0) the options grid that had ARRIVED by the candle and is fresh (else none)
+    int optGates[ofo::NGATE] = { 1, 1, 1, 1, 1, 1, 1 };                 // (1.1.0) the gates of LRA-OrderFlow-<MKT>.csv (on / ? / off)
 };
 struct Fact { int actor = 0; int impl = NEUTRAL; std::string text; int order = 0; long long t = 0; };   // actor 0 buyers, 1 sellers
 struct Read {
@@ -636,6 +647,7 @@ struct Read {
     std::string why[NVOTE];                                       // one word per voter (status / log)
     bool intrabar = false; int intraUpdates = 0; std::string inputs;
     std::string turnRow;                                          // (1.0.1) the LRA-Turns bucket used + its median swing (status only)
+    std::string opt[2];                                           // (1.1.0) the OPTIONS lines (blue); both empty = no fresh options data
 };
 
 struct LevelPlay { bool on = false; bool support = true; bool held = true; bool swept = false; Level lv; double ext = 0; };
@@ -718,39 +730,54 @@ inline Read compute(const Inputs& I) {
         if (!r) continue;
         flow += r->impl; flowWhy += std::string(src == SRC_BAS ? "B" : src == SRC_PULL ? "P" : "K") + (r->impl > 0 ? "+" : "-");
         const std::string lvl = r->level;
+        // (1.1.0) the panes' SPEC language, abbreviated: lots, the ratio, the pace word ("fast" / "slowly", '?' until PACE_SHOW,on)
+        auto paceOf = [&](int sd) -> std::string {
+            const long long note = num(*r, sd == 0 ? "pace_note_b" : "pace_note_a"), gate = r->n.count("pace_gate") ? num(*r, "pace_gate") : 0;
+            if (gate == 0 || (note != 1 && note != 2)) return std::string();
+            return trt::fill(note == 1 ? "pace.fast" : "pace.slow", { {"q", gate == 2 ? std::string() : std::string("?")} });
+        };
         if (src == SRC_BAS) {   // who attacked: bid side hit = sellers (0), offers lifted = buyers (1); the message names the side
             int side = r->msg.compare(0, 7, "Sellers") == 0 ? 0 : r->msg.compare(0, 6, "Buyers") == 0 ? 1 : (r->impl == BULL ? (r->msg.find("held") != std::string::npos ? 0 : 1) : (r->msg.find("held") != std::string::npos ? 1 : 0));
             const bool held = r->msg.find("held") != std::string::npos;
             const std::string sfx = side == 0 ? "_b" : "_a";
-            const long long lv = num(*r, "sweep_lv" + sfx), size = num(*r, "aggr_max" + sfx);
-            const bool S = r->let[side].find('S') != std::string::npos, L = r->let[side].find('L') != std::string::npos;
+            const long long lv = num(*r, "sweep_lv" + sfx), lots = num(*r, side == 0 ? "bid" : "ask");
+            const bool S = r->let[side].find('S') != std::string::npos;
             const double x = ratioAfter(r->nums, side == 0 ? "BidRatio " : "AskRatio ");
-            trt::Args a = { {"lv", std::to_string(lv)}, {"lot", (L || (S && size > 0)) && size > 0 ? trt::fill("lot", { {"n", std::to_string(size)} }) : std::string()},
-                            {"into", lvl.empty() ? std::string() : trt::fill("into", { {"lvl", lvl} })}, {"book", side == 0 ? "bid" : "offer"},
-                            {"verb", trt::text(side == 0 ? "verb.hitbid" : "verb.liftoffer")}, {"x", x >= 0 ? ratio(x) : std::string("high")} };
+            // where it happened: into the level the pane named; "off the low / high" when buyers / sellers won at the level in play
+            const LevelPlay lpx = levelInPlay(I, band);
+            std::string where = lvl.empty() ? std::string() : trt::fill("into", { {"lvl", lvl} });
+            if (!held && lpx.on && lpx.support == (side == 1)) where = trt::text(side == 1 ? "off.low" : "off.high");
+            trt::Args a = { {"lv", std::to_string(lv)}, {"n", std::to_string(lots)}, {"x", x >= 0 ? ratio(x) : std::string("high")}, {"pace", paceOf(side)},
+                            {"into", lvl.empty() ? std::string() : trt::fill("into", { {"lvl", lvl} })}, {"where", where} };
             Fact f; f.actor = side == 0 ? 1 : 0; f.impl = r->impl; f.order = ord++; f.t = rt;
-            f.text = trt::fill(S && lv > 0 ? (held ? "bas.sweep.held" : "bas.sweep.gave") : (held ? "bas.hit.held" : "bas.hit.gave"), a);
+            f.text = S && lv > 0 ? trt::fill(held ? "bas.sweep.held" : "bas.sweep.gave", a)
+                                 : trt::fill(side == 0 ? (held ? "bas.hit.held" : "bas.hit.gave") : (held ? "bas.lift.held" : "bas.lift.gave"), a);
             facts.push_back(f);
         } else if (src == SRC_PULL) {   // bids pulled = buyers leaving (bear); offers pulled = sellers leaving (bull)
             const int side = r->impl == BEAR ? 0 : 1; const std::string sfx = side == 0 ? "_b" : "_a";
             const double x = ratioAfter(r->nums, side == 0 ? "BidPull " : "AskPull ");
-            const long long big = r->let[side].find('L') != std::string::npos ? num(*r, "pull_max" + sfx) : 0;
-            const bool into = side == 0 ? dir3 < 0 : dir3 > 0;    // the side price is moving toward
-            std::string t = trt::fill(into ? "pull.into" : "pull.away", { {"book", side == 0 ? "bids" : "offers"}, {"x", x >= 0 ? ratio(x) : std::string("high")},
-                                      {"lot", big > 0 ? trt::fill("lot", { {"n", std::to_string(big)} }) : std::string()}, {"at", lvl.empty() ? std::string() : trt::fill("at", { {"lvl", lvl} })} });
-            t += into ? trt::text(side == 0 ? "pull.bids.into" : "pull.offers.into") : trt::text("pull.away.tail");
+            const long long n = num(*r, "pull_n" + sfx), lots = num(*r, "pull_cts" + sfx);
+            std::string t = trt::fill("pull", { {"n", std::to_string(n)}, {"book", side == 0 ? (n == 1 ? "bid" : "bids") : (n == 1 ? "offer" : "offers")}, {"lots", std::to_string(lots)},
+                                                {"x", x >= 0 ? ratio(x) : std::string("high")}, {"pace", paceOf(side)}, {"at", lvl.empty() ? std::string() : trt::fill("at", { {"lvl", lvl} })} });
+            t += trt::text(side == 0 ? "pull.bids.tail" : "pull.offers.tail");
             Fact f; f.actor = side == 0 ? 0 : 1; f.impl = r->impl; f.order = ord++; f.t = rt; f.text = t; facts.push_back(f);
         } else {                        // stacking: bids added = buyers (bull), offers added = sellers (bear)
             const int side = r->impl == BULL ? 0 : 1; const std::string sfx = side == 0 ? "_b" : "_a";
             const double x = ratioAfter(r->nums, side == 0 ? "BidStack " : "AskStack "), rx = ratioAfter(r->nums, side == 0 ? "BidRefill " : "AskRefill ");
-            const bool Rl = r->let[side].find('I') != std::string::npos || rx >= 2.0, Ad = x >= 2.0 || r->spike[side];
-            const long long big = r->let[side].find('L') != std::string::npos ? num(*r, "add_max" + sfx) : 0, ice = num(*r, "iceberg" + sfx);
-            const long long iceShown = num(*r, "ice_shown" + sfx), iceTraded = num(*r, "ice_traded" + sfx);   // OrderFlowFeed 38-number record
-            trt::Args a = { {"book", side == 0 ? "bids" : "offers"}, {"x", x >= 0 ? ratio(x) : std::string("high")}, {"rx", rx >= 0 ? ratio(rx) : std::to_string(num(*r, "refill_n" + sfx))},
-                            {"lot", big > 0 ? trt::fill("lot", { {"n", std::to_string(big)} }) : std::string()}, {"at", lvl.empty() ? std::string() : trt::fill("at", { {"lvl", lvl} })},
-                            {"ice", ice <= 0 ? std::string() : iceTraded > iceShown && iceShown > 0 ? trt::fill("ice.n", { {"shown", std::to_string(iceShown)}, {"traded", std::to_string(iceTraded)} }) : trt::text("ice")} };
-            Fact f; f.actor = side == 0 ? 0 : 1; f.impl = r->impl; f.order = ord++; f.t = rt;
-            f.text = trt::fill(Rl && Ad ? "stack.both" : Rl ? "stack.refill" : "stack.add", a);
+            const bool Rl = r->let[side].find('I') != std::string::npos;
+            const long long n = num(*r, "add_n" + sfx), lots = num(*r, "add_cts" + sfx), hit = num(*r, "hit_cts" + sfx), reb = num(*r, "rebuilt_cts" + sfx), ice = num(*r, "iceberg" + sfx);
+            std::string t = lvl.empty() ? std::string() : trt::fill("stack.defend", { {"lvl", lvl} });
+            const bool refillOnly = r->msg.find(" reloaded ") != std::string::npos || r->msg.find(" reloading ") != std::string::npos || (n == 0 && lots == 0);   // the refills alone were notable
+            const std::string rxT = rx >= 0 ? ratio(rx) : std::to_string(num(*r, "refill_n" + sfx));
+            if (refillOnly) t += trt::fill("stack.refillonly", { {"book", side == 0 ? "bids" : "offers"}, {"rx", rxT} }) + (ice > 0 ? trt::text("ice") : "");
+            else {
+                t += trt::fill("stack", { {"n", std::to_string(n)}, {"book", side == 0 ? (n == 1 ? "bid" : "bids") : (n == 1 ? "offer" : "offers")}, {"lots", std::to_string(lots)},
+                                          {"x", x >= 0 ? ratio(x) : std::string("high")}, {"pace", paceOf(side)} });
+                if (r->msg.find(" - rebuilt ") != std::string::npos && hit > 0) { long long p = (reb * 100 + hit / 2) / hit; if (p > 200) p = 200; t += trt::fill("stack.rebuilt", { {"p", std::to_string(p)} }); }
+                if (Rl) t += trt::fill("stack.refill", { {"rx", rxT} }) + (ice > 0 ? trt::text("ice") : "");
+            }
+            if (r->msg.find(STACK_ONE_ORDER) != std::string::npos || r->msg.find("may be bait") != std::string::npos) t += trt::text("stack.bait");   // (6:40 PM) new words + old records
+            Fact f; f.actor = side == 0 ? 0 : 1; f.impl = r->impl; f.order = ord++; f.t = rt; f.text = t;
             facts.push_back(f);
         }
     }
@@ -830,7 +857,9 @@ inline Read compute(const Inputs& I) {
         (who == 0 ? R.buyers : R.sellers) = s;
         (who == 0 ? R.buyImpl : R.sellImpl) = imp > 0 ? BULL : imp < 0 ? BEAR : NEUTRAL;
     }
-    // ---------------- LEVELS ----------------
+    // ---------------- (1.1.0) OPTIONS: the grid that had ARRIVED by the candle's end and is fresh (the host filters), blue ----------------
+    if (I.opt) { R.opt[0] = ofo::trLine1(*I.opt, I.optGates); R.opt[1] = ofo::trLine2(*I.opt, I.optGates, I.mkt, dir3); }
+    // ---------------- LEVELS (1.1.0: computed and logged for the nightly, no longer drawn - levels are named inside BUYERS / SELLERS) ----------------
     std::vector<std::string> parts;
     {   // low trust: first / last 5 min of RTH, roll
         // the candle's span [end - spb, end) overlaps the first / last 5 min of RTH
@@ -900,8 +929,9 @@ inline Read compute(const Inputs& I) {
 }
 
 // ---- the per-candle log line (lsFlexLevels\TapeReader\<MKT>-<CONTRACT>-<spb>-<YYYYMMDD>.csv) ----------------------------------
-static const char* const LOG_HEADER = "bar_raw|bar_t|ct|bias|n|v_flow|v_level|v_gamma|v_trend|weights|centre|centre_dir|buy_impl|sell_impl|buyers|sellers|levels|why|intrabar_updates|inputs|params|version";
-static const int LOG_FIELDS = 22;
+// (1.1.0) + "options" before "version" (23 fields); a 1.0.x log line (22 fields) still loads with no options
+static const char* const LOG_HEADER = "bar_raw|bar_t|ct|bias|n|v_flow|v_level|v_gamma|v_trend|weights|centre|centre_dir|buy_impl|sell_impl|buyers|sellers|levels|why|intrabar_updates|inputs|params|options|version";
+static const int LOG_FIELDS = 23, LOG_FIELDS_V10 = 22;
 inline std::string logLine(const Read& R, const Params& P) {
     char w[96]; std::snprintf(w, sizeof(w), "%.3g;%.3g;%.3g;%.3g", P.w[0], P.w[1], P.w[2], P.w[3]);
     std::string why; for (int v = 0; v < NVOTE; ++v) why += (v ? ";" : "") + std::string(VOTE_NAME[v]) + "=" + clean(R.why[v], 60);
@@ -909,11 +939,12 @@ inline std::string logLine(const Read& R, const Params& P) {
     return std::to_string(R.raw) + "|" + std::to_string(R.t) + "|" + clean(R.ct, 12) + "|" + (R.bias == BULL ? "bull" : R.bias == BEAR ? "bear" : "mixed") + "|" + std::to_string(R.n) + "|" +
         std::to_string(R.votes[0]) + "|" + std::to_string(R.votes[1]) + "|" + std::to_string(R.votes[2]) + "|" + std::to_string(R.votes[3]) + "|" + w + "|" +
         clean(R.turn, 300) + "|" + std::to_string(R.centreDir) + "|" + std::to_string(R.buyImpl) + "|" + std::to_string(R.sellImpl) + "|" +
-        clean(R.buyers, 600) + "|" + clean(R.sellers, 600) + "|" + clean(R.levels, 600) + "|" + why + "|" + std::to_string(R.intraUpdates) + "|" + clean(R.inputs, 600) + "|" + pp + "|" + VERSION;
+        clean(R.buyers, 600) + "|" + clean(R.sellers, 600) + "|" + clean(R.levels, 600) + "|" + why + "|" + std::to_string(R.intraUpdates) + "|" + clean(R.inputs, 600) + "|" + pp + "|" +
+        clean(R.opt[0], 300) + " // " + clean(R.opt[1], 300) + "|" + VERSION;
 }
 inline bool parseLogLine(const std::string& ln, Read& R) {
     const std::vector<std::string> c = split(ln, '|');
-    if ((int)c.size() != LOG_FIELDS) return false;
+    if ((int)c.size() != LOG_FIELDS && (int)c.size() != LOG_FIELDS_V10) return false;
     long long raw, t, n, v[4], cd, bi, si, iu;
     if (!parseWhole(c[0], 1, 9000000000000LL, raw) || !parseWhole(c[1], 0, 32503680000LL, t) || !parseWhole(c[4], 0, 4, n)) return false;
     for (int i = 0; i < 4; ++i) if (!parseWhole(c[5 + i], -1, 1, v[i])) return false;
@@ -923,6 +954,7 @@ inline bool parseLogLine(const std::string& ln, Read& R) {
     for (int i = 0; i < 4; ++i) r.votes[i] = (int)v[i];
     r.biasText = r.bias == BULL ? trt::fill("bias.bull", { {"n", std::to_string(r.n)} }) : r.bias == BEAR ? trt::fill("bias.bear", { {"n", std::to_string(r.n)} }) : trt::text("bias.mixed");
     r.turn = c[10]; r.centreDir = (int)cd; r.buyImpl = (int)bi; r.sellImpl = (int)si; r.buyers = c[14]; r.sellers = c[15]; r.levels = c[16]; r.intraUpdates = (int)iu; r.inputs = c[19];
+    if ((int)c.size() == LOG_FIELDS) { const size_t k = c[21].find(" // "); if (k != std::string::npos) { r.opt[0] = c[21].substr(0, k); r.opt[1] = c[21].substr(k + 4); } }   // (1.1.0)
     R = r; return true;
 }
 
@@ -934,7 +966,8 @@ inline bool overlap(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r 
 typedef std::function<int(const std::string&, int, bool)> Measure;
 struct Layout { std::vector<Item> items; Box box; bool ok = false; std::string note; int fs = 9, lines = 0; };
 static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_QUIET = 0x00D8DDE3, C_INK = 0x00D8DDE3, C_HEAD = 0x00F3F4F6, C_BG = 0x000F1520, C_BORDER = 0x00C8CDD3;
-static const int POS_DEFAULT = 6;     // Bottom left
+static const unsigned C_BLUE = 0x0058A6FF;   // (1.1.0) OPTIONS (the same blue as the panes' options line)
+static const int POS_DEFAULT = 7;     // (1.1.0, SPEC) Bottom centre (1.0.x: Bottom left)
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 static const char* const ELLIPSIS = "\x85";   // "…" in the Windows ANSI code page the chart draws with
 // the reference text that fixes the box's text width (the approved mockup's longest line, ~100 characters)
@@ -975,7 +1008,7 @@ inline std::vector<std::string> wrap2(const std::string& s, int w, int fs, const
     out.push_back(fitEllipsis(s.substr(r), w, fs, false, M));
     return out;
 }
-// the box: header (centred), line 1 (bias left, the stats centred in the box), BUYERS / SELLERS / LEVELS (1-2 lines each, the second
+// the box: header (centred), line 1 (bias left, the stats centred in the box), BUYERS / SELLERS (1-2 lines each) / OPTIONS (1.1.0, blue) (the second
 // line indented under the text). Fixed width (REF_TEXT at the font); height follows the content; placed by Position inside region
 // (the space up to the last bar, clear of the profiles).
 inline Layout layout(const Read& R, const std::string& header, const Box& region, int pos, const Measure& M) {
@@ -983,14 +1016,19 @@ inline Layout layout(const Read& R, const std::string& header, const Box& region
     const int availW = region.r - region.l, availH = region.b - region.t;
     for (int fs = 9; fs >= 7; --fs) {
         const int fsS = fs - 1, pad = 6, lh = (int)(fs * 1.75f + 0.5f), lhS = (int)(fsS * 1.7f + 0.5f), gap = 4;
-        const int labW = std::max(M(trt::text("label.sellers"), fsS, true), std::max(M(trt::text("label.buyers"), fsS, true), M(trt::text("label.levels"), fsS, true))) + 14;
+        const int labW = std::max(M(trt::text("label.sellers"), fsS, true), std::max(M(trt::text("label.buyers"), fsS, true), M(trt::text("label.options"), fsS, true))) + 14;
         const int textW = M(REF_TEXT, fsS, false);
         const int W = std::max(pad * 2 + labW + textW, M(header, fs, true) + 2 * pad);
         if (W > availW) continue;
         // content lines
-        const std::string side[3] = { R.buyers, R.sellers, R.levels };
+        // (1.1.0) BUYERS, SELLERS (1-2 lines each, wrapped), OPTIONS (blue, its 2 lines as they are, each cut to fit; none = one grey line)
+        const std::string side[3] = { R.buyers, R.sellers, std::string() };
         std::vector<std::string> wr[3]; int nl = 0;
-        for (int i = 0; i < 3; ++i) { const std::string& s = side[i].empty() ? std::string(trt::text("quiet")) : side[i]; wr[i] = wrap2(s, textW, fsS, M); nl += (int)wr[i].size(); }
+        for (int i = 0; i < 2; ++i) { const std::string& s = side[i].empty() ? std::string(trt::text("quiet")) : side[i]; wr[i] = wrap2(s, textW, fsS, M); nl += (int)wr[i].size(); }
+        const bool optAny = !R.opt[0].empty() || !R.opt[1].empty();
+        if (optAny) { for (int j = 0; j < 2; ++j) if (!R.opt[j].empty()) wr[2].push_back(fitEllipsis(R.opt[j], textW, fsS, false, M)); }
+        else wr[2].push_back(trt::text("options.none"));
+        nl += (int)wr[2].size();
         const int H = pad + lh + lh + gap + nl * lhS + pad;
         if (H > availH) { L.note = trt::text("note.short"); continue; }
         L.note.clear();
@@ -1017,11 +1055,12 @@ inline Layout layout(const Read& R, const std::string& header, const Box& region
             text(x, y, y + lh, cs, learning ? C_QUIET : R.centreDir > 0 ? C_GREEN : R.centreDir < 0 ? C_RED : C_QUIET, fs, true);
         }
         y += lh + gap;
-        const char* lab[3] = { trt::text("label.buyers"), trt::text("label.sellers"), trt::text("label.levels") };
-        const unsigned lc[3] = { implCol(side[0] == trt::text("quiet") ? 0 : R.buyImpl), implCol(side[1] == trt::text("quiet") ? 0 : R.sellImpl), C_QUIET };
+        const char* lab[3] = { trt::text("label.buyers"), trt::text("label.sellers"), trt::text("label.options") };
+        const unsigned lc[3] = { implCol(side[0].empty() || side[0] == trt::text("quiet") ? 0 : R.buyImpl), implCol(side[1].empty() || side[1] == trt::text("quiet") ? 0 : R.sellImpl), C_BLUE };
         for (int i = 0; i < 3; ++i) {
             text(b.l + pad, y, y + lhS, lab[i], lc[i], fsS, true);
-            for (size_t j = 0; j < wr[i].size(); ++j) { text(b.l + pad + labW, y, y + lhS, wr[i][j], C_INK, fsS, false); y += lhS; }
+            const unsigned ink = i < 2 ? C_INK : optAny ? C_BLUE : C_QUIET;
+            for (size_t j = 0; j < wr[i].size(); ++j) { text(b.l + pad + labW, y, y + lhS, wr[i][j], ink, fsS, false); y += lhS; }
         }
         return L;
     }

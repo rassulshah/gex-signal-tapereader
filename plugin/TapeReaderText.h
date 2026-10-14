@@ -1,4 +1,5 @@
-// TapeReaderText.h -- lsTapeReader 1.0.1 (2026-10-13; one change from 1.0.0: the refill letter R -> I): EVERY word the Tape Reader box writes, in ONE table, so the phrasing can be
+// TapeReaderText.h -- lsTapeReader 1.1.0 (2026-10-13; 1.1.0: BUYERS / SELLERS in the panes' SPEC language - lots, ratio, pace; OPTIONS replaces LEVELS;
+// 1.0.1: the refill letter R -> I): EVERY word the Tape Reader box writes, in ONE table, so the phrasing can be
 // swapped without touching the logic (coordinator 11:58: "keep the text templates in ONE table-driven place").
 // Phrasing follows "Tape Reader Language Guide (MBO, 3-min, reversals at key levels)", research_notes/TapeReader language/
 // LANGUAGE-GUIDE.md, compiled 2026-10-13 (the version used for 1.0.0):
@@ -31,7 +32,9 @@ static const Tpl TABLE[] = {
     { "bias.mixed",      "MIXED" },
     { "label.buyers",    "BUYERS" },
     { "label.sellers",   "SELLERS" },
-    { "label.levels",    "LEVELS" },
+    { "label.levels",    "LEVELS" },            // (1.1.0) logged only, not drawn
+    { "label.options",   "OPTIONS" },           // (1.1.0) blue
+    { "options.none",    "no fresh options data" },
     { "quiet",           "quiet" },
     // line 1, centre (three spaces between the parts, as the approved mockup)
     { "turn",            "Turn {dir} at {lvl} {p}" },
@@ -39,28 +42,35 @@ static const Tpl TABLE[] = {
     { "swing",           "Swing {x}+ ticks {p}" },
     { "next",            "Next: {px} {lvl}" },
     { "centre.sep",      "   " },
+    // (1.1.0, SPEC 2026-10-13) the panes' language, abbreviated: lots, the ratio, the pace word, the level named inside the line
     // BidAskStats (tape = fact): aggression always paired with its result
-    { "bas.sweep.held",  "Swept {lv} lvls{lot}{into} - no follow-through, {book} held" },
-    { "bas.sweep.gave",  "Swept {lv} lvls{lot}{into} - accepted, {book} giving way" },
-    { "bas.hit.held",    "{verb} {x}{lot}{into} - {book} held" },
-    { "bas.hit.gave",    "{verb} {x}{lot}{into} - {book} giving way" },
-    { "verb.hitbid",     "Hitting bid" },
-    { "verb.liftoffer",  "Lifting offer" },
+    //   SELLERS "Swept 3 lvls into PDL with a 240-lot (3.4x), no follow-through"   BUYERS "Lifted offers with a 170-lot (2.6x) off the low"
+    { "bas.sweep.held",  "Swept {lv} lvls{into} with a {n}-lot ({x}){pace}, no follow-through" },
+    { "bas.sweep.gave",  "Swept {lv} lvls{into} with a {n}-lot ({x}){pace}, accepted" },
+    { "bas.hit.held",    "Hit bids with a {n}-lot ({x}){pace}{into} - bids held" },
+    { "bas.hit.gave",    "Hit bids with a {n}-lot ({x}){pace}{where}" },
+    { "bas.lift.held",   "Lifted offers with a {n}-lot ({x}){pace}{into} - offers held" },
+    { "bas.lift.gave",   "Lifted offers with a {n}-lot ({x}){pace}{where}" },
+    { "off.low",         " off the low" },
+    { "off.high",        " off the high" },
+    { "pace.fast",       " fast{q}" },
+    { "pace.slow",       " slowly{q}" },
     { "lot",             " ({n}-lot)" },
     { "into",            " into {lvl}" },
     { "at",              " at {lvl}" },
-    // PullStats (book = intent): relative to where price is going, never "spoof"
-    { "pull.into",       "Pulled {book} {x}{lot} as price came in{at}" },
-    { "pull.away",       "Pulled {book} {x}{lot} away from price{at}" },
-    { "pull.bids.into",  " - support leaving" },
-    { "pull.offers.into"," - path opening up" },
-    { "pull.away.tail",  " - backing off" },
-    // StackStats: stacking is untested intent, refills / icebergs are numbers
-    { "stack.add",       "{Book} stacking {x}{lot}{at} - untested" },
-    { "stack.refill",    "{Book} reloading (I {rx}){at}{ice}" },
-    { "stack.both",      "{Book} stacking {x}{lot} + reloading (I {rx}){at}{ice}" },
+    // PullStats (book = intent): resting sellers are passive - "resistance leaving", never "attackers"
+    //   SELLERS "Pulled 38 offers, 95 lots (3.6x) fast - resistance leaving"
+    { "pull",            "Pulled {n} {book}, {lots} lots ({x}){pace}{at}" },
+    { "pull.bids.tail",  " - support leaving" },
+    { "pull.offers.tail"," - resistance leaving" },
+    // StackStats: BUYERS "Defending PDL: 42 bids, 150 lots (4.4x) added fast, 90% rebuilt"; refills / icebergs as numbers
+    { "stack.defend",    "Defending {lvl}: " },
+    { "stack",           "{n} {book}, {lots} lots ({x}) added{pace}" },
+    { "stack.rebuilt",   ", {p}% rebuilt" },
+    { "stack.refill",    ", reloading (I {rx})" },
+    { "stack.refillonly","reloading {book} (I {rx})" },
+    { "stack.bait",      ", one order - may not reload ?" },
     { "ice",             ", iceberg" },
-    { "ice.n",           ", iceberg {shown} shown / {traded} traded" },
     // Delta Profile (A / AE? / Ex?): absorption and exhaustion as facts that need confirmation
     { "delta.a",         "Absorbing at {lvl}{px} (A {x}x{ae})" },
     { "delta.ae.tag",    ", {ae}" },
