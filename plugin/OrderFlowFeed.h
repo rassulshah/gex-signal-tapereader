@@ -1,7 +1,17 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.3.1, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.3, lsPullStats 1.2.2 and
-// lsStackStats 1.1.3.
+// OrderFlowFeed.h (1.4.0, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.3, lsPullStats 1.3.0 and
+// lsStackStats 1.2.0.
+// 1.4.0 (2026-10-14 evening, Rassul's standing order "always record IRT data and keep the MBO files updated"; LIQ-DAY-2026-10-14 review:
+//   the ES mbo_HH.csv held only 30-45% of the traded volume in busy periods, 96-100% pre-market): ROOT CAUSE - the order feed was read
+//   only from the pane's calc / draw, which IRT ran every ~6-10 s on the busy 3-min chart (none while its layout tab is hidden), at most
+//   5,000 events / ~8 ms per call, and IRT keeps only the last few thousand events per subscriber, so the rest were overwritten unread
+//   (mbo_09.csv: events in 1-3 s bursts, then 5-9 s with none, 2,028 of 3,600 seconds empty). Now (MboPane = PullStats / StackStats):
+//   a 250 ms clock per pane reads the stream (opened with the chart symbol spelled out) behind a structured-exception guard into a
+//   queue (<= 400,000 events), each event goes to the recorder as it is read, and calc / draw route the queue in order before reading
+//   more. Status: FEED_CLOCK (ticks, events by clock / chart, queue peak / dropped, faults) and MBO_COVERAGE = FILL lots read / bar
+//   volume per closed candle (last bar, last 10, lowest with its time, since load). BidAskStats and the Liquidity Profile keep their
+//   calc / draw drain (unchanged behaviour); they only gain the coverage counter. Tests: tests_of/test_feedclock_host.cpp.
 // 1.3.1 (2026-10-14 CR5300; Rassul 11:59 CT, CLZ6 3-min BidAskStats: "the label for pace and lots on the red spike goes away but it
 //   is there on the green spike. fix it .. also check other indicators"): ROOT CAUSE in spikeLabels (shared by all three panes):
 //   pass 2 shrank the NEAREST already-placed full labels to their ratio alone whenever ANY other spike had no free spot (a spike under
@@ -108,7 +118,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.3.1";   // 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.4.0";   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1388,6 +1398,47 @@ struct Rolling {
     long long perMin(long long nowMs) const { const long long s = nowMs / 1000; long long t = 0; for (int i = 0; i < 60; ++i) if (sec[i] >= 0 && s >= sec[i] && s - sec[i] < 60) t += n[i]; return t; }
 };
 
+// (1.4.0, 2026-10-14 LIQ-DAY review: "captured fills only 30-45% of real volume in busy periods") COVERAGE SELF-CHECK - how much of
+// the traded volume the order feed actually delivered: the FILL lots read (resting side, by the event's own second) over each closed
+// candle's bar volume. Pre-market on 10-14 this was 96-100%; in busy RTH 10-45% (the drain ran only when IRT drew the chart, every
+// 6-10 s, and IRT keeps only the last few thousand events per subscriber). Bars evaluated once, >= 5 s after they closed.
+struct Coverage {
+    std::map<long long, long long> fillsAt;          // event second (RTDATE) -> FILL lots read
+    std::map<long long, long long> pend;             // closed bar end -> steady ms first seen closed (waits 5 s for late reads)
+    std::set<long long> done;                        // bar ends evaluated
+    struct Row { long long end = 0, fills = 0, vol = 0; int pct = -1; };
+    std::vector<Row> last;                           // the most recent evaluations (<= 10)
+    Row low; long long checked = 0, sumFills = 0, sumVol = 0;
+    void addFill(long long stamp, long long lots) {
+        if (stamp <= 0 || lots <= 0 || lots > 10000000) return;
+        fillsAt[stamp] += lots;
+        if (fillsAt.size() > 20000) fillsAt.erase(fillsAt.begin());   // ~5.5 h of busy seconds; older bars are long evaluated
+    }
+    long long fillsIn(long long from, long long to) const {   // [from, to)
+        long long t = 0;
+        for (std::map<long long, long long>::const_iterator i = fillsAt.lower_bound(from); i != fillsAt.end() && i->first < to; ++i) t += i->second;
+        return t;
+    }
+    static int pctOf(long long fills, long long vol) { if (vol <= 0) return -1; const long long p = (fills * 100 + vol / 2) / vol; return (int)(p > 999 ? 999 : p); }
+    // a bar ending at `end` (covers [end - spb, end)) with `vol` lots, seen closed now; returns true when it was evaluated now
+    bool offer(long long end, int spb, long long vol, long long nowMs, long long waitMs = 5000) {
+        if (end <= 0 || spb <= 0 || done.count(end)) return false;
+        std::map<long long, long long>::iterator p = pend.find(end);
+        if (p == pend.end()) { pend[end] = nowMs; if (pend.size() > 50) pend.erase(pend.begin()); return false; }
+        if (nowMs >= p->second && nowMs - p->second < waitMs) return false;
+        pend.erase(p);
+        done.insert(end); if (done.size() > 3000) done.erase(done.begin());
+        Row r; r.end = end; r.vol = vol; r.fills = fillsIn(end - spb, end); r.pct = pctOf(r.fills, vol);
+        if (r.pct < 0) return true;                                   // no volume: nothing to compare
+        last.push_back(r); if (last.size() > 10) last.erase(last.begin());
+        ++checked; sumFills += r.fills; sumVol += vol;
+        if (low.pct < 0 || (r.pct < low.pct && vol >= 20)) low = r;  // a 3-lot bar at 0% is not a meaningful "lowest"
+        return true;
+    }
+    int recentPct() const { long long f = 0, v = 0; for (size_t i = 0; i < last.size(); ++i) { f += last[i].fills; v += last[i].vol; } return pctOf(f, v); }
+    void reset() { fillsAt.clear(); pend.clear(); done.clear(); last.clear(); low = Row(); checked = sumFills = sumVol = 0; }
+};
+
 // (1.2.0) the options file of a market, re-read at most every 5 s when its stamp changes; each new grid joins the history on the bar
 // it ARRIVED on = the bar during which the file was written (its modification time, mapped to a bar end by the host's barOf; a time
 // past the forming bar = the forming bar), so a candle's line never changes later, and a restart shows the same lines
@@ -1425,6 +1476,7 @@ static const long long FINAL_GRACE_MS = 5000;      // ... or 5 s after it closed
 #include "HostSlot.h"
 #include <chrono>
 #include <climits>
+#include <cstdint>
 #include <new>
 #include <sstream>
 
@@ -1438,6 +1490,20 @@ template struct Rob<DboFlag, &cppExtension::DEPTH_BY_ORDER::bDboSubscribed>;
 
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 
+// (1.4.0) one getNext() behind a structured-exception guard: 1 = an event, 0 = none queued, -1 = the native call faulted (IRT's
+// C0000005 would otherwise unwind past our state). No C++ object with a destructor lives in this frame (MSVC C2712).
+inline int safeNext(cppExtension::DEPTH_BY_ORDER* d) {
+#if defined(_MSC_VER)
+    __try { return d->getNext() == RTX_OK ? 1 : 0; } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#else
+    try { return d->getNext() == RTX_OK ? 1 : 0; } catch (...) { return -1; }
+#endif
+}
+static const long long TIMER_MS = 250;              // (1.4.0) the order-feed clock: IRT keeps only the last few thousand events
+static const int TIMER_MAX = 50000;                 //   per subscriber, so it is read 4x a second whatever the chart is doing,
+static const long long TIMER_BUDGET_MS = 20;        //   up to 50,000 events or ~20 ms per tick
+static const size_t QUEUE_MAX = 400000;             //   events read by the clock wait here (<= ~20 MB) for the chart's next calc
+
 // ---- the order feed of one chart (lsMboCheck 1.1.0 pattern) --------------------------------------------------------
 struct Conn {
     cppExtension::DEPTH_BY_ORDER* dbo = nullptr;
@@ -1445,10 +1511,50 @@ struct Conn {
     long long openMs = -1, lastResubMs = -1, lastEventMs = -1;
     long long faults = 0, slices = 0, capHits = 0, backlogRun = 0, longestBacklog = 0, events = 0;
     bool lastCapped = false; std::string via; Rolling roll;
+    // (1.4.0) the clock path: events read by the order-feed timer wait in q (with their arrival ms) until the chart's calc / draw
+    // routes them, in order, before reading more. `raw` sees every event exactly once, as it is read (the recorder).
+    struct QEv { DEPTH_ORDER o; long long ms; };
+    std::vector<QEv> q; size_t qPeak = 0;
+    long long qDropped = 0, timerTicks = 0, timerEvents = 0, timerFaults = 0, pumpEvents = 0;
+    bool timerOff = false;                           // a faulting timer read: the clock stops reading (never re-enter it)
+    std::function<void(const DEPTH_ORDER&)> raw;
+    Coverage cov;
     Conn() {}
     Conn(const Conn&) = delete; Conn& operator=(const Conn&) = delete;
     ~Conn() { delete dbo; }
-    void reset() { delete dbo; dbo = nullptr; attempt = 0; flag = -1; blocked = dead = false; openMs = lastResubMs = lastEventMs = -1; lastCapped = false; via.clear(); }
+    void reset() { delete dbo; dbo = nullptr; attempt = 0; flag = -1; blocked = dead = false; openMs = lastResubMs = lastEventMs = -1; lastCapped = false; via.clear();
+                   q.clear(); timerOff = false; cov.reset(); }
+    bool named() const { return dbo && via.compare(0, 13, "chart symbol ") == 0; }   // opened with the chart symbol spelled out:
+                                                                                         // every SDK call names it, so readable off the chart
+    void took(const DEPTH_ORDER& o) {                               // every event read, on either path
+        if (o.action == 3) cov.addFill((long long)o.timestamp, (long long)o.size);
+        if (raw) raw(o);
+    }
+    // (1.4.0) the clock path (timer, any chart context): only a stream opened with the chart symbol spelled out is read here
+    template <class Clock> int prefetch(long long now, Clock clock) {
+        if (!dbo || dead || timerOff || !named() || flag != 1) return 0;
+        const long long t0 = clock(); int n = 0;
+        ++timerTicks;
+        for (;;) {
+            if (n >= TIMER_MAX || ((n & 1023) == 1023 && clock() - t0 > TIMER_BUDGET_MS)) { capHits++; break; }
+            const int r = safeNext(dbo);
+            if (r < 0) { timerFaults++; faults++; timerOff = true; break; }
+            if (r == 0) break;
+            ++n; took(dbo->dbo);
+            if (q.size() < QUEUE_MAX) { QEv e; e.o = dbo->dbo; e.ms = now; q.push_back(e); } else qDropped++;
+        }
+        if (q.size() > qPeak) qPeak = q.size();
+        if (n > 0) { lastEventMs = now; slices++; events += n; timerEvents += n; roll.add(now, n); }
+        return n;
+    }
+    // the queued events, in order, to the engine (chart context); `route(const DEPTH_ORDER&, long long arrivalMs)`
+    template <class Route> size_t flushQueue(Route route) {
+        const size_t n = q.size();
+        for (size_t i = 0; i < n; ++i) route(q[i].o, q[i].ms);
+        q.clear();
+        if (q.capacity() > 65536) std::vector<QEv>().swap(q);        // give a burst's memory back
+        return n;
+    }
     bool due(long long now) const {
         if (blocked || dead || attempt >= 2) return false;
         if (attempt == 1) return lastEventMs < 0 && openMs >= 0 && now - openMs >= WAIT_MS;
@@ -1489,11 +1595,11 @@ struct Conn {
                 if (n >= SLICE_MAX) { cap = true; break; }
                 if ((n & 511) == 511 && clock() - t0 > SLICE_BUDGET_MS) { cap = true; break; }
                 if (dbo->getNext() != RTX_OK) break;
-                ++n; sink(dbo->dbo);
+                ++n; took(dbo->dbo); sink(dbo->dbo);                        // (1.4.0) took(): recorder + coverage, once per event
             }
             flag = (dbo->*robbed(DboFlag())) ? 1 : 0;                      // after the reads: getNext may have just subscribed
         } catch (...) { faults++; dead = true; }                            // never re-enter a faulting call
-        if (n > 0) { lastEventMs = now; slices++; events += n; roll.add(now, n); }
+        if (n > 0) { lastEventMs = now; slices++; events += n; pumpEvents += n; roll.add(now, n); }
         if (cap) { capHits++; backlogRun++; if (backlogRun > longestBacklog) longestBacklog = backlogRun; } else backlogRun = 0;
         lastCapped = cap;
         return n;
@@ -1791,6 +1897,7 @@ template <class L> struct PaneState {
     OptCache opt; ResetWatch rw;                     // (1.2.0) the options file (blue line), PullStats' reset watch
     std::unique_ptr<PaneExt> ext;                    // (1.2.2) PullStats' order-feed recorder (null in the other panes)
     bp::Box lastBox; bool inBox = false; long long boxHovers = 0;   // (1.3.0) the read box last drawn; the mouse over it (numbers hover)
+    int timerId = 0; bool timerOn = false, timerTried = false;       // (1.4.0) the order-feed clock of this chart's pane
 };
 
 template <class L> class MboPane : public cppExtension {
@@ -1802,6 +1909,29 @@ public:
     virtual void onRaw(S_&, const DEPTH_ORDER&) {}
     virtual void afterPump(S_&, long long, bool) {}
     virtual void statusExtra(S_&, std::ostream&) {}
+    virtual void afterTimer(S_&, long long) {}                            // (1.4.0) e.g. the recorder's once-a-second flush
+    // (1.4.0, 2026-10-14 LIQ-DAY review: ES mbo_HH.csv held 30-45% of the traded volume in busy periods, 96-100% pre-market; events came
+    // in 1-3 s bursts with 5-9 s holes) ROOT CAUSE: the feed was read only from this pane's calc / draw, which IRT ran every ~6-10 s on
+    // the busy 3-min chart (and not at all while its layout tab is hidden), at most 5,000 events / ~8 ms per call, while IRT keeps
+    // only the last few thousand events per subscriber - the rest were overwritten unread. Now a 250 ms clock per pane reads the
+    // stream (opened with the chart symbol spelled out, so no chart context is needed) into a queue; calc / draw route the queue in
+    // order before reading more. A fault in a clock read stops the clock (calc / draw keep reading, as before).
+    virtual int timer(RTX_EVENT* e) {
+        if (!e) return RTX_FAIL;
+        S_* S = nullptr;
+        { typename std::map<int, S_*>::const_iterator it = timers().find(e->v.timer.id); if (it != timers().end()) S = it->second; }
+        if (!S) return RTX_FAIL;                                           // not ours: let IRT pass it on
+        if (S->busy) return RTX_OK;
+        S->busy = true;
+        struct Unbusy { S_* s; ~Unbusy() { s->busy = false; } } unbusy = { S };
+        try {
+            const long long now = steadyMs();
+            S->feed.prefetch(now, steadyMs);
+            if (S->feed.timerOff) stopTimer(*S);
+            afterTimer(*S, now);
+        } catch (...) {}
+        return RTX_OK;
+    }
     virtual int draw(void) {
         pump(true);                                                        // (1.2.2) from the draw: a recorder buffers, never writes
         S_* S = slot_.get(this, false);
@@ -1915,8 +2045,33 @@ public:
         if (followBoard(*S)) ch = true;                                    // (1.2.1) the mouse moved over another pane of this chart
         if (ch) invalidateChart(false);                                    // only on a change: no redraw cost otherwise
     }
-    void release() { slot_.release(this); }
+    void release() { S_* S = slot_.get(this, false); if (S) stopTimer(*S); slot_.release(this); }
     S_* testState() { return slot_.get(this, false); }
+    // (1.4.0) timer id -> the pane state it reads (IRT may deliver a timer in another chart's context: never trust the user-data slot)
+    static std::map<int, S_*>& timers() { static std::map<int, S_*> m; return m; }
+    void stopTimer(S_& S) {
+        if (S.timerOn) { destroyTimer(S.timerId); S.timerOn = false; }
+        if (S.timerId) timers().erase(S.timerId);
+        S.timerId = 0;
+    }
+    void startTimer(S_& S) {                                               // chart context, once the stream is subscribed
+        if (S.timerTried || S.timerOn || !S.feed.named() || S.feed.flag != 1 || S.feed.timerOff) return;
+        S.timerTried = true;
+        int id = 30000 + (int)(((uintptr_t)&S >> 4) % 900000);
+        while (timers().count(id)) ++id;
+        if (createTimer(id, (int)TIMER_MS) == RTX_OK) { S.timerId = id; S.timerOn = true; timers()[id] = &S; }
+    }
+    // (1.4.0) closed candles >= 5 s old: FILL lots read vs the bar volume (the MBO_COVERAGE status line)
+    void coverage(S_& S, long count, long long now) {
+        if (count < 3 || S.firstBarKey < 0 || S.spb <= 0) return;
+        RTARRAYI times(barDateTime), vols(barVolume);
+        if (times.count < count || vols.count < count) return;
+        for (long i = std::max(0L, count - 12); i < count - 1; ++i) {
+            const long long end = (long long)times[(int)i];
+            if (end <= S.firstBarKey) continue;                            // the bar the stream opened in is partial
+            S.feed.cov.offer(end, S.spb, (long long)vols[(int)i], now);
+        }
+    }
     void pump(bool fromDraw = false) {
         S_* P = slot_.get(this, true);
         if (!P || P->busy) return;
@@ -1939,8 +2094,13 @@ public:
                 S.feed.open(S.symbol, dir().empty() ? std::string() : dir() + "\\_opening-" + stem(S) + ".txt", now, st);
                 if (!st.empty()) S.state = st;
                 const double tick = S.tick;
-                S.feed.drain(now, steadyMs, [&](const DEPTH_ORDER& o) { onRaw(S, o); route(S, evOf(o, tick, now)); });
+                if (!S.feed.raw) { S_* ps = &S; S.feed.raw = [this, ps](const DEPTH_ORDER& o) { onRaw(*ps, o); }; }   // (1.4.0) once per event read
+                S.feed.flushQueue([&](const DEPTH_ORDER& o, long long ms) { route(S, evOf(o, tick, ms)); });          // (1.4.0) the clock's reads first
+                S.feed.drain(now, steadyMs, [&](const DEPTH_ORDER& o) { route(S, evOf(o, tick, now)); });
                 if (S.feed.lastEventMs >= 0 && S.firstBarKey < 0) S.firstBarKey = S.formingKey;
+                startTimer(S);
+                if (S.feed.timerOff) stopTimer(S);
+                coverage(S, count, now);
                 decide(S, now);
                 const std::string fs = S.feed.stateText(now);
                 if (!fs.empty()) S.state = fs;
@@ -1982,6 +2142,7 @@ private:
         double tick = (double)getProperty(SYM_TICKINCR); if (!finite(tick) || tick <= 0 || tick >= 1000) tick = 0;
         const std::string id = root + "|" + sym + "|" + std::to_string(spb);
         if (id == S.identity && tick == S.tick) return;
+        stopTimer(S); S.timerTried = false;                                // (1.4.0) the clock goes with the stream
         S.feed.reset();                                                    // a new symbol / bar size: start clean (unsubscribes)
         S.e = Engine(); S.accs.clear(); S.closedAt.clear(); S.ser.bars.clear(); S.barEnds.clear();
         S.formingKey = 0; S.firstBarKey = -1; S.lastClosedKey = 0; S.atr = 0; S.atrCount = -1; S.loaded = false; S.curSession.clear(); S.file = SessionFile();
@@ -2167,6 +2328,10 @@ private:
           << "\nBOOK,orders " << e.book.size() << ",drops " << e.bookDrops << ",resets " << e.bookResets
           << "\nNEAR_TICKS," << e.near << (S.set.nearTicks > 0 ? " (setting)" : " (auto)") << "\nATR," << S.atr << "\nLAST_PRICE_TICKS," << e.ref
           << "\nREADS,slices " << f.slices << ",cap_hits " << f.capHits << ",longest_backlog " << f.longestBacklog << ",faults " << f.faults
+          << "\nFEED_CLOCK," << (S.timerOn ? "on" : f.timerOff ? "off (a clock read faulted - calc / draw only)" : S.timerTried ? "refused by IRT (calc / draw only)" : "not started")
+          << "," << TIMER_MS << " ms,ticks " << f.timerTicks << ",events clock " << f.timerEvents << " / chart " << f.pumpEvents << ",queue_peak " << f.qPeak
+          << ",queue_dropped " << f.qDropped << ",clock_faults " << f.timerFaults
+          << "\nMBO_COVERAGE," << coverageText(S)
           << "\nSETTINGS," << paneSettingsLine(S.set) << "\nSPIKE_IN_FORCE,avg " << tenthsText(S.ser.spike.avgT) << ",jump " << tenthsText(S.ser.spike.jumpT) << ",lookback " << S.ser.spike.lookback
           << "\nPARAMS_SOURCE," << S.params.load.source << "\nPARAMS," << paramsText(S.params.load.p);
         for (size_t i = 0; i < S.params.load.notes.size() && i < 20; ++i) o << "\nPARAMS_NOTE," << S.params.load.notes[i];
@@ -2186,6 +2351,17 @@ private:
         makeDir(flexDir()); makeDir(d);
         S.statusMs = now;
         if (publishFile(d + "\\status-" + stem(S) + ".txt", text)) S.lastStatusText = text;
+    }
+    // (1.4.0) "last bar 3:24 PM 97% (fills 1234 / volume 1271),last 10 bars 95%,lowest 31% at 9:03 AM,bars 120,session 88%"
+    std::string coverageText(S_& S) {
+        const Coverage& c = S.feed.cov;
+        if (c.last.empty()) return "no closed bar checked yet (fills read vs bar volume, each closed bar >= 5 s after it closes)";
+        const Coverage::Row& r = c.last.back();
+        std::ostringstream o; o.imbue(std::locale::classic());
+        o << "last bar " << ctOf(r.end) << " " << r.pct << "% (fills " << r.fills << " / volume " << r.vol << "),last 10 bars " << c.recentPct() << "%";
+        if (c.low.pct >= 0) o << ",lowest " << c.low.pct << "% at " << ctOf(c.low.end) << " (fills " << c.low.fills << " / volume " << c.low.vol << ")";
+        o << ",bars " << c.checked << ",since load " << Coverage::pctOf(c.sumFills, c.sumVol) << "%";
+        return o.str();
     }
     void render(S_& S) {
         RCT pane; pane.getPaneRect(false);

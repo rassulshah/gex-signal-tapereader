@@ -1,4 +1,10 @@
 /********************************************************************************
+ *  0.16.1 (2026-10-14 evening, LIQ-DAY-2026-10-14 review "rebuilt_pct is pegged at 200 on every attempt"): ROOT CAUSE - the hit /
+ *    rebuilt tally counted every NEW order in the 3-point zone after its first fill as "rebuilt" (in ES the queue churn alone is
+ *    4-5x the lots hit: 10-14 15:25 status hit 3,854 / rebuilt 16,911), then capped the ratio at 200%. Now an add counts only at a
+ *    price that was hit, up to the lots hit there and not yet restored (the OrderFlowFeed 1.2.1 rule), so rebuilt % is 0-100%.
+ *    It feeds the hover line "Hit N lots - rebuilt NN% - absorbing" and the makeup log's rebuilt_pct only: no signal, mark or
+ *    decision reads it (Stats.rebuilt / the 'Rebuilt' pane line is the separate resilience measure, unchanged).
  *  0.16.0 (2026-10-14, CR5200, Rassul approved 11:00 CT - mockup-columns.png; 11:02 the node text; 11:39 the level badges):
  *    - the column stays on the LEFT edge in its own SOLID dark column (Width 20-200 px, default 60; "Solid background" checkbox)
  *      from under the top banner to the bottom; its bars grow right toward price; candles pass behind it
@@ -86,7 +92,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.16.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.16.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1841,6 +1847,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: support / resistance and the level it holds, its orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share rebuilt. The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.16.0");   // LQ_VERSION
+    p->setVersion("0.16.1");   // LQ_VERSION
     return p;
 }

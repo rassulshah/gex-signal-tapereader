@@ -61,7 +61,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.16.0";   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
+static const char* const VERSION = "0.16.1";   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -206,11 +206,15 @@ inline std::string makeupText(const Makeup& m) {
 // (0.15.0) one order is 70%+ of the zone (only when the makeup is shown)
 inline bool oneOrder(const Makeup& m, double share) { return m.ok && m.lots > 0 && (double)m.top >= share * (double)m.lots - 1e-9; }
 inline std::string oneOrderText() { return "Mostly one order - may not reload ?"; }
-// rebuilt % = lots re-added in the zone after hits / lots hit (capped 200, as OrderFlowFeed's rebuiltPctOf); -1 = nothing hit yet
+// rebuilt % = lots re-added at the hit prices after the hits / lots hit; -1 = nothing hit yet. (0.16.1, LIQ-DAY-2026-10-14: the makeup
+// log's rebuilt_pct was 200 on EVERY attempt - 0.15.0 counted every NEW in the 3-point zone after the first fill, and in ES the queue
+// churn alone is 4-5x the hit (status 10-14 15:25: hit 3,854, "rebuilt" 16,911). Now an add is credited only at a price that was
+// hit, up to the lots hit there and not yet restored - OrderFlowFeed 1.2.1's rule - so it can never pass 100%.) It feeds the hover
+// line "Hit N lots - rebuilt NN%" and the makeup log only; no signal or decision reads it.
 inline int rebuiltPct(long long rebuilt, long long hit) {
     if (hit <= 0) return -1;
     if (rebuilt < 0) rebuilt = 0;
-    const long long p = (rebuilt * 100 + hit / 2) / hit; return (int)(p > 200 ? 200 : p);
+    const long long p = (rebuilt * 100 + hit / 2) / hit; return (int)(p > 100 ? 100 : p);
 }
 // (0.15.0) "Hit 140 lots \xB7 rebuilt 90% - absorbing" (only while price is in the zone and something was hit)
 inline std::string hitText(long long hit, long long rebuilt) {
@@ -311,6 +315,7 @@ struct Attempt {
     bool done = false; std::string end; Ms tEnd = 0;
     double oldShare = -1;                        // (0.5.0) the zone's old-order share at arrival (-1 = not known), logged for the study
     long long hitLots = 0, rebuiltLots = 0;      // (0.15.0) order feed: lots FILLED in the zone (its side) / lots re-added there after a hit
+    std::map<Tick, std::pair<long long, long long>> hitAt;   // (0.16.1) price -> (lots hit there, lots credited as restored there <= hit)
     Makeup mk; bool mkSet = false;               // (0.15.0) the zone's makeup, refreshed while open; the last one stands at the decision
     double cameBase = -1, cameArr = -1;          // (0.15.0) the zone's lots when price first came within reach / at arrival (as price came)
     // (0.2.0) the absorption STORY per bar, for the aggression / defense panes (lsLiquidityFlow) and the nightly study:
@@ -895,14 +900,22 @@ public:
         for (size_t i = 0; i < attempts.size(); ++i) {
             Attempt& a = attempts[i];
             if (a.done || a.side != side || px < a.lo || px > a.hi) continue;
-            if (action == 3) { a.hitLots += size; continue; }
+            if (action == 3) { a.hitLots += size; a.hitAt[px].first += size; continue; }
             if (a.hitLots <= 0) continue;
-            if (action == 0) a.rebuiltLots += size;
+            long long add = 0;
+            if (action == 0) add = size;
             else if (action == 1 && had) {
                 const bool wasIn = oldPx >= a.lo && oldPx <= a.hi;
-                if (oldPx == px) { if (size > oldSize) a.rebuiltLots += size - oldSize; }
-                else if (!wasIn) a.rebuiltLots += size;
+                if (oldPx == px) { if (size > oldSize) add = size - oldSize; }
+                else if (!wasIn) add = size;
             }
+            if (add <= 0) continue;
+            // (0.16.1) only at a price that was hit, at most the lots hit there and not yet restored
+            std::map<Tick, std::pair<long long, long long>>::iterator h = a.hitAt.find(px);
+            if (h == a.hitAt.end()) continue;
+            const long long room = h->second.first - h->second.second;
+            const long long k = add < room ? add : room;
+            if (k > 0) { h->second.second += k; a.rebuiltLots += k; }
         }
     }
     // the open attempt on a zone (the one being hit), nullptr = none

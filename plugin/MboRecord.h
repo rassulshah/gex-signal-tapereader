@@ -1,6 +1,10 @@
 #ifndef LS_MBORECORD_H
 #define LS_MBORECORD_H
-// MboRecord.h (1.0.0, 2026-10-14) -- lsPullStats' "Record order feed" (Rassul approved 2026-10-13; settings audit 2026-10-14).
+// MboRecord.h (1.1.0, 2026-10-14) -- lsPullStats' "Record order feed" (Rassul approved 2026-10-13; settings audit 2026-10-14).
+// 1.1.0 (2026-10-14 evening, LIQ-DAY review "the ES MBO recorder drops events under load"): the hour file's path is built once per
+//   clock hour (not per event) and the host keeps one clock conversion per second (tsKey / tsTm), so a 50,000-event burst costs a
+//   snprintf + an append per event; the host (PullStats 1.3.0) now feeds every event read by its 250 ms order-feed clock and flushes
+//   from that clock once a second (OrderFlowFeed.h 1.4.0). The format, files and one-writer rules are unchanged.
 // SDK-free, unit-tested on Linux (tests_of/test_mborecord.cpp) and checked with lra.mbo_live's own parser.
 //
 // WHAT: every order-by-order event PullStats already drains (IRT DEPTH_BY_ORDER: NEW / MOD / DEL / FILL) is appended to
@@ -21,6 +25,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -34,7 +39,7 @@
 
 namespace mrec {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const char* const HEADER = "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask";
 static const long long MIN_FREE = 2LL * 1024 * 1024 * 1024;           // 2 GB
 static const size_t SOFT_CAP = 4u * 1024 * 1024, HARD_CAP = 32u * 1024 * 1024;
@@ -163,8 +168,10 @@ struct Recorder {
     long long rows = 0, bytes = 0, fails = 0, dropped = 0, flushes = 0, biggestFlush = 0, lastNow = 0;
     std::string note = "waiting for the order feed";
     std::string dirsMade;
+    unsigned long long tsKey = 0; struct tm tsTm;     // (1.1.0) the host's last clock conversion (one per event second)
+    long long pathKey = -1; std::string pathNow;      // (1.1.0) the hour file of the last event (built once per clock hour)
 
-    Recorder() {}
+    Recorder() { std::memset(&tsTm, 0, sizeof(tsTm)); }
     Recorder(const Recorder&) = delete; Recorder& operator=(const Recorder&) = delete;
     ~Recorder() { try { if (on && !buf.empty()) flush(lastNow + FLUSH_MS); } catch (...) {} if (!market.empty()) drop(market, this); }
 
@@ -172,7 +179,7 @@ struct Recorder {
         if (m == market) return;
         if (on && !buf.empty()) flush(lastNow + FLUSH_MS);
         if (!market.empty()) drop(market, this);
-        market = m; expect.clear(); foreign = false; owner = false;
+        market = m; expect.clear(); foreign = false; owner = false; pathKey = -1; pathNow.clear();
     }
     void setOn(bool v) {
         if (v == on) return;
@@ -183,7 +190,9 @@ struct Recorder {
     void dropBuffer(bool count) { if (count) for (std::map<std::string, std::string>::const_iterator i = buf.begin(); i != buf.end(); ++i) dropped += linesIn(i->second); buf.clear(); bufBytes = 0; }
     void add(const Ev& e) {
         if (!on || market.empty()) return;
-        const std::string p = pathOf(root(), market, e);
+        const long long key = (((long long)e.y * 13 + e.mo) * 32 + e.d) * 24 + e.h;   // (1.1.0) one path per clock hour
+        if (key != pathKey || pathNow.empty()) { pathNow = pathOf(root(), market, e); pathKey = pathNow.empty() ? -1 : key; }
+        const std::string& p = pathNow;
         if (p.empty()) { ++dropped; return; }
         if (bufBytes >= HARD_CAP) { ++dropped; return; }
         const std::string l = lineOf(e);

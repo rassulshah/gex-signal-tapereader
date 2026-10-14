@@ -1,4 +1,6 @@
-"""Static source contract for ReaderState (0.6.4: one state per fixed-market DLL, timer-safe)."""
+"""Static source contract for ReaderState (0.6.4: one state per fixed-market DLL, timer-safe).
+0.8.0: the depth recorder's state is per chart (HostSlot.h, its own file) - the footprint ReaderState stays owned by the DLL;
+done() / destroy() release the depth state first, then the reader state."""
 from pathlib import Path
 import re
 
@@ -9,7 +11,9 @@ checks = {
     'new state is deleted explicitly': 'delete p;\n    if (own_ == p) own_ = nullptr;' in source,
     'freeUserData is not called for new state': re.search(r'\bfreeUserData\s*\(', source) is None,
     'done releases current host state': 'int cppExtension::done(void)\n{\n    // The SDK calls done()' in source and 'static_cast<IRTReader*>(this)->releaseState();' in source,
-    'destroy releases current host state': 'int cppExtension::destroy(void)\n{\n    static_cast<IRTReader*>(this)->releaseState();' in source,
+    'destroy releases current host state': 'int cppExtension::destroy(void)\n{\n    static_cast<IRTReader*>(this)->depthRelease();\n    static_cast<IRTReader*>(this)->releaseState();' in source,
+    '(0.8.0) no depth read in the timer pass': 'depth();' not in source and 'depthByOrder();' not in source,
+    '(0.8.0) depth opened only from the chart call': source.count('depthChart(via)') == 1 and 'try { depthChart(via); }' in source,
     'timer IDs are state-specific': 'createTimer(timerIdFor(&state()), 1000)' in source and 'timerIdFor(p)' in source,
     'global cross-host other-market notice removed': 'static bool saidOthers' not in source and 'state().saidOthers' in source,
 }

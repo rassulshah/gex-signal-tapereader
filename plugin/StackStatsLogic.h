@@ -20,7 +20,7 @@
 
 namespace st {
 
-static const char* const VERSION = "1.1.3";   // 1.1.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.1.2 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.1.1 (2026-10-13 9:40 PM): rebuilt % <= 100%, row order, Crowd row, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, rebuilt %, SPEC message grammar, hover rows; 1.0.1: letter I
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-14 evening): complete order feed - a 250 ms clock reads it (OrderFlowFeed 1.4.0), MBO_COVERAGE in the status; 1.1.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.1.2 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.1.1 (2026-10-13 9:40 PM): rebuilt % <= 100%, row order, Crowd row, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, rebuilt %, SPEC message grammar, hover rows; 1.0.1: letter I
 using off::BID; using off::ASK;
 // the words after "one order is NN% of it - " (white / neutral). The Tape Reader keys on the same text (TapeReaderLogic.h tr::STACK_ONE_ORDER,
 // checked equal by trtests/test_tr_ofcompat.cpp) and still recognises the old "may be bait" in records written before 6:40 PM 13 Oct.

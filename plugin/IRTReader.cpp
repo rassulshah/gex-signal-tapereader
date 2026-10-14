@@ -1,6 +1,30 @@
 /********************************************************************************
- *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader  (v0.2.1, 2026-10-03: the chart's own market only, crash guard)
+ *  IRTReader.cpp  --  Investor/RT RTX extension  lsIRTReader / lsFootprintReader<MKT>  (0.8.0, 2026-10-14)
  *
+ *  0.8.0 (2026-10-14 evening; Rassul's standing order "always record IRT data and keep the MBO files updated"; LIQ-DAY-2026-10-14
+ *     review "dom.csv stopped at 8:26 ES / 6:55 CL, status DOM off all day although IRT had depth all day"):
+ *     ROOT CAUSE: 0.7.x read the book (MARKET_DEPTH(NULL)) and the order feed (DEPTH_BY_ORDER(NULL)) from the TIMER pass - outside
+ *     the chart's context, where "NULL = this chart" means nothing. msglog: "C0000005 Exception in RTX extension lsIRTReader 0.7.1
+ *     calling timer()" at each reload (06:54:56, 06:55:50 CL; 08:26:06 ES, right after "Subscribed to Depth By Order"). The fault
+ *     unwound past `busy = true`, so every later pass returned at once and that reader never wrote again; the status file then
+ *     showed only the Footprint Reader's lines ("DOM,off,NOT available ... DBO,off" - 0.7.1 also forced depth OFF on every
+ *     lsFootprintReader<MKT>). The 08:26:06 snapshot (level 1 bid under level 5) was a book read while IRT rebuilt it.
+ *     NOW - THE DEPTH RECORDER, on every reader (lsIRTReader and each lsFootprintReader<MKT>, all markets), one writer per market:
+ *       - book and order feed are OPENED and first read only from the chart's own calc / draw, each opened with the chart symbol
+ *         spelled out; a 250 ms clock then reads both (every native call behind a structured-exception guard: a fault turns that
+ *         clock read off and is reported - IRT never sees it);
+ *       - DOM: every level IRT gives (<= 200) once a second when the book changed, only when it is a real book (bids falling,
+ *         asks rising, best bid < best ask, on the tick grid - else counted as BAD with the reason) -> <session>\<MKT>\dom_HH.csv
+ *         (hourly files, the old dom.csv format);
+ *       - order-by-order: every event -> <session>\<MKT>\dbo_HH.csv, unless lsPullStats is recording that market's mbo_HH.csv
+ *         (then not written twice); buffered, one append per file per second, a buffer past 32 MB drops (counted);
+ *       - COVERAGE self-check: FILL lots read per closed chart bar / its volume; status file IRTReader.depth-<MKT>.txt (DOM / DBO
+ *         rows, snapshots, bad books, clock reads, faults, MBO_COVERAGE, files) every 5 s.
+ *     Also: a pass that never finished (a fault) is detected after 30 s and the reader carries on (was: silent for the day); a
+ *     footprint bar whose volume at price never loads (HG 2026-10-09 16:00 - the cursor sat there 5 days) is skipped after 5 tries
+ *     once it is 10+ min old or on the 16:00-17:00 CT boundary (traced); no new footprint bar for 20+ min is reported in ERROR
+ *     (NG 10-14: IRT's NGX6 subscription was aborted - "Error 7 ... Market data unavailable" - the reader asked every 100 s and
+ *     said nothing). Tests: tests_ir/ (mock SDK: bursts, ordering, bad books, session / hour boundaries, two readers, faults).
 *  0.6.1 (2026-10-05 20:36): depth (DOM + order-by-order) on by default - 0.6.0 never ran the probe because the dialog settings were not read.
  *  0.6.0 (2026-10-05 14:45, Rassul: "I think I have more data because I have full depth so can you see if you can view full
  *     depth"): DEPTH PROBE + RECORDING on the chart's own market. DOM on: the whole book the feed gives (md.maxLevels, up to 200
@@ -77,6 +101,12 @@
  *  IRTReader.status-<MKT>.txt - read by Claude over the bridge.
  *  Logic that needs no SDK (sessions, aggressor, cursor, book fingerprint) is in IRTReaderLogic.h (tested).
  ********************************************************************************/
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 #include "irtsdk.h"
 // Windows headers may define far as a legacy memory-model macro.  DealerLogic
 // legitimately uses Node::far, so remove only that obsolete macro before the
@@ -86,6 +116,7 @@
 #endif
 #include "DealerLogic.h"
 #include "IRTReaderLogic.h"
+#include "HostSlot.h"
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -101,8 +132,12 @@
 #include <ctime>
 #include <cctype>
 #include <direct.h>
+#include <new>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-static const char* IR_VERSION = "0.7.1";   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
+static const char* IR_VERSION = "0.8.0";   // (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
+//   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
 //   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
 #define IR_FIXED ""                // (0.5.0) lsIRTReader<MKT>.dll is built from IRTReader<MKT>.cpp with IR_FIXED = that market
@@ -131,6 +166,8 @@ struct FpState {
     std::string fpTry, deepTry;                          // (0.2.1) the guard file while a request is unproven
     time_t deepRetryAt = 0; int deepTries = 0;
     int deepStep = 0;                                    // (0.2.2) other markets: 0 = 1 day, 1 = 3 days, 2 = 10 days, 3 = done
+    long long stuckTs = -1; int stuckN = 0; long skipped = 0; // (0.8.0) a bar whose volume at price never loads
+    time_t lastNewT = 0;                                 // (0.8.0) when a new footprint bar was last written (stale-feed report)
 };
 
 // The SDK may dispatch one cppExtension object through several chart hosts.  All
@@ -160,6 +197,62 @@ struct ReaderState {
     int boots = 0;
     bool saidOthers = false;
 };
+// ---- (0.8.0) the depth recorder: one per chart (the host's user-data slot), one writer per market across all reader DLLs ----
+// Every native depth call goes through these guards: no C++ object with a destructor lives in their frames (MSVC C2712), so a
+// structured exception inside IRT (the 0.7.1 C0000005) comes back as -1 instead of unwinding past our state.
+static int irSafeAvail(cppExtension::MARKET_DEPTH* md, int* maxLv)
+{
+#if defined(_MSC_VER)
+    __try { const int a = md->available() ? 1 : 0; *maxLv = md->maxLevels; return a; } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#else
+    try { const int a = md->available() ? 1 : 0; *maxLv = md->maxLevels; return a; } catch (...) { return -1; }
+#endif
+}
+static int irSafeLevel(cppExtension::MARKET_DEPTH* md, unsigned k, DEPTH_LEVEL* out)
+{
+#if defined(_MSC_VER)
+    __try { *out = (*md)[k]; return 1; } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#else
+    try { *out = (*md)[k]; return 1; } catch (...) { return -1; }
+#endif
+}
+static int irSafeNext(cppExtension::DEPTH_BY_ORDER* d, DEPTH_ORDER* out)
+{
+#if defined(_MSC_VER)
+    __try { if (d->getNext() != RTX_OK) return 0; *out = d->dbo; return 1; } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#else
+    try { if (d->getNext() != RTX_OK) return 0; *out = d->dbo; return 1; } catch (...) { return -1; }
+#endif
+}
+static long long irSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+static const long long IR_CLOCK_MS = 250;            // the depth clock
+static const int IR_DBO_MAX = 50000;                 // order-feed events per read at most
+static const long long IR_DBO_BUDGET_MS = 20;        // ... or about this long
+static const size_t IR_BUF_MAX = 32u * 1024u * 1024u; // a write buffer past 32 MB drops (counted)
+static const int IR_DOM_LEVELS = 200;
+
+struct DepthState {
+    std::string mkt, sym, root, id, folder; double tick = 0; int spb = 0;
+    cppExtension::MARKET_DEPTH* md = nullptr; bool mdDead = false, mdBlocked = false;
+    cppExtension::DEPTH_BY_ORDER* dbo = nullptr; bool dboDead = false, dboBlocked = false, dboCqg = false, dboLive = false;
+    bool avail = false; int maxLevels = 0; long long availMs = -1;
+    unsigned long long domHash = 0; long long domSec = -1, snaps = 0, bad = 0, domFaults = 0, levelsLast = 0; std::string badWhy, lastSnap;
+    bool clockDomOff = false, clockDboOff = false;
+    long long dboEvents = 0, dboClock = 0, dboChart = 0, dboFaults = 0, dboNotWritten = 0, dboCaps = 0;
+    bool dboSkip = false; long long skipCheckMs = -1; std::string skipWhy;
+    std::map<std::string, std::string> buf; size_t bufBytes = 0; long long dropped = 0, fails = 0, rowsDom = 0, rowsDbo = 0, lastFlushMs = -1;
+    std::string lastDomFile, lastDboFile;
+    bool owner = false; long long ownerMs = -1; std::string ownerNote;
+    int timerId = 0; bool timerOn = false, timerTried = false; long long ticks = 0;
+    irl::FillCoverage cov; long long firstBarKey = -1;
+    unsigned long long tsKey = 0; struct tm tsTm; std::string tsSess, tsHH;
+    long long statusMs = -1, lastChartMs = -1; std::string err;
+    DepthState() { memset(&tsTm, 0, sizeof(tsTm)); }
+    ~DepthState() { delete md; delete dbo; }
+    DepthState(const DepthState&) = delete; DepthState& operator=(const DepthState&) = delete;
+};
+static std::map<int, DepthState*>& irClocks() { static std::map<int, DepthState*> m; return m; }
+
 static double tickOf(const std::string& m)
 {
     if (m == "ES" || m == "NQ") return 0.25;
@@ -191,7 +284,7 @@ public:
         if (activeState) return *activeState;
         if (!own_) {
             own_ = new ReaderState();
-            if (own_ && IR_FIXED[0]) { own_->cfg.fp = true; own_->cfg.trades = false; own_->cfg.dom = false; own_->cfg.dbo = false; }
+            if (own_ && IR_FIXED[0]) { own_->cfg.fp = true; own_->cfg.trades = false; own_->cfg.dom = true; own_->cfg.dbo = true; }   // (0.8.0) depth on every market again
         }
         return *own_;
     }
@@ -225,6 +318,7 @@ public:
     std::string dirFor2(const std::string& session, const std::string& m);
     void boot(const std::string& what);
     void trace(const std::string& what);
+    void traceTo(const std::string& mkt, const std::string& what);
 
     bool dialogReady() { if (RX.market < 0) return false; int i = getListIndex(RX.market); return i >= 0 && i <= 7; }
     void readSettings(RSet& S);
@@ -237,8 +331,23 @@ public:
         const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         if (ms >= 250) trace("SLOW " + what + " " + std::to_string(ms) + " ms");
     }
-    void depth();
-    void depthByOrder();
+    // (0.8.0) the depth recorder (replaces 0.7.x depth() / depthByOrder(), which ran in the timer and faulted)
+    void depthChart(const char* via);
+    void depthClock(DepthState& D);
+    void depthIdentify(DepthState& D);
+    bool depthOwner(DepthState& D, long long now);
+    void depthOpen(DepthState& D);
+    void domRead(DepthState& D, bool chart);
+    void dboRead(DepthState& D, bool chart, long long now);
+    void dboSkipCheck(DepthState& D, long long now);
+    bool tsOf(DepthState& D, unsigned long long stamp);
+    void depthAdd(DepthState& D, const std::string& file, const char* header, const std::string& rows);
+    void depthFlush(DepthState& D, long long now, bool force);
+    void depthCoverage(DepthState& D, long long now);
+    void depthStatus(DepthState& D, long long now, bool force);
+    void depthStop(DepthState& D);
+    void depthRelease();
+    HostSlot<DepthState> dslot_;
     void writeStatus();
     std::string dirFor(const std::string& session);
     long long secOf(RTDATE d, struct tm* out = nullptr);
@@ -247,6 +356,8 @@ public:
 
 private:
     ReaderState* activeState = nullptr; // only non-null while this callback is executing
+public:
+    time_t busyAt = 0;                   // (0.8.0) when the running pass started (watchdog)
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
@@ -273,11 +384,13 @@ int cppExtension::done(void)
 {
     // The SDK calls done() for a symbol/period change.  Drop persistent RTBARS,
     // DBO and cursors so they cannot bleed into the next host configuration.
+    static_cast<IRTReader*>(this)->depthRelease();
     static_cast<IRTReader*>(this)->releaseState();
     return RTX_OK;
 }
 int cppExtension::destroy(void)
 {
+    static_cast<IRTReader*>(this)->depthRelease();
     static_cast<IRTReader*>(this)->releaseState();
     return RTX_OK;
 }
@@ -303,6 +416,7 @@ void IRTReader::pump(const char* via)
         if (state().lastCalcRun == 0) boot(std::string("no timer tick - the pass runs from ") + via);
         state().lastCalcRun = now; tickAll();
     }
+    try { depthChart(via); } catch (...) {}                                 // (0.8.0) calc / draw = the chart's own context
 }
 
 int IRTReader::draw(void)
@@ -567,8 +681,14 @@ void IRTReader::footprintOf(FpState& M)
     if (bars.count != M.fpCount) { M.fpCount = bars.count; M.fpGrew = nowT; }
     if (bars.count < 2) { M.err = bars.count ? "" : "no footprint bars from IRT yet"; return; }
     M.err.clear();
+    const std::string before = M.lastTxt;
     int n = writeSlice(M, bars, M.fpLast, false, 400);
     M.caughtUp = (n <= 3 && M.err.empty()) ? M.caughtUp + 1 : 0;   // (0.2.0) only the newest bar(s) to write = caught up (weekends too)
+    // (0.8.0) NG 2026-10-14: no bar after 08:26 for 7 hours (IRT's NGX6 subscription aborted - msglog "Error 7 ... Market data
+    // unavailable") and the reader said nothing. Now: 20+ minutes without a new bar is reported in ERROR.
+    if (M.lastTxt != before || M.lastNewT == 0) M.lastNewT = nowT;
+    else if (nowT - M.lastNewT > 1200 && M.err.empty())
+        M.err = "no new 1-minute bar from IRT since " + (M.lastTxt.empty() ? std::string("the reader started") : M.lastTxt) + " (20+ min; normal in the 16:00-17:00 CT break and at weekends) - is IRT getting data for " + M.sym + "? (msglog: subscription aborted / Error 7)";
 }
 
 int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool deep, int maxBars)
@@ -602,6 +722,15 @@ int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool dee
         lastWritten = s;
         return true;
     };
+    // (0.8.0) HG 2026-10-09 16:00: IRT never loaded that bar's volume at price and the cursor sat on it for 5 days (2,006 passes)
+    auto stuckSkip = [&](long long s, const std::string& ts, int hh) -> bool {
+        if (M.stuckTs != s) { M.stuckTs = s; M.stuckN = 0; }
+        ++M.stuckN;
+        if (!irl::skipStuckBar(M.stuckN, (long long)time(0) - s, hh)) return false;
+        trace(M.mkt + " footprint: the " + ts + " bar's volume at price never loaded (" + std::to_string(M.stuckN) + " tries) - skipped, the cursor moves on");
+        M.stuckN = 0; M.skipped++; M.err.clear();
+        return true;
+    };
     std::string oldestSess;                                      // (0.2.2) a back-fill starts mid-session: its oldest session is partial
     if ((deep || lastRef < 0) && bars.count > 1) {             // (0.3.0) also the first run; only when the answer spans 2+ sessions
         struct tm t0, t1; secOf((RTDATE)(*bars.dt)[0], &t0); secOf((RTDATE)(*bars.dt)[(int)bars.count - 1], &t1);
@@ -628,7 +757,10 @@ int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool dee
         sessCur = session;
         std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
         BARSTATISTICS bs; memset(&bs, 0, sizeof(bs));
-        if (bars.getBarStatistics((int)i, bs) != RTX_OK) { M.err = "volume at price not loaded yet from " + ts; break; }   // retried next tick
+        if (bars.getBarStatistics((int)i, bs) != RTX_OK) {
+            if (stuckSkip(s, ts, t.tm_hour)) { if (!advanceSkipped(s)) break; continue; }   // (0.8.0)
+            M.err = "volume at price not loaded yet from " + ts; break;                      // retried next tick
+        }
         if (done >= maxBars) break;                              // a bounded slice per tick
         if (bs.prices < 0 || bs.prices > kMaxVapProfilesPerSlice - profilesRead) { M.err = "volume-at-price slice limit reached at " + ts; break; }
         const double op = (*bars.op)[(int)i], hi = (*bars.hi)[(int)i], lo = (*bars.lo)[(int)i], cl = (*bars.cl)[(int)i];
@@ -646,7 +778,8 @@ int IRTReader::writeSlice(FpState& M, RTBARS& bars, long long& lastRef, bool dee
                      vp.totalVolume, vp.tickCount, vp.maxDelta, vp.minDelta);
             oneRows += b; ++oneRowsCount;
         }
-        if (!complete) break;
+        if (!complete) { if (stuckSkip(s, ts, t.tm_hour)) { M.err.clear(); if (!advanceSkipped(s)) break; continue; } break; }   // (0.8.0)
+        if (M.stuckTs == s) { M.stuckTs = -1; M.stuckN = 0; }
         char b[300];
         snprintf(b, sizeof(b), "%s|%d|%s|%s|%s|%s|%lu|%ld|%ld|%ld|%ld|%ld|%ld\n", ts.c_str(), state().cfg.fpMin,
                  irl::px(op, tk).c_str(), irl::px(hi, tk).c_str(), irl::px(lo, tk).c_str(), irl::px(cl, tk).c_str(), (*bars.vo)[(int)i],
@@ -787,81 +920,6 @@ void IRTReader::trades()
     (void)flush();
 }
 
-// ---- DOM: the top levels whenever the book changed, at most every domSec seconds
-void IRTReader::depth()
-{
-    time_t now = time(0);
-    if (now - state().domT < state().cfg.domSec) return;
-    state().domT = now;
-    MARKET_DEPTH md(NULL);
-    state().domAvail = md.available() != 0;
-    if (!state().domAvail) return;
-    int n = md.maxLevels; if (n > 200) n = 200; if (n < 0) n = 0;   // (0.6.0) the full book the feed gives
-    state().domLevels = n;
-    std::vector<double> v; v.reserve((size_t)n * 4);
-    for (int k = 0; k < n; k++) {
-        DEPTH_LEVEL& L = md[(unsigned)k];
-        if (!std::isfinite(L.bid) || !std::isfinite(L.ask)) { state().err = "invalid DOM price"; return; }
-        v.push_back(L.bid); v.push_back(L.bidsize); v.push_back(L.ask); v.push_back(L.asksize);
-    }
-    unsigned long long h = irl::bookHash(v);
-    if (h == state().domHash) return;
-    RTDATE d = currentDate(); struct tm t; secOf(d, &t);
-    std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
-    std::string rows;
-    char line[200];
-    for (int k = 0; k < n; k++) {
-        if (v[(size_t)k * 4] <= 0 && v[(size_t)k * 4 + 2] <= 0) continue;
-        snprintf(line, sizeof(line), "%s|%d|%s|%.0f|%s|%.0f\n", ts.c_str(), k, irl::px(v[(size_t)k * 4], state().tick).c_str(), v[(size_t)k * 4 + 1],
-                 irl::px(v[(size_t)k * 4 + 2], state().tick).c_str(), v[(size_t)k * 4 + 3]);
-        rows += line;
-    }
-    if (!rows.empty()) {
-        if (!append(dirFor(irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour)) + "\\dom.csv", "time|level|bid|bid_size|ask|ask_size", rows)) return;
-        state().domRows++;
-    }
-    state().domHash = h;
-}
-
-// ---- order-by-order depth (MBO): every event the feed sends
-void IRTReader::depthByOrder()
-{
-    if (getDataSource() == DS_CQG) { state().dboSupported = false; return; } // CQG Continuum does not supply the SDK's native MBO stream.
-    state().dboSupported = true;
-    if (!state().dbo) state().dbo = new DEPTH_BY_ORDER(NULL);
-    // Every event is written, all session, one file per hour of the event's own time (<session>\<MKT>\dbo_HH.csv).
-    // DEPTH_BY_ORDER retains its iterator, so the next timer pass resumes after this bounded batch.
-    std::string rows, sess, hour;
-    long pendingRows = 0;
-    char line[260];
-    int guard = 0;
-    const int kMaxDboEventsPerPass = 5000;
-    auto flush = [&]() -> bool {
-        if (rows.empty() || sess.empty()) return true;
-        if (!append(dirFor(sess) + "\\dbo_" + hour + ".csv", "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask", rows)) return false;
-        state().dboRows += pendingRows;
-        rows.clear(); pendingRows = 0;
-        return true;
-    };
-    while (guard++ < kMaxDboEventsPerPass && state().dbo->getNext() == RTX_OK) {
-        const DEPTH_ORDER& o = state().dbo->dbo;
-        struct tm t; secOf(o.timestamp, &t);
-        const std::string s = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
-        char hh[4]; snprintf(hh, sizeof(hh), "%02d", t.tm_hour);
-        if ((s != sess || hour != hh) && !flush()) return;
-        if (s != sess || hour != hh) { sess = s; hour = hh; }
-        if (!std::isfinite(o.price) || !std::isfinite(o.previousPrice) || !std::isfinite(o.bid) || !std::isfinite(o.ask)) { state().err = "invalid DBO price"; continue; }
-        static const char* ACT[4] = { "NEW", "MOD", "DEL", "FILL" };
-        snprintf(line, sizeof(line), "%s|%s|%s|%s|%lu|%d|%d|%c|%s|%s\n",
-                 irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec).c_str(),
-                 o.action < 4 ? ACT[o.action] : "?", irl::px(o.price, state().tick).c_str(), irl::px(o.previousPrice, state().tick).c_str(), o.size, o.orderID,
-                 o.aggressorOrderID, o.buySell == 1 ? 'B' : o.buySell == 0 ? 'S' : '?', irl::px(o.bid, state().tick).c_str(), irl::px(o.ask, state().tick).c_str());
-        rows += line;
-        ++pendingRows;
-    }
-    (void)flush();
-}
-
 void IRTReader::writeStatus()
 {
     const char* up = getenv("USERPROFILE"); if (!up || state().mkt.empty()) return;
@@ -873,8 +931,8 @@ void IRTReader::writeStatus()
       << "\nFOLDER," << state().cfg.folder
       << "\nFOOTPRINT," << (state().cfg.fp ? "on" : "off") << "," << state().cfg.fpMin << "m,rows " << state().fpRows << ",last bar " << state().fpLastTxt << ",backfill days " << state().cfg.fpDays
       << "\nTRADES," << (state().cfg.trades ? "on" : "off") << ",rows " << state().trRows << ",last " << state().trLastTxt
-      << "\nDOM," << (state().cfg.dom ? "on" : "off") << "," << (state().domAvail ? "available" : "NOT available") << ",levels " << state().domLevels << ",snapshots " << state().domRows
-      << "\nDBO," << (state().cfg.dbo ? (state().dboSupported ? "on" : "unsupported on CQG") : "off") << ",events " << state().dboRows << (state().cfg.dbo && state().dboSupported ? ",writing all session" : "")
+      << "\nDOM,recorded by the depth recorder - see IRTReader.depth-" << state().mkt << ".txt"
+      << "\nDBO,recorded by the depth recorder - see IRTReader.depth-" << state().mkt << ".txt"
       << "\nOTHER_MARKETS," << (state().othersTxt.empty() ? "off" : state().othersTxt)
       << "\nERROR," << state().err << "\n";
 }
@@ -892,10 +950,11 @@ void IRTReader::boot(const std::string& what)
     f << b << " " << IR_VERSION << " reader " << id << " chart " << state().sym << " root " << state().root << " market " << (state().mkt.empty() ? "?" : state().mkt) << ": " << what << "\n";
 }
 
-void IRTReader::trace(const std::string& what)
+void IRTReader::trace(const std::string& what) { traceTo(state().mkt, what); }
+void IRTReader::traceTo(const std::string& mkt, const std::string& what)
 {
-    const char* up = getenv("USERPROFILE"); if (!up || state().mkt.empty()) return;
-    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\IRTReader.trace-" + state().mkt + ".txt";
+    const char* up = getenv("USERPROFILE"); if (!up || mkt.empty()) return;
+    std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\IRTReader.trace-" + mkt + ".txt";
     { std::ifstream t(path.c_str(), std::ios::ate | std::ios::binary); if (t.good() && t.tellg() > 300000) { t.close(); std::remove(path.c_str()); } }
     std::ofstream f(path.c_str(), std::ios::app); if (!f.is_open()) return;
     time_t n = time(0); struct tm lt = *localtime(&n);
@@ -905,8 +964,11 @@ void IRTReader::trace(const std::string& what)
 
 void IRTReader::tickAll()
 {
-    if (state().busy) return;                                            // (0.1.2) never two passes at once
-    state().busy = true;
+    if (state().busy) {                                                  // (0.1.2) never two passes at once
+        if (busyAt && time(0) - busyAt > 30) { trace("a pass started at " + std::to_string((long long)busyAt) + " never finished (a fault inside IRT?) - carrying on"); state().busy = false; }
+        else return;
+    }
+    state().busy = true; busyAt = time(0);
     identify();
     if (state().mkt.empty()) { state().busy = false; return; }
     state().cursorFor = state().mkt;                                             // (0.4.0) no trades cursor: footprint only
@@ -941,8 +1003,7 @@ void IRTReader::tickAll()
         if (M.mkt == state().mkt) { state().fpLast = M.fpLast; state().fpLastTxt = M.lastTxt; if (!M.err.empty()) state().err = M.err; }
     }
     { auto t_a = std::chrono::steady_clock::now(); if (state().cfg.trades) { if (loud) trace("trades..."); trades(); } slow(t_a, "trades"); }
-    { auto t_a = std::chrono::steady_clock::now(); if (state().cfg.dom) { if (loud) trace("dom..."); depth(); } slow(t_a, "dom"); }
-    { auto t_a = std::chrono::steady_clock::now(); if (state().cfg.dbo) { if (loud) trace("order-by-order..."); depthByOrder(); } slow(t_a, "order-by-order"); }
+    // (0.8.0) DOM / order-by-order are no longer read in this (timer) pass: the depth recorder reads them (depthChart / depthClock)
     if (loud) trace("pass done");
     state().backfilled = true;
     writeStatus();
@@ -954,6 +1015,10 @@ void IRTReader::tickAll()
 
 int IRTReader::timer(RTX_EVENT* e)
 {
+    if (e) {                                                             // (0.8.0) a depth clock?
+        std::map<int, DepthState*>::iterator it = irClocks().find(e->v.timer.id);
+        if (it != irClocks().end()) { try { depthClock(*it->second); } catch (...) {} return RTX_OK; }
+    }
     ReaderState* p = userState();
     if (!p || !e || e->v.timer.id != timerIdFor(p)) return RTX_FAIL;
     StateGuard guard(*this);
@@ -961,6 +1026,348 @@ int IRTReader::timer(RTX_EVENT* e)
     state().lastTimerTick = time(0);
     tickAll();
     return RTX_OK;
+}
+
+// =====================================================================================================================
+// (0.8.0) THE DEPTH RECORDER - DOM snapshots and order-by-order events of the chart's own market, all session, every market.
+// Opened and first read from the chart's own calc / draw; afterwards a 250 ms clock reads both too (guarded). One writer per
+// market across every reader DLL (lsIRTReader + lsFootprintReader<MKT> are on the same ES / CL / NG charts): data\irt\_depth-owner-<MKT>.txt
+// holds the writer's id and a heartbeat; another reader takes over when it is 15 s old.
+// =====================================================================================================================
+static long long irFileMtime(const std::string& p)
+{
+#if defined(_WIN32)
+    struct _stat64 st; if (_stat64(p.c_str(), &st) != 0) return -1; return (long long)st.st_mtime;
+#else
+    struct stat st; if (stat(p.c_str(), &st) != 0) return -1; return (long long)st.st_mtime;
+#endif
+}
+
+void IRTReader::depthRelease()
+{
+    DepthState* D = dslot_.get(this, false);
+    if (!D) return;
+    depthStop(*D);
+    try { depthFlush(*D, irSteadyMs(), true); } catch (...) {}
+    if (D->owner && !D->folder.empty() && !D->mkt.empty()) std::remove((D->folder + "\\_depth-owner-" + D->mkt + ".txt").c_str());
+    dslot_.release(this);
+}
+
+void IRTReader::depthStop(DepthState& D)
+{
+    if (D.timerOn) { destroyTimer(D.timerId); D.timerOn = false; }
+    if (D.timerId) irClocks().erase(D.timerId);
+    D.timerId = 0;
+}
+
+// the chart's market / contract / bar size; a change starts over (the old objects unsubscribe as they are deleted)
+void IRTReader::depthIdentify(DepthState& D)
+{
+    char buf[32] = {0};
+    const char* rs = getRootSymbol(buf); const char* sy = getSymbol();
+    const std::string root = rs ? rs : "", sym = sy ? sy : "";
+    std::string mkt = dl::marketFor(0, root);
+    if (IR_FIXED[0] && !mkt.empty() && mkt != IR_FIXED) mkt.clear();   // a Footprint Reader on another market's chart: nothing
+    double tick = (double)getTickIncrement();
+    if (!std::isfinite(tick) || tick <= 0 || tick >= 1000) tick = 0;
+    const int spb = getSecondsPerBar();
+    const std::string id = mkt + "|" + sym + "|" + std::to_string(spb);
+    if (id == D.id && tick == D.tick) return;
+    depthStop(D);
+    try { depthFlush(D, irSteadyMs(), true); } catch (...) {}
+    if (D.owner && !D.folder.empty() && !D.mkt.empty()) std::remove((D.folder + "\\_depth-owner-" + D.mkt + ".txt").c_str());
+    delete D.md; D.md = nullptr; delete D.dbo; D.dbo = nullptr;
+    D.mdDead = D.mdBlocked = D.dboDead = D.dboBlocked = D.dboCqg = D.dboLive = false; D.clockDomOff = D.clockDboOff = false;
+    D.avail = false; D.maxLevels = 0; D.availMs = -1; D.domHash = 0; D.domSec = -1; D.timerTried = false;
+    D.owner = false; D.ownerMs = -1; D.firstBarKey = -1; D.cov = irl::FillCoverage(); D.dboSkip = false; D.skipCheckMs = -1;
+    D.id = id; D.mkt = mkt; D.sym = sym; D.root = root; D.tick = tick; D.spb = spb; D.folder = RSet().folder;
+}
+
+// one writer per market (heartbeat file, 15 s takeover); checked every 5 s
+bool IRTReader::depthOwner(DepthState& D, long long now)
+{
+    if (D.ownerMs >= 0 && now >= D.ownerMs && now - D.ownerMs < 5000) return D.owner;
+    D.ownerMs = now;
+    _mkdir(D.folder.c_str());
+    const std::string p = D.folder + "\\_depth-owner-" + D.mkt + ".txt";
+    char me[64]; snprintf(me, sizeof(me), "%llx-%llx", (unsigned long long)(uintptr_t)this, (unsigned long long)(uintptr_t)&D);
+    std::string who; long long t = 0;
+    { std::ifstream f(p.c_str()); f >> who >> t; }
+    const long long nowS = (long long)time(0);
+    if (!who.empty() && who != me && nowS - t >= 0 && nowS - t < 15) {
+        D.owner = false; D.ownerNote = std::string("another reader (") + who + ") records " + D.mkt + " depth";
+        return false;
+    }
+    { std::ofstream o(p.c_str(), std::ios::trunc); o << me << " " << nowS << "\n"; }
+    if (!D.owner) traceTo(D.mkt, D.mkt + " depth: this reader records the book and the order feed (" + (IR_FIXED[0] ? "Footprint Reader" : "IRT Reader") + " " + IR_VERSION + ")");
+    D.owner = true; D.ownerNote = "this reader writes";
+    return true;
+}
+
+// chart context only: the book and the order feed, each named by the chart symbol, behind a crash-guard file
+void IRTReader::depthOpen(DepthState& D)
+{
+    if (D.sym.empty()) return;
+    const std::string guard = D.folder + "\\_opening-depth-" + D.mkt + ".txt";
+    if (!D.md && !D.mdDead && !D.mdBlocked && state().cfg.dom) {
+        std::ifstream g(guard.c_str());
+        if (g.good()) { D.mdBlocked = D.dboBlocked = true; D.err = "IRT stopped while the depth was being opened last time - delete " + guard + " to retry"; traceTo(D.mkt, D.mkt + " depth: " + D.err); return; }
+        { std::ofstream w(guard.c_str(), std::ios::trunc); w << "opening MARKET_DEPTH " << D.sym << "\n"; }
+        try { D.md = new (std::nothrow) MARKET_DEPTH(D.sym.c_str()); } catch (...) { D.mdDead = true; }
+        if (!D.md) D.mdDead = true;
+        std::remove(guard.c_str());
+    }
+    if (!D.dbo && !D.dboDead && !D.dboBlocked && !D.dboSkip && state().cfg.dbo) {
+        if (getDataSource() == DS_CQG) { D.dboCqg = true; return; }  // CQG Continuum gives plugins no order-by-order stream
+        { std::ofstream w(guard.c_str(), std::ios::trunc); w << "opening DEPTH_BY_ORDER " << D.sym << "\n"; }
+        try { D.dbo = new (std::nothrow) DEPTH_BY_ORDER(D.sym.c_str()); } catch (...) { D.dboDead = true; }
+        if (!D.dbo) D.dboDead = true;
+        std::remove(guard.c_str());
+    }
+}
+
+// the CT clock of an event / snapshot second, cached per second; also its session and hour
+bool IRTReader::tsOf(DepthState& D, unsigned long long stamp)
+{
+    if (!stamp) return false;
+    if (stamp == D.tsKey) return true;
+    struct tm t; memset(&t, 0, sizeof(t));
+    if (!getLocaltime((RTDATE)stamp, &t) || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1) return false;
+    if (D.tsKey == 0 || t.tm_hour != D.tsTm.tm_hour || t.tm_mday != D.tsTm.tm_mday) {
+        D.tsSess = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
+        char hh[4]; snprintf(hh, sizeof(hh), "%02d", t.tm_hour); D.tsHH = hh;
+    }
+    D.tsKey = stamp; D.tsTm = t;
+    return true;
+}
+
+void IRTReader::depthAdd(DepthState& D, const std::string& file, const char* header, const std::string& rows)
+{
+    if (rows.empty()) return;
+    if (D.bufBytes + rows.size() > IR_BUF_MAX) { long long n = 0; for (size_t i = 0; i < rows.size(); ++i) if (rows[i] == '\n') ++n; D.dropped += n; return; }
+    std::string& b = D.buf[file];
+    if (b.empty()) { std::ifstream ex(file.c_str()); if (!ex.good()) { b = header; b += "\n"; D.bufBytes += b.size(); } }
+    b += rows; D.bufBytes += rows.size();
+}
+
+// one append per file, at most once a second (or forced); a failed append is counted and its lines dropped (never retried in a loop)
+void IRTReader::depthFlush(DepthState& D, long long now, bool force)
+{
+    if (D.buf.empty()) { D.lastFlushMs = now; return; }
+    if (!force && D.lastFlushMs >= 0 && now >= D.lastFlushMs && now - D.lastFlushMs < 1000) return;
+    D.lastFlushMs = now;
+    for (std::map<std::string, std::string>::iterator i = D.buf.begin(); i != D.buf.end(); ++i) {
+        const std::string& p = i->first;
+        const size_t a = p.rfind('\\');
+        if (a != std::string::npos) { const std::string md = p.substr(0, a); const size_t b = md.rfind('\\'); if (b != std::string::npos) _mkdir(md.substr(0, b).c_str()); _mkdir(md.c_str()); }
+        std::ofstream f(p.c_str(), std::ios::binary | std::ios::app);
+        long long n = 0; for (size_t k = 0; k < i->second.size(); ++k) if (i->second[k] == '\n') ++n;
+        if (!f.is_open()) { D.fails++; D.dropped += n; continue; }
+        f.write(i->second.data(), (std::streamsize)i->second.size()); f.flush();
+        if (!f.good()) { D.fails++; D.dropped += n; continue; }
+    }
+    D.buf.clear(); D.bufBytes = 0;
+}
+
+// a snapshot of every level IRT gives, once a second when the book changed and only when it is a real book
+void IRTReader::domRead(DepthState& D, bool chart)
+{
+    if (!D.md || D.mdDead || D.tick <= 0) return;
+    const long long now = irSteadyMs();
+    if (chart) {
+        int ml = 0; const int a = irSafeAvail(D.md, &ml);
+        if (a < 0) { D.domFaults++; D.mdDead = true; D.err = "the book faulted inside IRT (available) - DOM stopped for this run"; traceTo(D.mkt, D.mkt + " depth: " + D.err); return; }
+        D.avail = a == 1; D.maxLevels = ml; D.availMs = now;
+        if (!D.avail) return;
+    } else {
+        if (D.clockDomOff || !D.avail || D.availMs < 0 || now - D.availMs > 30000) return;   // the clock reads only a book the chart saw lately
+    }
+    const RTDATE cd = currentDate();
+    const long long sec = (long long)cd;
+    if (sec == D.domSec) return;                                         // at most one snapshot a second
+    int n = D.maxLevels; if (n > IR_DOM_LEVELS) n = IR_DOM_LEVELS; if (n < 0) n = 0;
+    if (n == 0) return;
+    std::vector<double> v; v.reserve((size_t)n * 4);
+    for (int k = 0; k < n; ++k) {
+        DEPTH_LEVEL L; memset(&L, 0, sizeof(L));
+        if (irSafeLevel(D.md, (unsigned)k, &L) < 0) {
+            D.domFaults++;
+            if (chart) { D.mdDead = true; D.err = "the book faulted inside IRT (level read) - DOM stopped for this run"; }
+            else { D.clockDomOff = true; D.err = "a clock read of the book faulted - DOM now read only when IRT draws the chart"; }
+            traceTo(D.mkt, D.mkt + " depth: " + D.err); return;
+        }
+        v.push_back(L.bid); v.push_back(L.bidsize); v.push_back(L.ask); v.push_back(L.asksize);
+    }
+    D.domSec = sec;
+    const unsigned long long h = irl::bookHash(v);
+    if (h == D.domHash) return;
+    std::string why;
+    if (!irl::domValid(v, D.tick, why)) { D.bad++; D.badWhy = why; return; }   // a book being rebuilt / garbage: never written
+    if (!tsOf(D, (unsigned long long)cd)) return;
+    const struct tm& t = D.tsTm;
+    const std::string ts = irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+    std::string rows; rows.reserve((size_t)n * 48); char line[200]; long long lv = 0;
+    for (int k = 0; k < n; ++k) {
+        const double b = v[(size_t)k * 4], bs = v[(size_t)k * 4 + 1], a = v[(size_t)k * 4 + 2], as = v[(size_t)k * 4 + 3];
+        if ((b <= 0 || bs <= 0) && (a <= 0 || as <= 0)) continue;
+        snprintf(line, sizeof(line), "%s|%d|%s|%.0f|%s|%.0f\n", ts.c_str(), k, irl::px(b, D.tick).c_str(), bs, irl::px(a, D.tick).c_str(), as);
+        rows += line; ++lv;
+    }
+    if (rows.empty()) return;
+    const std::string file = D.folder + "\\" + D.tsSess + "\\" + D.mkt + "\\" + irl::hourFile("dom", t.tm_hour);
+    depthAdd(D, file, "time|level|bid|bid_size|ask|ask_size", rows);
+    D.domHash = h; D.snaps++; D.rowsDom += lv; D.levelsLast = lv; D.lastSnap = irl::clock12(t.tm_hour, t.tm_min, t.tm_sec); D.lastDomFile = file;
+}
+
+// lsPullStats records this market's mbo_HH.csv (same events, same format): then the order feed is read but not written twice
+void IRTReader::dboSkipCheck(DepthState& D, long long now)
+{
+    if (D.skipCheckMs >= 0 && now >= D.skipCheckMs && now - D.skipCheckMs < 10000) return;
+    D.skipCheckMs = now;
+    const RTDATE cd = currentDate(); struct tm t; memset(&t, 0, sizeof(t));
+    if (!getLocaltime(cd, &t)) return;
+    const std::string sess = irl::sessionOf(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour);
+    char hh[16]; snprintf(hh, sizeof(hh), "mbo_%02d.csv", t.tm_hour);
+    const std::string p = D.folder + "\\" + sess + "\\" + D.mkt + "\\" + hh;
+    const long long mt = irFileMtime(p);
+    const bool fresh = mt > 0 && (long long)time(0) - mt < 20;
+    if (fresh != D.dboSkip) traceTo(D.mkt, D.mkt + " depth: " + (fresh ? "lsPullStats is recording " + p + " - the order feed is not written twice" : std::string("no other order-feed recorder - writing dbo_HH.csv")));
+    D.dboSkip = fresh; D.skipWhy = fresh ? "lsPullStats records " + std::string(hh) : "";
+}
+
+// every queued order-feed event (<= 50,000 / ~20 ms per read): the clock reads only after the chart's own read got events
+void IRTReader::dboRead(DepthState& D, bool chart, long long now)
+{
+    if (!D.dbo || D.dboDead || D.tick <= 0) return;
+    if (!chart && (D.clockDboOff || !D.dboLive)) return;
+    const long long t0 = irSteadyMs(); int n = 0;
+    std::string rows; std::string file; char line[260];
+    static const char* ACT[4] = { "NEW", "MOD", "DEL", "FILL" };
+    auto out = [&]() { if (!rows.empty() && !file.empty()) depthAdd(D, file, "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask", rows); rows.clear(); };
+    for (;;) {
+        if (n >= IR_DBO_MAX || ((n & 1023) == 1023 && irSteadyMs() - t0 > IR_DBO_BUDGET_MS)) { D.dboCaps++; break; }
+        DEPTH_ORDER o; memset(&o, 0, sizeof(o));
+        const int r = irSafeNext(D.dbo, &o);
+        if (r < 0) {
+            D.dboFaults++;
+            if (chart) { D.dboDead = true; D.err = "the order feed faulted inside IRT - stopped for this run (reload the indicator to retry)"; }
+            else { D.clockDboOff = true; D.err = "a clock read of the order feed faulted - read only when IRT draws the chart"; }
+            traceTo(D.mkt, D.mkt + " depth: " + D.err); break;
+        }
+        if (r == 0) break;
+        ++n;
+        if (o.action == 3) D.cov.addFill((long long)o.timestamp, (long long)o.size);
+        if (D.dboSkip) { D.dboNotWritten++; continue; }
+        if (!tsOf(D, (unsigned long long)o.timestamp)) { D.dropped++; continue; }
+        const std::string f = D.folder + "\\" + D.tsSess + "\\" + D.mkt + "\\dbo_" + D.tsHH + ".csv";
+        if (f != file) { out(); file = f; D.lastDboFile = f; }
+        const struct tm& t = D.tsTm;
+        if (!std::isfinite(o.price) || !std::isfinite(o.previousPrice) || !std::isfinite(o.bid) || !std::isfinite(o.ask)) { D.dropped++; continue; }
+        snprintf(line, sizeof(line), "%04d-%02d-%02d %02d:%02d:%02d|%s|%s|%s|%lu|%d|%d|%c|%s|%s\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
+                 o.action < 4 ? ACT[o.action] : "?", irl::px(o.price, D.tick).c_str(), irl::px(o.previousPrice, D.tick).c_str(), (unsigned long)o.size, o.orderID,
+                 o.aggressorOrderID, o.buySell == 1 ? 'B' : o.buySell == 0 ? 'S' : '?', irl::px(o.bid, D.tick).c_str(), irl::px(o.ask, D.tick).c_str());
+        rows += line; D.rowsDbo++;
+    }
+    out();
+    if (n > 0) { D.dboEvents += n; if (chart) { D.dboChart += n; D.dboLive = true; } else D.dboClock += n; }
+    (void)now;
+}
+
+// closed chart bars >= 5 s old: FILL lots read vs the bar's volume (bars after the one the feed started in)
+void IRTReader::depthCoverage(DepthState& D, long long now)
+{
+    const long count = getBarCount();
+    if (count < 3 || D.spb <= 0) return;
+    RTARRAYI times(barDateTime), vols(barVolume);
+    if (times.count < count || vols.count < count) return;
+    if (D.firstBarKey < 0) { if (D.dboEvents > 0) D.firstBarKey = (long long)times[(int)count - 1]; return; }
+    for (long i = count - 12 < 0 ? 0 : count - 12; i < count - 1; ++i) {
+        const long long end = (long long)times[(int)i];
+        if (end <= D.firstBarKey) continue;
+        D.cov.offer(end, D.spb, (long long)vols[(int)i], now);
+    }
+}
+
+void IRTReader::depthStatus(DepthState& D, long long now, bool force)
+{
+    if (!force && D.statusMs >= 0 && now >= D.statusMs && now - D.statusMs < 5000) return;
+    D.statusMs = now;
+    const char* up = getenv("USERPROFILE"); if (!up || D.mkt.empty()) return;
+    std::ostringstream o;
+    const RTDATE cd = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(cd, &t);
+    o << "VERSION," << IR_VERSION << "\nREADER," << (IR_FIXED[0] ? "lsFootprintReader" : "lsIRTReader") << (IR_FIXED[0] ? IR_FIXED : "")
+      << "\nMARKET," << D.mkt << "\nSYMBOL," << D.sym << "\nTICK," << D.tick << "\nTIME," << irl::stamp(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
+      << " (" << irl::clock12(t.tm_hour, t.tm_min, t.tm_sec) << ")"
+      << "\nWRITER," << D.ownerNote
+      << "\nCLOCK," << (D.timerOn ? "on" : D.timerTried ? "refused by IRT (chart calls only)" : "not started") << "," << IR_CLOCK_MS << " ms,ticks " << D.ticks
+      << "\nDOM," << (D.mdBlocked ? "blocked" : D.mdDead ? "stopped (fault)" : !D.md ? "not opened" : D.avail ? "available" : "NOT available")
+      << ",levels " << D.maxLevels << ",snapshots " << D.snaps << ",last " << (D.lastSnap.empty() ? "none yet" : D.lastSnap) << " (" << D.levelsLast << " levels)"
+      << ",bad " << D.bad << (D.bad ? " (last: " + D.badWhy + ")" : std::string()) << ",clock " << (D.clockDomOff ? "off (fault)" : "on") << ",faults " << D.domFaults
+      << ",rows " << D.rowsDom << ",file " << (D.lastDomFile.empty() ? "none yet" : D.lastDomFile)
+      << "\nDBO," << (D.dboCqg ? "unsupported on CQG" : D.dboBlocked ? "blocked" : D.dboDead ? "stopped (fault)" : !D.dbo ? (D.dboSkip ? "not opened - " + D.skipWhy : std::string("not opened")) : D.dboSkip ? "read, not written - " + D.skipWhy : std::string("recording"))
+      << ",events " << D.dboEvents << " (clock " << D.dboClock << " / chart " << D.dboChart << "),rows " << D.rowsDbo << ",not_written " << D.dboNotWritten
+      << ",caps " << D.dboCaps << ",clock " << (D.clockDboOff ? "off (fault)" : D.dboLive ? "on" : "waiting for the chart's first read") << ",faults " << D.dboFaults
+      << ",file " << (D.lastDboFile.empty() ? "none yet" : D.lastDboFile)
+      << "\nMBO_COVERAGE,";
+    if (D.cov.lastPct < 0) o << "no closed bar checked yet (fills read vs bar volume, each closed bar >= 5 s after it closes)";
+    else {
+        struct tm a; memset(&a, 0, sizeof(a)); getLocaltime((RTDATE)D.cov.lastEnd, &a);
+        o << "last bar " << irl::clock12(a.tm_hour, a.tm_min, a.tm_sec) << " " << D.cov.lastPct << "% (fills " << D.cov.lastFills << " / volume " << D.cov.lastVol << "),last 10 bars " << D.cov.recentPct() << "%";
+        if (D.cov.lowPct >= 0) { struct tm b; memset(&b, 0, sizeof(b)); getLocaltime((RTDATE)D.cov.lowEnd, &b); o << ",lowest " << D.cov.lowPct << "% at " << irl::clock12(b.tm_hour, b.tm_min, b.tm_sec) << " (fills " << D.cov.lowFills << " / volume " << D.cov.lowVol << ")"; }
+        o << ",bars " << D.cov.checked << ",since load " << irl::FillCoverage::pctOf(D.cov.sumFills, D.cov.sumVol) << "%";
+    }
+    o << "\nBUFFER,bytes " << D.bufBytes << ",dropped " << D.dropped << ",write_fails " << D.fails
+      << "\nERROR," << D.err << "\n";
+    const std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\IRTReader.depth-" + D.mkt + ".txt";
+    irl::atomicWriteText(path, o.str());
+}
+
+// calc / draw: identify, own the market, open, read both, coverage, start the clock, write
+void IRTReader::depthChart(const char* via)
+{
+    (void)via;
+    if (!state().cfg.dom && !state().cfg.dbo) return;
+    DepthState* P = dslot_.get(this, true);
+    if (!P) return;
+    DepthState& D = *P;
+    const long long now = irSteadyMs();
+    if (D.lastChartMs >= 0 && now >= D.lastChartMs && now - D.lastChartMs < 200) return;   // at most 5 chart reads a second
+    D.lastChartMs = now;
+    depthIdentify(D);
+    if (D.mkt.empty() || D.sym.empty() || D.tick <= 0) return;
+    if (!depthOwner(D, now)) { depthStop(D); return; }                 // the writer's status file is the writer's alone
+    if (state().cfg.dbo) dboSkipCheck(D, now);
+    depthOpen(D);
+    domRead(D, true);
+    dboRead(D, true, now);
+    depthCoverage(D, now);
+    if (!D.timerTried && (D.md || D.dbo)) {                             // the clock: once the chart has opened the streams
+        D.timerTried = true;
+        int id = 52000 + (int)(((uintptr_t)&D >> 4) % 900000);
+        while (irClocks().count(id)) ++id;
+        if (createTimer(id, (int)IR_CLOCK_MS) == RTX_OK) { D.timerId = id; D.timerOn = true; irClocks()[id] = &D; traceTo(D.mkt, D.mkt + " depth: clock on (" + std::to_string(IR_CLOCK_MS) + " ms)"); }
+        else traceTo(D.mkt, D.mkt + " depth: IRT refused the clock - read only when IRT draws the chart");
+    }
+    depthFlush(D, now, false);
+    depthStatus(D, now, false);
+}
+
+// the 250 ms clock (any chart context): only objects opened with the chart symbol, only after the chart's own reads worked
+void IRTReader::depthClock(DepthState& D)
+{
+    const long long now = irSteadyMs();
+    D.ticks++;
+    if (!D.owner || D.mkt.empty()) return;
+    domRead(D, false);
+    dboRead(D, false, now);
+    depthFlush(D, now, false);
+    depthStatus(D, now, false);
+    if (D.ownerMs >= 0 && now - D.ownerMs >= 5000) {                      // keep the writer's heartbeat while the chart is hidden
+        const std::string p = D.folder + "\\_depth-owner-" + D.mkt + ".txt";
+        char me[64]; snprintf(me, sizeof(me), "%llx-%llx", (unsigned long long)(uintptr_t)this, (unsigned long long)(uintptr_t)&D);
+        std::ofstream o(p.c_str(), std::ios::trunc); o << me << " " << (long long)time(0) << "\n";
+        D.ownerMs = now;
+    }
 }
 
 extern "C" cppExtension *CreateExtension(void)

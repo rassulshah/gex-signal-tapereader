@@ -1,5 +1,11 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.2.2  (2026-10-14)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.3.0  (2026-10-14)
+ *  1.3.0 (2026-10-14 evening; Rassul's standing order "always record IRT data and keep the MBO files updated"; LIQ-DAY-2026-10-14:
+ *        mbo_HH.csv held only 30-45% of the ES volume in busy periods): the order feed is read by a 250 ms clock as well as calc / draw
+ *        (OrderFlowFeed.h 1.4.0 - IRT keeps only the last few thousand events per subscriber and drew this chart every 6-10 s), every
+ *        event goes to the recorder as it is read and the clock flushes the recorder once a second (so recording continues while the
+ *        layout tab is hidden); the status gains FEED_CLOCK and MBO_COVERAGE (fills read / bar volume per closed candle). The recorder
+ *        reuses the event's clock time within a second (one getLocaltime per second, not per event) - MboRecord.h 1.1.0.
  *  1.2.2 (2026-10-14, CR5300; Rassul 11:59 CT CLZ6 3-min "the label for pace and lots on the red spike goes away but it is there on
  *        the green spike. fix it"): spike labels never lose their pace / lots because of another spike (OrderFlowFeed.h 1.3.1: labels
  *        decided in time order from older labels only, no shrink pass; the hover grid drawn over them, not re-laying them out;
@@ -63,7 +69,7 @@
 #include "PullStatsLogic.h"
 #include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.2.2"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.3.0"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -80,8 +86,13 @@ public:
     }
     virtual void onRaw(S_& S, const DEPTH_ORDER& o) {
         mrec::Recorder* r = rec(S); if (!r || !r->on) return;
-        struct tm t; std::memset(&t, 0, sizeof(t));
-        if (!o.timestamp || !getLocaltime(o.timestamp, &t)) { ++r->dropped; return; }
+        if (!o.timestamp) { ++r->dropped; return; }
+        if (o.timestamp != r->tsKey) {                                     // (1.3.0) one clock conversion per second, not per event
+            struct tm t; std::memset(&t, 0, sizeof(t));
+            if (!getLocaltime(o.timestamp, &t)) { ++r->dropped; return; }
+            r->tsKey = o.timestamp; r->tsTm = t;
+        }
+        const struct tm& t = r->tsTm;
         mrec::Ev e; e.y = t.tm_year + 1900; e.mo = t.tm_mon + 1; e.d = t.tm_mday; e.h = t.tm_hour; e.mi = t.tm_min; e.s = t.tm_sec;
         e.action = o.action; e.price = (double)o.price; e.prev = (double)o.previousPrice; e.size = (unsigned long)o.size;
         e.oid = (long long)o.orderID; e.aid = (long long)o.aggressorOrderID; e.side = o.buySell == 1 ? 1 : o.buySell == 0 ? 0 : -1;
@@ -89,6 +100,7 @@ public:
         r->add(e);
     }
     virtual void afterPump(S_& S, long long now, bool fromDraw) { mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); }
+    virtual void afterTimer(S_& S, long long now) { mrec::Recorder* r = rec(S); if (r) r->tick(now, false); }   // (1.3.0) the clock writes too
     virtual void statusExtra(S_& S, std::ostream& o) { mrec::Recorder* r = rec(S); if (r) r->status(o); else o << "\nMBO_RECORD,unavailable (out of memory)"; }
 private:
     struct RecExt : off::PaneExt { mrec::Recorder r; };
@@ -122,6 +134,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, before price, traded first, pace, crowd = orders, avg size, top order share) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.2.2");   // PS_VERSION
+    p->setVersion("1.3.0");   // PS_VERSION
     return p;
 }
