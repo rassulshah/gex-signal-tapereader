@@ -46,7 +46,7 @@
 
 namespace tr {
 
-static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
+static const char* const VERSION = "1.1.2";   // 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
 // (6:40 PM) StackStats' one-order clause = st::ONE_ORDER_TAIL (StackStatsLogic.h); test_tr_ofcompat.cpp checks the two are equal
 static const char* const STACK_ONE_ORDER = "may not reload ?";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
@@ -309,6 +309,7 @@ inline std::vector<Level> mergeLevels(const std::vector<Level>& key, const std::
     const double eps = tick > 0 ? tick * 0.5 : 1e-9;
     auto add = [&](const Level& v) {
         if (v.kind == "vwap" || v.name.compare(0, 4, "VWAP") == 0) return;
+        if (v.kind == "pivot_1h" || v.kind == "pivot_1h_1x1" || v.name.compare(0, 2, "Hr") == 0) return;   // (1.1.2) hourly swings: logged, not targets
         for (size_t i = 0; i < out.size(); ++i) if (std::fabs(out[i].px - v.px) <= eps) { if (out[i].odds.empty() && !v.odds.empty()) { out[i].odds = v.odds; out[i].q = v.q; } return; }
         Level w = v; w.name = shortName(w.name); out.push_back(w);
     };
@@ -565,6 +566,8 @@ inline TurnsSnap parseTurns(bool exists, const std::vector<std::string>& L, cons
 inline std::string levelType(const std::string& name, const std::string& kind) {
     const std::string n = name;
     auto has = [&](const char* k) { return n.compare(0, std::strlen(k), k) == 0; };
+    if (has("Asia")) return "asia";            // (1.1.2)
+    if (has("CW")) return "current_week";      // (1.1.2) before "C..." gamma names (CR); "CW" is never a MenthorQ code here
     if (has("Lon")) return "london";
     if (has("PD")) return "prior_day";
     if (has("PW")) return "prior_week";

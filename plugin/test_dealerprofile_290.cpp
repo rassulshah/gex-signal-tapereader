@@ -219,7 +219,7 @@ int main(int argc, char** argv)
 
     std::vector<Op> O = drawOnce(D, cut, 0, dealer);
     const int anchor = 1598, reach = 50 + 100, bound = anchor - reach;
-    check(hasText(O, "Dealer Profile v2.9.0"), "header: the version");
+    check(hasText(O, "Dealer Profile v2.10.0"), "header: the version");
     check(hasText(O, "STALE 10h - 4:55 AM"), "header: STALE, the grid stopped at 4:55 AM (10h before 2:57 PM)");
     int small = 0, crossing = 0, gexOnFace = 0, wN = 0, fN = 0, redNum = 0, greenNum = 0, pct = 0, dashed = 0;
     for (size_t i = 0; i < O.size(); i++) {
@@ -274,7 +274,7 @@ int main(int argc, char** argv)
         std::string old; std::istringstream in(dealer); std::string ln;
         while (std::getline(in, ln)) if (ln.rfind("NODEX|", 0) != 0) old += ln + "\n";
         std::vector<Op> F = drawOnce(D, cut, 0, old);
-        check(!hasText(F, "Dealer Profile v2.9.0") && !hasText(F, "W"), "file 2.3: drawn as 2.8.7");
+        check(!hasText(F, "Dealer Profile v2.10.0") && !hasText(F, "W"), "file 2.3: drawn as 2.8.7");
     }
     // a malformed NODEX row: the snapshot is refused (nothing torn drawn)
     {

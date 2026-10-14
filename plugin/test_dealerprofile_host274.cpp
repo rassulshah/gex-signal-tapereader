@@ -136,9 +136,9 @@ int main()
         X.drawKeyLevels(X.cfg);
         bool pdh = false;
         for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s;
-            if (all.rfind("6660.00 PFH/PDH", 0) == 0) pdh = true;      // PFH = PDH here: one merged badge
+            if (all.rfind("6660.00 PFH \xB7 PDH", 0) == 0) pdh = true;      // PFH = PDH here: one merged badge
             check(P.seg.size() >= 2 && P.seg[1].bold && !P.seg[0].bold, "badge: price plain, name bold"); }
-        check(pdh, "ES key-level badge reads \"6660.00 PFH/PDH...\" (price first, MenthorQ format)");
+        check(pdh, "ES key-level badge reads \"6660.00 PFH . PDH...\" (2.10.0: middle dot on the badge)");
         // ---- 2. drawn: badges centred, never over each other, the Liquidity column (< 110) or past maxR (2.8.2: price bars allowed)
         if (getenv("DBG")) for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s; std::printf("pend y=%d %s\n", P.y, all.c_str()); }
         RECTS.clear(); X.flushLabels(X.cfg);
@@ -200,7 +200,7 @@ int main()
         X.drawKeyLevels(X.cfg);
         bool tag = false; for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s;
             if (getenv("DBG")) std::printf("liq pend %s\n", all.c_str());
-            if (all.rfind("6660.00 PFH/PDH", 0) == 0 && all.find("Liq 977 (2.6x)") != std::string::npos) tag = true; }
+            if (all.rfind("6660.00 PFH \xB7 PDH", 0) == 0 && all.find("Liq 977 (2.6x)") != std::string::npos) tag = true; }
         check(tag, "(2.8.0) key level on an offer zone: \"... Liq 977 (2.6x)\"");
         X.done();
     }

@@ -1,4 +1,4 @@
-// KeyLevelsLogic.h - the key levels, computed natively from the chart's own bars (lsDealerProfile 2.7.0).
+// KeyLevelsLogic.h - the key levels, computed natively from the chart's own bars (lsDealerProfile 2.7.0; 2.10.0 Asia + current week).
 // (Rassul 2026-10-09 08:40 "it would also need to calculate the PFH/PFL and PWH/PWL ... it would probably be better if the dealer
 // profile did all the levels and their probabilities"; 08:41 "those lines dont change once they are drawn till the next day")
 // Same definitions as lra.key_levels / lra.level_touch (the nightly studies' reference):
@@ -7,7 +7,12 @@
 //   PWH / PWL   the Monday-Friday sessions of the previous week
 //   ONH / ONL   this session's overnight bars (17:00 -> the RTH open); shown once RTH has started
 //   LonHI/LonLO this session's London bars (END in (02:00, 07:30]); shown after 07:30
-//   HrHI / HrLO the latest confirmed clock-hour swing (2 complete hours each side, strictly higher / lower), not yet traded through
+//   AsiaHI/LO   (2.10.0) this session's Asia bars (END in (18:00, 02:00] CT, per-market table asiaWindow); shown after 02:00
+//               (docs/study-methods/level-definitions-asia-week.md, reviewed 2026-10-14)
+//   CWH / CWL   (2.10.0) this week's high / low set BEFORE the prior session: the max / min of this week's completed sessions
+//               older than yesterday's; shown only when beyond the prior session's PFH / PFL (so never Monday or Tuesday).
+//               Fixed at the session start - never repaints.
+// (2.10.0, Rassul 2026-10-14) the hourly swings HrHI / HrLO are no longer computed or drawn here (lra.level_touch still logs them).
 // Pure C++ (no SDK) - tested in test_keylevels_logic.cpp.
 #pragma once
 #include <cmath>
@@ -24,11 +29,29 @@ struct Level { std::string code; double price; bool pivot; };
 
 struct Agg { double h = -1e300, l = 1e300; int n = 0; void add(double hi, double lo) { h = std::max(h, hi); l = std::min(l, lo); n++; } bool ok() const { return n > 0; } };
 
-inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int openMin, int closeMin, double tick)
+// (2.10.0) the Asia window per market, CT minutes of the bar END: (start, end]. One window for all markets today (18:00 -> 02:00,
+// ends where London starts); kept per market so the nightly studies can tune it.
+inline void asiaWindow(const char* m, int& startMin, int& endMin)
+{
+    startMin = 18 * 60; endMin = 2 * 60;
+    (void)m;
+}
+// (2.10.0) the merge distance for a NEW level (AsiaHI/LO, CWH/CWL) joining an existing line: the Liquidity Profile zone
+// half-width minimum in ticks (NearLevels.h nl::zoneFor().hwMin) - ES 4, NQ 8, CL 4, GC 8, HG 2, NG 2, EU 2
+inline int mergeTicksFor(const std::string& m)
+{
+    if (m == "NQ" || m == "GC") return 8;
+    if (m == "HG" || m == "NG" || m == "EU") return 2;
+    return 4;
+}
+inline bool isNewCode(const std::string& c) { return c.compare(0, 4, "Asia") == 0 || c.compare(0, 2, "CW") == 0; }
+
+inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int openMin, int closeMin, double tick,
+                                  int asiaStartMin = 18 * 60, int asiaEndMin = 2 * 60)
 {
     std::vector<Level> out;
     if (B.empty() || perSec <= 0 || !(tick > 0)) return out;
-    struct S { Agg full, rth, on, lon; };
+    struct S { Agg full, rth, on, lon, asia; };
     std::map<long, S> by;                                         // session (civil days) -> aggregates
     std::vector<long> sessOf(B.size(), 0); std::vector<int> kindOf(B.size(), svl::NONE);
     // (2.7.4) the chart's history may start part-way through a session: a level built from a session (or week) that is only
@@ -48,6 +71,8 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
             s.on.add(b.h, b.l);
             int endMin = b.endSec / 60;
             if (endMin > 2 * 60 && endMin <= 7 * 60 + 30 && b.endSec < 17 * 3600) s.lon.add(b.h, b.l);
+            // (2.10.0) Asia: the evening part after asiaStart, and the early-morning part up to asiaEnd (a bar ending 00:00 = 0)
+            if ((b.endSec >= 17 * 3600 && endMin > asiaStartMin) || (b.endSec < 17 * 3600 && endMin <= asiaEndMin)) s.asia.add(b.h, b.l);
         }
     }
     if (by.empty()) return out;
@@ -81,55 +106,66 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
     bool lonDone = rthStarted || (B[last].endSec < 17 * 3600 && lastEndMin > 7 * 60 + 30);
     const bool lonComplete = complete(cur) || (firstSess == cur && firstStart < 2 * 3600);   // loaded from before 02:00
     if (lonDone && cs.lon.ok() && lonComplete) { push("LonHI", cs.lon.h, false); push("LonLO", cs.lon.l, false); }
-    // hourly swings: clock-hour bars from bar START times, the last 3 sessions
-    struct H { long key; double h, l; int n; };
-    std::vector<H> hrs;
-    for (size_t i = 0; i < B.size(); i++) {
-        if (kindOf[i] == svl::NONE || sessOf[i] < cur - 4) continue;
-        long startAbs = B[i].days * 86400L + B[i].endSec - perSec;
-        long key = startAbs >= 0 ? startAbs / 3600 : -((-startAbs + 3599) / 3600);
-        if (hrs.empty() || hrs.back().key != key) hrs.push_back(H{key, B[i].h, B[i].l, 0});
-        H& x = hrs.back(); x.h = std::max(x.h, (double)B[i].h); x.l = std::min(x.l, (double)B[i].l); x.n++;
+    // (2.10.0) Asia high / low: once the window is over (after asiaEnd, or RTH started) and the whole window is loaded
+    {
+        const bool asiaDone = rthStarted || (B[last].endSec < 17 * 3600 && lastEndMin > asiaEndMin);
+        const bool asiaComplete = complete(cur) || (firstSess == cur && firstStart >= 17 * 3600 && firstStart <= asiaStartMin * 60);
+        if (asiaDone && cs.asia.ok() && asiaComplete) { push("AsiaHI", cs.asia.h, false); push("AsiaLO", cs.asia.l, false); }
     }
-    const int full = 3600 / perSec, minBars = std::max(1, (int)std::floor(0.9 * full));
-    const long nowHour = (B[last].days * 86400L + B[last].endSec) / 3600;
-    double hiP = NAN, loP = NAN;
-    for (size_t j = 2; j + 2 < hrs.size(); j++) {
-        bool ok = true;
-        for (size_t k = j - 2; k <= j + 2; k++) if (hrs[k].n < minBars) ok = false;
-        for (size_t k = j - 2; k < j + 2; k++) if (hrs[k + 1].key - hrs[k].key != 1) ok = false;
-        if (!ok || hrs[j].key + 3 > nowHour) continue;              // confirmed only once the 2 right-hand hours have CLOSED
-        bool hi = true, lo = true;
-        for (size_t k = j - 2; k <= j + 2; k++) if (k != j) { if (!(hrs[j].h > hrs[k].h)) hi = false; if (!(hrs[j].l < hrs[k].l)) lo = false; }
-        if (hi || lo) {                                           // still standing: not traded through after it was confirmed
-            double mxAfter = -1e300, mnAfter = 1e300;
-            for (size_t k = j + 1; k < hrs.size(); k++) { mxAfter = std::max(mxAfter, hrs[k].h); mnAfter = std::min(mnAfter, hrs[k].l); }
-            if (hi && mxAfter < hrs[j].h) hiP = hrs[j].h;
-            if (lo && mnAfter > hrs[j].l) loP = hrs[j].l;
+    // (2.10.0) current week: the sessions of this week (from Monday's, the Sunday 17:00 open) that are older than the prior session
+    if (it != by.begin()) {
+        const long prior = std::prev(it)->first;
+        const int wd = svl::weekdayOf(cur);
+        const long monday = cur - ((wd + 6) % 7);
+        if (prior >= monday && complete(monday)) {
+            Agg e;
+            for (auto& kv : by) if (kv.first >= monday && kv.first < prior && kv.second.full.ok()) e.add(kv.second.full.h, kv.second.full.l);
+            const Agg& pf = std::prev(it)->second.full;
+            if (e.ok() && pf.ok()) {
+                if (e.h > pf.h) push("CWH", e.h, false);
+                if (e.l < pf.l) push("CWL", e.l, false);
+            }
         }
     }
-    if (std::isfinite(hiP)) push("HrHI", hiP, true);
-    if (std::isfinite(loP)) push("HrLO", loP, true);
     return out;
 }
 
-// same price to the tick -> one level with the names joined ("PDH/HrHI"); key levels before pivots in the name
+// same price to the tick -> one level with the names joined ("PDH/PFH"). (2.10.0) a NEW level (AsiaHI/LO, CWH/CWL) within
+// nearTicks of an existing line joins it (the nearest; the line keeps its own price, the new name goes last: "ONH/AsiaHI");
+// otherwise it gets its own line. Existing levels still merge only on the exact tick.
 struct Merged { std::string name; double price; bool pivotOnly; };
-inline std::vector<Merged> merge(const std::vector<Level>& L, double tick)
+inline std::vector<Merged> merge(const std::vector<Level>& L, double tick, int nearTicks = 0)
 {
     std::map<long long, Merged> m;
+    auto join = [](Merged& g, const Level& x) {
+        std::string& n = g.name;
+        if (("/" + n + "/").find("/" + x.code + "/") == std::string::npos) n = n + "/" + x.code;
+        g.pivotOnly = g.pivotOnly && x.pivot;
+    };
+    for (int pass = 0; pass < 2; ++pass)
     for (const Level& x : L) {
+        const bool nw = isNewCode(x.code);
+        if ((pass == 0) == nw) continue;                          // existing levels first, then the new ones
         long long k = (long long)std::llround(x.price / tick);
         auto f = m.find(k);
-        if (f == m.end()) m[k] = Merged{x.code, x.price, x.pivot};
-        else {
-            std::string& n = f->second.name;
-            if (("/" + n + "/").find("/" + x.code + "/") == std::string::npos) n = n + "/" + x.code;   // compute() emits key levels first, pivots last
-            f->second.pivotOnly = f->second.pivotOnly && x.pivot;
+        if (f == m.end() && nw && nearTicks > 0) {               // the nearest existing line within nearTicks
+            long long best = 0; bool have = false;
+            for (auto& kv : m) { long long d = kv.first > k ? kv.first - k : k - kv.first; if (d <= nearTicks && (!have || d < (best > k ? best - k : k - best))) { best = kv.first; have = true; } }
+            if (have) f = m.find(best);
         }
+        if (f == m.end()) m[k] = Merged{x.code, x.price, x.pivot};
+        else join(f->second, x);
     }
     std::vector<Merged> v; for (auto& kv : m) v.push_back(kv.second);
     return v;
+}
+// (2.10.0, Rassul 2026-10-14 "ONH (dot) AsiaHI") the name on the chart badge: "/" -> " \xB7 " (the middle dot, CP1252 like DayStats);
+// the files keep "/" (every parser splits on it)
+inline std::string displayName(const std::string& n)
+{
+    std::string r; r.reserve(n.size() + 8);
+    for (char c : n) { if (c == '/') r += " \xB7 "; else r += c; }
+    return r;
 }
 
 } // namespace klv
