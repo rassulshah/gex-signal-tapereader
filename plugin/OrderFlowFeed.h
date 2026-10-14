@@ -1,7 +1,10 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.2.0, 2026-10-13) -- the ONE shared order-flow header of lsBidAskStats 1.5.0, lsPullStats 1.1.0 and
-// lsStackStats 1.1.0.
+// OrderFlowFeed.h (1.2.1, 2026-10-13) -- the ONE shared order-flow header of lsBidAskStats 1.5.0, lsPullStats 1.1.0 and
+// lsStackStats 1.1.1.
+// 1.2.1 (2026-10-13 9:12 PM CT, live ES "Rebuilt 200% ?" on both sides): REBUILT credits an add at a hit price only up to the lots
+//   hit there and not yet restored (Ice.rebuilt), so it can never exceed the hit size; rebuiltPctOf caps at 100% (was 200%). Nothing
+//   else changes (the record format, pull / add / refill counts and every other number are identical).
 // 1.2.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
 //   - Pull / Stack bars in LOTS (contracts pulled / added near price; were order counts). Spike labels: 3 rows - size ratio "3.4x" /
 //     pace "p 2.3x" / lots "240".
@@ -57,6 +60,7 @@
 //   NEAR = |price - the last trade price| <= the Liquidity Profile 0.14.0 near band (NearLevels.h).
 #include "NearLevels.h"
 #include "OptionsFlow.h"
+#include "HoverBoard.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -78,7 +82,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.2.1";   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -296,7 +300,7 @@ template <class O> Ev evOf(const O& o, double tick, long long arrMs) {
     return x;
 }
 
-struct Ice { long long traded = 0, shown = 0; bool unknown = false; };
+struct Ice { long long traded = 0, shown = 0, rebuilt = 0; bool unknown = false; };   // rebuilt: (1.2.1) lots credited as re-added at this price (<= traded)
 struct Aggr { int side = -1; long long size = 0; Tick px[AGGR_PX_MAX]; int nPx = 0; bool more = false; };
 // what one candle collected (open while the candle is forming / closing)
 struct Acc {
@@ -422,8 +426,13 @@ public:
         if (c > 0) {
             a.addC[s] += c; bump(a.addBy[s], id, c, a);
             if (px > 0) {                                                  // (1.2.0) rebuilt: added back at a price hit earlier this candle
-                std::map<Tick, Ice>::const_iterator h = a.ice[s].find(px);
-                if (h != a.ice[s].end() && h->second.traded > 0) a.rebuildC[s] += c;
+                // (1.2.1, live 13 Oct 9:12 PM "Rebuilt 200%") credit at most the lots still un-restored at that price: every new order
+                // joining the queue at a once-hit price used to count, so normal queue joins read as 200% (the cap) with a 1-lot hit
+                std::map<Tick, Ice>::iterator h = a.ice[s].find(px);
+                if (h != a.ice[s].end() && h->second.traded > h->second.rebuilt) {
+                    const long long room = h->second.traded - h->second.rebuilt, k = c < room ? c : room;
+                    h->second.rebuilt += k; a.rebuildC[s] += k;
+                }
             }
             std::vector<std::pair<long long, long long> >& T = a.addT[s];   // (1.2.0) the reset clock: one sample per stamp second
             if (!T.empty() && T.back().first == stamp) T.back().second = a.addC[s];
@@ -692,14 +701,24 @@ inline std::string ordersText(long long n, long long lots) {
     const long long t = (lots * 20 + n) / (2 * n);                       // tenths, rounded half up (137 / 20 = 6.85 -> 6.9)
     char b[96]; std::snprintf(b, sizeof(b), "%lld \xB7 avg %lld.%lld", n, t / 10, t % 10); return b;
 }
+// (1.2.1, Rassul 13 Oct "just do it") the ONE "Crowd" row: orders, average size and the top order's share - "96 \xB7 avg 3.8 \xB7 top 12%"
+inline std::string crowdText(long long n, long long lots, long long top) {
+    std::string o = ordersText(n, lots);
+    if (n <= 0) return o;
+    if (lots > 0 && top > 0) { long long p = (top * 100 + lots / 2) / lots; if (p > 100) p = 100; o += " \xB7 top " + std::to_string(p) + "%"; }
+    return o;
+}
+static const char* const CROWD_TMPL = "999 \xB7 avg 99.9 \xB7 top 99%";   // the info box value width (the longest row value)
 inline std::string pctOf(long long part, long long whole) {
     if (whole <= 0 || part <= 0) return "-";
     long long p = (part * 100 + whole / 2) / whole; if (p > 999) p = 999; return std::to_string(p) + "%";
 }
-// rebuilt %: the size added back at a price after a hit there / the size hit, capped at 200% (lra passive_aggr's restore)
+// rebuilt %: the share of the hit size restored after the hits (lots re-added at a hit price, at most that price's hit lots / the lots
+// hit), shown only when there were hits (-1 = none), at most 100% (1.2.1; was capped at 200% and counted every queue join)
 inline long long rebuiltPctOf(long long rebuilt, long long hit) {
     if (hit <= 0) return -1;
-    long long p = (rebuilt * 100 + hit / 2) / hit; return p > 200 ? 200 : p;
+    if (rebuilt < 0) rebuilt = 0;
+    long long p = (rebuilt * 100 + hit / 2) / hit; return p > 100 ? 100 : p;
 }
 
 // =====================================================================================================================
@@ -836,7 +855,8 @@ inline int barHeight(long long v, long long top, int px) {
 // (12:03 / 12:10) HEADROOM for the spike labels and the message line: the tallest bar tops out at <= 1/1.45 (~69%) of the drawing
 // height AND leaves LABEL_ROOM px (two label lines) plus the text reserve above it. The axis (scale()) uses the same px, so every
 // bar top still sits at its value on the axis.
-static const int LABEL_LH = 10, LABEL_ROWS = 3, LABEL_ROOM = LABEL_ROWS * LABEL_LH + 2;   // (1.2.0) 3 rows: ratio / pace / lots
+static const int LABEL_PT = 10, LABEL_LH = 14, LABEL_ROWS = 3, LABEL_ROOM = LABEL_ROWS * LABEL_LH + 2;   // (1.2.0) 3 rows: ratio / pace / lots; (1.2.1) 10 pt (was 7)
+static const int INFO_PT = 10, INFO_LH = 15;                                                            // (1.2.1) the info box at 10 pt (was 9 / 13)
 inline int drawPx(int paneH, int reserve) {
     const int avail = paneH - 6; if (avail <= 1) return 1;
     int p = (int)((double)avail / 1.45);
@@ -883,24 +903,57 @@ inline bool overlaps(const LBox& a, const LBox& b) { return !(a.r < b.l || b.r <
 // steps); one that would cross yTop (the message lines / pane top) is not drawn - labels never overlap anything.
 struct SpikeIn { int cx = 0, barTop = 0, side = 0; std::string q, x, p; };      // (1.2.0) p = pace "p 2.3x" ("" = none)
 struct SLabel { int l, t, r, b, side; std::string q, x, p; };
-template <class W> std::vector<SLabel> spikeLabels(const std::vector<SpikeIn>& in, int yTop, const std::vector<LBox>& letters, W width) {
-    std::vector<SLabel> out;
+// (1.2.1, Rassul 13 Oct "fonts are too small"): labels at 10 pt; never over each other, a letter box, the info box or the message line
+// (yTop). The full label (ratio / pace / lots) is tried right above its bar, then staggered up; then shifted left / right of its bar;
+// then the RATIO alone (the one number that must always show) the same way. Only when no spot is free is the label not drawn.
+template <class W> std::vector<SLabel> spikeLabels(const std::vector<SpikeIn>& in, int yTop, const std::vector<LBox>& letters, W width, int xMin = -1000000, int xMax = 1000000) {
+    // one free spot for a label of w x h near its bar: right above it, then staggered up, then shifted left / right; skip = its own index
+    auto spot = [&](const std::vector<SLabel>& out, size_t skip, const SpikeIn& sp, int w, int h, int maxStep, LBox& got, bool shift) {
+        const int shifts[3] = { 0, -(w / 2 + 3), w / 2 + 3 };
+        for (int sh = 0; sh < (shift ? 3 : 1); ++sh)
+            for (int step = 0; step < maxStep; ++step) {
+                const int b = sp.barTop - 2 - step * (h + 2), t = b - h + 1;
+                if (t < yTop) break;
+                int l = sp.cx - w / 2 + shifts[sh];
+                if (l + w - 1 > xMax) l = xMax - w + 1;
+                if (l < xMin) l = xMin;
+                const LBox me = { l, t, l + w - 1, b, 0, 0 };
+                bool hit = false;
+                for (size_t k = 0; k < out.size() && !hit; ++k) { if (k == skip || out[k].r < out[k].l) continue; const LBox o = { out[k].l, out[k].t, out[k].r, out[k].b, 0, 0 }; hit = overlaps(me, o); }
+                for (size_t k = 0; k < letters.size() && !hit; ++k) hit = overlaps(me, letters[k]);
+                if (!hit) { got = me; return true; }
+            }
+        return false;
+    };
+    // pass 1: the full label (ratio / pace / lots) right above its own bar, staggered up when it would touch another (as 1.2.0)
+    std::vector<SLabel> out(in.size(), SLabel{ 0, 0, -1, -1, 0, std::string(), std::string(), std::string() });
+    std::vector<int> cx(in.size(), 0);
     for (size_t i = 0; i < in.size(); ++i) {
+        out[i].side = in[i].side; cx[i] = in[i].cx;
         const int rows = in[i].p.empty() ? 2 : 3;
-        const int w = std::max(std::max(width(in[i].q), width(in[i].x)), width(in[i].p)) + 2, h = rows * LABEL_LH;
-        for (int step = 0; step < 4; ++step) {
-            const int b = in[i].barTop - 2 - step * (h + 2), t = b - h + 1;
-            if (t < yTop) break;
-            const LBox me = { in[i].cx - w / 2, t, in[i].cx - w / 2 + w - 1, b, 0, 0 };
-            bool hit = false;
-            for (size_t k = 0; k < out.size() && !hit; ++k) { const LBox o = { out[k].l, out[k].t, out[k].r, out[k].b, 0, 0 }; hit = overlaps(me, o); }
-            for (size_t k = 0; k < letters.size() && !hit; ++k) hit = overlaps(me, letters[k]);
-            if (hit) continue;
-            out.push_back(SLabel{ me.l, me.t, me.r, me.b, in[i].side, in[i].q, in[i].x, in[i].p });
-            break;
-        }
+        const int w = std::max(std::max(width(in[i].q), width(in[i].x)), width(in[i].p)) + 2; LBox got;
+        if (spot(out, i, in[i], w, rows * LABEL_LH, 4, got, false)) out[i] = SLabel{ got.l, got.t, got.r, got.b, in[i].side, in[i].q, in[i].x, in[i].p };
     }
-    return out;
+    // pass 2: a spike with no room keeps its RATIO (the number that must always show; the lots stand in before 5 candles of history):
+    // the ratio alone, shifted left / right if needed; if still no room, the nearest full labels shrink to their ratio alone first
+    auto ratioOnly = [&](size_t i, LBox& got) { const std::string x = in[i].x.empty() ? in[i].q : in[i].x; return spot(out, i, in[i], width(x) + 2, LABEL_LH, 8, got, true); };
+    for (size_t i = 0; i < in.size(); ++i) {
+        if (out[i].r >= out[i].l) continue;
+        LBox got; bool ok = ratioOnly(i, got);
+        while (!ok) {
+            size_t best = (size_t)-1; int bd = 1 << 30;
+            for (size_t k = 0; k < out.size(); ++k) if (k != i && out[k].r >= out[k].l && (!out[k].q.empty() || !out[k].p.empty())) { const int d = std::abs(cx[k] - cx[i]); if (d < bd) { bd = d; best = k; } }
+            if (best == (size_t)-1) break;
+            const std::string xb = in[best].x.empty() ? in[best].q : in[best].x; const int wb = width(xb) + 2;
+            int l = cx[best] - wb / 2; if (l + wb - 1 > xMax) l = xMax - wb + 1; if (l < xMin) l = xMin;
+            out[best] = SLabel{ l, out[best].b - LABEL_LH + 1, l + wb - 1, out[best].b, in[best].side, std::string(), xb, std::string() };   // shrink in place (its bottom row)
+            ok = ratioOnly(i, got);
+        }
+        if (ok) out[i] = SLabel{ got.l, got.t, got.r, got.b, in[i].side, std::string(), in[i].x.empty() ? in[i].q : in[i].x, std::string() };
+    }
+    std::vector<SLabel> kept;
+    for (size_t i = 0; i < out.size(); ++i) if (out[i].r >= out[i].l) kept.push_back(out[i]);
+    return kept;
 }
 inline int hoverIndex(long bar, long count) { return bar >= 0 && bar < count - 1 ? (int)bar : -1; }
 struct Hover { int bar = -1; bool set(int b) { if (b < -1) b = -1; if (b == bar) return false; bar = b; return true; } };
@@ -1379,14 +1432,14 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         }
     }
     if (sp.empty()) return;
-    cppExtension::FONT sf; sf.id = cppExtension::HELVETICA; sf.size = 7; sf.style = cppExtension::PLAIN; x->setFont(sf);
-    const std::vector<SLabel> L = spikeLabels(sp, g.top + g.reserve, allLets, [&](const std::string& t) { return t.empty() ? 0 : (int)x->getTextWidth(t.c_str(), -1); });
+    cppExtension::FONT sf; sf.id = cppExtension::HELVETICA; sf.size = LABEL_PT; sf.style = cppExtension::PLAIN; x->setFont(sf);   // (1.2.1) 10 pt
+    const std::vector<SLabel> L = spikeLabels(sp, g.top + g.reserve, allLets, [&](const std::string& t) { return t.empty() ? 0 : (int)x->getTextWidth(t.c_str(), -1); }, g.left + 1, g.edge - 1);
     for (size_t k = 0; k < L.size(); ++k) {
         x->setTextColor(spike[L[k].side]);
         auto put = [&](const std::string& t, int y) { if (t.empty()) return; const int w = x->getTextWidth(t.c_str(), -1), cx = (L[k].l + L[k].r) / 2;
             cppExtension::RCT r; r.set(coord(cx - w / 2), coord(y), coord(cx - w / 2 + w + 2), coord(y + LABEL_LH)); r.drawText(t.c_str(), false, false); };
-        const bool hp = !L[k].p.empty();                                  // (1.2.0) ratio / pace / lots
-        put(L[k].x, L[k].t); if (hp) put(L[k].p, L[k].t + LABEL_LH); put(L[k].q, L[k].t + (hp ? 2 : 1) * LABEL_LH);
+        const bool hp = !L[k].p.empty();                                  // (1.2.0) ratio / pace / lots ((1.2.1) the ratio alone when crowded)
+        put(L[k].x, L[k].t); if (hp) put(L[k].p, L[k].t + LABEL_LH); if (!L[k].q.empty()) put(L[k].q, L[k].t + (hp ? 2 : 1) * LABEL_LH);
     }
 }
 // ---- (12:05) THE INFO BOX - Rassul "all values go in the info box, which I should be able to see as I move my mouse over different
@@ -1395,23 +1448,28 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
 // Two-column boxes (PullStats / StackStats): a column header row (Bids / Offers), then label | left value | right value.
 static const COLOR C_BOX_BORDER = 0x009CA3AF;
 inline Box infoRect(cppExtension* x, const PaneGeo& g, int pos, const Info& I) {
-    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 9; f.style = cppExtension::BOLD; x->setFont(f);
+    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = INFO_PT; f.style = cppExtension::BOLD; x->setFont(f);
     int lw = 0, vw = (int)x->getTextWidth(I.tmpl.c_str(), -1);
     for (size_t k = 0; k < I.rows.size(); ++k) lw = std::max(lw, (int)x->getTextWidth(I.rows[k].label.c_str(), -1));
     if (I.twoCol) for (int s = 0; s < 2; ++s) vw = std::max(vw, (int)x->getTextWidth(I.colHead[s].c_str(), -1));
     const int hw = std::max((int)x->getTextWidth("12:59 PM", -1), (int)x->getTextWidth(I.head.c_str(), -1));
-    const int pad = 5, lh = 13, rows = 1 + (I.twoCol ? 1 : 0) + (int)I.rows.size();
-    const int W = std::max(I.twoCol ? pad + lw + 10 + vw + 10 + vw + pad : pad + lw + 12 + vw + pad, hw + 2 * pad), H = pad + lh * rows + pad - 2;
+    const int pad = 5, lh = INFO_LH, rows = 1 + (I.twoCol ? 1 : 0) + (int)I.rows.size();
+    int W = std::max(I.twoCol ? pad + lw + 10 + vw + 10 + vw + pad : pad + lw + 12 + vw + pad, hw + 2 * pad), H = pad + lh * rows + pad - 2;
     const Box area = { g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3 };
+    // (1.2.1) the box stays inside the pane: never taller / wider than it (rows that do not fit are left out by drawInfo, values cut)
+    if (H > area.b - area.t) H = area.b - area.t;
+    if (W > area.r - area.l) W = area.r - area.l;
+    if (H < 1) H = 1;
+    if (W < 1) W = 1;
     return placeIn(area, W, H, pos);
 }
 inline void drawInfo(cppExtension* x, const Box& b, const Info& I, const COLOR col[2]) {
-    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 9; f.style = cppExtension::BOLD; x->setFont(f);
+    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = INFO_PT; f.style = cppExtension::BOLD; x->setFont(f);
     x->setPen(C_BOX_BORDER, 1, P_SOLID); fillRect(b.l, b.t, b.r, b.b, C_BOX_BORDER, C_BLACKC, 1);   // the info box: grey solid border (kept)
-    const int pad = 5, lh = 13;
+    const int pad = 5, lh = INFO_LH;
     int lw = 0; for (size_t k = 0; k < I.rows.size(); ++k) lw = std::max(lw, (int)x->getTextWidth(I.rows[k].label.c_str(), -1));
     const int W = b.r - b.l, vw = I.twoCol ? (W - 2 * pad - lw - 20) / 2 : W - 2 * pad - lw - 12;
-    auto txt = [&](int xx, int y, const std::string& t, COLOR c) { x->setTextColor(c); const int w = x->getTextWidth(t.c_str(), -1); cppExtension::RCT r; r.set(coord(xx), coord(y), coord(xx + w + 2), coord(y + 12)); r.drawText(t.c_str(), false, false); };
+    auto txt = [&](int xx, int y, const std::string& t, COLOR c) { x->setTextColor(c); const int w = x->getTextWidth(t.c_str(), -1); cppExtension::RCT r; r.set(coord(xx), coord(y), coord(xx + w + 2), coord(y + lh - 1)); r.drawText(t.c_str(), false, false); };
     auto fit = [&](const std::string& t) { return fitText(t, vw, [&](const std::string& u) { return (int)x->getTextWidth(u.c_str(), -1); }); };
     { const int w = x->getTextWidth(I.head.c_str(), -1); txt(b.l + (W - w) / 2, b.t + pad - 1, I.head, C_WHITE); }
     const int rightCol[2] = { b.l + pad + lw + 10 + vw, b.r - pad };
@@ -1422,6 +1480,7 @@ inline void drawInfo(cppExtension* x, const Box& b, const Info& I, const COLOR c
     }
     for (size_t k = 0; k < I.rows.size(); ++k, ++row) {
         const int y = b.t + pad - 1 + lh * row;
+        if (y + lh - 1 > b.b) break;                                       // (1.2.1) a row that does not fit inside the box is left out
         txt(b.l + pad, y, I.rows[k].label, C_WHITE);
         for (int s = 0; s < (I.twoCol ? 2 : 1); ++s) {
             const std::string t = fit(I.rows[k].v[s]); if (t.empty()) continue;
@@ -1549,9 +1608,32 @@ public:
     virtual int draw(void) {
         pump();
         S_* S = slot_.get(this, false);
-        if (S) S->hov.left();
+        if (S) { S->hov.left(); followBoard(*S); }                        // (1.2.1) the candle under the mouse ANYWHERE on this chart
         if (S) { try { render(*S); } catch (...) { S->state = "draw error"; } }
         return RTX_OK;
+    }
+    // (1.2.1, Rassul 9:25 PM "when i move the mouse the tape reader changes but the other reads don't change") HoverBoard.h: the chart's
+    // first / last visible bar times (the time axis every pane of one chart shares) key the chart-wide hover
+    bool visRange(unsigned long long& t0, unsigned long long& t1) {
+        t0 = t1 = 0; int a = 0, b = 0; const long n = getBarCount();
+        if (n < 1 || getVisibleBars(&a, &b) != RTX_OK) return false;
+        RTARRAYI times(barDateTime); if ((long)times.count < n) return false;
+        if (a < 0) a = 0;
+        if (b > (int)n - 1) b = (int)n - 1;
+        if (b < a) return false;
+        t0 = (unsigned long long)times[a]; t1 = (unsigned long long)times[b]; return t0 > 0;
+    }
+    bool followBoard(S_& S) {                                              // true = the hovered candle changed
+        unsigned long long t0 = 0, t1 = 0; if (S.symbol.empty() || !visRange(t0, t1)) return false;
+        unsigned long long t = 0; if (!hb::hovered(S.symbol, S.spb, t0, t1, t)) return false;
+        RTARRAYI times(barDateTime); const long n = getBarCount(); if ((long)times.count < n) return false;
+        if (S.hov.hover.set(hb::indexOf(times, n, t))) { ++S.hov.redraws; return true; }
+        return false;
+    }
+    void publishBoard(S_& S, long bar) {
+        unsigned long long t0 = 0, t1 = 0; if (S.symbol.empty() || !visRange(t0, t1)) return;
+        RTARRAYI times(barDateTime); const long n = getBarCount(); if ((long)times.count < n) return;
+        hb::publish(S.symbol, S.spb, bar >= 0 && bar < n - 1 ? (unsigned long long)times[(int)bar] : 0ULL, t0, t1);
     }
     virtual int parmsLoad(void) { return RTX_OK; }                         // loading never saves
     virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
@@ -1561,6 +1643,7 @@ public:
         S_* S = slot_.get(this, false); if (!S) return RTX_FAIL;
         if (ev->type != E_MOUSE_MOVE && ev->type != E_MOUSE_HOVER) return RTX_FAIL;
         S->hov.seen();
+        publishBoard(*S, ev->v.mouse.bar);                                 // (1.2.1) every pane of this chart follows this candle
         if (S->hov.hover.set(hoverIndex(ev->v.mouse.bar, getBarCount()))) { ++S->hov.redraws; invalidateChart(false); }
         return RTX_FAIL;                                                   // never swallow the event
     }
@@ -1591,7 +1674,12 @@ public:
         if (dMax) *dMax = mx;
         return RTX_OK;
     }
-    void calcHook() { pump(); S_* S = slot_.get(this, false); if (S && S->hov.left()) { ++S->hov.redraws; invalidateChart(false); } }
+    void calcHook() {
+        pump(); S_* S = slot_.get(this, false); if (!S) return;
+        bool ch = S->hov.left(); if (ch) ++S->hov.redraws;
+        if (followBoard(*S)) ch = true;                                    // (1.2.1) the mouse moved over another pane of this chart
+        if (ch) invalidateChart(false);                                    // only on a change: no redraw cost otherwise
+    }
     void release() { slot_.release(this); }
     S_* testState() { return slot_.get(this, false); }
     void pump() {

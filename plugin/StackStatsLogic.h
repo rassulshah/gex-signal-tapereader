@@ -20,7 +20,7 @@
 
 namespace st {
 
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-13): lots, pace, rebuilt %, SPEC message grammar, hover rows; 1.0.1: letter I
+static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-10-13 9:40 PM): rebuilt % <= 100%, row order, Crowd row, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, rebuilt %, SPEC message grammar, hover rows; 1.0.1: letter I
 using off::BID; using off::ASK;
 // the words after "one order is NN% of it - " (white / neutral). The Tape Reader keys on the same text (TapeReaderLogic.h tr::STACK_ONE_ORDER,
 // checked equal by trtests/test_tr_ofcompat.cpp) and still recognises the old "may be bait" in records written before 6:40 PM 13 Oct.
@@ -106,18 +106,18 @@ inline nl::Msg message(const off::PaneBar& b, const off::Params& P, int* sideOut
 
 // the info box (hover): Bids (green) | Offers (red)
 inline off::Info info(const off::PaneBar* b, const off::Params& P) {
-    off::Info I; I.colHead[0] = "Bids"; I.colHead[1] = "Offers"; I.tmpl = "9999 (99.9x) ?";
-    const char* labels[6] = { "Added", "Pace", "Orders", "Top order", "Rebuilt", "Refills (I)" };
-    for (int k = 0; k < 6; ++k) {
+    off::Info I; I.colHead[0] = "Bids"; I.colHead[1] = "Offers"; I.tmpl = off::CROWD_TMPL;
+    // (1.1.1, Rassul 13 Oct "just do it") row order Added, Rebuilt, Pace, Crowd (orders \xB7 avg \xB7 top share), Refills (I)
+    const char* labels[5] = { "Added", "Rebuilt", "Pace", "Crowd", "Refills (I)" };
+    for (int k = 0; k < 5; ++k) {
         off::InfoRow r; r.label = labels[k];
         for (int s = 0; s < 2; ++s) {
             if (!b || !b->ok) { r.v[s] = "n/a"; continue; }
             const off::Rec& x = b->r;
             if (k == 0) r.v[s] = std::to_string(x.addC[s]) + " (" + off::ratioOr(b->m[0].ratioOk[s], b->m[0].ratio[s]) + ")";
-            else if (k == 1) r.v[s] = off::paceHover(x.pace100[s], P.paceFastT, x.paceGate);
-            else if (k == 2) r.v[s] = off::ordersText(x.addN[s], x.addC[s]);
-            else if (k == 3) r.v[s] = off::pctOf(x.addTop[s], x.addC[s]);
-            else if (k == 4) { const long long rb = rebuilt(x, s); r.v[s] = rb < 0 ? std::string("-") : std::to_string(rb) + "%" + (P.gate[ofo::G_REBUILT] == ofo::GATE_ON ? "" : " ?"); }
+            else if (k == 1) { const long long rb = rebuilt(x, s); r.v[s] = rb < 0 ? std::string("-") : std::to_string(rb) + "%" + (P.gate[ofo::G_REBUILT] == ofo::GATE_ON ? "" : " ?"); }
+            else if (k == 2) r.v[s] = off::paceHover(x.pace100[s], P.paceFastT, x.paceGate);
+            else if (k == 3) r.v[s] = off::crowdText(x.addN[s], x.addC[s], x.addTop[s]);
             else r.v[s] = std::to_string(x.refN[s]) + " (" + off::ratioOr(b->m[1].ratioOk[s], b->m[1].ratio[s]) + ")";
         }
         I.rows.push_back(r);

@@ -29,7 +29,7 @@
 
 namespace bas {
 
-static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
+static const char* const VERSION = "1.5.1";   // 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
 static const int COUNT_CAP = 999, RATIO_MIN_PRIOR = 5, RATIO_DEFAULT = 20, RATIO_LO = 5, RATIO_HI = 200;
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 static const int POS_DEFAULT = 0;   // Top left: the info box (12:05 the box stays; the message line is always top centre)
@@ -391,17 +391,17 @@ inline std::vector<Line> infoLines(const Stat* s, const off::Rec* r, const std::
 struct Row2 { std::string label, v[2]; };
 inline std::vector<Row2> infoRows(const Stat* s, const off::Rec* r, const std::string let[2], bool dbo, const PaceIn& pc, long long paceFastT) {
     std::vector<Row2> v; const bool ok = s && s->m.ok;
-    Row2 a; a.label = "Lots"; Row2 p; p.label = "Pace"; Row2 o; o.label = "Orders"; Row2 t; t.label = "Top order"; Row2 w; w.label = "Sweep"; Row2 l; l.label = "Large";
+    // (1.5.1, Rassul 13 Oct "just do it") Lots, Pace, Sweep, Large, [StopRun - added by the plugin], Crowd, [Burst]: Crowd = orders \xB7 avg \xB7 top share
+    Row2 a; a.label = "Lots"; Row2 p; p.label = "Pace"; Row2 o; o.label = "Crowd"; Row2 w; w.label = "Sweep"; Row2 l; l.label = "Large";
     for (int k = 0; k < 2; ++k) {
         a.v[k] = ok ? std::to_string(k == 0 ? s->m.bid : s->m.ask) + " (" + fmtRatio(k == 0 ? s->bidRatioOk : s->askRatioOk, k == 0 ? s->bidRatio : s->askRatio) + ")" : std::string("n/a");
         p.v[k] = ok ? off::paceHover(pc.p100[k], paceFastT, pc.gate) : std::string("n/a");
         const bool live = dbo && r;
-        o.v[k] = live ? off::ordersText(r->aggrN[k], r->aggrC[k]) : std::string("n/a");
-        t.v[k] = live ? off::pctOf(r->aggrMax[k], r->aggrC[k]) : std::string("n/a");
+        o.v[k] = live ? off::crowdText(r->aggrN[k], r->aggrC[k], r->aggrMax[k]) : std::string("n/a");
         w.v[k] = !live ? std::string("n/a") : let[k].find('S') != std::string::npos ? std::to_string(r->sweepLv[k]) + " lvls" : std::string("-");
         l.v[k] = !live ? std::string("n/a") : let[k].find('L') != std::string::npos ? std::to_string(r->aggrMax[k]) : std::string("-");
     }
-    v.push_back(a); v.push_back(p); v.push_back(o); v.push_back(t); v.push_back(w); v.push_back(l);
+    v.push_back(a); v.push_back(p); v.push_back(w); v.push_back(l); v.push_back(o);
     return v;
 }
 

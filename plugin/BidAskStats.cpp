@@ -81,6 +81,7 @@
 #include "BidAskStatsLogic.h"
 #include "StopRun.h"
 #include "OptionsFlow.h"
+#include "HoverBoard.h"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -99,7 +100,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.5.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.5.1"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -214,6 +215,9 @@ public:
     virtual int mouse(RTX_EVENT* e);
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax);
     bool mouseLeft(BASState& S);
+    bool visRange(unsigned long long& t0, unsigned long long& t1);   // (1.5.1) HoverBoard.h: the chart-wide hover
+    bool followBoard(BASState& S);
+    void publishBoard(BASState& S, long bar);
     void pump();
     void release() { slot_.release(this); }
     BASState* testState() { return slot_.get(this, false); }
@@ -271,15 +275,38 @@ int cppExtension::calc(int) {
     BidAskStats* x = static_cast<BidAskStats*>(this);
     x->pump();
     BASState* S = x->testState();
-    if (S && x->mouseLeft(*S)) { ++S->redraws; x->invalidateChart(false); }   // the mouse left the chart: back to Live
+    if (S) {
+        bool ch = x->mouseLeft(*S);                                        // the mouse left the chart: back to Live
+        if (x->followBoard(*S)) ch = true;                                 // (1.5.1) the mouse moved over another pane of this chart
+        if (ch) { ++S->redraws; x->invalidateChart(false); }               // only on a change
+    }
     return RTX_OK;
 }
 int BidAskStats::draw(void) {
     pump();
     BASState* S = slot_.get(this, false);
-    if (S) mouseLeft(*S);
+    if (S) { mouseLeft(*S); followBoard(*S); }                            // (1.5.1) the candle under the mouse ANYWHERE on this chart
     if (S) { try { render(*S); } catch (...) { S->state = "draw error"; } }
     return RTX_OK;
+}
+bool BidAskStats::visRange(unsigned long long& t0, unsigned long long& t1) {
+    t0 = t1 = 0; int a = 0, b = 0; const long n = getBarCount();
+    if (n < 1 || getVisibleBars(&a, &b) != RTX_OK) return false;
+    RTARRAYI times(barDateTime); if ((long)times.count < n) return false;
+    if (a < 0) a = 0;
+    if (b > (int)n - 1) b = (int)n - 1;
+    if (b < a) return false;
+    t0 = (unsigned long long)times[a]; t1 = (unsigned long long)times[b]; return t0 > 0;
+}
+bool BidAskStats::followBoard(BASState& S) {
+    unsigned long long t0 = 0, t1 = 0, t = 0; if (S.symbol.empty() || !visRange(t0, t1) || !hb::hovered(S.symbol, S.spb, t0, t1, t)) return false;
+    RTARRAYI times(barDateTime); const long n = getBarCount(); if ((long)times.count < n) return false;
+    return S.hover.set(hb::indexOf(times, n, t));
+}
+void BidAskStats::publishBoard(BASState& S, long bar) {
+    unsigned long long t0 = 0, t1 = 0; if (S.symbol.empty() || !visRange(t0, t1)) return;
+    RTARRAYI times(barDateTime); const long n = getBarCount(); if ((long)times.count < n) return;
+    hb::publish(S.symbol, S.spb, bar >= 0 && bar < n - 1 ? (unsigned long long)times[(int)bar] : 0ULL, t0, t1);
 }
 void BidAskStats::identify(BASState& S) {
     char rb[32]; std::memset(rb, 0, sizeof(rb));
@@ -311,6 +338,7 @@ int BidAskStats::mouse(RTX_EVENT* e) {
         S->hoverWnds.push_back(w);
         if (S->hoverWnds.size() > MAX_HOVER_WNDS) S->hoverWnds.erase(S->hoverWnds.begin());
     }
+    publishBoard(*S, e->v.mouse.bar);                                    // (1.5.1) every pane of this chart follows this candle
     if (S->hover.set(bas::hoverIndex(e->v.mouse.bar, getBarCount()))) { ++S->redraws; invalidateChart(false); }   // only on a change
     return RTX_FAIL;
 }
@@ -853,7 +881,7 @@ void BidAskStats::render(BASState& S) {
     if (hov >= 0) { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(mt); if (it != S.ser.bars.end()) bst = &it->second; }
     else { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(S.lastClosedTime); if (it != S.ser.bars.end() && S.lastClosedTime == mt) bst = &it->second; }
     // (1.5.0) two columns: Sellers (bids hit, red) | Buyers (offers lifted, green)
-    off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = "9999 (99.9x) ?";
+    off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = off::CROWD_TMPL;   // (1.5.1) the Crowd row is the widest
     {
         struct tm x; std::memset(&x, 0, sizeof(x));
         info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? bas::clock12(x.tm_hour, x.tm_min) : std::string("n/a"));
@@ -871,7 +899,8 @@ void BidAskStats::render(BASState& S) {
             b.v[c] = (e->ratioOk ? nl::ratioText(e->ratio) : std::string(e->sweep ? "sweep" : "spike")) + ", " + (e->bars <= 0 ? std::string("same bar") : "in " + sr::barsText(e->bars));
             a.side[c] = b.side[c] = e->dir > 0 ? 0 : 1;                    // colour by implication: trapped buyers = red, trapped sellers = green
         }
-        info.rows.push_back(a); info.rows.push_back(b);
+        // (1.5.1) order: Lots, Pace, Sweep, Large, StopRun, Crowd, Burst (bas::infoRows ends with Crowd)
+        info.rows.insert(info.rows.end() - (info.rows.empty() ? 0 : 1), a); info.rows.push_back(b);
     }
     const off::Box ib = off::infoRect(this, g, S.pos, info);
     const std::vector<off::LBox> avoid(1, off::LBox{ ib.l, ib.t, ib.r, ib.b, 0, 0 });
@@ -911,7 +940,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
-    p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, orders, top order, sweep, large, stop run) for the candle under the mouse (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.5.0");   // BAS_VERSION
+    p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
+    p->setVersion("1.5.1");   // BAS_VERSION
     return p;
 }

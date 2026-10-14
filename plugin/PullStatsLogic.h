@@ -19,7 +19,7 @@
 
 namespace ps {
 
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-13): lots, pace, SPEC message grammar, reset, hover rows; 1.0.1: no white outline
+static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, SPEC message grammar, reset, hover rows; 1.0.1: no white outline
 using off::BID; using off::ASK;
 
 inline std::string letters(const off::Rec& r, int s) { return r.thrRest > 0 && r.pullMax[s] >= r.thrRest ? "L" : ""; }
@@ -69,19 +69,19 @@ inline nl::Msg message(const off::PaneBar& b, const off::Params& P, int* sideOut
 
 // the info box (hover): Bids (green) | Offers (red)
 inline off::Info info(const off::PaneBar* b, const off::Params& P) {
-    off::Info I; I.colHead[0] = "Bids"; I.colHead[1] = "Offers"; I.tmpl = "9999 (99.9x) ?";
-    const char* labels[6] = { "Pulled", "Pace", "Orders", "Top order", "Traded first", "Before price" };
-    for (int k = 0; k < 6; ++k) {
+    off::Info I; I.colHead[0] = "Bids"; I.colHead[1] = "Offers"; I.tmpl = off::CROWD_TMPL;
+    // (1.1.1, Rassul 13 Oct "just do it") row order Pulled, Before price, Traded first, Pace, Crowd (orders \xB7 avg \xB7 top share)
+    const char* labels[5] = { "Pulled", "Before price", "Traded first", "Pace", "Crowd" };
+    for (int k = 0; k < 5; ++k) {
         off::InfoRow r; r.label = labels[k];
         for (int s = 0; s < 2; ++s) {
             if (!b || !b->ok) { r.v[s] = "n/a"; continue; }
             const off::Rec& x = b->r;
             if (k == 0) r.v[s] = std::to_string(x.pullC[s]) + " (" + off::ratioOr(b->m[0].ratioOk[s], b->m[0].ratio[s]) + ")";
-            else if (k == 1) r.v[s] = off::paceHover(x.pace100[s], P.paceFastT, x.paceGate);
-            else if (k == 2) r.v[s] = off::ordersText(x.pullN[s], x.pullC[s]);
-            else if (k == 3) r.v[s] = off::pctOf(x.pullMax[s], x.pullC[s]);
-            else if (k == 4) r.v[s] = x.pullN[s] > 0 && x.pullMax[s] > 0 ? (x.pullTraded[s] ? "yes" : "no") : "-";
-            else r.v[s] = x.pullN[s] > 0 ? (justBefore(x, s) ? "yes" : "no") : "-";
+            else if (k == 1) r.v[s] = x.pullN[s] > 0 ? (justBefore(x, s) ? "yes" : "no") : "-";
+            else if (k == 2) r.v[s] = x.pullN[s] > 0 && x.pullMax[s] > 0 ? (x.pullTraded[s] ? "yes" : "no") : "-";
+            else if (k == 3) r.v[s] = off::paceHover(x.pace100[s], P.paceFastT, x.paceGate);
+            else r.v[s] = off::crowdText(x.pullN[s], x.pullC[s], x.pullMax[s]);
         }
         I.rows.push_back(r);
     }

@@ -46,7 +46,7 @@
 
 namespace tr {
 
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
+static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
 // (6:40 PM) StackStats' one-order clause = st::ONE_ORDER_TAIL (StackStatsLogic.h); test_tr_ofcompat.cpp checks the two are equal
 static const char* const STACK_ONE_ORDER = "may not reload ?";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
@@ -440,7 +440,8 @@ inline void parseLiqStatus(const std::vector<std::string>& L, LiqSnap& S) {
 
 // ---- HOD / LOD (lsHodLod 2.0.x status) -----------------------------------------------------------------------------------------
 struct HodLodSnap { bool ok = false; std::string first; double pIn = -1; int usedPct = -1; bool projOk = false, projUp = false; double projPx = 0; bool news = false;
-                   double erPts = -1, rangePts = -1; };   // (1.0.1) erPts = the live expected RTH range (HLE_VALUES range=), rangePts = printed
+                   double erPts = -1, rangePts = -1;      // (1.0.1) erPts = the live expected RTH range (HLE_VALUES range=), rangePts = printed
+                   bool boxOk = false; int box[4] = { 0, 0, 0, 0 }; };   // (1.1.1) TABLE_BOX,l,t,r,b: where lsHodLod drew its table (price pane px)
 inline void parseHodLod(const std::vector<std::string>& L, HodLodSnap& H) {
     H = HodLodSnap();
     for (size_t i = 0; i < L.size(); ++i) {
@@ -453,6 +454,10 @@ inline void parseHodLod(const std::vector<std::string>& L, HodLodSnap& H) {
                 while (ss >> w) if (w.compare(0, 6, "range=") == 0) { double r; if (parseReal(w.substr(6), r) && r > 0) H.erPts = r; } } }
         else if (c[0] == "RANGE" && c.size() >= 2) { { double r; if (parseReal(c[1], r) && r >= 0) H.rangePts = r; } const std::string& u = c.back(); long long p; if (u.size() >= 2 && u.back() == '%' && parseWhole(u.substr(0, u.size() - 1), 0, 1000, p)) H.usedPct = (int)p; }
         else if (c[0] == "PROJ" && c.size() >= 3 && (c[1] == "HOD" || c[1] == "LOD")) { double p; if (parseReal(c[2], p) && p > 0) { H.projOk = true; H.projUp = c[1] == "HOD"; H.projPx = p; } }
+        else if (c[0] == "TABLE_BOX" && c.size() == 5) {             // (1.1.1) the Tape Reader never covers the HOD / LOD table
+            long long v[4]; bool ok = true; for (int k = 0; k < 4 && ok; ++k) ok = parseWhole(c[1 + k], -100000, 100000, v[k]);
+            if (ok && v[2] > v[0] && v[3] > v[1]) { H.boxOk = true; for (int k = 0; k < 4; ++k) H.box[k] = (int)v[k]; }
+        }
         else if (c[0] == "EVENTS") { for (size_t k = 1; k < c.size(); ++k) if (c[k] == "news=1" || c[k] == "fomc=1") H.news = true; }
     }
 }
@@ -964,7 +969,7 @@ struct Item { int k = 0, l = 0, t = 0, r = 0, b = 0; unsigned c1 = 0, c2 = 0; st
 struct Box { int l = 0, t = 0, r = 0, b = 0; };
 inline bool overlap(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 typedef std::function<int(const std::string&, int, bool)> Measure;
-struct Layout { std::vector<Item> items; Box box; bool ok = false; std::string note; int fs = 9, lines = 0; };
+struct Layout { std::vector<Item> items; Box box; bool ok = false; std::string note; int fs = 9, lines = 0, spot = -1; };   // spot: (1.1.1) the 9-spot place used
 static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_QUIET = 0x00D8DDE3, C_INK = 0x00D8DDE3, C_HEAD = 0x00F3F4F6, C_BG = 0x000F1520, C_BORDER = 0x00C8CDD3;
 static const unsigned C_BLUE = 0x0058A6FF;   // (1.1.0) OPTIONS (the same blue as the panes' options line)
 static const int POS_DEFAULT = 7;     // (1.1.0, SPEC) Bottom centre (1.0.x: Bottom left)
@@ -1011,15 +1016,38 @@ inline std::vector<std::string> wrap2(const std::string& s, int w, int fs, const
 // the box: header (centred), line 1 (bias left, the stats centred in the box), BUYERS / SELLERS (1-2 lines each) / OPTIONS (1.1.0, blue) (the second
 // line indented under the text). Fixed width (REF_TEXT at the font); height follows the content; placed by Position inside region
 // (the space up to the last bar, clear of the profiles).
-inline Layout layout(const Read& R, const std::string& header, const Box& region, int pos, const Measure& M) {
+// (1.1.1, Rassul 13 Oct "fonts are too small"): header / line 1 at 12 pt, the sections at 11 pt (were 9 / 8). The width is the reference
+// line at that size, or the region's width when that is narrower (lines wrap instead of the font shrinking), never under MIN_TEXT
+// characters; only then a smaller size. PLACEMENT: the Position spot first; when the box there would cover the HOD / LOD table
+// (hard) or the price candles (soft), the nearest other spot that covers neither, then one that is clear of the HOD / LOD table,
+// else the Position spot.
+static const int HEAD_PT = 12, BODY_PT = 11, MIN_PT = 9;
+static const char* const MIN_TEXT = "Bid LQ 2.6x, +GEX PS 92.90 (dlrs buy dips). Against: trend down, LOD";
+inline int spotDistance(int a, int b) { return std::abs(a / 3 - b / 3) * 3 + std::abs(a % 3 - b % 3); }
+inline Box placeAvoiding(const Box& region, int W, int H, int pos, const std::vector<Box>& hard, const std::vector<Box>& soft, int* used = nullptr) {
+    int order[9]; for (int k = 0; k < 9; ++k) order[k] = k;
+    if (pos < 0 || pos > 8) pos = POS_DEFAULT;
+    std::stable_sort(order, order + 9, [&](int a, int b) { return spotDistance(a, pos) < spotDistance(b, pos); });
+    auto clear = [&](const Box& b, const std::vector<Box>& v) { for (const Box& o : v) if (overlap(b, o)) return false; return true; };
+    for (int tier = 0; tier < 2; ++tier)
+        for (int k = 0; k < 9; ++k) {
+            const Box b = placeIn(region, W, H, order[k]);
+            if (clear(b, hard) && (tier == 1 || clear(b, soft))) { if (used) *used = order[k]; return b; }
+        }
+    if (used) *used = pos;
+    return placeIn(region, W, H, pos);
+}
+inline Layout layout(const Read& R, const std::string& header, const Box& region, int pos, const Measure& M,
+                     const std::vector<Box>& hard = std::vector<Box>(), const std::vector<Box>& soft = std::vector<Box>()) {
     Layout L;
     const int availW = region.r - region.l, availH = region.b - region.t;
-    for (int fs = 9; fs >= 7; --fs) {
-        const int fsS = fs - 1, pad = 6, lh = (int)(fs * 1.75f + 0.5f), lhS = (int)(fsS * 1.7f + 0.5f), gap = 4;
+    for (int fs = HEAD_PT; fs >= MIN_PT; --fs) {
+        const int fsS = fs - (HEAD_PT - BODY_PT), pad = 6, lh = (int)(fs * 1.75f + 0.5f), lhS = (int)(fsS * 1.7f + 0.5f), gap = 4;
         const int labW = std::max(M(trt::text("label.sellers"), fsS, true), std::max(M(trt::text("label.buyers"), fsS, true), M(trt::text("label.options"), fsS, true))) + 14;
-        const int textW = M(REF_TEXT, fsS, false);
-        const int W = std::max(pad * 2 + labW + textW, M(header, fs, true) + 2 * pad);
-        if (W > availW) continue;
+        const int minW = std::max(pad * 2 + labW + M(MIN_TEXT, fsS, false), M(header, fs, true) + 2 * pad);
+        if (minW > availW) continue;
+        const int W = std::min(availW, std::max(pad * 2 + labW + M(REF_TEXT, fsS, false), M(header, fs, true) + 2 * pad));
+        const int textW = W - pad * 2 - labW;
         // content lines
         // (1.1.0) BUYERS, SELLERS (1-2 lines each, wrapped), OPTIONS (blue, its 2 lines as they are, each cut to fit; none = one grey line)
         const std::string side[3] = { R.buyers, R.sellers, std::string() };
@@ -1032,8 +1060,8 @@ inline Layout layout(const Read& R, const std::string& header, const Box& region
         const int H = pad + lh + lh + gap + nl * lhS + pad;
         if (H > availH) { L.note = trt::text("note.short"); continue; }
         L.note.clear();
-        const Box b = placeIn(region, W, H, pos);
-        L.box = b; L.ok = true; L.fs = fs; L.lines = 2 + nl;
+        int used = pos; const Box b = placeAvoiding(region, W, H, pos, hard, soft, &used);
+        L.box = b; L.ok = true; L.fs = fs; L.lines = 2 + nl; L.spot = used;
         Item bg; bg.k = K_RECT; bg.l = b.l; bg.t = b.t; bg.r = b.r; bg.b = b.b; bg.c1 = C_BORDER; bg.c2 = C_BG; L.items.push_back(bg);
         auto text = [&](int x, int t, int bt, const std::string& s, unsigned col, int f, bool bold) {
             if (s.empty()) return;

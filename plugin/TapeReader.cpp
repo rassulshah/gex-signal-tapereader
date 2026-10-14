@@ -55,6 +55,7 @@
 #include "VwapTrendLogic.h"
 #include "TapeReaderLogic.h"
 #include "HostSlot.h"
+#include "HoverBoard.h"
 #include <algorithm>
 #include <chrono>
 #include <climits>
@@ -68,7 +69,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.1.0"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.1.1"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -159,7 +160,7 @@ struct TRState {
     int hover = -1; std::vector<void*> hoverWnds; long long redraws = 0;
     // status / place
     std::string lastStatus; long long lastStatusMs = -1, statusWrites = 0; long long placeSig = -2, placeChecked = -1; int pos = tr::POS_DEFAULT;
-    std::string layoutNote; tr::Box lastBox; tr::Box lastRegion; bool lastOk = false; int lastLines = 0;
+    std::string layoutNote; tr::Box lastBox; tr::Box lastRegion; bool lastOk = false; int lastLines = 0, lastSpot = -1, lastAvoid = 0;   // (1.1.1) the spot used; tables * 1000 + candles avoided
 };
 
 class TapeReader : public cppExtension {
@@ -190,6 +191,10 @@ public:
     int position(TRState& S);
     int priceEdge();
     bool mouseLeft(TRState& S);
+    void candleBoxes(const tr::Box& region, std::vector<tr::Box>& out);   // (1.1.1) the price candles the box keeps clear of
+    bool visRange(unsigned long long& t0, unsigned long long& t1);   // (1.1.1) HoverBoard.h: the chart-wide hover
+    bool followBoard(TRState& S);
+    void publishBoard(TRState& S, long bar);
     int textW(const std::string& s, int sz, bool bold) { FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f); return (int)getTextWidth(s.c_str(), -1); }
     void execute(const tr::Layout& L);
     long long nowCtSec() {   // (1.0.1) the wall clock on the bars' CT clock
@@ -225,7 +230,11 @@ int cppExtension::calc(int)
     TapeReader* x = static_cast<TapeReader*>(this);
     x->pump();
     TRState* S = x->testState();
-    if (S && x->mouseLeft(*S)) { ++S->redraws; x->invalidateChart(false); }
+    if (S) {
+        bool ch = x->mouseLeft(*S);
+        if (x->followBoard(*S)) ch = true;                                 // (1.1.1) the mouse over an order-flow pane of this chart
+        if (ch) { ++S->redraws; x->invalidateChart(false); }
+    }
     return RTX_OK;
 }
 
@@ -606,6 +615,22 @@ int TapeReader::priceEdge()
     return p.h > 0 ? (int)p.h : -1;
 }
 
+// (1.1.1) the visible candles inside the region as boxes (high to low, the bar's width), at most 400 - the "soft" area to keep clear
+void TapeReader::candleBoxes(const tr::Box& region, std::vector<tr::Box>& out)
+{
+    out.clear(); int a = 0, b = 0; const long n = getBarCount();
+    if (n < 1 || getVisibleBars(&a, &b) != RTX_OK) return;
+    RTARRAY hi(barHigh), lo(barLow); if ((long)hi.count < n || (long)lo.count < n) return;
+    if (a < 0) a = 0;
+    if (b > (int)n - 1) b = (int)n - 1;
+    if (b - a > 400) a = b - 400;
+    for (int i = a; i <= b; ++i) {
+        PNT L, R; if (L.set(i, hi[i], kBarLeft) != RTX_OK || R.set(i, lo[i], kBarRight) != RTX_OK) continue;
+        tr::Box c; c.l = std::min((int)L.h, (int)R.h); c.r = std::max((int)L.h, (int)R.h) + 1; c.t = std::min((int)L.v, (int)R.v); c.b = std::max((int)L.v, (int)R.v) + 1;
+        if (c.r < region.l || c.l > region.r) continue;
+        out.push_back(c);
+    }
+}
 int TapeReader::mouse(RTX_EVENT* e)
 {
     if (!e) return RTX_FAIL;
@@ -620,8 +645,33 @@ int TapeReader::mouse(RTX_EVENT* e)
     }
     const long cnt = getBarCount(); const long b = e->v.mouse.bar;
     const int h = b >= 0 && b < cnt - 1 ? (int)b : -1;                   // a closed bar; the forming bar / past the last = live
+    publishBoard(*S, b);                                                 // (1.1.1) the order-flow panes follow this candle
     if (h != S->hover) { S->hover = h; ++S->redraws; invalidateChart(false); }
     return RTX_FAIL;                                                     // never swallows the event
+}
+bool TapeReader::visRange(unsigned long long& t0, unsigned long long& t1)
+{
+    t0 = t1 = 0; int a = 0, b = 0; const long n = getBarCount();
+    if (n < 1 || getVisibleBars(&a, &b) != RTX_OK) return false;
+    RTARRAYI times(barDateTime); if ((long)times.count < n) return false;
+    if (a < 0) a = 0;
+    if (b > (int)n - 1) b = (int)n - 1;
+    if (b < a) return false;
+    t0 = (unsigned long long)times[a]; t1 = (unsigned long long)times[b]; return t0 > 0;
+}
+bool TapeReader::followBoard(TRState& S)
+{
+    unsigned long long t0 = 0, t1 = 0, t = 0; if (S.symbol.empty() || !visRange(t0, t1) || !hb::hovered(S.symbol, S.spb, t0, t1, t)) return false;
+    RTARRAYI times(barDateTime); const long n = getBarCount(); if ((long)times.count < n) return false;
+    const int h = hb::indexOf(times, n, t);
+    if (h == S.hover) return false;
+    S.hover = h; return true;
+}
+void TapeReader::publishBoard(TRState& S, long bar)
+{
+    unsigned long long t0 = 0, t1 = 0; if (S.symbol.empty() || !visRange(t0, t1)) return;
+    RTARRAYI times(barDateTime); const long n = getBarCount(); if ((long)times.count < n) return;
+    hb::publish(S.symbol, S.spb, bar >= 0 && bar < n - 1 ? (unsigned long long)times[(int)bar] : 0ULL, t0, t1);
 }
 bool TapeReader::mouseLeft(TRState& S)
 {
@@ -649,7 +699,7 @@ int TapeReader::draw(void)
     pump();
     TRState* S = testState();
     if (!S) return RTX_OK;
-    mouseLeft(*S);
+    mouseLeft(*S); followBoard(*S);                                     // (1.1.1) the candle under the mouse ANYWHERE on this chart
     try {
         RCT pane; pane.getPaneRect(false);
         tr::Measure M = [&](const std::string& s, int fs, bool bold) { return textW(s, fs, bold); };
@@ -674,9 +724,13 @@ int TapeReader::draw(void)
             RTARRAYI dt(barDateTime);
             if ((long)dt.count > S->hover) { std::map<unsigned long long, tr::Read>::const_iterator it = S->logged.find((unsigned long long)dt[S->hover]); if (it != S->logged.end()) R = &it->second; }
         }
-        const std::string header = trt::fill("header", { {"ver", "1.1"}, {"mkt", S->mkt}, {"time", R->ct} });   // (1.1.0) the real version
-        const tr::Layout L = tr::layout(*R, header, region, position(*S), M);
-        S->lastOk = L.ok; S->lastBox = L.box; S->layoutNote = L.note; S->lastLines = L.lines;
+        const std::string header = trt::fill("header", { {"ver", TR_VERSION}, {"mkt", S->mkt}, {"time", R->ct} });   // (1.1.1) the full real version
+        // (1.1.1) never over the HOD / LOD table (its own status file, when fresh) and, where a spot is free, not over the price candles
+        std::vector<tr::Box> hard, soft;
+        if (S->hl.boxOk && S->sHl.good && wallNow() - S->sHl.mtime <= 120) { tr::Box hb; hb.l = S->hl.box[0] - 4; hb.t = S->hl.box[1] - 4; hb.r = S->hl.box[2] + 4; hb.b = S->hl.box[3] + 4; hard.push_back(hb); }
+        candleBoxes(region, soft);
+        const tr::Layout L = tr::layout(*R, header, region, position(*S), M, hard, soft);
+        S->lastOk = L.ok; S->lastBox = L.box; S->layoutNote = L.note; S->lastLines = L.lines; S->lastSpot = L.spot; S->lastAvoid = (int)hard.size() * 1000 + (int)soft.size();
         if (L.ok) execute(L);
         else if (region.r - region.l > 160 && region.b - region.t > 20) { FONT f; f.id = HELVETICA; f.size = 8; f.style = PLAIN; setFont(f); setTextColor(tr::C_QUIET);
             RCT rc; rc.set(coord(region.l + 4), coord(region.b - 18), coord(region.l + 4 + textW(L.note, 8, false) + 4), coord(region.b - 4)); rc.drawText(L.note.c_str(), false, false); }
@@ -707,7 +761,7 @@ void TapeReader::writeStatus(TRState& S)
     }
     o += "LOG," + S.logPath + ",writes " + std::to_string(S.logWrites) + ",fails " + std::to_string(S.logFails) + ",queued " + std::to_string(S.logQueue.size()) + ",loaded " + std::to_string(S.logLoaded) + ",rejected " + std::to_string(S.logRejected) + "\n";
     o += "LAYOUT," + std::string(S.lastOk ? "drawn" : "not drawn") + "," + S.layoutNote + ",box " + std::to_string(S.lastBox.l) + " " + std::to_string(S.lastBox.t) + " " + std::to_string(S.lastBox.r) + " " + std::to_string(S.lastBox.b) +
-         ",region " + std::to_string(S.lastRegion.l) + " " + std::to_string(S.lastRegion.r) + ",lines " + std::to_string(S.lastLines) + "\n";
+         ",region " + std::to_string(S.lastRegion.l) + " " + std::to_string(S.lastRegion.r) + ",lines " + std::to_string(S.lastLines) + ",spot " + std::to_string(S.lastSpot) + ",avoid tables " + std::to_string(S.lastAvoid / 1000) + " candles " + std::to_string(S.lastAvoid % 1000) + "\n";
     o += "COUNTS,recomputes " + std::to_string(S.recomputes) + ",redraws " + std::to_string(S.redraws) + ",hover " + std::to_string(S.hover) + "\n";
     const long long now = steadyMs();
     const bool changed = o != S.lastStatus;
@@ -722,6 +776,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. Use Settings > Position to place it (default Bottom centre).");
-    p->setVersion("1.1.0");   // TR_VERSION
+    p->setVersion("1.1.1");   // TR_VERSION
     return p;
 }
