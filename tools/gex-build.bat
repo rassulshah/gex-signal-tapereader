@@ -87,6 +87,8 @@ REM (2026-10-13) lsStackStats 1.0.0 - who is arriving: orders added near price p
 call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
 call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h
+REM (2026-10-14) lsCobImpulse 0.1.0 - CoB impulse tag Cob+R? / Cob+V? / Cob+RV? + 1 px box on the impulse bar (Rassul 12:07 CT approved; CR5500)
+call :one CobImpulse lsCobImpulse CobImpulseLogic.h HostSlot.h HoverBoard.h
 del "%LOCK%" >nul 2>&1
 exit /b 0
 
@@ -174,7 +176,7 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats PullStats StackStats TapeReader) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats PullStats StackStats TapeReader CobImpulse) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
