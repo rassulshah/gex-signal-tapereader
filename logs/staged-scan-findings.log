@@ -1,3 +1,16 @@
-findings=0 allowed=0 staged_files=1 bytes=122
+findings=0 allowed=0 staged_files=14 bytes=753583
 largest staged blobs (bytes, path):
-SIZE	122	logs/staged-scan-findings.log
+SIZE	179270	plugin/OrderFlowFeed.h
+SIZE	158276	plugin/tests/cr5450-recording-tests.tar.gz
+SIZE	145727	plugin/LiquidityProfile.cpp
+SIZE	90928	plugin/LiquidityProfileLogic.h
+SIZE	86786	plugin/IRTReader.cpp
+SIZE	22938	plugin/BUILD-LESSONS.md
+SIZE	15878	plugin/MboRecord.h
+SIZE	13307	plugin/IRTReaderLogic.h
+SIZE	11696	plugin/PullStats.cpp
+SIZE	10866	plugin/StackStatsLogic.h
+SIZE	8172	plugin/PullStatsLogic.h
+SIZE	7698	plugin/StackStats.cpp
+SIZE	1917	plugin/test_irtreader_state_contract.py
+SIZE	124	logs/staged-scan-findings.log
