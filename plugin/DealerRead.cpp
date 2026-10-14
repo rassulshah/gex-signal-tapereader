@@ -1,5 +1,7 @@
 /********************************************************************************
- *  DealerRead.cpp  --  Investor/RT RTX extension  lsDealerRead  (v4.5.4, 2026-10-08)
+ *  DealerRead.cpp  --  Investor/RT RTX extension  lsDealerRead  (v4.6.0, 2026-10-14)
+ *  4.6.0 (2026-10-14, Rassul 15:07 CT approved the peer-review hide list): ClaimGates.h - the VERDICT (Strength), the OPTIONS column
+ *        causes, the forced-futures numbers and a footprint absorption cause are not drawn until the external audit (drGate).
  *
  *  THE DEALER READ: one compact strip docked in a corner of the price pane (mockup v11, ~1,470 x 176 px at font 10):
  *    left    the key level, the phase tabs APPROACH / SWEEP / RECLAIM / RETEST / TRADE, and WHAT TO DO
@@ -48,6 +50,7 @@
 #include "DealerLogic.h"
 #include "HostSlot.h"
 #include "BoxPlace.h"                // (4.5.9) Offset X / Y, clamping, the dialog snapshot
+#include "DealerReadGates.h"         // (4.6.0) peer-review claim gates (ClaimGates.h): VERDICT (Strength), OPTIONS causes, absorption causes hidden
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -68,6 +71,7 @@ static const COLOR C_YEL   = 0x00FCD34D;
 static const COLOR C_GREY  = 0x0064748B;
 static const COLOR C_INK   = 0x00E5E7EB;
 static const COLOR C_MUTED = 0x009CA3AF;
+
 static const COLOR C_GROUND = 0x00000000;   // the strip's FILL (matches the chart); no line is ever this colour
 static const COLOR C_BOXBG = 0x0005070C;
 static const COLOR C_TRACK = 0x001F2937;
@@ -422,6 +426,7 @@ void DealerRead::load()
     std::ifstream f(path.c_str()); if (!f.is_open()) { loadedPath.clear(); return; }
     std::stringstream ss; ss << f.rdbuf();
     D = dl::parseText(ss.str());
+    drg::apply(D);                                                     // (4.6.0) claims hidden until the external audit
     loadedStamp = st; loadedPath = path;
 }
 
@@ -1182,7 +1187,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ostringstream text;
-    text << "VERSION,4.5.9\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    text << "VERSION,4.6.0\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
     const std::string payload = text.str();
     const std::time_t now = std::time(NULL);
     // Different charts can share this legacy status file: cap those switches
@@ -1753,6 +1758,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (4.5.6) FRONT_DRAWING: the box is drawn after every other indicator, so no line shows through it;   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences.");
-    p->setVersion("4.5.9");   // (4.5.9, 2026-10-14 CR4800) Offset X / Y on the 9-spot Position (clamped, per market, the dialog filled from the file); (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.6.0");   // (4.6.0, 2026-10-14 15:07 CT approval) claim gates (ClaimGates.h): no VERDICT / Strength, no OPTIONS-column causes, no forced-futures numbers, no footprint absorption cause - hidden until the external audit; (4.5.9, 2026-10-14 CR4800) Offset X / Y on the 9-spot Position (clamped, per market, the dialog filled from the file); (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

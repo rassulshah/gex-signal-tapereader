@@ -1,5 +1,8 @@
 /********************************************************************************
- *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.1.3  (2026-10-14)
+ *  TapeReader.cpp  --  Investor/RT RTX extension  lsTapeReader  1.1.4  (2026-10-14)
+ *  1.1.4 (2026-10-14, Rassul 15:07 CT approval of the peer-review hide list): the Delta Profile A (absorption) is no longer a FLOW
+ *        vote or a BUYERS / SELLERS message (ClaimGates.h, LRA_SHOW_ABSORPTION_REASON default 0 = hidden until the external audit;
+ *        restore = /D LRA_SHOW_ABSORPTION_REASON=1 and rebuild). The A circle on the chart is lsDeltaProfile's and stays.
  *  1.1.3 (2026-10-14, CR4800; Rassul 07:12 "you already have messaging at the top", 07:13 decision "variant B, the one banner at the
  *        top", 07:17 solid dark background, 07:18 "test them thoroughly ... dont shake ... dont have garbage values"): NO big box. A
  *        compact 1-2 line BANNER at the top left, below the title row, 11 pt (10% under 1.1.2): line 1 = the version and the candle's
@@ -84,7 +87,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.1.3"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.1.4"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -867,6 +870,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
-    p->setVersion("1.1.3");   // TR_VERSION
+    p->setVersion("1.1.4");   // TR_VERSION
     return p;
 }

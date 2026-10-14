@@ -89,6 +89,7 @@ static const Tpl TABLE[] = {
     { "gex.pos.below",   "+GEX {lvl} {px} (dlrs buy dips)" },
     { "gex.pos.above",   "+GEX {lvl} {px} (dlrs sell rips)" },
     { "gex.neg",         "-GEX {lvl} {px} (dlrs chase)" },
+    { "gex.plain",       "{sign}GEX {lvl} {px}" },              // (1.1.4) the node only - the "(dlrs ...)" cause text is gated (ClaimGates.h)
     { "hl.in",           "{side} IN {p}%" },
     { "against",         "Against: {list}" },
     { "inval.below",     "Inval < {px}" },

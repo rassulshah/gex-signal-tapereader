@@ -45,10 +45,11 @@
 #include <sys/types.h>
 
 #include "OptionsFlow.h"
+#include "ClaimGates.h"          // (1.1.4) peer-review claim gates: A is not a vote / message until the external audit
 
 namespace tr {
 
-static const char* const VERSION = "1.1.3";   // 1.1.3 (2026-10-14 CR4800, Rassul 07:13 variant B): the ONE banner top left (bias / turn / swing / next + the Liquidity warning, 11 pt, solid background), the BUYERS / SELLERS / OPTIONS detail on its hover, Position Top left + Offset X / Y; 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
+static const char* const VERSION = "1.1.4";   // 1.1.4 (2026-10-14, Rassul 15:07 CT approval, peer review E "Delta Profile A ... INVALID"): the A (absorption) is no longer a FLOW vote or a BUYERS / SELLERS message (ClaimGates.h LRA_SHOW_ABSORPTION_REASON, default hidden; the A circle stays on the chart); the LEVELS line shows the gamma node without the "(dlrs buy dips / sell rips / chase)" cause (LRA_SHOW_HVL_CUSHION).   // 1.1.3 (2026-10-14 CR4800, Rassul 07:13 variant B): the ONE banner top left (bias / turn / swing / next + the Liquidity warning, 11 pt, solid background), the BUYERS / SELLERS / OPTIONS detail on its hover, Position Top left + Offset X / Y; 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
 // (6:40 PM) StackStats' one-order clause = st::ONE_ORDER_TAIL (StackStatsLogic.h); test_tr_ofcompat.cpp checks the two are equal
 static const char* const STACK_ONE_ORDER = "may not reload ?";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
@@ -717,12 +718,13 @@ inline Read compute(const Inputs& I) {
         for (const DeltaEx& e : I.dp->ex) if (e.decT <= bk.t && e.decT > t0 && (!EX || e.decT >= EX->decT)) EX = &e;
     }
     if (A) {
-        const int s = A->support ? BULL : BEAR; flow += s; flowWhy += A->support ? "A+" : "A-";
+        const int s = A->support ? BULL : BEAR;
+        if (cgate::kShowAbsorptionReason) { flow += s; flowWhy += A->support ? "A+" : "A-"; }   // (1.1.4) A is not a FLOW vote (gate)
         const Level* al = nullptr; { double bd = band + 1e-9; for (const Level& v : I.levels) { const double d = std::fabs(v.px - (A->support ? A->lo : A->hi)); if (d <= bd) { bd = d; al = &v; } } }
         const std::string at = al ? al->name + " " + pxText(al->px, tick) : pxText(A->px, tick);
         Fact f; f.actor = A->support ? 0 : 1; f.impl = s; f.order = ord++; f.t = A->decidedBy;
         f.text = trt::fill("delta.a", { {"lvl", at}, {"px", ""}, {"x", num1(A->mult)}, {"ae", AE ? trt::fill("delta.ae.tag", { {"ae", AE->label} }) : std::string()} });
-        facts.push_back(f);
+        if (cgate::kShowAbsorptionReason) facts.push_back(f);   // (1.1.4) no "Absorbing at ..." message while the gate is closed
         if (AE) { flow += 0.5 * s; flowWhy += "AE";
             Fact g; g.actor = A->support ? 1 : 0; g.impl = s; g.order = ord++; g.t = AE->decT; g.text = trt::fill("delta.ae.att", { {"lvl", at}, {"px", ""}, {"ae", AE->label} }); facts.push_back(g); }
     }
@@ -892,7 +894,8 @@ inline Read compute(const Inputs& I) {
         }
     }
     std::string gexText;
-    if (G) gexText = trt::fill(G->g > 0 ? (G->px <= c + tick * 0.5 ? "gex.pos.below" : "gex.pos.above") : "gex.neg", { {"lvl", gName}, {"px", pxText(G->px, tick)} });
+    if (G && cgate::kShowHvlCushion) gexText = trt::fill(G->g > 0 ? (G->px <= c + tick * 0.5 ? "gex.pos.below" : "gex.pos.above") : "gex.neg", { {"lvl", gName}, {"px", pxText(G->px, tick)} });
+    else if (G) gexText = trt::fill("gex.plain", { {"sign", G->g > 0 ? "+" : "-"}, {"lvl", gName}, {"px", pxText(G->px, tick)} });   // (1.1.4) no "dlrs buy dips / chase" cause
     std::vector<std::string> against;
     const int b = R.bias;
     if (G && (b == NEUTRAL || R.votes[V_GAMMA] != -b)) pro.push_back(gexText);
