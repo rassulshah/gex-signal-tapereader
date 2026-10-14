@@ -7,7 +7,7 @@
 #include <dirent.h>
 #include <unistd.h>
 
-namespace mock { Host* current = nullptr; }
+namespace mock { Host* current = nullptr; Feed feed; }   // (0.15.0) + the order feed
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
 
@@ -171,7 +171,7 @@ int main() {
             if (ln.size() > 5 && (ln.compare(ln.size() - 5, 5, ",near") == 0 || ln.compare(ln.size() - 4, 4, ",far") == 0)) tagged++; q = e2; }
         std::printf("  status ZONE lines: %d, tagged near/far: %d\n", zl, tagged);
         CHECK(zl == tagged, "(0.14.0) every ZONE line ends with ,near or ,far");
-        CHECK(std::string(LQ_VERSION) == "0.14.1" && std::string(lqp::VERSION) == "0.14.1", "(0.14.1) version 0.14.1");
+        CHECK(std::string(LQ_VERSION) == "0.15.0" && std::string(lqp::VERSION) == "0.15.0", "(0.15.0) version 0.15.0");
     }
     CHECK(readAll(st).find(std::string("VERSION,") + LQ_VERSION) != std::string::npos && std::string(lqp::VERSION) == LQ_VERSION, "status file written (one version everywhere)");
     {   // (0.12.0) the level-liquidity file for the Dealer Profile badges: header + every zone of 1.5x or more, side and prominence

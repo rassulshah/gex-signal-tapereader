@@ -64,7 +64,8 @@ call :one TapeFlowMarks lsTapeFlowMarks TapeFlowLogic.h HostSlot.h
 call :one ChartView    lsChartView    ChartViewLogic.h HostSlot.h DealerLogic.h ChartViewCamera.h
 call :one MboCheck     lsMboCheck     MboCheckLogic.h HostSlot.h
 REM (LQ010 2026-10-11) the Liquidity Profile - native depth + VAP, TESTING
-call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
+REM (LQ150 2026-10-13) 0.15.0 includes the order-by-order feed: rebuild when OrderFlowFeed.h / OptionsFlow.h / NearLevels.h change
+call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h OrderFlowFeed.h OptionsFlow.h NearLevels.h
 REM (LQ020 2026-10-11) the aggression / defense panes - the same source built as its own pane
 call :one LiquidityFlow lsLiquidityFlow LiquidityProfile.cpp LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
 REM (2026-10-11) lsPulling - who pulled their orders near price, from the order-by-order (MBO) feed

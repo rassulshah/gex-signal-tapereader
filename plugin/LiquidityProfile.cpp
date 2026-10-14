@@ -1,5 +1,5 @@
 /********************************************************************************
- *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.14.1, 2026-10-13: the warning (e.g. ABSORPTION WEAKENING ...) starts BELOW the chart's title row (LQ_TITLE_ROW_PX) - it was drawn at the pane top, over the IRT title text (Rassul screenshot); the column header moves down with it; 0.14.0, 2026-10-13: NEAR-price rule - zones within 1x the 3-min range of price shown at 1.5x the book behind them without the rank-1 rule, kept to 1.2x; far zones unchanged at 2.0x / rank 1 / 1.7x; never under 1.0x (Rassul "i want to see liquidity when it is close so i can see if there is any absorbtion going on"); 0.13.3, 2026-10-13: audit defect fixes - a bar re-drawn at the same index is a new baseline (no replayed volume), records keyed by the full contract, input files size-bounded, prices checked before the tick grid; 0.13.2, 2026-10-12: the column's width published so the Dealer Profile badges never sit on its labels; 0.13.1, 2026-10-12: each level named on ONE zone (the one holding it, else the nearest) - as the Dealer Profile badge; 0.13.0, 2026-10-12: only the strongest zone each side (solid) + zones on a key / gamma level (outlined, named) are drawn and published - the rest logged; 0.12.0, 2026-10-12: writes LRA-LiqZones-<MKT>.csv - the resting-liquidity zones near price - for the Dealer Profile's level badges ("Liq 2.6x"); 0.11.4, 2026-10-12: review fixes - no repaint when a market's line changes, the closing bar's last trades counted before it is decided, absorption windows recorded past the 50th touch, per-market state reset on a symbol change, stale Delta A zones dropped after an hour, no zone / LQ flicker, labels never overlap, fonts 10 pt+; 0.11.3, 2026-10-12 08:58: NO letters on the price chart at all - p / e / s / t are decided and recorded for the study, never drawn (Rassul "there are all these signals like P on the es chart .. i had asked you to remove them"); 0.11.2, 2026-10-12: the e? / p? watch letters are no longer drawn on the price chart - recorded only (Rassul 06:07); 0.11.1, 2026-10-11; 0.11.1: the Flow pane backfills - buyers / sellers from every loaded bar (up to 1,000), and its own record of each bar's near-price book and each absorption window (<MKT>-<spb>-flow-<session>.csv) re-read on load for this session and the two before (Rassul 20:36 "liquidity flow"); 0.11.0: the Flow pane is ALWAYS ON - buyers / sellers of every bar as x their 20-bar average and the resting bids / offers near price at each bar close; an absorption read also starts at a Delta Profile A / A? (not only a shown zone), drawn as a yellow window with its price, the steps and a readout on the right, idle = what it watches (Rassul 19:48-19:49, mockup LiquidityFlow_always_on); 0.10.0: only zones that stand out are drawn - 2x+ the 8 same-width bands behind them and the biggest of them, kept down to 1.7x, after resting 30 s at the same band; reach = 1/2 the expected RTH range (lsHodLod), else 1/2 the 14-session average RTH range, else 6x the 3-min range; the label = that prominence; no boxes across the chart (Rassul 18:53 "remove the boxes too"); LQ = a key level or a CR / PS / HVL level with a 2.5x+ zone on it (ES, GC, HG, NG; logged elsewhere) - research "Liquidity display for absorption trading" + the rules review 18:21-18:51; 0.9.0: the column on the LEFT edge of the price pane, bars facing price, the x-normal label on the price side of each bar, each zone a thin box across the chart to the last bar (mockup v4, Rassul 18:07-18:14); 0.8.1: never over the Delta Profile or its labels (the column moves 64 px further left, past the Delta Profile's "A 4.4x +62" labels) - the Dealer Profile reach is kept PER MARKET (its status file is shared by every chart: the last chart to write it wins) and starts at the Dealer Profile default (150 px) until this market's own reach is seen (Rassul 17:56 "the liquidity profile is overlapping the delta profile"); 0.8.0: the absorption PROCESS in every market (Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets - absorb, exhaust, counter or absorb, pull, break"): every step drawn everywhere at the market's data line where the nightly study set one, the standard line until then; s = Counter (the defenders out-traded the attackers after e, at the Counter line x their normal pace) on the price chart with its reason on the panes and the BUYERS / SELLERS STEPPING IN warning; panes AGGRESSIVE (Attack, Exh, Counter) / PASSIVE (Absorbed = the % of everything resting that took fills, Pulled, Rebuilt); 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
+ *  LiquidityProfile.cpp  --  Investor/RT RTX extension  lsLiquidityProfile  (0.15.0, 2026-10-13: the HOVER of each NEAR zone, built around support / resistance (Rassul approved the v2 mockup 6:44 PM CT) - mouse over a near zone's bar / label in the column: "Resistance [at <LEVEL>] 7,864.00 - 7,866.00 � 366 lots (1.5x)" (green support / red resistance), "Orders 96 � avg 3.8 lots � Top order 12%" (white), "Mostly one order - may not reload ?" at a 70%+ top order (white, replaces 'may be bait'), "As price came: up 20% - building" / "down 35% - leaving" / "unchanged" (lots now vs when price first came within reach, +/-10%, baseline once per approach; coloured by what it means for price), "Hit 140 lots � rebuilt 90% - absorbing" only while price is in the zone (green support / red resistance); from the chart's order-by-order feed (OrderFlowFeed.h off::Conn / off::Engine reused, one DEPTH_BY_ORDER per chart behind a crash guard); nothing new on the chart face; the box never covers the column or the Delta Profile; each decision's makeup + 'as price came' recorded (<MKT>-<sym>-<spb>-makeup-<session>.csv); 0.14.1, 2026-10-13: the warning (e.g. ABSORPTION WEAKENING ...) starts BELOW the chart's title row (LQ_TITLE_ROW_PX) - it was drawn at the pane top, over the IRT title text (Rassul screenshot); the column header moves down with it; 0.14.0, 2026-10-13: NEAR-price rule - zones within 1x the 3-min range of price shown at 1.5x the book behind them without the rank-1 rule, kept to 1.2x; far zones unchanged at 2.0x / rank 1 / 1.7x; never under 1.0x (Rassul "i want to see liquidity when it is close so i can see if there is any absorbtion going on"); 0.13.3, 2026-10-13: audit defect fixes - a bar re-drawn at the same index is a new baseline (no replayed volume), records keyed by the full contract, input files size-bounded, prices checked before the tick grid; 0.13.2, 2026-10-12: the column's width published so the Dealer Profile badges never sit on its labels; 0.13.1, 2026-10-12: each level named on ONE zone (the one holding it, else the nearest) - as the Dealer Profile badge; 0.13.0, 2026-10-12: only the strongest zone each side (solid) + zones on a key / gamma level (outlined, named) are drawn and published - the rest logged; 0.12.0, 2026-10-12: writes LRA-LiqZones-<MKT>.csv - the resting-liquidity zones near price - for the Dealer Profile's level badges ("Liq 2.6x"); 0.11.4, 2026-10-12: review fixes - no repaint when a market's line changes, the closing bar's last trades counted before it is decided, absorption windows recorded past the 50th touch, per-market state reset on a symbol change, stale Delta A zones dropped after an hour, no zone / LQ flicker, labels never overlap, fonts 10 pt+; 0.11.3, 2026-10-12 08:58: NO letters on the price chart at all - p / e / s / t are decided and recorded for the study, never drawn (Rassul "there are all these signals like P on the es chart .. i had asked you to remove them"); 0.11.2, 2026-10-12: the e? / p? watch letters are no longer drawn on the price chart - recorded only (Rassul 06:07); 0.11.1, 2026-10-11; 0.11.1: the Flow pane backfills - buyers / sellers from every loaded bar (up to 1,000), and its own record of each bar's near-price book and each absorption window (<MKT>-<spb>-flow-<session>.csv) re-read on load for this session and the two before (Rassul 20:36 "liquidity flow"); 0.11.0: the Flow pane is ALWAYS ON - buyers / sellers of every bar as x their 20-bar average and the resting bids / offers near price at each bar close; an absorption read also starts at a Delta Profile A / A? (not only a shown zone), drawn as a yellow window with its price, the steps and a readout on the right, idle = what it watches (Rassul 19:48-19:49, mockup LiquidityFlow_always_on); 0.10.0: only zones that stand out are drawn - 2x+ the 8 same-width bands behind them and the biggest of them, kept down to 1.7x, after resting 30 s at the same band; reach = 1/2 the expected RTH range (lsHodLod), else 1/2 the 14-session average RTH range, else 6x the 3-min range; the label = that prominence; no boxes across the chart (Rassul 18:53 "remove the boxes too"); LQ = a key level or a CR / PS / HVL level with a 2.5x+ zone on it (ES, GC, HG, NG; logged elsewhere) - research "Liquidity display for absorption trading" + the rules review 18:21-18:51; 0.9.0: the column on the LEFT edge of the price pane, bars facing price, the x-normal label on the price side of each bar, each zone a thin box across the chart to the last bar (mockup v4, Rassul 18:07-18:14); 0.8.1: never over the Delta Profile or its labels (the column moves 64 px further left, past the Delta Profile's "A 4.4x +62" labels) - the Dealer Profile reach is kept PER MARKET (its status file is shared by every chart: the last chart to write it wins) and starts at the Dealer Profile default (150 px) until this market's own reach is seen (Rassul 17:56 "the liquidity profile is overlapping the delta profile"); 0.8.0: the absorption PROCESS in every market (Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets - absorb, exhaust, counter or absorb, pull, break"): every step drawn everywhere at the market's data line where the nightly study set one, the standard line until then; s = Counter (the defenders out-traded the attackers after e, at the Counter line x their normal pace) on the price chart with its reason on the panes and the BUYERS / SELLERS STEPPING IN warning; panes AGGRESSIVE (Attack, Exh, Counter) / PASSIVE (Absorbed = the % of everything resting that took fills, Pulled, Rebuilt); 0.7.0: e? -> e and p? -> p (the watches) and t (trapped) on the price chart at the zone side of the bar, recorded and re-read for the last 10 sessions; the warning top left of the price chart (EXHAUSTION WATCH / PULLING WATCH / BUYERS HOLDING / BIDS THINNING / BUYERS PULLING / ABSORPTION OCCURRING / ABSORPTION WEAKENING / BREAKDOWN RISK / TRAPPED / GIVING UP, mirrored at resistance); the reason in plain words at each decided touch on the panes; mouse over a past touch shows its statistics as of that bar; headers AGGRESSION / DEFENSE; e decided at this market's line from arrival + 3 min; 0.6.0: the pane statistics on the left of each half in process order, Metric: now (line) - Attack (x normal per tick vs the prior 20 bars), Eaten (% of everything there: shown + new + refills), Exh | Pulled, Rebuilt - each measured as lra.mbo_study measures it and drawn only where its per-market line came from the data; depth read every 1 s (the study's snapshot step); 0.5.0: only what the data confirmed - Exh (aggression) and Pull (defense), each drawn only in markets where the nightly study confirmed it, no '?' (Rassul 2026-10-11 "remove whatever doesn't work and keep what works"); LoF / HiB / RpB / RpO and the bar-pace code removed; 0.4.1: each pane signal drawn with its number - Exh 0.3x (2nd / 1st half pace, under 0.5), Pull 72% (share pulled), LoF / HiB / RpB / RpO 2.4x (x the prior 20 bars' pace, 2.0x or more; PARAM pace_min per market); 0.4.0: no marks on the price chart (L? / LX / X removed, Rassul 2026-10-10 23:35); six pane signals Exh / LoF / HiB (aggression) and Pull / RpB / RpO (defense), recorded per session and redrawn after a restart, '?' until the study confirms each for the market; the zone label text removed; 0.3.1: the PULL? / E / LX thresholds per market from the data (PARAM lines in LRA-LiqNorms-<MKT>.csv, lra.liq_params), shown on the status file; 0.3.0: Flow pane green = buyers / red = sellers in both halves, DEFENSE = each side's net resting size (bids in / offers beyond a support zone, mirrored at resistance), O and R on the cumulative crosses; 0.2.0: the absorption story per bar (E / O / P / R / X) + the lsLiquidityFlow pane build (LiquidityFlow.cpp defines LQ_FLOW); 0.1.3: pulling blocks L? and labels a break LX P; 0.1.2: PULL? / refill - a zone being pulled instead of replenished; 0.1.1: status built at most once a second)
  *
  *  THE LIQUIDITY PROFILE (Rassul 2026-10-10: "get the liquidity profile done and the signals that support absorption ... so i can
  *  trade monday"; the agreed model: Liquidity_profile_model_v2 / Liquidity_profile_v01_mockup).
@@ -41,6 +41,15 @@
 #include "LiquidityProfileLogic.h"
 #include "KeyLevelsLogic.h"      // (0.10.0) the key levels, computed natively from the chart (as lsDealerProfile)
 #include "HostSlot.h"
+#ifndef LQ_FLOW
+// (0.15.0) the order-by-order feed and its order book: the shared order-flow header, reused as is (lsBidAskStats / PullStats /
+// StackStats). After irtsdk.h and after the near / far #undefs above (off::Engine has a member named 'near').
+#define OFF_SDK 1
+#include "OrderFlowFeed.h"
+#if defined(_MSC_VER)
+#pragma comment(lib, "user32.lib")   // (0.15.0) GetCursorPos / WindowFromPoint (off::cursorWindow, the hover leaving the chart)
+#endif
+#endif
 #include <algorithm>
 #include <cerrno>
 #include <cctype>
@@ -62,7 +71,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.14.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.15.0"          // keep equal to lqp::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
@@ -195,7 +204,7 @@ static std::string fileToken(const std::string& value) {
 // DeltaProfile 2.5.7 keeps its own exact token convention: preserve case and
 // dots, and use its documented empty-symbol fallback.  Do not apply this
 // package's uppercasing/capping convention to Delta records.
-static std::string deltaContractToken(const std::string& value) {
+static inline std::string deltaContractToken(const std::string& value) {
     std::string out; out.reserve(value.size());
     for (size_t i = 0; i < value.size(); ++i) {
         const unsigned char c = (unsigned char)value[i];
@@ -265,6 +274,16 @@ struct LQState {
     Line lAttack, lEaten, lExh, lPulled, lRebuilt, lCounter;
     int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
     std::string state = "starting", lastStatusText;
+#ifndef LQ_FLOW
+    // (0.15.0) the order-by-order feed (its own DEPTH_BY_ORDER, kept alive) and its order book (off::Engine: only the book is used -
+    // near = 0, so nothing is counted as near; its per-candle scratch is cleared every minute); the hover
+    off::Conn feed; off::Engine ob; off::Acc obAcc; std::string feedState = "MBO: not opened"; long long obClearMs = -1;
+    struct HovZone { long long id = 0; lqp::Tick lo = 0, hi = 0; std::string names; };   // names = the level(s) the zone holds
+    std::vector<HovZone> hovZones;                 // the near zones drawn last time (the mouse picks among them by price)
+    int hovColX0 = 0, hovColX1 = -1, hovLastBar = -1, hovLastX = 0; double hovBarW = 0;   // the column's x span and the bar -> x map
+    long long hovId = 0; void* hovWnd = nullptr;   // the hovered zone (0 = none) and the window its mouse event came from
+    std::string hovState = "none";                 // the last draw's hover: none / shown N rows / no room (status file)
+#endif
     ~LQState() { delete md; }
 };
 
@@ -297,6 +316,11 @@ private:
     void persist(LQState& S);
     void status(LQState& S, long long now);
     void writeLiqZones(LQState& S);    // (0.12.0) the zones for the Dealer Profile's level badges
+#ifndef LQ_FLOW
+    void orders(LQState& S, long long st);          // (0.15.0) the order-by-order feed -> order book, hits / rebuilds, makeup
+    void renderHover(LQState& S, int left, int top, int bottom, int paneRight);   // (0.15.0) the hovered near zone's box
+    lqp::HoverIn hoverIn(const LQState& S, const lqp::Zone& z, const std::string& names) const;   // (0.15.0) its inputs
+#endif
     void render(LQState& S);
     void renderFlow(LQState& S);
     void renderWarning(LQState& S);                // (0.7.0) the warning, top left of the price chart
@@ -382,6 +406,9 @@ void LiquidityProfile::identify(LQState& S) {
         // re-read when it changes, so the old market's CR / PS stayed), reach, LQ, Delta A zones and the Flow record
         S.levels.clear(); S.levelsAt = -1; S.mqLevels.clear(); S.mqStamp = -2; S.avgRth = 0; S.avgRthN = 0; S.rthOpen = S.rthClose = -1;
         S.expRange = 0; S.reachSrc = "6x 3-min range"; S.confirms.clear(); S.lqMark.clear(); S.lqPrev.clear(); S.dpBid.clear(); S.dpAsk.clear(); S.dpAt = 0;
+#ifndef LQ_FLOW
+        S.feed.reset(); S.ob = off::Engine(); S.obAcc = off::Acc(); S.feedState = "MBO: not opened"; S.obClearMs = -1; S.hovZones.clear(); S.hovId = 0; S.hovWnd = nullptr;   // (0.15.0)
+#endif
         S.atr = 0; S.finSeen = 0; S.hoverBar = -1; S.bookHist.clear(); S.winHist.clear(); S.winKeys.clear(); S.flowLines.clear(); S.lastStatusText.clear();
         S.identity = id; S.root = root; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
         S.e.P.tick = tick > 0 ? tick : 0.01; zoneRule(S.market, S.e.P); standardLines(S);
@@ -839,10 +866,10 @@ void LiquidityProfile::session(LQState& S, long long t) {
 void LiquidityProfile::persist(LQState& S) {
     // (0.4.0) lsLiquidityFlow records its pane signals (<MKT>-<spb>-panes-<session>.csv, re-read after a restart: no repaint);
     // lsLiquidityProfile records every attempt for the nightly study (<MKT>-<spb>-attempts-<session>.csv)
-    const std::string d = dir(); if (d.empty() || S.session < 0) { S.e.attemptLog.clear(); return; }
+    const std::string d = dir(); if (d.empty() || S.session < 0) { S.e.attemptLog.clear(); S.e.makeupLog.clear(); return; }
     makeDir(flexDir()); makeDir(d);
 #ifdef LQ_FLOW
-    S.e.attemptLog.clear();
+    S.e.attemptLog.clear(); S.e.makeupLog.clear();
     if (S.marksWritten < S.e.marks.size()) {
         std::vector<std::string> lines;
         for (size_t i = S.marksWritten; i < S.e.marks.size(); ++i) lines.push_back(lqp::Engine::line(S.e.marks[i], S.e.P.tick));
@@ -863,6 +890,10 @@ void LiquidityProfile::persist(LQState& S) {
     }
     if (!S.e.attemptLog.empty()) {
         if (appendLines(d + "\\" + recordStem(S) + "-attempts-" + std::to_string(S.session) + ".csv", lqp::Engine::attemptHeader(), S.e.attemptLog)) S.e.attemptLog.clear();
+        else S.recFails++;
+    }
+    if (!S.e.makeupLog.empty()) {                                        // (0.15.0) each decision's zone makeup, hits and rebuilds
+        if (appendLines(d + "\\" + recordStem(S) + "-makeup-" + std::to_string(S.session) + ".csv", lqp::Engine::makeupHeader(), S.e.makeupLog)) S.e.makeupLog.clear();
         else S.recFails++;
     }
 #endif
@@ -893,6 +924,22 @@ void LiquidityProfile::status(LQState& S, long long now) {
       << "\nNEAR,ticks " << S.e.nearTicks << ",show " << xfmt(S.e.P.nearShowX) << ",keep " << xfmt(S.e.P.nearKeepX)   // (0.14.0)
       << "\nLEVELS," << S.levels.size() << " key," << S.mqLevels.size() << " gamma1\nLQ," << (S.lqShow ? "shown" : "logged") << "," << S.confirms.size() << "\n";
     for (size_t i = 0; i < S.confirms.size(); ++i) o << "CONFIRM," << S.confirms[i] << "\n";
+#ifndef LQ_FLOW
+    {   // (0.15.0) the order feed and each near zone's makeup (what its hover shows)
+        const long long st = steadyMs(); const std::string fs = S.feed.stateText(st);
+        o << "MBO," << (fs.empty() ? S.feedState : fs) << ",via " << S.feed.via << ",orders " << S.ob.book.size() << ",events " << S.feed.events << ",faults " << S.feed.faults
+          << ",garbage " << S.ob.garbage << ",backlog " << S.feed.longestBacklog << ",hover " << S.hovState << "\n";
+        for (size_t i = 0; i < S.e.zones.size(); ++i) {
+            const lqp::Zone& z = S.e.zones[i]; if (!z.shown || !z.near) continue;
+            const lqp::HoverIn in = hoverIn(S, z, std::string()); const lqp::Makeup& m = in.mk;
+            const lqp::Came c = lqp::cameOf(in.nearBase, in.lots, in.band);
+            o << "MAKEUP," << (z.side == lqp::BID ? "support" : "resistance") << "," << (double)z.lo * S.e.P.tick << "," << (double)z.hi * S.e.P.tick << ",orders " << m.orders
+              << ",lots " << m.lots << ",top " << m.topPct() << "%,coverage " << m.coverage << (m.ok ? ",shown" : ",not shown") << ",one_order " << (lqp::oneOrder(m, in.oneShare) ? 1 : 0)
+              << ",came_base " << in.nearBase << ",came " << (c.state == lqp::CAME_NONE ? "none" : lqp::cameWord(c.state)) << " " << c.pct << "%"
+              << ",in_zone " << (in.inZone ? 1 : 0) << ",hit " << in.hit << ",rebuilt " << in.rebuilt << "\n";
+        }
+    }
+#endif
     for (size_t i = 0; i < S.e.zones.size(); ++i) {
         const lqp::Zone& z = S.e.zones[i];
         o << "ZONE,bx " << z.bx << ",rank " << z.rank << ",behind " << z.behindN << "," << (z.shown ? "shown" : "hidden") << "," << (z.side == lqp::BID ? "support" : "resistance") << "," << (double)z.lo * S.e.P.tick << "," << (double)z.hi * S.e.P.tick
@@ -977,6 +1024,37 @@ void LiquidityProfile::writeLiqZones(LQState& S) {
 #endif
 }
 
+#ifndef LQ_FLOW
+// (0.15.0) the chart's order-by-order feed, opened once the depth works (the lsMboCheck / OrderFlowFeed pattern: one DEPTH_BY_ORDER per
+// chart kept alive, opened from calc / draw only behind a crash-guard file, drained <= 5,000 events / ~8 ms per call). Each event
+// first goes to the attempts (hits / rebuilds, open attempts only), then to the order book. The open attempts' makeup is refreshed
+// every call, so the one recorded at the decision is the last one before it.
+void LiquidityProfile::orders(LQState& S, long long st) {
+    if (!S.e.haveBook || !S.depthAvail || S.symbol.empty()) return;
+    const std::string d = dir();
+    if (!d.empty()) { makeDir(flexDir()); makeDir(d); }
+    S.feed.open(S.symbol, d.empty() ? std::string() : d + "\\_opening-dbo-" + stem(S) + ".txt", st, S.feedState);
+    const double tick = S.e.P.tick;
+    S.feed.drain(st, off::steadyMs, [&](const auto& o) {
+        const off::Ev ev = off::evOf(o, tick, st);
+        if (ev.px > 0 && ev.action >= off::NEW && ev.action <= off::FILL) {
+            std::unordered_map<long long, off::Engine::Ord>::const_iterator it = S.ob.book.find(ev.id);
+            const bool had = it != S.ob.book.end() && it->second.known;
+            const int side = it != S.ob.book.end() && ev.action != off::NEW ? it->second.side : ev.side;
+            S.e.mboEvent(ev.action, side, ev.px, ev.size, had, had ? it->second.px : 0, had ? it->second.size : 0);
+        }
+        S.ob.apply(S.obAcc, ev);
+    });
+    if (S.obClearMs < 0 || st - S.obClearMs >= 60000 || st < S.obClearMs) { S.obAcc = off::Acc(); S.obClearMs = st; }   // bounded scratch
+    for (size_t i = 0; i < S.e.attempts.size(); ++i) {
+        lqp::Attempt& a = S.e.attempts[i]; if (a.done) continue;
+        a.mk = lqp::makeupOf(S.ob.book, a.side, a.lo, a.hi, S.e.band(a.side, a.lo, a.hi), S.e.P.coverMin, S.e.P.coverMax); a.mkSet = true;
+    }
+    // the mouse left the chart window: the hover goes (as the order-flow panes' HoverTrack)
+    if (S.hovId != 0 && S.hovWnd) { void* w = off::cursorWindow(); if (w && w != S.hovWnd) { S.hovId = 0; S.hovWnd = nullptr; invalidateChart(false); } }
+}
+#endif
+
 void LiquidityProfile::pump() {
     LQState* P = slot_.get(this, true);
     if (!P || P->busy) return;
@@ -1004,6 +1082,9 @@ void LiquidityProfile::pump() {
             S.e.formBar = (int)count - 1;                               // book flow belongs to the bar in progress
             readDepth(S, t);
         }
+#ifndef LQ_FLOW
+        orders(S, st);                                                  // (0.15.0) before the bars are decided: hits / rebuilds in time
+#endif
         closedBars(S, count);
         if (S.e.haveBook && (S.lastZones < 0 || t - S.lastZones >= ZONES_EVERY_MS || t < S.lastZones)) {
             S.lastZones = t;
@@ -1082,6 +1163,9 @@ void LiquidityProfile::render(LQState& S) {
     const std::vector<LqPick> picks = lqPicks(S);                      // (0.13.0) the strongest each side + the zones on a level
     lqp::Lanes labels(1);
     int colR = 0;                                                       // (0.13.2) the column's right end this draw
+#ifndef LQ_FLOW
+    S.hovZones.clear();                                                 // (0.15.0) the near zones the mouse can hover this draw
+#endif
     for (size_t oi = 0; oi < picks.size(); ++oi) {
         const lqp::Zone& z = S.e.zones[picks[oi].idx];                   // (0.10.0) only zones that stand out from the book behind them
         const bool topPick = picks[oi].top;
@@ -1091,6 +1175,12 @@ void LiquidityProfile::render(LQState& S) {
         yt = std::max(top, yt); yb = std::min(bottom, yb);
         const COLOR c = z.side == lqp::BID ? C_BUY : C_SELL;
         const bool solid = topPick;                                    // (0.13.0) solid = the strongest on its side; outlined = on a level
+#ifndef LQ_FLOW
+        if (z.near && solid) {                                        // (0.15.0) the level it holds names the hover's header
+            LQState::HovZone hz; hz.id = z.id; hz.lo = z.edgeLo; hz.hi = z.edgeHi; hz.names = picks[oi].names;
+            if (hz.names.empty()) { std::map<long long, std::string>::const_iterator q = S.lqMark.find(z.id); if (q != S.lqMark.end()) hz.names = q->second.compare(0, 3, "LQ ") == 0 ? q->second.substr(3) : q->second; }
+            S.hovZones.push_back(hz); }
+#endif
         const int len = std::max(8, (int)(maxZone > 0 ? z.size / maxZone * full : full));
         RCT r; r.set(coord(left), coord(yt), coord(left + len), coord(yb));
         if (solid) r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
@@ -1127,9 +1217,64 @@ void LiquidityProfile::render(LQState& S) {
             colR = std::max(colR, xl + qw + 2 - left); }
     }
     S.colRight = std::max(colR, full + 4);   // (0.13.2) published so the Dealer Profile's badges start right of it
+#ifndef LQ_FLOW
+    {   // (0.15.0) the column's x span and the bar -> x map, for the mouse; then the hovered near zone's makeup box
+        S.hovColX0 = pane.left; S.hovColX1 = left + S.colRight;
+        PNT a, b; a.set(lastBar, 0.0f, kBarCenter); b.set(lastBar - 1, 0.0f, kBarCenter);
+        S.hovLastBar = lastBar; S.hovLastX = a.h; S.hovBarW = (double)(a.h - b.h);
+        renderHover(S, left, top, bottom, paneRight);
+    }
+#endif
     (void)rd;   // (0.4.0) no read text and no marks on the price chart (Rassul 2026-10-10: signals only on the panes)
 }
 
+
+#ifndef LQ_FLOW
+// (0.15.0, Rassul 6:44 PM CT approved mockup v2) the hovered NEAR zone's box: right of the column, centred on the zone, inside the
+// pane, never over the column or the Delta Profile (its labels included); grey solid border (as the order-flow panes' info box); the
+// rows and their colours come from lqp::hoverRows (tested) - green = good for buyers, red = good for sellers, white = fact only
+void LiquidityProfile::renderHover(LQState& S, int left, int top, int bottom, int paneRight) {
+    S.hovState = "none";
+    if (S.hovId == 0) return;
+    const LQState::HovZone* hz = nullptr;
+    for (size_t i = 0; i < S.hovZones.size(); ++i) if (S.hovZones[i].id == S.hovId) hz = &S.hovZones[i];
+    const lqp::Zone* zp = nullptr;
+    for (size_t i = 0; i < S.e.zones.size(); ++i) if (S.e.zones[i].id == S.hovId) zp = &S.e.zones[i];
+    if (!hz || !zp) { S.hovId = 0; return; }                          // no longer a drawn near zone: no box
+    const lqp::HoverIn in = hoverIn(S, *zp, hz->names);
+    const std::vector<lqp::HoverRow> rows = lqp::hoverRows(in);
+    const COLOR cWhite = 0x00E2E8F0, cFill = 0x0011151C;
+    FONT f; f.id = HELVETICA; f.size = coord(S.font); f.style = BOLD; setFont(f);   // S.font >= 10 pt (settings floor)
+    const int rowH = rowPx(S.font), pad = 6;
+    int w = 0; for (size_t i = 0; i < rows.size(); ++i) w = std::max(w, (int)getTextWidth(rows[i].text.c_str(), -1));
+    const int W = w + 2 * pad + 4, H = rowH * (int)rows.size() + 2 * pad - 2;
+    const int dpLimit = paneRight - 2 - S.dealerReach - S.dpGap - S.dpWidth - 64;   // the Delta Profile's labels start there
+    const int x0 = lqp::hoverX(left + S.colRight, W, dpLimit);
+    if (x0 < 0) { S.hovState = "no room"; return; }                   // never over the column or the Delta Profile
+    PNT pm; pm.set(S.hovLastBar >= 0 ? S.hovLastBar : 0, (float)(((double)zp->edgeLo + (double)zp->edgeHi) / 2.0 * S.e.P.tick));
+    const int y0 = lqp::hoverY((int)pm.v, H, top, bottom);
+    setPen(C_GREY, 1, P_SOLID);
+    RCT bx; bx.set(coord(x0), coord(y0), coord(x0 + W), coord(y0 + H)); bx.draw(1, C_GREY, cFill, DRAW_OPAQUE, PAT_SOLID);
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const int k = rows[i].ink;
+        setTextColor(k == lqp::INK_GREEN ? C_BUY : k == lqp::INK_RED ? C_SELL : k == lqp::INK_GREY ? C_GREY : cWhite);
+        const int y = y0 + pad - 1 + (int)i * rowH; RCT r; r.set(coord(x0 + pad), coord(y), coord(x0 + W - 2), coord(y + rowH)); r.drawText(rows[i].text.c_str(), false, false);
+    }
+    S.hovState = "shown " + std::to_string((long long)rows.size()) + " rows";
+}
+// (0.15.0) the hover's inputs for one zone (also the status file's MAKEUP line): the makeup from the order book, the open attempt's
+// hit / rebuilt while price is in the zone, the 'as price came' baseline of this approach
+lqp::HoverIn LiquidityProfile::hoverIn(const LQState& S, const lqp::Zone& z, const std::string& names) const {
+    lqp::HoverIn in; in.side = z.side; in.level = names; in.lo = z.lo; in.hi = z.hi; in.tick = S.e.P.tick; in.lots = z.size; in.bx = z.bx;
+    in.mk = lqp::makeupOf(S.ob.book, z.side, z.lo, z.hi, S.e.band(z.side, z.lo, z.hi), S.e.P.coverMin, S.e.P.coverMax);
+    in.feedReady = S.feed.stateText(steadyMs()) == "ready";
+    in.nearBase = z.nearBase;
+    in.inZone = S.e.havePx && S.e.lastPx >= z.lo && S.e.lastPx <= z.hi;
+    if (const lqp::Attempt* a = S.e.openOn(z.id)) { in.hit = a->hitLots; in.rebuilt = a->rebuiltLots; }
+    in.oneShare = S.e.P.oneOrderShare; in.band = S.e.P.cameBand;
+    return in;
+}
+#endif
 
 // ---- (0.2.0) lsLiquidityFlow: the absorption story in its own pane, for the zone touches since load (Rassul 2026-10-10:
 // "the concept of aggression and defense ... the best way to show how and why absorption is occurring or failing"; the replenished-
@@ -1433,13 +1578,31 @@ void LiquidityProfile::renderFlow(LQState& S) {
 
 // (0.7.0) the mouse over a bar (the Flow pane follows it to show that bar's statistics of a past touch)
 int LiquidityProfile::mouse(RTX_EVENT* e) {
-#ifdef LQ_FLOW
+#ifndef LQ_FLOW
+    // (0.15.0) the price chart: the mouse over a NEAR zone's bar / label in the column -> that zone's makeup box (by price and bar: the
+    // bar's x from the last draw's bar -> x map, the price from the event; window pixels are not used)
+    if (!e) return RTX_FAIL;
+    LQState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
+    if (e->type == E_MOUSE_MOVE || e->type == E_MOUSE_HOVER) {
+        long long id = 0;
+        const double tick = S->e.P.tick, price = (double)e->v.mouse.price;
+        if (S->hovColX1 > S->hovColX0 && S->hovLastBar >= 0 && tick > 0 && lqp::finite(price) && price > 0) {
+            const double bw = std::fabs(S->hovBarW) > 0 ? std::fabs(S->hovBarW) : 1.0;
+            const double x = (double)S->hovLastX + (double)(e->v.mouse.bar - S->hovLastBar) * S->hovBarW;
+            if (x >= (double)S->hovColX0 - bw && x <= (double)S->hovColX1 + bw) {
+                const double t = price / tick;
+                for (size_t i = 0; i < S->hovZones.size() && !id; ++i) if (t >= (double)S->hovZones[i].lo - 0.5 && t <= (double)S->hovZones[i].hi + 0.5) id = S->hovZones[i].id;
+            }
+        }
+        if (id) S->hovWnd = off::cursorWindow();
+        if (id != S->hovId) { S->hovId = id; invalidateChart(false); }
+    }
+    return RTX_FAIL;                                                     // never swallow the event
+#else
     if (!e) return RTX_FAIL;
     LQState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
     if (e->type == E_MOUSE_MOVE || e->type == E_MOUSE_HOVER) { const long b = e->v.mouse.bar; S->hoverBar = (b >= 0 && b < getBarCount() - 1) ? (int)b : -1; }
     return RTX_FAIL;                                                     // never swallow the event: the chart keeps its own mouse behaviour
-#else
-    (void)e; return RTX_FAIL;
 #endif
 }
 
@@ -1451,10 +1614,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA Liquidity Flow: the absorption process at the zone price is in. AGGRESSIVE (market orders): buyers (green) and sellers (red) trading into the zone - Attack, Exh (the attackers ran out), Counter (the defenders stepped in). PASSIVE (resting orders): buyers' bids (green) and sellers' offers (red), net added since arrival - Absorbed, Pulled, Rebuilt. Each reads Metric: now (line), the line set per market by the nightly study.");
 #else
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED | TRACK_MOUSE);   // (0.15.0) TRACK_MOUSE: the zone hover
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
-    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). The signals are on the Liquidity Flow panes. TESTING.");
+    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: support / resistance and the level it holds, its orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share rebuilt. The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.14.1");   // LQ_VERSION
+    p->setVersion("0.15.0");   // LQ_VERSION
     return p;
 }

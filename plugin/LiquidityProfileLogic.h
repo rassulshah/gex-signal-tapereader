@@ -1,5 +1,22 @@
 #ifndef LS_LIQUIDITY_PROFILE_LOGIC_H
 #define LS_LIQUIDITY_PROFILE_LOGIC_H
+// (0.15.0, 2026-10-13, Rassul approved the v2 mockup "liquidity-before-after-v2" at 6:44 PM CT) the HOVER of each NEAR zone is built
+//   around its purpose - support / resistance - one line per question (nothing new on the chart face):
+//   1 "Support|Resistance [at <LEVEL>] lo - hi \xB7 N lots (X.Xx)"   green support / red resistance (the level = the one the zone holds)
+//   2 "Orders N \xB7 avg X lots \xB7 Top order NN%"                  white - resting orders in the zone from the order-by-order book
+//   3 "Mostly one order - may not reload ?"                           white, when the top order is 70%+ of the zone (replaces 'may be
+//                                                                      bait': his data - such orders were filled, not pulled; '?' until
+//                                                                      proven per market)
+//   4 "As price came: up NN% - building" | "down NN% - leaving" | "unchanged"   the zone's lots now vs its lots when price first came
+//                                                                      within reach (the NEAR rule); +/-10% band; baseline recorded ONCE
+//                                                                      per approach (reset when the zone stops being near). Colour by
+//                                                                      implication: support building = green, support leaving = red,
+//                                                                      resistance building = red, resistance leaving = green, else white
+//   5 "Hit N lots \xB7 rebuilt NN% - absorbing"                       only while price is IN the zone (open attempt, lots hit > 0);
+//                                                                      green at support, red at resistance; measurement only
+//   The makeup (line 2 / 3) shows only when the orders the feed knows cover 80-125% of the depth's lots (orders resting before load
+//   are unknown). Decision time only: an attempt's hit / rebuilt stop counting when it is decided and its last makeup + the 'as price
+//   came' change at arrival are recorded then (<MKT>-<sym>-<spb>-makeup-<session>.csv), never changed afterwards (no repaint).
 // LiquidityProfileLogic.h  (lsLiquidityProfile 0.1.0, 2026-10-11) -- the SDK-free engine of the Liquidity Profile. Tested by
 // test_liquidityprofile_logic.cpp (g++ / MSVC, no Investor/RT needed).
 // (0.11.4, 2026-10-12 review) finTotal (windows past the 50th touch), no zone flicker at the book's edge, LQ hysteresis 2.5x / 2.1x,
@@ -44,7 +61,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.14.1";
+static const char* const VERSION = "0.15.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -92,6 +109,9 @@ struct Params {
     double minShowX = 1.0;
     int nearPerSide = 2;                        // the strongest near candidates per side always tracked (even outside topN)
     Tick reachTicks = 0;                        // > 0: the reach in ticks set by the plugin (1/2 expected range ...), else reachAtr x ATR
+    double oneOrderShare = 0.70;                // (0.15.0) the top order's share of the zone from which the hover says "Mostly one order"
+    double cameBand = 0.10;                     // (0.15.0) 'as price came': +/- this share of the baseline = building / leaving
+    double coverMin = 0.80, coverMax = 1.25;    // (0.15.0) the feed's known lots / the depth's lots for the makeup to be shown
 };
 
 // (0.11.4) the decimals a price needs at this tick, tolerant of IRT's float tick (0.01f = 0.0099999998: 6 decimals / 3 decimals before)
@@ -150,10 +170,134 @@ struct Zone {
     Tick edgeLo = 0, edgeHi = 0;
     bool shown = false; Ms belowSince = -1;
     bool near = false;                          // (0.14.0) within the near band of price (hysteresis: in at nearTicks, out past 1.5x)
+    double nearBase = -1;                       // (0.15.0) the zone's lots when price first came within reach on THIS approach (-1 = not near)
     bool durable(Ms now, Ms persist) const { return now - born >= persist; }
 };
 
 struct FlowEvt { Ms t; int side; Tick px; double executed, pulled, added, refill; };
+
+// (0.15.0) a zone's makeup from the order-by-order book: resting orders in [lo, hi] on one side
+struct Makeup {
+    bool ok = false;                            // the feed's known lots cover coverMin..coverMax of the depth's lots
+    long long orders = 0, lots = 0, top = 0;    // orders, their lots, the biggest single order
+    double coverage = 0;                        // known lots / depth lots (0 = no depth size)
+    double avg() const { return orders > 0 ? (double)lots / (double)orders : 0; }
+    int topPct() const { return lots > 0 ? (int)((top * 100 + lots / 2) / lots) : 0; }
+};
+// Book: any map of order id -> order with .side .px .size .known (off::Engine::book)
+template <class Book> Makeup makeupOf(const Book& book, int side, Tick lo, Tick hi, double depthLots, double coverMin, double coverMax) {
+    Makeup m;
+    for (typename Book::const_iterator it = book.begin(); it != book.end(); ++it) {
+        const auto& o = it->second;
+        if (!o.known || o.side != side || o.size <= 0 || o.px < lo || o.px > hi) continue;
+        m.orders++; m.lots += (long long)o.size; if ((long long)o.size > m.top) m.top = (long long)o.size;
+    }
+    m.coverage = depthLots > 0 ? (double)m.lots / depthLots : 0;
+    m.ok = m.orders > 0 && depthLots > 0 && m.coverage >= coverMin && m.coverage <= coverMax;
+    return m;
+}
+// the hover's words (the chart's ANSI code page: \xB7 = the middle dot)
+inline std::string makeupText(const Makeup& m) {
+    char b[128]; const double a = m.avg();
+    if (a < 10) std::snprintf(b, sizeof(b), "Orders %lld \xB7 avg %.1f lots \xB7 Top order %d%%", m.orders, a, m.topPct());
+    else std::snprintf(b, sizeof(b), "Orders %lld \xB7 avg %.0f lots \xB7 Top order %d%%", m.orders, a, m.topPct());
+    return b;
+}
+// (0.15.0) one order is 70%+ of the zone (only when the makeup is shown)
+inline bool oneOrder(const Makeup& m, double share) { return m.ok && m.lots > 0 && (double)m.top >= share * (double)m.lots - 1e-9; }
+inline std::string oneOrderText() { return "Mostly one order - may not reload ?"; }
+// rebuilt % = lots re-added in the zone after hits / lots hit (capped 200, as OrderFlowFeed's rebuiltPctOf); -1 = nothing hit yet
+inline int rebuiltPct(long long rebuilt, long long hit) {
+    if (hit <= 0) return -1;
+    if (rebuilt < 0) rebuilt = 0;
+    const long long p = (rebuilt * 100 + hit / 2) / hit; return (int)(p > 200 ? 200 : p);
+}
+// (0.15.0) "Hit 140 lots \xB7 rebuilt 90% - absorbing" (only while price is in the zone and something was hit)
+inline std::string hitText(long long hit, long long rebuilt) {
+    char b[96]; std::snprintf(b, sizeof(b), "Hit %lld lots \xB7 rebuilt %d%% - absorbing", hit, rebuiltPct(rebuilt, hit)); return b;
+}
+// (0.15.0) 'as price came': the zone's lots now vs its lots when price first came within reach on this approach
+enum CameState { CAME_NONE = -1, CAME_UNCHANGED = 0, CAME_BUILDING = 1, CAME_LEAVING = 2 };
+struct Came { int state = CAME_NONE; int pct = 0; };    // pct = |now - base| / base, rounded (shown with up / down)
+inline Came cameOf(double base, double now, double band) {
+    Came c;
+    if (!(base > 0) || !(now >= 0) || !finite(base) || !finite(now) || !(band >= 0)) return c;
+    const double d = now - base;
+    c.pct = (int)std::floor(std::fabs(d) / base * 100.0 + 0.5);
+    // the band is inclusive: exactly +10% is building, exactly -10% leaving (1e-9 x base absorbs the floating-point rounding)
+    if (d >= band * base - 1e-9 * base) c.state = CAME_BUILDING;
+    else if (-d >= band * base - 1e-9 * base) c.state = CAME_LEAVING;
+    else c.state = CAME_UNCHANGED;
+    return c;
+}
+inline const char* cameWord(int state) { return state == CAME_BUILDING ? "building" : state == CAME_LEAVING ? "leaving" : state == CAME_UNCHANGED ? "unchanged" : ""; }
+inline std::string cameText(const Came& c) {
+    if (c.state == CAME_NONE) return "";
+    if (c.state == CAME_UNCHANGED) return "As price came: unchanged";
+    char b[80]; std::snprintf(b, sizeof(b), "As price came: %s %d%% - %s", c.state == CAME_BUILDING ? "up" : "down", c.pct, cameWord(c.state)); return b;
+}
+// hover row colours by what they mean for price: INK_WHITE = fact only, GREEN = good for buyers, RED = good for sellers, GREY = no data
+enum Ink { INK_WHITE = 0, INK_GREEN = 1, INK_RED = 2, INK_GREY = 3 };
+// support building = green, support leaving = red; resistance building = red, resistance leaving = green; unchanged = white
+inline int cameInk(int side, int state) {
+    if (state == CAME_BUILDING) return side == BID ? INK_GREEN : INK_RED;
+    if (state == CAME_LEAVING) return side == BID ? INK_RED : INK_GREEN;
+    return INK_WHITE;
+}
+inline int sideInk(int side) { return side == BID ? INK_GREEN : INK_RED; }   // header and 'absorbing': support green, resistance red
+// a price with the market's decimals and thousands commas ("7,864.00", "79.98")
+inline std::string pxText(Tick t, double tick) {
+    int d = 2; if (tick > 0) { d = 0; double x = tick; while (d < 8 && std::fabs(x - std::floor(x + 0.5)) > 1e-9) { x *= 10; ++d; } }
+    char b[48]; std::snprintf(b, sizeof(b), "%.*f", d, (double)t * tick);
+    std::string r = b; const size_t dot = r.find('.'); int i = (int)(dot == std::string::npos ? r.size() : dot);
+    const int stop = r[0] == '-' ? 1 : 0;
+    while ((i -= 3) > stop) r.insert((size_t)i, ",");
+    return r;
+}
+inline std::string lotsText(double v) { char b[32]; std::snprintf(b, sizeof(b), v >= 10000 ? "%.0fk" : "%.0f", v >= 10000 ? v / 1000 : v); return b; }
+inline std::string multText(double x) { char b[32]; if (x >= 10) std::snprintf(b, sizeof(b), "10x+"); else std::snprintf(b, sizeof(b), "%.1fx", x); return b; }
+// (0.15.0) everything the hover of one near zone shows, in the approved order; the plugin only maps Ink to its colours and draws
+struct HoverIn {
+    int side = BID; std::string level;          // level = the key / gamma level(s) the zone holds ("PDL", "LonLO/CR"), empty = none
+    Tick lo = 0, hi = 0; double tick = 0.25, lots = 0, bx = -1;
+    Makeup mk; bool feedReady = false;          // the makeup from the order book; feedReady = the order feed is live
+    double nearBase = -1;                       // the zone's lots when price first came within reach on this approach
+    bool inZone = false; long long hit = 0, rebuilt = 0;   // price is in the zone now; the open attempt's hit / rebuilt lots
+    double oneShare = 0.70, band = 0.10;
+};
+struct HoverRow { std::string text; int ink = INK_WHITE; };
+inline std::vector<HoverRow> hoverRows(const HoverIn& h) {
+    std::vector<HoverRow> r;
+    {   std::string t = h.side == BID ? "Support" : "Resistance";
+        if (!h.level.empty()) t += " at " + h.level;
+        t += " " + pxText(h.lo, h.tick) + " - " + pxText(h.hi, h.tick) + " \xB7 " + lotsText(h.lots) + " lots (" + (h.bx > 0 ? multText(h.bx) : std::string("-")) + ")";
+        HoverRow x; x.text = t; x.ink = sideInk(h.side); r.push_back(x); }
+    {   HoverRow x;
+        if (h.mk.ok) { x.text = makeupText(h.mk); x.ink = INK_WHITE; }
+        else if (!h.feedReady) { x.text = "Orders: waiting for the order feed"; x.ink = INK_GREY; }
+        else { char b[96]; std::snprintf(b, sizeof(b), "Orders: building (%d%% of the lots seen)", (int)std::floor(std::min(9.99, std::max(0.0, h.mk.coverage)) * 100 + 0.5)); x.text = b; x.ink = INK_GREY; }
+        r.push_back(x); }
+    if (oneOrder(h.mk, h.oneShare)) { HoverRow x; x.text = oneOrderText(); x.ink = INK_WHITE; r.push_back(x); }
+    {   const Came c = cameOf(h.nearBase, h.lots, h.band);
+        if (c.state != CAME_NONE) { HoverRow x; x.text = cameText(c); x.ink = cameInk(h.side, c.state); r.push_back(x); } }
+    if (h.inZone && h.hit > 0) { HoverRow x; x.text = hitText(h.hit, h.rebuilt); x.ink = sideInk(h.side); r.push_back(x); }
+    return r;
+}
+// (0.15.0) where the hover box goes: right of the column (colRight + gap), never over it; its right edge never past dpLimit (the left
+// end of the Delta Profile's labels: paneRight - 2 - Dealer reach - Delta gap - Delta width - 64 px of its labels). Returns the
+// box's left x, or -1 when it cannot fit between the two (then no box: never over the column or the Delta Profile).
+inline int hoverX(int colRightAbs, int boxW, int dpLimit, int gap = 12) {
+    const int x0 = colRightAbs + gap;
+    if (boxW <= 0 || x0 + boxW > dpLimit) return -1;
+    return x0;
+}
+inline int hoverY(int zoneMidY, int boxH, int top, int bottom) {
+    int y0 = zoneMidY - boxH / 2;
+    if (y0 + boxH > bottom - 2) y0 = bottom - 2 - boxH;
+    if (y0 < top) y0 = top;
+    return y0;
+}
+
 struct TradeEvt { Ms t; Tick px; double buy, sell; };
 
 struct Stats { double attack = -1, eaten = -1, exh = -1, pulled = -1, rebuilt = -1, counter = -1; int side = 0; bool active = false; };
@@ -166,6 +310,9 @@ struct Attempt {
     bool breachTrade = false;                    // an attacker trade beyond the far edge
     bool done = false; std::string end; Ms tEnd = 0;
     double oldShare = -1;                        // (0.5.0) the zone's old-order share at arrival (-1 = not known), logged for the study
+    long long hitLots = 0, rebuiltLots = 0;      // (0.15.0) order feed: lots FILLED in the zone (its side) / lots re-added there after a hit
+    Makeup mk; bool mkSet = false;               // (0.15.0) the zone's makeup, refreshed while open; the last one stands at the decision
+    double cameBase = -1, cameArr = -1;          // (0.15.0) the zone's lots when price first came within reach / at arrival (as price came)
     // (0.2.0) the absorption STORY per bar, for the aggression / defense panes (lsLiquidityFlow) and the nightly study:
     // attack / defend = aggressive contracts in the zone that bar (attackers vs the defending side turning aggressive);
     // rep / pul = replenished (added + refill) and pulled since arrival, cumulative, as of that bar
@@ -502,8 +649,9 @@ public:
     // near with hysteresis: in at <= nearTicks, out only past nearExit x nearTicks
     void nearState(Zone& z, Tick ref) const {
         const Tick d = zoneDist(z, ref);
-        if (!z.near) { if (d <= nearTicks) z.near = true; }
-        else if ((double)d > P.nearExit * (double)nearTicks) z.near = false;
+        if (!z.near) { if (d <= nearTicks) { z.near = true; z.nearBase = z.size; } }   // (0.15.0) the baseline, once per approach
+        else if ((double)d > P.nearExit * (double)nearTicks) { z.near = false; z.nearBase = -1; }
+        if (z.near && !(z.nearBase > 0) && z.size > 0) z.nearBase = z.size;          // (0.15.0) a zone that came near empty: first size
     }
     double xNormal(double size) const { return normal > 0 ? size / normal : -1; }
 
@@ -727,6 +875,46 @@ public:
     }
     std::vector<std::string> attemptLog;          // lines waiting to be appended by the host
 
+    // ---- (0.15.0) the order-by-order feed, one event BEFORE the order book applies it (action 0 NEW, 1 MOD, 2 DEL, 3 FILL, as
+    // OrderFlowFeed.h; side = the order's own side when it is known; had / oldPx / oldSize = its resting state before this event).
+    // Only OPEN attempts count (decided ones are frozen - no repaint). FILL in the zone on the zone's side = hit; after the first hit, a
+    // NEW in the zone, a size increase in place, or an order moved INTO the zone from outside = rebuilt.
+    void mboEvent(int action, int side, Tick px, long long size, bool had, Tick oldPx, long long oldSize) {
+        if ((side != BID && side != ASK) || size < 0 || size > 10000000 || px <= 0) return;
+        for (size_t i = 0; i < attempts.size(); ++i) {
+            Attempt& a = attempts[i];
+            if (a.done || a.side != side || px < a.lo || px > a.hi) continue;
+            if (action == 3) { a.hitLots += size; continue; }
+            if (a.hitLots <= 0) continue;
+            if (action == 0) a.rebuiltLots += size;
+            else if (action == 1 && had) {
+                const bool wasIn = oldPx >= a.lo && oldPx <= a.hi;
+                if (oldPx == px) { if (size > oldSize) a.rebuiltLots += size - oldSize; }
+                else if (!wasIn) a.rebuiltLots += size;
+            }
+        }
+    }
+    // the open attempt on a zone (the one being hit), nullptr = none
+    const Attempt* openOn(long long zoneId) const {
+        const Attempt* best = nullptr;
+        for (size_t i = 0; i < attempts.size(); ++i) if (!attempts[i].done && attempts[i].zoneId == zoneId && (!best || attempts[i].tA > best->tA)) best = &attempts[i];
+        return best;
+    }
+    // (0.15.0) the makeup record at each decision (its own file: the attempts file's columns are unchanged)
+    static std::string makeupHeader() { return "t_arrival|side|zone_lo|zone_hi|end|t_end|hit_lots|rebuilt_lots|rebuilt_pct|mk_ok|orders|lots|top_lots|top_pct|coverage|one_order|came_base|came_arrival|came_pct|came|version"; }
+    std::string makeupLine(const Attempt& a, Ms tEnd) const {
+        std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
+        o << a.tA << '|' << (a.side == BID ? "support" : "resistance") << '|' << (double)a.lo * P.tick << '|' << (double)a.hi * P.tick << '|' << a.end << '|' << tEnd
+          << '|' << a.hitLots << '|' << a.rebuiltLots << '|' << rebuiltPct(a.rebuiltLots, a.hitLots) << '|' << (a.mkSet && a.mk.ok ? 1 : 0)
+          << '|' << (a.mkSet ? a.mk.orders : -1) << '|' << (a.mkSet ? a.mk.lots : -1) << '|' << (a.mkSet ? a.mk.top : -1) << '|' << (a.mkSet ? a.mk.topPct() : -1)
+          << '|' << round2(a.mkSet ? a.mk.coverage : -1) << '|' << (a.mkSet && oneOrder(a.mk, P.oneOrderShare) ? 1 : 0);
+        const Came c = cameOf(a.cameBase, a.cameArr, P.cameBand);   // (0.15.0) signed %: + building, - leaving; -1 base = not known
+        o << '|' << round2(a.cameBase) << '|' << round2(a.cameArr) << '|' << (c.state == CAME_NONE ? 0 : (a.cameArr < a.cameBase ? -c.pct : c.pct))
+          << '|' << (c.state == CAME_NONE ? "none" : cameWord(c.state)) << '|' << VERSION;
+        return o.str();
+    }
+    std::vector<std::string> makeupLog;           // (0.15.0) lines waiting to be appended by the host
+
     // (0.2.0) the story marks, each decided once at a bar close: E = the attackers' 2nd-half pace < 0.5 x the 1st half; P = half+ of the
     // shown size pulled and not replaced; O = the defenders out-traded the attackers in a bar after the attackers had led one (defense
     // first, then offense - Rassul 2026-10-10 "buyers playing defense first and then offense")
@@ -925,6 +1113,7 @@ private:
             if (const std::pair<Tick, Tick>* d = dpAt(z.side, z.lo, z.hi)) { a.fromDelta = !z.shown; a.dpLo = d->first; a.dpHi = d->second; }
             a.shown = shown; a.startSize = a.minSize = a.curSize = shown;
             a.oldShare = zoneOld(z.side, z.lo, z.hi, t);
+            a.cameBase = z.nearBase; a.cameArr = z.size;                  // (0.15.0) 'as price came' at arrival, recorded at the decision
             const Tick w = z.hi - z.lo + 1;                               // (0.3.0) the other side's band: same width, just beyond the zone
             if (a.side == BID) { a.oppLo = z.hi + 1; a.oppHi = z.hi + w; } else { a.oppLo = z.lo - w; a.oppHi = z.lo - 1; }
             const double first = a.side == BID ? sell : buy;          // the trade that arrived counts as the first attack
@@ -942,6 +1131,8 @@ private:
     void close_(Attempt& a) {
         a.done = true; ++finTotal;
         attemptLog.push_back(attemptLine(a, a.tEnd > a.tA ? a.tEnd : (a.attacks.empty() ? a.tA : a.attacks.back().first)));
+        makeupLog.push_back(makeupLine(a, a.tEnd > a.tA ? a.tEnd : (a.attacks.empty() ? a.tA : a.attacks.back().first)));   // (0.15.0)
+        if (makeupLog.size() > 500) makeupLog.erase(makeupLog.begin());
         for (size_t i = 0; i < zones.size(); ++i) if (zones[i].id == a.zoneId) zones[i].inAttempt = false;
         finished.push_back(a); if (finished.size() > 50) finished.erase(finished.begin());
     }

@@ -8,7 +8,7 @@
 #include <dirent.h>
 #include <unistd.h>
 
-namespace mock { Host* current = nullptr; }
+namespace mock { Host* current = nullptr; Feed feed; }   // (0.15.0) + the order feed
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
 
@@ -128,13 +128,14 @@ int main() {
     CHECK(readAll(rec).find("|Exh|") != std::string::npos && readAll(rec).find("|LoF|") == std::string::npos, "Exh is recorded for the session, no removed codes");
     std::string attempts = flex_attempts(std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\" + (S->market + "-" + fileToken(S->symbol) + "-" + std::to_string(S->spb)) + "-attempts-" + std::to_string(S->session) + ".csv");
     CHECK(attempts.empty(), "the pane build writes no attempt log (the profile owns it)");
+    const std::string stemS = S->market + "-" + fileToken(S->symbol) + "-" + std::to_string(S->spb); const long long sessS = S->session;   // (0.15.0 ASan) S is freed by destroy()
     p->destroy();
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());
     h.draws.clear(); h.now = T + 400; q->calc(0); q->draw();
     bool again = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Exh ") == 0) again = true;
     CHECK(again, "after a restart the same signals are drawn again (no repaint)");
     {   // (0.11.1) backfill: the pane's own record (book near price per bar + the absorption window) is re-read after a restart
-        const std::string fr = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\" + (S->market + "-" + fileToken(S->symbol) + "-" + std::to_string(S->spb)) + "-flow-" + std::to_string(S->session) + ".csv";
+        const std::string fr = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile\\" + stemS + "-flow-" + std::to_string(sessS) + ".csv";
         const std::string t = readAll(fr);
         CHECK(t.find("\nB|") != std::string::npos && t.find("\nW|") != std::string::npos, "(0.11.1) each bar's book and the window are recorded");
         LQState* Q = static_cast<LQState*>(h.data);
