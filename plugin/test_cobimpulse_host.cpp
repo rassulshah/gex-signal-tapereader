@@ -1,4 +1,4 @@
-// test_cobimpulse_host.cpp -- lsCobImpulse 0.1.0 on the mock SDK (tests_cobimpulse/irtsdk.h)
+// test_cobimpulse_host.cpp -- lsCobImpulse 0.1.0-0.3.0 on the mock SDK (tests_cobimpulse/irtsdk.h); the 0.3.0 gamma part: test_cobimpulse_gamma_host.cpp
 // g++ -std=c++17 -fsanitize=address,undefined -Werror -Wall -Wextra -Itests_cobimpulse test_cobimpulse_host.cpp -o th && ./th nq_20261014.csv
 #include "irtsdk.h"
 namespace mock { Host* current = nullptr; }
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
         p->testState()->paramsCheckMs = -1; p->testState()->paramsStamp = -3; H.draws.clear(); p->draw();
         CHECK(texts(H, "Cob+").empty() && p->testState()->paramsWhy.find("defaults") != std::string::npos, "wrong-market file -> defaults (abs), reason in the status");
         std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.2.0") != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
+        CHECK(st.find("VERSION,0.3.0") != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
         p->destroy(); delete p; std::remove((flex() + "\\LRA-CobImpulse-NQ.csv").c_str());
     }
     // 3b) a 0.1.0 record file (11 fields) is read, kept and rewritten in the 0.2.0 layout
@@ -141,8 +141,8 @@ int main(int argc, char** argv) {
         p->testState()->session = -1;                                              // reload on the next pump
         setBars(H, F, F.bars.size(), i839, i854, i833, true); p->calc(0);
         const std::string t = slurp(path);
-        CHECK(t.rfind(cimp::REC_HEADER, 0) == 0 && t.find(std::to_string(F.bars[(size_t)i833].time) + "|bull|1|2|0|0|0.00|0|0|0.00|0|0|0|0.00|0") != std::string::npos
-              && t.find(std::to_string(F.bars[(size_t)i839].time) + "|bull|") != std::string::npos, "0.1.0 record kept in the new layout, new CoBs added");
+        CHECK(t.rfind(cimp::REC_HEADER, 0) == 0 && t.find(std::to_string(F.bars[(size_t)i833].time) + "|bull|1|2|0|0|0.00|0|0|0.00|0|0|0|0.00|0|||0|0|0||0|pre 0.3.0\n") != std::string::npos
+              && t.find(std::to_string(F.bars[(size_t)i839].time) + "|bull|") != std::string::npos, "0.1.0 record kept in the 0.3.0 layout (no gamma part: pre 0.3.0), new CoBs added");
         p->destroy(); delete p;
     }
     // 4) his RTL not readable -> nothing decided, retried; forming-bar flag never decided

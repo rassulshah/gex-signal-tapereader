@@ -1,4 +1,5 @@
-// test_cobimpulse_logic.cpp -- unit tests for CobImpulseLogic.h (lsCobImpulse 0.1.0)
+// test_cobimpulse_logic.cpp -- unit tests for CobImpulseLogic.h (lsCobImpulse 0.1.0 - 0.3.0; the gamma part is also parity-tested
+// against lra.cob_tag / lra.cob_gamma on random cases: test_cobimpulse_gamma_parity.cpp + analytics/test_cob_tag_gamma.py)
 // g++ -std=c++17 -fsanitize=address,undefined -Werror -Wall -Wextra test_cobimpulse_logic.cpp -o t && ./t [nq_20261014.csv]
 #include "CobImpulseLogic.h"
 #include <cstdio>
@@ -235,6 +236,44 @@ int main(int argc, char** argv)
               "NQ 08:54 = Cob+C? (no thrust; the red 08:33 volume climax, closed above at 08:42)");
         CHECK(A.c.bar < 0, "NQ 08:39: the 08:33 climax was not yet closed above by 08:39 - no C");
     } else std::printf("(no NQ fixture %s - skipped)\n", fx);
+    // ---- (0.3.0) the gamma part
+    {
+        std::string why;
+        cimp::Params Q = cimp::parseFile("VERSION,1\nMARKET,ES\nMODE,always\nPROVEN,0\nPLAIN,1\nMIN_BARS,35\nWINDOW,2\nGAMMA,1\nGAMMA_W,6\nGAMMA_EM,100\n", "ES", why);
+        CHECK(why.empty() && Q.gamma && Q.gammaW == 6 && Q.gammaEM == 100 && Q.mode == cimp::MODE_ALWAYS, "market file with the GAMMA lines");
+        Q = cimp::parseFile("VERSION,1\nMARKET,ES\nGAMMA,0\nGAMMA_W,3\nGAMMA_EM,150\n", "ES", why);
+        CHECK(why.empty() && !Q.gamma && Q.gammaW == 3 && Q.gammaEM == 150, "GAMMA,0 / ranges");
+        const char* bad[] = { "GAMMA,2", "GAMMA_W,2", "GAMMA_W,11", "GAMMA_EM,24", "GAMMA_EM,151", "GAMMA_W,6.5" };
+        for (const char* b : bad) { Q = cimp::parseFile(std::string("VERSION,1\nMARKET,ES\n") + b + "\n", "ES", why); CHECK(why.compare(0, 9, "bad GAMMA") == 0 && Q.gamma && Q.gammaW == 6, b); }
+        // the approved label format (15:51 CT)
+        cimp::Params A; A.mode = cimp::MODE_ALWAYS;
+        CHECK(cimp::label(true, false, true, A, false, "CR") == "Cob+R+CR?" && cimp::label(true, false, true, A, true, "PS") == "Cob+RC+PS?"
+              && cimp::label(false, true, false, A, false, "HVL") == "Cob+V+HVL?" && cimp::label(false, false, false, A, false, "CR") == "Cob+CR?"
+              && cimp::label(false, false, false, A, false, "GM") == "Cob+GM?" && cimp::label(false, false, false, A, false, "") == "Cob", "labels Cob+R+CR? ... Cob");
+        cimp::Params Ab; CHECK(cimp::label(true, false, false, Ab, false, "GM") == "Cob+GM?", "MODE abs hides the impulse, the gamma part stays");
+        A.proven = true; CHECK(cimp::label(true, false, true, A) == "Cob+R" && cimp::label(true, false, true, A, false, "CR") == "Cob+R+CR?", "the gamma part always keeps ?");
+        A.gamma = false; CHECK(cimp::label(true, false, true, A, false, "CR") == "Cob+R", "GAMMA,0 hides the gamma name");
+        // the live ES book (2026-10-14 15:45 CT)
+        const std::string es = "# MenthorQ intraday book\r\nBOOK,MQ\r\nMARKET,ES\r\nKIND,intraday\r\nSESSION,2026-10-14\r\nSTRIKE,7700,-100,1,1,KING SLICE,7700,,0\r\n"
+            "STRIKE,7750,-33,3,0,,7750,,0\r\nSTRIKE,7835,-1,14,0,HVL0,7835,,54000\r\nSTRIKE,7860,7,11,0,CR0+GW0,7860,,0\r\nSTRIKE,8000,35,2,0,,8000,,600\r\n"
+            "KING,7700\r\nCW,8000\r\nPW,7700\r\nFLIP,7845\r\nEMH,7916.71\r\nEML,7794.29\r\nASOF,56700,2026-10-14\r\n";
+        const cimp::GBook b = cimp::parseBook(es, "ES");
+        CHECK(b.ok && b.asof == cimp::civil(2026, 10, 14) * 86400 + 56700 && b.hasCW && b.cw == 8000 && b.hasFlip && b.flip == 7845 && b.strikes.size() == 5, "the live ES book parses (CRLF)");
+        const std::vector<cimp::GLevel> L = cimp::levels(b, 7810, 4.8, 61.21);
+        CHECK(L.size() == 7 && L[0].name == "CR" && L[0].sign == 1 && L[1].name == "PS" && L[1].sign == -1 && L[2].name == "HVL" && L[3].name == "HVL0"
+              && L[4].name == "CR0" && L[5].name == "GW0" && L[6].name == "GM" && L[6].px == 7750, "CW -> CR, PW -> PS, FLIP -> HVL, CR0 + GW0, GM 7,750 (rank 3 within 1 EM)");
+        CHECK(!cimp::parseBook(es, "NQ").ok && cimp::parseBook("MARKET,ES\nSESSION,2026-10-14\nEMH,1\nEML,2\nASOF,1,2026-10-14\n", "ES").why == "EMH not above EML"
+              && cimp::parseBook("MARKET,ES\nSESSION,2026-10-14\nEMH,0x10\n", "ES").why == "bad EMH", "book rejections");
+        CHECK(cimp::fmtPx(7775, 0.25) == "7,775" && cimp::fmtPx(7775.25, 0.25) == "7,775.25" && cimp::fmtPx(1.16525, 0.00005) == "1.16525"
+              && cimp::fmtPx(4100.4, 0.1) == "4,100.4" && cimp::fmtPx(4.75, 0.25) == "4.75" && cimp::fmtPx(30650, 0.25) == "30,650", "prices at tick precision");
+        CHECK(cimp::sessDayOf(cimp::civil(2026, 10, 13) * 86400 + 17 * 3600 + 180) == cimp::civil(2026, 10, 14)
+              && cimp::sessDayOf(cimp::civil(2026, 10, 14) * 86400 + 16 * 3600) == cimp::civil(2026, 10, 14), "17:03 bar -> next session");
+        // a 0.3.0 record round-trips; 11 / 15-field lines parse with no gamma part
+        cimp::Rec r; r.trig = 5; r.side = 1; r.gCode = "GW0"; r.gKind = "target"; r.gPx = 7860; r.gSign = 1; r.gDist = 200; r.hedge = 'A'; r.gAsof = 99; r.gWhy = "";
+        cimp::Rec r2; CHECK(cimp::parseRec(cimp::recLine(r), r2) && cimp::recLine(r2) == cimp::recLine(r) && r2.gComputed(), "23-field record round-trip");
+        CHECK(cimp::parseRec("5|bull|1|2|0|0|0.00|0|0|0.00|0", r2) && !r2.gComputed() && r2.gCode.empty(), "11-field line: no gamma part");
+        CHECK(!cimp::parseRec(cimp::recLine(r) + "|x", r2), "24 fields rejected");
+    }
     std::printf("%d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }

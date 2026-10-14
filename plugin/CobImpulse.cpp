@@ -1,5 +1,12 @@
 /********************************************************************************
- *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.2.0, 2026-10-14)
+ *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.3.0, 2026-10-14)
+ *  0.3.0 (Rassul 15:47 / 15:51 CT "identify if a gamma level is driving the CoB", approved format Cob+<R/V/C>+<gamma name>?, e.g.
+ *        Cob+R+CR?, Cob+RC+PS?, Cob+V+HVL?, Cob+CR?, Cob+GM?): the GAMMA PART of the tag (CobImpulseLogic.h 0.3.0 = lra.cob_gamma.drivers).
+ *        At the CoB close it reads lsFlexLevels\GammaProfile-MQ-<MKT>.csv (no G when missing / another session / newer than the CoB /
+ *        > 35 min old in RTH, or the book's band is > 0.20 ADR from the chart's prior 15:00 CT close - 20-day ADR from the chart's own
+ *        bars), names ONE level (origin > cross > target, nearest, named before GM) and records it with the CoB (23-field record + a
+ *        .gamma.csv hover sidecar) - never repainted. Market file: GAMMA,1 show / 0 hide (always logged), GAMMA_W,6, GAMMA_EM,100.
+ *        The hover adds the gamma lines (every dealer line says "model"; the HVL regime text follows the hvl_cushion claim gate).
  *  0.2.0 (Rassul 13:31 CT): "+C" climax at the origin - bull: a RED biggest-volume (35+ bars) bar from the pivot-low bar -2 .. +2, then a
  *        close above its high by the CoB bar (bear mirror); tags in order R, V, C ("Cob+RVC?"); C fields added to the record (a 0.1.0
  *        record file is read and rewritten in the new layout, its CoBs keep their 0.1.0 tags).
@@ -37,6 +44,7 @@
 #include "CobImpulseLogic.h"
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "HostSlot.h"
+#include "ClaimGates.h"                 // (0.3.0) cgate::kShowHvlCushion - the HVL regime text in the gamma hover
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")      // HoverBoard.h's GetCursorPos / WindowFromPoint
 #endif
@@ -59,11 +67,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.2.0"          // keep equal to cimp::VERSION and the setVersion literal below
+#define CI_VERSION "0.3.0"          // keep equal to cimp::VERSION and the setVersion literal below
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
 static const COLOR C_BOX = 0x00FFFFFF, C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
 static const int BARS_MAX = 1500;
+static const long ALL_MAX = 20000;          // (0.3.0) bars read for the 20-day ADR / prior close / RTH range (his LTF charts hold 15 days)
 static const char* const NAME_BULL = "cob_bull_3m_1b";
 static const char* const NAME_BEAR = "cob_bear_3m_1b";
 static const char* const NAME_ABULL = "Abs_Bull";
@@ -144,6 +153,14 @@ static long long civilDays(int y, unsigned m, unsigned d) {
     return era * 146097 + (long long)doe - 719468;
 }
 
+// checklist #24: the chart's SYM_TICKINCR, made exact (it arrives as a float: 0.00005f = 4.99999987e-05)
+static double cleanTick(float raw) {
+    const double d = static_cast<double>(raw);
+    if (!std::isfinite(d) || d <= 0 || d >= 1000) return 0;
+    char b[32]; std::snprintf(b, sizeof(b), "%.6g", d);
+    const double t = std::strtod(b, NULL);
+    return std::isfinite(t) && t > 0 && t < 1000 ? t : 0;
+}
 static const char* const REC_FILE_HEADER = cimp::REC_HEADER;
 static const size_t REC_FILE_MAX = 512 * 1024, REC_LINES_MAX = 5000;
 
@@ -157,6 +174,9 @@ struct CIState {
     std::map<std::pair<long long, int>, cimp::Rec> recs;     // recorded CoBs (drawn)
     std::vector<std::pair<long long, cimp::Rec>> pending;    // (session, record) waiting to be published
     long long recFails = 0, decided = 0;
+    // (0.3.0) the gamma part: the book (cached on its file stamp), the hover sidecar, the chart's tick
+    cimp::GBook book; long long bookStamp = -2; std::string bookWhy = "not read yet"; double tick = 0;
+    std::map<std::pair<long long, int>, cimp::GCtx> ctx, pendCtx;
     // hover
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
@@ -178,6 +198,7 @@ private:
     long long sessionOf(long long barTime) { const long long cs = ctSec((RTDATE)barTime); return cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1; }
     void identify(CIState& S);
     void params(CIState& S, long long now);
+    const cimp::GBook* readBook(CIState& S);
     bool readFlags(const char* name, long count, std::vector<float>& out);
     void decide(CIState& S, long count);
     bool flush(CIState& S);
@@ -218,7 +239,7 @@ void CobImpulse::identify(CIState& S) {
     const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity) return;
     S.identity = id; S.symbol = sym; S.spb = spb; S.market = marketName(root.empty() ? sym : root);
-    S.recs.clear(); S.pending.clear(); S.lastCount = 0; S.decidedThrough = 0; S.session = -1; S.paramsStamp = -2; S.paramsCheckMs = -1;
+    S.recs.clear(); S.pending.clear(); S.ctx.clear(); S.pendCtx.clear(); S.bookStamp = -2; S.bookWhy = "not read yet"; S.lastCount = 0; S.decidedThrough = 0; S.session = -1; S.paramsStamp = -2; S.paramsCheckMs = -1;
     S.targets.clear(); S.hovKey.clear();
 }
 void CobImpulse::params(CIState& S, long long now) {
@@ -234,6 +255,22 @@ void CobImpulse::params(CIState& S, long long now) {
     long long st2 = -1; if (!statFile(p, st2) || st2 != st) return;                                                  // torn: next check
     S.P = cimp::parseFile(text, S.market, why);
     S.paramsWhy = why.empty() ? "file" : why + " (defaults)"; S.paramsStamp = st;
+}
+// (0.3.0) the MenthorQ book as it is NOW (read at the CoB close): bounded, torn-safe, cached on the file stamp; nullptr = none usable
+const cimp::GBook* CobImpulse::readBook(CIState& S) {
+    const std::string f = flexDir(); if (f.empty()) { S.bookWhy = "no lsFlexLevels folder"; return nullptr; }
+    const std::string p = f + "\\GammaProfile-MQ-" + S.market + ".csv";
+    long long st = -1;
+    if (!statFile(p, st)) { S.book = cimp::GBook(); S.bookStamp = -1; S.bookWhy = "missing"; return nullptr; }
+    if (st != S.bookStamp) {
+        std::string text;
+        if (!readSmall(p, 64 * 1024, text)) { S.bookWhy = "unreadable or over 64 KB"; return S.book.ok ? &S.book : nullptr; }
+        long long st2 = -1; if (!statFile(p, st2) || st2 != st) { S.bookWhy = "being written (kept the last good)"; return S.book.ok ? &S.book : nullptr; }
+        cimp::GBook b = cimp::parseBook(text, S.market);
+        if (b.ok) { S.book = b; S.bookWhy = "ok"; } else { S.book = cimp::GBook(); S.bookWhy = b.why; }
+        S.bookStamp = st;
+    }
+    return S.book.ok ? &S.book : nullptr;
 }
 // his RTL by name, aligned so element i is chart bar i (the array ends on the chart's last bar); false = not readable
 bool CobImpulse::readFlags(const char* name, long count, std::vector<float>& out) {
@@ -263,6 +300,9 @@ void CobImpulse::decide(CIState& S, long count) {
         cimp::Bar b; b.t = (long long)times[(int)i]; b.o = op[(int)i]; b.h = hi[(int)i]; b.l = lo[(int)i]; b.c = cl[(int)i];
         b.v = (double)vol[(int)i]; B.push_back(b);
     }
+    // (0.3.0) the gamma inputs come from the whole chart (closed bars): built once, only when a CoB is to be decided
+    bool gReady = false; long firstAll = 0; std::vector<cimp::Bar> A; std::vector<long long> ct; std::vector<cimp::DayAgg> D; const cimp::GBook* book = nullptr;
+    int rthFirst = 0, rthLast = 0; const bool hasRth = cimp::rthWindow(S.market, rthFirst, rthLast);
     for (long i = first + 2; i <= lastClosed; ++i) {
         const long long bt = (long long)times[(int)i];
         if (bt <= S.decidedThrough) continue;
@@ -276,16 +316,67 @@ void CobImpulse::decide(CIState& S, long count) {
             const int k = (int)(i - first);
             const int p = cimp::legPivot(B, k, side);
             bool abs = false;
-            if (p >= 0) { const std::vector<float>& A = side > 0 ? ab : as; const bool okA = side > 0 ? okAB : okAS; abs = okA && A[(size_t)(p + first)] >= 0.5f; }
+            if (p >= 0) { const std::vector<float>& Af = side > 0 ? ab : as; const bool okA = side > 0 ? okAB : okAS; abs = okA && Af[(size_t)(p + first)] >= 0.5f; }
             const cimp::Tag T = cimp::evaluate(B, k, side, S.P, abs);
+            // (0.3.0) the gamma part, decided now (the CoB bar has just closed) from the book as it is now
+            if (!gReady) {
+                gReady = true; firstAll = std::max(0L, count - 1 - ALL_MAX);
+                A.reserve((size_t)(lastClosed - firstAll + 1)); ct.reserve(A.capacity());
+                for (long a = firstAll; a <= lastClosed; ++a) {
+                    cimp::Bar b; b.t = (long long)times[(int)a]; b.o = op[(int)a]; b.h = hi[(int)a]; b.l = lo[(int)a]; b.c = cl[(int)a]; b.v = (double)vol[(int)a];
+                    A.push_back(b); ct.push_back(ctSec((RTDATE)b.t));
+                }
+                D = cimp::dailyTable(ct, A);
+                book = readBook(S);
+            }
+            cimp::GTag G;
+            const long ai = i - firstAll;
+            if (p < 0 || ai < 0 || ai >= (long)A.size() || ct[(size_t)ai] <= 0) { G.computed = true; G.why = "no pivot"; }
+            else {
+                cimp::GIn in; in.bull = side > 0; in.ext = side > 0 ? B[(size_t)p].l : B[(size_t)p].h; in.entry = B[(size_t)k].c; in.tick = S.tick;
+                in.trigCt = ct[(size_t)ai]; in.sessDay = cimp::sessDayOf(in.trigCt);
+                const int mod = cimp::minuteOf(in.trigCt);
+                in.inRth = hasRth && mod >= rthFirst && mod <= rthLast;
+                size_t di = D.size();
+                for (size_t q = 0; q < D.size(); ++q) if (D[q].day == in.sessDay) { di = q; break; }
+                if (di < D.size()) {
+                    in.adr = cimp::adrAt(D, di);
+                    if (di > 0 && D[di - 1].has15) { in.hasClose15 = true; in.close15 = D[di - 1].c15; }
+                }
+                if (hasRth) for (long a = ai; a >= 0 && cimp::sessDayOf(ct[(size_t)a]) == in.sessDay; --a) {
+                    const int m2 = cimp::minuteOf(ct[(size_t)a]);
+                    if (m2 < rthFirst || m2 > rthLast || !cimp::barOk(A[(size_t)a])) continue;
+                    in.rthHi = std::max(in.rthHi, A[(size_t)a].h); in.rthLo = std::min(in.rthLo, A[(size_t)a].l);
+                }
+                G = cimp::gammaTag(in, book, S.P);
+            }
             const long long sess = sessionOf(bt);
             if (sess < 0 || S.pending.size() >= REC_LINES_MAX) { ++S.recFails; continue; }
-            S.pending.push_back(std::make_pair(sess, cimp::toRec(T, B))); ++S.decided;
+            S.pending.push_back(std::make_pair(sess, cimp::toRec(T, B, &G))); ++S.decided;
+            if (G.computed && G.why.empty()) S.pendCtx[std::make_pair(bt, side)] = cimp::toCtx(G, bt, side);
         }
     }
     S.decidedThrough = (long long)times[(int)lastClosed];
     S.state = "ready";
     flush(S);
+}
+// (0.3.0) merge-publish the hover sidecar of one session: old lines kept (first wins), the new ones appended; false = not written
+static bool publishCtx(const std::string& path, const std::vector<cimp::GCtx>& add) {
+    std::string old; long long st = -1; std::vector<std::string> keep; std::set<std::pair<long long, int>> seen;
+    if (statFile(path, st)) {
+        if (!readSmall(path, REC_FILE_MAX, old)) return false;
+        std::istringstream in(old); std::string line; bool head = true;
+        while (std::getline(in, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (head) { head = false; if (line != cimp::GCTX_HEADER) return false; continue; }
+            cimp::GCtx c; if (cimp::parseCtx(line, c) && seen.insert(std::make_pair(c.trig, c.side)).second) keep.push_back(cimp::ctxLine(c));
+        }
+        if (head && !old.empty()) return false;
+    }
+    std::string text = std::string(cimp::GCTX_HEADER) + "\n";
+    for (const auto& k : keep) text += k + "\n";
+    for (const auto& c : add) if (seen.insert(std::make_pair(c.trig, c.side)).second) text += cimp::ctxLine(c) + "\n";
+    return text.size() <= REC_FILE_MAX && publishFile(path, text);
 }
 bool CobImpulse::flush(CIState& S) {
     if (S.pending.empty()) return true;
@@ -304,7 +395,7 @@ bool CobImpulse::flush(CIState& S) {
             std::istringstream in(old); std::string line; bool head = true, badHead = false;
             while (std::getline(in, line)) {
                 if (!line.empty() && line.back() == '\r') line.pop_back();
-                if (head) { head = false; if (line != REC_FILE_HEADER && line != cimp::REC_HEADER_010) { badHead = true; break; } continue; }
+                if (head) { head = false; if (!cimp::knownHeader(line)) { badHead = true; break; } continue; }
                 cimp::Rec r; if (cimp::parseRec(line, r) && seen.insert(std::make_pair(r.trig, r.side)).second) keep.push_back(cimp::recLine(r));
             }
             if (badHead || (head && !old.empty())) { ++S.recFails; continue; }   // never rewrite a file we do not understand
@@ -313,7 +404,18 @@ bool CobImpulse::flush(CIState& S) {
         for (const auto& k : keep) text += k + "\n";
         for (size_t j : g.second) { const cimp::Rec& r = S.pending[j].second; if (seen.insert(std::make_pair(r.trig, r.side)).second) text += cimp::recLine(r) + "\n"; }
         if (text.size() > REC_FILE_MAX || !publishFile(path, text)) { ++S.recFails; continue; }
-        for (size_t j : g.second) { const cimp::Rec& r = S.pending[j].second; if (!S.recs.count(std::make_pair(r.trig, r.side))) S.recs[std::make_pair(r.trig, r.side)] = r; done[j] = 1; }
+        // (0.3.0) the hover sidecar of the same session; a CoB is done only when both are written (a retry rewrites the same lines)
+        std::vector<cimp::GCtx> add;
+        for (size_t j : g.second) { const cimp::Rec& r = S.pending[j].second; const auto it = S.pendCtx.find(std::make_pair(r.trig, r.side)); if (it != S.pendCtx.end()) add.push_back(it->second); }
+        if (!add.empty() && !publishCtx(d + "\\" + stem(S) + "-" + std::to_string(g.first) + ".gamma.csv", add)) { ++S.recFails; continue; }
+        for (size_t j : g.second) {
+            const cimp::Rec& r = S.pending[j].second; const std::pair<long long, int> key(r.trig, r.side);
+            if (!S.recs.count(key)) {
+                S.recs[key] = r;
+                const auto it = S.pendCtx.find(key); if (it != S.pendCtx.end() && !S.ctx.count(key)) S.ctx[key] = it->second;
+            }
+            S.pendCtx.erase(key); done[j] = 1;
+        }
     }
     std::vector<std::pair<long long, cimp::Rec>> retry;
     for (size_t i = 0; i < S.pending.size(); ++i) if (!done[i]) retry.push_back(S.pending[i]);
@@ -330,21 +432,34 @@ void CobImpulse::load(CIState& S) {
         std::istringstream in(text); std::string line; bool head = true; size_t n = 0;
         while (std::getline(in, line) && ++n <= REC_LINES_MAX) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            if (head) { head = false; if (line != REC_FILE_HEADER && line != cimp::REC_HEADER_010) break; continue; }
+            if (head) { head = false; if (!cimp::knownHeader(line)) break; continue; }
             cimp::Rec r; if (cimp::parseRec(line, r)) S.recs.insert(std::make_pair(std::make_pair(r.trig, r.side), r));
+        }
+        // (0.3.0) the hover sidecar
+        const std::string cp = d + "\\" + stem(S) + "-" + std::to_string(k) + ".gamma.csv";
+        if (!statFile(cp, st)) continue;
+        if (!readSmall(cp, REC_FILE_MAX, text)) { ++S.recFails; continue; }
+        std::istringstream ci(text); head = true; n = 0;
+        while (std::getline(ci, line) && ++n <= REC_LINES_MAX) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (head) { head = false; if (line != cimp::GCTX_HEADER) break; continue; }
+            cimp::GCtx c; if (cimp::parseCtx(line, c)) S.ctx.insert(std::make_pair(std::make_pair(c.trig, c.side), c));
         }
     }
 }
 void CobImpulse::status(CIState& S, long long now) {
     if (S.lastStatusMs >= 0 && now >= S.lastStatusMs && now - S.lastStatusMs < 1000) return;
     S.lastStatusMs = now;
-    int tagged = 0, shownN = 0;
-    for (const auto& kv : S.recs) { if (kv.second.r() || kv.second.v() || kv.second.c()) { ++tagged; if (cimp::shown(true, kv.second.abs, S.P.mode)) ++shownN; } }
+    int tagged = 0, shownN = 0, gTagged = 0;
+    for (const auto& kv : S.recs) { if (kv.second.r() || kv.second.v() || kv.second.c()) { ++tagged; if (cimp::shown(true, kv.second.abs, S.P.mode)) ++shownN; }
+                                    if (!kv.second.gCode.empty()) ++gTagged; }
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << CI_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nFLAGS," << S.flags << "\nPARAMS,mode " << cimp::modeName(S.P.mode) << ",proven " << (S.P.proven ? 1 : 0) << ",plain " << (S.P.plain ? 1 : 0)
-      << ",min_bars " << S.P.minBars << ",window " << S.P.window << "," << S.paramsWhy
-      << "\nRECORDS," << S.recs.size() << ",tagged " << tagged << ",tag shown " << shownN << ",pending " << S.pending.size() << ",fails " << S.recFails
+      << ",min_bars " << S.P.minBars << ",window " << S.P.window << ",gamma " << (S.P.gamma ? 1 : 0) << ",gamma_w " << S.P.gammaW
+      << ",gamma_em " << S.P.gammaEM << "," << S.paramsWhy
+      << "\nBOOK,GammaProfile-MQ-" << S.market << ".csv," << S.bookWhy << ",asof " << (S.book.ok ? S.book.asof : 0) << ",tick " << S.tick
+      << "\nRECORDS," << S.recs.size() << ",tagged " << tagged << ",tag shown " << shownN << ",gamma " << gTagged << ",pending " << S.pending.size() << ",fails " << S.recFails
       << "\nDECIDED_THROUGH," << S.decidedThrough << "\n";
     const std::string text = o.str(); if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
@@ -357,6 +472,7 @@ void CobImpulse::pump(bool mayCalc) {
     struct Unbusy { CIState* s; ~Unbusy() { s->busy = false; } } unbusy = { P };
     try {
         identify(S);
+        S.tick = cleanTick(getProperty(SYM_TICKINCR));          // (0.3.0) SYM_TICKINCR is the only tick source
         const long long now = steadyMs();
         const long long ct = ctSec(currentDate());
         if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; load(S); } }
@@ -388,12 +504,12 @@ void CobImpulse::render(CIState& S) {
     FONT f; f.id = HELVETICA; f.size = 10; f.style = BOLD; setFont(f);
     for (const auto& kv : S.recs) {
         const cimp::Rec& r = kv.second;
-        const bool tag = cimp::shown(r.r() || r.v() || r.c(), r.abs, S.P.mode);
-        if (!tag && !S.P.plain) continue;
+        const bool tag = cimp::shown(r.r() || r.v() || r.c(), r.abs, S.P.mode);   // the impulse part is shown (its bar gets the box)
+        const std::string text = cimp::label(r.r(), r.v(), r.abs, S.P, r.c(), r.gCode);   // (0.3.0) + the gamma name
+        if (text == "Cob" && !S.P.plain) continue;
         const int ti = indexOf(times, count, r.trig); if (ti < 0) continue;
         int ai = r.legEnd > 0 ? indexOf(times, count, r.legEnd) : -1; if (ai < 0) ai = ti > 0 ? ti - 1 : ti;
         PNT x0; x0.set(ai, 0.0f, kBarCenter); if (x0.h < pane.left - 40 || x0.h > pane.right + 40) continue;
-        const std::string text = cimp::label(r.r(), r.v(), r.abs, S.P, r.c());
         const float ext = r.side > 0 ? hi[ai] : lo[ai];
         PNT pe; pe.set(ai, ext, kBarCenter);
         const int w = getTextWidth(text.c_str(), -1) + 4, h = 14;
@@ -423,6 +539,8 @@ void CobImpulse::render(CIState& S) {
     cimp::HoverIn in; in.side = T->rec.side; in.r = T->rec.r(); in.v = T->rec.v(); in.abs = T->rec.abs;
     in.rn = T->rec.rn; in.vn = T->rec.vn; in.rx = T->rec.rx; in.vx = T->rec.vx; in.rTime = clockOf(T->rec.rT); in.vTime = clockOf(T->rec.vT);
     in.c = T->rec.c(); in.cn = T->rec.cn; in.cx = T->rec.cx; in.cTime = clockOf(T->rec.cT); in.cConfTime = clockOf(T->rec.cConf);
+    { const auto it = S.ctx.find(std::make_pair(T->rec.trig, T->rec.side)); in.g = cimp::fromRec(T->rec, it != S.ctx.end() ? &it->second : nullptr); }
+    in.tick = S.tick; in.showRegime = cgate::kShowHvlCushion;       // (0.3.0) the gamma lines; the HVL regime text follows the claim gate
     std::vector<std::string> L = cimp::hover(in, S.P);
     L.insert(L.begin() + 1, std::string("CoB ") + (T->rec.side > 0 ? "long" : "short") + " at " + clockOf(T->rec.trig) + " (leg from the " + clockOf(T->rec.pivot) + " bar).");
     FONT hf; hf.id = HELVETICA; hf.size = 10; hf.style = PLAIN; setFont(hf);
@@ -454,7 +572,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobImpulse* p = new CobImpulse();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | CALC_LAST);   // CALC_LAST: it reads his RTL results
-    p->setDescription("LRA Cob Impulse v0.2.0: did the CoB leg start with force? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob or Cob+ R / V / C (e.g. Cob+RV?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). A thin white box marks the impulse bar; hover the label or box for the time, bars and ratio. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs (only with Abs on the pivot, default) / always; PROVEN 1 drops the ?. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.2.0");   // CI_VERSION
+    p->setDescription("LRA Cob Impulse v0.3.0: did the CoB leg start with force, and is a gamma level behind it? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
+    p->setVersion("0.3.0");   // CI_VERSION
     return p;
 }

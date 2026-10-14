@@ -12,6 +12,7 @@ typedef unsigned long COLOR;
 typedef int RTX_RESULT;
 typedef bool RTBOOL;
 enum { RTX_OK = 0, RTX_FAIL = -1 };
+enum { SYM_TICKINCR = 171 };
 enum { POST_DRAWING = 1, OVERLAY = 2, NO_UI = 4, INSTRUMENT_SCALE = 8, TRACK_MOUSE = (1 << 27), CALC_LAST = (1 << 28), FRONT_DRAWING = (1 << 29) };
 enum iARRAY { barDateTime, barVolume };
 enum fARRAY { barOpen, barHigh, barLow, barClose, fEmptyArray };
@@ -27,7 +28,7 @@ struct Host {
     std::map<std::string, bool> customFail;
     int customCalls = 0, invalidates = 0;
     int paneTop = 0, paneBottom = 800, paneLeft = 0, paneRight = 3200; float priceBase = 30000; float pxPerPoint = 2;
-    COLOR ink = 0; std::vector<Draw> draws;
+    COLOR ink = 0; std::vector<Draw> draws; float tick = 0.25f; int barOffset = 0;   // x of bar i = 20 + (i - barOffset) x 10
 };
 extern Host* current;
 }
@@ -42,7 +43,7 @@ public:
     struct PNT {
         short h = 0, v = 0;
         RTX_RESULT set(int bar, float price, BAR_POSITION pos = kBarLeft) {
-            h = (short)(20 + bar * 10 + (pos == kBarCenter ? 4 : pos == kBarRight ? 8 : 0));
+            h = (short)(20 + (bar - mock::current->barOffset) * 10 + (pos == kBarCenter ? 4 : pos == kBarRight ? 8 : 0));
             v = (short)(mock::current->paneBottom - (price - mock::current->priceBase) * mock::current->pxPerPoint);
             return RTX_OK;
         }
@@ -89,6 +90,7 @@ public:
     const char* getRootSymbol(char* b = nullptr) { if (b) { std::strcpy(b, mock::current->root.c_str()); return b; } return mock::current->root.c_str(); }
     const char* getSymbol() { return mock::current->symbol.c_str(); }
     int getSecondsPerBar() { return mock::current->seconds; }
+    float getProperty(int, const char* = nullptr) { return mock::current->tick; }
     RTDATE currentDate() { return mock::current->now; }
     struct tm* getLocaltime(RTDATE stamp, struct tm* t) { time_t v = (time_t)stamp; return gmtime_r(&v, t); }   // stamps are Central wall time in the tests
     void setParameterVersion(unsigned) {}
