@@ -1,6 +1,16 @@
 /********************************************************************************
  *  DealerProfile.cpp  --  Investor/RT RTX extension  lsDealerProfile  (v1.0, 2026-09-29)
  *
+ *  2.9.0 (2026-10-13, Rassul approved 18:05 - dealer-profile-mockup.png): each node's LENGTH = MenthorQ's ABSOLUTE GEX at the
+ *     strike (the wall's size), its colour + a "W" / "F" letter by the NET sign (cyan W = wall, net long gamma: holds / pins; lime
+ *     F = fuel, net short gamma: accelerant); big absolute with near-zero net = a thin muted node. The 3 biggest strikes carry
+ *     their % change since the session's first grid ("+7%"). The dealer hedge on the way to a strike is a coloured number only
+ *     (red "-599" = dealers SELL, green "599" = BUY) on the strikes >= 35% of the biggest wall. No GEX value on the face - it is
+ *     in the hover. HVL regime tags (+GAMMA fades above / -GAMMA runs below). Header "Dealer Profile v2.9.0" + the grid's time;
+ *     "STALE 10h - 4:55 AM" and faded nodes when the grid is over 20 min old while MenthorQ updates. MenthorQ levels: "CR 0D /
+ *     GW 0D" = one thin "CR0" line; G2-G10 hidden unless on a key level. Labels stay inside the Profile's published REACH (never
+ *     over the Delta / Liquidity Profile columns); every text 10 pt+. Hovers on nodes, HVL tags and the header: the question,
+ *     how the number answers it, how to use it, an example. Needs file 2.4 (NODEX / BOOKASOF rows); older files draw as 2.8.7.
  *  2.7.4 (2026-10-12, review): every level badge reads "<price> <NAME>  <odds>" (key levels now carry their price, like the
  *     MenthorQ badges), 10 pt with the name in bold; MenthorQ levels green = PS (support), red = CR (resistance), yellow = HVL,
  *     cyan = other gamma levels; badges never cover a price bar, another badge or a level line, nor the Liquidity / Delta /
@@ -36,6 +46,15 @@
 #include <windows.h>     // BEFORE irtsdk.h: the SDK's RTBOOL clashes with minwindef.h's BOOL the other way round (MSVC C2371)
 #endif
 #include "irtsdk.h"
+#if defined(DP_TEST_CURSOR)
+extern void* dp_test_cursor_wnd;
+static void* dpCursorWindow() { return dp_test_cursor_wnd; }
+#elif defined(_WIN32)
+#pragma comment(lib, "user32.lib")   // (2.9.0) GetCursorPos / WindowFromPoint: the hover clears when the mouse leaves the chart
+static void* dpCursorWindow() { POINT p; if (!GetCursorPos(&p)) return NULL; return (void*)WindowFromPoint(p); }
+#else
+static void* dpCursorWindow() { return NULL; }
+#endif
 #ifdef far
 #undef far
 #endif
@@ -54,13 +73,16 @@
 #include <cstring>
 #include <ctime>
 #include <new>
+#include <algorithm>
 
-static const char* DP_VERSION = "2.8.7";   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.9.0";   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
 //   // 2.0.1 (2026-10-02 19:12): the how-to text in the settings is gone   // 2.0.0 (2026-10-02, Rassul: "there is no way it is supposed to look like this"): one bar per strike = MenthorQ's net GEX ($ per 1-pt move), red short / green long, today's 0DTE part darker, the value on the bar - as MenthorQ draws it; the old synthetic gamma + running BUY/SELL nodes only for files without net GEX   // 1.5.0: option D pills - the % pill takes its node's colour, filled by size (HEAVY solid / BIG half / MODERATE faint / LIGHT outline), as the Reader's size chips   // 1.4.0: KEY / TGT / MAG tags, REACH in the status (mockup v26)   // 1.3.11: settings guide = (open) lists, no checkbox rows   // 1.3.10: whole-book banner off by default (Rassul 2026-09-30: "i dont think i need the top part")
 //   // 1.3.4: cyan wall / lime fuel. 1.3.5: "4220  10  (9 to 17)", no whisker; delta keeps BUY / SELL
+static const COLOR C_WALL2 = 0x0022D3EE;   // (2.9.0, approved mockup) WALL = cyan
+static const COLOR C_FUEL2 = 0x00A3E635;   // (2.9.0, approved mockup) FUEL = lime
 static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow and purple like Skylit") long gamma = YELLOW //   // long gamma: CYAN (1.3.4, Rassul 2026-09-30: "Cyan (wall) and Lime (fuel)")
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
@@ -125,7 +147,8 @@ static void dpNormalizeSettings(Settings& s)
 {
     if (s.market < 0 || s.market > 7) s.market = 0;
     if (s.width < 30 || s.width > 900) s.width = 50;
-    if (s.font < 6 || s.font > 24) s.font = 10;
+    if (s.font < 10) s.font = 10;               // (2.9.0) every text 10 pt or larger
+    if (s.font > 24) s.font = 24;
     if (s.clock < -720 || s.clock > 720) s.clock = 0;
     if (s.inds.size() > 160) s.inds.resize(160);
 }
@@ -155,8 +178,22 @@ public:
     virtual int done(void);
     virtual int destroy(void);
     virtual int draw(void);
+    virtual int mouse(RTX_EVENT* e);
 
     Settings cfg;
+    // (2.9.0) the file 2.4 rows the Profile alone reads, the hover state and this draw's hover targets
+    std::vector<dpaudit::NodeX> nx; dpaudit::BookAsOf bookAt;
+    struct HoverT { short l = 0, t = 0, r = 0, b = 0; std::string key; dpaudit::Hover h; };
+    std::vector<HoverT> hovT;                       // this draw's targets (kept in the host state for mouse())
+    bool msHas = false; long msBar = -1; float msPrice = 0; short msH = 0, msV = 0; std::string hovKey;
+    std::vector<void*> hovWnds;
+    bool hvlFound = false; float hvlChartPx = 0;    // this draw's HVL (from the MenthorQ levels) for the regime tags
+    std::vector<double> keyPx;                      // this draw's key-level prices (chart scale): G2-G10 show only on one
+    bool hitTarget(const HoverT& T) ;
+    const HoverT* hovered();
+    void drawHover(const HoverT& T, const Settings& S);
+    void header(const Settings& S, bool stale, double age, short anchor, int reach);
+    void renderNodeX(const Settings& S, const RCT& pane, short anchor, int hs, bool stale);
     // (2.7.4) this draw's level badges: every level LINE is drawn first, then the badges (MenthorQ first, then key levels), so no
     // line crosses a badge; each badge keeps clear of the price bars, the other badges and the profile columns
     struct LSeg { std::string s; bool bold; COLOR c; };
@@ -275,6 +312,9 @@ public:
         std::map<std::string, KLC> klc;   // (2.7.2, RA1009 regression audit) the native key-level cache is THIS chart's (was on the shared DLL object)
         std::vector<dpaudit::LiqZ> liqZ; long long liqStamp = -2; time_t liqChecked = 0; std::map<long long, bool> liqShown;   // (2.8.0)
         std::map<long long, LiqMem> liqMem; time_t liqGoodAt = 0; std::map<std::string, short> lblX; int liqColRight = 0;     // (2.8.1)
+        std::vector<dpaudit::NodeX> nx; dpaudit::BookAsOf bookAt;                                                          // (2.9.0)
+        std::vector<HoverT> hovT; bool msHas = false; long msBar = -1; float msPrice = 0; short msH = 0, msV = 0; std::string hovKey;
+        std::vector<void*> hovWnds;
     };
     bool loadHostState();
     HostSlot<State> slot_;
@@ -296,6 +336,8 @@ void DealerProfile::clearWorkingState()
     mql.clear(); mqlStamp = -2; mqlChecked = 0; tps.clear(); tpStamp.clear(); tpChecked.clear(); tpAt.clear();
     lvs.clear(); lvStamp.clear(); lvChecked.clear(); lvAt.clear(); lvStale.clear(); klc.clear();
     liqZ.clear(); liqStamp = -2; liqChecked = 0; liqShown.clear(); liqMem.clear(); liqGoodAt = 0; lblX.clear(); liqColRight = 0;
+    nx.clear(); bookAt = dpaudit::BookAsOf(); hovT.clear(); msHas = false; msBar = -1; msPrice = 0; msH = msV = 0; hovKey.clear(); hovWnds.clear();
+    hvlFound = false; hvlChartPx = 0; keyPx.clear();
 }
 
 bool DealerProfile::loadHostState()
@@ -309,6 +351,8 @@ bool DealerProfile::loadHostState()
     lvAt = s->lvAt; lvStale = s->lvStale; klc = s->klc;
     liqZ = s->liqZ; liqStamp = s->liqStamp; liqChecked = s->liqChecked; liqShown = s->liqShown;
     liqMem = s->liqMem; liqGoodAt = s->liqGoodAt; lblX = s->lblX; liqColRight = s->liqColRight;
+    nx = s->nx; bookAt = s->bookAt; hovT = s->hovT; msHas = s->msHas; msBar = s->msBar; msPrice = s->msPrice; msH = s->msH; msV = s->msV;
+    hovKey = s->hovKey; hovWnds = s->hovWnds;
     return true;
 }
 
@@ -323,6 +367,8 @@ void DealerProfile::saveHostState()
     s->lvAt = lvAt; s->lvStale = lvStale; s->klc = klc;
     s->liqZ = liqZ; s->liqStamp = liqStamp; s->liqChecked = liqChecked; s->liqShown = liqShown;
     s->liqMem = liqMem; s->liqGoodAt = liqGoodAt; s->lblX = lblX; s->liqColRight = liqColRight;
+    s->nx = nx; s->bookAt = bookAt; s->hovT = hovT; s->msHas = msHas; s->msBar = msBar; s->msPrice = msPrice; s->msH = msH; s->msV = msV;
+    s->hovKey = hovKey; s->hovWnds = hovWnds;
 }
 
 int DealerProfile::done(void)
@@ -436,7 +482,7 @@ void DealerProfile::readSettings(Settings& S)
     S.width = getIntegerValue(PX.width); if (S.width < 30) S.width = 50; if (S.width > 900) S.width = 900;   // (1.0.1) a first dialog showed 9: anything under 40 px is not a real width
     S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = false;
     S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = false;
-    S.font = getIntegerValue(PX.font); if (S.font < 6) S.font = 10; if (S.font > 24) S.font = 24;
+    S.font = getIntegerValue(PX.font); if (S.font < 10) S.font = 10; if (S.font > 24) S.font = 24;
     S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
     char ib[200]; memset(ib, 0, sizeof(ib));
     if (getParameterText(PX.inds, ib, sizeof(ib) - 1) == RTX_OK && ib[0] && ib[0] != ' ') S.inds = ib;   // blank (an older saved layout) = the default; "none" = off
@@ -449,19 +495,25 @@ void DealerProfile::load()
     const char* rs = getRootSymbol(buf);
     root = rs ? rs : "";
     mkt = dl::marketFor(cfg.market, root);
-    if (mkt.empty()) { D = dl::Data(); loadedPath.clear(); return; }
-    const char* up = getenv("USERPROFILE"); if (!up) { D = dl::Data(); return; }
+    if (mkt.empty()) { D = dl::Data(); nx.clear(); bookAt = dpaudit::BookAsOf(); loadedPath.clear(); return; }
+    const char* up = getenv("USERPROFILE"); if (!up) { D = dl::Data(); nx.clear(); bookAt = dpaudit::BookAsOf(); return; }
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\LRA-Dealer-" + mkt + ".csv";
     long long st = dl::fileStamp(path);
     if (st == loadedStamp && path == loadedPath) return;                   // unchanged, including a known-missing file: no repeat disk open
-    if (st < 0) { D = dl::Data(); loadedStamp = st; loadedPath = path; return; } // cache a missing file rather than stat/opening each repaint
+    if (st < 0) { D = dl::Data(); nx.clear(); bookAt = dpaudit::BookAsOf(); loadedStamp = st; loadedPath = path; return; } // cache a missing file rather than stat/opening each repaint
     std::vector<std::string> lines;
     if (dpaudit::readBoundedLines(path, lines) != dpaudit::READ_OK || dl::fileStamp(path) != st) return;
     dl::Data parsed;
-    for (size_t i = 0; i < lines.size(); ++i) if (!dl::parseLine(parsed, lines[i]) && dpKnownDealerRow(lines[i])) return;   // (2.8.7) every row parsed; a malformed known row rejects the snapshot
+    std::vector<dpaudit::NodeX> px_; dpaudit::BookAsOf ba_;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const std::string& ln = lines[i];
+        if (ln.compare(0, 6, "NODEX|") == 0) { dpaudit::NodeX x; if (!dpaudit::parseNodeX(ln, x)) return; px_.push_back(x); continue; }    // (2.9.0) file 2.4
+        if (ln.compare(0, 9, "BOOKASOF|") == 0) { if (!dpaudit::parseBookAsOf(ln, ba_)) return; continue; }                                // (2.9.0) the grid's time
+        if (!dl::parseLine(parsed, ln) && dpKnownDealerRow(ln)) return;   // (2.8.7) every row parsed; a malformed known row rejects the snapshot
+    }
     if (parsed.ver.empty()) return;                              // declared file grammar starts with VERSION; do not install a torn prefix
     dpSanitizeDealerData(parsed);
-    D = parsed;
+    D = parsed; nx.swap(px_); bookAt = ba_;
     loadedStamp = st; loadedPath = path;
 }
 
@@ -565,6 +617,17 @@ void DealerProfile::render(const Settings& S)
     int nodeH = (int)(hs * 0.42f); if (nodeH < 3) nodeH = 3;
     int gap = hs >= 12 ? 1 : 0;
 
+    if (!nx.empty() && dl::anyUsd(D)) {   // ---- 2.9.0: absolute GEX per strike, W / F by the net sign (file 2.4)
+        bool stale = false; double age = -1;
+        {
+            RTDATE now = currentDate(); struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(now, &t);
+            age = dpaudit::ageMinutes(bookAt, t, S.clock);
+            stale = dpaudit::bookStale(age, dpaudit::mqUpdateHours(t.tm_wday, t.tm_hour * 60 + t.tm_min));
+        }
+        renderNodeX(S, pane, anchor, hs, stale);
+        header(S, stale, age, anchor, W + 100);
+        return;
+    }
     if (dl::anyUsd(D)) {   // ---- 2.0.0: net GEX per strike (MenthorQ's numbers)
         std::vector<dl::Node> vis;
         for (size_t i = 0; i < D.nodes.size(); i++) { short yy = yOf(D.nodes[i].k + off); if (yy >= pane.top && yy <= pane.bottom) vis.push_back(D.nodes[i]); }
@@ -662,6 +725,201 @@ void DealerProfile::render(const Settings& S)
         textLJ((short)(bx + 2), (short)(ly + lh), "DELTA node (upper): futures dealers MUST trade on the way to this strike (green buy / red sell) - the push into your level, and the stock they unwind after the turn (fuel for the reversal).", C_INK, S.font - 1, false);
         textLJ((short)(bx + 2), (short)(ly + 2 * lh), "Use both: the delta node says if there is flow to push price into the level; the gamma node says if the level stops it.  Whisker = earlier/later arrival, dashed = MenthorQ's number now.", C_MUTED, S.font - 1, false);
     }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------
+// (2.9.0) the Profile from file 2.4: one bar per strike, LENGTH = absolute GEX, colour / letter by the net sign (NODE usd)
+// ------------------------------------------------------------------------------------------------------------------------
+void DealerProfile::renderNodeX(const Settings& S, const RCT& pane, short anchor, int hs, bool stale)
+{
+    const int W = S.width, reach = W + 100;                         // REACH (status file): the Delta Profile sits left of it
+    const int leftLimit = anchor - reach + 2;
+    const int fz = S.font < 10 ? 10 : S.font;
+    std::map<long long, float> netBy;                               // strike (1/10000 pt) -> net GEX from the NODE row
+    for (size_t i = 0; i < D.nodes.size(); i++) if (D.nodes[i].hasUsd) netBy[std::llround((double)D.nodes[i].k * 10000.0)] = D.nodes[i].usd;
+    std::map<long long, bool> farBy;
+    for (size_t i = 0; i < D.nodes.size(); i++) farBy[std::llround((double)D.nodes[i].k * 10000.0)] = D.nodes[i].far;
+    std::vector<size_t> vis;
+    for (size_t i = 0; i < nx.size(); i++) { short yy = yOf(nx[i].k + off); if (yy >= pane.top && yy <= pane.bottom) vis.push_back(i); }
+    double amax = 0;
+    for (size_t j = 0; j < vis.size(); j++) if (nx[vis[j]].absG > amax) amax = nx[vis[j]].absG;
+    if (amax <= 0) for (size_t i = 0; i < nx.size(); i++) if (nx[i].absG > amax) amax = nx[i].absG;
+    if (amax <= 0) amax = 1;
+    const std::vector<size_t> top = dpaudit::top3(nx, vis);
+    int barH = hs - 1; if (barH > fz + 6) barH = fz + 6; if (barH < 3) barH = 3;
+    const bool ctxOnly = (mkt == "CL" || mkt == "NG");               // (2.0.2) options data context only in these markets: dimmed
+    const float stF = stale ? 0.40f : 0.0f;                          // (2.9.0) a stale grid: every node fades
+    short lastLabY = -10000;
+    for (size_t i = 0; i < nx.size(); i++) {
+        const dpaudit::NodeX& X = nx[i];
+        const long long key = std::llround((double)X.k * 10000.0);
+        const float net = netBy.count(key) ? netBy[key] : 0.0f;
+        const short y = yOf(X.k + off);
+        if (y < pane.top - hs || y > pane.bottom + hs) continue;
+        const bool muted = dpaudit::mutedNode(X.absG, net);
+        float ft = (S.fadefar && farBy.count(key) && farBy[key]) ? 0.55f : 0.0f;
+        if (ctxOnly && ft < 0.35f) ft = 0.35f;
+        if (muted) ft = ft + (1.0f - ft) * 0.45f;
+        ft = stF + (1.0f - stF) * ft;
+        const COLOR base = net >= 0 ? C_WALL2 : C_FUEL2;
+        const int L = dl::barLen((float)X.absG, (float)amax, W);
+        const int bh = muted ? std::max(3, barH / 2) : barH;
+        const short t = (short)(y - bh / 2), b = (short)(t + bh);
+        if (L > 0) box((short)(anchor - L), t, anchor, b, fade(base, ft));
+        if (y < pane.top || y > pane.bottom) continue;
+        HoverT H; H.l = (short)leftLimit; H.r = anchor; H.t = (short)(y - std::max(bh, fz + 4) / 2); H.b = (short)(H.t + std::max(bh, fz + 4));
+        H.key = "N|" + std::to_string(key); H.h = dpaudit::nodeHover(mkt, X, net, amax, D.px + off);
+        hovT.push_back(H);
+        if (!S.labels) continue;
+        // one label row per text height: a bigger node within it keeps the labels (as 2.0.2)
+        bool bigger = false;
+        for (size_t q = 0; q < nx.size() && !bigger; q++) {
+            if (q == i) continue;
+            short yq = yOf(nx[q].k + off);
+            if (std::abs((int)yq - (int)y) < fz + 3 && nx[q].absG > X.absG) bigger = true;
+        }
+        if (bigger || std::abs((int)y - (int)lastLabY) < fz + 3) continue;
+        lastLabY = y;
+        // the pieces, right to left from the bar's left end: W / F, the hedge number, the % (top 3), a KEY / TGT tag
+        const std::string wf(1, dpaudit::wfLetter(net));
+        const bool showD = dpaudit::showDelta(X, amax);
+        const std::string dn = showD ? dpaudit::deltaNum(X.d) : std::string();
+        bool inTop = false; for (size_t j = 0; j < top.size(); j++) if (top[j] == i) inTop = true;
+        const std::string pc = (inTop && X.hasChg) ? dpaudit::pctChg(X.chg) : std::string();
+        std::string tag; char tagCol = 'W';
+        { float step = 0; for (size_t q = 1; q < nx.size(); q++) { float d = nx[q].k - nx[q - 1].k; if (d > 0 && (step == 0 || d < step)) step = d; }
+          if (step <= 0) step = D.em * 0.1f;
+          for (size_t j = 0; j < D.tags.size(); j++) if (std::fabs(D.tags[j].k - X.k) <= step * 0.5f) { tag = D.tags[j].text; tagCol = D.tags[j].col; break; } }
+        std::vector<dpaudit::Piece> P(4);
+        P[0].w = textW(wf.c_str(), fz, true);
+        P[1].w = dn.empty() ? 0 : textW(dn.c_str(), fz, true);
+        P[2].w = pc.empty() ? 0 : textW(pc.c_str(), fz, true) + 10;
+        P[3].w = tag.empty() ? 0 : textW(tag.c_str(), fz, true) + 8;
+        dpaudit::placePieces(P, anchor - L - 4, leftLimit, 5);
+        const float tf = stF * 0.5f;
+        {   // a dark backdrop under the label pieces, so a level line through the row never cuts the text (mockup)
+            int l0 = 1 << 30; for (size_t j = 0; j < P.size(); j++) if (P[j].shown && P[j].x < l0) l0 = P[j].x;
+            if (l0 < (1 << 30)) box((short)(l0 - 2), (short)(y - (fz + 6) / 2), (short)(anchor - L - 1), (short)(y + (fz + 6) / 2), C_DARK);
+        }
+        if (P[0].shown) textLJ((short)P[0].x, y, wf.c_str(), fade(base, muted ? 0.45f : tf), fz, true);
+        if (P[1].shown) textLJ((short)P[1].x, y, dn.c_str(), fade(X.d > 0 ? C_BUY : C_SELL, tf), fz, true);
+        if (P[2].shown) {
+            const short h = (short)(fz + 6), t0 = (short)(y - h / 2);
+            setPen(fade(C_MUTED, 0.3f), 1, P_SOLID); CBRUSH br(fade(C_INK, 0.80f), PAT_SOLID); br.set();
+            RCT rc; rc.set((short)P[2].x, t0, (short)(P[2].x + P[2].w), (short)(t0 + h)); rc.drawRounded(6, 6);
+            textLJ((short)(P[2].x + 5), y, pc.c_str(), C_INK, fz, true);
+        }
+        if (P[3].shown) {
+            COLOR bg = tagCol == 'A' ? 0x00C084FC : tagCol == 'B' ? C_WALL2 : tagCol == 'G' ? C_BUY : tagCol == 'C' ? 0x0022D3EE : C_INK;
+            const short ch = (short)(fz + 5);
+            box((short)P[3].x, (short)(y - ch / 2), (short)(P[3].x + P[3].w), (short)(y + ch / 2), bg);
+            textLJ((short)(P[3].x + 4), y, tag.c_str(), C_DARK, fz, true);
+        }
+    }
+    // (2.9.0) HVL = the regime line: two short tags right of the last bar, never into the profile columns
+    if (hvlFound) {
+        const short yh = yOf(hvlChartPx);
+        if (yh > pane.top + fz && yh < pane.bottom - fz) {
+            PNT lb; lb.set(lastBar, hvlChartPx); short x = (short)(lb.h + 10);
+            const char* a = "+GAMMA above: fades"; const char* bl = "-GAMMA below: runs";
+            const int w = std::max(textW(a, fz, true), textW(bl, fz, true));
+            int maxR = dl::clearRightOf(anchor + 2) - 6; if (maxR > leftLimit - 6) maxR = leftLimit - 6;
+            if (x + w > maxR) x = (short)(maxR - w);
+            if (x > pane.left + 4) {
+                textLJ(x, (short)(yh - fz + 1), a, C_WALL2, fz, true);
+                textLJ(x, (short)(yh + fz - 1), bl, C_FUEL2, fz, true);
+                HoverT H; H.l = x; H.r = (short)(x + w); H.t = (short)(yh - 2 * fz); H.b = (short)(yh + 2 * fz); H.key = "HVL";
+                H.h = dpaudit::hvlHover(mkt, (double)hvlChartPx - off); hovT.push_back(H);
+            }
+        }
+    }
+}
+
+// (2.9.0) the header over the Profile column: "Dealer Profile v2.9.0", then the grid's time / STALE, right-aligned inside REACH
+void DealerProfile::header(const Settings& S, bool stale, double age, short anchor, int reach)
+{
+    RCT pane; pane.getPaneRect(false);
+    const int fz = S.font < 10 ? 10 : S.font;
+    std::string h1 = std::string("Dealer Profile v") + DP_VERSION;
+    if (textW(h1.c_str(), fz, true) > reach - 6) h1 = std::string("DP v") + DP_VERSION;
+    const std::string h2 = dpaudit::bookLine(bookAt, age, stale, D.srcBook, mkt);
+    const short y1 = (short)(pane.top + 4 + (fz + 6) / 2), y2 = (short)(y1 + fz + 8);
+    int w1 = textW(h1.c_str(), fz, true), w2 = h2.empty() ? 0 : textW(h2.c_str(), fz, true);
+    const int w = std::max(w1, w2) + 10;
+    box((short)(anchor - w), (short)(pane.top + 2), anchor, (short)(pane.top + 4 + (fz + 6) + (h2.empty() ? 0 : fz + 8)), C_DARK);
+    textRJ((short)(anchor - 4), y1, h1.c_str(), C_INK, fz, true);
+    if (!h2.empty()) {
+        if (stale) {
+            RCT bg; bg.set((short)(anchor - w2 - 10), (short)(y2 - (fz + 6) / 2), anchor, (short)(y2 + (fz + 6) / 2));
+            bg.draw(1, 0x00C0392B, 0x003A1416, DRAW_OPAQUE, PAT_SOLID);
+            textRJ((short)(anchor - 5), y2, h2.c_str(), 0x00FF9A8F, fz, true);
+        } else textRJ((short)(anchor - 4), y2, h2.c_str(), C_MUTED, fz, true);
+    }
+    HoverT H; H.l = (short)(anchor - w); H.r = anchor; H.t = pane.top; H.b = (short)(y2 + fz); H.key = "HDR";
+    H.h = dpaudit::headerHover(DP_VERSION, bookAt, age, stale); hovT.push_back(H);
+}
+
+bool DealerProfile::hitTarget(const HoverT& T)
+{
+    if (!msHas) return false;
+    if (msH >= T.l && msH <= T.r && msV >= T.t && msV <= T.b) return true;           // the event's own pane position
+    if (msBar >= 0 && dpFinite(msPrice)) {                                             // the bar / price the mouse points to
+        PNT p; p.set((int)msBar, msPrice);
+        if (p.h >= T.l && p.h <= T.r && p.v >= T.t && p.v <= T.b) return true;
+    }
+    return false;
+}
+const DealerProfile::HoverT* DealerProfile::hovered()
+{
+    for (size_t i = hovT.size(); i-- > 0;) if (hitTarget(hovT[i])) return &hovT[i];   // the last drawn (on top) first
+    return nullptr;
+}
+// the hover box: title + lines, 10 pt+, left of the column it explains, inside the pane, never left of the Liquidity column
+void DealerProfile::drawHover(const HoverT& T, const Settings& S)
+{
+    RCT pane; pane.getPaneRect(false);
+    const int fz = S.font < 10 ? 10 : S.font, lh = fz + 5, boxW = 360, pad = 7;
+    const int lqW = (liqColRight > 0 && time(nullptr) - liqGoodAt <= dpaudit::LIQ_STALE_S) ? liqColRight + 8 : 110;
+    const int minL = pane.left + (lqW > 110 ? lqW : 110);
+    std::vector<std::string> L1 = dpaudit::wrapPx(T.h.title, boxW - 2 * pad, [&](const std::string& t) { return textW(t.c_str(), fz, true); });
+    std::vector<std::string> L2;
+    for (size_t i = 0; i < T.h.lines.size(); i++) {
+        std::vector<std::string> w = dpaudit::wrapPx(T.h.lines[i], boxW - 2 * pad, [&](const std::string& t) { return textW(t.c_str(), fz, false); });
+        L2.insert(L2.end(), w.begin(), w.end());
+    }
+    const int h = 2 * pad + lh * (int)(L1.size() + L2.size()) + 4;
+    int r = T.l - 8, l = r - boxW;
+    if (l < minL) { l = minL; r = l + boxW; }
+    if (r > pane.right - 2) { r = pane.right - 2; l = r - boxW; }
+    int t = (T.t + T.b) / 2 - h / 2;
+    if (t < pane.top + 2) t = pane.top + 2;
+    if (t + h > pane.bottom - 2) t = pane.bottom - 2 - h;
+    RCT bg; bg.set((short)l, (short)t, (short)r, (short)(t + h)); bg.draw(1, C_MUTED, 0x00111827, DRAW_OPAQUE, PAT_SOLID);
+    int y = t + pad + lh / 2;
+    for (size_t i = 0; i < L1.size(); i++, y += lh) textLJ((short)(l + pad), (short)y, L1[i].c_str(), C_INK, fz, true);
+    y += 4;
+    for (size_t i = 0; i < L2.size(); i++, y += lh) textLJ((short)(l + pad), (short)y, L2[i].c_str(), C_MUTED, fz, false);
+}
+// (2.9.0) the mouse: remember where it is; redraw only when the hovered target changes. Never swallows the event.
+int DealerProfile::mouse(RTX_EVENT* e)
+{
+    if (!e || (e->type != E_MOUSE_MOVE && e->type != E_MOUSE_HOVER)) return RTX_FAIL;
+    if (!loadHostState()) return RTX_FAIL;
+    msHas = true; msBar = e->v.mouse.bar; msPrice = e->v.mouse.price; msH = e->v.mouse.h; msV = e->v.mouse.v;
+    void* w = dpCursorWindow();
+    if (w) {
+        std::vector<void*>::iterator it = std::find(hovWnds.begin(), hovWnds.end(), w);
+        if (it != hovWnds.end()) hovWnds.erase(it);
+        hovWnds.push_back(w);
+        if (hovWnds.size() > 8) hovWnds.erase(hovWnds.begin());
+    }
+    const HoverT* T = hovered();
+    const std::string k = T ? T->key : std::string();
+    const bool changed = k != hovKey;
+    hovKey = k;
+    saveHostState();
+    if (changed) invalidateChart(false);
+    return RTX_FAIL;
 }
 
 // (1.2) the strength mark, drawn right-to-left ending at rightX: "2.8%" in its band colour, then 0-3 rising bars, then a
@@ -1132,15 +1390,24 @@ void DealerProfile::drawMQLevels(const Settings& S)
             onSig = otl::onSigmaMin(cw, k, (int)per, op.win); lastC = (double)cl[(int)nb - 1];
         }
     }
+    // (2.9.0 clean-up) the key levels' prices on this chart: a G2-G10 line shows only when it sits on one
+    keyPx.clear();
+    { const std::vector<klv::Merged>& K = nativeLevels(mkt); for (size_t k = 0; k < K.size(); k++) keyPx.push_back(K[k].price); }
+    const double tickK = chartTick(mkt);
     for (size_t i = 0; i < L->size(); i++) {
         const MQL& q = (*L)[i];
         const float cp = q.px + sh;                                           // where it is on THIS chart
+        const std::string nm0 = dpaudit::stripMQ(q.label);
+        // (2.9.0) the HVL = the regime line (its tags are drawn with the Profile), found even when off screen
+        if (!hvlFound && dpaudit::mqKind(q.label) == 'Y') { hvlFound = true; hvlChartPx = cp; }
+        if (dpaudit::mqHiddenGex(nm0) && !dpaudit::onKeyLevel((double)cp, keyPx, tickK)) continue;   // (2.9.0) G2-G10 hidden off key levels
+        const std::string nm = dpaudit::mqShowName(nm0);                       // (2.9.0) "CR 0D / GW 0D" -> "CR0"
         PNT pp; pp.set((int)(nb - 1), cp); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) continue;
         // (2.7.4) green = support (PS), red = resistance (CR), yellow = HVL, cyan = the other gamma levels
         const char kind = dpaudit::mqKind(q.label);
         const COLOR col = kind == 'G' ? C_BUY : kind == 'R' ? C_SELL : kind == 'Y' ? (COLOR)0x00FACC15 : (COLOR)0x0022D3EE;
-        line(pane.left, y, pane.right, y, col, q.w);
+        line(pane.left, y, pane.right, y, col, nm != nm0 ? 1 : q.w);          // (2.9.0) the merged CR0 = one thin target line
         std::string odds;
         // (2.4.0, Rassul 2026-10-07 12:57 "start showing it now on the levels") the chance price touches this level: in the next
         // hour, by today's 0DTE expiry (when it comes before the close) and by the close; "?" until the market's numbers are proven
@@ -1167,7 +1434,7 @@ void DealerProfile::drawMQLevels(const Settings& S)
             }
         }
         PendLbl P; P.y = y; P.border = (lv && lv->pick) ? (COLOR)0x00FFFFFF : col;   // (2.5.0) a pick: white box
-        const dpaudit::Badge B = dpaudit::badge(mkt, q.px, dpaudit::stripMQ(q.label), odds);   // the strike, as MenthorQ writes it
+        const dpaudit::Badge B = dpaudit::badge(mkt, q.px, nm, odds);   // the strike, as MenthorQ writes it (2.9.0: CR0 merged name)
         P.key = "M|" + q.label;
         P.seg.push_back(LSeg{ B.price, false, C_INK });
         P.seg.push_back(LSeg{ B.name, true, col });
@@ -1271,6 +1538,11 @@ int DealerProfile::draw(void)
     load();
     alignContract();
     pend.clear();                             // (2.7.4) this draw's badges
+    hovT.clear(); hvlFound = false;           // (2.9.0) this draw's hover targets / HVL
+    if (msHas && !hovWnds.empty()) {          // (2.9.0) the mouse left the chart: no hover
+        void* w = dpCursorWindow();
+        if (w && std::find(hovWnds.begin(), hovWnds.end(), w) == hovWnds.end()) { msHas = false; hovKey.clear(); }
+    }
     drawMQLevels(cfg);                        // (2.3.0) under the profile: the key-level lines first
     drawKeyLevels(cfg);                       // (2.5.0) key levels + hourly swings with their touch odds
     flushLabels(cfg);                         // (2.7.4) the badges, over every line
@@ -1282,9 +1554,10 @@ int DealerProfile::draw(void)
         levelsOnly = dpaudit::barSeconds(st) > 900; }
     if (!levelsOnly) {
         render(cfg);
-        staleBadge();
-        srcTag();
+        if (nx.empty()) { staleBadge(); srcTag(); }   // (2.9.0) a 2.4 file: the header says both (book + STALE)
         exportBars();
+        if (const HoverT* T = hovered()) { hovKey = T->key; drawHover(*T, cfg); }   // (2.9.0) the hover, over everything
+        else hovKey.clear();
     }
     writeStatus(D.nodes.empty() ? "no data" : "drawn");
     saveHostState();
@@ -1295,8 +1568,8 @@ extern "C" cppExtension *CreateExtension(void)
 {
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion(DP_VERSION);   // 2.8.7 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
+    p->setVersion(DP_VERSION);   // 2.9.0 (DP_VERSION) - 2.5.1: per-host state, robust external-input handling, atomic bar export
     return p;
 }

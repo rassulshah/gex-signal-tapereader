@@ -1,0 +1,11 @@
+# LRA level touch - level_touch 1.2.2 (2026-10-10)
+MARKET|ES
+AT|2026-10-13 14:55
+PX|7857.25
+WINDOWS|CL
+STATE|ABSTAIN|under 60 min of RTH left
+LEVEL|VWAP+1|VWAP+1|7856.0|vwap||||||53|0|CL 53%?|53
+LEVEL|G4|G4|7860.0|gamma||||||19|0|CL 19%?|19
+LEVEL|VWAP+2|VWAP+2|7862.25|vwap||||||4|0|CL 4%?|4
+LEVEL|HrHI|HrHI|7863.25|pivot_1h||||||2|0|CL 2%?|2
+FIRST|G4|VWAP+1|CL|16|52|32

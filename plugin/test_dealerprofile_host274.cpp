@@ -89,6 +89,7 @@ cppExtension::FONT::FONT(FONT_ID i, short s, FONT_STYLE st) : id(i), size(s), st
 char* cppExtension::getRootSymbol(char* b, const char*) { if (b) { strcpy(b, CUR->sym.c_str()); return b; } return (char*)CUR->sym.c_str(); }
 char* cppExtension::getPeriodicityLabel(void) { return (char*)PERIOD.c_str(); }
 RTX_RESULT cppExtension::getVisibleBars(int* s, int* e) { *s = VS; *e = VE; return RTX_OK; }
+double cppExtension::getTickIncrement(const char*) { return 0.25; }   // (2.9.0 test fix) 2.8.7 matches levels on the SDK tick grid - this mock was missing (SEGV)
 void cppExtension::setPen(COLOR, short, PEN_STYLE) {}
 void cppExtension::setTextColor(COLOR) {}
 RTX_RESULT cppExtension::setFont(FONT& f) { curFont = f.size; return RTX_OK; }
@@ -170,7 +171,7 @@ int main()
         X.drawMQLevels(X.cfg);
         bool front = false, back = false; COLOR cr = 0, ps = 0;
         for (auto& P : X.pend) { std::string all; for (auto& s : P.seg) all += s.s;
-            if (all.rfind("6640.00 CR 0D / GW 0D", 0) == 0) { front = true; cr = P.seg[1].c; }
+            if (all.rfind("6640.00 CR0", 0) == 0) { front = true; cr = P.seg[1].c; }   // (2.9.0) "CR 0D / GW 0D" shows as one "CR0"
             if (all.rfind("6630.00 PS 0D", 0) == 0) ps = P.seg[1].c;
             if (all.find("6700.00") != std::string::npos) back = true; }
         check(front && !back, "continuous ES: the Z26 levels, not the H27 (back month) ones");
