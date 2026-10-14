@@ -232,7 +232,7 @@ int main(int argc, char** argv)
     // ---- 0. versions: DP_VERSION = the setVersion literal gex-build reads = the header
     {
         const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.11.0" && src.find("p->setVersion(\"2.11.0\")") != std::string::npos, "version 2.11.0: constant = setVersion literal");
+        check(std::string(DP_VERSION) == "2.11.1" && src.find("p->setVersion(\"2.11.1\")") != std::string::npos, "version 2.11.1: constant = setVersion literal");
         check(std::string(cb::VERSION) == "1.0.0" && std::string(dcol::VERSION) == "1.0.0", "ColumnBoard / DealerColumnsLogic 1.0.0");
     }
     // ---- 1. the default layout on ES: Delta Profile on the chart (board), Levels 78 | Delta 80 | Dealer 80, the margin
@@ -280,7 +280,7 @@ int main(int argc, char** argv)
         X.calc(0); X.preCalc();
         check(mockOpt().sets == 1, "the chart already has it: not set again");
         const std::string st = slurp(fl("DealerProfile.status.txt"));
-        check(st.find("COLUMNS,1362-1440,1440-1520,1520-1600,price right 1342,clean,delta on") != std::string::npos && st.find("MARGIN,need 258 px,units bars,ppb 5") != std::string::npos && st.find("VERSION,2.11.0") != std::string::npos, "status: COLUMNS / MARGIN / VERSION lines");
+        check(st.find("COLUMNS,1362-1440,1440-1520,1520-1600,price right 1342,clean,delta on") != std::string::npos && st.find("MARGIN,need 258 px,units bars,ppb 5") != std::string::npos && st.find("VERSION,2.11.1") != std::string::npos, "status: COLUMNS / MARGIN / VERSION lines");
         check(st.find("REACH,80") != std::string::npos, "REACH = the Dealer column (the Read / Analyst keep left of it)");
         // a hover on a badge: the detail moved off the chart
         RTX_EVENT e; memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE;

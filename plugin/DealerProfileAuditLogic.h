@@ -566,7 +566,7 @@ inline Hover headerHover(const std::string& ver, const BookAsOf& a, double age, 
                       (age >= 0 ? " (" + ageShort(age) + " ago)." : "."));
     h.lines.push_back("STALE = the grid is over 20 min old while MenthorQ is updating: the nodes fade and should not be trusted for a trade.");
     h.lines.push_back("How to use: when STALE, use the key levels and the footprint only until the grid refreshes.");
-    h.lines.push_back("Example: \"STALE 10h - 4:55 AM\" = the feed stopped at 4:55 AM; every wall / fuel size is from then.");
+    h.lines.push_back("Example: \"STALE 2h - 9:35 AM\" over \"no internet - retrying\" = the feed stopped at 9:35 AM because this PC lost its connection; every wall / fuel size is from then, and the bridge is re-checking every minute.");
     return h;
 }
 // greedy word wrap by a width function (pixels)
@@ -580,6 +580,53 @@ template <class W> inline std::vector<std::string> wrapPx(const std::string& tex
     }
     if (!cur.empty()) out.push_back(cur);
     return out;
+}
+
+// (2.11.1, MQF100 2026-10-14 after-close, Rassul: the header said "STALE 2h - 9:35 AM" with no reason) the bridge's feed diagnosis,
+// lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, every minute): VERSION|1, then
+// FEED|<OK|STALE|PAUSED>|<age min>|<code>|<short>|<retry>|<grid 12h CT>|<written unix>. Used only while written in the last 5 min.
+struct FeedStat { bool ok = false, stale = false; int age = -1; std::string code, shortTxt, retry, grid; long long at = 0; };
+static const long long FEED_FRESH_S = 300;
+inline FeedStat parseFeed(const std::vector<std::string>& lines)
+{
+    FeedStat f; bool ver = false;
+    for (size_t i = 0; i < lines.size() && i < 16; ++i) {
+        const std::vector<std::string> c = dl::split(lines[i], '|');
+        if (c.size() >= 2 && c[0] == "VERSION") { int v = 0; ver = parseInt(c[1], v) && v == 1; continue; }
+        if (!ver || c.size() < 8 || c[0] != "FEED") continue;
+        if (c[1] != "OK" && c[1] != "STALE" && c[1] != "PAUSED") return FeedStat();
+        char* e = nullptr; const long long at = std::strtoll(c[7].c_str(), &e, 10);
+        if (c[7].empty() || !e || *e || at <= 0) return FeedStat();
+        int age = -1; if (!c[2].empty() && !parseInt(c[2], age)) return FeedStat();
+        if (age < -1 || age > 100000) return FeedStat();
+        for (int k = 3; k <= 6; ++k) if (c[(size_t)k].size() > 80) return FeedStat();
+        f.ok = true; f.stale = c[1] == "STALE"; f.age = age; f.code = c[3]; f.shortTxt = c[4]; f.retry = c[5]; f.grid = c[6]; f.at = at;
+        return f;
+    }
+    return FeedStat();
+}
+inline bool feedFresh(const FeedStat& f, long long nowUnix) { return f.ok && nowUnix - f.at <= FEED_FRESH_S && f.at - nowUnix <= 60; }
+// the header's extra line(s) when the grid is STALE: the reason + what is being done, as the column allows -
+// one line "no internet - retrying" when it fits, else two ("no internet" / "retrying"), else the reason alone; fit(text) = fits the column
+template <class Fit> inline std::vector<std::string> feedLines(const FeedStat& f, long long nowUnix, Fit fit)
+{
+    std::vector<std::string> out;
+    if (!feedFresh(f, nowUnix) || !f.stale || f.code.empty() || f.code == "ok" || f.code == "paused" || f.shortTxt.empty()) return out;
+    const std::string act = f.code == "signed-out" ? "sign in" : f.code == "needs-you" ? "open feed" : "retrying";
+    const std::string full = f.shortTxt + " - " + act;
+    if (fit(full)) { out.push_back(full); return out; }
+    if (fit(f.shortTxt)) { out.push_back(f.shortTxt); if (fit(act)) out.push_back(act); }
+    return out;
+}
+inline void feedHover(Hover& h, const FeedStat& f, long long nowUnix)
+{
+    if (!feedFresh(f, nowUnix) || !f.stale || f.code.empty() || f.code == "ok" || f.code == "paused") return;
+    std::vector<std::string> add;
+    add.push_back("Why: " + f.shortTxt + " (the bridge's check, newest grid " + (f.grid.empty() ? std::string("unknown") : f.grid) + " CT).");
+    add.push_back("What is being done: " + f.retry + ".");
+    add.push_back(f.code == "signed-out" ? "You: click the MenthorQ tab and sign in." : f.code == "needs-you" ? "You: run open-menthorq.bat once." :
+                  "You: nothing - the bridge re-opens / reloads the MenthorQ feed by itself and this clears when a grid arrives.");
+    h.lines.insert(h.lines.begin() + (h.lines.empty() ? 0 : 1), add.begin(), add.end());
 }
 
 } // namespace dpaudit

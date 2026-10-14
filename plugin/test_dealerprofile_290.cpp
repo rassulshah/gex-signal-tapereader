@@ -221,8 +221,44 @@ int main(int argc, char** argv)
     std::vector<Op> O = drawOnce(D, cut, 0, dealer);
     // (2.11.0, CR5200) the Dealer column = the right 80 px before the axis; the header fits it ("DP v2.11.0", "STALE 10h")
     const int anchor = 1598, reach = 80, bound = 1600 - reach;   // the mock scale starts at the pane edge (1600): the column is 1520-1600
-    check(hasText(O, "DP v2.11.0"), "header: the version (short form inside the 80 px column)");
+    check(hasText(O, "DP v2.11.1"), "header: the version (short form inside the 80 px column)");
     check(hasText(O, "STALE 10h"), "header: STALE 10h (the time is in the header hover)");
+    {   // (2.11.1, MQF100 2026-10-14) WHY it is stale + what is being done, from the bridge's LRA-MQFeed.txt
+        using namespace dpaudit;
+        const long long nowU = (long long)time(nullptr);
+        auto feedTxt = [&](const char* st, const char* code, const char* sh, const char* retry, long long at) {
+            return std::string("VERSION|1\nFEED|") + st + "|125|" + code + "|" + sh + "|" + retry + "|9:35 AM|" + std::to_string(at) + "\n"; };
+        auto lines = [](const std::string& t) { std::vector<std::string> v; std::istringstream in(t); std::string l; while (std::getline(in, l)) v.push_back(l); return v; };
+        FeedStat f = parseFeed(lines(feedTxt("STALE", "no-network", "no internet", "retrying every minute", nowU)));
+        check(f.ok && f.stale && f.age == 125 && f.code == "no-network" && f.grid == "9:35 AM", "feed file parsed");
+        auto wide = [](const std::string&) { return true; }; auto narrow = [](const std::string& t) { return t.size() <= 12; };
+        check(feedLines(f, nowU, wide) == std::vector<std::string>{ "no internet - retrying" }, "wide column: one line 'no internet - retrying'");
+        check(feedLines(f, nowU, narrow) == std::vector<std::string>{ "no internet", "retrying" }, "80 px column: 'no internet' / 'retrying'");
+        check(feedLines(f, nowU + 301, wide).empty(), "a feed file older than 5 min (bridge stopped): nothing shown");
+        FeedStat so = parseFeed(lines(feedTxt("STALE", "signed-out", "signed out", "you must sign in", nowU)));
+        check(feedLines(so, nowU, wide) == std::vector<std::string>{ "signed out - sign in" }, "signed out: says what he must do");
+        check(feedLines(parseFeed(lines(feedTxt("OK", "ok", "live", "", nowU))), nowU, wide).empty(), "fresh grids: no extra line");
+        check(!parseFeed(lines("VERSION|2\nFEED|STALE|1|a|b|c|d|" + std::to_string(nowU) + "\n")).ok, "wrong VERSION: ignored");
+        check(!parseFeed(lines("VERSION|1\nFEED|WHAT|1|a|b|c|d|" + std::to_string(nowU) + "\n")).ok, "garbled state: ignored");
+        check(!parseFeed(lines("VERSION|1\nFEED|STALE|x|a|b|c|d|" + std::to_string(nowU) + "\n")).ok, "garbled age: ignored");
+        check(!parseFeed(lines("VERSION|1\nFEED|STALE|1|a|b|c|d|12x\n")).ok && !parseFeed(lines("FEED|STALE|1|a|b|c|d|5\n")).ok, "garbled time / no VERSION: ignored");
+        Hover h; h.title = "t"; h.lines.push_back("first");
+        feedHover(h, f, nowU);
+        check(h.lines.size() == 4 && h.lines[1].find("Why: no internet") == 0 && h.lines[2] == "What is being done: retrying every minute." && h.lines[3].find("You: nothing") == 0, "header hover: why / what is being done / what you do");
+        // on the chart: the stale ES grid + a fresh feed file -> the reason under "STALE 10h", inside the Dealer column
+        put("LRA-MQFeed.txt", feedTxt("STALE", "no-network", "no internet", "retrying every minute", nowU));
+        std::vector<Op> F = drawOnce(D, cut, 0, dealer);
+        check(hasText(F, "STALE 10h") && hasText(F, "no internet") && hasText(F, "retrying"), "chart: 'STALE 10h' / 'no internet' / 'retrying'");
+        int out = 0; for (auto& q : F) if (q.kind == "text" && (q.text == "no internet" || q.text == "retrying") && (q.l < bound || q.r > 1600)) out++;
+        check(out == 0, "the reason lines stay inside the Dealer column");
+        put("LRA-MQFeed.txt", feedTxt("STALE", "no-network", "no internet", "retrying every minute", nowU - 3600));
+        F = drawOnce(D, cut, 0, dealer);
+        check(hasText(F, "STALE 10h") && !hasText(F, "no internet"), "an old feed file (bridge not running): only STALE, no guessed reason");
+        put("LRA-MQFeed.txt", "garbage|||\n");
+        F = drawOnce(D, cut, 0, dealer);
+        check(hasText(F, "STALE 10h") && !hasText(F, "no internet"), "a garbled feed file: only STALE");
+        put("LRA-MQFeed.txt", "");
+    }
     int small = 0, crossing = 0, gexOnFace = 0, wN = 0, fN = 0, redNum = 0, greenNum = 0, pct = 0, dashed = 0;
     for (size_t i = 0; i < O.size(); i++) {
         const Op& q = O[i];
