@@ -334,7 +334,9 @@ bool HodLod::loadMq(HLState& S)
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")
 #endif
-static bool hlCursor(int& x, int& y) { POINT p; if (!GetCursorPos(&p)) return false; x = (int)p.x; y = (int)p.y; return true; }
+struct hlPoint { long x; long y; };   // (2.1.0a) layout = Win32 POINT; declared here so windows.h (macro clashes) is not pulled in
+extern "C" __declspec(dllimport) int __stdcall GetCursorPos(hlPoint* p);
+static bool hlCursor(int& x, int& y) { hlPoint p; if (!GetCursorPos(&p)) return false; x = (int)p.x; y = (int)p.y; return true; }
 #else
 static int hl_test_cx = 0, hl_test_cy = 0;
 static bool hlCursor(int& x, int& y) { x = hl_test_cx; y = hl_test_cy; return true; }
