@@ -1,2 +1,7 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=5 bytes=232672
 largest staged blobs (bytes, path):
+SIZE	128101	plugin/DealerProfile.cpp
+SIZE	40820	plugin/test_dealerprofile_2110.cpp
+SIZE	36457	plugin/DealerProfileAuditLogic.h
+SIZE	27212	plugin/test_dealerprofile_290.cpp
+SIZE	82	logs/staged-scan-findings.log
