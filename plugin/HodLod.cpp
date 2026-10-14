@@ -1,5 +1,14 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.0.6 (2026-10-14, CR4800; Rassul 07:13 "HOD/LOD table: move it DOWN, default Bottom centre", 07:07 Offset X / Y on every box, 07:18
+ *         "test them thoroughly ... dont shake ... dont have garbage values"): default Position Bottom centre (7); a place file holding the
+ *         2.0.5 default 1 becomes 7 ONCE per market (HodLod.migrate-206.txt), any other choice is kept. WHY THE TABLE WAS MISSING ON ES /
+ *         CL THIS MORNING: 2.0.5 read its checkboxes on the chart (isBoxChecked in draw) - IRT hands the chart copy every box UNCHECKED
+ *         (only the settings window's copy has the real values; Dealer Profile 2.5 found the same), so "Show table" read off, the table
+ *         was never laid out and no TABLE_BOX was written. Now every setting (Position, Offset X / Y, the 3 checkboxes, the 5 colours)
+ *         is saved per market from the settings window into HodLod.place-<MKT>.txt and the chart reads only that file (no file = every
+ *         element on). The dialog is filled from the file when it opens; a control he did not touch keeps the file's value. The table's
+ *         place has hysteresis (BoxPlace.h): a new spot only after 2 draws, never straight back. Status: PLACE / OPTS lines.
  *  2.0.5 (2026-10-13 night): the header reads "Regime: Neg / Uptrend" (Rassul 21:01; "Range" when there is no trend, 21:20) -
  *         the VWAP trend of the RTH shown, computed natively from the chart's CLOSED bars with VwapTrendLogic.h (vtl::fromChart, RTH:
  *         the same rule as the Tape Reader TREND vote; words = vtl::displayLabel: Uptrend / Dntrend / Strong ...). Default Position Top centre (16:24 "the table at the TOP
@@ -41,6 +50,7 @@
 #undef far
 #endif
 #include "HostSlot.h"
+#include "BoxPlace.h"                // (2.0.6) Offset X / Y rules, hysteresis, the dialog snapshot
 #include "HodLodLogic.h"
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
@@ -82,7 +92,8 @@ struct HLState {
     long long sessStamp = -2; time_t sessChecked = 0; std::string sessGam, sessExp; int sessAge = -1; bool sessRec = true;
     // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
     // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
-    time_t avoidChecked = 0; bool trBoxOk = false; hl::Box trBox = { 0, 0, 0, 0 }; int trPos = 7; bool trSeen = false; bool dpBanner = false;
+    time_t avoidChecked = 0; bool trBoxOk = false; hl::Box trBox = { 0, 0, 0, 0 }; int trPos = 0; bool trSeen = false; bool dpBanner = false;
+    bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
     ~HLState() { delete T; }
 };
 
@@ -93,17 +104,23 @@ public:
     // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
     // Bottom centre. IRT can return -1 for a LIST parameter outside its settings copy, so the choice is also kept per market in
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
-    virtual int parmsLoad(void) { return RTX_OK; }
+    virtual int parmsLoad(void);                                     // (2.0.6) fills the dialog from the place file (never saves)
     virtual int parmsApply(void) { savePos(); return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { savePos(); return RTX_OK; }
-    int posParam = 0;
-    // (2.0.5) the checkboxes and colours (indices into the parameter list, set in setup)
-    int pShowTable = 1, pTableBg = 2, pShowProj = 3, pProjUp = 4, pProjDn = 5, pShowMark = 6, pMarkLod = 7, pMarkHod = 8;
-    hl::Opts opts();
-    struct PosCache { std::string path; long long stamp = -2; int v = hl::POS_DEFAULT; };
+    int posParam = 0, pOffX = 1, pOffY = 2;
+    // (2.0.5) the checkboxes and colours (indices into the parameter list, set in setup); (2.0.6) after Offset X / Y
+    int pShowTable = 3, pTableBg = 4, pShowProj = 5, pProjUp = 6, pProjDn = 7, pShowMark = 8, pMarkLod = 9, pMarkHod = 10;
+    bp::DlgSnap snap_;                                                 // (2.0.6) the dialog as it opened
+    std::vector<long long> dialogNow();
+    // (2.0.6) the per-market settings: "pos,dx,dy,table,proj,mark,tableBg,projUp,projDn,markLod,markHod" (colours 0..0xFFFFFF, -1 =
+    // default); a 2.0.5 file ("7") = that position with everything else default
+    struct Place { int pos = hl::POS_DEFAULT; hl::Opts o; long long col[5] = { -1, -1, -1, -1, -1 }; std::string why; long long sig = -3; };
+    Place readPlace(const std::string& mkt);
+    hl::Opts opts(const Place& P);
+    struct PosCache { std::string path; long long stamp = -2; Place v; };
     std::vector<PosCache> posCache;                      // per object (no static state), <= 8 markets
     void savePos();
-    int position(const std::string& mkt);
+    Place position(const std::string& mkt);
     std::vector<std::string> migChecked;                 // (2.0.5) markets whose place file was checked for the old default this run
     void migratePlace(const std::string& mkt);
     void loadAvoid(HLState& S);
@@ -152,14 +169,17 @@ int cppExtension::calc(int)
 
 int cppExtension::setup(void)
 {
-    // (HL105) Position (9 spots, default Top centre since 2.0.5); (2.0.5, Rassul 2026-10-13 "settings must be real") a checkbox and a
-    // colour for every drawn element. Controls only, no how-to text. The value array stays hidden from the settings window.
-    setParameterVersion(4);   // (1.0.1) 3: IRT resets a stale saved Position; (2.0.5) 4: the new checkboxes / colours, and the saved Bottom centre resets to Top centre
-    setParameterDialogHeight(5);         // 4 rows: Position; table; projection; 1st-extreme mark
+    // (HL105) Position (9 spots; default Bottom centre since 2.0.6); (2.0.5, Rassul 2026-10-13 "settings must be real") a checkbox and a
+    // colour for every drawn element; (2.0.6) Offset X / Y. Controls only, no how-to text. The value array stays hidden from the settings
+    // window. The chart reads HodLod.place-<MKT>.txt only (IRT hands the chart copy every box unchecked - why the table vanished in 2.0.5).
+    setParameterVersion(5);   // (2.0.6) 5: + Offset X / Y (the rows below them move; the chart never reads the saved values)
+    setParameterDialogHeight(5);         // 4 rows: Position + offsets; table; projection; 1st-extreme mark
     HodLod* x = static_cast<HodLod*>(this);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     x->posParam = pc++;   setListParameter("Position", (short)hl::POS_DEFAULT, hl::POS_CHOICES);
+    x->pOffX = pc++;      setIntegerParameter("Offset X", 0, 50, SL);
+    x->pOffY = pc++;      setIntegerParameter("Offset Y", 0, 50, SL);
     x->pShowTable = pc++; setBoolParameter("Show table", true);
     x->pTableBg = pc++;   setColorParameter("Table background", (COLOR)hl::C_PANEL, 0, SL);
     x->pShowProj = pc++;  setBoolParameter("Show projection", true);
@@ -174,15 +194,36 @@ int cppExtension::setup(void)
     return RTX_OK;
 }
 
-// (2.0.5) this chart's checkboxes and colours, read on every draw (settings never leak between charts); an unreadable value = the default
-hl::Opts HodLod::opts()
+// (2.0.6) the chart's options come from the place file only (the chart copy's checkboxes always read unchecked in IRT)
+hl::Opts HodLod::opts(const Place& P)
 {
-    hl::Opts O;
-    O.table = isBoxChecked(pShowTable) != 0; O.proj = isBoxChecked(pShowProj) != 0; O.mark = isBoxChecked(pShowMark) != 0;
-    auto col = [&](int i, unsigned def) { int v = getIntegerValue(i); return v <= 0 ? def : hl::optCol((unsigned)v, def); };
-    O.tableBg = col(pTableBg, hl::C_PANEL); O.projUp = col(pProjUp, hl::C_GREEN); O.projDn = col(pProjDn, hl::C_RED);
-    O.markLod = col(pMarkLod, hl::C_GREEN); O.markHod = col(pMarkHod, hl::C_RED);
+    hl::Opts O = P.o;
+    O.tableBg = P.col[0] < 0 ? hl::C_PANEL : hl::optCol((unsigned)P.col[0], hl::C_PANEL); O.projUp = P.col[1] < 0 ? hl::C_GREEN : hl::optCol((unsigned)P.col[1], hl::C_GREEN);
+    O.projDn = P.col[2] < 0 ? hl::C_RED : hl::optCol((unsigned)P.col[2], hl::C_RED); O.markLod = P.col[3] < 0 ? hl::C_GREEN : hl::optCol((unsigned)P.col[3], hl::C_GREEN);
+    O.markHod = P.col[4] < 0 ? hl::C_RED : hl::optCol((unsigned)P.col[4], hl::C_RED);
     return O;
+}
+static bool hlColTok(const std::string& t, long long& v) { if (t == "-1") { v = -1; return true; } if (t.empty() || t.size() > 8) return false; for (char c : t) if (c < '0' || c > '9') return false; v = std::strtoll(t.c_str(), nullptr, 10); return v <= 0xFFFFFF; }
+static bool hlParsePlace(const std::string& lnIn, HodLod::Place& P)
+{
+    std::string ln = lnIn; while (!ln.empty() && (ln.back() == '\r' || ln.back() == ' ')) ln.pop_back();
+    bp::Place pl; std::vector<std::string> rest; std::string why;
+    if (!bp::parse(ln, hl::POS_DEFAULT, pl, &why, &rest)) { P = HodLod::Place(); P.why = "place file ignored (" + why + "): defaults"; return false; }
+    HodLod::Place Q; Q.pos = pl.pos; Q.o.dx = pl.dx; Q.o.dy = pl.dy;
+    if (!rest.empty()) {
+        if (rest.size() != 8) { P = HodLod::Place(); P.pos = pl.pos; P.o.dx = pl.dx; P.o.dy = pl.dy; P.why = "options fields malformed: options default"; return false; }
+        for (int k = 0; k < 3; ++k) if (rest[(size_t)k] != "0" && rest[(size_t)k] != "1") { P = HodLod::Place(); P.pos = pl.pos; P.o.dx = pl.dx; P.o.dy = pl.dy; P.why = "options fields malformed: options default"; return false; }
+        Q.o.table = rest[0] == "1"; Q.o.proj = rest[1] == "1"; Q.o.mark = rest[2] == "1";
+        for (int k = 0; k < 5; ++k) if (!hlColTok(rest[(size_t)(3 + k)], Q.col[k])) { P = HodLod::Place(); P.pos = pl.pos; P.o.dx = pl.dx; P.o.dy = pl.dy; P.why = "a colour field malformed: options default"; return false; }
+    }
+    P = Q; return true;
+}
+static std::string hlFormatPlace(const HodLod::Place& P)
+{
+    bp::Place pl; pl.pos = P.pos; pl.dx = P.o.dx; pl.dy = P.o.dy;
+    std::string o = bp::format(pl) + "," + (P.o.table ? "1" : "0") + "," + (P.o.proj ? "1" : "0") + "," + (P.o.mark ? "1" : "0");
+    for (int k = 0; k < 5; ++k) o += "," + std::to_string(P.col[k] < 0 || P.col[k] > 0xFFFFFF ? -1 : P.col[k]);
+    return o;
 }
 
 std::string HodLod::flexPath(const std::string& name)
@@ -580,7 +621,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
 {
     if (S.mi < 0) return;
     std::string text;
-    if (S.T && L) text = hl::statusText(S.view, *L, *S.T, S.rd, (int)S.per, S.state) + "CHART," + S.root + "," + std::to_string(S.per) + "\n";   // (HL105) chart identity for SessionInfo
+    if (S.T && L) text = hl::statusText(S.view, *L, *S.T, S.rd, (int)S.per, S.state) + "CHART," + S.root + "," + std::to_string(S.per) + "\n" + S.placeLine;   // (HL105) chart identity for SessionInfo; (2.0.6) PLACE / OPTS
     else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\n";
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
@@ -619,25 +660,54 @@ static long long hlFileStamp(const std::string& p)
 #endif
     return (long long)st.st_mtime * 1000003LL + (long long)st.st_size;
 }
+// (2.0.6) the settings window's copy has no bar size: only there are the dialog values real (on the chart every box reads unchecked)
+static bool hlInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }
+static std::string hlMarket(cppExtension* x) { char rb[32] = { 0 }; const char* rs = x->getRootSymbol(rb); return hl::marketForRoot(rs ? rs : ""); }
+std::vector<long long> HodLod::dialogNow()
+{
+    std::vector<long long> v;
+    v.push_back(getListIndex(posParam)); v.push_back(getIntegerValue(pOffX)); v.push_back(getIntegerValue(pOffY));
+    v.push_back(isBoxChecked(pShowTable) ? 1 : 0); v.push_back(isBoxChecked(pShowProj) ? 1 : 0); v.push_back(isBoxChecked(pShowMark) ? 1 : 0);
+    const int cp[5] = { pTableBg, pProjUp, pProjDn, pMarkLod, pMarkHod }; for (int k = 0; k < 5; ++k) v.push_back(getIntegerValue(cp[k]));
+    return v;
+}
+int HodLod::parmsLoad(void)
+{
+    if (!hlInDialog(this)) return RTX_OK;
+    const std::string mkt = hlMarket(this); if (mkt.empty()) return RTX_OK;
+    const Place P = readPlace(mkt);
+    setListIndex(posParam, P.pos); setIntegerValue(pOffX, P.o.dx); setIntegerValue(pOffY, P.o.dy);
+    checkBox(pShowTable, P.o.table); checkBox(pShowProj, P.o.proj); checkBox(pShowMark, P.o.mark);
+    const hl::Opts O = opts(P); const unsigned cv[5] = { O.tableBg, O.projUp, O.projDn, O.markLod, O.markHod }; const int cp[5] = { pTableBg, pProjUp, pProjDn, pMarkLod, pMarkHod };
+    for (int k = 0; k < 5; ++k) setIntegerValue(cp[k], (int)cv[k]);
+    snap_.take(dialogNow());
+    return RTX_OK;
+}
 void HodLod::savePos()
 {
-    int v = getListIndex(posParam);
-    if (v < 0 || v > 8) return;                                        // not this dialog's value: never overwrite a saved choice
-    char rb[32] = { 0 }; const char* rs = getRootSymbol(rb); std::string mkt = hl::marketForRoot(rs ? rs : "");
-    if (mkt.empty()) return;
-    std::string p = flexPath("HodLod.place-" + mkt + ".txt"); if (p.empty()) return;
-    hl::FileOps F; hl::writeAtomic(F, p, std::to_string(v) + "\n");
+    if (!hlInDialog(this)) return;                                      // (2.0.6) never from the chart copy (its boxes read unchecked)
+    const std::string mkt = hlMarket(this); if (mkt.empty()) return;
+    const std::string p = flexPath("HodLod.place-" + mkt + ".txt"); if (p.empty()) return;
+    const Place F = readPlace(mkt);
+    const std::vector<long long> now = dialogNow();
+    const long long fv[11] = { F.pos, F.o.dx, F.o.dy, F.o.table ? 1 : 0, F.o.proj ? 1 : 0, F.o.mark ? 1 : 0, F.col[0], F.col[1], F.col[2], F.col[3], F.col[4] };
+    long long v[11]; for (size_t k = 0; k < 11; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
+    Place P = F;
+    P.pos = bp::posOk((int)v[0]) && v[0] == (int)v[0] ? (int)v[0] : F.pos;                 // garbage never reaches the file
+    P.o.dx = bp::offOk((int)v[1]) && v[1] == (int)v[1] ? (int)v[1] : F.o.dx; P.o.dy = bp::offOk((int)v[2]) && v[2] == (int)v[2] ? (int)v[2] : F.o.dy;
+    P.o.table = v[3] != 0; P.o.proj = v[4] != 0; P.o.mark = v[5] != 0;
+    for (int k = 0; k < 5; ++k) P.col[k] = v[6 + k] == fv[6 + k] ? F.col[k] : (v[6 + k] > 0 && v[6 + k] <= 0xFFFFFF ? v[6 + k] : F.col[k]);
+    hl::FileOps Fo; if (hl::writeAtomic(Fo, p, hlFormatPlace(P) + "\n")) snap_.take(now);
 }
-// (2.0.5) ONE-TIME migration (Rassul 16:24 / 21:04: the table belongs at the TOP; the 10-11 place files hold the old default 7 =
-// Bottom centre, saved when the settings were applied, not a choice of Bottom): per market, the first time 2.0.5 sees its place file,
-// a "7" becomes "1" (Top centre); any other value is his choice and stays. HodLod.migrate-205.txt records every market checked (and
-// what was done), so a later deliberate "Bottom centre" is never migrated again.
+// (2.0.6) ONE-TIME migration (Rassul 07:13 "move it DOWN, default Bottom centre"): per market, the first time 2.0.6 sees its place file,
+// a 2.0.5 default "1" (alone, or "1,0,0" ...) becomes 7 (Bottom centre); any other value is his choice and stays. HodLod.migrate-206.txt
+// records every market checked (and what was done), so a later deliberate "Top centre" is never migrated again.
 void HodLod::migratePlace(const std::string& mkt)
 {
     for (size_t i = 0; i < migChecked.size(); i++) if (migChecked[i] == mkt) return;
     if (migChecked.size() >= 16) migChecked.erase(migChecked.begin());
     migChecked.push_back(mkt);
-    const std::string logp = flexPath("HodLod.migrate-205.txt"), p = flexPath("HodLod.place-" + mkt + ".txt");
+    const std::string logp = flexPath("HodLod.migrate-206.txt"), p = flexPath("HodLod.place-" + mkt + ".txt");
     if (logp.empty() || p.empty()) return;
     std::string log;
     {   std::ifstream f(logp.c_str(), std::ios::binary); std::string ln; int nl = 0;
@@ -654,28 +724,34 @@ void HodLod::migratePlace(const std::string& mkt)
 #endif
     char when[32]; strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", &lt);
     hl::FileOps F; std::string what;
-    if (cur == std::to_string(hl::POS_OLD_DEFAULT)) {
-        if (!hl::writeAtomic(F, p, std::to_string(hl::POS_DEFAULT) + "\n")) return;      // not written: try again on the next load
-        what = "place 7 (old default Bottom centre) -> 1 (Top centre)";
-    } else what = cur.empty() ? "no place file: default 1 (Top centre)" : "place " + cur + " kept (his choice)";
+    Place P; const bool ok = !cur.empty() && hlParsePlace(cur, P);
+    if (ok && P.pos == hl::POS_PREV_DEFAULT) {
+        P.pos = hl::POS_DEFAULT;
+        if (!hl::writeAtomic(F, p, hlFormatPlace(P) + "\n")) return;      // not written: try again on the next load
+        what = "place 1 (2.0.5 default Top centre) -> 7 (Bottom centre)";
+    } else what = cur.empty() ? "no place file: default 7 (Bottom centre)" : "place '" + cur.substr(0, 40) + "' kept (his choice)";
     hl::writeAtomic(F, logp, log + mkt + "," + when + "," + hl::HL_VERSION + "," + what + "\n");
 }
-int HodLod::position(const std::string& mkt)
+HodLod::Place HodLod::readPlace(const std::string& mkt)
+{
+    Place c; const std::string p = flexPath("HodLod.place-" + mkt + ".txt");
+    if (mkt.empty() || p.empty()) return c;
+    c.sig = hlFileStamp(p);
+    if (c.sig < 0) { c.why = "no place file: defaults"; return c; }
+    std::ifstream f(p.c_str()); std::string ln;
+    if (!std::getline(f, ln) || ln.size() > 200) { c.why = "place file unreadable: defaults"; return c; }
+    const long long sig = c.sig; hlParsePlace(ln, c); c.sig = sig;
+    return c;
+}
+// the per-market place file is the ONLY source while drawing (IRT hands the chart copy a stale list / unchecked boxes); cached by stamp
+HodLod::Place HodLod::position(const std::string& mkt)
 {
     if (!mkt.empty()) migratePlace(mkt);
-    // (1.0.1, Rassul 2026-10-11 "its default is bottom center. it is moving to upper left") the per-market place file is the ONLY
-    // source while drawing: IRT hands a freshly added copy a stale list index (0 = Top left) that the file never had. The file is
-    // written only when he presses OK / Apply in Settings; no file = Bottom centre.
-    std::string p = flexPath("HodLod.place-" + mkt + ".txt");
-    if (mkt.empty() || p.empty()) return hl::POS_DEFAULT;
-    long long st = hlFileStamp(p);
+    const std::string p = flexPath("HodLod.place-" + mkt + ".txt");
+    if (mkt.empty() || p.empty()) return Place();
+    const long long st = hlFileStamp(p);
     for (size_t i = 0; i < posCache.size(); i++) if (posCache[i].path == p) { if (posCache[i].stamp == st) return posCache[i].v; posCache.erase(posCache.begin() + (long)i); break; }
-    PosCache c; c.path = p; c.stamp = st; c.v = hl::POS_DEFAULT;
-    if (st >= 0) {
-        std::ifstream f(p.c_str()); std::string ln;
-        if (std::getline(f, ln)) { if (!ln.empty() && ln[ln.size() - 1] == '\r') ln.erase(ln.size() - 1);
-            if (ln.size() == 1 && ln[0] >= '0' && ln[0] <= '8') c.v = ln[0] - '0'; }      // strict: one digit 0-8, else the default
-    }
+    PosCache c; c.path = p; c.stamp = st; c.v = readPlace(mkt);
     if (posCache.size() >= 8) posCache.erase(posCache.begin());
     posCache.push_back(c);
     return c.v;
@@ -729,7 +805,7 @@ void HodLod::loadAvoid(HLState& S)
 static std::vector<hl::Box> hlAvoid(const HLState& S, const hl::Box& pane, int priceEdge)
 {
     std::vector<hl::Box> v;
-    const int DP_HDR_W = 250, DP_HDR_H = 46, DP_BANNER_W = 440, DP_BANNER_H = 32, TR_W = 660, TR_H = 150;
+    const int DP_HDR_W = 250, DP_HDR_H = 46, DP_BANNER_W = 440, DP_BANNER_H = 32, TR_W = 700, TR_H = 48;   // (2.0.6) the Tape Reader 1.1.3 banner (2 lines, 11 pt)
     v.push_back(hl::Box{ pane.r - DP_HDR_W, pane.t, pane.r, pane.t + DP_HDR_H });
     if (S.dpBanner) v.push_back(hl::Box{ pane.l, pane.t, pane.l + DP_BANNER_W, pane.t + DP_BANNER_H });
     if (S.trBoxOk) v.push_back(hl::Box{ S.trBox.l - 2, S.trBox.t - 2, S.trBox.r + 2, S.trBox.b + 2 });
@@ -776,8 +852,24 @@ int HodLod::draw(void)
     loadAvoid(*S);                           // (2.0.5) the Dealer Profile header / banner and the Tape Reader box
     const int pe = priceEdge();
     const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
-    const hl::Opts O = opts();
-    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, pe, position(S->mkt), projX, &avoid, &O);
+    const Place PL = position(S->mkt);
+    const hl::Opts O = opts(PL);
+    S->placeLine = "PLACE,pos " + std::to_string(PL.pos) + ",dx " + std::to_string(O.dx) + ",dy " + std::to_string(O.dy) + (PL.why.empty() ? "" : "," + PL.why)
+                 + "\nOPTS,table " + (O.table ? "on" : "off (Show table unchecked in Settings)") + ",projection " + (O.proj ? "on" : "off") + ",mark " + (O.mark ? "on" : "off") + ",moves " + std::to_string(S->hyst.moves) + "\n";
+    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, pe, PL.pos, projX, &avoid, &O);
+    {   // (2.0.6) the table's place has hysteresis: a new spot only after 2 draws, never straight back (reset when the settings change)
+        if (PL.sig != S->hystPlaceSig || pb.l != S->hystPane.l || pb.t != S->hystPane.t || pb.r != S->hystPane.r || pb.b != S->hystPane.b) { S->hyst.reset(); S->hystPlaceSig = PL.sig; S->hystPane = pb; }   // settings or the pane changed: start clean
+        if (L.tableOk) {
+            const bp::Box want = bp::mk(L.table.l, L.table.t, L.table.l + 1, L.table.t + 1);
+            bool blocked = false; if (S->hyst.have) for (const hl::Box& a : avoid) { const bp::Box c = bp::mk(S->hyst.cur.l, S->hyst.cur.t, S->hyst.cur.l + (L.table.r - L.table.l), S->hyst.cur.t + (L.table.b - L.table.t)); if (bp::overlap(c, bp::mk(a.l, a.t, a.r, a.b))) blocked = true; }
+            bp::Box got = S->hyst.step(want, blocked);
+            const int tw = L.table.r - L.table.l, th = L.table.b - L.table.t;
+            if (got.l < pb.l || got.t < pb.t || got.l + tw > pb.r || got.t + th > pb.b) { S->hyst.reset(); got = S->hyst.step(want); }   // never kept outside the pane
+            const int dx = got.l - L.table.l, dy = got.t - L.table.t;
+            if (dx || dy) { for (size_t i = 0; i < L.items.size(); ++i) if (L.items[i].role == hl::R_TABLE || L.items[i].role == hl::R_NOTE) { L.items[i].l += dx; L.items[i].r += dx; L.items[i].t += dy; L.items[i].b += dy; }
+                            L.table.l += dx; L.table.r += dx; L.table.t += dy; L.table.b += dy; }
+        }
+    }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
         if (p.set(S->fxIdx, (float)S->fxView.price, kBarCenter) == RTX_OK && p.h > 0) mx = (int)p.h;
@@ -799,6 +891,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
-    p->setVersion("2.0.5");
+    p->setVersion("2.0.6");
     return p;
 }

@@ -47,6 +47,7 @@
 #endif
 #include "DealerLogic.h"
 #include "HostSlot.h"
+#include "BoxPlace.h"                // (4.5.9) Offset X / Y, clamping, the dialog snapshot
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -149,8 +150,9 @@ static bool drShouldWriteStatus(const std::string& path, const std::string& payl
     return payload != lastPayload || elapsed >= 60.0;
 }
 
-struct PIdx { int rstg, rwid, rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
+struct PIdx { int offX = -1, offY = -1; int rstg, rwid, rpos, rtop, view, market, corner, font, trade, todo, clock, layout, explain, keyLvl, keyFuel, keyTrig, lift, moveX, widthPct, show, apos, atop, keyHow; };
 static PIdx PX;
+static bp::DlgSnap drSnap;                                            // (4.5.9) the dialog as it opened (Position, Offset X / Y, Font)
 struct Settings { int bg = 0; int rstg = 0, rwid = 100, rpos = 0, rtop = 30, view = 0, market = 0, corner = 0, font = 10, clock = 0, layout = 0, lift = 30, moveX = 0, widthPct = 100, show = 2, apos = 0, atop = 30; bool trade = true, todo = true, explain = true; };   // layout 0 Stacked, 1 Compact, 2 Mini, 3 Full
 
 // Investor/RT may invoke the single DLL extension object for multiple chart
@@ -276,13 +278,41 @@ int DealerRead::destroy(void) { releaseState(); return RTX_OK; }
 DealerRead::DealerRead() : cppExtension() { }
 short DealerRead::U(float v) { return (short)(v * u + 0.5f); }
 bool DealerRead::dialogReady() { int i = getListIndex(PX.market); return i >= 0 && i <= 7; }
-int DealerRead::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+// (4.5.9) the place file "pos,dx,dy" (a 4.3-4.5.8 file holds the position alone); malformed = Bottom left, no offset
+static bp::Place drPlace(const std::string& m)
+{
+    bp::Place P; P.pos = 6;
+    if (m.empty()) return P;
+    std::ifstream f(dl::placePath("DealerRead", m).c_str()); std::string ln;
+    if (f && std::getline(f, ln) && ln.size() < 64) { bp::Place q; if (bp::parse(ln, 6, q)) P = q; else P.pos = q.pos; }
+    return P;
+}
+static bool drInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the settings window's copy has no bar size
+static std::string drMarketOf(cppExtension* x, int market) { char b[32] = {0}; const char* rs = x->getRootSymbol(b); return dl::marketFor(market, rs ? rs : ""); }
+int DealerRead::parmsLoad(void)
+{
+    if (!dialogReady()) return RTX_OK;
+    readSettings(cfg);
+    if (drInDialog(this) && PX.offX >= 0) {                              // (4.5.9) the dialog shows the file's values, never IRT's stale ones
+        const std::string m = drMarketOf(this, cfg.market); const bp::Place P = drPlace(m);
+        setListIndex(PX.corner, P.pos); setIntegerValue(PX.offX, P.dx); setIntegerValue(PX.offY, P.dy);
+        std::vector<long long> v; v.push_back(getListIndex(PX.corner)); v.push_back(getIntegerValue(PX.offX)); v.push_back(getIntegerValue(PX.offY)); drSnap.take(v);
+    }
+    return RTX_OK;
+}
 // (4.3.0) the Position setting is saved for the dialog's market when he changes it (a draw never writes it)
 static void drSavePlace(cppExtension* x, const Settings& S)
 {
     char b[32] = {0}; const char* rs = x->getRootSymbol(b);
     const std::string m = dl::marketFor(S.market, rs ? rs : "");
-    dl::savePlace("DealerRead", m, S.corner);
+    if (!m.empty() && drInDialog(x) && PX.offX >= 0) {                  // (4.5.9) Position + Offset X / Y; an untouched control keeps the file's value
+        const bp::Place F = drPlace(m);
+        std::vector<long long> now; now.push_back(x->getListIndex(PX.corner)); now.push_back(x->getIntegerValue(PX.offX)); now.push_back(x->getIntegerValue(PX.offY));
+        bp::Place P; const long long a = drSnap.pick(0, now[0], F.pos), b = drSnap.pick(1, now[1], F.dx), c = drSnap.pick(2, now[2], F.dy);
+        P.pos = bp::posOk((int)a) && a == (int)a ? (int)a : F.pos; P.dx = bp::offOk((int)b) && b == (int)b ? (int)b : F.dx; P.dy = bp::offOk((int)c) && c == (int)c ? (int)c : F.dy;
+        std::ofstream f(dl::placePath("DealerRead", m).c_str(), std::ios::trunc); if (f.is_open()) f << bp::format(P) << "\n";
+        drSnap.take(now);
+    }
     // (4.5.8 settings audit) the Font size is kept per market the same way (on the chart IRT does not hand the dialog's values to
     // the draw, so the font went back to 10 pt); the Background row is gone (4.5.5 made the box always solid - the row did nothing)
     if (!m.empty() && S.font >= 7 && S.font <= 20) { std::ofstream f(dl::placePath("DealerReadFont", m).c_str(), std::ios::trunc); if (f.is_open()) f << S.font << "\n"; }
@@ -317,13 +347,15 @@ int cppExtension::setup(void)
     // (4.3.0, Rassul 2026-10-07 09:16 "fix placement, with fixed height and width ... top left, top center, top right, bottom left
     // ... middle right instead of the user entering amount of placement") Position = one of 9 spots (default Bottom left); the box
     // has a fixed size; nothing is dragged (one shared IRT object moved the copper Read when he clicked the gold chart).
-    setParameterVersion(13);   // (4.5.8) Clock offset + Background removed (the last two rows: the rows above keep their places). (4.4.0) + Background
+    setParameterVersion(14);   // (4.5.9) + Offset X / Y (appended; the chart reads the place file, the dialog is filled from it)   // (4.5.8) Clock offset + Background removed (the last two rows: the rows above keep their places). (4.4.0) + Background
     setParameterDialogHeight(3);
     const short SL = kParmAppendSameLine;
     int pc = 0;
     PX.market   = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
     PX.corner   = pc++; setListParameter("Position", 6, dl::ANCHORS, 0, SL);
     PX.font     = pc++; setIntegerParameter("Font size (pt)", 10, NUMW);
+    PX.offX     = pc++; setIntegerParameter("Offset X", 0, NUMW, SL);           // (4.5.9) px, right = +, -600..600
+    PX.offY     = pc++; setIntegerParameter("Offset Y", 0, NUMW, SL);           // (4.5.9) px, down = +
     // (4.5.8 settings audit) "Clock offset (min)" removed - the dealer files and his charts are both Central (as Dealer Sig 1.5.0,
     // Rassul 2026-10-05 21:19 "why do you even have that option?"); "Background" removed - 4.5.5 made the box always solid
     PX.clock = PX.rwid = -1;
@@ -1150,7 +1182,7 @@ void DealerRead::writeStatus(const char* what)
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerRead.status.txt";
     std::ostringstream text;
-    text << "VERSION,4.5.8\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
+    text << "VERSION,4.5.9\nROOT," << root << "\nMARKET," << mkt << "\nLEVEL," << (D.hasLevel ? D.lvlLabel : "none") << "\nPHASE," << D.phase << "\nSTATE," << what << "\n";
     const std::string payload = text.str();
     const std::time_t now = std::time(NULL);
     // Different charts can share this legacy status file: cap those switches
@@ -1448,7 +1480,9 @@ void DealerRead::renderGrid(const Settings& S)
     W += gw + 2 * pad;
     gridH = (short)(pad * 2 + lh * (short)(L.size() + 1));
     short clearR = clearRight(pane);
-    int ax, ay; dl::anchorXY(pane.left, pane.top + U(16), clearR, pane.bottom, W, gridH, dl::loadPlace("DealerRead", mkt, 6), U(8), ax, ay);
+    const bp::Place drp = drPlace(mkt);                                  // (4.5.9) Position + Offset X / Y, clamped inside the area
+    int ax, ay; dl::anchorXY(pane.left, pane.top + U(16), clearR, pane.bottom, W, gridH, drp.pos, U(8), ax, ay);
+    { const bp::Box o = bp::offset(bp::mk(ax, ay, ax + W, ay + gridH), drp.dx, drp.dy, bp::mk(pane.left, pane.top + U(16), clearR, pane.bottom)); ax = o.l; ay = o.t; }
     short x0 = (short)ax, y0 = (short)ay;
     lastClearR = clearR; lastLeft = pane.left; lastW = W;
     gridL = x0; gridT = y0;
@@ -1598,8 +1632,9 @@ void DealerRead::renderTurn(const Settings& S)
     if (bodyLines > 7) bodyLines = 7;
     nGroups = gOpt > gFp ? gOpt : gFp;
     gridH = dl::readBoxH(pad, lh, (int)head.size(), (int)rdl.size(), bodyLines, nGroups, U(2), U(3), U(6));
-    int place = dl::loadPlace("DealerRead", mkt, 6);                // Bottom left unless he picked another spot for this market
-    int ax, ay; dl::anchorXY(leftEdge, pane.top + U(16), clearR, pane.bottom, W, gridH, place, U(8), ax, ay);
+    const bp::Place drp = drPlace(mkt);                              // Bottom left unless he picked another spot for this market; (4.5.9) + Offset X / Y
+    int ax, ay; dl::anchorXY(leftEdge, pane.top + U(16), clearR, pane.bottom, W, gridH, drp.pos, U(8), ax, ay);
+    { const bp::Box o = bp::offset(bp::mk(ax, ay, ax + W, ay + gridH), drp.dx, drp.dy, bp::mk(leftEdge, pane.top + U(16), clearR, pane.bottom)); ax = o.l; ay = o.t; }
     short x0 = (short)ax, y0 = (short)ay;
     lastClearR = clearR; lastLeft = pane.left; lastW = W;
     gridL = x0; gridT = y0;
@@ -1718,6 +1753,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (4.5.6) FRONT_DRAWING: the box is drawn after every other indicator, so no line shows through it;   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences.");
-    p->setVersion("4.5.8");   // (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.5.9");   // (4.5.9, 2026-10-14 CR4800) Offset X / Y on the 9-spot Position (clamped, per market, the dialog filled from the file); (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

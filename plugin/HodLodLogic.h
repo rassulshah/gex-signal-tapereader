@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.0.5";
+static const char* const HL_VERSION = "2.0.6";
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -1337,8 +1337,8 @@ inline void addLine(Layout& L, int x1, int y1, int x2, int y2, unsigned col, int
 // (HL105, mockup 13 + Rassul "a setting where to put them") the 9 spots, as SessionInfo: Top / Middle / Bottom x Left / Centre / Right
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 // (2.0.5, Rassul 2026-10-13 16:24 "the table at the TOP of the price pane"; 21:04 "even the location of the hod lod is incorrect")
-static const int POS_DEFAULT = 1;   // Top centre (2.0.4 and before: 7 = Bottom centre)
-static const int POS_OLD_DEFAULT = 7;   // a place file holding this is migrated to POS_DEFAULT ONCE per market (HodLod.migrate-205.txt)
+static const int POS_DEFAULT = 7;   // (2.0.6, Rassul 07:13 "move it DOWN, default Bottom centre") Bottom centre (2.0.5: 1 = Top centre)
+static const int POS_PREV_DEFAULT = 1;  // (2.0.6) a place file holding the 2.0.5 default becomes 7 ONCE per market (HodLod.migrate-206.txt)
 static const int TITLE_ROW_PX = 22;     // (2.0.5) the IRT chart title row is kept clear (Liquidity 0.14.1 reserves 20 px the same way)
 static const int AVOID_GAP = 4;         // px kept between the table and another indicator's box
 inline Box placeIn(const Box& area, int W, int H, int pos)
@@ -1353,9 +1353,18 @@ inline Box placeIn(const Box& area, int W, int H, int pos)
 // (2.0.5) the Position spot, then - if another indicator's box is there (the Dealer Profile header / banner, the Tape Reader box) - the
 // nearest spot inside the area that touches none of them: the table's edge moved to just past an obstacle's edge (vertically first,
 // then sideways, then both). moved / clear say what happened (status file); nothing clear = the Position spot (clear = false).
-inline Box placeAvoid(const Box& area, int W, int H, int pos, const std::vector<Box>& avoid, bool* moved = nullptr, bool* clear = nullptr)
+inline Box offsetIn(const Box& area, const Box& b, int dx, int dy)    // (2.0.6) Offset X / Y, then kept fully inside the area
 {
-    const Box b0 = placeIn(area, W, H, pos);
+    if (dx < -600 || dx > 600) dx = 0;
+    if (dy < -600 || dy > 600) dy = 0;
+    const int W = b.r - b.l, H = b.b - b.t;
+    int x = b.l + dx, y = b.t + dy;
+    x = (std::max)(area.l, (std::min)(x, area.r - W)); y = (std::max)(area.t, (std::min)(y, area.b - H));
+    return Box{ x, y, x + W, y + H };
+}
+inline Box placeAvoid(const Box& area, int W, int H, int pos, const std::vector<Box>& avoid, bool* moved = nullptr, bool* clear = nullptr, int dx = 0, int dy = 0)
+{
+    const Box b0 = offsetIn(area, placeIn(area, W, H, pos), dx, dy);       // (2.0.6) the Position spot + the offset; avoidance from there
     auto hits = [&](const Box& b) { for (size_t i = 0; i < avoid.size(); i++) if (overlap(b, avoid[i])) return true; return false; };
     if (moved) *moved = false;
     if (clear) *clear = true;
@@ -1440,7 +1449,7 @@ inline std::vector<Seg> regimeParts(const View& v, bool compact = false)
 }
 inline std::string regimeText(const View& v, bool compact = false) { std::string s; std::vector<Seg> p = regimeParts(v, compact); for (size_t i = 0; i < p.size(); i++) s += p[i].s; return s; }
 
-inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT)
+inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT, int dx = 0, int dy = 0)
 {
     if (freeR < 0) freeR = pane.r;
     const int pad = 6;
@@ -1512,8 +1521,8 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);
         std::vector<int> cwv((size_t)ncol, (W - 12 - lw) / ncol);
         if (natural) { int extra = (W - 12 - lw - sumNat) / ncol; for (int k = 0; k < ncol; k++) cwv[(size_t)k] = nat[(size_t)k] + extra; }
-        L.tableWant = placeIn(area, W, H, pos);
-        Box T = placeAvoid(area, W, H, pos, L.avoid, &L.tableMoved, &L.tableClear);
+        L.tableWant = offsetIn(area, placeIn(area, W, H, pos), dx, dy);
+        Box T = placeAvoid(area, W, H, pos, L.avoid, &L.tableMoved, &L.tableClear, dx, dy);
         L.table = T; L.tableOk = true; L.trendCompact = compactT;
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
         const int cx = (T.l + T.r) / 2;
@@ -1914,6 +1923,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
 // unset, IRT returns it for a never-saved colour) keeps the default; hidden table = no table at all (the projection is then not cut).
 struct Opts {
     bool table = true, proj = true, mark = true;
+    int dx = 0, dy = 0;                                                    // (2.0.6) Offset X / Y of the table (px, -600..600)
     unsigned tableBg = C_PANEL, projUp = C_GREEN, projDn = C_RED, markLod = C_GREEN, markHod = C_RED;
 };
 inline unsigned optCol(unsigned v, unsigned def) { v &= 0xFFFFFFu; return v ? v : def; }
@@ -1957,7 +1967,7 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
     // the free area ends at the price edge (the last bar's right edge, where the profiles begin) when the chart gives it
     int freeR = priceEdge > 0 ? priceEdge : pane.r - (int)((pane.r - pane.l) * 0.15);
     if (freeR <= colR + 100) freeR = pane.r - (int)((pane.r - pane.l) * 0.15);
-    if (showTable) layoutTable(L, v, pane, colR, M, freeR, pos);   // (2.0.5) Show table off: no table, the projection runs uncut   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
+    if (showTable) layoutTable(L, v, pane, colR, M, freeR, pos, opt ? opt->dx : 0, opt ? opt->dy : 0);   // (2.0.5) Show table off: no table, the projection runs uncut   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
     if (HODLOD_SHOW_CANDLE) layoutCandle(L, v, pane, yOf, M);
     // (1.1.2) the line stands on the live extreme's candle; only when that bar is off the chart, just left of the table (1.1.0)
     if ((projX < pane.l + 2 || projX > pane.r - 4) && L.tableOk && L.table.l - PROJ_GAP > pane.l + 2) projX = L.table.l - PROJ_GAP;

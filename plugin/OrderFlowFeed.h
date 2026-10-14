@@ -1,7 +1,20 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.2.2, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.0, lsPullStats 1.1.0 and
-// lsStackStats 1.1.1.
+// OrderFlowFeed.h (1.3.0, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.2, lsPullStats 1.2.1 and
+// lsStackStats 1.1.2.
+// 1.3.0 (2026-10-14, CR4800; Rassul 07:02 "make them more compact so you will have room for the read", 07:16 "remove the white boxes,
+//   just keep the signals and use white font instead", 07:18 "test them thoroughly ... dont shake or act erratic, and dont have garbage
+//   values", 07:22 "replace the info box with a read box because there isn't enough room for both"):
+//   - THE PANEL: "Box shows" Read (default) = a fixed READ box (the plain-language read, max 3 lines, + the blue options line); the
+//     numbers table moves to the hover over that box (all rows, same order / colours, flowing into column groups). Numbers = the
+//     compact numbers box (columns sized to the rows that fit) + the read beside it, wrapped to 2 lines instead of cut.
+//   - Offset X / Y (BoxPlace.h): the box placed by Position, then nudged, always fully inside the pane and left of the last bar.
+//   - Letters: white text, no box, no border (R stop-run marks keep their red / green text). Spike labels: ONE per candle (the bigger
+//     side), never over the box or the read lines (a pane under 80 px used to get no text reserve - labels drew over the read).
+//   - L (one large order): the candle's biggest order must ALSO be in the top 10% (largeBarPct) of the prior candles' biggest
+//     orders (20+ candles this session; none before) - the per-ORDER 99th percentile alone (20 lots in ES) fired on ~every candle.
+//   - Settings are read from the per-market file on every draw (IRT hands the chart copy list 0 / boxes unchecked); the dialog is
+//     filled from the file when it opens, and a field the user did not touch is never overwritten (BoxPlace.h DlgSnap).
 // 1.2.2 (2026-10-14, settings audit + Rassul's approved "Record order feed" for PullStats): MboPane gets four virtual hooks with
 //   empty defaults (recorderPane / onRaw / afterPump / statusExtra) and PaneSettings an optional 7th field `record` (written only by
 //   a recorder pane; a 6-field file reads record = 1). lsBidAskStats / lsStackStats / lsTapeReader behave exactly as before.
@@ -64,6 +77,7 @@
 #include "NearLevels.h"
 #include "OptionsFlow.h"
 #include "HoverBoard.h"
+#include "BoxPlace.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -86,7 +100,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.2.2";   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -117,6 +131,10 @@ inline bool toTick(double price, double tick, Tick& out) {
 // =====================================================================================================================
 struct Params {
     long long sweepLevels = 3, largeLotAggr = 0, largeLotResting = 0, largeLotPct = 99, largeLotMin = 20;
+#ifndef OFF_LARGE_BAR_MIN_DEFAULT
+#define OFF_LARGE_BAR_MIN_DEFAULT 20   // the 1.2.x host suites build with 0 (the per-order rule alone) to keep their scenarios; 1.3.0 tests use 20
+#endif
+    long long largeBarPct = 90, largeBarMin = OFF_LARGE_BAR_MIN_DEFAULT;  // (1.3.0) L: the biggest order vs the prior candles' biggest (top 10%, 20+ candles)
     long long refillWindowMs = 1000, refillNotableT = 20;                 // tenths: 20 = 2.0x
     long long spikeAvgT = 20, spikeJumpT = 15, spikeLookback = 10;        // tenths / tenths / bars
     long long closeTicks = 2, baitPct = 70;
@@ -134,6 +152,8 @@ static const ParamDef PARAM_DEFS[] = {
     { "largeLotResting", false, 0, 100000, &Params::largeLotResting },
     { "largeLotPct", false, 50, 100, &Params::largeLotPct },
     { "largeLotMin", false, 1, 100000, &Params::largeLotMin },
+    { "largeBarPct", false, 50, 99, &Params::largeBarPct },
+    { "largeBarMin", false, 5, 500, &Params::largeBarMin },
     { "refillWindowMs", false, 50, 60000, &Params::refillWindowMs },
     { "refillNotableX", true, 10, 100, &Params::refillNotableT },
     { "spikeAvgX", true, 0, 100, &Params::spikeAvgT },
@@ -283,6 +303,18 @@ inline long long largeThreshold(const SizeDist& d, long long fixed, long long pc
     const long long v = d.pct(pct);
     return v > minLots ? v : minLots;
 }
+// (1.3.0, Rassul 07:16 "why are there so many") a candle has thousands of orders, so its biggest one almost always beats the per-ORDER
+// 99th percentile: L fired on ~every candle (ES: 46 of 46). L now also needs the candle's biggest order to be in the top
+// (100 - largeBarPct)% of the PRIOR candles' biggest orders (per side, this session, at least largeBarMin candles; before that no L).
+// A fixed lot size in the params file still wins. 0 = no threshold (no L).
+inline long long rareThreshold(const SizeDist& orders, const SizeDist& bars, long long fixed, const Params& P) {
+    if (fixed > 0) return fixed;
+    const long long o = largeThreshold(orders, 0, P.largeLotPct, P.largeLotMin);
+    if (P.largeBarMin <= 0) return o;                                     // the per-order rule alone (tests; the params file allows 5..500)
+    if (bars.total < P.largeBarMin) return 0;
+    const long long b = bars.pct(P.largeBarPct) + 1;                      // strictly above the bar percentile
+    return std::max(o, b);
+}
 
 // =====================================================================================================================
 // THE ENGINE
@@ -375,6 +407,7 @@ public:
     std::unordered_map<Tick, long long> rest[2];       // known resting size per price
     std::map<Tick, std::pair<long long, long long> > lastFill[2];   // price -> (arrival ms, stamp) of the latest fill there
     SizeDist aggrDist, restDist;                       // this session's aggressor order sizes / resting sizes near price
+    SizeDist aggrBar, restBar;                         // (1.3.0) this session's per-candle, per-side BIGGEST aggressor / resting (add or pull) order
     long long events = 0, garbage = 0, unknownDel = 0, unknownMod = 0, unknownFill = 0, dupNew = 0, bookDrops = 0, bookResets = 0;
     long long perAction[4] = {0, 0, 0, 0};
 
@@ -562,8 +595,8 @@ public:
     // the numbers only (nothing recorded): the forming candle's live look uses this
     Rec numbers(const Acc& a, bool partial, const Params& P) const {
         Rec r; r.partial = partial; r.events = a.events;
-        r.thrAggr = largeThreshold(aggrDist, P.largeLotAggr, P.largeLotPct, P.largeLotMin);
-        r.thrRest = largeThreshold(restDist, P.largeLotResting, P.largeLotPct, P.largeLotMin);
+        r.thrAggr = rareThreshold(aggrDist, aggrBar, P.largeLotAggr, P);
+        r.thrRest = rareThreshold(restDist, restBar, P.largeLotResting, P);
         for (int s = 0; s < 2; ++s) {
             r.pullN[s] = a.pullN[s]; r.pullC[s] = a.pullC[s]; r.pullMax[s] = a.pullMax[s]; r.pullClose[s] = a.pullClose[s];
             r.addN[s] = a.addN[s]; r.addC[s] = a.addC[s]; r.addMax[s] = a.addMax[s];
@@ -594,9 +627,15 @@ public:
         const Rec r = numbers(a, partial, P);
         for (std::unordered_map<long long, Aggr>::const_iterator i = a.aggr.begin(); i != a.aggr.end(); ++i) if (i->second.side == BID || i->second.side == ASK) aggrDist.add(i->second.size);
         for (size_t i = 0; i < a.restSizes.size(); ++i) restDist.add(a.restSizes[i]);
+        if (!partial) for (int s = 0; s < 2; ++s) {                        // (1.3.0) the candle's biggest orders join the per-candle distributions
+            if (r.aggrMax[s] > 0) aggrBar.add(r.aggrMax[s]);
+            const long long rm = std::max(r.addMax[s], r.pullMax[s]); if (rm > 0) restBar.add(rm);
+        }
         return r;
     }
-    void newSession() { aggrDist.clear(); restDist.clear(); }
+    void newSession() { aggrDist.clear(); restDist.clear(); aggrBar.clear(); restBar.clear(); }
+    // (1.3.0) after a restart: the per-candle maxima come back from the session record's closed candles (no new file lines)
+    void barFrom(const Rec& r) { if (r.partial) return; for (int s = 0; s < 2; ++s) { if (r.aggrMax[s] > 0) aggrBar.add(r.aggrMax[s]); const long long rm = std::max(r.addMax[s], r.pullMax[s]); if (rm > 0) restBar.add(rm); } }
 };
 
 // =====================================================================================================================
@@ -1002,6 +1041,148 @@ struct InfoRow { std::string label, v[2]; int side[2] = {0, 1}; };          // s
 struct Info { std::string head; bool twoCol = true; std::string colHead[2]; std::vector<InfoRow> rows; std::string tmpl = "9999 (99.9x)"; };
 
 // =====================================================================================================================
+// (1.3.0, CR4800) THE PANEL - pure geometry, measured with the host's own font (TextW), so the plugin draws exactly what the tests check.
+//   Read mode (default; Rassul 07:22 "replace the info box with a read box because there isn't enough room for both"): a READ box of
+//   FIXED size (READ_W x the pane height, at most 3 read lines + 2 options lines) placed by Position + Offset X / Y; the read wraps
+//   inside it (a 4th line would end in "..."). Hover over it = the numbers grid (every row, same order / colours) at the same top-left.
+//   Numbers mode: the compact numbers box (each column as wide as its widest row template among the rows that FIT) + the read beside
+//   it, wrapped to 2 lines (pane >= 92 px) instead of cut, the blue options line under it.
+// Every size here depends on the pane, the settings and the row TEMPLATES only - never on the live values or the mouse (no shaking).
+// =====================================================================================================================
+static const int MODE_READ = 0, MODE_NUMBERS = 1;
+static const char* const MODE_CHOICES = "Read;Numbers";
+static const int READ_W = 360, BOX_PAD = 5, READ_PT = 10, OPT_PT = 9, READ_LH = 15, OPT_LH = 13, READ_MAX = 3, OPT_MAX = 2, NUM_PT = 10, NUM_LH = 15;
+typedef std::function<int(const std::string&, int, bool)> TextW;   // px width of a string at pt / bold
+inline int clampMode(long long m) { return m == MODE_NUMBERS ? MODE_NUMBERS : MODE_READ; }
+// word wrap into at most maxLines lines of <= w px; more text = the last line cut with "..." (fitText); a single over-long word is cut
+inline std::vector<std::string> wrapText(const std::string& s, int w, int maxLines, int pt, bool bold, const TextW& M) {
+    std::vector<std::string> out; if (s.empty() || maxLines <= 0 || w <= 0) return out;
+    auto W = [&](const std::string& t) { return M(t, pt, bold); };
+    std::vector<std::string> words; { size_t a = 0; while (a < s.size()) { size_t b = s.find(' ', a); if (b == std::string::npos) b = s.size(); if (b > a) words.push_back(s.substr(a, b - a)); a = b + 1; } }
+    std::string cur; size_t i = 0;
+    for (; i < words.size(); ++i) {
+        const std::string t = cur.empty() ? words[i] : cur + " " + words[i];
+        if (W(t) <= w) { cur = t; continue; }
+        if (cur.empty()) { cur = nl::fitText(words[i], w, W); ++i; }      // one word wider than the box
+        out.push_back(cur); cur.clear();
+        if ((int)out.size() == maxLines) break;
+        --i;                                                                // this word starts the next line
+    }
+    if ((int)out.size() < maxLines) { if (!cur.empty()) out.push_back(cur); return out; }
+    if (i < words.size()) {                                                 // text left over: the last line ends in "..."
+        std::string rest = out.back(); for (size_t k = i; k < words.size(); ++k) rest += " " + words[k];
+        out.back() = nl::fitText(rest, w, W);
+    }
+    return out;
+}
+// (1.3.0) the read wrapped into maxLines: as is if it fits, else fitMessage's shorter forms (the large-order clause, then the pace words
+// dropped - the hover has them), and only then the end cut - the verdict ("- price held: buyers absorbing") is kept as long as possible
+inline std::vector<std::string> wrapRead(const std::string& s, int w, int maxLines, const TextW& M) {
+    const std::vector<std::string> v = compactVariants(s);
+    for (size_t k = 0; k < v.size(); ++k) {
+        const std::vector<std::string> L = wrapText(v[k], w, maxLines, READ_PT, true, M);
+        std::string j; for (size_t i = 0; i < L.size(); ++i) j += (i ? " " : "") + L[i];
+        if (j == v[k]) return L;
+    }
+    return wrapText(v.back(), w, maxLines, READ_PT, true, M);
+}
+// the widest value a row can show (the column width comes from these, never from the live value - no shaking)
+inline std::string rowTmpl(const std::string& label, const std::string& def) {
+    static const char* const T[][2] = {
+        { "Lots", "9999 (99.9x)" }, { "Added", "9999 (99.9x)" }, { "Pulled", "9999 (99.9x)" }, { "Pace", "9.9x (2.0x) ?" },
+        { "Sweep", "99 lvls" }, { "Large", "9999" }, { "StopRun", "above LonLO 12t?" }, { "Burst", "99.9x, in 9 bars" },
+        { "Rebuilt", "100% ?" }, { "Refills (I)", "999 (99.9x)" }, { "Before price", "yes" }, { "Traded first", "yes" } };
+    for (size_t k = 0; k < sizeof(T) / sizeof(T[0]); ++k) if (label == T[k][0]) return T[k][1];
+    return def;                                                             // Crowd and anything new: the box's template (the widest)
+}
+// the compact numbers box for the rows that fit in maxH: label column + two value columns (Rassul 07:02 "make them more compact")
+struct NumGeom { int lw = 0, vw = 0, W = 0, H = 0, rows = 0; };
+inline NumGeom numGeom(const Info& I, int maxH, const TextW& M) {
+    NumGeom g; const int head = 1 + (I.twoCol ? 1 : 0);
+    int fit = (maxH - BOX_PAD + 2) / NUM_LH - head; if (fit < 0) fit = 0;   // a row fits when its text ends inside the box (as 1.2.1 drew them)
+    g.rows = std::min((int)I.rows.size(), fit);
+    for (int k = 0; k < g.rows; ++k) { g.lw = std::max(g.lw, M(I.rows[(size_t)k].label, NUM_PT, true)); g.vw = std::max(g.vw, M(rowTmpl(I.rows[(size_t)k].label, I.tmpl), NUM_PT, true)); }
+    if (I.twoCol) for (int s = 0; s < 2; ++s) g.vw = std::max(g.vw, M(I.colHead[s], NUM_PT, true));
+    const int hw = std::max(M("12:59 PM", NUM_PT, true), M(I.head, NUM_PT, true));
+    g.W = std::max(I.twoCol ? BOX_PAD + g.lw + 8 + g.vw + 8 + g.vw + BOX_PAD : BOX_PAD + g.lw + 10 + g.vw + BOX_PAD, hw + 2 * BOX_PAD);
+    g.H = std::min(maxH, BOX_PAD + NUM_LH * (head + g.rows) + BOX_PAD - 2);
+    return g;
+}
+// the hover grid: EVERY row, flowing into column groups of rowsPer rows (label | left | right), as wide as the rows' templates
+struct GridGeom { struct G { int x = 0, lw = 0, vw = 0; size_t from = 0, n = 0; }; std::vector<G> g; int W = 0, H = 0, rowsPer = 0; };
+inline GridGeom gridGeom(const Info& I, int H, const TextW& M) {
+    GridGeom o; o.H = H;
+    o.rowsPer = (H - BOX_PAD + 2) / NUM_LH - 1; if (o.rowsPer < 1) o.rowsPer = 1;
+    int x = BOX_PAD + M("12:59 PM", NUM_PT, true) + 12;                     // the candle's time on the left of the header row
+    for (size_t from = 0; from < I.rows.size(); from += (size_t)o.rowsPer) {
+        GridGeom::G g; g.from = from; g.n = std::min((size_t)o.rowsPer, I.rows.size() - from); g.x = x;
+        for (size_t k = from; k < from + g.n; ++k) { g.lw = std::max(g.lw, M(I.rows[k].label, NUM_PT, true)); g.vw = std::max(g.vw, M(rowTmpl(I.rows[k].label, I.tmpl), NUM_PT, true)); }
+        if (I.twoCol) for (int s = 0; s < 2; ++s) g.vw = std::max(g.vw, M(I.colHead[s], NUM_PT, true));
+        o.g.push_back(g); x += g.lw + 8 + g.vw + 8 + g.vw + 18;
+    }
+    o.W = x - 18 + BOX_PAD; return o;
+}
+// text kept free at the top of the pane (the bars scale to the rest; scale() uses the same number, so the axis stays true)
+inline int textReserve(int paneH, int mode) {
+    if (mode == MODE_READ) return paneH >= 40 ? 4 : 0;                      // the read is in the box: the right side is bars + labels only
+    if (paneH >= 92) return 2 * READ_LH + OPT_LH + 4;                      // two read lines + the options line
+    return paneH >= 50 ? READ_LH + OPT_LH + 2 : 0;                         // (1.3.0) a short pane still keeps one line (was 0 under 80 px)
+}
+inline int msgLinesFor(int reserve) { return reserve >= 2 * READ_LH + OPT_LH ? 2 : (reserve >= READ_LH ? 1 : 0); }
+// the panel plan for one draw
+struct PanelPlan {
+    int mode = MODE_READ; bp::Box area, box; bool ok = false;
+    std::vector<std::string> read, opt;                                    // read mode: the lines in the box; numbers mode: beside it
+    NumGeom num; GridGeom grid; bp::Box gridBox;                           // numbers box / the hover grid
+    std::vector<bp::Box> textRects;                                        // numbers mode: the read / options line rectangles
+    int yTop = 0;                                                          // spike labels never above this
+};
+inline PanelPlan planPanel(const bp::Box& area, int paneTop, int mode, const bp::Place& place, const Info& I, const std::string& line1,
+                           const std::string& optLine, int reserve, const TextW& M) {
+    PanelPlan P; P.mode = clampMode(mode); P.area = area; P.yTop = paneTop + reserve;
+    if (area.w() < 40 || area.h() < 12) return P;
+    P.ok = true;
+    if (P.mode == MODE_READ) {
+        const int W = std::min(READ_W, area.w()), H = std::min(area.h(), 2 * BOX_PAD + READ_MAX * READ_LH + OPT_MAX * OPT_LH);
+        P.box = bp::placeBox(area, W, H, place);
+        const int tw = W - 2 * 6;
+        int roomRead = (H - 2 * BOX_PAD) / READ_LH; if (roomRead > READ_MAX) roomRead = READ_MAX;
+        P.read = wrapRead(line1, tw, roomRead, M);
+        const int used = (int)P.read.size() * READ_LH;
+        int roomOpt = (H - 2 * BOX_PAD - used) / OPT_LH; if (roomOpt > OPT_MAX) roomOpt = OPT_MAX;
+        P.opt = wrapText(optLine, tw, roomOpt, OPT_PT, false, M);
+        P.grid = gridGeom(I, H, M);
+        P.gridBox = bp::clampIn(bp::mk(P.box.l, P.box.t, P.box.l + P.grid.W, P.box.t + H), area);
+        return P;
+    }
+    P.num = numGeom(I, area.h(), M);
+    P.box = bp::placeBox(area, std::min(P.num.W, area.w()), P.num.H, place);
+    // the read beside the box: in the top band, the wider free side of it; never past the last bar
+    int L = area.l, R = area.r; const int y = paneTop + 2;
+    if (P.box.t < y + reserve && P.box.b > y) { const int lw = P.box.l - 4 - L, rw = R - (P.box.r + 4); if (rw >= lw) L = P.box.r + 4; else R = P.box.l - 4; }
+    if (R - L < 20) return P;
+    const int lines = msgLinesFor(reserve);
+    if (lines >= 2) P.read = wrapRead(line1, R - L, 2, M);
+    else if (lines == 1) { const std::string t = fitMessage(line1, R - L, [&](const std::string& u) { return M(u, READ_PT, true); }); if (!t.empty()) P.read.push_back(t); }
+    int yy = y;
+    for (size_t k = 0; k < P.read.size(); ++k) { const int w = M(P.read[k], READ_PT, true), x0 = (L + R) / 2 - w / 2; P.textRects.push_back(bp::mk(x0, yy, x0 + w + 2, yy + READ_LH)); yy += READ_LH; }
+    if (!optLine.empty() && reserve >= (int)P.read.size() * READ_LH + OPT_LH) {
+        const std::string t = nl::fitText(optLine, R - L, [&](const std::string& u) { return M(u, OPT_PT, false); });
+        if (!t.empty()) { P.opt.push_back(t); const int w = M(t, OPT_PT, false), x0 = (L + R) / 2 - w / 2; P.textRects.push_back(bp::mk(x0, yy, x0 + w + 2, yy + OPT_LH)); }
+    }
+    return P;
+}
+// (1.3.0) ONE spike label per candle (Rassul 07:02 "they overlap"): the side with the bigger ratio (no ratio: the bigger value)
+inline int spikeSideOf(const bool spk[2], const bool ratioOk[2], const double ratio[2], const long long v[2]) {
+    if (spk[0] && !spk[1]) return 0;
+    if (spk[1] && !spk[0]) return 1;
+    if (!spk[0] && !spk[1]) return -1;
+    const double a = ratioOk[0] ? ratio[0] : -1, b = ratioOk[1] ? ratio[1] : -1;
+    if (a != b) return a > b ? 0 : 1;
+    return v[0] >= v[1] ? 0 : 1;
+}
+
+// =====================================================================================================================
 // TIME: the 17:00 Central trading day of a bar END stamp (local clock fields), as yyyymmdd; at / after 17:00 = the next day
 // =====================================================================================================================
 inline long long civilDays(long long y, unsigned m, unsigned d) {
@@ -1349,10 +1530,10 @@ struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {fals
 struct PaneGeo { int left = 0, top = 0, right = 0, bottom = 0, yBase = 0, px = 1, reserve = 0, edge = 0; };
 // the pane geometry: bars from yBase = bottom - 1 up px pixels; the text area ends at the last bar (never the empty space right
 // of price) and never over the price axis
-inline PaneGeo paneGeo(cppExtension* x, int pos) {
+inline PaneGeo paneGeo(cppExtension* x, int mode) {
     PaneGeo g; cppExtension::RCT pane; pane.getPaneRect(false);
     g.left = pane.left; g.top = pane.top; g.right = pane.right; g.bottom = pane.bottom;
-    g.reserve = textReserve(pane.bottom - pane.top); (void)pos;
+    g.reserve = textReserve(pane.bottom - pane.top, mode);                // (1.3.0) by the Box shows mode (scale() uses the same)
     g.yBase = pane.bottom - 1; g.px = drawPx(pane.bottom - pane.top, g.reserve);
     cppExtension::RCT scl; scl.getScaleRect();
     int edge = pane.right;
@@ -1367,7 +1548,7 @@ inline PaneGeo paneGeo(cppExtension* x, int pos) {
 inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, int hov, const COLOR normal[2], const COLOR spike[2],
                      const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid = std::vector<LBox>()) {
     if (top <= 0) return;
-    cppExtension::FONT lf; lf.id = cppExtension::HELVETICA; lf.size = 7; lf.style = cppExtension::BOLD;
+    cppExtension::FONT lf; lf.id = cppExtension::HELVETICA; lf.size = 8; lf.style = cppExtension::BOLD;   // (1.3.0) 8 pt white text (was 7 pt in white boxes)
     std::vector<std::pair<int, BarLook> > lets;
     for (int i = v0; i <= v1; ++i) {
         const BarLook b = look(i); if (!b.ok) continue;
@@ -1417,8 +1598,9 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
                     }
                 }
                 allLets.push_back(bx[j]);
-                fillFlat(x, bx[j].l, bx[j].t, bx[j].r, bx[j].b, C_WHITE);
-                x->setTextColor(isMark ? lb.markCol[sd] : C_BLACKC);
+                // (1.3.0, Rassul 07:16 "remove the white boxes, just keep the signals and use white font instead"): the letter only -
+                // no box, no border; S / L / I white, the stop-run R in its red / green
+                x->setTextColor(isMark ? lb.markCol[sd] : C_WHITE);
                 cppExtension::RCT r; r.set(coord(bx[j].l), coord(bx[j].t), coord(bx[j].r + 1), coord(bx[j].b + 1)); r.drawText(txt.c_str(), true, false);
             }
         }
@@ -1429,7 +1611,8 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         const BarLook b = look(i); if (!b.ok || (!b.spike[0] && !b.spike[1])) continue;
         const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
         const Pair p = pairIn(xc, slot);
-        for (int s = 0; s < 2; ++s) if (b.spike[s]) {
+        const int one = spikeSideOf(b.spike, b.ratioOk, b.ratio, b.v);          // (1.3.0) one label per candle: the bigger side
+        for (int s = 0; s < 2; ++s) if (b.spike[s] && s == one) {
             SpikeIn si; si.cx = (p.l[s] + p.r[s]) / 2; si.barTop = g.yBase - barHeight(b.v[s], top, g.px); si.side = s;
             si.q = std::to_string(b.v[s]); si.x = b.ratioOk[s] ? ratioText(b.ratio[s]) : std::string(); si.p = paceLabel(b.p100[s]);
             sp.push_back(si);
@@ -1451,85 +1634,64 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
 // FIXED size (measured on a template value, values cut to fit), 9-spot Position (default Top left), never past the last bar.
 // Two-column boxes (PullStats / StackStats): a column header row (Bids / Offers), then label | left value | right value.
 static const COLOR C_BOX_BORDER = 0x009CA3AF;
-inline Box infoRect(cppExtension* x, const PaneGeo& g, int pos, const Info& I) {
-    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = INFO_PT; f.style = cppExtension::BOLD; x->setFont(f);
-    int lw = 0, vw = (int)x->getTextWidth(I.tmpl.c_str(), -1);
-    for (size_t k = 0; k < I.rows.size(); ++k) lw = std::max(lw, (int)x->getTextWidth(I.rows[k].label.c_str(), -1));
-    if (I.twoCol) for (int s = 0; s < 2; ++s) vw = std::max(vw, (int)x->getTextWidth(I.colHead[s].c_str(), -1));
-    const int hw = std::max((int)x->getTextWidth("12:59 PM", -1), (int)x->getTextWidth(I.head.c_str(), -1));
-    const int pad = 5, lh = INFO_LH, rows = 1 + (I.twoCol ? 1 : 0) + (int)I.rows.size();
-    int W = std::max(I.twoCol ? pad + lw + 10 + vw + 10 + vw + pad : pad + lw + 12 + vw + pad, hw + 2 * pad), H = pad + lh * rows + pad - 2;
-    const Box area = { g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3 };
-    // (1.2.1) the box stays inside the pane: never taller / wider than it (rows that do not fit are left out by drawInfo, values cut)
-    if (H > area.b - area.t) H = area.b - area.t;
-    if (W > area.r - area.l) W = area.r - area.l;
-    if (H < 1) H = 1;
-    if (W < 1) W = 1;
-    return placeIn(area, W, H, pos);
+// (1.2.0) the BLUE options stat line (SPEC: only when the data is present and fresh); (1.3.0) drawn by drawPanel
+static const COLOR C_OPT_BLUE = 0x0058A6FF;
+// ---- (1.3.0) THE PANEL: draws a PanelPlan (planPanel) with the host's font - the read box (+ its hover grid) or the numbers box + read
+inline TextW measureWith(cppExtension* x) {
+    return [x](const std::string& t, int pt, bool bold) {
+        if (t.empty()) return 0;
+        cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = (short)pt; f.style = bold ? cppExtension::BOLD : cppExtension::PLAIN; x->setFont(f);
+        return (int)x->getTextWidth(t.c_str(), -1);
+    };
 }
-inline void drawInfo(cppExtension* x, const Box& b, const Info& I, const COLOR col[2]) {
-    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = INFO_PT; f.style = cppExtension::BOLD; x->setFont(f);
-    x->setPen(C_BOX_BORDER, 1, P_SOLID); fillRect(b.l, b.t, b.r, b.b, C_BOX_BORDER, C_BLACKC, 1);   // the info box: grey solid border (kept)
-    const int pad = 5, lh = INFO_LH;
-    int lw = 0; for (size_t k = 0; k < I.rows.size(); ++k) lw = std::max(lw, (int)x->getTextWidth(I.rows[k].label.c_str(), -1));
-    const int W = b.r - b.l, vw = I.twoCol ? (W - 2 * pad - lw - 20) / 2 : W - 2 * pad - lw - 12;
-    auto txt = [&](int xx, int y, const std::string& t, COLOR c) { x->setTextColor(c); const int w = x->getTextWidth(t.c_str(), -1); cppExtension::RCT r; r.set(coord(xx), coord(y), coord(xx + w + 2), coord(y + lh - 1)); r.drawText(t.c_str(), false, false); };
-    auto fit = [&](const std::string& t) { return fitText(t, vw, [&](const std::string& u) { return (int)x->getTextWidth(u.c_str(), -1); }); };
-    { const int w = x->getTextWidth(I.head.c_str(), -1); txt(b.l + (W - w) / 2, b.t + pad - 1, I.head, C_WHITE); }
-    const int rightCol[2] = { b.l + pad + lw + 10 + vw, b.r - pad };
-    int row = 1;
-    if (I.twoCol) {
-        for (int s = 0; s < 2; ++s) { const std::string t = fit(I.colHead[s]); txt(rightCol[s] - (int)x->getTextWidth(t.c_str(), -1), b.t + pad - 1 + lh, t, col[s]); }
-        ++row;
-    }
-    for (size_t k = 0; k < I.rows.size(); ++k, ++row) {
-        const int y = b.t + pad - 1 + lh * row;
-        if (y + lh - 1 > b.b) break;                                       // (1.2.1) a row that does not fit inside the box is left out
-        txt(b.l + pad, y, I.rows[k].label, C_WHITE);
+inline void textAt(cppExtension* x, int l, int t, int h, const std::string& str, COLOR c, int pt, bool bold) {
+    if (str.empty()) return;
+    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = (short)pt; f.style = bold ? cppExtension::BOLD : cppExtension::PLAIN; x->setFont(f);
+    x->setTextColor(c); const int w = (int)x->getTextWidth(str.c_str(), -1);
+    cppExtension::RCT r; r.set(coord(l), coord(t), coord(l + w + 2), coord(t + h)); r.drawText(str.c_str(), false, false);
+}
+inline void boxAt(cppExtension* x, const bp::Box& b) { x->setPen(C_BOX_BORDER, 1, P_SOLID); fillRect(b.l, b.t, b.r, b.b, C_BOX_BORDER, C_BLACKC, 1); }
+// the numbers (label | left | right) of rows [from, from + n) in a column group starting at x0; values cut to the column, never wider
+inline void numbersAt(cppExtension* x, int x0, int y0, int lw, int vw, const Info& I, size_t from, size_t n, const COLOR col[2], bool head) {
+    const TextW M = measureWith(x);
+    const int rc[2] = { x0 + lw + 8 + vw, x0 + lw + 8 + vw + 8 + vw };
+    int y = y0;
+    if (head && I.twoCol) { for (int s = 0; s < 2; ++s) textAt(x, rc[s] - M(I.colHead[s], NUM_PT, true), y, NUM_LH - 1, I.colHead[s], col[s], NUM_PT, true); y += NUM_LH; }
+    for (size_t k = from; k < from + n && k < I.rows.size(); ++k, y += NUM_LH) {
+        textAt(x, x0, y, NUM_LH - 1, I.rows[k].label, C_WHITE, NUM_PT, true);
         for (int s = 0; s < (I.twoCol ? 2 : 1); ++s) {
-            const std::string t = fit(I.rows[k].v[s]); if (t.empty()) continue;
+            const std::string v = nl::fitText(I.rows[k].v[s], vw, [&](const std::string& u) { return M(u, NUM_PT, true); }); if (v.empty()) continue;
             const int sd = I.rows[k].side[s];
-            txt((I.twoCol ? rightCol[s] : b.r - pad) - (int)x->getTextWidth(t.c_str(), -1), y, t, sd < 0 ? C_WHITE : col[sd]);
+            textAt(x, (I.twoCol ? rc[s] : x0 + lw + 10 + vw) - M(v, NUM_PT, true), y, NUM_LH - 1, v, sd < 0 ? C_WHITE : col[sd], NUM_PT, true);
         }
     }
 }
-// the ONE message line, centred at the top of the pane (12:05: the numbers line moved into the box). If the box sits in the top band,
-// the line is centred in the wider free part beside it; never over the box, never past the last bar. Returns its rectangle.
-inline LBox drawMessage(cppExtension* x, const PaneGeo& g, const Box* box, const std::string& l1, int impl) {
-    int L = g.left + 3, R = g.edge - 3; const int y = g.top + 2, h = 15;
-    if (box && box->t < y + h && box->b > y) {
-        const int leftW = box->l - 4 - L, rightW = R - (box->r + 4);
-        if (rightW >= leftW) L = box->r + 4; else R = box->l - 4;
+inline void drawPanel(cppExtension* x, const PanelPlan& P, const Info& I, const COLOR col[2], int impl, bool hover) {
+    if (!P.ok) return;
+    if (P.mode == MODE_READ) {
+        if (hover) {                                                       // the numbers: every row, in column groups
+            const bp::Box& b = P.gridBox; boxAt(x, b);
+            textAt(x, b.l + BOX_PAD, b.t + BOX_PAD - 1, NUM_LH - 1, I.head, C_WHITE, NUM_PT, true);
+            for (size_t k = 0; k < P.grid.g.size(); ++k) {
+                const GridGeom::G& g = P.grid.g[k]; if (b.l + g.x + g.lw > b.r) break;
+                numbersAt(x, b.l + g.x, b.t + BOX_PAD - 1, g.lw, g.vw, I, g.from, g.n, col, true);
+            }
+            return;
+        }
+        boxAt(x, P.box);
+        int y = P.box.t + BOX_PAD - 1;
+        for (size_t k = 0; k < P.read.size(); ++k, y += READ_LH) textAt(x, P.box.l + 6, y, READ_LH, P.read[k], implColor(impl), READ_PT, true);
+        for (size_t k = 0; k < P.opt.size(); ++k, y += OPT_LH) textAt(x, P.box.l + 6, y, OPT_LH, P.opt[k], C_OPT_BLUE, OPT_PT, false);
+        return;
     }
-    LBox none = { 0, 0, -1, -1, 0, 0 };
-    if (R - L < 20 || l1.empty()) return none;
-    cppExtension::FONT f1; f1.id = cppExtension::HELVETICA; f1.size = 10; f1.style = cppExtension::BOLD; x->setFont(f1);
-    const std::string t = fitMessage(l1, R - L, [&](const std::string& u) { return (int)x->getTextWidth(u.c_str(), -1); });
-    if (t.empty()) return none;
-    const int w = x->getTextWidth(t.c_str(), -1), xx = (L + R) / 2 - w / 2;
-    x->setTextColor(implColor(impl));
-    cppExtension::RCT r; r.set(coord(xx), coord(y), coord(xx + w + 2), coord(y + h)); r.drawText(t.c_str(), false, false);
-    LBox out = { xx, y, xx + w + 2, y + h, 0, 0 }; return out;
+    boxAt(x, P.box);                                                       // numbers mode: the compact box + the read beside it
+    { const TextW M = measureWith(x); const int w = M(I.head, NUM_PT, true); textAt(x, P.box.l + (P.box.w() - w) / 2, P.box.t + BOX_PAD - 1, NUM_LH - 1, I.head, C_WHITE, NUM_PT, true); }
+    numbersAt(x, P.box.l + BOX_PAD, P.box.t + BOX_PAD - 1 + NUM_LH, P.num.lw, P.num.vw, I, 0, (size_t)P.num.rows, col, true);
+    size_t r = 0;
+    for (size_t k = 0; k < P.read.size(); ++k, ++r) textAt(x, P.textRects[r].l, P.textRects[r].t, READ_LH, P.read[k], implColor(impl), READ_PT, true);
+    for (size_t k = 0; k < P.opt.size() && r < P.textRects.size(); ++k, ++r) textAt(x, P.textRects[r].l, P.textRects[r].t, OPT_LH, P.opt[k], C_OPT_BLUE, OPT_PT, false);
 }
-// (1.2.0) the BLUE options stat line under the message line (SPEC: only when the data is present and fresh), centred like the message
-// in the free width beside the info box, never past the last bar; "" draws nothing
-static const COLOR C_OPT_BLUE = 0x0058A6FF;
-inline LBox drawSubLine(cppExtension* x, const PaneGeo& g, const Box* box, const std::string& t0) {
-    int L = g.left + 3, R = g.edge - 3; const int y = g.top + 2 + 15, h = 13;
-    if (box && box->t < y + h && box->b > y) {
-        const int leftW = box->l - 4 - L, rightW = R - (box->r + 4);
-        if (rightW >= leftW) L = box->r + 4; else R = box->l - 4;
-    }
-    LBox none = { 0, 0, -1, -1, 0, 0 };
-    if (R - L < 20 || t0.empty() || g.reserve < 30) return none;
-    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 9; f.style = cppExtension::PLAIN; x->setFont(f);
-    const std::string t = fitText(t0, R - L, [&](const std::string& u) { return (int)x->getTextWidth(u.c_str(), -1); });
-    if (t.empty()) return none;
-    const int w = x->getTextWidth(t.c_str(), -1), xx = (L + R) / 2 - w / 2;
-    x->setTextColor(C_OPT_BLUE);
-    cppExtension::RCT r; r.set(coord(xx), coord(y), coord(xx + w + 2), coord(y + h)); r.drawText(t.c_str(), false, false);
-    LBox out = { xx, y, xx + w + 2, y + h, 0, 0 }; return out;
-}
+inline bool inBox(const bp::Box& b, int h, int v) { return b.w() > 0 && h >= b.l && h <= b.r && v >= b.t && v <= b.b; }
 
 #ifdef OFF_TEST_CLOCK
 extern long long off_test_now_ms;
@@ -1568,11 +1730,19 @@ struct HoverTrack {
 // MboPane<L>: the whole host of lsPullStats / lsStackStats (L = ps::Logic / st::Logic). Own pane, two bars per candle from the
 // order feed near price, letters, spike labels, the info box + message line, the session record, the per-market params file.
 // =====================================================================================================================
-struct PaneSettings { int ratioBars = RATIO_DEFAULT, pos = POS_DEFAULT, nearTicks = 0; SpikeCfg spike; int record = -1; };   // (1.2.2) record: -1 = not a recorder pane (6 fields), 0 / 1 = the "Record order feed" box
+struct PaneSettings { int ratioBars = RATIO_DEFAULT, pos = POS_DEFAULT, nearTicks = 0; SpikeCfg spike; int record = -1; int dx = 0, dy = 0, mode = MODE_READ; };   // (1.3.0) + Offset X / Y, Box shows   // (1.2.2) record: -1 = not a recorder pane (6 fields), 0 / 1 = the "Record order feed" box
 inline bool parsePaneSettings(const std::string& line, PaneSettings& out) {
-    if (line.empty() || line.size() > 40) return false;
+    if (line.empty() || line.size() > 64) return false;
     std::vector<std::string> f; size_t a = 0;
     for (;;) { const size_t c = line.find(',', a); f.push_back(line.substr(a, c == std::string::npos ? std::string::npos : c - a)); if (c == std::string::npos) break; a = c + 1; }
+    // (1.3.0) 9 / 10 fields = the 6 / 7 of 1.2.x + Offset X, Offset Y, Box shows (0 Read, 1 Numbers)
+    int dx = 0, dy = 0, mode = MODE_READ;
+    if (f.size() == 9 || f.size() == 10) {
+        const size_t n = f.size();
+        if (!bp::intTok(f[n - 3], dx) || !bp::intTok(f[n - 2], dy) || !bp::offOk(dx) || !bp::offOk(dy) || (f[n - 1] != "0" && f[n - 1] != "1")) return false;
+        mode = f[n - 1] == "1" ? MODE_NUMBERS : MODE_READ;
+        f.resize(n - 3);
+    }
     if (f.size() != 6 && f.size() != 7) return false;                   // (1.2.2) 7th = Record order feed (PullStats)
     for (size_t k = 0; k < f.size(); ++k) if (!allDigits(f[k], 5)) return false;
     if (f.size() == 7 && f[6] != "0" && f[6] != "1") return false;
@@ -1580,11 +1750,13 @@ inline bool parsePaneSettings(const std::string& line, PaneSettings& out) {
     s.spike.avgT = std::atoi(f[2].c_str()); s.spike.jumpT = std::atoi(f[3].c_str()); s.spike.lookback = std::atoi(f[4].c_str()); s.nearTicks = std::atoi(f[5].c_str());
     if (s.ratioBars < RATIO_LO || s.ratioBars > RATIO_HI || s.pos < 0 || s.pos > 8 || s.spike.avgT > 100 || s.spike.jumpT > 100 || s.spike.lookback > SPIKE_LOOKBACK_MAX || s.nearTicks > nl::NEAR_MAX) return false;
     if (f.size() == 7) s.record = f[6] == "1" ? 1 : 0;
+    s.dx = dx; s.dy = dy; s.mode = mode;
     out = s; return true;
 }
 inline std::string paneSettingsLine(const PaneSettings& s) {
     return std::to_string(s.ratioBars) + "," + std::to_string(s.pos) + "," + std::to_string(s.spike.avgT) + "," + std::to_string(s.spike.jumpT) + "," + std::to_string(s.spike.lookback) + "," + std::to_string(s.nearTicks)
-         + (s.record >= 0 ? std::string(",") + (s.record ? "1" : "0") : std::string());
+         + (s.record >= 0 ? std::string(",") + (s.record ? "1" : "0") : std::string())
+         + "," + std::to_string(bp::offOk(s.dx) ? s.dx : 0) + "," + std::to_string(bp::offOk(s.dy) ? s.dy : 0) + "," + (s.mode == MODE_NUMBERS ? "1" : "0");
 }
 // (1.2.2) a pane's extra per-chart state (PullStats' order-feed recorder); deleted with the pane's state
 struct PaneExt { virtual ~PaneExt() {} };
@@ -1609,6 +1781,7 @@ template <class L> struct PaneState {
     long long statusMs = -1, changed = 0;
     OptCache opt; ResetWatch rw;                     // (1.2.0) the options file (blue line), PullStats' reset watch
     std::unique_ptr<PaneExt> ext;                    // (1.2.2) PullStats' order-feed recorder (null in the other panes)
+    bp::Box lastBox; bool inBox = false; long long boxHovers = 0;   // (1.3.0) the read box last drawn; the mouse over it (numbers hover)
 };
 
 template <class L> class MboPane : public cppExtension {
@@ -1623,7 +1796,7 @@ public:
     virtual int draw(void) {
         pump(true);                                                        // (1.2.2) from the draw: a recorder buffers, never writes
         S_* S = slot_.get(this, false);
-        if (S) { S->hov.left(); followBoard(*S); }                        // (1.2.1) the candle under the mouse ANYWHERE on this chart
+        if (S) { S->hov.left(); followBoard(*S); boxLeft(*S); }          // (1.2.1) the candle under the mouse ANYWHERE on this chart
         if (S) { try { render(*S); } catch (...) { S->state = "draw error"; } }
         return RTX_OK;
     }
@@ -1650,14 +1823,52 @@ public:
         RTARRAYI times(barDateTime); const long n = getBarCount(); if ((long)times.count < n) return;
         hb::publish(S.symbol, S.spb, bar >= 0 && bar < n - 1 ? (unsigned long long)times[(int)bar] : 0ULL, t0, t1);
     }
-    virtual int parmsLoad(void) { return RTX_OK; }                         // loading never saves
+    // (1.3.0) the settings dialog: filled from the per-market file when it opens (loading never saves); OK / Apply save it, a control
+    // the user did not touch keeping the file's value (bp::DlgSnap). On the chart IRT hands lists 0 / boxes unchecked - draw() reads the file.
+    int base() const { return recorderPane() ? 7 : 6; }                   // Offset X, Offset Y, Box shows follow the 1.2.x rows
+    bool inDialog() { const char* pl = getPeriodicityLabel(); return !(pl && pl[0]); }
+    std::string chartMarket() { char b[32]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const char* sy = getSymbol(); const std::string root = rs ? rs : ""; return marketName(root.empty() ? (sy ? sy : "") : root); }
+    PaneSettings fileSettings(const std::string& mkt) {
+        PaneSettings ns; const std::string p = placePath(mkt); if (p.empty()) return ns;
+        std::ifstream f(p.c_str(), std::ios::binary); std::string ln;
+        if (f && std::getline(f, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); PaneSettings c; if (parsePaneSettings(ln, c)) ns = c; }
+        if (recorderPane() && ns.record < 0) ns.record = 1;
+        return ns;
+    }
+    std::vector<long long> dialogNow() {
+        std::vector<long long> v;
+        v.push_back(getIntegerValue(0)); v.push_back(getListIndex(1)); v.push_back(tenthsOf(getFloatValue(2))); v.push_back(tenthsOf(getFloatValue(3)));
+        v.push_back(getIntegerValue(4)); v.push_back(getIntegerValue(5)); v.push_back(recorderPane() ? (this->isBoxChecked(6) ? 1 : 0) : -1);
+        v.push_back(getIntegerValue(base())); v.push_back(getIntegerValue(base() + 1)); v.push_back(getListIndex(base() + 2));
+        return v;
+    }
+    virtual int parmsLoad(void) {
+        if (!inDialog()) return RTX_OK;
+        const PaneSettings f = fileSettings(chartMarket());
+        this->setIntegerValue(0, f.ratioBars); this->setListIndex(1, f.pos); this->setFloatValue(2, (float)f.spike.avgT / 10.0f); this->setFloatValue(3, (float)f.spike.jumpT / 10.0f);
+        this->setIntegerValue(4, f.spike.lookback); this->setIntegerValue(5, f.nearTicks); if (recorderPane()) this->checkBox(6, f.record != 0);
+        this->setIntegerValue(base(), f.dx); this->setIntegerValue(base() + 1, f.dy); this->setListIndex(base() + 2, f.mode);
+        snap_.take(dialogNow());                                           // what the dialog shows now (filled, or IRT's own values)
+        return RTX_OK;
+    }
     virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { saveSettings(); return RTX_OK; }
+    void boxLeft(S_& S) {                                                  // the mouse is no longer over this chart: no box hover
+        if (!S.inBox) return;
+        void* w = cursorWindow();
+        if (!w) return;
+        if (std::find(S.hov.wnds.begin(), S.hov.wnds.end(), w) == S.hov.wnds.end()) { S.inBox = false; invalidateChart(false); }
+    }
     virtual int mouse(RTX_EVENT* ev) {
         if (!ev) return RTX_FAIL;
         S_* S = slot_.get(this, false); if (!S) return RTX_FAIL;
         if (ev->type != E_MOUSE_MOVE && ev->type != E_MOUSE_HOVER) return RTX_FAIL;
         S->hov.seen();
+        {   // (1.3.0) over the read box: its numbers show (hover), and the candle it reads stays (the bars under the box are not picked)
+            const bool in = S->set.mode == MODE_READ && inBox(S->lastBox, ev->v.mouse.h, ev->v.mouse.v);
+            if (in != S->inBox) { S->inBox = in; if (in) ++S->boxHovers; invalidateChart(false); }
+            if (in) return RTX_FAIL;
+        }
         publishBoard(*S, ev->v.mouse.bar);                                 // (1.2.1) every pane of this chart follows this candle
         if (S->hov.hover.set(hoverIndex(ev->v.mouse.bar, getBarCount()))) { ++S->hov.redraws; invalidateChart(false); }
         return RTX_FAIL;                                                   // never swallow the event
@@ -1683,7 +1894,7 @@ public:
                 }
             }
             S->axisTop = top;
-            axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH)), mn, mx);
+            axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, S->set.mode)), mn, mx);
         }
         if (dMin) *dMin = mn;
         if (dMax) *dMax = mx;
@@ -1788,6 +1999,7 @@ private:
             if (f && std::getline(f, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); PaneSettings c; if (parsePaneSettings(ln, c)) ns = c; }
         }
         const bool renear = ns.nearTicks != S.set.nearTicks;
+        if (ns.pos != S.set.pos || ns.dx != S.set.dx || ns.dy != S.set.dy || ns.mode != S.set.mode) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.3.0) moved: no stale hover rect
         S.set = ns; S.dlgSpike = ns.spike;
         const SpikeCfg eff = effectiveSpike(S.dlgSpike, S.params.load.p);
         if (S.ser.ratioBars != ns.ratioBars || S.ser.spike != eff) {      // a dialog change: every recorded bar re-decided
@@ -1797,17 +2009,24 @@ private:
         if (renear) S.atrCount = -1;
     }
     void saveSettings() {
+        if (!inDialog()) return;                                           // (1.3.0) only the settings window's values are real
+        const std::string mkt = chartMarket();
+        const PaneSettings fs = fileSettings(mkt);
+        const std::vector<long long> now = dialogNow();
+        const long long fv[10] = { fs.ratioBars, fs.pos, fs.spike.avgT, fs.spike.jumpT, fs.spike.lookback, fs.nearTicks, fs.record, fs.dx, fs.dy, fs.mode };
+        long long v[10]; for (size_t k = 0; k < 10; ++k) v[k] = snap_.pick(k, now[k], fv[k]);
         PaneSettings s;
-        s.ratioBars = getIntegerValue(0); s.pos = getListIndex(1);
-        s.spike.avgT = tenthsOf(getFloatValue(2)); s.spike.jumpT = tenthsOf(getFloatValue(3)); s.spike.lookback = getIntegerValue(4); s.nearTicks = getIntegerValue(5);
-        if (recorderPane()) s.record = this->isBoxChecked(6) ? 1 : 0;           // (1.2.2) PullStats: Record order feed
+        s.ratioBars = (int)v[0]; s.pos = (int)v[1]; s.spike.avgT = (int)v[2]; s.spike.jumpT = (int)v[3]; s.spike.lookback = (int)v[4]; s.nearTicks = (int)v[5];
+        if (recorderPane()) s.record = v[6] ? 1 : 0;                       // (1.2.2) PullStats: Record order feed
+        // (1.3.0) a garbage / out-of-range dialog value never reaches the file: the file's (validated) value stays
+        s.dx = bp::offOk(v[7]) ? (int)v[7] : fs.dx; s.dy = bp::offOk(v[8]) ? (int)v[8] : fs.dy; s.mode = v[9] == MODE_READ || v[9] == MODE_NUMBERS ? (int)v[9] : fs.mode;
+        if (!bp::posOk(s.pos)) s.pos = fs.pos;
         PaneSettings chk;
         if (s.spike.avgT < 0 || s.spike.jumpT < 0 || s.spike.lookback < 0 || s.nearTicks < 0 || !parsePaneSettings(paneSettingsLine(s), chk)) return;   // never overwrite with garbage
-        char b[32]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const char* sy = getSymbol();
-        const std::string root = rs ? rs : "";
-        const std::string p = placePath(marketName(root.empty() ? (sy ? sy : "") : root)); if (p.empty()) return;
+        const std::string p = placePath(mkt); if (p.empty()) return;
         makeDir(flexDir());
         publishFile(p, paneSettingsLine(s) + "\n");
+        snap_.take(now);                                                   // the next Apply compares with what the dialog shows now
         S_* S = slot_.get(this, false);
         if (S) { S->settingsCheckMs = -1; S->settingsStamp = -1 - 3; }    // re-read on the next pass (not "first")
     }
@@ -1911,6 +2130,7 @@ private:
         for (std::map<long long, Row>::const_iterator it = S.file.rows.begin(); it != S.file.rows.end(); ++it) {
             const Row& r = it->second; if (r.t >= S.formingKey || S.ser.bars.count(r.t)) continue;   // never the forming bar
             PaneBar b; if (!recFrom(r.nums, 0, b.r)) continue;
+            S.e.barFrom(b.r);                                              // (1.3.0) the rare-L history
             b.ok = true; b.fromFile = true; b.level = r.level;
             for (int s = 0; s < 2; ++s) { b.let[s] = r.let[s]; b.spike[s] = r.spike[s] != 0; b.dash[s] = r.dash[s]; }
             b.msg.impl = r.impl; b.msg.line1 = r.line1; b.msg.line2 = r.line2;
@@ -1980,7 +2200,7 @@ private:
         for (int i = v0; i <= v1; ++i) { const PaneBar* b = barOf(i); if (b) top = std::max(top, std::max(L::value(b->r, 0, BID), L::value(b->r, 0, ASK))); }
         if (S.axisTop > top) top = S.axisTop;
         S.paneH = pane.bottom - pane.top;
-        const PaneGeo g = paneGeo(this, S.set.pos);
+        const PaneGeo g = paneGeo(this, S.set.mode);
         const int hov = S.hov.hover.bar >= 0 && S.hov.hover.bar < last ? S.hov.hover.bar : -1;
         const COLOR normal[2] = { C_GREEN_BAR, C_RED_BAR }, spike[2] = { C_GREEN_SPIKE, C_RED_SPIKE };   // left = bids (green), right = offers (red)
         // (12:05) the info box (hovered candle, else the last closed) and the message line move together
@@ -1990,16 +2210,6 @@ private:
         const PaneBar* mbar = mi != S.ser.bars.end() && mi->second.ok ? &mi->second : nullptr;
         Info info = L::info(mbar, S.params.load.p);
         { struct tm x; std::memset(&x, 0, sizeof(x)); info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? clock12(x.tm_hour, x.tm_min) : std::string("n/a")); }
-        const Box ib = infoRect(this, g, S.set.pos, info);
-        std::vector<LBox> avoid(1, LBox{ ib.l, ib.t, ib.r, ib.b, 0, 0 });
-        drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
-            BarLook k; const PaneBar* b = barOf(i); if (!b) return k;
-            k.ok = true;
-            for (int s = 0; s < 2; ++s) { k.v[s] = L::value(b->r, 0, s); k.spike[s] = b->spike[s]; k.dash[s] = b->dash[s]; k.ratioOk[s] = b->m[0].ratioOk[s]; k.ratio[s] = b->m[0].ratio[s]; k.p100[s] = b->r.pace100[s]; if (i != last) k.let[s] = b->let[s]; }
-            return k;
-        }, avoid);
-        const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
-        drawInfo(this, ib, info, vcol);
         Msg m;
         if (mbar) m = mbar->msg;
         else {
@@ -2007,12 +2217,30 @@ private:
             m.line1 = pending ? "Deciding this candle..." : S.firstBarKey < 0 || mt < S.firstBarKey ? "No order data for this candle (before the indicator loaded)" : "No order data for this candle";
             if (S.state != "ready") m.line1 += " - " + S.state;
         }
-        drawMessage(this, g, &ib, line1Of(ctOf(mt), m.line1), m.impl);
         // (1.2.0) the blue options line: the snapshot that had ARRIVED by the candle read (hovered: fresh at its end; live: now)
         const ofo::Snap* os = S.opt.hist.latest(hov >= 0 ? mt : S.formingKey);
         const long long ref = hov >= 0 ? unixOf(mt) : (long long)std::time(NULL);
-        if (os && ofo::fresh(*os, ref)) drawSubLine(this, g, &ib, L::optLine(*os, S.params.load.p.gate[L::optGate()], S.market));
+        const std::string optL = os && ofo::fresh(*os, ref) ? L::optLine(*os, S.params.load.p.gate[L::optGate()], S.market) : std::string();
+        // (1.3.0) the panel: the READ box (numbers on hover) or the compact numbers box + the read beside it
+        bp::Place pl; pl.pos = S.set.pos; pl.dx = S.set.dx; pl.dy = S.set.dy;
+        const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
+        const PanelPlan P = planPanel(area, g.top, S.set.mode, pl, info, line1Of(ctOf(mt), m.line1), optL, g.reserve, measureWith(this));
+        S.lastBox = P.ok ? P.box : bp::Box();
+        const bool showGrid = P.ok && P.mode == MODE_READ && S.inBox;
+        std::vector<LBox> avoid;
+        if (P.ok) avoid.push_back(LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
+        if (showGrid) avoid.push_back(LBox{ P.gridBox.l, P.gridBox.t, P.gridBox.r, P.gridBox.b, 0, 0 });
+        for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
+        drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
+            BarLook k; const PaneBar* b = barOf(i); if (!b) return k;
+            k.ok = true;
+            for (int s = 0; s < 2; ++s) { k.v[s] = L::value(b->r, 0, s); k.spike[s] = b->spike[s]; k.dash[s] = b->dash[s]; k.ratioOk[s] = b->m[0].ratioOk[s]; k.ratio[s] = b->m[0].ratio[s]; k.p100[s] = b->r.pace100[s]; if (i != last) k.let[s] = b->let[s]; }
+            return k;
+        }, avoid);
+        const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
+        drawPanel(this, P, info, vcol, m.impl, showGrid);
     }
+    bp::DlgSnap snap_;                                                     // (1.3.0) the dialog as it opened (this object = the dialog's copy)
 };
 
 } // namespace off

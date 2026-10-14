@@ -1,5 +1,8 @@
 /********************************************************************************
- *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.1.0  (2026-10-13)
+ *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.1.2  (2026-10-14)
+ *  1.1.2 (2026-10-14, CR4800; Rassul 07:02-07:22): the left box is a READ box (the read, max 3 lines, + the blue options line; the
+ *        numbers on its hover) - "Box shows: Read / Numbers"; Offset X / Y on the 9-spot Position; letters white text with no box; one
+ *        spike label per candle never over the read; L only for a rare large order (OrderFlowFeed.h 1.3.0).
  *  1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
  *        bars = LOTS added near price (were orders); PACE (added lots / s vs the same-time norm); 3-row spike labels; the SPEC message
  *        grammar ("Buyers added 42 bids totaling 150 lots (4.4x) fast (p 3.4x) - rebuilt 90% after hits - defending PDL." ...);
@@ -47,7 +50,7 @@
 #include "OrderFlowFeed.h"
 #include "StackStatsLogic.h"
 
-#define SS_VERSION "1.1.1"          // keep equal to st::VERSION and the setVersion literal below
+#define SS_VERSION "1.1.2"          // keep equal to st::VERSION and the setVersion literal below
 
 class StackStats : public off::MboPane<st::Logic> {
 public:
@@ -58,14 +61,19 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<StackStats*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<StackStats*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
-    setParameterVersion(1);
-    setParameterDialogHeight(3);
+    // (1.1.2, CR4800 2026-10-14) + Offset X / Y (px, -600..600) and "Box shows" Read / Numbers, appended; version 2 = IRT resets the
+    // dialog rows once - harmless: the chart reads the per-market file and the dialog is filled from it when it opens
+    setParameterVersion(2);
+    setParameterDialogHeight(4);
     setIntegerParameter("Ratio bars", off::RATIO_DEFAULT, 50);
     setListParameter("Position", (short)off::POS_DEFAULT, off::POS_CHOICES, 110, kParmAppendSameLine);
     setFloatParameter("Spike vs average", 2.0f, 50);
     setFloatParameter("Spike vs prior biggest", 1.5f, 50, kParmAppendSameLine);
     setIntegerParameter("Spike lookback", 10, 50, kParmAppendSameLine);
     setIntegerParameter("Near ticks (0 = auto)", 0, 50);
+    setIntegerParameter("Offset X", 0, 50);                                // (1.1.2) parameter 6
+    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);           // 7
+    setListParameter("Box shows", (short)off::MODE_READ, off::MODE_CHOICES, 90, kParmAppendSameLine);   // 8
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<StackStats*>(this)->calcHook(); return RTX_OK; }
@@ -76,6 +84,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA StackStats: who is ARRIVING. Per candle, the LOTS of orders ADDED near price (market-by-order feed). Green = bids added, red = offers added. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. White dash = notable refills (re-added at a price right after it traded). I = refills + an iceberg confirmed, L = one large order added. Spike labels: the ratio, the pace (p = added lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = one order is most of it, may not reload ?), a blue options line when fresh (oStack), and the info box (Bids | Offers: added lots, rebuilt %, pace, crowd = orders, avg size, top order share, refills) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.1.1");   // SS_VERSION
+    p->setVersion("1.1.2");   // SS_VERSION
     return p;
 }

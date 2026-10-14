@@ -1,5 +1,9 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.2.0  (2026-10-14)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.2.1  (2026-10-14)
+ *  1.2.1 (2026-10-14, CR4800; Rassul 07:02-07:22): the left box is a READ box (the read, max 3 lines, + the blue options line; the
+ *        numbers on its hover) - "Box shows: Read / Numbers"; Offset X / Y on the 9-spot Position; letters white text with no box; one
+ *        spike label per candle never over the read; L only for a rare large order (OrderFlowFeed.h 1.3.0). Settings from the per-market
+ *        file on every draw, the dialog filled from it.
  *  1.2.0 (2026-10-14, "Record order feed", approved by Rassul 2026-10-13; settings audit): a check box (default ON) that appends every
  *        order-by-order event this pane drains to C:\Dev\level-reversal-analytics\data\irt\<session>\<MKT>\mbo_HH.csv in lra.mbo_live's
  *        format (time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask; session = the 17:00 CT day, HH = the CT hour).
@@ -55,7 +59,7 @@
 #include "PullStatsLogic.h"
 #include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.2.0"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.2.1"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -90,8 +94,10 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<PullStats*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<PullStats*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
-    setParameterVersion(1);                                            // (1.2.0) a row APPENDED (saved rows keep their places)
-    setParameterDialogHeight(3);
+    // (1.2.1, CR4800 2026-10-14) + Offset X / Y and "Box shows", appended; version 2 = IRT resets the dialog rows once (the chart reads
+    // the per-market file; the dialog is filled from it when it opens)
+    setParameterVersion(2);
+    setParameterDialogHeight(4);
     setIntegerParameter("Ratio bars", off::RATIO_DEFAULT, 50);
     setListParameter("Position", (short)off::POS_DEFAULT, off::POS_CHOICES, 110, kParmAppendSameLine);
     setFloatParameter("Spike vs average", 2.0f, 50);
@@ -99,6 +105,9 @@ int cppExtension::setup(void) {
     setIntegerParameter("Spike lookback", 10, 50, kParmAppendSameLine);
     setIntegerParameter("Near ticks (0 = auto)", 0, 50);
     setBoolParameter("Record order feed", true, kParmAppendSameLine);  // (1.2.0) parameter 6: data\irt\<session>\<MKT>\mbo_HH.csv
+    setIntegerParameter("Offset X", 0, 50);                                // (1.2.1) parameter 7
+    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);           // 8
+    setListParameter("Box shows", (short)off::MODE_READ, off::MODE_CHOICES, 90, kParmAppendSameLine);   // 9
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<PullStats*>(this)->calcHook(); return RTX_OK; }
@@ -109,6 +118,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, before price, traded first, pace, crowd = orders, avg size, top order share) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.2.0");   // PS_VERSION
+    p->setVersion("1.2.1");   // PS_VERSION
     return p;
 }
