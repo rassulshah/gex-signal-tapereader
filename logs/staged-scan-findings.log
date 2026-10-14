@@ -1,2 +1,13 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=11 bytes=189369
 largest staged blobs (bytes, path):
+SIZE	50020	plugin/CobImpulseLogic.h
+SIZE	36961	plugin/CobImpulse.cpp
+SIZE	24405	plugin/BUILD-LESSONS.md
+SIZE	21341	plugin/test_cobimpulse_logic.cpp
+SIZE	16971	plugin/test_cobimpulse_gamma_host.cpp
+SIZE	14442	plugin/test_cobimpulse_host.cpp
+SIZE	13610	tools/gex-build.bat
+SIZE	6447	plugin/tests_cobimpulse/irtsdk.h
+SIZE	3795	plugin/test_cobimpulse_gamma_parity.cpp
+SIZE	1295	plugin/test_cobimpulse_adr_parity.cpp
+SIZE	82	logs/staged-scan-findings.log
