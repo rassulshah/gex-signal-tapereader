@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.0.4";
+static const char* const HL_VERSION = "2.0.5";
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -728,6 +728,10 @@ struct View {
     int callT = -1, callSrc = 0; double callP = NAN; bool callIn = false;     // the 2nd-extreme call in the E cell / header
     double callShow = NAN; bool callQ = false, callLate = false, callDim = false;
     std::string headMain, headTail, headTailShort, headLeftTxt; unsigned headTailCol = C_SLATE;
+    // (2.0.5, Rassul 2026-10-13 21:01 / 21:20) the header reads "Regime: <Gamma> / <Trend>": the VWAP trend of the RTH shown, computed
+    // natively from the chart's CLOSED bars with VwapTrendLogic.h (the rule the Tape Reader TREND vote uses). trendLvl = vtl::level
+    // (+2 Strong Uptrend .. -2 Strong Downtrend, 0 = Range); trendReady = 20+ RTH bars (before that no trend is shown)
+    int trendLvl = 0; bool trendReady = false; int trendBars = 0; std::string trendVia;
     std::vector<Seg> sessSegs;       // (2.0.2, Rassul 05:52 "keep the RTH header but add the Regime and Options Expiry here") after "ES RTH 8:30-3:00"
     std::vector<Seg> fxSegs;         // (2.0.0, Rassul 2026-10-12 21:47 "combine the hod lod indicator and the first extreme") the 1st Extreme line (3rd header line); empty = none
     std::vector<Seg> headLeftSegs;   // (1.1.2, Rassul 10-12 "add colour") the left half in parts: "ES RTH 8:30-3:00" | "Range 70%" | "Proj LOD ..."   // (HL101) the header in two colours: the read + the 2nd call
@@ -1304,8 +1308,10 @@ inline Tracker runBars(const Cfg& c, const std::vector<Bar>& bars, size_t nClose
 // ------------------------------------------------------------------------------------------------ the draw list
 enum { K_FILL = 0, K_RECT = 1, K_LINE = 2, K_TEXT = 3 };
 enum { R_TABLE = 1, R_CANDLE = 2, R_LABEL = 3, R_NOTE = 4, R_PANEL = 5 };
-struct Item { int k = 0, l = 0, t = 0, r = 0, b = 0; unsigned c1 = 0, c2 = 0; std::string s; int fs = 9; bool bold = false; int w = 1; int role = 0; int block = -1; bool body = false; };   // body = a label drawn inside the candle body
+struct Item { int k = 0, l = 0, t = 0, r = 0, b = 0; unsigned c1 = 0, c2 = 0; std::string s; int fs = 9; bool bold = false; int w = 1; int role = 0; int block = -1; bool body = false; int elem = 0; };   // (2.0.5) elem: E_TABLE / E_PROJ / E_MARK - which Settings checkbox + colour it belongs to   // body = a label drawn inside the candle body
 struct Box { int l, t, r, b; };
+// (2.0.5, Rassul 2026-10-13 "settings must be real": a checkbox and a colour for every drawn element) the three drawn elements
+enum { E_TABLE = 0, E_PROJ = 1, E_MARK = 2 };
 inline bool overlap(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 typedef std::function<int(const std::string&, int, bool)> Measure;
 
@@ -1315,6 +1321,8 @@ struct Layout {
     Box table = { 0, 0, 0, 0 }, area = { 0, 0, 0, 0 };
     bool tableOk = false, candleOk = false, projOk = false; std::string note;
     int colRight = 0;            // (HL105) the reserved candle column's right edge (px); written to the status file for SessionInfo
+    // (2.0.5) other indicators' boxes the table and the projection label keep clear of, and what the placement did
+    std::vector<Box> avoid; Box tableWant = { 0, 0, 0, 0 }; bool tableMoved = false, tableClear = true; bool trendCompact = false;
 };
 
 inline int lineH(int fs) { return (int)(fs * 1.7f + 0.5f); }   // as SessionInfo (a 9 pt font is 12 px at 96 dpi)
@@ -1328,7 +1336,11 @@ inline void addLine(Layout& L, int x1, int y1, int x2, int y2, unsigned col, int
 // PIECE 2 (mockup v9): the table at the bottom, centred-left: its left edge `left` is clear of the session candle's column
 // (HL105, mockup 13 + Rassul "a setting where to put them") the 9 spots, as SessionInfo: Top / Middle / Bottom x Left / Centre / Right
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
-static const int POS_DEFAULT = 7;   // Bottom centre
+// (2.0.5, Rassul 2026-10-13 16:24 "the table at the TOP of the price pane"; 21:04 "even the location of the hod lod is incorrect")
+static const int POS_DEFAULT = 1;   // Top centre (2.0.4 and before: 7 = Bottom centre)
+static const int POS_OLD_DEFAULT = 7;   // a place file holding this is migrated to POS_DEFAULT ONCE per market (HodLod.migrate-205.txt)
+static const int TITLE_ROW_PX = 22;     // (2.0.5) the IRT chart title row is kept clear (Liquidity 0.14.1 reserves 20 px the same way)
+static const int AVOID_GAP = 4;         // px kept between the table and another indicator's box
 inline Box placeIn(const Box& area, int W, int H, int pos)
 {
     if (pos < 0 || pos > 8) pos = POS_DEFAULT;
@@ -1337,6 +1349,34 @@ inline Box placeIn(const Box& area, int W, int H, int pos)
     int y = r == 0 ? area.t : r == 1 ? (area.t + area.b) / 2 - H / 2 : area.b - H;
     x = (std::max)(area.l, (std::min)(x, area.r - W)); y = (std::max)(area.t, (std::min)(y, area.b - H));
     return Box{ x, y, x + W, y + H };
+}
+// (2.0.5) the Position spot, then - if another indicator's box is there (the Dealer Profile header / banner, the Tape Reader box) - the
+// nearest spot inside the area that touches none of them: the table's edge moved to just past an obstacle's edge (vertically first,
+// then sideways, then both). moved / clear say what happened (status file); nothing clear = the Position spot (clear = false).
+inline Box placeAvoid(const Box& area, int W, int H, int pos, const std::vector<Box>& avoid, bool* moved = nullptr, bool* clear = nullptr)
+{
+    const Box b0 = placeIn(area, W, H, pos);
+    auto hits = [&](const Box& b) { for (size_t i = 0; i < avoid.size(); i++) if (overlap(b, avoid[i])) return true; return false; };
+    if (moved) *moved = false;
+    if (clear) *clear = true;
+    if (!hits(b0)) return b0;
+    std::vector<int> xs, ys; xs.push_back(b0.l); ys.push_back(b0.t);
+    for (size_t i = 0; i < avoid.size(); i++) {
+        ys.push_back(avoid[i].b + AVOID_GAP); ys.push_back(avoid[i].t - AVOID_GAP - H);
+        xs.push_back(avoid[i].r + AVOID_GAP); xs.push_back(avoid[i].l - AVOID_GAP - W);
+    }
+    bool found = false; Box best = b0; long long bestD = 0;
+    for (size_t a = 0; a < xs.size(); a++) for (size_t q = 0; q < ys.size(); q++) {
+        const int x = xs[a], y = ys[q];
+        if (x < area.l || x + W > area.r || y < area.t || y + H > area.b) continue;
+        const Box b = { x, y, x + W, y + H };
+        if (hits(b)) continue;
+        const long long d = (long long)std::abs(x - b0.l) * 2 + std::abs(y - b0.t);   // sideways costs more: keep the column
+        if (!found || d < bestD) { found = true; best = b; bestD = d; }
+    }
+    if (!found) { if (clear) *clear = false; return b0; }
+    if (moved) *moved = true;
+    return best;
 }
 // (2.0.2, Rassul 2026-10-13 05:31-05:44, mockups a-h) the table, top to bottom:
 //   the session title ("ES RTH 8:30-3:00")                                          | "move ES RTH value to session box at the top"
@@ -1372,12 +1412,42 @@ inline std::string hlShortRegime(std::string r)
     return r;
 }
 inline void hlParenCell(Cell& c) { c.s = hlParenPct(c.s); c.s2 = hlParenPct(c.s2); c.s3 = hlParenPct(c.s3); }
+// (2.0.5) the trend words = vtl::displayLabel (the strings agreed for Session Info, VwapTrendLogic.h VW110): "Strong Uptrend" / "Uptrend" /
+// "Dntrend" / "Strong Dntrend"; no trend = "Range" (Rassul 2026-10-13 21:20). compact = only when the header column cannot fit the full word
+inline std::string trendWord(int lvl, bool compact = false)
+{
+    switch (lvl) {
+        case 2: return compact ? "Strong Up" : "Strong Uptrend";
+        case 1: return compact ? "Up" : "Uptrend";
+        case -1: return compact ? "Dn" : "Dntrend";
+        case -2: return compact ? "Strong Dn" : "Strong Dntrend";
+        default: return "Range";
+    }
+}
+inline unsigned trendCol(int lvl) { return lvl > 0 ? C_GREEN : (lvl < 0 ? C_RED : C_SLATE); }   // Range = the table's white text (no new colour)
+// the header's Regime cell as its coloured parts: "Regime: Neg" (gamma colour) + " / Uptrend" (trend colour). No gamma file and a
+// trend: "Regime: -- / Uptrend". Trend not ready (< 20 RTH bars): the gamma part only.
+inline std::vector<Seg> regimeParts(const View& v, bool compact = false)
+{
+    std::vector<Seg> out;
+    Seg reg{ "", C_GREY };
+    for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) reg = Seg{ hlShortRegime(v.sessSegs[q].s), v.sessSegs[q].col };
+    if (reg.s.empty() && v.trendReady) reg = Seg{ "Regime: --", C_GREY };
+    if (reg.s.empty()) return out;
+    out.push_back(reg);
+    if (v.trendReady) out.push_back(Seg{ " / " + trendWord(v.trendLvl, compact), trendCol(v.trendLvl) });
+    return out;
+}
+inline std::string regimeText(const View& v, bool compact = false) { std::string s; std::vector<Seg> p = regimeParts(v, compact); for (size_t i = 0; i < p.size(); i++) s += p[i].s; return s; }
 
 inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT)
 {
     if (freeR < 0) freeR = pane.r;
     const int pad = 6;
-    Box area = { left, pane.t, (std::min)(freeR, (int)pane.r), pane.b - 1 };
+    // (2.0.5) the IRT chart title row stays clear (a top table starts under it) when the pane has room for it
+    const int titleRow = pane.b - pane.t >= 200 ? TITLE_ROW_PX : 0;
+    Box area = { left, pane.t + titleRow, (std::min)(freeR, (int)pane.r), pane.b - 1 };
+    const std::string verTxt = std::string("  v") + HL_VERSION;   // (2.0.5, his rule: the version next to the panel's title)
     auto trimL = [](std::string t) { size_t k = t.find_first_not_of(' '); return k == std::string::npos ? std::string() : t.substr(k); };
     // ---- the content (independent of the font size)
     std::string title; unsigned titleCol = v.headerCol;
@@ -1409,8 +1479,10 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
     for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); }
     // ---- sizes: (2.0.3, Rassul 10:38 "reduce the size of this by 33%. too big") 9 / 9 / 8 / 8 pt instead of 13 / 12 / 11 / 10, and the
     // padding scaled by 2/3 (equal columns first, then content-sized)
-    for (int attempt = 0; attempt < 4; attempt++) {
-        const int fs = 9 - attempt / 2, efs = fs + 1; const bool natural = attempt % 2 == 1;
+    // (2.0.5) attempts 4-5: the same at 8 pt with the compact trend word ("Strong Down") - only when the full word cannot fit
+    for (int attempt = 0; attempt < 6; attempt++) {
+        const int fs = 9 - (std::min)(attempt, 3) / 2, efs = fs + 1; const bool natural = attempt % 2 == 1; const bool compactT = attempt >= 4;
+        if (compactT && !v.trendReady) break;
         const int rowH = lineH(fs) + 1, rowHE = lineH(efs) + 1, titleH = lineH(fs + 1) + 3, gap = 3;
         auto cellWf = [&](const Cell& C, int f) {
             int w = M(C.s, f, C.bold);
@@ -1421,37 +1493,42 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         };
         auto segW = [&](const std::vector<Seg>& S, int f, int sep) { int w = 0; for (size_t q = 0; q < S.size(); q++) w += M(S[q].s, f, true) + (q ? sep : 0); return w; };
         const int sepInfo = M("     ", fs, true);
-        int regW = 0; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) regW = M(hlShortRegime(v.sessSegs[q].s), fs + 1, true);
+        const std::vector<Seg> regP = regimeParts(v, compactT);
+        int regW = 0; for (size_t q = 0; q < regP.size(); q++) regW += M(regP[q].s, fs + 1, true);
         int lw = (std::max)((std::max)((std::max)(M(eRow[K_LABEL].s, fs, true), M(aRow[K_LABEL].s, fs, true)), info.empty() ? 0 : M("Estimate", fs, true)), regW) + 12;
         std::vector<int> nat; int cw = 0, sumNat = 0;
         for (int j = 0; j < NSHOWN; j++) { int c = SHOWN[j]; if (c == K_LABEL) continue;
             int w = (std::max)(M(COLS[c], fs, false), (std::max)(cellWf(eRow[c], efs), cellWf(aRow[c], fs))) + 24;
-            if (j == 1) w = (std::max)(w, M(title, fs + 1, true) + 16);                                   // the RTH title over 1st Time
+            if (j == 1) w = (std::max)(w, M(title, fs + 1, true) + M(verTxt, fs, false) + 16);           // the RTH title (+ version) over 1st Time
             if (j == 2) { std::string t2; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) t2 += (t2.empty() ? "" : "  ") + v.sessSegs[q].s;
                           w = (std::max)(w, M(t2, fs + 1, true) + 16); }                                 // the expiry over 2nd Time
             nat.push_back(w); sumNat += w; cw = (std::max)(cw, w); }
         const int ncol = NSHOWN - 1, colsW = natural ? sumNat : ncol * cw;
         int W = (std::max)(lw + colsW + 12, (std::max)(info.empty() ? 0 : lw + segW(info, fs, sepInfo) + 12, segW(fx, fs, 0)) + 32);
         const int H = titleH + 1 + rowH + rowHE + rowH + gap + 1 + (info.empty() ? 0 : rowH) + (fx.empty() ? 0 : rowH) + gap + 2;
-        if (W > area.r - area.l && attempt < 3) continue;
+        if (W > area.r - area.l && attempt < (v.trendReady ? 5 : 3)) continue;
         if (area.l + W > pane.r - pad) continue;
         if (H + 40 > pane.b - pane.t) break;
         if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);
         std::vector<int> cwv((size_t)ncol, (W - 12 - lw) / ncol);
         if (natural) { int extra = (W - 12 - lw - sumNat) / ncol; for (int k = 0; k < ncol; k++) cwv[(size_t)k] = nat[(size_t)k] + extra; }
-        Box T = placeIn(area, W, H, pos);
-        L.table = T; L.tableOk = true;
+        L.tableWant = placeIn(area, W, H, pos);
+        Box T = placeAvoid(area, W, H, pos, L.avoid, &L.tableMoved, &L.tableClear);
+        L.table = T; L.tableOk = true; L.trendCompact = compactT;
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
         const int cx = (T.l + T.r) / 2;
         int y = T.t + 2;
         {   // (05:52 "keep the RTH header but add the Regime and Options Expiry"; 05:56 "move the regime to the left of rth"; 05:57 "shorten
             // Regime to Reg: ... Negative to Neg ... i want all the columns aligned"): the header is a grid row too -
             // "Reg: Neg" in the label column, "ES RTH 8:30-3:00" centred over 1st Time, "Expiry 1:30 PM (in 8h 27m)" over 2nd Time
-            Seg reg{ "", C_GREY }; std::vector<Seg> rest;
-            for (size_t q = 0; q < v.sessSegs.size(); q++) { if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) reg = Seg{ hlShortRegime(v.sessSegs[q].s), v.sessSegs[q].col }; else rest.push_back(v.sessSegs[q]); }
-            if (!reg.s.empty()) addText(L, T.l + 8, y, y + titleH - 2, reg.s, reg.col, fs + 1, true, M(reg.s, fs + 1, true), R_TABLE, -1);
+            // (2.0.5) "Regime: Neg / Uptrend": the gamma part in its sign colour, the trend part green (up) / red (down) / the table white (Range)
+            std::vector<Seg> rest;
+            for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) rest.push_back(v.sessSegs[q]);
+            { int xr = T.l + 8; for (size_t q = 0; q < regP.size(); q++) { int w = M(regP[q].s, fs + 1, true); addText(L, xr, y, y + titleH - 2, regP[q].s, regP[q].col, fs + 1, true, w, R_TABLE, -1); xr += w; } }
             int xl = T.l + 6 + lw;
-            int w0 = M(title, fs + 1, true); addText(L, xl + cwv[0] / 2 - w0 / 2, y, y + titleH - 2, title, titleCol, fs + 1, true, w0, R_TABLE, -1);
+            int w0 = M(title, fs + 1, true), wv = M(verTxt, fs, false);
+            addText(L, xl + cwv[0] / 2 - (w0 + wv) / 2, y, y + titleH - 2, title, titleCol, fs + 1, true, w0, R_TABLE, -1);
+            addText(L, xl + cwv[0] / 2 - (w0 + wv) / 2 + w0, y, y + titleH - 2, verTxt, C_GREY, fs, false, wv, R_TABLE, -1);
             if (!rest.empty() && ncol > 1) { int x2 = xl + cwv[0]; std::string t2; unsigned c2 = rest[0].col;
                 for (size_t q = 0; q < rest.size(); q++) t2 += (q ? "  " : "") + rest[q].s;
                 int w2 = M(t2, fs + 1, true); addText(L, x2 + cwv[1] / 2 - w2 / 2, y, y + titleH - 2, t2, c2, fs + 1, true, w2, R_TABLE, -1); }
@@ -1760,6 +1837,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
             if (onLevelRow(yy, hh)) return false;                              // (2.0.4) never on a level badge's row
             Box b = { xx, yy, xx + ww, yy + hh };
             for (size_t k = 0; k < L.blocks.size(); k++) if (boxHit(b, L.blocks[k])) return false;
+            for (size_t k = 0; k < L.avoid.size(); k++) if (boxHit(b, L.avoid[k])) return false;   // (2.0.5) other indicators' boxes
             return !(L.tableOk && boxHit(b, L.table));
         };
         auto put = [&](int bx, int by) {
@@ -1802,6 +1880,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
         if (onLevelRow(yy, lh)) return false;                               // (2.0.4) never on a level badge's row
         Box bx = { tx, yy, tx + w, yy + lh };
         for (size_t k = 0; k < L.blocks.size(); k++) if (boxHit(bx, L.blocks[k])) return false;
+        for (size_t k = 0; k < L.avoid.size(); k++) if (boxHit(bx, L.avoid[k])) return false;   // (2.0.5)
         return !(L.tableOk && boxHit(bx, L.table));
     };
     int tx = x + PROJ_FLAG_W + 6;
@@ -1830,9 +1909,44 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     L.projOk = true;
 }
 
-inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int priceEdge = -1, int pos = POS_DEFAULT, int projX = -1)
+// (2.0.5) the Settings window, all applied here so the tests see exactly what is drawn: Show table + its background colour, Show
+// projection + its up (to the HOD) / down (to the LOD) colours, Show 1st-extreme mark + its LOD / HOD colours. A colour of 0 (black /
+// unset, IRT returns it for a never-saved colour) keeps the default; hidden table = no table at all (the projection is then not cut).
+struct Opts {
+    bool table = true, proj = true, mark = true;
+    unsigned tableBg = C_PANEL, projUp = C_GREEN, projDn = C_RED, markLod = C_GREEN, markHod = C_RED;
+};
+inline unsigned optCol(unsigned v, unsigned def) { v &= 0xFFFFFFu; return v ? v : def; }
+inline void applyOpts(Layout& L, const Opts& O)
+{
+    std::vector<Item> keep; keep.reserve(L.items.size());
+    for (size_t i = 0; i < L.items.size(); i++) {
+        Item it = L.items[i];
+        if (it.elem == E_PROJ) {
+            if (!O.proj) continue;
+            if (it.c1 == C_GREEN) it.c1 = optCol(O.projUp, C_GREEN); else if (it.c1 == C_RED) it.c1 = optCol(O.projDn, C_RED);
+        } else if (it.elem == E_MARK) {
+            if (!O.mark) continue;
+            if (it.c1 == C_GREEN) it.c1 = optCol(O.markLod, C_GREEN); else if (it.c1 == C_RED) it.c1 = optCol(O.markHod, C_RED);
+        } else if (it.role == R_TABLE || it.role == R_NOTE) {
+            if (!O.table) continue;
+            if (it.k == K_RECT && it.c2 == C_PANEL) it.c2 = optCol(O.tableBg, C_PANEL);
+            if (it.k == K_FILL && it.c1 == C_PANEL) it.c1 = optCol(O.tableBg, C_PANEL);
+        }
+        keep.push_back(it);
+    }
+    L.items.swap(keep);
+    if (!O.table) L.tableOk = false;
+}
+inline void tagElem(Layout& L, size_t from, int elem) { for (size_t i = from; i < L.items.size(); i++) L.items[i].elem = elem; }
+// (2.0.5) avoid = other indicators' boxes on this pane (the Dealer Profile header / banner, the Tape Reader box): the table and the
+// projection label keep clear of them
+inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int priceEdge = -1, int pos = POS_DEFAULT, int projX = -1,
+                        const std::vector<Box>* avoid = nullptr, const Opts* opt = nullptr)
 {
     Layout L;
+    if (avoid) L.avoid = *avoid;
+    const bool showTable = !opt || opt->table;
     if (pane.r - pane.l < 120 || pane.b - pane.t < 60) { L.note = "pane too small"; return L; }
     // (1.1.2, Rassul 11:20 "make the hod lod not overlap with the liquidity profile") the Liquidity Profile's column on the left
     // edge (bars + "5.1x", 110 px - the Dealer Profile badges keep off it the same way) is never under the table
@@ -1843,12 +1957,14 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
     // the free area ends at the price edge (the last bar's right edge, where the profiles begin) when the chart gives it
     int freeR = priceEdge > 0 ? priceEdge : pane.r - (int)((pane.r - pane.l) * 0.15);
     if (freeR <= colR + 100) freeR = pane.r - (int)((pane.r - pane.l) * 0.15);
-    layoutTable(L, v, pane, colR, M, freeR, pos);   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
+    if (showTable) layoutTable(L, v, pane, colR, M, freeR, pos);   // (2.0.5) Show table off: no table, the projection runs uncut   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
     if (HODLOD_SHOW_CANDLE) layoutCandle(L, v, pane, yOf, M);
     // (1.1.2) the line stands on the live extreme's candle; only when that bar is off the chart, just left of the table (1.1.0)
     if ((projX < pane.l + 2 || projX > pane.r - 4) && L.tableOk && L.table.l - PROJ_GAP > pane.l + 2) projX = L.table.l - PROJ_GAP;
+    const size_t p0 = L.items.size();
     layoutProj(L, v, pane, yOf, M, projX);
-    return L;
+    tagElem(L, p0, E_PROJ);
+    return L;                                // (2.0.5) the host adds the 1st-extreme mark, then applies the colours / checkboxes once (applyOpts)
 }
 
 // ------------------------------------------------------------------------------------------------ status + logs
@@ -1943,6 +2059,12 @@ inline std::string statusText(const View& v, const Layout& L, const Tracker& T, 
     kv("NOTE", L.note);
     kv("RESERVED_RIGHT_X", std::to_string(L.colRight > 0 ? L.colRight : 0));
     if (L.tableOk) kv("TABLE_BOX", std::to_string(L.table.l) + "," + std::to_string(L.table.t) + "," + std::to_string(L.table.r) + "," + std::to_string(L.table.b));   // SessionInfo stacks clear of it   // (HL105) the candle column's right edge (pane x): SessionInfo centres its box right of it
+    // (2.0.5) the trend in the header and where the table went (the Position spot, moved clear of another indicator's box, or not clear)
+    kv("TREND", std::string(v.trendReady ? trendWord(v.trendLvl) : "not ready") + "," + std::to_string(v.trendLvl) + ",bars " + std::to_string(v.trendBars) + "," + v.trendVia);
+    kv("REGIME_TEXT", regimeText(v, L.trendCompact));
+    if (L.tableOk) kv("TABLE_PLACE", std::string(L.tableMoved ? "moved clear" : (L.tableClear ? "position spot" : "position spot, NOT clear")) + ",want " +
+                      std::to_string(L.tableWant.l) + " " + std::to_string(L.tableWant.t) + " " + std::to_string(L.tableWant.r) + " " + std::to_string(L.tableWant.b));
+    for (size_t i = 0; i < L.avoid.size(); i++) kv("AVOID", std::to_string(L.avoid[i].l) + "," + std::to_string(L.avoid[i].t) + "," + std::to_string(L.avoid[i].r) + "," + std::to_string(L.avoid[i].b));
     return o;
 }
 

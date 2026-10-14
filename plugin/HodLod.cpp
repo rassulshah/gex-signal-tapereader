@@ -1,5 +1,15 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.0.5 (2026-10-13 night): the header reads "Regime: Neg / Uptrend" (Rassul 21:01; "Range" when there is no trend, 21:20) -
+ *         the VWAP trend of the RTH shown, computed natively from the chart's CLOSED bars with VwapTrendLogic.h (vtl::fromChart, RTH:
+ *         the same rule as the Tape Reader TREND vote; words = vtl::displayLabel: Uptrend / Dntrend / Strong ...). Default Position Top centre (16:24 "the table at the TOP
+ *         of the price pane"; 21:04 "even the location of the hod lod is incorrect"): a place file holding the old default 7 (Bottom
+ *         centre) becomes 1 ONCE per market (logged in HodLod.migrate-205.txt), any other choice is kept. The IRT title row (22 px) stays
+ *         clear; the table and the projection label keep clear of the Dealer Profile header (top right) / banner (top left, when on) and
+ *         the Tape Reader box (its published LAYOUT box, else its Position region, only when it runs on this market); the version
+ *         next to the RTH title. Settings made real (his 10-13 rule): Position + a checkbox and a colour for every drawn element - Show
+ *         table / Table background, Show projection / Up + Down colours, Show 1st-extreme mark / LOD + HOD colours (parameter version 4:
+ *         IRT resets the saved list once, so the dialog shows Top centre).
  *  2.0.4 (2026-10-13): the projection callout ("HOD after 10:45 . 94.34") keeps out of the left level-label band (the Liquidity
  *         column's level names, e.g. "/PDH") - max(110 px, 15% of the pane); it moves right of the band, never over a level label.
  *  2.0.3 (2026-10-13 10:38): the table 33% smaller ("reduce the size of this by 33%. too big"): 9 pt instead of 13, padding x 2/3.
@@ -33,6 +43,7 @@
 #include "HostSlot.h"
 #include "HodLodLogic.h"
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
+#include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
 #include <fstream>
 #include <sys/types.h>
@@ -69,6 +80,9 @@ struct HLState {
     // (2.0.2, Rassul 05:52 / 06:08: Session Info retired, its Regime + options Expiry move into the table's header) the bridge's
     // LRA-Session-<MKT>.csv: GAM|POS|NEG ... and EXP|hh:mm ... (bounded read, re-read only when the file changes, at most every 5 s)
     long long sessStamp = -2; time_t sessChecked = 0; std::string sessGam, sessExp; int sessAge = -1; bool sessRec = true;
+    // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
+    // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
+    time_t avoidChecked = 0; bool trBoxOk = false; hl::Box trBox = { 0, 0, 0, 0 }; int trPos = 7; bool trSeen = false; bool dpBanner = false;
     ~HLState() { delete T; }
 };
 
@@ -83,10 +97,16 @@ public:
     virtual int parmsApply(void) { savePos(); return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { savePos(); return RTX_OK; }
     int posParam = 0;
+    // (2.0.5) the checkboxes and colours (indices into the parameter list, set in setup)
+    int pShowTable = 1, pTableBg = 2, pShowProj = 3, pProjUp = 4, pProjDn = 5, pShowMark = 6, pMarkLod = 7, pMarkHod = 8;
+    hl::Opts opts();
     struct PosCache { std::string path; long long stamp = -2; int v = hl::POS_DEFAULT; };
     std::vector<PosCache> posCache;                      // per object (no static state), <= 8 markets
     void savePos();
     int position(const std::string& mkt);
+    std::vector<std::string> migChecked;                 // (2.0.5) markets whose place file was checked for the old default this run
+    void migratePlace(const std::string& mkt);
+    void loadAvoid(HLState& S);
     int priceEdge();
     HostSlot<HLState> slot_;
     HLState* state(bool create) { return slot_.get(this, create); }
@@ -132,15 +152,37 @@ int cppExtension::calc(int)
 
 int cppExtension::setup(void)
 {
-    // (HL105) the only setting: Position (9 spots, default Bottom centre); the value array stays hidden from the settings window
-    setParameterVersion(3);   // (1.0.1) 3: IRT resets a stale saved Position (Top left) to the default
-    setParameterDialogHeight(1);
-    static_cast<HodLod*>(this)->posParam = 0;
-    setListParameter("Position", (short)hl::POS_DEFAULT, hl::POS_CHOICES);
+    // (HL105) Position (9 spots, default Top centre since 2.0.5); (2.0.5, Rassul 2026-10-13 "settings must be real") a checkbox and a
+    // colour for every drawn element. Controls only, no how-to text. The value array stays hidden from the settings window.
+    setParameterVersion(4);   // (1.0.1) 3: IRT resets a stale saved Position; (2.0.5) 4: the new checkboxes / colours, and the saved Bottom centre resets to Top centre
+    setParameterDialogHeight(5);         // 4 rows: Position; table; projection; 1st-extreme mark
+    HodLod* x = static_cast<HodLod*>(this);
+    const short SL = kParmAppendSameLine;
+    int pc = 0;
+    x->posParam = pc++;   setListParameter("Position", (short)hl::POS_DEFAULT, hl::POS_CHOICES);
+    x->pShowTable = pc++; setBoolParameter("Show table", true);
+    x->pTableBg = pc++;   setColorParameter("Table background", (COLOR)hl::C_PANEL, 0, SL);
+    x->pShowProj = pc++;  setBoolParameter("Show projection", true);
+    x->pProjUp = pc++;    setColorParameter("Up (to the HOD)", (COLOR)hl::C_GREEN, 0, SL);
+    x->pProjDn = pc++;    setColorParameter("Down (to the LOD)", (COLOR)hl::C_RED, 0, SL);
+    x->pShowMark = pc++;  setBoolParameter("Show 1st-extreme mark", true);
+    x->pMarkLod = pc++;   setColorParameter("LOD call", (COLOR)hl::C_GREEN, 0, SL);
+    x->pMarkHod = pc++;   setColorParameter("HOD call", (COLOR)hl::C_RED, 0, SL);
     CPEN p(HL_GREY, 1, P_SOLID);
     setOutputParameter("HOD/LOD", DRAW_INVISIBLE, &p, HL_GREY, OUTPUT_NO_UI);
     setArrayDrawingFlags(0, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
     return RTX_OK;
+}
+
+// (2.0.5) this chart's checkboxes and colours, read on every draw (settings never leak between charts); an unreadable value = the default
+hl::Opts HodLod::opts()
+{
+    hl::Opts O;
+    O.table = isBoxChecked(pShowTable) != 0; O.proj = isBoxChecked(pShowProj) != 0; O.mark = isBoxChecked(pShowMark) != 0;
+    auto col = [&](int i, unsigned def) { int v = getIntegerValue(i); return v <= 0 ? def : hl::optCol((unsigned)v, def); };
+    O.tableBg = col(pTableBg, hl::C_PANEL); O.projUp = col(pProjUp, hl::C_GREEN); O.projDn = col(pProjDn, hl::C_RED);
+    O.markLod = col(pMarkLod, hl::C_GREEN); O.markHod = col(pMarkHod, hl::C_RED);
+    return O;
 }
 
 std::string HodLod::flexPath(const std::string& name)
@@ -282,6 +324,28 @@ static void hlSessSegs(HLState& S)
     }
 }
 
+// (2.0.5) the header's trend: vtl::fromChart on the CLOSED bars (B never holds the forming bar), RTH, of the latest RTH session among
+// them - the live one, or the prior one while the table shows it (overnight / before the open). Same rule and VWAP arithmetic as the
+// Tape Reader TREND vote and lsSessionVWAP; a chart without volume weights every bar equally (as the timing features do).
+static void hlTrend(HLState& S, const std::vector<hl::Bar>& B, long long per)
+{
+    S.view.trendLvl = 0; S.view.trendReady = false; S.view.trendBars = 0; S.view.trendVia.clear();
+    int om = 0, cm = 0;
+    if (B.empty() || per <= 0 || !svl::rthOf(S.mkt.c_str(), om, cm)) return;
+    std::vector<svl::Bar> vb; vb.reserve(B.size());
+    for (size_t i = 0; i < B.size(); i++) {
+        const long long a = B[i].absEnd; long d = (long)(a >= 0 ? a / 86400 : (a - 86399) / 86400);
+        svl::Bar x; x.days = d; x.endSec = (int)(a - (long long)d * 86400); x.h = (float)B[i].h; x.l = (float)B[i].l; x.c = (float)B[i].c;
+        x.v = std::isfinite(B[i].v) && B[i].v > 0 ? B[i].v : 1.0; vb.push_back(x);
+    }
+    int k = (int)vb.size();
+    while (k > 0 && svl::classify(vb[(size_t)k - 1].days, vb[(size_t)k - 1].endSec, (int)per, om, cm).kind != svl::RTH) k--;
+    if (k <= 0) return;
+    const vtl::Trend t = vtl::fromChart(vb, k, (int)per, om, cm, svl::RTH);
+    S.view.trendReady = t.ready; S.view.trendLvl = t.ready ? vtl::level(t) : 0; S.view.trendBars = t.bars;
+    S.view.trendVia = t.ready ? hl::csvSafe(t.strength == vtl::STR_STRONG ? std::string(vtl::strengthLabel(t)) : std::string(vtl::viaLabel(t))) : std::string();
+}
+
 void HodLod::recompute(HLState& S, long n)
 {
     S.recomputes++;
@@ -318,6 +382,7 @@ void HodLod::recompute(HLState& S, long n)
     hl::Tracker T = hl::runBars(c, B, B.size(), &rows, &lock);
     hl::ReadOut rd = rows.empty() ? hl::ReadOut() : rows.back().out;
     S.view = hl::buildView(T, rd, &rows, &S.mq, &lock);
+    hlTrend(S, B, per);                       // (2.0.5) "Regime: Neg / Uptrend" - the trend from the closed bars only (no repaint)
     computeFx(S, n, per);                     // (2.0.0) the 1st Extreme model on the same chart (this recompute's bar size)
     S.view.fxSegs = hlfx::headerLine(S.fxView, S.fxHave);
     S.projIdx = -1;                           // (1.1.0) the 1st extreme's bar on this chart, matched by its END stamp
@@ -563,8 +628,41 @@ void HodLod::savePos()
     std::string p = flexPath("HodLod.place-" + mkt + ".txt"); if (p.empty()) return;
     hl::FileOps F; hl::writeAtomic(F, p, std::to_string(v) + "\n");
 }
+// (2.0.5) ONE-TIME migration (Rassul 16:24 / 21:04: the table belongs at the TOP; the 10-11 place files hold the old default 7 =
+// Bottom centre, saved when the settings were applied, not a choice of Bottom): per market, the first time 2.0.5 sees its place file,
+// a "7" becomes "1" (Top centre); any other value is his choice and stays. HodLod.migrate-205.txt records every market checked (and
+// what was done), so a later deliberate "Bottom centre" is never migrated again.
+void HodLod::migratePlace(const std::string& mkt)
+{
+    for (size_t i = 0; i < migChecked.size(); i++) if (migChecked[i] == mkt) return;
+    if (migChecked.size() >= 16) migChecked.erase(migChecked.begin());
+    migChecked.push_back(mkt);
+    const std::string logp = flexPath("HodLod.migrate-205.txt"), p = flexPath("HodLod.place-" + mkt + ".txt");
+    if (logp.empty() || p.empty()) return;
+    std::string log;
+    {   std::ifstream f(logp.c_str(), std::ios::binary); std::string ln; int nl = 0;
+        while (nl++ < 200 && std::getline(f, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+            if (ln.compare(0, mkt.size() + 1, mkt + ",") == 0) return;                     // this market was already checked
+            if (ln.size() < 200) log += ln + "\n"; } }
+    std::string cur;
+    {   std::ifstream f(p.c_str()); if (f.is_open() && std::getline(f, cur) && !cur.empty() && cur.back() == '\r') cur.pop_back(); }
+    time_t t = time(nullptr); struct tm lt;
+#ifdef _WIN32
+    localtime_s(&lt, &t);
+#else
+    localtime_r(&t, &lt);
+#endif
+    char when[32]; strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", &lt);
+    hl::FileOps F; std::string what;
+    if (cur == std::to_string(hl::POS_OLD_DEFAULT)) {
+        if (!hl::writeAtomic(F, p, std::to_string(hl::POS_DEFAULT) + "\n")) return;      // not written: try again on the next load
+        what = "place 7 (old default Bottom centre) -> 1 (Top centre)";
+    } else what = cur.empty() ? "no place file: default 1 (Top centre)" : "place " + cur + " kept (his choice)";
+    hl::writeAtomic(F, logp, log + mkt + "," + when + "," + hl::HL_VERSION + "," + what + "\n");
+}
 int HodLod::position(const std::string& mkt)
 {
+    if (!mkt.empty()) migratePlace(mkt);
     // (1.0.1, Rassul 2026-10-11 "its default is bottom center. it is moving to upper left") the per-market place file is the ONLY
     // source while drawing: IRT hands a freshly added copy a stale list index (0 = Top left) that the file never had. The file is
     // written only when he presses OK / Apply in Settings; no file = Bottom centre.
@@ -581,6 +679,67 @@ int HodLod::position(const std::string& mkt)
     if (posCache.size() >= 8) posCache.erase(posCache.begin());
     posCache.push_back(c);
     return c.v;
+}
+// (2.0.5) the boxes of other indicators the table keeps clear of: bounded reads, at most every 3 s
+void HodLod::loadAvoid(HLState& S)
+{
+    time_t now = time(nullptr);
+    if (S.avoidChecked != 0 && now - S.avoidChecked < 3) return;
+    S.avoidChecked = now; S.trBoxOk = false; S.trSeen = false;
+    {   // the Tape Reader's status: "POSITION,<0-8>" and "LAYOUT,drawn,<note>,box l t r b,region ..." (written >= every 30 s while it draws)
+        const std::string p = flexPath("TapeReader.status-" + S.mkt + ".txt");
+        const long long st = hlFileStamp(p);
+        if (!p.empty() && st >= 0) {
+            S.trSeen = true;
+#ifdef _WIN32
+            struct _stat64 sb; bool ok = _stat64(p.c_str(), &sb) == 0;
+#else
+            struct stat sb; bool ok = stat(p.c_str(), &sb) == 0;
+#endif
+            const bool fresh = ok && (long long)sb.st_size <= 64 * 1024 && now - (time_t)sb.st_mtime <= 120 && (time_t)sb.st_mtime - now <= 120;
+            std::ifstream f(p.c_str(), std::ios::binary); std::string ln; int nl = 0;
+            while (ok && nl++ < 200 && std::getline(f, ln)) {
+                if (ln.size() > 2048) continue;
+                if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+                if (ln.compare(0, 9, "POSITION,") == 0 && ln.size() == 10 && ln[9] >= '0' && ln[9] <= '8') S.trPos = ln[9] - '0';
+                if (fresh && ln.compare(0, 13, "LAYOUT,drawn,") == 0) {
+                    size_t k = ln.find(",box "); int l, t, r, b;
+                    if (k != std::string::npos && std::sscanf(ln.c_str() + k + 5, "%d %d %d %d", &l, &t, &r, &b) == 4 && r > l && b > t && r - l < 4000 && b - t < 4000) {
+                        S.trBox = hl::Box{ l, t, r, b }; S.trBoxOk = true; }
+                }
+            }
+        }
+    }
+    {   // the Dealer Profile's whole-book banner (top left, off by default): DealerProfile.settings.txt, "<root>|market|width|font|clock|labels|snap|fadefar|banner|..."
+        S.dpBanner = false;
+        const std::string p = flexPath("DealerProfile.settings.txt");
+        std::ifstream f(p.c_str(), std::ios::binary); std::string ln; int nl = 0;
+        while (!p.empty() && f.is_open() && nl++ < 200 && std::getline(f, ln)) {
+            if (ln.size() > 1024) continue;
+            size_t a = ln.find('|'); if (a == std::string::npos) continue;
+            std::string key = ln.substr(0, a); size_t tl = key.find('~'); if (tl != std::string::npos) key = key.substr(0, tl);
+            if (key.empty() || hl::marketForRoot(key) != S.mkt) continue;
+            std::vector<std::string> c; size_t q = 0; for (;;) { size_t e = ln.find('|', q); c.push_back(ln.substr(q, e == std::string::npos ? std::string::npos : e - q)); if (e == std::string::npos) break; q = e + 1; }
+            if (c.size() >= 9 && c[8] == "1") S.dpBanner = true;
+        }
+    }
+}
+// (2.0.5) the avoid boxes for this pane: the Dealer Profile header (right-aligned at the scale edge, ~44 px tall, 2.9.0
+// DealerProfile.cpp header()) and its banner when on (top left, ~30 px), the Tape Reader box (published, else its Position region)
+static std::vector<hl::Box> hlAvoid(const HLState& S, const hl::Box& pane, int priceEdge)
+{
+    std::vector<hl::Box> v;
+    const int DP_HDR_W = 250, DP_HDR_H = 46, DP_BANNER_W = 440, DP_BANNER_H = 32, TR_W = 660, TR_H = 150;
+    v.push_back(hl::Box{ pane.r - DP_HDR_W, pane.t, pane.r, pane.t + DP_HDR_H });
+    if (S.dpBanner) v.push_back(hl::Box{ pane.l, pane.t, pane.l + DP_BANNER_W, pane.t + DP_BANNER_H });
+    if (S.trBoxOk) v.push_back(hl::Box{ S.trBox.l - 2, S.trBox.t - 2, S.trBox.r + 2, S.trBox.b + 2 });
+    else if (S.trSeen) {   // no fresh box (not drawn yet / another chart): reserve its Position spot at the 11 pt size, up to the last bar
+        const int r = priceEdge > 0 ? priceEdge : pane.r - (pane.r - pane.l) * 15 / 100;
+        const hl::Box area = { pane.l + 110, pane.t + 2, (std::max)(pane.l + 112, r), pane.b - 2 };
+        const int W = (std::min)(TR_W, area.r - area.l), H = (std::min)(TR_H, area.b - area.t);
+        if (W > 0 && H > 0) v.push_back(hl::placeIn(area, W, H, S.trPos));
+    }
+    return v;
 }
 // the last price bar's right edge (x): where the usable area ends (never beyond the last bar); -1 = unknown
 int HodLod::priceEdge()
@@ -614,13 +773,20 @@ int HodLod::draw(void)
         PNT p; if (p.set(S->projIdx, (float)((double)S->view.projFrom * tick), kBarCenter) == RTX_OK && p.h > 0) projX = (int)p.h;
     }
     loadSession(*S); hlSessSegs(*S);         // (2.0.2) Regime / Expiry in the header (Session Info retired)
-    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, priceEdge(), position(S->mkt), projX);
+    loadAvoid(*S);                           // (2.0.5) the Dealer Profile header / banner and the Tape Reader box
+    const int pe = priceEdge();
+    const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
+    const hl::Opts O = opts();
+    hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, pe, position(S->mkt), projX, &avoid, &O);
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
         if (p.set(S->fxIdx, (float)S->fxView.price, kBarCenter) == RTX_OK && p.h > 0) mx = (int)p.h;
         std::function<int(double)> yPx = [&](double v) { return (int)getVerticalDrawPosition((float)v); };
+        const size_t m0 = L.items.size();
         hlfx::marker(L, S->fxView, pb, mx, yPx, M);
+        hl::tagElem(L, m0, hl::E_MARK);
     }
+    hl::applyOpts(L, O);                      // (2.0.5) the Settings checkboxes and colours
     execute(L);
     writeStatus(*S, &L);
     writeFxStatus(*S);
@@ -633,6 +799,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
-    p->setVersion("2.0.4");
+    p->setVersion("2.0.5");
     return p;
 }
