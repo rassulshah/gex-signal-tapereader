@@ -1,5 +1,9 @@
 /********************************************************************************
- *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.1.2  (2026-10-14)
+ *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.1.3  (2026-10-14)
+ *  1.1.3 (2026-10-14, CR5300; Rassul 11:59 CT CLZ6 3-min "the label for pace and lots on the red spike goes away but it is there on
+ *        the green spike. fix it"): spike labels never lose their pace / lots because of another spike (OrderFlowFeed.h 1.3.1: labels
+ *        decided in time order from older labels only, no shrink pass; the hover grid drawn over them, not re-laying them out;
+ *        candles left of the view in the layout so a scroll keeps them). Seller and buyer labels behave the same.
  *  1.1.2 (2026-10-14, CR4800; Rassul 07:02-07:22): the left box is a READ box (the read, max 3 lines, + the blue options line; the
  *        numbers on its hover) - "Box shows: Read / Numbers"; Offset X / Y on the 9-spot Position; letters white text with no box; one
  *        spike label per candle never over the read; L only for a rare large order (OrderFlowFeed.h 1.3.0).
@@ -50,7 +54,7 @@
 #include "OrderFlowFeed.h"
 #include "StackStatsLogic.h"
 
-#define SS_VERSION "1.1.2"          // keep equal to st::VERSION and the setVersion literal below
+#define SS_VERSION "1.1.3"          // keep equal to st::VERSION and the setVersion literal below
 
 class StackStats : public off::MboPane<st::Logic> {
 public:
@@ -84,6 +88,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA StackStats: who is ARRIVING. Per candle, the LOTS of orders ADDED near price (market-by-order feed). Green = bids added, red = offers added. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. White dash = notable refills (re-added at a price right after it traded). I = refills + an iceberg confirmed, L = one large order added. Spike labels: the ratio, the pace (p = added lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = one order is most of it, may not reload ?), a blue options line when fresh (oStack), and the info box (Bids | Offers: added lots, rebuilt %, pace, crowd = orders, avg size, top order share, refills) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.1.2");   // SS_VERSION
+    p->setVersion("1.1.3");   // SS_VERSION
     return p;
 }

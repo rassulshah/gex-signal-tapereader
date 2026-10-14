@@ -1,5 +1,9 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.2.1  (2026-10-14)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.2.2  (2026-10-14)
+ *  1.2.2 (2026-10-14, CR5300; Rassul 11:59 CT CLZ6 3-min "the label for pace and lots on the red spike goes away but it is there on
+ *        the green spike. fix it"): spike labels never lose their pace / lots because of another spike (OrderFlowFeed.h 1.3.1: labels
+ *        decided in time order from older labels only, no shrink pass; the hover grid drawn over them, not re-laying them out;
+ *        candles left of the view in the layout so a scroll keeps them). Seller and buyer labels behave the same.
  *  1.2.1 (2026-10-14, CR4800; Rassul 07:02-07:22): the left box is a READ box (the read, max 3 lines, + the blue options line; the
  *        numbers on its hover) - "Box shows: Read / Numbers"; Offset X / Y on the 9-spot Position; letters white text with no box; one
  *        spike label per candle never over the read; L only for a rare large order (OrderFlowFeed.h 1.3.0). Settings from the per-market
@@ -59,7 +63,7 @@
 #include "PullStatsLogic.h"
 #include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.2.1"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.2.2"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -118,6 +122,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, before price, traded first, pace, crowd = orders, avg size, top order share) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.2.1");   // PS_VERSION
+    p->setVersion("1.2.2");   // PS_VERSION
     return p;
 }

@@ -1,5 +1,9 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.5.2 (2026-10-14)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.5.3 (2026-10-14)
+ *  1.5.3 (2026-10-14, CR5300; Rassul 11:59 CT CLZ6 3-min "the label for pace and lots on the red spike goes away but it is there on
+ *        the green spike. fix it"): spike labels never lose their pace / lots because of another spike (OrderFlowFeed.h 1.3.1: labels
+ *        decided in time order from older labels only, no shrink pass; the hover grid drawn over them, not re-laying them out;
+ *        candles left of the view in the layout so a scroll keeps them). Seller and buyer labels behave the same.
  *  1.5.2 (2026-10-14, CR4800; Rassul 07:02-07:22): the left box is a READ box (the read, max 3 lines, + the blue oHit line; the numbers
  *        Lots ... Burst on its hover, in column groups) - "Box shows: Read / Numbers"; Offset X / Y on the 9-spot Position (clamped
  *        inside the pane, left of the last bar); letters white text with no box; one spike label per candle never over the read; L only
@@ -105,7 +109,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.5.2"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.5.3"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -982,7 +986,7 @@ void BidAskStats::render(BASState& S) {
     const bool showGrid = P.ok && P.mode == off::MODE_READ && S.inBox;
     std::vector<off::LBox> avoid;
     if (P.ok) avoid.push_back(off::LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
-    if (showGrid) avoid.push_back(off::LBox{ P.gridBox.l, P.gridBox.t, P.gridBox.r, P.gridBox.b, 0, 0 });
+    // (1.5.3) the hover grid is not an obstacle: it is drawn over the bars while the mouse is in the box (labels never re-decide for it)
     for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
     const COLOR normal[2] = { C_BID_BAR, C_ASK_BAR }, spike[2] = { C_BID_SPIKE, C_ASK_SPIKE };   // left = bids hit (red), right = offers lifted (green)
     off::drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
@@ -1010,6 +1014,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.5.2");   // BAS_VERSION
+    p->setVersion("1.5.3");   // BAS_VERSION
     return p;
 }

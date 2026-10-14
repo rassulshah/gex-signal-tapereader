@@ -1,7 +1,15 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.3.0, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.2, lsPullStats 1.2.1 and
-// lsStackStats 1.1.2.
+// OrderFlowFeed.h (1.3.1, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.3, lsPullStats 1.2.2 and
+// lsStackStats 1.1.3.
+// 1.3.1 (2026-10-14 CR5300; Rassul 11:59 CT, CLZ6 3-min BidAskStats: "the label for pace and lots on the red spike goes away but it
+//   is there on the green spike. fix it .. also check other indicators"): ROOT CAUSE in spikeLabels (shared by all three panes):
+//   pass 2 shrank the NEAREST already-placed full labels to their ratio alone whenever ANY other spike had no free spot (a spike under
+//   the read box / hover grid, the forming bar, a crowded spot) - repeatedly, until no full label was left - so a label lost its pace
+//   and lots because of a different, often far-away candle; which side lost depended only on which label was nearest. Fixed: labels
+//   are decided in time order from older labels + fixed obstacles only (full above its bar, else the ratio alone for itself), never
+//   shrinking another; the hover grid no longer re-lays out labels (it is drawn over them); candles just left of the view take part
+//   in the layout so a scroll does not re-decide a label in view. Tests: tests_of/test_label_persist.cpp.
 // 1.3.0 (2026-10-14, CR4800; Rassul 07:02 "make them more compact so you will have room for the read", 07:16 "remove the white boxes,
 //   just keep the signals and use white font instead", 07:18 "test them thoroughly ... dont shake or act erratic, and dont have garbage
 //   values", 07:22 "replace the info box with a read box because there isn't enough room for both"):
@@ -100,7 +108,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.3.1";   // 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -940,18 +948,22 @@ inline std::vector<LBox> letterBoxes(int slotL, int slotR, int cx0, int cx1, int
     return out;
 }
 inline bool overlaps(const LBox& a, const LBox& b) { return !(a.r < b.l || b.r < a.l || a.b < b.t || b.b < a.t); }
-// SPIKE LABELS (Rassul 12:03 "i want the quantity and a ratio on top of the spikes"): above every spike bar, centred on it, two small
-// lines in the spike colour - the ratio on top, the quantity just above the bar top ("4.1x" over "240"). Always ABOVE the bar (12:10:
-// no inside-the-bar fallback). A label that would touch another label or a letter box is staggered one label height up (at most 3
-// steps); one that would cross yTop (the message lines / pane top) is not drawn - labels never overlap anything.
-struct SpikeIn { int cx = 0, barTop = 0, side = 0; std::string q, x, p; };      // (1.2.0) p = pace "p 2.3x" ("" = none)
-struct SLabel { int l, t, r, b, side; std::string q, x, p; };
-// (1.2.1, Rassul 13 Oct "fonts are too small"): labels at 10 pt; never over each other, a letter box, the info box or the message line
-// (yTop). The full label (ratio / pace / lots) is tried right above its bar, then staggered up; then shifted left / right of its bar;
-// then the RATIO alone (the one number that must always show) the same way. Only when no spot is free is the label not drawn.
+// SPIKE LABELS (Rassul 12:03 "i want the quantity and a ratio on top of the spikes"): above every spike bar, centred on it, in the
+// spike colour - the ratio on top, the pace, the quantity just above the bar top ("4.1x" / "p 2.3x" / "240"). Always ABOVE the bar
+// (12:10: no inside-the-bar fallback); never over another label, a letter, the read box or the message line (yTop).
+// 1.3.1 (2026-10-14 CR5300, Rassul 11:59 CT CLZ6 3-min: "the label for pace and lots on the red spike goes away but it is there on the
+// green spike. fix it"): a label once given NEVER loses rows because of another spike. 1.2.1-1.3.0 had a pass 2 that, for a spike
+// with no free spot (e.g. under the read box, or the forming bar), SHRANK the nearest full labels to their ratio one by one - every
+// label on the pane if the spot never freed up - so a seller (or buyer) spike lost its pace and lots whenever some other spike could
+// not be placed (new bars, the forming bar flickering, scrolling, the hover grid). Now each label is decided in TIME ORDER from the
+// older labels and the fixed obstacles only: 1) the full label right above its bar, staggered up; 2) else the ratio alone (the lots
+// when no ratio) above its bar, staggered up, then shifted left / right. A later spike can never change an earlier label.
+struct SpikeIn { int cx = 0, barTop = 0, side = 0; std::string q, x, p; bool view = true; };   // (1.2.0) p = pace "p 2.3x" ("" = none); in time order; (1.3.1) view = its candle is in view
+struct SLabel { int l, t, r, b, side; std::string q, x, p; bool view = true; };
 template <class W> std::vector<SLabel> spikeLabels(const std::vector<SpikeIn>& in, int yTop, const std::vector<LBox>& letters, W width, int xMin = -1000000, int xMax = 1000000) {
-    // one free spot for a label of w x h near its bar: right above it, then staggered up, then shifted left / right; skip = its own index
-    auto spot = [&](const std::vector<SLabel>& out, size_t skip, const SpikeIn& sp, int w, int h, int maxStep, LBox& got, bool shift) {
+    std::vector<SLabel> out;                                              // the labels placed so far (older first)
+    // one free spot for a label of w x h near its bar: right above it, then staggered up, then (shift) moved left / right
+    auto spot = [&](const SpikeIn& sp, int w, int h, int maxStep, LBox& got, bool shift) {
         const int shifts[3] = { 0, -(w / 2 + 3), w / 2 + 3 };
         for (int sh = 0; sh < (shift ? 3 : 1); ++sh)
             for (int step = 0; step < maxStep; ++step) {
@@ -962,42 +974,27 @@ template <class W> std::vector<SLabel> spikeLabels(const std::vector<SpikeIn>& i
                 if (l < xMin) l = xMin;
                 const LBox me = { l, t, l + w - 1, b, 0, 0 };
                 bool hit = false;
-                for (size_t k = 0; k < out.size() && !hit; ++k) { if (k == skip || out[k].r < out[k].l) continue; const LBox o = { out[k].l, out[k].t, out[k].r, out[k].b, 0, 0 }; hit = overlaps(me, o); }
+                for (size_t k = 0; k < out.size() && !hit; ++k) { const LBox o = { out[k].l, out[k].t, out[k].r, out[k].b, 0, 0 }; hit = overlaps(me, o); }
                 for (size_t k = 0; k < letters.size() && !hit; ++k) hit = overlaps(me, letters[k]);
                 if (!hit) { got = me; return true; }
             }
         return false;
     };
-    // pass 1: the full label (ratio / pace / lots) right above its own bar, staggered up when it would touch another (as 1.2.0)
-    std::vector<SLabel> out(in.size(), SLabel{ 0, 0, -1, -1, 0, std::string(), std::string(), std::string() });
-    std::vector<int> cx(in.size(), 0);
     for (size_t i = 0; i < in.size(); ++i) {
-        out[i].side = in[i].side; cx[i] = in[i].cx;
-        const int rows = in[i].p.empty() ? 2 : 3;
-        const int w = std::max(std::max(width(in[i].q), width(in[i].x)), width(in[i].p)) + 2; LBox got;
-        if (spot(out, i, in[i], w, rows * LABEL_LH, 4, got, false)) out[i] = SLabel{ got.l, got.t, got.r, got.b, in[i].side, in[i].q, in[i].x, in[i].p };
-    }
-    // pass 2: a spike with no room keeps its RATIO (the number that must always show; the lots stand in before 5 candles of history):
-    // the ratio alone, shifted left / right if needed; if still no room, the nearest full labels shrink to their ratio alone first
-    auto ratioOnly = [&](size_t i, LBox& got) { const std::string x = in[i].x.empty() ? in[i].q : in[i].x; return spot(out, i, in[i], width(x) + 2, LABEL_LH, 8, got, true); };
-    for (size_t i = 0; i < in.size(); ++i) {
-        if (out[i].r >= out[i].l) continue;
-        LBox got; bool ok = ratioOnly(i, got);
-        while (!ok) {
-            size_t best = (size_t)-1; int bd = 1 << 30;
-            for (size_t k = 0; k < out.size(); ++k) if (k != i && out[k].r >= out[k].l && (!out[k].q.empty() || !out[k].p.empty())) { const int d = std::abs(cx[k] - cx[i]); if (d < bd) { bd = d; best = k; } }
-            if (best == (size_t)-1) break;
-            const std::string xb = in[best].x.empty() ? in[best].q : in[best].x; const int wb = width(xb) + 2;
-            int l = cx[best] - wb / 2; if (l + wb - 1 > xMax) l = xMax - wb + 1; if (l < xMin) l = xMin;
-            out[best] = SLabel{ l, out[best].b - LABEL_LH + 1, l + wb - 1, out[best].b, in[best].side, std::string(), xb, std::string() };   // shrink in place (its bottom row)
-            ok = ratioOnly(i, got);
+        const SpikeIn& sp = in[i];
+        const int rows = sp.p.empty() ? 2 : 3;
+        const int w = std::max(std::max(width(sp.q), width(sp.x)), width(sp.p)) + 2; LBox got;
+        if (spot(sp, w, rows * LABEL_LH, 4, got, false)) {               // (a full label is never shifted: it could sit over another candle)
+            out.push_back(SLabel{ got.l, got.t, got.r, got.b, sp.side, sp.q, sp.x, sp.p, sp.view }); continue;
         }
-        if (ok) out[i] = SLabel{ got.l, got.t, got.r, got.b, in[i].side, std::string(), in[i].x.empty() ? in[i].q : in[i].x, std::string() };
+        const std::string x = sp.x.empty() ? sp.q : sp.x;                  // no room for the full label: the ratio alone (crowded)
+        if (spot(sp, width(x) + 2, LABEL_LH, 8, got, true)) out.push_back(SLabel{ got.l, got.t, got.r, got.b, sp.side, std::string(), x, std::string(), sp.view });
     }
-    std::vector<SLabel> kept;
-    for (size_t i = 0; i < out.size(); ++i) if (out[i].r >= out[i].l) kept.push_back(out[i]);
-    return kept;
+    return out;
 }
+// (1.3.1) how many candles LEFT of the view take part in the label layout (not drawn), so scrolling does not change a label that
+// stays in view: labels only interact within a few label widths
+inline int labelLead(int slot) { const int s = slot > 0 ? slot : 1; const int n = 240 / s + 2; return n < 4 ? 4 : (n > 60 ? 60 : n); }
 inline int hoverIndex(long bar, long count) { return bar >= 0 && bar < count - 1 ? (int)bar : -1; }
 struct Hover { int bar = -1; bool set(int b) { if (b < -1) b = -1; if (b == bar) return false; bar = b; return true; } };
 inline std::string clock12(int hour, int minute) {
@@ -1605,28 +1602,40 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
             }
         }
     }
-    // (12:03) the quantity and the ratio above every spike
+    // (12:03) the quantity and the ratio above every spike. (1.3.1) laid out from labelLead candles left of the view (never drawn) so a
+    // scroll does not re-decide a label still in view; no left clamp in the layout (a clamp would pile the off-view ones at the edge)
     std::vector<SpikeIn> sp;
-    for (int i = v0; i <= v1; ++i) {
+    for (int i = std::max(0, v0 - labelLead(slot)); i <= v1; ++i) {
         const BarLook b = look(i); if (!b.ok || (!b.spike[0] && !b.spike[1])) continue;
-        const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
+        const int xc = xOf(i); if (xc > g.right) continue;
         const Pair p = pairIn(xc, slot);
         const int one = spikeSideOf(b.spike, b.ratioOk, b.ratio, b.v);          // (1.3.0) one label per candle: the bigger side
         for (int s = 0; s < 2; ++s) if (b.spike[s] && s == one) {
             SpikeIn si; si.cx = (p.l[s] + p.r[s]) / 2; si.barTop = g.yBase - barHeight(b.v[s], top, g.px); si.side = s;
             si.q = std::to_string(b.v[s]); si.x = b.ratioOk[s] ? ratioText(b.ratio[s]) : std::string(); si.p = paceLabel(b.p100[s]);
+            si.view = i >= v0 && xc >= g.left;
             sp.push_back(si);
         }
     }
     if (sp.empty()) return;
     cppExtension::FONT sf; sf.id = cppExtension::HELVETICA; sf.size = LABEL_PT; sf.style = cppExtension::PLAIN; x->setFont(sf);   // (1.2.1) 10 pt
-    const std::vector<SLabel> L = spikeLabels(sp, g.top + g.reserve, allLets, [&](const std::string& t) { return t.empty() ? 0 : (int)x->getTextWidth(t.c_str(), -1); }, g.left + 1, g.edge - 1);
+    const std::vector<SLabel> L = spikeLabels(sp, g.top + g.reserve, allLets, [&](const std::string& t) { return t.empty() ? 0 : (int)x->getTextWidth(t.c_str(), -1); }, -1000000, g.edge - 1);
     for (size_t k = 0; k < L.size(); ++k) {
-        x->setTextColor(spike[L[k].side]);
-        auto put = [&](const std::string& t, int y) { if (t.empty()) return; const int w = x->getTextWidth(t.c_str(), -1), cx = (L[k].l + L[k].r) / 2;
+        SLabel Lk = L[k];
+        if (!Lk.view) continue;                                           // (1.3.1) a candle left of the view: laid out, not drawn
+        if (Lk.l < g.left + 1) {                                          // (1.3.1) past the pane's left edge: slid inside when that spot is
+            const int d = g.left + 1 - Lk.l; Lk.l += d; Lk.r += d;        // free, else not drawn (its candle is at / off the edge)
+            if (Lk.r > g.edge - 1) continue;
+            const LBox me = { Lk.l, Lk.t, Lk.r, Lk.b, 0, 0 }; bool hit = false;
+            for (size_t o = 0; o < L.size() && !hit; ++o) if (o != k) { const LBox ob = { L[o].l, L[o].t, L[o].r, L[o].b, 0, 0 }; hit = overlaps(me, ob); }
+            for (size_t o = 0; o < allLets.size() && !hit; ++o) hit = overlaps(me, allLets[o]);
+            if (hit) continue;
+        }
+        x->setTextColor(spike[Lk.side]);
+        auto put = [&](const std::string& t, int y) { if (t.empty()) return; const int w = x->getTextWidth(t.c_str(), -1), cx = (Lk.l + Lk.r) / 2;
             cppExtension::RCT r; r.set(coord(cx - w / 2), coord(y), coord(cx - w / 2 + w + 2), coord(y + LABEL_LH)); r.drawText(t.c_str(), false, false); };
-        const bool hp = !L[k].p.empty();                                  // (1.2.0) ratio / pace / lots ((1.2.1) the ratio alone when crowded)
-        put(L[k].x, L[k].t); if (hp) put(L[k].p, L[k].t + LABEL_LH); if (!L[k].q.empty()) put(L[k].q, L[k].t + (hp ? 2 : 1) * LABEL_LH);
+        const bool hp = !Lk.p.empty();                                  // (1.2.0) ratio / pace / lots ((1.2.1) the ratio alone when crowded)
+        put(Lk.x, Lk.t); if (hp) put(Lk.p, Lk.t + LABEL_LH); if (!Lk.q.empty()) put(Lk.q, Lk.t + (hp ? 2 : 1) * LABEL_LH);
     }
 }
 // ---- (12:05) THE INFO BOX - Rassul "all values go in the info box, which I should be able to see as I move my mouse over different
@@ -2229,7 +2238,7 @@ private:
         const bool showGrid = P.ok && P.mode == MODE_READ && S.inBox;
         std::vector<LBox> avoid;
         if (P.ok) avoid.push_back(LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
-        if (showGrid) avoid.push_back(LBox{ P.gridBox.l, P.gridBox.t, P.gridBox.r, P.gridBox.b, 0, 0 });
+        // (1.3.1) the hover grid is NOT an obstacle: it is drawn over the bars while the mouse is in the box; labels never re-decide for it
         for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
         drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
             BarLook k; const PaneBar* b = barOf(i); if (!b) return k;
