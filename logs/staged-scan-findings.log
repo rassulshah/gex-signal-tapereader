@@ -1,15 +1,5 @@
-findings=0 allowed=0 staged_files=13 bytes=259739
+findings=0 allowed=0 staged_files=3 bytes=122802
 largest staged blobs (bytes, path):
-SIZE	51707	plugin/ExhaustionV2.cpp
-SIZE	44838	plugin/TradeManager.cpp
-SIZE	32346	plugin/CVD.cpp
-SIZE	29735	plugin/Exhaustion.cpp
-SIZE	29664	plugin/KingTracker.cpp
-SIZE	18769	plugin/TapeFlowMarks.cpp
-SIZE	14331	plugin/tests_cvd/test_cvd_host.cpp
-SIZE	13862	tools/gex-build.bat
-SIZE	12299	plugin/TradeGuardLayout.h
-SIZE	5386	plugin/test_exhaustion_host.cpp
-SIZE	4040	plugin/ExhaustionLogic.h
-SIZE	2638	plugin/test_trademanager_130.cpp
-SIZE	124	logs/staged-scan-findings.log
+SIZE	92470	plugin/tests/audit-display-2026-10-14-tests.tar.gz
+SIZE	29759	plugin/BUILD-LESSONS.md
+SIZE	573	logs/staged-scan-findings.log
