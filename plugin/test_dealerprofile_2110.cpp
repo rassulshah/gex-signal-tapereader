@@ -232,8 +232,8 @@ int main(int argc, char** argv)
     // ---- 0. versions: DP_VERSION = the setVersion literal gex-build reads = the header
     {
         const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.11.1" && src.find("p->setVersion(\"2.11.1\")") != std::string::npos, "version 2.11.1: constant = setVersion literal");
-        check(std::string(cb::VERSION) == "1.0.0" && std::string(dcol::VERSION) == "1.0.0", "ColumnBoard / DealerColumnsLogic 1.0.0");
+        check(std::string(DP_VERSION) == "2.12.0" && src.find("p->setVersion(\"2.12.0\")") != std::string::npos, "version 2.12.0: constant = setVersion literal");
+        check(std::string(cb::VERSION) == "1.0.0" && std::string(dcol::VERSION).compare(0, 5, "1.1.0") == 0, "ColumnBoard 1.0.0 / DealerColumnsLogic 1.1.0");
     }
     // ---- 1. the default layout on ES: Delta Profile on the chart (board), Levels 78 | Delta 80 | Dealer 80, the margin
     {
@@ -280,7 +280,7 @@ int main(int argc, char** argv)
         X.calc(0); X.preCalc();
         check(mockOpt().sets == 1, "the chart already has it: not set again");
         const std::string st = slurp(fl("DealerProfile.status.txt"));
-        check(st.find("COLUMNS,1362-1440,1440-1520,1520-1600,price right 1342,clean,delta on") != std::string::npos && st.find("MARGIN,need 258 px,units bars,ppb 5") != std::string::npos && st.find("VERSION,2.11.1") != std::string::npos, "status: COLUMNS / MARGIN / VERSION lines");
+        check(st.find("COLUMNS,1362-1440,1440-1520,1520-1600,price right 1342,clean,delta on") != std::string::npos && st.find("MARGIN,need 258 px,units bars,ppb 5") != std::string::npos && st.find("VERSION,2.12.0") != std::string::npos, "status: COLUMNS / MARGIN / VERSION lines");
         check(st.find("REACH,80") != std::string::npos, "REACH = the Dealer column (the Read / Analyst keep left of it)");
         // a hover on a badge: the detail moved off the chart
         RTX_EVENT e; memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE;
@@ -378,8 +378,8 @@ int main(int argc, char** argv)
         auto boxAt = [&](const std::vector<Op>& V, const std::string& txt, unsigned long& fill) { for (size_t i = 0; i < V.size(); ++i) if (V[i].kind == "text" && V[i].text == txt) {
                 for (size_t j = i; j-- > 0;) if (V[j].kind == "box" && V[j].l <= V[i].l && V[j].r >= V[i].r && V[j].t <= V[i].b && V[j].b >= V[i].t) { fill = V[j].col; return true; } } return false; };
         unsigned long f1 = 0, f2 = 0, f3 = 0;
-        check(boxAt(O, "HL 900", f1) && f1 == (C_SELL & 0xFFFFFF), "CR0 above price: 'HL 900' on RED (resting offers)");
-        check((boxAt(O, "HL 1.2K", f2) || boxAt(O, "1.2K", f2)) && f2 == (C_BUY & 0xFFFFFF), "HVL below price: the HL block on GREEN (resting bids; 'HL 1.2K', or '1.2K' when 'HL' does not fit 78 px)");
+        check((boxAt(O, "HL? 900", f1) || boxAt(O, "900?", f1)) && f1 == (C_SELL & 0xFFFFFF), "(2.12.0) CR0 above price: 'HL? 900' (or '900?' when HL? does not fit) on RED (resting offers)");
+        check((boxAt(O, "HL? 1.2K", f2) || boxAt(O, "1.2K?", f2)) && f2 == (C_BUY & 0xFFFFFF), "HVL below price: the HL block on GREEN (resting bids; 'HL 1.2K', or '1.2K' when 'HL' does not fit 78 px)");
         check(boxAt(O, "310", f3) && f3 == 0x282828, "PS0 normal liquidity: '310' grey on dark grey (40,40,40)");
         int outl = 0; for (auto& q : O) if (q.kind == "line" && q.col == 0xFFFFFF && q.font == 2 && q.l >= c.lay.levels.l) ++outl;
         check(outl >= 8, "HL blocks: a 2 px white outline (" + std::to_string(outl) + " segments)");
@@ -392,26 +392,26 @@ int main(int argc, char** argv)
         // hysteresis: CR0 drops to 2.3x -> still HL (off only under 2.1x after 30 s)
         liqFile("L,31700,R,950,2.3\nL,31400,S,1234,2.6\nL,31300,S,310,1.1\n"); reloadLiq(X, a);
         std::vector<Op> O2 = drawOn(X, a, MOCK_CHART); unsigned long f4 = 0;
-        check(boxAt(O2, "HL 950", f4) && f4 == (C_SELL & 0xFFFFFF), "2.5x -> 2.3x: stays HL (no flicker)");
+        check((boxAt(O2, "HL? 950", f4) || boxAt(O2, "950?", f4)) && f4 == (C_SELL & 0xFFFFFF), "2.5x -> 2.3x: stays HL (no flicker)");
         // price crosses the level: the Liquidity Profile now reports CR0's band as BIDS (below price) -> green
         liqFile("L,31700,S,980,2.8\n"); reloadLiq(X, a);
         std::vector<Op> O3 = drawOn(X, a, MOCK_CHART); unsigned long f5 = 0;
-        check(boxAt(O3, "HL 980", f5) && f5 == (C_BUY & 0xFFFFFF), "price crossed CR0: the block flips to GREEN (bids)");
+        check((boxAt(O3, "HL? 980", f5) || boxAt(O3, "980?", f5)) && f5 == (C_BUY & 0xFFFFFF), "price crossed CR0: the block flips to GREEN (bids)");
         // a stale file, then garbage, then 'Liquidity in badge' off: name-only, never 0 / garbage
         liqFile("L,31700,S,980,2.8\n", 30); reloadLiq(X, a);
         std::vector<Op> O4 = drawOn(X, a, MOCK_CHART);
-        check(countPrefix(O4, "HL ") == 0 && !hasText(O4, "310") && hasText(O4, "CR0"), "a file 30 s old: name-only badges");
+        check(countPrefix(O4, "HL") == 0 && !hasText(O4, "310") && hasText(O4, "CR0"), "a file 30 s old: name-only badges");
         put("LRA-LiqLevels-ES.csv", "garbage\nL,31700,S,0,9\n"); reloadLiq(X, a);
         std::vector<Op> O5 = drawOn(X, a, MOCK_CHART);
-        check(countPrefix(O5, "HL ") == 0 && !hasText(O5, "0"), "a garbage file: name-only, no '0'");
+        check(countPrefix(O5, "HL") == 0 && !hasText(O5, "0"), "a garbage file: name-only, no '0'");
         settingsRow("ES", 80, 78, 0); liqFile("L,31700,R,900,2.7\n");
         Chart b = loadBars("14:57"); DealerProfile Y; prime(Y, b, "ES");
         std::vector<Op> O6 = drawOn(Y, b, "ES liq off");
-        check(countPrefix(O6, "HL ") == 0 && hasText(O6, "CR0"), "'Liquidity in badge' off: name-only badges");
+        check(countPrefix(O6, "HL") == 0 && hasText(O6, "CR0"), "'Liquidity in badge' off: name-only badges");
         // a narrow Levels column: no room for the block -> the name alone (never cut)
         settingsRow("ES", 80, 30, 1); Chart n = loadBars("14:57"); DealerProfile Z; prime(Z, n, "ES");
         std::vector<Op> O7 = drawOn(Z, n, "ES liq narrow");
-        check(countPrefix(O7, "HL ") == 0, "a 30 px Levels column: the name only");
+        check(countPrefix(O7, "HL") == 0, "a 30 px Levels column: the name only");
         CUR = &a; X.done(); CUR = &b; Y.done(); CUR = &n; Z.done(); put("DealerProfile.settings.txt", ""); cb::clear(cb::DELTA, a.sym, a.spb, "ES liq");
     }
     // ---- 7. the settings window: filled from the file (opening never saves); an untouched control keeps the file's value; garbage refused

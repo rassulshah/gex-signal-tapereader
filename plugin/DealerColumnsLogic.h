@@ -18,7 +18,7 @@
 #include "DealerProfileAuditLogic.h"
 
 namespace dcol {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-14 18:25 CT audit display list): model-not-forecast hovers, "HL?", reach-only odds, the locked trigger in "How to use"
 static const unsigned long C_POS = 0x0014B8A6UL;   // teal: + net gamma (dealers long gamma: they lean against moves)
 static const unsigned long C_NEG = 0x00F97316UL;   // orange: - net gamma (dealers short gamma: they chase moves)
 static const int BADGE_FONT_MIN = 8, BADGE_FONT_MAX = 14, BADGE_FONT_DEF = 9;
@@ -54,13 +54,26 @@ inline std::string dropHourly(const std::string& name)
 }
 
 // the node's hover: dpaudit::nodeHover (tested since 2.9.0) re-worded for the 2.11.0 face (teal + / orange - and B / S in the node)
-inline dpaudit::Hover nodeHover(const std::string& mkt, const dpaudit::NodeX& x, double net, double absMax, double pxNow, bool textShown)
+// (DP 2.12.0, 2026-10-14 18:25 CT, Rassul approved the external-audit display list, section 5) the bar hover says what the vendor model
+// shows, not what dealers will do: "Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it
+// holds." The B / S hedge line ("futures dealers must BUY 1,200 ...") stays - his wording (KEEP, his call 10-14).
+inline std::string ageText(double ageMin) { return ageMin >= 0 ? "data " + std::to_string((long long)(ageMin + 0.5)) + " min old" : std::string("data age unknown"); }
+inline dpaudit::Hover nodeHover(const std::string& mkt, const dpaudit::NodeX& x, double net, double absMax, double pxNow, bool textShown, double ageMin = -1)
 {
     dpaudit::Hover h = dpaudit::nodeHover(mkt, x, net, absMax, pxNow);
+    const std::string K0 = dpaudit::fmtStrike(mkt, x.k);
     for (size_t i = 0; i < h.lines.size(); ++i) {
         std::string& s = h.lines[i];
-        if (s.compare(0, 10, "W = WALL: ") == 0) s = "Teal (+) = WALL: " + s.substr(10);
-        else if (s.compare(0, 10, "F = FUEL: ") == 0) s = "Orange (-) = FUEL: " + s.substr(10);
+        if (s.compare(0, 10, "W = WALL: ") == 0) s = "Teal = MenthorQ model shows + net gamma here (vendor model, " + ageText(ageMin) + "). Not a prediction it holds.";
+        else if (s.compare(0, 10, "F = FUEL: ") == 0) s = "Orange = MenthorQ model shows - net gamma here (vendor model, " + ageText(ageMin) + "). Not a prediction it breaks.";
+        else if (s.compare(0, 15, "Why it matters:") == 0) s = "Why it matters: the model's gamma at " + K0 + " - a place to watch price and the tape, not a turn forecast.";
+        else if (s.compare(0, 11, "How to use:") == 0) s = "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT.";
+        else if (s.compare(0, 8, "Example:") == 0 && (s.find("absorbed") != std::string::npos || s.find("doing its job") != std::string::npos))
+            s = "Example: price sweeps " + K0 + " by a few ticks and a reversal bar (RB) or CoB closes back - that is your trigger here, not the node.";
+        else if (s.compare(0, 8, "Example:") == 0) {   // the hedge example keeps his "dealers buying N" wording; the hold / run forecast goes
+            const char* const tails[2] = { "the wall is where a short can set up.", "the fuel is where it can run." };
+            for (int t = 0; t < 2; ++t) { const size_t q = s.find(tails[t]); if (q != std::string::npos) s.replace(q, std::string(tails[t]).size(), "your trigger there is still a sweep, then RB or CoB."); }
+        }
         const std::string a = " - the number on the chart.", b = " (too small to print on the chart).";
         size_t p = s.find(a); if (p != std::string::npos) s.replace(p, a.size(), textShown ? " - the B / S text in the node." : ".");
         p = s.find(b); if (p != std::string::npos) s.replace(p, b.size(), textShown ? " - the B / S text in the node." : ".");
@@ -106,9 +119,9 @@ inline std::string levelWhat(const std::string& name)
     if (f == "AsiaHI" || f == "AsiaLO") return std::string("the Asia session's (6:00 PM - 2:00 AM CT) ") + (f == "AsiaHI" ? "high" : "low");
     const char k = dpaudit::mqKind(name);
     if (f == "CR0") return "today's 0DTE call resistance (the biggest call wall that expires today)";
-    if (k == 'R') return "call resistance: the strike with the most call gamma - dealers sell into rallies there";
-    if (k == 'G') return "put support: the strike with the most put gamma - dealers buy dips there";
-    if (k == 'Y') return "HVL, the gamma flip: above it dealers are long gamma (moves fade), below it short gamma (moves run)";
+    if (k == 'R') return "call resistance: the strike with the most call gamma (MenthorQ model)";            // (DP 2.12.0) no "dealers sell into rallies" claim
+    if (k == 'G') return "put support: the strike with the most put gamma (MenthorQ model)";
+    if (k == 'Y') return "HVL, the MenthorQ model's gamma flip level";
     return "a MenthorQ gamma level: a strike where dealers' options hedging is heavy";
 }
 inline bool isKeyLevel(const std::string& name)
@@ -128,20 +141,20 @@ inline dpaudit::Hover levelHover(const std::string& mkt, const std::string& name
     h.title = "Will " + mkt + " react at " + disp + " " + priceTxt + "?";
     h.lines.push_back("What: " + disp + " " + priceTxt + " = " + levelWhat(full) + ".");
     h.lines.push_back(isKeyLevel(full) ? "Why it matters: stops and resting orders gather at prior highs / lows - reversals start where a level is swept and reclaimed."
-                                       : "Why it matters: dealers' options positions make them buy or sell futures here, so price often stalls or turns at it.");
+                                       : "Why it matters: MenthorQ model level, about 6 to 8 min delayed. Watch price and tape here; it isn't a turn forecast.");   // (DP 2.12.0, audit list)
     if (!odds.empty()) {
         const bool proven = odds.find('?') == std::string::npos;
         h.lines.push_back("Touch odds: " + odds + (odds.find('/') != std::string::npos ? "  (within 90 min  /  by the 3:00 PM CT close)" : "") +
-                          (proven ? "." : " - '?' = not proven yet for this market."));
+                          (proven ? "." : " - '?' = not proven yet for this market.") + " A chance to REACH only - not hold or reverse.");   // (DP 2.12.0, audit list)
     } else h.lines.push_back("Touch odds: none right now (the odds file is stale or the level is too far).");
     std::string lq = liq; while (!lq.empty() && lq[0] == ' ') lq.erase(0, 1);
-    if (!lq.empty()) h.lines.push_back("Liquidity resting here: " + lq + ". HL on the badge = 2.5x+ (this market's confirmation line): green = bids below price defending it as support, red = offers above defending it as resistance.");
+    if (!lq.empty()) h.lines.push_back("Liquidity resting here: " + lq + ". HL? on the badge = resting size 2.5x+ this market's normal (green = bids below price, red = offers above); whether they hold is unknown.");   // (DP 2.12.0, audit list)
     const std::string sx = staleSuffix(name0);
     if (!sx.empty()) h.lines.push_back("Data: " + sx + " - the options book behind this level has not updated; treat it as older.");
-    if (pick) h.lines.push_back("White border = today's pick: the level the model rates most likely to be touched.");
-    h.lines.push_back("How to use: watch the footprint as price reaches it - absorption (A) or exhaustion (Ex?) at the level is the turn; a clean break with volume = no turn.");
-    h.lines.push_back(above ? "Example: price pokes above " + disp + " by a few ticks, buyers are absorbed and a red bar closes back below - a short against the level."
-                            : "Example: price sweeps " + disp + " by a few ticks, sellers are absorbed and a green bar closes back above - a long against the level.");
+    if (pick) h.lines.push_back("White border = today's pick ?: the level the reach model rates most likely to be touched (a chance to REACH, not proven).");   // (DP 2.12.0) MARK ?
+    h.lines.push_back("How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT.");   // (DP 2.12.0, audit list: the locked trigger)
+    h.lines.push_back(above ? "Example: price pokes above " + disp + " by a few ticks and a reversal bar (RB) or CoB closes back below before 11:00 AM CT - a short trigger at the level."
+                            : "Example: price sweeps " + disp + " by a few ticks and a reversal bar (RB) or CoB closes back above before 11:00 AM CT - a long trigger at the level.");
     return h;
 }
 
@@ -213,6 +226,6 @@ inline std::string lotsK(long long n)
     else std::snprintf(b, sizeof(b), "%.0fK", n / 1000.0);
     return b;
 }
-inline std::string liqBlockText(long long n, bool hl) { const std::string k = lotsK(n); return k.empty() ? k : (hl ? "HL " + k : k); }
+inline std::string liqBlockText(long long n, bool hl) { const std::string k = lotsK(n); return k.empty() ? k : (hl ? "HL? " + k : k); }   // (DP 2.12.0, audit list) "HL?" - the 2.5x line is not proven
 } // namespace dcol
 #endif

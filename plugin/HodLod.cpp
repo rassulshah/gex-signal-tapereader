@@ -1,5 +1,9 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.2.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, APPROVAL-LIST-2026-10-14.md section 8): MARK ? on the
+ *         model parts - header "Regime ?: below HVL (model)" (was "Regime: Neg"), Actual "LOD IN? 8:39 AM (71%, in test)" (was "LOD IN 8:39
+ *         (71%)"), Expected cells "(65%, in test)", "Proj HOD? 7,913.50" and the arrow callout "HOD?". KEEP: the trend word, Expiry, Range
+ *         used, the LOD? / HOD? first-extreme marker and the session candle. Built on 2.1.0 (the GEX line, 18:20 CT).
  *  2.1.0 (2026-10-14 evening; Rassul 16:01-16:04 CT "a line in the HOD/LOD indicator box that identifies the key GEX levels where a
  *         reaction can occur so it is front and center - this will be where I look for trades"; "must be able to identify strikes like
  *         7750 ... see growth in the absolute gex, regardless of whether it is an identified gamma level"): a GEX row under the header -
@@ -980,6 +984,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
-    p->setVersion("2.1.0");
+    p->setVersion("2.2.0");
     return p;
 }

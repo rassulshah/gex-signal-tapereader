@@ -34,7 +34,7 @@ REM (MT100 2026-10-09) lsDayModel + lsDayStats RETIRED - superseded by lsHodLod 
 REM   Their sources are kept in plugin\retired\ (see plugin\retired\RETIRE-NOTES.md); they are no longer built or installed.
 call :one KingTracker  lsKingTracker  KingTrackerLogic.h ContractOffsetLogic.h
 REM (2026-10-14 CR5200) the right-side columns: ColumnBoard.h shared by DealerProfile 2.11.0 / DeltaProfile 2.8.0 / LiquidityProfile + Flow 0.16.0
-call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h ColumnBoard.h DealerColumnsLogic.h BoxPlace.h BannerBoard.h
+call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h ColumnBoard.h DealerColumnsLogic.h BoxPlace.h BannerBoard.h ClaimGates.h
 call :one DealerRead   lsDealerRead   DealerLogic.h HostSlot.h BoxPlace.h ClaimGates.h DealerReadGates.h
 call :one DealerSig    lsDealerSig    DealerLogic.h ClaimGates.h
 call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h

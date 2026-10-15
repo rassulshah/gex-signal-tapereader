@@ -221,7 +221,7 @@ int main(int argc, char** argv)
     std::vector<Op> O = drawOnce(D, cut, 0, dealer);
     // (2.11.0, CR5200) the Dealer column = the right 80 px before the axis; the header fits it ("DP v2.11.0", "STALE 10h")
     const int anchor = 1598, reach = 80, bound = 1600 - reach;   // the mock scale starts at the pane edge (1600): the column is 1520-1600
-    check(hasText(O, "DP v2.11.1"), "header: the version (short form inside the 80 px column)");
+    check(hasText(O, "DP v2.12.0"), "header: the version (short form inside the 80 px column)");
     check(hasText(O, "STALE 10h"), "header: STALE 10h (the time is in the header hover)");
     {   // (2.11.1, MQF100 2026-10-14) WHY it is stale + what is being done, from the bridge's LRA-MQFeed.txt
         using namespace dpaudit;

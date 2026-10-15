@@ -166,8 +166,8 @@ static void dealerTexts()
     dpaudit::NodeX x; x.k = 7900; x.absG = 27e6; x.hasD = true; x.d = -8591; x.dUsd = -3.39e9;
     dpaudit::Hover n = dcol::nodeHover("ES", x, 26e6, 40e6, 7857, true);
     check(!n.lines.empty() && n.lines[0].find("\"S 8.6K\" = futures dealers must SELL 8.6K ES contracts (about $3.4B)") != std::string::npos, "node hover: the node text + its $");
-    bool teal = false; for (const std::string& l : n.lines) if (l.rfind("Teal (+) = WALL", 0) == 0) teal = true;
-    check(teal, "node hover: teal (+) = wall wording");
+    bool teal = false; for (const std::string& l : n.lines) if (l.rfind("Teal = MenthorQ model shows + net gamma here (vendor model, ", 0) == 0 && l.find("Not a prediction it holds.") != std::string::npos) teal = true;
+    check(teal, "(DP 2.12.0) node hover: 'Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds.'");
 }
 
 static void liquidityBadges()
@@ -183,7 +183,7 @@ static void liquidityBadges()
     check(!dcol::parseLiqLevels("garbage", now, L, why) && !dcol::parseLiqLevels("", now, L, why) && !dcol::parseLiqLevels("LIQL,1,now,0.25,2.5,2.1,4", now, L, why), "garbage headers refused");
     check(!dcol::parseLiqLevels("LIQL,1," + std::to_string(now) + ",0.25,2.0,2.4,4\n", now, L, why), "an off line above the on line refused");
     check(dcol::lotsK(310) == "310" && dcol::lotsK(900) == "900" && dcol::lotsK(1234) == "1.2K" && dcol::lotsK(1500) == "1.5K" && dcol::lotsK(15400) == "15K" && dcol::lotsK(0).empty() && dcol::lotsK(-4).empty(), "contracts: 310 / 1.2K / 15K, never 0");
-    check(dcol::liqBlockText(900, true) == "HL 900" && dcol::liqBlockText(310, false) == "310" && dcol::liqBlockText(0, true).empty(), "block text: HL 900 / 310 / none");
+    check(dcol::liqBlockText(900, true) == "HL? 900" && dcol::liqBlockText(310, false) == "310" && dcol::liqBlockText(0, true).empty(), "(DP 2.12.0) block text: HL? 900 / 310 / none");
     // HL hysteresis: on at 2.5x, held while >= 2.1x, and at least 30 s; ratios around 2.5 never flicker
     dcol::HLState h; long long t = 0; int flips = 0; bool prev = false;
     const double seq[] = { 2.4, 2.5, 2.45, 2.55, 2.49, 2.51, 2.3, 2.2, 2.6, 2.4 };

@@ -1,6 +1,10 @@
 /********************************************************************************
- *  DealerProfile.cpp  --  Investor/RT RTX extension  lsDealerProfile  (v1.0, 2026-09-29)
+ *  DealerProfile.cpp  --  Investor/RT RTX extension  lsDealerProfile  (v1.0, 2026-09-29; v2.12.0, 2026-10-14)
  *
+ *  2.12.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, APPROVAL-LIST-2026-10-14.md section 5): hovers
+ *     say what the vendor model shows, not a hold / turn forecast; "How to use" = his locked trigger; HL badge "HL?"; touch odds
+ *     "a chance to REACH only"; the pick marked ?; HVL regime text behind the hvl_cushion gate. Nothing on the chart moved; the node
+ *     B / S text and "futures dealers must BUY N" stay (KEEP, his call 10-14).
  *  2.11.0 (2026-10-14, CR5200, Rassul approved 11:00 CT - mockup-columns.png 10:53 "Liquidity 60 stays LEFT (solid) | right:
  *     Levels 40 | Delta 80 | Dealer 80"): the right side of the price chart is three columns, left to right after a 20 px gap from
  *     the last bar: the LEVELS column (compact badges ONH / CR0 / HVL / PFH / PDH / LonLO, close ones stacked with a tick to their
@@ -86,6 +90,7 @@ static void* dpCursorWindow() { return NULL; }
 #include "KeyLevelsLogic.h" // (2.7.0) the key levels, natively from the chart's bars
 #include "ColumnBoard.h"    // (2.11.0) the right-side columns: widths, layout, margin, board (shared with Delta / Liquidity)
 #include "DealerColumnsLogic.h" // (2.11.0) node text, compact badge names, the badge / node hovers
+#include "ClaimGates.h"         // (2.12.0) the hvl_cushion gate on the HVL badge hover
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -99,7 +104,7 @@ static void* dpCursorWindow() { return NULL; }
 #include <algorithm>
 #include <chrono>
 
-static const char* DP_VERSION = "2.11.1";   // 2.11.1 (MQF100, 2026-10-14 after-close - "STALE 2h - 9:35 AM" with no reason): when the grid is STALE the header adds WHY and what is being done ("no internet - retrying", "signed out - sign in", "tab asleep - retrying") from the bridge's lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, read at most every 5 s, used only while written in the last 5 min); the header hover says why / what is being done / what you do   // 2.11.0 (CR5200, Rassul 2026-10-14 11:00 CT): the Levels / Delta / Dealer columns right of price, the chart margin, one-sided teal / orange nodes with B / S hedge text, compact level badges (detail in the hovers)   // 2.10.0 (Rassul 2026-10-14): HrHI / HrLO no longer drawn; AsiaHI / AsiaLO (18:00-02:00 CT, muted purple) and CWH / CWL (this week's high / low set before yesterday, soft blue) added; a new level within the market's merge ticks joins the line ("ONH . AsiaHI")   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.12.0";   // 2.12.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 5): the bar hover "Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds."; MenthorQ badge hover "MenthorQ model level, about 6 to 8 min delayed. Watch price and tape here; it isn't a turn forecast."; touch odds "A chance to REACH only - not hold or reverse."; "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT."; HL badge "HL?" + "whether they hold is unknown"; today's pick marked ? in its hover; HVL regime text behind the hvl_cushion gate. The node B / S text and "dealers must BUY N" stay (his call).   // 2.11.1 (MQF100, 2026-10-14 after-close - "STALE 2h - 9:35 AM" with no reason): when the grid is STALE the header adds WHY and what is being done ("no internet - retrying", "signed out - sign in", "tab asleep - retrying") from the bridge's lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, read at most every 5 s, used only while written in the last 5 min); the header hover says why / what is being done / what you do   // 2.11.0 (CR5200, Rassul 2026-10-14 11:00 CT): the Levels / Delta / Dealer columns right of price, the chart margin, one-sided teal / orange nodes with B / S hedge text, compact level badges (detail in the hovers)   // 2.10.0 (Rassul 2026-10-14): HrHI / HrLO no longer drawn; AsiaHI / AsiaLO (18:00-02:00 CT, muted purple) and CWH / CWL (this week's high / low set before yesterday, soft blue) added; a new level within the market's merge ticks joins the line ("ONH . AsiaHI")   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -240,7 +245,7 @@ public:
     const HoverT* hovered();
     void drawHover(const HoverT& T, const Settings& S);
     void header(const Settings& S, bool stale, double age, short anchor, int colW, const char* note);
-    void renderNodeX(const Settings& S, const RCT& pane, short anchor, int hs, bool stale);
+    void renderNodeX(const Settings& S, const RCT& pane, short anchor, int hs, bool stale, double ageMin = -1);
     // (2.7.4) this draw's level badges: every level LINE is drawn first, then the badges (MenthorQ first, then key levels), so no
     // line crosses a badge; each badge keeps clear of the price bars, the other badges and the profile columns
     struct LSeg { std::string s; bool bold; COLOR c; };
@@ -766,7 +771,7 @@ void DealerProfile::render(const Settings& S)
             age = dpaudit::ageMinutes(bookAt, t, S.clock);
             stale = dpaudit::bookStale(age, dpaudit::mqUpdateHours(t.tm_wday, t.tm_hour * 60 + t.tm_min));
         }
-        renderNodeX(S, pane, anchor, hs, stale);
+        renderNodeX(S, pane, anchor, hs, stale, age);   // (2.12.0) the data age for the bar hover
         header(S, stale, age, anchor, col.w(), nullptr);
         return;
     }
@@ -872,7 +877,7 @@ void DealerProfile::render(const Settings& S)
 // ------------------------------------------------------------------------------------------------------------------------
 // (2.9.0) the Profile from file 2.4: one bar per strike, LENGTH = absolute GEX, colour / letter by the net sign (NODE usd)
 // ------------------------------------------------------------------------------------------------------------------------
-void DealerProfile::renderNodeX(const Settings& S, const RCT& pane, short anchor, int hs, bool stale)
+void DealerProfile::renderNodeX(const Settings& S, const RCT& pane, short anchor, int hs, bool stale, double ageMin)
 {
     // (2.11.0) one-sided: every node anchored on the Dealer column's right edge, growing LEFT toward price; + teal / - orange by the
     // net sign; length = absolute GEX (the wall's size). Inside the node "B 1.2K" / "S 980" = futures dealers must buy / sell to stay
@@ -927,7 +932,7 @@ void DealerProfile::renderNodeX(const Settings& S, const RCT& pane, short anchor
         }
         // the hover: the node's row across the whole column
         HoverT H; H.l = col.l; H.r = col.r; H.t = (short)(y - std::max(bh, fz + 4) / 2); H.b = (short)(H.t + std::max(bh, fz + 4));
-        H.key = "N|" + std::to_string(key); H.h = dcol::nodeHover(mkt, X, net, amax, D.px + off, shown);
+        H.key = "N|" + std::to_string(key); H.h = dcol::nodeHover(mkt, X, net, amax, D.px + off, shown, ageMin);
         bool inTop = false; for (size_t j = 0; j < top.size(); j++) if (top[j] == i) inTop = true;
         if (inTop && X.hasChg) H.h.lines.push_back("Top 3 wall today: " + dpaudit::pctChg(X.chg) + " since the session's first grid.");
         for (size_t j = 0; j < D.tags.size(); j++) if (std::fabs(D.tags[j].k - X.k) <= step * 0.5f) { H.h.lines.push_back("Tag: " + D.tags[j].text + " (the Reader's mark on this strike)."); break; }
@@ -1716,7 +1721,7 @@ void DealerProfile::flushLabels(const Settings& S)
         int nw = 0, lw = 0; widths(nw, lw);
         if (lw > 0 && nw + lw > avail && kf > 8) { bf = kf - 1; widths(nw, lw); }                                  // 1 pt smaller
         if (lw > 0 && nw + lw > avail) { const size_t cut = nm.find('/'); if (cut != std::string::npos) { nm = nm.substr(0, cut) + "+"; widths(nw, lw); } }   // "PFL+" for a merged name
-        if (lw > 0 && nw + lw > avail && P.hl) { lt = dcol::lotsK(P.lots); widths(nw, lw); }                      // the HL block without "HL "
+        if (lw > 0 && nw + lw > avail && P.hl) { lt = dcol::lotsK(P.lots) + "?"; widths(nw, lw); }                // the HL block without "HL " - (2.12.0) its "?" stays ("900?")
         if (lw > 0 && nw + lw > avail) { lw = 0; bf = kf; nm = names[j]; widths(nw, lw); lw = 0; }               // the name alone
         const short l = (short)(col.l + 2), mid = (short)(l + nw), r = (short)(mid + lw);
         const COLOR fill = fade(P.col, dim);
@@ -1740,7 +1745,10 @@ void DealerProfile::flushLabels(const Settings& S)
         ++cs.badgesShown;
         HoverT H; H.l = l; H.r = std::max(r, mid); H.t = (short)t; H.b = (short)b; H.key = "L|" + P.key;
         H.h = dcol::levelHover(mkt, P.name0, P.priceTxt, P.odds, P.liq, P.pick, P.above);
-        if (P.hvl) { const dpaudit::Hover V = dpaudit::hvlHover(mkt, (double)hvlChartPx - off); H.h.lines.insert(H.h.lines.begin() + 1, V.lines.begin(), V.lines.end() - 2); }
+        if (P.hvl) {
+            if (cgate::kShowHvlCushion) { const dpaudit::Hover V = dpaudit::hvlHover(mkt, (double)hvlChartPx - off); H.h.lines.insert(H.h.lines.begin() + 1, V.lines.begin(), V.lines.end() - 2); }
+            else H.h.lines.insert(H.h.lines.begin() + 1, "HVL " + dpaudit::fmtStrike(mkt, (double)hvlChartPx - off) + " = the MenthorQ model's gamma flip level (vendor model).");   // (2.12.0) no "moves fade / run" regime cause (hvl_cushion gate)
+        }
         hovT.push_back(H);
     }
     pend.clear();
@@ -1849,6 +1857,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.11.1");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.12.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
