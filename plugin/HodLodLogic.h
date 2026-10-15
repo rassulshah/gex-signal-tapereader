@@ -1428,6 +1428,23 @@ inline std::string hlShortRegime(std::string r)
     return r;
 }
 inline void hlParenCell(Cell& c) { c.s = hlParenPct(c.s); c.s2 = hlParenPct(c.s2); c.s3 = hlParenPct(c.s3); }
+// (2.1.1, Rassul 22:32 "remove the percentage (65%)") drop every " (NN%)" / " (NN%?)" / "(NN%, ...)" group from a cell's text
+inline std::string hlNoPct(const std::string& in)
+{
+    std::string o; size_t i = 0;
+    while (i < in.size()) {
+        if (in[i] == '(') {
+            size_t j = i + 1; while (j < in.size() && isdigit((unsigned char)in[j])) j++;
+            if (j > i + 1 && j < in.size() && in[j] == '%') {
+                size_t k = in.find(')', j);
+                if (k != std::string::npos) { while (!o.empty() && o.back() == ' ') o.pop_back(); i = k + 1; continue; }
+            }
+        }
+        o += in[i++];
+    }
+    return o;
+}
+inline void hlNoPctCell(Cell& c) { c.s = hlNoPct(c.s); c.s2 = hlNoPct(c.s2); c.s3 = hlNoPct(c.s3); }
 // (2.0.5) the trend words = vtl::displayLabel (the strings agreed for Session Info, VwapTrendLogic.h VW110): "Strong Uptrend" / "Uptrend" /
 // "Dntrend" / "Strong Dntrend"; no trend = "Range" (Rassul 2026-10-13 21:20). compact = only when the header column cannot fit the full word
 inline std::string trendWord(int lvl, bool compact = false)
@@ -1527,7 +1544,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             aRow[K_1ST] = c;
         }
     }
-    for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); }
+    for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); hlNoPctCell(aRow[c]); hlNoPctCell(eRow[c]); }
     // ---- sizes: (2.0.3, Rassul 10:38 "reduce the size of this by 33%. too big") 9 / 9 / 8 / 8 pt instead of 13 / 12 / 11 / 10, and the
     // padding scaled by 2/3 (equal columns first, then content-sized)
     // (2.0.5) attempts 4-5: the same at 8 pt with the compact trend word ("Strong Down") - only when the full word cannot fit
