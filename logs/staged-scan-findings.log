@@ -1,3 +1,4 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=2 bytes=333480
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	226989	plugin/LiquidityProfile.cpp
+SIZE	106491	plugin/LiquidityProfileLogic.h
