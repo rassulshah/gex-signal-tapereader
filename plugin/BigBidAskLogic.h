@@ -30,7 +30,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.2.1";
+static const char* const VERSION = "1.3.0";
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -113,6 +113,7 @@ struct Facts {
     long long o = 0, h = 0, l = 0, c = 0;   // whole-tick keys
     Pick bid, ask;
     int bidQ = -1, askQ = -1;          // ratio x 100 vs the prior median; -1 = n/a
+    int seg = -1;                      // (1.3.0) time of day: 0 overnight, 1 pre-open 7:00-8:30, 2 RTH 8:30-15:00 CT (set by the host)
 };
 inline Facts facts(long long t, bool closed, long long o, long long h, long long l, long long c, const std::vector<Row>& rows, bool valid) {
     Facts F; F.t = t; F.closed = closed; F.o = o; F.h = std::max(h, l); F.l = std::min(h, l); F.c = c; F.valid = valid;
@@ -128,6 +129,16 @@ inline double median(std::vector<long long> v) {
 // the median of the same side's biggest over the PRIOR LOOKBACK candles (indexes < i only; valid ones; 0 = not enough)
 inline double priorMedian(const std::vector<Facts>& v, size_t i, int side, int* nOut = nullptr) {
     std::vector<long long> xs;
+    if (v[i].seg >= 0) {   // (1.3.0, Rassul 09:05 "too many bold after the open") normal = the same TIME OF DAY: the prior 20 candles of the
+        // same segment (overnight / pre-open / RTH); not enough yet (the first bars after the open) = the BIGGEST of the prior 20 (strict)
+        for (size_t k = i; k-- > 0 && xs.size() < (size_t)LOOKBACK;) if (v[k].valid && v[k].seg == v[i].seg) xs.push_back(side < 0 ? (v[k].bid.ok ? v[k].bid.vol : 0) : (v[k].ask.ok ? v[k].ask.vol : 0));
+        if ((int)xs.size() >= MIN_PRIOR) { if (nOut) *nOut = (int)xs.size(); return median(xs); }
+        xs.clear(); long long mx = 0; int n = 0;
+        const size_t from = i > (size_t)LOOKBACK ? i - LOOKBACK : 0;
+        for (size_t k = from; k < i; ++k) if (v[k].valid) { mx = std::max(mx, side < 0 ? (v[k].bid.ok ? v[k].bid.vol : 0) : (v[k].ask.ok ? v[k].ask.vol : 0)); ++n; }
+        if (nOut) *nOut = n;
+        return n >= MIN_PRIOR ? (double)mx : 0;
+    }
     const size_t from = i > (size_t)LOOKBACK ? i - LOOKBACK : 0;
     for (size_t k = from; k < i; ++k) if (v[k].valid) xs.push_back(side < 0 ? (v[k].bid.ok ? v[k].bid.vol : 0) : (v[k].ask.ok ? v[k].ask.vol : 0));
     if (nOut) *nOut = (int)xs.size();

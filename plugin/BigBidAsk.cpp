@@ -66,7 +66,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.2.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.3.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -405,7 +405,7 @@ void BigBidAsk::compute(BBState& S, bool fromDraw) {
     S.builtMs = now; S.lastCount = count; S.lastFirst = first; S.lastLast = last;
     int vs = 0, ve = -1;
     if (!fromDraw || getVisibleBars(&vs, &ve) != RTX_OK || vs < 0 || ve < vs) { vs = std::max(0L, count - 400); ve = (int)count - 1; }
-    const int from = std::max(0, vs - LEAD), lo0 = std::max(0, from - bba::LOOKBACK);
+    const int from = std::max(0, vs - LEAD), lo0 = std::max(0, from - 140);   // (1.3.0) priors of the same time of day reach further back
     std::vector<bba::Facts> seq; seq.reserve((size_t)(count - lo0));
     int reads = 0; bool capped = false;
     for (int i = lo0; i < (int)count; ++i) {
@@ -430,6 +430,9 @@ void BigBidAsk::compute(BBState& S, bool fromDraw) {
         }
         seq.push_back(F);
     }
+    for (size_t k = 0; k < seq.size(); ++k) {                                       // (1.3.0) the time-of-day segment of each candle
+        const long long cs = ctSec((RTDATE)seq[k].t); const int m = cs > 0 ? (int)((cs % 86400) / 60) : -1;
+        seq[k].seg = m < 0 ? -1 : (m >= 510 && m < 900) ? 2 : (m >= 420 && m < 510) ? 1 : 0; }
     // ratios (past only) and the final facts of every closed candle whose 20 priors are all known
     for (size_t k = 0; k < seq.size(); ++k) {
         const int i = lo0 + (int)k;
@@ -680,7 +683,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask v1.2.1: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
-    p->setVersion("1.2.1");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask v1.3.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
+    p->setVersion("1.3.0");   // BBA_VERSION
     return p;
 }
