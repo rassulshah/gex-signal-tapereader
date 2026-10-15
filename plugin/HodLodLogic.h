@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.2.0";   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.2.1";   // (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -739,7 +739,7 @@ struct View {
     // never below the range so far). Study lra.ext_yardstick: the expected range beat ATR (and ATR + range used) in 6 of 7 markets
     // on unseen days (crude a tie). Drawn as a vertical line from the 1st extreme with a flag + "Proj HOD 7,870.00"; in the header.
     static const int PROJ_WAIT_MIN = 30;   // minutes after the RTH open before the projection shows
-    bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt, projLv;   // (2.2.0) projLv = the price / gamma level at the target ("ONH \xB7 CR")
+    bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt, projLv; double projPx = NAN;   // (2.2.0) projLv = the price / gamma level at the target ("ONH \xB7 CR")
     double projRange = NAN; int projStage = -1; bool projV2 = false;   // (1.1.5) for the projection log (HodLod.proj-<MKT>.csv)
     int projLockMod = -1;   // (1.1.6) the minute of day the shown target was set (locked)
     // (2.1.0, Rassul 2026-10-14 16:01 "a line in the HOD/LOD indicator box that identifies the key GEX levels where a reaction can
@@ -987,13 +987,15 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
         v.projTxt = std::string(v.projUp ? "Proj HOD " : "Proj LOD ") + pxTxt((double)v.projTo * tick, dec);
         {   // (2.2.0, Rassul 2026-10-15 12:01 "next to the projection add any levels you see near the projection: Proj HOD nnnn <price level>
             // <gamma level>") the nearest key level and the nearest MenthorQ level within 5% of the projected range (4 ticks min)
-            const long long tol = (std::max)(4LL, (long long)std::llround(0.05 * v.projRange / tick));
+            // (2.2.1, 12:18 screenshot: CR 7775 sat 6.5 pts from Proj HOD 7,781.50 and was not named) 10% of the projected range, 8 ticks min
+            const long long tol = (std::max)(8LL, (long long)std::llround(0.10 * v.projRange / tick));
+            v.projPx = (double)v.projTo * tick;
             std::string kn; long long kd = tol + 1;
             const Lvl* KL[4] = { &T.pf, &T.pd, &T.curOn, &T.curLon };
             for (int i = 0; i < 4; i++) if (KL[i]->ok && KL[i]->n > 0) {
                 const long long d1 = std::llabs(KL[i]->hi - v.projTo), d2 = std::llabs(KL[i]->lo - v.projTo);
-                if (d1 < kd) { kd = d1; kn = LV_HIGH[i]; }
-                if (d2 < kd) { kd = d2; kn = LV_LOW[i]; }
+                if (d1 < kd) { kd = d1; kn = std::string(LV_HIGH[i]) + " " + lvlPxTxt((double)KL[i]->hi * tick, dec); }
+                if (d2 < kd) { kd = d2; kn = std::string(LV_LOW[i]) + " " + lvlPxTxt((double)KL[i]->lo * tick, dec); }
             }
             std::string gn; long long gd = tol + 1;
             if (mq) {
@@ -1001,7 +1003,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 for (size_t i = 0; i < mq->size(); i++) { const MqSnap& q = (*mq)[i]; if (q.atAbs >= sesA0 && q.atAbs <= R->lastEndAbs && (!sn || q.atAbs >= sn->atAbs)) sn = &q; }
                 if (sn) for (size_t i = 0; i < sn->lv.size(); i++) {
                     const MqLevel& q = sn->lv[i]; if (q.code < 0 || q.code > 5) continue;
-                    const long long d = std::llabs(q.px - v.projTo); if (d < gd) { gd = d; gn = MQ_CODES[q.code]; }
+                    const long long d = std::llabs(q.px - v.projTo); if (d < gd) { gd = d; gn = std::string(MQ_CODES[q.code]) + " " + lvlPxTxt((double)q.px * tick, dec); }
                 }
             }
             v.projLv = kn + (gn.empty() ? std::string() : (kn.empty() ? std::string() : std::string(" \xB7 ")) + gn);

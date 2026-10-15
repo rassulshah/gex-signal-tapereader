@@ -158,6 +158,21 @@ inline void toView(hl::View& v, const File& F, double /*price*/, long long now, 
     if (F.asof > now + 120) return;                           // (audit) received in the future = clock / file wrong: never shown
     v.gexStale = staleText(F, now, updateHours(wd, min));
     for (const Loc& L : F.locs) { hl::View::GexItem g; g.strike = rangeTxt(L); g.name.clear(); g.grow = L.grow; g.other = L.side == 'O' || L.side == 'A'; g.above = L.side == 'A' || (F.side == "down" && L.side == 'O') || (F.side == "up" && L.side == 'T'); v.gexItems.push_back(g); }   // (2.1.1, Rassul 22:26) no W / F / M on the row
+    // (HodLod 2.2.1, Rassul 12:18 "do you see the levels mentioned?") the Gex S/R strike nearest the projected target (within 10% of the
+    // projected range) joins the projection's level text, in the table and under the flag
+    if (v.projOk && std::isfinite(v.projPx) && v.projRange > 0) {
+        auto num = [](std::string t) { std::string o; for (char c : t) if ((c >= '0' && c <= '9') || c == '.' || c == '-') o += c; char* e = nullptr; const double d = std::strtod(o.c_str(), &e); return (o.empty() || !e || *e) ? NAN : d; };
+        double best = 0.10 * v.projRange; std::string bs;
+        for (const Loc& L : F.locs) {
+            const double lo = num(L.loTxt), hi = num(L.hiTxt); if (!std::isfinite(lo) || !std::isfinite(hi)) continue;
+            const double d = v.projPx < (std::min)(lo, hi) ? (std::min)(lo, hi) - v.projPx : (v.projPx > (std::max)(lo, hi) ? v.projPx - (std::max)(lo, hi) : 0.0);
+            if (d <= best) { best = d; bs = "S/R " + rangeTxt(L); }
+        }
+        if (!bs.empty() && v.projLv.find(bs) == std::string::npos) {
+            v.projLv += (v.projLv.empty() ? "" : " \xB7 ") + bs;
+            for (size_t q = 0; q < v.headLeftSegs.size(); q++) if (v.headLeftSegs[q].s.find(v.projTxt) != std::string::npos) v.headLeftSegs[q].s = "   " + v.projTxt + "  " + v.projLv;
+        }
+    }
     int last = -1;
     for (const HLine& h : hover(F, v.gexStale, now, min)) {   // an empty Seg = a 5 px spacer before each location and before the guide
         if ((h.role == 1 || (h.role == 3 && last != 3)) && last >= 0) v.gexHover.push_back(hl::Seg{ "", hl::C_GREY });
