@@ -1782,6 +1782,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // 1SD = dimmed, 2SD = full colour, 3SD = full colour + white outline. Learning (under 30 big orders over 5 sessions): the 0.25.0
     // steps of the start (1x dim / 2x full / 3x outline).
     bldUpdate(S, minShow);
+    S.bo.sdMin = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldV[0])) : 0;   // (0.26.0, audit item 3) chart lines from Bigger (1SD) too
     long long tcut[3] = { minShow, 2 * minShow, 3 * minShow };
     if (S.bldOk) for (int k = 0; k < 3; ++k) tcut[k] = std::max(1LL, (long long)std::llround(S.bldV[k]));
     S.boTier[0] = S.boTier[1] = 0;

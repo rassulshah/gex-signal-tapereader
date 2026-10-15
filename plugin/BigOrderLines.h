@@ -267,7 +267,9 @@ public:
         P.floor = f; big[0].clear(); big[1].clear();
         for (std::unordered_map<long long, Ord>::const_iterator it = book.begin(); it != book.end(); ++it) rebig(it->first, it->second);
     }
+    long long sdMin = 0;               // (1.4.0, audit item 3) the host's big-lot 1SD (Bigger): when set, it IS the line size
     long long threshold() {
+        if (sdMin > 0) return sdMin;     // lines only from Bigger (1SD) - the same yardstick as the BIG column boxes
         long long t = P.floor;
         if (P.roll && rollThr > 0) t = std::max(t, rollThr);        // (1.2.0) the self-tuned size replaces the session percentile
         else if (hist.n >= P.pctMinN) t = std::max(t, hist.pct(P.pct));

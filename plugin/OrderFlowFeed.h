@@ -139,7 +139,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.7.0";   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.8.0";   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -724,6 +724,41 @@ inline double ratioOf(const std::vector<long long>& prior, long long v, int bars
     if (meanOut) *meanOut = mean;
     ok = true; return (double)v / mean;
 }
+// ---- (1.8.0, Rassul 2026-10-15 16:46 yardstick audit #1) THE SAME 30-MIN SLOT: a bar is measured against the bars of ITS half hour
+// (bar END minute - 1) / 30 - from the earlier sessions on file and the earlier bars of this one (newest 80, values > 0), on the LOG
+// scale: typical = e^mean (the ratio divides by it), spike = log(v) >= mean + 2 SD. Under 10 such bars: the 20-bar rule as before.
+static const int SLOT_MIN_N = 10, SLOT_MAX_N = 80;
+inline int slotOfKey(long long t) { const long long m = ((t % 86400) + 86400) % 86400 / 60; return (int)(((m == 0 ? 1440 : m) - 1) / 30); }
+struct SlotLog { bool ok = false; double lm = 0, ls = 0; int n = 0; };
+inline SlotLog slotLog(const std::vector<long long>& v) {
+    SlotLog z; double s1 = 0, s2 = 0; int n = 0;
+    for (size_t i = 0; i < v.size(); ++i) if (v[i] > 0) { const double x = std::log((double)v[i]); s1 += x; s2 += x * x; ++n; }
+    z.n = n; if (n < SLOT_MIN_N) return z;
+    z.lm = s1 / n; z.ls = std::sqrt(std::max(0.0, s2 / n - z.lm * z.lm)); z.ok = true; return z;
+}
+inline void applySlot(long long v, const SlotLog& z, bool& ratioOk, double& ratio, double& mean, bool& spike) {
+    if (!z.ok) return;
+    mean = std::exp(z.lm); ratio = mean > 0 ? (double)v / mean : 0; ratioOk = mean > 0;
+    spike = v > 0 && std::log((double)v) >= z.lm + 2.0 * z.ls;
+}
+// civil date from days since 1970-01-01 (H. Hinnant), for the earlier sessions' record names (YYYYMMDD)
+inline void civilFrom(long long z, int& y, unsigned& m, unsigned& d) {
+    z += 719468; const long long era = (z >= 0 ? z : z - 146096) / 146097; const unsigned doe = (unsigned)(z - era * 146097);
+    const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; const long long yy = (long long)yoe + era * 400;
+    const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100); const unsigned mp = (5 * doy + 2) / 153;
+    d = doy - (153 * mp + 2) / 5 + 1; m = mp < 10 ? mp + 3 : mp - 9; y = (int)(yy + (m <= 2));
+}
+inline long long civilDays(long long y, unsigned m, unsigned d);   // defined with the session keys below
+// "20261015" -> the n session strings before it (calendar days back, the caller keeps those whose file exists)
+inline std::vector<std::string> daysBefore(const std::string& s, int n) {
+    std::vector<std::string> out;
+    if (s.size() != 8) return out;
+    for (size_t i = 0; i < 8; ++i) if (s[i] < '0' || s[i] > '9') return out;
+    const long long y = std::atoll(s.substr(0, 4).c_str()); const unsigned m = (unsigned)std::atoi(s.substr(4, 2).c_str()), d = (unsigned)std::atoi(s.substr(6, 2).c_str());
+    const long long z0 = civilDays(y, m, d);
+    for (int k = 1; k <= n; ++k) { int yy; unsigned mm, dd; civilFrom(z0 - k, yy, mm, dd); char b[16]; std::snprintf(b, sizeof(b), "%04d%02u%02u", yy, mm, dd); out.push_back(b); }
+    return out;
+}
 struct MStat { bool ratioOk[2] = {false, false}; double ratio[2] = {0, 0}, mean[2] = {0, 0}; long long priorMax = 0; bool spike[2] = {false, false}; };
 inline MStat metricStat(const std::vector<long long>& pb, const std::vector<long long>& pa, const long long v[2], int ratioBars, const SpikeCfg& c, double floor) {
     MStat m;
@@ -807,7 +842,7 @@ inline long long rebuiltPctOf(long long rebuilt, long long hit) {
 // THE MBO PANES' SERIES (PullStats / StackStats): one bar = a Rec + its display, decided once at the close
 // =====================================================================================================================
 struct PaneBar {
-    bool ok = false, fromFile = false;
+    bool ok = false, fromFile = false; int slotN = 0;    // (1.8.0) slotN = same-slot bars the ratio / spike used (0 = the 20-bar rule)
     Rec r; MStat m[2];                                   // m: stats as of the bar (metric 0 = the bars, 1 = refills)
     std::string let[2];                                  // letters on [left = BID side, right = ASK side], max 2 each
     bool spike[2] = {false, false}; long long dash[2] = {-1, -1};
@@ -846,6 +881,21 @@ inline std::string resetMessage(int side, long long sec, const std::string& pull
 template <class L> struct PaneSeries {
     int ratioBars = RATIO_DEFAULT; SpikeCfg spike;
     std::map<long long, PaneBar> bars;
+    std::map<long long, std::vector<long long>> hist;    // (1.8.0) earlier sessions' bars: metric k side s at [k * 2 + s] (slot yardstick only)
+    // (1.8.0) the same-slot values of metric k before t: earlier sessions + this one, newest first, at most SLOT_MAX_N per side
+    void slotVals(long long t, int k, std::vector<long long>& vb, std::vector<long long>& va) const {
+        vb.clear(); va.clear(); const int sl = slotOfKey(t);
+        typename std::map<long long, PaneBar>::const_iterator it = bars.lower_bound(t);
+        while (it != bars.begin() && (int)vb.size() < SLOT_MAX_N) {
+            --it; if (!it->second.ok || it->second.r.partial || slotOfKey(it->first) != sl) continue;
+            vb.push_back(L::value(it->second.r, k, BID)); va.push_back(L::value(it->second.r, k, ASK));
+        }
+        std::map<long long, std::vector<long long>>::const_iterator h = hist.lower_bound(t);
+        while (h != hist.begin() && (int)vb.size() < SLOT_MAX_N) {
+            --h; if (slotOfKey(h->first) != sl || h->second.size() < (size_t)(k * 2 + 2)) continue;
+            vb.push_back(h->second[(size_t)(k * 2)]); va.push_back(h->second[(size_t)(k * 2 + 1)]);
+        }
+    }
     long long computed = 0;
     // the prior values of one metric before t: valid, not partial, newest last (at most `need`)
     void prior(long long t, size_t need, int metric, std::vector<long long>& pb, std::vector<long long>& pa) const {
@@ -864,6 +914,12 @@ template <class L> struct PaneSeries {
             prior(t, need, k, pb, pa);
             const long long v[2] = { L::value(b.r, k, BID), L::value(b.r, k, ASK) };
             b.m[k] = metricStat(pb, pa, v, ratioBars, spike, 1.0);
+            std::vector<long long> vb, va; slotVals(t, k, vb, va);          // (1.8.0) the same 30-min slot when it has 10+ bars
+            const SlotLog zb = slotLog(vb), za = slotLog(va);
+            applySlot(v[0], zb, b.m[k].ratioOk[0], b.m[k].ratio[0], b.m[k].mean[0], b.m[k].spike[0]);
+            applySlot(v[1], za, b.m[k].ratioOk[1], b.m[k].ratio[1], b.m[k].mean[1], b.m[k].spike[1]);
+            if (!spike.on()) { b.m[k].spike[0] = b.m[k].spike[1] = false; }   // the dialog's spikes-off still wins
+            if (k == 0) b.slotN = (zb.ok || za.ok) ? std::max(zb.n, za.n) : 0;
         }
     }
     PaneBar make(long long t, const Rec& r) const { PaneBar b; b.r = r; b.ok = r.events > 0; if (b.ok) stats(t, b); return b; }
@@ -2124,7 +2180,7 @@ template <class L> struct PaneState {
     std::map<long long, int> barEnds;                // chart bar end -> index
     long long formingKey = 0, firstBarKey = -1, lastClosedKey = 0;
     long long lateDropped = 0, noBar = 0, orphans = 0, finalized = 0, decidedLate = 0;
-    std::string curSession; SessionFile file; bool loaded = false; long long sessionResets = 0;
+    std::string curSession; SessionFile file; bool loaded = false; long long sessionResets = 0; int histSessions = 0;   // (1.8.0) earlier sessions read for the slot yardstick
     nl::Cache lv; std::vector<nl::Level> levels;
     ParamCache params; PaneSettings set; SpikeCfg dlgSpike; long long settingsCheckMs = -1, settingsStamp = -2;
     HoverTrack hov; long long axisTop = 0; int paneH = 0;
@@ -2552,6 +2608,21 @@ private:
             b.msg.impl = r.impl; b.msg.line1 = r.line1; b.msg.line2 = r.line2;
             S.ser.bars[r.t] = b;
         }
+        // (1.8.0, audit #1) the earlier sessions' records (up to 4 within 10 calendar days): only their numbers, for the same-slot yardstick
+        {   const std::vector<std::string> back = daysBefore(S.curSession, 10); int got = 0; S.histSessions = 0; S.ser.hist.clear();
+            for (size_t i = 0; i < back.size() && got < 4; ++i) {
+                SessionFile hf; hf.open(back[i], d + "\\" + stem(S) + "-" + back[i] + ".csv", std::string(), std::string(), (size_t)REC_NUMS);
+                if (!hf.load() || hf.rows.empty()) continue;
+                ++got;
+                for (std::map<long long, Row>::const_iterator it = hf.rows.begin(); it != hf.rows.end(); ++it) {
+                    Rec rr; if (!recFrom(it->second.nums, 0, rr) || rr.partial) continue;
+                    std::vector<long long> v((size_t)(L::metrics() * 2), 0);
+                    for (int k = 0; k < L::metrics(); ++k) for (int s = 0; s < 2; ++s) v[(size_t)(k * 2 + s)] = L::value(rr, k, s);
+                    S.ser.hist[it->first] = v;
+                }
+            }
+            S.histSessions = got;
+        }
         for (typename std::map<long long, PaneBar>::iterator it = S.ser.bars.begin(); it != S.ser.bars.end(); ++it) if (it->second.fromFile) S.ser.stats(it->first, it->second);
     }
     bool liveBar(const S_& S, PaneBar& b) {
@@ -2583,7 +2654,7 @@ private:
         for (size_t i = 0; i < S.params.load.notes.size() && i < 20; ++i) o << "\nPARAMS_NOTE," << S.params.load.notes[i];
         o << "\nLARGE_NOW,aggressor " << largeThreshold(e.aggrDist, S.params.load.p.largeLotAggr, S.params.load.p.largeLotPct, S.params.load.p.largeLotMin) << " (" << e.aggrDist.total << " orders)"
           << ",resting " << largeThreshold(e.restDist, S.params.load.p.largeLotResting, S.params.load.p.largeLotPct, S.params.load.p.largeLotMin) << " (" << e.restDist.total << " orders)"
-          << "\nSESSION," << S.curSession << "\nSESSION_FILE,rows " << S.file.rows.size() << ",loaded " << S.file.loaded << ",rejected " << S.file.rejected << ",writes " << S.file.writes << ",fails " << S.file.fails
+          << "\nSESSION," << S.curSession << "\nSLOT_YARDSTICK,earlier sessions " << S.histSessions << ",their bars " << S.ser.hist.size() << ",same 30-min slot from 10 bars (else the 20-bar rule)" << "\nSESSION_FILE,rows " << S.file.rows.size() << ",loaded " << S.file.loaded << ",rejected " << S.file.rejected << ",writes " << S.file.writes << ",fails " << S.file.fails
           << "\nBARS_DECIDED," << S.finalized << "\nLEVELS," << S.levels.size() << "," << S.lv.note
           << "\nOPTIONS," << S.opt.why << ",asof " << S.opt.last.asof << ",reads " << S.opt.reads << ",arrived " << S.opt.hist.v.size()
           << "\nRESET_WATCH," << (S.rw.on ? "on" : "off") << ",side " << (S.rw.side == ASK ? "offers" : "bids") << ",target " << S.rw.target << ",back " << S.rw.cum << ",resets " << S.rw.resets;

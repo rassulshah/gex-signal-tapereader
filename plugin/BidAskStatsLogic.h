@@ -29,7 +29,7 @@
 
 namespace bas {
 
-static const char* const VERSION = "1.7.3";   // (1.7.2) "Bid/Ask Stats · Who is pressing?" in front of the read line;   // (1.7.1) no S / L / R letters drawn;   // 1.7.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle, title "Bid/Ask Stats - Who is Pressing", attacking -> pressing;   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
+static const char* const VERSION = "1.8.0";   // (1.7.2) "Bid/Ask Stats · Who is pressing?" in front of the read line;   // (1.7.1) no S / L / R letters drawn;   // 1.7.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle, title "Bid/Ask Stats - Who is Pressing", attacking -> pressing;   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
 static const char* const TITLE = "Bid/Ask Stats - Who is Pressing";   // (1.7.0) the pane title (parmsTitle), "v1.7.0" next to it
 static const int COUNT_CAP = 999, RATIO_MIN_PRIOR = 5, RATIO_DEFAULT = 20, RATIO_LO = 5, RATIO_HI = 200;
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
@@ -138,6 +138,7 @@ struct Stat {
     double bidMean = 0, askMean = 0;           // the averages the ratios divide by (0 = n/a): spike condition (a)
     long long priorMax = 0;                    // (1.2.0) the biggest bid or ask of the prior `lookback` valid bars (0 = none)
     bool bidSpike = false, askSpike = false;   // (1.2.0) decided as of this bar
+    int slotN = 0;                             // (1.8.0) same-slot bars the ratio / spike used (0 = the 20-bar rule)
 };
 // (1.2.0) the spike fields of a stat from its prior bars (oldest first)
 inline void applySpike(Stat& s, const std::vector<long long>& pb, const std::vector<long long>& pa, const SpikeCfg& c) {
@@ -176,26 +177,39 @@ struct Series {
         // collected newest first -> reverse to oldest first
         for (size_t i = 0, j = pb.size(); i < j / 2; ++i) { std::swap(pb[i], pb[j - 1 - i]); std::swap(pa[i], pa[j - 1 - i]); }
     }
+    // (1.8.0, Rassul 2026-10-15 audit #1) the same 30-min slot: the chart's bars of this half hour before t (all sessions on the chart,
+    // newest 80); 10+ of them = ratio against their typical size (log mean) and spike = 2 SD above it, else the 20-bar rule stays
+    void slotFix(long long t, Stat& s) const {
+        s.slotN = 0; if (!s.m.ok) return;
+        std::vector<long long> vb, va; const int sl = off::slotOfKey(t);
+        std::map<long long, Stat>::const_iterator it = bars.lower_bound(t);
+        while (it != bars.begin() && (int)vb.size() < off::SLOT_MAX_N) { --it; if (!it->second.m.ok || off::slotOfKey(it->first) != sl) continue; vb.push_back(it->second.m.bid); va.push_back(it->second.m.ask); }
+        const off::SlotLog zb = off::slotLog(vb), za = off::slotLog(va);
+        off::applySlot(s.m.bid, zb, s.bidRatioOk, s.bidRatio, s.bidMean, s.bidSpike);
+        off::applySlot(s.m.ask, za, s.askRatioOk, s.askRatio, s.askMean, s.askSpike);
+        if (!spike.on()) s.bidSpike = s.askSpike = false;
+        s.slotN = (zb.ok || za.ok) ? std::max(zb.n, za.n) : 0;
+    }
     const Stat& add(long long t, const BarMax& m, int ratioBars) {
         std::vector<long long> pb, pa;
         const size_t need = (size_t)(COUNT_CAP > ratioBars ? COUNT_CAP : ratioBars);
         if (m.ok) prior(t, need, pb, pa);
         ++computed;
-        Stat s = statOf(m, pb, pa, ratioBars); applySpike(s, pb, pa, spike);
+        Stat s = statOf(m, pb, pa, ratioBars); applySpike(s, pb, pa, spike); slotFix(t, s);
         return bars[t] = s;
     }
     // (1.2.0) the stats a bar at time t WOULD get now (the forming bar's live colour); nothing stored
     Stat peek(long long t, const BarMax& m, int ratioBars) const {
         std::vector<long long> pb, pa;
         if (m.ok) prior(t, (size_t)(COUNT_CAP > ratioBars ? COUNT_CAP : ratioBars), pb, pa);
-        Stat s = statOf(m, pb, pa, ratioBars); applySpike(s, pb, pa, spike); return s;
+        Stat s = statOf(m, pb, pa, ratioBars); applySpike(s, pb, pa, spike); slotFix(t, s); return s;
     }
     // (1.2.0) a spike settings change (from the dialog only): spikes of the recorded bars re-decided from the stored maxima
     void respike(const SpikeCfg& c) {
         spike = c; std::vector<long long> pb, pa;
         for (std::map<long long, Stat>::iterator it = bars.begin(); it != bars.end(); ++it) {
             if (!it->second.m.ok) continue;
-            prior(it->first, (size_t)SPIKE_LOOKBACK_MAX, pb, pa); applySpike(it->second, pb, pa, c);
+            prior(it->first, (size_t)SPIKE_LOOKBACK_MAX, pb, pa); applySpike(it->second, pb, pa, c); slotFix(it->first, it->second);
         }
     }
     // a Ratio bars change: ratios of every recorded bar recomputed from the stored maxima (no VAP re-read; counts unchanged)
@@ -206,6 +220,7 @@ struct Series {
             prior(it->first, (size_t)RATIO_HI, pb, pa);
             it->second.bidRatio = ratioOf(pb, it->second.m.bid, ratioBars, it->second.bidRatioOk, &it->second.bidMean);
             it->second.askRatio = ratioOf(pa, it->second.m.ask, ratioBars, it->second.askRatioOk, &it->second.askMean);
+            slotFix(it->first, it->second);
         }
     }
     void trim(size_t keep) { while (bars.size() > keep) bars.erase(bars.begin()); }
