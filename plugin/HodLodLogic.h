@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.2.2";   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.2.3";   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -1449,6 +1449,7 @@ inline std::string hlShortRegime(std::string r)
     size_t k;
     if ((k = r.find("Negative")) != std::string::npos) r.replace(k, 8, "Neg");
     if ((k = r.find("Positive")) != std::string::npos) r.replace(k, 8, "Pos");
+    if (r.compare(0, 6, "Regime") == 0) r.replace(0, 6, "Reg");   // (2.2.3, Rassul 18:51 "make Regime Reg." - less space)
     return r;
 }
 inline void hlParenCell(Cell& c) { c.s = hlParenPct(c.s); c.s2 = hlParenPct(c.s2); c.s3 = hlParenPct(c.s3); }
@@ -1474,10 +1475,10 @@ inline void hlNoPctCell(Cell& c) { c.s = hlNoPct(c.s); c.s2 = hlNoPct(c.s2); c.s
 inline std::string trendWord(int lvl, bool compact = false)
 {
     switch (lvl) {
-        case 2: return compact ? "Strong Up" : "Strong Uptrend";
+        case 2: return compact ? "S. Up" : "S. Uptrend";   // (2.2.3, Rassul 18:51 "strong uptrend S. Uptrend")
         case 1: return compact ? "Up" : "Uptrend";
         case -1: return compact ? "Dn" : "Dntrend";
-        case -2: return compact ? "Strong Dn" : "Strong Dntrend";
+        case -2: return compact ? "S. Dn" : "S. Dntrend";
         default: return "Range";
     }
 }
@@ -1489,7 +1490,7 @@ inline std::vector<Seg> regimeParts(const View& v, bool compact = false)
     std::vector<Seg> out;
     Seg reg{ "", C_GREY };
     for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) reg = Seg{ hlShortRegime(v.sessSegs[q].s), v.sessSegs[q].col };
-    if (reg.s.empty() && v.trendReady) reg = Seg{ "Regime: --", C_GREY };
+    if (reg.s.empty() && v.trendReady) reg = Seg{ "Reg: --", C_GREY };
     if (reg.s.empty()) return out;
     out.push_back(reg);
     if (v.trendReady) out.push_back(Seg{ " / " + trendWord(v.trendLvl, compact), trendCol(v.trendLvl) });
