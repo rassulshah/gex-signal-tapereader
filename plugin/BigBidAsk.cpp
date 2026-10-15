@@ -67,7 +67,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.5.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.6.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -681,7 +681,7 @@ void BigBidAsk::render(BBState& S) {
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
-            bba::Cand c; c.bar = i; c.side = sd; c.x = sd < 0 ? cb_.l : cb_.r; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;
+            bba::Cand c; c.bar = i; c.side = sd; c.x = (cb_.l + cb_.r) / 2;   // (1.6.0) on the candle c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;
             c.bold = bold; c.huge = huge; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = bold && F->closed;
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back((double)p.key * S.tick); candVol.push_back((double)p.vol);
         }
@@ -694,33 +694,61 @@ void BigBidAsk::render(BBState& S) {
         const char* sy2 = getSymbol(); const char* cl2 = getChartLabel();
         sb::publish('B', sy2 ? sy2 : "", getSecondsPerBar(), cl2 ? cl2 : "", steadyMs(), ev);
     }
-    std::vector<bba::Box> hard; if (S.trOn) hard.push_back(S.trBox);
-    const std::vector<bba::Placed> P = bba::place(cands, candles, area, &S.lay, hard);
+    // (1.6.0, Rassul 18:26-18:40 mockup footprint-white-box-circle-v1 row B) ON THE CANDLE: each number is drawn ON its own candle at the
+    // price row it traded (never nudged, so it can only belong to that candle - a print is always inside the candle's high-low), WHITE with
+    // a 1 px black edge; a big print = a rounded box, an absorption print = a circle, both in the SIDE colour (red = sold at the bid,
+    // green = bought at the ask: the side that got trapped); 3SD+ = a bigger number, box and circle. Bid and ask on the same row of one
+    // candle sit side by side. Away from a zone the box / circle / number are dimmed (location first, unchanged).
+    FONT fH = fb; fH.size = (short)(set.font + 5);                   // 3SD+: bigger
+    int leadH = 0, ascH = 0, descH = 0; setFont(fH); getFontMetrics(&leadH, &ascH, &descH); setFont(fp);
+    S.lay = bba::LayoutStats();
+    std::vector<bba::Box> boxes(cands.size());
     for (size_t k = 0; k < cands.size(); ++k) {
-        if (!P[k].shown) { if (cands[k].bar >= vs) { ++S.droppedInView; if (cands[k].circle) ++S.circlesHidden; } continue; }
-        const bba::Cand& c = cands[k]; const bba::Box& t = P[k].text;
-        if (c.bar < vs) continue;                                       // laid out (lead-in) but left of the view
+        const bba::Cand& c = cands[k];
+        setFont(c.huge ? fH : fb);
+        const int tw = getTextWidth(texts[k].c_str(), -1), thx = c.huge ? std::max(set.font + 8, ascH + descH) : thB;
+        const int padX = c.circle ? (c.huge ? 7 : 5) : 3, padY = c.circle ? (c.huge ? 3 : 2) : 1;
+        bba::Box b; b.l = c.x - tw / 2 - padX; b.r = b.l + tw + 2 * padX; b.t = c.y - thx / 2 - padY; b.b = b.t + thx + 2 * padY;
+        boxes[k] = b;
+    }
+    for (size_t k = 0; k < cands.size(); ++k)                           // bid and ask on the same row of one candle: side by side
+        for (size_t j = k + 1; j < cands.size(); ++j) {
+            if (cands[j].bar != cands[k].bar || cands[j].side == cands[k].side) continue;
+            if (boxes[j].t > boxes[k].b || boxes[k].t > boxes[j].b) continue;
+            bba::Box& L = cands[k].side < 0 ? boxes[k] : boxes[j]; bba::Box& Rb = cands[k].side < 0 ? boxes[j] : boxes[k];
+            const int cx = cands[k].x, wl = L.r - L.l, wr = Rb.r - Rb.l;
+            L.r = cx - 1; L.l = L.r - wl; Rb.l = cx + 1; Rb.r = Rb.l + wr;
+        }
+    for (size_t k = 0; k < cands.size(); ++k) {
+        const bba::Cand& c = cands[k]; const bba::Box& f = boxes[k];
+        if (c.bar < vs) continue;                                       // left of the view
+        bool clash = f.l < area.l || f.r > area.r || f.t < area.t || f.b > area.b;
+        if (S.trOn && !(f.r < S.trBox.l || f.l > S.trBox.r || f.b < S.trBox.t || f.t > S.trBox.b)) clash = true;   // the Tape Reader banner
+        if (clash) { ++S.droppedInView; ++S.lay.dropped; if (c.circle) ++S.circlesHidden; continue; }
+        ++S.lay.shown;
         const bool zone = zn::atZone(Z, c.bar, candPx[k]);
-        const COLOR cSide = c.side < 0 ? (COLOR)set.sell : (COLOR)set.buy;   // (1.4.0) his colours
-        const COLOR col = zone ? cSide : getBlendedColor(cSide, 0x00000000, 55.0f);   // (1.2.0) mid-range = dimmed
-        if (c.bold) { if (zone) ++S.zoneFull; else ++S.zoneDim; }
-        setFont(c.bold ? fb : fp); setTextColor(c.bold ? col : getBlendedColor(cSide, 0x00000000, 40.0f));   // (1.4.0) non-bold = his colour, dimmed
-        // (1.4.1, Rassul 12:58 "the value has to be slightly better placed so it is in the exact center of the circle") IRT draws the
-        // text below the font's internal leading, so digits sat on the ring's bottom edge (12:45 ES "105": 5 px above, 0-1 px below);
-        // a circled number is lifted by half the leading + descent, putting the digits in the ring's vertical middle
-        const int lift = c.circle ? std::max(1, ((c.bold ? leadB + descB : lead + desc) + 1) / 2) : 0;
-        RCT r; r.set(coord(t.l), coord(t.t - lift), coord(t.r), coord(t.b - lift)); r.drawText(texts[k].c_str(), true, false);
-        if (c.circle) {                                                  // the thin 1 px rounded outline hugging the number, its own colour
-            const bba::Box& f = P[k].foot;
-            setPen(col, 1, P_SOLID); CBRUSH br(col, PAT_HOLLOW); br.set();
-            RCT ring; ring.set(coord(f.l), coord(f.t), coord(f.r), coord(f.b)); ring.drawRounded(f.b - f.t, f.b - f.t);
-            ++S.circles;
+        const COLOR cSide = c.side < 0 ? (COLOR)set.sell : (COLOR)set.buy;
+        const COLOR col = zone ? cSide : getBlendedColor(cSide, 0x00000000, 55.0f);
+        const COLOR ink = zone ? (COLOR)0x00FFFFFF : getBlendedColor(0x00FFFFFF, 0x00000000, 45.0f);
+        if (zone) ++S.zoneFull; else ++S.zoneDim;
+        const int pw = c.huge ? 2 : 1;
+        {   // the black edge first (so the box / circle reads on a candle of its own colour), then the colour
+            CBRUSH nb(0x00000000, PAT_HOLLOW); nb.set();
+            RCT e; e.set(coord(f.l), coord(f.t), coord(f.r), coord(f.b));
+            setPen(0x00000000, pw + 2, P_SOLID);
+            if (c.circle) e.drawRounded(f.b - f.t, f.b - f.t); else e.drawRounded(4, 4);
+            setPen(col, pw, P_SOLID); CBRUSH br(col, PAT_HOLLOW); br.set();
+            if (c.circle) { e.drawRounded(f.b - f.t, f.b - f.t); ++S.circles; } else e.drawRounded(4, 4);
         }
-        if (c.huge) {                                                    // (1.5.0) 3SD+: a white outline round the number (outside a circle)
-            const bba::Box& f = P[k].foot; setPen(0x00FFFFFF, 1, P_SOLID); CBRUSH br(0x00FFFFFF, PAT_HOLLOW); br.set();
-            RCT o; o.set(coord(f.l - 2), coord(f.t - 2), coord(f.r + 2), coord(f.b + 2)); o.draw(1, 0x00FFFFFF, 0x00FFFFFF, DRAW_OPAQUE, PAT_HOLLOW);
-        }
-        HoverT H; H.box = P[k].foot; H.t = src[k]->t; H.side = c.side; S.targets.push_back(H);
+        setFont(c.huge ? fH : fb);
+        const int lift = std::max(1, ((c.huge ? leadH + descH : leadB + descB) + 1) / 2);   // digits in the vertical middle (1.4.1)
+        const int tl = f.l, tt = f.t - lift, tr = f.r, tb = f.b - lift;
+        setTextColor(0x00000000);                                        // 1 px black edge round the white digits
+        for (int d = 0; d < 4; ++d) { const int dx = d == 0 ? -1 : d == 1 ? 1 : 0, dy = d == 2 ? -1 : d == 3 ? 1 : 0;
+            RCT r; r.set(coord(tl + dx), coord(tt + dy), coord(tr + dx), coord(tb + dy)); r.drawText(texts[k].c_str(), true, false); }
+        setTextColor(ink);
+        { RCT r; r.set(coord(tl), coord(tt), coord(tr), coord(tb)); r.drawText(texts[k].c_str(), true, false); }
+        HoverT H; H.box = f; H.t = src[k]->t; H.side = c.side; S.targets.push_back(H);
     }
     // the hover: only while the cursor is over this chart's window and over a number
     if (!S.msHas || S.msWnd == 0 || hb::hbCursor() != S.msWnd) { S.hovKey.clear(); return; }
@@ -762,6 +790,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.5.1");   // BBA_VERSION
+    p->setVersion("1.6.0");   // BBA_VERSION
     return p;
 }
