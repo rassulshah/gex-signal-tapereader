@@ -1,5 +1,19 @@
 /********************************************************************************
- *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.2.1, 2026-10-12)
+ *  Pulling.cpp  --  Investor/RT RTX extension  lsPulling  (0.3.0, 2026-10-14 night)
+ *  0.3.0 (2026-10-14 night, Rassul via the coordinator: "replace its box with ONE read line, shown only while price is inside a
+ *        key-level or gamma zone"; tonight's MBO study research-artifacts\review\MBO-LIQUIDITY-READS-2026-10-14.md Q2v): the header
+ *        readout ("Buyers pulled: 0.8x (1.5x)  Sellers pulled: ...") is replaced by ONE read line after "PULLING" (ZoneRead.h 1.0.0):
+ *        in the first 3 minutes after price reaches a key / gamma level (zone = level +/- 0.06 ADR, the Liquidity Profile zone rule;
+ *        arrival = the first trade within the level band), was the size resting AT the level on the defending side (bids at support,
+ *        offers at resistance) CANCELLED or TRADED? "ES 7750 - bids pulled, not filled (62% in 3 min) - less support ?" (red; offers
+ *        at resistance mirrored, green) / "ES 7750 - bids traded, held (2.1x normal) - support holding ?" (green; red at resistance) /
+ *        "bids: 30% pulled, 40% traded in 3 min ?" (grey) - the study's z >= 1 line vs this market's same-30-min-slot normal
+ *        (lsFlexLevels\LRA-ZoneReadNorms-<MKT>.csv), always "?", locked when the 3 minutes end (Pulling\<stem>-zoneread-<session>.csv,
+ *        read back on load: no repaint); outside every zone: nothing. Mouse on the line (TRACK_MOUSE): its detail box - the numbers,
+ *        the normal, what / why / how / an example, the study result (held ~19 pp less often) and its caveat (NOT YET proven).
+ *        Measured natively from this chart's order-by-order feed (the orders' own ids: cancels vs fills), so no proxy is needed; an
+ *        order that rested before the indicator loaded is unknown (the hover says "partial"). The two lines, dots, X and MBO % stay.
+ *        Description reworded (audit 2026-10-14 s.7): "buyers cancelled bids near price (0.8x normal)" - no "price drops when ...".
  *
  *  PULLING: who pulled their resting orders near price, bar by bar, from the market-by-order feed (Rithmic DBO through IRT's
  *  DEPTH_BY_ORDER). Rassul 2026-10-11 20:50-20:57: "a simple two line approach that is looking at pulling of orders by buyers and
@@ -36,6 +50,8 @@
 #endif
 #include "PullingLogic.h"
 #include "HostSlot.h"
+#include "NearLevels.h"           // (0.3.0) the per-market level band (the Liquidity Profile zone half-width)
+#include "ZoneRead.h"             // (0.3.0) the zone read line
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
@@ -56,15 +72,20 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define PL_VERSION "0.2.1"          // keep equal to pl::VERSION and the setVersion literal below
+#define PL_VERSION "0.3.0"          // keep equal to pl::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_X = 0x003CC8FA;
 static const int SLICE_MAX = 20000;            // events per call at most (never blocks IRT)
 static const long long SLICE_BUDGET_MS = 12;   // and about this many ms per call
 
+#ifdef PL_TEST_CLOCK
+extern long long pl_test_now_ms;                                        // (0.3.0) host tests drive the 3-minute window
+static long long steadyMs() { return pl_test_now_ms; }
+#else
 static long long steadyMs() {
     return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
+#endif
 static short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 static std::string flexDir() {
     const char* up = std::getenv("USERPROFILE");
@@ -186,6 +207,8 @@ struct PLState {
     std::map<long long, int> barEnds;             // chart bar end time -> index; native event timestamps route to their bar
     long long chartLastEnd = 0;
     std::vector<std::string> pending;             // closed bars not yet written
+    zread::Host zr; long zrCount = -1; long long zrSession = -1; double atr = 0;   // (0.3.0) the zone read line
+    int lineL = 0, lineT = 0, lineR = 0, lineB = 0; bool hoverOn = false;          // (0.3.0) where the line was drawn; the mouse on it
     ~PLState() { delete dbo; delete md; }
 };
 
@@ -196,6 +219,7 @@ public:
     virtual int parmsLoad(void)  { return RTX_OK; }          // no settings
     virtual int parmsApply(void) { return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    virtual int mouse(RTX_EVENT* e);                                    // (0.3.0) the read line's hover
     void pump();
     void release() { slot_.release(this); }
     PLState* testState() { return slot_.get(this, false); }
@@ -213,6 +237,7 @@ private:
     void norms(PLState& S);
     void status(PLState& S, long long now);
     void render(PLState& S);
+    void zone(PLState& S, long count, long long now);                   // (0.3.0)
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\Pulling"; }
     // Market alone is not a contract identity: ESZ and ESH must not share a record/status file.
     std::string stem(PLState& S) { return S.market + "-" + filePart(S.symbol) + "-" + std::to_string(S.spb); }
@@ -247,6 +272,7 @@ void Pulling::identify(PLState& S) {
     if (id == S.identity && tick == S.tick) return;
     delete S.dbo; S.dbo = nullptr; delete S.md; S.md = nullptr;              // a new symbol / bar size: start clean
     S.e = pl::Engine(); S.dboDead = S.mdDead = S.blocked = S.depthWasAvailable = false; S.hist.clear(); S.vol.clear(); S.barEnds.clear(); S.pending.clear();
+    S.zr = zread::Host(); S.zrCount = -1; S.zrSession = -1; S.atr = 0; S.hoverOn = false;   // (0.3.0)
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
     S.count = 0; S.chartLastEnd = 0; S.session = -1; S.openedMs = S.lastEventMs = S.lastDepthMs = S.lastNormsMs = S.lastStatusMs = -1; S.lastStatusText.clear();
     pl::defaults(S.market, S.e.P); S.params = "standard";
@@ -323,6 +349,7 @@ void Pulling::drain(PLState& S, long long now) {
                 pl::Tick bid = 0, ask = 0;
                 if (pl::toTick(o.bid, S.tick, bid) && pl::toTick(o.ask, S.tick, ask) && ask > bid) { x.bid = bid; x.ask = ask; }
             }
+            S.zr.e.onEvent(now, (int)x.action, x.side == pl::BID ? zread::BID : zread::ASK, x.id, x.px, (long long)x.size);   // (0.3.0) in order, to the zone read
             const int originalBar = S.e.cur;
             const int target = o.timestamp ? eventBar(S, o.timestamp) : originalBar;
             // Only the prior forming bar and newer bars are still pending durable
@@ -466,7 +493,8 @@ void Pulling::status(PLState& S, long long now) {
       << "\nBEST," << (S.e.haveBest ? (double)S.e.bestBid * S.tick : 0) << "," << (S.e.haveBest ? (double)S.e.bestAsk * S.tick : 0)
       << "\nPARAMS,near " << S.e.P.near << ",line " << S.e.P.line << "," << S.params
       << "\nNOW,bids_pulled_x " << S.e.x(b, pl::BID) << ",offers_pulled_x " << S.e.x(b, pl::OFFER) << ",leader " << S.e.leader(b)
-      << "\nRECORD,bars " << S.hist.size() << ",fails " << S.recFails << "\nMBO_RECORDER,rows " << S.mboRows << ",fails " << S.mboFails << ",data\\irt\\<session>\\" << S.market << "\\mbo_HH.csv\n";
+      << "\nRECORD,bars " << S.hist.size() << ",fails " << S.recFails << "\nMBO_RECORDER,rows " << S.mboRows << ",fails " << S.mboFails << ",data\\irt\\<session>\\" << S.market << "\\mbo_HH.csv\n"
+      << S.zr.status() << "\n";                                           // (0.3.0)
     const std::string text = o.str();
     if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
@@ -498,10 +526,57 @@ void Pulling::pump() {
         readBest(S, now);
         drain(S, now);
         bars(S, count, true);                                            // only now close/persist the former forming bar
+        zone(S, count, now);                                             // (0.3.0) the zone read line
         S.state = S.blocked ? S.state : S.dboDead ? "order feed fault" : !S.dbo ? "order feed not opened"
                 : S.lastEventMs < 0 ? (now - S.openedMs < 60000 ? "waiting for the order feed" : "no order feed (MBO) on this chart") : "ready";
         status(S, now);
     } catch (...) { S.state = "calculation error"; }
+}
+
+// (0.3.0) the zone read: levels / normals (files), the lagged ADR + ATR + closes (the chart's bars, on a new bar), this session's
+// record (read back on load), the chart's close as the price when no fill came for 5 s, then the clock (CT minute -> the normal's slot)
+void Pulling::zone(PLState& S, long count, long long now) {
+    S.zr.pane = zread::P_PULLING; S.zr.e.tick = S.tick;
+    const std::string fd = flexDir();
+    S.zr.files(fd.empty() ? fd : fd + "\\", S.market, now, (long long)std::time(NULL));
+    if (count != S.zrCount && count >= 2) {
+        RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+        if (times.count >= count && hi.count >= count && lo.count >= count && cl.count >= count) {
+            S.zrCount = count;
+            std::vector<double> rg;
+            for (int i = (int)count - 2; i >= 0 && rg.size() < 20; --i) rg.push_back((double)hi[i] - (double)lo[i]);
+            S.atr = nl::atrOf(rg, S.spb);
+            std::vector<zread::BarRow> rows; rows.reserve((size_t)std::min(count, 12000L));
+            for (long i = std::max(0L, count - 12000L); i < count - 1; ++i) {
+                const long long cs = ctSec((RTDATE)times[(int)i]); if (cs <= 0) continue;
+                zread::BarRow r; r.session = zrule::sessionKey(cs); r.endSec = cs; r.h = (double)hi[(int)i]; r.l = (double)lo[(int)i]; r.c = (double)cl[(int)i]; rows.push_back(r);
+            }
+            const long long cs = ctSec((RTDATE)times[(int)count - 1]);
+            if (cs > 0) { S.zrSession = zrule::sessionKey(cs); S.zr.bars(rows, S.zrSession, nl::halfWidth(nl::zoneFor(S.market), S.atr, S.tick)); }
+        }
+    }
+    const long long wall = ctSec(currentDate());
+    const int minute = wall > 0 ? (int)((wall % 86400 + 86400) % 86400 / 60) : -1;
+    const std::string d = dir();
+    if (S.zrSession >= 0 && !d.empty()) { makeDir(fd); makeDir(d); S.zr.newSession(S.zrSession, d + "\\" + stem(S) + "-zoneread-" + std::to_string(S.zrSession) + ".csv", now, wall); }
+    if (S.zr.e.lastTradeMs < 0 || now - S.zr.e.lastTradeMs > 5000 || now < S.zr.e.lastTradeMs) {
+        RTARRAY cl(barClose); pl::Tick px = 0;
+        if (cl.count >= count && count > 0 && pl::toTick((double)cl[(int)count - 1], S.tick, px)) S.zr.e.onPrice(now, px);
+    }
+    S.zr.e.step(now, wall > 0 ? wall : 0, minute);
+    S.zr.flush();
+}
+
+// (0.3.0) the mouse on the read line shows its detail box; never swallows the event
+int Pulling::mouse(RTX_EVENT* e) {
+    if (!e) return RTX_FAIL;
+    PLState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
+    if (e->type == E_MOUSE_MOVE || e->type == E_MOUSE_HOVER) {
+        const int h = e->v.mouse.h, v = e->v.mouse.v;
+        const bool in = S->lineR > S->lineL && h >= S->lineL && h <= S->lineR && v >= S->lineT && v <= S->lineB;
+        if (in != S->hoverOn) { S->hoverOn = in; invalidateChart(false); }
+    }
+    return RTX_FAIL;
 }
 
 void Pulling::render(PLState& S) {
@@ -514,11 +589,11 @@ void Pulling::render(PLState& S) {
     auto xs = [](double v) { char b[16]; if (v < 0) std::snprintf(b, sizeof(b), "-"); else std::snprintf(b, sizeof(b), "%.1fx", v); return std::string(b); };
     auto xOf = [&](int bar) { PNT p; p.set(bar, 0.0f, kBarCenter); return (int)p.h; };
     const double line = S.e.P.line;
-    // header: the bar in progress, Metric: now (line); the order feed's completeness on the right
+    // header: "PULLING", then (0.3.0) the ONE zone read line (only inside a key / gamma zone; else nothing), the order feed's
+    // completeness on the right (MBO %)
+    zread::Line zl = S.zr.e.line(zread::P_PULLING, steadyMs());
+    std::vector<std::string> hov; int hovX = 0, hovY = 0, hovW = 0;
     {
-        int x = txt(pane.left + 4, pane.top + 1, "PULLING   ", C_GREY);
-        x = txt(x, pane.top + 1, "Buyers pulled: ", C_GREY); x = txt(x, pane.top + 1, xs(S.e.x(lastBar, pl::BID)), C_SELL); x = txt(x, pane.top + 1, " (" + xs(line) + ")   ", C_GREY);
-        x = txt(x, pane.top + 1, "Sellers pulled: ", C_GREY); x = txt(x, pane.top + 1, xs(S.e.x(lastBar, pl::OFFER)), C_BUY); txt(x, pane.top + 1, " (" + xs(line) + ")", C_GREY);
         std::string feed; COLOR fc = C_GREY;
         if (S.lastEventMs < 0) { feed = S.state == "ready" ? "MBO" : S.state; fc = S.state.find("waiting") == 0 ? C_GREY : C_SELL; }
         else {
@@ -532,8 +607,35 @@ void Pulling::render(PLState& S) {
             if (n == 0 || vol <= 0) feed = "MBO";
             else { char b[40]; const double c = std::min(1.0, fil / vol); std::snprintf(b, sizeof(b), c >= 0.9 ? "MBO %.0f%%" : "MBO gaps %.0f%%", c * 100.0); feed = b; fc = c >= 0.9 ? C_GREY : C_SELL; }
         }
-        const int w = getTextWidth(feed.c_str(), -1);
-        txt(pane.right - w - 8, pane.top + 1, feed, fc);
+        const int fw = getTextWidth(feed.c_str(), -1);
+        txt(pane.right - fw - 8, pane.top + 1, feed, fc);
+        const int x = txt(pane.left + 4, pane.top + 1, "PULLING   ", C_GREY);
+        S.lineL = S.lineR = 0;
+        if (zl.show) {
+            FONT lf; lf.id = HELVETICA; lf.size = 10; lf.style = BOLD; setFont(lf);
+            const int room = pane.right - fw - 16 - x;
+            std::string t = zl.text;
+            if (getTextWidth(t.c_str(), -1) > room) { while (t.size() > 4 && getTextWidth((t + "...").c_str(), -1) > room) t.pop_back(); t += "..."; }
+            if (room > 40) {
+                const int w = txt(x, pane.top + 1, t, zl.impl > 0 ? C_BUY : zl.impl < 0 ? C_SELL : C_GREY) - x;
+                S.lineL = x; S.lineT = pane.top; S.lineR = x + w + 2; S.lineB = pane.top + 14;
+                if (S.hoverOn && !zl.hover.empty()) {                  // the detail box: under the line, inside the pane, drawn last
+                    FONT hf; hf.id = HELVETICA; hf.size = 10; hf.style = PLAIN; setFont(hf);
+                    const int maxW = std::max(120, std::min(700, (int)(pane.right - pane.left) - 16));
+                    for (size_t i = 0; i < zl.hover.size(); ++i) {
+                        std::string rest = zl.hover[i];
+                        while (!rest.empty() && hov.size() < 24) {
+                            size_t cut = rest.size();
+                            while (cut > 1 && getTextWidth(rest.substr(0, cut).c_str(), -1) > maxW - 12) { const size_t sp = rest.rfind(' ', cut - 1); cut = sp == std::string::npos || sp == 0 ? cut - 1 : sp; }
+                            hov.push_back(rest.substr(0, cut)); rest = cut < rest.size() ? rest.substr(cut + (rest[cut] == ' ' ? 1 : 0)) : std::string();
+                        }
+                    }
+                    for (size_t i = 0; i < hov.size(); ++i) hovW = std::max(hovW, (int)getTextWidth(hov[i].c_str(), -1));
+                    hovW += 12; hovX = std::max((int)pane.left + 2, std::min(x, (int)pane.right - hovW - 2)); hovY = pane.top + 16;
+                }
+            }
+            setFont(f);
+        } else S.hoverOn = false;
     }
     const int top = pane.top + 16, bottom = pane.bottom - 4;
     // the visible bars and the scale (at least 3x)
@@ -573,14 +675,21 @@ void Pulling::render(PLState& S) {
         { PNT a; a.set(0, 0.0f); a.h = coord(x); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(x); b.v = coord(bottom); b.drawLineTo(); }
         txt(x - 3, top, "X", C_X);
     }
+    if (!hov.empty()) {                                                  // (0.3.0) the read line's detail box, over the lines
+        FONT hf; hf.id = HELVETICA; hf.size = 10; hf.style = PLAIN; setFont(hf);
+        const int H = (int)hov.size() * 14 + 8, y1 = std::min((int)pane.bottom - 2, hovY + H);
+        setPen(C_GREY, 1, P_SOLID);
+        RCT bx; bx.set(coord(hovX), coord(hovY), coord(hovX + hovW), coord(y1)); bx.draw(1, C_GREY, 0x00000000, DRAW_OPAQUE, PAT_SOLID);
+        for (size_t i = 0; i < hov.size() && hovY + 4 + (int)i * 14 + 12 <= y1; ++i) txt(hovX + 6, hovY + 4 + (int)i * 14, hov[i], i == 0 ? (zl.impl > 0 ? C_BUY : zl.impl < 0 ? C_SELL : C_GREY) : (COLOR)0x00E2E8F0);
+    }
 }
 
 extern "C" cppExtension* CreateExtension(void) {
     Pulling* p = new Pulling();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | NO_UI);                                   // its own pane, draws itself
+    p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                     // its own pane, draws itself; (0.3.0) the read line's hover
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Pulling: who pulled their resting orders near price, per bar, from the order-by-order (MBO) feed. Red = buyers pulled bids (bearish: price drops when buyers step away), green = sellers pulling offers (bullish: price lifts when sellers step away), each x the normal pulling of the 20 bars before; the value shows at or over the line; a yellow X = the side pulling more over the last 10 bars changed. Fills never count as pulls. MBO % (top right) = how much of the bar volume the order feed showed.");
+    p->setDescription("LRA Pulling: who pulled their resting orders near price, per bar, from the order-by-order (MBO) feed. Red = buyers cancelled bids near price (e.g. 0.8x normal), green = sellers cancelled offers near price, each x the normal pulling of the 20 bars before; the value shows at or over the line; a yellow X = the side pulling more over the last 10 bars changed. Fills never count as pulls. MBO % (top right) = how much of the bar volume the order feed showed. The read line (only while price is in a key / gamma zone): in the first 3 minutes at the level, was the size resting there cancelled or traded - always '?', locked after the 3 minutes; hover it for the numbers and the study caveat.");
     p->setVersion(PL_VERSION);
     return p;
 }

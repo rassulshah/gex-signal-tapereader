@@ -66,11 +66,11 @@ call :one ChartView    lsChartView    ChartViewLogic.h HostSlot.h DealerLogic.h 
 call :one MboCheck     lsMboCheck     MboCheckLogic.h HostSlot.h
 REM (LQ010 2026-10-11) the Liquidity Profile - native depth + VAP, TESTING
 REM (LQ150 2026-10-13) 0.15.0 includes the order-by-order feed: rebuild when OrderFlowFeed.h / OptionsFlow.h / NearLevels.h change
-call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h BannerBoard.h BoxPlace.h ColumnBoard.h
+call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h BannerBoard.h BoxPlace.h ColumnBoard.h ZoneRule.h ZoneRead.h
 REM (LQ020 2026-10-11) the aggression / defense panes - the same source built as its own pane
-call :one LiquidityFlow lsLiquidityFlow LiquidityProfile.cpp LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h BannerBoard.h BoxPlace.h ColumnBoard.h
+call :one LiquidityFlow lsLiquidityFlow LiquidityProfile.cpp LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h BannerBoard.h BoxPlace.h ColumnBoard.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h ZoneRule.h ZoneRead.h
 REM (2026-10-11) lsPulling - who pulled their orders near price, from the order-by-order (MBO) feed
-call :one Pulling lsPulling PullingLogic.h HostSlot.h
+call :one Pulling lsPulling PullingLogic.h HostSlot.h NearLevels.h ZoneRule.h ZoneRead.h
 REM (2026-10-11) lsExhaustion - the pusher fading at a new extreme, per-market settings from lra.exh_study
 call :one Exhaustion lsExhaustion ExhaustionLogic.h HostSlot.h
 REM (2026-10-12) lsExhaustionV2 - pullback watch E? / trend response R? / EXIT? warnings (outside review), calibration from lra.exh2_nightly
@@ -81,11 +81,11 @@ REM (2026-10-13) lsBidAskStats - biggest bid (red) / biggest ask (green) per can
 REM (2026-10-13) lsBidAskStats 1.3.0 - who is attacking: S / L letters from the order feed, message line + info box, spike labels (shared OrderFlowFeed.h)
 REM (2026-10-13 of140) BidAskStats 1.5.0 / PullStats 1.1.0 / StackStats 1.1.0 also hash OptionsFlow.h (BidAskStats StopRun.h); TapeReader 1.1.0 hashes OptionsFlow.h
 REM (2026-10-13 fix1) BidAskStats 1.5.1 / PullStats 1.1.1 / StackStats 1.1.1 / TapeReader 1.1.1 / LiquidityProfile also hash HoverBoard.h (the chart-wide hover)
-call :one BidAskStats lsBidAskStats BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h StopRun.h OptionsFlow.h HoverBoard.h BoxPlace.h
+call :one BidAskStats lsBidAskStats BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h StopRun.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h
 REM (2026-10-13) lsPullStats 1.0.0 - who is leaving: resting orders pulled near price per candle (MBO), L, message line + info box (Rassul "number of bids and ask pulled like a histogram")
-call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h
+call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h
 REM (2026-10-13) lsStackStats 1.0.0 - who is arriving: orders added near price per candle (MBO), refill dash, R / L, message line + info box (Rassul "add a stacking indicator", "keep seperate")
-call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h
+call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
 REM (2026-10-14 claim gates) DealerRead 4.6.0 / TapeReader 1.1.4 also hash ClaimGates.h (DealerRead DealerReadGates.h)
 call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h ClaimGates.h

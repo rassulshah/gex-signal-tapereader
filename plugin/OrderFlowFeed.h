@@ -1,7 +1,17 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.4.0, 2026-10-14) -- the ONE shared order-flow header of lsBidAskStats 1.5.3, lsPullStats 1.3.0 and
-// lsStackStats 1.2.0.
+// OrderFlowFeed.h (1.5.0, 2026-10-14 night) -- the ONE shared order-flow header of lsBidAskStats 1.6.0, lsPullStats 1.4.0 and
+// lsStackStats 1.3.0 (and the order feed of lsLiquidityProfile / lsLiquidityFlow 0.17.0).
+// 1.5.0 (2026-10-14 night, Rassul via the coordinator: "every order-flow pane gets its own ONE read line in place of its box"):
+//   - "Box shows: Read" (default) no longer draws the READ box (read + blue options line + the numbers hover grid). Each pane draws ONE
+//     read line at the box's Position / Offset (planLine), ONLY while price is inside a key-level or gamma zone (ZoneRead.h: level
+//     +/- 0.06 ADR, the Liquidity Profile zone rule), else nothing: BidAskStats "ES 7750 - sellers hitting 3.1x normal, price held ?",
+//     StackStats "ES 7750 - bids stacking 2.3x normal ?", PullStats "ES 7750 - bids pulled before touch (45%) ?", always "?", green =
+//     buyers / bullish, red = sellers / bearish, grey otherwise; locked when its window closes (record <Pane>\<stem>-zoneread-<session>.csv,
+//     read back on load: no repaint). The mouse over the line shows its detail box (numbers, the normal, what / why / how / example, the
+//     study and its caveat). "Box shows: Numbers" keeps the compact numbers box, the read line beside it.
+//   - StackStats' refill / iceberg letter I is drawn "I?" (audit: inferred) - the record still stores I.
+//   - Spike bars, spike labels (CR5300 label persistence), letters S / L, the feed clock, the session record: unchanged.
 // 1.4.0 (2026-10-14 evening, Rassul's standing order "always record IRT data and keep the MBO files updated"; LIQ-DAY-2026-10-14 review:
 //   the ES mbo_HH.csv held only 30-45% of the traded volume in busy periods, 96-100% pre-market): ROOT CAUSE - the order feed was read
 //   only from the pane's calc / draw, which IRT ran every ~6-10 s on the busy 3-min chart (none while its layout tab is hidden), at most
@@ -96,6 +106,7 @@
 #include "OptionsFlow.h"
 #include "HoverBoard.h"
 #include "BoxPlace.h"
+#include "ZoneRead.h"          // (1.5.0) the one-line zone reads
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -118,7 +129,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.4.0";   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1179,6 +1190,31 @@ inline PanelPlan planPanel(const bp::Box& area, int paneTop, int mode, const bp:
     }
     return P;
 }
+// (1.5.0) THE READ LINE (Box shows: Read): one line at the box's Position / Offset, sized to its text, only when the pane has a read;
+// the mouse over it -> the detail box (the hover lines wrapped to the pane, below the line, else above it), drawn over the bars
+struct LinePlan { bool ok = false, show = false; bp::Box box, hoverBox; std::string text; int impl = 0; std::vector<std::string> hover; };
+static const int HOVER_W_MAX = 700, HOVER_PT = 10, HOVER_LH = 14;
+inline int implOf(const zread::Line& L) { return L.impl > 0 ? BULL : L.impl < 0 ? BEAR : NEUTRAL; }
+inline LinePlan planLine(const bp::Box& area, const bp::Place& place, const zread::Line& L, bool hovering, const TextW& M) {
+    LinePlan P; P.ok = area.w() >= 40 && area.h() >= READ_LH;
+    if (!P.ok || !L.show || L.text.empty()) return P;
+    P.text = nl::fitText(L.text, area.w() - 8, [&](const std::string& u) { return M(u, READ_PT, true); });
+    if (P.text.empty()) return P;
+    P.show = true; P.impl = implOf(L);
+    P.box = bp::placeBox(area, M(P.text, READ_PT, true) + 8, READ_LH + 2, place);
+    if (!hovering) return P;
+    const int W = std::min(HOVER_W_MAX, area.w()), tw = W - 2 * BOX_PAD;
+    std::vector<std::string> lines;
+    for (size_t i = 0; i < L.hover.size(); ++i) { const std::vector<std::string> w = wrapText(L.hover[i], tw, 4, HOVER_PT, false, M); lines.insert(lines.end(), w.begin(), w.end()); }
+    const int maxLines = std::max(1, (area.h() - 2 * BOX_PAD - 2) / HOVER_LH);
+    if ((int)lines.size() > maxLines) lines.resize((size_t)maxLines);
+    int mw = 0; for (size_t i = 0; i < lines.size(); ++i) mw = std::max(mw, M(lines[i], HOVER_PT, false));
+    const int H = (int)lines.size() * HOVER_LH + 2 * BOX_PAD, BW = std::min(W, mw + 2 * BOX_PAD + 2);
+    int t = P.box.b + 2; if (t + H > area.b) t = P.box.t - 2 - H; if (t < area.t) t = area.t;
+    P.hoverBox = bp::clampIn(bp::mk(P.box.l, t, P.box.l + BW, t + H), area);
+    P.hover = lines;
+    return P;
+}
 // (1.3.0) ONE spike label per candle (Rassul 07:02 "they overlap"): the side with the bigger ratio (no ratio: the bigger value)
 inline int spikeSideOf(const bool spk[2], const bool ratioOk[2], const double ratio[2], const long long v[2]) {
     if (spk[0] && !spk[1]) return 0;
@@ -1685,6 +1721,13 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
                 const int sd = bx[j].side == 1 ? 1 : 0;
                 const bool isMark = bx[j].c == 'R' && !lb.mark[sd].empty();
                 std::string txt(1, bx[j].c);
+                if (bx[j].c == 'I' && !isMark) {                                // (1.5.0 audit) the refill / iceberg letter is inferred: "I?"
+                    const int need = (int)x->getTextWidth("I?", -1) + 3;
+                    LBox w = bx[j]; const int cx = (bx[j].l + bx[j].r) / 2; w.l = std::max(sl, cx - need / 2); w.r = w.l + need - 1;
+                    if (w.r > sr) { w.r = sr; w.l = sr - need + 1; }
+                    bool hit = w.l < sl; for (size_t o = 0; o < bx.size() && !hit; ++o) if (o != j) hit = overlaps(w, bx[o]);
+                    if (!hit) { bx[j] = w; txt = "I?"; }                       // zoomed far out: "I" alone (the hover / record say "?")
+                }
                 if (isMark) {                                                   // "R?" may need a wider box: centred, else slid inside the slot
                     txt = lb.mark[sd];
                     const int need = (int)x->getTextWidth(txt.c_str(), -1) + 3;
@@ -1807,6 +1850,15 @@ inline void drawPanel(cppExtension* x, const PanelPlan& P, const Info& I, const 
     for (size_t k = 0; k < P.opt.size() && r < P.textRects.size(); ++k, ++r) textAt(x, P.textRects[r].l, P.textRects[r].t, OPT_LH, P.opt[k], C_OPT_BLUE, OPT_PT, false);
 }
 inline bool inBox(const bp::Box& b, int h, int v) { return b.w() > 0 && h >= b.l && h <= b.r && v >= b.t && v <= b.b; }
+// (1.5.0) the read line (no box, no border) and, with the mouse on it, its detail box (solid grey border, black, white text)
+inline void drawLine(cppExtension* x, const LinePlan& P) {
+    if (!P.ok || !P.show) return;
+    textAt(x, P.box.l + 4, P.box.t + 1, READ_LH, P.text, implColor(P.impl), READ_PT, true);
+    if (P.hover.empty() || P.hoverBox.w() <= 0) return;
+    boxAt(x, P.hoverBox);
+    int y = P.hoverBox.t + BOX_PAD - 1;
+    for (size_t k = 0; k < P.hover.size(); ++k, y += HOVER_LH) textAt(x, P.hoverBox.l + BOX_PAD, y, HOVER_LH, P.hover[k], k == 0 ? implColor(P.impl) : C_WHITE, HOVER_PT, k == 0);
+}
 
 #ifdef OFF_TEST_CLOCK
 extern long long off_test_now_ms;
@@ -1823,6 +1875,38 @@ inline void* cursorWindow() { return NULL; }
 #endif
 #endif
 
+// ---- (1.5.0) the zone read, once per pump, for any pane host: levels / normals (files, bounded, re-read on change), the lagged ADR
+// and the closes (the chart's bars, on a new bar only), this session's record (read back on load), the price when no fill came for
+// 5 s (the chart's close), then the clock (12-hour CT minute -> the normal's 30-min slot; wall seconds -> the record)
+inline long long zoneClockSec(cppExtension* e, long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !e->getLocaltime((RTDATE)t, &x)) return LLONG_MIN; return civilDays(x.tm_year + 1900, (unsigned)x.tm_mon + 1, (unsigned)x.tm_mday) * 86400 + x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec; }
+inline void zoneTickFor(cppExtension* x, zread::Host& zr, long& zrCount, long long& zrSession, int pane, double tick, const std::string& market, const nl::Zone& zone,
+                        double atr, const std::string& recPath, long count, long long now) {
+    zr.pane = pane; zr.e.tick = tick;
+    const std::string fd = flexDir();
+    zr.files(fd.empty() ? fd : fd + "\\", market, now, (long long)std::time(NULL));
+    if (count != zrCount && count >= 2) {
+        cppExtension::RTARRAYI times(barDateTime); cppExtension::RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+        if (times.count >= count && hi.count >= count && lo.count >= count && cl.count >= count) {
+            zrCount = count;
+            std::vector<zread::BarRow> rows; rows.reserve((size_t)std::min(count, 12000L));
+            for (long i = std::max(0L, count - 12000L); i < count - 1; ++i) {
+                const long long cs = zoneClockSec(x, (long long)times[(int)i]); if (cs == LLONG_MIN || cs <= 0) continue;
+                zread::BarRow r; r.session = zrule::sessionKey(cs); r.endSec = cs; r.h = (double)hi[(int)i]; r.l = (double)lo[(int)i]; r.c = (double)cl[(int)i]; rows.push_back(r);
+            }
+            const long long cs = zoneClockSec(x, (long long)times[(int)count - 1]);
+            if (cs != LLONG_MIN && cs > 0) { zrSession = zrule::sessionKey(cs); zr.bars(rows, zrSession, nl::halfWidth(zone, atr, tick)); }
+        }
+    }
+    long long wall = zoneClockSec(x, (long long)x->currentDate()); if (wall == LLONG_MIN) wall = 0;
+    int minute = -1; { struct tm t; std::memset(&t, 0, sizeof(t)); if (x->getLocaltime(x->currentDate(), &t)) minute = t.tm_hour * 60 + t.tm_min; }
+    if (zrSession >= 0 && !recPath.empty()) zr.newSession(zrSession, recPath, now, wall);
+    if (zr.e.lastTradeMs < 0 || now - zr.e.lastTradeMs > 5000 || now < zr.e.lastTradeMs) {
+        cppExtension::RTARRAY cl(barClose); Tick px = 0;
+        if (cl.count >= count && count > 0 && toTick((double)cl[(int)count - 1], tick, px)) zr.e.onPrice(now, px);
+    }
+    zr.e.step(now, wall, minute);
+    zr.flush();
+}
 // ---- the windows the chart's mouse events came from (hover off the chart -> Live), as lsBidAskStats 1.1.0 ----------------------
 struct HoverTrack {
     Hover hover; std::vector<void*> wnds; long long redraws = 0;
@@ -1897,6 +1981,7 @@ template <class L> struct PaneState {
     OptCache opt; ResetWatch rw;                     // (1.2.0) the options file (blue line), PullStats' reset watch
     std::unique_ptr<PaneExt> ext;                    // (1.2.2) PullStats' order-feed recorder (null in the other panes)
     bp::Box lastBox; bool inBox = false; long long boxHovers = 0;   // (1.3.0) the read box last drawn; the mouse over it (numbers hover)
+    zread::Host zr; long zrCount = -1; long long zrSession = -1;    // (1.5.0) the zone read line
     int timerId = 0; bool timerOn = false, timerTried = false;       // (1.4.0) the order-feed clock of this chart's pane
 };
 
@@ -2102,6 +2187,7 @@ public:
                 if (S.feed.timerOff) stopTimer(S);
                 coverage(S, count, now);
                 decide(S, now);
+                zoneTick(S, count, now);                                   // (1.5.0) the zone read line
                 const std::string fs = S.feed.stateText(now);
                 if (!fs.empty()) S.state = fs;
             }
@@ -2149,6 +2235,7 @@ private:
         S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
         S.zone = nl::zoneFor(S.market); S.params = ParamCache(); S.opt = OptCache(); S.rw = ResetWatch();
         S.settingsStamp = -2; S.settingsCheckMs = -1; S.hov.hover.set(-1); S.hov.wnds.clear(); S.lastStatusText.clear();
+        S.zr = zread::Host(); S.zrCount = -1; S.zrSession = -1;            // (1.5.0)
     }
     void applyParams(S_& S) {
         const Params& P = S.params.load.p;
@@ -2227,9 +2314,15 @@ private:
             S.curSession = ss; S.loaded = false;
         }
     }
+    void zoneTick(S_& S, long count, long long now) {                     // (1.5.0) the zone read line (zoneTickFor)
+        const std::string d = dir();
+        zoneTickFor(this, S.zr, S.zrCount, S.zrSession, std::string(L::name()) == "StackStats" ? zread::P_STACK : zread::P_PULLSTATS, S.tick, S.market, S.zone, S.atr,
+                    d.empty() || S.curSession.empty() ? std::string() : d + "\\" + stem(S) + "-zoneread-" + S.curSession + ".csv", count, now);
+    }
     // an event to the candle containing its own stamp; one that cannot be counted (no bar, a decided bar, a bar before the stream
     // opened - e.g. a snapshot of old orders) still teaches the engine its order (a scratch candle, thrown away)
     void route(S_& S, const Ev& x) {
+        S.zr.e.onEvent(x.arrMs, x.action, x.side, x.id, x.px, x.size);   // (1.5.0) every event, in order, to the zone read (its own book)
         const long long key = eventKey(S.barEnds, S.formingKey, S.spb, x.stamp);
         const bool noBar = key < 0, decided = !noBar && S.ser.bars.count(key) > 0, before = !noBar && S.firstBarKey > 0 && key < S.firstBarKey;
         const bool early = !noBar && S.firstBarKey < 0 && key < S.formingKey;      // before the first event of this load
@@ -2345,7 +2438,7 @@ private:
         o << "\nLAST_CLOSED_BAR," << S.lastClosedKey << "," << stamp(S.lastClosedKey);
         if (it != S.ser.bars.end()) o << "\nMESSAGE," << implText(it->second.msg.impl) << "," << it->second.msg.line1 << "\nNUMBERS," << it->second.msg.line2 << "\nLETTERS," << it->second.let[0] << "," << it->second.let[1];
         statusExtra(S, o);                                                 // (1.2.2)
-        o << "\n";
+        o << "\n" << S.zr.status() << "\n";                               // (1.5.0) the zone read
         const std::string text = o.str(); if (text == S.lastStatusText) return;
         const std::string d = dir(); if (d.empty()) return;
         makeDir(flexDir()); makeDir(d);
@@ -2409,10 +2502,15 @@ private:
         // (1.3.0) the panel: the READ box (numbers on hover) or the compact numbers box + the read beside it
         bp::Place pl; pl.pos = S.set.pos; pl.dx = S.set.dx; pl.dy = S.set.dy;
         const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
-        const PanelPlan P = planPanel(area, g.top, S.set.mode, pl, info, line1Of(ctOf(mt), m.line1), optL, g.reserve, measureWith(this));
-        S.lastBox = P.ok ? P.box : bp::Box();
-        const bool showGrid = P.ok && P.mode == MODE_READ && S.inBox;
+        // (1.5.0) Read = the ONE zone read line (only inside a key / gamma zone); Numbers = the compact numbers box + that line beside it
+        const zread::Line zl = S.zr.e.line(S.zr.pane, steadyMs());
+        const bool readMode = clampMode(S.set.mode) == MODE_READ;
+        PanelPlan P; LinePlan LP;
+        if (readMode) { LP = planLine(area, pl, zl, S.inBox, measureWith(this)); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
+        else { P = planPanel(area, g.top, S.set.mode, pl, info, zl.show ? zl.text : std::string(), optL, g.reserve, measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
+        (void)m;
         std::vector<LBox> avoid;
+        if (LP.show) avoid.push_back(LBox{ LP.box.l, LP.box.t, LP.box.r, LP.box.b, 0, 0 });
         if (P.ok) avoid.push_back(LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
         // (1.3.1) the hover grid is NOT an obstacle: it is drawn over the bars while the mouse is in the box; labels never re-decide for it
         for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
@@ -2423,7 +2521,7 @@ private:
             return k;
         }, avoid);
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
-        drawPanel(this, P, info, vcol, m.impl, showGrid);
+        if (readMode) drawLine(this, LP); else drawPanel(this, P, info, vcol, implOf(zl), false);
     }
     bp::DlgSnap snap_;                                                     // (1.3.0) the dialog as it opened (this object = the dialog's copy)
 };

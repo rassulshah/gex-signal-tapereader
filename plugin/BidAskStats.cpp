@@ -1,5 +1,15 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.5.3 (2026-10-14)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.6.0 (2026-10-14 night)
+ *  1.6.0 (2026-10-14 night, Rassul via the coordinator "every order-flow pane gets its own ONE read line in place of its box";
+ *        approval list 2026-10-14 s.7): the READ box is gone. Box shows: Read (default) = ONE line at the box's Position / Offset, only
+ *        while price is inside a key-level or gamma zone (ZoneRead.h 1.0.0, OrderFlowFeed.h 1.5.0): who is hitting the level and where
+ *        price is after the first 3 minutes - "ES 7750 - sellers hitting 3.1x normal, price held ?" / "... sellers hitting 3.1x, price
+ *        through ?" - ratio vs the market's same-30-min-slot normal (LRA-ZoneReadNorms-<MKT>.csv), always "?", green / red by
+ *        implication, locked when the window closes (BidAskStats\<stem>-zoneread-<session>.csv, read back on load). Mouse on the line =
+ *        its detail (numbers, normal, what / why / how / example, the study caveat). Numbers mode keeps the numbers box with the line
+ *        beside it and the options line reworded "Unsigned put volume 2.1x pace ? - buyer / seller unknown" (approval: MARK ?).
+ *        The candle message ("... price held: buyers absorbing") is no longer drawn; it stays in the session record unchanged
+ *        (the Tape Reader reads that record). Spikes, labels, letters, R? marks, settings: unchanged.
  *  1.5.3 (2026-10-14, CR5300; Rassul 11:59 CT CLZ6 3-min "the label for pace and lots on the red spike goes away but it is there on
  *        the green spike. fix it"): spike labels never lose their pace / lots because of another spike (OrderFlowFeed.h 1.3.1: labels
  *        decided in time order from older labels only, no shrink pass; the hover grid drawn over them, not re-laying them out;
@@ -109,7 +119,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.5.3"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.6.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -223,7 +233,14 @@ struct BASState {
     std::map<long long, long long> srReclaim;            // reclaim bar time -> break bar time (for its message / box)
     long long srEvents = 0, srLoaded = 0;
     off::OptCache opt;                                   // (1.5.0) LRA-Options-<MKT>.csv: the blue oHit line
+    zread::Host zr; long zrCount = -1; long long zrSession = -1;   // (1.6.0) the zone read line
 };
+// (1.6.0, approval list s.7 MARK ?) the options volume is unsigned: who bought / sold and opening / closing are unknown
+static std::string unsignedHitLine(const ofo::Snap& s, int gate) {
+    if (!s.ok || !s.hit.ok || gate == ofo::GATE_OFF) return std::string();
+    char b[32]; std::snprintf(b, sizeof(b), "%.1fx", s.hit.ratio);
+    return std::string("Unsigned ") + (s.hit.type == 'P' ? "put" : "call") + " volume " + b + " pace ? - buyer / seller unknown";
+}
 
 class BidAskStats : public cppExtension {
 public:
@@ -351,6 +368,7 @@ void BidAskStats::identify(BASState& S) {
     S.accs.clear(); S.closedAt.clear(); S.barEnds.clear(); S.formingKey = 0; S.firstBarKey = -1; S.finFrom = 0; S.fin.clear();
     S.file = off::SessionFile(); S.curSession.clear(); S.loaded = false; S.params = off::ParamCache(); S.lastStatusText.clear();
     S.opt = off::OptCache();
+    S.zr = zread::Host(); S.zrCount = -1; S.zrSession = -1;               // (1.6.0)
 }
 // the mouse over a bar: the info box and the message line follow it. Never swallows the event (the chart keeps its own mouse behaviour).
 int BidAskStats::mouse(RTX_EVENT* e) {
@@ -640,6 +658,7 @@ void BidAskStats::orderBars(BASState& S, long count, long long now) {
     }
 }
 void BidAskStats::route(BASState& S, const off::Ev& x) {
+    S.zr.e.onEvent(x.arrMs, x.action, x.side, x.id, x.px, x.size);       // (1.6.0) every event, in order, to the zone read
     const long long key = off::eventKey(S.barEnds, S.formingKey, S.spb, x.stamp);
     const bool noBar = key < 0, decided = !noBar && S.fin.count(key) > 0, before = !noBar && S.firstBarKey > 0 && key < S.firstBarKey;
     const bool early = !noBar && S.firstBarKey < 0 && key < S.formingKey;
@@ -852,7 +871,8 @@ void BidAskStats::status(BASState& S, long long now) {
                                 << ",norm " << (off::fileNorm(S.params.load.p, off::PM_AGGR, minuteOf(S.lastClosedTime)) > 0 ? "file" : "rolling");
     }
     o << "\nLARGE_AGGRESSOR_NOW," << off::largeThreshold(e.aggrDist, S.params.load.p.largeLotAggr, S.params.load.p.largeLotPct, S.params.load.p.largeLotMin) << " (" << e.aggrDist.total << " orders)"
-      << "\nSESSION," << S.curSession << "\nSESSION_FILE,rows " << S.file.rows.size() << ",loaded " << S.file.loaded << ",rejected " << S.file.rejected << ",writes " << S.file.writes << ",fails " << S.file.fails << "\n";
+      << "\nSESSION," << S.curSession << "\nSESSION_FILE,rows " << S.file.rows.size() << ",loaded " << S.file.loaded << ",rejected " << S.file.rejected << ",writes " << S.file.writes << ",fails " << S.file.fails << "\n"
+      << S.zr.status() << "\n";                                           // (1.6.0)
     const std::string text = o.str(); if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
     makeDir(f);
@@ -899,6 +919,11 @@ void BidAskStats::pump() {
                 if (S.srFrom < 0 && S.formingKey > 0) S.srFrom = S.formingKey;   // (1.4.0) bars closing from now on are judged
                 finalize(S, now);
                 stopRuns(S);
+            }
+            if (count >= 2 && !S.faulted) {                                // (1.6.0) the zone read line
+                const std::string d = dir();
+                off::zoneTickFor(this, S.zr, S.zrCount, S.zrSession, zread::P_BAS, S.tick, S.market, S.zone, S.atr,
+                                 d.empty() || S.curSession.empty() ? std::string() : d + "\\" + stem(S) + "-zoneread-" + S.curSession + ".csv", count, now);
             }
         }
         status(S, now);
@@ -978,13 +1003,18 @@ void BidAskStats::render(BASState& S) {
     // (1.5.0) the blue oHit line: the snapshot that had ARRIVED by the candle read (hovered: fresh at its end; live: now)
     const ofo::Snap* os = S.opt.hist.latest(hov >= 0 ? mt : (long long)times[last]);
     const long long ref = hov >= 0 ? unixOf(mt) : (long long)std::time(NULL);
-    const std::string optL = os && ofo::fresh(*os, ref) && !S.faulted ? ofo::hitLine(*os, S.params.load.p.gate[ofo::G_OHIT], S.market, S.params.load.p.gate[ofo::G_ODEX]) : std::string();
+    const std::string optL = os && ofo::fresh(*os, ref) && !S.faulted ? unsignedHitLine(*os, S.params.load.p.gate[ofo::G_OHIT]) : std::string();
     bp::Place pl; pl.pos = S.pos; pl.dx = S.dx; pl.dy = S.dy;
     const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
-    const off::PanelPlan P = off::planPanel(area, g.top, S.mode, pl, info, l1, optL, g.reserve, off::measureWith(this));
-    S.lastBox = P.ok ? P.box : bp::Box();
-    const bool showGrid = P.ok && P.mode == off::MODE_READ && S.inBox;
+    // (1.6.0) Read = the ONE zone read line (only inside a key / gamma zone); Numbers = the numbers box + that line beside it
+    const zread::Line zl = S.zr.e.line(zread::P_BAS, steadyMs());
+    const bool readMode = off::clampMode(S.mode) == off::MODE_READ;
+    off::PanelPlan P; off::LinePlan LP;
+    if (readMode) { LP = off::planLine(area, pl, zl, S.inBox, off::measureWith(this)); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
+    else { P = off::planPanel(area, g.top, S.mode, pl, info, zl.show ? zl.text : std::string(), optL, g.reserve, off::measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
+    (void)l1;
     std::vector<off::LBox> avoid;
+    if (LP.show) avoid.push_back(off::LBox{ LP.box.l, LP.box.t, LP.box.r, LP.box.b, 0, 0 });
     if (P.ok) avoid.push_back(off::LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
     // (1.5.3) the hover grid is not an obstacle: it is drawn over the bars while the mouse is in the box (labels never re-decide for it)
     for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
@@ -1005,7 +1035,7 @@ void BidAskStats::render(BASState& S) {
         return k;
     }, avoid);
     const COLOR vcol[2] = { C_BID, C_ASK };                                // values: sellers (bid side) red, buyers (ask side) green, labels white
-    off::drawPanel(this, P, info, vcol, m.impl, showGrid);
+    if (readMode) off::drawLine(this, LP); else off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
 }
 
 extern "C" cppExtension* CreateExtension(void) {
@@ -1014,6 +1044,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.5.3");   // BAS_VERSION
+    p->setVersion("1.6.0");   // BAS_VERSION
     return p;
 }

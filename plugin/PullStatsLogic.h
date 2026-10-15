@@ -19,7 +19,7 @@
 
 namespace ps {
 
-static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-10-14 evening): complete order feed - a 250 ms clock reads it (OrderFlowFeed 1.4.0), MBO_COVERAGE in the status, recorder flushed by the clock; 1.2.2 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.2.1 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.2.0 (2026-10-14): Record order feed (MboRecord.h, host only); 1.1.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, SPEC message grammar, reset, hover rows; 1.0.1: no white outline
+static const char* const VERSION = "1.4.0";   // 1.4.0 (2026-10-14 night): the read box -> one zone read line (pre-touch pulling, ZoneRead.h);   // 1.3.0 (2026-10-14 evening): complete order feed - a 250 ms clock reads it (OrderFlowFeed 1.4.0), MBO_COVERAGE in the status, recorder flushed by the clock; 1.2.2 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.2.1 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.2.0 (2026-10-14): Record order feed (MboRecord.h, host only); 1.1.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, SPEC message grammar, reset, hover rows; 1.0.1: no white outline
 using off::BID; using off::ASK;
 
 inline std::string letters(const off::Rec& r, int s) { return r.thrRest > 0 && r.pullMax[s] >= r.thrRest ? "L" : ""; }

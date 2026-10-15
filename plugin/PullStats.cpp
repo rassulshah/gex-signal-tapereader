@@ -1,5 +1,12 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.3.0  (2026-10-14)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.4.0  (2026-10-14 night)
+ *  1.4.0 (2026-10-14 night, Rassul via the coordinator "every order-flow pane gets its own ONE read line in place of its box"): the
+ *        READ box is gone (OrderFlowFeed.h 1.5.0). Box shows: Read (default) = ONE line at the box's Position / Offset, only while price
+ *        is inside a key-level or gamma zone (ZoneRead.h 1.0.0): PRE-TOUCH pulling - of the size resting at the level 5 minutes before
+ *        price arrived, the share cancelled before it got there: "ES 7750 - bids pulled before touch (45%) ?" (z >= 1 vs the market's
+ *        same-30-min-slot normal; else "bids stayed before touch (12% pulled) ?"), locked at the arrival, always "?"; the hover says the
+ *        study showed no clear sign yet. The candle message ("... - support leaving") is no longer drawn (still in the session record).
+ *        Spikes, labels, letters, the feed clock and the "Record order feed" recorder: unchanged.
  *  1.3.0 (2026-10-14 evening; Rassul's standing order "always record IRT data and keep the MBO files updated"; LIQ-DAY-2026-10-14:
  *        mbo_HH.csv held only 30-45% of the ES volume in busy periods): the order feed is read by a 250 ms clock as well as calc / draw
  *        (OrderFlowFeed.h 1.4.0 - IRT keeps only the last few thousand events per subscriber and drew this chart every 6-10 s), every
@@ -69,7 +76,7 @@
 #include "PullStatsLogic.h"
 #include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.3.0"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.4.0"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -134,6 +141,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, before price, traded first, pace, crowd = orders, avg size, top order share) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.3.0");   // PS_VERSION
+    p->setVersion("1.4.0");   // PS_VERSION
     return p;
 }

@@ -1,5 +1,12 @@
 /********************************************************************************
- *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.1.3  (2026-10-14)
+ *  StackStats.cpp  --  Investor/RT RTX extension  lsStackStats  1.3.0  (2026-10-14 night)
+ *  1.3.0 (2026-10-14 night, Rassul via the coordinator "every order-flow pane gets its own ONE read line in place of its box"; approval
+ *        list s.7): the READ box is gone (OrderFlowFeed.h 1.5.0). Box shows: Read (default) = ONE line at the box's Position / Offset,
+ *        only while price is inside a key-level or gamma zone (ZoneRead.h 1.0.0): size ADDED on the defending side at the level in the
+ *        3 minutes after price arrived - "ES 7750 - bids stacking 2.3x normal ?" / "ES 7750 - no new bids ?", locked when the window
+ *        closes; the hover says stacking / refill size alone mostly reflects a weak attack (read it with BidAsk). The refill / iceberg
+ *        letter I is drawn "I?" (inferred). The candle message ("... - defending PDL.") is no longer drawn (still in the record).
+ *  1.2.0 (2026-10-14 evening): complete order feed - the 250 ms clock (OrderFlowFeed.h 1.4.0), MBO_COVERAGE in the status.
  *  1.1.3 (2026-10-14, CR5300; Rassul 11:59 CT CLZ6 3-min "the label for pace and lots on the red spike goes away but it is there on
  *        the green spike. fix it"): spike labels never lose their pace / lots because of another spike (OrderFlowFeed.h 1.3.1: labels
  *        decided in time order from older labels only, no shrink pass; the hover grid drawn over them, not re-laying them out;
@@ -54,7 +61,7 @@
 #include "OrderFlowFeed.h"
 #include "StackStatsLogic.h"
 
-#define SS_VERSION "1.2.0"          // keep equal to st::VERSION and the setVersion literal below
+#define SS_VERSION "1.3.0"          // keep equal to st::VERSION and the setVersion literal below
 
 class StackStats : public off::MboPane<st::Logic> {
 public:
@@ -88,6 +95,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA StackStats: who is ARRIVING. Per candle, the LOTS of orders ADDED near price (market-by-order feed). Green = bids added, red = offers added. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. White dash = notable refills (re-added at a price right after it traded). I = refills + an iceberg confirmed, L = one large order added. Spike labels: the ratio, the pace (p = added lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = one order is most of it, may not reload ?), a blue options line when fresh (oStack), and the info box (Bids | Offers: added lots, rebuilt %, pace, crowd = orders, avg size, top order share, refills) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.2.0");   // SS_VERSION
+    p->setVersion("1.3.0");   // SS_VERSION
     return p;
 }
