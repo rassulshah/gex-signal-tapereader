@@ -30,7 +30,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
