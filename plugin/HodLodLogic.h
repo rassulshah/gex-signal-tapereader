@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.2.0";   // (2.2.0, 2026-10-14 18:25 CT audit display list) "Regime ?: below / above HVL (model)", "LOD IN? 8:39 AM (71%, in test)", Expected "(65%, in test)", "Proj HOD? 7,913.50" and the "HOD?" callout; trend, expiry, Range used, LOD? / HOD? marker and the session candle unchanged   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.1.1";   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -984,7 +984,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
             v.projTo = pl->to; v.projRange = pl->range; v.projStage = pl->stage; v.projV2 = pl->v2; v.projLockMod = pl->lockMod;
             eRange = pl->range;                                              // Range % against the target shown
         }
-        v.projTxt = std::string(v.projUp ? "Proj HOD? " : "Proj LOD? ") + pxTxt((double)v.projTo * tick, dec);   // (2.2.0, audit list) a model projection: MARK ?
+        v.projTxt = std::string(v.projUp ? "Proj HOD " : "Proj LOD ") + pxTxt((double)v.projTo * tick, dec);
     }
     if (std::isfinite(eRange) && eRange > 0) v.usedPct = (int)std::llround(100.0 * (double)v.rangeT * tick / eRange);
     // ---- the candle labels (mockup v5)
@@ -1422,31 +1422,12 @@ inline std::string hlParenPct(const std::string& in)
 inline std::string hlShortRegime(std::string r)
 {   // (05:57 "shorten Regime to Reg: ... shorten Negative to Neg") "Regime: Negative" -> "Reg: Neg", "Regime: Positive" -> "Reg: Pos"
     // (06:05 "spell out regime in the box") "Regime" stays spelled out; only the value is short
-    // (2.2.0, 2026-10-14 18:25 CT audit display list: the MenthorQ HVL side is a model) "Regime: Negative" -> "Regime ?: below HVL (model)",
-    // "Regime: Positive" -> "Regime ?: above HVL (model)"
-    if (r.find("Negative") != std::string::npos || r.find("Neg") != std::string::npos) return "Regime ?: below HVL (model)";
-    if (r.find("Positive") != std::string::npos || r.find("Pos") != std::string::npos) return "Regime ?: above HVL (model)";
+    size_t k;
+    if ((k = r.find("Negative")) != std::string::npos) r.replace(k, 8, "Neg");
+    if ((k = r.find("Positive")) != std::string::npos) r.replace(k, 8, "Pos");
     return r;
 }
 inline void hlParenCell(Cell& c) { c.s = hlParenPct(c.s); c.s2 = hlParenPct(c.s2); c.s3 = hlParenPct(c.s3); }
-// (2.2.0, 2026-10-14 18:25 CT audit display list: the timing / IN calls are not forward-calibrated per market yet) every "(65%)" /
-// "(73%?)" in a cell reads "(65%, in test)" - the "in test" replaces the "?"
-inline std::string hlInTestPct(const std::string& in)
-{
-    std::string o; size_t i = 0;
-    while (i < in.size()) {
-        if (in[i] == '(') {
-            size_t j = i + 1; while (j < in.size() && isdigit((unsigned char)in[j])) j++;
-            if (j > i + 1 && j < in.size() && in[j] == '%') {
-                size_t k = j + 1; if (k < in.size() && in[k] == '?') k++;
-                if (k < in.size() && in[k] == ')') { o += in.substr(i, j + 1 - i) + ", in test)"; i = k + 1; continue; }
-            }
-        }
-        o += in[i++];
-    }
-    return o;
-}
-inline void hlInTestCell(Cell& c) { c.s = hlInTestPct(c.s); c.s2 = hlInTestPct(c.s2); c.s3 = hlInTestPct(c.s3); }
 // (2.0.5) the trend words = vtl::displayLabel (the strings agreed for Session Info, VwapTrendLogic.h VW110): "Strong Uptrend" / "Uptrend" /
 // "Dntrend" / "Strong Dntrend"; no trend = "Range" (Rassul 2026-10-13 21:20). compact = only when the header column cannot fit the full word
 inline std::string trendWord(int lvl, bool compact = false)
@@ -1467,7 +1448,7 @@ inline std::vector<Seg> regimeParts(const View& v, bool compact = false)
     std::vector<Seg> out;
     Seg reg{ "", C_GREY };
     for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) reg = Seg{ hlShortRegime(v.sessSegs[q].s), v.sessSegs[q].col };
-    if (reg.s.empty() && v.trendReady) reg = Seg{ "Regime ?: --", C_GREY };
+    if (reg.s.empty() && v.trendReady) reg = Seg{ "Regime: --", C_GREY };
     if (reg.s.empty()) return out;
     out.push_back(reg);
     if (v.trendReady) out.push_back(Seg{ " / " + trendWord(v.trendLvl, compact), trendCol(v.trendLvl) });
@@ -1541,12 +1522,11 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const Cell& a1 = v.A[K_1ST];
         if (!v.prior && inPos != std::string::npos && pct != std::string::npos && pct > inPos && !a1.s.empty() && !a1.s2.empty()) {
             Cell c = a1; size_t e = pct + 1; if (e < hm.size() && hm[e] == '?') e++;
-            c.s = hm.substr(0, inPos) + " IN?"; c.s2 = a1.s + " " + hm.substr(inPos + 4, e - inPos - 4); c.col2 = a1.col; c.bold = true; c.s3.clear();   // (2.2.0) "LOD IN?"
+            c.s = hm.substr(0, inPos) + " IN"; c.s2 = a1.s + " " + hm.substr(inPos + 4, e - inPos - 4); c.col2 = a1.col; c.bold = true; c.s3.clear();
             aRow[K_1ST] = c;
         }
     }
-    for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); hlInTestCell(eRow[c]); }
-    hlInTestCell(aRow[K_1ST]);   // (2.2.0) "LOD IN? 8:39 AM (71%, in test)"
+    for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); }
     // ---- sizes: (2.0.3, Rassul 10:38 "reduce the size of this by 33%. too big") 9 / 9 / 8 / 8 pt instead of 13 / 12 / 11 / 10, and the
     // padding scaled by 2/3 (equal columns first, then content-sized)
     // (2.0.5) attempts 4-5: the same at 8 pt with the compact trend word ("Strong Down") - only when the full word cannot fit
@@ -1954,7 +1934,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     // (2.0.2, Rassul 05:59 "the callout at the top should be center justified HOD with the time and price below it"): two lines centred
     // on the projection line - "HOD" over "after 11:30 . 7,857.00" (the time = the expected 2nd-extreme call, when there is one)
     {
-        const std::string l1 = v.projUp ? "HOD?" : "LOD?";   // (2.2.0, audit list) the callout is a model projection
+        const std::string l1 = v.projUp ? "HOD" : "LOD";
         const size_t sp = v.projTxt.rfind(' ');
         const std::string price = sp == std::string::npos ? v.projTxt : v.projTxt.substr(sp + 1);
         const std::string l2 = (v.callT >= 0 ? "after " + clk(v.callT) + " \xB7 " : std::string()) + price;

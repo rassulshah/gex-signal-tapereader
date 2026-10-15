@@ -136,27 +136,16 @@ inline std::string signHow(char s) {
 struct HLine { std::string s; int role; };     // role 0 = title, 1 = location head, 2 = detail, 3 = guide
 inline std::string ageText(long long sec) { if (sec < 0) return "-"; char b[32]; long long m = sec / 60; if (m < 60) snprintf(b, sizeof b, "%lldm old", m); else snprintf(b, sizeof b, "%lldh %lldm old", m / 60, m % 60); return b; }
 inline std::vector<HLine> hover(const File& F, const std::string& stale, long long now = 0, int minCT = -1) {
+    // (2.1.1, Rassul 22:23 "a huge hover text box") compact: one title line + one line per strike, nothing else
+    (void)minCT;
     std::vector<HLine> o;
-    const std::string dir = F.side == "down" ? "price below its VWAP: supports below" : (F.side == "up" ? "price above its VWAP: resistance above" : "no VWAP yet: both sides");
-    o.push_back({ "MAP ? - model gamma strikes (MenthorQ model, received " + (F.asofTxt.empty() ? std::string("-") : F.asofTxt) + " CT, " + (now > 0 && F.asof > 0 ? ageText(now - F.asof) : std::string("-"))
-                  + (stale.empty() ? "" : ", " + stale) + "); " + dir + (minCT >= 11 * 60 && minCT < 17 * 60 ? "  -  OBSERVATION ONLY, no new entry after 11:00 CT" : ""), 0 });
-    bool seen[3] = { false, false, false };
-    for (const Loc& L : F.locs) {
-        const std::string sd = L.side == 'T' ? "toward" : (L.side == 'O' ? "other side, nearest" : (L.side == 'B' ? "below" : "above"));
-        o.push_back({ rangeTxt(L) + "  (" + sd + ", " + std::to_string(L.mem.size()) + (L.mem.size() == 1 ? " strike" : " strikes") + ")", 1 });
+    o.push_back({ "GEX strikes ? (MenthorQ " + (F.asofTxt.empty() ? std::string("-") : F.asofTxt) + (stale.empty() ? "" : ", " + stale) + ")", 0 });
+    (void)now;
+    for (const Loc& L : F.locs)
         for (const Mem& m : L.mem) {
-            std::string g = m.gOpen == G_NA ? "growth n/a" : (std::string(m.gOpen >= 0 ? "share +" : "share ") + std::to_string(m.gOpen) + "% since open" + (m.gOpen >= 30 ? " (growing)" : ""));
-            o.push_back({ m.chartTxt + (m.name.empty() ? "" : " " + m.name) + "  -  " + pct1(m.share) + " of the model GEX (rank " + std::to_string(m.rank) + ")  \xB7  "
-                          + signWord(m.sign) + "  \xB7  " + g + "  \xB7  abs " + ratioX(m.xOpen) + (m.strikeTxt != m.chartTxt ? "  \xB7  strike " + m.strikeTxt : ""), 2 });
-            seen[m.sign == 'W' ? 0 : (m.sign == 'F' ? 1 : 2)] = true;
+            std::string g = m.gOpen == G_NA ? "" : (std::string("  \xB7  ") + (m.gOpen >= 0 ? "+" : "") + std::to_string(m.gOpen) + "%");
+            o.push_back({ m.chartTxt + (m.name.empty() ? "" : " " + m.name) + "  \xB7  " + pct1(m.share) + "  \xB7  " + (m.sign == 'W' ? "WALL" : (m.sign == 'F' ? "FUEL" : "MIXED")) + g, 2 });
         }
-    }
-    const char sg[3] = { 'W', 'F', 'M' };
-    for (int k = 0; k < 3; k++) if (seen[k]) o.push_back({ signWord(sg[k]) + "  " + signHow(sg[k]), 2 });
-    o.push_back({ "What it answers: where to WATCH - the day's biggest model gamma strikes (top 5 by own abs GEX on any grid within 2 expected moves, named or not; share = of the GEX in that range), 5 locations toward price's direction + the nearest the other way.", 3 });
-    o.push_back({ "How to use it: a location is a ZONE, not a line - wait for price / tape and your locked trigger (sweep, then RB / CoB).", 3 });
-    o.push_back({ "Example: 14 Oct ES 9:14 AM - 7780-7800 F, 7750 F, 7700 F below; price traded into 7750 at 12:46 PM, to 7741, then rose (one example, not proof).", 3 });
-    o.push_back({ "Basis: " + (F.basis == "APPLIED" ? "converted to the chart (" + F.basisWhy + ")" : std::string("same contract as the chart (measured)")) + ". Grids are used only after they are received.", 3 });
     return o;
 }
 
