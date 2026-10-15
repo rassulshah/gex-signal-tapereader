@@ -1473,7 +1473,7 @@ inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
 inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const Measure& M, int fs, int sfs)
 {
     const bool st = !v.gexStale.empty();
-    const unsigned cs = st ? C_DIM : C_SLATE, cn = st ? C_DIM : C_BLUE;
+    const unsigned cs = 0x00FFFFFFu, cn = 0x00FFFFFFu;   // (2.1.1, Rassul 22:26) strikes always white
     const std::string sepT = "  \xB7  ";
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
