@@ -1,3 +1,4 @@
-findings=0 allowed=0 staged_files=1 bytes=226
+findings=0 allowed=0 staged_files=2 bytes=94406
 largest staged blobs (bytes, path):
-SIZE	226	logs/staged-scan-findings.log
+SIZE	94282	plugin/TapeReaderLogic.h
+SIZE	124	logs/staged-scan-findings.log
