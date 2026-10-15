@@ -131,7 +131,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.19.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.19.2"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1497,7 +1497,7 @@ void LiquidityProfile::loadBig(LQState& S) {
     S.boMkt = S.market; S.boStampT = t; S.boStampN = n;
     if (t < 0) { S.boSet = bol::Settings(); S.boSet.ok = true; S.boWhy = "no file: defaults"; }
     else { const BigFile z = readBig(p); if (z.ok) { S.boSet = z.s; S.boWhy = "file"; } else { S.boWhy = z.why; if (newMkt) { S.boSet = bol::Settings(); S.boSet.ok = true; } } }
-    S.bo.setFloor(S.boSet.minLots > 0 ? S.boSet.minLots : bol::floorFor(S.market));
+    S.bo.setFloor(S.boSet.minLots > 0 ? S.boSet.minLots : 5);   // (0.19.2) safety minimum only; the size tunes itself in boAfter
     S.bo.P.reachAtr = std::max(bol::REACH_MIN, std::min(bol::REACH_MAX, S.boSet.reach10 / 10.0)); S.bo.setAtr(S.bo.atrPrice);
     S.bo.P.keep = std::max(bol::KEEP_MIN, std::min(bol::KEEP_MAX, S.boSet.keep));
 }
@@ -1584,8 +1584,10 @@ void LiquidityProfile::boAfter(LQState& S, long count, long long st) {
         }
         if (S.boSet.minLots <= 0) {                                    // his own "min lots" setting always wins
             const int hr = (int)((t / 3600000LL) % 24);
-            S.bo.setFloor(std::max(bol::floorFor(S.market), S.boNormsOk && hr >= 0 ? S.boNorms[hr] : 0LL));
-        }
+            S.bo.P.roll = true; S.bo.setFloor(5);                      // (0.19.2) only a safety minimum; the size tunes itself (BigOrderLines 1.2.0)
+            S.bo.prior = std::max(bol::floorFor(S.market), S.boNormsOk && hr >= 0 ? S.boNorms[hr] : 0LL);   // cold start: nightly norm / market default
+        } else { S.bo.P.roll = false; S.bo.setFloor(S.boSet.minLots); }
+        S.bo.roll(t);
     }
     S.boState = S.bo.reach <= 0 ? "waiting for 15 closed bars (ATR)" : !S.bo.havePx ? "waiting for a price" : "ready";
     boFlush(S, false);
@@ -1682,7 +1684,7 @@ void LiquidityProfile::renderBigHover(LQState& S, int paneRight) {
     size_t k = S.bo.lines.size(); for (size_t i = S.bo.lines.size(); i-- > 0;) if (S.bo.lines[i].key == S.boHovKey) { k = i; break; }
     if (k == S.bo.lines.size()) { S.boHovKey = 0; return; }
     bol::HoverCtx c; c.tick = S.e.P.tick; c.reachAtr = S.bo.P.reachAtr; c.atrPrice = S.bo.atrPrice; c.nowMs = S.bo.lastT > 0 ? S.bo.lastT : nowMs(S);
-    c.minLots = S.bo.threshold(); c.floor = S.bo.P.floor; c.pctLots = S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0;
+    c.minLots = S.bo.threshold(); c.floor = S.bo.P.floor; c.pctLots = S.bo.rollThr;   // (0.19.2) the self-tuned size
     const std::vector<bol::Row> rows = bol::hoverRows(S.bo.now(k), c);
     const COLOR cWhite = 0x00E2E8F0, cFill = 0x0011151C;
     int font = S.boSet.font, W = 0, rowH = 0; const int pad = 6;
@@ -2354,6 +2356,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.19.1");   // LQ_VERSION
+    p->setVersion("0.19.2");   // LQ_VERSION
     return p;
 }

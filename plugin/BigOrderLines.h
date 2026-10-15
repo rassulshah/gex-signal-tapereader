@@ -28,12 +28,14 @@
 #include <map>
 #include <set>
 #include <string>
+#include <deque>
+#include <functional>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.1.0";   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
+static const char* const VERSION = "1.2.0";   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -90,6 +92,13 @@ struct Params {
     int keep = KEEP_DEF;               // ended lines drawn per side
     size_t bookCap = 200000;           // orders tracked (far ones are dropped first; ES rests ~20-50k at a time)
     size_t linesCap = 20000;           // lines kept in memory per session (the file keeps all)
+    // (1.2.0, Rassul 2026-10-15 "optimizing the size based on recent history automatically") the SELF-TUNING big size
+    bool roll = true;                  // off when he sets his own "min lots"
+    long long rollMs = 3600000;        // learn from the last 60 min of new orders near price
+    double rollTarget = 3.0;           // about this many qualifying orders per side per hour
+    size_t rollMinN = 50;              // orders in the window before the rolling size is used (cold start: the nightly prior)
+    double rollStep = 0.20;            // the size moves at most 20% per minute (no flicker)
+    long long rollEveryMs = 60000;
 };
 
 // ---- the size distribution (past-only) ----------------------------------------------------------------------------------------
@@ -181,7 +190,27 @@ public:
     std::vector<std::string> rows;     // record rows waiting to be written (S / E)
     long long events = 0, unknown = 0, garbage = 0, drops = 0, lostEnds = 0;
     long long lastT = 0;
-    long long depthMin = 0;            // (1.1.0, Rassul 10-15) also >= 3x the typical displayed size within reach (set live by the host)
+    long long depthMin = 0;
+    std::deque<std::pair<long long, long long>> recent;   // (1.2.0) (time, size) of new orders within reach, last rollMs
+    long long rollThr = 0, rollAt = 0, prior = 0;            // the tuned size, when it last moved, the nightly prior for this hour
+    void roll(long long t) {
+        while (!recent.empty() && recent.front().first < t - P.rollMs) recent.pop_front();
+        if (!P.roll) { rollThr = 0; return; }
+        if (rollAt > 0 && t >= rollAt && t - rollAt < P.rollEveryMs) return;
+        rollAt = t; long long target = 0;
+        if (recent.size() >= P.rollMinN) {
+            const double cover = std::min(1.0, std::max(1.0 / 60.0, (double)(t - recent.front().first) / (double)P.rollMs));
+            const size_t k = (size_t)std::max(1.0, std::floor(P.rollTarget * 2.0 * cover + 0.5));
+            std::vector<long long> v; v.reserve(recent.size()); for (size_t i = 0; i < recent.size(); ++i) v.push_back(recent[i].second);
+            const size_t kk = std::min(k, v.size()) - 1;
+            std::nth_element(v.begin(), v.begin() + (long)kk, v.end(), std::greater<long long>()); target = v[kk];
+        } else target = prior;                                    // cold start: the nightly hourly norm (0 = none)
+        if (target <= 0) return;
+        if (rollThr <= 0) { rollThr = target; return; }
+        const double lo = rollThr * (1.0 - P.rollStep), hi = rollThr * (1.0 + P.rollStep);
+        rollThr = (long long)std::llround(std::max(lo, std::min(hi, (double)target)));
+        if (rollThr < 1) rollThr = 1;
+    }            // (1.1.0, Rassul 10-15) also >= 3x the typical displayed size within reach (set live by the host)
 
     // a new floor (the setting changed): the candidate sets are rebuilt from the book
     void setFloor(long long f) {
@@ -192,7 +221,8 @@ public:
     }
     long long threshold() {
         long long t = P.floor;
-        if (hist.n >= P.pctMinN) t = std::max(t, hist.pct(P.pct));
+        if (P.roll && rollThr > 0) t = std::max(t, rollThr);        // (1.2.0) the self-tuned size replaces the session percentile
+        else if (hist.n >= P.pctMinN) t = std::max(t, hist.pct(P.pct));
         return std::max(t, depthMin);
     }
     void setAtr(double a) {
@@ -231,6 +261,7 @@ public:
             book[id] = o; rebig(id, book[id]);
             evaluate(t);
             hist.add(size);                               // past-only: its own size joins the distribution after it was judged
+            if (inReach(side, p)) recent.push_back(std::make_pair(t, size));   // (1.2.0) near-price arrivals feed the self-tuned size
             break; }
         case MOD: {
             if (it == book.end()) {                       // first sight: it rested before we were listening
@@ -520,14 +551,14 @@ inline std::vector<Row> hoverRows(const Line& L, const HoverCtx& c) {
     }
     {   // 4 why it is drawn (the rule and the numbers)
         char b[160]; const double r = c.reachAtr * c.atrPrice;
-        std::snprintf(b, sizeof(b), "The biggest single %s within %.1f ATR (%s) %s price; min %lld lots (floor %lld, top 0.1%% today %lld)",
+        std::snprintf(b, sizeof(b), "The biggest single %s within %.1f ATR (%s) %s price; big now = %lld+ lots (self-tuned from the last 60 min, ~3 per side per hour, and >= 3x the book near price; floor %lld, tuned %lld)",
                       who.c_str(), c.reachAtr, r > 0 ? price((Tick)std::llround(r / c.tick), c.tick).c_str() : "?", bid ? "below" : "above", c.minLots, c.floor, c.pctLots);
         v.push_back(Row{b, INK_GREY});
     }
     v.push_back(Row{bid ? "Answers: where is the biggest buyer waiting under price - and did it get hit or pull out?"
                         : "Answers: where is the biggest seller waiting over price - and did it get lifted or pull out?", INK_WHITE});
-    v.push_back(Row{bid ? "How: the line is one order's displayed size; a dot = it traded (sellers hit it), X = it was cancelled"
-                        : "How: the line is one order's displayed size; a dot = it traded (buyers lifted it), X = it was cancelled", INK_WHITE});
+    v.push_back(Row{bid ? "How: thicker line = size being added (+), thin = being pulled (-); once filled it stays in the BIG column for 60 min"
+                        : "How: thicker line = size being added (+), thin = being pulled (-); once filled it stays in the BIG column for 60 min", INK_WHITE});
     v.push_back(Row{bid ? "Use: price into a big bid that FILLS and holds = selling absorbed; an X before price got there = support left"
                         : "Use: price into a big offer that FILLS and holds = buying absorbed; an X before price got there = resistance left", INK_WHITE});
     v.push_back(Row{bid ? "e.g. Bid 120 at 29,905 rested 14 min, filled at 7:11 AM and price turned up: a buyer absorbed the selling"
