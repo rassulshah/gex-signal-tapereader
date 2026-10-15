@@ -133,7 +133,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.22.8"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.22.9"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -362,7 +362,8 @@ struct LQState {
     Line lAttack, lEaten, lExh, lPulled, lRebuilt, lCounter;
     int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
     std::string verdict = "none", vlogKey = "none"; int verdictScore = 0;
-    int vIncDir = 0; double vIncPx = 0; bool vIncPick = false;                                // (0.22.7) the verdict on screen (sticky)                  // (0.20.0) the banner verdict last drawn (status)
+    int vIncDir = 0; double vIncPx = 0; bool vIncPick = false;
+    std::string warnSeen; long long warnSinceMs = 0;                                         // (0.22.9) how long the warning on screen has held                                // (0.22.7) the verdict on screen (sticky)                  // (0.20.0) the banner verdict last drawn (status)
     int warnRows = 2;                              // (0.18.0) the warning detail's rows last drawn (>= 2 reserved)
     std::string state = "starting", lastStatusText;
 #ifndef LQ_FLOW
@@ -2000,6 +2001,7 @@ lqp::HoverIn LiquidityProfile::hoverIn(const LQState& S, const lqp::Zone& z, con
 // decided) with a border, the plain words after it; top left of the price area, never past the last bar
 void LiquidityProfile::renderWarning(LQState& S) {
     lqp::Warn w; const bool have = S.e.warning(S.e.bookT, w, S.e.P.tick);
+    {   const std::string wn = have ? w.name : std::string(); if (wn != S.warnSeen) { S.warnSeen = wn; S.warnSinceMs = nowMs(S); } }   // (0.22.9)
     {   // (0.15.3) the one banner: publish the warning (or "none") for this chart; a Tape Reader banner here = it shows the warning
         const char* cl = getChartLabel(); const std::string chart = cl ? std::string(cl) : std::string(); const long long now = steadyMs();
         bb::Warn bw; bw.on = have; bw.favour = w.favour; bw.name = w.name; bw.detail = w.detail;
@@ -2128,7 +2130,11 @@ void LiquidityProfile::renderWarning(LQState& S) {
             vfail = ag > sup && ag > 0;
             // (0.22.6, Rassul 10:37 "buyers pulling and Rev up ... you need to consider both together, they need to be coordinated"):
             // one story - a warning on the OTHER side (BUYERS PULLING / BIDS THINNING against a REV UP, or the mirror) makes it FAILING ?
-            const bool against = have && w.favour != 0 && ((w.favour > 0) != (vdir > 0));
+            // (0.22.9, 11:51 NQ log: REV DOWN / FAILING flipped every few seconds as PULLING WATCH came and went, and FAILING showed while
+            // price was already 25 pts down) the opposing warning counts only while price is still at the turn (within half a band of its
+            // price) and after it has held 15 s - offers pulled above a falling market are the market leaving them, not the turn failing
+            const bool atTurn = Z.band <= 0 || std::fabs((double)clA[lastBar] - best->px) <= 0.5 * Z.band;
+            const bool against = have && w.favour != 0 && ((w.favour > 0) != (vdir > 0)) && atTurn && nowMs(S) - S.warnSinceMs >= 15000;
             if (against) vfail = true;
             std::string what;
             if (best->src == 4) what = std::string(vdir > 0 ? "buyers lifted " : "sellers hit ") + std::to_string(best->lots) + " at " + pxTxt(best->px) + " (initiative)";
@@ -2147,11 +2153,12 @@ void LiquidityProfile::renderWarning(LQState& S) {
             std::string conf;
             if (best->aX > 0) { char bx[24]; std::snprintf(bx, sizeof(bx), "A %.1fx", best->aX); conf = bx; }
             if (best->circle) conf += conf.empty() ? "circle" : ", circle";
+            std::string wname = have ? w.name : std::string(); for (size_t i = 0; i < wname.size(); ++i) if (wname[i] == ',') wname[i] = ';';   // (0.22.9) CSV-safe
             {   char vb[400]; std::snprintf(vb, sizeof(vb), "%s,%d,%s,%d,%lld,%.2f,%d,%d,%lld,%d,%d,%lld,%lld,%s,%s,%d,%s,%.2f",
                     vfail ? "FAILING" : vdir > 0 ? "REV_UP" : "REV_DOWN", vdir, pxTxt(best->px).c_str(), best->src, best->lots, best->aX, best->circle ? 1 : 0, bestScore,
                     best->pulledOpp, S.boSign[bol::BID], S.boSign[bol::ASK], (long long)std::llround(S.boSize[bol::BID]), (long long)std::llround(S.boSize[bol::ASK]),
                     pxTxt((double)clA[lastBar]).c_str(), zn::nearest(named, best->px, Z.band).name.c_str(),
-                    against ? 1 : 0, have ? w.name.c_str() : "", Z.band);   // (0.22.8) + the warning against it, the warning on screen, the band
+                    against ? 1 : 0, wname.c_str(), Z.band);   // (0.22.8) + the warning against it, the warning on screen, the band
                 vlog = vb; }
             if (best->src == 4) absorbTxt = std::string("\x85then turned: ") + (vdir > 0 ? "buyers took the low" : "sellers took the high");
             else absorbTxt = std::string("\x85then held: ") + (best->lots > 0 ? std::to_string(best->lots) + (vdir > 0 ? " sold into a big bid, absorbed" : " bought into a big offer, absorbed") : std::string("absorbed")) + (conf.empty() ? std::string() : " (" + conf + ")");
@@ -2556,6 +2563,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.22.8");   // LQ_VERSION
+    p->setVersion("0.22.9");   // LQ_VERSION
     return p;
 }

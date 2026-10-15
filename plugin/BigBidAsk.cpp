@@ -66,7 +66,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.3.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.4.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -81,7 +81,7 @@ static const int LEAD = 30;                 // candles laid out left of the view
 static const int READS_MAX = 900;           // VAP bars read per pass (the rest next pass)
 static const int FAILS_FINAL = 5;           // a closed candle IRT has no VAP for after 5 passes is finalised as "no data"
 static const size_t REC_FILE_MAX = 2 * 1024 * 1024, REC_LINES_MAX = 20000;
-static const int P_FONT = 0, P_BOLD = 1, P_CIRCLE = 2, P_NONBOLD = 3;
+static const int P_FONT = 0, P_BOLD = 1, P_CIRCLE = 2, P_NONBOLD = 3, P_DIV = 4, P_BUYC = 5, P_SELLC = 6;   // (1.4.0) + divider, colours
 
 static long long steadyMs() {
     return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -238,12 +238,15 @@ int cppExtension::done(void)    { static_cast<BigBidAsk*>(this)->release(); retu
 int cppExtension::destroy(void) { static_cast<BigBidAsk*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
     // controls only (his rule); the chart reads the per-market file, the dialog is filled from it (BUILD-LESSONS #42 / #44)
-    setParameterVersion(1);
-    setParameterDialogHeight(3);
-    setIntegerParameter("Font size", 9, 50);                                       // 0
+    setParameterVersion(2);                                                         // (1.4.0) 2: IRT resets the saved rows once (they held font 0 / bold 9)
+    setParameterDialogHeight(4);
+    setIntegerParameter("Font size", 7, 50);                                       // 0
     setFloatParameter("Bold at (x normal)", 2.0f, 50, kParmAppendSameLine);        // 1
     setBoolParameter("Absorption circle", true);                                    // 2
     setBoolParameter("Show non-bold numbers", true, kParmAppendSameLine);           // 3
+    setIntegerParameter("Divider (0 = market default)", 0, 50);                    // 4  (1.4.0) 500 lots / 10 = 50
+    setColorParameter("Buyers (ask)", (COLOR)0x0022C55E, 0);                         // 5
+    setColorParameter("Sellers (bid)", (COLOR)0x00EF4444, 0, kParmAppendSameLine);   // 6
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<BigBidAsk*>(this)->pump(false); return RTX_OK; }
@@ -307,6 +310,7 @@ std::vector<long long> BigBidAsk::dialogNow() {
     std::vector<long long> v;
     v.push_back(getIntegerValue(P_FONT)); v.push_back(bba::toQ((double)getFloatValue(P_BOLD)));
     v.push_back(isBoxChecked(P_CIRCLE) ? 1 : 0); v.push_back(isBoxChecked(P_NONBOLD) ? 1 : 0);
+    v.push_back(getIntegerValue(P_DIV)); v.push_back((long long)(getIntegerValue(P_BUYC) & 0x00FFFFFF)); v.push_back((long long)(getIntegerValue(P_SELLC) & 0x00FFFFFF));
     return v;
 }
 int BigBidAsk::parmsLoad(void) {
@@ -316,6 +320,7 @@ int BigBidAsk::parmsLoad(void) {
         std::string why; const bba::Settings s = readSettingsFile(mkt, why);   // opening never saves
         setIntegerValue(P_FONT, s.font); setFloatValue(P_BOLD, (float)(s.boldQ / 100.0));
         checkBox(P_CIRCLE, s.circle); checkBox(P_NONBOLD, s.nonBold);
+        setIntegerValue(P_DIV, s.div); setIntegerValue(P_BUYC, (int)s.buy); setIntegerValue(P_SELLC, (int)s.sell);
         snap_.take(dialogNow());
     } catch (...) {}
     return RTX_OK;
@@ -327,12 +332,16 @@ void BigBidAsk::saveSettings() {
         const std::string p = settingsPath(mkt); if (p.empty()) return;
         std::string why; const bba::Settings F = readSettingsFile(mkt, why);
         const std::vector<long long> now = dialogNow();
-        const long long fv[4] = { F.font, F.boldQ, F.circle ? 1 : 0, F.nonBold ? 1 : 0 };
-        long long v[4]; for (size_t k = 0; k < 4; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
+        const long long fv[7] = { F.font, F.boldQ, F.circle ? 1 : 0, F.nonBold ? 1 : 0, F.div, (long long)F.buy, (long long)F.sell };
+        long long v[7]; for (size_t k = 0; k < 7; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
         bba::Settings s = F;
         s.font = bba::fontOk(v[0]) ? (int)v[0] : F.font;                          // garbage never reaches the file
         s.boldQ = bba::boldOk(v[1]) ? (int)v[1] : F.boldQ;
         s.circle = v[2] != 0; s.nonBold = v[3] != 0;
+        s.div = (v[4] == 0 || bba::divOk(v[4])) ? (int)v[4] : F.div;             // (1.4.0)
+        if (v[5] >= 0 && v[5] <= 0xFFFFFF) s.buy = (unsigned)v[5];
+        if (v[6] >= 0 && v[6] <= 0xFFFFFF) s.sell = (unsigned)v[6];
+        if (s.buy == s.sell) { s.buy = F.buy; s.sell = F.sell; }
         makeDir(flexDir());
         if (publishFile(p, bba::formatSettings(s) + "\n")) snap_.take(now);
     } catch (...) {}
@@ -507,7 +516,7 @@ void BigBidAsk::status(BBState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << BBA_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nTICK," << S.tick
-      << "\nSETTINGS,font " << S.set.font << ",bold " << bba::ratioText(S.set.boldQ) << ",circle " << (S.set.circle ? 1 : 0) << ",non-bold " << (S.set.nonBold ? 1 : 0) << "," << S.settingsWhy
+      << "\nSETTINGS,font " << S.set.font << ",bold " << bba::ratioText(S.set.boldQ) << ",circle " << (S.set.circle ? 1 : 0) << ",non-bold " << (S.set.nonBold ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << "," << S.settingsWhy
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
       << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim
@@ -609,7 +618,7 @@ void BigBidAsk::render(BBState& S) {
             if (!p.ok) continue;
             const bool bold = bba::bold(sd < 0 ? F->bidQ : F->askQ, set.boldQ);
             if (!bold && !set.nonBold) continue;
-            const std::string tx = bba::lots(p.vol);
+            const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
             bba::Cand c; c.bar = i; c.side = sd; c.x = sd < 0 ? cb_.l : cb_.r; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;
@@ -632,9 +641,10 @@ void BigBidAsk::render(BBState& S) {
         const bba::Cand& c = cands[k]; const bba::Box& t = P[k].text;
         if (c.bar < vs) continue;                                       // laid out (lead-in) but left of the view
         const bool zone = zn::atZone(Z, c.bar, candPx[k]);
-        const COLOR col = zone ? (c.side < 0 ? C_SELL : C_BUY) : getBlendedColor(c.side < 0 ? C_SELL : C_BUY, 0x00000000, 55.0f);   // (1.2.0) mid-range = dimmed
+        const COLOR cSide = c.side < 0 ? (COLOR)set.sell : (COLOR)set.buy;   // (1.4.0) his colours
+        const COLOR col = zone ? cSide : getBlendedColor(cSide, 0x00000000, 55.0f);   // (1.2.0) mid-range = dimmed
         if (c.bold) { if (zone) ++S.zoneFull; else ++S.zoneDim; }
-        setFont(c.bold ? fb : fp); setTextColor(c.bold ? col : (c.side < 0 ? C_SELL_DIM : C_BUY_DIM));
+        setFont(c.bold ? fb : fp); setTextColor(c.bold ? col : getBlendedColor(cSide, 0x00000000, 40.0f));   // (1.4.0) non-bold = his colour, dimmed
         RCT r; r.set(coord(t.l), coord(t.t), coord(t.r), coord(t.b)); r.drawText(texts[k].c_str(), true, false);
         if (c.circle) {                                                  // the thin 1 px rounded outline hugging the number, its own colour
             const bba::Box& f = P[k].foot;
@@ -683,7 +693,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask v1.3.1: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
-    p->setVersion("1.3.1");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask v1.4.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
+    p->setVersion("1.4.0");   // BBA_VERSION
     return p;
 }

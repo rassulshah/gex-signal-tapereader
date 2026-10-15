@@ -30,18 +30,27 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.3.1";
+static const char* const VERSION = "1.4.0";
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
 // ---- settings (all real: read on every draw from the per-market file, written only from the settings window) ----------------
 struct Settings {
-    int font = 9;             // 8 - 20 pt   (1.3.1, Rassul 10:28 "the font size is too big messing up its alignment": 11 -> 9)
+    int font = 7;             // 6 - 20 pt   (1.4.0, Rassul 11:51 "size should be 7 by default")
     int boldQ = 200;          // bold threshold in hundredths of x (2.00x); 1.20x - 10.00x
-    bool circle = true;       // draw the absorption circle
+    bool circle = true;       // draw the absorption circle (on by default)
     bool nonBold = true;      // draw the numbers that are not bold
+    int div = 0;              // (1.4.0) divider: 0 = the market's default, else 1 - 1000 (500 lots / 10 = "50")
+    unsigned buy = 0x0022C55E, sell = 0x00EF4444;   // (1.4.0) buyers (at the ask) green, sellers (at the bid) red - his colours
 };
-inline bool fontOk(long long v) { return v >= 8 && v <= 20; }
+// (1.4.0, Rassul 11:51 "a divider ... so the value always looks like a 1 or 2 digit value; for ES 10 by default") per market, from the
+// typical biggest lots at one price in a 3-min candle (ES ~300-1,500, CL / NG / 6E ~100-500, NQ / GC / HG ~20-150)
+inline int divFor(const std::string& m) {
+    if (m == "ES" || m == "CL" || m == "NG" || m == "EU") return 10;
+    return 1;                                   // NQ, GC, HG: already 1-2 digits
+}
+inline bool divOk(long long v) { return v >= 1 && v <= 1000; }
+inline bool fontOk(long long v) { return v >= 6 && v <= 20; }
 inline bool boldOk(long long q) { return q >= 120 && q <= 1000; }
 inline int toQ(double x) { if (!std::isfinite(x)) return -1; const double q = std::floor(x * 100.0 + 0.5); return q < 0 || q > 1e9 ? -1 : (int)q; }
 inline Settings clean(Settings s) {
@@ -59,7 +68,8 @@ inline bool fullInt(const std::string& t, long long& out) {
     out = v; return true;
 }
 inline std::string formatSettings(const Settings& s) {
-    return "BBA1|" + std::to_string(s.font) + "|" + std::to_string(s.boldQ) + "|" + (s.circle ? "1" : "0") + "|" + (s.nonBold ? "1" : "0");
+    return "BBA2|" + std::to_string(s.font) + "|" + std::to_string(s.boldQ) + "|" + (s.circle ? "1" : "0") + "|" + (s.nonBold ? "1" : "0")
+         + "|" + std::to_string(s.div) + "|" + std::to_string(s.buy & 0x00FFFFFF) + "|" + std::to_string(s.sell & 0x00FFFFFF);
 }
 inline Settings parseSettings(const std::string& text, std::string& why) {
     Settings s; why.clear();
@@ -67,12 +77,23 @@ inline Settings parseSettings(const std::string& text, std::string& why) {
     const size_t nl = line.find('\n'); if (nl != std::string::npos) line = line.substr(0, nl);
     if (!line.empty() && line.back() == '\r') line.pop_back();
     std::vector<std::string> f; { std::string cur; for (char c : line) { if (c == '|') { f.push_back(cur); cur.clear(); } else cur.push_back(c); } f.push_back(cur); }
-    if (f.size() != 5 || f[0] != "BBA1") { why = "garbled (defaults)"; return Settings(); }
+    const bool v1 = f.size() == 5 && f[0] == "BBA1", v2 = f.size() == 8 && f[0] == "BBA2";
+    if (!v1 && !v2) { why = "garbled (defaults)"; return Settings(); }
     long long a = 0, b = 0, c = 0, d = 0;
     if (!fullInt(f[1], a) || !fullInt(f[2], b) || !fullInt(f[3], c) || !fullInt(f[4], d) || c > 1 || d > 1) { why = "garbled (defaults)"; return Settings(); }
     if (fontOk(a)) s.font = (int)a; else why = "font out of range (default)";
     if (boldOk(b)) s.boldQ = (int)b; else why = "bold threshold out of range (default)";
     s.circle = c == 1; s.nonBold = d == 1;
+    if (v1) {   // (1.4.0) the 1.3.x file: font 7, the circle on, a bold line over 5.00x (a font typed into the wrong box) back to 2.00x
+        s.font = Settings().font; s.circle = true; if (s.boldQ > 500) s.boldQ = Settings().boldQ;
+        why = "1.3 file migrated (font 7, circle on" + std::string(b > 500 ? ", bold 2.00x" : "") + ")";
+        return s;
+    }
+    long long e = 0, g = 0, h = 0;
+    if (!fullInt(f[5], e) || !fullInt(f[6], g) || !fullInt(f[7], h) || g > 0xFFFFFF || h > 0xFFFFFF) { why = "garbled (defaults)"; return Settings(); }
+    s.div = (e == 0 || divOk(e)) ? (int)e : 0; if (e != 0 && !divOk(e)) why = "divider out of range (market default)";
+    s.buy = (unsigned)g; s.sell = (unsigned)h;
+    if (s.buy == s.sell) { s.buy = Settings().buy; s.sell = Settings().sell; why = "same colour for both sides (defaults)"; }
     return s;
 }
 
@@ -195,6 +216,11 @@ inline bool parseRec(const std::string& line, Facts& F) {
 
 // ---- text ----------------------------------------------------------------------------------------------------------------------
 inline std::string lots(long long v) { return v < 100000 ? std::to_string(v) : std::to_string(v / 1000) + "k"; }
+// (1.4.0) the number on the chart: lots / divider, rounded, never 0 for a real print (the hover keeps the real lots)
+inline std::string shown(long long v, int div) {
+    if (div <= 1) return lots(v);
+    const long long r = (v + div / 2) / div; return lots(r < 1 && v > 0 ? 1 : r);
+}
 inline std::string commas(long long v) {
     std::string s = std::to_string(v < 0 ? -v : v), o;
     for (size_t i = 0; i < s.size(); ++i) { if (i && (s.size() - i) % 3 == 0) o.push_back(','); o.push_back(s[i]); }
