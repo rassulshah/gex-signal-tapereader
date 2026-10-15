@@ -385,6 +385,7 @@ struct LQState {
     // before it (LiquidityProfile.biglots-<MKT>.txt); Big mu and the 1 / 2 / 3 SD sizes the BIG column tiers and its reference use
     bol::LogDist bldPast, bldCurBase; std::vector<std::pair<long long, std::string>> bldLines; std::string bldMkt; long long bldSes = -2, bldCalcMs = -1, bldWriteMs = -1;
     bool bldOk = false; long long bldN = 0, bldStart = 0; double bldMu = 0, bldV[3] = {0, 0, 0};
+    long long boUnder1sd = 0;                       // (0.26.0) live big orders not drawn: under 1SD
     long long boBase = 0;                           // (0.25.0) the tier base (lots): Big >= base, Bigger >= 2x, Biggest >= 3x
     int boTier[2] = {0, 0};                         // (0.25.0) the BIG box tier per side: 0 none, 1 biggest (dim), 2 big, 3 huge (outline)
     bol::Engine bo; bol::Settings boSet; long long boStampT = -2, boStampN = -2, boCheckMs = -1; std::string boMkt, boWhy;
@@ -1371,7 +1372,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
         o << "MBO," << (fs.empty() ? S.feedState : fs) << ",via " << S.feed.via << ",orders " << S.ob.book.size() << ",events " << S.feed.events << ",faults " << S.feed.faults
           << ",garbage " << S.ob.garbage << ",backlog " << S.feed.longestBacklog << ",hover " << S.hovState << "\n";
         // (0.18.0) the big resting order lines
-        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " 1SD " + std::to_string((long long)std::llround(S.bldV[0])) + " 2SD " + std::to_string((long long)std::llround(S.bldV[1])) + " 3SD " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
+        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " 1SD " + std::to_string((long long)std::llround(S.bldV[0])) + " 2SD " + std::to_string((long long)std::llround(S.bldV[1])) + " 3SD " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
           << ",reach " << S.bo.P.reachAtr << " ATR = " << S.bo.reach << " ticks (ATR14 " << S.bo.atrPrice << "),keep " << S.bo.P.keep << ",font " << S.boSet.font
           << ",live " << (S.bo.live[0] >= 0 ? "bid" : "-") << "/" << (S.bo.live[1] >= 0 ? "offer" : "-") << ",lines " << S.bo.lineN[0] << "/" << S.bo.lineN[1]
@@ -1709,7 +1710,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // last bar): the live order as a solid box "+200" / "-28" / "200" (flat) centred-left, and the orders FILLED in the last 60 min as
     // small right-aligned "\x95 3\xD7 410" (merged by price, at most 5 per side, dimmer after 30 min). Colour = meaning: bid stacked or
     // ask pulled = green, bid pulled or ask stacked = red; flat = the side's own colour (bid green, ask red).
-    S.boHits.clear(); S.boDrawn = 0; S.boLabels = 0; S.boExec = 0;
+    S.boHits.clear(); S.boDrawn = 0; S.boLabels = 0; S.boExec = 0; S.boUnder1sd = 0;
     if (!S.boSet.on) return;
     const double tick = S.e.P.tick; if (!(tick > 0)) return;
     const int xMin = paneLeft + 1 + std::max(S.width, S.colRight) + 6;
@@ -1727,6 +1728,11 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     for (int s = 0; s < 2; ++s) {
         if (S.bo.live[s] < 0) continue;
         const size_t k = (size_t)S.bo.live[s]; const bol::Line L = S.bo.now(k);
+        {   // (0.26.0, Rassul 16:40 audit #3) a chart line only for an order of Bigger (1SD of the big-lot distribution) or more - the same
+            // yardstick as the BIG column box (still learning: every live big order, as before)
+            const long long nNow = std::max((long long)std::llround(S.boSize[s] > 0 ? S.boSize[s] : 0.0), (long long)L.left);
+            if (S.bldOk && nNow < (long long)std::llround(S.bldV[0])) { ++S.boUnder1sd; continue; }
+        }
         const int b0 = std::max(0, std::min(lastBar, bol::barOf(S.barEndMs, L.tStart)));
         const int y = yOfPx(L.px); if (y < top || y > bottom) continue;
         const int x1 = xMax, x0 = std::max(xMin, std::min(xOfBar(b0), x1 - 16)); if (x1 - x0 < 4) continue;   // (0.22.3) an order placed in the current bar shows at once (a 16 px stub), not a bar later
