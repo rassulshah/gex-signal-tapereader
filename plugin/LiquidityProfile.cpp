@@ -381,6 +381,7 @@ struct LQState {
     long long hovId = 0; void* hovWnd = nullptr;   // the hovered zone (0 = none) and the window its mouse event came from
     std::string hovState = "none";                 // the last draw's hover: none / shown N rows / no room (status file)
     // (0.18.0) the biggest resting order lines: the engine (fed by the same order feed), the per-market settings file, the record
+    long long boBase = 0;                           // (0.25.0) the tier base (lots): Big >= base, Bigger >= 2x, Biggest >= 3x
     int boTier[2] = {0, 0};                         // (0.25.0) the BIG box tier per side: 0 none, 1 biggest (dim), 2 big, 3 huge (outline)
     bol::Engine bo; bol::Settings boSet; long long boStampT = -2, boStampN = -2, boCheckMs = -1; std::string boMkt, boWhy;
     long long boSession = -1, boFlushMs = -1, boLastH = 0, boWrites = 0, boFails = 0, boRestored = 0, boBad = 0, boDropped = 0;
@@ -1365,7 +1366,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
         o << "MBO," << (fs.empty() ? S.feedState : fs) << ",via " << S.feed.via << ",orders " << S.ob.book.size() << ",events " << S.feed.events << ",faults " << S.feed.faults
           << ",garbage " << S.ob.garbage << ",backlog " << S.feed.longestBacklog << ",hover " << S.hovState << "\n";
         // (0.18.0) the big resting order lines
-        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 Big - dim, 2 Bigger - full colour, 3 Biggest - full colour + outline)" << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
+        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 Big - dim, 2 Bigger - full colour, 3 Biggest - full colour + outline),base " << S.boBase << " / " << 2 * S.boBase << " / " << 3 * S.boBase << " lots" << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
           << ",reach " << S.bo.P.reachAtr << " ATR = " << S.bo.reach << " ticks (ATR14 " << S.bo.atrPrice << "),keep " << S.bo.P.keep << ",font " << S.boSet.font
           << ",live " << (S.bo.live[0] >= 0 ? "bid" : "-") << "/" << (S.bo.live[1] >= 0 ? "offer" : "-") << ",lines " << S.bo.lineN[0] << "/" << S.bo.lineN[1]
@@ -1707,8 +1708,12 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // outline"; 13:59 names: BIG = dim, BIGGER = full colour, BIGGEST = full colour + outline) THREE TIERS, one box per side: BIG (the live big order) = full colour; HUGE (3x the big size or more, e.g. a 1,000-lot
     // on ES) = full colour + a white outline; otherwise the BIGGEST single order within the reach (2x the typical level size or more,
     // sticky until one is 20% bigger) = dimmed, plain number, no lines. Same number size for all three.
+    // (0.25.0, Rassul 14:00 "big 100, bigger 200, biggest 300" + 14:02 option 2) the tiers are steps of ONE base: base = 2x the typical
+    // size resting at a price level within the reach (depthMin = 3x typical); BIG >= base (dim), BIGGER >= 2x base (full colour),
+    // BIGGEST >= 3x base (full colour + outline). No depth read yet: base = half the big-order size (so BIGGER = the big size).
     const long long thrNow = S.bo.threshold();
-    const long long minShow = std::max(5LL, S.bo.depthMin > 0 ? (S.bo.depthMin * 2 + 2) / 3 : 5LL);   // depthMin = 3x typical -> 2x typical
+    const long long minShow = std::max(5LL, S.bo.depthMin > 0 ? (S.bo.depthMin * 2 + 2) / 3 : thrNow / 2);
+    S.boBase = minShow;
     S.boTier[0] = S.boTier[1] = 0;
     for (int s = 0; s < 2; ++s) {
         long long px = 0, n = 0; int tier = 0; std::string tx;
@@ -1716,12 +1721,12 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             const bol::Line L = S.bo.now((size_t)S.bo.live[s]);
             px = L.px; n = (long long)std::llround(S.boSize[s] > 0 ? S.boSize[s] : (double)L.left);
             const long long nTier = std::max(n, (long long)L.left);
-            tier = thrNow > 0 && nTier >= 3 * thrNow ? 3 : 2;
+            tier = nTier >= 3 * minShow ? 3 : nTier >= 2 * minShow ? 2 : 1;
             tx = (S.boSign[s] > 0 ? "+" : S.boSign[s] < 0 ? "-" : "") + std::to_string(n);
         } else {
             bol::Tick bp = 0; long long bn = 0;
             if (!S.bo.biggest(s, minShow, bp, bn)) continue;
-            px = bp; n = bn; tier = (thrNow > 0 && n >= 3 * thrNow) ? 3 : (thrNow > 0 && n >= thrNow) ? 2 : 1; tx = std::to_string(n);
+            px = bp; n = bn; tier = n >= 3 * minShow ? 3 : n >= 2 * minShow ? 2 : 1; tx = std::to_string(n);
         }
         const int y = yOfPx(px); const int t0 = y - boxH / 2, b0 = t0 + boxH;
         if (t0 < top + 14 || b0 > bottom) continue;
