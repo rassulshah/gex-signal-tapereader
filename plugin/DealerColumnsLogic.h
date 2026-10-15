@@ -158,6 +158,86 @@ inline dpaudit::Hover levelHover(const std::string& mkt, const std::string& name
     return h;
 }
 
+
+// ---- (DP 2.15.0, Rassul 2026-10-15 13:21-13:28 "make the hover over on the levels more compact as well as the hover over on the dealer
+// profile and its nodes", mockup-compact-hovers-v2.png) the COMPACT hovers: the same question / what / numbers / use / example, one
+// short line each (the long forms above stay for the tests and the audit list)
+inline dpaudit::Hover levelHoverC(const std::string& mkt, const std::string& name0, const std::string& priceTxt, const std::string& odds,
+                                  const std::string& liq, bool pick, bool above)
+{
+    dpaudit::Hover h;
+    std::string full = name0; const size_t st = full.find(" STALE"); if (st != std::string::npos) full = full.substr(0, st);
+    const std::string cn = compactName(full);                              // "CR 0D/GW 0D" -> "CR0/GW0" (the badge's own name)
+    std::string disp; for (char c : cn) { if (c == '/') disp += " + "; else disp += c; }
+    const bool key = isKeyLevel(full);
+    h.title = disp + " " + priceTxt + " \xB7 will " + mkt + " react here?";
+    h.lines.push_back("What: " + (cn.compare(0, 3, "CR0") == 0 ? levelWhat("CR0") : levelWhat(full)) + (key ? std::string() : std::string(" \xB7 ~7 min delayed")));
+    if (!odds.empty()) {
+        const bool proven = odds.find('?') == std::string::npos;
+        h.lines.push_back("Touch odds: " + odds + (odds.find('/') != std::string::npos ? "  (90 min  /  by close)" : "") + " \xB7 reach only" +
+                          (proven ? std::string() : std::string(" \xB7 ? = not proven yet")));
+    } else h.lines.push_back("Touch odds: none now (stale or too far)");
+    std::string lq = liq; while (!lq.empty() && lq[0] == ' ') lq.erase(0, 1);
+    if (!lq.empty()) h.lines.push_back("Resting here: " + lq + (above ? " (offers above price)" : " (bids below price)"));
+    const std::string sx = staleSuffix(name0);
+    if (!sx.empty()) h.lines.push_back("Data: " + sx + " \xB7 the book behind it has not updated");
+    if (pick) h.lines.push_back("White border = today's pick ? (most likely to be touched)");
+    h.lines.push_back(std::string("Use: sweep through it, then RB or CoB closes back ") + (above ? "below = short" : "above = long"));
+    h.lines.push_back(std::string("e.g. pokes a few ticks ") + (above ? "above" : "below") + ", RB closes back " + (above ? "below = short trigger" : "above = long trigger"));
+    return h;
+}
+inline dpaudit::Hover nodeHoverC(const std::string& mkt, const dpaudit::NodeX& x, double net, double pxNow, double ageMin = -1)
+{
+    dpaudit::Hover h; const std::string K = dpaudit::fmtStrike(mkt, x.k);
+    const bool w = net >= 0, up = x.k > pxNow;
+    h.title = K + " \xB7 what do dealers do if " + mkt + " gets here?";
+    std::string l1 = std::string(w ? "Teal = + net gamma (wall) " : "Orange = - net gamma (fuel) ") + dpaudit::usdShort(x.absG) + " per pt";
+    if (x.hasChg) l1 += " \xB7 " + dpaudit::pctChg(x.chg) + " since the open (" + (x.chg >= 0 ? "building" : "fading") + ")";
+    if (dpaudit::mutedNode(x.absG, net)) l1 += " \xB7 calls and puts nearly cancel";
+    h.lines.push_back(l1);
+    if (x.hasD && std::fabs(x.d) >= 1.0) {
+        const std::string t = nodeText(x.hasD, x.d);
+        h.lines.push_back((t.empty() ? std::string() : "\"" + t + "\" = ") + "dealers must " + (x.d > 0 ? "BUY " : "SELL ") + dpaudit::deltaNum(std::fabs(x.d)) + " " + mkt +
+                          " (~" + dpaudit::usdShort(std::fabs(x.dUsd)) + ") on the way " + (up ? "up" : "down") + " to " + K);
+    }
+    h.lines.push_back("MenthorQ model, " + (ageMin >= 0 ? std::to_string((long long)(ageMin + 0.5)) + " min old" : std::string("age unknown")) + " \xB7 a place to watch, not a forecast");
+    h.lines.push_back("Use: sweep through it, then RB or CoB closes back = trigger");
+    h.lines.push_back(std::string("e.g. pokes a few ticks ") + (up ? "above " : "below ") + K + ", RB closes back = " + (up ? "short" : "long") + " trigger");
+    return h;
+}
+// 4 lines: the level hover borrows the first 2 (DP inserts begin .. end - 2 under the title)
+inline dpaudit::Hover hvlHoverC(const std::string& mkt, double hvl)
+{
+    dpaudit::Hover h; const std::string P = dpaudit::fmtStrike(mkt, hvl);
+    h.title = "Which gamma regime is " + mkt + " in?";
+    h.lines.push_back("HVL " + P + " = where dealers flip from long to short gamma");
+    h.lines.push_back("Above: long gamma, moves fade \xB7 below: short gamma, moves run");
+    h.lines.push_back("Use: above, fade at walls \xB7 below, respect breakouts");
+    h.lines.push_back("e.g. drops through " + P + " = range widens, walls below give way faster");
+    return h;
+}
+inline dpaudit::Hover headerHoverC(const std::string& ver, const dpaudit::BookAsOf& a, double age, bool stale)
+{
+    dpaudit::Hover h;
+    h.title = stale ? "Why is the dealer data STALE?" : "How fresh is the dealer data?";
+    h.lines.push_back("Grid " + (a.ok() ? dpaudit::clock12(a.so) : std::string("time unknown")) + (age >= 0 ? " (" + dpaudit::ageShort(age) + " ago)" : std::string()) + " \xB7 Dealer Profile v" + ver);
+    h.lines.push_back("STALE = over 20 min old: nodes fade, don't trade them");
+    h.lines.push_back("Use: when STALE, trade key levels + footprint only");
+    return h;
+}
+// (DP 2.15.0, Rassul 13:25 "make the sizing of the hover dynamic ... so the lines dont take up the next line with only one or a few
+// words") the box width: the fewest wrapped rows, then the fewest short leftover rows (< 40% of the width), then the narrowest
+template <class Wrap> inline int hoverWidth(int lo, int hi, Wrap rowsAt)
+{
+    int best = hi; long long bestScore = -1;
+    for (int w = lo; w <= hi; w += 10) {
+        int rows = 0, widows = 0; rowsAt(w, rows, widows);
+        const long long sc = (long long)rows * 100000 + (long long)widows * 1000 + w;
+        if (bestScore < 0 || sc < bestScore) { bestScore = sc; best = w; }
+    }
+    return best;
+}
+
 // ---- (Rassul 11:39 CT, design B, mockup-hl.png) the liquidity block of a level badge -------------------------------------------
 // LRA-LiqLevels-<MKT>.csv (lsLiquidityProfile 0.16.0, native in IRT, written about once a second while it has a live book):
 //   "LIQL,1,<unix>,<tick>,<confirmX>,<confirmKeepX>,<hw>" then "L,<tick index>,<S|R>,<contracts>,<bx>" for every price within its
