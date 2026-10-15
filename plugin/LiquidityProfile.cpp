@@ -133,7 +133,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.22.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.22.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -360,7 +360,7 @@ struct LQState {
     struct Line { double v = -1; bool data = false; };
     Line lAttack, lEaten, lExh, lPulled, lRebuilt, lCounter;
     int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
-    std::string verdict = "none"; int verdictScore = 0;                  // (0.20.0) the banner verdict last drawn (status)
+    std::string verdict = "none", vlogKey = "none"; int verdictScore = 0;                  // (0.20.0) the banner verdict last drawn (status)
     int warnRows = 2;                              // (0.18.0) the warning detail's rows last drawn (>= 2 reserved)
     std::string state = "starting", lastStatusText;
 #ifndef LQ_FLOW
@@ -2029,6 +2029,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
     auto pxTxt = [&](double v) { char b2[32]; std::snprintf(b2, sizeof(b2), "%.*f", lqp::decimals(tick), v); return std::string(b2); };
     // the verdict
     auto clock12 = [](long long ctMs) { const long long sd = (ctMs / 1000) % 86400; int h = (int)(sd / 3600), m = (int)(sd % 3600 / 60); const int h12 = h % 12 == 0 ? 12 : h % 12; char b3[16]; std::snprintf(b3, sizeof(b3), "%d:%02d", h12, m); return std::string(b3); };
+    std::string vlog;                                                  // (0.22.1) one verdict line for the day log
     int vdir = 0; bool vfail = false; std::string v1, v2, absorbTxt; double vpx = 0;
 #ifndef LQ_FLOW
     if (tick > 0) {
@@ -2126,12 +2127,32 @@ void LiquidityProfile::renderWarning(LQState& S) {
             std::string conf;
             if (best->aX > 0) { char bx[24]; std::snprintf(bx, sizeof(bx), "A %.1fx", best->aX); conf = bx; }
             if (best->circle) conf += conf.empty() ? "circle" : ", circle";
+            {   char vb[320]; std::snprintf(vb, sizeof(vb), "%s,%d,%s,%d,%lld,%.2f,%d,%d,%lld,%d,%d,%lld,%lld,%s,%s",
+                    vfail ? "FAILING" : vdir > 0 ? "REV_UP" : "REV_DOWN", vdir, pxTxt(best->px).c_str(), best->src, best->lots, best->aX, best->circle ? 1 : 0, bestScore,
+                    best->pulledOpp, S.boSign[bol::BID], S.boSign[bol::ASK], (long long)std::llround(S.boSize[bol::BID]), (long long)std::llround(S.boSize[bol::ASK]),
+                    pxTxt((double)clA[lastBar]).c_str(), zn::nearest(named, best->px, Z.band).name.c_str());
+                vlog = vb; }
             if (best->src == 4) absorbTxt = std::string("\x85then turned: ") + (vdir > 0 ? "buyers took the low" : "sellers took the high");
             else absorbTxt = std::string("\x85then held: ") + (best->lots > 0 ? std::to_string(best->lots) + (vdir > 0 ? " sold into a big bid, absorbed" : " bought into a big offer, absorbed") : std::string("absorbed")) + (conf.empty() ? std::string() : " (" + conf + ")");
         }
     }
 #endif
     S.verdict = vdir == 0 ? "none" : vfail ? "FAILING ?" : vdir > 0 ? "REV UP ?" : "REV DOWN ?";
+#ifndef LQ_FLOW
+    {   // (0.22.1, Rassul 09:16 "i want the tracking of indicators today") every verdict change to <MKT>-<sym>-<spb>-verdicts-<session>.csv
+        const std::string key = vdir == 0 ? std::string("none") : vlog.substr(0, vlog.find(',', vlog.find(',', vlog.find(',') + 1) + 1));   // verdict,dir,px
+        if (key != S.vlogKey && S.boSession >= 0) {
+            const std::string d = dir();
+            if (!d.empty()) {
+                const long long em = lastBar < (int)S.barEndMs.size() ? S.barEndMs[(size_t)lastBar] : 0;
+                const std::string line = clock12(nowMs(S)) + "," + std::to_string(em / 1000) + "," + (vdir == 0 ? std::string("NONE,0,,,,,,,,,,,,,") : vlog);
+                appendLines(d + "\\" + recordStem(S) + "-verdicts-" + std::to_string(S.boSession) + ".csv",
+                    "time_ct,bar_key,verdict,dir,px,src(1 fill 2 A 3 circle 4 initiative),lots,aX,circle,agree,pulled_opp,sign_bid,sign_ask,size_bid,size_ask,close,level", std::vector<std::string>{ line });
+            }
+            S.vlogKey = key;
+        }
+    }
+#endif
     if (!have && vdir == 0) { S.warnRows = 2; return; }
     RCT pane; pane.getPaneRect(false);
     PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int right = std::min((int)pl.h, (int)pane.right) - 4;
@@ -2506,6 +2527,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.22.0");   // LQ_VERSION
+    p->setVersion("0.22.1");   // LQ_VERSION
     return p;
 }
