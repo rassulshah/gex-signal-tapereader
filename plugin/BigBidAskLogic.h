@@ -30,7 +30,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.5.1";   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -39,7 +39,7 @@ struct Settings {
     int font = 7;             // 6 - 20 pt   (1.4.0, Rassul 11:51 "size should be 7 by default")
     int boldQ = 200;          // bold threshold in hundredths of x (2.00x); 1.20x - 10.00x
     bool circle = true;       // draw the absorption circle (on by default)
-    bool nonBold = true;      // draw the numbers that are not bold
+    bool nonBold = false;     // (1.5.1) only while learning (no SD sizes yet): draw the numbers that are not bold
     int div = 0;              // (1.4.0) divider: 0 = the market's default, else 1 - 1000 (500 lots / 10 = "50")
     unsigned buy = 0x0022C55E, sell = 0x00EF4444;   // (1.4.0) buyers (at the ask) green, sellers (at the bid) red - his colours
 };

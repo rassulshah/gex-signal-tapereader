@@ -67,7 +67,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.5.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.5.1"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -248,7 +248,7 @@ int cppExtension::setup(void) {
     setIntegerParameter("Font size", 7, 50);                                       // 0
     setFloatParameter("Bold at (x normal)", 2.0f, 50, kParmAppendSameLine);        // 1
     setBoolParameter("Absorption print circle", true);                                    // 2
-    setBoolParameter("Show non-bold numbers", true, kParmAppendSameLine);           // 3
+    setBoolParameter("Show smaller numbers while learning", false, kParmAppendSameLine);           // 3
     setIntegerParameter("Divider (0 = market default)", 0, 50);                    // 4  (1.4.0) 500 lots / 10 = 50
     setColorParameter("Buyers (ask)", (COLOR)0x0022C55E, 0);                         // 5
     setColorParameter("Sellers (bid)", (COLOR)0x00EF4444, 0, kParmAppendSameLine);   // 6
@@ -669,13 +669,15 @@ void BigBidAsk::render(BBState& S) {
         {   struct tm mm; std::memset(&mm, 0, sizeof(mm));
             if (getLocaltime((RTDATE)F->t, &mm)) { const int md = mm.tm_hour * 60 + mm.tm_min; tz = S.win[winOf(md)].ok ? &S.win[winOf(md)] : S.phase[dayMod(md) ? 1 : 0].ok ? &S.phase[dayMod(md) ? 1 : 0] : nullptr; } }
         const long long muL = tz ? std::max(1LL, (long long)std::llround(tz->mu)) : 0;
-        const int ab = !set.circle ? 0 : tz ? bba::absorptionMin(*F, muL) : bba::absorption(*F, set.boldQ);
+        // (1.5.1, Rassul 18:24 "get rid of displaying less than 1SD") nothing under 1SD on the candles; the circle needs a shown (1SD+) print
+        const long long sd1 = tz ? std::max(1LL, tz->sd[0]) : 0; (void)muL;
+        const int ab = !set.circle ? 0 : tz ? bba::absorptionMin(*F, sd1) : bba::absorption(*F, set.boldQ);
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok) continue;
             bool bold = bba::bold(sd < 0 ? F->bidQ : F->askQ, set.boldQ), huge = false;
-            if (tz) { if (p.vol < muL) continue; bold = p.vol >= tz->sd[0]; huge = p.vol >= tz->sd[2]; }
-            if (!bold && !set.nonBold) continue;
+            if (tz) { if (p.vol < sd1) continue; bold = true; huge = p.vol >= tz->sd[2]; }   // (1.5.1) 1SD+ only: bold, 3SD+ outlined
+            else if (!bold && !set.nonBold) continue;                     // still learning (no SD yet): the setting decides
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
@@ -760,6 +762,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.5.0");   // BBA_VERSION
+    p->setVersion("1.5.1");   // BBA_VERSION
     return p;
 }
