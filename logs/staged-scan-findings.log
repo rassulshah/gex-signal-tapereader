@@ -1,4 +1,3 @@
-findings=0 allowed=0 staged_files=2 bytes=7039
+findings=0 allowed=0 staged_files=1 bytes=157
 largest staged blobs (bytes, path):
-SIZE	6915	plugin/TouchParams.h
-SIZE	124	logs/staged-scan-findings.log
+SIZE	157	logs/staged-scan-findings.log
