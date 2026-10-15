@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.1.1";   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.1.2";   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -1479,7 +1479,7 @@ inline int gexArrowW(int fs) { return (int)(fs * 0.8f + 0.5f) + 4; }
 inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
 {
     if (v.gexItems.empty()) return 0;
-    int w = 0; const int sep = M("  \xB7  ", fs, true), sepO = M("   |   ", fs, true);
+    int w = 0; const int sep = M("  \xB7  ", fs, true), sepO = M("  \xB7  ", fs, true);
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
         w += (i ? (g.other && !v.gexItems[i - 1].other ? sepO : sep) : 0) + M(g.strike, fs, true) + (g.name.empty() ? 0 : M(" " + g.name, fs, true)) + (g.grow ? gexArrowW(fs) : 0);
@@ -1494,7 +1494,7 @@ inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const 
     const std::string sepT = "  \xB7  ";
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
-        if (i) { const bool o = g.other && !v.gexItems[i - 1].other; const std::string st = o ? "   |   " : sepT; const int sw = M(st, fs, true);
+        if (i) { const std::string st = sepT; const int sw = M(st, fs, true);
                  addText(L, x, t, b, st, C_GREY, fs, true, sw, R_TABLE, -1); x += sw; }   // '|' = the other side of price starts
         cs = cn = g.above ? C_RED : C_GREEN;
         int w = M(g.strike, fs, true); addText(L, x, t, b, g.strike, cs, fs, true, w, R_TABLE, -1); x += w;
