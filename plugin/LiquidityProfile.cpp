@@ -1,4 +1,24 @@
 /********************************************************************************
+ *  0.18.0 (2026-10-14 night; lsLiquidityProfile - lsLiquidityFlow shares the source and only takes the number):
+ *    1. THE BIGGEST RESTING ORDER LINES (Rassul approved 22:11 CT, mockup v2 mockup-big-resting-orders.png; BigOrderLines.h 1.0.0).
+ *       On the price chart, over the candles: at most 2 live lines - the single biggest DISPLAYED resting bid (one MBO order id, never
+ *       a price-level total) within 2 ATR below price in green, the biggest offer within 2 ATR above in red (ATR = 14 bars of the
+ *       chart's own closed bars). Minimum size = max(the market's floor, the session's own top 0.1% of displayed order sizes so far,
+ *       past-only) - floors from his recorded order files: ES 30, NQ 10, GC 15, HG 12, CL 15, NG 10, 6E 50 (a setting overrides).
+ *       A line starts where the order became the biggest within reach (it must stay the biggest 10 s, or trade first - flashed orders
+ *       never draw), labelled "Bid 120" / "Ask 95" at its left end (11 pt, its colour), extends bar by bar, and ends ONCE: dot =
+ *       FILLED, X = PULLED / moved, arrow = still resting, a plain end = a bigger one took over / out of reach for 60 s / the depth
+ *       book no longer shows it (the feed missed its exit) / IRT closed / the session ended. Never repaints: S / E / H rows in
+ *       LiquidityProfile\<MKT>-<SYM>-<spb>-bigorders-<session>.csv, read back after a restart (a line resting when IRT closed ends at
+ *       the last heartbeat, "after <time> not known"); an order first seen after a restart has no known start ("since restart").
+ *       Hover: size, price, appeared (12-hour CT), rested, traded vs cancelled, how it ended, the rule and numbers, what it answers /
+ *       how / use / example, and the limit (displayed size only). Never inside the Liquidity column nor past the last bar + arrow nor
+ *       into the right-side columns (ColumnBoard). Settings (rows 5-9, per market in lsFlexLevels\LiquidityProfile.bigorders-<MKT>.txt):
+ *       Big resting orders on / off, reach (ATR), min lots, ended lines kept per side, font. setParameterVersion 4.
+ *    2. THE WARNING DETAIL ON TWO LINES (Rassul 22:48 CT, mockup-lp-warning-v5.png): the grey detail next to the badge is split one line
+ *       per side (line 2 directly under line 1, the connector "but" / ";" / "while" dropped), never truncated (was cut with "..."); the
+ *       second line's height is always reserved so the column header below never overlaps. Badge, font, colour, position unchanged.
+ ********************************************************************************
  *  0.17.0 (2026-10-14 night, Rassul approved 18:25 CT; lsLiquidityProfile + lsLiquidityFlow):
  *    1. HELD / BROKE BY HIS ZONE RULE (ZoneRule.h 1.0.0, ported natively from lra.level_confluence LCF v1.1 zone_outcome /
  *       docs\study-methods\level-confluence.md; 400 / 400 random cases identical to the study's own function). Levels are ZONES price
@@ -84,6 +104,7 @@
 // StackStats). After irtsdk.h and after the near / far #undefs above (off::Engine has a member named 'near').
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
+#include "BigOrderLines.h"     // (0.18.0) the biggest resting order lines on the price chart (SDK-free, tested)
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (0.15.0) GetCursorPos / WindowFromPoint (off::cursorWindow, the hover leaving the chart)
 #endif
@@ -109,7 +130,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.17.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.18.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -124,6 +145,9 @@ static const int WIDTH_INDEX = -1, FONT_INDEX = 0, OFFX_INDEX = -1, OFFY_INDEX =
 static const char* const LQ_SIZE_NAME = "LiquidityFlow";
 #else
 static const int WIDTH_INDEX = 0, FONT_INDEX = 1, OFFX_INDEX = 2, OFFY_INDEX = 3, BG_INDEX = 4;   // (CR5000) the LIQ label Offset X / Y; (0.16.0) Solid background
+// (0.18.0) the big resting order lines: on / off, reach (ATR), minimum lots (the market's floor shown; 0 = the market default), ended
+// lines kept per side, font - saved per market in lsFlexLevels\LiquidityProfile.bigorders-<MKT>.txt, the chart reads only that file
+static const int BO_ON_INDEX = 5, BO_REACH_INDEX = 6, BO_MIN_INDEX = 7, BO_KEEP_INDEX = 8, BO_FONT_INDEX = 9;
 static const char* const LQ_SIZE_NAME = "LiquidityProfile";
 #endif
 static const long long DEPTH_EVERY_MS = 1000, ZONES_EVERY_MS = 500, STATUS_EVERY_MS = 30000;
@@ -132,6 +156,9 @@ static const int DEPTH_READ_MAX = 200, VAP_ROWS_MAX = 5000;
 // (0.11.4) the pixel height of one text row at a font size in points (96 dpi: 4/3 px per pt, plus a little leading)
 static int rowPx(int pt) { return pt * 4 / 3 + 4; }
 static int warnH(int font) { return rowPx(font + 2) + 2; }       // the warning box (top left of the price chart)
+// (0.18.0) the warning's whole block: the badge row + the detail's further rows (at least the 2nd line is ALWAYS reserved, so the
+// column header / labels below never move under a two-line warning)
+static int warnBlockH(int font, int rows) { return warnH(font) + std::max(1, rows - 1) * rowPx(font + 1); }
 // (0.14.1, 2026-10-13) IRT draws the chart's title ("ES LTF: EPZ26 (3m*) ...") along the top of the price pane; nothing of ours
 // may start above this row. The warning sits under it and the column header under the warning.
 static const int LQ_TITLE_ROW_PX = 20;
@@ -330,6 +357,7 @@ struct LQState {
     struct Line { double v = -1; bool data = false; };
     Line lAttack, lEaten, lExh, lPulled, lRebuilt, lCounter;
     int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
+    int warnRows = 2;                              // (0.18.0) the warning detail's rows last drawn (>= 2 reserved)
     std::string state = "starting", lastStatusText;
 #ifndef LQ_FLOW
     // (0.15.0) the order-by-order feed (its own DEPTH_BY_ORDER, kept alive) and its order book (off::Engine: only the book is used -
@@ -340,6 +368,14 @@ struct LQState {
     int hovColX0 = 0, hovColX1 = -1, hovLastBar = -1, hovLastX = 0; double hovBarW = 0;   // the column's x span and the bar -> x map
     long long hovId = 0; void* hovWnd = nullptr;   // the hovered zone (0 = none) and the window its mouse event came from
     std::string hovState = "none";                 // the last draw's hover: none / shown N rows / no room (status file)
+    // (0.18.0) the biggest resting order lines: the engine (fed by the same order feed), the per-market settings file, the record
+    bol::Engine bo; bol::Settings boSet; long long boStampT = -2, boStampN = -2, boCheckMs = -1; std::string boMkt, boWhy;
+    long long boSession = -1, boFlushMs = -1, boLastH = 0, boWrites = 0, boFails = 0, boRestored = 0, boBad = 0, boDropped = 0;
+    long long boLastStamp = -1, boLastStampMs = 0;                  // an event's stamp -> Central ms (cached per second)
+    std::vector<long long> barEndMs; long boAtrCount = -1;          // every bar's END in Central ms (bars stamp their end)
+    struct BoHit { long long key = 0; int b0 = 0, b1 = 0; long long px = 0, tol = 1; };
+    std::vector<BoHit> boHits; long long boHovKey = 0; int boHovBar = -1; double boHovPrice = 0; void* boHovWnd = nullptr;
+    int boXMin = 0, boXMax = 0, boTop = 0, boBot = 0; std::string boState = "starting", boHovState = "none"; int boDrawn = 0, boLabels = 0;
 #endif
     ~LQState() { delete md; }
 };
@@ -349,10 +385,12 @@ public:
     LiquidityProfile() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsApply(void) { saveSize(); return RTX_OK; }
+    virtual int parmsApply(void) { saveSize(); saveBig(); snap_.take(dlgValues()); return RTX_OK; }   // (0.18.0) both files judged against the SAME opening snapshot
     virtual int parmsLoad(void);                                        // (CR5000) the dialog filled from the size file (never saves)
     bp::DlgSnap snap_;                                                   // (CR5000) the dialog as it opened         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
     void saveSize();
+    void saveBig();                                                      // (0.18.0) the big-order rows -> their per-market file
+    std::vector<long long> dlgValues();                                  // (0.18.0) every dialog row as numbers (the snapshot)
     void loadSize(LQState& S);
     void pump();
     void release() { slot_.release(this); }
@@ -388,6 +426,13 @@ private:
 #ifndef LQ_FLOW
     void orders(LQState& S, long long st);          // (0.15.0) the order-by-order feed -> order book, hits / rebuilds, makeup
     void renderHover(LQState& S, int left, int top, int bottom, int paneRight);   // (0.15.0) the hovered near zone's box
+    void loadBig(LQState& S);                       // (0.18.0) the big-order settings of this market (file, by its sub-second stamp)
+    void boSessionCheck(LQState& S, long long t);   // (0.18.0) a new session: end / flush / restore the lines
+    void boAfter(LQState& S, long count, long long st);   // (0.18.0) ATR, bar ends, price, the time-driven steps, the book check, flush
+    void boFlush(LQState& S, bool force);
+    void renderBig(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX);
+    void renderBigHover(LQState& S, int paneRight);
+    std::string boPath(LQState& S) { const std::string d = dir(); return d.empty() || S.boSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-bigorders-" + std::to_string(S.boSession) + ".csv"; }
     lqp::HoverIn hoverIn(const LQState& S, const lqp::Zone& z, const std::string& names) const;   // (0.15.0) its inputs
 #endif
     void render(LQState& S);
@@ -409,13 +454,18 @@ int cppExtension::setup(void) {
     setParameterDialogHeight(1);
     setIntegerParameter("Font pt", 11, 50);
 #else
-    setParameterVersion(3);                       // (0.16.0) + Solid background, Width 20-200 (IRT resets the saved rows once; the size file keeps them)
-    setParameterDialogHeight(3);
+    setParameterVersion(4);                       // (0.16.0) + Solid background, Width 20-200; (0.18.0) + the big-order rows (IRT resets the saved rows once; the files keep them)
+    setParameterDialogHeight(5);
     setIntegerParameter("Width px (20-200)", 60, 50);
     setIntegerParameter("Font pt", 11, 50, kParmAppendSameLine);
     setIntegerParameter("Label offset X", 0, 50);
     setIntegerParameter("Label offset Y", 0, 50, kParmAppendSameLine);
     setBoolParameter("Solid background", true);
+    setBoolParameter("Big resting orders", true);                                   // 5  (0.18.0)
+    setFloatParameter("Big order reach (ATR, 0.5-5)", 2.0f, 50, kParmAppendSameLine);   // 6
+    setIntegerParameter("Big order min lots", 0, 60);                              // 7  (the market's floor is shown; 0 = market default)
+    setIntegerParameter("Ended lines kept per side (0-50)", 10, 50, kParmAppendSameLine);   // 8
+    setIntegerParameter("Big order font pt (10-16)", 11, 50, kParmAppendSameLine);  // 9
 #endif
     return RTX_OK;
 }
@@ -444,6 +494,36 @@ static std::string lqSizePath(cppExtension* x) {
     if (mkt.empty() || dirp.empty()) return std::string();
     return dirp + "\\" + LQ_SIZE_NAME + ".size-" + mkt + ".txt";
 }
+// ---- (0.18.0) the big resting order lines: settings file, sub-second stamp (lesson 84), dialog rows ----------------------------------
+#ifndef LQ_FLOW
+static bool statSub(const std::string& p, long long& t, long long& n) {
+#if defined(_WIN32)
+    WIN32_FILE_ATTRIBUTE_DATA a; if (!GetFileAttributesExA(p.c_str(), GetFileExInfoStandard, &a) || (a.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) return false;
+    t = (long long)((((unsigned long long)a.ftLastWriteTime.dwHighDateTime) << 32 | a.ftLastWriteTime.dwLowDateTime) & 0x7FFFFFFFFFFFFFFFULL);
+    n = ((long long)a.nFileSizeHigh << 32) | (long long)a.nFileSizeLow; return true;
+#else
+    struct stat st; if (stat(p.c_str(), &st) != 0 || (st.st_mode & S_IFMT) != S_IFREG) return false;
+    t = (long long)st.st_mtim.tv_sec * 1000000000LL + (long long)st.st_mtim.tv_nsec; n = (long long)st.st_size; return true;
+#endif
+}
+struct BigFile { bol::Settings s; bool ok = false; std::string why; };
+static BigFile readBig(const std::string& p) {
+    BigFile z; std::ifstream in; std::string ln;
+    if (!statFile(p)) { z.why = "no big-orders file (defaults)"; return z; }
+    if (!openBoundedInput(p, in) || !readBoundedLine(in, ln)) { z.why = "big-orders file unreadable - last good kept"; return z; }
+    bol::Settings s; if (!bol::parseSettings(ln, s)) { z.why = s.why; return z; }
+    z.s = s; z.ok = true; return z;
+}
+static std::string bigMarket(cppExtension* x) {
+    char rb[32]; std::memset(rb, 0, sizeof(rb)); const char* rs = x->getRootSymbol(rb); const char* sy = x->getSymbol();
+    const std::string root = rs ? rs : ""; return marketName(root.empty() ? (sy ? sy : "") : root);
+}
+static std::string bigPath(cppExtension* x) {
+    const std::string mkt = bigMarket(x), dirp = flexDir();
+    if (mkt.empty() || dirp.empty()) return std::string();
+    return dirp + "\\LiquidityProfile.bigorders-" + mkt + ".txt";
+}
+#endif
 int LiquidityProfile::parmsLoad(void) {
 #ifndef LQ_FLOW
     if (!lqInDialog(this)) return RTX_OK;
@@ -451,8 +531,14 @@ int LiquidityProfile::parmsLoad(void) {
     const LqSize z = readSize(p);
     if (z.ok) { setIntegerValue(WIDTH_INDEX, z.w); setIntegerValue(FONT_INDEX, z.f); setIntegerValue(OFFX_INDEX, z.dx); setIntegerValue(OFFY_INDEX, z.dy); checkBox(BG_INDEX, z.bg); }
     else { setIntegerValue(WIDTH_INDEX, cb::range(cb::LIQ).def); setIntegerValue(OFFX_INDEX, 0); setIntegerValue(OFFY_INDEX, 0); checkBox(BG_INDEX, true); }
-    std::vector<long long> v; v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX)); v.push_back(isBoxChecked(BG_INDEX) ? 1 : 0);
-    snap_.take(v);
+    {   // (0.18.0) the big-order rows from their per-market file (defaults when there is none); min lots shows the market's real floor
+        const std::string bp2 = bigPath(this); const BigFile bf = bp2.empty() ? BigFile() : readBig(bp2);
+        const bol::Settings b = bf.ok ? bf.s : bol::Settings();
+        checkBox(BO_ON_INDEX, b.on); setFloatValue(BO_REACH_INDEX, (float)(b.reach10 / 10.0));
+        setIntegerValue(BO_MIN_INDEX, (int)(b.minLots > 0 ? b.minLots : bol::floorFor(bigMarket(this))));
+        setIntegerValue(BO_KEEP_INDEX, b.keep); setIntegerValue(BO_FONT_INDEX, b.font);
+    }
+    snap_.take(dlgValues());
 #endif
     return RTX_OK;
 }
@@ -489,11 +575,35 @@ void LiquidityProfile::saveSize() {
 #endif
     if (publishFile(p, body)) {
         if (S) { S->sizeStamp = -2; S->sizeCheckMs = -1; }
+    }                                                                  // (0.18.0) the snapshot is retaken by parmsApply after BOTH files
+}
+std::vector<long long> LiquidityProfile::dlgValues() {
+    std::vector<long long> v;
 #ifndef LQ_FLOW
-        std::vector<long long> v; v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX)); v.push_back(isBoxChecked(BG_INDEX) ? 1 : 0);
-        snap_.take(v);
+    v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX)); v.push_back(isBoxChecked(BG_INDEX) ? 1 : 0);
+    const double r = (double)getFloatValue(BO_REACH_INDEX);
+    v.push_back(isBoxChecked(BO_ON_INDEX) ? 1 : 0); v.push_back(bol::finiteD(r) ? (long long)std::llround(r * 10.0) : -1);
+    v.push_back(getIntegerValue(BO_MIN_INDEX)); v.push_back(getIntegerValue(BO_KEEP_INDEX)); v.push_back(getIntegerValue(BO_FONT_INDEX));
 #endif
-    }
+    return v;
+}
+// (0.18.0) OK / Apply: the big-order rows -> lsFlexLevels\LiquidityProfile.bigorders-<MKT>.txt (a control he did not touch since the
+// dialog opened keeps the file's value - IRT may hand a copy with boxes unchecked; garbage never reaches the file)
+void LiquidityProfile::saveBig() {
+#ifndef LQ_FLOW
+    const std::string p = bigPath(this); if (p.empty()) return;
+    const std::string mkt = bigMarket(this);
+    const BigFile bf = readBig(p); const bol::Settings fv = bf.ok ? bf.s : bol::Settings();
+    const long long floorM = bol::floorFor(mkt), fileMin = fv.minLots > 0 ? fv.minLots : floorM;
+    const std::vector<long long> now = dlgValues();
+    const long long fileV[5] = { fv.on ? 1 : 0, fv.reach10, fileMin, fv.keep, fv.font };
+    long long v[5]; for (size_t k = 0; k < 5; ++k) v[k] = snap_.pick(5 + k, now[5 + k], fileV[k]);
+    long long minLots = v[2]; if (minLots == floorM) minLots = 0;           // the market's own floor: keep following its default
+    if (minLots < 0 || minLots > bol::FLOOR_MAX) minLots = fv.minLots;
+    const bol::Settings z = bol::cleanSettings(v[0] != 0, v[1] >= 0 ? (double)v[1] / 10.0 : -1.0, minLots, v[3], v[4], fv);
+    makeDir(flexDir());
+    if (publishFile(p, bol::settingsLine(z) + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->boStampT = S->boStampN = -2; S->boCheckMs = -1; } }
+#endif
 }
 void LiquidityProfile::loadSize(LQState& S) {
     const long long now = steadyMs();
@@ -584,10 +694,16 @@ void LiquidityProfile::identify(LQState& S) {
         S.expRange = 0; S.reachSrc = "6x 3-min range"; S.confirms.clear(); S.lqMark.clear(); S.lqPrev.clear(); S.dpBid.clear(); S.dpAsk.clear(); S.dpAt = 0;
 #ifndef LQ_FLOW
         S.feed.reset(); S.ob = off::Engine(); S.obAcc = off::Acc(); S.feedState = "MBO: not opened"; S.obClearMs = -1; S.hovZones.clear(); S.hovId = 0; S.hovWnd = nullptr;   // (0.15.0)
+        if (S.boSession >= 0) boFlush(S, true);                         // (0.18.0) the old chart's pending rows go to ITS file first
+        S.bo = bol::Engine(); S.boMkt.clear(); S.boStampT = S.boStampN = -2; S.boCheckMs = -1; S.boSession = -1; S.boLastH = 0; S.boLastStamp = -1;
+        S.barEndMs.clear(); S.boAtrCount = -1; S.boHits.clear(); S.boHovKey = 0; S.boHovWnd = nullptr;
 #endif
         S.atr = 0; S.finSeen = 0; S.hoverBar = -1; S.bookHist.clear(); S.winHist.clear(); S.winKeys.clear(); S.flowLines.clear(); S.lastStatusText.clear();
         S.identity = id; S.root = root; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
         S.e.P.tick = tick > 0 ? tick : 0.01; zoneRule(S.market, S.e.P); standardLines(S);
+#ifndef LQ_FLOW
+        S.bo.tick = S.e.P.tick;                                         // (0.18.0)
+#endif
         S.e.P.requireShown = true; S.e.P.topN = 8;                         // (0.10.0) candidates; only the shown ones are drawn / read
         S.lqShow = S.market == "ES" || S.market == "GC" || S.market == "HG" || S.market == "NG";   // CL / NQ / 6E: logged only
         S.e.P.barMs = spb > 0 ? (lqp::Ms)spb * 1000 : 180000;
@@ -1180,6 +1296,14 @@ void LiquidityProfile::status(LQState& S, long long now) {
         const long long st = steadyMs(); const std::string fs = S.feed.stateText(st);
         o << "MBO," << (fs.empty() ? S.feedState : fs) << ",via " << S.feed.via << ",orders " << S.ob.book.size() << ",events " << S.feed.events << ",faults " << S.feed.faults
           << ",garbage " << S.ob.garbage << ",backlog " << S.feed.longestBacklog << ",hover " << S.hovState << "\n";
+        // (0.18.0) the big resting order lines
+        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
+          << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
+          << ",reach " << S.bo.P.reachAtr << " ATR = " << S.bo.reach << " ticks (ATR14 " << S.bo.atrPrice << "),keep " << S.bo.P.keep << ",font " << S.boSet.font
+          << ",live " << (S.bo.live[0] >= 0 ? "bid" : "-") << "/" << (S.bo.live[1] >= 0 ? "offer" : "-") << ",lines " << S.bo.lineN[0] << "/" << S.bo.lineN[1]
+          << ",drawn " << S.boDrawn << ",labels " << S.boLabels << ",events " << S.bo.events << ",not_known " << S.bo.unknown << ",lost_ends " << S.bo.lostEnds
+          << ",orders " << S.bo.book.size() << ",restored " << S.boRestored << " (bad rows " << S.boBad << "),writes " << S.boWrites << ",fails " << S.boFails
+          << ",dropped " << S.boDropped << ",hover " << S.boHovState << "\n";
         for (size_t i = 0; i < S.e.zones.size(); ++i) {
             const lqp::Zone& z = S.e.zones[i]; if (!z.shown || !z.near) continue;
             const lqp::HoverIn in = hoverIn(S, z, std::string()); const lqp::Makeup& m = in.mk;
@@ -1329,6 +1453,16 @@ void LiquidityProfile::orders(LQState& S, long long st) {
             S.e.mboEvent(ev.action, side, ev.px, ev.size, had, had ? it->second.px : 0, had ? it->second.size : 0);
         }
         S.ob.apply(S.obAcc, ev);
+        if (S.boSet.on) {                                               // (0.18.0) the same event to the big-order lines, on the Central clock
+            long long ms = 0;
+            if (ev.stamp > 0 && ev.stamp == S.boLastStamp) ms = S.boLastStampMs;
+            else {
+                ms = ev.stamp > 0 ? ctSec((RTDATE)ev.stamp) * 1000LL : 0;
+                if (ms > 0) { S.boLastStamp = ev.stamp; S.boLastStampMs = ms; }
+                else ms = S.haveOffset ? st + S.ctOffset : 0;
+            }
+            S.bo.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms);
+        }
     });
     if (S.obClearMs < 0 || st - S.obClearMs >= 60000 || st < S.obClearMs) { S.obAcc = off::Acc(); S.obClearMs = st; }   // bounded scratch
     for (size_t i = 0; i < S.e.attempts.size(); ++i) {
@@ -1337,6 +1471,169 @@ void LiquidityProfile::orders(LQState& S, long long st) {
     }
     // the mouse left the chart window: the hover goes (as the order-flow panes' HoverTrack)
     if (S.hovId != 0 && S.hovWnd) { void* w = off::cursorWindow(); if (w && w != S.hovWnd) { S.hovId = 0; S.hovWnd = nullptr; invalidateChart(false); } }
+    if (S.boHovKey != 0 && S.boHovWnd) { void* w = off::cursorWindow(); if (w && w != S.boHovWnd) { S.boHovKey = 0; S.boHovWnd = nullptr; invalidateChart(false); } }   // (0.18.0)
+}
+#endif
+
+#ifndef LQ_FLOW
+// ---- (0.18.0, Rassul approved 22:11 CT mockup v2) THE BIGGEST RESTING ORDER LINES ----------------------------------------------------
+// The engine (BigOrderLines.h, tested on its own and replayed on his recorded order files) is fed by the SAME order feed as the hover
+// (orders()); here: its per-market settings file, the session record (append-only S / E / H rows, read back after a restart so a line
+// never changes), the 14-bar ATR of the chart's closed bars, every bar's end time, the depth-book check and the drawing / hover.
+void LiquidityProfile::loadBig(LQState& S) {
+    const long long now = steadyMs();
+    if (S.boMkt == S.market && S.boCheckMs >= 0 && now >= S.boCheckMs && now - S.boCheckMs < 1000) return;   // at most once a second
+    S.boCheckMs = now;
+    const std::string dirp = flexDir(); if (dirp.empty() || S.market.empty()) return;
+    const std::string p = dirp + "\\LiquidityProfile.bigorders-" + S.market + ".txt";
+    long long t = -1, n = -1; if (!statSub(p, t, n)) { t = -1; n = -1; }
+    if (S.boMkt == S.market && t == S.boStampT && n == S.boStampN) return;
+    const bool newMkt = S.boMkt != S.market;
+    S.boMkt = S.market; S.boStampT = t; S.boStampN = n;
+    if (t < 0) { S.boSet = bol::Settings(); S.boSet.ok = true; S.boWhy = "no file: defaults"; }
+    else { const BigFile z = readBig(p); if (z.ok) { S.boSet = z.s; S.boWhy = "file"; } else { S.boWhy = z.why; if (newMkt) { S.boSet = bol::Settings(); S.boSet.ok = true; } } }
+    S.bo.setFloor(S.boSet.minLots > 0 ? S.boSet.minLots : bol::floorFor(S.market));
+    S.bo.P.reachAtr = std::max(bol::REACH_MIN, std::min(bol::REACH_MAX, S.boSet.reach10 / 10.0)); S.bo.setAtr(S.bo.atrPrice);
+    S.bo.P.keep = std::max(bol::KEEP_MIN, std::min(bol::KEEP_MAX, S.boSet.keep));
+}
+void LiquidityProfile::boFlush(LQState& S, bool force) {
+    const long long st = steadyMs();
+    if (!force && S.boFlushMs >= 0 && st >= S.boFlushMs && st - S.boFlushMs < 1000) return;   // buffered: once a second
+    S.boFlushMs = st;
+    if ((S.bo.live[0] >= 0 || S.bo.live[1] >= 0) && S.bo.lastT > 0 && S.bo.lastT - S.boLastH >= 30000) {   // a heartbeat while a line rests
+        S.bo.rows.push_back(bol::Engine::hRow(S.bo.lastT)); S.boLastH = S.bo.lastT; }
+    if (S.bo.rows.empty()) return;
+    const std::string path = boPath(S); if (path.empty()) return;
+    makeDir(flexDir()); makeDir(dir());
+    if (appendLines(path, bol::Engine::header(), S.bo.rows)) { S.bo.rows.clear(); S.boWrites++; }     // #6: cleared only after a good write
+    else { S.boFails++; if (S.bo.rows.size() > 5000) { S.bo.rows.erase(S.bo.rows.begin(), S.bo.rows.begin() + 1000); S.boDropped += 1000; } }
+}
+void LiquidityProfile::boSessionCheck(LQState& S, long long t) {
+    if (S.session < 0 || S.session == S.boSession || S.symbol.empty()) return;
+    if (S.boSession >= 0) { S.bo.endSession(t > 0 ? t : S.bo.lastT); boFlush(S, true); S.bo.clearSession(); S.boLastH = 0; }
+    S.boSession = S.session;
+    std::vector<std::string> rows; std::ifstream in;
+    if (openBoundedInput(boPath(S), in)) { std::string line; int n = 0; while (readBoundedLine(in, line) && ++n < 200000) rows.push_back(line); }
+    long long bad = 0; S.boRestored = (long long)S.bo.restore(rows, &bad); S.boBad = bad;
+    S.bo.openedMs = t;
+    boFlush(S, true);                                               // the RESTART ends of lines that rested while IRT was closed
+}
+void LiquidityProfile::boAfter(LQState& S, long count, long long st) {
+    if (count < 2) return;
+    RTARRAYI times(barDateTime); RTARRAY close(barClose), high(barHigh), low(barLow);
+    if (times.count < count || close.count < count || high.count < count || low.count < count) return;
+    // every bar's end (Central ms): appended as bars come; a reload / shorter chart starts over; the forming bar re-read each time
+    if ((long)S.barEndMs.size() > count) S.barEndMs.clear();
+    if (!S.barEndMs.empty()) S.barEndMs.pop_back();                 // the forming bar's entry is re-read
+    for (long i = (long)S.barEndMs.size(); i < count; ++i) S.barEndMs.push_back(ctSec((RTDATE)times[(int)i]) * 1000LL);
+    if (S.boAtrCount != count) {                                    // the 14-bar ATR of the chart's own CLOSED bars (the forming one never)
+        S.boAtrCount = count; std::vector<double> H, L, C;
+        for (long i = std::max(0L, count - 16); i <= count - 2; ++i) { H.push_back((double)high[(int)i]); L.push_back((double)low[(int)i]); C.push_back((double)close[(int)i]); }
+        S.bo.setAtr(bol::atr14(H, L, C));
+    }
+    if (!S.boSet.on) { S.boState = "off (setting)"; boFlush(S, false); return; }
+    { const double c = (double)close[(int)count - 1]; lqp::Tick tk = 0; if (lqp::finite(c) && c > 0 && lqp::tryToTick(c, S.e.P.tick, tk)) S.bo.setPrice(tk, false); }
+    const long long t = std::max(S.bo.lastT, nowMs(S));            // the feed's time, carried on by the clock while it is quiet
+    S.bo.evaluate(t);                                               // the dwell / leave steps also move on a quiet feed
+    if (S.e.haveBook && S.depthAvail) {                             // the depth book shows less than the line's order at its price for 5 s: gone
+        for (int s = 0; s < 2; ++s) {
+            if (S.bo.live[s] < 0) continue;
+            const bol::Line& L = S.bo.lines[(size_t)S.bo.live[s]];
+            const std::map<lqp::Tick, double>& bk = S.e.book[s == bol::BID ? lqp::BID : lqp::ASK];
+            const bool known = !bk.empty() && L.px >= bk.begin()->first && L.px <= bk.rbegin()->first;
+            const std::map<lqp::Tick, double>::const_iterator it = bk.find(L.px);
+            S.bo.checkBook(s, L.px, it == bk.end() ? 0.0 : it->second, known, st, t);
+        }
+    }
+    S.boState = S.bo.reach <= 0 ? "waiting for 15 closed bars (ATR)" : !S.bo.havePx ? "waiting for a price" : "ready";
+    boFlush(S, false);
+}
+void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX) {
+    S.boHits.clear(); S.boDrawn = 0; S.boLabels = 0;
+    if (!S.boSet.on) return;
+    const std::vector<size_t> sh = S.bo.shown(); if (sh.empty()) return;
+    const double tick = S.e.P.tick; if (!(tick > 0)) return;
+    // never inside the Liquidity Profile's own column (its bars + labels) and never past the last bar + the arrow or into the
+    // right-side columns (ColumnBoard: Levels / Delta / Dealer)
+    const int xMin = paneLeft + 1 + std::max(S.width, S.colRight) + 6;
+    const int xMax = std::min(std::min(lastX + bol::ARROW_W + 2, paneRight - 2), S.colPriceRight > 0 ? S.colPriceRight - 4 : INT_MAX);
+    S.boXMin = xMin; S.boXMax = xMax; S.boTop = top; S.boBot = bottom;
+    if (xMax - xMin < 30 || bottom - top < 20) { S.boState = "no room"; return; }
+    FONT f; f.id = HELVETICA; f.size = coord(S.boSet.font); f.style = BOLD; setFont(f);
+    auto xOfBar = [&](int b) { PNT p; p.set(b, 0.0f, kBarCenter); return (int)p.h; };
+    auto yOfPx = [&](long long t) { PNT p; p.set(lastBar, (float)((double)t * tick)); return (int)p.v; };
+    const long long midT = sh.empty() ? 0 : S.bo.lines[sh[0]].px;
+    const double pxPerTick = std::fabs((double)(yOfPx(midT) - yOfPx(midT + 20))) / 20.0;
+    const long long tol = std::max(1LL, (long long)std::ceil(5.0 / std::max(0.01, pxPerTick)));
+    std::vector<bol::Seg> segs; std::vector<std::pair<int, int>> bars;
+    for (size_t i = 0; i < sh.size(); ++i) {
+        const bol::Line L = S.bo.now(sh[i]);
+        const int b0 = std::max(0, std::min(lastBar, bol::barOf(S.barEndMs, L.tStart)));
+        const int b1 = std::max(b0, std::min(lastBar, L.end == bol::RESTING ? lastBar : bol::barOf(S.barEndMs, L.tEnd)));
+        bol::Seg g; g.line = sh[i]; g.side = L.side; g.x0 = xOfBar(b0); g.x1 = L.end == bol::RESTING ? lastX : xOfBar(b1); g.y = yOfPx(L.px);
+        g.live = L.end == bol::RESTING; g.end = L.end; g.text = bol::label(L); g.textW = getTextWidth(g.text.c_str(), -1) + 2;
+        segs.push_back(g); bars.push_back(std::make_pair(b0, b1));
+    }
+    bol::View V; V.xMin = xMin; V.xMax = xMax; V.yTop = top; V.yBot = bottom; V.rowH = rowPx(S.boSet.font);
+    const std::vector<bol::Op> ops = bol::layout(segs, V);
+    auto stroke = [&](int x0, int y0, int x1, int y1) { PNT a; a.set(0, 0.0f); a.h = coord(x0); a.v = coord(y0); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(x1); b.v = coord(y1); b.drawLineTo(); };
+    for (size_t i = 0; i < ops.size(); ++i) {
+        const bol::Op& o = ops[i]; const COLOR c = o.side == bol::BID ? C_BUY : C_SELL;   // green = bid (buyer waiting), red = offer
+        const int y = (o.y0 + o.y1) / 2;
+        if (o.kind == bol::OP_LINE) {
+            setPen(c, 2, P_SOLID); stroke(o.x0, o.y0, o.x1, o.y1); ++S.boDrawn;
+            for (size_t k = 0; k < segs.size(); ++k) if (segs[k].line == o.line) {
+                LQState::BoHit h; h.key = S.bo.lines[o.line].key; h.b0 = bars[k].first; h.b1 = bars[k].second; h.px = S.bo.lines[o.line].px; h.tol = tol; S.boHits.push_back(h); }
+        } else if (o.kind == bol::OP_ARROW) {                        // still resting: a small arrow past the last bar
+            setPen(c, 2, P_SOLID); stroke(o.x0, y, o.x1, y); stroke(o.x1 - 4, y - 4, o.x1, y); stroke(o.x1 - 4, y + 4, o.x1, y);
+        } else if (o.kind == bol::OP_DOT) {                          // FILLED: a filled dot
+            setPen(c, 1, P_SOLID); CBRUSH br(c, PAT_SOLID); br.set();
+            RCT r; r.set(coord(o.x0), coord(o.y0), coord(o.x1), coord(o.y1)); r.drawOval(DRAW_OPAQUE);
+        } else if (o.kind == bol::OP_X) {                            // PULLED / moved: an X
+            setPen(c, 2, P_SOLID); stroke(o.x0, o.y0, o.x1, o.y1); stroke(o.x0, o.y1, o.x1, o.y0);
+        } else if (o.kind == bol::OP_LABEL) {                        // "Bid 120" / "Ask 95" in the line's colour, at its left end
+            setTextColor(c); RCT r; r.set(coord(o.x0), coord(o.y0), coord(o.x1 + 2), coord(o.y1)); r.drawText(o.text.c_str(), false, false); ++S.boLabels;
+        }
+    }
+}
+// the hovered line's box: the rows from bol::hoverRows (tested), inside the drawable band, never over the column or the right columns
+void LiquidityProfile::renderBigHover(LQState& S, int paneRight) {
+    S.boHovState = "none";
+    if (S.boHovKey == 0 || !S.boSet.on) return;
+    size_t k = S.bo.lines.size(); for (size_t i = S.bo.lines.size(); i-- > 0;) if (S.bo.lines[i].key == S.boHovKey) { k = i; break; }
+    if (k == S.bo.lines.size()) { S.boHovKey = 0; return; }
+    bol::HoverCtx c; c.tick = S.e.P.tick; c.reachAtr = S.bo.P.reachAtr; c.atrPrice = S.bo.atrPrice; c.nowMs = S.bo.lastT > 0 ? S.bo.lastT : nowMs(S);
+    c.minLots = S.bo.threshold(); c.floor = S.bo.P.floor; c.pctLots = S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0;
+    const std::vector<bol::Row> rows = bol::hoverRows(S.bo.now(k), c);
+    const COLOR cWhite = 0x00E2E8F0, cFill = 0x0011151C;
+    int font = S.boSet.font, W = 0, rowH = 0; const int pad = 6;
+    const int x1Lim = (S.colPriceRight > 0 ? std::min(S.colPriceRight, paneRight) : paneRight) - 4, x0Lim = S.boXMin;
+    for (;;) {                                                     // the font steps down to 10 pt before any row is shortened
+        FONT f; f.id = HELVETICA; f.size = coord(font); f.style = BOLD; setFont(f);
+        W = 0; for (size_t i = 0; i < rows.size(); ++i) W = std::max(W, (int)getTextWidth(rows[i].text.c_str(), -1));
+        W += 2 * pad + 4; rowH = rowPx(font);
+        if (W <= x1Lim - x0Lim || font <= bol::FONT_MIN) break;
+        --font;
+    }
+    const int H = rowH * (int)rows.size() + 2 * pad - 2;
+    if (x1Lim - x0Lim < 120 || S.boBot - S.boTop < H) { S.boHovState = "no room"; return; }
+    if (W > x1Lim - x0Lim) W = x1Lim - x0Lim;
+    PNT pm; pm.set(S.boHovBar >= 0 ? S.boHovBar : 0, (float)S.boHovPrice);
+    int x0 = (int)pm.h + 14 + W > x1Lim ? (int)pm.h - 14 - W : (int)pm.h + 14;
+    x0 = std::max(x0Lim, std::min(x0, x1Lim - W));
+    int y0 = (int)pm.v + 12 + H > S.boBot ? (int)pm.v - 12 - H : (int)pm.v + 12;
+    y0 = std::max(S.boTop, std::min(y0, S.boBot - H));
+    setPen(C_GREY, 1, P_SOLID);
+    RCT bx; bx.set(coord(x0), coord(y0), coord(x0 + W), coord(y0 + H)); bx.draw(1, C_GREY, cFill, DRAW_OPAQUE, PAT_SOLID);
+    for (size_t i = 0; i < rows.size(); ++i) {
+        std::string tx = rows[i].text;                             // only when even 10 pt cannot fit (a very narrow chart)
+        while (tx.size() > 4 && (int)getTextWidth(tx.c_str(), -1) > W - 2 * pad - 2) tx.resize(tx.size() - 4);
+        if (tx != rows[i].text) tx += "...";
+        const int ink = rows[i].ink;
+        setTextColor(ink == bol::INK_GREEN ? C_BUY : ink == bol::INK_RED ? C_SELL : ink == bol::INK_GREY ? C_GREY : cWhite);
+        const int y = y0 + pad - 1 + (int)i * rowH; RCT r; r.set(coord(x0 + pad), coord(y), coord(x0 + W - 2), coord(y + rowH)); r.drawText(tx.c_str(), false, false);
+    }
+    S.boHovState = "shown " + std::to_string((long long)rows.size()) + " rows";
 }
 #endif
 
@@ -1351,6 +1648,9 @@ void LiquidityProfile::pump() {
         if (S.faulted || S.tick <= 0) { if (S.tick <= 0) S.state = "no tick size from IRT"; return; }
         const long long t = nowMs(S), st = steadyMs();
         session(S, t);
+#ifndef LQ_FLOW
+        loadBig(S); boSessionCheck(S, t);                              // (0.18.0) the big-order settings + this session's lines
+#endif
         if (S.lastNorms < 0 || st - S.lastNorms >= 60000) { S.lastNorms = st; loadNorms(S); }
         if (S.lastLayout < 0 || st - S.lastLayout >= 1000) { S.lastLayout = st; loadLayout(S); loadLevels(S, getBarCount()); loadReach(S); updateConfirms(S); loadDelta(S); }
         openDepth(S);
@@ -1371,6 +1671,9 @@ void LiquidityProfile::pump() {
         orders(S, st);                                                  // (0.15.0) before the bars are decided: hits / rebuilds in time
 #endif
         closedBars(S, count);
+#ifndef LQ_FLOW
+        boAfter(S, count, st);                                          // (0.18.0) ATR, bar ends, price, time steps, book check, record
+#endif
         if (S.e.haveBook && (S.lastZones < 0 || t - S.lastZones >= ZONES_EVERY_MS || t < S.lastZones)) {
             S.lastZones = t;
             struct tm tt; std::memset(&tt, 0, sizeof(tt));
@@ -1407,7 +1710,7 @@ void LiquidityProfile::render(LQState& S) {
     const int left = pane.left + 1;
     const int full = S.width - 4;                                                   // the longest bar (the Width setting)
     const int rowH = rowPx(S.font);                                                 // (0.11.4) rows sized from the font
-    int hdrTop = warnTop(pane.top) + warnH(S.font) + 4;                             // (0.14.1) under the title row + the warning box
+    int hdrTop = warnTop(pane.top) + warnBlockH(S.font, S.warnRows) + 4;           // (0.14.1) under the title row + the warning box; (0.18.0) + its 2nd detail line
     if (S.trBanner && S.trRect.l < left + S.width + 60 && S.trRect.t < hdrTop + rowH && S.trRect.b + 4 > hdrTop)
         hdrTop = S.trRect.b + 4;                                                    // (0.15.3) under the Tape Reader's banner (its reserved 2-line height)
     const int top = hdrTop + rowH + 2, bottom = pane.bottom;
@@ -1529,11 +1832,13 @@ void LiquidityProfile::render(LQState& S) {
     }
     S.colRight = std::max(colR, full + 4);   // (0.13.2) published so the Dealer Profile's badges start right of it
 #ifndef LQ_FLOW
+    renderBig(S, pane.left, paneRight, top, bottom, lastBar, lastX);   // (0.18.0) the biggest resting order lines, over the candles
     {   // (0.15.0) the column's x span and the bar -> x map, for the mouse; then the hovered near zone's makeup box
         S.hovColX0 = pane.left; S.hovColX1 = left + S.colRight;
         PNT a, b; a.set(lastBar, 0.0f, kBarCenter); b.set(lastBar - 1, 0.0f, kBarCenter);
         S.hovLastBar = lastBar; S.hovLastX = a.h; S.hovBarW = (double)(a.h - b.h);
         renderHover(S, left, top, bottom, paneRight);
+        renderBigHover(S, paneRight);                                  // (0.18.0) the hovered order line's box, drawn last (on top)
     }
 #endif
     (void)rd;   // (0.4.0) no read text and no marks on the price chart (Rassul 2026-10-10: signals only on the panes)
@@ -1624,10 +1929,25 @@ void LiquidityProfile::renderWarning(LQState& S) {
     RCT b; b.set(coord(x0), coord(y0), coord(x0 + nw + 8), coord(y0 + bh)); b.draw(1, c, c, DRAW_OPAQUE, PAT_HOLLOW);
     setTextColor(c); RCT t; t.set(coord(x0 + 4), coord(y0 + 1), coord(x0 + nw + 6), coord(y0 + bh - 1)); t.drawText(w.name.c_str(), false, false);
     FONT g; g.id = HELVETICA; g.size = coord(S.font + 1); g.style = PLAIN; setFont(g);
-    std::string d = w.detail; const int room = right - (x0 + nw + 16);
-    while (!d.empty() && getTextWidth(d.c_str(), -1) > room) d.resize(d.size() > 4 ? d.size() - 4 : 0);   // never past the last bar
-    if (!d.empty() && d != w.detail) d += "...";
-    setTextColor(C_GREY); RCT r; r.set(coord(x0 + nw + 14), coord(y0 + 1), coord(right), coord(y0 + bh - 1)); r.drawText(d.c_str(), false, false);
+    // (0.18.0, Rassul 22:48 CT, mockup v5) the detail on TWO lines, one per side (line 1 next to the badge, line 2 directly under it,
+    // the connector dropped), same font / grey / position; NEVER truncated (was cut with "..." at the last bar): a line wider than the
+    // room wraps at a space onto the next row. render() reserves the rows drawn (at least 2) so nothing below overlaps.
+    const int room = std::max(40, right - (x0 + nw + 14));
+    std::vector<std::string> rows;
+    const std::vector<std::string> sides = lqp::warnLines(w.detail);
+    for (size_t i = 0; i < sides.size(); ++i) {
+        const std::vector<std::string> wr = lqp::wrapWords(sides[i], [&](const std::string& t) { return getTextWidth(t.c_str(), -1) <= room; });
+        rows.insert(rows.end(), wr.begin(), wr.end());
+    }
+    const int lineH = rowPx(S.font + 1);
+    setTextColor(C_GREY);
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const int ty = i == 0 ? y0 + 1 : y0 + bh - 1 + (int)(i - 1) * lineH;
+        const int tb = i == 0 ? y0 + bh - 1 : ty + lineH;
+        const int tw = getTextWidth(rows[i].c_str(), -1) + 4;
+        RCT r; r.set(coord(x0 + nw + 14), coord(ty), coord(std::max(right, x0 + nw + 14 + tw)), coord(tb)); r.drawText(rows[i].c_str(), false, false);
+    }
+    S.warnRows = std::max(1, (int)rows.size());
 }
 void LiquidityProfile::renderFlow(LQState& S) {
     auto flowLine = [this](const std::vector<std::pair<int, int>>& pts, COLOR c) {
@@ -1917,6 +2237,19 @@ int LiquidityProfile::mouse(RTX_EVENT* e) {
         }
         if (id) S->hovWnd = off::cursorWindow();
         if (id != S->hovId) { S->hovId = id; invalidateChart(false); }
+        // (0.18.0) the mouse on a big-order line (its price within ~5 px, its bars or the end mark): that line's box
+        long long key = 0; long long bestD = LLONG_MAX; const long bar = e->v.mouse.bar;
+        if (!id && tick > 0 && lqp::finite(price) && price > 0) {
+            const double t = price / tick;
+            for (size_t i = 0; i < S->boHits.size(); ++i) {
+                const LQState::BoHit& h = S->boHits[i];
+                const double d = std::fabs(t - (double)h.px);
+                if (d > (double)h.tol + 0.5 || bar < h.b0 - 1 || bar > h.b1 + 1) continue;
+                const long long di = (long long)(d * 1000.0); if (di < bestD) { bestD = di; key = h.key; }
+            }
+        }
+        if (key) { S->boHovWnd = off::cursorWindow(); S->boHovBar = (int)bar; S->boHovPrice = price; }
+        if (key != S->boHovKey || (key && S->boHovBar != (int)bar)) { S->boHovKey = key; invalidateChart(false); }
     }
     return RTX_FAIL;                                                     // never swallow the event
 #else
@@ -1939,6 +2272,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.17.0");   // LQ_VERSION
+    p->setVersion("0.18.0");   // LQ_VERSION
     return p;
 }

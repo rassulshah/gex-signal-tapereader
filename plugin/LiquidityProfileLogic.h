@@ -63,7 +63,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.17.0";   // (0.17.0, 2026-10-14 night, Rassul approved 18:25 CT) Held / Broke by the ZONE rule (ZoneRule.h: centre +/- 0.06 ADR, held = a close 0.10 ADR back out, broke = a close 0.10 ADR beyond with no close back inside in 15 min; never a tick-through or a first touch), labels only once resolved; audit wording: "Hit N lots \xB7 NN% re-added ?", LQ? <LEVEL>, no intent words;   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
+static const char* const VERSION = "0.18.0";   // (0.18.0, 2026-10-14 night) the biggest resting order lines (BigOrderLines.h) + the warning detail on two lines (warnLines);   // (0.17.0, 2026-10-14 night, Rassul approved 18:25 CT) Held / Broke by the ZONE rule (ZoneRule.h: centre +/- 0.06 ADR, held = a close 0.10 ADR back out, broke = a close 0.10 ADR beyond with no close back inside in 15 min; never a tick-through or a first touch), labels only once resolved; audit wording: "Hit N lots \xB7 NN% re-added ?", LQ? <LEVEL>, no intent words;   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -363,6 +363,34 @@ struct Mark {
 struct Lines { double attack = -1, eaten = -1, exh = -1, pulled = -1, rebuilt = -1, counter = -1; bool trapped = false; };
 // (0.7.0, Rassul 2026-10-11) the warning on the price chart: one at a time, the strongest that applies, in plain words
 struct Warn { std::string name, detail; int favour = 0; };   // favour: +1 buyers (green), -1 sellers (red), 0 not decided (grey)
+// (0.18.0, Rassul 22:48 CT 2026-10-14, mockup-lp-warning-v5.png) the warning's grey detail drawn on TWO lines, one per side: line 1 next
+// to the badge = the first side, line 2 directly under it = the other side; the connector ("; " / ", but " / " while ") is dropped.
+// A detail with no second side stays one line. The text itself is unchanged (the Tape Reader hand-off keeps the one-line detail).
+inline std::vector<std::string> warnLines(const std::string& d) {
+    static const char* const SEP[] = { ", but ", "; but ", "; ", " while ", " but " };
+    size_t best = std::string::npos, len = 0;
+    for (size_t k = 0; k < sizeof(SEP) / sizeof(SEP[0]); ++k) {
+        const size_t at = d.find(SEP[k]);
+        if (at != std::string::npos && at > 0 && (best == std::string::npos || at < best)) { best = at; len = std::string(SEP[k]).size(); }
+    }
+    std::vector<std::string> v;
+    if (best == std::string::npos || best + len >= d.size()) { if (!d.empty()) v.push_back(d); return v; }
+    v.push_back(d.substr(0, best)); v.push_back(d.substr(best + len));
+    return v;
+}
+// word wrap with NO truncation: a line wider than the room continues on the next row at a space (a single word wider than the room
+// stays whole). fits(text) = the text fits the room.
+template <class Fits> std::vector<std::string> wrapWords(const std::string& text, Fits fits) {
+    std::vector<std::string> out; std::string cur; size_t i = 0;
+    while (i < text.size()) {
+        size_t j = text.find(' ', i); if (j == std::string::npos) j = text.size();
+        const std::string w = text.substr(i, j - i), tryS = cur.empty() ? w : cur + " " + w;
+        if (cur.empty() || fits(tryS)) cur = tryS; else { out.push_back(cur); cur = w; }
+        i = j + 1;
+    }
+    if (!cur.empty()) out.push_back(cur);
+    return out;
+}
 
 struct Readout {         // the live read of the zone price is in (or the last one), for the column label
     bool active = false; int side = BID; Tick lo = 0, hi = 0; double eaten = 0, stayed = 1, exhaust = -1; bool exhausted = false;
