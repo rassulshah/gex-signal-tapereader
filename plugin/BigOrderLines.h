@@ -35,7 +35,7 @@
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.3.0";   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
+static const char* const VERSION = "1.4.0";   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -171,6 +171,54 @@ inline std::string dur(long long ms) {
     return b;
 }
 inline std::string label(const Line& L) { return std::string(L.side == BID ? "Bid " : "Ask ") + std::to_string(L.size0); }
+
+// ---- (1.4.0, Rassul 2026-10-15 14:52-15:00 "a big lot distribution where the big amount is the mean ... indicate the 1SD 2SD 3SD
+// sizes for reference ... at least 1 SD") THE BIG-LOT DISTRIBUTION: new orders at or above a start size (2x the typical price-level
+// size), counted in 48 log buckets (10 lots x 1.15^k, ~7,000+ in the last), kept for this session + the 4 before it (file). On the LOG
+// of the size: mean (Big mu = e^mean), SD; 1SD / 2SD / 3SD = e^(mean + k SD). Each SD is a fixed multiple (~1.7x on ES).
+struct LogDist {
+    static const int NB = 48;
+    long long c[NB];
+    LogDist() { clear(); }
+    void clear() { for (int i = 0; i < NB; ++i) c[i] = 0; }
+    static int bucket(long long s) { if (s < 10) return -1; const int b = (int)std::floor(std::log((double)s / 10.0) / std::log(1.15)); return b < 0 ? 0 : b >= NB ? NB - 1 : b; }
+    static double centre(int b) { return 10.0 * std::pow(1.15, b + 0.5); }
+    void addN(long long s, long long n) { const int b = bucket(s); if (b >= 0 && n > 0) c[b] += n; }
+    void add(const LogDist& o) { for (int i = 0; i < NB; ++i) c[i] += o.c[i]; }
+    void fromHist(const Hist& h) { clear(); for (size_t s = 10; s < h.c.size(); ++s) if (h.c[s] > 0) addN((long long)s, h.c[s]); }
+    std::string line(long long session) const {
+        std::string o = "BLD1," + std::to_string(session) + ",";
+        for (int i = 0; i < NB; ++i) { if (i) o += ';'; o += std::to_string(c[i]); }
+        return o;
+    }
+    static bool parse(const std::string& ln, long long& session, LogDist& d) {
+        if (ln.compare(0, 5, "BLD1,") != 0) return false;
+        const size_t p2 = ln.find(',', 5); if (p2 == std::string::npos) return false;
+        long long sv = 0; if (!Engine_num_ll(ln.substr(5, p2 - 5), sv)) return false;
+        LogDist t; size_t a = p2 + 1; int i = 0;
+        while (i < NB) {
+            size_t e = ln.find(';', a); if (e == std::string::npos) e = ln.size();
+            long long v = 0; if (!Engine_num_ll(ln.substr(a, e - a), v) || v < 0) return false;
+            t.c[i++] = v; if (e >= ln.size()) break; a = e + 1;
+        }
+        if (i != NB) return false;
+        session = sv; d = t; return true;
+    }
+    static bool Engine_num_ll(const std::string& t, long long& out) {
+        if (t.empty() || t.size() > 15) return false;
+        for (size_t k = 0; k < t.size(); ++k) if (t[k] < '0' || t[k] > '9') return false;
+        out = std::atoll(t.c_str()); return true;
+    }
+    // the orders at or above start: n, Big mu and the 1 / 2 / 3 SD sizes (lots); false under minN orders
+    bool stats(long long start, long long minN, long long& n, double& mu, double v[3]) const {
+        double sw = 0, s1 = 0, s2 = 0;
+        for (int i = 0; i < NB; ++i) { if (c[i] <= 0 || centre(i) < (double)start) continue; const double x = std::log(centre(i)); sw += (double)c[i]; s1 += c[i] * x; s2 += c[i] * x * x; }
+        n = (long long)sw; if (n < minN || n < 2) return false;
+        const double m = s1 / sw, var = std::max(0.0, s2 / sw - m * m), sd = std::sqrt(var);
+        mu = std::exp(m); for (int k = 0; k < 3; ++k) v[k] = std::exp(m + (k + 1) * sd);
+        return true;
+    }
+};
 
 // ---- the engine ----------------------------------------------------------------------------------------------------------------
 class Engine {
