@@ -1,3 +1,15 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=13 bytes=632317
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	188348	plugin/OrderFlowFeed.h
+SIZE	157097	plugin/tests/cr6000-zone-reads-tests.tar.gz
+SIZE	76911	plugin/BidAskStats.cpp
+SIZE	46454	plugin/ZoneRead.h
+SIZE	43771	plugin/Pulling.cpp
+SIZE	28405	plugin/BidAskStatsLogic.h
+SIZE	27101	plugin/BUILD-LESSONS.md
+SIZE	13849	tools/gex-build.bat
+SIZE	12618	plugin/PullStats.cpp
+SIZE	10978	plugin/StackStatsLogic.h
+SIZE	9876	plugin/PullingLogic.h
+SIZE	8638	plugin/StackStats.cpp
+SIZE	8271	plugin/PullStatsLogic.h
