@@ -63,7 +63,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.26.0";   // (0.26.0) BIG column on the big-lot distribution: boxes from 1SD (dim) / 2SD (full) / 3SD (outline), reference Big mu + 1-3SD at the column bottom;   // (0.25.0) BIG column 3 tiers: biggest within reach dimmed, big full colour, huge + white outline;   // (0.24.0) one combined badge: verdict on top (REV UP / DOWN FAILING ?), book state below in its own colour, grey lines verdict side first, levels by name;   // (0.23.0) Big order font 7-16 (default 10) drives the BIG column box and its filled marks;   // (0.22.9) an opposing warning fails the verdict only at the turn and after 15 s; CSV-safe warning names;   // (0.22.8) verdict log to the second with seconds-into-bar, the warning and the band (verdicts2);   // (0.22.7) the verdict is sticky (no REV / NONE flicker);   // (0.22.6) a warning on the other side of the verdict makes it FAILING ? (coordinated);   // (0.22.5) BIG column 56 px wide, from the top of the chart;   // (0.22.4) banner / verdict badge names centred vertically;   // (0.22.3) a big order placed in the current bar gets its stack / pull line at once;   // (0.22.2) verdict only at the 10-bar extreme (no chasing); "big bid filled N (sellers hit it)";   // (0.22.1) every verdict change logged (<MKT>-...-verdicts-<session>.csv);   // (0.22.0) verdict also on INITIATIVE at the session extreme (bold lift / hit) with the book on its side or the opposite big order pulled;   // (0.21.0) SignalBoard: the verdict uses the Delta Profile A, Big Bid/Ask circles and the big fills together;   // (0.20.1) level badges use the drawn zone's own lots / x (in sync with the column);   // (0.20.0) banner: badge + 2 grey lines aligned inside its height, level named first; verdict badge REV UP / REV DOWN / FAILING ? below during a turn;   // (0.19.2) the big size tunes itself from the last 60 min (BigOrderLines 1.2.0);   // (0.19.1) BIG column fills in the bar colours (bid red, ask green);   // (0.19.0, Rassul 2026-10-15) the BIG column + 2 stack / pull lines (no labels on the chart), large = floor (nightly hourly norms) AND 3x the local book;   // (0.18.0, 2026-10-14 night) the biggest resting order lines (BigOrderLines.h) + the warning detail on two lines (warnLines);   // (0.17.0, 2026-10-14 night, Rassul approved 18:25 CT) Held / Broke by the ZONE rule (ZoneRule.h: centre +/- 0.06 ADR, held = a close 0.10 ADR back out, broke = a close 0.10 ADR beyond with no close back inside in 15 min; never a tick-through or a first touch), labels only once resolved; audit wording: "Hit N lots \xB7 NN% re-added ?", LQ? <LEVEL>, no intent words;   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
+static const char* const VERSION = "0.27.0";   // (0.27.0) Attack / pace against the same 30-min slot (log mean of that slot's earlier bars, 10+), else the 20 bars before;   // (0.26.0) BIG column on the big-lot distribution: boxes from 1SD (dim) / 2SD (full) / 3SD (outline), reference Big mu + 1-3SD at the column bottom;   // (0.25.0) BIG column 3 tiers: biggest within reach dimmed, big full colour, huge + white outline;   // (0.24.0) one combined badge: verdict on top (REV UP / DOWN FAILING ?), book state below in its own colour, grey lines verdict side first, levels by name;   // (0.23.0) Big order font 7-16 (default 10) drives the BIG column box and its filled marks;   // (0.22.9) an opposing warning fails the verdict only at the turn and after 15 s; CSV-safe warning names;   // (0.22.8) verdict log to the second with seconds-into-bar, the warning and the band (verdicts2);   // (0.22.7) the verdict is sticky (no REV / NONE flicker);   // (0.22.6) a warning on the other side of the verdict makes it FAILING ? (coordinated);   // (0.22.5) BIG column 56 px wide, from the top of the chart;   // (0.22.4) banner / verdict badge names centred vertically;   // (0.22.3) a big order placed in the current bar gets its stack / pull line at once;   // (0.22.2) verdict only at the 10-bar extreme (no chasing); "big bid filled N (sellers hit it)";   // (0.22.1) every verdict change logged (<MKT>-...-verdicts-<session>.csv);   // (0.22.0) verdict also on INITIATIVE at the session extreme (bold lift / hit) with the book on its side or the opposite big order pulled;   // (0.21.0) SignalBoard: the verdict uses the Delta Profile A, Big Bid/Ask circles and the big fills together;   // (0.20.1) level badges use the drawn zone's own lots / x (in sync with the column);   // (0.20.0) banner: badge + 2 grey lines aligned inside its height, level named first; verdict badge REV UP / REV DOWN / FAILING ? below during a turn;   // (0.19.2) the big size tunes itself from the last 60 min (BigOrderLines 1.2.0);   // (0.19.1) BIG column fills in the bar colours (bid red, ask green);   // (0.19.0, Rassul 2026-10-15) the BIG column + 2 stack / pull lines (no labels on the chart), large = floor (nightly hourly norms) AND 3x the local book;   // (0.18.0, 2026-10-14 night) the biggest resting order lines (BigOrderLines.h) + the warning detail on two lines (warnLines);   // (0.17.0, 2026-10-14 night, Rassul approved 18:25 CT) Held / Broke by the ZONE rule (ZoneRule.h: centre +/- 0.06 ADR, held = a close 0.10 ADR back out, broke = a close 0.10 ADR beyond with no close back inside in 15 min; never a tick-through or a first touch), labels only once resolved; audit wording: "Hit N lots \xB7 NN% re-added ?", LQ? <LEVEL>, no intent words;   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -466,17 +466,30 @@ public:
         return old / total;
     }
     // (0.6.0) the chart's closed bars: buyers' / sellers' volume and the ticks each bar traded - the Attack readout's normal
-    struct BarNorm { double buy = 0, sell = 0; int ticks = 1; Tick hi = 0, lo = 0; bool range = false; };
+    struct BarNorm { double buy = 0, sell = 0; int ticks = 1; Tick hi = 0, lo = 0; bool range = false; int slot = -1; };   // (0.27.0) slot = the bar END's 30-min slot
     std::map<int, BarNorm> barNorm;
-    void setBar(int bar, double buy, double sell, int ticks, Tick hi = 0, Tick lo = 0) {
+    void setBar(int bar, double buy, double sell, int ticks, Tick hi = 0, Tick lo = 0, int slot = -1) {
         if (bar < 0 || !(buy >= 0) || !(sell >= 0) || !finite(buy) || !finite(sell)) return;
-        BarNorm& b = barNorm[bar]; b.buy = buy; b.sell = sell; b.ticks = std::max(1, ticks);
+        BarNorm& b = barNorm[bar]; b.buy = buy; b.sell = sell; b.ticks = std::max(1, ticks); b.slot = slot;
         b.range = hi > 0 && lo > 0 && hi >= lo; b.hi = hi; b.lo = lo;
         while (barNorm.size() > 1200) barNorm.erase(barNorm.begin());   // (0.11.0) the always-on Aggressive half: a screen of bars
     }
     // the attackers' (sellers at a support, buyers at a resistance) average volume per bar per tick traded over the 20 bars before 'bar';
     // -1 until 15 of those bars are known
+    // (0.27.0, Rassul 2026-10-15 audit #2) the SAME 30-min slot first: the typical (log mean) of that slot's earlier bars on the chart
+    // (all sessions loaded, newest 80); 10+ of them, else the 20 bars before as before. kind 0 = per tick traded (Attack), 1 = per bar (pace)
+    double slotNormal(int bar, bool buyers, int kind) const {
+        std::map<int, BarNorm>::const_iterator me = barNorm.find(bar); if (me == barNorm.end() || me->second.slot < 0) return -1;
+        double s1 = 0; int n = 0;
+        for (std::map<int, BarNorm>::const_iterator i = barNorm.find(bar); i != barNorm.begin() && n < 80;) {
+            --i; if (i->second.slot != me->second.slot) continue;
+            double v = buyers ? i->second.buy : i->second.sell; if (kind == 0) v /= (double)i->second.ticks;
+            if (v > 0) { s1 += std::log(v); ++n; }
+        }
+        return n >= 10 ? std::exp(s1 / n) : -1;
+    }
     double attackNormal(int side, int bar) const {
+        { const double z = slotNormal(bar, side != BID, 0); if (z > 0) return z; }   // (0.27.0) the same slot
         double s = 0; int n = 0;
         for (std::map<int, BarNorm>::const_iterator i = barNorm.lower_bound(bar - 20); i != barNorm.end() && i->first < bar; ++i) {
             s += (side == BID ? i->second.sell : i->second.buy) / (double)i->second.ticks; ++n;
@@ -487,6 +500,7 @@ public:
     // before it (-1 until 15 are known)
     double paceX(int bar, bool buyers) const {
         std::map<int, BarNorm>::const_iterator me = barNorm.find(bar); if (me == barNorm.end()) return -1;
+        { const double z = slotNormal(bar, buyers, 1); if (z > 0) return (buyers ? me->second.buy : me->second.sell) / z; }   // (0.27.0) the same slot
         double s = 0; int n = 0;
         for (std::map<int, BarNorm>::const_iterator i = barNorm.lower_bound(bar - 20); i != barNorm.end() && i->first < bar; ++i) { s += buyers ? i->second.buy : i->second.sell; ++n; }
         if (n < 15 || s <= 0) return -1;

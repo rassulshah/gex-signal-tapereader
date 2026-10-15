@@ -134,7 +134,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.26.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.27.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -881,7 +881,7 @@ void LiquidityProfile::readTrades(LQState& S, long long t, long count) {
 }
 
 // (0.6.0) the Attack readout's normal: each closed bar's buyers' / sellers' volume (IRT's own bar statistics) and the ticks it traded
-static void seedBars(LQState& S, cppExtension::RTARRAYP& vap, cppExtension::RTARRAY& high, cppExtension::RTARRAY& low, int from, int to) {
+static void seedBars(LQState& S, cppExtension::RTARRAYP& vap, cppExtension::RTARRAY& high, cppExtension::RTARRAY& low, int from, int to, cppExtension::RTARRAYI* times = nullptr) {
     if (S.tick <= 0) return;
     for (int b = std::max(0, from); b <= to && b < (int)vap.count && b < (int)high.count && b < (int)low.count; ++b) {
         cppExtension::BARSTATISTICS st; const int n = vapStats(&vap, b, &st);
@@ -892,12 +892,14 @@ static void seedBars(LQState& S, cppExtension::RTARRAYP& vap, cppExtension::RTAR
         if (!lqp::tryToTick(hi, S.tick, hiTick) || !lqp::tryToTick(lo, S.tick, loTick) || hiTick < loTick) continue;
         const double span = (double)hiTick - (double)loTick + 1.0;
         if (!lqp::finite(span) || span > INT_MAX) continue;
-        S.e.setBar(b, (double)st.buyVolume, (double)st.sellVolume, (int)span, hiTick, loTick);
+        int slot = -1;                                                  // (0.27.0) the bar END's 30-min slot (minute - 1) / 30
+        if (times && b < (int)times->count) { const long long t = (long long)(*times)[b]; if (t > 0) { const long long m = ((t % 86400) + 86400) % 86400 / 60; slot = (int)(((m == 0 ? 1440 : m) - 1) / 30); } }
+        S.e.setBar(b, (double)st.buyVolume, (double)st.sellVolume, (int)span, hiTick, loTick, slot);
     }
 }
 // a bar is closed once a later bar exists (checklist #27); each closed bar is decided once, in order
 void LiquidityProfile::closedBars(LQState& S, long count) {
-    if (S.barCount == 0) { S.barCount = count; S.e.curBar = (int)count - 2; S.e.formBar = (int)count - 1; RTARRAYP vap(barVolumeProfile); RTARRAY hi(barHigh), lo(barLow); seedBars(S, vap, hi, lo, (int)count - 1000, (int)count - 2); zoneRestore(S, count); return; }   // (0.11.1) every loaded bar (up to 1,000) for the always-on pane   // history before load: never decided
+    if (S.barCount == 0) { S.barCount = count; S.e.curBar = (int)count - 2; S.e.formBar = (int)count - 1; RTARRAYP vap(barVolumeProfile); RTARRAY hi(barHigh), lo(barLow); RTARRAYI tt(barDateTime); seedBars(S, vap, hi, lo, (int)count - 1000, (int)count - 2, &tt); zoneRestore(S, count); return; }   // (0.11.1) every loaded bar (up to 1,000) for the always-on pane   // history before load: never decided
     if (count <= S.barCount) { if (count < S.barCount) S.barCount = count; return; }
     RTARRAYI times(barDateTime); RTARRAY close(barClose), high(barHigh), low(barLow);
     if (times.count < count || close.count < count || high.count < count || low.count < count) return;   // (0.11.4) high / low too
@@ -910,7 +912,7 @@ void LiquidityProfile::closedBars(LQState& S, long count) {
     for (long i = S.barCount - 1; i < count - 1; ++i) {
         const long long bt = (long long)times[(int)i];
         const long long endMs = ctSec((RTDATE)times[(int)i]) * 1000LL;   // IRT stamps the bar END (checklist #12)
-        if (endMs > 0) { seedBars(S, vap, high, low, (int)i, (int)i); S.e.onBarClose((int)i, bt, endMs, (double)close[(int)i], S.dpBid, S.dpAsk); S.zrLastBarTime = bt; S.zrLastEndMs = endMs; }
+        if (endMs > 0) { seedBars(S, vap, high, low, (int)i, (int)i, &times); S.e.onBarClose((int)i, bt, endMs, (double)close[(int)i], S.dpBid, S.dpAsk); S.zrLastBarTime = bt; S.zrLastEndMs = endMs; }
 #ifdef LQ_FLOW
         std::map<int, std::pair<double, double>>::const_iterator nb = S.e.nearBook.find((int)i);
         if (nb != S.e.nearBook.end() && !S.bookHist.count(bt)) {
@@ -2766,6 +2768,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.26.0");   // LQ_VERSION
+    p->setVersion("0.27.0");   // LQ_VERSION
     return p;
 }
