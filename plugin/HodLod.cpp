@@ -483,6 +483,17 @@ void HodLod::recompute(HLState& S, long n)
     S.view.fxSegs = hlfx::headerLine(S.fxView, S.fxHave);
     S.projIdx = -1;                           // (1.1.0) the 1st extreme's bar on this chart, matched by its END stamp
     if (S.view.projOk) for (size_t j = B.size(); j-- > 0;) if (B[j].absEnd == S.view.projFromEnd) { S.projIdx = start + (int)j; break; }
+    if (S.view.projOk && S.projIdx >= start && tick > 0) {   // (2.2.2) the first closed bar after the 1st extreme that traded through the target
+        const double tgt = (double)S.view.projTo * tick;
+        for (size_t j = (size_t)(S.projIdx - start) + 1; j < B.size(); ++j) {
+            if (S.view.projUp ? B[j].h >= tgt - tick * 0.5 : B[j].l <= tgt + tick * 0.5) {
+                S.view.projHit = true; S.view.projHitMod = (int)(((B[j].absEnd - per) % 86400 + 86400) % 86400 / 60);
+                for (size_t q = 0; q < S.view.headLeftSegs.size(); q++)
+                    if (S.view.headLeftSegs[q].s.find(S.view.projTxt) != std::string::npos) { S.view.headLeftSegs[q].s = "   " + S.view.projTxt + " hit " + hl::clk(S.view.projHitMod); S.view.headLeftSegs[q].col = hl::C_DIM; }
+                break;
+            }
+        }
+    }
     if (!S.mqWhy.empty()) S.view.mqWhy = S.mqWhy + (S.view.mqWhy.empty() ? "" : "; " + S.view.mqWhy);
     S.rd = rd; S.per = per; S.tick = tick; S.have = S.view.has || !S.view.header.empty();
     delete S.T; S.T = new hl::Tracker(T);
@@ -980,6 +991,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
-    p->setVersion("2.2.1");
+    p->setVersion("2.2.2");
     return p;
 }

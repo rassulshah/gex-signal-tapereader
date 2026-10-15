@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.2.1";   // (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.2.2";   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -739,6 +739,7 @@ struct View {
     // never below the range so far). Study lra.ext_yardstick: the expected range beat ATR (and ATR + range used) in 6 of 7 markets
     // on unseen days (crude a tie). Drawn as a vertical line from the 1st extreme with a flag + "Proj HOD 7,870.00"; in the header.
     static const int PROJ_WAIT_MIN = 30;   // minutes after the RTH open before the projection shows
+    bool projHit = false; int projHitMod = -1;   // (2.2.2) price already traded through the target (the plugin finds the bar)
     bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt, projLv; double projPx = NAN;   // (2.2.0) projLv = the price / gamma level at the target ("ONH \xB7 CR")
     double projRange = NAN; int projStage = -1; bool projV2 = false;   // (1.1.5) for the projection log (HodLod.proj-<MKT>.csv)
     int projLockMod = -1;   // (1.1.6) the minute of day the shown target was set (locked)
@@ -1933,7 +1934,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     if (y0 == y1) return;
     const int top = pane.t + 1, bot = pane.b - 1;
     auto clampY = [&](int y) { return (std::max)(top, (std::min)(y, bot)); };
-    const unsigned col = v.projUp ? C_GREEN : C_RED;
+    const unsigned col = v.projHit ? C_DIM : v.projUp ? C_GREEN : C_RED;   // (2.2.2) reached: grey
     int a = clampY(y0), e = clampY(y1);
     bool off = y1 < top || y1 > bot;
     if (L.tableOk && x >= L.table.l - 2 && x <= L.table.r + 2) {            // never across the table: stop at its edge
@@ -1947,7 +1948,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     addLine(L, x, a, x, e, col, 2, R_LABEL);
     // (1.1.2, Rassul 10:25 "a dashed line across" at the projected level) when the target is on the pane: 6 px dashes, 4 px gaps,
     // across the pane in the projection's colour; never through the table
-    if (y1 >= top && y1 <= bot) {
+    if (y1 >= top && y1 <= bot && !v.projHit) {                            // (2.2.2) no dashed line across once reached
         for (int dx = pane.l + 2; dx < pane.r - 2; dx += 10) {
             int ex = (std::min)(dx + 6, (int)pane.r - 2);
             if (L.tableOk && y1 >= L.table.t - 1 && y1 <= L.table.b + 1 && ex >= L.table.l && dx <= L.table.r) continue;
@@ -1964,6 +1965,9 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
     // (1.1.3, 13:58 NG check: the "(above)" text at the pane edge landed on level badges / header boxes) a target off the pane
     // gets the line and the flag only - its price is in the table header ("Proj HOD 3.205"), in the same colour
     if (off) { L.projOk = true; return; }
+    // (2.2.2, Rassul 13:45 NQ screenshot: price went 90 pts past "HOD after 1:45 30,013.50" and the callout floated over the candles)
+    // a reached target keeps only its grey line + flag; the table says "Proj HOD 30,013.50 hit 12:21"
+    if (v.projHit) { L.projOk = true; return; }
     // (2.0.4) a text box [yy, yy + hh] that would sit on a level's row (its line +/- PROJ_LVL_ROW_HALF px: the Dealer Profile badge)
     auto onLevelRow = [&](int yy, int hh) {
         for (size_t i = 0; i < v.levelTicks.size(); i++) {

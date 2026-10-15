@@ -35,7 +35,7 @@
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.2.0";   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
+static const char* const VERSION = "1.3.0";   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -306,6 +306,30 @@ public:
         if (book.size() > P.bookCap) trim();
     }
 
+    // (1.3.0, Rassul 2026-10-15 13:51-13:55 "biggest above and below within 2 ATR ... dimmed", mockup-big-column-tiers-v1) DISPLAY ONLY
+    // (no line, no record): the biggest single resting order on side s within the reach, at least minShow lots. Sticky: the shown
+    // order stays until another is 20% bigger, or it is filled / pulled / out of reach - no jumping box.
+    long long showId[2] = {0, 0};
+    bool biggest(int s, long long minShow, Tick& outPx, long long& outSize) {
+        if (s < 0 || s > 1 || !havePx || reach <= 0) { if (s >= 0 && s <= 1) showId[s] = 0; return false; }
+        if (minShow < 1) minShow = 1;
+        const Ord* cur = nullptr;
+        if (showId[s] != 0) {
+            std::unordered_map<long long, Ord>::const_iterator it = book.find(showId[s]);
+            if (it != book.end() && it->second.side == s && it->second.size >= minShow && inReach(s, it->second.px)) cur = &it->second; else showId[s] = 0;
+        }
+        long long bestId = 0; const Ord* best = nullptr;
+        for (std::set<long long>::const_iterator i = big[s].begin(); i != big[s].end(); ++i) {
+            std::unordered_map<long long, Ord>::const_iterator it = book.find(*i);
+            if (it == book.end()) continue;
+            const Ord& o = it->second;
+            if (o.size < minShow || !inReach(s, o.px)) continue;
+            if (!best || o.size > best->size || (o.size == best->size && *i < bestId)) { best = &o; bestId = *i; }
+        }
+        if (cur && (!best || (double)best->size < 1.2 * (double)cur->size)) { best = cur; bestId = showId[s]; }
+        if (!best) { showId[s] = 0; return false; }
+        showId[s] = bestId; outPx = best->px; outSize = best->size; return true;
+    }
     // the selection: the biggest order on each side within the reach (size >= the minimum), else nothing
     void evaluate(long long t) {
         if (!havePx || reach <= 0) return;

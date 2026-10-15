@@ -168,7 +168,7 @@ inline void toView(hl::View& v, const File& F, double /*price*/, long long now, 
             const double d = v.projPx < (std::min)(lo, hi) ? (std::min)(lo, hi) - v.projPx : (v.projPx > (std::max)(lo, hi) ? v.projPx - (std::max)(lo, hi) : 0.0);
             if (d <= best) { best = d; bs = "S/R " + rangeTxt(L); }
         }
-        if (!bs.empty() && v.projLv.find(bs) == std::string::npos) {
+        if (!bs.empty() && !v.projHit && v.projLv.find(bs) == std::string::npos) {   // (2.2.2) a reached target names no level
             v.projLv += (v.projLv.empty() ? "" : " \xB7 ") + bs;
             for (size_t q = 0; q < v.headLeftSegs.size(); q++) if (v.headLeftSegs[q].s.find(v.projTxt) != std::string::npos) v.headLeftSegs[q].s = "   " + v.projTxt + "  " + v.projLv;
         }

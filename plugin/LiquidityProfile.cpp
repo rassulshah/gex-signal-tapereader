@@ -134,7 +134,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.24.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.25.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -381,6 +381,7 @@ struct LQState {
     long long hovId = 0; void* hovWnd = nullptr;   // the hovered zone (0 = none) and the window its mouse event came from
     std::string hovState = "none";                 // the last draw's hover: none / shown N rows / no room (status file)
     // (0.18.0) the biggest resting order lines: the engine (fed by the same order feed), the per-market settings file, the record
+    int boTier[2] = {0, 0};                         // (0.25.0) the BIG box tier per side: 0 none, 1 biggest (dim), 2 big, 3 huge (outline)
     bol::Engine bo; bol::Settings boSet; long long boStampT = -2, boStampN = -2, boCheckMs = -1; std::string boMkt, boWhy;
     long long boSession = -1, boFlushMs = -1, boLastH = 0, boWrites = 0, boFails = 0, boRestored = 0, boBad = 0, boDropped = 0;
     long long boLastStamp = -1, boLastStampMs = 0;                  // an event's stamp -> Central ms (cached per second)
@@ -1364,7 +1365,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
         o << "MBO," << (fs.empty() ? S.feedState : fs) << ",via " << S.feed.via << ",orders " << S.ob.book.size() << ",events " << S.feed.events << ",faults " << S.feed.faults
           << ",garbage " << S.ob.garbage << ",backlog " << S.feed.longestBacklog << ",hover " << S.hovState << "\n";
         // (0.18.0) the big resting order lines
-        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
+        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 largest nearby - dim, 2 big, 3 huge - outline)" << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
           << ",reach " << S.bo.P.reachAtr << " ATR = " << S.bo.reach << " ticks (ATR14 " << S.bo.atrPrice << "),keep " << S.bo.P.keep << ",font " << S.boSet.font
           << ",live " << (S.bo.live[0] >= 0 ? "bid" : "-") << "/" << (S.bo.live[1] >= 0 ? "offer" : "-") << ",lines " << S.bo.lineN[0] << "/" << S.bo.lineN[1]
@@ -1700,18 +1701,37 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     auto freeAt = [&](int t0, int b0) { for (size_t i = 0; i < used.size(); ++i) if (!(b0 < used[i].first || t0 > used[i].second)) return false; return true; };
     const int bfont = std::max(bol::FONT_MIN, std::min(bol::FONT_MAX, S.boSet.font));   // (0.23.0) his "Big order font pt"
     FONT fb; fb.id = HELVETICA; fb.size = coord(bfont); fb.style = BOLD; setFont(fb);
+    FONT fp1 = fb; fp1.style = PLAIN;                                   // (0.25.0) the dimmed "biggest" box: plain number
     const int boxW = std::max(24, (cr - cl) * 64 / 100), boxH = rowPx(bfont) + 2;
+    // (0.25.0, Rassul 13:51-13:55 "biggest above and below within 2 ATR ... dimmed", "big will not be dimmed and huge will also have the
+    // outline") THREE TIERS, one box per side: BIG (the live big order) = full colour; HUGE (3x the big size or more, e.g. a 1,000-lot
+    // on ES) = full colour + a white outline; otherwise the BIGGEST single order within the reach (2x the typical level size or more,
+    // sticky until one is 20% bigger) = dimmed, plain number, no lines. Same number size for all three.
+    const long long thrNow = S.bo.threshold();
+    const long long minShow = std::max(5LL, S.bo.depthMin > 0 ? (S.bo.depthMin * 2 + 2) / 3 : 5LL);   // depthMin = 3x typical -> 2x typical
+    S.boTier[0] = S.boTier[1] = 0;
     for (int s = 0; s < 2; ++s) {
-        if (S.bo.live[s] < 0) continue;
-        const bol::Line L = S.bo.now((size_t)S.bo.live[s]);
-        const int y = yOfPx(L.px); const int t0 = y - boxH / 2, b0 = t0 + boxH;
+        long long px = 0, n = 0; int tier = 0; std::string tx;
+        if (S.bo.live[s] >= 0) {
+            const bol::Line L = S.bo.now((size_t)S.bo.live[s]);
+            px = L.px; n = (long long)std::llround(S.boSize[s] > 0 ? S.boSize[s] : (double)L.left);
+            const long long nTier = std::max(n, (long long)L.left);
+            tier = thrNow > 0 && nTier >= 3 * thrNow ? 3 : 2;
+            tx = (S.boSign[s] > 0 ? "+" : S.boSign[s] < 0 ? "-" : "") + std::to_string(n);
+        } else {
+            bol::Tick bp = 0; long long bn = 0;
+            if (!S.bo.biggest(s, minShow, bp, bn)) continue;
+            px = bp; n = bn; tier = (thrNow > 0 && n >= 3 * thrNow) ? 3 : (thrNow > 0 && n >= thrNow) ? 2 : 1; tx = std::to_string(n);
+        }
+        const int y = yOfPx(px); const int t0 = y - boxH / 2, b0 = t0 + boxH;
         if (t0 < top + 14 || b0 > bottom) continue;
-        const bool bull = meaning(s, S.boSign[s]); const long long n = (long long)std::llround(S.boSize[s] > 0 ? S.boSize[s] : (double)L.left);
-        const std::string tx = (S.boSign[s] > 0 ? "+" : S.boSign[s] < 0 ? "-" : "") + std::to_string(n);
-        const COLOR fill = S.boSign[s] < 0 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL);
+        const bool bull = meaning(s, S.bo.live[s] >= 0 ? S.boSign[s] : 0);
+        const COLOR fill = tier == 1 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL);
         RCT r; r.set(coord(cl + 2), coord(t0), coord(cl + 2 + boxW), coord(b0)); r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID);
-        setTextColor(S.boSign[s] < 0 ? (bull ? C_MINT : C_PINK) : C_WHITE); r.drawText(tx.c_str(), true, false);
-        used.push_back(std::make_pair(t0, b0)); ++S.boLabels;
+        if (tier == 3) { setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cl + 3 + boxW), coord(b0 + 1)); o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
+        setFont(tier == 1 ? fp1 : fb);
+        setTextColor(tier == 1 ? (bull ? C_MINT : C_PINK) : (bull ? C_INK : C_WHITE)); r.drawText(tx.c_str(), true, false);
+        used.push_back(std::make_pair(t0, b0)); ++S.boLabels; S.boTier[s] = tier;
     }
     // executed in the last 60 min, merged by side + price; the 5 biggest per side
     struct Ex { int side; long long px, lots, last; int n; };
@@ -2669,6 +2689,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.24.0");   // LQ_VERSION
+    p->setVersion("0.25.0");   // LQ_VERSION
     return p;
 }
