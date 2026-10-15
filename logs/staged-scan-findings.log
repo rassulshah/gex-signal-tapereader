@@ -1,12 +1,4 @@
-findings=0 allowed=0 staged_files=10 bytes=489761
+findings=0 allowed=0 staged_files=2 bytes=132437
 largest staged blobs (bytes, path):
-SIZE	168843	plugin/HodLodLogic.h
-SIZE	129816	plugin/DealerProfile.cpp
-SIZE	67786	plugin/HodLod.cpp
-SIZE	40968	plugin/test_dealerprofile_2110.cpp
-SIZE	27212	plugin/test_dealerprofile_290.cpp
-SIZE	19230	plugin/test_columnboard_logic.cpp
-SIZE	17911	plugin/DealerColumnsLogic.h
-SIZE	13648	tools/gex-build.bat
-SIZE	4145	plugin/test_dealerprofile_2120.cpp
-SIZE	202	logs/staged-scan-findings.log
+SIZE	131950	plugin/DeltaProfile.cpp
+SIZE	487	logs/staged-scan-findings.log
