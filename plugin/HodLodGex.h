@@ -157,7 +157,7 @@ inline void toView(hl::View& v, const File& F, double /*price*/, long long now, 
     if (!showable(F)) return;
     if (F.asof > now + 120) return;                           // (audit) received in the future = clock / file wrong: never shown
     v.gexStale = staleText(F, now, updateHours(wd, min));
-    for (const Loc& L : F.locs) { hl::View::GexItem g; g.strike = rangeTxt(L); g.name.clear();   // (2.1.1, Rassul 22:26) no W / F / M on the row g.grow = L.grow; g.other = L.side == 'O' || L.side == 'A'; v.gexItems.push_back(g); }
+    for (const Loc& L : F.locs) { hl::View::GexItem g; g.strike = rangeTxt(L); g.name.clear(); g.grow = L.grow; g.other = L.side == 'O' || L.side == 'A'; g.above = L.side == 'A' || (F.side == "down" && L.side == 'O') || (F.side == "up" && L.side == 'T'); v.gexItems.push_back(g); }   // (2.1.1, Rassul 22:26) no W / F / M on the row
     int last = -1;
     for (const HLine& h : hover(F, v.gexStale, now, min)) {   // an empty Seg = a 5 px spacer before each location and before the guide
         if ((h.role == 1 || (h.role == 3 && last != 3)) && last >= 0) v.gexHover.push_back(hl::Seg{ "", hl::C_GREY });

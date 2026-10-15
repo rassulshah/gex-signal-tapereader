@@ -745,7 +745,7 @@ struct View {
     // (2.1.0, Rassul 2026-10-14 16:01 "a line in the HOD/LOD indicator box that identifies the key GEX levels where a reaction can
     // occur so it is front and center") the GEX line under the header: at most 3 strikes from LRA-GexNodes-<MKT>.csv (HodLodGex.h),
     // nearest the price first; grow = the up arrow; gexStale = "STALE 25m" (the strikes dimmed); gexHover = the detail on mouse-over
-    struct GexItem { std::string strike, name; bool grow = false, other = false; };   // (2.1.0 rule 2.0) strike = the location's range, name = W / F / M, other = the other side
+    struct GexItem { std::string strike, name; bool grow = false, other = false, above = false; };   // (2.1.1) above = above price (red), else below (green)   // (2.1.0 rule 2.0) strike = the location's range, name = W / F / M, other = the other side
     std::vector<GexItem> gexItems; std::string gexStale; std::vector<Seg> gexHover;
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
@@ -1473,12 +1473,13 @@ inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
 inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const Measure& M, int fs, int sfs)
 {
     const bool st = !v.gexStale.empty();
-    const unsigned cs = 0x00FFFFFFu, cn = 0x00FFFFFFu;   // (2.1.1, Rassul 22:26) strikes always white
+    unsigned cs = 0x00FFFFFFu, cn = 0x00FFFFFFu;   // (2.1.1, Rassul 22:31) set per strike below: above price red, below price green   // (2.1.1, Rassul 22:26) strikes always white
     const std::string sepT = "  \xB7  ";
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
         if (i) { const bool o = g.other && !v.gexItems[i - 1].other; const std::string st = o ? "   |   " : sepT; const int sw = M(st, fs, true);
                  addText(L, x, t, b, st, C_GREY, fs, true, sw, R_TABLE, -1); x += sw; }   // '|' = the other side of price starts
+        cs = cn = g.above ? C_RED : C_GREEN;
         int w = M(g.strike, fs, true); addText(L, x, t, b, g.strike, cs, fs, true, w, R_TABLE, -1); x += w;
         if (!g.name.empty()) { w = M(" " + g.name, fs, true); addText(L, x, t, b, " " + g.name, cn, fs, true, w, R_TABLE, -1); x += w; }
         if (g.grow) {   // an up arrow: shaft + head, centred in the row
