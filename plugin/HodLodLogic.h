@@ -1498,7 +1498,7 @@ inline std::string regimeText(const View& v, bool compact = false) { std::string
 
 // (2.1.0) the GEX line: "7750 G8 ^  .  7775 G7  .  7800 G1" (+ "  STALE 25m"); the up arrow is drawn with lines (no glyph: IRT draws
 // text in the chart's code page). Strike white, MenthorQ name blue, separators grey; stale = strikes / names dimmed.
-inline int gexArrowW(int fs) { return (int)(fs * 0.8f + 0.5f) + 4; }
+inline int gexArrowW(int fs) { return (int)(fs * 0.8f + 0.5f) + 8; }   // (2.2.1, Rassul 12:22 "the arrow is too close to the number") +4 px
 inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
 {
     if (v.gexItems.empty()) return 0;
@@ -1523,7 +1523,7 @@ inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const 
         int w = M(g.strike, fs, true); addText(L, x, t, b, g.strike, cs, fs, true, w, R_TABLE, -1); x += w;
         if (!g.name.empty()) { w = M(" " + g.name, fs, true); addText(L, x, t, b, " " + g.name, cn, fs, true, w, R_TABLE, -1); x += w; }
         if (g.grow) {   // an up arrow: shaft + head, centred in the row
-            const int aw = gexArrowW(fs), ax = x + aw / 2 + 1, h = (int)(fs * 0.95f + 0.5f), yc = (t + b) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
+            const int aw = gexArrowW(fs), ax = x + aw / 2 + 3, h = (int)(fs * 0.95f + 0.5f), yc = (t + b) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
             addLine(L, ax, y0, ax, y1, cs, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, cs, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, cs, 2, R_TABLE);
             x += aw;
         }
