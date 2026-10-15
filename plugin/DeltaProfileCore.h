@@ -128,7 +128,11 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     const bool peakKnown = pb.closed && finite(pb.open) && finite(pb.close);
     if (peakKnown) {
         const Tick pk = key(pb.close);
-        const bool confirmed = sell ? (pb.close > pb.open && pk > high) : (pb.close < pb.open && pk < low);
+        // (2.8.2, Rassul 2026-10-14 19:44) bullish A: the node at / below the peak bar's halfway mark; bearish A: at / above it
+        const double nodeMid = (static_cast<double>(low) + static_cast<double>(high)) * 0.5;
+        const double barMid = finite(pb.high) && finite(pb.low) ? (pb.high + pb.low) * 0.5 / tick : (sell ? -1e300 : 1e300);
+        const bool half = sell ? (nodeMid <= barMid + 1e-6) : (nodeMid >= barMid - 1e-6);
+        const bool confirmed = half && (sell ? (pb.close > pb.open && pk > high) : (pb.close < pb.open && pk < low));
         if (confirmed) { out.code = "A"; out.support = sell; out.decidedBar = pb.index; return out; }
         for (std::size_t i = static_cast<std::size_t>(formed + 1); i < bars.size(); ++i) {
             const Bar& b = bars[i];
