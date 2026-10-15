@@ -1,4 +1,6 @@
 /********************************************************************************
+ *  0.17 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 13): the title reads "King ? (vendor)"
+ *  (the vendor King strike is context). Lines, labels and settings unchanged.
  *  KingTracker.cpp  —  Investor/RT RTX extension  (KING TRACKER — stepped lines)
  *
  *  Draws each book's King as a TIME-indexed STEPPED LINE across the session: the
@@ -497,7 +499,7 @@ extern "C" cppExtension *CreateExtension(void)
     KingTracker *p = new KingTracker();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");
-    p->setVersion("0.16");
+    p->setDescription("King ? (vendor): King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");   // (0.17, 2026-10-14 audit display list) title "King ? (vendor)": the vendor King strike is context
+    p->setVersion("0.17");
     return p;
 }

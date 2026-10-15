@@ -27,7 +27,7 @@ int main() {
     CHECK(S->marks.size() == 1 && S->marks.count(eTime) && S->marks[eTime] == -1, "one top E, at the first new high where buyers trade at a third of their peak");
     h.draws.clear(); p->draw();
     bool head = false, e = false, v = false;
-    for (auto& d : h.draws) { if (d.type == "text" && d.text == "EXHAUSTION   ") head = true; if (d.type == "text" && d.text == "E" && d.color == C_SELL) e = true; if (d.type == "text" && d.text == "3.3x" && d.color == C_SELL) v = true; }
+    for (auto& d : h.draws) { if (d.type == "text" && d.text == "EXHAUSTION   ") head = true; if (d.type == "text" && d.text == "E?" && d.color == C_SELL) e = true; if (d.type == "text" && d.text == "3.3x" && d.color == C_SELL) v = true; }
     CHECK(head && e && v, "header, the red E and its 3.3x value are drawn");
     bool testing = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "testing") testing = true;
     CHECK(testing, "no nightly confirmation yet: the header says testing");

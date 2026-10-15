@@ -1,5 +1,7 @@
 /********************************************************************************
- *  TapeFlowMarks.cpp  --  Investor/RT RTX extension  lsTapeFlowMarks  (v1.1.1, 2026-10-12)
+ *  TapeFlowMarks.cpp  --  Investor/RT RTX extension  lsTapeFlowMarks  (v1.2.0, 2026-10-14)
+ *  1.2.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 13): the candle letter is always "A?" - never
+ *  "A" (a different A from the Delta Profile's, unproven). Placement, colours and the record unchanged.
  *
  *  Rassul approved the TapeFlow 2.0.3 mockup: "do a sanity check and test then implement .. i want to see how it looks on a chart".
  *  The PRICE CHART half of TapeFlow's absorption signal. (1.1.0, Rassul: "just put A on top of the candle that was absorbed. The
@@ -41,7 +43,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* TFM_VERSION = "1.1.1";   // (1.1.1) current cache is published before status; same-size atomic rewrites use native-resolution write times; a transient bad file never erases a drawn mark
+static const char* TFM_VERSION = "1.2.0";   // (1.2.0, 2026-10-14 audit display list) the candle mark is always "A?" (never "A")   // (1.1.1) current cache is published before status; same-size atomic rewrites use native-resolution write times; a transient bad file never erases a drawn mark
 static const COLOR C_BUY  = 0x0022C55E;
 static const COLOR C_SELL = 0x00EF4444;
 static const COLOR C_GRAY = 0x0064748B;
@@ -307,7 +309,7 @@ int TapeFlowMarks::draw(void)
             // ABOVE the candle's high (footprint signals go above the bar), red bearish / green bullish; the multiple stays in TapeFlow
             PNT p; p.set(i, hi, kBarCenter);
             const COLOR c = m.dir > 0 ? C_BUY : C_SELL;
-            const char* label = m.question() ? "A?" : "A";
+            const char* label = "A?";   // (1.2.0, audit list 18:25 CT) always "A?", never "A": a different A from the Delta Profile's, unproven
             textC(p.h, (short)(p.v - LETTER_GAP), label, c);
         }
     } catch (...) {}

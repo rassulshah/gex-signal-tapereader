@@ -1,6 +1,6 @@
 #ifndef LS_TRADEGUARD_LAYOUT_H
 #define LS_TRADEGUARD_LAYOUT_H
-// TradeGuardLayout.h (lsTradeManager 1.2.0, 2026-10-10) -- the SDK-free half of the Topstep Guard box: where it may go, the
+// TradeGuardLayout.h (lsTradeManager 1.2.0, 2026-10-10; 1.3.0 2026-10-14: READY from the checklist only - readyFromChecklist) -- the SDK-free half of the Topstep Guard box: where it may go, the
 // 9-spot Position, the drag (click on the box, move, release), and the per-chart file that remembers a dragged spot.
 // Tested by test_tradeguard_layout.cpp (g++ / MinGW, sanitizers) and test_trademanager_mock.cpp (the real TradeManager.cpp on a
 // mock IRT host with two charts).
@@ -199,6 +199,29 @@ inline MouseOut onMouse(Drag& d, int ev, int h, int v, bool havePos, bool button
     }
     return o;
 }
+
+// (lsTradeManager 1.3.0, 2026-10-14 18:25 CT, Rassul approved the external-audit display list, section 11) READY comes ONLY from his
+// checklist: a key level in play, before 11:00 AM CT (his locked cutoff for new entries), no high-impact news, limits OK. The Dealer
+// Read's DEMAND / SUPPLY word no longer counts. Unknown or stale input = WAIT (never READY on missing data).
+struct ReadyIn {
+    bool levelInPlay = false;     // a key level being worked (the Dealer file's TURN + RDX)
+    bool dealerFresh = false;     // the Dealer file exists and was written in the last DEALER_STALE_MIN minutes
+    int nowMin = -1;              // minutes of the day, CT (-1 = unknown)
+    bool calendarKnown = false;   // the Session file (WIN / CAL rows) exists and is fresh
+    bool newsNear = false;        // a high-impact release from 15 min before to 30 min after now
+    bool guardKnown = false;      // the Topstep Guard file is connected (STATUS row)
+    bool limitsOk = false;        // trades left today, status not warn / stop
+};
+static const int CUTOFF_MIN = 11 * 60;        // 11:00 AM CT - no new entry after it (his locked trade)
+static const int DEALER_STALE_MIN = 15;       // as the Dealer Read's STALE
+static const int SESSION_STALE_MIN = 24 * 60; // the Session file is written once a session
+inline bool beforeCutoff(int nowMin) { return nowMin >= 0 && nowMin < CUTOFF_MIN; }
+inline bool readyFromChecklist(const ReadyIn& r)
+{
+    return r.levelInPlay && r.dealerFresh && beforeCutoff(r.nowMin) && r.calendarKnown && !r.newsNear && r.guardKnown && r.limitsOk;
+}
+// the minutes since a file was written (-1 = missing / unknown)
+inline long long ageMinutes(long long fileSec, long long nowSec) { return fileSec < 0 || nowSec <= 0 || nowSec < fileSec - 60 ? -1 : (nowSec - fileSec) / 60; }
 
 } // namespace tgl
 #endif

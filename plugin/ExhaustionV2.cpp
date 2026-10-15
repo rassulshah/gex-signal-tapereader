@@ -1,4 +1,6 @@
 /*******************************************************************************
+ * 2.0.2 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 13): RETIRED - the marks are no longer drawn
+ * (still decided, journalled and counted); the lines and the header stay.
  * LRA Exhaustion V2 native adapter (research only) -- 2.0.1 (2.0.0 from the outside review, its own indicator lsExhaustionV2 since 2026-10-12; lsExhaustion keeps the reversal read)
  *
  * This adapter deliberately has no legacy engine code or legacy normalization
@@ -45,7 +47,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX2_VERSION "2.0.1"   // 2.0.1 (LRA integration 2026-10-11): real barVolume array, 2% VAP/bar-volume tolerance, frontier resync by bar time, his header format
+#define EX2_VERSION "2.0.2"   // 2.0.2 (2026-10-14 audit display list) marks hidden - retired, log only;   // 2.0.1 (LRA integration 2026-10-11): real barVolume array, 2% VAP/bar-volume tolerance, frontier resync by bar time, his header format
 
 static const COLOR C_BUY_FADE = 0x00EF4444; // red: buyers fading at a high
 static const COLOR C_SELL_FADE = 0x0022C55E; // green: sellers fading at a low
@@ -769,7 +771,10 @@ void Exhaustion::render(const RuntimeState& s) {
     }
     // marks never overlap (his rule): each goes in the first of 3 rows where it clears the mark before it
     int rowEnd[3] = { INT_MIN, INT_MIN, INT_MIN };
-    for (size_t i = 0; i < visible.size(); ++i) {
+    // (2.0.2, 2026-10-14 18:25 CT audit display list: Exhaustion V2 is retired - log only) the marks are still decided, journalled
+    // (EXH2EVENT) and counted in the status file, never drawn
+    static const bool kDrawMarks = false;
+    for (size_t i = 0; kDrawMarks && i < visible.size(); ++i) {
         const std::map<long long, std::vector<Marker> >::const_iterator it = s.markers.find((long long)times[visible[i]]);
         if (it == s.markers.end()) continue;
         for (size_t m = 0; m < it->second.size(); ++m) {
@@ -820,6 +825,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion V2 - pullback read (research only): red buyer-fade is an uptrend exit warning; green seller-fade is a pullback setup only after a causal confirmation. Completed 180-second VAP bars only; calibration is exact-contract and prior-session-only.");
-    p->setVersion("2.0.1");   // keep equal to EX2_VERSION (the build log reads this literal)
+    p->setVersion("2.0.2");   // keep equal to EX2_VERSION (the build log reads this literal)
     return p;
 }

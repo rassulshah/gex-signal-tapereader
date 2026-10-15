@@ -1,4 +1,6 @@
 /*******************************************************************************
+ * lsCVD 1.2.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 13): the shown (confirmed) marks read
+ * "Div?" / "Exh?" / "BR?" - a small test sample (+0.26R on 99). Filled box, colours, placement and the record unchanged.
  * lsCVD 1.1.0 -- one pane: CVD line + delta % histogram, with Div / Exh / BR marks on the CVD line (Rassul 2026-10-12
  * "implement new cvd delta indicator", from the outside package CVD Signals v0.1 + its approved mockup).
  *
@@ -50,7 +52,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CVD_VERSION "1.1.0"
+#define CVD_VERSION "1.2.0"   // 1.2.0 (2026-10-14 audit display list) the confirmed marks read Div? / Exh? / BR?
 
 static const COLOR C_BULL = 0x0034D399;       // green  (bullish setup)
 static const COLOR C_BEAR = 0x00F87171;       // red    (bearish setup)
@@ -480,7 +482,8 @@ void CVD::render(const RuntimeState& s) {
         const cvdf::Out* o = outOf(b->second); if (!o || !std::isfinite(o->cvd)) continue;
         const bool bull = mk.e.direction == cvd::Direction::Bull;
         const COLOR col = bull ? C_BULL : C_BEAR;
-        const std::string label = cvd::name(mk.e.type);
+        std::string label = cvd::name(mk.e.type);
+        if (mk.e.type != cvd::Type::Abs) label += "?";   // (1.2.0, audit list 18:25 CT: small test sample, +0.26R on 99) "Div?" / "Exh?" / "BR?"
         const long x = xOf(b->second), y = yC(o->cvd), w = getTextWidth(label.c_str(), -1) + 8, x0 = x - w / 2;
         RCT dot; dot.set(coord(x - 3), coord(y - 3), coord(x + 4), coord(y + 4)); dot.draw(1, col, col, DRAW_OPAQUE, PAT_SOLID);
         long boxTop = LONG_MIN;
@@ -520,6 +523,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA CVD (testing): blue line = cumulative delta (ask-traded minus bid-traded volume) since the 5:00 PM session start; bars = each bar's delta as a % of its volume. Marks sit on the CVD line where a reversal or breakout was confirmed by price and flow at a prior-day or prior-session high / low (PDH PDL PFH PFL): Div = price made a new high / low but CVD did not; Exh = the pushing side faded at the new extreme; BR = broke the level, retested it and held. Green below the line = bullish, red above = bearish. Only setups with a stop within 4x the normal bar range are shown. Closed bars only; nothing drawn ever changes.");
-    p->setVersion("1.1.0");   // keep equal to CVD_VERSION (the build log reads this literal)
+    p->setVersion("1.2.0");   // keep equal to CVD_VERSION (the build log reads this literal)
     return p;
 }

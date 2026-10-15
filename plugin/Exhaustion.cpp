@@ -1,4 +1,6 @@
 /********************************************************************************
+ *  0.2.3 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 13): the mark reads "E?" (was "E") - untested
+ *        as a standalone signal; recorded and drawn exactly as before otherwise.
  *  Exhaustion.cpp  --  Investor/RT RTX extension  lsExhaustion  (0.2.2, 2026-10-13: engineering fixes ported from the 0.3.1 audit - a failed VAP read rejects the snapshot instead of reading as zero volume, prices on the chart tick grid, RTH edge in exact seconds, records published atomically per contract (marks shown only once recorded), status file replaced atomically, bounded norms / record parsing; signal, thresholds and norms unchanged. 0.2.1, 2026-10-12: the reversal read kept as Rassul uses it - "it is showing good reversals" in crude - with the bar in progress no longer read; the pullback read is the separate lsExhaustionV2. 0.2.0, 2026-10-11; 0.2.0: overnight E only at the study's own overnight line T_overnight when both halves agree, else none - Rassul 22:05 "customize the thresholds for time of day .. overnight vs rth")
  *
  *  EXHAUSTION: is the side pushing price running out? Rassul 2026-10-11 21:17-21:28 (option A, "build exhaustion indicator").
@@ -47,7 +49,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.2.2"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.2.3"          // keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -462,7 +464,7 @@ void Exhaustion::render(EXState& S) {
     if (times.count >= count) for (size_t k = 0; k < vis.size(); ++k) {
         std::map<long long, int>::const_iterator m = S.marks.find((long long)times[vis[k]]);
         if (m == S.marks.end()) continue;
-        txt(xOf(vis[k]) - 3, bottom + 2, "E", m->second < 0 ? C_SELL : C_BUY);
+        txt(xOf(vis[k]) - 6, bottom + 2, "E?", m->second < 0 ? C_SELL : C_BUY);   // (0.2.3, audit list 18:25 CT) "E?" - untested as a standalone signal
     }
 }
 
@@ -471,6 +473,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.2.2");   // EX_VERSION
+    p->setVersion("0.2.3");   // EX_VERSION
     return p;
 }

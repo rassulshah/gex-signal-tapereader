@@ -1,4 +1,9 @@
 /********************************************************************************
+ *  1.3.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, APPROVAL-LIST-2026-10-14.md section 11): READY comes
+ *  ONLY from his checklist - a key level in play (Dealer file fresh), before 11:00 AM CT, no high-impact news (calendar known), limits
+ *  OK (Topstep Guard connected); anything unknown or stale = WAIT. The "Read: YES / NO" item is gone (the time line is his 11:00 AM CT
+ *  cutoff), and in a trade the HOLD / EXIT? / WATCH line from the Read is hidden. Topstep numbers unchanged. Gates: ClaimGates.h
+ *  LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT (=1 restores 1.2.0).
  *  lsTradeManager - the TOPSTEP TRADE MANAGER on each market's chart (Rassul 2026-10-06 21:16 "a topstep indicator in irt ...
  *  sending warnings, letting me know whether i should be in this trade or not, telling me about entry, exit executions ...
  *  oversight, guidance and mentorship as well as coaching"; mockup v1 approved 2026-10-07 08:58 "trade manager is approved, we
@@ -46,6 +51,7 @@
 #include "DealerLogic.h"
 #include "HostSlot.h"
 #include "TradeGuardLayout.h"
+#include "ClaimGates.h"      // (1.3.0) LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT
 #include <chrono>
 #include <deque>
 #include <fstream>
@@ -63,7 +69,7 @@
 #include <climits>
 #include <new>
 
-static const char* const TM_VERSION = "1.2.0";   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
+static const char* const TM_VERSION = "1.3.0";   // (1.3.0, 2026-10-14 18:25 CT audit display list) READY only from his checklist (key level, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT), no "Read" item, no in-trade HOLD / EXIT? (ClaimGates.h LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT)   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
                                                   // (1.1.2) per-chart state, validated bridge inputs, bounded sizing
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
 static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_GREEN = 0x0022C55E, C_DKRED = 0x007F1D1D, C_DKGRN = 0x00166534, C_TRACK = 0x001F2937;
@@ -239,6 +245,7 @@ struct TMState {
     bool inPos = false; std::string posSide; int posSize = 0; double posPx = 0, posUpl = 0;
     bool haveTurn = false, atLevel = false; char side = 0; std::string head, levelTxt, ctl; double ext = 0, lvl = 0, t1 = 0, px = 0;
     std::vector<TMWin> W; std::vector<TMCal> C;
+    long long dealerSec = -1, sessSec = -1;            // (1.3.0) when the Dealer / Session files were written (unix s; -1 = missing)
     std::map<std::string, long long> stamps;
     std::map<std::string, TMPlace> places;             // (1.2.0) per chart key, bounded
     long long saves = 0;                               // test counter (#29): Position files written
@@ -364,6 +371,7 @@ void TradeManager::load(TMState& s)
     std::string dir = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\";
     std::string pG = dir + "LRA-Topstep.csv", pD = dir + "LRA-Dealer-" + mkt + ".csv", pS = dir + "LRA-Session-" + mkt + ".csv";
     bool mk = lastMkt != mkt; lastMkt = mkt;                                  // state is per current chart host
+    s.dealerSec = dl::fileStampSeconds(dl::fileStampPrecise(pD)); s.sessSec = dl::fileStampSeconds(dl::fileStampPrecise(pS));   // (1.3.0) stale input = WAIT
     if (changed(s, pG) || mk) {
         resetGuard();
         std::vector<std::string> L = readLines(pG);
@@ -458,11 +466,13 @@ int TradeManager::draw(void)
         if (t1 > 0) ln += "   target " + fmtPx(mkt, t1);
         add("", C_INK, ln, C_INK, false);
         if (stopPx > 0) { Ln b; b.bar = 1; b.a = ""; b.b = ""; b.ca = b.cb = C_INK; b.bold = false; L.push_back(b); }
-        bool readSame = sameTurn && ctlUpper.find(lng ? "DEMAND" : "SUPPLY") != std::string::npos;
-        bool readFlip = haveTurn && ctlUpper.find(lng ? "SUPPLY" : "DEMAND") != std::string::npos;
-        if (readSame) add("HOLD  ", C_GREEN, "Read still " + ctl, C_INK, false);
-        else if (readFlip) add("EXIT?  ", C_RED, "The Read flipped: " + ctl, C_INK, false);
-        else add("WATCH  ", C_AMBER, "Read: " + (ctl.empty() ? std::string("none") : ctl), C_INK, false);
+        if (cgate::kShowReadExit) {   // (1.3.0, audit list: an untested exit signal) HOLD / EXIT? from the Read - hidden (ClaimGates.h LRA_SHOW_READ_EXIT)
+            bool readSame = sameTurn && ctlUpper.find(lng ? "DEMAND" : "SUPPLY") != std::string::npos;
+            bool readFlip = haveTurn && ctlUpper.find(lng ? "SUPPLY" : "DEMAND") != std::string::npos;
+            if (readSame) add("HOLD  ", C_GREEN, "Read still " + ctl, C_INK, false);
+            else if (readFlip) add("EXIT?  ", C_RED, "The Read flipped: " + ctl, C_INK, false);
+            else add("WATCH  ", C_AMBER, "Read: " + (ctl.empty() ? std::string("none") : ctl), C_INK, false);
+        }
         if (stopPx > 0) add("NEXT  ", C_INK, "At +1R (" + fmtPx(mkt, lng ? posPx + dist : posPx - dist) + "): stop to " + fmtPx(mkt, posPx) + ", break-even", C_INK, false);
         add("NO  ", C_AMBER, std::string("Adding to this trade (cap ") + std::to_string(microCap(mkt)) + " " + microName(mkt) + ")", C_INK, false);
     } else {
@@ -470,21 +480,35 @@ int TradeManager::draw(void)
         bool lvlOk = atLevel && haveTurn;
         bool readOk = side == 'L' ? ctlUpper.find("DEMAND") != std::string::npos : side == 'S' ? ctlUpper.find("SUPPLY") != std::string::npos : false;
         bool readNo = side == 'L' ? ctlUpper.find("SUPPLY") != std::string::npos : side == 'S' ? ctlUpper.find("DEMAND") != std::string::npos : false;
+        const long long nowSec = (long long)time(0);
+        const long long dAge = tgl::ageMinutes(S.dealerSec, nowSec), sAge = tgl::ageMinutes(S.sessSec, nowSec);
         std::string tag; for (size_t i = 0; i < W.size(); i++) if (inWindow(now, W[i].a, W[i].b)) tag = W[i].tag;
         const TMCal* nw = 0; int nwDelta = 0;
         for (size_t i = 0; i < C.size(); i++) if (C[i].imp == "high") { int d = minuteDelta(now, C[i].m); if (d >= -15 && d <= 30 && (!nw || std::abs(d) < std::abs(nwDelta) || (std::abs(d) == std::abs(nwDelta) && C[i].title < nw->title))) { nw = &C[i]; nwDelta = d; } }
-        bool ready_ = lvlOk && readOk && tag != "chop" && !nw && (trades < maxTrades) && status != "warn";
+        // (1.3.0, audit list) READY only from his checklist: key level in play, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT
+        tgl::ReadyIn ri; ri.levelInPlay = lvlOk; ri.dealerFresh = dAge >= 0 && dAge <= tgl::DEALER_STALE_MIN; ri.nowMin = now;
+        ri.calendarKnown = sAge >= 0 && sAge <= tgl::SESSION_STALE_MIN; ri.newsNear = nw != 0; ri.guardKnown = haveGuard;
+        ri.limitsOk = haveGuard && trades < maxTrades && status != "warn" && status != "stop";
+        bool ready_ = cgate::kShowControlWord ? (lvlOk && readOk && tag != "chop" && !nw && (trades < maxTrades) && status != "warn") : tgl::readyFromChecklist(ri);
         add(mkt + " TRADE MANAGER", C_INK, ready_ ? "   READY" : "   WAIT", ready_ ? C_GREEN : C_AMBER, true);
         add("", C_INK, dayLn, C_INK, false);
         if (lvlOk) add("", C_INK, std::string("Next: ") + (side == 'L' ? "LONG" : "SHORT") + " at " + levelTxt, C_INK, true);
         else add("", C_INK, "Next: no key level in play - wait for one", C_MUTED, true);
         add(lvlOk ? "YES  " : "NO  ", lvlOk ? C_GREEN : C_RED, lvlOk ? "Key level: " + levelTxt : "Key level: none within reach", C_INK, false);
-        add(readOk ? "YES  " : readNo ? "NO  " : "WAIT  ", readOk ? C_GREEN : readNo ? C_RED : C_AMBER, "Read: " + (ctl.empty() ? std::string("none") : ctl), C_INK, false);
-        if (tag == "active") add("YES  ", C_GREEN, "Time: Active window", C_INK, false);
-        else if (tag == "chop") add("NO  ", C_RED, "Time: Chop window - sit out", C_INK, false);
-        else add("OK  ", C_INK, "Time: normal", C_INK, false);
+        if (cgate::kShowControlWord) {   // the 1.2.0 checklist (restore path)
+            add(readOk ? "YES  " : readNo ? "NO  " : "WAIT  ", readOk ? C_GREEN : readNo ? C_RED : C_AMBER, "Read: " + (ctl.empty() ? std::string("none") : ctl), C_INK, false);
+            if (tag == "active") add("YES  ", C_GREEN, "Time: Active window", C_INK, false);
+            else if (tag == "chop") add("NO  ", C_RED, "Time: Chop window - sit out", C_INK, false);
+            else add("OK  ", C_INK, "Time: normal", C_INK, false);
+        } else {   // (1.3.0) his checklist: no Read item; the time line is his 11:00 AM CT cutoff
+            if (lvlOk && !ri.dealerFresh) add("WAIT  ", C_AMBER, "Key level data stale" + (dAge >= 0 ? " (" + std::to_string(dAge) + " min old)" : std::string()), C_INK, false);
+            if (tgl::beforeCutoff(now)) add("YES  ", C_GREEN, "Time: before 11:00 AM CT", C_INK, false);
+            else add("NO  ", C_RED, "Time: after 11:00 AM CT - no new entries", C_INK, false);
+        }
         if (nw) add("WAIT  ", C_AMBER, "News: " + nw->title + " at " + t12(nw->m), C_INK, false);
+        else if (!cgate::kShowControlWord && !ri.calendarKnown) add("WAIT  ", C_AMBER, "News: calendar unknown", C_INK, false);
         else add("YES  ", C_GREEN, "News: no high-impact release within 30 min", C_INK, false);
+        if (!cgate::kShowControlWord && !haveGuard) add("WAIT  ", C_AMBER, "Limits: Topstep Guard not connected", C_INK, false);
         if (trades >= maxTrades) add("NO  ", C_RED, "Trades: " + std::to_string(trades) + " of " + std::to_string(maxTrades) + " used today", C_INK, false);
         if (lvlOk && pv > 0) {
             double stopPx = side == 'L' ? ext - tk : ext + tk;
@@ -656,6 +680,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // TRACK_MOUSE: drag without selecting it first
     p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Drag the box to move it (kept per chart); double-click it to go back to the Position setting.");
-    p->setVersion("1.2.0");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
+    p->setVersion("1.3.0");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
     return p;
 }

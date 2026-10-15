@@ -1,4 +1,4 @@
-// test_cvd_host.cpp -- lsCVD 1.1.0 on the mock host (BUILD-LESSONS proofs). From tests/:  g++ -std=c++17 -Wall -Wextra -Imock -I../plugin test_cvd_host.cpp -o th && ./th
+// test_cvd_host.cpp -- lsCVD 1.2.0 (1.1.0 + the audit "?" marks) on the mock host (BUILD-LESSONS proofs). From tests/:  g++ -std=c++17 -Wall -Wextra -Imock -I../plugin test_cvd_host.cpp -o th && ./th
 #include "CVD.cpp"
 #include <cstdio>
 #include <random>
@@ -122,12 +122,16 @@ int main() {
         c.h.paneBottom = 40; c.draw(); CHECK(c.h.draws.empty(), "pane too short: nothing drawn"); }
     // 12. status file written once, keyed by market and bar size
     {   std::ifstream in((std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\CVD.status-ES-180.txt").c_str()); std::string l; std::getline(in, l);
-        CHECK(l == "VERSION,1.1.0", "status file"); }
+        CHECK(l == "VERSION,1.2.0", "status file"); }
     // 13. (1.1.0) the chart shows only shown marks: confirmed, at PDH/PDL/PFH/PFL, stop within 4.0x the bar range; no '?' and no 'x'
     {   Chart c; c.h.bars = all; c.h.barPx = 1; c.h.firstBar = 0; c.run(); c.draw();
         int labels = 0; bool warn = false;
-        for (const mock::Draw& d : c.h.draws) if (d.type == "text" && (d.text == "Div" || d.text == "Exh" || d.text == "BR" || d.text == "Abs" || d.text.find('?') != std::string::npos || d.text.find(" x") != std::string::npos)) {
-            ++labels; if (d.text.find('?') != std::string::npos || d.text.find(" x") != std::string::npos || d.text == "Abs") warn = true; }
+        // (1.2.0, audit list 18:25 CT) the shown marks read "Div?" / "Exh?" / "BR?"; a plain "Div" / "Exh" / "BR" is never drawn
+        bool plain = false;
+        for (const mock::Draw& d : c.h.draws) if (d.type == "text" && (d.text == "Div" || d.text == "Exh" || d.text == "BR")) plain = true;
+        CHECK(!plain, "1.2.0: no plain Div / Exh / BR - every shown mark carries its ?");
+        for (const mock::Draw& d : c.h.draws) if (d.type == "text" && (d.text == "Div?" || d.text == "Exh?" || d.text == "BR?" || d.text.compare(0, 3, "Abs") == 0 || d.text.find(" x") != std::string::npos)) {
+            ++labels; if (d.text.find(" x") != std::string::npos || d.text.compare(0, 3, "Abs") == 0) warn = true; }
         int shown = 0; bool rule = true, abs = false;
         for (const cvdf::Mark& m : c.st()->feed.marks) {
             if (m.e.type == cvd::Type::Abs) abs = true;
@@ -155,7 +159,7 @@ int main() {
             { std::ofstream o(vf.c_str()); o << v; }
             Chart c; c.h.bars = all; c.h.barPx = 1; c.h.firstBar = 0; c.run(); c.draw(); testingTag = offTag = false; labels = 0;
             for (const mock::Draw& d : c.h.draws) if (d.type == "text") { if (d.text == "testing") testingTag = true; if (d.text.find("marks off") == 0) offTag = true;
-                if (d.text == "Div" || d.text == "Exh" || d.text == "BR") ++labels; }
+                if (d.text == "Div?" || d.text == "Exh?" || d.text == "BR?") ++labels; }
         };
         bool t = false, off = false; int n = 0, n0 = 0;
         drawn("VERDICT,testing\n", t, off, n0); CHECK(t && !off && n0 > 0, "testing: tag and marks");
