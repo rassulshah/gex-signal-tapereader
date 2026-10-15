@@ -66,7 +66,7 @@
 #include "OrderFlowFeed.h"
 #include "StackStatsLogic.h"
 
-#define SS_VERSION "1.4.0"          // keep equal to st::VERSION and the setVersion literal below
+#define SS_VERSION "1.4.1"          // keep equal to st::VERSION and the setVersion literal below
 
 class StackStats : public off::MboPane<st::Logic> {
 public:
@@ -103,6 +103,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA StackStats: who is ARRIVING. Per candle, the LOTS of orders ADDED near price (market-by-order feed). One bar per candle = the bigger side: green = bids added, red = offers added; a white tick at the other side's lots when both sides spiked. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. Refills (re-added at a price right after it traded), I (refills + an iceberg confirmed) and L (one large order added) are in the hover, not drawn. Spike labels: the ratio, the pace (p = added lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = one order is most of it, may not reload ?), a blue options line when fresh (oStack), and the info box (Bids | Offers: added lots, rebuilt %, pace, crowd = orders, avg size, top order share, refills) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto).");
-    p->setVersion("1.4.0");   // SS_VERSION
+    p->setVersion("1.4.1");   // SS_VERSION
     return p;
 }

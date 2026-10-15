@@ -139,7 +139,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.6.0";   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.6.1";   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1202,17 +1202,28 @@ inline PanelPlan planPanel(const bp::Box& area, int paneTop, int mode, const bp:
 }
 // (1.5.0) THE READ LINE (Box shows: Read): one line at the box's Position / Offset, sized to its text, only when the pane has a read;
 // the mouse over it -> the detail box (the hover lines wrapped to the pane, below the line, else above it), drawn over the bars
-struct LinePlan { bool ok = false, show = false; bp::Box box, hoverBox; std::string text; int impl = 0; std::vector<std::string> hover; };
+struct LinePlan { bool ok = false, show = false; bp::Box box, hoverBox; std::string text, pre; int impl = 0, preW = 0; std::vector<std::string> hover; };
+// (1.6.1, Rassul 2026-10-15 10:31 "in the indicator pane, add the name of the indicator and the questions like Who is arriving?")
+// "Pull Stats - Who is Leaving" -> "Pull Stats \xB7 Who is leaving?" - drawn grey in front of the read line, always shown
+inline std::string paneQuestion(const char* t) {
+    std::string s = t ? t : ""; const size_t k = s.find(" - ");
+    if (k == std::string::npos) return s;
+    std::string q = s.substr(k + 3);
+    if (q.compare(0, 7, "Who is ") == 0 && q.size() > 7 && q[7] >= 'A' && q[7] <= 'Z') q[7] = (char)(q[7] - 'A' + 'a');   // "Who is leaving"
+    return s.substr(0, k) + " \xB7 " + q + "?";
+}
 static const int HOVER_W_MAX = 700, HOVER_PT = 10, HOVER_LH = 14;
 inline int implOf(const zread::Line& L) { return L.impl > 0 ? BULL : L.impl < 0 ? BEAR : NEUTRAL; }
-inline LinePlan planLine(const bp::Box& area, const bp::Place& place, const zread::Line& L, bool hovering, const TextW& M) {
+inline LinePlan planLine(const bp::Box& area, const bp::Place& place, const zread::Line& L, bool hovering, const TextW& M, const std::string& pre = std::string()) {
     LinePlan P; P.ok = area.w() >= 40 && area.h() >= READ_LH;
-    if (!P.ok || !L.show || L.text.empty()) return P;
-    P.text = nl::fitText(L.text, area.w() - 8, [&](const std::string& u) { return M(u, READ_PT, true); });
-    if (P.text.empty()) return P;
-    P.show = true; P.impl = implOf(L);
-    P.box = bp::placeBox(area, M(P.text, READ_PT, true) + 8, READ_LH + 2, place);
-    if (!hovering) return P;
+    const bool hasText = L.show && !L.text.empty();
+    if (!P.ok || (!hasText && pre.empty())) return P;
+    if (!pre.empty() && M(pre, READ_PT, true) + 12 < area.w()) { P.pre = pre; P.preW = M(pre + "   ", READ_PT, true); }   // (1.6.1) the name + question
+    if (hasText) P.text = nl::fitText(L.text, area.w() - 8 - P.preW, [&](const std::string& u) { return M(u, READ_PT, true); });
+    if (P.text.empty() && P.pre.empty()) return P;
+    P.show = true; P.impl = P.text.empty() ? 0 : implOf(L);
+    P.box = bp::placeBox(area, P.preW + (P.text.empty() ? 0 : M(P.text, READ_PT, true)) + 8, READ_LH + 2, place);
+    if (!hovering || P.text.empty()) return P;
     const int W = std::min(HOVER_W_MAX, area.w()), tw = W - 2 * BOX_PAD;
     std::vector<std::string> lines;
     for (size_t i = 0; i < L.hover.size(); ++i) { const std::vector<std::string> w = wrapText(L.hover[i], tw, 4, HOVER_PT, false, M); lines.insert(lines.end(), w.begin(), w.end()); }
@@ -1943,7 +1954,8 @@ inline bool inBox(const bp::Box& b, int h, int v) { return b.w() > 0 && h >= b.l
 // (1.5.0) the read line (no box, no border) and, with the mouse on it, its detail box (solid grey border, black, white text)
 inline void drawLine(cppExtension* x, const LinePlan& P) {
     if (!P.ok || !P.show) return;
-    textAt(x, P.box.l + 4, P.box.t + 1, READ_LH, P.text, implColor(P.impl), READ_PT, true);
+    if (!P.pre.empty()) textAt(x, P.box.l + 4, P.box.t + 1, READ_LH, P.pre, C_NUMS, READ_PT, true);   // (1.6.1) the pane's name + question, grey
+    if (!P.text.empty()) textAt(x, P.box.l + 4 + P.preW, P.box.t + 1, READ_LH, P.text, implColor(P.impl), READ_PT, true);
     if (P.hover.empty() || P.hoverBox.w() <= 0) return;
     boxAt(x, P.hoverBox);
     int y = P.hoverBox.t + BOX_PAD - 1;
@@ -2599,7 +2611,7 @@ private:
         const zread::Line zl = S.zr.e.line(S.zr.pane, steadyMs());
         const bool readMode = clampMode(S.set.mode) == MODE_READ;
         PanelPlan P; LinePlan LP;
-        if (readMode) { LP = planLine(area, pl, zl, S.inBox, measureWith(this)); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
+        if (readMode) { LP = planLine(area, pl, zl, S.inBox, measureWith(this), paneQuestion(L::title())); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
         else { P = planPanel(area, g.top, S.set.mode, pl, info, zl.show ? zl.text : std::string(), optL, g.reserve, measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
         (void)m;
         std::vector<LBox> avoid;

@@ -97,7 +97,7 @@
 #include "PullStatsLogic.h"
 #include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.6.1"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.6.2"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -165,6 +165,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). One bar per candle = the bigger side: green = bids pulled (buyers leaving), red = offers pulled (sellers leaving); a white tick at the other side's lots when both sides spiked. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. The read line (only at a key / gamma level, shown once it locks 3 minutes after price reached the level): was the size resting at the level cancelled or traded - red = the defence pulled at support (green at resistance), green = traded and held at support, grey = mixed; always '?'. Its hover: the numbers, the normal, the share pulled before the touch, and the study caveats. Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive), Offset X / Y, Box shows.");
-    p->setVersion("1.6.1");   // PS_VERSION
+    p->setVersion("1.6.2");   // PS_VERSION
     return p;
 }

@@ -133,7 +133,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.22.4"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.22.7"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -166,6 +166,7 @@ static int warnBlockH(int font, int rows) { return warnH(font) + std::max(1, row
 // may start above this row. The warning sits under it and the column header under the warning.
 static const int LQ_TITLE_ROW_PX = 20;
 static int warnTop(int paneTop) { return paneTop + LQ_TITLE_ROW_PX; }
+static const int LQ_BIG_W = 56;   // (0.22.5, Rassul 10:35 "the column for Big needs to be slightly wider") in ColumnBoard's 30-120 range
 static long long steadyMs() {
     return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
@@ -360,7 +361,8 @@ struct LQState {
     struct Line { double v = -1; bool data = false; };
     Line lAttack, lEaten, lExh, lPulled, lRebuilt, lCounter;
     int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
-    std::string verdict = "none", vlogKey = "none"; int verdictScore = 0;                  // (0.20.0) the banner verdict last drawn (status)
+    std::string verdict = "none", vlogKey = "none"; int verdictScore = 0;
+    int vIncDir = 0; double vIncPx = 0; bool vIncPick = false;                                // (0.22.7) the verdict on screen (sticky)                  // (0.20.0) the banner verdict last drawn (status)
     int warnRows = 2;                              // (0.18.0) the warning detail's rows last drawn (>= 2 reserved)
     std::string state = "starting", lastStatusText;
 #ifndef LQ_FLOW
@@ -1817,8 +1819,8 @@ void LiquidityProfile::render(LQState& S) {
         cb::In in; in.paneL = pane.left; in.paneT = pane.top; in.paneB = pane.bottom; in.axisR = paneRight;
         in.levels = S.peers.on[cb::LEVELS]; in.levelsW = S.peers.w[cb::LEVELS]; in.delta = S.peers.on[cb::DELTA]; in.deltaW = S.peers.w[cb::DELTA];
         in.dealer = S.peers.on[cb::DEALER]; in.dealerW = S.peers.w[cb::DEALER];
-        in.big = S.boSet.on; in.bigW = cb::range(cb::BIG).def;          // (0.19.0) our BIG column, first after the last bar
-        if (S.boSet.on) cb::publish(cb::BIG, S.symbol, S.spb, chart, now, cb::range(cb::BIG).def); else cb::clear(cb::BIG, S.symbol, S.spb, chart);
+        in.big = S.boSet.on; in.bigW = LQ_BIG_W;                          // (0.19.0) our BIG column, first after the last bar; (0.22.5) 44 -> 56 px
+        if (S.boSet.on) cb::publish(cb::BIG, S.symbol, S.spb, chart, now, LQ_BIG_W); else cb::clear(cb::BIG, S.symbol, S.spb, chart);
         const cb::Layout L = cb::layout(in);
         S.colPriceRight = L.margin > 0 ? L.priceRight : -1;
         S.colBigL = L.w[cb::BIG] > 0 && L.margin > 0 ? L.big.l : -1; S.colBigR = S.colBigL >= 0 ? L.big.r : -1;
@@ -1923,7 +1925,7 @@ void LiquidityProfile::render(LQState& S) {
     }
     S.colRight = std::max(colR, full + 4);   // (0.13.2) published so the Dealer Profile's badges start right of it
 #ifndef LQ_FLOW
-    renderBig(S, pane.left, paneRight, top, bottom, lastBar, lastX);   // (0.18.0) the biggest resting order lines, over the candles
+    renderBig(S, pane.left, paneRight, warnTop(pane.top), bottom, lastBar, lastX);   // (0.22.5, Rassul 10:35) the BIG column from the top of the chart (under the title row)   // (0.18.0) the biggest resting order lines, over the candles
     {   // (0.15.0) the column's x span and the bar -> x map, for the mouse; then the hovered near zone's makeup box
         S.hovColX0 = pane.left; S.hovColX1 = left + S.colRight;
         PNT a, b; a.set(lastBar, 0.0f, kBarCenter); b.set(lastBar - 1, 0.0f, kBarCenter);
@@ -2089,7 +2091,11 @@ void LiquidityProfile::renderWarning(LQState& S) {
         const Cand* best = nullptr; int bestScore = -1;
         for (size_t i = 0; i < cands.size(); ++i) {
             Cand& c = cands[i];
-            const bool held = c.dir > 0 ? (double)clA[lastBar] > c.px : (double)clA[lastBar] < c.px;
+            // (0.22.7, 10:40 NQ log: REV DOWN / NONE / REV DOWN several times a minute) the verdict on screen is sticky: it stays until price
+            // closes a quarter band (2 ticks min) through its price, and wins a tie against a new candidate - no flicker
+            const bool inc = S.vIncDir == c.dir && std::fabs(c.px - S.vIncPx) < tick * 0.5;
+            const double hyst = inc ? std::max(2.0 * tick, 0.25 * Z.band) : 0.0;
+            const bool held = c.dir > 0 ? (double)clA[lastBar] > c.px - hyst : (double)clA[lastBar] < c.px + hyst;
             if (!held || !zn::atZone(Z, std::max(0, std::min(lastBar, c.bar)), c.px)) continue;
             {   // (0.22.2, Rassul 09:53 - the 9:42 E-S REV UP at 7753 came 30 pts after the 9:00 low: chasing) a turn is at the EXTREME:
                 // within one band of the lowest low (up) / highest high (down) of the last 10 bars, else it is a fill inside a move
@@ -2109,15 +2115,21 @@ void LiquidityProfile::renderWarning(LQState& S) {
             if (!c.circle) { const sb::Ev* q = sb::nearestEv(evB, c.px, tol, k0, k1, c.dir > 0 ? -1 : 1); if (q && q->flag) c.circle = true; }
             if (c.lots <= 0) { const sb::Ev* f2 = sb::nearestEv(evF, c.px, tol, k0, k1, c.dir > 0 ? -1 : 1); if (f2) c.lots = (long long)f2->val; }
             const int score = (c.src == 1 || c.lots > 0 ? 1 : 0) + (c.aX > 0 ? 1 : 0) + (c.circle ? 1 : 0);
-            if (score > bestScore || (score == bestScore && best && c.lots > best->lots)) { best = &c; bestScore = score; }
+            const bool bInc = best && S.vIncDir == best->dir && std::fabs(best->px - S.vIncPx) < tick * 0.5;
+            if (score > bestScore || (score == bestScore && best && ((inc && !bInc) || (inc == bInc && c.lots > best->lots)))) { best = &c; bestScore = score; }
         }
+        if (!best) S.vIncDir = 0;                                           // (0.22.7) nothing on screen any more
         if (best) {
-            vdir = best->dir; vpx = best->px; S.verdictScore = bestScore;
+            vdir = best->dir; vpx = best->px; S.verdictScore = bestScore; S.vIncDir = vdir; S.vIncPx = vpx;
             const int sgB = S.boSign[bol::BID], sgA = S.boSign[bol::ASK];
             const bool liveB = S.bo.live[bol::BID] >= 0, liveA = S.bo.live[bol::ASK] >= 0;
             const int sup = vdir > 0 ? (liveB && sgB > 0) + (liveA && sgA < 0) : (liveA && sgA > 0) + (liveB && sgB < 0);
             const int ag = vdir > 0 ? (liveB && sgB < 0) + (liveA && sgA > 0) : (liveA && sgA < 0) + (liveB && sgB > 0);
             vfail = ag > sup && ag > 0;
+            // (0.22.6, Rassul 10:37 "buyers pulling and Rev up ... you need to consider both together, they need to be coordinated"):
+            // one story - a warning on the OTHER side (BUYERS PULLING / BIDS THINNING against a REV UP, or the mirror) makes it FAILING ?
+            const bool against = have && w.favour != 0 && ((w.favour > 0) != (vdir > 0));
+            if (against) vfail = true;
             std::string what;
             if (best->src == 4) what = std::string(vdir > 0 ? "buyers lifted " : "sellers hit ") + std::to_string(best->lots) + " at " + pxTxt(best->px) + " (initiative)";
             else if (best->lots > 0) what = std::string(vdir > 0 ? "big bid filled " : "big offer filled ") + (best->n > 1 ? std::to_string(best->n) + "\xD7 " : std::string()) + std::to_string(best->lots)
@@ -2129,6 +2141,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
                 const long long n = (long long)std::llround(S.boSize[sd]);
                 return std::string(" \xB7 ") + nm + (S.boSign[sd] > 0 ? " stacking +" : S.boSign[sd] < 0 ? " pulled -" : " flat ") + std::to_string(n); };
             v1 += side(bol::BID, "bids") + side(bol::ASK, "offers");
+            if (against) { std::string wn = w.name; for (size_t i = 0; i < wn.size(); ++i) if (wn[i] >= 'A' && wn[i] <= 'Z') wn[i] = (char)(wn[i] - 'A' + 'a'); v1 += " \xB7 against it: " + wn; }   // (0.22.6)
             const zn::NL lv = zn::nearest(named, vpx, Z.band);
             v2 = clock12(best->tEnd > 0 ? best->tEnd : barKey(lastBar) * 1000) + (lv.name.empty() ? std::string() : " \xB7 at " + lv.name + " " + pxTxt(lv.px));
             std::string conf;
@@ -2537,6 +2550,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.22.4");   // LQ_VERSION
+    p->setVersion("0.22.7");   // LQ_VERSION
     return p;
 }
