@@ -54,14 +54,16 @@
 #include <deque>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
+#include "ZoneRule.h"           // (0.17.0) Rassul's zone rule (held / broke), ported from lra.level_confluence
 
 namespace lqp {
 
-static const char* const VERSION = "0.16.1";   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
+static const char* const VERSION = "0.17.0";   // (0.17.0, 2026-10-14 night, Rassul approved 18:25 CT) Held / Broke by the ZONE rule (ZoneRule.h: centre +/- 0.06 ADR, held = a close 0.10 ADR back out, broke = a close 0.10 ADR beyond with no close back inside in 15 min; never a tick-through or a first touch), labels only once resolved; audit wording: "Hit N lots \xB7 NN% re-added ?", LQ? <LEVEL>, no intent words;   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -218,7 +220,7 @@ inline int rebuiltPct(long long rebuilt, long long hit) {
 }
 // (0.15.0) "Hit 140 lots \xB7 rebuilt 90% - absorbing" (only while price is in the zone and something was hit)
 inline std::string hitText(long long hit, long long rebuilt) {
-    char b[96]; std::snprintf(b, sizeof(b), "Hit %lld lots \xB7 rebuilt %d%% - absorbing", hit, rebuiltPct(rebuilt, hit)); return b;
+    char b[96]; std::snprintf(b, sizeof(b), "Hit %lld lots \xB7 %d%% re-added ?", hit, rebuiltPct(rebuilt, hit)); return b;   // (0.17.0 audit: was "rebuilt NN% - absorbing")
 }
 // (0.15.0) 'as price came': the zone's lots now vs its lots when price first came within reach on this approach
 enum CameState { CAME_NONE = -1, CAME_UNCHANGED = 0, CAME_BUILDING = 1, CAME_LEAVING = 2 };
@@ -272,7 +274,7 @@ struct HoverIn {
 struct HoverRow { std::string text; int ink = INK_WHITE; };
 inline std::vector<HoverRow> hoverRows(const HoverIn& h) {
     std::vector<HoverRow> r;
-    {   std::string t = h.side == BID ? "Support" : "Resistance";
+    {   std::string t = h.side == BID ? "Bids" : "Offers";            // (0.17.0 audit: no "support" / "resistance" - resting size is not a defence)
         if (!h.level.empty()) t += " at " + h.level;
         t += " " + pxText(h.lo, h.tick) + " - " + pxText(h.hi, h.tick) + " \xB7 " + lotsText(h.lots) + " lots (" + (h.bx > 0 ? multText(h.bx) : std::string("-")) + ")";
         HoverRow x; x.text = t; x.ink = sideInk(h.side); r.push_back(x); }
@@ -782,7 +784,7 @@ public:
             // side (a green close above a support after the push below) - they broke it, got nothing, now they are stuck
             if (a.barT < 0 && a.breachTrade && (a.side == BID ? c > a.hi : c < a.lo)) { a.barT = bar; push("t", a, barTime, barEnd, -1); }
             if (broke) {
-                pushReason(a, false, barTime, barEnd);
+                // (0.17.0) the attempt's own end stays (logged, never a label); Held / Broke come from the ZONE rule (zrClose)
                 a.end = std::string("break") + (pulling ? " pulled" : "") + (eaten >= P.eatenBreak ? " eaten" : "") + (depleting ? " depleting" : "");
                 close_(a);
                 continue;
@@ -791,7 +793,6 @@ public:
                 bool A = false;
                 const std::vector<std::pair<Tick, Tick>>& dp = a.side == BID ? deltaAbsorbBid : deltaAbsorbAsk;
                 for (size_t k = 0; k < dp.size(); ++k) if (dp[k].first <= a.hi && dp[k].second >= a.lo) A = true;
-                pushReason(a, true, barTime, barEnd);
                 a.end = std::string("hold") + (pulling ? " pulled" : "") + (depleting ? " depleting" : "") + (a.barE >= 0 ? " Exh" : "") + (A ? " A" : "")
                       + (a.barO >= 0 ? " offense" : "") + (a.barR >= 0 ? " replenished" : "");
                 close_(a);
@@ -800,6 +801,7 @@ public:
             if (bar - a.barA >= P.maxBars) { a.end = "expired"; close_(a); }
         }
         attempts.erase(std::remove_if(attempts.begin(), attempts.end(), [](const Attempt& a) { return a.done; }), attempts.end());
+        zrClose(bar, barTime, barEnd, close);                          // (0.17.0) the zone rule on this closed bar
         curBar = bar;
     }
     int curBar = 0;
@@ -863,7 +865,7 @@ public:
     static double round2(double v) { return std::floor(v * 100 + 0.5) / 100; }
 
     // the attempt log line (every attempt, drawn or not) for the nightly scoring
-    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end|e_bar|o_bar|p_bar|story|r_bar|x_bar|def_net_x|opp_net_x|old_x"; }
+    static std::string attemptHeader() { return "t_arrival|side|zone_lo|zone_hi|shown|eaten|stayed|added_x|refill_x|exhaust|resilience|breach_trade|end|version|pushback|defender_speed|pull_speed|response_cross|t_end|e_bar|o_bar|p_bar|story|r_bar|x_bar|def_net_x|opp_net_x|old_x|zr_adr|zr_lo|zr_hi|zr_x|zr_rule"; }   // (0.17.0) + the zone-rule geometry (the outcome: -zonerule- file)
     std::string attemptLine(const Attempt& a, Ms tEnd) const {
         std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
         const double sh = a.shown > 0 ? a.shown : 1;
@@ -887,6 +889,10 @@ public:
         o << '|' << (a.barE >= 0 ? a.barE - a.barA : -1) << '|' << (a.barO >= 0 ? a.barO - a.barA : -1) << '|' << (a.barP >= 0 ? a.barP - a.barA : -1) << '|' << (st.empty() ? "-" : st)
           << '|' << (a.barR >= 0 ? a.barR - a.barA : -1) << '|' << (a.barX >= 0 ? a.barX - a.barA : -1)
           << '|' << round2(a.defNet / sh) << '|' << round2(a.oppNet / sh) << '|' << round2(a.oldShare);
+        // (0.17.0) the zone-rule geometry of this attempt (empty when the chart had no ADR yet)
+        if (zrAdr > 0) { const double c = 0.5 * (double)(a.lo + a.hi) * P.tick, w = zrule::ZONE_W * zrAdr;
+            o << '|' << zrAdr << '|' << (c - w) << '|' << (c + w) << '|' << zrule::RES_X * zrAdr << '|' << zrule::VERSION; }
+        else o << "||||" << zrule::VERSION;
         return o.str();
     }
     std::vector<std::string> attemptLog;          // lines waiting to be appended by the host
@@ -1013,18 +1019,126 @@ public:
         std::string first = att + " " + hit;
         if (L.attack > 0 && st.attack >= 0) first += " " + fx(st.attack) + " normal";
         const bool exh = L.exh > 0 && st.exh >= 0 && st.exh < L.exh;
-        if (L.exh > 0 && st.exh >= 0) first += exh ? ", then exhausted (" + fx(st.exh) + ")" : (held ? ", kept going (" + fx(st.exh) + ")" : " and never slowed");
+        if (L.exh > 0 && st.exh >= 0) first += exh ? ", then slowed to " + fx(st.exh) : (held ? ", kept going (" + fx(st.exh) + ")" : " and never slowed");   // (0.17.0) no "exhausted"
         std::string second;
         const bool pulled = L.pulled > 0 && st.pulled >= L.pulled;
-        if (pulled) second = dfn + " pulled " + pc(std::min(st.pulled, 9.99)) + " of their " + ord + (held ? "" : " instead of defending");
-        else if (L.rebuilt > 0 && st.rebuilt >= L.rebuilt) second = dfn + " held and refilled their " + ord + " (" + fx(st.rebuilt) + ")";
+        if (pulled) second = dfn + " pulled " + pc(std::min(st.pulled, 9.99)) + " of their " + ord;
+        else if (L.rebuilt > 0 && st.rebuilt >= L.rebuilt) second = dfn + " re-added " + ord + " (" + fx(st.rebuilt) + ")";
         else if (!held && L.eaten > 0 && st.eaten >= L.eaten) second = att + " ate " + pc(st.eaten) + " of everything there";
-        else second = held ? dfn + " held" : dfn + " did not refill";
-        return std::string(held ? "Absorbed: " : "Broke: ") + first + "; " + second;
+        else second = held ? "price closed back out" : dfn + " did not re-add";
+        return std::string(held ? "Held: " : "Broke: ") + first + "; " + second;
     }
     void pushReason(const Attempt& a, bool held, long long barTime, Ms barEnd) {
         Mark m; m.code = held ? "Held" : "Broke"; m.reasons = reason(a, held, barEnd); m.value = -1; m.side = a.side; m.barTime = barTime;
         m.lo = a.lo; m.hi = a.hi; m.shown = a.shown; m.tA = a.tA; m.tDecided = barEnd; marks.push_back(m);
+    }
+    // ---- (0.17.0, Rassul 2026-10-14 18:25 CT approved) HELD / BROKE BY THE ZONE RULE (ZoneRule.h, lra.level_confluence LCF v1.1):
+    // each arrival at a liquidity zone starts an encounter on the zone centre +/- 0.06 ADR (ADR = the chart's own prior 20 sessions,
+    // set by the host as zrAdr). On every CLOSED bar from the arrival bar on: Held = a close 0.10 ADR back out beyond the near edge;
+    // Broke = a close 0.10 ADR beyond the far edge with no close back inside within 15 min (5 x 3-min bars) - the label is written on
+    // the bar where that became known, never before; otherwise in zone (no label); after 2 h pinned (logged, no label). A first touch
+    // or a tick through is never a break. Once written a label never changes (marks are append-only and redrawn from the record).
+    // Debounce (zone_entries): a new encounter on the same side within an open / just-resolved encounter's zone waits for 2 closes
+    // at least the half-width beyond it.
+    double zrAdr = -1; int zrSpb = 180;
+    struct ZTrack { long long zoneId = 0; Ms tA = 0; int side = BID; Tick lo = 0, hi = 0; double shown = 0; int barA = -1; zrule::Outcome o; zrule::Reset reset; bool restored = false; Ms tRes = 0; };
+    std::vector<ZTrack> ztracks;
+    std::vector<std::string> zoneLog;                    // lines for the host (OPEN at the arrival, the outcome once final)
+    long long zrOpened = 0, zrRev = 0, zrCont = 0, zrPin = 0, zrCens = 0, zrSkipped = 0, zrNoAdr = 0;
+    static std::string zoneHeader() { return "event|t_arrival|side|zone_lo|zone_hi|shown|adr|zr_lo|zr_hi|x|res|failed_breaks|bars|break_bar|t_decided|bar_time|rule|version"; }
+    std::string zoneLine(const char* ev, const ZTrack& z, Ms tDec, long long barTime) const {
+        std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
+        o << ev << '|' << z.tA << '|' << (z.side == BID ? "support" : "resistance") << '|' << (double)z.lo * P.tick << '|' << (double)z.hi * P.tick << '|' << z.shown
+          << '|' << (z.o.x / zrule::RES_X) << '|' << z.o.lo << '|' << z.o.hi << '|' << z.o.x << '|' << zrule::resName(z.o.res) << '|' << z.o.failed << '|' << z.o.n + 1
+          << '|' << z.o.kb << '|' << tDec << '|' << barTime << '|' << zrule::VERSION << '|' << VERSION;
+        return o.str();
+    }
+    bool zrBlocked(int side, double centre) const {
+        for (size_t i = 0; i < ztracks.size(); ++i) {
+            const ZTrack& t = ztracks[i]; if (t.side != side) continue;
+            if (centre < t.o.lo || centre > t.o.hi) continue;
+            if (!t.o.resolved() || !t.reset.done) return true;
+        }
+        return false;
+    }
+    void zrStart(const Attempt& a) {
+        if (!(zrAdr > 0) || !finite(zrAdr)) { zrNoAdr++; return; }
+        const double c = 0.5 * (double)(a.lo + a.hi) * P.tick;
+        if (zrBlocked(a.side, c)) { zrSkipped++; return; }
+        ZTrack t; t.zoneId = a.zoneId; t.tA = a.tA; t.side = a.side; t.lo = a.lo; t.hi = a.hi; t.shown = a.shown; t.barA = a.barA;
+        t.o = zrule::makeOutcome(a.side == BID, c, zrAdr, zrSpb);
+        t.reset.lo = t.o.lo; t.reset.hi = t.o.hi; t.reset.dist = zrule::ZONE_W * zrAdr;
+        ztracks.push_back(t); zrOpened++;
+        zoneLog.push_back(zoneLine("OPEN", t, 0, 0));
+        while (ztracks.size() > 200) ztracks.erase(ztracks.begin());
+    }
+    // a track rebuilt from the record after a restart (OPEN with no outcome yet): the host replays the closed bars since its arrival
+    bool zrRestore(const std::string& ln, int barA) {
+        std::vector<std::string> f; size_t b = 0;
+        for (size_t i = 0; i <= ln.size(); ++i) if (i == ln.size() || ln[i] == '|') { f.push_back(ln.substr(b, i - b)); b = i + 1; }
+        if (f.size() < 18 || f[0] != "OPEN") return false;
+        long long tA = 0; double lo = 0, hi = 0, sh = 0, adr = 0;
+        if (!integer(f[1], 1, std::numeric_limits<long long>::max(), tA) || !num(f[3], lo) || !num(f[4], hi) || !num(f[5], sh) || !num(f[6], adr) || adr <= 0) return false;
+        if (f[2] != "support" && f[2] != "resistance") return false;
+        for (size_t i = 0; i < ztracks.size(); ++i) if (ztracks[i].tA == tA) return false;     // already here
+        ZTrack t; t.tA = tA; t.side = f[2] == "support" ? BID : ASK; t.shown = sh; t.barA = barA; t.restored = true;
+        if (!tryToTick(lo, P.tick, t.lo) || !tryToTick(hi, P.tick, t.hi)) return false;
+        t.o = zrule::makeOutcome(t.side == BID, 0.5 * (lo + hi), adr, zrSpb);
+        t.reset.lo = t.o.lo; t.reset.hi = t.o.hi; t.reset.dist = zrule::ZONE_W * adr;
+        ztracks.push_back(t); return true;
+    }
+    void zrResolved(const std::string& ln) {                  // an outcome already in the record: that encounter is done (no second label)
+        std::vector<std::string> f; size_t b = 0;
+        for (size_t i = 0; i <= ln.size(); ++i) if (i == ln.size() || ln[i] == '|') { f.push_back(ln.substr(b, i - b)); b = i + 1; }
+        long long tA = 0; if (f.size() < 18 || f[0] != "RES" || !integer(f[1], 1, std::numeric_limits<long long>::max(), tA)) return;
+        resolvedSeen.insert(tA);
+    }
+    std::set<long long> resolvedSeen;
+    void zrClose(int bar, long long barTime, Ms barEnd, double close) {
+        for (size_t i = 0; i < ztracks.size(); ++i) {
+            ZTrack& t = ztracks[i];
+            if (t.o.resolved()) { t.reset.onClose(close); continue; }
+            if (t.barA < 0 || bar < t.barA) continue;
+            if (!t.o.onClose(close, barEnd / 1000)) continue;
+            t.tRes = barEnd;
+            if (resolvedSeen.count(t.tA)) continue;               // decided before a restart: already labelled / logged
+            resolvedSeen.insert(t.tA);
+            const int r = t.o.res;
+            if (r == zrule::REV) zrRev++; else if (r == zrule::CONT) zrCont++; else if (r == zrule::PIN) zrPin++; else zrCens++;
+            zoneLog.push_back(zoneLine("RES", t, barEnd, barTime));
+            if (r != zrule::REV && r != zrule::CONT) continue;    // pinned / censored: logged for the study, no label
+            const bool held = r == zrule::REV;
+            const Attempt* a = nullptr;
+            for (size_t k = 0; k < attempts.size() && !a; ++k) if (attempts[k].tA == t.tA && attempts[k].zoneId == t.zoneId) a = &attempts[k];
+            for (size_t k = finished.size(); k-- > 0 && !a;) if (finished[k].tA == t.tA && finished[k].zoneId == t.zoneId) a = &finished[k];
+            if (a && !t.restored) { pushReason(*a, held, barTime, barEnd); continue; }
+            Mark m; m.code = held ? "Held" : "Broke"; m.value = -1; m.side = t.side; m.barTime = barTime; m.lo = t.lo; m.hi = t.hi; m.shown = t.shown; m.tA = t.tA; m.tDecided = barEnd;
+            m.reasons = held ? "Held: closed 0.10 ADR back out of the zone" : "Broke: closed 0.10 ADR beyond the zone, no close back inside in 15 min";
+            marks.push_back(m);
+        }
+        for (size_t i = 0; i < ztracks.size();) {               // done with: resolved, reset passed (or 6 h old)
+            const ZTrack& t = ztracks[i];
+            if (t.o.resolved() && (t.reset.done || (t.tRes > 0 && barEnd - t.tRes > 6LL * 3600 * 1000))) ztracks.erase(ztracks.begin() + i); else ++i;
+        }
+    }
+    // the session ended (17:00 CT): an open break candidate counts (the study's i_end), else pinned - logged, labelled as above
+    void zrEndSession(long long barTime, Ms barEnd) {
+        for (size_t i = 0; i < ztracks.size(); ++i) {
+            ZTrack& t = ztracks[i]; if (t.o.resolved() || !t.o.endSession()) continue;
+            t.tRes = barEnd;
+            if (resolvedSeen.count(t.tA)) continue;
+            resolvedSeen.insert(t.tA);
+            const int r = t.o.res; if (r == zrule::CONT) zrCont++; else zrPin++;
+            zoneLog.push_back(zoneLine("RES", t, barEnd, barTime));
+            if (r == zrule::CONT) {
+                Mark m; m.code = "Broke"; m.value = -1; m.side = t.side; m.barTime = barTime; m.lo = t.lo; m.hi = t.hi; m.shown = t.shown; m.tA = t.tA; m.tDecided = barEnd;
+                const Attempt* a = nullptr;
+                for (size_t k = finished.size(); k-- > 0 && !a;) if (finished[k].tA == t.tA && finished[k].zoneId == t.zoneId) a = &finished[k];
+                m.reasons = a && !t.restored ? reason(*a, false, barEnd) : "Broke: closed 0.10 ADR beyond the zone at the session end";
+                marks.push_back(m);
+            }
+        }
+        ztracks.clear();
     }
     // (0.7.0) the warning for the zone price is in now: the strongest that applies (risk first, the good ones only when nothing worse
     // applies); every condition uses only lines confirmed for this market; nothing when no attempt is live or nothing applies
@@ -1040,7 +1154,7 @@ public:
         auto stepping = [&](const Attempt& x) {
             const bool s_ = x.side == BID;
             w = Warn(); w.name = std::string(s_ ? "BUYERS" : "SELLERS") + " STEPPING IN"; w.favour = s_ ? +1 : -1;
-            w.detail = std::string(s_ ? "sellers" : "buyers") + " exhausted" + (x.exE >= 0 ? " (" + fx(x.exE) + ")" : std::string()) + "; " +
+            w.detail = std::string(s_ ? "sellers" : "buyers") + " slowed" + (x.exE >= 0 ? " (" + fx(x.exE) + ")" : std::string()) + "; " +
                        (s_ ? "buyers now lifting offers " : "sellers now hitting bids ") + fx(x.sX) + " normal";
             return true;
         };
@@ -1060,8 +1174,8 @@ public:
         w = Warn();
         if (heavy && pull && !exh) { w.name = sup ? "BREAKDOWN RISK" : "BREAKOUT RISK"; w.favour = bad;
             w.detail = att + " " + hitting + A() + ", not slowing; " + dfn + " pulling their " + ord + " (" + pc(st.pulled) + ")"; }
-        else if (exh && pull) { w.name = "ABSORPTION WEAKENING"; w.favour = bad;
-            w.detail = att + " exhausted (" + fx(st.exh) + "), but " + dfn + " are pulling their " + ord + " (" + pc(st.pulled) + ")"; }
+        else if (exh && pull) { w.name = Att + " SLOWED, " + Ord + " PULLED ?"; w.favour = bad;
+            w.detail = att + " slowed (" + fx(st.exh) + "), but " + dfn + " are pulling their " + ord + " (" + pc(st.pulled) + ")"; }
         else if (pull) { w.name = Dfn + " PULLING"; w.favour = bad;
             w.detail = dfn + " pulling their " + ord + " (" + pc(st.pulled) + ") while " + att + " keep " + hitting; }
         else if (thin && !exh) { w.name = Ord + " THINNING"; w.favour = bad;
@@ -1075,11 +1189,11 @@ public:
             w.detail = att + " " + hitting + A() + ", not slowing; " + dfn + " holding - wait"; }
         else if (trapped) { w.name = "TRAPPED " + Att; w.favour = good;
             w.detail = att + " pushed past " + std::string(px) + " and failed; price back " + (sup ? "above" : "below") + " the zone"; }
-        else if (exh && light) { w.name = Att + " GIVING UP"; w.favour = good;
-            w.detail = att + " tested the " + (sup ? "bid" : "offer") + " lightly (" + fx(st.attack) + " normal) and exhausted (" + fx(st.exh) + ")"; }
-        else if (exh) { w.name = "ABSORPTION OCCURRING"; w.favour = good;
-            w.detail = att + " exhausted (" + fx(st.exh) + "); " + dfn + " holding" +
-                       (L.rebuilt > 0 && st.rebuilt >= L.rebuilt ? " and refilling their " + ord + " (" + fx(st.rebuilt) + ")" : std::string()); }
+        else if (exh && light) { w.name = Att + " LIGHT, SLOWING ?"; w.favour = good;
+            w.detail = att + " tested the " + (sup ? "bid" : "offer") + " lightly (" + fx(st.attack) + " normal) and slowed (" + fx(st.exh) + ")"; }
+        else if (exh) { w.name = Att + " SLOWED ?"; w.favour = good;
+            w.detail = att + " slowed (" + fx(st.exh) + "); price still at the zone" +
+                       (L.rebuilt > 0 && st.rebuilt >= L.rebuilt ? "; " + dfn + " re-adding " + ord + " (" + fx(st.rebuilt) + ")" : std::string()); }
         else return false;
         return true;
     }
@@ -1144,6 +1258,7 @@ private:
             if (first > 0) { a.attackVol = first; a.attacks.push_back(std::make_pair(t, first)); }
             a.flowBars[a.barA].attack += first > 0 ? first : 0;
             attempts.push_back(a); z.inAttempt = true;
+            zrStart(attempts.back());                                   // (0.17.0) the zone-rule encounter of this arrival
         }
     }
     void push(const char* code, const Attempt& a, long long barTime, Ms barEnd, double value) {

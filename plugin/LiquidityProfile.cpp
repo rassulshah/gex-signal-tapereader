@@ -1,4 +1,21 @@
 /********************************************************************************
+ *  0.17.0 (2026-10-14 night, Rassul approved 18:25 CT; lsLiquidityProfile + lsLiquidityFlow):
+ *    1. HELD / BROKE BY HIS ZONE RULE (ZoneRule.h 1.0.0, ported natively from lra.level_confluence LCF v1.1 zone_outcome /
+ *       docs\study-methods\level-confluence.md; 400 / 400 random cases identical to the study's own function). Levels are ZONES price
+ *       trades into, then reverses or continues: zone = the touched zone's centre +/- 0.06 ADR (ADR = the daily true range of the full
+ *       17:00 CT session, mean of the prior 20 sessions from the chart's own bars, min 10; 5-9 labelled short); HELD = a 3-min close
+ *       0.10 ADR back out beyond the near edge; BROKE = a close 0.10 ADR beyond the far edge with NO close back inside within 15 min
+ *       (5 bars) - written on the bar where that became known; otherwise in zone (no label), pinned after 2 h (logged). A first touch
+ *       or a tick through is never a break (was: a single 3-min close past the liquidity band = "Broke", a close back out after 3 min =
+ *       "Absorbed"). Labels only once resolved, never changed (append-only record, redrawn from it); open encounters are rebuilt after a
+ *       restart from <stem>-zonerule-<chart|panes>-<session>.csv and the closed bars replayed. The attempts log keeps every column
+ *       and gains zr_adr|zr_lo|zr_hi|zr_x|zr_rule (an older session file gets the longer header once); the outcome is in the
+ *       -zonerule- file (OPEN / RES rows: REV / CONT / PIN / CENSORED, failed breaks). Status line ZONE_RULE.
+ *    2. AUDIT WORDING (APPROVAL-LIST-2026-10-14 s.6): hover "Hit 140 lots \xB7 rebuilt 90% - absorbing" -> "Hit 140 lots \xB7 90% re-added ?";
+ *       "LQ PDL" -> "LQ? PDL" and the hover header says Bids / Offers (no "support" / "resistance"); reasons "Absorbed: ..." -> "Held:
+ *       ...", "then exhausted (0.3x)" -> "then slowed to 0.3x", "held and refilled their bids" -> "re-added bids", "instead of
+ *       defending" dropped; warnings ABSORPTION OCCURRING / WEAKENING / GIVING UP -> "<SIDE> SLOWED ?" / "<SIDE> SLOWED, <BIDS> PULLED ?" /
+ *       "<SIDE> LIGHT, SLOWING ?"; the Flow pane's "Absorbed" statistic is named "Eaten" (it is the eaten share). KEEP items unchanged.
  *  0.16.1 (2026-10-14 evening, LIQ-DAY-2026-10-14 review "rebuilt_pct is pegged at 200 on every attempt"): ROOT CAUSE - the hit /
  *    rebuilt tally counted every NEW order in the 3-point zone after its first fill as "rebuilt" (in ES the queue churn alone is
  *    4-5x the lots hit: 10-14 15:25 status hit 3,854 / rebuilt 16,911), then capped the ratio at 200%. Now an add counts only at a
@@ -92,7 +109,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.16.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.17.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -290,6 +307,8 @@ struct LQState {
     std::vector<Lvl> levels; long levelsAt = -1; long long mqStamp = -2; std::vector<Lvl> mqLevels;
     double avgRth = 0; int avgRthN = 0, rthOpen = -1, rthClose = -1;
     double expRange = 0; long long hlStamp = -2; std::string reachSrc = "6x 3-min range";
+    // (0.17.0) the zone rule: the lagged ADR (chart bars, prior 20 sessions), the last closed bar (session end), the restore of open encounters
+    int zrAdrDays = 0; std::string zrNote = "no ADR yet"; long long zrLastBarTime = 0, zrLastEndMs = 0; bool zrRestored = false; long long zrRestoredN = 0, zrWrites = 0, zrFails = 0;
     std::vector<std::string> confirms;
     // (0.11.1, Rassul 20:35-20:36 "how do i backfill ... liquidity flow") the Flow pane's own record: each closed bar's resting bids /
     // offers near price and each absorption window, per session (<MKT>-<spb>-flow-<session>.csv), re-read on load so a restart or a
@@ -356,7 +375,8 @@ private:
     void closedBars(LQState& S, long count);
     void loadNorms(LQState& S);
     void loadLayout(LQState& S);
-    void loadLevels(LQState& S, long count);     // (0.10.0) key levels + CR / PS / HVL + the 14-session RTH range
+    void loadLevels(LQState& S, long count);
+    void zoneRestore(LQState& S, long count);   // (0.17.0) open zone-rule encounters of this session after a restart     // (0.10.0) key levels + CR / PS / HVL + the 14-session RTH range
     void loadReach(LQState& S);
     void updateConfirms(LQState& S);              // (0.10.0) LQ: a key / CR / PS / HVL level with a 2.5x+ shown zone on it                  // (0.10.0) the reach: 1/2 expected range (lsHodLod) / 1/2 average RTH range / 6x
     void loadDelta(LQState& S);
@@ -686,7 +706,7 @@ static void seedBars(LQState& S, cppExtension::RTARRAYP& vap, cppExtension::RTAR
 }
 // a bar is closed once a later bar exists (checklist #27); each closed bar is decided once, in order
 void LiquidityProfile::closedBars(LQState& S, long count) {
-    if (S.barCount == 0) { S.barCount = count; S.e.curBar = (int)count - 2; S.e.formBar = (int)count - 1; RTARRAYP vap(barVolumeProfile); RTARRAY hi(barHigh), lo(barLow); seedBars(S, vap, hi, lo, (int)count - 1000, (int)count - 2); return; }   // (0.11.1) every loaded bar (up to 1,000) for the always-on pane   // history before load: never decided
+    if (S.barCount == 0) { S.barCount = count; S.e.curBar = (int)count - 2; S.e.formBar = (int)count - 1; RTARRAYP vap(barVolumeProfile); RTARRAY hi(barHigh), lo(barLow); seedBars(S, vap, hi, lo, (int)count - 1000, (int)count - 2); zoneRestore(S, count); return; }   // (0.11.1) every loaded bar (up to 1,000) for the always-on pane   // history before load: never decided
     if (count <= S.barCount) { if (count < S.barCount) S.barCount = count; return; }
     RTARRAYI times(barDateTime); RTARRAY close(barClose), high(barHigh), low(barLow);
     if (times.count < count || close.count < count || high.count < count || low.count < count) return;   // (0.11.4) high / low too
@@ -699,7 +719,7 @@ void LiquidityProfile::closedBars(LQState& S, long count) {
     for (long i = S.barCount - 1; i < count - 1; ++i) {
         const long long bt = (long long)times[(int)i];
         const long long endMs = ctSec((RTDATE)times[(int)i]) * 1000LL;   // IRT stamps the bar END (checklist #12)
-        if (endMs > 0) { seedBars(S, vap, high, low, (int)i, (int)i); S.e.onBarClose((int)i, bt, endMs, (double)close[(int)i], S.dpBid, S.dpAsk); }
+        if (endMs > 0) { seedBars(S, vap, high, low, (int)i, (int)i); S.e.onBarClose((int)i, bt, endMs, (double)close[(int)i], S.dpBid, S.dpAsk); S.zrLastBarTime = bt; S.zrLastEndMs = endMs; }
 #ifdef LQ_FLOW
         std::map<int, std::pair<double, double>>::const_iterator nb = S.e.nearBook.find((int)i);
         if (nb != S.e.nearBook.end() && !S.bookHist.count(bt)) {
@@ -862,6 +882,16 @@ void LiquidityProfile::loadLevels(LQState& S, long count) {
     }
     if (B.size() < 30) return;
     const int per = S.spb > 0 ? S.spb : 180;
+    {   // (0.17.0) the zone rule's ADR: the daily TRUE range of the full 17:00-CT session, mean of the prior 20 sessions (min 10; 5-9 used
+        // and labelled when the chart holds fewer), from these same bars - the session in progress never counts
+        zrule::Adr adr;
+        for (size_t i = 0; i < B.size(); ++i) adr.add(zrule::sessionKey((long long)B[i].days * 86400 + B[i].endSec), B[i].h, B[i].l, B[i].c);
+        const long long cur = zrule::sessionKey((long long)B.back().days * 86400 + B.back().endSec);
+        int n = 0; double v = adr.adrFor(cur, n, zrule::ADR_MIN); bool shortAdr = false;
+        if (!(v > 0)) { v = adr.adrFor(cur, n, 5); shortAdr = v > 0; }
+        S.e.zrAdr = v > 0 ? v : -1; S.e.zrSpb = per; S.zrAdrDays = n;
+        S.zrNote = v > 0 ? std::to_string(n) + " sessions" + (shortAdr ? " (short: the study uses 10+)" : "") : "under 5 complete sessions on the chart: no zone rule (no labels)";
+    }
     const std::vector<klv::Level> L = klv::compute(B, per, S.rthOpen, S.rthClose, S.tick);
     S.levels.clear();
     for (size_t i = 0; i < L.size(); ++i) {
@@ -941,7 +971,7 @@ void LiquidityProfile::updateConfirms(LQState& S) {
         q << all[i].code << "," << (double)all[i].px * S.e.P.tick << "," << (z->side == lqp::BID ? "support" : "resistance") << ",bx " << z->bx
           << "," << (S.lqShow ? "shown" : "logged");
         S.confirms.push_back(q.str());
-        if (S.lqShow) { std::string& m = S.lqMark[z->id]; if (m.empty()) m = "LQ " + all[i].code; else if (m.find(all[i].code) == std::string::npos) m += "/" + all[i].code; }
+        if (S.lqShow) { std::string& m = S.lqMark[z->id]; if (m.empty()) m = "LQ? " + all[i].code; else if (m.find(all[i].code) == std::string::npos) m += "/" + all[i].code; }
     }
 }
 
@@ -978,7 +1008,8 @@ void LiquidityProfile::session(LQState& S, long long t) {
     const long long sec = t / 1000; if (sec <= 0) return;
     const long long key = (sec - 17LL * 3600) / 86400LL + 1;               // 17:00 CT belongs to the next day's session
     if (key == S.session) return;
-    S.session = key; S.e.marks.clear(); S.marksWritten = 0;
+    if (S.session >= 0 && S.zrLastEndMs > 0) { S.e.zrEndSession(S.zrLastBarTime, S.zrLastEndMs); persist(S); }   // (0.17.0) i_end: open breaks count, the rest pin
+    S.session = key; S.e.marks.clear(); S.marksWritten = 0; S.zrRestored = false; S.e.resolvedSeen.clear();
     const std::string d = dir(); if (d.empty()) return;
     // (0.7.0, Rassul 2026-10-11 "do you store the reason so i can see the reason when i go back on the chart") every recorded mark and
     // reason of THIS session and the 9 before it is read back, so scrolling back through earlier days shows what was drawn then (#11).
@@ -1019,11 +1050,69 @@ void LiquidityProfile::session(LQState& S, long long t) {
 #endif
 }
 
+// (0.17.0) the zone-rule record of this instance: OPEN at an arrival, RES with the outcome (REV / CONT / PIN / CENSORED) once final
+#ifdef LQ_FLOW
+static const char* const ZR_KIND = "-zonerule-panes-";
+#else
+static const char* const ZR_KIND = "-zonerule-chart-";
+#endif
+// after a restart: every OPEN encounter of this session with no outcome yet is rebuilt and the closed bars since its arrival replayed
+// (closes only: the same answer as if the indicator had run), so a label is never lost or written twice
+void LiquidityProfile::zoneRestore(LQState& S, long count) {
+    if (S.zrRestored) return;
+    S.zrRestored = true;
+    const std::string d = dir(); if (d.empty() || S.session < 0 || count < 3) return;
+    std::ifstream in; if (!openBoundedInput(d + "\\" + recordStem(S) + ZR_KIND + std::to_string(S.session) + ".csv", in)) return;
+    std::vector<std::string> open; std::string line; int n = 0;
+    while (readBoundedLine(in, line) && ++n < 20000) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.compare(0, 4, "RES|") == 0) S.e.zrResolved(line); else if (line.compare(0, 5, "OPEN|") == 0) open.push_back(line);
+    }
+    RTARRAYI times(barDateTime); RTARRAY close(barClose);
+    if (times.count < count || close.count < count) return;
+    for (size_t k = 0; k < open.size(); ++k) {
+        const std::vector<std::string> f = split(open[k], '|'); long long tA = 0;
+        if (f.size() < 2 || !parseLL(f[1], 1, LLONG_MAX / 2, tA) || S.e.resolvedSeen.count(tA)) continue;
+        int barA = -1;                                                    // the bar the arrival traded in: the first bar ending after it
+        for (long i = std::max(0L, count - 2000); i < count; ++i) { const long long e = ctSec((RTDATE)times[(int)i]) * 1000LL; if (e > tA) { barA = (int)i; break; } }
+        if (barA < 0 || !S.e.zrRestore(open[k], barA)) continue;
+        S.zrRestoredN++;
+    }
+    for (long i = 0; i < count - 1; ++i) {                               // replay: zrClose only acts on the restored encounters here
+        bool any = false; for (size_t k = 0; k < S.e.ztracks.size(); ++k) if (!S.e.ztracks[k].o.resolved() && S.e.ztracks[k].barA <= (int)i) any = true;
+        if (!any) continue;
+        const long long endMs = ctSec((RTDATE)times[(int)i]) * 1000LL; if (endMs <= 0) continue;
+        S.e.zrClose((int)i, (long long)times[(int)i], endMs, (double)close[(int)i]);
+    }
+}
+
+// (0.17.0) append with a header that may have GROWN: a session file started by an older version (fewer columns) gets the new header
+// line once (atomic rewrite; old rows keep their fields - readers fill the new columns as empty), so no row has more fields than its header
+static bool appendLinesHeader(const std::string& path, const std::string& header, const std::vector<std::string>& lines) {
+    if (lines.empty()) return true;
+    long long bytes = 0;
+    if (statFile(path, nullptr, &bytes) && bytes > 0 && bytes < 8LL * 1024 * 1024) {
+        std::ifstream in(path.c_str(), std::ios::binary); std::string first;
+        if (in && std::getline(in, first)) {
+            if (!first.empty() && first.back() == '\r') first.pop_back();
+            if (first != header && header.compare(0, first.size() + 1, first + "|") == 0) {
+                std::string rest((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()); in.close();
+                if (!publishFile(path, header + "\n" + rest)) return false;
+            }
+        }
+    }
+    return appendLines(path, header, lines);
+}
+
 void LiquidityProfile::persist(LQState& S) {
     // (0.4.0) lsLiquidityFlow records its pane signals (<MKT>-<spb>-panes-<session>.csv, re-read after a restart: no repaint);
     // lsLiquidityProfile records every attempt for the nightly study (<MKT>-<spb>-attempts-<session>.csv)
     const std::string d = dir(); if (d.empty() || S.session < 0) { S.e.attemptLog.clear(); S.e.makeupLog.clear(); return; }
     makeDir(flexDir()); makeDir(d);
+    if (!S.e.zoneLog.empty()) {                                          // (0.17.0) the zone-rule record (each instance its own file)
+        if (appendLines(d + "\\" + recordStem(S) + ZR_KIND + std::to_string(S.session) + ".csv", lqp::Engine::zoneHeader(), S.e.zoneLog)) { S.e.zoneLog.clear(); S.zrWrites++; }
+        else { S.zrFails++; if (S.e.zoneLog.size() > 2000) S.e.zoneLog.erase(S.e.zoneLog.begin(), S.e.zoneLog.begin() + 1000); }
+    }
 #ifdef LQ_FLOW
     S.e.attemptLog.clear(); S.e.makeupLog.clear();
     if (S.marksWritten < S.e.marks.size()) {
@@ -1045,7 +1134,7 @@ void LiquidityProfile::persist(LQState& S) {
         else S.recFails++;
     }
     if (!S.e.attemptLog.empty()) {
-        if (appendLines(d + "\\" + recordStem(S) + "-attempts-" + std::to_string(S.session) + ".csv", lqp::Engine::attemptHeader(), S.e.attemptLog)) S.e.attemptLog.clear();
+        if (appendLinesHeader(d + "\\" + recordStem(S) + "-attempts-" + std::to_string(S.session) + ".csv", lqp::Engine::attemptHeader(), S.e.attemptLog)) S.e.attemptLog.clear();
         else S.recFails++;
     }
     if (!S.e.makeupLog.empty()) {                                        // (0.15.0) each decision's zone makeup, hits and rebuilds
@@ -1069,7 +1158,10 @@ void LiquidityProfile::status(LQState& S, long long now) {
       << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",norms " << (S.e.norms.loaded ? "file" : "session") << "\nPARAMS," << S.params
       << "\nZONES," << S.e.zones.size() << "\nATTEMPTS," << S.e.attempts.size() << "\nMARKS," << S.e.marks.size() << ",written " << S.marksWritten
       << ",writes " << S.recWrites << ",fails " << S.recFails << "\nDELTA_A," << S.dpBid.size() << "," << S.dpAsk.size()
-      << "\nSESSION," << S.session << "\nSTATE," << S.state << "\n";
+      << "\nSESSION," << S.session << "\nSTATE," << S.state
+      << "\nZONE_RULE," << zrule::VERSION << ",adr " << S.e.zrAdr << " (" << S.zrNote << "),zone +/- " << zrule::ZONE_W << " ADR,held/broke " << zrule::RES_X << " ADR,reclaim 15 min"
+      << ",open " << S.e.ztracks.size() << ",opened " << S.e.zrOpened << ",held " << S.e.zrRev << ",broke " << S.e.zrCont << ",pinned " << S.e.zrPin << ",censored " << S.e.zrCens
+      << ",skipped (debounce) " << S.e.zrSkipped << ",no_adr " << S.e.zrNoAdr << ",restored " << S.zrRestoredN << ",writes " << S.zrWrites << ",fails " << S.zrFails << "\n";
     {   // (0.6.0) the pane statistics now and the lines in use (value, data / default)
         lqp::Stats st; const bool have = S.e.latest(S.e.bookT, st);
         auto ln = [](const LQState::Line& l) { std::ostringstream q; q.imbue(std::locale::classic()); q << l.v << (l.data ? " data" : " default"); return q.str(); };
@@ -1397,7 +1489,7 @@ void LiquidityProfile::render(LQState& S) {
 #ifndef LQ_FLOW
         if (z.near && solid) {                                        // (0.15.0) the level it holds names the hover's header
             LQState::HovZone hz; hz.id = z.id; hz.lo = z.edgeLo; hz.hi = z.edgeHi; hz.names = picks[oi].names;
-            if (hz.names.empty()) { std::map<long long, std::string>::const_iterator q = S.lqMark.find(z.id); if (q != S.lqMark.end()) hz.names = q->second.compare(0, 3, "LQ ") == 0 ? q->second.substr(3) : q->second; }
+            if (hz.names.empty()) { std::map<long long, std::string>::const_iterator q = S.lqMark.find(z.id); if (q != S.lqMark.end()) hz.names = q->second.compare(0, 4, "LQ? ") == 0 ? q->second.substr(4) : q->second; }
             S.hovZones.push_back(hz); }
 #endif
         const int len = std::max(8, (int)(maxZone > 0 ? z.size / maxZone * full : full));
@@ -1689,7 +1781,7 @@ void LiquidityProfile::renderFlow(LQState& S) {
             struct It { const char* name; double now; LQState::Line line; bool pct, higherSafe; };
             const It agg[3] = { {"Attack", st.attack, S.lAttack, false, false}, {"Exh", st.exh, S.lExh, false, false}, {"Counter", st.counter, S.lCounter, false, true} };
             // (0.11.4) Pulled reads as a % like the Pull signal (Rassul: "Pull signal keeps its % form"); ratios as 2.0x (one decimal)
-            const It dfn[3] = { {"Absorbed", st.eaten, S.lEaten, true, false}, {"Pulled", st.pulled, S.lPulled, true, false}, {"Rebuilt", st.rebuilt, S.lRebuilt, false, true} };
+            const It dfn[3] = { {"Eaten", st.eaten, S.lEaten, true, false}, {"Pulled", st.pulled, S.lPulled, true, false}, {"Rebuilt", st.rebuilt, S.lRebuilt, false, true} };
             auto fmt = [](double v, bool pct) { char b[24]; if (v < 0) std::snprintf(b, sizeof(b), "-"); else if (pct) std::snprintf(b, sizeof(b), "%.0f%%", v * 100.0); else std::snprintf(b, sizeof(b), "%.1fx", v); return std::string(b); };
             auto column = [&](const It* it, int y, int yMax) {
                 for (int k = 0; k < 3; ++k) {
@@ -1841,12 +1933,12 @@ extern "C" cppExtension* CreateExtension(void) {
 #ifdef LQ_FLOW
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);                    // its own pane (no OVERLAY), draws itself
     p->setExtendedFlags(CALL_CONTINUOUSLY);
-    p->setDescription("LRA Liquidity Flow: the absorption process at the zone price is in. AGGRESSIVE (market orders): buyers (green) and sellers (red) trading into the zone - Attack, Exh (the attackers ran out), Counter (the defenders stepped in). PASSIVE (resting orders): buyers' bids (green) and sellers' offers (red), net added since arrival - Absorbed, Pulled, Rebuilt. Each reads Metric: now (line), the line set per market by the nightly study.");
+    p->setDescription("LRA Liquidity Flow: the process at the zone price is in. AGGRESSIVE (market orders): buyers (green) and sellers (red) trading into the zone - Attack, Exh (the attackers slowed), Counter (the other side turned aggressive). PASSIVE (resting orders): buyers' bids (green) and sellers' offers (red), net added since arrival - Eaten, Pulled, Rebuilt. Each reads Metric: now (line), the line set per market by the nightly study. Held / Broke at a touch = the zone rule (zone = centre +/- 0.06 ADR; held = a 3-min close 0.10 ADR back out; broke = a close 0.10 ADR beyond with no close back inside within 15 min), written only once decided.");
 #else
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED | TRACK_MOUSE);   // (0.15.0) TRACK_MOUSE: the zone hover
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
-    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: support / resistance and the level it holds, its orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share rebuilt. The signals are on the Liquidity Flow panes. TESTING.");
+    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.16.1");   // LQ_VERSION
+    p->setVersion("0.17.0");   // LQ_VERSION
     return p;
 }
