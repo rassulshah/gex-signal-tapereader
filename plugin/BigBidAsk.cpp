@@ -66,7 +66,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.4.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.5.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -177,6 +177,7 @@ static bool keyOf(double price, double tick, long long& key) {
 
 struct HoverT { bba::Box box; long long t = 0; int side = -1; };
 struct BBState {
+    bool sdOk = false; long long sd[3] = {0, 0, 0}; long long sdCheckMs = -1; std::string sdWhy = "no file";   // (1.5.0) the big-lot SD sizes
     bool busy = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "missing (defaults)", chartKey;
     int spb = 0; long long session = -1; double tick = 0;
@@ -294,7 +295,20 @@ bba::Settings BigBidAsk::readSettingsFile(const std::string& mkt, std::string& w
     if (why.empty()) why = "file";
     return s;
 }
+// (1.5.0) the Liquidity Profile's big-lot sizes for this market (LiquidityProfile.bigsd-<MKT>.txt), checked every 5 s
+static void readSd(BBState& S, const std::string& dirp, long long now) {
+    if (S.sdCheckMs >= 0 && now >= S.sdCheckMs && now - S.sdCheckMs < 5000) return;
+    S.sdCheckMs = now;
+    if (dirp.empty() || S.market.empty()) { S.sdOk = false; S.sdWhy = "no folder"; return; }
+    std::ifstream in((dirp + BBA_SEP "LiquidityProfile.bigsd-" + S.market + ".txt").c_str(), std::ios::binary);
+    std::string ln; long long v[3] = {0, 0, 0};
+    if (!in || !std::getline(in, ln) || ln.size() > 200) { S.sdOk = false; S.sdWhy = "no Liquidity Profile big-lot file (bold ratio rule)"; return; }
+    if (!bba::parseBsd(ln, v)) { S.sdOk = false; S.sdWhy = "Liquidity Profile still learning (bold ratio rule)"; return; }
+    S.sdOk = true; for (int k = 0; k < 3; ++k) S.sd[k] = v[k];
+    S.sdWhy = "big-lot sizes 1SD " + std::to_string(v[0]) + " / 2SD " + std::to_string(v[1]) + " / 3SD " + std::to_string(v[2]);
+}
 void BigBidAsk::settings(BBState& S, long long now) {
+    readSd(S, flexDir(), now);
     if (S.setCheckMs >= 0 && now >= S.setCheckMs && now - S.setCheckMs < 1000) return;
     S.setCheckMs = now;
     const std::string p = settingsPath(S.market);
@@ -519,7 +533,7 @@ void BigBidAsk::status(BBState& S, long long now) {
       << "\nSETTINGS,font " << S.set.font << ",bold " << bba::ratioText(S.set.boldQ) << ",circle " << (S.set.circle ? 1 : 0) << ",non-bold " << (S.set.nonBold ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << "," << S.settingsWhy
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
-      << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim
+      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim
       << "\nAREA,left " << S.leftLimit << ",price right " << S.priceRight << ",columns levels " << (S.peers.on[cb::LEVELS] ? "on" : "off") << " delta " << (S.peers.on[cb::DELTA] ? "on" : "off")
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none") << "\n";
     const std::string text = o.str();
@@ -621,17 +635,21 @@ void BigBidAsk::render(BBState& S) {
         if (i < (int)count - 1) { auto it = S.fin.find(t); if (it != S.fin.end()) F = &it->second; }
         else if (S.haveForming && S.forming.t == t) F = &S.forming;
         if (!F || !F->valid) continue;
-        const int ab = set.circle ? bba::absorption(*F, set.boldQ) : 0;
+        // (1.5.0, Rassul 16:11-16:13 "the faded prints next to the candle have to be at least 1 SD ... use the distribution that we are
+        // currently using") with the Liquidity Profile's big-lot sizes: nothing under 1SD, 1SD = faded, 2SD = bold, 3SD = bold + outline;
+        // absorption circle from 1SD. Still learning there (no file / under 30 big orders): the 1.4 bold-ratio rule.
+        const int ab = !set.circle ? 0 : S.sdOk ? bba::absorptionMin(*F, S.sd[0]) : bba::absorption(*F, set.boldQ);
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok) continue;
-            const bool bold = bba::bold(sd < 0 ? F->bidQ : F->askQ, set.boldQ);
+            bool bold = bba::bold(sd < 0 ? F->bidQ : F->askQ, set.boldQ), huge = false;
+            if (S.sdOk) { if (p.vol < S.sd[0]) continue; bold = p.vol >= S.sd[1]; huge = p.vol >= S.sd[2]; }
             if (!bold && !set.nonBold) continue;
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
             bba::Cand c; c.bar = i; c.side = sd; c.x = sd < 0 ? cb_.l : cb_.r; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;
-            c.bold = bold; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = bold && F->closed;
+            c.bold = bold; c.huge = huge; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = bold && F->closed;
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back((double)p.key * S.tick); candVol.push_back((double)p.vol);
         }
     }
@@ -664,6 +682,10 @@ void BigBidAsk::render(BBState& S) {
             setPen(col, 1, P_SOLID); CBRUSH br(col, PAT_HOLLOW); br.set();
             RCT ring; ring.set(coord(f.l), coord(f.t), coord(f.r), coord(f.b)); ring.drawRounded(f.b - f.t, f.b - f.t);
             ++S.circles;
+        }
+        if (c.huge) {                                                    // (1.5.0) 3SD+: a white outline round the number (outside a circle)
+            const bba::Box& f = P[k].foot; setPen(0x00FFFFFF, 1, P_SOLID); CBRUSH br(0x00FFFFFF, PAT_HOLLOW); br.set();
+            RCT o; o.set(coord(f.l - 2), coord(f.t - 2), coord(f.r + 2), coord(f.b + 2)); o.draw(1, 0x00FFFFFF, 0x00FFFFFF, DRAW_OPAQUE, PAT_HOLLOW);
         }
         HoverT H; H.box = P[k].foot; H.t = src[k]->t; H.side = c.side; S.targets.push_back(H);
     }
@@ -706,7 +728,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask v1.4.1: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.4.1");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
+    p->setVersion("1.5.0");   // BBA_VERSION
     return p;
 }

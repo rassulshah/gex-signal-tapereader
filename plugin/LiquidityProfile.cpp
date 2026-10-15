@@ -1695,6 +1695,11 @@ void LiquidityProfile::bldUpdate(LQState& S, long long start) {
             for (size_t i = S.bldLines.size(); i-- > 0;) body += S.bldLines[i].second + "\n";
             body += cur.line(S.boSession) + "\n";
             makeDir(dirp); publishFile(p, body);
+            // (0.26.0, Rassul 16:13 "why not use the distribution that we are currently using") the sizes for Big Bid / Ask's prints:
+            // "BSD1,ok,n,mu,1sd,2sd,3sd" (ok 0 = still learning: Big Bid / Ask keeps its own rule)
+            char b2[160]; std::snprintf(b2, sizeof(b2), "BSD1,%d,%lld,%lld,%lld,%lld,%lld\n", S.bldOk ? 1 : 0, S.bldN, (long long)std::llround(S.bldMu),
+                (long long)std::llround(S.bldV[0]), (long long)std::llround(S.bldV[1]), (long long)std::llround(S.bldV[2]));
+            publishFile(dirp + "\\LiquidityProfile.bigsd-" + S.market + ".txt", b2);
         }
     }
 }

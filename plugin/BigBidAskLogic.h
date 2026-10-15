@@ -30,7 +30,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.4.1";   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.5.0";   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -175,6 +175,22 @@ inline void rate(std::vector<Facts>& v, size_t i) {
 }
 inline bool bold(int q, int boldQ) { return q >= 0 && q >= boldQ; }
 // +1 = bullish absorption (circle the RED number), -1 = bearish (circle the GREEN number), 0 = none. Closed candles only.
+// (1.5.0) the same absorption rule with a size floor (lots) instead of the bold ratio - the big-lot 1SD from the Liquidity Profile
+inline int absorptionMin(const Facts& F, long long minVol) {
+    if (!F.closed || !F.valid || minVol <= 0) return 0;
+    const long long mid2 = F.h + F.l;
+    if (F.bid.ok && F.bid.vol >= minVol && 2 * F.bid.key <= mid2 && F.c > F.o && F.c > F.bid.key) return +1;
+    if (F.ask.ok && F.ask.vol >= minVol && 2 * F.ask.key >= mid2 && F.c < F.o && F.c < F.ask.key) return -1;
+    return 0;
+}
+// "BSD1,ok,n,mu,1sd,2sd,3sd" -> the three sizes (lots); false = learning / garbled (the bold-ratio rule stays)
+inline bool parseBsd(const std::string& line, long long sd[3]) {
+    std::vector<std::string> f; size_t a = 0; std::string ln = line; while (!ln.empty() && (ln.back() == '\r' || ln.back() == '\n')) ln.pop_back();
+    for (size_t i = 0; i <= ln.size(); ++i) if (i == ln.size() || ln[i] == ',') { f.push_back(ln.substr(a, i - a)); a = i + 1; }
+    if (f.size() != 7 || f[0] != "BSD1" || f[1] != "1") return false;
+    for (int k = 0; k < 3; ++k) { const std::string& t = f[4 + k]; if (t.empty() || t.size() > 9) return false; for (char ch : t) if (ch < '0' || ch > '9') return false; sd[k] = std::atoll(t.c_str()); }
+    return sd[0] > 0 && sd[1] >= sd[0] && sd[2] >= sd[1];
+}
 inline int absorption(const Facts& F, int boldQ) {
     if (!F.closed || !F.valid) return 0;
     const long long mid2 = F.h + F.l;                                      // twice the halfway mark, in ticks
@@ -284,6 +300,7 @@ struct Cand {
     int w = 0, h = 0;                  // the text's size
     bool bold = false, circle = false;
     bool first = false;                // a CLOSED candle's bold number (frozen): laid out before every plain / forming number
+    bool huge = false;                 // (1.5.0) 3SD or more: a white outline round the number
 };
 struct Placed { bool shown = false, crowded = false; Box text, foot; int dy = 0; };
 static const int GAP = 1;              // px between the candle and its number (1.4.1: 2 -> 1, Rassul "bring the prints closer")
