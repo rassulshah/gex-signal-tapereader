@@ -64,7 +64,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.0.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.1.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -72,7 +72,8 @@
 #define BBA_SEP "/"
 #endif
 
-static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;           // buyers green, sellers red (the Delta Profile's colours)
+static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
+static const COLOR C_BUY_DIM = 0x00157A3D, C_SELL_DIM = 0x00933030;   // (1.1.0, Rassul 10-15 "like the 96") normal-size numbers dim, the big ones full colour           // buyers green, sellers red (the Delta Profile's colours)
 static const COLOR C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
 static const int LEAD = 30;                 // candles laid out left of the view, so a scroll does not re-decide what stays in view
 static const int READS_MAX = 900;           // VAP bars read per pass (the rest next pass)
@@ -573,9 +574,11 @@ void BigBidAsk::render(BBState& S) {
     const int from = std::max(0, vs - LEAD);
     const bba::Settings set = S.set;
     FONT fp; fp.id = HELVETICA; fp.size = (short)set.font; fp.style = PLAIN;
-    FONT fb = fp; fb.style = BOLD;
+    FONT fb = fp; fb.style = BOLD; fb.size = (short)(set.font + 3);   // (1.1.0) the really large numbers bold AND bigger, like the mockup 96
     int lead = 0, asc = 0, desc = 0; setFont(fp); getFontMetrics(&lead, &asc, &desc);
     const int th = std::max(set.font + 2, asc + desc);
+    int leadB = 0, ascB = 0, descB = 0; setFont(fb); getFontMetrics(&leadB, &ascB, &descB); setFont(fp);
+    const int thB = std::max(set.font + 5, ascB + descB);
     bba::Box area; area.l = S.leftLimit; area.t = pane.top + 20; area.r = std::min(S.priceRight, axisR) - 1; area.b = pane.bottom - 1;   // the IRT title row stays clear
     std::vector<bba::Box> candles; std::vector<bba::Cand> cands; std::vector<const bba::Facts*> src; std::vector<std::string> texts;
     for (int i = from; i <= ve; ++i) {
@@ -596,7 +599,7 @@ void BigBidAsk::render(BBState& S) {
             const std::string tx = bba::lots(p.vol);
             setFont(bold ? fb : fp);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
-            bba::Cand c; c.bar = i; c.side = sd; c.x = sd < 0 ? cb_.l : cb_.r; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = th;
+            bba::Cand c; c.bar = i; c.side = sd; c.x = sd < 0 ? cb_.l : cb_.r; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;
             c.bold = bold; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = bold && F->closed;
             cands.push_back(c); src.push_back(F); texts.push_back(tx);
         }
@@ -608,7 +611,7 @@ void BigBidAsk::render(BBState& S) {
         const bba::Cand& c = cands[k]; const bba::Box& t = P[k].text;
         if (c.bar < vs) continue;                                       // laid out (lead-in) but left of the view
         const COLOR col = c.side < 0 ? C_SELL : C_BUY;
-        setFont(c.bold ? fb : fp); setTextColor(col);
+        setFont(c.bold ? fb : fp); setTextColor(c.bold ? col : (c.side < 0 ? C_SELL_DIM : C_BUY_DIM));
         RCT r; r.set(coord(t.l), coord(t.t), coord(t.r), coord(t.b)); r.drawText(texts[k].c_str(), true, false);
         if (c.circle) {                                                  // the thin 1 px rounded outline hugging the number, its own colour
             const bba::Box& f = P[k].foot;
@@ -657,7 +660,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask v1.0.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
-    p->setVersion("1.0.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask v1.1.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
+    p->setVersion("1.1.0");   // BBA_VERSION
     return p;
 }
