@@ -1,2 +1,13 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=11 bytes=498452
 largest staged blobs (bytes, path):
+SIZE	196437	plugin/OrderFlowFeed.h
+SIZE	109715	plugin/tests/onebar-tests.tar.gz
+SIZE	78475	plugin/BidAskStats.cpp
+SIZE	36546	plugin/BUILD-LESSONS.md
+SIZE	28666	plugin/BidAskStatsLogic.h
+SIZE	15765	plugin/PullStats.cpp
+SIZE	11223	plugin/StackStatsLogic.h
+SIZE	9887	plugin/StackStats.cpp
+SIZE	8768	plugin/PullStatsLogic.h
+SIZE	2888	plugin/NOTES-ONEBAR.md
+SIZE	82	logs/staged-scan-findings.log
