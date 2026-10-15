@@ -1,6 +1,6 @@
 #ifndef LS_PULLSTATS_LOGIC_H
 #define LS_PULLSTATS_LOGIC_H
-// PullStatsLogic.h (1.1.0, 2026-10-13) -- SDK-free rules of lsPullStats: who is LEAVING. Unit-tested on Linux.
+// PullStatsLogic.h (1.5.0, 2026-10-14 night; rules below from 1.1.0, 2026-10-13) -- SDK-free rules of lsPullStats: who is LEAVING. Unit-tested on Linux.
 // 1.1.0 (2026-10-13, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md, mockup orderflow-contracts-mockup.png):
 //   Bars = LOTS pulled near price (were order counts); spike label ratio / pace / lots; PACE (pulled lots / s vs the same-time norm);
 //   the message grammar of the SPEC (exact):
@@ -19,7 +19,7 @@
 
 namespace ps {
 
-static const char* const VERSION = "1.4.0";   // 1.4.0 (2026-10-14 night): the read box -> one zone read line (pre-touch pulling, ZoneRead.h);   // 1.3.0 (2026-10-14 evening): complete order feed - a 250 ms clock reads it (OrderFlowFeed 1.4.0), MBO_COVERAGE in the status, recorder flushed by the clock; 1.2.2 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.2.1 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.2.0 (2026-10-14): Record order feed (MboRecord.h, host only); 1.1.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, SPEC message grammar, reset, hover rows; 1.0.1: no white outline
+static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-10-14 night, Rassul approved 20:04 CT; design changed the same night): the line = the LOCKED arrival read only (lsPulling retired into it; ZoneRead.h 1.1.0), pre-touch share in the hover + record;   // 1.4.0 (2026-10-14 night): the read box -> one zone read line (pre-touch pulling, ZoneRead.h);   // 1.3.0 (2026-10-14 evening): complete order feed - a 250 ms clock reads it (OrderFlowFeed 1.4.0), MBO_COVERAGE in the status, recorder flushed by the clock; 1.2.2 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.2.1 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.2.0 (2026-10-14): Record order feed (MboRecord.h, host only); 1.1.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, SPEC message grammar, reset, hover rows; 1.0.1: no white outline
 using off::BID; using off::ASK;
 
 inline std::string letters(const off::Rec& r, int s) { return r.thrRest > 0 && r.pullMax[s] >= r.thrRest ? "L" : ""; }

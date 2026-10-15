@@ -1,6 +1,16 @@
 #ifndef LS_ZONE_READ_H
 #define LS_ZONE_READ_H
-// ZoneRead.h (1.0.0, 2026-10-14 night) -- SDK-free. ONE read line per order-flow pane (lsBidAskStats, lsStackStats, lsPullStats,
+// ZoneRead.h (1.1.0, 2026-10-14 night) -- SDK-free.
+// 1.1.0 (2026-10-14 night; Rassul approved 20:04 CT "merge the Pulling read into PullStats and retire lsPulling", then changed the
+//   design: "the PullStats line shows ONLY the locked arrival read after the 3-min window ... it emphasises the pull"): the PullStats
+//   pane's line is now the ARRIVAL read (the arrival cohort cancelled vs traded in the first 3 minutes - what lsPulling 0.3.0 showed),
+//   drawn ONLY once it locks; nothing while approaching or measuring. The pre-touch share is still measured at arrival, recorded and
+//   shown in the hover as a secondary fact. The PullStats host records an "arrived" row at arrival (pre-touch numbers + the arrival
+//   size), so a restart inside the 3 minutes keeps the pre-touch part and, when the window has passed, shows a grey "arrival read
+//   not known (restarted during the 3 min) ?" instead of a read it could not measure. Record rows gain pre_moved|pre_partial|
+//   pre_impl|pre_text at the END; an existing session file's header is upgraded once (atomic rewrite) before the first longer row;
+//   1.0.0 rows (27 fields) are still read (a 1.0.0 PullStats row is rebuilt as the arrival read from its own numbers).
+//   BidAskStats / StackStats / Liquidity lines: unchanged. ONE read line per order-flow pane (lsBidAskStats, lsStackStats, lsPullStats,
 // lsPulling), in place of the read box. Rassul 2026-10-14 night (via the coordinator): "every order-flow pane gets its own ONE read
 // line in place of its box" - shown ONLY while price is inside a key-level or gamma ZONE (ZoneRule.h: level +/- 0.06 ADR, the same
 // width as the Liquidity Profile zone rule), otherwise nothing; plain words; values as ratios vs the same-market, same-30-min-slot
@@ -44,7 +54,7 @@
 
 namespace zread {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 typedef long long Tick;
 typedef long long Ms;
 enum Pane { P_BAS = 0, P_STACK = 1, P_PULLSTATS = 2, P_PULLING = 3, P_N = 4 };
@@ -132,6 +142,7 @@ struct Enc {
     long long nOrders = 0, shown = 0, pulled = 0, filled = 0, moved = 0, added = 0, aggr = 0;
     long long preShown = -1, prePulled = 0, preFilled = 0, preMoved = 0;
     Tick pxEnd = 0; bool through = false;
+    Line pre; bool arrWritten = false;                    // (1.1.0) the pre-touch read (hover fact for PullStats), the "arrived" row written
     Line out[P_N];                                        // the frozen lines (pre-touch frozen at arrival)
 };
 
@@ -143,7 +154,8 @@ public:
     Enc cur; Tick last = 0; bool haveLast = false; Ms firstEventMs = -1, lastSnapMs = -1, lastTradeMs = -1;
     Norms norms;
     std::vector<std::string> recPending;                  // frozen read lines for the host to append (one per pane per encounter)
-    struct Kept { Ms t = 0; long long wall = 0; Line out[P_N]; };
+    bool arrRec = false;                                  // (1.1.0) this host records an "arrived" row (lsPullStats)
+    struct Kept { Ms t = 0; long long wall = 0; Line out[P_N]; bool open = false; Line unknown; };   // (1.1.0) open = arrived, never locked (restart inside the window)
     std::map<Tick, Kept> kept;                           // level centre -> its last frozen read (this session; restored on load)
     long long encounters = 0, frozen = 0, orderDrops = 0;
 
@@ -254,7 +266,8 @@ public:
         if (!haveLast) return;
         const int zi = zoneOf(last);
         if (cur.state == APPROACH && cur.lvl >= 0 && inCurBand(last)) arrive(t, wallSec, minuteOfDay);
-        if (cur.state == MEASURE && cur.wallArr == 0) { cur.wallArr = wallSec; cur.minArr = minuteOfDay; }
+        if (cur.state == MEASURE && cur.wallArr == 0) { cur.wallArr = wallSec; cur.minArr = minuteOfDay; cur.pre = preLine(); }
+        if (cur.state == MEASURE && arrRec && !cur.arrWritten && cur.wallArr > 0) { recPending.push_back(recLineState(P_PULLSTATS, "arrived")); cur.arrWritten = true; }
         if (cur.state == MEASURE && t - cur.tArr >= WINDOW_MS) freeze(t);
         if (cur.state != NONE && cur.lvl != zi && cur.state != MEASURE) cur = Enc();          // price left the zone: the read ends
         if (cur.state == NONE && zi >= 0 && armed[(size_t)zi]) {
@@ -281,9 +294,9 @@ public:
         const std::string pfx = market + " " + pxText(z.c, tick) + DASH;
         if (cur.state != NONE && cur.lvl == zi) {
             const char* d = cur.support ? "bids" : "offers";
+            if (p == P_PULLSTATS && cur.state != FROZEN) return L;            // (1.1.0) PullStats: nothing until the arrival read locks
             if (cur.state == APPROACH) { L.show = true; L.text = pfx + "level not reached yet ?"; L.hover = approachHover(); return L; }
             if (cur.state == MEASURE) {
-                if (p == P_PULLSTATS && cur.out[P_PULLSTATS].show) return cur.out[P_PULLSTATS];
                 const long long el = std::max(0LL, (long long)(t - cur.tArr)) / 1000;
                 char b[96]; std::snprintf(b, sizeof(b), "%s: measuring %lld:%02lld of 3:00 ?", d, el / 60, el % 60);
                 L.show = true; L.text = pfx + b; L.hover = measureHover(p); return L;
@@ -291,25 +304,35 @@ public:
             if (cur.state == FROZEN) return cur.out[p];
         }
         std::map<Tick, Kept>::const_iterator k = kept.find(z.c);       // a read already locked for this level (this session)
-        if (k != kept.end() && t - k->second.t <= RESTORE_MAX_MS && k->second.out[p].show) return k->second.out[p];
+        if (k != kept.end() && t - k->second.t <= RESTORE_MAX_MS) {
+            if (p == P_PULLSTATS && k->second.open) return t - k->second.t >= WINDOW_MS ? k->second.unknown : L;   // (1.1.0) restarted inside the window
+            if (k->second.out[p].show) return k->second.out[p];
+        }
         return L;
     }
     // ---- record (one line per pane per frozen read): the host appends recPending to <Pane>\<MKT>-<sym>-<spb>-zoneread-<session>.csv
-    static std::string header() { return "wall_arrival|minute|level|name|kind|side|zone_half|band_half|adr|state|pane|impl|text|orders|shown|pulled|filled|moved|added|aggr|pre_shown|pre_pulled|pre_filled|px_end|through|partial|version"; }
+    static std::string header() { return "wall_arrival|minute|level|name|kind|side|zone_half|band_half|adr|state|pane|impl|text|orders|shown|pulled|filled|moved|added|aggr|pre_shown|pre_pulled|pre_filled|px_end|through|partial|version|pre_moved|pre_partial|pre_impl|pre_text"; }
+    static const size_t OLD_FIELDS = 27, NEW_FIELDS = 31;   // (1.1.0) 1.0.0 rows have 27 fields; the four pre_* columns are appended
     static std::string clean(const std::string& s) { std::string o; for (char c : s) { if (o.size() >= 200) break; o += (c == '|' || c == '\n' || c == '\r') ? ' ' : c; } return o; }
-    std::string recLine(int p) const {
+    std::string recLine(int p) const { return recLineState(p, "frozen"); }
+    // (1.1.0) state "frozen" (one row per pane when the window closes) or "arrived" (lsPullStats only, at arrival: the pre-touch part)
+    std::string recLineState(int p, const char* state) const {
+        const bool arr = std::string(state) == "arrived";
+        const Line& shown = arr ? cur.pre : cur.out[p];
         std::ostringstream o; o.imbue(std::locale::classic()); o.precision(10);
         o << cur.wallArr << '|' << cur.minArr << '|' << (double)cur.c * tick << '|' << clean(cur.name) << '|' << cur.kind << '|' << (cur.support ? "support" : "resistance")
-          << '|' << zoneHalf << '|' << hw << '|' << adr << '|' << "frozen" << '|' << paneName(p) << '|' << cur.out[p].impl << '|' << clean(cur.out[p].text)
+          << '|' << zoneHalf << '|' << hw << '|' << adr << '|' << state << '|' << paneName(p) << '|' << shown.impl << '|' << clean(shown.text)
           << '|' << cur.nOrders << '|' << cur.shown << '|' << cur.pulled << '|' << cur.filled << '|' << cur.moved << '|' << cur.added << '|' << cur.aggr
           << '|' << cur.preShown << '|' << cur.prePulled << '|' << cur.preFilled << '|' << (double)cur.pxEnd * tick << '|' << (cur.through ? 1 : 0)
-          << '|' << (cur.partial ? 1 : 0) << '|' << VERSION;
+          << '|' << (cur.partial ? 1 : 0) << '|' << VERSION
+          << '|' << cur.preMoved << '|' << (cur.prePartial ? 1 : 0) << '|' << cur.pre.impl << '|' << clean(cur.pre.text);
         return o.str();
     }
     // a record line read back on load (this session): the level's locked read for pane p comes back exactly as drawn
     bool restore(const std::string& ln, int p, Ms nowMs, long long nowWallSec) {
         const std::vector<std::string> f = zrule::splitBar(ln);
-        if (f.size() < 27 || f[10] != paneName(p) || f[9] != "frozen") return false;
+        if (p == P_PULLSTATS) return restorePullStats(f, nowMs, nowWallSec);
+        if (f.size() < OLD_FIELDS || f[10] != paneName(p) || f[9] != "frozen") return false;
         double px = 0, imp = 0, wa = 0; if (!zrule::numTok(f[2], px) || !zrule::numTok(f[11], imp) || !zrule::numTok(f[0], wa) || px <= 0) return false;
         const double t = px / tick; if (!finite(t) || t <= 0) return false;
         const Tick c = (Tick)std::llround(t);
@@ -373,17 +396,20 @@ private:
                 if (h->second == 0) cur.prePulled += o.size; else if (h->second == 1) cur.preFilled += o.size; else cur.preMoved += o.size;
             }
         }
-        cur.out[P_PULLSTATS] = preLine();                         // the pre-touch read is complete at arrival: locked now
+        cur.pre = preLine();                                      // the pre-touch read is complete at arrival (1.1.0: a hover fact, recorded)
     }
-    std::string pfx() const { return market + " " + pxText(cur.c, tick) + DASH; }
-    std::string where() const {
-        const char* k = cur.kind == 0 ? "key" : cur.kind == 1 ? "MenthorQ" : "gamma";
-        return market + " " + pxText(cur.c, tick) + " " + cur.name + " (" + k + ") \xB7 " + (cur.support ? "support (price came down)" : "resistance (price came up)");
+    std::string pfx() const { return pfxOf(cur); }
+    std::string pfxOf(const Enc& c) const { return market + " " + pxText(c.c, tick) + DASH; }
+    std::string where() const { return whereOf(cur); }
+    std::string whereOf(const Enc& c) const {
+        const char* k = c.kind == 0 ? "key" : c.kind == 1 ? "MenthorQ" : "gamma";
+        return market + " " + pxText(c.c, tick) + " " + c.name + " (" + k + ") \xB7 " + (c.support ? "support (price came down)" : "resistance (price came up)");
     }
-    std::string slotText(const Norm& n) const {
+    std::string slotText(const Norm& n) const { return slotTextOf(cur, n); }
+    std::string slotTextOf(const Enc& c, const Norm& n) const {
         if (!n.ok()) return "no normal yet";
-        if (!n.slot || cur.minArr < 0) return "this market's normal (all slots, n " + std::to_string(n.n) + ")";
-        const int a = (cur.minArr / 30) * 30;
+        if (!n.slot || c.minArr < 0) return "this market's normal (all slots, n " + std::to_string(n.n) + ")";
+        const int a = (c.minArr / 30) * 30;
         return "the " + clock12(a) + " - " + clock12(a + 30) + " normal (n " + std::to_string(n.n) + ")";
     }
     Line preLine() const {
@@ -430,33 +456,36 @@ private:
         cur.state = FROZEN; cur.tEnd = t; cur.pxEnd = last;
         cur.through = cur.support ? last < cur.c - hw : last > cur.c + hw;
         cur.out[P_PULLING] = pullingLine(); cur.out[P_STACK] = stackLine(); cur.out[P_BAS] = basLine();
+        cur.out[P_PULLSTATS] = pullStatsLineOf(cur);                 // (1.1.0) the arrival read, with the pre-touch part in the hover
         for (int p = 0; p < P_N; ++p) { cur.out[p].locked = true; recPending.push_back(recLine(p)); }
         Kept& k = kept[cur.c]; k.t = t; k.wall = cur.wallArr; for (int p = 0; p < P_N; ++p) k.out[p] = cur.out[p];
         frozen++;
     }
-    std::string partialNote() const { return cur.partial ? "Partial: the indicator (order feed) started after price came into the zone - orders resting before are unknown" : "Orders = those the order feed has seen (an order resting since before the indicator loaded is unknown)"; }
-    Line pullingLine() const {
+    std::string partialNote() const { return partialNoteOf(cur); }
+    std::string partialNoteOf(const Enc& c) const { return c.partial ? "Partial: the indicator (order feed) started after price came into the zone - orders resting before are unknown" : "Orders = those the order feed has seen (an order resting since before the indicator loaded is unknown)"; }
+    Line pullingLine() const { return pullingLineOf(cur); }
+    Line pullingLineOf(const Enc& c) const {
         Line L; L.show = true;
-        const char* d = cur.support ? "bids" : "offers"; const char* lev = cur.support ? "support" : "resistance";
-        const Norm np = norms.get("pull_def", cur.minArr), nf = norms.get("fill_def", cur.minArr);
-        L.hover.push_back("Pulling read \xB7 " + where());
+        const char* d = c.support ? "bids" : "offers"; const char* lev = c.support ? "support" : "resistance";
+        const Norm np = norms.get("pull_def", c.minArr), nf = norms.get("fill_def", c.minArr);
+        L.hover.push_back("Pulling read \xB7 " + whereOf(c));
         L.hover.push_back("What it is: the size resting AT the level when price arrived - in the next 3 minutes, was it cancelled or traded?");
         L.hover.push_back("Why it matters: size that is cancelled instead of traded is not defending the level any more");
-        L.hover.push_back("Arrived " + clock12(cur.minArr) + ", locked 3 minutes later at " + clock12(cur.minArr < 0 ? -1 : (cur.minArr + 3) % 1440));
-        if (cur.shown <= 0) { L.text = pfx() + "no " + d + " seen at the level at arrival ?"; L.impl = 0; L.hover.push_back(partialNote()); addPullCaveat(L); return L; }
-        const double p = (double)cur.pulled / (double)cur.shown, f = (double)cur.filled / (double)cur.shown;
-        const double zp = zOf(p, np); const double fx = nf.ok() && nf.med > 0 ? (double)cur.filled / nf.med : -1;
+        L.hover.push_back("Arrived " + clock12(c.minArr) + ", locked 3 minutes later at " + clock12(c.minArr < 0 ? -1 : (c.minArr + 3) % 1440));
+        if (c.shown <= 0) { L.text = pfxOf(c) + "no " + d + " seen at the level at arrival ?"; L.impl = 0; L.hover.push_back(partialNoteOf(c)); addPullCaveat(L); return L; }
+        const double p = (double)c.pulled / (double)c.shown, f = (double)c.filled / (double)c.shown;
+        const double zp = zOf(p, np); const double fx = nf.ok() && nf.med > 0 ? (double)c.filled / nf.med : -1;
         char b[220];
-        std::snprintf(b, sizeof(b), "%s resting at the level at arrival: %lld lots (%lld orders)", cur.support ? "Bids" : "Offers", cur.shown, cur.nOrders); L.hover.push_back(b);
-        std::snprintf(b, sizeof(b), "In 3 min: traded %lld lots (%s) \xB7 cancelled %lld (%s) \xB7 moved away %lld", cur.filled, pctText(f).c_str(), cur.pulled, pctText(p).c_str(), cur.moved); L.hover.push_back(b);
-        if (np.ok()) L.hover.push_back("Normal cancelled share " + pctText(np.med) + " (" + slotText(np) + "): this one z " + zText(zp) + " (line z 1.0)");
-        if (nf.ok() && nf.med > 0) L.hover.push_back("Normal traded " + std::to_string((long long)std::llround(nf.med)) + " lots (" + slotText(nf) + "): this one " + ratioText(fx));
-        if (!np.ok()) { L.text = pfx() + d + ": " + pctText(p) + " pulled, " + pctText(f) + " traded in 3 min (no normal yet) ?"; L.impl = 0; }
-        else if (zp >= Z_LINE) { L.text = pfx() + d + " pulled, not filled (" + pctText(p) + " in 3 min)" + DASH + "less " + lev + " ?"; L.impl = cur.support ? -1 : 1; }
-        else if (fx >= 1.0 && !cur.through) { L.text = pfx() + d + " traded, held (" + ratioText(fx) + " normal)" + DASH + lev + " holding ?"; L.impl = cur.support ? 1 : -1; }
-        else if (fx >= 1.0 && cur.through) { L.text = pfx() + d + " traded (" + ratioText(fx) + " normal), price through ?"; L.impl = cur.support ? -1 : 1; }
-        else { L.text = pfx() + d + ": " + pctText(p) + " pulled, " + pctText(f) + " traded in 3 min ?"; L.impl = 0; }
-        L.hover.push_back(partialNote());
+        std::snprintf(b, sizeof(b), "%s resting at the level at arrival: %lld lots (%lld orders)", c.support ? "Bids" : "Offers", c.shown, c.nOrders); L.hover.push_back(b);
+        std::snprintf(b, sizeof(b), "In 3 min: traded %lld lots (%s) \xB7 cancelled %lld (%s) \xB7 moved away %lld", c.filled, pctText(f).c_str(), c.pulled, pctText(p).c_str(), c.moved); L.hover.push_back(b);
+        if (np.ok()) L.hover.push_back("Normal cancelled share " + pctText(np.med) + " (" + slotTextOf(c, np) + "): this one z " + zText(zp) + " (line z 1.0)");
+        if (nf.ok() && nf.med > 0) L.hover.push_back("Normal traded " + std::to_string((long long)std::llround(nf.med)) + " lots (" + slotTextOf(c, nf) + "): this one " + ratioText(fx));
+        if (!np.ok()) { L.text = pfxOf(c) + d + ": " + pctText(p) + " pulled, " + pctText(f) + " traded in 3 min (no normal yet) ?"; L.impl = 0; }
+        else if (zp >= Z_LINE) { L.text = pfxOf(c) + d + " pulled, not filled (" + pctText(p) + " in 3 min)" + DASH + "less " + lev + " ?"; L.impl = c.support ? -1 : 1; }
+        else if (fx >= 1.0 && !c.through) { L.text = pfxOf(c) + d + " traded, held (" + ratioText(fx) + " normal)" + DASH + lev + " holding ?"; L.impl = c.support ? 1 : -1; }
+        else if (fx >= 1.0 && c.through) { L.text = pfxOf(c) + d + " traded (" + ratioText(fx) + " normal), price through ?"; L.impl = c.support ? -1 : 1; }
+        else { L.text = pfxOf(c) + d + ": " + pctText(p) + " pulled, " + pctText(f) + " traded in 3 min ?"; L.impl = 0; }
+        L.hover.push_back(partialNoteOf(c));
         addPullCaveat(L);
         return L;
     }
@@ -466,6 +495,89 @@ private:
         L.hover.push_back("Study 10-14 (MBO, 22 days, Q2v): top-of-normal cancelling -> the zone held about 19 pp less often (-19 / -5 / -13 pp");
         L.hover.push_back("  build / validate / forward with attack pace held) - an association, NOT YET proven; first live forward days pending ?");
     }
+    // ---- (1.1.0) lsPullStats: ONE line = the arrival read, shown only once locked; the pre-touch share is a secondary hover fact ------
+    std::string slotShort(const Enc& c, const Norm& n) const {   // "9:00 AM - 9:30 AM, n 31" / "all slots, n 120"
+        if (!n.slot || c.minArr < 0) return "all slots, n " + std::to_string(n.n);
+        const int a = (c.minArr / 30) * 30; return clock12(a) + " - " + clock12(a + 30) + ", n " + std::to_string(n.n);
+    }
+    std::string preFactOf(const Enc& c) const {
+        const char* d = c.support ? "bids" : "offers";
+        if (c.preShown < 0 || c.prePartial) return "Before the touch (secondary): not known - the order feed started less than 5 minutes before price arrived";
+        if (c.preShown == 0) return std::string("Before the touch (secondary): no ") + d + " resting at the level 5 minutes before";
+        const double sh = (double)c.prePulled / (double)c.preShown; const Norm n = norms.get("pull_app", c.minArr);
+        char b[220];
+        std::snprintf(b, sizeof(b), "Before the touch (secondary): %s of the %lld lots of %s there 5 min earlier were cancelled", pctText(sh).c_str(), c.preShown, d);
+        std::string o = b;
+        if (n.ok()) o += " (normal " + pctText(n.med) + ", z " + zText(zOf(sh, n)) + ")";
+        return o;
+    }
+    // the hover rows are kept short (<= ~115 characters) and in order of importance: the pane shows as many as fit
+    Line pullStatsLineOf(const Enc& c) const {
+        const Line A = pullingLineOf(c);                       // the same words / colour rule as lsPulling 0.3.0's arrival read
+        Line L; L.show = true; L.locked = true; L.text = A.text; L.impl = A.impl;
+        const char* d = c.support ? "bids" : "offers";
+        const Norm np = norms.get("pull_def", c.minArr), nf = norms.get("fill_def", c.minArr);
+        L.hover.push_back("PullStats read \xB7 " + whereOf(c));
+        char b[220];
+        if (c.shown > 0) {
+            const double p = (double)c.pulled / (double)c.shown, f = (double)c.filled / (double)c.shown;
+            std::snprintf(b, sizeof(b), "At arrival (%s): %lld lots of %s at the level (%lld orders)", clock12(c.minArr).c_str(), c.shown, d, c.nOrders); L.hover.push_back(b);
+            std::snprintf(b, sizeof(b), "In 3 min: cancelled %lld (%s) \xB7 traded %lld (%s) \xB7 moved away %lld", c.pulled, pctText(p).c_str(), c.filled, pctText(f).c_str(), c.moved); L.hover.push_back(b);
+            std::string nm;
+            if (np.ok()) nm = "cancelled " + pctText(np.med) + " - this one z " + zText(zOf(p, np)) + " (line z 1.0)";
+            if (nf.ok() && nf.med > 0) nm += std::string(nm.empty() ? "" : " \xB7 ") + "traded " + std::to_string((long long)std::llround(nf.med)) + " lots - this one " + ratioText((double)c.filled / nf.med);
+            L.hover.push_back(nm.empty() ? std::string("Normal: no normal yet - shown as shares only") : "Normal (" + slotShort(c, np.ok() ? np : nf) + "): " + nm);
+        } else {
+            L.hover.push_back(std::string("At arrival (") + clock12(c.minArr) + "): the order feed saw no " + d + " resting at the level");
+        }
+        L.hover.push_back(preFactOf(c));
+        L.hover.push_back("What it is: was the size resting AT the level cancelled or traded in the 3 min after price arrived? (locks at 3:00)");
+        L.hover.push_back("Why it matters: cancelled size no longer defends the level; size that trades while price holds stood its ground");
+        L.hover.push_back("Use: heavy cancelling = give the level less weight; traded and held = the size stood; either way wait for RB / CoB");
+        L.hover.push_back("Example: ES 7750 - 62% of the bids there at arrival cancelled in 3 min, few filled -> less support ?");
+        L.hover.push_back("Study 10-14 (MBO, 22 days): top-of-normal cancelling -> held about 19 pp less often - association only, NOT YET proven ?");
+        L.hover.push_back("Study 10-14: pre-touch pulling showed NO clear sign yet (+7 pp breaks, interval includes 0) ?");
+        L.hover.push_back(c.partial ? "Partial: the order feed started after price came into the zone - orders resting before are unknown" : "Orders = those the order feed has seen (one resting since before the indicator loaded is unknown)");
+        return L;
+    }
+    Line unknownLineOf(const Enc& c) const {                   // restarted inside the 3 minutes: the cohort could not be followed
+        Line L; L.show = true; L.locked = true; L.impl = 0;
+        L.text = pfxOf(c) + (c.support ? "bids" : "offers") + ": arrival read not known (restarted during the 3 min) ?";
+        L.hover.push_back("PullStats read \xB7 " + whereOf(c));
+        L.hover.push_back("Price arrived " + clock12(c.minArr) + "; the indicator restarted before the 3 minutes ended, so which resting orders were cancelled or traded is not known");
+        L.hover.push_back(preFactOf(c));
+        L.hover.push_back("Study 10-14 (MBO, 22 days): top-of-normal cancelling -> held about 19 pp less often - association only, NOT YET proven ?");
+        return L;
+    }
+public:
+    // (1.1.0) a PullStats record row read back: "frozen" = the locked line (1.1.0 rows: the text as drawn; 1.0.0 rows: rebuilt as the
+    // arrival read from the row's own numbers), "arrived" = an encounter that never locked here (restart inside the window)
+    bool restorePullStats(const std::vector<std::string>& f, Ms nowMs, long long nowWallSec) {
+        if (f.size() < OLD_FIELDS || f[10] != paneName(P_PULLSTATS) || (f[9] != "frozen" && f[9] != "arrived")) return false;
+        const bool fresh = f.size() >= NEW_FIELDS, arrived = f[9] == "arrived";
+        if (arrived && !fresh) return false;
+        double v[OLD_FIELDS] = {0}; const int need[] = { 0, 1, 2, 4, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 };
+        for (size_t i = 0; i < sizeof(need) / sizeof(need[0]); ++i) if (!zrule::numTok(f[(size_t)need[i]], v[need[i]])) return false;
+        if (v[2] <= 0) return false;
+        const double tt = v[2] / tick; if (!finite(tt) || tt <= 0 || tt > 1e12) return false;
+        Enc c; c.c = (Tick)std::llround(tt); c.name = f[3]; c.kind = (int)v[4]; c.support = f[5] == "support";
+        c.wallArr = (long long)v[0]; c.minArr = (int)v[1]; c.nOrders = (long long)v[13]; c.shown = (long long)v[14]; c.pulled = (long long)v[15];
+        c.filled = (long long)v[16]; c.moved = (long long)v[17]; c.added = (long long)v[18]; c.aggr = (long long)v[19];
+        c.preShown = (long long)v[20]; c.prePulled = (long long)v[21]; c.preFilled = (long long)v[22];
+        c.pxEnd = (Tick)std::llround(v[23] / tick); c.through = v[24] != 0; c.partial = v[25] != 0; c.prePartial = c.preShown < 0;
+        if (fresh) { double pm = 0, pp = 0; if (zrule::numTok(f[27], pm)) c.preMoved = (long long)pm; if (zrule::numTok(f[28], pp)) c.prePartial = pp != 0; }
+        if (c.minArr < -1 || c.minArr >= 1440 || c.shown < 0 || c.pulled < 0 || c.filled < 0) return false;
+        Kept& k = kept[c.c];
+        if (arrived && !k.open && k.wall == c.wallArr && k.out[P_PULLSTATS].show) return true;   // already locked (rows are in time order)
+        const long long age = nowWallSec > 0 && c.wallArr > 0 ? (nowWallSec - c.wallArr) : 0;
+        k.t = nowMs - (age > 0 ? age * 1000 : 0); k.wall = c.wallArr;
+        if (arrived) { k.open = true; k.unknown = unknownLineOf(c); k.out[P_PULLSTATS] = Line(); return true; }
+        Line L = pullStatsLineOf(c);
+        if (fresh) { L.text = f[12]; L.impl = v[11] > 0 ? 1 : v[11] < 0 ? -1 : 0; }
+        k.open = false; k.out[P_PULLSTATS] = L;
+        return true;
+    }
+private:
     Line stackLine() const {
         Line L; L.show = true;
         const char* d = cur.support ? "bids" : "offers";
@@ -535,7 +647,7 @@ struct Host {
     std::string recPath; long long recWrites = 0, recFails = 0, restored = 0;
     // levels every 10 s, normals every 60 s (re-read only when the file changed); dir ends with the path separator
     void files(const std::string& dir, const std::string& market, long long nowMs, long long nowUnix) {
-        e.market = market;
+        e.market = market; e.arrRec = pane == P_PULLSTATS;      // (1.1.0) only lsPullStats records the "arrived" row
         if (dir.empty()) { lvNote = nmNote = "no level folder"; return; }
         if (lvChecked < 0 || nowMs - lvChecked >= 10000 || nowMs < lvChecked) {
             lvChecked = nowMs; bool ch = false; std::string t;
@@ -584,14 +696,33 @@ struct Host {
     // a new session: the old reads are gone; this session's record (if any) is read back so a restart shows the same locked reads
     void newSession(long long s, const std::string& path, long long nowMs, long long nowWall) {
         if (s == session && path == recPath) return;
-        session = s; recPath = path; e.kept.clear(); e.cur = Enc(); restored = 0;   // (arming comes from closes: kept)
+        session = s; recPath = path; e.kept.clear(); e.cur = Enc(); restored = 0; headerOk = false;   // (arming comes from closes: kept)
         std::string t; if (path.empty() || !readSmall(path, t, 4 * 1024 * 1024)) return;
         const std::vector<std::string> L = zrule::lines(t);
         for (size_t i = 1; i < L.size(); ++i) if (e.restore(L[i], pane, nowMs, nowWall)) restored++;
     }
+    // (1.1.0, lesson 66) a session file written by 1.0.0 has the 27-column header: rewrite it once with the new header (atomic:
+    // .tmp -> old to .bak -> rename -> .bak removed; the old file is put back on failure) before the first longer row is appended
+    bool upgradeHeader() {
+        std::string t; if (!readSmall(recPath, t, 4 * 1024 * 1024)) return false;
+        const size_t nl = t.find('\n'); std::string first = t.substr(0, nl == std::string::npos ? t.size() : nl);
+        if (!first.empty() && first[first.size() - 1] == '\r') first.erase(first.size() - 1);
+        if (first == Engine::header()) return true;
+        if (first.compare(0, 13, "wall_arrival|") != 0) return false;     // not ours: never touched
+        const std::string body = nl == std::string::npos ? std::string() : t.substr(nl + 1);
+        const std::string tmp = recPath + ".tmp", bak = recPath + ".bak";
+        { std::ofstream o(tmp.c_str(), std::ios::binary | std::ios::trunc); if (!o) return false; o << Engine::header() << "\n" << body; o.flush(); if (!o) { std::remove(tmp.c_str()); return false; } }
+        std::remove(bak.c_str());
+        if (std::rename(recPath.c_str(), bak.c_str()) != 0) { std::remove(tmp.c_str()); return false; }
+        if (std::rename(tmp.c_str(), recPath.c_str()) != 0) { std::rename(bak.c_str(), recPath.c_str()); std::remove(tmp.c_str()); return false; }
+        std::remove(bak.c_str()); headerUpgrades++;
+        return true;
+    }
+    long long headerUpgrades = 0; bool headerOk = false;
     void flush() {
         if (e.recPending.empty() || recPath.empty()) { if (recPath.empty()) e.recPending.clear(); return; }
         const bool fresh = fileSig(recPath) < 0;
+        if (!fresh && !headerOk) { if (!upgradeHeader()) { recFails++; return; } headerOk = true; }
         std::ofstream f(recPath.c_str(), std::ios::binary | std::ios::app); if (!f) { recFails++; return; }
         if (fresh) f << Engine::header() << "\n";
         for (size_t i = 0; i < e.recPending.size(); ++i) f << e.recPending[i] << "\n";
@@ -601,7 +732,7 @@ struct Host {
     std::string status() const {
         std::ostringstream o; o.imbue(std::locale::classic());
         o << "ZONE_READ," << VERSION << ",pane " << paneName(pane) << ",state " << (e.cur.state == NONE ? "none" : e.cur.state == APPROACH ? "approach" : e.cur.state == MEASURE ? "measuring" : "locked")
-          << ",encounters " << e.encounters << ",locked " << e.frozen << ",restored " << restored << ",record writes " << recWrites << " fails " << recFails
+          << ",encounters " << e.encounters << ",locked " << e.frozen << ",restored " << restored << ",record writes " << recWrites << " fails " << recFails << ",header upgrades " << headerUpgrades
           << "\nZONE_GEOMETRY,adr " << e.adr << " (" << adrNote << "),zone +/- " << e.zoneHalf << " ticks (0.06 ADR),band +/- " << e.hw << " ticks"
           << "\nZONE_LEVELS," << lvNote << "\nZONE_NORMS," << nmNote << "\nZONE_ORDERS,tracked " << e.ord.size() << ",drops " << e.orderDrops;
         return o.str();

@@ -105,7 +105,7 @@ static Box ringBox(const mock::Draw& d) { return Box{ d.x - 6, d.y - 6, d.x + 7,
 int main()
 {
     setenv("TZ", "UTC", 1); tzset();
-    check(std::string(DLT_VERSION) == "2.8.0", "version string is 2.8.0");
+    check(std::string(DLT_VERSION) == "2.8.4", "version string is 2.8.4");
     // 1) a thin top after an A prints Ex? at the FIRST red close, and never moves or disappears after later bars
     mock::Draw firstMark("none", 0, 0);
     {
@@ -122,30 +122,30 @@ int main()
             check(c[1] == "C" && c[5] == "top" && c[10] == "112" && c[12] == "PDH" && c[14] == "1", "C line: top at 112.00, PDH 1 tick away");
             check(c[17] == "1" && c[18] == "1" && std::atof(c[15].c_str()) < 0.35 && std::atof(c[16].c_str()) < 0.5, "thin and fading (thin " + c[15] + ", fade " + c[16] + ")");
             check(c[19] == "A" && c[20] == "108" && c[22] == "Ex?" && c[23] == "live", "context = the A at 108, mark Ex?, live");
-            check(c[2] == "2.8.0" && c[25].find("show=ctx") != std::string::npos && c[25].find("src=file") != std::string::npos, "version + params recorded");
+            check(c[2] == DLT_VERSION && c[25].find("show=ctx") != std::string::npos && c[25].find("src=file") != std::string::npos, "version + params recorded");
         }
         check(texts(h, "Ex").empty(), "nothing drawn before the close back");
         draw(p, h, 118, all);                                           // bar 116 closed red: the print
         text = slurp(record(dir)); E = tagged(text, "E");
         check(E.size() == 2 && E[1][1] == "P" && E[1][24] == "red close" && E[1][9] == std::to_string(all[116].time), "P line at bar 116's close");
         auto m = texts(h, "Ex?");
-        check(m.size() == 1 && m[0].color == C_SELL, "one red Ex? drawn");
+        check(m.empty(), "2.8.1: the printed Ex? is recorded (P line) but NOT drawn");   // (2.8.4 test update: was "one red Ex? drawn")
         if (m.size() == 1) {
             firstMark = m[0];
             check(m[0].x == 50 + 115 * 10 + 9 && m[0].y + 4 < 1000 - (112 - 80) * 20, "Ex? centred on the extreme bar, above its high");
         }
         for (int n = 119; n <= 130; ++n) draw(p, h, n, all);           // later bars (one makes a lower high): nothing moves
         m = texts(h, "Ex?");
-        check(m.size() == 1 && m[0].x == firstMark.x && m[0].y == firstMark.y, "the mark never moves after later bars");
+        check(m.empty(), "2.8.1: still nothing drawn after later bars");
         check(tagged(slurp(record(dir)), "E").size() == 2, "no new E lines after the decision");
         const std::string st = slurp(flex + "DeltaProfile.status.txt");
-        check(st.find("EXH,0,P,top,112,Ex?,drawn,Ex? thin top 0.02x delta; aggression 0.08x") != std::string::npos && st.find("after A at 108") != std::string::npos &&
+        check(st.find("EXH,0,P,top,112,Ex?,") != std::string::npos && st.find("Ex? thin top 0.02x delta; aggression 0.08x") != std::string::npos && st.find("after A at 108") != std::string::npos &&
               st.find("at PDH 112.25 (1 ticks)") != std::string::npos, "status carries the plain-words detail");
         // 7) restart in the same session: the mark reloads from the record at the same place; nothing re-logged
         mock::current = &h; p.destroy(); latchBooks().clear(); exConfigs().clear(); exLevelCaches().clear();
         DeltaProfile p2; mock::Host h2 = host(); draw(p2, h2, 130, all);
         m = texts(h2, "Ex?");
-        check(m.size() == 1 && m[0].x == firstMark.x && m[0].y == firstMark.y, "restart: the mark reloads at the same place");
+        check(m.empty(), "2.8.1 restart: the mark reloads into the book, still not drawn");
         check(tagged(slurp(record(dir)), "E").size() == 2 && latchBooks().begin()->second.exLoaded == 1, "restart: loaded, nothing re-logged");
         // 8) an A circle on the extreme bar right where the mark would sit: the mark steps up, never overlapping it
         LatchBook& bk = latchBooks().begin()->second;
@@ -155,7 +155,7 @@ int main()
         draw(p2, h2, 130, all);
         m = texts(h2, "Ex?"); bool clash = false, ringThere = false;
         for (const mock::Draw& d : h2.draws) if (d.type == "ring") { if (d.x == 50 + 115 * 10) ringThere = true; for (const mock::Draw& e : m) if (hit(textBox(e), ringBox(d))) clash = true; }
-        check(ringThere && m.size() == 1 && !clash && m[0].y < firstMark.y, "Ex? steps above an A circle on the same bar, no overlap");
+        check(ringThere && m.empty() && !clash, "2.8.1: the A circle is drawn, no Ex? beside it");
         for (const mock::Draw& d : h2.draws) if (d.type == "text" && d.text != "Ex?" && !m.empty() && hit(textBox(d), textBox(m[0]))) clash = true;
         check(!clash, "Ex? overlaps no other label");
         mock::current = &h2; p2.destroy(); latchBooks().clear();
@@ -225,7 +225,7 @@ int main()
         mock::Host h = host(); DeltaProfile p; draw(p, h, 117, all); draw(p, h, 118, all);
         const auto E = tagged(slurp(record(dir)), "E");
         check(E.size() == 2 && E[0][19] == "T" && E[0][20] == "108" && E[0][21] == std::to_string(all[106].time), "context T: trapped buyers at 108 (bar 106)");
-        check(texts(h, "Ex?").size() == 1, "context T + SHOW ctx: Ex? drawn");
+        check(texts(h, "Ex").empty(), "2.8.1: context T + SHOW ctx: logged, Ex? not drawn");
         check(slurp(flex + "DeltaProfile.status.txt").find("after trapped buyers at 108") != std::string::npos, "status: trapped buyers in words");
         mock::current = &h; p.destroy(); latchBooks().clear();
     }
@@ -238,7 +238,7 @@ int main()
         check(E.size() == 2 && E[0][5] == "bottom" && E[0][10] == "104" && E[0][19] == "A" && E[0][20] == "108" && E[1][1] == "P" && E[1][24] == "green close",
               "bottom: thin low 104 after the bullish A at 108, printed on the green close");
         const auto m = texts(h, "Ex?");
-        check(m.size() == 1 && m[0].color == C_BUY && m[0].y + 4 > 1000 - (104 - 80) * 20, "green Ex? below the low");
+        check(m.empty(), "2.8.1: the bottom Ex? is logged, not drawn");
         mock::current = &h; p.destroy(); latchBooks().clear();
     }
     // 7b) restart after EVERY bar writes the same record, byte for byte, as one straight pass (Ex + AE)
@@ -274,25 +274,25 @@ int main()
         check(AE.size() == 1 && AE[0].size() == 18 && AE[0][1] == "Y" && AE[0][6] == std::to_string(all[109].time) && AE[0][7] == std::to_string(all[106].time) &&
               AE[0][10] == "buyers" && AE[0][11] == "3" && AE[0][16] == "AE?", "AE decided at bar 109's close: Y, 3 bars, label AE?");
         auto L = texts(h, "AE? ");
-        check(L.size() == 1, "the A's profile label now reads AE?");
+        check(L.empty() && texts(h, "A ").size() == 1, "2.8.1 (\"no AE\"): AE? recorded, the profile label stays A");
         // never flips back: a strong new attack into the node later does not undo it
         all[118] = mk(all[118].time, 107.75, 108.25, 107.75, 108.0); addRows(all[118], 107.75, 108.25, 2000, 1);
         for (int n = 112; n <= 125; ++n) draw(p, h, n, all);
         AE = tagged(slurp(record(dir)), "AE");
-        check(AE.size() == 1 && texts(h, "AE? ").size() == 1 && texts(h, "A ").empty(), "AE never flips back to A");
+        check(AE.size() == 1 && AE[0][16] == "AE?" && texts(h, "AE").empty() && texts(h, "A ").size() == 1, "AE decided once (record AE?), never re-logged; label A");
         // the label fits and overlaps nothing
-        L = texts(h, "AE? "); bool clash = false;
+        L = texts(h, "A "); bool clash = false;
         for (const mock::Draw& d : h.draws) {
             if (L.empty()) break;
             if (d.type == "ring" && hit(textBox(L[0]), ringBox(d))) clash = true;
             if (d.type == "text" && !(d.x == L[0].x && d.y == L[0].y) && hit(textBox(L[0]), textBox(d))) clash = true;
         }
-        check(!L.empty() && !clash && L[0].x - static_cast<int>(L[0].text.size()) * 6 > 0, "AE? label fits and overlaps no circle or label");
+        check(!L.empty() && !clash && L[0].x - static_cast<int>(L[0].text.size()) * 6 > 0, "2.8.1: the A label fits and overlaps no circle or label");
         check(slurp(flex + "DeltaProfile.status.txt").find("they ran out inside the absorption") != std::string::npos, "status: AE in plain words");
         // a restart reloads AE? from the record
         mock::current = &h; p.destroy(); latchBooks().clear(); exConfigs().clear();
         DeltaProfile p2; mock::Host h2 = host(); draw(p2, h2, 125, all);
-        check(texts(h2, "AE? ").size() == 1 && tagged(slurp(record(dir)), "AE").size() == 1, "restart: AE? reloads, nothing re-logged");
+        check(texts(h2, "AE").empty() && texts(h2, "A ").size() == 1 && tagged(slurp(record(dir)), "AE").size() == 1, "restart: AE reloads (label A), nothing re-logged");
         mock::current = &h2; p2.destroy(); latchBooks().clear();
     }
     // 11) an A whose attackers do NOT fade (re-tests of 1,600) stays A; decided N once aeMaxBars (20) bars have passed
@@ -324,7 +324,7 @@ int main()
         mock::current = &h2; p2.destroy(); latchBooks().clear();
         const std::string dir3 = home("ae_proven"); put(flex + "LRA-DeltaEx-ES.csv", "VERSION,1\nMARKET,ES\nSHOW_AE,proven\n");
         mock::Host h3 = host(); DeltaProfile p3; for (int n = 108; n <= 115; ++n) draw(p3, h3, n, all);
-        check(texts(h3, "AE ").size() == 1 && texts(h3, "AE? ").empty(), "SHOW_AE proven: label AE");
+        check(texts(h3, "AE").empty() && texts(h3, "A ").size() == 1, "2.8.1: SHOW_AE proven still draws only A");
         mock::current = &h3; p3.destroy(); latchBooks().clear();
     }
     // 13) parser units: params grammar and E / AE line round trips; a torn E line is ignored

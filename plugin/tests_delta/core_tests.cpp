@@ -4,13 +4,13 @@
 #include <functional>
 #include <cstdlib>
 using namespace delta_profile;
-static int passed = 0;
-static void check(bool value, const char* message) {
+static int passed = 0, failedCount = 0;
+static void check(bool value, const std::string& message) {
     if (!value) throw std::runtime_error(message);
 }
 static void test(const char* name, const std::function<void()>& fn) {
     try { fn(); ++passed; std::cout << "PASS " << name << '\n'; }
-    catch (const std::exception& e) { std::cerr << "FAIL " << name << ": " << e.what() << '\n'; std::exit(1); }
+    catch (const std::exception& e) { std::cerr << "FAIL " << name << ": " << e.what() << '\n'; ++failedCount; }
 }
 static Bar candle(int i, std::int64_t time, double lo, double hi, double cl, bool closed = true) {
     Bar b; b.index = i; b.time = time; b.closed = closed;
@@ -26,52 +26,61 @@ static std::vector<Bar> held(bool sell, bool up, std::int64_t elapsed = 900, boo
     return b;
 }
 int main() {
-    test("sell absorption confirmed after 900 seconds", [] { State s = classify(held(true, true),100,100,-100,1); check(s.code == "A" && s.support && s.peakBar == 0,"wrong A"); });
-    test("buy absorption is mirrored downward", [] { State s = classify(held(false,false),100,100,100,1); check(s.code == "A" && !s.support,"wrong mirrored A"); });
-    test("sell initiative confirmed downward", [] { State s = classify(held(true,false),100,100,-100,1); check(s.code == "I" && !s.support,"wrong I"); });
-    test("buy initiative confirmed upward", [] { State s = classify(held(false,true),100,100,100,1); check(s.code == "I" && s.support,"wrong mirrored I"); });
-    // (2.5.0) the FIRST closed bar beyond the node decides - no 15-minute hold - and the decision is final
-    test("(2.5.0) one closed bar beyond the node confirms at once", [] {
-        std::vector<Bar> b = held(true,true,60); b.resize(2);
-        State s = classify(b,100,100,-100,1); check(s.code == "A" && s.support && s.decidedBar == 1,"close above did not confirm sell absorption");
+    // (2.8.4 night verification) the 2.5.0 "a LATER closed bar beyond the node decides" tests were superseded by 2.6.2 (Rassul
+    // 2026-10-13 05:16: the node's OWN PEAK BAR decides at its close) and 2.8.2 (the halfway rule); rewritten to the current rule.
+    // peak(): bar 0 holds the whole node (100) and is the peak bar; its OHLC is what decides.
+    test("(2.6.2) sell node: the peak bar closes GREEN above it, node in its lower half -> A support, decided by the peak bar", [] {
+        std::vector<Bar> b = held(true, true); b[0].low = 99; b[0].high = 105; b[0].open = 99.5; b[0].close = 104;
+        State s = classify(b,100,100,-100,1); check(s.code == "A" && s.support && s.peakBar == 0 && s.decidedBar == 0,"wrong A");
     });
-    test("(2.5.0) bearish: a close below a heavy-BUYING node = A (buyers absorbed)", [] {
-        std::vector<Bar> b; Bar seed = candle(0,0,99,101,100); seed.rows.push_back(Row(100,100,100)); b.push_back(seed);
-        b.push_back(candle(1,180,98,101,99)); b[1].open = 100.5;   // a red bar closing below
-        State s = classify(b,100,100,100,1); check(s.code == "A" && !s.support,"close below buying node not bearish A");
+    test("(2.6.2) buy node mirrored: the peak bar closes RED below it, node in its upper half -> A resistance", [] {
+        std::vector<Bar> b = held(false, false); b[0].low = 95; b[0].high = 101; b[0].open = 100.5; b[0].close = 96;
+        State s = classify(b,100,100,100,1); check(s.code == "A" && !s.support && s.decidedBar == 0,"wrong mirrored A");
     });
-    test("(2.5.0) a GREEN bar closing below a buying node does not confirm (needs a red bar)", [] {
-        std::vector<Bar> b; Bar seed = candle(0,0,99,101,100); seed.rows.push_back(Row(100,100,100)); b.push_back(seed);
-        b.push_back(candle(1,180,97,99.5,99)); b[1].open = 97.5;   // closes below the node but up on the bar
-        check(classify(b,100,100,100,1).code == "A?","green bar confirmed a bearish absorption");
-        b.push_back(candle(2,360,97,99,98)); b[2].open = 99;         // the next RED bar closing below does
-        check(classify(b,100,100,100,1).code == "A","red bar below did not confirm");
+    test("(2.6.2) a doji peak bar then a later red close below a sell node = I (sellers won)", [] {
+        State s = classify(held(true,false),100,100,-100,1); check(s.code == "I" && !s.support && s.decidedBar == 1,"wrong I");
     });
-    test("(2.5.0) a doji (open == close) beyond the node does not decide", [] {
-        std::vector<Bar> b = held(true,true,60); b.resize(2); b[1].open = b[1].close;
-        check(classify(b,100,100,-100,1).code == "A?","doji decided");
+    test("(2.6.2) a doji peak bar then a later green close above a buy node = I (buyers won)", [] {
+        State s = classify(held(false,true),100,100,100,1); check(s.code == "I" && s.support,"wrong mirrored I");
     });
-    test("(2.5.0) a forming bar beyond the node does not decide", [] {
-        std::vector<Bar> b = held(true,true,60); b.resize(2); b[1].closed = false;
+    test("(2.6.2) a LATER green close above a sell node never makes A (the peak bar did not confirm)", [] {
+        State s = classify(held(true,true),100,100,-100,1); check(s.code == "I?","later bar made A: " + std::string(s.code));
+    });
+    test("(2.6.2) a GREEN peak bar closing below a buying node is not A (needs red)", [] {
+        std::vector<Bar> b = held(false, false); b[0].low = 95; b[0].high = 101; b[0].open = 95.5; b[0].close = 99;
+        check(classify(b,100,100,100,1).code != "A","green peak bar confirmed a bearish absorption");
+    });
+    test("(2.6.2) a doji peak bar beyond the node does not decide A", [] {
+        std::vector<Bar> b = held(true, true); b[0].low = 99; b[0].high = 105; b[0].open = 104; b[0].close = 104;
+        check(classify(b,100,100,-100,1).code != "A","doji decided");
+    });
+    test("(2.6.2) a forming peak bar never decides (A?)", [] {
+        std::vector<Bar> b = held(true, true); b.resize(1); b[0].low = 99; b[0].high = 105; b[0].open = 99.5; b[0].close = 104; b[0].closed = false;
         check(classify(b,100,100,-100,1).code == "A?","forming bar decided");
     });
-    test("(2.5.0) a close back inside / at the node edge does not decide", [] {
-        std::vector<Bar> b = held(true,true,60); b.resize(2); b[1].close = 100;
-        check(classify(b,100,100,-100,1).code == "A?","close at node decided");
+    test("(2.6.2 / F1) a peak-bar close ON the node's edge is not beyond it -> not A", [] {
+        std::vector<Bar> b = held(true, true); b[0].low = 99; b[0].high = 105; b[0].open = 99.5; b[0].close = 100;
+        check(classify(b,100,100,-100,1).code != "A","close at node decided");
+        b[0].close = 101; check(classify(b,100,100,-100,1).code == "A","one tick above did not decide");
     });
-    test("(2.5.0) the decision is final: a later close on the other side does not change it", [] {
-        std::vector<Bar> b = held(true,true,60); b.resize(2);
-        b.push_back(candle(2,360,95,101,96)); b.push_back(candle(3,540,94,99,95)); b[2].open = 100; b[3].open = 98;
+    test("(2.6.2) the decision is final: later closes on the other side do not change a decided A", [] {
+        std::vector<Bar> b = held(true, true); b[0].low = 99; b[0].high = 105; b[0].open = 99.5; b[0].close = 104;
+        b.push_back(candle(3,1500,95,101,96)); b.push_back(candle(4,1600,94,99,95)); b[3].open = 100; b[4].open = 98;
         check(classify(b,100,100,-100,1).code == "A","later opposite close changed a decided A");
+    });
+    test("(2.8.2) halfway: a green-above peak bar whose node sits in its UPPER half is not A", [] {
+        std::vector<Bar> b = held(true, true); b[0].low = 95; b[0].high = 101; b[0].open = 95.5; b[0].close = 101;   // mid 98, node 100
+        check(classify(b,100,100,-100,1).code != "A","upper-half node confirmed");
     });
     test("(2.5.0) the first decisive close wins over later ones (I stays I)", [] {
         std::vector<Bar> b = held(true,false,60); b.resize(2);   // sell node, closes below = I
         b.push_back(candle(2,360,100,106,105)); b[2].open = 101;
         check(classify(b,100,100,-100,1).code == "I","I flipped");
     });
-    test("formation restarts at last material contribution", [] {
-        std::vector<Bar> b = held(true,true); b[2].rows.push_back(Row(100,-20,20));
-        check(classify(b,100,100,-120,1).code == "A?","formation not restarted");
+    test("formation restarts at last material contribution", [] {   // (2.8.4) peak bar 0 did not confirm; the forming bar 2 contributes
+        std::vector<Bar> b = held(true,true,900,false); b[2].rows.push_back(Row(100,-20,20));
+        const State st = classify(b,100,100,-120,1);
+        check(st.formedBar == 2 && st.code == "I?","formation not restarted");
     });
     test("peak ring is hardest contributor not newest minute", [] {
         std::vector<Bar> b = held(true,true); b[0].index=42;
@@ -119,6 +128,8 @@ int main() {
         std::vector<Bar> b=held(true,true);
         for(int i=0;i<5;++i) b[0].rows.push_back(Row(110+i,1,1));
         normalize(b[0]);
+        b[0].high=105; b[0].open=99.5; b[0].close=104;   // (2.8.4) a peak bar that WOULD confirm A on full history
+        check(build(b,1,true).nodes[0].state.code=="A","fixture: confirms on full history");
         Snapshot s=build(b,1,false); check(!s.nodes.empty() && s.nodes[0].state.code=="A?","partial history confirmed");
     });
     test("zone classification excludes older 90-minute contributor", [] {
@@ -178,5 +189,6 @@ int main() {
             for(const Node& n:s.nodes) check(n.ratio>=2 && n.state.peakBar>=0 && n.state.peakBar<30,"invalid node/ring association");
         }
     });
-    std::cout << "RESULT " << passed << " tests passed\n";
+    std::cout << "RESULT " << passed << " tests passed, " << failedCount << " failed\n";
+    return failedCount ? 1 : 0;
 }

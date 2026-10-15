@@ -3,8 +3,8 @@
 #include <functional>
 #include <cstdlib>
 namespace mock { Host* current=NULL; }
-static int passed=0;
-static void check(bool x,const char* why){if(!x)throw std::runtime_error(why);++passed;}
+static int passed=0,failedN=0;
+static void check(bool x,const char* why){if(!x){++failedN;std::cerr<<"FAIL "<<why<<"\n";return;}++passed;}   // (2.8.4) counts, no abort
 static ChartState& state(mock::Host& h){return *static_cast<ChartState*>(h.data);}
 static mock::Host fixture(bool green=false){
     mock::Host h;h.seconds=180;h.tick=.25f;
@@ -12,7 +12,9 @@ static mock::Host fixture(bool green=false){
     for(int i=0;i<45;++i){mock::Bar b;b.time=start+i*180;b.low=100;b.high=125;b.open=104;b.close=green?106:104;
         b.rows={mock::Price(120,1,0,1),mock::Price(121,1,0,1),mock::Price(122,1,0,1),mock::Price(123,1,0,1),mock::Price(124,1,0,1)};b.volume=5;h.bars.push_back(b);}
     h.bars[20].rows.push_back(mock::Price(100,0,10000,10000));h.bars[20].volume+=10000;
-    h.bars[20].low=99;h.bars[20].open=100;h.bars[20].close=100;return h;
+    h.bars[20].low=99;h.bars[20].open=100;h.bars[20].close=100;
+    if(green){h.bars[20].open=99;h.bars[20].close=101;}   // (2.8.4 test update, 2.6.2 rule) the PEAK bar itself closes green above the node
+    return h;
 }
 static int rings(mock::Host& h){int n=0;for(const mock::Draw& d:h.draws)if(d.type=="ring")++n;return n;}
 static void cleanup(DeltaProfile& p,mock::Host& h){mock::current=&h;p.destroy();latchBooks().clear();}
@@ -22,14 +24,14 @@ int main(){
  setenv("TZ","UTC",1);tzset();unsetenv("USERPROFILE");
  {
   mock::Host h=fixture();DeltaProfile p;draw(p,h);
-  check(first(h).code=="A?","fixture pending A");check(rings(h)==0,"A? must not bubble");
+  check(first(h).code=="I?","(2.6.2) doji peak bar: absorption ruled out, pending I?");check(rings(h)==0,"I? must not bubble");
   mock::Bar r=h.bars.back();r.time+=180;r.open=99;r.close=97;r.low=96;h.bars.push_back(r);r.time+=180;h.bars.push_back(r);draw(p,h);
   check(first(h).code=="I","pending resolves I");check(rings(h)==0,"I must not bubble");
   bool I=false;for(auto& d:h.draws)if(d.type=="text"&&d.text.find("I ")==0)I=true;
-  check(I,"initiation stays on profile");cleanup(p,h);
+  check(!I,"(2.8.1) the I is recorded, not drawn on the profile");cleanup(p,h);
  }
  {
-  mock::Host h=fixture();DeltaProfile p;draw(p,h);const long long id=first(h).id;
+  mock::Host h=fixture(true);DeltaProfile p;draw(p,h);const long long id=first(h).id;   // (2.8.4) the peak bar decides A
   mock::Bar g=h.bars.back();g.time+=180;g.open=104;g.close=107;h.bars.push_back(g);g.time+=180;h.bars.push_back(g);draw(p,h);
   check(first(h).code=="A"&&first(h).support,"confirmed A bullish");check(rings(h)==1,"A gets one bubble");
   check(state(h).bubbleState[id]=="drawn","bubble shares event id");check(state(h).profileState[id]=="shown:A","profile shares event id");
@@ -53,7 +55,7 @@ int main(){
   // Earlier red close AFTER peak but BEFORE last material contribution must NOT decide.
   mock::Host h=fixture();h.bars[25].rows.push_back(mock::Price(100,0,4000,4000));h.bars[25].volume+=4000;
   h.bars[23].open=99;h.bars[23].close=97;h.bars[23].low=96;
-  DeltaProfile p;draw(p,h);check(first(h).code=="A?","no false decision between peak and formation");
+  DeltaProfile p;draw(p,h);check(first(h).code!="A"&&first(h).code!="I","no false decision between peak and formation");
   check(first(h).formedTime==h.bars[25].time,"frozen formation time recorded");check(rings(h)==0,"premature peak-scan bubble absent");cleanup(p,h);
  }
  {
@@ -105,5 +107,6 @@ int main(){
   LatchBook bk;seedFromText(recordLine(L,'F',.25,"ESZ26")+"\n"+recordLine(changed,'D',.25,"ESZ26")+"\n","ESZ26",.25,bk);
   check(bk.v.size()==1&&!bk.v[0].logged&&bk.rejected==1,"altered immutable decision is rejected");
  }
- std::cout<<"RESULT "<<passed<<" checks passed\n";
+ std::cout<<"RESULT "<<passed<<" checks passed, "<<failedN<<" failed\n";
+ return failedN?1:0;
 }

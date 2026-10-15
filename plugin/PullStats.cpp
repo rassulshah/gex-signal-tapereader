@@ -1,5 +1,21 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.4.0  (2026-10-14 night)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.5.0  (2026-10-14 night)
+ *  1.5.0 (2026-10-14 night; Rassul approved 20:04 CT "merge lsPulling's read into lsPullStats and retire lsPulling", then changed the
+ *        design: "the PullStats line shows ONLY state 3, the locked arrival read after the 3-min window ... It emphasises the pull";
+ *        "draw NO pre-touch line and NO measuring line; nothing shows until the read locks"; "still compute and record the pre-touch
+ *        % ... and put it in the hover as a secondary fact"): the ONE zone read line (ZoneRead.h 1.1.0) is now lsPulling 0.3.0's
+ *        ARRIVAL read - in the first 3 minutes after price reached a key / gamma level, was the size resting AT the level on the
+ *        defending side cancelled or traded (this chart's own order ids)? Drawn only once it locks at 3:00:
+ *          "ES 7750 - bids pulled, not filled (62% in 3 min) - less support ?"   red (green for offers pulled at resistance)
+ *          "ES 7750 - bids traded, held (2.1x normal) - support holding ?"         green at support (red for offers at resistance)
+ *          "ES 7750 - bids: 30% pulled, 40% traded in 3 min ?"                     grey (mixed)
+ *        always "?", never repainted. Hover: the arrival cancelled / traded numbers and the normal, the pre-touch share (secondary),
+ *        what / why / how / an example, and both study caveats (arrival: held ~19 pp less often, association only, NOT YET proven;
+ *        pre-touch: no clear sign yet). The session record (PullStats\<stem>-zoneread-<session>.csv) gets an "arrived" row at arrival
+ *        and a "frozen" row at the lock, with the pre-touch part in four new columns at the end (an existing 1.4.0 file's header is
+ *        upgraded once; its rows are still read). A restart inside the 3 minutes cannot follow the orders: nothing until the window
+ *        ends, then a grey "bids: arrival read not known (restarted during the 3 min) ?". Bars, spike labels, letters, the feed
+ *        clock and the recorder: unchanged. lsPulling is a retired stub from tonight.
  *  1.4.0 (2026-10-14 night, Rassul via the coordinator "every order-flow pane gets its own ONE read line in place of its box"): the
  *        READ box is gone (OrderFlowFeed.h 1.5.0). Box shows: Read (default) = ONE line at the box's Position / Offset, only while price
  *        is inside a key-level or gamma zone (ZoneRead.h 1.0.0): PRE-TOUCH pulling - of the size resting at the level 5 minutes before
@@ -76,7 +92,7 @@
 #include "PullStatsLogic.h"
 #include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.4.0"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.5.0"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
@@ -140,7 +156,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. Top: a plain-English message (green = bullish, red = bearish, white = bait gone / reset), a blue options line when fresh (oPull), and the info box (Bids | Offers: pulled lots, before price, traded first, pace, crowd = orders, avg size, top order share) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.4.0");   // PS_VERSION
+    p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. The read line (only at a key / gamma level, shown once it locks 3 minutes after price reached the level): was the size resting at the level cancelled or traded - red = the defence pulled at support (green at resistance), green = traded and held at support, grey = mixed; always '?'. Its hover: the numbers, the normal, the share pulled before the touch, and the study caveats. Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive), Offset X / Y, Box shows.");
+    p->setVersion("1.5.0");   // PS_VERSION
     return p;
 }

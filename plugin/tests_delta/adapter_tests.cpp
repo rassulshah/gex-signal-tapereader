@@ -212,8 +212,10 @@ int main(){
         for(auto& b:h.bars){b.rows={mock::Price(80,1,0,1),mock::Price(81,1,0,1),mock::Price(82,1,0,1),mock::Price(83,1,0,1),mock::Price(84,1,0,1)};b.volume=5;b.low=79;b.high=100;b.open=97;b.close=96;}
         h.bars[40].rows.push_back(mock::Price(100,0,10000,10000));h.bars[40].volume+=10000;h.bars[40].open=100;h.bars[40].close=100;h.bars[40].high=101;
         mock::current=&h;DeltaProfile p;p.draw();bool letter=false;
-        for(const mock::Draw& d:h.draws){check(d.type!="ring","initiative circle");if(d.type=="text" && d.text.find("I ")==0)letter=true;}
-        check(letter,"initiative letter absent");cleanup(p,h);
+        for(const mock::Draw& d:h.draws){check(d.type!="ring","initiative circle");if(d.type=="text" && d.text.find("I")==0)letter=true;}
+        // (2.8.1, Rassul 18:31 "remove the I") the I is recorded, never drawn: no circle AND no letter (was: letter present)
+        bool recorded=false;for(const Latch& L:latchBooks().begin()->second.v)if(L.code=="I")recorded=true;
+        check(!letter,"2.8.1: no I letter drawn");check(recorded,"the I is still decided and recorded");cleanup(p,h);
     });
     test("2.6.0: current A uses the paired event while historical bubbles survive profile layout",[]{
         mock::Host h=history(110,60);

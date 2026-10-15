@@ -66,7 +66,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.8.3"; // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.8.4"; // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -1149,6 +1149,11 @@ bool DeltaProfile::buildNative(ChartState& s) {
                 return;
             }
             Latch L; L.low = lo; L.high = hi; L.code = allowedNow ? code : (decided(code) ? code + "?" : code);
+            // (2.8.4) classify() sees only the 90-min window and cannot apply the 2.8.3 pivot rule (chart bars 0 .. peak) - a node
+            // first seen AFTER its peak bar closed (chart opened, IRT restarted, the node reached 2.0x / the top 3 later) took its A
+            // without that rule. A new event now starts undecided; the decision loop below applies EVERY A rule from the peak bar's
+            // own closed data (bars 0 .. peak only), so the late path and the live path give the same answer.
+            if (L.code == "A") L.code = "A?";
             L.support = support; L.candSupport = support; L.peakTime = peak; L.price = price; L.sell = mySell;
             L.formedTime = static_cast<RTDATE>(times[formedBar]); L.formedT = barEnd(formedBar);
             L.id = bk.nextId++; L.tFirst = nowT; L.peakT = barEnd(peakBar); L.net = net; L.mult = mult; L.zone = zone;
@@ -1189,28 +1194,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
         // 1-bar ZigZag (CobImpulseLogic legPivot / trade_def zigzag). Bullish A: the peak bar CREATES the down pivot (it is the current
         // down leg's low) or its LOW is below the HIGH of the latest down-pivot bar. Bearish A: mirror (creates the up pivot, or its
         // HIGH is above the LOW of the latest up-pivot bar). A later lower low / higher high changes nothing.
-        auto pivotOk = [&](int pk, bool bullish) -> bool {
-            if (pk < 1) return false;
-            for (int i = 0; i <= pk; ++i) if (!dp::finite(high[i]) || !dp::finite(low[i]) || high[i] < low[i]) return false;
-            int dirn = high[1] >= high[0] ? 1 : -1, ext = 0, start = 0;
-            for (int i = 1; i <= pk; ++i) {
-                if (dirn == 1) {
-                    if (high[i] > high[ext]) ext = i;
-                    else if (low[i] < low[i - 1] && i != ext) { start = ext; ext = i; dirn = -1; }
-                } else {
-                    if (low[i] < low[ext]) ext = i;
-                    else if (high[i] > high[i - 1] && i != ext) { start = ext; ext = i; dirn = 1; }
-                }
-            }
-            if (bullish) {
-                const int piv = dirn == -1 ? ext : start;          // the down pivot (the current down leg's low, else the up leg's start)
-                if (piv == pk) return true;                       // this bar creates the down pivot
-                return low[pk] < high[piv];
-            }
-            const int piv = dirn == 1 ? ext : start;              // the up pivot
-            if (piv == pk) return true;
-            return high[pk] > low[piv];
-        };
+        // (2.8.4) the pivot rule is dp::pivotOk (DeltaProfileCore.h), unit-tested; the halfway rule dp::halfwayOk
         for (std::size_t k = 0; allowedNow && k < latches.size(); ++k) {
             Latch& L = latches[k];
             if (decided(L.code)) continue;
@@ -1224,9 +1208,8 @@ bool DeltaProfile::buildNative(ChartState& s) {
             // versa") the node's middle must sit at / below the peak bar's midpoint for a bullish A, at / above it for a bearish A
             const double ph = high[pk], pl = low[pk];
             if (!dp::finite(ph) || !dp::finite(pl)) continue;
-            const double nodeMid = (static_cast<double>(L.low) + static_cast<double>(L.high)) * 0.5, barMid = (ph + pl) * 0.5 / tick;
-            const bool half = L.sell ? (nodeMid <= barMid + 1e-6) : (nodeMid >= barMid - 1e-6);
-            const bool confirmed = half && pivotOk(pk, L.sell) && (L.sell ? (pc > po && pck > L.high) : (pc < po && pck < L.low));
+            const bool half = dp::halfwayOk(L.low, L.high, ph, pl, tick, L.sell);
+            const bool confirmed = half && dp::pivotOk(high, low, pk, L.sell) && (L.sell ? (pc > po && pck > L.high) : (pc < po && pck < L.low));
             if (confirmed) { L.code = "A"; L.support = L.sell; L.decidedBy = barEnd(pk); continue; }
             L.code = "I?"; L.support = !L.sell;                                                   // absorption ruled out
             const int at = findBar(L.formedTime);
@@ -1445,7 +1428,7 @@ void DeltaProfile::exhaust(ChartState& s, LatchBook& bk, const std::vector<dp::B
                     m.ctxT = c.ctxIndex >= 0 && c.ctxIndex < static_cast<int>(count) ? localSec(static_cast<RTDATE>(times[c.ctxIndex])) : 0;
                     m.live = b.index == lastClosed; m.W = cfg.p.W; m.params = exParamText(cfg);
                     const bool gate = cfg.p.show == 2 || (cfg.p.show == 1 && c.ctx != 'N');
-                    m.mark = c.qualifies() && gate ? (cfg.p.proven ? "Ex" : "Ex?") : "none";
+                    m.mark = c.qualifies() && gate ? "Ex?" : "none";   // (2.8.4) always "Ex?" in the record (never drawn; not proven)
                     bk.ex.push_back(m); bk.journal.push_back(exLine(m, 'C', tick, s.book));
                 }
             }
@@ -1678,6 +1661,7 @@ bool DeltaProfile::render(ChartState& s) {
     nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [](const VisibleNode& v) { return v.node->state.code != "A"; }), nodes.end());
     if (nodes.size() > 3) nodes.resize(3);
     std::vector<int> used;
+    std::vector<const dp::Node*> labelled;   // (2.8.4) the A nodes whose label was actually drawn
     std::vector<LBox> placed;
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const VisibleNode& v = nodes[i]; const dp::Node& n = *v.node;
@@ -1708,7 +1692,7 @@ bool DeltaProfile::render(ChartState& s) {
         }
         if (!ok) continue;
         const COLOR color = n.state.support ? C_SUPPORT : C_RESISTANCE;
-        textRight(r, y, label, color, s.layout.font, true); used.push_back(y);
+        textRight(r, y, label, color, s.layout.font, true); used.push_back(y); labelled.push_back(v.node);   // (2.8.4)
         if(event){s.profileState[event->id]="shown:"+code; if(isA&&(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared"))++s.pairedAbsorptions;}
         placed.push_back(LBox{ l, y - h / 2, r, y + h / 2 });
         if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1); // visible association when a label stepped
@@ -1766,7 +1750,9 @@ bool DeltaProfile::render(ChartState& s) {
         std::stable_sort(rowTexts.begin(), rowTexts.end(), [](const RowText& a, const RowText& b) { return std::fabs(a.delta) > std::fabs(b.delta); });
         const int h = s.layout.font + 3;
         for (const RowText& t : rowTexts) {
-            bool isTop = false; for (const VisibleNode& v : nodes) if (v.node == t.node) { isTop = true; break; }   // (2.8.1) the 3 strongest nodes only
+            // (2.8.4) only a node whose A label was DRAWN (2.8.3 also wrote it next to an A whose label was refused - offscreen bubble,
+            // no room - leaving an orphan "+137" with no A)
+            bool isTop = false; for (const dp::Node* v : labelled) if (v == t.node) { isTop = true; break; }
             if (!isTop) continue;
             const std::string label = amount(t.delta);
             const int w = textWidth(label, s.layout.font, true), r = t.edge - 2, l = r - w;
@@ -1920,6 +1906,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.8.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.8.4");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }

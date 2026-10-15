@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -92,6 +92,50 @@ inline double regionalDelta(const Bar& b, Tick low, Tick high) {
     for (; i != b.rows.end() && i->key <= high; ++i) d += i->delta;
     return d;
 }
+// (2.8.4) the two 2.8.2 / 2.8.3 A rules as pure functions, shared by the host's decision loop, classify() and the tests.
+// halfwayOk (2.8.2, Rassul 2026-10-14 19:44 "for bullish circle the absorption needs to be at or below the half way mark of the
+// candle and vice versa"): the node's middle (in tick keys) at / below the peak bar's (high+low)/2 for a SELLING node (bullish A),
+// at / above it for a BUYING node (bearish A). Unknown high / low = fails.
+// (2.8.4) compared in WHOLE TICKS (twice the midpoints, integers): 2.8.2 compared the node's integer key midpoint with the bar's raw
+// (high + low) / 2 / tick in double, so with a float tick that is not exact in binary (GC 0.1, HG 0.0005, NG 0.001) a node exactly AT
+// the halfway mark read ~0.0006 tick ABOVE it and a valid bullish A was refused (test_audit_257 GC / HG / NG).
+inline bool halfwayOk(Tick low, Tick high, double barHigh, double barLow, double tick, bool sellNode) {
+    if (!finite(barHigh) || !finite(barLow) || !finite(tick) || tick <= 0) return false;
+    const double qh = barHigh / tick, ql = barLow / tick;
+    if (!finite(qh) || !finite(ql) || std::fabs(qh) >= 9.0e15 || std::fabs(ql) >= 9.0e15) return false;
+    const Tick node2 = low + high, bar2 = static_cast<Tick>(std::llround(qh)) + static_cast<Tick>(std::llround(ql));
+    return sellNode ? (node2 <= bar2) : (node2 >= bar2);
+}
+// pivotOk (2.8.3, Rassul 2026-10-14 19:47): his 1-bar ZigZag (the same walk as CobImpulseLogic legPivot / trade_def zigzag) over
+// chart bars 0 .. pk ONLY (decided once at the peak bar's close; later bars can never change it). Bullish A: bar pk CREATES the
+// down pivot (it is the current down leg's low) or its LOW is below the HIGH of the latest down-pivot bar. Bearish A: mirror (pk
+// creates the up pivot, or its HIGH is above the LOW of the latest up-pivot bar). H / L: any indexable arrays (RTARRAY, vector).
+template <class H, class L>
+inline bool pivotOk(H& high, L& low, int pk, bool bullish, int* pivotBar = nullptr) {
+    if (pivotBar) *pivotBar = -1;
+    if (pk < 1) return false;
+    auto hi = [&](int i) { return static_cast<double>(high[i]); };
+    auto lo = [&](int i) { return static_cast<double>(low[i]); };
+    for (int i = 0; i <= pk; ++i) if (!finite(hi(i)) || !finite(lo(i)) || hi(i) < lo(i)) return false;
+    int dirn = hi(1) >= hi(0) ? 1 : -1, ext = 0, start = 0;
+    for (int i = 1; i <= pk; ++i) {
+        if (dirn == 1) {
+            if (hi(i) > hi(ext)) ext = i;
+            else if (lo(i) < lo(i - 1) && i != ext) { start = ext; ext = i; dirn = -1; }
+        } else {
+            if (lo(i) < lo(ext)) ext = i;
+            else if (hi(i) > hi(i - 1) && i != ext) { start = ext; ext = i; dirn = 1; }
+        }
+    }
+    if (bullish) {
+        const int piv = dirn == -1 ? ext : start;          // the down pivot (the current down leg's low, else the up leg's start)
+        if (pivotBar) *pivotBar = piv;
+        return piv == pk || lo(pk) < hi(piv);
+    }
+    const int piv = dirn == 1 ? ext : start;               // the up pivot (the current up leg's high, else the down leg's start)
+    if (pivotBar) *pivotBar = piv;
+    return piv == pk || hi(pk) > lo(piv);
+}
 inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
                       double net, double tick) {
     State out;
@@ -129,9 +173,9 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     if (peakKnown) {
         const Tick pk = key(pb.close);
         // (2.8.2, Rassul 2026-10-14 19:44) bullish A: the node at / below the peak bar's halfway mark; bearish A: at / above it
-        const double nodeMid = (static_cast<double>(low) + static_cast<double>(high)) * 0.5;
-        const double barMid = finite(pb.high) && finite(pb.low) ? (pb.high + pb.low) * 0.5 / tick : (sell ? -1e300 : 1e300);
-        const bool half = sell ? (nodeMid <= barMid + 1e-6) : (nodeMid >= barMid - 1e-6);
+        // (2.8.4) the window holds only the last 90 min, so the 2.8.3 pivot rule (chart bars 0 .. peak) is NOT applied here: the
+        // host never publishes this A as decided - a new event starts undecided and its own decision loop applies every rule
+        const bool half = halfwayOk(low, high, pb.high, pb.low, tick, sell);
         const bool confirmed = half && (sell ? (pb.close > pb.open && pk > high) : (pb.close < pb.open && pk < low));
         if (confirmed) { out.code = "A"; out.support = sell; out.decidedBar = pb.index; return out; }
         for (std::size_t i = static_cast<std::size_t>(formed + 1); i < bars.size(); ++i) {

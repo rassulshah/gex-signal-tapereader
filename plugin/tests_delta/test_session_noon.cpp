@@ -25,7 +25,7 @@ static mock::Host fixture(unsigned long wallStart, int count)
         b.volume = 5; b.low = 100; b.high = 125; b.open = 103; b.close = 104; h.bars.push_back(b);
     }
     h.bars[40].rows.push_back(mock::Price(100,0,10000,10000)); h.bars[40].volume += 10000;
-    h.bars[40].low = 99; h.bars[40].high = 125; h.bars[40].close = 100; h.bars[40].open = 100;
+    h.bars[40].low = 99; h.bars[40].high = 125; h.bars[40].close = 101; h.bars[40].open = 99;   // (2.8.4 test update) the 2.6.2 rule: the PEAK bar itself closes green above the node (the old doji peak + later bar no longer makes A)
     return h;
 }
 static void extend(mock::Host& h, int n) { mock::Bar last = h.bars.back(); for (int i = 0; i < n; ++i) { mock::Bar b = last; b.time = last.time + static_cast<unsigned long>((i + 1) * 60); h.bars.push_back(b); } }

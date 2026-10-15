@@ -4,7 +4,7 @@ REM  run-logic-tests.bat  --  Gate B (logic) regression for ALL the RTX plugins.
 REM  Compiles each plugin\test_*_logic.cpp against its *Logic.h with the same MSVC the DLLs
 REM  use (no IRT SDK needed) and runs it. Exit code = total failures.
 REM      run-logic-tests.bat            all four suites
-REM      run-logic-tests.bat gamma      one: gamma | contractoffset | kingtracker | dealer
+REM      run-logic-tests.bat gamma      one: gamma | contractoffset | kingtracker | dealer | deltarules | deltacore | deltaedge
 REM  (MT100 2026-10-09) daymodel / daystats retired: their tests live in plugin\retired\ with the sources
 REM  The cloud runs the identical files with g++ on every build (tools/regress.py).
 REM ===========================================================================
@@ -24,6 +24,13 @@ call :one gamma          test_gammaprofile_logic
 call :one contractoffset test_contractoffset_logic
 call :one kingtracker    test_kingtracker_logic
 call :one dealer         test_dealer_logic
+REM (lsDeltaProfile 2.8.4, 2026-10-14 night) the SDK-free Delta Profile suites: the A rules (pivot / halfway / edge) and the core
+call :one deltarules     tests_delta\test_rules284_core
+call :one deltacore      tests_delta\core_tests
+call :one deltaedge      tests_delta\test_audit_257
+REM The mock-SDK Delta Profile suites (tests_delta\test_rules284, test_dp_bubble_halfway, adapter_tests, test_rule262, test_record_254,
+REM test_contract263, test_exh270, test_offscreen271, test_columns280, test_sync260, test_session_noon) need POSIX + the mock irtsdk.h:
+REM the cloud runs them with g++ -fsanitize=address,undefined from tests_delta (see the Build line at the top of each file).
 echo.
 if "%TOTAL%"=="0" (echo ALL LOGIC TESTS PASSED) else (echo %TOTAL% LOGIC TEST(S) FAILED)
 pause

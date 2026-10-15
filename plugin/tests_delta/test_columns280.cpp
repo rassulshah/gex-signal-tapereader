@@ -40,10 +40,10 @@ static std::string dirFor(const std::string& name) {
 }
 int main() {
     setenv("TZ", "UTC", 1); tzset();
-    check(std::string(DLT_VERSION) == "2.8.0", "version 2.8.0");
+    check(std::string(DLT_VERSION) == "2.8.4", "version 2.8.4");
     {   // the setVersion literal gex-build reads = DLT_VERSION
         std::ifstream f("../DeltaProfile.cpp"); std::stringstream ss; ss << f.rdbuf();
-        check(ss.str().find("p->setVersion(\"2.8.0\")") != std::string::npos, "setVersion literal 2.8.0");
+        check(ss.str().find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "setVersion literal = DLT_VERSION");
     }
     // 1) no Dealer Profile on the chart: the column sits at the axis (80 px), every bar and text inside it; delta values green / red
     {
@@ -52,9 +52,12 @@ int main() {
         check(s.lay.ok && s.lay.delta.r == 1978 && s.lay.delta.l == 1898 && s.lay.priceRight == 1878 && s.lay.dealer.w() == 0, "alone: column 1898-1978, price ends at 1878");
         std::string why; check(strays(h, s, &why) == 0, "alone: nothing outside the column " + why);
         int green = 0, red = 0; for (const mock::Draw& d : h.draws) if (d.type == "text" && (d.text[0] == '+' || d.text[0] == '-')) { if (d.color == C_BUY) ++green; if (d.color == C_SELL) ++red; }
-        check(green > 0 && red > 0 && s.textsDrawn == green + red, "delta values next to the bars: +green / -red (" + std::to_string(green) + " / " + std::to_string(red) + ")");
-        bool title = false; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.text == "DLT v2.8.0") title = true;
-        check(title, "title 'DLT v2.8.0'");
+        // (2.8.1, Rassul 18:30 "values for every node instead of the nodes that matter") delta text only on LABELLED A nodes (2.8.0 had it
+        // on every row); any value drawn is green + / red - and inside the column
+        int aLabels = 0; for (const mock::Draw& d : h.draws) if (d.type == "text" && (d.text == "A" || d.text.compare(0, 2, "A ") == 0)) ++aLabels;
+        check(s.textsDrawn == green + red && green + red <= aLabels, "delta values only on A labels: +green / -red (" + std::to_string(green) + " / " + std::to_string(red) + ", A labels " + std::to_string(aLabels) + ")");
+        bool title = false; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.text == std::string("DLT v") + DLT_VERSION) title = true;
+        check(title, std::string("title 'DLT v") + DLT_VERSION + "'");
         // the margin: owner only after 5 s without a Dealer Profile, then gap + 80 = 100 px = 10 bars at 10 px / bar
         p.calc(0); check(h.marginSets == 0, "not in the first 5 s (the Dealer Profile may still be loading)");
         state(h).firstDrawMs -= 6000; p.calc(0);
