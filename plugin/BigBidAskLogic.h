@@ -30,13 +30,13 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.3.0";
+static const char* const VERSION = "1.3.1";
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
 // ---- settings (all real: read on every draw from the per-market file, written only from the settings window) ----------------
 struct Settings {
-    int font = 11;            // 8 - 20 pt
+    int font = 9;             // 8 - 20 pt   (1.3.1, Rassul 10:28 "the font size is too big messing up its alignment": 11 -> 9)
     int boldQ = 200;          // bold threshold in hundredths of x (2.00x); 1.20x - 10.00x
     bool circle = true;       // draw the absorption circle
     bool nonBold = true;      // draw the numbers that are not bold

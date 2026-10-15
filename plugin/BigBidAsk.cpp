@@ -66,7 +66,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.3.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.3.1"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -240,7 +240,7 @@ int cppExtension::setup(void) {
     // controls only (his rule); the chart reads the per-market file, the dialog is filled from it (BUILD-LESSONS #42 / #44)
     setParameterVersion(1);
     setParameterDialogHeight(3);
-    setIntegerParameter("Font size", 11, 50);                                       // 0
+    setIntegerParameter("Font size", 9, 50);                                       // 0
     setFloatParameter("Bold at (x normal)", 2.0f, 50, kParmAppendSameLine);        // 1
     setBoolParameter("Absorption circle", true);                                    // 2
     setBoolParameter("Show non-bold numbers", true, kParmAppendSameLine);           // 3
@@ -587,7 +587,7 @@ void BigBidAsk::render(BBState& S) {
         const char* sy = getSymbol(); Z.levels = zn::levels(flexDir(), S.market, sy ? sy : "", steadyMs()); }
     std::vector<double> candPx, candVol;
     FONT fp; fp.id = HELVETICA; fp.size = (short)set.font; fp.style = PLAIN;
-    FONT fb = fp; fb.style = BOLD; fb.size = (short)(set.font + 3);   // (1.1.0) the really large numbers bold AND bigger, like the mockup 96
+    FONT fb = fp; fb.style = BOLD; fb.size = (short)(set.font + 2);   // (1.1.0) the really large numbers bold AND bigger, like the mockup 96
     int lead = 0, asc = 0, desc = 0; setFont(fp); getFontMetrics(&lead, &asc, &desc);
     const int th = std::max(set.font + 2, asc + desc);
     int leadB = 0, ascB = 0, descB = 0; setFont(fb); getFontMetrics(&leadB, &ascB, &descB); setFont(fp);
@@ -683,7 +683,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask v1.3.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
-    p->setVersion("1.3.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask v1.3.1: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
+    p->setVersion("1.3.1");   // BBA_VERSION
     return p;
 }
