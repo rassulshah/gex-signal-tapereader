@@ -133,7 +133,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.22.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.22.2"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -2091,6 +2091,12 @@ void LiquidityProfile::renderWarning(LQState& S) {
             Cand& c = cands[i];
             const bool held = c.dir > 0 ? (double)clA[lastBar] > c.px : (double)clA[lastBar] < c.px;
             if (!held || !zn::atZone(Z, std::max(0, std::min(lastBar, c.bar)), c.px)) continue;
+            {   // (0.22.2, Rassul 09:53 - the 9:42 E-S REV UP at 7753 came 30 pts after the 9:00 low: chasing) a turn is at the EXTREME:
+                // within one band of the lowest low (up) / highest high (down) of the last 10 bars, else it is a fill inside a move
+                double ext = c.dir > 0 ? 1e300 : -1e300;
+                for (int i = std::max(0, lastBar - 9); i <= lastBar; ++i) ext = c.dir > 0 ? std::min(ext, Z.lo[(size_t)i]) : std::max(ext, Z.hi[(size_t)i]);
+                if (Z.band > 0 && std::fabs(c.px - ext) > Z.band) continue;
+            }
             if (c.src == 4) {                                                  // initiative needs the book on its side too
                 const int gB = S.boSign[bol::BID], gA = S.boSign[bol::ASK];
                 const bool lB = S.bo.live[bol::BID] >= 0, lA = S.bo.live[bol::ASK] >= 0;
@@ -2114,7 +2120,8 @@ void LiquidityProfile::renderWarning(LQState& S) {
             vfail = ag > sup && ag > 0;
             std::string what;
             if (best->src == 4) what = std::string(vdir > 0 ? "buyers lifted " : "sellers hit ") + std::to_string(best->lots) + " at " + pxTxt(best->px) + " (initiative)";
-            else if (best->lots > 0) what = std::string(vdir > 0 ? "big buyer filled " : "big seller filled ") + (best->n > 1 ? std::to_string(best->n) + "\xD7 " : std::string()) + std::to_string(best->lots);
+            else if (best->lots > 0) what = std::string(vdir > 0 ? "big bid filled " : "big offer filled ") + (best->n > 1 ? std::to_string(best->n) + "\xD7 " : std::string()) + std::to_string(best->lots)
+                + (vdir > 0 ? " (sellers hit it)" : " (buyers lifted it)");   // (0.22.2) who was passive and who hit it
             else what = std::string(vdir > 0 ? "sellers absorbed" : "buyers absorbed");
             v1 = what;
             if (best->pulledOpp > 0) v1 += std::string(" \xB7 big ") + (vdir > 0 ? "offer " : "bid ") + std::to_string(best->pulledOpp) + " at " + pxTxt(best->pulledPx) + " pulled";
@@ -2527,6 +2534,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.22.1");   // LQ_VERSION
+    p->setVersion("0.22.2");   // LQ_VERSION
     return p;
 }
