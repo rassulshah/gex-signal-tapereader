@@ -54,6 +54,7 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <functional>
 #include <locale>
 #include <map>
 #include <set>
@@ -177,7 +178,7 @@ static bool keyOf(double price, double tick, long long& key) {
 
 struct HoverT { bba::Box box; long long t = 0; int side = -1; };
 struct BBState {
-    bool sdOk = false; long long sd[3] = {0, 0, 0}; long long sdCheckMs = -1; std::string sdWhy = "no file";   // (1.5.0) the big-lot SD sizes
+    bool sdOk = false; long long sd[3] = {0, 0, 0}; long long sdCheckMs = -1, sdN = 0; double sdMu = 0; std::string sdWhy = "learning";   // (1.5.0) the print SD sizes
     bool busy = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "missing (defaults)", chartKey;
     int spb = 0; long long session = -1; double tick = 0;
@@ -295,20 +296,28 @@ bba::Settings BigBidAsk::readSettingsFile(const std::string& mkt, std::string& w
     if (why.empty()) why = "file";
     return s;
 }
-// (1.5.0) the Liquidity Profile's big-lot sizes for this market (LiquidityProfile.bigsd-<MKT>.txt), checked every 5 s
-static void readSd(BBState& S, const std::string& dirp, long long now) {
+// (1.5.0) the print distribution of THIS chart: the biggest print per side of each closed candle on it (the newest 2,300 - about 5
+// sessions of 3-min bars), the same phase as the newest candle (day 8:30 AM - 3:00 PM CT, else night); recomputed every 5 s
+static void printSd(BBState& S, long long now, const std::function<int(long long)>& modOf) {
     if (S.sdCheckMs >= 0 && now >= S.sdCheckMs && now - S.sdCheckMs < 5000) return;
     S.sdCheckMs = now;
-    if (dirp.empty() || S.market.empty()) { S.sdOk = false; S.sdWhy = "no folder"; return; }
-    std::ifstream in((dirp + BBA_SEP "LiquidityProfile.bigsd-" + S.market + ".txt").c_str(), std::ios::binary);
-    std::string ln; long long v[3] = {0, 0, 0};
-    if (!in || !std::getline(in, ln) || ln.size() > 200) { S.sdOk = false; S.sdWhy = "no Liquidity Profile big-lot file (bold ratio rule)"; return; }
-    if (!bba::parseBsd(ln, v)) { S.sdOk = false; S.sdWhy = "Liquidity Profile still learning (bold ratio rule)"; return; }
-    S.sdOk = true; for (int k = 0; k < 3; ++k) S.sd[k] = v[k];
-    S.sdWhy = "big-lot sizes 1SD " + std::to_string(v[0]) + " / 2SD " + std::to_string(v[1]) + " / 3SD " + std::to_string(v[2]);
+    auto dayOf = [&](long long t) { const int m = modOf(t); return m > 510 && m <= 900; };   // bar END in (8:30, 3:00 PM]
+    if (S.fin.empty()) { S.sdOk = false; S.sdWhy = "learning (no closed candles)"; return; }
+    const bool day = dayOf(S.fin.rbegin()->first);
+    bba::PrintDist d; int k = 0;
+    for (std::map<long long, bba::Facts>::const_reverse_iterator it = S.fin.rbegin(); it != S.fin.rend() && k < 2300; ++it, ++k) {
+        const bba::Facts& F = it->second; if (!F.valid || !F.closed || dayOf(it->first) != day) continue;
+        if (F.bid.ok) d.add(F.bid.vol); if (F.ask.ok) d.add(F.ask.vol);
+    }
+    long long n = 0, v[3] = {0, 0, 0}; double mu = 0;
+    S.sdOk = d.stats(30, n, mu, v); S.sdN = n;
+    if (S.sdOk) { for (int q = 0; q < 3; ++q) S.sd[q] = v[q]; S.sdMu = mu; }
+    S.sdWhy = S.sdOk ? std::string(day ? "day" : "night") + " prints " + std::to_string(n) + ": Big mu " + std::to_string((long long)std::llround(mu)) +
+                       " / 1SD " + std::to_string(v[0]) + " / 2SD " + std::to_string(v[1]) + " / 3SD " + std::to_string(v[2]) + " lots"
+                     : "learning (" + std::to_string(n) + " prints, needs 30) - bold ratio rule";
 }
 void BigBidAsk::settings(BBState& S, long long now) {
-    readSd(S, flexDir(), now);
+    printSd(S, now, [this](long long t) { struct tm m; std::memset(&m, 0, sizeof(m)); return t > 0 && getLocaltime((RTDATE)t, &m) ? m.tm_hour * 60 + m.tm_min : -1; });
     if (S.setCheckMs >= 0 && now >= S.setCheckMs && now - S.setCheckMs < 1000) return;
     S.setCheckMs = now;
     const std::string p = settingsPath(S.market);

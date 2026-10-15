@@ -183,6 +183,26 @@ inline int absorptionMin(const Facts& F, long long minVol) {
     if (F.ask.ok && F.ask.vol >= minVol && 2 * F.ask.key >= mid2 && F.c < F.o && F.c < F.ask.key) return -1;
     return 0;
 }
+// (1.5.0, Rassul 16:15-16:17 "doesn't our distribution consider one price level in the candle or 1 large order" -> its own
+// distribution) THE PRINT DISTRIBUTION: each closed candle's biggest print per side (lots traded at one price by one side), in log
+// buckets (1.15^k lots); on the LOG of the size: Big mu = e^mean, 1SD / 2SD / 3SD = e^(mean + k SD). Learned per chart (market and
+// bar size) from the candles on it, day (8:30 AM - 3:00 PM CT) and night apart.
+struct PrintDist {
+    static const int NB = 64;
+    long long c[NB];
+    PrintDist() { for (int i = 0; i < NB; ++i) c[i] = 0; }
+    static int bucket(long long s) { if (s < 1) return -1; const int b = (int)std::floor(std::log((double)s) / std::log(1.15)); return b < 0 ? 0 : b >= NB ? NB - 1 : b; }
+    static double centre(int b) { return std::pow(1.15, b + 0.5); }
+    void add(long long s) { const int b = bucket(s); if (b >= 0) c[b]++; }
+    bool stats(long long minN, long long& n, double& mu, long long v[3]) const {
+        double sw = 0, s1 = 0, s2 = 0;
+        for (int i = 0; i < NB; ++i) { if (c[i] <= 0) continue; const double x = std::log(centre(i)); sw += (double)c[i]; s1 += c[i] * x; s2 += c[i] * x * x; }
+        n = (long long)sw; if (n < minN || n < 2) return false;
+        const double m = s1 / sw, sd = std::sqrt(std::max(0.0, s2 / sw - m * m));
+        mu = std::exp(m); for (int k = 0; k < 3; ++k) v[k] = std::max(1LL, (long long)std::llround(std::exp(m + (k + 1) * sd)));
+        return v[1] >= v[0] && v[2] >= v[1];
+    }
+};
 // "BSD1,ok,n,mu,1sd,2sd,3sd" -> the three sizes (lots); false = learning / garbled (the bold-ratio rule stays)
 inline bool parseBsd(const std::string& line, long long sd[3]) {
     std::vector<std::string> f; size_t a = 0; std::string ln = line; while (!ln.empty() && (ln.back() == '\r' || ln.back() == '\n')) ln.pop_back();
