@@ -179,6 +179,9 @@ static bool keyOf(double price, double tick, long long& key) {
 struct HoverT { bba::Box box; long long t = 0; int side = -1; };
 struct BBState {
     bool sdOk = false; long long sd[3] = {0, 0, 0}; long long sdCheckMs = -1, sdN = 0; double sdMu = 0; std::string sdWhy = "learning";   // (1.5.0) the print SD sizes
+    // (1.5.0, Rassul 16:27 "yes" to sizes by time of day) per 30-min window of the bar END (48), then day / night, then the 1.4 rule
+    struct Thr { bool ok = false; double mu = 0; long long sd[3] = {0, 0, 0}; long long n = 0; };
+    Thr win[48]; Thr phase[2];
     bool busy = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "missing (defaults)", chartKey;
     int spb = 0; long long session = -1; double tick = 0;
@@ -297,24 +300,37 @@ bba::Settings BigBidAsk::readSettingsFile(const std::string& mkt, std::string& w
     return s;
 }
 // (1.5.0) the print distribution of THIS chart: the biggest print per side of each closed candle on it (the newest 2,300 - about 5
-// sessions of 3-min bars), the same phase as the newest candle (day 8:30 AM - 3:00 PM CT, else night); recomputed every 5 s
+// sessions of 3-min bars), learned per 30-minute window of the day (the candle's END time; 30+ prints needed), else per phase (day
+// 8:30 AM - 3:00 PM CT / night), else not ready (the 1.4 bold-ratio rule); recomputed every 5 s
+static int winOf(int mod) { return mod <= 0 ? 47 : ((mod - 1) / 30) % 48; }   // END 9:00 -> the 8:30-9:00 window
+static bool dayMod(int m) { return m > 510 && m <= 900; }
 static void printSd(BBState& S, long long now, const std::function<int(long long)>& modOf) {
     if (S.sdCheckMs >= 0 && now >= S.sdCheckMs && now - S.sdCheckMs < 5000) return;
     S.sdCheckMs = now;
-    auto dayOf = [&](long long t) { const int m = modOf(t); return m > 510 && m <= 900; };   // bar END in (8:30, 3:00 PM]
+    for (int i = 0; i < 48; ++i) S.win[i] = BBState::Thr();
+    S.phase[0] = S.phase[1] = BBState::Thr();
     if (S.fin.empty()) { S.sdOk = false; S.sdWhy = "learning (no closed candles)"; return; }
-    const bool day = dayOf(S.fin.rbegin()->first);
-    bba::PrintDist d; int k = 0;
+    bba::PrintDist w[48], ph[2]; int k = 0;
     for (std::map<long long, bba::Facts>::const_reverse_iterator it = S.fin.rbegin(); it != S.fin.rend() && k < 2300; ++it, ++k) {
-        const bba::Facts& F = it->second; if (!F.valid || !F.closed || dayOf(it->first) != day) continue;
-        if (F.bid.ok) d.add(F.bid.vol); if (F.ask.ok) d.add(F.ask.vol);
+        const bba::Facts& F = it->second; if (!F.valid || !F.closed) continue;
+        const int m = modOf(it->first); if (m < 0) continue;
+        const int wi = winOf(m), pi = dayMod(m) ? 1 : 0;
+        if (F.bid.ok) { w[wi].add(F.bid.vol); ph[pi].add(F.bid.vol); }
+        if (F.ask.ok) { w[wi].add(F.ask.vol); ph[pi].add(F.ask.vol); }
     }
-    long long n = 0, v[3] = {0, 0, 0}; double mu = 0;
-    S.sdOk = d.stats(30, n, mu, v); S.sdN = n;
-    if (S.sdOk) { for (int q = 0; q < 3; ++q) S.sd[q] = v[q]; S.sdMu = mu; }
-    S.sdWhy = S.sdOk ? std::string(day ? "day" : "night") + " prints " + std::to_string(n) + ": Big mu " + std::to_string((long long)std::llround(mu)) +
-                       " / 1SD " + std::to_string(v[0]) + " / 2SD " + std::to_string(v[1]) + " / 3SD " + std::to_string(v[2]) + " lots"
-                     : "learning (" + std::to_string(n) + " prints, needs 30) - bold ratio rule";
+    auto fill = [](const bba::PrintDist& d, BBState::Thr& t) { long long v[3] = {0, 0, 0}; double mu = 0; long long n = 0; t.ok = d.stats(30, n, mu, v); t.n = n; if (t.ok) { t.mu = mu; for (int q = 0; q < 3; ++q) t.sd[q] = v[q]; } };
+    for (int i = 0; i < 48; ++i) fill(w[i], S.win[i]);
+    for (int i = 0; i < 2; ++i) fill(ph[i], S.phase[i]);
+    // the newest candle's sizes for the status line
+    const int m0 = modOf(S.fin.rbegin()->first);
+    const BBState::Thr* t0 = m0 >= 0 && S.win[winOf(m0)].ok ? &S.win[winOf(m0)] : m0 >= 0 && S.phase[dayMod(m0) ? 1 : 0].ok ? &S.phase[dayMod(m0) ? 1 : 0] : nullptr;
+    S.sdOk = t0 != nullptr;
+    if (t0) { S.sdMu = t0->mu; for (int q = 0; q < 3; ++q) S.sd[q] = t0->sd[q]; S.sdN = t0->n; }
+    int wins = 0; for (int i = 0; i < 48; ++i) if (S.win[i].ok) ++wins;
+    S.sdWhy = t0 ? std::string(m0 >= 0 && S.win[winOf(m0)].ok ? "this 30-min window" : (dayMod(m0) ? "day (window still learning)" : "night (window still learning)")) +
+                   " " + std::to_string(t0->n) + " prints: Big mu " + std::to_string((long long)std::llround(t0->mu)) + " / 1SD " + std::to_string(t0->sd[0]) +
+                   " / 3SD " + std::to_string(t0->sd[2]) + " lots; windows ready " + std::to_string(wins) + "/48"
+                 : "learning - bold ratio rule";
 }
 void BigBidAsk::settings(BBState& S, long long now) {
     printSd(S, now, [this](long long t) { struct tm m; std::memset(&m, 0, sizeof(m)); return t > 0 && getLocaltime((RTDATE)t, &m) ? m.tm_hour * 60 + m.tm_min : -1; });
@@ -649,13 +665,16 @@ void BigBidAsk::render(BBState& S) {
         // absorption circle from 1SD. Still learning there (no file / under 30 big orders): the 1.4 bold-ratio rule.
         // (1.5.0, Rassul 16:21 "for the candle just use the average large") on the candles the floor is Big mu: under it nothing; Big mu =
         // faded, Bigger (1SD) = bold, Huge (3SD+) = bold + white outline; absorption circle from Big mu
-        const long long muL = std::max(1LL, (long long)std::llround(S.sdMu));
-        const int ab = !set.circle ? 0 : S.sdOk ? bba::absorptionMin(*F, muL) : bba::absorption(*F, set.boldQ);
+        const BBState::Thr* tz = nullptr;                                 // this candle's window, else its phase, else none (1.4 rule)
+        {   struct tm mm; std::memset(&mm, 0, sizeof(mm));
+            if (getLocaltime((RTDATE)F->t, &mm)) { const int md = mm.tm_hour * 60 + mm.tm_min; tz = S.win[winOf(md)].ok ? &S.win[winOf(md)] : S.phase[dayMod(md) ? 1 : 0].ok ? &S.phase[dayMod(md) ? 1 : 0] : nullptr; } }
+        const long long muL = tz ? std::max(1LL, (long long)std::llround(tz->mu)) : 0;
+        const int ab = !set.circle ? 0 : tz ? bba::absorptionMin(*F, muL) : bba::absorption(*F, set.boldQ);
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok) continue;
             bool bold = bba::bold(sd < 0 ? F->bidQ : F->askQ, set.boldQ), huge = false;
-            if (S.sdOk) { if (p.vol < muL) continue; bold = p.vol >= S.sd[0]; huge = p.vol >= S.sd[2]; }
+            if (tz) { if (p.vol < muL) continue; bold = p.vol >= tz->sd[0]; huge = p.vol >= tz->sd[2]; }
             if (!bold && !set.nonBold) continue;
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
