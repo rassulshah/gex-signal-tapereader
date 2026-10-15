@@ -20,7 +20,7 @@
 
 namespace st {
 
-static const char* const VERSION = "1.4.1";   // 1.4.1 (2026-10-15): "Stack Stats · Who is arriving?" in front of the read line (OrderFlowFeed 1.6.1);   // 1.4.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle (OrderFlowFeed 1.6.0), title "Stack Stats - Who is Arriving";   // 1.3.0 (2026-10-14 night): the read box -> one zone read line (stacking at the level, ZoneRead.h), I -> I?;   // 1.2.0 (2026-10-14 evening): complete order feed - a 250 ms clock reads it (OrderFlowFeed 1.4.0), MBO_COVERAGE in the status; 1.1.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.1.2 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.1.1 (2026-10-13 9:40 PM): rebuilt % <= 100%, row order, Crowd row, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, rebuilt %, SPEC message grammar, hover rows; 1.0.1: letter I
+static const char* const VERSION = "1.4.2";   // 1.4.1 (2026-10-15): "Stack Stats · Who is arriving?" in front of the read line (OrderFlowFeed 1.6.1);   // 1.4.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle (OrderFlowFeed 1.6.0), title "Stack Stats - Who is Arriving";   // 1.3.0 (2026-10-14 night): the read box -> one zone read line (stacking at the level, ZoneRead.h), I -> I?;   // 1.2.0 (2026-10-14 evening): complete order feed - a 250 ms clock reads it (OrderFlowFeed 1.4.0), MBO_COVERAGE in the status; 1.1.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.1.2 (2026-10-14 CR4800): read box (numbers on hover), Offset X / Y, white letters, one spike label, rare L; 1.1.1 (2026-10-13 9:40 PM): rebuilt % <= 100%, row order, Crowd row, 10 pt labels, chart-wide hover; 1.1.0 (2026-10-13): lots, pace, rebuilt %, SPEC message grammar, hover rows; 1.0.1: letter I
 using off::BID; using off::ASK;
 // the words after "one order is NN% of it - " (white / neutral). The Tape Reader keys on the same text (TapeReaderLogic.h tr::STACK_ONE_ORDER,
 // checked equal by trtests/test_tr_ofcompat.cpp) and still recognises the old "may be bait" in records written before 6:40 PM 13 Oct.
@@ -134,6 +134,8 @@ struct Logic {
     static int optGate() { return ofo::G_OSTACK; }
     static std::string optLine(const ofo::Snap& s, int gate, const std::string&) { return ofo::stackLine(s, gate); }
     static bool resets() { return false; }
+    static std::string hoverQuestion() { return "Who arrived?"; }   // (off 1.7.0) the bar hover
+    static const char* const* hoverVerbs() { static const char* const v[2] = { "Buyers added bids", "Sellers added offers" }; return v; }
     static off::Info info(const off::PaneBar* b, const off::Params& P) { return st::info(b, P); }
     static long long value(const off::Rec& r, int metric, int s) { return metric == 0 ? r.addC[s] : r.refN[s]; }   // (1.1.0) lots added; refills = count
     static void decide(off::PaneBar& b, const off::Params& P, bool) {

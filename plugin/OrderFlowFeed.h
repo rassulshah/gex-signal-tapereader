@@ -139,7 +139,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.6.1";   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.7.0";   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1962,6 +1962,55 @@ inline void drawLine(cppExtension* x, const LinePlan& P) {
     for (size_t k = 0; k < P.hover.size(); ++k, y += HOVER_LH) textAt(x, P.hoverBox.l + BOX_PAD, y, HOVER_LH, P.hover[k], k == 0 ? implColor(P.impl) : C_WHITE, HOVER_PT, k == 0);
 }
 
+// ---- (1.7.0, Rassul 2026-10-15 13:25 "when i hover over a indicator value for pulling stacking etc, i should get the answer for the
+// node i am hovering over", mockup-pane-bar-hover-v1.png) the BAR HOVER: the hovered candle's answer in a small box beside it, in
+// every order-flow pane (the chart-wide hover moves all three together). Line 1 = time + the pane's question; then the buyers' line
+// (green) and the sellers' line (red), the side that helps buyers first; then the extra rows that have something (Sweep, Large ...).
+// The numbers are the info box's own (same source as the Numbers mode and the record). Pure geometry: planned here, drawn by drawBarHover.
+struct BarHov { bool ok = false; bp::Box box; std::vector<std::string> rows; std::vector<COLOR> cols; std::vector<bool> bold; };
+inline bool hovUseful(const std::string& v) { return !v.empty() && v != "-" && v != "n/a" && v != "no" && v != "0"; }
+inline BarHov planBarHover(const bp::Box& area, int barX, const Info& I, const std::string& question, const char* const verb[2], int bull,
+                           const TextW& M) {
+    BarHov H; if (bull != 0 && bull != 1) bull = 1;
+    if (I.rows.empty() || area.w() < 120 || area.h() < HOVER_LH * 2) return H;
+    H.rows.push_back(I.head + " \xB7 " + question); H.cols.push_back(C_WHITE); H.bold.push_back(true);
+    std::string pace[2];
+    for (size_t k = 1; k < I.rows.size(); ++k) if (I.rows[k].label == "Pace") { pace[0] = I.rows[k].v[0]; pace[1] = I.rows[k].v[1]; }
+    const int order[2] = { bull, 1 - bull };
+    for (int o = 0; o < 2; ++o) {
+        const int sd = order[o];
+        std::string t = std::string(verb[sd]) + " " + I.rows[0].v[sd];
+        if (hovUseful(pace[sd])) t += " \xB7 pace " + pace[sd];
+        H.rows.push_back(t); H.cols.push_back(sd == bull ? (COLOR)0x0022C55E : (COLOR)0x00EF4444); H.bold.push_back(false);
+    }
+    std::string extra;
+    for (size_t k = 1; k < I.rows.size(); ++k) {
+        const InfoRow& r = I.rows[k];
+        if (r.label == "Pace" || r.label == "Crowd") continue;
+        for (int o = 0; o < 2; ++o) {
+            const int sd = order[o];
+            if (!hovUseful(r.v[sd])) continue;
+            extra += (extra.empty() ? std::string() : std::string(" \xB7 ")) + r.label + ": " + I.colHead[sd] + " " + r.v[sd];
+        }
+    }
+    if (!extra.empty()) { H.rows.push_back(extra); H.cols.push_back(C_NUMS); H.bold.push_back(false); }
+    const int maxRows = std::max(2, (area.h() - 2 * BOX_PAD) / HOVER_LH);
+    if ((int)H.rows.size() > maxRows) { H.rows.resize((size_t)maxRows); H.cols.resize((size_t)maxRows); H.bold.resize((size_t)maxRows); }
+    int w = 0; for (size_t k = 0; k < H.rows.size(); ++k) w = std::max(w, M(H.rows[k], HOVER_PT, H.bold[k]));
+    w = std::min(w + 2 * BOX_PAD + 2, area.w());
+    const int h = (int)H.rows.size() * HOVER_LH + 2 * BOX_PAD;
+    int l = barX + 10; if (l + w > area.r) l = barX - 10 - w;              // right of the candle, else left of it
+    if (l < area.l) l = area.l;
+    H.box = bp::clampIn(bp::mk(l, area.t, l + w, area.t + h), area);
+    H.ok = true; return H;
+}
+inline void drawBarHover(cppExtension* x, const BarHov& H) {
+    if (!H.ok) return;
+    boxAt(x, H.box);
+    int y = H.box.t + BOX_PAD - 1;
+    for (size_t k = 0; k < H.rows.size(); ++k, y += HOVER_LH) textAt(x, H.box.l + BOX_PAD, y, HOVER_LH, H.rows[k], H.cols[k], HOVER_PT, H.bold[k]);
+}
+
 #ifdef OFF_TEST_CLOCK
 extern long long off_test_now_ms;
 extern void* off_test_cursor_wnd;
@@ -2628,6 +2677,7 @@ private:
         }, avoid, oneBarBull(), barMarks());
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         if (readMode) drawLine(this, LP); else drawPanel(this, P, info, vcol, implOf(zl), false);
+        if (hov >= 0) drawBarHover(this, planBarHover(area, xOf(hov), info, L::hoverQuestion(), L::hoverVerbs(), oneBarBull(), measureWith(this)));   // (1.7.0)
     }
     bp::DlgSnap snap_;                                                     // (1.3.0) the dialog as it opened (this object = the dialog's copy)
 };
