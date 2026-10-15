@@ -17,7 +17,7 @@
 #include <map>
 #include <algorithm>
 namespace zn {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0) level NAMES too (levelsNamed / nearest) for the banner
 struct Ctx { std::vector<double> hi, lo; std::vector<long long> sess; std::vector<double> levels; double band = 0; };
 inline double bandFrom(const std::vector<double>& hi, const std::vector<double>& lo, int lastClosed)
 {
@@ -60,35 +60,44 @@ inline bool sameMonth(const std::string& a0, const std::string& b0)
 }
 inline std::vector<std::string> split(const std::string& s, char d)
 { std::vector<std::string> f; std::string c; for (char ch : s) { if (ch == '\r') continue; if (ch == d) { f.push_back(c); c.clear(); } else c += ch; } f.push_back(c); return f; }
-inline void readFile(const std::string& path, int kind, const std::string& contract, std::vector<double>& out)
+struct NL { std::string name; double px = 0; };
+inline void readFile(const std::string& path, int kind, const std::string& contract, std::vector<NL>& out)
 {
     std::ifstream f(path.c_str(), std::ios::binary); if (!f) return;
-    std::string ln; int n = 0; std::string sym; std::vector<double> v; bool stale = false;
+    std::string ln; int n = 0; std::string sym; std::vector<NL> v; bool stale = false;
     while (n < 4096 && std::getline(f, ln)) {
         ++n; if (ln.size() > 4096) continue;
-        const std::vector<std::string> c = split(ln, kind == 0 ? '|' : '|');
-        char* e = nullptr;
-        if (kind == 0 && c.size() >= 3 && c[0] == "L") { const double px = std::strtod(c[2].c_str(), &e); if (e != c[2].c_str() && px > 0 && std::isfinite(px)) v.push_back(px); }
+        const std::vector<std::string> c = split(ln, '|');
+        char* e = nullptr; NL x;
+        if (kind == 0 && c.size() >= 3 && c[0] == "L") { x.px = std::strtod(c[2].c_str(), &e); if (e != c[2].c_str() && x.px > 0 && std::isfinite(x.px)) { x.name = c[1].substr(0, 24); v.push_back(x); } }
         if (kind != 0 && c.size() >= 2 && c[0] == "SYMBOL") sym = c[1];
         if (kind != 0 && c.size() >= 2 && c[0] == "STATE" && c[1] == "STALE") stale = true;
-        if (kind == 1 && c.size() >= 3 && c[0] == "LEVEL" && c[1] != "NONE") { const double px = std::strtod(c[2].c_str(), &e); if (e != c[2].c_str() && px > 0 && std::isfinite(px)) v.push_back(px); }
-        if (kind == 2 && c.size() >= 4 && c[0] == "LEVEL") { const double px = std::strtod(c[3].c_str(), &e); if (e != c[3].c_str() && px > 0 && std::isfinite(px)) v.push_back(px); }
+        if (kind == 1 && c.size() >= 3 && c[0] == "LEVEL" && c[1] != "NONE") { x.px = std::strtod(c[2].c_str(), &e); if (e != c[2].c_str() && x.px > 0 && std::isfinite(x.px)) { x.name = c[1].substr(0, 24); v.push_back(x); } }
+        if (kind == 2 && c.size() >= 4 && c[0] == "LEVEL") { x.px = std::strtod(c[3].c_str(), &e); if (e != c[3].c_str() && x.px > 0 && std::isfinite(x.px)) { x.name = c[1].substr(0, 24); v.push_back(x); } }
     }
     if (kind != 0 && (stale || !sameMonth(contract, sym))) return;     // a roll / another contract: not used (no offset guessed)
     out.insert(out.end(), v.begin(), v.end());
 }
-struct LevelCache { std::vector<double> v; long long at = -1; };
-inline const std::vector<double>& levels(const std::string& dir, const std::string& market, const std::string& contract, long long nowMs)
+struct LevelCache { std::vector<NL> v; std::vector<double> px; long long at = -1; };
+inline LevelCache& cache(const std::string& dir, const std::string& market, const std::string& contract, long long nowMs)
 {
     static std::map<std::string, LevelCache> m; LevelCache& C = m[market + "|" + contract];
-    if (C.at >= 0 && nowMs >= C.at && nowMs - C.at < 5000) return C.v;
-    C.at = nowMs; C.v.clear();
-    if (dir.empty() || market.empty()) return C.v;
+    if (C.at >= 0 && nowMs >= C.at && nowMs - C.at < 5000) return C;
+    C.at = nowMs; C.v.clear(); C.px.clear();
+    if (dir.empty() || market.empty()) return C;
     std::string d = dir; if (d.back() != '\\' && d.back() != '/') d += "\\";
     readFile(d + "LRA-KeyLevels-" + market + ".csv", 0, contract, C.v);
     readFile(d + "LRA-Dealer-" + market + ".csv", 1, contract, C.v);
     readFile(d + "LRA-Levels-" + market + ".csv", 2, contract, C.v);
-    return C.v;
+    for (size_t i = 0; i < C.v.size(); ++i) C.px.push_back(C.v[i].px);
+    return C;
 }
+inline const std::vector<double>& levels(const std::string& dir, const std::string& market, const std::string& contract, long long nowMs)
+{ return cache(dir, market, contract, nowMs).px; }
+inline const std::vector<NL>& levelsNamed(const std::string& dir, const std::string& market, const std::string& contract, long long nowMs)
+{ return cache(dir, market, contract, nowMs).v; }
+// the named level nearest p within `band` (empty name = none)
+inline NL nearest(const std::vector<NL>& v, double p, double band)
+{ NL best; double d = band; for (size_t i = 0; i < v.size(); ++i) { const double x = std::fabs(v[i].px - p); if (x <= d) { d = x; best = v[i]; } } return best; }
 }  // namespace zn
 #endif
