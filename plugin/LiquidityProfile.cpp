@@ -133,7 +133,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.23.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.24.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -2151,7 +2151,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
             v1 += side(bol::BID, "bids") + side(bol::ASK, "offers");
             if (against) { std::string wn = w.name; for (size_t i = 0; i < wn.size(); ++i) if (wn[i] >= 'A' && wn[i] <= 'Z') wn[i] = (char)(wn[i] - 'A' + 'a'); v1 += " \xB7 against it: " + wn; }   // (0.22.6)
             const zn::NL lv = zn::nearest(named, vpx, Z.band);
-            v2 = clock12(best->tEnd > 0 ? best->tEnd : barKey(lastBar) * 1000) + (lv.name.empty() ? std::string() : " \xB7 at " + lv.name + " " + pxTxt(lv.px));
+            v2 = clock12(best->tEnd > 0 ? best->tEnd : barKey(lastBar) * 1000) + " at " + (lv.name.empty() ? pxTxt(vpx) : lv.name);   // (0.24.0, Rassul 12:41) a key / gamma level by name only, any other level by its price
             std::string conf;
             if (best->aX > 0) { char bx[24]; std::snprintf(bx, sizeof(bx), "A %.1fx", best->aX); conf = bx; }
             if (best->circle) conf += conf.empty() ? "circle" : ", circle";
@@ -2167,7 +2167,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
         }
     }
 #endif
-    S.verdict = vdir == 0 ? "none" : vfail ? "FAILING ?" : vdir > 0 ? "REV UP ?" : "REV DOWN ?";
+    S.verdict = vdir == 0 ? "none" : vfail ? (vdir > 0 ? "REV UP FAILING ?" : "REV DOWN FAILING ?") : vdir > 0 ? "REV UP ?" : "REV DOWN ?";
 #ifndef LQ_FLOW
     {   // (0.22.1, Rassul 09:16 "i want the tracking of indicators today") every verdict change to <MKT>-<sym>-<spb>-verdicts-<session>.csv
         const std::string key = vdir == 0 ? std::string("none") : vlog.substr(0, vlog.find(',', vlog.find(',', vlog.find(',') + 1) + 1));   // verdict,dir,px
@@ -2196,48 +2196,85 @@ void LiquidityProfile::renderWarning(LQState& S) {
     FONT f; f.id = HELVETICA; f.size = coord(S.font + 2); f.style = BOLD;
     FONT g; g.id = HELVETICA; g.size = coord(S.font + 1); g.style = PLAIN;
     const int lineH = rowPx(S.font + 1);
-    const std::string vname = vdir == 0 ? std::string() : vfail ? "FAILING ?" : vdir > 0 ? "REV UP ?" : "REV DOWN ?";
+    // (0.24.0, Rassul 12:37-12:50, mockup-combined-badge-v7.png) ONE badge: top = the verdict (filled, REV UP ? / REV DOWN ? /
+    // REV UP FAILING ? / REV DOWN FAILING ?, bullish green, bearish red), bottom = the book state (outlined, today's words, its OWN colour
+    // so a warning against the verdict still shows in its first 15 s); the grey lines = everything both badges showed, the verdict
+    // side first (bullish: buyers lines first, bearish: sellers first), the time + level last. No verdict = the book badge as before.
+    const std::string vname = vdir == 0 ? std::string() : vfail ? (vdir > 0 ? "REV UP FAILING ?" : "REV DOWN FAILING ?") : vdir > 0 ? "REV UP ?" : "REV DOWN ?";
     setFont(f);
     const int nwW = have ? getTextWidth(w.name.c_str(), -1) : 0, nwV = vname.empty() ? 0 : getTextWidth(vname.c_str(), -1);
-    const int bw = std::max(nwW, nwV) + 16;                                // one badge width for both rows: the grey text lines up
-    const int bh = std::max(warnH(S.font), 2 * lineH + 2);                // the badge spans the two grey lines
+    const int bw = std::max(nwW, nwV) + 16;
+    const int half = rowPx(S.font + 2) + 4;                               // one row of the combined badge
+    const int bh = (have && vdir != 0) ? 2 * half : std::max(warnH(S.font), 2 * lineH + 2);
     const int gx = x0 + bw + 10;                                          // the grey column
     const int room = std::max(40, right - gx);
     int y = y0;
-    auto rowOf = [&](const std::string& name, COLOR c, bool filled, std::vector<std::string> lines) {
-        setFont(f);
-        RCT b; b.set(coord(x0), coord(y), coord(x0 + bw), coord(y + bh));
-        if (filled) b.draw(1, c, c, DRAW_OPAQUE, PAT_SOLID); else { setPen(c, 1, P_SOLID); b.draw(1, c, c, DRAW_OPAQUE, PAT_HOLLOW); }
-        setTextColor(filled ? (c == C_BUY ? C_INK : C_WHITE) : c);
-        {   // (0.22.4, Rassul 10:31 "the badges like Buyers Pulling need to be better aligned inside the box, same with the Rev badge")
-            // the name in a one-row rect at the badge's vertical middle (IRT does not centre text vertically in a taller rect)
-            const int nh = rowPx(S.font + 2), ty = y + std::max(0, (bh - nh) / 2);
-            RCT t; t.set(coord(x0 + 2), coord(ty), coord(x0 + bw - 2), coord(ty + nh)); t.drawText(name.c_str(), true, false); }
+    auto nameIn = [&](const std::string& nm, int top, int h, COLOR tc) {  // (0.22.4) the name centred in a one-row rect
+        setFont(f); setTextColor(tc);
+        const int nh = rowPx(S.font + 2), ty = top + std::max(0, (h - nh) / 2);
+        RCT t; t.set(coord(x0 + 2), coord(ty), coord(x0 + bw - 2), coord(ty + nh)); t.drawText(nm.c_str(), true, false); };
+    // which side a grey line speaks for: +1 buyers (their bids), -1 sellers (their offers), 0 neither
+    auto sideOf = [](const std::string& t) {
+        auto st = [&](const char* w) { return t.compare(0, std::strlen(w), w) == 0; };
+        if (st("buyers") || st("bids") || st("big bid")) return 1;
+        if (st("sellers") || st("offers") || st("big offer")) return -1;
+        return 0; };
+    struct GL { std::string t; int sd; };
+    std::vector<GL> gl;
+    COLOR cBook = C_GREY;
+    if (have) {
+        std::vector<std::string> sides = lqp::warnLines(w.detail);
+        if (!absorbTxt.empty()) { if (sides.size() < 2) sides.push_back(absorbTxt); else sides[1] += " " + absorbTxt; }
+        const zn::NL lv = zn::nearest(named, (double)clA[lastBar], Z.band);
+        for (size_t i = 0; i < sides.size(); ++i) {
+            const int sd = sideOf(sides[i]);
+            std::string t = sides[i];
+            if (i == 0 && !lv.name.empty()) t = lv.name + " \xB7 " + t;  // (0.24.0) the level by name only (was name + price)
+            gl.push_back(GL{ t, sd });
+        }
+        cBook = w.favour > 0 ? C_BUY : w.favour < 0 ? C_SELL : C_GREY;
+    }
+    if (vdir != 0) {
+        std::vector<GL> v; v.push_back(GL{ v1, sideOf(v1) });
+        for (size_t i = 0; i < gl.size(); ++i) v.push_back(gl[i]);
+        gl.clear();
+        const int want = vdir > 0 ? 1 : -1;                                // the verdict's side first, the order kept otherwise
+        for (size_t i = 0; i < v.size(); ++i) if (v[i].sd == want) gl.push_back(v[i]);
+        for (size_t i = 0; i < v.size(); ++i) if (v[i].sd != want) gl.push_back(v[i]);
+        gl.push_back(GL{ v2, 0 });                                         // time + level last
+    }
+    // the badge
+    if (vdir != 0) {
+        const bool bull = vfail ? vdir < 0 : vdir > 0;                    // REV UP FAILING ? is bearish (red); REV DOWN FAILING ? bullish
+        const COLOR cv = bull ? C_BUY : C_SELL;
+        const int hv = have ? half : bh;
+        RCT b; b.set(coord(x0), coord(y), coord(x0 + bw), coord(y + hv)); b.draw(1, cv, cv, DRAW_OPAQUE, PAT_SOLID);
+        nameIn(vname, y, hv, cv == C_BUY ? C_INK : C_WHITE);
+        if (have) {
+            setPen(cBook, 1, P_SOLID);
+            RCT o; o.set(coord(x0), coord(y + half), coord(x0 + bw), coord(y + bh)); o.draw(1, cBook, cBook, DRAW_OPAQUE, PAT_HOLLOW);
+            nameIn(w.name, y + half, half, cBook);
+        }
+    } else if (have) {
+        setPen(cBook, 1, P_SOLID);
+        RCT o; o.set(coord(x0), coord(y), coord(x0 + bw), coord(y + bh)); o.draw(1, cBook, cBook, DRAW_OPAQUE, PAT_HOLLOW);
+        nameIn(w.name, y, bh, cBook);
+    }
+    // the grey lines, wrapped (never cut), centred on the badge when they fit, else from its top down
+    {
         setFont(g); setTextColor(C_GREY);
         std::vector<std::string> rows;
-        for (size_t i = 0; i < lines.size(); ++i) {
-            if (lines[i].empty()) continue;
-            const std::vector<std::string> wr = lqp::wrapWords(lines[i], [&](const std::string& tx) { return getTextWidth(tx.c_str(), -1) <= room; });
+        for (size_t i = 0; i < gl.size(); ++i) {
+            if (gl[i].t.empty()) continue;
+            const std::vector<std::string> wr = lqp::wrapWords(gl[i].t, [&](const std::string& tx) { return getTextWidth(tx.c_str(), -1) <= room; });
             rows.insert(rows.end(), wr.begin(), wr.end());
         }
-        const int top = y + std::max(0, (bh - 2 * lineH) / 2);
+        const int top = y + std::max(0, (bh - (int)rows.size() * lineH) / 2);
         for (size_t i = 0; i < rows.size(); ++i) {
             const int ty = top + (int)i * lineH; const int tw = getTextWidth(rows[i].c_str(), -1) + 4;
             RCT r; r.set(coord(gx), coord(ty), coord(std::max(right, gx + tw)), coord(ty + lineH)); r.drawText(rows[i].c_str(), false, false);
         }
         y = std::max(y + bh, top + (int)rows.size() * lineH) + 6;
-    };
-    if (have) {
-        std::vector<std::string> sides = lqp::warnLines(w.detail);
-        const zn::NL lv = zn::nearest(named, (double)clA[lastBar], Z.band);
-        if (!sides.empty() && !lv.name.empty()) sides[0] = lv.name + " " + pxTxt(lv.px) + " \xB7 " + sides[0];   // line 1 names the level first
-        if (!absorbTxt.empty()) { if (sides.size() < 2) sides.push_back(absorbTxt); else sides[1] += " " + absorbTxt; }
-        const COLOR c = w.favour > 0 ? C_BUY : w.favour < 0 ? C_SELL : C_GREY;
-        rowOf(w.name, c, false, sides);                                   // the badge as it is (outlined), its two grey lines
-    }
-    if (vdir != 0) {
-        const bool bull = vfail ? vdir < 0 : vdir > 0;                    // FAILING of an up-turn is bearish (red); of a down-turn bullish
-        rowOf(vname, bull ? C_BUY : C_SELL, true, { v1, v2 });            // the verdict (filled), only during a turn
     }
     const int used = y - y0 - 6;
     S.warnRows = std::max(2, 1 + (int)std::ceil(std::max(0, used - warnH(S.font)) / (double)rowPx(S.font + 1)));   // what render() reserves below
@@ -2565,6 +2602,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.23.0");   // LQ_VERSION
+    p->setVersion("0.24.0");   // LQ_VERSION
     return p;
 }
