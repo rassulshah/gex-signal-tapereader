@@ -1,3 +1,9 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=7 bytes=625643
 largest staged blobs (bytes, path):
+SIZE	219330	plugin/LiquidityProfile.cpp
+SIZE	171796	plugin/HodLodLogic.h
+SIZE	104628	plugin/LiquidityProfileLogic.h
+SIZE	68089	plugin/HodLod.cpp
+SIZE	47264	plugin/BigOrderLines.h
+SIZE	14412	plugin/HodLodGex.h
 SIZE	124	logs/staged-scan-findings.log

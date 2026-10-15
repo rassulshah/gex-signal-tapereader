@@ -1365,7 +1365,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
         o << "MBO," << (fs.empty() ? S.feedState : fs) << ",via " << S.feed.via << ",orders " << S.ob.book.size() << ",events " << S.feed.events << ",faults " << S.feed.faults
           << ",garbage " << S.ob.garbage << ",backlog " << S.feed.longestBacklog << ",hover " << S.hovState << "\n";
         // (0.18.0) the big resting order lines
-        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 largest nearby - dim, 2 big, 3 huge - outline)" << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
+        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 Big - dim, 2 Bigger - full colour, 3 Biggest - full colour + outline)" << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
           << ",reach " << S.bo.P.reachAtr << " ATR = " << S.bo.reach << " ticks (ATR14 " << S.bo.atrPrice << "),keep " << S.bo.P.keep << ",font " << S.boSet.font
           << ",live " << (S.bo.live[0] >= 0 ? "bid" : "-") << "/" << (S.bo.live[1] >= 0 ? "offer" : "-") << ",lines " << S.bo.lineN[0] << "/" << S.bo.lineN[1]
@@ -1704,7 +1704,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     FONT fp1 = fb; fp1.style = PLAIN;                                   // (0.25.0) the dimmed "biggest" box: plain number
     const int boxW = std::max(24, (cr - cl) * 64 / 100), boxH = rowPx(bfont) + 2;
     // (0.25.0, Rassul 13:51-13:55 "biggest above and below within 2 ATR ... dimmed", "big will not be dimmed and huge will also have the
-    // outline") THREE TIERS, one box per side: BIG (the live big order) = full colour; HUGE (3x the big size or more, e.g. a 1,000-lot
+    // outline"; 13:59 names: BIG = dim, BIGGER = full colour, BIGGEST = full colour + outline) THREE TIERS, one box per side: BIG (the live big order) = full colour; HUGE (3x the big size or more, e.g. a 1,000-lot
     // on ES) = full colour + a white outline; otherwise the BIGGEST single order within the reach (2x the typical level size or more,
     // sticky until one is 20% bigger) = dimmed, plain number, no lines. Same number size for all three.
     const long long thrNow = S.bo.threshold();
