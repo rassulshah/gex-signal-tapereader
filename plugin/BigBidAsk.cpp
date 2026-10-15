@@ -719,9 +719,26 @@ void BigBidAsk::render(BBState& S) {
             const int cx = cands[k].x, wl = L.r - L.l, wr = Rb.r - Rb.l;
             L.r = cx - 1; L.l = L.r - wl; Rb.l = cx + 1; Rb.r = Rb.l + wr;
         }
+    // (1.6.0) two numbers on NEIGHBOURING candles can touch when zoomed out (a number is wider than a candle): the absorption print
+    // wins, then the bigger print; the other is not drawn (counted on the status file) - nothing is ever moved off its candle
+    std::vector<char> lose(cands.size(), 0);
+    {   std::vector<size_t> ord(cands.size()); for (size_t k = 0; k < ord.size(); ++k) ord[k] = k;
+        std::stable_sort(ord.begin(), ord.end(), [&](size_t x, size_t y) {
+            if (cands[x].circle != cands[y].circle) return cands[x].circle > cands[y].circle;
+            return candVol[x] > candVol[y]; });
+        std::vector<size_t> kept;
+        for (size_t q : ord) {
+            bool hit = false;
+            for (size_t w : kept) { if (cands[w].bar == cands[q].bar) continue;
+                const bba::Box& A = boxes[q]; const bba::Box& B = boxes[w];
+                if (!(A.r < B.l || A.l > B.r || A.b < B.t || A.t > B.b)) { hit = true; break; } }
+            if (hit) lose[q] = 1; else kept.push_back(q);
+        }
+    }
     for (size_t k = 0; k < cands.size(); ++k) {
         const bba::Cand& c = cands[k]; const bba::Box& f = boxes[k];
         if (c.bar < vs) continue;                                       // left of the view
+        if (lose[k]) { ++S.droppedInView; ++S.lay.crowded; if (c.circle) ++S.circlesHidden; continue; }
         bool clash = f.l < area.l || f.r > area.r || f.t < area.t || f.b > area.b;
         if (S.trOn && !(f.r < S.trBox.l || f.l > S.trBox.r || f.b < S.trBox.t || f.t > S.trBox.b)) clash = true;   // the Tape Reader banner
         if (clash) { ++S.droppedInView; ++S.lay.dropped; if (c.circle) ++S.circlesHidden; continue; }
