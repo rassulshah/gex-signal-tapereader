@@ -39,6 +39,7 @@
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "BoxPlace.h"                    // bp::DlgSnap (a control he did not touch keeps the file's value)
 #include "HostSlot.h"
+#include "SignalBoard.h"           // (1.2.1) posts its bold sizes / circles for the other indicators on this chart
 #include "ZoneNear.h"              // (1.2.0) location first: bold / circles away from a zone are dimmed
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")      // HoverBoard.h's GetCursorPos / WindowFromPoint
@@ -65,7 +66,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.2.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.2.1"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -581,7 +582,7 @@ void BigBidAsk::render(BBState& S) {
         for (int i = 0; i <= ve; ++i) { Z.hi.push_back(i < zn0 ? 0.0 : (double)hi[i]); Z.lo.push_back(i < zn0 ? 0.0 : (double)lo[i]); Z.sess.push_back(i < zn0 ? -1 : sessionOf((long long)times[i])); }
         Z.band = zn::bandFrom(Z.hi, Z.lo, std::max(0, (int)count - 2 <= ve ? (int)count - 2 : ve));
         const char* sy = getSymbol(); Z.levels = zn::levels(flexDir(), S.market, sy ? sy : "", steadyMs()); }
-    std::vector<double> candPx;
+    std::vector<double> candPx, candVol;
     FONT fp; fp.id = HELVETICA; fp.size = (short)set.font; fp.style = PLAIN;
     FONT fb = fp; fb.style = BOLD; fb.size = (short)(set.font + 3);   // (1.1.0) the really large numbers bold AND bigger, like the mockup 96
     int lead = 0, asc = 0, desc = 0; setFont(fp); getFontMetrics(&lead, &asc, &desc);
@@ -610,8 +611,16 @@ void BigBidAsk::render(BBState& S) {
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
             bba::Cand c; c.bar = i; c.side = sd; c.x = sd < 0 ? cb_.l : cb_.r; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;
             c.bold = bold; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = bold && F->closed;
-            cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back((double)p.key * S.tick);
+            cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back((double)p.key * S.tick); candVol.push_back((double)p.vol);
         }
+    }
+    {   // (1.2.1, SignalBoard) the bold sizes (and circles) of the laid-out bars for the other indicators on this chart
+        std::vector<sb::Ev> ev;
+        for (size_t k = 0; k < cands.size(); ++k) { if (!cands[k].bold) continue;
+            sb::Ev e; e.bar = ctSec((RTDATE)times[cands[k].bar]); e.px = candPx[k]; e.side = cands[k].side; e.val = candVol[k]; e.flag = cands[k].circle ? 1 : 0;
+            if (e.bar > 0) ev.push_back(e); }
+        const char* sy2 = getSymbol(); const char* cl2 = getChartLabel();
+        sb::publish('B', sy2 ? sy2 : "", getSecondsPerBar(), cl2 ? cl2 : "", steadyMs(), ev);
     }
     std::vector<bba::Box> hard; if (S.trOn) hard.push_back(S.trBox);
     const std::vector<bba::Placed> P = bba::place(cands, candles, area, &S.lay, hard);
@@ -671,7 +680,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask v1.2.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
-    p->setVersion("1.2.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask v1.2.1: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers.");
+    p->setVersion("1.2.1");   // BBA_VERSION
     return p;
 }

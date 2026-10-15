@@ -98,6 +98,7 @@
 #include "HostSlot.h"
 #include "BannerBoard.h"           // (0.15.3) the one top banner: the warning handed to the Tape Reader
 #include "BoxPlace.h"              // (CR5000) the LIQ label Offset X / Y: validation + clamping (shared, as is)
+#include "SignalBoard.h"           // (0.21.0) reads / posts the chart's signals (Delta Profile A, Big Bid/Ask, big fills)
 #include "ZoneNear.h"              // (0.20.0) the zone + level names for the banner verdict
 #include "ColumnBoard.h"           // (0.16.0) the right-side columns (Levels / Delta / Dealer) and this column's width on the board
 #ifndef LQ_FLOW
@@ -132,7 +133,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.20.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.21.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -359,7 +360,7 @@ struct LQState {
     struct Line { double v = -1; bool data = false; };
     Line lAttack, lEaten, lExh, lPulled, lRebuilt, lCounter;
     int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
-    std::string verdict = "none";                  // (0.20.0) the banner verdict last drawn (status)
+    std::string verdict = "none"; int verdictScore = 0;                  // (0.20.0) the banner verdict last drawn (status)
     int warnRows = 2;                              // (0.18.0) the warning detail's rows last drawn (>= 2 reserved)
     std::string state = "starting", lastStatusText;
 #ifndef LQ_FLOW
@@ -1277,7 +1278,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
       << ",max " << S.depthMax << ",levels " << S.depthLevels << ",reads " << S.depthReads << ",books " << S.e.books << ",bad " << S.e.badBooks << "," << S.e.why
       << "\nCOLUMN,width " << S.width << ",background " << (S.bg ? "on" : "off") << ",right columns end price at " << S.colPriceRight
       << "\nLIQ_LEVELS,rows " << S.lvlRows << ",writes " << S.lvlWrites
-      << "\nBANNER," << (S.trBanner ? "Tape Reader banner on this chart: the warning is shown there" : "no Tape Reader banner: the warning is drawn here") << ",handed " << S.handed << ",verdict " << S.verdict << ",label offset " << S.labDx << "," << S.labDy << (S.sizeWhy.empty() ? std::string() : "," + S.sizeWhy)
+      << "\nBANNER," << (S.trBanner ? "Tape Reader banner on this chart: the warning is shown there" : "no Tape Reader banner: the warning is drawn here") << ",handed " << S.handed << ",verdict " << S.verdict << " (agree " << S.verdictScore << "/3)" << ",label offset " << S.labDx << "," << S.labDy << (S.sizeWhy.empty() ? std::string() : "," + S.sizeWhy)
       << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",norms " << (S.e.norms.loaded ? "file" : "session") << "\nPARAMS," << S.params
       << "\nZONES," << S.e.zones.size() << "\nATTEMPTS," << S.e.attempts.size() << "\nMARKS," << S.e.marks.size() << ",written " << S.marksWritten
       << ",writes " << S.recWrites << ",fails " << S.recFails << "\nDELTA_A," << S.dpBid.size() << "," << S.dpAsk.size()
@@ -2030,38 +2031,73 @@ void LiquidityProfile::renderWarning(LQState& S) {
     auto clock12 = [](long long ctMs) { const long long sd = (ctMs / 1000) % 86400; int h = (int)(sd / 3600), m = (int)(sd % 3600 / 60); const int h12 = h % 12 == 0 ? 12 : h % 12; char b3[16]; std::snprintf(b3, sizeof(b3), "%d:%02d", h12, m); return std::string(b3); };
     int vdir = 0; bool vfail = false; std::string v1, v2, absorbTxt; double vpx = 0;
 #ifndef LQ_FLOW
-    if (S.boSet.on && tick > 0) {
-        struct Fx { int side; long long px, lots, tEnd; int n; };
-        std::vector<Fx> fx;
-        for (size_t k = 0; k < S.bo.lines.size(); ++k) {
-            const bol::Line& L = S.bo.lines[k];
-            if (L.end != bol::FILLED || L.traded <= 0 || L.tEnd <= 0) continue;
-            const int b = bol::barOf(S.barEndMs, L.tEnd); if (b < lastBar - 4) continue;
-            bool m = false; for (size_t i = 0; i < fx.size(); ++i) if (fx[i].side == L.side && fx[i].px == L.px) { fx[i].lots += L.traded; fx[i].n++; fx[i].tEnd = std::max(fx[i].tEnd, L.tEnd); m = true; }
-            if (!m) { Fx e; e.side = L.side; e.px = L.px; e.lots = L.traded; e.tEnd = L.tEnd; e.n = 1; fx.push_back(e); }
+    if (tick > 0) {
+        // (0.21.0, SignalBoard) the verdict now uses EVERY indicator on this chart: the big orders FILLED here, the Delta Profile's A
+        // events and Big Bid/Ask's bold sizes / circles (posted on the chart's SignalBoard). A turn = at a zone, price closed back on
+        // the absorbing side, and at least one of: a big order filled there, a Delta Profile A there, a Big Bid/Ask circle there.
+        const char* cl0 = getChartLabel(); const std::string chart0 = cl0 ? std::string(cl0) : std::string(); const long long nowS = steadyMs();
+        std::vector<sb::Ev> evA, evB, evF;
+        sb::read('A', S.symbol, S.spb, chart0, nowS, evA); sb::read('B', S.symbol, S.spb, chart0, nowS, evB);
+        auto barKey = [&](int i) { return i >= 0 && i < (int)S.barEndMs.size() ? S.barEndMs[(size_t)i] / 1000 : 0LL; };
+        auto barIdx = [&](long long key) { for (int i = lastBar; i >= std::max(0, lastBar - 60); --i) if (barKey(i) == key) return i; return -1; };
+        struct Cand { int dir = 0; double px = 0; int bar = -1; long long lots = 0; int n = 0; long long tEnd = 0; double aX = 0; bool circle = false; int src = 0; };
+        std::vector<Cand> cands;
+        if (S.boSet.on) {                                                      // 1 big orders filled in the last 5 bars (merged by price)
+            for (size_t k = 0; k < S.bo.lines.size(); ++k) {
+                const bol::Line& L = S.bo.lines[k];
+                if (L.end != bol::FILLED || L.traded <= 0 || L.tEnd <= 0) continue;
+                const int b = bol::barOf(S.barEndMs, L.tEnd);
+                { sb::Ev e; e.bar = barKey(b); e.px = (double)L.px * tick; e.side = L.side == bol::BID ? -1 : 1; e.val = (double)L.traded; if (e.bar > 0) evF.push_back(e); }
+                if (b < lastBar - 4) continue;
+                const int dir = L.side == bol::BID ? 1 : -1; const double px = (double)L.px * tick; bool m = false;
+                for (size_t i = 0; i < cands.size(); ++i) if (cands[i].src == 1 && cands[i].dir == dir && std::fabs(cands[i].px - px) < tick * 0.5) { cands[i].lots += L.traded; cands[i].n++; cands[i].tEnd = std::max(cands[i].tEnd, L.tEnd); cands[i].bar = std::max(cands[i].bar, b); m = true; }
+                if (!m) { Cand c; c.dir = dir; c.px = px; c.bar = b; c.lots = L.traded; c.n = 1; c.tEnd = L.tEnd; c.src = 1; cands.push_back(c); }
+            }
+            sb::publish('F', S.symbol, S.spb, chart0, nowS, evF);
         }
-        const Fx* best = nullptr;
-        for (size_t i = 0; i < fx.size(); ++i) {
-            const double p = (double)fx[i].px * tick; const int b = bol::barOf(S.barEndMs, fx[i].tEnd);
-            const bool held = fx[i].side == bol::BID ? (double)clA[lastBar] > p : (double)clA[lastBar] < p;
-            if (!held || !zn::atZone(Z, std::max(0, std::min(lastBar, b)), p)) continue;
-            if (!best || fx[i].lots > best->lots) best = &fx[i];
+        for (size_t i = 0; i < evA.size(); ++i) {                              // 2 Delta Profile A in the last 5 bars
+            const int b = barIdx(evA[i].bar); if (b < 0 || b < lastBar - 4) continue;
+            Cand c; c.dir = evA[i].side > 0 ? 1 : -1; c.px = evA[i].px; c.bar = b; c.aX = evA[i].val; c.tEnd = barKey(b) * 1000; c.src = 2; cands.push_back(c);
+        }
+        for (size_t i = 0; i < evB.size(); ++i) {                              // 3 Big Bid/Ask absorption circle in the last 5 bars
+            if (!evB[i].flag) continue; const int b = barIdx(evB[i].bar); if (b < 0 || b < lastBar - 4) continue;
+            Cand c; c.dir = evB[i].side < 0 ? 1 : -1; c.px = evB[i].px; c.bar = b; c.lots = (long long)evB[i].val; c.circle = true; c.tEnd = barKey(b) * 1000; c.src = 3; cands.push_back(c);
+        }
+        const double tol = std::max(2.0 * tick, Z.band * 0.5);
+        const Cand* best = nullptr; int bestScore = -1;
+        for (size_t i = 0; i < cands.size(); ++i) {
+            Cand& c = cands[i];
+            const bool held = c.dir > 0 ? (double)clA[lastBar] > c.px : (double)clA[lastBar] < c.px;
+            if (!held || !zn::atZone(Z, std::max(0, std::min(lastBar, c.bar)), c.px)) continue;
+            // cross-confirm with the other indicators at the same price / bars
+            const long long k0 = barKey(std::max(0, c.bar - 2)), k1 = barKey(lastBar);
+            if (c.aX <= 0) { const sb::Ev* a = sb::nearestEv(evA, c.px, tol, k0, k1, c.dir); if (a) c.aX = a->val; }
+            if (!c.circle) { const sb::Ev* q = sb::nearestEv(evB, c.px, tol, k0, k1, c.dir > 0 ? -1 : 1); if (q && q->flag) c.circle = true; }
+            if (c.lots <= 0) { const sb::Ev* f2 = sb::nearestEv(evF, c.px, tol, k0, k1, c.dir > 0 ? -1 : 1); if (f2) c.lots = (long long)f2->val; }
+            const int score = (c.src == 1 || c.lots > 0 ? 1 : 0) + (c.aX > 0 ? 1 : 0) + (c.circle ? 1 : 0);
+            if (score > bestScore || (score == bestScore && best && c.lots > best->lots)) { best = &c; bestScore = score; }
         }
         if (best) {
-            vdir = best->side == bol::BID ? 1 : -1; vpx = (double)best->px * tick;
-            const int sb = S.boSign[bol::BID], sa = S.boSign[bol::ASK];
-            const int sup = vdir > 0 ? (sb > 0) + (sa < 0) : (sa > 0) + (sb < 0);
-            const int ag = vdir > 0 ? (sb < 0) + (sa > 0) : (sa < 0) + (sb > 0);
+            vdir = best->dir; vpx = best->px; S.verdictScore = bestScore;
+            const int sgB = S.boSign[bol::BID], sgA = S.boSign[bol::ASK];
+            const bool liveB = S.bo.live[bol::BID] >= 0, liveA = S.bo.live[bol::ASK] >= 0;
+            const int sup = vdir > 0 ? (liveB && sgB > 0) + (liveA && sgA < 0) : (liveA && sgA > 0) + (liveB && sgB < 0);
+            const int ag = vdir > 0 ? (liveB && sgB < 0) + (liveA && sgA > 0) : (liveA && sgA < 0) + (liveB && sgB > 0);
             vfail = ag > sup && ag > 0;
-            const std::string lots = (best->n > 1 ? std::to_string(best->n) + "\xD7 " : std::string()) + std::to_string(best->lots);
-            v1 = std::string(vdir > 0 ? "big buyer filled " : "big seller filled ") + lots;
-            auto side = [&](int s, const char* nm) { if (S.bo.live[s] < 0) return std::string();
-                const long long n = (long long)std::llround(S.boSize[s]);
-                return std::string(" \xB7 ") + nm + (S.boSign[s] > 0 ? " stacking +" : S.boSign[s] < 0 ? " pulled -" : " flat ") + std::to_string(n); };
+            std::string what;
+            if (best->lots > 0) what = std::string(vdir > 0 ? "big buyer filled " : "big seller filled ") + (best->n > 1 ? std::to_string(best->n) + "\xD7 " : std::string()) + std::to_string(best->lots);
+            else what = std::string(vdir > 0 ? "sellers absorbed" : "buyers absorbed");
+            v1 = what;
+            auto side = [&](int sd, const char* nm) { if (S.bo.live[sd] < 0) return std::string();
+                const long long n = (long long)std::llround(S.boSize[sd]);
+                return std::string(" \xB7 ") + nm + (S.boSign[sd] > 0 ? " stacking +" : S.boSign[sd] < 0 ? " pulled -" : " flat ") + std::to_string(n); };
             v1 += side(bol::BID, "bids") + side(bol::ASK, "offers");
             const zn::NL lv = zn::nearest(named, vpx, Z.band);
-            v2 = clock12(best->tEnd) + (lv.name.empty() ? std::string() : " \xB7 at " + lv.name + " " + pxTxt(lv.px));
-            absorbTxt = std::string("\x85then held: ") + std::to_string(best->lots) + (vdir > 0 ? " sold into a big bid, absorbed" : " bought into a big offer, absorbed");
+            v2 = clock12(best->tEnd > 0 ? best->tEnd : barKey(lastBar) * 1000) + (lv.name.empty() ? std::string() : " \xB7 at " + lv.name + " " + pxTxt(lv.px));
+            std::string conf;
+            if (best->aX > 0) { char bx[24]; std::snprintf(bx, sizeof(bx), "A %.1fx", best->aX); conf = bx; }
+            if (best->circle) conf += conf.empty() ? "circle" : ", circle";
+            absorbTxt = std::string("\x85then held: ") + (best->lots > 0 ? std::to_string(best->lots) + (vdir > 0 ? " sold into a big bid, absorbed" : " bought into a big offer, absorbed") : std::string("absorbed")) + (conf.empty() ? std::string() : " (" + conf + ")");
         }
     }
 #endif
@@ -2440,6 +2476,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.20.1");   // LQ_VERSION
+    p->setVersion("0.21.0");   // LQ_VERSION
     return p;
 }
