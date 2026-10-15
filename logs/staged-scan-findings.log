@@ -1,5 +1,3 @@
-findings=0 allowed=0 staged_files=3 bytes=375052
+findings=0 allowed=0 staged_files=1 bytes=188
 largest staged blobs (bytes, path):
-SIZE	168325	plugin/HodLodLogic.h
-SIZE	139479	plugin/DeltaProfile.cpp
-SIZE	67248	plugin/HodLod.cpp
+SIZE	188	logs/staged-scan-findings.log
