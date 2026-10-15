@@ -2266,7 +2266,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
                 const int gB = S.boSign[bol::BID], gA = S.boSign[bol::ASK];
                 const bool lB = S.bo.live[bol::BID] >= 0, lA = S.bo.live[bol::ASK] >= 0;
                 const int sp = c.dir > 0 ? (lB && gB > 0) + (lA && gA < 0) : (lA && gA > 0) + (lB && gB < 0);
-                if (sp == 0 && c.pulledOpp <= 0) continue;
+                if (sp == 0) continue;   // (0.27.0, audit: a pulled opposite big order was right 5 of 22 on ES) it no longer counts as support - still shown in the grey text
             }
             // cross-confirm with the other indicators at the same price / bars
             const long long k0 = barKey(std::max(0, c.bar - 2)), k1 = barKey(lastBar);
