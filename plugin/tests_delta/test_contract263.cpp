@@ -63,7 +63,7 @@ int main()
     const unsigned long t0 = day + 9 * 3600 + 30 * 60;
     const std::string S = std::to_string(session);
 
-    check(std::string(DLT_VERSION) == "2.8.4", "version string is 2.8.4");
+    check(std::string(DLT_VERSION) == "2.8.5", "version string is 2.8.5");
 
     // (c) path sanitization: the token keeps ASCII letters, digits, '_', '-', '.'; everything else becomes '_'
     {

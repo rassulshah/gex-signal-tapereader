@@ -75,10 +75,14 @@ int main(){
   mock::Host h=fixture(true);DeltaProfile p;draw(p,h);Latch a=first(h);
   auto& bk=latchBooks()[state(h).book+"|180"];
   Latch b=a;b.id=bk.nextId++;b.price=a.price+.25;b.low=a.low+1;b.high=a.high+1;bk.v.push_back(b);draw(p,h);
-  check(rings(h)==2,"two distinct A locations on same candle both draw");
-  int x1=-1,x2=-1;for(auto& d:h.draws)if(d.type=="ring"){if(x1<0)x1=d.x;else x2=d.x;}
-  check(std::abs(x1-x2)>=14,"same-candle bubbles do not overlap");
-  check(state(h).bubbleState[a.id]=="drawn"&&state(h).bubbleState[b.id]=="drawn","both events auditable");cleanup(p,h);
+  // (2.8.5 intended rule change, Rassul 2026-10-14 23:05 CT) ONE bubble per candle per side: bullish at the LOWEST price, bearish at
+  // the HIGHEST (2.6.0-2.8.4: "two distinct A locations on same candle both draw")
+  check(rings(h)==1,"2.8.5: two A locations on the same candle and side draw ONE bubble");
+  const Latch& keep=a.support?(a.price<b.price?a:b):(a.price>b.price?a:b), &drop=&keep==&a?b:a;
+  int rx=-1,ry=-1;for(auto& d:h.draws)if(d.type=="ring"){rx=d.x;ry=d.y;}
+  mock::current=&h;cppExtension::PNT want;want.set(20,static_cast<float>(keep.price),cppExtension::kBarCenter);
+  check(state(h).bubbleState[keep.id]=="drawn"&&state(h).bubbleState[drop.id]=="merged:"+std::to_string(keep.id),"both events auditable: one drawn, the other merged into it");
+  check(ry==want.v&&rx==want.h,"the bubble sits on the kept event (bullish lowest / bearish highest)");cleanup(p,h);
  }
  {
   // Seeder: old-color metadata cannot recolor final confirmed A; I and pending never ring.

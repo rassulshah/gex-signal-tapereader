@@ -40,7 +40,7 @@ static std::string dirFor(const std::string& name) {
 }
 int main() {
     setenv("TZ", "UTC", 1); tzset();
-    check(std::string(DLT_VERSION) == "2.8.4", "version 2.8.4");
+    check(std::string(DLT_VERSION) == "2.8.5", "version 2.8.5");
     {   // the setVersion literal gex-build reads = DLT_VERSION
         std::ifstream f("../DeltaProfile.cpp"); std::stringstream ss; ss << f.rdbuf();
         check(ss.str().find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "setVersion literal = DLT_VERSION");

@@ -88,7 +88,7 @@ struct Params {
     long long dwellMs = 10000;         // a candidate must stay the biggest this long (or trade first) before its line is drawn
     long long leaveMs = 60000;         // a live line ends LEFT only after its order stayed out of reach this long
     int keep = KEEP_DEF;               // ended lines drawn per side
-    size_t bookCap = 600000;           // orders tracked (far ones are dropped first)
+    size_t bookCap = 200000;           // orders tracked (far ones are dropped first; ES rests ~20-50k at a time)
     size_t linesCap = 20000;           // lines kept in memory per session (the file keeps all)
 };
 
@@ -541,10 +541,13 @@ struct Op { int kind = OP_LINE; int side = BID; int x0 = 0, y0 = 0, x1 = 0, y1 =
 struct Seg { size_t line = 0; int side = BID; int x0 = 0, x1 = 0, y = 0; bool live = false; int end = RESTING; std::string text; int textW = 0; };
 struct View { int xMin = 0, xMax = 0, yTop = 0, yBot = 0, rowH = 18; };
 static const int ARROW_W = 9, MARK_R = 4, LABEL_GAP = 4;
-// segs in priority order (live first, then the newest ended). Returns the ops; the space a drawn line / mark / label takes never goes
-// left of xMin (the Liquidity Profile's column) or right of xMax (the last bar + the arrow, before the right-side columns).
-inline std::vector<Op> layout(const std::vector<Seg>& segs, const View& V) {
-    std::vector<Op> ops;
+// Returns the ops; the space a drawn line / mark / label takes never goes left of xMin (the Liquidity Profile's column) or right of xMax
+// (the last bar + the arrow, before the right-side columns). Labels are placed in TIME order (lesson 49): an older line's label is
+// decided first and a newer line never takes its spot - the newer one moves above / below its line or goes without; the same order's
+// label at the same price again (it left the reach / was taken over and came back) is not repeated.
+inline std::vector<Op> layout(std::vector<Seg> segs, const View& V) {
+    std::stable_sort(segs.begin(), segs.end(), [](const Seg& a, const Seg& b) { return a.line < b.line; });
+    std::vector<Op> ops; std::vector<std::pair<std::string, int> > texts;
     struct R { int l, t, r, b; };
     std::vector<R> placed;
     auto clash = [&](const R& a) { for (size_t i = 0; i < placed.size(); ++i) { const R& b = placed[i]; if (a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b) return true; } return false; };
@@ -560,6 +563,8 @@ inline std::vector<Op> layout(const std::vector<Seg>& segs, const View& V) {
         if (s.live) { mk.kind = OP_ARROW; mk.x0 = x1; mk.x1 = x1 + ARROW_W; ops.push_back(mk); }
         else if (s.end == FILLED && x1 + MARK_R <= V.xMax && x1 - MARK_R >= V.xMin) { mk.kind = OP_DOT; mk.x0 = x1 - MARK_R; mk.x1 = x1 + MARK_R; ops.push_back(mk); }
         else if ((s.end == PULLED || s.end == MOVED) && x1 + MARK_R <= V.xMax && x1 - MARK_R >= V.xMin) { mk.kind = OP_X; mk.x0 = x1 - MARK_R; mk.x1 = x1 + MARK_R; ops.push_back(mk); }
+        bool again = false; for (size_t q = 0; q < texts.size(); ++q) if (texts[q].first == s.text && std::abs(texts[q].second - s.y) <= 1) again = true;
+        if (again) continue;                                           // the same order's label is already on this price
         // the label at the left end: left of the start when there is room, else just above the line's start
         R a{ x0 - LABEL_GAP - s.textW, s.y - V.rowH / 2, x0 - LABEL_GAP, s.y - V.rowH / 2 + V.rowH };
         const bool leftOk = s.x0 >= V.xMin && a.l >= V.xMin && a.t >= V.yTop && a.b <= V.yBot;
@@ -571,7 +576,7 @@ inline std::vector<Op> layout(const std::vector<Seg>& segs, const View& V) {
                 a = c2;
             } else a = b;
         }
-        placed.push_back(a);
+        placed.push_back(a); texts.push_back(std::make_pair(s.text, s.y));
         Op lb; lb.kind = OP_LABEL; lb.side = s.side; lb.x0 = a.l; lb.y0 = a.t; lb.x1 = a.r; lb.y1 = a.b; lb.text = s.text; lb.line = s.line; ops.push_back(lb);
     }
     return ops;

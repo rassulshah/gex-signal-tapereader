@@ -74,7 +74,7 @@ static std::string verLiteral() {   // the setVersion("x.y.z") literal gex-build
 int main()
 {
     setenv("TZ", "UTC", 1); tzset();
-    check(std::string(DLT_VERSION) == "2.8.4", "DLT_VERSION is 2.8.4");
+    check(std::string(DLT_VERSION) == "2.8.5", "DLT_VERSION is 2.8.5");
     check(verLiteral() == DLT_VERSION, "setVersion literal (" + verLiteral() + ") = DLT_VERSION (gex-build reads the literal)");
 
     // ---- 2(d) pivotOk unit tests (pure function, plain arrays) ----
@@ -237,6 +237,9 @@ int main()
         check(kept, "the first A keeps its bubble position when 12 later A's arrive");
         ChartState& s = *static_cast<ChartState*>(h.data);
         check(s.bubbleState[bk.v[0].id] == "drawn", "the first A is still drawn (not evicted)");
+        {   // (2.8.5) the 12 later A's are on the SAME candle and side and decided later: one bubble per candle per side -> merged into it
+            int merged = 0; for (std::size_t k = 1; k < bk.v.size(); ++k) if (s.bubbleState[bk.v[k].id] == "merged:" + std::to_string(bk.v[0].id)) ++merged;
+            check(merged == 12 && rings(h).size() == 1, "2.8.5: the 12 later same-candle A's are merged into the first bubble (" + std::to_string(merged) + ")"); }
         int suppressed = 0; for (const auto& kv : s.bubbleState) if (kv.second == "suppressed") ++suppressed;
         bool oldestFirst = true;   // any suppressed bubble is a LATER one than every drawn one
         long long lastDrawnT = -1, firstSupT = LLONG_MAX;

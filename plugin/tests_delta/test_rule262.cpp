@@ -119,7 +119,12 @@ int main()
         DeltaProfile p; mock::current = &h2; p.draw();                  // an IRT restart: the book is seeded from the 2.6.1 record
         check(latchBooks().begin()->second.loaded == 1 && latchBooks().begin()->second.v.size() == 1 && latchBooks().begin()->second.v[0].code == "A",
               "old 2.6.1 A record loads as A");
-        check(rings(h2) == 1, "old 2.6.1 A record keeps its circle");
+        // (2.8.5 intended rule change, Rassul 2026-10-14 23:05 CT) a record decided before 2.8.4 is re-checked ONCE against the 2.8.4
+        // rules: this peak bar is RED on the node (fails the same-bar close rule) -> not drawn, the record unchanged, the status says why
+        // (2.6.2-2.8.4 kept its circle: "old 2.6.1 A record keeps its circle")
+        check(rings(h2) == 0, "2.8.5: old 2.6.1 A record that fails the 2.8.4 close rule is NOT drawn");
+        { const std::string st = slurp(dir + "../DeltaProfile.status.txt");
+          check(st.find("hidden: pre-2.8.4 rule (close") != std::string::npos && st.find("A_HIDDEN_PRE284,1") != std::string::npos, "2.8.5: status says hidden: pre-2.8.4 rule (close ...)"); }
         check(linesWithCode(slurp(path), "D", "A") == 1 && rows(slurp(path), "D").size() == 1, "no new decision line appended for the old A");
         mock::current = &h2; p.destroy(); latchBooks().clear();
     }

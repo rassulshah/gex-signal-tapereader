@@ -105,7 +105,7 @@ static Box ringBox(const mock::Draw& d) { return Box{ d.x - 6, d.y - 6, d.x + 7,
 int main()
 {
     setenv("TZ", "UTC", 1); tzset();
-    check(std::string(DLT_VERSION) == "2.8.4", "version string is 2.8.4");
+    check(std::string(DLT_VERSION) == "2.8.5", "version string is 2.8.5");
     // 1) a thin top after an A prints Ex? at the FIRST red close, and never moves or disappears after later bars
     mock::Draw firstMark("none", 0, 0);
     {

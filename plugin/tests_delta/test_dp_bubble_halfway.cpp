@@ -38,7 +38,7 @@ static int halfCase(double nodePx,bool sellNode,float open,float close){
 }
 int main(){
     setenv("TZ","UTC",1);tzset();unsetenv("USERPROFILE");
-    check(std::string(DLT_VERSION)=="2.8.4","version 2.8.4");   // (2.8.4 night verification: version bumped)
+    check(std::string(DLT_VERSION)=="2.8.5","version 2.8.5");   // (2.8.5: version bumped)
     {   std::ifstream f("../DeltaProfile.cpp");std::stringstream ss;ss<<f.rdbuf();
         check(ss.str().find(std::string("p->setVersion(\"")+DLT_VERSION+"\")")!=std::string::npos,"the setVersion literal = DLT_VERSION (2.8.1-2.8.3 shipped setVersion 2.8.0)");
         check(ss.str().find("(cfg.p.proven ? \"Ex\" : \"Ex?\")")==std::string::npos,"2.8.3: the recorded Ex mark no longer switches to plain Ex when PROVEN"); }

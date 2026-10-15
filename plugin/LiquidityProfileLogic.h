@@ -920,7 +920,7 @@ public:
         // (0.17.0) the zone-rule geometry of this attempt (empty when the chart had no ADR yet)
         if (zrAdr > 0) { const double c = 0.5 * (double)(a.lo + a.hi) * P.tick, w = zrule::ZONE_W * zrAdr;
             o << '|' << zrAdr << '|' << (c - w) << '|' << (c + w) << '|' << zrule::RES_X * zrAdr << '|' << zrule::VERSION; }
-        else o << "||||" << zrule::VERSION;
+        else o << "|||||" << zrule::VERSION;   // (0.18.0 fix) 5 fields like the header (zr_adr|zr_lo|zr_hi|zr_x|zr_rule): 0.17.0 wrote 4 - zr_rule landed in zr_x
         return o.str();
     }
     std::vector<std::string> attemptLog;          // lines waiting to be appended by the host
