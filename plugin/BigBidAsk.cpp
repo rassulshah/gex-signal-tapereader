@@ -66,7 +66,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.4.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.4.1"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -645,7 +645,11 @@ void BigBidAsk::render(BBState& S) {
         const COLOR col = zone ? cSide : getBlendedColor(cSide, 0x00000000, 55.0f);   // (1.2.0) mid-range = dimmed
         if (c.bold) { if (zone) ++S.zoneFull; else ++S.zoneDim; }
         setFont(c.bold ? fb : fp); setTextColor(c.bold ? col : getBlendedColor(cSide, 0x00000000, 40.0f));   // (1.4.0) non-bold = his colour, dimmed
-        RCT r; r.set(coord(t.l), coord(t.t), coord(t.r), coord(t.b)); r.drawText(texts[k].c_str(), true, false);
+        // (1.4.1, Rassul 12:58 "the value has to be slightly better placed so it is in the exact center of the circle") IRT draws the
+        // text below the font's internal leading, so digits sat on the ring's bottom edge (12:45 ES "105": 5 px above, 0-1 px below);
+        // a circled number is lifted by half the leading + descent, putting the digits in the ring's vertical middle
+        const int lift = c.circle ? std::max(1, ((c.bold ? leadB + descB : lead + desc) + 1) / 2) : 0;
+        RCT r; r.set(coord(t.l), coord(t.t - lift), coord(t.r), coord(t.b - lift)); r.drawText(texts[k].c_str(), true, false);
         if (c.circle) {                                                  // the thin 1 px rounded outline hugging the number, its own colour
             const bba::Box& f = P[k].foot;
             setPen(col, 1, P_SOLID); CBRUSH br(col, PAT_HOLLOW); br.set();
@@ -693,7 +697,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask v1.4.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.4.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask v1.4.1: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
+    p->setVersion("1.4.1");   // BBA_VERSION
     return p;
 }

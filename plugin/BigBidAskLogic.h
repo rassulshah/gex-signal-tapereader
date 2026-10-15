@@ -30,7 +30,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.4.0";
+static const char* const VERSION = "1.4.1";   // (1.4.1) a circled number centred in its ring
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 

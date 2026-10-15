@@ -100,6 +100,7 @@
 #include "BoxPlace.h"              // (CR5000) the LIQ label Offset X / Y: validation + clamping (shared, as is)
 #include "SignalBoard.h"           // (0.21.0) reads / posts the chart's signals (Delta Profile A, Big Bid/Ask, big fills)
 #include "ZoneNear.h"              // (0.20.0) the zone + level names for the banner verdict
+#include "BannerSettings.h"    // (0.24.0) the verdict banner settings (SDK-free, tested)
 #include "ColumnBoard.h"           // (0.16.0) the right-side columns (Levels / Delta / Dealer) and this column's width on the board
 #ifndef LQ_FLOW
 // (0.15.0) the order-by-order feed and its order book: the shared order-flow header, reused as is (lsBidAskStats / PullStats /
@@ -151,6 +152,8 @@ static const int WIDTH_INDEX = 0, FONT_INDEX = 1, OFFX_INDEX = 2, OFFY_INDEX = 3
 // (0.18.0) the big resting order lines: on / off, reach (ATR), minimum lots (the market's floor shown; 0 = the market default), ended
 // lines kept per side, font - saved per market in lsFlexLevels\LiquidityProfile.bigorders-<MKT>.txt, the chart reads only that file
 static const int BO_ON_INDEX = 5, BO_REACH_INDEX = 6, BO_MIN_INDEX = 7, BO_KEEP_INDEX = 8, BO_FONT_INDEX = 9;
+// (0.24.0) the verdict banner: on / off, solid background, font, background colour - per market in LiquidityProfile.banner-<MKT>.txt
+static const int BN_ON_INDEX = 10, BN_BG_INDEX = 11, BN_FONT_INDEX = 12, BN_COL_INDEX = 13;
 static const char* const LQ_SIZE_NAME = "LiquidityProfile";
 #endif
 static const long long DEPTH_EVERY_MS = 1000, ZONES_EVERY_MS = 500, STATUS_EVERY_MS = 30000;
@@ -364,6 +367,8 @@ struct LQState {
     std::string verdict = "none", vlogKey = "none"; int verdictScore = 0;
     int vIncDir = 0; double vIncPx = 0; bool vIncPick = false;
     std::string warnSeen; long long warnSinceMs = 0;                                         // (0.22.9) how long the warning on screen has held                                // (0.22.7) the verdict on screen (sticky)                  // (0.20.0) the banner verdict last drawn (status)
+    int warnPx = 0;                                // (0.24.0) the banner's drawn height in px (what render() reserves below it)
+    bns::Settings bn; long long bnStampT = -2, bnStampN = -2, bnCheckMs = -1; std::string bnMkt, bnWhy;   // (0.24.0) banner settings
     int warnRows = 2;                              // (0.18.0) the warning detail's rows last drawn (>= 2 reserved)
     std::string state = "starting", lastStatusText;
 #ifndef LQ_FLOW
@@ -396,10 +401,12 @@ public:
     LiquidityProfile() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsApply(void) { saveSize(); saveBig(); snap_.take(dlgValues()); return RTX_OK; }   // (0.18.0) both files judged against the SAME opening snapshot
+    virtual int parmsApply(void) { saveSize(); saveBig(); saveBanner(); snap_.take(dlgValues()); return RTX_OK; }   // (0.18.0) both files judged against the SAME opening snapshot
     virtual int parmsLoad(void);                                        // (CR5000) the dialog filled from the size file (never saves)
     bp::DlgSnap snap_;                                                   // (CR5000) the dialog as it opened         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
     void saveSize();
+    void saveBanner();                                                   // (0.24.0) the banner rows -> their per-market file
+    void loadBanner(LQState& S);
     void saveBig();                                                      // (0.18.0) the big-order rows -> their per-market file
     std::vector<long long> dlgValues();                                  // (0.18.0) every dialog row as numbers (the snapshot)
     void loadSize(LQState& S);
@@ -465,8 +472,8 @@ int cppExtension::setup(void) {
     setParameterDialogHeight(1);
     setIntegerParameter("Font pt", 11, 50);
 #else
-    setParameterVersion(4);                       // (0.16.0) + Solid background, Width 20-200; (0.18.0) + the big-order rows (IRT resets the saved rows once; the files keep them)
-    setParameterDialogHeight(5);
+    setParameterVersion(5);                       // (0.16.0) + Solid background, Width 20-200; (0.18.0) + the big-order rows; (0.24.0) + the banner rows (IRT resets the saved rows once; the files keep them)
+    setParameterDialogHeight(7);
     setIntegerParameter("Width px (20-200)", 60, 50);
     setIntegerParameter("Font pt", 11, 50, kParmAppendSameLine);
     setIntegerParameter("Label offset X", 0, 50);
@@ -477,6 +484,10 @@ int cppExtension::setup(void) {
     setIntegerParameter("Big order min lots", 0, 60);                              // 7  (the market's floor is shown; 0 = market default)
     setIntegerParameter("Ended lines kept per side (0-50)", 10, 50, kParmAppendSameLine);   // 8
     setIntegerParameter("Big order font pt (7-16)", 10, 50, kParmAppendSameLine);  // 9  (0.23.0) the BIG column's live box; the filled marks 2 pt smaller
+    setBoolParameter("Verdict banner", true);                                     // 10 (0.24.0) the combined REV / book badge + its grey lines
+    setBoolParameter("Banner solid background", true);                           // 11
+    setIntegerParameter("Banner font pt (7-16)", bns::FONT_DEF, 50);              // 12
+    setColorParameter("Banner background", (COLOR)bns::BG_DEF, 0, kParmAppendSameLine);   // 13
 #endif
     return RTX_OK;
 }
@@ -534,6 +545,11 @@ static std::string bigPath(cppExtension* x) {
     if (mkt.empty() || dirp.empty()) return std::string();
     return dirp + "\\LiquidityProfile.bigorders-" + mkt + ".txt";
 }
+static std::string bannerPath(cppExtension* x) {
+    const std::string mkt = bigMarket(x), dirp = flexDir();
+    if (mkt.empty() || dirp.empty()) return std::string();
+    return dirp + "\\LiquidityProfile.banner-" + mkt + ".txt";
+}
 #endif
 int LiquidityProfile::parmsLoad(void) {
 #ifndef LQ_FLOW
@@ -548,6 +564,11 @@ int LiquidityProfile::parmsLoad(void) {
         checkBox(BO_ON_INDEX, b.on); setFloatValue(BO_REACH_INDEX, (float)(b.reach10 / 10.0));
         setIntegerValue(BO_MIN_INDEX, (int)(b.minLots > 0 ? b.minLots : bol::floorFor(bigMarket(this))));
         setIntegerValue(BO_KEEP_INDEX, b.keep); setIntegerValue(BO_FONT_INDEX, b.font);
+    }
+    {   // (0.24.0) the banner rows from their per-market file (defaults when there is none)
+        const std::string p3 = bannerPath(this); bns::Settings b;
+        if (!p3.empty()) { std::ifstream in; std::string ln; if (statFile(p3) && openBoundedInput(p3, in) && readBoundedLine(in, ln)) { bns::Settings z; if (bns::parse(ln, z)) b = z; } }
+        checkBox(BN_ON_INDEX, b.on); checkBox(BN_BG_INDEX, b.bg); setIntegerValue(BN_FONT_INDEX, b.font); setIntegerValue(BN_COL_INDEX, (int)b.bgc);
     }
     snap_.take(dlgValues());
 #endif
@@ -595,6 +616,8 @@ std::vector<long long> LiquidityProfile::dlgValues() {
     const double r = (double)getFloatValue(BO_REACH_INDEX);
     v.push_back(isBoxChecked(BO_ON_INDEX) ? 1 : 0); v.push_back(bol::finiteD(r) ? (long long)std::llround(r * 10.0) : -1);
     v.push_back(getIntegerValue(BO_MIN_INDEX)); v.push_back(getIntegerValue(BO_KEEP_INDEX)); v.push_back(getIntegerValue(BO_FONT_INDEX));
+    v.push_back(isBoxChecked(BN_ON_INDEX) ? 1 : 0); v.push_back(isBoxChecked(BN_BG_INDEX) ? 1 : 0); v.push_back(getIntegerValue(BN_FONT_INDEX));
+    v.push_back((long long)(getIntegerValue(BN_COL_INDEX) & 0x00FFFFFF));          // 10-13 (0.24.0)
 #endif
     return v;
 }
@@ -616,6 +639,38 @@ void LiquidityProfile::saveBig() {
     if (publishFile(p, bol::settingsLine(z) + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->boStampT = S->boStampN = -2; S->boCheckMs = -1; } }
 #endif
 }
+// (0.24.0) OK / Apply: the banner rows -> LiquidityProfile.banner-<MKT>.txt (an untouched control keeps the file's value)
+void LiquidityProfile::saveBanner() {
+#ifndef LQ_FLOW
+    const std::string p = bannerPath(this); if (p.empty()) return;
+    bns::Settings fv; { std::ifstream in; std::string ln; if (statFile(p) && openBoundedInput(p, in) && readBoundedLine(in, ln)) { bns::Settings z; if (bns::parse(ln, z)) fv = z; } }
+    const std::vector<long long> now = dlgValues(); if (now.size() < 14) return;
+    const long long fileV[4] = { fv.on ? 1 : 0, fv.bg ? 1 : 0, fv.font, fv.bgc };
+    long long v[4]; for (size_t k = 0; k < 4; ++k) v[k] = snap_.pick(10 + k, now[10 + k], fileV[k]);
+    const bns::Settings z = bns::clean(v[0], v[1], v[2], v[3], fv);
+    makeDir(flexDir());
+    if (publishFile(p, bns::line(z) + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->bn = z; S->bnStampT = S->bnStampN = -2; S->bnCheckMs = -1; } }
+#endif
+}
+#ifndef LQ_FLOW
+void LiquidityProfile::loadBanner(LQState& S) {
+    const long long now = steadyMs();
+    if (S.bnMkt == S.market && S.bnCheckMs >= 0 && now >= S.bnCheckMs && now - S.bnCheckMs < 1000) return;   // at most once a second
+    S.bnCheckMs = now;
+    const std::string dirp = flexDir(); if (dirp.empty() || S.market.empty()) return;
+    const std::string p = dirp + "\\LiquidityProfile.banner-" + S.market + ".txt";
+    long long t = -1, n = -1; if (!statSub(p, t, n)) { t = -1; n = -1; }
+    if (S.bnMkt == S.market && t == S.bnStampT && n == S.bnStampN) return;
+    const bool newMkt = S.bnMkt != S.market;
+    S.bnMkt = S.market; S.bnStampT = t; S.bnStampN = n;
+    if (t < 0) { S.bn = bns::Settings(); S.bn.ok = true; S.bnWhy = "no file: defaults"; return; }
+    std::ifstream in; std::string ln; bns::Settings z;
+    if (openBoundedInput(p, in) && readBoundedLine(in, ln) && bns::parse(ln, z)) { S.bn = z; S.bnWhy = "file"; }
+    else { S.bnWhy = z.why.empty() ? std::string("banner file unreadable - last good kept") : z.why; if (newMkt) { S.bn = bns::Settings(); S.bn.ok = true; } }
+}
+#else
+void LiquidityProfile::loadBanner(LQState&) {}
+#endif
 void LiquidityProfile::loadSize(LQState& S) {
     const long long now = steadyMs();
     if (S.sizeMkt == S.market && S.sizeCheckMs >= 0 && now >= S.sizeCheckMs && now - S.sizeCheckMs < 1000) return;
@@ -663,6 +718,7 @@ int LiquidityProfile::draw(void) {
 #ifdef LQ_FLOW
     if (S && !S->faulted) { try { renderFlow(*S); } catch (...) { S->state = "draw error"; } }
 #else
+    if (S && !S->faulted) { try { loadBanner(*S); } catch (...) {} }      // (0.24.0) the banner settings of this market
     if (S && !S->faulted) { try { renderWarning(*S); render(*S); } catch (...) { S->state = "draw error"; } }   // (0.11.3) no price-chart letters
 #endif
     return RTX_OK;
@@ -1803,7 +1859,7 @@ void LiquidityProfile::render(LQState& S) {
     const int left = pane.left + 1;
     const int full = S.width - 4;                                                   // the longest bar (the Width setting)
     const int rowH = rowPx(S.font);                                                 // (0.11.4) rows sized from the font
-    int hdrTop = warnTop(pane.top) + warnBlockH(S.font, S.warnRows) + 4;           // (0.14.1) under the title row + the warning box; (0.18.0) + its 2nd detail line
+    int hdrTop = warnTop(pane.top) + (S.bn.on ? std::max(S.warnPx, 0) : 0) + 4;           // (0.14.1) under the title row + the warning box; (0.18.0) + its 2nd detail line
     if (S.trBanner && S.trRect.l < left + S.width + 60 && S.trRect.t < hdrTop + rowH && S.trRect.b + 4 > hdrTop)
         hdrTop = S.trRect.b + 4;                                                    // (0.15.3) under the Tape Reader's banner (its reserved 2-line height)
     const int top = hdrTop + rowH + 2, bottom = pane.bottom;
@@ -2151,7 +2207,8 @@ void LiquidityProfile::renderWarning(LQState& S) {
             v1 += side(bol::BID, "bids") + side(bol::ASK, "offers");
             if (against) { std::string wn = w.name; for (size_t i = 0; i < wn.size(); ++i) if (wn[i] >= 'A' && wn[i] <= 'Z') wn[i] = (char)(wn[i] - 'A' + 'a'); v1 += " \xB7 against it: " + wn; }   // (0.22.6)
             const zn::NL lv = zn::nearest(named, vpx, Z.band);
-            v2 = clock12(best->tEnd > 0 ? best->tEnd : barKey(lastBar) * 1000) + " at " + (lv.name.empty() ? pxTxt(vpx) : lv.name);   // (0.24.0, Rassul 12:41) a key / gamma level by name only, any other level by its price
+            const bool keyLv = !lv.name.empty() && lv.name.find("VWAP") == std::string::npos;   // VWAP bands are not key / gamma levels
+            v2 = clock12(best->tEnd > 0 ? best->tEnd : barKey(lastBar) * 1000) + " at " + (keyLv ? lv.name : pxTxt(vpx));   // (0.24.0, Rassul 12:41) a key / gamma level by name only, any other level by its price
             std::string conf;
             if (best->aX > 0) { char bx[24]; std::snprintf(bx, sizeof(bx), "A %.1fx", best->aX); conf = bx; }
             if (best->circle) conf += conf.empty() ? "circle" : ", circle";
@@ -2188,14 +2245,16 @@ void LiquidityProfile::renderWarning(LQState& S) {
         }
     }
 #endif
-    if (!have && vdir == 0) { S.warnRows = 2; return; }
+    const int bf = std::max(bns::FONT_MIN, std::min(bns::FONT_MAX, S.bn.font));   // (0.24.0) the banner's own font (settings)
+    if (!S.bn.on) { S.warnRows = 2; S.warnPx = 0; return; }              // (0.24.0) banner off: nothing drawn, nothing reserved
+    if (!have && vdir == 0) { S.warnRows = 2; S.warnPx = warnBlockH(bf, 2); return; }
     RCT pane; pane.getPaneRect(false);
     PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int right = std::min((int)pl.h, (int)pane.right) - 4;
     const int x0 = pane.left + 6, y0 = warnTop(pane.top);                     // (0.14.1) below the chart title, never over it
-    if (right - x0 < 120) return;
-    FONT f; f.id = HELVETICA; f.size = coord(S.font + 2); f.style = BOLD;
-    FONT g; g.id = HELVETICA; g.size = coord(S.font + 1); g.style = PLAIN;
-    const int lineH = rowPx(S.font + 1);
+    if (right - x0 < 120) { S.warnPx = 0; return; }
+    FONT f; f.id = HELVETICA; f.size = coord(bf + 2); f.style = BOLD;
+    FONT g; g.id = HELVETICA; g.size = coord(bf + 1); g.style = PLAIN;
+    const int lineH = rowPx(bf + 1);
     // (0.24.0, Rassul 12:37-12:50, mockup-combined-badge-v7.png) ONE badge: top = the verdict (filled, REV UP ? / REV DOWN ? /
     // REV UP FAILING ? / REV DOWN FAILING ?, bullish green, bearish red), bottom = the book state (outlined, today's words, its OWN colour
     // so a warning against the verdict still shows in its first 15 s); the grey lines = everything both badges showed, the verdict
@@ -2204,14 +2263,14 @@ void LiquidityProfile::renderWarning(LQState& S) {
     setFont(f);
     const int nwW = have ? getTextWidth(w.name.c_str(), -1) : 0, nwV = vname.empty() ? 0 : getTextWidth(vname.c_str(), -1);
     const int bw = std::max(nwW, nwV) + 16;
-    const int half = rowPx(S.font + 2) + 4;                               // one row of the combined badge
-    const int bh = (have && vdir != 0) ? 2 * half : std::max(warnH(S.font), 2 * lineH + 2);
+    const int half = rowPx(bf + 2) + 4;                               // one row of the combined badge
+    const int bh = (have && vdir != 0) ? 2 * half : std::max(warnH(bf), 2 * lineH + 2);
     const int gx = x0 + bw + 10;                                          // the grey column
     const int room = std::max(40, right - gx);
     int y = y0;
     auto nameIn = [&](const std::string& nm, int top, int h, COLOR tc) {  // (0.22.4) the name centred in a one-row rect
         setFont(f); setTextColor(tc);
-        const int nh = rowPx(S.font + 2), ty = top + std::max(0, (h - nh) / 2);
+        const int nh = rowPx(bf + 2), ty = top + std::max(0, (h - nh) / 2);
         RCT t; t.set(coord(x0 + 2), coord(ty), coord(x0 + bw - 2), coord(ty + nh)); t.drawText(nm.c_str(), true, false); };
     // which side a grey line speaks for: +1 buyers (their bids), -1 sellers (their offers), 0 neither
     auto sideOf = [](const std::string& t) {
@@ -2229,7 +2288,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
         for (size_t i = 0; i < sides.size(); ++i) {
             const int sd = sideOf(sides[i]);
             std::string t = sides[i];
-            if (i == 0 && !lv.name.empty()) t = lv.name + " \xB7 " + t;  // (0.24.0) the level by name only (was name + price)
+            if (i == 0 && !lv.name.empty()) t = (lv.name.find("VWAP") == std::string::npos ? lv.name : pxTxt(lv.px)) + " \xB7 " + t;   // key / gamma by name, else the price  // (0.24.0) the level by name only (was name + price)
             gl.push_back(GL{ t, sd });
         }
         cBook = w.favour > 0 ? C_BUY : w.favour < 0 ? C_SELL : C_GREY;
@@ -2242,6 +2301,22 @@ void LiquidityProfile::renderWarning(LQState& S) {
         for (size_t i = 0; i < v.size(); ++i) if (v[i].sd == want) gl.push_back(v[i]);
         for (size_t i = 0; i < v.size(); ++i) if (v[i].sd != want) gl.push_back(v[i]);
         gl.push_back(GL{ v2, 0 });                                         // time + level last
+    }
+    // the grey lines, wrapped (never cut), centred on the badge when they fit, else from its top down
+    setFont(g);
+    std::vector<std::string> rows;
+    for (size_t i = 0; i < gl.size(); ++i) {
+        if (gl[i].t.empty()) continue;
+        const std::vector<std::string> wr = lqp::wrapWords(gl[i].t, [&](const std::string& tx) { return getTextWidth(tx.c_str(), -1) <= room; });
+        rows.insert(rows.end(), wr.begin(), wr.end());
+    }
+    int maxW = 0; for (size_t i = 0; i < rows.size(); ++i) maxW = std::max(maxW, getTextWidth(rows[i].c_str(), -1));
+    const int top = y + std::max(0, (bh - (int)rows.size() * lineH) / 2);
+    const int yEnd = std::max(y + bh, top + (int)rows.size() * lineH);
+    if (S.bn.bg) {   // (0.24.0, Rassul 12:56 "use a solid fill background by default") one solid box behind the badge + its grey lines
+        const COLOR cb0 = (COLOR)(S.bn.bgc & 0x00FFFFFF);
+        RCT bgR; bgR.set(coord(x0 - 4), coord(y - 3), coord(std::min((int)pane.right - 2, gx + maxW + 8)), coord(yEnd + 3));
+        bgR.draw(0, cb0, cb0, DRAW_OPAQUE, PAT_SOLID);
     }
     // the badge
     if (vdir != 0) {
@@ -2260,24 +2335,16 @@ void LiquidityProfile::renderWarning(LQState& S) {
         RCT o; o.set(coord(x0), coord(y), coord(x0 + bw), coord(y + bh)); o.draw(1, cBook, cBook, DRAW_OPAQUE, PAT_HOLLOW);
         nameIn(w.name, y, bh, cBook);
     }
-    // the grey lines, wrapped (never cut), centred on the badge when they fit, else from its top down
-    {
-        setFont(g); setTextColor(C_GREY);
-        std::vector<std::string> rows;
-        for (size_t i = 0; i < gl.size(); ++i) {
-            if (gl[i].t.empty()) continue;
-            const std::vector<std::string> wr = lqp::wrapWords(gl[i].t, [&](const std::string& tx) { return getTextWidth(tx.c_str(), -1) <= room; });
-            rows.insert(rows.end(), wr.begin(), wr.end());
-        }
-        const int top = y + std::max(0, (bh - (int)rows.size() * lineH) / 2);
-        for (size_t i = 0; i < rows.size(); ++i) {
-            const int ty = top + (int)i * lineH; const int tw = getTextWidth(rows[i].c_str(), -1) + 4;
-            RCT r; r.set(coord(gx), coord(ty), coord(std::max(right, gx + tw)), coord(ty + lineH)); r.drawText(rows[i].c_str(), false, false);
-        }
-        y = std::max(y + bh, top + (int)rows.size() * lineH) + 6;
+    setFont(g); setTextColor(C_GREY);
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const int ty = top + (int)i * lineH; const int tw = getTextWidth(rows[i].c_str(), -1) + 4;
+        RCT r; r.set(coord(gx), coord(ty), coord(std::max(right, gx + tw)), coord(ty + lineH)); r.drawText(rows[i].c_str(), false, false);
     }
+    y = yEnd + 6;
+
     const int used = y - y0 - 6;
-    S.warnRows = std::max(2, 1 + (int)std::ceil(std::max(0, used - warnH(S.font)) / (double)rowPx(S.font + 1)));   // what render() reserves below
+    S.warnRows = std::max(2, 1 + (int)std::ceil(std::max(0, used - warnH(bf)) / (double)rowPx(bf + 1)));
+    S.warnPx = std::max(used, warnBlockH(bf, 2));                         // (0.24.0) render() reserves exactly what was drawn   // what render() reserves below
 }
 void LiquidityProfile::renderFlow(LQState& S) {
     auto flowLine = [this](const std::vector<std::pair<int, int>>& pts, COLOR c) {
