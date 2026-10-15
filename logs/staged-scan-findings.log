@@ -1,3 +1,19 @@
-findings=0 allowed=0 staged_files=1 bytes=82
+findings=0 allowed=0 staged_files=17 bytes=430397
 largest staged blobs (bytes, path):
-SIZE	82	logs/staged-scan-findings.log
+SIZE	102707	plugin/LiquidityProfileLogic.h
+SIZE	94378	plugin/tests/lp-0.18.0-bigorders-tests.tar.gz
+SIZE	42332	plugin/BigOrderLines.h
+SIZE	39920	plugin/BUILD-LESSONS.md
+SIZE	27403	plugin/tests_delta/test_exh270.cpp
+SIZE	23070	plugin/tests_delta/test_rules285.cpp
+SIZE	21714	plugin/tests_delta/test_rules284.cpp
+SIZE	14167	plugin/tests_delta/test_contract263.cpp
+SIZE	12540	plugin/tests_delta/test_rules285_core.cpp
+SIZE	10716	plugin/tests_delta/test_rule262.cpp
+SIZE	9564	plugin/tests_delta/test_columns280.cpp
+SIZE	8586	plugin/tests_delta/test_sync260.cpp
+SIZE	8313	plugin/tests_delta/test_dp_bubble_halfway.cpp
+SIZE	8186	plugin/tests_delta/replay_es285.cpp
+SIZE	3729	plugin/NOTES-LP0180.md
+SIZE	2950	plugin/run-logic-tests.bat
+SIZE	122	logs/staged-scan-findings.log

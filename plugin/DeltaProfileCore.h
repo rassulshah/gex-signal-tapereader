@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -10,6 +10,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace delta_profile {
@@ -135,6 +136,76 @@ inline bool pivotOk(H& high, L& low, int pk, bool bullish, int* pivotBar = nullp
     const int piv = dirn == 1 ? ext : start;               // the up pivot (the current up leg's high, else the down leg's start)
     if (pivotBar) *pivotBar = piv;
     return piv == pk || hi(pk) > lo(piv);
+}
+// ---- (2.8.5, Rassul approved 2026-10-14 23:05 CT) display-only rules for the A bubbles. The records are never changed. ----
+// versionBefore: true when the record's version text is earlier than a.b.c, or cannot be read (an unreadable version is treated
+// as old, so it is re-checked rather than trusted). "2.8.0" < "2.8.4" <= "2.8.4" < "2.8.10".
+inline bool versionBefore(const std::string& v, int a, int b, int c) {
+    long part[3] = { -1, -1, -1 }; std::size_t i = 0; int n = 0;
+    while (n < 3) {
+        if (i >= v.size() || v[i] < '0' || v[i] > '9') return true;
+        long x = 0; int digits = 0;
+        while (i < v.size() && v[i] >= '0' && v[i] <= '9') { if (++digits > 6) return true; x = x * 10 + (v[i] - '0'); ++i; }
+        part[n++] = x;
+        if (n < 3) { if (i >= v.size() || v[i] != '.') return true; ++i; }
+    }
+    if (i != v.size()) return true;
+    if (part[0] != a) return part[0] < a;
+    if (part[1] != b) return part[1] < b;
+    return part[2] < c;
+}
+// recheckA (2.8.5 rule 2): the 2.8.4 A rules applied ONCE to a record decided by an earlier version, on the chart's bars 0 .. pk only:
+// the same-bar close beyond the node (selling node: green close above the node's top tick; buying node: red close below its bottom
+// tick), the 2.8.2 halfway rule (halfwayOk) and the 2.8.3 pivot rule (pivotOk). bars = false when the bars needed are not on the chart
+// (peak bar missing / still forming / no bar before it / a non-finite or inverted bar in 0 .. pk): the record is then left undrawn.
+struct Recheck { bool bars = false, close = false, halfway = false, pivot = false; int pivotBar = -1;
+                 bool pass() const { return bars && close && halfway && pivot; } };
+template <class O, class H, class L, class C>
+inline Recheck recheckA(O& open, H& high, L& low, C& close, int count, int pk, Tick nodeLow, Tick nodeHigh, double tick, bool sellNode) {
+    Recheck r;
+    if (pk < 1 || pk >= count - 1 || !finite(tick) || tick <= 0) return r;
+    for (int i = 0; i <= pk; ++i) {
+        const double h = static_cast<double>(high[i]), l = static_cast<double>(low[i]);
+        if (!finite(h) || !finite(l) || h < l) return r;
+    }
+    const double po = static_cast<double>(open[pk]), pc = static_cast<double>(close[pk]);
+    if (!finite(po) || !finite(pc) || !finite(pc / tick) || std::fabs(pc / tick) >= 9.0e15) return r;
+    r.bars = true;
+    const Tick pck = static_cast<Tick>(std::llround(pc / tick));
+    r.close = sellNode ? (pc > po && pck > nodeHigh) : (pc < po && pck < nodeLow);
+    r.halfway = halfwayOk(nodeLow, nodeHigh, static_cast<double>(high[pk]), static_cast<double>(low[pk]), tick, sellNode);
+    r.pivot = pivotOk(high, low, pk, sellNode, &r.pivotBar);
+    return r;
+}
+// oneBubblePerCandle (2.8.5 rule 1): ONE bubble per candle per side. Among the drawable confirmed A events whose peak bar is the same
+// candle and side, the bubble goes to the event with the LOWEST price for a bullish (support) A and the HIGHEST price for a bearish
+// (resistance) A - but only among the events decided at the group's FIRST decision moment (its smallest t_decided: the candle's
+// close when IRT was running). An event decided later (a re-track after the row size changed, a node first seen later) can never
+// move a bubble that is already drawn; it joins it. A lower (bullish) / higher (bearish) event decided at that same first moment
+// does take the bubble - at that moment every candidate exists together. Ties (same price): the lowest id. Pure function of the
+// set: independent of load order, the same after a restart, unchanged by later bars. Returns event id -> the id that holds its group's
+// bubble (itself for the chosen one).
+struct BubbleCand { long long id = 0, candle = 0, tDecided = 0; bool support = false; double price = 0; };
+inline std::map<long long, long long> oneBubblePerCandle(const std::vector<BubbleCand>& v, double tick) {
+    const double t = finite(tick) && tick > 0 ? tick : 0;
+    auto halfTicks = [t](double p) -> long long { return t > 0 && finite(p / t) && std::fabs(p / t) < 4.0e15 ? std::llround(p / t * 2.0) : 0; };
+    auto better = [&](const BubbleCand& a, const BubbleCand& b) {   // a beats b inside one group
+        const long long pa = halfTicks(a.price), pb = halfTicks(b.price);
+        if (t > 0 && pa != pb) return a.support ? pa < pb : pa > pb;
+        if (t <= 0 && a.price != b.price) return a.support ? a.price < b.price : a.price > b.price;
+        return a.id < b.id;
+    };
+    std::map<std::pair<long long, bool>, std::vector<const BubbleCand*> > groups;
+    for (std::size_t i = 0; i < v.size(); ++i) groups[std::make_pair(v[i].candle, v[i].support)].push_back(&v[i]);
+    std::map<long long, long long> out;
+    for (std::map<std::pair<long long, bool>, std::vector<const BubbleCand*> >::const_iterator g = groups.begin(); g != groups.end(); ++g) {
+        long long first = g->second[0]->tDecided;
+        for (const BubbleCand* c : g->second) first = std::min(first, c->tDecided);
+        const BubbleCand* best = nullptr;
+        for (const BubbleCand* c : g->second) if (c->tDecided == first && (!best || better(*c, *best))) best = c;
+        for (const BubbleCand* c : g->second) out[c->id] = best->id;
+    }
+    return out;
 }
 inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
                       double net, double tick) {

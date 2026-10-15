@@ -1,4 +1,15 @@
 /********************************************************************************
+ * 2.8.5 (2026-10-14 night, Rassul approved 23:05 CT; his E-S chart showed a cluster of circles on one candle: the 2.8.0 records held
+ *       the same peak bar 2-3 times at slightly different prices after the row size changed - 20:18 x3, 21:06 x3, 21:00 x2):
+ *       (1) ONE BUBBLE PER CANDLE PER SIDE - among the confirmed A events whose peak bar is the same candle, a bullish (support)
+ *           A draws ONE bubble at the LOWEST price, a bearish (resistance) A ONE bubble at the HIGHEST price; the profile A label
+ *           follows the same choice. Only the events decided at the group's FIRST decision moment (its smallest t_decided = the
+ *           candle's close when IRT was running) compete: a duplicate decided later never moves a drawn bubble. Pure function of the
+ *           record set (dp::oneBubblePerCandle): load-order independent, identical after a restart, never repainted by later bars.
+ *       (2) a ONE-TIME RE-CHECK of A records written before 2.8.4 (version column < 2.8.4) against the 2.8.4 rules on the chart's
+ *           bars 0 .. peak (dp::recheckA = same-bar close beyond + halfwayOk + pivotOk): a failure is not drawn, stays in the record,
+ *           and the status says "hidden: pre-2.8.4 rule (<rule>)"; bars not on the chart = undrawn, said so. 2.8.4+ records are
+ *           never re-checked (decided once). The records are never changed - display only.
  * 2.8.0 (2026-10-14, CR5200, Rassul approved 11:00 CT - mockup-columns.png): the Delta Profile is the MIDDLE right-side column,
  *       between the Levels column and the Dealer Profile (ColumnBoard.h): its box is fixed from the axis (the Dealer column's width
  *       from the board, 0 when no Dealer Profile is on the chart), Width 40-250 px (default 80), every bar anchored on the column's
@@ -66,7 +77,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.8.4"; // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.8.5"; // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -160,8 +171,9 @@ struct Latch {
     // (2.5.4) the record only - never read by the drawing: id (creation order), CT-clock bar ends (epoch-as-UTC, TapeFlow's
     // convention), the node's net delta and multiple, where it came from, and whether its decided line is already queued
     long long id, tFirst, tDecided, decidedBy, peakT; double net, mult; bool zone, logged;
+    std::string version;   // (2.8.5) the version that wrote the decision (D line), DLT_VERSION for one decided here
     Latch() : low(0), high(0), support(false), peakTime(0), price(0), sell(false), candSupport(false), id(-1), tFirst(0), tDecided(0), decidedBy(0),
-        peakT(0), net(0), mult(0), zone(false), logged(false) { formedTime = 0; formedT = 0; }
+        peakT(0), net(0), mult(0), zone(false), logged(false), version(DLT_VERSION) { formedTime = 0; formedT = 0; }   // (2.8.5) in memory = decided here; a parsed line sets its own
 };
 // (2.5.1) the record lives OUTSIDE the per-chart state, keyed by symbol and bar size: a chart-state reset (IRT's host
 // switching contexts, a periodicity label read empty, two charts sharing one object) no longer wipes it, and the circle is
@@ -188,6 +200,10 @@ struct LatchBook {
     // (2.5.7, audit F6) an old session's lines that could not be written at the 17:00 change: kept and retried, never dropped
     std::vector<std::pair<std::string, std::vector<std::string> > > carry;
     double tick = 0;                        // (2.5.7, audit F5) the tick the in-memory keys were made with
+    // (2.8.5) display only (memory; the record is never changed): the pre-2.8.4 re-check result per A id (cached once the bars were
+    // on the chart), and every confirmed A's display disposition: "" = holds its candle's bubble, "merged:<id>", "hidden: pre-2.8.4
+    // rule (<rule>)", "undrawn: pre-2.8.4 re-check - bars not on chart"
+    std::map<long long, dp::Recheck> recheck; std::map<long long, std::string> show;
 };
 // ---- (2.5.4) the session signal record. One pipe-separated line per event, append-only, never rewritten:
 //   F = the candidate first appeared (code "A?"), D = it was decided (A / I / Acc / Dst). A line is complete only when it ends
@@ -289,7 +305,7 @@ static bool parseRecordLine(const std::string& line, double chartTick, RecordEve
     if ((c[20] != "buy" && c[20] != "sell") || (c[21] != "node" && c[21] != "zone")) return false;
     L.code = code; L.support = support; L.tFirst = tf; L.tDecided = td; L.decidedBy = by; L.id = id; L.peakT = pt;
     L.peakTime = static_cast<RTDATE>(praw); L.price = price; L.net = net; L.mult = mult; L.sell = c[20] == "sell"; L.zone = c[21] == "zone";
-    L.low = lo; L.high = hi;
+    L.low = lo; L.high = hi; L.version = c[11].substr(0, 16);   // (2.8.5) an unreadable version is treated as old (re-checked)
     if (c.size() == REC_FIELDS) {
         long long ft, fr;
         if (!parseWhole(c[22], 0, T_MAX, ft) || !parseWhole(c[23], 0, rawLimit, fr)) return false;
@@ -441,6 +457,7 @@ static void seedFromText(const std::string& text, const std::string& root, const
             if (L.low != r.latch.low || L.high != r.latch.high || L.sell != r.latch.sell || L.zone != r.latch.zone || L.peakTime != r.latch.peakTime ||
                 L.price != r.latch.price || L.formedTime != r.latch.formedTime || L.formedT != r.latch.formedT || L.tFirst != r.latch.tFirst) { ++bk.rejected; continue; }
             L.code = r.latch.code; L.support = r.latch.support; L.tDecided = r.latch.tDecided; L.decidedBy = r.latch.decidedBy; L.logged = true;
+            L.version = r.latch.version;   // (2.8.5) the DECISION's version decides whether the pre-2.8.4 re-check applies
         }
     }
     for (std::map<long long, Latch>::const_iterator i = byId.begin(); i != byId.end(); ++i) {
@@ -693,6 +710,7 @@ struct ChartState {
     int dealerReach, drawnRows, missingVap, vapMismatch;
     bool dirty, faulted, ready, shortHistory, coarseBoundary;
     int absorptionEvents, bubblesDrawn, bubblesOffscreen, bubblesSuppressed, activeAbsorptions, pairedAbsorptions;
+    int bubblesMerged = 0, aHiddenPre284 = 0, aUncheckedPre284 = 0;   // (2.8.5)
     std::map<long long, std::string> bubbleState; // event ID -> drawn/shared/offscreen/suppressed
     std::map<long long, std::string> profileState; // actual emitted profile disposition, not just calculation
     std::string exParams, exSource = "missing", exLevelNote; std::size_t exLevelCount = 0;   // (2.7.0) exhaustion gate / levels
@@ -1095,7 +1113,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             }
             bk.v.clear(); bk.session = sess;
             bk.journal.clear(); bk.path.clear(); bk.note.clear(); bk.nextId = 0; bk.written = bk.loaded = bk.rejected = 0;
-            bk.ae.clear(); bk.aeThrough.clear(); bk.ex.clear(); bk.exNext = bk.exLoaded = bk.exRejected = 0; bk.exThrough = 0; bk.exNote.clear();   // (2.7.0)
+            bk.recheck.clear(); bk.show.clear(); bk.ae.clear(); bk.aeThrough.clear(); bk.ex.clear(); bk.exNext = bk.exLoaded = bk.exRejected = 0; bk.exThrough = 0; bk.exNote.clear();   // (2.7.0)
             // (2.5.4) after an IRT restart (or the first chart of the day) the session's record seeds the book: what was shown stays
             const std::string folder = recordDirectory();
             if (!folder.empty() && !s.root.empty()) {
@@ -1127,6 +1145,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             }
             if (dropped) bk.note = "tick changed: " + std::to_string(dropped) + " latches could not be re-keyed and were dropped";
         }
+        if (bk.tick > 0 && std::fabs(bk.tick - tick) > 1e-9 * std::max(bk.tick, tick)) bk.recheck.clear();   // (2.8.5) keys re-made
         bk.tick = tick;
         std::vector<Latch>& latches = bk.v;
         const long long nowT = localSec(static_cast<RTDATE>(times[static_cast<int>(count) - 1]));   // the chart's last bar end
@@ -1158,6 +1177,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             L.formedTime = static_cast<RTDATE>(times[formedBar]); L.formedT = barEnd(formedBar);
             L.id = bk.nextId++; L.tFirst = nowT; L.peakT = barEnd(peakBar); L.net = net; L.mult = mult; L.zone = zone;
             if (decided(L.code)) L.decidedBy = barEnd(decidedBar);
+            L.version = DLT_VERSION;
             eventId = L.id; latches.push_back(L); bk.journal.push_back(recordLine(L, 'F', tick, s.book));
         };
         const dp::Tick tpr = candidate.ticksPerRow;
@@ -1228,8 +1248,42 @@ bool DeltaProfile::buildNative(ChartState& s) {
         for (std::size_t k = 0; k < latches.size(); ++k) {
             Latch& L = latches[k];
             if (!decided(L.code) || L.logged) continue;
-            L.tDecided = nowT; L.logged = true;
+            L.tDecided = nowT; L.logged = true; L.version = DLT_VERSION;   // (2.8.5) decided by this version
             bk.journal.push_back(recordLine(L, 'D', tick, s.book));
+        }
+        // (2.8.5) display dispositions for the confirmed A events (records untouched):
+        //   rule 2 - an A decided by a version before 2.8.4 is re-checked ONCE against the 2.8.4 rules on the chart's bars 0 .. peak
+        //            (cached once the bars were there; never repeated, so a later bar or a scroll cannot flip it); 2.8.4+ never;
+        //   rule 1 - one bubble per candle per side (dp::oneBubblePerCandle), among the events that are drawable after rule 2.
+        {
+            std::vector<dp::BubbleCand> cands;
+            bk.show.clear();
+            for (const Latch& L : latches) {
+                if (!confirmedAbsorption(L)) continue;
+                if (dp::versionBefore(L.version, 2, 8, 4)) {
+                    std::map<long long, dp::Recheck>::const_iterator rc = bk.recheck.find(L.id);
+                    if (rc == bk.recheck.end()) {
+                        const int pk = findBar(L.peakTime);
+                        const dp::Recheck r = pk < 0 ? dp::Recheck() :
+                            dp::recheckA(open, high, low, close, static_cast<int>(count), pk, L.low, L.high, tick, L.sell);
+                        if (r.bars) rc = bk.recheck.insert(std::make_pair(L.id, r)).first;
+                    }
+                    if (rc == bk.recheck.end()) { bk.show[L.id] = "undrawn: pre-2.8.4 re-check - bars not on chart"; continue; }
+                    const dp::Recheck& r = rc->second;
+                    if (!r.pass()) {
+                        std::string why;
+                        if (!r.close) why += "close";
+                        if (!r.halfway) why += std::string(why.empty() ? "" : "+") + "halfway";
+                        if (!r.pivot) why += std::string(why.empty() ? "" : "+") + "pivot";
+                        bk.show[L.id] = "hidden: pre-2.8.4 rule (" + why + ")"; continue;
+                    }
+                }
+                dp::BubbleCand c; c.id = L.id; c.candle = static_cast<long long>(L.peakTime); c.tDecided = L.tDecided;
+                c.support = L.support; c.price = L.price; cands.push_back(c);
+            }
+            const std::map<long long, long long> holder = dp::oneBubblePerCandle(cands, tick);
+            for (std::map<long long, long long>::const_iterator h = holder.begin(); h != holder.end(); ++h)
+                bk.show[h->first] = h->first == h->second ? std::string() : "merged:" + std::to_string(h->second);
         }
         // (2.7.0) the thin-extreme exhaustion candidates: decided on closed bars after this build's A decisions, logged as E lines
         // in the same record (flushed just below), the same complete-build gate as A
@@ -1563,7 +1617,17 @@ bool DeltaProfile::render(ChartState& s) {
     RTARRAYI bubbleTimes(barDateTime);
     // Immutable event order: a newly qualifying mark never evicts a previously retained bubble.
     std::vector<const Latch*> confirmed;
-    for (const Latch& L : book.v) if (confirmedAbsorption(L)) confirmed.push_back(&L);
+    // (2.8.5) only the event holding its candle's bubble (rule 1) that is not hidden by the pre-2.8.4 re-check (rule 2) is drawn; the
+    // others keep their record and report their disposition ("merged:<id>", "hidden: pre-2.8.4 rule (...)", "undrawn: ...")
+    s.bubblesMerged = s.aHiddenPre284 = s.aUncheckedPre284 = 0;
+    for (const Latch& L : book.v) {
+        if (!confirmedAbsorption(L)) continue;
+        const std::map<long long, std::string>::const_iterator d = book.show.find(L.id);
+        const std::string q = d == book.show.end() ? std::string("undrawn: not decided for display yet") : d->second;
+        if (q.empty()) { confirmed.push_back(&L); continue; }
+        ++s.absorptionEvents; s.bubbleState[L.id] = q;
+        if (q.compare(0, 7, "merged:") == 0) ++s.bubblesMerged; else if (q.compare(0, 7, "hidden:") == 0) ++s.aHiddenPre284; else ++s.aUncheckedPre284;
+    }
     std::sort(confirmed.begin(),confirmed.end(),[](const Latch* a,const Latch* b){
         return a->tDecided!=b->tDecided?a->tDecided<b->tDecided:a->id<b->id;
     });
@@ -1603,7 +1667,7 @@ bool DeltaProfile::render(ChartState& s) {
     auto permitAbsorptionLabel = [&](long long id) -> bool {
         const std::string q=bubbleDisposition(id);
         if(q=="drawn"||q=="shared")return true;
-        s.profileState[id]=q=="offscreen"?"suppressed:offscreen":"suppressed:no bubble";return false;
+        s.profileState[id]=q=="offscreen"?"suppressed:offscreen":q=="suppressed"||q=="missing"?"suppressed:no bubble":"suppressed:"+q;return false;   // (2.8.5) merged / hidden: no label either
     };
     std::vector<std::size_t> ranked;
     for (std::size_t i = 0; i < profile.buckets.size(); ++i) ranked.push_back(i);
@@ -1845,7 +1909,12 @@ void DeltaProfile::status(ChartState& s) {
         out << "BUBBLE_POLICY,confirmed A only; historical peak annotations\nABSORPTION_EVENTS," << s.absorptionEvents
             << "\nBUBBLES_DRAWN," << s.bubblesDrawn << "\nBUBBLES_OFFSCREEN," << s.bubblesOffscreen
             << "\nBUBBLES_SUPPRESSED," << s.bubblesSuppressed << "\nACTIVE_ABSORPTIONS," << s.activeAbsorptions
-            << "\nPAIRED_ABSORPTIONS," << s.pairedAbsorptions << '\n';
+            << "\nPAIRED_ABSORPTIONS," << s.pairedAbsorptions
+            << "\nA_RULES_285,one bubble per candle per side (bullish lowest / bearish highest; first decision moment); pre-2.8.4 A re-checked once"
+            << "\nBUBBLES_MERGED," << s.bubblesMerged << "\nA_HIDDEN_PRE284," << s.aHiddenPre284 << "\nA_UNDRAWN_PRE284_NO_BARS," << s.aUncheckedPre284 << '\n';
+        for (std::map<long long, dp::Recheck>::const_iterator r = bk.recheck.begin(); r != bk.recheck.end(); ++r)   // (2.8.5) rule by rule
+            out << "RECHECK_PRE284," << r->first << ",close " << (r->second.close ? "ok" : "fail") << ",halfway " << (r->second.halfway ? "ok" : "fail")
+                << ",pivot " << (r->second.pivot ? "ok" : "fail") << " (pivot bar " << r->second.pivotBar << ")," << (r->second.pass() ? "shown" : "hidden: pre-2.8.4 rule") << '\n';
         for(const Latch& L:latches){
             const auto b=s.bubbleState.find(L.id), q=s.profileState.find(L.id);
             out << "EVENT_SYNC," << L.id << ',' << L.code << ',' << (L.support?"support":"resistance")
@@ -1906,6 +1975,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.8.4");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.8.5");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }
