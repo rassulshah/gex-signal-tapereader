@@ -1,2 +1,26 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=24 bytes=667163
 largest staged blobs (bytes, path):
+SIZE	162310	plugin/tests/cr6100-pullstats-merge-tests.tar.gz
+SIZE	131852	plugin/DeltaProfile.cpp
+SIZE	59036	plugin/ZoneRead.h
+SIZE	43771	plugin/retired/Pulling_0_3_0.cpp
+SIZE	34355	plugin/BUILD-LESSONS.md
+SIZE	31468	plugin/DeltaProfileCore.h
+SIZE	27403	plugin/tests_delta/test_exh270.cpp
+SIZE	26216	plugin/tests_delta/test_record_254.cpp
+SIZE	21253	plugin/tests_delta/test_rules284.cpp
+SIZE	20527	plugin/tests_delta/adapter_tests.cpp
+SIZE	14693	plugin/PullStats.cpp
+SIZE	14167	plugin/tests_delta/test_contract263.cpp
+SIZE	14126	tools/gex-build.bat
+SIZE	13566	plugin/tests_delta/core_tests.cpp
+SIZE	9564	plugin/tests_delta/test_columns280.cpp
+SIZE	8527	plugin/PullStatsLogic.h
+SIZE	8332	plugin/tests_delta/test_dp_bubble_halfway.cpp
+SIZE	8050	plugin/tests_delta/test_sync260.cpp
+SIZE	5445	plugin/tests_delta/test_rules284_core.cpp
+SIZE	4438	plugin/tests_delta/test_session_noon.cpp
+SIZE	2837	plugin/tests_delta/test_audit_257.cpp
+SIZE	2737	plugin/run-logic-tests.bat
+SIZE	2408	plugin/Pulling.cpp
+SIZE	82	logs/staged-scan-findings.log
