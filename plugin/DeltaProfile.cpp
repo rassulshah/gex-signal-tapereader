@@ -66,7 +66,7 @@
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.8.2"; // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.8.3"; // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -1185,6 +1185,32 @@ bool DeltaProfile::buildNative(ChartState& s) {
             }
             return -1;
         };
+        // (2.8.3, Rassul 19:47) the pivot rule, from bars 0 .. pk only (decided once at the peak bar's close, never repainted): his
+        // 1-bar ZigZag (CobImpulseLogic legPivot / trade_def zigzag). Bullish A: the peak bar CREATES the down pivot (it is the current
+        // down leg's low) or its LOW is below the HIGH of the latest down-pivot bar. Bearish A: mirror (creates the up pivot, or its
+        // HIGH is above the LOW of the latest up-pivot bar). A later lower low / higher high changes nothing.
+        auto pivotOk = [&](int pk, bool bullish) -> bool {
+            if (pk < 1) return false;
+            for (int i = 0; i <= pk; ++i) if (!dp::finite(high[i]) || !dp::finite(low[i]) || high[i] < low[i]) return false;
+            int dirn = high[1] >= high[0] ? 1 : -1, ext = 0, start = 0;
+            for (int i = 1; i <= pk; ++i) {
+                if (dirn == 1) {
+                    if (high[i] > high[ext]) ext = i;
+                    else if (low[i] < low[i - 1] && i != ext) { start = ext; ext = i; dirn = -1; }
+                } else {
+                    if (low[i] < low[ext]) ext = i;
+                    else if (high[i] > high[i - 1] && i != ext) { start = ext; ext = i; dirn = 1; }
+                }
+            }
+            if (bullish) {
+                const int piv = dirn == -1 ? ext : start;          // the down pivot (the current down leg's low, else the up leg's start)
+                if (piv == pk) return true;                       // this bar creates the down pivot
+                return low[pk] < high[piv];
+            }
+            const int piv = dirn == 1 ? ext : start;              // the up pivot
+            if (piv == pk) return true;
+            return high[pk] > low[piv];
+        };
         for (std::size_t k = 0; allowedNow && k < latches.size(); ++k) {
             Latch& L = latches[k];
             if (decided(L.code)) continue;
@@ -1200,7 +1226,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
             if (!dp::finite(ph) || !dp::finite(pl)) continue;
             const double nodeMid = (static_cast<double>(L.low) + static_cast<double>(L.high)) * 0.5, barMid = (ph + pl) * 0.5 / tick;
             const bool half = L.sell ? (nodeMid <= barMid + 1e-6) : (nodeMid >= barMid - 1e-6);
-            const bool confirmed = half && (L.sell ? (pc > po && pck > L.high) : (pc < po && pck < L.low));
+            const bool confirmed = half && pivotOk(pk, L.sell) && (L.sell ? (pc > po && pck > L.high) : (pc < po && pck < L.low));
             if (confirmed) { L.code = "A"; L.support = L.sell; L.decidedBy = barEnd(pk); continue; }
             L.code = "I?"; L.support = !L.sell;                                                   // absorption ruled out
             const int at = findBar(L.formedTime);
