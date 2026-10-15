@@ -647,12 +647,15 @@ void BigBidAsk::render(BBState& S) {
         // (1.5.0, Rassul 16:11-16:13 "the faded prints next to the candle have to be at least 1 SD ... use the distribution that we are
         // currently using") with the Liquidity Profile's big-lot sizes: nothing under 1SD, 1SD = faded, 2SD = bold, 3SD = bold + outline;
         // absorption circle from 1SD. Still learning there (no file / under 30 big orders): the 1.4 bold-ratio rule.
-        const int ab = !set.circle ? 0 : S.sdOk ? bba::absorptionMin(*F, S.sd[0]) : bba::absorption(*F, set.boldQ);
+        // (1.5.0, Rassul 16:21 "for the candle just use the average large") on the candles the floor is Big mu: under it nothing; Big mu =
+        // faded, Bigger (1SD) = bold, Huge (3SD+) = bold + white outline; absorption circle from Big mu
+        const long long muL = std::max(1LL, (long long)std::llround(S.sdMu));
+        const int ab = !set.circle ? 0 : S.sdOk ? bba::absorptionMin(*F, muL) : bba::absorption(*F, set.boldQ);
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok) continue;
             bool bold = bba::bold(sd < 0 ? F->bidQ : F->askQ, set.boldQ), huge = false;
-            if (S.sdOk) { if (p.vol < S.sd[0]) continue; bold = p.vol >= S.sd[1]; huge = p.vol >= S.sd[2]; }
+            if (S.sdOk) { if (p.vol < muL) continue; bold = p.vol >= S.sd[0]; huge = p.vol >= S.sd[2]; }
             if (!bold && !set.nonBold) continue;
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
